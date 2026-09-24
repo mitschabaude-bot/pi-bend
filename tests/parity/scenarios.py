@@ -115,6 +115,15 @@ SCENARIOS = [
                   ("settle", 0.5), ("snap", "answered")],
     },
     {
+        "name": "new-session",
+        "args": MODEL,
+        "turns": [{"text": "First answer."}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "hello"), ("key", "Enter"),
+                  ("wait", "First answer.", "answer"), ("settle", 0.5),
+                  ("keys", "/new"), ("key", "Enter"),
+                  ("wait", "New session started", "new"), ("settle", 0.2), ("snap", "after")],
+    },
+    {
         "name": "tool-call",
         "args": MODEL,
         "turns": [{"tool": {"name": "bash", "arguments": {"command": "echo tool-output"}}, "start_delay_ms": 1000}, {"text": "Tool finished."}],

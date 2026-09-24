@@ -27,6 +27,7 @@ type Action is Data:
   CopyLastAssistant{}
   OpenSettings{}
   OpenTrust{}
+  NewSessionStarted{}
   ShowChangelog{}
   ReloadResources{}
   RunBash{command: String,excluded: Bool}

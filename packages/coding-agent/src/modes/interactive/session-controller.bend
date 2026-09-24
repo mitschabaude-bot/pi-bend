@@ -174,7 +174,7 @@ def dispatchPrompt(handle: Handle,prompt: Callback.Callback<Submission,Result<&2
         dispatchActive(handle,prompt,value,observer,run,request,active)
 def newAction(result: Result<&2,&2,String,Unit>) -> Commands.Action:
   match result:
-    case Done{_}: Commands.Notice{"✓ New session started"}
+    case Done{_}: Commands.NewSessionStarted{}
     case Fail{message}: Commands.CommandError{message}
 def performNew(callback: Callback.Callback<Unit,Result<&2,&2,String,Unit>>,observer: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,run: PromptRun) -> IO(Result<&2,&2,String,Unit>):
   do IO<Result<&2,&2,String,Unit>>:
