@@ -14,6 +14,7 @@ import ../../../tui/src/keys.bend as Keys
 import ../../../tui/src/keybindings.bend as Bindings
 import ../../../tui/src/fuzzy.bend as Fuzzy
 import ../../../tui/src/tui-base.bend as Tui
+import ../../../tui/src/tui.bend as Ui
 import ../../../tui/src/tui-main-screen.bend as Screen
 import ../../../tui/src/tui-process.bend as Process
 import ../../../tui/src/terminal.bend as Terminal
@@ -538,3 +539,96 @@ def selectSession(cwd: String,+sessionDir: Maybe<&2,String>,+agentDir: String,se
     bindings : Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager> <- AppKeys.create(AppKeys.Environment{"linux",None{},None{}},agentDir)
     outcome : Outcome() <- loadedBindings(current,all,bindings)
     return outcome
+
+# The same picker can occupy the interactive editor without starting a second
+# terminal process. Both entry points share filtering, ordering and keybindings.
+type Modal is Data: Closed{} Open{state: State}
+type Host is Data:
+  Host{modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,chosen: Callback.Callback<String,Unit>}
+type HostOwner is Type:
+  HostOwner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
+def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindings.KeybindingsManager,width: Nat) -> IO(List<&2,String>):
+  match current:
+    case Closed{}: Component.render(editor,width)
+    case Open{state}: IO.pure(List<&2,String>,renderState(state,width,normalHint(bindings),deleteHint(bindings)))
+def drawModal(host: Host,width: Nat) -> IO(List<&2,String>):
+  match host:
+    case Host{+modal,editor,bindings,_}:
+      do IO<List<&2,String>>:
+        current : Modal <- Ref.read(Modal,modal)
+        drawModalCurrent(current,editor,bindings,width)
+def afterTransition(modal: Ref.Ref<Modal>,chosen: Callback.Callback<String,Unit>,next: State) -> IO(Unit):
+  match next:
+    case State{_,_,_,_,_,Chosen{path},_}:
+      do IO<Unit>:
+        Ref.write(Modal,modal,Closed{})
+        Callback.call(String,Unit,chosen,path)
+    case State{_,_,_,_,_,Cancelled{},_}: Ref.write(Modal,modal,Closed{})
+    case other: Ref.write(Modal,modal,Open{other})
+def modalTransitionPair(modal: Ref.Ref<Modal>,chosen: Callback.Callback<String,Unit>,pair: State & Bool) -> IO(Unit):
+  match pair:
+    case (next,_): afterTransition(modal,chosen,next)
+def modalTransition(modal: Ref.Ref<Modal>,bindings: Bindings.KeybindingsManager,chosen: Callback.Callback<String,Unit>,state: State,data: String) -> IO(Unit):
+  modalTransitionPair(modal,chosen,transition(state,data,bindings))
+def modalDeleteAction(modal: Ref.Ref<Modal>,bindings: Bindings.KeybindingsManager,chosen: Callback.Callback<String,Unit>,state: State,+path: String,data: String,selected: Action) -> IO(Unit):
+  match selected:
+    case Confirm{}:
+      do IO<Unit>:
+        result : Result<&2,&2,String,String> <- removeSession(path)
+        Ref.write(Modal,modal,Open{removed(state,path,result)})
+    case _: modalTransition(modal,bindings,chosen,state,data)
+def receivedModalOpen(modal: Ref.Ref<Modal>,+bindings: Bindings.KeybindingsManager,chosen: Callback.Callback<String,Unit>,+state: State,+data: String) -> IO(Unit):
+  match state:
+    case State{_,_,_,_,_,Pending{},Controls{_,_,_,Some{+path},_}}:
+      modalDeleteAction(modal,bindings,chosen,state,path,data,action(bindings,data))
+    case _: modalTransition(modal,bindings,chosen,state,data)
+def receivedModalCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,chosen: Callback.Callback<String,Unit>,data: String) -> IO(Unit):
+  match current:
+    case Closed{}: Component.handleInput(editor,data)
+    case Open{state}: receivedModalOpen(modal,bindings,chosen,state,data)
+def receivedModal(host: Host,data: String) -> IO(Unit):
+  match host:
+    case Host{+modal,editor,bindings,handler}:
+      do IO<Unit>:
+        current : Modal <- Ref.read(Modal,modal)
+        receivedModalCurrent(current,modal,editor,bindings,handler,data)
+def mouseCurrent(current: Modal,mouse: Maybe<&2,Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>>,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+  match current mouse:
+    case Closed{} Some{callback}: Callback.call(Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,callback,event)
+    case _ _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
+def modalMouse(host: Host,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+  match host:
+    case Host{+modal,Component.Component{_,_,_,mouse,_,_,_},_,_}:
+      do IO<Maybe<&2,Component.MouseResponse>>:
+        current : Modal <- Ref.read(Modal,modal)
+        mouseCurrent(current,mouse,event)
+def modalInvalidate(host: Host,_: Unit) -> IO(Unit):
+  match host: case Host{_,editor,_,_}: Component.invalidate(editor)
+def modalFocus(host: Host,value: Bool) -> IO(Unit):
+  match host: case Host{_,editor,_,_}: Component.setFocused(editor,value)
+def createHost(+editor: Component.Component,bindings: Bindings.KeybindingsManager,chosen: Callback.Callback<String,Unit>) -> IO(HostOwner):
+  do IO<HostOwner>:
+    modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
+    +host : Host <- IO.pure(Host,Host{modal,editor,bindings,chosen})
+    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~drawModal,host)
+    +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receivedModal,host)
+    +mouse : Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Host,~Ui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~modalMouse,host)
+    +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Host,~Unit,~Unit,~modalInvalidate,host)
+    +focus : Callback.Callback<Bool,Unit> <- Callback.create(~Host,~Bool,~Unit,~modalFocus,host)
+    +component : Component.Component <- IO.pure(Component.Component,Component.Component{Component.id(editor),render,Some{input},Some{mouse},invalidate,Some{focus},False{}})
+    return HostOwner{host,component,render,input,mouse,invalidate,focus}
+def borrowHost(owner: HostOwner) -> HostOwner & Host & Component.Component:
+  match owner: case HostOwner{+host,+component,render,input,mouse,invalidate,focus}: (HostOwner{host,component,render,input,mouse,invalidate,focus},host,component)
+def openHost(host: Host,current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>) -> IO(Unit):
+  match host:
+    case Host{modal,_,_,_}: Ref.write(Modal,modal,Open{State{current,all,Current{},"",0n,Pending{},Controls{Threaded{},False{},False{},None{},None{}}}})
+def disposeHost(owner: HostOwner) -> IO(Unit):
+  match owner:
+    case HostOwner{Host{modal,_,_,_},_,render,input,mouse,invalidate,focus}:
+      do IO<Unit>:
+        discarded : Modal <- Ref.dispose(Modal,modal)
+        Callback.dispose(Nat,List<&2,String>,render)
+        Callback.dispose(String,Unit,input)
+        Callback.dispose(Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,mouse)
+        Callback.dispose(Unit,Unit,invalidate)
+        Callback.dispose(Bool,Unit,focus)

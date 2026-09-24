@@ -238,6 +238,40 @@ def switchSession(-S: Type, +runtime: AgentSessionRuntime<S>, sessionPath: Strin
     found : Maybe<&2, Snapshot> <- snapshot(S, runtime)
     switchFrom(S, runtime, sessionPath, cwdOverride, found)
 
+type ResumeOutcome is Data:
+  Resumed{}
+  ResumeNeedsCwd{issue: SessionCwd.SessionCwdIssue}
+  ResumeFailed{message: String}
+def matchResumeResult(result: Result<&2,&2,String,Unit>) -> IO(ResumeOutcome):
+  match result:
+    case Done{_}: IO.pure(ResumeOutcome,Resumed{})
+    case Fail{message}: IO.pure(ResumeOutcome,ResumeFailed{message})
+def resumeChecked(-S: Type,runtime: AgentSessionRuntime<S>,previous: Maybe<&2,String>,+next: Session.Session(),issue: Maybe<&2,SessionCwd.SessionCwdIssue>) -> IO(ResumeOutcome):
+  match issue:
+    case Some{found}: IO.pure(ResumeOutcome,ResumeNeedsCwd{found})
+    case None{}:
+      do IO<ResumeOutcome>:
+        result : Result<&2,&2,String,Unit> <- replaced(S,runtime,Sessions.getCwd(Unit,Tools.ToolDetails,V.Value,next),next,SessionStart{ResumeStart{},previous})
+        matchResumeResult(result)
+def resumeOpened(-S: Type,runtime: AgentSessionRuntime<S>,previous: Maybe<&2,String>,fallbackCwd: String,opened: Sessions.Outcome(Session.Session())) -> IO(ResumeOutcome):
+  match opened:
+    case Fail{error}: IO.pure(ResumeOutcome,ResumeFailed{Sessions.message(error)})
+    case Done{+next}:
+      do IO<ResumeOutcome>:
+        issue : Maybe<&2,SessionCwd.SessionCwdIssue> <- SessionCwd.getMissingSessionCwdIssue(Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,next),Sessions.getCwd(Unit,Tools.ToolDetails,V.Value,next),fallbackCwd)
+        resumeChecked(S,runtime,previous,next,issue)
+def resumeFrom(-S: Type,runtime: AgentSessionRuntime<S>,sessionPath: String,cwdOverride: Maybe<&2,String>,found: Maybe<&2,Snapshot>) -> IO(ResumeOutcome):
+  match found:
+    case None{}: IO.pure(ResumeOutcome,ResumeFailed{noSession()})
+    case Some{Snapshot{+directory,stored}}:
+      do IO<ResumeOutcome>:
+        opened : Sessions.Outcome(Session.Session()) <- Sessions.open(~Unit,~Tools.ToolDetails,~V.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,~Session.readUnit,~Session.readDetails,~Session.readRaw,sessionPath,None{},cwdOverride,directory)
+        resumeOpened(S,runtime,Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),directory,opened)
+def resumeSession(-S: Type,+runtime: AgentSessionRuntime<S>,sessionPath: String,cwdOverride: Maybe<&2,String>) -> IO(ResumeOutcome):
+  do IO<ResumeOutcome>:
+    found : Maybe<&2,Snapshot> <- snapshot(S,runtime)
+    resumeFrom(S,runtime,sessionPath,cwdOverride,found)
+
 type ImportOutcome is Data:
   Imported{path: String}
   ImportNeedsCwd{issue: SessionCwd.SessionCwdIssue}

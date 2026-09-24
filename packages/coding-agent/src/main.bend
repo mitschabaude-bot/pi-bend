@@ -903,8 +903,29 @@ def refreshInteractive(host: Host(),_: Unit) -> IO(List<&2,Models.Model()>):
 def importInteractive(host: Host(),request: InteractiveRun.ImportRequest) -> IO(SessionRuntime.ImportOutcome):
   match request:
     case InteractiveRun.ImportRequest{path,cwdOverride}: SessionRuntime.importFromJsonl(Services,host,path,cwdOverride)
+type InteractiveSessionSource is Data: InteractiveSessionSource{host: Host(),agentDir: String}
+def sessionOverride(default: Bool,directory: String) -> Maybe<&2,String>:
+  match default:
+    case True{}: None{}
+    case False{}: Some{directory}
+def listInteractive(source: InteractiveSessionSource,_: Unit) -> IO(InteractiveRun.SessionChoices):
+  match source:
+    case InteractiveSessionSource{host,+agentDir}:
+      do IO<InteractiveRun.SessionChoices>:
+        current : Maybe<&2,AgentSession.AgentSession> <- SessionRuntime.session(Services,host)
+        +live : AgentSession.AgentSession <- activeSession(current)
+        +stored : AgentSession.Session() <- AgentSession.sessionOf(live)
+        +cwd : String <- IO.pure(String,Sessions.getCwd(Unit,Tools.ToolDetails,V.Value,stored))
+        +directory : String <- IO.pure(String,Sessions.getSessionDir(Unit,Tools.ToolDetails,V.Value,stored))
+        +override : Maybe<&2,String> <- IO.pure(Maybe<&2,String>,sessionOverride(Sessions.usesDefaultSessionDir(Unit,Tools.ToolDetails,V.Value,stored,agentDir),directory))
+        local : List<&2,S.SessionInfo> <- Sessions.list(cwd,override,agentDir)
+        all : List<&2,S.SessionInfo> <- Sessions.listAll(override,Path.join(agentDir,"sessions"))
+        return InteractiveRun.SessionChoices{local,all}
+def resumeInteractive(host: Host(),request: InteractiveRun.ResumeRequest) -> IO(SessionRuntime.ResumeOutcome):
+  match request:
+    case InteractiveRun.ResumeRequest{path,cwdOverride}: SessionRuntime.resumeSession(Services,host,path,cwdOverride)
 
-def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, +cwd: String, agentDir: String, packageDir: String, +host: Host()) -> IO(Unit):
+def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, +cwd: String, +agentDir: String, packageDir: String, +host: Host()) -> IO(Unit):
   do IO<Unit>:
     current : Maybe<&2, AgentSession.AgentSession> <- SessionRuntime.session(Services, host)
     +live : AgentSession.AgentSession <- activeSession(current)
@@ -918,12 +939,16 @@ def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, 
     +login : Callback.Callback<InteractiveRun.LoginRequest,AuthLogin.Outcome()> <- Callback.create(~Unit,~InteractiveRun.LoginRequest,~AuthLogin.Outcome(),~loginInteractive,Unit{})
     +refresh : Callback.Callback<Unit,List<&2,Models.Model()>> <- Callback.create(~Host(),~Unit,~List<&2,Models.Model()>,~refreshInteractive,host)
     +importer : Callback.Callback<InteractiveRun.ImportRequest,SessionRuntime.ImportOutcome> <- Callback.create(~Host(),~InteractiveRun.ImportRequest,~SessionRuntime.ImportOutcome,~importInteractive,host)
+    +sessions : Callback.Callback<Unit,InteractiveRun.SessionChoices> <- Callback.create(~InteractiveSessionSource,~Unit,~InteractiveRun.SessionChoices,~listInteractive,InteractiveSessionSource{host,agentDir})
+    +resume : Callback.Callback<InteractiveRun.ResumeRequest,SessionRuntime.ResumeOutcome> <- Callback.create(~Host(),~InteractiveRun.ResumeRequest,~SessionRuntime.ResumeOutcome,~resumeInteractive,host)
     SessionRuntime.setRebindSession(Services,host,Some{rebinder})
-    result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.runBound(live,InteractiveRun.Binding{current,startNew,onRebind,login,refresh,importer},initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings),catalogModels(catalog))
+    result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.runBound(live,InteractiveRun.Binding{current,startNew,onRebind,login,refresh,importer,sessions,resume},initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings),catalogModels(catalog))
     SessionRuntime.setRebindSession(Services,host,None{})
     Callback.dispose(InteractiveRun.LoginRequest,AuthLogin.Outcome(),login)
     Callback.dispose(Unit,List<&2,Models.Model()>,refresh)
     Callback.dispose(InteractiveRun.ImportRequest,SessionRuntime.ImportOutcome,importer)
+    Callback.dispose(Unit,InteractiveRun.SessionChoices,sessions)
+    Callback.dispose(InteractiveRun.ResumeRequest,SessionRuntime.ResumeOutcome,resume)
     Callback.dispose(Unit,Result<&2,&2,String,Unit>,startNew)
     Callback.dispose(AgentSession.AgentSession,Unit,rebinder)
     oldHook : Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>,onRebind)

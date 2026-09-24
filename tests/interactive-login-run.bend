@@ -4,6 +4,7 @@ import ./agent-session.bend as Faux
 import ../packages/coding-agent/src/core/agent-session.bend as Session
 import ../packages/coding-agent/src/core/agent-session-runtime.bend as Host
 import ../packages/coding-agent/src/core/session-persistence.bend as Sessions
+import ../packages/coding-agent/src/core/session-manager.bend as Tree
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
 import ../packages/coding-agent/src/modes/interactive/run.bend as Run
 import ../packages/coding-agent/src/cli/auth-login.bend as AuthLogin
@@ -35,6 +36,17 @@ def startNew(runtime: Runtime(),_: Unit) -> IO(Result<&2,&2,String,Unit>): Host.
 def importSession(runtime: Runtime(),request: Run.ImportRequest) -> IO(Host.ImportOutcome):
   match request:
     case Run.ImportRequest{path,cwdOverride}: Host.importFromJsonl(Services(),runtime,path,cwdOverride)
+def resumeSession(runtime: Runtime(),request: Run.ResumeRequest) -> IO(Host.ResumeOutcome):
+  match request:
+    case Run.ResumeRequest{path,cwdOverride}: Host.resumeSession(Services(),runtime,path,cwdOverride)
+type Listings is Data: Listings{cwd: String,agentDir: String}
+def listSessions(source: Listings,_: Unit) -> IO(Run.SessionChoices):
+  match source:
+    case Listings{+cwd,agentDir}:
+      do IO<Run.SessionChoices>:
+        current : List<&2,Tree.SessionInfo> <- Sessions.list(cwd,Some{cwd},agentDir)
+        all : List<&2,Tree.SessionInfo> <- Sessions.listAll(Some{cwd},cwd)
+        return Run.SessionChoices{current,all}
 def loginCopied(+base: String,request: Run.LoginRequest) -> IO(AuthLogin.Outcome()):
   match request:
     case Run.LoginRequest{provider,signal,notice,manual,manualDone}:
@@ -78,12 +90,16 @@ def run(args: List<String>) -> IO(Unit):
         +login : Callback.Callback<Run.LoginRequest,AuthLogin.Outcome()> <- Callback.create(~String,~Run.LoginRequest,~AuthLogin.Outcome(),~login,base)
         +refresh : Callback.Callback<Unit,List<&2,Models.Model()>> <- Callback.create(~Unit,~Unit,~List<&2,Models.Model()>,~models,Unit{})
         +importer : Callback.Callback<Run.ImportRequest,Host.ImportOutcome> <- Callback.create(~Runtime(),~Run.ImportRequest,~Host.ImportOutcome,~importSession,runtime)
+        +sessions : Callback.Callback<Unit,Run.SessionChoices> <- Callback.create(~Listings,~Unit,~Run.SessionChoices,~listSessions,Listings{cwd,agentDir})
+        +resume : Callback.Callback<Run.ResumeRequest,Host.ResumeOutcome> <- Callback.create(~Runtime(),~Run.ResumeRequest,~Host.ResumeOutcome,~resumeSession,runtime)
         Host.setRebindSession(Services(),runtime,Some{rebinder})
-        result : Result<&2,&2,Run.Error,Unit> <- Run.runBound(live,Run.Binding{current,new,hook,login,refresh,importer},Nil{},cwd,None{},agentDir,assetsRoot,None{},Nil{})
+        result : Result<&2,&2,Run.Error,Unit> <- Run.runBound(live,Run.Binding{current,new,hook,login,refresh,importer,sessions,resume},Nil{},cwd,None{},agentDir,assetsRoot,None{},Nil{})
         Host.setRebindSession(Services(),runtime,None{})
         Callback.dispose(Run.LoginRequest,AuthLogin.Outcome(),login)
         Callback.dispose(Unit,List<&2,Models.Model()>,refresh)
         Callback.dispose(Run.ImportRequest,Host.ImportOutcome,importer)
+        Callback.dispose(Unit,Run.SessionChoices,sessions)
+        Callback.dispose(Run.ResumeRequest,Host.ResumeOutcome,resume)
         Callback.dispose(Unit,Result<&2,&2,String,Unit>,new)
         Callback.dispose(Session.AgentSession,Unit,rebinder)
         oldHook : Maybe<&2,Callback.Callback<Session.AgentSession,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,hook)
