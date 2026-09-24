@@ -734,13 +734,14 @@ def reloadObserved(input: CommandObservation) -> IO(Unit):
         compacting : Bool <- Session.isCompacting(live)
         reloadIdle(transcript,header,live,trust,cwd,streaming,compacting)
         Interactive.requestRender(redraw)
-def newSessionObserved(input: CommandObservation) -> IO(Unit):
+def sessionStatus(input: CommandObservation,message: String) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,_,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_}: Transcript.status(transcript,"✓ New session started")
+    case CommandObservation{_,_,_,_,_,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_}: Transcript.status(transcript,message)
 def commandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match action:
     case Commands.CopyLastAssistant{}: copyObserved(input)
-    case Commands.NewSessionStarted{}: newSessionObserved(input)
+    case Commands.NewSessionStarted{}: sessionStatus(input,"✓ New session started")
+    case Commands.ClonedSession{}: sessionStatus(input,"Cloned to new session")
     case Commands.OpenSettings{}: settingsObserved(input)
     case Commands.OpenTrust{}: trustObserved(input)
     case Commands.ShowChangelog{}: changelogObserved(input)

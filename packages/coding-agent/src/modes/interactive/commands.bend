@@ -28,6 +28,7 @@ type Action is Data:
   OpenSettings{}
   OpenTrust{}
   NewSessionStarted{}
+  ClonedSession{}
   ShowChangelog{}
   ReloadResources{}
   RunBash{command: String,excluded: Bool}

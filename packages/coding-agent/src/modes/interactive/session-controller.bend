@@ -214,7 +214,7 @@ def performCredential(credential: Maybe<&2,Callback.Callback<Commands.Credential
 # upstream handleCloneCommand: fork at the current leaf into a new session.
 def cloned(result: Result<&2,&2,String,Maybe<&2,String>>) -> Commands.Action:
   match result:
-    case Done{_}: Commands.Notice{"Cloned to new session"}
+    case Done{_}: Commands.ClonedSession{}
     case Fail{message}: Commands.CommandError{message}
 def cloneLeaf(fork: Callback.Callback<SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>>,observer: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,leaf: Maybe<&2,String>) -> IO(Result<&2,&2,String,Unit>):
   match leaf:
