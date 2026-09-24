@@ -42,6 +42,41 @@ FLOWS = [
         ],
     },
     {
+        "name": "bash",
+        "turns": [{"text": "Saw it."}],
+        "steps": [
+            {"type": "bash", "command": "echo hello-from-bash"},
+            {"type": "bash", "command": "exit 3"},
+            {"type": "bash", "command": "echo hidden", "excludeFromContext": True},
+            {"type": "prompt", "message": "what ran?"},
+            {"type": "get_messages"},
+        ],
+    },
+    {
+        "name": "models",
+        "turns": [],
+        "steps": [
+            {"type": "get_available_models"},
+            {"type": "set_model", "provider": "openai", "modelId": "gpt-5-mini"},
+            {"type": "get_available_thinking_levels"},
+            {"type": "set_thinking_level", "level": "high"},
+            {"type": "cycle_thinking_level"},
+            {"type": "cycle_model"},
+            {"type": "get_state"},
+        ],
+    },
+    {
+        "name": "follow-up",
+        "turns": [{"text": "First.", "chunks": 20, "delay_ms": 20}, {"text": "Follow-up answer."}],
+        "steps": [
+            {"type": "prompt", "message": "one", "settle": False},
+            {"type": "follow_up", "message": "and then this"},
+            {"type": "wait_settled"},
+            {"type": "get_last_assistant_text"},
+            {"type": "get_messages"},
+        ],
+    },
+    {
         "name": "steer-and-queue",
         "turns": [{"text": "Answer.", "chunks": 20, "delay_ms": 20}, {"text": "Steered answer."}],
         "steps": [
