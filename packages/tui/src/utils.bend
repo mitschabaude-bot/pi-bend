@@ -301,10 +301,34 @@ def selectedWidth(value: Maybe<&2,Nat>,text: String) -> Nat:
     case None{}: nonSpacingWidth(text)
 def graphemeWidth(+text: String) -> Nat:
   Bool.pick(Unit -> Nat,Strings.equal(text,"\t"),_ => 3n,_ => selectedWidth(spacingRun(text,0n),text))(Unit{})
-def asciiWidth(text: String,width: Nat) -> Maybe<&2,Nat>:
-  match text:
-    case SNil{}: Some{width}
-    case SCon{char,rest}: Bool.pick(Unit -> Maybe<&2,Nat>,range(Char.to_u32(char),32,126),_ => asciiWidth(rest,width + 1n),_ => None{})(Unit{})
+# Scans check each character at the following step, so the recursion branches
+# on a parameter instead of allocating a pair of lazy `Bool.pick` closures.
+def asciiScan(text: String,ascii: Bool,width: Nat) -> Maybe<&2,Nat>:
+  match text ascii:
+    case _ False{}: None{}
+    case SNil{} True{}: Some{width}
+    case SCon{char,rest} True{}: asciiScan(rest,range(Char.to_u32(char),32,126),width + 1n)
+def asciiWidth(text: String,width: Nat) -> Maybe<&2,Nat>: asciiScan(text,True{},width)
+# A character that is its own grapheme cluster whatever its neighbours
+# (Grapheme_Cluster_Break=Other, not Extended_Pictographic, no InCB) and has no
+# display property but Wide or CJK script takes 1 or 2 cells, exactly as
+# graphemeWidth measures it; 0 marks any other character.
+def plainCells(+point: U32,+flags: U32) -> Nat:
+  Bool.pick(Nat,U32.is_eq(U32.and(flags,4294967007),0) && U32.is_eq(Grapheme.packed(point),0),Bool.pick(Nat,enabled(flags,32),2n,1n),0n)
+def cellsOf(ascii: Bool,+point: U32) -> Nat:
+  match ascii:
+    case True{}: 1n
+    case False{}: plainCells(point,Display.properties(point))
+def plainScan(text: String,cells: Nat,width: Nat) -> Maybe<&2,Nat>:
+  match text cells:
+    case _ Zero{}: None{}
+    case SNil{} _: Some{width}
+    case SCon{char,rest} _:
+      +point = Char.to_u32(char)
+      +next = cellsOf(range(point,32,126),point)
+      plainScan(rest,next,width + next)
+# Text of such characters needs no segmentation.
+def plainWidth(text: String) -> Maybe<&2,Nat>: plainScan(text,1n,0n)
 # Grapheme.next always consumes a nonempty cluster; the state machine returns
 # an affine pair so no list of every cluster is needed just to measure width.
 @unsafe def measuredClusters(value: Maybe<&1,String & String>,width: Nat) -> Nat:
@@ -315,7 +339,7 @@ def measuredText(value: Maybe<&2,Nat>,text: String) -> Nat:
   match value:
     case Some{width}: width
     case None{}: measuredClusters(Grapheme.next(text),0n)
-def visibleClean(+text: String) -> Nat: measuredText(asciiWidth(text,0n),text)
+def visibleClean(+text: String) -> Nat: measuredText(plainWidth(text),text)
 # Tabs must become spaces before segmentation: a following spacing-mark cluster
 # then has a visible base, which affects Pi's terminal-spacing mark accounting.
 def expandedTabs(text: String,reversed: String) -> String:

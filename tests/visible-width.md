@@ -8,7 +8,7 @@ The algorithm retains source ordering: tabs, all-spacing-mark clusters, zero-wid
 
 Visible width strips complete controls using the native scanner and concatenates visible runs before segmentation. Styling can therefore split a combining cluster or emoji without changing its width. Visible tabs expand to three spaces before segmentation, as upstream does: merely assigning a tab cluster width three was insufficient when a later spacing mark needs the final space as its visible base. The source differential corpus caught and fixed that distinction before handoff.
 
-Printable ASCII has a direct linear path. Other text streams one cluster at a time, without constructing a list of all clusters. There is no process-global width cache; results remain pure and deterministic. The cluster driver has an `@unsafe` annotation because its next shorter string is returned by `Grapheme.next`; each successful step consumes a nonempty cluster.
+Printable ASCII has a direct linear path. Text whose every character is its own grapheme cluster (Grapheme_Cluster_Break=Other, not Extended_Pictographic, no InCB) with no display property other than Wide or CJK script is summed per character without segmentation (`plainWidth`); `tests/plain-width.bend` checks over all 1,114,112 scalar values that each such character's `graphemeWidth` equals its `plainCells` (run it with `bun <bend2>/main.ts tests/plain-width.bend`; expect 0 disagreements), and the grapheme rules cannot join two such characters. Other text streams one cluster at a time, without constructing a list of all clusters. There is no process-global width cache; results remain pure and deterministic. The cluster driver has an `@unsafe` annotation because its next shorter string is returned by `Grapheme.next`; each successful step consumes a nonempty cluster.
 
 `runtime/unicode-17-display.bend` is generated from hash-pinned official [Unicode17 UCD data](https://www.unicode.org/Public/17.0.0/ucd/) and [emoji sequence data](https://www.unicode.org/Public/17.0.0/emoji/). Balanced constant decisions classify marks, controls, format characters, default ignorables, East Asian Width and singleton emoji without constructing a property table per input. All 3,953 RGI emoji are represented exactly. Multi-scalar sequences use a hash to select candidates and compare the full string before accepting; collisions cannot imply emoji membership. The Unicode License V3 already lives beside these generated modules.
 
@@ -28,6 +28,8 @@ Additional validation:
 - Four long scans cover 200,000 ASCII characters, one base with 100,000 combining marks, 10,000 ZWJ emoji and 10,000 styled text repetitions.
 
 ## Reproduction
+
+The reference pins upstream files at commit `46c9de402`; point `--reference` at a checkout of that commit (for example `git -C ../pi-mono worktree add /tmp/pi-mono-46c9 46c9de402`) once the sibling checkout has moved on.
 
 ```sh
 python3 scripts/generate-display-unicode.py --check

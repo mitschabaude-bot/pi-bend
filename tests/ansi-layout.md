@@ -24,6 +24,8 @@ The corpus supplements these with styled Unicode, tabs, combining marks, CJK, em
 
 ## Reproduction
 
+The reference pins upstream files at commit `46c9de402`; point `--reference` at a checkout of that commit (for example `git -C ../pi-mono worktree add /tmp/pi-mono-46c9 46c9de402`) once the sibling checkout has moved on.
+
 ```sh
 python3 scripts/generate-display-unicode.py --check
 bun /home/agent/code/pi-bend-tls/build/bend-process-files/bend2/main.ts tests/ansi-layout.bend -o build/ansi-layout.js
