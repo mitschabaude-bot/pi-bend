@@ -41,6 +41,14 @@ SCENARIOS = [
         "steps": [("wait", READY, "startup"), ("settle", 0.5), ("key", "C-o"), ("settle", 0.5), ("snap", "expanded")],
     },
     {
+        "name": "trust-interactive",
+        "args": MODEL,
+        "files": {"project/.pi/settings.json": "{}"},
+        "trust_file": True,
+        "steps": [("wait", "Trust project folder?", "prompt"), ("settle", 0.2), ("snap", "prompt"),
+                  ("key", "Enter"), ("wait", READY, "accepted"), ("settle", 0.2), ("snap", "accepted")],
+    },
+    {
         "name": "bash-env",
         "args": MODEL,
         "steps": [("wait", READY, "startup"), ("settle", 0.5),

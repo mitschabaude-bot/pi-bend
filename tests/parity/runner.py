@@ -174,6 +174,10 @@ def settings_snap(agent, snaps):
         except ValueError:
             snaps["settings"] = path.read_text()
 
+def trust_snap(agent, root, snaps):
+    path = agent / "trust.json"
+    snaps["trust"] = normalise(path.read_text(), root) if path.exists() else ""
+
 def run_side(label, argv, scenario, keep):
     # Equal-length names: the cwd enters the system prompt and token estimates.
     root = Path(tempfile.mkdtemp(prefix=f"pi-parity-{label[0]}-"))
@@ -222,6 +226,8 @@ def run_side(label, argv, scenario, keep):
         requests = re.sub(r"127\.0\.0\.1:\d+", "<server>", normalise(json.dumps(logged, indent=1, sort_keys=True), root)) if logged else ""
         requests = unpackage(requests)
         settings_snap(agent, snaps)
+        if scenario.get("trust_file"):
+            trust_snap(agent, root, snaps)
         if not keep:
             shutil.rmtree(root, ignore_errors=True)
         return {"snaps": snaps, "timings": timings, "requests": requests}
@@ -254,6 +260,8 @@ def run_side(label, argv, scenario, keep):
         # The system prompt names the installed package's docs directory.
         requests = unpackage(requests)
         settings_snap(agent, snaps)
+        if scenario.get("trust_file"):
+            trust_snap(agent, root, snaps)
         if not keep:
             shutil.rmtree(root, ignore_errors=True)
     return {"snaps": snaps, "timings": timings, "requests": requests}
