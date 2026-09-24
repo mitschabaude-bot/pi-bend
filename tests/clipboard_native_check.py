@@ -20,8 +20,7 @@ def writer(path, body):
 
 
 def main():
-    if not PROBE.exists():
-        subprocess.run(["sh", "scripts/build-pure.sh", "tests/clipboard-native-probe.bend", str(PROBE)], cwd=ROOT, check=True)
+    subprocess.run(["sh", "scripts/build-pure.sh", "tests/clipboard-native-probe.bend", str(PROBE)], cwd=ROOT, check=True)
 
     with tempfile.TemporaryDirectory() as tmp:
         directory = Path(tmp)

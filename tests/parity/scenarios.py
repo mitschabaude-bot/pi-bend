@@ -68,6 +68,18 @@ SCENARIOS = [
                   ("wait", "Tool finished", "turn"), ("settle", 0.5), ("snap", "tool")],
     },
     {
+        "name": "copy",
+        "args": MODEL,
+        "turns": [{"text": "Copy me."}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.5),
+                  ("keys", "/copy"), ("key", "Enter"),
+                  ("wait", "No agent messages to copy yet", "empty"), ("snap", "empty"),
+                  ("keys", "hello"), ("key", "Enter"),
+                  ("wait", "Copy me.", "answer"), ("settle", 0.5),
+                  ("keys", "/copy"), ("key", "Enter"),
+                  ("wait", "Copied last agent message", "copied"), ("snap", "copied")],
+    },
+    {
         # On exit pi leaves its last frame, footer included, above the shell prompt.
         "name": "exit",
         "args": MODEL,

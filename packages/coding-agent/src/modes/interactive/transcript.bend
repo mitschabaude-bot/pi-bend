@@ -65,15 +65,24 @@ def statusChanged(state: State,+message: String) -> IO(State & Unit):
 def status(handle: Handle,message: String) -> IO(Unit):
   match handle:
     case Handle{resource}: Serial.run(State,Unit,resource,state => statusChanged(state,message))
-def managedResult(pair: State & Bool) -> State & Unit:
+def appendedUnit(pair: State & Bool) -> State & Unit:
   match pair:
     case (next,_): (next,Unit{})
+def errorAppended(state: State,message: String) -> IO(State & Unit):
+  match state:
+    case State{entries,tools,active,id,view,+theme,styles,expanded,hidden}:
+      do IO<State & Unit>:
+        pair : State & Bool <- append(State{entries,tools,active,id,view,theme,styles,expanded,hidden},Messages.ErrorBody{message,theme},False{})
+        return appendedUnit(pair)
+def showError(handle: Handle,message: String) -> IO(Unit):
+  match handle:
+    case Handle{resource}: Serial.run(State,Unit,resource,state => errorAppended(state,message))
 def managedAppended(state: State,message: String,warning: Bool,first: Bool) -> IO(State & Unit):
   match state:
     case State{entries,tools,active,id,view,+theme,styles,expanded,hidden}:
       do IO<State & Unit>:
         pair : State & Bool <- append(State{entries,tools,active,id,view,theme,styles,expanded,hidden},Messages.ManagedBody{message,theme,warning,first},False{})
-        return managedResult(pair)
+        return appendedUnit(pair)
 def managedStatus(handle: Handle,message: String,warning: Bool,first: Bool) -> IO(Unit):
   match handle:
     case Handle{resource}: Serial.run(State,Unit,resource,state => managedAppended(state,message,warning,first))
@@ -119,10 +128,15 @@ def failBash(+handle: Messages.Handle,reason: String) -> IO(Unit):
   do IO<Unit>:
     body : Messages.Body <- Messages.current(handle)
     Messages.set(handle,bashFailed(body,reason))
-def user(state: State,text: String) -> IO(State & Bool):
+def appendUser(state: State,text: String,preceded: Bool) -> IO(State & Bool):
   match state:
     case State{entries,tools,active,id,view,+theme,+styles,expanded,+hidden}:
-      append(State{entries,tools,active,id,view,theme,styles,expanded,hidden},Messages.UserBody{Messages.user(text,theme,styles,1n)},False{})
+      append(State{entries,tools,active,id,view,theme,styles,expanded,hidden},Messages.UserBody{Messages.user(text,theme,styles,1n),preceded},False{})
+def user(state: State,text: String) -> IO(State & Bool):
+  match state:
+    case State{Nil{},tools,active,id,view,theme,styles,expanded,hidden}:
+      appendUser(State{Nil{},tools,active,id,view,theme,styles,expanded,hidden},text,False{})
+    case current: appendUser(current,text,True{})
 def findTool(tools: List<&2,ToolLink>,+id: String) -> Maybe<&2,Tool.Handle>:
   match tools:
     case Nil{}: None{}

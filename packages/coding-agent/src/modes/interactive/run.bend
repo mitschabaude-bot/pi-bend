@@ -44,6 +44,7 @@ import ../../core/system-prompt.bend as Prompt
 import ../../utils/tools-manager.bend as Manager
 import ../../core/settings-manager.bend as Settings
 import ../../core/model-runtime.bend as Models
+import ../../utils/clipboard.bend as Clipboard
 import ../../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../core/keybindings.bend as AppKeys
 import ./components/footer.bend as Footer
@@ -571,8 +572,28 @@ def ordinaryCommandObserved(input: CommandObservation,action: Commands.Action) -
           live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
           state : Session.AgentState() <- Session.state(live)
           Ref.modify(Footer.State,Unit,footer,current => (withChosen(current,state),Unit{})),_ => IO.pure(Unit,Unit{}))(Unit{})
+def copyResult(transcript: Transcript.Handle,result: Result<&2,&2,String,Unit>) -> IO(Unit):
+  match result:
+    case Done{_}: Transcript.status(transcript,"Copied last agent message to clipboard")
+    case Fail{message}: Transcript.showError(transcript,message)
+def copyText(transcript: Transcript.Handle,cwd: String,text: Maybe<&2,String>) -> IO(Unit):
+  match text:
+    case None{}: Transcript.showError(transcript,"No agent messages to copy yet.")
+    case Some{value}:
+      do IO<Unit>:
+        result : Result<&2,&2,String,Unit> <- Clipboard.copy(value,cwd)
+        copyResult(transcript,result)
+def copyObserved(input: CommandObservation) -> IO(Unit):
+  match input:
+    case CommandObservation{_,session,_,_,redraw,cwd,_,_,_,_,BashInput{_,transcript,_,_,_,_}}:
+      do IO<Unit>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        text : Maybe<&2,String> <- Session.getLastAssistantText(live)
+        copyText(transcript,cwd,text)
+        Interactive.requestRender(redraw)
 def commandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match action:
+    case Commands.CopyLastAssistant{}: copyObserved(input)
     case Commands.ExportSession{path}: exportObserved(input,path)
     case Commands.ImportSession{path}: importObserved(input,path)
     case Commands.ResumeSession{}: resumeObserved(input)
