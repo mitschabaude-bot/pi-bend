@@ -152,7 +152,7 @@ def draw(input: Header,width: Nat) -> IO(List<&2,String>):
             +details : String <- resourceText(current,contexts,skills,cwd,home,isExpanded)
             resourceLines : List<&2,String> <- cached(resources,details,size)
             +present : Bool <- IO.pure(Bool,Bool.not(Strings.equal(details,"")))
-            +before : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,present,"" <> Nil{},Nil{}))
+            +before : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,present,"" <> "" <> Nil{},Nil{}))
             +after : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,present,"" <> "" <> Nil{},"" <> Nil{}))
             return "" <> List.append(&2,String,headerLines,List.append(&2,String,before,List.append(&2,String,resourceLines,after)))
 def ignore(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})

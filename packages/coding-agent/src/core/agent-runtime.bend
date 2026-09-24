@@ -401,6 +401,38 @@ def resolvedSkills(resolved: PackageManager.ResolvedPaths) -> List<&2, String>:
   match resolved:
     case PackageManager.ResolvedPaths{skills, _, _}: PackageManager.enabledPaths(skills)
 
+def skillSourceName(source: PackageManager.Source) -> String:
+  match source:
+    case PackageManager.Local{}: "local"
+    case PackageManager.Auto{}: "auto"
+
+def skillScope(scope: PackageManager.Scope) -> Skills.SourceScope:
+  match scope:
+    case PackageManager.ProjectScope{}: Skills.Project{}
+    case PackageManager.UserScope{}: Skills.User{}
+
+def skillResources(resolved: PackageManager.ResolvedPaths) -> List<&2, PackageManager.ResolvedResource>:
+  match resolved:
+    case PackageManager.ResolvedPaths{skills, _, _}: skills
+
+def skillSource(metadata: PackageManager.PathMetadata, path: String) -> Skills.SourceInfo:
+  match metadata:
+    case PackageManager.PathMetadata{source, scope, baseDir}:
+      Skills.SourceInfo{path, skillSourceName(source), skillScope(scope), Skills.TopLevel{}, baseDir}
+
+def resolvedSkillSource(+path: String, resources: List<&2, PackageManager.ResolvedResource>) -> Maybe<&2, Skills.SourceInfo>:
+  match resources:
+    case Nil{}: None{}
+    case PackageManager.ResolvedResource{root, _, metadata} <> rest:
+      Bool.pick(Maybe<&2, Skills.SourceInfo>, Skills.under(path, root), Some{skillSource(metadata, path)}, resolvedSkillSource(path, rest))
+
+def sourcedSkills(skills: List<&2, Skills.Skill>, +resources: List<&2, PackageManager.ResolvedResource>) -> List<&2, Skills.Skill>:
+  match skills:
+    case Nil{}: Nil{}
+    case Skills.Skill{name, description, +path, baseDir, source, disabled} <> rest:
+      +resolved = Maybe.default(&2, Skills.SourceInfo, resolvedSkillSource(path, resources), source)
+      Skills.Skill{name, description, path, baseDir, resolved, disabled} <> sourcedSkills(rest, resources)
+
 def nonLocalPrefix(+value: String) -> Bool:
   String.starts_with(value, "npm:") || String.starts_with(value, "git:") || String.starts_with(value, "github:") || String.starts_with(value, "http:") || String.starts_with(value, "https:") || String.starts_with(value, "ssh:")
 
@@ -425,12 +457,13 @@ def resolvedFor(+environment: Paths.Environment, options: CreateOptions) -> IO(P
 # upstream DefaultResourceLoader skills: the package manager's enabled skills
 # (unless --no-skills) followed by --skill paths, deduplicated by canonical
 # path and loaded without the default directories.
-def skillsFor(+environment: Paths.Environment, options: CreateOptions, resolved: PackageManager.ResolvedPaths) -> IO(List<&2, Skills.Skill>):
+def skillsFor(+environment: Paths.Environment, options: CreateOptions, +resolved: PackageManager.ResolvedPaths) -> IO(List<&2, Skills.Skill>):
   match options:
     case CreateOptions{+cwd, +agentDir, _, _, _, _, _, _, _, _, _, _, _, _, _, ResourceOptions{skillPaths, +noSkills, _, _}}:
       do IO<List<&2, Skills.Skill>>:
         merged : List<&2, String> <- mergedFrom(environment, cwd, List.append(&2, String, Bool.pick(List<&2, String>, noSkills, Nil{}, resolvedSkills(resolved)), cliPaths(environment, skillPaths)), Nil{})
-        skillsFrom(environment, cwd, agentDir, noSkills, merged)
+        loaded : List<&2, Skills.Skill> <- skillsFrom(environment, cwd, agentDir, noSkills, merged)
+        return sourcedSkills(loaded, skillResources(resolved))
 
 def resolvedPrompts(resolved: PackageManager.ResolvedPaths) -> List<&2, String>:
   match resolved:
@@ -553,22 +586,39 @@ def restoredModel(+models: Models.ModelRuntime, seed: SessionSeed) -> IO(Maybe<&
     case SessionSeed{_, _, None{}, _}: IO.pure(Maybe<&2, Models.Model()>, None{})
     case SessionSeed{_, _, Some{S.SessionModel{provider, id}}, _}: authorizedRestore(models, Models.getModel(models, provider, id))
 
-def chosenOrRestored(+models: Models.ModelRuntime, settings: Settings.SettingsManager, provider: Maybe<&2, String>, cliModel: Maybe<&2, String>, restored: Maybe<&2, Models.Model()>) -> IO(Result<&2, &2, String, Maybe<&2, Models.Model()>>):
+def chosenOrRestored(+models: Models.ModelRuntime, settings: Settings.SettingsManager, resolution: Models.ResolveCliModelResult, restored: Maybe<&2, Models.Model()>) -> IO(Result<&2, &2, String, Maybe<&2, Models.Model()>>):
   match restored:
     case Some{model}: IO.pure(Result<&2, &2, String, Maybe<&2, Models.Model()>>, Done{Some{model}})
-    case None{}: chosenModel(models, settings, Models.resolveCliModel(models, provider, cliModel))
+    case None{}: chosenModel(models, settings, resolution)
 
 def restoreIf(+models: Models.ModelRuntime, named: Bool, seed: SessionSeed) -> IO(Maybe<&2, Models.Model()>):
   match named:
     case True{}: IO.pure(Maybe<&2, Models.Model()>, None{})
     case False{}: restoredModel(models, seed)
 
-def selectModel(+models: Models.ModelRuntime, options: CreateOptions) -> IO(Result<&2, &2, String, Maybe<&2, Models.Model()>>):
+# upstream main's --provider/--model resolution, reported as a warning.
+def cliResolution(+models: Models.ModelRuntime, options: CreateOptions) -> Models.ResolveCliModelResult:
+  match options:
+    case CreateOptions{_, _, _, _, _, provider, cliModel, _, thinking, _, _, _, _, _, _, _}: Models.resolveCliModel(models, provider, cliModel, thinking)
+
+def reportResolution(resolution: Models.ResolveCliModelResult) -> IO(Unit):
+  match resolution:
+    case Models.ResolveCliModelResult{_, _, Some{warning}, _}: IO.print_err("Warning: " ++ warning)
+    case _: IO.pure(Unit, Unit{})
+
+# "--model <pattern>:<thinking>" sets the thinking level unless --thinking did.
+def withSuffixThinking(options: CreateOptions, resolution: Models.ResolveCliModelResult) -> CreateOptions:
+  match options resolution:
+    case CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, None{}, systemPrompt, appendSystemPrompt, tools, contextFiles, seed, settings, resources} Models.ResolveCliModelResult{Some{_}, level, _, _}:
+      CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, level, systemPrompt, appendSystemPrompt, tools, contextFiles, seed, settings, resources}
+    case options _: options
+
+def selectModel(+models: Models.ModelRuntime, options: CreateOptions, resolution: Models.ResolveCliModelResult) -> IO(Result<&2, &2, String, Maybe<&2, Models.Model()>>):
   match options:
     case CreateOptions{_, _, _, _, _, +provider, +cliModel, _, _, _, _, _, _, seed, settings, _}:
       do IO<Result<&2, &2, String, Maybe<&2, Models.Model()>>>:
         restored : Maybe<&2, Models.Model()> <- restoreIf(models, Maybe.is_some(&2, String, provider) || Maybe.is_some(&2, String, cliModel), seed)
-        chosen : Result<&2, &2, String, Maybe<&2, Models.Model()>> <- chosenOrRestored(models, settings, provider, cliModel, restored)
+        chosen : Result<&2, &2, String, Maybe<&2, Models.Model()>> <- chosenOrRestored(models, settings, resolution, restored)
         return Result.bind(&2, &2, String, Maybe<&2, Models.Model()>, Maybe<&2, Models.Model()>, chosen, supported)
 
 def namedLevel(levels: List<&2, Ai.ModelThinkingLevel>, +text: String) -> Maybe<&2, Ai.ModelThinkingLevel>:
@@ -594,7 +644,7 @@ def sessionThinking(+seed: SessionSeed, settingsDefault: Maybe<&2, Ai.ModelThink
 # upstream createAgentSession: --thinking, else the resumed session's level,
 # else the settings' per-model level, else the settings default, else
 # DEFAULT_THINKING_LEVEL; clamped to the model's levels, and off without a
-# model. The :level model suffix is not applied yet.
+# model. A --model ":<level>" suffix arrives as the requested level.
 def thinkingLevel(requested: Maybe<&2, Ai.ModelThinkingLevel>, seed: SessionSeed, +model: Models.Model(), +settings: Settings.SettingsManager) -> Ai.ModelThinkingLevel:
   +settingsDefault = Settings.getDefaultThinkingLevel(settings)
   +perModel = Settings.getModelThinkingLevel(Models.modelProvider(model), Models.modelId(model), settings)
@@ -790,10 +840,12 @@ def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, 
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch, urlContext())
         anthropicOAuth : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch, urlContext())
         +models : Models.ModelRuntime <- Models.createWithAnthropic(credentialStore, oauth, Some{anthropicOAuth})
-        +selected : Result<&2, &2, String, Maybe<&2, Models.Model()>> <- selectModel(models, options)
+        +resolution : Models.ResolveCliModelResult = cliResolution(models, options)
+        reportResolution(resolution)
+        +selected : Result<&2, &2, String, Maybe<&2, Models.Model()>> <- selectModel(models, options, resolution)
         applyKey(credentials, apiKey, selected)
         prompt : Result<&2, &2, String, Prepared> <- preparedFor(paths, options, packageDir)
-        withModel(options, Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected)
+        withModel(withSuffixThinking(options, resolution), Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected)
 
 def withPathsFields(options: CreateOptions, authPath: String, packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, paths: Paths.Environment) -> IO(Outcome(AgentRuntime)):
   do IO<Outcome(AgentRuntime)>:

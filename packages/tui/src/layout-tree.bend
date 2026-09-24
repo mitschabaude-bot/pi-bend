@@ -87,6 +87,15 @@ def painted(items: List<&2,Item>,rows: List<&2,String>,+parentX: Nat,+parentY: N
     case Nil{}: rows
     case Item{_,L.LayoutBox{_,L.LayoutRect{x,y,childWidth,childHeight},_,_,_,_,_},lines,_,_,_} <> rest:
       painted(rest,L.paint(rows,lines,y - parentY,x - parentX,childWidth,childHeight,width),parentX,parentY,width)
+def verticalPaint(items: List<&2,Item>,+parentY: Nat,+used: Nat,+height: Nat,+width: Nat) -> List<&2,String>:
+  match items:
+    case Nil{}: L.blank(height - used,Nil{})
+    case Item{_,L.LayoutBox{_,L.LayoutRect{_,y,childWidth,childHeight},_,_,_,_,_},lines,_,_,_} <> rest:
+      +top = Nat.min(height,y - parentY)
+      +space = L.blank(top - used,Nil{})
+      +visible = Nat.min(childHeight,height - top)
+      +child = L.paint(L.blank(visible,Nil{}),lines,0n,0n,childWidth,visible,width)
+      List.append(&2,String,space,List.append(&2,String,child,verticalPaint(rest,parentY,top + visible,height,width)))
 def one(node: N.LayoutNode,box: L.LayoutBox,lines: List<&2,String>,naturalWidth: Nat,naturalHeight: Nat,cache: List<&2,CachedLine>) -> Result:
   Single{Item{node,box,lines,naturalWidth,naturalHeight,None{}},cache}
 def placeholder(node: N.LayoutNode,+width: Nat,+height: Nat,lines: List<&2,String>,cache: List<&2,CachedLine>) -> Result:
@@ -129,13 +138,15 @@ def stackNode(axis: S.Axis,entries: N.LayoutNode,gap: Nat,align: S.Align) -> N.L
   match axis:
     case S.Vertical{}: N.VStack{entries,gap}
     case S.Horizontal{}: N.HStack{entries,gap,align}
-def stackPlaced(axis: S.Axis,entries: N.LayoutNode,+items: List<&2,Item>,+gap: Nat,align: S.Align,+x: Nat,+y: Nat,+width: Nat,+height: Nat,clip: L.LayoutRect,cache: List<&2,CachedLine>) -> Result:
+def stackScreen(axis: S.Axis,items: List<&2,Item>,x: Nat,y: Nat,width: Nat,height: Nat) -> List<&2,String>:
+  match axis:
+    case S.Vertical{}: verticalPaint(items,y,0n,height,width)
+    case S.Horizontal{}: painted(items,L.blank(height,Nil{}),x,y,width)
+def stackPlaced(+axis: S.Axis,entries: N.LayoutNode,+items: List<&2,Item>,+gap: Nat,align: S.Align,+x: Nat,+y: Nat,+width: Nat,+height: Nat,clip: L.LayoutRect,cache: List<&2,CachedLine>) -> Result:
   +bounds = L.rect(x,y,width,height)
-  +screen = painted(items,L.blank(height,Nil{}),x,y,width)
+  +screen = stackScreen(axis,items,x,y,width,height)
   +node = stackNode(axis,entries,gap,align)
-  +naturalWidth = L.lineWidth(screen)
-  +naturalHeight = List.length(&2,String,screen)
-  one(node,L.LayoutBox{None{},bounds,L.intersect(clip,bounds),boxes(items),None{},0n,0n},screen,naturalWidth,naturalHeight,cache)
+  one(node,L.LayoutBox{None{},bounds,L.intersect(clip,bounds),boxes(items),None{},0n,0n},screen,width,height,cache)
 def shiftScrollChild(children: List<&2,L.LayoutBox>,x: Nat,y: Nat,clip: L.LayoutRect) -> List<&2,L.LayoutBox>:
   match children:
     case Nil{}: Nil{}
@@ -274,15 +285,29 @@ def inlineFrame(result: Result,width: Nat,height: Nat) -> TreeFrame:
     case Single{Item{N.VStack{entries,gap},box,lines,_,_,_},_}:
       TreeFrame{N.Inline{N.VStack{entries,gap}},L.LayoutFrame{box,width,height,lines}}
     case result: wrappedFrame(treeFrame(result,width,height))
-def renderInline(+node: N.LayoutNode,width: Nat,height: Nat) -> IO(TreeFrame):
-  +safeWidth = Nat.max(1n,width)
-  +safeHeight = Nat.max(1n,height)
-  +viewport = viewport(safeWidth,safeHeight)
-  do IO<TreeFrame>:
-    +measured : Result <- run(node,Measure{safeWidth,viewport},Nil{})
-    +contentHeight : Nat <- IO.pure(Nat,Nat.min(safeHeight,Nat.max(1n,maybeHeight(resultItem(measured)))))
-    result : Result <- run(node,Place{0n,0n,safeWidth,contentHeight,L.rect(0n,0n,safeWidth,contentHeight),viewport},resultCache(measured))
-    return inlineFrame(result,safeWidth,contentHeight)
+def renderInline(node: N.LayoutNode,width: Nat,height: Nat) -> IO(TreeFrame):
+  match node:
+    case N.VStack{entries,+gap}:
+      +safeWidth = Nat.max(1n,width)
+      +safeHeight = Nat.max(1n,height)
+      +view = viewport(safeWidth,safeHeight)
+      do IO<TreeFrame>:
+        +measured : Result <- run(entries,Measure{safeWidth,view},Nil{})
+        +items : List<&2,Item> <- IO.pure(List<&2,Item>,resultItems(measured))
+        +natural : List<&2,Nat> <- IO.pure(List<&2,Nat>,S.allocateStackSizes(options(items),naturalHeights(items),None{},gap))
+        +contentHeight : Nat <- IO.pure(Nat,Nat.min(safeHeight,Nat.max(1n,total(natural) + gapTotal(items,gap))))
+        +allocated : List<&2,Nat> <- IO.pure(List<&2,Nat>,S.allocateStackSizes(options(items),naturalHeights(items),Some{contentHeight},gap))
+        +placed : Result <- run(resultEntries(measured),PlaceV{0n,0n,safeWidth,allocated,gap,L.rect(0n,0n,safeWidth,contentHeight),view},resultCache(measured))
+        return inlineFrame(stackPlaced(S.Vertical{},resultEntries(placed),resultItems(placed),gap,S.Stretch{},0n,0n,safeWidth,contentHeight,L.rect(0n,0n,safeWidth,contentHeight),resultCache(placed)),safeWidth,contentHeight)
+    case +node:
+      +safeWidth = Nat.max(1n,width)
+      +safeHeight = Nat.max(1n,height)
+      +view = viewport(safeWidth,safeHeight)
+      do IO<TreeFrame>:
+        +measured : Result <- run(node,Measure{safeWidth,view},Nil{})
+        +contentHeight : Nat <- IO.pure(Nat,Nat.min(safeHeight,Nat.max(1n,maybeHeight(resultItem(measured)))))
+        result : Result <- run(node,Place{0n,0n,safeWidth,contentHeight,L.rect(0n,0n,safeWidth,contentHeight),view},resultCache(measured))
+        return inlineFrame(result,safeWidth,contentHeight)
 def renderTreeFrame(node: N.LayoutNode,width: Nat,height: Nat) -> IO(TreeFrame):
   match node:
     case N.Inline{child}: renderInline(child,width,height)
