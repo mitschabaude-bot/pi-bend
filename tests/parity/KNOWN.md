@@ -50,3 +50,10 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   like pi (overrides, saved decisions, defaults; print/JSON/RPC untrusted) but
   has no startup selector yet, so interactive mode treats the project as
   untrusted. Codex is porting ExtensionSelectorComponent/showStartupSelector.
+- **RPC command ordering around a prompt** (`steer-and-queue`): Node runs a
+  prompt's microtasks up to its first awaited I/O before reading the next
+  stdin line, so a steer sent right after the prompt response arrives while
+  the model streams. Bend's RPC reader waits for the prompt's user message
+  (the loop has then polled the steering queue) or the prompt's end. When a
+  prompt first compacts, pi reads the next command during the compaction
+  request instead; Bend still waits for the user message.

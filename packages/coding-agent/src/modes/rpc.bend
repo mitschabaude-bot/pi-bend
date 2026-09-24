@@ -34,7 +34,11 @@ import ../core/prompt-templates.bend as Templates
 def Sink() -> Data: Callback.Callback<String,Unit>
 type Submission is Data: Submission{text: String,images: List<&2,Ai.ImageContent>,behavior: Maybe<&2,Session.StreamingBehavior>}
 type BashRequest is Data: BashRequest{id: Maybe<&2,String>,command: String,exclude: Maybe<&2,Bool>}
-type Work is Data: PromptWork{request: Submission} BashWork{request: BashRequest}
+# Upstream handles the next command only when the prompt reaches its first
+# awaited I/O: its user message is out and the loop has polled the steering
+# queue. `Started` lets the reader wait for that point (or the prompt's end).
+type Started is Data: Started{signal: Chan(Unit),sent: Ref.Ref<Bool>}
+type Work is Data: PromptWork{request: Submission,started: Started} BashWork{request: BashRequest}
 # One command's view of the endpoint, over the session current when it runs.
 type Command is Data:
   Command{session: Session.AgentSession,sink: Sink(),buffer: Ref.Ref<String>,busy: Ref.Ref<Bool>,jobs: Chan(Work),assetsDir: Maybe<&2,String>}
@@ -151,15 +155,41 @@ def runBash(handle: Command,request: BashRequest) -> IO(Unit):
       do IO<Unit>:
         result : Result<&2,&2,String,Bash.BashResult> <- Session.executeBash(session,command,None{},Session.BashOptions{exclude,id,None{}})
         bashReply(sink,id,result)
-def runJob(handle: Command,request: Submission) -> IO(Unit):
-  match handle request:
-    case Command{session,_,_,busy,_,_} Submission{text,images,behavior}:
+def sendSignal(signal: Chan(Unit)) -> IO(Unit):
+  do IO<Unit>:
+    delivered : Bool <- Chan.send(Unit,signal,Unit{})
+    return Unit{}
+def releaseStarted(started: Started) -> IO(Unit):
+  match started:
+    case Started{_,sent}:
       do IO<Unit>:
+        flag : Bool <- Ref.dispose(Bool,sent)
+        return Unit{}
+def signalOnce(started: Started) -> IO(Unit):
+  match started:
+    case Started{signal,sent}:
+      do IO<Unit>:
+        previous : Bool <- Ref.swap(Bool,sent,True{})
+        Bool.pick(Unit -> IO(Unit),previous,_ => IO.pure(Unit,Unit{}),_ => sendSignal(signal))(Unit{})
+def startedBy(started: Started,value: Session.AgentSessionEvent) -> IO(Unit):
+  match value:
+    case Session.AgentEvent{AgentTypes.MessageEnd{AgentTypes.LlmMessage{Ai.User{_}}}}: signalOnce(started)
+    case _: IO.pure(Unit,Unit{})
+def runJob(handle: Command,request: Submission,+started: Started) -> IO(Unit):
+  match handle request:
+    case Command{+session,_,_,busy,_,_} Submission{text,images,behavior}:
+      do IO<Unit>:
+        +watch : Session.Listener() <- Callback.create(~Started,~Session.AgentSessionEvent,~Unit,~startedBy,started)
+        Session.subscribe(session,watch)
         result : Result<&2,&2,String,Unit> <- Session.prompt(session,text,images,behavior)
+        Session.unsubscribe(session,watch)
+        Callback.dispose(Session.AgentSessionEvent,Unit,watch)
+        signalOnce(started)
+        releaseStarted(started)
         Ref.write(Bool,busy,False{})
 def runWork(handle: Command,work: Work) -> IO(Unit):
   match work:
-    case PromptWork{request}: runJob(handle,request)
+    case PromptWork{request,started}: runJob(handle,request,started)
     case BashWork{request}: runBash(handle,request)
 def commandOf(handle: Handle) -> IO(Command):
   match handle:
@@ -221,9 +251,12 @@ def acceptedPrompt(session: Session.AgentSession,sink: Sink(),busy: Ref.Ref<Bool
         output(sink,ok(id,"prompt"))
     case False{} _:
       do IO<Unit>:
+        +signal : Chan(Unit) <- Chan.new(Unit,1)
+        sent : Ref.Ref<Bool> <- Ref.new(Bool,False{})
         Ref.write(Bool,busy,True{})
         output(sink,ok(id,"prompt"))
-        accepted : Bool <- Chan.send(Work,jobs,PromptWork{Submission{text,images,behavior}})
+        accepted : Bool <- Chan.send(Work,jobs,PromptWork{Submission{text,images,behavior},Started{signal,sent}})
+        ready : Maybe<&1,Unit> <- Chan.recv(Unit,signal)
         return Unit{}
 
 def promptChecked(handle: Command,id: Maybe<&2,String>,message: Result<&2,&2,String,String>,images: Result<&2,&2,String,List<&2,Ai.ImageContent>>,behavior: Result<&2,&2,String,Maybe<&2,Session.StreamingBehavior>>) -> IO(Unit):
