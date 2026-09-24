@@ -4,6 +4,7 @@ import ./cli/auth-login.bend as AuthLogin
 import ./cli/file-processor.bend as Files
 import ./cli/list-models.bend as ModelList
 import ./cli/session-picker.bend as Picker
+import ./cli/startup-selector.bend as StartupSelector
 import ./config.bend as Config
 import ./core/agent-runtime.bend as Runtime
 import ./core/model-runtime.bend as Models
@@ -37,6 +38,7 @@ import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/json.bend as Decode
 import ../../runtime/src/callback.bend as Callback
 import ../../runtime/src/ref.bend as Ref
+import ../../runtime/src/record.bend as Record
 import ../../runtime/src/abort.bend as Abort
 
 # The pi entry point: argument parsing, mode selection, session selection,
@@ -765,7 +767,19 @@ def Created() -> Type: SessionRuntime.Created<Services>
 def Host() -> Data: SessionRuntime.AgentSessionRuntime<Services>
 
 type FactoryEnv is Data:
-  FactoryEnv{parsed: Args.Args, agentDir: String, authPath: String, bundlePath: String, packageDir: String}
+  FactoryEnv{parsed: Args.Args, agentDir: String, authPath: String, bundlePath: String, packageDir: String, mode: AppMode, trust: Ref.Ref<Record.Record<Bool>>}
+type StartupSelect is Data: StartupSelect{agentDir: String,assetsRoot: String}
+def selectedTrust(context: StartupSelect,request: ProjectTrust.SelectRequest) -> IO(Maybe<&2,String>):
+  match context:
+    case StartupSelect{agentDir,assetsRoot}: StartupSelector.select(request,agentDir,assetsRoot)
+def initialRequest(start: Maybe<&2,SessionRuntime.SessionStart>) -> Bool:
+  match start:
+    case None{}: True{}
+    case Some{_}: False{}
+def interactive(mode: AppMode) -> Bool:
+  match mode:
+    case Interactive{}: True{}
+    case _: False{}
 
 def releaseServices(env: Unit, services: Services) -> IO(Unit):
   match services:
@@ -851,7 +865,7 @@ def envHome(value: Result<&1, &1, U32 & String, String>) -> Maybe<&2, String>:
     case Fail{_}: None{}
 def runtimeWithSettings(env: FactoryEnv, +cwd: String, +session: Session(), +value: Runtime.SessionSeed, +settings: Settings.SettingsManager) -> IO(Result<&1, &1, String, Created()>):
   match env:
-    case FactoryEnv{+parsed, agentDir, authPath, bundlePath, packageDir}:
+    case FactoryEnv{+parsed, agentDir, authPath, bundlePath, packageDir,_,_}:
       do IO<Result<&1, &1, String, Created()>>:
         created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.create(createOptions(parsed, cwd, agentDir, authPath, bundlePath, packageDir, value, settings))
         runtimeCreated(cwd, session, seedMessages(value), seedThinking(value), settings, value, scopeFlags(parsed, settings), created)
@@ -859,29 +873,48 @@ def trustedRuntime(env: FactoryEnv, +cwd: String, +session: Session(), +value: R
   match env trust:
     case _ Fail{message}: IO.pure(Result<&1, &1, String, Created()>, Fail{"Error: " ++ message})
     case env Done{True{}}: runtimeWithSettings(env, cwd, session, value, startup)
-    case FactoryEnv{parsed, +agentDir, authPath, bundlePath, packageDir} Done{False{}}:
+    case FactoryEnv{parsed, +agentDir, authPath, bundlePath, packageDir,mode,cache} Done{False{}}:
       do IO<Result<&1, &1, String, Created()>>:
         +untrusted : Settings.SettingsManager <- loadSettingsTrusted(cwd, agentDir, False{})
-        runtimeWithSettings(FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir}, cwd, session, value, untrusted)
-def flaggedRuntime(env: FactoryEnv, +cwd: String, +session: Session(), +value: Runtime.SessionSeed, unknown: Maybe<&2, String>) -> IO(Result<&1, &1, String, Created()>):
+        runtimeWithSettings(FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir,mode,cache}, cwd, session, value, untrusted)
+def overrideFor(explicit: Maybe<&2,Bool>,cached: Maybe<&2,Bool>) -> Maybe<&2,Bool>:
+  match explicit:
+    case Some{value}: Some{value}
+    case None{}: cached
+def resolvedTrust(options: ProjectTrust.ResolveProjectTrustedOptions,prompt: Bool,agentDir: String,assetsRoot: String) -> IO(Result<&2,&2,String,Bool>):
+  match prompt:
+    case False{}: ProjectTrust.resolveProjectTrusted(options,None{})
+    case True{}:
+      do IO<Result<&2,&2,String,Bool>>:
+        +selector : Callback.Callback<ProjectTrust.SelectRequest,Maybe<&2,String>> <- Callback.create(~StartupSelect,~ProjectTrust.SelectRequest,~Maybe<&2,String>,~selectedTrust,StartupSelect{agentDir,assetsRoot})
+        answer : Result<&2,&2,String,Bool> <- ProjectTrust.resolveProjectTrusted(options,Some{selector})
+        Callback.dispose(ProjectTrust.SelectRequest,Maybe<&2,String>,selector)
+        return answer
+def rememberTrust(cache: Ref.Ref<Record.Record<Bool>>,cwd: String,result: Result<&2,&2,String,Bool>) -> IO(Unit):
+  match result:
+    case Done{trusted}: Ref.modify(Record.Record<Bool>,Unit,cache,current => (Record.set(Bool,current,cwd,trusted),Unit{}))
+    case Fail{_}: IO.pure(Unit,Unit{})
+def flaggedRuntime(env: FactoryEnv, +cwd: String, +session: Session(), +value: Runtime.SessionSeed, unknown: Maybe<&2, String>,initial: Bool) -> IO(Result<&1, &1, String, Created()>):
   match env unknown:
     case _ Some{message}: IO.pure(Result<&1, &1, String, Created()>, Fail{message})
-    case FactoryEnv{+parsed, +agentDir, authPath, bundlePath, packageDir} None{}:
+    case FactoryEnv{+parsed, +agentDir, authPath, bundlePath, +packageDir,+mode,+cache} None{}:
       do IO<Result<&1, &1, String, Created()>>:
         +startup : Settings.SettingsManager <- loadSettings(cwd, agentDir)
         home : Result<&1, &1, U32 & String, String> <- IO.get_env("HOME")
-        trust : Result<&2, &2, String, Bool> <- ProjectTrust.resolveProjectTrusted(ProjectTrust.ResolveProjectTrustedOptions{cwd, envHome(home), Trust.create(agentDir), Args.projectTrustOverrideOf(parsed), Settings.getDefaultProjectTrust(startup)}, None{})
-        trustedRuntime(FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir}, cwd, session, value, startup, trust)
+        known : Record.Record<Bool> <- Ref.read(Record.Record<Bool>,cache)
+        +trust : Result<&2, &2, String, Bool> <- resolvedTrust(ProjectTrust.ResolveProjectTrustedOptions{cwd, envHome(home), Trust.create(agentDir), overrideFor(Args.projectTrustOverrideOf(parsed),Record.get(Bool,known,cwd)), Settings.getDefaultProjectTrust(startup)},initial && interactive(mode),agentDir,packageDir)
+        rememberTrust(cache,cwd,trust)
+        trustedRuntime(FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir,mode,cache}, cwd, session, value, startup, trust)
 
-def seededRuntime(env: FactoryEnv, +cwd: String, +session: Session(), seed: Result<&2, &2, Stop, Runtime.SessionSeed>) -> IO(Result<&1, &1, String, Created()>):
+def seededRuntime(env: FactoryEnv, +cwd: String, +session: Session(), seed: Result<&2, &2, Stop, Runtime.SessionSeed>,initial: Bool) -> IO(Result<&1, &1, String, Created()>):
   match env seed:
     case _ Fail{Failed{message}}: IO.pure(Result<&1, &1, String, Created()>, Fail{message})
     case _ Fail{Aborted{note}}: IO.pure(Result<&1, &1, String, Created()>, Fail{note})
-    case FactoryEnv{+parsed, agentDir, authPath, bundlePath, packageDir} Done{value}: flaggedRuntime(FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir}, cwd, session, value, unknownOptions(Args.unknownFlagNames(parsed)))
+    case FactoryEnv{+parsed, agentDir, authPath, bundlePath, packageDir,mode,cache} Done{value}: flaggedRuntime(FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir,mode,cache}, cwd, session, value, unknownOptions(Args.unknownFlagNames(parsed)),initial)
 
 def createRuntime(env: FactoryEnv, request: SessionRuntime.Request) -> IO(Result<&1, &1, String, Created()>):
   match request:
-    case SessionRuntime.Request{cwd, +session, _}: seededRuntime(env, cwd, session, sessionSeed(session))
+    case SessionRuntime.Request{cwd, +session, start}: seededRuntime(env, cwd, session, sessionSeed(session),initialRequest(start))
 
 # Modes
 # -----
@@ -1078,15 +1111,18 @@ def runHosted(mode: AppMode, initial: InitialMessage, themeOverride: Maybe<&2,St
     case Rpc{} _ Done{host}: rpcHosted(packageDir, host)
     case _ InitialMessage{text, images, remaining} Done{host}: printHosted(Print.PrintModeOptions{outputMode(mode), remaining, text, images}, host)
 
-def runSeeded(+parsed: Args.Args, mode: AppMode, initial: InitialMessage, +session: Session(), +agentDir: String, authPath: String, bundlePath: String, +packageDir: String) -> IO(Unit):
+def runSeeded(+parsed: Args.Args, +mode: AppMode, initial: InitialMessage, +session: Session(), +agentDir: String, authPath: String, bundlePath: String, +packageDir: String) -> IO(Unit):
   +sessionCwd = Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, session)
   do IO<Unit>:
-    +factory : SessionRuntime.Factory(Services) <- Callback.create(~FactoryEnv, ~SessionRuntime.Request, ~Result<&1, &1, String, Created()>, ~createRuntime, FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir})
+    +trust : Ref.Ref<Record.Record<Bool>> <- Ref.new(Record.Record<Bool>,Record.new(Bool))
+    +factory : SessionRuntime.Factory(Services) <- Callback.create(~FactoryEnv, ~SessionRuntime.Request, ~Result<&1, &1, String, Created()>, ~createRuntime, FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir,mode,trust})
     +release : Callback.Callback<Services, Unit> <- Callback.create(~Unit, ~Services, ~Unit, ~releaseServices, Unit{})
     started : Result<&2, &2, String, Host()> <- SessionRuntime.create(Services, factory, release, agentDir, sessionCwd, session)
     runHosted(mode, initial, themeOverride(parsed), sessionCwd, agentDir, packageDir, started)
     Callback.dispose(SessionRuntime.Request, Result<&1, &1, String, Created()>, factory)
     Callback.dispose(Services, Unit, release)
+    decision : Record.Record<Bool> <- Ref.dispose(Record.Record<Bool>,trust)
+    return Unit{}
 
 def runNamed(parsed: Args.Args, mode: AppMode, initial: InitialMessage, named: Selected(), agentDir: String, authPath: String, bundlePath: String, packageDir: String) -> IO(Unit):
   match named:
