@@ -1,8 +1,10 @@
 import Base
 import ../core/project-trust.bend as Trust
 import ../core/keybindings.bend as AppKeys
+import ../core/settings-manager.bend as Settings
 import ../modes/interactive/theme/theme.bend as Theme
 import ../modes/interactive/theme/color.bend as Color
+import ../modes/interactive/theme/detection.bend as Detection
 import ../../../runtime/src/callback.bend as Callback
 import ../../../runtime/src/deferred.bend as Deferred
 import ../../../runtime/src/posix-path.bend as Path
@@ -14,6 +16,7 @@ import ../../../tui/src/tui-base.bend as Tui
 import ../../../tui/src/tui-main-screen.bend as Screen
 import ../../../tui/src/tui-process.bend as Process
 import ../../../tui/src/terminal.bend as Terminal
+import ../../../tui/src/terminal-image.bend as Image
 import ../../../tui/src/utils.bend as Utils
 
 # A startup question owns the terminal only until the user chooses or cancels.
@@ -152,8 +155,25 @@ def loaded(request: Trust.SelectRequest,keys: Result<&2,&2,AppKeys.Error,AppKeys
   match keys theme:
     case Done{AppKeys.KeybindingsManager{bindings,_,_}} Done{ready}: withTheme(request,bindings,ready)
     case _ _: IO.pure(Maybe<&2,String>,None{})
-def select(request: Trust.SelectRequest,+agentDir: String,assetsRoot: String) -> IO(Maybe<&2,String>):
+def envValue(value: Result<&1,&1,U32 & String,String>) -> Maybe<&2,String>:
+  match value:
+    case Done{text}: Some{text}
+    case Fail{_}: None{}
+def terminalName(theme: Detection.TerminalTheme) -> String:
+  match theme:
+    case Detection.Dark{}: "dark"
+    case Detection.Light{}: "light"
+def themeName(setting: Maybe<&2,String>,background: Maybe<&2,String>) -> String:
+  +detected = Detection.detectionTheme(Detection.detectTerminalBackgroundFromEnv(background))
+  Maybe.default(&2,String,Detection.resolveThemeSetting(setting,detected),terminalName(detected))
+def trueColorOverride(capabilities: Settings.TerminalCapabilities) -> Maybe<&2,Bool>:
+  match capabilities: case Settings.TerminalCapabilities{_,color,_}: color
+def select(request: Trust.SelectRequest,+agentDir: String,assetsRoot: String,+settings: Settings.SettingsManager) -> IO(Maybe<&2,String>):
   do IO<Maybe<&2,String>>:
     keys : Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager> <- AppKeys.create(AppKeys.Environment{"linux",None{},None{}},agentDir)
-    theme : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadByName("dark",Path.join(assetsRoot,"packages/coding-agent/src/modes/interactive/theme"),Path.join(agentDir,"themes"),Color.TrueColor{})
+    background : Result<&1,&1,U32 & String,String> <- IO.get_env("COLORFGBG")
+    home : Result<&1,&1,U32 & String,String> <- IO.get_env("HOME")
+    environment : Image.Environment <- Image.processEnvironment("linux",Maybe.default(&2,String,envValue(home),""))
+    mode : Color.Mode <- IO.pure(Color.Mode,Color.modeFor(Image.trueColor(environment,trueColorOverride(Settings.getTerminalCapabilityOverrides(settings)))))
+    theme : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadByName(themeName(Settings.getThemeSetting(settings),envValue(background)),Path.join(assetsRoot,"packages/coding-agent/src/modes/interactive/theme"),Path.join(agentDir,"themes"),mode)
     loaded(request,keys,theme)

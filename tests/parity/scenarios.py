@@ -49,6 +49,14 @@ SCENARIOS = [
                   ("key", "Enter"), ("wait", READY, "accepted"), ("settle", 0.2), ("snap", "accepted")],
     },
     {
+        "name": "trust-light-256",
+        "args": MODEL,
+        "files": {"project/.pi/settings.json": "{}", "home/.pi/agent/settings.json": json.dumps({"theme": "light", "terminal": {"trueColor": False}})},
+        "trust_file": True,
+        "steps": [("wait", "Trust project folder?", "prompt"), ("settle", 0.2), ("snap", "prompt"),
+                  ("key", "Enter"), ("wait", READY, "accepted"), ("settle", 0.2), ("snap", "accepted")],
+    },
+    {
         "name": "trust-session-only",
         "args": MODEL,
         "files": {"project/.pi/settings.json": "{}"},

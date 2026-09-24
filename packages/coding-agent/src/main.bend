@@ -768,10 +768,10 @@ def Host() -> Data: SessionRuntime.AgentSessionRuntime<Services>
 
 type FactoryEnv is Data:
   FactoryEnv{parsed: Args.Args, agentDir: String, authPath: String, bundlePath: String, packageDir: String, mode: AppMode, trust: Ref.Ref<Record.Record<Bool>>}
-type StartupSelect is Data: StartupSelect{agentDir: String,assetsRoot: String}
+type StartupSelect is Data: StartupSelect{agentDir: String,assetsRoot: String,settings: Settings.SettingsManager}
 def selectedTrust(context: StartupSelect,request: ProjectTrust.SelectRequest) -> IO(Maybe<&2,String>):
   match context:
-    case StartupSelect{agentDir,assetsRoot}: StartupSelector.select(request,agentDir,assetsRoot)
+    case StartupSelect{agentDir,assetsRoot,settings}: StartupSelector.select(request,agentDir,assetsRoot,settings)
 def initialRequest(start: Maybe<&2,SessionRuntime.SessionStart>) -> Bool:
   match start:
     case None{}: True{}
@@ -881,12 +881,12 @@ def overrideFor(explicit: Maybe<&2,Bool>,cached: Maybe<&2,Bool>) -> Maybe<&2,Boo
   match explicit:
     case Some{value}: Some{value}
     case None{}: cached
-def resolvedTrust(options: ProjectTrust.ResolveProjectTrustedOptions,prompt: Bool,agentDir: String,assetsRoot: String) -> IO(Result<&2,&2,String,Bool>):
+def resolvedTrust(options: ProjectTrust.ResolveProjectTrustedOptions,prompt: Bool,agentDir: String,assetsRoot: String,settings: Settings.SettingsManager) -> IO(Result<&2,&2,String,Bool>):
   match prompt:
     case False{}: ProjectTrust.resolveProjectTrusted(options,None{})
     case True{}:
       do IO<Result<&2,&2,String,Bool>>:
-        +selector : Callback.Callback<ProjectTrust.SelectRequest,Maybe<&2,String>> <- Callback.create(~StartupSelect,~ProjectTrust.SelectRequest,~Maybe<&2,String>,~selectedTrust,StartupSelect{agentDir,assetsRoot})
+        +selector : Callback.Callback<ProjectTrust.SelectRequest,Maybe<&2,String>> <- Callback.create(~StartupSelect,~ProjectTrust.SelectRequest,~Maybe<&2,String>,~selectedTrust,StartupSelect{agentDir,assetsRoot,settings})
         answer : Result<&2,&2,String,Bool> <- ProjectTrust.resolveProjectTrusted(options,Some{selector})
         Callback.dispose(ProjectTrust.SelectRequest,Maybe<&2,String>,selector)
         return answer
@@ -902,7 +902,7 @@ def flaggedRuntime(env: FactoryEnv, +cwd: String, +session: Session(), +value: R
         +startup : Settings.SettingsManager <- loadSettings(cwd, agentDir)
         home : Result<&1, &1, U32 & String, String> <- IO.get_env("HOME")
         known : Record.Record<Bool> <- Ref.read(Record.Record<Bool>,cache)
-        +trust : Result<&2, &2, String, Bool> <- resolvedTrust(ProjectTrust.ResolveProjectTrustedOptions{cwd, envHome(home), Trust.create(agentDir), overrideFor(Args.projectTrustOverrideOf(parsed),Record.get(Bool,known,cwd)), Settings.getDefaultProjectTrust(startup)},initial && interactive(mode),agentDir,packageDir)
+        +trust : Result<&2, &2, String, Bool> <- resolvedTrust(ProjectTrust.ResolveProjectTrustedOptions{cwd, envHome(home), Trust.create(agentDir), overrideFor(Args.projectTrustOverrideOf(parsed),Record.get(Bool,known,cwd)), Settings.getDefaultProjectTrust(startup)},initial && interactive(mode),agentDir,packageDir,startup)
         rememberTrust(cache,cwd,trust)
         trustedRuntime(FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir,mode,cache}, cwd, session, value, startup, trust)
 
