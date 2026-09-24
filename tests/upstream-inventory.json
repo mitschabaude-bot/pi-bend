@@ -2352,9 +2352,12 @@
     },
     {
       "source": "packages/coding-agent/test/model-resolver.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "1764d9ef39b2be9ed2a2521b565ca8da61baa425ce1b76c47b75e8c694d93ecf"
+      "status": "partial",
+      "ports": [
+        "tests/model-resolver.bend"
+      ],
+      "sha256": "1764d9ef39b2be9ed2a2521b565ca8da61baa425ce1b76c47b75e8c694d93ecf",
+      "notes": "All parseModelPattern and resolveCliModel cases are ported with their names; the mocked getModels/hasConfiguredAuth become the model list and the authenticated provider names passed to the pure resolveCliModelWith. Results compare whole model/level/warning/error summaries, so fallback warnings unasserted upstream are pinned to upstream's code, and one added case covers several authenticated providers. The localeCompare ordering of an ambiguity is applied in agent-runtime and is covered by process parity. resolveModelScopeWithDiagnostics and default model selection (findInitialModel, persisted scope) remain pending."
     },
     {
       "source": "packages/coding-agent/test/model-runtime-auth-options.test.ts",

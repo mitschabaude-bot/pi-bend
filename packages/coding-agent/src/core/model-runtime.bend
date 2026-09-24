@@ -760,22 +760,95 @@ def orNotFound(+display: String, result: ResolveCliModelResult) -> ResolveCliMod
 def resolveAcross(pattern: String, models: List<&2, Model()>) -> ResolveCliModelResult:
   resolved(parsePattern(pattern, models, False{}))
 
-def fallbackAcross(cliModel: String, scoped: ResolveCliModelResult, models: List<&2, Model()>) -> ResolveCliModelResult:
-  match scoped:
-    case ResolveCliModelResult{None{}, _, _, None{}}: resolveAcross(cliModel, models)
+# The pure resolution; an ambiguous bare id carries its matches so the caller
+# can order them as upstream's localeCompare does.
+type Resolution is Data:
+  Resolved{result: ResolveCliModelResult}
+  AmbiguousAcross{cliModel: String, matches: List<&2, String>, hint: String}
+
+def found(model: Model()) -> ResolveCliModelResult: ResolveCliModelResult{Some{model}, None{}, None{}, None{}}
+def authedIn(authed: List<&2, String>, +provider: String) -> Bool:
+  match authed:
+    case Nil{}: False{}
+    case name <> rest: String.eq(name, provider) || authedIn(rest, provider)
+def authenticatedAmong(models: List<&2, Model()>, +authed: List<&2, String>) -> List<&2, Model()>:
+  match models:
+    case Nil{}: Nil{}
+    case +model <> rest:
+      +tail = authenticatedAmong(rest, authed)
+      Bool.pick(List<&2, Model()>, authedIn(authed, modelProvider(model)), model <> tail, tail)
+def referenceOf(+model: Model()) -> String: modelProvider(model) ++ "/" ++ modelId(model)
+def references(models: List<&2, Model()>) -> List<&2, String>:
+  match models:
+    case Nil{}: Nil{}
+    case model <> rest: referenceOf(model) <> references(rest)
+def ambiguousBare(+cliModel: String, +matches: List<&2, Model()>, authenticated: List<&2, Model()>) -> Resolution:
+  match authenticated:
+    case one <> Nil{}: Resolved{found(one)}
+    case Nil{}: AmbiguousAcross{cliModel, references(matches), "No matching provider is authenticated."}
+    case _: AmbiguousAcross{cliModel, references(matches), "More than one matching provider is authenticated."}
+def exactAmong(+cliModel: String, +one: Model(), +more: List<&2, Model()>, +authed: List<&2, String>) -> Resolution:
+  match more:
+    case Nil{}: Resolved{found(one)}
+    case _: ambiguousBare(cliModel, one <> more, authenticatedAmong(one <> more, authed))
+# upstream: without a provider, an exact id (or provider/id) match wins; several
+# prefer the sole authenticated provider, otherwise the id is ambiguous.
+def bareExact(+cliModel: String, exact: List<&2, Model()>, +authed: List<&2, String>, +models: List<&2, Model()>) -> Resolution:
+  match exact:
+    case Nil{}: Resolved{orNotFound(cliModel, resolveAcross(cliModel, models))}
+    case +one <> more: exactAmong(cliModel, one, more, authed)
+def exactMatches(models: List<&2, Model()>, +lower: String) -> List<&2, Model()>:
+  match models:
+    case Nil{}: Nil{}
+    case +model <> rest:
+      +tail = exactMatches(rest, lower)
+      Bool.pick(List<&2, Model()>, String.eq(String.to_lower(modelId(model)), lower) || String.eq(String.to_lower(referenceOf(model)), lower), model <> tail, tail)
+def bareResolution(+cliModel: String, +authed: List<&2, String>, +models: List<&2, Model()>) -> Resolution:
+  bareExact(cliModel, exactMatches(models, String.to_lower(cliModel)), authed, models)
+
+# upstream: an inferred provider/model on an unauthenticated provider yields to
+# the one authenticated model whose raw id is the whole input.
+def sameModel(+left: Model(), +right: Model()) -> Bool: String.eq(modelProvider(left), modelProvider(right)) && String.eq(modelId(left), modelId(right))
+def rawIdMatches(models: List<&2, Model()>, +lower: String, +chosen: Model()) -> List<&2, Model()>:
+  match models:
+    case Nil{}: Nil{}
+    case +model <> rest:
+      +tail = rawIdMatches(rest, lower, chosen)
+      Bool.pick(List<&2, Model()>, String.eq(String.to_lower(modelId(model)), lower) && Bool.not(sameModel(model, chosen)), model <> tail, tail)
+def soleAuthenticated(candidates: List<&2, Model()>, result: ResolveCliModelResult) -> ResolveCliModelResult:
+  match candidates:
+    case one <> Nil{}: found(one)
+    case _: result
+def preferAuthenticatedRaw(+cliModel: String, result: ResolveCliModelResult, +authed: List<&2, String>, +models: List<&2, Model()>) -> ResolveCliModelResult:
+  match result:
+    case ResolveCliModelResult{Some{+model}, +level, +warning, None{}}:
+      Bool.pick(Unit -> ResolveCliModelResult, authedIn(authed, modelProvider(model)),
+        _ => ResolveCliModelResult{Some{model}, level, warning, None{}},
+        _ => soleAuthenticated(authenticatedAmong(rawIdMatches(models, String.to_lower(cliModel), model), authed), ResolveCliModelResult{Some{model}, level, warning, None{}}))(Unit{})
     case other: other
 
-def resolveCandidate(+cliModel: String, +provider: Maybe<&2, String>, +rest: String, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, +models: List<&2, Model()>) -> ResolveCliModelResult:
+# upstream: when the inferred provider has no match, the whole input is tried as
+# a raw id (first exact id or provider/id match), then as a pattern.
+def firstExact(+cliModel: String, exact: List<&2, Model()>, +models: List<&2, Model()>) -> ResolveCliModelResult:
+  match exact:
+    case one <> _: found(one)
+    case Nil{}: resolveAcross(cliModel, models)
+def fallbackAcross(+cliModel: String, scoped: ResolveCliModelResult, +models: List<&2, Model()>) -> ResolveCliModelResult:
+  match scoped:
+    case ResolveCliModelResult{None{}, _, _, None{}}: firstExact(cliModel, exactMatches(models, String.to_lower(cliModel)), models)
+    case other: other
+
+def resolveCandidate(+cliModel: String, +provider: Maybe<&2, String>, +rest: String, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, +authed: List<&2, String>, +models: List<&2, Model()>) -> Resolution:
   match provider:
-    case None{}: orNotFound(cliModel, resolveAcross(cliModel, models))
-    case Some{+provider}: orFallback(provider, rest, cliThinking, models, fallbackAcross(cliModel, resolveWithin(provider, rest, models), models))
+    case None{}: bareResolution(cliModel, authed, models)
+    case Some{+provider}: Resolved{orFallback(provider, rest, cliThinking, models, fallbackAcross(cliModel, preferAuthenticatedRaw(cliModel, resolveWithin(provider, rest, models), authed, models), models))}
 
 # "provider/model" prefers the provider interpretation when the prefix names a
 # known provider; a failed provider-scoped match falls back to the full text.
-def resolveInferred(+cliModel: String, split: Maybe<&2, Split>, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, +models: List<&2, Model()>) -> ResolveCliModelResult:
+def resolveInferred(+cliModel: String, split: Maybe<&2, Split>, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, +authed: List<&2, String>, +models: List<&2, Model()>) -> Resolution:
   match split:
-    case None{}: orNotFound(cliModel, resolveAcross(cliModel, models))
-    case Some{Split{+head, +rest}}: resolveCandidate(cliModel, canonicalProvider(models, String.to_lower(head)), rest, cliThinking, models)
+    case None{}: bareResolution(cliModel, authed, models)
+    case Some{Split{+head, +rest}}: resolveCandidate(cliModel, canonicalProvider(models, String.to_lower(head)), rest, cliThinking, authed, models)
 
 def resolveKnown(+provider: Maybe<&2, String>, cliProvider: String, cliModel: String, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, +models: List<&2, Model()>) -> ResolveCliModelResult:
   match provider:
@@ -787,19 +860,42 @@ def resolveKnown(+provider: Maybe<&2, String>, cliProvider: String, cliModel: St
 def resolveExplicit(+cliProvider: String, cliModel: String, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, +models: List<&2, Model()>) -> ResolveCliModelResult:
   resolveKnown(canonicalProvider(models, String.to_lower(cliProvider)), cliProvider, cliModel, cliThinking, models)
 
-def resolveCliModelWith(cliProvider: Maybe<&2, String>, +cliModel: String, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, +models: List<&2, Model()>) -> ResolveCliModelResult:
+def resolveCliModelWith(cliProvider: Maybe<&2, String>, +cliModel: String, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, +authed: List<&2, String>, +models: List<&2, Model()>) -> Resolution:
   match cliProvider models:
-    case _ Nil{}: cliError("No models available. Check your installation or add models to models.json.")
-    case Some{provider} _: resolveExplicit(provider, cliModel, cliThinking, models)
-    case None{} _: resolveInferred(cliModel, slashSplit(cliModel), cliThinking, models)
+    case _ Nil{}: Resolved{cliError("No models available. Check your installation or add models to models.json.")}
+    case Some{provider} _: Resolved{resolveExplicit(provider, cliModel, cliThinking, models)}
+    case None{} _: resolveInferred(cliModel, slashSplit(cliModel), cliThinking, authed, models)
 
-# Uses all models, not just authenticated ones, so --api-key works for first-time setup.
-# Not ported: upstream's bare-id disambiguation by configured auth when an
-# exact id exists in several providers.
-def resolveCliModel(runtime: ModelRuntime, cliProvider: Maybe<&2, String>, cliModel: Maybe<&2, String>, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>) -> ResolveCliModelResult:
+# Providers with configured auth among the models' providers.
+def providersOf(models: List<&2, Model()>, +seen: List<&2, String>) -> List<&2, String>:
+  match models:
+    case Nil{}: List.reverse(&2, String, seen)
+    case model <> rest:
+      +provider = modelProvider(model)
+      providersOf(rest, Bool.pick(List<&2, String>, authedIn(seen, provider), seen, provider <> seen))
+def authenticatedProviders(+runtime: ModelRuntime, providers: List<&2, String>) -> IO(List<&2, String>):
+  match providers:
+    case Nil{}: IO.pure(List<&2, String>, Nil{})
+    case +provider <> rest:
+      do IO<List<&2, String>>:
+        configured : Bool <- hasConfiguredAuth(runtime, provider)
+        +more : List<&2, String> <- authenticatedProviders(runtime, rest)
+        return Bool.pick(List<&2, String>, configured, provider <> more, more)
+
+# Uses all models, not just authenticated ones, so --api-key works for
+# first-time setup; configured auth only breaks ties between providers.
+def resolveCliModel(+runtime: ModelRuntime, cliProvider: Maybe<&2, String>, cliModel: Maybe<&2, String>, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>) -> IO(Resolution):
   match cliModel:
-    case None{}: ResolveCliModelResult{None{}, None{}, None{}, None{}}
-    case Some{pattern}: resolveCliModelWith(cliProvider, pattern, cliThinking, getModels(runtime))
+    case None{}: IO.pure(Resolution, Resolved{ResolveCliModelResult{None{}, None{}, None{}, None{}}})
+    case Some{pattern}:
+      +models = getModels(runtime)
+      do IO<Resolution>:
+        authed : List<&2, String> <- authenticatedProviders(runtime, providersOf(models, Nil{}))
+        return resolveCliModelWith(cliProvider, pattern, cliThinking, authed, models)
+
+# The ambiguity message lists the matches in upstream's localeCompare order.
+def ambiguityMessage(cliModel: String, sorted: List<&2, String>, hint: String) -> ResolveCliModelResult:
+  cliError("Model \"" ++ cliModel ++ "\" is ambiguous across providers: " ++ String.join(sorted, ", ") ++ ". " ++ hint ++ " Use --provider or provider/model.")
 
 def defaultAmong(defaults: List<&2, DefaultModel>, +models: List<&2, Model()>) -> Maybe<&2, Model()>:
   match defaults:

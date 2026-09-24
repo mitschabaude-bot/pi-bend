@@ -44,12 +44,12 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   bundles an inline extension that registers the `/llama` command
   (`packages/coding-agent/src/extensions/llama`). The port has no extension
   runtime yet, so `get_commands` lacks it.
-- **Interactive project-trust prompt** (pending): with an undecided project
-  that has `.pi` resources and `defaultProjectTrust: "ask"`, pi shows a
-  "Trust project folder?" selector before the UI starts. Bend resolves trust
-  like pi (overrides, saved decisions, defaults; print/JSON/RPC untrusted) but
-  has no startup selector yet, so interactive mode treats the project as
-  untrusted. Codex is porting ExtensionSelectorComponent/showStartupSelector.
+- **Built-in provider catalog** (`print-bare-unauthed`, `print-bare-two-authed`):
+  Bend registers 5 of pi 0.87.1's built-in providers (openai, openai-codex,
+  anthropic, google, cerebras), so a bare `--model gpt-5` has one candidate
+  instead of pi's four (azure-openai-responses, cloudflare-ai-gateway, openai,
+  opencode). The ambiguity rules themselves are ported and unit-tested
+  (`tests/model-resolver.bend`).
 - **RPC command ordering around a prompt** (`steer-and-queue`): Node runs a
   prompt's microtasks up to its first awaited I/O before reading the next
   stdin line, so a steer sent right after the prompt response arrives while

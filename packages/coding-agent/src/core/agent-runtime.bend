@@ -39,6 +39,7 @@ import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/filesystem.bend as FS
 import ../../../runtime/src/posix-path.bend as Path
 import ../../../runtime/src/text.bend as Text
+import ../../../runtime/src/collation.bend as Collation
 import ../utils/paths.bend as Paths
 import ./auth-storage.bend as Storage
 import ./runtime-credentials.bend as Runtime
@@ -618,10 +619,26 @@ def restoreIf(+models: Models.ModelRuntime, named: Bool, seed: SessionSeed) -> I
     case True{}: IO.pure(Maybe<&2, Models.Model()>, None{})
     case False{}: restoredModel(models, seed)
 
+# upstream sorts an ambiguity's matches with localeCompare.
+def collatedMatches(matches: List<&2, String>, loaded: Result<&2, &2, Collation.LoadError, Collation.Collator>) -> List<&2, String>:
+  match loaded:
+    case Done{collator}: Collation.sort(collator, matches)
+    case Fail{_}: matches
+def resolved(resolution: Models.Resolution, packageDir: String) -> IO(Models.ResolveCliModelResult):
+  match resolution:
+    case Models.Resolved{result}: IO.pure(Models.ResolveCliModelResult, result)
+    case Models.AmbiguousAcross{cliModel, matches, hint}:
+      do IO<Models.ResolveCliModelResult>:
+        loaded : Result<&2, &2, Collation.LoadError, Collation.Collator> <- Collation.load(Path.join(packageDir, "packages/runtime/data"))
+        return Models.ambiguityMessage(cliModel, collatedMatches(matches, loaded), hint)
+
 # upstream main's --provider/--model resolution, reported as a warning.
-def cliResolution(+models: Models.ModelRuntime, options: CreateOptions) -> Models.ResolveCliModelResult:
+def cliResolution(+models: Models.ModelRuntime, options: CreateOptions, packageDir: String) -> IO(Models.ResolveCliModelResult):
   match options:
-    case CreateOptions{_, _, _, _, _, provider, cliModel, _, thinking, _, _, _, _, _, _, _}: Models.resolveCliModel(models, provider, cliModel, thinking)
+    case CreateOptions{_, _, _, _, _, provider, cliModel, _, thinking, _, _, _, _, _, _, _}:
+      do IO<Models.ResolveCliModelResult>:
+        resolution : Models.Resolution <- Models.resolveCliModel(models, provider, cliModel, thinking)
+        resolved(resolution, packageDir)
 
 def reportResolution(resolution: Models.ResolveCliModelResult) -> IO(Unit):
   match resolution:
@@ -862,7 +879,7 @@ def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, 
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch, urlContext())
         anthropicOAuth : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch, urlContext())
         +models : Models.ModelRuntime <- Models.createWithAnthropic(credentialStore, oauth, Some{anthropicOAuth})
-        +resolution : Models.ResolveCliModelResult = cliResolution(models, options)
+        +resolution : Models.ResolveCliModelResult <- cliResolution(models, options, packageDir)
         reportResolution(resolution)
         +selected : Result<&2, &2, String, Maybe<&2, Models.Model()>> <- selectModel(models, options, resolution)
         applyKey(credentials, apiKey, selected)
