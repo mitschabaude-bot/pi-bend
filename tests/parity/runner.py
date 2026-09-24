@@ -89,6 +89,33 @@ def normalise(text, root):
     text = re.sub(r"\b\d+(\.\d+)?(ms|s)\b", "<duration>", text)
     return "\n".join(line.rstrip() for line in text.rstrip("\n").split("\n"))
 
+IDS = {"id", "parentId", "responseId", "toolCallId", "sessionId"}
+
+def mask(value, key=None):
+    """Clock readings and generated ids vary per run; key order is JavaScript
+    insertion order, which the port does not reproduce, so keys are sorted."""
+    if isinstance(value, dict):
+        return {k: mask(v, k) for k, v in sorted(value.items())}
+    if isinstance(value, list):
+        return [mask(v) for v in value]
+    if key == "timestamp":
+        return "<time>"
+    if key in IDS and isinstance(value, str):
+        return "<id>"
+    if isinstance(value, str):
+        return value.replace(PI_PACKAGE, "<package>").replace(str(ROOT), "<package>")
+    return value
+
+def normalise_events(text):
+    """JSON lines compare as values; other lines as text."""
+    lines = []
+    for line in text.split("\n"):
+        try:
+            lines.append(json.dumps(mask(json.loads(line)), sort_keys=True))
+        except ValueError:
+            lines.append(line)
+    return "\n".join(lines)
+
 def run_side(label, argv, scenario, keep):
     root = Path(tempfile.mkdtemp(prefix=f"pi-parity-{label}-"))
     home = root / "home"
@@ -110,8 +137,25 @@ def run_side(label, argv, scenario, keep):
            # Bend pi locates its bundled assets (collation data, themes) here; pi ignores it.
            "PI_BEND_PACKAGE_DIR": str(ROOT),
            **scenario.get("env", {})}
-    terminal = Terminal(f"parity-{label}-{scenario['name']}", argv + scenario.get("args", []), env, project)
     snaps, timings = {}, {}
+    if scenario.get("process"):
+        # Non-interactive modes: exact stdout/stderr of a plain process.
+        started = time.monotonic()
+        try:
+            result = subprocess.run(argv + scenario.get("args", []), cwd=project, env=env, capture_output=True, text=True, timeout=scenario.get("timeout", 60), stdin=subprocess.DEVNULL)
+            timings["done"] = time.monotonic() - started
+            snaps["stdout"] = normalise(normalise_events(result.stdout), root)
+            snaps["stderr"] = normalise(result.stderr, root)
+            snaps["exit"] = str(result.returncode)
+        finally:
+            server.shutdown()
+            logged = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+            requests = re.sub(r"127\.0\.0\.1:\d+", "<server>", normalise(json.dumps(logged, indent=1, sort_keys=True), root)) if logged else ""
+            requests = requests.replace(PI_PACKAGE, "<package>").replace(str(ROOT), "<package>")
+            if not keep:
+                shutil.rmtree(root, ignore_errors=True)
+        return {"snaps": snaps, "timings": timings, "requests": requests}
+    terminal = Terminal(f"parity-{label}-{scenario['name']}", argv + scenario.get("args", []), env, project)
     try:
         for step in scenario["steps"]:
             kind = step[0]

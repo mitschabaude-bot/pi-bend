@@ -87,4 +87,26 @@ SCENARIOS = [
         "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "hi"), ("key", "Enter"),
                   ("wait", "Headers seen", "turn"), ("settle", 0.5), ("snap", "answered")],
     },
+    {
+        "name": "print-turn",
+        "process": True,
+        "args": MODEL + ["-p", "hello"],
+        "turns": [{"text": "Printed answer.", "chunks": 3, "usage": {"input": 900, "output": 20}}],
+        "steps": [],
+    },
+    {
+        "name": "print-tool",
+        "process": True,
+        "args": MODEL + ["-p", "run it"],
+        "turns": [{"tool": {"name": "bash", "arguments": {"command": "echo tool-output"}}}, {"text": "Tool finished."}],
+        "steps": [],
+    },
+    {
+        # The JSON event stream of one tool turn (timestamps and ids normalised).
+        "name": "json-turn",
+        "process": True,
+        "args": MODEL + ["--mode", "json", "run it"],
+        "turns": [{"tool": {"name": "bash", "arguments": {"command": "echo tool-output"}}}, {"text": "Tool finished."}],
+        "steps": [],
+    },
 ]
