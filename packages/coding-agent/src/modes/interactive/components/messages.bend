@@ -257,7 +257,7 @@ def renderBash(state: BashMessage,+width: Nat) -> IO(List<&2,String>):
 
 # A mounted message renders the latest immutable snapshot. The transcript owns
 # the callback lifetime; stream updates replace only this message's snapshot.
-type Body is Data: UserBody{value: UserMessage} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} StatusBody{text: String,theme: Theme.Theme}
+type Body is Data: UserBody{value: UserMessage} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} StatusBody{text: String,theme: Theme.Theme} ManagedBody{text: String,theme: Theme.Theme,warning: Bool,first: Bool}
 def expandedBody(body: Body,expanded: Bool) -> Body:
   match body:
     case BashBody{value}: BashBody{bashExpanded(value,expanded)}
@@ -269,9 +269,14 @@ def retheme(body: Body,theme: Theme.Theme) -> Body:
       AssistantBody{AssistantMessage{content,hide,label,pad,streaming,stop,error,theme,styles}}
     case BashBody{value}: BashBody{bashTheme(value,theme)}
     case StatusBody{text,_}: StatusBody{text,theme}
+    case ManagedBody{text,_,warning,first}: ManagedBody{text,theme,warning,first}
 type Owner is Type:
   Owner{state: Ref.Ref<Body>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
 type Handle is Data: Handle{state: Ref.Ref<Body>}
+def managedLines(first: Bool,lines: List<&2,String>) -> List<&2,String>:
+  match first:
+    case True{}: "" <> lines
+    case False{}: lines
 def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
   match body:
     case UserBody{value}: renderUser(value,width)
@@ -282,6 +287,11 @@ def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
         colored : String <- foregroundText(theme,"dim",text)
         lines : List<&2,String> <- textLines(colored,1n,width)
         return "" <> lines
+    case ManagedBody{text,theme,warning,first}:
+      do IO<List<&2,String>>:
+        colored : String <- foregroundText(theme,Bool.pick(String,warning,"warning","dim"),text)
+        lines : List<&2,String> <- textLines(colored,1n,width)
+        return managedLines(first,lines)
 def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
   match handle:
     case Handle{state}:

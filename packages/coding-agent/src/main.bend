@@ -20,6 +20,7 @@ import ./modes/rpc.bend as Rpc
 import ./modes/interactive/session-controller.bend as Controller
 import ./modes/interactive/run.bend as InteractiveRun
 import ./utils/paths.bend as Paths
+import ./utils/tools-manager.bend as Manager
 import ../../agent/src/types.bend as T
 import ../../ai/src/types.bend as Ai
 import ../../ai/src/auth/types.bend as Auth
@@ -950,6 +951,13 @@ def resumeInteractive(host: Host(),request: InteractiveRun.ResumeRequest) -> IO(
 def forkHosted(host: Host(), request: SessionRuntime.ForkRequest) -> IO(Result<&2,&2,String,Maybe<&2,String>>):
   match request:
     case SessionRuntime.ForkRequest{entryId, position}: SessionRuntime.fork(Services, host, entryId, position)
+def managedInRuntime(scope: List<&2,Models.ScopedModel>,pair: Runtime.AgentRuntime & Manager.ToolsManager) -> IO(Services & Maybe<&2,Manager.ToolsManager>):
+  match pair:
+    case (runtime,manager):
+      IO.pure(Services & Maybe<&2,Manager.ToolsManager>,(Services{runtime,scope},Some{manager}))
+def managedInServices(agentDir: String,services: Services) -> IO(Services & Maybe<&2,Manager.ToolsManager>):
+  match services:
+    case Services{runtime,scope}: managedInRuntime(scope,Runtime.managedTools(runtime,agentDir))
 
 def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, +cwd: String, +agentDir: String, packageDir: String, +host: Host()) -> IO(Unit):
   do IO<Unit>:
@@ -968,8 +976,9 @@ def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, 
     +importer : Callback.Callback<InteractiveRun.ImportRequest,SessionRuntime.ImportOutcome> <- Callback.create(~Host(),~InteractiveRun.ImportRequest,~SessionRuntime.ImportOutcome,~importInteractive,host)
     +sessions : Callback.Callback<Unit,InteractiveRun.SessionChoices> <- Callback.create(~InteractiveSessionSource,~Unit,~InteractiveRun.SessionChoices,~listInteractive,InteractiveSessionSource{host,agentDir})
     +resume : Callback.Callback<InteractiveRun.ResumeRequest,SessionRuntime.ResumeOutcome> <- Callback.create(~Host(),~InteractiveRun.ResumeRequest,~SessionRuntime.ResumeOutcome,~resumeInteractive,host)
+    tools : Maybe<&2,Manager.ToolsManager> <- SessionRuntime.withServices(Services,Maybe<&2,Manager.ToolsManager>,host,services => managedInServices(agentDir,services),None{})
     SessionRuntime.setRebindSession(Services,host,Some{rebinder})
-    result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.runBound(live,InteractiveRun.Binding{current,Controller.Replacement{startNew,forking},onRebind,login,refresh,importer,sessions,resume},initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings),catalogModels(catalog))
+    result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.runBound(live,InteractiveRun.Binding{current,Controller.Replacement{startNew,forking},onRebind,login,refresh,importer,sessions,resume,tools},initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings),catalogModels(catalog))
     SessionRuntime.setRebindSession(Services,host,None{})
     Callback.dispose(InteractiveRun.LoginRequest,AuthLogin.Outcome(),login)
     Callback.dispose(Unit,List<&2,Models.Model()>,refresh)

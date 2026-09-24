@@ -879,6 +879,10 @@ def create(options: CreateOptions) -> IO(Outcome(AgentRuntime)):
 def agentOf(runtime: AgentRuntime) -> AgentRuntime & Owner():
   match runtime:
     case AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, +agent, model, thinking, loadout}: (AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, model, thinking, loadout}, agent)
+def managedTools(runtime: AgentRuntime,agentDir: String) -> AgentRuntime & Manager.ToolsManager:
+  match runtime:
+    case AgentRuntime{Transport{authorizer,network,+fetch},storage,storageStore,credentials,credentialStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout}:
+      (AgentRuntime{Transport{authorizer,network,fetch},storage,storageStore,credentials,credentialStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout},Manager.ToolsManager{Path.join(agentDir,"bin"),urlContext(),Some{fetch}})
 
 def selectionOf(runtime: AgentRuntime) -> AgentRuntime & Selection:
   match runtime:

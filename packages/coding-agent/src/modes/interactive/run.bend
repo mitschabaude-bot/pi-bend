@@ -38,6 +38,9 @@ import ../../core/prompt-templates.bend as Templates
 import ../../core/session-manager.bend as Tree
 import ../../core/session-stats.bend as Stats
 import ../../core/tools/index.bend as Tools
+import ../../core/skills.bend as Skills
+import ../../core/system-prompt.bend as Prompt
+import ../../utils/tools-manager.bend as Manager
 import ../../core/settings-manager.bend as Settings
 import ../../core/model-runtime.bend as Models
 import ../../../../ai/src/utils/thinking-levels.bend as Levels
@@ -611,14 +614,14 @@ type ThemeLive is Data:
 type ThemeOwned is Type:
   ThemeOwned{controller: ThemeController.Owner,render: Callback.Callback<Unit,Unit>}
 type ThemeStartup is Data:
-  ThemeStartup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>,theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,setting: Maybe<&2,String>,builtinDir: String,customDir: String}
+  ThemeStartup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>,theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,session: Ref.Ref<Session.AgentSession>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,managed: Maybe<&2,Manager.ToolsManager>}
 type ThemeStopping is Data:
   ThemeStopping{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>}
 type Interaction is Data:
   Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,modelSelector: Ref.Ref<Maybe<&2,ModelPicker.Host>>,header: Maybe<&2,Header.Handle>,bashActivity: Ref.Ref<BashActivity>}
 type LoginRequest is Data: LoginRequest{provider: String,signal: Abort.AbortSignal<Unit>,notice: AuthLogin.Notice(),manual: Callback.Callback<AuthLogin.ManualPrompt,Unit>,manualDone: Callback.Callback<Unit,Unit>}
 type Binding is Data:
-  Binding{current: Ref.Ref<Session.AgentSession>,replacement: Controller.Replacement,onRebind: Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>,login: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,refreshModels: Callback.Callback<Unit,List<&2,Models.Model()>>,importer: Callback.Callback<ImportRequest,SessionHost.ImportOutcome>,sessions: Callback.Callback<Unit,SessionChoices>,resume: Callback.Callback<ResumeRequest,SessionHost.ResumeOutcome>}
+  Binding{current: Ref.Ref<Session.AgentSession>,replacement: Controller.Replacement,onRebind: Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>,login: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,refreshModels: Callback.Callback<Unit,List<&2,Models.Model()>>,importer: Callback.Callback<ImportRequest,SessionHost.ImportOutcome>,sessions: Callback.Callback<Unit,SessionChoices>,resume: Callback.Callback<ResumeRequest,SessionHost.ResumeOutcome>,managed: Maybe<&2,Manager.ToolsManager>}
 type LoginState is Data:
   LoginState{host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,abort: Ref.Ref<Maybe<&2,Abort.AbortController<Unit>>>,backend: Maybe<&2,Callback.Callback<LoginRequest,AuthLogin.Outcome()>>,refresh: Maybe<&2,Callback.Callback<Unit,List<&2,Models.Model()>>>,models: Ref.Ref<List<&2,Models.Model()>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>}
 def showLoginCode(target: Maybe<&2,LoginDialog.Host>,url: String,code: String) -> IO(Unit):
@@ -980,15 +983,15 @@ def contextBinding(context: ThemeContext) -> Maybe<&2,Binding>:
 def loginStateOf(mode: Maybe<&2,Binding>,host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,abort: Ref.Ref<Maybe<&2,Abort.AbortController<Unit>>>,models: Ref.Ref<List<&2,Models.Model()>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>) -> LoginState:
   match mode:
     case None{}: LoginState{host,abort,None{},None{},models,failure,redraw,session}
-    case Some{Binding{_,_,_,backend,refresh,_,_,_}}: LoginState{host,abort,Some{backend},Some{refresh},models,failure,redraw,session}
+    case Some{Binding{_,_,_,backend,refresh,_,_,_,_}}: LoginState{host,abort,Some{backend},Some{refresh},models,failure,redraw,session}
 def importStateOf(mode: Maybe<&2,Binding>,host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> ImportState:
   match mode:
     case None{}: ImportState{host,None{},failure,redraw}
-    case Some{Binding{_,_,_,_,_,backend,_,_}}: ImportState{host,Some{backend},failure,redraw}
+    case Some{Binding{_,_,_,_,_,backend,_,_,_}}: ImportState{host,Some{backend},failure,redraw}
 def resumeStateOf(mode: Maybe<&2,Binding>,picker: Ref.Ref<Maybe<&2,SessionPicker.Host>>,dialog: Ref.Ref<Maybe<&2,LoginDialog.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> ResumeState:
   match mode:
     case None{}: ResumeState{picker,dialog,None{},None{},failure,redraw}
-    case Some{Binding{_,_,_,_,_,_,sessions,resume}}: ResumeState{picker,dialog,Some{sessions},Some{resume},failure,redraw}
+    case Some{Binding{_,_,_,_,_,_,sessions,resume,_}}: ResumeState{picker,dialog,Some{sessions},Some{resume},failure,redraw}
 def disposeLoginState(state: LoginState) -> IO(Unit):
   match state:
     case LoginState{host,abort,_,_,models,_,_,_}:
@@ -1137,7 +1140,7 @@ def rebound(sink: RebindSink,session: Session.AgentSession) -> IO(Unit):
   reboundCopied(sink,session)
 def bindRebound(binding: Binding,listener: Session.Listener(),transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>) -> IO(Unit):
   match binding:
-    case Binding{_,_,hook,_,_,_,_,_}:
+    case Binding{_,_,hook,_,_,_,_,_,_}:
       do IO<Unit>:
         callback : Callback.Callback<Session.AgentSession,Unit> <- Callback.create(~RebindSink,~Session.AgentSession,~Unit,~rebound,RebindSink{listener,transcript,editor,footer,failure,redraw,cwd,home})
         Ref.write(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,hook,Some{callback})
@@ -1152,7 +1155,7 @@ def disposeRebindCallback(value: Maybe<&2,Callback.Callback<Session.AgentSession
 def unbind(mode: Maybe<&2,Binding>) -> IO(Unit):
   match mode:
     case None{}: IO.pure(Unit,Unit{})
-    case Some{Binding{_,_,hook,_,_,_,_,_}}:
+    case Some{Binding{_,_,hook,_,_,_,_,_,_}}:
       do IO<Unit>:
         callback : Maybe<&2,Callback.Callback<Session.AgentSession,Unit>> <- Ref.swap(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,hook,None{})
         disposeRebindCallback(callback)
@@ -1166,7 +1169,7 @@ def finishSessionRef(session: Ref.Ref<Session.AgentSession>,mode: Maybe<&2,Bindi
 def modeCurrent(mode: Maybe<&2,Binding>,session: Session.AgentSession) -> IO(Ref.Ref<Session.AgentSession>):
   match mode:
     case None{}: Ref.new(Session.AgentSession,session)
-    case Some{Binding{current,_,_,_,_,_,_,_}}: IO.pure(Ref.Ref<Session.AgentSession>,current)
+    case Some{Binding{current,_,_,_,_,_,_,_,_}}: IO.pure(Ref.Ref<Session.AgentSession>,current)
 def controllerFor(mode: Maybe<&2,Binding>,current: Ref.Ref<Session.AgentSession>,session: Session.AgentSession,listener: Session.Listener(),limit: Nat,failure: Maybe<&2,Callback.Callback<Controller.PromptFailure,Unit>>,command: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,control: Maybe<&2,Callback.Callback<Controller.ControlResult,Unit>>,selection: Maybe<&2,Callback.Callback<Controller.SelectionResult,Unit>>,models: Ref.Ref<List<&2,Models.Model()>>,login: Callback.Callback<Commands.CredentialCommand,Unit>) -> IO(Controller.Controller & Controller.Handle):
   match mode:
     case None{}:
@@ -1174,7 +1177,7 @@ def controllerFor(mode: Maybe<&2,Binding>,current: Ref.Ref<Session.AgentSession>
         available : List<&2,Models.Model()> <- Ref.read(List<&2,Models.Model()>,models)
         Callback.dispose(Commands.CredentialCommand,Unit,login)
         Controller.start(session,listener,limit,failure,command,control,selection,available)
-    case Some{Binding{_,replacement,_,_,_,_,_,_}}: Controller.startBound(current,listener,replacement,limit,failure,command,control,selection,models,Some{login})
+    case Some{Binding{_,replacement,_,_,_,_,_,_,_}}: Controller.startBound(current,listener,replacement,limit,failure,command,control,selection,models,Some{login})
 def disposeInteraction(interaction: Interaction) -> IO(Unit):
   match interaction:
     case Interaction{editor,lastClear,lastEscape,selector,modelSelector,_,bashActivity}:
@@ -1187,10 +1190,14 @@ def disposeInteraction(interaction: Interaction) -> IO(Unit):
         oldBash : BashActivity <- Ref.dispose(BashActivity,bashActivity)
         disposeBashActivity(oldBash)
         return Unit{}
+def managedOf(mode: Maybe<&2,Binding>) -> Maybe<&2,Manager.ToolsManager>:
+  match mode:
+    case None{}: None{}
+    case Some{Binding{_,_,_,_,_,_,_,_,managed}}: managed
 def startup(context: ThemeContext,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>) -> ThemeStartup:
   match context:
-    case ThemeContext{theme,transcript,_,setting,builtinDir,customDir,_,_,_,_,_}:
-      ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,setting,builtinDir,customDir}
+    case ThemeContext{theme,transcript,session,setting,builtinDir,customDir,_,_,mode,_,_}:
+      ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managedOf(mode)}
 def selectionTheme(value: ThemeController.Selection) -> Theme.Theme:
   match value: case ThemeController.Selection{_,_,_,theme,_,_,_}: theme
 def syncSelected(live: ThemeLive,handle: ThemeController.Handle) -> IO(Unit):
@@ -1216,15 +1223,59 @@ def startInput(handle: ThemeController.Handle,redraw: Ref.Ref<Maybe<&2,Callback.
   match handle:
     case ThemeController.Handle{_,Process.QueryReady{queries,terminal,write,_},_,_,_,_}:
       Interactive.onReady(Interactive.Startup{redraw,queue,initial,failure},Process.QueryReady{queries,terminal,write,render})
+type ManagedSink is Data:
+  ManagedSink{transcript: Transcript.Handle,render: Callback.Callback<Unit,Unit>,started: Ref.Ref<Bool>,leading: Bool}
+def managedWarning(kind: Manager.ToolStatusType) -> Bool:
+  match kind:
+    case Manager.Warning{}: True{}
+    case Manager.Info{}: False{}
+def managedText(warning: Bool,message: String) -> String:
+  match warning:
+    case True{}: "Warning: " ++ message
+    case False{}: message
+def managedReported(sink: ManagedSink,status: Manager.ToolStatus) -> IO(Unit):
+  match sink status:
+    case ManagedSink{transcript,render,started,leading} Manager.ToolStatus{kind,message}:
+      do IO<Unit>:
+        previous : Bool <- Ref.swap(Bool,started,True{})
+        +warning : Bool <- IO.pure(Bool,managedWarning(kind))
+        +text : String <- IO.pure(String,managedText(warning,message))
+        Transcript.managedStatus(transcript,text,warning,Bool.not(previous) && leading)
+        Callback.call(Unit,Unit,render,Unit{})
+def ensureManagedOne(managed: Manager.ToolsManager,tool: Manager.Tool,status: Callback.Callback<Manager.ToolStatus,Unit>) -> IO(Unit):
+  do IO<Unit>:
+    path : Maybe<&2,String> <- Manager.ensureTool(managed,tool,Some{status})
+    return Unit{}
+def managedLeading(+session: Session.AgentSession) -> IO(Bool):
+  +contexts = Session.getAgentsFiles(session)
+  +skills = Session.getSkills(session)
+  do IO<Bool>:
+    settings : Settings.SettingsManager <- Session.getSettings(session)
+    return Settings.getQuietStartup(settings) || (List.is_empty(&2,Prompt.ContextFile,contexts) && List.is_empty(&2,Skills.Skill,skills))
+def setupManaged(managed: Maybe<&2,Manager.ToolsManager>,transcript: Transcript.Handle,render: Callback.Callback<Unit,Unit>,session: Ref.Ref<Session.AgentSession>) -> IO(Unit):
+  match managed:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{+manager}:
+      do IO<Unit>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        leading : Bool <- managedLeading(live)
+        +started : Ref.Ref<Bool> <- Ref.new(Bool,False{})
+        +status : Callback.Callback<Manager.ToolStatus,Unit> <- Callback.create(~ManagedSink,~Manager.ToolStatus,~Unit,~managedReported,ManagedSink{transcript,render,started,leading})
+        ensureManagedOne(manager,Manager.Fd{},status)
+        ensureManagedOne(manager,Manager.Rg{},status)
+        Callback.dispose(Manager.ToolStatus,Unit,status)
+        wasStarted : Bool <- Ref.dispose(Bool,started)
+        return Unit{}
 def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle>,startup: ThemeStartup,+render: Callback.Callback<Unit,Unit>) -> IO(Unit):
   match result startup:
-    case Done{(controller,+handle)} ThemeStartup{redraw,queue,initial,failure,_,+selected,owned,_,theme,transcript,_,_,_}:
+    case Done{(controller,+handle)} ThemeStartup{redraw,queue,initial,failure,_,+selected,owned,_,theme,+transcript,session,_,_,_,managed}:
       do IO<Unit>:
         Ref.write(Maybe<&2,ThemeController.Handle>,selected,Some{handle})
         Ref.write(Maybe<&1,ThemeOwned>,owned,Some{ThemeOwned{controller,render}})
         syncSelected(ThemeLive{selected,theme,transcript,render},handle)
+        setupManaged(managed,transcript,render,session)
         startInput(handle,redraw,queue,initial,failure,render)
-    case Fail{cause} ThemeStartup{_,_,_,_,stopped,_,_,error,_,_,_,_,_}:
+    case Fail{cause} ThemeStartup{_,_,_,_,stopped,_,_,error,_,_,_,_,_,_,_}:
       do IO<Unit>:
         Callback.dispose(Unit,Unit,render)
         Ref.write(Maybe<&2,Theme.LoadError>,error,Some{cause})
@@ -1236,12 +1287,12 @@ def colorEnvironment(result: Result<&1,&1,U32 & String,String>) -> Maybe<&2,Stri
     case Done{value}: Some{value}
 def themeReady(startup: ThemeStartup,ready: Process.QueryReady) -> IO(Unit):
   match startup ready:
-    case ThemeStartup{redraw,queue,initial,failure,stopped,+selected,owned,error,+theme,+transcript,+setting,+builtinDir,+customDir} Process.QueryReady{queries,terminal,write,requestRender}:
+    case ThemeStartup{redraw,queue,initial,failure,stopped,+selected,owned,error,+theme,+transcript,+session,+setting,+builtinDir,+customDir,+managed} Process.QueryReady{queries,terminal,write,requestRender}:
       do IO<Unit>:
         +render : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeLive,~Unit,~Unit,~syncRender,ThemeLive{selected,theme,transcript,requestRender})
         detected : Result<&1,&1,U32 & String,String> <- IO.get_env("COLORFGBG")
         result : Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle> <- ThemeController.start(Process.QueryReady{queries,terminal,write,render},setting,colorEnvironment(detected),builtinDir,customDir,Color.TrueColor{})
-        readySelected(result,ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,setting,builtinDir,customDir},render)
+        readySelected(result,ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managed},render)
 def closeTheme(current: Maybe<&1,ThemeOwned>) -> IO(Unit):
   match current:
     case None{}: IO.pure(Unit,Unit{})

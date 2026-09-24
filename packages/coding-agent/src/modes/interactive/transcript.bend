@@ -65,6 +65,18 @@ def statusChanged(state: State,+message: String) -> IO(State & Unit):
 def status(handle: Handle,message: String) -> IO(Unit):
   match handle:
     case Handle{resource}: Serial.run(State,Unit,resource,state => statusChanged(state,message))
+def managedResult(pair: State & Bool) -> State & Unit:
+  match pair:
+    case (next,_): (next,Unit{})
+def managedAppended(state: State,message: String,warning: Bool,first: Bool) -> IO(State & Unit):
+  match state:
+    case State{entries,tools,active,id,view,+theme,styles,expanded,hidden}:
+      do IO<State & Unit>:
+        pair : State & Bool <- append(State{entries,tools,active,id,view,theme,styles,expanded,hidden},Messages.ManagedBody{message,theme,warning,first},False{})
+        return managedResult(pair)
+def managedStatus(handle: Handle,message: String,warning: Bool,first: Bool) -> IO(Unit):
+  match handle:
+    case Handle{resource}: Serial.run(State,Unit,resource,state => managedAppended(state,message,warning,first))
 def mountedBashState(state: State,owner: Messages.Owner,component: Component.Component,handle: Messages.Handle) -> IO(State & Messages.Handle):
   match state:
     case State{entries,tools,active,+id,+view,theme,styles,expanded,hidden}:

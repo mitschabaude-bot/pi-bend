@@ -89,7 +89,7 @@ def run(args: List<String>) -> IO(Unit):
         +sessions : Callback.Callback<Unit,Run.SessionChoices> <- Callback.create(~Listings,~Unit,~Run.SessionChoices,~listSessions,Listings{cwd,agentDir})
         +resume : Callback.Callback<Run.ResumeRequest,Host.ResumeOutcome> <- Callback.create(~Runtime(),~Run.ResumeRequest,~Host.ResumeOutcome,~resumeSession,runtime)
         Host.setRebindSession(Services(),runtime,Some{rebinder})
-        result : Result<&2,&2,Run.Error,Unit> <- Run.runBound(live,Run.Binding{current,Controller.Replacement{new,forking},hook,login,refresh,importer,sessions,resume},Nil{},cwd,None{},agentDir,assetsRoot,None{},Faux.fauxModel() <> Nil{})
+        result : Result<&2,&2,Run.Error,Unit> <- Run.runBound(live,Run.Binding{current,Controller.Replacement{new,forking},hook,login,refresh,importer,sessions,resume,None{}},Nil{},cwd,None{},agentDir,assetsRoot,None{},Faux.fauxModel() <> Nil{})
         Host.setRebindSession(Services(),runtime,None{})
         Callback.dispose(Run.LoginRequest,AuthLogin.Outcome(),login)
         Callback.dispose(Unit,List<&2,Models.Model()>,refresh)
