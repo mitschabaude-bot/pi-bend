@@ -99,7 +99,8 @@ SCENARIOS = [
         "files": {"project/.pi/settings.json": "{}", "home/.pi/agent/trust.json": json.dumps({"<root>/project": False}),
                   "home/.pi/agent/keybindings.json": json.dumps({"tui.select.down": "ctrl+n"})},
         "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "/trust"), ("key", "Enter"),
-                  ("wait", "Saved decision: untrusted", "selector"), ("key", "Down"), ("settle", 0.2), ("snap", "default-key"),
+                  ("wait", "Saved decision: untrusted", "selector"), ("key", "Up"), ("key", "Up"),
+                  ("key", "Down"), ("settle", 0.2), ("snap", "default-key"),
                   ("key", "C-n"), ("settle", 0.2), ("snap", "custom-key")],
     },
     {
