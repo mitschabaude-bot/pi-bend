@@ -59,7 +59,10 @@ def updateTiming(current: Timing,done: Bool) -> IO(Timing & Unit):
 def measured(current: Timing) -> IO(Timing & Maybe<&2,F64>):
   match current:
     case Finished{+elapsed}: IO.pure(Timing & Maybe<&2,F64>,(Finished{elapsed},Some{elapsed}))
-    case Running{clock}: IO.pure(Timing & Maybe<&2,F64>,(Running{clock},None{}))
+    case Running{+clock}:
+      do IO<Timing & Maybe<&2,F64>>:
+        elapsed : F64 <- Clock.now(clock)
+        return (Running{clock},Some{elapsed})
     case Waiting{}: IO.pure(Timing & Maybe<&2,F64>,(Waiting{},None{}))
 
 def new(toolName: String,toolCallId: String,args: Value.Value,theme: Theme.Theme,shell: Shell) -> ToolExecution:
@@ -280,20 +283,21 @@ def durationLong(+seconds: Nat) -> String:
   Bool.pick(String,Nat.is_lt(seconds,3600n),Nat.show(seconds / 60n) ++ "m " ++ Nat.show(seconds % 60n) ++ "s",Nat.show(seconds / 3600n) ++ "h " ++ Nat.show((seconds % 3600n) / 60n) ++ "m " ++ Nat.show(seconds % 60n) ++ "s")
 def durationText(+tenths: Nat) -> String:
   Bool.pick(String,Nat.is_lt(tenths,600n),Nat.show(tenths / 10n) ++ "." ++ Nat.show(tenths % 10n) ++ "s",durationLong(tenths / 10n))
-def bashTiming(name: String,elapsed: Maybe<&2,F64>,theme: Theme.Theme) -> IO(String):
-  match name elapsed:
-    case "bash" Some{ms}:
+def bashTiming(name: String,result: Maybe<&2,ToolResult>,partial: Bool,elapsed: Maybe<&2,F64>,theme: Theme.Theme) -> IO(String):
+  match name result elapsed:
+    case "bash" Some{_} Some{ms}:
       do IO<String>:
-        label : String <- Messages.foregroundText(theme,"muted","Took " ++ durationText(durationTenths(F.convert(F.divide(F.add(ms,F.fromU32(50)),F.fromU32(100))))))
+        prefix : String <- IO.pure(String,Bool.pick(String,partial,"Elapsed ","Took "))
+        label : String <- Messages.foregroundText(theme,"muted",prefix ++ durationText(durationTenths(F.convert(F.divide(F.add(ms,F.fromU32(50)),F.fromU32(100))))))
         return "\n\n" ++ label
-    case _ _: IO.pure(String,"")
+    case _ _ _: IO.pure(String,"")
 def boxedBuiltin(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>) -> IO(List<&2,String>):
   match state:
-    case ToolExecution{name,_,args,result,expanded,_,_,_,_,+theme,_}:
+    case ToolExecution{name,_,args,result,expanded,_,partial,_,_,+theme,_}:
       do IO<List<&2,String>>:
         call : String <- builtCall(name,args,expanded,theme)
         extra : String <- builtResult(name,result,expanded,theme)
-        timing : String <- bashTiming(name,elapsed,theme)
+        timing : String <- bashTiming(name,result,partial,elapsed,theme)
         +bg : Callback.Callback<String,String> <- Messages.color(theme,backgroundKey(state),True{})
         lines : List<&2,String> <- textLines(call ++ extra ++ timing,0n,0n,Nat.max(1n,width - 2n),None{})
         +body : List<&2,String> <- Box.paintContent(Box.prependMargin(lines," ",Nil{}),width,Some{bg},Nil{})
