@@ -20,9 +20,10 @@ import ../../../core/tools/renderers/find.bend as FindRenderer
 import ../../../core/tools/renderers/grep.bend as GrepRenderer
 import ../../../core/tools/renderers/ls.bend as LsRenderer
 import ../../../core/tools/renderers/edit.bend as EditRenderer
+import ../../../core/tools/index.bend as Tools
 import ../../../../../agent/src/types.bend as Agent
 
-type ToolResult is Data: ToolResult{content: List<&2,Ai.TextImageContent>,isError: Bool,details: Maybe<&2,Value.Value>}
+type ToolResult is Data: ToolResult{content: List<&2,Ai.TextImageContent>,isError: Bool,details: Maybe<&2,Tools.ToolDetails>}
 type RenderContext is Data:
   RenderContext{toolName: String,toolCallId: String,args: Value.Value,result: Maybe<&2,ToolResult>,expanded: Bool,isPartial: Bool,executionStarted: Bool,argsComplete: Bool,width: Nat}
 def Renderer() -> Data: Callback.Callback<RenderContext,List<&2,String>>
@@ -81,9 +82,9 @@ def setArgsComplete(state: ToolExecution) -> ToolExecution:
   match state: case ToolExecution{name,id,args,result,expanded,images,partial,started,_,theme,shell}: ToolExecution{name,id,args,result,expanded,images,partial,started,True{},theme,shell}
 def updateResult(state: ToolExecution,result: ToolResult,isPartial: Bool) -> ToolExecution:
   match state: case ToolExecution{name,id,args,_,expanded,images,_,started,complete,theme,shell}: ToolExecution{name,id,args,Some{result},expanded,images,isPartial,started,complete,theme,shell}
-def updateFromAgent(-D: Data,state: ToolExecution,result: Agent.AgentToolResult<D>,details: Maybe<&2,Value.Value>,isError: Bool,isPartial: Bool) -> ToolExecution:
+def updateFromAgent(-D: Data,state: ToolExecution,result: Agent.AgentToolResult<D>,details: Maybe<&2,Tools.ToolDetails>,isError: Bool,isPartial: Bool) -> ToolExecution:
   match result: case Agent.AgentToolResult{content,_,_,_}: updateResult(state,ToolResult{content,isError,details},isPartial)
-def updateFromAiResult(-D: Data,state: ToolExecution,message: Ai.ToolResultMessage<D>,details: Maybe<&2,Value.Value>) -> ToolExecution:
+def updateFromAiResult(-D: Data,state: ToolExecution,message: Ai.ToolResultMessage<D>,details: Maybe<&2,Tools.ToolDetails>) -> ToolExecution:
   match message:
     case Ai.ToolResultMessage{_,_,content,_,_,isError,_}:
       updateResult(markExecutionStarted(setArgsComplete(state)),ToolResult{content,isError,details},False{})
@@ -250,7 +251,7 @@ def errorOutput(result: Maybe<&2,ToolResult>) -> Bool:
   match result:
     case Some{ToolResult{_,True{},_}}: True{}
     case _: False{}
-def resultDetails(result: Maybe<&2,ToolResult>) -> Maybe<&2,Value.Value>:
+def resultDetails(result: Maybe<&2,ToolResult>) -> Maybe<&2,Tools.ToolDetails>:
   match result:
     case Some{ToolResult{_,_,details}}: details
     case None{}: None{}

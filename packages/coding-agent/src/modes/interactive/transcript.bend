@@ -247,12 +247,10 @@ def blocksText(blocks: List<&2,Ai.TextImageContent>) -> String:
     case Nil{}: ""
     case Ai.TextImageText{Ai.TextContent{text,_}} <> rest: text ++ blocksText(rest)
     case _ <> rest: blocksText(rest)
-def encodedDetails(details: Maybe<&2,Tools.ToolDetails>) -> Maybe<&2,Schema.Value>:
-  Maybe.map(&2,Tools.ToolDetails,Schema.Value,Tools.detailsValue,details)
-def agentDetails(result: Agent.AgentToolResult<Tools.ToolDetails>) -> Maybe<&2,Schema.Value>:
-  match result: case Agent.AgentToolResult{_,details,_,_}: encodedDetails(details)
-def historicalDetails(message: Ai.ToolResultMessage<Tools.ToolDetails>) -> Maybe<&2,Schema.Value>:
-  match message: case Ai.ToolResultMessage{_,_,_,details,_,_,_}: encodedDetails(details)
+def agentDetails(result: Agent.AgentToolResult<Tools.ToolDetails>) -> Maybe<&2,Tools.ToolDetails>:
+  match result: case Agent.AgentToolResult{_,details,_,_}: details
+def historicalDetails(message: Ai.ToolResultMessage<Tools.ToolDetails>) -> Maybe<&2,Tools.ToolDetails>:
+  match message: case Ai.ToolResultMessage{_,_,_,details,_,_,_}: details
 def historicalFound(state: State,+message: Ai.ToolResultMessage<Tools.ToolDetails>,found: Maybe<&2,Tool.Handle>) -> IO(State & Bool):
   match found:
     case None{}: IO.pure(State & Bool,(state,False{}))

@@ -11,10 +11,6 @@ def field(value: Value.Value,key: String) -> Maybe<&2,Value.Value>:
   match value:
     case Value.ObjectValue{record}: Record.get(Value.Value,record,key)
     case _: None{}
-def optionalField(value: Maybe<&2,Value.Value>,key: String) -> Maybe<&2,Value.Value>:
-  match value:
-    case None{}: None{}
-    case Some{object}: field(object,key)
 def textValue(value: Maybe<&2,Value.Value>) -> Maybe<&2,String>:
   match value:
     case None{}: Some{""}
@@ -29,20 +25,6 @@ def numberValue(value: Maybe<&2,Value.Value>) -> Maybe<&2,Nat>:
     case _: None{}
 def numberField(value: Value.Value,key: String) -> Maybe<&2,Nat>:
   numberValue(field(value,key))
-def detailNumber(details: Maybe<&2,Value.Value>,key: String) -> Maybe<&2,Nat>:
-  numberValue(optionalField(details,key))
-def boolValue(value: Maybe<&2,Value.Value>) -> Bool:
-  match value:
-    case Some{Value.Boolean{flag}}: flag
-    case _: False{}
-def detailBool(details: Maybe<&2,Value.Value>,key: String) -> Bool:
-  boolValue(optionalField(details,key))
-def truncation(details: Maybe<&2,Value.Value>) -> Maybe<&2,Value.Value>:
-  optionalField(details,"truncation")
-def truncated(details: Maybe<&2,Value.Value>) -> Bool:
-  detailBool(truncation(details),"truncated")
-def maxBytes(details: Maybe<&2,Value.Value>) -> Nat:
-  Maybe.default(&2,Nat,detailNumber(truncation(details),"maxBytes"),Truncate.DEFAULT_MAX_BYTES())
 def title(theme: Theme.Theme,name: String) -> IO(String):
   Messages.foregroundText(theme,"toolTitle","\u{1b}[1m" ++ name ++ "\u{1b}[22m")
 def pathValue(theme: Theme.Theme,path: Maybe<&2,String>,accent: Bool) -> IO(String):
@@ -104,5 +86,7 @@ def withWarning(output: String,expanded: Bool,+theme: Theme.Theme,maxLines: Nat,
     display : String <- result(output,expanded,theme,maxLines)
     notice : String <- warning(theme,parts)
     return display ++ notice
-def byteWarning(+details: Maybe<&2,Value.Value>) -> List<&2,String>:
-  Bool.pick(List<&2,String>,truncated(details),(Truncate.formatSize(maxBytes(details)) ++ " limit") <> Nil{},Nil{})
+def byteWarning(details: Maybe<&2,Truncate.TruncationResult>) -> List<&2,String>:
+  match details:
+    case Some{Truncate.TruncationResult{_,True{},_,_,_,_,_,_,_,_,maxBytes}}: (Truncate.formatSize(maxBytes) ++ " limit") <> Nil{}
+    case _: Nil{}

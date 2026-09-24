@@ -3,6 +3,8 @@ import ../../../modes/interactive/components/messages.bend as Messages
 import ../../../modes/interactive/theme/theme.bend as Theme
 import ../../../../../runtime/src/schema-value.bend as Value
 import ../../../../../runtime/src/record.bend as Record
+import ../index.bend as Tools
+import ../edit.bend as Edit
 import ../../../../../runtime/src/callback.bend as Callback
 import ../../../../../tui/src/components/box.bend as Box
 import ../../../../../tui/src/components/text.bend as TuiText
@@ -31,13 +33,9 @@ def renderCall(args: Value.Value,+theme: Theme.Theme) -> IO(String):
     name : String <- Messages.foregroundText(theme,"toolTitle","\u{1b}[1medit\u{1b}[22m")
     path : String <- shownPath(theme,pathField(args))
     return name ++ " " ++ path
-def diffField(value: Maybe<&2,Value.Value>) -> Maybe<&2,String>:
-  match value:
-    case Some{Value.Text{text}}: Some{text}
-    case _: None{}
-def diffValue(details: Maybe<&2,Value.Value>) -> Maybe<&2,String>:
+def diffValue(details: Maybe<&2,Tools.ToolDetails>) -> Maybe<&2,String>:
   match details:
-    case Some{Value.ObjectValue{record}}: diffField(Record.get(Value.Value,record,"diff"))
+    case Some{Tools.EditDetails{Edit.EditToolDetails{diff,_,_}}}: Some{diff}
     case _: None{}
 def colorDiffLine(theme: Theme.Theme,line: String) -> IO(String):
   match line:
@@ -94,7 +92,7 @@ def renderSuccess(diff: Maybe<&2,String>,theme: Theme.Theme) -> IO(String):
   match diff:
     case Some{value}: renderDiff(value,theme)
     case None{}: IO.pure(String,"")
-def renderResult(output: String,details: Maybe<&2,Value.Value>,isError: Bool,theme: Theme.Theme) -> IO(String):
+def renderResult(output: String,details: Maybe<&2,Tools.ToolDetails>,isError: Bool,theme: Theme.Theme) -> IO(String):
   match isError:
     case True{}: Messages.foregroundText(theme,"error",output)
     case False{}: renderSuccess(diffValue(details),theme)
@@ -130,7 +128,7 @@ def display(call: String,+result: String,hasResult: Bool,error: Bool,theme: Them
         displayError(header,result,width)
     case False{}:
       paintBox(call ++ Bool.pick(String,String.is_empty(result),"","\n\n" ++ result),theme,hasResult,False{},width)
-def render(args: Value.Value,output: String,details: Maybe<&2,Value.Value>,hasResult: Bool,+error: Bool,+theme: Theme.Theme,width: Nat) -> IO(List<&2,String>):
+def render(args: Value.Value,output: String,details: Maybe<&2,Tools.ToolDetails>,hasResult: Bool,+error: Bool,+theme: Theme.Theme,width: Nat) -> IO(List<&2,String>):
   do IO<List<&2,String>>:
     call : String <- renderCall(args,theme)
     result : String <- renderResult(output,details,error,theme)
