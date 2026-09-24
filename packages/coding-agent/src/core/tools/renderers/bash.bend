@@ -98,7 +98,7 @@ def warning(theme: Theme.Theme,notice: String) -> IO(String):
     case value:
       do IO<String>:
         shown : String <- Messages.foregroundText(theme,"warning",value)
-        return "\n" ++ shown
+        return "\n\n" ++ shown
 def tenths(result: Result<&2,&2,F.Error,Nat>) -> Nat:
   match result:
     case Done{value}: value
