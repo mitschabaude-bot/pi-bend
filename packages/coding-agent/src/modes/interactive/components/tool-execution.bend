@@ -6,6 +6,8 @@ import ../../../../../tui/src/components/text.bend as TuiText
 import ../../../../../tui/src/utils.bend as U
 import ../../../../../runtime/src/callback.bend as Callback
 import ../../../../../runtime/src/ref.bend as Ref
+import ../../../../../runtime/src/serial-resource.bend as Serial
+import ../../../../../runtime/src/clock.bend as Clock
 import ../../../../../tui/src/component.bend as Component
 import ../../../../../runtime/src/schema-value.bend as Value
 import ../../../../../runtime/src/record.bend as Record
@@ -26,6 +28,39 @@ type Shell is Data:
   SelfRendered{call: Maybe<&2,Renderer()>,result: Maybe<&2,Renderer()>}
 type ToolExecution is Data:
   ToolExecution{toolName: String,toolCallId: String,args: Value.Value,result: Maybe<&2,ToolResult>,expanded: Bool,showImages: Bool,isPartial: Bool,executionStarted: Bool,argsComplete: Bool,theme: Theme.Theme,shell: Shell}
+type Timing is Data:
+  Waiting{}
+  Running{clock: Clock.Clock}
+  Finished{elapsedMs: F64}
+def finished(state: ToolExecution) -> Bool:
+  match state:
+    case ToolExecution{_,_,_,Some{_},_,_,False{},_,_,_,_}: True{}
+    case _: False{}
+def completedTiming(clock: Clock.Clock,done: Bool) -> IO(Timing & Unit):
+  match done:
+    case False{}: IO.pure(Timing & Unit,(Running{clock},Unit{}))
+    case True{}:
+      do IO<Timing & Unit>:
+        elapsed : F64 <- Clock.now(clock)
+        return (Finished{elapsed},Unit{})
+def beginTiming(current: Timing) -> IO(Timing & Unit):
+  match current:
+    case Finished{elapsed}: IO.pure(Timing & Unit,(Finished{elapsed},Unit{}))
+    case Running{clock}: IO.pure(Timing & Unit,(Running{clock},Unit{}))
+    case Waiting{}:
+      do IO<Timing & Unit>:
+        clock : Clock.Clock <- Clock.new()
+        return (Running{clock},Unit{})
+def updateTiming(current: Timing,done: Bool) -> IO(Timing & Unit):
+  match current:
+    case Finished{elapsed}: IO.pure(Timing & Unit,(Finished{elapsed},Unit{}))
+    case Running{clock}: completedTiming(clock,done)
+    case Waiting{}: IO.pure(Timing & Unit,(Waiting{},Unit{}))
+def measured(current: Timing) -> IO(Timing & Maybe<&2,F64>):
+  match current:
+    case Finished{+elapsed}: IO.pure(Timing & Maybe<&2,F64>,(Finished{elapsed},Some{elapsed}))
+    case Running{clock}: IO.pure(Timing & Maybe<&2,F64>,(Running{clock},None{}))
+    case Waiting{}: IO.pure(Timing & Maybe<&2,F64>,(Waiting{},None{}))
 
 def new(toolName: String,toolCallId: String,args: Value.Value,theme: Theme.Theme,shell: Shell) -> ToolExecution:
   ToolExecution{toolName,toolCallId,args,None{},False{},True{},True{},False{},False{},theme,shell}
@@ -237,14 +272,30 @@ def builtCall(name: String,args: Value.Value,expanded: Bool,theme: Theme.Theme) 
     case "bash": bashCall(theme,args)
     case "write": writeCall(theme,args,expanded)
     case _: pathCall(theme,"edit",args)
-def boxedBuiltin(+state: ToolExecution,+width: Nat) -> IO(List<&2,String>):
+def durationTenths(result: Result<&2,&2,F.Error,Nat>) -> Nat:
+  match result:
+    case Done{value}: value
+    case Fail{_}: 0n
+def durationLong(+seconds: Nat) -> String:
+  Bool.pick(String,Nat.is_lt(seconds,3600n),Nat.show(seconds / 60n) ++ "m " ++ Nat.show(seconds % 60n) ++ "s",Nat.show(seconds / 3600n) ++ "h " ++ Nat.show((seconds % 3600n) / 60n) ++ "m " ++ Nat.show(seconds % 60n) ++ "s")
+def durationText(+tenths: Nat) -> String:
+  Bool.pick(String,Nat.is_lt(tenths,600n),Nat.show(tenths / 10n) ++ "." ++ Nat.show(tenths % 10n) ++ "s",durationLong(tenths / 10n))
+def bashTiming(name: String,elapsed: Maybe<&2,F64>,theme: Theme.Theme) -> IO(String):
+  match name elapsed:
+    case "bash" Some{ms}:
+      do IO<String>:
+        label : String <- Messages.foregroundText(theme,"muted","Took " ++ durationText(durationTenths(F.convert(F.divide(F.add(ms,F.fromU32(50)),F.fromU32(100))))))
+        return "\n\n" ++ label
+    case _ _: IO.pure(String,"")
+def boxedBuiltin(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>) -> IO(List<&2,String>):
   match state:
     case ToolExecution{name,_,args,result,expanded,_,_,_,_,+theme,_}:
       do IO<List<&2,String>>:
         call : String <- builtCall(name,args,expanded,theme)
         extra : String <- builtResult(name,result,expanded,theme)
+        timing : String <- bashTiming(name,elapsed,theme)
         +bg : Callback.Callback<String,String> <- Messages.color(theme,backgroundKey(state),True{})
-        lines : List<&2,String> <- textLines(call ++ extra,0n,0n,Nat.max(1n,width - 2n),None{})
+        lines : List<&2,String> <- textLines(call ++ extra ++ timing,0n,0n,Nat.max(1n,width - 2n),None{})
         +body : List<&2,String> <- Box.paintContent(Box.prependMargin(lines," ",Nil{}),width,Some{bg},Nil{})
         +top : List<&2,String> <- Box.paintPadding(1n,width,Some{bg},Nil{})
         +bottom : List<&2,String> <- Box.paintPadding(1n,width,Some{bg},Nil{})
@@ -268,10 +319,12 @@ def editBuiltin(+state: ToolExecution,+width: Nat) -> IO(List<&2,String>):
             resultLines : List<&2,String> <- textLines(colored,1n,0n,width,None{})
             return "" <> List.append(&2,String,top,List.append(&2,String,body,List.append(&2,String,bottom,"" <> resultLines))),
           _ => IO.pure(List<&2,String>,"" <> List.append(&2,String,top,List.append(&2,String,body,bottom))))(Unit{})
-def builtin(+state: ToolExecution,width: Nat) -> IO(List<&2,String>):
+def builtinWithDuration(+state: ToolExecution,width: Nat,elapsed: Maybe<&2,F64>) -> IO(List<&2,String>):
   match state:
     case ToolExecution{"edit",_,_,_,_,_,_,_,_,_,_}: editBuiltin(state,width)
-    case _: boxedBuiltin(state,width)
+    case _: boxedBuiltin(state,width,elapsed)
+def builtin(state: ToolExecution,width: Nat) -> IO(List<&2,String>):
+  builtinWithDuration(state,width,None{})
 
 def coloredOutput(lines: List<&2,String>,+theme: Theme.Theme,reversed: List<&2,String>) -> IO(List<&2,String>):
   match lines:
@@ -334,56 +387,75 @@ def selfRendered(+state: ToolExecution,call: Maybe<&2,Renderer()>,result: Maybe<
     second : List<&2,String> <- resultSlot(result,state,width)
     +content : List<&2,String> <- IO.pure(List<&2,String>,List.append(&2,String,first,second))
     return Bool.pick(List<&2,String>,List.is_empty(&2,String,content),Nil{},"" <> content)
-def render(+state: ToolExecution,+width: Nat) -> IO(List<&2,String>):
+def renderWithDuration(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>) -> IO(List<&2,String>):
   match state:
     case ToolExecution{+name,_,_,_,_,_,_,_,_,_,Generic{}}:
-      Bool.pick(Unit -> IO(List<&2,String>),String.eq(name,"read") || String.eq(name,"bash") || String.eq(name,"edit") || String.eq(name,"write"),_ => builtin(state,width),_ => generic(state,width))(Unit{})
+      Bool.pick(Unit -> IO(List<&2,String>),String.eq(name,"read") || String.eq(name,"bash") || String.eq(name,"edit") || String.eq(name,"write"),_ => builtinWithDuration(state,width,elapsed),_ => generic(state,width))(Unit{})
     case ToolExecution{_,_,_,_,_,_,_,_,_,_,Boxed{+call,+result}}: boxed(state,call,result,width)
     case ToolExecution{_,_,_,_,_,_,_,_,_,_,SelfRendered{+call,+result}}: selfRendered(state,call,result,width)
+def render(state: ToolExecution,width: Nat) -> IO(List<&2,String>):
+  renderWithDuration(state,width,None{})
 
 # The viewport keeps this component mounted while the transcript replaces its
 # immutable state as tool events arrive.
 type Owner is Type:
-  Owner{state: Ref.Ref<ToolExecution>,component: Component.Component,draw: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
-type Handle is Data: Handle{state: Ref.Ref<ToolExecution>}
+  Owner{state: Ref.Ref<ToolExecution>,timing: Serial.Owner<Timing>,component: Component.Component,draw: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
+type Handle is Data: Handle{state: Ref.Ref<ToolExecution>,timing: Serial.Handle<Timing>}
 def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
   match handle:
-    case Handle{state}:
+    case Handle{state,timing}:
       do IO<List<&2,String>>:
         value : ToolExecution <- Ref.read(ToolExecution,state)
-        render(value,width)
+        elapsed : Maybe<&2,F64> <- Serial.run(Timing,Maybe<&2,F64>,timing,measured)
+        renderWithDuration(value,width,elapsed)
 def noInvalidate(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
+def created(id: Component.ComponentId,+state: Ref.Ref<ToolExecution>,pair: Serial.Owner<Timing> & Serial.Handle<Timing>) -> IO(Owner):
+  match pair:
+    case (timing,handle):
+      do IO<Owner>:
+        +draw : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Handle,~Nat,~List<&2,String>,~renderLive,Handle{state,handle})
+        +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~noInvalidate,Unit{})
+        return Owner{state,timing,Component.Component{id,draw,None{},None{},invalidate,None{},False{}},draw,invalidate}
 def create(id: Component.ComponentId,value: ToolExecution) -> IO(Owner):
   do IO<Owner>:
     +state : Ref.Ref<ToolExecution> <- Ref.new(ToolExecution,value)
-    +draw : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Handle,~Nat,~List<&2,String>,~renderLive,Handle{state})
-    +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~noInvalidate,Unit{})
-    return Owner{state,Component.Component{id,draw,None{},None{},invalidate,None{},False{}},draw,invalidate}
+    timing : Serial.Owner<Timing> <- Serial.create(Timing,Waiting{})
+    created(id,state,Serial.borrow(Timing,timing))
+def borrowed(pair: Serial.Owner<Timing> & Serial.Handle<Timing>,+state: Ref.Ref<ToolExecution>,+component: Component.Component,draw: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>) -> Owner & Component.Component & Handle:
+  match pair:
+    case (timing,handle): (Owner{state,timing,component,draw,invalidate},component,Handle{state,handle})
 def borrow(owner: Owner) -> Owner & Component.Component & Handle:
   match owner:
-    case Owner{+state,+component,draw,invalidate}: (Owner{state,component,draw,invalidate},component,Handle{state})
+    case Owner{+state,timing,+component,draw,invalidate}: borrowed(Serial.borrow(Timing,timing),state,component,draw,invalidate)
 def rethemeOwner(owner: Owner,theme: Theme.Theme) -> IO(Owner):
   match owner:
-    case Owner{+state,+component,draw,invalidate}:
+    case Owner{+state,timing,+component,draw,invalidate}:
       do IO<Owner>:
         value : ToolExecution <- Ref.read(ToolExecution,state)
         Ref.write(ToolExecution,state,retheme(value,theme))
-        return Owner{state,component,draw,invalidate}
+        return Owner{state,timing,component,draw,invalidate}
 def expandOwner(owner: Owner,expanded: Bool) -> IO(Owner):
   match owner:
-    case Owner{+state,+component,draw,invalidate}:
+    case Owner{+state,timing,+component,draw,invalidate}:
       do IO<Owner>:
         value : ToolExecution <- Ref.read(ToolExecution,state)
         Ref.write(ToolExecution,state,setExpanded(value,expanded))
-        return Owner{state,component,draw,invalidate}
-def set(handle: Handle,value: ToolExecution) -> IO(Unit):
-  match handle: case Handle{state}: Ref.write(ToolExecution,state,value)
+        return Owner{state,timing,component,draw,invalidate}
+def set(handle: Handle,+value: ToolExecution) -> IO(Unit):
+  match handle:
+    case Handle{state,timing}:
+      do IO<Unit>:
+        updated : Unit <- Serial.run(Timing,Unit,timing,current => updateTiming(current,finished(value)))
+        Ref.write(ToolExecution,state,value)
+def executionBegan(handle: Handle) -> IO(Unit):
+  match handle: case Handle{_,timing}: Serial.run(Timing,Unit,timing,beginTiming)
 def current(handle: Handle) -> IO(ToolExecution):
-  match handle: case Handle{state}: Ref.read(ToolExecution,state)
+  match handle: case Handle{state,_}: Ref.read(ToolExecution,state)
 def dispose(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{state,_,draw,invalidate}:
+    case Owner{state,timing,_,draw,invalidate}:
       do IO<Unit>:
         old : ToolExecution <- Ref.dispose(ToolExecution,state)
+        oldTiming : Timing <- Serial.retire(Timing,timing)
         Callback.dispose(Nat,List<&2,String>,draw)
         Callback.dispose(Unit,Unit,invalidate)

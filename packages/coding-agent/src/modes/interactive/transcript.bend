@@ -221,6 +221,7 @@ def beginFound(state: State,args: Schema.Value,found: Maybe<&2,Tool.Handle>) -> 
     case None{}: IO.pure(State & Bool,(state,False{}))
     case Some{+handle}:
       do IO<State & Bool>:
+        Tool.executionBegan(handle)
         current : Tool.ToolExecution <- Tool.current(handle)
         Tool.set(handle,Tool.markExecutionStarted(Tool.setArgsComplete(Tool.updateArgs(current,args))))
         return (state,True{})
