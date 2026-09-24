@@ -36,7 +36,7 @@ class Script:
 def events(turn, index):
     rid = f"resp_{index}"
     usage = turn.get("usage", {"input": 100, "output": 10})
-    yield {"type": "response.created", "response": {"id": rid, "status": "in_progress"}}
+    yield {"type": "response.created", "response": {"id": rid, "status": "in_progress"}, "_delay": turn.get("start_delay_ms", 0)}
     if "failed" in turn:
         yield {"type": "response.failed", "response": {"id": rid, "status": "failed", "error": turn["failed"]}}
         return

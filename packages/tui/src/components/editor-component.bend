@@ -1,5 +1,6 @@
 import Base
 import ./editor.bend as Editor
+import ./loader.bend as Loader
 import ../component.bend as Component
 import ../keybindings.bend as Keybindings
 import ../keys.bend as Keys
@@ -8,6 +9,7 @@ import ../word-navigation.bend as Word
 import ../../../runtime/src/callback.bend as Callback
 import ../../../runtime/src/ref.bend as Ref
 import ../../../runtime/src/serial-resource.bend as Serial
+import ../../../runtime/src/text.bend as Strings
 import ../../../runtime/src/word-segmenter.bend as Segmenter
 
 # The terminal owns one editor. Component callbacks borrow its serialized
@@ -16,6 +18,7 @@ import ../../../runtime/src/word-segmenter.bend as Segmenter
 type State is Data:
   State{editor: Editor.Editor,words: Segmenter.Context,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,rows: Ref.Ref<Nat>,error: Maybe<&2,Editor.Error>}
 type Handle is Data: Handle{resource: Serial.Handle<State>}
+type RenderInput is Data: RenderInput{editor: Handle,working: Maybe<&2,Ref.Ref<Maybe<&2,Loader.Handle>>>}
 type Owner is Type:
   Owner{resource: Serial.Owner<State>,component: Component.Component,handle: Handle}
 
@@ -29,9 +32,30 @@ def rendered(state: State,width: Nat) -> IO(State & List<&2,String>):
         height : Nat <- Ref.read(Nat,rows)
         pair : Editor.Editor & List<&2,String> <- Editor.render(editor,width,height)
         return renderedPair(pair,words,bindings,keyboard,rows,error)
-def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
+def statusLine(handle: Maybe<&2,Loader.Handle>,width: Nat) -> IO(Maybe<&2,String>):
   match handle:
-    case Handle{resource}: Serial.run(State,List<&2,String>,resource,state => rendered(state,width))
+    case None{}: IO.pure(Maybe<&2,String>,None{})
+    case Some{loader}:
+      do IO<Maybe<&2,String>>:
+        lines : List<&2,String> <- Loader.renderLive(loader,width + 2n)
+        return Some{Strings.trim(Maybe.default(&2,String,List.get(&2,String,lines,1n),""))}
+def renderedStatus(state: State,width: Nat,status: Maybe<&2,String>) -> IO(State & List<&2,String>):
+  match state:
+    case State{editor,words,bindings,keyboard,+rows,error}:
+      do IO<State & List<&2,String>>:
+        height : Nat <- Ref.read(Nat,rows)
+        pair : Editor.Editor & List<&2,String> <- Editor.renderWithStatus(editor,width,height,status)
+        return renderedPair(pair,words,bindings,keyboard,rows,error)
+def renderLiveCopied(input: RenderInput,+width: Nat) -> IO(List<&2,String>):
+  match input:
+    case RenderInput{Handle{resource},None{}}: Serial.run(State,List<&2,String>,resource,state => rendered(state,width))
+    case RenderInput{Handle{resource},Some{working}}:
+      do IO<List<&2,String>>:
+        handle : Maybe<&2,Loader.Handle> <- Ref.read(Maybe<&2,Loader.Handle>,working)
+        status : Maybe<&2,String> <- statusLine(handle,width)
+        Serial.run(State,List<&2,String>,resource,state => renderedStatus(state,width,status))
+def renderLive(input: RenderInput,width: Nat) -> IO(List<&2,String>):
+  renderLiveCopied(input,width)
 
 def accepted(previous: State,result: Editor.ResultOf(Editor.Editor)) -> State:
   match previous result:
@@ -103,11 +127,11 @@ def setText(handle: Handle,value: String) -> IO(Unit):
   match handle:
     case Handle{resource}: Serial.run(State,Unit,resource,state => setTextState(state,value))
 
-def created(id: Component.ComponentId,pair: Serial.Owner<State> & Serial.Handle<State>) -> IO(Owner):
+def created(id: Component.ComponentId,pair: Serial.Owner<State> & Serial.Handle<State>,working: Maybe<&2,Ref.Ref<Maybe<&2,Loader.Handle>>>) -> IO(Owner):
   match pair:
     case (resource,+handle):
       do IO<Owner>:
-        render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Handle,~Nat,~List<&2,String>,~renderLive,Handle{handle})
+        render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~RenderInput,~Nat,~List<&2,String>,~renderLive,RenderInput{Handle{handle},working})
         input : Callback.Callback<String,Unit> <- Callback.create(~Handle,~String,~Unit,~inputLive,Handle{handle})
         mouse : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Handle,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~mouseLive,Handle{handle})
         invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Handle,~Unit,~Unit,~invalidateLive,Handle{handle})
@@ -116,7 +140,11 @@ def created(id: Component.ComponentId,pair: Serial.Owner<State> & Serial.Handle<
 def create(id: Component.ComponentId,editor: Editor.Editor,words: Segmenter.Context,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,rows: Ref.Ref<Nat>) -> IO(Owner):
   do IO<Owner>:
     resource : Serial.Owner<State> <- Serial.create(State,State{editor,words,bindings,keyboard,rows,None{}})
-    created(id,Serial.borrow(State,resource))
+    created(id,Serial.borrow(State,resource),None{})
+def createWithWorking(id: Component.ComponentId,editor: Editor.Editor,words: Segmenter.Context,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,rows: Ref.Ref<Nat>,working: Ref.Ref<Maybe<&2,Loader.Handle>>) -> IO(Owner):
+  do IO<Owner>:
+    resource : Serial.Owner<State> <- Serial.create(State,State{editor,words,bindings,keyboard,rows,None{}})
+    created(id,Serial.borrow(State,resource),Some{working})
 def borrow(owner: Owner) -> Owner & Component.Component & Handle:
   match owner:
     case Owner{resource,+component,+handle}: (Owner{resource,component,handle},component,handle)

@@ -56,14 +56,15 @@ SCENARIOS = [
         "args": MODEL,
         "turns": [{"text": ANSWER, "chunks": 40, "delay_ms": 10, "usage": {"input": 1200, "output": 150}}],
         "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "hello"), ("key", "Enter"),
-                  ("wait", r"word1\b", "first-token"), ("wait", "END-OF-ANSWER", "last-token"),
+                  ("wait", r"word1\b", "first-token"), ("snap", "working"), ("wait", "END-OF-ANSWER", "last-token"),
                   ("settle", 0.5), ("snap", "answered")],
     },
     {
         "name": "tool-call",
         "args": MODEL,
-        "turns": [{"tool": {"name": "bash", "arguments": {"command": "echo tool-output"}}}, {"text": "Tool finished."}],
+        "turns": [{"tool": {"name": "bash", "arguments": {"command": "echo tool-output"}}, "start_delay_ms": 1000}, {"text": "Tool finished."}],
         "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "run it"), ("key", "Enter"),
+                  ("wait", "Working", "working"), ("snap", "working"),
                   ("wait", "Tool finished", "turn"), ("settle", 0.5), ("snap", "tool")],
     },
     {

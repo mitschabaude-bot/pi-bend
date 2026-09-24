@@ -109,6 +109,12 @@ def normalise(text, root):
     text = re.sub(r"\b\d+(\.\d+)?(ms|s)\b", "<duration>", text)
     return "\n".join(line.rstrip() for line in text.rstrip("\n").split("\n"))
 
+def working_screen(text, root):
+    # Streamed text advances at different rates; compare the editor and footer.
+    lines = normalise(text, root).split("\n")[-5:]
+    frame = re.sub(r"[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]", "<spinner>", "\n".join(lines))
+    return re.sub(r"\d+(?:\.\d+)?%/\d+k", "<usage>", frame)
+
 IDS = {"id", "parentId", "responseId", "toolCallId", "sessionId", "targetId", "firstKeptEntryId", "fromId", "leafId", "entryId"}
 
 def mask(value, key=None, names=None):
@@ -220,7 +226,7 @@ def run_side(label, argv, scenario, keep):
             elif kind == "settle":
                 terminal.settle(step[1] if len(step) > 1 else 0.5, scenario.get("timeout", 30))
             elif kind == "snap":
-                snaps[step[1]] = normalise(terminal.screen(), root)
+                snaps[step[1]] = working_screen(terminal.screen(), root) if step[1] == "working" else normalise(terminal.screen(), root)
     finally:
         terminal.close()
         server.shutdown()

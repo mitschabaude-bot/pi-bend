@@ -877,17 +877,34 @@ def padAutocomplete(lines: List<&2,String>,+padding: Nat,+width: Nat) -> List<&2
 def rendered(value: Editor,geometry: Geometry,height: Nat) -> Editor:
   match value geometry:
     case Editor{editing,history,_,settings,autocomplete,paste,jump} Geometry{width,visible,_,scroll}: Editor{editing,history,Geometry{width,visible,height,scroll},settings,autocomplete,paste,jump}
-def paintPlan(+value: Editor,plan: RenderPlan,+border: C.Callback<String,String>,ui: Maybe<&2,AutocompleteUi>) -> IO(Editor & List<&2,String>):
+def workingTopFitted(top: String,label: String,+border: C.Callback<String,String>,width: Nat,used: Nat,fit: Bool) -> IO(String):
+  match fit:
+    case True{}:
+      do IO<String>:
+        left : String <- C.call(String,String,border,"── ")
+        right : String <- C.call(String,String,border," " ++ repeat(width - used - 4n,'─',""))
+        return left ++ label ++ right
+    case False{}: C.call(String,String,border,top)
+def workingTop(+top: String,status: Maybe<&2,String>,+border: C.Callback<String,String>) -> IO(String):
+  match status:
+    case None{}: C.call(String,String,border,top)
+    case Some{+label}:
+      +width = U.visibleWidth(top)
+      +used = U.visibleWidth(label)
+      workingTopFitted(top,label,border,width,used,Nat.is_ge(width,used + 5n))
+def paintPlan(+value: Editor,plan: RenderPlan,+border: C.Callback<String,String>,ui: Maybe<&2,AutocompleteUi>,status: Maybe<&2,String>) -> IO(Editor & List<&2,String>):
   match plan:
     case RenderPlan{lines,top,bottom,geometry,+padding,+content}:
       do IO<Editor & List<&2,String>>:
-        top : String <- C.call(String,String,border,top)
+        top : String <- workingTop(top,status,border)
         bottom : String <- C.call(String,String,border,bottom)
         +extra : List<&2,String> <- autocompleteLines(ui,content)
         return (rendered(value,geometry,List.length(&2,String,extra)),top <> List.append(&2,String,lines,bottom <> padAutocomplete(extra,padding,content)))
-def render(+value: Editor,width: Nat,terminalRows: Nat) -> IO(Editor & List<&2,String>):
+def renderWithStatus(+value: Editor,width: Nat,terminalRows: Nat,status: Maybe<&2,String>) -> IO(Editor & List<&2,String>):
   match value:
-    case Editor{editing,_,geometry,EditorSettings{EditorTheme{border,_},options,_,focused,_},AutocompleteState{_,_,ui},_,_}: paintPlan(value,renderPlan(editing,options,geometry,focused,width,terminalRows),border,ui)
+    case Editor{editing,_,geometry,EditorSettings{EditorTheme{border,_},options,_,focused,_},AutocompleteState{_,_,ui},_,_}: paintPlan(value,renderPlan(editing,options,geometry,focused,width,terminalRows),border,ui,status)
+def render(value: Editor,width: Nat,terminalRows: Nat) -> IO(Editor & List<&2,String>):
+  renderWithStatus(value,width,terminalRows,None{})
 
 def historyAdded(value: History,+text: String) -> History:
   match value:
