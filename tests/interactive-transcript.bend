@@ -24,6 +24,8 @@ def historical(text: String) -> Agent.AgentMessage<Value.Value,Value.Value,Unit>
   Agent.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text},F64{0,0}}}}
 def assistant(text: String) -> Ai.AssistantMessage<Value.Value,Value.Value>:
   Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{text,None{}}} <> Nil{},"openai-responses","openai","gpt-4o-mini",None{},None{},None{},None{},Ai.Usage{F64{0,0},F64{0,0},F64{0,0},F64{0,0},None{},None{},F64{0,0},Ai.UsageCost{F64{0,0},F64{0,0},F64{0,0},F64{0,0},F64{0,0}}},Ai.Stop{},None{},None{},None{},None{},F64{0,0}}
+def thinking(text: String) -> Ai.AssistantMessage<Value.Value,Value.Value>:
+  Ai.AssistantMessage{Ai.AssistantThinking{Ai.ThinkingContent{text,None{},None{}}} <> Ai.AssistantText{Ai.TextContent{"visible answer",None{}}} <> Nil{},"openai-responses","openai","gpt-4o-mini",None{},None{},None{},None{},Ai.Usage{F64{0,0},F64{0,0},F64{0,0},F64{0,0},None{},None{},F64{0,0},Ai.UsageCost{F64{0,0},F64{0,0},F64{0,0},F64{0,0},F64{0,0}}},Ai.Stop{},None{},None{},None{},None{},F64{0,0}}
 def withTools(text: String) -> Ai.AssistantMessage<Value.Value,Value.Value>:
   Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{text,None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"call-1","sample_tool",Value.Null{},None{},None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"call-2","second_tool",Value.Null{},None{},None{}}} <> Nil{},"openai-responses","openai","gpt-4o-mini",None{},None{},None{},None{},Ai.Usage{F64{0,0},F64{0,0},F64{0,0},F64{0,0},None{},None{},F64{0,0},Ai.UsageCost{F64{0,0},F64{0,0},F64{0,0},F64{0,0},F64{0,0}}},Ai.Stop{},None{},None{},None{},None{},F64{0,0}}
 def resumedAssistant() -> Agent.AgentMessage<Value.Value,Value.Value,Unit>:
@@ -146,6 +148,18 @@ def runEvents(pair: Transcript.Owner & Transcript.Handle,view: View.View,+docume
         isCollapsed : Bool <- Transcript.toggleExpanded(handle)
         +closed : List<&2,String> <- Component.render(document,80n)
         check(Bool.not(isCollapsed) && Bool.not(contains(clean(closed),"FIRST_HIDDEN")),"collapsing transcript left Bash output expanded")
+        thinkingStart : Bool <- Transcript.accept(Value.Value,Value.Value,Unit,handle,started(thinking("private reasoning")))
+        +thoughtVisible : List<&2,String> <- Component.render(document,80n)
+        check(thinkingStart && contains(clean(thoughtVisible),"private reasoning"),"thinking block did not initially render")
+        Transcript.setHideThinking(handle,True{})
+        +thoughtHidden : List<&2,String> <- Component.render(document,80n)
+        check(Bool.not(contains(clean(thoughtHidden),"private reasoning")) && contains(clean(thoughtHidden),"visible answer"),"toggle did not hide existing thinking without hiding answer")
+        newThinking : Bool <- Transcript.accept(Value.Value,Value.Value,Unit,handle,started(thinking("future reasoning")))
+        +futureHidden : List<&2,String> <- Component.render(document,80n)
+        check(newThinking && Bool.not(contains(clean(futureHidden),"future reasoning")),"new assistant did not inherit thinking visibility")
+        Transcript.setHideThinking(handle,False{})
+        +thoughtShown : List<&2,String> <- Component.render(document,80n)
+        check(contains(clean(thoughtShown),"private reasoning") && contains(clean(thoughtShown),"future reasoning"),"toggle did not restore mounted thinking")
         Transcript.dispose(transcript)
         View.dispose(view)
         Styles.dispose(styles)

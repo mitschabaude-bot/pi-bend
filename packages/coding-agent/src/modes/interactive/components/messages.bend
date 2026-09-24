@@ -306,6 +306,17 @@ def expandOwner(owner: Owner,expanded: Bool) -> IO(Owner):
         body : Body <- Ref.read(Body,state)
         Ref.write(Body,state,expandedBody(body,expanded))
         return Owner{state,component,render,invalidate}
+def hiddenBody(body: Body,hidden: Bool) -> Body:
+  match body:
+    case AssistantBody{value}: AssistantBody{setHideThinkingBlock(value,hidden)}
+    case other: other
+def hideThinkingOwner(owner: Owner,hidden: Bool) -> IO(Owner):
+  match owner:
+    case Owner{+state,+component,render,invalidate}:
+      do IO<Owner>:
+        body : Body <- Ref.read(Body,state)
+        Ref.write(Body,state,hiddenBody(body,hidden))
+        return Owner{state,component,render,invalidate}
 def set(handle: Handle,body: Body) -> IO(Unit):
   match handle:
     case Handle{state}: Ref.write(Body,state,body)

@@ -1070,9 +1070,26 @@ def expandOutput(input: KeyInput) -> IO(Unit):
         expanded : Bool <- Transcript.toggleExpanded(transcript)
         toggleHeader(header)
         Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandNotice{Bool.pick(String,expanded,"Tool output: expanded","Tool output: collapsed")}})
+def thinkingChanged(result: Result<&2,&2,String,Unit>,transcript: Transcript.Handle,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,+hidden: Bool) -> IO(Unit):
+  match result:
+    case Fail{reason}: Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandFailure{reason}})
+    case Done{_}:
+      do IO<Unit>:
+        Transcript.setHideThinking(transcript,hidden)
+        Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandNotice{Bool.pick(String,hidden,"Thinking blocks: hidden","Thinking blocks: visible")}})
+def toggleThinking(input: KeyInput) -> IO(Unit):
+  match input:
+    case KeyInput{_,_,failure,_,_,_,session,_,_,transcript}:
+      do IO<Unit>:
+        +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        settings : Settings.SettingsManager <- Session.getSettings(live)
+        +hidden : Bool <- IO.pure(Bool,Bool.not(Settings.getHideThinkingBlock(settings)))
+        result : Result<&2,&2,String,Unit> <- Session.changeSettings(live,current => Settings.setHideThinkingBlock(hidden,current))
+        thinkingChanged(result,transcript,failure,hidden)
 def keyAction(input: KeyInput,action: Editor.EditorAction) -> IO(Unit):
   match action:
     case Editor.ExpandTools{}: expandOutput(input)
+    case Editor.ToggleThinking{}: toggleThinking(input)
     case Editor.Interrupt{text}: interrupted(input,text)
     case Editor.Dequeue{text}: keyControl(input,Controller.Dequeue{text})
     case Editor.Clear{}: cleared(input)
@@ -1100,6 +1117,8 @@ def reboundCopied(sink: RebindSink,+session: Session.AgentSession) -> IO(Unit):
         Session.subscribe(session,listener)
         +messages : List<&2,Session.Message()> <- Session.messages(session)
         Transcript.clear(transcript)
+        settings : Settings.SettingsManager <- Session.getSettings(session)
+        Transcript.setHideThinking(transcript,Settings.getHideThinkingBlock(settings))
         Transcript.seedSession(transcript,messages)
         state : Session.AgentState() <- Session.state(session)
         Ref.write(Footer.State,footerRef,initialFooter(state,messages,cwd,home))
@@ -1387,6 +1406,8 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
     case (transcript,+transcriptHandle):
       do IO<Result<&2,&2,Error,Unit>>:
         +existing : List<&2,Session.Message()> <- Session.messages(session)
+        settings : Settings.SettingsManager <- Session.getSettings(session)
+        Transcript.setHideThinking(transcriptHandle,Settings.getHideThinkingBlock(settings))
         Transcript.seedSession(transcriptHandle,existing)
         agentState : Session.AgentState() <- Session.state(session)
         +foot : FooterOwner <- footer(initialFooter(agentState,existing,cwd,home),liveTheme)
