@@ -487,6 +487,10 @@ def flagNames(properties: List<&2,Record.Property<FlagValue>>) -> List<&2,String
     case Nil{}: Nil{}
     case Record.Property{name,_} <> rest: name <> flagNames(rest)
 
+# --approve (Some{True}) or --no-approve (Some{False}).
+def projectTrustOverrideOf(args: Args) -> Maybe<&2,Bool>:
+  match args:
+    case Args{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,trust,_,_,_,_}: trust
 # Names of the `--flags` no built-in option claimed, in command-line order.
 def unknownFlagNames(args: Args) -> List<&2,String>:
   match args:

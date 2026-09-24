@@ -14,6 +14,8 @@ import ./core/agent-session.bend as AgentSession
 import ./core/agent-session-runtime.bend as SessionRuntime
 import ./core/export-html/index.bend as Export
 import ./core/settings-manager.bend as Settings
+import ./core/project-trust.bend as ProjectTrust
+import ./core/trust-manager.bend as Trust
 import ./core/tools/index.bend as Tools
 import ./modes/print-mode.bend as Print
 import ./modes/rpc.bend as Rpc
@@ -837,14 +839,39 @@ def unknownOptions(names: List<&2, String>) -> Maybe<&2, String>:
     case _ <> Nil{}: Some{"Error: Unknown option: " ++ String.join(dashed(names), ", ")}
     case _: Some{"Error: Unknown options: " ++ String.join(dashed(names), ", ")}
 
+# upstream main createRuntime: project settings and resources load only for a
+# trusted project (resolveProjectTrusted); the startup settings stay trusted.
+def loadSettingsTrusted(cwd: String, agentDir: String, trusted: Bool) -> IO(Settings.SettingsManager):
+  do IO<Settings.SettingsManager>:
+    loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.SettingsManagerCreateOptions{trusted})
+    reported(drained(loaded))
+def envHome(value: Result<&1, &1, U32 & String, String>) -> Maybe<&2, String>:
+  match value:
+    case Done{home}: Some{home}
+    case Fail{_}: None{}
+def runtimeWithSettings(env: FactoryEnv, +cwd: String, +session: Session(), +value: Runtime.SessionSeed, +settings: Settings.SettingsManager) -> IO(Result<&1, &1, String, Created()>):
+  match env:
+    case FactoryEnv{+parsed, agentDir, authPath, bundlePath, packageDir}:
+      do IO<Result<&1, &1, String, Created()>>:
+        created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.create(createOptions(parsed, cwd, agentDir, authPath, bundlePath, packageDir, value, settings))
+        runtimeCreated(cwd, session, seedMessages(value), seedThinking(value), settings, value, scopeFlags(parsed, settings), created)
+def trustedRuntime(env: FactoryEnv, +cwd: String, +session: Session(), +value: Runtime.SessionSeed, startup: Settings.SettingsManager, trust: Result<&2, &2, String, Bool>) -> IO(Result<&1, &1, String, Created()>):
+  match env trust:
+    case _ Fail{message}: IO.pure(Result<&1, &1, String, Created()>, Fail{"Error: " ++ message})
+    case env Done{True{}}: runtimeWithSettings(env, cwd, session, value, startup)
+    case FactoryEnv{parsed, +agentDir, authPath, bundlePath, packageDir} Done{False{}}:
+      do IO<Result<&1, &1, String, Created()>>:
+        +untrusted : Settings.SettingsManager <- loadSettingsTrusted(cwd, agentDir, False{})
+        runtimeWithSettings(FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir}, cwd, session, value, untrusted)
 def flaggedRuntime(env: FactoryEnv, +cwd: String, +session: Session(), +value: Runtime.SessionSeed, unknown: Maybe<&2, String>) -> IO(Result<&1, &1, String, Created()>):
   match env unknown:
     case _ Some{message}: IO.pure(Result<&1, &1, String, Created()>, Fail{message})
     case FactoryEnv{+parsed, +agentDir, authPath, bundlePath, packageDir} None{}:
       do IO<Result<&1, &1, String, Created()>>:
-        +settings : Settings.SettingsManager <- loadSettings(cwd, agentDir)
-        created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.create(createOptions(parsed, cwd, agentDir, authPath, bundlePath, packageDir, value, settings))
-        runtimeCreated(cwd, session, seedMessages(value), seedThinking(value), settings, value, scopeFlags(parsed, settings), created)
+        +startup : Settings.SettingsManager <- loadSettings(cwd, agentDir)
+        home : Result<&1, &1, U32 & String, String> <- IO.get_env("HOME")
+        trust : Result<&2, &2, String, Bool> <- ProjectTrust.resolveProjectTrusted(ProjectTrust.ResolveProjectTrustedOptions{cwd, envHome(home), Trust.create(agentDir), Args.projectTrustOverrideOf(parsed), Settings.getDefaultProjectTrust(startup)}, None{})
+        trustedRuntime(FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir}, cwd, session, value, startup, trust)
 
 def seededRuntime(env: FactoryEnv, +cwd: String, +session: Session(), seed: Result<&2, &2, Stop, Runtime.SessionSeed>) -> IO(Result<&1, &1, String, Created()>):
   match env seed:

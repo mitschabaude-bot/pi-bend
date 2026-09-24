@@ -185,7 +185,8 @@ def run_side(label, argv, scenario, keep):
     for relative, content in scenario.get("files", {}).items():
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(content) if isinstance(content, bytes) else path.write_text(content)
+        # `<root>` in a text file stands for this run's temporary root.
+        path.write_bytes(content) if isinstance(content, bytes) else path.write_text(content.replace("<root>", str(root)))
     log = root / "requests.jsonl"
     server = fake_openai.serve(scenario.get("turns", []), str(log))
     port = server.server_address[1]

@@ -44,3 +44,9 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   bundles an inline extension that registers the `/llama` command
   (`packages/coding-agent/src/extensions/llama`). The port has no extension
   runtime yet, so `get_commands` lacks it.
+- **Interactive project-trust prompt** (pending): with an undecided project
+  that has `.pi` resources and `defaultProjectTrust: "ask"`, pi shows a
+  "Trust project folder?" selector before the UI starts. Bend resolves trust
+  like pi (overrides, saved decisions, defaults; print/JSON/RPC untrusted) but
+  has no startup selector yet, so interactive mode treats the project as
+  untrusted. Codex is porting ExtensionSelectorComponent/showStartupSelector.

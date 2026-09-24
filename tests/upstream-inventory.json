@@ -3630,9 +3630,12 @@
     },
     {
       "source": "packages/coding-agent/test/trust-manager.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a7e10cbd3acc3550bd1d355ecf64cf3c47628ac9c78248df38f49f431f8e91b9"
+      "status": "ported",
+      "ports": [
+        "tests/trust-manager.bend"
+      ],
+      "sha256": "a7e10cbd3acc3550bd1d355ecf64cf3c47628ac9c78248df38f49f431f8e91b9",
+      "notes": "Both named cases ported (HOME passed explicitly); ten more checks cover sorted trust.json output, null removal, prompt options and the user ~/.agents/skills exclusion. Print-mode trust behaviour is compared with pi by the print-*-trust/-project parity scenarios."
     },
     {
       "source": "packages/coding-agent/test/trust-selector.test.ts",
