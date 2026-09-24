@@ -7,11 +7,13 @@ import ../../../../../tui/src/keybindings.bend as Bindings
 import ../../../../../tui/src/keys.bend as Keys
 import ../../../../../tui/src/tui.bend as Tui
 import ../../../../../tui/src/utils.bend as Utils
+import ../../../../../tui/src/fuzzy.bend as Fuzzy
 import ../theme/theme.bend as Theme
 
 # Replaces the editor while the native device flow waits for authorization.
 # Esc calls the flow's abort controller; closing restores the original editor.
-type State is Data: Closed{} Choosing{} Waiting{} Device{url: String,code: String} Manual{url: String,input: String}
+type Choice is Data: Choice{id: String,label: String,description: String}
+type State is Data: Closed{} Choosing{title: String,all: List<&2,Choice>,visible: List<&2,Choice>,selected: Nat,query: String} Waiting{} Device{url: String,code: String} Manual{url: String,input: String}
 type Host is Data:
   Host{state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Deferred.Deferred<String>>>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,cancel: Callback.Callback<Unit,Unit>}
 type Owner is Type:
@@ -40,8 +42,24 @@ def linkedFrame(+theme: Theme.Theme,+width: Nat,title: String,url: String,body: 
   paint(theme,"dim",bar(width)) <> paint(theme,"accent",title) <> "" <> paint(theme,"accent",linked(url,width)) <> List.append(&2,String,clipLines(body,width),paint(theme,"dim",bar(width)) <> Nil{})
 def waiting(+theme: Theme.Theme,width: Nat) -> List<&2,String>:
   frame(theme,width," Login to OpenAI Codex",paint(theme,"dim"," Requesting device code...") <> "" <> " (Esc to cancel)" <> Nil{})
-def choosing(+theme: Theme.Theme,width: Nat) -> List<&2,String>:
-  frame(theme,width," Login",paint(theme,"accent"," Choose a provider") <> "  1  OpenAI Codex" <> "  2  Anthropic (Claude Pro/Max)" <> "" <> paint(theme,"dim"," Press 1 or 2 · Esc to cancel") <> Nil{})
+def searchText(choice: Choice) -> String:
+  match choice: case Choice{id,label,description}: id ++ " " ++ label ++ " " ++ description
+def filtered(+choices: List<&2,Choice>,+query: String) -> List<&2,Choice>:
+  Bool.pick(List<&2,Choice>,String.is_empty(query),choices,Fuzzy.fuzzyFilter(~Choice,~searchText,choices,query))
+def choiceRow(choice: Choice,+index: Nat,+selected: Nat,width: Nat,theme: Theme.Theme) -> String:
+  match choice:
+    case Choice{_,label,+description}:
+      +text = Bool.pick(String,Nat.is_eq(index,selected)," › ","   ") ++ label ++ Bool.pick(String,String.is_empty(description),""," · " ++ description)
+      Utils.truncateToWidth(paint(theme,Bool.pick(String,Nat.is_eq(index,selected),"accent","muted"),text),width,"",False{})
+def choiceRows(choices: List<&2,Choice>,+index: Nat,+selected: Nat,+width: Nat,+theme: Theme.Theme) -> List<&2,String>:
+  match choices:
+    case Nil{}: Nil{}
+    case choice <> rest: choiceRow(choice,index,selected,width,theme) <> choiceRows(rest,index + 1n,selected,width,theme)
+def choosing(+theme: Theme.Theme,+width: Nat,title: String,+visible: List<&2,Choice>,+selected: Nat,query: String) -> List<&2,String>:
+  +count = List.length(&2,Choice,visible)
+  +start = Nat.min(selected - 5n,count - Nat.min(count,10n))
+  +body = Bool.pick(List<&2,String>,Nat.is_eq(count,0n),paint(theme,"muted","  No matching credentials") <> Nil{},choiceRows(List.take(&2,Choice,List.drop(&2,Choice,visible,start),10n),start,selected,width,theme))
+  frame(theme,width,title,(paint(theme,"muted"," Search: ") ++ paint(theme,"accent",query)) <> List.append(&2,String,body,"" <> paint(theme,"dim"," ↑/↓ select · Enter confirm · Esc cancel") <> Nil{}))
 def manual(+theme: Theme.Theme,+width: Nat,+url: String,+input: String) -> List<&2,String>:
   linkedFrame(theme,width," Login to Anthropic",url,paint(theme,"dim"," Ctrl+click to open") <> "" <> paint(theme,"dim"," Complete login in your browser; paste the redirect URL if it is on another machine.") <> paint(theme,"warning"," Paste authorization code or redirect URL:") <> clipped(" " ++ input,width) <> "" <> paint(theme,"dim"," Enter to submit · Esc to cancel") <> Nil{})
 def device(+theme: Theme.Theme,+width: Nat,+url: String,code: String) -> List<&2,String>:
@@ -49,7 +67,7 @@ def device(+theme: Theme.Theme,+width: Nat,+url: String,code: String) -> List<&2
 def drawCurrent(state: State,editor: Component.Component,theme: Theme.Theme,width: Nat) -> IO(List<&2,String>):
   match state:
     case Closed{}: Component.render(editor,width)
-    case Choosing{}: IO.pure(List<&2,String>,choosing(theme,width))
+    case Choosing{title,_,visible,selected,query}: IO.pure(List<&2,String>,choosing(theme,width,title,visible,selected,query))
     case Waiting{}: IO.pure(List<&2,String>,waiting(theme,width))
     case Device{url,code}: IO.pure(List<&2,String>,device(theme,width,url,code))
     case Manual{url,input}: IO.pure(List<&2,String>,manual(theme,width,url,input))
@@ -88,22 +106,46 @@ def inputManual(+state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Deferred.Deferred
   Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.confirm"),_ => do IO<Unit>:
     Ref.write(State,state,Waiting{})
     settle(reply,input),_ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.editor.deleteCharBackward"),_ => Ref.write(State,state,Manual{url,withoutLast(input)}),_ => Bool.pick(Unit -> IO(Unit),printable(data),_ => Ref.write(State,state,Manual{url,input ++ data}),_ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{}))(Unit{})
-def choose(state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Deferred.Deferred<String>>>,data: String) -> IO(Unit):
+def choiceId(choice: Maybe<&2,Choice>) -> Maybe<&2,String>:
+  match choice:
+    case None{}: None{}
+    case Some{Choice{id,_,_}}: Some{id}
+def selectedChoice(state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Deferred.Deferred<String>>>,choice: Maybe<&2,String>) -> IO(Unit):
+  match choice:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{id}:
+      do IO<Unit>:
+        Ref.write(State,state,Waiting{})
+        settle(reply,id)
+def chooseIndex(state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Deferred.Deferred<String>>>,choices: List<&2,Choice>,index: Nat) -> IO(Unit):
+  selectedChoice(state,reply,choiceId(List.get(&2,Choice,choices,index)))
+def menuChanged(state: Ref.Ref<State>,title: String,+all: List<&2,Choice>,selected: Nat,+query: String) -> IO(Unit):
+  Ref.write(State,state,Choosing{title,all,filtered(all,query),selected,query})
+def moveChoice(state: Ref.Ref<State>,title: String,all: List<&2,Choice>,visible: List<&2,Choice>,+selected: Nat,query: String,up: Bool) -> IO(Unit):
+  +count = List.length(&2,Choice,visible)
+  +next = Bool.pick(Nat,up,Bool.pick(Nat,Nat.is_eq(selected,0n),count - 1n,selected - 1n),Bool.pick(Nat,Nat.is_eq(selected,count - 1n),0n,selected + 1n))
+  menuChanged(state,title,all,Bool.pick(Nat,Nat.is_eq(count,0n),0n,next),query)
+def menuInput(+state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Deferred.Deferred<String>>>,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+title: String,+all: List<&2,Choice>,+visible: List<&2,Choice>,+selected: Nat,+query: String,+data: String) -> IO(Unit):
   match data:
-    case "1":
-      do IO<Unit>:
-        Ref.write(State,state,Waiting{})
-        settle(reply,"openai-codex")
-    case "2":
-      do IO<Unit>:
-        Ref.write(State,state,Waiting{})
-        settle(reply,"anthropic")
-    case _: IO.pure(Unit,Unit{})
+    case "1": chooseIndex(state,reply,visible,0n)
+    case "2": chooseIndex(state,reply,visible,1n)
+    case _:
+      Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.up"),
+        _ => moveChoice(state,title,all,visible,selected,query,True{}),
+        _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.down"),
+          _ => moveChoice(state,title,all,visible,selected,query,False{}),
+          _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.confirm"),
+            _ => chooseIndex(state,reply,visible,selected),
+            _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.editor.deleteCharBackward"),
+              _ => menuChanged(state,title,all,0n,withoutLast(query)),
+              _ => Bool.pick(Unit -> IO(Unit),printable(data),
+                _ => menuChanged(state,title,all,0n,query ++ data),
+                _ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
 def receiveCurrent(current: State,+state: Ref.Ref<State>,+reply: Ref.Ref<Maybe<&2,Deferred.Deferred<String>>>,editor: Component.Component,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+cancel: Callback.Callback<Unit,Unit>,+data: String) -> IO(Unit):
   match current:
     case Closed{}: Component.handleInput(editor,data)
-    case Choosing{}:
-      Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => Callback.call(Unit,Unit,cancel,Unit{}),_ => choose(state,reply,data))(Unit{})
+    case Choosing{title,all,visible,selected,query}:
+      Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => Callback.call(Unit,Unit,cancel,Unit{}),_ => menuInput(state,reply,bindings,keyboard,title,all,visible,selected,query,data))(Unit{})
     case Manual{url,input}:
       Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => Callback.call(Unit,Unit,cancel,Unit{}),_ => inputManual(state,reply,bindings,keyboard,url,input,data))(Unit{})
     case _:
@@ -150,15 +192,17 @@ def create(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bi
 def borrow(owner: Owner) -> Owner & Host & Component.Component:
   match owner:
     case Owner{+host,+component,renderCallback,inputCallback,mouseCallback,invalidateCallback,focusCallback}: (Owner{host,component,renderCallback,inputCallback,mouseCallback,invalidateCallback,focusCallback},host,component)
-def open(host: Host) -> IO(Deferred.Deferred<String>):
+def openChoices(host: Host,title: String,+choices: List<&2,Choice>) -> IO(Deferred.Deferred<String>):
   match host:
     case Host{state,reply,editor,_,_,_,_}:
       do IO<Deferred.Deferred<String>>:
         +choice : Deferred.Deferred<String> <- Deferred.new(String)
         Ref.write(Maybe<&2,Deferred.Deferred<String>>,reply,Some{choice})
         Component.setFocused(editor,False{})
-        Ref.write(State,state,Choosing{})
+        Ref.write(State,state,Choosing{title,choices,choices,0n,""})
         return choice
+def open(host: Host) -> IO(Deferred.Deferred<String>):
+  openChoices(host," Login · Choose a provider",Choice{"openai-codex","OpenAI Codex","subscription"} <> Choice{"anthropic","Anthropic (Claude Pro/Max)","subscription"} <> Nil{})
 def openDirect(host: Host) -> IO(Unit):
   match host:
     case Host{state,_,editor,_,_,_,_}:

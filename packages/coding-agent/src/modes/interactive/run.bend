@@ -1,6 +1,7 @@
 import Base
 import ../../../../agent/src/types.bend as Agent
 import ../../../../ai/src/types.bend as Ai
+import ../../../../ai/src/auth/types.bend as Auth
 import ../../../../runtime/src/callback.bend as Callback
 import ../../../../runtime/src/deferred.bend as Deferred
 import ../../../../runtime/src/date.bend as Date
@@ -277,7 +278,8 @@ def refreshLoginModels(refresh: Maybe<&2,Callback.Callback<Unit,List<&2,Models.M
 def providerName(provider: String) -> String:
   match provider:
     case "anthropic": "Anthropic"
-    case _: "OpenAI Codex"
+    case "openai-codex": "OpenAI Codex"
+    case other: other
 def defaultId(defaults: List<&2,Models.DefaultModel>,+provider: String) -> Maybe<&2,String>:
   match defaults:
     case Nil{}: None{}
@@ -399,11 +401,11 @@ def directLogin(+state: LoginState,dialog: LoginDialog.Host,authenticate: Callba
         +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
         Ref.write(Maybe<&2,Abort.AbortController<Unit>>,abort,Some{controller})
         selectedLogin(state,provider,authenticate,controller)
-def invalidLogin(state: LoginState,requested: String) -> IO(Unit):
+def credentialFailure(state: LoginState,message: String) -> IO(Unit):
   match state:
     case LoginState{_,_,_,_,_,failure,redraw,_}:
       do IO<Unit>:
-        Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandFailure{"Unknown login provider: " ++ requested}})
+        Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandFailure{message}})
         Interactive.requestRender(redraw)
 def unavailableLogin(state: LoginState) -> IO(Unit):
   match state:
@@ -414,7 +416,7 @@ def unavailableLogin(state: LoginState) -> IO(Unit):
 def beginDirect(state: LoginState,dialog: LoginDialog.Host,authenticate: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,requested: String,provider: Maybe<&2,String>) -> IO(Unit):
   match provider:
     case Some{chosen}: directLogin(state,dialog,authenticate,chosen)
-    case None{}: invalidLogin(state,requested)
+    case None{}: credentialFailure(state,"Unknown login provider: " ++ requested)
 def beginLogin(+state: LoginState,target: Maybe<&2,LoginDialog.Host>,backend: Maybe<&2,Callback.Callback<LoginRequest,AuthLogin.Outcome()>>,+requested: String) -> IO(Unit):
   match target backend:
     case Some{dialog} Some{authenticate}:
@@ -429,6 +431,77 @@ def loginRunCopied(+state: LoginState,requested: String) -> IO(Unit):
         target : Maybe<&2,LoginDialog.Host> <- Ref.read(Maybe<&2,LoginDialog.Host>,host)
         beginLogin(state,target,backend,requested)
 def loginRun(state: LoginState,requested: String) -> IO(Unit): loginRunCopied(state,requested)
+def logoutChoice(info: Auth.CredentialInfo) -> LoginDialog.Choice:
+  match info:
+    case Auth.CredentialInfo{+id,kind}: LoginDialog.Choice{id,providerName(id),Auth.typeName(kind)}
+def logoutChoices(infos: List<&2,Auth.CredentialInfo>) -> List<&2,LoginDialog.Choice>:
+  match infos:
+    case Nil{}: Nil{}
+    case info <> rest: logoutChoice(info) <> logoutChoices(rest)
+def logoutKind(infos: List<&2,Auth.CredentialInfo>,+id: String) -> Maybe<&2,Auth.CredentialType>:
+  match infos:
+    case Nil{}: None{}
+    case Auth.CredentialInfo{provider,kind} <> rest: Bool.pick(Maybe<&2,Auth.CredentialType>,String.eq(provider,id),Some{kind},logoutKind(rest,id))
+def logoutNotice(provider: String,kind: Maybe<&2,Auth.CredentialType>) -> String:
+  match kind:
+    case Some{Auth.ApiKeyType{}}: "Removed stored API key for " ++ providerName(provider) ++ ". Environment variables and models.json config are unchanged."
+    case _: "Logged out of " ++ providerName(provider)
+def logoutOutcome(+provider: String,kind: Maybe<&2,Auth.CredentialType>,result: AuthLogin.Outcome(),refresh: Maybe<&2,Callback.Callback<Unit,List<&2,Models.Model()>>>,models: Ref.Ref<List<&2,Models.Model()>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>) -> IO(Unit):
+  match result:
+    case Done{_}:
+      do IO<Unit>:
+        available : List<&2,Models.Model()> <- refreshLoginModels(refresh,models)
+        Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandNotice{logoutNotice(provider,kind)}})
+    case Fail{message}: Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandFailure{"Logout failed: " ++ message}})
+def logoutChosen(state: LoginState,+chosen: String,infos: List<&2,Auth.CredentialInfo>) -> IO(Unit):
+  match state:
+    case LoginState{_,_,_,refresh,models,failure,redraw,_}:
+      do IO<Unit>:
+        kind : Maybe<&2,Auth.CredentialType> = logoutKind(infos,chosen)
+        result : AuthLogin.Outcome() <- AuthLogin.logout(chosen)
+        logoutOutcome(chosen,kind,result,refresh,models,failure)
+        Interactive.requestRender(redraw)
+def logoutSelected(state: LoginState,provider: String,infos: List<&2,Auth.CredentialInfo>) -> IO(Unit):
+  match provider:
+    case "": IO.pure(Unit,Unit{})
+    case chosen: logoutChosen(state,chosen,infos)
+def logoutMenu(+state: LoginState,+dialog: LoginDialog.Host,+infos: List<&2,Auth.CredentialInfo>) -> IO(Unit):
+  match state:
+    case LoginState{_,_,_,_,_,_,redraw,_}:
+      do IO<Unit>:
+        +pending : Deferred.Deferred<String> <- LoginDialog.openChoices(dialog," Logout · Stored credentials",logoutChoices(infos))
+        Interactive.requestRender(redraw)
+        chosen : String <- Deferred.result(String,pending)
+        Deferred.dispose(String,pending)
+        LoginDialog.close(dialog)
+        Interactive.requestRender(redraw)
+        logoutSelected(state,chosen,infos)
+def emptyLogout(state: LoginState) -> IO(Unit):
+  match state:
+    case LoginState{_,_,_,_,_,failure,redraw,_}:
+      do IO<Unit>:
+        Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandNotice{"No stored credentials to remove. /logout only removes credentials saved by /login; environment variables and models.json config are unchanged."}})
+        Interactive.requestRender(redraw)
+def logoutAvailable(state: LoginState,target: Maybe<&2,LoginDialog.Host>,infos: List<&2,Auth.CredentialInfo>) -> IO(Unit):
+  match target:
+    case Some{dialog}: logoutMenu(state,dialog,infos)
+    case None{}: unavailableLogin(state)
+def logoutListed(state: LoginState,target: Maybe<&2,LoginDialog.Host>,result: AuthLogin.StoredCredentials()) -> IO(Unit):
+  match result:
+    case Fail{message}: credentialFailure(state,"Could not read stored credentials: " ++ message)
+    case Done{Nil{}}: emptyLogout(state)
+    case Done{infos}: logoutAvailable(state,target,infos)
+def logoutRun(+state: LoginState) -> IO(Unit):
+  match state:
+    case LoginState{host,_,_,_,_,_,_,_}:
+      do IO<Unit>:
+        target : Maybe<&2,LoginDialog.Host> <- Ref.read(Maybe<&2,LoginDialog.Host>,host)
+        stored : AuthLogin.StoredCredentials() <- AuthLogin.storedCredentials()
+        logoutListed(state,target,stored)
+def credentialRun(state: LoginState,command: Commands.CredentialCommand) -> IO(Unit):
+  match command:
+    case Commands.BeginLogin{requested}: loginRun(state,Maybe.default(&2,String,requested,""))
+    case Commands.BeginLogout{}: logoutRun(state)
 def abortLogin(current: Maybe<&2,Abort.AbortController<Unit>>) -> IO(Unit):
   match current:
     case None{}: IO.pure(Unit,Unit{})
@@ -710,12 +783,12 @@ def modeCurrent(mode: Maybe<&2,Binding>,session: Session.AgentSession) -> IO(Ref
   match mode:
     case None{}: Ref.new(Session.AgentSession,session)
     case Some{Binding{current,_,_,_,_}}: IO.pure(Ref.Ref<Session.AgentSession>,current)
-def controllerFor(mode: Maybe<&2,Binding>,current: Ref.Ref<Session.AgentSession>,session: Session.AgentSession,listener: Session.Listener(),limit: Nat,failure: Maybe<&2,Callback.Callback<Controller.PromptFailure,Unit>>,command: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,control: Maybe<&2,Callback.Callback<Controller.ControlResult,Unit>>,selection: Maybe<&2,Callback.Callback<Controller.SelectionResult,Unit>>,models: Ref.Ref<List<&2,Models.Model()>>,login: Callback.Callback<String,Unit>) -> IO(Controller.Controller & Controller.Handle):
+def controllerFor(mode: Maybe<&2,Binding>,current: Ref.Ref<Session.AgentSession>,session: Session.AgentSession,listener: Session.Listener(),limit: Nat,failure: Maybe<&2,Callback.Callback<Controller.PromptFailure,Unit>>,command: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,control: Maybe<&2,Callback.Callback<Controller.ControlResult,Unit>>,selection: Maybe<&2,Callback.Callback<Controller.SelectionResult,Unit>>,models: Ref.Ref<List<&2,Models.Model()>>,login: Callback.Callback<Commands.CredentialCommand,Unit>) -> IO(Controller.Controller & Controller.Handle):
   match mode:
     case None{}:
       do IO<Controller.Controller & Controller.Handle>:
         available : List<&2,Models.Model()> <- Ref.read(List<&2,Models.Model()>,models)
-        Callback.dispose(String,Unit,login)
+        Callback.dispose(Commands.CredentialCommand,Unit,login)
         Controller.start(session,listener,limit,failure,command,control,selection,available)
     case Some{Binding{_,newSession,_,_,_}}: Controller.startBound(current,listener,newSession,limit,failure,command,control,selection,models,Some{login})
 def disposeInteraction(interaction: Interaction) -> IO(Unit):
@@ -938,7 +1011,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +loginHost : Ref.Ref<Maybe<&2,LoginDialog.Host>> <- Ref.new(Maybe<&2,LoginDialog.Host>,None{})
         +loginAbort : Ref.Ref<Maybe<&2,Abort.AbortController<Unit>>> <- Ref.new(Maybe<&2,Abort.AbortController<Unit>>,None{})
         +loginState : LoginState <- IO.pure(LoginState,loginStateOf(mode,loginHost,loginAbort,modelsRef,footerFailure(foot),redraw,current))
-        loginCallback : Callback.Callback<String,Unit> <- Callback.create(~LoginState,~String,~Unit,~loginRun,loginState)
+        loginCallback : Callback.Callback<Commands.CredentialCommand,Unit> <- Callback.create(~LoginState,~Commands.CredentialCommand,~Unit,~credentialRun,loginState)
         +commandSink : Interactive.CommandSink <- IO.pure(Interactive.CommandSink,Interactive.CommandSink{footerFailure(foot),redraw,modelSelectorRef,current,modelsRef})
         commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot)})
         +editorHandle : Ref.Ref<Maybe<&2,Live.Handle>> <- Ref.new(Maybe<&2,Live.Handle>,None{})

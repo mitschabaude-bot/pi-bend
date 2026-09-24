@@ -183,6 +183,49 @@ def authenticate(endpoints: Codex.DeviceEndpoints, signal: Abort.AbortSignal<Uni
     transport : Runtime.Outcome(Runtime.Transport) <- Runtime.createTransport(bundle(certs))
     ready(transport, path, endpoints, signal, notice)
 
+def StoredCredentials() -> Data: Result<&2,&2,String,List<&2,Auth.CredentialInfo>>
+def listedCredentials(pair: Storage.AuthStorageOwner & Storage.AuthStorage) -> IO(StoredCredentials()):
+  match pair:
+    case (owner,view):
+      do IO<StoredCredentials()>:
+        +store : Auth.CredentialStore <- Storage.store(view)
+        result : StoredCredentials() <- Auth.list(store,None{})
+        Auth.disposeStore(store)
+        Storage.dispose(owner)
+        return result
+def credentialsPath(path: Result<&2,&2,FS.Error,String>) -> IO(StoredCredentials()):
+  match path:
+    case Fail{_}: IO.pure(StoredCredentials(),Fail{"Could not locate the auth file"})
+    case Done{value}:
+      do IO<StoredCredentials()>:
+        owner : Storage.AuthStorageOwner <- Storage.create(value)
+        listedCredentials(Storage.borrow(owner))
+def storedCredentials() -> IO(StoredCredentials()):
+  do IO<StoredCredentials()>:
+    path : Result<&2,&2,FS.Error,String> <- Config.getAuthPath()
+    credentialsPath(path)
+
+def deletedCredential(provider: String,pair: Storage.AuthStorageOwner & Storage.AuthStorage) -> IO(Outcome()):
+  match pair:
+    case (owner,view):
+      do IO<Outcome()>:
+        +store : Auth.CredentialStore <- Storage.store(view)
+        result : Outcome() <- Auth.delete(store,provider,None{})
+        Auth.disposeStore(store)
+        Storage.dispose(owner)
+        return result
+def deletePath(provider: String,path: Result<&2,&2,FS.Error,String>) -> IO(Outcome()):
+  match path:
+    case Fail{_}: IO.pure(Outcome(),Fail{"Could not locate the auth file"})
+    case Done{value}:
+      do IO<Outcome()>:
+        owner : Storage.AuthStorageOwner <- Storage.create(value)
+        deletedCredential(provider,Storage.borrow(owner))
+def logout(provider: String) -> IO(Outcome()):
+  do IO<Outcome()>:
+    path : Result<&2,&2,FS.Error,String> <- Config.getAuthPath()
+    deletePath(provider,path)
+
 def printPrompt(_: Unit, prompt: DevicePrompt) -> IO(Unit):
   match prompt:
     case DevicePrompt{url, code}: IO.print("Open " ++ url ++ " and enter code: " ++ code)
