@@ -1,0 +1,45 @@
+--- a/base.bend
++++ b/base.bend
+@@ -194,6 +194,13 @@
+   import "./effs/get_env.c"
+   import "./effs/get_env.js"
+ 
++# Sets a variable in this process's environment, which later reads and
++# spawned processes see (JavaScript's process.env assignment). Not
++# synchronised with concurrent environment reads: set variables at startup.
++def IO.set_env(name: String, value: String) -> IO(Result<&1, &1, U32 & String, Unit>):
++  import "./effs/set_env.c"
++  import "./effs/set_env.js"
++
+ def IO.args() -> IO(List<String>):
+   import "./effs/args.c"
+   import "./effs/args.js"
+--- a/effs/set_env.c
++++ b/effs/set_env.c
+@@ -0,0 +1,18 @@
++Term io_set_env_run(Env e, Term* f, IoWork* w) {
++  uint64_t n = 0, m = 0;
++  char* name = io_cstr(e, f[0], &n);
++  char* value = io_cstr(e, f[1], &m);
++  uint32_t q = 0;
++  if (n == 0 || io_nul(name, n) || io_nul(value, m) || strchr(name, '=')) {
++    q = EINVAL;
++  } else if (setenv(name, value, 1) != 0) {
++    q = errno;
++  }
++  free(name);
++  free(value);
++  return q ? io_fail(e, q, NULL) : io_done(e, term_pak(CID_UNIT, 0));
++}
++
++static void __attribute__((constructor)) io_set_env_use(void) {
++  io_eff(CID_IO_SET_ENV, io_set_env_run, 0);
++}
+--- a/effs/set_env.js
++++ b/effs/set_env.js
+@@ -0,0 +1,5 @@
++function io_set_env(name, value) {
++  if (name.length === 0 || name.includes("=") || name.includes("\0") || value.includes("\0")) return io_fail(22);
++  process.env[name] = value;
++  return io_done({$: "Unit"});
++}

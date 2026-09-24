@@ -42,7 +42,7 @@ SCENARIOS = [
         "args": MODEL,
         "steps": [("wait", READY, "startup"), ("settle", 0.5),
                   ("keys", "!env | grep ^PI_ | sort"), ("key", "Enter"),
-                  ("wait", r"PI_MODEL|exit code|\(no output\)", "bash"), ("settle", 0.5), ("snap", "bash")],
+                  ("wait", r"PI_OFFLINE=1", "bash"), ("settle", 0.5), ("snap", "bash")],
     },
     {
         "name": "typing",

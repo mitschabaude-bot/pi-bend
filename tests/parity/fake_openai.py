@@ -22,13 +22,13 @@ class Script:
         self.count = 0
         self.log_path = log_path
 
-    def next(self, body):
+    def next(self, body, path, headers):
         with self.lock:
             index = self.count
             self.count += 1
             if self.log_path:
                 with open(self.log_path, "a") as log:
-                    log.write(json.dumps({"index": index, "body": body}) + "\n")
+                    log.write(json.dumps({"index": index, "path": path, "headers": headers, "body": body}) + "\n")
             return self.turns[index] if index < len(self.turns) else {"text": "(script exhausted)"}
 
 def events(turn, index):
@@ -74,7 +74,8 @@ def handler(script):
                 body = json.loads(raw)
             except ValueError:
                 body = raw.decode(errors="replace")
-            turn = script.next(body)
+            headers = {name.lower(): value for name, value in self.headers.items()}
+            turn = script.next(body, self.path, headers)
             self.send_response(200)
             self.send_header("content-type", "text/event-stream")
             self.send_header("cache-control", "no-cache")

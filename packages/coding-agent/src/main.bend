@@ -1285,7 +1285,40 @@ def runValues(values: List<&2, String>) -> IO(Unit):
     case "auth" <> "login" <> _: fail("Usage: pi auth login [--provider openai-codex]")
     case other: run(Args.parseArgs(other))
 
+# upstream cli/setup.ts setupCli and main's offline switch: variables the
+# process and every child it spawns see.
+def setEnv(name: String, value: String) -> IO(Unit):
+  do IO<Unit>:
+    set : Result<&1, &1, U32 & String, Unit> <- IO.set_env(name, value)
+    return Unit{}
+
+def isTruthyEnvFlag(value: Result<&1, &1, U32 & String, String>) -> Bool:
+  match value:
+    case Done{+text}: String.eq(text, "1") || String.eq(String.to_lower(text), "true") || String.eq(String.to_lower(text), "yes")
+    case Fail{_}: False{}
+
+def hasOffline(values: List<&2, String>) -> Bool:
+  match values:
+    case Nil{}: False{}
+    case value <> rest: String.eq(value, "--offline") || hasOffline(rest)
+
+def offlineMode(offline: Bool) -> IO(Unit):
+  Bool.pick(Unit -> IO(Unit), offline,
+    _ => do IO<Unit>:
+      setEnv("PI_OFFLINE", "1")
+      setEnv("PI_SKIP_VERSION_CHECK", "1"),
+    _ => IO.pure(Unit, Unit{}))(Unit{})
+
+def setupCli(values: List<&2, String>) -> IO(Unit):
+  do IO<Unit>:
+    setEnv("PI_CODING_AGENT", "true")
+    setEnv("AI_AGENT", "pi")
+    flag : Result<&1, &1, U32 & String, String> <- IO.get_env("PI_OFFLINE")
+    offlineMode(hasOffline(values) || isTruthyEnvFlag(flag))
+
 def main() -> IO(Unit):
   do IO<Unit>:
-    values : List<String> <- IO.args()
-    runValues(shared(values))
+    raw : List<String> <- IO.args()
+    +values : List<&2, String> = shared(raw)
+    setupCli(values)
+    runValues(values)

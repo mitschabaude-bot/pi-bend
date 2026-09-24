@@ -126,7 +126,8 @@ def run_side(label, argv, scenario, keep):
     finally:
         terminal.close()
         server.shutdown()
-        requests = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+        logged = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+        requests = re.sub(r"127\.0\.0\.1:\d+", "<server>", normalise(json.dumps(logged, indent=1, sort_keys=True), root)) if logged else ""
         if not keep:
             shutil.rmtree(root, ignore_errors=True)
     return {"snaps": snaps, "timings": timings, "requests": requests}
@@ -158,6 +159,15 @@ def main():
                 mismatched.append(name)
                 diff = difflib.unified_diff(expected.split("\n"), actual.split("\n"), "pi", "bend", lineterm="")
                 (directory / f"{name}.diff").write_text("\n".join(diff) + "\n")
+        # What each client sent to the model server, normalised like the screens.
+        wanted, sent = upstream["requests"], native["requests"]
+        if wanted or sent:
+            (directory / "requests.pi.json").write_text(wanted + "\n")
+            (directory / "requests.bend.json").write_text(sent + "\n")
+            if wanted != sent:
+                mismatched.append("requests")
+                diff = difflib.unified_diff(wanted.split("\n"), sent.split("\n"), "pi", "bend", lineterm="")
+                (directory / "requests.diff").write_text("\n".join(diff) + "\n")
         timing = {key: {"pi": upstream["timings"].get(key), "bend": native["timings"].get(key)} for key in upstream["timings"]}
         (directory / "timings.json").write_text(json.dumps(timing, indent=1) + "\n")
         status = "MATCH" if not mismatched else "DIFF " + ",".join(mismatched)
