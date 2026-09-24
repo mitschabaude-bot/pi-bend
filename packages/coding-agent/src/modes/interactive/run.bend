@@ -30,6 +30,7 @@ import ../../../../tui/src/utils.bend as Utils
 import ../../core/agent-runtime.bend as Runtime
 import ../../core/agent-session.bend as Session
 import ../../core/agent-session-runtime.bend as SessionHost
+import ../../core/bash-executor.bend as BashExec
 import ../../core/session-cwd.bend as SessionCwd
 import ../../core/session-persistence.bend as Persistence
 import ../../core/export-html/index.bend as Export
@@ -43,6 +44,7 @@ import ./components/footer.bend as Footer
 import ./components/header.bend as Header
 import ./components/session-selector.bend as Selector
 import ./components/model-selector.bend as ModelPicker
+import ./components/messages.bend as MessageUI
 import ./components/login-dialog.bend as LoginDialog
 import ./theme/color.bend as Color
 import ./theme/markdown-theme.bend as MarkdownTheme
@@ -172,8 +174,10 @@ type ImportState is Data:
   ImportState{host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,backend: Maybe<&2,Callback.Callback<ImportRequest,SessionHost.ImportOutcome>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type ResumeState is Data:
   ResumeState{picker: Ref.Ref<Maybe<&2,SessionPicker.Host>>,dialog: Ref.Ref<Maybe<&2,LoginDialog.Host>>,sessions: Maybe<&2,Callback.Callback<Unit,SessionChoices>>,backend: Maybe<&2,Callback.Callback<ResumeRequest,SessionHost.ResumeOutcome>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+type BashInput is Data:
+  BashInput{session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type CommandObservation is Data:
-  CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,builtinDir: String,importState: ImportState,resumeState: ResumeState,selector: Ref.Ref<Maybe<&2,Selector.Host>>}
+  CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,builtinDir: String,importState: ImportState,resumeState: ResumeState,selector: Ref.Ref<Maybe<&2,Selector.Host>>,bash: BashInput}
 def firstPath(args: List<&2,String>) -> Maybe<&2,String>:
   match args:
     case Nil{}: None{}
@@ -246,7 +250,7 @@ def exportNotice(result: Result<&2,&2,String,String>) -> Interactive.SubmissionF
     case Fail{message}: Interactive.CommandFailure{"Failed to export session: " ++ message}
 def exportObserved(input: CommandObservation,requested: Maybe<&2,String>) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,failure,redraw,cwd,builtinDir,_,_,_}:
+    case CommandObservation{_,session,_,failure,redraw,cwd,builtinDir,_,_,_,_}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         result : Result<&2,&2,String,String> <- exportCurrent(live,cwd,builtinDir,requested)
@@ -318,7 +322,7 @@ def importRequested(+state: ImportState,path: Maybe<&2,String>) -> IO(Unit):
         importConfirmed(state,input,answer)
 def importObserved(input: CommandObservation,requested: Maybe<&2,String>) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,_,_,_,state,_,_}: importRequested(state,exportPath(requested))
+    case CommandObservation{_,_,_,_,_,_,_,state,_,_,_}: importRequested(state,exportPath(requested))
 def resumeStatus(state: ResumeState,status: Interactive.SubmissionFailure) -> IO(Unit):
   match state:
     case ResumeState{_,_,_,_,failure,redraw}:
@@ -378,7 +382,7 @@ def resumeRequested(+state: ResumeState) -> IO(Unit):
         choices : SessionChoices <- Callback.call(Unit,SessionChoices,backend,Unit{})
         resumeOpen(state,choices)
 def resumeObserved(input: CommandObservation) -> IO(Unit):
-  match input: case CommandObservation{_,_,_,_,_,_,_,_,state,_}: resumeRequested(state)
+  match input: case CommandObservation{_,_,_,_,_,_,_,_,state,_,_}: resumeRequested(state)
 def selectorNotice(failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,message: String) -> IO(Unit):
   Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandNotice{message}})
 def openTree(target: Maybe<&2,Selector.Host>,state: Selector.State) -> IO(Unit):
@@ -413,10 +417,66 @@ def openSessionSelector(mode: Selector.Mode,session: Ref.Ref<Session.AgentSessio
     Interactive.requestRender(redraw)
 def treeObserved(input: CommandObservation,mode: Selector.Mode) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,failure,redraw,_,_,_,_,selector}: openSessionSelector(mode,session,selector,failure,redraw)
+    case CommandObservation{_,session,_,failure,redraw,_,_,_,_,selector,_}: openSessionSelector(mode,session,selector,failure,redraw)
+type BashChunk is Data: BashChunk{message: MessageUI.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+def bashChunk(target: BashChunk,delta: String) -> IO(Unit):
+  match target:
+    case BashChunk{message,redraw}:
+      do IO<Unit>:
+        Transcript.appendBash(message,delta)
+        Interactive.requestRender(redraw)
+def bashFailed(input: BashInput,message: MessageUI.Handle,+error: String) -> IO(Unit):
+  match input:
+    case BashInput{_,_,_,failure,redraw}:
+      do IO<Unit>:
+        Transcript.failBash(message,error)
+        Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandFailure{"Bash command failed: " ++ error}})
+        Interactive.requestRender(redraw)
+def bashDone(input: BashInput,message: MessageUI.Handle,result: BashExec.BashResult) -> IO(Unit):
+  match input result:
+    case BashInput{_,_,_,_,redraw} BashExec.BashResult{output,exitCode,cancelled,truncated,path}:
+      do IO<Unit>:
+        Transcript.finishBash(message,output,exitCode,cancelled,truncated,path)
+        Interactive.requestRender(redraw)
+def bashCompleted(input: BashInput,message: MessageUI.Handle,result: Result<&2,&2,String,BashExec.BashResult>) -> IO(Unit):
+  match result:
+    case Fail{error}: bashFailed(input,message,error)
+    case Done{value}: bashDone(input,message,value)
+def runBashTask(+input: BashInput,+command: String,+excluded: Bool) -> IO(Unit):
+  match input:
+    case BashInput{session,transcript,_,_,redraw}:
+      do IO<Unit>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        +message : MessageUI.Handle <- Transcript.startBash(transcript,command,excluded)
+        Interactive.requestRender(redraw)
+        +chunk : Callback.Callback<String,Unit> <- Callback.create(~BashChunk,~String,~Unit,~bashChunk,BashChunk{message,redraw})
+        result : Result<&2,&2,String,BashExec.BashResult> <- Session.executeBash(live,command,Some{chunk},Session.BashOptions{Some{excluded},None{},None{}})
+        Callback.dispose(String,Unit,chunk)
+        bashCompleted(input,message,result)
+def restoreBashEditor(target: Maybe<&2,Live.Handle>,command: String) -> IO(Unit):
+  match target:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{handle}: Live.setText(handle,command)
+def bashBusy(input: BashInput,command: String,excluded: Bool) -> IO(Unit):
+  match input:
+    case BashInput{_,_,editor,failure,redraw}:
+      do IO<Unit>:
+        target : Maybe<&2,Live.Handle> <- Ref.read(Maybe<&2,Live.Handle>,editor)
+        restoreBashEditor(target,Bool.pick(String,excluded,"!!","!") ++ command)
+        Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandFailure{"A bash command is already running. Press Esc to cancel it first."}})
+        Interactive.requestRender(redraw)
+def bashRequested(+input: BashInput,+command: String,+excluded: Bool) -> IO(Unit):
+  match input:
+    case BashInput{session,_,_,_,_}:
+      do IO<Unit>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        busy : Bool <- Session.isBashRunning(live)
+        Bool.pick(Unit -> IO(Unit),busy,_ => bashBusy(input,command,excluded),_ => IO.spawn(Unit,runBashTask(input,command,excluded)))(Unit{})
+def bashObserved(input: CommandObservation,command: String,excluded: Bool) -> IO(Unit):
+  match input: case CommandObservation{_,_,_,_,_,_,_,_,_,_,bash}: bashRequested(bash,command,excluded)
 def ordinaryCommandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match input:
-    case CommandObservation{sink,session,footer,_,_,_,_,_,_,_}:
+    case CommandObservation{sink,session,footer,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
         changed : Bool <- Interactive.commandResult(sink,action)
         Bool.pick(Unit -> IO(Unit),changed,_ => do IO<Unit>:
@@ -430,6 +490,7 @@ def commandObserved(input: CommandObservation,action: Commands.Action) -> IO(Uni
     case Commands.ResumeSession{}: resumeObserved(input)
     case Commands.OpenTree{}: treeObserved(input,Selector.TreeMode{})
     case Commands.OpenFork{}: treeObserved(input,Selector.ForkMode{})
+    case Commands.RunBash{command,excluded}: bashObserved(input,command,excluded)
     case other: ordinaryCommandObserved(input,other)
 type WorkerFailure is Data:
   WorkerFailure{failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
@@ -809,7 +870,7 @@ def refreshSelection(sink: SelectionSink,result: Controller.SelectionResult) -> 
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         +messages : List<&2,Session.Message()> <- Session.messages(live)
         Transcript.clear(transcript)
-        Transcript.seed(Unit,Runtime.Details(),Runtime.Custom(),transcript,messages)
+        Transcript.seedSession(transcript,messages)
         agentState : Session.AgentState() <- Session.state(live)
         Ref.write(Footer.State,footerRef,initialFooter(agentState,messages,cwd,home))
         updateSelectionEditor(editor,selectionText(result))
@@ -923,9 +984,10 @@ def interrupted(+input: KeyInput,+text: String) -> IO(Unit):
   match input:
     case KeyInput{_,_,_,_,lastEscape,_,session,_,_}:
       do IO<Unit>:
-        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        bash : Bool <- Session.isBashRunning(live)
         active : Bool <- Session.isStreaming(live)
-        Bool.pick(Unit -> IO(Unit),active,_ => keyControl(input,Controller.Interrupt{text}),_ => Bool.pick(Unit -> IO(Unit),String.is_empty(Text.trim(text)),_ => idleEscape(input,lastEscape),_ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{})
+        Bool.pick(Unit -> IO(Unit),bash,_ => Session.abortBash(live),_ => Bool.pick(Unit -> IO(Unit),active,_ => keyControl(input,Controller.Interrupt{text}),_ => Bool.pick(Unit -> IO(Unit),String.is_empty(Text.trim(text)),_ => idleEscape(input,lastEscape),_ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{}))(Unit{})
 def doubleClear(previous: Maybe<&2,F64>,now: F64,stop: Deferred.Deferred<Unit>) -> IO(Unit):
   match previous:
     case Some{earlier}: Bool.pick(Unit -> IO(Unit),F64.is_lt(F.subtract(now,earlier),U32.to_f64(500)),_ => do IO<Unit>:
@@ -985,7 +1047,7 @@ def reboundCopied(sink: RebindSink,+session: Session.AgentSession) -> IO(Unit):
         Session.subscribe(session,listener)
         +messages : List<&2,Session.Message()> <- Session.messages(session)
         Transcript.clear(transcript)
-        Transcript.seed(Unit,Runtime.Details(),Runtime.Custom(),transcript,messages)
+        Transcript.seedSession(transcript,messages)
         state : Session.AgentState() <- Session.state(session)
         Ref.write(Footer.State,footerRef,initialFooter(state,messages,cwd,home))
         Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,None{})
@@ -1253,7 +1315,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
     case (transcript,+transcriptHandle):
       do IO<Result<&2,&2,Error,Unit>>:
         +existing : List<&2,Session.Message()> <- Session.messages(session)
-        Transcript.seed(Unit,Runtime.Details(),Runtime.Custom(),transcriptHandle,existing)
+        Transcript.seedSession(transcriptHandle,existing)
         agentState : Session.AgentState() <- Session.state(session)
         +foot : FooterOwner <- footer(initialFooter(agentState,existing,cwd,home),liveTheme)
         +redraw : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,None{})
@@ -1271,8 +1333,8 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +resumeState : ResumeState <- IO.pure(ResumeState,resumeStateOf(mode,resumePicker,loginHost,footerFailure(foot),redraw))
         loginCallback : Callback.Callback<Commands.CredentialCommand,Unit> <- Callback.create(~LoginState,~Commands.CredentialCommand,~Unit,~credentialRun,loginState)
         +commandSink : Interactive.CommandSink <- IO.pure(Interactive.CommandSink,Interactive.CommandSink{footerFailure(foot),redraw,modelSelectorRef,current,modelsRef})
-        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),footerFailure(foot),redraw,cwd,builtinDir,importStateOf(mode,loginHost,footerFailure(foot),redraw),resumeState,selectorRef})
         +editorHandle : Ref.Ref<Maybe<&2,Live.Handle>> <- Ref.new(Maybe<&2,Live.Handle>,None{})
+        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),footerFailure(foot),redraw,cwd,builtinDir,importStateOf(mode,loginHost,footerFailure(foot),redraw),resumeState,selectorRef,BashInput{current,transcriptHandle,editorHandle,footerFailure(foot),redraw}})
         +lastClear : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         +lastEscape : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         selectionObserver : Callback.Callback<Controller.SelectionResult,Unit> <- Callback.create(~SelectionSink,~Controller.SelectionResult,~Unit,~selectionResult,SelectionSink{current,transcriptHandle,editorHandle,footerState(foot),footerFailure(foot),redraw,cwd,home})

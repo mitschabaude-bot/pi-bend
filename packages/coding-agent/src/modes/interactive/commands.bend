@@ -24,6 +24,7 @@ type Action is Data:
   ResumeSession{}
   OpenTree{}
   OpenFork{}
+  RunBash{command: String,excluded: Bool}
 type CredentialCommand is Data:
   BeginLogin{provider: Maybe<&2,String>}
   BeginLogout{}
@@ -44,11 +45,15 @@ type Command is Data:
   Resume{}
   Tree{}
   Fork{}
+  Bash{command: String,excluded: Bool}
   Unsupported{text: String}
 
 def argument(text: String,prefix: Nat) -> Maybe<&2,String>:
   +value = Text.trim(String.drop(text,prefix))
   Bool.pick(Maybe<&2,String>,String.is_empty(value),None{},Some{value})
+def bashCommand(+text: String,prefix: Nat,excluded: Bool) -> Command:
+  +command = Text.trim(String.drop(text,prefix))
+  Bool.pick(Command,String.is_empty(command),Send{text},Bash{command,excluded})
 def classify(+text: String,parts: List<&2,String>) -> Command:
   match parts:
     case "/exit" <> Nil{}: Stop{}
@@ -68,7 +73,9 @@ def classify(+text: String,parts: List<&2,String>) -> Command:
     case "/tree" <> Nil{}: Tree{}
     case "/fork" <> Nil{}: Fork{}
     case _:
-      Bool.pick(Command,String.starts_with(text,"/") || String.starts_with(text,"!"),Unsupported{text},Send{text})
+      Bool.pick(Command,String.starts_with(text,"!!"),bashCommand(text,2n,True{}),
+        Bool.pick(Command,String.starts_with(text,"!"),bashCommand(text,1n,False{}),
+          Bool.pick(Command,String.starts_with(text,"/"),Unsupported{text},Send{text})))
 def names(levels: List<&2,Ai.ModelThinkingLevel>) -> List<&2,String>:
   match levels:
     case Nil{}: Nil{}
@@ -190,6 +197,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case Resume{}: IO.pure(Action,ResumeSession{})
     case Tree{}: IO.pure(Action,OpenTree{})
     case Fork{}: IO.pure(Action,OpenFork{})
+    case Bash{command,excluded}: IO.pure(Action,RunBash{command,excluded})
     case Unsupported{text}: IO.pure(Action,CommandError{"Unknown command: " ++ text})
 def parse(text: String) -> Command:
   +clean = Text.trim(text)

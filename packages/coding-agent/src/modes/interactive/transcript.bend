@@ -9,6 +9,8 @@ import ./theme/theme.bend as Theme
 import ./components/messages.bend as Messages
 import ./components/tool-execution.bend as Tool
 import ./viewport.bend as View
+import ../../core/messages.bend as CoreMessages
+import ../../core/tools/index.bend as Tools
 
 # The transcript owns mounted messages and tools. Agent events replace the
 # active assistant and matching tool snapshots; entries stay mounted for resizes.
@@ -44,6 +46,48 @@ def append(state: State,body: Messages.Body,assistant: Bool) -> IO(State & Bool)
       do IO<State & Bool>:
         owner : Messages.Owner <- Messages.create(Component.ComponentId{id},body)
         inserted(State{entries,tools,active,id,view,theme,styles},Messages.borrow(owner),assistant)
+def mountedBashState(state: State,owner: Messages.Owner,component: Component.Component,handle: Messages.Handle) -> IO(State & Messages.Handle):
+  match state:
+    case State{entries,tools,active,+id,+view,theme,styles}:
+      do IO<State & Messages.Handle>:
+        View.append(view,component)
+        return (State{MessageEntry{owner} <> entries,tools,active,id + 1n,view,theme,styles},handle)
+def mountedBash(state: State,pair: Messages.Owner & Component.Component & Messages.Handle) -> IO(State & Messages.Handle):
+  match pair:
+    case (owner,component,handle): mountedBashState(state,owner,component,handle)
+def bashCreated(state: State,command: String,excluded: Bool) -> IO(State & Messages.Handle):
+  match state:
+    case State{entries,tools,active,+id,view,+theme,styles}:
+      do IO<State & Messages.Handle>:
+        owner : Messages.Owner <- Messages.create(Component.ComponentId{id},Messages.BashBody{Messages.bash(command,excluded,theme)})
+        mountedBash(State{entries,tools,active,id,view,theme,styles},Messages.borrow(owner))
+def startBash(handle: Handle,command: String,excluded: Bool) -> IO(Messages.Handle):
+  match handle:
+    case Handle{resource}: Serial.run(State,Messages.Handle,resource,state => bashCreated(state,command,excluded))
+def bashAppended(body: Messages.Body,delta: String) -> Messages.Body:
+  match body:
+    case Messages.BashBody{state}: Messages.BashBody{Messages.appendBash(state,delta)}
+    case other: other
+def appendBash(+handle: Messages.Handle,delta: String) -> IO(Unit):
+  do IO<Unit>:
+    body : Messages.Body <- Messages.current(handle)
+    Messages.set(handle,bashAppended(body,delta))
+def bashFinished(body: Messages.Body,output: String,exitCode: Maybe<&2,U32>,cancelled: Bool,truncated: Bool,path: Maybe<&2,String>) -> Messages.Body:
+  match body:
+    case Messages.BashBody{state}: Messages.BashBody{Messages.completeBash(state,output,exitCode,cancelled,truncated,path)}
+    case other: other
+def finishBash(+handle: Messages.Handle,output: String,exitCode: Maybe<&2,U32>,cancelled: Bool,truncated: Bool,path: Maybe<&2,String>) -> IO(Unit):
+  do IO<Unit>:
+    body : Messages.Body <- Messages.current(handle)
+    Messages.set(handle,bashFinished(body,output,exitCode,cancelled,truncated,path))
+def bashFailed(body: Messages.Body,reason: String) -> Messages.Body:
+  match body:
+    case Messages.BashBody{state}: Messages.BashBody{Messages.failBash(state,reason)}
+    case other: other
+def failBash(+handle: Messages.Handle,reason: String) -> IO(Unit):
+  do IO<Unit>:
+    body : Messages.Body <- Messages.current(handle)
+    Messages.set(handle,bashFailed(body,reason))
 def user(state: State,text: String) -> IO(State & Bool):
   match state:
     case State{entries,tools,active,id,view,+theme,+styles}:
@@ -207,6 +251,28 @@ def seed(-G: Data,-D: Data,-C: Data,+handle: Handle,messages: List<&2,Agent.Agen
         begun : Bool <- accept(G,D,C,handle,Agent.MessageStart{message})
         ended : Bool <- accept(G,D,C,handle,Agent.MessageEnd{message})
         seed(G,D,C,handle,rest)
+def seedHistoricalBash(handle: Handle,value: CoreMessages.BashExecutionMessage) -> IO(Unit):
+  match value:
+    case CoreMessages.BashExecutionMessage{command,output,exitCode,cancelled,truncated,path,_,excluded}:
+      do IO<Unit>:
+        bash : Messages.Handle <- startBash(handle,command,Maybe.default(&2,Bool,excluded,False{}))
+        finishBash(bash,output,exitCode,cancelled,truncated,path)
+def seedSessionEntry(+handle: Handle,message: Agent.AgentMessage<Unit,Tools.ToolDetails,CoreMessages.CodingMessage<Schema.Value>>) -> IO(Unit):
+  match message:
+    case Agent.CustomMessage{CoreMessages.BashExecution{value}}: seedHistoricalBash(handle,value)
+    case Agent.LlmMessage{+value}:
+      do IO<Unit>:
+        begun : Bool <- accept(Unit,Tools.ToolDetails,CoreMessages.CodingMessage<Schema.Value>,handle,Agent.MessageStart{Agent.LlmMessage{value}})
+        ended : Bool <- accept(Unit,Tools.ToolDetails,CoreMessages.CodingMessage<Schema.Value>,handle,Agent.MessageEnd{Agent.LlmMessage{value}})
+        return Unit{}
+    case Agent.CustomMessage{_}: IO.pure(Unit,Unit{})
+def seedSession(+handle: Handle,messages: List<&2,Agent.AgentMessage<Unit,Tools.ToolDetails,CoreMessages.CodingMessage<Schema.Value>>>) -> IO(Unit):
+  match messages:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case message <> rest:
+      do IO<Unit>:
+        seedSessionEntry(handle,message)
+        seedSession(handle,rest)
 def rethemeEntries(entries: List<&1,Entry>,+theme: Theme.Theme) -> IO(List<&1,Entry>):
   match entries:
     case Nil{}: IO.pure(List<&1,Entry>,Nil{})

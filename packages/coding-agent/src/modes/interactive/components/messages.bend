@@ -184,14 +184,84 @@ def renderAssistant(state: AssistantMessage,+width: Nat) -> IO(List<&2,String>):
         +complete : List<&2,String> <- withError(started,errorText(stop,error,hasTool(content)),pad,width,theme)
         return Bool.pick(List<&2,String>,hasTool(content),complete,zone(complete))
 
+type BashStatus is Data:
+  BashRunning{}
+  BashFailed{reason: String}
+  BashComplete{exitCode: Maybe<&2,U32>,cancelled: Bool,truncated: Bool,fullOutputPath: Maybe<&2,String>}
+type BashMessage is Data:
+  BashMessage{command: String,output: String,status: BashStatus,excluded: Bool,theme: Theme.Theme}
+def bash(command: String,excluded: Bool,theme: Theme.Theme) -> BashMessage:
+  BashMessage{command,"",BashRunning{},excluded,theme}
+def normalizedOutput(text: String) -> String:
+  match text:
+    case SNil{}: ""
+    case SCon{'\r',SCon{'\n',rest}}: SCon{'\n',normalizedOutput(rest)}
+    case SCon{'\r',rest}: SCon{'\n',normalizedOutput(rest)}
+    case SCon{char,rest}: SCon{char,normalizedOutput(rest)}
+def appendBash(state: BashMessage,chunk: String) -> BashMessage:
+  match state:
+    case BashMessage{command,output,status,excluded,theme}: BashMessage{command,output ++ normalizedOutput(U.stripTerminalSequences(chunk)),status,excluded,theme}
+def completeBash(state: BashMessage,output: String,exitCode: Maybe<&2,U32>,cancelled: Bool,truncated: Bool,path: Maybe<&2,String>) -> BashMessage:
+  match state:
+    case BashMessage{command,_,_,excluded,theme}: BashMessage{command,normalizedOutput(U.stripTerminalSequences(output)),BashComplete{exitCode,cancelled,truncated,path},excluded,theme}
+def failBash(state: BashMessage,reason: String) -> BashMessage:
+  match state:
+    case BashMessage{command,output,_,excluded,theme}: BashMessage{command,output,BashFailed{reason},excluded,theme}
+def bashTheme(state: BashMessage,theme: Theme.Theme) -> BashMessage:
+  match state: case BashMessage{command,output,status,excluded,_}: BashMessage{command,output,status,excluded,theme}
+def bashBorder(count: Nat) -> String:
+  match count:
+    case Zero{}: ""
+    case Succ{rest}: SCon{'─',bashBorder(rest)}
+def bashColor(excluded: Bool) -> String:
+  match excluded: case True{}: "dim" case False{}: "bashMode"
+def bashOutputLines(+output: String,width: Nat) -> IO(List<&2,String>):
+  Bool.pick(Unit -> IO(List<&2,String>),String.is_empty(output),_ => IO.pure(List<&2,String>,Nil{}),_ => textLines(output,1n,width))(Unit{})
+def bashPreview(+lines: List<&2,String>,expanded: Bool) -> List<&2,String>:
+  Bool.pick(List<&2,String>,expanded,lines,List.drop(&2,String,lines,List.length(&2,String,lines) - 20n))
+def bashHidden(lines: List<&2,String>,expanded: Bool) -> Nat:
+  Bool.pick(Nat,expanded,0n,List.length(&2,String,lines) - 20n)
+def joinStatus(+first: String,+second: String) -> String:
+  Bool.pick(String,String.is_empty(first),second,Bool.pick(String,String.is_empty(second),first,first ++ "\n" ++ second))
+def bashStatus(status: BashStatus,+hidden: Nat) -> String:
+  match status:
+    case BashRunning{}: "Running... (esc to cancel)"
+    case BashFailed{reason}: "Bash command failed: " ++ reason
+    case BashComplete{exitCode,cancelled,truncated,path}:
+      +more = Bool.pick(String,Nat.is_eq(hidden,0n),"","... " ++ Nat.show(hidden) ++ " earlier lines")
+      +ending = Bool.pick(String,cancelled,"(cancelled)",Maybe.default(&2,String,Maybe.map(&2,U32,String,+code => Bool.pick(String,U32.is_eq(code,0),"","(exit " ++ U32.show(code) ++ ")"),exitCode),""))
+      +truncation = Bool.pick(String,truncated,Maybe.default(&2,String,Maybe.map(&2,String,String,value => "Output truncated. Full output: " ++ value,path),"Output truncated"),"")
+      joinStatus(joinStatus(more,ending),truncation)
+def bashPaintedLines(lines: List<&2,String>,+theme: Theme.Theme,reversed: List<&2,String>) -> IO(List<&2,String>):
+  match lines:
+    case Nil{}: IO.pure(List<&2,String>,List.reverse(&2,String,reversed))
+    case line <> rest:
+      do IO<List<&2,String>>:
+        painted : String <- foregroundText(theme,"muted",line)
+        bashPaintedLines(rest,theme,painted <> reversed)
+def renderBash(state: BashMessage,+width: Nat) -> IO(List<&2,String>):
+  match state:
+    case BashMessage{command,output,status,excluded,+theme}:
+      do IO<List<&2,String>>:
+        +key : String <- IO.pure(String,bashColor(excluded))
+        +top : String <- foregroundText(theme,key,bashBorder(width))
+        header : String <- foregroundText(theme,key,"$ " ++ command)
+        headerLines : List<&2,String> <- textLines("\u{1b}[1m" ++ header ++ "\u{1b}[22m",1n,width)
+        +visual : List<&2,String> <- bashOutputLines(output,width)
+        body : List<&2,String> <- bashPaintedLines(bashPreview(visual,False{}),theme,Nil{})
+        +note : String <- foregroundText(theme,"muted",bashStatus(status,bashHidden(visual,False{})))
+        statusLines : List<&2,String> <- Bool.pick(Unit -> IO(List<&2,String>),String.is_empty(note),_ => IO.pure(List<&2,String>,Nil{}),_ => textLines(note,1n,width))(Unit{})
+        return List.append(&2,String,"" <> top <> headerLines,List.append(&2,String,body,List.append(&2,String,statusLines,top <> Nil{})))
+
 # A mounted message renders the latest immutable snapshot. The transcript owns
 # the callback lifetime; stream updates replace only this message's snapshot.
-type Body is Data: UserBody{value: UserMessage} AssistantBody{value: AssistantMessage}
+type Body is Data: UserBody{value: UserMessage} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage}
 def retheme(body: Body,theme: Theme.Theme) -> Body:
   match body:
     case UserBody{UserMessage{text,pad,_,styles}}: UserBody{UserMessage{text,pad,theme,styles}}
     case AssistantBody{AssistantMessage{content,hide,label,pad,streaming,stop,error,_,styles}}:
       AssistantBody{AssistantMessage{content,hide,label,pad,streaming,stop,error,theme,styles}}
+    case BashBody{value}: BashBody{bashTheme(value,theme)}
 type Owner is Type:
   Owner{state: Ref.Ref<Body>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
 type Handle is Data: Handle{state: Ref.Ref<Body>}
@@ -199,6 +269,7 @@ def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
   match body:
     case UserBody{value}: renderUser(value,width)
     case AssistantBody{value}: renderAssistant(value,width)
+    case BashBody{value}: renderBash(value,width)
 def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
   match handle:
     case Handle{state}:

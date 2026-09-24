@@ -60,7 +60,6 @@ def scenario(threads):
                 ("/new", b"Starting a new session is not available yet"),
                 ("/clear", b"Starting a new session is not available yet"),
                 ("/unknown", b"Unknown command: /unknown"),
-                ("!echo hi", b"Unknown command: !echo hi"),
             ]
             for command, expected in cases:
                 before = len(output)
