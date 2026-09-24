@@ -684,7 +684,10 @@ def templateCommands(templates: List<&2,Templates.PromptTemplate>,skills: List<&
 def getCommands(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
     case Command{+session,sink,_,_,_,_}:
-      output(sink,data(id,"get_commands",MessageJson.object(MessageJson.field("commands",V.ArrayValue{templateCommands(Session.promptTemplates(session),Session.getSkills(session))},Nil{}))))
+      do IO<Unit>:
+        templates : List<&2,Templates.PromptTemplate> <- Session.promptTemplates(session)
+        skills : List<&2,Skills.Skill> <- Session.getSkills(session)
+        output(sink,data(id,"get_commands",MessageJson.object(MessageJson.field("commands",V.ArrayValue{templateCommands(templates,skills)},Nil{}))))
 def dispatch(handle: Command,host: Host,id: Maybe<&2,String>,+command: String,+object: R.Record<V.Value>) -> IO(Unit):
   match command:
     case "new_session": newSessionCommand(handle,host,id,optionalText(field(object,"parentSession")))

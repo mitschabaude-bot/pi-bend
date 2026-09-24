@@ -2140,6 +2140,19 @@ def create(cwd: String,agentDir: String,options: SettingsManagerCreateOptions) -
   +storage = fileStorage(cwd,agentDir)
   fromStorageWithPaths(~FileSettingsStorage,~fileWithLock,storage,options,SettingsPaths{Some{filePath(Global{},storage)},Some{filePath(Project{},storage)}})
 
+# upstream settingsManager.reload() for a manager loaded from files; in-memory
+# managers are unchanged.
+def reloadedFiles(value: FileSettingsStorage & SettingsManager) -> SettingsManager:
+  match value:
+    case (_,manager): manager
+def reloadFiles(+state: SettingsManager) -> IO(SettingsManager):
+  match state:
+    case SettingsManager{_,_,_,_,_,_,SettingsPaths{Some{+global},Some{+project}}}:
+      do IO<SettingsManager>:
+        reloaded : FileSettingsStorage & SettingsManager <- reload(~FileSettingsStorage,~fileWithLock,FileSettingsStorage{global,project},state)
+        return reloadedFiles(reloaded)
+    case _: IO.pure(SettingsManager,state)
+
 # Persist a manager loaded from file storage, while in-memory managers retain
 # their transaction state for their caller's storage implementation.
 def flushedFiles(value: FileSettingsStorage & SettingsManager) -> SettingsManager:

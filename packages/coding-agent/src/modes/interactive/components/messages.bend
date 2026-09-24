@@ -262,7 +262,7 @@ type Changelog is Data:
   FullChangelog{markdown: String}
   WhatsNew{markdown: String,spaced: Bool}
   UpdatedTo{version: String,spaced: Bool}
-type Body is Data: UserBody{value: UserMessage,preceded: Bool} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} StatusBody{text: String,theme: Theme.Theme} ErrorBody{text: String,theme: Theme.Theme} ManagedBody{text: String,theme: Theme.Theme,warning: Bool,first: Bool} ChangelogBody{value: Changelog,theme: Theme.Theme,styles: Markdown.MarkdownTheme}
+type Body is Data: UserBody{value: UserMessage,preceded: Bool} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} StatusBody{text: String,theme: Theme.Theme} ErrorBody{text: String,theme: Theme.Theme} WarningBody{text: String,theme: Theme.Theme} ManagedBody{text: String,theme: Theme.Theme,warning: Bool,first: Bool} ChangelogBody{value: Changelog,theme: Theme.Theme,styles: Markdown.MarkdownTheme}
 def expandedBody(body: Body,expanded: Bool) -> Body:
   match body:
     case BashBody{value}: BashBody{bashExpanded(value,expanded)}
@@ -275,6 +275,7 @@ def retheme(body: Body,theme: Theme.Theme) -> Body:
     case BashBody{value}: BashBody{bashTheme(value,theme)}
     case StatusBody{text,_}: StatusBody{text,theme}
     case ErrorBody{text,_}: ErrorBody{text,theme}
+    case WarningBody{text,_}: WarningBody{text,theme}
     case ManagedBody{text,_,warning,first}: ManagedBody{text,theme,warning,first}
     case ChangelogBody{value,_,styles}: ChangelogBody{value,theme,styles}
 type Owner is Type:
@@ -341,6 +342,11 @@ def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
     case ErrorBody{text,theme}:
       do IO<List<&2,String>>:
         colored : String <- foregroundText(theme,"error","Error: " ++ text)
+        lines : List<&2,String> <- textLines(colored,1n,width)
+        return "" <> lines
+    case WarningBody{text,theme}:
+      do IO<List<&2,String>>:
+        colored : String <- foregroundText(theme,"warning","Warning: " ++ text)
         lines : List<&2,String> <- textLines(colored,1n,width)
         return "" <> lines
     case ManagedBody{text,theme,warning,first}:

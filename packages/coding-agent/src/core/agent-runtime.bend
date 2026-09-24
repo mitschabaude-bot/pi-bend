@@ -304,8 +304,12 @@ type Selection is Data:
 # What the session declares on each prompt: the system prompt sections and
 # the executable tools (upstream _preparePromptAndToolLoadout's inputs), with
 # the loaded skills and prompt templates that expand /skill: and /name input.
+# What the prompt resources were prepared from.
+type LoadoutSource is Data: LoadoutSource{environment: Paths.Environment, options: CreateOptions, packageDir: String}
+
+# `source` rebuilds the prompt resources on reload (upstream AgentSession.reload).
 type Loadout is Data:
-  Loadout{sections: Prompt.SystemPromptSections(), tools: List<&2, Tools.Tool()>, skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>, context: Maybe<&2, Ctx.ContextSource()>, contextFiles: List<&2, Prompt.ContextFile>}
+  Loadout{sections: Prompt.SystemPromptSections(), tools: List<&2, Tools.Tool()>, skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>, context: Maybe<&2, Ctx.ContextSource()>, contextFiles: List<&2, Prompt.ContextFile>, source: Maybe<&2, LoadoutSource>}
 
 # The system prompt with the resources it was built from.
 type Prepared is Data:
@@ -533,6 +537,14 @@ def preparedFor(+environment: Paths.Environment, +options: CreateOptions, +packa
     templates : List<&2, Templates.PromptTemplate> <- templatesFor(environment, options, resolved)
     return preparedWith(skills, templates, contextList, promptResult(Prompt.buildSystemPromptSections(Prompt.DocumentationPaths{Path.join(packageDir, "README.md"), Path.join(packageDir, "docs"), Path.join(packageDir, "examples")}, promptOptions(options, contextList, skills))))
 
+def withSettings(options: CreateOptions, settings: Settings.SettingsManager) -> CreateOptions:
+  match options:
+    case CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, _, resources}: CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings, resources}
+# Skills, prompt templates, context files and the system prompt again, under
+# reloaded settings.
+def reprepare(source: LoadoutSource, settings: Settings.SettingsManager) -> IO(Result<&2, &2, String, Prepared>):
+  match source:
+    case LoadoutSource{environment, options, packageDir}: preparedFor(environment, withSettings(options, settings), packageDir)
 def sectionsOf(result: Result<&2, &2, String, Prepared>) -> Result<&2, &2, String, Prompt.SystemPromptSections()>:
   match result:
     case Fail{error}: Fail{error}
@@ -769,8 +781,8 @@ def disposeServices(transport: Transport, storage: Storage.AuthStorageOwner, sto
 
 def disposeLoadout(loadout: Loadout) -> IO(Unit):
   match loadout:
-    case Loadout{_, _, _, _, None{}, _}: IO.pure(Unit, Unit{})
-    case Loadout{_, _, _, _, Some{context}, _}: Ctx.dispose(context)
+    case Loadout{_, _, _, _, None{}, _, _}: IO.pure(Unit, Unit{})
+    case Loadout{_, _, _, _, Some{context}, _, _}: Ctx.dispose(context)
 
 # Assembly with cleanup on every failure path.
 def constructed(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout, result: Result<&2, &2, StreamFn.MissingDefault, Owner()>) -> IO(Outcome(AgentRuntime)):
@@ -798,18 +810,18 @@ def createToolList(names: List<&2, Tools.ToolName>, paths: Paths.Environment, cw
         owners : List<&1, Tools.ToolOwner> <- Tools.createTools(names, environment(paths, cwd, agentDir, packageDir, fetch, handle, context), Tools.defaultOptions())
         return (queue, Tools.borrowTools(owners))
 
-def loadoutFrom(prepared: Prepared, tools: List<&2, Tools.Tool()>, context: Ctx.ContextSource()) -> Loadout:
+def loadoutFrom(prepared: Prepared, tools: List<&2, Tools.Tool()>, context: Ctx.ContextSource(), source: LoadoutSource) -> Loadout:
   match prepared:
-    case Prepared{sections, skills, templates, agentsFiles}: Loadout{sections, tools, skills, templates, Some{context}, agentsFiles}
+    case Prepared{sections, skills, templates, agentsFiles}: Loadout{sections, tools, skills, templates, Some{context}, agentsFiles, Some{source}}
 
-def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Maybe<&2, Models.Model()>, +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager, context: Ctx.ContextSource()) -> IO(Outcome(AgentRuntime)):
+def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Maybe<&2, Models.Model()>, +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager, context: Ctx.ContextSource(), source: LoadoutSource) -> IO(Outcome(AgentRuntime)):
   match created:
     case Tuple{queue, Tuple{owners, tools}}:
       do IO<Outcome(AgentRuntime)>:
         result : Result<&2, &2, StreamFn.MissingDefault, Owner()> <- Agent.new(~Unit, ~Details(), ~Custom(), ~Error(), ~Unit, agentOptions(model, thinking, stream, keys, converter, seed, settings), registry, validator, Tools.emptyDetails())
-        constructed(transport, storage, storageStore, credentials, credentialStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, loadoutFrom(prepared, tools, context), result)
+        constructed(transport, storage, storageStore, credentials, credentialStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, loadoutFrom(prepared, tools, context, source), result)
 
-def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Outcome(AgentRuntime)):
+def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, source: LoadoutSource) -> IO(Outcome(AgentRuntime)):
   match transport prompt selected:
     case Transport{+authorizer, runtime, +fetch} Done{prompt} Done{+model}:
       do IO<Outcome(AgentRuntime)>:
@@ -821,7 +833,7 @@ def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey
         +validator : Loop.Validator(Error()) <- Loop.createPlain(~Error(), ~validationError)
         +keys : C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>> <- C.create(~KeySource, ~String, ~Result<&2, &2, Error(), Maybe<&2, String>>, ~resolveKey, KeySource{models, apiKey})
         +converter : Converter() <- createConverter(Settings.getBlockImages(settings))
-        assembled(Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, created, stream, registry, validator, keys, converter, prompt, model, thinkingForSelection(requested, seed, settings, model), seed, settings, context)
+        assembled(Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, created, stream, registry, validator, keys, converter, prompt, model, thinkingForSelection(requested, seed, settings, model), seed, settings, context, source)
     case transport Fail{error} _:
       do IO<Outcome(AgentRuntime)>:
         disposeBase(transport, storage, storageStore, credentials, credentialStore, models)
@@ -831,9 +843,9 @@ def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey
         disposeBase(transport, storage, storageStore, credentials, credentialStore, models)
         return Fail{error}
 
-def withModel(options: CreateOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, paths: Paths.Environment, prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Outcome(AgentRuntime)):
+def withModel(+options: CreateOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, +paths: Paths.Environment, prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Outcome(AgentRuntime)):
   match options:
-    case CreateOptions{cwd, agentDir, _, _, packageDir, _, _, apiKey, thinking, _, _, names, _, seed, settings, _}: withModelFields(cwd, agentDir, packageDir, apiKey, thinking, seed, settings, names, transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected)
+    case CreateOptions{cwd, agentDir, _, _, +packageDir, _, _, apiKey, thinking, _, _, names, _, seed, settings, _}: withModelFields(cwd, agentDir, packageDir, apiKey, thinking, seed, settings, names, transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected, LoadoutSource{paths, options, packageDir})
 
 def applyKey(credentials: Runtime.RuntimeCredentials, apiKey: Maybe<&2, String>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Unit):
   match apiKey selected:

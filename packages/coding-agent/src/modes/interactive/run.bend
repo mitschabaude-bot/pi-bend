@@ -232,7 +232,7 @@ type BashReservation is Data:
   BashBusy{unused: Deferred.Deferred<Unit>}
   BashClosed{unused: Deferred.Deferred<Unit>}
 type CommandObservation is Data:
-  CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,builtinDir: String,importState: ImportState,resumeState: ResumeState,selector: Ref.Ref<Maybe<&2,Selector.Host>>,bash: BashInput,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>}
+  CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,builtinDir: String,importState: ImportState,resumeState: ResumeState,selector: Ref.Ref<Maybe<&2,Selector.Host>>,bash: BashInput,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,header: Maybe<&2,Header.Handle>}
 def firstPath(args: List<&2,String>) -> Maybe<&2,String>:
   match args:
     case Nil{}: None{}
@@ -305,7 +305,7 @@ def exportNotice(result: Result<&2,&2,String,String>) -> Interactive.SubmissionF
     case Fail{message}: Interactive.CommandFailure{"Failed to export session: " ++ message}
 def exportObserved(input: CommandObservation,requested: Maybe<&2,String>) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,failure,redraw,cwd,builtinDir,_,_,_,_,_}:
+    case CommandObservation{_,session,_,failure,redraw,cwd,builtinDir,_,_,_,_,_,_}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         result : Result<&2,&2,String,String> <- exportCurrent(live,cwd,builtinDir,requested)
@@ -377,7 +377,7 @@ def importRequested(+state: ImportState,path: Maybe<&2,String>) -> IO(Unit):
         importConfirmed(state,input,answer)
 def importObserved(input: CommandObservation,requested: Maybe<&2,String>) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,_,_,_,state,_,_,_,_}: importRequested(state,exportPath(requested))
+    case CommandObservation{_,_,_,_,_,_,_,state,_,_,_,_,_}: importRequested(state,exportPath(requested))
 def resumeStatus(state: ResumeState,status: Interactive.SubmissionFailure) -> IO(Unit):
   match state:
     case ResumeState{_,_,_,_,failure,redraw}:
@@ -437,7 +437,7 @@ def resumeRequested(+state: ResumeState) -> IO(Unit):
         choices : SessionChoices <- Callback.call(Unit,SessionChoices,backend,Unit{})
         resumeOpen(state,choices)
 def resumeObserved(input: CommandObservation) -> IO(Unit):
-  match input: case CommandObservation{_,_,_,_,_,_,_,_,state,_,_,_}: resumeRequested(state)
+  match input: case CommandObservation{_,_,_,_,_,_,_,_,state,_,_,_,_}: resumeRequested(state)
 def selectorNotice(failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,message: String) -> IO(Unit):
   Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandNotice{message}})
 def openTree(target: Maybe<&2,Selector.Host>,state: Selector.State) -> IO(Unit):
@@ -473,7 +473,7 @@ def openSessionSelector(mode: Selector.Mode,session: Ref.Ref<Session.AgentSessio
     Interactive.requestRender(redraw)
 def treeObserved(input: CommandObservation,mode: Selector.Mode) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,failure,redraw,_,_,_,_,selector,_,_}: openSessionSelector(mode,session,selector,failure,redraw)
+    case CommandObservation{_,session,_,failure,redraw,_,_,_,_,selector,_,_,_}: openSessionSelector(mode,session,selector,failure,redraw)
 type BashChunk is Data: BashChunk{message: MessageUI.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 def bashChunk(target: BashChunk,delta: String) -> IO(Unit):
   match target:
@@ -565,10 +565,10 @@ def bashRequested(+input: BashInput,+command: String,+excluded: Bool) -> IO(Unit
           reservation : BashReservation <- Ref.modify(BashActivity,BashReservation,activity,current => reserveBash(current,fresh))
           bashReserved(input,command,excluded,reservation))(Unit{})
 def bashObserved(input: CommandObservation,command: String,excluded: Bool) -> IO(Unit):
-  match input: case CommandObservation{_,_,_,_,_,_,_,_,_,_,bash,_}: bashRequested(bash,command,excluded)
+  match input: case CommandObservation{_,_,_,_,_,_,_,_,_,_,bash,_,_}: bashRequested(bash,command,excluded)
 def ordinaryCommandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match input:
-    case CommandObservation{sink,session,footer,_,_,_,_,_,_,_,_,_}:
+    case CommandObservation{sink,session,footer,_,_,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
         changed : Bool <- Interactive.commandResult(sink,action)
         Bool.pick(Unit -> IO(Unit),changed,_ => do IO<Unit>:
@@ -588,7 +588,7 @@ def copyText(transcript: Transcript.Handle,cwd: String,text: Maybe<&2,String>) -
         copyResult(transcript,result)
 def copyObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,_,redraw,cwd,_,_,_,_,BashInput{_,transcript,_,_,_,_},_}:
+    case CommandObservation{_,session,_,_,redraw,cwd,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         text : Maybe<&2,String> <- Session.getLastAssistantText(live)
@@ -609,7 +609,7 @@ def changelogText(entries: List<&2,Changelog.ChangelogEntry>) -> String:
     case entries: String.join(linkedEntries(List.reverse(&2,Changelog.ChangelogEntry,entries)),"\n\n")
 def changelogObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,redraw,_,builtinDir,_,_,_,BashInput{_,transcript,_,_,_,_},_}:
+    case CommandObservation{_,_,_,_,redraw,_,builtinDir,_,_,_,BashInput{_,transcript,_,_,_,_},_,_}:
       do IO<Unit>:
         entries : List<&2,Changelog.ChangelogEntry> <- Changelog.parseChangelog(changelogPath(builtinDir))
         Transcript.changelog(transcript,MessageUI.FullChangelog{changelogText(entries)})
@@ -620,15 +620,53 @@ def matchSettings(host: Maybe<&2,SettingsPicker.Host>) -> IO(Unit):
     case Some{ready}: SettingsPicker.open(ready)
 def settingsObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,_,_,_,_,_,_,_,settings}:
+    case CommandObservation{_,_,_,_,_,_,_,_,_,_,_,settings,_}:
       do IO<Unit>:
         host : Maybe<&2,SettingsPicker.Host> <- Ref.read(Maybe<&2,SettingsPicker.Host>,settings)
         matchSettings(host)
+# upstream handleReloadCommand (no extensions or keybindings file reload yet):
+# the session reloads settings and prompt resources, the header lists them.
+def reloadListed(header: Maybe<&2,Header.Handle>,+session: Session.AgentSession) -> IO(Unit):
+  match header:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{handle}:
+      do IO<Unit>:
+        files : List<&2,Prompt.ContextFile> <- Session.getAgentsFiles(session)
+        skills : List<&2,Skills.Skill> <- Session.getSkills(session)
+        Header.setResources(handle,files,skills)
+def reloadResult(+transcript: Transcript.Handle,header: Maybe<&2,Header.Handle>,+session: Session.AgentSession,result: Result<&2,&2,String,Unit>) -> IO(Unit):
+  match result:
+    case Fail{message}: Transcript.showError(transcript,"Reload failed: " ++ message)
+    case Done{_}:
+      do IO<Unit>:
+        messages : List<&2,Session.Message()> <- Session.messages(session)
+        Transcript.clear(transcript)
+        Transcript.seedSession(transcript,messages)
+        reloadListed(header,session)
+        Transcript.status(transcript,"Reloaded keybindings, extensions, skills, prompts, themes, and context files")
+def reloadIdle(transcript: Transcript.Handle,header: Maybe<&2,Header.Handle>,+session: Session.AgentSession,streaming: Bool,compacting: Bool) -> IO(Unit):
+  match streaming compacting:
+    case True{} _: Transcript.showWarning(transcript,"Wait for the current response to finish before reloading.")
+    case False{} True{}: Transcript.showWarning(transcript,"Wait for compaction to finish before reloading.")
+    case False{} False{}:
+      do IO<Unit>:
+        result : Result<&2,&2,String,Unit> <- Session.reload(session)
+        reloadResult(transcript,header,session,result)
+def reloadObserved(input: CommandObservation) -> IO(Unit):
+  match input:
+    case CommandObservation{_,session,_,_,redraw,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,header}:
+      do IO<Unit>:
+        +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        streaming : Bool <- Session.isStreaming(live)
+        compacting : Bool <- Session.isCompacting(live)
+        reloadIdle(transcript,header,live,streaming,compacting)
+        Interactive.requestRender(redraw)
 def commandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match action:
     case Commands.CopyLastAssistant{}: copyObserved(input)
     case Commands.OpenSettings{}: settingsObserved(input)
     case Commands.ShowChangelog{}: changelogObserved(input)
+    case Commands.ReloadResources{}: reloadObserved(input)
     case Commands.ExportSession{path}: exportObserved(input,path)
     case Commands.ImportSession{path}: importObserved(input,path)
     case Commands.ResumeSession{}: resumeObserved(input)
@@ -1342,7 +1380,7 @@ def startInput(handle: ThemeController.Handle,redraw: Ref.Ref<Maybe<&2,Callback.
     case ThemeController.Handle{_,Process.QueryReady{queries,terminal,write,_},_,_,_,_}:
       Interactive.onReady(Interactive.Startup{redraw,queue,initial,failure},Process.QueryReady{queries,terminal,write,render})
 type ManagedSink is Data:
-  ManagedSink{transcript: Transcript.Handle,render: Callback.Callback<Unit,Unit>,started: Ref.Ref<Bool>,leading: Bool}
+  ManagedSink{transcript: Transcript.Handle,render: Callback.Callback<Unit,Unit>,started: Ref.Ref<Bool>}
 def managedWarning(kind: Manager.ToolStatusType) -> Bool:
   match kind:
     case Manager.Warning{}: True{}
@@ -1351,34 +1389,27 @@ def managedText(warning: Bool,message: String) -> String:
   match warning:
     case True{}: "Warning: " ++ message
     case False{}: message
+# upstream showManagedToolStatus: a spacer before the first status line only.
 def managedReported(sink: ManagedSink,status: Manager.ToolStatus) -> IO(Unit):
   match sink status:
-    case ManagedSink{transcript,render,started,leading} Manager.ToolStatus{kind,message}:
+    case ManagedSink{transcript,render,started} Manager.ToolStatus{kind,message}:
       do IO<Unit>:
         previous : Bool <- Ref.swap(Bool,started,True{})
         +warning : Bool <- IO.pure(Bool,managedWarning(kind))
         +text : String <- IO.pure(String,managedText(warning,message))
-        Transcript.managedStatus(transcript,text,warning,Bool.not(previous) && leading)
+        Transcript.managedStatus(transcript,text,warning,Bool.not(previous))
         Callback.call(Unit,Unit,render,Unit{})
 def ensureManagedOne(managed: Manager.ToolsManager,tool: Manager.Tool,status: Callback.Callback<Manager.ToolStatus,Unit>) -> IO(Unit):
   do IO<Unit>:
     path : Maybe<&2,String> <- Manager.ensureTool(managed,tool,Some{status})
     return Unit{}
-def managedLeading(+session: Session.AgentSession) -> IO(Bool):
-  +contexts = Session.getAgentsFiles(session)
-  +skills = Session.getSkills(session)
-  do IO<Bool>:
-    settings : Settings.SettingsManager <- Session.getSettings(session)
-    return Settings.getQuietStartup(settings) || (List.is_empty(&2,Prompt.ContextFile,contexts) && List.is_empty(&2,Skills.Skill,skills))
-def setupManaged(managed: Maybe<&2,Manager.ToolsManager>,transcript: Transcript.Handle,render: Callback.Callback<Unit,Unit>,session: Ref.Ref<Session.AgentSession>) -> IO(Unit):
+def setupManaged(managed: Maybe<&2,Manager.ToolsManager>,transcript: Transcript.Handle,render: Callback.Callback<Unit,Unit>) -> IO(Unit):
   match managed:
     case None{}: IO.pure(Unit,Unit{})
     case Some{+manager}:
       do IO<Unit>:
-        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
-        leading : Bool <- managedLeading(live)
         +started : Ref.Ref<Bool> <- Ref.new(Bool,False{})
-        +status : Callback.Callback<Manager.ToolStatus,Unit> <- Callback.create(~ManagedSink,~Manager.ToolStatus,~Unit,~managedReported,ManagedSink{transcript,render,started,leading})
+        +status : Callback.Callback<Manager.ToolStatus,Unit> <- Callback.create(~ManagedSink,~Manager.ToolStatus,~Unit,~managedReported,ManagedSink{transcript,render,started})
         ensureManagedOne(manager,Manager.Fd{},status)
         ensureManagedOne(manager,Manager.Rg{},status)
         Callback.dispose(Manager.ToolStatus,Unit,status)
@@ -1432,7 +1463,7 @@ def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & T
         Ref.write(Maybe<&2,ThemeController.Handle>,selected,Some{handle})
         Ref.write(Maybe<&1,ThemeOwned>,owned,Some{ThemeOwned{controller,render}})
         syncSelected(ThemeLive{selected,theme,transcript,render},handle)
-        setupManaged(managed,transcript,render,session)
+        setupManaged(managed,transcript,render)
         startupChangelog(transcript,session,builtinDir)
         startInput(handle,redraw,queue,initial,failure,render)
     case Fail{cause} ThemeStartup{_,_,_,_,stopped,_,_,error,_,_,_,_,_,_,_}:
@@ -1630,7 +1661,7 @@ def startController(pair: Controller.Controller & Controller.Handle,view: View.V
         submitted : Callback.Callback<String,Unit> <- Callback.create(~Interactive.SubmissionInput,~String,~Unit,~Interactive.submitted,Interactive.SubmissionInput{queue,stopped,footerFailure(foot)})
         paintPair : Callback.Callback<String,String> & Editor.EditorTheme <- editorTheme(contextTheme(context))
         startPaint(paintPair,controller,queue,submitted,view,transcript,styles,initial,foot,words,stopped,redraw,context)
-def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.View,viewHandle: View.Handle,styles: MarkdownTheme.Styles,+liveTheme: Ref.Ref<Theme.Theme>,+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,words: Words.Source,setting: Maybe<&2,String>,+builtinDir: String,customDir: String,+models: List<&2,Models.Model()>,+mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
+def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.View,+viewHandle: View.Handle,styles: MarkdownTheme.Styles,+liveTheme: Ref.Ref<Theme.Theme>,+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,words: Words.Source,setting: Maybe<&2,String>,+builtinDir: String,customDir: String,+models: List<&2,Models.Model()>,+mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (transcript,+transcriptHandle):
       do IO<Result<&2,&2,Error,Unit>>:
@@ -1661,7 +1692,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +commandSink : Interactive.CommandSink <- IO.pure(Interactive.CommandSink,Interactive.CommandSink{footerFailure(foot),redraw,modelSelectorRef,current,modelsRef})
         +editorHandle : Ref.Ref<Maybe<&2,Live.Handle>> <- Ref.new(Maybe<&2,Live.Handle>,None{})
         +bashActivity : Ref.Ref<BashActivity> <- Ref.new(BashActivity,BashActivity{False{},False{},None{}})
-        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),footerFailure(foot),redraw,cwd,builtinDir,importStateOf(mode,loginHost,footerFailure(foot),redraw),resumeState,selectorRef,BashInput{current,transcriptHandle,editorHandle,footerFailure(foot),redraw,bashActivity},settingsSelectorRef})
+        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),footerFailure(foot),redraw,cwd,builtinDir,importStateOf(mode,loginHost,footerFailure(foot),redraw),resumeState,selectorRef,BashInput{current,transcriptHandle,editorHandle,footerFailure(foot),redraw,bashActivity},settingsSelectorRef,View.headerHandle(viewHandle)})
         +lastClear : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         +lastEscape : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         selectionObserver : Callback.Callback<Controller.SelectionResult,Unit> <- Callback.create(~SelectionSink,~Controller.SelectionResult,~Unit,~selectionResult,SelectionSink{current,transcriptHandle,editorHandle,footerState(foot),footerFailure(foot),redraw,cwd,home})
@@ -1683,7 +1714,9 @@ def withHeader(styles: MarkdownTheme.Styles,quiet: Bool,+session: Session.AgentS
   match styles:
     case MarkdownTheme.Styles{markdown,callbacks,+live}:
       do IO<View.View & MarkdownTheme.Styles>:
-        view : View.View <- View.createWithHeader(Component.ComponentId{1n},live,quiet,cwd,home,Session.getAgentsFiles(session),Session.getSkills(session))
+        files : List<&2,Prompt.ContextFile> <- Session.getAgentsFiles(session)
+        skills : List<&2,Skills.Skill> <- Session.getSkills(session)
+        view : View.View <- View.createWithHeader(Component.ComponentId{1n},live,quiet,cwd,home,files,skills)
         return (view,MarkdownTheme.Styles{markdown,callbacks,live})
 def prepared(pair: View.View & MarkdownTheme.Styles,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,theme: Theme.Theme,words: Words.Source,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match pair:

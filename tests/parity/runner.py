@@ -237,6 +237,11 @@ def run_side(label, argv, scenario, keep):
                 timings[step[2] if len(step) > 2 else step[1]] = terminal.wait(step[1], scenario.get("timeout", 30))
             elif kind == "settle":
                 terminal.settle(step[1] if len(step) > 1 else 0.5, scenario.get("timeout", 30))
+            elif kind == "write":
+                # Change a file while the program runs (e.g. before /reload).
+                target = root / step[1]
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(step[2])
             elif kind == "snap":
                 snaps[step[1]] = working_screen(terminal.screen(), root) if step[1] == "working" else normalise(terminal.screen(), root)
     finally:

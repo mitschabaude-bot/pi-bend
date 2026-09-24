@@ -207,14 +207,14 @@ def fixtureWith(+stored: Session.Session(), +cwd: String, agentDir: String, resp
   fixtureWithModel(stored,cwd,agentDir,responses,gates,loadout,Some{fauxModel()},fauxSources())
 
 def fixtureNoModel(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>) -> IO(Fixture):
-  fixtureWithModel(stored,cwd,agentDir,responses,gates,Runtime.Loadout{Rec.new(String),Nil{},Nil{},Nil{},None{},Nil{}},None{},fauxSources())
+  fixtureWithModel(stored,cwd,agentDir,responses,gates,Runtime.Loadout{Rec.new(String),Nil{},Nil{},Nil{},None{},Nil{}, None{}},None{},fauxSources())
 
 # A fixture whose model runtime offers the given providers.
 def fixtureOver(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, sources: List<&2, ModelFixture.Source>) -> IO(Fixture):
-  fixtureWithModel(stored, cwd, agentDir, responses, Nil{}, Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, None{}, Nil{}}, Some{fauxModel()}, sources)
+  fixtureWithModel(stored, cwd, agentDir, responses, Nil{}, Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}}, Some{fauxModel()}, sources)
 
 def fixture(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>) -> IO(Fixture):
-  fixtureWith(stored, cwd, agentDir, responses, gates, Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, None{}, Nil{}})
+  fixtureWith(stored, cwd, agentDir, responses, gates, Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}})
 
 def disposeStreams(streams: List<&2, EventStream()>) -> IO(Unit):
   match streams:
@@ -842,7 +842,7 @@ def sourceIn(dir: String) -> Skills.SourceInfo: Skills.SourceInfo{dir, "local", 
 
 def expandLoadout(+dir: String) -> Runtime.Loadout:
   +source = sourceIn(dir)
-  Runtime.Loadout{Rec.new(String), Nil{}, Skills.Skill{"demo", "Demo skill", dir ++ "/skills/demo/SKILL.md", dir ++ "/skills/demo", source, False{}} <> Skills.Skill{"gone", "Missing file", dir ++ "/skills/gone/SKILL.md", dir ++ "/skills/gone", source, False{}} <> Nil{}, Templates.PromptTemplate{"greet", "", None{}, "Hello $1 ($@)", source, dir ++ "/prompts/greet.md"} <> Nil{}, None{}, Nil{}}
+  Runtime.Loadout{Rec.new(String), Nil{}, Skills.Skill{"demo", "Demo skill", dir ++ "/skills/demo/SKILL.md", dir ++ "/skills/demo", source, False{}} <> Skills.Skill{"gone", "Missing file", dir ++ "/skills/gone/SKILL.md", dir ++ "/skills/gone", source, False{}} <> Nil{}, Templates.PromptTemplate{"greet", "", None{}, "Hello $1 ($@)", source, dir ++ "/prompts/greet.md"} <> Nil{}, None{}, Nil{}, None{}}
 
 def expandScenario(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:

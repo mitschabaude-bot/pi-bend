@@ -77,6 +77,15 @@ def errorAppended(state: State,message: String) -> IO(State & Unit):
 def showError(handle: Handle,message: String) -> IO(Unit):
   match handle:
     case Handle{resource}: Serial.run(State,Unit,resource,state => errorAppended(state,message))
+def warningAppended(state: State,message: String) -> IO(State & Unit):
+  match state:
+    case State{entries,tools,active,id,view,+theme,styles,expanded,hidden}:
+      do IO<State & Unit>:
+        pair : State & Bool <- append(State{entries,tools,active,id,view,theme,styles,expanded,hidden},Messages.WarningBody{message,theme},False{})
+        return appendedUnit(pair)
+def showWarning(handle: Handle,message: String) -> IO(Unit):
+  match handle:
+    case Handle{resource}: Serial.run(State,Unit,resource,state => warningAppended(state,message))
 def managedAppended(state: State,message: String,warning: Bool,first: Bool) -> IO(State & Unit):
   match state:
     case State{entries,tools,active,id,view,+theme,styles,expanded,hidden}:

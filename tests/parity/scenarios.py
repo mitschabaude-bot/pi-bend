@@ -4,6 +4,7 @@ Paths in `files` are relative to the scenario root (home/, project/). Steps:
   ("keys", text)  literal input      ("key", name)  tmux key name (Enter, C-o)
   ("wait", regex[, label])  record input→screen latency under `label`
   ("settle"[, seconds])     wait for a quiet screen   ("snap", name)
+  ("write", path, text)     change a file under the scenario root
 """
 import base64
 import json
@@ -110,6 +111,18 @@ SCENARIOS = [
         "args": MODEL,
         "files": {"home/.pi/agent/settings.json": json.dumps({"lastChangelogVersion": "0.86.0"})},
         "steps": [("wait", READY, "startup"), ("settle", 0.5), ("snap", "startup")],
+    },
+    {
+        # /reload picks up edited context files and skills for the next request.
+        "name": "reload",
+        "args": MODEL,
+        "files": RESOURCES,
+        "turns": [{"text": "Reloaded answer."}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.5),
+                  ("write", "project/AGENTS.md", "# Project rules\n\nAnswer in haiku.\n"),
+                  ("write", "home/.agents/skills/extra/SKILL.md", "---\nname: extra\ndescription: Another skill.\n---\nMore.\n"),
+                  ("keys", "/reload"), ("key", "Enter"), ("wait", "Reloaded keybindings", "reload"), ("settle", 0.5), ("snap", "reloaded"),
+                  ("keys", "hi"), ("key", "Enter"), ("wait", "Reloaded answer", "turn"), ("settle", 0.5), ("snap", "answered")],
     },
     {
         "name": "shortcuts",

@@ -236,7 +236,7 @@ type SessionHooks is Data:
   SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>, request: T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()), replacedRequest: Maybe<&2, T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>, context: Ctx.ContextFactory()}
 
 type AgentSession is Data:
-  AgentSession{agent: Runtime.Owner(), shared: R.Ref<Shared>, hooks: SessionHooks, settings: R.Ref<Settings.SettingsManager>, cwd: String, loadout: Runtime.Loadout, models: Models.ModelRuntime, scoped: R.Ref<List<&2, Models.ScopedModel>>}
+  AgentSession{agent: Runtime.Owner(), shared: R.Ref<Shared>, hooks: SessionHooks, settings: R.Ref<Settings.SettingsManager>, cwd: String, loadout: R.Ref<Runtime.Loadout>, models: Models.ModelRuntime, scoped: R.Ref<List<&2, Models.ScopedModel>>}
 
 def sharedSession(state: Shared) -> Session():
   match state:
@@ -898,8 +898,8 @@ def toolContext(env: ContextEnv, unit: Unit) -> IO(Ctx.ExtensionContext):
 
 def bindContext(loadout: Runtime.Loadout, factory: Maybe<&2, Ctx.ContextFactory()>) -> IO(Unit):
   match loadout:
-    case Runtime.Loadout{_, _, _, _, None{}, _}: IO.pure(Unit, Unit{})
-    case Runtime.Loadout{_, _, _, _, Some{source}, _}: Ctx.bind(source, factory)
+    case Runtime.Loadout{_, _, _, _, None{}, _, _}: IO.pure(Unit, Unit{})
+    case Runtime.Loadout{_, _, _, _, Some{source}, _, _}: Ctx.bind(source, factory)
 
 def dispose(session: AgentSession) -> IO(Unit):
   match session:
@@ -915,7 +915,8 @@ def dispose(session: AgentSession) -> IO(Unit):
         C.dispose(T.ToolHookInput<Turn()>, TurnResult(), nextTurn)
         Agent.setPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedRequest)
         C.dispose(T.ToolHookInput<T.PrepareRequestContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>, Result<&2, &2, Runtime.Error(), Maybe<&2, T.AgentRequestUpdate<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>>, request)
-        bindContext(loadout, None{})
+        current : Runtime.Loadout <- R.dispose(Runtime.Loadout, loadout)
+        bindContext(current, None{})
         C.dispose(Unit, Ctx.ExtensionContext, context)
         oldSettings : Settings.SettingsManager <- R.dispose(Settings.SettingsManager,settings)
         released : Shared <- R.dispose(Shared, shared)
@@ -1476,7 +1477,7 @@ def sectionPatch(patch: Maybe<&2, Rec.Record<Maybe<&2, String>>>, now: F64) -> M
 
 def prepareLoadout(agent: Runtime.Owner(), loadout: Runtime.Loadout, messages: List<&2, Message()>, now: F64) -> IO(Maybe<&2, Message()>):
   match loadout:
-    case Runtime.Loadout{sections, tools, _, _, _, _}:
+    case Runtime.Loadout{sections, tools, _, _, _, _, _}:
       do IO<Maybe<&2, Message()>>:
         Agent.setTools(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, tools)
         return sectionPatch(Prompt.diffSystemPromptSections(sectionsOf(Transcript.getCurrentSystemMessage(V.Value, V.Value, Unit, Runtime.Details(), llmOnly(messages))), sections), now)
@@ -1497,7 +1498,7 @@ def withPatch(patch: Maybe<&2, Message()>, messages: List<&2, Message()>) -> Lis
 def Context() -> Data: T.AgentContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>
 
 type NextTurnEnv is Data:
-  NextTurnEnv{agent: Runtime.Owner(), shared: R.Ref<Shared>, settings: R.Ref<Settings.SettingsManager>, previous: Maybe<&2, NextTurnHook()>, legacy: Maybe<&2, LegacyTurnHook()>, loadout: Runtime.Loadout}
+  NextTurnEnv{agent: Runtime.Owner(), shared: R.Ref<Shared>, settings: R.Ref<Settings.SettingsManager>, previous: Maybe<&2, NextTurnHook()>, legacy: Maybe<&2, LegacyTurnHook()>, loadout: R.Ref<Runtime.Loadout>}
 
 def turnContext(turn: Turn()) -> Context():
   match turn:
@@ -1599,7 +1600,8 @@ def nextTurnHook(env: NextTurnEnv, input: T.ToolHookInput<Turn()>) -> IO(TurnRes
     case NextTurnEnv{agent, shared, settings, previous, legacy, loadout} T.ToolHookInput{turn, signal}:
       do IO<TurnResult()>:
         +current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
-        refreshTurn(agent, shared, current, previous, legacy, loadout, turn, signal)
+        +resources : Runtime.Loadout <- R.read(Runtime.Loadout, loadout)
+        refreshTurn(agent, shared, current, previous, legacy, resources, turn, signal)
 
 # Request projection
 # ------------------
@@ -1655,14 +1657,15 @@ def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.Sett
     subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, handler)
     +replaced : Maybe<&2, NextTurnHook()> <- Agent.getPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     legacy : Maybe<&2, LegacyTurnHook()> <- Agent.getPrepareNextTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +nextTurn : NextTurnHook() <- C.create(~NextTurnEnv, ~T.ToolHookInput<Turn()>, ~TurnResult(), ~nextTurnHook, NextTurnEnv{agent, shared, settingsRef, replaced, legacy, loadout})
+    +loadoutRef : R.Ref<Runtime.Loadout> <- R.new(Runtime.Loadout, loadout)
+    +nextTurn : NextTurnHook() <- C.create(~NextTurnEnv, ~T.ToolHookInput<Turn()>, ~TurnResult(), ~nextTurnHook, NextTurnEnv{agent, shared, settingsRef, replaced, legacy, loadoutRef})
     Agent.setPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{nextTurn})
     +replacedRequest : Maybe<&2, RequestHook()> <- Agent.getPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +request : RequestHook() <- C.create(~RequestEnv, ~RequestInput(), ~RequestResult(), ~requestHook, RequestEnv{agent, shared, replacedRequest})
     Agent.setPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{request})
     +context : Ctx.ContextFactory() <- C.create(~ContextEnv, ~Unit, ~Ctx.ExtensionContext, ~toolContext, ContextEnv{agent, shared, cwd})
     bindContext(loadout, Some{context})
-    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context}, settingsRef, cwd, loadout, models, scoped}
+    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context}, settingsRef, cwd, loadoutRef, models, scoped}
 
 # A final error after retries reports the failure and resets the counter.
 def failedRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason, finalError: Maybe<&2, String>) -> IO(Unit):
@@ -1726,9 +1729,10 @@ def runUntilSettled(fuel: Nat, +agent: Runtime.Owner(), +shared: R.Ref<Shared>, 
 # and the agent runs until post-run handling settles.
 def runAgentPrompt(session: AgentSession, +text: String, images: List<&2, Ai.ImageContent>) -> IO(Result<&2, &2, String, Unit>):
   match session:
-    case AgentSession{+agent, +shared, _, settingsRef, _, loadout, _, _}:
+    case AgentSession{+agent, +shared, _, settingsRef, _, loadoutRef, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
         +settings : Settings.SettingsManager <- R.read(Settings.SettingsManager,settingsRef)
+        loadout : Runtime.Loadout <- R.read(Runtime.Loadout, loadoutRef)
         compactBeforePrompt(agent, shared, settings)
         current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +now : F64 <- Date.now()
@@ -1764,9 +1768,9 @@ def queueAt(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +behavior: Streaming
 # Input expansion
 # ---------------
 
-def loadoutOf(session: AgentSession) -> Runtime.Loadout:
+def loadoutOf(session: AgentSession) -> IO(Runtime.Loadout):
   match session:
-    case AgentSession{_, _, _, _, _, loadout, _, _}: loadout
+    case AgentSession{_, _, _, _, _, loadout, _, _}: R.read(Runtime.Loadout, loadout)
 
 def skillNamed(skills: List<&2, Skills.Skill>, +name: String) -> Maybe<&2, Skills.Skill>:
   match skills:
@@ -1813,13 +1817,16 @@ def expandSkillCommand(skills: List<&2, Skills.Skill>, +text: String) -> IO(Stri
 
 def expandWith(loadout: Runtime.Loadout, +text: String) -> IO(String):
   match loadout:
-    case Runtime.Loadout{_, _, skills, templates, _, _}:
+    case Runtime.Loadout{_, _, skills, templates, _, _, _}:
       do IO<String>:
         expanded : String <- expandSkillCommand(skills, text)
         return Templates.expandPromptTemplate(expanded, templates)
 
 # Skill commands, then prompt templates.
-def expandInput(session: AgentSession, text: String) -> IO(String): expandWith(loadoutOf(session), text)
+def expandInput(session: AgentSession, +text: String) -> IO(String):
+  do IO<String>:
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    expandWith(loadout, text)
 
 def queueExpanded(session: AgentSession, behavior: StreamingBehavior, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit):
   match session:
@@ -2455,18 +2462,60 @@ def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, St
         return result
 
 # upstream session.promptTemplates and resourceLoader.getSkills(): the
-# resources this session was loaded with.
-def promptTemplates(session: AgentSession) -> List<&2, Templates.PromptTemplate>:
-  match session:
-    case AgentSession{_, _, _, _, _, Runtime.Loadout{_, _, _, templates, _, _}, _, _}: templates
+# resources this session was loaded (or last reloaded) with.
+def templatesOf(loadout: Runtime.Loadout) -> List<&2, Templates.PromptTemplate>:
+  match loadout:
+    case Runtime.Loadout{_, _, _, templates, _, _, _}: templates
+def skillsOf(loadout: Runtime.Loadout) -> List<&2, Skills.Skill>:
+  match loadout:
+    case Runtime.Loadout{_, _, loaded, _, _, _, _}: loaded
+def agentsFilesOf(loadout: Runtime.Loadout) -> List<&2, Prompt.ContextFile>:
+  match loadout:
+    case Runtime.Loadout{_, _, _, _, _, agentsFiles, _}: agentsFiles
+def promptTemplates(session: AgentSession) -> IO(List<&2, Templates.PromptTemplate>):
+  do IO<List<&2, Templates.PromptTemplate>>:
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    return templatesOf(loadout)
+def getSkills(session: AgentSession) -> IO(List<&2, Skills.Skill>):
+  do IO<List<&2, Skills.Skill>>:
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    return skillsOf(loadout)
+def getAgentsFiles(session: AgentSession) -> IO(List<&2, Prompt.ContextFile>):
+  do IO<List<&2, Prompt.ContextFile>>:
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    return agentsFilesOf(loadout)
 
-def getSkills(session: AgentSession) -> List<&2, Skills.Skill>:
+# upstream AgentSession.reload without extensions: settings are reloaded from
+# their files, then skills, prompt templates, context files and the system
+# prompt are prepared again; the tools stay. The next request declares the new
+# system prompt (the loadout diff), as after any change.
+def reloadedLoadout(loadout: Runtime.Loadout, prepared: Result<&2, &2, String, Runtime.Prepared>) -> Result<&2, &2, String, Runtime.Loadout>:
+  match loadout prepared:
+    case _ Fail{message}: Fail{message}
+    case Runtime.Loadout{_, tools, _, _, context, _, source} Done{Runtime.Prepared{sections, skills, templates, files}}: Done{Runtime.Loadout{sections, tools, skills, templates, context, files, source}}
+def storeReloaded(+loadoutRef: R.Ref<Runtime.Loadout>, result: Result<&2, &2, String, Runtime.Loadout>) -> IO(Result<&2, &2, String, Unit>):
+  match result:
+    case Fail{message}: IO.pure(Result<&2, &2, String, Unit>, Fail{message})
+    case Done{next}:
+      do IO<Result<&2, &2, String, Unit>>:
+        R.write(Runtime.Loadout, loadoutRef, next)
+        return Done{Unit{}}
+def reloadFrom(+loadoutRef: R.Ref<Runtime.Loadout>, +loadout: Runtime.Loadout, settings: Settings.SettingsManager) -> IO(Result<&2, &2, String, Unit>):
+  match loadout:
+    case Runtime.Loadout{_, _, _, _, _, _, None{}}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+    case Runtime.Loadout{_, _, _, _, _, _, Some{source}}:
+      do IO<Result<&2, &2, String, Unit>>:
+        prepared : Result<&2, &2, String, Runtime.Prepared> <- Runtime.reprepare(source, settings)
+        storeReloaded(loadoutRef, reloadedLoadout(loadout, prepared))
+def reload(session: AgentSession) -> IO(Result<&2, &2, String, Unit>):
   match session:
-    case AgentSession{_, _, _, _, _, Runtime.Loadout{_, _, loaded, _, _, _}, _, _}: loaded
-
-def getAgentsFiles(session: AgentSession) -> List<&2, Prompt.ContextFile>:
-  match session:
-    case AgentSession{_, _, _, _, _, Runtime.Loadout{_, _, _, _, _, agentsFiles}, _, _}: agentsFiles
+    case AgentSession{_, _, _, +settingsRef, _, +loadoutRef, _, _}:
+      do IO<Result<&2, &2, String, Unit>>:
+        current : Settings.SettingsManager <- R.read(Settings.SettingsManager, settingsRef)
+        +reloaded : Settings.SettingsManager <- Settings.reloadFiles(current)
+        R.write(Settings.SettingsManager, settingsRef, reloaded)
+        loadout : Runtime.Loadout <- R.read(Runtime.Loadout, loadoutRef)
+        reloadFrom(loadoutRef, loadout, reloaded)
 
 # upstream getSessionStats: counts and billed usage over every stored entry,
 # with the current context usage.

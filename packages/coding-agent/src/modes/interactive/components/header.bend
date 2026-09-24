@@ -12,9 +12,11 @@ import ../theme/theme.bend as Theme
 
 # The built-in header belongs to the scrollable document, but survives a
 # transcript replacement. Expansion and theme changes are read at render time.
-type Header is Data: Header{expanded: Ref.Ref<Bool>,theme: Ref.Ref<Theme.Theme>,quiet: Bool,cwd: String,home: Maybe<&2,String>,contexts: List<&2,Prompt.ContextFile>,skills: List<&2,Skills.Skill>,heading: Ref.Ref<Text.Text>,resources: Ref.Ref<Text.Text>}
-type Owner is Type: Owner{expanded: Ref.Ref<Bool>,heading: Ref.Ref<Text.Text>,resources: Ref.Ref<Text.Text>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
-type Handle is Data: Handle{expanded: Ref.Ref<Bool>}
+# The loaded context files and skills; /reload replaces them.
+type Loaded is Data: Loaded{contexts: List<&2,Prompt.ContextFile>,skills: List<&2,Skills.Skill>}
+type Header is Data: Header{expanded: Ref.Ref<Bool>,theme: Ref.Ref<Theme.Theme>,quiet: Bool,cwd: String,home: Maybe<&2,String>,loaded: Ref.Ref<Loaded>,heading: Ref.Ref<Text.Text>,resources: Ref.Ref<Text.Text>}
+type Owner is Type: Owner{expanded: Ref.Ref<Bool>,loaded: Ref.Ref<Loaded>,heading: Ref.Ref<Text.Text>,resources: Ref.Ref<Text.Text>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
+type Handle is Data: Handle{expanded: Ref.Ref<Bool>,loaded: Ref.Ref<Loaded>}
 
 def colorResult(result: Result<&2,&2,Theme.Error,String>) -> IO(String):
   match result:
@@ -136,9 +138,12 @@ def cached(+cache: Ref.Ref<Text.Text>,body: String,width: Nat) -> IO(List<&2,Str
     old : Text.Text <- Ref.read(Text.Text,cache)
     pair : Text.Text & List<&2,String> <- Text.render(currentText(old,body),width)
     stored(pair,cache)
+def listedText(+theme: Theme.Theme,listed: Loaded,cwd: String,+home: Maybe<&2,String>,+expanded: Bool) -> IO(String):
+  match listed:
+    case Loaded{contexts,skills}: resourceText(theme,contexts,skills,cwd,home,expanded)
 def draw(input: Header,width: Nat) -> IO(List<&2,String>):
   match input:
-    case Header{state,theme,quiet,cwd,home,contexts,skills,heading,resources}:
+    case Header{state,theme,quiet,cwd,home,loaded,heading,resources}:
       match quiet:
         case True{}: IO.pure(List<&2,String>,Nil{})
         case False{}:
@@ -146,34 +151,40 @@ def draw(input: Header,width: Nat) -> IO(List<&2,String>):
             +size : Nat <- IO.pure(Nat,width)
             +isExpanded : Bool <- Ref.read(Bool,state)
             +current : Theme.Theme <- Ref.read(Theme.Theme,theme)
+            listed : Loaded <- Ref.read(Loaded,loaded)
             +brand : String <- logo(current)
             body : String <- Bool.pick(Unit -> IO(String),isExpanded,_ => expanded(current,brand),_ => compact(current,brand))(Unit{})
             headerLines : List<&2,String> <- cached(heading,body,size)
-            +details : String <- resourceText(current,contexts,skills,cwd,home,isExpanded)
+            +details : String <- listedText(current,listed,cwd,home,isExpanded)
             resourceLines : List<&2,String> <- cached(resources,details,size)
             +present : Bool <- IO.pure(Bool,Bool.not(Strings.equal(details,"")))
             +before : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,present,"" <> "" <> Nil{},Nil{}))
-            +after : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,present,"" <> "" <> Nil{},"" <> Nil{}))
-            return "" <> List.append(&2,String,headerLines,List.append(&2,String,before,List.append(&2,String,resourceLines,after)))
+            return "" <> List.append(&2,String,headerLines,List.append(&2,String,before,List.append(&2,String,resourceLines,[""])))
 def ignore(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
 def create(theme: Ref.Ref<Theme.Theme>,quiet: Bool,cwd: String,home: Maybe<&2,String>,contexts: List<&2,Prompt.ContextFile>,skills: List<&2,Skills.Skill>) -> IO(Owner):
   do IO<Owner>:
     +state : Ref.Ref<Bool> <- Ref.new(Bool,False{})
+    +loaded : Ref.Ref<Loaded> <- Ref.new(Loaded,Loaded{contexts,skills})
     +heading : Ref.Ref<Text.Text> <- Ref.new(Text.Text,Text.new("",Some{1n},Some{0n},None{}))
     +resources : Ref.Ref<Text.Text> <- Ref.new(Text.Text,Text.new("",Some{0n},Some{0n},None{}))
-    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Header,~Nat,~List<&2,String>,~draw,Header{state,theme,quiet,cwd,home,contexts,skills,heading,resources})
+    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Header,~Nat,~List<&2,String>,~draw,Header{state,theme,quiet,cwd,home,loaded,heading,resources})
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~ignore,Unit{})
-    return Owner{state,heading,resources,Component.Component{Component.ComponentId{90n},render,None{},None{},invalidate,None{},False{}},render,invalidate}
+    return Owner{state,loaded,heading,resources,Component.Component{Component.ComponentId{90n},render,None{},None{},invalidate,None{},False{}},render,invalidate}
 def borrow(owner: Owner) -> Owner & Component.Component & Handle:
   match owner:
-    case Owner{+state,heading,resources,+component,render,invalidate}: (Owner{state,heading,resources,component,render,invalidate},component,Handle{state})
+    case Owner{+state,+loaded,heading,resources,+component,render,invalidate}: (Owner{state,loaded,heading,resources,component,render,invalidate},component,Handle{state,loaded})
 def toggle(handle: Handle) -> IO(Unit):
   match handle:
-    case Handle{state}: Ref.modify(Bool,Unit,state,previous => (Bool.not(previous),Unit{}))
+    case Handle{state,_}: Ref.modify(Bool,Unit,state,previous => (Bool.not(previous),Unit{}))
+# upstream showLoadedResources after /reload: the listing shows the reloaded resources.
+def setResources(handle: Handle,contexts: List<&2,Prompt.ContextFile>,skills: List<&2,Skills.Skill>) -> IO(Unit):
+  match handle:
+    case Handle{_,loaded}: Ref.write(Loaded,loaded,Loaded{contexts,skills})
 def dispose(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{state,heading,resources,_,render,invalidate}:
+    case Owner{state,loaded,heading,resources,_,render,invalidate}:
       do IO<Unit>:
+        oldLoaded : Loaded <- Ref.dispose(Loaded,loaded)
         Callback.dispose(Nat,List<&2,String>,render)
         Callback.dispose(Unit,Unit,invalidate)
         previous : Bool <- Ref.dispose(Bool,state)

@@ -27,6 +27,7 @@ type Action is Data:
   CopyLastAssistant{}
   OpenSettings{}
   ShowChangelog{}
+  ReloadResources{}
   RunBash{command: String,excluded: Bool}
 type CredentialCommand is Data:
   BeginLogin{provider: Maybe<&2,String>}
@@ -51,6 +52,7 @@ type Command is Data:
   Copy{}
   Settings{}
   Changelog{}
+  Reload{}
   Bash{command: String,excluded: Bool}
   Unsupported{text: String}
 
@@ -69,7 +71,6 @@ def unported(parts: List<&2,String>) -> Bool:
     case "/session" <> Nil{}: True{}
     case "/hotkeys" <> Nil{}: True{}
     case "/trust" <> Nil{}: True{}
-    case "/reload" <> Nil{}: True{}
     case "/debug" <> Nil{}: True{}
     case _: False{}
 
@@ -95,6 +96,7 @@ def classify(+text: String,+parts: List<&2,String>) -> Command:
     case "/copy" <> Nil{}: Copy{}
     case "/settings" <> Nil{}: Settings{}
     case "/changelog" <> Nil{}: Changelog{}
+    case "/reload" <> Nil{}: Reload{}
     case _:
       Bool.pick(Command,String.starts_with(text,"!!"),bashCommand(text,2n,True{}),
         Bool.pick(Command,String.starts_with(text,"!"),bashCommand(text,1n,False{}),
@@ -223,6 +225,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case Copy{}: IO.pure(Action,CopyLastAssistant{})
     case Settings{}: IO.pure(Action,OpenSettings{})
     case Changelog{}: IO.pure(Action,ShowChangelog{})
+    case Reload{}: IO.pure(Action,ReloadResources{})
     case Bash{command,excluded}: IO.pure(Action,RunBash{command,excluded})
     case Unsupported{text}: IO.pure(Action,CommandError{text ++ " is not available in pi-bend yet"})
 def parse(text: String) -> Command:
