@@ -174,8 +174,14 @@ type ImportState is Data:
   ImportState{host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,backend: Maybe<&2,Callback.Callback<ImportRequest,SessionHost.ImportOutcome>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type ResumeState is Data:
   ResumeState{picker: Ref.Ref<Maybe<&2,SessionPicker.Host>>,dialog: Ref.Ref<Maybe<&2,LoginDialog.Host>>,sessions: Maybe<&2,Callback.Callback<Unit,SessionChoices>>,backend: Maybe<&2,Callback.Callback<ResumeRequest,SessionHost.ResumeOutcome>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+type BashActivity is Data:
+  BashActivity{active: Bool,closing: Bool,completion: Maybe<&2,Deferred.Deferred<Unit>>}
 type BashInput is Data:
-  BashInput{session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+  BashInput{session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,activity: Ref.Ref<BashActivity>}
+type BashReservation is Data:
+  BashReserved{previous: Maybe<&2,Deferred.Deferred<Unit>>,completion: Deferred.Deferred<Unit>}
+  BashBusy{unused: Deferred.Deferred<Unit>}
+  BashClosed{unused: Deferred.Deferred<Unit>}
 type CommandObservation is Data:
   CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,builtinDir: String,importState: ImportState,resumeState: ResumeState,selector: Ref.Ref<Maybe<&2,Selector.Host>>,bash: BashInput}
 def firstPath(args: List<&2,String>) -> Maybe<&2,String>:
@@ -427,14 +433,14 @@ def bashChunk(target: BashChunk,delta: String) -> IO(Unit):
         Interactive.requestRender(redraw)
 def bashFailed(input: BashInput,message: MessageUI.Handle,+error: String) -> IO(Unit):
   match input:
-    case BashInput{_,_,_,failure,redraw}:
+    case BashInput{_,_,_,failure,redraw,_}:
       do IO<Unit>:
         Transcript.failBash(message,error)
         Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandFailure{"Bash command failed: " ++ error}})
         Interactive.requestRender(redraw)
 def bashDone(input: BashInput,message: MessageUI.Handle,result: BashExec.BashResult) -> IO(Unit):
   match input result:
-    case BashInput{_,_,_,_,redraw} BashExec.BashResult{output,exitCode,cancelled,truncated,path}:
+    case BashInput{_,_,_,_,redraw,_} BashExec.BashResult{output,exitCode,cancelled,truncated,path}:
       do IO<Unit>:
         Transcript.finishBash(message,output,exitCode,cancelled,truncated,path)
         Interactive.requestRender(redraw)
@@ -442,9 +448,12 @@ def bashCompleted(input: BashInput,message: MessageUI.Handle,result: Result<&2,&
   match result:
     case Fail{error}: bashFailed(input,message,error)
     case Done{value}: bashDone(input,message,value)
-def runBashTask(+input: BashInput,+command: String,+excluded: Bool) -> IO(Unit):
+def idleBash(state: BashActivity) -> BashActivity & Unit:
+  match state:
+    case BashActivity{_,closing,completion}: (BashActivity{False{},closing,completion},Unit{})
+def runBashTask(+input: BashInput,+command: String,+excluded: Bool,completion: Deferred.Deferred<Unit>) -> IO(Unit):
   match input:
-    case BashInput{session,transcript,_,_,redraw}:
+    case BashInput{session,transcript,_,_,redraw,activity}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         +message : MessageUI.Handle <- Transcript.startBash(transcript,command,excluded)
@@ -453,25 +462,58 @@ def runBashTask(+input: BashInput,+command: String,+excluded: Bool) -> IO(Unit):
         result : Result<&2,&2,String,BashExec.BashResult> <- Session.executeBash(live,command,Some{chunk},Session.BashOptions{Some{excluded},None{},None{}})
         Callback.dispose(String,Unit,chunk)
         bashCompleted(input,message,result)
+        Ref.modify(BashActivity,Unit,activity,idleBash)
+        settled : Bool <- Deferred.resolve(Unit,completion,Unit{})
+        return Unit{}
 def restoreBashEditor(target: Maybe<&2,Live.Handle>,command: String) -> IO(Unit):
   match target:
     case None{}: IO.pure(Unit,Unit{})
     case Some{handle}: Live.setText(handle,command)
 def bashBusy(input: BashInput,command: String,excluded: Bool) -> IO(Unit):
   match input:
-    case BashInput{_,_,editor,failure,redraw}:
+    case BashInput{_,_,editor,failure,redraw,_}:
       do IO<Unit>:
         target : Maybe<&2,Live.Handle> <- Ref.read(Maybe<&2,Live.Handle>,editor)
         restoreBashEditor(target,Bool.pick(String,excluded,"!!","!") ++ command)
         Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandFailure{"A bash command is already running. Press Esc to cancel it first."}})
         Interactive.requestRender(redraw)
+def reserveBash(state: BashActivity,+fresh: Deferred.Deferred<Unit>) -> BashActivity & BashReservation:
+  match state:
+    case BashActivity{active,True{},completion}: (BashActivity{active,True{},completion},BashClosed{fresh})
+    case BashActivity{True{},False{},completion}: (BashActivity{True{},False{},completion},BashBusy{fresh})
+    case BashActivity{False{},False{},previous}: (BashActivity{True{},False{},Some{fresh}},BashReserved{previous,fresh})
+def disposePrevious(previous: Maybe<&2,Deferred.Deferred<Unit>>) -> IO(Unit):
+  match previous:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{+done}:
+      do IO<Unit>:
+        completed : Unit <- Deferred.result(Unit,done)
+        Deferred.dispose(Unit,done)
+def disposeBashActivity(state: BashActivity) -> IO(Unit):
+  match state:
+    case BashActivity{_,_,None{}}: IO.pure(Unit,Unit{})
+    case BashActivity{_,_,Some{done}}: Deferred.dispose(Unit,done)
+def bashReserved(input: BashInput,command: String,excluded: Bool,reservation: BashReservation) -> IO(Unit):
+  match reservation:
+    case BashBusy{unused}:
+      do IO<Unit>:
+        Deferred.dispose(Unit,unused)
+        bashBusy(input,command,excluded)
+    case BashClosed{unused}: Deferred.dispose(Unit,unused)
+    case BashReserved{previous,completion}:
+      do IO<Unit>:
+        disposePrevious(previous)
+        IO.spawn(Unit,runBashTask(input,command,excluded,completion))
 def bashRequested(+input: BashInput,+command: String,+excluded: Bool) -> IO(Unit):
   match input:
-    case BashInput{session,_,_,_,_}:
+    case BashInput{session,_,_,_,_,activity}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
-        busy : Bool <- Session.isBashRunning(live)
-        Bool.pick(Unit -> IO(Unit),busy,_ => bashBusy(input,command,excluded),_ => IO.spawn(Unit,runBashTask(input,command,excluded)))(Unit{})
+        running : Bool <- Session.isBashRunning(live)
+        Bool.pick(Unit -> IO(Unit),running,_ => bashBusy(input,command,excluded),_ => do IO<Unit>:
+          fresh : Deferred.Deferred<Unit> <- Deferred.new(Unit)
+          reservation : BashReservation <- Ref.modify(BashActivity,BashReservation,activity,current => reserveBash(current,fresh))
+          bashReserved(input,command,excluded,reservation))(Unit{})
 def bashObserved(input: CommandObservation,command: String,excluded: Bool) -> IO(Unit):
   match input: case CommandObservation{_,_,_,_,_,_,_,_,_,_,bash}: bashRequested(bash,command,excluded)
 def ordinaryCommandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
@@ -568,7 +610,7 @@ type ThemeStartup is Data:
 type ThemeStopping is Data:
   ThemeStopping{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>}
 type Interaction is Data:
-  Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,modelSelector: Ref.Ref<Maybe<&2,ModelPicker.Host>>,header: Maybe<&2,Header.Handle>}
+  Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,modelSelector: Ref.Ref<Maybe<&2,ModelPicker.Host>>,header: Maybe<&2,Header.Handle>,bashActivity: Ref.Ref<BashActivity>}
 type LoginRequest is Data: LoginRequest{provider: String,signal: Abort.AbortSignal<Unit>,notice: AuthLogin.Notice(),manual: Callback.Callback<AuthLogin.ManualPrompt,Unit>,manualDone: Callback.Callback<Unit,Unit>}
 type Binding is Data:
   Binding{current: Ref.Ref<Session.AgentSession>,newSession: Callback.Callback<Unit,Result<&2,&2,String,Unit>>,onRebind: Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>,login: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,refreshModels: Callback.Callback<Unit,List<&2,Models.Model()>>,importer: Callback.Callback<ImportRequest,SessionHost.ImportOutcome>,sessions: Callback.Callback<Unit,SessionChoices>,resume: Callback.Callback<ResumeRequest,SessionHost.ResumeOutcome>}
@@ -904,9 +946,9 @@ def chosenModel(input: SelectInput,model: Models.Model()) -> IO(Unit):
         result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitCommand(queue,Commands.SwitchModel{model})
         Interactive.submittedResult(failure,result)
 def selectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,Selector.Host>>:
-  match interaction: case Interaction{_,_,_,selector,_,_}: selector
+  match interaction: case Interaction{_,_,_,selector,_,_,_}: selector
 def modelSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,ModelPicker.Host>>:
-  match interaction: case Interaction{_,_,_,_,selector,_}: selector
+  match interaction: case Interaction{_,_,_,_,selector,_,_}: selector
 def contextTheme(context: ThemeContext) -> Ref.Ref<Theme.Theme>:
   match context: case ThemeContext{theme,_,_,_,_,_,_,_,_,_,_}: theme
 def contextTranscript(context: ThemeContext) -> Transcript.Handle:
@@ -914,9 +956,11 @@ def contextTranscript(context: ThemeContext) -> Transcript.Handle:
 def contextInteraction(context: ThemeContext) -> Interaction:
   match context: case ThemeContext{_,_,_,_,_,_,interaction,_,_,_,_}: interaction
 def lastClearOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,F64>>:
-  match interaction: case Interaction{_,lastClear,_,_,_,_}: lastClear
+  match interaction: case Interaction{_,lastClear,_,_,_,_,_}: lastClear
 def recordEditor(interaction: Interaction,handle: Live.Handle) -> IO(Unit):
-  match interaction: case Interaction{editor,_,_,_,_,_}: Ref.write(Maybe<&2,Live.Handle>,editor,Some{handle})
+  match interaction: case Interaction{editor,_,_,_,_,_,_}: Ref.write(Maybe<&2,Live.Handle>,editor,Some{handle})
+def bashActivityOf(interaction: Interaction) -> Ref.Ref<BashActivity>:
+  match interaction: case Interaction{_,_,_,_,_,_,activity}: activity
 def contextSession(context: ThemeContext) -> Ref.Ref<Session.AgentSession>:
   match context: case ThemeContext{_,_,session,_,_,_,_,_,_,_,_}: session
 def contextLogin(context: ThemeContext) -> LoginState:
@@ -949,7 +993,7 @@ def disposeLoginState(state: LoginState) -> IO(Unit):
         return Unit{}
 def keyInput(queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,interaction: Interaction,session: Ref.Ref<Session.AgentSession>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,transcript: Transcript.Handle) -> KeyInput:
   match interaction:
-    case Interaction{_,lastClear,lastEscape,selector,_,header}: KeyInput{queue,stop,failure,lastClear,lastEscape,selector,session,redraw,header,transcript}
+    case Interaction{_,lastClear,lastEscape,selector,_,header,_}: KeyInput{queue,stop,failure,lastClear,lastEscape,selector,session,redraw,header,transcript}
 def openedTree(input: KeyInput,mode: Selector.Mode) -> IO(Unit):
   match input:
     case KeyInput{_,_,failure,_,_,selector,session,redraw,_,_}: openSessionSelector(mode,session,selector,failure,redraw)
@@ -1107,13 +1151,15 @@ def controllerFor(mode: Maybe<&2,Binding>,current: Ref.Ref<Session.AgentSession>
     case Some{Binding{_,newSession,_,_,_,_,_,_}}: Controller.startBound(current,listener,newSession,limit,failure,command,control,selection,models,Some{login})
 def disposeInteraction(interaction: Interaction) -> IO(Unit):
   match interaction:
-    case Interaction{editor,lastClear,lastEscape,selector,modelSelector,_}:
+    case Interaction{editor,lastClear,lastEscape,selector,modelSelector,_,bashActivity}:
       do IO<Unit>:
         oldEditor : Maybe<&2,Live.Handle> <- Ref.dispose(Maybe<&2,Live.Handle>,editor)
         oldClear : Maybe<&2,F64> <- Ref.dispose(Maybe<&2,F64>,lastClear)
         oldEscape : Maybe<&2,F64> <- Ref.dispose(Maybe<&2,F64>,lastEscape)
         oldSelector : Maybe<&2,Selector.Host> <- Ref.dispose(Maybe<&2,Selector.Host>,selector)
         oldModelSelector : Maybe<&2,ModelPicker.Host> <- Ref.dispose(Maybe<&2,ModelPicker.Host>,modelSelector)
+        oldBash : BashActivity <- Ref.dispose(BashActivity,bashActivity)
+        disposeBashActivity(oldBash)
         return Unit{}
 def startup(context: ThemeContext,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>) -> ThemeStartup:
   match context:
@@ -1224,10 +1270,27 @@ def processEditor(view: View.View,editorComponent: Component.Component,foot: Foo
   processEditorBorrowed(View.borrow(view),editorComponent,foot,stopped,redraw,queue,initial,context)
 def process(view: View.View,editor: Component.Component,foot: FooterOwner,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
   processEditor(view,editor,foot,stopped,redraw,queue,initial,context)
-def finish(outcome: View.View & Result<&2,&2,Error,Unit>,transcript: Transcript.Owner,live: Live.Owner,foot: FooterOwner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<Editor.EditorAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,stopped: Deferred.Deferred<Unit>,interaction: Interaction,session: Ref.Ref<Session.AgentSession>,+mode: Maybe<&2,Binding>,+login: LoginState) -> IO(Result<&2,&2,Error,Unit>):
+def markBashClosing(state: BashActivity) -> BashActivity & Maybe<&2,Deferred.Deferred<Unit>>:
+  match state:
+    case BashActivity{active,_,+completion}: (BashActivity{active,True{},completion},completion)
+def awaitBashCompletion(completion: Maybe<&2,Deferred.Deferred<Unit>>,session: Ref.Ref<Session.AgentSession>) -> IO(Unit):
+  match completion:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{done}:
+      do IO<Unit>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        Session.abortBash(live)
+        completed : Unit <- Deferred.result(Unit,done)
+        return Unit{}
+def awaitBash(activity: Ref.Ref<BashActivity>,session: Ref.Ref<Session.AgentSession>) -> IO(Unit):
+  do IO<Unit>:
+    completion : Maybe<&2,Deferred.Deferred<Unit>> <- Ref.modify(BashActivity,Maybe<&2,Deferred.Deferred<Unit>>,activity,markBashClosing)
+    awaitBashCompletion(completion,session)
+def finish(outcome: View.View & Result<&2,&2,Error,Unit>,transcript: Transcript.Owner,live: Live.Owner,foot: FooterOwner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<Editor.EditorAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,stopped: Deferred.Deferred<Unit>,+interaction: Interaction,+session: Ref.Ref<Session.AgentSession>,+mode: Maybe<&2,Binding>,+login: LoginState) -> IO(Result<&2,&2,Error,Unit>):
   match outcome:
     case (view,result):
       do IO<Result<&2,&2,Error,Unit>>:
+        awaitBash(bashActivityOf(interaction),session)
         unbind(mode)
         Transcript.dispose(transcript)
         View.dispose(view)
@@ -1343,14 +1406,15 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         loginCallback : Callback.Callback<Commands.CredentialCommand,Unit> <- Callback.create(~LoginState,~Commands.CredentialCommand,~Unit,~credentialRun,loginState)
         +commandSink : Interactive.CommandSink <- IO.pure(Interactive.CommandSink,Interactive.CommandSink{footerFailure(foot),redraw,modelSelectorRef,current,modelsRef})
         +editorHandle : Ref.Ref<Maybe<&2,Live.Handle>> <- Ref.new(Maybe<&2,Live.Handle>,None{})
-        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),footerFailure(foot),redraw,cwd,builtinDir,importStateOf(mode,loginHost,footerFailure(foot),redraw),resumeState,selectorRef,BashInput{current,transcriptHandle,editorHandle,footerFailure(foot),redraw}})
+        +bashActivity : Ref.Ref<BashActivity> <- Ref.new(BashActivity,BashActivity{False{},False{},None{}})
+        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),footerFailure(foot),redraw,cwd,builtinDir,importStateOf(mode,loginHost,footerFailure(foot),redraw),resumeState,selectorRef,BashInput{current,transcriptHandle,editorHandle,footerFailure(foot),redraw,bashActivity}})
         +lastClear : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         +lastEscape : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         selectionObserver : Callback.Callback<Controller.SelectionResult,Unit> <- Callback.create(~SelectionSink,~Controller.SelectionResult,~Unit,~selectionResult,SelectionSink{current,transcriptHandle,editorHandle,footerState(foot),footerFailure(foot),redraw,cwd,home})
         controlObserver : Callback.Callback<Controller.ControlResult,Unit> <- Callback.create(~ControlSink,~Controller.ControlResult,~Unit,~controlResult,ControlSink{editorHandle,footerFailure(foot),redraw})
         bindOptional(mode,listener,transcriptHandle,editorHandle,footerState(foot),footerFailure(foot),redraw,cwd,home)
         controllerPair : Controller.Controller & Controller.Handle <- controllerFor(mode,current,session,listener,32n,Some{failureObserver},Some{commandObserver},Some{controlObserver},Some{selectionObserver},modelsRef,loginCallback)
-        startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,current,setting,builtinDir,customDir,Interaction{editorHandle,lastClear,lastEscape,selectorRef,modelSelectorRef,View.headerHandle(viewHandle)},modelsRef,mode,loginState,resumeState})
+        startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,current,setting,builtinDir,customDir,Interaction{editorHandle,lastClear,lastEscape,selectorRef,modelSelectorRef,View.headerHandle(viewHandle),bashActivity},modelsRef,mode,loginState,resumeState})
 def startStyles(styles: MarkdownTheme.Styles,view: View.View,+viewHandle: View.Handle,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Context,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match styles:
     case MarkdownTheme.Styles{+markdown,callbacks,+live}:
