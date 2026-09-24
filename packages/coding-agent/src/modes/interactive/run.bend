@@ -30,6 +30,7 @@ import ../../../../tui/src/terminal.bend as Terminal
 import ../../../../tui/src/utils.bend as Utils
 import ../../core/agent-runtime.bend as Runtime
 import ../../core/agent-session.bend as Session
+import ../../core/trust-manager.bend as Trust
 import ../../core/agent-session-runtime.bend as SessionHost
 import ../../core/bash-executor.bend as BashExec
 import ../../core/session-cwd.bend as SessionCwd
@@ -1456,6 +1457,23 @@ def startupChangelog(transcript: Transcript.Handle,session: Ref.Ref<Session.Agen
     +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
     messages : List<&2,Session.Message()> <- Session.messages(live)
     changelogFor(transcript,live,Bool.not(List.is_empty(&2,Session.Message(),messages)),builtinDir)
+def environmentValue(result: Result<&1,&1,U32 & String,String>) -> Maybe<&2,String>:
+  match result:
+    case Fail{_}: None{}
+    case Done{value}: Some{value}
+def sessionCwd(session: Session.AgentSession) -> String:
+  match session:
+    case Session.AgentSession{_,_,_,_,cwd,_,_,_}: cwd
+def startupProjectTrustWarning(transcript: Transcript.Handle,session: Ref.Ref<Session.AgentSession>) -> IO(Unit):
+  do IO<Unit>:
+    +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+    cwd : String <- IO.pure(String,sessionCwd(live))
+    settings : Settings.SettingsManager <- Session.getSettings(live)
+    home : Result<&1,&1,U32 & String,String> <- IO.get_env("HOME")
+    resources : Bool <- Trust.hasTrustRequiringProjectResources(cwd,environmentValue(home))
+    Bool.pick(Unit -> IO(Unit),resources && Bool.not(Settings.isProjectTrusted(settings)),
+      _ => Transcript.showProjectTrustWarning(transcript,"This project is not trusted. Project .pi resources and packages are ignored. Use /trust to save a trust decision, then restart pi."),
+      _ => IO.pure(Unit,Unit{}))(Unit{})
 def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle>,startup: ThemeStartup,+render: Callback.Callback<Unit,Unit>) -> IO(Unit):
   match result startup:
     case Done{(controller,+handle)} ThemeStartup{redraw,queue,initial,failure,_,+selected,owned,_,theme,+transcript,+session,_,builtinDir,_,managed}:
@@ -1464,6 +1482,7 @@ def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & T
         Ref.write(Maybe<&1,ThemeOwned>,owned,Some{ThemeOwned{controller,render}})
         syncSelected(ThemeLive{selected,theme,transcript,render},handle)
         setupManaged(managed,transcript,render)
+        startupProjectTrustWarning(transcript,session)
         startupChangelog(transcript,session,builtinDir)
         startInput(handle,redraw,queue,initial,failure,render)
     case Fail{cause} ThemeStartup{_,_,_,_,stopped,_,_,error,_,_,_,_,_,_,_}:
@@ -1472,17 +1491,13 @@ def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & T
         Ref.write(Maybe<&2,Theme.LoadError>,error,Some{cause})
         settled : Bool <- Deferred.resolve(Unit,stopped,Unit{})
         return Unit{}
-def colorEnvironment(result: Result<&1,&1,U32 & String,String>) -> Maybe<&2,String>:
-  match result:
-    case Fail{_}: None{}
-    case Done{value}: Some{value}
 def themeReady(startup: ThemeStartup,ready: Process.QueryReady) -> IO(Unit):
   match startup ready:
     case ThemeStartup{redraw,queue,initial,failure,stopped,+selected,owned,error,+theme,+transcript,+session,+setting,+builtinDir,+customDir,+managed} Process.QueryReady{queries,terminal,write,requestRender}:
       do IO<Unit>:
         +render : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeLive,~Unit,~Unit,~syncRender,ThemeLive{selected,theme,transcript,requestRender})
         detected : Result<&1,&1,U32 & String,String> <- IO.get_env("COLORFGBG")
-        result : Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle> <- ThemeController.start(Process.QueryReady{queries,terminal,write,render},setting,colorEnvironment(detected),builtinDir,customDir,Color.TrueColor{})
+        result : Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle> <- ThemeController.start(Process.QueryReady{queries,terminal,write,render},setting,environmentValue(detected),builtinDir,customDir,Color.TrueColor{})
         readySelected(result,ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managed},render)
 def closeTheme(current: Maybe<&1,ThemeOwned>) -> IO(Unit):
   match current:
