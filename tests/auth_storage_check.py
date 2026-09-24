@@ -28,6 +28,12 @@ for backend, command in [('bun', ['bun', str(PREFIX) + '.js']), ('native-1', [st
         oauth = {'type': 'oauth', 'refresh': 'refresh-token', 'access': 'access-token', 'expires': 1790000000000}
         assert run('read', 'memory:' + json.dumps({'anthropic': oauth}), 'anthropic') == [oauth]
         print(f'{backend}: returns OAuth credentials unchanged', flush=True)
+        write({'openai': {'type': 'api_key', 'key': 'first'}})
+        assert run('reread', str(auth), 'openai', json.dumps({'openai': {'type': 'api_key', 'key': 'second-key'}})) == [{'type': 'api_key', 'key': 'first'}] * 2 + [{'type': 'api_key', 'key': 'second-key'}]
+        print(f'{backend}: rereads a file replaced after an unchanged read', flush=True)
+        auth.unlink()
+        assert run('reread', str(auth), 'openai', json.dumps({'openai': {'type': 'api_key', 'key': 'created-key'}})) == [None, None, {'type': 'api_key', 'key': 'created-key'}]
+        print(f'{backend}: reads a file created after it was absent', flush=True)
         write({'anthropic': {'type': 'api_key', 'key': '$SCOPED_KEY', 'env': {'SCOPED_KEY': 'scoped-value', 'REGION': 'test-region'}}})
         assert run('read', str(auth), 'anthropic') == [{'type': 'api_key', 'key': 'scoped-value', 'env': {'SCOPED_KEY': 'scoped-value', 'REGION': 'test-region'}}]
         print(f'{backend}: credential-scoped env takes precedence and remains inspectable', flush=True)

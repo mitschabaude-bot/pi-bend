@@ -9,6 +9,7 @@ import ../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../../runtime/src/string.bend as Strings
 import ../../../runtime/src/glob.bend as Glob
 import ../../../runtime/src/record.bend as R
+import ../../../runtime/src/ref.bend as Ref
 import ../../../runtime/src/filesystem.bend as FS
 import ../config.bend as AppConfig
 import ./model-config.bend as Config
@@ -23,8 +24,11 @@ import ./provider-composer.bend as Composer
 def Model() -> Data: Ai.Model<Ai.JsonValue>
 
 # `retained` owns the built-in auth parts that composed providers wrap.
+# `configured` is upstream's snapshot.configuredProviders: computed when the
+# runtime is created and refreshed after credential changes, so availability
+# queries do not read the credential store.
 type ModelRuntime is Data:
-  ModelRuntime{providers: List<&2, AiModels.Provider>, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, compositionErrors: List<&2, String>, retained: List<&2, Composer.Retained>}
+  ModelRuntime{providers: List<&2, AiModels.Provider>, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, compositionErrors: List<&2, String>, retained: List<&2, Composer.Retained>, configured: Ref.Ref<List<&2, String>>}
 
 # Composition (recomposeProvider/rebuildProviders)
 # -----------------------------------------------
@@ -100,9 +104,91 @@ def rebuildProviders(ids: List<&2, String>, +builtins: List<&2, AiModels.Provide
         next : Composition <- recomposeProvider(id, findProvider(builtins, id), Config.getProvider(config, id), composition)
         rebuildProviders(rest, builtins, config, next)
 
-def assembled(composition: Composition, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig) -> ModelRuntime:
+def assembled(composition: Composition, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, authed: Ref.Ref<List<&2, String>>) -> ModelRuntime:
   match composition:
-    case Composition{providers, errors, retained}: ModelRuntime{List.reverse(&2, AiModels.Provider, providers), credentials, context, config, List.reverse(&2, String, errors), retained}
+    case Composition{providers, errors, retained}: ModelRuntime{List.reverse(&2, AiModels.Provider, providers), credentials, context, config, List.reverse(&2, String, errors), retained, authed}
+
+def supportsOAuth(provider: Maybe<&2, AiModels.Provider>) -> Bool:
+  match provider:
+    case Some{AiModels.Provider{_, _, _, Auth.ProviderAuth{_, Some{_}}, _}}: True{}
+    case _: False{}
+
+def unknownProvider(id: String) -> Resolve.ModelsError:
+  Resolve.ModelsError{Resolve.ProviderError{}, "Unknown provider: " ++ id}
+
+def providerRef(provider: AiModels.Provider) -> Resolve.ProviderRef:
+  match provider:
+    case AiModels.Provider{id, _, _, auth, _}: Resolve.ProviderRef{id, auth}
+
+def resolveFor(credentials: Auth.CredentialStore, context: Auth.AuthContext, id: String, +provider: Maybe<&2, AiModels.Provider>, overrides: Resolve.AuthResolutionOverrides) -> IO(Resolve.Resolution()):
+  match provider:
+    case None{}: IO.pure(Resolve.Resolution(), Fail{unknownProvider(id)})
+    case Some{provider}: Resolve.resolveProviderAuth(providerRef(provider), credentials, context, overrides)
+
+def getAuth(runtime: ModelRuntime, +id: String, overrides: Resolve.AuthResolutionOverrides) -> IO(Resolve.Resolution()):
+  match runtime:
+    case ModelRuntime{providers, credentials, context, _, _, _, _}: resolveFor(credentials, context, id, findProvider(providers, id), overrides)
+
+def resolvedAuth(resolution: Resolve.Resolution()) -> Bool:
+  match resolution:
+    case Done{Some{_}}: True{}
+    case _: False{}
+
+def resolvesAuth(runtime: ModelRuntime, id: String) -> IO(Bool):
+  do IO<Bool>:
+    resolution : Resolve.Resolution() <- getAuth(runtime, id, Resolve.noOverrides())
+    return resolvedAuth(resolution)
+
+# A models.json apiKey is checked without resolving it, so a command-backed
+# key is never run for availability (upstream composed ApiKeyAuth.check).
+def checkedConfigured(+runtime: ModelRuntime, +id: String, key: Maybe<&2, String>) -> IO(Bool):
+  match runtime key:
+    case ModelRuntime{_, _, context, _, _, _, _} Some{key}: Composer.checkConfiguredApiKey(key, context)
+    case _ None{}: resolvesAuth(runtime, id)
+
+def configuredKey(entry: Maybe<&2, Config.ModelsJsonProvider>) -> Maybe<&2, String>:
+  match entry:
+    case Some{Config.ModelsJsonProvider{_, _, apiKey, _, _, _, _, _, _, _}}: apiKey
+    case None{}: None{}
+
+def checkedStored(+runtime: ModelRuntime, +id: String, stored: Auth.StoreResult(Maybe<&2, Auth.Credential>)) -> IO(Bool):
+  match runtime stored:
+    case ModelRuntime{providers, _, _, _, _, _, _} Done{Some{Auth.OAuthCredential{_, _, _, _}}}: IO.pure(Bool, supportsOAuth(findProvider(providers, id)))
+    case ModelRuntime{_, _, _, config, _, _, _} Done{None{}}: checkedConfigured(runtime, id, configuredKey(Config.getProvider(config, id)))
+    case _ _: resolvesAuth(runtime, id)
+
+# upstream Models.checkProviderAuth: a stored OAuth credential counts when the
+# provider supports OAuth, without refreshing it; otherwise the provider's
+# API key must resolve.
+def checkProviderAuth(+runtime: ModelRuntime, +id: String) -> IO(Bool):
+  match runtime:
+    case ModelRuntime{_, +credentials, _, _, _, _, _}:
+      do IO<Bool>:
+        stored : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(credentials, id, None{})
+        checkedStored(runtime, id, stored)
+
+def configuredIds(+runtime: ModelRuntime, providers: List<&2, AiModels.Provider>) -> IO(List<&2, String>):
+  match providers:
+    case Nil{}: IO.pure(List<&2, String>, Nil{})
+    case provider <> rest:
+      +id = providerId(provider)
+      do IO<List<&2, String>>:
+        ready : Bool <- checkProviderAuth(runtime, id)
+        +others : List<&2, String> <- configuredIds(runtime, rest)
+        return Bool.pick(List<&2, String>, ready, id <> others, others)
+
+def getProviders(runtime: ModelRuntime) -> List<&2, AiModels.Provider>:
+  match runtime:
+    case ModelRuntime{providers, _, _, _, _, _, _}: providers
+
+def configuredRef(runtime: ModelRuntime) -> Ref.Ref<List<&2, String>>:
+  match runtime: case ModelRuntime{_, _, _, _, _, _, authed}: authed
+
+# upstream runAvailabilityRefresh: every provider's auth is checked again.
+def refreshAvailability(+runtime: ModelRuntime) -> IO(Unit):
+  do IO<Unit>:
+    ids : List<&2, String> <- configuredIds(runtime, getProviders(runtime))
+    Ref.write(List<&2, String>, configuredRef(runtime), ids)
 
 # The credential store is borrowed; the built-in providers are owned from here on.
 def createWithProviders(credentials: Auth.CredentialStore, +builtins: List<&2, AiModels.Provider>, modelsPath: Maybe<&2, String>) -> IO(ModelRuntime):
@@ -110,11 +196,18 @@ def createWithProviders(credentials: Auth.CredentialStore, +builtins: List<&2, A
     +config : Config.ModelConfig <- Config.load(modelsPath)
     composition : Composition <- rebuildProviders(composedIds(builtins, config), builtins, config, Composition{Nil{}, Nil{}, Nil{}})
     context : Auth.AuthContext <- Context.defaultProviderAuthContext()
-    return assembled(composition, credentials, context, config)
+    authed : Ref.Ref<List<&2, String>> <- Ref.new(List<&2, String>, Nil{})
+    +runtime : ModelRuntime <- IO.pure(ModelRuntime, assembled(composition, credentials, context, config, authed))
+    refreshAvailability(runtime)
+    return runtime
 
 # Providers without models.json, as test fixtures build them.
-def fromProviders(providers: List<&2, AiModels.Provider>, credentials: Auth.CredentialStore, context: Auth.AuthContext) -> ModelRuntime:
-  ModelRuntime{providers, credentials, context, Config.empty(), Nil{}, Nil{}}
+def fromProviders(providers: List<&2, AiModels.Provider>, credentials: Auth.CredentialStore, context: Auth.AuthContext) -> IO(ModelRuntime):
+  do IO<ModelRuntime>:
+    authed : Ref.Ref<List<&2, String>> <- Ref.new(List<&2, String>, Nil{})
+    +runtime : ModelRuntime <- IO.pure(ModelRuntime, ModelRuntime{providers, credentials, context, Config.empty(), Nil{}, Nil{}, authed})
+    refreshAvailability(runtime)
+    return runtime
 
 def locatedPath(path: Result<&2, &2, FS.Error, String>) -> Maybe<&2, String>:
   match path:
@@ -152,11 +245,13 @@ def disposeProviders(providers: List<&2, AiModels.Provider>) -> IO(Unit):
 
 def dispose(runtime: ModelRuntime) -> IO(Unit):
   match runtime:
-    case ModelRuntime{providers, _, context, _, _, retained}:
+    case ModelRuntime{providers, _, context, _, _, retained, authed}:
       do IO<Unit>:
         disposeProviders(providers)
         Composer.disposeRetained(retained)
         Auth.disposeContext(context)
+        old : List<&2, String> <- Ref.dispose(List<&2, String>, authed)
+        return Unit{}
 
 # models.json load and provider composition errors, as upstream getError().
 def joinedErrors(configError: Maybe<&2, String>, errors: List<&2, String>) -> Maybe<&2, String>:
@@ -167,18 +262,14 @@ def joinedErrors(configError: Maybe<&2, String>, errors: List<&2, String>) -> Ma
 
 def getError(runtime: ModelRuntime) -> Maybe<&2, String>:
   match runtime:
-    case ModelRuntime{_, _, _, config, errors, _}: joinedErrors(Config.getError(config), errors)
+    case ModelRuntime{_, _, _, config, errors, _, _}: joinedErrors(Config.getError(config), errors)
 
 def getModelConfig(runtime: ModelRuntime) -> Config.ModelConfig:
   match runtime:
-    case ModelRuntime{_, _, _, config, _, _}: config
+    case ModelRuntime{_, _, _, config, _, _, _}: config
 
 # Catalog
 # -------
-
-def getProviders(runtime: ModelRuntime) -> List<&2, AiModels.Provider>:
-  match runtime:
-    case ModelRuntime{providers, _, _, _, _, _}: providers
 
 def getProvider(runtime: ModelRuntime, id: String) -> Maybe<&2, AiModels.Provider>:
   findProvider(getProviders(runtime), id)
@@ -215,22 +306,6 @@ def getModel(runtime: ModelRuntime, provider: String, id: String) -> Maybe<&2, M
 
 # Auth
 # ----
-
-def providerRef(provider: AiModels.Provider) -> Resolve.ProviderRef:
-  match provider:
-    case AiModels.Provider{id, _, _, auth, _}: Resolve.ProviderRef{id, auth}
-
-def unknownProvider(id: String) -> Resolve.ModelsError:
-  Resolve.ModelsError{Resolve.ProviderError{}, "Unknown provider: " ++ id}
-
-def resolveFor(credentials: Auth.CredentialStore, context: Auth.AuthContext, id: String, +provider: Maybe<&2, AiModels.Provider>, overrides: Resolve.AuthResolutionOverrides) -> IO(Resolve.Resolution()):
-  match provider:
-    case None{}: IO.pure(Resolve.Resolution(), Fail{unknownProvider(id)})
-    case Some{provider}: Resolve.resolveProviderAuth(providerRef(provider), credentials, context, overrides)
-
-def getAuth(runtime: ModelRuntime, +id: String, overrides: Resolve.AuthResolutionOverrides) -> IO(Resolve.Resolution()):
-  match runtime:
-    case ModelRuntime{providers, credentials, context, _, _, _}: resolveFor(credentials, context, id, findProvider(providers, id), overrides)
 
 def sameHeaderName(+left: String, +right: String) -> Bool: String.eq(String.to_lower(left), String.to_lower(right))
 
@@ -296,63 +371,45 @@ def getModelAuth(+runtime: ModelRuntime, +model: Model(), +overrides: Resolve.Au
     resolution : Resolve.Resolution() <- getAuth(runtime, Ai.modelProvider(model), overrides)
     withModelHeaders(model, Config.getProvider(getModelConfig(runtime), Ai.modelProvider(model)), resolution, overrideEnv(overrides))
 
-def configured(resolution: Resolve.Resolution()) -> Bool:
-  match resolution:
-    case Done{Some{_}}: True{}
-    case _: False{}
+def withoutId(ids: List<&2, String>, +id: String) -> List<&2, String>:
+  match ids:
+    case Nil{}: Nil{}
+    case +other <> +rest: Bool.pick(List<&2, String>, String.eq(other, id), withoutId(rest, id), other <> withoutId(rest, id))
 
-def resolvesAuth(runtime: ModelRuntime, id: String) -> IO(Bool):
+def withProvider(ready: Bool, id: String, others: List<&2, String>) -> List<&2, String>:
+  match ready:
+    case True{}: id <> others
+    case False{}: others
+
+# upstream refreshProviderAvailability: one provider after its credentials
+# changed (login, logout, a runtime API key).
+def refreshProviderAvailability(+runtime: ModelRuntime, +id: String) -> IO(Unit):
+  do IO<Unit>:
+    ready : Bool <- checkProviderAuth(runtime, id)
+    Ref.modify(List<&2, String>, Unit, configuredRef(runtime), ids => (withProvider(ready, id, withoutId(ids, id)), Unit{}))
+
+def containsProvider(ids: List<&2, String>, +id: String) -> Bool:
+  match ids:
+    case Nil{}: False{}
+    case other <> rest: String.eq(other, id) || containsProvider(rest, id)
+
+def hasConfiguredAuth(runtime: ModelRuntime, +id: String) -> IO(Bool):
   do IO<Bool>:
-    resolution : Resolve.Resolution() <- getAuth(runtime, id, Resolve.noOverrides())
-    return configured(resolution)
+    ids : List<&2, String> <- Ref.read(List<&2, String>, configuredRef(runtime))
+    return containsProvider(ids, id)
 
-def supportsOAuth(provider: Maybe<&2, AiModels.Provider>) -> Bool:
-  match provider:
-    case Some{AiModels.Provider{_, _, _, Auth.ProviderAuth{_, Some{_}}, _}}: True{}
-    case _: False{}
-
-def configuredKey(entry: Maybe<&2, Config.ModelsJsonProvider>) -> Maybe<&2, String>:
-  match entry:
-    case Some{Config.ModelsJsonProvider{_, _, apiKey, _, _, _, _, _, _, _}}: apiKey
-    case None{}: None{}
-
-# A models.json apiKey is checked without resolving it, so a command-backed
-# key is never run for availability (upstream composed ApiKeyAuth.check).
-def checkedConfigured(+runtime: ModelRuntime, +id: String, key: Maybe<&2, String>) -> IO(Bool):
-  match runtime key:
-    case ModelRuntime{_, _, context, _, _, _} Some{key}: Composer.checkConfiguredApiKey(key, context)
-    case _ None{}: resolvesAuth(runtime, id)
-
-def checkedStored(+runtime: ModelRuntime, +id: String, stored: Auth.StoreResult(Maybe<&2, Auth.Credential>)) -> IO(Bool):
-  match runtime stored:
-    case ModelRuntime{providers, _, _, _, _, _} Done{Some{Auth.OAuthCredential{_, _, _, _}}}: IO.pure(Bool, supportsOAuth(findProvider(providers, id)))
-    case ModelRuntime{_, _, _, config, _, _} Done{None{}}: checkedConfigured(runtime, id, configuredKey(Config.getProvider(config, id)))
-    case _ _: resolvesAuth(runtime, id)
-
-# upstream Models.checkProviderAuth: a stored OAuth credential counts when the
-# provider supports OAuth, without refreshing it; otherwise the provider's
-# API key must resolve.
-def hasConfiguredAuth(+runtime: ModelRuntime, +id: String) -> IO(Bool):
-  match runtime:
-    case ModelRuntime{_, +credentials, _, _, _, _}:
-      do IO<Bool>:
-        stored : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(credentials, id, None{})
-        checkedStored(runtime, id, stored)
-
-def availableProviders(+runtime: ModelRuntime, providers: List<&2, AiModels.Provider>) -> IO(List<&2, AiModels.Provider>):
+def configuredProviders(+ids: List<&2, String>, providers: List<&2, AiModels.Provider>) -> List<&2, AiModels.Provider>:
   match providers:
-    case Nil{}: IO.pure(List<&2, AiModels.Provider>, Nil{})
+    case Nil{}: Nil{}
     case +provider <> rest:
-      do IO<List<&2, AiModels.Provider>>:
-        ready : Bool <- hasConfiguredAuth(runtime, providerId(provider))
-        +others : List<&2, AiModels.Provider> <- availableProviders(runtime, rest)
-        return Bool.pick(List<&2, AiModels.Provider>, ready, provider <> others, others)
+      +tail = configuredProviders(ids, rest)
+      Bool.pick(List<&2, AiModels.Provider>, containsProvider(ids, providerId(provider)), provider <> tail, tail)
 
-# Models whose provider resolves auth now.
+# Models whose provider had configured auth at the last availability refresh.
 def getAvailable(+runtime: ModelRuntime) -> IO(List<&2, Model()>):
   do IO<List<&2, Model()>>:
-    providers : List<&2, AiModels.Provider> <- availableProviders(runtime, getProviders(runtime))
-    return allModels(providers)
+    +ids : List<&2, String> <- Ref.read(List<&2, String>, configuredRef(runtime))
+    return allModels(configuredProviders(ids, getProviders(runtime)))
 
 # Model resolution (model-resolver.ts)
 # ------------------------------------

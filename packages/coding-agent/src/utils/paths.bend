@@ -146,3 +146,17 @@ def findPath(candidates: List<&2,String>, +original: String, found: Maybe<&2,Str
 def resolvedReadPath(environment: Environment, +original: String) -> IO(String):
   +nfd = Unicode.nfd(normalization(environment),original)
   findPath(original <> screenshot(original,"") <> nfd <> curly(original,"") <> curly(nfd,"") <> Nil{},original,None{})
+
+# upstream getFileRevision: a stamp that changes when the file does. The
+# filesystem primitives expose the size and the modification time (seconds
+# and nanoseconds), not upstream's device, inode and change time, so a
+# same-size rewrite within one mtime tick is not observed.
+def revisionOf(size: Result<&1,&1,U32 & String,U32 & U32>,modified: Result<&1,&1,U32 & String,U32 & U32 & U32>) -> Maybe<&2,String>:
+  match size modified:
+    case Done{(high,low)} Done{(secondsHigh,(secondsLow,nanos))}: Some{U32.show(high) ++ ":" ++ U32.show(low) ++ ":" ++ U32.show(secondsHigh) ++ ":" ++ U32.show(secondsLow) ++ ":" ++ U32.show(nanos)}
+    case _ _: None{}
+def getFileRevision(+path: String) -> IO(Maybe<&2,String>):
+  do IO<Maybe<&2,String>>:
+    size : Result<&1,&1,U32 & String,U32 & U32> <- File.size_bytes(path)
+    modified : Result<&1,&1,U32 & String,U32 & U32 & U32> <- File.modified_time(path)
+    return revisionOf(size,modified)

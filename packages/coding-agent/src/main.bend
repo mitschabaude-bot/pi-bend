@@ -944,11 +944,16 @@ def printHosted(options: Print.PrintModeOptions, +host: Host()) -> IO(Unit):
 
 type Catalog is Data:
   Catalog{available: List<&2,Models.Model()>, scope: List<&2,Models.ScopedModel>}
+# The catalog follows credential changes (login, logout) since the last refresh.
+def refreshedAvailable(+models: Models.ModelRuntime) -> IO(List<&2,Models.Model()>):
+  do IO<List<&2,Models.Model()>>:
+    Models.refreshAvailability(models)
+    Models.getAvailable(models)
 def catalogPair(+scope: List<&2,Models.ScopedModel>, pair: Runtime.AgentRuntime & Models.ModelRuntime) -> IO(Services & Catalog):
   match pair:
     case (runtime, models):
       do IO<Services & Catalog>:
-        available : List<&2,Models.Model()> <- Models.getAvailable(models)
+        available : List<&2,Models.Model()> <- refreshedAvailable(models)
         return (Services{runtime, scope}, Catalog{available, scope})
 def catalogOf(services: Services) -> IO(Services & Catalog):
   match services:

@@ -33,4 +33,4 @@ def create(sources: List<&2, Source>) -> IO(Models.ModelRuntime):
     store : Auth.CredentialStore <- storeOf(AuthStorage.borrow(owner))
     available : List<&2, AiModels.Provider> <- providers(sources)
     context : Auth.AuthContext <- Context.defaultProviderAuthContext()
-    return Models.fromProviders(available, store, context)
+    Models.fromProviders(available, store, context)

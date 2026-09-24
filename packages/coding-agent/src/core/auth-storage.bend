@@ -17,6 +17,7 @@ import ./resolve-config-value.bend as ConfigValue
 import ../../../runtime/src/file-lock.bend as Lock
 import ../../../runtime/src/random.bend as Random
 import ../../../runtime/src/date.bend as Date
+import ../utils/paths.bend as Paths
 
 # CredentialStore implementation backed by auth.json. Provider auth
 # orchestration belongs to the model runtime and pi-ai auth resolution.
@@ -170,8 +171,10 @@ def serialize(data: AuthStorageData()) -> String:
 # document; the memory backend keeps the serialized document. Transactions
 # use a shared directory lease across processes and one serialized resource
 # within each process.
+# `revision` is the file revision the snapshot's data was read at (upstream
+# readState.revision); a write clears it so the next read reloads.
 type Backend is Data:
-  FileBackend{path: String}
+  FileBackend{path: String, revision: Maybe<&2, String>}
   MemoryBackend{content: Maybe<&2, String>}
 
 type Snapshot is Data:
@@ -186,7 +189,7 @@ def decoded(result: Result<&2, &2, FS.Error, List<&2, U32>>) -> Outcome(Maybe<&2
 def readContent(backend: Backend) -> IO(Outcome(Maybe<&2, String>)):
   match backend:
     case MemoryBackend{content}: IO.pure(Outcome(Maybe<&2, String>), Done{content})
-    case FileBackend{path}:
+    case FileBackend{path, _}:
       do IO<Outcome(Maybe<&2, String>)>:
         bytes : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile(path)
         return decoded(bytes)
@@ -210,11 +213,11 @@ def dirname(+path: String) -> String: Path.join(path, "..")
 def writeContentUnchecked(backend: Backend, +content: String) -> IO(Backend & Outcome(Unit)):
   match backend:
     case MemoryBackend{_}: IO.pure(Backend & Outcome(Unit), (MemoryBackend{Some{content}}, Done{Unit{}}))
-    case FileBackend{+path}:
+    case FileBackend{+path, _}:
       do IO<Backend & Outcome(Unit)>:
         parent : Result<&2, &2, FS.Error, Unit> <- FS.mkdir(dirname(path))
         result : Outcome(Unit) <- writtenParent(path, content, parent)
-        return (FileBackend{path}, result)
+        return (FileBackend{path, None{}}, result)
 
 def aborted(signal: Auth.Signal()) -> IO(Bool):
   match signal:
@@ -334,7 +337,7 @@ def lockParent(~A: Data,path: String,snapshot: Snapshot,+signal: Auth.Signal(),o
 def transaction(~A: Data,+snapshot: Snapshot,+signal: Auth.Signal(),operation: Access -> Snapshot -> IO(Snapshot & Outcome(A))) -> IO(Snapshot & Outcome(A)):
   match snapshot:
     case Snapshot{MemoryBackend{_},_}: runAccess(~A,snapshot,operation,Access{None{},signal})
-    case Snapshot{FileBackend{+path},_}:
+    case Snapshot{FileBackend{+path,_},_}:
       do IO<Snapshot & Outcome(A)>:
         parent : Result<&2,&2,FS.Error,Unit> <- FS.mkdir(dirname(path))
         lockParent(~A,path,snapshot,signal,operation,parent)
@@ -383,8 +386,8 @@ def initial(result: Outcome(AuthStorageData())) -> AuthStorageData():
 # surfaces its error on the first operation that needs the file.
 def create(+path: String) -> IO(AuthStorageOwner):
   do IO<AuthStorageOwner>:
-    result : Outcome(AuthStorageData()) <- loadData(FileBackend{path})
-    createWith(FileBackend{path}, initial(result))
+    result : Outcome(AuthStorageData()) <- loadData(FileBackend{path, None{}})
+    createWith(FileBackend{path, None{}}, initial(result))
 
 def inMemory(+data: AuthStorageData()) -> IO(AuthStorageOwner):
   createWith(MemoryBackend{Some{serialize(data)}}, data)
@@ -410,27 +413,60 @@ def dispose(owner: AuthStorageOwner) -> IO(Unit):
 
 # Reads without a signal retain the last valid snapshot if reloading fails.
 # Signalled reads propagate cancellation and reload errors, as upstream does.
-def latest(snapshot: Snapshot, reloaded: Outcome(AuthStorageData())) -> Snapshot & Outcome(AuthStorageData()):
-  match snapshot reloaded:
-    case Snapshot{backend, _} Done{+data}: (Snapshot{backend, data}, Done{data})
-    case snapshot Fail{error}: (snapshot,Fail{error})
+def latest(snapshot: Snapshot, revised: Backend, reloaded: Outcome(AuthStorageData())) -> Snapshot & Outcome(AuthStorageData()):
+  match reloaded:
+    case Done{+data}: (Snapshot{revised, data}, Done{data})
+    case Fail{error}: (snapshot,Fail{error})
+
+# The revision is taken under the lock, after reading (upstream reload). A
+# file absent at a successful read is recorded as such: upstream's concurrent
+# availability checks share one reload of a missing file, which sequential
+# checks reproduce by not locking again while it stays absent.
+def observed(backend: Backend) -> IO(Backend):
+  match backend:
+    case FileBackend{+path, _}:
+      do IO<Backend>:
+        revision : Maybe<&2, String> <- Paths.getFileRevision(path)
+        return FileBackend{path, Some{Maybe.default(&2, String, revision, "absent")}}
+    case memory: IO.pure(Backend, memory)
 
 def reload(access: Access,snapshot: Snapshot) -> IO(Snapshot & Outcome(AuthStorageData())):
   match snapshot:
     case Snapshot{+backend, data}:
       do IO<Snapshot & Outcome(AuthStorageData())>:
         reloaded : Outcome(AuthStorageData()) <- loadData(backend)
-        return latest(Snapshot{backend, data}, reloaded)
+        revised : Backend <- observed(backend)
+        return latest(Snapshot{backend, data}, revised, reloaded)
 
 def fallbackRead(signal: Auth.Signal(),pair: Snapshot & Outcome(AuthStorageData())) -> Snapshot & Outcome(AuthStorageData()):
   match signal pair:
     case None{} Tuple{Snapshot{backend,+data},Fail{_}}: (Snapshot{backend,data},Done{data})
     case _ pair: pair
 
-def readTransaction(+signal: Auth.Signal(),snapshot: Snapshot) -> IO(Snapshot & Outcome(AuthStorageData())):
+def lockedRead(+signal: Auth.Signal(),snapshot: Snapshot) -> IO(Snapshot & Outcome(AuthStorageData())):
   do IO<Snapshot & Outcome(AuthStorageData())>:
     result : Snapshot & Outcome(AuthStorageData()) <- transaction(~AuthStorageData(),snapshot,signal,reload)
     return fallbackRead(signal,result)
+
+def sameRevision(current: Maybe<&2, String>, +seen: String) -> Bool:
+  match current:
+    case Some{revision}: String.eq(revision, seen)
+    case None{}: String.eq(seen, "absent")
+
+def currentOr(+signal: Auth.Signal(),unchanged: Bool,snapshot: Snapshot) -> IO(Snapshot & Outcome(AuthStorageData())):
+  match unchanged snapshot:
+    case True{} Snapshot{backend, +data}: IO.pure(Snapshot & Outcome(AuthStorageData()), (Snapshot{backend, data}, Done{data}))
+    case False{} snapshot: lockedRead(signal,snapshot)
+
+# upstream readLatestData: an unchanged file revision serves the snapshot
+# without taking the lock.
+def readTransaction(+signal: Auth.Signal(),snapshot: Snapshot) -> IO(Snapshot & Outcome(AuthStorageData())):
+  match snapshot:
+    case Snapshot{FileBackend{+path, Some{+seen}}, data}:
+      do IO<Snapshot & Outcome(AuthStorageData())>:
+        current : Maybe<&2, String> <- Paths.getFileRevision(path)
+        currentOr(signal,sameRevision(current,seen),Snapshot{FileBackend{path, Some{seen}}, data})
+    case other: lockedRead(signal,other)
 
 def readUnlessAborted(signal: Auth.Signal(),cancelled: Bool, state: Serial.Handle<Snapshot>) -> IO(Outcome(AuthStorageData())):
   match cancelled:
@@ -604,5 +640,5 @@ def storedOrNone(result: Outcome(AuthStorageData())) -> Maybe<&2, AuthStorageDat
 # One-off read of a stored credential without a store or key resolution.
 def readStoredCredential(providerId: String, path: String) -> IO(Maybe<&2, Auth.Credential>):
   do IO<Maybe<&2, Auth.Credential>>:
-    result : Outcome(AuthStorageData()) <- loadData(FileBackend{path})
+    result : Outcome(AuthStorageData()) <- loadData(FileBackend{path, None{}})
     return Maybe.bind(&2, AuthStorageData(), Auth.Credential, storedOrNone(result), data => R.get(Auth.Credential, data, providerId))

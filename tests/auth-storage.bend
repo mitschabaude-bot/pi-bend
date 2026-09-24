@@ -9,6 +9,7 @@ import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/f64.bend as F
+import ../packages/runtime/src/filesystem.bend as FS
 
 # Fixture for auth-storage and runtime-credentials. Every command opens the
 # storage at <path> ("memory:<json>" for in-memory storage), performs one
@@ -171,8 +172,27 @@ def withStorage(pair: Storage.AuthStorageOwner & Storage.AuthStorage, values: Li
         operate(storage, values)
         Storage.dispose(owner)
 
+# One storage reads, the file is replaced behind it, and it reads again: the
+# second read observes the edit (upstream readLatestData's file revision).
+def rereadWith(pair: Storage.AuthStorageOwner & Storage.AuthStorage, location: String, +providerId: String, json: String) -> IO(Unit):
+  match pair:
+    case Tuple{owner, +storage}:
+      do IO<Unit>:
+        first : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Storage.read(storage, providerId, None{})
+        IO.print(outcome(Maybe<&2, Auth.Credential>, credentialValue, first))
+        again : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Storage.read(storage, providerId, None{})
+        IO.print(outcome(Maybe<&2, Auth.Credential>, credentialValue, again))
+        written : Result<&2, &2, FS.Error, Unit> <- FS.writeFile(location, json)
+        edited : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Storage.read(storage, providerId, None{})
+        IO.print(outcome(Maybe<&2, Auth.Credential>, credentialValue, edited))
+        Storage.dispose(owner)
+
 def run(values: List<String>) -> IO(Unit):
   match values:
+    case "reread" <> +location <> providerId <> json <> Nil{}:
+      do IO<Unit>:
+        owner : Storage.AuthStorageOwner <- open(location)
+        rereadWith(Storage.borrow(owner), location, providerId, json)
     case operation <> location <> rest:
       do IO<Unit>:
         owner : Storage.AuthStorageOwner <- open(location)

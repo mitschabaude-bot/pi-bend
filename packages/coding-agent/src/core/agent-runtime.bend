@@ -865,9 +865,15 @@ def withModel(+options: CreateOptions, transport: Transport, storage: Storage.Au
   match options:
     case CreateOptions{cwd, agentDir, _, _, +packageDir, _, _, apiKey, thinking, _, _, names, _, seed, settings, _}: withModelFields(cwd, agentDir, packageDir, apiKey, thinking, seed, settings, names, transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected, LoadoutSource{paths, options, packageDir})
 
-def applyKey(credentials: Runtime.RuntimeCredentials, apiKey: Maybe<&2, String>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Unit):
+# A runtime API key changes the provider's availability (upstream
+# setRuntimeApiKey refreshes it).
+def applyKey(credentials: Runtime.RuntimeCredentials, +models: Models.ModelRuntime, apiKey: Maybe<&2, String>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Unit):
   match apiKey selected:
-    case Some{key} Done{Some{model}}: Runtime.setRuntimeApiKey(credentials, Models.modelProvider(model), key)
+    case Some{key} Done{Some{model}}:
+      +provider = Models.modelProvider(model)
+      do IO<Unit>:
+        Runtime.setRuntimeApiKey(credentials, provider, key)
+        Models.refreshProviderAvailability(models, provider)
     case _ _: IO.pure(Unit, Unit{})
 
 def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, +paths: Paths.Environment, borrowed: Storage.AuthStorageOwner & Storage.AuthStorage) -> IO(Outcome(AgentRuntime)):
@@ -883,7 +889,7 @@ def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, 
         +resolution : Models.ResolveCliModelResult <- cliResolution(models, options, packageDir)
         reportResolution(resolution)
         +selected : Result<&2, &2, String, Maybe<&2, Models.Model()>> <- selectModel(models, options, resolution)
-        applyKey(credentials, apiKey, selected)
+        applyKey(credentials, models, apiKey, selected)
         prompt : Result<&2, &2, String, Prepared> <- preparedFor(paths, options, packageDir)
         withModel(withSuffixThinking(options, resolution), Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected)
 
