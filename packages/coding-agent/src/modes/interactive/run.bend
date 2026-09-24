@@ -36,9 +36,11 @@ import ../../core/session-persistence.bend as Persistence
 import ../../core/export-html/index.bend as Export
 import ../../core/prompt-templates.bend as Templates
 import ../../core/session-manager.bend as Tree
+import ../../core/session-stats.bend as Stats
 import ../../core/tools/index.bend as Tools
 import ../../core/settings-manager.bend as Settings
 import ../../core/model-runtime.bend as Models
+import ../../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../core/keybindings.bend as AppKeys
 import ./components/footer.bend as Footer
 import ./components/header.bend as Header
@@ -85,15 +87,6 @@ def converted(result: Result<&2,&2,F.Error,Nat>) -> Nat:
     case Done{number}: number
     case Fail{_}: 0n
 def count(value: F64) -> Nat: converted(F.convert(value))
-def thinking(level: Ai.ModelThinkingLevel) -> String:
-  match level:
-    case Ai.Off{}: "off"
-    case Ai.Thinking{Ai.Minimal{}}: "minimal"
-    case Ai.Thinking{Ai.Low{}}: "low"
-    case Ai.Thinking{Ai.Medium{}}: "medium"
-    case Ai.Thinking{Ai.High{}}: "high"
-    case Ai.Thinking{Ai.XHigh{}}: "xhigh"
-    case Ai.Thinking{Ai.Max{}}: "max"
 def model(value: Ai.Model<Ai.JsonValue>) -> Footer.Model:
   match value:
     case Ai.Model{id,_,_,provider,_,reasoning,_,_,_,_,_,window,_,_,_,_}:
@@ -102,24 +95,17 @@ def usage(value: Ai.Usage) -> Footer.Usage:
   match value:
     case Ai.Usage{input,output,read,write,_,_,_,Ai.UsageCost{_,_,_,_,cost}}:
       Footer.Usage{count(input),count(output),count(read),count(write),cost}
-def usageTokens(value: Ai.Usage) -> F64:
-  match value: case Ai.Usage{input,_,read,write,_,_,_,_}: F.add(input,F.add(read,write))
-def percent(tokens: F64,chosen: Maybe<&2,Footer.Model>) -> Maybe<&2,F64>:
-  match chosen:
-    case Some{Footer.Model{_,_,_,+window}}:
-      Bool.pick(Maybe<&2,F64>,Nat.is_eq(window,0n),None{},Some{F.multiply(F.divide(tokens,F.fromNat(window)),F.fromNat(100n))})
-    case None{}: None{}
 def latestModel(previous: Maybe<&2,Footer.Model>,+message: Ai.AssistantMessage<Schema.Value,Unit>) -> Maybe<&2,Footer.Model>:
   match previous:
     case Some{Footer.Model{_,_,reasoning,window}}: Some{Footer.Model{Ai.assistantModel(Schema.Value,Unit,message),Ai.assistantProvider(Schema.Value,Unit,message),reasoning,window}}
     case None{}: previous
 def withAssistant(state: Footer.State,+message: Ai.AssistantMessage<Schema.Value,Unit>) -> Footer.State:
   match state:
-    case Footer.State{cwd,home,branch,name,chosen,thinkingLevel,totals,_,_,window,providers,subscription,auto,experimental,statuses}:
+    case Footer.State{cwd,home,branch,name,chosen,thinkingLevel,totals,_,context,window,providers,subscription,auto,experimental,statuses}:
       +raw = Ai.assistantUsage(Schema.Value,Unit,message)
       +latest = usage(raw)
       +nextModel = latestModel(chosen,message)
-      Footer.State{cwd,home,branch,name,nextModel,thinkingLevel,Footer.addUsage(totals,latest),Some{latest},percent(usageTokens(raw),nextModel),window,providers,subscription,auto,experimental,statuses}
+      Footer.State{cwd,home,branch,name,nextModel,thinkingLevel,totals,Some{latest},context,window,providers,subscription,auto,experimental,statuses}
 def seedFooter(messages: List<&2,Session.Message()>,state: Footer.State) -> Footer.State:
   match messages:
     case Nil{}: state
@@ -127,7 +113,7 @@ def seedFooter(messages: List<&2,Session.Message()>,state: Footer.State) -> Foot
     case _ <> rest: seedFooter(rest,state)
 def initialFooter(+agentState: Session.AgentState(),messages: List<&2,Session.Message()>,cwd: String,home: Maybe<&2,String>) -> Footer.State:
   +chosen = Maybe.map(&2,Ai.Model<Ai.JsonValue>,Footer.Model,model,Session.stateModel(agentState))
-  seedFooter(messages,Footer.State{cwd,home,None{},None{},chosen,thinking(Session.stateThinking(agentState)),Footer.emptyUsage(),None{},None{},None{},1n,False{},False{},False{},Nil{}})
+  seedFooter(messages,Footer.State{cwd,home,None{},None{},chosen,Levels.name(Session.stateThinking(agentState)),Footer.emptyUsage(),None{},None{},None{},1n,False{},False{},False{},Nil{}})
 def withStatus(state: Footer.State,statuses: List<&2,Footer.Status>) -> Footer.State:
   match state:
     case Footer.State{cwd,home,branch,name,chosen,thinkingLevel,totals,latest,context,window,providers,subscription,auto,experimental,_}:
@@ -135,11 +121,11 @@ def withStatus(state: Footer.State,statuses: List<&2,Footer.Status>) -> Footer.S
 def withThinking(state: Footer.State,level: Ai.ModelThinkingLevel) -> Footer.State:
   match state:
     case Footer.State{cwd,home,branch,name,chosen,_,totals,latest,context,window,providers,subscription,auto,experimental,statuses}:
-      Footer.State{cwd,home,branch,name,chosen,thinking(level),totals,latest,context,window,providers,subscription,auto,experimental,statuses}
+      Footer.State{cwd,home,branch,name,chosen,Levels.name(level),totals,latest,context,window,providers,subscription,auto,experimental,statuses}
 def withChosen(state: Footer.State,+agentState: Session.AgentState()) -> Footer.State:
   match state:
     case Footer.State{cwd,home,branch,name,_,_,totals,latest,context,window,providers,subscription,auto,experimental,statuses}:
-      Footer.State{cwd,home,branch,name,Maybe.map(&2,Ai.Model<Ai.JsonValue>,Footer.Model,model,Session.stateModel(agentState)),thinking(Session.stateThinking(agentState)),totals,latest,context,window,providers,subscription,auto,experimental,statuses}
+      Footer.State{cwd,home,branch,name,Maybe.map(&2,Ai.Model<Ai.JsonValue>,Footer.Model,model,Session.stateModel(agentState)),Levels.name(Session.stateThinking(agentState)),totals,latest,context,window,providers,subscription,auto,experimental,statuses}
 def withName(state: Footer.State,name: Maybe<&2,String>) -> Footer.State:
   match state:
     case Footer.State{cwd,home,branch,_,chosen,thinkingLevel,totals,latest,context,window,providers,subscription,auto,experimental,statuses}:
@@ -418,7 +404,8 @@ def openSessionSelector(mode: Selector.Mode,session: Ref.Ref<Session.AgentSessio
   do IO<Unit>:
     +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
     current : Session.Session() <- Session.sessionOf(live)
-    filter : Settings.TreeFilterMode <- Session.treeFilterMode(live)
+    settings : Settings.SettingsManager <- Session.getSettings(live)
+    filter : Settings.TreeFilterMode = Settings.getTreeFilterMode(settings)
     selectorFromState(mode,Session.stateOf(current),selectorFilter(filter),selector,failure)
     Interactive.requestRender(redraw)
 def treeObserved(input: CommandObservation,mode: Selector.Mode) -> IO(Unit):
@@ -543,7 +530,7 @@ def promptFailed(input: WorkerFailure,value: Controller.PromptFailure) -> IO(Uni
         Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.PromptFailure{message}})
         Interactive.requestRender(redraw)
 
-type FooterPaint is Data: FooterPaint{state: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,theme: Ref.Ref<Theme.Theme>}
+type FooterPaint is Data: FooterPaint{state: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>}
 type FooterOwner is Data: FooterOwner{state: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
 
 def appendedFailure(lines: List<&2,String>,plain: String,painted: Result<&2,&2,Theme.Error,String>) -> List<&2,String>:
@@ -559,23 +546,41 @@ def withFailure(lines: List<&2,String>,failure: Maybe<&2,Interactive.SubmissionF
     case Some{value}:
       +plain = Utils.truncateToWidth("Error: " ++ Interactive.failureText(value),width,"...",False{})
       appendedFailure(lines,plain,Theme.foreground(theme,"error",plain))
+def contextPercent(value: Maybe<&2,Stats.ContextUsage>) -> Maybe<&2,F64>:
+  match value:
+    case None{}: None{}
+    case Some{Stats.ContextUsage{_,_,percent}}: percent
+def contextWindow(value: Maybe<&2,Stats.ContextUsage>) -> Maybe<&2,Nat>:
+  match value:
+    case None{}: None{}
+    case Some{Stats.ContextUsage{_,window,_}}: Some{count(window)}
+def withStats(state: Footer.State,stats: Stats.Stats) -> Footer.State:
+  match state stats:
+    case Footer.State{cwd,home,branch,name,chosen,thinkingLevel,_,latest,_,_,providers,subscription,auto,experimental,statuses} Stats.Stats{_,_,Stats.Totals{_,_,_,_,_,input,output,read,write,cost},+context}:
+      Footer.State{cwd,home,branch,name,chosen,thinkingLevel,Footer.Usage{count(input),count(output),count(read),count(write),cost},latest,contextPercent(context),contextWindow(context),providers,subscription,auto,experimental,statuses}
+def statsState(state: Footer.State,result: Result<&2,&2,Tree.Error,Stats.Stats>) -> Footer.State:
+  match result:
+    case Done{stats}: withStats(state,stats)
+    case Fail{_}: state
 def footerLinesCopied(paint: FooterPaint,+width: Nat) -> IO(List<&2,String>):
   match paint:
-    case FooterPaint{state,failure,+theme}:
+    case FooterPaint{state,failure,+theme,session}:
       do IO<List<&2,String>>:
         +selected : Theme.Theme <- Ref.read(Theme.Theme,theme)
         current : Footer.State <- Ref.read(Footer.State,state)
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        stats : Result<&2,&2,Tree.Error,Stats.Stats> <- Session.getSessionStats(live)
         failed : Maybe<&2,Interactive.SubmissionFailure> <- Ref.read(Maybe<&2,Interactive.SubmissionFailure>,failure)
-        lines : List<&2,String> <- Footer.render(current,selected,width)
+        lines : List<&2,String> <- Footer.render(statsState(current,stats),selected,width)
         return withFailure(lines,failed,selected,width)
 def footerLines(paint: FooterPaint,width: Nat) -> IO(List<&2,String>):
   footerLinesCopied(paint,width)
 def ignore(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
-def footer(initial: Footer.State,theme: Ref.Ref<Theme.Theme>) -> IO(FooterOwner):
+def footer(initial: Footer.State,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>) -> IO(FooterOwner):
   do IO<FooterOwner>:
     +state : Ref.Ref<Footer.State> <- Ref.new(Footer.State,initial)
     +failure : Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>> <- Ref.new(Maybe<&2,Interactive.SubmissionFailure>,None{})
-    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~FooterPaint,~Nat,~List<&2,String>,~footerLines,FooterPaint{state,failure,theme})
+    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~FooterPaint,~Nat,~List<&2,String>,~footerLines,FooterPaint{state,failure,theme,session})
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~ignore,Unit{})
     return FooterOwner{state,failure,Component.Component{Component.ComponentId{3n},render,None{},None{},invalidate,None{},False{}},render,invalidate}
 def footerState(owner: FooterOwner) -> Ref.Ref<Footer.State>:
@@ -1008,7 +1013,8 @@ def triggerDouble(+input: KeyInput) -> IO(Unit):
       do IO<Unit>:
         Ref.write(Maybe<&2,F64>,lastEscape,None{})
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
-        action : Settings.DoubleEscapeAction <- Session.doubleEscapeAction(live)
+        settings : Settings.SettingsManager <- Session.getSettings(live)
+        action : Settings.DoubleEscapeAction = Settings.getDoubleEscapeAction(settings)
         actionDouble(input,action)
 def doubleEscape(input: KeyInput,previous: Maybe<&2,F64>,now: F64) -> IO(Unit):
   match previous:
@@ -1410,14 +1416,14 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         Transcript.setHideThinking(transcriptHandle,Settings.getHideThinkingBlock(settings))
         Transcript.seedSession(transcriptHandle,existing)
         agentState : Session.AgentState() <- Session.state(session)
-        +foot : FooterOwner <- footer(initialFooter(agentState,existing,cwd,home),liveTheme)
+        +current : Ref.Ref<Session.AgentSession> <- modeCurrent(mode,session)
+        +foot : FooterOwner <- footer(initialFooter(agentState,existing,cwd,home),liveTheme,current)
         +redraw : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,None{})
         +stopped : Deferred.Deferred<Unit> <- Deferred.new(Unit)
         +listener : Callback.Callback<Session.AgentSessionEvent,Unit> <- Callback.create(~Observation,~Session.AgentSessionEvent,~Unit,~observed,Observation{transcriptHandle,redraw,footerState(foot)})
         failureObserver : Callback.Callback<Controller.PromptFailure,Unit> <- Callback.create(~WorkerFailure,~Controller.PromptFailure,~Unit,~promptFailed,WorkerFailure{footerFailure(foot),redraw})
         +modelSelectorRef : Ref.Ref<Maybe<&2,ModelPicker.Host>> <- Ref.new(Maybe<&2,ModelPicker.Host>,None{})
         +selectorRef : Ref.Ref<Maybe<&2,Selector.Host>> <- Ref.new(Maybe<&2,Selector.Host>,None{})
-        +current : Ref.Ref<Session.AgentSession> <- modeCurrent(mode,session)
         +modelsRef : Ref.Ref<List<&2,Models.Model()>> <- Ref.new(List<&2,Models.Model()>,models)
         +loginHost : Ref.Ref<Maybe<&2,LoginDialog.Host>> <- Ref.new(Maybe<&2,LoginDialog.Host>,None{})
         +resumePicker : Ref.Ref<Maybe<&2,SessionPicker.Host>> <- Ref.new(Maybe<&2,SessionPicker.Host>,None{})

@@ -5,9 +5,8 @@ import ../../../../../runtime/src/posix-path.bend as Path
 import ../../../../../runtime/src/text.bend as Text
 import ../theme/theme.bend as Theme
 
-# Immutable footer input. Callers accumulate usage across the whole session,
-# including summaries, compactions and tool results; latestAssistant is only
-# the most recent assistant response and supplies the cache-hit percentage.
+# Immutable footer input. Totals and context come from the stored session;
+# latestAssistant supplies the cache-hit percentage of the last response.
 type Usage is Data: Usage{input: Nat,output: Nat,cacheRead: Nat,cacheWrite: Nat,cost: F64}
 type Model is Data: Model{id: String,provider: String,reasoning: Bool,contextWindow: Nat}
 type Status is Data: Status{key: String,text: String}
