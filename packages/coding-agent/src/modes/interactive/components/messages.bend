@@ -217,8 +217,23 @@ def bashBorder(count: Nat) -> String:
     case Succ{rest}: SCon{'─',bashBorder(rest)}
 def bashColor(excluded: Bool) -> String:
   match excluded: case True{}: "dim" case False{}: "bashMode"
+def withoutFinalEmptyReversed(reversed: List<&2,String>,lines: List<&2,String>) -> List<&2,String>:
+  match reversed:
+    case last <> rest: Bool.pick(List<&2,String>,String.is_empty(String.trim(last)),List.reverse(&2,String,rest),lines)
+    case Nil{}: Nil{}
+def withoutFinalEmpty(+lines: List<&2,String>) -> List<&2,String>:
+  withoutFinalEmptyReversed(List.reverse(&2,String,lines),lines)
 def bashOutputLines(+output: String,width: Nat) -> IO(List<&2,String>):
-  Bool.pick(Unit -> IO(List<&2,String>),String.is_empty(output),_ => IO.pure(List<&2,String>,Nil{}),_ => textLines(output,1n,width))(Unit{})
+  match output:
+    case SNil{}: IO.pure(List<&2,String>,Nil{})
+    case output:
+      do IO<List<&2,String>>:
+        lines : List<&2,String> <- textLines(output,1n,width)
+        return withoutFinalEmpty(lines)
+def spacedOutput(lines: List<&2,String>) -> List<&2,String>:
+  match lines:
+    case Nil{}: Nil{}
+    case lines: "" <> lines
 def bashPreview(+lines: List<&2,String>,expanded: Bool) -> List<&2,String>:
   Bool.pick(List<&2,String>,expanded,lines,List.drop(&2,String,lines,List.length(&2,String,lines) - 20n))
 def bashHidden(lines: List<&2,String>,expanded: Bool) -> Nat:
@@ -253,7 +268,7 @@ def renderBash(state: BashMessage,+width: Nat) -> IO(List<&2,String>):
         body : List<&2,String> <- bashPaintedLines(bashPreview(visual,expanded),theme,Nil{})
         +note : String <- foregroundText(theme,"muted",bashStatus(status,bashHidden(visual,expanded)))
         statusLines : List<&2,String> <- Bool.pick(Unit -> IO(List<&2,String>),String.is_empty(note),_ => IO.pure(List<&2,String>,Nil{}),_ => textLines(note,1n,width))(Unit{})
-        return List.append(&2,String,"" <> top <> headerLines,List.append(&2,String,body,List.append(&2,String,statusLines,top <> Nil{})))
+        return List.append(&2,String,"" <> top <> headerLines,List.append(&2,String,spacedOutput(body),List.append(&2,String,statusLines,top <> Nil{})))
 
 # A mounted message renders the latest immutable snapshot. The transcript owns
 # the callback lifetime; stream updates replace only this message's snapshot.
