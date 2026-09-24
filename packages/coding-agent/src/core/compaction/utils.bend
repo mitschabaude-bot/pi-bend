@@ -194,4 +194,4 @@ def serializeConversation(-G: Data, -D: Data, messages: List<&2, Ai.Message<V.Va
   String.join(conversationParts(G, D, messages), "\n\n")
 
 def SUMMARIZATION_SYSTEM_PROMPT() -> String:
-  "You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified.\nDo NOT continue the conversation. Do NOT respond to any questions in the conversation. ONLY output the structured summary."
+  "You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified.\n\nDo NOT continue the conversation. Do NOT respond to any questions in the conversation. ONLY output the structured summary."
