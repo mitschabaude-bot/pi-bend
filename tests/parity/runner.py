@@ -106,12 +106,31 @@ def mask(value, key=None):
         return value.replace(PI_PACKAGE, "<package>").replace(str(ROOT), "<package>")
     return value
 
+# Differences recorded in tests/parity/KNOWN.md, masked so a run shows only
+# unexplained ones. Request headers Node fetch or the OpenAI SDK add on their
+# own (content-length follows the install path in the system prompt).
+KNOWN_HEADERS = {"accept-encoding", "accept-language", "connection", "sec-fetch-mode", "content-length",
+                 "x-stainless-arch", "x-stainless-lang", "x-stainless-os", "x-stainless-package-version",
+                 "x-stainless-runtime", "x-stainless-runtime-version"}
+# Upstream providers stream one mutable output object, so pi's early events
+# show the final usage and responseId (JavaScript aliasing).
+ALIASED_EVENTS = {"message_start", "message_update"}
+
+def mask_known(value):
+    if isinstance(value, dict) and value.get("type") in ALIASED_EVENTS:
+        value = dict(value)
+        for holder in ("message", "assistantMessageEvent"):
+            if isinstance(value.get(holder), dict):
+                value[holder] = {k: v for k, v in value[holder].items() if k not in ("usage", "responseId")}
+        value.pop("usage", None)
+    return value
+
 def normalise_events(text):
     """JSON lines compare as values; other lines as text."""
     lines = []
     for line in text.split("\n"):
         try:
-            lines.append(json.dumps(mask(json.loads(line)), sort_keys=True))
+            lines.append(json.dumps(mask(mask_known(json.loads(line))), sort_keys=True))
         except ValueError:
             lines.append(line)
     return "\n".join(lines)
@@ -153,6 +172,8 @@ def run_side(label, argv, scenario, keep):
         finally:
             server.shutdown()
             logged = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+        for request in logged:
+            request["headers"] = {k: v for k, v in request.get("headers", {}).items() if k not in KNOWN_HEADERS}
             requests = re.sub(r"127\.0\.0\.1:\d+", "<server>", normalise(json.dumps(logged, indent=1, sort_keys=True), root)) if logged else ""
             requests = requests.replace(PI_PACKAGE, "<package>").replace(str(ROOT), "<package>")
             if not keep:
@@ -176,6 +197,8 @@ def run_side(label, argv, scenario, keep):
         terminal.close()
         server.shutdown()
         logged = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+        for request in logged:
+            request["headers"] = {k: v for k, v in request.get("headers", {}).items() if k not in KNOWN_HEADERS}
         requests = re.sub(r"127\.0\.0\.1:\d+", "<server>", normalise(json.dumps(logged, indent=1, sort_keys=True), root)) if logged else ""
         # The system prompt names the installed package's docs directory.
         requests = requests.replace(PI_PACKAGE, "<package>").replace(str(ROOT), "<package>")

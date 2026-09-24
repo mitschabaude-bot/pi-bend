@@ -2,7 +2,8 @@
 
 `tests/parity/runner.py` diffs every screen, output and model request. A
 difference is either listed here with its reason or it is a bug. Each entry
-names the scenario where it shows.
+names the scenario where it shows; the runner masks the header and aliasing
+entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
 
 ## Language-driven (the port does not reproduce them)
 
