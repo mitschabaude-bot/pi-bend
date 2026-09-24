@@ -2,34 +2,13 @@ import Base
 import ../../../modes/interactive/components/messages.bend as Messages
 import ../../../modes/interactive/theme/theme.bend as Theme
 import ../../../../../runtime/src/schema-value.bend as Value
-import ../../../../../runtime/src/record.bend as Record
+import ../render-utils.bend as Render
 import ../index.bend as Tools
 import ../read.bend as Read
 import ../truncate.bend as Truncate
 
 # Read presentation uses the typed tool result; the collapsed success view is
 # intentionally just its path and optional line range.
-def field(args: Value.Value,key: String) -> Maybe<&2,Value.Value>:
-  match args:
-    case Value.ObjectValue{record}: Record.get(Value.Value,record,key)
-    case _: None{}
-def pathValue(value: Maybe<&2,Value.Value>) -> Maybe<&2,String>:
-  match value:
-    case None{}: Some{""}
-    case Some{Value.Null{}}: Some{""}
-    case Some{Value.Text{text}}: Some{text}
-    case _: None{}
-def pathChoice(file: Maybe<&2,Value.Value>,pathArg: Maybe<&2,Value.Value>) -> Maybe<&2,String>:
-  match file:
-    case Some{Value.Text{text}}: Some{text}
-    case _: pathValue(pathArg)
-def path(+args: Value.Value) -> Maybe<&2,String>:
-  pathChoice(field(args,"file_path"),field(args,"path"))
-def shownPath(theme: Theme.Theme,value: Maybe<&2,String>) -> IO(String):
-  match value:
-    case None{}: Messages.foregroundText(theme,"error","[invalid arg]")
-    case Some{""}: Messages.foregroundText(theme,"toolOutput","...")
-    case Some{text}: Messages.foregroundText(theme,"accent",text)
 def natural(value: Maybe<&2,Value.Value>) -> Maybe<&2,Nat>:
   match value:
     case Some{Value.Number{number}}: Some{U32.to_nat(F64.to_u32(number))}
@@ -42,10 +21,9 @@ def range(theme: Theme.Theme,offset: Maybe<&2,Nat>,limit: Maybe<&2,Nat>) -> IO(S
     case Some{+start} Some{+count}: Messages.foregroundText(theme,"warning",":" ++ Nat.show(start) ++ Bool.pick(String,Nat.is_eq(count,0n),"","-" ++ Nat.show(start + count - 1n)))
 def renderCall(+args: Value.Value,+theme: Theme.Theme) -> IO(String):
   do IO<String>:
-    title : String <- Messages.foregroundText(theme,"toolTitle","\u{1b}[1mread\u{1b}[22m")
-    target : String <- shownPath(theme,path(args))
-    lines : String <- range(theme,natural(field(args,"offset")),natural(field(args,"limit")))
-    return title ++ " " ++ target ++ lines
+    title : String <- Render.pathCall(theme,"read",args)
+    lines : String <- range(theme,natural(Render.field(args,"offset")),natural(Render.field(args,"limit")))
+    return title ++ lines
 
 def trimmedReverse(lines: List<&2,String>) -> List<&2,String>:
   match lines:

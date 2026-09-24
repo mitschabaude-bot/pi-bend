@@ -2,37 +2,15 @@ import Base
 import ../../../modes/interactive/components/messages.bend as Messages
 import ../../../modes/interactive/theme/theme.bend as Theme
 import ../../../../../runtime/src/schema-value.bend as Value
-import ../../../../../runtime/src/record.bend as Record
+import ../render-utils.bend as Render
 import ../index.bend as Tools
 import ../edit.bend as Edit
 import ../../../../../runtime/src/callback.bend as Callback
 import ../../../../../tui/src/components/box.bend as Box
 import ../../../../../tui/src/components/text.bend as TuiText
 
-def pathValue(value: Maybe<&2,Value.Value>) -> Maybe<&2,String>:
-  match value:
-    case None{}: Some{""}
-    case Some{Value.Null{}}: Some{""}
-    case Some{Value.Text{text}}: Some{text}
-    case _: None{}
-def pathChoice(file: Maybe<&2,Value.Value>,path: Maybe<&2,Value.Value>) -> Maybe<&2,String>:
-  match file:
-    case Some{Value.Text{text}}: Some{text}
-    case _: pathValue(path)
-def pathField(args: Value.Value) -> Maybe<&2,String>:
-  match args:
-    case Value.ObjectValue{+record}: pathChoice(Record.get(Value.Value,record,"file_path"),Record.get(Value.Value,record,"path"))
-    case _: Some{""}
-def shownPath(theme: Theme.Theme,path: Maybe<&2,String>) -> IO(String):
-  match path:
-    case None{}: Messages.foregroundText(theme,"error","[invalid arg]")
-    case Some{""}: Messages.foregroundText(theme,"toolOutput","...")
-    case Some{value}: Messages.foregroundText(theme,"accent",value)
-def renderCall(args: Value.Value,+theme: Theme.Theme) -> IO(String):
-  do IO<String>:
-    name : String <- Messages.foregroundText(theme,"toolTitle","\u{1b}[1medit\u{1b}[22m")
-    path : String <- shownPath(theme,pathField(args))
-    return name ++ " " ++ path
+def renderCall(args: Value.Value,theme: Theme.Theme) -> IO(String):
+  Render.pathCall(theme,"edit",args)
 def diffValue(details: Maybe<&2,Tools.ToolDetails>) -> Maybe<&2,String>:
   match details:
     case Some{Tools.EditDetails{Edit.EditToolDetails{diff,_,_}}}: Some{diff}

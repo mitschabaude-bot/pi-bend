@@ -10,8 +10,6 @@ import ../../../../../runtime/src/serial-resource.bend as Serial
 import ../../../../../runtime/src/clock.bend as Clock
 import ../../../../../tui/src/component.bend as Component
 import ../../../../../runtime/src/schema-value.bend as Value
-import ../../../../../runtime/src/record.bend as Record
-import ../../../../../runtime/src/f64.bend as F
 import ../../../../../ai/src/types.bend as Ai
 import ../../../../../ai/src/utils/json.bend as Json
 import ../../../../../ai/src/utils/schema-json.bend as SchemaJson
@@ -21,6 +19,9 @@ import ../../../core/tools/renderers/grep.bend as GrepRenderer
 import ../../../core/tools/renderers/ls.bend as LsRenderer
 import ../../../core/tools/renderers/edit.bend as EditRenderer
 import ../../../core/tools/renderers/read.bend as ReadRenderer
+import ../../../core/tools/renderers/write.bend as WriteRenderer
+import ../../../core/tools/renderers/bash.bend as BashRenderer
+import ../../../core/tools/render-utils.bend as Render
 import ../../../core/tools/index.bend as Tools
 import ../../../../../agent/src/types.bend as Agent
 
@@ -147,90 +148,6 @@ def generic(+state: ToolExecution,width: Nat) -> IO(List<&2,String>):
         Callback.dispose(String,String,bg)
         return "" <> lines
 
-def field(args: Value.Value,key: String) -> Maybe<&2,Value.Value>:
-  match args:
-    case Value.ObjectValue{record}: Record.get(Value.Value,record,key)
-    case _: None{}
-def stringField(value: Maybe<&2,Value.Value>) -> Maybe<&2,String>:
-  match value:
-    case None{}: Some{""}
-    case Some{Value.Null{}}: Some{""}
-    case Some{Value.Text{text}}: Some{text}
-    case _: None{}
-def argument(args: Value.Value,key: String) -> Maybe<&2,String>:
-  stringField(field(args,key))
-def pathField(args: Value.Value,file: Maybe<&2,Value.Value>) -> Maybe<&2,String>:
-  match file:
-    case Some{Value.Text{text}}: Some{text}
-    case _: argument(args,"path")
-def pathArgument(+args: Value.Value) -> Maybe<&2,String>:
-  pathField(args,field(args,"file_path"))
-def shownPath(theme: Theme.Theme,path: Maybe<&2,String>) -> IO(String):
-  match path:
-    case None{}: Messages.foregroundText(theme,"error","[invalid arg]")
-    case Some{""}: Messages.foregroundText(theme,"toolOutput","...")
-    case Some{value}: Messages.foregroundText(theme,"accent",value)
-def shownTitle(theme: Theme.Theme,label: String) -> IO(String):
-  Messages.foregroundText(theme,"toolTitle","\u{1b}[1m" ++ label ++ "\u{1b}[22m")
-def pathCall(+theme: Theme.Theme,label: String,args: Value.Value) -> IO(String):
-  do IO<String>:
-    name : String <- shownTitle(theme,label)
-    path : String <- shownPath(theme,pathArgument(args))
-    return name ++ " " ++ path
-def shellCommand(value: Maybe<&2,String>,theme: Theme.Theme) -> IO(String):
-  match value:
-    case None{}: Messages.foregroundText(theme,"error","[invalid arg]")
-    case Some{""}: Messages.foregroundText(theme,"toolOutput","...")
-    case Some{command}: IO.pure(String,command)
-def bashCall(+theme: Theme.Theme,args: Value.Value) -> IO(String):
-  do IO<String>:
-    command : String <- shellCommand(argument(args,"command"),theme)
-    shownTitle(theme,"$ " ++ command)
-def tabs(value: String) -> String: String.join(String.split(value,'\t'),"   ")
-def trimmedReverse(lines: List<&2,String>) -> List<&2,String>:
-  match lines:
-    case "" <> rest: trimmedReverse(rest)
-    case _: List.reverse(&2,String,lines)
-def nonemptyLines(lines: List<&2,String>) -> List<&2,String>:
-  trimmedReverse(List.reverse(&2,String,lines))
-def contentLines(content: String) -> List<&2,String>:
-  nonemptyLines(String.split(tabs(String.join(String.split(content,'\r'),"")),'\n'))
-def coloredLines(lines: List<&2,String>,+theme: Theme.Theme,reversed: List<&2,String>) -> IO(List<&2,String>):
-  match lines:
-    case Nil{}: IO.pure(List<&2,String>,List.reverse(&2,String,reversed))
-    case line <> rest:
-      do IO<List<&2,String>>:
-        colored : String <- Messages.foregroundText(theme,"toolOutput",line)
-        coloredLines(rest,theme,colored <> reversed)
-def expandHint(+theme: Theme.Theme,lead: String) -> IO(String):
-  do IO<String>:
-    start : String <- Messages.foregroundText(theme,"muted",lead)
-    key : String <- Messages.foregroundText(theme,"dim",Messages.expandKeys())
-    rest : String <- Messages.foregroundText(theme,"muted"," to expand")
-    end : String <- Messages.foregroundText(theme,"muted",")")
-    return start ++ " " ++ key ++ rest ++ end
-def writeContent(+theme: Theme.Theme,header: String,expanded: Bool,contentArg: Maybe<&2,String>) -> IO(String):
-  match contentArg:
-    case None{}:
-      do IO<String>:
-        invalid : String <- Messages.foregroundText(theme,"error","[invalid content arg - expected string]")
-        return header ++ "\n\n" ++ invalid
-    case Some{""}: IO.pure(String,header)
-    case Some{content}:
-      do IO<String>:
-        +all : List<&2,String> <- IO.pure(List<&2,String>,contentLines(content))
-        +display : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,expanded,all,List.take(&2,String,all,10n)))
-        colored : List<&2,String> <- coloredLines(display,theme,Nil{})
-        +remaining : Nat <- IO.pure(Nat,List.length(&2,String,all) - List.length(&2,String,display))
-        +preview : String <- IO.pure(String,header ++ "\n\n" ++ String.join(colored,"\n"))
-        Bool.pick(Unit -> IO(String),Nat.is_eq(remaining,0n),_ => IO.pure(String,preview),
-          _ => do IO<String>:
-            hint : String <- expandHint(theme,"\n... (" ++ Nat.show(remaining) ++ " more lines, " ++ Nat.show(List.length(&2,String,all)) ++ " total,")
-            return preview ++ hint)(Unit{})
-def writeCall(+theme: Theme.Theme,+args: Value.Value,expanded: Bool) -> IO(String):
-  do IO<String>:
-    header : String <- pathCall(theme,"write",args)
-    writeContent(theme,header,expanded,argument(args,"content"))
 def errorOutput(result: Maybe<&2,ToolResult>) -> Bool:
   match result:
     case Some{ToolResult{_,True{},_}}: True{}
@@ -239,70 +156,36 @@ def resultDetails(result: Maybe<&2,ToolResult>) -> Maybe<&2,Tools.ToolDetails>:
   match result:
     case Some{ToolResult{_,_,details}}: details
     case None{}: None{}
-def builtFileResult(+name: String,+result: Maybe<&2,ToolResult>,+expanded: Bool,+theme: Theme.Theme) -> IO(String):
-  +output = textOutput(result)
-  Bool.pick(Unit -> IO(String),String.is_empty(output),_ => IO.pure(String,""),
-    _ => Bool.pick(Unit -> IO(String),String.eq(name,"read") && Bool.not(expanded) && Bool.not(errorOutput(result)),
-      _ => IO.pure(String,""),
-      _ => Bool.pick(Unit -> IO(String),String.eq(name,"edit") && Bool.not(errorOutput(result)),
-        _ => IO.pure(String,""),
-        _ => Bool.pick(Unit -> IO(String),String.eq(name,"write") && Bool.not(errorOutput(result)),
-          _ => IO.pure(String,""),
-          _ => do IO<String>:
-            +source : String <- IO.pure(String,Bool.pick(String,String.eq(name,"bash"),String.trim(output),output))
-            +lines : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,String.eq(name,"read"),nonemptyLines(String.split(source,'\n')),String.split(source,'\n')))
-            +count : Nat <- IO.pure(Nat,List.length(&2,String,lines))
-            +bash : Bool <- IO.pure(Bool,String.eq(name,"bash"))
-            +display : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,expanded,lines,Bool.pick(List<&2,String>,bash,List.drop(&2,String,lines,count - 5n),List.take(&2,String,lines,10n))))
-            +colored : List<&2,String> <- coloredLines(display,theme,Nil{})
-            +skipped : Nat <- IO.pure(Nat,count - List.length(&2,String,display))
-            +plain : String <- IO.pure(String,Bool.pick(String,String.eq(name,"read") || bash,"\n\n","\n") ++ String.join(colored,"\n"))
-            Bool.pick(Unit -> IO(String),bash && Bool.not(expanded) && Nat.is_gt(skipped,0n),
-              _ => do IO<String>:
-                hint : String <- expandHint(theme,"... (" ++ Nat.show(skipped) ++ " earlier lines,")
-                return "\n\n" ++ hint ++ "\n" ++ String.join(colored,"\n"),
-              _ => IO.pure(String,plain))(Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
-def builtResult(+name: String,+result: Maybe<&2,ToolResult>,+expanded: Bool,+theme: Theme.Theme) -> IO(String):
+def bashElapsed(result: Maybe<&2,ToolResult>,elapsed: Maybe<&2,F64>) -> Maybe<&2,F64>:
+  match result:
+    case None{}: None{}
+    case Some{_}: elapsed
+def builtResult(+name: String,+result: Maybe<&2,ToolResult>,+expanded: Bool,partial: Bool,elapsed: Maybe<&2,F64>,+theme: Theme.Theme) -> IO(String):
   match name:
     case "read": ReadRenderer.renderResult(textOutput(result),resultDetails(result),expanded,errorOutput(result),theme)
+    case "write": WriteRenderer.renderResult(textOutput(result),errorOutput(result),theme)
+    case "bash": BashRenderer.renderResult(textOutput(result),resultDetails(result),expanded,partial,bashElapsed(result,elapsed),theme)
     case "find": FindRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
     case "grep": GrepRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
     case "ls": LsRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
-    case _: builtFileResult(name,result,expanded,theme)
+    case _: IO.pure(String,"")
 def builtCall(name: String,args: Value.Value,expanded: Bool,theme: Theme.Theme) -> IO(String):
   match name:
     case "read": ReadRenderer.renderCall(args,theme)
-    case "bash": bashCall(theme,args)
-    case "write": writeCall(theme,args,expanded)
+    case "bash": BashRenderer.renderCall(args,theme)
+    case "write": WriteRenderer.renderCall(args,theme,expanded)
     case "find": FindRenderer.renderCall(args,theme)
     case "grep": GrepRenderer.renderCall(args,theme)
     case "ls": LsRenderer.renderCall(args,theme)
-    case _: pathCall(theme,"edit",args)
-def durationTenths(result: Result<&2,&2,F.Error,Nat>) -> Nat:
-  match result:
-    case Done{value}: value
-    case Fail{_}: 0n
-def durationLong(+seconds: Nat) -> String:
-  Bool.pick(String,Nat.is_lt(seconds,3600n),Nat.show(seconds / 60n) ++ "m " ++ Nat.show(seconds % 60n) ++ "s",Nat.show(seconds / 3600n) ++ "h " ++ Nat.show((seconds % 3600n) / 60n) ++ "m " ++ Nat.show(seconds % 60n) ++ "s")
-def durationText(+tenths: Nat) -> String:
-  Bool.pick(String,Nat.is_lt(tenths,600n),Nat.show(tenths / 10n) ++ "." ++ Nat.show(tenths % 10n) ++ "s",durationLong(tenths / 10n))
-def bashTiming(name: String,result: Maybe<&2,ToolResult>,partial: Bool,elapsed: Maybe<&2,F64>,theme: Theme.Theme) -> IO(String):
-  match name result elapsed:
-    case "bash" Some{_} Some{ms}:
-      do IO<String>:
-        prefix : String <- IO.pure(String,Bool.pick(String,partial,"Elapsed ","Took "))
-        label : String <- Messages.foregroundText(theme,"muted",prefix ++ durationText(durationTenths(F.convert(F.divide(F.add(ms,F.fromU32(50)),F.fromU32(100))))))
-        return "\n\n" ++ label
-    case _ _ _: IO.pure(String,"")
+    case _: Render.pathCall(theme,name,args)
 def boxedBuiltin(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>) -> IO(List<&2,String>):
   match state:
     case ToolExecution{name,_,args,result,expanded,_,partial,_,_,+theme,_}:
       do IO<List<&2,String>>:
         call : String <- builtCall(name,args,expanded,theme)
-        extra : String <- builtResult(name,result,expanded,theme)
-        timing : String <- bashTiming(name,result,partial,elapsed,theme)
+        extra : String <- builtResult(name,result,expanded,partial,elapsed,theme)
         +bg : Callback.Callback<String,String> <- Messages.color(theme,backgroundKey(state),True{})
-        lines : List<&2,String> <- textLines(call ++ extra ++ timing,0n,0n,Nat.max(1n,width - 2n),None{})
+        lines : List<&2,String> <- textLines(call ++ extra,0n,0n,Nat.max(1n,width - 2n),None{})
         +body : List<&2,String> <- Box.paintContent(Box.prependMargin(lines," ",Nil{}),width,Some{bg},Nil{})
         +top : List<&2,String> <- Box.paintPadding(1n,width,Some{bg},Nil{})
         +bottom : List<&2,String> <- Box.paintPadding(1n,width,Some{bg},Nil{})
