@@ -91,6 +91,6 @@ def check(label, command):
                 process.wait()
 
 
-for label, command in (("native1", [str(ROOT / "build/rpc-controls-cli-native"), "--threads", "1", "--"]), ("native4", [str(ROOT / "build/rpc-controls-cli-native"), "--threads", "4", "--"])):
+for label, command in (("native1", ["env", "BEND_THREADS=1", str(ROOT / "build/rpc-controls-cli-native")]), ("native4", ["env", "BEND_THREADS=4", str(ROOT / "build/rpc-controls-cli-native")])):
     if os.environ.get("PI_BEND_ONLY", label) == label:
         check(label, command)

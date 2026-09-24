@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory(prefix="pi-export-cli-") as directory:
     source = cwd / "export-input.jsonl"
     shutil.copyfile(SOURCE, source)
     for threads, output in ((1, None), (4, "named.html")):
-        args = [str(BINARY), "--threads", str(threads), "--", "--export", str(source)]
+        args = ["env", f"BEND_THREADS={threads}", str(BINARY), "--export", str(source)]
         if output:
             args.append(output)
         process = subprocess.run(args, cwd=cwd, capture_output=True, timeout=30)
@@ -38,12 +38,12 @@ with tempfile.TemporaryDirectory(prefix="pi-export-cli-") as directory:
         assert [entry["id"] for entry in data["entries"]] == ["u1", "a1", "r1"]
         print(f"native{threads}: --export wrote a safe standalone viewer from another cwd")
 
-    missing = subprocess.run([str(BINARY), "--threads", "1", "--", "--export", str(cwd / "missing.jsonl")], cwd=cwd, capture_output=True, timeout=30)
+    missing = subprocess.run(["env", "BEND_THREADS=1", str(BINARY), "--export", str(cwd / "missing.jsonl")], cwd=cwd, capture_output=True, timeout=30)
     assert missing.returncode == 1 and b"Error:" in missing.stderr
     print("native1: missing export source reports an error")
 
     rpc = subprocess.run(
-        [str(BINARY), "--threads", "1", "--", "--mode", "rpc", "--session", str(source)],
+        ["env", "BEND_THREADS=1", str(BINARY), "--mode", "rpc", "--session", str(source)],
         input=b'{"id":"export","type":"export_html","outputPath":"rpc.html"}\n',
         cwd=cwd, capture_output=True, timeout=30,
     )

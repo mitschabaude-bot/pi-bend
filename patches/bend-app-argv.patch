@@ -1,0 +1,35 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -6358,11 +6358,23 @@
+ // Main
+ // ====
+ 
++// BEND_THREADS sets the default worker count. An application built with
++// -DBEND_APP_ARGV owns its whole command line: the runtime reads no flags.
++static long env_threads(void) {
++  const char* v = getenv("BEND_THREADS");
++  char* end = NULL;
++  long n = v != NULL ? strtol(v, &end, 10) : 0;
++  return v != NULL && n >= 1 && end != NULL && *end == '\0' ? n : 0;
++}
++
+ int main(int argc, char** argv) {
+-  long thr = 0;
++  long thr = env_threads();
+   int  gpu = -1;
+   u64  mem = 0;
+   io_argv = argv + 1;
++#ifdef BEND_APP_ARGV
++  io_argc = argc - 1;
++#else
+   for (int i = 1; i < argc; i += 1) {
+     const char* a = argv[i];
+     const char* v = i + 1 < argc ? argv[i + 1] : NULL;
+@@ -6403,6 +6415,7 @@
+       io_argv[io_argc++] = argv[i];
+     }
+   }
++#endif
+   bool dev = gpu != 0 && BANGS != 0 && gpu_probe();
+   if (gpu == 1 && BANGS != 0 && !dev) {
+     cli_fail("--gpu on, but this binary found no GPU device", NULL);

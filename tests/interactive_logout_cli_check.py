@@ -30,7 +30,7 @@ for threads in (1, 4):
         master, slave = pty.openpty()
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 100, 0, 0))
         original = termios.tcgetattr(slave)
-        process = subprocess.Popen([str(BINARY), "--threads", str(threads), "--", "--no-tools"], cwd=project, stdin=slave, stdout=slave, stderr=subprocess.PIPE, env=env)
+        process = subprocess.Popen(["env", f"BEND_THREADS={threads}", str(BINARY), "--no-tools"], cwd=project, stdin=slave, stdout=slave, stderr=subprocess.PIPE, env=env)
         output = bytearray()
 
         def until(needle, start=0, timeout=25):

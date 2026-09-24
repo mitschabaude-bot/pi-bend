@@ -1,7 +1,7 @@
 """Native print-mode CLI: argument handling, help/version, exit behavior and
 (optionally) live text/JSON runs against the OpenAI Responses API.
 
-Build first: BEND_TUS=8 sh scripts/build-pure.sh packages/coding-agent/src/main.bend build/pi-cli
+Build first: BEND_TUS=4 sh scripts/build-cli.sh build/pi-cli
 Live checks run when PI_BEND_LIVE=1 and OPENAI_API_KEY are set."""
 import json, os, pathlib, re, subprocess, sys, tempfile
 from upstream_pin import PIN
@@ -15,7 +15,7 @@ def source(path):
 def run(args, stdin=b'', env=None, timeout=120, cwd=ROOT):
     merged = dict(os.environ)
     merged.update(env or {})
-    return subprocess.run([str(CLI), '--', *args], input=stdin, capture_output=True, env=merged, timeout=timeout, cwd=cwd)
+    return subprocess.run([str(CLI), *args], input=stdin, capture_output=True, env=merged, timeout=timeout, cwd=cwd)
 
 def expected_help():
     text = source('src/cli/args.ts')

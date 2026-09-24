@@ -10,7 +10,7 @@ CLI = Path(os.environ.get("PI_BEND_CLI", ROOT / "build/pi-cli"))
 
 
 def command(threads, *args):
-    return [str(CLI), "--threads", str(threads), "--", "--mode", "rpc", *args]
+    return ["env", f"BEND_THREADS={threads}", str(CLI), "--mode", "rpc", *args]
 
 
 for threads in (1, 4):

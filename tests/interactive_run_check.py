@@ -19,7 +19,7 @@ for threads, theme in ((1, None), (4, None), (1, "light"), (4, "light")):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
     original = termios.tcgetattr(slave)
-    args = [str(BINARY), "--threads", str(threads), "--", "--no-tools"]
+    args = ["env", f"BEND_THREADS={threads}", str(BINARY), "--no-tools"]
     if theme:
         args += ["--use-theme", theme]
     process = subprocess.Popen(
@@ -60,6 +60,6 @@ for threads, theme in ((1, None), (4, None), (1, "light"), (4, "light")):
             process.wait()
         os.close(master)
         os.close(slave)
-    print(f"native{threads}: {theme or 'default'} theme, mounted, accepted /exit, restored terminal")
+    print(f"native{threads}: {theme or 'default'} theme, mounted, accepted /quit, restored terminal")
 
 PROJECT.cleanup()

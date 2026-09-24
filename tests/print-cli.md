@@ -3,7 +3,7 @@
 `packages/coding-agent/src/main.bend` connects native argument parsing, authentication storage, model resolution, system prompts, the agent loop and public tools to text/JSON print modes. It uses the native DNS/TLS/HTTP/SSE provider; prototype libcurl/ICU adapters are not linked. The merged CLI retains the canonical system-prompt implementation, including skill formatting. Resource discovery still needs wiring into this entry point.
 
 ```sh
-BEND=/path/to/patched/bend2/main.ts BEND_TUS=8 sh scripts/build-pure.sh packages/coding-agent/src/main.bend build/pi-cli
+BEND=/path/to/patched/bend2/main.ts BEND_TUS=4 sh scripts/build-cli.sh build/pi-cli
 python3 tests/print_cli_check.py
 PI_BEND_LIVE=1 python3 tests/print_cli_check.py
 PI_BEND_CODEX_LIVE=1 python3 tests/print_cli_check.py

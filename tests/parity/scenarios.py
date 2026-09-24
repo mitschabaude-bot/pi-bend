@@ -109,4 +109,10 @@ SCENARIOS = [
         "turns": [{"tool": {"name": "bash", "arguments": {"command": "echo tool-output"}}}, {"text": "Tool finished."}],
         "steps": [],
     },
+    {"name": "cli-help", "process": True, "args": ["--help"], "steps": []},
+    {"name": "cli-version", "process": True, "args": ["--version"], "steps": []},
+    {"name": "cli-list-models", "process": True, "args": ["--list-models"], "steps": []},
+    {"name": "cli-list-models-search", "process": True, "args": ["--list-models", "gpt-5"], "steps": []},
+    {"name": "cli-unknown-model", "process": True, "args": ["--provider", "openai", "--model", "nope", "-p", "hi"], "steps": []},
+    {"name": "cli-no-prompt-print", "process": True, "args": MODEL + ["-p"], "steps": []},
 ]

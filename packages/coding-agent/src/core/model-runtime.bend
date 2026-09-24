@@ -684,6 +684,75 @@ def resolved(parsed: ParsedModelResult) -> ResolveCliModelResult:
 def resolveWithin(provider: String, pattern: String, models: List<&2, Model()>) -> ResolveCliModelResult:
   resolved(parsePattern(pattern, providerModelsOf(models, provider), False{}))
 
+# upstream buildFallbackModel: an unknown id on a known provider borrows the
+# provider's default model (else its first) under the requested id.
+def renamed(model: Model(), +id: String) -> Model():
+  match model:
+    case Ai.Model{_, _, api, provider, baseUrl, reasoning, levels, input, limits, cost, cache, window, maxTokens, sampling, headers, compat}:
+      Ai.Model{id, id, api, provider, baseUrl, reasoning, levels, input, limits, cost, cache, window, maxTokens, sampling, headers, compat}
+
+def defaultIdOf(defaults: List<&2, DefaultModel>, +provider: String) -> Maybe<&2, String>:
+  match defaults:
+    case Nil{}: None{}
+    case DefaultModel{name, id} <> rest: Bool.pick(Maybe<&2, String>, String.eq(name, provider), Some{id}, defaultIdOf(rest, provider))
+
+def baseModelOf(+provider: String, +candidates: List<&2, Model()>) -> Maybe<&2, Model()>:
+  Maybe.or(&2, Model(), Maybe.bind(&2, String, Model(), defaultIdOf(defaultModelPerProvider(), provider), id => findModel(candidates, provider, id)), List.head(&2, Model(), candidates))
+
+def buildFallbackModel(+provider: String, +modelId: String, models: List<&2, Model()>) -> Maybe<&2, Model()>:
+  Maybe.map(&2, Model(), Model(), model => renamed(model, modelId), baseModelOf(provider, providerModelsOf(models, provider)))
+
+def withReasoning(model: Model(), requested: Maybe<&2, Ai.ModelThinkingLevel>) -> Model():
+  match model requested:
+    case Ai.Model{id, name, api, provider, baseUrl, _, levels, input, limits, cost, cache, window, maxTokens, sampling, headers, compat} Some{Ai.Thinking{_}}:
+      Ai.Model{id, name, api, provider, baseUrl, True{}, levels, input, limits, cost, cache, window, maxTokens, sampling, headers, compat}
+    case _ _: model
+
+def notFound(+display: String, warning: Maybe<&2, String>) -> ResolveCliModelResult:
+  ResolveCliModelResult{None{}, None{}, warning, Some{"Model \"" ++ display ++ "\" not found. Use --list-models to see available models."}}
+
+def fallbackWarning(warning: Maybe<&2, String>, +message: String) -> String:
+  match warning:
+    case None{}: message
+    case Some{earlier}: earlier ++ " " ++ message
+
+# The id and a thinking level from a trailing ":<level>", unless --thinking
+# was given.
+def suffixLevel(split: Maybe<&2, Split>) -> Maybe<&2, Ai.ModelThinkingLevel>:
+  match split:
+    case Some{Split{_, suffix}}: thinkingLevel(suffix)
+    case None{}: None{}
+
+def suffixPrefix(split: Maybe<&2, Split>, +pattern: String) -> String:
+  match split:
+    case Some{Split{prefix, _}}: prefix
+    case None{}: pattern
+
+def fallbackBuilt(+provider: String, +pattern: String, +id: String, +level: Maybe<&2, Ai.ModelThinkingLevel>, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, warning: Maybe<&2, String>, built: Maybe<&2, Model()>) -> ResolveCliModelResult:
+  match built:
+    case None{}: notFound(provider ++ "/" ++ pattern, warning)
+    case Some{model}: ResolveCliModelResult{Some{withReasoning(model, Maybe.or(&2, Ai.ModelThinkingLevel, cliThinking, level))}, level, Some{fallbackWarning(warning, "Model \"" ++ id ++ "\" not found for provider \"" ++ provider ++ "\". Using custom model id.")}, None{}}
+
+def fallbackSplit(+provider: String, +pattern: String, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, warning: Maybe<&2, String>, +split: Maybe<&2, Split>, models: List<&2, Model()>) -> ResolveCliModelResult:
+  +level = suffixLevel(split)
+  +id = Bool.pick(String, Maybe.is_some(&2, Ai.ModelThinkingLevel, level), suffixPrefix(split, pattern), pattern)
+  fallbackBuilt(provider, pattern, id, level, cliThinking, warning, buildFallbackModel(provider, id, models))
+
+def fallbackResult(+provider: String, +pattern: String, +cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, warning: Maybe<&2, String>, models: List<&2, Model()>) -> ResolveCliModelResult:
+  fallbackSplit(provider, pattern, cliThinking, warning, Bool.pick(Maybe<&2, Split>, Maybe.is_some(&2, Ai.ModelThinkingLevel, cliThinking), None{}, lastColonSplit(pattern)), models)
+
+# upstream resolveCliModel's tail: a known provider without a match falls back
+# to a custom model id; otherwise the model is not found.
+def orFallback(+provider: String, +pattern: String, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, models: List<&2, Model()>, result: ResolveCliModelResult) -> ResolveCliModelResult:
+  match result:
+    case ResolveCliModelResult{None{}, _, warning, None{}}: fallbackResult(provider, pattern, cliThinking, warning, models)
+    case other: other
+
+def orNotFound(+display: String, result: ResolveCliModelResult) -> ResolveCliModelResult:
+  match result:
+    case ResolveCliModelResult{None{}, _, warning, None{}}: notFound(display, warning)
+    case other: other
+
 def resolveAcross(pattern: String, models: List<&2, Model()>) -> ResolveCliModelResult:
   resolved(parsePattern(pattern, models, False{}))
 
@@ -692,37 +761,41 @@ def fallbackAcross(cliModel: String, scoped: ResolveCliModelResult, models: List
     case ResolveCliModelResult{None{}, _, _, None{}}: resolveAcross(cliModel, models)
     case other: other
 
-def resolveCandidate(+cliModel: String, +provider: Maybe<&2, String>, rest: String, +models: List<&2, Model()>) -> ResolveCliModelResult:
+def resolveCandidate(+cliModel: String, +provider: Maybe<&2, String>, +rest: String, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, +models: List<&2, Model()>) -> ResolveCliModelResult:
   match provider:
-    case None{}: resolveAcross(cliModel, models)
-    case Some{+provider}: fallbackAcross(cliModel, resolveWithin(provider, rest, models), models)
+    case None{}: orNotFound(cliModel, resolveAcross(cliModel, models))
+    case Some{+provider}: orFallback(provider, rest, cliThinking, models, fallbackAcross(cliModel, resolveWithin(provider, rest, models), models))
 
 # "provider/model" prefers the provider interpretation when the prefix names a
 # known provider; a failed provider-scoped match falls back to the full text.
-def resolveInferred(+cliModel: String, split: Maybe<&2, Split>, +models: List<&2, Model()>) -> ResolveCliModelResult:
+def resolveInferred(+cliModel: String, split: Maybe<&2, Split>, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, +models: List<&2, Model()>) -> ResolveCliModelResult:
   match split:
-    case None{}: resolveAcross(cliModel, models)
-    case Some{Split{+head, +rest}}: resolveCandidate(cliModel, canonicalProvider(models, String.to_lower(head)), rest, models)
+    case None{}: orNotFound(cliModel, resolveAcross(cliModel, models))
+    case Some{Split{+head, +rest}}: resolveCandidate(cliModel, canonicalProvider(models, String.to_lower(head)), rest, cliThinking, models)
 
-def resolveKnown(+provider: Maybe<&2, String>, cliProvider: String, cliModel: String, +models: List<&2, Model()>) -> ResolveCliModelResult:
+def resolveKnown(+provider: Maybe<&2, String>, cliProvider: String, cliModel: String, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, +models: List<&2, Model()>) -> ResolveCliModelResult:
   match provider:
     case None{}: cliError("Unknown provider \"" ++ cliProvider ++ "\". Use --list-models to see available providers/models.")
-    case Some{+provider}: resolveWithin(provider, stripPrefix(cliModel, provider ++ "/"), models)
+    case Some{+provider}:
+      +pattern = stripPrefix(cliModel, provider ++ "/")
+      orFallback(provider, pattern, cliThinking, models, resolveWithin(provider, pattern, models))
 
-def resolveExplicit(+cliProvider: String, cliModel: String, +models: List<&2, Model()>) -> ResolveCliModelResult:
-  resolveKnown(canonicalProvider(models, String.to_lower(cliProvider)), cliProvider, cliModel, models)
+def resolveExplicit(+cliProvider: String, cliModel: String, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, +models: List<&2, Model()>) -> ResolveCliModelResult:
+  resolveKnown(canonicalProvider(models, String.to_lower(cliProvider)), cliProvider, cliModel, cliThinking, models)
 
-def resolveCliModelWith(cliProvider: Maybe<&2, String>, +cliModel: String, +models: List<&2, Model()>) -> ResolveCliModelResult:
+def resolveCliModelWith(cliProvider: Maybe<&2, String>, +cliModel: String, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>, +models: List<&2, Model()>) -> ResolveCliModelResult:
   match cliProvider models:
     case _ Nil{}: cliError("No models available. Check your installation or add models to models.json.")
-    case Some{provider} _: resolveExplicit(provider, cliModel, models)
-    case None{} _: resolveInferred(cliModel, slashSplit(cliModel), models)
+    case Some{provider} _: resolveExplicit(provider, cliModel, cliThinking, models)
+    case None{} _: resolveInferred(cliModel, slashSplit(cliModel), cliThinking, models)
 
 # Uses all models, not just authenticated ones, so --api-key works for first-time setup.
-def resolveCliModel(runtime: ModelRuntime, cliProvider: Maybe<&2, String>, cliModel: Maybe<&2, String>) -> ResolveCliModelResult:
+# Not ported: upstream's bare-id disambiguation by configured auth when an
+# exact id exists in several providers.
+def resolveCliModel(runtime: ModelRuntime, cliProvider: Maybe<&2, String>, cliModel: Maybe<&2, String>, cliThinking: Maybe<&2, Ai.ModelThinkingLevel>) -> ResolveCliModelResult:
   match cliModel:
     case None{}: ResolveCliModelResult{None{}, None{}, None{}, None{}}
-    case Some{pattern}: resolveCliModelWith(cliProvider, pattern, getModels(runtime))
+    case Some{pattern}: resolveCliModelWith(cliProvider, pattern, cliThinking, getModels(runtime))
 
 def defaultAmong(defaults: List<&2, DefaultModel>, +models: List<&2, Model()>) -> Maybe<&2, Model()>:
   match defaults:

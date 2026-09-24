@@ -20,7 +20,7 @@ with tempfile.TemporaryDirectory(prefix='pi-availability-') as folder:
     expected = subprocess.run(['pi', '--list-models'], cwd=base, env=env, capture_output=True, text=True, timeout=120)
     for label, threads in (('native1', '1'), ('native4', '4')):
         trace = base / ('trace-' + label)
-        command = [str(CLI), '--threads', threads, '--', '--list-models']
+        command = ["env", f"BEND_THREADS={threads}", str(CLI), '--list-models']
         if shutil.which('strace'): command = ['strace', '-f', '-e', 'trace=connect', '-o', str(trace)] + command
         actual = subprocess.run(command, cwd=base, env=env, capture_output=True, text=True, timeout=120)
         assert actual.returncode == expected.returncode and actual.stdout == expected.stdout, (label, actual.stdout[-800:], actual.stderr[-800:])

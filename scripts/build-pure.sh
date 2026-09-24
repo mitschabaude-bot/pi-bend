@@ -16,6 +16,9 @@ case "$("$PI_BEND_CC" --version)" in
   *clang*) set -- -fbracket-depth=2048 ;;
   *) set -- ;;
 esac
+# BEND_CFLAGS adds C definitions, e.g. -DBEND_APP_ARGV for an application
+# that owns its whole command line (see patches/bend-app-argv.patch).
+set -- "$@" ${BEND_CFLAGS:-}
 # BEND_TUS=N (also read by the compiler when it emits C) compiles the one
 # generated source as N translation units in parallel and links them.
 UNITS=${BEND_TUS:-1}

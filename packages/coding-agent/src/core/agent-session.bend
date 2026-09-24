@@ -177,7 +177,6 @@ type AgentSessionEvent is Data:
   QueueUpdate{steering: List<&2, String>, followUp: List<&2, String>}
   SessionInfoChanged{name: Maybe<&2, String>}
   SessionTree{oldLeafId: Maybe<&2, String>, newLeafId: Maybe<&2, String>}
-  SessionForked{sessionId: String, sessionFile: Maybe<&2, String>, previousSessionFile: Maybe<&2, String>}
   ThinkingLevelChanged{level: Ai.ModelThinkingLevel}
   AutoRetryStart{attempt: Nat, maxAttempts: Nat, delayMs: F64, errorMessage: String}
   AutoRetryEnd{success: Bool, attempt: Nat, finalError: Maybe<&2, String>}

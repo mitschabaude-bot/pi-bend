@@ -31,17 +31,17 @@ python3 scripts/check-proofs.py
 Build and run the modular CLI with an OpenAI API key already configured in the environment or pi authentication storage:
 
 ```sh
-BEND_TUS=8 sh scripts/build-pure.sh packages/coding-agent/src/main.bend build/pi-cli
-./build/pi-cli -- --model gpt-4.1-mini -p "Summarize this directory"
-./build/pi-cli -- --model gpt-4.1-mini
+BEND_TUS=4 sh scripts/build-cli.sh build/pi-cli
+./build/pi-cli --model gpt-4.1-mini -p "Summarize this directory"
+./build/pi-cli --model gpt-4.1-mini
 python3 tests/interactive_run_check.py
-printf '%s\n' '{"id":"state","type":"get_messages"}' | ./build/pi-cli -- --mode rpc
+printf '%s\n' '{"id":"state","type":"get_messages"}' | ./build/pi-cli --mode rpc
 python3 tests/rpc_cli_check.py
-./build/pi-cli -- --export path/to/session.jsonl exported.html
+./build/pi-cli --export path/to/session.jsonl exported.html
 python3 tests/export_cli_check.py
 ```
 
-The first `--` passes the remaining arguments through Bend's runtime to pi. The interactive check runs on one and four native threads from a separate project directory and verifies terminal restoration.
+The CLI owns its whole command line, as pi does; `BEND_THREADS=N` sets the native worker count. The interactive check runs on one and four native threads from a separate project directory and verifies terminal restoration.
 
 The legacy `scripts/setup.sh`, `scripts/build.sh` and `scripts/test.sh` target the bootstrap executable and require libcurl/ICU development libraries. They are not the acceptance gate for the modular port. Credentials and private sessions must stay outside the repository.
 
