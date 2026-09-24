@@ -1022,7 +1022,10 @@
     {
       "source": "packages/ai/test/openai-codex-oauth.test.ts",
       "status": "partial",
-      "ports": ["tests/oauth-device-login.bend", "tests/oauth_device_login_check.py"],
+      "ports": [
+        "tests/oauth-device-login.bend",
+        "tests/oauth_device_login_check.py"
+      ],
       "sha256": "82d9746892b5e8a8b8bef1037dd6cca40f37427a3a317a43d8028f5cb7031f8e"
     },
     {
@@ -2333,9 +2336,14 @@
     },
     {
       "source": "packages/coding-agent/test/model-registry.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2b8c24d61e5684264c087c7fd064e3fbe1d93369943cd9936833f474276963fd"
+      "status": "partial",
+      "ports": [
+        "tests/models-json.bend",
+        "tests/models_json_check.py",
+        "tests/models_json_reference.ts"
+      ],
+      "sha256": "2b8c24d61e5684264c087c7fd064e3fbe1d93369943cd9936833f474276963fd",
+      "notes": "models.json loading, schema errors and provider composition (built-in overrides, custom providers, model overrides, configured auth) are compared against the pinned model-config/provider-composer source: 23 runnable fixtures on Bun (the !command key fixture runs natively). The named registry test cases themselves are not ported; request-time header merging is not yet wired."
     },
     {
       "source": "packages/coding-agent/test/model-resolver.test.ts",
