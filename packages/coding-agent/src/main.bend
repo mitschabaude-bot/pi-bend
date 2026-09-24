@@ -823,15 +823,33 @@ def runtimeCreated(cwd: String, session: Session(), hasExisting: Bool, hasThinki
     case Fail{error}: IO.pure(Result<&1, &1, String, Created()>, Fail{error})
     case Done{runtime}: catalogScoped(cwd, session, hasExisting, hasThinking, settings, seed, flags, modelsOf(runtime))
 
-def seededRuntime(env: FactoryEnv, +cwd: String, +session: Session(), seed: Result<&2, &2, Stop, Runtime.SessionSeed>) -> IO(Result<&1, &1, String, Created()>):
-  match env seed:
-    case _ Fail{Failed{message}}: IO.pure(Result<&1, &1, String, Created()>, Fail{message})
-    case _ Fail{Aborted{note}}: IO.pure(Result<&1, &1, String, Created()>, Fail{note})
-    case FactoryEnv{+parsed, +agentDir, authPath, bundlePath, packageDir} Done{+value}:
+def dashed(names: List<&2, String>) -> List<&2, String>:
+  match names:
+    case Nil{}: Nil{}
+    case name <> rest: ("--" ++ name) <> dashed(rest)
+
+# agent-session-services checks CLI flags against the flags extensions
+# register; with no extension registry every unclaimed flag is unknown.
+def unknownOptions(names: List<&2, String>) -> Maybe<&2, String>:
+  match names:
+    case Nil{}: None{}
+    case _ <> Nil{}: Some{"Error: Unknown option: " ++ String.join(dashed(names), ", ")}
+    case _: Some{"Error: Unknown options: " ++ String.join(dashed(names), ", ")}
+
+def flaggedRuntime(env: FactoryEnv, +cwd: String, +session: Session(), +value: Runtime.SessionSeed, unknown: Maybe<&2, String>) -> IO(Result<&1, &1, String, Created()>):
+  match env unknown:
+    case _ Some{message}: IO.pure(Result<&1, &1, String, Created()>, Fail{message})
+    case FactoryEnv{+parsed, +agentDir, authPath, bundlePath, packageDir} None{}:
       do IO<Result<&1, &1, String, Created()>>:
         +settings : Settings.SettingsManager <- loadSettings(cwd, agentDir)
         created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.create(createOptions(parsed, cwd, agentDir, authPath, bundlePath, packageDir, value, settings))
         runtimeCreated(cwd, session, seedMessages(value), seedThinking(value), settings, value, scopeFlags(parsed, settings), created)
+
+def seededRuntime(env: FactoryEnv, +cwd: String, +session: Session(), seed: Result<&2, &2, Stop, Runtime.SessionSeed>) -> IO(Result<&1, &1, String, Created()>):
+  match env seed:
+    case _ Fail{Failed{message}}: IO.pure(Result<&1, &1, String, Created()>, Fail{message})
+    case _ Fail{Aborted{note}}: IO.pure(Result<&1, &1, String, Created()>, Fail{note})
+    case FactoryEnv{+parsed, agentDir, authPath, bundlePath, packageDir} Done{value}: flaggedRuntime(FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir}, cwd, session, value, unknownOptions(Args.unknownFlagNames(parsed)))
 
 def createRuntime(env: FactoryEnv, request: SessionRuntime.Request) -> IO(Result<&1, &1, String, Created()>):
   match request:
@@ -1094,7 +1112,7 @@ def runConfigured(parsed: Args.Args, mode: AppMode, initial: InitialMessage, +fl
 
 def runWithFiles(+parsed: Args.Args, mode: AppMode, stdin: Maybe<&2, String>, messages: List<&2, String>, environment: Paths.Environment, files: Files.ResultOf(Files.ProcessedFiles)) -> IO(Unit):
   match environment files:
-    case _ Fail{error}: fail(fileError(error))
+    case _ Fail{error}: fail("Error: " ++ fileError(error))
     case Paths.Environment{cwd, home, url} Done{+processed}:
       do IO<Unit>:
         agentDirLocated : Result<&2, &2, FS.Error, String> <- Config.getAgentDir()

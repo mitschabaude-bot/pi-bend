@@ -482,6 +482,16 @@ def scan(remaining: Nat,step: Step) -> State:
 def parseArgs(+args: List<&2,String>) -> Args:
   materialize(scan(List.length(&2,String,args),Step{args,State{Nil{},Nil{},Nil{},Record.new(FlagValue),Nil{}}}))
 
+def flagNames(properties: List<&2,Record.Property<FlagValue>>) -> List<&2,String>:
+  match properties:
+    case Nil{}: Nil{}
+    case Record.Property{name,_} <> rest: name <> flagNames(rest)
+
+# Names of the `--flags` no built-in option claimed, in command-line order.
+def unknownFlagNames(args: Args) -> List<&2,String>:
+  match args:
+    case Args{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,flags,_}: flagNames(Record.entries(FlagValue,flags))
+
 # printHelp without extension flags; the port has no extension registry yet.
 # The text is the pinned upstream template with pi's default identity.
 def helpLines(+appName: String) -> List<&2, String>:
