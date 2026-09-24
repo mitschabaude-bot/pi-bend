@@ -246,7 +246,7 @@ type ThemeStopping is Data:
   ThemeStopping{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>}
 type Interaction is Data:
   Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,modelSelector: Ref.Ref<Maybe<&2,ModelPicker.Host>>,header: Maybe<&2,Header.Handle>}
-type LoginRequest is Data: LoginRequest{provider: String,signal: Abort.AbortSignal<Unit>,notice: AuthLogin.Notice(),manual: Callback.Callback<String,String>}
+type LoginRequest is Data: LoginRequest{provider: String,signal: Abort.AbortSignal<Unit>,notice: AuthLogin.Notice(),manual: Callback.Callback<AuthLogin.ManualPrompt,Unit>,manualDone: Callback.Callback<Unit,Unit>}
 type Binding is Data:
   Binding{current: Ref.Ref<Session.AgentSession>,newSession: Callback.Callback<Unit,Result<&2,&2,String,Unit>>,onRebind: Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>,login: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,refreshModels: Callback.Callback<Unit,List<&2,Models.Model()>>}
 type LoginState is Data:
@@ -296,22 +296,32 @@ def loginFinished(state: LoginState,provider: String,result: AuthLogin.Outcome()
         closeLoginDialog(target)
         loginOutcome(provider,result,cancelled,refresh,models,failure)
         Interactive.requestRender(redraw)
-def manualLoginDialog(target: Maybe<&2,LoginDialog.Host>,url: String,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(String):
-  match target:
-    case None{}: IO.pure(String,"")
-    case Some{dialog}:
-      do IO<String>:
-        +pending : Deferred.Deferred<String> <- LoginDialog.showManual(dialog,url)
+def manualLoginDialog(target: Maybe<&2,LoginDialog.Host>,prompt: AuthLogin.ManualPrompt,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
+  match target prompt:
+    case None{} _: IO.pure(Unit,Unit{})
+    case Some{dialog} AuthLogin.ManualPrompt{url,answer}:
+      do IO<Unit>:
+        LoginDialog.showManual(dialog,url,answer)
         Interactive.requestRender(redraw)
-        input : String <- Deferred.result(String,pending)
-        Deferred.dispose(String,pending)
-        return input
-def manualLogin(state: LoginState,url: String) -> IO(String):
+def manualLogin(state: LoginState,prompt: AuthLogin.ManualPrompt) -> IO(Unit):
   match state:
     case LoginState{host,_,_,_,_,_,redraw}:
-      do IO<String>:
+      do IO<Unit>:
         target : Maybe<&2,LoginDialog.Host> <- Ref.read(Maybe<&2,LoginDialog.Host>,host)
-        manualLoginDialog(target,url,redraw)
+        manualLoginDialog(target,prompt,redraw)
+def endManualDialog(target: Maybe<&2,LoginDialog.Host>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
+  match target:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{dialog}:
+      do IO<Unit>:
+        LoginDialog.stopManual(dialog)
+        Interactive.requestRender(redraw)
+def endManual(state: LoginState,_: Unit) -> IO(Unit):
+  match state:
+    case LoginState{host,_,_,_,_,_,redraw}:
+      do IO<Unit>:
+        target : Maybe<&2,LoginDialog.Host> <- Ref.read(Maybe<&2,LoginDialog.Host>,host)
+        endManualDialog(target,redraw)
 def loginAbort(state: LoginState) -> Ref.Ref<Maybe<&2,Abort.AbortController<Unit>>>:
   match state: case LoginState{_,abort,_,_,_,_,_}: abort
 def selectedLogin(+state: LoginState,+provider: String,authenticate: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,+controller: Abort.AbortController<Unit>) -> IO(Unit):
@@ -324,10 +334,12 @@ def selectedLogin(+state: LoginState,+provider: String,authenticate: Callback.Ca
     case +chosen:
       do IO<Unit>:
         +notice : AuthLogin.Notice() <- Callback.create(~LoginState,~AuthLogin.DevicePrompt,~Unit,~loginNotice,state)
-        +manual : Callback.Callback<String,String> <- Callback.create(~LoginState,~String,~String,~manualLogin,state)
-        result : AuthLogin.Outcome() <- Callback.call(LoginRequest,AuthLogin.Outcome(),authenticate,LoginRequest{chosen,Abort.signal(Unit,controller),notice,manual})
+        +manual : Callback.Callback<AuthLogin.ManualPrompt,Unit> <- Callback.create(~LoginState,~AuthLogin.ManualPrompt,~Unit,~manualLogin,state)
+        +manualDone : Callback.Callback<Unit,Unit> <- Callback.create(~LoginState,~Unit,~Unit,~endManual,state)
+        result : AuthLogin.Outcome() <- Callback.call(LoginRequest,AuthLogin.Outcome(),authenticate,LoginRequest{chosen,Abort.signal(Unit,controller),notice,manual,manualDone})
         Callback.dispose(AuthLogin.DevicePrompt,Unit,notice)
-        Callback.dispose(String,String,manual)
+        Callback.dispose(AuthLogin.ManualPrompt,Unit,manual)
+        Callback.dispose(Unit,Unit,manualDone)
         old : Maybe<&2,Abort.AbortController<Unit>> <- Ref.swap(Maybe<&2,Abort.AbortController<Unit>>,loginAbort(state),None{})
         cancelled : Bool <- Abort.aborted(Unit,Abort.signal(Unit,controller))
         Abort.dispose(Unit,controller)

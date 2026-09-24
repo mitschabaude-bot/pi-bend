@@ -9,13 +9,16 @@ import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import pty
+import re
 import select
+import socket
 import struct
 import subprocess
 import tempfile
 import termios
 import threading
 import time
+import urllib.parse
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = Path(subprocess.check_output(["git", "rev-parse", "--git-common-dir"], cwd=ROOT, text=True).strip()).resolve()
@@ -114,13 +117,39 @@ def scenario(threads):
                 until(b"Choose a provider", at)
                 os.write(master, b"2")
                 until(b"Paste authorization code", at)
-                os.write(master, b"anthropic_test\r")
+                links = re.findall(rb"\x1b\]8;;(https://claude\.ai/oauth/authorize\?[^\x07]*)\x07", output[at:])
+                assert links, bytes(output[at:][-1800:])
+                link = links[-1].decode()
+                params = urllib.parse.parse_qs(urllib.parse.urlparse(link).query)
+                assert "state" in params, link
+                state = params["state"][0]
+                def callback(given_state):
+                    with socket.create_connection(("127.0.0.1", 53692), timeout=3) as connection:
+                        connection.sendall(f"GET /callback?code=anthropic_test&state={given_state} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".encode())
+                        chunks = []
+                        while chunk := connection.recv(4096):
+                            chunks.append(chunk)
+                        return b"".join(chunks)
+                assert callback("wrong").startswith(b"HTTP/1.1 400 Bad Request")
+                assert callback(state).startswith(b"HTTP/1.1 200 OK")
                 until(b"Logged in to Anthropic", at)
+                with socket.socket() as occupied:
+                    occupied.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    occupied.bind(("127.0.0.1", 53692))
+                    occupied.listen()
+                    at = len(output)
+                    os.write(master, b"/login\r")
+                    until(b"Choose a provider", at)
+                    os.write(master, b"2")
+                    until(b"Paste authorization code", at)
+                    os.write(master, b"anthropic_test\r")
+                    until(b"Logged in to Anthropic", at)
                 at = len(output)
                 os.write(master, b"/model\r")
                 until(b"anthropic/claude", at)
                 anthropic = json.loads((agent_dir / "auth.json").read_text())["anthropic"]
                 assert anthropic["access"] == "anthropic_access" and anthropic["refresh"] == "anthropic_refresh"
+                assert [item[1] for item in Handler.seen].count("/anthropic-token") == 2
                 os.write(master, b"\x1b")
                 time.sleep(.3)
                 at = len(output)

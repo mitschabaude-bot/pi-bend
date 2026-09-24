@@ -25,24 +25,27 @@ def bar(width: Nat) -> String:
     case Succ{rest}: "─" ++ bar(rest)
 def clipped(text: String,width: Nat) -> String:
   Utils.truncateToWidth(text,width,"",False{})
+def linked(+url: String,width: Nat) -> String:
+  +label = clipped(url,width - 1n)
+  " \u{1b}]8;;" ++ url ++ "\u{7}" ++ label ++ "\u{1b}]8;;\u{7}"
 def clipLines(lines: List<&2,String>,+width: Nat) -> List<&2,String>:
   match lines:
     case Nil{}: Nil{}
     case line <> rest: clipped(line,width) <> clipLines(rest,width)
-def frameLines(+theme: Theme.Theme,+width: Nat,body: List<&2,String>) -> List<&2,String>:
-  paint(theme,"dim",bar(width)) <> paint(theme,"accent"," Login to OpenAI Codex") <> "" <> List.append(&2,String,body,paint(theme,"dim",bar(width)) <> Nil{})
-def frame(theme: Theme.Theme,+width: Nat,body: List<&2,String>) -> List<&2,String>:
-  clipLines(frameLines(theme,width,body),width)
+def frameLines(+theme: Theme.Theme,+width: Nat,title: String,body: List<&2,String>) -> List<&2,String>:
+  paint(theme,"dim",bar(width)) <> paint(theme,"accent",title) <> "" <> List.append(&2,String,body,paint(theme,"dim",bar(width)) <> Nil{})
+def frame(theme: Theme.Theme,+width: Nat,title: String,body: List<&2,String>) -> List<&2,String>:
+  clipLines(frameLines(theme,width,title,body),width)
+def linkedFrame(+theme: Theme.Theme,+width: Nat,title: String,url: String,body: List<&2,String>) -> List<&2,String>:
+  paint(theme,"dim",bar(width)) <> paint(theme,"accent",title) <> "" <> paint(theme,"accent",linked(url,width)) <> List.append(&2,String,clipLines(body,width),paint(theme,"dim",bar(width)) <> Nil{})
 def waiting(+theme: Theme.Theme,width: Nat) -> List<&2,String>:
-  frame(theme,width,paint(theme,"dim"," Requesting device code...") <> "" <> " (Esc to cancel)" <> Nil{})
+  frame(theme,width," Login to OpenAI Codex",paint(theme,"dim"," Requesting device code...") <> "" <> " (Esc to cancel)" <> Nil{})
 def choosing(+theme: Theme.Theme,width: Nat) -> List<&2,String>:
-  frame(theme,width,paint(theme,"accent"," Choose a provider") <> "  1  OpenAI Codex" <> "  2  Anthropic (Claude Pro/Max)" <> "" <> paint(theme,"dim"," Press 1 or 2 · Esc to cancel") <> Nil{})
+  frame(theme,width," Login",paint(theme,"accent"," Choose a provider") <> "  1  OpenAI Codex" <> "  2  Anthropic (Claude Pro/Max)" <> "" <> paint(theme,"dim"," Press 1 or 2 · Esc to cancel") <> Nil{})
 def manual(+theme: Theme.Theme,+width: Nat,+url: String,+input: String) -> List<&2,String>:
-  +link = "\u{1b}]8;;" ++ url ++ "\u{7}" ++ url ++ "\u{1b}]8;;\u{7}"
-  frame(theme,width,clipped(paint(theme,"accent"," " ++ link),width) <> paint(theme,"dim"," Ctrl+click to open") <> "" <> paint(theme,"dim"," Copy the final redirect URL from your browser after authorization.") <> paint(theme,"warning"," Paste authorization code or redirect URL:") <> clipped(" " ++ input,width) <> "" <> paint(theme,"dim"," Enter to submit · Esc to cancel") <> Nil{})
+  linkedFrame(theme,width," Login to Anthropic",url,paint(theme,"dim"," Ctrl+click to open") <> "" <> paint(theme,"dim"," Complete login in your browser; paste the redirect URL if it is on another machine.") <> paint(theme,"warning"," Paste authorization code or redirect URL:") <> clipped(" " ++ input,width) <> "" <> paint(theme,"dim"," Enter to submit · Esc to cancel") <> Nil{})
 def device(+theme: Theme.Theme,+width: Nat,+url: String,code: String) -> List<&2,String>:
-  +link = "\u{1b}]8;;" ++ url ++ "\u{7}" ++ url ++ "\u{1b}]8;;\u{7}"
-  frame(theme,width,clipped(paint(theme,"accent"," " ++ link),width) <> paint(theme,"dim"," Ctrl+click to open") <> "" <> paint(theme,"warning"," Enter code: " ++ code) <> "" <> paint(theme,"dim"," Waiting for authentication...") <> " (Esc to cancel)" <> Nil{})
+  linkedFrame(theme,width," Login to OpenAI Codex",url,paint(theme,"dim"," Ctrl+click to open") <> "" <> paint(theme,"warning"," Enter code: " ++ code) <> "" <> paint(theme,"dim"," Waiting for authentication...") <> " (Esc to cancel)" <> Nil{})
 def drawCurrent(state: State,editor: Component.Component,theme: Theme.Theme,width: Nat) -> IO(List<&2,String>):
   match state:
     case Closed{}: Component.render(editor,width)
@@ -156,14 +159,22 @@ def open(host: Host) -> IO(Deferred.Deferred<String>):
         Component.setFocused(editor,False{})
         Ref.write(State,state,Choosing{})
         return choice
-def showManual(host: Host,url: String) -> IO(Deferred.Deferred<String>):
+def showManual(host: Host,url: String,answer: Deferred.Deferred<String>) -> IO(Unit):
   match host:
     case Host{state,reply,_,_,_,_,_}:
-      do IO<Deferred.Deferred<String>>:
-        +input : Deferred.Deferred<String> <- Deferred.new(String)
-        Ref.write(Maybe<&2,Deferred.Deferred<String>>,reply,Some{input})
+      do IO<Unit>:
+        Ref.write(Maybe<&2,Deferred.Deferred<String>>,reply,Some{answer})
         Ref.write(State,state,Manual{url,""})
-        return input
+def waitingAfterManual(current: State) -> State & Unit:
+  match current:
+    case Closed{}: (Closed{},Unit{})
+    case _: (Waiting{},Unit{})
+def stopManual(host: Host) -> IO(Unit):
+  match host:
+    case Host{state,reply,_,_,_,_,_}:
+      do IO<Unit>:
+        settle(reply,"")
+        Ref.modify(State,Unit,state,waitingAfterManual)
 def withCode(current: State,url: String,code: String) -> State & Unit:
   match current:
     case Waiting{}: (Device{url,code},Unit{})

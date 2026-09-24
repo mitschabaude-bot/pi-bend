@@ -34,9 +34,9 @@ def rebound(binding: Binding,live: Session.AgentSession) -> IO(Unit): reboundCop
 def startNew(runtime: Runtime(),_: Unit) -> IO(Result<&2,&2,String,Unit>): Host.newSession(Services(),runtime,None{})
 def loginCopied(+base: String,request: Run.LoginRequest) -> IO(AuthLogin.Outcome()):
   match request:
-    case Run.LoginRequest{provider,signal,notice,manual}:
+    case Run.LoginRequest{provider,signal,notice,manual,manualDone}:
       match provider:
-        case "anthropic": AuthLogin.authenticateAnthropicWithTokenURL(base ++ "/anthropic-token",signal,manual)
+        case "anthropic": AuthLogin.authenticateAnthropicWithTokenURL(base ++ "/anthropic-token",AuthLogin.BrowserInteraction{signal,manual,manualDone})
         case _: AuthLogin.authenticate(Codex.DeviceEndpoints{base ++ "/usercode",base ++ "/token",base ++ "/exchange",base ++ "/codex/device"},signal,notice)
 def login(base: String,request: Run.LoginRequest) -> IO(AuthLogin.Outcome()): loginCopied(base,request)
 def models(_: Unit,_: Unit) -> IO(List<&2,Models.Model()>): IO.pure(List<&2,Models.Model()>,Faux.fauxModel() <> List.append(&2,Models.Model(),CodexModels.OPENAI_CODEX_MODELS(),AnthropicModels.ANTHROPIC_MODELS()))

@@ -7,6 +7,7 @@ import ../../../ai/src/auth/oauth/openai-codex.bend as Codex
 import ../../../ai/src/auth/oauth/anthropic.bend as Anthropic
 import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/callback.bend as C
+import ../../../runtime/src/deferred.bend as Deferred
 import ../../../runtime/src/filesystem.bend as FS
 
 # The caller owns cancellation; this function owns the transport and credential
@@ -14,6 +15,9 @@ import ../../../runtime/src/filesystem.bend as FS
 type DevicePrompt is Data: DevicePrompt{url: String, code: String}
 def Notice() -> Data: C.Callback<DevicePrompt, Unit>
 def Outcome() -> Type: Result<&2, &2, String, Unit>
+type ManualPrompt is Data: ManualPrompt{url: String,answer: Deferred.Deferred<String>}
+type BrowserInteraction is Data:
+  BrowserInteraction{signal: Abort.AbortSignal<Unit>,show: C.Callback<ManualPrompt,Unit>,hide: C.Callback<Unit,Unit>}
 
 def replace(credential: Auth.Credential, old: Maybe<&2, Auth.Credential>) -> IO(Auth.StoreResult(Maybe<&2, Auth.Credential>)):
   IO.pure(Auth.StoreResult(Maybe<&2, Auth.Credential>), Done{Some{credential}})
@@ -46,32 +50,59 @@ def anthropicExchange(flow: Anthropic.Flow,store: Auth.CredentialStore,code: Res
       do IO<Outcome()>:
         credential : Result<&2,&2,String,Auth.Credential> <- Anthropic.exchangeCode(flow,value,verifier,signal)
         savedAnthropic(store,credential,signal)
-def anthropicCode(flow: Anthropic.Flow,store: Auth.CredentialStore,authorization: Anthropic.Authorization,signal: Abort.AbortSignal<Unit>,prompt: C.Callback<String,String>) -> IO(Outcome()):
-  match authorization:
-    case Anthropic.Authorization{url,+verifier}:
+def callbackCode(flow: Anthropic.Flow,store: Auth.CredentialStore,listener: Listener,url: String,+verifier: String,interaction: BrowserInteraction) -> IO(Outcome()):
+  match interaction:
+    case BrowserInteraction{+signal,show,hide}:
       do IO<Outcome()>:
-        input : String <- C.call(String,String,prompt,url)
+        +answer : Deferred.Deferred<String> <- Deferred.new(String)
+        worker : Chan(Unit) <- IO.fork(Unit,Anthropic.callbackRun(Anthropic.Listening{listener},answer,verifier,signal))
+        C.call(ManualPrompt,Unit,show,ManualPrompt{url,answer})
+        input : String <- Deferred.result(String,answer)
+        IO.join(Unit,worker)
+        C.call(Unit,Unit,hide,Unit{})
+        Deferred.dispose(String,answer)
         code : Result<&2,&2,String,String> <- IO.pure(Result<&2,&2,String,String>,Anthropic.authorizationInput(input,verifier))
         anthropicExchange(flow,store,code,verifier,signal)
-def anthropicStarted(flow: Anthropic.Flow,store: Auth.CredentialStore,started: Result<&2,&2,String,Anthropic.Authorization>,signal: Abort.AbortSignal<Unit>,prompt: C.Callback<String,String>) -> IO(Outcome()):
+def manualCode(flow: Anthropic.Flow,store: Auth.CredentialStore,url: String,+verifier: String,interaction: BrowserInteraction) -> IO(Outcome()):
+  match interaction:
+    case BrowserInteraction{+signal,show,hide}:
+      do IO<Outcome()>:
+        +answer : Deferred.Deferred<String> <- Deferred.new(String)
+        C.call(ManualPrompt,Unit,show,ManualPrompt{url,answer})
+        input : String <- Deferred.result(String,answer)
+        C.call(Unit,Unit,hide,Unit{})
+        Deferred.dispose(String,answer)
+        code : Result<&2,&2,String,String> <- IO.pure(Result<&2,&2,String,String>,Anthropic.authorizationInput(input,verifier))
+        anthropicExchange(flow,store,code,verifier,signal)
+def callbackReady(flow: Anthropic.Flow,store: Auth.CredentialStore,listener: Result<&1,&1,U32 & String,Listener>,url: String,verifier: String,interaction: BrowserInteraction) -> IO(Outcome()):
+  match listener:
+    case Fail{_}: manualCode(flow,store,url,verifier,interaction)
+    case Done{bound}: callbackCode(flow,store,bound,url,verifier,interaction)
+def anthropicCode(flow: Anthropic.Flow,store: Auth.CredentialStore,authorization: Anthropic.Authorization,interaction: BrowserInteraction) -> IO(Outcome()):
+  match authorization:
+    case Anthropic.Authorization{url,verifier}:
+      do IO<Outcome()>:
+        listener : Result<&1,&1,U32 & String,Listener> <- Anthropic.listenCallback()
+        callbackReady(flow,store,listener,url,verifier,interaction)
+def anthropicStarted(flow: Anthropic.Flow,store: Auth.CredentialStore,started: Result<&2,&2,String,Anthropic.Authorization>,interaction: BrowserInteraction) -> IO(Outcome()):
   match started:
     case Fail{message}: IO.pure(Outcome(),Fail{message})
-    case Done{authorization}: anthropicCode(flow,store,authorization,signal,prompt)
-def anthropicStore(owner: Storage.AuthStorageOwner,view: Storage.AuthStorage,transport: Runtime.Transport,tokenUrl: String,signal: Abort.AbortSignal<Unit>,prompt: C.Callback<String,String>) -> IO(Outcome()):
+    case Done{authorization}: anthropicCode(flow,store,authorization,interaction)
+def anthropicStore(owner: Storage.AuthStorageOwner,view: Storage.AuthStorage,transport: Runtime.Transport,tokenUrl: String,interaction: BrowserInteraction) -> IO(Outcome()):
   match transport:
     case Runtime.Transport{+authorizer,runtime,+network}:
       do IO<Outcome()>:
         +store : Auth.CredentialStore <- Storage.store(view)
         started : Result<&2,&2,String,Anthropic.Authorization> <- Anthropic.beginAuthorization()
-        outcome : Outcome() <- anthropicStarted(Anthropic.Flow{network,Runtime.urlContext(),tokenUrl},store,started,signal,prompt)
+        outcome : Outcome() <- anthropicStarted(Anthropic.Flow{network,Runtime.urlContext(),tokenUrl},store,started,interaction)
         Auth.disposeStore(store)
         Storage.dispose(owner)
         Runtime.disposeTransport(Runtime.Transport{authorizer,runtime,network})
         return outcome
-def anthropicBorrowed(pair: Storage.AuthStorageOwner & Storage.AuthStorage,transport: Runtime.Transport,tokenUrl: String,signal: Abort.AbortSignal<Unit>,prompt: C.Callback<String,String>) -> IO(Outcome()):
+def anthropicBorrowed(pair: Storage.AuthStorageOwner & Storage.AuthStorage,transport: Runtime.Transport,tokenUrl: String,interaction: BrowserInteraction) -> IO(Outcome()):
   match pair:
-    case (owner,view): anthropicStore(owner,view,transport,tokenUrl,signal,prompt)
-def anthropicReady(transport: Runtime.Outcome(Runtime.Transport),path: Result<&2,&2,FS.Error,String>,tokenUrl: String,signal: Abort.AbortSignal<Unit>,prompt: C.Callback<String,String>) -> IO(Outcome()):
+    case (owner,view): anthropicStore(owner,view,transport,tokenUrl,interaction)
+def anthropicReady(transport: Runtime.Outcome(Runtime.Transport),path: Result<&2,&2,FS.Error,String>,tokenUrl: String,interaction: BrowserInteraction) -> IO(Outcome()):
   match transport path:
     case Fail{message} _: IO.pure(Outcome(),Fail{message})
     case Done{transport} Fail{_}:
@@ -81,7 +112,7 @@ def anthropicReady(transport: Runtime.Outcome(Runtime.Transport),path: Result<&2
     case Done{transport} Done{path}:
       do IO<Outcome()>:
         owner : Storage.AuthStorageOwner <- Storage.create(path)
-        anthropicBorrowed(Storage.borrow(owner),transport,tokenUrl,signal,prompt)
+        anthropicBorrowed(Storage.borrow(owner),transport,tokenUrl,interaction)
 
 def authorized(flow: Codex.Flow, endpoints: Codex.DeviceEndpoints, store: Auth.CredentialStore, result: Result<&2, &2, String, Codex.AuthorizationCode>, +signal: Abort.AbortSignal<Unit>) -> IO(Outcome()):
   match result:
@@ -136,14 +167,14 @@ def bundle(value: Result<&1, &1, U32 & String, String>) -> String:
     case Done{path}: path
     case Fail{_}: "/etc/ssl/certs/ca-certificates.crt"
 
-def authenticateAnthropicWithTokenURL(tokenUrl: String,signal: Abort.AbortSignal<Unit>,prompt: C.Callback<String,String>) -> IO(Outcome()):
+def authenticateAnthropicWithTokenURL(tokenUrl: String,interaction: BrowserInteraction) -> IO(Outcome()):
   do IO<Outcome()>:
     path : Result<&2,&2,FS.Error,String> <- Config.getAuthPath()
     certs : Result<&1,&1,U32 & String,String> <- IO.get_env("SSL_CERT_FILE")
     transport : Runtime.Outcome(Runtime.Transport) <- Runtime.createTransport(bundle(certs))
-    anthropicReady(transport,path,tokenUrl,signal,prompt)
-def authenticateAnthropic(signal: Abort.AbortSignal<Unit>,prompt: C.Callback<String,String>) -> IO(Outcome()):
-  authenticateAnthropicWithTokenURL(Anthropic.TOKEN_URL(),signal,prompt)
+    anthropicReady(transport,path,tokenUrl,interaction)
+def authenticateAnthropic(interaction: BrowserInteraction) -> IO(Outcome()):
+  authenticateAnthropicWithTokenURL(Anthropic.TOKEN_URL(),interaction)
 
 def authenticate(endpoints: Codex.DeviceEndpoints, signal: Abort.AbortSignal<Unit>, notice: Notice()) -> IO(Outcome()):
   do IO<Outcome()>:

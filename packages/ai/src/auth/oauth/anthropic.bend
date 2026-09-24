@@ -7,6 +7,7 @@ import ../../../../runtime/src/base64.bend as Base64
 import ../../../../runtime/src/callback.bend as C
 import ../../../../runtime/src/date.bend as Date
 import ../../../../runtime/src/deadline.bend as Deadline
+import ../../../../runtime/src/deferred.bend as Deferred
 import ../../../../runtime/src/f64.bend as F
 import ../../../../runtime/src/fetch.bend as Fetch
 import ../../../../runtime/src/http-exchange.bend as Exchange
@@ -124,16 +125,16 @@ def fields(now: F64, access: Maybe<&2, String>, refresh: Maybe<&2, String>, expi
   match access refresh expires:
     case Some{access} Some{refresh} Some{V.Number{seconds}}:
       Done{Token{access, refresh, F.subtract(F.add(now, F.multiply(seconds, F.fromU32(1000))), F.fromU32(300000))}}
-    case _ _ _: Fail{"Anthropic token refresh response missing fields"}
+    case _ _ _: Fail{"Anthropic token response missing fields"}
 
 def parsed(now: F64, value: Result<&2, &2, Json.ParseError, V.Value>) -> Result<&2, &2, String, Token>:
   match value:
     case Done{V.ObjectValue{+record}}: fields(now, nonempty(R.get(V.Value, record, "access_token")), nonempty(R.get(V.Value, record, "refresh_token")), R.get(V.Value, record, "expires_in"))
-    case _: Fail{"Anthropic token refresh returned invalid JSON"}
+    case _: Fail{"Anthropic token response returned invalid JSON"}
 
 def encoded(value: Maybe<&2, String>, url: Result<&2, &2, URL.Error, URL.URL>, headers: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>) -> Result<&2, &2, String, Request>:
   match value url headers:
-    case None{} _ _: Fail{"Anthropic token refresh payload could not be encoded"}
+    case None{} _ _: Fail{"Anthropic token payload could not be encoded"}
     case _ Fail{_} _: Fail{"Anthropic token endpoint URL is invalid"}
     case _ _ Fail{_}: Fail{"Anthropic token request headers are invalid"}
     case Some{body} Done{address} Done{headerFields}: Done{Request{address, headerFields, body}}
@@ -148,7 +149,7 @@ def authorizationRequest(url: URL.Context, tokenUrl: String, code: String, +veri
 
 def readResult(result: Result<&2, &2, Response.TextError<Exchange.ReadError<Deadline.Cause<Unit>>>, String>) -> Result<&2, &2, String, String>:
   match result:
-    case Fail{_}: Fail{"Could not read Anthropic token refresh response"}
+    case Fail{_}: Fail{"Could not read Anthropic token response"}
     case Done{value}: Done{value}
 
 def bodyText(body: Response.Body<Fetch.Transport(Unit)>) -> IO(Result<&2, &2, String, String>):
@@ -162,11 +163,11 @@ def statusBody(body: Response.Body<Fetch.Transport(Unit)>, successful: Bool) -> 
     case False{}:
       do IO<Result<&2, &2, String, String>>:
         discarded : Result<&2, &2, String, String> <- bodyText(body)
-        return Fail{"Anthropic token refresh was rejected"}
+        return Fail{"Anthropic token request was rejected"}
 
 def responded(outcome: Fetch.Result_(Unit)) -> IO(Result<&2, &2, String, String>):
   match outcome:
-    case Fail{_}: IO.pure(Result<&2, &2, String, String>, Fail{"Anthropic token refresh request failed"})
+    case Fail{_}: IO.pure(Result<&2, &2, String, String>, Fail{"Anthropic token request failed"})
     case Done{Response.Response{metadata, body}}: statusBody(body, Response.successful(Response.metadataStatus(metadata)))
 
 def parsedResponse(now: F64, response: Result<&2, &2, String, String>) -> Result<&2, &2, String, Token>:
@@ -236,3 +237,141 @@ def anthropicOAuthWithTokenURL(fetch: Fetch.Fetch(Unit), url: URL.Context, token
 
 def anthropicOAuth(fetch: Fetch.Fetch(Unit), url: URL.Context) -> IO(Auth.OAuthAuth):
   anthropicOAuthWithTokenURL(fetch, url, TOKEN_URL())
+
+# The CLI callback listener owns its socket. The browser and the terminal
+# race to settle one authorization result; every path closes the listener.
+def callbackLineParts(parts: List<&2,String>) -> Maybe<&2,String>:
+  match parts:
+    case first <> _ <> _: Some{Text.trim(first)}
+    case _: None{}
+def callbackLineText(value: Result<&2,&2,Utf8.Error,String>) -> Maybe<&2,String>:
+  match value:
+    case Fail{_}: None{}
+    case Done{text}: callbackLineParts(Strings.split(text,'\n'))
+def callbackLine(bytes: List<&2,U32>) -> Maybe<&2,String>:
+  callbackLineText(Utf8.decodeStrict(bytes))
+def callbackTarget(parts: List<&2,String>,verifier: String) -> Result<&2,&2,String,String>:
+  match parts:
+    case "GET" <> +target <> "HTTP/1.1" <> Nil{}:
+      Bool.pick(Unit -> Result<&2,&2,String,String>,String.starts_with(target,"/callback?"),_ => authorizationInput(REDIRECT_URI() ++ "?" ++ String.drop(target,10n),verifier),_ => Fail{"Unexpected OAuth callback route"})(Unit{})
+    case _: Fail{"Invalid OAuth callback request"}
+def callbackCode(line: String,verifier: String) -> Result<&2,&2,String,String>:
+  callbackTarget(Strings.split(line,' '),verifier)
+def callbackHtml(success: Bool) -> String:
+  Bool.pick(String,success,"<!doctype html><title>Anthropic login complete</title><p>Authentication completed. You can close this window.</p>","<!doctype html><title>Anthropic login failed</title><p>Authentication did not complete. Return to the terminal.</p>")
+def callbackResponse(+success: Bool) -> String:
+  +body = callbackHtml(success)
+  Bool.pick(String,success,"HTTP/1.1 200 OK\r\n","HTTP/1.1 400 Bad Request\r\n") ++ "Content-Type: text/html; charset=utf-8\r\nContent-Length: " ++ Nat.show(List.length(&2,U32,Utf8.encode(body))) ++ "\r\nConnection: close\r\n\r\n" ++ body
+def closeCallbackWrite(pair: Socket & Result<&1,&1,U32 & String,Unit>) -> IO(Unit):
+  match pair:
+    case (socket,_): Socket.close(socket)
+def respondCallback(socket: Socket,success: Bool) -> IO(Unit):
+  do IO<Unit>:
+    pair : Socket & Result<&1,&1,U32 & String,Unit> <- TCP.send(socket,callbackResponse(success))
+    closeCallbackWrite(pair)
+
+type CallbackStep is Type:
+  Listening{listener: Listener}
+  CheckedListener{listener: Listener,answer: Maybe<&2,String>,aborted: Bool}
+  Accepted{pair: Listener & Result<&1,&1,U32 & String,Socket>}
+  Reading{listener: Listener,socket: Socket,bytes: List<&2,U32>}
+  CheckedSocket{listener: Listener,socket: Socket,bytes: List<&2,U32>,answer: Maybe<&2,String>,aborted: Bool}
+  Readable{listener: Listener,pair: Socket & Result<&1,&1,U32 & String,Bool>,bytes: List<&2,U32>}
+  Received{listener: Listener,pair: Socket & Result<&1,&1,U32 & String,List<&2,U32>>,bytes: List<&2,U32>}
+  Line{listener: Listener,socket: Socket,bytes: List<&2,U32>,line: Maybe<&2,String>}
+  LineSize{listener: Listener,socket: Socket,bytes: List<&2,U32>,tooLong: Bool}
+  Parsed{listener: Listener,socket: Socket,result: Result<&2,&2,String,String>}
+
+@unsafe def callbackRun(step: CallbackStep,+answer: Deferred.Deferred<String>,+verifier: String,+signal: Abort.AbortSignal<Unit>) -> IO(Unit):
+  match step:
+    case Listening{listener}:
+      do IO<Unit>:
+        current : Maybe<&2,String> <- Deferred.peek(String,answer)
+        stopped : Bool <- Abort.aborted(Unit,signal)
+        callbackRun(CheckedListener{listener,current,stopped},answer,verifier,signal)
+    case CheckedListener{listener,Some{_},_}:
+      do IO<Unit>:
+        Listener.close(listener)
+        return Unit{}
+    case CheckedListener{listener,None{},True{}}:
+      do IO<Unit>:
+        Listener.close(listener)
+        settled : Bool <- Deferred.resolve(String,answer,"")
+        return Unit{}
+    case CheckedListener{listener,None{},False{}}:
+      do IO<Unit>:
+        pair : Listener & Result<&1,&1,U32 & String,Socket> <- TCP.accept_try(listener)
+        callbackRun(Accepted{pair},answer,verifier,signal)
+    case Accepted{(listener,Fail{(11,_)})}:
+      do IO<Unit>:
+        IO.sleep(30)
+        callbackRun(Listening{listener},answer,verifier,signal)
+    case Accepted{(listener,Fail{_})}:
+      do IO<Unit>:
+        Listener.close(listener)
+        settled : Bool <- Deferred.resolve(String,answer,"")
+        return Unit{}
+    case Accepted{(listener,Done{socket})}: callbackRun(Reading{listener,socket,Nil{}},answer,verifier,signal)
+    case Reading{listener,socket,bytes}:
+      do IO<Unit>:
+        current : Maybe<&2,String> <- Deferred.peek(String,answer)
+        stopped : Bool <- Abort.aborted(Unit,signal)
+        callbackRun(CheckedSocket{listener,socket,bytes,current,stopped},answer,verifier,signal)
+    case CheckedSocket{listener,socket,_,Some{_},_}:
+      do IO<Unit>:
+        Socket.close(socket)
+        Listener.close(listener)
+        return Unit{}
+    case CheckedSocket{listener,socket,_,None{},True{}}:
+      do IO<Unit>:
+        Socket.close(socket)
+        Listener.close(listener)
+        settled : Bool <- Deferred.resolve(String,answer,"")
+        return Unit{}
+    case CheckedSocket{listener,socket,bytes,None{},False{}}:
+      do IO<Unit>:
+        pair : Socket & Result<&1,&1,U32 & String,Bool> <- TCP.readable(socket)
+        callbackRun(Readable{listener,pair,bytes},answer,verifier,signal)
+    case Readable{listener,(socket,Done{False{}}),bytes}:
+      do IO<Unit>:
+        IO.sleep(30)
+        callbackRun(Reading{listener,socket,bytes},answer,verifier,signal)
+    case Readable{listener,(socket,Fail{_}),_}:
+      do IO<Unit>:
+        Socket.close(socket)
+        callbackRun(Listening{listener},answer,verifier,signal)
+    case Readable{listener,(socket,Done{True{}}),bytes}:
+      do IO<Unit>:
+        pair : Socket & Result<&1,&1,U32 & String,List<&2,U32>> <- TCP.recv_bytes(socket,4096)
+        callbackRun(Received{listener,pair,bytes},answer,verifier,signal)
+    case Received{listener,(socket,Fail{_}),_}:
+      do IO<Unit>:
+        Socket.close(socket)
+        callbackRun(Listening{listener},answer,verifier,signal)
+    case Received{listener,(socket,Done{Nil{}}),_}:
+      do IO<Unit>:
+        Socket.close(socket)
+        callbackRun(Listening{listener},answer,verifier,signal)
+    case Received{listener,(socket,Done{chunk}),bytes}:
+      +joined = List.append(&2,U32,bytes,chunk)
+      callbackRun(Line{listener,socket,joined,callbackLine(joined)},answer,verifier,signal)
+    case Line{listener,socket,+bytes,None{}}:
+      callbackRun(LineSize{listener,socket,bytes,Nat.is_gt(List.length(&2,U32,bytes),8192n)},answer,verifier,signal)
+    case LineSize{listener,socket,_,True{}}:
+      do IO<Unit>:
+        respondCallback(socket,False{})
+        callbackRun(Listening{listener},answer,verifier,signal)
+    case LineSize{listener,socket,bytes,False{}}: callbackRun(Reading{listener,socket,bytes},answer,verifier,signal)
+    case Line{listener,socket,_,Some{line}}: callbackRun(Parsed{listener,socket,callbackCode(line,verifier)},answer,verifier,signal)
+    case Parsed{listener,socket,Fail{_}}:
+      do IO<Unit>:
+        respondCallback(socket,False{})
+        callbackRun(Listening{listener},answer,verifier,signal)
+    case Parsed{listener,socket,Done{code}}:
+      do IO<Unit>:
+        respondCallback(socket,True{})
+        settled : Bool <- Deferred.resolve(String,answer,code)
+        Listener.close(listener)
+        return Unit{}
+
+def listenCallback() -> IO(Result<&1,&1,U32 & String,Listener>): TCP.listen_host("127.0.0.1",53692)
