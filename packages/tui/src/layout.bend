@@ -1,6 +1,7 @@
 import Base
 import ./component.bend as C
 import ./tui.bend as T
+import ./terminal-image.bend as Image
 import ./utils.bend as U
 import ./components/stack.bend as S
 import ./components/scroll-view.bend as Scroll
@@ -51,10 +52,43 @@ def sizes(measured: List<&2,Measured>,+vertical: Bool) -> List<&2,Nat>:
   match measured:
     case Nil{}: Nil{}
     case Measured{_,_,width,height} <> rest: Bool.pick(Nat,vertical,height,width) <> sizes(rest,vertical)
-def composite(row: String,line: Maybe<&2,String>,x: Nat,width: Nat,totalWidth: Nat) -> String:
+# upstream paintBox: a full-width box painting onto an untouched row (or an
+# image line) uses the source line itself. Rows are written with erase-line and
+# the final width clamp still truncates over-wide lines, so no padding or
+# grapheme segmentation is needed.
+def untouchedOrImage(row: String,+line: String) -> Bool:
+  match row:
+    case SNil{}: True{}
+    case _: Image.isImageLine(line)
+def compositeWhen(direct: Bool,row: String,line: String,x: Nat,width: Nat,totalWidth: Nat) -> String:
+  match direct:
+    case True{}: line
+    case False{}: T.compositeTuiLine(row,line,x,width,totalWidth)
+# upstream OSC133_ZONE_PREFIX: leading semantic-prompt zone marks
+# (ESC ] 133 ; A|B|C, ended by BEL or ESC \) are removed before painting.
+def zoneKind(kind: Char,rest: String) -> Maybe<&2,String>:
+  match kind:
+    case 'A': Some{rest}
+    case 'B': Some{rest}
+    case 'C': Some{rest}
+    case _: None{}
+def zonePrefix(line: String) -> Maybe<&2,String>:
+  match line:
+    case SCon{Chr{27},SCon{']',SCon{'1',SCon{'3',SCon{'3',SCon{';',SCon{kind,SCon{Chr{7},rest}}}}}}}}: zoneKind(kind,rest)
+    case SCon{Chr{27},SCon{']',SCon{'1',SCon{'3',SCon{'3',SCon{';',SCon{kind,SCon{Chr{27},SCon{'\\',rest}}}}}}}}}: zoneKind(kind,rest)
+    case _: None{}
+@unsafe
+def withoutZonesFrom(line: String,next: Maybe<&2,String>) -> String:
+  match next:
+    case None{}: line
+    case Some{+rest}: withoutZonesFrom(rest,zonePrefix(rest))
+def withoutZones(+line: String) -> String: withoutZonesFrom(line,zonePrefix(line))
+def composite(+row: String,line: Maybe<&2,String>,+x: Nat,+width: Nat,+totalWidth: Nat) -> String:
   match line:
     case None{}: row
-    case Some{text}: T.compositeTuiLine(row,text,x,width,totalWidth)
+    case Some{source}:
+      +text = withoutZones(source)
+      compositeWhen(Nat.is_eq(x,0n) && Nat.is_ge(width,totalWidth) && untouchedOrImage(row,text),row,text,x,width,totalWidth)
 def paintLines(rows: List<&2,String>,sourceLines: List<&2,String>,height: Nat,+x: Nat,+width: Nat,+totalWidth: Nat) -> List<&2,String>:
   match rows sourceLines height:
     case row <> rest line <> more Succ{left}:
