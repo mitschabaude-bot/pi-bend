@@ -22,20 +22,29 @@ def colorDiffLine(theme: Theme.Theme,line: String) -> IO(String):
     case _: Messages.foregroundText(theme,"toolDiffContext",line)
 def commonLength(a: String,b: String) -> Nat:
   match a b:
-    case SCon{left,restLeft} SCon{right,restRight}: Bool.pick(Nat,Char.is_eq(left,right),1n + commonLength(restLeft,restRight),0n)
+    case SCon{left,restLeft} SCon{right,restRight}:
+      Bool.pick(Unit -> Nat,Char.is_eq(left,right),_ => 1n + commonLength(restLeft,restRight),_ => 0n)(Unit{})
     case _ _: 0n
 def wordBoundary(+text: String,+index: Nat) -> Bool:
   Nat.is_eq(index,0n) || Nat.is_eq(index,String.length(text)) || String.ends_with(String.take(text,index)," ") || String.starts_with(String.drop(text,index)," ") || String.ends_with(String.take(text,index),"\t") || String.starts_with(String.drop(text,index),"\t")
-def alignedPrefix(+before: String,+after: String,count: Nat) -> Nat:
-  match count:
-    case Zero{}: 0n
-    case Succ{+previous}:
-      Bool.pick(Nat,wordBoundary(before,Succ{previous}) && wordBoundary(after,Succ{previous}),Succ{previous},alignedPrefix(before,after,previous))
-def alignedSuffix(+before: String,+after: String,count: Nat) -> Nat:
-  match count:
-    case Zero{}: 0n
-    case Succ{+previous}:
-      Bool.pick(Nat,wordBoundary(before,String.length(before) - Succ{previous}) && wordBoundary(after,String.length(after) - Succ{previous}),Succ{previous},alignedSuffix(before,after,previous))
+def space(+char: Char) -> Bool: Char.is_eq(char,' ') || Char.is_eq(char,'\t')
+def lastSpaceEnd(chars: String,+index: Nat,last: Nat) -> Nat:
+  match chars:
+    case SNil{}: last
+    case SCon{char,rest}: lastSpaceEnd(rest,index + 1n,Bool.pick(Nat,space(char),index + 1n,last))
+def firstSpace(chars: String,+index: Nat) -> Maybe<&2,Nat>:
+  match chars:
+    case SNil{}: None{}
+    case SCon{char,rest}: Bool.pick(Unit -> Maybe<&2,Nat>,space(char),_ => Some{index},_ => firstSpace(rest,index + 1n))(Unit{})
+def suffixAfterSpace(found: Maybe<&2,Nat>,count: Nat) -> Nat:
+  match found:
+    case Some{position}: count - position
+    case None{}: 0n
+def alignedPrefix(+before: String,+after: String,+count: Nat) -> Nat:
+  Bool.pick(Nat,wordBoundary(before,count) && wordBoundary(after,count),count,lastSpaceEnd(String.take(before,count),0n,0n))
+def alignedSuffix(+before: String,+after: String,+count: Nat) -> Nat:
+  Bool.pick(Nat,wordBoundary(before,String.length(before) - count) && wordBoundary(after,String.length(after) - count),count,
+    suffixAfterSpace(firstSpace(String.take(String.drop(before,String.length(before) - count),count),0n),count))
 def contentStart(line: String,count: Nat) -> Nat:
   match line:
     case SNil{}: count
