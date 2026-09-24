@@ -5,6 +5,7 @@ Paths in `files` are relative to the scenario root (home/, project/). Steps:
   ("wait", regex[, label])  record input→screen latency under `label`
   ("settle"[, seconds])     wait for a quiet screen   ("snap", name)
 """
+import json
 
 MODEL = ["--provider", "openai", "--model", "gpt-5"]
 READY = r"gpt-5 • "  # the footer's model line: the editor is mounted
@@ -115,4 +116,23 @@ SCENARIOS = [
     {"name": "cli-list-models-search", "process": True, "args": ["--list-models", "gpt-5"], "steps": []},
     {"name": "cli-unknown-model", "process": True, "args": ["--provider", "openai", "--model", "nope", "-p", "hi"], "steps": []},
     {"name": "cli-no-prompt-print", "process": True, "args": MODEL + ["-p"], "steps": []},
+    {"name": "print-thinking-high", "process": True, "args": MODEL + ["--thinking", "high", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},
+    {"name": "print-model-suffix", "process": True, "args": ["--provider", "openai", "--model", "gpt-5:low", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},
+    {"name": "print-no-tools", "process": True, "args": MODEL + ["--no-tools", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},
+    {"name": "print-tools-subset", "process": True, "args": MODEL + ["--tools", "read,ls,grep", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},
+    {"name": "print-system-prompt", "process": True, "args": MODEL + ["--system-prompt", "You are terse.", "--append-system-prompt", "Always answer in English.", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},
+    {"name": "print-context-skills", "process": True, "args": MODEL + ["-p", "hi"], "files": RESOURCES, "turns": [{"text": "ok"}], "steps": []},
+    {"name": "print-file-arg", "process": True, "args": MODEL + ["-p", "@notes.txt", "summarise"], "files": {"project/notes.txt": "line one\nline two\n"}, "turns": [{"text": "ok"}], "steps": []},
+    {"name": "print-continue", "process": True, "before": [MODEL + ["-p", "first"]], "args": MODEL + ["-c", "-p", "second"],
+     "turns": [{"text": "first answer"}, {"text": "second answer"}], "steps": []},
+    {"name": "print-read-tool", "process": True, "args": MODEL + ["-p", "read it"], "files": {"project/data.txt": "alpha\nbeta\n"},
+     "turns": [{"tool": {"name": "read", "arguments": {"path": "data.txt"}}}, {"text": "Read done."}], "steps": []},
+    {"name": "print-http-400", "process": True, "args": MODEL + ["-p", "hi"],
+     "turns": [{"status": 400, "error": {"error": {"message": "Invalid request: bad field", "type": "invalid_request_error"}}}], "steps": []},
+    {"name": "print-retry-500", "process": True, "args": MODEL + ["-p", "hi"],
+     "files": {"home/.pi/agent/settings.json": json.dumps({"retry": {"enabled": True, "maxRetries": 2, "baseDelayMs": 10}})},
+     "turns": [{"status": 500}, {"text": "recovered"}], "steps": []},
+    {"name": "print-failed", "process": True, "args": MODEL + ["-p", "hi"],
+     "files": {"home/.pi/agent/settings.json": json.dumps({"retry": {"enabled": False}})},
+     "turns": [{"failed": {"code": "server_error", "message": "boom"}}], "steps": []},
 ]

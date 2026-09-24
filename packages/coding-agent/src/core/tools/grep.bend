@@ -469,7 +469,7 @@ def createGrepTool(paths: Paths.Environment,tools: Tools.ToolsManager,cwd: Strin
     case GrepToolOptions{operations}:
       do IO<ToolOwner>:
         callback : Callback.Callback<Agent.ToolExecutionInput<GrepToolDetails>,ToolResult()> <- Callback.create(~Registered,~Agent.ToolExecutionInput<GrepToolDetails>,~ToolResult(),~invoke,Registered{Invocation{paths,tools,cwd,operations},source})
-        return ToolOwner{Agent.AgentTool{"grep","Search file contents for a pattern. Returns matching lines with file paths and line numbers. Respects .gitignore. Output is truncated to 100 matches or 50KB (whichever is hit first). Long lines are truncated to 500 chars.",grepSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"grep",None{},callback,None{},None{}}}
+        return ToolOwner{Agent.AgentTool{"grep","Search file contents for a pattern. Returns matching lines with file paths and line numbers. Respects .gitignore. Output is truncated to 100 matches or 50KB (whichever is hit first). Long lines are truncated to 500 chars.",grepSchema(),None{},"grep",None{},callback,None{},None{}}}
 def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<GrepToolDetails,Error>:
   match owner:
     case ToolOwner{+tool}: (ToolOwner{tool},tool)

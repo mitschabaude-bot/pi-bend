@@ -6,6 +6,8 @@ the event shapes upstream's openai-responses parser reads. A turn is
   {"text": "...", "chunks": N, "delay_ms": D}          assistant text
   {"tool": {"name": "...", "arguments": {...}}}         one function call
   {"usage": {"input": I, "output": O}}                  optional, with either
+  {"status": 500, "error": {...}}                       an HTTP error response
+  {"failed": {"code": "...", "message": "..."}}         a response.failed event
 Requests are appended as JSON lines to the log path so scenarios can compare
 what each client sent.
 """
@@ -35,6 +37,9 @@ def events(turn, index):
     rid = f"resp_{index}"
     usage = turn.get("usage", {"input": 100, "output": 10})
     yield {"type": "response.created", "response": {"id": rid, "status": "in_progress"}}
+    if "failed" in turn:
+        yield {"type": "response.failed", "response": {"id": rid, "status": "failed", "error": turn["failed"]}}
+        return
     if "tool" in turn:
         call = turn["tool"]
         arguments = json.dumps(call.get("arguments", {}))
@@ -76,6 +81,15 @@ def handler(script):
                 body = raw.decode(errors="replace")
             headers = {name.lower(): value for name, value in self.headers.items()}
             turn = script.next(body, self.path, headers)
+            if "status" in turn:
+                # A plain HTTP error response.
+                payload = json.dumps(turn.get("error", {"error": {"message": "scripted failure", "type": "server_error"}})).encode()
+                self.send_response(turn["status"])
+                self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+                return
             self.send_response(200)
             self.send_header("content-type", "text/event-stream")
             self.send_header("cache-control", "no-cache")

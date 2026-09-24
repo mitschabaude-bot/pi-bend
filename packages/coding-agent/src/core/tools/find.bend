@@ -278,7 +278,7 @@ def createFindTool(paths: Paths.Environment,tools: Tools.ToolsManager,cwd: Strin
     case FindToolOptions{operations}:
       do IO<ToolOwner>:
         callback : Callback.Callback<Agent.ToolExecutionInput<FindToolDetails>,ToolResult()> <- Callback.create(~Registered,~Agent.ToolExecutionInput<FindToolDetails>,~ToolResult(),~invoke,Registered{Invocation{paths,tools,cwd,operations},source})
-        return ToolOwner{Agent.AgentTool{"find","Search for files by glob pattern. Returns matching file paths relative to the search directory. Respects .gitignore. Output is truncated to 1000 results or 50KB (whichever is hit first).",findSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"find",None{},callback,None{},None{}}}
+        return ToolOwner{Agent.AgentTool{"find","Search for files by glob pattern. Returns matching file paths relative to the search directory. Respects .gitignore. Output is truncated to 1000 results or 50KB (whichever is hit first).",findSchema(),None{},"find",None{},callback,None{},None{}}}
 def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<FindToolDetails,Error>:
   match owner:
     case ToolOwner{+tool}: (ToolOwner{tool},tool)

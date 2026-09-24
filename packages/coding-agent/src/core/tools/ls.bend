@@ -291,7 +291,7 @@ def lsSchema() -> Value.Value:
 def created(~le: String -> String -> Bool, environment: Registered, owned: Maybe<&2,LsOperations>) -> IO(ToolOwner):
   do IO<ToolOwner>:
     callback : Callback.Callback<Agent.ToolExecutionInput<LsToolDetails>,ToolResult()> <- Callback.create(~Registered,~Agent.ToolExecutionInput<LsToolDetails>,~ToolResult(),~invoke(~le),environment)
-    return ToolOwner{Agent.AgentTool{"ls","List directory contents. Returns entries sorted alphabetically, with '/' suffix for directories. Includes dotfiles. Output is truncated to 500 entries or 50KB (whichever is hit first).",lsSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"ls",None{},callback,None{},None{}},owned}
+    return ToolOwner{Agent.AgentTool{"ls","List directory contents. Returns entries sorted alphabetically, with '/' suffix for directories. Includes dotfiles. Output is truncated to 500 entries or 50KB (whichever is hit first).",lsSchema(),None{},"ls",None{},callback,None{},None{}},owned}
 
 # Comparator injection also makes the ordering contract explicit for consumers.
 def createWithOrder(~le: String -> String -> Bool, order: Order, paths: Paths.Environment, cwd: String, options: LsToolOptions, source: Ctx.ContextSource()) -> IO(ToolOwner):

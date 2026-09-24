@@ -89,19 +89,22 @@ def normalise(text, root):
     text = re.sub(r"\b\d+(\.\d+)?(ms|s)\b", "<duration>", text)
     return "\n".join(line.rstrip() for line in text.rstrip("\n").split("\n"))
 
-IDS = {"id", "parentId", "responseId", "toolCallId", "sessionId"}
+IDS = {"id", "parentId", "responseId", "toolCallId", "sessionId", "targetId", "firstKeptEntryId", "fromId", "leafId", "entryId"}
 
-def mask(value, key=None):
-    """Clock readings and generated ids vary per run; key order is JavaScript
-    insertion order, which the port does not reproduce, so keys are sorted."""
+def mask(value, key=None, names=None):
+    """Clock readings and generated ids vary per run; ids are numbered by first
+    appearance so references between entries still compare. Key order is
+    JavaScript insertion order, which the port does not reproduce, so keys
+    are sorted."""
+    names = {} if names is None else names
     if isinstance(value, dict):
-        return {k: mask(v, k) for k, v in sorted(value.items())}
+        return {k: mask(v, k, names) for k, v in sorted(value.items())}
     if isinstance(value, list):
-        return [mask(v) for v in value]
+        return [mask(v, None, names) for v in value]
     if key == "timestamp":
         return "<time>"
     if key in IDS and isinstance(value, str):
-        return "<id>"
+        return names.setdefault(value, f"<id{len(names)}>")
     if isinstance(value, str):
         return value.replace(PI_PACKAGE, "<package>").replace(str(ROOT), "<package>")
     return value
@@ -127,10 +130,10 @@ def mask_known(value):
 
 def normalise_events(text):
     """JSON lines compare as values; other lines as text."""
-    lines = []
+    lines, names = [], {}
     for line in text.split("\n"):
         try:
-            lines.append(json.dumps(mask(mask_known(json.loads(line))), sort_keys=True))
+            lines.append(json.dumps(mask(mask_known(json.loads(line)), None, names), sort_keys=True))
         except ValueError:
             lines.append(line)
     return "\n".join(lines)
@@ -159,8 +162,12 @@ def run_side(label, argv, scenario, keep):
     snaps, timings = {}, {}
     if scenario.get("process"):
         # Non-interactive modes: exact stdout/stderr of a plain process.
-        started = time.monotonic()
         try:
+            # Earlier invocations in the same environment (e.g. create a
+            # session before continuing it); their output is not compared.
+            for earlier in scenario.get("before", []):
+                subprocess.run(argv + earlier, cwd=project, env=env, capture_output=True, text=True, timeout=scenario.get("timeout", 60), stdin=subprocess.DEVNULL)
+            started = time.monotonic()
             result = subprocess.run(argv + scenario.get("args", []), cwd=project, env=env, capture_output=True, text=True, timeout=scenario.get("timeout", 60), stdin=subprocess.DEVNULL)
             timings["done"] = time.monotonic() - started
             snaps["stdout"] = normalise(normalise_events(result.stdout), root)
