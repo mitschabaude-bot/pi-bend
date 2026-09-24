@@ -33,7 +33,7 @@ def nameFor(mode: U32, first: Bool) -> String:
 
 def notifyBlocked(mode: U32, update: Maybe<&2, T.AgentToolUpdateCallback(String)>) -> IO(Unit):
   match update:
-    case Some{callback}: Bool.pick(IO(Unit), sequential(mode), C.call(T.AgentToolResult<String>, Unit, callback, T.AgentToolResult{Nil{}, "blocked", None{}, None{}}), IO.pure(Unit, Unit{}))
+    case Some{callback}: Bool.pick(IO(Unit), sequential(mode), C.call(T.AgentToolResult<String>, Unit, callback, T.AgentToolResult{Nil{}, Some{"blocked"}, None{}, None{}}), IO.pure(Unit, Unit{}))
     case None{}: Test.assertion(False{}, "executor update callback available")
 
 def received(value: Maybe<&1, Unit>) -> IO(Unit):
@@ -69,7 +69,7 @@ def execute(gates: Gates, input: Validation.ExecuteInput()) -> IO(Validation.Exe
         +value : String = valueFor(mode, first)
         Test.assertion(V.equal(args, Validation.field(V.Text{value})), "original tool arguments")
         executeCall(Gates{mode, started, release, resolved, starts, recording}, id, update)
-        return Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{Bool.pick(String, sequential(mode), nameFor(mode, first), "echoed") ++ ": " ++ value, None{}}} <> Nil{}, value, None{}, None{}}}
+        return Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{Bool.pick(String, sequential(mode), nameFor(mode, first), "echoed") ++ ": " ++ value, None{}}} <> Nil{}, Some{value}, None{}, None{}}}
 
 def call(+mode: U32, +first: Bool) -> Ai.AssistantContent<V.Value>:
   Ai.AssistantToolCall{Ai.ToolCall{Bool.pick(String, first, "tool-1", "tool-2"), nameFor(mode, first), Validation.field(V.Text{valueFor(mode, first)}), None{}, None{}}}

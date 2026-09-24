@@ -45,10 +45,10 @@ def execute(environment: Execution, input: H.ExecuteInput()) -> IO(H.ExecuteOutp
       do IO<H.ExecuteOutput()>:
         Test.assertion(V.equal(arguments, H.field(V.Text{"changed by hook"})), "parallel execution receives hook-updated arguments without revalidation")
         R.modify(List<&2, S.Update()>, Unit, retained, callbacks => (update <> callbacks, Unit{}))
-        C.call(T.AgentToolResult<String>, Unit, update, T.AgentToolResult{Nil{}, "progress", None{}, None{}})
+        C.call(T.AgentToolResult<String>, Unit, update, T.AgentToolResult{Nil{}, Some{"progress"}, None{}, None{}})
         announce(gates, id)
         released : Maybe<&1, Unit> <- Chan.recv(Unit, selected(id, gates))
-        return Done{T.AgentToolResult{Nil{}, "executed", None{}, None{}}}
+        return Done{T.AgentToolResult{Nil{}, Some{"executed"}, None{}, None{}}}
     case _ _: IO.die(H.ExecuteOutput(), 1, "unexpected parallel execution input")
 
 def notifyEnd(ended: Chan(String), event: H.EventValue()) -> IO(Unit):
@@ -76,7 +76,7 @@ def fullContext(context: H.Context()) -> Bool:
 
 def after(count: R.Ref<U32>, input: S.AfterInput()) -> IO(S.AfterOutput()):
   match input:
-    case T.ToolHookInput{T.AfterToolCallContext{_, _, arguments, T.AgentToolResult{_, details, _, _}, False{}, context}, _}:
+    case T.ToolHookInput{T.AfterToolCallContext{_, _, arguments, T.AgentToolResult{_, Some{details}, _, _}, False{}, context}, _}:
       do IO<S.AfterOutput()>:
         Test.assertion(fullContext(context) && V.equal(arguments, H.field(V.Text{"changed by hook"})) && String.eq(details, "executed"), "every after hook receives final preparation context and its execution result")
         R.modify(U32, Unit, count, value => ((value + 1 : U32), Unit{}))

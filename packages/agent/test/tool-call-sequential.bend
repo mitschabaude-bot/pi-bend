@@ -56,8 +56,8 @@ def execute(environment: Execution, input: H.ExecuteInput()) -> IO(H.ExecuteOutp
         Test.assertion(String.eq(id, "call") && V.equal(arguments, H.field(V.Text{"changed by hook"})), "execution receives before-hook arguments without revalidation")
         R.modify(U32, Unit, calls, count => ((count + 1 : U32), Unit{}))
         R.write(Maybe<&2, Update()>, retained, Some{update})
-        C.call(T.AgentToolResult<String>, Unit, update, T.AgentToolResult{Nil{}, "progress", None{}, None{}})
-        return Done{T.AgentToolResult{Nil{}, "executed", None{}, None{}}}
+        C.call(T.AgentToolResult<String>, Unit, update, T.AgentToolResult{Nil{}, Some{"progress"}, None{}, None{}})
+        return Done{T.AgentToolResult{Nil{}, Some{"executed"}, None{}, None{}}}
     case _ _: IO.die(H.ExecuteOutput(), 1, "unexpected execution input")
 
 def marked(context: H.Context()) -> Bool:
@@ -75,7 +75,7 @@ def before(block: Bool, input: BeforeInput()) -> IO(BeforeOutput()):
 
 def after(counter: R.Ref<U32>, input: AfterInput()) -> IO(AfterOutput()):
   match input:
-    case T.ToolHookInput{T.AfterToolCallContext{_, _, arguments, T.AgentToolResult{_, details, _, _}, False{}, context}, _}:
+    case T.ToolHookInput{T.AfterToolCallContext{_, _, arguments, T.AgentToolResult{_, Some{details}, _, _}, False{}, context}, _}:
       do IO<AfterOutput()>:
         Test.assertion(marked(context) && V.equal(arguments, H.field(V.Text{"changed by hook"})) && String.eq(details, "executed"), "after hook sees updated arguments, context and executor result")
         R.modify(U32, Unit, counter, count => ((count + 1 : U32), Unit{}))
@@ -121,7 +121,7 @@ def checkOutcome(actual: Outcome(), failed: Bool, hasMarker: Bool, errors: List<
 def late(callback: Maybe<&2, Update()>) -> IO(Unit):
   match callback:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{callback}: C.call(T.AgentToolResult<String>, Unit, callback, T.AgentToolResult{Nil{}, "late", None{}, None{}})
+    case Some{callback}: C.call(T.AgentToolResult<String>, Unit, callback, T.AgentToolResult{Nil{}, Some{"late"}, None{}, None{}})
 
 def scenario(+failAt: String, +initialAbort: Bool, abortAfter: Bool, blockBefore: Bool, expectedCalls: U32, expectedHooks: U32, expectedEvents: List<&2, String>, expectedErrors: List<&2, Bool>, terminate: Bool) -> IO(Unit):
   do IO<Unit>:

@@ -71,7 +71,7 @@ def stop(seen: R.Ref<Bool>, input: StopInput()) -> IO(Finished()):
         Test.assertion(String.eq(roles(messages), "suat"), "finishTurn receives system/user/assistant/toolResult context")
         return Done{Some{T.EndTurn{}}}
 def execute(mode: U32, input: T.ToolExecutionInput<Unit>) -> IO(Result<&2, &2, String, T.AgentToolResult<Unit>>):
-  IO.pure(Result<&2, &2, String, T.AgentToolResult<Unit>>, Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{Bool.pick(String, U32.is_eq(mode, 0), "ok", "tool complete"), None{}}} <> Nil{}, Unit{}, None{}, None{}}})
+  IO.pure(Result<&2, &2, String, T.AgentToolResult<Unit>>, Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{Bool.pick(String, U32.is_eq(mode, 0), "ok", "tool complete"), None{}}} <> Nil{}, Some{Unit{}}, None{}, None{}}})
 def options(+mode: U32, stream: Named.StreamFunction(), executor: Named.Executor(), prepareHook: Hooks.LegacyHook(Update(), String), stopHook: Finish()) -> Options.AgentOptions<Unit, Unit, String, String, Unit>:
   Options.AgentOptions{Some{State.AgentInitialState{None{}, None{}, None{}, Some{Declarations.tool("noop", "Noop tool", executor) <> Nil{}}, None{}}}, None{}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, Bool.pick(Maybe<&2, Finish()>, U32.is_eq(mode, 1), Some{stopHook}, None{}), None{}, Bool.pick(Maybe<&2, Hooks.LegacyHook(Update(), String)>, U32.is_eq(mode, 0), Some{prepareHook}, None{}), None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 def create(+mode: U32, capture: Capture, prepareHook: Hooks.LegacyHook(Update(), String), stopHook: Finish()) -> IO(Named.Fixture):

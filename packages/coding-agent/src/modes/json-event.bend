@@ -49,7 +49,7 @@ def toolResults(values: List<&2, Ai.ToolResultMessage<Tools.ToolDetails>>) -> Li
 
 def toolResult(value: ToolResult()) -> V.Value:
   match value:
-    case Agent.AgentToolResult{content, details, usage, terminate}: Json.object(Json.field("content", V.ArrayValue{Json.textImageContents(content)}, Json.field("details", Tools.detailsValue(details), Json.optional("usage", Maybe.map(&2, Ai.Usage, V.Value, Json.usage, usage), Json.optionalBoolean("terminate", terminate, Nil{})))))
+    case Agent.AgentToolResult{content, details, usage, terminate}: Json.object(Json.field("content", V.ArrayValue{Json.textImageContents(content)}, Json.optional("details", Maybe.map(&2, Tools.ToolDetails, V.Value, Tools.detailsValue, details), Json.optional("usage", Maybe.map(&2, Ai.Usage, V.Value, Json.usage, usage), Json.optionalBoolean("terminate", terminate, Nil{})))))
 
 # Streaming events without snapshots
 # ----------------------------------

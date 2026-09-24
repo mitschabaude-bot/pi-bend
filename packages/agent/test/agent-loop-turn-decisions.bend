@@ -111,7 +111,7 @@ def provider(script: Script, input: M.ProviderInput()) -> IO(M.ProviderOutput())
         return Done{T.borrowedStream(Unit, String, stream)}
 
 def execute(scenario: U32, input: H.ExecuteInput()) -> IO(H.ExecuteOutput()):
-  IO.pure(H.ExecuteOutput(), Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"done", None{}}} <> Nil{}, "tool", None{}, Some{U32.is_eq(scenario, 0)}}})
+  IO.pure(H.ExecuteOutput(), Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"done", None{}}} <> Nil{}, Some{"tool"}, None{}, Some{U32.is_eq(scenario, 0)}}})
 
 def lastRole(messages: H.Messages()) -> String:
   match messages:

@@ -52,7 +52,7 @@ def execute(recording: H.Log(), input: Validation.ExecuteInput()) -> IO(Validati
       do IO<Validation.ExecuteOutput()>:
         Test.assertion(String.eq(id, "tool-1") && V.equal(args, Validation.field(V.Text{"hello"})), "executor receives complete validated arguments")
         H.log(recording, "hello")
-        return Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"echoed: hello", None{}}} <> Nil{}, "hello", Some{usage(False{})}, None{}}}
+        return Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"echoed: hello", None{}}} <> Nil{}, Some{"hello"}, Some{usage(False{})}, None{}}}
 
 def after(recording: H.Log(), input: HookInput()) -> IO(HookOutput()):
   match input:
@@ -120,7 +120,7 @@ def checkEvent(+truncated: Bool, event: Validation.EventValue()) -> IO(U32):
       do IO<U32>:
         Test.assertion(String.eq(id, "tool-1") && String.eq(name, "echo"), "tool execution start")
         return 1
-    case T.ToolExecutionEnd{id, name, T.AgentToolResult{content, details, usageValue, _}, error}:
+    case T.ToolExecutionEnd{id, name, T.AgentToolResult{content, Some{details}, usageValue, _}, error}:
       do IO<U32>:
         Test.assertion(validResult(truncated, Ai.ToolResultMessage{id, name, content, Some{details}, usageValue, error, F.fromU32(0)}), "tool execution end preserves finalized usage or truncation error")
         return 10

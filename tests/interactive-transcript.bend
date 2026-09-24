@@ -33,7 +33,7 @@ def resumedAssistant() -> Agent.AgentMessage<Value.Value,Value.Value,Unit>:
 def savedResult(id: String,name: String,text: String,error: Bool) -> Agent.AgentMessage<Value.Value,Value.Value,Unit>:
   Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{id,name,Ai.TextImageText{Ai.TextContent{text,None{}}} <> Nil{},None{},None{},error,F64{0,0}}}}
 def toolResult(text: String) -> Agent.AgentToolResult<Value.Value>:
-  Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{text,None{}}} <> Nil{},Value.Null{},None{},None{}}
+  Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{text,None{}}} <> Nil{},Some{Value.Null{}},None{},None{}}
 def started(value: Ai.AssistantMessage<Value.Value,Value.Value>) -> AgentEventT():
   Agent.MessageStart{Agent.LlmMessage{Ai.Assistant{value}}}
 def updated(+value: Ai.AssistantMessage<Value.Value,Value.Value>) -> AgentEventT():

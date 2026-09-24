@@ -108,12 +108,12 @@ def arguments(pattern: String,path: String, maximum: String) -> V.Value:
     case "none": V.ObjectValue{R.Record{R.Property{"pattern",V.Text{pattern}} <> limit(maximum)}}
     case _: V.ObjectValue{R.Record{R.Property{"pattern",V.Text{pattern}} <> R.Property{"path",V.Text{path}} <> limit(maximum)}}
 
-def call(pair: L.ToolOwner & Agent.AgentTool<Maybe<&2,L.FindToolDetails>,L.Error>, args: V.Value, signal: A.AbortSignal<Unit>) -> IO(Unit):
+def call(pair: L.ToolOwner & Agent.AgentTool<L.FindToolDetails,L.Error>, args: V.Value, signal: A.AbortSignal<Unit>) -> IO(Unit):
   match pair:
     case (owner,Agent.AgentTool{name,_,_,Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},label,None{},callback,None{},None{}}):
       do IO<Unit>:
         check(String.eq(name,"find") && String.eq(label,"find"),"ls metadata")
-        result : L.ToolResult() <- C.call(Agent.ToolExecutionInput<Maybe<&2,L.FindToolDetails>>,L.ToolResult(),callback,Agent.ToolExecutionInput{"ls-1",args,Some{signal},None{}})
+        result : L.ToolResult() <- C.call(Agent.ToolExecutionInput<L.FindToolDetails>,L.ToolResult(),callback,Agent.ToolExecutionInput{"ls-1",args,Some{signal},None{}})
         report(result)
         L.disposeTool(owner)
     case _: IO.die(Unit,1,"unexpected tool shape")

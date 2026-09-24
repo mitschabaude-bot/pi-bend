@@ -51,7 +51,7 @@ def run(args: List<String>) -> IO(Unit):
         +registry : StreamFn.Registry(Unit,Tools.ToolDetails,Runtime.LoopConfig(),Tools.ToolError) <- StreamFn.create(Unit,Tools.ToolDetails,Runtime.LoopConfig(),Tools.ToolError)
         +validator : Loop.Validator(Tools.ToolError) <- Loop.createPlain(~Tools.ToolError,~Runtime.validationError)
         +converter : Runtime.Converter() <- Runtime.createConverter(False{})
-        candidate : Result<&2,&2,StreamFn.MissingDefault,Runtime.Owner()> <- Agent.new(~Unit,~Tools.ToolDetails,~Runtime.Custom(),~Tools.ToolError,~Unit,options(stream,converter,Sessions.getSessionId(Unit,Tools.ToolDetails,Schema.Value,stored)),registry,validator,Tools.WriteDetails{})
+        candidate : Result<&2,&2,StreamFn.MissingDefault,Runtime.Owner()> <- Agent.new(~Unit,~Tools.ToolDetails,~Runtime.Custom(),~Tools.ToolError,~Unit,options(stream,converter,Sessions.getSessionId(Unit,Tools.ToolDetails,Schema.Value,stored)),registry,validator,Tools.emptyDetails())
         +agent : Runtime.Owner() <- requireAgent(candidate)
         loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd,agentDir,Settings.options())
         models : Models.ModelRuntime <- ModelFixture.create(Nil{})

@@ -99,7 +99,7 @@ def readText(input: ReadToolInput, content: String) -> Result<&2, &2, Error, Tex
 # Local operations are owned by the factory. Injected operations and image
 # processors remain borrowed; callers retire them only after executions settle.
 def ResultOf(-A: Data) -> Data: Result<&2,&2,Error,A>
-def ToolResult() -> Data: ResultOf(Agent.AgentToolResult<Maybe<&2,ReadToolDetails>>)
+def ToolResult() -> Data: ResultOf(Agent.AgentToolResult<ReadToolDetails>)
 
 type ReadOperations is Data:
   ReadOperations{readFile: Callback.Callback<String,ResultOf(List<&2,U32>)>, access: Callback.Callback<String,ResultOf(Unit)>, detectImageMimeType: Maybe<&2,Callback.Callback<String,ResultOf(Maybe<&2,String>)>>}
@@ -121,7 +121,7 @@ type Invocation is Data:
   Invocation{paths: Paths.Environment, cwd: String, operations: ReadOperations, autoResizeImages: Bool, imageProcessor: Maybe<&2,Callback.Callback<ImageInput,ResultOf(ProcessedImage)>>}
 
 type ToolOwner is Type:
-  ToolOwner{tool: Agent.AgentTool<Maybe<&2,ReadToolDetails>,Error>, ownedOperations: Maybe<&2,ReadOperations>}
+  ToolOwner{tool: Agent.AgentTool<ReadToolDetails,Error>, ownedOperations: Maybe<&2,ReadOperations>}
 
 def continued(-A: Data, -B: Data, result: ResultOf(A), next: A -> IO(ResultOf(B))) -> IO(ResultOf(B)):
   match result:
@@ -194,7 +194,7 @@ def nonVision(note: Maybe<&2,Bool>) -> String:
     case Some{False{}}: "\n[Current model does not support images. The image will be omitted from this request.]"
     case _: ""
 
-def imageResult(original: String, note: Maybe<&2,Bool>, processed: ProcessedImage) -> Agent.AgentToolResult<Maybe<&2,ReadToolDetails>>:
+def imageResult(original: String, note: Maybe<&2,Bool>, processed: ProcessedImage) -> Agent.AgentToolResult<ReadToolDetails>:
   match processed:
     case Unsupported{message}:
       Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{"Read image file [" ++ original ++ "]\n" ++ message ++ nonVision(note),None{}}} <> Nil{},None{},None{},None{}}
@@ -226,7 +226,7 @@ def content(input: ReadToolInput, bytes: List<&2,U32>, mime: Maybe<&2,String>, r
   match mime:
     case None{}: IO.pure(ToolResult(),textContent(input,Utf8.decodeWith(Utf8.Preserve{},bytes)))
     case Some{+mime}:
-      then(ProcessedImage,Agent.AgentToolResult<Maybe<&2,ReadToolDetails>>,processed(processor,bytes,mime,resize),value => IO.pure(ToolResult(),Done{imageResult(mime,note,value)}))
+      then(ProcessedImage,Agent.AgentToolResult<ReadToolDetails>,processed(processor,bytes,mime,resize),value => IO.pure(ToolResult(),Done{imageResult(mime,note,value)}))
 
 def nonempty(value: Maybe<&2,String>) -> Maybe<&2,String>:
   match value:
@@ -244,11 +244,11 @@ def detect(callback: Maybe<&2,Callback.Callback<String,ResultOf(Maybe<&2,String>
 def read(operations: ReadOperations, +absolute: String, input: ReadToolInput, resize: Bool, processor: Maybe<&2,Callback.Callback<ImageInput,ResultOf(ProcessedImage)>>, note: Maybe<&2,Bool>, +signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ToolResult()):
   match operations:
     case ReadOperations{reader,access,mime}:
-      then(Unit,Agent.AgentToolResult<Maybe<&2,ReadToolDetails>>,check(signal),_ =>
-        then(Unit,Agent.AgentToolResult<Maybe<&2,ReadToolDetails>>,Callback.call(String,ResultOf(Unit),access,absolute),_ =>
-          then(Unit,Agent.AgentToolResult<Maybe<&2,ReadToolDetails>>,check(signal),_ =>
-            then(Maybe<&2,String>,Agent.AgentToolResult<Maybe<&2,ReadToolDetails>>,detect(mime,absolute),detected =>
-              then(List<&2,U32>,Agent.AgentToolResult<Maybe<&2,ReadToolDetails>>,Callback.call(String,ResultOf(List<&2,U32>),reader,absolute),bytes =>
+      then(Unit,Agent.AgentToolResult<ReadToolDetails>,check(signal),_ =>
+        then(Unit,Agent.AgentToolResult<ReadToolDetails>,Callback.call(String,ResultOf(Unit),access,absolute),_ =>
+          then(Unit,Agent.AgentToolResult<ReadToolDetails>,check(signal),_ =>
+            then(Maybe<&2,String>,Agent.AgentToolResult<ReadToolDetails>,detect(mime,absolute),detected =>
+              then(List<&2,U32>,Agent.AgentToolResult<ReadToolDetails>,Callback.call(String,ResultOf(List<&2,U32>),reader,absolute),bytes =>
                 content(input,bytes,detected,resize,processor,note))))))
 
 def numeric(value: Result<&2,&2,Number.Error,Nat>) -> ResultOf(Maybe<&2,Nat>):
@@ -279,7 +279,7 @@ def execute(environment: Invocation, +input: ReadToolInput, note: Maybe<&2,Bool>
       do IO<ToolResult()>:
         absolute : String <- Paths.resolvedReadPath(paths,path)
         value : ToolResult() <- read(operations,absolute,input,resize,processor,note,signal)
-        settled(Agent.AgentToolResult<Maybe<&2,ReadToolDetails>>,signal,value)
+        settled(Agent.AgentToolResult<ReadToolDetails>,signal,value)
 
 def resolveInput(environment: Paths.Environment, cwd: String, input: ReadToolInput) -> Result<&2,&2,Paths.Error,String>:
   match input:
@@ -294,11 +294,11 @@ def invokeInput(+environment: Invocation, context: ReadContext, +signal: Maybe<&
   match environment context input:
     case _ _ Fail{error}: IO.pure(ToolResult(),Fail{error})
     case Invocation{+paths,cwd,_,_,_} ReadContext{override,note} Done{+value}:
-      then(Unit,Agent.AgentToolResult<Maybe<&2,ReadToolDetails>>,check(signal),_ => execute(environment,value,note,signal,resolveInput(paths,workingDirectory(override,cwd),value)))
+      then(Unit,Agent.AgentToolResult<ReadToolDetails>,check(signal),_ => execute(environment,value,note,signal,resolveInput(paths,workingDirectory(override,cwd),value)))
 
 # Extension adapters can pass dynamic cwd/model capability here. AgentTool's
 # public execute input has no ExtensionContext and uses the absent context.
-def invokeWithContext(environment: Invocation, context: ReadContext, request: Agent.ToolExecutionInput<Maybe<&2,ReadToolDetails>>) -> IO(ToolResult()):
+def invokeWithContext(environment: Invocation, context: ReadContext, request: Agent.ToolExecutionInput<ReadToolDetails>) -> IO(ToolResult()):
   match request:
     case Agent.ToolExecutionInput{_,arguments,signal,_}: invokeInput(environment,context,signal,parseInput(arguments))
 
@@ -320,7 +320,7 @@ def toolContext(context: Maybe<&2,Ctx.ExtensionContext>) -> ReadContext:
   match context:
     case None{}: ReadContext{None{},None{}}
     case Some{Ctx.ExtensionContext{cwd,model,_,_,_}}: ReadContext{Some{cwd},modelImages(model)}
-def invoke(registered: Registered, request: Agent.ToolExecutionInput<Maybe<&2,ReadToolDetails>>) -> IO(ToolResult()):
+def invoke(registered: Registered, request: Agent.ToolExecutionInput<ReadToolDetails>) -> IO(ToolResult()):
   match registered:
     case Registered{environment,source}:
       do IO<ToolResult()>:
@@ -341,7 +341,7 @@ def readSchema() -> Value.Value:
 
 def created(environment: Registered, owned: Maybe<&2,ReadOperations>) -> IO(ToolOwner):
   do IO<ToolOwner>:
-    callback : Callback.Callback<Agent.ToolExecutionInput<Maybe<&2,ReadToolDetails>>,ToolResult()> <- Callback.create(~Registered,~Agent.ToolExecutionInput<Maybe<&2,ReadToolDetails>>,~ToolResult(),~invoke,environment)
+    callback : Callback.Callback<Agent.ToolExecutionInput<ReadToolDetails>,ToolResult()> <- Callback.create(~Registered,~Agent.ToolExecutionInput<ReadToolDetails>,~ToolResult(),~invoke,environment)
     return ToolOwner{Agent.AgentTool{"read","Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output is truncated to 2000 lines or 50KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.",readSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"read",None{},callback,None{},None{}},owned}
 
 def createReadTool(paths: Paths.Environment, cwd: String, options: ReadToolOptions, source: Ctx.ContextSource()) -> IO(ToolOwner):
@@ -352,7 +352,7 @@ def createReadTool(paths: Paths.Environment, cwd: String, options: ReadToolOptio
         +operations : ReadOperations <- defaultReadOperations()
         created(Registered{Invocation{paths,cwd,operations,Maybe.default(&2,Bool,resize,True{}),processor},source},Some{operations})
 
-def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<Maybe<&2,ReadToolDetails>,Error>:
+def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<ReadToolDetails,Error>:
   match owner:
     case ToolOwner{+tool,operations}: (ToolOwner{tool,operations},tool)
 
@@ -365,5 +365,5 @@ def disposeTool(owner: ToolOwner) -> IO(Unit):
   match owner:
     case ToolOwner{Agent.AgentTool{_,_,_,_,_,_,callback,_,_},owned}:
       do IO<Unit>:
-        Callback.dispose(Agent.ToolExecutionInput<Maybe<&2,ReadToolDetails>>,ToolResult(),callback)
+        Callback.dispose(Agent.ToolExecutionInput<ReadToolDetails>,ToolResult(),callback)
         disposeOwned(owned)

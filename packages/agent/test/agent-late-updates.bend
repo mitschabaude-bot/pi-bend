@@ -25,7 +25,7 @@ def Update() -> Data: T.AgentToolUpdateCallback(Unit)
 def ExecuteInput() -> Data: T.ToolExecutionInput<Unit>
 def ExecuteResult() -> Data: Result<&2, &2, String, T.AgentToolResult<Unit>>
 def result(text: String, terminate: Bool) -> T.AgentToolResult<Unit>:
-  T.AgentToolResult{Ai.TextImageText{Ai.TextContent{text, None{}}} <> Nil{}, Unit{}, None{}, Some{terminate}}
+  T.AgentToolResult{Ai.TextImageText{Ai.TextContent{text, None{}}} <> Nil{}, Some{Unit{}}, None{}, Some{terminate}}
 def requireUpdate(value: Maybe<&2, Update()>) -> IO(Update()):
   match value:
     case Some{callback}: IO.pure(Update(), callback)

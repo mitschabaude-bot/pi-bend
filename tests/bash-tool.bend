@@ -42,11 +42,11 @@ def content(values: List<&2,Ai.TextImageContent>, acc: String, count: Nat) -> St
 def rendered(prefix: String, detail: Maybe<&2,Bash.BashToolDetails>, pair: String & Nat) -> String:
   match pair:
     case (text,count): prefix ++ "|" ++ Nat.show(count) ++ "|" ++ wire(text) ++ "|" ++ details(detail)
-def frame(prefix: String, result: Agent.AgentToolResult<Maybe<&2,Bash.BashToolDetails>>) -> String:
+def frame(prefix: String, result: Agent.AgentToolResult<Bash.BashToolDetails>) -> String:
   match result:
     case Agent.AgentToolResult{items,detail,None{},None{}}: rendered(prefix,detail,content(items,"",0n))
     case _: "unexpected-result-shape"
-def update(unused: Unit, value: Agent.AgentToolResult<Maybe<&2,Bash.BashToolDetails>>) -> IO(Unit): IO.print(frame("update",value))
+def update(unused: Unit, value: Agent.AgentToolResult<Bash.BashToolDetails>) -> IO(Unit): IO.print(frame("update",value))
 def report(value: Bash.ToolResult()) -> IO(Unit):
   match value:
     case Done{result}: IO.print(frame("result",result))
@@ -176,13 +176,13 @@ def late(mode: String, value: Maybe<&2,C.Callback<List<&2,U32>,Result<&2,&2,Stri
 
 def context(+cwd: String) -> Bash.BashContext:
   Bash.BashContext{Some{cwd ++ "/context"},Some{"session-A"},Some{"/tmp/session.json"},Some{"openai"},Some{"model-A"},Some{"high"}}
-def request(mode: String, invocation: Bash.Invocation, cwd: String, input: Agent.ToolExecutionInput<Maybe<&2,Bash.BashToolDetails>>, callback: C.Callback<Agent.ToolExecutionInput<Maybe<&2,Bash.BashToolDetails>>,Bash.ToolResult()>) -> IO(Bash.ToolResult()):
+def request(mode: String, invocation: Bash.Invocation, cwd: String, input: Agent.ToolExecutionInput<Bash.BashToolDetails>, callback: C.Callback<Agent.ToolExecutionInput<Bash.BashToolDetails>,Bash.ToolResult()>) -> IO(Bash.ToolResult()):
   match mode:
     case "mock-context": Bash.invokeWithContext(invocation,context(cwd),input)
     case "mock-hidden": Bash.invokeWithContext(invocation,context(cwd),input)
-    case _: C.call(Agent.ToolExecutionInput<Maybe<&2,Bash.BashToolDetails>>,Bash.ToolResult(),callback,input)
+    case _: C.call(Agent.ToolExecutionInput<Bash.BashToolDetails>,Bash.ToolResult(),callback,input)
 
-def call(+mode: String, binDir: String, +cwd: String, options: Bash.BashToolOptions, operations: Bash.BashOperations, params: V.Value, signal: A.AbortSignal<Unit>, update: Agent.AgentToolUpdateCallback(Maybe<&2,Bash.BashToolDetails>), retained: Ref.Ref<Maybe<&2,C.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>>>, pair: Bash.ToolOwner & Agent.AgentTool<Maybe<&2,Bash.BashToolDetails>,Bash.Error>) -> IO(Unit):
+def call(+mode: String, binDir: String, +cwd: String, options: Bash.BashToolOptions, operations: Bash.BashOperations, params: V.Value, signal: A.AbortSignal<Unit>, update: Agent.AgentToolUpdateCallback(Bash.BashToolDetails), retained: Ref.Ref<Maybe<&2,C.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>>>, pair: Bash.ToolOwner & Agent.AgentTool<Bash.BashToolDetails,Bash.Error>) -> IO(Unit):
   match pair:
     case (owner,Agent.AgentTool{name,_,_,Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},label,None{},callback,None{},None{}}):
       do IO<Unit>:
@@ -200,7 +200,7 @@ def runCase(+mode: String,+binDir: String,+cwd: String,shell: String,command: St
     +retained : Ref.Ref<Maybe<&2,C.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>>> <- Ref.new(Maybe<&2,C.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>>,None{})
     +exec : C.Callback<Bash.BashExecutionInput,Result<&2,&2,Bash.OperationError,Maybe<&2,U32>>> <- C.create(~Injection,~Bash.BashExecutionInput,~Result<&2,&2,Bash.OperationError,Maybe<&2,U32>>,~injected,Injection{mode,retained})
     +hookCallback : C.Callback<Bash.BashSpawnContext,Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>> <- C.create(~String,~Bash.BashSpawnContext,~Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>,~hook,mode)
-    +updateCallback : Agent.AgentToolUpdateCallback(Maybe<&2,Bash.BashToolDetails>) <- C.create(~Unit,~Agent.AgentToolResult<Maybe<&2,Bash.BashToolDetails>>,~Unit,~update,Unit{})
+    +updateCallback : Agent.AgentToolUpdateCallback(Bash.BashToolDetails) <- C.create(~Unit,~Agent.AgentToolResult<Bash.BashToolDetails>,~Unit,~update,Unit{})
     +controller : A.AbortController<Unit> <- A.new(Unit)
     abortTask : Maybe<&2,Chan(Unit)> <- prepareAbort(mode,controller)
     +options : Bash.BashToolOptions = Bash.BashToolOptions{Bool.pick(Maybe<&2,Bash.BashOperations>,native(mode),None{},Some{Bash.BashOperations{exec}}),prefix(mode),Some{shell},Some{Bool.not(String.eq(mode,"mock-hidden"))},spawnHook(mode,hookCallback)}
@@ -209,7 +209,7 @@ def runCase(+mode: String,+binDir: String,+cwd: String,shell: String,command: St
     call(mode,binDir,cwd,options,Bash.BashOperations{exec},arguments(mode,command,seconds),A.signal(Unit,controller),updateCallback,retained,Bash.borrowTool(owner))
     join(abortTask)
     A.dispose(Unit,controller)
-    C.dispose(Agent.AgentToolResult<Maybe<&2,Bash.BashToolDetails>>,Unit,updateCallback)
+    C.dispose(Agent.AgentToolResult<Bash.BashToolDetails>,Unit,updateCallback)
     C.dispose(Bash.BashSpawnContext,Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>,hookCallback)
     C.dispose(Bash.BashExecutionInput,Result<&2,&2,Bash.OperationError,Maybe<&2,U32>>,exec)
     unused : Maybe<&2,C.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>> <- Ref.dispose(Maybe<&2,C.Callback<List<&2,U32>,Result<&2,&2,String,Unit>>>,retained)

@@ -30,7 +30,7 @@ def text(value: List<&2, Ai.TextImageContent>) -> String:
 
 def inspect(input: Input(), expectedError: Bool) -> IO(Unit):
   match input:
-    case T.ToolHookInput{T.AfterToolCallContext{_, Ai.ToolCall{id, name, raw, _, _}, args, T.AgentToolResult{content, details, _, _}, isError, T.AgentContext{T.CustomMessage{context} <> Nil{}, _}}, Some{_}}:
+    case T.ToolHookInput{T.AfterToolCallContext{_, Ai.ToolCall{id, name, raw, _, _}, args, T.AgentToolResult{content, Some{details}, _, _}, isError, T.AgentContext{T.CustomMessage{context} <> Nil{}, _}}, Some{_}}:
       Test.assertion(String.eq(id, "call-id") && String.eq(name, "echo") && Schema.equal(raw, Schema.Text{"raw args"}) && Schema.equal(args, Schema.Number{F.fromU32(123)}) && String.eq(text(content), "original") && String.eq(details, "original details") && Bool.not(Bool.xor(isError, expectedError)) && String.eq(context, "context"), "after hook input lost execution data")
     case _: Test.assertion(False{}, "after hook input or signal shape")
 
@@ -59,8 +59,9 @@ def configuration(converter: ConfigTest.Converter(), after: Maybe<&2, Hook()>) -
 
 def check(finalized: Loop.FinalizedToolCallOutcome<String>, expectedText: String, expectedDetails: String, expectedError: Bool, expectedTerminate: Bool) -> IO(Unit):
   match finalized:
-    case Loop.FinalizedToolCallOutcome{Ai.ToolCall{id, name, raw, _, _}, T.AgentToolResult{content, details, _, terminate}, isError}:
-      Test.assertion(String.eq(id, "call-id") && String.eq(name, "echo") && Schema.equal(raw, Schema.Text{"raw args"}) && String.eq(text(content), expectedText) && String.eq(details, expectedDetails) && Bool.not(Bool.xor(isError, expectedError)) && Bool.not(Bool.xor(Loop.resultTerminates(String, T.AgentToolResult{Nil{}, "", None{}, terminate}), expectedTerminate)), "finalized fields differ")
+    case Loop.FinalizedToolCallOutcome{Ai.ToolCall{id, name, raw, _, _}, T.AgentToolResult{content, Some{details}, _, terminate}, isError}:
+      Test.assertion(String.eq(id, "call-id") && String.eq(name, "echo") && Schema.equal(raw, Schema.Text{"raw args"}) && String.eq(text(content), expectedText) && String.eq(details, expectedDetails) && Bool.not(Bool.xor(isError, expectedError)) && Bool.not(Bool.xor(Loop.resultTerminates(String, T.AgentToolResult{Nil{}, Some{""}, None{}, terminate}), expectedTerminate)), "finalized fields differ")
+    case _: Test.assertion(False{}, "finalized result lacks details")
 
 def optional(present: Bool, hook: Hook()) -> Maybe<&2, Hook()>:
   match present:
@@ -96,7 +97,7 @@ def scenario(+present: Bool, mode: U32, +originallyError: Bool, expectedText: St
     +zero : F64 = F.fromU32(0)
     assistant : Ai.AssistantMessage<Schema.Value, Unit> = Test.assistant(Nil{}, Test.usage(Ai.UsageCost{zero, zero, zero, zero, zero}), Ai.ToolUse{})
     prepared : Loop.PreparedToolCall<String, String> = Loop.PreparedToolCall{Ai.ToolCall{"call-id", "echo", Schema.Text{"raw args"}, None{}, None{}}, T.AgentTool{"echo", "", Schema.Null{}, None{}, "", None{}, execute, None{}, None{}}, Schema.Number{F.fromU32(123)}}
-    executed : Loop.ExecutedToolCallOutcome<String> = Loop.ExecutedToolCallOutcome{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"original", None{}}} <> Nil{}, "original details", None{}, None{}}, originallyError}
+    executed : Loop.ExecutedToolCallOutcome<String> = Loop.ExecutedToolCallOutcome{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"original", None{}}} <> Nil{}, Some{"original details"}, None{}, None{}}, originallyError}
     controller : Abort.AbortController<Unit> <- Abort.new(Unit)
     running : Chan(Loop.FinalizedToolCallOutcome<String>) <- IO.fork(Loop.FinalizedToolCallOutcome<String>, finish(Loop.finalizeExecutedToolCall(Unit, String, String, String, Unit, T.AgentContext{T.CustomMessage{"context"} <> Nil{}, None{}}, assistant, prepared, executed, configuration(converter, optional(present, after)), Some{Abort.signal(Unit, controller)}, "empty details", error => error), done))
     releaseHook(present, entered, release, done)

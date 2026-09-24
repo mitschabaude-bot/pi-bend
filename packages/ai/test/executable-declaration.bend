@@ -17,7 +17,7 @@ def ExecutableTool() -> Data: A.AgentTool<S.Value, Unit, Unit, Unit, Unit, Strin
 def executeBody(counter: Ref.Ref<U32>) -> ExecuteInput() -> IO(ExecuteResult()):
   input => do IO<ExecuteResult()>:
     ignored : Unit <- Ref.modify(U32, Unit, counter, n => ((n + 1 : U32), Unit{}))
-    return Done{A.AgentToolResult{Nil{}, Unit{}, None{}, None{}}}
+    return Done{A.AgentToolResult{Nil{}, Some{Unit{}}, None{}, None{}}}
 
 def prepareBody(counter: Ref.Ref<U32>) -> Unit -> IO(PrepareResult()):
   input => do IO<PrepareResult()>:

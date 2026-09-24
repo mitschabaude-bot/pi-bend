@@ -31,7 +31,7 @@ def execute(unused: Unit, input: Execute.Input()) -> IO(Execute.Output()):
 
 def after(unused: Unit, input: Finalize.Input()) -> IO(Finalize.Output()):
   match input:
-    case T.ToolHookInput{T.AfterToolCallContext{_, _, args, T.AgentToolResult{_, details, _, _}, False{}, _}, _}:
+    case T.ToolHookInput{T.AfterToolCallContext{_, _, args, T.AgentToolResult{_, Some{details}, _, _}, False{}, _}, _}:
       do IO<Finalize.Output()>:
         Test.assertion(Schema.equal(args, Schema.Number{F.fromU32(123)}) && String.eq(details, "done"), "after hook lost actual execution result")
         return Done{Some{T.AfterToolCallResult{None{}, None{}, None{}, None{}, Some{True{}}}}}

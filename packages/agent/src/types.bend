@@ -23,7 +23,7 @@ type ToolReplayPolicy is Data:
   Safe{}
 
 type AgentToolResult<-Details: Data> is Data:
-  AgentToolResult{content: List<&2, Ai.TextImageContent>, details: Details, usage: Maybe<&2, Ai.Usage>, terminate: Maybe<&2, Bool>}
+  AgentToolResult{content: List<&2, Ai.TextImageContent>, details: Maybe<&2, Details>, usage: Maybe<&2, Ai.Usage>, terminate: Maybe<&2, Bool>}
 
 # The execution layer must enforce invocation-scoped update lifetime; the type
 # alone does not implement ignoring updates after the tool promise settles.

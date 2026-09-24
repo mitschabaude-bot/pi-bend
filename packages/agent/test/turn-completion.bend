@@ -106,7 +106,7 @@ def execute(terminate: Bool, input: H.ExecuteInput()) -> IO(H.ExecuteOutput()):
     case T.ToolExecutionInput{id, arguments, _, _}:
       do IO<H.ExecuteOutput()>:
         Test.assertion(String.eq(id, "call") && V.equal(arguments, H.field(V.Number{F.fromU32(42)})), "turn tool uses native validated arguments")
-        return Done{T.AgentToolResult{Nil{}, "tool", None{}, Some{terminate}}}
+        return Done{T.AgentToolResult{Nil{}, Some{"tool"}, None{}, Some{terminate}}}
     case _: IO.die(H.ExecuteOutput(), 1, "unexpected tool input")
 
 def notAborted(unused: Unit, signal: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Bool): IO.pure(Bool, False{})

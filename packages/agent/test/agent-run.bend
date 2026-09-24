@@ -90,7 +90,7 @@ def executeTool(unused: Unit, input: T.ToolExecutionInput<Unit>) -> IO(Result<&2
       do IO<Result<&2, &2, String, T.AgentToolResult<Unit>>>:
         cancelled : Bool <- Abort.aborted(Unit, signal)
         Test.assertion(String.eq(id, "call") && Bool.not(cancelled), "tool receives the call ID and active signal")
-        return Done{T.AgentToolResult{Nil{}, Unit{}, None{}, None{}}}
+        return Done{T.AgentToolResult{Nil{}, Some{Unit{}}, None{}, None{}}}
     case _: IO.die(Result<&2, &2, String, T.AgentToolResult<Unit>>, 1, "missing tool signal")
 def tools(mode: U32, execute: C.Callback<T.ToolExecutionInput<Unit>, Result<&2, &2, String, T.AgentToolResult<Unit>>>) -> Maybe<&2, List<&2, T.AgentTool<Unit, String>>>:
   match mode:

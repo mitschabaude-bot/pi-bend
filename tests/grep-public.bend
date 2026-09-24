@@ -109,12 +109,12 @@ def parsed(result: Result<&2,&2,Json.ParseError,V.Value>) -> V.Value:
     case Done{value}: value
     case Fail{_}: V.Null{}
 
-def call(pair: L.ToolOwner & Agent.AgentTool<Maybe<&2,L.GrepToolDetails>,L.Error>, args: V.Value, signal: A.AbortSignal<Unit>) -> IO(Unit):
+def call(pair: L.ToolOwner & Agent.AgentTool<L.GrepToolDetails,L.Error>, args: V.Value, signal: A.AbortSignal<Unit>) -> IO(Unit):
   match pair:
     case (owner,Agent.AgentTool{name,_,_,Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},label,None{},callback,None{},None{}}):
       do IO<Unit>:
         check(String.eq(name,"grep") && String.eq(label,"grep"),"grep metadata")
-        result : L.ToolResult() <- C.call(Agent.ToolExecutionInput<Maybe<&2,L.GrepToolDetails>>,L.ToolResult(),callback,Agent.ToolExecutionInput{"grep-1",args,Some{signal},None{}})
+        result : L.ToolResult() <- C.call(Agent.ToolExecutionInput<L.GrepToolDetails>,L.ToolResult(),callback,Agent.ToolExecutionInput{"grep-1",args,Some{signal},None{}})
         report(result)
         L.disposeTool(owner)
     case _: IO.die(Unit,1,"unexpected tool shape")
@@ -132,16 +132,16 @@ def countEntries(value: Result<&2,&2,FS.Error,List<&2,FS.DirectoryEntry>>) -> Na
     case Done{entries}: List.length(&2,FS.DirectoryEntry,entries)
     case Fail{_}: 999999n
 
-def repeat(fuel: Nat,+callback: C.Callback<Agent.ToolExecutionInput<Maybe<&2,L.GrepToolDetails>>,L.ToolResult()>,+args: V.Value,+signal: A.AbortSignal<Unit>) -> IO(Unit):
+def repeat(fuel: Nat,+callback: C.Callback<Agent.ToolExecutionInput<L.GrepToolDetails>,L.ToolResult()>,+args: V.Value,+signal: A.AbortSignal<Unit>) -> IO(Unit):
   match fuel:
     case Zero{}: IO.pure(Unit,Unit{})
     case Succ{fuel}:
       do IO<Unit>:
-        value : L.ToolResult() <- C.call(Agent.ToolExecutionInput<Maybe<&2,L.GrepToolDetails>>,L.ToolResult(),callback,Agent.ToolExecutionInput{"repeat",args,Some{signal},None{}})
-        check(Result.is_done(&2,&2,L.Error,Agent.AgentToolResult<Maybe<&2,L.GrepToolDetails>>,value),"repeated scan failed")
+        value : L.ToolResult() <- C.call(Agent.ToolExecutionInput<L.GrepToolDetails>,L.ToolResult(),callback,Agent.ToolExecutionInput{"repeat",args,Some{signal},None{}})
+        check(Result.is_done(&2,&2,L.Error,Agent.AgentToolResult<L.GrepToolDetails>,value),"repeated scan failed")
         repeat(fuel,callback,args,signal)
 
-def repeated(pair: L.ToolOwner & Agent.AgentTool<Maybe<&2,L.GrepToolDetails>,L.Error>,+args: V.Value,+signal: A.AbortSignal<Unit>) -> IO(Unit):
+def repeated(pair: L.ToolOwner & Agent.AgentTool<L.GrepToolDetails,L.Error>,+args: V.Value,+signal: A.AbortSignal<Unit>) -> IO(Unit):
   match pair:
     case (owner,Agent.AgentTool{_,_,_,_,_,_,+callback,_,_}):
       do IO<Unit>:

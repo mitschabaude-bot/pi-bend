@@ -36,7 +36,7 @@ def run(+failAt: String, expectedTrace: String) -> IO(Unit):
   do IO<Unit>:
     +log : R.Ref<List<&2, String>> <- R.new(List<&2, String>, Nil{})
     +emit : Sink() <- C.create(~State, ~EventValue(), ~Outcome(), ~sink, State{log, failAt})
-    finalized : Loop.FinalizedToolCallOutcome<String> = Loop.FinalizedToolCallOutcome{Ai.ToolCall{"id", "echo", Schema.Text{"args"}, None{}, None{}}, T.AgentToolResult{Nil{}, "details", None{}, None{}}, False{}}
+    finalized : Loop.FinalizedToolCallOutcome<String> = Loop.FinalizedToolCallOutcome{Ai.ToolCall{"id", "echo", Schema.Text{"args"}, None{}, None{}}, T.AgentToolResult{Nil{}, Some{"details"}, None{}, None{}}, False{}}
     result : Outcome() <- Loop.emitToolExecutionEnd(Unit, String, String, Unit, String, finalized, emit)
     outcome : Outcome() <- afterExecution(result, emit, Ai.ToolResultMessage{"id", "echo", Nil{}, Some{"details"}, None{}, False{}, F.fromU32(0)})
     check(outcome, failAt)

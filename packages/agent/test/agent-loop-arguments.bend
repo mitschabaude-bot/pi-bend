@@ -84,7 +84,7 @@ def execute(capture: Capture, input: Validation.ExecuteInput()) -> IO(Validation
       do IO<Validation.ExecuteOutput()>:
         Test.assertion(String.eq(id, "tool-1") && V.equal(args, Bool.pick(V.Value, prepare, prepared(), Validation.field(V.Number{F.fromU32(123)}))), "executor receives exact prepared edits or numeric hook replacement")
         H.log(recording, "execute")
-        return Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{Bool.pick(String, prepare, "edited 1", "echoed: 123"), None{}}} <> Nil{}, "result", None{}, None{}}}
+        return Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{Bool.pick(String, prepare, "edited 1", "echoed: 123"), None{}}} <> Nil{}, Some{"result"}, None{}, None{}}}
 
 def response(+prepare: Bool, index: U32) -> Ai.AssistantMessageEvent<V.Value, Unit>:
   match index:

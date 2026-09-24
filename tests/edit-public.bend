@@ -28,7 +28,7 @@ def line(value: Maybe<&2, Nat>) -> String:
 def report(result: E.ToolResult()) -> IO(Unit):
   match result:
     case Fail{error}: IO.print("error|" ++ Wire.showText(E.errorMessage(error)))
-    case Done{Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{text, _}} <> Nil{}, E.EditToolDetails{diff, patch, first}, _, _}}:
+    case Done{Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{text, _}} <> Nil{}, Some{E.EditToolDetails{diff, patch, first}}, _, _}}:
       IO.print("ok|" ++ Wire.showText(text) ++ "|" ++ Wire.showText(diff) ++ "|" ++ Wire.showText(patch) ++ "|" ++ line(first))
     case _: IO.die(Unit, 1, "invalid edit result")
 

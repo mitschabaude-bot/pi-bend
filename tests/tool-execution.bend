@@ -86,7 +86,7 @@ def mainRun(+theme: Theme.Theme) -> IO(Unit):
     show("self-empty-result",Tool.updateResult(emptySelf,Tool.ToolResult{Nil{},False{}},False{}))
     +callValue : Ai.ToolCall<Value.Value> <- IO.pure(Ai.ToolCall<Value.Value>,Ai.ToolCall{"a1","custom_tool",Value.ObjectValue{R.Record{Nil{}}},None{},None{}})
     +adapter : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.fromAiToolCall(callValue,theme,Tool.Generic{}))
-    +agentResult : Agent.AgentToolResult<Value.Value> <- IO.pure(Agent.AgentToolResult<Value.Value>,Agent.AgentToolResult{text("from agent") <> Nil{},Value.Null{},None{},None{}})
+    +agentResult : Agent.AgentToolResult<Value.Value> <- IO.pure(Agent.AgentToolResult<Value.Value>,Agent.AgentToolResult{text("from agent") <> Nil{},Some{Value.Null{}},None{},None{}})
     show("agent-adapter",Tool.updateFromAgent(Value.Value,adapter,agentResult,False{},False{}))
     builtin("read",theme)
     builtin("bash",theme)

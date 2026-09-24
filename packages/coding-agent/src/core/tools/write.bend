@@ -142,7 +142,7 @@ def parseInput(value: Value.Value) -> Result<&2, &2, Error, WriteToolInput>:
 def toolResult(path: String, value: Outcome()) -> ToolResult():
   match value:
     case Fail{error}: Fail{error}
-    case Done{Unit{}}: Done{Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{"Successfully wrote to " ++ path, None{}}} <> Nil{}, Unit{}, None{}, None{}}}
+    case Done{Unit{}}: Done{Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{"Successfully wrote to " ++ path, None{}}} <> Nil{}, None{}, None{}, None{}}}
 
 def resolvedInput(queue: Queue.Queue, operations: WriteOperations, path: String, content: String, signal: Maybe<&2, Abort.AbortSignal<Unit>>, resolved: Result<&2, &2, Paths.Error, String>) -> IO(ToolResult()):
   match resolved:

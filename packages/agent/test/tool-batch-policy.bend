@@ -57,7 +57,7 @@ def makeFinalized(values: List<&2, Maybe<&2, Bool>>, +call: T.AgentToolCall) -> 
     case Nil{}: IO.pure(List<&2, Loop.FinalizedToolCallOutcome<Unit>>, Nil{})
     case terminate <> tail:
       do IO<List<&2, Loop.FinalizedToolCallOutcome<Unit>>>:
-        result : T.AgentToolResult<Unit> = T.AgentToolResult{Nil{}, Unit{}, None{}, terminate}
+        result : T.AgentToolResult<Unit> = T.AgentToolResult{Nil{}, Some{Unit{}}, None{}, terminate}
         rest : List<&2, Loop.FinalizedToolCallOutcome<Unit>> <- makeFinalized(tail, call)
         return Loop.FinalizedToolCallOutcome{call, result, False{}} <> rest
 

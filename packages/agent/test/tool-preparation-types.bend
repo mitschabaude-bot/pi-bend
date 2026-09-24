@@ -34,7 +34,7 @@ def main() -> IO(Unit):
     +execute : C.Callback<Input(), Output()> <- C.create(~Unit, ~Input(), ~Output(), ~forbidden, Unit{})
     +tool : Tool() = T.AgentTool{"tool", "description", Schema.Null{}, None{}, "label", None{}, execute, None{}, None{}}
     +call : T.AgentToolCall = Ai.ToolCall{"id", "tool", Schema.Text{"raw"}, None{}, None{}}
-    +result : T.AgentToolResult<String> = T.AgentToolResult{Nil{}, "details", None{}, None{}}
+    +result : T.AgentToolResult<String> = T.AgentToolResult{Nil{}, Some{"details"}, None{}, None{}}
     +prepared : Preparation() = Loop.Prepared{Loop.PreparedToolCall{call, tool, Schema.Number{F.fromU32(7)}}}
     +immediate : Preparation() = Loop.Immediate{Loop.ImmediateToolCallOutcome{result, True{}}}
     Test.assertion(String.eq(Loop.preparationKind(String, String, prepared), "prepared"), "prepared discriminator differs")

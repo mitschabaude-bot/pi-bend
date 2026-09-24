@@ -54,9 +54,9 @@ def Consumers() -> Type: List<&1,OutputConsumer>
 type Invocation is Data:
   Invocation{binDir: String, cwd: String, options: BashToolOptions, operations: BashOperations, consumers: Maybe<&2,Ref.Ref<Consumers()>>}
 type ToolOwner is Type:
-  ToolOwner{tool: Agent.AgentTool<Maybe<&2,BashToolDetails>,Error>, ownedOperations: Maybe<&2,BashOperations>, consumers: Ref.Ref<Consumers()>}
+  ToolOwner{tool: Agent.AgentTool<BashToolDetails,Error>, ownedOperations: Maybe<&2,BashOperations>, consumers: Ref.Ref<Consumers()>}
 
-def ToolResult() -> Data: Result<&2,&2,Error,Agent.AgentToolResult<Maybe<&2,BashToolDetails>>>
+def ToolResult() -> Data: Result<&2,&2,Error,Agent.AgentToolResult<BashToolDetails>>
 def defaults() -> BashToolOptions: BashToolOptions{None{},None{},None{},None{},None{}}
 def noContext() -> BashContext: BashContext{None{},None{},None{},None{},None{},None{}}
 
@@ -167,7 +167,7 @@ def contextCwd(fallback: String, context: BashContext) -> String:
     case BashContext{Some{SCon{first,rest}},_,_,_,_,_}: SCon{first,rest}
     case _: fallback
 
-def resultContent(text: String, details: Maybe<&2,BashToolDetails>) -> Agent.AgentToolResult<Maybe<&2,BashToolDetails>>:
+def resultContent(text: String, details: Maybe<&2,BashToolDetails>) -> Agent.AgentToolResult<BashToolDetails>:
   Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{text,None{}}} <> Nil{},details,None{},None{}}
 
 def updateDetails(truncation: Truncate.TruncationResult, path: Maybe<&2,String>) -> BashToolDetails:
@@ -175,10 +175,10 @@ def updateDetails(truncation: Truncate.TruncationResult, path: Maybe<&2,String>)
     case Truncate.TruncationResult{content,+truncated,cause,totalLines,totalBytes,lines,bytes,partial,first,maxLines,maxBytes}:
       BashToolDetails{Bool.pick(Maybe<&2,Truncate.TruncationResult>,truncated,Some{Truncate.TruncationResult{content,truncated,cause,totalLines,totalBytes,lines,bytes,partial,first,maxLines,maxBytes}},None{}),path}
 
-def publish(callback: Agent.AgentToolUpdateCallback(Maybe<&2,BashToolDetails>), snapshot: Output.OutputSnapshot) -> IO(Unit):
+def publish(callback: Agent.AgentToolUpdateCallback(BashToolDetails), snapshot: Output.OutputSnapshot) -> IO(Unit):
   match snapshot:
     case Output.OutputSnapshot{content,truncation,path}:
-      C.call(Agent.AgentToolResult<Maybe<&2,BashToolDetails>>,Unit,callback,resultContent(content,Some{updateDetails(truncation,path)}))
+      C.call(Agent.AgentToolResult<BashToolDetails>,Unit,callback,resultContent(content,Some{updateDetails(truncation,path)}))
 
 def lineLimit(cause: Maybe<&2,Truncate.Limit>) -> String:
   match cause:
@@ -338,13 +338,13 @@ def acceptOutput(gate: Serial.Handle<Maybe<&2,Output.StreamHandle>>, bytes: List
 def stopOutput(gate: Maybe<&2,Output.StreamHandle>) -> IO(Maybe<&2,Output.StreamHandle> & Unit):
   IO.pure(Maybe<&2,Output.StreamHandle> & Unit,(None{},Unit{}))
 
-def publication(update: Maybe<&2,Agent.AgentToolUpdateCallback(Maybe<&2,BashToolDetails>)>) -> IO(Maybe<&2,C.Callback<Output.OutputSnapshot,Unit>>):
+def publication(update: Maybe<&2,Agent.AgentToolUpdateCallback(BashToolDetails)>) -> IO(Maybe<&2,C.Callback<Output.OutputSnapshot,Unit>>):
   match update:
     case None{}: IO.pure(Maybe<&2,C.Callback<Output.OutputSnapshot,Unit>>,None{})
     case Some{+callback}:
       do IO<Maybe<&2,C.Callback<Output.OutputSnapshot,Unit>>>:
-        C.call(Agent.AgentToolResult<Maybe<&2,BashToolDetails>>,Unit,callback,Agent.AgentToolResult{Nil{},None{},None{},None{}})
-        bridge : C.Callback<Output.OutputSnapshot,Unit> <- C.create(~Agent.AgentToolUpdateCallback(Maybe<&2,BashToolDetails>),~Output.OutputSnapshot,~Unit,~publish,callback)
+        C.call(Agent.AgentToolResult<BashToolDetails>,Unit,callback,Agent.AgentToolResult{Nil{},None{},None{},None{}})
+        bridge : C.Callback<Output.OutputSnapshot,Unit> <- C.create(~Agent.AgentToolUpdateCallback(BashToolDetails),~Output.OutputSnapshot,~Unit,~publish,callback)
         return Some{bridge}
 
 def disposePublication(publication: Maybe<&2,C.Callback<Output.OutputSnapshot,Unit>>) -> IO(Unit):
@@ -379,7 +379,7 @@ def runOwned(operations: BashOperations, spawn: BashSpawnContext, signal: Maybe<
         gate : Serial.Owner<Maybe<&2,Output.StreamHandle>> <- Serial.create(Maybe<&2,Output.StreamHandle>,Some{handle})
         executeObserved(operations,spawn,signal,timeout,consumers,owner,Serial.borrow(Maybe<&2,Output.StreamHandle>,gate))
 
-def runPrepared(consumers: Maybe<&2,Ref.Ref<Consumers()>>, operations: BashOperations, signal: Maybe<&2,Abort.AbortSignal<Unit>>, timeout: Maybe<&2,F64>, update: Maybe<&2,Agent.AgentToolUpdateCallback(Maybe<&2,BashToolDetails>)>, spawn: Result<&2,&2,OperationError,BashSpawnContext>) -> IO(ToolResult()):
+def runPrepared(consumers: Maybe<&2,Ref.Ref<Consumers()>>, operations: BashOperations, signal: Maybe<&2,Abort.AbortSignal<Unit>>, timeout: Maybe<&2,F64>, update: Maybe<&2,Agent.AgentToolUpdateCallback(BashToolDetails)>, spawn: Result<&2,&2,OperationError,BashSpawnContext>) -> IO(ToolResult()):
   match spawn:
     case Fail{cause}: IO.pure(ToolResult(),Fail{ExecutionError{cause,""}})
     case Done{context}:
@@ -401,7 +401,7 @@ def preparedContext(cwd: String, command: String, options: BashToolOptions, +con
     case BashToolOptions{_,prefix,_,expose,hook} Done{env}:
       applyHook(hook,BashSpawnContext{prefixed(command,prefix),contextCwd(cwd,context),sessionEnvironment(Maybe.default(&2,Bool,expose,True{}),context,env)})
 
-def invokeInput(invocation: Invocation, context: BashContext, signal: Maybe<&2,Abort.AbortSignal<Unit>>, update: Maybe<&2,Agent.AgentToolUpdateCallback(Maybe<&2,BashToolDetails>)>, input: Result<&2,&2,Error,BashToolInput>) -> IO(ToolResult()):
+def invokeInput(invocation: Invocation, context: BashContext, signal: Maybe<&2,Abort.AbortSignal<Unit>>, update: Maybe<&2,Agent.AgentToolUpdateCallback(BashToolDetails)>, input: Result<&2,&2,Error,BashToolInput>) -> IO(ToolResult()):
   match invocation input:
     case _ Fail{cause}: IO.pure(ToolResult(),Fail{cause})
     case Invocation{binDir,cwd,options,operations,consumers} Done{BashToolInput{command,timeout}}:
@@ -410,7 +410,7 @@ def invokeInput(invocation: Invocation, context: BashContext, signal: Maybe<&2,A
         spawn : Result<&2,&2,OperationError,BashSpawnContext> <- preparedContext(cwd,command,options,context,env)
         runPrepared(consumers,operations,signal,timeout,update,spawn)
 
-def invokeWithContext(invocation: Invocation, context: BashContext, request: Agent.ToolExecutionInput<Maybe<&2,BashToolDetails>>) -> IO(ToolResult()):
+def invokeWithContext(invocation: Invocation, context: BashContext, request: Agent.ToolExecutionInput<BashToolDetails>) -> IO(ToolResult()):
   match request:
     case Agent.ToolExecutionInput{_,params,signal,update}: invokeInput(invocation,context,signal,update,parseInput(params))
 
@@ -426,7 +426,7 @@ def toolContext(context: Maybe<&2,Ctx.ExtensionContext>) -> BashContext:
   match context:
     case None{}: noContext()
     case Some{Ctx.ExtensionContext{cwd,+model,session,file,thinking}}: BashContext{Some{cwd},Some{session},file,modelField(model,True{}),modelField(model,False{}),Some{Levels.name(thinking)}}
-def invoke(registered: Registered, request: Agent.ToolExecutionInput<Maybe<&2,BashToolDetails>>) -> IO(ToolResult()):
+def invoke(registered: Registered, request: Agent.ToolExecutionInput<BashToolDetails>) -> IO(ToolResult()):
   match registered:
     case Registered{invocation,source}:
       do IO<ToolResult()>:
@@ -435,7 +435,7 @@ def invoke(registered: Registered, request: Agent.ToolExecutionInput<Maybe<&2,Ba
 
 def created(invocation: Registered, owned: Maybe<&2,BashOperations>, consumers: Ref.Ref<Consumers()>) -> IO(ToolOwner):
   do IO<ToolOwner>:
-    callback : C.Callback<Agent.ToolExecutionInput<Maybe<&2,BashToolDetails>>,ToolResult()> <- C.create(~Registered,~Agent.ToolExecutionInput<Maybe<&2,BashToolDetails>>,~ToolResult(),~invoke,invocation)
+    callback : C.Callback<Agent.ToolExecutionInput<BashToolDetails>,ToolResult()> <- C.create(~Registered,~Agent.ToolExecutionInput<BashToolDetails>,~ToolResult(),~invoke,invocation)
     return ToolOwner{Agent.AgentTool{"bash","Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last 2000 lines or 50KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.",bashSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"bash",None{},callback,None{},None{}},owned,consumers}
 
 # The managed binary directory is an explicit runtime/configuration dependency.
@@ -453,7 +453,7 @@ def createBashTool(binDir: String, cwd: String, options: BashToolOptions, source
     consumers : Ref.Ref<Consumers()> <- Ref.new(Consumers(),Nil{})
     createWithConsumers(binDir,cwd,options,consumers,source)
 
-def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<Maybe<&2,BashToolDetails>,Error>:
+def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<BashToolDetails,Error>:
   match owner:
     case ToolOwner{+tool,operations,consumers}: (ToolOwner{tool,operations,consumers},tool)
 
@@ -476,7 +476,7 @@ def disposeTool(owner: ToolOwner) -> IO(Unit):
   match owner:
     case ToolOwner{Agent.AgentTool{_,_,_,_,_,_,callback,_,_},operations,consumers}:
       do IO<Unit>:
-        C.dispose(Agent.ToolExecutionInput<Maybe<&2,BashToolDetails>>,ToolResult(),callback)
+        C.dispose(Agent.ToolExecutionInput<BashToolDetails>,ToolResult(),callback)
         disposeOwned(operations)
         retained : Consumers() <- Ref.dispose(Consumers(),consumers)
         disposeConsumers(retained)

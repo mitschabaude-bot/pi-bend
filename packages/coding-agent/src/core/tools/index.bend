@@ -56,17 +56,21 @@ def parseToolName(text: String) -> Maybe<&2, ToolName>:
     case "ls": Some{LsTool{}}
     case _: None{}
 
-# RawDetails holds tool details restored from a session file: upstream stores
-# them untyped, and a stored value is kept as JSON rather than guessed at.
+# A tool result carries details only where the upstream tool returns them
+# (AgentToolResult.details is optional); write never does. RawDetails holds
+# tool details restored from a session file: upstream stores them untyped, and
+# a stored value is kept as JSON rather than guessed at.
 type ToolDetails is Data:
-  ReadDetails{value: Maybe<&2, Read.ReadToolDetails>}
-  BashDetails{value: Maybe<&2, Bash.BashToolDetails>}
+  ReadDetails{value: Read.ReadToolDetails}
+  BashDetails{value: Bash.BashToolDetails}
   EditDetails{value: Edit.EditToolDetails}
-  WriteDetails{}
-  FindDetails{value: Maybe<&2, Find.FindToolDetails>}
-  GrepDetails{value: Maybe<&2, Grep.GrepToolDetails>}
-  LsDetails{value: Maybe<&2, Ls.LsToolDetails>}
+  FindDetails{value: Find.FindToolDetails}
+  GrepDetails{value: Grep.GrepToolDetails}
+  LsDetails{value: Ls.LsToolDetails}
   RawDetails{value: V.Value}
+
+# The agent loop's error results carry upstream createErrorToolResult's `{}`.
+def emptyDetails() -> ToolDetails: RawDetails{Json.object(Nil{})}
 
 # Failure carries loop-level messages (validation, declaration, provider)
 # that upstream raises as plain Errors alongside tool failures.
@@ -143,7 +147,7 @@ def promptGuidelines(name: ToolName) -> List<&2, String>:
 def lifted(~D: Data, ~E: Data, ~details: D -> ToolDetails, ~failed: E -> ToolError, value: Result<&2, &2, E, Agent.AgentToolResult<D>>) -> Output():
   match value:
     case Fail{error}: Fail{failed(error)}
-    case Done{Agent.AgentToolResult{content, own, usage, terminate}}: Done{Agent.AgentToolResult{content, details(own), usage, terminate}}
+    case Done{Agent.AgentToolResult{content, own, usage, terminate}}: Done{Agent.AgentToolResult{content, Maybe.map(&2, D, ToolDetails, details, own), usage, terminate}}
 
 # Tools without streaming updates run with the loop's id, arguments and signal.
 def invokeLifted(~D: Data, ~E: Data, ~details: D -> ToolDetails, ~failed: E -> ToolError, callback: C.Callback<Agent.ToolExecutionInput<D>, Result<&2, &2, E, Agent.AgentToolResult<D>>>, input: Input()) -> IO(Output()):
@@ -153,35 +157,35 @@ def invokeLifted(~D: Data, ~E: Data, ~details: D -> ToolDetails, ~failed: E -> T
         result : Result<&2, &2, E, Agent.AgentToolResult<D>> <- C.call(Agent.ToolExecutionInput<D>, Result<&2, &2, E, Agent.AgentToolResult<D>>, callback, Agent.ToolExecutionInput{id, params, signal, None{}})
         return lifted(~D, ~E, ~details, ~failed, result)
 
-def readDetails(value: Maybe<&2, Read.ReadToolDetails>) -> ToolDetails: ReadDetails{value}
+def readDetails(value: Read.ReadToolDetails) -> ToolDetails: ReadDetails{value}
 def readFailed(error: Read.Error) -> ToolError: ReadFailed{error}
-def bashDetails(value: Maybe<&2, Bash.BashToolDetails>) -> ToolDetails: BashDetails{value}
+def bashDetails(value: Bash.BashToolDetails) -> ToolDetails: BashDetails{value}
 def bashFailed(error: Bash.Error) -> ToolError: BashFailed{error}
 def editDetails(value: Edit.EditToolDetails) -> ToolDetails: EditDetails{value}
 def editFailed(error: Edit.Error) -> ToolError: EditFailed{error}
-def writeDetails(value: Unit) -> ToolDetails: WriteDetails{}
+def writeDetails(value: Unit) -> ToolDetails: emptyDetails()
 def writeFailed(error: Write.Error) -> ToolError: WriteFailed{error}
-def findDetails(value: Maybe<&2, Find.FindToolDetails>) -> ToolDetails: FindDetails{value}
-def lsDetails(value: Maybe<&2, Ls.LsToolDetails>) -> ToolDetails: LsDetails{value}
+def findDetails(value: Find.FindToolDetails) -> ToolDetails: FindDetails{value}
+def lsDetails(value: Ls.LsToolDetails) -> ToolDetails: LsDetails{value}
 def lsFailed(error: Ls.Error) -> ToolError: LsFailed{error}
 def findFailed(error: Find.Error) -> ToolError: FindFailed{error}
-def grepDetails(value: Maybe<&2, Grep.GrepToolDetails>) -> ToolDetails: GrepDetails{value}
+def grepDetails(value: Grep.GrepToolDetails) -> ToolDetails: GrepDetails{value}
 def grepFailed(error: Grep.Error) -> ToolError: GrepFailed{error}
 
 # Streaming updates are forwarded into the loop wrapped in the details sum.
-def bashUpdate(callback: Update(), value: Agent.AgentToolResult<Maybe<&2, Bash.BashToolDetails>>) -> IO(Unit):
+def bashUpdate(callback: Update(), value: Agent.AgentToolResult<Bash.BashToolDetails>) -> IO(Unit):
   match callback value:
     case None{} _: IO.pure(Unit, Unit{})
-    case Some{callback} Agent.AgentToolResult{content, details, usage, terminate}: C.call(Agent.AgentToolResult<ToolDetails>, Unit, callback, Agent.AgentToolResult{content, BashDetails{details}, usage, terminate})
+    case Some{callback} Agent.AgentToolResult{content, details, usage, terminate}: C.call(Agent.AgentToolResult<ToolDetails>, Unit, callback, Agent.AgentToolResult{content, Maybe.map(&2, Bash.BashToolDetails, ToolDetails, bashDetails, details), usage, terminate})
 
-def invokeBash(callback: C.Callback<Agent.ToolExecutionInput<Maybe<&2, Bash.BashToolDetails>>, Bash.ToolResult()>, input: Input()) -> IO(Output()):
+def invokeBash(callback: C.Callback<Agent.ToolExecutionInput<Bash.BashToolDetails>, Bash.ToolResult()>, input: Input()) -> IO(Output()):
   match input:
     case Agent.ToolExecutionInput{id, params, signal, update}:
       do IO<Output()>:
-        +bridge : Agent.AgentToolUpdateCallback(Maybe<&2, Bash.BashToolDetails>) <- C.create(~Update(), ~Agent.AgentToolResult<Maybe<&2, Bash.BashToolDetails>>, ~Unit, ~bashUpdate, update)
-        result : Bash.ToolResult() <- C.call(Agent.ToolExecutionInput<Maybe<&2, Bash.BashToolDetails>>, Bash.ToolResult(), callback, Agent.ToolExecutionInput{id, params, signal, Some{bridge}})
-        C.dispose(Agent.AgentToolResult<Maybe<&2, Bash.BashToolDetails>>, Unit, bridge)
-        return lifted(~Maybe<&2, Bash.BashToolDetails>, ~Bash.Error, ~bashDetails, ~bashFailed, result)
+        +bridge : Agent.AgentToolUpdateCallback(Bash.BashToolDetails) <- C.create(~Update(), ~Agent.AgentToolResult<Bash.BashToolDetails>, ~Unit, ~bashUpdate, update)
+        result : Bash.ToolResult() <- C.call(Agent.ToolExecutionInput<Bash.BashToolDetails>, Bash.ToolResult(), callback, Agent.ToolExecutionInput{id, params, signal, Some{bridge}})
+        C.dispose(Agent.AgentToolResult<Bash.BashToolDetails>, Unit, bridge)
+        return lifted(~Bash.BashToolDetails, ~Bash.Error, ~bashDetails, ~bashFailed, result)
 
 def prepared(value: Edit.ResultOf(V.Value)) -> Result<&2, &2, ToolError, V.Value>:
   match value:
@@ -257,9 +261,9 @@ def bridged(~D: Data, ~E: Data, ~details: D -> ToolDetails, ~failed: E -> ToolEr
         +execute : Execute() <- C.create(~C.Callback<Agent.ToolExecutionInput<D>, Result<&2, &2, E, Agent.AgentToolResult<D>>>, ~Input(), ~Output(), ~invokeLifted(~D, ~E, ~details, ~failed), callback)
         return ToolOwner{Agent.AgentTool{name, description, parameters, sampling, label, None{}, execute, replay, mode}, execute, owned}
 
-def bridgedRead(pair: Read.ToolOwner & Agent.AgentTool<Maybe<&2, Read.ReadToolDetails>, Read.Error>) -> IO(ToolOwner):
+def bridgedRead(pair: Read.ToolOwner & Agent.AgentTool<Read.ReadToolDetails, Read.Error>) -> IO(ToolOwner):
   match pair:
-    case (owner, tool): bridged(~Maybe<&2, Read.ReadToolDetails>, ~Read.Error, ~readDetails, ~readFailed, OwnedRead{owner}, tool)
+    case (owner, tool): bridged(~Read.ReadToolDetails, ~Read.Error, ~readDetails, ~readFailed, OwnedRead{owner}, tool)
 
 def createReadTool(environment: Environment, options: Maybe<&2, Read.ReadToolOptions>) -> IO(ToolOwner):
   match environment:
@@ -268,9 +272,9 @@ def createReadTool(environment: Environment, options: Maybe<&2, Read.ReadToolOpt
         owner : Read.ToolOwner <- Read.createReadTool(paths, cwd, Maybe.default(&2, Read.ReadToolOptions, options, Read.ReadToolOptions{None{}, None{}, None{}}), context)
         bridgedRead(Read.borrowTool(owner))
 
-def bridgedFind(pair: Find.ToolOwner & Agent.AgentTool<Maybe<&2, Find.FindToolDetails>, Find.Error>) -> IO(ToolOwner):
+def bridgedFind(pair: Find.ToolOwner & Agent.AgentTool<Find.FindToolDetails, Find.Error>) -> IO(ToolOwner):
   match pair:
-    case (owner, tool): bridged(~Maybe<&2, Find.FindToolDetails>, ~Find.Error, ~findDetails, ~findFailed, OwnedFind{owner}, tool)
+    case (owner, tool): bridged(~Find.FindToolDetails, ~Find.Error, ~findDetails, ~findFailed, OwnedFind{owner}, tool)
 
 def createFindTool(environment: Environment, options: Maybe<&2, Find.FindToolOptions>) -> IO(ToolOwner):
   match environment:
@@ -279,9 +283,9 @@ def createFindTool(environment: Environment, options: Maybe<&2, Find.FindToolOpt
         owner : Find.ToolOwner <- Find.createFindTool(paths, tools, cwd, Maybe.default(&2, Find.FindToolOptions, options, Find.FindToolOptions{None{}}), context)
         bridgedFind(Find.borrowTool(owner))
 
-def bridgedGrep(pair: Grep.ToolOwner & Agent.AgentTool<Maybe<&2, Grep.GrepToolDetails>, Grep.Error>) -> IO(ToolOwner):
+def bridgedGrep(pair: Grep.ToolOwner & Agent.AgentTool<Grep.GrepToolDetails, Grep.Error>) -> IO(ToolOwner):
   match pair:
-    case (owner, tool): bridged(~Maybe<&2, Grep.GrepToolDetails>, ~Grep.Error, ~grepDetails, ~grepFailed, OwnedGrep{owner}, tool)
+    case (owner, tool): bridged(~Grep.GrepToolDetails, ~Grep.Error, ~grepDetails, ~grepFailed, OwnedGrep{owner}, tool)
 
 def createGrepTool(environment: Environment, options: Maybe<&2, Grep.GrepToolOptions>) -> IO(ToolOwner):
   match environment:
@@ -290,11 +294,11 @@ def createGrepTool(environment: Environment, options: Maybe<&2, Grep.GrepToolOpt
         owner : Grep.ToolOwner <- Grep.createGrepTool(paths, tools, cwd, Maybe.default(&2, Grep.GrepToolOptions, options, Grep.GrepToolOptions{None{}}), context)
         bridgedGrep(Grep.borrowTool(owner))
 
-def bridgedBash(pair: Bash.ToolOwner & Agent.AgentTool<Maybe<&2, Bash.BashToolDetails>, Bash.Error>) -> IO(ToolOwner):
+def bridgedBash(pair: Bash.ToolOwner & Agent.AgentTool<Bash.BashToolDetails, Bash.Error>) -> IO(ToolOwner):
   match pair:
     case (owner, Agent.AgentTool{name, description, parameters, sampling, label, _, callback, replay, mode}):
       do IO<ToolOwner>:
-        +execute : Execute() <- C.create(~C.Callback<Agent.ToolExecutionInput<Maybe<&2, Bash.BashToolDetails>>, Bash.ToolResult()>, ~Input(), ~Output(), ~invokeBash, callback)
+        +execute : Execute() <- C.create(~C.Callback<Agent.ToolExecutionInput<Bash.BashToolDetails>, Bash.ToolResult()>, ~Input(), ~Output(), ~invokeBash, callback)
         return ToolOwner{Agent.AgentTool{name, description, parameters, sampling, label, None{}, execute, replay, mode}, execute, OwnedBash{owner}}
 
 def createBashTool(environment: Environment, options: Maybe<&2, Bash.BashToolOptions>) -> IO(ToolOwner):
@@ -335,9 +339,9 @@ def createWriteTool(environment: Environment, options: Maybe<&2, Write.WriteTool
         owner : Write.ToolOwner <- Write.createWriteTool(paths, queue, cwd, Maybe.default(&2, Write.WriteToolOptions, options, Write.WriteToolOptions{None{}}), context)
         bridgedWrite(Write.borrowTool(owner))
 
-def bridgedLs(pair: Ls.ToolOwner & Agent.AgentTool<Maybe<&2, Ls.LsToolDetails>, Ls.Error>) -> IO(ToolOwner):
+def bridgedLs(pair: Ls.ToolOwner & Agent.AgentTool<Ls.LsToolDetails, Ls.Error>) -> IO(ToolOwner):
   match pair:
-    case (owner, tool): bridged(~Maybe<&2, Ls.LsToolDetails>, ~Ls.Error, ~lsDetails, ~lsFailed, OwnedLs{owner}, tool)
+    case (owner, tool): bridged(~Ls.LsToolDetails, ~Ls.Error, ~lsDetails, ~lsFailed, OwnedLs{owner}, tool)
 
 def codePointLe(left: String, right: String) -> Bool: String.is_le(left, right)
 
@@ -415,41 +419,35 @@ def truncationValue(value: Truncate.TruncationResult) -> V.Value:
     case Truncate.TruncationResult{content, truncated, truncatedBy, totalLines, totalBytes, outputLines, outputBytes, lastLinePartial, firstLineExceedsLimit, maxLines, maxBytes}:
       Json.object(Json.field("content", V.Text{content}, Json.field("truncated", V.Boolean{truncated}, Json.field("truncatedBy", limitValue(truncatedBy), Json.field("totalLines", Json.natural(totalLines), Json.field("totalBytes", Json.natural(totalBytes), Json.field("outputLines", Json.natural(outputLines), Json.field("outputBytes", Json.natural(outputBytes), Json.field("lastLinePartial", V.Boolean{lastLinePartial}, Json.field("firstLineExceedsLimit", V.Boolean{firstLineExceedsLimit}, Json.field("maxLines", Json.natural(maxLines), Json.field("maxBytes", Json.natural(maxBytes), Nil{}))))))))))))
 
-def readDetailsValue(value: Maybe<&2, Read.ReadToolDetails>) -> V.Value:
+def readDetailsValue(value: Read.ReadToolDetails) -> V.Value:
   match value:
-    case None{}: Json.object(Nil{})
-    case Some{Read.ReadToolDetails{result}}: Json.object(Json.field("truncation", truncationValue(result), Nil{}))
+    case Read.ReadToolDetails{result}: Json.object(Json.field("truncation", truncationValue(result), Nil{}))
 
-def bashDetailsValue(value: Maybe<&2, Bash.BashToolDetails>) -> V.Value:
+def bashDetailsValue(value: Bash.BashToolDetails) -> V.Value:
   match value:
-    case None{}: Json.object(Nil{})
-    case Some{Bash.BashToolDetails{result, fullOutputPath}}: Json.object(Json.optional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncationValue, result), Json.optional("fullOutputPath", Maybe.map(&2, String, V.Value, path => V.Text{path}, fullOutputPath), Nil{})))
+    case Bash.BashToolDetails{result, fullOutputPath}: Json.object(Json.optional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncationValue, result), Json.optional("fullOutputPath", Maybe.map(&2, String, V.Value, path => V.Text{path}, fullOutputPath), Nil{})))
 
 def editDetailsValue(value: Edit.EditToolDetails) -> V.Value:
   match value:
     case Edit.EditToolDetails{diff, patch, firstChangedLine}: Json.object(Json.field("diff", V.Text{diff}, Json.field("patch", V.Text{patch}, Json.optional("firstChangedLine", Maybe.map(&2, Nat, V.Value, Json.natural, firstChangedLine), Nil{}))))
 
-def findDetailsValue(value: Maybe<&2, Find.FindToolDetails>) -> V.Value:
+def findDetailsValue(value: Find.FindToolDetails) -> V.Value:
   match value:
-    case None{}: V.Null{}
-    case Some{Find.FindToolDetails{cut, resultLimit}}: Json.object(Json.optional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncationValue, cut), Json.optional("resultLimitReached", Maybe.map(&2, Nat, V.Value, Json.natural, resultLimit), Nil{})))
+    case Find.FindToolDetails{cut, resultLimit}: Json.object(Json.optional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncationValue, cut), Json.optional("resultLimitReached", Maybe.map(&2, Nat, V.Value, Json.natural, resultLimit), Nil{})))
 
-def grepDetailsValue(value: Maybe<&2, Grep.GrepToolDetails>) -> V.Value:
+def grepDetailsValue(value: Grep.GrepToolDetails) -> V.Value:
   match value:
-    case None{}: V.Null{}
-    case Some{Grep.GrepToolDetails{cut, limit, lines}}: Json.object(Json.optional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncationValue, cut), Json.optional("matchLimitReached", Maybe.map(&2, Nat, V.Value, Json.natural, limit), Json.optional("linesTruncated", Maybe.map(&2, Bool, V.Value, flag => V.Boolean{flag}, lines), Nil{}))))
+    case Grep.GrepToolDetails{cut, limit, lines}: Json.object(Json.optional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncationValue, cut), Json.optional("matchLimitReached", Maybe.map(&2, Nat, V.Value, Json.natural, limit), Json.optional("linesTruncated", Maybe.map(&2, Bool, V.Value, flag => V.Boolean{flag}, lines), Nil{}))))
 
-def lsDetailsValue(value: Maybe<&2, Ls.LsToolDetails>) -> V.Value:
+def lsDetailsValue(value: Ls.LsToolDetails) -> V.Value:
   match value:
-    case None{}: V.Null{}
-    case Some{Ls.LsToolDetails{cut, reached}}: Json.object(Json.optional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncationValue, cut), Json.optional("entryLimitReached", Maybe.map(&2, Nat, V.Value, Json.natural, reached), Nil{})))
+    case Ls.LsToolDetails{cut, reached}: Json.object(Json.optional("truncation", Maybe.map(&2, Truncate.TruncationResult, V.Value, truncationValue, cut), Json.optional("entryLimitReached", Maybe.map(&2, Nat, V.Value, Json.natural, reached), Nil{})))
 
 def detailsValue(value: ToolDetails) -> V.Value:
   match value:
     case ReadDetails{details}: readDetailsValue(details)
     case BashDetails{details}: bashDetailsValue(details)
     case EditDetails{details}: editDetailsValue(details)
-    case WriteDetails{}: Json.object(Nil{})
     case FindDetails{details}: findDetailsValue(details)
     case GrepDetails{details}: grepDetailsValue(details)
     case LsDetails{details}: lsDetailsValue(details)

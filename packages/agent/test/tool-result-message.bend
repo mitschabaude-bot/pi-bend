@@ -39,13 +39,20 @@ def check(value: Ai.ToolResultMessage<String>, expected: String, cost: Ai.UsageC
         assertion(String.eq(current, "before"), "tool-result message must observe its supplied details value")
     case _: IO.die(Unit, 1, "tool result details missing")
 
+# Upstream copies result.details as is, so a tool returning details: undefined
+# yields a message without details.
+def checkAbsent(value: Ai.ToolResultMessage<String>) -> IO(Unit):
+  match value:
+    case Ai.ToolResultMessage{_, _, _, None{}, _, _, _}: IO.pure(Unit, Unit{})
+    case _: IO.die(Unit, 1, "absent tool details must stay absent")
+
 def main() -> IO(Unit):
   do IO<Unit>:
     +zero : F64 = F.fromU32(0)
     +details : String <- IO.pure(String, "before")
     +cost : Ai.UsageCost = Ai.UsageCost{zero, zero, zero, zero, zero}
     +call : T.AgentToolCall = Ai.ToolCall{"call-id", "echo", Schema.Null{}, None{}, None{}}
-    +result : T.AgentToolResult<String> = T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"tool output", None{}}} <> Nil{}, details, Some{Ai.Usage{zero, zero, zero, zero, None{}, None{}, zero, cost}}, Some{True{}}}
+    +result : T.AgentToolResult<String> = T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"tool output", None{}}} <> Nil{}, Some{details}, Some{Ai.Usage{zero, zero, zero, zero, None{}, None{}, zero, cost}}, Some{True{}}}
     +finalized : Loop.FinalizedToolCallOutcome<String> = Loop.FinalizedToolCallOutcome{call, result, True{}}
     +lower : F64 <- Date.now()
     +first : Ai.ToolResultMessage<String> <- Loop.createToolResultMessage(String, finalized)
@@ -63,4 +70,7 @@ def main() -> IO(Unit):
     oldCall : Ai.ToolCall<Schema.Value> = call
     oldDetails : String <- IO.pure(String, details)
     oldCost : Ai.UsageCost = cost
-    IO.print("PASS tool-result artifact fields, wall-clock timestamps, immutable payloads")
+    +absentCall : T.AgentToolCall = Ai.ToolCall{"call-id", "echo", Schema.Null{}, None{}, None{}}
+    absent : Ai.ToolResultMessage<String> <- Loop.createToolResultMessage(String, Loop.FinalizedToolCallOutcome{absentCall, T.AgentToolResult{Nil{}, None{}, None{}, None{}}, False{}})
+    checkAbsent(absent)
+    IO.print("PASS tool-result artifact fields, wall-clock timestamps, immutable payloads, absent details")

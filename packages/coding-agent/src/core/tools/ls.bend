@@ -34,7 +34,7 @@ type Error is Data:
   CannotReadDirectory{message: String}
 
 def ResultOf(-A: Data) -> Data: Result<&2,&2,Error,A>
-def ToolResult() -> Data: ResultOf(Agent.AgentToolResult<Maybe<&2,LsToolDetails>>)
+def ToolResult() -> Data: ResultOf(Agent.AgentToolResult<LsToolDetails>)
 def DEFAULT_LIMIT() -> Nat: 500n
 
 type LsOperations is Data:
@@ -52,7 +52,7 @@ type Order is Data:
 type Invocation is Data:
   Invocation{paths: Paths.Environment, cwd: String, operations: LsOperations, order: Order}
 type ToolOwner is Type:
-  ToolOwner{tool: Agent.AgentTool<Maybe<&2,LsToolDetails>,Error>, ownedOperations: Maybe<&2,LsOperations>}
+  ToolOwner{tool: Agent.AgentTool<LsToolDetails,Error>, ownedOperations: Maybe<&2,LsOperations>}
 
 def errorMessage(error: Error) -> String:
   match error:
@@ -209,19 +209,19 @@ def checkedDirectory(~le: String -> String -> Bool, order: Order, info: LsStat, 
   match info:
     case LsStat{False{}}: IO.pure(ToolResult(),Fail{NotDirectory{path}})
     case LsStat{True{}}:
-      then(Unit,Agent.AgentToolResult<Maybe<&2,LsToolDetails>>,check(signal),_ =>
+      then(Unit,Agent.AgentToolResult<LsToolDetails>,check(signal),_ =>
         do IO<ToolResult()>:
           entries : ResultOf(List<&2,String>) <- Callback.call(String,ResultOf(List<&2,String>),readdir,path)
-          then(List<&2,String>,Agent.AgentToolResult<Maybe<&2,LsToolDetails>>,settled(List<&2,String>,signal,readResult(entries)),names =>
-            then(Listing,Agent.AgentToolResult<Maybe<&2,LsToolDetails>>,collect(sortedNames(~le,order,names),Selection{limit,Nil{}},stat,path,signal),listing => IO.pure(ToolResult(),render(limit,listing)))))
+          then(List<&2,String>,Agent.AgentToolResult<LsToolDetails>,settled(List<&2,String>,signal,readResult(entries)),names =>
+            then(Listing,Agent.AgentToolResult<LsToolDetails>,collect(sortedNames(~le,order,names),Selection{limit,Nil{}},stat,path,signal),listing => IO.pure(ToolResult(),render(limit,listing)))))
 
 def listDirectory(~le: String -> String -> Bool, order: Order, operations: LsOperations, +path: String, +limit: Nat, +signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ToolResult()):
   match operations:
     case LsOperations{exists,+stat,readdir}:
-      then(Bool,Agent.AgentToolResult<Maybe<&2,LsToolDetails>>,Callback.call(String,ResultOf(Bool),exists,path),found =>
-        then(Unit,Agent.AgentToolResult<Maybe<&2,LsToolDetails>>,check(signal),_ =>
+      then(Bool,Agent.AgentToolResult<LsToolDetails>,Callback.call(String,ResultOf(Bool),exists,path),found =>
+        then(Unit,Agent.AgentToolResult<LsToolDetails>,check(signal),_ =>
           Bool.pick(Unit -> IO(ToolResult()),found,
-            _ => then(LsStat,Agent.AgentToolResult<Maybe<&2,LsToolDetails>>,Callback.call(String,ResultOf(LsStat),stat,path),info => checkedDirectory(~le,order,info,stat,readdir,path,limit,signal)),
+            _ => then(LsStat,Agent.AgentToolResult<LsToolDetails>,Callback.call(String,ResultOf(LsStat),stat,path),info => checkedDirectory(~le,order,info,stat,readdir,path,limit,signal)),
             _ => IO.pure(ToolResult(),Fail{PathNotFound{path}}))(Unit{})))
 
 def numeric(value: Result<&2,&2,Number.Error,Nat>) -> ResultOf(Maybe<&2,Nat>):
@@ -257,7 +257,7 @@ def resolved(~le: String -> String -> Bool, order: Order, operations: LsOperatio
     case Done{path}:
       do IO<ToolResult()>:
         value : ToolResult() <- listDirectory(~le,order,operations,path,limit,signal)
-        settled(Agent.AgentToolResult<Maybe<&2,LsToolDetails>>,signal,value)
+        settled(Agent.AgentToolResult<LsToolDetails>,signal,value)
 
 def invokeInput(~le: String -> String -> Bool, environment: Invocation, context: LsContext, +signal: Maybe<&2,Abort.AbortSignal<Unit>>, input: ResultOf(LsToolInput)) -> IO(ToolResult()):
   match environment context input:
@@ -265,15 +265,15 @@ def invokeInput(~le: String -> String -> Bool, environment: Invocation, context:
     case Invocation{paths,cwd,operations,order} LsContext{override} Done{LsToolInput{path,limit}}:
       resolved(~le,order,operations,Maybe.default(&2,Nat,limit,DEFAULT_LIMIT()),signal,Paths.resolveToCwd(paths,nonempty(path,"."),nonempty(override,cwd)))
 
-def invokeWithContext(~le: String -> String -> Bool, environment: Invocation, context: LsContext, request: Agent.ToolExecutionInput<Maybe<&2,LsToolDetails>>) -> IO(ToolResult()):
+def invokeWithContext(~le: String -> String -> Bool, environment: Invocation, context: LsContext, request: Agent.ToolExecutionInput<LsToolDetails>) -> IO(ToolResult()):
   match request:
     case Agent.ToolExecutionInput{_,arguments,+signal,_}:
-      then(Unit,Agent.AgentToolResult<Maybe<&2,LsToolDetails>>,check(signal),_ => invokeInput(~le,environment,context,signal,parseInput(arguments)))
+      then(Unit,Agent.AgentToolResult<LsToolDetails>,check(signal),_ => invokeInput(~le,environment,context,signal,parseInput(arguments)))
 
 # upstream wrapToolDefinition: the registered tool reads the session's
 # context when it runs; without a bound session it keeps its own cwd.
 type Registered is Data: Registered{environment: Invocation, source: Ctx.ContextSource()}
-def invoke(~le: String -> String -> Bool, registered: Registered, request: Agent.ToolExecutionInput<Maybe<&2,LsToolDetails>>) -> IO(ToolResult()):
+def invoke(~le: String -> String -> Bool, registered: Registered, request: Agent.ToolExecutionInput<LsToolDetails>) -> IO(ToolResult()):
   match registered:
     case Registered{environment,source}:
       do IO<ToolResult()>:
@@ -290,7 +290,7 @@ def lsSchema() -> Value.Value:
 
 def created(~le: String -> String -> Bool, environment: Registered, owned: Maybe<&2,LsOperations>) -> IO(ToolOwner):
   do IO<ToolOwner>:
-    callback : Callback.Callback<Agent.ToolExecutionInput<Maybe<&2,LsToolDetails>>,ToolResult()> <- Callback.create(~Registered,~Agent.ToolExecutionInput<Maybe<&2,LsToolDetails>>,~ToolResult(),~invoke(~le),environment)
+    callback : Callback.Callback<Agent.ToolExecutionInput<LsToolDetails>,ToolResult()> <- Callback.create(~Registered,~Agent.ToolExecutionInput<LsToolDetails>,~ToolResult(),~invoke(~le),environment)
     return ToolOwner{Agent.AgentTool{"ls","List directory contents. Returns entries sorted alphabetically, with '/' suffix for directories. Includes dotfiles. Output is truncated to 500 entries or 50KB (whichever is hit first).",lsSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"ls",None{},callback,None{},None{}},owned}
 
 # Comparator injection also makes the ordering contract explicit for consumers.
@@ -309,7 +309,7 @@ def createLsToolWithComparator(~le: String -> String -> Bool, paths: Paths.Envir
 def createLsTool(collator: Collation.Collator, paths: Paths.Environment, cwd: String, options: LsToolOptions, source: Ctx.ContextSource()) -> IO(ToolOwner):
   createWithOrder(~codePointLe,Collated{collator},paths,cwd,options,source)
 
-def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<Maybe<&2,LsToolDetails>,Error>:
+def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<LsToolDetails,Error>:
   match owner:
     case ToolOwner{+tool,operations}: (ToolOwner{tool,operations},tool)
 
@@ -322,5 +322,5 @@ def disposeTool(owner: ToolOwner) -> IO(Unit):
   match owner:
     case ToolOwner{Agent.AgentTool{_,_,_,_,_,_,callback,_,_},operations}:
       do IO<Unit>:
-        Callback.dispose(Agent.ToolExecutionInput<Maybe<&2,LsToolDetails>>,ToolResult(),callback)
+        Callback.dispose(Agent.ToolExecutionInput<LsToolDetails>,ToolResult(),callback)
         disposeOwned(operations)

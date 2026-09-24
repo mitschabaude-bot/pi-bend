@@ -22,18 +22,24 @@ type EditExecution is Data:
   EditExecution{callback: C.Callback<Agent.ToolExecutionInput<Edit.EditToolDetails>, Edit.ToolResult()>, counter: Ref.Ref<U32>}
 
 type ReadExecution is Data:
-  ReadExecution{callback: C.Callback<Agent.ToolExecutionInput<Maybe<&2,Read.ReadToolDetails>>, Read.ToolResult()>, counter: Ref.Ref<U32>}
+  ReadExecution{callback: C.Callback<Agent.ToolExecutionInput<Read.ReadToolDetails>, Read.ToolResult()>, counter: Ref.Ref<U32>}
 
 type BashExecution is Data:
-  BashExecution{callback: C.Callback<Agent.ToolExecutionInput<Maybe<&2,Bash.BashToolDetails>>,Bash.ToolResult()>, counter: Ref.Ref<U32>}
+  BashExecution{callback: C.Callback<Agent.ToolExecutionInput<Bash.BashToolDetails>,Bash.ToolResult()>, counter: Ref.Ref<U32>}
 
-# Details erasure is confined to this heterogeneous integration harness.
-# Forward real streaming updates into the canonical loop before final results.
-def bashContent(value: Agent.AgentToolResult<Maybe<&2,Bash.BashToolDetails>>) -> Agent.AgentToolResult<Unit>:
+# Details erasure is confined to this heterogeneous integration harness; it
+# keeps whether a tool reported details at all.
+def erased(-D: Data, value: Maybe<&2, D>) -> Maybe<&2, Unit>:
   match value:
-    case Agent.AgentToolResult{content,_,mutation,refresh}: Agent.AgentToolResult{content,Unit{},mutation,refresh}
+    case None{}: None{}
+    case Some{_}: Some{Unit{}}
 
-def bashUpdate(callback: Maybe<&2,Agent.AgentToolUpdateCallback(Unit)>, value: Agent.AgentToolResult<Maybe<&2,Bash.BashToolDetails>>) -> IO(Unit):
+# Forward real streaming updates into the canonical loop before final results.
+def bashContent(value: Agent.AgentToolResult<Bash.BashToolDetails>) -> Agent.AgentToolResult<Unit>:
+  match value:
+    case Agent.AgentToolResult{content,own,mutation,refresh}: Agent.AgentToolResult{content,erased(Bash.BashToolDetails,own),mutation,refresh}
+
+def bashUpdate(callback: Maybe<&2,Agent.AgentToolUpdateCallback(Unit)>, value: Agent.AgentToolResult<Bash.BashToolDetails>) -> IO(Unit):
   match callback:
     case None{}: IO.pure(Unit,Unit{})
     case Some{callback}: C.call(Agent.AgentToolResult<Unit>,Unit,callback,bashContent(value))
@@ -48,22 +54,22 @@ def invokeBash(environment: BashExecution, input: Runner.ToolInput()) -> IO(Runn
     case BashExecution{callback,counter} Agent.ToolExecutionInput{id,params,signal,update}:
       do IO<Runner.ToolOutput()>:
         Ref.modify(U32,Unit,counter,value => ((value + 1 : U32),Unit{}))
-        +bridge : Agent.AgentToolUpdateCallback(Maybe<&2,Bash.BashToolDetails>) <- C.create(~Maybe<&2,Agent.AgentToolUpdateCallback(Unit)>,~Agent.AgentToolResult<Maybe<&2,Bash.BashToolDetails>>,~Unit,~bashUpdate,update)
-        result : Bash.ToolResult() <- C.call(Agent.ToolExecutionInput<Maybe<&2,Bash.BashToolDetails>>,Bash.ToolResult(),callback,Agent.ToolExecutionInput{id,params,signal,Some{bridge}})
-        C.dispose(Agent.AgentToolResult<Maybe<&2,Bash.BashToolDetails>>,Unit,bridge)
+        +bridge : Agent.AgentToolUpdateCallback(Bash.BashToolDetails) <- C.create(~Maybe<&2,Agent.AgentToolUpdateCallback(Unit)>,~Agent.AgentToolResult<Bash.BashToolDetails>,~Unit,~bashUpdate,update)
+        result : Bash.ToolResult() <- C.call(Agent.ToolExecutionInput<Bash.BashToolDetails>,Bash.ToolResult(),callback,Agent.ToolExecutionInput{id,params,signal,Some{bridge}})
+        C.dispose(Agent.AgentToolResult<Bash.BashToolDetails>,Unit,bridge)
         return bashResult(result)
 
 def readResult(value: Read.ToolResult()) -> Runner.ToolOutput():
   match value:
     case Fail{error}: Fail{Read.errorMessage(error)}
-    case Done{Agent.AgentToolResult{content,_,mutation,refresh}}: Done{Agent.AgentToolResult{content,Unit{},mutation,refresh}}
+    case Done{Agent.AgentToolResult{content,own,mutation,refresh}}: Done{Agent.AgentToolResult{content,erased(Read.ReadToolDetails,own),mutation,refresh}}
 
 def invokeRead(environment: ReadExecution, input: Runner.ToolInput()) -> IO(Runner.ToolOutput()):
   match environment input:
     case ReadExecution{callback,counter} Agent.ToolExecutionInput{id,params,signal,_}:
       do IO<Runner.ToolOutput()>:
         Ref.modify(U32,Unit,counter,value => ((value + 1 : U32),Unit{}))
-        result : Read.ToolResult() <- C.call(Agent.ToolExecutionInput<Maybe<&2,Read.ReadToolDetails>>,Read.ToolResult(),callback,Agent.ToolExecutionInput{id,params,signal,None{}})
+        result : Read.ToolResult() <- C.call(Agent.ToolExecutionInput<Read.ReadToolDetails>,Read.ToolResult(),callback,Agent.ToolExecutionInput{id,params,signal,None{}})
         return readResult(result)
 
 def firstLine(value: Maybe<&2, Nat>) -> String:
@@ -76,10 +82,11 @@ def firstLine(value: Maybe<&2, Nat>) -> String:
 def editResult(value: Edit.ToolResult()) -> IO(Runner.ToolOutput()):
   match value:
     case Fail{error}: IO.pure(Runner.ToolOutput(), Fail{Edit.errorMessage(error)})
-    case Done{Agent.AgentToolResult{content, Edit.EditToolDetails{diff, patch, first}, mutation, refresh}}:
+    case Done{Agent.AgentToolResult{content, Some{Edit.EditToolDetails{diff, patch, first}}, mutation, refresh}}:
       do IO<Runner.ToolOutput()>:
         IO.print("edit-details|" ++ Wire.showText(diff) ++ "|" ++ Wire.showText(patch) ++ "|" ++ firstLine(first))
-        return Done{Agent.AgentToolResult{content, Unit{}, mutation, refresh}}
+        return Done{Agent.AgentToolResult{content, Some{Unit{}}, mutation, refresh}}
+    case Done{_}: IO.die(Runner.ToolOutput(), 1, "edit result lacks details")
 
 def invokeEdit(environment: EditExecution, input: Runner.ToolInput()) -> IO(Runner.ToolOutput()):
   match environment input:
@@ -99,7 +106,7 @@ def prepareEdit(callback: C.Callback<V.Value, Edit.ResultOf(V.Value)>, input: V.
     result : Edit.ResultOf(V.Value) <- C.call(V.Value, Edit.ResultOf(V.Value), callback, input)
     return prepared(result)
 
-def runOwned(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String, write: Write.ToolOwner & Agent.AgentTool<Unit, Write.Error>, edit: Edit.ToolOwner & Agent.AgentTool<Edit.EditToolDetails, Edit.Error>, read: Read.ToolOwner & Agent.AgentTool<Maybe<&2,Read.ReadToolDetails>,Read.Error>, bash: Bash.ToolOwner & Agent.AgentTool<Maybe<&2,Bash.BashToolDetails>,Bash.Error>) -> IO(Runner.Outcome()):
+def runOwned(bundle: List<&2, X509.Certificate>, name: String, base: String, prompt: String, write: Write.ToolOwner & Agent.AgentTool<Unit, Write.Error>, edit: Edit.ToolOwner & Agent.AgentTool<Edit.EditToolDetails, Edit.Error>, read: Read.ToolOwner & Agent.AgentTool<Read.ReadToolDetails,Read.Error>, bash: Bash.ToolOwner & Agent.AgentTool<Bash.BashToolDetails,Bash.Error>) -> IO(Runner.Outcome()):
   match write edit read bash:
     case Tuple{writeOwner, Agent.AgentTool{wn, wd, wp, ws, wl, None{}, wc, wr, wm}} Tuple{editOwner, Agent.AgentTool{en, ed, ep, es, el, Some{prepare}, ec, er, em}} Tuple{readOwner,Agent.AgentTool{rn,rd,rp,rs,rl,None{},rc,rr,rm}} Tuple{bashOwner,Agent.AgentTool{bn,bd,bp,bs,bl,None{},bc,br,bm}}:
       do IO<Runner.Outcome()>:

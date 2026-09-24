@@ -34,7 +34,7 @@ def execute(state: R.Ref<QueueState>, input: Validation.ExecuteInput()) -> IO(Va
         +value : String = Bool.pick(String, String.eq(id, "tool-1"), "first", "second")
         Test.assertion(V.equal(args, Validation.field(V.Text{value})), "original tool arguments")
         R.modify(QueueState, Unit, state, current => recordExecution(current, value))
-        return Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"ok:" ++ value, None{}}} <> Nil{}, value, None{}, None{}}}
+        return Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"ok:" ++ value, None{}}} <> Nil{}, Some{value}, None{}, None{}}}
 
 def poll(state: QueueState) -> QueueState & Bool:
   match state:

@@ -40,7 +40,7 @@ def execute(environment: Capture, input: Validation.ExecuteInput()) -> IO(Valida
         +value : String = valueFor(mode, id)
         Test.assertion(V.equal(args, Validation.field(V.Text{value})), "executor receives original validated arguments")
         H.log(recording, value)
-        return Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"echoed: " ++ value, None{}}} <> Nil{}, value, None{}, terminate(mode, id)}}
+        return Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"echoed: " ++ value, None{}}} <> Nil{}, Some{value}, None{}, terminate(mode, id)}}
 
 def blockDecision(mode: U32, id: String) -> Maybe<&2, T.BeforeToolCallResult>:
   match mode:

@@ -112,7 +112,7 @@ def runPrepared(+prepared: Loop.PreparedToolCall<String, String>, emitter: C.Cal
 def check(+mode: U32, state: State(), emitter: C.Callback<Execute.EventValue(), E.Emission<String>>) -> IO(Unit):
   match state:
     case Loop.ToolPreparationState{_, Loop.Prepared{prepared}}: runPrepared(prepared, emitter)
-    case Loop.ToolPreparationState{_, Loop.Immediate{Loop.ImmediateToolCallOutcome{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{message, _}} <> Nil{}, details, _, terminate}, True{}}}}:
+    case Loop.ToolPreparationState{_, Loop.Immediate{Loop.ImmediateToolCallOutcome{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{message, _}} <> Nil{}, Some{details}, _, terminate}, True{}}}}:
       do IO<Unit>:
         expected : String = expectedMessage(mode)
         Test.assertion(String.eq(message, expected) && String.eq(details, "empty"), "preparation error conversion")

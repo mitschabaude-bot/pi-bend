@@ -42,11 +42,11 @@ def processor(environment: Scenario, input: Read.ImageInput) -> IO(Read.ResultOf
 def parameters() -> V.Value:
   V.ObjectValue{Record.Record{Record.Property{"path",V.Text{"file"}} <> Nil{}}}
 
-def call(pair: Read.ToolOwner & Agent.AgentTool<Maybe<&2,Read.ReadToolDetails>,Read.Error>, signal: Abort.AbortSignal<Unit>) -> IO(Read.ToolResult()):
+def call(pair: Read.ToolOwner & Agent.AgentTool<Read.ReadToolDetails,Read.Error>, signal: Abort.AbortSignal<Unit>) -> IO(Read.ToolResult()):
   match pair:
     case Tuple{owner,Agent.AgentTool{_,_,_,_,_,_,callback,_,_}}:
       do IO<Read.ToolResult()>:
-        result : Read.ToolResult() <- C.call(Agent.ToolExecutionInput<Maybe<&2,Read.ReadToolDetails>>,Read.ToolResult(),callback,Agent.ToolExecutionInput{"injected",parameters(),Some{signal},None{}})
+        result : Read.ToolResult() <- C.call(Agent.ToolExecutionInput<Read.ReadToolDetails>,Read.ToolResult(),callback,Agent.ToolExecutionInput{"injected",parameters(),Some{signal},None{}})
         Read.disposeTool(owner)
         return result
 

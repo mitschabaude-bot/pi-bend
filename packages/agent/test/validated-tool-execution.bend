@@ -51,7 +51,7 @@ def execute(counter: Ref.Ref<U32>, input: ExecuteInput()) -> IO(ExecuteOutput())
       do IO<ExecuteOutput()>:
         Test.assertion(String.eq(id, "call") && V.equal(args, field(V.Number{F.fromU32(42)})), "executor must receive actual normalized/validated arguments")
         Ref.modify(U32, Unit, counter, count => ((count + 1 : U32), Unit{}))
-        return Done{T.AgentToolResult{Nil{}, "done", None{}, None{}}}
+        return Done{T.AgentToolResult{Nil{}, Some{"done"}, None{}, None{}}}
     case _: IO.die(ExecuteOutput(), 1, "execution signal/update callback missing")
 
 def emit(unused: Unit, event: EventValue()) -> IO(E.Emission<String>):
@@ -62,7 +62,7 @@ def config(converter: C.Callback<Messages(), Converted()>) -> Config():
 
 def executed(result: Result<&2, &2, String, Loop.ExecutedToolCallOutcome<String>>) -> IO(Unit):
   match result:
-    case Done{Loop.ExecutedToolCallOutcome{T.AgentToolResult{_, details, _, _}, False{}}}: Test.assertion(String.eq(details, "done"), "validated executor result")
+    case Done{Loop.ExecutedToolCallOutcome{T.AgentToolResult{_, Some{details}, _, _}, False{}}}: Test.assertion(String.eq(details, "done"), "validated executor result")
     case _: Test.assertion(False{}, "validated execution failed")
 
 def runPrepared(+prepared: Loop.PreparedToolCall<String, String>, emitter: C.Callback<EventValue(), E.Emission<String>>) -> IO(Unit):

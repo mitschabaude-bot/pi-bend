@@ -214,7 +214,7 @@ def chooseOptional(-Value: Data, original: Maybe<&2, Value>, replacement: Maybe<
 def mergeResult(-Details: Data, original: T.AgentToolResult<Details>, replacement: T.AfterToolCallResult<Details>) -> T.AgentToolResult<Details> & Maybe<&2, Bool>:
   match original replacement:
     case T.AgentToolResult{content, details, usage, terminate} T.AfterToolCallResult{newContent, newDetails, newIsError, newUsage, newTerminate}:
-      (T.AgentToolResult{choose(List<&2, Ai.TextImageContent>, content, newContent), choose(Details, details, newDetails), chooseOptional(Ai.Usage, usage, newUsage), chooseOptional(Bool, terminate, newTerminate)}, newIsError)
+      (T.AgentToolResult{choose(List<&2, Ai.TextImageContent>, content, newContent), chooseOptional(Details, details, newDetails), chooseOptional(Ai.Usage, usage, newUsage), chooseOptional(Bool, terminate, newTerminate)}, newIsError)
 
 def mergedOutcome(-Details: Data, isError: Bool, merged: T.AgentToolResult<Details> & Maybe<&2, Bool>) -> ExecutedToolCallOutcome<Details>:
   match merged:
@@ -338,7 +338,7 @@ def emitToolResultMessage(-DiagnosticDetails: Data, -Details: Data, -Custom: Dat
 def toolResultMessageAt(-Details: Data, call: Ai.ToolCall<Schema.Value>, result: T.AgentToolResult<Details>, isError: Bool, timestamp: F64) -> Ai.ToolResultMessage<Details>:
   match call result:
     case Ai.ToolCall{id, name, _, _, _} T.AgentToolResult{content, details, usage, _}:
-      Ai.ToolResultMessage{id, name, content, Some{details}, usage, isError, timestamp}
+      Ai.ToolResultMessage{id, name, content, details, usage, isError, timestamp}
 
 def createToolResultMessage(-Details: Data, finalized: FinalizedToolCallOutcome<Details>) -> IO(Ai.ToolResultMessage<Details>):
   match finalized:
@@ -868,7 +868,7 @@ type ExecutedToolCallBatch<-Details: Data> is Data:
   ExecutedToolCallBatch{messages: List<&2, Ai.ToolResultMessage<Details>>, terminate: Bool}
 
 def createErrorToolResult(-DetailValue: Data, message: String) -> T.AgentToolResult<Record.Record<DetailValue>>:
-  T.AgentToolResult{Ai.TextImageText{Ai.TextContent{message, None{}}} <> Nil{}, Record.new(DetailValue), None{}, None{}}
+  T.AgentToolResult{Ai.TextImageText{Ai.TextContent{message, None{}}} <> Nil{}, Some{Record.new(DetailValue)}, None{}, None{}}
 
 # Failure details are supplied by the caller, preserving the tool result type.
 type TruncatedToolCallRun<-DiagnosticDetails: Data, -Custom: Data, -PartialResult: Data, -ExecutionError: Data, -Details: Data> is Data:
@@ -901,7 +901,7 @@ def afterTruncatedStart(-DiagnosticDetails: Data, -Custom: Data, -PartialResult:
     case _ Fail{error}: IO.pure(Result<&2, &2, ExecutionError, Ai.ToolResultMessage<Details>>, Fail{error})
     case TruncatedToolCallRun{emit, emptyDetails} Done{_}:
       do IO<Result<&2, &2, ExecutionError, Ai.ToolResultMessage<Details>>>:
-        result : T.AgentToolResult<Details> = T.AgentToolResult{Ai.TextImageText{Ai.TextContent{truncatedCallError(call), None{}}} <> Nil{}, emptyDetails, None{}, None{}}
+        result : T.AgentToolResult<Details> = T.AgentToolResult{Ai.TextImageText{Ai.TextContent{truncatedCallError(call), None{}}} <> Nil{}, Some{emptyDetails}, None{}, None{}}
         +finalized : FinalizedToolCallOutcome<Details> = FinalizedToolCallOutcome{call, result, True{}}
         ended : Result<&2, &2, ExecutionError, Unit> <- emitToolExecutionEnd(DiagnosticDetails, Details, Custom, PartialResult, ExecutionError, finalized, emit)
         afterTruncatedExecutionEnd(DiagnosticDetails, Custom, PartialResult, ExecutionError, Details, run, finalized, ended)
@@ -987,7 +987,7 @@ def beforeToolCallDecision(aborted: Bool, result: Maybe<&2, T.BeforeToolCallResu
 
 # Error values remain typed; formatting occurs only at the tool-result boundary.
 def failedToolOutcome(-Details: Data, -Error: Data, details: Details, renderError: Error -> String, error: Error) -> ExecutedToolCallOutcome<Details>:
-  ExecutedToolCallOutcome{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{renderError(error), None{}}} <> Nil{}, details, None{}, None{}}, True{}}
+  ExecutedToolCallOutcome{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{renderError(error), None{}}} <> Nil{}, Some{details}, None{}, None{}}, True{}}
 
 def resolveToolHookResult(-Details: Data, -Error: Data, executed: ExecutedToolCallOutcome<Details>, failureDetails: Details, renderError: Error -> String, outcome: Result<&2, &2, Error, Maybe<&2, T.AfterToolCallResult<Details>>>) -> ExecutedToolCallOutcome<Details>:
   match outcome:
@@ -1155,7 +1155,7 @@ def findExecutableTool(-Details: Data, -Error: Data, +name: String, tools: List<
       selected(Unit{})
 
 def immediatePreparation(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, context: T.AgentContext<DiagnosticDetails, Details, Custom, Error>, message: String, details: Details, terminate: Bool) -> ToolPreparationState<DiagnosticDetails, Details, Custom, Error>:
-  result = {T.AgentToolResult{Ai.TextImageText{Ai.TextContent{message, None{}}} <> Nil{}, details, None{}, Bool.pick(Maybe<&2, Bool>, terminate, Some{True{}}, None{})} : T.AgentToolResult<Details>}
+  result = {T.AgentToolResult{Ai.TextImageText{Ai.TextContent{message, None{}}} <> Nil{}, Some{details}, None{}, Bool.pick(Maybe<&2, Bool>, terminate, Some{True{}}, None{})} : T.AgentToolResult<Details>}
   ToolPreparationState{context, Immediate{ImmediateToolCallOutcome{result, True{}}}}
 
 def checkedArgumentPreparation(-Details: Data, -Error: Data, tool: T.AgentTool<Details, Error>, prepared: Result<&2, &2, Error, PreparedToolCallArguments>, validate: C.Callback<ToolValidationInput, Result<&2, &2, Error, Schema.Value>>) -> IO(Result<&2, &2, Error, Schema.Value>):
@@ -1447,7 +1447,7 @@ def executeParallel(~DiagnosticDetails: Data, ~Details: Data, ~Custom: Data, ~Er
             stopped : Bool <- C.call(Maybe<&2, Abort.AbortSignal<Unit>>, Bool, isAborted, signal)
             executeParallel(~DiagnosticDetails, ~Details, ~Custom, ~Error, ~Telemetry, ~renderError, environment, Aborted{prepared, stopped})
         case Aborted{prepared, True{}}:
-          executeParallel(~DiagnosticDetails, ~Details, ~Custom, ~Error, ~Telemetry, ~renderError, environment, ParallelFinalized{FinalizedToolCallOutcome{preparedCall(Details, Error, prepared), T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"Operation aborted", None{}}} <> Nil{}, failureDetails, None{}, None{}}, True{}}})
+          executeParallel(~DiagnosticDetails, ~Details, ~Custom, ~Error, ~Telemetry, ~renderError, environment, ParallelFinalized{FinalizedToolCallOutcome{preparedCall(Details, Error, prepared), T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"Operation aborted", None{}}} <> Nil{}, Some{failureDetails}, None{}, None{}}, True{}}})
         case Aborted{+prepared, False{}}:
           do IO<Result<&2, &2, Error, FinalizedToolCallOutcome<Details>>>:
             +updates : ToolUpdateRun<Details, Error> <- createToolUpdateRun(~DiagnosticDetails, ~Details, ~Custom, ~Error, preparedCall(Details, Error, prepared), emit)

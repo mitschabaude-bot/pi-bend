@@ -22,7 +22,7 @@ type EmitState is Data:
   EmitState{log: R.Ref<List<&2, String>>, first: Chan(Unit), second: Chan(Unit), fail: Bool, immediate: Bool}
 
 def partial(+text: String) -> T.AgentToolResult<String>:
-  T.AgentToolResult{Ai.TextImageText{Ai.TextContent{text, None{}}} <> Nil{}, text, None{}, None{}}
+  T.AgentToolResult{Ai.TextImageText{Ai.TextContent{text, None{}}} <> Nil{}, Some{text}, None{}, None{}}
 
 def update(callback: Update(), text: String) -> IO(Unit):
   C.call(T.AgentToolResult<String>, Unit, callback, partial(text))
@@ -58,7 +58,7 @@ def delivery(immediate: Bool, gate: Chan(Unit), +error: String) -> IO(E.Emission
 
 def emit(state: EmitState, event: EventValue()) -> IO(E.Emission<String>):
   match state event:
-    case EmitState{log, first, second, fail, +immediate} T.ToolExecutionUpdate{id, name, raw, T.AgentToolResult{_, +details, _, _}}:
+    case EmitState{log, first, second, fail, +immediate} T.ToolExecutionUpdate{id, name, raw, T.AgentToolResult{_, Some{+details}, _, _}}:
       do IO<E.Emission<String>>:
         Test.assertion(String.eq(id, "call") && String.eq(name, "echo") && Schema.equal(raw, Schema.Text{"raw"}), "update must preserve original call arguments")
         R.modify(List<&2, String>, Unit, log, entries => (details <> entries, Unit{}))
@@ -76,7 +76,7 @@ def finish(action: IO(Outcome()), done: D.Deferred<Unit>) -> IO(Outcome()):
 def check(outcome: Outcome(), +toolFailed: Bool, listenerFailed: Bool) -> IO(Unit):
   match outcome:
     case Fail{error}: Test.assertion(listenerFailed && String.eq(error, "listener failed"), "update failure must escape execution")
-    case Done{Loop.ExecutedToolCallOutcome{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{message, _}} <> Nil{}, details, _, _}, isError}}:
+    case Done{Loop.ExecutedToolCallOutcome{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{message, _}} <> Nil{}, Some{details}, _, _}, isError}}:
       Test.assertion(Bool.not(listenerFailed) && Bool.not(Bool.xor(isError, toolFailed)) && String.eq(message, Bool.pick(String, toolFailed, "tool failed", "done")) && String.eq(details, Bool.pick(String, toolFailed, "empty details", "done")), "tool result/error conversion differs")
     case _: Test.assertion(False{}, "unexpected execution result shape")
 

@@ -85,7 +85,7 @@ def execute(recording: H.Log(), input: Validation.ExecuteInput()) -> IO(Validati
       do IO<Validation.ExecuteOutput()>:
         Test.assertion(String.eq(id, "tool-1") && V.equal(args, Validation.field(V.Text{"hello"})), "original tool execution")
         H.log(recording, "hello")
-        return Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"echoed: hello", None{}}} <> Nil{}, "hello", None{}, None{}}}
+        return Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"echoed: hello", None{}}} <> Nil{}, Some{"hello"}, None{}, None{}}}
 
 def hasGuidance(messages: List<&2, Ai.Message<V.Value, V.Value, Unit, String>>) -> Bool:
   match messages:

@@ -23,7 +23,7 @@ def arguments(path: String, content: String) -> V.Value:
 
 def report(path: String, value: W.ToolResult()) -> IO(Unit):
   match value:
-    case Done{Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{+text, None{}}} <> Nil{}, Unit{}, None{}, None{}}}:
+    case Done{Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{+text, None{}}} <> Nil{}, None{}, None{}, None{}}}:
       do IO<Unit>:
         Test.check(String.eq(text, "Successfully wrote to " ++ path), "write result text")
         IO.print(text)

@@ -33,7 +33,7 @@ type Error is Data:
   Aborted{}
 
 def ResultOf(-A: Data) -> Data: Result<&2,&2,Error,A>
-def ToolResult() -> Data: ResultOf(Agent.AgentToolResult<Maybe<&2,FindToolDetails>>)
+def ToolResult() -> Data: ResultOf(Agent.AgentToolResult<FindToolDetails>)
 def DEFAULT_LIMIT() -> Nat: 1000n
 
 type FindOperations is Data:
@@ -45,7 +45,7 @@ type FindContext is Data:
 type Invocation is Data:
   Invocation{paths: Paths.Environment, tools: Tools.ToolsManager, cwd: String, operations: Maybe<&2,FindOperations>}
 type ToolOwner is Type:
-  ToolOwner{tool: Agent.AgentTool<Maybe<&2,FindToolDetails>,Error>}
+  ToolOwner{tool: Agent.AgentTool<FindToolDetails,Error>}
 
 def errorMessage(error: Error) -> String:
   match error:
@@ -219,9 +219,9 @@ def execute(environment: Invocation,pattern: String,+path: String,+limit: Nat,+s
     case Invocation{_,_,_,Some{operations}}:
       do IO<ToolResult()>:
         values : ResultOf(List<&2,String>) <- customSearch(operations,pattern,path,limit,signal)
-        then(List<&2,String>,Agent.AgentToolResult<Maybe<&2,FindToolDetails>>,settled(List<&2,String>,signal,values),results => IO.pure(ToolResult(),render(results,path,limit)))
+        then(List<&2,String>,Agent.AgentToolResult<FindToolDetails>,settled(List<&2,String>,signal,values),results => IO.pure(ToolResult(),render(results,path,limit)))
     case Invocation{_,tools,_,None{}}:
-      then(String,Agent.AgentToolResult<Maybe<&2,FindToolDetails>>,ensureFd(tools,signal),fdPath => withFd(pattern,path,limit,signal,fdPath))
+      then(String,Agent.AgentToolResult<FindToolDetails>,ensureFd(tools,signal),fdPath => withFd(pattern,path,limit,signal,fdPath))
 
 def numeric(value: Result<&2,&2,Number.Error,Nat>) -> ResultOf(Maybe<&2,Nat>):
   match value:
@@ -249,15 +249,15 @@ def invokeInput(+environment: Invocation,context: FindContext,signal: Maybe<&2,A
   match environment context input:
     case Invocation{paths,_,cwd,_} FindContext{override} FindToolInput{pattern,path,limit}:
       resolved(environment,pattern,Maybe.default(&2,Nat,limit,DEFAULT_LIMIT()),signal,Paths.resolveToCwd(paths,Text.orElse(path,"."),Text.orElse(override,cwd)))
-def invokeWithContext(environment: Invocation,context: FindContext,request: Agent.ToolExecutionInput<Maybe<&2,FindToolDetails>>) -> IO(ToolResult()):
+def invokeWithContext(environment: Invocation,context: FindContext,request: Agent.ToolExecutionInput<FindToolDetails>) -> IO(ToolResult()):
   match request:
     case Agent.ToolExecutionInput{_,arguments,+signal,_}:
-      then(Unit,Agent.AgentToolResult<Maybe<&2,FindToolDetails>>,check(signal),_ => continued(FindToolInput,Agent.AgentToolResult<Maybe<&2,FindToolDetails>>,parseInput(arguments),input => invokeInput(environment,context,signal,input)))
+      then(Unit,Agent.AgentToolResult<FindToolDetails>,check(signal),_ => continued(FindToolInput,Agent.AgentToolResult<FindToolDetails>,parseInput(arguments),input => invokeInput(environment,context,signal,input)))
 # upstream wrapToolDefinition: the registered tool reads the session's
 # context when it runs; without a bound session it keeps its own cwd.
 type Registered is Data: Registered{environment: Invocation, source: Ctx.ContextSource()}
 def toolContext(context: Maybe<&2,Ctx.ExtensionContext>) -> FindContext: FindContext{Ctx.cwdOf(context)}
-def invoke(registered: Registered, request: Agent.ToolExecutionInput<Maybe<&2,FindToolDetails>>) -> IO(ToolResult()):
+def invoke(registered: Registered, request: Agent.ToolExecutionInput<FindToolDetails>) -> IO(ToolResult()):
   match registered:
     case Registered{environment,source}:
       do IO<ToolResult()>:
@@ -277,14 +277,14 @@ def createFindTool(paths: Paths.Environment,tools: Tools.ToolsManager,cwd: Strin
   match options:
     case FindToolOptions{operations}:
       do IO<ToolOwner>:
-        callback : Callback.Callback<Agent.ToolExecutionInput<Maybe<&2,FindToolDetails>>,ToolResult()> <- Callback.create(~Registered,~Agent.ToolExecutionInput<Maybe<&2,FindToolDetails>>,~ToolResult(),~invoke,Registered{Invocation{paths,tools,cwd,operations},source})
+        callback : Callback.Callback<Agent.ToolExecutionInput<FindToolDetails>,ToolResult()> <- Callback.create(~Registered,~Agent.ToolExecutionInput<FindToolDetails>,~ToolResult(),~invoke,Registered{Invocation{paths,tools,cwd,operations},source})
         return ToolOwner{Agent.AgentTool{"find","Search for files by glob pattern. Returns matching file paths relative to the search directory. Respects .gitignore. Output is truncated to 1000 results or 50KB (whichever is hit first).",findSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"find",None{},callback,None{},None{}}}
-def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<Maybe<&2,FindToolDetails>,Error>:
+def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<FindToolDetails,Error>:
   match owner:
     case ToolOwner{+tool}: (ToolOwner{tool},tool)
 def disposeTool(owner: ToolOwner) -> IO(Unit):
   match owner:
-    case ToolOwner{Agent.AgentTool{_,_,_,_,_,_,callback,_,_}}: Callback.dispose(Agent.ToolExecutionInput<Maybe<&2,FindToolDetails>>,ToolResult(),callback)
+    case ToolOwner{Agent.AgentTool{_,_,_,_,_,_,callback,_,_}}: Callback.dispose(Agent.ToolExecutionInput<FindToolDetails>,ToolResult(),callback)
 def dispose(operations: FindOperations) -> IO(Unit):
   match operations:
     case FindOperations{exists,glob}:

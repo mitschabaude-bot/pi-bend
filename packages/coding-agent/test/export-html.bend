@@ -33,7 +33,7 @@ def timestamp() -> String: "2026-01-01T00:00:00.000Z"
 def entries() -> Entries():
   S.SessionMessageEntry{S.SessionEntryBase{"u1", None{}, timestamp()}, Agent.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{"<script>alert(1)</script> & é"}, F.fromU32(1)}}}} <>
   S.SessionMessageEntry{S.SessionEntryBase{"a1", Some{"u1"}, timestamp()}, assistant()} <>
-  S.SessionMessageEntry{S.SessionEntryBase{"r1", Some{"a1"}, timestamp()}, Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{"call-1", "bash", Ai.TextImageText{Ai.TextContent{"<ok>\n  indented", None{}}} <> Nil{}, Some{Tools.WriteDetails{}}, None{}, False{}, F.fromU32(3)}}}} <> Nil{}
+  S.SessionMessageEntry{S.SessionEntryBase{"r1", Some{"a1"}, timestamp()}, Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{"call-1", "bash", Ai.TextImageText{Ai.TextContent{"<ok>\n  indented", None{}}} <> Nil{}, Some{Tools.emptyDetails()}, None{}, False{}, F.fromU32(3)}}}} <> Nil{}
 
 def session() -> Result<&2, &2, S.Error, State()>:
   S.restore(Unit, Tools.ToolDetails, V.Value, S.SessionHeader{Some{S.CURRENT_SESSION_VERSION()}, "export-1", "2026-01-01T00:00:00.000Z", "/tmp", None{}}, entries())

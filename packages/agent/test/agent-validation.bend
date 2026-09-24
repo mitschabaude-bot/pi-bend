@@ -58,7 +58,7 @@ def execute(counter: R.Ref<U32>, input: ExecuteInput()) -> IO(ExecuteOutput()):
       do IO<ExecuteOutput()>:
         Test.assertion(V.equal(args, field(V.Number{F.fromU32(42)})), "executor receives the original number with optional null removed")
         R.modify(U32, Unit, counter, old => (U32.add(old, 1), Unit{}))
-        return Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"accepted", None{}}} <> Nil{}, "done", None{}, None{}}}
+        return Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"accepted", None{}}} <> Nil{}, Some{"done"}, None{}, None{}}}
     case _: IO.die(ExecuteOutput(), 1, "unexpected executor input")
 type Capture is Data:
   Capture{valid: Bool, calls: R.Ref<U32>, streams: R.Ref<List<&2, StreamValue()>>}

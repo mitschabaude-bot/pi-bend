@@ -220,7 +220,7 @@ def execute(environment: Execution, input: H.ExecuteInput()) -> IO(H.ExecuteOutp
       do IO<H.ExecuteOutput()>:
         Test.assertion(String.eq(id, "call") && V.equal(arguments, H.field(V.Number{F.fromU32(42)})), "full loop executes validated arguments")
         ignored : U32 <- bump(count)
-        return Done{T.AgentToolResult{Nil{}, "tool", None{}, Some{terminate}}}
+        return Done{T.AgentToolResult{Nil{}, Some{"tool"}, None{}, Some{terminate}}}
 
 def validate(count: R.Ref<U32>, input: H.Input()) -> IO(H.Checked()):
   do IO<H.Checked()>:

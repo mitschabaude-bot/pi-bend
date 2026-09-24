@@ -53,7 +53,7 @@ def schema() -> V.Value:
 
 def echoValue(value: Maybe<&2, V.Value>) -> ToolOutput():
   match value:
-    case Some{V.Text{text}}: Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{text, None{}}} <> Nil{}, Unit{}, None{}, None{}}}
+    case Some{V.Text{text}}: Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{text, None{}}} <> Nil{}, Some{Unit{}}, None{}, None{}}}
     case _: Fail{"echo expects an input string"}
 
 def echo(counter: Ref.Ref<U32>, input: ToolInput()) -> IO(ToolOutput()):

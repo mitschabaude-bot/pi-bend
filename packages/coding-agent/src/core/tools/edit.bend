@@ -161,7 +161,7 @@ def prepareContent(edits: List<&2, Edits.Edit>, path: String, count: Nat, decode
 
 def resultDetails(path: String, count: Nat, patch: String, result: Diff.DiffResult) -> Agent.AgentToolResult<EditToolDetails>:
   match result:
-    case Diff.DiffResult{diff, firstChangedLine}: Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{"Successfully replaced " ++ Nat.show(count) ++ " block(s) in " ++ path ++ ".", None{}}} <> Nil{}, EditToolDetails{diff, patch, firstChangedLine}, None{}, None{}}
+    case Diff.DiffResult{diff, firstChangedLine}: Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{"Successfully replaced " ++ Nat.show(count) ++ " block(s) in " ++ path ++ ".", None{}}} <> Nil{}, Some{EditToolDetails{diff, patch, firstChangedLine}}, None{}, None{}}
 
 def save(writer: Callback.Callback<(String & String), ResultOf(Unit)>, absolute: String, +path: String, +signal: Maybe<&2, Abort.AbortSignal<Unit>>, prepared: Prepared) -> IO(ToolResult()):
   match prepared:

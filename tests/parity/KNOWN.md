@@ -19,9 +19,6 @@ names the scenario where it shows.
 
 ## Open (to fix)
 
-- **Tool result `details: {}`** (`json-turn`, sessions, RPC): upstream omits
-  `details` when a tool returns none (bash without truncation); Bend's agent
-  core types `AgentToolResult.details` as required, so the registry emits `{}`.
 - **Request headers** (every scenario with a model turn): Bend sends neither
   Node fetch's default fields (`accept-encoding`, `accept-language`,
   `connection`, `sec-fetch-mode`; see tests/fetch-keepalive.md) nor the OpenAI

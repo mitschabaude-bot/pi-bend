@@ -105,8 +105,9 @@ def checkAbsent(original: T.AgentToolResult<Payload>, beforeError: Bool, outcome
 
 def checkRecord(value: T.AgentToolResult<Payload>, expectedDetails: U32, old: String, fresh: String, expectedContent: String, expectedCost: Ai.UsageCost, expectedTerminate: Maybe<&2, Bool>) -> IO(Unit):
   match value:
-    case T.AgentToolResult{contentValue, detailValue, usageValue, terminateValue}:
+    case T.AgentToolResult{contentValue, Some{detailValue}, usageValue, terminateValue}:
       assertion(String.eq(showContent(contentValue), expectedContent) && checkDetails(detailValue, expectedDetails, old, fresh) && sameUsage(usageValue, expectedCost) && sameOptional(terminateValue, expectedTerminate), "hook override fields differ from upstream nullish merge")
+    case _: assertion(False{}, "hook override result lacks details")
 
 def unchangedContent(value: T.AgentToolResult<Payload>) -> IO(Unit):
   match value:
@@ -131,7 +132,7 @@ def run(contentIndex: U32, detailsIndex: U32, +flags: U32, expectedDetails: U32,
     +newCost : Ai.UsageCost = Ai.UsageCost{zero, zero, zero, zero, zero}
     +oldDetails : String <- IO.pure(String, "old")
     +newDetails : String <- IO.pure(String, "new")
-    +original : T.AgentToolResult<Payload> = T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"old", None{}}} <> Nil{}, ObjectPayload{oldDetails}, Some{usage(oldCost)}, originalTerminate(flags)}
+    +original : T.AgentToolResult<Payload> = T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"old", None{}}} <> Nil{}, Some{ObjectPayload{oldDetails}}, Some{usage(oldCost)}, originalTerminate(flags)}
     +beforeError : Bool = U32.is_eq(flags, 0) || U32.is_eq(flags, 2) || U32.is_eq(flags, 4)
     unchanged : Loop.ExecutedToolCallOutcome<Payload> = Loop.applyAfterToolCallResult(Payload, Loop.ExecutedToolCallOutcome{original, beforeError}, None{})
     checkAbsent(original, beforeError, unchanged)

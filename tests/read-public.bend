@@ -44,16 +44,16 @@ def parsed(value: Result<&2,&2,Json.ParseError,V.Value>) -> V.Value:
     case Done{value}: value
     case Fail{_}: V.Null{}
 
-def calls(args: List<String>, +callback: C.Callback<Agent.ToolExecutionInput<Maybe<&2,Read.ReadToolDetails>>,Read.ToolResult()>) -> IO(Unit):
+def calls(args: List<String>, +callback: C.Callback<Agent.ToolExecutionInput<Read.ReadToolDetails>,Read.ToolResult()>) -> IO(Unit):
   match args:
     case Nil{}: IO.pure(Unit,Unit{})
     case value <> rest:
       do IO<Unit>:
-        result : Read.ToolResult() <- C.call(Agent.ToolExecutionInput<Maybe<&2,Read.ReadToolDetails>>,Read.ToolResult(),callback,Agent.ToolExecutionInput{"test",parsed(Json.parse(value)),None{},None{}})
+        result : Read.ToolResult() <- C.call(Agent.ToolExecutionInput<Read.ReadToolDetails>,Read.ToolResult(),callback,Agent.ToolExecutionInput{"test",parsed(Json.parse(value)),None{},None{}})
         IO.print(report(result))
         calls(rest,callback)
 
-def runOwner(value: Read.ToolOwner & Agent.AgentTool<Maybe<&2,Read.ReadToolDetails>,Read.Error>, args: List<String>) -> IO(Unit):
+def runOwner(value: Read.ToolOwner & Agent.AgentTool<Read.ReadToolDetails,Read.Error>, args: List<String>) -> IO(Unit):
   match value:
     case Tuple{owner,Agent.AgentTool{"read",_,_,Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"read",None{},callback,None{},None{}}}:
       do IO<Unit>:

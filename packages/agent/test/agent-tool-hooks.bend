@@ -77,7 +77,7 @@ def before(capture: Capture, input: BeforeInput()) -> IO(BeforeResult()):
 def content(text: String) -> List<&2, Ai.TextImageContent>: Ai.TextImageText{Ai.TextContent{text, None{}}} <> Nil{}
 def after(capture: Capture, input: AfterInput()) -> IO(AfterResult()):
   match capture input:
-    case Capture{+name, trace, _, _} T.ToolHookInput{T.AfterToolCallContext{_, Ai.ToolCall{"call", "echo", Schema.Null{}, _, _}, _, T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"executed", None{}}} <> Nil{}, Unit{}, _, _}, False{}, _}, Some{signal}}:
+    case Capture{+name, trace, _, _} T.ToolHookInput{T.AfterToolCallContext{_, Ai.ToolCall{"call", "echo", Schema.Null{}, _, _}, _, T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"executed", None{}}} <> Nil{}, Some{Unit{}}, _, _}, False{}, _}, Some{signal}}:
       do IO<AfterResult()>:
         live(signal)
         R.modify(String, Unit, trace, old => (old ++ "a" ++ name ++ ";", Unit{}))
@@ -86,7 +86,7 @@ def after(capture: Capture, input: AfterInput()) -> IO(AfterResult()):
 def execute(trace: R.Ref<String>, input: T.ToolExecutionInput<Unit>) -> IO(Result<&2, &2, String, T.AgentToolResult<Unit>>):
   do IO<Result<&2, &2, String, T.AgentToolResult<Unit>>>:
     R.modify(String, Unit, trace, old => (old ++ "x;", Unit{}))
-    return Done{T.AgentToolResult{content("executed"), Unit{}, None{}, None{}}}
+    return Done{T.AgentToolResult{content("executed"), Some{Unit{}}, None{}, None{}}}
 type ProviderCapture is Data:
   ProviderCapture{calls: R.Ref<U32>, trace: R.Ref<String>, streams: R.Ref<List<&2, H.StreamValue()>>}
 def toolTurn(+index: U32) -> Bool: U32.is_eq(index, 0) || U32.is_eq(index, 2) || U32.is_eq(index, 4)
