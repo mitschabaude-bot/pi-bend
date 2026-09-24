@@ -73,7 +73,7 @@ def scenario(threads):
             at = len(output)
             os.write(master, b"/help\r")
             until(b"Commands: /model [search]", at)
-            os.write(master, b"/exit\r")
+            os.write(master, b"/quit\r")
             stderr = process.communicate(timeout=15)[1]
             assert process.returncode == 0, (threads, stderr.decode(errors="replace"))
             assert termios.tcgetattr(slave) == original, threads

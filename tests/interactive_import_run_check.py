@@ -93,7 +93,7 @@ for threads in (1, 4):
             command(b"/import external/absent.jsonl", b"Replace current session")
             os.write(master, b"1")
             until(b"File not found: external/absent.jsonl")
-            os.write(master, b"/exit\r")
+            os.write(master, b"/quit\r")
             stderr = process.communicate(timeout=20)[1]
             assert process.returncode == 0, (threads, stderr.decode(errors="replace"))
             assert termios.tcgetattr(slave) == original

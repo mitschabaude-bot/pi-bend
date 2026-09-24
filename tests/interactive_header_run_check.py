@@ -60,7 +60,7 @@ def scenario(threads, quiet):
                 start = len(output)
                 os.write(master, b"\x0f")
                 until(b"ctrl+c  clear", start)
-            os.write(master, b"/exit\r")
+            os.write(master, b"/quit\r")
             stderr = process.communicate(timeout=10)[1]
             assert process.returncode == 0 and not stderr, (process.returncode, stderr)
             assert termios.tcgetattr(slave) == original, threads

@@ -65,7 +65,7 @@ def scenario(threads):
             start = len(output)
             os.write(master, b"\x0f")
             until(b"Tool output: collapsed", start)
-            os.write(master, b"/exit\r")
+            os.write(master, b"/quit\r")
             deadline = time.monotonic() + 20
             while process.poll() is None and time.monotonic() < deadline:
                 drain(.1)

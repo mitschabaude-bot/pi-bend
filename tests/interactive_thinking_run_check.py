@@ -51,7 +51,7 @@ def scenario(threads):
                 os.write(master, b"\x14")
                 until(expected, start)
                 assert json.loads(settings.read_text())["hideThinkingBlock"] is persisted
-            os.write(master, b"/exit\r")
+            os.write(master, b"/quit\r")
             deadline = time.monotonic() + 20
             while process.poll() is None and time.monotonic() < deadline:
                 if select.select([master], [], [], .1)[0]:

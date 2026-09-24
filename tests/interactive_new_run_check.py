@@ -70,21 +70,21 @@ def scenario(threads):
             os.write(master, b'/export "nested/conversation copy.jsonl"\r')
             until(b"Session exported to: " + os.fsencode(jsonl), before)
             assert any("before" in line for line in jsonl.read_text().splitlines())
-            for command in (b"/new", b"/clear"):
+            for command in (b"/new",):
                 before = len(output)
                 os.write(master, command + b"\r")
                 until(b"New session started", before)
             before = len(output)
             os.write(master, b"hello\r")
             until(b"answer", before)
-            os.write(master, b"/exit\r")
+            os.write(master, b"/quit\r")
             stderr = process.communicate(timeout=20)[1]
             assert process.returncode == 0, (threads, stderr.decode(errors="replace"))
             assert termios.tcgetattr(slave) == original, threads
             assert not stderr, (threads, stderr.decode(errors="replace"))
             paths = re.findall(rb'\{"type":"factory","cwd":"[^"]+","sessionFile":"([^"]+)"', output)
-            assert len(paths) == 3 and len(set(paths)) == 3, (threads, paths, bytes(output[:1200]))
-            assert output.count(b'"reason":"new"') == 2, (threads, bytes(output[:1500]))
+            assert len(paths) == 2 and len(set(paths)) == 2, (threads, paths, bytes(output[:1200]))
+            assert output.count(b'"reason":"new"') == 1, (threads, bytes(output[:1500]))
             files = list(cwd.glob("*.jsonl"))
             assert len(files) == 2 and {os.fsencode(file) for file in files} == {paths[0], paths[-1]}, (threads, files, paths)
             histories = {os.fsencode(file): [json.loads(line) for line in file.read_text().splitlines()] for file in files}
@@ -100,7 +100,7 @@ def scenario(threads):
                 process.wait()
             os.close(master)
             os.close(slave)
-    print(f"native{threads}: HTML/JSONL export, /new, /clear, isolated histories, terminal restore")
+    print(f"native{threads}: HTML/JSONL export, /new, isolated histories, terminal restore")
 
 
 for threads in (1, 4):

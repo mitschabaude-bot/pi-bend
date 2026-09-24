@@ -57,7 +57,7 @@ def scenario(threads, choice, automatic):
                 os.write(master, b"\x1b[?997;1n")
                 until(DARK)
                 assert DARK in output[before:], (threads, bytes(output[before:]))
-            os.write(master, b"/exit\r")
+            os.write(master, b"/quit\r")
             stderr = process.communicate(timeout=12)[1]
             assert process.returncode == 0, (threads, choice, stderr.decode(errors="replace"))
             assert termios.tcgetattr(slave) == original, threads

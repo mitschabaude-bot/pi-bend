@@ -61,7 +61,7 @@ for threads in (1, 4):
             start = len(output)
             os.write(master, b"/model\r")
             until(b"No models available. Use /login", start)
-            os.write(master, b"/exit\r")
+            os.write(master, b"/quit\r")
             stderr = process.communicate(timeout=20)[1]
             assert process.returncode == 0, (threads, stderr.decode(errors="replace"))
             assert termios.tcgetattr(slave) == original

@@ -53,7 +53,7 @@ for threads in (1, 4):
             until(b"Choose a provider", start)
             os.write(master, b"\x1b")
             until(b"Login cancelled", start)
-            os.write(master, b"/exit\r")
+            os.write(master, b"/quit\r")
             stderr = process.communicate(timeout=20)[1]
             assert process.returncode == 0, (threads, stderr.decode(errors="replace"))
             assert termios.tcgetattr(slave) == original

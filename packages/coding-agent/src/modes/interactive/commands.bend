@@ -31,7 +31,6 @@ type CredentialCommand is Data:
 type Command is Data:
   Send{text: String}
   Stop{}
-  Help{}
   ShowModel{requested: Maybe<&2,String>}
   SwitchModel{model: Ai.Model<Ai.JsonValue>}
   SetThinking{requested: Maybe<&2,String>}
@@ -54,16 +53,33 @@ def argument(text: String,prefix: Nat) -> Maybe<&2,String>:
 def bashCommand(+text: String,prefix: Nat,excluded: Bool) -> Command:
   +command = Text.trim(String.drop(text,prefix))
   Bool.pick(Command,String.is_empty(command),Send{text},Bash{command,excluded})
-def classify(+text: String,parts: List<&2,String>) -> Command:
+# upstream's built-in commands that are not ported yet; they report so
+# instead of reaching the model.
+def unported(parts: List<&2,String>) -> Bool:
   match parts:
-    case "/exit" <> Nil{}: Stop{}
+    case "/settings" <> Nil{}: True{}
+    case "/share" <> Nil{}: True{}
+    case "/bug" <> _: True{}
+    case "/copy" <> Nil{}: True{}
+    case "/session" <> Nil{}: True{}
+    case "/changelog" <> Nil{}: True{}
+    case "/hotkeys" <> Nil{}: True{}
+    case "/clone" <> Nil{}: True{}
+    case "/trust" <> Nil{}: True{}
+    case "/reload" <> Nil{}: True{}
+    case "/debug" <> Nil{}: True{}
+    case _: False{}
+
+# upstream interactive-mode's built-in commands; any other text, including an
+# unknown /name, is submitted, so prompt templates and /skill: commands expand
+# in the session.
+def classify(+text: String,+parts: List<&2,String>) -> Command:
+  match parts:
     case "/quit" <> Nil{}: Stop{}
-    case "/help" <> Nil{}: Help{}
     case "/model" <> _: ShowModel{argument(text,6n)}
     case "/thinking" <> _: SetThinking{argument(text,9n)}
     case "/compact" <> _: Compact{argument(text,8n)}
     case "/new" <> Nil{}: NewSession{}
-    case "/clear" <> Nil{}: NewSession{}
     case "/name" <> _: Name{argument(text,5n)}
     case "/login" <> _: Login{argument(text,6n)}
     case "/logout" <> Nil{}: Logout{}
@@ -75,7 +91,7 @@ def classify(+text: String,parts: List<&2,String>) -> Command:
     case _:
       Bool.pick(Command,String.starts_with(text,"!!"),bashCommand(text,2n,True{}),
         Bool.pick(Command,String.starts_with(text,"!"),bashCommand(text,1n,False{}),
-          Bool.pick(Command,String.starts_with(text,"/"),Unsupported{text},Send{text})))
+          Bool.pick(Command,unported(parts),Unsupported{text},Send{text})))
 def names(levels: List<&2,Ai.ModelThinkingLevel>) -> List<&2,String>:
   match levels:
     case Nil{}: Nil{}
@@ -183,7 +199,6 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
   match command:
     case Send{text}: IO.pure(Action,Prompt{text})
     case Stop{}: IO.pure(Action,Exit{})
-    case Help{}: IO.pure(Action,Notice{"Commands: /model [search], /thinking [level], /compact [instructions], /new, /clear, /name [name], /login, /logout, /export [path], /import <path>, /resume, /tree, /fork, /exit"})
     case ShowModel{requested}: showModel(session,models,requested)
     case SwitchModel{model}: switchModel(session,model)
     case SetThinking{requested}: thinking(session,requested)
@@ -198,7 +213,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case Tree{}: IO.pure(Action,OpenTree{})
     case Fork{}: IO.pure(Action,OpenFork{})
     case Bash{command,excluded}: IO.pure(Action,RunBash{command,excluded})
-    case Unsupported{text}: IO.pure(Action,CommandError{"Unknown command: " ++ text})
+    case Unsupported{text}: IO.pure(Action,CommandError{text ++ " is not available in pi-bend yet"})
 def parse(text: String) -> Command:
   +clean = Text.trim(text)
   classify(clean,String.split(clean,' '))

@@ -90,7 +90,7 @@ for threads in (1, 4):
             command(b"/export fallback.jsonl", b"Session exported to:")
             fallback = (cwd / "fallback.jsonl").read_text()
             assert "MISSING RESUME SESSION" in fallback and "after fallback" in fallback
-            os.write(master, b"/exit\r")
+            os.write(master, b"/quit\r")
             stderr = process.communicate(timeout=20)[1]
             assert process.returncode == 0, (threads, stderr.decode(errors="replace"))
             assert termios.tcgetattr(slave) == original

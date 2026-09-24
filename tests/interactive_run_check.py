@@ -40,7 +40,7 @@ for threads, theme in ((1, None), (4, None), (1, "light"), (4, "light")):
                         raise
                     break
         assert output, (threads, process.poll(), process.stderr.read() if process.poll() is not None else b"")
-        os.write(master, b"/exit\r")
+        os.write(master, b"/quit\r")
         stderr = process.communicate(timeout=30)[1]
         while select.select([master], [], [], 0)[0]:
             try:

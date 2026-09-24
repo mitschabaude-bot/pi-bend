@@ -51,7 +51,7 @@ def scenario(threads, exit_during_bash):
             if exit_during_bash:
                 os.write(master, b"!sleep 5\r")
                 until(b"Running...", start)
-                os.write(master, b"/exit\r")
+                os.write(master, b"/quit\r")
             else:
                 os.write(master, b"!sleep 5\r!printf SECOND_BASH\r")
                 until(b"A bash command is already running", start)
@@ -62,7 +62,7 @@ def scenario(threads, exit_during_bash):
                 start = len(output)
                 os.write(master, b"\r")
                 until(b"$ printf SECOND_BASH", start)
-                os.write(master, b"/exit\r")
+                os.write(master, b"/quit\r")
             deadline = time.monotonic() + 12
             while process.poll() is None and time.monotonic() < deadline:
                 read_for(.1)

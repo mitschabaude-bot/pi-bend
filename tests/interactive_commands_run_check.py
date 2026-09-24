@@ -48,7 +48,6 @@ def scenario(threads):
         try:
             until(b"theme-fixture")
             cases = [
-                ("/help", b"Commands: /model [search], /thinking [level], /compact [instructions], /new, /clear, /name [name], /login, /logout, /export [path], /import <path>, /resume, /tree, /fork, /exit"),
                 ("/thinking", b"Thinking level: off. Available: off"),
                 ("/thinking OFF", b"Thinking level: off"),
                 ("/thinking medium", b'Unknown thinking level "medium". Available levels: off.'),
@@ -58,14 +57,13 @@ def scenario(threads):
                 ("/name", b"Session name: Midnight Session"),
                 ("/logout", b"Logout is available in interactive mode only"),
                 ("/new", b"Starting a new session is not available yet"),
-                ("/clear", b"Starting a new session is not available yet"),
-                ("/unknown", b"Unknown command: /unknown"),
+                ("/settings", b"/settings is not available in pi-bend yet"),
             ]
             for command, expected in cases:
                 before = len(output)
                 os.write(master, command.encode() + b"\r")
                 until(expected, before)
-            os.write(master, b"/exit\r")
+            os.write(master, b"/quit\r")
             stderr = process.communicate(timeout=15)[1]
             assert process.returncode == 0, (threads, stderr.decode(errors="replace"))
             assert termios.tcgetattr(slave) == original, threads
