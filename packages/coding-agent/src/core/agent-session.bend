@@ -150,10 +150,14 @@ def stateThinking(value: AgentState()) -> Ai.ModelThinkingLevel:
   match value:
     case T.AgentState{_, thinking, _, _, _, _, _, _}: thinking
 
+def keepAssistant(assistant: Ai.AssistantMessage<V.Value,Unit>,found: Maybe<&2,Ai.AssistantMessage<V.Value,Unit>>) -> Maybe<&2,Ai.AssistantMessage<V.Value,Unit>>:
+  match assistant:
+    case Ai.AssistantMessage{Nil{},_,_,_,_,_,_,_,_,Ai.Aborted{},_,_,_,_,_}: found
+    case other: Some{other}
 def lastAssistantIn(messages: List<&2, Message()>, +found: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>) -> Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>:
   match messages:
     case Nil{}: found
-    case T.LlmMessage{Ai.Assistant{assistant}} <> rest: lastAssistantIn(rest, Some{assistant})
+    case T.LlmMessage{Ai.Assistant{assistant}} <> rest: lastAssistantIn(rest, keepAssistant(assistant,found))
     case _ <> rest: lastAssistantIn(rest, found)
 
 # Events
@@ -957,10 +961,17 @@ def assistantTextOf(assistant: Ai.AssistantMessage<V.Value, Unit>) -> String:
   match assistant:
     case Ai.AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: assistantText(content)
 
+def usefulAssistantText(value: Maybe<&2,Ai.AssistantMessage<V.Value,Unit>>) -> Maybe<&2,String>:
+  match value:
+    case None{}: None{}
+    case Some{assistant}:
+      +text = Text.trim(assistantTextOf(assistant))
+      Bool.pick(Maybe<&2,String>,String.is_empty(text),None{},Some{text})
+
 def getLastAssistantText(session: AgentSession) -> IO(Maybe<&2, String>):
   do IO<Maybe<&2, String>>:
     current : List<&2, Message()> <- messages(session)
-    return Maybe.map(&2, Ai.AssistantMessage<V.Value, Unit>, String, assistant => assistantTextOf(assistant), lastAssistantIn(current, None{}))
+    return usefulAssistantText(lastAssistantIn(current, None{}))
 
 # Prompting
 # ---------
@@ -2473,4 +2484,3 @@ def getSettings(session: AgentSession) -> IO(Settings.SettingsManager):
 def changeSettings(session: AgentSession, change: Settings.SettingsManager -> Settings.Outcome(Settings.SettingsManager)) -> IO(Result<&2, &2, String, Unit>):
   match session:
     case AgentSession{_, _, _, settings, _, _, _, _}: updateSettings(settings, change)
-
