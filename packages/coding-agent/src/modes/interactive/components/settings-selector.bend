@@ -182,7 +182,7 @@ def liveEffect(id: String,value: String,transcript: Transcript.Handle,result: Re
   match result:
     case Fail{message}: Transcript.showError(transcript,message)
     case Done{_}: liveEffectDone(id,value,transcript)
-def changed(context: ChangeContext,selection: ListUI.Change) -> IO(Unit):
+def changeSetting(context: ChangeContext,selection: ListUI.Change) -> IO(Unit):
   match context selection:
     case ChangeContext{session,+transcript,redraw} ListUI.Change{+id,+newValue}:
       do IO<Unit>:
@@ -190,7 +190,7 @@ def changed(context: ChangeContext,selection: ListUI.Change) -> IO(Unit):
         result : Result<&2,&2,String,Unit> <- applied(id,newValue,current)
         liveEffect(id,newValue,transcript,result)
         request(redraw)
-def cancelled(context: CancelContext,_: Unit) -> IO(Unit):
+def cancelPanel(context: CancelContext,_: Unit) -> IO(Unit):
   match context:
     case CancelContext{modal,redraw}:
       do IO<Unit>:
@@ -270,14 +270,18 @@ def mousePair(modal: Ref.Ref<Modal>,pair: ListUI.SettingsList & Maybe<&2,Compone
       do IO<Maybe<&2,Component.MouseResponse>>:
         Ref.write(Modal,modal,Open{next})
         return result
+def listMouseEvent(event: Tui.TuiMouseEvent) -> Tui.TuiMouseEvent:
+  match event:
+    case Tui.TuiMouseEvent{kind,button,x,y,screenX,screenY,width,height,shift,alt,ctrl,wheel,clicks}:
+      Tui.TuiMouseEvent{kind,button,x,Component.subtract(y,Tui.Forward{1n}),screenX,screenY,width,height,shift,alt,ctrl,wheel,clicks}
 def mouseCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match current:
     case Closed{}: editorMouse(editor,event)
     case Open{list}:
       do IO<Maybe<&2,Component.MouseResponse>>:
-        pair : ListUI.SettingsList & Maybe<&2,Component.MouseResponse> <- ListUI.handleMouse(list,event)
+        pair : ListUI.SettingsList & Maybe<&2,Component.MouseResponse> <- ListUI.handleMouse(list,listMouseEvent(event))
         mousePair(modal,pair)
-def mouse(host: Host,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+def mouseEvent(host: Host,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match host:
     case Host{+modal,editor,_,_,_,_,_,_,_,_,_,_}:
       do IO<Maybe<&2,Component.MouseResponse>>:
@@ -295,14 +299,14 @@ def createHost(+editor: Component.Component,+theme: Ref.Ref<Theme.Theme>,+sessio
     +value : Callback.Callback<ListUI.ThemeText,String> <- Callback.create(~Paint,~ListUI.ThemeText,~String,~painted,Paint{theme,"muted","text"})
     +description : Callback.Callback<String,String> <- Callback.create(~Paint,~String,~String,~plainPaint,Paint{theme,"muted","muted"})
     +hint : Callback.Callback<String,String> <- Callback.create(~Paint,~String,~String,~plainPaint,Paint{theme,"dim","dim"})
-    +changedCallback : Callback.Callback<ListUI.Change,Unit> <- Callback.create(~ChangeContext,~ListUI.Change,~Unit,~changed,ChangeContext{session,transcript,redraw})
-    +cancelledCallback : Callback.Callback<Unit,Unit> <- Callback.create(~CancelContext,~Unit,~Unit,~cancelled,CancelContext{modal,redraw})
+    +changedCallback : Callback.Callback<ListUI.Change,Unit> <- Callback.create(~ChangeContext,~ListUI.Change,~Unit,~changeSetting,ChangeContext{session,transcript,redraw})
+    +cancelledCallback : Callback.Callback<Unit,Unit> <- Callback.create(~CancelContext,~Unit,~Unit,~cancelPanel,CancelContext{modal,redraw})
     +completed : Callback.Callback<ListUI.Completion,Unit> <- Callback.create(~Unit,~ListUI.Completion,~Unit,~noCompletion,Unit{})
     +style : ListUI.SettingsListTheme <- IO.pure(ListUI.SettingsListTheme,ListUI.SettingsListTheme{label,value,description,"› ",hint})
     +host : Host <- IO.pure(Host,Host{modal,editor,theme,session,source,bindings,keyboard,redraw,style,changedCallback,cancelledCallback,completed})
     +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~draw,host)
     +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receive,host)
-    +mouseCallback : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Host,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~mouse,host)
+    +mouseCallback : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Host,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~mouseEvent,host)
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Host,~Unit,~Unit,~invalidated,host)
     +focus : Callback.Callback<Bool,Unit> <- Callback.create(~Host,~Bool,~Unit,~focused,host)
     +component : Component.Component <- IO.pure(Component.Component,Component.Component{Component.id(editor),render,Some{input},Some{mouseCallback},invalidate,Some{focus},False{}})
