@@ -118,13 +118,17 @@ def errorState(state: State) -> IO(State & Maybe<&2,Editor.Error>):
 def lastError(handle: Handle) -> IO(Maybe<&2,Editor.Error>):
   match handle:
     case Handle{resource}: Serial.run(State,Maybe<&2,Editor.Error>,resource,errorState)
-def textState(state: State) -> IO(State & String):
+# A read of the current editor value.
+def readState(-A: Data,state: State,read: Editor.Editor -> A) -> IO(State & A):
   match state:
     case State{+editor,words,bindings,keyboard,rows,error}:
-      IO.pure(State & String,(State{editor,words,bindings,keyboard,rows,error},Editor.getText(editor)))
-def text(handle: Handle) -> IO(String):
+      IO.pure(State & A,(State{editor,words,bindings,keyboard,rows,error},read(editor)))
+def query(-A: Data,handle: Handle,read: Editor.Editor -> A) -> IO(A):
   match handle:
-    case Handle{resource}: Serial.run(State,String,resource,textState)
+    case Handle{resource}: Serial.run(State,A,resource,state => readState(A,state,read))
+def text(handle: Handle) -> IO(String): query(String,handle,Editor.getText)
+def expandedText(handle: Handle) -> IO(String): query(String,handle,Editor.getExpandedText)
+def isShowingAutocomplete(handle: Handle) -> IO(Bool): query(Bool,handle,Editor.isShowingAutocomplete)
 def setTextState(state: State,value: String) -> IO(State & Unit):
   match state:
     case State{editor,words,bindings,keyboard,rows,error}:

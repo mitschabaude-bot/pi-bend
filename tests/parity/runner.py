@@ -49,7 +49,7 @@ def unpackage(text):
 
 def tmux(*args, check=True):
     # A private server keeps runs off the user's own tmux sessions.
-    return subprocess.run(["tmux", "-L", "pi-parity", "-f", "/dev/null", *args], capture_output=True, text=True, check=check).stdout
+    return subprocess.run(["tmux", "-L", os.environ.get("PARITY_TMUX", "pi-parity"), "-f", "/dev/null", *args], capture_output=True, text=True, check=check).stdout
 
 class Terminal:
     def __init__(self, name, argv, env, cwd):

@@ -29,17 +29,36 @@ def logo(+theme: Theme.Theme) -> IO(String):
     name : String <- colored(theme,"accent","pi")
     version : String <- colored(theme,"dim"," v" ++ Config.version())
     return "\u{1b}[1m" ++ name ++ "\u{1b}[22m" ++ version
+# upstream keyHint/rawKeyHint: a dim key and a muted description. Key texts
+# are the default bindings' keyText.
+type Hint is Data: Hint{key: String,description: String}
+def hints(+theme: Theme.Theme,items: List<&2,Hint>) -> IO(List<&2,String>):
+  match items:
+    case Nil{}: IO.pure(List<&2,String>,Nil{})
+    case Hint{key,description} <> rest:
+      do IO<List<&2,String>>:
+        dim : String <- colored(theme,"dim",key)
+        muted : String <- colored(theme,"muted"," " ++ description)
+        more : List<&2,String> <- hints(theme,rest)
+        return (dim ++ muted) <> more
+def COMPACT_HINTS() -> List<&2,Hint>:
+  [Hint{"escape","interrupt"},Hint{"ctrl+c/ctrl+d","clear/exit"},Hint{"/","commands"},Hint{"!","bash"},Hint{"ctrl+o","more"}]
+def EXPANDED_HINTS() -> List<&2,Hint>:
+  [Hint{"escape","to interrupt"},Hint{"ctrl+c","to clear"},Hint{"ctrl+c twice","to exit"},Hint{"ctrl+d","to exit (empty)"},Hint{"ctrl+z","to suspend"},Hint{"ctrl+k","to delete to end"},Hint{"shift+tab","to cycle thinking level"},Hint{"ctrl+p/shift+ctrl+p","to cycle models"},Hint{"ctrl+l","to select model"},Hint{"ctrl+o","to expand tools"},Hint{"ctrl+t","to expand thinking"},Hint{"ctrl+g","for external editor"},Hint{"/","for commands"},Hint{"!","to run bash"},Hint{"!!","to run bash (no context)"},Hint{"alt+enter","to queue follow-up"},Hint{"alt+up","to edit all queued messages"},Hint{"ctrl+v","to paste image (with text fallback)"},Hint{"drop files","to attach"}]
 def compact(+theme: Theme.Theme,brand: String) -> IO(String):
   do IO<String>:
-    hints : String <- colored(theme,"muted","escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash · ctrl+o more")
+    parts : List<&2,String> <- hints(theme,COMPACT_HINTS())
+    separator : String <- colored(theme,"muted"," · ")
+    +instructions : String <- IO.pure(String,String.join(parts,separator))
     more : String <- colored(theme,"dim","Press ctrl+o to show full startup help and loaded resources.")
     onboarding : String <- colored(theme,"dim","Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.")
-    return brand ++ "\n" ++ hints ++ "\n" ++ more ++ "\n\n" ++ onboarding
+    return brand ++ "\n" ++ instructions ++ "\n" ++ more ++ "\n\n" ++ onboarding
 def expanded(+theme: Theme.Theme,brand: String) -> IO(String):
   do IO<String>:
-    hints : String <- colored(theme,"muted","escape to interrupt\nctrl+c to clear\nctrl+c twice to exit\nctrl+d to exit (empty)\nctrl+z to suspend\nctrl+k to delete to end\nshift+tab to cycle thinking level\nctrl+p/shift+ctrl+p to cycle models\nctrl+l to select model\nctrl+o to expand tools\nctrl+t to expand thinking\nctrl+g for external editor\n/ for commands\n! to run bash\n!! to run bash (no context)\nalt+enter to queue follow-up\nalt+up to edit all queued messages\nctrl+v to paste image (with text fallback)\ndrop files to attach")
+    parts : List<&2,String> <- hints(theme,EXPANDED_HINTS())
+    +instructions : String <- IO.pure(String,String.join(parts,"\n"))
     onboarding : String <- colored(theme,"dim","Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.")
-    return brand ++ "\n" ++ hints ++ "\n\n" ++ onboarding
+    return brand ++ "\n" ++ instructions ++ "\n\n" ++ onboarding
 
 def inside(base: String,path: String) -> Maybe<&2,String>:
   +relative = Path.relative(base,path)
@@ -88,14 +107,23 @@ def skillPaths(skills: List<&2,Skills.Skill>,+home: Maybe<&2,String>,reversed: L
   match skills:
     case Nil{}: List.reverse(&2,String,reversed)
     case Skills.Skill{_,_,path,_,_,_} <> rest: skillPaths(rest,home,("    " ++ displayPath(path,home)) <> reversed)
+# upstream formatScopeGroups colours each path line on its own.
+def dimLines(+theme: Theme.Theme,lines: List<&2,String>) -> IO(List<&2,String>):
+  match lines:
+    case Nil{}: IO.pure(List<&2,String>,Nil{})
+    case line <> rest:
+      do IO<List<&2,String>>:
+        painted : String <- colored(theme,"dim",line)
+        more : List<&2,String> <- dimLines(theme,rest)
+        return painted <> more
 def skillGroupSelected(selected: List<&2,Skills.Skill>,+theme: Theme.Theme,label: String,home: Maybe<&2,String>) -> IO(String):
   match selected:
     case Nil{}: IO.pure(String,"")
     case _:
       do IO<String>:
-        title : String <- colored(theme,"accent","  " ++ label)
-        paths : String <- colored(theme,"dim",String.join(skillPaths(List.sort(~Skills.Skill,~skillBefore,selected),home,Nil{}),"\n"))
-        return title ++ "\n" ++ paths
+        title : String <- colored(theme,"accent",label)
+        paths : List<&2,String> <- dimLines(theme,skillPaths(List.sort(~Skills.Skill,~skillBefore,selected),home,Nil{}))
+        return "  " ++ title ++ "\n" ++ String.join(paths,"\n")
 def skillGroup(theme: Theme.Theme,skills: List<&2,Skills.Skill>,wanted: Nat,label: String,home: Maybe<&2,String>) -> IO(String):
   skillGroupSelected(inScope(skills,wanted,Nil{}),theme,label,home)
 def skillNames(skills: List<&2,Skills.Skill>,reversed: List<&2,String>) -> List<&2,String>:

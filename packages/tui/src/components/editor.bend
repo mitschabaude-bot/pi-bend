@@ -725,16 +725,8 @@ def disposeAutocompleteRuntime(runtime: AutocompleteRuntime) -> IO(Unit):
 
 type EditorTheme is Data: EditorTheme{borderColor: C.Callback<String,String>,selectList: Select.SelectListTheme}
 type EditorOptions is Data: EditorOptions{paddingX: Nat,autocompleteMaxVisible: Nat}
-type EditorAction is Data:
-  Interrupt{text: String}
-  Clear{}
-  Exit{}
-  FollowUp{text: String}
-  Dequeue{text: String}
-  ExpandTools{}
-  ToggleThinking{}
 type EditorCallbacks is Data:
-  EditorCallbacks{onChange: Maybe<&2,C.Callback<String,Unit>>,onSubmit: Maybe<&2,C.Callback<String,Unit>>,requestRender: Maybe<&2,C.Callback<Unit,Unit>>,onAction: Maybe<&2,C.Callback<EditorAction,Unit>>}
+  EditorCallbacks{onChange: Maybe<&2,C.Callback<String,Unit>>,onSubmit: Maybe<&2,C.Callback<String,Unit>>,requestRender: Maybe<&2,C.Callback<Unit,Unit>>}
 type EditorSettings is Data: EditorSettings{theme: EditorTheme,options: EditorOptions,callbacks: EditorCallbacks,focused: Bool,disableSubmit: Bool}
 type Geometry is Data: Geometry{lastWidth: Nat,renderedVisibleLineCount: Nat,renderedAutocompleteHeight: Nat,scrollOffset: Nat}
 type History is Data: History{entries: List<&2,String>,index: Maybe<&2,Nat>,draft: Maybe<&2,EditorState>}
@@ -751,7 +743,7 @@ def checkedOptions(options: EditorOptions) -> EditorOptions:
 def new(theme: EditorTheme,options: Maybe<&2,EditorOptions>) -> IO(Editor):
   do IO<Editor>:
     runtime : AutocompleteRuntime <- createAutocompleteRuntime(emptyState())
-    return Editor{createEditing(),History{Nil{},None{},None{}},Geometry{80n,1n,0n,0n},EditorSettings{theme,checkedOptions(Maybe.default(&2,EditorOptions,options,defaultOptions())),EditorCallbacks{None{},None{},None{},None{}},False{},False{}},AutocompleteState{None{},runtime,None{}},PasteInput{"",False{}},None{}}
+    return Editor{createEditing(),History{Nil{},None{},None{}},Geometry{80n,1n,0n,0n},EditorSettings{theme,checkedOptions(Maybe.default(&2,EditorOptions,options,defaultOptions())),EditorCallbacks{None{},None{},None{}},False{},False{}},AutocompleteState{None{},runtime,None{}},PasteInput{"",False{}},None{}}
 def getText(value: Editor) -> String:
   match value:
     case Editor{editing,_,_,_,_,_,_}: editingText(editing)
@@ -804,7 +796,7 @@ def cancelAutocomplete(+value: Editor) -> IO(Editor):
         return clearAutocompleteUi(value)
 def notifyChange(+value: Editor) -> IO(Editor):
   match value:
-    case Editor{+editing,_,_,EditorSettings{_,_,EditorCallbacks{change,_,_,_},_,_},AutocompleteState{_,runtime,_},_,_}:
+    case Editor{+editing,_,_,EditorSettings{_,_,EditorCallbacks{change,_,_},_,_},AutocompleteState{_,runtime,_},_,_}:
       do IO<Editor>:
         synchronizeAutocomplete(runtime,editingState(editing))
         changedCallback(change,editingText(editing))
@@ -829,7 +821,7 @@ def settingsOptions(value: Editor,options: EditorOptions) -> Editor:
     case Editor{editing,history,geometry,EditorSettings{theme,_,callbacks,focused,disabled},autocomplete,paste,jump}: Editor{editing,history,geometry,EditorSettings{theme,options,callbacks,focused,disabled},autocomplete,paste,jump}
 def requestRender(+value: Editor) -> IO(Editor):
   match value:
-    case Editor{_,_,_,EditorSettings{_,_,EditorCallbacks{_,_,render,_},_,_},_,_,_}:
+    case Editor{_,_,_,EditorSettings{_,_,EditorCallbacks{_,_,render},_,_},_,_,_}:
       do IO<Editor>:
         invokeRender(render)
         return value
@@ -1037,7 +1029,7 @@ def startAllowed(+value: Editor,+provider: AC.AutocompleteProvider,+options: Aut
   match value allowed:
     case _ Fail{error}: IO.pure(ResultOf(Editor),Fail{CompletionError{error}})
     case _ Done{False{}}: IO.pure(ResultOf(Editor),Done{value})
-    case Editor{editing,_,_,EditorSettings{_,_,EditorCallbacks{_,_,redraw,_},_,_},AutocompleteState{_,runtime,_},_,_} Done{True{}}:
+    case Editor{editing,_,_,EditorSettings{_,_,EditorCallbacks{_,_,redraw},_,_},AutocompleteState{_,runtime,_},_,_} Done{True{}}:
       do IO<ResultOf(Editor)>:
         runtime : AutocompleteRuntime <- requestAutocomplete(runtime,editingState(editing),provider,options,autocompleteDelay(value,options),redraw)
         return Done{setRuntime(value,runtime)}
@@ -1236,7 +1228,7 @@ def submittedEditing(value: Editing) -> Editing:
     case Editing{_,ring,_,_,_,_}: Editing{emptySnapshot(),ring,NoAction{},Undo.create(EditorSnapshot),None{},None{}}
 def submitValue(+value: Editor) -> IO(Editor):
   match value:
-    case Editor{+editing,_,_,EditorSettings{_,_,EditorCallbacks{_,submit,_,_},_,_},_,_,_}:
+    case Editor{+editing,_,_,EditorSettings{_,_,EditorCallbacks{_,submit,_},_,_},_,_,_}:
       do IO<Editor>:
         +value : Editor <- cancelAutocomplete(replaceEditing(value,submittedEditing(editing),True{},True{}))
         +value : Editor <- notifyChange(value)
@@ -1401,46 +1393,11 @@ def menuInput(~Context: Data,~segment: Context -> String -> Word.ResultOf(List<&
             menuSelected(~Context,~segment,context,result,manager,keyboard,data,terminalRows,Bool.not(KB.matches(manager,keyboard,data,"tui.input.tab")) && isSlashPicker(value),selected),
           _ => executeCommand(~Context,~segment,context,value,manager,keyboard,data,terminalRows,selected))(Unit{}))(Unit{}))(Unit{}),
     _ => executeCommand(~Context,~segment,context,value,manager,keyboard,data,terminalRows,selected))(Unit{})
-def callEditorAction(callback: Maybe<&2,C.Callback<EditorAction,Unit>>,action: EditorAction) -> IO(Unit):
-  match callback:
-    case Some{handler}: C.call(EditorAction,Unit,handler,action)
-    case None{}: IO.pure(Unit,Unit{})
-def editorAction(+value: Editor,action: EditorAction,clear: Bool) -> IO(ResultOf(Editor)):
-  match value:
-    case Editor{_,_,_,EditorSettings{_,_,EditorCallbacks{_,_,_,callback},_,_},_,_,_}:
-      do IO<ResultOf(Editor)>:
-        callEditorAction(callback,action)
-        +next : Editor <- Bool.pick(Unit -> IO(Editor),clear,_ => setText(value,""),_ => IO.pure(Editor,value))(Unit{})
-        return Done{next}
 def regularSelected(~Context: Data,~segment: Context -> String -> Word.ResultOf(List<&2,Word.Segment>),context: Context,value: Editor,manager: KB.KeybindingsManager,keyboard: Keys.Context,data: String,terminalRows: Nat,selected: Command) -> IO(ResultOf(Editor)):
   match selected:
     case Copy{}: IO.pure(ResultOf(Editor),Done{value})
     case UndoCommand{}: executeCommand(~Context,~segment,context,value,manager,keyboard,data,terminalRows,UndoCommand{})
     case selected: menuInput(~Context,~segment,context,value,manager,keyboard,data,terminalRows,selected)
-type AppInput is Data: AppInterrupt{} AppClear{} AppExit{} AppFollowUp{} AppDequeue{} AppExpand{} AppToggleThinking{} AppNone{}
-def appInput(+manager: KB.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> AppInput:
-  Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.tools.expand"),AppExpand{},
-    Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.thinking.toggle"),AppToggleThinking{},
-      Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.interrupt"),AppInterrupt{},
-        Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.clear"),AppClear{},
-          Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.exit"),AppExit{},
-            Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.message.followUp"),AppFollowUp{},
-              Bool.pick(AppInput,KB.matches(manager,keyboard,data,"app.message.dequeue"),AppDequeue{},AppNone{})))))))
-def runAppInput(~Context: Data,~segment: Context -> String -> Word.ResultOf(List<&2,Word.Segment>),context: Context,+value: Editor,manager: KB.KeybindingsManager,keyboard: Keys.Context,data: String,terminalRows: Nat,selected: Command,app: AppInput) -> IO(ResultOf(Editor)):
-  match app:
-    case AppExpand{}: editorAction(value,ExpandTools{},False{})
-    case AppToggleThinking{}: editorAction(value,ToggleThinking{},False{})
-    case AppInterrupt{}: editorAction(value,Interrupt{getText(value)},False{})
-    case AppClear{}: editorAction(value,Clear{},True{})
-    case AppExit{}:
-      Bool.pick(Unit -> IO(ResultOf(Editor)),String.is_empty(getText(value)),
-        _ => editorAction(value,Exit{},False{}),
-        _ => regularSelected(~Context,~segment,context,value,manager,keyboard,data,terminalRows,selected))(Unit{})
-    case AppFollowUp{}: editorAction(value,FollowUp{Text.trim(getExpandedText(value))},True{})
-    case AppDequeue{}: editorAction(value,Dequeue{getText(value)},False{})
-    case AppNone{}: regularSelected(~Context,~segment,context,value,manager,keyboard,data,terminalRows,selected)
-def regularInput(~Context: Data,~segment: Context -> String -> Word.ResultOf(List<&2,Word.Segment>),context: Context,value: Editor,+manager: KB.KeybindingsManager,+keyboard: Keys.Context,+data: String,terminalRows: Nat,selected: Command) -> IO(ResultOf(Editor)):
-  runAppInput(~Context,~segment,context,value,manager,keyboard,data,terminalRows,selected,appInput(manager,keyboard,data))
 
 type Position is Data: Position{line: Nat,column: Nat}
 def findFirst(text: String,+wanted: String,+index: Nat) -> Maybe<&2,Nat>:
@@ -1524,7 +1481,7 @@ def handleInputStage(~Context: Data,~segment: Context -> String -> Word.ResultOf
   match stage:
     case Waiting{value}: IO.pure(ResultOf(Editor),Done{value})
     case Jumped{value,text,backward}: jumpToChar(value,text,backward)
-    case Regular{value,+data}: regularInput(~Context,~segment,context,value,manager,keyboard,data,terminalRows,command(bindings(),manager,keyboard,data))
+    case Regular{value,+data}: regularSelected(~Context,~segment,context,value,manager,keyboard,data,terminalRows,command(bindings(),manager,keyboard,data))
     case Pasted{+value,+text,+remaining}:
       do IO<ResultOf(Editor)>:
         +value : Editor <- Bool.pick(Unit -> IO(Editor),String.is_empty(text),_ => IO.pure(Editor,value),_ => pasteText(value,text))(Unit{})

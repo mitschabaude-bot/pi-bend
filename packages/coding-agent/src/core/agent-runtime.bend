@@ -563,9 +563,10 @@ def levelOf(result: Models.ResolveCliModelResult) -> Maybe<&2, Ai.ModelThinkingL
 def noModels() -> String:
   "No models available.\n\nRun pi to log in with a provider, or set an API key environment variable such as OPENAI_API_KEY."
 
+# A resolution error is a startup diagnostic (upstream main prints "Error: ").
 def chosenFrom(models: Models.ModelRuntime, +settings: Settings.SettingsManager, error: Maybe<&2, String>, model: Maybe<&2, Models.Model()>) -> IO(Result<&2, &2, String, Maybe<&2, Models.Model()>>):
   match error model:
-    case Some{message} _: IO.pure(Result<&2, &2, String, Maybe<&2, Models.Model()>>, Fail{message})
+    case Some{message} _: IO.pure(Result<&2, &2, String, Maybe<&2, Models.Model()>>, Fail{"Error: " ++ message})
     case None{} Some{chosen}: IO.pure(Result<&2, &2, String, Maybe<&2, Models.Model()>>, Done{Some{chosen}})
     case None{} None{}:
       do IO<Result<&2, &2, String, Maybe<&2, Models.Model()>>>:

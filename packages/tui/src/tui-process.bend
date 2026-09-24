@@ -244,12 +244,15 @@ def queueTicks(+listener: EventSink,effects: List<&2,Tui.RenderEffect>) -> IO(Un
         IO.spawn(Unit,immediateTick(listener))
         queueTicks(listener,rest)
     case _ <> rest: queueTicks(listener,rest)
-# The application's requestRender (upstream TUI.requestRender()).
+# The application's requestRender (upstream TUI.requestRender()) only
+# schedules: it may be called while input or a render holds the TUI state
+# (e.g. a key handler whose session event requests a frame), so the request
+# is registered by its own task.
 def requested(+listener: EventSink) -> IO(Unit):
   do IO<Unit>:
     effects : List<&2,Tui.RenderEffect> <- scheduled(listener,Tui.RequestRender{False{}})
     queueTicks(listener,effects)
-def onRequest(listener: EventSink,value: Unit) -> IO(Unit): requested(listener)
+def onRequest(listener: EventSink,value: Unit) -> IO(Unit): IO.spawn(Unit,requested(listener))
 
 # The caller's stop signal is settled by its input/application callbacks. The
 # terminal and serialized TUI state remain owned here until all listeners stop.

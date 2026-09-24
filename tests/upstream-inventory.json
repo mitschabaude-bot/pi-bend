@@ -1896,9 +1896,12 @@
     },
     {
       "source": "packages/coding-agent/test/custom-editor-history-keybindings.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "dc3ac027822c55a662bdb3401f56d163490b3131df294cb0fecf4284aed6bf5d"
+      "status": "ported",
+      "ports": [
+        "tests/custom-editor-history-keybindings.bend"
+      ],
+      "sha256": "dc3ac027822c55a662bdb3401f56d163490b3131df294cb0fecf4284aed6bf5d",
+      "notes": "The explicit ctrl+p/ctrl+n history bindings case, with the editor text read through the live editor handle; a supplementary case checks that default ctrl+p reaches the registered model-cycle action."
     },
     {
       "source": "packages/coding-agent/test/custom-message.test.ts",

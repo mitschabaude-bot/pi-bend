@@ -140,7 +140,7 @@ def query(+v: V.Value) -> IO(V.Value):
     +submit : C.Callback<String,Unit> <- C.create(~Sink,~String,~Unit,~record,Sink{events,"S"})
     +render : C.Callback<Unit,Unit> <- C.create(~Ref.Ref<List<&2,String>>,~Unit,~Unit,~redraw,events)
     value : E.Editor <- E.new(E.EditorTheme{paint,Select.SelectListTheme{paint,paint,paint,paint,paint}},None{})
-    result : V.Value <- trace(array(get(v,"ops")),Step{E.setCallbacks(value,E.EditorCallbacks{Some{change},Some{submit},Some{render},None{}}),V.Null{}},context(get(v,"words")),KB.create(KB.TUI_KEYBINDINGS(),R.new(List<&2,Keys.KeyId>)),events,Nil{})
+    result : V.Value <- trace(array(get(v,"ops")),Step{E.setCallbacks(value,E.EditorCallbacks{Some{change},Some{submit},Some{render}}),V.Null{}},context(get(v,"words")),KB.create(KB.TUI_KEYBINDINGS(),R.new(List<&2,Keys.KeyId>)),events,Nil{})
     C.dispose(String,String,paint)
     C.dispose(String,Unit,change)
     C.dispose(String,Unit,submit)
