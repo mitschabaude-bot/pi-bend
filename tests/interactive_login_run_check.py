@@ -89,7 +89,7 @@ def scenario(threads):
                             break
                 assert needle in output[start:], (threads, needle, process.poll(), Handler.seen[-8:], bytes(output[start:][-1800:]))
             try:
-                until(b"faux-model")
+                until(b"no-model")
                 before = len(output)
                 os.write(master, b"/login\r")
                 until(b"Choose a provider", before)
@@ -102,7 +102,7 @@ def scenario(threads):
                 until(b"Choose a provider", before)
                 os.write(master, b"1")
                 until(b"ABCD-EFGH", before)
-                until(b"Logged in to OpenAI Codex", before)
+                until(b"Logged in to OpenAI Codex. Selected gpt-5.5", before)
                 before = len(output)
                 os.write(master, b"/model\r")
                 until(b"openai-codex/gpt", before)
@@ -112,6 +112,9 @@ def scenario(threads):
                 assert any(item[1] == "/exchange" for item in Handler.seen)
                 os.write(master, b"\x1b")
                 time.sleep(.3)
+                at = len(output)
+                os.write(master, b"hello after login\r")
+                until(b"answer", at)
                 at = len(output)
                 os.write(master, b"/login\r")
                 until(b"Choose a provider", at)
@@ -167,7 +170,7 @@ def scenario(threads):
                 os.close(master)
                 os.close(slave)
         server.shutdown()
-    print(f"native{threads}: Codex and Anthropic /login, cancellation, auth.json, refreshed /model")
+    print(f"native{threads}: model-free login, default selection, prompt, Anthropic callback, auth.json")
 
 for threads in (1, 4):
     scenario(threads)

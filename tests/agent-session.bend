@@ -154,8 +154,8 @@ def observe(env: Unit, event: Session.AgentSessionEvent) -> IO(Unit):
 type Fixture is Data:
   Fixture{session: Session.AgentSession, listener: Session.Listener(), stream: Runtime.Stream(), validator: Loop.Validator(Tools.ToolError), converter: Runtime.Converter(), registry: StreamFn.Registry(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError), faux: Faux}
 
-def options(stream: Runtime.Stream(), converter: Runtime.Converter(), sessionId: String) -> Agent.AgentOptions<Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit>:
-  Agent.AgentOptions{Some{Agent.AgentInitialState{Some{""}, Some{fauxModel()}, Some{Ai.Off{}}, Some{Nil{}}, None{}}}, Some{converter}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{sessionId}, None{}, None{}, None{}, None{}}
+def options(stream: Runtime.Stream(), converter: Runtime.Converter(), sessionId: String, selected: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> Agent.AgentOptions<Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit>:
+  Agent.AgentOptions{Some{Agent.AgentInitialState{Some{""}, selected, Some{Ai.Off{}}, Some{Nil{}}, None{}}}, Some{converter}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{sessionId}, None{}, None{}, None{}, None{}}
 
 def requireAgent(result: Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()>) -> IO(Runtime.Owner()):
   match result:
@@ -171,7 +171,7 @@ def settingsOf(pair: Settings.FileSettingsStorage & Settings.SettingsManager) ->
   match pair:
     case Tuple{_, manager}: manager
 
-def fixtureWith(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>, +loadout: Runtime.Loadout) -> IO(Fixture):
+def fixtureWithModel(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>, +loadout: Runtime.Loadout, selected: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> IO(Fixture):
   do IO<Fixture>:
     +responseRef : R.Ref<List<&2, String>> <- R.new(List<&2, String>, responses)
     +streams : R.Ref<List<&2, EventStream()>> <- R.new(List<&2, EventStream()>, Nil{})
@@ -180,13 +180,19 @@ def fixtureWith(+stored: Session.Session(), +cwd: String, agentDir: String, resp
     +registry : StreamFn.Registry(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError) <- StreamFn.create(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError)
     +validator : Loop.Validator(Tools.ToolError) <- Loop.createPlain(~Tools.ToolError, ~Runtime.validationError)
     +converter : Runtime.Converter() <- Runtime.createConverter(False{})
-    created : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~Unit, ~Tools.ToolDetails, ~Runtime.Custom(), ~Tools.ToolError, ~Unit, options(stream, converter, Sessions.getSessionId(Unit, Tools.ToolDetails, V.Value, stored)), registry, validator, Tools.WriteDetails{})
+    created : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~Unit, ~Tools.ToolDetails, ~Runtime.Custom(), ~Tools.ToolError, ~Unit, options(stream, converter, Sessions.getSessionId(Unit, Tools.ToolDetails, V.Value, stored), selected), registry, validator, Tools.WriteDetails{})
     +agent : Runtime.Owner() <- requireAgent(created)
     loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.options())
     +session : Session.AgentSession <- Session.create(agent, stored, settingsOf(loaded), cwd, loadout)
     +listener : Session.Listener() <- C.create(~Unit, ~Session.AgentSessionEvent, ~Unit, ~observe, Unit{})
     Session.subscribe(session, listener)
     return Fixture{session, listener, stream, validator, converter, registry, Faux{responseRef, streams, gateRef}}
+
+def fixtureWith(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>, +loadout: Runtime.Loadout) -> IO(Fixture):
+  fixtureWithModel(stored,cwd,agentDir,responses,gates,loadout,Some{fauxModel()})
+
+def fixtureNoModel(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>) -> IO(Fixture):
+  fixtureWithModel(stored,cwd,agentDir,responses,gates,Runtime.Loadout{Rec.new(String),Nil{},Nil{},Nil{}},None{})
 
 def fixture(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>) -> IO(Fixture):
   fixtureWith(stored, cwd, agentDir, responses, gates, Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}})

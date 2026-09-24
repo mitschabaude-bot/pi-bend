@@ -62,7 +62,7 @@ def run(args: List<String>) -> IO(Unit):
       do IO<Unit>:
         created : Sessions.Outcome(Session.Session()) <- Session.createSession(cwd,Some{cwd},agentDir,Sessions.noOptions())
         stored : Session.Session() <- requireSession(created)
-        +factory : Host.Factory(Services()) <- Callback.create(~String,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~Fixture.factory,agentDir)
+        +factory : Host.Factory(Services()) <- Callback.create(~String,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~Fixture.factoryNoModel,agentDir)
         +release : Callback.Callback<Services(),Unit> <- Callback.create(~Unit,~Services(),~Unit,~Fixture.release,Unit{})
         hosted : Result<&2,&2,String,Runtime()> <- Host.create(Services(),factory,release,agentDir,cwd,stored)
         +runtime : Runtime() <- requireHost(hosted)
@@ -75,7 +75,7 @@ def run(args: List<String>) -> IO(Unit):
         +login : Callback.Callback<Run.LoginRequest,AuthLogin.Outcome()> <- Callback.create(~String,~Run.LoginRequest,~AuthLogin.Outcome(),~login,base)
         +refresh : Callback.Callback<Unit,List<&2,Models.Model()>> <- Callback.create(~Unit,~Unit,~List<&2,Models.Model()>,~models,Unit{})
         Host.setRebindSession(Services(),runtime,Some{rebinder})
-        result : Result<&2,&2,Run.Error,Unit> <- Run.runBound(live,Run.Binding{current,new,hook,login,refresh},Nil{},cwd,None{},agentDir,assetsRoot,None{},Faux.fauxModel() <> Nil{})
+        result : Result<&2,&2,Run.Error,Unit> <- Run.runBound(live,Run.Binding{current,new,hook,login,refresh},Nil{},cwd,None{},agentDir,assetsRoot,None{},Nil{})
         Host.setRebindSession(Services(),runtime,None{})
         Callback.dispose(Run.LoginRequest,AuthLogin.Outcome(),login)
         Callback.dispose(Unit,List<&2,Models.Model()>,refresh)

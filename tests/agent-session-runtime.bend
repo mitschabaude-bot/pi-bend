@@ -44,6 +44,13 @@ def factory(agentDir: String, request: Host.Request) -> IO(Result<&1, &1, String
         +fixture : Fx.Fixture <- Fx.fixture(stored, cwd, agentDir, "answer" <> "again" <> Nil{}, Nil{})
         return created(fixture)
 
+def factoryNoModel(agentDir: String, request: Host.Request) -> IO(Result<&1, &1, String, Host.Created<Services()>>):
+  match request:
+    case Host.Request{+cwd,+stored,_}:
+      do IO<Result<&1,&1,String,Host.Created<Services()>>>:
+        +fixture : Fx.Fixture <- Fx.fixtureNoModel(stored,cwd,agentDir,"answer" <> "again" <> Nil{},Nil{})
+        return created(fixture)
+
 # The session itself is disposed by the host before its services.
 def release(env: Unit, fixture: Services()) -> IO(Unit):
   match fixture:
