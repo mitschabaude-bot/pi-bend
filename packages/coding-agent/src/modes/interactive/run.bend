@@ -842,7 +842,7 @@ def cancelLogin(state: LoginState,_: Unit) -> IO(Unit):
 type ThemeContext is Data:
   ThemeContext{theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,session: Ref.Ref<Session.AgentSession>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,interaction: Interaction,models: Ref.Ref<List<&2,Models.Model()>>,binding: Maybe<&2,Binding>,login: LoginState,resume: ResumeState}
 type KeyInput is Data:
-  KeyInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,session: Ref.Ref<Session.AgentSession>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,header: Maybe<&2,Header.Handle>}
+  KeyInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,session: Ref.Ref<Session.AgentSession>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,header: Maybe<&2,Header.Handle>,transcript: Transcript.Handle}
 type ControlSink is Data:
   ControlSink{editor: Ref.Ref<Maybe<&2,Live.Handle>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type SelectionSink is Data:
@@ -909,6 +909,8 @@ def modelSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,ModelPicker
   match interaction: case Interaction{_,_,_,_,selector,_}: selector
 def contextTheme(context: ThemeContext) -> Ref.Ref<Theme.Theme>:
   match context: case ThemeContext{theme,_,_,_,_,_,_,_,_,_,_}: theme
+def contextTranscript(context: ThemeContext) -> Transcript.Handle:
+  match context: case ThemeContext{_,transcript,_,_,_,_,_,_,_,_,_}: transcript
 def contextInteraction(context: ThemeContext) -> Interaction:
   match context: case ThemeContext{_,_,_,_,_,_,interaction,_,_,_,_}: interaction
 def lastClearOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,F64>>:
@@ -945,12 +947,12 @@ def disposeLoginState(state: LoginState) -> IO(Unit):
         oldAbort : Maybe<&2,Abort.AbortController<Unit>> <- Ref.dispose(Maybe<&2,Abort.AbortController<Unit>>,abort)
         oldModels : List<&2,Models.Model()> <- Ref.dispose(List<&2,Models.Model()>,models)
         return Unit{}
-def keyInput(queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,interaction: Interaction,session: Ref.Ref<Session.AgentSession>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> KeyInput:
+def keyInput(queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,interaction: Interaction,session: Ref.Ref<Session.AgentSession>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,transcript: Transcript.Handle) -> KeyInput:
   match interaction:
-    case Interaction{_,lastClear,lastEscape,selector,_,header}: KeyInput{queue,stop,failure,lastClear,lastEscape,selector,session,redraw,header}
+    case Interaction{_,lastClear,lastEscape,selector,_,header}: KeyInput{queue,stop,failure,lastClear,lastEscape,selector,session,redraw,header,transcript}
 def openedTree(input: KeyInput,mode: Selector.Mode) -> IO(Unit):
   match input:
-    case KeyInput{_,_,failure,_,_,selector,session,redraw,_}: openSessionSelector(mode,session,selector,failure,redraw)
+    case KeyInput{_,_,failure,_,_,selector,session,redraw,_,_}: openSessionSelector(mode,session,selector,failure,redraw)
 def actionDouble(input: KeyInput,action: Settings.DoubleEscapeAction) -> IO(Unit):
   match action:
     case Settings.Tree{}: openedTree(input,Selector.TreeMode{})
@@ -958,7 +960,7 @@ def actionDouble(input: KeyInput,action: Settings.DoubleEscapeAction) -> IO(Unit
     case Settings.NoDoubleEscape{}: IO.pure(Unit,Unit{})
 def triggerDouble(+input: KeyInput) -> IO(Unit):
   match input:
-    case KeyInput{_,_,_,_,lastEscape,_,session,_,_}:
+    case KeyInput{_,_,_,_,lastEscape,_,session,_,_,_}:
       do IO<Unit>:
         Ref.write(Maybe<&2,F64>,lastEscape,None{})
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
@@ -976,13 +978,13 @@ def idleEscape(input: KeyInput,lastEscape: Ref.Ref<Maybe<&2,F64>>) -> IO(Unit):
     doubleEscape(input,previous,now)
 def keyControl(input: KeyInput,control: Controller.Control) -> IO(Unit):
   match input:
-    case KeyInput{queue,_,failure,_,_,_,_,_,_}:
+    case KeyInput{queue,_,failure,_,_,_,_,_,_,_}:
       do IO<Unit>:
         result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitControl(queue,control)
         Interactive.submittedResult(failure,result)
 def interrupted(+input: KeyInput,+text: String) -> IO(Unit):
   match input:
-    case KeyInput{_,_,_,_,lastEscape,_,session,_,_}:
+    case KeyInput{_,_,_,_,lastEscape,_,session,_,_,_}:
       do IO<Unit>:
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         bash : Bool <- Session.isBashRunning(live)
@@ -996,30 +998,37 @@ def doubleClear(previous: Maybe<&2,F64>,now: F64,stop: Deferred.Deferred<Unit>) 
     case None{}: IO.pure(Unit,Unit{})
 def cleared(input: KeyInput) -> IO(Unit):
   match input:
-    case KeyInput{_,stop,_,lastClear,_,_,_,_,_}:
+    case KeyInput{_,stop,_,lastClear,_,_,_,_,_,_}:
       do IO<Unit>:
         +now : F64 <- Date.now()
         previous : Maybe<&2,F64> <- Ref.swap(Maybe<&2,F64>,lastClear,Some{now})
         doubleClear(previous,now,stop)
 def queuedFollowUp(input: KeyInput,+text: String) -> IO(Unit):
   match input:
-    case KeyInput{queue,_,failure,_,_,_,_,_,_}:
+    case KeyInput{queue,_,failure,_,_,_,_,_,_,_}:
       Bool.pick(Unit -> IO(Unit),String.is_empty(text),_ => IO.pure(Unit,Unit{}),_ => do IO<Unit>:
         result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submit(queue,Controller.Submission{text,Nil{},Some{Session.FollowUp{}}})
         Interactive.submittedResult(failure,result))(Unit{})
 def exited(input: KeyInput) -> IO(Unit):
   match input:
-    case KeyInput{_,stop,_,_,_,_,_,_,_}:
+    case KeyInput{_,stop,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
         settled : Bool <- Deferred.resolve(Unit,stop,Unit{})
         return Unit{}
-def expandHeader(input: KeyInput) -> IO(Unit):
+def toggleHeader(header: Maybe<&2,Header.Handle>) -> IO(Unit):
+  match header:
+    case Some{value}: Header.toggle(value)
+    case None{}: IO.pure(Unit,Unit{})
+def expandOutput(input: KeyInput) -> IO(Unit):
   match input:
-    case KeyInput{_,_,_,_,_,_,_,_,Some{header}}: Header.toggle(header)
-    case _: IO.pure(Unit,Unit{})
+    case KeyInput{_,_,failure,_,_,_,_,_,header,transcript}:
+      do IO<Unit>:
+        expanded : Bool <- Transcript.toggleExpanded(transcript)
+        toggleHeader(header)
+        Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandNotice{Bool.pick(String,expanded,"Tool output: expanded","Tool output: collapsed")}})
 def keyAction(input: KeyInput,action: Editor.EditorAction) -> IO(Unit):
   match action:
-    case Editor.ExpandTools{}: expandHeader(input)
+    case Editor.ExpandTools{}: expandOutput(input)
     case Editor.Interrupt{text}: interrupted(input,text)
     case Editor.Dequeue{text}: keyControl(input,Controller.Dequeue{text})
     case Editor.Clear{}: cleared(input)
@@ -1298,7 +1307,7 @@ def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,contr
     case (paint,uiTheme):
       do IO<Result<&2,&2,Error,Unit>>:
         editor : Editor.Editor <- Editor.new(uiTheme,None{})
-        +keys : Callback.Callback<Editor.EditorAction,Unit> <- Callback.create(~KeyInput,~Editor.EditorAction,~Unit,~keyAction,keyInput(queue,stopped,footerFailure(foot),contextInteraction(context),contextSession(context),redraw))
+        +keys : Callback.Callback<Editor.EditorAction,Unit> <- Callback.create(~KeyInput,~Editor.EditorAction,~Unit,~keyAction,keyInput(queue,stopped,footerFailure(foot),contextInteraction(context),contextSession(context),redraw,contextTranscript(context)))
         +configured : Editor.Editor <- IO.pure(Editor.Editor,Editor.setCallbacks(editor,Editor.EditorCallbacks{None{},Some{submitted},None{},Some{keys}}))
         +rows : Ref.Ref<Nat> <- Ref.new(Nat,24n)
         live : Live.Owner <- Live.create(Component.ComponentId{2n},configured,words,Keybindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)),Keys.defaults(),rows)

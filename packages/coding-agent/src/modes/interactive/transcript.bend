@@ -17,13 +17,13 @@ import ../../core/tools/index.bend as Tools
 type Entry is Type: MessageEntry{owner: Messages.Owner} ToolEntry{owner: Tool.Owner}
 type ToolLink is Data: ToolLink{id: String,handle: Tool.Handle}
 type State is Type:
-  State{entries: List<&1,Entry>,tools: List<&2,ToolLink>,active: Maybe<&2,Messages.Handle>,nextId: Nat,view: View.Handle,theme: Theme.Theme,styles: Markdown.MarkdownTheme}
+  State{entries: List<&1,Entry>,tools: List<&2,ToolLink>,active: Maybe<&2,Messages.Handle>,nextId: Nat,view: View.Handle,theme: Theme.Theme,styles: Markdown.MarkdownTheme,expanded: Bool}
 type Owner is Type: Owner{resource: Serial.Owner<State>}
 type Handle is Data: Handle{resource: Serial.Handle<State>}
 
 def create(view: View.Handle,theme: Theme.Theme,styles: Markdown.MarkdownTheme) -> IO(Owner):
   do IO<Owner>:
-    resource : Serial.Owner<State> <- Serial.create(State,State{Nil{},Nil{},None{},100n,view,theme,styles})
+    resource : Serial.Owner<State> <- Serial.create(State,State{Nil{},Nil{},None{},100n,view,theme,styles,False{}})
     return Owner{resource}
 def borrowed(pair: Serial.Owner<State> & Serial.Handle<State>) -> Owner & Handle:
   match pair:
@@ -33,34 +33,34 @@ def borrow(owner: Owner) -> Owner & Handle:
     case Owner{resource}: borrowed(Serial.borrow(State,resource))
 def insertedState(state: State,owner: Messages.Owner,component: Component.Component,handle: Messages.Handle,assistant: Bool) -> IO(State & Bool):
   match state:
-    case State{entries,tools,_,id,+view,theme,styles}:
+    case State{entries,tools,_,id,+view,theme,styles,expanded}:
       do IO<State & Bool>:
         View.append(view,component)
-        return (State{MessageEntry{owner} <> entries,tools,Bool.pick(Maybe<&2,Messages.Handle>,assistant,Some{handle},None{}),id + 1n,view,theme,styles},True{})
+        return (State{MessageEntry{owner} <> entries,tools,Bool.pick(Maybe<&2,Messages.Handle>,assistant,Some{handle},None{}),id + 1n,view,theme,styles,expanded},True{})
 def inserted(state: State,pair: Messages.Owner & Component.Component & Messages.Handle,assistant: Bool) -> IO(State & Bool):
   match pair:
     case (owner,component,handle): insertedState(state,owner,component,handle,assistant)
 def append(state: State,body: Messages.Body,assistant: Bool) -> IO(State & Bool):
   match state:
-    case State{entries,tools,active,+id,view,theme,styles}:
+    case State{entries,tools,active,+id,view,theme,styles,expanded}:
       do IO<State & Bool>:
         owner : Messages.Owner <- Messages.create(Component.ComponentId{id},body)
-        inserted(State{entries,tools,active,id,view,theme,styles},Messages.borrow(owner),assistant)
+        inserted(State{entries,tools,active,id,view,theme,styles,expanded},Messages.borrow(owner),assistant)
 def mountedBashState(state: State,owner: Messages.Owner,component: Component.Component,handle: Messages.Handle) -> IO(State & Messages.Handle):
   match state:
-    case State{entries,tools,active,+id,+view,theme,styles}:
+    case State{entries,tools,active,+id,+view,theme,styles,expanded}:
       do IO<State & Messages.Handle>:
         View.append(view,component)
-        return (State{MessageEntry{owner} <> entries,tools,active,id + 1n,view,theme,styles},handle)
+        return (State{MessageEntry{owner} <> entries,tools,active,id + 1n,view,theme,styles,expanded},handle)
 def mountedBash(state: State,pair: Messages.Owner & Component.Component & Messages.Handle) -> IO(State & Messages.Handle):
   match pair:
     case (owner,component,handle): mountedBashState(state,owner,component,handle)
 def bashCreated(state: State,command: String,excluded: Bool) -> IO(State & Messages.Handle):
   match state:
-    case State{entries,tools,active,+id,view,+theme,styles}:
+    case State{entries,tools,active,+id,view,+theme,styles,+expanded}:
       do IO<State & Messages.Handle>:
-        owner : Messages.Owner <- Messages.create(Component.ComponentId{id},Messages.BashBody{Messages.bash(command,excluded,theme)})
-        mountedBash(State{entries,tools,active,id,view,theme,styles},Messages.borrow(owner))
+        owner : Messages.Owner <- Messages.create(Component.ComponentId{id},Messages.BashBody{Messages.bash(command,excluded,theme,expanded)})
+        mountedBash(State{entries,tools,active,id,view,theme,styles,expanded},Messages.borrow(owner))
 def startBash(handle: Handle,command: String,excluded: Bool) -> IO(Messages.Handle):
   match handle:
     case Handle{resource}: Serial.run(State,Messages.Handle,resource,state => bashCreated(state,command,excluded))
@@ -90,8 +90,8 @@ def failBash(+handle: Messages.Handle,reason: String) -> IO(Unit):
     Messages.set(handle,bashFailed(body,reason))
 def user(state: State,text: String) -> IO(State & Bool):
   match state:
-    case State{entries,tools,active,id,view,+theme,+styles}:
-      append(State{entries,tools,active,id,view,theme,styles},Messages.UserBody{Messages.user(text,theme,styles,1n)},False{})
+    case State{entries,tools,active,id,view,+theme,+styles,expanded}:
+      append(State{entries,tools,active,id,view,theme,styles,expanded},Messages.UserBody{Messages.user(text,theme,styles,1n)},False{})
 def findTool(tools: List<&2,ToolLink>,+id: String) -> Maybe<&2,Tool.Handle>:
   match tools:
     case Nil{}: None{}
@@ -99,17 +99,19 @@ def findTool(tools: List<&2,ToolLink>,+id: String) -> Maybe<&2,Tool.Handle>:
       Bool.pick(Maybe<&2,Tool.Handle>,String.eq(current,id),Some{handle},findTool(rest,id))
 def mountedOwned(state: State,toolId: String,owned: Tool.Owner,component: Component.Component,handle: Tool.Handle) -> IO(State & Bool):
   match state:
-    case State{entries,tools,active,+id,+view,theme,styles}:
+    case State{entries,tools,active,+id,+view,theme,styles,expanded}:
       do IO<State & Bool>:
         View.append(view,component)
-        return (State{ToolEntry{owned} <> entries,ToolLink{toolId,handle} <> tools,active,id + 1n,view,theme,styles},True{})
+        return (State{ToolEntry{owned} <> entries,ToolLink{toolId,handle} <> tools,active,id + 1n,view,theme,styles,expanded},True{})
 def mountedBorrowed(state: State,toolId: String,pair: Tool.Owner & Component.Component & Tool.Handle) -> IO(State & Bool):
   match pair:
     case (owned,component,handle): mountedOwned(state,toolId,owned,component,handle)
 def mountedTool(state: State,toolId: String,componentId: Nat,value: Tool.ToolExecution) -> IO(State & Bool):
-  do IO<State & Bool>:
-    owner : Tool.Owner <- Tool.create(Component.ComponentId{componentId},value)
-    mountedBorrowed(state,toolId,Tool.borrow(owner))
+  match state:
+    case State{entries,tools,active,nextId,view,theme,styles,+expanded}:
+      do IO<State & Bool>:
+        owner : Tool.Owner <- Tool.create(Component.ComponentId{componentId},Tool.setExpanded(value,expanded))
+        mountedBorrowed(State{entries,tools,active,nextId,view,theme,styles,expanded},toolId,Tool.borrow(owner))
 def ensureFound(state: State,+id: String,name: String,args: Schema.Value,componentId: Nat,theme: Theme.Theme,found: Maybe<&2,Tool.Handle>) -> IO(State & Bool):
   match found:
     case Some{+handle}:
@@ -120,8 +122,8 @@ def ensureFound(state: State,+id: String,name: String,args: Schema.Value,compone
     case None{}: mountedTool(state,id,componentId,Tool.new(name,id,args,theme,Tool.Generic{}))
 def ensureTool(state: State,+id: String,name: String,args: Schema.Value) -> IO(State & Bool):
   match state:
-    case State{entries,+tools,active,+componentId,view,+theme,styles}:
-      ensureFound(State{entries,tools,active,componentId,view,theme,styles},id,name,args,componentId,theme,findTool(tools,id))
+    case State{entries,+tools,active,+componentId,view,+theme,styles,expanded}:
+      ensureFound(State{entries,tools,active,componentId,view,theme,styles,expanded},id,name,args,componentId,theme,findTool(tools,id))
 def stateOf(pair: State & Bool) -> State:
   match pair: case (next,_): next
 def mountCalls(content: List<&2,Ai.AssistantContent<Schema.Value>>,state: State) -> IO(State & Bool):
@@ -136,10 +138,10 @@ def startedCalls(-D: Data,pair: State & Bool,message: Ai.AssistantMessage<Schema
   match pair: case (next,_): mountCalls(Ai.assistantContent(Schema.Value,D,message),next)
 def assistantStart(-D: Data,state: State,+message: Ai.AssistantMessage<Schema.Value,D>) -> IO(State & Bool):
   match state:
-    case State{entries,tools,active,id,view,+theme,+styles}:
+    case State{entries,tools,active,id,view,+theme,+styles,expanded}:
       +snapshot = Messages.updateFromAi(Schema.Value,D,Messages.assistant(Nil{},theme,styles),message,True{})
       do IO<State & Bool>:
-        pair : State & Bool <- append(State{entries,tools,active,id,view,theme,styles},Messages.AssistantBody{snapshot},True{})
+        pair : State & Bool <- append(State{entries,tools,active,id,view,theme,styles,expanded},Messages.AssistantBody{snapshot},True{})
         startedCalls(D,pair,message)
 def updated(-A: Data,-D: Data,body: Messages.Body,message: Ai.AssistantMessage<A,D>,streaming: Bool) -> Messages.Body:
   match body:
@@ -147,14 +149,14 @@ def updated(-A: Data,-D: Data,body: Messages.Body,message: Ai.AssistantMessage<A
     case value: value
 def assistantUpdate(-D: Data,state: State,+message: Ai.AssistantMessage<Schema.Value,D>,+streaming: Bool) -> IO(State & Bool):
   match state:
-    case State{entries,tools,active,id,view,theme,styles}:
+    case State{entries,tools,active,id,view,theme,styles,expanded}:
       match active:
-        case None{}: IO.pure(State & Bool,(State{entries,tools,None{},id,view,theme,styles},False{}))
+        case None{}: IO.pure(State & Bool,(State{entries,tools,None{},id,view,theme,styles,expanded},False{}))
         case Some{+handle}:
           do IO<State & Bool>:
             body : Messages.Body <- Messages.current(handle)
             Messages.set(handle,updated(Schema.Value,D,body,message,streaming))
-            mountCalls(Ai.assistantContent(Schema.Value,D,message),State{entries,tools,Bool.pick(Maybe<&2,Messages.Handle>,streaming,Some{handle},None{}),id,view,theme,styles})
+            mountCalls(Ai.assistantContent(Schema.Value,D,message),State{entries,tools,Bool.pick(Maybe<&2,Messages.Handle>,streaming,Some{handle},None{}),id,view,theme,styles,expanded})
 def blocksText(blocks: List<&2,Ai.TextImageContent>) -> String:
   match blocks:
     case Nil{}: ""
@@ -170,8 +172,8 @@ def historicalFound(-D: Data,state: State,message: Ai.ToolResultMessage<D>,found
         return (state,True{})
 def historicalTool(-D: Data,state: State,+message: Ai.ToolResultMessage<D>) -> IO(State & Bool):
   match state message:
-    case State{entries,+tools,active,next,view,theme,styles} Ai.ToolResultMessage{id,_,_,_,_,_,_}:
-      historicalFound(D,State{entries,tools,active,next,view,theme,styles},message,findTool(tools,id))
+    case State{entries,+tools,active,next,view,theme,styles,expanded} Ai.ToolResultMessage{id,_,_,_,_,_,_}:
+      historicalFound(D,State{entries,tools,active,next,view,theme,styles,expanded},message,findTool(tools,id))
 def userMessage(-G: Data,-D: Data,-C: Data,state: State,message: Agent.AgentMessage<G,D,C>) -> IO(State & Bool):
   match message:
     case Agent.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text},_}}}: user(state,text)
@@ -193,8 +195,8 @@ def beginFound(state: State,args: Schema.Value,found: Maybe<&2,Tool.Handle>) -> 
         return (state,True{})
 def beginState(state: State,id: String,args: Schema.Value) -> IO(State & Bool):
   match state:
-    case State{entries,+tools,active,next,view,theme,styles}:
-      beginFound(State{entries,tools,active,next,view,theme,styles},args,findTool(tools,id))
+    case State{entries,+tools,active,next,view,theme,styles,expanded}:
+      beginFound(State{entries,tools,active,next,view,theme,styles,expanded},args,findTool(tools,id))
 def begunPair(pair: State & Bool,id: String,args: Schema.Value) -> IO(State & Bool):
   match pair: case (next,_): beginState(next,id,args)
 def startedTool(state: State,+id: String,name: String,+args: Schema.Value) -> IO(State & Bool):
@@ -211,8 +213,8 @@ def partialFound(-D: Data,state: State,result: Agent.AgentToolResult<D>,found: M
         return (state,True{})
 def partialState(-D: Data,state: State,id: String,result: Agent.AgentToolResult<D>) -> IO(State & Bool):
   match state:
-    case State{entries,+tools,active,next,view,theme,styles}:
-      partialFound(D,State{entries,tools,active,next,view,theme,styles},result,findTool(tools,id))
+    case State{entries,+tools,active,next,view,theme,styles,expanded}:
+      partialFound(D,State{entries,tools,active,next,view,theme,styles,expanded},result,findTool(tools,id))
 def partialPair(-D: Data,pair: State & Bool,id: String,result: Agent.AgentToolResult<D>) -> IO(State & Bool):
   match pair: case (next,_): partialState(D,next,id,result)
 def partialTool(-D: Data,state: State,+id: String,name: String,args: Schema.Value,result: Agent.AgentToolResult<D>) -> IO(State & Bool):
@@ -229,8 +231,8 @@ def finishedFound(-D: Data,state: State,result: Agent.AgentToolResult<D>,error: 
         return (state,True{})
 def finishedTool(-D: Data,state: State,id: String,result: Agent.AgentToolResult<D>,error: Bool) -> IO(State & Bool):
   match state:
-    case State{entries,+tools,active,next,view,theme,styles}:
-      finishedFound(D,State{entries,tools,active,next,view,theme,styles},result,error,findTool(tools,id))
+    case State{entries,+tools,active,next,view,theme,styles,expanded}:
+      finishedFound(D,State{entries,tools,active,next,view,theme,styles,expanded},result,error,findTool(tools,id))
 def transition(-G: Data,-D: Data,-C: Data,state: State,event: Agent.AgentEvent<G,D,C,Agent.AgentToolResult<D>,Agent.AgentToolResult<D>>) -> IO(State & Bool):
   match event:
     case Agent.MessageStart{message}: userMessage(G,D,C,state,message)
@@ -288,13 +290,36 @@ def rethemeEntries(entries: List<&1,Entry>,+theme: Theme.Theme) -> IO(List<&1,En
         return ToolEntry{kept} <> next
 def rethemed(state: State,+theme: Theme.Theme) -> IO(State & Unit):
   match state:
-    case State{entries,tools,active,nextId,view,_,styles}:
+    case State{entries,tools,active,nextId,view,_,styles,expanded}:
       do IO<State & Unit>:
         next : List<&1,Entry> <- rethemeEntries(entries,theme)
-        return (State{next,tools,active,nextId,view,theme,styles},Unit{})
+        return (State{next,tools,active,nextId,view,theme,styles,expanded},Unit{})
 def retheme(handle: Handle,theme: Theme.Theme) -> IO(Unit):
   match handle:
     case Handle{resource}: Serial.run(State,Unit,resource,state => rethemed(state,theme))
+def expandEntries(entries: List<&1,Entry>,+expanded: Bool) -> IO(List<&1,Entry>):
+  match entries:
+    case Nil{}: IO.pure(List<&1,Entry>,Nil{})
+    case MessageEntry{owner} <> rest:
+      do IO<List<&1,Entry>>:
+        kept : Messages.Owner <- Messages.expandOwner(owner,expanded)
+        next : List<&1,Entry> <- expandEntries(rest,expanded)
+        return MessageEntry{kept} <> next
+    case ToolEntry{owner} <> rest:
+      do IO<List<&1,Entry>>:
+        kept : Tool.Owner <- Tool.expandOwner(owner,expanded)
+        next : List<&1,Entry> <- expandEntries(rest,expanded)
+        return ToolEntry{kept} <> next
+def toggled(state: State) -> IO(State & Bool):
+  match state:
+    case State{entries,tools,active,nextId,view,theme,styles,+expanded}:
+      do IO<State & Bool>:
+        +next : Bool <- IO.pure(Bool,Bool.not(expanded))
+        changed : List<&1,Entry> <- expandEntries(entries,next)
+        return (State{changed,tools,active,nextId,view,theme,styles,next},next)
+def toggleExpanded(handle: Handle) -> IO(Bool):
+  match handle:
+    case Handle{resource}: Serial.run(State,Bool,resource,toggled)
 def disposeEntries(entries: List<&1,Entry>) -> IO(Unit):
   match entries:
     case Nil{}: IO.pure(Unit,Unit{})
@@ -308,17 +333,17 @@ def disposeEntries(entries: List<&1,Entry>) -> IO(Unit):
         disposeEntries(rest)
 def cleared(state: State) -> IO(State & Unit):
   match state:
-    case State{entries,_,_,nextId,+view,theme,styles}:
+    case State{entries,_,_,nextId,+view,theme,styles,expanded}:
       do IO<State & Unit>:
         View.clear(view)
         disposeEntries(entries)
-        return (State{Nil{},Nil{},None{},nextId,view,theme,styles},Unit{})
+        return (State{Nil{},Nil{},None{},nextId,view,theme,styles,expanded},Unit{})
 def clear(handle: Handle) -> IO(Unit):
   match handle:
     case Handle{resource}: Serial.run(State,Unit,resource,cleared)
 def disposeState(state: State) -> IO(Unit):
   match state:
-    case State{entries,_,_,_,_,_,_}: disposeEntries(entries)
+    case State{entries,_,_,_,_,_,_,_}: disposeEntries(entries)
 def dispose(owner: Owner) -> IO(Unit):
   match owner:
     case Owner{resource}:

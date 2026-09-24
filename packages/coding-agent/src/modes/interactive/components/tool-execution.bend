@@ -369,6 +369,13 @@ def rethemeOwner(owner: Owner,theme: Theme.Theme) -> IO(Owner):
         value : ToolExecution <- Ref.read(ToolExecution,state)
         Ref.write(ToolExecution,state,retheme(value,theme))
         return Owner{state,component,draw,invalidate}
+def expandOwner(owner: Owner,expanded: Bool) -> IO(Owner):
+  match owner:
+    case Owner{+state,+component,draw,invalidate}:
+      do IO<Owner>:
+        value : ToolExecution <- Ref.read(ToolExecution,state)
+        Ref.write(ToolExecution,state,setExpanded(value,expanded))
+        return Owner{state,component,draw,invalidate}
 def set(handle: Handle,value: ToolExecution) -> IO(Unit):
   match handle: case Handle{state}: Ref.write(ToolExecution,state,value)
 def current(handle: Handle) -> IO(ToolExecution):

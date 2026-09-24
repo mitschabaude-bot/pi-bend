@@ -189,9 +189,9 @@ type BashStatus is Data:
   BashFailed{reason: String}
   BashComplete{exitCode: Maybe<&2,U32>,cancelled: Bool,truncated: Bool,fullOutputPath: Maybe<&2,String>}
 type BashMessage is Data:
-  BashMessage{command: String,output: String,status: BashStatus,excluded: Bool,theme: Theme.Theme}
-def bash(command: String,excluded: Bool,theme: Theme.Theme) -> BashMessage:
-  BashMessage{command,"",BashRunning{},excluded,theme}
+  BashMessage{command: String,output: String,status: BashStatus,excluded: Bool,theme: Theme.Theme,expanded: Bool}
+def bash(command: String,excluded: Bool,theme: Theme.Theme,expanded: Bool) -> BashMessage:
+  BashMessage{command,"",BashRunning{},excluded,theme,expanded}
 def normalizedOutput(text: String) -> String:
   match text:
     case SNil{}: ""
@@ -200,15 +200,17 @@ def normalizedOutput(text: String) -> String:
     case SCon{char,rest}: SCon{char,normalizedOutput(rest)}
 def appendBash(state: BashMessage,chunk: String) -> BashMessage:
   match state:
-    case BashMessage{command,output,status,excluded,theme}: BashMessage{command,output ++ normalizedOutput(U.stripTerminalSequences(chunk)),status,excluded,theme}
+    case BashMessage{command,output,status,excluded,theme,expanded}: BashMessage{command,output ++ normalizedOutput(U.stripTerminalSequences(chunk)),status,excluded,theme,expanded}
 def completeBash(state: BashMessage,output: String,exitCode: Maybe<&2,U32>,cancelled: Bool,truncated: Bool,path: Maybe<&2,String>) -> BashMessage:
   match state:
-    case BashMessage{command,_,_,excluded,theme}: BashMessage{command,normalizedOutput(U.stripTerminalSequences(output)),BashComplete{exitCode,cancelled,truncated,path},excluded,theme}
+    case BashMessage{command,_,_,excluded,theme,expanded}: BashMessage{command,normalizedOutput(U.stripTerminalSequences(output)),BashComplete{exitCode,cancelled,truncated,path},excluded,theme,expanded}
 def failBash(state: BashMessage,reason: String) -> BashMessage:
   match state:
-    case BashMessage{command,output,_,excluded,theme}: BashMessage{command,output,BashFailed{reason},excluded,theme}
+    case BashMessage{command,output,_,excluded,theme,expanded}: BashMessage{command,output,BashFailed{reason},excluded,theme,expanded}
 def bashTheme(state: BashMessage,theme: Theme.Theme) -> BashMessage:
-  match state: case BashMessage{command,output,status,excluded,_}: BashMessage{command,output,status,excluded,theme}
+  match state: case BashMessage{command,output,status,excluded,_,expanded}: BashMessage{command,output,status,excluded,theme,expanded}
+def bashExpanded(state: BashMessage,expanded: Bool) -> BashMessage:
+  match state: case BashMessage{command,output,status,excluded,theme,_}: BashMessage{command,output,status,excluded,theme,expanded}
 def bashBorder(count: Nat) -> String:
   match count:
     case Zero{}: ""
@@ -228,7 +230,7 @@ def bashStatus(status: BashStatus,+hidden: Nat) -> String:
     case BashRunning{}: "Running... (esc to cancel)"
     case BashFailed{reason}: "Bash command failed: " ++ reason
     case BashComplete{exitCode,cancelled,truncated,path}:
-      +more = Bool.pick(String,Nat.is_eq(hidden,0n),"","... " ++ Nat.show(hidden) ++ " earlier lines")
+      +more = Bool.pick(String,Nat.is_eq(hidden,0n),"","... " ++ Nat.show(hidden) ++ " earlier lines (Ctrl+O to expand)")
       +ending = Bool.pick(String,cancelled,"(cancelled)",Maybe.default(&2,String,Maybe.map(&2,U32,String,+code => Bool.pick(String,U32.is_eq(code,0),"","(exit " ++ U32.show(code) ++ ")"),exitCode),""))
       +truncation = Bool.pick(String,truncated,Maybe.default(&2,String,Maybe.map(&2,String,String,value => "Output truncated. Full output: " ++ value,path),"Output truncated"),"")
       joinStatus(joinStatus(more,ending),truncation)
@@ -241,21 +243,25 @@ def bashPaintedLines(lines: List<&2,String>,+theme: Theme.Theme,reversed: List<&
         bashPaintedLines(rest,theme,painted <> reversed)
 def renderBash(state: BashMessage,+width: Nat) -> IO(List<&2,String>):
   match state:
-    case BashMessage{command,output,status,excluded,+theme}:
+    case BashMessage{command,output,status,excluded,+theme,+expanded}:
       do IO<List<&2,String>>:
         +key : String <- IO.pure(String,bashColor(excluded))
         +top : String <- foregroundText(theme,key,bashBorder(width))
         header : String <- foregroundText(theme,key,"$ " ++ command)
         headerLines : List<&2,String> <- textLines("\u{1b}[1m" ++ header ++ "\u{1b}[22m",1n,width)
         +visual : List<&2,String> <- bashOutputLines(output,width)
-        body : List<&2,String> <- bashPaintedLines(bashPreview(visual,False{}),theme,Nil{})
-        +note : String <- foregroundText(theme,"muted",bashStatus(status,bashHidden(visual,False{})))
+        body : List<&2,String> <- bashPaintedLines(bashPreview(visual,expanded),theme,Nil{})
+        +note : String <- foregroundText(theme,"muted",bashStatus(status,bashHidden(visual,expanded)))
         statusLines : List<&2,String> <- Bool.pick(Unit -> IO(List<&2,String>),String.is_empty(note),_ => IO.pure(List<&2,String>,Nil{}),_ => textLines(note,1n,width))(Unit{})
         return List.append(&2,String,"" <> top <> headerLines,List.append(&2,String,body,List.append(&2,String,statusLines,top <> Nil{})))
 
 # A mounted message renders the latest immutable snapshot. The transcript owns
 # the callback lifetime; stream updates replace only this message's snapshot.
 type Body is Data: UserBody{value: UserMessage} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage}
+def expandedBody(body: Body,expanded: Bool) -> Body:
+  match body:
+    case BashBody{value}: BashBody{bashExpanded(value,expanded)}
+    case other: other
 def retheme(body: Body,theme: Theme.Theme) -> Body:
   match body:
     case UserBody{UserMessage{text,pad,_,styles}}: UserBody{UserMessage{text,pad,theme,styles}}
@@ -292,6 +298,13 @@ def rethemeOwner(owner: Owner,theme: Theme.Theme) -> IO(Owner):
       do IO<Owner>:
         body : Body <- Ref.read(Body,state)
         Ref.write(Body,state,retheme(body,theme))
+        return Owner{state,component,render,invalidate}
+def expandOwner(owner: Owner,expanded: Bool) -> IO(Owner):
+  match owner:
+    case Owner{+state,+component,render,invalidate}:
+      do IO<Owner>:
+        body : Body <- Ref.read(Body,state)
+        Ref.write(Body,state,expandedBody(body,expanded))
         return Owner{state,component,render,invalidate}
 def set(handle: Handle,body: Body) -> IO(Unit):
   match handle:

@@ -2,6 +2,7 @@ import Base
 import ../packages/agent/src/types.bend as Agent
 import ../packages/ai/src/types.bend as Ai
 import ../packages/coding-agent/src/modes/interactive/transcript.bend as Transcript
+import ../packages/coding-agent/src/modes/interactive/components/messages.bend as Messages
 import ../packages/coding-agent/src/modes/interactive/viewport.bend as View
 import ../packages/coding-agent/src/modes/interactive/theme/theme.bend as Theme
 import ../packages/coding-agent/src/modes/interactive/theme/color.bend as Color
@@ -46,7 +47,7 @@ def childCount(value: Component.Container) -> Nat:
   match value: case Component.Container{children,_}: List.length(&2,Component.Component,children)
 def mountedCount(handle: View.Handle) -> IO(Nat):
   match handle:
-    case View.Handle{document}:
+    case View.Handle{document,_}:
       do IO<Nat>:
         value : Component.Container <- Ref.read(Component.Container,document)
         return childCount(value)
@@ -63,6 +64,10 @@ def orderedRows(+rows: List<&2,String>,first: String,last: String) -> Bool:
   orderedPositions(lineOf(rows,first,0n),lineOf(rows,last,0n))
 def check(value: Bool,message: String) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit),value,_ => IO.pure(Unit,Unit{}),_ => IO.die(Unit,1,message))(Unit{})
+def repeatedLines(count: Nat) -> String:
+  match count:
+    case Zero{}: ""
+    case Succ{rest}: "later\n" ++ repeatedLines(rest)
 def runEvents(pair: Transcript.Owner & Transcript.Handle,view: View.View,+document: Component.Component,+viewHandle: View.Handle,styles: Styles.Styles) -> IO(Unit):
   match pair:
     case (transcript,+handle):
@@ -127,6 +132,20 @@ def runEvents(pair: Transcript.Owner & Transcript.Handle,view: View.View,+docume
         check(Bool.not(contains(clean(resumed),"unmatched output")),"unmatched saved tool result rendered a standalone row")
         resumedCount : Nat <- mountedCount(viewHandle)
         check(Nat.is_eq(resumedCount,11n),"saved tool results added duplicate components")
+        bash : Messages.Handle <- Transcript.startBash(handle,"printf first",False{})
+        Transcript.finishBash(bash,"FIRST_HIDDEN\n" ++ repeatedLines(25n),Some{0},False{},False{},None{})
+        +collapsed : List<&2,String> <- Component.render(document,80n)
+        check(Bool.not(contains(clean(collapsed),"FIRST_HIDDEN")),"collapsed Bash output showed hidden lines")
+        isExpanded : Bool <- Transcript.toggleExpanded(handle)
+        +opened : List<&2,String> <- Component.render(document,80n)
+        check(isExpanded && contains(clean(opened),"FIRST_HIDDEN"),"expanding transcript did not reveal Bash output")
+        nextBash : Messages.Handle <- Transcript.startBash(handle,"printf next",False{})
+        Transcript.finishBash(nextBash,"NEXT_VISIBLE\n" ++ repeatedLines(25n),Some{0},False{},False{},None{})
+        +newEntry : List<&2,String> <- Component.render(document,80n)
+        check(contains(clean(newEntry),"NEXT_VISIBLE"),"new Bash message did not inherit expansion")
+        isCollapsed : Bool <- Transcript.toggleExpanded(handle)
+        +closed : List<&2,String> <- Component.render(document,80n)
+        check(Bool.not(isCollapsed) && Bool.not(contains(clean(closed),"FIRST_HIDDEN")),"collapsing transcript left Bash output expanded")
         Transcript.dispose(transcript)
         View.dispose(view)
         Styles.dispose(styles)
