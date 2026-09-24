@@ -135,8 +135,9 @@ def passes(row: Row,mode: Mode,filter: Filter,search: String) -> Bool:
 def filtered(rows: List<&2,Row>,+mode: Mode,+filter: Filter,+search: String) -> List<&2,Row>:
   match rows:
     case Nil{}: Nil{}
-    case +row <> +rest:
-      Bool.pick(List<&2,Row>,passes(row,mode,filter,search),row <> filtered(rest,mode,filter,search),filtered(rest,mode,filter,search))
+    case +row <> rest:
+      +tail = filtered(rest,mode,filter,search)
+      Bool.pick(List<&2,Row>,passes(row,mode,filter,search),row <> tail,tail)
 def indexOf(rows: List<&2,Row>,+id: String,+index: Nat) -> Maybe<&2,Nat>:
   match rows:
     case Nil{}: None{}
@@ -418,8 +419,10 @@ def visibleLines(rows: List<&2,Row>,+start: Nat,+count: Nat,+index: Nat,+selecte
   match rows:
     case Nil{}: Nil{}
     case row <> +rest:
-      Bool.pick(List<&2,String>,Nat.is_lt(index,start),visibleLines(rest,start,count,index + 1n,selected,folded,mode,theme,width),
-        Bool.pick(List<&2,String>,Nat.is_ge(index,start + count),Nil{},line(row,Nat.is_eq(index,selected),folded,mode,theme,width) <> visibleLines(rest,start,count,index + 1n,selected,folded,mode,theme,width)))
+      Bool.pick(Unit -> List<&2,String>,Nat.is_ge(index,start + count),_ => Nil{},
+        _ => Bool.pick(Unit -> List<&2,String>,Nat.is_lt(index,start),
+          _ => visibleLines(rest,start,count,index + 1n,selected,folded,mode,theme,width),
+          _ => line(row,Nat.is_eq(index,selected),folded,mode,theme,width) <> visibleLines(rest,start,count,index + 1n,selected,folded,mode,theme,width))(Unit{}))(Unit{})
 def title(mode: Mode) -> String:
   match mode:
     case TreeMode{}: "  Session Tree"

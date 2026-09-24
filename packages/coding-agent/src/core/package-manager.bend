@@ -173,7 +173,9 @@ def withoutFirst(value: String) -> String:
 def overridePatterns(entries: List<&2, String>, +prefix: String) -> List<&2, String>:
   match entries:
     case Nil{}: Nil{}
-    case +entry <> +others: Bool.pick(List<&2, String>, String.starts_with(entry, prefix), withoutFirst(entry) <> overridePatterns(others, prefix), overridePatterns(others, prefix))
+    case +entry <> others:
+      +tail = overridePatterns(others, prefix)
+      Bool.pick(List<&2, String>, String.starts_with(entry, prefix), withoutFirst(entry) <> tail, tail)
 
 # upstream isEnabledByOverrides: !excludes disable, +exact paths re-enable,
 # -exact paths disable last.
@@ -487,12 +489,16 @@ def resolvedFrom(+environment: Paths.Environment, entries: List<&2, String>, +ba
 def plainEntries(entries: List<&2, String>) -> List<&2, String>:
   match entries:
     case Nil{}: Nil{}
-    case +entry <> +rest: Bool.pick(List<&2, String>, isPattern(entry), plainEntries(rest), entry <> plainEntries(rest))
+    case +entry <> rest:
+      +tail = plainEntries(rest)
+      Bool.pick(List<&2, String>, isPattern(entry), tail, entry <> tail)
 
 def patternEntries(entries: List<&2, String>) -> List<&2, String>:
   match entries:
     case Nil{}: Nil{}
-    case +entry <> +rest: Bool.pick(List<&2, String>, isPattern(entry), entry <> patternEntries(rest), patternEntries(rest))
+    case +entry <> rest:
+      +tail = patternEntries(rest)
+      Bool.pick(List<&2, String>, isPattern(entry), entry <> tail, tail)
 
 # upstream resolveLocalEntries: plain entries name files or directories to
 # search; patterns select which of those are enabled.
@@ -609,7 +615,9 @@ def canonical(+path: String) -> IO(String):
 def withoutPath(dirs: List<&2, String>, +excluded: String) -> List<&2, String>:
   match dirs:
     case Nil{}: Nil{}
-    case +dir <> +rest: Bool.pick(List<&2, String>, String.eq(Path.normalize(dir), excluded), withoutPath(rest, excluded), dir <> withoutPath(rest, excluded))
+    case +dir <> rest:
+      +tail = withoutPath(rest, excluded)
+      Bool.pick(List<&2, String>, String.eq(Path.normalize(dir), excluded), tail, dir <> tail)
 
 # Project .agents skill directories, each its own base directory.
 def addedAgentsDirs(dirs: List<&2, String>, +resources: List<&2, ResolvedResource>, +overrides: List<&2, String>) -> IO(List<&2, ResolvedResource>):

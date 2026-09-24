@@ -122,7 +122,9 @@ def builtinIds(providers: List<&2, Provider>) -> List<&2, String>:
 def newIds(ids: List<&2, String>, +known: List<&2, String>) -> List<&2, String>:
   match ids:
     case Nil{}: Nil{}
-    case +id <> +rest: Bool.pick(List<&2, String>, containsId(known, id), newIds(rest, known), id <> newIds(rest, known))
+    case +id <> rest:
+      +tail = newIds(rest, known)
+      Bool.pick(List<&2, String>, containsId(known, id), tail, id <> tail)
 
 # Built-in ids first, then models.json ids, each once.
 def composedIds(+builtins: List<&2, Provider>, +config: Config.ModelConfig) -> List<&2, String>:
@@ -273,7 +275,9 @@ def sameHeaderName(+left: String, +right: String) -> Bool: String.eq(String.to_l
 def withoutHeader(entries: List<&2, R.Property<Ai.Nullable<String>>>, +name: String) -> List<&2, R.Property<Ai.Nullable<String>>>:
   match entries:
     case Nil{}: Nil{}
-    case R.Property{+key, value} <> +rest: Bool.pick(List<&2, R.Property<Ai.Nullable<String>>>, sameHeaderName(key, name), withoutHeader(rest, name), R.Property{key, value} <> withoutHeader(rest, name))
+    case R.Property{+key, value} <> rest:
+      +tail = withoutHeader(rest, name)
+      Bool.pick(List<&2, R.Property<Ai.Nullable<String>>>, sameHeaderName(key, name), tail, R.Property{key, value} <> tail)
 
 def overrideHeaders(overrides: List<&2, R.Property<Ai.Nullable<String>>>, entries: List<&2, R.Property<Ai.Nullable<String>>>) -> List<&2, R.Property<Ai.Nullable<String>>>:
   match overrides:

@@ -553,9 +553,9 @@ def growPass(current: List<&2,Nat>,targets: List<&2,Nat>,+remaining: Nat) -> Lis
   match current targets:
     case Nil{} _: Nil{}
     case _ Nil{}: Nil{}
-    case +value <> +more +target <> +rest:
-      Bool.pick(List<&2,Nat>,Nat.is_gt(remaining,0n) && Nat.is_lt(value,target),
-        Succ{value} <> growPass(more,rest,remaining - 1n),value <> growPass(more,rest,remaining))
+    case +value <> more target <> rest:
+      +grow = Nat.is_gt(remaining,0n) && Nat.is_lt(value,target)
+      Bool.pick(Nat,grow,Succ{value},value) <> growPass(more,rest,Bool.pick(Nat,grow,remaining - 1n,remaining))
 @unsafe def fillWidths(+current: List<&2,Nat>,+targets: List<&2,Nat>,+budget: Nat) -> List<&2,Nat>:
   +remaining = budget - sumWidths(current)
   Bool.pick(Unit -> List<&2,Nat>,Nat.is_gt(remaining,0n) && Nat.is_lt(sumWidths(current),sumWidths(targets)),
