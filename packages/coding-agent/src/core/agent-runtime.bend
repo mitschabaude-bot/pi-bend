@@ -411,27 +411,36 @@ def skillScope(scope: PackageManager.Scope) -> Skills.SourceScope:
     case PackageManager.ProjectScope{}: Skills.Project{}
     case PackageManager.UserScope{}: Skills.User{}
 
-def skillResources(resolved: PackageManager.ResolvedPaths) -> List<&2, PackageManager.ResolvedResource>:
+# upstream metadataByPath: every resolved resource's metadata, first path wins.
+def resolvedResources(resolved: PackageManager.ResolvedPaths) -> List<&2, PackageManager.ResolvedResource>:
   match resolved:
-    case PackageManager.ResolvedPaths{skills, _, _}: skills
+    case PackageManager.ResolvedPaths{skills, prompts, themes}: List.append(&2, PackageManager.ResolvedResource, skills, List.append(&2, PackageManager.ResolvedResource, prompts, themes))
 
-def skillSource(metadata: PackageManager.PathMetadata, path: String) -> Skills.SourceInfo:
+def resourceSource(metadata: PackageManager.PathMetadata, path: String) -> Skills.SourceInfo:
   match metadata:
     case PackageManager.PathMetadata{source, scope, baseDir}:
       Skills.SourceInfo{path, skillSourceName(source), skillScope(scope), Skills.TopLevel{}, baseDir}
 
-def resolvedSkillSource(+path: String, resources: List<&2, PackageManager.ResolvedResource>) -> Maybe<&2, Skills.SourceInfo>:
+# upstream findSourceInfoForPath: the resource at or above the path.
+def findSourceInfoForPath(+path: String, resources: List<&2, PackageManager.ResolvedResource>) -> Maybe<&2, Skills.SourceInfo>:
   match resources:
     case Nil{}: None{}
     case PackageManager.ResolvedResource{root, _, metadata} <> rest:
-      Bool.pick(Maybe<&2, Skills.SourceInfo>, Skills.under(path, root), Some{skillSource(metadata, path)}, resolvedSkillSource(path, rest))
+      Bool.pick(Maybe<&2, Skills.SourceInfo>, Skills.under(path, root), Some{resourceSource(metadata, path)}, findSourceInfoForPath(path, rest))
 
 def sourcedSkills(skills: List<&2, Skills.Skill>, +resources: List<&2, PackageManager.ResolvedResource>) -> List<&2, Skills.Skill>:
   match skills:
     case Nil{}: Nil{}
     case Skills.Skill{name, description, +path, baseDir, source, disabled} <> rest:
-      +resolved = Maybe.default(&2, Skills.SourceInfo, resolvedSkillSource(path, resources), source)
+      +resolved = Maybe.default(&2, Skills.SourceInfo, findSourceInfoForPath(path, resources), source)
       Skills.Skill{name, description, path, baseDir, resolved, disabled} <> sourcedSkills(rest, resources)
+
+def sourcedTemplates(templates: List<&2, Templates.PromptTemplate>, +resources: List<&2, PackageManager.ResolvedResource>) -> List<&2, Templates.PromptTemplate>:
+  match templates:
+    case Nil{}: Nil{}
+    case Templates.PromptTemplate{name, description, hint, content, source, +file} <> rest:
+      +resolved = Maybe.default(&2, Skills.SourceInfo, findSourceInfoForPath(file, resources), source)
+      Templates.PromptTemplate{name, description, hint, content, resolved, file} <> sourcedTemplates(rest, resources)
 
 def nonLocalPrefix(+value: String) -> Bool:
   String.starts_with(value, "npm:") || String.starts_with(value, "git:") || String.starts_with(value, "github:") || String.starts_with(value, "http:") || String.starts_with(value, "https:") || String.starts_with(value, "ssh:")
@@ -463,7 +472,7 @@ def skillsFor(+environment: Paths.Environment, options: CreateOptions, +resolved
       do IO<List<&2, Skills.Skill>>:
         merged : List<&2, String> <- mergedFrom(environment, cwd, List.append(&2, String, Bool.pick(List<&2, String>, noSkills, Nil{}, resolvedSkills(resolved)), cliPaths(environment, skillPaths)), Nil{})
         loaded : List<&2, Skills.Skill> <- skillsFrom(environment, cwd, agentDir, noSkills, merged)
-        return sourcedSkills(loaded, skillResources(resolved))
+        return sourcedSkills(loaded, resolvedResources(resolved))
 
 def resolvedPrompts(resolved: PackageManager.ResolvedPaths) -> List<&2, String>:
   match resolved:
@@ -497,12 +506,13 @@ def templatesFrom(+environment: Paths.Environment, +cwd: String, agentDir: Strin
         return loadedTemplates(result)
 
 # upstream DefaultResourceLoader prompts, as for skills.
-def templatesFor(+environment: Paths.Environment, options: CreateOptions, resolved: PackageManager.ResolvedPaths) -> IO(List<&2, Templates.PromptTemplate>):
+def templatesFor(+environment: Paths.Environment, options: CreateOptions, +resolved: PackageManager.ResolvedPaths) -> IO(List<&2, Templates.PromptTemplate>):
   match options:
     case CreateOptions{+cwd, +agentDir, _, _, _, _, _, _, _, _, _, _, _, _, _, ResourceOptions{_, _, promptPaths, +noTemplates}}:
       do IO<List<&2, Templates.PromptTemplate>>:
         merged : List<&2, String> <- mergedFrom(environment, cwd, List.append(&2, String, Bool.pick(List<&2, String>, noTemplates, Nil{}, resolvedPrompts(resolved)), cliPaths(environment, promptPaths)), Nil{})
-        templatesFrom(environment, cwd, agentDir, noTemplates, merged)
+        loaded : List<&2, Templates.PromptTemplate> <- templatesFrom(environment, cwd, agentDir, noTemplates, merged)
+        return sourcedTemplates(loaded, resolvedResources(resolved))
 
 def promptResult(value: Prompt.ResultOf(Prompt.SystemPromptSections())) -> Result<&2, &2, String, Prompt.SystemPromptSections()>:
   match value:

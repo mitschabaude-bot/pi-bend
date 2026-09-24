@@ -40,3 +40,7 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   exiting. Bend stops at the unknown option before creating the runtime, so
   a simultaneous model warning or error is not printed. The lone case
   matches.
+- **Built-in llama.cpp extension** (`session-settings` RPC flow): pi 0.87.1
+  bundles an inline extension that registers the `/llama` command
+  (`packages/coding-agent/src/extensions/llama`). The port has no extension
+  runtime yet, so `get_commands` lacks it.

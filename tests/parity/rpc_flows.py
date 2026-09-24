@@ -72,6 +72,28 @@ FLOWS = [
         ],
     },
     {
+        "name": "session-settings",
+        "turns": [{"text": "Hi."}],
+        "files": {"agent/prompts/review.md": "---\ndescription: Review a file\n---\nReview $1.\n",
+                  "home/.agents/skills/demo/SKILL.md": "---\nname: demo\ndescription: A demo skill.\n---\nDo the demo.\n"},
+        "steps": [
+            {"type": "get_commands"},
+            {"type": "set_steering_mode", "mode": "all"},
+            {"type": "set_follow_up_mode", "mode": "all"},
+            {"type": "set_auto_compaction", "enabled": False},
+            {"type": "set_auto_retry", "enabled": False},
+            {"type": "set_session_name", "name": "Parity flow"},
+            {"type": "prompt", "message": "hello"},
+            {"type": "get_fork_messages"},
+            {"type": "get_last_assistant_text"},
+            {"type": "get_state"},
+            {"type": "abort_retry"},
+            {"type": "abort_bash"},
+            {"type": "abort"},
+            {"type": "no_such_command"},
+        ],
+    },
+    {
         "name": "bash",
         "turns": [{"text": "Saw it."}],
         "steps": [
@@ -126,6 +148,10 @@ def drive(label, argv, flow, keep):
     project = root / "project"
     agent.mkdir(parents=True)
     project.mkdir()
+    for relative, content in flow.get("files", {}).items():
+        path = agent / relative[len("agent/"):] if relative.startswith("agent/") else root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
     if "settings" in flow:
         (agent / "settings.json").write_text(json.dumps(flow["settings"]))
     log = root / "requests.jsonl"
