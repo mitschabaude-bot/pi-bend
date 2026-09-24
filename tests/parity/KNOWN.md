@@ -27,7 +27,9 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   runtime-version`). Sending `x-stainless-runtime: node` from a Bend binary
   would misreport the client; awaiting Gregor's decision.
 - **Docs path** (`basic-turn` requests): the system prompt names the install
-  directory; the runner masks it as `<package>`.
+  directory; the runner masks it as `<package>`. Its length also enters
+  token estimates, so with an overridden small context window
+  `max_output_tokens` differs by the path difference (~26 tokens).
 - **Malformed RPC input** (`tests/rpc_session_commands_check.py`): upstream
   reads a missing `sessionPath`/`entryId` unchecked and reports JavaScript's
   TypeError text (`Cannot read properties of undefined (reading 'startsWith')`);
