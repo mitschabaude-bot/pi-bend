@@ -22,6 +22,8 @@ type Action is Data:
   ExportSession{path: Maybe<&2,String>}
   ImportSession{path: Maybe<&2,String>}
   ResumeSession{}
+  OpenTree{}
+  OpenFork{}
 type CredentialCommand is Data:
   BeginLogin{provider: Maybe<&2,String>}
   BeginLogout{}
@@ -40,6 +42,8 @@ type Command is Data:
   Export{path: Maybe<&2,String>}
   Import{path: Maybe<&2,String>}
   Resume{}
+  Tree{}
+  Fork{}
   Unsupported{text: String}
 
 def argument(text: String,prefix: Nat) -> Maybe<&2,String>:
@@ -61,6 +65,8 @@ def classify(+text: String,parts: List<&2,String>) -> Command:
     case "/export" <> _: Export{argument(text,7n)}
     case "/import" <> _: Import{argument(text,7n)}
     case "/resume" <> Nil{}: Resume{}
+    case "/tree" <> Nil{}: Tree{}
+    case "/fork" <> Nil{}: Fork{}
     case _:
       Bool.pick(Command,String.starts_with(text,"/") || String.starts_with(text,"!"),Unsupported{text},Send{text})
 def names(levels: List<&2,Ai.ModelThinkingLevel>) -> List<&2,String>:
@@ -170,7 +176,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
   match command:
     case Send{text}: IO.pure(Action,Prompt{text})
     case Stop{}: IO.pure(Action,Exit{})
-    case Help{}: IO.pure(Action,Notice{"Commands: /model [search], /thinking [level], /compact [instructions], /new, /clear, /name [name], /login, /logout, /export [path], /import <path>, /resume, /exit"})
+    case Help{}: IO.pure(Action,Notice{"Commands: /model [search], /thinking [level], /compact [instructions], /new, /clear, /name [name], /login, /logout, /export [path], /import <path>, /resume, /tree, /fork, /exit"})
     case ShowModel{requested}: showModel(session,models,requested)
     case SwitchModel{model}: switchModel(session,model)
     case SetThinking{requested}: thinking(session,requested)
@@ -182,6 +188,8 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case Export{path}: IO.pure(Action,ExportSession{path})
     case Import{path}: IO.pure(Action,ImportSession{path})
     case Resume{}: IO.pure(Action,ResumeSession{})
+    case Tree{}: IO.pure(Action,OpenTree{})
+    case Fork{}: IO.pure(Action,OpenFork{})
     case Unsupported{text}: IO.pure(Action,CommandError{"Unknown command: " ++ text})
 def parse(text: String) -> Command:
   +clean = Text.trim(text)

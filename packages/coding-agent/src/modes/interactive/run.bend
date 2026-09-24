@@ -173,7 +173,7 @@ type ImportState is Data:
 type ResumeState is Data:
   ResumeState{picker: Ref.Ref<Maybe<&2,SessionPicker.Host>>,dialog: Ref.Ref<Maybe<&2,LoginDialog.Host>>,sessions: Maybe<&2,Callback.Callback<Unit,SessionChoices>>,backend: Maybe<&2,Callback.Callback<ResumeRequest,SessionHost.ResumeOutcome>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type CommandObservation is Data:
-  CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,builtinDir: String,importState: ImportState,resumeState: ResumeState}
+  CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,builtinDir: String,importState: ImportState,resumeState: ResumeState,selector: Ref.Ref<Maybe<&2,Selector.Host>>}
 def firstPath(args: List<&2,String>) -> Maybe<&2,String>:
   match args:
     case Nil{}: None{}
@@ -246,7 +246,7 @@ def exportNotice(result: Result<&2,&2,String,String>) -> Interactive.SubmissionF
     case Fail{message}: Interactive.CommandFailure{"Failed to export session: " ++ message}
 def exportObserved(input: CommandObservation,requested: Maybe<&2,String>) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,failure,redraw,cwd,builtinDir,_,_}:
+    case CommandObservation{_,session,_,failure,redraw,cwd,builtinDir,_,_,_}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         result : Result<&2,&2,String,String> <- exportCurrent(live,cwd,builtinDir,requested)
@@ -318,7 +318,7 @@ def importRequested(+state: ImportState,path: Maybe<&2,String>) -> IO(Unit):
         importConfirmed(state,input,answer)
 def importObserved(input: CommandObservation,requested: Maybe<&2,String>) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,_,_,_,state,_}: importRequested(state,exportPath(requested))
+    case CommandObservation{_,_,_,_,_,_,_,state,_,_}: importRequested(state,exportPath(requested))
 def resumeStatus(state: ResumeState,status: Interactive.SubmissionFailure) -> IO(Unit):
   match state:
     case ResumeState{_,_,_,_,failure,redraw}:
@@ -378,10 +378,45 @@ def resumeRequested(+state: ResumeState) -> IO(Unit):
         choices : SessionChoices <- Callback.call(Unit,SessionChoices,backend,Unit{})
         resumeOpen(state,choices)
 def resumeObserved(input: CommandObservation) -> IO(Unit):
-  match input: case CommandObservation{_,_,_,_,_,_,_,_,state}: resumeRequested(state)
+  match input: case CommandObservation{_,_,_,_,_,_,_,_,state,_}: resumeRequested(state)
+def selectorNotice(failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,message: String) -> IO(Unit):
+  Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandNotice{message}})
+def openTree(target: Maybe<&2,Selector.Host>,state: Selector.State) -> IO(Unit):
+  match target:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{host}: Selector.open(host,state)
+def openCandidate(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,+state: Selector.State,empty: String) -> IO(Unit):
+  Bool.pick(Unit -> IO(Unit),Selector.hasRows(state),_ => do IO<Unit>:
+    target : Maybe<&2,Selector.Host> <- Ref.read(Maybe<&2,Selector.Host>,selector)
+    openTree(target,state),_ => selectorNotice(failure,empty))(Unit{})
+def selectorFilter(value: Settings.TreeFilterMode) -> Selector.Filter:
+  match value:
+    case Settings.DefaultFilter{}: Selector.Default{}
+    case Settings.NoTools{}: Selector.NoTools{}
+    case Settings.UserOnly{}: Selector.UserOnly{}
+    case Settings.LabeledOnly{}: Selector.LabeledOnly{}
+    case Settings.AllEntries{}: Selector.All{}
+def matchTree(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,result: Result<&2,&2,Tree.Error,List<&2,Selector.Node()>>,leaf: Maybe<&2,String>,filter: Selector.Filter) -> IO(Unit):
+  match result:
+    case Fail{_}: selectorNotice(failure,"Cannot load session tree")
+    case Done{nodes}: openCandidate(selector,failure,Selector.createWithFilter(nodes,leaf,Selector.TreeMode{},24n,filter),"No entries in session")
+def selectorFromState(mode: Selector.Mode,+state: Session.State(),filter: Selector.Filter,selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>) -> IO(Unit):
+  match mode:
+    case Selector.TreeMode{}: matchTree(selector,failure,Tree.getTree(Unit,Tools.ToolDetails,Schema.Value,state),Tree.getLeafId(Unit,Tools.ToolDetails,Schema.Value,state),filter)
+    case Selector.ForkMode{}: openCandidate(selector,failure,Selector.createFork(Tree.getEntries(Unit,Tools.ToolDetails,Schema.Value,state),24n),"No user messages found")
+def openSessionSelector(mode: Selector.Mode,session: Ref.Ref<Session.AgentSession>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
+  do IO<Unit>:
+    +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+    current : Session.Session() <- Session.sessionOf(live)
+    filter : Settings.TreeFilterMode <- Session.treeFilterMode(live)
+    selectorFromState(mode,Session.stateOf(current),selectorFilter(filter),selector,failure)
+    Interactive.requestRender(redraw)
+def treeObserved(input: CommandObservation,mode: Selector.Mode) -> IO(Unit):
+  match input:
+    case CommandObservation{_,session,_,failure,redraw,_,_,_,_,selector}: openSessionSelector(mode,session,selector,failure,redraw)
 def ordinaryCommandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match input:
-    case CommandObservation{sink,session,footer,_,_,_,_,_,_}:
+    case CommandObservation{sink,session,footer,_,_,_,_,_,_,_}:
       do IO<Unit>:
         changed : Bool <- Interactive.commandResult(sink,action)
         Bool.pick(Unit -> IO(Unit),changed,_ => do IO<Unit>:
@@ -393,6 +428,8 @@ def commandObserved(input: CommandObservation,action: Commands.Action) -> IO(Uni
     case Commands.ExportSession{path}: exportObserved(input,path)
     case Commands.ImportSession{path}: importObserved(input,path)
     case Commands.ResumeSession{}: resumeObserved(input)
+    case Commands.OpenTree{}: treeObserved(input,Selector.TreeMode{})
+    case Commands.OpenFork{}: treeObserved(input,Selector.ForkMode{})
     case other: ordinaryCommandObserved(input,other)
 type WorkerFailure is Data:
   WorkerFailure{failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
@@ -850,39 +887,9 @@ def disposeLoginState(state: LoginState) -> IO(Unit):
 def keyInput(queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,interaction: Interaction,session: Ref.Ref<Session.AgentSession>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> KeyInput:
   match interaction:
     case Interaction{_,lastClear,lastEscape,selector,_,header}: KeyInput{queue,stop,failure,lastClear,lastEscape,selector,session,redraw,header}
-def selectorNotice(failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,message: String) -> IO(Unit):
-  Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandNotice{message}})
-def openTree(target: Maybe<&2,Selector.Host>,state: Selector.State) -> IO(Unit):
-  match target:
-    case None{}: IO.pure(Unit,Unit{})
-    case Some{host}: Selector.open(host,state)
-def openCandidate(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,+state: Selector.State,empty: String) -> IO(Unit):
-  Bool.pick(Unit -> IO(Unit),Selector.hasRows(state),_ => do IO<Unit>:
-    target : Maybe<&2,Selector.Host> <- Ref.read(Maybe<&2,Selector.Host>,selector)
-    openTree(target,state),_ => selectorNotice(failure,empty))(Unit{})
-def selectorFilter(value: Settings.TreeFilterMode) -> Selector.Filter:
-  match value:
-    case Settings.DefaultFilter{}: Selector.Default{}
-    case Settings.NoTools{}: Selector.NoTools{}
-    case Settings.UserOnly{}: Selector.UserOnly{}
-    case Settings.LabeledOnly{}: Selector.LabeledOnly{}
-    case Settings.AllEntries{}: Selector.All{}
-def matchTree(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,result: Result<&2,&2,Tree.Error,List<&2,Selector.Node()>>,leaf: Maybe<&2,String>,filter: Selector.Filter) -> IO(Unit):
-  match result:
-    case Fail{_}: selectorNotice(failure,"Cannot load session tree")
-    case Done{nodes}: openCandidate(selector,failure,Selector.createWithFilter(nodes,leaf,Selector.TreeMode{},24n,filter),"No entries in session")
-def selectorFromState(mode: Selector.Mode,+state: Session.State(),filter: Selector.Filter,selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>) -> IO(Unit):
-  match mode:
-    case Selector.TreeMode{}: matchTree(selector,failure,Tree.getTree(Unit,Tools.ToolDetails,Schema.Value,state),Tree.getLeafId(Unit,Tools.ToolDetails,Schema.Value,state),filter)
-    case Selector.ForkMode{}: openCandidate(selector,failure,Selector.createFork(Tree.getEntries(Unit,Tools.ToolDetails,Schema.Value,state),24n),"No user messages found")
 def openedTree(input: KeyInput,mode: Selector.Mode) -> IO(Unit):
   match input:
-    case KeyInput{_,_,failure,_,_,selector,+session,_,_}:
-      do IO<Unit>:
-        +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
-        current : Session.Session() <- Session.sessionOf(live)
-        filter : Settings.TreeFilterMode <- Session.treeFilterMode(live)
-        selectorFromState(mode,Session.stateOf(current),selectorFilter(filter),selector,failure)
+    case KeyInput{_,_,failure,_,_,selector,session,redraw,_}: openSessionSelector(mode,session,selector,failure,redraw)
 def actionDouble(input: KeyInput,action: Settings.DoubleEscapeAction) -> IO(Unit):
   match action:
     case Settings.Tree{}: openedTree(input,Selector.TreeMode{})
@@ -1254,6 +1261,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +listener : Callback.Callback<Session.AgentSessionEvent,Unit> <- Callback.create(~Observation,~Session.AgentSessionEvent,~Unit,~observed,Observation{transcriptHandle,redraw,footerState(foot)})
         failureObserver : Callback.Callback<Controller.PromptFailure,Unit> <- Callback.create(~WorkerFailure,~Controller.PromptFailure,~Unit,~promptFailed,WorkerFailure{footerFailure(foot),redraw})
         +modelSelectorRef : Ref.Ref<Maybe<&2,ModelPicker.Host>> <- Ref.new(Maybe<&2,ModelPicker.Host>,None{})
+        +selectorRef : Ref.Ref<Maybe<&2,Selector.Host>> <- Ref.new(Maybe<&2,Selector.Host>,None{})
         +current : Ref.Ref<Session.AgentSession> <- modeCurrent(mode,session)
         +modelsRef : Ref.Ref<List<&2,Models.Model()>> <- Ref.new(List<&2,Models.Model()>,models)
         +loginHost : Ref.Ref<Maybe<&2,LoginDialog.Host>> <- Ref.new(Maybe<&2,LoginDialog.Host>,None{})
@@ -1263,11 +1271,10 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +resumeState : ResumeState <- IO.pure(ResumeState,resumeStateOf(mode,resumePicker,loginHost,footerFailure(foot),redraw))
         loginCallback : Callback.Callback<Commands.CredentialCommand,Unit> <- Callback.create(~LoginState,~Commands.CredentialCommand,~Unit,~credentialRun,loginState)
         +commandSink : Interactive.CommandSink <- IO.pure(Interactive.CommandSink,Interactive.CommandSink{footerFailure(foot),redraw,modelSelectorRef,current,modelsRef})
-        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),footerFailure(foot),redraw,cwd,builtinDir,importStateOf(mode,loginHost,footerFailure(foot),redraw),resumeState})
+        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),footerFailure(foot),redraw,cwd,builtinDir,importStateOf(mode,loginHost,footerFailure(foot),redraw),resumeState,selectorRef})
         +editorHandle : Ref.Ref<Maybe<&2,Live.Handle>> <- Ref.new(Maybe<&2,Live.Handle>,None{})
         +lastClear : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         +lastEscape : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
-        +selectorRef : Ref.Ref<Maybe<&2,Selector.Host>> <- Ref.new(Maybe<&2,Selector.Host>,None{})
         selectionObserver : Callback.Callback<Controller.SelectionResult,Unit> <- Callback.create(~SelectionSink,~Controller.SelectionResult,~Unit,~selectionResult,SelectionSink{current,transcriptHandle,editorHandle,footerState(foot),footerFailure(foot),redraw,cwd,home})
         controlObserver : Callback.Callback<Controller.ControlResult,Unit> <- Callback.create(~ControlSink,~Controller.ControlResult,~Unit,~controlResult,ControlSink{editorHandle,footerFailure(foot),redraw})
         bindOptional(mode,listener,transcriptHandle,editorHandle,footerState(foot),footerFailure(foot),redraw,cwd,home)
