@@ -198,4 +198,4 @@ def StreamFn(-DiagnosticDetails: Data, -ToolDetails: Data, -Options: Data, -Erro
 # systemPrompt is derived from messages by agent-state.systemPrompt.
 # Runtime ownership and borrowed callbacks remain outside this value snapshot.
 type AgentState<-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data> is Data:
-  AgentState{model: Ai.Model<Ai.JsonValue>, thinkingLevel: ThinkingLevel(), tools: List<&2, AgentTool<Details, Error>>, messages: List<&2, AgentMessage<DiagnosticDetails, Details, Custom>>, isStreaming: Bool, streamingMessage: Maybe<&2, AgentMessage<DiagnosticDetails, Details, Custom>>, pendingToolCalls: Set.StringSet, errorMessage: Maybe<&2, String>}
+  AgentState{model: Maybe<&2, Ai.Model<Ai.JsonValue>>, thinkingLevel: ThinkingLevel(), tools: List<&2, AgentTool<Details, Error>>, messages: List<&2, AgentMessage<DiagnosticDetails, Details, Custom>>, isStreaming: Bool, streamingMessage: Maybe<&2, AgentMessage<DiagnosticDetails, Details, Custom>>, pendingToolCalls: Set.StringSet, errorMessage: Maybe<&2, String>}

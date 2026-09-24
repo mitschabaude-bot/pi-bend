@@ -47,9 +47,10 @@ def names(levels: List<&2,Ai.ModelThinkingLevel>) -> List<&2,String>:
   match levels:
     case Nil{}: Nil{}
     case level <> rest: Levels.name(level) <> names(rest)
-def available(model: Ai.Model<Ai.JsonValue>) -> List<&2,Ai.ModelThinkingLevel>:
-  match model:
-    case Ai.Model{_,_,_,_,_,reasoning,mapping,_,_,_,_,_,_,_,_,_}: Levels.available(reasoning,mapping)
+def available(selected: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> List<&2,Ai.ModelThinkingLevel>:
+  match selected:
+    case None{}: Ai.Off{} <> Nil{}
+    case Some{Ai.Model{_,_,_,_,_,reasoning,mapping,_,_,_,_,_,_,_,_,_}}: Levels.available(reasoning,mapping)
 def findLevel(levels: List<&2,Ai.ModelThinkingLevel>,+wanted: String) -> Maybe<&2,Ai.ModelThinkingLevel>:
   match levels:
     case Nil{}: None{}

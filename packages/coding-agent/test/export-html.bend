@@ -48,7 +48,7 @@ def model() -> Ai.Model<Ai.JsonValue>:
   Ai.Model{"gpt-test", "Test", Ai.OpenAIResponsesApi{}, "openai", "https://example.test", False{}, None{}, Ai.InputText{} <> Nil{}, None{}, Ai.ModelCost{zero, zero, zero, zero, None{}}, None{}, F.fromU32(1000), F.fromU32(100), None{}, None{}, None{}}
 
 def agentState() -> Export.AgentState():
-  Agent.AgentState{model(), Ai.Off{}, Nil{}, Agent.LlmMessage{Ai.System{Ai.SystemMessage{Ai.SystemText{"System instructions <safe>"}, None{}, None{}, None{}, F.fromU32(0)}}} <> Nil{}, False{}, None{}, Set.empty(), None{}}
+  Agent.AgentState{Some{model()}, Ai.Off{}, Nil{}, Agent.LlmMessage{Ai.System{Ai.SystemMessage{Ai.SystemText{"System instructions <safe>"}, None{}, None{}, None{}, F.fromU32(0)}}} <> Nil{}, False{}, None{}, Set.empty(), None{}}
 
 def assertion(ok: Bool, label: String) -> IO(Unit):
   Bool.pick(IO(Unit), ok, IO.pure(Unit, Unit{}), IO.die(Unit, 1, label))

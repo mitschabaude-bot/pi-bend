@@ -61,14 +61,14 @@ def onSessionEvent(events: Events,event: Session.AgentSessionEvent) -> IO(Unit):
     case _: IO.pure(Unit,Unit{})
 def commandStatus(failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,status: SubmissionFailure) -> IO(Unit):
   Ref.write(Maybe<&2,SubmissionFailure>,failure,Some{status})
-def pickerCurrent(session: Session.AgentSession) -> IO(Models.Model()):
-  do IO<Models.Model()>:
+def pickerCurrent(session: Session.AgentSession) -> IO(Maybe<&2,Models.Model()>):
+  do IO<Maybe<&2,Models.Model()>>:
     current : Session.AgentState() <- Session.state(session)
     return Session.stateModel(current)
-def openPicker(host: Maybe<&2,ModelPicker.Host>,models: List<&2,Models.Model()>,current: Models.Model(),query: Maybe<&2,String>) -> IO(Unit):
+def openPicker(host: Maybe<&2,ModelPicker.Host>,models: List<&2,Models.Model()>,current: Maybe<&2,Models.Model()>,query: Maybe<&2,String>) -> IO(Unit):
   match host:
     case None{}: IO.pure(Unit,Unit{})
-    case Some{value}: ModelPicker.open(value,ModelPicker.create(models,Some{current},Maybe.default(&2,String,query,""),24n))
+    case Some{value}: ModelPicker.open(value,ModelPicker.create(models,current,Maybe.default(&2,String,query,""),24n))
 def openPickerResult(failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,session: Session.AgentSession,models: List<&2,Models.Model()>,search: Maybe<&2,String>) -> IO(Bool):
   match models:
     case Nil{}:
@@ -78,7 +78,7 @@ def openPickerResult(failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,redraw: Ref.R
         return False{}
     case model <> rest:
       do IO<Bool>:
-        +current : Models.Model() <- pickerCurrent(session)
+        +current : Maybe<&2,Models.Model()> <- pickerCurrent(session)
         target : Maybe<&2,ModelPicker.Host> <- Ref.read(Maybe<&2,ModelPicker.Host>,picker)
         openPicker(target,model <> rest,current,search)
         requestRender(redraw)

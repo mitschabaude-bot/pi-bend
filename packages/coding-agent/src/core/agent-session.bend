@@ -133,7 +133,7 @@ def stateMessages(value: AgentState()) -> List<&2, Message()>:
   match value:
     case T.AgentState{_, _, _, messages, _, _, _, _}: messages
 
-def stateModel(value: AgentState()) -> Ai.Model<Ai.JsonValue>:
+def stateModel(value: AgentState()) -> Maybe<&2, Ai.Model<Ai.JsonValue>>:
   match value:
     case T.AgentState{model, _, _, _, _, _, _, _}: model
 
@@ -1369,13 +1369,17 @@ def executePlan(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Setti
     case Plan.ThresholdCompaction{}: runAutoCompaction(agent, shared, settings, model, Threshold{}, False{})
 
 # upstream _checkCompaction: true when the run should continue.
+def checkCompactionFor(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +turn: LastTurn, skipAborted: Bool, current: AgentState(), entries: List<&2, Entry()>, state: Shared, facts: Facts, selected: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> IO(Bool):
+  match selected:
+    case None{}: IO.pure(Bool, False{})
+    case Some{+model}: executePlan(agent, shared, settings, model, turn, planCompaction(compactionSettingsFor(settings, model), skipAborted, turnMessage(turn), model, compactionTimestamp(entries), stateMessages(current), overflowAttemptedOf(state), facts))
 def checkCompaction(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +turn: LastTurn, skipAborted: Bool) -> IO(Bool):
   do IO<Bool>:
     +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +entries : List<&2, Entry()> <- branchEntries(shared)
     +state : Shared <- R.read(Shared, shared)
     +facts : Facts = factsOf(projectionOf(sharedSession(state)), entries, entryIdOf(turn))
-    executePlan(agent, shared, settings, stateModel(current), turn, planCompaction(compactionSettingsFor(settings, stateModel(current)), skipAborted, turnMessage(turn), stateModel(current), compactionTimestamp(entries), stateMessages(current), overflowAttemptedOf(state), facts))
+    checkCompactionFor(agent, shared, settings, turn, skipAborted, current, entries, state, facts, stateModel(current))
 
 # The entry of the last projected assistant message: the agent's transcript
 # is the projection, so this is the entry of its last assistant message.
@@ -1503,14 +1507,19 @@ def compactIfOver(over: Bool, +agent: Runtime.Owner(), +shared: R.Ref<Shared>, s
 # upstream _compactBeforeNextAssistantResponse: the projected context is
 # estimated before the next request, not from the last response's usage, and
 # the request continues on the (possibly compacted) projection.
+def compactBeforeFor(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +context: Context(), selected: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> IO(Context()):
+  match selected:
+    case None{}: IO.pure(Context(), context)
+    case Some{+model}:
+      do IO<Context()>:
+        before : Shared <- R.read(Shared, shared)
+        compactIfOver(overThreshold(settings, model, sharedSession(before)), agent, shared, settings, model)
+        after : Shared <- R.read(Shared, shared)
+        return withContextMessages(context, sessionMessages(sharedSession(after)))
 def compactBeforeNextResponse(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +context: Context()) -> IO(Context()):
   do IO<Context()>:
     current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +model : Ai.Model<Ai.JsonValue> = stateModel(current)
-    before : Shared <- R.read(Shared, shared)
-    compactIfOver(overThreshold(settings, model, sharedSession(before)), agent, shared, settings, model)
-    after : Shared <- R.read(Shared, shared)
-    return withContextMessages(context, sessionMessages(sharedSession(after)))
+    compactBeforeFor(agent, shared, settings, context, stateModel(current))
 
 # A hook given to the agent before the session runs next, with precedence
 # for the context-aware one as in upstream Agent.
@@ -1536,8 +1545,8 @@ def nextContext(+context: Context(), result: TurnResult()) -> Context():
 def refreshedUpdate(+context: Context(), +current: AgentState(), result: TurnResult(), patch: Maybe<&2, Message()>) -> TurnResult():
   match result:
     case Fail{error}: Fail{error}
-    case Done{None{}}: Done{Some{T.AgentLoopTurnUpdate{Some{withContextTools(context, stateTools(current))}, withPatchAfter(None{}, patch), Some{stateModel(current)}, Some{stateThinking(current)}}}}
-    case Done{Some{T.AgentLoopTurnUpdate{replaced, added, _, _}}}: Done{Some{T.AgentLoopTurnUpdate{Some{withContextTools(Maybe.default(&2, Context(), replaced, context), stateTools(current))}, withPatchAfter(added, patch), Some{stateModel(current)}, Some{stateThinking(current)}}}}
+    case Done{None{}}: Done{Some{T.AgentLoopTurnUpdate{Some{withContextTools(context, stateTools(current))}, withPatchAfter(None{}, patch), stateModel(current), Some{stateThinking(current)}}}}
+    case Done{Some{T.AgentLoopTurnUpdate{replaced, added, _, _}}}: Done{Some{T.AgentLoopTurnUpdate{Some{withContextTools(Maybe.default(&2, Context(), replaced, context), stateTools(current))}, withPatchAfter(added, patch), stateModel(current), Some{stateThinking(current)}}}}
 
 def refreshTurn(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, previous: Maybe<&2, NextTurnHook()>, legacy: Maybe<&2, LegacyTurnHook()>, loadout: Runtime.Loadout, +turn: Turn(), signal: Maybe<&2, A.AbortSignal<Unit>>) -> IO(TurnResult()):
   do IO<TurnResult()>:
@@ -1578,16 +1587,22 @@ def previousRequest(previous: Maybe<&2, RequestHook()>, request: T.PrepareReques
 def mergedRequest(+canonical: Context(), +current: AgentState(), result: RequestResult()) -> RequestResult():
   match result:
     case Fail{error}: Fail{error}
-    case Done{None{}}: Done{Some{T.AgentRequestUpdate{Some{canonical}, Some{stateModel(current)}, Some{stateThinking(current)}}}}
-    case Done{Some{T.AgentRequestUpdate{replaced, model, thinking}}}: Done{Some{T.AgentRequestUpdate{Some{Maybe.default(&2, Context(), replaced, canonical)}, Some{Maybe.default(&2, Ai.Model<Ai.JsonValue>, model, stateModel(current))}, Some{Maybe.default(&2, Ai.ModelThinkingLevel, thinking, stateThinking(current))}}}}
+    case Done{None{}}: Done{Some{T.AgentRequestUpdate{Some{canonical}, stateModel(current), Some{stateThinking(current)}}}}
+    case Done{Some{T.AgentRequestUpdate{replaced, model, thinking}}}: Done{Some{T.AgentRequestUpdate{Some{Maybe.default(&2, Context(), replaced, canonical)}, Maybe.or(&2, Ai.Model<Ai.JsonValue>, model, stateModel(current)), Some{Maybe.default(&2, Ai.ModelThinkingLevel, thinking, stateThinking(current))}}}}
 
+def projectRequestFor(previous: Maybe<&2, RequestHook()>, +canonical: Context(), +current: AgentState(), signal: Maybe<&2, A.AbortSignal<Unit>>, selected: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> IO(RequestResult()):
+  match selected:
+    case None{}: IO.pure(RequestResult(), Fail{Tools.Failure{"No model selected"}})
+    case Some{model}:
+      do IO<RequestResult()>:
+        result : RequestResult() <- previousRequest(previous, T.PrepareRequestContext{canonical, model, stateThinking(current)}, signal)
+        return mergedRequest(canonical, current, result)
 def projectRequest(+agent: Runtime.Owner(), shared: R.Ref<Shared>, previous: Maybe<&2, RequestHook()>, context: Context(), signal: Maybe<&2, A.AbortSignal<Unit>>) -> IO(RequestResult()):
   do IO<RequestResult()>:
     state : Shared <- R.read(Shared, shared)
     +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +canonical : Context() = withContextTools(withContextMessages(context, sessionMessages(sharedSession(state))), stateTools(current))
-    result : RequestResult() <- previousRequest(previous, T.PrepareRequestContext{canonical, stateModel(current), stateThinking(current)}, signal)
-    return mergedRequest(canonical, current, result)
+    projectRequestFor(previous, canonical, current, signal, stateModel(current))
 
 def requestHook(env: RequestEnv, input: RequestInput()) -> IO(RequestResult()):
   match env input:
@@ -1596,7 +1611,8 @@ def requestHook(env: RequestEnv, input: RequestInput()) -> IO(RequestResult()):
 def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, cwd: String, +loadout: Runtime.Loadout) -> IO(AgentSession):
   do IO<AgentSession>:
     initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, False{}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, Ai.modelContextWindow(stateModel(initial)), None{}}, CompactionState{False{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}})
+    +window : F64 = Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, stateModel(initial)), F.fromU32(0))
+    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, False{}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, window, None{}}, CompactionState{False{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}})
     +settingsRef : R.Ref<Settings.SettingsManager> <- R.new(Settings.SettingsManager,settings)
     +handler : Agent.Handler(SessionEvent(), Runtime.Error()) <- C.create(~R.Ref<Shared>, ~Agent.Input<SessionEvent()>, ~Loop.Emission<Runtime.Error()>, ~handleAgentEvent, shared)
     subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, handler)
@@ -1825,11 +1841,18 @@ def manualCompacting(session: AgentSession) -> IO(Bool):
         state : Shared <- R.read(Shared, shared)
         return manualIn(compactionOf(state))
 
+def promptSelected(+session: AgentSession, text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>, selected: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> IO(Result<&2, &2, String, Unit>):
+  match selected:
+    case None{}: IO.pure(Result<&2, &2, String, Unit>, Fail{"No model selected. Use /login to add a provider, then /model to select a model."})
+    case Some{_}:
+      do IO<Result<&2, &2, String, Unit>>:
+        expanded : String <- expandInput(session, text)
+        streaming : Bool <- isStreaming(session)
+        promptWhile(session, streaming, expanded, images, behavior)
 def promptExpanded(+session: AgentSession, text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
-    expanded : String <- expandInput(session, text)
-    streaming : Bool <- isStreaming(session)
-    promptWhile(session, streaming, expanded, images, behavior)
+    current : AgentState() <- state(session)
+    promptSelected(session, text, images, behavior, stateModel(current))
 
 # upstream prompt(): no prompt while a manual compaction runs; skill commands
 # and prompt templates are expanded, then the message runs or, while
@@ -1909,6 +1932,10 @@ def finishManual(agent: Runtime.Owner(), +shared: R.Ref<Shared>, result: Result<
 
 # upstream compact(): abort the agent, then summarize the branch; the result
 # is returned, a failure or cancellation is reported in compaction_end.
+def manualFor(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +customInstructions: Maybe<&2, String>, signal: A.AbortSignal<Unit>, +entries: List<&2, Entry()>, selected: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
+  match selected:
+    case None{}: IO.pure(Result<&2, &2, String, Compaction.CompactionResult>, Fail{"No model selected"})
+    case Some{+model}: manualPrepared(agent, shared, model, customInstructions, signal, entries, Compaction.prepareCompaction(~Unit, ~Tools.ToolDetails, ~V.Value, ~detailsOf, entries, compactionSettingsFor(settings, model)))
 def compact(session: AgentSession, customInstructions: Maybe<&2, String>) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
   match session:
     case AgentSession{+agent, +shared, _, settingsRef, _, _}:
@@ -1923,7 +1950,7 @@ def compact(session: AgentSession, customInstructions: Maybe<&2, String>) -> IO(
         emit(shared, CompactionStart{Manual{}})
         +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +entries : List<&2, Entry()> <- branchEntries(shared)
-        result : Result<&2, &2, String, Compaction.CompactionResult> <- manualPrepared(agent, shared, stateModel(current), customInstructions, A.signal(Unit, controller), entries, Compaction.prepareCompaction(~Unit, ~Tools.ToolDetails, ~V.Value, ~detailsOf, entries, compactionSettingsFor(settings, stateModel(current))))
+        result : Result<&2, &2, String, Compaction.CompactionResult> <- manualFor(agent, shared, settings, customInstructions, A.signal(Unit, controller), entries, stateModel(current))
         aborted : Bool <- A.aborted(Unit, A.signal(Unit, controller))
         R.modify(Shared, Unit, shared, current => (setManualController(current, None{}), Unit{}))
         A.dispose(Unit, controller)
@@ -2101,8 +2128,8 @@ def recorded(shared: R.Ref<Shared>, outcome: Sessions.Outcome(Appended())) -> IO
         return Done{Unit{}}
     case Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{Sessions.message(error)})
 
-def clamped(value: AgentState(), level: Ai.ModelThinkingLevel) -> Ai.ModelThinkingLevel:
-  AiModels.clampThinkingLevel(Ai.JsonValue, stateModel(value), level)
+def clamped(value: AgentState(), +level: Ai.ModelThinkingLevel) -> Ai.ModelThinkingLevel:
+  Maybe.default(&2, Ai.ModelThinkingLevel, Maybe.map(&2, Ai.Model<Ai.JsonValue>, Ai.ModelThinkingLevel, model => AiModels.clampThinkingLevel(Ai.JsonValue, model, level), stateModel(value)), level)
 
 # upstream setThinkingLevel: clamp to the model, apply, record, notify.
 def applyThinking(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +chosen: Ai.ModelThinkingLevel) -> IO(Result<&2, &2, String, Unit>):

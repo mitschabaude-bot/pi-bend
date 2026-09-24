@@ -53,7 +53,7 @@ def createState(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error:
   match initial:
     case AgentInitialState{initialPrompt, model, thinking, tools, messages}:
       +selectedTools = Maybe.default(&2, List<&2, T.AgentTool<Details, Error>>, tools, Nil{})
-      T.AgentState{Maybe.default(&2, Ai.Model<Ai.JsonValue>, model, defaultModel(Ai.JsonValue)), Maybe.default(&2, T.ThinkingLevel(), thinking, Ai.Off{}), selectedTools, initialMessages(DiagnosticDetails, Details, Custom, Error, initialPrompt, declarations(DiagnosticDetails, Details, Custom, Error, selectedTools), Maybe.default(&2, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>, messages, Nil{})), False{}, None{}, Set.empty(), None{}}
+      T.AgentState{model, Maybe.default(&2, T.ThinkingLevel(), thinking, Ai.Off{}), selectedTools, initialMessages(DiagnosticDetails, Details, Custom, Error, initialPrompt, declarations(DiagnosticDetails, Details, Custom, Error, selectedTools), Maybe.default(&2, List<&2, T.AgentMessage<DiagnosticDetails, Details, Custom>>, messages, Nil{})), False{}, None{}, Set.empty(), None{}}
 
 def systemPromptState(-DiagnosticDetails: Data, -Details: Data, -Custom: Data, -Error: Data, agentState: T.AgentState<DiagnosticDetails, Details, Custom, Error>) -> String:
   match agentState:
@@ -106,7 +106,7 @@ type StateChange<-G: Data, -D: Data, -M: Data, -E: Data> is Data:
   AppendMessage{message: T.AgentMessage<G, D, M>}
 def applyChange(-G: Data, -D: Data, -M: Data, -E: Data, agentState: T.AgentState<G, D, M, E>, change: StateChange<G, D, M, E>) -> T.AgentState<G, D, M, E>:
   match agentState change:
-    case T.AgentState{_, thinking, tools, messages, streaming, current, pending, error} SetModel{model}: T.AgentState{model, thinking, tools, messages, streaming, current, pending, error}
+    case T.AgentState{_, thinking, tools, messages, streaming, current, pending, error} SetModel{model}: T.AgentState{Some{model}, thinking, tools, messages, streaming, current, pending, error}
     case T.AgentState{model, _, tools, messages, streaming, current, pending, error} SetThinkingLevel{thinking}: T.AgentState{model, thinking, tools, messages, streaming, current, pending, error}
     case T.AgentState{model, thinking, _, messages, streaming, current, pending, error} SetTools{tools}: T.AgentState{model, thinking, tools, messages, streaming, current, pending, error}
     case T.AgentState{model, thinking, tools, _, streaming, current, pending, error} ReplaceMessages{messages}: T.AgentState{model, thinking, tools, messages, streaming, current, pending, error}
@@ -711,7 +711,7 @@ def failureMessage(-G: Data, model: Ai.Model<Ai.JsonValue>, aborted: Bool, error
       Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{"", None{}}} <> Nil{}, Api.name(api), provider, id, None{}, None{}, None{}, None{}, emptyUsage(), Bool.pick(Ai.StopReason, aborted, Ai.Aborted{}, Ai.Error{}), None{}, Some{error}, None{}, None{}, timestamp}
 def fromState(-G: Data, -D: Data, -C: Data, -E: Data, agentState: T.AgentState<G, D, C, E>, aborted: Bool, error: String, timestamp: F64) -> T.AgentMessage<G, D, C>:
   match agentState:
-    case T.AgentState{model, _, _, _, _, _, _, _}: T.LlmMessage{Ai.Assistant{failureMessage(G, model, aborted, error, timestamp)}}
+    case T.AgentState{model, _, _, _, _, _, _, _}: T.LlmMessage{Ai.Assistant{failureMessage(G, Maybe.default(&2, Ai.Model<Ai.JsonValue>, model, defaultModel(Ai.JsonValue)), aborted, error, timestamp)}}
 def events(-G: Data, -D: Data, -C: Data, -Partial: Data, -Execution: Data, +message: T.AgentMessage<G, D, C>) -> List<&2, T.AgentEvent<G, D, C, Partial, Execution>>:
   T.MessageStart{message} <> T.MessageEnd{message} <> T.TurnEnd{message, Nil{}} <> T.AgentEnd{message <> Nil{}} <> Nil{}
 def deliver(-G: Data, -D: Data, -C: Data, -E: Data, -Partial: Data, -Execution: Data, -Failure: Data, +runtime: OwnedRuntime<G, D, C, E>, +listeners: Listeners<T.AgentEvent<G, D, C, Partial, Execution>, Failure>, messages: List<&2, T.AgentEvent<G, D, C, Partial, Execution>>, result: Result<&2, &2, DeliveryError<Failure>, Unit>) -> IO(Result<&2, &2, DeliveryError<Failure>, Unit>):
@@ -852,7 +852,7 @@ def context(-G: Data, -D: Data, -M: Data, -E: Data, agentState: T.AgentState<G, 
 def bind(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, agentState: T.AgentState<G, D, M, E>, base: T.AgentLoopConfig<G, D, M, E, Telemetry>, readers: BindingPollers<G, D, M, E>) -> T.AgentLoopConfig<G, D, M, E, Telemetry>:
   match agentState base readers:
     case T.AgentState{currentModel, thinking, _, _, _, _, _, _} T.AgentLoopConfig{options, _, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, getSteeringMessages, getFollowUpMessages, toolExecution, beforeToolCall, afterToolCall} BindingPollers{steering, followUps, _}:
-      T.AgentLoopConfig{Ai.withReasoning(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), E, options, thinkingReasoning(thinking)), currentModel, convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, Some{steering}, Some{followUps}, toolExecution, beforeToolCall, afterToolCall}
+      T.AgentLoopConfig{Ai.withReasoning(Ai.JsonValue, Abort.AbortSignal<Unit>, Telemetry, Fetch.Fetch(Unit), E, options, thinkingReasoning(thinking)), Maybe.default(&2, Ai.Model<Ai.JsonValue>, currentModel, defaultModel(Ai.JsonValue)), convertToLlm, transformContext, getApiKey, finishTurn, prepareRequest, prepareNextTurn, Some{steering}, Some{followUps}, toolExecution, beforeToolCall, afterToolCall}
 type Snapshot<-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data> is Data:
   Snapshot{context: T.AgentContext<G, D, M, E>, config: T.AgentLoopConfig<G, D, M, E, Telemetry>}
 def snapshotBinding(-G: Data, -D: Data, -M: Data, -E: Data, -Telemetry: Data, runtime: OwnedRuntime<G, D, M, E>, base: T.AgentLoopConfig<G, D, M, E, Telemetry>, readers: BindingPollers<G, D, M, E>) -> IO(Snapshot<G, D, M, E, Telemetry>):

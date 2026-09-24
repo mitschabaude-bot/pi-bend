@@ -245,7 +245,7 @@ type CreateOptions is Data:
 
 # The model and thinking level the runtime settled on, for the session record.
 type Selection is Data:
-  Selection{model: Models.Model(), thinking: Ai.ModelThinkingLevel}
+  Selection{model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel}
 
 # What the session declares on each prompt: the system prompt sections and
 # the executable tools (upstream _preparePromptAndToolLoadout's inputs), with
@@ -258,7 +258,7 @@ type Prepared is Data:
   Prepared{sections: Prompt.SystemPromptSections(), skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>}
 
 type AgentRuntime is Type:
-  AgentRuntime{transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), agent: Owner(), model: Models.Model(), thinking: Ai.ModelThinkingLevel, loadout: Loadout}
+  AgentRuntime{transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), agent: Owner(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout}
 
 def snippets(names: List<&2, Tools.ToolName>, +record: R.Record<String>) -> R.Record<String>:
   match names:
@@ -453,34 +453,36 @@ def levelOf(result: Models.ResolveCliModelResult) -> Maybe<&2, Ai.ModelThinkingL
 def noModels() -> String:
   "No models available.\n\nRun pi to log in with a provider, or set an API key environment variable such as OPENAI_API_KEY."
 
-def chosenFrom(models: Models.ModelRuntime, +settings: Settings.SettingsManager, error: Maybe<&2, String>, model: Maybe<&2, Models.Model()>) -> IO(Result<&2, &2, String, Models.Model()>):
+def chosenFrom(models: Models.ModelRuntime, +settings: Settings.SettingsManager, error: Maybe<&2, String>, model: Maybe<&2, Models.Model()>) -> IO(Result<&2, &2, String, Maybe<&2, Models.Model()>>):
   match error model:
-    case Some{message} _: IO.pure(Result<&2, &2, String, Models.Model()>, Fail{message})
-    case None{} Some{chosen}: IO.pure(Result<&2, &2, String, Models.Model()>, Done{chosen})
+    case Some{message} _: IO.pure(Result<&2, &2, String, Maybe<&2, Models.Model()>>, Fail{message})
+    case None{} Some{chosen}: IO.pure(Result<&2, &2, String, Maybe<&2, Models.Model()>>, Done{Some{chosen}})
     case None{} None{}:
-      do IO<Result<&2, &2, String, Models.Model()>>:
+      do IO<Result<&2, &2, String, Maybe<&2, Models.Model()>>>:
         initial : Maybe<&2, Models.Model()> <- Models.findInitialModel(models, Settings.getDefaultProvider(settings), Settings.getDefaultModel(settings))
-        return Maybe.default(&2, Result<&2, &2, String, Models.Model()>, Maybe.map(&2, Models.Model(), Result<&2, &2, String, Models.Model()>, found => Done{found}, initial), Fail{noModels()})
+        return Done{initial}
 
-def chosenModel(models: Models.ModelRuntime, settings: Settings.SettingsManager, resolved: Models.ResolveCliModelResult) -> IO(Result<&2, &2, String, Models.Model()>):
+def chosenModel(models: Models.ModelRuntime, settings: Settings.SettingsManager, resolved: Models.ResolveCliModelResult) -> IO(Result<&2, &2, String, Maybe<&2, Models.Model()>>):
   match resolved:
     case Models.ResolveCliModelResult{model, _, _, error}: chosenFrom(models, settings, error, model)
 
 # The registered APIs stream through their native providers.
-def supportedApi(api: Ai.ModelApi, +model: Models.Model()) -> Result<&2, &2, String, Models.Model()>:
+def supportedApi(api: Ai.ModelApi, +model: Models.Model()) -> Result<&2, &2, String, Maybe<&2, Models.Model()>>:
   match api:
-    case Ai.OpenAIResponsesApi{}: Done{model}
-    case Ai.OpenAICodexResponsesApi{}: Done{model}
-    case Ai.AnthropicMessagesApi{}: Done{model}
-    case Ai.GoogleGenerativeAiApi{}: Done{model}
-    case Ai.OpenAICompletionsApi{}: Done{model}
+    case Ai.OpenAIResponsesApi{}: Done{Some{model}}
+    case Ai.OpenAICodexResponsesApi{}: Done{Some{model}}
+    case Ai.AnthropicMessagesApi{}: Done{Some{model}}
+    case Ai.GoogleGenerativeAiApi{}: Done{Some{model}}
+    case Ai.OpenAICompletionsApi{}: Done{Some{model}}
     case _: Fail{"Model " ++ Models.reference(model) ++ " uses an API this port does not stream yet."}
 
-def supportedModel(+model: Models.Model()) -> Result<&2, &2, String, Models.Model()>:
+def supportedModel(+model: Models.Model()) -> Result<&2, &2, String, Maybe<&2, Models.Model()>>:
   supportedApi(modelApi(model), model)
 
-def supported(model: Models.Model()) -> Result<&2, &2, String, Models.Model()>:
-  supportedModel(model)
+def supported(selected: Maybe<&2, Models.Model()>) -> Result<&2, &2, String, Maybe<&2, Models.Model()>>:
+  match selected:
+    case None{}: Done{None{}}
+    case Some{model}: supportedModel(model)
 
 # A session's recorded model is restored when the command line names none
 # and its provider has credentials; otherwise the usual resolution applies.
@@ -497,9 +499,9 @@ def restoredModel(+models: Models.ModelRuntime, seed: SessionSeed) -> IO(Maybe<&
     case SessionSeed{_, _, None{}, _}: IO.pure(Maybe<&2, Models.Model()>, None{})
     case SessionSeed{_, _, Some{S.SessionModel{provider, id}}, _}: authorizedRestore(models, Models.getModel(models, provider, id))
 
-def chosenOrRestored(+models: Models.ModelRuntime, settings: Settings.SettingsManager, provider: Maybe<&2, String>, cliModel: Maybe<&2, String>, restored: Maybe<&2, Models.Model()>) -> IO(Result<&2, &2, String, Models.Model()>):
+def chosenOrRestored(+models: Models.ModelRuntime, settings: Settings.SettingsManager, provider: Maybe<&2, String>, cliModel: Maybe<&2, String>, restored: Maybe<&2, Models.Model()>) -> IO(Result<&2, &2, String, Maybe<&2, Models.Model()>>):
   match restored:
-    case Some{model}: IO.pure(Result<&2, &2, String, Models.Model()>, Done{model})
+    case Some{model}: IO.pure(Result<&2, &2, String, Maybe<&2, Models.Model()>>, Done{Some{model}})
     case None{}: chosenModel(models, settings, Models.resolveCliModel(models, provider, cliModel))
 
 def restoreIf(+models: Models.ModelRuntime, named: Bool, seed: SessionSeed) -> IO(Maybe<&2, Models.Model()>):
@@ -507,13 +509,13 @@ def restoreIf(+models: Models.ModelRuntime, named: Bool, seed: SessionSeed) -> I
     case True{}: IO.pure(Maybe<&2, Models.Model()>, None{})
     case False{}: restoredModel(models, seed)
 
-def selectModel(+models: Models.ModelRuntime, options: CreateOptions) -> IO(Result<&2, &2, String, Models.Model()>):
+def selectModel(+models: Models.ModelRuntime, options: CreateOptions) -> IO(Result<&2, &2, String, Maybe<&2, Models.Model()>>):
   match options:
     case CreateOptions{_, _, _, _, _, +provider, +cliModel, _, _, _, _, _, _, seed, settings, _}:
-      do IO<Result<&2, &2, String, Models.Model()>>:
+      do IO<Result<&2, &2, String, Maybe<&2, Models.Model()>>>:
         restored : Maybe<&2, Models.Model()> <- restoreIf(models, Maybe.is_some(&2, String, provider) || Maybe.is_some(&2, String, cliModel), seed)
-        chosen : Result<&2, &2, String, Models.Model()> <- chosenOrRestored(models, settings, provider, cliModel, restored)
-        return Result.bind(&2, &2, String, Models.Model(), Models.Model(), chosen, supported)
+        chosen : Result<&2, &2, String, Maybe<&2, Models.Model()>> <- chosenOrRestored(models, settings, provider, cliModel, restored)
+        return Result.bind(&2, &2, String, Maybe<&2, Models.Model()>, Maybe<&2, Models.Model()>, chosen, supported)
 
 def namedLevel(levels: List<&2, Ai.ModelThinkingLevel>, +text: String) -> Maybe<&2, Ai.ModelThinkingLevel>:
   match levels:
@@ -541,6 +543,10 @@ def thinkingLevel(requested: Maybe<&2, Ai.ModelThinkingLevel>, seed: SessionSeed
   +settingsDefault = Settings.getDefaultThinkingLevel(settings)
   +perModel = Settings.getModelThinkingLevel(Models.modelProvider(model), Models.modelId(model), settings)
   AiModels.clampThinkingLevel(Ai.JsonValue, model, Maybe.default(&2, Ai.ModelThinkingLevel, Maybe.or(&2, Ai.ModelThinkingLevel, requested, Maybe.or(&2, Ai.ModelThinkingLevel, sessionThinking(seed, settingsDefault), Maybe.or(&2, Ai.ModelThinkingLevel, perModel, settingsDefault))), Ai.Off{}))
+def thinkingForSelection(+requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, selected: Maybe<&2, Models.Model()>) -> Ai.ModelThinkingLevel:
+  match selected:
+    case None{}: Maybe.default(&2, Ai.ModelThinkingLevel, Maybe.or(&2, Ai.ModelThinkingLevel, requested, sessionThinking(seed, Settings.getDefaultThinkingLevel(settings))), Ai.Off{})
+    case Some{model}: thinkingLevel(requested, seed, model, settings)
 
 def seededMessages(seed: SessionSeed) -> Maybe<&2, List<&2, T.AgentMessage<Unit, Details(), Custom()>>>:
   match seed:
@@ -620,8 +626,8 @@ def seedSessionId(seed: SessionSeed) -> String:
 # upstream createAgentSession's Agent options: no prompt or tools yet (the
 # session declares its loadout with each prompt), the session id, the settings'
 # steering/follow-up modes, transport, thinking budgets and retry delay.
-def agentOptions(model: Models.Model(), thinking: Ai.ModelThinkingLevel, stream: Stream(), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), +seed: SessionSeed, +settings: Settings.SettingsManager) -> Agent.AgentOptions<Unit, Details(), Custom(), Error(), Unit>:
-  Agent.AgentOptions{Some{Agent.AgentInitialState{Some{""}, Some{model}, Some{thinking}, Some{Nil{}}, seededMessages(seed)}}, Some{converter}, None{}, Some{stream}, Some{keys}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{Settings.getSteeringMode(settings)}, Some{Settings.getFollowUpMode(settings)}, Some{seedSessionId(seed)}, thinkingBudgets(Settings.getThinkingBudgets(settings)), Some{Settings.getTransport(settings)}, Some{maxRetryDelay(Settings.getProviderRetrySettings(settings))}, None{}}
+def agentOptions(model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, stream: Stream(), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), +seed: SessionSeed, +settings: Settings.SettingsManager) -> Agent.AgentOptions<Unit, Details(), Custom(), Error(), Unit>:
+  Agent.AgentOptions{Some{Agent.AgentInitialState{Some{""}, model, Some{thinking}, Some{Nil{}}, seededMessages(seed)}}, Some{converter}, None{}, Some{stream}, Some{keys}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{Settings.getSteeringMode(settings)}, Some{Settings.getFollowUpMode(settings)}, Some{seedSessionId(seed)}, thinkingBudgets(Settings.getThinkingBudgets(settings)), Some{Settings.getTransport(settings)}, Some{maxRetryDelay(Settings.getProviderRetrySettings(settings))}, None{}}
 
 # The tools download fd and rg through the agent's own fetch.
 def environment(paths: Paths.Environment, cwd: String, agentDir: String, packageDir: String, fetch: Fetch.Fetch(Unit), queue: Queue.Queue) -> Tools.Environment:
@@ -646,7 +652,7 @@ def disposeServices(transport: Transport, storage: Storage.AuthStorageOwner, sto
     disposeTransport(transport)
 
 # Assembly with cleanup on every failure path.
-def constructed(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), model: Models.Model(), thinking: Ai.ModelThinkingLevel, loadout: Loadout, result: Result<&2, &2, StreamFn.MissingDefault, Owner()>) -> IO(Outcome(AgentRuntime)):
+def constructed(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout, result: Result<&2, &2, StreamFn.MissingDefault, Owner()>) -> IO(Outcome(AgentRuntime)):
   match result:
     case Done{agent}: IO.pure(Outcome(AgentRuntime), Done{AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, model, thinking, loadout}})
     case Fail{error}:
@@ -674,14 +680,14 @@ def loadoutFrom(prepared: Prepared, tools: List<&2, Tools.Tool()>) -> Loadout:
   match prepared:
     case Prepared{sections, skills, templates}: Loadout{sections, tools, skills, templates}
 
-def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Models.Model(), +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager) -> IO(Outcome(AgentRuntime)):
+def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Maybe<&2, Models.Model()>, +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager) -> IO(Outcome(AgentRuntime)):
   match created:
     case Tuple{queue, Tuple{owners, tools}}:
       do IO<Outcome(AgentRuntime)>:
         result : Result<&2, &2, StreamFn.MissingDefault, Owner()> <- Agent.new(~Unit, ~Details(), ~Custom(), ~Error(), ~Unit, agentOptions(model, thinking, stream, keys, converter, seed, settings), registry, validator, Tools.WriteDetails{})
         constructed(transport, storage, storageStore, credentials, credentialStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, loadoutFrom(prepared, tools), result)
 
-def withModelFields(+cwd: String, +agentDir: String, packageDir: String, apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Models.Model()>) -> IO(Outcome(AgentRuntime)):
+def withModelFields(+cwd: String, +agentDir: String, packageDir: String, apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Outcome(AgentRuntime)):
   match transport prompt selected:
     case Transport{+authorizer, runtime, +fetch} Done{prompt} Done{+model}:
       do IO<Outcome(AgentRuntime)>:
@@ -692,7 +698,7 @@ def withModelFields(+cwd: String, +agentDir: String, packageDir: String, apiKey:
         +validator : Loop.Validator(Error()) <- Loop.createPlain(~Error(), ~validationError)
         +keys : C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>> <- C.create(~KeySource, ~String, ~Result<&2, &2, Error(), Maybe<&2, String>>, ~resolveKey, KeySource{models, apiKey})
         +converter : Converter() <- createConverter(Settings.getBlockImages(settings))
-        assembled(Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, created, stream, registry, validator, keys, converter, prompt, model, thinkingLevel(requested, seed, model, settings), seed, settings)
+        assembled(Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, created, stream, registry, validator, keys, converter, prompt, model, thinkingForSelection(requested, seed, settings, model), seed, settings)
     case transport Fail{error} _:
       do IO<Outcome(AgentRuntime)>:
         disposeBase(transport, storage, storageStore, credentials, credentialStore, models)
@@ -702,13 +708,13 @@ def withModelFields(+cwd: String, +agentDir: String, packageDir: String, apiKey:
         disposeBase(transport, storage, storageStore, credentials, credentialStore, models)
         return Fail{error}
 
-def withModel(options: CreateOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, paths: Paths.Environment, prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Models.Model()>) -> IO(Outcome(AgentRuntime)):
+def withModel(options: CreateOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, paths: Paths.Environment, prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Outcome(AgentRuntime)):
   match options:
     case CreateOptions{cwd, agentDir, _, _, packageDir, _, _, apiKey, thinking, _, _, names, _, seed, settings, _}: withModelFields(cwd, agentDir, packageDir, apiKey, thinking, seed, settings, names, transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected)
 
-def applyKey(credentials: Runtime.RuntimeCredentials, apiKey: Maybe<&2, String>, selected: Result<&2, &2, String, Models.Model()>) -> IO(Unit):
+def applyKey(credentials: Runtime.RuntimeCredentials, apiKey: Maybe<&2, String>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Unit):
   match apiKey selected:
-    case Some{key} Done{model}: Runtime.setRuntimeApiKey(credentials, Models.modelProvider(model), key)
+    case Some{key} Done{Some{model}}: Runtime.setRuntimeApiKey(credentials, Models.modelProvider(model), key)
     case _ _: IO.pure(Unit, Unit{})
 
 def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, +paths: Paths.Environment, borrowed: Storage.AuthStorageOwner & Storage.AuthStorage) -> IO(Outcome(AgentRuntime)):
@@ -721,7 +727,7 @@ def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, 
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch, urlContext())
         anthropicOAuth : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch, urlContext())
         +models : Models.ModelRuntime <- Models.createWithAnthropic(credentialStore, oauth, Some{anthropicOAuth})
-        +selected : Result<&2, &2, String, Models.Model()> <- selectModel(models, options)
+        +selected : Result<&2, &2, String, Maybe<&2, Models.Model()>> <- selectModel(models, options)
         applyKey(credentials, apiKey, selected)
         prompt : Result<&2, &2, String, Prepared> <- preparedFor(paths, options, packageDir)
         withModel(options, Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected)
@@ -774,7 +780,7 @@ def selectStartup(runtime: AgentRuntime,+chosen: Models.Model(),+level: Ai.Model
       do IO<AgentRuntime>:
         Agent.setModel(Unit,Details(),Custom(),Error(),Unit,agent,chosen)
         Agent.setThinkingLevel(Unit,Details(),Custom(),Error(),Unit,agent,level)
-        return AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, chosen, level, loadout}
+        return AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, Some{chosen}, level, loadout}
 
 def dispose(runtime: AgentRuntime) -> IO(Unit):
   match runtime:

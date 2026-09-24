@@ -418,12 +418,14 @@ def levelValues(values: List<&2,Ai.ModelThinkingLevel>) -> List<&2,V.Value>:
 def levelsOf(model: Ai.Model<Ai.JsonValue>) -> List<&2,Ai.ModelThinkingLevel>:
   match model:
     case Ai.Model{_,_,_,_,_,reasoning,mapping,_,_,_,_,_,_,_,_,_}: Levels.available(reasoning,mapping)
+def selectedLevels(selected: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> List<&2,Ai.ModelThinkingLevel>:
+  Maybe.default(&2,List<&2,Ai.ModelThinkingLevel>,Maybe.map(&2,Ai.Model<Ai.JsonValue>,List<&2,Ai.ModelThinkingLevel>,levelsOf,selected),Nil{})
 def availableLevels(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
     case Handle{session,sink,_,_,_,_}:
       do IO<Unit>:
         current : Session.AgentState() <- Session.state(session)
-        output(sink,data(id,"get_available_thinking_levels",MessageJson.object(MessageJson.field("levels",V.ArrayValue{levelValues(levelsOf(Session.stateModel(current)))},Nil{}))))
+        output(sink,data(id,"get_available_thinking_levels",MessageJson.object(MessageJson.field("levels",V.ArrayValue{levelValues(selectedLevels(Session.stateModel(current)))},Nil{}))))
 def following(values: List<&2,Ai.ModelThinkingLevel>,+current: Ai.ModelThinkingLevel) -> Maybe<&2,Ai.ModelThinkingLevel>:
   match values:
     case Nil{}: None{}
@@ -440,10 +442,11 @@ def cycleOutcome(sink: Sink(),id: Maybe<&2,String>,level: Ai.ModelThinkingLevel,
   match result:
     case Fail{reason}: output(sink,failure(id,"cycle_thinking_level",reason))
     case Done{_}: output(sink,data(id,"cycle_thinking_level",MessageJson.object(MessageJson.field("level",V.Text{Levels.name(level)},Nil{}))))
-def cycleModel(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,state: Session.AgentState(),model: Ai.Model<Ai.JsonValue>) -> IO(Unit):
-  match model:
-    case Ai.Model{_,_,_,_,_,False{},_,_,_,_,_,_,_,_,_,_}: output(sink,data(id,"cycle_thinking_level",V.Null{}))
-    case model:
+def cycleModel(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,state: Session.AgentState(),selected: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> IO(Unit):
+  match selected:
+    case None{}: output(sink,data(id,"cycle_thinking_level",V.Null{}))
+    case Some{Ai.Model{_,_,_,_,_,False{},_,_,_,_,_,_,_,_,_,_}}: output(sink,data(id,"cycle_thinking_level",V.Null{}))
+    case Some{model}:
       do IO<Unit>:
         +level : Ai.ModelThinkingLevel <- IO.pure(Ai.ModelThinkingLevel,nextLevel(levelsOf(model),Session.stateThinking(state)))
         result : Result<&2,&2,String,Unit> <- Session.setThinkingLevel(session,level)
@@ -463,8 +466,10 @@ def queueModeName(value: AgentTypes.QueueMode) -> String:
 def pendingCount(value: Session.Shared) -> Nat:
   match value:
     case Session.Shared{_,steering,followUp,_,_,_,_,_, _}: List.length(&2,String,steering) + List.length(&2,String,followUp)
+def modelValue(selected: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> V.Value:
+  Maybe.default(&2,V.Value,Maybe.map(&2,Ai.Model<Ai.JsonValue>,V.Value,ModelJson.model,selected),V.Null{})
 def stateValue(+stored: Session.Session(),+current: Session.AgentState(),shared: Session.Shared,streaming: Bool,compacting: Bool,steering: AgentTypes.QueueMode,followUp: AgentTypes.QueueMode,auto: Bool) -> V.Value:
-  MessageJson.object(MessageJson.field("model",ModelJson.model(Session.stateModel(current)),MessageJson.field("thinkingLevel",V.Text{Levels.name(Session.stateThinking(current))},MessageJson.field("isStreaming",V.Boolean{streaming},MessageJson.field("isCompacting",V.Boolean{compacting},MessageJson.field("steeringMode",V.Text{queueModeName(steering)},MessageJson.field("followUpMode",V.Text{queueModeName(followUp)},MessageJson.optionalText("sessionFile",Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),MessageJson.field("sessionId",V.Text{S.getSessionId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored))},MessageJson.optionalText("sessionName",S.getSessionName(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),MessageJson.field("autoCompactionEnabled",V.Boolean{auto},MessageJson.field("messageCount",MessageJson.natural(List.length(&2,Session.Message(),Session.stateMessages(current))),MessageJson.field("pendingMessageCount",MessageJson.natural(pendingCount(shared)),Nil{})))))))))))))
+  MessageJson.object(MessageJson.field("model",modelValue(Session.stateModel(current)),MessageJson.field("thinkingLevel",V.Text{Levels.name(Session.stateThinking(current))},MessageJson.field("isStreaming",V.Boolean{streaming},MessageJson.field("isCompacting",V.Boolean{compacting},MessageJson.field("steeringMode",V.Text{queueModeName(steering)},MessageJson.field("followUpMode",V.Text{queueModeName(followUp)},MessageJson.optionalText("sessionFile",Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),MessageJson.field("sessionId",V.Text{S.getSessionId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored))},MessageJson.optionalText("sessionName",S.getSessionName(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),MessageJson.field("autoCompactionEnabled",V.Boolean{auto},MessageJson.field("messageCount",MessageJson.natural(List.length(&2,Session.Message(),Session.stateMessages(current))),MessageJson.field("pendingMessageCount",MessageJson.natural(pendingCount(shared)),Nil{})))))))))))))
 def sharedSnapshot(session: Session.AgentSession) -> IO(Session.Shared):
   match session:
     case Session.AgentSession{_,shared,_,_,_,_}: Ref.read(Session.Shared,shared)
@@ -537,7 +542,7 @@ def modelPosition(items: List<&2,Models.Model()>,+current: Models.Model(),+index
   match items:
     case Nil{}: None{}
     case model <> rest: Bool.pick(Maybe<&2,Nat>,sameModel(model,current),Some{index},modelPosition(rest,current,index + 1n))
-def nextCatalogModel(+models: List<&2,Models.Model()>,current: Models.Model()) -> Maybe<&2,Models.Model()>:
+def nextCatalogFrom(+models: List<&2,Models.Model()>,current: Models.Model()) -> Maybe<&2,Models.Model()>:
   +count = List.length(&2,Models.Model(),models)
   Bool.pick(Unit -> Maybe<&2,Models.Model()>,Nat.is_le(count,1n),_ => None{},_ =>
     +index = Maybe.default(&2,Nat,modelPosition(models,current,0n),0n)
@@ -546,11 +551,19 @@ def scopedPosition(items: List<&2,Models.ScopedModel>,+current: Models.Model(),+
   match items:
     case Nil{}: None{}
     case Models.ScopedModel{model,_} <> rest: Bool.pick(Maybe<&2,Nat>,sameModel(model,current),Some{index},scopedPosition(rest,current,index + 1n))
-def nextScoped(+items: List<&2,Models.ScopedModel>,current: Models.Model()) -> Maybe<&2,Models.ScopedModel>:
+def nextCatalogModel(+models: List<&2,Models.Model()>,current: Maybe<&2,Models.Model()>) -> Maybe<&2,Models.Model()>:
+  match current:
+    case None{}: List.get(&2,Models.Model(),models,0n)
+    case Some{model}: nextCatalogFrom(models,model)
+def nextScopedFrom(+items: List<&2,Models.ScopedModel>,current: Models.Model()) -> Maybe<&2,Models.ScopedModel>:
   +count = List.length(&2,Models.ScopedModel,items)
   Bool.pick(Unit -> Maybe<&2,Models.ScopedModel>,Nat.is_le(count,1n),_ => None{},_ =>
     +index = Maybe.default(&2,Nat,scopedPosition(items,current,0n),0n)
     List.get(&2,Models.ScopedModel,items,(index + 1n) % count))(Unit{})
+def nextScoped(+items: List<&2,Models.ScopedModel>,current: Maybe<&2,Models.Model()>) -> Maybe<&2,Models.ScopedModel>:
+  match current:
+    case None{}: List.get(&2,Models.ScopedModel,items,0n)
+    case Some{model}: nextScopedFrom(items,model)
 def cycleResult(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,model: Models.Model(),scoped: Bool,result: Result<&2,&2,String,Unit>) -> IO(Unit):
   match result:
     case Fail{message}: output(sink,failure(id,"cycle_model",message))

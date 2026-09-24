@@ -110,9 +110,10 @@ def withContext(path: Maybe<&2,String>,id: String,totals: Totals,value: Result<&
   match value:
     case Fail{reason}: Fail{reason}
     case Done{usage}: Done{Stats{path,id,totals,usage}}
-def stats(+stored: Persistence.Session<Unit,Tools.ToolDetails,V.Value>,model: Ai.Model<Ai.JsonValue>) -> Result<&2,&2,S.Error,Stats>:
+def stats(+stored: Persistence.Session<Unit,Tools.ToolDetails,V.Value>,model: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> Result<&2,&2,S.Error,Stats>:
   +manager = Persistence.stateOf(Unit,Tools.ToolDetails,V.Value,stored)
-  withContext(Persistence.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),S.getSessionId(Unit,Tools.ToolDetails,V.Value,manager),aggregate(S.getEntries(Unit,Tools.ToolDetails,V.Value,manager),empty()),context(manager,Ai.modelContextWindow(model)))
+  +window = Maybe.default(&2,F64,Maybe.map(&2,Ai.Model<Ai.JsonValue>,F64,Ai.modelContextWindow,model),zero())
+  withContext(Persistence.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),S.getSessionId(Unit,Tools.ToolDetails,V.Value,manager),aggregate(S.getEntries(Unit,Tools.ToolDetails,V.Value,manager),empty()),context(manager,window))
 
 def contextValue(value: ContextUsage) -> V.Value:
   match value:

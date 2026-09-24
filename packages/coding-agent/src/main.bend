@@ -516,7 +516,8 @@ def recordSelection(+session: Session(), hasExisting: Bool, hasThinking: Bool, s
   match hasExisting hasThinking selection:
     case True{} False{} Runtime.Selection{_, thinking}: recordedThinking(Done{session}, thinking)
     case True{} True{} Runtime.Selection{_, _}: IO.pure(Selected(), Done{session})
-    case False{} _ Runtime.Selection{model, thinking}:
+    case False{} _ Runtime.Selection{None{}, thinking}: recordedThinking(Done{session}, thinking)
+    case False{} _ Runtime.Selection{Some{model}, thinking}:
       do IO<Selected()>:
         first : Sessions.Outcome(Appended()) <- AgentSession.recordModel(session, model)
         recordedThinking(appendedSession(first), thinking)
@@ -644,6 +645,10 @@ def scopeEntry(items: List<&2,Models.ScopedModel>,+model: Models.Model()) -> May
       Bool.pick(Maybe<&2,Models.ScopedModel>,sameScopeModel(candidate,model),Some{Models.ScopedModel{candidate,level}},scopeEntry(rest,model))
 def preferredScope(+items: List<&2,Models.ScopedModel>,model: Models.Model()) -> Maybe<&2,Models.ScopedModel>:
   Maybe.or(&2,Models.ScopedModel,scopeEntry(items,model),List.get(&2,Models.ScopedModel,items,0n))
+def preferredSelection(+items: List<&2,Models.ScopedModel>,selected: Maybe<&2,Models.Model()>) -> Maybe<&2,Models.ScopedModel>:
+  match selected:
+    case None{}: List.get(&2,Models.ScopedModel,items,0n)
+    case Some{model}: preferredScope(items,model)
 def startupScopeChosen(runtime: Runtime.AgentRuntime,seed: Runtime.SessionSeed,settings: Settings.SettingsManager,requested: Maybe<&2,Ai.ModelThinkingLevel>,entry: Maybe<&2,Models.ScopedModel>) -> IO(Runtime.AgentRuntime):
   match entry:
     case None{}: IO.pure(Runtime.AgentRuntime,runtime)
@@ -651,7 +656,7 @@ def startupScopeChosen(runtime: Runtime.AgentRuntime,seed: Runtime.SessionSeed,s
       Runtime.selectStartup(runtime,model,Runtime.thinkingLevel(Maybe.or(&2,Ai.ModelThinkingLevel,requested,level),seed,model,settings))
 def startupSelected(seed: Runtime.SessionSeed,settings: Settings.SettingsManager,requested: Maybe<&2,Ai.ModelThinkingLevel>,scope: List<&2,Models.ScopedModel>,pair: Runtime.AgentRuntime & Runtime.Selection) -> IO(Runtime.AgentRuntime):
   match pair:
-    case (runtime,Runtime.Selection{model,_}): startupScopeChosen(runtime,seed,settings,requested,preferredScope(scope,model))
+    case (runtime,Runtime.Selection{model,_}): startupScopeChosen(runtime,seed,settings,requested,preferredSelection(scope,model))
 def startupDecision(runtime: Runtime.AgentRuntime,scope: List<&2,Models.ScopedModel>,seed: Runtime.SessionSeed,settings: Settings.SettingsManager,thinking: Maybe<&2,Ai.ModelThinkingLevel>,named: Bool,hasExisting: Bool) -> IO(Runtime.AgentRuntime):
   match named hasExisting:
     case True{} _: IO.pure(Runtime.AgentRuntime,runtime)
@@ -836,13 +841,23 @@ def activeSession(live: Maybe<&2, AgentSession.AgentSession>) -> IO(AgentSession
     case Some{session}: IO.pure(AgentSession.AgentSession, session)
     case None{}: IO.die(AgentSession.AgentSession, 1, "No active session")
 
+def printSelected(options: Print.PrintModeOptions, host: Host(), live: AgentSession.AgentSession, selected: Maybe<&2, Models.Model()>) -> IO(Unit):
+  match selected:
+    case None{}:
+      do IO<Unit>:
+        SessionRuntime.dispose(Services, host)
+        fail(Runtime.noModels())
+    case Some{_}:
+      do IO<Unit>:
+        code : U32 <- Print.runPrintMode(live, options)
+        SessionRuntime.dispose(Services, host)
+        exitWith(code)
 def printHosted(options: Print.PrintModeOptions, +host: Host()) -> IO(Unit):
   do IO<Unit>:
     current : Maybe<&2, AgentSession.AgentSession> <- SessionRuntime.session(Services, host)
-    live : AgentSession.AgentSession <- activeSession(current)
-    code : U32 <- Print.runPrintMode(live, options)
-    SessionRuntime.dispose(Services, host)
-    exitWith(code)
+    +live : AgentSession.AgentSession <- activeSession(current)
+    state : AgentSession.AgentState() <- AgentSession.state(live)
+    printSelected(options, host, live, AgentSession.stateModel(state))
 
 type Catalog is Data:
   Catalog{available: List<&2,Models.Model()>, scope: List<&2,Models.ScopedModel>}
@@ -922,13 +937,23 @@ def rpcWithCatalog(live: AgentSession.AgentSession, assetsRoot: String, host: Ho
         SessionRuntime.dispose(Services, host)
         rpcFinished(result)
 
+def rpcSelected(live: AgentSession.AgentSession, assetsRoot: String, +host: Host(), selected: Maybe<&2,Models.Model()>) -> IO(Unit):
+  match selected:
+    case None{}:
+      do IO<Unit>:
+        SessionRuntime.dispose(Services, host)
+        fail(Runtime.noModels())
+    case Some{_}:
+      do IO<Unit>:
+        catalog : Catalog <- SessionRuntime.withServices(Services, Catalog, host, catalogOf, Catalog{Nil{}, Nil{}})
+        rpcWithCatalog(live, assetsRoot, host, catalog)
+
 def rpcHosted(assetsRoot: String, +host: Host()) -> IO(Unit):
   do IO<Unit>:
     current : Maybe<&2, AgentSession.AgentSession> <- SessionRuntime.session(Services, host)
-    live : AgentSession.AgentSession <- activeSession(current)
-    catalog : Catalog <- SessionRuntime.withServices(Services, Catalog, host, catalogOf, Catalog{Nil{}, Nil{}})
-    rpcWithCatalog(live, assetsRoot, host, catalog)
-
+    +live : AgentSession.AgentSession <- activeSession(current)
+    state : AgentSession.AgentState() <- AgentSession.state(live)
+    rpcSelected(live, assetsRoot, host, AgentSession.stateModel(state))
 def runHosted(mode: AppMode, initial: InitialMessage, themeOverride: Maybe<&2,String>, cwd: String, agentDir: String, packageDir: String, started: Result<&2, &2, String, Host()>) -> IO(Unit):
   match mode initial started:
     case _ _ Fail{message}: fail(message)

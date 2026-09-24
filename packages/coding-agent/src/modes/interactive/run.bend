@@ -117,8 +117,8 @@ def seedFooter(messages: List<&2,Session.Message()>,state: Footer.State) -> Foot
     case Agent.LlmMessage{Ai.Assistant{message}} <> rest: seedFooter(rest,withAssistant(state,message))
     case _ <> rest: seedFooter(rest,state)
 def initialFooter(+agentState: Session.AgentState(),messages: List<&2,Session.Message()>,cwd: String,home: Maybe<&2,String>) -> Footer.State:
-  +chosen = model(Session.stateModel(agentState))
-  seedFooter(messages,Footer.State{cwd,home,None{},None{},Some{chosen},thinking(Session.stateThinking(agentState)),Footer.emptyUsage(),None{},None{},None{},1n,False{},False{},False{},Nil{}})
+  +chosen = Maybe.map(&2,Ai.Model<Ai.JsonValue>,Footer.Model,model,Session.stateModel(agentState))
+  seedFooter(messages,Footer.State{cwd,home,None{},None{},chosen,thinking(Session.stateThinking(agentState)),Footer.emptyUsage(),None{},None{},None{},1n,False{},False{},False{},Nil{}})
 def withStatus(state: Footer.State,statuses: List<&2,Footer.Status>) -> Footer.State:
   match state:
     case Footer.State{cwd,home,branch,name,chosen,thinkingLevel,totals,latest,context,window,providers,subscription,auto,experimental,_}:
@@ -130,7 +130,7 @@ def withThinking(state: Footer.State,level: Ai.ModelThinkingLevel) -> Footer.Sta
 def withChosen(state: Footer.State,+agentState: Session.AgentState()) -> Footer.State:
   match state:
     case Footer.State{cwd,home,branch,name,_,_,totals,latest,context,window,providers,subscription,auto,experimental,statuses}:
-      Footer.State{cwd,home,branch,name,Some{model(Session.stateModel(agentState))},thinking(Session.stateThinking(agentState)),totals,latest,context,window,providers,subscription,auto,experimental,statuses}
+      Footer.State{cwd,home,branch,name,Maybe.map(&2,Ai.Model<Ai.JsonValue>,Footer.Model,model,Session.stateModel(agentState)),thinking(Session.stateThinking(agentState)),totals,latest,context,window,providers,subscription,auto,experimental,statuses}
 def withName(state: Footer.State,name: Maybe<&2,String>) -> Footer.State:
   match state:
     case Footer.State{cwd,home,branch,_,chosen,thinkingLevel,totals,latest,context,window,providers,subscription,auto,experimental,statuses}:

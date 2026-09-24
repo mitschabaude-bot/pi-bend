@@ -71,11 +71,11 @@ def completeModel(model: Ai.Model<Ai.JsonValue>, expectedApi: String) -> Bool:
 def emptyPending(values: Set.StringSet) -> Bool: Nat.is_eq(List.length(&2, String, Set.toList(values)), 0n)
 def defaultState(value: Snapshot()) -> Bool:
   match value:
-    case T.AgentState{Ai.Model{"unknown", _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, Ai.Off{}, Nil{}, Nil{}, False{}, None{}, pending, None{}}: emptyPending(pending)
+    case T.AgentState{None{}, Ai.Off{}, Nil{}, Nil{}, False{}, None{}, pending, None{}}: emptyPending(pending)
     case _: False{}
 def customState(value: Snapshot()) -> Bool:
   match value:
-    case T.AgentState{model, Ai.Thinking{Ai.Low{}}, _, T.LlmMessage{Ai.System{Ai.SystemMessage{Ai.SystemText{"You are a helpful assistant."}, _, _, _, stamp}}} <> Nil{}, _, _, _, _}: completeModel(model, "openai-responses") && equals(stamp, 0)
+    case T.AgentState{Some{model}, Ai.Thinking{Ai.Low{}}, _, T.LlmMessage{Ai.System{Ai.SystemMessage{Ai.SystemText{"You are a helpful assistant."}, _, _, _, stamp}}} <> Nil{}, _, _, _, _}: completeModel(model, "openai-responses") && equals(stamp, 0)
     case _: False{}
 def declaredState(value: Snapshot()) -> Bool:
   match value:
@@ -156,7 +156,8 @@ def executor(fixture: Fixture) -> Executor():
     case Fixture{_, _, _, execute, _}: execute
 def changedModel(value: Snapshot()) -> Bool:
   match value:
-    case T.AgentState{model, _, _, _, _, _, _, _}: completeModel(model, "google-generative-ai")
+    case T.AgentState{Some{model}, _, _, _, _, _, _, _}: completeModel(model, "google-generative-ai")
+    case _: False{}
 def toolList(execute: Executor()) -> List<&2, Tool()>:
   T.AgentTool{"test", "test tool", Schema.ObjectValue{Record.Record{Nil{}}}, None{}, "Test", None{}, execute, None{}, None{}} <> Nil{}
 def exactTools(values: List<&2, Tool()>, expected: Executor()) -> Bool:

@@ -40,10 +40,12 @@ def declaredList(tools: List<&2, Ai.Tool<V.Value>>) -> List<&2, String>:
     case Ai.Tool{name, _, _, _} <> rest: name <> declaredList(rest)
 def declaredNames(tools: List<&2, Ai.Tool<V.Value>>) -> String:
   String.join(declaredList(tools), ",")
+def selectedId(model: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> String:
+  Maybe.default(&2, String, Maybe.map(&2, Ai.Model<Ai.JsonValue>, String, Ai.modelId, model), "unknown")
 def keyFields(prompt: String, state: Value()) -> String:
   match state:
     case T.AgentState{model, level, tools, +messages, streaming, message, pending, error}:
-      Ai.modelId(model) ++ ";" ++ thinking(level) ++ ";" ++ String.join(toolNames(tools), ",") ++ ";" ++ prompt ++ ";" ++ H.names(messages) ++ ";" ++ Bool.pick(String, streaming, "1", "0") ++ ";" ++ partial(message) ++ ";" ++ String.join(Set.toList(pending), ",") ++ ";" ++ Maybe.default(&2, String, error, "none") ++ ";" ++ declaredNames(Transcript.getCurrentTools(V.Value, V.Value, Unit, String, H.converted(messages))) ++ ";" ++ H.llmNames(State.defaultConvertToLlm(Unit, String, String, String, messages))
+      selectedId(model) ++ ";" ++ thinking(level) ++ ";" ++ String.join(toolNames(tools), ",") ++ ";" ++ prompt ++ ";" ++ H.names(messages) ++ ";" ++ Bool.pick(String, streaming, "1", "0") ++ ";" ++ partial(message) ++ ";" ++ String.join(Set.toList(pending), ",") ++ ";" ++ Maybe.default(&2, String, error, "none") ++ ";" ++ declaredNames(Transcript.getCurrentTools(V.Value, V.Value, Unit, String, H.converted(messages))) ++ ";" ++ H.llmNames(State.defaultConvertToLlm(Unit, String, String, String, messages))
 def key(+state: Value()) -> String:
   keyFields(State.systemPromptState(Unit, String, String, String, state), state)
 
