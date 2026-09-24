@@ -399,6 +399,10 @@ def modelsScenario(+dir: String, agentDir: String) -> IO(Unit):
     reportScope(session)
     thinking : Result<&2, &2, String, Unit> <- Session.setThinkingLevel(session, Ai.Thinking{Ai.Medium{}}, Session.ModelMutationOptions{True{}})
     reportOutcome("set_thinking_persisted", thinking)
+    hidden : Result<&2, &2, String, Unit> <- Session.changeSettings(session, current => Settings.setHideThinkingBlock(True{}, current))
+    reportOutcome("hide_thinking", hidden)
+    settings : Settings.SettingsManager <- Session.getSettings(session)
+    IO.print("{\"type\":\"hidden\",\"value\":" ++ boolJson(Settings.getHideThinkingBlock(settings)) ++ "}")
     reportEntries(session)
     teardown(value)
 

@@ -2484,8 +2484,16 @@ def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, St
         emit(shared, SessionInfoChanged{Some{name}})
         return result
 
-# Interactive key handling reads the effective setting without exposing the
-# mutable settings manager to the runner.
+# upstream session.settingsManager: the modes read the effective settings and
+# change them through the session, which persists each change.
+def getSettings(session: AgentSession) -> IO(Settings.SettingsManager):
+  match session:
+    case AgentSession{_, _, _, settings, _, _, _, _}: R.read(Settings.SettingsManager, settings)
+
+def changeSettings(session: AgentSession, change: Settings.SettingsManager -> Settings.Outcome(Settings.SettingsManager)) -> IO(Result<&2, &2, String, Unit>):
+  match session:
+    case AgentSession{_, _, _, settings, _, _, _, _}: updateSettings(settings, change)
+
 def doubleEscapeAction(session: AgentSession) -> IO(Settings.DoubleEscapeAction):
   match session:
     case AgentSession{_,_,_,settings,_,_,_,_}:

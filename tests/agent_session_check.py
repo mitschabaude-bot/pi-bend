@@ -267,7 +267,7 @@ def main():
     checks += 4
     # setModel requires provider auth; thinking levels follow the model; cycleThinkingLevel/cycleModel wrap in either direction over available or available scoped models; persist writes the defaults and extends a non-empty scope (agent-session model/thinking methods)
     events = run(runner, args.threads, 'models', work)
-    view = [e for e in events if e['type'] in ('set_unavailable', 'levels', 'cycle_thinking', 'cycle_model', 'thinking_level_changed', 'set_persisted', 'scope', 'set_thinking_persisted')]
+    view = [e for e in events if e['type'] in ('set_unavailable', 'levels', 'cycle_thinking', 'cycle_model', 'thinking_level_changed', 'set_persisted', 'scope', 'set_thinking_persisted', 'hide_thinking', 'hidden')]
     expected = [
         {'type': 'set_unavailable', 'ok': False, 'error': 'No API key for other/other-model'},
         {'type': 'levels', 'levels': ['off'], 'supportsThinking': False},
@@ -288,12 +288,14 @@ def main():
         {'type': 'set_persisted', 'ok': True},
         {'type': 'scope', 'models': ['faux/faux-reasoning', 'faux/faux-model']},
         {'type': 'set_thinking_persisted', 'ok': True},
+        {'type': 'hide_thinking', 'ok': True},
+        {'type': 'hidden', 'value': True},
     ]
     assert view == expected, json.dumps(view, indent=1)
     kinds = [e for e in events if e['type'] == 'entries'][0]['kinds']
     assert kinds == ['model_change:faux/faux-reasoning', 'thinking_level_change:minimal', 'thinking_level_change:low', 'model_change:faux/faux-model', 'thinking_level_change:off', 'model_change:faux/faux-reasoning', 'thinking_level_change:high', 'model_change:faux/faux-model', 'thinking_level_change:off', 'model_change:faux/faux-model'], kinds
     saved = json.loads((work / 'models-agent' / 'settings.json').read_text())
-    assert (saved.get('defaultProvider'), saved.get('defaultModel'), saved.get('defaultThinkingLevel'), 'enabledModels' in saved) == ('faux', 'faux-model', 'medium', False), saved
+    assert (saved.get('defaultProvider'), saved.get('defaultModel'), saved.get('defaultThinkingLevel'), saved.get('hideThinkingBlock'), 'enabledModels' in saved) == ('faux', 'faux-model', 'medium', True, False), saved
     checks += 3
     # while the first request is held open, prompt() without a behavior is refused; steer/followUp queue and are delivered after the turn and after the run (agent-session-concurrent; agent-session-prompt; agent-session-queue)
     events = run(runner, args.threads, 'busy', work)
