@@ -662,7 +662,7 @@ def chooseAfterLogin(provider: String,session: Session.AgentSession,available: L
     case Some{+chosen}:
       do IO<String>:
         id : String = Models.modelId(chosen)
-        result : Result<&2,&2,String,Unit> <- Session.setModel(session,chosen)
+        result : Result<&2,&2,String,Unit> <- Session.setModel(session,chosen,Session.ModelMutationOptions{True{}})
         return selectedNotice(provider,id,result)
 def loginStatus(+provider: String,session: Ref.Ref<Session.AgentSession>,+available: List<&2,Models.Model()>) -> IO(String):
   do IO<String>:

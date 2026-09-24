@@ -622,7 +622,7 @@ def rpcInput(pair: Rpc.Owner & Rpc.Handle) -> IO(Result<&2,&2,String,Unit>):
         result : Result<&2,&2,String,Unit> <- rpcStdin(handle)
         Rpc.stop(owner)
         return result
-def rpcCatalog(runtime: Runtime.AgentRuntime) -> Runtime.AgentRuntime & Models.ModelRuntime:
+def modelsOf(runtime: Runtime.AgentRuntime) -> Runtime.AgentRuntime & Models.ModelRuntime:
   match runtime:
     case Runtime.AgentRuntime{transport,storage,storageStore,credentials,credentialStore,+models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout}:
       (Runtime.AgentRuntime{transport,storage,storageStore,credentials,credentialStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout},models)
@@ -773,16 +773,20 @@ def factoryFailed(runtime: Runtime.AgentRuntime, message: String) -> IO(Result<&
     Runtime.dispose(runtime)
     return Fail{message}
 
-def sessionWithLoadout(cwd: String, +settings: Settings.SettingsManager, scope: List<&2, Models.ScopedModel>, session: Session(), agent: Runtime.Owner(), pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Result<&1, &1, String, Created()>):
+def sessionWithLoadout(cwd: String, +settings: Settings.SettingsManager, +scope: List<&2, Models.ScopedModel>, session: Session(), agent: Runtime.Owner(), models: Models.ModelRuntime, pair: Runtime.AgentRuntime & Runtime.Loadout) -> IO(Result<&1, &1, String, Created()>):
   match pair:
     case (runtime, loadout):
       do IO<Result<&1, &1, String, Created()>>:
-        live : AgentSession.AgentSession <- AgentSession.create(agent, session, settings, cwd, loadout)
+        live : AgentSession.AgentSession <- AgentSession.create(agent, session, settings, cwd, loadout, models, scope)
         return Done{SessionRuntime.Created{Services{runtime, scope}, live}}
+
+def sessionWithModels(cwd: String, settings: Settings.SettingsManager, scope: List<&2, Models.ScopedModel>, session: Session(), agent: Runtime.Owner(), pair: Runtime.AgentRuntime & Models.ModelRuntime) -> IO(Result<&1, &1, String, Created()>):
+  match pair:
+    case (runtime, models): sessionWithLoadout(cwd, settings, scope, session, agent, models, Runtime.loadoutOf(runtime))
 
 def sessionWithAgent(cwd: String, settings: Settings.SettingsManager, scope: List<&2, Models.ScopedModel>, session: Session(), pair: Runtime.AgentRuntime & Runtime.Owner()) -> IO(Result<&1, &1, String, Created()>):
   match pair:
-    case (runtime, agent): sessionWithLoadout(cwd, settings, scope, session, agent, Runtime.loadoutOf(runtime))
+    case (runtime, agent): sessionWithModels(cwd, settings, scope, session, agent, modelsOf(runtime))
 
 def createdSession(cwd: String, settings: Settings.SettingsManager, scope: List<&2, Models.ScopedModel>, recorded: Selected(), runtime: Runtime.AgentRuntime) -> IO(Result<&1, &1, String, Created()>):
   match recorded:
@@ -817,7 +821,7 @@ def catalogScoped(cwd: String, session: Session(), hasExisting: Bool, hasThinkin
 def runtimeCreated(cwd: String, session: Session(), hasExisting: Bool, hasThinking: Bool, settings: Settings.SettingsManager, seed: Runtime.SessionSeed, flags: ScopeFlags, created: Runtime.Outcome(Runtime.AgentRuntime)) -> IO(Result<&1, &1, String, Created()>):
   match created:
     case Fail{error}: IO.pure(Result<&1, &1, String, Created()>, Fail{error})
-    case Done{runtime}: catalogScoped(cwd, session, hasExisting, hasThinking, settings, seed, flags, rpcCatalog(runtime))
+    case Done{runtime}: catalogScoped(cwd, session, hasExisting, hasThinking, settings, seed, flags, modelsOf(runtime))
 
 def seededRuntime(env: FactoryEnv, +cwd: String, +session: Session(), seed: Result<&2, &2, Stop, Runtime.SessionSeed>) -> IO(Result<&1, &1, String, Created()>):
   match env seed:
@@ -869,7 +873,7 @@ def catalogPair(+scope: List<&2,Models.ScopedModel>, pair: Runtime.AgentRuntime 
         return (Services{runtime, scope}, Catalog{available, scope})
 def catalogOf(services: Services) -> IO(Services & Catalog):
   match services:
-    case Services{runtime, scope}: catalogPair(scope, rpcCatalog(runtime))
+    case Services{runtime, scope}: catalogPair(scope, modelsOf(runtime))
 def catalogModels(catalog: Catalog) -> List<&2,Models.Model()>:
   match catalog: case Catalog{available,_}: available
 
@@ -956,17 +960,6 @@ def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, 
     SessionRuntime.dispose(Services, host)
     interactiveFinished(result)
 
-def rpcWithCatalog(live: AgentSession.AgentSession, assetsRoot: String, host: Host(), catalog: Catalog) -> IO(Unit):
-  match catalog:
-    case Catalog{available, scope}:
-      do IO<Unit>:
-        +sink : Callback.Callback<String,Unit> <- Callback.create(~Unit,~String,~Unit,~rpcWrite,Unit{})
-        endpoint : Rpc.Owner & Rpc.Handle <- Rpc.start(live,sink,Some{Path.join(assetsRoot,"packages/coding-agent/src/core/export-html")},available,scope)
-        result : Result<&2,&2,String,Unit> <- rpcInput(endpoint)
-        Callback.dispose(String,Unit,sink)
-        SessionRuntime.dispose(Services, host)
-        rpcFinished(result)
-
 def rpcSelected(live: AgentSession.AgentSession, assetsRoot: String, +host: Host(), selected: Maybe<&2,Models.Model()>) -> IO(Unit):
   match selected:
     case None{}:
@@ -975,8 +968,12 @@ def rpcSelected(live: AgentSession.AgentSession, assetsRoot: String, +host: Host
         fail(Runtime.noModels())
     case Some{_}:
       do IO<Unit>:
-        catalog : Catalog <- SessionRuntime.withServices(Services, Catalog, host, catalogOf, Catalog{Nil{}, Nil{}})
-        rpcWithCatalog(live, assetsRoot, host, catalog)
+        +sink : Callback.Callback<String,Unit> <- Callback.create(~Unit,~String,~Unit,~rpcWrite,Unit{})
+        endpoint : Rpc.Owner & Rpc.Handle <- Rpc.start(live,sink,Some{Path.join(assetsRoot,"packages/coding-agent/src/core/export-html")})
+        result : Result<&2,&2,String,Unit> <- rpcInput(endpoint)
+        Callback.dispose(String,Unit,sink)
+        SessionRuntime.dispose(Services, host)
+        rpcFinished(result)
 
 def rpcHosted(assetsRoot: String, +host: Host()) -> IO(Unit):
   do IO<Unit>:

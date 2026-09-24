@@ -95,7 +95,7 @@ def selected(level: Ai.ModelThinkingLevel,result: Result<&2,&2,String,Unit>) -> 
     case Fail{reason}: CommandError{reason}
 def choose(session: Session.AgentSession,+level: Ai.ModelThinkingLevel) -> IO(Action):
   do IO<Action>:
-    result : Result<&2,&2,String,Unit> <- Session.setThinkingLevel(session,level)
+    result : Result<&2,&2,String,Unit> <- Session.setThinkingLevel(session,level,Session.ModelMutationOptions{False{}})
     return selected(level,result)
 def thinkingSelected(session: Session.AgentSession,levels: List<&2,Ai.ModelThinkingLevel>,requested: String,found: Maybe<&2,Ai.ModelThinkingLevel>) -> IO(Action):
   match found:
@@ -115,7 +115,7 @@ def switched(model: Ai.Model<Ai.JsonValue>,result: Result<&2,&2,String,Unit>) ->
     case Fail{reason}: CommandError{reason}
 def switchModel(session: Session.AgentSession,+model: Ai.Model<Ai.JsonValue>) -> IO(Action):
   do IO<Action>:
-    result : Result<&2,&2,String,Unit> <- Session.setModel(session,model)
+    result : Result<&2,&2,String,Unit> <- Session.setModel(session,model,Session.ModelMutationOptions{False{}})
     return switched(model,result)
 def matchingModels(models: List<&2,Models.Model()>,+query: String,+reference: Bool) -> List<&2,Models.Model()>:
   match models:

@@ -28,6 +28,9 @@ import ../packages/coding-agent/src/core/tools/bash.bend as Bash
 import ../packages/runtime/src/child-process.bend as Child
 import ../packages/runtime/src/utf8.bend as Utf8
 import ../packages/coding-agent/src/core/skills.bend as Skills
+import ../packages/coding-agent/src/core/model-runtime.bend as Models
+import ../packages/ai/src/utils/thinking-levels.bend as Levels
+import ./model-runtime-fixture.bend as ModelFixture
 import ../packages/coding-agent/src/core/prompt-templates.bend as Templates
 
 # AgentSession scenarios over a faux provider that answers each request with
@@ -64,6 +67,16 @@ def holdAt(gate: Maybe<&2, Gate>) -> IO(Unit):
 
 def fauxModel() -> Ai.Model<Ai.JsonValue>:
   Ai.Model{"faux-model", "Faux", Ai.OpenAIResponsesApi{}, "faux", "https://faux.invalid", False{}, None{}, Ai.InputText{} <> Nil{}, None{}, Ai.ModelCost{U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), None{}}, None{}, U32.to_f64(128000), U32.to_f64(4096), None{}, None{}, None{}}
+
+def modelNamed(+id: String, +provider: String, reasoning: Bool) -> Ai.Model<Ai.JsonValue>:
+  Ai.Model{id, id, Ai.OpenAIResponsesApi{}, provider, "https://faux.invalid", reasoning, None{}, Ai.InputText{} <> Nil{}, None{}, Ai.ModelCost{U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), None{}}, None{}, U32.to_f64(128000), U32.to_f64(4096), None{}, None{}, None{}}
+
+def fauxReasoning() -> Ai.Model<Ai.JsonValue>: modelNamed("faux-reasoning", "faux", True{})
+def otherModel() -> Ai.Model<Ai.JsonValue>: modelNamed("other-model", "other", True{})
+
+# faux is available when PI_FAUX_API_KEY is set; other never is.
+def fauxSources() -> List<&2, ModelFixture.Source>:
+  ModelFixture.Source{"faux", "PI_FAUX_API_KEY", fauxModel() <> fauxReasoning() <> Nil{}} <> ModelFixture.Source{"other", "PI_BEND_UNSET_TEST_KEY", otherModel() <> Nil{}} <> Nil{}
 
 # A scripted response is its text, optionally "text#tokens" to report that
 # much context usage, "~text" to stop at the length limit, or "!message" to
@@ -171,7 +184,7 @@ def settingsOf(pair: Settings.FileSettingsStorage & Settings.SettingsManager) ->
   match pair:
     case Tuple{_, manager}: manager
 
-def fixtureWithModel(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>, +loadout: Runtime.Loadout, selected: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> IO(Fixture):
+def fixtureWithModel(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>, +loadout: Runtime.Loadout, selected: Maybe<&2,Ai.Model<Ai.JsonValue>>, sources: List<&2, ModelFixture.Source>) -> IO(Fixture):
   do IO<Fixture>:
     +responseRef : R.Ref<List<&2, String>> <- R.new(List<&2, String>, responses)
     +streams : R.Ref<List<&2, EventStream()>> <- R.new(List<&2, EventStream()>, Nil{})
@@ -183,16 +196,21 @@ def fixtureWithModel(+stored: Session.Session(), +cwd: String, agentDir: String,
     created : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~Unit, ~Tools.ToolDetails, ~Runtime.Custom(), ~Tools.ToolError, ~Unit, options(stream, converter, Sessions.getSessionId(Unit, Tools.ToolDetails, V.Value, stored), selected), registry, validator, Tools.WriteDetails{})
     +agent : Runtime.Owner() <- requireAgent(created)
     loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.options())
-    +session : Session.AgentSession <- Session.create(agent, stored, settingsOf(loaded), cwd, loadout)
+    models : Models.ModelRuntime <- ModelFixture.create(sources)
+    +session : Session.AgentSession <- Session.create(agent, stored, settingsOf(loaded), cwd, loadout, models, Nil{})
     +listener : Session.Listener() <- C.create(~Unit, ~Session.AgentSessionEvent, ~Unit, ~observe, Unit{})
     Session.subscribe(session, listener)
     return Fixture{session, listener, stream, validator, converter, registry, Faux{responseRef, streams, gateRef}}
 
 def fixtureWith(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>, +loadout: Runtime.Loadout) -> IO(Fixture):
-  fixtureWithModel(stored,cwd,agentDir,responses,gates,loadout,Some{fauxModel()})
+  fixtureWithModel(stored,cwd,agentDir,responses,gates,loadout,Some{fauxModel()},fauxSources())
 
 def fixtureNoModel(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>) -> IO(Fixture):
-  fixtureWithModel(stored,cwd,agentDir,responses,gates,Runtime.Loadout{Rec.new(String),Nil{},Nil{},Nil{}},None{})
+  fixtureWithModel(stored,cwd,agentDir,responses,gates,Runtime.Loadout{Rec.new(String),Nil{},Nil{},Nil{}},None{},fauxSources())
+
+# A fixture whose model runtime offers the given providers.
+def fixtureOver(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, sources: List<&2, ModelFixture.Source>) -> IO(Fixture):
+  fixtureWithModel(stored, cwd, agentDir, responses, Nil{}, Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}}, Some{fauxModel()}, sources)
 
 def fixture(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>) -> IO(Fixture):
   fixtureWith(stored, cwd, agentDir, responses, gates, Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}})
@@ -298,13 +316,90 @@ def mutateScenario(+dir: String, agentDir: String) -> IO(Unit):
     created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixture(stored, dir, agentDir, Nil{}, Nil{})
-    thinking : Result<&2, &2, String, Unit> <- Session.setThinkingLevel(sessionOf(value), Ai.Thinking{Ai.High{}})
+    thinking : Result<&2, &2, String, Unit> <- Session.setThinkingLevel(sessionOf(value), Ai.Thinking{Ai.High{}}, Session.ModelMutationOptions{False{}})
     reportOutcome("set_thinking", thinking)
-    model : Result<&2, &2, String, Unit> <- Session.setModel(sessionOf(value), fauxModel())
+    model : Result<&2, &2, String, Unit> <- Session.setModel(sessionOf(value), fauxModel(), Session.ModelMutationOptions{False{}})
     reportOutcome("set_model", model)
     named : Result<&2, &2, String, Unit> <- Session.setSessionName(sessionOf(value), "title")
     reportOutcome("set_name", named)
     reportEntries(sessionOf(value))
+    teardown(value)
+
+# models: auth-checked setModel, thinking levels and their cycle, model cycling
+# over the available and the scoped models, and persisted defaults.
+def boolJson(value: Bool) -> String: Bool.pick(String, value, "true", "false")
+
+def levelNames(levels: List<&2, Ai.ModelThinkingLevel>) -> List<&2, String>:
+  match levels:
+    case Nil{}: Nil{}
+    case level <> rest: Levels.name(level) <> levelNames(rest)
+
+def reportLevels(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    levels : List<&2, Ai.ModelThinkingLevel> <- Session.getAvailableThinkingLevels(session)
+    supported : Bool <- Session.supportsThinking(session)
+    IO.print("{\"type\":\"levels\",\"levels\":[" ++ String.join(quotedAll(levelNames(levels)), ",") ++ "],\"supportsThinking\":" ++ boolJson(supported) ++ "}")
+
+def reportThinkingCycle(result: Result<&2, &2, String, Maybe<&2, Ai.ModelThinkingLevel>>) -> IO(Unit):
+  match result:
+    case Fail{error}: IO.print("{\"type\":\"cycle_thinking\",\"ok\":false,\"error\":" ++ Decode.quote(error) ++ "}")
+    case Done{None{}}: IO.print("{\"type\":\"cycle_thinking\",\"ok\":true,\"level\":null}")
+    case Done{Some{level}}: IO.print("{\"type\":\"cycle_thinking\",\"ok\":true,\"level\":" ++ Decode.quote(Levels.name(level)) ++ "}")
+
+def reportModelCycle(result: Result<&2, &2, String, Maybe<&2, Session.ModelCycleResult>>) -> IO(Unit):
+  match result:
+    case Fail{error}: IO.print("{\"type\":\"cycle_model\",\"ok\":false,\"error\":" ++ Decode.quote(error) ++ "}")
+    case Done{None{}}: IO.print("{\"type\":\"cycle_model\",\"ok\":true,\"model\":null}")
+    case Done{Some{Session.ModelCycleResult{model, level, scoped}}}:
+      IO.print("{\"type\":\"cycle_model\",\"ok\":true,\"model\":" ++ Decode.quote(Models.reference(model)) ++ ",\"thinkingLevel\":" ++ Decode.quote(Levels.name(level)) ++ ",\"isScoped\":" ++ boolJson(scoped) ++ "}")
+
+def scopedNames(items: List<&2, Models.ScopedModel>) -> List<&2, String>:
+  match items:
+    case Nil{}: Nil{}
+    case Models.ScopedModel{model, _} <> rest: Models.reference(model) <> scopedNames(rest)
+
+def reportScope(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    items : List<&2, Models.ScopedModel> <- Session.getScopedModels(session)
+    IO.print("{\"type\":\"scope\",\"models\":[" ++ String.join(quotedAll(scopedNames(items)), ",") ++ "]}")
+
+def cycleForward(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2, &2, String, Maybe<&2, Session.ModelCycleResult>> <- Session.cycleModel(session, Session.Forward{}, Session.ModelMutationOptions{False{}})
+    reportModelCycle(result)
+
+def cycleThinking(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2, &2, String, Maybe<&2, Ai.ModelThinkingLevel>> <- Session.cycleThinkingLevel(session, Session.ModelMutationOptions{False{}})
+    reportThinkingCycle(result)
+
+def modelsScenario(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    stored : Session.Session() <- requireSession(created)
+    +value : Fixture <- fixture(stored, dir, agentDir, Nil{}, Nil{})
+    +session : Session.AgentSession = sessionOf(value)
+    denied : Result<&2, &2, String, Unit> <- Session.setModel(session, otherModel(), Session.ModelMutationOptions{False{}})
+    reportOutcome("set_unavailable", denied)
+    reportLevels(session)
+    cycleThinking(session)
+    cycleForward(session)
+    reportLevels(session)
+    cycleThinking(session)
+    cycleThinking(session)
+    backward : Result<&2, &2, String, Maybe<&2, Session.ModelCycleResult>> <- Session.cycleModel(session, Session.Backward{}, Session.ModelMutationOptions{False{}})
+    reportModelCycle(backward)
+    Session.setScopedModels(session, Models.ScopedModel{fauxReasoning(), Some{Ai.Thinking{Ai.High{}}}} <> Models.ScopedModel{otherModel(), None{}} <> Models.ScopedModel{fauxModel(), None{}} <> Nil{})
+    cycleForward(session)
+    cycleForward(session)
+    Session.setScopedModels(session, Models.ScopedModel{fauxReasoning(), None{}} <> Nil{})
+    cycleForward(session)
+    persisted : Result<&2, &2, String, Unit> <- Session.setModel(session, fauxModel(), Session.ModelMutationOptions{True{}})
+    reportOutcome("set_persisted", persisted)
+    reportScope(session)
+    thinking : Result<&2, &2, String, Unit> <- Session.setThinkingLevel(session, Ai.Thinking{Ai.Medium{}}, Session.ModelMutationOptions{True{}})
+    reportOutcome("set_thinking_persisted", thinking)
+    reportEntries(session)
     teardown(value)
 
 # busy: while the first request is held open, a plain prompt is refused with
@@ -773,6 +868,7 @@ def run(args: List<String>) -> IO(Unit):
     case "bash" <> dir <> agentDir <> Nil{}: bashScenario(dir, agentDir)
     case "bash_deferred" <> dir <> agentDir <> Nil{}: bashDeferredScenario(dir, agentDir)
     case "expand" <> dir <> agentDir <> Nil{}: expandScenario(dir, agentDir)
+    case "models" <> dir <> agentDir <> Nil{}: modelsScenario(dir, agentDir)
     case _: IO.die(Unit, 1, "usage: agent-session <persist|queue|mutate|busy|navigate|fork|fork_persisted|bash|bash_deferred|expand> <dir> <agentDir> | retry <dir> <agentDir> <responses> <cancel|run> | compact <dir> <agentDir> <prompts|-> <responses> <manual|cancel|abort|queued|none>")
 
 def main() -> IO(Unit):

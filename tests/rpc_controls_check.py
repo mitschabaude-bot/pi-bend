@@ -41,7 +41,7 @@ def check(label, command):
         cwd = Path(temporary)
         agent = cwd / "agent"
         agent.mkdir()
-        env = dict(os.environ, PI_CODING_AGENT_DIR=str(agent), PI_CODING_AGENT_SESSION_DIR=str(cwd / "sessions"))
+        env = dict(os.environ, PI_FAUX_API_KEY="faux-key", PI_CODING_AGENT_DIR=str(agent), PI_CODING_AGENT_SESSION_DIR=str(cwd / "sessions"))
         process = subprocess.Popen(command + ["--mode", "rpc", "--no-session", "--no-tools"], cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
         try:
             send(process, id="compaction", type="set_auto_compaction", enabled=False)

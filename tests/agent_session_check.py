@@ -38,7 +38,7 @@ def run(runner, threads, scenario, work):
     project = work / scenario; project.mkdir()
     agent = work / (scenario + '-agent'); agent.mkdir()
     command = ['bun', runner] if runner.endswith('.js') else [runner, '--threads', threads, '--']
-    result = subprocess.run(command + [scenario, str(project), str(agent)], capture_output=True, text=True, timeout=300, cwd=ROOT)
+    result = subprocess.run(command + [scenario, str(project), str(agent)], capture_output=True, text=True, timeout=300, cwd=ROOT, env=dict(os.environ, PI_FAUX_API_KEY='faux-key'))
     assert result.returncode == 0, (scenario, result.returncode, result.stderr[-2000:], result.stdout[-1000:])
     return [json.loads(line) for line in result.stdout.splitlines()]
 
@@ -259,12 +259,42 @@ def main():
     # thinking level, model and name mutations record entries and notify listeners (setThinkingLevel/setModel/setSessionName)
     events = run(runner, args.threads, 'mutate', work)
     assert [e['ok'] for e in events if e['type'] in ('set_thinking', 'set_model', 'set_name')] == [True, True, True], events
-    assert types(events)[:5] == ['thinking_level_changed', 'set_thinking', 'set_model', 'session_info_changed', 'set_name'], types(events)
-    assert [e for e in events if e['type'] == 'thinking_level_changed'][0]['level'] == 'off', 'a model without reasoning clamps the level to off'
+    # a model without reasoning clamps high to off, which is no change: nothing is recorded or announced
+    assert types(events)[:4] == ['set_thinking', 'set_model', 'session_info_changed', 'set_name'], types(events)
     assert [e for e in events if e['type'] == 'session_info_changed'][0]['name'] == 'title'
     kinds = [e for e in events if e['type'] == 'entries'][0]['kinds']
-    assert kinds == ['thinking_level_change:off', 'model_change:faux/faux-model', 'session_info:title'], kinds
-    checks += 5
+    assert kinds == ['model_change:faux/faux-model', 'session_info:title'], kinds
+    checks += 4
+    # setModel requires provider auth; thinking levels follow the model; cycleThinkingLevel/cycleModel wrap in either direction over available or available scoped models; persist writes the defaults and extends a non-empty scope (agent-session model/thinking methods)
+    events = run(runner, args.threads, 'models', work)
+    view = [e for e in events if e['type'] in ('set_unavailable', 'levels', 'cycle_thinking', 'cycle_model', 'thinking_level_changed', 'set_persisted', 'scope', 'set_thinking_persisted')]
+    expected = [
+        {'type': 'set_unavailable', 'ok': False, 'error': 'No API key for other/other-model'},
+        {'type': 'levels', 'levels': ['off'], 'supportsThinking': False},
+        {'type': 'cycle_thinking', 'ok': True, 'level': None},
+        {'type': 'cycle_model', 'ok': True, 'model': 'faux/faux-reasoning', 'thinkingLevel': 'off', 'isScoped': False},
+        {'type': 'levels', 'levels': ['off', 'minimal', 'low', 'medium', 'high'], 'supportsThinking': True},
+        {'type': 'thinking_level_changed', 'level': 'minimal'},
+        {'type': 'cycle_thinking', 'ok': True, 'level': 'minimal'},
+        {'type': 'thinking_level_changed', 'level': 'low'},
+        {'type': 'cycle_thinking', 'ok': True, 'level': 'low'},
+        {'type': 'thinking_level_changed', 'level': 'off'},
+        {'type': 'cycle_model', 'ok': True, 'model': 'faux/faux-model', 'thinkingLevel': 'off', 'isScoped': False},
+        {'type': 'thinking_level_changed', 'level': 'high'},
+        {'type': 'cycle_model', 'ok': True, 'model': 'faux/faux-reasoning', 'thinkingLevel': 'high', 'isScoped': True},
+        {'type': 'thinking_level_changed', 'level': 'off'},
+        {'type': 'cycle_model', 'ok': True, 'model': 'faux/faux-model', 'thinkingLevel': 'off', 'isScoped': True},
+        {'type': 'cycle_model', 'ok': True, 'model': None},
+        {'type': 'set_persisted', 'ok': True},
+        {'type': 'scope', 'models': ['faux/faux-reasoning', 'faux/faux-model']},
+        {'type': 'set_thinking_persisted', 'ok': True},
+    ]
+    assert view == expected, json.dumps(view, indent=1)
+    kinds = [e for e in events if e['type'] == 'entries'][0]['kinds']
+    assert kinds == ['model_change:faux/faux-reasoning', 'thinking_level_change:minimal', 'thinking_level_change:low', 'model_change:faux/faux-model', 'thinking_level_change:off', 'model_change:faux/faux-reasoning', 'thinking_level_change:high', 'model_change:faux/faux-model', 'thinking_level_change:off', 'model_change:faux/faux-model'], kinds
+    saved = json.loads((work / 'models-agent' / 'settings.json').read_text())
+    assert (saved.get('defaultProvider'), saved.get('defaultModel'), saved.get('defaultThinkingLevel'), 'enabledModels' in saved) == ('faux', 'faux-model', 'medium', False), saved
+    checks += 3
     # while the first request is held open, prompt() without a behavior is refused; steer/followUp queue and are delivered after the turn and after the run (agent-session-concurrent; agent-session-prompt; agent-session-queue)
     events = run(runner, args.threads, 'busy', work)
     streaming = [e['value'] for e in events if e['type'] == 'streaming']

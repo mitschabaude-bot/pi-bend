@@ -13,7 +13,7 @@ assert hashlib.sha256((UPSTREAM / "packages/coding-agent/src/modes/rpc/rpc-mode.
 assert hashlib.sha256((UPSTREAM / "packages/coding-agent/src/core/agent-session.ts").read_bytes()).hexdigest() == "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7"
 
 def check(label, executable, threads=None):
-    env = dict(os.environ)
+    env = dict(os.environ, PI_FAUX_API_KEY="faux-key")
     if threads:
         env["BEND_THREADS"] = threads
     cwd = ROOT / "build" / f"rpc-model-{label}-cwd"

@@ -32,9 +32,8 @@ def Sink() -> Data: Callback.Callback<String,Unit>
 type Submission is Data: Submission{text: String,images: List<&2,Ai.ImageContent>,behavior: Maybe<&2,Session.StreamingBehavior>}
 type BashRequest is Data: BashRequest{id: Maybe<&2,String>,command: String,exclude: Maybe<&2,Bool>}
 type Work is Data: PromptWork{request: Submission} BashWork{request: BashRequest}
-type Resources is Data: Resources{assetsDir: Maybe<&2,String>,availableModels: List<&2,Models.Model()>,scopedModels: List<&2,Models.ScopedModel>}
 type Handle is Data:
-  Handle{session: Session.AgentSession,sink: Sink(),buffer: Ref.Ref<String>,busy: Ref.Ref<Bool>,jobs: Chan(Work),resources: Resources}
+  Handle{session: Session.AgentSession,sink: Sink(),buffer: Ref.Ref<String>,busy: Ref.Ref<Bool>,jobs: Chan(Work),assetsDir: Maybe<&2,String>}
 type Owner is Type:
   Owner{handle: Handle,worker: Chan(Unit),listener: Session.Listener()}
 
@@ -167,12 +166,12 @@ type Phase is Type: Check{} Received{request: Maybe<&1,Work>}
       do IO<Unit>:
         runWork(handle,request)
         worker(handle,Check{})
-def start(+session: Session.AgentSession,+sink: Sink(),assetsDir: Maybe<&2,String>,availableModels: List<&2,Models.Model()>,scopedModels: List<&2,Models.ScopedModel>) -> IO(Owner & Handle):
+def start(+session: Session.AgentSession,+sink: Sink(),assetsDir: Maybe<&2,String>) -> IO(Owner & Handle):
   do IO<Owner & Handle>:
     +buffer : Ref.Ref<String> <- Ref.new(String,"")
     +busy : Ref.Ref<Bool> <- Ref.new(Bool,False{})
     +jobs : Chan(Work) <- Chan.new(Work,64)
-    +handle : Handle <- IO.pure(Handle,Handle{session,sink,buffer,busy,jobs,Resources{assetsDir,availableModels,scopedModels}})
+    +handle : Handle <- IO.pure(Handle,Handle{session,sink,buffer,busy,jobs,assetsDir})
     +listener : Session.Listener() <- Callback.create(~Sink(),~Session.AgentSessionEvent,~Unit,~observe,sink)
     Session.subscribe(session,listener)
     task : Chan(Unit) <- IO.fork(Unit,worker(handle,Check{}))
@@ -250,7 +249,7 @@ def setChosenThinking(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,St
     case None{}: output(sink,failure(id,"set_thinking_level","Invalid thinking level: " ++ level))
     case Some{value}:
       do IO<Unit>:
-        result : Result<&2,&2,String,Unit> <- Session.setThinkingLevel(session,value)
+        result : Result<&2,&2,String,Unit> <- Session.setThinkingLevel(session,value,Session.ModelMutationOptions{False{}})
         output(sink,resultResponse(id,"set_thinking_level",result))
 
 def setThinking(handle: Handle,id: Maybe<&2,String>,value: Result<&2,&2,String,String>) -> IO(Unit):
@@ -389,7 +388,7 @@ def clearedValue(value: Cleared) -> V.Value:
     case Cleared{steering,followUp}: MessageJson.object(MessageJson.field("steering",V.ArrayValue{Events.texts(steering)},MessageJson.field("followUp",V.ArrayValue{Events.texts(followUp)},Nil{})))
 def clearQueue(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{Session.AgentSession{agent,+shared,_,_,_,_},sink,_,_,_,_}:
+    case Handle{Session.AgentSession{agent,+shared,_,_,_,_,_,_},sink,_,_,_,_}:
       do IO<Unit>:
         Agent.clearAllQueues(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent)
         removed : Cleared <- Ref.modify(Session.Shared,Cleared,shared,clearState)
@@ -415,50 +414,23 @@ def levelValues(values: List<&2,Ai.ModelThinkingLevel>) -> List<&2,V.Value>:
   match values:
     case Nil{}: Nil{}
     case value <> rest: V.Text{Levels.name(value)} <> levelValues(rest)
-def levelsOf(model: Ai.Model<Ai.JsonValue>) -> List<&2,Ai.ModelThinkingLevel>:
-  match model:
-    case Ai.Model{_,_,_,_,_,reasoning,mapping,_,_,_,_,_,_,_,_,_}: Levels.available(reasoning,mapping)
-def selectedLevels(selected: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> List<&2,Ai.ModelThinkingLevel>:
-  Maybe.default(&2,List<&2,Ai.ModelThinkingLevel>,Maybe.map(&2,Ai.Model<Ai.JsonValue>,List<&2,Ai.ModelThinkingLevel>,levelsOf,selected),Nil{})
 def availableLevels(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
     case Handle{session,sink,_,_,_,_}:
       do IO<Unit>:
-        current : Session.AgentState() <- Session.state(session)
-        output(sink,data(id,"get_available_thinking_levels",MessageJson.object(MessageJson.field("levels",V.ArrayValue{levelValues(selectedLevels(Session.stateModel(current)))},Nil{}))))
-def following(values: List<&2,Ai.ModelThinkingLevel>,+current: Ai.ModelThinkingLevel) -> Maybe<&2,Ai.ModelThinkingLevel>:
-  match values:
-    case Nil{}: None{}
-    case _ <> Nil{}: None{}
-    case value <> +next <> rest:
-      Bool.pick(Maybe<&2,Ai.ModelThinkingLevel>,U32.is_eq(Levels.rank(value),Levels.rank(current)),Some{next},following(next <> rest,current))
-def firstLevel(values: List<&2,Ai.ModelThinkingLevel>) -> Ai.ModelThinkingLevel:
-  match values:
-    case Nil{}: Ai.Off{}
-    case value <> _: value
-def nextLevel(+values: List<&2,Ai.ModelThinkingLevel>,current: Ai.ModelThinkingLevel) -> Ai.ModelThinkingLevel:
-  Maybe.default(&2,Ai.ModelThinkingLevel,following(values,current),firstLevel(values))
-def cycleOutcome(sink: Sink(),id: Maybe<&2,String>,level: Ai.ModelThinkingLevel,result: Result<&2,&2,String,Unit>) -> IO(Unit):
+        levels : List<&2,Ai.ModelThinkingLevel> <- Session.getAvailableThinkingLevels(session)
+        output(sink,data(id,"get_available_thinking_levels",MessageJson.object(MessageJson.field("levels",V.ArrayValue{levelValues(levels)},Nil{}))))
+def thinkingCycled(sink: Sink(),id: Maybe<&2,String>,result: Result<&2,&2,String,Maybe<&2,Ai.ModelThinkingLevel>>) -> IO(Unit):
   match result:
     case Fail{reason}: output(sink,failure(id,"cycle_thinking_level",reason))
-    case Done{_}: output(sink,data(id,"cycle_thinking_level",MessageJson.object(MessageJson.field("level",V.Text{Levels.name(level)},Nil{}))))
-def cycleModel(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,state: Session.AgentState(),selected: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> IO(Unit):
-  match selected:
-    case None{}: output(sink,data(id,"cycle_thinking_level",V.Null{}))
-    case Some{Ai.Model{_,_,_,_,_,False{},_,_,_,_,_,_,_,_,_,_}}: output(sink,data(id,"cycle_thinking_level",V.Null{}))
-    case Some{model}:
-      do IO<Unit>:
-        +level : Ai.ModelThinkingLevel <- IO.pure(Ai.ModelThinkingLevel,nextLevel(levelsOf(model),Session.stateThinking(state)))
-        result : Result<&2,&2,String,Unit> <- Session.setThinkingLevel(session,level)
-        cycleOutcome(sink,id,level,result)
-def cycleState(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,+state: Session.AgentState()) -> IO(Unit):
-  cycleModel(session,sink,id,state,Session.stateModel(state))
+    case Done{None{}}: output(sink,data(id,"cycle_thinking_level",V.Null{}))
+    case Done{Some{level}}: output(sink,data(id,"cycle_thinking_level",MessageJson.object(MessageJson.field("level",V.Text{Levels.name(level)},Nil{}))))
 def cycleThinking(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{+session,sink,_,_,_,_}:
+    case Handle{session,sink,_,_,_,_}:
       do IO<Unit>:
-        current : Session.AgentState() <- Session.state(session)
-        cycleState(session,sink,id,current)
+        result : Result<&2,&2,String,Maybe<&2,Ai.ModelThinkingLevel>> <- Session.cycleThinkingLevel(session,Session.ModelMutationOptions{False{}})
+        thinkingCycled(sink,id,result)
 def queueModeName(value: AgentTypes.QueueMode) -> String:
   match value:
     case AgentTypes.All{}: "all"
@@ -472,7 +444,7 @@ def stateValue(+stored: Session.Session(),+current: Session.AgentState(),shared:
   MessageJson.object(MessageJson.field("model",modelValue(Session.stateModel(current)),MessageJson.field("thinkingLevel",V.Text{Levels.name(Session.stateThinking(current))},MessageJson.field("isStreaming",V.Boolean{streaming},MessageJson.field("isCompacting",V.Boolean{compacting},MessageJson.field("steeringMode",V.Text{queueModeName(steering)},MessageJson.field("followUpMode",V.Text{queueModeName(followUp)},MessageJson.optionalText("sessionFile",Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),MessageJson.field("sessionId",V.Text{S.getSessionId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored))},MessageJson.optionalText("sessionName",S.getSessionName(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),MessageJson.field("autoCompactionEnabled",V.Boolean{auto},MessageJson.field("messageCount",MessageJson.natural(List.length(&2,Session.Message(),Session.stateMessages(current))),MessageJson.field("pendingMessageCount",MessageJson.natural(pendingCount(shared)),Nil{})))))))))))))
 def sharedSnapshot(session: Session.AgentSession) -> IO(Session.Shared):
   match session:
-    case Session.AgentSession{_,shared,_,_,_,_}: Ref.read(Session.Shared,shared)
+    case Session.AgentSession{_,shared,_,_,_,_,_,_}: Ref.read(Session.Shared,shared)
 def getState(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
     case Handle{+session,sink,_,_,_,_}:
@@ -504,108 +476,53 @@ def setAutoRetry(handle: Handle,id: Maybe<&2,String>,enabled: Result<&2,&2,Strin
         result : Result<&2,&2,String,Unit> <- Session.setAutoRetryEnabled(session,value)
         autoResult(sink,id,"set_auto_retry",result)
 
-# Model commands use the same authenticated catalog that selected the running
-# agent's initial model. No separate registry is constructed for RPC.
+# Model commands read the session's model runtime, so a login is visible
+# without restarting. No separate registry is constructed for RPC.
 def modelValues(models: List<&2,Models.Model()>) -> List<&2,V.Value>:
   match models:
     case Nil{}: Nil{}
     case model <> rest: ModelJson.model(model) <> modelValues(rest)
 def availableModels(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{_,sink,_,_,_,Resources{_,available,_}}:
-      output(sink,data(id,"get_available_models",MessageJson.object(MessageJson.field("models",V.ArrayValue{modelValues(available)},Nil{}))))
+    case Handle{session,sink,_,_,_,_}:
+      do IO<Unit>:
+        available : List<&2,Models.Model()> <- Models.getAvailable(Session.modelRuntime(session))
+        output(sink,data(id,"get_available_models",MessageJson.object(MessageJson.field("models",V.ArrayValue{modelValues(available)},Nil{}))))
 def setModelResponse(sink: Sink(),id: Maybe<&2,String>,model: Models.Model(),result: Result<&2,&2,String,Unit>) -> IO(Unit):
   match result:
     case Done{_}: output(sink,data(id,"set_model",ModelJson.model(model)))
     case Fail{message}: output(sink,failure(id,"set_model",message))
 def setFoundModel(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,+model: Models.Model()) -> IO(Unit):
   do IO<Unit>:
-    result : Result<&2,&2,String,Unit> <- Session.setModel(session,model)
+    result : Result<&2,&2,String,Unit> <- Session.setModel(session,model,Session.ModelMutationOptions{False{}})
     setModelResponse(sink,id,model,result)
 def setMatchedModel(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,provider: String,modelId: String,found: Maybe<&2,Models.Model()>) -> IO(Unit):
   match found:
     case None{}: output(sink,failure(id,"set_model","Model not found: " ++ provider ++ "/" ++ modelId))
     case Some{model}: setFoundModel(session,sink,id,model)
-def setAvailableModel(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,+provider: String,+modelId: String,models: List<&2,Models.Model()>) -> IO(Unit):
-  setMatchedModel(session,sink,id,provider,modelId,Models.findModel(models,provider,modelId))
+def setAvailableModel(+session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,+provider: String,+modelId: String) -> IO(Unit):
+  do IO<Unit>:
+    available : List<&2,Models.Model()> <- Models.getAvailable(Session.modelRuntime(session))
+    setMatchedModel(session,sink,id,provider,modelId,Models.findModel(available,provider,modelId))
 def setModelParsed(handle: Handle,id: Maybe<&2,String>,provider: Result<&2,&2,String,String>,modelId: Result<&2,&2,String,String>) -> IO(Unit):
   match handle provider modelId:
     case Handle{_,sink,_,_,_,_} Fail{message} _: output(sink,failure(id,"set_model",message))
     case Handle{_,sink,_,_,_,_} _ Fail{message}: output(sink,failure(id,"set_model",message))
-    case Handle{session,sink,_,_,_,Resources{_,available,_}} Done{provider} Done{modelId}:
-      setAvailableModel(session,sink,id,provider,modelId,available)
+    case Handle{session,sink,_,_,_,_} Done{provider} Done{modelId}: setAvailableModel(session,sink,id,provider,modelId)
 def setCatalogModel(handle: Handle,id: Maybe<&2,String>,+object: R.Record<V.Value>) -> IO(Unit):
   setModelParsed(handle,id,requiredText(object,"provider"),requiredText(object,"modelId"))
-def sameModel(+left: Models.Model(),+right: Models.Model()) -> Bool:
-  String.eq(Models.modelProvider(left),Models.modelProvider(right)) && String.eq(Models.modelId(left),Models.modelId(right))
-def modelPosition(items: List<&2,Models.Model()>,+current: Models.Model(),+index: Nat) -> Maybe<&2,Nat>:
-  match items:
-    case Nil{}: None{}
-    case model <> rest: Bool.pick(Maybe<&2,Nat>,sameModel(model,current),Some{index},modelPosition(rest,current,index + 1n))
-def nextCatalogFrom(+models: List<&2,Models.Model()>,current: Models.Model()) -> Maybe<&2,Models.Model()>:
-  +count = List.length(&2,Models.Model(),models)
-  Bool.pick(Unit -> Maybe<&2,Models.Model()>,Nat.is_le(count,1n),_ => None{},_ =>
-    +index = Maybe.default(&2,Nat,modelPosition(models,current,0n),0n)
-    List.get(&2,Models.Model(),models,(index + 1n) % count))(Unit{})
-def scopedPosition(items: List<&2,Models.ScopedModel>,+current: Models.Model(),+index: Nat) -> Maybe<&2,Nat>:
-  match items:
-    case Nil{}: None{}
-    case Models.ScopedModel{model,_} <> rest: Bool.pick(Maybe<&2,Nat>,sameModel(model,current),Some{index},scopedPosition(rest,current,index + 1n))
-def nextCatalogModel(+models: List<&2,Models.Model()>,current: Maybe<&2,Models.Model()>) -> Maybe<&2,Models.Model()>:
-  match current:
-    case None{}: List.get(&2,Models.Model(),models,0n)
-    case Some{model}: nextCatalogFrom(models,model)
-def nextScopedFrom(+items: List<&2,Models.ScopedModel>,current: Models.Model()) -> Maybe<&2,Models.ScopedModel>:
-  +count = List.length(&2,Models.ScopedModel,items)
-  Bool.pick(Unit -> Maybe<&2,Models.ScopedModel>,Nat.is_le(count,1n),_ => None{},_ =>
-    +index = Maybe.default(&2,Nat,scopedPosition(items,current,0n),0n)
-    List.get(&2,Models.ScopedModel,items,(index + 1n) % count))(Unit{})
-def nextScoped(+items: List<&2,Models.ScopedModel>,current: Maybe<&2,Models.Model()>) -> Maybe<&2,Models.ScopedModel>:
-  match current:
-    case None{}: List.get(&2,Models.ScopedModel,items,0n)
-    case Some{model}: nextScopedFrom(items,model)
-def cycleResult(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,model: Models.Model(),scoped: Bool,result: Result<&2,&2,String,Unit>) -> IO(Unit):
+def modelCycled(sink: Sink(),id: Maybe<&2,String>,result: Result<&2,&2,String,Maybe<&2,Session.ModelCycleResult>>) -> IO(Unit):
   match result:
     case Fail{message}: output(sink,failure(id,"cycle_model",message))
-    case Done{_}:
-      do IO<Unit>:
-        current : Session.AgentState() <- Session.state(session)
-        output(sink,data(id,"cycle_model",MessageJson.object(MessageJson.field("model",ModelJson.model(model),MessageJson.field("thinkingLevel",V.Text{Levels.name(Session.stateThinking(current))},MessageJson.field("isScoped",V.Boolean{scoped},Nil{}))))))
-def cycleModelLevel(+session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,model: Models.Model(),scoped: Bool,thinking: Maybe<&2,Ai.ModelThinkingLevel>) -> IO(Unit):
-  match thinking:
-    case None{}: cycleResult(session,sink,id,model,scoped,Done{Unit{}})
-    case Some{level}:
-      do IO<Unit>:
-        changed : Result<&2,&2,String,Unit> <- Session.setThinkingLevel(session,level)
-        cycleResult(session,sink,id,model,scoped,changed)
-def cycleModelThinking(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,model: Models.Model(),scoped: Bool,thinking: Maybe<&2,Ai.ModelThinkingLevel>,result: Result<&2,&2,String,Unit>) -> IO(Unit):
-  match result:
-    case Fail{message}: output(sink,failure(id,"cycle_model",message))
-    case Done{_}: cycleModelLevel(session,sink,id,model,scoped,thinking)
-def cycleApplied(+session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,+model: Models.Model(),thinking: Maybe<&2,Ai.ModelThinkingLevel>,scoped: Bool) -> IO(Unit):
-  do IO<Unit>:
-    result : Result<&2,&2,String,Unit> <- Session.setModel(session,model)
-    cycleModelThinking(session,sink,id,model,scoped,thinking,result)
-def cycleChosen(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,chosen: Maybe<&2,Models.Model()>) -> IO(Unit):
-  match chosen:
-    case None{}: output(sink,data(id,"cycle_model",V.Null{}))
-    case Some{model}: cycleApplied(session,sink,id,model,None{},False{})
-def cycleAvailable(+session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,models: List<&2,Models.Model()>) -> IO(Unit):
-  do IO<Unit>:
-    current : Session.AgentState() <- Session.state(session)
-    cycleChosen(session,sink,id,nextCatalogModel(models,Session.stateModel(current)))
-def cycleScopedChosen(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,chosen: Maybe<&2,Models.ScopedModel>) -> IO(Unit):
-  match chosen:
-    case None{}: output(sink,data(id,"cycle_model",V.Null{}))
-    case Some{Models.ScopedModel{model,level}}: cycleApplied(session,sink,id,model,level,True{})
-def cycleScoped(+session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,items: List<&2,Models.ScopedModel>) -> IO(Unit):
-  do IO<Unit>:
-    current : Session.AgentState() <- Session.state(session)
-    cycleScopedChosen(session,sink,id,nextScoped(items,Session.stateModel(current)))
+    case Done{None{}}: output(sink,data(id,"cycle_model",V.Null{}))
+    case Done{Some{Session.ModelCycleResult{model,level,scoped}}}:
+      output(sink,data(id,"cycle_model",MessageJson.object(MessageJson.field("model",ModelJson.model(model),MessageJson.field("thinkingLevel",V.Text{Levels.name(level)},MessageJson.field("isScoped",V.Boolean{scoped},Nil{}))))))
 def cycleCatalogModel(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{session,sink,_,_,_,Resources{_,available,Nil{}}}: cycleAvailable(session,sink,id,available)
-    case Handle{session,sink,_,_,_,Resources{_,_,scope}}: cycleScoped(session,sink,id,scope)
+    case Handle{session,sink,_,_,_,_}:
+      do IO<Unit>:
+        result : Result<&2,&2,String,Maybe<&2,Session.ModelCycleResult>> <- Session.cycleModel(session,Session.Forward{},Session.ModelMutationOptions{False{}})
+        modelCycled(sink,id,result)
 def statsResponse(id: Maybe<&2,String>,result: Result<&2,&2,S.Error,Stats.Stats>) -> V.Value:
   match result:
     case Fail{_}: failure(id,"get_session_stats","Session history is invalid")
@@ -637,8 +554,8 @@ def exportFromDir(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String
     exportLoaded(session,sink,id,path,loaded)
 def exportChosen(handle: Handle,id: Maybe<&2,String>,path: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{session,sink,_,_,_,Resources{None{},_,_}}: output(sink,failure(id,"export_html","HTML export assets are unavailable"))
-    case Handle{session,sink,_,_,_,Resources{Some{directory},_,_}}: exportFromDir(session,sink,id,path,directory)
+    case Handle{session,sink,_,_,_,None{}}: output(sink,failure(id,"export_html","HTML export assets are unavailable"))
+    case Handle{session,sink,_,_,_,Some{directory}}: exportFromDir(session,sink,id,path,directory)
 def exportHtml(handle: Handle,id: Maybe<&2,String>,path: Result<&2,&2,String,Maybe<&2,String>>) -> IO(Unit):
   match path:
     case Fail{reason}: commandFailure(handle,id,"export_html",reason)

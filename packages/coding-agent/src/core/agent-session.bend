@@ -24,6 +24,7 @@ import ../../../runtime/src/record.bend as Rec
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/json.bend as Decode
 import ./agent-runtime.bend as Runtime
+import ./model-runtime.bend as Models
 import ./messages.bend as Messages
 import ./skills.bend as Skills
 import ./prompt-templates.bend as Templates
@@ -51,7 +52,9 @@ import ../../../ai/src/utils/transcript.bend as Transcript
 # retries transient provider errors with the settings' backoff policy, and
 # compacts the context manually or when it overflows or crosses the
 # settings' threshold, expands /skill: commands and prompt templates, and runs
-# user bash commands. Extensions, reload and the cache warmer are not ported.
+# user bash commands, and switches and cycles models and thinking levels
+# within the available or scoped models. Extensions, reload and the cache
+# warmer are not ported.
 
 # The CLI's session codecs: no diagnostic details, tool details as their
 # JSON shape (restored ones kept raw), extension payloads as JSON values.
@@ -228,7 +231,7 @@ type SessionHooks is Data:
   SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>, request: T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()), replacedRequest: Maybe<&2, T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>}
 
 type AgentSession is Data:
-  AgentSession{agent: Runtime.Owner(), shared: R.Ref<Shared>, hooks: SessionHooks, settings: R.Ref<Settings.SettingsManager>, cwd: String, loadout: Runtime.Loadout}
+  AgentSession{agent: Runtime.Owner(), shared: R.Ref<Shared>, hooks: SessionHooks, settings: R.Ref<Settings.SettingsManager>, cwd: String, loadout: Runtime.Loadout, models: Models.ModelRuntime, scoped: R.Ref<List<&2, Models.ScopedModel>>}
 
 def sharedSession(state: Shared) -> Session():
   match state:
@@ -596,7 +599,7 @@ def addListener(state: Shared, listener: Listener()) -> Shared:
 
 def subscribe(session: AgentSession, +listener: Listener()) -> IO(Unit):
   match session:
-    case AgentSession{_, shared, _, _, _, _}: R.modify(Shared, Unit, shared, current => (addListener(current, listener), Unit{}))
+    case AgentSession{_, shared, _, _, _, _, _, _}: R.modify(Shared, Unit, shared, current => (addListener(current, listener), Unit{}))
 
 def withoutListener(listeners: List<&2, Listener()>, +listener: Listener()) -> List<&2, Listener()>:
   match listeners:
@@ -609,7 +612,7 @@ def removedListener(state: Shared, listener: Listener()) -> Shared:
 
 def unsubscribe(session: AgentSession, +listener: Listener()) -> IO(Unit):
   match session:
-    case AgentSession{_, shared, _, _, _, _}: R.modify(Shared, Unit, shared, current => (removedListener(current, listener), Unit{}))
+    case AgentSession{_, shared, _, _, _, _, _, _}: R.modify(Shared, Unit, shared, current => (removedListener(current, listener), Unit{}))
 
 def sleepingOf(retry: RetryState) -> Maybe<&2, A.AbortController<Unit>>:
   match retry:
@@ -707,18 +710,18 @@ def abortBashIn(shared: R.Ref<Shared>) -> IO(Unit):
 # upstream abortBash: cancel every running bash command.
 def abortBash(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{_, shared, _, _, _, _}: abortBashIn(shared)
+    case AgentSession{_, shared, _, _, _, _, _, _}: abortBashIn(shared)
 
 def isBashRunning(session: AgentSession) -> IO(Bool):
   match session:
-    case AgentSession{_, shared, _, _, _, _}:
+    case AgentSession{_, shared, _, _, _, _, _, _}:
       do IO<Bool>:
         state : Shared <- R.read(Shared, shared)
         return Bool.not(List.is_empty(&2, RunningBash, runningOf(bashOf(state))))
 
 def hasPendingBashMessages(session: AgentSession) -> IO(Bool):
   match session:
-    case AgentSession{_, shared, _, _, _, _}:
+    case AgentSession{_, shared, _, _, _, _, _, _}:
       do IO<Bool>:
         state : Shared <- R.read(Shared, shared)
         return Bool.not(List.is_empty(&2, Message(), pendingOf(bashOf(state))))
@@ -761,7 +764,7 @@ def recordBashWhile(agent: Runtime.Owner(), +shared: R.Ref<Shared>, streaming: B
 # run to settle.
 def recordBashResult(session: AgentSession, command: String, result: BashExec.BashResult, excludeFromContext: Maybe<&2, Bool>) -> IO(Unit):
   match session:
-    case AgentSession{agent, +shared, _, _, _, _}:
+    case AgentSession{agent, +shared, _, _, _, _, _, _}:
       do IO<Unit>:
         now : F64 <- Date.now()
         current : Shared <- R.read(Shared, shared)
@@ -833,7 +836,7 @@ def recordedBash(+session: AgentSession, command: String, excludeFromContext: Ma
 
 def withOperations(+session: AgentSession, +command: String, onChunk: Maybe<&2, C.Callback<String, Unit>>, excludeFromContext: Maybe<&2, Bool>, id: Maybe<&2, String>, owned: Bool, +operations: Bash.BashOperations) -> IO(Result<&2, &2, String, BashExec.BashResult>):
   match session:
-    case AgentSession{_, +shared, _, settingsRef, cwd, _}:
+    case AgentSession{_, +shared, _, settingsRef, cwd, _, _, _}:
       do IO<Result<&2, &2, String, BashExec.BashResult>>:
         settings : Settings.SettingsManager <- R.read(Settings.SettingsManager, settingsRef)
         +controller : A.AbortController<Unit> <- A.new(Unit)
@@ -858,7 +861,7 @@ def withLocalOperations(+session: AgentSession, +command: String, onChunk: Maybe
 
 def settingsOf(session: AgentSession) -> R.Ref<Settings.SettingsManager>:
   match session:
-    case AgentSession{_, _, _, settings, _, _}: settings
+    case AgentSession{_, _, _, settings, _, _, _, _}: settings
 
 # upstream executeBash: run a user command with the configured prefix and
 # shell, stream its output as bash_execution_update events and record the
@@ -876,7 +879,7 @@ def executeBash(+session: AgentSession, +command: String, onChunk: Maybe<&2, C.C
 # Abort the agent and disconnect; the agent itself belongs to the runtime.
 def dispose(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{+agent, +shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest}, settings, _, _}:
+    case AgentSession{+agent, +shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest}, settings, _, _, _, _}:
       do IO<Unit>:
         abortSleeping(shared)
         abortCompactions(shared)
@@ -897,14 +900,14 @@ def dispose(session: AgentSession) -> IO(Unit):
 
 def agentOf(session: AgentSession) -> Runtime.Owner():
   match session:
-    case AgentSession{agent, _, _, _, _, _}: agent
+    case AgentSession{agent, _, _, _, _, _, _, _}: agent
 
 def state(session: AgentSession) -> IO(AgentState()):
   Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agentOf(session))
 
 def sessionOf(session: AgentSession) -> IO(Session()):
   match session:
-    case AgentSession{_, shared, _, _, _, _}:
+    case AgentSession{_, shared, _, _, _, _, _, _}:
       do IO<Session()>:
         current : Shared <- R.read(Shared, shared)
         return sharedSession(current)
@@ -916,7 +919,7 @@ def messages(session: AgentSession) -> IO(List<&2, Message()>):
 
 def isStreaming(session: AgentSession) -> IO(Bool):
   match session:
-    case AgentSession{_, shared, _, _, _, _}:
+    case AgentSession{_, shared, _, _, _, _, _, _}:
       do IO<Bool>:
         current : Shared <- R.read(Shared, shared)
         return runActiveOf(current)
@@ -1608,8 +1611,9 @@ def requestHook(env: RequestEnv, input: RequestInput()) -> IO(RequestResult()):
   match env input:
     case RequestEnv{agent, shared, previous} T.ToolHookInput{T.PrepareRequestContext{context, _, _}, signal}: projectRequest(agent, shared, previous, context, signal)
 
-def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, cwd: String, +loadout: Runtime.Loadout) -> IO(AgentSession):
+def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, cwd: String, +loadout: Runtime.Loadout, models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
   do IO<AgentSession>:
+    scoped : R.Ref<List<&2, Models.ScopedModel>> <- R.new(List<&2, Models.ScopedModel>, scopedModels)
     initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +window : F64 = Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, stateModel(initial)), F.fromU32(0))
     +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, False{}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, window, None{}}, CompactionState{False{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}})
@@ -1623,7 +1627,7 @@ def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.Sett
     +replacedRequest : Maybe<&2, RequestHook()> <- Agent.getPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +request : RequestHook() <- C.create(~RequestEnv, ~RequestInput(), ~RequestResult(), ~requestHook, RequestEnv{agent, shared, replacedRequest})
     Agent.setPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{request})
-    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest}, settingsRef, cwd, loadout}
+    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest}, settingsRef, cwd, loadout, models, scoped}
 
 # A final error after retries reports the failure and resets the counter.
 def failedRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason, finalError: Maybe<&2, String>) -> IO(Unit):
@@ -1687,7 +1691,7 @@ def runUntilSettled(fuel: Nat, +agent: Runtime.Owner(), +shared: R.Ref<Shared>, 
 # and the agent runs until post-run handling settles.
 def runAgentPrompt(session: AgentSession, +text: String, images: List<&2, Ai.ImageContent>) -> IO(Result<&2, &2, String, Unit>):
   match session:
-    case AgentSession{+agent, +shared, _, settingsRef, _, loadout}:
+    case AgentSession{+agent, +shared, _, settingsRef, _, loadout, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
         +settings : Settings.SettingsManager <- R.read(Settings.SettingsManager,settingsRef)
         compactBeforePrompt(agent, shared, settings)
@@ -1727,7 +1731,7 @@ def queueAt(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +behavior: Streaming
 
 def loadoutOf(session: AgentSession) -> Runtime.Loadout:
   match session:
-    case AgentSession{_, _, _, _, _, loadout}: loadout
+    case AgentSession{_, _, _, _, _, loadout, _, _}: loadout
 
 def skillNamed(skills: List<&2, Skills.Skill>, +name: String) -> Maybe<&2, Skills.Skill>:
   match skills:
@@ -1784,7 +1788,7 @@ def expandInput(session: AgentSession, text: String) -> IO(String): expandWith(l
 
 def queueExpanded(session: AgentSession, behavior: StreamingBehavior, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit):
   match session:
-    case AgentSession{agent, shared, _, _, _, _}:
+    case AgentSession{agent, shared, _, _, _, _, _, _}:
       do IO<Unit>:
         now : F64 <- Date.now()
         queueAt(agent, shared, behavior, text, images, now)
@@ -1806,7 +1810,7 @@ def clearedQueues(state: Shared) -> Shared & QueuedMessages:
       (Shared{session, Nil{}, Nil{}, listeners, active, lastAssistant, retry, compaction, bash}, QueuedMessages{steering, following})
 def clearQueue(session: AgentSession) -> IO(QueuedMessages):
   match session:
-    case AgentSession{+agent, +shared, _, _, _, _}:
+    case AgentSession{+agent, +shared, _, _, _, _, _, _}:
       do IO<QueuedMessages>:
         cleared : QueuedMessages <- R.modify(Shared, QueuedMessages, shared, clearedQueues)
         Agent.clearSteeringQueue(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
@@ -1816,7 +1820,7 @@ def clearQueue(session: AgentSession) -> IO(QueuedMessages):
 
 def flushPending(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{agent, shared, _, _, _, _}: flushPendingBash(agent, shared)
+    case AgentSession{agent, shared, _, _, _, _, _, _}: flushPendingBash(agent, shared)
 
 def promptWhile(+session: AgentSession, streaming: Bool, +text: String, +images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>) -> IO(Result<&2, &2, String, Unit>):
   match streaming behavior:
@@ -1836,7 +1840,7 @@ def manualIn(compaction: CompactionState) -> Bool:
 
 def manualCompacting(session: AgentSession) -> IO(Bool):
   match session:
-    case AgentSession{_, shared, _, _, _, _}:
+    case AgentSession{_, shared, _, _, _, _, _, _}:
       do IO<Bool>:
         state : Shared <- R.read(Shared, shared)
         return manualIn(compactionOf(state))
@@ -1867,18 +1871,18 @@ def prompt(+session: AgentSession, text: String, images: List<&2, Ai.ImageConten
 
 def abortRetry(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{_, shared, _, _, _, _}: abortSleeping(shared)
+    case AgentSession{_, shared, _, _, _, _, _, _}: abortSleeping(shared)
 
 def isRetrying(session: AgentSession) -> IO(Bool):
   match session:
-    case AgentSession{_, shared, _, _, _, _}:
+    case AgentSession{_, shared, _, _, _, _, _, _}:
       do IO<Bool>:
         state : Shared <- R.read(Shared, shared)
         return Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, sleepingOf(retryOf(state))))
 
 def abortCompaction(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{_, shared, _, _, _, _}: abortCompactions(shared)
+    case AgentSession{_, shared, _, _, _, _, _, _}: abortCompactions(shared)
 
 def hasController(compaction: CompactionState) -> Bool:
   match compaction:
@@ -1886,7 +1890,7 @@ def hasController(compaction: CompactionState) -> Bool:
 
 def isCompacting(session: AgentSession) -> IO(Bool):
   match session:
-    case AgentSession{_, shared, _, _, _, _}:
+    case AgentSession{_, shared, _, _, _, _, _, _}:
       do IO<Bool>:
         state : Shared <- R.read(Shared, shared)
         return hasController(compactionOf(state))
@@ -1895,7 +1899,7 @@ def isCompacting(session: AgentSession) -> IO(Bool):
 # wait until it is idle.
 def abort(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{+agent, +shared, _, _, _, _}:
+    case AgentSession{+agent, +shared, _, _, _, _, _, _}:
       do IO<Unit>:
         abortSleeping(shared)
         abortCompactions(shared)
@@ -1938,7 +1942,7 @@ def manualFor(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settin
     case Some{+model}: manualPrepared(agent, shared, model, customInstructions, signal, entries, Compaction.prepareCompaction(~Unit, ~Tools.ToolDetails, ~V.Value, ~detailsOf, entries, compactionSettingsFor(settings, model)))
 def compact(session: AgentSession, customInstructions: Maybe<&2, String>) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
   match session:
-    case AgentSession{+agent, +shared, _, settingsRef, _, _}:
+    case AgentSession{+agent, +shared, _, settingsRef, _, _, _, _}:
       do IO<Result<&2, &2, String, Compaction.CompactionResult>>:
         +settings : Settings.SettingsManager <- R.read(Settings.SettingsManager,settingsRef)
         abortSleeping(shared)
@@ -2023,7 +2027,7 @@ def navigateSnapshot(agent: Runtime.Owner(), shared: R.Ref<Shared>, snapshot: Sh
 # No-summary navigation; branch summarization remains a separate operation.
 def navigateTree(+session: AgentSession, targetId: String) -> IO(Result<&2, &2, String, Navigation>):
   match session:
-    case AgentSession{agent, shared, _, _, _, _}:
+    case AgentSession{agent, shared, _, _, _, _, _, _}:
       do IO<Result<&2, &2, String, Navigation>>:
         streaming : Bool <- isStreaming(session)
         compacting : Bool <- isCompacting(session)
@@ -2107,7 +2111,7 @@ def forkSnapshot(agent: Runtime.Owner(), shared: R.Ref<Shared>, snapshot: Shared
 # for the editor. The active owner and its event subscribers stay mounted.
 def forkAt(+session: AgentSession, entryId: String) -> IO(Result<&2, &2, String, Fork>):
   match session:
-    case AgentSession{agent, shared, _, _, _, _}:
+    case AgentSession{agent, shared, _, _, _, _, _, _}:
       do IO<Result<&2, &2, String, Fork>>:
         streaming : Bool <- isStreaming(session)
         compacting : Bool <- isCompacting(session)
@@ -2127,26 +2131,6 @@ def recorded(shared: R.Ref<Shared>, outcome: Sessions.Outcome(Appended())) -> IO
         R.modify(Shared, Unit, shared, current => (withSession(current, session), Unit{}))
         return Done{Unit{}}
     case Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{Sessions.message(error)})
-
-def clamped(value: AgentState(), +level: Ai.ModelThinkingLevel) -> Ai.ModelThinkingLevel:
-  Maybe.default(&2, Ai.ModelThinkingLevel, Maybe.map(&2, Ai.Model<Ai.JsonValue>, Ai.ModelThinkingLevel, model => AiModels.clampThinkingLevel(Ai.JsonValue, model, level), stateModel(value)), level)
-
-# upstream setThinkingLevel: clamp to the model, apply, record, notify.
-def applyThinking(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +chosen: Ai.ModelThinkingLevel) -> IO(Result<&2, &2, String, Unit>):
-  do IO<Result<&2, &2, String, Unit>>:
-    Agent.setThinkingLevel(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, chosen)
-    stored : Shared <- R.read(Shared, shared)
-    outcome : Sessions.Outcome(Appended()) <- recordThinking(sharedSession(stored), chosen)
-    result : Result<&2, &2, String, Unit> <- recorded(shared, outcome)
-    emit(shared, ThinkingLevelChanged{chosen})
-    return result
-
-def setThinkingLevel(session: AgentSession, level: Ai.ModelThinkingLevel) -> IO(Result<&2, &2, String, Unit>):
-  match session:
-    case AgentSession{+agent, shared, _, _, _, _}:
-      do IO<Result<&2, &2, String, Unit>>:
-        current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-        applyThinking(agent, shared, clamped(current, level))
 
 def checkedSetting(value: Settings.SettingsManager & List<&2,Settings.SettingsError>) -> Result<&2,&2,String,Settings.SettingsManager>:
   match value:
@@ -2168,14 +2152,14 @@ def settingApplied(settings: R.Ref<Settings.SettingsManager>,result: Result<&2,&
         return Done{Unit{}}
 def setAutoCompactionEnabled(session: AgentSession,enabled: Bool) -> IO(Result<&2,&2,String,Unit>):
   match session:
-    case AgentSession{_,_,_,+settings,_,_}:
+    case AgentSession{_,_,_,+settings,_,_,_,_}:
       do IO<Result<&2,&2,String,Unit>>:
         +current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
         updated : Result<&2,&2,String,Settings.SettingsManager> <- persistedSetting(Settings.setCompactionEnabled(enabled,current))
         settingApplied(settings,updated)
 def getAutoCompactionEnabled(session: AgentSession) -> IO(Bool):
   match session:
-    case AgentSession{_,_,_,settings,_,_}:
+    case AgentSession{_,_,_,settings,_,_,_,_}:
       do IO<Bool>:
         +current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
         return Settings.getCompactionEnabled(current)
@@ -2189,14 +2173,14 @@ def retryApplied(settings: R.Ref<Settings.SettingsManager>,shared: R.Ref<Shared>
         return Done{Unit{}}
 def setAutoRetryEnabled(session: AgentSession,enabled: Bool) -> IO(Result<&2,&2,String,Unit>):
   match session:
-    case AgentSession{_,shared,_,+settings,_,_}:
+    case AgentSession{_,shared,_,+settings,_,_,_,_}:
       do IO<Result<&2,&2,String,Unit>>:
         +current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
         updated : Result<&2,&2,String,Settings.SettingsManager> <- persistedSetting(Settings.setRetryEnabled(enabled,current))
         retryApplied(settings,shared,updated)
 def getAutoRetryEnabled(session: AgentSession) -> IO(Bool):
   match session:
-    case AgentSession{_,_,_,settings,_,_}:
+    case AgentSession{_,_,_,settings,_,_,_,_}:
       do IO<Bool>:
         +current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
         return Settings.getRetryEnabled(current)
@@ -2205,7 +2189,7 @@ def getAutoRetryEnabled(session: AgentSession) -> IO(Bool):
 # to the settings.
 def setSteeringMode(session: AgentSession, +mode: T.QueueMode) -> IO(Result<&2, &2, String, Unit>):
   match session:
-    case AgentSession{agent, _, _, +settings, _, _}:
+    case AgentSession{agent, _, _, +settings, _, _, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
         Agent.setSteeringMode(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, mode)
         +current : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
@@ -2214,31 +2198,285 @@ def setSteeringMode(session: AgentSession, +mode: T.QueueMode) -> IO(Result<&2, 
 
 def setFollowUpMode(session: AgentSession, +mode: T.QueueMode) -> IO(Result<&2, &2, String, Unit>):
   match session:
-    case AgentSession{agent, _, _, +settings, _, _}:
+    case AgentSession{agent, _, _, +settings, _, _, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
         Agent.setFollowUpMode(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, mode)
         +current : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
         updated : Result<&2, &2, String, Settings.SettingsManager> <- persistedSetting(Settings.setFollowUpMode(mode, current))
         settingApplied(settings, updated)
 
-# upstream setModel: apply the model, keep the thinking level within its
-# range, record the change (extension model_select events are not ported).
-def setModel(+session: AgentSession, +model: Ai.Model<Ai.JsonValue>) -> IO(Result<&2, &2, String, Unit>):
+# Models and thinking levels
+# --------------------------
+
+type ModelMutationOptions is Data:
+  ModelMutationOptions{persist: Bool}
+
+type CycleDirection is Data:
+  Forward{}
+  Backward{}
+
+type ModelCycleResult is Data:
+  ModelCycleResult{model: Ai.Model<Ai.JsonValue>, thinkingLevel: Ai.ModelThinkingLevel, isScoped: Bool}
+
+def both(first: Result<&2, &2, String, Unit>, second: Result<&2, &2, String, Unit>) -> Result<&2, &2, String, Unit>:
+  match first:
+    case Fail{message}: Fail{message}
+    case Done{_}: second
+
+def done() -> IO(Result<&2, &2, String, Unit>): IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+
+def updateSettings(+settings: R.Ref<Settings.SettingsManager>, change: Settings.SettingsManager -> Settings.Outcome(Settings.SettingsManager)) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    current : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
+    updated : Result<&2, &2, String, Settings.SettingsManager> <- persistedSetting(change(current))
+    settingApplied(settings, updated)
+
+def levelsFor(model: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> List<&2, Ai.ModelThinkingLevel>:
+  match model:
+    case None{}: Levels.all()
+    case Some{found}: AiModels.getSupportedThinkingLevels(Ai.JsonValue, found)
+
+def clamped(value: AgentState(), +level: Ai.ModelThinkingLevel) -> Ai.ModelThinkingLevel:
+  Maybe.default(&2, Ai.ModelThinkingLevel, Maybe.map(&2, Ai.Model<Ai.JsonValue>, Ai.ModelThinkingLevel, model => AiModels.clampThinkingLevel(Ai.JsonValue, model, level), stateModel(value)), level)
+
+def sameLevel(left: Ai.ModelThinkingLevel, right: Ai.ModelThinkingLevel) -> Bool:
+  U32.is_eq(Levels.rank(left), Levels.rank(right))
+
+def recordThinkingChange(+shared: R.Ref<Shared>, +level: Ai.ModelThinkingLevel) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    stored : Shared <- R.read(Shared, shared)
+    outcome : Sessions.Outcome(Appended()) <- recordThinking(sharedSession(stored), level)
+    result : Result<&2, &2, String, Unit> <- recorded(shared, outcome)
+    emit(shared, ThinkingLevelChanged{level})
+    return result
+
+def persistThinking(settings: R.Ref<Settings.SettingsManager>, level: Ai.ModelThinkingLevel, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Unit>):
+  match options:
+    case ModelMutationOptions{False{}}: done()
+    case ModelMutationOptions{True{}}: updateSettings(settings, current => Settings.setDefaultThinkingLevel(level, current))
+
+# upstream setThinkingLevel: clamp to the model, persist the requested level
+# on request, and record and announce the clamped level only when it changes.
+def applyThinking(+agent: Runtime.Owner(), shared: R.Ref<Shared>, settings: R.Ref<Settings.SettingsManager>, +level: Ai.ModelThinkingLevel, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +effective : Ai.ModelThinkingLevel = clamped(current, level)
+    +previous : Ai.ModelThinkingLevel = stateThinking(current)
+    Agent.setThinkingLevel(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, effective)
+    persisted : Result<&2, &2, String, Unit> <- persistThinking(settings, level, options)
+    changed : Result<&2, &2, String, Unit> <- Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), sameLevel(effective, previous), _ => done(), _ => recordThinkingChange(shared, effective))(Unit{})
+    return both(persisted, changed)
+
+def setThinkingLevel(session: AgentSession, level: Ai.ModelThinkingLevel, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Unit>):
   match session:
-    case AgentSession{+agent, +shared, _, _, _, _}:
+    case AgentSession{agent, shared, _, settings, _, _, _, _}: applyThinking(agent, shared, settings, level, options)
+
+def getAvailableThinkingLevels(session: AgentSession) -> IO(List<&2, Ai.ModelThinkingLevel>):
+  do IO<List<&2, Ai.ModelThinkingLevel>>:
+    current : AgentState() <- state(session)
+    return levelsFor(stateModel(current))
+
+def reasoningModel(model: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> Bool:
+  match model:
+    case Some{Ai.Model{_, _, _, _, _, reasoning, _, _, _, _, _, _, _, _, _, _}}: reasoning
+    case None{}: False{}
+
+def supportsThinking(session: AgentSession) -> IO(Bool):
+  do IO<Bool>:
+    current : AgentState() <- state(session)
+    return reasoningModel(stateModel(current))
+
+def levelIndex(levels: List<&2, Ai.ModelThinkingLevel>, +current: Ai.ModelThinkingLevel, +index: Nat) -> Maybe<&2, Nat>:
+  match levels:
+    case Nil{}: None{}
+    case level <> rest: Bool.pick(Maybe<&2, Nat>, sameLevel(level, current), Some{index}, levelIndex(rest, current, index + 1n))
+
+# upstream indexOf + 1: an unlisted current level starts at the first.
+def followingLevel(+levels: List<&2, Ai.ModelThinkingLevel>, current: Ai.ModelThinkingLevel) -> Ai.ModelThinkingLevel:
+  +next = Maybe.default(&2, Nat, Maybe.map(&2, Nat, Nat, index => index + 1n, levelIndex(levels, current, 0n)), 0n)
+  Maybe.default(&2, Ai.ModelThinkingLevel, List.get(&2, Ai.ModelThinkingLevel, levels, next % List.length(&2, Ai.ModelThinkingLevel, levels)), Ai.Off{})
+
+def cycleThinkingFrom(session: AgentSession, +current: AgentState(), options: ModelMutationOptions) -> IO(Result<&2, &2, String, Maybe<&2, Ai.ModelThinkingLevel>>):
+  +model = stateModel(current)
+  Bool.pick(Unit -> IO(Result<&2, &2, String, Maybe<&2, Ai.ModelThinkingLevel>>), reasoningModel(model),
+    _ => do IO<Result<&2, &2, String, Maybe<&2, Ai.ModelThinkingLevel>>>:
+      +next : Ai.ModelThinkingLevel = followingLevel(levelsFor(model), stateThinking(current))
+      result : Result<&2, &2, String, Unit> <- setThinkingLevel(session, next, options)
+      return Result.map(&2, &2, String, Unit, Maybe<&2, Ai.ModelThinkingLevel>, _ => Some{next}, result),
+    _ => IO.pure(Result<&2, &2, String, Maybe<&2, Ai.ModelThinkingLevel>>, Done{None{}}))(Unit{})
+
+# upstream cycleThinkingLevel: the next supported level, or None for a model
+# without reasoning.
+def cycleThinkingLevel(+session: AgentSession, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Maybe<&2, Ai.ModelThinkingLevel>>):
+  do IO<Result<&2, &2, String, Maybe<&2, Ai.ModelThinkingLevel>>>:
+    current : AgentState() <- state(session)
+    cycleThinkingFrom(session, current, options)
+
+def getScopedModels(session: AgentSession) -> IO(List<&2, Models.ScopedModel>):
+  match session:
+    case AgentSession{_, _, _, _, _, _, _, scoped}: R.read(List<&2, Models.ScopedModel>, scoped)
+
+def setScopedModels(session: AgentSession, scopedModels: List<&2, Models.ScopedModel>) -> IO(Unit):
+  match session:
+    case AgentSession{_, _, _, _, _, _, _, scoped}: R.write(List<&2, Models.ScopedModel>, scoped, scopedModels)
+
+def modelRuntime(session: AgentSession) -> Models.ModelRuntime:
+  match session:
+    case AgentSession{_, _, _, _, _, _, models, _}: models
+
+# The per-model setting, then the default setting, then the current level.
+def switchThinking(+settings: Settings.SettingsManager, +model: Ai.Model<Ai.JsonValue>, explicit: Maybe<&2, Ai.ModelThinkingLevel>, current: Ai.ModelThinkingLevel) -> Ai.ModelThinkingLevel:
+  match explicit:
+    case Some{level}: level
+    case None{}: Maybe.default(&2, Ai.ModelThinkingLevel, Maybe.or(&2, Ai.ModelThinkingLevel, Settings.getModelThinkingLevel(Models.modelProvider(model), Models.modelId(model), settings), Settings.getDefaultThinkingLevel(settings)), current)
+
+def listsPattern(patterns: List<&2, String>, +wanted: String) -> Bool:
+  match patterns:
+    case Nil{}: False{}
+    case pattern <> rest: String.eq(String.to_lower(pattern), wanted) || listsPattern(rest, wanted)
+
+def enableDefault(settings: R.Ref<Settings.SettingsManager>, enabled: Maybe<&2, List<&2, String>>, +reference: String) -> IO(Result<&2, &2, String, Unit>):
+  match enabled:
+    case None{}: done()
+    case Some{Nil{}}: done()
+    case Some{+patterns}:
+      Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), listsPattern(patterns, String.to_lower(reference)),
+        _ => done(),
+        _ => updateSettings(settings, current => Settings.setEnabledModels(Some{List.append(&2, String, patterns, reference <> Nil{})}, current)))(Unit{})
+
+# upstream _addPersistedDefaultToNonEmptyScope: a persisted default joins a
+# non-empty scope and the enabledModels setting that defines it.
+def scopeDefault(+settings: R.Ref<Settings.SettingsManager>, +scoped: R.Ref<List<&2, Models.ScopedModel>>, +model: Ai.Model<Ai.JsonValue>) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    +items : List<&2, Models.ScopedModel> <- R.read(List<&2, Models.ScopedModel>, scoped)
+    Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), List.is_empty(&2, Models.ScopedModel, items) || Models.scopedContains(items, model),
+      _ => done(),
+      _ => do IO<Result<&2, &2, String, Unit>>:
+        R.write(List<&2, Models.ScopedModel>, scoped, Models.addScoped(items, model, None{}))
+        current : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
+        enableDefault(settings, Settings.getEnabledModels(current), Models.reference(model)))(Unit{})
+
+def persistModel(+settings: R.Ref<Settings.SettingsManager>, scoped: R.Ref<List<&2, Models.ScopedModel>>, +model: Ai.Model<Ai.JsonValue>, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Unit>):
+  match options:
+    case ModelMutationOptions{False{}}: done()
+    case ModelMutationOptions{True{}}:
       do IO<Result<&2, &2, String, Unit>>:
+        saved : Result<&2, &2, String, Unit> <- updateSettings(settings, current => Settings.setDefaultModelAndProvider(Models.modelProvider(model), Models.modelId(model), current))
+        scopedResult : Result<&2, &2, String, Unit> <- scopeDefault(settings, scoped, model)
+        return both(saved, scopedResult)
+
+# The shared body of upstream setModel and the cycles: apply the model, record
+# the change, persist it on request, then apply its thinking level.
+def switchModel(session: AgentSession, +model: Ai.Model<Ai.JsonValue>, explicit: Maybe<&2, Ai.ModelThinkingLevel>, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Unit>):
+  match session:
+    case AgentSession{+agent, +shared, _, +settings, _, _, _, scoped}:
+      do IO<Result<&2, &2, String, Unit>>:
+        manager : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
+        current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        +level : Ai.ModelThinkingLevel = switchThinking(manager, model, explicit, stateThinking(current))
         Agent.setModel(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, model)
-        +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-        Agent.setThinkingLevel(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, clamped(current, stateThinking(current)))
-        R.modify(Shared, Unit, shared, current => (withContextWindow(current, Ai.modelContextWindow(model)), Unit{}))
+        R.modify(Shared, Unit, shared, value => (withContextWindow(value, Ai.modelContextWindow(model)), Unit{}))
         stored : Shared <- R.read(Shared, shared)
         outcome : Sessions.Outcome(Appended()) <- recordModel(sharedSession(stored), model)
-        recorded(shared, outcome)
+        modelResult : Result<&2, &2, String, Unit> <- recorded(shared, outcome)
+        persisted : Result<&2, &2, String, Unit> <- persistModel(settings, scoped, model, options)
+        thought : Result<&2, &2, String, Unit> <- applyThinking(agent, shared, settings, level, ModelMutationOptions{False{}})
+        return both(modelResult, both(persisted, thought))
+
+# upstream setModel: the provider must have configured auth.
+def setModel(+session: AgentSession, +model: Ai.Model<Ai.JsonValue>, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    authorized : Bool <- Models.hasConfiguredAuth(modelRuntime(session), Models.modelProvider(model))
+    Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), authorized,
+      _ => switchModel(session, model, None{}, options),
+      _ => IO.pure(Result<&2, &2, String, Unit>, Fail{"No API key for " ++ Models.reference(model)}))(Unit{})
+
+def sameModel(+left: Ai.Model<Ai.JsonValue>, +right: Ai.Model<Ai.JsonValue>) -> Bool:
+  String.eq(Models.modelProvider(left), Models.modelProvider(right)) && String.eq(Models.modelId(left), Models.modelId(right))
+
+def modelIndex(models: List<&2, Ai.Model<Ai.JsonValue>>, +current: Ai.Model<Ai.JsonValue>, +index: Nat) -> Nat:
+  match models:
+    case Nil{}: 0n
+    case model <> rest: Bool.pick(Nat, sameModel(model, current), index, modelIndex(rest, current, index + 1n))
+
+# upstream cycling: from the current model's position (the first when it is
+# not listed), wrapping in either direction.
+def stepped(direction: CycleDirection, +index: Nat, +count: Nat) -> Nat:
+  match direction:
+    case Forward{}: (index + 1n) % count
+    case Backward{}: (index + count - 1n) % count
+
+def cycledIndex(direction: CycleDirection, +models: List<&2, Ai.Model<Ai.JsonValue>>, current: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> Nat:
+  stepped(direction, Maybe.default(&2, Nat, Maybe.map(&2, Ai.Model<Ai.JsonValue>, Nat, model => modelIndex(models, model, 0n), current), 0n), List.length(&2, Ai.Model<Ai.JsonValue>, models))
+
+def scopedModels(items: List<&2, Models.ScopedModel>) -> List<&2, Ai.Model<Ai.JsonValue>>:
+  match items:
+    case Nil{}: Nil{}
+    case Models.ScopedModel{model, _} <> rest: model <> scopedModels(rest)
+
+def listsModel(models: List<&2, Ai.Model<Ai.JsonValue>>, +wanted: Ai.Model<Ai.JsonValue>) -> Bool:
+  match models:
+    case Nil{}: False{}
+    case model <> rest: sameModel(model, wanted) || listsModel(rest, wanted)
+
+def availableScope(items: List<&2, Models.ScopedModel>, +available: List<&2, Ai.Model<Ai.JsonValue>>) -> List<&2, Models.ScopedModel>:
+  match items:
+    case Nil{}: Nil{}
+    case Models.ScopedModel{+model, thinking} <> rest:
+      +tail = availableScope(rest, available)
+      Bool.pick(List<&2, Models.ScopedModel>, listsModel(available, model), Models.ScopedModel{model, thinking} <> tail, tail)
+
+def cycled(+session: AgentSession, +model: Ai.Model<Ai.JsonValue>, explicit: Maybe<&2, Ai.ModelThinkingLevel>, scoped: Bool, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>):
+  do IO<Result<&2, &2, String, Maybe<&2, ModelCycleResult>>>:
+    result : Result<&2, &2, String, Unit> <- switchModel(session, model, explicit, options)
+    current : AgentState() <- state(session)
+    return Result.map(&2, &2, String, Unit, Maybe<&2, ModelCycleResult>, _ => Some{ModelCycleResult{model, stateThinking(current), scoped}}, result)
+
+def cycleScopedTo(session: AgentSession, chosen: Maybe<&2, Models.ScopedModel>, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>):
+  match chosen:
+    case Some{Models.ScopedModel{model, thinking}}: cycled(session, model, thinking, True{}, options)
+    case None{}: IO.pure(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>, Done{None{}})
+
+def cycleScopedFrom(session: AgentSession, +items: List<&2, Models.ScopedModel>, direction: CycleDirection, current: Maybe<&2, Ai.Model<Ai.JsonValue>>, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>):
+  cycleScopedTo(session, List.get(&2, Models.ScopedModel, items, cycledIndex(direction, scopedModels(items), current)), options)
+
+def cycleAvailableTo(session: AgentSession, chosen: Maybe<&2, Ai.Model<Ai.JsonValue>>, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>):
+  match chosen:
+    case Some{model}: cycled(session, model, None{}, False{}, options)
+    case None{}: IO.pure(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>, Done{None{}})
+
+def cycleAvailableFrom(session: AgentSession, +models: List<&2, Ai.Model<Ai.JsonValue>>, direction: CycleDirection, current: Maybe<&2, Ai.Model<Ai.JsonValue>>, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>):
+  cycleAvailableTo(session, List.get(&2, Ai.Model<Ai.JsonValue>, models, cycledIndex(direction, models, current)), options)
+
+def cycleScoped(session: AgentSession, +scope: List<&2, Models.ScopedModel>, available: List<&2, Ai.Model<Ai.JsonValue>>, direction: CycleDirection, current: Maybe<&2, Ai.Model<Ai.JsonValue>>, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>):
+  +usable = availableScope(scope, available)
+  Bool.pick(Unit -> IO(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>), Nat.is_le(List.length(&2, Models.ScopedModel, usable), 1n),
+    _ => IO.pure(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>, Done{None{}}),
+    _ => cycleScopedFrom(session, usable, direction, current, options))(Unit{})
+
+def cycleAvailable(session: AgentSession, +available: List<&2, Ai.Model<Ai.JsonValue>>, direction: CycleDirection, current: Maybe<&2, Ai.Model<Ai.JsonValue>>, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>):
+  Bool.pick(Unit -> IO(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>), Nat.is_le(List.length(&2, Ai.Model<Ai.JsonValue>, available), 1n),
+    _ => IO.pure(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>, Done{None{}}),
+    _ => cycleAvailableFrom(session, available, direction, current, options))(Unit{})
+
+def cycleWithin(session: AgentSession, scope: List<&2, Models.ScopedModel>, available: List<&2, Ai.Model<Ai.JsonValue>>, direction: CycleDirection, current: Maybe<&2, Ai.Model<Ai.JsonValue>>, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>):
+  match scope:
+    case Nil{}: cycleAvailable(session, available, direction, current, options)
+    case item <> rest: cycleScoped(session, item <> rest, available, direction, current, options)
+
+# upstream cycleModel: within the scoped models that are available, else
+# within all available models; None when there is nothing to cycle to.
+def cycleModel(+session: AgentSession, direction: CycleDirection, options: ModelMutationOptions) -> IO(Result<&2, &2, String, Maybe<&2, ModelCycleResult>>):
+  do IO<Result<&2, &2, String, Maybe<&2, ModelCycleResult>>>:
+    scope : List<&2, Models.ScopedModel> <- getScopedModels(session)
+    available : List<&2, Ai.Model<Ai.JsonValue>> <- Models.getAvailable(modelRuntime(session))
+    current : AgentState() <- state(session)
+    cycleWithin(session, scope, available, direction, stateModel(current), options)
 
 # upstream setSessionName: record the name and notify.
 def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, String, Unit>):
   match session:
-    case AgentSession{_, +shared, _, _, _, _}:
+    case AgentSession{_, +shared, _, _, _, _, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
         stored : Shared <- R.read(Shared, shared)
         outcome : Sessions.Outcome(Appended()) <- recordName(sharedSession(stored), name)
@@ -2250,14 +2488,14 @@ def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, St
 # mutable settings manager to the runner.
 def doubleEscapeAction(session: AgentSession) -> IO(Settings.DoubleEscapeAction):
   match session:
-    case AgentSession{_,_,_,settings,_,_}:
+    case AgentSession{_,_,_,settings,_,_,_,_}:
       do IO<Settings.DoubleEscapeAction>:
         current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
         return Settings.getDoubleEscapeAction(current)
 
 def treeFilterMode(session: AgentSession) -> IO(Settings.TreeFilterMode):
   match session:
-    case AgentSession{_,_,_,settings,_,_}:
+    case AgentSession{_,_,_,settings,_,_,_,_}:
       do IO<Settings.TreeFilterMode>:
         current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
         return Settings.getTreeFilterMode(current)
