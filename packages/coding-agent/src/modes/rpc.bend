@@ -529,11 +529,10 @@ def statsResponse(id: Maybe<&2,String>,result: Result<&2,&2,S.Error,Stats.Stats>
     case Done{value}: data(id,"get_session_stats",Stats.value(value))
 def getSessionStats(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{+session,sink,_,_,_,_}:
+    case Handle{session,sink,_,_,_,_}:
       do IO<Unit>:
-        stored : Session.Session() <- Session.sessionOf(session)
-        current : Session.AgentState() <- Session.state(session)
-        output(sink,statsResponse(id,Stats.stats(stored,Session.stateModel(current))))
+        result : Result<&2,&2,S.Error,Stats.Stats> <- Session.getSessionStats(session)
+        output(sink,statsResponse(id,result))
 def exported(id: Maybe<&2,String>,result: Result<&2,&2,String,String>) -> V.Value:
   match result:
     case Fail{reason}: failure(id,"export_html",reason)

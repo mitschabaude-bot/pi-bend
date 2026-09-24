@@ -29,6 +29,7 @@ import ../packages/runtime/src/child-process.bend as Child
 import ../packages/runtime/src/utf8.bend as Utf8
 import ../packages/coding-agent/src/core/skills.bend as Skills
 import ../packages/coding-agent/src/core/model-runtime.bend as Models
+import ../packages/coding-agent/src/core/session-stats.bend as Stats
 import ../packages/ai/src/utils/thinking-levels.bend as Levels
 import ./model-runtime-fixture.bend as ModelFixture
 import ../packages/coding-agent/src/core/prompt-templates.bend as Templates
@@ -635,11 +636,40 @@ def interrupted(+session: Session.AgentSession, abortAll: Bool, prompts: List<&2
     C.dispose(Session.AgentSessionEvent, Unit, signal)
     Chan.close(Unit, started)
 
+def numberText(value: F64) -> String: Maybe.default(&2, String, Render.stringify(SchemaJson.toJson(V.Number{value})), "null")
+
+def optionalNumber(value: Maybe<&2, F64>) -> String:
+  match value:
+    case None{}: "null"
+    case Some{number}: numberText(number)
+
+def reportContextUsage(usage: Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>>) -> IO(Unit):
+  match usage:
+    case Done{Some{Stats.ContextUsage{tokens, window, percent}}}: IO.print("{\"type\":\"context\",\"tokens\":" ++ optionalNumber(tokens) ++ ",\"contextWindow\":" ++ numberText(window) ++ ",\"percent\":" ++ optionalNumber(percent) ++ "}")
+    case Done{None{}}: IO.print("{\"type\":\"context\",\"usage\":null}")
+    case Fail{_}: IO.print("{\"type\":\"context\",\"error\":true}")
+
+def reportContext(session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    usage : Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>> <- Session.getContextUsage(session)
+    reportContextUsage(usage)
+
+# context: usage is known before compaction, unknown after it, and known
+# again once an assistant responds.
+def contextAroundCompaction(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    reportContext(session)
+    compactThen(session, Nil{})
+    reportContext(session)
+    promptAll(session, "three" <> Nil{})
+    reportContext(session)
+
 def compactAction(+session: Session.AgentSession, action: String) -> IO(Unit):
   match action:
     case "manual": compactThen(session, Nil{})
     case "cancel": interrupted(session, False{}, Nil{})
     case "abort": interrupted(session, True{}, "next prompt" <> Nil{})
+    case "context": contextAroundCompaction(session)
     case _: IO.pure(Unit, Unit{})
 
 # "queued" queues a follow-up before the prompts, so the run continues past

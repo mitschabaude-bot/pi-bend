@@ -70,6 +70,14 @@ def compaction_checks(runner, threads, work):
     assert stored[0]['firstKeptEntryId'] == lines[4]['id'] and lines[4]['message']['role'] == 'assistant', 'the split turn keeps its last assistant message'
     checks += 9
     # persists usage from pi-generated manual compaction: one prefix-summary request for a one-turn session
+    # getContextUsage: a projected estimate before compaction, unknown right after it, known again after the next response (agent-session getContextUsage)
+    events = run_compact(runner, threads, work, KEEP_RECENT, 'one;two', 'a1#100;a2#200;history summary;prefix summary;a3#300', 'context')
+    contexts = [e for e in events if e['type'] == 'context']
+    assert len(contexts) == 3 and all(c.get('contextWindow') == 128000 for c in contexts), contexts
+    assert contexts[0]['tokens'] and contexts[0]['percent'] == contexts[0]['tokens'] / 128000 * 100, contexts
+    assert contexts[1]['tokens'] is None and contexts[1]['percent'] is None, contexts
+    assert contexts[2]['tokens'] and contexts[2]['percent'] == contexts[2]['tokens'] / 128000 * 100, contexts
+    checks += 3
     events = run_compact(runner, threads, work, KEEP_RECENT, 'one', 'a1;prefix summary#10', 'manual')
     result = only(events, 'compact_result')['result']
     assert result['usage']['totalTokens'] == 10 and result['usage']['input'] == 10, result

@@ -35,6 +35,7 @@ import ../../../runtime/src/text.bend as Text
 import ./session-manager.bend as S
 import ./session-persistence.bend as Sessions
 import ./settings-manager.bend as Settings
+import ./session-stats.bend as Stats
 import ./tools/index.bend as Tools
 import ./system-prompt.bend as Prompt
 import ./bash-executor.bend as BashExec
@@ -2483,6 +2484,22 @@ def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, St
         result : Result<&2, &2, String, Unit> <- recorded(shared, outcome)
         emit(shared, SessionInfoChanged{Some{name}})
         return result
+
+# upstream getSessionStats: counts and billed usage over every stored entry,
+# with the current context usage.
+def getSessionStats(+session: AgentSession) -> IO(Result<&2, &2, S.Error, Stats.Stats>):
+  do IO<Result<&2, &2, S.Error, Stats.Stats>>:
+    stored : Session() <- sessionOf(session)
+    current : AgentState() <- state(session)
+    return Stats.stats(stored, stateModel(current))
+
+# upstream getContextUsage: None without a model or context window; unknown
+# tokens after a compaction until an assistant responds.
+def getContextUsage(+session: AgentSession) -> IO(Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>>):
+  do IO<Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>>>:
+    stored : Session() <- sessionOf(session)
+    current : AgentState() <- state(session)
+    return Stats.context(stateOf(stored), Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, stateModel(current)), F.fromU32(0)))
 
 # upstream session.settingsManager: the modes read the effective settings and
 # change them through the session, which persists each change.
