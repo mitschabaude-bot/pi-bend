@@ -61,6 +61,10 @@ def mermaid(value: Settings.MermaidRenderingMode) -> String:
     case Settings.MermaidStreaming{}: "streaming"
 def rows(+settings: Settings.SettingsManager) -> List<&2,ListUI.SettingItem>:
   boolean("autocompact","Auto-compact","Automatically compact context when it gets too large",Settings.getCompactionEnabled(settings)) <>
+  boolean("auto-resize-images","Auto-resize images","Resize large images to 2000x2000 max for better model compatibility",Settings.getImageAutoResize(settings)) <>
+  boolean("block-images","Block images","Prevent images from being sent to LLM providers",Settings.getBlockImages(settings)) <>
+  boolean("skill-commands","Skill commands","Register skills as /skill:name commands",Settings.getEnableSkillCommands(settings)) <>
+  boolean("terminal-progress","Terminal progress","Show OSC 9;4 progress indicators in the terminal tab bar",Settings.getShowTerminalProgress(settings)) <>
   item("steering-mode","Steering mode","Enter while streaming queues steering messages. 'one-at-a-time': deliver one, wait for response. 'all': deliver all at once.",queue(Settings.getSteeringMode(settings)),choices("one-at-a-time","all")) <>
   item("follow-up-mode","Follow-up mode","Queues follow-up messages until agent stops. 'one-at-a-time': deliver one, wait for response. 'all': deliver all at once.",queue(Settings.getFollowUpMode(settings)),choices("one-at-a-time","all")) <>
   item("transport","Transport","Preferred transport for providers that support multiple transports",transport(Settings.getTransport(settings)),"sse" <> "websocket" <> "websocket-cached" <> "auto" <> Nil{}) <>
@@ -73,11 +77,6 @@ def rows(+settings: Settings.SettingsManager) -> List<&2,ListUI.SettingItem>:
   item("default-project-trust","Default project trust","Fallback behavior when no extension or saved trust decision decides project trust",trust(Settings.getDefaultProjectTrust(settings)),"Ask" <> "Always trust" <> "Never trust" <> Nil{}) <>
   item("double-escape-action","Double-escape action","Action when pressing Escape twice with empty editor",escape(Settings.getDoubleEscapeAction(settings)),"tree" <> "fork" <> "none" <> Nil{}) <>
   item("tree-filter-mode","Tree filter mode","Default filter when opening /tree",treeFilter(Settings.getTreeFilterMode(settings)),"default" <> "no-tools" <> "user-only" <> "labeled-only" <> "all" <> Nil{}) <>
-  boolean("show-images","Show images","Show images in tool output",Settings.getShowImages(settings)) <>
-  boolean("auto-resize-images","Auto-resize images","Resize large images to fit the terminal",Settings.getImageAutoResize(settings)) <>
-  boolean("block-images","Block images","Do not send image content to providers",Settings.getBlockImages(settings)) <>
-  boolean("skill-commands","Skill commands","Expose skills as slash commands",Settings.getEnableSkillCommands(settings)) <>
-  boolean("terminal-progress","Terminal progress","Show terminal progress while the agent is working",Settings.getShowTerminalProgress(settings)) <>
   Nil{}
 
 # An invalid choice fails at the boundary instead of silently changing state.
