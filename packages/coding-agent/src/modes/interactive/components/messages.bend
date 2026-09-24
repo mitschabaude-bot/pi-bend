@@ -2,6 +2,8 @@ import Base
 import ../../../../../tui/src/components/markdown.bend as Markdown
 import ../../../../../tui/src/components/text.bend as TuiText
 import ../../../../../tui/src/components/box.bend as Box
+import ../../../../../tui/src/components/loader.bend as Loader
+import ../../../core/tools/truncate.bend as Truncate
 import ../../../../../tui/src/utils.bend as U
 import ../theme/theme.bend as Theme
 import ../../../../../runtime/src/callback.bend as Callback
@@ -186,7 +188,6 @@ def renderAssistant(state: AssistantMessage,+width: Nat) -> IO(List<&2,String>):
 
 type BashStatus is Data:
   BashRunning{}
-  BashFailed{reason: String}
   BashComplete{exitCode: Maybe<&2,U32>,cancelled: Bool,truncated: Bool,fullOutputPath: Maybe<&2,String>}
 type BashMessage is Data:
   BashMessage{command: String,output: String,status: BashStatus,excluded: Bool,theme: Theme.Theme,expanded: Bool}
@@ -204,9 +205,11 @@ def appendBash(state: BashMessage,chunk: String) -> BashMessage:
 def completeBash(state: BashMessage,output: String,exitCode: Maybe<&2,U32>,cancelled: Bool,truncated: Bool,path: Maybe<&2,String>) -> BashMessage:
   match state:
     case BashMessage{command,_,_,excluded,theme,expanded}: BashMessage{command,normalizedOutput(U.stripTerminalSequences(output)),BashComplete{exitCode,cancelled,truncated,path},excluded,theme,expanded}
-def failBash(state: BashMessage,reason: String) -> BashMessage:
+# upstream: a failed execution completes without an exit code; the caller
+# shows the error.
+def failBash(state: BashMessage) -> BashMessage:
   match state:
-    case BashMessage{command,output,_,excluded,theme,expanded}: BashMessage{command,output,BashFailed{reason},excluded,theme,expanded}
+    case BashMessage{command,output,_,excluded,theme,expanded}: BashMessage{command,output,BashComplete{None{},False{},False{},None{}},excluded,theme,expanded}
 def bashTheme(state: BashMessage,theme: Theme.Theme) -> BashMessage:
   match state: case BashMessage{command,output,status,excluded,_,expanded}: BashMessage{command,output,status,excluded,theme,expanded}
 def bashExpanded(state: BashMessage,expanded: Bool) -> BashMessage:
@@ -217,38 +220,24 @@ def bashBorder(count: Nat) -> String:
     case Succ{rest}: SCon{'─',bashBorder(rest)}
 def bashColor(excluded: Bool) -> String:
   match excluded: case True{}: "dim" case False{}: "bashMode"
-def withoutFinalEmptyReversed(reversed: List<&2,String>,lines: List<&2,String>) -> List<&2,String>:
-  match reversed:
-    case last <> rest: Bool.pick(List<&2,String>,String.is_empty(String.trim(last)),List.reverse(&2,String,rest),lines)
-    case Nil{}: Nil{}
-def withoutFinalEmpty(+lines: List<&2,String>) -> List<&2,String>:
-  withoutFinalEmptyReversed(List.reverse(&2,String,lines),lines)
-def bashOutputLines(+output: String,width: Nat) -> IO(List<&2,String>):
-  match output:
-    case SNil{}: IO.pure(List<&2,String>,Nil{})
-    case output:
-      do IO<List<&2,String>>:
-        lines : List<&2,String> <- textLines(output,1n,width)
-        return withoutFinalEmpty(lines)
-def spacedOutput(lines: List<&2,String>) -> List<&2,String>:
-  match lines:
-    case Nil{}: Nil{}
-    case lines: "" <> lines
-def bashPreview(+lines: List<&2,String>,expanded: Bool) -> List<&2,String>:
-  Bool.pick(List<&2,String>,expanded,lines,List.drop(&2,String,lines,List.length(&2,String,lines) - 20n))
-def bashHidden(lines: List<&2,String>,expanded: Bool) -> Nat:
-  Bool.pick(Nat,expanded,0n,List.length(&2,String,lines) - 20n)
-def joinStatus(+first: String,+second: String) -> String:
-  Bool.pick(String,String.is_empty(first),second,Bool.pick(String,String.is_empty(second),first,first ++ "\n" ++ second))
-def bashStatus(status: BashStatus,+hidden: Nat) -> String:
-  match status:
-    case BashRunning{}: "Running... (esc to cancel)"
-    case BashFailed{reason}: "Bash command failed: " ++ reason
-    case BashComplete{exitCode,cancelled,truncated,path}:
-      +more = Bool.pick(String,Nat.is_eq(hidden,0n),"","... " ++ Nat.show(hidden) ++ " earlier lines (Ctrl+O to expand)")
-      +ending = Bool.pick(String,cancelled,"(cancelled)",Maybe.default(&2,String,Maybe.map(&2,U32,String,+code => Bool.pick(String,U32.is_eq(code,0),"","(exit " ++ U32.show(code) ++ ")"),exitCode),""))
-      +truncation = Bool.pick(String,truncated,Maybe.default(&2,String,Maybe.map(&2,String,String,value => "Output truncated. Full output: " ++ value,path),"Output truncated"),"")
-      joinStatus(joinStatus(more,ending),truncation)
+# upstream BashExecutionComponent. Key texts are keyText's defaults for
+# tui.select.cancel and app.tools.expand.
+def PREVIEW_LINES() -> Nat: 20n
+def cancelKeys() -> String: "escape/ctrl+c"
+def expandKeys() -> String: "ctrl+o"
+def bashRunning(+theme: Theme.Theme,key: String,width: Nat) -> IO(List<&2,String>):
+  do IO<List<&2,String>>:
+    spinner : String <- foregroundText(theme,key,Loader.frameAt(Loader.defaultFrames(),0n))
+    message : String <- foregroundText(theme,"muted","Running... (" ++ cancelKeys() ++ " to cancel)")
+    lines : List<&2,String> <- textLines(spinner ++ " " ++ message,1n,width)
+    return "" <> lines
+# The displayed lines follow the context truncation of the bash tool.
+def bashAvailable(result: Truncate.TruncationResult) -> List<&2,String>:
+  match result:
+    case Truncate.TruncationResult{SNil{},_,_,_,_,_,_,_,_,_,_}: Nil{}
+    case Truncate.TruncationResult{content,_,_,_,_,_,_,_,_,_,_}: String.split(content,'\n')
+def contextTruncated(result: Truncate.TruncationResult) -> Bool:
+  match result: case Truncate.TruncationResult{_,truncated,_,_,_,_,_,_,_,_,_}: truncated
 def bashPaintedLines(lines: List<&2,String>,+theme: Theme.Theme,reversed: List<&2,String>) -> IO(List<&2,String>):
   match lines:
     case Nil{}: IO.pure(List<&2,String>,List.reverse(&2,String,reversed))
@@ -256,19 +245,83 @@ def bashPaintedLines(lines: List<&2,String>,+theme: Theme.Theme,reversed: List<&
       do IO<List<&2,String>>:
         painted : String <- foregroundText(theme,"muted",line)
         bashPaintedLines(rest,theme,painted <> reversed)
+def lastLines(+lines: List<&2,String>,count: Nat) -> List<&2,String>:
+  List.drop(&2,String,lines,List.length(&2,String,lines) - count)
+# Collapsed output shows the last PREVIEW_LINES logical lines, cut to as many
+# visual lines (upstream truncateToVisualLines).
+def bashOutput(lines: List<&2,String>,+theme: Theme.Theme,+expanded: Bool,width: Nat) -> IO(List<&2,String>):
+  match lines:
+    case Nil{}: IO.pure(List<&2,String>,Nil{})
+    case +lines:
+      do IO<List<&2,String>>:
+        painted : List<&2,String> <- bashPaintedLines(Bool.pick(List<&2,String>,expanded,lines,lastLines(lines,PREVIEW_LINES())),theme,Nil{})
+        +visual : List<&2,String> <- textLines("\n" ++ String.join(painted,"\n"),1n,width)
+        return Bool.pick(List<&2,String>,expanded,visual,lastLines(visual,PREVIEW_LINES()))
+def keyHint(+theme: Theme.Theme,description: String) -> IO(String):
+  do IO<String>:
+    key : String <- foregroundText(theme,"dim",expandKeys())
+    text : String <- foregroundText(theme,"muted"," " ++ description)
+    return key ++ text
+def hiddenPart(+theme: Theme.Theme,+hidden: Nat,expanded: Bool) -> IO(List<&2,String>):
+  match hidden expanded:
+    case Zero{} _: IO.pure(List<&2,String>,Nil{})
+    case Succ{_} True{}:
+      do IO<List<&2,String>>:
+        open : String <- foregroundText(theme,"muted","(")
+        hint : String <- keyHint(theme,"to collapse")
+        close : String <- foregroundText(theme,"muted",")")
+        return [open ++ hint ++ close]
+    case Succ{_} False{}:
+      do IO<List<&2,String>>:
+        open : String <- foregroundText(theme,"muted","... " ++ Nat.show(hidden) ++ " more lines (")
+        hint : String <- keyHint(theme,"to expand")
+        close : String <- foregroundText(theme,"muted",")")
+        return [open ++ hint ++ close]
+def endingPart(+theme: Theme.Theme,cancelled: Bool,exitCode: Maybe<&2,U32>) -> IO(List<&2,String>):
+  match cancelled exitCode:
+    case True{} _:
+      do IO<List<&2,String>>:
+        text : String <- foregroundText(theme,"warning","(cancelled)")
+        return [text]
+    case False{} Some{+code}:
+      Bool.pick(Unit -> IO(List<&2,String>),U32.is_eq(code,0),_ => IO.pure(List<&2,String>,Nil{}),_ => do IO<List<&2,String>>:
+        text : String <- foregroundText(theme,"error","(exit " ++ U32.show(code) ++ ")")
+        return [text])(Unit{})
+    case False{} None{}: IO.pure(List<&2,String>,Nil{})
+def truncationPart(+theme: Theme.Theme,truncated: Bool,path: Maybe<&2,String>) -> IO(List<&2,String>):
+  match truncated path:
+    case True{} Some{path}:
+      do IO<List<&2,String>>:
+        text : String <- foregroundText(theme,"warning","Output truncated. Full output: " ++ path)
+        return [text]
+    case _ _: IO.pure(List<&2,String>,Nil{})
+def statusLines(parts: List<&2,String>,width: Nat) -> IO(List<&2,String>):
+  match parts:
+    case Nil{}: IO.pure(List<&2,String>,Nil{})
+    case parts: textLines("\n" ++ String.join(parts,"\n"),1n,width)
+def bashStatus(status: BashStatus,+theme: Theme.Theme,key: String,+hidden: Nat,expanded: Bool,contextCut: Bool,+width: Nat) -> IO(List<&2,String>):
+  match status:
+    case BashRunning{}: bashRunning(theme,key,width)
+    case BashComplete{exitCode,cancelled,truncated,path}:
+      do IO<List<&2,String>>:
+        more : List<&2,String> <- hiddenPart(theme,hidden,expanded)
+        ending : List<&2,String> <- endingPart(theme,cancelled,exitCode)
+        cut : List<&2,String> <- truncationPart(theme,truncated || contextCut,path)
+        statusLines(List.append(&2,String,more,List.append(&2,String,ending,cut)),width)
 def renderBash(state: BashMessage,+width: Nat) -> IO(List<&2,String>):
   match state:
     case BashMessage{command,output,status,excluded,+theme,+expanded}:
+      +key = bashColor(excluded)
+      +truncation = Truncate.truncateTail(output,Truncate.TruncationOptions{None{},None{}})
+      +available = bashAvailable(truncation)
+      +hidden = List.length(&2,String,available) - PREVIEW_LINES()
       do IO<List<&2,String>>:
-        +key : String <- IO.pure(String,bashColor(excluded))
         +top : String <- foregroundText(theme,key,bashBorder(width))
-        header : String <- foregroundText(theme,key,"$ " ++ command)
-        headerLines : List<&2,String> <- textLines("\u{1b}[1m" ++ header ++ "\u{1b}[22m",1n,width)
-        +visual : List<&2,String> <- bashOutputLines(output,width)
-        body : List<&2,String> <- bashPaintedLines(bashPreview(visual,expanded),theme,Nil{})
-        +note : String <- foregroundText(theme,"muted",bashStatus(status,bashHidden(visual,expanded)))
-        statusLines : List<&2,String> <- Bool.pick(Unit -> IO(List<&2,String>),String.is_empty(note),_ => IO.pure(List<&2,String>,Nil{}),_ => textLines(note,1n,width))(Unit{})
-        return List.append(&2,String,"" <> top <> headerLines,List.append(&2,String,spacedOutput(body),List.append(&2,String,statusLines,top <> Nil{})))
+        header : String <- foregroundText(theme,key,"\u{1b}[1m$ " ++ command ++ "\u{1b}[22m")
+        headerLines : List<&2,String> <- textLines(header,1n,width)
+        body : List<&2,String> <- bashOutput(available,theme,expanded,width)
+        after : List<&2,String> <- bashStatus(status,theme,key,hidden,expanded,contextTruncated(truncation),width)
+        return List.append(&2,String,"" <> top <> headerLines,List.append(&2,String,body,List.append(&2,String,after,top <> Nil{})))
 
 # A mounted message renders the latest immutable snapshot. The transcript owns
 # the callback lifetime; stream updates replace only this message's snapshot.

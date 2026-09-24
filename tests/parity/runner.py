@@ -249,7 +249,13 @@ def run_side(label, argv, scenario, keep):
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(step[2])
             elif kind == "snap":
-                snaps[step[1]] = working_screen(terminal.screen(), root) if step[1] == "working" else normalise(terminal.screen(), root)
+                if step[1] == "working":
+                    snaps[step[1]] = working_screen(terminal.screen(), root)
+                else:
+                    snaps[step[1]] = normalise(terminal.screen(), root)
+                    # tmux re-encodes each cell's attributes, so equal
+                    # captures mean equal colours and styles on screen.
+                    snaps[step[1] + ".color"] = normalise(terminal.screen(ansi=True), root)
     finally:
         terminal.close()
         server.shutdown()

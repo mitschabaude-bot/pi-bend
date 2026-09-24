@@ -59,6 +59,7 @@ import ./components/trust-selector.bend as TrustPicker
 import ./components/messages.bend as MessageUI
 import ./components/login-dialog.bend as LoginDialog
 import ./theme/color.bend as Color
+import ../../../../tui/src/terminal-image.bend as Image
 import ./theme/markdown-theme.bend as MarkdownTheme
 import ./theme/theme.bend as Theme
 import ./theme/theme-controller.bend as ThemeController
@@ -1580,7 +1581,8 @@ def themeReady(startup: ThemeStartup,ready: Process.QueryReady) -> IO(Unit):
       do IO<Unit>:
         +render : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeLive,~Unit,~Unit,~syncRender,ThemeLive{selected,theme,transcript,requestRender})
         detected : Result<&1,&1,U32 & String,String> <- IO.get_env("COLORFGBG")
-        result : Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle> <- ThemeController.start(Process.QueryReady{queries,terminal,write,render},setting,environmentValue(detected),builtinDir,customDir,Color.TrueColor{})
+        initialTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
+        result : Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle> <- ThemeController.start(Process.QueryReady{queries,terminal,write,render},setting,environmentValue(detected),builtinDir,customDir,Theme.colorMode(initialTheme))
         readySelected(result,ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managed},render)
 def closeTheme(current: Maybe<&1,ThemeOwned>) -> IO(Unit):
   match current:
@@ -1841,11 +1843,21 @@ def themed(session: Session.AgentSession,initial: List<&2,Controller.Submission>
   match loaded:
     case Fail{cause}: IO.pure(Result<&2,&2,Error,Unit>,Fail{ThemeData{cause}})
     case Done{theme}: started(session,initial,cwd,home,theme,words,setting,builtinDir,customDir,models,mode)
-def withWords(session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,agentDir: String,assetsRoot: String,setting: Maybe<&2,String>,words: Words.Source,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
+# upstream theme colour mode: getCapabilities().trueColor, with the settings'
+# terminal capability override taking precedence over detection.
+def trueColorOverride(capabilities: Settings.TerminalCapabilities) -> Maybe<&2,Bool>:
+  match capabilities: case Settings.TerminalCapabilities{_,color,_}: color
+def colorMode(session: Session.AgentSession,home: Maybe<&2,String>) -> IO(Color.Mode):
+  do IO<Color.Mode>:
+    settings : Settings.SettingsManager <- Ref.read(Settings.SettingsManager,Session.settingsOf(session))
+    environment : Image.Environment <- Image.processEnvironment("linux",Maybe.default(&2,String,home,""))
+    return Color.modeFor(Image.trueColor(environment,trueColorOverride(Settings.getTerminalCapabilityOverrides(settings))))
+def withWords(+session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,+home: Maybe<&2,String>,agentDir: String,assetsRoot: String,setting: Maybe<&2,String>,words: Words.Source,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   do IO<Result<&2,&2,Error,Unit>>:
     +builtinDir : String <- IO.pure(String,Path.join(assetsRoot,"packages/coding-agent/src/modes/interactive/theme"))
     +customDir : String <- IO.pure(String,Path.join(agentDir,"themes"))
-    theme : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadByName("dark",builtinDir,customDir,Color.TrueColor{})
+    colors : Color.Mode <- colorMode(session,home)
+    theme : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadByName("dark",builtinDir,customDir,colors)
     themed(session,initial,cwd,home,words,theme,setting,builtinDir,customDir,models,mode)
 def run(session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,agentDir: String,+assetsRoot: String,themeSetting: Maybe<&2,String>,models: List<&2,Models.Model()>) -> IO(Result<&2,&2,Error,Unit>):
   do IO<Result<&2,&2,Error,Unit>>:

@@ -12,6 +12,8 @@ import ../../../../../runtime/src/posix-path.bend as Path
 # is loaded, so rendering never depends on JSON or mutable global state.
 type Token is Data: Literal{color: C.Color} Reference{name: String}
 type Theme is Data: Theme{name: String,mode: C.Mode,foreground: R.Record<C.Color>,background: R.Record<C.Color>}
+def colorMode(theme: Theme) -> C.Mode:
+  match theme: case Theme{_,mode,_,_}: mode
 type Error is Data:
   InvalidJson{}
   InvalidDocument{}

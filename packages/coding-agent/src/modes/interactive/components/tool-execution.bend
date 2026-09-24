@@ -216,7 +216,7 @@ def coloredLines(lines: List<&2,String>,+theme: Theme.Theme,reversed: List<&2,St
 def expandHint(+theme: Theme.Theme,lead: String) -> IO(String):
   do IO<String>:
     start : String <- Messages.foregroundText(theme,"muted",lead)
-    key : String <- Messages.foregroundText(theme,"dim","")
+    key : String <- Messages.foregroundText(theme,"dim",Messages.expandKeys())
     rest : String <- Messages.foregroundText(theme,"muted"," to expand")
     end : String <- Messages.foregroundText(theme,"muted",")")
     return start ++ " " ++ key ++ rest ++ end
@@ -353,7 +353,7 @@ def resultFallback(state: ToolExecution,width: Nat) -> IO(List<&2,String>):
           +text : String <- Bool.pick(Unit -> IO(String),Nat.is_eq(remaining,0n),_ => IO.pure(String,joined),
             _ => do IO<String>:
               start : String <- Messages.foregroundText(theme,"muted","\n... (" ++ Nat.show(remaining) ++ " more lines,")
-              key : String <- Messages.foregroundText(theme,"dim","")
+              key : String <- Messages.foregroundText(theme,"dim",Messages.expandKeys())
               hint : String <- Messages.foregroundText(theme,"muted"," to expand")
               end : String <- Messages.foregroundText(theme,"muted",")")
               return joined ++ start ++ " " ++ key ++ hint ++ end)(Unit{})

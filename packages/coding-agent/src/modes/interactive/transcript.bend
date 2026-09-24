@@ -151,14 +151,14 @@ def finishBash(+handle: Messages.Handle,output: String,exitCode: Maybe<&2,U32>,c
   do IO<Unit>:
     body : Messages.Body <- Messages.current(handle)
     Messages.set(handle,bashFinished(body,output,exitCode,cancelled,truncated,path))
-def bashFailed(body: Messages.Body,reason: String) -> Messages.Body:
+def bashFailed(body: Messages.Body) -> Messages.Body:
   match body:
-    case Messages.BashBody{state}: Messages.BashBody{Messages.failBash(state,reason)}
+    case Messages.BashBody{state}: Messages.BashBody{Messages.failBash(state)}
     case other: other
-def failBash(+handle: Messages.Handle,reason: String) -> IO(Unit):
+def failBash(+handle: Messages.Handle) -> IO(Unit):
   do IO<Unit>:
     body : Messages.Body <- Messages.current(handle)
-    Messages.set(handle,bashFailed(body,reason))
+    Messages.set(handle,bashFailed(body))
 def appendUser(state: State,text: String,preceded: Bool) -> IO(State & Bool):
   match state:
     case State{entries,tools,active,id,view,+theme,+styles,expanded,+hidden}:

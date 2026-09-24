@@ -28,11 +28,20 @@ def selected(options: List<&2,Trust.ProjectTrustOption>,+saved: Maybe<&2,Trust.P
     case option <> rest: Bool.pick(Nat,isSaved(option,saved),index,selected(rest,saved,index + 1n))
 def new(cwd: String,+options: List<&2,Trust.ProjectTrustOption>,+saved: Maybe<&2,Trust.ProjectTrustStoreEntry>,trusted: Bool) -> State:
   State{cwd,options,saved,trusted,selected(options,saved,0n)}
-def decision(saved: Maybe<&2,Trust.ProjectTrustStoreEntry>,cwd: String) -> String:
+# upstream formatDecision: a decision saved for another path is inherited.
+def trustPathOf(options: List<&2,Trust.ProjectTrustOption>) -> Maybe<&2,String>:
+  match options:
+    case Trust.ProjectTrustOption{_,_,_,path} <> _: path
+    case Nil{}: None{}
+def decisionLabel(decided: Bool) -> String: Bool.pick(String,decided,"trusted","untrusted")
+def decisionPath(trustPath: Maybe<&2,String>,+path: String) -> String:
+  match trustPath:
+    case Some{other}: Bool.pick(String,String.eq(path,other),path,"inherited from " ++ path)
+    case None{}: path
+def decision(saved: Maybe<&2,Trust.ProjectTrustStoreEntry>,trustPath: Maybe<&2,String>) -> String:
   match saved:
     case None{}: "none"
-    case Some{Trust.ProjectTrustStoreEntry{+path,True{}}}: "trusted (" ++ Bool.pick(String,String.eq(path,cwd),path,"inherited from " ++ path) ++ ")"
-    case Some{Trust.ProjectTrustStoreEntry{+path,False{}}}: "untrusted (" ++ Bool.pick(String,String.eq(path,cwd),path,"inherited from " ++ path) ++ ")"
+    case Some{Trust.ProjectTrustStoreEntry{path,decided}}: decisionLabel(decided) ++ " (" ++ decisionPath(trustPath,path) ++ ")"
 def color(theme: Theme.Theme,key: String,+text: String) -> String:
   Result.default(&2,&2,Theme.Error,String,Theme.foreground(theme,key,text),text)
 def border(width: Nat) -> String:
@@ -52,24 +61,28 @@ def choiceRows(options: List<&2,Trust.ProjectTrustOption>,+saved: Maybe<&2,Trust
     case Nil{}: Nil{}
     case +option <> rest:
       +active = Nat.is_eq(index,selectedIndex)
-      +prefix = Bool.pick(String,active,"→ ","  ") ++ Bool.pick(String,isSaved(option,saved),"✓ ","  ")
-      List.append(&2,String,padded(color(theme,Bool.pick(String,active,"accent","text"),prefix ++ optionLabel(option)),width),choiceRows(rest,saved,index + 1n,selectedIndex,theme,width))
+      +prefix = Bool.pick(String,active,color(theme,"accent","→ "),"  ")
+      +marker = Bool.pick(String,isSaved(option,saved),color(theme,"accent","✓ "),"  ")
+      +label = color(theme,Bool.pick(String,active,"accent","text"),optionLabel(option))
+      List.append(&2,String,padded(prefix ++ marker ++ label,width),choiceRows(rest,saved,index + 1n,selectedIndex,theme,width))
 def namedKeys(keys: List<&2,Keys.KeyId>,fallback: String) -> String:
   match keys:
     case Nil{}: fallback
     case key <> Nil{}: Keys.formatKeyId(key)
     case key <> rest: Keys.formatKeyId(key) ++ "/" ++ namedKeys(rest,fallback)
-def hint(bindings: Bindings.KeybindingsManager,+action: String) -> String:
-  namedKeys(Bindings.getKeys(bindings,action),action)
+def rawKeyHint(+theme: Theme.Theme,key: String,description: String) -> String:
+  color(theme,"dim",key) ++ color(theme,"muted"," " ++ description)
+def keyHint(+theme: Theme.Theme,bindings: Bindings.KeybindingsManager,+action: String,description: String) -> String:
+  rawKeyHint(theme,namedKeys(Bindings.getKeys(bindings,action),action),description)
 def render(state: State,+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,+width: Nat) -> List<&2,String>:
   match state:
-    case State{+cwd,options,+saved,trusted,index}:
+    case State{cwd,+options,+saved,trusted,index}:
       +rule = color(theme,"border",border(width))
-      +title = padded(color(theme,"accent","Project trust"),width)
+      +title = padded(color(theme,"accent","\u{1b}[1mProject trust\u{1b}[22m"),width)
       +location = padded(color(theme,"muted",cwd),width)
-      +savedLine = padded(color(theme,"muted","Saved decision: " ++ decision(saved,cwd)),width)
+      +savedLine = padded(color(theme,"muted","Saved decision: " ++ decision(saved,trustPathOf(options))),width)
       +current = padded(color(theme,"muted","Current session: " ++ Bool.pick(String,trusted,"trusted","untrusted")),width)
-      +help = padded(color(theme,"muted","↑↓ navigate  " ++ hint(bindings,"tui.select.confirm") ++ " save  " ++ hint(bindings,"tui.select.cancel") ++ " cancel"),width)
+      +help = padded(rawKeyHint(theme,"↑↓","navigate") ++ "  " ++ keyHint(theme,bindings,"tui.select.confirm","save") ++ "  " ++ keyHint(theme,bindings,"tui.select.cancel","cancel"),width)
       rule <> "" <> List.append(&2,String,title,List.append(&2,String,location,
         "" <> List.append(&2,String,savedLine,List.append(&2,String,current,
           "" <> List.append(&2,String,choiceRows(options,saved,0n,index,theme,width),

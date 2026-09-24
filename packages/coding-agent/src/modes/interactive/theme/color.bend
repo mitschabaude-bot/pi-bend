@@ -3,6 +3,11 @@ import Base
 type Rgb is Data: Rgb{red: Nat,green: Nat,blue: Nat}
 type Color is Data: Default{} Indexed{index: Nat} RgbColor{rgb: Rgb}
 type Mode is Data: TrueColor{} Palette256{}
+# upstream theme.ts: truecolor when the terminal supports it, else 256 colours.
+def modeFor(trueColor: Bool) -> Mode:
+  match trueColor:
+    case True{}: TrueColor{}
+    case False{}: Palette256{}
 type Error is Data: InvalidHex{value: String} InvalidIndex{value: Nat}
 
 def digit(char: Char) -> Maybe<&2,Nat>:

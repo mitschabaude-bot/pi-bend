@@ -110,6 +110,31 @@ SCENARIOS = [
                   ("wait", r"PI_OFFLINE=1", "bash"), ("settle", 0.5), ("snap", "bash")],
     },
     {
+        # upstream BashExecutionComponent: running loader, collapsed preview of
+        # the last 20 lines with its expand hint, output without a final
+        # newline, and a failing exit code.
+        "name": "bash-shapes",
+        "args": MODEL,
+        "steps": [("wait", READY, "startup"), ("settle", 0.5),
+                  ("keys", "!sleep 2; echo done"), ("key", "Enter"),
+                  ("wait", "Running", "running"), ("snap", "running"),
+                  ("wait", r"^ *done", "done"), ("settle", 0.3),
+                  ("keys", "!seq 30"), ("key", "Enter"), ("wait", r"^ *30", "seq"), ("settle", 0.3), ("snap", "seq"),
+                  ("key", "C-o"), ("settle", 0.5), ("snap", "expanded"), ("key", "C-o"), ("settle", 0.3),
+                  ("keys", "!printf tail; exit 3"), ("key", "Enter"), ("wait", r"exit 3\)", "failed"), ("settle", 0.3), ("snap", "failed")],
+    },
+    {
+        # Collapsed tool output and its expand hints (bash and read renderers).
+        "name": "tool-previews",
+        "args": MODEL,
+        "files": {"project/data.txt": "".join(f"line {n}\n" for n in range(1, 41))},
+        "turns": [{"tool": {"name": "bash", "arguments": {"command": "seq 40"}}},
+                  {"tool": {"name": "read", "arguments": {"path": "data.txt"}}}, {"text": "Both done."}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "go"), ("key", "Enter"),
+                  ("wait", "Both done", "turn"), ("settle", 0.5), ("snap", "collapsed"),
+                  ("key", "C-o"), ("settle", 0.5), ("snap", "expanded")],
+    },
+    {
         "name": "typing",
         "args": MODEL,
         "steps": [("wait", READY, "startup"), ("settle", 0.5), *typed("parity"), ("settle", 0.3), ("snap", "typed")],

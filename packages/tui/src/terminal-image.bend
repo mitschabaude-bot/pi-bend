@@ -255,6 +255,32 @@ def detectCapabilities(+environment: Environment,tmuxForwardsHyperlinks: Bool) -
   detected = Bool.pick(TerminalCapabilities,tmux,TerminalCapabilities{NoImages{},trueColor,tmuxForwardsHyperlinks},
     Bool.pick(TerminalCapabilities,screen,TerminalCapabilities{NoImages{},trueColor,False{}},terminalCapabilities(environment,lowerIdentifier(variable(environment,"TERM_PROGRAM"),""),term,trueColor)))
   applyOverrides(detected,environmentOverrides(environment))
+# The process variables detectCapabilities reads.
+def CAPABILITY_VARIABLES() -> List<&2,String>:
+  ["TERM","COLORTERM","TMUX","TERM_PROGRAM","KITTY_WINDOW_ID","GHOSTTY_RESOURCES_DIR","WEZTERM_PANE","WARP_SESSION_ID","WARP_TERMINAL_SESSION_UUID","ITERM_SESSION_ID","WT_SESSION","TERMINAL_EMULATOR","PI_IMAGE_PROTOCOL","PI_TRUE_COLOR","PI_HYPERLINKS"]
+def withVariable(variables: Record.Record<String>,+name: String,value: Result<&1,&1,U32 & String,String>) -> Record.Record<String>:
+  match value:
+    case Done{text}: Record.set(String,variables,name,text)
+    case Fail{_}: variables
+def readVariables(names: List<&2,String>,variables: Record.Record<String>) -> IO(Record.Record<String>):
+  match names:
+    case Nil{}: IO.pure(Record.Record<String>,variables)
+    case +name <> rest:
+      do IO<Record.Record<String>>:
+        value : Result<&1,&1,U32 & String,String> <- IO.get_env(name)
+        readVariables(rest,withVariable(variables,name,value))
+def processEnvironment(platform: String,home: String) -> IO(Environment):
+  do IO<Environment>:
+    variables : Record.Record<String> <- readVariables(CAPABILITY_VARIABLES(),Record.new(String))
+    return Environment{variables,platform,home}
+# upstream getCapabilities().trueColor: an explicit override (settings) wins
+# over detection; the tmux hyperlink probe does not affect colour.
+def capabilityTrueColor(capabilities: TerminalCapabilities) -> Bool:
+  match capabilities: case TerminalCapabilities{_,value,_}: value
+def trueColor(+environment: Environment,override: Maybe<&2,Bool>) -> Bool:
+  match override:
+    case Some{value}: value
+    case None{}: capabilityTrueColor(detectCapabilities(environment,False{}))
 def getCellDimensions(state: State) -> CellDimensions:
   match state:
     case State{_,_,cells,_,_}: cells
