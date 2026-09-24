@@ -37,9 +37,11 @@ def runMounted(view: View.View,+handle: View.Handle,+base: Tui.TuiBase,message: 
         second : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,8n)
         filled : String <- frame(second)
         same(filled,"one|two|three|four||editor|footer")
+        # An overflowing transcript keeps the line above the editor: upstream's
+        # widgetContainerAbove is a plain Spacer(1) (parity scenario whats-new).
         overflow : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,4n)
         short : String <- frame(overflow)
-        same(short,"three|four|editor|footer")
+        same(short,"four||editor|footer")
         View.clear(handle)
         third : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,8n)
         cleared : String <- frame(third)

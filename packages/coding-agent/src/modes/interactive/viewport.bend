@@ -75,10 +75,12 @@ def dispose(view: View) -> IO(Unit):
         Callback.dispose(Unit,Unit,invalidate)
         disposeHeader(header)
 
+# upstream widgetContainerAbove holds a Spacer(1) when no widgets are set; it
+# keeps its line when the transcript overflows.
 def entries(document: Component.Component,editor: Component.Component,footer: Component.Component) -> Node.LayoutNode:
   +scroll = Scroll.new(document,Scroll.ScrollViewOptions{Scroll.FollowEnd{},True{},Scroll.Chain{},Scroll.Hidden{},1000n})
   Node.Children{Node.child(Node.ScrollNode{scroll},Stack.sized(None{},1n,1n,0n,100000n),None{}),
-    Node.Children{Node.child(Node.Spacer{1n},Stack.sized(None{},0n,1n,0n,1n),None{}),
+    Node.Children{Node.child(Node.Spacer{1n},Stack.sized(None{},0n,0n,1n,1n),None{}),
       Node.Children{Node.child(Node.Leaf{editor},Stack.sized(None{},0n,0n,1n,100000n),None{}),
         Node.Children{Node.child(Node.Leaf{footer},Stack.sized(None{},0n,0n,1n,100000n),None{}),Node.Empty{}}}}}
 def layout(+document: Component.Component,+editor: Component.Component,+footer: Component.Component) -> Node.LayoutNode:

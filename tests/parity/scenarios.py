@@ -87,6 +87,21 @@ SCENARIOS = [
         "steps": [("wait", READY, "startup"), ("settle", 0.5), ("key", "C-d"), ("settle", 1.0), ("snap", "exited")],
     },
     {
+        # /changelog lists every entry, oldest first; the screen shows the newest.
+        "name": "changelog-command",
+        "args": MODEL,
+        "timeout": 60,
+        "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "/changelog"), ("key", "Enter"),
+                  ("wait", "outdated Claude Code version", "changelog"), ("settle", 1.0), ("snap", "changelog")],
+    },
+    {
+        # After an update, the entries newer than lastChangelogVersion are shown.
+        "name": "whats-new",
+        "args": MODEL,
+        "files": {"home/.pi/agent/settings.json": json.dumps({"lastChangelogVersion": "0.86.0"})},
+        "steps": [("wait", READY, "startup"), ("settle", 0.5), ("snap", "startup")],
+    },
+    {
         "name": "shortcuts",
         "args": ["--provider", "openai", "--models", "gpt-5,gpt-5-mini"],
         "steps": [("wait", r"gpt-5 • ", "startup"), ("settle", 0.5),

@@ -86,6 +86,25 @@ def managedAppended(state: State,message: String,warning: Bool,first: Bool) -> I
 def managedStatus(handle: Handle,message: String,warning: Bool,first: Bool) -> IO(Unit):
   match handle:
     case Handle{resource}: Serial.run(State,Unit,resource,state => managedAppended(state,message,warning,first))
+# upstream adds a Spacer before the startup notice only after other chat content.
+def changelogBlock(value: Messages.Changelog,spaced: Bool) -> Messages.Changelog:
+  match value:
+    case Messages.WhatsNew{markdown,_}: Messages.WhatsNew{markdown,spaced}
+    case Messages.UpdatedTo{version,_}: Messages.UpdatedTo{version,spaced}
+    case full: full
+def changelogAppended(state: State,value: Messages.Changelog) -> IO(State & Unit):
+  match state:
+    case State{Nil{},tools,active,id,view,+theme,+styles,expanded,hidden}:
+      do IO<State & Unit>:
+        pair : State & Bool <- append(State{Nil{},tools,active,id,view,theme,styles,expanded,hidden},Messages.ChangelogBody{changelogBlock(value,False{}),theme,styles},False{})
+        return appendedUnit(pair)
+    case State{entries,tools,active,id,view,+theme,+styles,expanded,hidden}:
+      do IO<State & Unit>:
+        pair : State & Bool <- append(State{entries,tools,active,id,view,theme,styles,expanded,hidden},Messages.ChangelogBody{changelogBlock(value,True{}),theme,styles},False{})
+        return appendedUnit(pair)
+def changelog(handle: Handle,value: Messages.Changelog) -> IO(Unit):
+  match handle:
+    case Handle{resource}: Serial.run(State,Unit,resource,state => changelogAppended(state,value))
 def mountedBashState(state: State,owner: Messages.Owner,component: Component.Component,handle: Messages.Handle) -> IO(State & Messages.Handle):
   match state:
     case State{entries,tools,active,+id,+view,theme,styles,expanded,hidden}:

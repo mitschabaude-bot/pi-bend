@@ -45,6 +45,8 @@ import ../../utils/tools-manager.bend as Manager
 import ../../core/settings-manager.bend as Settings
 import ../../core/model-runtime.bend as Models
 import ../../utils/clipboard.bend as Clipboard
+import ../../utils/changelog.bend as Changelog
+import ../../config.bend as Config
 import ../../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../core/keybindings.bend as AppKeys
 import ./components/footer.bend as Footer
@@ -591,9 +593,30 @@ def copyObserved(input: CommandObservation) -> IO(Unit):
         text : Maybe<&2,String> <- Session.getLastAssistantText(live)
         copyText(transcript,cwd,text)
         Interactive.requestRender(redraw)
+# The package's CHANGELOG.md, beside the built-in themes' package
+# (upstream getChangelogPath: <package>/CHANGELOG.md).
+def changelogPath(builtinDir: String) -> String: Path.join(builtinDir,"../../../../CHANGELOG.md")
+def linkedEntries(entries: List<&2,Changelog.ChangelogEntry>) -> List<&2,String>:
+  match entries:
+    case Nil{}: Nil{}
+    case Changelog.ChangelogEntry{major,minor,patch,content} <> rest:
+      Changelog.normalizeChangelogLinks(content,Changelog.entryVersion(Changelog.ChangelogEntry{major,minor,patch,""})) <> linkedEntries(rest)
+# upstream handleChangelogCommand: every entry, oldest first.
+def changelogText(entries: List<&2,Changelog.ChangelogEntry>) -> String:
+  match entries:
+    case Nil{}: "No changelog entries found."
+    case entries: String.join(linkedEntries(List.reverse(&2,Changelog.ChangelogEntry,entries)),"\n\n")
+def changelogObserved(input: CommandObservation) -> IO(Unit):
+  match input:
+    case CommandObservation{_,_,_,_,redraw,_,builtinDir,_,_,_,BashInput{_,transcript,_,_,_,_}}:
+      do IO<Unit>:
+        entries : List<&2,Changelog.ChangelogEntry> <- Changelog.parseChangelog(changelogPath(builtinDir))
+        Transcript.changelog(transcript,MessageUI.FullChangelog{changelogText(entries)})
+        Interactive.requestRender(redraw)
 def commandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match action:
     case Commands.CopyLastAssistant{}: copyObserved(input)
+    case Commands.ShowChangelog{}: changelogObserved(input)
     case Commands.ExportSession{path}: exportObserved(input,path)
     case Commands.ImportSession{path}: importObserved(input,path)
     case Commands.ResumeSession{}: resumeObserved(input)
@@ -1346,14 +1369,56 @@ def setupManaged(managed: Maybe<&2,Manager.ToolsManager>,transcript: Transcript.
         Callback.dispose(Manager.ToolStatus,Unit,status)
         wasStarted : Bool <- Ref.dispose(Bool,started)
         return Unit{}
+# upstream getChangelogForDisplay/showStartupNoticesIfNeeded: a fresh install
+# records the version silently; after an update the new entries are shown
+# (condensed when collapseChangelog is set). Resumed sessions show nothing.
+def firstVersion(entries: List<&2,Changelog.ChangelogEntry>) -> String:
+  match entries:
+    case Changelog.ChangelogEntry{major,minor,patch,_} <> _: Changelog.entryVersion(Changelog.ChangelogEntry{major,minor,patch,""})
+    case Nil{}: Config.version()
+def latestVersion(markdown: String) -> String: firstVersion(Changelog.parseChangelogText(markdown))
+def whatsNew(collapse: Bool,+markdown: String) -> MessageUI.Changelog:
+  match collapse:
+    case True{}: MessageUI.UpdatedTo{latestVersion(markdown),False{}}
+    case False{}: MessageUI.WhatsNew{Text.trim(markdown),False{}}
+def showNewEntries(transcript: Transcript.Handle,session: Session.AgentSession,+settings: Settings.SettingsManager,entries: List<&2,Changelog.ChangelogEntry>) -> IO(Unit):
+  match entries:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case entries:
+      do IO<Unit>:
+        recorded : Result<&2,&2,String,Unit> <- Session.changeSettings(session,current => Settings.setLastChangelogVersion(Config.version(),current))
+        Transcript.changelog(transcript,whatsNew(Settings.getCollapseChangelog(settings),String.join(linkedEntries(entries),"\n\n")))
+def changelogSince(transcript: Transcript.Handle,+session: Session.AgentSession,+settings: Settings.SettingsManager,last: Maybe<&2,String>,builtinDir: String) -> IO(Unit):
+  match last:
+    case None{}:
+      do IO<Unit>:
+        recorded : Result<&2,&2,String,Unit> <- Session.changeSettings(session,current => Settings.setLastChangelogVersion(Config.version(),current))
+        return Unit{}
+    case Some{version}:
+      do IO<Unit>:
+        entries : List<&2,Changelog.ChangelogEntry> <- Changelog.parseChangelog(changelogPath(builtinDir))
+        showNewEntries(transcript,session,settings,Changelog.getNewEntries(entries,version))
+def changelogFor(transcript: Transcript.Handle,+session: Session.AgentSession,resumed: Bool,builtinDir: String) -> IO(Unit):
+  match resumed:
+    case True{}: IO.pure(Unit,Unit{})
+    case False{}:
+      do IO<Unit>:
+        +settings : Settings.SettingsManager <- Session.getSettings(session)
+        changelogSince(transcript,session,settings,Settings.getLastChangelogVersion(settings),builtinDir)
+def startupChangelog(transcript: Transcript.Handle,session: Ref.Ref<Session.AgentSession>,builtinDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+    messages : List<&2,Session.Message()> <- Session.messages(live)
+    changelogFor(transcript,live,Bool.not(List.is_empty(&2,Session.Message(),messages)),builtinDir)
 def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle>,startup: ThemeStartup,+render: Callback.Callback<Unit,Unit>) -> IO(Unit):
   match result startup:
-    case Done{(controller,+handle)} ThemeStartup{redraw,queue,initial,failure,_,+selected,owned,_,theme,+transcript,session,_,_,_,managed}:
+    case Done{(controller,+handle)} ThemeStartup{redraw,queue,initial,failure,_,+selected,owned,_,theme,+transcript,+session,_,builtinDir,_,managed}:
       do IO<Unit>:
         Ref.write(Maybe<&2,ThemeController.Handle>,selected,Some{handle})
         Ref.write(Maybe<&1,ThemeOwned>,owned,Some{ThemeOwned{controller,render}})
         syncSelected(ThemeLive{selected,theme,transcript,render},handle)
         setupManaged(managed,transcript,render,session)
+        startupChangelog(transcript,session,builtinDir)
         startInput(handle,redraw,queue,initial,failure,render)
     case Fail{cause} ThemeStartup{_,_,_,_,stopped,_,_,error,_,_,_,_,_,_,_}:
       do IO<Unit>:

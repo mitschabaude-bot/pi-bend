@@ -257,7 +257,12 @@ def renderBash(state: BashMessage,+width: Nat) -> IO(List<&2,String>):
 
 # A mounted message renders the latest immutable snapshot. The transcript owns
 # the callback lifetime; stream updates replace only this message's snapshot.
-type Body is Data: UserBody{value: UserMessage,preceded: Bool} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} StatusBody{text: String,theme: Theme.Theme} ErrorBody{text: String,theme: Theme.Theme} ManagedBody{text: String,theme: Theme.Theme,warning: Bool,first: Bool}
+# Changelog blocks (upstream /changelog and the startup "What's New" notice).
+type Changelog is Data:
+  FullChangelog{markdown: String}
+  WhatsNew{markdown: String,spaced: Bool}
+  UpdatedTo{version: String,spaced: Bool}
+type Body is Data: UserBody{value: UserMessage,preceded: Bool} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} StatusBody{text: String,theme: Theme.Theme} ErrorBody{text: String,theme: Theme.Theme} ManagedBody{text: String,theme: Theme.Theme,warning: Bool,first: Bool} ChangelogBody{value: Changelog,theme: Theme.Theme,styles: Markdown.MarkdownTheme}
 def expandedBody(body: Body,expanded: Bool) -> Body:
   match body:
     case BashBody{value}: BashBody{bashExpanded(value,expanded)}
@@ -271,6 +276,7 @@ def retheme(body: Body,theme: Theme.Theme) -> Body:
     case StatusBody{text,_}: StatusBody{text,theme}
     case ErrorBody{text,_}: ErrorBody{text,theme}
     case ManagedBody{text,_,warning,first}: ManagedBody{text,theme,warning,first}
+    case ChangelogBody{value,_,styles}: ChangelogBody{value,theme,styles}
 type Owner is Type:
   Owner{state: Ref.Ref<Body>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
 type Handle is Data: Handle{state: Ref.Ref<Body>}
@@ -282,6 +288,43 @@ def spacedUser(preceded: Bool,lines: List<&2,String>) -> List<&2,String>:
   match preceded:
     case True{}: "" <> lines
     case False{}: lines
+def dashes(count: Nat) -> String:
+  match count:
+    case Zero{}: ""
+    case Succ{rest}: SCon{'─',dashes(rest)}
+# upstream DynamicBorder: one rule across the width, in the border colour.
+def dynamicBorder(theme: Theme.Theme,width: Nat) -> IO(String): foregroundText(theme,"border",dashes(Nat.max(1n,width)))
+def whatsNewTitle(theme: Theme.Theme,width: Nat) -> IO(List<&2,String>):
+  do IO<List<&2,String>>:
+    accent : String <- foregroundText(theme,"accent","What's New")
+    textLines("\u{1b}[1m" ++ accent ++ "\u{1b}[22m",1n,width)
+def changelogMarkdown(source: String,paddingY: Nat,width: Nat,styles: Markdown.MarkdownTheme) -> IO(List<&2,String>):
+  do IO<List<&2,String>>:
+    rendered : Markdown.Markdown & List<&2,String> <- Markdown.render(Markdown.new(source,1n,paddingY,styles,None{},None{}),width)
+    return markdownResult(rendered)
+def spacedLines(spaced: Bool,lines: List<&2,String>) -> List<&2,String>:
+  match spaced:
+    case True{}: "" <> lines
+    case False{}: lines
+def renderChangelog(value: Changelog,+theme: Theme.Theme,styles: Markdown.MarkdownTheme,+width: Nat) -> IO(List<&2,String>):
+  match value:
+    case FullChangelog{markdown}:
+      do IO<List<&2,String>>:
+        +border : String <- dynamicBorder(theme,width)
+        title : List<&2,String> <- whatsNewTitle(theme,width)
+        body : List<&2,String> <- changelogMarkdown(markdown,1n,width,styles)
+        return "" <> border <> List.append(&2,String,title,"" <> List.append(&2,String,body,[border]))
+    case WhatsNew{markdown,spaced}:
+      do IO<List<&2,String>>:
+        +border : String <- dynamicBorder(theme,width)
+        title : List<&2,String> <- whatsNewTitle(theme,width)
+        body : List<&2,String> <- changelogMarkdown(markdown,0n,width,styles)
+        return spacedLines(spaced,border <> List.append(&2,String,title,"" <> List.append(&2,String,body,["",border])))
+    case UpdatedTo{version,spaced}:
+      do IO<List<&2,String>>:
+        +border : String <- dynamicBorder(theme,width)
+        text : List<&2,String> <- textLines("Updated to v" ++ version ++ ". Use \u{1b}[1m/changelog\u{1b}[22m to view full changelog.",1n,width)
+        return spacedLines(spaced,border <> List.append(&2,String,text,[border]))
 def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
   match body:
     case UserBody{value,preceded}:
@@ -305,6 +348,7 @@ def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
         colored : String <- foregroundText(theme,Bool.pick(String,warning,"warning","dim"),text)
         lines : List<&2,String> <- textLines(colored,1n,width)
         return managedLines(first,lines)
+    case ChangelogBody{value,theme,styles}: renderChangelog(value,theme,styles,width)
 def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
   match handle:
     case Handle{state}:

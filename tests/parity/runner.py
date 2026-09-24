@@ -164,6 +164,16 @@ def normalise_events(text):
             lines.append(line)
     return "\n".join(lines)
 
+def settings_snap(agent, snaps):
+    """The agent's settings.json after the run, as a value (pi records e.g.
+    lastChangelogVersion on first start)."""
+    path = agent / "settings.json"
+    if path.exists():
+        try:
+            snaps["settings"] = json.dumps(json.loads(path.read_text()), indent=1, sort_keys=True)
+        except ValueError:
+            snaps["settings"] = path.read_text()
+
 def run_side(label, argv, scenario, keep):
     # Equal-length names: the cwd enters the system prompt and token estimates.
     root = Path(tempfile.mkdtemp(prefix=f"pi-parity-{label[0]}-"))
@@ -210,6 +220,7 @@ def run_side(label, argv, scenario, keep):
             request["headers"] = {k: v for k, v in request.get("headers", {}).items() if k not in KNOWN_HEADERS}
         requests = re.sub(r"127\.0\.0\.1:\d+", "<server>", normalise(json.dumps(logged, indent=1, sort_keys=True), root)) if logged else ""
         requests = unpackage(requests)
+        settings_snap(agent, snaps)
         if not keep:
             shutil.rmtree(root, ignore_errors=True)
         return {"snaps": snaps, "timings": timings, "requests": requests}
@@ -236,6 +247,7 @@ def run_side(label, argv, scenario, keep):
         requests = re.sub(r"127\.0\.0\.1:\d+", "<server>", normalise(json.dumps(logged, indent=1, sort_keys=True), root)) if logged else ""
         # The system prompt names the installed package's docs directory.
         requests = unpackage(requests)
+        settings_snap(agent, snaps)
         if not keep:
             shutil.rmtree(root, ignore_errors=True)
     return {"snaps": snaps, "timings": timings, "requests": requests}
