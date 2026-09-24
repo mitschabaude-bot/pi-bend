@@ -1,10 +1,13 @@
 """Generate Unicode 17 regex property data from the official, pinned UCD archive."""
+import sys
 from collections import defaultdict
 from pathlib import Path
 from urllib.request import urlopen
 import base64, hashlib, json, zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/'scripts'))
+from decision_tree import decision_tree
 URL = 'https://www.unicode.org/Public/17.0.0/ucd/UCD.zip'
 SHA = '2066d1909b2ea93916ce092da1c0ee4808ea3ef8407c94b4f14f5b7eb263d28e'
 
@@ -158,11 +161,8 @@ def generate_word_break(check=False):
     spans=[(0,values[0])]+[(i,v) for i,v in enumerate(values[1:],1) if values[i-1]!=v]
     restored=[value for i,(start,value) in enumerate(spans) for _ in range((spans[i+1][0] if i+1<len(spans) else len(values))-start)]
     assert restored==values
-    def decision(rows):
-        if len(rows)==1:return str(rows[0][1])
-        mid=len(rows)//2
-        return f'Bool.pick(Unit -> U32,U32.is_lt(code,{rows[mid][0]}),\n  _ => {decision(rows[:mid])},\n  _ => {decision(rows[mid:])})(Unit{{}})'
-    output='# Generated from pinned Unicode17 UCD by generate-regex-unicode.py --word-break.\n# Unicode License V3; see unicode-LICENSE.txt. Low5 bits Word_Break, bit5 Extended_Pictographic.\nimport Base\n\ndef properties(+code: U32) -> U32:\n  '+decision(spans)+'\n'
+    nodes,root=decision_tree('propertiesBelow',spans,'code',str,'U32',[('code','U32')])
+    output='# Generated from pinned Unicode17 UCD by generate-regex-unicode.py --word-break.\n# Unicode License V3; see unicode-LICENSE.txt. Low5 bits Word_Break, bit5 Extended_Pictographic.\nimport Base\n\n'+nodes+'\ndef properties(+code: U32) -> U32:\n  '+root+'\n'
     target=ROOT/'packages/runtime/src/unicode-17-word-break.bend'
     if check:assert target.read_text()==output,'regenerate word-break data'
     else:target.write_text(output)

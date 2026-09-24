@@ -1,7 +1,10 @@
 """Generate default Unicode17 lowercase and contextual property tables."""
+import sys
 import argparse, importlib.util
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/'scripts'))
+from decision_tree import decision_tree
 spec=importlib.util.spec_from_file_location('ucd',ROOT/'scripts/generate-regex-unicode.py')
 ucd=importlib.util.module_from_spec(spec);spec.loader.exec_module(ucd)
 
@@ -17,13 +20,9 @@ def data():
             for cp in ucd.points(span):props[cp]|=bit
     return mapping,props
 
-def decision(values):
+def decision(name,values):
     spans=[(0,values[0])]+[(cp,value) for cp,value in enumerate(values[1:],1) if values[cp-1]!=value]
-    def tree(rows):
-        if len(rows)==1:return str(rows[0][1])
-        mid=len(rows)//2
-        return f'Bool.pick(Unit -> U32,U32.is_lt(code,{rows[mid][0]}),\n  _ => {tree(rows[:mid])},\n  _ => {tree(rows[mid:])})(Unit{{}})'
-    return tree(spans)
+    return decision_tree(name+'Below',spans,'code',str,'U32',[('code','U32')])
 
 def generate(check=False):
     mapping,props=data();delta=[0]*0x110000
@@ -32,8 +31,10 @@ def generate(check=False):
     for cp,out in mapping.items():
         if len(out)==1:delta[cp]=(out[0]-cp)&0xffffffff
     result='# Generated from pinned Unicode17 UCD by scripts/generate-case-map.py.\n# Unicode License V3; see unicode-LICENSE.txt.\nimport Base\n\n'
-    result+='def properties(+code: U32) -> U32:\n  '+decision(props)+'\n\n'
-    result+='def delta(+code: U32) -> U32:\n  '+decision(delta)+'\n'
+    nodes,root=decision('properties',props)
+    result+=nodes+'\ndef properties(+code: U32) -> U32:\n  '+root+'\n\n'
+    nodes,root=decision('delta',delta)
+    result+=nodes+'\ndef delta(+code: U32) -> U32:\n  '+root+'\n'
     target=ROOT/'packages/runtime/src/unicode-17-case-map.bend'
     if check:assert target.read_text()==result,'regenerate case mapping data'
     else:target.write_text(result)
