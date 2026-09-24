@@ -51,6 +51,7 @@ import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/u64.bend as W
 import ../../../ai/src/models.bend as AiModels
 import ../../../ai/src/utils/thinking-levels.bend as Levels
+import ./defaults.bend as Defaults
 import ./resource-loader.bend as Resources
 import ./package-manager.bend as PackageManager
 import ./skills.bend as Skills
@@ -59,6 +60,7 @@ import ./diagnostics.bend as Diagnostics
 import ./tools/index.bend as Tools
 import ../utils/tools-manager.bend as Manager
 import ./tools/file-mutation-queue.bend as Queue
+import ./extensions/context.bend as Ctx
 
 # The owned services behind one agent: transport, credentials, model runtime,
 # settings-driven selection, tools and the Agent itself. This is the print-mode
@@ -251,11 +253,11 @@ type Selection is Data:
 # the executable tools (upstream _preparePromptAndToolLoadout's inputs), with
 # the loaded skills and prompt templates that expand /skill: and /name input.
 type Loadout is Data:
-  Loadout{sections: Prompt.SystemPromptSections(), tools: List<&2, Tools.Tool()>, skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>}
+  Loadout{sections: Prompt.SystemPromptSections(), tools: List<&2, Tools.Tool()>, skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>, context: Maybe<&2, Ctx.ContextSource()>, contextFiles: List<&2, Prompt.ContextFile>}
 
 # The system prompt with the resources it was built from.
 type Prepared is Data:
-  Prepared{sections: Prompt.SystemPromptSections(), skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>}
+  Prepared{sections: Prompt.SystemPromptSections(), skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>, contextFiles: List<&2, Prompt.ContextFile>}
 
 type AgentRuntime is Type:
   AgentRuntime{transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), agent: Owner(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout}
@@ -422,24 +424,24 @@ def promptResult(value: Prompt.ResultOf(Prompt.SystemPromptSections())) -> Resul
     case Done{sections}: Done{sections}
     case Fail{Prompt.InvalidSectionName{name}}: Fail{"Invalid system prompt section name: " ++ name}
 
-def preparedWith(skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>, result: Result<&2, &2, String, Prompt.SystemPromptSections()>) -> Result<&2, &2, String, Prepared>:
+def preparedWith(skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>, agentsFiles: List<&2, Prompt.ContextFile>, result: Result<&2, &2, String, Prompt.SystemPromptSections()>) -> Result<&2, &2, String, Prepared>:
   match result:
     case Fail{error}: Fail{error}
-    case Done{sections}: Done{Prepared{sections, skills, templates}}
+    case Done{sections}: Done{Prepared{sections, skills, templates, agentsFiles}}
 
 def preparedFor(+environment: Paths.Environment, +options: CreateOptions, +packageDir: String) -> IO(Result<&2, &2, String, Prepared>):
   do IO<Result<&2, &2, String, Prepared>>:
     loaded : Resources.ContextFiles <- contextFilesFor(environment,options)
-    contextList : List<&2,Prompt.ContextFile> <- contextFilesReported(loaded)
+    +contextList : List<&2,Prompt.ContextFile> <- contextFilesReported(loaded)
     +resolved : PackageManager.ResolvedPaths <- resolvedFor(environment, options)
     +skills : List<&2, Skills.Skill> <- skillsFor(environment, options, resolved)
     templates : List<&2, Templates.PromptTemplate> <- templatesFor(environment, options, resolved)
-    return preparedWith(skills, templates, promptResult(Prompt.buildSystemPromptSections(Prompt.DocumentationPaths{Path.join(packageDir, "README.md"), Path.join(packageDir, "docs"), Path.join(packageDir, "examples")}, promptOptions(options, contextList, skills))))
+    return preparedWith(skills, templates, contextList, promptResult(Prompt.buildSystemPromptSections(Prompt.DocumentationPaths{Path.join(packageDir, "README.md"), Path.join(packageDir, "docs"), Path.join(packageDir, "examples")}, promptOptions(options, contextList, skills))))
 
 def sectionsOf(result: Result<&2, &2, String, Prepared>) -> Result<&2, &2, String, Prompt.SystemPromptSections()>:
   match result:
     case Fail{error}: Fail{error}
-    case Done{Prepared{sections, _, _}}: Done{sections}
+    case Done{Prepared{sections, _, _, _}}: Done{sections}
 
 def systemPromptFor(+environment: Paths.Environment, +options: CreateOptions, +packageDir: String) -> IO(Result<&2, &2, String, Prompt.SystemPromptSections()>):
   do IO<Result<&2, &2, String, Prompt.SystemPromptSections()>>:
@@ -532,20 +534,22 @@ def hasSessionMessages(seed: SessionSeed) -> Bool:
     case SessionSeed{_, Nil{}, _, _}: False{}
     case _: True{}
 
-# A resumed session restores its recorded level, or the settings default.
+# A resumed session restores its recorded level, or the settings default,
+# or DEFAULT_THINKING_LEVEL.
 def sessionThinking(+seed: SessionSeed, settingsDefault: Maybe<&2, Ai.ModelThinkingLevel>) -> Maybe<&2, Ai.ModelThinkingLevel>:
-  Bool.pick(Maybe<&2, Ai.ModelThinkingLevel>, hasSessionMessages(seed), Some{Maybe.default(&2, Ai.ModelThinkingLevel, Maybe.or(&2, Ai.ModelThinkingLevel, seededThinking(seed), settingsDefault), Ai.Off{})}, None{})
+  Bool.pick(Maybe<&2, Ai.ModelThinkingLevel>, hasSessionMessages(seed), Some{Maybe.default(&2, Ai.ModelThinkingLevel, Maybe.or(&2, Ai.ModelThinkingLevel, seededThinking(seed), settingsDefault), Defaults.DEFAULT_THINKING_LEVEL())}, None{})
 
 # upstream createAgentSession: --thinking, else the resumed session's level,
-# else the settings' per-model level, else the settings default, else off;
-# clamped to the model's levels. The :level model suffix is not applied yet.
+# else the settings' per-model level, else the settings default, else
+# DEFAULT_THINKING_LEVEL; clamped to the model's levels, and off without a
+# model. The :level model suffix is not applied yet.
 def thinkingLevel(requested: Maybe<&2, Ai.ModelThinkingLevel>, seed: SessionSeed, +model: Models.Model(), +settings: Settings.SettingsManager) -> Ai.ModelThinkingLevel:
   +settingsDefault = Settings.getDefaultThinkingLevel(settings)
   +perModel = Settings.getModelThinkingLevel(Models.modelProvider(model), Models.modelId(model), settings)
-  AiModels.clampThinkingLevel(Ai.JsonValue, model, Maybe.default(&2, Ai.ModelThinkingLevel, Maybe.or(&2, Ai.ModelThinkingLevel, requested, Maybe.or(&2, Ai.ModelThinkingLevel, sessionThinking(seed, settingsDefault), Maybe.or(&2, Ai.ModelThinkingLevel, perModel, settingsDefault))), Ai.Off{}))
+  AiModels.clampThinkingLevel(Ai.JsonValue, model, Maybe.default(&2, Ai.ModelThinkingLevel, Maybe.or(&2, Ai.ModelThinkingLevel, requested, Maybe.or(&2, Ai.ModelThinkingLevel, sessionThinking(seed, settingsDefault), Maybe.or(&2, Ai.ModelThinkingLevel, perModel, settingsDefault))), Defaults.DEFAULT_THINKING_LEVEL()))
 def thinkingForSelection(+requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, selected: Maybe<&2, Models.Model()>) -> Ai.ModelThinkingLevel:
   match selected:
-    case None{}: Maybe.default(&2, Ai.ModelThinkingLevel, Maybe.or(&2, Ai.ModelThinkingLevel, requested, sessionThinking(seed, Settings.getDefaultThinkingLevel(settings))), Ai.Off{})
+    case None{}: Ai.Off{}
     case Some{model}: thinkingLevel(requested, seed, model, settings)
 
 def seededMessages(seed: SessionSeed) -> Maybe<&2, List<&2, T.AgentMessage<Unit, Details(), Custom()>>>:
@@ -630,8 +634,8 @@ def agentOptions(model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLev
   Agent.AgentOptions{Some{Agent.AgentInitialState{Some{""}, model, Some{thinking}, Some{Nil{}}, seededMessages(seed)}}, Some{converter}, None{}, Some{stream}, Some{keys}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{Settings.getSteeringMode(settings)}, Some{Settings.getFollowUpMode(settings)}, Some{seedSessionId(seed)}, thinkingBudgets(Settings.getThinkingBudgets(settings)), Some{Settings.getTransport(settings)}, Some{maxRetryDelay(Settings.getProviderRetrySettings(settings))}, None{}}
 
 # The tools download fd and rg through the agent's own fetch.
-def environment(paths: Paths.Environment, cwd: String, agentDir: String, packageDir: String, fetch: Fetch.Fetch(Unit), queue: Queue.Queue) -> Tools.Environment:
-  Tools.Environment{paths, cwd, Manager.ToolsManager{Path.join(agentDir, "bin"), urlContext(), Some{fetch}}, queue, Path.join(packageDir, "packages/runtime/data")}
+def environment(paths: Paths.Environment, cwd: String, agentDir: String, packageDir: String, fetch: Fetch.Fetch(Unit), queue: Queue.Queue, context: Ctx.ContextSource()) -> Tools.Environment:
+  Tools.Environment{paths, cwd, Manager.ToolsManager{Path.join(agentDir, "bin"), urlContext(), Some{fetch}}, queue, Path.join(packageDir, "packages/runtime/data"), context}
 
 def pathsError(error: FS.Error) -> String: "Could not resolve the working directory"
 
@@ -651,6 +655,11 @@ def disposeServices(transport: Transport, storage: Storage.AuthStorageOwner, sto
     Storage.dispose(storage)
     disposeTransport(transport)
 
+def disposeLoadout(loadout: Loadout) -> IO(Unit):
+  match loadout:
+    case Loadout{_, _, _, _, None{}, _}: IO.pure(Unit, Unit{})
+    case Loadout{_, _, _, _, Some{context}, _}: Ctx.dispose(context)
+
 # Assembly with cleanup on every failure path.
 def constructed(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout, result: Result<&2, &2, StreamFn.MissingDefault, Owner()>) -> IO(Outcome(AgentRuntime)):
   match result:
@@ -658,6 +667,7 @@ def constructed(transport: Transport, storage: Storage.AuthStorageOwner, storage
     case Fail{error}:
       do IO<Outcome(AgentRuntime)>:
         disposeServices(transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter)
+        disposeLoadout(loadout)
         return Fail{StreamFn.errorMessage(error)}
 
 def disposeBase(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime) -> IO(Unit):
@@ -669,36 +679,37 @@ def disposeBase(transport: Transport, storage: Storage.AuthStorageOwner, storage
     Storage.dispose(storage)
     disposeTransport(transport)
 
-def createToolList(names: List<&2, Tools.ToolName>, paths: Paths.Environment, cwd: String, agentDir: String, packageDir: String, fetch: Fetch.Fetch(Unit), borrowed: Queue.Owner & Queue.Queue) -> IO(Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>)):
+def createToolList(names: List<&2, Tools.ToolName>, paths: Paths.Environment, cwd: String, agentDir: String, packageDir: String, fetch: Fetch.Fetch(Unit), context: Ctx.ContextSource(), borrowed: Queue.Owner & Queue.Queue) -> IO(Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>)):
   match borrowed:
     case Tuple{queue, handle}:
       do IO<Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>)>:
-        owners : List<&1, Tools.ToolOwner> <- Tools.createTools(names, environment(paths, cwd, agentDir, packageDir, fetch, handle), Tools.defaultOptions())
+        owners : List<&1, Tools.ToolOwner> <- Tools.createTools(names, environment(paths, cwd, agentDir, packageDir, fetch, handle, context), Tools.defaultOptions())
         return (queue, Tools.borrowTools(owners))
 
-def loadoutFrom(prepared: Prepared, tools: List<&2, Tools.Tool()>) -> Loadout:
+def loadoutFrom(prepared: Prepared, tools: List<&2, Tools.Tool()>, context: Ctx.ContextSource()) -> Loadout:
   match prepared:
-    case Prepared{sections, skills, templates}: Loadout{sections, tools, skills, templates}
+    case Prepared{sections, skills, templates, agentsFiles}: Loadout{sections, tools, skills, templates, Some{context}, agentsFiles}
 
-def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Maybe<&2, Models.Model()>, +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager) -> IO(Outcome(AgentRuntime)):
+def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Maybe<&2, Models.Model()>, +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager, context: Ctx.ContextSource()) -> IO(Outcome(AgentRuntime)):
   match created:
     case Tuple{queue, Tuple{owners, tools}}:
       do IO<Outcome(AgentRuntime)>:
         result : Result<&2, &2, StreamFn.MissingDefault, Owner()> <- Agent.new(~Unit, ~Details(), ~Custom(), ~Error(), ~Unit, agentOptions(model, thinking, stream, keys, converter, seed, settings), registry, validator, Tools.WriteDetails{})
-        constructed(transport, storage, storageStore, credentials, credentialStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, loadoutFrom(prepared, tools), result)
+        constructed(transport, storage, storageStore, credentials, credentialStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, loadoutFrom(prepared, tools, context), result)
 
 def withModelFields(+cwd: String, +agentDir: String, packageDir: String, apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Outcome(AgentRuntime)):
   match transport prompt selected:
     case Transport{+authorizer, runtime, +fetch} Done{prompt} Done{+model}:
       do IO<Outcome(AgentRuntime)>:
         queue : Queue.Owner <- Queue.create()
-        created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- createToolList(names, paths, cwd, agentDir, packageDir, fetch, Queue.borrow(queue))
+        +context : Ctx.ContextSource() <- Ctx.create()
+        created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- createToolList(names, paths, cwd, agentDir, packageDir, fetch, context, Queue.borrow(queue))
         +stream : Stream() <- createStream(authorizer, fetch)
         +registry : StreamFn.Registry(Unit, Details(), LoopConfig(), Error()) <- StreamFn.create(Unit, Details(), LoopConfig(), Error())
         +validator : Loop.Validator(Error()) <- Loop.createPlain(~Error(), ~validationError)
         +keys : C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>> <- C.create(~KeySource, ~String, ~Result<&2, &2, Error(), Maybe<&2, String>>, ~resolveKey, KeySource{models, apiKey})
         +converter : Converter() <- createConverter(Settings.getBlockImages(settings))
-        assembled(Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, created, stream, registry, validator, keys, converter, prompt, model, thinkingForSelection(requested, seed, settings, model), seed, settings)
+        assembled(Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, created, stream, registry, validator, keys, converter, prompt, model, thinkingForSelection(requested, seed, settings, model), seed, settings, context)
     case transport Fail{error} _:
       do IO<Outcome(AgentRuntime)>:
         disposeBase(transport, storage, storageStore, credentials, credentialStore, models)
@@ -784,7 +795,8 @@ def selectStartup(runtime: AgentRuntime,+chosen: Models.Model(),+level: Ai.Model
 
 def dispose(runtime: AgentRuntime) -> IO(Unit):
   match runtime:
-    case AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, _, _, _}:
+    case AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, _, _, loadout}:
       do IO<Unit>:
         Agent.dispose(Unit, Details(), Custom(), Error(), Unit, agent)
         disposeServices(transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter)
+        disposeLoadout(loadout)

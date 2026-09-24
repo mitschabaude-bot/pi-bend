@@ -25,6 +25,9 @@ import ../core/export-html/index.bend as Export
 import ../core/tools/index.bend as Tools
 import ../core/compaction/compaction.bend as Compaction
 import ./json-event.bend as Events
+import ../core/agent-session-runtime.bend as SessionRuntime
+import ../core/skills.bend as Skills
+import ../core/prompt-templates.bend as Templates
 
 # pi v0.87.1's headless protocol is LF-delimited JSON objects. The caller owns
 # byte transport; this endpoint owns framing, dispatch and event subscriptions.
@@ -32,10 +35,18 @@ def Sink() -> Data: Callback.Callback<String,Unit>
 type Submission is Data: Submission{text: String,images: List<&2,Ai.ImageContent>,behavior: Maybe<&2,Session.StreamingBehavior>}
 type BashRequest is Data: BashRequest{id: Maybe<&2,String>,command: String,exclude: Maybe<&2,Bool>}
 type Work is Data: PromptWork{request: Submission} BashWork{request: BashRequest}
+# One command's view of the endpoint, over the session current when it runs.
+type Command is Data:
+  Command{session: Session.AgentSession,sink: Sink(),buffer: Ref.Ref<String>,busy: Ref.Ref<Bool>,jobs: Chan(Work),assetsDir: Maybe<&2,String>}
+# upstream runtimeHost: the host replaces the session, and the endpoint
+# rebinds to the one it installs.
+type ForkRequest is Data: ForkRequest{entryId: String,position: SessionRuntime.ForkPosition}
+type Host is Data:
+  Host{newSession: Callback.Callback<Maybe<&2,String>,Result<&2,&2,String,Unit>>,switchSession: Callback.Callback<String,Result<&2,&2,String,Unit>>,fork: Callback.Callback<ForkRequest,Result<&2,&2,String,Maybe<&2,String>>>}
 type Handle is Data:
-  Handle{session: Session.AgentSession,sink: Sink(),buffer: Ref.Ref<String>,busy: Ref.Ref<Bool>,jobs: Chan(Work),assetsDir: Maybe<&2,String>}
+  Handle{current: Ref.Ref<Session.AgentSession>,sink: Sink(),buffer: Ref.Ref<String>,busy: Ref.Ref<Bool>,jobs: Chan(Work),assetsDir: Maybe<&2,String>,host: Host,listener: Session.Listener()}
 type Owner is Type:
-  Owner{handle: Handle,worker: Chan(Unit),listener: Session.Listener()}
+  Owner{handle: Handle,worker: Chan(Unit)}
 
 def line(value: V.Value) -> String:
   Maybe.default(&2,String,Json.stringify(SchemaJson.toJson(value)),"null") ++ "\n"
@@ -135,25 +146,35 @@ def bashReply(sink: Sink(),id: Maybe<&2,String>,result: Result<&2,&2,String,Bash
   match result:
     case Fail{reason}: output(sink,failure(id,"bash",reason))
     case Done{value}: output(sink,data(id,"bash",bashValue(value)))
-def runBash(handle: Handle,request: BashRequest) -> IO(Unit):
+def runBash(handle: Command,request: BashRequest) -> IO(Unit):
   match handle request:
-    case Handle{session,sink,_,_,_,_} BashRequest{+id,command,exclude}:
+    case Command{session,sink,_,_,_,_} BashRequest{+id,command,exclude}:
       do IO<Unit>:
         result : Result<&2,&2,String,Bash.BashResult> <- Session.executeBash(session,command,None{},Session.BashOptions{exclude,id,None{}})
         bashReply(sink,id,result)
-def runJob(handle: Handle,request: Submission) -> IO(Unit):
+def runJob(handle: Command,request: Submission) -> IO(Unit):
   match handle request:
-    case Handle{session,_,_,busy,_,_} Submission{text,images,behavior}:
+    case Command{session,_,_,busy,_,_} Submission{text,images,behavior}:
       do IO<Unit>:
         result : Result<&2,&2,String,Unit> <- Session.prompt(session,text,images,behavior)
         Ref.write(Bool,busy,False{})
-def runWork(handle: Handle,work: Work) -> IO(Unit):
+def runWork(handle: Command,work: Work) -> IO(Unit):
   match work:
     case PromptWork{request}: runJob(handle,request)
     case BashWork{request}: runBash(handle,request)
+def commandOf(handle: Handle) -> IO(Command):
+  match handle:
+    case Handle{current,sink,buffer,busy,jobs,assetsDir,_,_}:
+      do IO<Command>:
+        session : Session.AgentSession <- Ref.read(Session.AgentSession,current)
+        return Command{session,sink,buffer,busy,jobs,assetsDir}
 def nextJob(handle: Handle) -> IO(Maybe<&1,Work>):
   match handle:
-    case Handle{_,_,_,_,jobs,_}: Chan.recv(Work,jobs)
+    case Handle{_,_,_,_,jobs,_,_,_}: Chan.recv(Work,jobs)
+def runCurrent(+handle: Handle,work: Work) -> IO(Unit):
+  do IO<Unit>:
+    view : Command <- commandOf(handle)
+    runWork(view,work)
 type Phase is Type: Check{} Received{request: Maybe<&1,Work>}
 @unsafe def worker(+handle: Handle,phase: Phase) -> IO(Unit):
   match phase:
@@ -164,18 +185,29 @@ type Phase is Type: Check{} Received{request: Maybe<&1,Work>}
     case Received{None{}}: IO.pure(Unit,Unit{})
     case Received{Some{request}}:
       do IO<Unit>:
-        runWork(handle,request)
+        runCurrent(handle,request)
         worker(handle,Check{})
-def start(+session: Session.AgentSession,+sink: Sink(),assetsDir: Maybe<&2,String>) -> IO(Owner & Handle):
+def start(+session: Session.AgentSession,+sink: Sink(),assetsDir: Maybe<&2,String>,host: Host) -> IO(Owner & Handle):
   do IO<Owner & Handle>:
+    +current : Ref.Ref<Session.AgentSession> <- Ref.new(Session.AgentSession,session)
     +buffer : Ref.Ref<String> <- Ref.new(String,"")
     +busy : Ref.Ref<Bool> <- Ref.new(Bool,False{})
     +jobs : Chan(Work) <- Chan.new(Work,64)
-    +handle : Handle <- IO.pure(Handle,Handle{session,sink,buffer,busy,jobs,assetsDir})
     +listener : Session.Listener() <- Callback.create(~Sink(),~Session.AgentSessionEvent,~Unit,~observe,sink)
     Session.subscribe(session,listener)
+    +handle : Handle <- IO.pure(Handle,Handle{current,sink,buffer,busy,jobs,assetsDir,host,listener})
     task : Chan(Unit) <- IO.fork(Unit,worker(handle,Check{}))
-    return (Owner{handle,task,listener},handle)
+    return (Owner{handle,task},handle)
+
+# upstream rebindSession: later commands and events use the session the host
+# installed; the replaced session's listeners went with it.
+def rebind(handle: Handle,+session: Session.AgentSession) -> IO(Unit):
+  match handle:
+    case Handle{current,_,_,busy,_,_,_,listener}:
+      do IO<Unit>:
+        Ref.write(Session.AgentSession,current,session)
+        Ref.write(Bool,busy,False{})
+        Session.subscribe(session,listener)
 
 def acceptedPrompt(session: Session.AgentSession,sink: Sink(),busy: Ref.Ref<Bool>,jobs: Chan(Work),id: Maybe<&2,String>,text: String,images: List<&2,Ai.ImageContent>,active: Bool,behavior: Maybe<&2,Session.StreamingBehavior>) -> IO(Unit):
   match active behavior:
@@ -195,9 +227,9 @@ def acceptedPrompt(session: Session.AgentSession,sink: Sink(),busy: Ref.Ref<Bool
         accepted : Bool <- Chan.send(Work,jobs,PromptWork{Submission{text,images,behavior}})
         return Unit{}
 
-def promptChecked(handle: Handle,id: Maybe<&2,String>,message: Result<&2,&2,String,String>,images: Result<&2,&2,String,List<&2,Ai.ImageContent>>,behavior: Result<&2,&2,String,Maybe<&2,Session.StreamingBehavior>>) -> IO(Unit):
+def promptChecked(handle: Command,id: Maybe<&2,String>,message: Result<&2,&2,String,String>,images: Result<&2,&2,String,List<&2,Ai.ImageContent>>,behavior: Result<&2,&2,String,Maybe<&2,Session.StreamingBehavior>>) -> IO(Unit):
   match handle:
-    case Handle{+session,+sink,_,+busy,+jobs,_}:
+    case Command{+session,+sink,_,+busy,+jobs,_}:
       match message images behavior:
         case Fail{error} _ _: output(sink,failure(id,"prompt",error))
         case _ Fail{error} _: output(sink,failure(id,"prompt",error))
@@ -207,18 +239,18 @@ def promptChecked(handle: Handle,id: Maybe<&2,String>,message: Result<&2,&2,Stri
             active : Bool <- Ref.read(Bool,busy)
             streaming : Bool <- Session.isStreaming(session)
             acceptedPrompt(session,sink,busy,jobs,id,text,images,active || streaming,behavior)
-def prompt(handle: Handle,id: Maybe<&2,String>,+object: R.Record<V.Value>) -> IO(Unit):
+def prompt(handle: Command,id: Maybe<&2,String>,+object: R.Record<V.Value>) -> IO(Unit):
   promptChecked(handle,id,requiredText(object,"message"),imagesOf(object),behaviorOf(object))
-def commandFailure(handle: Handle,id: Maybe<&2,String>,command: String,error: String) -> IO(Unit):
+def commandFailure(handle: Command,id: Maybe<&2,String>,command: String,error: String) -> IO(Unit):
   match handle:
-    case Handle{_,sink,_,_,_,_}: output(sink,failure(id,command,error))
-def queueText(handle: Handle,id: Maybe<&2,String>,+command: String,+text: String,+images: List<&2,Ai.ImageContent>) -> IO(Unit):
+    case Command{_,sink,_,_,_,_}: output(sink,failure(id,command,error))
+def queueText(handle: Command,id: Maybe<&2,String>,+command: String,+text: String,+images: List<&2,Ai.ImageContent>) -> IO(Unit):
   match handle:
-    case Handle{+session,sink,_,_,_,_}:
+    case Command{+session,sink,_,_,_,_}:
       do IO<Unit>:
         Bool.pick(Unit -> IO(Unit),String.eq(command,"steer"),_ => Session.steer(session,text,images),_ => Session.followUp(session,text,images))(Unit{})
         output(sink,ok(id,command))
-def queued(handle: Handle,id: Maybe<&2,String>,+command: String,message: Result<&2,&2,String,String>,images: Result<&2,&2,String,List<&2,Ai.ImageContent>>) -> IO(Unit):
+def queued(handle: Command,id: Maybe<&2,String>,+command: String,message: Result<&2,&2,String,String>,images: Result<&2,&2,String,List<&2,Ai.ImageContent>>) -> IO(Unit):
   match message images:
     case Fail{error} _: commandFailure(handle,id,command,error)
     case _ Fail{error}: commandFailure(handle,id,command,error)
@@ -230,10 +262,10 @@ def setCleanName(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>
       do IO<Unit>:
         result : Result<&2,&2,String,Unit> <- Session.setSessionName(session,name)
         output(sink,resultResponse(id,"set_session_name",result))
-def setName(handle: Handle,id: Maybe<&2,String>,value: Result<&2,&2,String,String>) -> IO(Unit):
+def setName(handle: Command,id: Maybe<&2,String>,value: Result<&2,&2,String,String>) -> IO(Unit):
   match handle value:
-    case Handle{_,sink,_,_,_,_} Fail{error}: output(sink,failure(id,"set_session_name",error))
-    case Handle{session,sink,_,_,_,_} Done{name}: setCleanName(session,sink,id,String.trim(name))
+    case Command{_,sink,_,_,_,_} Fail{error}: output(sink,failure(id,"set_session_name",error))
+    case Command{session,sink,_,_,_,_} Done{name}: setCleanName(session,sink,id,String.trim(name))
 def thinking(level: String) -> Maybe<&2,Ai.ModelThinkingLevel>:
   match level:
     case "off": Some{Ai.Off{}}
@@ -252,22 +284,22 @@ def setChosenThinking(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,St
         result : Result<&2,&2,String,Unit> <- Session.setThinkingLevel(session,value,Session.ModelMutationOptions{False{}})
         output(sink,resultResponse(id,"set_thinking_level",result))
 
-def setThinking(handle: Handle,id: Maybe<&2,String>,value: Result<&2,&2,String,String>) -> IO(Unit):
+def setThinking(handle: Command,id: Maybe<&2,String>,value: Result<&2,&2,String,String>) -> IO(Unit):
   match handle value:
-    case Handle{_,sink,_,_,_,_} Fail{error}: output(sink,failure(id,"set_thinking_level",error))
-    case Handle{session,sink,_,_,_,_} Done{+level}: setChosenThinking(session,sink,id,level,thinking(level))
-def reply(handle: Handle,value: V.Value) -> IO(Unit):
+    case Command{_,sink,_,_,_,_} Fail{error}: output(sink,failure(id,"set_thinking_level",error))
+    case Command{session,sink,_,_,_,_} Done{+level}: setChosenThinking(session,sink,id,level,thinking(level))
+def reply(handle: Command,value: V.Value) -> IO(Unit):
   match handle:
-    case Handle{_,sink,_,_,_,_}: output(sink,value)
-def abortCommand(handle: Handle,id: Maybe<&2,String>,+retry: Bool) -> IO(Unit):
+    case Command{_,sink,_,_,_,_}: output(sink,value)
+def abortCommand(handle: Command,id: Maybe<&2,String>,+retry: Bool) -> IO(Unit):
   match handle:
-    case Handle{+session,sink,_,_,_,_}:
+    case Command{+session,sink,_,_,_,_}:
       do IO<Unit>:
         Bool.pick(Unit -> IO(Unit),retry,_ => Session.abortRetry(session),_ => Session.abort(session))(Unit{})
         output(sink,ok(id,Bool.pick(String,retry,"abort_retry","abort")))
-def currentMessages(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+def currentMessages(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{session,sink,_,_,_,_}:
+    case Command{session,sink,_,_,_,_}:
       do IO<Unit>:
         messages : List<&2,Session.Message()> <- Session.messages(session)
         output(sink,data(id,"get_messages",MessageJson.object(MessageJson.field("messages",V.ArrayValue{messageValues(messages)},Nil{}))))
@@ -303,10 +335,10 @@ def entriesResponse(id: Maybe<&2,String>,leaf: Maybe<&2,String>,selected: Result
   match selected:
     case Fail{reason}: failure(id,"get_entries",reason)
     case Done{entries}: data(id,"get_entries",MessageJson.object(MessageJson.field("entries",V.ArrayValue{entryValues(entries)},MessageJson.field("leafId",optionalValue(leaf),Nil{}))))
-def getEntries(handle: Handle,id: Maybe<&2,String>,since: Result<&2,&2,String,Maybe<&2,String>>) -> IO(Unit):
+def getEntries(handle: Command,id: Maybe<&2,String>,since: Result<&2,&2,String,Maybe<&2,String>>) -> IO(Unit):
   match handle since:
-    case Handle{_,sink,_,_,_,_} Fail{reason}: output(sink,failure(id,"get_entries",reason))
-    case Handle{session,sink,_,_,_,_} Done{since}:
+    case Command{_,sink,_,_,_,_} Fail{reason}: output(sink,failure(id,"get_entries",reason))
+    case Command{session,sink,_,_,_,_} Done{since}:
       do IO<Unit>:
         +stored : Session.Session() <- Session.sessionOf(session)
         output(sink,entriesResponse(id,S.getLeafId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),selectedEntries(S.getEntries(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),since)))
@@ -332,9 +364,9 @@ def treeResponse(id: Maybe<&2,String>,leaf: Maybe<&2,String>,result: Result<&2,&
   match result:
     case Fail{_}: failure(id,"get_tree","Session tree is invalid")
     case Done{tree}: data(id,"get_tree",MessageJson.object(MessageJson.field("tree",renderTree(RenderNodes{tree,Nil{}} <> Nil{},V.Null{}),MessageJson.field("leafId",optionalValue(leaf),Nil{}))))
-def getTree(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+def getTree(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{session,sink,_,_,_,_}:
+    case Command{session,sink,_,_,_,_}:
       do IO<Unit>:
         +stored : Session.Session() <- Session.sessionOf(session)
         output(sink,treeResponse(id,S.getLeafId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),S.getTree(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored))))
@@ -355,9 +387,9 @@ def forkItems(entries: List<&2,Session.Entry()>) -> List<&2,V.Value>:
   match entries:
     case Nil{}: Nil{}
     case entry <> rest: includeFork(forkItem(entry),forkItems(rest))
-def getForkMessages(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+def getForkMessages(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{session,sink,_,_,_,_}:
+    case Command{session,sink,_,_,_,_}:
       do IO<Unit>:
         stored : Session.Session() <- Session.sessionOf(session)
         output(sink,data(id,"get_fork_messages",MessageJson.object(MessageJson.field("messages",V.ArrayValue{forkItems(S.getEntries(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)))},Nil{}))))
@@ -365,16 +397,16 @@ def compactResponse(id: Maybe<&2,String>,result: Result<&2,&2,String,Compaction.
   match result:
     case Fail{reason}: failure(id,"compact",reason)
     case Done{value}: data(id,"compact",Events.compactionResult(value))
-def compactCommand(handle: Handle,id: Maybe<&2,String>,instructions: Result<&2,&2,String,Maybe<&2,String>>) -> IO(Unit):
+def compactCommand(handle: Command,id: Maybe<&2,String>,instructions: Result<&2,&2,String,Maybe<&2,String>>) -> IO(Unit):
   match handle instructions:
-    case Handle{_,sink,_,_,_,_} Fail{reason}: output(sink,failure(id,"compact",reason))
-    case Handle{session,sink,_,_,_,_} Done{custom}:
+    case Command{_,sink,_,_,_,_} Fail{reason}: output(sink,failure(id,"compact",reason))
+    case Command{session,sink,_,_,_,_} Done{custom}:
       do IO<Unit>:
         result : Result<&2,&2,String,Compaction.CompactionResult> <- Session.compact(session,custom)
         output(sink,compactResponse(id,result))
-def lastText(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+def lastText(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{session,sink,_,_,_,_}:
+    case Command{session,sink,_,_,_,_}:
       do IO<Unit>:
         last : Maybe<&2,String> <- Session.getLastAssistantText(session)
         output(sink,data(id,"get_last_assistant_text",MessageJson.object(MessageJson.field("text",optionalValue(last),Nil{}))))
@@ -386,9 +418,9 @@ def clearState(current: Session.Shared) -> Session.Shared & Cleared:
 def clearedValue(value: Cleared) -> V.Value:
   match value:
     case Cleared{steering,followUp}: MessageJson.object(MessageJson.field("steering",V.ArrayValue{Events.texts(steering)},MessageJson.field("followUp",V.ArrayValue{Events.texts(followUp)},Nil{})))
-def clearQueue(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+def clearQueue(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{Session.AgentSession{agent,+shared,_,_,_,_,_,_},sink,_,_,_,_}:
+    case Command{Session.AgentSession{agent,+shared,_,_,_,_,_,_},sink,_,_,_,_}:
       do IO<Unit>:
         Agent.clearAllQueues(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent)
         removed : Cleared <- Ref.modify(Session.Shared,Cleared,shared,clearState)
@@ -399,14 +431,14 @@ def mode(value: String) -> Maybe<&2,AgentTypes.QueueMode>:
     case "all": Some{AgentTypes.All{}}
     case "one-at-a-time": Some{AgentTypes.OneAtATime{}}
     case _: None{}
-def modeResponse(handle: Handle,id: Maybe<&2,String>,+command: String,value: Maybe<&2,AgentTypes.QueueMode>) -> IO(Unit):
+def modeResponse(handle: Command,id: Maybe<&2,String>,+command: String,value: Maybe<&2,AgentTypes.QueueMode>) -> IO(Unit):
   match handle value:
-    case Handle{_,sink,_,_,_,_} None{}: output(sink,failure(id,command,"Invalid command: mode must be 'all' or 'one-at-a-time'"))
-    case Handle{+session,sink,_,_,_,_} Some{+chosen}:
+    case Command{_,sink,_,_,_,_} None{}: output(sink,failure(id,command,"Invalid command: mode must be 'all' or 'one-at-a-time'"))
+    case Command{+session,sink,_,_,_,_} Some{+chosen}:
       do IO<Unit>:
         persisted : Result<&2,&2,String,Unit> <- Bool.pick(Unit -> IO(Result<&2,&2,String,Unit>),String.eq(command,"set_steering_mode"),_ => Session.setSteeringMode(session,chosen),_ => Session.setFollowUpMode(session,chosen))(Unit{})
         output(sink,ok(id,command))
-def setMode(handle: Handle,id: Maybe<&2,String>,command: String,value: Result<&2,&2,String,String>) -> IO(Unit):
+def setMode(handle: Command,id: Maybe<&2,String>,command: String,value: Result<&2,&2,String,String>) -> IO(Unit):
   match value:
     case Fail{reason}: commandFailure(handle,id,command,reason)
     case Done{text}: modeResponse(handle,id,command,mode(text))
@@ -414,9 +446,9 @@ def levelValues(values: List<&2,Ai.ModelThinkingLevel>) -> List<&2,V.Value>:
   match values:
     case Nil{}: Nil{}
     case value <> rest: V.Text{Levels.name(value)} <> levelValues(rest)
-def availableLevels(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+def availableLevels(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{session,sink,_,_,_,_}:
+    case Command{session,sink,_,_,_,_}:
       do IO<Unit>:
         levels : List<&2,Ai.ModelThinkingLevel> <- Session.getAvailableThinkingLevels(session)
         output(sink,data(id,"get_available_thinking_levels",MessageJson.object(MessageJson.field("levels",V.ArrayValue{levelValues(levels)},Nil{}))))
@@ -425,9 +457,9 @@ def thinkingCycled(sink: Sink(),id: Maybe<&2,String>,result: Result<&2,&2,String
     case Fail{reason}: output(sink,failure(id,"cycle_thinking_level",reason))
     case Done{None{}}: output(sink,data(id,"cycle_thinking_level",V.Null{}))
     case Done{Some{level}}: output(sink,data(id,"cycle_thinking_level",MessageJson.object(MessageJson.field("level",V.Text{Levels.name(level)},Nil{}))))
-def cycleThinking(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+def cycleThinking(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{session,sink,_,_,_,_}:
+    case Command{session,sink,_,_,_,_}:
       do IO<Unit>:
         result : Result<&2,&2,String,Maybe<&2,Ai.ModelThinkingLevel>> <- Session.cycleThinkingLevel(session,Session.ModelMutationOptions{False{}})
         thinkingCycled(sink,id,result)
@@ -445,9 +477,9 @@ def stateValue(+stored: Session.Session(),+current: Session.AgentState(),shared:
 def sharedSnapshot(session: Session.AgentSession) -> IO(Session.Shared):
   match session:
     case Session.AgentSession{_,shared,_,_,_,_,_,_}: Ref.read(Session.Shared,shared)
-def getState(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+def getState(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{+session,sink,_,_,_,_}:
+    case Command{+session,sink,_,_,_,_}:
       do IO<Unit>:
         +agent : Runtime.Owner() <- IO.pure(Runtime.Owner(),Session.agentOf(session))
         stored : Session.Session() <- Session.sessionOf(session)
@@ -461,17 +493,17 @@ def getState(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
         output(sink,data(id,"get_state",stateValue(stored,current,shared,streaming,compacting,steering,followUp,auto)))
 def autoResult(sink: Sink(),id: Maybe<&2,String>,command: String,result: Result<&2,&2,String,Unit>) -> IO(Unit):
   output(sink,resultResponse(id,command,result))
-def setAutoCompaction(handle: Handle,id: Maybe<&2,String>,enabled: Result<&2,&2,String,Bool>) -> IO(Unit):
+def setAutoCompaction(handle: Command,id: Maybe<&2,String>,enabled: Result<&2,&2,String,Bool>) -> IO(Unit):
   match handle enabled:
-    case Handle{_,sink,_,_,_,_} Fail{message}: output(sink,failure(id,"set_auto_compaction",message))
-    case Handle{session,sink,_,_,_,_} Done{value}:
+    case Command{_,sink,_,_,_,_} Fail{message}: output(sink,failure(id,"set_auto_compaction",message))
+    case Command{session,sink,_,_,_,_} Done{value}:
       do IO<Unit>:
         result : Result<&2,&2,String,Unit> <- Session.setAutoCompactionEnabled(session,value)
         autoResult(sink,id,"set_auto_compaction",result)
-def setAutoRetry(handle: Handle,id: Maybe<&2,String>,enabled: Result<&2,&2,String,Bool>) -> IO(Unit):
+def setAutoRetry(handle: Command,id: Maybe<&2,String>,enabled: Result<&2,&2,String,Bool>) -> IO(Unit):
   match handle enabled:
-    case Handle{_,sink,_,_,_,_} Fail{message}: output(sink,failure(id,"set_auto_retry",message))
-    case Handle{session,sink,_,_,_,_} Done{value}:
+    case Command{_,sink,_,_,_,_} Fail{message}: output(sink,failure(id,"set_auto_retry",message))
+    case Command{session,sink,_,_,_,_} Done{value}:
       do IO<Unit>:
         result : Result<&2,&2,String,Unit> <- Session.setAutoRetryEnabled(session,value)
         autoResult(sink,id,"set_auto_retry",result)
@@ -482,9 +514,9 @@ def modelValues(models: List<&2,Models.Model()>) -> List<&2,V.Value>:
   match models:
     case Nil{}: Nil{}
     case model <> rest: ModelJson.model(model) <> modelValues(rest)
-def availableModels(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+def availableModels(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{session,sink,_,_,_,_}:
+    case Command{session,sink,_,_,_,_}:
       do IO<Unit>:
         available : List<&2,Models.Model()> <- Models.getAvailable(Session.modelRuntime(session))
         output(sink,data(id,"get_available_models",MessageJson.object(MessageJson.field("models",V.ArrayValue{modelValues(available)},Nil{}))))
@@ -504,12 +536,12 @@ def setAvailableModel(+session: Session.AgentSession,sink: Sink(),id: Maybe<&2,S
   do IO<Unit>:
     available : List<&2,Models.Model()> <- Models.getAvailable(Session.modelRuntime(session))
     setMatchedModel(session,sink,id,provider,modelId,Models.findModel(available,provider,modelId))
-def setModelParsed(handle: Handle,id: Maybe<&2,String>,provider: Result<&2,&2,String,String>,modelId: Result<&2,&2,String,String>) -> IO(Unit):
+def setModelParsed(handle: Command,id: Maybe<&2,String>,provider: Result<&2,&2,String,String>,modelId: Result<&2,&2,String,String>) -> IO(Unit):
   match handle provider modelId:
-    case Handle{_,sink,_,_,_,_} Fail{message} _: output(sink,failure(id,"set_model",message))
-    case Handle{_,sink,_,_,_,_} _ Fail{message}: output(sink,failure(id,"set_model",message))
-    case Handle{session,sink,_,_,_,_} Done{provider} Done{modelId}: setAvailableModel(session,sink,id,provider,modelId)
-def setCatalogModel(handle: Handle,id: Maybe<&2,String>,+object: R.Record<V.Value>) -> IO(Unit):
+    case Command{_,sink,_,_,_,_} Fail{message} _: output(sink,failure(id,"set_model",message))
+    case Command{_,sink,_,_,_,_} _ Fail{message}: output(sink,failure(id,"set_model",message))
+    case Command{session,sink,_,_,_,_} Done{provider} Done{modelId}: setAvailableModel(session,sink,id,provider,modelId)
+def setCatalogModel(handle: Command,id: Maybe<&2,String>,+object: R.Record<V.Value>) -> IO(Unit):
   setModelParsed(handle,id,requiredText(object,"provider"),requiredText(object,"modelId"))
 def modelCycled(sink: Sink(),id: Maybe<&2,String>,result: Result<&2,&2,String,Maybe<&2,Session.ModelCycleResult>>) -> IO(Unit):
   match result:
@@ -517,9 +549,9 @@ def modelCycled(sink: Sink(),id: Maybe<&2,String>,result: Result<&2,&2,String,Ma
     case Done{None{}}: output(sink,data(id,"cycle_model",V.Null{}))
     case Done{Some{Session.ModelCycleResult{model,level,scoped}}}:
       output(sink,data(id,"cycle_model",MessageJson.object(MessageJson.field("model",ModelJson.model(model),MessageJson.field("thinkingLevel",V.Text{Levels.name(level)},MessageJson.field("isScoped",V.Boolean{scoped},Nil{}))))))
-def cycleCatalogModel(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+def cycleCatalogModel(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{session,sink,_,_,_,_}:
+    case Command{session,sink,_,_,_,_}:
       do IO<Unit>:
         result : Result<&2,&2,String,Maybe<&2,Session.ModelCycleResult>> <- Session.cycleModel(session,Session.Forward{},Session.ModelMutationOptions{False{}})
         modelCycled(sink,id,result)
@@ -527,9 +559,9 @@ def statsResponse(id: Maybe<&2,String>,result: Result<&2,&2,S.Error,Stats.Stats>
   match result:
     case Fail{_}: failure(id,"get_session_stats","Session history is invalid")
     case Done{value}: data(id,"get_session_stats",Stats.value(value))
-def getSessionStats(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+def getSessionStats(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{session,sink,_,_,_,_}:
+    case Command{session,sink,_,_,_,_}:
       do IO<Unit>:
         result : Result<&2,&2,S.Error,Stats.Stats> <- Session.getSessionStats(session)
         output(sink,statsResponse(id,result))
@@ -551,19 +583,19 @@ def exportFromDir(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String
   do IO<Unit>:
     loaded : Result<&2,&2,String,Export.Assets> <- Export.loadAssets(directory)
     exportLoaded(session,sink,id,path,loaded)
-def exportChosen(handle: Handle,id: Maybe<&2,String>,path: Maybe<&2,String>) -> IO(Unit):
+def exportChosen(handle: Command,id: Maybe<&2,String>,path: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{session,sink,_,_,_,None{}}: output(sink,failure(id,"export_html","HTML export assets are unavailable"))
-    case Handle{session,sink,_,_,_,Some{directory}}: exportFromDir(session,sink,id,path,directory)
-def exportHtml(handle: Handle,id: Maybe<&2,String>,path: Result<&2,&2,String,Maybe<&2,String>>) -> IO(Unit):
+    case Command{session,sink,_,_,_,None{}}: output(sink,failure(id,"export_html","HTML export assets are unavailable"))
+    case Command{session,sink,_,_,_,Some{directory}}: exportFromDir(session,sink,id,path,directory)
+def exportHtml(handle: Command,id: Maybe<&2,String>,path: Result<&2,&2,String,Maybe<&2,String>>) -> IO(Unit):
   match path:
     case Fail{reason}: commandFailure(handle,id,"export_html",reason)
     case Done{chosen}: exportChosen(handle,id,chosen)
-def bashSubmitted(handle: Handle,id: Maybe<&2,String>,command: Result<&2,&2,String,String>,exclude: Result<&2,&2,String,Maybe<&2,Bool>>) -> IO(Unit):
+def bashSubmitted(handle: Command,id: Maybe<&2,String>,command: Result<&2,&2,String,String>,exclude: Result<&2,&2,String,Maybe<&2,Bool>>) -> IO(Unit):
   match handle command exclude:
-    case Handle{_,sink,_,_,_,_} Fail{reason} _: output(sink,failure(id,"bash",reason))
-    case Handle{_,sink,_,_,_,_} _ Fail{reason}: output(sink,failure(id,"bash",reason))
-    case Handle{_,_,_,_,jobs,_} Done{text} Done{choice}:
+    case Command{_,sink,_,_,_,_} Fail{reason} _: output(sink,failure(id,"bash",reason))
+    case Command{_,sink,_,_,_,_} _ Fail{reason}: output(sink,failure(id,"bash",reason))
+    case Command{_,_,_,_,jobs,_} Done{text} Done{choice}:
       do IO<Unit>:
         accepted : Bool <- Chan.send(Work,jobs,BashWork{BashRequest{id,text,choice}})
         return Unit{}
@@ -572,14 +604,95 @@ def optionalBoolean(value: Maybe<&2,V.Value>) -> Result<&2,&2,String,Maybe<&2,Bo
     case None{}: Done{None{}}
     case Some{V.Boolean{choice}}: Done{Some{choice}}
     case _: Fail{"Invalid command: excludeFromContext must be a boolean"}
-def abortBash(handle: Handle,id: Maybe<&2,String>) -> IO(Unit):
+def abortBash(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Handle{session,sink,_,_,_,_}:
+    case Command{session,sink,_,_,_,_}:
       do IO<Unit>:
         Session.abortBash(session)
         output(sink,ok(id,"abort_bash"))
-def dispatch(handle: Handle,id: Maybe<&2,String>,+command: String,+object: R.Record<V.Value>) -> IO(Unit):
+# Session replacement goes through the host; the rebind hook has installed
+# the new session before the response.
+def replacedData(fields: List<&2,R.Property<V.Value>>) -> V.Value:
+  MessageJson.object(List.append(&2,R.Property<V.Value>,fields,MessageJson.field("cancelled",V.Boolean{False{}},Nil{})))
+def replacedReply(sink: Sink(),id: Maybe<&2,String>,command: String,result: Result<&2,&2,String,Unit>) -> IO(Unit):
+  match result:
+    case Fail{message}: output(sink,failure(id,command,message))
+    case Done{_}: output(sink,data(id,command,replacedData(Nil{})))
+def newSessionCommand(handle: Command,host: Host,id: Maybe<&2,String>,parent: Result<&2,&2,String,Maybe<&2,String>>) -> IO(Unit):
+  match handle host parent:
+    case Command{_,sink,_,_,_,_} _ Fail{reason}: output(sink,failure(id,"new_session",reason))
+    case Command{_,sink,_,_,_,_} Host{opening,_,_} Done{parentSession}:
+      do IO<Unit>:
+        result : Result<&2,&2,String,Unit> <- Callback.call(Maybe<&2,String>,Result<&2,&2,String,Unit>,opening,parentSession)
+        replacedReply(sink,id,"new_session",result)
+def switchSessionCommand(handle: Command,host: Host,id: Maybe<&2,String>,path: Result<&2,&2,String,String>) -> IO(Unit):
+  match handle host path:
+    case Command{_,sink,_,_,_,_} _ Fail{reason}: output(sink,failure(id,"switch_session",reason))
+    case Command{_,sink,_,_,_,_} Host{_,switching,_} Done{sessionPath}:
+      do IO<Unit>:
+        result : Result<&2,&2,String,Unit> <- Callback.call(String,Result<&2,&2,String,Unit>,switching,sessionPath)
+        replacedReply(sink,id,"switch_session",result)
+def forkReply(sink: Sink(),id: Maybe<&2,String>,+command: String,result: Result<&2,&2,String,Maybe<&2,String>>) -> IO(Unit):
+  match result:
+    case Fail{message}: output(sink,failure(id,command,message))
+    case Done{text}: output(sink,data(id,command,replacedData(Bool.pick(List<&2,R.Property<V.Value>>,String.eq(command,"fork"),MessageJson.optionalText("text",text,Nil{}),Nil{}))))
+def forkWith(sink: Sink(),host: Host,id: Maybe<&2,String>,command: String,request: ForkRequest) -> IO(Unit):
+  match host:
+    case Host{_,_,forking}:
+      do IO<Unit>:
+        result : Result<&2,&2,String,Maybe<&2,String>> <- Callback.call(ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,forking,request)
+        forkReply(sink,id,command,result)
+def forkCommand(handle: Command,host: Host,id: Maybe<&2,String>,entry: Result<&2,&2,String,String>) -> IO(Unit):
+  match handle entry:
+    case Command{_,sink,_,_,_,_} Fail{reason}: output(sink,failure(id,"fork",reason))
+    case Command{_,sink,_,_,_,_} Done{target}: forkWith(sink,host,id,"fork",ForkRequest{target,SessionRuntime.ForkBefore{}})
+def cloneLeaf(sink: Sink(),host: Host,id: Maybe<&2,String>,leaf: Maybe<&2,String>) -> IO(Unit):
+  match leaf:
+    case None{}: output(sink,failure(id,"clone","Cannot clone session: no current entry selected"))
+    case Some{leafId}: forkWith(sink,host,id,"clone",ForkRequest{leafId,SessionRuntime.ForkAt{}})
+def cloneCommand(handle: Command,host: Host,id: Maybe<&2,String>) -> IO(Unit):
+  match handle:
+    case Command{session,sink,_,_,_,_}:
+      do IO<Unit>:
+        stored : Session.Session() <- Session.sessionOf(session)
+        cloneLeaf(sink,host,id,S.getLeafId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)))
+
+# get_commands: prompt templates, then skills (extension commands are not
+# ported), each with its source metadata.
+def scopeName(scope: Skills.SourceScope) -> String:
+  match scope:
+    case Skills.User{}: "user"
+    case Skills.Project{}: "project"
+    case Skills.Temporary{}: "temporary"
+def originName(origin: Skills.SourceOrigin) -> String:
+  match origin:
+    case Skills.Package{}: "package"
+    case Skills.TopLevel{}: "top-level"
+def sourceInfoValue(info: Skills.SourceInfo) -> V.Value:
+  match info:
+    case Skills.SourceInfo{path,source,scope,origin,baseDir}:
+      MessageJson.object(MessageJson.field("path",V.Text{path},MessageJson.field("source",V.Text{source},MessageJson.field("scope",V.Text{scopeName(scope)},MessageJson.field("origin",V.Text{originName(origin)},MessageJson.optionalText("baseDir",baseDir,Nil{}))))))
+def commandValue(name: String,description: String,source: String,info: Skills.SourceInfo) -> V.Value:
+  MessageJson.object(MessageJson.field("name",V.Text{name},MessageJson.field("description",V.Text{description},MessageJson.field("source",V.Text{source},MessageJson.field("sourceInfo",sourceInfoValue(info),Nil{})))))
+def skillCommands(skills: List<&2,Skills.Skill>) -> List<&2,V.Value>:
+  match skills:
+    case Nil{}: Nil{}
+    case Skills.Skill{name,description,_,_,info,_} <> rest: commandValue("skill:" ++ name,description,"skill",info) <> skillCommands(rest)
+def templateCommands(templates: List<&2,Templates.PromptTemplate>,skills: List<&2,Skills.Skill>) -> List<&2,V.Value>:
+  match templates:
+    case Nil{}: skillCommands(skills)
+    case Templates.PromptTemplate{name,description,_,_,info,_} <> rest: commandValue(name,description,"prompt",info) <> templateCommands(rest,skills)
+def getCommands(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
+  match handle:
+    case Command{+session,sink,_,_,_,_}:
+      output(sink,data(id,"get_commands",MessageJson.object(MessageJson.field("commands",V.ArrayValue{templateCommands(Session.promptTemplates(session),Session.getSkills(session))},Nil{}))))
+def dispatch(handle: Command,host: Host,id: Maybe<&2,String>,+command: String,+object: R.Record<V.Value>) -> IO(Unit):
   match command:
+    case "new_session": newSessionCommand(handle,host,id,optionalText(field(object,"parentSession")))
+    case "switch_session": switchSessionCommand(handle,host,id,requiredText(object,"sessionPath"))
+    case "fork": forkCommand(handle,host,id,requiredText(object,"entryId"))
+    case "clone": cloneCommand(handle,host,id)
+    case "get_commands": getCommands(handle,id)
     case "prompt": prompt(handle,id,object)
     case "steer": queued(handle,id,"steer",requiredText(object,"message"),imagesOf(object))
     case "follow_up": queued(handle,id,"follow_up",requiredText(object,"message"),imagesOf(object))
@@ -609,19 +722,24 @@ def dispatch(handle: Handle,id: Maybe<&2,String>,+command: String,+object: R.Rec
     case "set_steering_mode": setMode(handle,id,"set_steering_mode",requiredText(object,"mode"))
     case "set_follow_up_mode": setMode(handle,id,"set_follow_up_mode",requiredText(object,"mode"))
     case _: reply(handle,failure(id,command,"Unknown command: " ++ command))
-def identified(handle: Handle,object: R.Record<V.Value>,id: Result<&2,&2,String,Maybe<&2,String>>,kind: Result<&2,&2,String,String>) -> IO(Unit):
+def identified(handle: Command,host: Host,object: R.Record<V.Value>,id: Result<&2,&2,String,Maybe<&2,String>>,kind: Result<&2,&2,String,String>) -> IO(Unit):
   match handle id kind:
-    case Handle{_,sink,_,_,_,_} Fail{error} _: output(sink,failure(None{},"parse",error))
-    case Handle{_,sink,_,_,_,_} _ Fail{error}: output(sink,failure(None{},"parse",error))
-    case _ Done{id} Done{kind}: dispatch(handle,id,kind,object)
+    case Command{_,sink,_,_,_,_} Fail{error} _: output(sink,failure(None{},"parse",error))
+    case Command{_,sink,_,_,_,_} _ Fail{error}: output(sink,failure(None{},"parse",error))
+    case _ Done{id} Done{kind}: dispatch(handle,host,id,kind,object)
 
-def parsed(handle: Handle,value: Result<&2,&2,Decode.ParseError,V.Value>) -> IO(Unit):
+def parsed(handle: Command,host: Host,value: Result<&2,&2,Decode.ParseError,V.Value>) -> IO(Unit):
   match handle value:
-    case Handle{_,sink,_,_,_,_} Fail{_}: output(sink,failure(None{},"parse","Failed to parse command: invalid JSON"))
-    case _ Done{V.ObjectValue{+object}}: identified(handle,object,idOf(object),requiredText(object,"type"))
-    case Handle{_,sink,_,_,_,_} Done{_}: output(sink,failure(None{},"parse","Invalid command: expected object"))
-def command(handle: Handle,text: String) -> IO(Unit):
-  parsed(handle,Decode.parse(text))
+    case Command{_,sink,_,_,_,_} Fail{_}: output(sink,failure(None{},"parse","Failed to parse command: invalid JSON"))
+    case _ Done{V.ObjectValue{+object}}: identified(handle,host,object,idOf(object),requiredText(object,"type"))
+    case Command{_,sink,_,_,_,_} Done{_}: output(sink,failure(None{},"parse","Invalid command: expected object"))
+def hostOf(handle: Handle) -> Host:
+  match handle:
+    case Handle{_,_,_,_,_,_,host,_}: host
+def command(+handle: Handle,text: String) -> IO(Unit):
+  do IO<Unit>:
+    view : Command <- commandOf(handle)
+    parsed(view,hostOf(handle),Decode.parse(text))
 def withoutCR(+value: String) -> String:
   Bool.pick(String,String.ends_with(value,"\r"),String.take(value,String.length(value) - 1n),value)
 type Frame is Data: Frame{records: List<&2,String>,pending: String}
@@ -637,7 +755,7 @@ def frame(buffer: String,chunk: String) -> Frame:
   collect(String.split(buffer ++ chunk,'\n'))
 def storeTail(handle: Handle,part: String) -> IO(Unit):
   match handle:
-    case Handle{_,_,buffer,_,_,_}: Ref.write(String,buffer,part)
+    case Handle{_,_,buffer,_,_,_,_,_}: Ref.write(String,buffer,part)
 def processRecords(+handle: Handle,parts: List<&2,String>) -> IO(Unit):
   match parts:
     case Nil{}: IO.pure(Unit,Unit{})
@@ -653,26 +771,28 @@ def receivedFrame(+handle: Handle,value: Frame) -> IO(Unit):
         processRecords(handle,records)
 def feed(+handle: Handle,chunk: String) -> IO(Unit):
   match handle:
-    case Handle{_,_,+buffer,_,_,_}:
+    case Handle{_,_,+buffer,_,_,_,_,_}:
       do IO<Unit>:
         pending : String <- Ref.read(String,buffer)
         receivedFrame(handle,frame(pending,chunk))
 def finish(+handle: Handle) -> IO(Unit):
   match handle:
-    case Handle{_,_,+buffer,_,_,_}:
+    case Handle{_,_,+buffer,_,_,_,_,_}:
       do IO<Unit>:
         +pending : String <- Ref.read(String,buffer)
         Ref.write(String,buffer,"")
         Bool.pick(Unit -> IO(Unit),String.is_empty(pending),_ => IO.pure(Unit,Unit{}),_ => command(handle,withoutCR(pending)))(Unit{})
 def stop(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{Handle{+session,_,buffer,busy,jobs,_},+task,+listener}:
+    case Owner{Handle{+current,_,buffer,busy,jobs,_,_,+listener},+task}:
       do IO<Unit>:
+        +session : Session.AgentSession <- Ref.read(Session.AgentSession,current)
         Session.abortBash(session)
         Chan.close(Work,jobs)
         completed : Maybe<&1,Unit> <- Chan.recv(Unit,task)
         Chan.close(Unit,task)
-        Session.unsubscribe(session,listener)
+        live : Session.AgentSession <- Ref.dispose(Session.AgentSession,current)
+        Session.unsubscribe(live,listener)
         Callback.dispose(Session.AgentSessionEvent,Unit,listener)
         oldBuffer : String <- Ref.dispose(String,buffer)
         oldBusy : Bool <- Ref.dispose(Bool,busy)

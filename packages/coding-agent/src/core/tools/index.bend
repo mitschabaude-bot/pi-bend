@@ -17,6 +17,7 @@ import ./grep.bend as Grep
 import ../../utils/tools-manager.bend as Manager
 import ./truncate.bend as Truncate
 import ./file-mutation-queue.bend as Queue
+import ../extensions/context.bend as Ctx
 
 # The public coding tools behind one agent-tool type. Upstream erases each
 # tool's details to `any`; here the details and errors are explicit sums, and
@@ -245,7 +246,7 @@ def defaultOptions() -> ToolsOptions: ToolsOptions{None{}, None{}, None{}, None{
 # path environment, the working directory, the manager of pi's bin directory
 # (fd, rg) and the shared file-mutation queue.
 type Environment is Data:
-  Environment{paths: Paths.Environment, cwd: String, tools: Manager.ToolsManager, queue: Queue.Queue, data: String}
+  Environment{paths: Paths.Environment, cwd: String, tools: Manager.ToolsManager, queue: Queue.Queue, data: String, context: Ctx.ContextSource()}
 
 # The bridged tool keeps the tool's metadata and runs through the registry's
 # execution callback; tools without argument preparation share it.
@@ -262,9 +263,9 @@ def bridgedRead(pair: Read.ToolOwner & Agent.AgentTool<Maybe<&2, Read.ReadToolDe
 
 def createReadTool(environment: Environment, options: Maybe<&2, Read.ReadToolOptions>) -> IO(ToolOwner):
   match environment:
-    case Environment{paths, cwd, _, _, _}:
+    case Environment{paths, cwd, _, _, _, context}:
       do IO<ToolOwner>:
-        owner : Read.ToolOwner <- Read.createReadTool(paths, cwd, Maybe.default(&2, Read.ReadToolOptions, options, Read.ReadToolOptions{None{}, None{}, None{}}))
+        owner : Read.ToolOwner <- Read.createReadTool(paths, cwd, Maybe.default(&2, Read.ReadToolOptions, options, Read.ReadToolOptions{None{}, None{}, None{}}), context)
         bridgedRead(Read.borrowTool(owner))
 
 def bridgedFind(pair: Find.ToolOwner & Agent.AgentTool<Maybe<&2, Find.FindToolDetails>, Find.Error>) -> IO(ToolOwner):
@@ -273,9 +274,9 @@ def bridgedFind(pair: Find.ToolOwner & Agent.AgentTool<Maybe<&2, Find.FindToolDe
 
 def createFindTool(environment: Environment, options: Maybe<&2, Find.FindToolOptions>) -> IO(ToolOwner):
   match environment:
-    case Environment{paths, cwd, tools, _, _}:
+    case Environment{paths, cwd, tools, _, _, context}:
       do IO<ToolOwner>:
-        owner : Find.ToolOwner <- Find.createFindTool(paths, tools, cwd, Maybe.default(&2, Find.FindToolOptions, options, Find.FindToolOptions{None{}}))
+        owner : Find.ToolOwner <- Find.createFindTool(paths, tools, cwd, Maybe.default(&2, Find.FindToolOptions, options, Find.FindToolOptions{None{}}), context)
         bridgedFind(Find.borrowTool(owner))
 
 def bridgedGrep(pair: Grep.ToolOwner & Agent.AgentTool<Maybe<&2, Grep.GrepToolDetails>, Grep.Error>) -> IO(ToolOwner):
@@ -284,9 +285,9 @@ def bridgedGrep(pair: Grep.ToolOwner & Agent.AgentTool<Maybe<&2, Grep.GrepToolDe
 
 def createGrepTool(environment: Environment, options: Maybe<&2, Grep.GrepToolOptions>) -> IO(ToolOwner):
   match environment:
-    case Environment{paths, cwd, tools, _, _}:
+    case Environment{paths, cwd, tools, _, _, context}:
       do IO<ToolOwner>:
-        owner : Grep.ToolOwner <- Grep.createGrepTool(paths, tools, cwd, Maybe.default(&2, Grep.GrepToolOptions, options, Grep.GrepToolOptions{None{}}))
+        owner : Grep.ToolOwner <- Grep.createGrepTool(paths, tools, cwd, Maybe.default(&2, Grep.GrepToolOptions, options, Grep.GrepToolOptions{None{}}), context)
         bridgedGrep(Grep.borrowTool(owner))
 
 def bridgedBash(pair: Bash.ToolOwner & Agent.AgentTool<Maybe<&2, Bash.BashToolDetails>, Bash.Error>) -> IO(ToolOwner):
@@ -298,9 +299,9 @@ def bridgedBash(pair: Bash.ToolOwner & Agent.AgentTool<Maybe<&2, Bash.BashToolDe
 
 def createBashTool(environment: Environment, options: Maybe<&2, Bash.BashToolOptions>) -> IO(ToolOwner):
   match environment:
-    case Environment{_, cwd, Manager.ToolsManager{binDir, _, _}, _, _}:
+    case Environment{_, cwd, Manager.ToolsManager{binDir, _, _}, _, _, context}:
       do IO<ToolOwner>:
-        owner : Bash.ToolOwner <- Bash.createBashTool(binDir, cwd, Maybe.default(&2, Bash.BashToolOptions, options, Bash.BashToolOptions{None{}, None{}, None{}, None{}, None{}}))
+        owner : Bash.ToolOwner <- Bash.createBashTool(binDir, cwd, Maybe.default(&2, Bash.BashToolOptions, options, Bash.BashToolOptions{None{}, None{}, None{}, None{}, None{}}), context)
         bridgedBash(Bash.borrowTool(owner))
 
 def bridgedPrepare(callback: Maybe<&2, C.Callback<V.Value, Edit.ResultOf(V.Value)>>) -> IO(Prepare()):
@@ -318,9 +319,9 @@ def bridgedEdit(pair: Edit.ToolOwner & Agent.AgentTool<Edit.EditToolDetails, Edi
 
 def createEditTool(environment: Environment, options: Maybe<&2, Edit.EditToolOptions>) -> IO(ToolOwner):
   match environment:
-    case Environment{paths, cwd, _, queue, _}:
+    case Environment{paths, cwd, _, queue, _, context}:
       do IO<ToolOwner>:
-        owner : Edit.ToolOwner <- Edit.createEditTool(paths, queue, cwd, Maybe.default(&2, Edit.EditToolOptions, options, Edit.EditToolOptions{None{}}))
+        owner : Edit.ToolOwner <- Edit.createEditTool(paths, queue, cwd, Maybe.default(&2, Edit.EditToolOptions, options, Edit.EditToolOptions{None{}}), context)
         bridgedEdit(Edit.borrowTool(owner))
 
 def bridgedWrite(pair: Write.ToolOwner & Agent.AgentTool<Unit, Write.Error>) -> IO(ToolOwner):
@@ -329,9 +330,9 @@ def bridgedWrite(pair: Write.ToolOwner & Agent.AgentTool<Unit, Write.Error>) -> 
 
 def createWriteTool(environment: Environment, options: Maybe<&2, Write.WriteToolOptions>) -> IO(ToolOwner):
   match environment:
-    case Environment{paths, cwd, _, queue, _}:
+    case Environment{paths, cwd, _, queue, _, context}:
       do IO<ToolOwner>:
-        owner : Write.ToolOwner <- Write.createWriteTool(paths, queue, cwd, Maybe.default(&2, Write.WriteToolOptions, options, Write.WriteToolOptions{None{}}))
+        owner : Write.ToolOwner <- Write.createWriteTool(paths, queue, cwd, Maybe.default(&2, Write.WriteToolOptions, options, Write.WriteToolOptions{None{}}), context)
         bridgedWrite(Write.borrowTool(owner))
 
 def bridgedLs(pair: Ls.ToolOwner & Agent.AgentTool<Maybe<&2, Ls.LsToolDetails>, Ls.Error>) -> IO(ToolOwner):
@@ -342,17 +343,17 @@ def codePointLe(left: String, right: String) -> Bool: String.is_le(left, right)
 
 # The collation data ships with pi's runtime data; without it entries fall
 # back to code point order.
-def lsWithCollator(paths: Paths.Environment, cwd: String, options: Ls.LsToolOptions, loaded: Result<&2, &2, Collation.LoadError, Collation.Collator>) -> IO(Ls.ToolOwner):
+def lsWithCollator(paths: Paths.Environment, cwd: String, options: Ls.LsToolOptions, context: Ctx.ContextSource(), loaded: Result<&2, &2, Collation.LoadError, Collation.Collator>) -> IO(Ls.ToolOwner):
   match loaded:
-    case Done{collator}: Ls.createLsTool(collator, paths, cwd, options)
-    case Fail{_}: Ls.createLsToolWithComparator(~codePointLe, paths, cwd, options)
+    case Done{collator}: Ls.createLsTool(collator, paths, cwd, options, context)
+    case Fail{_}: Ls.createLsToolWithComparator(~codePointLe, paths, cwd, options, context)
 
 def createLsTool(environment: Environment, options: Maybe<&2, Ls.LsToolOptions>) -> IO(ToolOwner):
   match environment:
-    case Environment{paths, cwd, _, _, data}:
+    case Environment{paths, cwd, _, _, data, context}:
       do IO<ToolOwner>:
         loaded : Result<&2, &2, Collation.LoadError, Collation.Collator> <- Collation.load(data)
-        owner : Ls.ToolOwner <- lsWithCollator(paths, cwd, Maybe.default(&2, Ls.LsToolOptions, options, Ls.LsToolOptions{None{}}), loaded)
+        owner : Ls.ToolOwner <- lsWithCollator(paths, cwd, Maybe.default(&2, Ls.LsToolOptions, options, Ls.LsToolOptions{None{}}), context, loaded)
         bridgedLs(Ls.borrowTool(owner))
 
 def createTool(name: ToolName, environment: Environment, options: ToolsOptions) -> IO(ToolOwner):

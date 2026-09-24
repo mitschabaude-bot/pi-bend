@@ -10,6 +10,7 @@ import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/filesystem.bend as FS
 import ../packages/runtime/src/tls-trust.bend as Trust
 import ../packages/runtime/src/x509.bend as X509
+import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
 
 type Execution is Data:
   Execution{callback: C.Callback<Runner.ToolInput(), Write.ToolResult()>, counter: Ref.Ref<U32>}
@@ -58,7 +59,8 @@ def runQueue(bundle: List<&2, X509.Certificate>, name: String, base: String, pro
   match queue:
     case (owner, handle):
       do IO<Unit>:
-        tool : Write.ToolOwner <- Write.createWriteTool(environment, handle, cwd, Write.WriteToolOptions{None{}})
+        +unbound1 : Ctx.ContextSource() <- Ctx.create()
+        tool : Write.ToolOwner <- Write.createWriteTool(environment, handle, cwd, Write.WriteToolOptions{None{}},unbound1)
         result : Runner.Outcome() <- runOwned(bundle, name, base, prompt, Write.borrowTool(tool))
         Queue.dispose(owner)
         Runner.report(result)

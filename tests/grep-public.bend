@@ -19,6 +19,7 @@ import ../packages/runtime/src/unicode-17-idna-properties.bend as Properties
 import ../packages/runtime/src/string.bend as S
 import ../packages/runtime/src/utf8.bend as U
 import ../packages/runtime/src/base64.bend as B
+import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
 
 def urlContext() -> URL.Context:
   URL.Context{IDNA.Context{Mapping.table(),Normalization.tables(),Properties.table()},IDNA.Options{IDNA.LabelOptions{False{},False{},True{},IDNA.Nontransitional{}},True{},False{}}}
@@ -162,17 +163,20 @@ def execute(mode: String,+cwd: String,+home: String,args: V.Value,entries: Strin
   match mode:
     case "abort-native":
       do IO<Unit>:
-        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),manager(home),cwd,L.GrepToolOptions{None{}})
+        +unbound1 : Ctx.ContextSource() <- Ctx.create()
+        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),manager(home),cwd,L.GrepToolOptions{None{}},unbound1)
         task : Chan(Unit) <- IO.fork(Unit,abortLater(controller))
         call(L.borrowTool(owner),args,A.signal(Unit,controller))
         IO.join(Unit,task)
     case "repeat":
       do IO<Unit>:
-        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),manager(home),cwd,L.GrepToolOptions{None{}})
+        +unbound2 : Ctx.ContextSource() <- Ctx.create()
+        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),manager(home),cwd,L.GrepToolOptions{None{}},unbound2)
         repeated(L.borrowTool(owner),args,A.signal(Unit,controller))
     case "native":
       do IO<Unit>:
-        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),manager(home),cwd,L.GrepToolOptions{None{}})
+        +unbound3 : Ctx.ContextSource() <- Ctx.create()
+        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),manager(home),cwd,L.GrepToolOptions{None{}},unbound3)
         call(L.borrowTool(owner),args,A.signal(Unit,controller))
     case "context":
       do IO<Unit>:
@@ -183,7 +187,8 @@ def execute(mode: String,+cwd: String,+home: String,args: V.Value,entries: Strin
       do IO<Unit>:
         +ops : L.GrepOperations <- operations(Injection{mode,entries,controller})
         cancel(mode,"preabort",controller)
-        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),manager(home),cwd,L.GrepToolOptions{Some{ops}})
+        +unbound4 : Ctx.ContextSource() <- Ctx.create()
+        owner : L.ToolOwner <- L.createGrepTool(environment(cwd,home),manager(home),cwd,L.GrepToolOptions{Some{ops}},unbound4)
         call(L.borrowTool(owner),args,A.signal(Unit,controller))
         reuse(mode,ops)
         L.dispose(ops)

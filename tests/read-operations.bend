@@ -9,6 +9,7 @@ import ../packages/runtime/src/json.bend as Json
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/record.bend as Record
 import ./read-public.bend as Public
+import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
 
 type Scenario is Data:
   Scenario{trace: Ref.Ref<String>, mode: String, controller: Abort.AbortController<Unit>}
@@ -60,7 +61,8 @@ def scenario(+mode: String) -> IO(Unit):
     +process : C.Callback<Read.ImageInput,Read.ResultOf(Read.ProcessedImage)> <- C.create(~Scenario,~Read.ImageInput,~Read.ResultOf(Read.ProcessedImage),~processor,env)
     +operations : Read.ReadOperations = Read.ReadOperations{reader,access,Bool.pick(Maybe<&2,C.Callback<String,Read.ResultOf(Maybe<&2,String>)>>,String.eq(mode,"text"),None{},Some{detect})}
     ignored : Bool <- Bool.pick(Unit -> IO(Bool),String.eq(mode,"pre-abort"),_ => Abort.abort(Unit,controller,None{}),_ => IO.pure(Bool,False{}))(Unit{})
-    tool : Read.ToolOwner <- Read.createReadTool(Public.environment("/tmp/read-test","/tmp"),"/tmp/read-test",Read.ReadToolOptions{None{},Some{operations},Some{process}})
+    +unbound1 : Ctx.ContextSource() <- Ctx.create()
+    tool : Read.ToolOwner <- Read.createReadTool(Public.environment("/tmp/read-test","/tmp"),"/tmp/read-test",Read.ReadToolOptions{None{},Some{operations},Some{process}},unbound1)
     result : Read.ToolResult() <- call(Read.borrowTool(tool),Abort.signal(Unit,controller))
     log : String <- Ref.read(String,trace)
     IO.print("[" ++ Json.quote(mode) ++ "," ++ Public.report(result) ++ "," ++ Json.quote(log) ++ "]")

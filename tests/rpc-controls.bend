@@ -3,6 +3,7 @@ import ./agent-session.bend as Faux
 import ../packages/coding-agent/src/core/agent-session.bend as Session
 import ../packages/coding-agent/src/core/session-persistence.bend as Stored
 import ../packages/coding-agent/src/modes/rpc.bend as Rpc
+import ./rpc-host-fixture.bend as RpcHost
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/callback.bend as Callback
 
@@ -42,9 +43,10 @@ def run(args: List<String>) -> IO(Unit):
         +session : Session.AgentSession <- IO.pure(Session.AgentSession,Faux.sessionOf(fixture))
         +lines : Ref.Ref<List<&2,String>> <- Ref.new(List<&2,String>,Nil{})
         +sink : Callback.Callback<String,Unit> <- Callback.create(~Ref.Ref<List<&2,String>>,~String,~Unit,~capture,lines)
-        first : Rpc.Owner & Rpc.Handle <- Rpc.start(session,sink,None{})
+        +host : Rpc.Host <- RpcHost.create()
+        first : Rpc.Owner & Rpc.Handle <- Rpc.start(session,sink,None{},host)
         runCommands(first)
-        second : Rpc.Owner & Rpc.Handle <- Rpc.start(session,sink,None{})
+        second : Rpc.Owner & Rpc.Handle <- Rpc.start(session,sink,None{},host)
         inspect(second)
         captured : List<&2,String> <- Ref.dispose(List<&2,String>,lines)
         output(captured)

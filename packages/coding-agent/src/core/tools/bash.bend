@@ -12,6 +12,8 @@ import ../../../../runtime/src/record.bend as Record
 import ../../../../runtime/src/f64.bend as F
 import ../../../../runtime/src/serial-resource.bend as Serial
 import ../../../../runtime/src/ref.bend as Ref
+import ../../../../ai/src/utils/thinking-levels.bend as Levels
+import ../extensions/context.bend as Ctx
 
 # Typed operations are shared by local and injected (for example remote) shells.
 type BashToolInput is Data:
@@ -412,28 +414,44 @@ def invokeWithContext(invocation: Invocation, context: BashContext, request: Age
   match request:
     case Agent.ToolExecutionInput{_,params,signal,update}: invokeInput(invocation,context,signal,update,parseInput(params))
 
-def invoke(invocation: Invocation, request: Agent.ToolExecutionInput<Maybe<&2,BashToolDetails>>) -> IO(ToolResult()):
-  invokeWithContext(invocation,noContext(),request)
+# upstream wrapToolDefinition: the registered tool reads the session's
+# context when it runs, for its cwd and PI_* variables; without a bound
+# session it keeps its own cwd and sets none.
+type Registered is Data: Registered{invocation: Invocation, source: Ctx.ContextSource()}
+def modelField(model: Maybe<&2,Ai.Model<Ai.JsonValue>>, provider: Bool) -> Maybe<&2,String>:
+  match model:
+    case None{}: None{}
+    case Some{Ai.Model{id,_,_,owner,_,_,_,_,_,_,_,_,_,_,_,_}}: Some{Bool.pick(String,provider,owner,id)}
+def toolContext(context: Maybe<&2,Ctx.ExtensionContext>) -> BashContext:
+  match context:
+    case None{}: noContext()
+    case Some{Ctx.ExtensionContext{cwd,+model,session,file,thinking}}: BashContext{Some{cwd},Some{session},file,modelField(model,True{}),modelField(model,False{}),Some{Levels.name(thinking)}}
+def invoke(registered: Registered, request: Agent.ToolExecutionInput<Maybe<&2,BashToolDetails>>) -> IO(ToolResult()):
+  match registered:
+    case Registered{invocation,source}:
+      do IO<ToolResult()>:
+        context : Maybe<&2,Ctx.ExtensionContext> <- Ctx.current(source)
+        invokeWithContext(invocation,toolContext(context),request)
 
-def created(invocation: Invocation, owned: Maybe<&2,BashOperations>, consumers: Ref.Ref<Consumers()>) -> IO(ToolOwner):
+def created(invocation: Registered, owned: Maybe<&2,BashOperations>, consumers: Ref.Ref<Consumers()>) -> IO(ToolOwner):
   do IO<ToolOwner>:
-    callback : C.Callback<Agent.ToolExecutionInput<Maybe<&2,BashToolDetails>>,ToolResult()> <- C.create(~Invocation,~Agent.ToolExecutionInput<Maybe<&2,BashToolDetails>>,~ToolResult(),~invoke,invocation)
+    callback : C.Callback<Agent.ToolExecutionInput<Maybe<&2,BashToolDetails>>,ToolResult()> <- C.create(~Registered,~Agent.ToolExecutionInput<Maybe<&2,BashToolDetails>>,~ToolResult(),~invoke,invocation)
     return ToolOwner{Agent.AgentTool{"bash","Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last 2000 lines or 50KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.",bashSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"bash",None{},callback,None{},None{}},owned,consumers}
 
 # The managed binary directory is an explicit runtime/configuration dependency.
 # Injected operations and hooks remain borrowed; default operations are owned.
-def createWithConsumers(+binDir: String, cwd: String, +options: BashToolOptions, +consumers: Ref.Ref<Consumers()>) -> IO(ToolOwner):
+def createWithConsumers(+binDir: String, cwd: String, +options: BashToolOptions, +consumers: Ref.Ref<Consumers()>, source: Ctx.ContextSource()) -> IO(ToolOwner):
   match options:
-    case BashToolOptions{Some{operations},_,_,_,_}: created(Invocation{binDir,cwd,options,operations,Some{consumers}},None{},consumers)
+    case BashToolOptions{Some{operations},_,_,_,_}: created(Registered{Invocation{binDir,cwd,options,operations,Some{consumers}},source},None{},consumers)
     case BashToolOptions{None{},_,shellPath,_,_}:
       do IO<ToolOwner>:
         +operations : BashOperations <- createLocalBashOperations(binDir,shellPath)
-        created(Invocation{binDir,cwd,options,operations,None{}},Some{operations},consumers)
+        created(Registered{Invocation{binDir,cwd,options,operations,None{}},source},Some{operations},consumers)
 
-def createBashTool(binDir: String, cwd: String, options: BashToolOptions) -> IO(ToolOwner):
+def createBashTool(binDir: String, cwd: String, options: BashToolOptions, source: Ctx.ContextSource()) -> IO(ToolOwner):
   do IO<ToolOwner>:
     consumers : Ref.Ref<Consumers()> <- Ref.new(Consumers(),Nil{})
-    createWithConsumers(binDir,cwd,options,consumers)
+    createWithConsumers(binDir,cwd,options,consumers,source)
 
 def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<Maybe<&2,BashToolDetails>,Error>:
   match owner:

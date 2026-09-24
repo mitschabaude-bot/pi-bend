@@ -5,6 +5,7 @@ import ../packages/coding-agent/src/core/agent-session.bend as Session
 import ../packages/coding-agent/src/core/model-runtime.bend as Models
 import ../packages/coding-agent/src/core/session-persistence.bend as Stored
 import ../packages/coding-agent/src/modes/rpc.bend as Rpc
+import ./rpc-host-fixture.bend as RpcHost
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/callback.bend as Callback
 import ./model-runtime-fixture.bend as ModelFixture
@@ -50,10 +51,10 @@ def scopedCommands(pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
         Rpc.stop(owner)
 def catalog(models: List<&2,Ai.Model<Ai.JsonValue>>) -> List<&2,ModelFixture.Source>:
   ModelFixture.Source{"faux","PI_FAUX_API_KEY",models} <> Nil{}
-def started(+fixture: Faux.Fixture,sink: Callback.Callback<String,Unit>) -> IO(Rpc.Owner & Rpc.Handle):
+def started(+fixture: Faux.Fixture,sink: Callback.Callback<String,Unit>,host: Rpc.Host) -> IO(Rpc.Owner & Rpc.Handle):
   do IO<Rpc.Owner & Rpc.Handle>:
     quiet(fixture)
-    Rpc.start(Faux.sessionOf(fixture),sink,None{})
+    Rpc.start(Faux.sessionOf(fixture),sink,None{},host)
 def run(args: List<String>) -> IO(Unit):
   match args:
     case +cwd <> +agentDir <> Nil{}:
@@ -64,12 +65,13 @@ def run(args: List<String>) -> IO(Unit):
         +lone : Faux.Fixture <- Faux.fixtureOver(stored,cwd,agentDir,Nil{},catalog([Faux.fauxModel()]))
         +lines : Ref.Ref<List<&2,String>> <- Ref.new(List<&2,String>,Nil{})
         +sink : Callback.Callback<String,Unit> <- Callback.create(~Ref.Ref<List<&2,String>>,~String,~Unit,~capture,lines)
-        first : Rpc.Owner & Rpc.Handle <- started(fixture,sink)
+        +host : Rpc.Host <- RpcHost.create()
+        first : Rpc.Owner & Rpc.Handle <- started(fixture,sink,host)
         modelCommands(first)
-        single : Rpc.Owner & Rpc.Handle <- started(lone,sink)
+        single : Rpc.Owner & Rpc.Handle <- started(lone,sink,host)
         oneModel(single)
         Session.setScopedModels(Faux.sessionOf(fixture),[Models.ScopedModel{Faux.fauxModel(),None{}},Models.ScopedModel{secondModel(),Some{Ai.Thinking{Ai.Low{}}}}])
-        scoped : Rpc.Owner & Rpc.Handle <- Rpc.start(Faux.sessionOf(fixture),sink,None{})
+        scoped : Rpc.Owner & Rpc.Handle <- Rpc.start(Faux.sessionOf(fixture),sink,None{},host)
         scopedCommands(scoped)
         captured : List<&2,String> <- Ref.dispose(List<&2,String>,lines)
         output(captured)

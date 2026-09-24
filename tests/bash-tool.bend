@@ -11,6 +11,7 @@ import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/utf8.bend as Utf8
 import ../packages/runtime/src/base64.bend as B64
+import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
 
 # One public call drives real callbacks; the host runner checks the wire frames.
 # UTF-8 encoding already guarantees valid octets; use the direct encoder.
@@ -203,7 +204,8 @@ def runCase(+mode: String,+binDir: String,+cwd: String,shell: String,command: St
     +controller : A.AbortController<Unit> <- A.new(Unit)
     abortTask : Maybe<&2,Chan(Unit)> <- prepareAbort(mode,controller)
     +options : Bash.BashToolOptions = Bash.BashToolOptions{Bool.pick(Maybe<&2,Bash.BashOperations>,native(mode),None{},Some{Bash.BashOperations{exec}}),prefix(mode),Some{shell},Some{Bool.not(String.eq(mode,"mock-hidden"))},spawnHook(mode,hookCallback)}
-    owner : Bash.ToolOwner <- Bash.createBashTool(binDir,cwd,options)
+    +unbound1 : Ctx.ContextSource() <- Ctx.create()
+    owner : Bash.ToolOwner <- Bash.createBashTool(binDir,cwd,options,unbound1)
     call(mode,binDir,cwd,options,Bash.BashOperations{exec},arguments(mode,command,seconds),A.signal(Unit,controller),updateCallback,retained,Bash.borrowTool(owner))
     join(abortTask)
     A.dispose(Unit,controller)

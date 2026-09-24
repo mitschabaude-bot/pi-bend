@@ -16,6 +16,7 @@ import ../packages/runtime/src/tls-trust.bend as Trust
 import ../packages/runtime/src/x509.bend as X509
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/test/utf8-runner.bend as Wire
+import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
 
 type EditExecution is Data:
   EditExecution{callback: C.Callback<Agent.ToolExecutionInput<Edit.EditToolDetails>, Edit.ToolResult()>, counter: Ref.Ref<U32>}
@@ -134,10 +135,14 @@ def runQueue(bundle: List<&2, X509.Certificate>, name: String, base: String, pro
   match queue:
     case (owner, +handle):
       do IO<Unit>:
-        write : Write.ToolOwner <- Write.createWriteTool(environment, handle, cwd, Write.WriteToolOptions{None{}})
-        edit : Edit.ToolOwner <- Edit.createEditTool(environment, handle, cwd, Edit.EditToolOptions{None{}})
-        read : Read.ToolOwner <- Read.createReadTool(environment,cwd,Read.ReadToolOptions{None{},None{},None{}})
-        bash : Bash.ToolOwner <- Bash.createBashTool(cwd ++ "/.pi/bin",cwd,Bash.defaults())
+        +unbound1 : Ctx.ContextSource() <- Ctx.create()
+        write : Write.ToolOwner <- Write.createWriteTool(environment, handle, cwd, Write.WriteToolOptions{None{}},unbound1)
+        +unbound2 : Ctx.ContextSource() <- Ctx.create()
+        edit : Edit.ToolOwner <- Edit.createEditTool(environment, handle, cwd, Edit.EditToolOptions{None{}},unbound2)
+        +unbound3 : Ctx.ContextSource() <- Ctx.create()
+        read : Read.ToolOwner <- Read.createReadTool(environment,cwd,Read.ReadToolOptions{None{},None{},None{}},unbound3)
+        +unbound4 : Ctx.ContextSource() <- Ctx.create()
+        bash : Bash.ToolOwner <- Bash.createBashTool(cwd ++ "/.pi/bin",cwd,Bash.defaults(),unbound4)
         result : Runner.Outcome() <- runOwned(bundle, name, base, prompt, Write.borrowTool(write), Edit.borrowTool(edit),Read.borrowTool(read),Bash.borrowTool(bash))
         Queue.dispose(owner)
         Runner.report(result)

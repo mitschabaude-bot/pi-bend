@@ -17,6 +17,7 @@ import ../packages/runtime/src/unicode-17-idna-properties.bend as Properties
 import ../packages/runtime/src/string.bend as S
 import ../packages/runtime/src/utf8.bend as U
 import ../packages/runtime/src/base64.bend as B
+import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
 
 def environment(+cwd: String) -> Paths.Environment:
   Paths.Environment{cwd,cwd,URL.Context{IDNA.Context{Mapping.table(),Normalization.tables(),Properties.table()},IDNA.Options{IDNA.LabelOptions{False{},False{},True{},IDNA.Nontransitional{}},True{},False{}}}}
@@ -145,14 +146,16 @@ def collated(+cwd: String, path: String, maximum: String, signal: A.AbortSignal<
     case Fail{_}: IO.die(Unit,1,"collation data missing")
     case Done{collator}:
       do IO<Unit>:
-        owner : L.ToolOwner <- L.createLsTool(collator,environment(cwd),cwd,L.LsToolOptions{None{}})
+        +unbound1 : Ctx.ContextSource() <- Ctx.create()
+        owner : L.ToolOwner <- L.createLsTool(collator,environment(cwd),cwd,L.LsToolOptions{None{}},unbound1)
         call(L.borrowTool(owner),arguments(path,maximum),signal)
 
 def execute(mode: String, +cwd: String, path: String, maximum: String, entries: String, +controller: A.AbortController<Unit>) -> IO(Unit):
   match mode:
     case "native":
       do IO<Unit>:
-        owner : L.ToolOwner <- L.createLsToolWithComparator(~lessEqual,environment(cwd),cwd,L.LsToolOptions{None{}})
+        +unbound2 : Ctx.ContextSource() <- Ctx.create()
+        owner : L.ToolOwner <- L.createLsToolWithComparator(~lessEqual,environment(cwd),cwd,L.LsToolOptions{None{}},unbound2)
         call(L.borrowTool(owner),arguments(path,maximum),A.signal(Unit,controller))
     case "collated":
       do IO<Unit>:
@@ -169,7 +172,8 @@ def execute(mode: String, +cwd: String, path: String, maximum: String, entries: 
       do IO<Unit>:
         +ops : L.LsOperations <- operations(Injection{mode,entries,controller})
         cancel(mode,"preabort",controller)
-        owner : L.ToolOwner <- L.createLsToolWithComparator(~lessEqual,environment(cwd),cwd,L.LsToolOptions{Some{ops}})
+        +unbound3 : Ctx.ContextSource() <- Ctx.create()
+        owner : L.ToolOwner <- L.createLsToolWithComparator(~lessEqual,environment(cwd),cwd,L.LsToolOptions{Some{ops}},unbound3)
         call(L.borrowTool(owner),arguments(path,maximum),A.signal(Unit,controller))
         reuse(mode,ops)
         L.dispose(ops)

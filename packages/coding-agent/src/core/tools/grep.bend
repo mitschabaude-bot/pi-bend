@@ -15,6 +15,7 @@ import ../../../../runtime/src/ref.bend as Ref
 import ../../../../runtime/src/string.bend as Strings
 import ../../../../runtime/src/f64.bend as Number
 import ../../../../runtime/src/callback.bend as Callback
+import ../extensions/context.bend as Ctx
 import ../../../../runtime/src/abort.bend as Abort
 import ./truncate.bend as Truncate
 
@@ -431,8 +432,16 @@ def invokeWithContext(environment: Invocation,context: GrepContext,request: Agen
   match request:
     case Agent.ToolExecutionInput{_,arguments,+signal,_}:
       then(Unit,Agent.AgentToolResult<Maybe<&2,GrepToolDetails>>,check(signal),_ => continued(GrepToolInput,Agent.AgentToolResult<Maybe<&2,GrepToolDetails>>,parseInput(arguments),input => invokeInput(environment,context,signal,input)))
-def invoke(environment: Invocation,request: Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>) -> IO(ToolResult()):
-  invokeWithContext(environment,GrepContext{None{}},request)
+# upstream wrapToolDefinition: the registered tool reads the session's
+# context when it runs; without a bound session it keeps its own cwd.
+type Registered is Data: Registered{environment: Invocation, source: Ctx.ContextSource()}
+def toolContext(context: Maybe<&2,Ctx.ExtensionContext>) -> GrepContext: GrepContext{Ctx.cwdOf(context)}
+def invoke(registered: Registered, request: Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>) -> IO(ToolResult()):
+  match registered:
+    case Registered{environment,source}:
+      do IO<ToolResult()>:
+        context : Maybe<&2,Ctx.ExtensionContext> <- Ctx.current(source)
+        invokeWithContext(environment,toolContext(context),request)
 
 def errorMessage(error: Error) -> String:
   match error:
@@ -455,11 +464,11 @@ def grepSchema() -> Value.Value:
     Record.Property{"context",parameter("number","Number of lines to show before and after each match (default: 0)")} <>
     Record.Property{"limit",parameter("number","Maximum number of matches to return (default: 100)")} <> Nil{}}}} <>
     Record.Property{"required",Value.ArrayValue{Value.Text{"pattern"} <> Nil{}}} <> Nil{}}}
-def createGrepTool(paths: Paths.Environment,tools: Tools.ToolsManager,cwd: String,options: GrepToolOptions) -> IO(ToolOwner):
+def createGrepTool(paths: Paths.Environment,tools: Tools.ToolsManager,cwd: String,options: GrepToolOptions,source: Ctx.ContextSource()) -> IO(ToolOwner):
   match options:
     case GrepToolOptions{operations}:
       do IO<ToolOwner>:
-        callback : Callback.Callback<Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>,ToolResult()> <- Callback.create(~Invocation,~Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>,~ToolResult(),~invoke,Invocation{paths,tools,cwd,operations})
+        callback : Callback.Callback<Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>,ToolResult()> <- Callback.create(~Registered,~Agent.ToolExecutionInput<Maybe<&2,GrepToolDetails>>,~ToolResult(),~invoke,Registered{Invocation{paths,tools,cwd,operations},source})
         return ToolOwner{Agent.AgentTool{"grep","Search file contents for a pattern. Returns matching lines with file paths and line numbers. Respects .gitignore. Output is truncated to 100 matches or 50KB (whichever is hit first). Long lines are truncated to 500 chars.",grepSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"grep",None{},callback,None{},None{}}}
 def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<Maybe<&2,GrepToolDetails>,Error>:
   match owner:

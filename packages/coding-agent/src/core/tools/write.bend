@@ -7,6 +7,7 @@ import ../../../../runtime/src/record.bend as Record
 import ./file-mutation-queue.bend as Queue
 import ../../../../runtime/src/filesystem.bend as FS
 import ../../../../runtime/src/callback.bend as Callback
+import ../extensions/context.bend as Ctx
 import ../../../../runtime/src/abort.bend as Abort
 import ../../../../runtime/src/string.bend as Strings
 
@@ -151,15 +152,25 @@ def resolvedInput(queue: Queue.Queue, operations: WriteOperations, path: String,
         result : Outcome() <- execute(queue, operations, absolutePath, content, signal)
         return toolResult(path, result)
 
-def invokeInput(environment: Invocation, signal: Maybe<&2, Abort.AbortSignal<Unit>>, parsed: Result<&2, &2, Error, WriteToolInput>) -> IO(ToolResult()):
+def invokeInput(environment: Invocation, context: Maybe<&2, Ctx.ExtensionContext>, signal: Maybe<&2, Abort.AbortSignal<Unit>>, parsed: Result<&2, &2, Error, WriteToolInput>) -> IO(ToolResult()):
   match environment parsed:
     case _ Fail{error}: IO.pure(ToolResult(), Fail{error})
     case Invocation{paths, cwd, queue, operations} Done{WriteToolInput{+path, content}}:
-      resolvedInput(queue, operations, path, content, signal, Paths.resolveToCwd(paths, path, cwd))
+      resolvedInput(queue, operations, path, content, signal, Paths.resolveToCwd(paths, path, Ctx.cwdOr(context, cwd)))
 
-def invoke(environment: Invocation, request: Agent.ToolExecutionInput<Unit>) -> IO(ToolResult()):
+# upstream wrapToolDefinition: the registered tool resolves paths against the
+# session's cwd when it runs, or its own without a bound session.
+type Registered is Data: Registered{environment: Invocation, source: Ctx.ContextSource()}
+def invokeRequest(environment: Invocation, context: Maybe<&2, Ctx.ExtensionContext>, request: Agent.ToolExecutionInput<Unit>) -> IO(ToolResult()):
   match request:
-    case Agent.ToolExecutionInput{_, arguments, signal, _}: invokeInput(environment, signal, parseInput(arguments))
+    case Agent.ToolExecutionInput{_, arguments, signal, _}: invokeInput(environment, context, signal, parseInput(arguments))
+
+def invoke(registered: Registered, request: Agent.ToolExecutionInput<Unit>) -> IO(ToolResult()):
+  match registered:
+    case Registered{environment, source}:
+      do IO<ToolResult()>:
+        context : Maybe<&2, Ctx.ExtensionContext> <- Ctx.current(source)
+        invokeRequest(environment, context, request)
 
 def stringParameter(description: String) -> Value.Value:
   Value.ObjectValue{Record.Record{Record.Property{"type", Value.Text{"string"}} <> Record.Property{"description", Value.Text{description}} <> Nil{}}}
@@ -172,19 +183,19 @@ def writeSchema() -> Value.Value:
       Record.Property{"content", stringParameter("Content to write to the file")} <> Nil{}}}} <>
     Record.Property{"required", Value.ArrayValue{Value.Text{"path"} <> Value.Text{"content"} <> Nil{}}} <> Nil{}}}
 
-def created(environment: Invocation, owned: Maybe<&2, WriteOperations>) -> IO(ToolOwner):
+def created(environment: Registered, owned: Maybe<&2, WriteOperations>) -> IO(ToolOwner):
   do IO<ToolOwner>:
-    callback : Callback.Callback<Agent.ToolExecutionInput<Unit>, ToolResult()> <- Callback.create(~Invocation, ~Agent.ToolExecutionInput<Unit>, ~ToolResult(), ~invoke, environment)
+    callback : Callback.Callback<Agent.ToolExecutionInput<Unit>, ToolResult()> <- Callback.create(~Registered, ~Agent.ToolExecutionInput<Unit>, ~ToolResult(), ~invoke, environment)
     return ToolOwner{Agent.AgentTool{"write", "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Automatically creates parent directories.", writeSchema(), Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}}, "write", None{}, callback, None{}, None{}}, owned}
 
 # Environment and shared queue are explicit native runtime dependencies.
-def createWriteTool(environment: Paths.Environment, queue: Queue.Queue, cwd: String, options: WriteToolOptions) -> IO(ToolOwner):
+def createWriteTool(environment: Paths.Environment, queue: Queue.Queue, cwd: String, options: WriteToolOptions, source: Ctx.ContextSource()) -> IO(ToolOwner):
   match options:
-    case WriteToolOptions{Some{operations}}: created(Invocation{environment, cwd, queue, operations}, None{})
+    case WriteToolOptions{Some{operations}}: created(Registered{Invocation{environment, cwd, queue, operations}, source}, None{})
     case WriteToolOptions{None{}}:
       do IO<ToolOwner>:
         +operations : WriteOperations <- defaultWriteOperations()
-        created(Invocation{environment, cwd, queue, operations}, Some{operations})
+        created(Registered{Invocation{environment, cwd, queue, operations}, source}, Some{operations})
 
 def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<Unit, Error>:
   match owner:

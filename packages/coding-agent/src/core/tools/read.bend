@@ -8,6 +8,7 @@ import ../../../../runtime/src/schema-value.bend as Value
 import ../../../../runtime/src/record.bend as Record
 import ../../../../runtime/src/filesystem.bend as FS
 import ../../../../runtime/src/callback.bend as Callback
+import ../extensions/context.bend as Ctx
 import ../../../../runtime/src/abort.bend as Abort
 import ../../../../runtime/src/utf8.bend as Utf8
 import ../../../../runtime/src/f64.bend as Number
@@ -301,8 +302,30 @@ def invokeWithContext(environment: Invocation, context: ReadContext, request: Ag
   match request:
     case Agent.ToolExecutionInput{_,arguments,signal,_}: invokeInput(environment,context,signal,parseInput(arguments))
 
-def invoke(environment: Invocation, request: Agent.ToolExecutionInput<Maybe<&2,ReadToolDetails>>) -> IO(ToolResult()):
-  invokeWithContext(environment,ReadContext{None{},None{}},request)
+# upstream wrapToolDefinition: the registered tool reads the session's
+# context when it runs; without a bound session it keeps its own cwd.
+type Registered is Data: Registered{environment: Invocation, source: Ctx.ContextSource()}
+def acceptsImages(input: List<&2,Ai.ModelInput>) -> Bool:
+  match input:
+    case Nil{}: False{}
+    case Ai.InputImage{} <> _: True{}
+    case _ <> rest: acceptsImages(rest)
+def modelImages(model: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> Maybe<&2,Bool>:
+  match model:
+    case None{}: None{}
+    case Some{Ai.Model{_,_,_,_,_,_,_,input,_,_,_,_,_,_,_,_}}: Some{acceptsImages(input)}
+# ctx.cwd and getNonVisionImageNote(ctx.model); the model's inputLimits image
+# resize options are not modelled by the native reader.
+def toolContext(context: Maybe<&2,Ctx.ExtensionContext>) -> ReadContext:
+  match context:
+    case None{}: ReadContext{None{},None{}}
+    case Some{Ctx.ExtensionContext{cwd,model,_,_,_}}: ReadContext{Some{cwd},modelImages(model)}
+def invoke(registered: Registered, request: Agent.ToolExecutionInput<Maybe<&2,ReadToolDetails>>) -> IO(ToolResult()):
+  match registered:
+    case Registered{environment,source}:
+      do IO<ToolResult()>:
+        context : Maybe<&2,Ctx.ExtensionContext> <- Ctx.current(source)
+        invokeWithContext(environment,toolContext(context),request)
 
 def parameter(kind: String, description: String) -> Value.Value:
   Value.ObjectValue{Record.Record{Record.Property{"type",Value.Text{kind}} <> Record.Property{"description",Value.Text{description}} <> Nil{}}}
@@ -316,18 +339,18 @@ def readSchema() -> Value.Value:
       Record.Property{"limit",parameter("number","Maximum number of lines to read")} <> Nil{}}}} <>
     Record.Property{"required",Value.ArrayValue{Value.Text{"path"} <> Nil{}}} <> Nil{}}}
 
-def created(environment: Invocation, owned: Maybe<&2,ReadOperations>) -> IO(ToolOwner):
+def created(environment: Registered, owned: Maybe<&2,ReadOperations>) -> IO(ToolOwner):
   do IO<ToolOwner>:
-    callback : Callback.Callback<Agent.ToolExecutionInput<Maybe<&2,ReadToolDetails>>,ToolResult()> <- Callback.create(~Invocation,~Agent.ToolExecutionInput<Maybe<&2,ReadToolDetails>>,~ToolResult(),~invoke,environment)
+    callback : Callback.Callback<Agent.ToolExecutionInput<Maybe<&2,ReadToolDetails>>,ToolResult()> <- Callback.create(~Registered,~Agent.ToolExecutionInput<Maybe<&2,ReadToolDetails>>,~ToolResult(),~invoke,environment)
     return ToolOwner{Agent.AgentTool{"read","Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output is truncated to 2000 lines or 50KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.",readSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"read",None{},callback,None{},None{}},owned}
 
-def createReadTool(paths: Paths.Environment, cwd: String, options: ReadToolOptions) -> IO(ToolOwner):
+def createReadTool(paths: Paths.Environment, cwd: String, options: ReadToolOptions, source: Ctx.ContextSource()) -> IO(ToolOwner):
   match options:
-    case ReadToolOptions{resize,Some{operations},processor}: created(Invocation{paths,cwd,operations,Maybe.default(&2,Bool,resize,True{}),processor},None{})
+    case ReadToolOptions{resize,Some{operations},processor}: created(Registered{Invocation{paths,cwd,operations,Maybe.default(&2,Bool,resize,True{}),processor},source},None{})
     case ReadToolOptions{resize,None{},processor}:
       do IO<ToolOwner>:
         +operations : ReadOperations <- defaultReadOperations()
-        created(Invocation{paths,cwd,operations,Maybe.default(&2,Bool,resize,True{}),processor},Some{operations})
+        created(Registered{Invocation{paths,cwd,operations,Maybe.default(&2,Bool,resize,True{}),processor},source},Some{operations})
 
 def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<Maybe<&2,ReadToolDetails>,Error>:
   match owner:

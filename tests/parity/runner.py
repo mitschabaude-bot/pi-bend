@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Side-by-side acceptance runs of upstream pi and Bend pi.
+
+Both CLIs run in identical tmux terminals with the same HOME, agent dir,
+project files, environment and scripted model server. A scenario is a list
+of steps; `snap` captures the rendered screen, `wait` records how long the
+screen took to show a pattern after the last input. Screens are normalised
+(versions, temp paths, ids, durations) and diffed; timings are reported side
+by side.
+
+  python3 tests/parity/runner.py [--bend build/pi-cli] [--only NAME] [--keep]
+"""
+import argparse
+import difflib
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import fake_openai  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[2]
+WIDTH, HEIGHT = 100, 32
+
+def tmux(*args, check=True):
+    # A private server keeps runs off the user's own tmux sessions.
+    return subprocess.run(["tmux", "-L", "pi-parity", "-f", "/dev/null", *args], capture_output=True, text=True, check=check).stdout
+
+class Terminal:
+    def __init__(self, name, argv, env, cwd):
+        self.name = name
+        assignments = " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items())
+        # A prompt marker after exit shows where the shell prompt would land.
+        command = f"cd {shlex.quote(str(cwd))} && env -i {assignments} {' '.join(shlex.quote(a) for a in argv)}; printf \'shell$ \'; sleep 3600"
+        tmux("kill-session", "-t", name, check=False)
+        tmux("new-session", "-d", "-s", name, "-x", str(WIDTH), "-y", str(HEIGHT), command)
+        self.last_input = time.monotonic()
+
+    def screen(self, ansi=False):
+        args = ["capture-pane", "-p", "-t", self.name]
+        if ansi:
+            args.insert(2, "-e")
+        return tmux(*args)
+
+    def keys(self, text):
+        tmux("send-keys", "-t", self.name, "-l", text)
+        self.last_input = time.monotonic()
+
+    def key(self, name):
+        tmux("send-keys", "-t", self.name, name)
+        self.last_input = time.monotonic()
+
+    def wait(self, pattern, timeout):
+        regex = re.compile(pattern, re.M)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if regex.search(self.screen()):
+                return time.monotonic() - self.last_input
+            time.sleep(0.005)
+        return None
+
+    def settle(self, quiet, timeout):
+        """Wait until the screen is unchanged for `quiet` seconds."""
+        previous, stable_since = None, time.monotonic()
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            current = self.screen(ansi=True)
+            now = time.monotonic()
+            if current != previous:
+                previous, stable_since = current, now
+            elif now - stable_since >= quiet:
+                return
+            time.sleep(0.01)
+
+    def close(self):
+        tmux("kill-session", "-t", self.name, check=False)
+
+def normalise(text, root):
+    text = text.replace(str(root), "<root>")
+    text = re.sub(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "<uuid>", text)
+    text = re.sub(r"\b\d+(\.\d+)?(ms|s)\b", "<duration>", text)
+    return "\n".join(line.rstrip() for line in text.rstrip("\n").split("\n"))
+
+def run_side(label, argv, scenario, keep):
+    root = Path(tempfile.mkdtemp(prefix=f"pi-parity-{label}-"))
+    home = root / "home"
+    agent = home / ".pi" / "agent"
+    project = root / "project"
+    agent.mkdir(parents=True)
+    project.mkdir()
+    for relative, content in scenario.get("files", {}).items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+    log = root / "requests.jsonl"
+    server = fake_openai.serve(scenario.get("turns", []), str(log))
+    port = server.server_address[1]
+    (agent / "models.json").write_text(json.dumps({"providers": {"openai": {"baseUrl": f"http://127.0.0.1:{port}/v1"}}}))
+    env = {"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "PATH": os.environ["PATH"],
+           "TERM": "xterm-256color", "LANG": "C.UTF-8", "OPENAI_API_KEY": "sk-parity", "PI_OFFLINE": "1",
+           # Bend pi locates its bundled assets (collation data, themes) here; pi ignores it.
+           "PI_BEND_PACKAGE_DIR": str(ROOT),
+           **scenario.get("env", {})}
+    terminal = Terminal(f"parity-{label}-{scenario['name']}", argv + scenario.get("args", []), env, project)
+    snaps, timings = {}, {}
+    try:
+        for step in scenario["steps"]:
+            kind = step[0]
+            if kind == "keys":
+                terminal.keys(step[1])
+            elif kind == "key":
+                terminal.key(step[1])
+            elif kind == "wait":
+                timings[step[2] if len(step) > 2 else step[1]] = terminal.wait(step[1], scenario.get("timeout", 30))
+            elif kind == "settle":
+                terminal.settle(step[1] if len(step) > 1 else 0.5, scenario.get("timeout", 30))
+            elif kind == "snap":
+                snaps[step[1]] = normalise(terminal.screen(), root)
+    finally:
+        terminal.close()
+        server.shutdown()
+        requests = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+        if not keep:
+            shutil.rmtree(root, ignore_errors=True)
+    return {"snaps": snaps, "timings": timings, "requests": requests}
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--pi", default=shutil.which("pi") or "pi")
+    parser.add_argument("--bend", default=str(ROOT / "build/pi-cli"))
+    parser.add_argument("--only")
+    parser.add_argument("--keep", action="store_true")
+    parser.add_argument("--out", default=str(ROOT / "build/parity"))
+    args = parser.parse_args()
+    import scenarios
+    out = Path(args.out)
+    failures = 0
+    for scenario in scenarios.SCENARIOS:
+        if args.only and scenario["name"] != args.only:
+            continue
+        upstream = run_side("pi", [args.pi], scenario, args.keep)
+        native = run_side("bend", [str(Path(args.bend).resolve())], scenario, args.keep)
+        directory = out / scenario["name"]
+        directory.mkdir(parents=True, exist_ok=True)
+        mismatched = []
+        for name, expected in upstream["snaps"].items():
+            actual = native["snaps"].get(name, "<missing>")
+            (directory / f"{name}.pi.txt").write_text(expected + "\n")
+            (directory / f"{name}.bend.txt").write_text(actual + "\n")
+            if expected != actual:
+                mismatched.append(name)
+                diff = difflib.unified_diff(expected.split("\n"), actual.split("\n"), "pi", "bend", lineterm="")
+                (directory / f"{name}.diff").write_text("\n".join(diff) + "\n")
+        timing = {key: {"pi": upstream["timings"].get(key), "bend": native["timings"].get(key)} for key in upstream["timings"]}
+        (directory / "timings.json").write_text(json.dumps(timing, indent=1) + "\n")
+        status = "MATCH" if not mismatched else "DIFF " + ",".join(mismatched)
+        failures += bool(mismatched)
+        rendered = ", ".join(f"{k}: pi {fmt(v['pi'])} / bend {fmt(v['bend'])}" for k, v in timing.items())
+        print(f"{scenario['name']:<24} {status}  {rendered}")
+    return 1 if failures else 0
+
+def fmt(value):
+    return "timeout" if value is None else f"{value * 1000:.0f}ms"
+
+if __name__ == "__main__":
+    sys.exit(main())

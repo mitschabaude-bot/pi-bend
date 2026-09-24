@@ -15,6 +15,7 @@ import ../packages/runtime/src/unicode-17-idna-properties.bend as Properties
 import ./file-mutation-queue.bend as Test
 import ../packages/runtime/src/json.bend as Json
 import ../packages/runtime/test/utf8-runner.bend as Wire
+import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
 
 def environment(cwd: String, home: String) -> Paths.Environment:
   Paths.Environment{cwd, home, URL.Context{IDNA.Context{Mapping.table(), Normalization.tables(), Properties.table()}, IDNA.Options{IDNA.LabelOptions{False{}, False{}, True{}, IDNA.Nontransitional{}}, True{}, False{}}}}
@@ -53,7 +54,8 @@ def runQueue(pair: Q.Owner & Q.Queue, +cwd: String, arguments: V.Value) -> IO(Un
   match pair:
     case (owner, queue):
       do IO<Unit>:
-        tool : E.ToolOwner <- E.createEditTool(environment(cwd, cwd), queue, cwd, E.EditToolOptions{None{}})
+        +unbound1 : Ctx.ContextSource() <- Ctx.create()
+        tool : E.ToolOwner <- E.createEditTool(environment(cwd, cwd), queue, cwd, E.EditToolOptions{None{}},unbound1)
         call(E.borrowTool(tool), arguments)
         Q.dispose(owner)
 

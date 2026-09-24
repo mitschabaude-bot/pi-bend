@@ -10,6 +10,7 @@ import ../../../../runtime/src/record.bend as Record
 import ../../../../runtime/src/filesystem.bend as FS
 import ../../../../runtime/src/utf8.bend as Utf8
 import ../../../../runtime/src/callback.bend as Callback
+import ../extensions/context.bend as Ctx
 import ../../../../runtime/src/abort.bend as Abort
 
 type EditToolInput is Data:
@@ -261,14 +262,24 @@ def resolved(environment: Invocation, path: String, edits: List<&2, Edits.Edit>,
     case _ Fail{cause}: IO.pure(ToolResult(), Fail{InvalidPath{cause}})
     case Invocation{_, _, queue, operations} Done{absolute}: execute(queue, operations, absolute, path, edits, signal)
 
-def invokeInput(+environment: Invocation, signal: Maybe<&2, Abort.AbortSignal<Unit>>, parsed: ResultOf(EditToolInput)) -> IO(ToolResult()):
+def invokeInput(+environment: Invocation, context: Maybe<&2, Ctx.ExtensionContext>, signal: Maybe<&2, Abort.AbortSignal<Unit>>, parsed: ResultOf(EditToolInput)) -> IO(ToolResult()):
   match environment parsed:
     case _ Fail{error}: IO.pure(ToolResult(), Fail{error})
-    case Invocation{paths, cwd, _, _} Done{EditToolInput{+path, edits}}: resolved(environment, path, edits, signal, Paths.resolveToCwd(paths, path, cwd))
+    case Invocation{paths, cwd, _, _} Done{EditToolInput{+path, edits}}: resolved(environment, path, edits, signal, Paths.resolveToCwd(paths, path, Ctx.cwdOr(context, cwd)))
 
-def invoke(environment: Invocation, request: Agent.ToolExecutionInput<EditToolDetails>) -> IO(ToolResult()):
+# upstream wrapToolDefinition: the registered tool resolves paths against the
+# session's cwd when it runs, or its own without a bound session.
+type Registered is Data: Registered{environment: Invocation, source: Ctx.ContextSource()}
+def invokeRequest(environment: Invocation, context: Maybe<&2, Ctx.ExtensionContext>, request: Agent.ToolExecutionInput<EditToolDetails>) -> IO(ToolResult()):
   match request:
-    case Agent.ToolExecutionInput{_, arguments, signal, _}: invokeInput(environment, signal, parseInput(arguments))
+    case Agent.ToolExecutionInput{_, arguments, signal, _}: invokeInput(environment, context, signal, parseInput(arguments))
+
+def invoke(registered: Registered, request: Agent.ToolExecutionInput<EditToolDetails>) -> IO(ToolResult()):
+  match registered:
+    case Registered{environment, source}:
+      do IO<ToolResult()>:
+        context : Maybe<&2, Ctx.ExtensionContext> <- Ctx.current(source)
+        invokeRequest(environment, context, request)
 
 def stringParameter(description: String) -> Value.Value:
   Value.ObjectValue{Record.Record{Record.Property{"type", Value.Text{"string"}} <> Record.Property{"description", Value.Text{description}} <> Nil{}}}
@@ -289,20 +300,20 @@ def editSchema() -> Value.Value:
           Record.Property{"required", Value.ArrayValue{Value.Text{"oldText"} <> Value.Text{"newText"} <> Nil{}}} <> Nil{}}}} <> Nil{}}}} <> Nil{}}}} <>
     Record.Property{"required", Value.ArrayValue{Value.Text{"path"} <> Value.Text{"edits"} <> Nil{}}} <> Nil{}}}
 
-def created(environment: Invocation, owned: Maybe<&2, EditOperations>) -> IO(ToolOwner):
+def created(environment: Registered, owned: Maybe<&2, EditOperations>) -> IO(ToolOwner):
   do IO<ToolOwner>:
     prepare : Callback.Callback<Value.Value, ResultOf(Value.Value)> <- Callback.create(~Unit, ~Value.Value, ~ResultOf(Value.Value), ~prepareArguments, Unit{})
-    callback : Callback.Callback<Agent.ToolExecutionInput<EditToolDetails>, ToolResult()> <- Callback.create(~Invocation, ~Agent.ToolExecutionInput<EditToolDetails>, ~ToolResult(), ~invoke, environment)
+    callback : Callback.Callback<Agent.ToolExecutionInput<EditToolDetails>, ToolResult()> <- Callback.create(~Registered, ~Agent.ToolExecutionInput<EditToolDetails>, ~ToolResult(), ~invoke, environment)
     return ToolOwner{Agent.AgentTool{"edit", "Edit a single file using exact text replacement. Every edits[].oldText must match a unique, non-overlapping region of the original file. If two changes affect the same block or nearby lines, merge them into one edit instead of emitting overlapping edits. Do not include large unchanged regions just to connect distant changes.", editSchema(), Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}}, "edit", Some{prepare}, callback, None{}, None{}}, owned}
 
 # Explicit native runtime dependencies; injected callbacks remain caller-owned.
-def createEditTool(environment: Paths.Environment, queue: Queue.Queue, cwd: String, options: EditToolOptions) -> IO(ToolOwner):
+def createEditTool(environment: Paths.Environment, queue: Queue.Queue, cwd: String, options: EditToolOptions, source: Ctx.ContextSource()) -> IO(ToolOwner):
   match options:
-    case EditToolOptions{Some{operations}}: created(Invocation{environment, cwd, queue, operations}, None{})
+    case EditToolOptions{Some{operations}}: created(Registered{Invocation{environment, cwd, queue, operations}, source}, None{})
     case EditToolOptions{None{}}:
       do IO<ToolOwner>:
         +operations : EditOperations <- defaultEditOperations()
-        created(Invocation{environment, cwd, queue, operations}, Some{operations})
+        created(Registered{Invocation{environment, cwd, queue, operations}, source}, Some{operations})
 
 def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<EditToolDetails, Error>:
   match owner:

@@ -960,6 +960,35 @@ def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, 
     SessionRuntime.dispose(Services, host)
     interactiveFinished(result)
 
+def rpcNewSession(host: Host(), parent: Maybe<&2,String>) -> IO(Result<&2,&2,String,Unit>):
+  SessionRuntime.newSession(Services, host, parent)
+def rpcSwitchSession(host: Host(), path: String) -> IO(Result<&2,&2,String,Unit>):
+  SessionRuntime.switchSession(Services, host, path, None{})
+def rpcFork(host: Host(), request: Rpc.ForkRequest) -> IO(Result<&2,&2,String,Maybe<&2,String>>):
+  match request:
+    case Rpc.ForkRequest{entryId, position}: SessionRuntime.fork(Services, host, entryId, position)
+def rpcRebind(handle: Rpc.Handle, live: AgentSession.AgentSession) -> IO(Unit): Rpc.rebind(handle, live)
+
+def disposeRpcHost(rpcHost: Rpc.Host) -> IO(Unit):
+  match rpcHost:
+    case Rpc.Host{opening, switching, forking}:
+      do IO<Unit>:
+        Callback.dispose(Maybe<&2,String>,Result<&2,&2,String,Unit>,opening)
+        Callback.dispose(String,Result<&2,&2,String,Unit>,switching)
+        Callback.dispose(Rpc.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,forking)
+
+def rpcServed(+host: Host(), rpcHost: Rpc.Host, pair: Rpc.Owner & Rpc.Handle) -> IO(Result<&2,&2,String,Unit>):
+  match pair:
+    case (owner, +handle):
+      do IO<Result<&2,&2,String,Unit>>:
+        +rebinder : Callback.Callback<AgentSession.AgentSession,Unit> <- Callback.create(~Rpc.Handle,~AgentSession.AgentSession,~Unit,~rpcRebind,handle)
+        SessionRuntime.setRebindSession(Services, host, Some{rebinder})
+        result : Result<&2,&2,String,Unit> <- rpcInput((owner, handle))
+        SessionRuntime.setRebindSession(Services, host, None{})
+        Callback.dispose(AgentSession.AgentSession,Unit,rebinder)
+        disposeRpcHost(rpcHost)
+        return result
+
 def rpcSelected(live: AgentSession.AgentSession, assetsRoot: String, +host: Host(), selected: Maybe<&2,Models.Model()>) -> IO(Unit):
   match selected:
     case None{}:
@@ -969,8 +998,12 @@ def rpcSelected(live: AgentSession.AgentSession, assetsRoot: String, +host: Host
     case Some{_}:
       do IO<Unit>:
         +sink : Callback.Callback<String,Unit> <- Callback.create(~Unit,~String,~Unit,~rpcWrite,Unit{})
-        endpoint : Rpc.Owner & Rpc.Handle <- Rpc.start(live,sink,Some{Path.join(assetsRoot,"packages/coding-agent/src/core/export-html")})
-        result : Result<&2,&2,String,Unit> <- rpcInput(endpoint)
+        opening : Callback.Callback<Maybe<&2,String>,Result<&2,&2,String,Unit>> <- Callback.create(~Host(),~Maybe<&2,String>,~Result<&2,&2,String,Unit>,~rpcNewSession,host)
+        switching : Callback.Callback<String,Result<&2,&2,String,Unit>> <- Callback.create(~Host(),~String,~Result<&2,&2,String,Unit>,~rpcSwitchSession,host)
+        forking : Callback.Callback<Rpc.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>> <- Callback.create(~Host(),~Rpc.ForkRequest,~Result<&2,&2,String,Maybe<&2,String>>,~rpcFork,host)
+        +rpcHost : Rpc.Host = Rpc.Host{opening, switching, forking}
+        endpoint : Rpc.Owner & Rpc.Handle <- Rpc.start(live,sink,Some{Path.join(assetsRoot,"packages/coding-agent/src/core/export-html")},rpcHost)
+        result : Result<&2,&2,String,Unit> <- rpcServed(host, rpcHost, endpoint)
         Callback.dispose(String,Unit,sink)
         SessionRuntime.dispose(Services, host)
         rpcFinished(result)

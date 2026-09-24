@@ -12,6 +12,7 @@ import ../../../../runtime/src/utf8.bend as Utf8
 import ../../../../runtime/src/text.bend as Text
 import ../../../../runtime/src/f64.bend as Number
 import ../../../../runtime/src/callback.bend as Callback
+import ../extensions/context.bend as Ctx
 import ../../../../runtime/src/abort.bend as Abort
 import ./truncate.bend as Truncate
 
@@ -252,8 +253,16 @@ def invokeWithContext(environment: Invocation,context: FindContext,request: Agen
   match request:
     case Agent.ToolExecutionInput{_,arguments,+signal,_}:
       then(Unit,Agent.AgentToolResult<Maybe<&2,FindToolDetails>>,check(signal),_ => continued(FindToolInput,Agent.AgentToolResult<Maybe<&2,FindToolDetails>>,parseInput(arguments),input => invokeInput(environment,context,signal,input)))
-def invoke(environment: Invocation,request: Agent.ToolExecutionInput<Maybe<&2,FindToolDetails>>) -> IO(ToolResult()):
-  invokeWithContext(environment,FindContext{None{}},request)
+# upstream wrapToolDefinition: the registered tool reads the session's
+# context when it runs; without a bound session it keeps its own cwd.
+type Registered is Data: Registered{environment: Invocation, source: Ctx.ContextSource()}
+def toolContext(context: Maybe<&2,Ctx.ExtensionContext>) -> FindContext: FindContext{Ctx.cwdOf(context)}
+def invoke(registered: Registered, request: Agent.ToolExecutionInput<Maybe<&2,FindToolDetails>>) -> IO(ToolResult()):
+  match registered:
+    case Registered{environment,source}:
+      do IO<ToolResult()>:
+        context : Maybe<&2,Ctx.ExtensionContext> <- Ctx.current(source)
+        invokeWithContext(environment,toolContext(context),request)
 
 def parameter(kind: String,description: String) -> Value.Value:
   Value.ObjectValue{Record.Record{Record.Property{"type",Value.Text{kind}} <> Record.Property{"description",Value.Text{description}} <> Nil{}}}
@@ -264,11 +273,11 @@ def findSchema() -> Value.Value:
     Record.Property{"limit",parameter("number","Maximum number of results (default: 1000)")} <> Nil{}}}} <>
     Record.Property{"required",Value.ArrayValue{Value.Text{"pattern"} <> Nil{}}} <> Nil{}}}
 
-def createFindTool(paths: Paths.Environment,tools: Tools.ToolsManager,cwd: String,options: FindToolOptions) -> IO(ToolOwner):
+def createFindTool(paths: Paths.Environment,tools: Tools.ToolsManager,cwd: String,options: FindToolOptions,source: Ctx.ContextSource()) -> IO(ToolOwner):
   match options:
     case FindToolOptions{operations}:
       do IO<ToolOwner>:
-        callback : Callback.Callback<Agent.ToolExecutionInput<Maybe<&2,FindToolDetails>>,ToolResult()> <- Callback.create(~Invocation,~Agent.ToolExecutionInput<Maybe<&2,FindToolDetails>>,~ToolResult(),~invoke,Invocation{paths,tools,cwd,operations})
+        callback : Callback.Callback<Agent.ToolExecutionInput<Maybe<&2,FindToolDetails>>,ToolResult()> <- Callback.create(~Registered,~Agent.ToolExecutionInput<Maybe<&2,FindToolDetails>>,~ToolResult(),~invoke,Registered{Invocation{paths,tools,cwd,operations},source})
         return ToolOwner{Agent.AgentTool{"find","Search for files by glob pattern. Returns matching file paths relative to the search directory. Respects .gitignore. Output is truncated to 1000 results or 50KB (whichever is hit first).",findSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"find",None{},callback,None{},None{}}}
 def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<Maybe<&2,FindToolDetails>,Error>:
   match owner:

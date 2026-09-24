@@ -11,6 +11,7 @@ import ../packages/runtime/src/idna.bend as IDNA
 import ../packages/runtime/src/unicode-17-idna-mapping.bend as Mapping
 import ../packages/runtime/src/unicode-17-normalization.bend as Normalization
 import ../packages/runtime/src/unicode-17-idna-properties.bend as Properties
+import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
 
 def environment(cwd: String, home: String) -> Paths.Environment:
   Paths.Environment{cwd,home,URL.Context{IDNA.Context{Mapping.table(),Normalization.tables(),Properties.table()},IDNA.Options{IDNA.LabelOptions{False{},False{},True{},IDNA.Nontransitional{}},True{},False{}}}}
@@ -65,7 +66,8 @@ def run(args: List<String>) -> IO(Unit):
     case +cwd <> home <> +mode <> rest:
       do IO<Unit>:
         +processor : C.Callback<Read.ImageInput,Read.ResultOf(Read.ProcessedImage)> <- C.create(~String,~Read.ImageInput,~Read.ResultOf(Read.ProcessedImage),~process,mode)
-        tool : Read.ToolOwner <- Read.createReadTool(environment(cwd,home),cwd,Read.ReadToolOptions{Some{Bool.not(String.eq(mode,"noresize") || String.eq(mode,"native-noresize"))},None{},Bool.pick(Maybe<&2,C.Callback<Read.ImageInput,Read.ResultOf(Read.ProcessedImage)>>,String.eq(mode,"default") || String.eq(mode,"native-noresize"),None{},Some{processor})})
+        +unbound1 : Ctx.ContextSource() <- Ctx.create()
+        tool : Read.ToolOwner <- Read.createReadTool(environment(cwd,home),cwd,Read.ReadToolOptions{Some{Bool.not(String.eq(mode,"noresize") || String.eq(mode,"native-noresize"))},None{},Bool.pick(Maybe<&2,C.Callback<Read.ImageInput,Read.ResultOf(Read.ProcessedImage)>>,String.eq(mode,"default") || String.eq(mode,"native-noresize"),None{},Some{processor})},unbound1)
         runOwner(Read.borrowTool(tool),rest)
         C.dispose(Read.ImageInput,Read.ResultOf(Read.ProcessedImage),processor)
     case _: IO.die(Unit,1,"expected cwd, home, processor mode, JSON inputs")
