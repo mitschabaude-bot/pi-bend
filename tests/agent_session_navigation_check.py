@@ -12,8 +12,6 @@ COMMON = Path(subprocess.check_output(["git", "rev-parse", "--git-common-dir"], 
 UPSTREAM = Path(os.environ.get("PI_MONO", COMMON.parent.parent / "pi-mono"))
 SOURCE = UPSTREAM / "packages/coding-agent/src/core/agent-session.ts"
 assert hashlib.sha256(SOURCE.read_bytes()).hexdigest() == "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7"
-FORK_SOURCE = UPSTREAM / "packages/coding-agent/src/core/agent-session-runtime.ts"
-assert hashlib.sha256(FORK_SOURCE.read_bytes()).hexdigest() == "ee66f90f4774ace21290fc6a0ed0fc2065376b57af4223371f1d1680b302036d"
 
 
 def check(binary, threads):
@@ -46,44 +44,8 @@ def check(binary, threads):
     print(f"{binary.name} threads={threads}: selected user restores draft; context branches; history retained")
 
 
-def check_fork(binary, threads, persisted):
-    with tempfile.TemporaryDirectory(prefix="pi-fork-") as cwd:
-        agent = Path(cwd) / "agent"
-        agent.mkdir()
-        command = (["bun", str(binary)] if str(binary).endswith(".js") else [str(binary), "--threads", str(threads), "--"])
-        completed = subprocess.run(command + ["fork_persisted" if persisted else "fork", cwd, str(agent)], cwd=ROOT, capture_output=True, text=True, timeout=60)
-        assert completed.returncode == 0, completed.stderr[-2000:]
-        events = [json.loads(line) for line in completed.stdout.splitlines()]
-        source = next(event for event in events if event["type"] == "source_session")
-        fork = next(event for event in events if event["type"] == "fork")
-        started = next(event for event in events if event["type"] == "session_start")
-        assert fork["selectedText"] == "two" and fork["sessionId"] != source["id"]
-        assert started["reason"] == "fork"
-        if persisted:
-            path = Path(fork["sessionFile"])
-            assert path.is_file(), fork
-            header = json.loads(path.read_text().splitlines()[0])
-            assert header["parentSession"] == started["previousSessionFile"] and header["parentSession"] != str(path), header
-        else:
-            assert fork["sessionFile"] is None
-            assert "previousSessionFile" not in started
-        messages = [event["messages"] for event in events if event["type"] == "messages"]
-        def text(message):
-            return "".join(block.get("text", "") for block in message["content"])
-        assert [[text(message) for message in group] for group in messages] == [
-            ["one", "a1"], ["one", "a1", "replacement", "branched"]
-        ]
-        entries = [event["kinds"] for event in events if event["type"] == "entries"]
-        assert [len(group) for group in entries] == [2, 4]
-    print(f"{binary.name} threads={threads}: {'persisted' if persisted else 'memory'} fork switches session ID, copies selected branch, and accepts next prompt")
-
-
 check(ROOT / "build/session-navigation.js", 0)
-check_fork(ROOT / "build/session-navigation.js", 0, False)
-check_fork(ROOT / "build/session-navigation.js", 0, True)
 native = ROOT / "build/session-navigation-fixture"
 if native.exists():
     for threads in (1, 4):
         check(native, threads)
-        check_fork(native, threads, False)
-        check_fork(native, threads, True)

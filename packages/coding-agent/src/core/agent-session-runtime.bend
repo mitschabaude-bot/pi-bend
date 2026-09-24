@@ -367,6 +367,10 @@ type ForkPosition is Data:
   ForkBefore{}
   ForkAt{}
 
+# A fork as the modes request it: the entry and where to fork relative to it.
+type ForkRequest is Data:
+  ForkRequest{entryId: String, position: ForkPosition}
+
 type ForkTarget is Data:
   ForkTarget{leafId: Maybe<&2, String>, selectedText: Maybe<&2, String>}
 

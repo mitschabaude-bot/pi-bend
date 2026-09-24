@@ -546,11 +546,6 @@ def reportNavigation(result: Result<&2, &2, String, Session.Navigation>) -> IO(U
     case Done{Session.Navigation{editorText,leafId}}: IO.print("{\"type\":\"navigation\",\"editorText\":" ++ maybeQuoted(editorText) ++ ",\"leafId\":" ++ maybeQuoted(leafId) ++ "}")
     case Fail{error}: IO.print("{\"type\":\"navigation_error\",\"error\":" ++ Decode.quote(error) ++ "}")
 
-def reportFork(result: Result<&2, &2, String, Session.Fork>) -> IO(Unit):
-  match result:
-    case Done{Session.Fork{text,id,file}}: IO.print("{\"type\":\"fork\",\"selectedText\":" ++ Decode.quote(text) ++ ",\"sessionId\":" ++ Decode.quote(id) ++ ",\"sessionFile\":" ++ maybeQuoted(file) ++ "}")
-    case Fail{error}: IO.print("{\"type\":\"fork_error\",\"error\":" ++ Decode.quote(error) ++ "}")
-
 def navigationScenario(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
@@ -569,29 +564,6 @@ def navigationScenario(+dir: String, agentDir: String) -> IO(Unit):
     reportNavigation(unchanged)
     invalid : Result<&2, &2, String, Session.Navigation> <- Session.navigateTree(sessionOf(value), "missing-entry")
     reportNavigation(invalid)
-    replacement : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "replacement", Nil{}, None{})
-    reportPrompt(replacement)
-    reportMessages(sessionOf(value))
-    reportEntries(sessionOf(value))
-    teardown(value)
-
-def forkScenario(+dir: String, +agentDir: String, persisted: Bool) -> IO(Unit):
-  do IO<Unit>:
-    created : Sessions.Outcome(Session.Session()) <- Bool.pick(Unit -> IO(Sessions.Outcome(Session.Session())), persisted,
-      _ => Session.createSession(dir, Some{dir}, agentDir, Sessions.noOptions()),
-      _ => Session.memorySession(dir, Sessions.noOptions()))(Unit{})
-    stored : Session.Session() <- requireSession(created)
-    +value : Fixture <- fixture(stored, dir, agentDir, "a1" <> "a2" <> "branched" <> Nil{}, Nil{})
-    first : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "one", Nil{}, None{})
-    reportPrompt(first)
-    second : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "two", Nil{}, None{})
-    reportPrompt(second)
-    +before : Session.Session() <- Session.sessionOf(sessionOf(value))
-    IO.print("{\"type\":\"source_session\",\"id\":" ++ Decode.quote(Sessions.getSessionId(Unit, Tools.ToolDetails, V.Value, before)) ++ "}")
-    forked : Result<&2, &2, String, Session.Fork> <- Session.forkAt(sessionOf(value), secondUserInSession(before))
-    reportFork(forked)
-    reportMessages(sessionOf(value))
-    reportEntries(sessionOf(value))
     replacement : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "replacement", Nil{}, None{})
     reportPrompt(replacement)
     reportMessages(sessionOf(value))
@@ -897,8 +869,6 @@ def run(args: List<String>) -> IO(Unit):
     case "retry" <> dir <> agentDir <> responses <> cancel <> Nil{}: retryScenario(dir, agentDir, responses, cancel)
     case "compact" <> dir <> agentDir <> prompts <> responses <> action <> Nil{}: compactScenario(dir, agentDir, prompts, responses, action)
     case "navigate" <> dir <> agentDir <> Nil{}: navigationScenario(dir, agentDir)
-    case "fork" <> dir <> agentDir <> Nil{}: forkScenario(dir, agentDir, False{})
-    case "fork_persisted" <> dir <> agentDir <> Nil{}: forkScenario(dir, agentDir, True{})
     case "bash" <> dir <> agentDir <> Nil{}: bashScenario(dir, agentDir)
     case "bash_deferred" <> dir <> agentDir <> Nil{}: bashDeferredScenario(dir, agentDir)
     case "expand" <> dir <> agentDir <> Nil{}: expandScenario(dir, agentDir)

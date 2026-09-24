@@ -40,9 +40,8 @@ type Command is Data:
   Command{session: Session.AgentSession,sink: Sink(),buffer: Ref.Ref<String>,busy: Ref.Ref<Bool>,jobs: Chan(Work),assetsDir: Maybe<&2,String>}
 # upstream runtimeHost: the host replaces the session, and the endpoint
 # rebinds to the one it installs.
-type ForkRequest is Data: ForkRequest{entryId: String,position: SessionRuntime.ForkPosition}
 type Host is Data:
-  Host{newSession: Callback.Callback<Maybe<&2,String>,Result<&2,&2,String,Unit>>,switchSession: Callback.Callback<String,Result<&2,&2,String,Unit>>,fork: Callback.Callback<ForkRequest,Result<&2,&2,String,Maybe<&2,String>>>}
+  Host{newSession: Callback.Callback<Maybe<&2,String>,Result<&2,&2,String,Unit>>,switchSession: Callback.Callback<String,Result<&2,&2,String,Unit>>,fork: Callback.Callback<SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>>}
 type Handle is Data:
   Handle{current: Ref.Ref<Session.AgentSession>,sink: Sink(),buffer: Ref.Ref<String>,busy: Ref.Ref<Bool>,jobs: Chan(Work),assetsDir: Maybe<&2,String>,host: Host,listener: Session.Listener()}
 type Owner is Type:
@@ -636,20 +635,20 @@ def forkReply(sink: Sink(),id: Maybe<&2,String>,+command: String,result: Result<
   match result:
     case Fail{message}: output(sink,failure(id,command,message))
     case Done{text}: output(sink,data(id,command,replacedData(Bool.pick(List<&2,R.Property<V.Value>>,String.eq(command,"fork"),MessageJson.optionalText("text",text,Nil{}),Nil{}))))
-def forkWith(sink: Sink(),host: Host,id: Maybe<&2,String>,command: String,request: ForkRequest) -> IO(Unit):
+def forkWith(sink: Sink(),host: Host,id: Maybe<&2,String>,command: String,request: SessionRuntime.ForkRequest) -> IO(Unit):
   match host:
     case Host{_,_,forking}:
       do IO<Unit>:
-        result : Result<&2,&2,String,Maybe<&2,String>> <- Callback.call(ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,forking,request)
+        result : Result<&2,&2,String,Maybe<&2,String>> <- Callback.call(SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,forking,request)
         forkReply(sink,id,command,result)
 def forkCommand(handle: Command,host: Host,id: Maybe<&2,String>,entry: Result<&2,&2,String,String>) -> IO(Unit):
   match handle entry:
     case Command{_,sink,_,_,_,_} Fail{reason}: output(sink,failure(id,"fork",reason))
-    case Command{_,sink,_,_,_,_} Done{target}: forkWith(sink,host,id,"fork",ForkRequest{target,SessionRuntime.ForkBefore{}})
+    case Command{_,sink,_,_,_,_} Done{target}: forkWith(sink,host,id,"fork",SessionRuntime.ForkRequest{target,SessionRuntime.ForkBefore{}})
 def cloneLeaf(sink: Sink(),host: Host,id: Maybe<&2,String>,leaf: Maybe<&2,String>) -> IO(Unit):
   match leaf:
     case None{}: output(sink,failure(id,"clone","Cannot clone session: no current entry selected"))
-    case Some{leafId}: forkWith(sink,host,id,"clone",ForkRequest{leafId,SessionRuntime.ForkAt{}})
+    case Some{leafId}: forkWith(sink,host,id,"clone",SessionRuntime.ForkRequest{leafId,SessionRuntime.ForkAt{}})
 def cloneCommand(handle: Command,host: Host,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
     case Command{session,sink,_,_,_,_}:

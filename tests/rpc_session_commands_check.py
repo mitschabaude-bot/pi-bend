@@ -77,12 +77,17 @@ def drive(executable, extra, threads=None):
             process.wait(timeout=30)
         return normalise(responses, str(root))
 
+MALFORMED = {"missing-switch", "missing-fork"}
 UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+ENTRY = re.compile(r"^[0-9a-f]{8}$")
 STAMPED = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_")
 
 def normalise(value, root):
     names = {}
+    entries = {}
     def text(s):
+        if ENTRY.match(s):
+            return entries.setdefault(s, f"<entry{len(entries)}>")
         s = s.replace(root, "<root>")
         s = STAMPED.sub("<stamp>_", s)
         return UUID.sub(lambda m: names.setdefault(m.group(0), f"<id{len(names)}>") if m.group(0) != "11111111-1111-4111-8111-111111111111" else "<original>", s)
@@ -102,6 +107,11 @@ expected = drive(UPSTREAM, [])
 for label, extra, threads in (("native1", [], "1"), ("native4", [], "4")):
     actual = drive(NATIVE, extra, threads)
     for want, got in zip(expected, actual):
+        # Upstream reads a missing field unchecked and reports the JavaScript
+        # TypeError text; both must fail, the message is not reproduced.
+        if want.get("id") in MALFORMED:
+            assert want["success"] is False and got["success"] is False, (label, want, got)
+            continue
         if want != got:
             import difflib
             diff = difflib.unified_diff(json.dumps(want, indent=1, sort_keys=True).split("\n"), json.dumps(got, indent=1, sort_keys=True).split("\n"), "pi", "bend", lineterm="")

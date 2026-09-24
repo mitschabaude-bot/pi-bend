@@ -929,6 +929,10 @@ def resumeInteractive(host: Host(),request: InteractiveRun.ResumeRequest) -> IO(
   match request:
     case InteractiveRun.ResumeRequest{path,cwdOverride}: SessionRuntime.resumeSession(Services,host,path,cwdOverride)
 
+def forkHosted(host: Host(), request: SessionRuntime.ForkRequest) -> IO(Result<&2,&2,String,Maybe<&2,String>>):
+  match request:
+    case SessionRuntime.ForkRequest{entryId, position}: SessionRuntime.fork(Services, host, entryId, position)
+
 def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, +cwd: String, +agentDir: String, packageDir: String, +host: Host()) -> IO(Unit):
   do IO<Unit>:
     current : Maybe<&2, AgentSession.AgentSession> <- SessionRuntime.session(Services, host)
@@ -940,13 +944,14 @@ def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, 
     +onRebind : Ref.Ref<Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>,None{})
     +rebinder : Callback.Callback<AgentSession.AgentSession,Unit> <- Callback.create(~InteractiveRebind,~AgentSession.AgentSession,~Unit,~rebindInteractive,InteractiveRebind{current,onRebind})
     +startNew : Callback.Callback<Unit,Result<&2,&2,String,Unit>> <- Callback.create(~Host(),~Unit,~Result<&2,&2,String,Unit>,~newInteractive,host)
+    +forking : Callback.Callback<SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>> <- Callback.create(~Host(),~SessionRuntime.ForkRequest,~Result<&2,&2,String,Maybe<&2,String>>,~forkHosted,host)
     +login : Callback.Callback<InteractiveRun.LoginRequest,AuthLogin.Outcome()> <- Callback.create(~Unit,~InteractiveRun.LoginRequest,~AuthLogin.Outcome(),~loginInteractive,Unit{})
     +refresh : Callback.Callback<Unit,List<&2,Models.Model()>> <- Callback.create(~Host(),~Unit,~List<&2,Models.Model()>,~refreshInteractive,host)
     +importer : Callback.Callback<InteractiveRun.ImportRequest,SessionRuntime.ImportOutcome> <- Callback.create(~Host(),~InteractiveRun.ImportRequest,~SessionRuntime.ImportOutcome,~importInteractive,host)
     +sessions : Callback.Callback<Unit,InteractiveRun.SessionChoices> <- Callback.create(~InteractiveSessionSource,~Unit,~InteractiveRun.SessionChoices,~listInteractive,InteractiveSessionSource{host,agentDir})
     +resume : Callback.Callback<InteractiveRun.ResumeRequest,SessionRuntime.ResumeOutcome> <- Callback.create(~Host(),~InteractiveRun.ResumeRequest,~SessionRuntime.ResumeOutcome,~resumeInteractive,host)
     SessionRuntime.setRebindSession(Services,host,Some{rebinder})
-    result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.runBound(live,InteractiveRun.Binding{current,startNew,onRebind,login,refresh,importer,sessions,resume},initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings),catalogModels(catalog))
+    result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.runBound(live,InteractiveRun.Binding{current,Controller.Replacement{startNew,forking},onRebind,login,refresh,importer,sessions,resume},initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings),catalogModels(catalog))
     SessionRuntime.setRebindSession(Services,host,None{})
     Callback.dispose(InteractiveRun.LoginRequest,AuthLogin.Outcome(),login)
     Callback.dispose(Unit,List<&2,Models.Model()>,refresh)
@@ -954,6 +959,7 @@ def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, 
     Callback.dispose(Unit,InteractiveRun.SessionChoices,sessions)
     Callback.dispose(InteractiveRun.ResumeRequest,SessionRuntime.ResumeOutcome,resume)
     Callback.dispose(Unit,Result<&2,&2,String,Unit>,startNew)
+    Callback.dispose(SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,forking)
     Callback.dispose(AgentSession.AgentSession,Unit,rebinder)
     oldHook : Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>,onRebind)
     oldSession : AgentSession.AgentSession <- Ref.dispose(AgentSession.AgentSession,current)
@@ -964,9 +970,6 @@ def rpcNewSession(host: Host(), parent: Maybe<&2,String>) -> IO(Result<&2,&2,Str
   SessionRuntime.newSession(Services, host, parent)
 def rpcSwitchSession(host: Host(), path: String) -> IO(Result<&2,&2,String,Unit>):
   SessionRuntime.switchSession(Services, host, path, None{})
-def rpcFork(host: Host(), request: Rpc.ForkRequest) -> IO(Result<&2,&2,String,Maybe<&2,String>>):
-  match request:
-    case Rpc.ForkRequest{entryId, position}: SessionRuntime.fork(Services, host, entryId, position)
 def rpcRebind(handle: Rpc.Handle, live: AgentSession.AgentSession) -> IO(Unit): Rpc.rebind(handle, live)
 
 def disposeRpcHost(rpcHost: Rpc.Host) -> IO(Unit):
@@ -975,7 +978,7 @@ def disposeRpcHost(rpcHost: Rpc.Host) -> IO(Unit):
       do IO<Unit>:
         Callback.dispose(Maybe<&2,String>,Result<&2,&2,String,Unit>,opening)
         Callback.dispose(String,Result<&2,&2,String,Unit>,switching)
-        Callback.dispose(Rpc.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,forking)
+        Callback.dispose(SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,forking)
 
 def rpcServed(+host: Host(), rpcHost: Rpc.Host, pair: Rpc.Owner & Rpc.Handle) -> IO(Result<&2,&2,String,Unit>):
   match pair:
@@ -1000,7 +1003,7 @@ def rpcSelected(live: AgentSession.AgentSession, assetsRoot: String, +host: Host
         +sink : Callback.Callback<String,Unit> <- Callback.create(~Unit,~String,~Unit,~rpcWrite,Unit{})
         opening : Callback.Callback<Maybe<&2,String>,Result<&2,&2,String,Unit>> <- Callback.create(~Host(),~Maybe<&2,String>,~Result<&2,&2,String,Unit>,~rpcNewSession,host)
         switching : Callback.Callback<String,Result<&2,&2,String,Unit>> <- Callback.create(~Host(),~String,~Result<&2,&2,String,Unit>,~rpcSwitchSession,host)
-        forking : Callback.Callback<Rpc.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>> <- Callback.create(~Host(),~Rpc.ForkRequest,~Result<&2,&2,String,Maybe<&2,String>>,~rpcFork,host)
+        forking : Callback.Callback<SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>> <- Callback.create(~Host(),~SessionRuntime.ForkRequest,~Result<&2,&2,String,Maybe<&2,String>>,~forkHosted,host)
         +rpcHost : Rpc.Host = Rpc.Host{opening, switching, forking}
         endpoint : Rpc.Owner & Rpc.Handle <- Rpc.start(live,sink,Some{Path.join(assetsRoot,"packages/coding-agent/src/core/export-html")},rpcHost)
         result : Result<&2,&2,String,Unit> <- rpcServed(host, rpcHost, endpoint)

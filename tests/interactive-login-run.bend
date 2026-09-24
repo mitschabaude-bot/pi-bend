@@ -7,6 +7,7 @@ import ../packages/coding-agent/src/core/session-persistence.bend as Sessions
 import ../packages/coding-agent/src/core/session-manager.bend as Tree
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
 import ../packages/coding-agent/src/modes/interactive/run.bend as Run
+import ../packages/coding-agent/src/modes/interactive/session-controller.bend as Controller
 import ../packages/coding-agent/src/cli/auth-login.bend as AuthLogin
 import ../packages/coding-agent/src/core/model-runtime.bend as Models
 import ../packages/ai/src/auth/oauth/openai-codex.bend as Codex
@@ -33,6 +34,9 @@ def reboundCopied(binding: Binding,+live: Session.AgentSession) -> IO(Unit):
         notify(observer,live)
 def rebound(binding: Binding,live: Session.AgentSession) -> IO(Unit): reboundCopied(binding,live)
 def startNew(runtime: Runtime(),_: Unit) -> IO(Result<&2,&2,String,Unit>): Host.newSession(Services(),runtime,None{})
+def forkSession(runtime: Runtime(),request: Host.ForkRequest) -> IO(Result<&2,&2,String,Maybe<&2,String>>):
+  match request:
+    case Host.ForkRequest{entryId,position}: Host.fork(Services(),runtime,entryId,position)
 def importSession(runtime: Runtime(),request: Run.ImportRequest) -> IO(Host.ImportOutcome):
   match request:
     case Run.ImportRequest{path,cwdOverride}: Host.importFromJsonl(Services(),runtime,path,cwdOverride)
@@ -87,13 +91,14 @@ def run(args: List<String>) -> IO(Unit):
         +hook : Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,None{})
         +rebinder : Callback.Callback<Session.AgentSession,Unit> <- Callback.create(~Binding,~Session.AgentSession,~Unit,~rebound,Binding{current,hook})
         +new : Callback.Callback<Unit,Result<&2,&2,String,Unit>> <- Callback.create(~Runtime(),~Unit,~Result<&2,&2,String,Unit>,~startNew,runtime)
+        +forking : Callback.Callback<Host.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>> <- Callback.create(~Runtime(),~Host.ForkRequest,~Result<&2,&2,String,Maybe<&2,String>>,~forkSession,runtime)
         +login : Callback.Callback<Run.LoginRequest,AuthLogin.Outcome()> <- Callback.create(~String,~Run.LoginRequest,~AuthLogin.Outcome(),~login,base)
         +refresh : Callback.Callback<Unit,List<&2,Models.Model()>> <- Callback.create(~Unit,~Unit,~List<&2,Models.Model()>,~models,Unit{})
         +importer : Callback.Callback<Run.ImportRequest,Host.ImportOutcome> <- Callback.create(~Runtime(),~Run.ImportRequest,~Host.ImportOutcome,~importSession,runtime)
         +sessions : Callback.Callback<Unit,Run.SessionChoices> <- Callback.create(~Listings,~Unit,~Run.SessionChoices,~listSessions,Listings{cwd,agentDir})
         +resume : Callback.Callback<Run.ResumeRequest,Host.ResumeOutcome> <- Callback.create(~Runtime(),~Run.ResumeRequest,~Host.ResumeOutcome,~resumeSession,runtime)
         Host.setRebindSession(Services(),runtime,Some{rebinder})
-        result : Result<&2,&2,Run.Error,Unit> <- Run.runBound(live,Run.Binding{current,new,hook,login,refresh,importer,sessions,resume},Nil{},cwd,None{},agentDir,assetsRoot,None{},Nil{})
+        result : Result<&2,&2,Run.Error,Unit> <- Run.runBound(live,Run.Binding{current,Controller.Replacement{new,forking},hook,login,refresh,importer,sessions,resume},Nil{},cwd,None{},agentDir,assetsRoot,None{},Nil{})
         Host.setRebindSession(Services(),runtime,None{})
         Callback.dispose(Run.LoginRequest,AuthLogin.Outcome(),login)
         Callback.dispose(Unit,List<&2,Models.Model()>,refresh)
@@ -101,6 +106,7 @@ def run(args: List<String>) -> IO(Unit):
         Callback.dispose(Unit,Run.SessionChoices,sessions)
         Callback.dispose(Run.ResumeRequest,Host.ResumeOutcome,resume)
         Callback.dispose(Unit,Result<&2,&2,String,Unit>,new)
+        Callback.dispose(Host.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,forking)
         Callback.dispose(Session.AgentSession,Unit,rebinder)
         oldHook : Maybe<&2,Callback.Callback<Session.AgentSession,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,hook)
         old : Session.AgentSession <- Ref.dispose(Session.AgentSession,current)

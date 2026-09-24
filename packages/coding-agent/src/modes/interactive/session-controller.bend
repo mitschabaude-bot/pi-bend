@@ -6,6 +6,10 @@ import ../../../../ai/src/types.bend as Ai
 import ../../core/agent-session.bend as Session
 import ../../core/model-runtime.bend as Models
 import ./commands.bend as Commands
+import ../../core/agent-session-runtime.bend as SessionRuntime
+import ../../core/session-manager.bend as Tree
+import ../../core/tools/index.bend as Tools
+import ../../../../runtime/src/schema-value.bend as Schema
 
 # The editor only enqueues submissions. A separate worker may await prompt,
 # so session events can request TUI work without re-entering the editor lock.
@@ -17,7 +21,10 @@ type Control is Data:
 type ControlResult is Data:
   ControlResult{text: String,count: Nat}
 type Selection is Data: Navigate{id: String} Fork{id: String}
-type SelectionResult is Data: Navigated{navigation: Session.Navigation} Forked{fork: Session.Fork} SelectionFailed{message: String}
+type SelectionResult is Data: Navigated{navigation: Session.Navigation} Forked{text: Maybe<&2,String>} SelectionFailed{message: String}
+# upstream runtimeHost: starting and forking sessions replace the session.
+type Replacement is Data:
+  Replacement{newSession: Callback.Callback<Unit,Result<&2,&2,String,Unit>>,fork: Callback.Callback<SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>>}
 type Job is Data:
   PromptJob{request: Submission}
   CommandJob{command: Commands.Command}
@@ -34,7 +41,7 @@ type SessionSource is Data:
   Fixed{session: Maybe<&2,Session.AgentSession>}
   Bound{current: Ref.Ref<Session.AgentSession>}
 type Controller is Type:
-  Controller{handle: Handle,worker: Chan(Unit),run: PromptRun,prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,session: SessionSource,listener: Maybe<&2,Session.Listener()>,failure: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,selectionResult: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,replacement: Maybe<&2,Callback.Callback<Unit,Result<&2,&2,String,Unit>>>,login: Maybe<&2,Callback.Callback<Commands.CredentialCommand,Unit>>,ownedModels: Maybe<&2,Ref.Ref<List<&2,Models.Model()>>>}
+  Controller{handle: Handle,worker: Chan(Unit),run: PromptRun,prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,session: SessionSource,listener: Maybe<&2,Session.Listener()>,failure: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,selectionResult: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,replacement: Maybe<&2,Replacement>,login: Maybe<&2,Callback.Callback<Commands.CredentialCommand,Unit>>,ownedModels: Maybe<&2,Ref.Ref<List<&2,Models.Model()>>>}
 def sessionFrom(source: SessionSource) -> IO(Maybe<&2,Session.AgentSession>):
   match source:
     case Fixed{session}: IO.pure(Maybe<&2,Session.AgentSession>,session)
@@ -175,9 +182,9 @@ def performNew(callback: Callback.Callback<Unit,Result<&2,&2,String,Unit>>,obser
     joined(run)
     notifyCommand(observer,newAction(result))
     return Done{Unit{}}
-def performNewMaybe(option: Maybe<&2,Callback.Callback<Unit,Result<&2,&2,String,Unit>>>,session: Maybe<&2,Session.AgentSession>,models: List<&2,Models.Model()>,observer: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,run: PromptRun) -> IO(Result<&2,&2,String,Unit>):
+def performNewMaybe(option: Maybe<&2,Replacement>,session: Maybe<&2,Session.AgentSession>,models: List<&2,Models.Model()>,observer: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,run: PromptRun) -> IO(Result<&2,&2,String,Unit>):
   match option:
-    case Some{callback}: performNew(callback,observer,run)
+    case Some{Replacement{callback,_}}: performNew(callback,observer,run)
     case None{}:
       do IO<Result<&2,&2,String,Unit>>:
         notifyCommand(observer,Commands.CommandError{"Starting a new session is not available yet"})
@@ -204,9 +211,36 @@ def performCredential(credential: Maybe<&2,Callback.Callback<Commands.Credential
       do IO<Result<&2,&2,String,Unit>>:
         notifyCommand(observer,unavailableCredential(action))
         return Done{Unit{}}
-def performCommand(session: Maybe<&2,Session.AgentSession>,models: List<&2,Models.Model()>,observer: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,+replacement: Maybe<&2,Callback.Callback<Unit,Result<&2,&2,String,Unit>>>,login: Maybe<&2,Callback.Callback<Commands.CredentialCommand,Unit>>,run: PromptRun,command: Commands.Command) -> IO(Result<&2,&2,String,Unit>):
+# upstream handleCloneCommand: fork at the current leaf into a new session.
+def cloned(result: Result<&2,&2,String,Maybe<&2,String>>) -> Commands.Action:
+  match result:
+    case Done{_}: Commands.Notice{"Cloned to new session"}
+    case Fail{message}: Commands.CommandError{message}
+def cloneLeaf(fork: Callback.Callback<SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>>,observer: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,leaf: Maybe<&2,String>) -> IO(Result<&2,&2,String,Unit>):
+  match leaf:
+    case None{}:
+      do IO<Result<&2,&2,String,Unit>>:
+        notifyCommand(observer,Commands.Notice{"Nothing to clone yet"})
+        return Done{Unit{}}
+    case Some{id}:
+      do IO<Result<&2,&2,String,Unit>>:
+        result : Result<&2,&2,String,Maybe<&2,String>> <- Callback.call(SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,fork,SessionRuntime.ForkRequest{id,SessionRuntime.ForkAt{}})
+        notifyCommand(observer,cloned(result))
+        return Done{Unit{}}
+def performClone(option: Maybe<&2,Replacement>,session: Maybe<&2,Session.AgentSession>,observer: Maybe<&2,Callback.Callback<Commands.Action,Unit>>) -> IO(Result<&2,&2,String,Unit>):
+  match option session:
+    case Some{Replacement{_,fork}} Some{live}:
+      do IO<Result<&2,&2,String,Unit>>:
+        stored : Session.Session() <- Session.sessionOf(live)
+        cloneLeaf(fork,observer,Tree.getLeafId(Unit,Tools.ToolDetails,Schema.Value,Session.stateOf(stored)))
+    case _ _:
+      do IO<Result<&2,&2,String,Unit>>:
+        notifyCommand(observer,Commands.CommandError{"Cloning is not available"})
+        return Done{Unit{}}
+def performCommand(session: Maybe<&2,Session.AgentSession>,models: List<&2,Models.Model()>,observer: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,+replacement: Maybe<&2,Replacement>,login: Maybe<&2,Callback.Callback<Commands.CredentialCommand,Unit>>,run: PromptRun,command: Commands.Command) -> IO(Result<&2,&2,String,Unit>):
   match command:
     case Commands.NewSession{}: performNewMaybe(replacement,session,models,observer,run)
+    case Commands.Clone{}: performClone(replacement,session,observer)
     case Commands.Login{provider}: performCredential(login,observer,Commands.BeginLogin{provider})
     case Commands.Logout{}: performCredential(login,observer,Commands.BeginLogout{})
     case other: ordinaryCommand(session,models,observer,other)
@@ -243,30 +277,32 @@ def navigationResult(result: Result<&2,&2,String,Session.Navigation>) -> Selecti
   match result:
     case Done{value}: Navigated{value}
     case Fail{message}: SelectionFailed{message}
-def forkResult(result: Result<&2,&2,String,Session.Fork>) -> SelectionResult:
+def forkResult(result: Result<&2,&2,String,Maybe<&2,String>>) -> SelectionResult:
   match result:
-    case Done{value}: Forked{value}
+    case Done{text}: Forked{text}
     case Fail{message}: SelectionFailed{message}
-def performSelection(session: Maybe<&2,Session.AgentSession>,observer: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,selection: Selection) -> IO(Result<&2,&2,String,Unit>):
-  match session selection:
-    case None{} _: IO.pure(Result<&2,&2,String,Unit>,Fail{"Selection requires an active session"})
-    case Some{value} Navigate{id}:
+# upstream fork selector: runtimeHost.fork before the chosen user message.
+def performSelection(session: Maybe<&2,Session.AgentSession>,observer: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,replacement: Maybe<&2,Replacement>,selection: Selection) -> IO(Result<&2,&2,String,Unit>):
+  match session replacement selection:
+    case None{} _ _: IO.pure(Result<&2,&2,String,Unit>,Fail{"Selection requires an active session"})
+    case Some{value} _ Navigate{id}:
       do IO<Result<&2,&2,String,Unit>>:
         outcome : Result<&2,&2,String,Session.Navigation> <- Session.navigateTree(value,id)
         notifySelection(observer,navigationResult(outcome))
         return Done{Unit{}}
-    case Some{value} Fork{id}:
+    case Some{_} Some{Replacement{_,fork}} Fork{id}:
       do IO<Result<&2,&2,String,Unit>>:
-        outcome : Result<&2,&2,String,Session.Fork> <- Session.forkAt(value,id)
+        outcome : Result<&2,&2,String,Maybe<&2,String>> <- Callback.call(SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,fork,SessionRuntime.ForkRequest{id,SessionRuntime.ForkBefore{}})
         notifySelection(observer,forkResult(outcome))
         return Done{Unit{}}
-def perform(handle: Handle,+prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,session: Maybe<&2,Session.AgentSession>,models: List<&2,Models.Model()>,observer: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,selectionResult: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,replacement: Maybe<&2,Callback.Callback<Unit,Result<&2,&2,String,Unit>>>,login: Maybe<&2,Callback.Callback<Commands.CredentialCommand,Unit>>,run: PromptRun,job: Job) -> IO(Result<&2,&2,String,Unit>):
+    case Some{_} None{} Fork{_}: IO.pure(Result<&2,&2,String,Unit>,Fail{"Forking is not available"})
+def perform(handle: Handle,+prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,session: Maybe<&2,Session.AgentSession>,models: List<&2,Models.Model()>,observer: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,selectionResult: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,replacement: Maybe<&2,Replacement>,login: Maybe<&2,Callback.Callback<Commands.CredentialCommand,Unit>>,run: PromptRun,job: Job) -> IO(Result<&2,&2,String,Unit>):
   match job:
     case PromptJob{request}: dispatchPrompt(handle,prompt,session,observer,run,request)
     case CommandJob{command}: performCommand(session,models,commandResult,replacement,login,run,command)
     case ControlJob{control}: performControl(session,controlResult,run,control)
-    case SelectJob{selection}: performSelection(session,selectionResult,selection)
-@unsafe def worker(+handle: Handle,+prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,+source: SessionSource,+models: Ref.Ref<List<&2,Models.Model()>>,+observer: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,+commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,+controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,+selectionResult: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,+replacement: Maybe<&2,Callback.Callback<Unit,Result<&2,&2,String,Unit>>>,+login: Maybe<&2,Callback.Callback<Commands.CredentialCommand,Unit>>,+run: PromptRun,phase: Phase) -> IO(Unit):
+    case SelectJob{selection}: performSelection(session,selectionResult,replacement,selection)
+@unsafe def worker(+handle: Handle,+prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,+source: SessionSource,+models: Ref.Ref<List<&2,Models.Model()>>,+observer: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,+commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,+controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,+selectionResult: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,+replacement: Maybe<&2,Replacement>,+login: Maybe<&2,Callback.Callback<Commands.CredentialCommand,Unit>>,+run: PromptRun,phase: Phase) -> IO(Unit):
   match phase:
     case Check{}:
       do IO<Unit>:
@@ -285,7 +321,7 @@ def perform(handle: Handle,+prompt: Callback.Callback<Submission,Result<&2,&2,St
         worker(handle,prompt,source,models,observer,commandResult,controlResult,selectionResult,replacement,login,run,Woken{signal})
     case Woken{None{}}: IO.pure(Unit,Unit{})
     case Woken{Some{_}}: worker(handle,prompt,source,models,observer,commandResult,controlResult,selectionResult,replacement,login,run,Check{})
-def started(+prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,+source: SessionSource,+models: Ref.Ref<List<&2,Models.Model()>>,listener: Maybe<&2,Session.Listener()>,limit: Nat,+failure: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,+commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,+controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,+selectionResult: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,+replacement: Maybe<&2,Callback.Callback<Unit,Result<&2,&2,String,Unit>>>,+login: Maybe<&2,Callback.Callback<Commands.CredentialCommand,Unit>>,ownedModels: Bool) -> IO(Controller & Handle):
+def started(+prompt: Callback.Callback<Submission,Result<&2,&2,String,Unit>>,+source: SessionSource,+models: Ref.Ref<List<&2,Models.Model()>>,listener: Maybe<&2,Session.Listener()>,limit: Nat,+failure: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,+commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,+controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,+selectionResult: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,+replacement: Maybe<&2,Replacement>,+login: Maybe<&2,Callback.Callback<Commands.CredentialCommand,Unit>>,ownedModels: Bool) -> IO(Controller & Handle):
   do IO<Controller & Handle>:
     +state : Ref.Ref<QueueState> <- Ref.new(QueueState,QueueState{Fifo.new(Job),0n,Nat.max(1n,limit),False{},False{},None{}})
     +wake : Chan(Unit) <- Chan.new(Unit,1)
@@ -308,7 +344,7 @@ def boundPrompt(current: Ref.Ref<Session.AgentSession>,request: Submission) -> I
   do IO<Result<&2,&2,String,Unit>>:
     session : Session.AgentSession <- Ref.read(Session.AgentSession,current)
     callPrompt(session,request)
-def startBound(+current: Ref.Ref<Session.AgentSession>,+listener: Session.Listener(),+replacement: Callback.Callback<Unit,Result<&2,&2,String,Unit>>,limit: Nat,failure: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,selectionResult: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,models: Ref.Ref<List<&2,Models.Model()>>,+login: Maybe<&2,Callback.Callback<Commands.CredentialCommand,Unit>>) -> IO(Controller & Handle):
+def startBound(+current: Ref.Ref<Session.AgentSession>,+listener: Session.Listener(),+replacement: Replacement,limit: Nat,failure: Maybe<&2,Callback.Callback<PromptFailure,Unit>>,commandResult: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,controlResult: Maybe<&2,Callback.Callback<ControlResult,Unit>>,selectionResult: Maybe<&2,Callback.Callback<SelectionResult,Unit>>,models: Ref.Ref<List<&2,Models.Model()>>,+login: Maybe<&2,Callback.Callback<Commands.CredentialCommand,Unit>>) -> IO(Controller & Handle):
   do IO<Controller & Handle>:
     session : Session.AgentSession <- Ref.read(Session.AgentSession,current)
     Session.subscribe(session,listener)

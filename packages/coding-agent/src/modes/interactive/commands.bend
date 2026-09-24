@@ -36,6 +36,7 @@ type Command is Data:
   SetThinking{requested: Maybe<&2,String>}
   Compact{instructions: Maybe<&2,String>}
   NewSession{}
+  Clone{}
   Name{requested: Maybe<&2,String>}
   Login{provider: Maybe<&2,String>}
   Logout{}
@@ -64,7 +65,6 @@ def unported(parts: List<&2,String>) -> Bool:
     case "/session" <> Nil{}: True{}
     case "/changelog" <> Nil{}: True{}
     case "/hotkeys" <> Nil{}: True{}
-    case "/clone" <> Nil{}: True{}
     case "/trust" <> Nil{}: True{}
     case "/reload" <> Nil{}: True{}
     case "/debug" <> Nil{}: True{}
@@ -80,6 +80,7 @@ def classify(+text: String,+parts: List<&2,String>) -> Command:
     case "/thinking" <> _: SetThinking{argument(text,9n)}
     case "/compact" <> _: Compact{argument(text,8n)}
     case "/new" <> Nil{}: NewSession{}
+    case "/clone" <> Nil{}: Clone{}
     case "/name" <> _: Name{argument(text,5n)}
     case "/login" <> _: Login{argument(text,6n)}
     case "/logout" <> Nil{}: Logout{}
@@ -204,6 +205,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case SetThinking{requested}: thinking(session,requested)
     case Compact{instructions}: compact(session,instructions)
     case NewSession{}: IO.pure(Action,CommandError{"Starting a new session is not available yet"})
+    case Clone{}: IO.pure(Action,CommandError{"Cloning is not available"})
     case Name{requested}: nameCommand(session,requested)
     case Login{_}: IO.pure(Action,CommandError{"Login is available in interactive mode only"})
     case Logout{}: IO.pure(Action,CommandError{"Logout is available in interactive mode only"})

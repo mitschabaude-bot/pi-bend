@@ -27,3 +27,7 @@ names the scenario where it shows.
   would misreport the client; awaiting Gregor's decision.
 - **Docs path** (`basic-turn` requests): the system prompt names the install
   directory; the runner masks it as `<package>`.
+- **Malformed RPC input** (`tests/rpc_session_commands_check.py`): upstream
+  reads a missing `sessionPath`/`entryId` unchecked and reports JavaScript's
+  TypeError text (`Cannot read properties of undefined (reading 'startsWith')`);
+  Bend validates the field. Both fail; the message is not reproduced.
