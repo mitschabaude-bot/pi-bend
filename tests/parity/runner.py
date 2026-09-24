@@ -147,6 +147,9 @@ def run_side(label, argv, scenario, keep):
             snaps["stdout"] = normalise(normalise_events(result.stdout), root)
             snaps["stderr"] = normalise(result.stderr, root)
             snaps["exit"] = str(result.returncode)
+            # Session files written under the agent directory, as values.
+            for index, path in enumerate(sorted((agent / "sessions").rglob("*.jsonl")) if (agent / "sessions").exists() else []):
+                snaps[f"session{index}"] = normalise(normalise_events(path.read_text().rstrip("\n")), root)
         finally:
             server.shutdown()
             logged = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
