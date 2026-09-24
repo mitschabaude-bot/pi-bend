@@ -646,13 +646,14 @@ def trustOpened(target: Ref.Ref<Maybe<&2,TrustPicker.Host>>,cwd: String,options:
         openTrustHost(host,cwd,options,saved,trusted)
 def trustObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,_,_,+cwd,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,TrustContext{host,store,_},_}:
+    case CommandObservation{_,session,_,_,redraw,+cwd,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,TrustContext{host,store,_},_}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         settings : Settings.SettingsManager <- Session.getSettings(live)
         options : List<&2,Trust.ProjectTrustOption> <- Trust.getProjectTrustOptions(cwd,False{})
         saved : Result<&2,&2,Trust.Error,Maybe<&2,Trust.ProjectTrustStoreEntry>> <- Trust.getEntry(store,cwd)
         trustOpened(host,cwd,options,Settings.isProjectTrusted(settings),transcript,saved)
+        Interactive.requestRender(redraw)
 type TrustChoiceInput is Data:
   TrustChoiceInput{store: Trust.ProjectTrustStore,transcript: Transcript.Handle}
 def trustSaved(trusted: Bool,transcript: Transcript.Handle,result: Result<&2,&2,Trust.Error,Unit>) -> IO(Unit):
@@ -738,10 +739,13 @@ def reloadObserved(input: CommandObservation) -> IO(Unit):
 def sessionStatus(input: CommandObservation,message: String) -> IO(Unit):
   match input:
     case CommandObservation{_,_,_,_,_,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_}: Transcript.status(transcript,message)
+def newSessionStatus(input: CommandObservation) -> IO(Unit):
+  match input:
+    case CommandObservation{_,_,_,_,_,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_}: Transcript.newSession(transcript)
 def commandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match action:
     case Commands.CopyLastAssistant{}: copyObserved(input)
-    case Commands.NewSessionStarted{}: sessionStatus(input,"✓ New session started")
+    case Commands.NewSessionStarted{}: newSessionStatus(input)
     case Commands.ClonedSession{}: sessionStatus(input,"Cloned to new session")
     case Commands.OpenSettings{}: settingsObserved(input)
     case Commands.OpenTrust{}: trustObserved(input)

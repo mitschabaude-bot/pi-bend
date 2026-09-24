@@ -68,6 +68,15 @@ def status(handle: Handle,message: String) -> IO(Unit):
 def appendedUnit(pair: State & Bool) -> State & Unit:
   match pair:
     case (next,_): (next,Unit{})
+def newSessionAppended(state: State) -> IO(State & Unit):
+  match state:
+    case State{entries,tools,active,id,view,+theme,styles,expanded,hidden}:
+      do IO<State & Unit>:
+        pair : State & Bool <- append(State{entries,tools,active,id,view,theme,styles,expanded,hidden},Messages.NewSessionBody{theme},False{})
+        return appendedUnit(pair)
+def newSession(handle: Handle) -> IO(Unit):
+  match handle:
+    case Handle{resource}: Serial.run(State,Unit,resource,newSessionAppended)
 def errorAppended(state: State,message: String) -> IO(State & Unit):
   match state:
     case State{entries,tools,active,id,view,+theme,styles,expanded,hidden}:

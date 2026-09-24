@@ -36,15 +36,12 @@ def border(width: Nat) -> String:
   match width:
     case Zero{}: ""
     case Succ{rest}: "─" ++ border(rest)
-def titleParts(parts: List<&2,String>,+theme: Theme.Theme) -> List<&2,String>:
+def indent(parts: List<&2,String>) -> List<&2,String>:
   match parts:
     case Nil{}: Nil{}
-    case part <> rest: (" " ++ colored(theme,"accent",part)) <> titleParts(rest,theme)
-def titled(lines: List<&2,String>,+theme: Theme.Theme,+width: Nat) -> List<&2,String>:
-  match lines:
-    case Nil{}: Nil{}
-    case line <> rest:
-      List.append(&2,String,titleParts(Utils.wrapTextWithAnsi(line,width - 2n),theme),titled(rest,theme,width))
+    case part <> rest: (" " ++ part) <> indent(rest)
+def titled(title: String,+theme: Theme.Theme,+width: Nat) -> List<&2,String>:
+  indent(Utils.wrapTextWithAnsi(colored(theme,"accent","\u{1b}[1m" ++ title ++ "\u{1b}[22m"),width - 2n))
 def choices(options: List<&2,String>,+index: Nat,+selected: Nat,+theme: Theme.Theme) -> List<&2,String>:
   match options:
     case Nil{}: Nil{}
@@ -59,14 +56,16 @@ def namedKey(keys: List<&2,Keys.KeyId>,name: String) -> String:
     case key <> rest: Keys.formatKeyId(key) ++ "/" ++ namedKey(rest,name)
 def firstKey(bindings: Bindings.KeybindingsManager,+name: String) -> String:
   namedKey(Bindings.getKeys(bindings,name),name)
+def hint(+theme: Theme.Theme,key: String,description: String) -> String:
+  colored(theme,"dim",key) ++ colored(theme,"muted"," " ++ description)
 def lines(state: State,+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,+width: Nat) -> List<&2,String>:
   match state:
     case State{title,options,selected,_,_}:
       +rule = colored(theme,"border",border(width))
-      +help = " ↑↓ navigate  " ++ firstKey(bindings,"tui.select.confirm") ++ " select  " ++ firstKey(bindings,"tui.select.cancel") ++ " cancel"
-      rule <> "" <> List.append(&2,String,titled(String.split(title,'\n'),theme,width),
+      +help = " " ++ hint(theme,"↑↓","navigate") ++ "  " ++ hint(theme,firstKey(bindings,"tui.select.confirm"),"select") ++ "  " ++ hint(theme,firstKey(bindings,"tui.select.cancel"),"cancel")
+      rule <> "" <> List.append(&2,String,titled(title,theme,width),
         "" <> List.append(&2,String,choices(options,0n,selected,theme),
-          "" <> colored(theme,"muted",help) <> "" <> rule <> Nil{}))
+          "" <> help <> "" <> rule <> Nil{}))
 def draw(paint: Paint,width: Nat) -> IO(List<&2,String>):
   match paint:
     case Paint{state,theme,bindings}:

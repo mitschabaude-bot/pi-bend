@@ -330,7 +330,7 @@ type Changelog is Data:
   FullChangelog{markdown: String}
   WhatsNew{markdown: String,spaced: Bool}
   UpdatedTo{version: String,spaced: Bool}
-type Body is Data: UserBody{value: UserMessage,preceded: Bool} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} StatusBody{text: String,theme: Theme.Theme} ErrorBody{text: String,theme: Theme.Theme} WarningBody{text: String,theme: Theme.Theme,label: Bool} ManagedBody{text: String,theme: Theme.Theme,warning: Bool,first: Bool} ChangelogBody{value: Changelog,theme: Theme.Theme,styles: Markdown.MarkdownTheme}
+type Body is Data: UserBody{value: UserMessage,preceded: Bool} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} StatusBody{text: String,theme: Theme.Theme} NewSessionBody{theme: Theme.Theme} ErrorBody{text: String,theme: Theme.Theme} WarningBody{text: String,theme: Theme.Theme,label: Bool} ManagedBody{text: String,theme: Theme.Theme,warning: Bool,first: Bool} ChangelogBody{value: Changelog,theme: Theme.Theme,styles: Markdown.MarkdownTheme}
 def expandedBody(body: Body,expanded: Bool) -> Body:
   match body:
     case BashBody{value}: BashBody{bashExpanded(value,expanded)}
@@ -342,6 +342,7 @@ def retheme(body: Body,theme: Theme.Theme) -> Body:
       AssistantBody{AssistantMessage{content,hide,label,pad,streaming,stop,error,theme,styles}}
     case BashBody{value}: BashBody{bashTheme(value,theme)}
     case StatusBody{text,_}: StatusBody{text,theme}
+    case NewSessionBody{_}: NewSessionBody{theme}
     case ErrorBody{text,_}: ErrorBody{text,theme}
     case WarningBody{text,_,label}: WarningBody{text,theme,label}
     case ManagedBody{text,_,warning,first}: ManagedBody{text,theme,warning,first}
@@ -407,6 +408,11 @@ def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
         colored : String <- foregroundText(theme,"dim",text)
         lines : List<&2,String> <- textLines(colored,1n,width)
         return "" <> lines
+    case NewSessionBody{theme}:
+      do IO<List<&2,String>>:
+        colored : String <- foregroundText(theme,"accent","✓ New session started")
+        lines : List<&2,String> <- textLines(colored,1n,width)
+        return "" <> "" <> List.append(&2,String,lines,[""])
     case ErrorBody{text,theme}:
       do IO<List<&2,String>>:
         colored : String <- foregroundText(theme,"error","Error: " ++ text)
