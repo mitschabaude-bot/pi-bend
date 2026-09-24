@@ -123,12 +123,17 @@ def finish(owner: Owner,outcome: Result<&2,&2,Terminal.Error,Process.Active>) ->
         Callback.dispose(Bool,Unit,focus)
         Deferred.dispose(Unit,stop)
         return settled(outcome,final)
+def clearPrompt(outcome: Result<&2,&2,Terminal.Error,Process.Active>) -> IO(Unit):
+  match outcome:
+    case Done{_}: IO.write("\u{1b}[2J\u{1b}[H")
+    case Fail{_}: IO.pure(Unit,Unit{})
 def mounted(owner: Owner,base: Tui.ResultOf(Tui.TuiBase)) -> IO(Result<&2,&2,String,Maybe<&2,String>>):
   match owner base:
     case owner Fail{_}: finish(owner,Fail{Terminal.Closed{}})
     case Owner{state,+stop,+component,render,input,invalidate,focus} Done{tui}:
       do IO<Result<&2,&2,String,Maybe<&2,String>>>:
-        outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runProcess(Process.active(Process.Session{tui,Screen.initial()},[component],[Component.ComponentId{1n}]),stop,False{})
+        +outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runProcess(Process.active(Process.Session{tui,Screen.initial()},[component],[Component.ComponentId{1n}]),stop,False{})
+        clearPrompt(outcome)
         finish(Owner{state,stop,component,render,input,invalidate,focus},outcome)
 def run(owner: Owner) -> IO(Result<&2,&2,String,Maybe<&2,String>>):
   match owner:
