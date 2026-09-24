@@ -24,7 +24,7 @@ type Command is Data:
   SetThinking{requested: Maybe<&2,String>}
   Compact{instructions: Maybe<&2,String>}
   NewSession{}
-  Login{}
+  Login{provider: Maybe<&2,String>}
   Unsupported{text: String}
 
 def argument(text: String,prefix: Nat) -> Maybe<&2,String>:
@@ -40,7 +40,7 @@ def classify(+text: String,parts: List<&2,String>) -> Command:
     case "/compact" <> _: Compact{argument(text,8n)}
     case "/new" <> Nil{}: NewSession{}
     case "/clear" <> Nil{}: NewSession{}
-    case "/login" <> Nil{}: Login{}
+    case "/login" <> _: Login{argument(text,6n)}
     case _:
       Bool.pick(Command,String.starts_with(text,"/") || String.starts_with(text,"!"),Unsupported{text},Send{text})
 def names(levels: List<&2,Ai.ModelThinkingLevel>) -> List<&2,String>:
@@ -127,7 +127,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case SetThinking{requested}: thinking(session,requested)
     case Compact{instructions}: compact(session,instructions)
     case NewSession{}: IO.pure(Action,CommandError{"Starting a new session is not available yet"})
-    case Login{}: IO.pure(Action,CommandError{"Login is available in interactive mode only"})
+    case Login{_}: IO.pure(Action,CommandError{"Login is available in interactive mode only"})
     case Unsupported{text}: IO.pure(Action,CommandError{"Unknown command: " ++ text})
 def parse(text: String) -> Command:
   +clean = Text.trim(text)

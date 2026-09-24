@@ -159,6 +159,12 @@ def open(host: Host) -> IO(Deferred.Deferred<String>):
         Component.setFocused(editor,False{})
         Ref.write(State,state,Choosing{})
         return choice
+def openDirect(host: Host) -> IO(Unit):
+  match host:
+    case Host{state,_,editor,_,_,_,_}:
+      do IO<Unit>:
+        Component.setFocused(editor,False{})
+        Ref.write(State,state,Waiting{})
 def showManual(host: Host,url: String,answer: Deferred.Deferred<String>) -> IO(Unit):
   match host:
     case Host{state,reply,_,_,_,_,_}:
