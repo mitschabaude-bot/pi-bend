@@ -86,7 +86,7 @@ def painted(items: List<&2,Item>,rows: List<&2,String>,+parentX: Nat,+parentY: N
   match items:
     case Nil{}: rows
     case Item{_,L.LayoutBox{_,L.LayoutRect{x,y,childWidth,childHeight},_,_,_,_,_},lines,_,_,_} <> rest:
-      painted(rest,L.paint(rows,lines,0n,x - parentX,y - parentY,childWidth,childHeight,width),parentX,parentY,width)
+      painted(rest,L.paint(rows,lines,y - parentY,x - parentX,childWidth,childHeight,width),parentX,parentY,width)
 def one(node: N.LayoutNode,box: L.LayoutBox,lines: List<&2,String>,naturalWidth: Nat,naturalHeight: Nat,cache: List<&2,CachedLine>) -> Result:
   Single{Item{node,box,lines,naturalWidth,naturalHeight,None{}},cache}
 def placeholder(node: N.LayoutNode,+width: Nat,+height: Nat,lines: List<&2,String>,cache: List<&2,CachedLine>) -> Result:
@@ -261,7 +261,7 @@ def maybeHeight(item: Maybe<&2,Item>) -> Nat:
 def treeFrame(result: Result,+width: Nat,+height: Nat) -> TreeFrame:
   match result:
     case Single{Item{node,box,lines,_,_,_},_}:
-      TreeFrame{node,L.LayoutFrame{box,width,height,L.paint(L.blank(height,Nil{}),lines,0n,0n,0n,width,height,width)}}
+      TreeFrame{node,L.LayoutFrame{box,width,height,L.paint(L.blank(height,Nil{}),lines,0n,0n,width,height,width)}}
     case _: TreeFrame{N.Empty{},L.LayoutFrame{L.LayoutBox{None{},L.rect(0n,0n,width,height),L.rect(0n,0n,width,height),Nil{},None{},0n,0n},width,height,L.blank(height,Nil{})}}
 def viewport(width: Nat,height: Nat) -> S.LayoutViewport: S.LayoutViewport{width,height}
 def inlineFrame(value: TreeFrame) -> TreeFrame:

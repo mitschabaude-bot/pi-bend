@@ -51,21 +51,20 @@ def sizes(measured: List<&2,Measured>,+vertical: Bool) -> List<&2,Nat>:
   match measured:
     case Nil{}: Nil{}
     case Measured{_,_,width,height} <> rest: Bool.pick(Nat,vertical,height,width) <> sizes(rest,vertical)
-def source(lines: List<&2,String>,row: Nat) -> Maybe<&2,String>:
-  match lines row:
-    case Nil{} _: None{}
-    case line <> rest Zero{}: Some{line}
-    case line <> rest Succ{before}: source(rest,before)
 def composite(row: String,line: Maybe<&2,String>,x: Nat,width: Nat,totalWidth: Nat) -> String:
   match line:
     case None{}: row
     case Some{text}: T.compositeTuiLine(row,text,x,width,totalWidth)
-def paint(rows: List<&2,String>,+sourceLines: List<&2,String>,+index: Nat,+x: Nat,+y: Nat,+width: Nat,+height: Nat,+totalWidth: Nat) -> List<&2,String>:
-  match rows:
-    case Nil{}: Nil{}
-    case +row <> rest:
-      +painted = Bool.pick(Unit -> String,Nat.is_le(y,index) && Nat.is_lt(index,y + height),_ => composite(row,source(sourceLines,index - y),x,width,totalWidth),_ => row)(Unit{})
-      painted <> paint(rest,sourceLines,index + 1n,x,y,width,height,totalWidth)
+def paintLines(rows: List<&2,String>,sourceLines: List<&2,String>,height: Nat,+x: Nat,+width: Nat,+totalWidth: Nat) -> List<&2,String>:
+  match rows sourceLines height:
+    case row <> rest line <> more Succ{left}:
+      composite(row,Some{line},x,width,totalWidth) <> paintLines(rest,more,left,x,width,totalWidth)
+    case _ _ _: rows
+def paint(rows: List<&2,String>,sourceLines: List<&2,String>,y: Nat,x: Nat,width: Nat,height: Nat,totalWidth: Nat) -> List<&2,String>:
+  match rows y:
+    case Nil{} _: Nil{}
+    case row <> rest Succ{before}: row <> paint(rest,sourceLines,before,x,width,height,totalWidth)
+    case rows Zero{}: paintLines(rows,sourceLines,height,x,width,totalWidth)
 def vertical(measured: List<&2,Measured>,allocated: List<&2,Nat>,+y: Nat,+gap: Nat,+outer: LayoutRect,screen: List<&2,String>,reversed: List<&2,LayoutBox>) -> Placed:
   match measured allocated:
     case Nil{} _: Placed{List.reverse(&2,LayoutBox,reversed),screen}
@@ -74,7 +73,7 @@ def vertical(measured: List<&2,Measured>,allocated: List<&2,Nat>,+y: Nat,+gap: N
         case LayoutRect{+x,_,+width,_}:
           +bounds = rect(x,y,width,height)
           +clip = intersect(outer,bounds)
-          +updated = paint(screen,lines,0n,x,y,width,height,width)
+          +updated = paint(screen,lines,y,x,width,height,width)
           vertical(rest,more,y + height + gap,gap,outer,updated,LayoutBox{Some{C.id(component)},bounds,clip,Nil{},Some{lines},0n,0n} <> reversed)
     case _ _: Placed{List.reverse(&2,LayoutBox,reversed),screen}
 def aligned(align: S.Align,outer: Nat,inner: Nat) -> Nat:
@@ -98,7 +97,7 @@ def horizontal(measured: List<&2,Measured>,allocated: List<&2,Nat>,+x: Nat,+gap:
             +y : Nat <- IO.pure(Nat,top + aligned(align,totalHeight,height))
             +bounds : LayoutRect <- IO.pure(LayoutRect,rect(x,y,width,height))
             +clip : LayoutRect <- IO.pure(LayoutRect,intersect(outer,bounds))
-            +updated : List<&2,String> <- IO.pure(List<&2,String>,paint(screen,lines,0n,x,y,width,height,totalWidth))
+            +updated : List<&2,String> <- IO.pure(List<&2,String>,paint(screen,lines,y,x,width,height,totalWidth))
             horizontal(rest,more,x + width + gap,gap,align,outer,updated,LayoutBox{Some{C.id(component)},bounds,clip,Nil{},Some{lines},0n,0n} <> reversed)
     case _ _: IO.pure(Placed,Placed{List.reverse(&2,LayoutBox,reversed),screen})
 def finish(+root: LayoutRect,result: Placed) -> LayoutFrame:
@@ -180,13 +179,24 @@ def overScrollbar(row: String,index: Nat,view: Scroll.ScrollView,width: Nat,geom
     case Some{ScrollbarGeometry{+column,top,height,thumbTop,thumbHeight,maxTop}}:
       +glyph = scrollbarGlyph(view,index,ScrollbarGeometry{column,top,height,thumbTop,thumbHeight,maxTop})
       T.compositeTuiLine(row,styledGlyph(glyph),column,1n,width)
-def scrollRows(+sourceLines: List<&2,String>,+offset: Nat,count: Nat,+index: Nat,+width: Nat,+contentWidth: Nat,+view: Scroll.ScrollView,+geometry: Maybe<&2,ScrollbarGeometry>,reversed: List<&2,String>) -> List<&2,String>:
+def dropLines(lines: List<&2,String>,offset: Nat) -> List<&2,String>:
+  match lines offset:
+    case Nil{} _: Nil{}
+    case lines Zero{}: lines
+    case _ <> rest Succ{left}: dropLines(rest,left)
+def scrollRows(lines: List<&2,String>,+index: Nat,+width: Nat,+contentWidth: Nat,+view: Scroll.ScrollView,+geometry: Maybe<&2,ScrollbarGeometry>,reversed: List<&2,String>) -> List<&2,String>:
+  match lines:
+    case Nil{}: reversed
+    case line <> more:
+      +base = composite("",Some{line},0n,contentWidth,width)
+      +painted = overScrollbar(base,index,view,width,geometry)
+      scrollRows(more,index + 1n,width,contentWidth,view,geometry,painted <> reversed)
+def scrollBlank(count: Nat,+index: Nat,+width: Nat,+view: Scroll.ScrollView,+geometry: Maybe<&2,ScrollbarGeometry>,reversed: List<&2,String>) -> List<&2,String>:
   match count:
     case Zero{}: List.reverse(&2,String,reversed)
     case Succ{rest}:
-      +base = composite("",source(sourceLines,offset + index),0n,contentWidth,width)
-      +line = overScrollbar(base,index,view,width,geometry)
-      scrollRows(sourceLines,offset,rest,index + 1n,width,contentWidth,view,geometry,line <> reversed)
+      +line = overScrollbar("",index,view,width,geometry)
+      scrollBlank(rest,index + 1n,width,view,geometry,line <> reversed)
 def scrollChild(view: Scroll.ScrollView,lines: List<&2,String>,rootRect: LayoutRect,+childRect: LayoutRect,top: Nat) -> LayoutBox:
   LayoutBox{Some{C.id(viewChild(view))},childRect,intersect(rootRect,childRect),Nil{},Some{lines},top,0n}
 def scrollRoot(+rootRect: LayoutRect,child: LayoutBox) -> LayoutBox:
@@ -198,7 +208,10 @@ def scrollFrame(view: Scroll.ScrollView,+lines: List<&2,String>,+width: Nat,+hei
   +childRect = rect(0n,0n,contentWidth,List.length(&2,String,lines))
   +child = scrollChild(updated,lines,rootRect,childRect,top)
   +root = scrollRoot(rootRect,child)
-  +screen = scrollRows(lines,top,height,0n,width,contentWidth,updated,scrollbarGeometry(updated,width),Nil{})
+  +visible = List.take(&2,String,dropLines(lines,top),height)
+  +used = List.length(&2,String,visible)
+  +geometry = scrollbarGeometry(updated,width)
+  +screen = scrollBlank(height - used,used,width,updated,geometry,scrollRows(visible,0n,width,contentWidth,updated,geometry,Nil{}))
   ScrollLayoutFrame{updated,LayoutFrame{root,width,height,screen}}
 def renderScrollViewFrame(+view: Scroll.ScrollView,width: Nat,height: Nat) -> IO(ScrollLayoutFrame):
   +safeWidth = Nat.max(1n,width)
