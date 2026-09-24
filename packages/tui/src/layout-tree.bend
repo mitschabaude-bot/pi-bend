@@ -205,6 +205,10 @@ def maybeHeight(item: Maybe<&2,Item>) -> Nat:
         +contentWidth : Nat <- IO.pure(Nat,Scroll.getContentWidth(view,width))
         rendered : Rendered <- renderCached(L.viewChild(view),contentWidth,cache)
         return placedScroll(view,rendered,x,y,width,height,contentWidth,clip)
+    case N.Spacer{+lines} Measure{_,_}: IO.pure(Result,placeholder(N.Spacer{lines},0n,lines,Nil{},cache))
+    case N.Spacer{lines} Place{x,y,width,+height,clip,_}:
+      +bounds = L.rect(x,y,width,height)
+      IO.pure(Result,one(N.Spacer{lines},L.LayoutBox{None{},bounds,L.intersect(clip,bounds),Nil{},None{},0n,0n},L.blank(height,Nil{}),0n,height,cache))
     case N.Empty{} Measure{_,_}: IO.pure(Result,Group{N.Empty{},Nil{},cache})
     case N.Empty{} PlaceV{_,_,_,_,_,_,_}: IO.pure(Result,Group{N.Empty{},Nil{},cache})
     case N.Empty{} PlaceH{_,_,_,_,_,_,_,_}: IO.pure(Result,Group{N.Empty{},Nil{},cache})

@@ -30,17 +30,20 @@ def same(+actual: String,expected: String) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit),String.eq(actual,expected),_ => IO.pure(Unit,Unit{}),_ => IO.die(Unit,1,"viewport mismatch: " ++ actual))(Unit{})
 def runMounted(view: View.View,+handle: View.Handle,+base: Tui.TuiBase,message: Component.Component) -> IO(Unit):
   do IO<Unit>:
-        first : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,3n)
+        first : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,8n)
         empty : String <- frame(first)
-        same(empty,"editor|footer")
+        same(empty,"|editor|footer")
         View.append(handle,message)
-        second : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,3n)
+        second : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,8n)
         filled : String <- frame(second)
-        same(filled,"four|editor|footer")
+        same(filled,"one|two|three|four||editor|footer")
+        overflow : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,4n)
+        short : String <- frame(overflow)
+        same(short,"three|four|editor|footer")
         View.clear(handle)
-        third : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,3n)
+        third : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,8n)
         cleared : String <- frame(third)
-        same(cleared,"editor|footer")
+        same(cleared,"|editor|footer")
         View.dispose(view)
 def runPair(pair: View.View & View.Handle & Tui.TuiBase,message: Component.Component) -> IO(Unit):
   match pair:

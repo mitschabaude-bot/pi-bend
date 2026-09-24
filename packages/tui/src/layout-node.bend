@@ -13,6 +13,7 @@ type LayoutNode is Data:
   VStack{entries: LayoutNode,gap: Nat}
   HStack{entries: LayoutNode,gap: Nat,align: Stack.Align}
   ScrollNode{view: Scroll.ScrollView}
+  Spacer{lines: Nat}
   Entry{node: LayoutNode,size: Stack.StackEntryOptions,visible: Maybe<&2,Callback.Callback<Stack.LayoutViewport,Bool>>}
   Children{first: LayoutNode,rest: LayoutNode}
   Empty{}
