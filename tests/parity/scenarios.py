@@ -166,6 +166,14 @@ SCENARIOS = [
                   ("key", "C-o"), ("settle", 0.5), ("snap", "expanded")],
     },
     {
+        "name": "ls-limit",
+        "args": MODEL + ["--tools", "ls"],
+        "files": {f"project/items/file-{n:02}.txt": "data\n" for n in range(1, 6)},
+        "turns": [{"tool": {"name": "ls", "arguments": {"path": "items", "limit": 3}}}, {"text": "Listed."}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "list"), ("key", "Enter"),
+                  ("wait", "Listed.", "turn"), ("settle", 0.5), ("snap", "limited")],
+    },
+    {
         "name": "typing",
         "args": MODEL,
         "steps": [("wait", READY, "startup"), ("settle", 0.5), *typed("parity"), ("settle", 0.3), ("snap", "typed")],
