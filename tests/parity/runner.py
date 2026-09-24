@@ -106,6 +106,7 @@ def normalise(text, root):
     text = text.replace(str(root), "<root>")
     text = re.sub(r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_", "<stamp>_", text)
     text = re.sub(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "<uuid>", text)
+    text = re.sub(r"/tmp/pi-bash-[0-9a-f]+\.log", "<bash-output>", text)
     text = re.sub(r"\b\d+(\.\d+)?(ms|s)\b", "<duration>", text)
     return "\n".join(line.rstrip() for line in text.rstrip("\n").split("\n"))
 

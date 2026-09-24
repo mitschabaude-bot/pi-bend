@@ -157,6 +157,20 @@ SCENARIOS = [
                   ("wait", "Search complete", "turn"), ("settle", 0.5), ("snap", "collapsed")],
     },
     {
+        "name": "bash-timeout",
+        "args": MODEL,
+        "turns": [{"tool": {"name": "bash", "arguments": {"command": "printf ready", "timeout": 5}}}, {"text": "Done."}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "run"), ("key", "Enter"),
+                  ("wait", "Done.", "turn"), ("settle", 0.5), ("snap", "timed")],
+    },
+    {
+        "name": "bash-truncated",
+        "args": MODEL,
+        "turns": [{"tool": {"name": "bash", "arguments": {"command": "seq 2101"}}}, {"text": "Done."}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "run"), ("key", "Enter"),
+                  ("wait", "Done.", "turn"), ("settle", 0.5), ("snap", "truncated")],
+    },
+    {
         "name": "ls-preview",
         "args": MODEL + ["--tools", "ls"],
         "files": {f"project/items/file-{n:02}.txt": "data\n" for n in range(1, 26)},

@@ -58,6 +58,20 @@ def trimmedOutput(source: String,+expanded: Bool,+theme: Theme.Theme) -> IO(Stri
           _ => IO.pure(String,"\n\n" ++ String.join(display,"\n")))(Unit{})
 def outputText(output: String,expanded: Bool,theme: Theme.Theme) -> IO(String):
   trimmedOutput(String.trim(output),expanded,theme)
+def withoutFooter(reversed: List<&2,String>,+output: String,path: String) -> String:
+  match reversed:
+    case +footer <> ("" <> earlier):
+      Bool.pick(String,String.starts_with(footer,"[") && String.ends_with(footer,"]") && String.contains(footer,path),String.join(List.reverse(&2,String,earlier),"\n"),output)
+    case _: output
+def stripSettled(+output: String,details: Maybe<&2,Tools.ToolDetails>) -> String:
+  match details:
+    case Some{Tools.BashDetails{Bash.BashToolDetails{Some{Truncate.TruncationResult{_,True{},_,_,_,_,_,_,_,_,_}},Some{path}}}}:
+      withoutFooter(List.reverse(&2,String,String.split(String.trim(output),'\n')),output,path)
+    case _: output
+def stripFooter(output: String,details: Maybe<&2,Tools.ToolDetails>,partial: Bool) -> String:
+  match partial:
+    case False{}: stripSettled(output,details)
+    case True{}: output
 def truncationNotice(value: Truncate.TruncationResult) -> String:
   match value:
     case Truncate.TruncationResult{_,False{},_,_,_,_,_,_,_,_,_}: ""
@@ -100,9 +114,9 @@ def timing(elapsed: Maybe<&2,F64>,partial: Bool,theme: Theme.Theme) -> IO(String
       do IO<String>:
         label : String <- Messages.foregroundText(theme,"muted",Bool.pick(String,partial,"Elapsed ","Took ") ++ duration(tenths(F.convert(F.divide(F.add(ms,F.fromU32(50)),F.fromU32(100))))))
         return "\n\n" ++ label
-def renderResult(output: String,details: Maybe<&2,Tools.ToolDetails>,expanded: Bool,partial: Bool,elapsed: Maybe<&2,F64>,+theme: Theme.Theme) -> IO(String):
+def renderResult(+output: String,+details: Maybe<&2,Tools.ToolDetails>,expanded: Bool,+partial: Bool,elapsed: Maybe<&2,F64>,+theme: Theme.Theme) -> IO(String):
   do IO<String>:
-    body : String <- outputText(output,expanded,theme)
+    body : String <- outputText(stripFooter(output,details,partial),expanded,theme)
     notice : String <- warning(theme,detailsNotice(details))
     durationText : String <- timing(elapsed,partial,theme)
     return body ++ notice ++ durationText
