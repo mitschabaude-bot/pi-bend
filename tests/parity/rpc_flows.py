@@ -42,6 +42,22 @@ FLOWS = [
         ],
     },
     {
+        # A second compaction updates the previous summary (the update prompt).
+        "name": "compact-twice",
+        "turns": [{"text": "First answer. " + LONG, "usage": {"input": 3000, "output": 400}},
+                  {"text": "## Goal\nTalk.\n\n## Progress\nOne answer."},
+                  {"text": "Second answer. " + LONG, "usage": {"input": 3500, "output": 400}},
+                  {"text": "## Goal\nTalk.\n\n## Progress\nTwo answers."}],
+        "settings": {"compaction": {"keepRecentTokens": 1}},
+        "steps": [
+            {"type": "prompt", "message": "one"},
+            {"type": "compact"},
+            {"type": "prompt", "message": "two"},
+            {"type": "compact", "customInstructions": "Keep it short."},
+            {"type": "get_messages"},
+        ],
+    },
+    {
         "name": "bash",
         "turns": [{"text": "Saw it."}],
         "steps": [
