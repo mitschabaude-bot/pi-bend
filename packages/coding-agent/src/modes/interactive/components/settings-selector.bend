@@ -131,9 +131,9 @@ def change(id: String,value: String,settings: Settings.SettingsManager) -> Setti
 type Modal is Data: Closed{} Open{list: ListUI.SettingsList}
 type Paint is Data: Paint{theme: Ref.Ref<Theme.Theme>,ordinary: String,selected: String}
 type ChangeContext is Data:
-  ChangeContext{session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+  ChangeContext{session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle}
 type CancelContext is Data:
-  CancelContext{modal: Ref.Ref<Modal>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+  CancelContext{modal: Ref.Ref<Modal>}
 type Host is Data:
   Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,words: Ref.Ref<Segmenter.Source>,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,style: ListUI.SettingsListTheme,changed: Callback.Callback<ListUI.Change,Unit>,cancelled: Callback.Callback<Unit,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>}
 type Owner is Type:
@@ -184,18 +184,14 @@ def liveEffect(id: String,value: String,transcript: Transcript.Handle,result: Re
     case Done{_}: liveEffectDone(id,value,transcript)
 def changeSetting(context: ChangeContext,selection: ListUI.Change) -> IO(Unit):
   match context selection:
-    case ChangeContext{session,+transcript,redraw} ListUI.Change{+id,+newValue}:
+    case ChangeContext{session,+transcript} ListUI.Change{+id,+newValue}:
       do IO<Unit>:
         current : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         result : Result<&2,&2,String,Unit> <- applied(id,newValue,current)
         liveEffect(id,newValue,transcript,result)
-        request(redraw)
 def cancelPanel(context: CancelContext,_: Unit) -> IO(Unit):
   match context:
-    case CancelContext{modal,redraw}:
-      do IO<Unit>:
-        Ref.write(Modal,modal,Closed{})
-        request(redraw)
+    case CancelContext{modal}: Ref.write(Modal,modal,Closed{})
 def border(width: Nat) -> String:
   match width:
     case Zero{}: ""
@@ -283,10 +279,12 @@ def mouseCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Componen
         mousePair(modal,pair)
 def mouseEvent(host: Host,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match host:
-    case Host{+modal,editor,_,_,_,_,_,_,_,_,_,_}:
+    case Host{+modal,editor,_,_,_,_,_,redraw,_,_,_,_}:
       do IO<Maybe<&2,Component.MouseResponse>>:
         current : Modal <- Ref.read(Modal,modal)
-        mouseCurrent(current,modal,editor,event)
+        result : Maybe<&2,Component.MouseResponse> <- mouseCurrent(current,modal,editor,event)
+        request(redraw)
+        return result
 def invalidated(host: Host,_: Unit) -> IO(Unit):
   match host: case Host{_,editor,_,_,_,_,_,_,_,_,_,_}: Component.invalidate(editor)
 def focused(host: Host,value: Bool) -> IO(Unit):
@@ -299,8 +297,8 @@ def createHost(+editor: Component.Component,+theme: Ref.Ref<Theme.Theme>,+sessio
     +value : Callback.Callback<ListUI.ThemeText,String> <- Callback.create(~Paint,~ListUI.ThemeText,~String,~painted,Paint{theme,"muted","text"})
     +description : Callback.Callback<String,String> <- Callback.create(~Paint,~String,~String,~plainPaint,Paint{theme,"muted","muted"})
     +hint : Callback.Callback<String,String> <- Callback.create(~Paint,~String,~String,~plainPaint,Paint{theme,"dim","dim"})
-    +changedCallback : Callback.Callback<ListUI.Change,Unit> <- Callback.create(~ChangeContext,~ListUI.Change,~Unit,~changeSetting,ChangeContext{session,transcript,redraw})
-    +cancelledCallback : Callback.Callback<Unit,Unit> <- Callback.create(~CancelContext,~Unit,~Unit,~cancelPanel,CancelContext{modal,redraw})
+    +changedCallback : Callback.Callback<ListUI.Change,Unit> <- Callback.create(~ChangeContext,~ListUI.Change,~Unit,~changeSetting,ChangeContext{session,transcript})
+    +cancelledCallback : Callback.Callback<Unit,Unit> <- Callback.create(~CancelContext,~Unit,~Unit,~cancelPanel,CancelContext{modal})
     +completed : Callback.Callback<ListUI.Completion,Unit> <- Callback.create(~Unit,~ListUI.Completion,~Unit,~noCompletion,Unit{})
     +style : ListUI.SettingsListTheme <- IO.pure(ListUI.SettingsListTheme,ListUI.SettingsListTheme{label,value,description,"› ",hint})
     +host : Host <- IO.pure(Host,Host{modal,editor,theme,session,source,bindings,keyboard,redraw,style,changedCallback,cancelledCallback,completed})
