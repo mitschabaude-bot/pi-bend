@@ -210,7 +210,8 @@ def displayedPair(modal: Ref.Ref<Modal>,theme: Ref.Ref<Theme.Theme>,width: Nat,p
       do IO<List<&2,String>>:
         Ref.write(Modal,modal,Open{next})
         currentTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        return List.append(&2,String,lines,borderPainted(currentTheme,width) <> Nil{})
+        +rule : String <- IO.pure(String,borderPainted(currentTheme,width))
+        return rule <> List.append(&2,String,lines,rule <> Nil{})
 def displayedClosed(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
     case Host{_,editor,_,_,_,_,_,_,_,_,_,_}: Component.render(editor,width)
