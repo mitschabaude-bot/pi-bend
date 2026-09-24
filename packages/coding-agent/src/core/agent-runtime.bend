@@ -61,6 +61,7 @@ import ./tools/index.bend as Tools
 import ../utils/tools-manager.bend as Manager
 import ./tools/file-mutation-queue.bend as Queue
 import ./extensions/context.bend as Ctx
+import ./provider-composer.bend as Composer
 
 # The owned services behind one agent: transport, credentials, model runtime,
 # settings-driven selection, tools and the Agent itself. This is the print-mode
@@ -166,46 +167,97 @@ def modelApi(model: Models.Model()) -> Ai.ModelApi:
   match model:
     case Ai.Model{_, _, api, _, _, _, _, _, _, _, _, _, _, _, _, _}: api
 
+# upstream sdk buildRequestOptions: a request's timeout, retries and
+# websocket connect timeout default to the settings. The settings are read
+# when the runtime is created.
+type RequestDefaults is Data:
+  RequestDefaults{requestTimeout: F64, retryLimit: Maybe<&2, F64>, retryDelay: F64, connectTimeout: Maybe<&2, F64>}
+
+def idleTimeout(+idle: W.U64) -> F64:
+  Bool.pick(F64, F.isEqual(F.compare(F.fromU64(idle), F.fromU32(0))), F.fromU32(2147483647), F.fromU64(idle))
+
+def defaultsFrom(retry: Settings.ResolvedProviderRetrySettings, idle: W.U64, connect: Maybe<&2, W.U64>) -> RequestDefaults:
+  match retry:
+    case Settings.ResolvedProviderRetrySettings{timeout, retries, delay}:
+      RequestDefaults{Maybe.default(&2, F64, Maybe.map(&2, W.U64, F64, F.fromU64, timeout), idleTimeout(idle)), Maybe.map(&2, W.U64, F64, F.fromU64, retries), F.fromU64(delay), Maybe.map(&2, W.U64, F64, F.fromU64, connect)}
+
+def requestDefaults(+settings: Settings.SettingsManager) -> RequestDefaults:
+  defaultsFrom(Settings.getProviderRetrySettings(settings), Settings.getHttpIdleTimeoutMs(settings), Settings.getWebSocketConnectTimeoutMs(settings))
+
+# Request auth comes from the model runtime; --api-key overrides the stored key.
+type KeySource is Data:
+  KeySource{models: Models.ModelRuntime, apiKey: Maybe<&2, String>}
+
 type ProviderStreams is Data:
-  ProviderStreams{responses: Responses.Config, fetch: Fetch.Fetch(Unit)}
+  ProviderStreams{responses: Responses.Config, fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource}
 
 def selectedOptions(options: Maybe<&2, LoopConfig()>) -> Maybe<&2, Responses.SimpleStreamOptions(Unit, Unit, Error())>:
   Maybe.map(&2, LoopConfig(), Responses.SimpleStreamOptions(Unit, Unit, Error()), project, options)
 
-def withFetch(fetch: Fetch.Fetch(Unit), options: Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()>) -> Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()>:
-  match options:
-    case Ai.SimpleStreamOptions{signal, telemetry, apiKey, None{}, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets}:
-      Ai.SimpleStreamOptions{signal, telemetry, apiKey, Some{fetch}, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, thinkingBudgets}
-    case other: other
+# Like upstream's global fetch, requests share the runtime's fetch, so
+# keep-alive connections carry over between turns.
+def withRequest(fetch: Fetch.Fetch(Unit), preset: RequestDefaults, options: Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()>) -> Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()>:
+  match preset options:
+    case RequestDefaults{timeout, retries, delay, connect} Ai.SimpleStreamOptions{signal, telemetry, apiKey, shared, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}:
+      Ai.SimpleStreamOptions{signal, telemetry, apiKey, Maybe.or(&2, Fetch.Fetch(Unit), shared, Some{fetch}), env, onPayload, onResponse, headers, Maybe.or(&2, F64, timeoutMs, Some{timeout}), Maybe.or(&2, F64, maxRetries, retries), Maybe.or(&2, F64, maxRetryDelayMs, Some{delay}), temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, Maybe.or(&2, F64, websocketConnectTimeoutMs, connect), metadata, toolChoice, reasoning, deferred, budgets}
 
-# Like upstream's global fetch, the Responses API shares the runtime's fetch,
-# so its keep-alive connections carry over between turns.
-def sharedFetch(fetch: Fetch.Fetch(Unit), config: LoopConfig()) -> LoopConfig():
+def requestConfig(fetch: Fetch.Fetch(Unit), preset: RequestDefaults, config: LoopConfig()) -> LoopConfig():
   match config:
-    case T.AgentLoopConfig{options, model, convert, transform, key, a, b, c, d, e, f, g, h}: T.AgentLoopConfig{withFetch(fetch, options), model, convert, transform, key, a, b, c, d, e, f, g, h}
+    case T.AgentLoopConfig{options, model, convert, transform, key, a, b, c, d, e, f, g, h}: T.AgentLoopConfig{withRequest(fetch, preset, options), model, convert, transform, key, a, b, c, d, e, f, g, h}
 
-def selectedProvider(responses: Responses.Config, fetch: Fetch.Fetch(Unit), model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, options: Maybe<&2, LoopConfig()>, api: Ai.ModelApi) -> IO(Providers.Output(Unit, Error())):
+def selectedProvider(responses: Responses.Config, fetch: Fetch.Fetch(Unit), model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, +options: Maybe<&2, LoopConfig()>, api: Ai.ModelApi) -> IO(Providers.Output(Unit, Error())):
   match api:
     case Ai.AnthropicMessagesApi{}: Anthropic.open(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.GoogleGenerativeAiApi{}: Google.open(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.OpenAICompletionsApi{}: Completions.open(fetch, urlContext(), model, context, selectedOptions(options))
-    case _: Providers.openResponses(~LoopConfig(), ~Unit, ~Unit, ~Details(), ~Error(), ~project, ~render, ~failure, responses, T.StreamInput{model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), config => sharedFetch(fetch, config), options)})
+    case _: Providers.openResponses(~LoopConfig(), ~Unit, ~Unit, ~Details(), ~Error(), ~project, ~render, ~failure, responses, T.StreamInput{model, context, options})
+
+# upstream ModelRuntime.prepareRequest: each request resolves its model's
+# auth; the request's own key and headers win over it, auth headers come
+# first, the auth base URL replaces the model's and the environments merge.
+# Without resolved auth the request goes out as prepared by the agent.
+def withBaseUrl(model: Models.Model(), url: Maybe<&2, String>) -> Models.Model():
+  match model url:
+    case _ None{}: model
+    case Ai.Model{id, name, api, provider, _, reasoning, levels, input, limits, cost, cache, window, maxTokens, sampling, headers, compat} Some{replaced}:
+      Ai.Model{id, name, api, provider, replaced, reasoning, levels, input, limits, cost, cache, window, maxTokens, sampling, headers, compat}
+
+def mergedEnv(auth: Maybe<&2, Ai.ProviderEnv()>, request: Maybe<&2, Ai.ProviderEnv()>) -> Maybe<&2, Ai.ProviderEnv()>:
+  match auth request:
+    case None{} _: request
+    case _ None{}: auth
+    case Some{base} Some{extra}: Some{Composer.spread(String, base, R.entries(String, extra))}
+
+def preparedOptions(auth: Auth.AuthResult, options: Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()>) -> Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()>:
+  match auth options:
+    case Auth.AuthResult{Auth.ModelAuth{key, authHeaders, _}, authEnv, _} Ai.SimpleStreamOptions{signal, telemetry, apiKey, shared, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}:
+      Ai.SimpleStreamOptions{signal, telemetry, Maybe.or(&2, String, apiKey, key), shared, mergedEnv(authEnv, env), onPayload, onResponse, Models.mergeHeaders(authHeaders, headers), timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}
+
+def preparedConfig(auth: Auth.AuthResult, config: LoopConfig()) -> LoopConfig():
+  match config:
+    case T.AgentLoopConfig{options, model, convert, transform, key, a, b, c, d, e, f, g, h}: T.AgentLoopConfig{preparedOptions(auth, options), model, convert, transform, key, a, b, c, d, e, f, g, h}
+
+def preparedRequest(responses: Responses.Config, fetch: Fetch.Fetch(Unit), +model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, options: Maybe<&2, LoopConfig()>, resolution: Resolve.Resolution()) -> IO(Providers.Output(Unit, Error())):
+  match resolution:
+    case Done{Some{Auth.AuthResult{Auth.ModelAuth{key, headers, +url}, env, source}}}:
+      +model = withBaseUrl(model, url)
+      selectedProvider(responses, fetch, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => preparedConfig(Auth.AuthResult{Auth.ModelAuth{key, headers, url}, env, source}, value), options), modelApi(model))
+    case _: selectedProvider(responses, fetch, model, context, options, modelApi(model))
 
 def openProvider(config: ProviderStreams, input: Providers.Input(LoopConfig(), Unit, Details())) -> IO(Providers.Output(Unit, Error())):
   match config input:
-    case ProviderStreams{responses, fetch} T.StreamInput{+model, context, options}:
-      selectedProvider(responses, fetch, model, context, options, modelApi(model))
+    case ProviderStreams{responses, +fetch, defaults, KeySource{models, apiKey}} T.StreamInput{+model, context, options}:
+      do IO<Providers.Output(Unit, Error())>:
+        resolution : Resolve.Resolution() <- Models.getModelAuth(models, model, Resolve.AuthResolutionOverrides{apiKey, None{}, None{}, None{}})
+        preparedRequest(responses, fetch, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => requestConfig(fetch, defaults, value), options), resolution)
 
-def createStream(authorizer: C.Callback<URL.Host, TLSClient.Authorization>, fetch: Fetch.Fetch(Unit)) -> IO(Stream()):
+def createStream(authorizer: C.Callback<URL.Host, TLSClient.Authorization>, fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource) -> IO(Stream()):
   do IO<Stream()>:
     agent : String <- IO.try(String, UserAgent.get())
-    C.create(~ProviderStreams, ~Providers.Input(LoopConfig(), Unit, Details()), ~Providers.Output(Unit, Error()), ~openProvider, ProviderStreams{providerConfig(authorizer, agent), fetch})
+    C.create(~ProviderStreams, ~Providers.Input(LoopConfig(), Unit, Details()), ~Providers.Output(Unit, Error()), ~openProvider, ProviderStreams{providerConfig(authorizer, agent), fetch, defaults, keys})
 
 # Request auth
 # ------------
-
-type KeySource is Data:
-  KeySource{models: Models.ModelRuntime, apiKey: Maybe<&2, String>}
 
 def keyOf(providerId: String, resolution: Resolve.Resolution()) -> Result<&2, &2, Error(), Maybe<&2, String>>:
   match resolution:
@@ -697,14 +749,14 @@ def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageSt
         result : Result<&2, &2, StreamFn.MissingDefault, Owner()> <- Agent.new(~Unit, ~Details(), ~Custom(), ~Error(), ~Unit, agentOptions(model, thinking, stream, keys, converter, seed, settings), registry, validator, Tools.WriteDetails{})
         constructed(transport, storage, storageStore, credentials, credentialStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, loadoutFrom(prepared, tools, context), result)
 
-def withModelFields(+cwd: String, +agentDir: String, packageDir: String, apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Outcome(AgentRuntime)):
+def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Outcome(AgentRuntime)):
   match transport prompt selected:
     case Transport{+authorizer, runtime, +fetch} Done{prompt} Done{+model}:
       do IO<Outcome(AgentRuntime)>:
         queue : Queue.Owner <- Queue.create()
         +context : Ctx.ContextSource() <- Ctx.create()
         created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- createToolList(names, paths, cwd, agentDir, packageDir, fetch, context, Queue.borrow(queue))
-        +stream : Stream() <- createStream(authorizer, fetch)
+        +stream : Stream() <- createStream(authorizer, fetch, requestDefaults(settings), KeySource{models, apiKey})
         +registry : StreamFn.Registry(Unit, Details(), LoopConfig(), Error()) <- StreamFn.create(Unit, Details(), LoopConfig(), Error())
         +validator : Loop.Validator(Error()) <- Loop.createPlain(~Error(), ~validationError)
         +keys : C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>> <- C.create(~KeySource, ~String, ~Result<&2, &2, Error(), Maybe<&2, String>>, ~resolveKey, KeySource{models, apiKey})

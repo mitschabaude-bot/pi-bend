@@ -275,24 +275,35 @@ def withoutHeader(entries: List<&2, R.Property<Ai.Nullable<String>>>, +name: Str
     case Nil{}: Nil{}
     case R.Property{+key, value} <> +rest: Bool.pick(List<&2, R.Property<Ai.Nullable<String>>>, sameHeaderName(key, name), withoutHeader(rest, name), R.Property{key, value} <> withoutHeader(rest, name))
 
-def overrideHeaders(overrides: List<&2, R.Property<String>>, entries: List<&2, R.Property<Ai.Nullable<String>>>) -> List<&2, R.Property<Ai.Nullable<String>>>:
+def overrideHeaders(overrides: List<&2, R.Property<Ai.Nullable<String>>>, entries: List<&2, R.Property<Ai.Nullable<String>>>) -> List<&2, R.Property<Ai.Nullable<String>>>:
   match overrides:
     case Nil{}: entries
-    case R.Property{+name, value} <> rest: overrideHeaders(rest, List.append(&2, R.Property<Ai.Nullable<String>>, withoutHeader(entries, name), R.Property{name, Ai.PresentValue{value}} <> Nil{}))
+    case R.Property{+name, value} <> rest: overrideHeaders(rest, List.append(&2, R.Property<Ai.Nullable<String>>, withoutHeader(entries, name), R.Property{name, value} <> Nil{}))
 
-# An override replaces any header whose name differs only in case.
-def mergeHeaders(base: Maybe<&2, Ai.ProviderHeaders()>, override: Maybe<&2, R.Record<String>>) -> Maybe<&2, Ai.ProviderHeaders()>:
+# upstream mergeHeaders: an override replaces any header whose name differs
+# only in case.
+def mergeHeaders(base: Maybe<&2, Ai.ProviderHeaders()>, override: Maybe<&2, Ai.ProviderHeaders()>) -> Maybe<&2, Ai.ProviderHeaders()>:
   match base override:
     case base None{}: base
-    case None{} Some{values}: Some{R.Record{overrideHeaders(R.entries(String, values), Nil{})}}
-    case Some{R.Record{entries}} Some{values}: Some{R.Record{overrideHeaders(R.entries(String, values), entries)}}
+    case None{} Some{R.Record{values}}: Some{R.Record{overrideHeaders(values, Nil{})}}
+    case Some{R.Record{entries}} Some{R.Record{values}}: Some{R.Record{overrideHeaders(values, entries)}}
+
+def presentHeaders(values: List<&2, R.Property<String>>) -> List<&2, R.Property<Ai.Nullable<String>>>:
+  match values:
+    case Nil{}: Nil{}
+    case R.Property{name, value} <> rest: R.Property{name, Ai.PresentValue{value}} <> presentHeaders(rest)
+
+def configuredHeaders(configured: Maybe<&2, R.Record<String>>) -> Maybe<&2, Ai.ProviderHeaders()>:
+  match configured:
+    case None{}: None{}
+    case Some{values}: Some{R.Record{presentHeaders(R.entries(String, values))}}
 
 def modelHeaders(resolution: Resolve.Resolution(), headers: Result<&2, &2, String, Maybe<&2, R.Record<String>>>) -> Resolve.Resolution():
   match resolution headers:
     case Fail{error} _: Fail{error}
     case Done{None{}} _: Done{None{}}
     case _ Fail{error}: Fail{Resolve.ModelsError{Resolve.AuthError{}, error}}
-    case Done{Some{Auth.AuthResult{Auth.ModelAuth{apiKey, existing, url}, env, source}}} Done{configured}: Done{Some{Auth.AuthResult{Auth.ModelAuth{apiKey, mergeHeaders(existing, configured), url}, env, source}}}
+    case Done{Some{Auth.AuthResult{Auth.ModelAuth{apiKey, existing, url}, env, source}}} Done{configured}: Done{Some{Auth.AuthResult{Auth.ModelAuth{apiKey, mergeHeaders(existing, configuredHeaders(configured)), url}, env, source}}}
 
 def resolutionEnv(resolution: Resolve.Resolution(), overrides: Maybe<&2, Ai.ProviderEnv()>) -> Maybe<&2, Ai.ProviderEnv()>:
   match resolution overrides:

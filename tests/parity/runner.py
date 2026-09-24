@@ -28,6 +28,7 @@ import fake_openai  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 WIDTH, HEIGHT = 100, 32
+PI_PACKAGE = str(Path(shutil.which("pi") or "pi").resolve().parents[2]) if shutil.which("pi") else "/nonexistent"
 
 def tmux(*args, check=True):
     # A private server keeps runs off the user's own tmux sessions.
@@ -102,7 +103,8 @@ def run_side(label, argv, scenario, keep):
     log = root / "requests.jsonl"
     server = fake_openai.serve(scenario.get("turns", []), str(log))
     port = server.server_address[1]
-    (agent / "models.json").write_text(json.dumps({"providers": {"openai": {"baseUrl": f"http://127.0.0.1:{port}/v1"}}}))
+    provider = {"baseUrl": f"http://127.0.0.1:{port}/v1", **scenario.get("provider", {})}
+    (agent / "models.json").write_text(json.dumps({"providers": {"openai": provider}}))
     env = {"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "PATH": os.environ["PATH"],
            "TERM": "xterm-256color", "LANG": "C.UTF-8", "OPENAI_API_KEY": "sk-parity", "PI_OFFLINE": "1",
            # Bend pi locates its bundled assets (collation data, themes) here; pi ignores it.
@@ -128,6 +130,8 @@ def run_side(label, argv, scenario, keep):
         server.shutdown()
         logged = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
         requests = re.sub(r"127\.0\.0\.1:\d+", "<server>", normalise(json.dumps(logged, indent=1, sort_keys=True), root)) if logged else ""
+        # The system prompt names the installed package's docs directory.
+        requests = requests.replace(PI_PACKAGE, "<package>").replace(str(ROOT), "<package>")
         if not keep:
             shutil.rmtree(root, ignore_errors=True)
     return {"snaps": snaps, "timings": timings, "requests": requests}

@@ -78,4 +78,13 @@ SCENARIOS = [
                   ("key", "S-Tab"), ("settle", 0.5), ("snap", "thinking-cycled"),
                   ("key", "C-p"), ("settle", 0.5), ("snap", "model-cycled")],
     },
+    {
+        # models.json provider headers reach the request (upstream prepareRequest).
+        "name": "provider-headers",
+        "args": MODEL,
+        "provider": {"headers": {"X-Team": "t1"}},
+        "turns": [{"text": "Headers seen."}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "hi"), ("key", "Enter"),
+                  ("wait", "Headers seen", "turn"), ("settle", 0.5), ("snap", "answered")],
+    },
 ]
