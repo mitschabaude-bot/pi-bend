@@ -331,6 +331,7 @@ type EncodeSet is Data:
   UserInfo{}
   Component{}
   Form{}
+  EcmaUri{}
 
 def control(+byte: U32) -> Bool: U32.is_lt(byte, 32) || U32.is_gt(byte, 126)
 def queryExtra(+byte: U32) -> Bool: U32.is_eq(byte, 32) || U32.is_eq(byte, 34) || U32.is_eq(byte, 35) || U32.is_eq(byte, 60) || U32.is_eq(byte, 62)
@@ -338,6 +339,10 @@ def pathExtra(+byte: U32) -> Bool: U32.is_eq(byte, 63) || U32.is_eq(byte, 94) ||
 def userExtra(+byte: U32) -> Bool: U32.is_eq(byte, 47) || U32.is_eq(byte, 58) || U32.is_eq(byte, 59) || U32.is_eq(byte, 61) || U32.is_eq(byte, 64) || (U32.is_ge(byte, 91) && U32.is_le(byte, 93)) || U32.is_eq(byte, 124)
 def componentExtra(+byte: U32) -> Bool: (U32.is_ge(byte, 36) && U32.is_le(byte, 38)) || U32.is_eq(byte, 43) || U32.is_eq(byte, 44)
 def formExtra(+byte: U32) -> Bool: U32.is_eq(byte, 33) || (U32.is_ge(byte, 39) && U32.is_le(byte, 41)) || U32.is_eq(byte, 126)
+
+# ECMAScript encodeURI keeps ASCII alphanumerics and ;,/?:@&=+$-_.!~*'()#.
+def uriUnescaped(+byte: U32) -> Bool:
+  (U32.is_ge(byte, 48) && U32.is_le(byte, 57)) || (U32.is_ge(byte, 65) && U32.is_le(byte, 90)) || (U32.is_ge(byte, 97) && U32.is_le(byte, 122)) || U32.is_eq(byte, 33) || U32.is_eq(byte, 35) || U32.is_eq(byte, 36) || (U32.is_ge(byte, 38) && U32.is_le(byte, 47)) || U32.is_eq(byte, 58) || U32.is_eq(byte, 59) || U32.is_eq(byte, 61) || U32.is_eq(byte, 63) || U32.is_eq(byte, 64) || U32.is_eq(byte, 95) || U32.is_eq(byte, 126)
 
 def includes(set: EncodeSet, +byte: U32) -> Bool:
   match set:
@@ -349,6 +354,7 @@ def includes(set: EncodeSet, +byte: U32) -> Bool:
     case UserInfo{}: control(byte) || queryExtra(byte) || pathExtra(byte) || userExtra(byte)
     case Component{}: control(byte) || queryExtra(byte) || pathExtra(byte) || userExtra(byte) || componentExtra(byte)
     case Form{}: control(byte) || queryExtra(byte) || pathExtra(byte) || userExtra(byte) || componentExtra(byte) || formExtra(byte)
+    case EcmaUri{}: Bool.not(uriUnescaped(byte))
 
 def percentHexDigit(+nibble: U32) -> Char:
   Chr{Bool.pick(U32, U32.is_lt(nibble, 10), (48 + nibble : U32), (55 + nibble : U32))}

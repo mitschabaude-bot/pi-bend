@@ -1777,9 +1777,14 @@
     },
     {
       "source": "packages/coding-agent/test/changelog.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "55db7ba3be898b7871448c98b4f737d444672031b41372ff6d2e437a6e25b40b"
+      "status": "ported",
+      "ports": [
+        "tests/changelog.bend",
+        "tests/changelog-all.bend",
+        "tests/changelog_check.py"
+      ],
+      "sha256": "55db7ba3be898b7871448c98b4f737d444672031b41372ff6d2e437a6e25b40b",
+      "notes": "Both named normalizeChangelogLinks cases ported verbatim; tests/changelog_check.py also compares parseChangelog + normalizeChangelogLinks on the real v0.87.1 CHANGELOG.md (278 entries) byte for byte with upstream."
     },
     {
       "source": "packages/coding-agent/test/chat-viewport.test.ts",
