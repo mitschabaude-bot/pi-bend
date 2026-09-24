@@ -257,7 +257,7 @@ def builtResult(+name: String,+result: Maybe<&2,ToolResult>,+expanded: Bool,+the
           _ => IO.pure(String,""),
           _ => do IO<String>:
             +source : String <- IO.pure(String,Bool.pick(String,String.eq(name,"bash"),String.trim(output),output))
-            +lines : List<&2,String> <- IO.pure(List<&2,String>,String.split(source,'\n'))
+            +lines : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,String.eq(name,"read"),nonemptyLines(String.split(source,'\n')),String.split(source,'\n')))
             +count : Nat <- IO.pure(Nat,List.length(&2,String,lines))
             +bash : Bool <- IO.pure(Bool,String.eq(name,"bash"))
             +display : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,expanded,lines,Bool.pick(List<&2,String>,bash,List.drop(&2,String,lines,count - 5n),List.take(&2,String,lines,10n))))
