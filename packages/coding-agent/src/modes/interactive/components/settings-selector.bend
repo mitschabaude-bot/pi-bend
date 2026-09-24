@@ -240,12 +240,11 @@ def accepted(+modal: Ref.Ref<Modal>,result: Word.ResultOf(ListUI.SettingsList)) 
     case Fail{_}: IO.pure(Unit,Unit{})
 def inputOpen(host: Host,list: ListUI.SettingsList,data: String) -> IO(Unit):
   match host:
-    case Host{modal,_,_,_,words,bindings,keyboard,redraw,_,_,_,_}:
+    case Host{modal,_,_,_,words,bindings,keyboard,_,_,_,_,_}:
       do IO<Unit>:
         source : Segmenter.Source <- Ref.read(Segmenter.Source,words)
         result : Word.ResultOf(ListUI.SettingsList) <- ListUI.handleInput(~Segmenter.Source,~Word.sourceSegments,~nonAtomic,source,list,bindings,keyboard,data)
         accepted(modal,result)
-        request(redraw)
 def receiveCurrent(current: Modal,host: Host,editor: Component.Component,data: String) -> IO(Unit):
   match current:
     case Closed{}: Component.handleInput(editor,data)
@@ -279,11 +278,10 @@ def mouseCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Componen
         mousePair(modal,pair)
 def mouseEvent(host: Host,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match host:
-    case Host{+modal,editor,_,_,_,_,_,redraw,_,_,_,_}:
+    case Host{+modal,editor,_,_,_,_,_,_,_,_,_,_}:
       do IO<Maybe<&2,Component.MouseResponse>>:
         current : Modal <- Ref.read(Modal,modal)
         result : Maybe<&2,Component.MouseResponse> <- mouseCurrent(current,modal,editor,event)
-        request(redraw)
         return result
 def invalidated(host: Host,_: Unit) -> IO(Unit):
   match host: case Host{_,editor,_,_,_,_,_,_,_,_,_,_}: Component.invalidate(editor)
