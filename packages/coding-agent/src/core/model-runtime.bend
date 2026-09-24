@@ -1,14 +1,10 @@
 import Base
 import ../../../ai/src/types.bend as Ai
 import ../../../ai/src/auth/types.bend as Auth
-import ../../../ai/src/auth/helpers.bend as Helpers
 import ../../../ai/src/auth/context.bend as Context
 import ../../../ai/src/auth/resolve.bend as Resolve
-import ../../../ai/src/providers/openai.models.bend as OpenAI
-import ../../../ai/src/providers/openai-codex.models.bend as Codex
-import ../../../ai/src/providers/anthropic.models.bend as Anthropic
-import ../../../ai/src/providers/google.models.bend as Google
-import ../../../ai/src/providers/cerebras.models.bend as Cerebras
+import ../../../ai/src/models.bend as AiModels
+import ../../../ai/src/providers/all.bend as Builtin
 import ../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../../runtime/src/string.bend as Strings
 import ../../../runtime/src/glob.bend as Glob
@@ -24,83 +20,49 @@ import ./provider-composer.bend as Composer
 # catalog refresh, models-store.json, radius OAuth providers and the
 # extension provider registry are not ported.
 
-type Provider is Data:
-  Provider{id: String, name: String, baseUrl: String, auth: Auth.ProviderAuth, models: List<&2, Ai.Model<Ai.JsonValue>>}
-
 def Model() -> Data: Ai.Model<Ai.JsonValue>
 
 # `retained` owns the built-in auth parts that composed providers wrap.
 type ModelRuntime is Data:
-  ModelRuntime{providers: List<&2, Provider>, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, compositionErrors: List<&2, String>, retained: List<&2, Composer.Retained>}
-
-def openaiProvider() -> IO(Provider):
-  do IO<Provider>:
-    apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("OpenAI API key", ["OPENAI_API_KEY"])
-    return Provider{"openai", "OpenAI", "https://api.openai.com/v1", Auth.ProviderAuth{Some{apiKey}, None{}}, OpenAI.OPENAI_MODELS()}
-
-def openaiCodexProvider(oauth: Auth.OAuthAuth) -> Provider:
-  Provider{"openai-codex", "OpenAI Codex", "https://chatgpt.com/backend-api", Auth.ProviderAuth{None{}, Some{oauth}}, Codex.OPENAI_CODEX_MODELS()}
-
-def anthropicProvider(oauth: Maybe<&2, Auth.OAuthAuth>) -> IO(Provider):
-  do IO<Provider>:
-    apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("Anthropic API key", ["ANTHROPIC_OAUTH_TOKEN", "ANTHROPIC_API_KEY"])
-    return Provider{"anthropic", "Anthropic", "https://api.anthropic.com", Auth.ProviderAuth{Some{apiKey}, oauth}, Anthropic.ANTHROPIC_MODELS()}
-
-def googleProvider() -> IO(Provider):
-  do IO<Provider>:
-    apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("Gemini API key", ["GEMINI_API_KEY"])
-    return Provider{"google", "Google", "https://generativelanguage.googleapis.com/v1beta", Auth.ProviderAuth{Some{apiKey}, None{}}, Google.GOOGLE_MODELS()}
-
-def cerebrasProvider() -> IO(Provider):
-  do IO<Provider>:
-    apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("Cerebras API key", ["CEREBRAS_API_KEY"])
-    return Provider{"cerebras", "Cerebras", "https://api.cerebras.ai/v1", Auth.ProviderAuth{Some{apiKey}, None{}}, Cerebras.CEREBRAS_MODELS()}
-
-def builtinProviders(codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuthAuth>) -> IO(List<&2, Provider>):
-  do IO<List<&2, Provider>>:
-    openai : Provider <- openaiProvider()
-    anthropic : Provider <- anthropicProvider(anthropicOAuth)
-    google : Provider <- googleProvider()
-    cerebras : Provider <- cerebrasProvider()
-    return [openai, openaiCodexProvider(codex), anthropic, google, cerebras]
+  ModelRuntime{providers: List<&2, AiModels.Provider>, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, compositionErrors: List<&2, String>, retained: List<&2, Composer.Retained>}
 
 # Composition (recomposeProvider/rebuildProviders)
 # -----------------------------------------------
 
-def providerId(provider: Provider) -> String:
+def providerId(provider: AiModels.Provider) -> String:
   match provider:
-    case Provider{id, _, _, _, _}: id
+    case AiModels.Provider{id, _, _, _, _}: id
 
-def providerModels(provider: Provider) -> List<&2, Model()>:
+def providerModels(provider: AiModels.Provider) -> List<&2, Model()>:
   match provider:
-    case Provider{_, _, _, _, models}: models
+    case AiModels.Provider{_, _, _, _, models}: models
 
-def findProvider(providers: List<&2, Provider>, +id: String) -> Maybe<&2, Provider>:
+def findProvider(providers: List<&2, AiModels.Provider>, +id: String) -> Maybe<&2, AiModels.Provider>:
   match providers:
     case Nil{}: None{}
-    case +provider <> rest: Bool.pick(Maybe<&2, Provider>, String.eq(providerId(provider), id), Some{provider}, findProvider(rest, id))
+    case +provider <> rest: Bool.pick(Maybe<&2, AiModels.Provider>, String.eq(providerId(provider), id), Some{provider}, findProvider(rest, id))
 
-def base(provider: Maybe<&2, Provider>) -> Maybe<&2, Composer.Base>:
+def base(provider: Maybe<&2, AiModels.Provider>) -> Maybe<&2, Composer.Base>:
   match provider:
     case None{}: None{}
-    case Some{Provider{_, name, url, auth, models}}: Some{Composer.Base{name, url, auth, models}}
+    case Some{AiModels.Provider{_, name, url, auth, models}}: Some{Composer.Base{name, url, auth, models}}
 
 type Composition is Data:
-  Composition{providers: List<&2, Provider>, errors: List<&2, String>, retained: List<&2, Composer.Retained>}
+  Composition{providers: List<&2, AiModels.Provider>, errors: List<&2, String>, retained: List<&2, Composer.Retained>}
 
-def added(provider: Maybe<&2, Provider>, composition: Composition) -> Composition:
+def added(provider: Maybe<&2, AiModels.Provider>, composition: Composition) -> Composition:
   match provider composition:
     case None{} composition: composition
     case Some{provider} Composition{providers, errors, retained}: Composition{provider <> providers, errors, retained}
 
 # A failed composition keeps the built-in provider untouched (or omits a
 # custom one) and records the error.
-def recomposed(+id: String, +builtin: Maybe<&2, Provider>, result: Result<&2, &2, String, Composer.Composed>, composition: Composition) -> Composition:
+def recomposed(+id: String, +builtin: Maybe<&2, AiModels.Provider>, result: Result<&2, &2, String, Composer.Composed>, composition: Composition) -> Composition:
   match result composition:
     case Fail{error} Composition{providers, errors, retained}: added(builtin, Composition{providers, ("Provider \"" ++ id ++ "\": " ++ error) <> errors, retained})
-    case Done{Composer.Composed{name, url, auth, models, owned}} Composition{providers, errors, retained}: Composition{Provider{id, name, url, auth, models} <> providers, errors, List.append(&2, Composer.Retained, owned, retained)}
+    case Done{Composer.Composed{name, url, auth, models, owned}} Composition{providers, errors, retained}: Composition{AiModels.Provider{id, name, url, auth, models} <> providers, errors, List.append(&2, Composer.Retained, owned, retained)}
 
-def recomposeProvider(+id: String, +builtin: Maybe<&2, Provider>, entry: Maybe<&2, Config.ModelsJsonProvider>, composition: Composition) -> IO(Composition):
+def recomposeProvider(+id: String, +builtin: Maybe<&2, AiModels.Provider>, entry: Maybe<&2, Config.ModelsJsonProvider>, composition: Composition) -> IO(Composition):
   match entry:
     # No overlay: the built-in provider is used untouched.
     case None{}: IO.pure(Composition, added(builtin, composition))
@@ -114,7 +76,7 @@ def containsId(ids: List<&2, String>, +id: String) -> Bool:
     case Nil{}: False{}
     case +first <> rest: String.eq(first, id) || containsId(rest, id)
 
-def builtinIds(providers: List<&2, Provider>) -> List<&2, String>:
+def builtinIds(providers: List<&2, AiModels.Provider>) -> List<&2, String>:
   match providers:
     case Nil{}: Nil{}
     case provider <> rest: providerId(provider) <> builtinIds(rest)
@@ -127,10 +89,10 @@ def newIds(ids: List<&2, String>, +known: List<&2, String>) -> List<&2, String>:
       Bool.pick(List<&2, String>, containsId(known, id), tail, id <> tail)
 
 # Built-in ids first, then models.json ids, each once.
-def composedIds(+builtins: List<&2, Provider>, +config: Config.ModelConfig) -> List<&2, String>:
+def composedIds(+builtins: List<&2, AiModels.Provider>, +config: Config.ModelConfig) -> List<&2, String>:
   List.append(&2, String, builtinIds(builtins), newIds(Config.getProviderIds(config), builtinIds(builtins)))
 
-def rebuildProviders(ids: List<&2, String>, +builtins: List<&2, Provider>, +config: Config.ModelConfig, composition: Composition) -> IO(Composition):
+def rebuildProviders(ids: List<&2, String>, +builtins: List<&2, AiModels.Provider>, +config: Config.ModelConfig, composition: Composition) -> IO(Composition):
   match ids:
     case Nil{}: IO.pure(Composition, composition)
     case +id <> rest:
@@ -140,10 +102,10 @@ def rebuildProviders(ids: List<&2, String>, +builtins: List<&2, Provider>, +conf
 
 def assembled(composition: Composition, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig) -> ModelRuntime:
   match composition:
-    case Composition{providers, errors, retained}: ModelRuntime{List.reverse(&2, Provider, providers), credentials, context, config, List.reverse(&2, String, errors), retained}
+    case Composition{providers, errors, retained}: ModelRuntime{List.reverse(&2, AiModels.Provider, providers), credentials, context, config, List.reverse(&2, String, errors), retained}
 
 # The credential store is borrowed; the built-in providers are owned from here on.
-def createWithProviders(credentials: Auth.CredentialStore, +builtins: List<&2, Provider>, modelsPath: Maybe<&2, String>) -> IO(ModelRuntime):
+def createWithProviders(credentials: Auth.CredentialStore, +builtins: List<&2, AiModels.Provider>, modelsPath: Maybe<&2, String>) -> IO(ModelRuntime):
   do IO<ModelRuntime>:
     +config : Config.ModelConfig <- Config.load(modelsPath)
     composition : Composition <- rebuildProviders(composedIds(builtins, config), builtins, config, Composition{Nil{}, Nil{}, Nil{}})
@@ -151,7 +113,7 @@ def createWithProviders(credentials: Auth.CredentialStore, +builtins: List<&2, P
     return assembled(composition, credentials, context, config)
 
 # Providers without models.json, as test fixtures build them.
-def fromProviders(providers: List<&2, Provider>, credentials: Auth.CredentialStore, context: Auth.AuthContext) -> ModelRuntime:
+def fromProviders(providers: List<&2, AiModels.Provider>, credentials: Auth.CredentialStore, context: Auth.AuthContext) -> ModelRuntime:
   ModelRuntime{providers, credentials, context, Config.empty(), Nil{}, Nil{}}
 
 def locatedPath(path: Result<&2, &2, FS.Error, String>) -> Maybe<&2, String>:
@@ -168,7 +130,7 @@ def defaultModelsPath() -> IO(Maybe<&2, String>):
 # The credential store is borrowed; the OAuth handlers are owned from here on.
 def createWithModelsPath(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuthAuth>, modelsPath: Maybe<&2, String>) -> IO(ModelRuntime):
   do IO<ModelRuntime>:
-    builtins : List<&2, Provider> <- builtinProviders(codex, anthropicOAuth)
+    builtins : List<&2, AiModels.Provider> <- Builtin.builtinProviders(codex, anthropicOAuth)
     createWithProviders(credentials, builtins, modelsPath)
 
 # Upstream's default models path: <agentDir>/models.json.
@@ -180,10 +142,10 @@ def createWithAnthropic(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth
 def create(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth) -> IO(ModelRuntime):
   createWithAnthropic(credentials, codex, None{})
 
-def disposeProviders(providers: List<&2, Provider>) -> IO(Unit):
+def disposeProviders(providers: List<&2, AiModels.Provider>) -> IO(Unit):
   match providers:
     case Nil{}: IO.pure(Unit, Unit{})
-    case Provider{_, _, _, auth, _} <> rest:
+    case AiModels.Provider{_, _, _, auth, _} <> rest:
       do IO<Unit>:
         Auth.disposeProviderAuth(auth)
         disposeProviders(rest)
@@ -214,14 +176,14 @@ def getModelConfig(runtime: ModelRuntime) -> Config.ModelConfig:
 # Catalog
 # -------
 
-def getProviders(runtime: ModelRuntime) -> List<&2, Provider>:
+def getProviders(runtime: ModelRuntime) -> List<&2, AiModels.Provider>:
   match runtime:
     case ModelRuntime{providers, _, _, _, _, _}: providers
 
-def getProvider(runtime: ModelRuntime, id: String) -> Maybe<&2, Provider>:
+def getProvider(runtime: ModelRuntime, id: String) -> Maybe<&2, AiModels.Provider>:
   findProvider(getProviders(runtime), id)
 
-def allModels(providers: List<&2, Provider>) -> List<&2, Model()>:
+def allModels(providers: List<&2, AiModels.Provider>) -> List<&2, Model()>:
   match providers:
     case Nil{}: Nil{}
     case provider <> rest: List.append(&2, Model(), providerModels(provider), allModels(rest))
@@ -254,14 +216,14 @@ def getModel(runtime: ModelRuntime, provider: String, id: String) -> Maybe<&2, M
 # Auth
 # ----
 
-def providerRef(provider: Provider) -> Resolve.ProviderRef:
+def providerRef(provider: AiModels.Provider) -> Resolve.ProviderRef:
   match provider:
-    case Provider{id, _, _, auth, _}: Resolve.ProviderRef{id, auth}
+    case AiModels.Provider{id, _, _, auth, _}: Resolve.ProviderRef{id, auth}
 
 def unknownProvider(id: String) -> Resolve.ModelsError:
   Resolve.ModelsError{Resolve.ProviderError{}, "Unknown provider: " ++ id}
 
-def resolveFor(credentials: Auth.CredentialStore, context: Auth.AuthContext, id: String, +provider: Maybe<&2, Provider>, overrides: Resolve.AuthResolutionOverrides) -> IO(Resolve.Resolution()):
+def resolveFor(credentials: Auth.CredentialStore, context: Auth.AuthContext, id: String, +provider: Maybe<&2, AiModels.Provider>, overrides: Resolve.AuthResolutionOverrides) -> IO(Resolve.Resolution()):
   match provider:
     case None{}: IO.pure(Resolve.Resolution(), Fail{unknownProvider(id)})
     case Some{provider}: Resolve.resolveProviderAuth(providerRef(provider), credentials, context, overrides)
@@ -344,9 +306,9 @@ def resolvesAuth(runtime: ModelRuntime, id: String) -> IO(Bool):
     resolution : Resolve.Resolution() <- getAuth(runtime, id, Resolve.noOverrides())
     return configured(resolution)
 
-def supportsOAuth(provider: Maybe<&2, Provider>) -> Bool:
+def supportsOAuth(provider: Maybe<&2, AiModels.Provider>) -> Bool:
   match provider:
-    case Some{Provider{_, _, _, Auth.ProviderAuth{_, Some{_}}, _}}: True{}
+    case Some{AiModels.Provider{_, _, _, Auth.ProviderAuth{_, Some{_}}, _}}: True{}
     case _: False{}
 
 def configuredKey(entry: Maybe<&2, Config.ModelsJsonProvider>) -> Maybe<&2, String>:
@@ -377,19 +339,19 @@ def hasConfiguredAuth(+runtime: ModelRuntime, +id: String) -> IO(Bool):
         stored : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(credentials, id, None{})
         checkedStored(runtime, id, stored)
 
-def availableProviders(+runtime: ModelRuntime, providers: List<&2, Provider>) -> IO(List<&2, Provider>):
+def availableProviders(+runtime: ModelRuntime, providers: List<&2, AiModels.Provider>) -> IO(List<&2, AiModels.Provider>):
   match providers:
-    case Nil{}: IO.pure(List<&2, Provider>, Nil{})
+    case Nil{}: IO.pure(List<&2, AiModels.Provider>, Nil{})
     case +provider <> rest:
-      do IO<List<&2, Provider>>:
+      do IO<List<&2, AiModels.Provider>>:
         ready : Bool <- hasConfiguredAuth(runtime, providerId(provider))
-        +others : List<&2, Provider> <- availableProviders(runtime, rest)
-        return Bool.pick(List<&2, Provider>, ready, provider <> others, others)
+        +others : List<&2, AiModels.Provider> <- availableProviders(runtime, rest)
+        return Bool.pick(List<&2, AiModels.Provider>, ready, provider <> others, others)
 
 # Models whose provider resolves auth now.
 def getAvailable(+runtime: ModelRuntime) -> IO(List<&2, Model()>):
   do IO<List<&2, Model()>>:
-    providers : List<&2, Provider> <- availableProviders(runtime, getProviders(runtime))
+    providers : List<&2, AiModels.Provider> <- availableProviders(runtime, getProviders(runtime))
     return allModels(providers)
 
 # Model resolution (model-resolver.ts)
@@ -398,8 +360,11 @@ def getAvailable(+runtime: ModelRuntime) -> IO(List<&2, Model()>):
 type DefaultModel is Data:
   DefaultModel{provider: String, id: String}
 
+# upstream defaultModelPerProvider, in its key order, which
+# findInitialModel follows. Entries for providers without a built-in port
+# still apply to models.json providers of that id.
 def defaultModelPerProvider() -> List<&2, DefaultModel>:
-  [DefaultModel{"openai", "gpt-5.5"}, DefaultModel{"openai-codex", "gpt-5.5"}, DefaultModel{"anthropic", "claude-sonnet-5"}, DefaultModel{"google", "gemini-3.1-pro-preview"}, DefaultModel{"cerebras", "gpt-oss-120b"}]
+  [DefaultModel{"amazon-bedrock", "us.anthropic.claude-opus-4-6-v1"}, DefaultModel{"ant-ling", "Ring-2.6-1T"}, DefaultModel{"anthropic", "claude-opus-4-8"}, DefaultModel{"openai", "gpt-5.5"}, DefaultModel{"azure-openai-responses", "gpt-5.4"}, DefaultModel{"openai-codex", "gpt-5.5"}, DefaultModel{"radius", "balanced"}, DefaultModel{"nvidia", "nvidia/nemotron-3-super-120b-a12b"}, DefaultModel{"deepseek", "deepseek-v4-pro"}, DefaultModel{"google", "gemini-3.1-pro-preview"}, DefaultModel{"google-vertex", "gemini-3.1-pro-preview"}, DefaultModel{"github-copilot", "gpt-5.4"}, DefaultModel{"openrouter", "moonshotai/kimi-k2.6"}, DefaultModel{"vercel-ai-gateway", "zai/glm-5.1"}, DefaultModel{"xai", "grok-4.7"}, DefaultModel{"groq", "openai/gpt-oss-120b"}, DefaultModel{"cerebras", "gpt-oss-120b"}, DefaultModel{"zai", "glm-5.3"}, DefaultModel{"zai-coding-cn", "glm-5.3"}, DefaultModel{"mistral", "devstral-medium-latest"}, DefaultModel{"minimax", "MiniMax-M2.7"}, DefaultModel{"minimax-cn", "MiniMax-M2.7"}, DefaultModel{"moonshotai", "kimi-k2.6"}, DefaultModel{"moonshotai-cn", "kimi-k2.6"}, DefaultModel{"huggingface", "moonshotai/Kimi-K2.6"}, DefaultModel{"fireworks", "accounts/fireworks/models/kimi-k2p6"}, DefaultModel{"together", "moonshotai/Kimi-K2.6"}, DefaultModel{"baseten", "zai-org/GLM-5.2"}, DefaultModel{"opencode", "kimi-k2.6"}, DefaultModel{"opencode-go", "kimi-k2.6"}, DefaultModel{"kimi-coding", "kimi-for-coding"}, DefaultModel{"meta", "muse-spark-1.3"}, DefaultModel{"cloudflare-workers-ai", "@cf/moonshotai/kimi-k2.6"}, DefaultModel{"cloudflare-ai-gateway", "workers-ai/@cf/moonshotai/kimi-k2.6"}, DefaultModel{"qwen-token-plan", "qwen3.7-max"}, DefaultModel{"qwen-token-plan-cn", "qwen3.7-max"}, DefaultModel{"qwen-token-plan-individual", "qwen3.8-max"}, DefaultModel{"xiaomi", "mimo-v2.5-pro"}, DefaultModel{"xiaomi-token-plan-cn", "mimo-v2.5-pro"}, DefaultModel{"xiaomi-token-plan-ams", "mimo-v2.5-pro"}, DefaultModel{"xiaomi-token-plan-sgp", "mimo-v2.5-pro"}]
 
 # A split text; tuples are affine types, so pairs of strings are data.
 type Split is Data:

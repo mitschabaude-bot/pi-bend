@@ -23,9 +23,23 @@ import argparse, json, os, pathlib, subprocess, tempfile
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PI_MONO = pathlib.Path(os.environ.get('PI_MONO', ROOT.parent / 'pi-mono'))
 AGENT = PI_MONO / 'packages/coding-agent'
-NATIVE_BUILTINS = ['openai', 'openai-codex', 'anthropic', 'google', 'cerebras']
+NATIVE_BUILTINS = [
+    'ant-ling', 'anthropic', 'baseten', 'cerebras', 'deepseek', 'fireworks', 'github-copilot', 'google',
+    'groq', 'huggingface', 'kimi-coding', 'meta', 'minimax', 'minimax-cn', 'moonshotai', 'moonshotai-cn',
+    'nvidia', 'openai', 'openai-codex', 'opencode', 'opencode-go', 'openrouter', 'qwen-token-plan',
+    'qwen-token-plan-cn', 'qwen-token-plan-individual', 'together', 'vercel-ai-gateway', 'xai', 'xiaomi',
+    'xiaomi-token-plan-ams', 'xiaomi-token-plan-cn', 'xiaomi-token-plan-sgp', 'zai', 'zai-coding-cn',
+]
 # Ambient keys that would otherwise leak into auth resolution.
-AMBIENT = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'GEMINI_API_KEY', 'CEREBRAS_API_KEY']
+AMBIENT = [
+    'ANT_LING_API_KEY', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_OAUTH_TOKEN', 'BASETEN_API_KEY',
+    'CEREBRAS_API_KEY', 'DEEPSEEK_API_KEY', 'FIREWORKS_API_KEY', 'COPILOT_GITHUB_TOKEN', 'GEMINI_API_KEY',
+    'GROQ_API_KEY', 'HF_TOKEN', 'KIMI_API_KEY', 'META_API_KEY', 'MINIMAX_API_KEY', 'MINIMAX_CN_API_KEY',
+    'MOONSHOT_API_KEY', 'NVIDIA_API_KEY', 'OPENAI_API_KEY', 'OPENCODE_API_KEY', 'OPENROUTER_API_KEY',
+    'QWEN_TOKEN_PLAN_API_KEY', 'QWEN_TOKEN_PLAN_CN_API_KEY', 'TOGETHER_API_KEY', 'AI_GATEWAY_API_KEY',
+    'XAI_API_KEY', 'XIAOMI_API_KEY', 'XIAOMI_TOKEN_PLAN_AMS_API_KEY', 'XIAOMI_TOKEN_PLAN_CN_API_KEY',
+    'XIAOMI_TOKEN_PLAN_SGP_API_KEY', 'ZAI_API_KEY', 'ZAI_CODING_CN_API_KEY',
+]
 
 def custom(**fields):
     return {'baseUrl': 'http://127.0.0.1:9/v1', **fields}

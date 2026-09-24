@@ -9,6 +9,7 @@ import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/callback.bend as C
 import ../packages/coding-agent/src/core/auth-storage.bend as AuthStorage
+import ../packages/ai/src/models.bend as AiModels
 import ../packages/coding-agent/src/core/model-runtime.bend as Models
 import ../packages/coding-agent/src/core/model-config.bend as Config
 
@@ -60,15 +61,15 @@ def authValue(resolution: Resolve.Resolution()) -> V.Value:
     case Done{None{}}: V.Null{}
     case Done{Some{Auth.AuthResult{Auth.ModelAuth{apiKey, headers, _}, _, source}}}: object([R.Property{"apiKey", optionalText(apiKey)}, R.Property{"headers", headersValue(headers)}, R.Property{"source", optionalText(source)}])
 
-def providerValue(+runtime: Models.ModelRuntime, provider: Models.Provider) -> IO(V.Value):
+def providerValue(+runtime: Models.ModelRuntime, provider: AiModels.Provider) -> IO(V.Value):
   match provider:
-    case Models.Provider{+id, name, baseUrl, _, models}:
+    case AiModels.Provider{+id, name, baseUrl, _, models}:
       do IO<V.Value>:
         available : Bool <- Models.hasConfiguredAuth(runtime, id)
         auth : Resolve.Resolution() <- Models.getAuth(runtime, id, Resolve.noOverrides())
         return object([R.Property{"id", text(id)}, R.Property{"name", text(name)}, R.Property{"baseUrl", text(baseUrl)}, R.Property{"models", V.ArrayValue{modelValues(models)}}, R.Property{"available", V.Boolean{available}}, R.Property{"auth", authValue(auth)}])
 
-def presentValue(+runtime: Models.ModelRuntime, found: Maybe<&2, Models.Provider>) -> IO(Maybe<&2, V.Value>):
+def presentValue(+runtime: Models.ModelRuntime, found: Maybe<&2, AiModels.Provider>) -> IO(Maybe<&2, V.Value>):
   match found:
     case None{}: IO.pure(Maybe<&2, V.Value>, None{})
     case Some{provider}:
@@ -90,7 +91,7 @@ def configuredValues(+runtime: Models.ModelRuntime, ids: List<&2, String>) -> IO
         others : List<&2, V.Value> <- configuredValues(runtime, rest)
         return prepend(value, others)
 
-def providerIds(providers: List<&2, Models.Provider>) -> List<&2, String>:
+def providerIds(providers: List<&2, AiModels.Provider>) -> List<&2, String>:
   match providers:
     case Nil{}: Nil{}
     case provider <> rest: Models.providerId(provider) <> providerIds(rest)
