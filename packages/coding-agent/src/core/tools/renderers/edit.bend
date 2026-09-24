@@ -46,6 +46,18 @@ def commonLength(a: String,b: String) -> Nat:
   match a b:
     case SCon{left,restLeft} SCon{right,restRight}: Bool.pick(Nat,Char.is_eq(left,right),1n + commonLength(restLeft,restRight),0n)
     case _ _: 0n
+def wordBoundary(+text: String,+index: Nat) -> Bool:
+  Nat.is_eq(index,0n) || Nat.is_eq(index,String.length(text)) || String.ends_with(String.take(text,index)," ") || String.starts_with(String.drop(text,index)," ") || String.ends_with(String.take(text,index),"\t") || String.starts_with(String.drop(text,index),"\t")
+def alignedPrefix(+before: String,+after: String,count: Nat) -> Nat:
+  match count:
+    case Zero{}: 0n
+    case Succ{+previous}:
+      Bool.pick(Nat,wordBoundary(before,Succ{previous}) && wordBoundary(after,Succ{previous}),Succ{previous},alignedPrefix(before,after,previous))
+def alignedSuffix(+before: String,+after: String,count: Nat) -> Nat:
+  match count:
+    case Zero{}: 0n
+    case Succ{+previous}:
+      Bool.pick(Nat,wordBoundary(before,String.length(before) - Succ{previous}) && wordBoundary(after,String.length(after) - Succ{previous}),Succ{previous},alignedSuffix(before,after,previous))
 def contentStart(line: String,count: Nat) -> Nat:
   match line:
     case SNil{}: count
@@ -60,8 +72,8 @@ def markedPair(+removed: String,+added: String) -> String & String:
   +addedStart = contentStart(added,0n)
   +before = String.drop(removed,removedStart)
   +after = String.drop(added,addedStart)
-  +prefix = commonLength(before,after)
-  +suffix = commonLength(String.reverse(String.drop(before,prefix)),String.reverse(String.drop(after,prefix)))
+  +prefix = alignedPrefix(before,after,commonLength(before,after))
+  +suffix = alignedSuffix(before,after,commonLength(String.reverse(String.drop(before,prefix)),String.reverse(String.drop(after,prefix))))
   (String.take(removed,removedStart) ++ highlight(before,prefix,suffix),String.take(added,addedStart) ++ highlight(after,prefix,suffix))
 def colorPair(pair: String & String,+theme: Theme.Theme) -> IO(String & String):
   match pair:

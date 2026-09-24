@@ -80,7 +80,10 @@ def result(output: String,expanded: Bool,theme: Theme.Theme,maxLines: Nat) -> IO
 def warning(theme: Theme.Theme,parts: List<&2,String>) -> IO(String):
   match parts:
     case Nil{}: IO.pure(String,"")
-    case values: Messages.foregroundText(theme,"warning","\n[Truncated: " ++ String.join(values,", ") ++ "]")
+    case values:
+      do IO<String>:
+        notice : String <- Messages.foregroundText(theme,"warning","[Truncated: " ++ String.join(values,", ") ++ "]")
+        return "\n" ++ notice
 def withWarning(output: String,expanded: Bool,+theme: Theme.Theme,maxLines: Nat,parts: List<&2,String>) -> IO(String):
   do IO<String>:
     display : String <- result(output,expanded,theme,maxLines)
