@@ -3,3 +3,4 @@ vendor/
 *.o
 __pycache__/
 .pi/
+.claude/
