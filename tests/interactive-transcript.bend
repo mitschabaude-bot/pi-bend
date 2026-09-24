@@ -2,6 +2,7 @@ import Base
 import ../packages/agent/src/types.bend as Agent
 import ../packages/ai/src/types.bend as Ai
 import ../packages/coding-agent/src/modes/interactive/transcript.bend as Transcript
+import ../packages/coding-agent/src/core/tools/index.bend as Tools
 import ../packages/coding-agent/src/modes/interactive/components/messages.bend as Messages
 import ../packages/coding-agent/src/modes/interactive/viewport.bend as View
 import ../packages/coding-agent/src/modes/interactive/theme/theme.bend as Theme
@@ -13,14 +14,14 @@ import ../packages/tui/src/component.bend as Component
 import ../packages/tui/src/components/markdown.bend as Markdown
 import ../packages/tui/src/utils.bend as Utils
 
-def AgentEventT() -> Data: Agent.AgentEvent<Value.Value,Value.Value,Unit,Agent.AgentToolResult<Value.Value>,Agent.AgentToolResult<Value.Value>>
+def AgentEventT() -> Data: Agent.AgentEvent<Value.Value,Tools.ToolDetails,Unit,Agent.AgentToolResult<Tools.ToolDetails>,Agent.AgentToolResult<Tools.ToolDetails>>
 def loaded(value: Result<&2,&2,Theme.LoadError,Theme.Theme>) -> IO(Theme.Theme):
   match value:
     case Done{theme}: IO.pure(Theme.Theme,theme)
     case Fail{_}: IO.die(Theme.Theme,1,"theme load failed")
 def user(text: String) -> AgentEventT():
   Agent.MessageStart{Agent.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text},F64{0,0}}}}}
-def historical(text: String) -> Agent.AgentMessage<Value.Value,Value.Value,Unit>:
+def historical(text: String) -> Agent.AgentMessage<Value.Value,Tools.ToolDetails,Unit>:
   Agent.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text},F64{0,0}}}}
 def assistant(text: String) -> Ai.AssistantMessage<Value.Value,Value.Value>:
   Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{text,None{}}} <> Nil{},"openai-responses","openai","gpt-4o-mini",None{},None{},None{},None{},Ai.Usage{F64{0,0},F64{0,0},F64{0,0},F64{0,0},None{},None{},F64{0,0},Ai.UsageCost{F64{0,0},F64{0,0},F64{0,0},F64{0,0},F64{0,0}}},Ai.Stop{},None{},None{},None{},None{},F64{0,0}}
@@ -28,12 +29,12 @@ def thinking(text: String) -> Ai.AssistantMessage<Value.Value,Value.Value>:
   Ai.AssistantMessage{Ai.AssistantThinking{Ai.ThinkingContent{text,None{},None{}}} <> Ai.AssistantText{Ai.TextContent{"visible answer",None{}}} <> Nil{},"openai-responses","openai","gpt-4o-mini",None{},None{},None{},None{},Ai.Usage{F64{0,0},F64{0,0},F64{0,0},F64{0,0},None{},None{},F64{0,0},Ai.UsageCost{F64{0,0},F64{0,0},F64{0,0},F64{0,0},F64{0,0}}},Ai.Stop{},None{},None{},None{},None{},F64{0,0}}
 def withTools(text: String) -> Ai.AssistantMessage<Value.Value,Value.Value>:
   Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{text,None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"call-1","sample_tool",Value.Null{},None{},None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"call-2","second_tool",Value.Null{},None{},None{}}} <> Nil{},"openai-responses","openai","gpt-4o-mini",None{},None{},None{},None{},Ai.Usage{F64{0,0},F64{0,0},F64{0,0},F64{0,0},None{},None{},F64{0,0},Ai.UsageCost{F64{0,0},F64{0,0},F64{0,0},F64{0,0},F64{0,0}}},Ai.Stop{},None{},None{},None{},None{},F64{0,0}}
-def resumedAssistant() -> Agent.AgentMessage<Value.Value,Value.Value,Unit>:
+def resumedAssistant() -> Agent.AgentMessage<Value.Value,Tools.ToolDetails,Unit>:
   Agent.LlmMessage{Ai.Assistant{Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{"resumed turn",None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"resume-1","first_saved",Value.Null{},None{},None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"resume-2","second_saved",Value.Null{},None{},None{}}} <> Nil{},"openai-responses","openai","gpt-4o-mini",None{},None{},None{},None{},Ai.Usage{F64{0,0},F64{0,0},F64{0,0},F64{0,0},None{},None{},F64{0,0},Ai.UsageCost{F64{0,0},F64{0,0},F64{0,0},F64{0,0},F64{0,0}}},Ai.Stop{},None{},None{},None{},None{},F64{0,0}}}}
-def savedResult(id: String,name: String,text: String,error: Bool) -> Agent.AgentMessage<Value.Value,Value.Value,Unit>:
+def savedResult(id: String,name: String,text: String,error: Bool) -> Agent.AgentMessage<Value.Value,Tools.ToolDetails,Unit>:
   Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{id,name,Ai.TextImageText{Ai.TextContent{text,None{}}} <> Nil{},None{},None{},error,F64{0,0}}}}
-def toolResult(text: String) -> Agent.AgentToolResult<Value.Value>:
-  Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{text,None{}}} <> Nil{},Some{Value.Null{}},None{},None{}}
+def toolResult(text: String) -> Agent.AgentToolResult<Tools.ToolDetails>:
+  Agent.AgentToolResult{Ai.TextImageText{Ai.TextContent{text,None{}}} <> Nil{},Some{Tools.RawDetails{Value.Null{}}},None{},None{}}
 def started(value: Ai.AssistantMessage<Value.Value,Value.Value>) -> AgentEventT():
   Agent.MessageStart{Agent.LlmMessage{Ai.Assistant{value}}}
 def updated(+value: Ai.AssistantMessage<Value.Value,Value.Value>) -> AgentEventT():
@@ -74,57 +75,57 @@ def runEvents(pair: Transcript.Owner & Transcript.Handle,view: View.View,+docume
   match pair:
     case (transcript,+handle):
       do IO<Unit>:
-        added : Bool <- Transcript.accept(Value.Value,Value.Value,Unit,handle,user("hello"))
+        added : Bool <- Transcript.accept(Value.Value,Unit,handle,user("hello"))
         check(added,"user event did not append")
         +partial : Ai.AssistantMessage<Value.Value,Value.Value> <- IO.pure(Ai.AssistantMessage<Value.Value,Value.Value>,assistant("partial"))
-        begun : Bool <- Transcript.accept(Value.Value,Value.Value,Unit,handle,started(partial))
+        begun : Bool <- Transcript.accept(Value.Value,Unit,handle,started(partial))
         check(begun,"assistant start did not append")
         +interim : List<&2,String> <- Component.render(document,20n)
         check(contains(clean(interim),"hello") && contains(clean(interim),"partial"),"streaming transcript omitted a message")
-        replaced : Bool <- Transcript.accept(Value.Value,Value.Value,Unit,handle,updated(assistant("answer")))
+        replaced : Bool <- Transcript.accept(Value.Value,Unit,handle,updated(assistant("answer")))
         check(replaced,"assistant update did not replace")
         +current : List<&2,String> <- Component.render(document,20n)
         check(contains(clean(current),"answer") && Bool.not(contains(clean(current),"partial")),"assistant update appended stale content")
-        completed : Bool <- Transcript.accept(Value.Value,Value.Value,Unit,handle,ended(assistant("final")))
+        completed : Bool <- Transcript.accept(Value.Value,Unit,handle,ended(assistant("final")))
         check(completed,"assistant end did not settle")
         +final : List<&2,String> <- Component.render(document,20n)
         check(contains(clean(final),"final") && Bool.not(contains(clean(final),"answer")),"assistant end retained stale content")
-        Transcript.seed(Value.Value,Value.Value,Unit,handle,historical("archived") <> Nil{})
+        Transcript.seed(Value.Value,Unit,handle,historical("archived") <> Nil{})
         seeded : List<&2,String> <- Component.render(document,20n)
         check(contains(clean(seeded),"archived"),"stored message was not restored")
-        toolBegin : Bool <- Transcript.accept(Value.Value,Value.Value,Unit,handle,started(assistant("invoke")))
+        toolBegin : Bool <- Transcript.accept(Value.Value,Unit,handle,started(assistant("invoke")))
         check(toolBegin,"assistant was not mounted")
-        callDiscovered : Bool <- Transcript.accept(Value.Value,Value.Value,Unit,handle,updated(withTools("invoke")))
+        callDiscovered : Bool <- Transcript.accept(Value.Value,Unit,handle,updated(withTools("invoke")))
         check(callDiscovered,"assistant tool call was not mounted")
         +pending : List<&2,String> <- Component.render(document,28n)
         check(contains(clean(pending),"invoke") && contains(clean(pending),"sample_tool") && contains(clean(pending),"second_tool") && orderedRows(pending,"invoke","sample_tool") && orderedRows(pending,"sample_tool","second_tool"),"pending tools missing or out of order")
         initialCount : Nat <- mountedCount(viewHandle)
         check(Nat.is_eq(initialCount,6n),"tool calls were not mounted exactly once")
-        callStart : Bool <- Transcript.accept(Value.Value,Value.Value,Unit,handle,Agent.ToolExecutionStart{"call-1","sample_tool",Value.Text{"start"}})
+        callStart : Bool <- Transcript.accept(Value.Value,Unit,handle,Agent.ToolExecutionStart{"call-1","sample_tool",Value.Text{"start"}})
         check(callStart,"tool start was not accepted")
-        partialResult : Bool <- Transcript.accept(Value.Value,Value.Value,Unit,handle,Agent.ToolExecutionUpdate{"call-1","sample_tool",Value.Text{"running"},toolResult("partial output")})
+        partialResult : Bool <- Transcript.accept(Value.Value,Unit,handle,Agent.ToolExecutionUpdate{"call-1","sample_tool",Value.Text{"running"},toolResult("partial output")})
         check(partialResult,"tool update was not accepted")
         +partialView : List<&2,String> <- Component.render(document,28n)
         check(contains(clean(partialView),"partial output") && contains(clean(partialView),"running"),"partial tool state was not rendered")
-        finalResult : Bool <- Transcript.accept(Value.Value,Value.Value,Unit,handle,Agent.ToolExecutionEnd{"call-1","sample_tool",toolResult("final output"),True{}})
+        finalResult : Bool <- Transcript.accept(Value.Value,Unit,handle,Agent.ToolExecutionEnd{"call-1","sample_tool",toolResult("final output"),True{}})
         check(finalResult,"tool end was not accepted")
         +finalView : List<&2,String> <- Component.render(document,28n)
         check(contains(clean(finalView),"final output") && Bool.not(contains(clean(finalView),"partial output")),"final tool result retained stale output")
-        secondResult : Bool <- Transcript.accept(Value.Value,Value.Value,Unit,handle,Agent.ToolExecutionEnd{"call-2","second_tool",toolResult("other output"),False{}})
+        secondResult : Bool <- Transcript.accept(Value.Value,Unit,handle,Agent.ToolExecutionEnd{"call-2","second_tool",toolResult("other output"),False{}})
         check(secondResult,"second tool end was not accepted")
         +secondView : List<&2,String> <- Component.render(document,28n)
         check(contains(clean(secondView),"final output") && contains(clean(secondView),"other output"),"tool results were not tracked by ID")
-        toolMessageEnd : Bool <- Transcript.accept(Value.Value,Value.Value,Unit,handle,ended(withTools("invoke complete")))
+        toolMessageEnd : Bool <- Transcript.accept(Value.Value,Unit,handle,ended(withTools("invoke complete")))
         check(toolMessageEnd,"assistant tool message did not settle")
         settledCount : Nat <- mountedCount(viewHandle)
         check(Nat.is_eq(settledCount,6n),"assistant end mounted a duplicate tool")
-        toolSeed : Bool <- Transcript.accept(Value.Value,Value.Value,Unit,handle,user("after tool"))
+        toolSeed : Bool <- Transcript.accept(Value.Value,Unit,handle,user("after tool"))
         check(toolSeed,"next user message did not append")
         +ordered : List<&2,String> <- Component.render(document,28n)
         check(contains(clean(ordered),"final output") && contains(clean(ordered),"after tool") && orderedRows(ordered,"final output","after tool"),"tool result lost or reordered across subsequent message")
         # pi f07218c4d interactive-mode.ts renderSessionItems matches stored
         # tool results by ID without adding result rows, even out of result order.
-        Transcript.seed(Value.Value,Value.Value,Unit,handle,resumedAssistant() <>
+        Transcript.seed(Value.Value,Unit,handle,resumedAssistant() <>
           savedResult("resume-2","second_saved","saved second",False{}) <>
           savedResult("resume-1","first_saved","saved first error",True{}) <>
           savedResult("unknown","missing","unmatched output",False{}) <>
@@ -148,13 +149,13 @@ def runEvents(pair: Transcript.Owner & Transcript.Handle,view: View.View,+docume
         isCollapsed : Bool <- Transcript.toggleExpanded(handle)
         +closed : List<&2,String> <- Component.render(document,80n)
         check(Bool.not(isCollapsed) && Bool.not(contains(clean(closed),"FIRST_HIDDEN")),"collapsing transcript left Bash output expanded")
-        thinkingStart : Bool <- Transcript.accept(Value.Value,Value.Value,Unit,handle,started(thinking("private reasoning")))
+        thinkingStart : Bool <- Transcript.accept(Value.Value,Unit,handle,started(thinking("private reasoning")))
         +thoughtVisible : List<&2,String> <- Component.render(document,80n)
         check(thinkingStart && contains(clean(thoughtVisible),"private reasoning"),"thinking block did not initially render")
         Transcript.setHideThinking(handle,True{})
         +thoughtHidden : List<&2,String> <- Component.render(document,80n)
         check(Bool.not(contains(clean(thoughtHidden),"private reasoning")) && contains(clean(thoughtHidden),"visible answer"),"toggle did not hide existing thinking without hiding answer")
-        newThinking : Bool <- Transcript.accept(Value.Value,Value.Value,Unit,handle,started(thinking("future reasoning")))
+        newThinking : Bool <- Transcript.accept(Value.Value,Unit,handle,started(thinking("future reasoning")))
         +futureHidden : List<&2,String> <- Component.render(document,80n)
         check(newThinking && Bool.not(contains(clean(futureHidden),"future reasoning")),"new assistant did not inherit thinking visibility")
         Transcript.setHideThinking(handle,False{})

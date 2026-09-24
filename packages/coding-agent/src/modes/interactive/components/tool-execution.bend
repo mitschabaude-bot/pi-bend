@@ -16,9 +16,12 @@ import ../../../../../ai/src/types.bend as Ai
 import ../../../../../ai/src/utils/json.bend as Json
 import ../../../../../ai/src/utils/schema-json.bend as SchemaJson
 import ../../../utils/shell.bend as Shell
+import ../../../core/tools/renderers/find.bend as FindRenderer
+import ../../../core/tools/renderers/grep.bend as GrepRenderer
+import ../../../core/tools/renderers/ls.bend as LsRenderer
 import ../../../../../agent/src/types.bend as Agent
 
-type ToolResult is Data: ToolResult{content: List<&2,Ai.TextImageContent>,isError: Bool}
+type ToolResult is Data: ToolResult{content: List<&2,Ai.TextImageContent>,isError: Bool,details: Maybe<&2,Value.Value>}
 type RenderContext is Data:
   RenderContext{toolName: String,toolCallId: String,args: Value.Value,result: Maybe<&2,ToolResult>,expanded: Bool,isPartial: Bool,executionStarted: Bool,argsComplete: Bool,width: Nat}
 def Renderer() -> Data: Callback.Callback<RenderContext,List<&2,String>>
@@ -77,12 +80,12 @@ def setArgsComplete(state: ToolExecution) -> ToolExecution:
   match state: case ToolExecution{name,id,args,result,expanded,images,partial,started,_,theme,shell}: ToolExecution{name,id,args,result,expanded,images,partial,started,True{},theme,shell}
 def updateResult(state: ToolExecution,result: ToolResult,isPartial: Bool) -> ToolExecution:
   match state: case ToolExecution{name,id,args,_,expanded,images,_,started,complete,theme,shell}: ToolExecution{name,id,args,Some{result},expanded,images,isPartial,started,complete,theme,shell}
-def updateFromAgent(-D: Data,state: ToolExecution,result: Agent.AgentToolResult<D>,isError: Bool,isPartial: Bool) -> ToolExecution:
-  match result: case Agent.AgentToolResult{content,_,_,_}: updateResult(state,ToolResult{content,isError},isPartial)
-def updateFromAiResult(-D: Data,state: ToolExecution,message: Ai.ToolResultMessage<D>) -> ToolExecution:
+def updateFromAgent(-D: Data,state: ToolExecution,result: Agent.AgentToolResult<D>,details: Maybe<&2,Value.Value>,isError: Bool,isPartial: Bool) -> ToolExecution:
+  match result: case Agent.AgentToolResult{content,_,_,_}: updateResult(state,ToolResult{content,isError,details},isPartial)
+def updateFromAiResult(-D: Data,state: ToolExecution,message: Ai.ToolResultMessage<D>,details: Maybe<&2,Value.Value>) -> ToolExecution:
   match message:
     case Ai.ToolResultMessage{_,_,content,_,_,isError,_}:
-      updateResult(markExecutionStarted(setArgsComplete(state)),ToolResult{content,isError},False{})
+      updateResult(markExecutionStarted(setArgsComplete(state)),ToolResult{content,isError,details},False{})
 def setExpanded(state: ToolExecution,expanded: Bool) -> ToolExecution:
   match state: case ToolExecution{name,id,args,result,_,images,partial,started,complete,theme,shell}: ToolExecution{name,id,args,result,expanded,images,partial,started,complete,theme,shell}
 def setShowImages(state: ToolExecution,images: Bool) -> ToolExecution:
@@ -98,7 +101,7 @@ def title(state: ToolExecution) -> IO(String):
 def backgroundKey(state: ToolExecution) -> String:
   match state:
     case ToolExecution{_,_,_,_,_,_,True{},_,_,_,_}: "toolPendingBg"
-    case ToolExecution{_,_,_,Some{ToolResult{_,True{}}},_,_,False{},_,_,_,_}: "toolErrorBg"
+    case ToolExecution{_,_,_,Some{ToolResult{_,True{},_}},_,_,False{},_,_,_,_}: "toolErrorBg"
     case _: "toolSuccessBg"
 def resultTexts(content: List<&2,Ai.TextImageContent>,reversed: List<&2,String>) -> List<&2,String>:
   match content:
@@ -110,7 +113,7 @@ def resultTexts(content: List<&2,Ai.TextImageContent>,reversed: List<&2,String>)
 def textOutput(result: Maybe<&2,ToolResult>) -> String:
   match result:
     case None{}: ""
-    case Some{ToolResult{content,_}}: String.join(resultTexts(content,Nil{}),"\n")
+    case Some{ToolResult{content,_,_}}: String.join(resultTexts(content,Nil{}),"\n")
 def argsJson(args: Value.Value) -> String:
   Maybe.default(&2,String,Json.stringifyPretty(SchemaJson.toJson(args)),"")
 def textResult(value: TuiText.Text & List<&2,String>) -> List<&2,String>:
@@ -242,66 +245,14 @@ def writeCall(+theme: Theme.Theme,+args: Value.Value,expanded: Bool) -> IO(Strin
   do IO<String>:
     header : String <- pathCall(theme,"write",args)
     writeContent(theme,header,expanded,argument(args,"content"))
-def listingPathValue(+theme: Theme.Theme,path: Maybe<&2,String>,name: String) -> IO(String):
-  match path:
-    case None{}: Messages.foregroundText(theme,"error","[invalid arg]")
-    case Some{""}: Messages.foregroundText(theme,Bool.pick(String,String.eq(name,"ls"),"accent","toolOutput"),".")
-    case Some{path}: Messages.foregroundText(theme,Bool.pick(String,String.eq(name,"ls"),"accent","toolOutput"),path)
-def listingPath(theme: Theme.Theme,args: Value.Value,name: String) -> IO(String): listingPathValue(theme,argument(args,"path"),name)
-def listingLimitValue(+theme: Theme.Theme,value: Maybe<&2,Nat>,bracketed: Bool) -> IO(String):
-  match value:
-    case None{}: IO.pure(String,"")
-    case Some{limit}:
-      +count = Nat.show(limit)
-      Messages.foregroundText(theme,"toolOutput",Bool.pick(String,bracketed," (limit " ++ count ++ ")"," limit " ++ count))
-def listingLimit(theme: Theme.Theme,args: Value.Value,bracketed: Bool) -> IO(String): listingLimitValue(theme,numberArgument(args,"limit"),bracketed)
-def listingPatternValue(+theme: Theme.Theme,pattern: Maybe<&2,String>,slash: Bool) -> IO(String):
-  match pattern:
-    case None{}: Messages.foregroundText(theme,"error","[invalid arg]")
-    case Some{+value}: Messages.foregroundText(theme,"accent",Bool.pick(String,slash,"/" ++ value ++ "/",value))
-def listingGlobValue(+theme: Theme.Theme,glob: Maybe<&2,String>) -> IO(String):
-  match glob:
-    case Some{+value}: Bool.pick(Unit -> IO(String),String.is_empty(value),_ => IO.pure(String,""),_ => Messages.foregroundText(theme,"toolOutput"," (" ++ value ++ ")"))(Unit{})
-    case None{}: IO.pure(String,"")
-def listingCallNamed(name: String,+args: Value.Value,+theme: Theme.Theme,title: String,path: String,limit: String) -> IO(String):
-  match name:
-    case "ls": IO.pure(String,title ++ " " ++ path ++ limit)
-    case "find":
-      do IO<String>:
-        pattern : String <- listingPatternValue(theme,argument(args,"pattern"),False{})
-        joiner : String <- Messages.foregroundText(theme,"toolOutput"," in ")
-        return title ++ " " ++ pattern ++ joiner ++ path ++ limit
-    case _:
-      do IO<String>:
-        pattern : String <- listingPatternValue(theme,argument(args,"pattern"),True{})
-        joiner : String <- Messages.foregroundText(theme,"toolOutput"," in ")
-        suffix : String <- listingGlobValue(theme,argument(args,"glob"))
-        return title ++ " " ++ pattern ++ joiner ++ path ++ suffix ++ limit
-def listingCall(+name: String,+args: Value.Value,+theme: Theme.Theme) -> IO(String):
-  do IO<String>:
-    title : String <- shownTitle(theme,name)
-    path : String <- listingPath(theme,args,name)
-    limit : String <- listingLimit(theme,args,String.eq(name,"find") || String.eq(name,"ls"))
-    listingCallNamed(name,args,theme,title,path,limit)
-def listingResultText(text: String,expanded: Bool,+theme: Theme.Theme,maxLines: Nat) -> IO(String):
-  match text:
-    case "": IO.pure(String,"")
-    case content:
-      do IO<String>:
-        +lines : List<&2,String> <- IO.pure(List<&2,String>,String.split(content,'\n'))
-        +display : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,expanded,lines,List.take(&2,String,lines,maxLines)))
-        +colored : List<&2,String> <- coloredLines(display,theme,Nil{})
-        +remaining : Nat <- IO.pure(Nat,List.length(&2,String,lines) - List.length(&2,String,display))
-        Bool.pick(Unit -> IO(String),Nat.is_eq(remaining,0n),_ => IO.pure(String,"\n\n" ++ String.join(colored,"\n")),
-          _ => do IO<String>:
-            hint : String <- expandHint(theme,"\n... (" ++ Nat.show(remaining) ++ " more lines,")
-            return "\n\n" ++ String.join(colored,"\n") ++ hint)(Unit{})
-def listingResult(+result: Maybe<&2,ToolResult>,+expanded: Bool,+theme: Theme.Theme,+maxLines: Nat) -> IO(String):
-  listingResultText(String.trim(textOutput(result)),expanded,theme,maxLines)
 def errorOutput(result: Maybe<&2,ToolResult>) -> Bool:
   match result:
-    case Some{ToolResult{_,True{}}}: True{}
+    case Some{ToolResult{_,True{},_}}: True{}
     case _: False{}
+def resultDetails(result: Maybe<&2,ToolResult>) -> Maybe<&2,Value.Value>:
+  match result:
+    case Some{ToolResult{_,_,details}}: details
+    case None{}: None{}
 def builtFileResult(+name: String,+result: Maybe<&2,ToolResult>,+expanded: Bool,+theme: Theme.Theme) -> IO(String):
   +output = textOutput(result)
   Bool.pick(Unit -> IO(String),String.is_empty(output),_ => IO.pure(String,""),
@@ -327,18 +278,18 @@ def builtFileResult(+name: String,+result: Maybe<&2,ToolResult>,+expanded: Bool,
               _ => IO.pure(String,plain))(Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
 def builtResult(+name: String,+result: Maybe<&2,ToolResult>,+expanded: Bool,+theme: Theme.Theme) -> IO(String):
   match name:
-    case "find": listingResult(result,expanded,theme,20n)
-    case "grep": listingResult(result,expanded,theme,15n)
-    case "ls": listingResult(result,expanded,theme,20n)
+    case "find": FindRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
+    case "grep": GrepRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
+    case "ls": LsRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
     case _: builtFileResult(name,result,expanded,theme)
 def builtCall(name: String,args: Value.Value,expanded: Bool,theme: Theme.Theme) -> IO(String):
   match name:
     case "read": readCall(theme,args)
     case "bash": bashCall(theme,args)
     case "write": writeCall(theme,args,expanded)
-    case "find": listingCall(name,args,theme)
-    case "grep": listingCall(name,args,theme)
-    case "ls": listingCall(name,args,theme)
+    case "find": FindRenderer.renderCall(args,theme)
+    case "grep": GrepRenderer.renderCall(args,theme)
+    case "ls": LsRenderer.renderCall(args,theme)
     case _: pathCall(theme,"edit",args)
 def durationTenths(result: Result<&2,&2,F.Error,Nat>) -> Nat:
   match result:

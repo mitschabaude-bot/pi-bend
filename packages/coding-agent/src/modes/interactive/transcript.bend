@@ -247,26 +247,32 @@ def blocksText(blocks: List<&2,Ai.TextImageContent>) -> String:
     case Nil{}: ""
     case Ai.TextImageText{Ai.TextContent{text,_}} <> rest: text ++ blocksText(rest)
     case _ <> rest: blocksText(rest)
-def historicalFound(-D: Data,state: State,message: Ai.ToolResultMessage<D>,found: Maybe<&2,Tool.Handle>) -> IO(State & Bool):
+def encodedDetails(details: Maybe<&2,Tools.ToolDetails>) -> Maybe<&2,Schema.Value>:
+  Maybe.map(&2,Tools.ToolDetails,Schema.Value,Tools.detailsValue,details)
+def agentDetails(result: Agent.AgentToolResult<Tools.ToolDetails>) -> Maybe<&2,Schema.Value>:
+  match result: case Agent.AgentToolResult{_,details,_,_}: encodedDetails(details)
+def historicalDetails(message: Ai.ToolResultMessage<Tools.ToolDetails>) -> Maybe<&2,Schema.Value>:
+  match message: case Ai.ToolResultMessage{_,_,_,details,_,_,_}: encodedDetails(details)
+def historicalFound(state: State,+message: Ai.ToolResultMessage<Tools.ToolDetails>,found: Maybe<&2,Tool.Handle>) -> IO(State & Bool):
   match found:
     case None{}: IO.pure(State & Bool,(state,False{}))
     case Some{+handle}:
       do IO<State & Bool>:
         current : Tool.ToolExecution <- Tool.current(handle)
-        Tool.set(handle,Tool.updateFromAiResult(D,current,message))
+        Tool.set(handle,Tool.updateFromAiResult(Tools.ToolDetails,current,message,historicalDetails(message)))
         return (state,True{})
-def historicalTool(-D: Data,state: State,+message: Ai.ToolResultMessage<D>) -> IO(State & Bool):
+def historicalTool(state: State,+message: Ai.ToolResultMessage<Tools.ToolDetails>) -> IO(State & Bool):
   match state message:
     case State{entries,+tools,active,next,view,theme,styles,expanded,hidden} Ai.ToolResultMessage{id,_,_,_,_,_,_}:
-      historicalFound(D,State{entries,tools,active,next,view,theme,styles,expanded,hidden},message,findTool(tools,id))
-def userMessage(-G: Data,-D: Data,-C: Data,state: State,message: Agent.AgentMessage<G,D,C>) -> IO(State & Bool):
+      historicalFound(State{entries,tools,active,next,view,theme,styles,expanded,hidden},message,findTool(tools,id))
+def userMessage(-G: Data,-C: Data,state: State,message: Agent.AgentMessage<G,Tools.ToolDetails,C>) -> IO(State & Bool):
   match message:
     case Agent.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text},_}}}: user(state,text)
     case Agent.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserBlocks{blocks},_}}}: user(state,blocksText(blocks))
     case Agent.LlmMessage{Ai.Assistant{assistant}}: assistantStart(G,state,assistant)
-    case Agent.LlmMessage{Ai.ToolResult{result}}: historicalTool(D,state,result)
+    case Agent.LlmMessage{Ai.ToolResult{result}}: historicalTool(state,result)
     case _: IO.pure(State & Bool,(state,False{}))
-def updateMessage(-G: Data,-D: Data,-C: Data,state: State,message: Agent.AgentMessage<G,D,C>,streaming: Bool) -> IO(State & Bool):
+def updateMessage(-G: Data,-C: Data,state: State,message: Agent.AgentMessage<G,Tools.ToolDetails,C>,streaming: Bool) -> IO(State & Bool):
   match message:
     case Agent.LlmMessage{Ai.Assistant{assistant}}: assistantUpdate(G,state,assistant,streaming)
     case _: IO.pure(State & Bool,(state,False{}))
@@ -289,56 +295,56 @@ def startedTool(state: State,+id: String,name: String,+args: Schema.Value) -> IO
   do IO<State & Bool>:
     pair : State & Bool <- ensureTool(state,id,name,args)
     begunPair(pair,id,args)
-def partialFound(-D: Data,state: State,result: Agent.AgentToolResult<D>,found: Maybe<&2,Tool.Handle>) -> IO(State & Bool):
+def partialFound(state: State,+result: Agent.AgentToolResult<Tools.ToolDetails>,found: Maybe<&2,Tool.Handle>) -> IO(State & Bool):
   match found:
     case None{}: IO.pure(State & Bool,(state,False{}))
     case Some{+handle}:
       do IO<State & Bool>:
         current : Tool.ToolExecution <- Tool.current(handle)
-        Tool.set(handle,Tool.updateFromAgent(D,current,result,False{},True{}))
+        Tool.set(handle,Tool.updateFromAgent(Tools.ToolDetails,current,result,agentDetails(result),False{},True{}))
         return (state,True{})
-def partialState(-D: Data,state: State,id: String,result: Agent.AgentToolResult<D>) -> IO(State & Bool):
+def partialState(state: State,id: String,result: Agent.AgentToolResult<Tools.ToolDetails>) -> IO(State & Bool):
   match state:
     case State{entries,+tools,active,next,view,theme,styles,expanded,hidden}:
-      partialFound(D,State{entries,tools,active,next,view,theme,styles,expanded,hidden},result,findTool(tools,id))
-def partialPair(-D: Data,pair: State & Bool,id: String,result: Agent.AgentToolResult<D>) -> IO(State & Bool):
-  match pair: case (next,_): partialState(D,next,id,result)
-def partialTool(-D: Data,state: State,+id: String,name: String,args: Schema.Value,result: Agent.AgentToolResult<D>) -> IO(State & Bool):
+      partialFound(State{entries,tools,active,next,view,theme,styles,expanded,hidden},result,findTool(tools,id))
+def partialPair(pair: State & Bool,id: String,result: Agent.AgentToolResult<Tools.ToolDetails>) -> IO(State & Bool):
+  match pair: case (next,_): partialState(next,id,result)
+def partialTool(state: State,+id: String,name: String,args: Schema.Value,result: Agent.AgentToolResult<Tools.ToolDetails>) -> IO(State & Bool):
   do IO<State & Bool>:
     pair : State & Bool <- startedTool(state,id,name,args)
-    partialPair(D,pair,id,result)
-def finishedFound(-D: Data,state: State,result: Agent.AgentToolResult<D>,error: Bool,found: Maybe<&2,Tool.Handle>) -> IO(State & Bool):
+    partialPair(pair,id,result)
+def finishedFound(state: State,+result: Agent.AgentToolResult<Tools.ToolDetails>,error: Bool,found: Maybe<&2,Tool.Handle>) -> IO(State & Bool):
   match found:
     case None{}: IO.pure(State & Bool,(state,False{}))
     case Some{+handle}:
       do IO<State & Bool>:
         current : Tool.ToolExecution <- Tool.current(handle)
-        Tool.set(handle,Tool.updateFromAgent(D,Tool.markExecutionStarted(current),result,error,False{}))
+        Tool.set(handle,Tool.updateFromAgent(Tools.ToolDetails,Tool.markExecutionStarted(current),result,agentDetails(result),error,False{}))
         return (state,True{})
-def finishedTool(-D: Data,state: State,id: String,result: Agent.AgentToolResult<D>,error: Bool) -> IO(State & Bool):
+def finishedTool(state: State,id: String,result: Agent.AgentToolResult<Tools.ToolDetails>,error: Bool) -> IO(State & Bool):
   match state:
     case State{entries,+tools,active,next,view,theme,styles,expanded,hidden}:
-      finishedFound(D,State{entries,tools,active,next,view,theme,styles,expanded,hidden},result,error,findTool(tools,id))
-def transition(-G: Data,-D: Data,-C: Data,state: State,event: Agent.AgentEvent<G,D,C,Agent.AgentToolResult<D>,Agent.AgentToolResult<D>>) -> IO(State & Bool):
+      finishedFound(State{entries,tools,active,next,view,theme,styles,expanded,hidden},result,error,findTool(tools,id))
+def transition(-G: Data,-C: Data,state: State,event: Agent.AgentEvent<G,Tools.ToolDetails,C,Agent.AgentToolResult<Tools.ToolDetails>,Agent.AgentToolResult<Tools.ToolDetails>>) -> IO(State & Bool):
   match event:
-    case Agent.MessageStart{message}: userMessage(G,D,C,state,message)
-    case Agent.MessageUpdate{message,_}: updateMessage(G,D,C,state,message,True{})
-    case Agent.MessageEnd{message}: updateMessage(G,D,C,state,message,False{})
+    case Agent.MessageStart{message}: userMessage(G,C,state,message)
+    case Agent.MessageUpdate{message,_}: updateMessage(G,C,state,message,True{})
+    case Agent.MessageEnd{message}: updateMessage(G,C,state,message,False{})
     case Agent.ToolExecutionStart{id,name,args}: startedTool(state,id,name,args)
-    case Agent.ToolExecutionUpdate{id,name,args,result}: partialTool(D,state,id,name,args,result)
-    case Agent.ToolExecutionEnd{id,_,result,error}: finishedTool(D,state,id,result,error)
+    case Agent.ToolExecutionUpdate{id,name,args,result}: partialTool(state,id,name,args,result)
+    case Agent.ToolExecutionEnd{id,_,result,error}: finishedTool(state,id,result,error)
     case _: IO.pure(State & Bool,(state,False{}))
-def accept(-G: Data,-D: Data,-C: Data,handle: Handle,event: Agent.AgentEvent<G,D,C,Agent.AgentToolResult<D>,Agent.AgentToolResult<D>>) -> IO(Bool):
+def accept(-G: Data,-C: Data,handle: Handle,event: Agent.AgentEvent<G,Tools.ToolDetails,C,Agent.AgentToolResult<Tools.ToolDetails>,Agent.AgentToolResult<Tools.ToolDetails>>) -> IO(Bool):
   match handle:
-    case Handle{resource}: Serial.run(State,Bool,resource,state => transition(G,D,C,state,event))
-def seed(-G: Data,-D: Data,-C: Data,+handle: Handle,messages: List<&2,Agent.AgentMessage<G,D,C>>) -> IO(Unit):
+    case Handle{resource}: Serial.run(State,Bool,resource,state => transition(G,C,state,event))
+def seed(-G: Data,-C: Data,+handle: Handle,messages: List<&2,Agent.AgentMessage<G,Tools.ToolDetails,C>>) -> IO(Unit):
   match messages:
     case Nil{}: IO.pure(Unit,Unit{})
     case +message <> rest:
       do IO<Unit>:
-        begun : Bool <- accept(G,D,C,handle,Agent.MessageStart{message})
-        ended : Bool <- accept(G,D,C,handle,Agent.MessageEnd{message})
-        seed(G,D,C,handle,rest)
+        begun : Bool <- accept(G,C,handle,Agent.MessageStart{message})
+        ended : Bool <- accept(G,C,handle,Agent.MessageEnd{message})
+        seed(G,C,handle,rest)
 def seedHistoricalBash(handle: Handle,value: CoreMessages.BashExecutionMessage) -> IO(Unit):
   match value:
     case CoreMessages.BashExecutionMessage{command,output,exitCode,cancelled,truncated,path,_,excluded}:
@@ -350,8 +356,8 @@ def seedSessionEntry(+handle: Handle,message: Agent.AgentMessage<Unit,Tools.Tool
     case Agent.CustomMessage{CoreMessages.BashExecution{value}}: seedHistoricalBash(handle,value)
     case Agent.LlmMessage{+value}:
       do IO<Unit>:
-        begun : Bool <- accept(Unit,Tools.ToolDetails,CoreMessages.CodingMessage<Schema.Value>,handle,Agent.MessageStart{Agent.LlmMessage{value}})
-        ended : Bool <- accept(Unit,Tools.ToolDetails,CoreMessages.CodingMessage<Schema.Value>,handle,Agent.MessageEnd{Agent.LlmMessage{value}})
+        begun : Bool <- accept(Unit,CoreMessages.CodingMessage<Schema.Value>,handle,Agent.MessageStart{Agent.LlmMessage{value}})
+        ended : Bool <- accept(Unit,CoreMessages.CodingMessage<Schema.Value>,handle,Agent.MessageEnd{Agent.LlmMessage{value}})
         return Unit{}
     case Agent.CustomMessage{_}: IO.pure(Unit,Unit{})
 def seedSession(+handle: Handle,messages: List<&2,Agent.AgentMessage<Unit,Tools.ToolDetails,CoreMessages.CodingMessage<Schema.Value>>>) -> IO(Unit):

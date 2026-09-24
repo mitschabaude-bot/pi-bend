@@ -53,7 +53,7 @@ def observed(events: Events,event: Session.SessionEvent()) -> IO(Unit):
   match events:
     case Events{transcript,redraw}:
       do IO<Unit>:
-        changed : Bool <- Transcript.accept(Unit,Runtime.Details(),Runtime.Custom(),transcript,event)
+        changed : Bool <- Transcript.accept(Unit,Runtime.Custom(),transcript,event)
         Bool.pick(Unit -> IO(Unit),changed,_ => requestRender(redraw),_ => IO.pure(Unit,Unit{}))(Unit{})
 def onSessionEvent(events: Events,event: Session.AgentSessionEvent) -> IO(Unit):
   match event:
