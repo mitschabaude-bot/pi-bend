@@ -777,6 +777,22 @@ def entryLines(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T
 def fileContent(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, +state: S.SessionManager<D, T, C>) -> String:
   SJ.entryLine(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, S.Header{S.getHeader(D, T, C, state)}) ++ String.join(entryLines(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, S.getEntries(D, T, C, state), Nil{}), "")
 
+def branchLines(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, entries: List<&2,S.SessionEntry<D,T,C>>, parent: Maybe<&2,String>, +reversed: List<&2,String>) -> List<&2,String>:
+  match entries:
+    case Nil{}: List.reverse(&2,String,reversed)
+    case entry <> rest:
+      +linked = S.reparent(D,T,C,entry,parent,Map.new(&2,Maybe<&2,String>))
+      +line = SJ.entryLine(~D,~T,~C,~diagnostic,~tool,~custom,S.Entry{linked})
+      branchLines(~D,~T,~C,~diagnostic,~tool,~custom,rest,Some{S.entryId(D,T,C,linked)},line <> reversed)
+def branchContentFrom(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, +state: S.SessionManager<D,T,C>, +timestamp: String, result: Result<&2,&2,S.Error,List<&2,S.SessionEntry<D,T,C>>>) -> Outcome(String):
+  match result:
+    case Fail{error}: Fail{State{error}}
+    case Done{entries}:
+      +header = {S.SessionHeader{Some{S.CURRENT_SESSION_VERSION()},S.getSessionId(D,T,C,state),timestamp,S.getCwd(D,T,C,state),None{}} : S.SessionHeader}
+      Done{SJ.entryLine(~D,~T,~C,~diagnostic,~tool,~custom,S.Header{header}) ++ String.join(branchLines(~D,~T,~C,~diagnostic,~tool,~custom,entries,None{},Nil{}),"")}
+def branchContent(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, +state: S.SessionManager<D,T,C>, timestamp: String) -> Outcome(String):
+  branchContentFrom(~D,~T,~C,~diagnostic,~tool,~custom,state,timestamp,S.getBranch(D,T,C,state,S.Latest{}))
+
 def writeOutcome(path: String, result: Result<&2, &2, FS.Error, Unit>) -> Outcome(Unit):
   fileError(Unit, path, result)
 

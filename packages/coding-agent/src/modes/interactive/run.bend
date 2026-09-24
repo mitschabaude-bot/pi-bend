@@ -28,6 +28,9 @@ import ../../../../tui/src/terminal.bend as Terminal
 import ../../../../tui/src/utils.bend as Utils
 import ../../core/agent-runtime.bend as Runtime
 import ../../core/agent-session.bend as Session
+import ../../core/session-persistence.bend as Persistence
+import ../../core/export-html/index.bend as Export
+import ../../core/prompt-templates.bend as Templates
 import ../../core/session-manager.bend as Tree
 import ../../core/tools/index.bend as Tools
 import ../../core/settings-manager.bend as Settings
@@ -160,16 +163,98 @@ def observeCopied(input: Observation,+event: Session.AgentSessionEvent) -> IO(Un
 def observed(input: Observation,event: Session.AgentSessionEvent) -> IO(Unit):
   observeCopied(input,event)
 type CommandObservation is Data:
-  CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>}
-def commandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
+  CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,builtinDir: String}
+def firstPath(args: List<&2,String>) -> Maybe<&2,String>:
+  match args:
+    case Nil{}: None{}
+    case path <> _: Some{path}
+def exportPath(requested: Maybe<&2,String>) -> Maybe<&2,String>:
+  match requested:
+    case None{}: None{}
+    case Some{text}: firstPath(Templates.parseCommandArgs(text))
+def jsonlWritten(path: String,result: Result<&2,&2,Filesystem.Error,Unit>) -> Result<&2,&2,String,String>:
+  match result:
+    case Done{_}: Done{path}
+    case Fail{error}: Fail{Filesystem.errorMessage(error)}
+def branchText(result: Persistence.Outcome(String)) -> Result<&2,&2,String,String>:
+  match result:
+    case Done{text}: Done{text}
+    case Fail{error}: Fail{Persistence.message(error)}
+def branchAt(stored: Session.Session(),time: Persistence.Outcome(String)) -> Result<&2,&2,String,String>:
+  match time:
+    case Fail{error}: Fail{Persistence.message(error)}
+    case Done{timestamp}: branchText(Persistence.branchContent(~Unit,~Tools.ToolDetails,~Schema.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,Session.stateOf(stored),timestamp))
+def writeBranchCreated(+target: String,+content: String,created: Result<&2,&2,Filesystem.Error,Unit>) -> IO(Result<&2,&2,String,String>):
+  match created:
+    case Fail{error}: IO.pure(Result<&2,&2,String,String>,Fail{Filesystem.errorMessage(error)})
+    case Done{_}:
+      do IO<Result<&2,&2,String,String>>:
+        result : Result<&2,&2,Filesystem.Error,Unit> <- Filesystem.writeFile(target,content)
+        return jsonlWritten(target,result)
+def writeBranch(+target: String,content: Result<&2,&2,String,String>) -> IO(Result<&2,&2,String,String>):
+  match content:
+    case Fail{message}: IO.pure(Result<&2,&2,String,String>,Fail{message})
+    case Done{text}:
+      do IO<Result<&2,&2,String,String>>:
+        created : Result<&2,&2,Filesystem.Error,Unit> <- Filesystem.mkdir(Path.join(target,".."))
+        writeBranchCreated(target,text,created)
+def exportJsonlResolved(session: Session.AgentSession,resolved: Maybe<&2,String>) -> IO(Result<&2,&2,String,String>):
+  match resolved:
+    case None{}: IO.pure(Result<&2,&2,String,String>,Fail{"Could not resolve export path"})
+    case Some{+target}:
+      do IO<Result<&2,&2,String,String>>:
+        stored : Session.Session() <- Session.sessionOf(session)
+        timestamp : Persistence.Outcome(String) <- Persistence.isoNow()
+        writeBranch(target,branchAt(stored,timestamp))
+def exportJsonl(session: Session.AgentSession,cwd: String,path: String) -> IO(Result<&2,&2,String,String>):
+  exportJsonlResolved(session,Path.resolve(cwd,path))
+def exportWithAssets(+session: Session.AgentSession,path: Maybe<&2,String>,assets: Result<&2,&2,String,Export.Assets>) -> IO(Result<&2,&2,String,String>):
+  match assets:
+    case Fail{message}: IO.pure(Result<&2,&2,String,String>,Fail{message})
+    case Done{loaded}:
+      do IO<Result<&2,&2,String,String>>:
+        stored : Session.Session() <- Session.sessionOf(session)
+        agentState : Session.AgentState() <- Session.state(session)
+        Export.write(loaded,stored,agentState,path)
+def exportHtml(session: Session.AgentSession,builtinDir: String,path: Maybe<&2,String>) -> IO(Result<&2,&2,String,String>):
+  do IO<Result<&2,&2,String,String>>:
+    assets : Result<&2,&2,String,Export.Assets> <- Export.loadAssets(Path.join(builtinDir,"../../../core/export-html"))
+    exportWithAssets(session,path,assets)
+def exportWithPath(session: Session.AgentSession,cwd: String,builtinDir: String,+path: String,jsonl: Bool) -> IO(Result<&2,&2,String,String>):
+  match jsonl:
+    case True{}: exportJsonl(session,cwd,path)
+    case False{}: exportHtml(session,builtinDir,Some{path})
+def exportChosen(session: Session.AgentSession,cwd: String,builtinDir: String,path: Maybe<&2,String>) -> IO(Result<&2,&2,String,String>):
+  match path:
+    case Some{+path}: exportWithPath(session,cwd,builtinDir,path,String.ends_with(path,".jsonl"))
+    case None{}: exportHtml(session,builtinDir,None{})
+def exportCurrent(session: Session.AgentSession,cwd: String,builtinDir: String,requested: Maybe<&2,String>) -> IO(Result<&2,&2,String,String>):
+  exportChosen(session,cwd,builtinDir,exportPath(requested))
+def exportNotice(result: Result<&2,&2,String,String>) -> Interactive.SubmissionFailure:
+  match result:
+    case Done{path}: Interactive.CommandNotice{"Session exported to: " ++ path}
+    case Fail{message}: Interactive.CommandFailure{"Failed to export session: " ++ message}
+def exportObserved(input: CommandObservation,requested: Maybe<&2,String>) -> IO(Unit):
   match input:
-    case CommandObservation{sink,session,footer}:
+    case CommandObservation{_,session,_,failure,redraw,cwd,builtinDir}:
+      do IO<Unit>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        result : Result<&2,&2,String,String> <- exportCurrent(live,cwd,builtinDir,requested)
+        Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{exportNotice(result)})
+        Interactive.requestRender(redraw)
+def ordinaryCommandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
+  match input:
+    case CommandObservation{sink,session,footer,_,_,_,_}:
       do IO<Unit>:
         changed : Bool <- Interactive.commandResult(sink,action)
         Bool.pick(Unit -> IO(Unit),changed,_ => do IO<Unit>:
           live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
           state : Session.AgentState() <- Session.state(live)
           Ref.modify(Footer.State,Unit,footer,current => (withChosen(current,state),Unit{})),_ => IO.pure(Unit,Unit{}))(Unit{})
+def commandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
+  match action:
+    case Commands.ExportSession{path}: exportObserved(input,path)
+    case other: ordinaryCommandObserved(input,other)
 type WorkerFailure is Data:
   WorkerFailure{failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 def promptFailed(input: WorkerFailure,value: Controller.PromptFailure) -> IO(Unit):
@@ -993,7 +1078,7 @@ def startController(pair: Controller.Controller & Controller.Handle,view: View.V
         submitted : Callback.Callback<String,Unit> <- Callback.create(~Interactive.SubmissionInput,~String,~Unit,~Interactive.submitted,Interactive.SubmissionInput{queue,stopped,footerFailure(foot)})
         paintPair : Callback.Callback<String,String> & Editor.EditorTheme <- editorTheme(contextTheme(context))
         startPaint(paintPair,controller,queue,submitted,view,transcript,styles,initial,foot,words,stopped,redraw,context)
-def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.View,viewHandle: View.Handle,styles: MarkdownTheme.Styles,+liveTheme: Ref.Ref<Theme.Theme>,+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,words: Words.Context,setting: Maybe<&2,String>,builtinDir: String,customDir: String,+models: List<&2,Models.Model()>,+mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
+def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.View,viewHandle: View.Handle,styles: MarkdownTheme.Styles,+liveTheme: Ref.Ref<Theme.Theme>,+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,words: Words.Context,setting: Maybe<&2,String>,+builtinDir: String,customDir: String,+models: List<&2,Models.Model()>,+mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (transcript,+transcriptHandle):
       do IO<Result<&2,&2,Error,Unit>>:
@@ -1013,7 +1098,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +loginState : LoginState <- IO.pure(LoginState,loginStateOf(mode,loginHost,loginAbort,modelsRef,footerFailure(foot),redraw,current))
         loginCallback : Callback.Callback<Commands.CredentialCommand,Unit> <- Callback.create(~LoginState,~Commands.CredentialCommand,~Unit,~credentialRun,loginState)
         +commandSink : Interactive.CommandSink <- IO.pure(Interactive.CommandSink,Interactive.CommandSink{footerFailure(foot),redraw,modelSelectorRef,current,modelsRef})
-        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot)})
+        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),footerFailure(foot),redraw,cwd,builtinDir})
         +editorHandle : Ref.Ref<Maybe<&2,Live.Handle>> <- Ref.new(Maybe<&2,Live.Handle>,None{})
         +lastClear : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         +lastEscape : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})

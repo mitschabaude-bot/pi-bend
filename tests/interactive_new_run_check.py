@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Mounted /new and /clear replace the live session and keep the editor usable."""
+import base64
 import errno
 import fcntl
 import hashlib
@@ -31,7 +32,7 @@ def scenario(threads):
         cwd = Path(place)
         process = subprocess.Popen(
             [str(BINARY), "--threads", str(threads), "--", str(ROOT), place, str(cwd / "agent")],
-            cwd=ROOT, stdin=slave, stdout=slave, stderr=subprocess.PIPE,
+            cwd=cwd, stdin=slave, stdout=slave, stderr=subprocess.PIPE,
             env={**os.environ, "TERM": "xterm-256color"},
         )
         output = bytearray()
@@ -54,6 +55,21 @@ def scenario(threads):
             before = len(output)
             os.write(master, b"before\r")
             until(b'"type":"turn_end"', before)
+            html = cwd / "conversation.html"
+            before = len(output)
+            os.write(master, b"/export conversation.html\r")
+            until(b"Session exported to: " + os.fsencode(html), before)
+            payload = re.search(r'<script id="session-data" type="application/json">([A-Za-z0-9+/=]+)</script>', html.read_text())
+            assert payload and "before" in base64.b64decode(payload.group(1)).decode()
+            before = len(output)
+            os.write(master, b"/export\r")
+            until(b"Session exported to: " + os.fsencode(cwd / "pi-session-"), before)
+            assert len(list(cwd.glob("pi-session-*.html"))) == 1
+            jsonl = cwd / "nested" / "conversation copy.jsonl"
+            before = len(output)
+            os.write(master, b'/export "nested/conversation copy.jsonl"\r')
+            until(b"Session exported to: " + os.fsencode(jsonl), before)
+            assert any("before" in line for line in jsonl.read_text().splitlines())
             for command in (b"/new", b"/clear"):
                 before = len(output)
                 os.write(master, command + b"\r")
@@ -72,6 +88,9 @@ def scenario(threads):
             files = list(cwd.glob("*.jsonl"))
             assert len(files) == 2 and {os.fsencode(file) for file in files} == {paths[0], paths[-1]}, (threads, files, paths)
             histories = {os.fsencode(file): [json.loads(line) for line in file.read_text().splitlines()] for file in files}
+            exported = [json.loads(line) for line in jsonl.read_text().splitlines()]
+            assert exported[0]["id"] == histories[paths[0]][0]["id"]
+            assert exported[1:] == histories[paths[0]][1:]
             assert any(entry.get("type") == "message" and "before" in json.dumps(entry) for entry in histories[paths[0]]), (threads, histories)
             assert any(entry.get("type") == "message" and "hello" in json.dumps(entry) for entry in histories[paths[-1]]), (threads, histories)
             assert all("hello" not in json.dumps(entry) for entry in histories[paths[0]]), (threads, histories)
@@ -81,7 +100,7 @@ def scenario(threads):
                 process.wait()
             os.close(master)
             os.close(slave)
-    print(f"native{threads}: /new, /clear, distinct old/new histories, prompt after replacement, terminal restore")
+    print(f"native{threads}: HTML/JSONL export, /new, /clear, isolated histories, terminal restore")
 
 
 for threads in (1, 4):
