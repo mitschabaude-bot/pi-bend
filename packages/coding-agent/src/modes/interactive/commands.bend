@@ -26,6 +26,7 @@ type Action is Data:
   OpenFork{}
   CopyLastAssistant{}
   OpenSettings{}
+  OpenTrust{}
   ShowChangelog{}
   ReloadResources{}
   RunBash{command: String,excluded: Bool}
@@ -51,6 +52,7 @@ type Command is Data:
   Fork{}
   Copy{}
   Settings{}
+  Trust{}
   Changelog{}
   Reload{}
   Bash{command: String,excluded: Bool}
@@ -70,7 +72,6 @@ def unported(parts: List<&2,String>) -> Bool:
     case "/bug" <> _: True{}
     case "/session" <> Nil{}: True{}
     case "/hotkeys" <> Nil{}: True{}
-    case "/trust" <> Nil{}: True{}
     case "/debug" <> Nil{}: True{}
     case _: False{}
 
@@ -95,6 +96,7 @@ def classify(+text: String,+parts: List<&2,String>) -> Command:
     case "/fork" <> Nil{}: Fork{}
     case "/copy" <> Nil{}: Copy{}
     case "/settings" <> Nil{}: Settings{}
+    case "/trust" <> Nil{}: Trust{}
     case "/changelog" <> Nil{}: Changelog{}
     case "/reload" <> Nil{}: Reload{}
     case _:
@@ -224,6 +226,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case Fork{}: IO.pure(Action,OpenFork{})
     case Copy{}: IO.pure(Action,CopyLastAssistant{})
     case Settings{}: IO.pure(Action,OpenSettings{})
+    case Trust{}: IO.pure(Action,OpenTrust{})
     case Changelog{}: IO.pure(Action,ShowChangelog{})
     case Reload{}: IO.pure(Action,ReloadResources{})
     case Bash{command,excluded}: IO.pure(Action,RunBash{command,excluded})

@@ -67,6 +67,16 @@ SCENARIOS = [
                   ("wait", READY, "declined"), ("settle", 0.2), ("snap", "declined")],
     },
     {
+        "name": "trust-command",
+        "args": MODEL,
+        "files": {"project/.pi/settings.json": "{}", "home/.pi/agent/trust.json": json.dumps({"<root>/project": False})},
+        "trust_file": True,
+        "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "/trust"), ("key", "Enter"),
+                  ("wait", "Saved decision: untrusted", "selector"), ("settle", 0.2), ("snap", "selector"),
+                  ("key", "Up"), ("key", "Up"), ("key", "Enter"),
+                  ("wait", "Saved trust decision: trusted", "saved"), ("settle", 0.2), ("snap", "saved")],
+    },
+    {
         "name": "bash-env",
         "args": MODEL,
         "steps": [("wait", READY, "startup"), ("settle", 0.5),
@@ -266,5 +276,10 @@ SCENARIOS = [
     {"name": "print-unknown-flag", "process": True, "args": MODEL + ["--frobnicate", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},
     {"name": "print-bad-mode", "process": True, "args": MODEL + ["--mode", "yaml", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},
     {"name": "print-api-key", "process": True, "args": MODEL + ["--api-key", "sk-other", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},
+    # A bare id listed by several providers: the sole authenticated one wins,
+    # otherwise the id is ambiguous (upstream resolveCliModel).
+    {"name": "print-bare-authed", "process": True, "args": ["--model", "gpt-5", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},
+    {"name": "print-bare-unauthed", "process": True, "args": ["--model", "gpt-5", "-p", "hi"], "env": {"OPENAI_API_KEY": ""}, "steps": []},
+    {"name": "print-bare-two-authed", "process": True, "args": ["--model", "gpt-5", "-p", "hi"], "env": {"OPENROUTER_API_KEY": "sk-x", "AZURE_OPENAI_API_KEY": "sk-y"}, "steps": []},
     {"name": "print-no-context", "process": True, "args": MODEL + ["-nc", "-ns", "-p", "hi"], "files": RESOURCES, "turns": [{"text": "ok"}], "steps": []},
 ]
