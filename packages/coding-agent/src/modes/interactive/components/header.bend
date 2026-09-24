@@ -149,9 +149,12 @@ def draw(input: Header,width: Nat) -> IO(List<&2,String>):
             +brand : String <- logo(current)
             body : String <- Bool.pick(Unit -> IO(String),isExpanded,_ => expanded(current,brand),_ => compact(current,brand))(Unit{})
             headerLines : List<&2,String> <- cached(heading,body,size)
-            details : String <- resourceText(current,contexts,skills,cwd,home,isExpanded)
+            +details : String <- resourceText(current,contexts,skills,cwd,home,isExpanded)
             resourceLines : List<&2,String> <- cached(resources,details,size)
-            return "" <> List.append(&2,String,headerLines,"" <> List.append(&2,String,resourceLines,"" <> Nil{}))
+            +present : Bool <- IO.pure(Bool,Bool.not(Strings.equal(details,"")))
+            +before : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,present,"" <> Nil{},Nil{}))
+            +after : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,present,"" <> "" <> Nil{},"" <> Nil{}))
+            return "" <> List.append(&2,String,headerLines,List.append(&2,String,before,List.append(&2,String,resourceLines,after)))
 def ignore(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
 def create(theme: Ref.Ref<Theme.Theme>,quiet: Bool,cwd: String,home: Maybe<&2,String>,contexts: List<&2,Prompt.ContextFile>,skills: List<&2,Skills.Skill>) -> IO(Owner):
   do IO<Owner>:

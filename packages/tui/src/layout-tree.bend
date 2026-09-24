@@ -264,9 +264,16 @@ def treeFrame(result: Result,+width: Nat,+height: Nat) -> TreeFrame:
       TreeFrame{node,L.LayoutFrame{box,width,height,L.paint(L.blank(height,Nil{}),lines,0n,0n,width,height,width)}}
     case _: TreeFrame{N.Empty{},L.LayoutFrame{L.LayoutBox{None{},L.rect(0n,0n,width,height),L.rect(0n,0n,width,height),Nil{},None{},0n,0n},width,height,L.blank(height,Nil{})}}
 def viewport(width: Nat,height: Nat) -> S.LayoutViewport: S.LayoutViewport{width,height}
-def inlineFrame(value: TreeFrame) -> TreeFrame:
+def wrappedFrame(value: TreeFrame) -> TreeFrame:
   match value:
     case TreeFrame{node,frame}: TreeFrame{N.Inline{node},frame}
+def inlineFrame(result: Result,width: Nat,height: Nat) -> TreeFrame:
+  match result:
+    # A placed stack already contains its complete screen; repainting it
+    # over another blank screen repeats every column's ANSI composition.
+    case Single{Item{N.VStack{entries,gap},box,lines,_,_,_},_}:
+      TreeFrame{N.Inline{N.VStack{entries,gap}},L.LayoutFrame{box,width,height,lines}}
+    case result: wrappedFrame(treeFrame(result,width,height))
 def renderInline(+node: N.LayoutNode,width: Nat,height: Nat) -> IO(TreeFrame):
   +safeWidth = Nat.max(1n,width)
   +safeHeight = Nat.max(1n,height)
@@ -275,7 +282,7 @@ def renderInline(+node: N.LayoutNode,width: Nat,height: Nat) -> IO(TreeFrame):
     +measured : Result <- run(node,Measure{safeWidth,viewport},Nil{})
     +contentHeight : Nat <- IO.pure(Nat,Nat.min(safeHeight,Nat.max(1n,maybeHeight(resultItem(measured)))))
     result : Result <- run(node,Place{0n,0n,safeWidth,contentHeight,L.rect(0n,0n,safeWidth,contentHeight),viewport},resultCache(measured))
-    return inlineFrame(treeFrame(result,safeWidth,contentHeight))
+    return inlineFrame(result,safeWidth,contentHeight)
 def renderTreeFrame(node: N.LayoutNode,width: Nat,height: Nat) -> IO(TreeFrame):
   match node:
     case N.Inline{child}: renderInline(child,width,height)

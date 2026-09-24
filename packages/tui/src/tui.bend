@@ -142,9 +142,17 @@ def composed(base: Layout.Segments,overlay: Layout.WidthResult,+startCol: Nat,+o
 
 # Wide graphemes intersecting an overlay boundary are replaced by padding;
 # independent SGR/OSC resets keep styles and hyperlinks within each segment.
-def compositeTuiLine(+baseLine: String,overlayLine: String,+startCol: Nat,+overlayWidth: Nat,+totalWidth: Nat) -> String:
+def fullLineResult(sliced: Layout.WidthResult,+width: Nat) -> String:
+  match sliced:
+    case Layout.WidthResult{text,used}:
+      segmentReset() ++ text ++ Layout.spaces(width - used,"") ++ segmentReset()
+def fullLine(overlayLine: String,+width: Nat) -> String:
+  fullLineResult(Layout.sliceWithWidth(overlayLine,0n,width,True{}),width)
+def compositeTuiLine(+baseLine: String,+overlayLine: String,+startCol: Nat,+overlayWidth: Nat,+totalWidth: Nat) -> String:
   Bool.pick(Unit -> String,Image.isImageLine(baseLine),_ => baseLine,
-    _ => composed(Layout.extractSegments(baseLine,startCol,startCol + overlayWidth,totalWidth - startCol - overlayWidth,True{}),Layout.sliceWithWidth(overlayLine,0n,overlayWidth,True{}),startCol,overlayWidth,totalWidth))(Unit{})
+    _ => Bool.pick(Unit -> String,String.is_empty(baseLine) && Nat.is_eq(startCol,0n) && Nat.is_eq(overlayWidth,totalWidth),
+      _ => fullLine(overlayLine,totalWidth),
+      _ => composed(Layout.extractSegments(baseLine,startCol,startCol + overlayWidth,totalWidth - startCol - overlayWidth,True{}),Layout.sliceWithWidth(overlayLine,0n,overlayWidth,True{}),startCol,overlayWidth,totalWidth))(Unit{}))(Unit{})
 
 # Final frame preparation keeps image payloads untouched and extracts only the
 # lowest visible cursor marker, retaining markers outside the displayed viewport.
