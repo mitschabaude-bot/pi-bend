@@ -2166,6 +2166,15 @@ def setFollowUpMode(session: AgentSession, +mode: T.QueueMode) -> IO(Result<&2, 
         updated : Result<&2, &2, String, Settings.SettingsManager> <- persistedSetting(Settings.setFollowUpMode(mode, current))
         settingApplied(settings, updated)
 
+def setTransport(session: AgentSession, +transport: Ai.Transport) -> IO(Result<&2, &2, String, Unit>):
+  match session:
+    case AgentSession{agent, _, _, +settings, _, _, _, _}:
+      do IO<Result<&2, &2, String, Unit>>:
+        Agent.setTransport(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, transport)
+        +current : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
+        updated : Result<&2, &2, String, Settings.SettingsManager> <- persistedSetting(Settings.setTransport(transport, current))
+        settingApplied(settings, updated)
+
 # Models and thinking levels
 # --------------------------
 
