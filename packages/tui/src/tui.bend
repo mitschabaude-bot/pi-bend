@@ -159,14 +159,18 @@ def compositeTuiLine(+baseLine: String,+overlayLine: String,+startCol: Nat,+over
 type CursorPosition is Data: CursorPosition{row: Nat,col: Nat}
 type CursorFrame is Data: CursorFrame{lines: List<&2,String>,cursor: Maybe<&2,CursorPosition>}
 type Marker is Data: Marker{before: String,after: String}
-def marker(text: String,+reversed: String) -> Maybe<&2,Marker>:
+# The marker starts with ESC, so only an ESC position is compared; `found`
+# says whether the marker starts at `text`.
+def markerAt(+text: String) -> Bool:
   match text:
-    case SNil{}: None{}
-    case SCon{+char,+rest}:
-      +text = {SCon{char,rest}: String}
-      Bool.pick(Unit -> Maybe<&2,Marker>,String.starts_with(text,CURSOR_MARKER()),
-        _ => Some{Marker{String.reverse(reversed),String.drop(text,7n)}},
-        _ => marker(rest,SCon{char,reversed}))(Unit{})
+    case SCon{Chr{27},_}: String.starts_with(text,CURSOR_MARKER())
+    case _: False{}
+def markerScan(text: String,found: Bool,+reversed: String) -> Maybe<&2,Marker>:
+  match text found:
+    case text True{}: Some{Marker{String.reverse(reversed),String.drop(text,7n)}}
+    case SNil{} False{}: None{}
+    case SCon{char,+rest} False{}: markerScan(rest,markerAt(rest),SCon{char,reversed})
+def marker(+text: String,reversed: String) -> Maybe<&2,Marker>: markerScan(text,markerAt(text),reversed)
 type CursorSearch is Data:
   Searching{reversed: List<&2,String>,suffix: List<&2,String>,height: Nat,row: Nat}
   CursorFound{frame: CursorFrame}

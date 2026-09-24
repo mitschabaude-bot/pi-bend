@@ -363,10 +363,37 @@ def widthText(items: List<&2,Token>,reversed: String) -> String:
     case Nil{}: reverseInto(reversed,"")
     case Token{text,False{}} <> rest: widthText(rest,expandedTabs(text,reversed))
     case _ <> rest: widthText(rest,reversed)
-def visibleMeasured(value: Maybe<&2,Nat>,text: String) -> Nat:
+# Styled text of plain characters: controls are skipped in place and cells
+# summed, without building the stripped string. `cells` is one more than the
+# previous step's width; 0 means a character or sequence needing the general
+# path (a non-control escape, a tab, a non-plain character).
+type Visible is Data: Visible{rest: String,cells: Nat}
+def controlStep(value: Scan) -> Visible:
+  match value:
+    case Scan{Token{_,True{}},rest,_}: Visible{rest,1n}
+    case Scan{_,rest,_}: Visible{rest,0n}
+def visibleStep(text: String) -> Visible:
+  match text:
+    case SNil{}: Visible{"",1n}
+    case SCon{Chr{27},rest}: controlStep(scan(SCon{Chr{27},rest}))
+    case SCon{char,rest}:
+      +point = Char.to_u32(char)
+      +cells = cellsOf(range(point,32,126),point)
+      Visible{rest,Bool.pick(Nat,Nat.is_eq(cells,0n),0n,cells + 1n)}
+@unsafe
+def visibleScan(step: Visible,width: Nat) -> Maybe<&2,Nat>:
+  match step:
+    case Visible{_,Zero{}}: None{}
+    case Visible{SNil{},Succ{cells}}: Some{width + cells}
+    case Visible{rest,Succ{cells}}: visibleScan(visibleStep(rest),width + cells)
+def visibleGeneral(value: Maybe<&2,Nat>,text: String) -> Nat:
   match value:
     case Some{width}: width
     case None{}: visibleClean(widthText(tokens(text),""))
+def visibleMeasured(value: Maybe<&2,Nat>,+text: String) -> Nat:
+  match value:
+    case Some{width}: width
+    case None{}: visibleGeneral(visibleScan(visibleStep(text),0n),text)
 def visibleWidth(+text: String) -> Nat: visibleMeasured(asciiWidth(text,0n),text)
 
 # Layout retains controls as zero-cell tokens and segments each visible run.
@@ -413,22 +440,22 @@ def spaces(count: Nat,result: String) -> String:
     case Succ{rest}: spaces(rest,SCon{' ',result})
 def padResult(text: String,width: Nat,maxWidth: Nat,pad: Bool) -> String:
   text ++ Bool.pick(String,pad,spaces(maxWidth - width,""),"")
+# `stop` says the previous cell reached the end column. Deciding it at the
+# next call keeps the recursion free of closures; the one cursor step taken
+# past the end is discarded.
 @unsafe
-def sliceCells(items: CellStep,+start: Nat,+end: Nat,+strict: Bool,+column: Nat,+reversed: String,+pending: String,width: Nat) -> WidthResult:
-  match items:
-    case CellEnd{}: WidthResult{reverseInto(reversed,""),width}
-    case CellNext{Token{+text,True{}},rest}:
-      sliceCells(nextCell(rest),start,end,strict,column,Bool.pick(String,Nat.is_ge(column,start) && Nat.is_lt(column,end),prependReversed(text,reversed),reversed),Bool.pick(String,Nat.is_lt(column,start),prependReversed(text,pending),pending),width)
-    case CellNext{Token{+text,False{}},rest}:
+def sliceCells(stop: Bool,items: CellStep,+start: Nat,+end: Nat,+strict: Bool,+column: Nat,+reversed: String,+pending: String,width: Nat) -> WidthResult:
+  match stop items:
+    case True{} _: WidthResult{reverseInto(reversed,""),width}
+    case False{} CellEnd{}: WidthResult{reverseInto(reversed,""),width}
+    case False{} CellNext{Token{+text,True{}},rest}:
+      sliceCells(False{},nextCell(rest),start,end,strict,column,Bool.pick(String,Nat.is_ge(column,start) && Nat.is_lt(column,end),prependReversed(text,reversed),reversed),Bool.pick(String,Nat.is_lt(column,start),prependReversed(text,pending),pending),width)
+    case False{} CellNext{Token{+text,False{}},rest}:
       +size = graphemeWidth(text)
       +keep = Nat.is_ge(column,start) && Nat.is_lt(column,end) && (Bool.not(strict) || Nat.is_le(column + size,end))
-      +next = Bool.pick(String,keep,prependReversed(text,(pending ++ reversed)),reversed)
-      +nextWidth = width + Bool.pick(Nat,keep,size,0n)
-      Bool.pick(Unit -> WidthResult,Nat.is_ge(column + size,end),
-        _ => WidthResult{reverseInto(next,""),nextWidth},
-        _ => sliceCells(nextCell(rest),start,end,strict,column + size,next,Bool.pick(String,keep,"",pending),nextWidth))(Unit{})
+      sliceCells(Nat.is_ge(column + size,end),nextCell(rest),start,end,strict,column + size,Bool.pick(String,keep,prependReversed(text,(pending ++ reversed)),reversed),Bool.pick(String,keep,"",pending),width + Bool.pick(Nat,keep,size,0n))
 def sliceWithWidth(line: String,+startCol: Nat,+length: Nat,strict: Bool) -> WidthResult:
-  Bool.pick(Unit -> WidthResult,Nat.is_eq(length,0n),_ => WidthResult{"",0n},_ => sliceCells(nextCell(CellCursor{"",line}),startCol,startCol + length,strict,0n,"","",0n))(Unit{})
+  Bool.pick(Unit -> WidthResult,Nat.is_eq(length,0n),_ => WidthResult{"",0n},_ => sliceCells(False{},nextCell(CellCursor{"",line}),startCol,startCol + length,strict,0n,"","",0n))(Unit{})
 def resultText(value: WidthResult) -> String:
   match value:
     case WidthResult{text,_}: text
