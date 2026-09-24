@@ -25,6 +25,7 @@ type Action is Data:
   OpenTree{}
   OpenFork{}
   CopyLastAssistant{}
+  OpenSettings{}
   ShowChangelog{}
   RunBash{command: String,excluded: Bool}
 type CredentialCommand is Data:
@@ -48,6 +49,7 @@ type Command is Data:
   Tree{}
   Fork{}
   Copy{}
+  Settings{}
   Changelog{}
   Bash{command: String,excluded: Bool}
   Unsupported{text: String}
@@ -62,7 +64,6 @@ def bashCommand(+text: String,prefix: Nat,excluded: Bool) -> Command:
 # instead of reaching the model.
 def unported(parts: List<&2,String>) -> Bool:
   match parts:
-    case "/settings" <> Nil{}: True{}
     case "/share" <> Nil{}: True{}
     case "/bug" <> _: True{}
     case "/session" <> Nil{}: True{}
@@ -92,6 +93,7 @@ def classify(+text: String,+parts: List<&2,String>) -> Command:
     case "/tree" <> Nil{}: Tree{}
     case "/fork" <> Nil{}: Fork{}
     case "/copy" <> Nil{}: Copy{}
+    case "/settings" <> Nil{}: Settings{}
     case "/changelog" <> Nil{}: Changelog{}
     case _:
       Bool.pick(Command,String.starts_with(text,"!!"),bashCommand(text,2n,True{}),
@@ -219,6 +221,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case Tree{}: IO.pure(Action,OpenTree{})
     case Fork{}: IO.pure(Action,OpenFork{})
     case Copy{}: IO.pure(Action,CopyLastAssistant{})
+    case Settings{}: IO.pure(Action,OpenSettings{})
     case Changelog{}: IO.pure(Action,ShowChangelog{})
     case Bash{command,excluded}: IO.pure(Action,RunBash{command,excluded})
     case Unsupported{text}: IO.pure(Action,CommandError{text ++ " is not available in pi-bend yet"})
