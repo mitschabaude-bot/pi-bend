@@ -20,17 +20,21 @@ def reverseInto(text: String,result: String) -> String:
 def scanned(reversed: String,control: Bool,rest: String,length: Nat) -> Scan:
   Scan{Token{reverseInto(reversed,""),control},rest,length}
 def range(+point: U32,low: U32,high: U32) -> Bool: U32.is_ge(point,low) && U32.is_le(point,high)
-# ECMA-48 CSI parameters precede intermediates and one final byte.
-def csi(text: String,+reversed: String,+length: Nat,+intermediate: Bool) -> Scan:
+# ECMA-48 CSI parameters precede intermediates and one final byte. `step`
+# classifies the next character: 0 parameter/intermediate, 1 final, 2 other.
+def csiStep(text: String,intermediate: Bool) -> U32:
   match text:
-    case SNil{}: scanned(reversed,False{},"",length)
-    case SCon{+char,+rest}:
+    case SNil{}: 2
+    case SCon{char,_}:
       +point = Char.to_u32(char)
-      Bool.pick(Unit -> Scan,range(point,64,126),
-        _ => scanned(SCon{char,reversed},True{},rest,length + 1n),
-        _ => Bool.pick(Unit -> Scan,range(point,32,47) || (Bool.not(intermediate) && range(point,48,63)),
-          _ => csi(rest,SCon{char,reversed},length + 1n,intermediate || range(point,32,47)),
-          _ => scanned(reversed,False{},SCon{char,rest},length))(Unit{}))(Unit{})
+      Bool.pick(U32,range(point,64,126),1,Bool.pick(U32,range(point,32,47) || (Bool.not(intermediate) && range(point,48,63)),0,2))
+def csi(text: String,step: U32,+reversed: String,+length: Nat,+intermediate: Bool) -> Scan:
+  match text step:
+    case SCon{+char,+rest} 0:
+      +next = intermediate || range(Char.to_u32(char),32,47)
+      csi(rest,csiStep(rest,next),SCon{char,reversed},length + 1n,next)
+    case SCon{char,rest} 1: scanned(SCon{char,reversed},True{},rest,length + 1n)
+    case text _: scanned(reversed,False{},text,length)
 def stringControl(text: String,reversed: String,length: Nat) -> Scan:
   match text:
     case SNil{}: scanned(reversed,False{},"",length)
@@ -44,7 +48,7 @@ def scanPlain(text: String,reversed: String,length: Nat) -> Scan:
     case SCon{char,rest}: scanPlain(rest,SCon{char,reversed},length + 1n)
 def scan(text: String) -> Scan:
   match text:
-    case SCon{Chr{27},SCon{'[',rest}}: csi(rest,"[\u{1b}",2n,False{})
+    case SCon{Chr{27},SCon{'[',+rest}}: csi(rest,csiStep(rest,False{}),"[\u{1b}",2n,False{})
     case SCon{Chr{27},SCon{']',rest}}: stringControl(rest,"]\u{1b}",2n)
     case SCon{Chr{27},SCon{'_',rest}}: stringControl(rest,"_\u{1b}",2n)
     case SCon{char,rest}: scanPlain(rest,SCon{char,SNil{}},1n)
@@ -258,6 +262,34 @@ def activeOsc8Close(state: AnsiCodeTracker) -> String:
 
 def getActiveOsc8Close(text: String) -> String: activeOsc8Close(updateTrackerFromText(text,emptyTracker()))
 
+# Scans check each character at the following step, so the recursion branches
+# on a parameter instead of allocating a pair of lazy `Bool.pick` closures.
+def asciiScan(text: String,ascii: Bool,width: Nat) -> Maybe<&2,Nat>:
+  match text ascii:
+    case _ False{}: None{}
+    case SNil{} True{}: Some{width}
+    case SCon{char,rest} True{}: asciiScan(rest,range(Char.to_u32(char),32,126),width + 1n)
+def asciiWidth(text: String,width: Nat) -> Maybe<&2,Nat>: asciiScan(text,True{},width)
+# A character that is its own grapheme cluster whatever its neighbours
+# (Grapheme_Cluster_Break=Other, not Extended_Pictographic, no InCB) and has no
+# display property but Wide or CJK script takes 1 or 2 cells, exactly as
+# graphemeWidth measures it; 0 marks any other character.
+def plainCells(+point: U32,+flags: U32) -> Nat:
+  Bool.pick(Nat,U32.is_eq(U32.and(flags,4294967007),0) && U32.is_eq(Grapheme.packed(point),0),Bool.pick(Nat,enabled(flags,32),2n,1n),0n)
+def cellsOf(ascii: Bool,+point: U32) -> Nat:
+  match ascii:
+    case True{}: 1n
+    case False{}: plainCells(point,Display.properties(point))
+def plainScan(text: String,cells: Nat,width: Nat) -> Maybe<&2,Nat>:
+  match text cells:
+    case _ Zero{}: None{}
+    case SNil{} _: Some{width}
+    case SCon{char,rest} _:
+      +point = Char.to_u32(char)
+      +next = cellsOf(range(point,32,126),point)
+      plainScan(rest,next,width + next)
+# Text of such characters needs no segmentation.
+def plainWidth(text: String) -> Maybe<&2,Nat>: plainScan(text,1n,0n)
 # Terminal cell widths follow pinned Pi's display policy, rather than treating
 # all graphemes as one cell. Unicode properties and RGI membership are exact.
 def terminalSpacingMark(+point: U32,flags: U32) -> Bool:
@@ -299,36 +331,15 @@ def selectedWidth(value: Maybe<&2,Nat>,text: String) -> Nat:
   match value:
     case Some{width}: width
     case None{}: nonSpacingWidth(text)
-def graphemeWidth(+text: String) -> Nat:
+def clusterWidth(+text: String) -> Nat:
   Bool.pick(Unit -> Nat,Strings.equal(text,"\t"),_ => 3n,_ => selectedWidth(spacingRun(text,0n),text))(Unit{})
-# Scans check each character at the following step, so the recursion branches
-# on a parameter instead of allocating a pair of lazy `Bool.pick` closures.
-def asciiScan(text: String,ascii: Bool,width: Nat) -> Maybe<&2,Nat>:
-  match text ascii:
-    case _ False{}: None{}
-    case SNil{} True{}: Some{width}
-    case SCon{char,rest} True{}: asciiScan(rest,range(Char.to_u32(char),32,126),width + 1n)
-def asciiWidth(text: String,width: Nat) -> Maybe<&2,Nat>: asciiScan(text,True{},width)
-# A character that is its own grapheme cluster whatever its neighbours
-# (Grapheme_Cluster_Break=Other, not Extended_Pictographic, no InCB) and has no
-# display property but Wide or CJK script takes 1 or 2 cells, exactly as
-# graphemeWidth measures it; 0 marks any other character.
-def plainCells(+point: U32,+flags: U32) -> Nat:
-  Bool.pick(Nat,U32.is_eq(U32.and(flags,4294967007),0) && U32.is_eq(Grapheme.packed(point),0),Bool.pick(Nat,enabled(flags,32),2n,1n),0n)
-def cellsOf(ascii: Bool,+point: U32) -> Nat:
-  match ascii:
-    case True{}: 1n
-    case False{}: plainCells(point,Display.properties(point))
-def plainScan(text: String,cells: Nat,width: Nat) -> Maybe<&2,Nat>:
-  match text cells:
-    case _ Zero{}: None{}
-    case SNil{} _: Some{width}
-    case SCon{char,rest} _:
-      +point = Char.to_u32(char)
-      +next = cellsOf(range(point,32,126),point)
-      plainScan(rest,next,width + next)
-# Text of such characters needs no segmentation.
-def plainWidth(text: String) -> Maybe<&2,Nat>: plainScan(text,1n,0n)
+def plainOr(width: Maybe<&2,Nat>,text: String) -> Nat:
+  match width:
+    case Some{cells}: cells
+    case None{}: clusterWidth(text)
+# Two plain characters never share a cluster, so a plain cluster is a single
+# character and plainWidth measures it exactly.
+def graphemeWidth(+text: String) -> Nat: plainOr(plainWidth(text),text)
 # Grapheme.next always consumes a nonempty cluster; the state machine returns
 # an affine pair so no list of every cluster is needed just to measure width.
 @unsafe def measuredClusters(value: Maybe<&1,String & String>,width: Nat) -> Nat:

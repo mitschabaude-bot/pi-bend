@@ -3,10 +3,10 @@ import ../packages/tui/src/utils.bend as U
 import ../packages/runtime/src/unicode-17-display.bend as Display
 
 # Every character plainWidth accepts measures the same through grapheme
-# segmentation (graphemeWidth), over all Unicode scalar values.
+# segmentation measure (clusterWidth), over all Unicode scalar values.
 def agrees(+point: U32) -> Bool:
   +cells = U.plainCells(point,Display.properties(point))
-  Nat.is_eq(cells,0n) || Nat.is_eq(cells,U.graphemeWidth(SCon{Chr{point},SNil{}}))
+  Nat.is_eq(cells,0n) || Nat.is_eq(cells,U.clusterWidth(SCon{Chr{point},SNil{}}))
 def scalar(+point: U32) -> Bool: U32.is_lt(point,55296) || U32.is_gt(point,57343)
 def agreesIf(valid: Bool,+point: U32) -> Bool:
   match valid:

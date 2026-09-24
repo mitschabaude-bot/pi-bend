@@ -36,16 +36,19 @@ def indicOf(value: U32) -> IndicProperty:
     case 2: IndicExtend{}
     case 3: Linker{}
     case _: NoIndic{}
+def packedHangul(syllable: Bool,+code: U32) -> U32:
+  match syllable:
+    case True{}: Bool.pick(U32,U32.is_eq(((code - 44032 : U32) % 28 : U32),0),12,13)
+    case False{}: Unicode.lookup(code)
+def packedFrom(ascii: Bool,+code: U32) -> U32:
+  match ascii:
+    case True{}: Bool.pick(U32,U32.is_lt(code,32) || U32.is_eq(code,127),3,0)
+    case False{}: packedHangul(U32.is_ge(code,44032) && U32.is_lt(code,55204),code)
 def packed(+code: U32) -> U32:
   match code:
     case 10: 2
     case 13: 1
-    case +code:
-      Bool.pick(Unit -> U32,U32.is_lt(code,128),
-        _ => Bool.pick(U32,U32.is_lt(code,32) || U32.is_eq(code,127),3,0),
-        _ => Bool.pick(Unit -> U32,U32.is_ge(code,44032) && U32.is_lt(code,55204),
-          _ => Bool.pick(U32,U32.is_eq(((code - 44032 : U32) % 28 : U32),0),12,13),
-          _ => Unicode.lookup(code))(Unit{}))(Unit{})
+    case +code: packedFrom(U32.is_lt(code,128),code)
 def propertiesFrom(+value: U32) -> Properties:
   Properties{classOf((value % 16 : U32)),U32.is_eq(((value / 16 : U32) % 2 : U32),1),indicOf((value / 32 : U32))}
 def properties(char: Char) -> Properties: propertiesFrom(packed(Char.to_u32(char)))
@@ -124,27 +127,38 @@ def initial(value: Properties) -> Context: advance(Context{Other{},False{},NoEmo
 
 # Only the current cluster is reversed. The remaining suffix is shared, never
 # measured or copied, so repeated next calls traverse the string in linear time.
-def takeCluster(text: String,+context: Context,+reversed: String) -> String & String:
+# The properties of the next character and whether it joins the cluster arrive
+# as parameters, so the scan branches without allocating closures.
+def headProperties(text: String) -> Properties:
   match text:
-    case SNil{}: (String.reverse(reversed),"")
-    case SCon{+char,+rest}:
-      +value = properties(char)
-      Bool.pick(Unit -> String & String,continues(context,value),
-        _ => takeCluster(rest,advance(context,value),SCon{char,reversed}),
-        _ => (String.reverse(reversed),SCon{char,rest}))(Unit{})
+    case SNil{}: Properties{Other{},False{},NoIndic{}}
+    case SCon{char,_}: properties(char)
+def takeCluster(text: String,joins: Bool,+value: Properties,+context: Context,+reversed: String) -> String & String:
+  match text joins:
+    case SCon{+char,+rest} True{}:
+      +after = advance(context,value)
+      +following = headProperties(rest)
+      takeCluster(rest,continues(after,following),following,after,SCon{char,reversed})
+    case text _: (String.reverse(reversed),text)
+def clusterAt(+text: String,+context: Context,reversed: String) -> String & String:
+  +value = headProperties(text)
+  takeCluster(text,continues(context,value),value,context,reversed)
 def next(text: String) -> Maybe<&1,String & String>:
   match text:
     case SNil{}: None{}
-    case SCon{+char,rest}: Some{takeCluster(rest,initial(properties(char)),SCon{char,""})}
-def split(text: String,+context: Context,+cluster: String,+reversed: List<&2,String>) -> List<&2,String>:
-  match text:
-    case SNil{}: List.reverse(&2,String,String.reverse(cluster) <> reversed)
-    case SCon{+char,+rest}:
+    case SCon{+char,rest}: Some{clusterAt(rest,initial(properties(char)),SCon{char,""})}
+type Split is Data: Split{cluster: String,reversed: List<&2,String>}
+def grown(joins: Bool,char: Char,cluster: String,reversed: List<&2,String>) -> Split:
+  match joins:
+    case True{}: Split{SCon{char,cluster},reversed}
+    case False{}: Split{SCon{char,""},String.reverse(cluster) <> reversed}
+def split(text: String,+context: Context,state: Split) -> List<&2,String>:
+  match text state:
+    case SNil{} Split{cluster,reversed}: List.reverse(&2,String,String.reverse(cluster) <> reversed)
+    case SCon{+char,rest} Split{cluster,reversed}:
       +value = properties(char)
-      Bool.pick(Unit -> List<&2,String>,continues(context,value),
-        _ => split(rest,advance(context,value),SCon{char,cluster},reversed),
-        _ => split(rest,advance(context,value),SCon{char,""},String.reverse(cluster) <> reversed))(Unit{})
+      split(rest,advance(context,value),grown(continues(context,value),char,cluster,reversed))
 def segments(text: String) -> List<&2,String>:
   match text:
     case SNil{}: Nil{}
-    case SCon{+char,rest}: split(rest,initial(properties(char)),SCon{char,""},Nil{})
+    case SCon{+char,rest}: split(rest,initial(properties(char)),Split{SCon{char,""},Nil{}})
