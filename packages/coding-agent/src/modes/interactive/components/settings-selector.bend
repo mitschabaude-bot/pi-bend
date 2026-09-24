@@ -300,7 +300,7 @@ def createHost(+editor: Component.Component,+theme: Ref.Ref<Theme.Theme>,+sessio
     +changedCallback : Callback.Callback<ListUI.Change,Unit> <- Callback.create(~ChangeContext,~ListUI.Change,~Unit,~changeSetting,ChangeContext{session,transcript})
     +cancelledCallback : Callback.Callback<Unit,Unit> <- Callback.create(~CancelContext,~Unit,~Unit,~cancelPanel,CancelContext{modal})
     +completed : Callback.Callback<ListUI.Completion,Unit> <- Callback.create(~Unit,~ListUI.Completion,~Unit,~noCompletion,Unit{})
-    +style : ListUI.SettingsListTheme <- IO.pure(ListUI.SettingsListTheme,ListUI.SettingsListTheme{label,value,description,"› ",hint})
+    +style : ListUI.SettingsListTheme <- IO.pure(ListUI.SettingsListTheme,ListUI.SettingsListTheme{label,value,description,"→ ",hint})
     +host : Host <- IO.pure(Host,Host{modal,editor,theme,session,source,bindings,keyboard,redraw,style,changedCallback,cancelledCallback,completed})
     +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~draw,host)
     +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receive,host)
