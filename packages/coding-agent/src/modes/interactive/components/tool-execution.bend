@@ -20,6 +20,7 @@ import ../../../core/tools/renderers/find.bend as FindRenderer
 import ../../../core/tools/renderers/grep.bend as GrepRenderer
 import ../../../core/tools/renderers/ls.bend as LsRenderer
 import ../../../core/tools/renderers/edit.bend as EditRenderer
+import ../../../core/tools/renderers/read.bend as ReadRenderer
 import ../../../core/tools/index.bend as Tools
 import ../../../../../agent/src/types.bend as Agent
 
@@ -158,12 +159,6 @@ def stringField(value: Maybe<&2,Value.Value>) -> Maybe<&2,String>:
     case _: None{}
 def argument(args: Value.Value,key: String) -> Maybe<&2,String>:
   stringField(field(args,key))
-def numberValue(value: Maybe<&2,Value.Value>) -> Maybe<&2,Nat>:
-  match value:
-    case Some{Value.Number{number}}: Some{U32.to_nat(F64.to_u32(number))}
-    case _: None{}
-def numberArgument(args: Value.Value,key: String) -> Maybe<&2,Nat>:
-  numberValue(field(args,key))
 def pathField(args: Value.Value,file: Maybe<&2,Value.Value>) -> Maybe<&2,String>:
   match file:
     case Some{Value.Text{text}}: Some{text}
@@ -182,17 +177,6 @@ def pathCall(+theme: Theme.Theme,label: String,args: Value.Value) -> IO(String):
     name : String <- shownTitle(theme,label)
     path : String <- shownPath(theme,pathArgument(args))
     return name ++ " " ++ path
-def readRange(theme: Theme.Theme,offset: Maybe<&2,Nat>,limit: Maybe<&2,Nat>) -> IO(String):
-  match offset limit:
-    case None{} None{}: IO.pure(String,"")
-    case Some{start} None{}: Messages.foregroundText(theme,"warning",":" ++ Nat.show(start))
-    case None{} Some{+count}: Messages.foregroundText(theme,"warning",":" ++ "1" ++ Bool.pick(String,Nat.is_eq(count,0n),"","-" ++ Nat.show(count)))
-    case Some{+start} Some{+count}: Messages.foregroundText(theme,"warning",":" ++ Nat.show(start) ++ Bool.pick(String,Nat.is_eq(count,0n),"","-" ++ Nat.show(start + count - 1n)))
-def readCall(+theme: Theme.Theme,+args: Value.Value) -> IO(String):
-  do IO<String>:
-    name : String <- pathCall(theme,"read",args)
-    range : String <- readRange(theme,numberArgument(args,"offset"),numberArgument(args,"limit"))
-    return name ++ range
 def shellCommand(value: Maybe<&2,String>,theme: Theme.Theme) -> IO(String):
   match value:
     case None{}: Messages.foregroundText(theme,"error","[invalid arg]")
@@ -280,13 +264,14 @@ def builtFileResult(+name: String,+result: Maybe<&2,ToolResult>,+expanded: Bool,
               _ => IO.pure(String,plain))(Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
 def builtResult(+name: String,+result: Maybe<&2,ToolResult>,+expanded: Bool,+theme: Theme.Theme) -> IO(String):
   match name:
+    case "read": ReadRenderer.renderResult(textOutput(result),resultDetails(result),expanded,errorOutput(result),theme)
     case "find": FindRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
     case "grep": GrepRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
     case "ls": LsRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
     case _: builtFileResult(name,result,expanded,theme)
 def builtCall(name: String,args: Value.Value,expanded: Bool,theme: Theme.Theme) -> IO(String):
   match name:
-    case "read": readCall(theme,args)
+    case "read": ReadRenderer.renderCall(args,theme)
     case "bash": bashCall(theme,args)
     case "write": writeCall(theme,args,expanded)
     case "find": FindRenderer.renderCall(args,theme)
