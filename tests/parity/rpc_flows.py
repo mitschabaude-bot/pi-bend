@@ -58,6 +58,20 @@ FLOWS = [
         ],
     },
     {
+        # A context overflow compacts and retries the prompt.
+        "name": "overflow-retry",
+        "turns": [{"text": "First answer. " + LONG, "usage": {"input": 3000, "output": 400}},
+                  {"status": 400, "error": {"error": {"message": "Your input exceeds the context window of this model. Please adjust your input and try again.", "type": "invalid_request_error", "code": "context_length_exceeded"}}},
+                  {"text": "## Goal\nTalk.\n\n## Progress\nOne answer."},
+                  {"text": "Answer after compaction."}],
+        "settings": {"compaction": {"keepRecentTokens": 1}},
+        "steps": [
+            {"type": "prompt", "message": "one"},
+            {"type": "prompt", "message": "two"},
+            {"type": "get_messages"},
+        ],
+    },
+    {
         "name": "bash",
         "turns": [{"text": "Saw it."}],
         "steps": [
