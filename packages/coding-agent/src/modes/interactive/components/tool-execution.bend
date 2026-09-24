@@ -242,11 +242,67 @@ def writeCall(+theme: Theme.Theme,+args: Value.Value,expanded: Bool) -> IO(Strin
   do IO<String>:
     header : String <- pathCall(theme,"write",args)
     writeContent(theme,header,expanded,argument(args,"content"))
+def listingPathValue(+theme: Theme.Theme,path: Maybe<&2,String>,name: String) -> IO(String):
+  match path:
+    case None{}: Messages.foregroundText(theme,"error","[invalid arg]")
+    case Some{""}: Messages.foregroundText(theme,Bool.pick(String,String.eq(name,"ls"),"accent","toolOutput"),".")
+    case Some{path}: Messages.foregroundText(theme,Bool.pick(String,String.eq(name,"ls"),"accent","toolOutput"),path)
+def listingPath(theme: Theme.Theme,args: Value.Value,name: String) -> IO(String): listingPathValue(theme,argument(args,"path"),name)
+def listingLimitValue(+theme: Theme.Theme,value: Maybe<&2,Nat>,bracketed: Bool) -> IO(String):
+  match value:
+    case None{}: IO.pure(String,"")
+    case Some{limit}:
+      +count = Nat.show(limit)
+      Messages.foregroundText(theme,"toolOutput",Bool.pick(String,bracketed," (limit " ++ count ++ ")"," limit " ++ count))
+def listingLimit(theme: Theme.Theme,args: Value.Value,bracketed: Bool) -> IO(String): listingLimitValue(theme,numberArgument(args,"limit"),bracketed)
+def listingPatternValue(+theme: Theme.Theme,pattern: Maybe<&2,String>,slash: Bool) -> IO(String):
+  match pattern:
+    case None{}: Messages.foregroundText(theme,"error","[invalid arg]")
+    case Some{+value}: Messages.foregroundText(theme,"accent",Bool.pick(String,slash,"/" ++ value ++ "/",value))
+def listingGlobValue(+theme: Theme.Theme,glob: Maybe<&2,String>) -> IO(String):
+  match glob:
+    case Some{+value}: Bool.pick(Unit -> IO(String),String.is_empty(value),_ => IO.pure(String,""),_ => Messages.foregroundText(theme,"toolOutput"," (" ++ value ++ ")"))(Unit{})
+    case None{}: IO.pure(String,"")
+def listingCallNamed(name: String,+args: Value.Value,+theme: Theme.Theme,title: String,path: String,limit: String) -> IO(String):
+  match name:
+    case "ls": IO.pure(String,title ++ " " ++ path ++ limit)
+    case "find":
+      do IO<String>:
+        pattern : String <- listingPatternValue(theme,argument(args,"pattern"),False{})
+        joiner : String <- Messages.foregroundText(theme,"toolOutput"," in ")
+        return title ++ " " ++ pattern ++ joiner ++ path ++ limit
+    case _:
+      do IO<String>:
+        pattern : String <- listingPatternValue(theme,argument(args,"pattern"),True{})
+        joiner : String <- Messages.foregroundText(theme,"toolOutput"," in ")
+        suffix : String <- listingGlobValue(theme,argument(args,"glob"))
+        return title ++ " " ++ pattern ++ joiner ++ path ++ suffix ++ limit
+def listingCall(+name: String,+args: Value.Value,+theme: Theme.Theme) -> IO(String):
+  do IO<String>:
+    title : String <- shownTitle(theme,name)
+    path : String <- listingPath(theme,args,name)
+    limit : String <- listingLimit(theme,args,String.eq(name,"find") || String.eq(name,"ls"))
+    listingCallNamed(name,args,theme,title,path,limit)
+def listingResultText(text: String,expanded: Bool,+theme: Theme.Theme,maxLines: Nat) -> IO(String):
+  match text:
+    case "": IO.pure(String,"")
+    case content:
+      do IO<String>:
+        +lines : List<&2,String> <- IO.pure(List<&2,String>,String.split(content,'\n'))
+        +display : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,expanded,lines,List.take(&2,String,lines,maxLines)))
+        +colored : List<&2,String> <- coloredLines(display,theme,Nil{})
+        +remaining : Nat <- IO.pure(Nat,List.length(&2,String,lines) - List.length(&2,String,display))
+        Bool.pick(Unit -> IO(String),Nat.is_eq(remaining,0n),_ => IO.pure(String,"\n\n" ++ String.join(colored,"\n")),
+          _ => do IO<String>:
+            hint : String <- expandHint(theme,"\n... (" ++ Nat.show(remaining) ++ " more lines,")
+            return "\n\n" ++ String.join(colored,"\n") ++ hint)(Unit{})
+def listingResult(+result: Maybe<&2,ToolResult>,+expanded: Bool,+theme: Theme.Theme,+maxLines: Nat) -> IO(String):
+  listingResultText(String.trim(textOutput(result)),expanded,theme,maxLines)
 def errorOutput(result: Maybe<&2,ToolResult>) -> Bool:
   match result:
     case Some{ToolResult{_,True{}}}: True{}
     case _: False{}
-def builtResult(+name: String,+result: Maybe<&2,ToolResult>,+expanded: Bool,+theme: Theme.Theme) -> IO(String):
+def builtFileResult(+name: String,+result: Maybe<&2,ToolResult>,+expanded: Bool,+theme: Theme.Theme) -> IO(String):
   +output = textOutput(result)
   Bool.pick(Unit -> IO(String),String.is_empty(output),_ => IO.pure(String,""),
     _ => Bool.pick(Unit -> IO(String),String.eq(name,"read") && Bool.not(expanded) && Bool.not(errorOutput(result)),
@@ -269,11 +325,20 @@ def builtResult(+name: String,+result: Maybe<&2,ToolResult>,+expanded: Bool,+the
                 hint : String <- expandHint(theme,"... (" ++ Nat.show(skipped) ++ " earlier lines,")
                 return "\n\n" ++ hint ++ "\n" ++ String.join(colored,"\n"),
               _ => IO.pure(String,plain))(Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
+def builtResult(+name: String,+result: Maybe<&2,ToolResult>,+expanded: Bool,+theme: Theme.Theme) -> IO(String):
+  match name:
+    case "find": listingResult(result,expanded,theme,20n)
+    case "grep": listingResult(result,expanded,theme,15n)
+    case "ls": listingResult(result,expanded,theme,20n)
+    case _: builtFileResult(name,result,expanded,theme)
 def builtCall(name: String,args: Value.Value,expanded: Bool,theme: Theme.Theme) -> IO(String):
   match name:
     case "read": readCall(theme,args)
     case "bash": bashCall(theme,args)
     case "write": writeCall(theme,args,expanded)
+    case "find": listingCall(name,args,theme)
+    case "grep": listingCall(name,args,theme)
+    case "ls": listingCall(name,args,theme)
     case _: pathCall(theme,"edit",args)
 def durationTenths(result: Result<&2,&2,F.Error,Nat>) -> Nat:
   match result:
@@ -394,7 +459,7 @@ def selfRendered(+state: ToolExecution,call: Maybe<&2,Renderer()>,result: Maybe<
 def renderWithDuration(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>) -> IO(List<&2,String>):
   match state:
     case ToolExecution{+name,_,_,_,_,_,_,_,_,_,Generic{}}:
-      Bool.pick(Unit -> IO(List<&2,String>),String.eq(name,"read") || String.eq(name,"bash") || String.eq(name,"edit") || String.eq(name,"write"),_ => builtinWithDuration(state,width,elapsed),_ => generic(state,width))(Unit{})
+      Bool.pick(Unit -> IO(List<&2,String>),String.eq(name,"read") || String.eq(name,"bash") || String.eq(name,"edit") || String.eq(name,"write") || String.eq(name,"find") || String.eq(name,"grep") || String.eq(name,"ls"),_ => builtinWithDuration(state,width,elapsed),_ => generic(state,width))(Unit{})
     case ToolExecution{_,_,_,_,_,_,_,_,_,_,Boxed{+call,+result}}: boxed(state,call,result,width)
     case ToolExecution{_,_,_,_,_,_,_,_,_,_,SelfRendered{+call,+result}}: selfRendered(state,call,result,width)
 def render(state: ToolExecution,width: Nat) -> IO(List<&2,String>):
