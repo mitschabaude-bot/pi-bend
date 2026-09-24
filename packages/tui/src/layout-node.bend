@@ -9,6 +9,7 @@ import ../../runtime/src/callback.bend as Callback
 # immutable representation of a stack's ordered entry collection.
 type LayoutNode is Data:
   Leaf{component: C.Component}
+  Inline{node: LayoutNode}
   VStack{entries: LayoutNode,gap: Nat}
   HStack{entries: LayoutNode,gap: Nat,align: Stack.Align}
   ScrollNode{view: Scroll.ScrollView}

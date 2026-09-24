@@ -173,6 +173,7 @@ def maybeHeight(item: Maybe<&2,Item>) -> Nat:
     case Some{value}: itemHeight(value)
 @unsafe def run(node: N.LayoutNode,mode: Mode,+cache: List<&2,CachedLine>) -> IO(Result):
   match node mode:
+    case N.Inline{child} mode: run(child,mode,cache)
     case N.Leaf{+component} Measure{+width,_}:
       do IO<Result>:
         rendered : Rendered <- renderCached(component,width,cache)
@@ -263,10 +264,25 @@ def treeFrame(result: Result,+width: Nat,+height: Nat) -> TreeFrame:
       TreeFrame{node,L.LayoutFrame{box,width,height,L.paint(L.blank(height,Nil{}),lines,0n,0n,0n,width,height,width)}}
     case _: TreeFrame{N.Empty{},L.LayoutFrame{L.LayoutBox{None{},L.rect(0n,0n,width,height),L.rect(0n,0n,width,height),Nil{},None{},0n,0n},width,height,L.blank(height,Nil{})}}
 def viewport(width: Nat,height: Nat) -> S.LayoutViewport: S.LayoutViewport{width,height}
-def renderTreeFrame(node: N.LayoutNode,width: Nat,height: Nat) -> IO(TreeFrame):
+def inlineFrame(value: TreeFrame) -> TreeFrame:
+  match value:
+    case TreeFrame{node,frame}: TreeFrame{N.Inline{node},frame}
+def renderInline(+node: N.LayoutNode,width: Nat,height: Nat) -> IO(TreeFrame):
   +safeWidth = Nat.max(1n,width)
   +safeHeight = Nat.max(1n,height)
   +viewport = viewport(safeWidth,safeHeight)
   do IO<TreeFrame>:
-    result : Result <- run(node,Place{0n,0n,safeWidth,safeHeight,L.rect(0n,0n,safeWidth,safeHeight),viewport},Nil{})
-    return treeFrame(result,safeWidth,safeHeight)
+    +measured : Result <- run(node,Measure{safeWidth,viewport},Nil{})
+    +contentHeight : Nat <- IO.pure(Nat,Nat.min(safeHeight,Nat.max(1n,maybeHeight(resultItem(measured)))))
+    result : Result <- run(node,Place{0n,0n,safeWidth,contentHeight,L.rect(0n,0n,safeWidth,contentHeight),viewport},resultCache(measured))
+    return inlineFrame(treeFrame(result,safeWidth,contentHeight))
+def renderTreeFrame(node: N.LayoutNode,width: Nat,height: Nat) -> IO(TreeFrame):
+  match node:
+    case N.Inline{child}: renderInline(child,width,height)
+    case node:
+      +safeWidth = Nat.max(1n,width)
+      +safeHeight = Nat.max(1n,height)
+      +viewport = viewport(safeWidth,safeHeight)
+      do IO<TreeFrame>:
+        result : Result <- run(node,Place{0n,0n,safeWidth,safeHeight,L.rect(0n,0n,safeWidth,safeHeight),viewport},Nil{})
+        return treeFrame(result,safeWidth,safeHeight)

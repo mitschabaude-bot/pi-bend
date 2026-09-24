@@ -257,7 +257,7 @@ def renderBash(state: BashMessage,+width: Nat) -> IO(List<&2,String>):
 
 # A mounted message renders the latest immutable snapshot. The transcript owns
 # the callback lifetime; stream updates replace only this message's snapshot.
-type Body is Data: UserBody{value: UserMessage} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage}
+type Body is Data: UserBody{value: UserMessage} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} StatusBody{text: String,theme: Theme.Theme}
 def expandedBody(body: Body,expanded: Bool) -> Body:
   match body:
     case BashBody{value}: BashBody{bashExpanded(value,expanded)}
@@ -268,6 +268,7 @@ def retheme(body: Body,theme: Theme.Theme) -> Body:
     case AssistantBody{AssistantMessage{content,hide,label,pad,streaming,stop,error,_,styles}}:
       AssistantBody{AssistantMessage{content,hide,label,pad,streaming,stop,error,theme,styles}}
     case BashBody{value}: BashBody{bashTheme(value,theme)}
+    case StatusBody{text,_}: StatusBody{text,theme}
 type Owner is Type:
   Owner{state: Ref.Ref<Body>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
 type Handle is Data: Handle{state: Ref.Ref<Body>}
@@ -276,6 +277,11 @@ def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
     case UserBody{value}: renderUser(value,width)
     case AssistantBody{value}: renderAssistant(value,width)
     case BashBody{value}: renderBash(value,width)
+    case StatusBody{text,theme}:
+      do IO<List<&2,String>>:
+        colored : String <- foregroundText(theme,"dim",text)
+        lines : List<&2,String> <- textLines(colored,1n,width)
+        return "" <> lines
 def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
   match handle:
     case Handle{state}:

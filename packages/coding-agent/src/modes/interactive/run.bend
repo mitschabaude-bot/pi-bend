@@ -111,9 +111,9 @@ def seedFooter(messages: List<&2,Session.Message()>,state: Footer.State) -> Foot
     case Nil{}: state
     case Agent.LlmMessage{Ai.Assistant{message}} <> rest: seedFooter(rest,withAssistant(state,message))
     case _ <> rest: seedFooter(rest,state)
-def initialFooter(+agentState: Session.AgentState(),messages: List<&2,Session.Message()>,cwd: String,home: Maybe<&2,String>) -> Footer.State:
+def initialFooter(+agentState: Session.AgentState(),messages: List<&2,Session.Message()>,cwd: String,home: Maybe<&2,String>,autoCompact: Bool) -> Footer.State:
   +chosen = Maybe.map(&2,Ai.Model<Ai.JsonValue>,Footer.Model,model,Session.stateModel(agentState))
-  seedFooter(messages,Footer.State{cwd,home,None{},None{},chosen,Levels.name(Session.stateThinking(agentState)),Footer.emptyUsage(),None{},None{},None{},1n,False{},False{},False{},Nil{}})
+  seedFooter(messages,Footer.State{cwd,home,None{},None{},chosen,Levels.name(Session.stateThinking(agentState)),Footer.emptyUsage(),None{},None{},None{},1n,False{},autoCompact,False{},Nil{}})
 def withStatus(state: Footer.State,statuses: List<&2,Footer.Status>) -> Footer.State:
   match state:
     case Footer.State{cwd,home,branch,name,chosen,thinkingLevel,totals,latest,context,window,providers,subscription,auto,experimental,_}:
@@ -919,7 +919,8 @@ def refreshSelection(sink: SelectionSink,result: Controller.SelectionResult) -> 
         Transcript.clear(transcript)
         Transcript.seedSession(transcript,messages)
         agentState : Session.AgentState() <- Session.state(live)
-        Ref.write(Footer.State,footerRef,initialFooter(agentState,messages,cwd,home))
+        settings : Settings.SettingsManager <- Session.getSettings(live)
+        Ref.write(Footer.State,footerRef,initialFooter(agentState,messages,cwd,home,Settings.getCompactionEnabled(settings)))
         updateSelectionEditor(editor,selectionText(result))
         Interactive.requestRender(redraw)
 def failedSelection(sink: SelectionSink,message: String) -> IO(Unit):
@@ -1071,18 +1072,18 @@ def toggleHeader(header: Maybe<&2,Header.Handle>) -> IO(Unit):
     case None{}: IO.pure(Unit,Unit{})
 def expandOutput(input: KeyInput) -> IO(Unit):
   match input:
-    case KeyInput{_,_,failure,_,_,_,_,_,header,transcript}:
+    case KeyInput{_,_,_,_,_,_,_,_,header,+transcript}:
       do IO<Unit>:
         expanded : Bool <- Transcript.toggleExpanded(transcript)
         toggleHeader(header)
-        Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandNotice{Bool.pick(String,expanded,"Tool output: expanded","Tool output: collapsed")}})
-def thinkingChanged(result: Result<&2,&2,String,Unit>,transcript: Transcript.Handle,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,+hidden: Bool) -> IO(Unit):
+        Transcript.status(transcript,Bool.pick(String,expanded,"Tool output: expanded","Tool output: collapsed"))
+def thinkingChanged(result: Result<&2,&2,String,Unit>,+transcript: Transcript.Handle,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,+hidden: Bool) -> IO(Unit):
   match result:
     case Fail{reason}: Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandFailure{reason}})
     case Done{_}:
       do IO<Unit>:
         Transcript.setHideThinking(transcript,hidden)
-        Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandNotice{Bool.pick(String,hidden,"Thinking blocks: hidden","Thinking blocks: visible")}})
+        Transcript.status(transcript,Bool.pick(String,hidden,"Thinking blocks: hidden","Thinking blocks: visible"))
 def toggleThinking(input: KeyInput) -> IO(Unit):
   match input:
     case KeyInput{_,_,failure,_,_,_,session,_,_,transcript}:
@@ -1123,11 +1124,11 @@ def reboundCopied(sink: RebindSink,+session: Session.AgentSession) -> IO(Unit):
         Session.subscribe(session,listener)
         +messages : List<&2,Session.Message()> <- Session.messages(session)
         Transcript.clear(transcript)
-        settings : Settings.SettingsManager <- Session.getSettings(session)
+        +settings : Settings.SettingsManager <- Session.getSettings(session)
         Transcript.setHideThinking(transcript,Settings.getHideThinkingBlock(settings))
         Transcript.seedSession(transcript,messages)
         state : Session.AgentState() <- Session.state(session)
-        Ref.write(Footer.State,footerRef,initialFooter(state,messages,cwd,home))
+        Ref.write(Footer.State,footerRef,initialFooter(state,messages,cwd,home,Settings.getCompactionEnabled(settings)))
         Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,None{})
         target : Maybe<&2,Live.Handle> <- Ref.read(Maybe<&2,Live.Handle>,editor)
         setSelectedDraft(target,"")
@@ -1412,12 +1413,12 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
     case (transcript,+transcriptHandle):
       do IO<Result<&2,&2,Error,Unit>>:
         +existing : List<&2,Session.Message()> <- Session.messages(session)
-        settings : Settings.SettingsManager <- Session.getSettings(session)
+        +settings : Settings.SettingsManager <- Session.getSettings(session)
         Transcript.setHideThinking(transcriptHandle,Settings.getHideThinkingBlock(settings))
         Transcript.seedSession(transcriptHandle,existing)
         agentState : Session.AgentState() <- Session.state(session)
         +current : Ref.Ref<Session.AgentSession> <- modeCurrent(mode,session)
-        +foot : FooterOwner <- footer(initialFooter(agentState,existing,cwd,home),liveTheme,current)
+        +foot : FooterOwner <- footer(initialFooter(agentState,existing,cwd,home,Settings.getCompactionEnabled(settings)),liveTheme,current)
         +redraw : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,None{})
         +stopped : Deferred.Deferred<Unit> <- Deferred.new(Unit)
         +listener : Callback.Callback<Session.AgentSessionEvent,Unit> <- Callback.create(~Observation,~Session.AgentSessionEvent,~Unit,~observed,Observation{transcriptHandle,redraw,footerState(foot)})
@@ -1452,20 +1453,20 @@ def startView(borrowed: View.View & Component.Component & View.Handle,styles: Ma
   match borrowed:
     case (view,_,viewHandle):
       startStyles(styles,view,viewHandle,session,initial,cwd,home,theme,words,setting,builtinDir,customDir,models,mode)
-def withHeader(styles: MarkdownTheme.Styles,quiet: Bool) -> IO(View.View & MarkdownTheme.Styles):
+def withHeader(styles: MarkdownTheme.Styles,quiet: Bool,+session: Session.AgentSession,cwd: String,home: Maybe<&2,String>) -> IO(View.View & MarkdownTheme.Styles):
   match styles:
     case MarkdownTheme.Styles{markdown,callbacks,+live}:
       do IO<View.View & MarkdownTheme.Styles>:
-        view : View.View <- View.createWithHeader(Component.ComponentId{1n},live,quiet)
+        view : View.View <- View.createWithHeader(Component.ComponentId{1n},live,quiet,cwd,home,Session.getAgentsFiles(session),Session.getSkills(session))
         return (view,MarkdownTheme.Styles{markdown,callbacks,live})
 def prepared(pair: View.View & MarkdownTheme.Styles,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,theme: Theme.Theme,words: Words.Context,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (view,styles): startView(View.borrow(view),styles,session,initial,cwd,home,theme,words,setting,builtinDir,customDir,models,mode)
-def started(+session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Context,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
+def started(+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Context,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   do IO<Result<&2,&2,Error,Unit>>:
     styles : MarkdownTheme.Styles <- MarkdownTheme.create(theme)
     settings : Settings.SettingsManager <- Ref.read(Settings.SettingsManager,Session.settingsOf(session))
-    pair : View.View & MarkdownTheme.Styles <- withHeader(styles,Settings.getQuietStartup(settings))
+    pair : View.View & MarkdownTheme.Styles <- withHeader(styles,Settings.getQuietStartup(settings),session,cwd,home)
     prepared(pair,session,initial,cwd,home,theme,words,setting,builtinDir,customDir,models,mode)
 def themed(session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,words: Words.Context,loaded: Result<&2,&2,Theme.LoadError,Theme.Theme>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match loaded:

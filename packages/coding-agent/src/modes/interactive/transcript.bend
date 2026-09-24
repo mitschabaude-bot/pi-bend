@@ -12,9 +12,9 @@ import ./viewport.bend as View
 import ../../core/messages.bend as CoreMessages
 import ../../core/tools/index.bend as Tools
 
-# The transcript owns mounted messages and tools. Agent events replace the
-# active assistant and matching tool snapshots; entries stay mounted for resizes.
-type Entry is Type: MessageEntry{owner: Messages.Owner} ToolEntry{owner: Tool.Owner}
+# The transcript owns mounted messages, tools, and transient status lines.
+# Agent events replace the active assistant and matching tool snapshots.
+type Entry is Type: MessageEntry{owner: Messages.Owner} ToolEntry{owner: Tool.Owner} StatusEntry{owner: Messages.Owner,handle: Messages.Handle}
 type ToolLink is Data: ToolLink{id: String,handle: Tool.Handle}
 type State is Type:
   State{entries: List<&1,Entry>,tools: List<&2,ToolLink>,active: Maybe<&2,Messages.Handle>,nextId: Nat,view: View.Handle,theme: Theme.Theme,styles: Markdown.MarkdownTheme,expanded: Bool,hidden: Bool}
@@ -46,6 +46,25 @@ def append(state: State,body: Messages.Body,assistant: Bool) -> IO(State & Bool)
       do IO<State & Bool>:
         owner : Messages.Owner <- Messages.create(Component.ComponentId{id},body)
         inserted(State{entries,tools,active,id,view,theme,styles,expanded,hidden},Messages.borrow(owner),assistant)
+def statusAppended(pair: Messages.Owner & Component.Component & Messages.Handle,entries: List<&1,Entry>,tools: List<&2,ToolLink>,active: Maybe<&2,Messages.Handle>,id: Nat,+view: View.Handle,theme: Theme.Theme,styles: Markdown.MarkdownTheme,expanded: Bool,hidden: Bool) -> IO(State & Unit):
+  match pair:
+    case (owner,component,handle):
+      do IO<State & Unit>:
+        View.append(view,component)
+        return (State{StatusEntry{owner,handle} <> entries,tools,active,id + 1n,view,theme,styles,expanded,hidden},Unit{})
+def statusChanged(state: State,+message: String) -> IO(State & Unit):
+  match state:
+    case State{StatusEntry{owner,+handle} <> rest,tools,active,+id,view,+theme,styles,expanded,hidden}:
+      do IO<State & Unit>:
+        Messages.set(handle,Messages.StatusBody{message,theme})
+        return (State{StatusEntry{owner,handle} <> rest,tools,active,id,view,theme,styles,expanded,hidden},Unit{})
+    case State{entries,tools,active,+id,+view,+theme,styles,expanded,hidden}:
+      do IO<State & Unit>:
+        owner : Messages.Owner <- Messages.create(Component.ComponentId{id},Messages.StatusBody{message,theme})
+        statusAppended(Messages.borrow(owner),entries,tools,active,id,view,theme,styles,expanded,hidden)
+def status(handle: Handle,message: String) -> IO(Unit):
+  match handle:
+    case Handle{resource}: Serial.run(State,Unit,resource,state => statusChanged(state,message))
 def mountedBashState(state: State,owner: Messages.Owner,component: Component.Component,handle: Messages.Handle) -> IO(State & Messages.Handle):
   match state:
     case State{entries,tools,active,+id,+view,theme,styles,expanded,hidden}:
@@ -288,6 +307,11 @@ def rethemeEntries(entries: List<&1,Entry>,+theme: Theme.Theme) -> IO(List<&1,En
         kept : Tool.Owner <- Tool.rethemeOwner(owner,theme)
         next : List<&1,Entry> <- rethemeEntries(rest,theme)
         return ToolEntry{kept} <> next
+    case StatusEntry{owner,handle} <> rest:
+      do IO<List<&1,Entry>>:
+        kept : Messages.Owner <- Messages.rethemeOwner(owner,theme)
+        next : List<&1,Entry> <- rethemeEntries(rest,theme)
+        return StatusEntry{kept,handle} <> next
 def rethemed(state: State,+theme: Theme.Theme) -> IO(State & Unit):
   match state:
     case State{entries,tools,active,nextId,view,_,styles,expanded,hidden}:
@@ -310,6 +334,10 @@ def expandEntries(entries: List<&1,Entry>,+expanded: Bool) -> IO(List<&1,Entry>)
         kept : Tool.Owner <- Tool.expandOwner(owner,expanded)
         next : List<&1,Entry> <- expandEntries(rest,expanded)
         return ToolEntry{kept} <> next
+    case StatusEntry{owner,handle} <> rest:
+      do IO<List<&1,Entry>>:
+        next : List<&1,Entry> <- expandEntries(rest,expanded)
+        return StatusEntry{owner,handle} <> next
 def toggled(state: State) -> IO(State & Bool):
   match state:
     case State{entries,tools,active,nextId,view,theme,styles,+expanded,hidden}:
@@ -332,6 +360,10 @@ def hideThinkingEntries(entries: List<&1,Entry>,+hidden: Bool) -> IO(List<&1,Ent
       do IO<List<&1,Entry>>:
         next : List<&1,Entry> <- hideThinkingEntries(rest,hidden)
         return ToolEntry{owner} <> next
+    case StatusEntry{owner,handle} <> rest:
+      do IO<List<&1,Entry>>:
+        next : List<&1,Entry> <- hideThinkingEntries(rest,hidden)
+        return StatusEntry{owner,handle} <> next
 def changedThinking(state: State,+hidden: Bool) -> IO(State & Unit):
   match state:
     case State{entries,tools,active,id,view,theme,styles,expanded,_}:
@@ -351,6 +383,10 @@ def disposeEntries(entries: List<&1,Entry>) -> IO(Unit):
     case ToolEntry{entry} <> rest:
       do IO<Unit>:
         Tool.dispose(entry)
+        disposeEntries(rest)
+    case StatusEntry{entry,_} <> rest:
+      do IO<Unit>:
+        Messages.dispose(entry)
         disposeEntries(rest)
 def cleared(state: State) -> IO(State & Unit):
   match state:

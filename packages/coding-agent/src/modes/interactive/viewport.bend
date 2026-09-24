@@ -8,6 +8,8 @@ import ../../../../tui/src/layout-node.bend as Node
 import ../../../../tui/src/tui-base.bend as Tui
 import ./components/header.bend as Header
 import ./theme/theme.bend as Theme
+import ../../core/system-prompt.bend as Prompt
+import ../../core/skills.bend as Skills
 
 # The document changes as session events arrive; the editor and footer stay
 # mounted. A frame reads one document snapshot and paints its children at the
@@ -43,9 +45,9 @@ def create(id: Component.ComponentId) -> IO(View): created(id,None{},None{},None
 def withHeader(id: Component.ComponentId,pair: Header.Owner & Component.Component & Header.Handle) -> IO(View):
   match pair:
     case (owner,component,handle): created(id,Some{owner},Some{component},Some{handle})
-def createWithHeader(id: Component.ComponentId,theme: Ref.Ref<Theme.Theme>,quiet: Bool) -> IO(View):
+def createWithHeader(id: Component.ComponentId,theme: Ref.Ref<Theme.Theme>,quiet: Bool,cwd: String,home: Maybe<&2,String>,contexts: List<&2,Prompt.ContextFile>,skills: List<&2,Skills.Skill>) -> IO(View):
   do IO<View>:
-    header : Header.Owner <- Header.create(theme,quiet)
+    header : Header.Owner <- Header.create(theme,quiet,cwd,home,contexts,skills)
     withHeader(id,Header.borrow(header))
 def borrow(view: View) -> View & Component.Component & Handle:
   match view:
@@ -75,11 +77,11 @@ def dispose(view: View) -> IO(Unit):
 
 def entries(document: Component.Component,editor: Component.Component,footer: Component.Component) -> Node.LayoutNode:
   +scroll = Scroll.new(document,Scroll.ScrollViewOptions{Scroll.FollowEnd{},True{},Scroll.Chain{},Scroll.Hidden{},1000n})
-  Node.Children{Node.child(Node.ScrollNode{scroll},Stack.sized(Some{0n},1n,1n,0n,100000n),None{}),
-    Node.Children{Node.child(Node.Leaf{editor},Stack.defaultSize(),None{}),
-      Node.Children{Node.child(Node.Leaf{footer},Stack.defaultSize(),None{}),Node.Empty{}}}}
+  Node.Children{Node.child(Node.ScrollNode{scroll},Stack.sized(None{},1n,1n,0n,100000n),None{}),
+    Node.Children{Node.child(Node.Leaf{editor},Stack.sized(None{},0n,0n,1n,100000n),None{}),
+      Node.Children{Node.child(Node.Leaf{footer},Stack.sized(None{},0n,0n,1n,100000n),None{}),Node.Empty{}}}}
 def layout(+document: Component.Component,+editor: Component.Component,+footer: Component.Component) -> Node.LayoutNode:
-  Node.VStack{entries(document,editor,footer),0n}
+  Node.Inline{Node.VStack{entries(document,editor,footer),0n}}
 def mountComponents(+document: Component.Component,+editor: Component.Component,+footer: Component.Component) -> IO(Tui.ResultOf(Tui.TuiBase)):
   +base = Tui.setLayoutRoot(Tui.added(Tui.added(Tui.added(Tui.newTui(),document),editor),footer),Some{layout(document,editor,footer)})
   Tui.setFocus(base,document <> editor <> footer <> Nil{},Component.id(document) <> Component.id(editor) <> Component.id(footer) <> Nil{},Some{Component.id(editor)})

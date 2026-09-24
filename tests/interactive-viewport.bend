@@ -32,7 +32,7 @@ def runMounted(view: View.View,+handle: View.Handle,+base: Tui.TuiBase,message: 
   do IO<Unit>:
         first : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,3n)
         empty : String <- frame(first)
-        same(empty,"|editor|footer")
+        same(empty,"editor|footer")
         View.append(handle,message)
         second : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,3n)
         filled : String <- frame(second)
@@ -40,7 +40,7 @@ def runMounted(view: View.View,+handle: View.Handle,+base: Tui.TuiBase,message: 
         View.clear(handle)
         third : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,3n)
         cleared : String <- frame(third)
-        same(cleared,"|editor|footer")
+        same(cleared,"editor|footer")
         View.dispose(view)
 def runPair(pair: View.View & View.Handle & Tui.TuiBase,message: Component.Component) -> IO(Unit):
   match pair:
