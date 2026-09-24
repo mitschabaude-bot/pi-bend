@@ -13,6 +13,7 @@ import ../../../../../tui/src/word-navigation.bend as Word
 import ../../../../../tui/src/components/settings-list.bend as ListUI
 import ../../../core/agent-session.bend as Session
 import ../../../core/settings-manager.bend as Settings
+import ../../../../../runtime/src/u64.bend as W
 import ../theme/theme.bend as Theme
 import ../transcript.bend as Transcript
 
@@ -59,11 +60,23 @@ def mermaid(value: Settings.MermaidRenderingMode) -> String:
     case Settings.MermaidOff{}: "off"
     case Settings.MermaidFinal{}: "final"
     case Settings.MermaidStreaming{}: "streaming"
+def outputPadding(value: Settings.OutputPadding) -> String:
+  match value:
+    case Settings.NoPadding{}: "0"
+    case Settings.OnePadding{}: "1"
+def smallNumber(value: W.U64) -> String:
+  match value:
+    case W.U64{_,low}: U32.show(low)
 def rows(+settings: Settings.SettingsManager) -> List<&2,ListUI.SettingItem>:
   boolean("autocompact","Auto-compact","Automatically compact context when it gets too large",Settings.getCompactionEnabled(settings)) <>
   boolean("auto-resize-images","Auto-resize images","Resize large images to 2000x2000 max for better model compatibility",Settings.getImageAutoResize(settings)) <>
   boolean("block-images","Block images","Prevent images from being sent to LLM providers",Settings.getBlockImages(settings)) <>
   boolean("skill-commands","Skill commands","Register skills as /skill:name commands",Settings.getEnableSkillCommands(settings)) <>
+  boolean("show-hardware-cursor","Show hardware cursor","Show the terminal cursor while still positioning it for IME support",Maybe.default(&2,Bool,Settings.selectedShowHardwareCursor(Settings.get(Settings.effective(settings),"showHardwareCursor")),False{})) <>
+  item("editor-padding","Editor padding","Horizontal padding for input editor (0-3)",smallNumber(Settings.getEditorPaddingX(settings)),"0" <> "1" <> "2" <> "3" <> Nil{}) <>
+  item("output-padding","Output padding","Horizontal padding for user messages, assistant messages, and thinking",outputPadding(Settings.getOutputPad(settings)),choices("0","1")) <>
+  item("autocomplete-max-visible","Autocomplete max items","Max visible items in autocomplete dropdown (3-20)",smallNumber(Settings.getAutocompleteMaxVisible(settings)),"3" <> "5" <> "7" <> "10" <> "15" <> "20" <> Nil{}) <>
+  boolean("clear-on-shrink","Clear on shrink","Clear empty rows when content shrinks (may cause flicker)",Settings.resolvedClearOnShrink(Settings.terminalOptions(settings),False{})) <>
   boolean("terminal-progress","Terminal progress","Show OSC 9;4 progress indicators in the terminal tab bar",Settings.getShowTerminalProgress(settings)) <>
   item("steering-mode","Steering mode","Enter while streaming queues steering messages. 'one-at-a-time': deliver one, wait for response. 'all': deliver all at once.",queue(Settings.getSteeringMode(settings)),choices("one-at-a-time","all")) <>
   item("follow-up-mode","Follow-up mode","Queues follow-up messages until agent stops. 'one-at-a-time': deliver one, wait for response. 'all': deliver all at once.",queue(Settings.getFollowUpMode(settings)),choices("one-at-a-time","all")) <>
@@ -84,6 +97,22 @@ def change(id: String,value: String,settings: Settings.SettingsManager) -> Setti
   match id value:
     case "autocompact" "true": Settings.setCompactionEnabled(True{},settings)
     case "autocompact" "false": Settings.setCompactionEnabled(False{},settings)
+    case "show-hardware-cursor" "true": Settings.setShowHardwareCursor(True{},settings)
+    case "show-hardware-cursor" "false": Settings.setShowHardwareCursor(False{},settings)
+    case "editor-padding" "0": Settings.setEditorPaddingX(W.U64{0,0},settings)
+    case "editor-padding" "1": Settings.setEditorPaddingX(W.U64{0,1},settings)
+    case "editor-padding" "2": Settings.setEditorPaddingX(W.U64{0,2},settings)
+    case "editor-padding" "3": Settings.setEditorPaddingX(W.U64{0,3},settings)
+    case "output-padding" "0": Settings.setOutputPad(Settings.NoPadding{},settings)
+    case "output-padding" "1": Settings.setOutputPad(Settings.OnePadding{},settings)
+    case "autocomplete-max-visible" "3": Settings.setAutocompleteMaxVisible(W.U64{0,3},settings)
+    case "autocomplete-max-visible" "5": Settings.setAutocompleteMaxVisible(W.U64{0,5},settings)
+    case "autocomplete-max-visible" "7": Settings.setAutocompleteMaxVisible(W.U64{0,7},settings)
+    case "autocomplete-max-visible" "10": Settings.setAutocompleteMaxVisible(W.U64{0,10},settings)
+    case "autocomplete-max-visible" "15": Settings.setAutocompleteMaxVisible(W.U64{0,15},settings)
+    case "autocomplete-max-visible" "20": Settings.setAutocompleteMaxVisible(W.U64{0,20},settings)
+    case "clear-on-shrink" "true": Settings.setClearOnShrink(True{},settings)
+    case "clear-on-shrink" "false": Settings.setClearOnShrink(False{},settings)
     case "steering-mode" "all": Settings.setSteeringMode(Agent.All{},settings)
     case "steering-mode" "one-at-a-time": Settings.setSteeringMode(Agent.OneAtATime{},settings)
     case "follow-up-mode" "all": Settings.setFollowUpMode(Agent.All{},settings)
@@ -150,9 +179,10 @@ def request(redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit)
 def painted(context: Paint,text: ListUI.ThemeText) -> IO(String):
   match context text:
     case Paint{theme,normal,selected} ListUI.ThemeText{+value,active}:
+      +key = Bool.pick(String,active,selected,normal)
       do IO<String>:
         current : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        return Result.default(&2,&2,Theme.Error,String,Theme.foreground(current,Bool.pick(String,active,selected,normal),value),value)
+        return Bool.pick(String,String.is_empty(key),value,Result.default(&2,&2,Theme.Error,String,Theme.foreground(current,key,value),value))
 def plainPaint(context: Paint,text: String) -> IO(String):
   match context text:
     case Paint{theme,key,_} +value:
@@ -291,14 +321,16 @@ def createHost(+editor: Component.Component,+theme: Ref.Ref<Theme.Theme>,+sessio
   do IO<Owner>:
     +modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
     source : Ref.Ref<Segmenter.Source> <- Ref.new(Segmenter.Source,words)
-    +label : Callback.Callback<ListUI.ThemeText,String> <- Callback.create(~Paint,~ListUI.ThemeText,~String,~painted,Paint{theme,"text","accent"})
-    +value : Callback.Callback<ListUI.ThemeText,String> <- Callback.create(~Paint,~ListUI.ThemeText,~String,~painted,Paint{theme,"muted","text"})
-    +description : Callback.Callback<String,String> <- Callback.create(~Paint,~String,~String,~plainPaint,Paint{theme,"muted","muted"})
+    +label : Callback.Callback<ListUI.ThemeText,String> <- Callback.create(~Paint,~ListUI.ThemeText,~String,~painted,Paint{theme,"","accent"})
+    +value : Callback.Callback<ListUI.ThemeText,String> <- Callback.create(~Paint,~ListUI.ThemeText,~String,~painted,Paint{theme,"muted","accent"})
+    +description : Callback.Callback<String,String> <- Callback.create(~Paint,~String,~String,~plainPaint,Paint{theme,"dim","dim"})
     +hint : Callback.Callback<String,String> <- Callback.create(~Paint,~String,~String,~plainPaint,Paint{theme,"dim","dim"})
     +changedCallback : Callback.Callback<ListUI.Change,Unit> <- Callback.create(~ChangeContext,~ListUI.Change,~Unit,~changeSetting,ChangeContext{session,transcript})
     +cancelledCallback : Callback.Callback<Unit,Unit> <- Callback.create(~CancelContext,~Unit,~Unit,~cancelPanel,CancelContext{modal})
     +completed : Callback.Callback<ListUI.Completion,Unit> <- Callback.create(~Unit,~ListUI.Completion,~Unit,~noCompletion,Unit{})
-    +style : ListUI.SettingsListTheme <- IO.pure(ListUI.SettingsListTheme,ListUI.SettingsListTheme{label,value,description,"→ ",hint})
+    currentTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
+    cursor : String <- IO.pure(String,Result.default(&2,&2,Theme.Error,String,Theme.foreground(currentTheme,"accent","→ "),"→ "))
+    +style : ListUI.SettingsListTheme <- IO.pure(ListUI.SettingsListTheme,ListUI.SettingsListTheme{label,value,description,cursor,hint})
     +host : Host <- IO.pure(Host,Host{modal,editor,theme,session,source,bindings,keyboard,redraw,style,changedCallback,cancelledCallback,completed})
     +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~draw,host)
     +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receive,host)
