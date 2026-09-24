@@ -2,9 +2,13 @@ import Base
 import ../../../../ai/src/types.bend as Ai
 import ../../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../../../runtime/src/text.bend as Text
+import ../../../../runtime/src/json.bend as Json
+import ../../../../runtime/src/schema-value.bend as Schema
 import ../../core/agent-session.bend as Session
 import ../../core/compaction/compaction.bend as Compaction
 import ../../core/model-runtime.bend as Models
+import ../../core/session-manager.bend as Tree
+import ../../core/tools/index.bend as Tools
 
 # Built-in commands are recognized before submitting to the agent. Features
 # without a session operation report an error instead of becoming model input.
@@ -24,6 +28,7 @@ type Command is Data:
   SetThinking{requested: Maybe<&2,String>}
   Compact{instructions: Maybe<&2,String>}
   NewSession{}
+  Name{requested: Maybe<&2,String>}
   Login{provider: Maybe<&2,String>}
   Unsupported{text: String}
 
@@ -40,6 +45,7 @@ def classify(+text: String,parts: List<&2,String>) -> Command:
     case "/compact" <> _: Compact{argument(text,8n)}
     case "/new" <> Nil{}: NewSession{}
     case "/clear" <> Nil{}: NewSession{}
+    case "/name" <> _: Name{argument(text,5n)}
     case "/login" <> _: Login{argument(text,6n)}
     case _:
       Bool.pick(Command,String.starts_with(text,"/") || String.starts_with(text,"!"),Unsupported{text},Send{text})
@@ -117,6 +123,35 @@ def compact(session: Session.AgentSession,instructions: Maybe<&2,String>) -> IO(
   do IO<Action>:
     result : Result<&2,&2,String,Compaction.CompactionResult> <- Session.compact(session,instructions)
     return compacted(result)
+def currentName(session: Session.AgentSession) -> IO(Maybe<&2,String>):
+  do IO<Maybe<&2,String>>:
+    stored : Session.Session() <- Session.sessionOf(session)
+    return Tree.getSessionName(Unit,Tools.ToolDetails,Schema.Value,Session.stateOf(stored))
+def showName(current: Maybe<&2,String>) -> Action:
+  match current:
+    case Some{name}: Notice{"Session name: " ++ name}
+    case None{}: CommandError{"Usage: /name <name>"}
+def namedStored(+requested: String,value: Maybe<&2,String>) -> Action:
+  match value:
+    case Some{+actual}:
+      Bool.pick(Action,String.eq(requested,actual),Notice{"Session name set: " ++ actual},Notice{"Session name was normalized from " ++ Json.quote(requested) ++ " to " ++ Json.quote(actual) ++ ". Session name set: " ++ actual})
+    case None{}: Notice{"Session name cleared"}
+def named(requested: String,stored: Maybe<&2,String>,result: Result<&2,&2,String,Unit>) -> Action:
+  match result:
+    case Fail{message}: CommandError{message}
+    case Done{_}: namedStored(requested,stored)
+def setName(+session: Session.AgentSession,+name: String) -> IO(Action):
+  do IO<Action>:
+    outcome : Result<&2,&2,String,Unit> <- Session.setSessionName(session,name)
+    current : Maybe<&2,String> <- currentName(session)
+    return named(name,current,outcome)
+def nameCommand(session: Session.AgentSession,requested: Maybe<&2,String>) -> IO(Action):
+  match requested:
+    case None{}:
+      do IO<Action>:
+        current : Maybe<&2,String> <- currentName(session)
+        return showName(current)
+    case Some{name}: setName(session,name)
 def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,command: Command) -> IO(Action):
   match command:
     case Send{text}: IO.pure(Action,Prompt{text})
@@ -127,6 +162,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case SetThinking{requested}: thinking(session,requested)
     case Compact{instructions}: compact(session,instructions)
     case NewSession{}: IO.pure(Action,CommandError{"Starting a new session is not available yet"})
+    case Name{requested}: nameCommand(session,requested)
     case Login{_}: IO.pure(Action,CommandError{"Login is available in interactive mode only"})
     case Unsupported{text}: IO.pure(Action,CommandError{"Unknown command: " ++ text})
 def parse(text: String) -> Command:
