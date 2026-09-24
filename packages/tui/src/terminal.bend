@@ -133,7 +133,7 @@ type Output is Type: Output{pipe: Pipe, failure: Maybe<&2,Error>, log: Maybe<&2,
 type Handle is Data:
   Handle{state: Serial.Handle<State>, output: Serial.Handle<Output>, inputCancel: PipeCancel, outputCancel: PipeCancel, resizeCancel: PipeCancel}
 type Listeners is Data:
-  Listeners{handle: Handle, input: Callback.Callback<String,Unit>, resize: Callback.Callback<Unit,Unit>}
+  Listeners{handle: Handle, input: Callback.Callback<String,Unit>, resize: Callback.Callback<Unit,Unit>, settled: Callback.Callback<Unit,Unit>}
 type ProcessTerminal is Type:
   ProcessTerminal{lease: TerminalLease, state: Serial.Owner<State>, output: Serial.Owner<Output>, handle: Handle, buffer: Input.AsyncOwner, observer: Callback.Callback<Input.InputEvent,Unit>, reader: Chan(Pipe), resizer: Chan(Pipe), clock: Chan(Unit)}
 
@@ -197,8 +197,8 @@ def inputCallbacks(+observer: Callback.Callback<String,Unit>, events: List<&2,St
         inputCallbacks(observer,rest)
 def deliver(listeners: Listeners,delivery: Delivery) -> IO(Unit):
   match listeners delivery:
-    case Listeners{_,input,_} Delivery{events,SNil{}}: inputCallbacks(input,events)
-    case Listeners{+handle,input,_} Delivery{events,text}:
+    case Listeners{_,input,_,_} Delivery{events,SNil{}}: inputCallbacks(input,events)
+    case Listeners{+handle,input,_,_} Delivery{events,text}:
       do IO<Unit>:
         result : Result<&2,&2,Error,Unit> <- writeRaw(handle,text)
         rememberedWrite(handle,result)
@@ -226,7 +226,7 @@ def frameLocked(now: Nat,event: Input.InputEvent,+state: State) -> IO(State & Un
     case _: IO.pure(State & Unit,(state,Unit{}))
 def onFrame(listeners: Listeners,event: Input.InputEvent) -> IO(Unit):
   match listeners:
-    case Listeners{Handle{state,_,_,_,_},_,_}:
+    case Listeners{Handle{state,_,_,_,_},_,_,_}:
       do IO<Unit>:
         now : Nat <- IO.now()
         Serial.run(State,Unit,state,current => frameLocked(now,event,current))
@@ -342,12 +342,18 @@ def deliveries(+listeners: Listeners,events: List<&2,Delivery>) -> IO(Unit):
       do IO<Unit>:
         deliver(listeners,event)
         deliveries(listeners,rest)
-def clockStep(listeners: Listeners,step: ClockStep) -> IO(Bool):
+# All input framed from one read is published together; `settled` then runs,
+# as Node runs nextTick callbacks after a stdin data handler returns.
+def settle(listeners: Listeners) -> IO(Unit):
+  match listeners:
+    case Listeners{_,_,_,settled}: Callback.call(Unit,Unit,settled,Unit{})
+def clockStep(+listeners: Listeners,step: ClockStep) -> IO(Bool):
   match step:
     case End{}: IO.pure(Bool,False{})
     case Publish{events}:
       do IO<Bool>:
         deliveries(listeners,events)
+        settle(listeners)
         return True{}
     case Wait{wake}:
       do IO<Bool>:
@@ -361,7 +367,7 @@ def clockStep(listeners: Listeners,step: ClockStep) -> IO(Bool):
 @unsafe def terminalClock(+listeners: Listeners,again: Bool) -> IO(Unit):
   match listeners again:
     case _ False{}: IO.pure(Unit,Unit{})
-    case Listeners{Handle{state,_,_,_,_},_,_} True{}:
+    case Listeners{Handle{state,_,_,_,_},_,_,_} True{}:
       do IO<Unit>:
         step : ClockStep <- Serial.run(State,ClockStep,state,nextClock)
         next : Bool <- clockStep(listeners,step)
@@ -385,7 +391,7 @@ def getDimensions(handle: Handle) -> IO(Dimensions):
     case Handle{state,_,_,_,_}: Serial.run(State,Dimensions,state,value => readDimensions(value))
 def notifyResize(listeners: Listeners) -> IO(Unit):
   match listeners:
-    case Listeners{Handle{+state,_,_,outputCancel,_},_,resize}:
+    case Listeners{Handle{+state,_,_,outputCancel,_},_,resize,_}:
       do IO<Unit>:
         previous : Dimensions <- Serial.run(State,Dimensions,state,value => readDimensions(value))
         measured : Result<&1,&1,U32 & String,U32 & U32> <- Terminal.dimensions(outputCancel)
@@ -393,7 +399,7 @@ def notifyResize(listeners: Listeners) -> IO(Unit):
         Bool.pick(Unit -> IO(Unit),changed,_ => Callback.call(Unit,Unit,resize,Unit{}),_ => IO.pure(Unit,Unit{}))(Unit{})
 def resizeFailure(listeners: Listeners,error: Error) -> IO(Unit):
   match listeners:
-    case Listeners{handle,_,_}: remember(handle,Some{error})
+    case Listeners{handle,_,_,_}: remember(handle,Some{error})
 def resizeStep(+listeners: Listeners,result: Pipe & Result<&1,&1,U32 & String,List<&2,U32>>) -> IO(Pipe & Bool):
   match result:
     case (pipe,Done{Nil{}}): IO.pure(Pipe & Bool,(pipe,False{}))
@@ -549,7 +555,7 @@ def started(owner: ProcessTerminal,result: Result<&2,&2,Error,Unit>) -> IO(Resul
         return failedStart(error,cleanup)
 def startWorkers(lease: TerminalLease,state: Serial.Owner<State>,output: Serial.Owner<Output>,+listeners: Listeners,observer: Callback.Callback<Input.InputEvent,Unit>,input: Pipe,resize: Pipe,pair: Input.AsyncOwner & Input.AsyncHandle) -> IO(Result<&2,&1,Error,ProcessTerminal>):
   match listeners pair:
-    case Listeners{+handle,_,_} Tuple{buffer,inputHandle}:
+    case Listeners{+handle,_,_,_} Tuple{buffer,inputHandle}:
       do IO<Result<&2,&1,Error,ProcessTerminal>>:
         reader : Chan(Pipe) <- IO.fork(Pipe,inputReader(handle,inputHandle,(input,True{})))
         resizer : Chan(Pipe) <- IO.fork(Pipe,resizeReader(listeners,(resize,True{})))
@@ -561,11 +567,11 @@ def startBuffer(lease: TerminalLease,state: Serial.Owner<State>,output: Serial.O
     +observer : Callback.Callback<Input.InputEvent,Unit> <- Callback.create(~Listeners,~Input.InputEvent,~Unit,~onFrame,listeners)
     buffer : Input.AsyncOwner <- Input.createAsync(Input.StdinBufferOptions{50,escape},observer)
     startWorkers(lease,state,output,listeners,observer,input,resize,Input.borrowAsync(buffer))
-def startResources(lease: TerminalLease,options: Options,onInput: Callback.Callback<String,Unit>,onResize: Callback.Callback<Unit,Unit>,input: Pipe & PipeCancel,resize: Pipe & PipeCancel,outputCancel: PipeCancel,state: Serial.Owner<State> & Serial.Handle<State>,output: Serial.Owner<Output> & Serial.Handle<Output>) -> IO(Result<&2,&1,Error,ProcessTerminal>):
+def startResources(lease: TerminalLease,options: Options,onInput: Callback.Callback<String,Unit>,onResize: Callback.Callback<Unit,Unit>,onSettled: Callback.Callback<Unit,Unit>,input: Pipe & PipeCancel,resize: Pipe & PipeCancel,outputCancel: PipeCancel,state: Serial.Owner<State> & Serial.Handle<State>,output: Serial.Owner<Output> & Serial.Handle<Output>) -> IO(Result<&2,&1,Error,ProcessTerminal>):
   match options input resize state output:
     case Options{_,_,escape,_,_} Tuple{input,inputCancel} Tuple{resize,resizeCancel} Tuple{state,stateHandle} Tuple{output,outputHandle}:
-      startBuffer(lease,state,output,Listeners{Handle{stateHandle,outputHandle,inputCancel,outputCancel,resizeCancel},onInput,onResize},input,resize,escape)
-def acquired(+options: Options,onInput: Callback.Callback<String,Unit>,onResize: Callback.Callback<Unit,Unit>,result: Result<&1,&1,U32 & String,TerminalLease & (Pipe & PipeCancel) & (Pipe & PipeCancel) & (Pipe & PipeCancel)>) -> IO(Result<&2,&1,Error,ProcessTerminal>):
+      startBuffer(lease,state,output,Listeners{Handle{stateHandle,outputHandle,inputCancel,outputCancel,resizeCancel},onInput,onResize,onSettled},input,resize,escape)
+def acquired(+options: Options,onInput: Callback.Callback<String,Unit>,onResize: Callback.Callback<Unit,Unit>,onSettled: Callback.Callback<Unit,Unit>,result: Result<&1,&1,U32 & String,TerminalLease & (Pipe & PipeCancel) & (Pipe & PipeCancel) & (Pipe & PipeCancel)>) -> IO(Result<&2,&1,Error,ProcessTerminal>):
   match options result:
     case _ Fail{(code,message)}: IO.pure(Result<&2,&1,Error,ProcessTerminal>,Fail{System{"acquire terminal",code,message}})
     case Options{_,_,_,fallback,log} Done{(lease,input,(output,outputCancel),resize)}:
@@ -576,16 +582,16 @@ def acquired(+options: Options,onInput: Callback.Callback<String,Unit>,onResize:
         now : Nat <- IO.now()
         state : Serial.Owner<State> <- Serial.create(State,State{initialNegotiation(),None{},False{},True{},now,dimensionsResult(fallback,measured),Nil{},wake,None{},Nil{}})
         output : Serial.Owner<Output> <- Serial.create(Output,Output{output,None{},log})
-        startResources(lease,options,onInput,onResize,input,resize,outputCancel,Serial.borrow(State,state),Serial.borrow(Output,output))
+        startResources(lease,options,onInput,onResize,onSettled,input,resize,outputCancel,Serial.borrow(State,state),Serial.borrow(Output,output))
 
 # The terminal owns its IO and workers; input/resize callbacks stay caller-owned.
 # Stop before disposing listeners. Borrowed operations must be joined before stop.
-def start(+options: Options,onInput: Callback.Callback<String,Unit>,onResize: Callback.Callback<Unit,Unit>) -> IO(Result<&2,&1,Error,ProcessTerminal>):
+def start(+options: Options,onInput: Callback.Callback<String,Unit>,onResize: Callback.Callback<Unit,Unit>,onSettled: Callback.Callback<Unit,Unit>) -> IO(Result<&2,&1,Error,ProcessTerminal>):
   match options:
     case Options{input,output,_,_,_}:
       do IO<Result<&2,&1,Error,ProcessTerminal>>:
         result : Result<&1,&1,U32 & String,TerminalLease & (Pipe & PipeCancel) & (Pipe & PipeCancel) & (Pipe & PipeCancel)> <- Terminal.acquire(input,output)
-        acquired(options,onInput,onResize,result)
+        acquired(options,onInput,onResize,onSettled,result)
 
 def drainState(now: Nat,transition: ProtocolTransition,state: State) -> State & Maybe<&2,String>:
   match transition state:
@@ -685,10 +691,10 @@ def processOptions() -> IO(Options):
     logging : Result<&1,&1,U32 & String,String> <- IO.get_env("PI_TUI_WRITE_LOG")
     logPath : Maybe<&2,String> <- resolveLogPath(envText(logging))
     return Options{0,1,resolveEscapeTimeoutMs(envText(escape),envText(connection),envText(tty)),Dimensions{dimensionFallback(columns,80),dimensionFallback(rows,24)},logPath}
-def startProcess(input: Callback.Callback<String,Unit>,resize: Callback.Callback<Unit,Unit>) -> IO(Result<&2,&1,Error,ProcessTerminal>):
+def startProcess(input: Callback.Callback<String,Unit>,resize: Callback.Callback<Unit,Unit>,settled: Callback.Callback<Unit,Unit>) -> IO(Result<&2,&1,Error,ProcessTerminal>):
   do IO<Result<&2,&1,Error,ProcessTerminal>>:
     options : Options <- processOptions()
-    start(options,input,resize)
+    start(options,input,resize,settled)
 
 
 def loggedClose(primary: Maybe<&2,Error>,closed: Result<&1,&1,U32 & String,Unit>) -> Result<&2,&2,Error,Unit>:

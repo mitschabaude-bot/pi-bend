@@ -18,6 +18,7 @@ def sleep(ms: U32) -> IO(Unit):
     waitTimer(pair)
 def onInput(environment: Unit,text: String) -> IO(Unit): IO.print_err("input:" ++ J.quote(text))
 def onResize(environment: Unit,value: Unit) -> IO(Unit): IO.print_err("resize")
+def onSettled(environment: Unit,value: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
 def status(result: Result<&2,&2,T.Error,Unit>) -> String:
   match result:
     case Done{Unit{}}: "ok"
@@ -131,10 +132,12 @@ def run(mode: String) -> IO(Unit):
   do IO<Unit>:
     +input : C.Callback<String,Unit> <- C.create(~Unit,~String,~Unit,~onInput,Unit{})
     +resize : C.Callback<Unit,Unit> <- C.create(~Unit,~Unit,~Unit,~onResize,Unit{})
-    result : Result<&2,&1,T.Error,T.ProcessTerminal> <- T.startProcess(input,resize)
+    +settled : C.Callback<Unit,Unit> <- C.create(~Unit,~Unit,~Unit,~onSettled,Unit{})
+    result : Result<&2,&1,T.Error,T.ProcessTerminal> <- T.startProcess(input,resize,settled)
     started(mode,result)
     C.dispose(String,Unit,input)
     C.dispose(Unit,Unit,resize)
+    C.dispose(Unit,Unit,settled)
 def runCycles(left: Nat) -> IO(Unit):
   match left:
     case Zero{}: IO.pure(Unit,Unit{})

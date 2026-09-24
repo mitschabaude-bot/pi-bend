@@ -32,7 +32,7 @@ def prepare(+component: Component.Component) -> IO(Process.Active):
     return Process.active(Process.Session{tui,Screen.initial()},component <> Nil{},Component.id(component) <> Nil{})
 def requireActive(value: Process.Active) -> IO(Unit):
   match value:
-    case Process.Active{_,_,_,None{}}: IO.pure(Unit,Unit{})
+    case Process.Active{_,_,_,None{},_}: IO.pure(Unit,Unit{})
     case _: IO.die(Unit,1,"TUI listener recorded an error")
 def requireRun(value: Result<&2,&2,Terminal.Error,Process.Active>) -> IO(Unit):
   match value:

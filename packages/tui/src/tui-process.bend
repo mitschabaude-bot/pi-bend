@@ -19,7 +19,7 @@ type Error is Data:
 type Draw is Data:
   Drawn{session: Session}
   Rejected{session: Session,cause: Error}
-type Input is Data: Input{outcome: Draw,handled: Bool}
+type Input is Data: Input{outcome: Draw,handled: Bool,owed: Bool}
 
 def initial() -> Session: Session{Tui.newTui(),Screen.initial()}
 def options(tui: Tui.TuiBase,termux: Bool) -> Screen.Options:
@@ -79,17 +79,14 @@ def draw(session: Session,+handle: Terminal.Handle,termux: Bool) -> IO(Draw):
     rows : U32 <- Terminal.getRows(handle)
     sized(session,handle,termux,columns,rows)
 
-# Input callbacks run before the latency-sensitive redraw, using the same
-# owner/screen transaction as a manually requested frame.
+# Input callbacks run before the latency-sensitive redraw. As upstream's
+# requestImmediateRender, a frame is owed and drawn once after all input of
+# one terminal read (the `settled` callback), in the same owner/screen
+# transaction as a manually requested frame.
 def afterInput(result: Tui.ResultOf(Tui.InputResult),old: Session,handle: Terminal.Handle,termux: Bool) -> IO(Input):
   match result old:
-    case Fail{error} old: IO.pure(Input,Input{Rejected{old,Owner{error}},False{}})
-    case Done{Tui.InputResult{+tui,+handled,immediate}} Session{_,+screen}:
-      Bool.pick(Unit -> IO(Input),immediate,
-        _ => do IO<Input>:
-          outcome : Draw <- draw(Session{tui,screen},handle,termux)
-          return Input{outcome,handled},
-        _ => IO.pure(Input,Input{Drawn{Session{tui,screen}},handled}))(Unit{})
+    case Fail{error} old: IO.pure(Input,Input{Rejected{old,Owner{error}},False{},False{}})
+    case Done{Tui.InputResult{tui,handled,immediate}} Session{_,screen}: IO.pure(Input,Input{Drawn{Session{tui,screen}},handled,immediate})
 def input(+session: Session,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
   match session:
     case Session{+tui,_}:
@@ -101,7 +98,7 @@ def input(+session: Session,registry: List<&2,Component.Component>,mounted: List
 # share this context, so input, resize and application updates cannot interleave
 # between a component callback and the frame it produces.
 type Active is Data:
-  Active{session: Session,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,lastError: Maybe<&2,Error>}
+  Active{session: Session,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,lastError: Maybe<&2,Error>,owed: Bool}
 type EventSink is Data:
   EventSink{state: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,queries: Query.Handle,termux: Bool}
 type QueryReady is Data:
@@ -109,26 +106,31 @@ type QueryReady is Data:
 type QueryWriter is Data:
   QueryWriter{terminal: Terminal.Handle,stopped: Deferred.Deferred<Unit>,failure: Deferred.Deferred<Terminal.Error>}
 def active(session: Session,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>) -> Active:
-  Active{session,components,mounted,None{}}
+  Active{session,components,mounted,None{},False{}}
 def afterDraw(outcome: Draw,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,previous: Maybe<&2,Error>) -> Active:
   match outcome:
-    case Drawn{session}: Active{session,components,mounted,previous}
-    case Rejected{session,error}: Active{session,components,mounted,Some{error}}
-def inputFinished(event: Input,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,previous: Maybe<&2,Error>) -> Active & Unit:
+    case Drawn{session}: Active{session,components,mounted,previous,False{}}
+    case Rejected{session,error}: Active{session,components,mounted,Some{error},False{}}
+def inputFinished(event: Input,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,previous: Maybe<&2,Error>,+owed: Bool) -> Active & Unit:
   match event:
-    case Input{outcome,_}: (afterDraw(outcome,components,mounted,previous),Unit{})
+    case Input{Drawn{session},_,now}: (Active{session,components,mounted,previous,owed || now},Unit{})
+    case Input{Rejected{session,error},_,_}: (Active{session,components,mounted,Some{error},owed},Unit{})
 def inputOperation(current: Active,data: String,handle: Terminal.Handle,termux: Bool) -> IO(Active & Unit):
   match current:
-    case Active{session,+components,+mounted,previous}:
+    case Active{session,+components,+mounted,previous,owed}:
       do IO<Active & Unit>:
         event : Input <- input(session,components,mounted,data,handle,termux)
-        return inputFinished(event,components,mounted,previous)
+        return inputFinished(event,components,mounted,previous,owed)
 def resizeOperation(current: Active,handle: Terminal.Handle,termux: Bool) -> IO(Active & Unit):
   match current:
-    case Active{session,components,mounted,previous}:
+    case Active{session,components,mounted,previous,_}:
       do IO<Active & Unit>:
         outcome : Draw <- draw(session,handle,termux)
         return (afterDraw(outcome,components,mounted,previous),Unit{})
+def settledOperation(current: Active,handle: Terminal.Handle,termux: Bool) -> IO(Active & Unit):
+  match current:
+    case Active{_,_,_,_,False{}}: IO.pure(Active & Unit,(current,Unit{}))
+    case current: resizeOperation(current,handle,termux)
 def dispatchInput(listener: EventSink,+data: String) -> IO(Unit):
   match listener:
     case EventSink{state,ready,queries,termux}:
@@ -146,6 +148,12 @@ def onResize(listener: EventSink,value: Unit) -> IO(Unit):
       do IO<Unit>:
         handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
         Serial.run(Active,Unit,state,current => resizeOperation(current,handle,termux))
+def onSettled(listener: EventSink,value: Unit) -> IO(Unit):
+  match listener:
+    case EventSink{state,ready,_,termux}:
+      do IO<Unit>:
+        handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
+        Serial.run(Active,Unit,state,current => settledOperation(current,handle,termux))
 
 # The caller's stop signal is settled by its input/application callbacks. The
 # terminal and serialized TUI state remain owned here until all listeners stop.
@@ -182,8 +190,8 @@ def queryResult(closed: Result<&2,&2,Terminal.Error,Unit>,failure: Maybe<&2,Term
     case None{}: completed(closed,state)
 def beforeStop(current: Active) -> IO(Active & Screen.Stream):
   match current:
-    case Active{Session{tui,+screen},components,mounted,error}:
-      IO.pure(Active & Screen.Stream,(Active{Session{tui,screen},components,mounted,error},Screen.beforeTerminalStop(screen,False{})))
+    case Active{Session{tui,+screen},components,mounted,error,owed}:
+      IO.pure(Active & Screen.Stream,(Active{Session{tui,screen},components,mounted,error,owed},Screen.beforeTerminalStop(screen,False{})))
 def stoppedResult(cleanup: Result<&2,&2,Terminal.Error,Unit>,closed: Result<&2,&2,Terminal.Error,Unit>,failure: Maybe<&2,Terminal.Error>,state: Active) -> Result<&2,&2,Terminal.Error,Active>:
   match cleanup:
     case Done{_}: queryResult(closed,failure,state)
@@ -226,10 +234,12 @@ def runQueries(pair: Query.Owner & Query.Handle,owner: Serial.Owner<Active>,+sta
       do IO<Result<&2,&2,Terminal.Error,Active>>:
         +input : Callback.Callback<String,Unit> <- Callback.create(~EventSink,~String,~Unit,~onInput,EventSink{state,ready,queryHandle,termux})
         +resize : Callback.Callback<Unit,Unit> <- Callback.create(~EventSink,~Unit,~Unit,~onResize,EventSink{state,ready,queryHandle,termux})
-        started : Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal> <- Terminal.startProcess(input,resize)
+        +settled : Callback.Callback<Unit,Unit> <- Callback.create(~EventSink,~Unit,~Unit,~onSettled,EventSink{state,ready,queryHandle,termux})
+        started : Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal> <- Terminal.startProcess(input,resize,settled)
         result : Result<&2,&2,Terminal.Error,Active> <- awaitProcess(started,owner,state,ready,queryHandle,onReady,onStopping,resize,stopped,termux)
         Callback.dispose(String,Unit,input)
         Callback.dispose(Unit,Unit,resize)
+        Callback.dispose(Unit,Unit,settled)
         Deferred.dispose(Terminal.Handle,ready)
         Query.close(queries)
         return result
