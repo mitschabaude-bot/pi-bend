@@ -34,3 +34,9 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   reads a missing `sessionPath`/`entryId` unchecked and reports JavaScript's
   TypeError text (`Cannot read properties of undefined (reading 'startsWith')`);
   Bend validates the field. Both fail; the message is not reproduced.
+- **Unknown flags with other startup diagnostics** (`print-unknown-flag`):
+  upstream collects the unknown-option error with the model-resolution and
+  settings diagnostics of the same runtime and prints them together before
+  exiting. Bend stops at the unknown option before creating the runtime, so
+  a simultaneous model warning or error is not printed. The lone case
+  matches.

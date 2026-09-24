@@ -101,6 +101,8 @@ class Terminal:
         tmux("kill-session", "-t", self.name, check=False)
 
 def normalise(text, root):
+    # Session directories encode the project path.
+    text = text.replace("--" + str(root / "project").strip("/").replace("/", "-") + "--", "<cwd-dir>")
     text = text.replace(str(root), "<root>")
     text = re.sub(r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_", "<stamp>_", text)
     text = re.sub(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "<uuid>", text)
@@ -167,7 +169,7 @@ def run_side(label, argv, scenario, keep):
     for relative, content in scenario.get("files", {}).items():
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content)
+        path.write_bytes(content) if isinstance(content, bytes) else path.write_text(content)
     log = root / "requests.jsonl"
     server = fake_openai.serve(scenario.get("turns", []), str(log))
     port = server.server_address[1]
@@ -192,17 +194,18 @@ def run_side(label, argv, scenario, keep):
             snaps["stderr"] = normalise(result.stderr, root)
             snaps["exit"] = str(result.returncode)
             # Session files written under the agent directory, as values.
-            for index, path in enumerate(sorted((agent / "sessions").rglob("*.jsonl")) if (agent / "sessions").exists() else []):
+            stored = [path for directory in (agent / "sessions", project / "sessions-here") if directory.exists() for path in sorted(directory.rglob("*.jsonl"))]
+            for index, path in enumerate(stored):
                 snaps[f"session{index}"] = normalise(normalise_events(path.read_text().rstrip("\n")), root)
         finally:
             server.shutdown()
             logged = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
         for request in logged:
             request["headers"] = {k: v for k, v in request.get("headers", {}).items() if k not in KNOWN_HEADERS}
-            requests = re.sub(r"127\.0\.0\.1:\d+", "<server>", normalise(json.dumps(logged, indent=1, sort_keys=True), root)) if logged else ""
-            requests = unpackage(requests)
-            if not keep:
-                shutil.rmtree(root, ignore_errors=True)
+        requests = re.sub(r"127\.0\.0\.1:\d+", "<server>", normalise(json.dumps(logged, indent=1, sort_keys=True), root)) if logged else ""
+        requests = unpackage(requests)
+        if not keep:
+            shutil.rmtree(root, ignore_errors=True)
         return {"snaps": snaps, "timings": timings, "requests": requests}
     terminal = Terminal(f"parity-{label}-{scenario['name']}", argv + scenario.get("args", []), env, project)
     try:

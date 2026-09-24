@@ -5,6 +5,7 @@ Paths in `files` are relative to the scenario root (home/, project/). Steps:
   ("wait", regex[, label])  record input→screen latency under `label`
   ("settle"[, seconds])     wait for a quiet screen   ("snap", name)
 """
+import base64
 import json
 
 MODEL = ["--provider", "openai", "--model", "gpt-5"]
@@ -157,4 +158,21 @@ SCENARIOS = [
      "turns": [{"tool": {"name": "nosuch", "arguments": {}}}, {"text": "Hm."}], "steps": []},
     {"name": "print-bad-args", "process": True, "args": MODEL + ["-p", "read it"],
      "turns": [{"tool": {"name": "read", "arguments": {"offset": "x"}}}, {"text": "Hm."}], "steps": []},
+    {"name": "print-session-reuse", "process": True, "before": [MODEL + ["--session-id", "abc-reuse", "-p", "first"]],
+     "args": MODEL + ["--session-id", "abc-reuse", "-p", "second"], "turns": [{"text": "one"}, {"text": "two"}], "steps": []},
+    {"name": "print-session-partial", "process": True, "before": [MODEL + ["--session-id", "abc-partial", "-p", "first"]],
+     "args": MODEL + ["--session", "abc-par", "-p", "second"], "turns": [{"text": "one"}, {"text": "two"}], "steps": []},
+    {"name": "print-fork", "process": True, "before": [MODEL + ["--session-id", "abc-fork", "-p", "first"]],
+     "args": MODEL + ["--fork", "abc-fork", "-p", "second"], "turns": [{"text": "one"}, {"text": "two"}], "steps": []},
+    {"name": "print-session-missing", "process": True, "args": MODEL + ["--session", "nothing-here", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},
+    {"name": "print-fork-conflict", "process": True, "args": MODEL + ["--fork", "x", "--no-session", "-p", "hi"], "steps": []},
+    {"name": "print-session-dir", "process": True, "args": MODEL + ["--session-dir", "sessions-here", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},
+    {"name": "print-image-file", "process": True, "args": MODEL + ["-p", "@pixel.png", "what is it"],
+     "files": {"project/pixel.png": base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC")}, "turns": [{"text": "ok"}], "steps": []},
+    {"name": "print-missing-file", "process": True, "args": MODEL + ["-p", "@nope.txt", "x"], "steps": []},
+    {"name": "print-bad-thinking", "process": True, "args": MODEL + ["--thinking", "huge", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},
+    {"name": "print-unknown-flag", "process": True, "args": MODEL + ["--frobnicate", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},
+    {"name": "print-bad-mode", "process": True, "args": MODEL + ["--mode", "yaml", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},
+    {"name": "print-api-key", "process": True, "args": MODEL + ["--api-key", "sk-other", "-p", "hi"], "turns": [{"text": "ok"}], "steps": []},
+    {"name": "print-no-context", "process": True, "args": MODEL + ["-nc", "-ns", "-p", "hi"], "files": RESOURCES, "turns": [{"text": "ok"}], "steps": []},
 ]
