@@ -3,6 +3,9 @@ import ../../../../ai/src/utils/message-json.bend as Json
 import ../../../../agent/src/types.bend as Agent
 import ../../../../runtime/src/callback.bend as C
 import ../../../../runtime/src/schema-value.bend as V
+import ../../../../runtime/src/json.bend as Decode
+import ../../../../runtime/src/f64.bend as F
+import ../../../../runtime/src/record.bend as R
 import ../../../../runtime/src/filesystem.bend as FS
 import ../../../../runtime/src/posix-path.bend as Path
 import ../../utils/paths.bend as Paths
@@ -453,3 +456,90 @@ def detailsValue(value: ToolDetails) -> V.Value:
     case LsDetails{details}: lsDetailsValue(details)
     case RawDetails{raw}: raw
 
+# Session JSON has no static tool-name parameter, so its generic reader keeps
+# details raw. Once the result's toolName is known, decode built-in details
+# before passing the result to an interactive component.
+def decoded(value: Result<&2,&2,F.Error,Nat>) -> Result<&2,&2,Decode.Error,Nat>:
+  match value:
+    case Done{result}: Done{result}
+    case Fail{_}: Fail{Decode.InvalidValue{Nil{},"non-negative integer"}}
+def natural(value: V.Value) -> Result<&2,&2,Decode.Error,Nat>:
+  Result.bind(&2,&2,Decode.Error,F64,Nat,Decode.number(value),number => decoded(F.convert(number)))
+def boolean(value: V.Value) -> Result<&2,&2,Decode.Error,Bool>:
+  match value:
+    case V.Boolean{flag}: Done{flag}
+    case _: Fail{Decode.WrongType{Nil{},"boolean"}}
+def limit(value: V.Value) -> Result<&2,&2,Decode.Error,Truncate.Limit>:
+  match value:
+    case V.Text{"lines"}: Done{Truncate.Lines{}}
+    case V.Text{"bytes"}: Done{Truncate.Bytes{}}
+    case _: Fail{Decode.InvalidValue{Nil{},"lines or bytes"}}
+def truncation(value: V.Value) -> Result<&2,&2,Decode.Error,Truncate.TruncationResult>:
+  do Result<&2,&2,Decode.Error,Truncate.TruncationResult>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    content : String <- Decode.required(String,fields,"content",Decode.string)
+    truncated : Bool <- Decode.required(Bool,fields,"truncated",boolean)
+    truncatedBy : Maybe<&2,Truncate.Limit> <- Decode.optional(Truncate.Limit,fields,"truncatedBy",limit)
+    totalLines : Nat <- Decode.required(Nat,fields,"totalLines",natural)
+    totalBytes : Nat <- Decode.required(Nat,fields,"totalBytes",natural)
+    outputLines : Nat <- Decode.required(Nat,fields,"outputLines",natural)
+    outputBytes : Nat <- Decode.required(Nat,fields,"outputBytes",natural)
+    lastLinePartial : Bool <- Decode.required(Bool,fields,"lastLinePartial",boolean)
+    firstLineExceedsLimit : Bool <- Decode.required(Bool,fields,"firstLineExceedsLimit",boolean)
+    maxLines : Nat <- Decode.required(Nat,fields,"maxLines",natural)
+    maxBytes : Nat <- Decode.required(Nat,fields,"maxBytes",natural)
+    return Truncate.TruncationResult{content,truncated,truncatedBy,totalLines,totalBytes,outputLines,outputBytes,lastLinePartial,firstLineExceedsLimit,maxLines,maxBytes}
+def restoredRead(value: V.Value) -> Result<&2,&2,Decode.Error,ToolDetails>:
+  do Result<&2,&2,Decode.Error,ToolDetails>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    result : Truncate.TruncationResult <- Decode.required(Truncate.TruncationResult,fields,"truncation",truncation)
+    return ReadDetails{Read.ReadToolDetails{result}}
+def restoredBash(value: V.Value) -> Result<&2,&2,Decode.Error,ToolDetails>:
+  do Result<&2,&2,Decode.Error,ToolDetails>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    result : Maybe<&2,Truncate.TruncationResult> <- Decode.optional(Truncate.TruncationResult,fields,"truncation",truncation)
+    path : Maybe<&2,String> <- Decode.optional(String,fields,"fullOutputPath",Decode.string)
+    return BashDetails{Bash.BashToolDetails{result,path}}
+def restoredEdit(value: V.Value) -> Result<&2,&2,Decode.Error,ToolDetails>:
+  do Result<&2,&2,Decode.Error,ToolDetails>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    diff : String <- Decode.required(String,fields,"diff",Decode.string)
+    patch : String <- Decode.required(String,fields,"patch",Decode.string)
+    first : Maybe<&2,Nat> <- Decode.optional(Nat,fields,"firstChangedLine",natural)
+    return EditDetails{Edit.EditToolDetails{diff,patch,first}}
+def restoredFind(value: V.Value) -> Result<&2,&2,Decode.Error,ToolDetails>:
+  do Result<&2,&2,Decode.Error,ToolDetails>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    cut : Maybe<&2,Truncate.TruncationResult> <- Decode.optional(Truncate.TruncationResult,fields,"truncation",truncation)
+    reached : Maybe<&2,Nat> <- Decode.optional(Nat,fields,"resultLimitReached",natural)
+    return FindDetails{Find.FindToolDetails{cut,reached}}
+def restoredGrep(value: V.Value) -> Result<&2,&2,Decode.Error,ToolDetails>:
+  do Result<&2,&2,Decode.Error,ToolDetails>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    cut : Maybe<&2,Truncate.TruncationResult> <- Decode.optional(Truncate.TruncationResult,fields,"truncation",truncation)
+    reached : Maybe<&2,Nat> <- Decode.optional(Nat,fields,"matchLimitReached",natural)
+    lines : Maybe<&2,Bool> <- Decode.optional(Bool,fields,"linesTruncated",boolean)
+    return GrepDetails{Grep.GrepToolDetails{cut,reached,lines}}
+def restoredLs(value: V.Value) -> Result<&2,&2,Decode.Error,ToolDetails>:
+  do Result<&2,&2,Decode.Error,ToolDetails>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    cut : Maybe<&2,Truncate.TruncationResult> <- Decode.optional(Truncate.TruncationResult,fields,"truncation",truncation)
+    reached : Maybe<&2,Nat> <- Decode.optional(Nat,fields,"entryLimitReached",natural)
+    return LsDetails{Ls.LsToolDetails{cut,reached}}
+def restored(name: String,value: V.Value) -> Result<&2,&2,Decode.Error,ToolDetails>:
+  match name:
+    case "read": restoredRead(value)
+    case "bash": restoredBash(value)
+    case "edit": restoredEdit(value)
+    case "find": restoredFind(value)
+    case "grep": restoredGrep(value)
+    case "ls": restoredLs(value)
+    case _: Done{RawDetails{value}}
+def restoreResult(value: Result<&2,&2,Decode.Error,ToolDetails>,raw: V.Value) -> ToolDetails:
+  match value:
+    case Done{details}: details
+    case Fail{_}: RawDetails{raw}
+def restoreDetails(name: String,details: ToolDetails) -> ToolDetails:
+  match details:
+    case RawDetails{+raw}: restoreResult(restored(name,raw),raw)
+    case typed: typed

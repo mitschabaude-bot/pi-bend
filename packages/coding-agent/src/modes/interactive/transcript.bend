@@ -250,7 +250,9 @@ def blocksText(blocks: List<&2,Ai.TextImageContent>) -> String:
 def agentDetails(result: Agent.AgentToolResult<Tools.ToolDetails>) -> Maybe<&2,Tools.ToolDetails>:
   match result: case Agent.AgentToolResult{_,details,_,_}: details
 def historicalDetails(message: Ai.ToolResultMessage<Tools.ToolDetails>) -> Maybe<&2,Tools.ToolDetails>:
-  match message: case Ai.ToolResultMessage{_,_,_,details,_,_,_}: details
+  match message:
+    case Ai.ToolResultMessage{_,name,_,details,_,_,_}:
+      Maybe.map(&2,Tools.ToolDetails,Tools.ToolDetails,value => Tools.restoreDetails(name,value),details)
 def historicalFound(state: State,+message: Ai.ToolResultMessage<Tools.ToolDetails>,found: Maybe<&2,Tool.Handle>) -> IO(State & Bool):
   match found:
     case None{}: IO.pure(State & Bool,(state,False{}))
