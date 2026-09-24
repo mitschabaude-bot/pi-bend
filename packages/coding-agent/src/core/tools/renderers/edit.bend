@@ -20,11 +20,12 @@ def colorDiffLine(theme: Theme.Theme,line: String) -> IO(String):
     case SCon{'-',_}: Messages.foregroundText(theme,"toolDiffRemoved",line)
     case SCon{'+',_}: Messages.foregroundText(theme,"toolDiffAdded",line)
     case _: Messages.foregroundText(theme,"toolDiffContext",line)
-def commonLength(a: String,b: String) -> Nat:
+def commonLengthFrom(a: String,b: String,+count: Nat) -> Nat:
   match a b:
     case SCon{left,restLeft} SCon{right,restRight}:
-      Bool.pick(Unit -> Nat,Char.is_eq(left,right),_ => 1n + commonLength(restLeft,restRight),_ => 0n)(Unit{})
-    case _ _: 0n
+      Bool.pick(Unit -> Nat,Char.is_eq(left,right),_ => commonLengthFrom(restLeft,restRight,count + 1n),_ => count)(Unit{})
+    case _ _: count
+def commonLength(a: String,b: String) -> Nat: commonLengthFrom(a,b,0n)
 def wordBoundary(+text: String,+index: Nat) -> Bool:
   Nat.is_eq(index,0n) || Nat.is_eq(index,String.length(text)) || String.ends_with(String.take(text,index)," ") || String.starts_with(String.drop(text,index)," ") || String.ends_with(String.take(text,index),"\t") || String.starts_with(String.drop(text,index),"\t")
 def space(+char: Char) -> Bool: Char.is_eq(char,' ') || Char.is_eq(char,'\t')
