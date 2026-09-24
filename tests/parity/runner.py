@@ -29,6 +29,23 @@ import fake_openai  # noqa: E402
 ROOT = Path(__file__).resolve().parents[2]
 WIDTH, HEIGHT = 100, 32
 PI_PACKAGE = str(Path(shutil.which("pi") or "pi").resolve().parents[2]) if shutil.which("pi") else "/nonexistent"
+# The system prompt names each CLI's package directory, whose length enters
+# token estimates. Both CLIs see their package through a link of equal length.
+LINKS = {"pi": "/tmp/pi-parity-pkg-u", "bend": "/tmp/pi-parity-pkg-b"}
+
+def package_links():
+    for link, target in ((LINKS["pi"], PI_PACKAGE), (LINKS["bend"], str(ROOT))):
+        if os.path.islink(link) and os.readlink(link) == target:
+            continue
+        if os.path.lexists(link):
+            os.remove(link)
+        os.symlink(target, link)
+    return {"PI_PACKAGE_DIR": LINKS["pi"], "PI_BEND_PACKAGE_DIR": LINKS["bend"]}
+
+def unpackage(text):
+    for path in (LINKS["pi"], LINKS["bend"], PI_PACKAGE, str(ROOT)):
+        text = text.replace(path, "<package>")
+    return text
 
 def tmux(*args, check=True):
     # A private server keeps runs off the user's own tmux sessions.
@@ -85,6 +102,7 @@ class Terminal:
 
 def normalise(text, root):
     text = text.replace(str(root), "<root>")
+    text = re.sub(r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_", "<stamp>_", text)
     text = re.sub(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "<uuid>", text)
     text = re.sub(r"\b\d+(\.\d+)?(ms|s)\b", "<duration>", text)
     return "\n".join(line.rstrip() for line in text.rstrip("\n").split("\n"))
@@ -106,7 +124,7 @@ def mask(value, key=None, names=None):
     if key in IDS and isinstance(value, str):
         return names.setdefault(value, f"<id{len(names)}>")
     if isinstance(value, str):
-        return value.replace(PI_PACKAGE, "<package>").replace(str(ROOT), "<package>")
+        return unpackage(value)
     return value
 
 # Differences recorded in tests/parity/KNOWN.md, masked so a run shows only
@@ -139,7 +157,8 @@ def normalise_events(text):
     return "\n".join(lines)
 
 def run_side(label, argv, scenario, keep):
-    root = Path(tempfile.mkdtemp(prefix=f"pi-parity-{label}-"))
+    # Equal-length names: the cwd enters the system prompt and token estimates.
+    root = Path(tempfile.mkdtemp(prefix=f"pi-parity-{label[0]}-"))
     home = root / "home"
     agent = home / ".pi" / "agent"
     project = root / "project"
@@ -156,8 +175,7 @@ def run_side(label, argv, scenario, keep):
     (agent / "models.json").write_text(json.dumps({"providers": {"openai": provider}}))
     env = {"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "PATH": os.environ["PATH"],
            "TERM": "xterm-256color", "LANG": "C.UTF-8", "OPENAI_API_KEY": "sk-parity", "PI_OFFLINE": "1",
-           # Bend pi locates its bundled assets (collation data, themes) here; pi ignores it.
-           "PI_BEND_PACKAGE_DIR": str(ROOT),
+           **package_links(),
            **scenario.get("env", {})}
     snaps, timings = {}, {}
     if scenario.get("process"):
@@ -182,7 +200,7 @@ def run_side(label, argv, scenario, keep):
         for request in logged:
             request["headers"] = {k: v for k, v in request.get("headers", {}).items() if k not in KNOWN_HEADERS}
             requests = re.sub(r"127\.0\.0\.1:\d+", "<server>", normalise(json.dumps(logged, indent=1, sort_keys=True), root)) if logged else ""
-            requests = requests.replace(PI_PACKAGE, "<package>").replace(str(ROOT), "<package>")
+            requests = unpackage(requests)
             if not keep:
                 shutil.rmtree(root, ignore_errors=True)
         return {"snaps": snaps, "timings": timings, "requests": requests}
@@ -208,7 +226,7 @@ def run_side(label, argv, scenario, keep):
             request["headers"] = {k: v for k, v in request.get("headers", {}).items() if k not in KNOWN_HEADERS}
         requests = re.sub(r"127\.0\.0\.1:\d+", "<server>", normalise(json.dumps(logged, indent=1, sort_keys=True), root)) if logged else ""
         # The system prompt names the installed package's docs directory.
-        requests = requests.replace(PI_PACKAGE, "<package>").replace(str(ROOT), "<package>")
+        requests = unpackage(requests)
         if not keep:
             shutil.rmtree(root, ignore_errors=True)
     return {"snaps": snaps, "timings": timings, "requests": requests}
