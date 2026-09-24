@@ -180,6 +180,14 @@ def queryResult(closed: Result<&2,&2,Terminal.Error,Unit>,failure: Maybe<&2,Term
   match failure:
     case Some{error}: Fail{error}
     case None{}: completed(closed,state)
+def beforeStop(current: Active) -> IO(Active & Screen.Stream):
+  match current:
+    case Active{Session{tui,+screen},components,mounted,error}:
+      IO.pure(Active & Screen.Stream,(Active{Session{tui,screen},components,mounted,error},Screen.beforeTerminalStop(screen,False{})))
+def stoppedResult(cleanup: Result<&2,&2,Terminal.Error,Unit>,closed: Result<&2,&2,Terminal.Error,Unit>,failure: Maybe<&2,Terminal.Error>,state: Active) -> Result<&2,&2,Terminal.Error,Active>:
+  match cleanup:
+    case Done{_}: queryResult(closed,failure,state)
+    case Fail{error}: Fail{error}
 # The callback receives borrowed handles while the terminal is live. It may
 # await queries here; any forked query must finish before the stop signal.
 def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Owner<Active>,+handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,requestRender: Callback.Callback<Unit,Unit>,+stopped: Deferred.Deferred<Unit>,termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
@@ -196,12 +204,14 @@ def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Ow
         notifyStopping(onStopping)
         drained : Unit <- Serial.run(Active,Unit,handle,unchanged)
         Query.setRunning(queries,writer,False{})
+        cleanup : Screen.Stream <- Serial.run(Active,Screen.Stream,handle,beforeStop)
+        written : Result<&2,&2,Terminal.Error,Unit> <- writeEffects(terminalHandle,cleanup)
         closed : Result<&2,&2,Terminal.Error,Unit> <- Terminal.stop(terminal)
         final : Active <- Serial.retire(Active,owner)
         failed : Maybe<&2,Terminal.Error> <- Deferred.peek(Terminal.Error,failure)
         Callback.dispose(String,Unit,writer)
         Deferred.dispose(Terminal.Error,failure)
-        return queryResult(closed,failed,final)
+        return stoppedResult(written,closed,failed,final)
 def awaitProcess(started: Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal>,owner: Serial.Owner<Active>,handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,requestRender: Callback.Callback<Unit,Unit>,+stopped: Deferred.Deferred<Unit>,termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
   match started:
     case Fail{error}:

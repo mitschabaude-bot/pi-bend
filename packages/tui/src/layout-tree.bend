@@ -163,9 +163,11 @@ def measuredLeaf(component: C.Component,rendered: Rendered,+width: Nat) -> Resul
   match rendered:
     case Rendered{+lines,cache}:
       leafResult(component,lines,cache,0n,0n,width,List.length(&2,String,lines),L.rect(0n,0n,width,List.length(&2,String,lines)))
-def placedLeaf(component: C.Component,rendered: Rendered,x: Nat,y: Nat,width: Nat,height: Nat,clip: L.LayoutRect) -> Result:
+def placedLeaf(+component: C.Component,rendered: Rendered,x: Nat,y: Nat,+width: Nat,+height: Nat,clip: L.LayoutRect) -> Result:
   match rendered:
-    case Rendered{+lines,cache}: leafResult(component,lines,cache,x,y,width,height,clip)
+    case Rendered{+lines,cache}:
+      +bounds = L.rect(x,y,width,height)
+      one(N.Leaf{component},leafBox(component,lines,bounds,clip),lines,width,height,cache)
 def measuredScroll(view: Scroll.ScrollView,rendered: Rendered,width: Nat) -> Result:
   match rendered:
     case Rendered{+lines,cache}:
