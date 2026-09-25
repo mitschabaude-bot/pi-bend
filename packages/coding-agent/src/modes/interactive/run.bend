@@ -2112,7 +2112,6 @@ def runThinkingHosted(borrowed: ThinkingPicker.Owner & ThinkingPicker.Host & Com
         +modelChosen : Callback.Callback<Models.Model(),Unit> <- Callback.create(~SelectInput,~Models.Model(),~Unit,~chosenModel,SelectInput{queue,contextStatus(context),redraw})
         modelHost : ModelPicker.Owner <- ModelPicker.createHost(component,contextTheme(context),contextBindings(context),Keys.defaults(),modelChosen)
         result : Result<&2,&2,Error,Unit> <- runModelHosted(ModelPicker.borrowHost(modelHost),tree,treeHandle,live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,treeChosen,modelChosen)
-        Ref.write(Maybe<&2,ThinkingPicker.Host>,thinkingSelectorRefOf(contextInteraction(context)),None{})
         ThinkingPicker.disposeHost(thinking)
         Callback.dispose(ThinkingPicker.Choice,Unit,thinkingChosen)
         return result
@@ -2124,7 +2123,6 @@ def runScopeHosted(borrowed: ScopePicker.Owner & ScopePicker.Host & Component.Co
         +thinkingChosen : Callback.Callback<ThinkingPicker.Choice,Unit> <- Callback.create(~SelectInput,~ThinkingPicker.Choice,~Unit,~chosenThinking,SelectInput{queue,contextStatus(context),redraw})
         host : ThinkingPicker.Owner <- ThinkingPicker.createHost(component,contextTheme(context),words,contextBindings(context),Keys.defaults(),thinkingChosen)
         result : Result<&2,&2,Error,Unit> <- runThinkingHosted(ThinkingPicker.borrowHost(host),tree,treeHandle,live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,treeChosen,thinkingChosen)
-        Ref.write(Maybe<&2,ScopePicker.Host>,scopedSelectorRefOf(contextInteraction(context)),None{})
         ScopePicker.disposeHost(scoped)
         Callback.dispose(ScopePicker.Action,Unit,scopeChosen)
         return result

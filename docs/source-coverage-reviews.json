@@ -132,7 +132,7 @@
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "23a8e54c1d30b54424d1e29508abdf12385cb5dec8e142b675becdb2c540b2d4",
-        "packages/coding-agent/src/modes/interactive/run.bend": "93f70f701333d91a639f40ee2c54dc9e22a209f840a1759f7c743368d1da01d9",
+        "packages/coding-agent/src/modes/interactive/run.bend": "59545810e0627743d6f57b3a9389ca950f127d19ff1cb457f00e226b0573e385",
         "packages/coding-agent/src/modes/interactive/commands.bend": "346a1437fb1f5d4b429ae47416c1ab464e043ee8a5d7ec79a269fdc417a3092a",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "b5e0bae4b4c857909a36a9f14c3f60bbc3a1c6ab04391492a36958b9616a6eb2"
       }
