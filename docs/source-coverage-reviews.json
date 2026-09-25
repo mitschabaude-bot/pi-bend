@@ -416,7 +416,7 @@
         "packages/coding-agent/src/modes/interactive/transcript.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "2108bc696a289f479fe2797068a7367936f307ddbd7d79821edf0b684bb1792f",
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "673d378b14754e8cf4e7b2c7cb130510b2d48d4bb949a5631eb0d8bf6ff9ea04",
         "packages/coding-agent/src/modes/interactive/transcript.bend": "590b14d48d644f88a59dbe4acec0994cbdc7e2c949b55163c2aeb425aeb6bf91"
       }
     },
@@ -429,7 +429,7 @@
         "packages/coding-agent/src/modes/interactive/transcript.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "2108bc696a289f479fe2797068a7367936f307ddbd7d79821edf0b684bb1792f",
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "673d378b14754e8cf4e7b2c7cb130510b2d48d4bb949a5631eb0d8bf6ff9ea04",
         "packages/coding-agent/src/modes/interactive/transcript.bend": "590b14d48d644f88a59dbe4acec0994cbdc7e2c949b55163c2aeb425aeb6bf91"
       }
     },
@@ -442,7 +442,7 @@
         "packages/coding-agent/src/modes/interactive/transcript.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "2108bc696a289f479fe2797068a7367936f307ddbd7d79821edf0b684bb1792f",
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "673d378b14754e8cf4e7b2c7cb130510b2d48d4bb949a5631eb0d8bf6ff9ea04",
         "packages/coding-agent/src/modes/interactive/transcript.bend": "590b14d48d644f88a59dbe4acec0994cbdc7e2c949b55163c2aeb425aeb6bf91"
       }
     },
@@ -455,8 +455,19 @@
         "packages/coding-agent/src/modes/interactive/transcript.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "2108bc696a289f479fe2797068a7367936f307ddbd7d79821edf0b684bb1792f",
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "673d378b14754e8cf4e7b2c7cb130510b2d48d4bb949a5631eb0d8bf6ff9ea04",
         "packages/coding-agent/src/modes/interactive/transcript.bend": "590b14d48d644f88a59dbe4acec0994cbdc7e2c949b55163c2aeb425aeb6bf91"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/assistant-message.ts": {
+      "state": "partial",
+      "note": "Assistant text/thinking rendering, stream updates, independent thinking-run clicks, global reset, mouse hit regions, output padding and stop errors are ported. Markdown extension transformers and their streaming/width context remain incomplete.",
+      "source_sha256": "f8a20228291816aec253d3f115fec5ba765807275bc14077780225117e5912cb",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/messages.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "673d378b14754e8cf4e7b2c7cb130510b2d48d4bb949a5631eb0d8bf6ff9ea04"
       }
     }
   }

@@ -66,6 +66,11 @@ def lineOf(rows: List<&2,String>,+needle: String,+index: Nat) -> Maybe<&2,Nat>:
     case Nil{}: None{}
     case row <> rest:
       Bool.pick(Maybe<&2,Nat>,contains(Utils.stripTerminalSequences(row),needle),Some{index},lineOf(rest,needle,index + 1n))
+def lineAfter(rows: List<&2,String>,+needle: String,+after: Nat,+index: Nat) -> Maybe<&2,Nat>:
+  match rows:
+    case Nil{}: None{}
+    case row <> rest:
+      Bool.pick(Maybe<&2,Nat>,Nat.is_lt(after,index) && contains(Utils.stripTerminalSequences(row),needle),Some{index},lineAfter(rest,needle,after,index + 1n))
 def orderedPositions(first: Maybe<&2,Nat>,last: Maybe<&2,Nat>) -> Bool:
   match first last:
     case Some{a} Some{b}: Nat.is_lt(a,b)
@@ -219,6 +224,44 @@ def clickNote(component: Component.Component) -> IO(Unit):
   do IO<Unit>:
     clicked : Maybe<&2,Component.TuiMouseDispatchResult> <- Component.dispatchMouseEvent(component,Tui.TuiMouseEvent{Tui.MouseClick{},Tui.MouseLeft{},Tui.Forward{2n},Tui.Forward{1n},Tui.Forward{2n},Tui.Forward{1n},80n,5n,False{},False{},False{},None{},Some{1n}})
     check(Maybe.is_some(&2,Component.TuiMouseDispatchResult,clicked),"summary click was not handled")
+def clickThinkingAt(component: Component.Component,+row: Nat) -> IO(Unit):
+  do IO<Unit>:
+    clicked : Maybe<&2,Component.TuiMouseDispatchResult> <- Component.dispatchMouseEvent(component,Tui.TuiMouseEvent{Tui.MouseClick{},Tui.MouseLeft{},Tui.Forward{2n},Tui.Forward{row},Tui.Forward{2n},Tui.Forward{row},80n,20n,False{},False{},False{},None{},Some{1n}})
+    check(Maybe.is_some(&2,Component.TuiMouseDispatchResult,clicked),"thinking run click was not handled")
+def updatedThinking(body: Messages.Body) -> Messages.Body:
+  match body:
+    case Messages.AssistantBody{value}:
+      Messages.AssistantBody{Messages.updateContent(value,Messages.ThinkingBlock{"first thought updated"} <> Messages.TextBlock{"answer"} <> Messages.ThinkingBlock{"second thought"} <> Nil{},Messages.Stop{},None{},True{})}
+    case other: other
+def refreshThinking(+handle: Messages.Handle) -> IO(Unit):
+  do IO<Unit>:
+    current : Messages.Body <- Messages.current(handle)
+    Messages.set(handle,updatedThinking(current))
+def testThinkingClicks(pair: Messages.Owner & Component.Component & Messages.Handle) -> IO(Unit):
+  match pair:
+    case (owner,+component,handle):
+      do IO<Unit>:
+        +initial : List<&2,String> <- Component.render(component,80n)
+        check(Bool.not(contains(clean(initial),"first thought")) && Bool.not(contains(clean(initial),"second thought")),"thinking runs began expanded")
+        clickThinkingAt(component,1n)
+        +firstOpen : List<&2,String> <- Component.render(component,80n)
+        check(contains(clean(firstOpen),"first thought") && Bool.not(contains(clean(firstOpen),"second thought")),"first thinking click changed another run")
+        +answerRow : Maybe<&2,Nat> <- IO.pure(Maybe<&2,Nat>,lineOf(firstOpen,"answer",0n))
+        +secondRow : Maybe<&2,Nat> <- IO.pure(Maybe<&2,Nat>,lineAfter(firstOpen,"Thinking...",Maybe.default(&2,Nat,answerRow,0n),0n))
+        check(Maybe.is_some(&2,Nat,answerRow) && Maybe.is_some(&2,Nat,secondRow),"second thinking row was not rendered")
+        clickThinkingAt(component,Maybe.default(&2,Nat,secondRow,0n))
+        +bothOpen : List<&2,String> <- Component.render(component,80n)
+        check(contains(clean(bothOpen),"first thought") && contains(clean(bothOpen),"second thought"),"second thinking click did not expand independently")
+        clickThinkingAt(component,1n)
+        +firstClosed : List<&2,String> <- Component.render(component,80n)
+        check(Bool.not(contains(clean(firstClosed),"first thought")) && contains(clean(firstClosed),"second thought"),"first thinking run did not collapse independently")
+        refreshThinking(handle)
+        +updated : List<&2,String> <- Component.render(component,80n)
+        check(Bool.not(contains(clean(updated),"first thought updated")) && contains(clean(updated),"second thought"),"stream update lost thinking overrides")
+        reset : Messages.Owner <- Messages.hideThinkingOwner(owner,False{})
+        +resetLines : List<&2,String> <- Component.render(component,80n)
+        check(contains(clean(resetLines),"first thought updated") && contains(clean(resetLines),"second thought"),"global thinking toggle did not clear overrides")
+        Messages.dispose(reset)
 def testNoteClick(pair: Messages.Owner & Component.Component & Messages.Handle,+detail: String) -> IO(Unit):
   match pair:
     case (owner,+component,_):
@@ -236,6 +279,8 @@ def runStyle(pair: Styles.Styles & Markdown.MarkdownTheme,view: View.View,docume
   match pair:
     case (styles,+markdown):
       do IO<Unit>:
+        thoughtMessage : Messages.Owner <- Messages.create(Component.ComponentId{1002n},Messages.AssistantBody{Messages.setHideThinkingBlock(Messages.assistant(Messages.ThinkingBlock{"first thought"} <> Messages.TextBlock{"answer"} <> Messages.ThinkingBlock{"second thought"} <> Nil{},theme,markdown,1n),True{})})
+        testThinkingClicks(Messages.borrow(thoughtMessage))
         note : Messages.Owner <- Messages.create(Component.ComponentId{999n},Messages.NoteBody{Messages.Note{"branch",Some{"Branch summary"},"click details",False{},theme,markdown,"ctrl+o"}})
         testNoteClick(Messages.borrow(note),"click details")
         compactNote : Messages.Owner <- Messages.create(Component.ComponentId{1001n},Messages.NoteBody{Messages.Note{"compaction",Some{"Compacted from 1,200 tokens"},"compaction click details",False{},theme,markdown,"ctrl+o"}})

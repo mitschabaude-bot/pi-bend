@@ -1818,10 +1818,11 @@
         "packages/coding-agent/src/modes/interactive/components/messages.bend",
         "tests/interactive-messages.bend",
         "tests/interactive_messages_reference.ts",
-        "tests/interactive_messages_check.py"
+        "tests/interactive_messages_check.py",
+        "tests/interactive-transcript.bend"
       ],
       "sha256": "115f5f8261312edb53325023f1b221f210c0eddcae38aa1003867eda49f92d20",
-      "notes": "Byte-exact colored-terminal snapshots for text, adjacent/hidden thinking, streaming content replacement, length/aborted/error stops and tool-call error suppression pass Bun/native1/native4; Ai.AssistantMessage projection is exercised. Per-run mouse toggle, Markdown transformer context/chaining/exception recovery, invalidation and full named suite remain pending; see tests/interactive-messages.md."
+      "notes": "Byte-exact colored-terminal snapshots for text, adjacent/hidden thinking, streaming content replacement, length/aborted/error stops and tool-call error suppression pass Bun/native1/native4; Ai.AssistantMessage projection and per-run mouse toggling are exercised; streaming updates retain per-run choices and global visibility clears them. Markdown transformer context/chaining/exception recovery, invalidation and full named suite remain pending; see tests/interactive-messages.md."
     },
     {
       "source": "packages/coding-agent/test/auth-check.test.ts",
