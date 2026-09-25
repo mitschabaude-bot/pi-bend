@@ -3514,9 +3514,20 @@
     },
     {
       "source": "packages/coding-agent/test/syntax-highlight.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5c6889f27c94309cbcd1625b45cb205909d34a1007f0735f5fd5ed12cb4495c0"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/src/utils/syntax-highlight.bend",
+        "packages/coding-agent/src/utils/html.bend",
+        "packages/runtime/src/highlight.bend",
+        "tests/syntax-highlight.bend",
+        "tests/syntax_highlight_reference.ts",
+        "tests/syntax_highlight_check.py",
+        "tests/highlight-replay.bend",
+        "tests/highlight_reference.mjs",
+        "tests/highlight_check.py"
+      ],
+      "sha256": "5c6889f27c94309cbcd1625b45cb205909d34a1007f0735f5fd5ed12cb4495c0",
+      "notes": "All 8 cases as differential cases against pi-mono's own functions (tests/syntax_highlight_check.py, exact equality instead of toContain): eager registry then loadAllHighlightLanguages (supportsLanguage ada false/true, plus aliases), renderHighlightedHtml span/entity/nested/unscoped cases, highlight(typescript const value = 1), highlightCode diff colours and the regexp/decorator/html scopes with the dark truecolor theme (chalk forced on, as in a terminal). Also Markdown code blocks and getLanguageFromPath. The highlight.js core itself is checked against highlight.js 10.7.3 HTML on 556 cases (tests/highlight_check.py)."
     },
     {
       "source": "packages/coding-agent/test/system-prompt-updates.test.ts",

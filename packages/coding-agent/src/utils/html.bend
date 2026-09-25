@@ -34,12 +34,15 @@ def signed(text: String, hex: Bool, +radix: U32) -> Parsed:
     case SCon{Chr{45}, rest}: Parsed{True{}, digitsFrom(unprefixed(hex, rest), radix, None{})}
     case SCon{Chr{43}, rest}: Parsed{False{}, digitsFrom(unprefixed(hex, rest), radix, None{})}
     case other: Parsed{False{}, digitsFrom(unprefixed(hex, other), radix, None{})}
+# Strings hold Unicode scalars: a surrogate code point (a lone UTF-16 unit
+# in JavaScript) becomes U+FFFD.
+def scalarOf(+code: U32) -> U32: Bool.pick(U32, U32.is_ge(code, 55296) && U32.is_le(code, 57343), 65533, code)
 def codePointOf(parsed: Parsed) -> Maybe<&2, String>:
   match parsed:
     case Parsed{_, None{}}: None{}
     case Parsed{True{}, Some{Zero{}}}: Some{SCon{Chr{0}, SNil{}}}
     case Parsed{True{}, Some{_}}: None{}
-    case Parsed{False{}, Some{+value}}: Bool.pick(Maybe<&2, String>, Nat.is_le(value, 1114111n), Some{SCon{Chr{U32.from_nat(value)}, SNil{}}}, None{})
+    case Parsed{False{}, Some{+value}}: Bool.pick(Unit -> Maybe<&2, String>, Nat.is_le(value, 1114111n), _ => Some{SCon{Chr{scalarOf(U32.from_nat(value))}, SNil{}}}, _ => None{})(Unit{})
 def decodeHtmlEntity(entity: String) -> Maybe<&2, String>:
   match entity:
     case "amp": Some{"&"}

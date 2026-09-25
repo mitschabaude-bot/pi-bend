@@ -1137,3 +1137,7 @@ A related library defect class: `Bool.pick(T, c, x <> f(rest), f(rest))` with a 
 ### Base `Listener` collides with a def in an entry file (2026-09-25)
 
 `bun bend2/main.ts packages/coding-agent/src/core/agent-session.bend` fails with `a fresh name (duplicate declaration: Listener)` at `def Listener()`, at HEAD as well: Base declares `law Listener` (the TCP listener type). Checked through any importer (`modes/print-mode.bend`, `tests/agent-session.bend`) the module passes, because imported definitions are namespaced. Same family as the `Event`/`Halt` collisions above, now only for the entry file; the diagnostic still does not name Base. Not worked around: agent-session is checked through an importer.
+
+### BEND-032 recurrence: highlight.js port (2026-09-25)
+
+`packages/runtime/src/highlight.bend` (`case Some{found}` next to `def found`), `ecma-regex.bend` (`Some{+moved}` next to `def moved`) and `theme.bend` (`Some{+name}` next to `def name`) each type-checked alone and failed only in an importing program. A worse variant: `givingBack(back, …)` whose body still read `match moved:` (the parameter had been renamed from `moved`) type-checked on its own, although `moved` then names a function definition, not a `Maybe`. The binders were renamed; the stale match was fixed by hand. Status: same defect as BEND-032, unfixed; checking a module through a one-line importing program catches it.
