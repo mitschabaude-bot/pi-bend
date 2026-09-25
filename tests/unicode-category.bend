@@ -3,7 +3,7 @@ import ../packages/runtime/src/unicode-17-category.bend as Category
 
 # Runs of Category.category over every Unicode scalar, as `start:class`
 # lines (tests/unicode_category_check.py compares them with JavaScript's
-# `\p{L}` and `\p{N}`).
+# `\p{L}`, `\p{N}`, `\p{P}` and `\p{S}`).
 def runs(count: Nat,+code: U32,+previous: U32,+reversed: List<&2,String>) -> List<&2,String>:
   match count:
     case Zero{}: List.reverse(&2,String,reversed)

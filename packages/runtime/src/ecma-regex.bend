@@ -1,4 +1,5 @@
 import Base
+import ./unicode-17-category.bend as Category
 
 # ECMAScript regular expressions (RegExp) as a backtracking matcher over
 # Unicode scalars: capture groups, lookahead and lookbehind, backreferences,
@@ -6,7 +7,10 @@ import Base
 # language follows ECMA-262 with Annex B's web-compatible syntax outside
 # unicode mode. Differences from JavaScript: indices count scalars, not
 # UTF-16 code units; case-insensitive matching folds ASCII letters only; a
-# match that needs more than the step budget fails instead of running on.
+# match that needs more than the step budget fails instead of running on;
+# the property escapes `\p{…}`/`\P{…}` know the General_Category classes
+# L, N, P and S (Letter, Number, Punctuation, Symbol, optionally after `gc=`
+# or `General_Category=`) and reject other properties as syntax errors.
 
 # Syntax
 # ------
@@ -16,6 +20,8 @@ type ClassItem is Data:
   Digit{negated: Bool}
   Word{negated: Bool}
   Space{negated: Bool}
+  # A General_Category class of unicode-17-category.bend (1 L, 2 N, 3 P, 4 S).
+  Category{negated: Bool, category: U32}
 
 type Node is Data:
   Empty{}
@@ -156,6 +162,35 @@ def classControl(value: Maybe<&2, Escaped>, +rest: List<&2, U32>) -> Result<&2, 
     case Some{escaped}: classEscaped(escaped)
     case None{}: Done{ClassStep{ClassCode{92}, 99 <> rest}}
 
+# `\p{Name}` in unicode mode: the name up to '}' and the class it names.
+def propertyCategory(name: String) -> Maybe<&2, U32>:
+  match name:
+    case "L": Some{1}
+    case "Letter": Some{1}
+    case "N": Some{2}
+    case "Number": Some{2}
+    case "P": Some{3}
+    case "Punctuation": Some{3}
+    case "S": Some{4}
+    case "Symbol": Some{4}
+    case _: None{}
+def unprefixed(+name: String) -> String:
+  Bool.pick(Unit -> String, String.starts_with(name, "gc="), _ => String.drop(name, 3n),
+    _ => Bool.pick(Unit -> String, String.starts_with(name, "General_Category="), _ => String.drop(name, 17n), _ => name)(Unit{}))(Unit{})
+def propertyNamed(negated: Bool, found: Maybe<&2, U32>, rest: List<&2, U32>) -> Result<&2, &2, Error, ClassStep>:
+  match found:
+    case Some{category}: Done{ClassStep{ClassSet{Category{negated, category}}, rest}}
+    case None{}: Fail{SyntaxError{"Invalid property name"}}
+def propertyName(negated: Bool, input: List<&2, U32>, +name: List<&2, U32>) -> Result<&2, &2, Error, ClassStep>:
+  match input:
+    case 125 <> rest: propertyNamed(negated, propertyCategory(unprefixed(fromCodes(List.reverse(&2, U32, name)))), rest)
+    case code <> rest: propertyName(negated, rest, code <> name)
+    case Nil{}: Fail{SyntaxError{"Invalid property name"}}
+def propertyEscape(negated: Bool, input: List<&2, U32>) -> Result<&2, &2, Error, ClassStep>:
+  match input:
+    case 123 <> rest: propertyName(negated, rest, Nil{})
+    case _: Fail{SyntaxError{"Invalid property name"}}
+
 # Annex B: an escaped c without a control letter is a literal backslash.
 def classEscapeLetter(+code: U32, +rest: List<&2, U32>, unicode: Bool) -> Result<&2, &2, Error, ClassStep>:
   match code:
@@ -174,6 +209,8 @@ def classEscapeLetter(+code: U32, +rest: List<&2, U32>, unicode: Bool) -> Result
     case 120: classEscaped(hexEscape(2n, 120, rest))
     case 117: unicodeEscape(unicode, rest)
     case 99: classControl(controlEscape(rest), rest)
+    case 112: Bool.pick(Unit -> Result<&2, &2, Error, ClassStep>, unicode, _ => propertyEscape(False{}, rest), _ => Done{ClassStep{ClassCode{112}, rest}})(Unit{})
+    case 80: Bool.pick(Unit -> Result<&2, &2, Error, ClassStep>, unicode, _ => propertyEscape(True{}, rest), _ => Done{ClassStep{ClassCode{80}, rest}})(Unit{})
     case _: Bool.pick(Unit -> Result<&2, &2, Error, ClassStep>, octalDigit(code) && Bool.not(unicode), _ => classEscaped(legacyOctal(code, rest)), _ => Done{ClassStep{ClassCode{code}, rest}})(Unit{})
 
 def classAtom(input: List<&2, U32>, unicode: Bool) -> Result<&2, &2, Error, ClassStep>:
@@ -634,6 +671,7 @@ def itemHas(item: ClassItem, +code: U32) -> Bool:
     case Digit{negated}: Bool.xor(isDigitCode(code), negated)
     case Word{negated}: Bool.xor(isWordCode(code), negated)
     case Space{negated}: Bool.xor(isSpaceCode(code), negated)
+    case Category{negated, category}: Bool.xor(U32.is_eq(Category.category(code), category), negated)
 def itemsHave(items: List<&2, ClassItem>, +code: U32) -> Bool:
   match items:
     case Nil{}: False{}
@@ -1022,18 +1060,28 @@ def negatedIf(negated: Bool, set: Ascii) -> Ascii:
   match negated:
     case True{}: asciiComplement(set)
     case False{}: set
+# The ASCII members of the General_Category classes.
+def categoryAscii(category: U32) -> Ascii:
+  match category:
+    case 1: asciiUnion(asciiRange(65, 90), asciiRange(97, 122))
+    case 2: asciiRange(48, 57)
+    case 3: Ascii{0, 2348873710, 3087007745, 671088640}
+    case 4: Ascii{0, 1879050256, 1073741824, 1342177281}
+    case _: noAscii()
 def itemAscii(item: ClassItem) -> Ascii:
   match item:
     case Range{low, high}: asciiRange(low, high)
     case Digit{negated}: negatedIf(negated, asciiRange(48, 57))
     case Word{negated}: negatedIf(negated, asciiUnion(asciiUnion(asciiRange(48, 57), asciiRange(65, 90)), asciiUnion(asciiRange(97, 122), asciiRange(95, 95))))
     case Space{negated}: negatedIf(negated, asciiUnion(asciiRange(9, 13), asciiRange(32, 32)))
+    case Category{negated, category}: negatedIf(negated, categoryAscii(category))
 def itemWide(item: ClassItem) -> Bool:
   match item:
     case Range{_, high}: U32.is_ge(high, 128)
     case Digit{negated}: negated
     case Word{negated}: negated
     case Space{_}: True{}
+    case Category{_, _}: True{}
 def itemsAscii(items: List<&2, ClassItem>, set: Ascii, wide: Bool) -> Ascii & Bool:
   match items:
     case Nil{}: (set, wide)
@@ -1126,3 +1174,27 @@ def startsAt(start: Start, +flags: Flags, previous: Maybe<&2, U32>, next: Maybe<
 def canStart(regex: RegExp, start: Start, +cursor: Cursor) -> Bool:
   match regex:
     case RegExp{_, flags, _, _, _}: startsAt(start, flags, previousCode(cursor), followingCode(cursor))
+
+# A match with the cursor at its end, where a scan continues.
+type Found is Data: Found{result: Match, cursor: Cursor}
+def foundAt(result: Machine, start: Nat) -> Maybe<&2, Found>:
+  match result:
+    case Succeeded{+cursor, captures}: Some{Found{Match{start, indexOf(cursor), captures}, cursor}}
+    case _: None{}
+def attemptAt(+regex: RegExp, +start: Start, input: List<&2, U32>, +cursor: Cursor) -> Maybe<&2, Found>:
+  match regex:
+    case RegExp{_, +flags, root, +groups, names}:
+      Bool.pick(Unit -> Maybe<&2, Found>, startsAt(start, flags, previousCode(cursor), followingCode(cursor)),
+        _ => foundAt(attempt(root, groups, settingsOf(flags, input, groups, names), cursor), indexOf(cursor)), _ => None{})(Unit{})
+def searchFrom(fuel: Nat, +regex: RegExp, +start: Start, +input: List<&2, U32>, +cursor: Cursor, attempt: Maybe<&2, Found>) -> Maybe<&2, Found>:
+  match fuel attempt:
+    case _ Some{result}: Some{result}
+    case Zero{} None{}: None{}
+    case Succ{more} None{}:
+      +next = Maybe.default(&2, Cursor, advance(cursor), cursor)
+      searchFrom(more, regex, start, input, next, attemptAt(regex, start, input, next))
+# The leftmost match of `regex` at `cursor` or after it (a global or
+# unanchored exec from the cursor's index), attempted only where the start
+# analysis `start` allows one; `input` is the whole subject.
+def search(+regex: RegExp, +start: Start, +input: List<&2, U32>, +cursor: Cursor) -> Maybe<&2, Found>:
+  searchFrom(List.length(&2, U32, following(cursor)), regex, start, input, cursor, attemptAt(regex, start, input, cursor))
