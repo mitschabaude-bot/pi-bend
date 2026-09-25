@@ -1,28 +1,8 @@
-# Port status
+# Historical port log
 
-The full-port goal resumed after the native Bend cleanup on 2026-09-18. See [native-bend.md](native-bend.md) for the approved representation decisions. The native cleanup replaces earlier object-compatibility milestones; Git history retains their implementation history.
+This is a chronological record of development milestones, not a current coverage report. Statements such as “pending,” “now implemented” and test counts describe the state when each entry was written; early entries refer to older upstream revisions. Do not use this log to choose or close porting work. Use the checked [source reviews](source-coverage-reviews.json), [upstream test inventory](../tests/upstream-inventory.json) and runnable [terminal parity scenarios](../tests/parity/scenarios.py) for current evidence. The [architecture contract](architecture.md) states design requirements without a progress snapshot.
 
-Reference: pi 0.85.1, commit `46c9de402`. This checklist describes the requested destination, not completed features. JavaScript extension compatibility is explicitly excluded by the user.
-
-- [ ] Native build and dependency setup
-- [ ] JSON and incremental SSE parsing
-- [ ] HTTPS, streaming, cancellation, timeouts, retries, proxies, WebSockets
-- [ ] OpenAI OAuth credential loading, refresh and persistence
-- [ ] Provider adapters and model catalog parity
-- [ ] Agent loop, event ordering, steering, tool validation and cancellation
-- [ ] Read, bash, edit, write, grep, find, ls tools with upstream semantics
-- [ ] Project instructions, skills, prompt templates, settings and themes
-- [ ] Session persistence, tree navigation, continue/resume/fork and compaction
-- [ ] Print, JSON event and RPC modes; embedding interface
-- [ ] Terminal editor, differential rendering, Markdown, images, shortcuts and dialogs
-- [ ] Bend extension interface, discovery, hooks and custom tools/UI
-- [ ] Native Linux/macOS portability; account for upstream Windows support
-- [ ] Upstream-derived behavioral and terminal snapshot tests
-- [ ] Final pure-Bend pi-bend subagent develops and tests a feature
-
-Authentication preflight: upstream pi successfully called `openai-codex/gpt-5.6-sol` using the existing private auth file on 2026-09-17. No interactive login was required. This is not yet evidence for authentication implemented in Bend.
-
-## Milestones
+## Historical milestones
 
 - Native JSON parser/serializer: nested structures, exact number spelling, escapes, surrogate pairs, malformed input rejection tested.
 - Native OS effects: file I/O, subprocess output/status/timeouts, streaming HTTP through libcurl. Local HTTP fixture splits Unicode into individual bytes to test transport boundaries.
