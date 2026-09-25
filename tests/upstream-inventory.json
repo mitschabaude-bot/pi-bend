@@ -1781,9 +1781,14 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-tree-navigation.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "26030678b0a8e9044bb3c021477eb1e7b4945eb2f7f06328544ce93eac7471d7"
+      "status": "ported",
+      "ports": [
+        "tests/tree_navigation_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "26030678b0a8e9044bb3c021477eb1e7b4945eb2f7f06328544ce93eac7471d7",
+      "notes": "All ten cases on the faux session instead of a live model (prompts answered 'reply N', the summary 'branch summary'): editor text and leaf for user and assistant targets, summary placement at the root, under the target's parent and under an assistant target, abort during summarization (summary request held, isCompacting true, abortBranchSummary, session unchanged), no summary without the option, same-position no-op, custom instructions (checked in the summarization request, since the scripted summary cannot follow them) and navigation between branches (the summary request covers only the abandoned branch). Bun and native (tests/regressions.bend, 1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/ansi-utils.test.ts",
@@ -2470,14 +2475,14 @@
     },
     {
       "source": "packages/coding-agent/test/management-http.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/tools-manager.bend",
         "tests/tools_manager_check.py",
         "tests/tools-manager.md"
       ],
       "sha256": "2b0e2f0e179c2ddbe4aa91540728265d8703167f482375e519aebe459c4f406b",
-      "notes": "Through tools-manager downloads against a local server on native 1 and 4 threads: 'retries a transient transport failure once' (two dropped connections, then success, three requests) and 'retries transient HTTP responses and returns the successful response' (503s then 200). 'shares the timeout budget across attempts' holds by construction (one Deadline scope and signal for all attempts) but is not asserted. Pending: 'retries an attempt timeout' (attemptTimeoutMs is not ported; upstream uses it only for the unported remote catalog) and 'does not retry caller cancellation' (the fixture has no aborted caller signal)."
+      "notes": "Through tests/tools-manager.bend against a local server, native 1 and 4 threads: 'retries a transient transport failure once' (two dropped connections, three requests), 'retries an attempt timeout' (a hung first attempt past attemptTimeoutMs, two requests), 'retries transient HTTP responses and returns the successful response', 'does not retry caller cancellation' (an aborted caller signal, no request). 'shares the timeout budget across attempts' asserts upstream's signal identity; the port's contract is one budget for all attempts (one Deadline without attemptTimeoutMs; each attempt's deadline bounded by the remaining budget with it), checked by attempts that keep hanging and end with the timeout."
     },
     {
       "source": "packages/coding-agent/test/max-thinking.test.ts",
@@ -3186,9 +3191,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2835-tools-allowlist-filters-extension-tools.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "399e5369a79209f30f15e530f940a61230b876bed587b8287eb58520b40b138b"
+      "status": "partial",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "399e5369a79209f30f15e530f940a61230b876bed587b8287eb58520b40b138b",
+      "notes": "Both cases for the built-in tools: an allowlist of read and dynamic_tool registers and activates only read and the prompt lists only '- read: Read file contents'; an empty allowlist registers nothing and the prompt's tools section is '(none)'. Pending: the extension tool dynamic_tool, which the native extension API cannot register. Bun and native (tests/regressions.bend, 1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2860-replaced-session-context.test.ts",
@@ -3285,9 +3295,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5109-exclude-tools.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "3fa0f1a92fd7fb8a5a72c64bdc4ce86959e98b1fdc9a5dfe046f02600f8dcef1"
+      "status": "partial",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "3fa0f1a92fd7fb8a5a72c64bdc4ce86959e98b1fdc9a5dfe046f02600f8dcef1",
+      "notes": "Both cases for the built-in tools: excluded read is neither registered nor active nor in the system prompt while bash, edit and write stay active; excluded names override the allowlist (only bash registered and active). Pending: the extension tools (ask_question, dynamic_tool registered from session_start), which the native extension API cannot register. Bun and native (tests/regressions.bend, 1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5208-late-bash-output.test.ts",
@@ -3417,9 +3432,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6324-branch-summary-ambient-auth.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6d35ff8fdce4b909a53b027b9cda24f71e7bcb03af625dd04512d4f81f500ef3"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "6d35ff8fdce4b909a53b027b9cda24f71e7bcb03af625dd04512d4f81f500ef3",
+      "notes": "navigateTreeWith(target, summarize) on a seeded session makes one summarization request through the agent's stream function without an API key in its options; the result is not cancelled and its branch_summary entry contains the reply text with the reply's usage (cost 0.25). Bun and native (tests/regressions.bend, 1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6363-agent-settled-event.test.ts",
@@ -3730,9 +3750,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9178-tree-during-compaction.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "21dee83475afbc7421e4c44594b51cd4f3666b68953fc91266de4ab0e305c482"
+      "status": "partial",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "21dee83475afbc7421e4c44594b51cd4f3666b68953fc91266de4ab0e305c482",
+      "notes": "'rejects navigation before the active leaf can change' passes with the manual compaction held at its summary request: navigation fails with the compaction message, the leaf is unchanged, the compaction entry follows the original leaf and the context keeps 'second assistant'. Pending: 'rejects a second navigation while the first is waiting', which waits in a session_before_tree extension handler. Bun and native (tests/regressions.bend, 1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9340-9777-auto-compaction-cancellation.test.ts",
@@ -3908,7 +3933,7 @@
         "tests/tool-prompt-contributions.bend"
       ],
       "sha256": "eff9fdb9335cdcac14d26b90b3caf353fc7cb4473d096e67c414555d85984403",
-      "notes": "The seven ported tools' rows of 'keeps the %s tool definition aligned with its contribution': the port has one source for a tool's prompt snippet and guidelines (Tools.promptSnippet/promptGuidelines, read by the system prompt builder), compared with upstream's *ToolSystemPromptContribution constants imported from the pinned pi-mono. Pending: the powershell row (tool not ported) and 'keeps %s session-environment guidance conditional' (gap: the port's guidelines ignore BashToolOptions.exposeSessionEnvironment). bun test."
+      "notes": "The seven ported tools' rows of 'keeps the %s tool definition aligned with its contribution' (Tools.promptSnippet and Tools.definitionGuidelines, which the system prompt builder reads, against upstream's *ToolSystemPromptContribution constants from the pinned pi-mono) and the bash row of 'keeps %s session-environment guidance conditional' (the bash definition with exposeSessionEnvironment false has no guidelines; upstream's undefined is an empty list). Pending: the powershell rows (tool not ported). The runtime creates its tools with default options (agent-runtime toolsOptions); there is no caller-supplied tool option yet. bun test."
     },
     {
       "source": "packages/coding-agent/test/tools-manager.test.ts",

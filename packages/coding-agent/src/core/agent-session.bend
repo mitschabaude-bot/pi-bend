@@ -13,6 +13,7 @@ import ../../../ai/src/utils/model-api.bend as ModelApi
 import ../../../ai/src/utils/uuid.bend as Uuid
 import ../../../runtime/src/fetch.bend as Fetch
 import ./compaction/compaction.bend as Compaction
+import ./compaction/branch-summarization.bend as BranchSummary
 import ./compaction/plan.bend as Plan
 import ../../../runtime/src/abort.bend as A
 import ../../../runtime/src/f64.bend as F
@@ -211,7 +212,7 @@ type RetryState is Data:
 # recovery was spent, and the abort controllers of manual and automatic
 # compactions in progress.
 type CompactionState is Data:
-  CompactionState{overflowRecoveryAttempted: Bool, manual: Maybe<&2, A.AbortController<Unit>>, auto: Maybe<&2, A.AbortController<Unit>>}
+  CompactionState{overflowRecoveryAttempted: Bool, manual: Maybe<&2, A.AbortController<Unit>>, auto: Maybe<&2, A.AbortController<Unit>>, branch: Maybe<&2, A.AbortController<Unit>>}
 
 # The last assistant message of a run with the session entries that persisted
 # it and its turn's tool results; recovery omits them from the projection.
@@ -609,7 +610,7 @@ def succeededRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason) -> IO(Unit
 
 def markOverflow(state: Shared, attempted: Bool) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{_, manual, auto}, bash}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto}, bash}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{_, manual, auto, branch}, bash}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto, branch}, bash}
 
 # A completed or aborted assistant message re-arms the one overflow recovery.
 def settleOverflow(shared: R.Ref<Shared>, stopReason: Ai.StopReason) -> IO(Unit):
@@ -690,10 +691,19 @@ def abortSleeping(shared: R.Ref<Shared>) -> IO(Unit):
 
 def abortBoth(compaction: CompactionState) -> IO(Unit):
   match compaction:
-    case CompactionState{_, manual, auto}:
+    case CompactionState{_, manual, auto, _}:
       do IO<Unit>:
         abortController(manual)
         abortController(auto)
+
+# upstream abortBranchSummary: cancel an in-progress branch summarization.
+def abortBranchController(compaction: CompactionState) -> IO(Unit):
+  match compaction:
+    case CompactionState{_, _, _, branch}: abortController(branch)
+
+def setBranchController(state: Shared, controller: Maybe<&2, A.AbortController<Unit>>) -> Shared:
+  match state:
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto, _}, bash}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto, controller}, bash}
 
 def compactionOf(state: Shared) -> CompactionState:
   match state:
@@ -704,6 +714,11 @@ def abortCompactions(shared: R.Ref<Shared>) -> IO(Unit):
   do IO<Unit>:
     state : Shared <- R.read(Shared, shared)
     abortBoth(compactionOf(state))
+
+def abortBranchSummaryOf(shared: R.Ref<Shared>) -> IO(Unit):
+  do IO<Unit>:
+    state : Shared <- R.read(Shared, shared)
+    abortBranchController(compactionOf(state))
 
 def runActiveOf(value: Shared) -> Bool:
   match value:
@@ -967,6 +982,7 @@ def contextAbort(env: ContextEnv, unit: Unit) -> IO(Unit):
         R.modify(Shared,Unit,shared,current => (requestRunAbort(current),Unit{}))
         abortSleeping(shared)
         abortCompactions(shared)
+        abortBranchSummaryOf(shared)
         Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
 
 # The mode binds shutdown (upstream bindExtensions); until then it does
@@ -1029,8 +1045,8 @@ def boundWith(runner: ExtensionRunner.ExtensionRunner, binding: Maybe<&2, Extens
 
 def bindContext(loadout: Runtime.Loadout, binding: Maybe<&2, ExtensionBinding>) -> IO(Unit):
   match loadout:
-    case Runtime.Loadout{_, _, _, _, None{}, _, _}: IO.pure(Unit, Unit{})
-    case Runtime.Loadout{_, _, _, _, Some{runner}, _, _}: boundWith(runner, binding)
+    case Runtime.Loadout{_, _, _, _, None{}, _, _, _}: IO.pure(Unit, Unit{})
+    case Runtime.Loadout{_, _, _, _, Some{runner}, _, _, _}: boundWith(runner, binding)
 
 def StreamInput() -> Data: T.StreamInput<Unit, Runtime.Details(), Runtime.LoopConfig()>
 def StreamOutput() -> Type: Result<&2, &1, Runtime.Error(), T.StreamLease<Unit, Runtime.Error()>>
@@ -1067,6 +1083,7 @@ def shutdown(session: AgentSession) -> IO(Unit):
       do IO<Unit>:
         abortSleeping(shared)
         abortCompactions(shared)
+        abortBranchSummaryOf(shared)
         abortBashIn(shared)
         Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         disposeWarming(agent, warming)
@@ -1252,15 +1269,15 @@ def prepareRetry(agent: Runtime.Owner(), +shared: R.Ref<Shared>, turn: LastTurn,
 
 def setManualController(state: Shared, manual: Maybe<&2, A.AbortController<Unit>>) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, _, auto}, bash}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto}, bash}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, _, auto, branch}, bash}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto, branch}, bash}
 
 def setAutoController(state: Shared, auto: Maybe<&2, A.AbortController<Unit>>) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, _}, bash}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto}, bash}
+    case Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, _, branch}, bash}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, CompactionState{attempted, manual, auto, branch}, bash}
 
 def overflowAttemptedOf(state: Shared) -> Bool:
   match state:
-    case Shared{_, _, _, _, _, _, _, CompactionState{attempted, _, _}, _}: attempted
+    case Shared{_, _, _, _, _, _, _, CompactionState{attempted, _, _, _}, _}: attempted
 
 def policyOf(state: Shared) -> Retry.RetryPolicy:
   match state:
@@ -1678,7 +1695,7 @@ def sectionPatch(patch: Maybe<&2, Rec.Record<Maybe<&2, String>>>, now: F64) -> M
 
 def prepareLoadout(agent: Runtime.Owner(), loadout: Runtime.Loadout, messages: List<&2, Message()>, now: F64) -> IO(Maybe<&2, Message()>):
   match loadout:
-    case Runtime.Loadout{sections, tools, _, _, _, _, _}:
+    case Runtime.Loadout{sections, tools, _, _, _, _, _, _}:
       do IO<Maybe<&2, Message()>>:
         Agent.setTools(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, tools)
         return sectionPatch(Prompt.diffSystemPromptSections(sectionsOf(Transcript.getCurrentSystemMessage(V.Value, V.Value, Unit, Runtime.Details(), llmOnly(messages))), sections), now)
@@ -2016,7 +2033,7 @@ def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.Sett
     +scoped : R.Ref<List<&2, Models.ScopedModel>> <- R.new(List<&2, Models.ScopedModel>, scopedModels)
     initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +window : F64 = Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, stateModel(initial)), F.fromU32(0))
-    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, RunState{False{},False{}}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, window, None{}}, CompactionState{False{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}})
+    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, RunState{False{},False{}}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, window, None{}}, CompactionState{False{}, None{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}})
     +settingsRef : R.Ref<Settings.SettingsManager> <- R.new(Settings.SettingsManager,settings)
     +handler : Agent.Handler(SessionEvent(), Runtime.Error()) <- C.create(~R.Ref<Shared>, ~Agent.Input<SessionEvent()>, ~Loop.Emission<Runtime.Error()>, ~handleAgentEvent, shared)
     subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, handler)
@@ -2199,7 +2216,7 @@ def expandSkillCommand(skills: List<&2, Skills.Skill>, +text: String) -> IO(Stri
 
 def expandWith(loadout: Runtime.Loadout, +text: String) -> IO(String):
   match loadout:
-    case Runtime.Loadout{_, _, skills, templates, _, _, _}:
+    case Runtime.Loadout{_, _, skills, templates, _, _, _, _}:
       do IO<String>:
         expanded : String <- expandSkillCommand(skills, text)
         return Templates.expandPromptTemplate(expanded, templates)
@@ -2260,7 +2277,7 @@ def promptWhile(+session: AgentSession, streaming: Bool, +text: String, +images:
 
 def manualIn(compaction: CompactionState) -> Bool:
   match compaction:
-    case CompactionState{_, manual, _}: Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, manual))
+    case CompactionState{_, manual, _, _}: Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, manual))
 
 def manualCompacting(session: AgentSession) -> IO(Bool):
   match session:
@@ -2287,7 +2304,7 @@ def promptExpanded(+session: AgentSession, text: String, images: List<&2, Ai.Ima
 
 def runnerOf(loadout: Runtime.Loadout) -> Maybe<&2, ExtensionRunner.ExtensionRunner>:
   match loadout:
-    case Runtime.Loadout{_, _, _, _, runner, _, _}: runner
+    case Runtime.Loadout{_, _, _, _, runner, _, _, _}: runner
 
 # The session's extension runner (upstream session.extensionRunner); None for
 # sessions created without one.
@@ -2402,7 +2419,7 @@ def abortCompaction(session: AgentSession) -> IO(Unit):
 
 def hasController(compaction: CompactionState) -> Bool:
   match compaction:
-    case CompactionState{_, manual, auto}: Bool.or(Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, manual)), Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, auto)))
+    case CompactionState{_, manual, auto, branch}: Bool.or(Bool.or(Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, manual)), Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, auto))), Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, branch)))
 
 def isCompacting(session: AgentSession) -> IO(Bool):
   match session:
@@ -2421,6 +2438,7 @@ def requestAbort(session: AgentSession) -> IO(Unit):
         R.modify(Shared,Unit,shared,current => (requestRunAbort(current),Unit{}))
         abortSleeping(shared)
         abortCompactions(shared)
+        abortBranchSummaryOf(shared)
         Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
 
 # upstream abort: requestAbort, then wait until the agent is idle.
@@ -2472,6 +2490,7 @@ def compact(session: AgentSession, customInstructions: Maybe<&2, String>) -> IO(
         +settings : Settings.SettingsManager <- R.read(Settings.SettingsManager,settingsRef)
         abortSleeping(shared)
         abortCompactions(shared)
+        abortBranchSummaryOf(shared)
         Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +controller : A.AbortController<Unit> <- A.new(Unit)
@@ -2514,55 +2533,208 @@ def branchTo(session: Session(), leafId: Maybe<&2, String>) -> Sessions.Outcome(
     case None{}: Sessions.resetLeaf(Unit, Tools.ToolDetails, V.Value, session)
     case Some{id}: Sessions.branch(Unit, Tools.ToolDetails, V.Value, session, id)
 
-def navigateBranched(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +target: Navigation, oldLeafId: Maybe<&2, String>, outcome: Sessions.Outcome(Session())) -> IO(Result<&2, &2, String, Navigation>):
+# upstream navigateTree options.
+type NavigateTreeOptions is Data:
+  NavigateTreeOptions{summarize: Bool, customInstructions: Maybe<&2, String>, replaceInstructions: Maybe<&2, Bool>, label: Maybe<&2, String>}
+
+def noSummary() -> NavigateTreeOptions: NavigateTreeOptions{False{}, None{}, None{}, None{}}
+
+# upstream's navigateTree result: the editor text, the new leaf and the branch
+# summary entry; an aborted summarization is upstream's
+# `{cancelled: true, aborted: true}`.
+type TreeNavigation is Data:
+  TreeNavigated{editorText: Maybe<&2, String>, leafId: Maybe<&2, String>, summaryEntry: Maybe<&2, Entry()>}
+  TreeNavigationAborted{}
+
+def TreeResult() -> Data: Result<&2, &2, String, TreeNavigation>
+
+def branchReserve(value: Settings.ResolvedBranchSummarySettings) -> F64:
+  match value:
+    case Settings.ResolvedBranchSummarySettings{reserveTokens, _}: F.fromU64(reserveTokens)
+
+def labelOf(+options: NavigateTreeOptions) -> Maybe<&2, String>:
+  match options:
+    case NavigateTreeOptions{_, _, _, label}: label
+
+def wantsSummary(+options: NavigateTreeOptions) -> Bool:
+  match options:
+    case NavigateTreeOptions{summarize, _, _, _}: summarize
+
+def collectedEntries(collected: Result<&2, &2, S.Error, BranchSummary.Collected<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, Entry()>:
+  match collected:
+    case Done{BranchSummary.Collected{entries, _}}: entries
+    case Fail{_}: Nil{}
+
+def missingModel(+options: NavigateTreeOptions, +model: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> Bool:
+  Bool.and(wantsSummary(options), Maybe.is_none(&2, Ai.Model<Ai.JsonValue>, model))
+
+def leafOfSession(session: Session()) -> Maybe<&2, String>: S.getLeafId(Unit, Tools.ToolDetails, V.Value, stateOf(session))
+
+def appendedSession(outcome: Sessions.Outcome(Appended())) -> Result<&2, &2, String, Session()>:
   match outcome:
-    case Fail{error}: IO.pure(Result<&2, &2, String, Navigation>, Fail{Sessions.message(error)})
-    case Done{next}:
-      do IO<Result<&2, &2, String, Navigation>>:
+    case Done{Sessions.Appended{session, _}}: Done{session}
+    case Fail{error}: Fail{Sessions.message(error)}
+
+# The label goes on the summary entry, or on the target without a summary.
+def labelled(+session: Session(), labelTarget: String, +label: Maybe<&2, String>) -> IO(Result<&2, &2, String, Session()>):
+  match label:
+    case None{}: IO.pure(Result<&2, &2, String, Session()>, Done{session})
+    case Some{text}:
+      do IO<Result<&2, &2, String, Session()>>:
+        appended : Sessions.Outcome(Appended()) <- Sessions.appendLabelChange(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, session, labelTarget, Some{text})
+        return appendedSession(appended)
+
+def branchedAndLabelled(branched: Sessions.Outcome(Session()), +targetId: String, +label: Maybe<&2, String>) -> IO(Result<&2, &2, String, Session()>):
+  match branched:
+    case Fail{error}: IO.pure(Result<&2, &2, String, Session()>, Fail{Sessions.message(error)})
+    case Done{session}: labelled(session, targetId, label)
+
+def settledNavigation(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +editorText: Maybe<&2, String>, summaryEntry: Maybe<&2, Entry()>, +oldLeafId: Maybe<&2, String>, outcome: Result<&2, &2, String, Session()>) -> IO(TreeResult()):
+  match outcome:
+    case Fail{message}: IO.pure(TreeResult(), Fail{message})
+    case Done{+next}:
+      +leaf = leafOfSession(next)
+      do IO<TreeResult()>:
         R.modify(Shared, Unit, shared, previous => (withSession(previous, next), Unit{}))
         refreshContext(agent, shared)
-        emit(shared, SessionTree{oldLeafId, navigationLeaf(target)})
-        return Done{target}
+        emit(shared, SessionTree{oldLeafId, leaf})
+        return Done{TreeNavigated{editorText, leaf, summaryEntry}}
 
-def navigateSelected(agent: Runtime.Owner(), shared: R.Ref<Shared>, current: Session(), +target: Navigation, oldLeafId: Maybe<&2, String>) -> IO(Result<&2, &2, String, Navigation>):
-  match target:
-    case Navigation{_, +leafId}: navigateBranched(agent, shared, target, oldLeafId, branchTo(current, leafId))
+def summaryDetails(summary: BranchSummary.Summary) -> V.Value:
+  match summary:
+    case BranchSummary.Summary{_, _, details}: details
 
-def navigateFound(agent: Runtime.Owner(), shared: R.Ref<Shared>, current: Session(), targetId: String, oldLeafId: Maybe<&2, String>, entry: Maybe<&2, Entry()>) -> IO(Result<&2, &2, String, Navigation>):
+def summaryEntryOf(session: Session(), id: String) -> Maybe<&2, Entry()>:
+  S.getEntry(Unit, Tools.ToolDetails, V.Value, stateOf(session), id)
+
+def summaryLabelled(+label: Maybe<&2, String>, outcome: Sessions.Outcome(Appended())) -> IO(Result<&2, &2, String, Session()> & Maybe<&2, Entry()>):
+  match outcome:
+    case Fail{error}: IO.pure(Result<&2, &2, String, Session()> & Maybe<&2, Entry()>, (Fail{Sessions.message(error)}, None{}))
+    case Done{Sessions.Appended{+session, +id}}:
+      +entry = summaryEntryOf(session, id)
+      do IO<Result<&2, &2, String, Session()> & Maybe<&2, Entry()>>:
+        result : Result<&2, &2, String, Session()> <- labelled(session, id, label)
+        return (result, entry)
+
+def settledPair(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +editorText: Maybe<&2, String>, +oldLeafId: Maybe<&2, String>, pair: Result<&2, &2, String, Session()> & Maybe<&2, Entry()>) -> IO(TreeResult()):
+  match pair:
+    case (outcome, entry): settledNavigation(agent, shared, editorText, entry, oldLeafId, outcome)
+
+# upstream: the summary is attached at the navigation target position (the
+# new leaf); without one the leaf moves there and the label goes on the target.
+def navigateTo(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +current: Session(), +target: Navigation, +targetId: String, +oldLeafId: Maybe<&2, String>, +label: Maybe<&2, String>, summary: Maybe<&2, BranchSummary.Summary>) -> IO(TreeResult()):
+  match target summary:
+    case Navigation{editorText, leafId} None{}:
+      do IO<TreeResult()>:
+        labelledTarget : Result<&2, &2, String, Session()> <- branchedAndLabelled(branchTo(current, leafId), targetId, label)
+        settledNavigation(agent, shared, editorText, None{}, oldLeafId, labelledTarget)
+    case Navigation{editorText, leafId} Some{BranchSummary.Summary{text, usage, details}}:
+      do IO<TreeResult()>:
+        appended : Sessions.Outcome(Appended()) <- Sessions.branchWithSummary(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, current, leafId, text, Some{details}, Some{False{}}, usage)
+        pair : Result<&2, &2, String, Session()> & Maybe<&2, Entry()> <- summaryLabelled(label, appended)
+        settledPair(agent, shared, editorText, oldLeafId, pair)
+
+# The branch summarizer: the agent's stream function, the session's thinking
+# level, the settings' branch-summary reserve and retry policy, and retry
+# notices with the branch-summary source (upstream generateBranchSummary).
+def summarizeBranch(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +model: Ai.Model<Ai.JsonValue>, entries: List<&2, Entry()>, +options: NavigateTreeOptions, +signal: A.AbortSignal<Unit>) -> IO(Result<&2, &2, String, BranchSummary.Summary>):
+  match options:
+    case NavigateTreeOptions{_, custom, replace, _}:
+      do IO<Result<&2, &2, String, BranchSummary.Summary>>:
+        stream : Runtime.Stream() <- Agent.getStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        config : Runtime.LoopConfig() <- Agent.getConfig(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        generated : Result<&2, &2, String, String> <- Uuid.generate()
+        state : Shared <- R.read(Shared, shared)
+        +summarizer : Compaction.Summarizer(Unit, Tools.ToolDetails) <- C.create(~SummarizerEnv, ~Compaction.SummaryRequest<Unit, Tools.ToolDetails>, ~Ai.AssistantMessage<V.Value, Unit>, ~summarizeWith, SummarizerEnv{stream, config, model, stateThinking(current), signal, requestIdOf(generated)})
+        +callbacks : Retry.RetryCallbacks() <- C.create(~RetryNotifier, ~Retry.RetryNotice, ~Unit, ~notifyRetry, RetryNotifier{shared, BranchSummarySource{}})
+        result : Result<&2, &2, String, BranchSummary.Summary> <- BranchSummary.generate(~Unit, ~Tools.ToolDetails, summarizer, entries, model, branchReserve(Settings.getBranchSummarySettings(settings)), signal, custom, Maybe.default(&2, Bool, replace, False{}), Some{policyOf(state)}, Some{callbacks})
+        C.dispose(Compaction.SummaryRequest<Unit, Tools.ToolDetails>, Ai.AssistantMessage<V.Value, Unit>, summarizer)
+        C.dispose(Retry.RetryNotice, Unit, callbacks)
+        return result
+
+def summarized(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +current: Session(), +target: Navigation, +targetId: String, +oldLeafId: Maybe<&2, String>, +label: Maybe<&2, String>, aborted: Bool, result: Result<&2, &2, String, BranchSummary.Summary>) -> IO(TreeResult()):
+  match aborted result:
+    case True{} _: IO.pure(TreeResult(), Done{TreeNavigationAborted{}})
+    case False{} Fail{message}: IO.pure(TreeResult(), Fail{message})
+    case False{} Done{summary}: navigateTo(agent, shared, current, target, targetId, oldLeafId, label, Some{summary})
+
+# Summarization runs under the branch-summary abort controller, which makes
+# the session count as compacting (upstream _branchSummaryAbortController).
+def summarizedNavigation(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +model: Ai.Model<Ai.JsonValue>, +current: Session(), +target: Navigation, +targetId: String, +oldLeafId: Maybe<&2, String>, entries: List<&2, Entry()>, +options: NavigateTreeOptions) -> IO(TreeResult()):
+  do IO<TreeResult()>:
+    +controller : A.AbortController<Unit> <- A.new(Unit)
+    R.modify(Shared, Unit, shared, previous => (setBranchController(previous, Some{controller}), Unit{}))
+    result : Result<&2, &2, String, BranchSummary.Summary> <- summarizeBranch(agent, shared, settings, model, entries, options, A.signal(Unit, controller))
+    aborted : Bool <- A.aborted(Unit, A.signal(Unit, controller))
+    R.modify(Shared, Unit, shared, previous => (setBranchController(previous, None{}), Unit{}))
+    A.dispose(Unit, controller)
+    summarized(agent, shared, current, target, targetId, oldLeafId, labelOf(options), aborted, result)
+
+def navigateCollected(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +model: Maybe<&2, Ai.Model<Ai.JsonValue>>, +current: Session(), +target: Navigation, +targetId: String, +oldLeafId: Maybe<&2, String>, entries: List<&2, Entry()>, +options: NavigateTreeOptions) -> IO(TreeResult()):
+  match model entries:
+    case Some{+chosen} +first <> rest: Bool.pick(Unit -> IO(TreeResult()), wantsSummary(options), _ => summarizedNavigation(agent, shared, settings, chosen, current, target, targetId, oldLeafId, first <> rest, options), _ => navigateTo(agent, shared, current, target, targetId, oldLeafId, labelOf(options), None{}))(Unit{})
+    case _ _: navigateTo(agent, shared, current, target, targetId, oldLeafId, labelOf(options), None{})
+
+def navigateFound(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +model: Maybe<&2, Ai.Model<Ai.JsonValue>>, +current: Session(), +targetId: String, +tree: State(), +oldLeafId: Maybe<&2, String>, +options: NavigateTreeOptions, entry: Maybe<&2, Entry()>) -> IO(TreeResult()):
   match entry:
-    case None{}: IO.pure(Result<&2, &2, String, Navigation>, Fail{"Entry " ++ targetId ++ " not found"})
-    case Some{selected}: navigateSelected(agent, shared, current, navigationTarget(selected, targetId), oldLeafId)
+    case None{}: IO.pure(TreeResult(), Fail{"Entry " ++ targetId ++ " not found"})
+    case Some{selected}: navigateCollected(agent, shared, settings, model, current, navigationTarget(selected, targetId), targetId, oldLeafId, collectedEntries(BranchSummary.collect(Unit, Tools.ToolDetails, V.Value, tree, oldLeafId, targetId)), options)
 
-def sameLeaf(leafId: Maybe<&2, String>, targetId: String) -> Bool:
+def sameLeaf(leafId: Maybe<&2, String>, +targetId: String) -> Bool:
   match leafId:
     case None{}: False{}
     case Some{id}: String.eq(id, targetId)
 
-def navigateLocated(agent: Runtime.Owner(), shared: R.Ref<Shared>, current: Session(), +targetId: String, tree: State(), +oldLeafId: Maybe<&2, String>) -> IO(Result<&2, &2, String, Navigation>):
-  Bool.pick(Unit -> IO(Result<&2, &2, String, Navigation>), sameLeaf(oldLeafId, targetId),
-    _ => IO.pure(Result<&2, &2, String, Navigation>, Done{Navigation{None{}, oldLeafId}}),
-    _ => navigateFound(agent, shared, current, targetId, oldLeafId, S.getEntry(Unit, Tools.ToolDetails, V.Value, tree, targetId)))(Unit{})
+def navigateLocated(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +model: Maybe<&2, Ai.Model<Ai.JsonValue>>, +current: Session(), +targetId: String, +tree: State(), +oldLeafId: Maybe<&2, String>, +options: NavigateTreeOptions) -> IO(TreeResult()):
+  Bool.pick(Unit -> IO(TreeResult()), sameLeaf(oldLeafId, targetId),
+    _ => IO.pure(TreeResult(), Done{TreeNavigated{None{}, oldLeafId, None{}}}),
+    _ => Bool.pick(Unit -> IO(TreeResult()), missingModel(options, model),
+      _ => IO.pure(TreeResult(), Fail{"No model available for summarization"}),
+      _ => navigateFound(agent, shared, settings, model, current, targetId, tree, oldLeafId, options, S.getEntry(Unit, Tools.ToolDetails, V.Value, tree, targetId)))(Unit{}))(Unit{})
 
-def navigateSnapshot(agent: Runtime.Owner(), shared: R.Ref<Shared>, snapshot: Shared, +targetId: String) -> IO(Result<&2, &2, String, Navigation>):
+def navigateSnapshot(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, +model: Maybe<&2, Ai.Model<Ai.JsonValue>>, snapshot: Shared, +targetId: String, +options: NavigateTreeOptions) -> IO(TreeResult()):
   match snapshot:
     case Shared{+current, _, _, _, _, _, _, _, _}:
       +tree = stateOf(current)
-      navigateLocated(agent, shared, current, targetId, tree, S.getLeafId(Unit, Tools.ToolDetails, V.Value, tree))
+      navigateLocated(agent, shared, settings, model, current, targetId, tree, S.getLeafId(Unit, Tools.ToolDetails, V.Value, tree), options)
 
-# No-summary navigation; branch summarization remains a separate operation.
-def navigateTree(+session: AgentSession, targetId: String) -> IO(Result<&2, &2, String, Navigation>):
+# upstream navigateTree(targetId, options): move the leaf within the same
+# session file; with `summarize`, the abandoned branch (old leaf back to the
+# common ancestor) is summarized first and the summary becomes the new leaf.
+def navigateTreeWith(+session: AgentSession, +targetId: String, +options: NavigateTreeOptions) -> IO(TreeResult()):
   match session:
-    case AgentSession{agent, shared, _, _, _, _, _, _}:
-      do IO<Result<&2, &2, String, Navigation>>:
+    case AgentSession{agent, shared, _, settingsRef, _, _, _, _}:
+      do IO<TreeResult()>:
         streaming : Bool <- isStreaming(session)
         compacting : Bool <- isCompacting(session)
-        Bool.pick(Unit -> IO(Result<&2, &2, String, Navigation>), streaming,
-          _ => IO.pure(Result<&2, &2, String, Navigation>, Fail{"Wait for the current response to finish before navigating the session tree."}),
-          _ => Bool.pick(Unit -> IO(Result<&2, &2, String, Navigation>), compacting,
-            _ => IO.pure(Result<&2, &2, String, Navigation>, Fail{"Wait for the current compaction or tree navigation to finish before navigating the session tree."}),
-            _ => do IO<Result<&2, &2, String, Navigation>>:
+        Bool.pick(Unit -> IO(TreeResult()), streaming,
+          _ => IO.pure(TreeResult(), Fail{"Wait for the current response to finish before navigating the session tree."}),
+          _ => Bool.pick(Unit -> IO(TreeResult()), compacting,
+            _ => IO.pure(TreeResult(), Fail{"Wait for the current compaction or tree navigation to finish before navigating the session tree."}),
+            _ => do IO<TreeResult()>:
               snapshot : Shared <- R.read(Shared, shared)
-              navigateSnapshot(agent, shared, snapshot, targetId))(Unit{}))(Unit{})
+              settings : Settings.SettingsManager <- R.read(Settings.SettingsManager, settingsRef)
+              current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+              navigateSnapshot(agent, shared, settings, stateModel(current), snapshot, targetId, options))(Unit{}))(Unit{})
+
+# upstream abortBranchSummary: cancel an in-progress branch summarization;
+# the navigation then reports it as aborted and leaves the session unchanged.
+def abortBranchSummary(session: AgentSession) -> IO(Unit):
+  match session:
+    case AgentSession{_, shared, _, _, _, _, _, _}: abortBranchSummaryOf(shared)
+
+def plainNavigation(result: TreeResult()) -> Result<&2, &2, String, Navigation>:
+  match result:
+    case Done{TreeNavigated{editorText, leafId, _}}: Done{Navigation{editorText, leafId}}
+    case Done{TreeNavigationAborted{}}: Fail{"Branch summarization aborted"}
+    case Fail{message}: Fail{message}
+
+# Navigation without a summary.
+def navigateTree(+session: AgentSession, +targetId: String) -> IO(Result<&2, &2, String, Navigation>):
+  do IO<Result<&2, &2, String, Navigation>>:
+    result : TreeResult() <- navigateTreeWith(session, targetId, noSummary())
+    return plainNavigation(result)
 
 def forkText(text: Maybe<&2, String>, parent: Maybe<&2, String>) -> Maybe<&2, Navigation>:
   match text:
@@ -2974,13 +3146,13 @@ def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, St
 # resources this session was loaded (or last reloaded) with.
 def templatesOf(loadout: Runtime.Loadout) -> List<&2, Templates.PromptTemplate>:
   match loadout:
-    case Runtime.Loadout{_, _, _, templates, _, _, _}: templates
+    case Runtime.Loadout{_, _, _, templates, _, _, _, _}: templates
 def skillsOf(loadout: Runtime.Loadout) -> List<&2, Skills.Skill>:
   match loadout:
-    case Runtime.Loadout{_, _, loaded, _, _, _, _}: loaded
+    case Runtime.Loadout{_, _, loaded, _, _, _, _, _}: loaded
 def agentsFilesOf(loadout: Runtime.Loadout) -> List<&2, Prompt.ContextFile>:
   match loadout:
-    case Runtime.Loadout{_, _, _, _, _, agentsFiles, _}: agentsFiles
+    case Runtime.Loadout{_, _, _, _, _, agentsFiles, _, _}: agentsFiles
 def promptTemplates(session: AgentSession) -> IO(List<&2, Templates.PromptTemplate>):
   do IO<List<&2, Templates.PromptTemplate>>:
     loadout : Runtime.Loadout <- loadoutOf(session)
@@ -2994,6 +3166,71 @@ def getAgentsFiles(session: AgentSession) -> IO(List<&2, Prompt.ContextFile>):
     loadout : Runtime.Loadout <- loadoutOf(session)
     return agentsFilesOf(loadout)
 
+# Tools
+# -----
+
+def toolNamesOf(tools: List<&2, Tools.Tool()>) -> List<&2, String>:
+  match tools:
+    case Nil{}: Nil{}
+    case T.AgentTool{name, _, _, _, _, _, _, _, _} <> rest: name <> toolNamesOf(rest)
+
+# upstream ToolInfo without source metadata.
+type ToolInfo is Data:
+  ToolInfo{name: String, description: String, parameters: V.Value}
+
+def toolInfos(tools: List<&2, Tools.Tool()>) -> List<&2, ToolInfo>:
+  match tools:
+    case Nil{}: Nil{}
+    case T.AgentTool{name, description, parameters, _, _, _, _, _, _} <> rest: ToolInfo{name, description, parameters} <> toolInfos(rest)
+
+def activeNamesIn(loadout: Runtime.Loadout) -> List<&2, String>:
+  match loadout:
+    case Runtime.Loadout{_, tools, _, _, _, _, _, _}: toolNamesOf(tools)
+
+def registryIn(loadout: Runtime.Loadout) -> List<&2, ToolInfo>:
+  match loadout:
+    case Runtime.Loadout{_, _, _, _, _, _, _, registry}: toolInfos(registry)
+
+# upstream getActiveToolNames: the active tools, in activation order.
+def getActiveToolNames(session: AgentSession) -> IO(List<&2, String>):
+  do IO<List<&2, String>>:
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    return activeNamesIn(loadout)
+
+# upstream getAllTools: every tool that can be activated.
+def getAllTools(session: AgentSession) -> IO(List<&2, ToolInfo>):
+  do IO<List<&2, ToolInfo>>:
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    return registryIn(loadout)
+
+def sectionsAfter(+sections: Prompt.SystemPromptSections(), source: Maybe<&2, Runtime.LoadoutSource>, +names: List<&2, String>, contextFiles: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>) -> Prompt.SystemPromptSections():
+  match source:
+    case None{}: sections
+    case Some{found}: Result.default(&2, &2, String, Prompt.SystemPromptSections(), Runtime.sectionsForTools(found, names, contextFiles, skills), sections)
+
+def activated(loadout: Runtime.Loadout, +names: List<&2, String>) -> Runtime.Loadout:
+  match loadout:
+    case Runtime.Loadout{+sections, _, +skills, templates, extensions, +files, +source, +registry}:
+      +active = Runtime.activeTools(registry, names)
+      Runtime.Loadout{sectionsAfter(sections, source, toolNamesOf(active), files, skills), active, skills, templates, extensions, files, source, registry}
+
+# upstream setActiveToolsByName: only registered tools can be activated,
+# unknown names are ignored, and the system prompt is rebuilt for the new set;
+# the next request declares it (the loadout diff).
+def setActiveToolsByName(session: AgentSession, names: List<&2, String>) -> IO(Unit):
+  match session:
+    case AgentSession{_, _, _, _, _, loadoutRef, _, _}: R.modify(Runtime.Loadout, Unit, loadoutRef, current => (activated(current, names), Unit{}))
+
+def sectionsIn(loadout: Runtime.Loadout) -> Prompt.SystemPromptSections():
+  match loadout:
+    case Runtime.Loadout{sections, _, _, _, _, _, _, _}: sections
+
+# upstream systemPrompt: the effective system prompt for the next request.
+def systemPrompt(session: AgentSession) -> IO(String):
+  do IO<String>:
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    return Result.default(&2, &2, Prompt.Error, String, Prompt.promptText(Done{Prompt.SystemPromptState{"", Some{sectionsIn(loadout)}}}), "")
+
 # upstream AgentSession.reload without extensions: settings are reloaded from
 # their files, then skills, prompt templates, context files and the system
 # prompt are prepared again; the tools stay. The next request declares the new
@@ -3001,7 +3238,7 @@ def getAgentsFiles(session: AgentSession) -> IO(List<&2, Prompt.ContextFile>):
 def reloadedLoadout(loadout: Runtime.Loadout, prepared: Result<&2, &2, String, Runtime.Prepared>) -> Result<&2, &2, String, Runtime.Loadout>:
   match loadout prepared:
     case _ Fail{message}: Fail{message}
-    case Runtime.Loadout{_, tools, _, _, context, _, source} Done{Runtime.Prepared{sections, skills, templates, files}}: Done{Runtime.Loadout{sections, tools, skills, templates, context, files, source}}
+    case Runtime.Loadout{_, tools, _, _, context, _, source, registry} Done{Runtime.Prepared{sections, skills, templates, files}}: Done{Runtime.Loadout{sections, tools, skills, templates, context, files, source, registry}}
 def storeReloaded(+loadoutRef: R.Ref<Runtime.Loadout>, result: Result<&2, &2, String, Runtime.Loadout>) -> IO(Result<&2, &2, String, Unit>):
   match result:
     case Fail{message}: IO.pure(Result<&2, &2, String, Unit>, Fail{message})
@@ -3011,10 +3248,10 @@ def storeReloaded(+loadoutRef: R.Ref<Runtime.Loadout>, result: Result<&2, &2, St
         return Done{Unit{}}
 def reloadFrom(+loadoutRef: R.Ref<Runtime.Loadout>, +loadout: Runtime.Loadout, settings: Settings.SettingsManager) -> IO(Result<&2, &2, String, Unit>):
   match loadout:
-    case Runtime.Loadout{_, _, _, _, _, _, None{}}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
-    case Runtime.Loadout{_, _, _, _, _, _, Some{source}}:
+    case Runtime.Loadout{_, _, _, _, _, _, None{}, _}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+    case Runtime.Loadout{_, tools, _, _, _, _, Some{source}, _}:
       do IO<Result<&2, &2, String, Unit>>:
-        prepared : Result<&2, &2, String, Runtime.Prepared> <- Runtime.reprepare(source, settings)
+        prepared : Result<&2, &2, String, Runtime.Prepared> <- Runtime.reprepare(source, settings, toolNamesOf(tools))
         storeReloaded(loadoutRef, reloadedLoadout(loadout, prepared))
 def reload(session: AgentSession) -> IO(Result<&2, &2, String, Unit>):
   match session:

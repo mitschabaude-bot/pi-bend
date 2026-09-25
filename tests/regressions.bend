@@ -17,6 +17,7 @@ import ../packages/coding-agent/src/core/agent-runtime.bend as Runtime
 import ../packages/coding-agent/src/core/agent-session.bend as Session
 import ../packages/coding-agent/src/core/session-persistence.bend as Sessions
 import ../packages/coding-agent/src/core/session-manager.bend as S
+import ../packages/coding-agent/src/core/system-prompt.bend as Prompt
 import ../packages/coding-agent/src/core/compaction/compaction.bend as Compaction
 import ../packages/coding-agent/src/core/settings-manager.bend as Settings
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
@@ -24,6 +25,7 @@ import ../packages/coding-agent/src/core/model-runtime.bend as Models
 import ../packages/coding-agent/src/modes/json-event.bend as JsonEvent
 import ./model-runtime-fixture.bend as ModelFixture
 import ./agent-session.bend as H
+import ../packages/coding-agent/src/utils/paths.bend as Paths
 
 # Scenarios for upstream's suite/regressions tests that need AgentSession
 # behavior beyond tests/agent-session.bend. The provider streams like
@@ -39,6 +41,7 @@ def EventStream() -> Data: Stream.AssistantMessageEventStream(V.Value, Unit)
 type Reply is Data:
   Text{text: String}
   Plain{text: String}
+  Costed{text: String}
   Call{id: String, name: String, arguments: V.Value, json: String}
 
 # Each request takes the next hold: Pass runs at once, Hold waits at a gate
@@ -65,6 +68,29 @@ def signalOf(input: H.Input()) -> Maybe<&2, Signal()>:
     case T.StreamInput{_, _, Some{T.AgentLoopConfig{Ai.SimpleStreamOptions{signal, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _, _}}}: signal
     case _: None{}
 
+def blockTexts(blocks: List<&2, Ai.TextImageContent>) -> String:
+  match blocks:
+    case Nil{}: ""
+    case Ai.TextImageText{Ai.TextContent{text, _}} <> rest: text ++ blockTexts(rest)
+    case _ <> rest: blockTexts(rest)
+
+def lastUserIn(messages: List<&2, Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>>, found: Maybe<&2, String>) -> Maybe<&2, String>:
+  match messages:
+    case Nil{}: found
+    case Ai.User{Ai.UserMessage{Ai.UserText{text}, _}} <> rest: lastUserIn(rest, Some{text})
+    case Ai.User{Ai.UserMessage{Ai.UserBlocks{blocks}, _}} <> rest: lastUserIn(rest, Some{blockTexts(blocks)})
+    case _ <> rest: lastUserIn(rest, found)
+
+# The text of the request's last user message.
+def lastUserOf(input: H.Input()) -> Maybe<&2, String>:
+  match input:
+    case T.StreamInput{_, Ai.TranscriptContext{messages}, _}: lastUserIn(messages, None{})
+
+def apiKeyOf(input: H.Input()) -> Maybe<&2, String>:
+  match input:
+    case T.StreamInput{_, _, Some{T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, apiKey, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _, _}}}: apiKey
+    case _: None{}
+
 def isAborted(signal: Maybe<&2, Signal()>) -> IO(Bool):
   match signal:
     case None{}: IO.pure(Bool, False{})
@@ -80,6 +106,10 @@ def usageOf(+output: F64) -> Ai.Usage:
 # The model a reply comes from and its time.
 type Stamp is Data:
   Stamp{model: String, time: F64}
+
+# 6324's reply: input 1, output 1, total cost 0.25.
+def costedUsage() -> Ai.Usage:
+  Ai.Usage{U32.to_f64(1), U32.to_f64(1), zero(), zero(), None{}, None{}, U32.to_f64(2), Ai.UsageCost{zero(), zero(), zero(), zero(), F64.div(U32.to_f64(1), U32.to_f64(4))}}
 
 def message(content: List<&2, Ai.AssistantContent<V.Value>>, stop: Ai.StopReason, usage: Ai.Usage, now: Stamp) -> Ai.AssistantMessage<V.Value, Unit>:
   match now:
@@ -131,6 +161,11 @@ def answer(+stream: EventStream(), reply: Reply, +now: Stamp) -> IO(Unit):
         textDeltas(stream, chunks(text), "", usage, now)
         push(stream, Ai.TextEnd{zero(), text, message(textBlock(text), Ai.Pending{}, usage, now)})
         push(stream, Ai.StreamDone{Ai.DoneStop{}, message(textBlock(text), Ai.Stop{}, usage, now)})
+    case Costed{+text}:
+      +usage = costedUsage()
+      do IO<Unit>:
+        push(stream, Ai.Start{message(Nil{}, Ai.Pending{}, usage, now)})
+        push(stream, Ai.StreamDone{Ai.DoneStop{}, message(textBlock(text), Ai.Stop{}, usage, now)})
     case Plain{+text}:
       +usage = usageOf(zero())
       do IO<Unit>:
@@ -159,12 +194,13 @@ def popReply(replies: List<&2, Reply>) -> List<&2, Reply> & Reply:
     case Nil{}: (Nil{}, Text{"(no scripted response)"})
     case reply <> rest: (rest, reply)
 
-def provider(faux: Faux, input: H.Input()) -> IO(H.Output()):
+def providing(faux: Faux, +input: H.Input()) -> IO(H.Output()):
   match faux:
     case Faux{replies, streams, gates, +model, signals}:
       +signal = signalOf(input)
       do IO<H.Output()>:
         R.write(Maybe<&2, Signal()>, signals, signal)
+        IO.print("{\"type\":\"request\",\"apiKey\":" ++ H.maybeQuoted(apiKeyOf(input)) ++ ",\"lastUser\":" ++ H.maybeQuoted(lastUserOf(input)) ++ "}")
         gate : Maybe<&2, H.Gate> <- R.modify(List<&2, Hold>, Maybe<&2, H.Gate>, gates, remaining => popHold(remaining))
         H.holdAt(gate)
         aborted : Bool <- isAborted(signal)
@@ -175,6 +211,8 @@ def provider(faux: Faux, input: H.Input()) -> IO(H.Output()):
         R.modify(List<&2, EventStream()>, Unit, streams, old => (stream <> old, Unit{}))
         Bool.pick(Unit -> IO(Unit), aborted, _ => abortedReply(stream, Stamp{model, now}), _ => answer(stream, reply, Stamp{model, now}))(Unit{})
         return Done{T.borrowedStream(Unit, Tools.ToolError, stream)}
+
+def provider(faux: Faux, input: H.Input()) -> IO(H.Output()): providing(faux, input)
 
 # Prints every session event on the wire, and for message_update also the
 # session event's own assistant message, which the wire form omits.
@@ -191,7 +229,7 @@ def observe(env: Unit, event: Session.AgentSessionEvent) -> IO(Unit): observed(e
 type Fixture is Data:
   Fixture{session: Session.AgentSession, listener: Session.Listener(), stream: Runtime.Stream(), validator: Loop.Validator(Tools.ToolError), converter: Runtime.Converter(), registry: StreamFn.Registry(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError), faux: Faux}
 
-def emptyLoadout() -> Runtime.Loadout: Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}}
+def emptyLoadout() -> Runtime.Loadout: Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}, Nil{}}
 
 # The agent starts from the stored session's context, as the upstream
 # harness's `agent.state.messages = buildSessionContext().messages`.
@@ -206,7 +244,7 @@ def contextOf(stored: Session.Session()) -> List<&2, Session.Message()>:
 type Setup is Data:
   Setup{replies: List<&2, Reply>, gates: List<&2, Hold>, model: Ai.Model<Ai.JsonValue>}
 
-def fixtureWith(+stored: Session.Session(), +cwd: String, +settings: Settings.SettingsManager, setup: Setup) -> IO(Fixture):
+def fixtureWithLoadout(+stored: Session.Session(), +cwd: String, +settings: Settings.SettingsManager, setup: Setup, +loadout: Runtime.Loadout) -> IO(Fixture):
   match setup:
     case Setup{replies, gates, +model}:
       do IO<Fixture>:
@@ -222,10 +260,13 @@ def fixtureWith(+stored: Session.Session(), +cwd: String, +settings: Settings.Se
         +agent : Runtime.Owner() <- H.requireAgent(created)
         Agent.replaceMessages(Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit, agent, contextOf(stored))
         models : Models.ModelRuntime <- ModelFixture.create(ModelFixture.Source{"faux", "PI_FAUX_API_KEY", model <> Nil{}} <> Nil{})
-        +session : Session.AgentSession <- Session.create(agent, stored, settings, cwd, emptyLoadout(), models, Nil{})
+        +session : Session.AgentSession <- Session.create(agent, stored, settings, cwd, loadout, models, Nil{})
         +listener : Session.Listener() <- C.create(~Unit, ~Session.AgentSessionEvent, ~Unit, ~observe, Unit{})
         Session.subscribe(session, listener)
         return Fixture{session, listener, stream, validator, converter, registry, Faux{replyRef, streams, gateRef, Ai.modelId(model), signalRef}}
+
+def fixtureWith(+stored: Session.Session(), +cwd: String, +settings: Settings.SettingsManager, setup: Setup) -> IO(Fixture):
+  fixtureWithLoadout(stored, cwd, settings, setup, emptyLoadout())
 
 def fixture(+stored: Session.Session(), +cwd: String, agentDir: String, setup: Setup) -> IO(Fixture):
   do IO<Fixture>:
@@ -257,6 +298,10 @@ def sessionOf(value: Fixture) -> Session.AgentSession:
     case Fixture{session, _, _, _, _, _, _}: session
 
 def plainSetup(replies: List<&2, Reply>) -> Setup: Setup{replies, Nil{}, H.fauxModel()}
+
+def fixtureLoaded(+stored: Session.Session(), +cwd: String, +settings: Settings.SettingsManager, +loadout: Runtime.Loadout) -> IO(Fixture):
+  fixtureWithLoadout(stored, cwd, settings, plainSetup(Nil{}), loadout)
+
 
 def requireAppended(result: Sessions.Outcome(Sessions.Appended<Unit, Tools.ToolDetails, V.Value>)) -> IO(Session.Session()):
   match result:
@@ -526,13 +571,18 @@ def treeDuringStreaming(+dir: String, agentDir: String) -> IO(Unit):
     Chan.close(Unit, gate)
     Chan.close(Result<&2, &2, String, Unit>, done)
 
+def baseFields(base: S.SessionEntryBase, rest: List<&2, Rec.Property<V.Value>>) -> List<&2, Rec.Property<V.Value>>:
+  match base:
+    case S.SessionEntryBase{id, parent, _}: Json.field("id", Json.text(id), Json.field("parentId", Maybe.default(&2, V.Value, Maybe.map(&2, String, V.Value, p => V.Text{p}, parent), V.Null{}), rest))
+
 # Entries in order, message entries with their message (upstream
 # sessionManager.getEntries()).
 def entryShapes(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
   match entries:
     case Nil{}: Nil{}
-    case S.SessionMessageEntry{_, message} <> rest: Json.object(Json.field("type", Json.text("message"), Json.field("message", JsonEvent.message(message), Nil{}))) <> entryShapes(rest)
-    case S.Compaction{_} <> rest: Json.object(Json.field("type", Json.text("compaction"), Nil{})) <> entryShapes(rest)
+    case S.SessionMessageEntry{base, message} <> rest: Json.object(Json.field("type", Json.text("message"), baseFields(base, Json.field("message", JsonEvent.message(message), Nil{})))) <> entryShapes(rest)
+    case S.Compaction{S.CompactionEntry{base, _, _, _, _, _, _, _}} <> rest: Json.object(Json.field("type", Json.text("compaction"), baseFields(base, Nil{}))) <> entryShapes(rest)
+    case S.BranchSummaryEntry{base, _, summary, _, _, _} <> rest: Json.object(Json.field("type", Json.text("branch_summary"), baseFields(base, Json.field("summary", Json.text(summary), Nil{})))) <> entryShapes(rest)
     case _ <> rest: Json.object(Json.field("type", Json.text("other"), Nil{})) <> entryShapes(rest)
 
 def reportEntryShapes(+session: Session.AgentSession) -> IO(Unit):
@@ -581,6 +631,256 @@ def compactDuringResponse(+dir: String, agentDir: String) -> IO(Unit):
     Chan.close(Result<&2, &2, String, Unit>, prompted)
     Chan.close(Compacted, compacted)
 
+# Tool registry scenarios (5109, 2835): the runtime's tool resolution
+# (Runtime.resolveTools) over the built-in tools, a loadout assembled as the
+# runtime assembles it (registry, active tools, system prompt sections for
+# them) and the session's tool API. The registry's tools carry the built-in
+# names and descriptions with a stub execution: the scenarios never run them.
+def stubExecute(unit: Unit, input: Tools.Input()) -> IO(Tools.Output()):
+  IO.pure(Tools.Output(), Fail{Tools.failure("not executed")})
+
+def stubTools(names: List<&2, Tools.ToolName>, +execute: Tools.Execute()) -> List<&2, Tools.Tool()>:
+  match names:
+    case Nil{}: Nil{}
+    case +name <> rest: T.AgentTool{Tools.toolName(name), Tools.promptSnippet(name), V.Null{}, None{}, Tools.toolName(name), None{}, execute, None{}, None{}} <> stubTools(rest, execute)
+
+def optionalList(+text: String) -> Maybe<&2, List<&2, String>>:
+  Bool.pick(Maybe<&2, List<&2, String>>, String.eq(text, "-"), None{}, Some{Bool.pick(List<&2, String>, String.is_empty(text), Nil{}, String.split(text, ','))})
+
+def noToolsNamed(text: String) -> Maybe<&2, Runtime.NoTools>:
+  match text:
+    case "all": Some{Runtime.NoToolsAll{}}
+    case "builtin": Some{Runtime.NoToolsBuiltin{}}
+    case _: None{}
+
+def toolOptions(+cwd: String, +agentDir: String, selection: Runtime.ToolSelection, +settings: Settings.SettingsManager) -> Runtime.CreateOptions:
+  Runtime.CreateOptions{cwd, agentDir, "", "", "/pi", None{}, None{}, None{}, None{}, None{}, Nil{}, selection, False{}, Runtime.emptySeed(), settings, Runtime.ResourceOptions{Nil{}, True{}, Nil{}, True{}}}
+
+def toolLoadout(+source: Runtime.LoadoutSource, setup: Runtime.ToolSetup, +execute: Tools.Execute()) -> Runtime.Loadout:
+  match setup:
+    case Runtime.ToolSetup{registry, active}:
+      +tools = stubTools(registry, execute)
+      +chosen = Runtime.activeTools(tools, active)
+      Runtime.Loadout{Result.default(&2, &2, String, Prompt.SystemPromptSections(), Runtime.sectionsForTools(source, Session.toolNamesOf(chosen), Nil{}, Nil{}), Rec.new(String)), chosen, Nil{}, Nil{}, None{}, Nil{}, Some{source}, tools}
+
+def infoNames(infos: List<&2, Session.ToolInfo>) -> List<&2, V.Value>:
+  match infos:
+    case Nil{}: Nil{}
+    case Session.ToolInfo{name, _, _} <> rest: V.Text{name} <> infoNames(rest)
+
+def texts(values: List<&2, String>) -> List<&2, V.Value>:
+  match values:
+    case Nil{}: Nil{}
+    case value <> rest: V.Text{value} <> texts(rest)
+
+def reportTools(+label: String, +session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    all : List<&2, Session.ToolInfo> <- Session.getAllTools(session)
+    active : List<&2, String> <- Session.getActiveToolNames(session)
+    prompt : String <- Session.systemPrompt(session)
+    H.printed(Done{Json.object(Json.field("type", Json.text(label), Json.field("all", V.ArrayValue{infoNames(all)}, Json.field("active", V.ArrayValue{texts(active)}, Json.field("systemPrompt", Json.text(prompt), Nil{})))))})
+
+def activated(+session: Session.AgentSession, activate: Maybe<&2, List<&2, String>>) -> IO(Unit):
+  match activate:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{names}:
+      do IO<Unit>:
+        Session.setActiveToolsByName(session, names)
+        reportTools("activated", session)
+
+def toolsWith(+dir: String, +agentDir: String, selection: Runtime.ToolSelection, activate: Maybe<&2, List<&2, String>>, +settings: Settings.SettingsManager) -> IO(Unit):
+  do IO<Unit>:
+    +execute : Tools.Execute() <- C.create(~Unit, ~Tools.Input(), ~Tools.Output(), ~stubExecute, Unit{})
+    +options : Runtime.CreateOptions = toolOptions(dir, agentDir, selection, settings)
+    +loadout : Runtime.Loadout = toolLoadout(Runtime.LoadoutSource{Paths.Environment{dir, agentDir, Runtime.urlContext()}, options, "/pi"}, Runtime.toolSetupOf(options), execute)
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    stored : Session.Session() <- H.requireSession(created)
+    +value : Fixture <- fixtureLoaded(stored, dir, settings, loadout)
+    reportTools("tools", sessionOf(value))
+    activated(sessionOf(value), activate)
+    teardown(value)
+    C.dispose(Tools.Input(), Tools.Output(), execute)
+
+def toolsScenario(+dir: String, +agentDir: String, +allow: String, +exclude: String, +noTools: String, +activate: String) -> IO(Unit):
+  do IO<Unit>:
+    loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(dir, agentDir, Settings.options())
+    toolsWith(dir, agentDir, Runtime.ToolSelection{optionalList(allow), noToolsNamed(noTools), optionalList(exclude)}, optionalList(activate), H.settingsOf(loaded))
+
+# 6324: navigation with a summary of the abandoned branch.
+def branchUsageCost(usage: Maybe<&2, Ai.Usage>) -> V.Value:
+  match usage:
+    case Some{Ai.Usage{_, _, _, _, _, _, _, Ai.UsageCost{_, _, _, _, total}}}: V.Number{total}
+    case None{}: V.Null{}
+
+def optionalText(value: Maybe<&2, String>) -> V.Value:
+  match value:
+    case Some{text}: V.Text{text}
+    case None{}: V.Null{}
+
+def reportTreeNavigation(result: Result<&2, &2, String, Session.TreeNavigation>) -> IO(Unit):
+  match result:
+    case Fail{message}: IO.print("{\"type\":\"tree_error\",\"error\":" ++ Decode.quote(message) ++ "}")
+    case Done{Session.TreeNavigationAborted{}}: IO.print("{\"type\":\"tree_navigation\",\"cancelled\":true,\"aborted\":true}")
+    case Done{Session.TreeNavigated{editorText, leafId, Some{S.BranchSummaryEntry{S.SessionEntryBase{id, _, _}, _, summary, _, usage, _}}}}:
+      H.printed(Done{Json.object(Json.field("type", Json.text("tree_navigation"), Json.field("cancelled", V.Boolean{False{}}, Json.field("editorText", optionalText(editorText), Json.field("leafId", Maybe.default(&2, V.Value, Maybe.map(&2, String, V.Value, t => V.Text{t}, leafId), V.Null{}), Json.field("summaryEntry", Json.object(Json.field("type", Json.text("branch_summary"), Json.field("id", Json.text(id), Json.field("summary", Json.text(summary), Json.field("costTotal", branchUsageCost(usage), Nil{}))))), Nil{}))))))})
+    case Done{Session.TreeNavigated{editorText, leafId, _}}: IO.print("{\"type\":\"tree_navigation\",\"cancelled\":false,\"editorText\":" ++ H.maybeQuoted(editorText) ++ ",\"leafId\":" ++ H.maybeQuoted(leafId) ++ ",\"summaryEntry\":null}")
+
+def branchSummaryScenario(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +value : Fixture <- seededFixture(dir, agentDir, userMsg("first branch") <> assistantAt("first reply", Ai.Stop{}, usageOf(zero()), zero()) <> userMsg("abandoned branch work") <> assistantAt("abandoned reply", Ai.Stop{}, usageOf(zero()), zero()) <> Nil{}, Setup{Costed{"branch summary text"} <> Nil{}, Nil{}, H.fauxModel()})
+    stored : Session.Session() <- Session.sessionOf(sessionOf(value))
+    result : Result<&2, &2, String, Session.TreeNavigation> <- Session.navigateTreeWith(sessionOf(value), firstUser(stored), Session.NavigateTreeOptions{True{}, None{}, None{}, None{}})
+    reportTreeNavigation(result)
+    reportRemaining(repliesOf(value))
+    teardown(value)
+
+# agent-session-tree-navigation.test.ts over the faux: the prompts run in
+# order (each answered "reply N"), `branch` first navigates to the first
+# assistant reply and prompts once more, then the navigation runs. Targets:
+# first-user, user:N, assistant:N (1-based) or leaf. `hold` holds the summary
+# request and aborts the branch summary while it is held.
+def roleOf(entry: S.SessionEntry<Unit, Tools.ToolDetails, V.Value>) -> String:
+  match entry:
+    case S.SessionMessageEntry{_, T.LlmMessage{Ai.User{_}}}: "user"
+    case S.SessionMessageEntry{_, T.LlmMessage{Ai.Assistant{_}}}: "assistant"
+    case _: "other"
+
+def idOfEntry(entry: S.SessionEntry<Unit, Tools.ToolDetails, V.Value>) -> String: S.entryId(Unit, Tools.ToolDetails, V.Value, entry)
+
+def entryIds(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>, +role: String) -> List<&2, String>:
+  match entries:
+    case Nil{}: Nil{}
+    case +entry <> rest:
+      +tail = entryIds(rest, role)
+      Bool.pick(List<&2, String>, String.eq(roleOf(entry), role), idOfEntry(entry) <> tail, tail)
+
+def nth(ids: List<&2, String>, index: Nat) -> String:
+  Maybe.default(&2, String, List.get(&2, String, ids, index - 1n), "missing-entry")
+
+def indexOf(+text: String) -> Nat: Maybe.default(&2, Nat, Nat.read(text), 0n)
+
+def selectTarget(parts: List<&2, String>, +entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>, +leaf: String) -> String:
+  match parts:
+    case "user" <> index <> Nil{}: nth(entryIds(entries, "user"), indexOf(index))
+    case "assistant" <> index <> Nil{}: nth(entryIds(entries, "assistant"), indexOf(index))
+    case "leaf" <> Nil{}: leaf
+    case _: nth(entryIds(entries, "user"), 1n)
+
+def targetIn(+stored: Session.Session(), +target: String) -> String:
+  selectTarget(String.split(target, ':'), S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)), H.currentLeaf(stored))
+
+def reply(+index: Nat) -> Reply: Text{"reply " ++ Nat.show(index)}
+
+def replies(prompts: List<&2, String>, +index: Nat) -> List<&2, Reply>:
+  match prompts:
+    case Nil{}: Nil{}
+    case _ <> rest: reply(index) <> replies(rest, index + 1n)
+
+def promptsOf(+text: String) -> List<&2, String>: Bool.pick(List<&2, String>, String.eq(text, "-"), Nil{}, String.split(text, ';'))
+
+def navigateOptions(+summarize: String, +custom: String) -> Session.NavigateTreeOptions:
+  Session.NavigateTreeOptions{String.eq(summarize, "summarize"), Bool.pick(Maybe<&2, String>, String.eq(custom, "-"), None{}, Some{custom}), None{}, None{}}
+
+def reportLeafState(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    stored : Session.Session() <- Session.sessionOf(session)
+    IO.print("{\"type\":\"leaf\",\"leafId\":" ++ H.maybeQuoted(S.getLeafId(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored))) ++ "}")
+    reportEntryShapes(session)
+
+def promptAll(+session: Session.AgentSession, prompts: List<&2, String>) -> IO(Unit):
+  match prompts:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case text <> rest:
+      do IO<Unit>:
+        result : Result<&2, &2, String, Unit> <- Session.prompt(session, text, Nil{}, None{})
+        promptAll(session, rest)
+
+def branched(+session: Session.AgentSession, prompts: List<&2, String>) -> IO(Unit):
+  match prompts:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case more:
+      do IO<Unit>:
+        stored : Session.Session() <- Session.sessionOf(session)
+        moved : Result<&2, &2, String, Session.Navigation> <- Session.navigateTree(session, targetIn(stored, "assistant:1"))
+        promptAll(session, more)
+
+type Navigated is Data:
+  Navigated{result: Result<&2, &2, String, Session.TreeNavigation>}
+
+def navigateInBackground(session: Session.AgentSession, +targetId: String, options: Session.NavigateTreeOptions, done: Chan(Navigated)) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2, &2, String, Session.TreeNavigation> <- Session.navigateTreeWith(session, targetId, options)
+    sent : Bool <- Chan.send(Navigated, done, Navigated{result})
+    R.requireSent(sent)
+
+def reportNavigated(received: Maybe<&1, Navigated>) -> IO(Unit):
+  match received:
+    case Some{Navigated{result}}: reportTreeNavigation(result)
+    case None{}: IO.print("{\"type\":\"tree_error\",\"error\":\"navigation fiber did not finish\"}")
+
+def heldNavigation(+session: Session.AgentSession, +targetId: String, options: Session.NavigateTreeOptions, started: Chan(Unit), gate: Chan(Unit)) -> IO(Unit):
+  do IO<Unit>:
+    +done : Chan(Navigated) <- Chan.new(Navigated, 1)
+    IO.spawn(Unit, navigateInBackground(session, targetId, options, done))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    H.reportCompacting(session)
+    Session.abortBranchSummary(session)
+    release(gate)
+    finished : Maybe<&1, Navigated> <- Chan.recv(Navigated, done)
+    reportNavigated(finished)
+    Chan.close(Navigated, done)
+
+def holdsFor(prompts: List<&2, String>) -> List<&2, Hold>:
+  match prompts:
+    case Nil{}: Nil{}
+    case _ <> rest: Pass{} <> holdsFor(rest)
+
+def treeScenario(+dir: String, agentDir: String, +prompts: String, +more: String, +target: String, +summarize: String, +custom: String, +hold: String) -> IO(Unit):
+  do IO<Unit>:
+    +first : List<&2, String> = promptsOf(prompts)
+    +second : List<&2, String> = promptsOf(more)
+    +count : Nat = List.length(&2, String, first)
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +gate : Chan(Unit) <- Chan.new(Unit, 1)
+    +held : Bool = String.eq(hold, "hold")
+    +value : Fixture <- seededFixture(dir, agentDir, Nil{}, Setup{List.append(&2, Reply, replies(first, 1n), List.append(&2, Reply, replies(second, count + 1n), [Text{"branch summary"}])), Bool.pick(List<&2, Hold>, held, List.append(&2, Hold, holdsFor(first), List.append(&2, Hold, holdsFor(second), [Held{H.Gate{started, gate}}])), Nil{}), H.fauxModel()})
+    promptAll(sessionOf(value), first)
+    branched(sessionOf(value), second)
+    reportLeafState(sessionOf(value))
+    stored : Session.Session() <- Session.sessionOf(sessionOf(value))
+    +targetId : String = targetIn(stored, target)
+    IO.print("{\"type\":\"target\",\"id\":" ++ Decode.quote(targetId) ++ "}")
+    Bool.pick(Unit -> IO(Unit), held, _ => heldNavigation(sessionOf(value), targetId, navigateOptions(summarize, custom), started, gate), _ => IO.bind(Result<&2, &2, String, Session.TreeNavigation>, Unit, Session.navigateTreeWith(sessionOf(value), targetId, navigateOptions(summarize, custom)), reportTreeNavigation))(Unit{})
+    reportLeafState(sessionOf(value))
+    teardown(value)
+    Chan.close(Unit, started)
+    Chan.close(Unit, gate)
+
+# 9178: navigation while a manual compaction's summary request is held.
+def treeDuringCompaction(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +gate : Chan(Unit) <- Chan.new(Unit, 1)
+    +done : Chan(Compacted) <- Chan.new(Compacted, 1)
+    +value : Fixture <- seededFixture(dir, agentDir, userMsg("first user") <> assistantAt("first assistant", Ai.Stop{}, usageOf(zero()), zero()) <> userMsg("second user") <> assistantAt("second assistant", Ai.Stop{}, usageOf(zero()), zero()) <> Nil{}, Setup{Text{"summary"} <> Text{"prefix summary"} <> Nil{}, Held{H.Gate{started, gate}} <> Nil{}, H.fauxModel()})
+    reportLeaf("original", sessionOf(value))
+    IO.spawn(Unit, compactInBackground(sessionOf(value), done))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    H.reportCompacting(sessionOf(value))
+    stored : Session.Session() <- Session.sessionOf(sessionOf(value))
+    navigated : Result<&2, &2, String, Session.Navigation> <- Session.navigateTree(sessionOf(value), targetIn(stored, "assistant:1"))
+    H.reportNavigation(navigated)
+    reportLeaf("during", sessionOf(value))
+    release(gate)
+    finished : Maybe<&1, Compacted> <- Chan.recv(Compacted, done)
+    reportCompacted(finished)
+    reportEntryShapes(sessionOf(value))
+    H.reportMessages(sessionOf(value))
+    teardown(value)
+    Chan.close(Unit, started)
+    Chan.close(Unit, gate)
+    Chan.close(Compacted, done)
+
 def number(+text: String) -> Nat: Maybe.default(&2, Nat, Nat.read(text), 0n)
 
 def run(args: List<String>) -> IO(Unit):
@@ -595,6 +895,10 @@ def run(args: List<String>) -> IO(Unit):
     case "compaction_prompt" <> dir <> agentDir <> Nil{}: promptDuringCompaction(dir, agentDir)
     case "tree_streaming" <> dir <> agentDir <> Nil{}: treeDuringStreaming(dir, agentDir)
     case "compact_during_response" <> dir <> agentDir <> Nil{}: compactDuringResponse(dir, agentDir)
+    case "tools" <> dir <> agentDir <> allow <> exclude <> noTools <> activate <> Nil{}: toolsScenario(dir, agentDir, allow, exclude, noTools, activate)
+    case "branch_summary" <> dir <> agentDir <> Nil{}: branchSummaryScenario(dir, agentDir)
+    case "tree" <> dir <> agentDir <> prompts <> more <> target <> summarize <> custom <> hold <> Nil{}: treeScenario(dir, agentDir, prompts, more, target, summarize, custom, hold)
+    case "tree_during_compaction" <> dir <> agentDir <> Nil{}: treeDuringCompaction(dir, agentDir)
     case "settings_reload" <> dir <> agentDir <> settings <> Nil{}: reloadScenario(dir, decoded(Decode.parse(settings)))
     case _: IO.die(Unit, 1, "usage: regressions <name <dir> <agentDir> <name> | prompt <dir> <agentDir> <text> <reply> | stream <dir> <agentDir> <characters> | toolcall <dir> <agentDir>>")
 

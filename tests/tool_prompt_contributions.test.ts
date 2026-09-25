@@ -5,9 +5,9 @@
 // system prompt builder reads; tests/tool-prompt-contributions.bend prints
 // them and this test compares them with upstream's contribution constants,
 // imported from the pinned pi-mono (tests/upstream_pin.mjs). Test-only.
-// Pending: the powershell tool (not ported) and "keeps %s session-environment
-// guidance conditional": the port's guidelines ignore the bash tool's
-// exposeSessionEnvironment option.
+// "keeps %s session-environment guidance conditional" checks the bash
+// definition built with exposeSessionEnvironment false: upstream's undefined
+// guidelines are an empty list. Pending: the powershell rows (not ported).
 //
 // Usage: bun test tests/tool_prompt_contributions.test.ts
 //        TOOL_PROMPT_RUNNER=build/tool-prompt-contributions bun test tests/tool_prompt_contributions.test.ts
@@ -46,5 +46,12 @@ describe("built-in tool system prompt contributions", () => {
 
 		expect(definition?.snippet).toBe(contribution.snippet);
 		expect(definition?.guidelines ?? []).toEqual([...contribution.guidelines]);
+	});
+
+	test.each(["bash"] as const)("keeps %s session-environment guidance conditional", (name) => {
+		const definition = NATIVE.get(`${name}:noSessionEnvironment`);
+
+		expect(definition).toBeDefined();
+		expect(definition?.guidelines).toEqual([]);
 	});
 });

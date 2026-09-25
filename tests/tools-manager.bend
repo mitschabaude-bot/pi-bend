@@ -5,6 +5,11 @@ import ../packages/runtime/src/fetch.bend as Fetch
 import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/base64.bend as B
 import ../packages/runtime/src/utf8.bend as U
+import ../packages/runtime/src/abort.bend as Abort
+import ../packages/runtime/src/http-message.bend as Message
+import ../packages/runtime/src/http-response.bend as Response
+import ../packages/runtime/src/url.bend as URL
+import ../packages/coding-agent/src/utils/management-http.bend as Http
 
 def encoded(value: String) -> String: B.encoded(U.encode(value),"")
 
@@ -67,12 +72,57 @@ def live(+binDir: String,+name: String,transport: Runtime.Outcome(Runtime.Transp
         ensure(Tools.ToolsManager{binDir,Runtime.urlContext(),Some{fetch}},name)
         Runtime.disposeTransport(Runtime.Transport{authorizer,runtime,fetch})
 
+# management-http.test.ts: fetchWithRetry with a per-attempt timeout, or
+# with a caller signal aborted before the call. Prints the final status or
+# the error.
+def probed(result: Http.ScopedOutcome()) -> IO(Unit):
+  match result:
+    case Fail{error}: IO.print("error:" ++ encoded(Http.errorMessage(error)))
+    case Done{Response.Response{+metadata,body}}:
+      +code = Response.metadataStatus(metadata)
+      do IO<Unit>:
+        Tools.release(Response.Response{metadata,body})
+        IO.print("status:" ++ encoded(U32.show(code)))
+
+def probeAt(fetch: Fetch.Fetch(Unit), target: Tools.Outcome(URL.URL), +attempt: U32, +budget: U32, cancelled: Bool) -> IO(Unit):
+  match target:
+    case Fail{message}: IO.print("error:" ++ encoded(message))
+    case Done{url}:
+      do IO<Unit>:
+        +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+        Bool.pick(Unit -> IO(Unit), cancelled, _ => IO.bind(Bool, Unit, Abort.abort(Unit, controller, None{}), _ => IO.pure(Unit, Unit{})), _ => IO.pure(Unit, Unit{}))(Unit{})
+        result : Http.ScopedOutcome() <- Http.fetchWithRetry(fetch,Runtime.urlContext(),Http.Request{url,Message.new(),Http.Follow{}},Abort.signal(Unit,controller),Http.FetchRetryOptions{None{},None{},budget,Bool.pick(Maybe<&2,U32>,U32.is_eq(attempt,0),None{},Some{attempt})})
+        probed(result)
+        Abort.dispose(Unit,controller)
+
+def probeWith(+url: String, +attempt: U32, +budget: U32, cancelled: Bool, pair: Fetch.Runtime & Fetch.Fetch(Unit)) -> IO(Unit):
+  match pair:
+    case (runtime,+fetch):
+      do IO<Unit>:
+        probeAt(fetch,Tools.parsed(Runtime.urlContext(),url),attempt,budget,cancelled)
+        Fetch.retire(Unit,fetch)
+        Fetch.dispose(runtime)
+
+def probe(+url: String, +attempt: U32, +budget: U32, cancelled: Bool, runtime: Result<&2,&1,Fetch.InitError,Fetch.Runtime>) -> IO(Unit):
+  match runtime:
+    case Fail{_}: IO.print("error:" ++ encoded("runtime"))
+    case Done{runtime}:
+      do IO<Unit>:
+        pair : Fetch.Runtime & Fetch.Fetch(Unit) <- Fetch.callback(~Unit,runtime)
+        probeWith(url,attempt,budget,cancelled,pair)
+
+def number(+text: String) -> U32: U32.from_nat(Maybe.default(&2,Nat,Nat.read(text),0n))
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case "download" <> url <> dest <> Nil{}:
       do IO<Unit>:
         runtime : Result<&2,&1,Fetch.InitError,Fetch.Runtime> <- Fetch.create(Runtime.files(),Runtime.httpOptions())
         download(url,dest,runtime)
+    case "probe" <> url <> attempt <> budget <> cancelled <> Nil{}:
+      do IO<Unit>:
+        runtime : Result<&2,&1,Fetch.InitError,Fetch.Runtime> <- Fetch.create(Runtime.files(),Runtime.httpOptions())
+        probe(url,number(attempt),number(budget),String.eq(cancelled,"cancelled"),runtime)
     case "install" <> archive <> extractDir <> asset <> binary <> target <> Nil{}:
       do IO<Unit>:
         result : Tools.Outcome(String) <- Tools.extractAndInstall(archive,extractDir,asset,binary,target)

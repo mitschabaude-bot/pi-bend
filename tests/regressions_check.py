@@ -148,6 +148,28 @@ def tree_checks(f):
     return 1
 
 
+def branch_summary_checks(f):
+    checks = 0
+    # 6324-branch-summary-ambient-auth: summarizes tree branches when request auth has no API key
+    events = f.session('regressions', 'branch_summary')
+    result = last(events, 'tree_navigation')
+    summaries = [e for e in of_type(events, 'request')]
+    assert result['cancelled'] is False and len(summaries) == 1 and summaries[0]['apiKey'] is None, (result, summaries)
+    assert result['summaryEntry']['type'] == 'branch_summary' and 'branch summary text' in result['summaryEntry']['summary'] and result['summaryEntry']['costTotal'] == 0.25, result
+    checks += 1
+    # 9178-tree-during-compaction: rejects navigation before the active leaf can change
+    events = f.session('regressions', 'tree_during_compaction', settings={'compaction': {'keepRecentTokens': 1}})
+    original = last(events, 'original')['leafId']
+    assert last(events, 'compacting')['value'] is True
+    assert last(events, 'navigation_error')['error'] == 'Wait for the current compaction or tree navigation to finish before navigating the session tree.'
+    assert last(events, 'during')['leafId'] == original
+    entries = last(events, 'entry_shapes')['entries']
+    assert entries[-1]['type'] == 'compaction' and entries[-1]['parentId'] == original, entries[-1]
+    assert 'second assistant' in [text_of(m) for m in last(events, 'messages')['messages'] if 'content' in m]
+    checks += 1
+    return checks
+
+
 def compaction_checks(f):
     checks = 0
     # 8328-zero-usage-auto-compaction: uses the message estimate when no assistant has reported usage
@@ -260,6 +282,48 @@ def discovery_checks(f):
     return checks
 
 
+def tool_checks(f):
+    """Tool allow- and denylists (5109, 2835) for the built-in tools; the extension tools
+    (ask_question, dynamic_tool) are not registered because the native extension API has no
+    registerTool, so they only appear as unknown names in the lists."""
+    checks = 0
+
+    def tools(allow='-', exclude='-', no_tools='-', activate='-'):
+        events = f.session('regressions', 'tools', allow, exclude, no_tools, activate)
+        return last(events, 'tools'), (of_type(events, 'activated') or [None])[-1]
+
+    # 5109-exclude-tools: filters built-in and extension tools from available and active tools
+    state, _ = tools(exclude='read,ask_question')
+    assert 'read' not in state['all'] and 'ask_question' not in state['all'] and 'bash' in state['all'], state['all']
+    assert sorted(state['active']) == ['bash', 'edit', 'write'], state['active']
+    assert '- read:' not in state['systemPrompt'] and 'ask_question' not in state['systemPrompt']
+    checks += 1
+    # 5109-exclude-tools: lets excluded tools override the allowlist
+    state, _ = tools(allow='read,bash,ask_question', exclude='read,ask_question')
+    assert state['all'] == ['bash'] and state['active'] == ['bash'], state
+    assert '- bash:' in state['systemPrompt'] and '- read:' not in state['systemPrompt'] and 'ask_question' not in state['systemPrompt']
+    checks += 1
+    # 2835-tools-allowlist-filters-extension-tools: allows only explicitly listed built-in and extension tools
+    state, _ = tools(allow='read,dynamic_tool')
+    assert sorted(state['all']) == ['read'] and sorted(state['active']) == ['read'], state
+    prompt = state['systemPrompt']
+    assert '- read: Read file contents' in prompt and '- bash:' not in prompt and '- edit:' not in prompt
+    checks += 1
+    # 2835-tools-allowlist-filters-extension-tools: disables all tools when the allowlist is empty
+    state, _ = tools(allow='')
+    assert state['all'] == [] and state['active'] == [] and '<tools>\n(none)\n' in state['systemPrompt'] and 'dynamic_tool' not in state['systemPrompt'], state
+    checks += 1
+    # setActiveToolsByName: registered tools in the given order, unknown names ignored, prompt rebuilt.
+    state, activated = tools(activate='bash,grep,nope')
+    assert state['active'] == ['read', 'bash', 'edit', 'write'] and state['all'] == ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'], state
+    assert activated['active'] == ['bash', 'grep'] and '- grep:' in activated['systemPrompt'] and '- read:' not in activated['systemPrompt'], activated
+    # --no-tools and --no-builtin-tools without an allowlist start with nothing active.
+    for mode in ('all', 'builtin'):
+        state, _ = tools(no_tools=mode)
+        assert state['active'] == [] and state['all'] == ([] if mode == 'all' else ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls']), (mode, state)
+    return checks
+
+
 def cli_checks(f):
     checks = 0
     # 7269-cli-end-of-options: passes %j as a prompt after --
@@ -330,7 +394,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-regressions-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = retry_checks(fixtures) + json_stream_checks(fixtures) + session_name_checks(fixtures) + tree_checks(fixtures) + compaction_checks(fixtures) + session_manager_checks(fixtures) + discovery_checks(fixtures) + cli_checks(fixtures) + settings_checks(fixtures)
+    checks = retry_checks(fixtures) + json_stream_checks(fixtures) + session_name_checks(fixtures) + tree_checks(fixtures) + branch_summary_checks(fixtures) + compaction_checks(fixtures) + session_manager_checks(fixtures) + discovery_checks(fixtures) + tool_checks(fixtures) + cli_checks(fixtures) + settings_checks(fixtures)
     print('regressions: %d upstream cases passed' % checks)
 
 

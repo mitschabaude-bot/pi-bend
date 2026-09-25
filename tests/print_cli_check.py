@@ -81,12 +81,20 @@ with tempfile.TemporaryDirectory(prefix='pi-session-file-invalid-') as temp:
     unknown = run(['--session', 'no-such-session-id', '-p', 'hi'], env={'PI_CODING_AGENT_DIR': str(agent_dir)}, cwd=project)
     check(unknown.returncode == 1 and b"No session found matching 'no-such-session-id'" in unknown.stderr, 'an unknown --session id exits 1')
 
-    # Settings diagnostics (settings-diagnostics.ts): an invalid settings file is a warning, reported once.
+    # Settings diagnostics (main.ts, settings-diagnostics.ts): the startup and runtime settings managers'
+    # warnings are deduplicated and reported once after the runtime is created, before its errors; also
+    # before --help and --list-models; not when the session cannot be selected.
     (agent_dir / 'settings.json').write_text('{not json')
-    warned = run(['--session', 'no-such-session-id', '-p', 'hi'], env={'PI_CODING_AGENT_DIR': str(agent_dir)}, cwd=project)
-    check(warned.stderr.count(f'Warning: Invalid settings file {agent_dir / "settings.json"}: invalid JSON'.encode()) == 1, 'an invalid settings file is reported once as a warning')
+    warning = f'Warning: Invalid settings file {agent_dir / "settings.json"}: invalid JSON'.encode()
+    warned = run(['--provider', 'nope', '--model', 'x', '-p', 'hi'], env={'PI_CODING_AGENT_DIR': str(agent_dir), 'PI_OFFLINE': '1'}, cwd=project)
+    check(warned.returncode == 1 and warned.stderr.count(warning) == 1 and warned.stderr.index(warning) < warned.stderr.index(b'Unknown provider'), 'an invalid settings file is reported once as a warning, before runtime errors')
+    for flags in (['--help'], ['--list-models', 'no-such-model']):
+        listed = run(flags, env={'PI_CODING_AGENT_DIR': str(agent_dir), 'PI_OFFLINE': '1'}, cwd=project)
+        check(listed.stderr.count(warning) == 1, f'{flags[0]} reports the startup settings warning')
+    unselected = run(['--session', 'no-such-session-id', '-p', 'hi'], env={'PI_CODING_AGENT_DIR': str(agent_dir)}, cwd=project)
+    check(unselected.returncode == 1 and warning not in unselected.stderr, 'no settings warning when the session cannot be selected')
     (agent_dir / 'settings.json').write_text(json.dumps({'defaultTools': ['read', 'oops']}))
-    typed = run(['--session', 'no-such-session-id', '-p', 'hi'], env={'PI_CODING_AGENT_DIR': str(agent_dir)}, cwd=project)
+    typed = run(['--provider', 'nope', '--model', 'x', '-p', 'hi'], env={'PI_CODING_AGENT_DIR': str(agent_dir), 'PI_OFFLINE': '1'}, cwd=project)
     check(b'Warning: Invalid settings file' not in typed.stderr, 'a well-formed settings file loads silently')
     (agent_dir / 'settings.json').unlink()
 

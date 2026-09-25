@@ -196,7 +196,7 @@ def latestAt(fetch: Fetch.Fetch(Unit), +context: URL.Context, +repo: String, tar
     case Done{url}:
       do IO<Outcome(String)>:
         +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
-        result : Http.ScopedOutcome() <- Http.fetchWithRetry(fetch,context,Http.Request{url,withHeader("User-Agent",Config.appName() ++ "-coding-agent"),Http.Manual{}},Abort.signal(Unit,controller),Http.FetchRetryOptions{None{},None{},10000})
+        result : Http.ScopedOutcome() <- Http.fetchWithRetry(fetch,context,Http.Request{url,withHeader("User-Agent",Config.appName() ++ "-coding-agent"),Http.Manual{}},Abort.signal(Unit,controller),Http.FetchRetryOptions{None{},None{},10000,None{}})
         version : Outcome(String) <- latestResponse(context,repo,result)
         Abort.dispose(Unit,controller)
         return version
@@ -273,7 +273,7 @@ def downloadTo(fetch: Fetch.Fetch(Unit), +context: URL.Context, +url: String, +d
     case Done{address}:
       do IO<Outcome(Unit)>:
         +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
-        result : Http.ScopedOutcome() <- Http.fetchWithRetry(fetch,context,Http.Request{address,Message.new(),Http.Follow{}},Abort.signal(Unit,controller),Http.FetchRetryOptions{None{},None{},120000})
+        result : Http.ScopedOutcome() <- Http.fetchWithRetry(fetch,context,Http.Request{address,Message.new(),Http.Follow{}},Abort.signal(Unit,controller),Http.FetchRetryOptions{None{},None{},120000,None{}})
         saved : Outcome(Unit) <- save(dest,url,result)
         Abort.dispose(Unit,controller)
         return saved

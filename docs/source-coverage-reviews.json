@@ -55,7 +55,7 @@
       "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal; prompt images and tool-result images are normalized with the image setting and the current model's resize profile (f5c946480), without the before_agent_start and tool_result extension events. Full upstream session and extension integration behavior remains unverified.",
       "source_sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7",
       "port_sha256": {
-        "packages/coding-agent/src/core/agent-session.bend": "c11f36fce8ba08d6ebf2d214e47dcb7e0dbc2169c2b2975ce6dee4986702b1ff"
+        "packages/coding-agent/src/core/agent-session.bend": "9491dad5269412051d43275d438b8c6b87a8c91874223ca6495dab45f8af7f80"
       }
     },
     "packages/coding-agent/src/core/session-manager.ts": {
@@ -145,7 +145,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "7ff585e601fb1bcc2e2ba8a42744a9f7d1a33205065cbfcc418d7aace7d26408",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c22354d3f1a7a080d3298e338943a2a49c3665589c41cda5308eea8903d0785",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "14557c415d7d4b0dd3c2d6921ce0f3dbd7b1717f23db27fdd8657b1e3d5eb547",
-        "packages/coding-agent/src/main.bend": "99011f58ca1281916d8542b42366cdbacf3dbf2374e4a8b58a75d6f333ed7589"
+        "packages/coding-agent/src/main.bend": "402a8c362d223d138f6710d0f849f5f3e9ffc4ae48e5f762484d42ebafcad13e"
       }
     },
     "packages/tui/src/editor-component.ts": {
