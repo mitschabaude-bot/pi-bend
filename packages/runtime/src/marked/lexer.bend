@@ -231,18 +231,27 @@ def afterText(-X: Data,+here: Here<X>,+found: Maybe<&2,Tk.Texted>) -> BlockMachi
   match found:
     case Some{Tk.Texted{raw,text}}: textFound(X,here,raw,text)
     case None{}: stopped(X,here)
-def afterParagraph(-X: Data,+rules: Rules.Block,+here: Here<X>,+cut: List<&2,U32>,+found: Maybe<&2,Tk.Texted>) -> BlockMachine<X>:
+# `cutSrc`: the source up to an extension's start after the first character,
+# and whether that cut anything off.
+type Cut is Data: Cut{src: List<&2,U32>,clipped: Bool}
+def cutClipped(+cut: Cut) -> Bool:
+  match cut: case Cut{_,clipped}: clipped
+def afterParagraph(-X: Data,+rules: Rules.Block,+here: Here<X>,+cut: Cut,+found: Maybe<&2,Tk.Texted>) -> BlockMachine<X>:
   match found:
-    case Some{Tk.Texted{raw,text}}: paragraphFound(X,here,raw,text,Bool.not(Nat.is_eq(Tk.codesLength(cut,0n),Tk.codesLength(hereSrc(X,here),0n))))
+    case Some{Tk.Texted{raw,text}}: paragraphFound(X,here,raw,text,cutClipped(cut))
     case None{}: afterText(X,here,Tk.blockText(rules,hereSrc(X,here)))
-# `cutSrc`: the source up to an extension's start after the first character.
-def cutSource(+start: Maybe<&2,Nat>,+src: List<&2,U32>) -> List<&2,U32>:
+def cutSource(+start: Maybe<&2,Nat>,+src: List<&2,U32>) -> Cut:
   match start:
-    case Some{index}: Tk.take(src,index + 1n)
-    case None{}: src
-def paragraphs(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>) -> BlockMachine<X>:
+    case Some{+index}: Cut{Tk.take(src,index + 1n),Bool.not(List.is_empty(&2,U32,Tk.drop(src,index + 1n)))}
+    case None{}: Cut{src,False{}}
+def cutCodes(+cut: Cut) -> List<&2,U32>:
+  match cut: case Cut{codes,_}: codes
+def topParagraph(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>) -> BlockMachine<X>:
   +cut = cutSource(startBlock(X,ext)(Tk.drop(hereSrc(X,here),1n)),hereSrc(X,here))
-  Bool.pick(Unit -> BlockMachine<X>,topOf(hereState(X,here)),_ => afterParagraph(X,rules,here,cut,Tk.paragraph(rules,cut)),_ => afterText(X,here,Tk.blockText(rules,hereSrc(X,here))))(Unit{})
+  afterParagraph(X,rules,here,cut,Tk.paragraph(rules,cutCodes(cut)))
+# Paragraphs only at the top level (`state.top`); text otherwise.
+def paragraphs(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>) -> BlockMachine<X>:
+  Bool.pick(Unit -> BlockMachine<X>,topOf(hereState(X,here)),_ => topParagraph(~X,~ext,rules,here),_ => afterText(X,here,Tk.blockText(rules,hereSrc(X,here))))(Unit{})
 def afterLheading(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>,+found: Maybe<&2,Tk.Titled>) -> BlockMachine<X>:
   match found:
     case Some{Tk.Titled{raw,depth,text}}: headed(X,here,raw,depth,text)
@@ -421,7 +430,7 @@ def countNewlines(+text: String,+count: Nat) -> Nat:
 def multipleLineBreaks(-X: Data,+tokens: List<&2,T.Token<X>>) -> Bool:
   match tokens:
     case Nil{}: False{}
-    case T.Space{raw} <> rest: Nat.is_ge(countNewlines(raw,0n),2n) || multipleLineBreaks(X,rest)
+    case T.Space{raw} <> rest: Bool.pick(Unit -> Bool,Nat.is_ge(countNewlines(raw,0n),2n),_ => True{},_ => multipleLineBreaks(X,rest))(Unit{})
     case _ <> rest: multipleLineBreaks(X,rest)
 def itemLexed(-X: Data,+state: BlockState,+frames: List<&2,BlockFrame<X>>,+list: Tk.ListDraft,+item: Tk.ItemDraft,+pending: List<&2,Tk.ItemDraft>,+done: List<&2,T.Token<X>>,+tokens: List<&2,T.Token<X>>) -> BlockMachine<X>:
   match item:
@@ -558,7 +567,7 @@ def matchCodes(+input: List<&2,U32>,+found: Re.Match) -> List<&2,U32>:
 def containsCode(+codes: List<&2,U32>,+code: U32) -> Bool:
   match codes:
     case Nil{}: False{}
-    case +first <> rest: U32.is_eq(first,code) || containsCode(rest,code)
+    case +first <> rest: Bool.pick(Unit -> Bool,U32.is_eq(first,code),_ => True{},_ => containsCode(rest,code))(Unit{})
 def lastIndexFrom(+codes: List<&2,U32>,+code: U32,+index: Nat,+found: Nat) -> Nat:
   match codes:
     case Nil{}: found
@@ -573,11 +582,12 @@ def repeatA(+count: Nat,+codes: List<&2,U32>) -> List<&2,U32>:
 def bracketMask(+length: Nat) -> List<&2,U32>: 91 <> repeatA(length - 2n,[93])
 # Whether a link (not an image) sits among a text's links, code spans and
 # tags.
-def linkSpan(+rules: Rules.Inline,+text: List<&2,U32>,+matches: List<&2,Re.Match>) -> Bool:
+def linkSpan(+rules: Rules.Inline,+text: List<&2,U32>,matches: List<&2,Re.Match>) -> Bool:
   match matches:
     case Nil{}: False{}
     case +found <> rest:
-      (Tk.test(Rules.inlineLink(rules),matchCodes(text,found)) && Bool.not(U32.is_eq(Maybe.default(&2,U32,List.get(&2,U32,text,matchStart(found) - 1n),0),33) && Nat.is_gt(matchStart(found),0n))) || linkSpan(rules,text,rest)
+      Bool.pick(Unit -> Bool,Tk.test(Rules.inlineLink(rules),matchCodes(text,found)) && Bool.not(U32.is_eq(Maybe.default(&2,U32,List.get(&2,U32,text,matchStart(found) - 1n),0),33) && Nat.is_gt(matchStart(found),0n)),
+        _ => True{},_ => linkSpan(rules,text,rest))(Unit{})
 def keyOf(+codes: List<&2,U32>,+refStart: Nat) -> String: Tk.slice(codes,refStart + 1n,List.length(&2,U32,codes) - 1n)
 # linkInText's reference part: a reference to a definition whose text holds
 # no link is a link.
@@ -717,7 +727,7 @@ def afterInlineText(-X: Data,+here: At<X>,+found: Maybe<&2,String>) -> InlineMac
     case None{}: stoppedHere(X,here)
 def textStage(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+here: At<X>) -> InlineMachine<X>:
   +src = runSrc(X,hereRun(X,here))
-  afterInlineText(X,here,Tk.inlineText(rules,cutSource(startInline(X,ext)(Tk.drop(src,1n)),src)))
+  afterInlineText(X,here,Tk.inlineText(rules,cutCodes(cutSource(startInline(X,ext)(Tk.drop(src,1n)),src))))
 def afterUrl(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+here: At<X>,+found: Maybe<&2,T.Token<X>>) -> InlineMachine<X>:
   match found:
     case Some{token}: pushedHere(X,here,token)

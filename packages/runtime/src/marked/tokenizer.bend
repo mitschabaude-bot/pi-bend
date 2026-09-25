@@ -43,8 +43,13 @@ def cap(input: List<&2,U32>,found: Maybe<&2,Re.Match>) -> Maybe<&2,Cap>:
   match found:
     case Some{value}: Some{Cap{input,value}}
     case None{}: None{}
-def exec(+regex: Re.RegExp,+src: List<&2,U32>) -> Maybe<&2,Cap>: cap(src,Re.matchAt(regex,src,Re.cursorAt(src)))
-def test(+regex: Re.RegExp,+src: List<&2,U32>) -> Bool: Maybe.is_some(&2,Re.Match,Re.matchAt(regex,src,Re.cursorAt(src)))
+def capFound(+src: List<&2,U32>,value: Maybe<&2,Re.Found>) -> Maybe<&2,Cap>:
+  match value:
+    case Some{Re.Found{result,_}}: Some{Cap{src,result}}
+    case None{}: None{}
+def exec(rule: Rules.Search,+src: List<&2,U32>) -> Maybe<&2,Cap>:
+  match rule: case Rules.Search{regex,start}: capFound(src,Re.attemptAt(regex,start,src,Re.cursorAt(src)))
+def test(+rule: Rules.Search,+src: List<&2,U32>) -> Bool: Maybe.is_some(&2,Cap,exec(rule,src))
 def flatSpan(value: Maybe<&2,Maybe<&2,Re.Span>>) -> Maybe<&2,Re.Span>:
   match value:
     case Some{span}: span
@@ -185,7 +190,7 @@ def html(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>
 def hasLineTerminator(text: String) -> Bool:
   match text:
     case SNil{}: False{}
-    case SCon{+char,rest}: H.isLineTerminator(char) || hasLineTerminator(rest)
+    case SCon{+char,rest}: Bool.pick(Unit -> Bool,H.isLineTerminator(char),_ => True{},_ => hasLineTerminator(rest))(Unit{})
 # other.hrefBrackets, `/^<(.*)>$/` → "$1".
 def hrefBrackets(+text: String) -> String:
   Bool.pick(Unit -> String,H.startsWithChar(text,'<') && H.endsWithChar(text,'>') && Nat.is_ge(String.length(text),2n) && Bool.not(hasLineTerminator(text)),
@@ -266,7 +271,31 @@ def lheadingOf(found: Maybe<&2,Cap>) -> Maybe<&2,Titled>:
   match found:
     case Some{+value}: Some{Titled{H.rtrim(capWhole(value),'\n'),Bool.pick(Nat,H.startsWithChar(capText(value,2n),'='),1n,2n),Text.trim(capText(value,1n))}}
     case None{}: None{}
-def lheading(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Titled>: lheadingOf(exec(Rules.blockLheading(rules),src))
+def underlineRunOf(+text: String,+char: Char) -> Bool:
+  +after = H.dropWhileChar(text,char)
+  Nat.is_lt(String.length(after),String.length(text)) && String.is_empty(H.dropWhileChar(after,' '))
+# A setext heading needs a later line of at most three spaces, a run of `=`
+# or `-` and spaces, before the first blank line: without one the rule is
+# not tried (the expression cannot match).
+def underlineLine(+line: String) -> Bool:
+  +text = H.dropWhileChar(line,' ')
+  Nat.is_le(String.length(line) - String.length(text),3n) && (underlineRunOf(text,'=') || underlineRunOf(text,'-'))
+# `codes` starts a line of the paragraph; is there a next line, and is it an
+# underline, or a blank line that stops the paragraph?
+def hasNewlineAfter(+codes: List<&2,U32>,+line: String) -> Bool: Bool.not(List.is_empty(&2,U32,drop(codes,String.length(line))))
+def underlineAhead(fuel: Nat,+codes: List<&2,U32>) -> Bool:
+  match fuel:
+    case Zero{}: False{}
+    case Succ{more}:
+      +line = firstLine(codes)
+      +rest = drop(codes,String.length(line) + 1n)
+      +next = firstLine(rest)
+      Bool.pick(Unit -> Bool,hasNewlineAfter(codes,line),
+        _ => Bool.pick(Unit -> Bool,underlineLine(next),_ => True{},
+          _ => Bool.pick(Unit -> Bool,Text.blank(next) && hasNewlineAfter(rest,next),_ => False{},_ => underlineAhead(more,rest))(Unit{}))(Unit{}),
+        _ => False{})(Unit{})
+def lheading(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Titled>:
+  Bool.pick(Unit -> Maybe<&2,Titled>,underlineAhead(codesLength(src,0n),src),_ => lheadingOf(exec(Rules.blockLheading(rules),src)),_ => None{})(Unit{})
 
 def paragraphText(+text: String) -> String: Bool.pick(Unit -> String,H.endsWithChar(text,'\n'),_ => H.dropEnd(text,1n),_ => text)(Unit{})
 def paragraphOf(found: Maybe<&2,Cap>) -> Maybe<&2,Texted>:
@@ -309,7 +338,7 @@ def isAsciiLetter(+char: Char) -> Bool: (Char.is_upper(char) || Char.is_lower(ch
 def closesTag(text: String) -> Bool:
   match text:
     case SNil{}: False{}
-    case SCon{+char,rest}: Char.is_eq(char,'>') || (Bool.not(H.isLineTerminator(char)) && closesTag(rest))
+    case SCon{+char,rest}: Bool.pick(Unit -> Bool,Char.is_eq(char,'>'),_ => True{},_ => Bool.pick(Unit -> Bool,H.isLineTerminator(char),_ => False{},_ => closesTag(rest))(Unit{}))(Unit{})
 def tagOpening(text: String) -> Bool:
   match text:
     case SCon{+char,+after}: (isAsciiLetter(char) && closesTag(after)) || (Char.is_eq(char,'!') && String.starts_with(after,"--"))
@@ -349,7 +378,7 @@ def nextBullet(+limit: Nat,+line: String) -> Bool: bulletAfter(indented(line,lim
 def ruleOf(text: String,+char: Char,+count: Nat) -> Bool:
   match text:
     case SNil{}: Nat.is_ge(count,3n)
-    case SCon{+next,+rest}: Bool.pick(Unit -> Bool,Char.is_eq(next,char),_ => ruleOf(rest,char,count + 1n),_ => Char.is_eq(next,' ') && ruleOf(rest,char,count))(Unit{})
+    case SCon{+next,+rest}: Bool.pick(Unit -> Bool,Char.is_eq(next,char),_ => ruleOf(rest,char,count + 1n),_ => Bool.pick(Unit -> Bool,Char.is_eq(next,' '),_ => ruleOf(rest,char,count),_ => False{})(Unit{}))(Unit{})
 def ruleStart(text: String) -> Bool:
   match text:
     case SCon{+char,+after}: (Char.is_eq(char,'-') || Char.is_eq(char,'_') || Char.is_eq(char,'*')) && ruleOf(SCon{char,after},char,0n)
@@ -447,16 +476,52 @@ def itemFrom(+raw: String,+marker: Nat,+line: String,+src: List<&2,U32>) -> Cont
 type Step is Data: Step{raw: String,text: String,src: List<&2,U32>}
 def stepped(value: Continued) -> Step:
   match value: case Continued{Item{raw,contents,_,_},src}: Step{H.concatReversed(raw,""),H.concatReversed(contents,""),src}
-def stepOf(found: Maybe<&2,Cap>,+src: List<&2,U32>) -> Maybe<&2,Step>:
+# other.listItemRegex(bull), `^( {0,3}BULL)((?:[\t ][^\n]*)?(?:\n|$))`
+# for the list's bullet: a given `*`, `+` or `-`, or one to nine digits and
+# a given `.` or `)`. The match is the bullet with its indentation (the
+# marker's width) and the rest of the line with its newline.
+type Bullet is Data:
+  Unordered{mark: U32}
+  Ordered{delimiter: U32}
+type ItemStart is Data: ItemStart{marker: Nat,rest: String}
+def digitRun(codes: List<&2,U32>,+count: Nat) -> Nat:
+  match codes:
+    case +scalar <> rest: Bool.pick(Unit -> Nat,U32.is_ge(scalar,48) && U32.is_le(scalar,57),_ => digitRun(rest,count + 1n),_ => count)(Unit{})
+    case Nil{}: count
+def bulletLength(bullet: Bullet,+codes: List<&2,U32>) -> Maybe<&2,Nat>:
+  match bullet:
+    case Unordered{+mark}: Bool.pick(Maybe<&2,Nat>,Maybe.default(&2,Bool,Maybe.map(&2,U32,Bool,scalar => U32.is_eq(scalar,mark),List.head(&2,U32,codes)),False{}),Some{1n},None{})
+    case Ordered{+delimiter}:
+      +digits = digitRun(codes,0n)
+      Bool.pick(Maybe<&2,Nat>,Nat.is_ge(digits,1n) && Nat.is_le(digits,9n) && U32.is_eq(Maybe.default(&2,U32,List.get(&2,U32,codes,digits),0),delimiter),Some{digits + 1n},None{})
+# `(?:[\t ][^\n]*)?(?:\n|$)` after the bullet.
+def bulletRest(+codes: List<&2,U32>) -> Maybe<&2,String>:
+  match codes:
+    case Nil{}: Some{""}
+    case +scalar <> rest:
+      Bool.pick(Unit -> Maybe<&2,String>,U32.is_eq(scalar,9) || U32.is_eq(scalar,32),_ => Some{firstLine(codes) ++ Bool.pick(String,List.is_empty(&2,U32,drop(codes,String.length(firstLine(codes)))),"","\n")},
+        _ => Bool.pick(Maybe<&2,String>,U32.is_eq(scalar,10),Some{"\n"},None{}))(Unit{})
+def itemStarted(+indent: Nat,length: Maybe<&2,Nat>,+after: List<&2,U32>) -> Maybe<&2,ItemStart>:
+  match length:
+    case Some{+bullet}: Maybe.map(&2,String,ItemStart,rest => ItemStart{indent + bullet,rest},bulletRest(drop(after,bullet)))
+    case None{}: None{}
+def spaceCount(codes: List<&2,U32>,limit: Nat,+count: Nat) -> Nat:
+  match codes limit:
+    case _ Zero{}: count
+    case +scalar <> rest Succ{more}: Bool.pick(Unit -> Nat,U32.is_eq(scalar,32),_ => spaceCount(rest,more,count + 1n),_ => count)(Unit{})
+    case Nil{} _: count
+def itemStart(+bullet: Bullet,+src: List<&2,U32>) -> Maybe<&2,ItemStart>:
+  +indent = spaceCount(src,4n,0n)
+  Bool.pick(Unit -> Maybe<&2,ItemStart>,Nat.is_le(indent,3n),_ => itemStarted(indent,bulletLength(bullet,drop(src,indent)),drop(src,indent)),_ => None{})(Unit{})
+def stepOf(found: Maybe<&2,ItemStart>,+src: List<&2,U32>) -> Maybe<&2,Step>:
   match found:
-    case Some{+value}:
-      +raw = capWhole(value)
-      +marker = String.length(capText(value,1n))
-      Some{stepped(itemFrom(raw,marker,H.expandTabs(firstTextLine(capText(value,2n)),marker,""),drop(src,String.length(raw))))}
+    case Some{ItemStart{+marker,+rest}}:
+      +raw = slice(src,0n,marker) ++ rest
+      Some{stepped(itemFrom(raw,marker,H.expandTabs(firstTextLine(rest),marker,""),drop(src,String.length(raw))))}
     case None{}: None{}
 # The item at `src`, unless there is no bullet or the line is a rule.
-def stepAt(+rules: Rules.Block,+itemRegex: Re.RegExp,+src: List<&2,U32>) -> Maybe<&2,Step>:
-  Bool.pick(Unit -> Maybe<&2,Step>,test(Rules.blockHr(rules),src),_ => None{},_ => stepOf(exec(itemRegex,src),src))(Unit{})
+def stepAt(+rules: Rules.Block,+bullet: Bullet,+src: List<&2,U32>) -> Maybe<&2,Step>:
+  Bool.pick(Unit -> Maybe<&2,Step>,test(Rules.blockHr(rules),src),_ => None{},_ => stepOf(itemStart(bullet,src),src))(Unit{})
 
 # Items (reversed), whether the list is loose and whether the previous item
 # ended with a blank line.
@@ -464,11 +529,11 @@ type Collected is Data: Collected{items: List<&2,ItemDraft>,loose: Bool,endsWith
 def collectedItem(collected: Collected,+raw: String,+text: String) -> Collected:
   match collected:
     case Collected{items,+loose,+ends}: Collected{ItemDraft{raw,listIsTask(text),text} <> items,loose || ends,ends || (Bool.not(loose) && doubleBlankLine(raw))}
-def itemsFrom(fuel: Nat,+rules: Rules.Block,+itemRegex: Re.RegExp,collected: Collected,next: Maybe<&2,Step>) -> Collected:
+def itemsFrom(fuel: Nat,+rules: Rules.Block,+bullet: Bullet,collected: Collected,next: Maybe<&2,Step>) -> Collected:
   match fuel next:
     case _ None{}: collected
     case Zero{} _: collected
-    case Succ{more} Some{Step{raw,text,src}}: itemsFrom(more,rules,itemRegex,collectedItem(collected,raw,text),stepAt(rules,itemRegex,src))
+    case Succ{more} Some{Step{raw,text,src}}: itemsFrom(more,rules,bullet,collectedItem(collected,raw,text),stepAt(rules,bullet,src))
 
 def itemRawOf(item: ItemDraft) -> String:
   match item: case ItemDraft{raw,_,_}: raw
@@ -487,12 +552,11 @@ def listFinished(collected: Collected,ordered: Bool,start: Maybe<&2,Nat>) -> May
     case Collected{Nil{},_,_}: None{}
     case Collected{+items,loose,_}: Some{ListDraft{Text.trimEnd(rawsReversed(items,"")),ordered,start,loose,List.reverse(&2,ItemDraft,trimmedHead(items))}}
 # `^( {0,3}BULL)((?:[\t ][^\n]*)?(?:\n|$))` for the list's bullet.
-def listItemRegex(+bull: String,ordered: Bool) -> Re.RegExp:
-  Rules.compiled(Rules.edit("^( {0,3}" ++ Bool.pick(String,ordered,"\\d{1,9}\\" ++ String.drop(bull,String.length(bull) - 1n),"\\" ++ bull) ++ ")((?:[\t ][^\\n]*)?(?:\\n|$))",""))
+def lastScalar(+text: String) -> U32: Maybe.default(&2,U32,Maybe.map(&2,Char,U32,Char.to_u32,H.lastChar(text)),0)
 def listWith(+rules: Rules.Block,+src: List<&2,U32>,+bull: String) -> Maybe<&2,ListDraft>:
   +ordered = Nat.is_gt(String.length(bull),1n)
-  +itemRegex = listItemRegex(bull,ordered)
-  listFinished(itemsFrom(List.length(&2,U32,src) + 1n,rules,itemRegex,Collected{Nil{},False{},False{}},stepAt(rules,itemRegex,src)),ordered,Bool.pick(Maybe<&2,Nat>,ordered,Nat.read(H.dropEnd(bull,1n)),None{}))
+  +bullet = Bool.pick(Bullet,ordered,Ordered{lastScalar(bull)},Unordered{lastScalar(bull)})
+  listFinished(itemsFrom(List.length(&2,U32,src) + 1n,rules,bullet,Collected{Nil{},False{},False{}},stepAt(rules,bullet,src)),ordered,Bool.pick(Maybe<&2,Nat>,ordered,Nat.read(H.dropEnd(bull,1n)),None{}))
 def listOf(+rules: Rules.Block,+src: List<&2,U32>,found: Maybe<&2,Cap>) -> Maybe<&2,ListDraft>:
   match found:
     case Some{value}: listWith(rules,src,Text.trim(capText(value,1n)))
@@ -569,7 +633,7 @@ def definitionFor(links: List<&2,T.LinkDefinition>,+label: String) -> Maybe<&2,T
 def hasDefinition(links: List<&2,T.LinkDefinition>,+label: String) -> Bool:
   match links:
     case Nil{}: False{}
-    case T.LinkDefinition{+name,_,_} <> rest: String.eq(name,label) || hasDefinition(rest,label)
+    case T.LinkDefinition{+name,_,_} <> rest: Bool.pick(Unit -> Bool,String.eq(name,label),_ => True{},_ => hasDefinition(rest,label))(Unit{})
 def refFound(entry: Maybe<&2,T.LinkDefinition>,+raw: String,label: String) -> RefStep:
   match entry:
     case None{}: RefText{String.take(raw,1n)}
@@ -772,5 +836,111 @@ def urlOf(-X: Data,+rules: Rules.Inline,found: Maybe<&2,Cap>) -> Maybe<&2,T.Toke
     case None{}: None{}
 def url(-X: Data,+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: urlOf(X,rules,exec(Rules.inlineUrl(rules),src))
 
+# The text run
+# ------------
+# GFM's inline `text` rule is the lexer's hottest expression: every run of
+# plain text is scanned with it, trying several lookaheads per character.
+# Without `breaks` it is matched by the function below, which follows the
+# expression step by step (tests/marked_lexer_check.py compares it with the
+# expression on its inputs):
+#
+#   ^(`+|~+|[^`~])(?:(?=[`~])|(?= {2,}\n)|(?=EMAIL+@)|[\s\S]*?(?:(?=STOP|$)
+#     |[^ ](?= {2,}\n)|[^EMAIL](?=EMAIL+@)))
+#
+# with EMAIL = [a-zA-Z0-9.!#$%&'*+\/=?_`{\|}~-] and STOP = [\\<!\[`*~_]|\b_
+# |[hH][tT][tT][pP][sS]?|[fF][tT][pP]:\/\/|www\. (the protocol alternative
+# stops at any "http", as the expression reads).
+def emailPunctuation(scalar: U32) -> Bool:
+  match scalar:
+    case 33: True{}
+    case 35: True{}
+    case 36: True{}
+    case 37: True{}
+    case 38: True{}
+    case 39: True{}
+    case 42: True{}
+    case 43: True{}
+    case 45: True{}
+    case 46: True{}
+    case 47: True{}
+    case 61: True{}
+    case 63: True{}
+    case 95: True{}
+    case 96: True{}
+    case 123: True{}
+    case 124: True{}
+    case 125: True{}
+    case 126: True{}
+    case _: False{}
+def isEmailCode(+scalar: U32) -> Bool:
+  (U32.is_ge(scalar,97) && U32.is_le(scalar,122)) || (U32.is_ge(scalar,65) && U32.is_le(scalar,90)) || (U32.is_ge(scalar,48) && U32.is_le(scalar,57)) || emailPunctuation(scalar)
+# `(?=EMAIL+@)`
+def emailAhead(codes: List<&2,U32>,+count: Nat) -> Bool:
+  match codes:
+    case Nil{}: False{}
+    case +scalar <> rest: Bool.pick(Unit -> Bool,isEmailCode(scalar),_ => emailAhead(rest,count + 1n),_ => U32.is_eq(scalar,64) && Nat.is_gt(count,0n))(Unit{})
+# `(?= {2,}\n)`
+def breakAhead(codes: List<&2,U32>,+count: Nat) -> Bool:
+  match codes:
+    case Nil{}: False{}
+    case +scalar <> rest: Bool.pick(Unit -> Bool,U32.is_eq(scalar,32),_ => breakAhead(rest,count + 1n),_ => U32.is_eq(scalar,10) && Nat.is_ge(count,2n))(Unit{})
+def lowered(+scalar: U32) -> U32: Bool.pick(U32,U32.is_ge(scalar,65) && U32.is_le(scalar,90),(scalar + 32 : U32),scalar)
+def foldedPrefix(codes: List<&2,U32>,prefix: String) -> Bool:
+  match codes prefix:
+    case _ SNil{}: True{}
+    case Nil{} _: False{}
+    case scalar <> rest SCon{Chr{expected},more}: Bool.pick(Unit -> Bool,U32.is_eq(lowered(scalar),expected),_ => foldedPrefix(rest,more),_ => False{})(Unit{})
+def plainPrefix(codes: List<&2,U32>,prefix: String) -> Bool:
+  match codes prefix:
+    case _ SNil{}: True{}
+    case Nil{} _: False{}
+    case scalar <> rest SCon{Chr{expected},more}: Bool.pick(Unit -> Bool,U32.is_eq(scalar,expected),_ => plainPrefix(rest,more),_ => False{})(Unit{})
+# `[\\<!\[`*~_]`
+def stopCharacter(scalar: U32) -> Bool:
+  match scalar:
+    case 92: True{}
+    case 60: True{}
+    case 33: True{}
+    case 91: True{}
+    case 96: True{}
+    case 42: True{}
+    case 126: True{}
+    case 95: True{}
+    case _: False{}
+# STOP at the start of `codes`.
+def stopAhead(+codes: List<&2,U32>) -> Bool:
+  match codes:
+    case Nil{}: False{}
+    case +scalar <> _: stopCharacter(scalar) || foldedPrefix(codes,"http") || foldedPrefix(codes,"ftp://") || plainPrefix(codes,"www.")
+# `[^ ](?= {2,}\n)` and `[^EMAIL](?=EMAIL+@)` at a character.
+def breakAfter(+scalar: U32,+rest: List<&2,U32>) -> Bool: Bool.pick(Unit -> Bool,U32.is_eq(scalar,32),_ => False{},_ => breakAhead(rest,0n))(Unit{})
+def emailAfter(+scalar: U32,+rest: List<&2,U32>) -> Bool: Bool.pick(Unit -> Bool,isEmailCode(scalar),_ => False{},_ => emailAhead(rest,0n))(Unit{})
+# `[\s\S]*?(?:(?=STOP|$)|[^ ](?= {2,}\n)|[^EMAIL](?=EMAIL+@))`: the length
+# of the lazy run and the alternative's character.
+def textRun(codes: List<&2,U32>,+length: Nat) -> Nat:
+  match codes:
+    case Nil{}: length
+    case +scalar <> +rest:
+      Bool.pick(Unit -> Nat,stopAhead(scalar <> rest),_ => length,
+        _ => Bool.pick(Unit -> Nat,breakAfter(scalar,rest) || emailAfter(scalar,rest),_ => length + 1n,
+          _ => textRun(rest,length + 1n))(Unit{}))(Unit{})
+def runOf(codes: List<&2,U32>,+scalar: U32,+count: Nat) -> Nat:
+  match codes:
+    case +next <> rest: Bool.pick(Unit -> Nat,U32.is_eq(next,scalar),_ => runOf(rest,scalar,count + 1n),_ => count)(Unit{})
+    case Nil{}: count
+# `(`+|~+|[^`~])` then the rest.
+def textAfter(+first: Nat,+rest: List<&2,U32>) -> Nat:
+  Bool.pick(Unit -> Nat,startsWith(rest,'`') || startsWith(rest,'~') || breakAhead(rest,0n) || emailAhead(rest,0n),_ => first,_ => first + textRun(rest,0n))(Unit{})
+def textLength(+src: List<&2,U32>) -> Maybe<&2,Nat>:
+  match src:
+    case Nil{}: None{}
+    case +scalar <> _:
+      +first = Bool.pick(Nat,U32.is_eq(scalar,96) || U32.is_eq(scalar,126),runOf(src,scalar,0n),1n)
+      Some{textAfter(first,drop(src,first))}
+def textOfLength(+src: List<&2,U32>,length: Maybe<&2,Nat>) -> Maybe<&2,String>:
+  match length:
+    case Some{+count}: Some{slice(src,0n,count)}
+    case None{}: None{}
 # The text run; the lexer merges it into a preceding text token.
-def inlineText(+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,String>: wholeOf(exec(Rules.inlineText(rules),src))
+def inlineText(+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,String>:
+  Bool.pick(Unit -> Maybe<&2,String>,Rules.inlineBreaks(rules),_ => wholeOf(exec(Rules.inlineText(rules),src)),_ => textOfLength(src,textLength(src)))(Unit{})

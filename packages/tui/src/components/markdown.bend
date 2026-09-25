@@ -62,10 +62,11 @@ def isDigitCode(+code: U32) -> Bool: U32.is_ge(code,48) && U32.is_le(code,57)
 def isIdentifierCode(+code: U32) -> Bool: isAsciiLetter(code) || isDigitCode(code) || U32.is_eq(code,95)
 def isMathSymbol(+code: U32) -> Bool: String.contains("_^=+*/<>()[]|±≤≥≠≈∈→⇒∞∫∑√-",SCon{Chr{code},SNil{}})
 # `/\\[A-Za-z]+|[_^=+*/<>()[\]|±≤≥≠≈∈→⇒∞∫∑√-]/.test(source)`
-def looksLikePendingDollarMath(+codes: List<&2,U32>) -> Bool:
+def looksLikePendingDollarMath(codes: List<&2,U32>) -> Bool:
   match codes:
     case Nil{}: False{}
-    case +code <> +rest: (U32.is_eq(code,92) && isAsciiLetter(Maybe.default(&2,U32,List.head(&2,U32,rest),0))) || isMathSymbol(code) || looksLikePendingDollarMath(rest)
+    case +code <> +rest:
+      Bool.pick(Unit -> Bool,(U32.is_eq(code,92) && isAsciiLetter(Maybe.default(&2,U32,List.head(&2,U32,rest),0))) || isMathSymbol(code),_ => True{},_ => looksLikePendingDollarMath(rest))(Unit{})
 
 # findClosingDelimiter: the first `closing` not preceded by an odd run of
 # backslashes; `run` counts the backslashes before the current scalar and
@@ -148,9 +149,16 @@ def dropSpaces(+codes: List<&2,U32>) -> List<&2,U32>:
     case +code <> +rest: Bool.pick(Unit -> List<&2,U32>,U32.is_eq(code,32),_ => dropSpaces(rest),_ => code <> rest)(Unit{})
     case Nil{}: Nil{}
 # ` {0,3}` then `opening`: the scalars after the opening.
-def openedBlock(+source: List<&2,U32>,+opening: String) -> Maybe<&2,List<&2,U32>>:
-  +spaces = Tokenizer.codesLength(source,0n) - Tokenizer.codesLength(dropSpaces(source),0n)
-  Bool.pick(Unit -> Maybe<&2,List<&2,U32>>,Nat.is_le(spaces,3n) && startsWithText(dropSpaces(source),opening),_ => Some{Tokenizer.drop(dropSpaces(source),String.length(opening))},_ => None{})(Unit{})
+def afterIndent(codes: List<&2,U32>,+count: Nat) -> Maybe<&2,List<&2,U32>>:
+  match codes:
+    case +code <> +rest:
+      Bool.pick(Unit -> Maybe<&2,List<&2,U32>>,U32.is_eq(code,32),_ => Bool.pick(Unit -> Maybe<&2,List<&2,U32>>,Nat.is_ge(count,3n),_ => None{},_ => afterIndent(rest,count + 1n))(Unit{}),_ => Some{code <> rest})(Unit{})
+    case Nil{}: Some{Nil{}}
+def openingAfter(indented: Maybe<&2,List<&2,U32>>,+opening: String) -> Maybe<&2,List<&2,U32>>:
+  match indented:
+    case Some{+rest}: Bool.pick(Unit -> Maybe<&2,List<&2,U32>>,startsWithText(rest,opening),_ => Some{Tokenizer.drop(rest,String.length(opening))},_ => None{})(Unit{})
+    case None{}: None{}
+def openedBlock(+source: List<&2,U32>,+opening: String) -> Maybe<&2,List<&2,U32>>: openingAfter(afterIndent(source,0n),opening)
 def dropSpaceTab(+codes: List<&2,U32>) -> List<&2,U32>:
   match codes:
     case +code <> +rest: Bool.pick(Unit -> List<&2,U32>,U32.is_eq(code,32) || U32.is_eq(code,9),_ => dropSpaceTab(rest),_ => code <> rest)(Unit{})
@@ -160,10 +168,14 @@ def contentStart(+codes: List<&2,U32>) -> List<&2,U32>:
   +rest = dropSpaceTab(codes)
   Bool.pick(Unit -> List<&2,U32>,Tokenizer.startsWith(rest,'\n'),_ => Tokenizer.drop(rest,1n),_ => rest)(Unit{})
 # `closing[ \t]*(?:\n|$)` at the start: the scalars it takes.
+def spaceTabRun(codes: List<&2,U32>,+count: Nat) -> Maybe<&2,Nat>:
+  match codes:
+    case Nil{}: Some{count}
+    case +code <> +rest:
+      Bool.pick(Unit -> Maybe<&2,Nat>,U32.is_eq(code,32) || U32.is_eq(code,9),_ => spaceTabRun(rest,count + 1n),
+        _ => Bool.pick(Maybe<&2,Nat>,U32.is_eq(code,10),Some{count + 1n},None{}))(Unit{})
 def closingLine(+codes: List<&2,U32>,+closing: String) -> Maybe<&2,Nat>:
-  +after = dropSpaceTab(Tokenizer.drop(codes,String.length(closing)))
-  Bool.pick(Unit -> Maybe<&2,Nat>,startsWithText(codes,closing) && (List.is_empty(&2,U32,after) || Tokenizer.startsWith(after,'\n')),
-    _ => Some{Tokenizer.codesLength(codes,0n) - Tokenizer.codesLength(after,0n) + Bool.pick(Nat,List.is_empty(&2,U32,after),0n,1n)},_ => None{})(Unit{})
+  Bool.pick(Unit -> Maybe<&2,Nat>,startsWithText(codes,closing),_ => Maybe.map(&2,Nat,Nat,taken => taken + String.length(closing),spaceTabRun(Tokenizer.drop(codes,String.length(closing)),0n)),_ => None{})(Unit{})
 type BlockClose is Data: BlockClose{index: Nat,taken: Nat}
 # `([\s\S]*?)closing[ \t]*(?:\n|$)`: the shortest content before a closing line.
 def blockCloseFrom(+codes: List<&2,U32>,+closing: String,+index: Nat) -> Maybe<&2,BlockClose>:
@@ -206,7 +218,7 @@ def blockStartFrom(+codes: List<&2,U32>,+lineStart: Bool,+index: Nat) -> Maybe<&
   match codes:
     case Nil{}: None{}
     case +code <> +rest:
-      Bool.pick(Unit -> Maybe<&2,Nat>,lineStart && (Maybe.is_some(&2,List<&2,U32>,openedBlock(code <> rest,"$$")) || Maybe.is_some(&2,List<&2,U32>,openedBlock(code <> rest,"\\["))),_ => Some{index},
+      Bool.pick(Unit -> Maybe<&2,Nat>,Bool.pick(Unit -> Bool,lineStart,_ => Maybe.is_some(&2,List<&2,U32>,openedBlock(code <> rest,"$$")) || Maybe.is_some(&2,List<&2,U32>,openedBlock(code <> rest,"\\[")),_ => False{})(Unit{}),_ => Some{index},
         _ => blockStartFrom(rest,U32.is_eq(code,10),index + 1n))(Unit{})
 def startBlockLatex(source: List<&2,U32>) -> Maybe<&2,Nat>: blockStartFrom(source,True{},0n)
 

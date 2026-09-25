@@ -4337,16 +4337,22 @@
     },
     {
       "source": "packages/tui/test/markdown.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
+        "tests/markdown-test.bend",
+        "tests/markdown_test_reference.ts",
+        "tests/markdown_test_check.py",
         "tests/markdown.bend",
         "tests/markdown-reference.ts",
+        "tests/markdown-render.bend",
+        "tests/markdown_render_reference.ts",
+        "tests/markdown_render_check.py",
         "tests/latex.bend",
         "tests/latex_reference.ts",
         "tests/latex_check.py"
       ],
       "sha256": "1060dbf84302c3984479b7a33ad4aaf21ae0616b8c02a45f066ba6e8f200f14d",
-      "notes": "Core native Markdown rendering and cache invalidation match 40 source-pinned outputs on Bun/native one/four. All 12 \"LaTeX math\" tests (16 renders) and 176 LaTeX Markdown differential renders match on Bun (tests/latex_check.py); five multi-line-paragraph/list-item LaTeX cases are tracked known divergences (line-based paragraphs). Advanced Marked grammar, table wrapping/alignment, ANSI restoration, OSC8 links and streaming fences remain pending."
+      "notes": "All 81 tests run as upstream wrote them with a recording Markdown (tests/markdown_test_reference.ts); every Markdown each test creates (94) is replayed in Bend with its theme and default style (chalk style chains or wrappers, described by probing), options, setText/invalidate calls, per-render hyperlink capability and transform calls, and all renders match line for line (tests/markdown_test_check.py, Bun). The four tests that assert through the TUI and a virtual terminal are checked on the Markdown lines they paint, not by replaying xterm in Bend. The Markdown component lexes with the marked 18.0.11 port (packages/runtime/src/marked/, 1,336 token lists identical to marked incl. marked's Lexer.test.js, tests/marked_lexer_check.py); 3,000 differential renders (tests/markdown_render_check.py) and 2,175 LaTeX cases (tests/latex_check.py) match pi."
     },
     {
       "source": "packages/tui/test/mouse-components.test.ts",
