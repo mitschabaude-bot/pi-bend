@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Differential check of packages/ai/src/utils/retry.bend and overflow.bend against
 the pinned pi-ai classifiers: every case is classified by both and compared."""
+from upstream_pin import UPSTREAM
 import argparse, json, subprocess, sys, tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-UPSTREAM = ROOT.parent / 'pi-mono' / 'packages' / 'ai'
+UPSTREAM = UPSTREAM / 'packages' / 'ai'
 
 RETRY_TEXTS = [
     # retry.test.ts

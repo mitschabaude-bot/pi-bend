@@ -1,4 +1,6 @@
 """Compare declaration snapshots/equality directly with pinned pi-mono code."""
+from upstream_pin import check_sibling
+check_sibling()
 import copy
 import json
 from pathlib import Path

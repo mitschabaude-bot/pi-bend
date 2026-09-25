@@ -1,4 +1,6 @@
 """Native invocation-scope concurrency and affine-completion ownership checks."""
+from upstream_pin import check_sibling
+check_sibling()
 from pathlib import Path
 from bend_toolchain import BEND
 import os

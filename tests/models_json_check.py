@@ -18,10 +18,11 @@ Adaptations (documented in model-config.bend / provider-composer.bend):
 
 Usage: models_json_check.py --runner build/models-json[.js] [--threads N]
 """
+from upstream_pin import UPSTREAM
 import argparse, json, os, pathlib, subprocess, tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-PI_MONO = pathlib.Path(os.environ.get('PI_MONO', ROOT.parent / 'pi-mono'))
+PI_MONO = UPSTREAM
 AGENT = PI_MONO / 'packages/coding-agent'
 NATIVE_BUILTINS = [
     'ant-ling', 'anthropic', 'baseten', 'cerebras', 'deepseek', 'fireworks', 'github-copilot', 'google',

@@ -1,4 +1,5 @@
 """Pinned shell policies plus real POSIX executable-path fixtures."""
+from upstream_pin import UPSTREAM
 import argparse
 import json
 import os
@@ -9,7 +10,7 @@ import socket
 import subprocess
 import tempfile
 ROOT=Path(__file__).resolve().parents[1]
-UPSTREAM=ROOT.parent/'pi-mono/packages/coding-agent/src'
+UPSTREAM=UPSTREAM / 'packages/coding-agent/src'
 
 def text(s):return ','.join(str(ord(c)) for c in s)
 def entries(values):return ';'.join(text(k+'='+v) for k,v in values)

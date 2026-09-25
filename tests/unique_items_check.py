@@ -1,4 +1,6 @@
 """Native structural uniqueness with the approved signed-zero adaptation."""
+from upstream_pin import check_sibling
+check_sibling()
 import json,subprocess
 from pathlib import Path
 from schema_literals import value,string

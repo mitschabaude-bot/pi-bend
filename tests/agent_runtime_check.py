@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Composed state/queue/lifecycle comparisons against the pinned Agent."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools,json,pathlib,subprocess
 root=pathlib.Path(__file__).resolve().parents[1]
 ops=[4,5,1,1,2,7,4,4,0,9,10,5,4,5,4,5,0,8,0,3,6,7,11,9,10,1,2,0,5,0,4,3,10,5,1,1,2,12,17,2,13,18,1,2,14,15,1,2,16]

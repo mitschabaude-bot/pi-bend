@@ -1,8 +1,9 @@
 """Differential terminal framing with explicit flush; real timer ownership is separate."""
 import json,pathlib,random,subprocess,sys
-from upstream_pin import PIN
+from upstream_pin import PIN, UPSTREAM, check_sibling
+check_sibling()
 ROOT=pathlib.Path(__file__).resolve().parents[1]
-assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT.parent/'pi-mono',text=True).strip()==PIN
+assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=UPSTREAM,text=True).strip()==PIN
 esc='\x1b'
 sequences=['a','hello 世界',esc,esc+'[A',esc+'[1;5D',esc+'OP',esc+'x',esc+'[<35;20;5m',esc+'[<0;1;1M',esc+'[Mabc',esc+']title\x07',esc+']title'+esc+'\\',esc+'P>|version'+esc+'\\',esc+'_Gok'+esc+'\\',esc+'[97u'+'a',esc+'[97:65u'+'a',esc+'[97:u'+'a',esc+'[97::65u'+'a',esc+'[97;2u'+'a',esc+esc+'[27;1:3u',esc+'[200~hello\n世界'+esc+'[201~z']
 original=json.loads(subprocess.check_output(['node','tests/stdin_buffer_original.mts'],text=True,cwd=ROOT))

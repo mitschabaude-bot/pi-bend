@@ -1,4 +1,6 @@
 """Strict provider schemas, fallback policy and exact error precedence from Pi."""
+from upstream_pin import check_sibling
+check_sibling()
 import json,random,subprocess
 from pathlib import Path
 from schema_literals import value,string,seq

@@ -1,4 +1,6 @@
 """Compare complete native validation failures and independent renderer cases."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import subprocess

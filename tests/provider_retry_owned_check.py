@@ -18,7 +18,8 @@ parser.add_argument('--no-build', action='store_true')
 args = parser.parse_args()
 WORK = args.worktree.resolve()
 from bend_toolchain import BEND as BEND_PATH
-from upstream_pin import PIN
+from upstream_pin import PIN, UPSTREAM, check_sibling
+check_sibling()
 BEND = Path(BEND_PATH)
 BUN = str(Path.home() / '.bun/bin/bun')
 SOURCE = 'tests/provider-retry-owned.bend'
@@ -44,7 +45,7 @@ for suffix in ['', '-audit']:
     subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1', f'{prefix}{suffix}.c',
                     '-lpthread', '-lm', '-o', str(prefix) + suffix], cwd=WORK, check=True)
 
-reference_commit = subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT.parent/'pi-mono',text=True).strip()
+reference_commit = subprocess.check_output(['git','rev-parse','HEAD'],cwd=UPSTREAM,text=True).strip()
 assert reference_commit.startswith(PIN[:9]), reference_commit
 original = json.loads(subprocess.check_output(['node','--disable-warning=ExperimentalWarning','tests/provider_retry_reference.mts'],cwd=ROOT,text=True))
 assert len(original)==12

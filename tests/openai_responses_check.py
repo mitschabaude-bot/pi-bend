@@ -8,7 +8,8 @@ Requests, retries, bodies and peer closure are asserted by the server.
 import argparse,hashlib,json,os,re,socket,struct,subprocess,tempfile,threading,time
 from pathlib import Path
 from scoped_session_audit import prepare
-from upstream_pin import PIN
+from upstream_pin import PIN, UPSTREAM, check_sibling
+check_sibling()
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--prefix',type=Path,default=ROOT/'build/openai-responses')
@@ -81,7 +82,7 @@ messages=[dict(role='system',content='initial',toolsAdded=[tool],timestamp=1),di
 prepared=oracle('responses_prepare_reference.mts',[dict(model={**model,'id':c.get('modelId','test')},messages=messages,options=dict(apiKey=c.get('apiKey','fixture-key'),env={},**({'serviceTier':c['serviceTier']} if 'serviceTier' in c else {}))) for c in cases])
 grammar=oracle('openai_provider_grammar_reference.mts',dict(model=model,events=tool_events,grammar=prepared[1]['grammar']))
 assert prepared[1]['grammar']=={'tool':'program'} and grammar['content'][0]['arguments']=={'program':'alpha'},(prepared[1],grammar)
-reference_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT.parent/'pi-mono',text=True).strip()
+reference_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=UPSTREAM,text=True).strip()
 assert reference_commit.startswith(PIN[:9])
 def oracle_case(c,p):
     value=dict(mode=c['oracle'],events=[] if c['mode']==32 else c['events'],statuses=c['statuses'],supplied=c['supplied'],defaultPricing=True,sdkStatusError=True,abortCallerOnIteratorClose=False,preaborted=c.get('preaborted',False),structuredPayload=True,params=p.get('payload'),serviceTier=c.get('serviceTier'),modelId=c.get('modelId'),grammar=p.get('grammar',{}))
@@ -180,7 +181,7 @@ while pending:
     if path in seen:continue
     seen.add(path);pending.extend(path.parent/name for name in re.findall(r'^import (\.[^\s]+)',path.read_text(),re.M))
 seen.update([Path(__file__).resolve(),ROOT/'tests/scoped_session_audit.py',ROOT/'tests/channel_audit.py',ROOT/'tests/openai_provider_driver_reference.mts',ROOT/'tests/openai_provider_grammar_reference.mts',ROOT/'tests/responses_prepare_reference.mts',ROOT/'tests/responses_stream_reference.mts'])
-seen.update((ROOT.parent/'pi-mono/packages/ai/src').rglob('*.ts'))
+seen.update((UPSTREAM / 'packages/ai/src').rglob('*.ts'))
 deps=Path('/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/node_modules')
 for dependency in ['openai','partial-json']:
     seen.add(deps/dependency/'package.json');seen.update((deps/dependency).rglob('*.js'))

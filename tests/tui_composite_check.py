@@ -1,9 +1,10 @@
 """Pinned overlay assertions and exact ANSI/Unicode composition comparisons."""
+from upstream_pin import UPSTREAM
 import argparse,json,random,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser();p.add_argument('--prefix',type=Path,default=ROOT/'build/tui-composite');p.add_argument('--width-reference',default='/home/agent/code/pi-bend-tui-ansi/build/ansi-reference/node_modules/get-east-asian-width/index.js');p.add_argument('backends',nargs='*',default=['bun','native-1','native-4']);a=p.parse_args()
-oracle=['bun','tests/tui_composite_reference.ts',str(ROOT.parent/'pi-mono'),a.width_reference]
+oracle=['bun','tests/tui_composite_reference.ts',str(UPSTREAM),a.width_reference]
 def run(command,values):
  result=subprocess.run(command+[json.dumps(values,ensure_ascii=False)],cwd=ROOT,text=True,capture_output=True,timeout=60)
  assert result.returncode==0,(result.returncode,result.stderr[-2000:])

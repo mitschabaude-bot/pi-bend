@@ -1,4 +1,5 @@
 """Public read AgentTool: real files, paths, typed arguments and injected image processing."""
+from upstream_pin import UPSTREAM
 import argparse
 import json
 from pathlib import Path
@@ -11,7 +12,7 @@ parser.add_argument('backends', nargs='*')
 parser.add_argument('--prefix', default='build/read-public')
 args = parser.parse_args()
 prefix = ROOT/args.prefix
-reference = ROOT.parent/'pi-mono/packages/coding-agent/src/core/tools'
+reference = UPSTREAM / 'packages/coding-agent/src/core/tools'
 source = (reference/'read.ts').read_text()
 body = source[source.index('function getNonVisionImageNote'):source.index('export function createReadTool(cwd')]
 oracle = ROOT/'build/read-tool-oracle.ts'

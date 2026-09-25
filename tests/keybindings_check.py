@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Original named tests and actual-source manager differential checks."""
+from upstream_pin import UPSTREAM
 import argparse,json,random,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -36,7 +37,7 @@ def corpus(defs):
  out.append({'steps':[{'queries':queries(names+['unknown'])}]})
  return out
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('--reference',default='/home/agent/code/pi-mono');p.add_argument('command',nargs=argparse.REMAINDER);a=p.parse_args();command=a.command
+ p=argparse.ArgumentParser();p.add_argument('--reference',default=str(UPSTREAM));p.add_argument('command',nargs=argparse.REMAINDER);a=p.parse_args();command=a.command
  if command[:1]==['--']:command=command[1:]
  oracle=['bun','tests/keybindings_reference.ts',a.reference]
  originals=raw(oracle,'--original');actual=batch(command,[x['input'] for x in originals])

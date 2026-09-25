@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Pinned named assertions plus exact native prompt/section/patch comparisons."""
+from upstream_pin import UPSTREAM
 import argparse
 import json
 import pathlib
 import subprocess
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--upstream', default='../pi-mono')
+parser.add_argument('--upstream', default=str(UPSTREAM))
 parser.add_argument('command', nargs=argparse.REMAINDER)
 args = parser.parse_args()
 command = args.command

@@ -33,7 +33,7 @@ for badname,badvalue in [('bad name','x'),('','x'),('x','a\nb'),('X','🙂'),('b
 script=r'''
 import fs from 'node:fs';import {stripTypeScriptTypes} from 'node:module';
 const {buildHeaders}=await import(process.env.PI_HEADERS_SDK+'/internal/headers.mjs');
-const src=stripTypeScriptTypes(fs.readFileSync('../pi-mono/packages/ai/src/api/openai-responses.ts','utf8'));
+const src=stripTypeScriptTypes(fs.readFileSync(process.env.PI_MONO+'/packages/ai/src/api/openai-responses.ts','utf8'));
 const start=src.indexOf('function createClient('),end=src.indexOf('\nfunction buildParams(',start);
 if(start<0||end<0)throw Error('createClient extraction failed');
 const create=new Function('getCompat','getPiUserAgent','hasCopilotVisionInput','buildCopilotDynamicHeaders','OpenAI',src.slice(start,end)+';return createClient;');

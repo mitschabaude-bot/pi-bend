@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from upstream_pin import check_sibling
+check_sibling()
 import json,pathlib,subprocess
 root=pathlib.Path(__file__).resolve().parents[1]
 result=subprocess.run(['node','--experimental-strip-types','tests/agent_listeners_reference.mts'],cwd=root,text=True,capture_output=True,check=True)

@@ -1,4 +1,5 @@
 """Pinned f07218c4d theme-controller.ts: explicit selection and live auto changes repaint the mounted runner."""
+from upstream_pin import UPSTREAM
 import errno
 import fcntl
 import os
@@ -13,7 +14,6 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = Path(os.environ.get("PI_BEND_THEME_RUN", ROOT / "build/interactive-theme-run"))
-UPSTREAM = Path("/home/agent/code/pi-mono")
 SOURCE = subprocess.check_output(["git", "-C", str(UPSTREAM), "show", "f07218c4d:packages/coding-agent/src/modes/interactive/theme/theme-controller.ts"])
 assert b"getThemeSetting()" in SOURCE and b"onTerminalColorSchemeChange" in SOURCE
 LIGHT = b"\x1b[38;2;90;128;128m"

@@ -25,7 +25,7 @@ values=[None,'',' ','test','\t\r\n','\u200b','\u3000','\x00']
 for _ in range(400):case(rng.choice([None,None,'','test-key']),{name:rng.choice(values) for name in rng.sample(names,rng.randrange(6))})
 script=r'''
 const fs=require('fs');const{stripTypeScriptTypes}=require('node:module');
-const source=stripTypeScriptTypes(fs.readFileSync('../pi-mono/packages/ai/src/api/openai-responses.ts','utf8'));
+const source=stripTypeScriptTypes(fs.readFileSync(process.env.PI_MONO+'/packages/ai/src/api/openai-responses.ts','utf8'));
 const start=source.indexOf('function hasHeader('),end=source.indexOf('\nfunction detectSessionAffinityFormat(',start);
 if(start<0||end<0)throw Error('helper extraction failed');
 const resolve=new Function(source.slice(start,end)+';return getClientApiKey;')();

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Replay the actual pinned test suite, then compare independent key APIs."""
+from upstream_pin import UPSTREAM
 import argparse,itertools,json,random,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -52,7 +53,7 @@ def vectors(tables):
   add(data,targets=['a','ctrl+a','delete'])
  return result
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('--reference',default='/home/agent/code/pi-mono');p.add_argument('command',nargs=argparse.REMAINDER);a=p.parse_args();command=a.command
+ p=argparse.ArgumentParser();p.add_argument('--reference',default=str(UPSTREAM));p.add_argument('command',nargs=argparse.REMAINDER);a=p.parse_args();command=a.command
  if command[:1]==['--']:command=command[1:]
  assert command,'fixture command required'
  oracle=['bun','tests/keys_reference.ts',a.reference]

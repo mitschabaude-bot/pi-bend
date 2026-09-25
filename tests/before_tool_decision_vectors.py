@@ -1,4 +1,6 @@
 """Compare post-validation before-hook decisions with the original block."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import subprocess

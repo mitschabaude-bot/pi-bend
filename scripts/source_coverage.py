@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Check hand-reviewed upstream source coverage against the pinned trees."""
+import sys; sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[1] / "tests"))
+from upstream_pin import UPSTREAM
 
 import argparse
 import hashlib
@@ -48,6 +50,6 @@ def check(upstream):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--reference", type=Path, default=ROOT.parent / "pi-mono")
+    parser.add_argument("--reference", type=Path, default=UPSTREAM)
     args = parser.parse_args()
     check(args.reference.resolve())

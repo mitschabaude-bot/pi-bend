@@ -1,4 +1,6 @@
 """Differential model thinking tests using the actual upstream helper bodies."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import random

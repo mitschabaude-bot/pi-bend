@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Differential Anthropic request and SSE checks against pi-mono f07218c4d."""
+from upstream_pin import UPSTREAM
 import argparse
 import json
 import os
@@ -33,7 +34,7 @@ def events():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--toolchain", default="/tmp/pi-bend-theme-controller/build/theme-toolchain/bend2/main.ts")
-    parser.add_argument("--upstream", type=pathlib.Path, default=pathlib.Path("/home/agent/code/pi-mono"))
+    parser.add_argument("--upstream", type=pathlib.Path, default=UPSTREAM)
     parser.add_argument("--backend", choices=("bun", "native1", "native4", "all"), default="all")
     args = parser.parse_args()
     actual_commit = execute(["git", "rev-parse", "HEAD"], cwd=args.upstream)

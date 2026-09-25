@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Source comparisons for pending queues and the Agent.continue decision boundary."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools
 import json
 import pathlib

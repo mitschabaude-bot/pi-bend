@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exact pinned terminal-image protocols, environment policy, metadata and sizing."""
+from upstream_pin import UPSTREAM
 import argparse,base64,json,random,re,struct,subprocess
 from pathlib import Path
 def compress(v):
@@ -79,7 +80,7 @@ def boundaries():
  a.append((dict(method='crop',hidden=3,visible=1,**meta),None));a.append((dict(method='crop',hidden=0,visible=0,**meta),None))
  return a
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('command',nargs='+');p.add_argument('--upstream',default='../pi-mono');args=p.parse_args();items=cases();expected=batch(['bun','tests/terminal_image_reference.ts',args.upstream],items);actual=batch(args.command,items)
+ p=argparse.ArgumentParser();p.add_argument('command',nargs='+');p.add_argument('--upstream',default=str(UPSTREAM));args=p.parse_args();items=cases();expected=batch(['bun','tests/terminal_image_reference.ts',args.upstream],items);actual=batch(args.command,items)
  for index,(v,want,got) in enumerate(zip(items,expected,actual)):
   assert got==want,(index,v,want,got)
  print(f'{len(items)} terminal-image reference comparisons passed')

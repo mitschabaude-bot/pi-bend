@@ -1,4 +1,5 @@
 """Pinned ANSI oracle on supported escapes; explicit standards-based adaptations."""
+from upstream_pin import UPSTREAM
 import argparse
 import json
 from pathlib import Path
@@ -29,7 +30,7 @@ def main():
     cases += [''.join(rng.choices(components,k=rng.randrange(1,30))) for _ in range(700)]
     with tempfile.TemporaryDirectory() as tmp:
         path=Path(tmp)/'cases.json';path.write_text(json.dumps(cases))
-        expected=[json.loads(x) for x in subprocess.check_output(['bun',str(ROOT/'tests/ansi_reference.ts'),str(ROOT.parent/'pi-mono/packages/coding-agent/src'),str(path)],text=True).splitlines()]
+        expected=[json.loads(x) for x in subprocess.check_output(['bun',str(ROOT/'tests/ansi_reference.ts'),str(UPSTREAM / 'packages/coding-agent/src'),str(path)],text=True).splitlines()]
     adaptations=[('x'+ESC+'(0y','xy'),('x'+ESC+'#8y','xy'),(ESC+']unterminated',ESC+']unterminated'),(ESC+']funterminated',ESC+']funterminated'),(ESC+'[123',ESC+'[123'),(ESC+'[123456789mX','X'),(ESC+'[38:2::255:0:0mX','X'),(ESC+'[ qX','X'),(ESC+'[999999999999uX','X'),('x'+ESC+'*0y','xy'),(ESC+'[31\ntext',ESC+'[31\ntext')]
     for c in range(64,127):adaptations.append(('a'+ESC+'[12;34'+chr(c)+'z','az'))
     preserved=['x'+ESC,'x'+ESC+'[','x'+ESC+'[12;','x'+ESC+']title',ESC+'[1 '+ '3x','\x90abc\x9c','\x9dabc\x9c',ESC+'\\ok',ESC+'^abc\x07',ESC+'_abc\x9c']

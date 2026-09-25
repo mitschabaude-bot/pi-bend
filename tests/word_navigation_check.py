@@ -1,10 +1,11 @@
 """Source-oracle navigation with injected segmentation; no production Intl dependency."""
+from upstream_pin import UPSTREAM
 import argparse, json, subprocess, itertools, hashlib
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('backends',nargs='*',default=['bun','native-1','native-4'])
-p.add_argument('--upstream',type=Path,default=ROOT.parent/'pi-mono')
+p.add_argument('--upstream',type=Path,default=UPSTREAM)
 a=p.parse_args()
 source=(a.upstream/'packages/tui/src/word-navigation.ts').read_text()
 assert hashlib.sha256(source.encode()).hexdigest()=='b73e915a524926ac8881731e89026b0bc7b5b0bd465de67257af81a420465c7f'

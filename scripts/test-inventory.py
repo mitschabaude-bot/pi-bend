@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Record upstream suites without treating unported tests as passing coverage."""
+import sys; sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[1] / "tests"))
+from upstream_pin import UPSTREAM
 import argparse
 import hashlib
 import json
@@ -9,8 +11,7 @@ import subprocess
 import sys
 
 # The sibling of the main checkout, also from a linked worktree elsewhere.
-common = subprocess.check_output(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], text=True).strip()
-default_reference = os.environ.get("PI_MONO", str(pathlib.Path(common).parent.parent / "pi-mono"))
+default_reference = str(UPSTREAM)
 parser = argparse.ArgumentParser()
 parser.add_argument("--reference", default=default_reference)
 parser.add_argument("--update", action="store_true")

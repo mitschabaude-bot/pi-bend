@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Differential settings state/persistence checks against pinned Pi source."""
+from upstream_pin import UPSTREAM
 import argparse,json,subprocess,random
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -106,7 +107,7 @@ def cases():
  for _,value in result:value['global']=value.pop('global_')
  return result
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('--reference',default='/home/agent/code/pi-mono');p.add_argument('command',nargs=argparse.REMAINDER);a=p.parse_args();command=a.command
+ p=argparse.ArgumentParser();p.add_argument('--reference',default=str(UPSTREAM));p.add_argument('command',nargs=argparse.REMAINDER);a=p.parse_args();command=a.command
  if command[:1]==['--']:command=command[1:]
  if not command:p.error('provide fixture command after --')
  tests=cases();inputs=[x[1] for x in tests]

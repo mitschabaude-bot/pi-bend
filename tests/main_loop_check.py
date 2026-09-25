@@ -1,4 +1,6 @@
 """Composed native main loop against pinned source, using real validators."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools
 import json
 import subprocess

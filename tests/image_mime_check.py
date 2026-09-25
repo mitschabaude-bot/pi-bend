@@ -1,4 +1,5 @@
 """Pure image recognition against pinned Pi mime.ts; no image decoding or file IO."""
+from upstream_pin import UPSTREAM
 import argparse
 import json
 import os
@@ -61,7 +62,7 @@ def corpus():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--reference', type=Path, default=ROOT.parent/'pi-mono')
+    parser.add_argument('--reference', type=Path, default=UPSTREAM)
     parser.add_argument('--bend', type=Path)
     parser.add_argument('--no-build', action='store_true')
     args = parser.parse_args()

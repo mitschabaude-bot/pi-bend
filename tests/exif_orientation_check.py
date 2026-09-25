@@ -1,4 +1,5 @@
 """Bounded EXIF parsing and shared raster orientation against pinned Pi source."""
+from upstream_pin import UPSTREAM
 import argparse
 import json
 import os
@@ -84,7 +85,7 @@ def corpus():
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--reference',type=Path,default=ROOT.parent/'pi-mono')
+    parser.add_argument('--reference',type=Path,default=UPSTREAM)
     parser.add_argument('--no-build',action='store_true')
     args=parser.parse_args()
     prefix=ROOT/'build/exif-orientation'

@@ -3,13 +3,14 @@
 The emitted production timer, sleep adapter and retry loop remain unchanged.
 Only io_tick and explicit test control effects are supplied by this harness.
 """
+from upstream_pin import UPSTREAM
 import hashlib,json,re,shutil,subprocess,sys,tempfile
 from pathlib import Path
 from bend_toolchain import BEND, TOOLCHAIN
 ROOT=Path(__file__).resolve().parents[1]
 candidate=Path(sys.argv[1] if len(sys.argv)>1 and not sys.argv[1].startswith('--') else TOOLCHAIN).resolve();bun=Path.home()/'.bun/bin/bun'
 fixture=ROOT/'packages/ai/test/provider-retry-named.bend'
-upstream=ROOT.parent/'pi-mono/packages/ai/test/provider-retry.test.ts'
+upstream=UPSTREAM / 'packages/ai/test/provider-retry.test.ts'
 names=re.findall(r'it\("([^"]+)"',upstream.read_text())
 assert len(names)==5
 assert all('"'+name+'"' in fixture.read_text() for name in names)

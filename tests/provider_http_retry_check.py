@@ -11,7 +11,8 @@ import subprocess
 import sys
 import threading
 from channel_audit import instrument
-from upstream_pin import PIN
+from upstream_pin import PIN, UPSTREAM, check_sibling
+check_sibling()
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
@@ -84,7 +85,7 @@ for name,responses,retries,limit,wanted in cases[:11]:
         items.append({'status':int(lines[0].split()[1]),'body':body.hex(),
                       'headers':[line.split(': ',1) for line in lines[1:]]})
     reference_cases.append({'name':name,'responses':items,'retries':retries})
-reference_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT.parent/'pi-mono',text=True).strip()
+reference_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=UPSTREAM,text=True).strip()
 assert reference_commit.startswith(PIN[:9])
 reference=json.loads(subprocess.check_output(['node','--disable-warning=ExperimentalWarning',str(ROOT/'tests/provider_http_retry_reference.mts')],input=json.dumps(reference_cases),cwd=ROOT,text=True))
 for case,observed in zip(cases[:11],reference['results'],strict=True):

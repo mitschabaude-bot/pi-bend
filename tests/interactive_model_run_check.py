@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Mounted model switching against pinned pi interactive model behavior."""
+from upstream_pin import UPSTREAM
 import errno
 import fcntl
 import hashlib
@@ -15,7 +16,6 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = Path(subprocess.check_output(["git", "rev-parse", "--git-common-dir"], cwd=ROOT, text=True).strip()).resolve()
-UPSTREAM = Path(os.environ.get("PI_MONO", COMMON.parent.parent / "pi-mono"))
 SOURCES = {
     "packages/coding-agent/src/modes/interactive/interactive-mode.ts": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
     "packages/coding-agent/src/modes/interactive/components/model-selector.ts": "92d70b9faffc9febf2ce0c519c7c086938bddfc5da9ad28d819f408d54e3637e",

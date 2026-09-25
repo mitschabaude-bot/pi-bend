@@ -1,9 +1,10 @@
 """Compare native Flash rendering and expiry order with pinned pi-mono source."""
+from upstream_pin import UPSTREAM
 from pathlib import Path
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-expected = subprocess.check_output(['bun', 'tests/alt-screen-flash-reference.ts', '/home/agent/code/pi-mono'], cwd=ROOT, text=True).splitlines()
+expected = subprocess.check_output(['bun', 'tests/alt-screen-flash-reference.ts', str(UPSTREAM)], cwd=ROOT, text=True).splitlines()
 for name, command in [
     ('bun', ['bun', 'build/alt-screen-flash.js']),
     ('native-1', ['build/alt-screen-flash', '--threads', '1']),

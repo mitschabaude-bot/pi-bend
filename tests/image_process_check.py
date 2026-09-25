@@ -10,7 +10,7 @@ import tempfile
 import zlib
 from webp_lossless_check import constant, webp
 from webp_check import animated
-from upstream_pin import PIN
+from upstream_pin import PIN, UPSTREAM
 
 ROOT = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser(description=__doc__)
@@ -24,7 +24,7 @@ assert json.loads((photon.parent/'package.json').read_text())['version'] == '0.3
 
 
 def source(name):
-    return subprocess.check_output(['git', '-C', str(ROOT.parent/'pi-mono'), 'show',
+    return subprocess.check_output(['git', '-C', str(UPSTREAM), 'show',
                                     f'{PIN}:packages/coding-agent/src/utils/{name}'], text=True)
 
 
@@ -39,7 +39,7 @@ gif = b'GIF89a'+struct.pack('<HHBBB', 1, 1, 128, 0, 0)+bytes([20,40,60,255,255,2
 bmp = b'BM'+struct.pack('<IHHI',58,0,0,54)+struct.pack('<IiiHHIIiiII',40,1,1,1,24,0,4,0,0,0,0)+bytes([0,0,255,0])
 files = [('small.png', png(7,9), 'image/png'), ('large.png', png(2010,3), 'image/png'),
          ('tiny.gif', gif, 'image/gif'), ('opaque-image', bmp, 'image/bmp'), ('broken.gif', b'GIF89a', 'image/gif')]
-upstream_tests = subprocess.check_output(['git','-C',str(ROOT.parent/'pi-mono'),'show',
+upstream_tests = subprocess.check_output(['git','-C',str(UPSTREAM),'show',
     f'{PIN}:packages/coding-agent/test/image-processing.test.ts'],text=True)
 jpeg = base64.b64decode(re.search(r'const TINY_JPEG_2X1\s*=\s*"([^"]+)"',upstream_tests)[1])
 def app1(payload): return b'\xff\xe1'+struct.pack('>H',len(payload)+2)+payload

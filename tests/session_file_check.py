@@ -7,6 +7,7 @@ the JSON operations to tests/session_file_reference.ts (actual upstream code)
 and to the Bend runner, checks the upstream assertions on both, and compares
 the two result streams after normalizing generated ids, timestamps and paths.
 """
+from upstream_pin import UPSTREAM
 import argparse, json, os, re, shutil, subprocess, tempfile, time
 from pathlib import Path
 
@@ -387,7 +388,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--runner', default='build/session-file.js')
     parser.add_argument('--threads', default='1')
-    parser.add_argument('--reference', type=Path, default=ROOT.parent / 'pi-mono/packages/coding-agent')
+    parser.add_argument('--reference', type=Path, default=UPSTREAM / 'packages/coding-agent')
     args = parser.parse_args()
     work = Path(tempfile.mkdtemp(prefix='pi-session-file-'))
     try:

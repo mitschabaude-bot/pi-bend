@@ -1,4 +1,5 @@
 """Compare complete theme palettes with pinned pi; check strict invalid input."""
+from upstream_pin import UPSTREAM
 import copy
 import hashlib
 import json
@@ -7,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
-upstream = Path('/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/theme')
+upstream = Path(str(UPSTREAM / 'packages/coding-agent/src/modes/interactive/theme'))
 hashes = {
     'dark': '103a5aecb74a2dab5cc903c9741845ee6158658ce2ff6e5445948784116eaef8',
     'light': '14c7172ba7e75eab6f509504de806af0f2d9ff817bfb45d9533bff15c7e6e657',

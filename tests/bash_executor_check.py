@@ -1,4 +1,5 @@
 """User Bash execution oracle, stream-boundary corrections and owned cleanup."""
+from upstream_pin import UPSTREAM
 import argparse,json,os,random,subprocess,tempfile
 from pathlib import Path
 from output_accumulator_fault_check import hooks
@@ -17,7 +18,7 @@ def main():
   cases.append(dict(mode='normal',exit='0',chunks=[list(value.encode())]))
  with tempfile.TemporaryDirectory() as tmp:
   env=dict(os.environ,TMPDIR=tmp);path=Path(tmp)/'cases.json';path.write_text(json.dumps(cases))
-  expected=[json.loads(x) for x in subprocess.check_output(['bun',str(ROOT/'tests/bash_executor_reference.ts'),str(ROOT.parent/'pi-mono/packages/coding-agent/src'),str(path)],text=True,env=env).splitlines()]
+  expected=[json.loads(x) for x in subprocess.check_output(['bun',str(ROOT/'tests/bash_executor_reference.ts'),str(UPSTREAM / 'packages/coding-agent/src'),str(path)],text=True,env=env).splitlines()]
   def run(mode,exit,chunks):
    arg=chunks if isinstance(chunks,str) else chunks_arg(chunks)
    r=subprocess.run([*runner,mode,exit,arg],capture_output=True,text=True,env=env,timeout=60)

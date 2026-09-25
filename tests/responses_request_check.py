@@ -1,4 +1,6 @@
 """Full native request builder versus pinned buildParams with real converters."""
+from upstream_pin import check_sibling
+check_sibling()
 import argparse,itertools,json,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]

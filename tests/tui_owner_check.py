@@ -1,8 +1,9 @@
 """Check callback driven TuiBase frame commit and core input behavior."""
+from upstream_pin import UPSTREAM
 import hashlib,json,subprocess
 from pathlib import Path
 root=Path(__file__).resolve().parents[1]
-upstream=root.parent/'pi-mono'
+upstream=UPSTREAM
 def run(command,*args):
  p=subprocess.run(command+list(args),cwd=root,text=True,capture_output=True,timeout=90)
  assert p.returncode==0,(command,p.stderr[-2000:])

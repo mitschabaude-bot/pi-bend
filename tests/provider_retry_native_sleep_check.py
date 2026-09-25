@@ -3,6 +3,8 @@
 Uses the isolated timer compiler. Real-time tests supplement, rather than
 replace, upstream virtual-clock boundary assertions.
 """
+from upstream_pin import check_sibling
+check_sibling()
 import hashlib,json,subprocess,sys,tempfile,time
 from pathlib import Path
 from bend_toolchain import BEND, TOOLCHAIN

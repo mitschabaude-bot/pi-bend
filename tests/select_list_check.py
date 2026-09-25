@@ -1,11 +1,12 @@
 """Pinned SelectList source tests and exact rendering/callback/input comparisons."""
+from upstream_pin import UPSTREAM
 import argparse,json,random,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('backends',nargs='*',default=['bun','native-1','native-4'])
 p.add_argument('--prefix',type=Path,default=ROOT/'build/select-list')
-p.add_argument('--reference',default='/home/agent/code/pi-mono')
+p.add_argument('--reference',default=str(UPSTREAM))
 p.add_argument('--modules',default='build/select-reference/node_modules')
 a=p.parse_args(); E='\x1b'
 oracle=['bun','tests/select_list_reference.ts',a.reference,a.modules]

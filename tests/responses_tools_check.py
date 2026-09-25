@@ -1,4 +1,6 @@
 """Typed Responses declarations, grammar selection and mappings versus actual Pi."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools,json,subprocess
 from pathlib import Path
 from schema_literals import value,string,seq

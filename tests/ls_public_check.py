@@ -1,4 +1,5 @@
 """Public ls behavior, native filesystem and injected operation lifecycle."""
+from upstream_pin import UPSTREAM
 import argparse
 import base64
 import json
@@ -12,7 +13,7 @@ p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('backends', nargs='*', default=['bun', 'native-1', 'native-4'])
 p.add_argument('--prefix', type=Path, default=ROOT / 'build/ls-public')
 a = p.parse_args()
-reference = ROOT.parent / 'pi-mono/packages/coding-agent/src/core/tools'
+reference = UPSTREAM / 'packages/coding-agent/src/core/tools'
 source = (reference / 'ls.ts').read_text()
 body = source[source.index('export function createLsToolDefinition('):source.index('export function createLsTool(cwd')]
 oracle = ROOT / 'build/ls-tool-oracle.ts'

@@ -1,4 +1,5 @@
 """Compare read's pure text result with the exact pinned read.ts implementation."""
+from upstream_pin import UPSTREAM
 
 import argparse
 import json
@@ -8,7 +9,7 @@ import shlex
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-UPSTREAM = ROOT.parent / "pi-mono/packages/coding-agent/src/core/tools"
+UPSTREAM = UPSTREAM / 'packages/coding-agent/src/core/tools'
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("backend", choices=["bun", "native-1", "native-4"])
 parser.add_argument("--prefix", default="build/read-text")

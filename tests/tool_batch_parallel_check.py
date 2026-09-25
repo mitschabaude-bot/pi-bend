@@ -1,4 +1,6 @@
 """Source scheduler comparisons through the real native tool lifecycle."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools
 import json
 import subprocess

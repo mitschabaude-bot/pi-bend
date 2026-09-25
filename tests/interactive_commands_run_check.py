@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Pinned interactive command routing through the mounted native editor and PTY."""
+from upstream_pin import UPSTREAM
 import errno
 import fcntl
 import hashlib
@@ -15,7 +16,6 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = Path(subprocess.check_output(["git", "rev-parse", "--git-common-dir"], cwd=ROOT, text=True).strip()).resolve()
-UPSTREAM = Path(os.environ.get("PI_MONO", ROOT.parent / "pi-mono" if (ROOT.parent / "pi-mono").is_dir() else COMMON.parent.parent / "pi-mono"))
 SOURCE = UPSTREAM / "packages/coding-agent/src/modes/interactive/interactive-mode.ts"
 assert hashlib.sha256(SOURCE.read_bytes()).hexdigest() == "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388"
 BINARY = Path(os.environ.get("PI_BEND_COMMAND_RUN", ROOT / "build/interactive-commands-run")).resolve()

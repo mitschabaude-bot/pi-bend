@@ -1,4 +1,5 @@
 """Public edit factory, disk bytes and exact pinned rendering behavior."""
+from upstream_pin import UPSTREAM
 import argparse
 import hashlib
 import json
@@ -35,7 +36,7 @@ cases=[
 def unpoints(s): return ''.join(chr(int(x)) for x in s.split(',')) if s else ''
 with tempfile.TemporaryDirectory(prefix='bend-edit-') as directory:
     root=Path(directory)
-    source=Path(os.environ.get('PI_MONO','/home/agent/code/pi-mono'))/'packages/coding-agent/src/core/tools/edit-diff.ts'
+    source=UPSTREAM/'packages/coding-agent/src/core/tools/edit-diff.ts'
     original=source.read_text()
     assert hashlib.sha256(original.encode()).hexdigest()=='f85a9809eb44b9828236050cf38a8e45933e5cfd583a186e9a0e55a664dd3e8d', 'Unexpected edit-diff.ts revision'
     assert json.loads((args.diff_package/'package.json').read_text())['version']=='8.0.4'

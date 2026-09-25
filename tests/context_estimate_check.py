@@ -1,4 +1,6 @@
 """Native context heuristic compared with pinned Pi, including usage selection."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools, json, random, subprocess
 from pathlib import Path
 from schema_literals import string as literal_string, value, floating, seq

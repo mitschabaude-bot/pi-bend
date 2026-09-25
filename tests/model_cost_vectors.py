@@ -1,4 +1,6 @@
 """Compare pure binary64 pricing and shared cost identity with pinned pi-mono."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import random

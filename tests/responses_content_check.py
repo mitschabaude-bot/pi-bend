@@ -1,4 +1,6 @@
 """Responses user/tool content and composition with shared image preparation."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools,json,subprocess
 from pathlib import Path
 from schema_literals import string,seq

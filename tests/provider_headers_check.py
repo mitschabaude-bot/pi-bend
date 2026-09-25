@@ -9,7 +9,7 @@ values=[None,'','0','false',' a ','\tvalue\r\n','é','🙂']
 for _ in range(700):cases.append({name:rng.choice(values) for name in rng.sample(names,rng.randrange(len(names)+1))})
 script="""
 const fs=require('fs');const {stripTypeScriptTypes}=require('node:module');
-const source=stripTypeScriptTypes(fs.readFileSync('../pi-mono/packages/ai/src/utils/headers.ts','utf8')).replace(/^export /gm,'');
+const source=stripTypeScriptTypes(fs.readFileSync(process.env.PI_MONO+'/packages/ai/src/utils/headers.ts','utf8')).replace(/^export /gm,'');
 const project=new Function(source+';return providerHeadersToRecord;')();
 const codes=s=>Array.from(s,c=>c.codePointAt(0)).join(',');
 console.log(JSON.stringify(JSON.parse(fs.readFileSync(0,'utf8')).map(value=>{

@@ -4,14 +4,15 @@ Upstream's AgentLoopConfig extends SimpleStreamOptions; the port nests those
 inherited fields as one `options` record. The comparison flattens that record
 so every upstream field, with its optionality, must still be present.
 """
+from upstream_pin import UPSTREAM
 from pathlib import Path
 import re
 import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'build'
 BUILD.mkdir(exist_ok=True)
-agent = (ROOT.parent / 'pi-mono/packages/agent/src/types.ts').read_text()
-ai = (ROOT.parent / 'pi-mono/packages/ai/src/types.ts').read_text()
+agent = (UPSTREAM / 'packages/agent/src/types.ts').read_text()
+ai = (UPSTREAM / 'packages/ai/src/types.ts').read_text()
 native_agent = (ROOT / 'packages/agent/src/types.bend').read_text()
 native_ai = (ROOT / 'packages/ai/src/types.bend').read_text()
 

@@ -1,4 +1,6 @@
 """Public start/continue entries composed with the full native loop."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools
 import json
 import subprocess

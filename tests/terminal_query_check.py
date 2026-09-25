@@ -1,11 +1,9 @@
 """Check the native query lifecycle against the pinned pi TUI test contracts."""
+from upstream_pin import UPSTREAM
 import pathlib
 import subprocess
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-UPSTREAM = ROOT.parent / 'pi-mono'
-if not UPSTREAM.exists():
-    UPSTREAM = pathlib.Path('/home/agent/code/pi-mono')
 PIN = 'f07218c4d'
 source = subprocess.check_output(['git', 'show', f'{PIN}:packages/tui/src/tui.ts'], cwd=UPSTREAM, text=True)
 tests = subprocess.check_output(['git', 'show', f'{PIN}:packages/tui/test/terminal-colors.test.ts'], cwd=UPSTREAM, text=True)

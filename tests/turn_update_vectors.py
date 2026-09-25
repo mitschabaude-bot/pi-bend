@@ -1,4 +1,6 @@
 """Compare next-turn replacement with the actual upstream runLoop block."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import subprocess

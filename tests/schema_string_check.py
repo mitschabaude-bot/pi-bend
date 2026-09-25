@@ -1,4 +1,6 @@
 """Pinned schema grapheme policy and composed tool-validation length messages."""
+from upstream_pin import check_sibling
+check_sibling()
 import json, random, subprocess
 from pathlib import Path
 from schema_literals import value,string

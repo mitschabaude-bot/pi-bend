@@ -1,8 +1,9 @@
 """Compare Codex body framing against the actual pinned pure request builder."""
 import itertools, json, pathlib, subprocess, sys
-from upstream_pin import PIN
+from upstream_pin import PIN, UPSTREAM, check_sibling
+check_sibling()
 ROOT=pathlib.Path(__file__).resolve().parents[1]
-assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT.parent/'pi-mono',text=True).strip()==PIN
+assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=UPSTREAM,text=True).strip()==PIN
 FIELDS=['supportsDeveloperRole','supportsMidConvoSystemMessages','sessionAffinityFormat','supportsLongCacheRetention','supportsStrictMode','supportsOpenAIGrammarTools','supportsAdditionalTools','supportsToolSearch','supportsExplicitPromptCacheMode','supportsMaxOutputTokens']
 schema={'type':'object','properties':{'input':{'type':'string'}},'required':['input']}
 def tool(name): return {'name':name,'description':'A tool','parameters':schema}

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Byte-compare native JSONL framing with pi v0.87.1's actual jsonl.ts."""
+from upstream_pin import UPSTREAM, check_sibling
+check_sibling()
 import hashlib
 import os
 import subprocess
@@ -7,10 +9,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = Path(subprocess.check_output(["git", "rev-parse", "--git-common-dir"], cwd=ROOT, text=True).strip()).resolve()
-DEFAULT_UPSTREAM = ROOT.parent / "pi-mono"
-if not DEFAULT_UPSTREAM.is_dir():
-    DEFAULT_UPSTREAM = COMMON.parent.parent / "pi-mono"
-UPSTREAM = Path(os.environ.get("PI_MONO", DEFAULT_UPSTREAM))
 JSONL = UPSTREAM / "packages/coding-agent/src/modes/rpc/jsonl.ts"
 RPC_MODE = UPSTREAM / "packages/coding-agent/src/modes/rpc/rpc-mode.ts"
 assert hashlib.sha256(JSONL.read_bytes()).hexdigest() == "95723d349fcebad1f1da7ce103d02ba7d5e2c876b7d178d41d8b56beedbd93e0"

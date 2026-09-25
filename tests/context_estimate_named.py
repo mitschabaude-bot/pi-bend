@@ -1,8 +1,9 @@
 """All original named context-estimation cases and a native typed integration."""
+from upstream_pin import UPSTREAM
 import re, subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];BUILD=ROOT/'build'
-source=ROOT.parent/'pi-mono/packages/ai/test/context-estimate.test.ts'
+source=UPSTREAM / 'packages/ai/test/context-estimate.test.ts'
 native=ROOT/'packages/ai/test/context-estimate.bend'
 names=re.findall(r'\bit\("([^"\n]+)"',source.read_text())
 assert re.findall(r'IO.print\("PASS ([^"\n]+)"\)',native.read_text())==names

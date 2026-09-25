@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Actual pinned layout assertions and ANSI/Unicode boundary comparisons."""
+from upstream_pin import UPSTREAM
 import argparse,json,random,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];E='\x1b'
@@ -39,7 +40,7 @@ def corpus():
   cases.append(dict(method='wrapTextWithAnsi',text=text,width=rng.randrange(1,12)))
  return cases
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('--reference',default='/home/agent/code/pi-mono');p.add_argument('--width-reference',default='build/ansi-reference/node_modules/get-east-asian-width/index.js');p.add_argument('command',nargs=argparse.REMAINDER);a=p.parse_args();command=a.command
+ p=argparse.ArgumentParser();p.add_argument('--reference',default=str(UPSTREAM));p.add_argument('--width-reference',default='build/ansi-reference/node_modules/get-east-asian-width/index.js');p.add_argument('command',nargs=argparse.REMAINDER);a=p.parse_args();command=a.command
  if command[:1]==['--']:command=command[1:]
  oracle=['bun','tests/ansi_layout_reference.ts',a.reference,a.width_reference]
  original=json.loads(subprocess.check_output(oracle+['--original'],cwd=ROOT,text=True));calls=original['calls'];actual=batch(command,[c['input'] for c in calls],True)

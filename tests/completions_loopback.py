@@ -1,4 +1,5 @@
 """Pinned Chat Completions wire and stream checks over a local HTTP/SSE server."""
+from upstream_pin import UPSTREAM
 import argparse
 import http.server
 import json
@@ -9,7 +10,6 @@ import tempfile
 import threading
 
 ROOT = Path(__file__).resolve().parents[1]
-UPSTREAM = Path('/home/agent/code/pi-mono')
 
 TEXT = b'data: {"id":"chatcmpl-1","model":"test-model","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}\n\ndata: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\ndata: malformed-after-done\n\n'
 TOOL = b'data: {"id":"chatcmpl-tool","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"lookup","arguments":"{\\\"value\\\":"}}]},"finish_reason":null}]}\n\ndata: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\\"42\\\"}"}}]},"finish_reason":"tool_calls"}]}\n\ndata: [DONE]\n\n'

@@ -1,12 +1,13 @@
 """Replay editing-history traces against actual pinned KillRing/UndoStack."""
 import argparse,json,random,subprocess
 from pathlib import Path
-from upstream_pin import PIN
+from upstream_pin import PIN, UPSTREAM, check_sibling
+check_sibling()
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser();p.add_argument('command',nargs=argparse.REMAINDER);args=p.parse_args();command=args.command
 if command[:1]==['--']:command=command[1:]
 assert command
-assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT.parent/'pi-mono',text=True).strip()==PIN
+assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=UPSTREAM,text=True).strip()==PIN
 traces=[[],[{'op':'pop'},{'op':'clear'},{'op':'rotate'}]]
 for prepend in [False,True]:
  for accumulate in [False,True]:

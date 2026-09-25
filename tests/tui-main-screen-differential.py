@@ -4,6 +4,8 @@ Set BEND_COMPILER to a current bend2/main.ts when the installed compiler lacks
 recent process constructors. Setting `BEND_MAIN_SCREEN_NATIVE` also compares a prebuilt binary named by
 BEND_MAIN_SCREEN_NATIVE; it never starts a build itself.
 """
+from upstream_pin import UPSTREAM, check_sibling
+check_sibling()
 import json
 import os
 from pathlib import Path
@@ -23,7 +25,7 @@ def oracle_env():
     env = os.environ.copy()
     if not env.get("NODE_PATH"):
         for candidate in (
-            ROOT.parent / "pi-mono/node_modules",
+            UPSTREAM / 'node_modules',
             ROOT.parent / "pi-bend-tui-text/build/text-reference/node_modules",
             ROOT.parent / "pi-bend-tui-ansi/build/ansi-reference/node_modules",
         ):

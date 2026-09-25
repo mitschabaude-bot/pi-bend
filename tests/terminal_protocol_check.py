@@ -1,3 +1,5 @@
+from upstream_pin import check_sibling
+check_sibling()
 import json,pathlib,random,subprocess,sys
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 e='\x1b'

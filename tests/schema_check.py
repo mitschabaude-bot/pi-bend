@@ -5,6 +5,7 @@ native loader and verifies explicit rejection of unsupported constraints.
 Diagnostic mode compares acceptance via issue collection. Exact native issue
 contents have separate fixtures; upstream diagnostic text integration is pending.
 """
+from upstream_pin import UPSTREAM
 import json
 from pathlib import Path
 from schema_literals import seq, floating, value
@@ -13,7 +14,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'build'
-upstream = ROOT.parent / 'pi-mono/packages/ai/package.json'
+upstream = UPSTREAM / 'packages/ai/package.json'
 assert json.loads(upstream.read_text())['dependencies']['typebox'] == '1.3.27'
 DEPENDENCY = BUILD / 'schema-reference/node_modules/typebox/package.json'
 if not DEPENDENCY.exists():

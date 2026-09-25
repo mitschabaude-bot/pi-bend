@@ -1,4 +1,5 @@
 """Check internal preparation contracts against pinned upstream records."""
+from upstream_pin import UPSTREAM
 import os
 from pathlib import Path
 from bend_toolchain import BEND
@@ -8,7 +9,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'build'
 BUILD.mkdir(exist_ok=True)
-source = (ROOT.parent / 'pi-mono/packages/agent/src/agent-loop.ts').read_text()
+source = (UPSTREAM / 'packages/agent/src/agent-loop.ts').read_text()
 native = (ROOT / 'packages/agent/src/agent-loop.bend').read_text()
 for name, kind in [('PreparedToolCall', 'prepared'), ('ImmediateToolCallOutcome', 'immediate')]:
     upstream = re.search(r'type ' + name + r' = \{(.*?)\n};', source, re.S).group(1)

@@ -1,4 +1,6 @@
 """Compare complete tool-state changes with the actual upstream implementation."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import random

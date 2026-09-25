@@ -1,4 +1,5 @@
 """Pinned SettingsList assertions, state transitions, rendering and callback contracts."""
+from upstream_pin import UPSTREAM
 import argparse,json,random,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -6,7 +7,7 @@ p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('backends',nargs='*',default=['bun','native-1','native-4'])
 p.add_argument('--prefix',type=Path,default=ROOT/'build/settings-list')
 a=p.parse_args(); E='\x1b'; rng=random.Random(991)
-oracle=['bun','tests/settings_list_reference.ts','/home/agent/code/pi-mono','build/input-reference/node_modules']
+oracle=['bun','tests/settings_list_reference.ts',str(UPSTREAM),'build/input-reference/node_modules']
 def run(command,values):
  r=subprocess.run(command+[json.dumps(values,ensure_ascii=False,separators=(',',':'))],cwd=ROOT,text=True,capture_output=True,timeout=90)
  assert r.returncode==0 and not r.stderr,(command,r.returncode,r.stderr[-4000:])

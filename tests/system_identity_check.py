@@ -1,11 +1,11 @@
 """Compare Bend's platform identity with pinned pi-mono's Node formula."""
+from upstream_pin import UPSTREAM
 import argparse
 import pathlib
 import subprocess
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-UPSTREAM = pathlib.Path('/home/agent/code/pi-mono')
 
 def main():
     parser = argparse.ArgumentParser()

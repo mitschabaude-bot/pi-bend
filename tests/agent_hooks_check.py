@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from upstream_pin import check_sibling
+check_sibling()
 import itertools,json,pathlib,subprocess
 root=pathlib.Path(__file__).resolve().parents[1]
 fixtures=[dict(initial=a,later=b,fail=f) for a,b,f in itertools.product(range(4),range(4),[False,True])]

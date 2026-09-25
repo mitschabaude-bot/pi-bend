@@ -1,4 +1,6 @@
 """Exact retry errors against pinned pi; binary64 ceil against native Math.ceil."""
+from upstream_pin import check_sibling
+check_sibling()
 import json, math, random, struct, subprocess, sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]

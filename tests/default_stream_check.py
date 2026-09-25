@@ -1,4 +1,6 @@
 """Default selection timing through public entries and full native loops."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools
 import json
 import subprocess
