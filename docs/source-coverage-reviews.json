@@ -106,10 +106,12 @@
       }
     },
     "packages/coding-agent/src/modes/interactive/components/scoped-models-selector.ts": {
-      "state": "missing",
-      "note": "The /scoped-models interactive selector is absent; model cycling exists separately.",
+      "state": "partial",
+      "note": "The native /scoped-models picker matches upstream selection, clear/enable/provider controls, save, close, and model cycling in terminal parity. Refresh cancellation, unavailable-pattern resolution, reorder/mouse interactions, and remaining ANSI/viewport details are not yet verified or matched.",
       "source_sha256": "a8524d7ccfaf6fd6044a268a06d43f6eee7325b047057c73bb43fa0b1286c612",
-      "port_sha256": {}
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/scoped-models-selector.bend": "d344fc42dc581fb2f742a75485436f4c410213fe42279ac175e7967712d08902"
+      }
     },
     "packages/coding-agent/src/modes/interactive/interactive-mode.ts": {
       "state": "partial",
@@ -118,12 +120,12 @@
         "packages/coding-agent/src/modes/interactive/run.bend",
         "packages/coding-agent/src/modes/interactive/commands.bend"
       ],
-      "note": "Interactive /thinking selection and save-as-default match terminal parity; /scoped-models remains missing and broader command/terminal parity remains incomplete.",
+      "note": "Interactive /thinking and basic /scoped-models selection and settings persistence are implemented and checked against terminal parity; broader command and terminal behavior remain incomplete.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "1e656fd8e3bfd5b60998553a9cc796c291ec2bec77fc0833b97ee5802f666923",
-        "packages/coding-agent/src/modes/interactive/run.bend": "b6feca600d81dbf3cfb1d4008605b20021bb29646089b96699b1511556a18fce",
-        "packages/coding-agent/src/modes/interactive/commands.bend": "6b4021d7464a3d91754ca38f757ee054ea96e2f756aa6114116150825d8c0e94"
+        "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "23a8e54c1d30b54424d1e29508abdf12385cb5dec8e142b675becdb2c540b2d4",
+        "packages/coding-agent/src/modes/interactive/run.bend": "be0594baf5184199012fb46f17d823f0ef6d35ba88c26fad59aea3f6c80f2ab1",
+        "packages/coding-agent/src/modes/interactive/commands.bend": "346a1437fb1f5d4b429ae47416c1ab464e043ee8a5d7ec79a269fdc417a3092a"
       }
     },
     "packages/tui/src/editor-component.ts": {

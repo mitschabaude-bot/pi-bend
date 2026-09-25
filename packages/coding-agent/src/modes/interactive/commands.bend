@@ -19,6 +19,7 @@ type Action is Data:
   CommandError{text: String}
   OpenModelPicker{search: Maybe<&2,String>}
   OpenThinkingPicker{}
+  OpenScopedModels{}
   ThinkingSelected{level: Ai.ModelThinkingLevel,persist: Bool}
   ModelSelected{model: Ai.Model<Ai.JsonValue>}
   ExportSession{path: Maybe<&2,String>}
@@ -46,6 +47,7 @@ type Command is Data:
   SwitchModel{model: Ai.Model<Ai.JsonValue>}
   SetThinking{requested: Maybe<&2,String>}
   SelectThinking{level: Ai.ModelThinkingLevel,persist: Bool}
+  ScopedModels{}
   Compact{instructions: Maybe<&2,String>}
   NewSession{}
   Clone{}
@@ -90,6 +92,7 @@ def classify(+text: String,+parts: List<&2,String>) -> Command:
     case "/quit" <> Nil{}: Stop{}
     case "/model" <> _: ShowModel{argument(text,6n)}
     case "/thinking" <> _: SetThinking{argument(text,9n)}
+    case "/scoped-models" <> Nil{}: ScopedModels{}
     case "/compact" <> _: Compact{argument(text,8n)}
     case "/new" <> Nil{}: NewSession{}
     case "/clone" <> Nil{}: Clone{}
@@ -223,6 +226,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case SwitchModel{model}: switchModel(session,model)
     case SetThinking{requested}: thinking(session,requested)
     case SelectThinking{level,persist}: choose(session,level,persist)
+    case ScopedModels{}: IO.pure(Action,OpenScopedModels{})
     case Compact{instructions}: compact(session,instructions)
     case NewSession{}: IO.pure(Action,CommandError{"Starting a new session is not available yet"})
     case Clone{}: IO.pure(Action,CommandError{"Cloning is not available"})

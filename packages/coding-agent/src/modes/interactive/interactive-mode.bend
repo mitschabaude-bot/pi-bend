@@ -3,6 +3,7 @@ import ../../../../agent/src/types.bend as Agent
 import ../../../../runtime/src/callback.bend as Callback
 import ../../../../runtime/src/deferred.bend as Deferred
 import ../../../../runtime/src/ref.bend as Ref
+import ../../../../runtime/src/record.bend as Record
 import ../../../../runtime/src/text.bend as Text
 import ../../../../tui/src/tui-process.bend as Process
 import ../../core/agent-runtime.bend as Runtime
@@ -26,6 +27,7 @@ import ../../core/extensions/types.bend as ExtensionTypes
 import ./model-search.bend as Search
 import ./components/model-selector.bend as ModelPicker
 import ./components/thinking-selector.bend as ThinkingPicker
+import ./components/scoped-models-selector.bend as ScopePicker
 import ./session-controller.bend as Controller
 import ./commands.bend as Commands
 import ./transcript.bend as Transcript
@@ -45,7 +47,7 @@ type StatusSink is Data:
 type SubmissionInput is Data:
   SubmissionInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: StatusSink}
 type CommandSink is Data:
-  CommandSink{failure: StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,thinking: Ref.Ref<Maybe<&2,ThinkingPicker.Host>>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>}
+  CommandSink{failure: StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,thinking: Ref.Ref<Maybe<&2,ThinkingPicker.Host>>,scoped: Ref.Ref<Maybe<&2,ScopePicker.Host>>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>}
 type Startup is Data:
   Startup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: StatusSink}
 
@@ -130,33 +132,89 @@ def openThinking(redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker:
     showThinking(host,levels,Session.stateThinking(agent),Maybe.default(&2,Ai.ModelThinkingLevel,Settings.getDefaultThinkingLevel(settings),Ai.Thinking{Ai.Medium{}}))
     requestRender(redraw)
     return False{}
+def scopedIds(items: List<&2,Models.ScopedModel>) -> List<&2,String>:
+  match items:
+    case Nil{}: Nil{}
+    case Models.ScopedModel{model,_} <> rest: Models.reference(model) <> scopedIds(rest)
+def resolvedResult(patterns: List<&2,String>,result: Result<&2,&2,String,List<&2,Models.ScopedModel>>) -> List<&2,String>:
+  match result:
+    case Done{scope}: scopedIds(scope)
+    case Fail{_}: patterns
+def resolvedIds(+patterns: List<&2,String>,models: List<&2,Models.Model()>) -> List<&2,String>:
+  resolvedResult(patterns,Models.resolveScope(patterns,models,Nil{}))
+def configuredScope(configured: Maybe<&2,List<&2,String>>,models: List<&2,Models.Model()>) -> ScopePicker.Scope:
+  match configured:
+    case None{}: ScopePicker.All{}
+    case Some{Nil{}}: ScopePicker.All{}
+    case Some{patterns}: ScopePicker.Selected{resolvedIds(patterns,models)}
+def initialScope(scoped: List<&2,Models.ScopedModel>,configured: Maybe<&2,List<&2,String>>,models: List<&2,Models.Model()>) -> ScopePicker.Scope:
+  match scoped:
+    case Nil{}: configuredScope(configured,models)
+    case _: ScopePicker.Selected{scopedIds(scoped)}
+def showScoped(picker: Maybe<&2,ScopePicker.Host>,models: List<&2,Models.Model()>,scope: ScopePicker.Scope) -> IO(Unit):
+  match picker:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{host}: ScopePicker.open(host,ScopePicker.create(models,scope,"Refreshing model catalogs…"))
+def refreshErrorStatus(errors: List<&2,Record.Property<String>>) -> String:
+  match errors:
+    case Nil{}: "Model catalogs refreshed."
+    case _: "Could not refresh model catalogs; showing cached models."
+def refreshStatus(result: Models.ModelsRefreshResult) -> String:
+  match result:
+    case Models.ModelsRefreshResult{True{},_}: "Model refresh was canceled; showing cached models."
+    case Models.ModelsRefreshResult{_,errors}: refreshErrorStatus(Record.entries(String,errors))
+def refreshScoped(host: ScopePicker.Host,models: Ref.Ref<List<&2,Models.Model()>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+runtime: Models.ModelRuntime) -> IO(Unit):
+  do IO<Unit>:
+    result : Models.ModelsRefreshResult <- Models.refresh(runtime,Models.refreshOptions())
+    +available : List<&2,Models.Model()> <- Models.getAvailable(runtime)
+    Ref.write(List<&2,Models.Model()>,models,available)
+    ScopePicker.refreshed(host,available,refreshStatus(result))
+    requestRender(redraw)
+def startScopeRefresh(host: Maybe<&2,ScopePicker.Host>,models: Ref.Ref<List<&2,Models.Model()>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,runtime: Models.ModelRuntime) -> IO(Unit):
+  match host:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{current}: IO.spawn(Unit,refreshScoped(current,models,redraw,runtime))
+def openScoped(+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ScopePicker.Host>>,+session: Session.AgentSession,+models: Ref.Ref<List<&2,Models.Model()>>) -> IO(Bool):
+  do IO<Bool>:
+    +available : List<&2,Models.Model()> <- Ref.read(List<&2,Models.Model()>,models)
+    settings : Settings.SettingsManager <- Session.getSettings(session)
+    scoped : List<&2,Models.ScopedModel> <- Session.getScopedModels(session)
+    +host : Maybe<&2,ScopePicker.Host> <- Ref.read(Maybe<&2,ScopePicker.Host>,picker)
+    showScoped(host,available,initialScope(scoped,Settings.getEnabledModels(settings),available))
+    requestRender(redraw)
+    startScopeRefresh(host,models,redraw,Session.modelRuntime(session))
+    return False{}
 def commandResult(+sink: CommandSink,result: Commands.Action) -> IO(Bool):
   match sink result:
-    case CommandSink{failure,redraw,_,_,_,_} Commands.Notice{message}:
+    case CommandSink{failure,redraw,_,_,_,_,_} Commands.Notice{message}:
       do IO<Bool>:
         commandStatus(failure,CommandNotice{message})
         requestRender(redraw)
         return False{}
-    case CommandSink{failure,redraw,_,_,_,_} Commands.CommandError{message}:
+    case CommandSink{failure,redraw,_,_,_,_,_} Commands.CommandError{message}:
       do IO<Bool>:
         commandStatus(failure,CommandFailure{message})
         requestRender(redraw)
         return False{}
-    case CommandSink{failure,redraw,_,_,_,_} Commands.ModelSelected{model}:
+    case CommandSink{failure,redraw,_,_,_,_,_} Commands.ModelSelected{model}:
       do IO<Bool>:
         commandStatus(failure,CommandNotice{"Model: " ++ Models.reference(model)})
         requestRender(redraw)
         return True{}
-    case CommandSink{failure,redraw,picker,_,session,models} Commands.OpenModelPicker{search}:
+    case CommandSink{failure,redraw,picker,_,_,session,models} Commands.OpenModelPicker{search}:
       do IO<Bool>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         available : List<&2,Models.Model()> <- Ref.read(List<&2,Models.Model()>,models)
         openPickerResult(failure,redraw,picker,live,available,search)
-    case CommandSink{_,redraw,_,thinking,session,_} Commands.OpenThinkingPicker{}:
+    case CommandSink{_,redraw,_,thinking,_,session,_} Commands.OpenThinkingPicker{}:
       do IO<Bool>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         openThinking(redraw,thinking,live)
-    case CommandSink{failure,redraw,_,_,_,_} Commands.ThinkingSelected{level,persist}:
+    case CommandSink{_,redraw,_,_,scoped,session,models} Commands.OpenScopedModels{}:
+      do IO<Bool>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        openScoped(redraw,scoped,live,models)
+    case CommandSink{failure,redraw,_,_,_,_,_} Commands.ThinkingSelected{level,persist}:
       do IO<Bool>:
         commandStatus(failure,CommandNotice{Bool.pick(String,persist,"Default thinking level: ","Thinking level: ") ++ Levels.name(level)})
         requestRender(redraw)
