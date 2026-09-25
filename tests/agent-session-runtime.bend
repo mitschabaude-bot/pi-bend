@@ -13,6 +13,7 @@ import ../packages/runtime/src/json.bend as Decode
 import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/ref.bend as R
 import ../packages/runtime/src/schema-value.bend as V
+import ../packages/ai/src/utils/uuid.bend as Uuid
 
 # AgentSessionRuntime over the faux-provider fixture: each runtime the
 # factory creates is a fresh agent and AgentSession for the requested session
@@ -212,7 +213,8 @@ def started(+dir: String, missing: String, result: Result<&2, &2, String, Runtim
 
 def persisted(+dir: String, +agentDir: String, missing: String) -> IO(Unit):
   do IO<Unit>:
-    opened : Sessions.Outcome(Session.Session()) <- Session.createSession(dir, Some{dir}, agentDir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    opened : Sessions.Outcome(Session.Session()) <- Session.createSession(uuids, dir, Some{dir}, agentDir, Sessions.noOptions())
     stored : Session.Session() <- Fx.requireSession(opened)
     +make : Host.Factory(Services()) <- C.create(~String, ~Host.Request, ~Result<&1, &1, String, Host.Created<Services()>>, ~factory, agentDir)
     +free : C.Callback<Services(), Unit> <- C.create(~Unit, ~Services(), ~Unit, ~release, Unit{})
@@ -238,7 +240,8 @@ def memoryStarted(result: Result<&2, &2, String, Runtime()>) -> IO(Unit):
 
 def inMemory(+dir: String, +agentDir: String) -> IO(Unit):
   do IO<Unit>:
-    opened : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    opened : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- Fx.requireSession(opened)
     +make : Host.Factory(Services()) <- C.create(~String, ~Host.Request, ~Result<&1, &1, String, Host.Created<Services()>>, ~factory, agentDir)
     +free : C.Callback<Services(), Unit> <- C.create(~Unit, ~Services(), ~Unit, ~release, Unit{})

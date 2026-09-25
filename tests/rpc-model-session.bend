@@ -9,6 +9,7 @@ import ./rpc-host-fixture.bend as RpcHost
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/callback.bend as Callback
 import ./model-runtime-fixture.bend as ModelFixture
+import ../packages/ai/src/utils/uuid.bend as Uuid
 
 def secondModel() -> Ai.Model<Ai.JsonValue>:
   Ai.Model{"faux-two", "Faux Two", Ai.OpenAIResponsesApi{}, "faux", "https://faux.invalid", True{}, None{}, Ai.InputText{} <> Ai.InputImage{} <> Nil{}, None{}, Ai.ModelCost{U32.to_f64(1), U32.to_f64(2), U32.to_f64(3), U32.to_f64(4), None{}}, None{}, U32.to_f64(64000), U32.to_f64(2048), None{}, None{}, None{}}
@@ -59,7 +60,8 @@ def run(args: List<String>) -> IO(Unit):
   match args:
     case +cwd <> +agentDir <> Nil{}:
       do IO<Unit>:
-        created : Stored.Outcome(Session.Session()) <- Session.createSession(cwd,Some{cwd},agentDir,Stored.noOptions())
+        uuids : Uuid.Generator <- Uuid.generator()
+        created : Stored.Outcome(Session.Session()) <- Session.createSession(uuids,cwd,Some{cwd},agentDir,Stored.noOptions())
         +stored : Session.Session() <- Faux.requireSession(created)
         +fixture : Faux.Fixture <- Faux.fixtureOver(stored,cwd,agentDir,Nil{},catalog([Faux.fauxModel(),secondModel()]))
         +lone : Faux.Fixture <- Faux.fixtureOver(stored,cwd,agentDir,Nil{},catalog([Faux.fauxModel()]))

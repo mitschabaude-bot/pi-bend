@@ -11,6 +11,7 @@ import ../../../../ai/src/types.bend as Ai
 import ../../../../ai/src/utils/json.bend as Json
 import ../../../../ai/src/utils/schema-json.bend as SchemaJson
 import ../../../../ai/src/utils/transcript.bend as Transcript
+import ../../../../ai/src/utils/uuid.bend as Uuid
 import ../../../../agent/src/types.bend as Agent
 import ../session-manager.bend as S
 import ../session-persistence.bend as Persistence
@@ -393,25 +394,25 @@ def fromOpened(assets: Assets, source: String, cwd: String, outputPath: Maybe<&2
     case Fail{error}: IO.pure(Outcome(String), Fail{Persistence.message(error)})
     case Done{session}: fromFileChosen(assets, session, chosenPath(source, cwd, outputPath))
 
-def fromResolved(assets: Assets, +source: String, +cwd: String, outputPath: Maybe<&2, String>) -> IO(Outcome(String)):
+def fromResolved(ids: Uuid.Generator, assets: Assets, +source: String, +cwd: String, outputPath: Maybe<&2, String>) -> IO(Outcome(String)):
   do IO<Outcome(String)>:
-    opened : Persistence.Outcome(Session()) <- Persistence.open(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, source, None{}, None{}, cwd)
+    opened : Persistence.Outcome(Session()) <- Persistence.open(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, ids, source, None{}, None{}, cwd)
     fromOpened(assets, source, cwd, outputPath, opened)
 
-def fromFound(assets: Assets, cwd: String, outputPath: Maybe<&2, String>, found: Result<&2, &2, FS.Error, String>) -> IO(Outcome(String)):
+def fromFound(ids: Uuid.Generator, assets: Assets, cwd: String, outputPath: Maybe<&2, String>, found: Result<&2, &2, FS.Error, String>) -> IO(Outcome(String)):
   match found:
     case Fail{error}: IO.pure(Outcome(String), Fail{fileError(error)})
-    case Done{source}: fromResolved(assets, source, cwd, outputPath)
+    case Done{source}: fromResolved(ids, assets, source, cwd, outputPath)
 
-def fromCwd(assets: Assets, +inputPath: String, outputPath: Maybe<&2, String>, result: Result<&2, &2, FS.Error, String>) -> IO(Outcome(String)):
+def fromCwd(ids: Uuid.Generator, assets: Assets, +inputPath: String, outputPath: Maybe<&2, String>, result: Result<&2, &2, FS.Error, String>) -> IO(Outcome(String)):
   match result:
     case Fail{error}: IO.pure(Outcome(String), Fail{fileError(error)})
     case Done{+cwd}:
       do IO<Outcome(String)>:
         found : Result<&2, &2, FS.Error, String> <- FS.realpath(Maybe.default(&2, String, Path.resolve(cwd, inputPath), inputPath))
-        fromFound(assets, cwd, outputPath, found)
+        fromFound(ids, assets, cwd, outputPath, found)
 
-def exportFromFile(assets: Assets, inputPath: String, outputPath: Maybe<&2, String>) -> IO(Outcome(String)):
+def exportFromFile(ids: Uuid.Generator, assets: Assets, inputPath: String, outputPath: Maybe<&2, String>) -> IO(Outcome(String)):
   do IO<Outcome(String)>:
     cwd : Result<&2, &2, FS.Error, String> <- FS.cwd()
-    fromCwd(assets, inputPath, outputPath, cwd)
+    fromCwd(ids, assets, inputPath, outputPath, cwd)

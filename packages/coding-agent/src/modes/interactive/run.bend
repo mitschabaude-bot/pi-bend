@@ -35,6 +35,7 @@ import ../../../../tui/src/terminal.bend as Terminal
 import ../../../../tui/src/utils.bend as Utils
 import ../../core/agent-runtime.bend as Runtime
 import ../../core/agent-session.bend as Session
+import ../../../../ai/src/utils/uuid.bend as Uuid
 import ../../core/trust-manager.bend as Trust
 import ../../core/agent-session-runtime.bend as SessionHost
 import ../../core/bash-executor.bend as BashExec
@@ -2358,7 +2359,9 @@ def runTrustHosted(borrowed: TrustPicker.Owner & TrustPicker.Host & Component.Co
     case (trust,host,component):
       do IO<Result<&2,&2,Error,Unit>>:
         Ref.write(Maybe<&2,TrustPicker.Host>,trustSelectorRefOf(contextInteraction(context)),Some{host})
-        picker : SessionPicker.HostOwner <- SessionPicker.createHost(component,contextBindings(context),contextTheme(context),words,resumeChosen)
+        current : Session.AgentSession <- Ref.read(Session.AgentSession,contextSession(context))
+        ids : Uuid.Generator <- Session.idGenerator(current)
+        picker : SessionPicker.HostOwner <- SessionPicker.createHost(ids,component,contextBindings(context),contextTheme(context),words,resumeChosen)
         result : Result<&2,&2,Error,Unit> <- runPickerHosted(SessionPicker.borrowHost(picker),settings,retained,tree,live,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,treeChosen,modelChosen,resumeChosen)
         TrustPicker.disposeHost(trust)
         Callback.dispose(Trust.ProjectTrustOption,Unit,choice)

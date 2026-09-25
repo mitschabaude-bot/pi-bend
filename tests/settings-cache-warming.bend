@@ -87,8 +87,8 @@ def cleaned(+root: String) -> IO(Unit):
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    generated : Result<&2, &2, String, String> <- Uuid.generate()
-    +root : String = "/tmp/pi-bend-cache-warming-" ++ Result.default(&2, &2, String, String, generated, "settings")
+    generated : Result<&2, &2, Uuid.Error, String> <- Uuid.randomUUID()
+    +root : String = "/tmp/pi-bend-cache-warming-" ++ Result.default(&2, &2, Uuid.Error, String, generated, "settings")
     defaults(root ++ "/defaults")
     persists(root ++ "/persists")
     cleaned(root)

@@ -1289,3 +1289,21 @@ Cause and fix (2026-09-25, compiler owner). `match_flatten` opens a definition's
 
 `-ftime-trace` on one of the CLI's 16 units (9 MB of C, 46 s alone at `-O1`): frontend 10.7 s, optimizer 16.9 s (the CGSCC inliner pipeline is 10 s of it), code generation 20.2 s. No function exceeds 0.8 s, and every segment unit takes 76–78 s in a parallel build, so the time is proportional to the amount of C. `-mllvm -fast-isel` at `-O1` cuts the unit to 39 s and the whole build from 213 s to 196 s, but the binary is slower: on the same source, keystrokes in `code-answer` take 10–11 ms instead of 2–4 ms, and `stream-flood` about 8% longer (three alternating rounds each, one disturbed round excluded). Rejected: compile time does not justify slower code.
 
+
+## BEND-052 — The proof checker overflows on a comparison with a Nat constant of 65,536 or more (2026-09-26)
+
+Found while proving the UUIDv7 ordering laws. A law that merely mentions `Nat.is_eq(n, big())` for a variable `n` fails with `the machine stack overflowed (a deep recursion, or a literal too large to expand)` once the constant reaches 65,536, even when the proof is `{==}` of the term with itself. Reduced reproducer (installed toolchain, `bun build/bend-native-toolchain/bend2/main.ts repro.bend`):
+
+```
+import Base
+
+def big() -> Nat: 65536n
+
+law instance:
+  for +n: Nat
+  {Nat.is_eq(n, big()) == Nat.is_eq(n, big()) : Bool}
+
+def instance(n): {==}
+```
+
+`Nat.mul(16n, 16n)` and `Nat.mul(64n, 64n)` check; `Nat.mul(256n, 256n)`, `Nat.add(40000n, 40000n)` and the literal `65536n` overflow. Runtime code is unaffected: compiled Nats are native integers up to 2^48-1. Classification: confirmed limitation; the cause is a hypothesis (the checker expands the constant into successor form while normalizing the stuck comparison), not investigated. Not a soundness problem. Consequence: `laws/uuid.bend` states the ordering laws for `Uuid.advanceWithin` at every sequence limit, and `Uuid.advance` is that transition at upstream's 2^41-1 by definition; instantiating the laws at the constant is what the checker cannot do. Toolchain work is reserved to its owner.

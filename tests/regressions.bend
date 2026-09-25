@@ -26,6 +26,7 @@ import ../packages/coding-agent/src/modes/json-event.bend as JsonEvent
 import ./model-runtime-fixture.bend as ModelFixture
 import ./agent-session.bend as H
 import ../packages/coding-agent/src/utils/paths.bend as Paths
+import ../packages/ai/src/utils/uuid.bend as Uuid
 
 # Scenarios for upstream's suite/regressions tests that need AgentSession
 # behavior beyond tests/agent-session.bend. The provider streams like
@@ -320,7 +321,8 @@ def seeded(seed: List<&2, Session.Message()>, +stored: Session.Session()) -> IO(
 
 def withSeeded(+dir: String, agentDir: String, seed: List<&2, Session.Message()>, setup: Setup, body: Session.AgentSession -> IO(Unit)) -> IO(Unit):
   do IO<Unit>:
-    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     empty : Session.Session() <- H.requireSession(created)
     stored : Session.Session() <- seeded(seed, empty)
     +value : Fixture <- fixture(stored, dir, agentDir, setup)
@@ -380,7 +382,8 @@ def reloadScenario(+dir: String, +initial: Settings.Outcome(Settings.Settings)) 
     case Fail{_}: IO.die(Unit, 1, "invalid initial settings")
     case Done{settings}:
       do IO<Unit>:
-        created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+        uuids : Uuid.Generator <- Uuid.generator()
+        created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
         stored : Session.Session() <- H.requireSession(created)
         memory : Settings.InMemorySettingsStorage & Settings.SettingsManager <- Settings.inMemory(settings, Settings.options())
         +value : Fixture <- fixtureWith(stored, dir, managerOf(memory), plainSetup(Nil{}))
@@ -458,7 +461,8 @@ def reportPersisted(+session: Session.AgentSession) -> IO(Unit):
 
 def seededFixture(+dir: String, agentDir: String, seed: List<&2, Session.Message()>, setup: Setup) -> IO(Fixture):
   do IO<Fixture>:
-    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     empty : Session.Session() <- H.requireSession(created)
     stored : Session.Session() <- seeded(seed, empty)
     fixture(stored, dir, agentDir, setup)
@@ -693,7 +697,8 @@ def toolsWith(+dir: String, +agentDir: String, selection: Runtime.ToolSelection,
     +execute : Tools.Execute() <- C.create(~Unit, ~Tools.Input(), ~Tools.Output(), ~stubExecute, Unit{})
     +options : Runtime.CreateOptions = toolOptions(dir, agentDir, selection, settings)
     +loadout : Runtime.Loadout = toolLoadout(Runtime.LoadoutSource{Paths.Environment{dir, agentDir, Runtime.urlContext()}, options, "/pi"}, Runtime.toolSetupOf(options), execute)
-    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- H.requireSession(created)
     +value : Fixture <- fixtureLoaded(stored, dir, settings, loadout)
     reportTools("tools", sessionOf(value))

@@ -110,20 +110,21 @@ def validSessionId(id: String) -> Bool:
 def assertValidSessionId(+id: String) -> Outcome(Unit):
   Bool.pick(Outcome(Unit), validSessionId(id), Done{Unit{}}, Fail{InvalidSessionId{}})
 
-def identity(result: Result<&2, &2, String, String>) -> Outcome(String):
+def identity(result: Result<&2, &2, Uuid.Error, String>) -> Outcome(String):
   match result:
     case Done{id}: Done{id}
-    case Fail{text}: Fail{Identity{text}}
+    case Fail{error}: Fail{Identity{Uuid.errorMessage(error)}}
 
-def createSessionId() -> IO(Outcome(String)):
+# upstream createSessionId: a UUIDv7 from the process generator.
+def createSessionId(ids: Uuid.Generator) -> IO(Outcome(String)):
   do IO<Outcome(String)>:
-    result : Result<&2, &2, String, String> <- Uuid.generate()
+    result : Result<&2, &2, Uuid.Error, String> <- Uuid.uuidv7(ids, None{})
     return identity(result)
 
-def chosenId(requested: Maybe<&2, String>) -> IO(Outcome(String)):
+def chosenId(ids: Uuid.Generator, requested: Maybe<&2, String>) -> IO(Outcome(String)):
   match requested:
     case Some{+id}: IO.pure(Outcome(String), Result.map(&2, &2, Error, Unit, String, _ => id, assertValidSessionId(id)))
-    case None{}: createSessionId()
+    case None{}: createSessionId(ids)
 
 def hexDigit(+value: U32) -> Char:
   Char.from_u32(Bool.pick(U32, U32.is_lt(value, 10), (48 + value : U32), (87 + value : U32)))
@@ -140,8 +141,8 @@ def shortId(random: Result<&1, &1, U32 & String, List<&2, U32>>) -> Maybe<&2, St
 
 def fullId() -> IO(String):
   do IO<String>:
-    result : Result<&2, &2, String, String> <- Uuid.generate()
-    return Result.default(&2, &2, String, String, result, "00000000")
+    result : Result<&2, &2, Uuid.Error, String> <- Uuid.randomUUID()
+    return Result.default(&2, &2, Uuid.Error, String, result, "00000000")
 
 def attempt(-D: Data, -T: Data, -C: Data, +state: S.SessionManager<D, T, C>, candidate: Maybe<&2, String>, retry: Unit -> IO(String)) -> IO(String):
   match candidate:
@@ -933,32 +934,37 @@ def listAllProgress(sessionDir: Maybe<&2, String>, sessionsDir: String, order: F
 # -----------
 
 type Session<-D: Data, -T: Data, -C: Data> is Data:
-  Session{state: S.SessionManager<D, T, C>, cwd: String, sessionDir: String, sessionFile: Maybe<&2, String>, persist: Bool, flushed: Bool}
+  Session{state: S.SessionManager<D, T, C>, cwd: String, sessionDir: String, sessionFile: Maybe<&2, String>, persist: Bool, flushed: Bool, idGenerator: Uuid.Generator}
 
 def stateOf(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>) -> S.SessionManager<D, T, C>:
   match session:
-    case Session{state, _, _, _, _, _}: state
+    case Session{state, _, _, _, _, _, _}: state
 
 def getSessionFile(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>) -> Maybe<&2, String>:
   match session:
-    case Session{_, _, _, file, _, _}: file
+    case Session{_, _, _, file, _, _, _}: file
+
+# The process UUIDv7 generator new session ids come from.
+def getIdGenerator(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>) -> Uuid.Generator:
+  match session:
+    case Session{_, _, _, _, _, _, ids}: ids
 
 def getSessionDir(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>) -> String:
   match session:
-    case Session{_, _, dir, _, _, _}: dir
+    case Session{_, _, dir, _, _, _, _}: dir
 
 def isPersisted(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>) -> Bool:
   match session:
-    case Session{_, _, _, _, persist, _}: persist
+    case Session{_, _, _, _, persist, _, _}: persist
 
 def isFlushed(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>) -> Bool:
   match session:
-    case Session{_, _, _, _, _, flushed}: flushed
+    case Session{_, _, _, _, _, flushed, _}: flushed
 
 # The effective working directory: an opened session may override its header's.
 def getCwd(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>) -> String:
   match session:
-    case Session{_, place, _, _, _, _}: place
+    case Session{_, place, _, _, _, _, _}: place
 
 def getSessionId(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>) -> String:
   S.getSessionId(D, T, C, stateOf(D, T, C, session))
@@ -974,7 +980,7 @@ def stateError(-A: Data, result: Result<&2, &2, S.Error, A>) -> Outcome(A):
 # Replace the state through a pure transition (branch, resetLeaf).
 def modify(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>, transition: S.SessionManager<D, T, C> -> Result<&2, &2, S.Error, S.SessionManager<D, T, C>>) -> Outcome(Session<D, T, C>):
   match session:
-    case Session{state, place, dir, file, persist, flushed}: Result.map(&2, &2, Error, S.SessionManager<D, T, C>, Session<D, T, C>, next => Session{next, place, dir, file, persist, flushed}, stateError(S.SessionManager<D, T, C>, transition(state)))
+    case Session{state, place, dir, file, persist, flushed, ids}: Result.map(&2, &2, Error, S.SessionManager<D, T, C>, Session<D, T, C>, next => Session{next, place, dir, file, persist, flushed, ids}, stateError(S.SessionManager<D, T, C>, transition(state)))
 
 # Writing
 # -------
@@ -1009,9 +1015,9 @@ def writeOutcome(path: String, result: Result<&2, &2, FS.Error, Unit>) -> Outcom
 # Rewrite the whole file (migration, an initialized empty file, a persisted fork).
 def rewriteFile(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, session: Session<D, T, C>) -> IO(Outcome(Unit)):
   match session:
-    case Session{_, _, _, None{}, _, _}: IO.pure(Outcome(Unit), Done{Unit{}})
-    case Session{_, _, _, Some{_}, False{}, _}: IO.pure(Outcome(Unit), Done{Unit{}})
-    case Session{state, _, _, Some{+path}, True{}, _}:
+    case Session{_, _, _, None{}, _, _, _}: IO.pure(Outcome(Unit), Done{Unit{}})
+    case Session{_, _, _, Some{_}, False{}, _, _}: IO.pure(Outcome(Unit), Done{Unit{}})
+    case Session{state, _, _, Some{+path}, True{}, _, _}:
       do IO<Outcome(Unit)>:
         result : Result<&2, &2, FS.Error, Unit> <- FS.writeFile(path, fileContent(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, state))
         return writeOutcome(path, result)
@@ -1033,7 +1039,7 @@ def appendLine(+path: String, content: String) -> IO(Outcome(Unit)):
 
 def flushedSession(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>, flushed: Bool) -> Session<D, T, C>:
   match session:
-    case Session{state, place, dir, file, persist, _}: Session{state, place, dir, file, persist, flushed}
+    case Session{state, place, dir, file, persist, _, ids}: Session{state, place, dir, file, persist, flushed, ids}
 
 def afterWrite(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>, flushed: Bool, result: Outcome(Unit)) -> Outcome(Session<D, T, C>):
   Result.map(&2, &2, Error, Unit, Session<D, T, C>, _ => flushedSession(D, T, C, session, flushed), result)
@@ -1058,10 +1064,10 @@ def persistWith(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: 
 # message flushes every entry, later entries append.
 def persistEntry(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, session: Session<D, T, C>, entry: S.SessionEntry<D, T, C>) -> IO(Outcome(Session<D, T, C>)):
   match session:
-    case Session{state, place, dir, None{}, persist, flushed}: IO.pure(Outcome(Session<D, T, C>), Done{Session{state, place, dir, None{}, persist, flushed}})
-    case Session{state, place, dir, Some{path}, False{}, flushed}: IO.pure(Outcome(Session<D, T, C>), Done{Session{state, place, dir, Some{path}, False{}, flushed}})
-    case Session{+state, place, dir, Some{+path}, True{}, +flushed}:
-      persistWith(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, Session{state, place, dir, Some{path}, True{}, flushed}, path, flushed, hasAssistant(D, T, C, S.getEntries(D, T, C, state)), entry)
+    case Session{state, place, dir, None{}, persist, flushed, ids}: IO.pure(Outcome(Session<D, T, C>), Done{Session{state, place, dir, None{}, persist, flushed, ids}})
+    case Session{state, place, dir, Some{path}, False{}, flushed, ids}: IO.pure(Outcome(Session<D, T, C>), Done{Session{state, place, dir, Some{path}, False{}, flushed, ids}})
+    case Session{+state, place, dir, Some{+path}, True{}, +flushed, ids}:
+      persistWith(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, Session{state, place, dir, Some{path}, True{}, flushed, ids}, path, flushed, hasAssistant(D, T, C, S.getEntries(D, T, C, state)), entry)
 
 # Appending
 # ---------
@@ -1083,7 +1089,7 @@ def persistLeaf(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: 
 def persistAppended(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, session: Session<D, T, C>, id: String, next: Outcome(S.SessionManager<D, T, C>)) -> IO(Outcome(Appended<D, T, C>)):
   match session next:
     case _ Fail{error}: IO.pure(Outcome(Appended<D, T, C>), Fail{error})
-    case Session{_, place, dir, file, persist, flushed} Done{+state}: persistLeaf(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, Session{state, place, dir, file, persist, flushed}, id, appendedEntry(D, T, C, state))
+    case Session{_, place, dir, file, persist, flushed, ids} Done{+state}: persistLeaf(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, Session{state, place, dir, file, persist, flushed, ids}, id, appendedEntry(D, T, C, state))
 
 def appendStamped(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, session: Session<D, T, C>, stamp: Outcome(S.EntryStamp), append: S.EntryStamp -> Result<&2, &2, S.Error, S.SessionManager<D, T, C>>) -> IO(Outcome(Appended<D, T, C>)):
   match stamp:
@@ -1152,25 +1158,25 @@ def resetLeaf(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>) -> Outcom
 def headerFor(id: String, timestamp: String, cwd: String, parentSession: Maybe<&2, String>) -> S.SessionHeader:
   S.SessionHeader{Some{S.CURRENT_SESSION_VERSION()}, id, timestamp, cwd, parentSession}
 
-def started(-D: Data, -T: Data, -C: Data, +cwd: String, +dir: String, +persist: Bool, +id: Outcome(String), timestamp: Outcome(String), parentSession: Maybe<&2, String>) -> Outcome(Session<D, T, C>):
+def started(-D: Data, -T: Data, -C: Data, ids: Uuid.Generator, +cwd: String, +dir: String, +persist: Bool, +id: Outcome(String), timestamp: Outcome(String), parentSession: Maybe<&2, String>) -> Outcome(Session<D, T, C>):
   match id timestamp:
     case Fail{error} _: Fail{error}
     case _ Fail{error}: Fail{error}
     case Done{+id} Done{+time}:
-      Result.map(&2, &2, Error, S.SessionManager<D, T, C>, Session<D, T, C>, state => Session{state, cwd, dir, Bool.pick(Maybe<&2, String>, persist, Some{Path.join(dir, sessionFileName(time, id))}, None{}), persist, False{}}, stateError(S.SessionManager<D, T, C>, S.inMemory(D, T, C, headerFor(id, time, cwd, parentSession))))
+      Result.map(&2, &2, Error, S.SessionManager<D, T, C>, Session<D, T, C>, state => Session{state, cwd, dir, Bool.pick(Maybe<&2, String>, persist, Some{Path.join(dir, sessionFileName(time, id))}, None{}), persist, False{}, ids}, stateError(S.SessionManager<D, T, C>, S.inMemory(D, T, C, headerFor(id, time, cwd, parentSession))))
 
 # A fresh header (and, when persisting, the file path the session will use).
-def startSession(-D: Data, -T: Data, -C: Data, cwd: String, dir: String, persist: Bool, options: NewSessionOptions) -> IO(Outcome(Session<D, T, C>)):
+def startSession(-D: Data, -T: Data, -C: Data, +ids: Uuid.Generator, cwd: String, dir: String, persist: Bool, options: NewSessionOptions) -> IO(Outcome(Session<D, T, C>)):
   match options:
     case NewSessionOptions{requested, parentSession}:
       do IO<Outcome(Session<D, T, C>)>:
-        id : Outcome(String) <- chosenId(requested)
+        id : Outcome(String) <- chosenId(ids, requested)
         timestamp : Outcome(String) <- isoNow()
-        return started(D, T, C, cwd, dir, persist, id, timestamp, parentSession)
+        return started(D, T, C, ids, cwd, dir, persist, id, timestamp, parentSession)
 
 # Start a new session in the same directory and mode.
 def newSession(-D: Data, -T: Data, -C: Data, +session: Session<D, T, C>, options: NewSessionOptions) -> IO(Outcome(Session<D, T, C>)):
-  startSession(D, T, C, getCwd(D, T, C, session), getSessionDir(D, T, C, session), isPersisted(D, T, C, session), options)
+  startSession(D, T, C, getIdGenerator(D, T, C, session), getCwd(D, T, C, session), getSessionDir(D, T, C, session), isPersisted(D, T, C, session), options)
 
 # Loading entries into a session
 # ------------------------------
@@ -1199,7 +1205,7 @@ def restored(-D: Data, -T: Data, -C: Data, header: S.SessionHeader, entries: Lis
 def withState(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>, +state: Outcome(S.SessionManager<D, T, C>)) -> Outcome(Session<D, T, C>):
   match session state:
     case _ Fail{error}: Fail{error}
-    case Session{_, place, dir, file, persist, flushed} Done{state}: Done{Session{state, place, dir, file, persist, flushed}}
+    case Session{_, place, dir, file, persist, flushed, ids} Done{state}: Done{Session{state, place, dir, file, persist, flushed, ids}}
 
 def rewriteIf(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, session: Outcome(Session<D, T, C>), needed: Bool) -> IO(Outcome(Session<D, T, C>)):
   match session needed:
@@ -1230,7 +1236,7 @@ def loadEntries(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: 
 
 def withFile(-D: Data, -T: Data, -C: Data, session: Session<D, T, C>, file: Maybe<&2, String>, flushed: Bool) -> Session<D, T, C>:
   match session:
-    case Session{state, place, dir, _, persist, _}: Session{state, place, dir, file, persist, flushed}
+    case Session{state, place, dir, _, persist, _, ids}: Session{state, place, dir, file, persist, flushed, ids}
 
 def initializedAt(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, fresh: Outcome(Session<D, T, C>), path: String) -> IO(Outcome(Session<D, T, C>)):
   match fresh:
@@ -1301,40 +1307,40 @@ def ensuredDir(+dir: String, persist: Bool) -> IO(Outcome(Unit)):
         result : Result<&2, &2, FS.Error, Unit> <- FS.mkdir(dir)
         return fileError(Unit, dir, result)
 
-def placeholder(-D: Data, -T: Data, -C: Data, +cwd: String, +dir: String, +persist: Bool) -> Outcome(Session<D, T, C>):
-  stateError(Session<D, T, C>, Result.map(&2, &2, S.Error, S.SessionManager<D, T, C>, Session<D, T, C>, state => Session{state, cwd, dir, None{}, persist, False{}}, S.inMemory(D, T, C, headerFor("pending", "1970-01-01T00:00:00.000Z", cwd, None{}))))
+def placeholder(-D: Data, -T: Data, -C: Data, ids: Uuid.Generator, +cwd: String, +dir: String, +persist: Bool) -> Outcome(Session<D, T, C>):
+  stateError(Session<D, T, C>, Result.map(&2, &2, S.Error, S.SessionManager<D, T, C>, Session<D, T, C>, state => Session{state, cwd, dir, None{}, persist, False{}, ids}, S.inMemory(D, T, C, headerFor("pending", "1970-01-01T00:00:00.000Z", cwd, None{}))))
 
 # Upstream's constructor: an explicit file loads or initializes it, preloaded
 # entries restore in memory, otherwise a new session starts.
-def construct(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), +cwd: String, +dir: String, sessionFile: Maybe<&2, String>, +persist: Bool, +options: NewSessionOptions, preloaded: Maybe<&2, Loaded<D, T, C>>, ensured: Outcome(Unit), blank: Outcome(Session<D, T, C>)) -> IO(Outcome(Session<D, T, C>)):
+def construct(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), +ids: Uuid.Generator, +cwd: String, +dir: String, sessionFile: Maybe<&2, String>, +persist: Bool, +options: NewSessionOptions, preloaded: Maybe<&2, Loaded<D, T, C>>, ensured: Outcome(Unit), blank: Outcome(Session<D, T, C>)) -> IO(Outcome(Session<D, T, C>)):
   match sessionFile preloaded ensured blank:
     case _ _ Fail{error} _: IO.pure(Outcome(Session<D, T, C>), Fail{error})
     case _ _ _ Fail{error}: IO.pure(Outcome(Session<D, T, C>), Fail{error})
     case Some{path} loaded Done{Unit{}} Done{empty}: setSessionFile(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, empty, path, loaded)
-    case None{} Some{Loaded{Nil{}, _}} Done{Unit{}} Done{_}: startSession(D, T, C, cwd, dir, persist, options)
+    case None{} Some{Loaded{Nil{}, _}} Done{Unit{}} Done{_}: startSession(D, T, C, ids, cwd, dir, persist, options)
     case None{} Some{Loaded{entries, migrated}} Done{Unit{}} Done{empty}: loadEntries(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, empty, entries, migrated, options)
-    case None{} None{} Done{Unit{}} Done{_}: startSession(D, T, C, cwd, dir, persist, options)
+    case None{} None{} Done{Unit{}} Done{_}: startSession(D, T, C, ids, cwd, dir, persist, options)
 
-def build(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), +cwd: String, +dir: String, sessionFile: Maybe<&2, String>, +persist: Bool, options: NewSessionOptions, preloaded: Maybe<&2, Loaded<D, T, C>>) -> IO(Outcome(Session<D, T, C>)):
+def build(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), +ids: Uuid.Generator, +cwd: String, +dir: String, sessionFile: Maybe<&2, String>, +persist: Bool, options: NewSessionOptions, preloaded: Maybe<&2, Loaded<D, T, C>>) -> IO(Outcome(Session<D, T, C>)):
   do IO<Outcome(Session<D, T, C>)>:
     ensured : Outcome(Unit) <- ensuredDir(dir, persist)
-    construct(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, cwd, dir, sessionFile, persist, options, preloaded, ensured, placeholder(D, T, C, cwd, dir, persist))
+    construct(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, ids, cwd, dir, sessionFile, persist, options, preloaded, ensured, placeholder(D, T, C, ids, cwd, dir, persist))
 
-def inDir(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), cwd: String, dir: Outcome(String), sessionFile: Maybe<&2, String>, options: NewSessionOptions) -> IO(Outcome(Session<D, T, C>)):
+def inDir(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), ids: Uuid.Generator, cwd: String, dir: Outcome(String), sessionFile: Maybe<&2, String>, options: NewSessionOptions) -> IO(Outcome(Session<D, T, C>)):
   match dir:
     case Fail{error}: IO.pure(Outcome(Session<D, T, C>), Fail{error})
-    case Done{chosen}: build(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, cwd, chosen, sessionFile, True{}, options, None{})
+    case Done{chosen}: build(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, ids, cwd, chosen, sessionFile, True{}, options, None{})
 
 # Create a new persisted session for a working directory.
-def create(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), +cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, options: NewSessionOptions) -> IO(Outcome(Session<D, T, C>)):
+def create(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), ids: Uuid.Generator, +cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, options: NewSessionOptions) -> IO(Outcome(Session<D, T, C>)):
   do IO<Outcome(Session<D, T, C>)>:
     dir : Outcome(String) <- chosenDir(sessionDir, cwd, agentDir)
-    inDir(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, cwd, dir, None{}, options)
+    inDir(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, ids, cwd, dir, None{}, options)
 
 def parentDir(path: String) -> String: Path.join(path, "..")
 
-def openWith(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), +path: String, sessionDir: Maybe<&2, String>, cwd: String, preloaded: Maybe<&2, Loaded<D, T, C>>) -> IO(Outcome(Session<D, T, C>)):
-  build(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, cwd, Maybe.default(&2, String, Maybe.map(&2, String, String, dir => Path.normalize(dir), sessionDir), parentDir(path)), Some{path}, True{}, noOptions(), preloaded)
+def openWith(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), ids: Uuid.Generator, +path: String, sessionDir: Maybe<&2, String>, cwd: String, preloaded: Maybe<&2, Loaded<D, T, C>>) -> IO(Outcome(Session<D, T, C>)):
+  build(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, ids, cwd, Maybe.default(&2, String, Maybe.map(&2, String, String, dir => Path.normalize(dir), sessionDir), parentDir(path)), Some{path}, True{}, noOptions(), preloaded)
 
 # What opening learns before loading: the stored cwd and, when the bounded
 # scan could not decide, the full load that replaces it.
@@ -1362,38 +1368,38 @@ def discovered(~D: Data, ~T: Data, ~C: Data, ~diagnosticIn: V.Value -> Decoded(D
         scanned : Outcome(Maybe<&2, S.SessionHeader>) <- readSessionHeader(path)
         headerOrLoad(~D, ~T, ~C, ~diagnosticIn, ~toolIn, ~customIn, path, scanned)
 
-def opened(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), path: String, sessionDir: Maybe<&2, String>, cwdOverride: Maybe<&2, String>, processCwd: String, found: Outcome(Discovery<D, T, C>)) -> IO(Outcome(Session<D, T, C>)):
+def opened(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), ids: Uuid.Generator, path: String, sessionDir: Maybe<&2, String>, cwdOverride: Maybe<&2, String>, processCwd: String, found: Outcome(Discovery<D, T, C>)) -> IO(Outcome(Session<D, T, C>)):
   match found:
     case Fail{error}: IO.pure(Outcome(Session<D, T, C>), Fail{error})
-    case Done{Discovery{storedCwd, preloaded}}: openWith(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, path, sessionDir, Maybe.default(&2, String, Maybe.or(&2, String, cwdOverride, storedCwd), processCwd), preloaded)
+    case Done{Discovery{storedCwd, preloaded}}: openWith(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, ids, path, sessionDir, Maybe.default(&2, String, Maybe.or(&2, String, cwdOverride, storedCwd), processCwd), preloaded)
 
 # Open a session file. The working directory comes from the override, the
 # stored header, or the process; the session directory from the argument or
 # the file's parent.
-def open(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), +path: String, sessionDir: Maybe<&2, String>, +cwdOverride: Maybe<&2, String>, processCwd: String) -> IO(Outcome(Session<D, T, C>)):
+def open(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), ids: Uuid.Generator, +path: String, sessionDir: Maybe<&2, String>, +cwdOverride: Maybe<&2, String>, processCwd: String) -> IO(Outcome(Session<D, T, C>)):
   do IO<Outcome(Session<D, T, C>)>:
     present : Bool <- FS.accessible(path, 0)
     found : Outcome(Discovery<D, T, C>) <- discovered(~D, ~T, ~C, ~diagnosticIn, ~toolIn, ~customIn, path, cwdOverride, present)
-    opened(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, Path.normalize(path), sessionDir, cwdOverride, processCwd, found)
+    opened(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, ids, Path.normalize(path), sessionDir, cwdOverride, processCwd, found)
 
-def continued(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), +cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, dir: Outcome(String)) -> IO(Outcome(Session<D, T, C>)):
+def continued(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), ids: Uuid.Generator, +cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, dir: Outcome(String)) -> IO(Outcome(Session<D, T, C>)):
   match dir:
     case Fail{error}: IO.pure(Outcome(Session<D, T, C>), Fail{error})
     case Done{+chosen}:
       do IO<Outcome(Session<D, T, C>)>:
         recent : Maybe<&2, String> <- findMostRecentSession(chosen, Bool.pick(Maybe<&2, String>, filtersCwd(sessionDir, chosen, cwd, agentDir), Some{cwd}, None{}))
-        build(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, cwd, chosen, recent, True{}, noOptions(), None{})
+        build(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, ids, cwd, chosen, recent, True{}, noOptions(), None{})
 
 # Continue the most recent session of the directory, or start a new one.
-def continueRecent(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String) -> IO(Outcome(Session<D, T, C>)):
+def continueRecent(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), ids: Uuid.Generator, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String) -> IO(Outcome(Session<D, T, C>)):
   do IO<Outcome(Session<D, T, C>)>:
     dir : Outcome(String) <- chosenDir(sessionDir, cwd, agentDir)
-    continued(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, cwd, sessionDir, agentDir, dir)
+    continued(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, ids, cwd, sessionDir, agentDir, dir)
 
 # An in-memory session without file persistence, optionally restoring
 # entries held outside the filesystem.
-def inMemory(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), cwd: String, options: NewSessionOptions, entries: Maybe<&2, List<&2, S.FileEntry<D, T, C>>>) -> IO(Outcome(Session<D, T, C>)):
-  build(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, cwd, "", None{}, False{}, options, Maybe.map(&2, List<&2, S.FileEntry<D, T, C>>, Loaded<D, T, C>, restoredEntries => Loaded{restoredEntries, False{}}, entries))
+def inMemory(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), ids: Uuid.Generator, cwd: String, options: NewSessionOptions, entries: Maybe<&2, List<&2, S.FileEntry<D, T, C>>>) -> IO(Outcome(Session<D, T, C>)):
+  build(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, ids, cwd, "", None{}, False{}, options, Maybe.map(&2, List<&2, S.FileEntry<D, T, C>>, Loaded<D, T, C>, restoredEntries => Loaded{restoredEntries, False{}}, entries))
 
 # Forking
 # -------
@@ -1401,12 +1407,12 @@ def inMemory(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -
 def forkedContent(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, header: S.SessionHeader, entries: List<&2, S.FileEntry<D, T, C>>) -> String:
   SJ.entryLine(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, S.Header{header}) ++ String.join(entryLines(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, bodyEntries(D, T, C, entries, Nil{}), Nil{}), "")
 
-def forkWritten(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), targetCwd: String, dir: String, path: String, written: Outcome(Unit)) -> IO(Outcome(Session<D, T, C>)):
+def forkWritten(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), ids: Uuid.Generator, targetCwd: String, dir: String, path: String, written: Outcome(Unit)) -> IO(Outcome(Session<D, T, C>)):
   match written:
     case Fail{error}: IO.pure(Outcome(Session<D, T, C>), Fail{error})
-    case Done{Unit{}}: build(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, targetCwd, dir, Some{path}, True{}, noOptions(), None{})
+    case Done{Unit{}}: build(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, ids, targetCwd, dir, Some{path}, True{}, noOptions(), None{})
 
-def forkInto(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), sourcePath: String, +targetCwd: String, +dir: String, entries: List<&2, S.FileEntry<D, T, C>>, id: Outcome(String), timestamp: Outcome(String)) -> IO(Outcome(Session<D, T, C>)):
+def forkInto(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), ids: Uuid.Generator, sourcePath: String, +targetCwd: String, +dir: String, entries: List<&2, S.FileEntry<D, T, C>>, id: Outcome(String), timestamp: Outcome(String)) -> IO(Outcome(Session<D, T, C>)):
   match id timestamp:
     case Fail{error} _: IO.pure(Outcome(Session<D, T, C>), Fail{error})
     case _ Fail{error}: IO.pure(Outcome(Session<D, T, C>), Fail{error})
@@ -1414,9 +1420,9 @@ def forkInto(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -
       +path = Path.join(dir, sessionFileName(time, newId))
       do IO<Outcome(Session<D, T, C>)>:
         result : Result<&2, &2, FS.Error, Unit> <- FS.writeFileExclusive(path, forkedContent(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, headerFor(newId, time, targetCwd, Some{sourcePath}), entries))
-        forkWritten(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, targetCwd, dir, path, writeOutcome(path, result))
+        forkWritten(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, ids, targetCwd, dir, path, writeOutcome(path, result))
 
-def forkSource(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), +sourcePath: String, targetCwd: String, dir: Outcome(String), options: NewSessionOptions, entries: List<&2, S.FileEntry<D, T, C>>) -> IO(Outcome(Session<D, T, C>)):
+def forkSource(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), +ids: Uuid.Generator, +sourcePath: String, targetCwd: String, dir: Outcome(String), options: NewSessionOptions, entries: List<&2, S.FileEntry<D, T, C>>) -> IO(Outcome(Session<D, T, C>)):
   match dir options entries:
     case _ _ Nil{}: IO.pure(Outcome(Session<D, T, C>), Fail{EmptySource{sourcePath}})
     case Fail{error} _ _: IO.pure(Outcome(Session<D, T, C>), Fail{error})
@@ -1424,17 +1430,17 @@ def forkSource(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T
     case Done{+chosen} NewSessionOptions{requested, _} S.Header{_} <> rest:
       do IO<Outcome(Session<D, T, C>)>:
         made : Result<&2, &2, FS.Error, Unit> <- FS.mkdir(chosen)
-        id : Outcome(String) <- chosenId(requested)
+        id : Outcome(String) <- chosenId(ids, requested)
         timestamp : Outcome(String) <- isoNow()
-        forkInto(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, sourcePath, targetCwd, chosen, rest, Result.bind(&2, &2, Error, Unit, String, fileError(Unit, chosen, made), _ => id), timestamp)
+        forkInto(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, ids, sourcePath, targetCwd, chosen, rest, Result.bind(&2, &2, Error, Unit, String, fileError(Unit, chosen, made), _ => id), timestamp)
 
 # Fork a session file into a working directory: a new file with a new id,
 # the source as parent session, and every source entry copied.
-def forkFrom(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), +sourcePath: String, +targetCwd: String, sessionDir: Maybe<&2, String>, agentDir: String, options: NewSessionOptions) -> IO(Outcome(Session<D, T, C>)):
+def forkFrom(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, ~diagnosticIn: V.Value -> Decoded(D), ~toolIn: V.Value -> Decoded(T), ~customIn: V.Value -> Decoded(C), ids: Uuid.Generator, +sourcePath: String, +targetCwd: String, sessionDir: Maybe<&2, String>, agentDir: String, options: NewSessionOptions) -> IO(Outcome(Session<D, T, C>)):
   do IO<Outcome(Session<D, T, C>)>:
     loaded : Outcome(Loaded<D, T, C>) <- loadFile(~D, ~T, ~C, ~diagnosticIn, ~toolIn, ~customIn, sourcePath)
     dir : Outcome(String) <- chosenDir(sessionDir, targetCwd, agentDir)
-    forkSource(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, Path.normalize(sourcePath), Path.normalize(targetCwd), dir, options, entriesOf(D, T, C, loaded))
+    forkSource(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, ~diagnosticIn, ~toolIn, ~customIn, ids, Path.normalize(sourcePath), Path.normalize(targetCwd), dir, options, entriesOf(D, T, C, loaded))
 
 # Branched sessions
 # -----------------
@@ -1453,8 +1459,8 @@ def labelIds(-D: Data, -T: Data, -C: Data, +state: S.SessionManager<D, T, C>, co
 
 def branchedFile(-D: Data, -T: Data, -C: Data, previous: Session<D, T, C>, +state: S.SessionManager<D, T, C>, stamp: S.EntryStamp) -> Session<D, T, C>:
   match previous stamp:
-    case Session{_, place, dir, file, False{}, flushed} _: Session{state, place, dir, file, False{}, flushed}
-    case Session{_, place, +dir, file, True{}, _} S.EntryStamp{id, time}: Session{S.withParentSession(D, T, C, state, file), place, dir, Some{Path.join(dir, sessionFileName(time, id))}, True{}, False{}}
+    case Session{_, place, dir, file, False{}, flushed, ids} _: Session{state, place, dir, file, False{}, flushed, ids}
+    case Session{_, place, +dir, file, True{}, _, ids} S.EntryStamp{id, time}: Session{S.withParentSession(D, T, C, state, file), place, dir, Some{Path.join(dir, sessionFileName(time, id))}, True{}, False{}, ids}
 
 def branchWrite(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, +session: Session<D, T, C>, write: Bool) -> IO(Outcome(Session<D, T, C>)):
   match write:
@@ -1483,7 +1489,7 @@ def branched(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -
 def createBranchedSession(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, +session: Session<D, T, C>, leaf: String) -> IO(Outcome(Session<D, T, C>)):
   +state = stateOf(D, T, C, session)
   do IO<Outcome(Session<D, T, C>)>:
-    id : Outcome(String) <- createSessionId()
+    id : Outcome(String) <- createSessionId(getIdGenerator(D, T, C, session))
     timestamp : Outcome(String) <- isoNow()
     ids : List<&2, String> <- labelIds(D, T, C, state, labelCount(D, T, C, state), Nil{})
     branched(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, session, Result.bind(&2, &2, Error, String, S.EntryStamp, id, newId => Result.map(&2, &2, Error, String, S.EntryStamp, time => S.EntryStamp{newId, time}, timestamp)), ids, leaf)

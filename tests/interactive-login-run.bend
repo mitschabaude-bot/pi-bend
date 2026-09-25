@@ -16,6 +16,7 @@ import ../packages/ai/src/providers/anthropic.models.bend as AnthropicModels
 import ../packages/runtime/src/callback.bend as Callback
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/schema-value.bend as Schema
+import ../packages/ai/src/utils/uuid.bend as Uuid
 
 def Services() -> Type: Fixture.Services()
 def Runtime() -> Data: Host.AgentSessionRuntime<Services()>
@@ -79,7 +80,8 @@ def run(args: List<String>) -> IO(Unit):
   match args:
     case assetsRoot <> +cwd <> +agentDir <> +base <> Nil{}:
       do IO<Unit>:
-        created : Sessions.Outcome(Session.Session()) <- Session.createSession(cwd,Some{cwd},agentDir,Sessions.noOptions())
+        uuids : Uuid.Generator <- Uuid.generator()
+        created : Sessions.Outcome(Session.Session()) <- Session.createSession(uuids,cwd,Some{cwd},agentDir,Sessions.noOptions())
         stored : Session.Session() <- requireSession(created)
         +factory : Host.Factory(Services()) <- Callback.create(~String,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~Fixture.factoryNoModel,agentDir)
         +release : Callback.Callback<Services(),Unit> <- Callback.create(~Unit,~Services(),~Unit,~Fixture.release,Unit{})

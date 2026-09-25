@@ -10,6 +10,7 @@ import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/filesystem.bend as FS
 import ../../../runtime/src/posix-path.bend as Path
 import ../../../runtime/src/utf8.bend as Utf8
+import ../../../ai/src/utils/uuid.bend as Uuid
 
 # upstream AgentSessionRuntime: owns the current AgentSession and the services
 # it was created with. Replacing the session tears the current one down first
@@ -203,10 +204,13 @@ def snapshot(-S: Type, +runtime: AgentSessionRuntime<S>) -> IO(Maybe<&2, Snapsho
 
 def noSession() -> String: "No active live"
 
-def createdNext(+directory: String, persisted: Bool, sessionDir: String, agentDir: String, options: Sessions.NewSessionOptions) -> IO(Sessions.Outcome(Session.Session())):
+# New and reopened sessions keep drawing ids from the process generator.
+def idsOf(stored: Session.Session()) -> Uuid.Generator: Sessions.getIdGenerator(Unit, Tools.ToolDetails, V.Value, stored)
+
+def createdNext(ids: Uuid.Generator, +directory: String, persisted: Bool, sessionDir: String, agentDir: String, options: Sessions.NewSessionOptions) -> IO(Sessions.Outcome(Session.Session())):
   match persisted:
-    case True{}: Session.createSession(directory, Some{sessionDir}, agentDir, options)
-    case False{}: Session.memorySession(directory, options)
+    case True{}: Session.createSession(ids, directory, Some{sessionDir}, agentDir, options)
+    case False{}: Session.memorySession(ids, directory, options)
 
 def replacedWith(-S: Type, runtime: AgentSessionRuntime<S>, +directory: String, start: SessionStart, next: Sessions.Outcome(Session.Session())) -> IO(Result<&2, &2, String, Unit>):
   match next:
@@ -218,7 +222,7 @@ def newFrom(-S: Type, +runtime: AgentSessionRuntime<S>, parentSession: Maybe<&2,
     case _ None{}: IO.pure(Result<&2, &2, String, Unit>, Fail{noSession()})
     case AgentSessionRuntime{_, _, _, agentDir, _, _} Some{Snapshot{+directory, +stored}}:
       do IO<Result<&2, &2, String, Unit>>:
-        next : Sessions.Outcome(Session.Session()) <- createdNext(directory, Sessions.isPersisted(Unit, Tools.ToolDetails, V.Value, stored), Sessions.getSessionDir(Unit, Tools.ToolDetails, V.Value, stored), agentDir, Sessions.NewSessionOptions{None{}, parentSession})
+        next : Sessions.Outcome(Session.Session()) <- createdNext(idsOf(stored), directory, Sessions.isPersisted(Unit, Tools.ToolDetails, V.Value, stored), Sessions.getSessionDir(Unit, Tools.ToolDetails, V.Value, stored), agentDir, Sessions.NewSessionOptions{None{}, parentSession})
         replacedWith(S, runtime, directory, SessionStart{NewStart{}, Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, stored)}, next)
 
 # upstream newSession: a new session in the current cwd, persisted in the
@@ -244,9 +248,9 @@ def switchOpened(-S: Type, +runtime: AgentSessionRuntime<S>, previous: Maybe<&2,
 def switchFrom(-S: Type, +runtime: AgentSessionRuntime<S>, +sessionPath: String, cwdOverride: Maybe<&2, String>, found: Maybe<&2, Snapshot>) -> IO(Result<&2, &2, String, Unit>):
   match found:
     case None{}: IO.pure(Result<&2, &2, String, Unit>, Fail{noSession()})
-    case Some{Snapshot{+directory, stored}}:
+    case Some{Snapshot{+directory, +stored}}:
       do IO<Result<&2, &2, String, Unit>>:
-        opened : Sessions.Outcome(Session.Session()) <- Sessions.open(~Unit, ~Tools.ToolDetails, ~V.Value, ~Session.unitValue, ~Tools.detailsValue, ~Session.rawValue, ~Session.readUnit, ~Session.readDetails, ~Session.readRaw, sessionPath, None{}, cwdOverride, directory)
+        opened : Sessions.Outcome(Session.Session()) <- Sessions.open(~Unit, ~Tools.ToolDetails, ~V.Value, ~Session.unitValue, ~Tools.detailsValue, ~Session.rawValue, ~Session.readUnit, ~Session.readDetails, ~Session.readRaw, idsOf(stored), sessionPath, None{}, cwdOverride, directory)
         switchOpened(S, runtime, Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, stored), directory, opened)
 
 # upstream switchSession: resume a stored session in its own cwd.
@@ -280,9 +284,9 @@ def resumeOpened(-S: Type,runtime: AgentSessionRuntime<S>,previous: Maybe<&2,Str
 def resumeFrom(-S: Type,runtime: AgentSessionRuntime<S>,sessionPath: String,cwdOverride: Maybe<&2,String>,found: Maybe<&2,Snapshot>) -> IO(ResumeOutcome):
   match found:
     case None{}: IO.pure(ResumeOutcome,ResumeFailed{noSession()})
-    case Some{Snapshot{+directory,stored}}:
+    case Some{Snapshot{+directory,+stored}}:
       do IO<ResumeOutcome>:
-        opened : Sessions.Outcome(Session.Session()) <- Sessions.open(~Unit,~Tools.ToolDetails,~V.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,~Session.readUnit,~Session.readDetails,~Session.readRaw,sessionPath,None{},cwdOverride,directory)
+        opened : Sessions.Outcome(Session.Session()) <- Sessions.open(~Unit,~Tools.ToolDetails,~V.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,~Session.readUnit,~Session.readDetails,~Session.readRaw,idsOf(stored),sessionPath,None{},cwdOverride,directory)
         resumeOpened(S,runtime,Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),directory,opened)
 def resumeSession(-S: Type,+runtime: AgentSessionRuntime<S>,sessionPath: String,cwdOverride: Maybe<&2,String>) -> IO(ResumeOutcome):
   do IO<ResumeOutcome>:
@@ -351,10 +355,10 @@ def importOpened(-S: Type,runtime: AgentSessionRuntime<S>,+source: String,direct
 def importFromSnapshot(-S: Type,runtime: AgentSessionRuntime<S>,+source: String,+cwdOverride: Maybe<&2,String>,found: Maybe<&2,Snapshot>) -> IO(ImportOutcome):
   match found:
     case None{}: IO.pure(ImportOutcome,ImportFailed{noSession()})
-    case Some{Snapshot{+directory,stored}}:
+    case Some{Snapshot{+directory,+stored}}:
       do IO<ImportOutcome>:
         +sessionDir : String <- IO.pure(String,Sessions.getSessionDir(Unit,Tools.ToolDetails,V.Value,stored))
-        opened : Sessions.Outcome(Session.Session()) <- Sessions.open(~Unit,~Tools.ToolDetails,~V.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,~Session.readUnit,~Session.readDetails,~Session.readRaw,source,Some{sessionDir},cwdOverride,directory)
+        opened : Sessions.Outcome(Session.Session()) <- Sessions.open(~Unit,~Tools.ToolDetails,~V.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,~Session.readUnit,~Session.readDetails,~Session.readRaw,idsOf(stored),source,Some{sessionDir},cwdOverride,directory)
         importOpened(S,runtime,source,sessionDir,directory,cwdOverride,opened)
 def importSourceError(path: String,error: FS.Error) -> String:
   match error:
@@ -435,7 +439,7 @@ def forkPersistedFile(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: St
     case _ None{}: IO.pure(Result<&2, &2, String, Maybe<&2, String>>, Fail{"Persisted session is missing a session file"})
     case None{} Some{+path}:
       do IO<Result<&2, &2, String, Maybe<&2, String>>>:
-        next : Sessions.Outcome(Session.Session()) <- Session.createSession(directory, Some{Sessions.getSessionDir(Unit, Tools.ToolDetails, V.Value, stored)}, agentDirOf(S, runtime), Sessions.NewSessionOptions{None{}, Some{path}})
+        next : Sessions.Outcome(Session.Session()) <- Session.createSession(idsOf(stored), directory, Some{Sessions.getSessionDir(Unit, Tools.ToolDetails, V.Value, stored)}, agentDirOf(S, runtime), Sessions.NewSessionOptions{None{}, Some{path}})
         forked(S, runtime, directory, Some{path}, text, next)
     case Some{id} Some{+path}:
       do IO<Result<&2, &2, String, Maybe<&2, String>>>:

@@ -2,6 +2,7 @@ import Base
 import ../core/session-manager.bend as Session
 import ../core/session-persistence.bend as Persistence
 import ../core/agent-session.bend as AgentSession
+import ../../../ai/src/utils/uuid.bend as Uuid
 import ../core/keybindings.bend as AppKeys
 import ../modes/interactive/theme/theme.bend as Theme
 import ../modes/interactive/theme/color.bend as Color
@@ -813,7 +814,7 @@ def selectSession(cwd: String,+sessionDir: Maybe<&2,String>,+agentDir: String,se
 # terminal process. Both entry points share filtering, ordering and keybindings.
 type Modal is Data: Closed{} Open{state: State} Renaming{state: State,target: Session.SessionInfo,input: SearchInput.Input}
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>}
+  Host{modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,ids: Uuid.Generator}
 type HostOwner is Type:
   HostOwner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
 def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,+width: Nat) -> IO(List<&2,String>):
@@ -832,7 +833,7 @@ def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindi
         return List.concat(&2,String,[["",Theme.fg(selected,"accent",rule(width)),""," " ++ Theme.bold("Rename Session"),""],renderedQuery(rendered),[""," " ++ Theme.fg(selected,"muted","enter to save · escape/ctrl+c to cancel"),"",Theme.fg(selected,"accent",rule(width))]])
 def drawModal(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
-    case Host{+modal,editor,bindings,theme,_,_}:
+    case Host{+modal,editor,bindings,theme,_,_,_}:
       do IO<List<&2,String>>:
         current : Modal <- Ref.read(Modal,modal)
         drawModalCurrent(current,editor,bindings,theme,width)
@@ -888,9 +889,9 @@ def renameOpened(opened: Persistence.Outcome(AgentSession.Session()),name: Strin
       do IO<Bool>:
         result : Persistence.Outcome(AgentSession.Appended()) <- AgentSession.recordName(session,name)
         return Result.is_done(&2,&2,Persistence.Error,AgentSession.Appended(),result)
-def renameStored(+info: Session.SessionInfo,name: String) -> IO(Bool):
+def renameStored(ids: Uuid.Generator,+info: Session.SessionInfo,name: String) -> IO(Bool):
   do IO<Bool>:
-    opened : Persistence.Outcome(AgentSession.Session()) <- AgentSession.openSession(infoPath(info),None{},sessionCwd(info))
+    opened : Persistence.Outcome(AgentSession.Session()) <- AgentSession.openSession(ids,infoPath(info),None{},sessionCwd(info))
     renameOpened(opened,name)
 def beginRenameFound(modal: Ref.Ref<Modal>,+state: State,selected: Maybe<&2,Session.SessionInfo>) -> IO(Unit):
   match selected:
@@ -898,20 +899,20 @@ def beginRenameFound(modal: Ref.Ref<Modal>,+state: State,selected: Maybe<&2,Sess
     case Some{+info}: Ref.write(Modal,modal,Renaming{state,info,SearchInput.setValue(newQuery(),sessionName(info))})
 def beginRename(modal: Ref.Ref<Modal>,+state: State) -> IO(Unit):
   beginRenameFound(modal,state,List.get(&2,Session.SessionInfo,visible(state),selectedIndex(state)))
-def renamedModalAction(modal: Ref.Ref<Modal>,+state: State,+target: Session.SessionInfo,input: SearchInput.Input,words: Ref.Ref<Words.Source>,bindings: Bindings.KeybindingsManager,data: String,selected: Action) -> IO(Unit):
+def renamedModalAction(ids: Uuid.Generator,modal: Ref.Ref<Modal>,+state: State,+target: Session.SessionInfo,input: SearchInput.Input,words: Ref.Ref<Words.Source>,bindings: Bindings.KeybindingsManager,data: String,selected: Action) -> IO(Unit):
   match selected:
     case Cancel{}: Ref.write(Modal,modal,Open{state})
     case Confirm{}:
       +name = String.trim(queryText(input))
       Bool.pick(Unit -> IO(Unit),String.is_empty(name),_ => IO.pure(Unit,Unit{}),_ => do IO<Unit>:
-        saved : Bool <- renameStored(target,name)
+        saved : Bool <- renameStored(ids,target,name)
         Ref.write(Modal,modal,Open{Bool.pick(State,saved,namedState(state,infoPath(target),name),state)}))(Unit{})
     case _:
       do IO<Unit>:
         next : SearchInput.Input <- editQuery(input,words,bindings,data)
         Ref.write(Modal,modal,Renaming{state,target,next})
-def renamedModal(modal: Ref.Ref<Modal>,state: State,target: Session.SessionInfo,input: SearchInput.Input,words: Ref.Ref<Words.Source>,+bindings: Bindings.KeybindingsManager,+data: String) -> IO(Unit):
-  renamedModalAction(modal,state,target,input,words,bindings,data,action(bindings,data))
+def renamedModal(ids: Uuid.Generator,modal: Ref.Ref<Modal>,state: State,target: Session.SessionInfo,input: SearchInput.Input,words: Ref.Ref<Words.Source>,+bindings: Bindings.KeybindingsManager,+data: String) -> IO(Unit):
+  renamedModalAction(ids,modal,state,target,input,words,bindings,data,action(bindings,data))
 def receivedModalOpenAction(modal: Ref.Ref<Modal>,+bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,+state: State,+data: String,selected: Action) -> IO(Unit):
   match state selected:
     case State{_,_,_,_,_,Pending{},Controls{_,_,_,Some{+path},_}} _:
@@ -920,36 +921,36 @@ def receivedModalOpenAction(modal: Ref.Ref<Modal>,+bindings: Bindings.Keybinding
     case _ _: modalTransition(modal,bindings,words,chosen,state,data)
 def receivedModalOpen(modal: Ref.Ref<Modal>,+bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,+state: State,+data: String) -> IO(Unit):
   receivedModalOpenAction(modal,bindings,words,chosen,state,data,action(bindings,data))
-def receivedModalCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,data: String) -> IO(Unit):
+def receivedModalCurrent(ids: Uuid.Generator,current: Modal,modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,data: String) -> IO(Unit):
   match current:
     case Closed{}: Component.handleInput(editor,data)
     case Open{state}: receivedModalOpen(modal,bindings,words,chosen,state,data)
-    case Renaming{state,target,input}: renamedModal(modal,state,target,input,words,bindings,data)
+    case Renaming{state,target,input}: renamedModal(ids,modal,state,target,input,words,bindings,data)
 def receivedModal(host: Host,data: String) -> IO(Unit):
   match host:
-    case Host{+modal,editor,bindings,_,words,handler}:
+    case Host{+modal,editor,bindings,_,words,handler,ids}:
       do IO<Unit>:
         current : Modal <- Ref.read(Modal,modal)
-        receivedModalCurrent(current,modal,editor,bindings,words,handler,data)
+        receivedModalCurrent(ids,current,modal,editor,bindings,words,handler,data)
 def mouseCurrent(current: Modal,mouse: Maybe<&2,Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>>,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match current mouse:
     case Closed{} Some{callback}: Callback.call(Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,callback,event)
     case _ _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
 def modalMouse(host: Host,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match host:
-    case Host{+modal,Component.Component{_,_,_,mouse,_,_,_},_,_,_,_}:
+    case Host{+modal,Component.Component{_,_,_,mouse,_,_,_},_,_,_,_,_}:
       do IO<Maybe<&2,Component.MouseResponse>>:
         current : Modal <- Ref.read(Modal,modal)
         mouseCurrent(current,mouse,event)
 def modalInvalidate(host: Host,_: Unit) -> IO(Unit):
-  match host: case Host{_,editor,_,_,_,_}: Component.invalidate(editor)
+  match host: case Host{_,editor,_,_,_,_,_}: Component.invalidate(editor)
 def modalFocus(host: Host,value: Bool) -> IO(Unit):
-  match host: case Host{_,editor,_,_,_,_}: Component.setFocused(editor,value)
-def createHost(+editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Words.Source,chosen: Callback.Callback<String,Unit>) -> IO(HostOwner):
+  match host: case Host{_,editor,_,_,_,_,_}: Component.setFocused(editor,value)
+def createHost(ids: Uuid.Generator,+editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Words.Source,chosen: Callback.Callback<String,Unit>) -> IO(HostOwner):
   do IO<HostOwner>:
     modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
     wordRef : Ref.Ref<Words.Source> <- Ref.new(Words.Source,words)
-    +host : Host <- IO.pure(Host,Host{modal,editor,bindings,theme,wordRef,chosen})
+    +host : Host <- IO.pure(Host,Host{modal,editor,bindings,theme,wordRef,chosen,ids})
     +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~drawModal,host)
     +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receivedModal,host)
     +mouse : Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Host,~Ui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~modalMouse,host)
@@ -961,10 +962,10 @@ def borrowHost(owner: HostOwner) -> HostOwner & Host & Component.Component:
   match owner: case HostOwner{+host,+component,render,input,mouse,invalidate,focus}: (HostOwner{host,component,render,input,mouse,invalidate,focus},host,component)
 def openHost(host: Host,current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>) -> IO(Unit):
   match host:
-    case Host{modal,_,_,_,_,_}: Ref.write(Modal,modal,Open{State{current,all,Current{},newQuery(),0n,Pending{},Controls{Threaded{},False{},False{},None{},None{}}}})
+    case Host{modal,_,_,_,_,_,_}: Ref.write(Modal,modal,Open{State{current,all,Current{},newQuery(),0n,Pending{},Controls{Threaded{},False{},False{},None{},None{}}}})
 def disposeHost(owner: HostOwner) -> IO(Unit):
   match owner:
-    case HostOwner{Host{modal,_,_,_,words,_},_,render,input,mouse,invalidate,focus}:
+    case HostOwner{Host{modal,_,_,_,words,_,_},_,render,input,mouse,invalidate,focus}:
       do IO<Unit>:
         discarded : Modal <- Ref.dispose(Modal,modal)
         oldWords : Words.Source <- Ref.dispose(Words.Source,words)
