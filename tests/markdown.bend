@@ -7,7 +7,7 @@ def plain(_: Unit,value: String) -> IO(String): IO.pure(String,value)
 def theme(+style: C.Callback<String,String>) -> M.MarkdownTheme:
   M.MarkdownTheme{style,style,style,style,style,style,style,style,style,style,style,style,style,style,None{},None{}}
 def cases() -> List<&2,String>:
-  "hello" <> "hello world" <> "**bold**" <> "*italic*" <> "~~gone~~" <> "`code`" <> "# title" <> "## subtitle" <> "line\nnext" <> "hello\n\nworld" <> "- one\n- two" <> "1. one\n2. two" <> "> quoted" <> "---" <> "```js\nconst x = 1;\n```" <> "[site](https://example.com)" <> "a  \nb" <> "- outer\n  - inner\n- other" <> "3. a\n7. b" <> "# heading\nnext" <> "```js\nx\n```\nnext" <> "> a\n> b" <> "---\nnext" <> "simple <b>tag</b>" <> "\\*literal*" <> "~~foo~~ ~bar~" <> "```x\nfoo\n```\n" <> "| A | B |\n|---|---|\n| one | two |" <> "| A | B |\n|---|---|\n| x | y |\n| z | w |" <> Nil{}
+  "hello" <> "hello world" <> "**bold**" <> "*italic*" <> "~~gone~~" <> "`code`" <> "# title" <> "## subtitle" <> "line\nnext" <> "hello\n\nworld" <> "- one\n- two" <> "1. one\n2. two" <> "> quoted" <> "---" <> "```js\nconst x = 1;\n```" <> "[site](https://example.com)" <> "a  \nb" <> "- outer\n  - inner\n- other" <> "3. a\n7. b" <> "# heading\nnext" <> "```js\nx\n```\nnext" <> "> a\n> b" <> "---\nnext" <> "simple <b>tag</b>" <> "\\*literal*" <> "~~foo~~ ~bar~" <> "```x\nfoo\n```\n" <> "| A | B |\n|---|---|\n| one | two |" <> "| A | B |\n|---|---|\n| x | y |\n| z | w |" <> "| Keys | Action |\n| --- | --- |\n| `Ctrl+P` / `Ctrl+K` | choose |" <> Nil{}
 def shown(+lines: List<&2,String>) -> String:
   Nat.show(List.length(&2,String,lines)) ++ ":" ++ String.join(lines,"|")
 def result(pair: M.Markdown & List<&2,String>) -> String:

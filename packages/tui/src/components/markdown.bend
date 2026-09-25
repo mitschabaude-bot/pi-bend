@@ -510,6 +510,22 @@ def tableRows(value: TableRows) -> List<&2,List<&2,String>>:
   match value: case TableRows{rows,_}: rows
 def tableRemaining(value: TableRows) -> List<&2,String>:
   match value: case TableRows{_,rest}: rest
+def inlineCells(cells: List<&2,String>,+theme: MarkdownTheme,+links: Bool) -> IO(List<&2,String>):
+  match cells:
+    case Nil{}: IO.pure(List<&2,String>,Nil{})
+    case cell <> rest:
+      do IO<List<&2,String>>:
+        rendered : String <- renderInline(nextInline(cell),"",theme,None{},links)
+        following : List<&2,String> <- inlineCells(rest,theme,links)
+        return rendered <> following
+def inlineRows(rows: List<&2,List<&2,String>>,+theme: MarkdownTheme,+links: Bool) -> IO(List<&2,List<&2,String>>):
+  match rows:
+    case Nil{}: IO.pure(List<&2,List<&2,String>>,Nil{})
+    case row <> rest:
+      do IO<List<&2,List<&2,String>>>:
+        rendered : List<&2,String> <- inlineCells(row,theme,links)
+        following : List<&2,List<&2,String>> <- inlineRows(rest,theme,links)
+        return rendered <> following
 def rowWidth(rows: List<&2,List<&2,String>>,+index: Nat) -> Nat:
   match rows:
     case Nil{}: 0n
@@ -583,13 +599,11 @@ def resetFragments(parts: List<&2,String>) -> List<&2,String>:
     case Nil{}: Nil{}
     case last <> Nil{}: last <> Nil{}
     case first <> rest: (first ++ "\u{1b}[22;23;24;25;27;28;29;39m") <> resetFragments(rest)
-@unsafe def wrappedCells(+cells: List<&2,String>,sizes: List<&2,Nat>,+theme: MarkdownTheme,+links: Bool,reversed: List<&2,List<&2,String>>) -> IO(List<&2,List<&2,String>>):
+@unsafe def wrappedCells(+cells: List<&2,String>,sizes: List<&2,Nat>,reversed: List<&2,List<&2,String>>) -> List<&2,List<&2,String>>:
   match sizes:
-    case Nil{}: IO.pure(List<&2,List<&2,String>>,List.reverse(&2,List<&2,String>,reversed))
+    case Nil{}: List.reverse(&2,List<&2,String>,reversed)
     case width <> rest:
-      do IO<List<&2,List<&2,String>>>:
-        rendered : String <- renderInline(nextInline(Maybe.default(&2,String,List.get(&2,String,cells,0n),"")),"",theme,None{},links)
-        wrappedCells(List.drop(&2,String,cells,1n),rest,theme,links,resetFragments(U.wrapTextWithAnsi(rendered,Nat.max(1n,width))) <> reversed)
+      wrappedCells(List.drop(&2,String,cells,1n),rest,resetFragments(U.wrapTextWithAnsi(Maybe.default(&2,String,List.get(&2,String,cells,0n),""),Nat.max(1n,width))) <> reversed)
 def wrappedHeight(cells: List<&2,List<&2,String>>) -> Nat:
   match cells:
     case Nil{}: 0n
@@ -610,26 +624,27 @@ def wrappedRowParts(cells: List<&2,List<&2,String>>,sizes: List<&2,Nat>,+index: 
         parts : List<&2,String> <- wrappedRowParts(cells,sizes,index,bold,theme,Nil{})
         following : List<&2,String> <- wrappedRowLines(cells,sizes,bold,theme,Succ{index},rest)
         return ("│ " ++ String.join(parts," │ ") ++ " │") <> following
-def wrappedRow(row: List<&2,String>,+sizes: List<&2,Nat>,+bold: Bool,+theme: MarkdownTheme,links: Bool) -> IO(List<&2,String>):
+def wrappedRow(row: List<&2,String>,+sizes: List<&2,Nat>,+bold: Bool,+theme: MarkdownTheme) -> IO(List<&2,String>):
   do IO<List<&2,String>>:
-    +cells : List<&2,List<&2,String>> <- wrappedCells(row,sizes,theme,links,Nil{})
+    +cells : List<&2,List<&2,String>> <- IO.pure(List<&2,List<&2,String>>,wrappedCells(row,sizes,Nil{}))
     wrappedRowLines(cells,sizes,bold,theme,0n,wrappedHeight(cells))
-def renderedRows(rows: List<&2,List<&2,String>>,+widths: List<&2,Nat>,+theme: MarkdownTheme,+separator: String,+links: Bool) -> IO(List<&2,String>):
+def renderedRows(rows: List<&2,List<&2,String>>,+widths: List<&2,Nat>,+theme: MarkdownTheme,+separator: String) -> IO(List<&2,String>):
   match rows:
     case Nil{}: IO.pure(List<&2,String>,Nil{})
-    case row <> Nil{}: wrappedRow(row,widths,False{},theme,links)
+    case row <> Nil{}: wrappedRow(row,widths,False{},theme)
     case row <> rest:
       do IO<List<&2,String>>:
-        line : List<&2,String> <- wrappedRow(row,widths,False{},theme,links)
-        following : List<&2,String> <- renderedRows(rest,widths,theme,separator,links)
+        line : List<&2,String> <- wrappedRow(row,widths,False{},theme)
+        following : List<&2,String> <- renderedRows(rest,widths,theme,separator)
         return List.append(&2,String,line,separator <> following)
 def tableRegular(header: String,rest: List<&2,String>,+theme: MarkdownTheme,+width: Nat,+links: Bool) -> IO(TableResult):
   do IO<TableResult>:
     +parsed : TableRows <- IO.pure(TableRows,collectRows(afterDivider(rest),Nil{}))
-    +cells : List<&2,String> <- IO.pure(List<&2,String>,tableHeader(header))
-    +columns : List<&2,Nat> <- IO.pure(List<&2,Nat>,tableWidths(widths(cells,tableRows(parsed),0n),minimumWidths(cells,tableRows(parsed),0n),width - (3n * List.length(&2,String,cells) + 1n)))
-    heading : List<&2,String> <- wrappedRow(cells,columns,True{},theme,links)
-    rows : List<&2,String> <- renderedRows(tableRows(parsed),columns,theme,border(columns,"├─","─┼─","─┤"),links)
+    +cells : List<&2,String> <- inlineCells(tableHeader(header),theme,links)
+    +body : List<&2,List<&2,String>> <- inlineRows(tableRows(parsed),theme,links)
+    +columns : List<&2,Nat> <- IO.pure(List<&2,Nat>,tableWidths(widths(cells,body,0n),minimumWidths(cells,body,0n),width - (3n * List.length(&2,String,cells) + 1n)))
+    heading : List<&2,String> <- wrappedRow(cells,columns,True{},theme)
+    rows : List<&2,String> <- renderedRows(body,columns,theme,border(columns,"├─","─┼─","─┤"))
     return TableResult{border(columns,"┌─","─┬─","─┐") <> List.append(&2,String,heading,border(columns,"├─","─┼─","─┤") <> List.append(&2,String,rows,border(columns,"└─","─┴─","─┘") <> Nil{})),tableRemaining(parsed)}
 def tableRendered(+header: String,+rest: List<&2,String>,+theme: MarkdownTheme,+width: Nat,+links: Bool) -> IO(TableResult):
   Bool.pick(Unit -> IO(TableResult),Nat.is_lt(width,4n * List.length(&2,String,tableHeader(header)) + 1n),
