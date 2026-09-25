@@ -247,6 +247,17 @@
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/theme/theme-controller.bend": "dc2e19e70f6153e6c3ac419724d260316c3e1ffc3c8668953ed2b3c5231443c9"
       }
+    },
+    "packages/coding-agent/src/modes/interactive/components/session-selector.ts": {
+      "state": "partial",
+      "note": "The native /resume picker lists sessions and supports interactive rename, checked against terminal parity. Selected-title ANSI styling differs; broader loading, sorting, deletion, mouse and cancellation behavior has not been fully reviewed.",
+      "ports": [
+        "packages/coding-agent/src/cli/session-picker.bend"
+      ],
+      "source_sha256": "8d8744ed7ba79d04fbc5e2fac16ef38083ba2d1e871d12a1a2460faa27e29f27",
+      "port_sha256": {
+        "packages/coding-agent/src/cli/session-picker.bend": "9ebb4af8bc4e29c5dad8fa49de994a356867b2d43db497d192988d807d9fbb47"
+      }
     }
   }
 }

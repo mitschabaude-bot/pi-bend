@@ -1,6 +1,7 @@
 import Base
 import ../core/session-manager.bend as Session
 import ../core/session-persistence.bend as Persistence
+import ../core/agent-session.bend as AgentSession
 import ../core/keybindings.bend as AppKeys
 import ../modes/interactive/theme/theme.bend as Theme
 import ../modes/interactive/theme/color.bend as Color
@@ -36,7 +37,7 @@ type Scope is Data: Current{} All{}
 type Sort is Data: Threaded{} Recent{} Relevance{}
 type Controls is Data: Controls{sort: Sort,named: Bool,showPath: Bool,deleting: Maybe<&2,String>,status: Maybe<&2,String>}
 type Action is Data:
-  Cancel{} Confirm{} SwitchScope{} SwitchSort{} SwitchNamed{} TogglePath{} Delete{} DeleteAlias{} MoveUp{} MoveDown{} PageUp{} PageDown{} Edit{data: String}
+  Cancel{} Confirm{} SwitchScope{} SwitchSort{} SwitchNamed{} TogglePath{} Delete{} DeleteAlias{} Rename{} MoveUp{} MoveDown{} PageUp{} PageDown{} Edit{data: String}
 type State is Data:
   State{current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,scope: Scope,query: SearchInput.Input,index: Nat,choice: Choice,controls: Controls}
 type Count is Data: Count{loaded: Nat,total: Nat}
@@ -287,9 +288,9 @@ def label(+info: Session.SessionInfo,index: Nat,chosen: Nat,all: Bool,thread: Bo
   +available = width - 2n - Utils.visibleWidth(prefix) - Utils.visibleWidth(right) - 2n
   +selected = Nat.is_eq(index,chosen)
   +title = Utils.truncateToWidth(infoText(info),Nat.max(10n,available),"…",False{})
-  +namedTitle = Bool.pick(String,named(info),Theme.fg(theme,"warning",title),title)
+  +namedTitle = Bool.pick(String,named(info) && Bool.not(selected),Theme.fg(theme,"warning",title),title)
   +styledTitle = Bool.pick(String,selected,Theme.bold(namedTitle),namedTitle)
-  +left = Bool.pick(String,selected,Theme.fg(theme,"accent","› "),"  ") ++ Theme.fg(theme,"dim",prefix) ++ styledTitle
+  +left = Bool.pick(String,selected,Theme.fg(theme,"accent","› "),"  ") ++ Bool.pick(String,String.is_empty(prefix),"",Theme.fg(theme,"dim",prefix)) ++ styledTitle
   +line = left ++ Utils.spaces(Nat.max(1n,width - Utils.visibleWidth(left) - Utils.visibleWidth(right)),"") ++ Theme.fg(theme,"dim",right)
   Utils.truncateToWidth(selectedBackground(theme,line,selected),width,"…",False{})
 
@@ -311,22 +312,23 @@ def keyHint(+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,key: Stri
   Theme.fg(theme,"dim",firstKey(bindings,key)) ++ Theme.fg(theme,"muted"," " ++ description)
 def scopeHint(+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager) -> String:
   keyHint(theme,bindings,"tui.input.tab","scope") ++ Theme.fg(theme,"muted"," · re:<pattern> regex · \"phrase\" exact")
-def normalHint(+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,showPath: Bool) -> String:
+def normalHint(+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,showPath: Bool,canRename: Bool) -> String:
   +separator = Theme.fg(theme,"muted"," · ")
   keyHint(theme,bindings,"app.session.toggleSort","sort") ++ separator ++
   keyHint(theme,bindings,"app.session.toggleNamedFilter","named") ++ separator ++
   keyHint(theme,bindings,"app.session.delete","delete") ++ separator ++
-  keyHint(theme,bindings,"app.session.togglePath","path" ++ Bool.pick(String,showPath," (on)"," (off)"))
+  keyHint(theme,bindings,"app.session.togglePath","path" ++ Bool.pick(String,showPath," (on)"," (off)")) ++
+  Bool.pick(String,canRename,separator ++ keyHint(theme,bindings,"app.session.rename","rename"),"")
 def deleteHint(+bindings: Bindings.KeybindingsManager) -> String:
   firstKey(bindings,"tui.select.confirm") ++ " confirm · " ++ firstKey(bindings,"tui.select.cancel") ++ " cancel"
-def hintMessage(message: Maybe<&2,String>,+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,showPath: Bool) -> String & String:
+def hintMessage(message: Maybe<&2,String>,+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,showPath: Bool,canRename: Bool) -> String & String:
   match message:
     case Some{value}: (Theme.fg(theme,"accent",value),"")
-    case None{}: (scopeHint(theme,bindings),normalHint(theme,bindings,showPath))
-def hintLines(deleting: Maybe<&2,String>,status: Maybe<&2,String>,problem: Maybe<&2,String>,theme: Theme.Theme,bindings: Bindings.KeybindingsManager,showPath: Bool) -> String & String:
+    case None{}: (scopeHint(theme,bindings),normalHint(theme,bindings,showPath,canRename))
+def hintLines(deleting: Maybe<&2,String>,status: Maybe<&2,String>,problem: Maybe<&2,String>,theme: Theme.Theme,bindings: Bindings.KeybindingsManager,showPath: Bool,canRename: Bool) -> String & String:
   match deleting:
     case Some{_}: (Theme.fg(theme,"error","Delete session? " ++ deleteHint(bindings)),"")
-    case None{}: hintMessage(Maybe.or(&2,String,problem,status),theme,bindings,showPath)
+    case None{}: hintMessage(Maybe.or(&2,String,problem,status),theme,bindings,showPath,canRename)
 def countHint(count: Maybe<&2,Count>) -> Maybe<&2,String>:
   match count:
     case None{}: None{}
@@ -364,7 +366,7 @@ def hintRows(hints: String & String,+width: Nat) -> List<&2,String>:
     case (first,second): [Utils.truncateToWidth(first,width,"…",False{}),Utils.truncateToWidth(second,width,"…",False{})]
 def renderedQuery(pair: SearchInput.Input & List<&2,String>) -> List<&2,String>:
   match pair: case (_,lines): lines
-def renderState(+state: State,+width: Nat,bindings: Bindings.KeybindingsManager,+theme: Theme.Theme,loads: Loads,now: F64,home: String) -> IO(List<&2,String>):
+def renderState(+state: State,+width: Nat,bindings: Bindings.KeybindingsManager,+theme: Theme.Theme,loads: Loads,now: F64,home: String,canRename: Bool) -> IO(List<&2,String>):
   match state:
     case State{_,_,scope,query,index,_,Controls{sort,namedFilter,showPath,deleting,status}}:
       +items = visible(state)
@@ -379,7 +381,7 @@ def renderState(+state: State,+width: Nat,bindings: Bindings.KeybindingsManager,
       do IO<List<&2,String>>:
         input : SearchInput.Input & List<&2,String> <- SearchInput.render(query,width)
         return List.concat(&2,String,[["",Theme.fg(theme,"accent",rule(width)),"",heading(scope,sort,namedFilter,loading,width,theme)],
-          hintRows(hintLines(deleting,status,searchProblem(parsedSearch(text)),theme,bindings,showPath),width),
+          hintRows(hintLines(deleting,status,searchProblem(parsedSearch(text)),theme,bindings,showPath,canRename),width),
           [""],renderedQuery(input),[""],body,["",Theme.fg(theme,"accent",rule(width))]])
 
 def paint(environment: Paint,width: Nat) -> IO(List<&2,String>):
@@ -390,7 +392,7 @@ def paint(environment: Paint,width: Nat) -> IO(List<&2,String>):
         loading : Loads <- Ref.read(Loads,loads)
         now : F64 <- Date.now()
         home : Result<&2,&2,FS.Error,String> <- FS.homedir()
-        renderState(value,width,bindings,theme,loading,now,Result.default(&2,&2,FS.Error,String,home,""))
+        renderState(value,width,bindings,theme,loading,now,Result.default(&2,&2,FS.Error,String,home,""),False{})
 def ignore(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
 def ignoreFocus(_: Unit,_: Bool) -> IO(Unit): IO.pure(Unit,Unit{})
 
@@ -406,7 +408,7 @@ def selectorBindings() -> List<&2,Binding>:
   [Binding{"tui.select.cancel",Cancel{}},Binding{"tui.select.confirm",Confirm{}},Binding{"tui.input.tab",SwitchScope{}},
    Binding{"app.session.toggleSort",SwitchSort{}},Binding{"app.session.toggleNamedFilter",SwitchNamed{}},
    Binding{"app.session.togglePath",TogglePath{}},Binding{"app.session.delete",Delete{}},
-   Binding{"app.session.deleteNoninvasive",DeleteAlias{}},Binding{"tui.select.up",MoveUp{}},
+   Binding{"app.session.deleteNoninvasive",DeleteAlias{}},Binding{"app.session.rename",Rename{}},Binding{"tui.select.up",MoveUp{}},
    Binding{"tui.select.down",MoveDown{}},Binding{"tui.select.pageUp",PageUp{}},Binding{"tui.select.pageDown",PageDown{}}]
 def bound(items: List<&2,Binding>,+bindings: Bindings.KeybindingsManager,+data: String) -> Maybe<&2,Action>:
   match items:
@@ -447,6 +449,7 @@ def pending(+current: List<&2,Session.SessionInfo>,+all: List<&2,Session.Session
     case Delete{}: deletingSelected(current,all,scope,query,index,controls)
     case DeleteAlias{}:
       Bool.pick(Unit -> State & Bool,String.is_empty(queryText(query)),_ => deletingSelected(current,all,scope,query,index,controls),_ => (revised(current,all,scope,query,index,Pending{},controls),False{}))(Unit{})
+    case Rename{}: (revised(current,all,scope,query,index,Pending{},controls),False{})
     case MoveUp{}:
       +count = List.length(&2,Session.SessionInfo,visible(revised(current,all,scope,query,index,Pending{},controls)))
       (revised(current,all,scope,query,advanced(index,count,False{}),Pending{},controls),False{})
@@ -799,12 +802,12 @@ def selectSession(cwd: String,+sessionDir: Maybe<&2,String>,+agentDir: String,se
 
 # The same picker can occupy the interactive editor without starting a second
 # terminal process. Both entry points share filtering, ordering and keybindings.
-type Modal is Data: Closed{} Open{state: State}
+type Modal is Data: Closed{} Open{state: State} Renaming{state: State,target: Session.SessionInfo,input: SearchInput.Input}
 type Host is Data:
   Host{modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>}
 type HostOwner is Type:
   HostOwner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
-def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,width: Nat) -> IO(List<&2,String>):
+def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,+width: Nat) -> IO(List<&2,String>):
   match current:
     case Closed{}: Component.render(editor,width)
     case Open{state}:
@@ -812,7 +815,12 @@ def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindi
         now : F64 <- Date.now()
         home : Result<&2,&2,FS.Error,String> <- FS.homedir()
         currentTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        renderState(state,width,bindings,currentTheme,Loads{None{},None{}},now,Result.default(&2,&2,FS.Error,String,home,""))
+        renderState(state,width,bindings,currentTheme,Loads{None{},None{}},now,Result.default(&2,&2,FS.Error,String,home,""),True{})
+    case Renaming{_,_,input}:
+      do IO<List<&2,String>>:
+        +selected : Theme.Theme <- Ref.read(Theme.Theme,theme)
+        rendered : SearchInput.Input & List<&2,String> <- SearchInput.render(input,width)
+        return List.concat(&2,String,[["",Theme.fg(selected,"accent",rule(width)),""," " ++ Theme.bold("Rename Session"),""],renderedQuery(rendered),[""," " ++ Theme.fg(selected,"muted","enter to save · escape/ctrl+c to cancel"),"",Theme.fg(selected,"accent",rule(width))]])
 def drawModal(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
     case Host{+modal,editor,bindings,theme,_,_}:
@@ -843,15 +851,71 @@ def modalDeleteAction(modal: Ref.Ref<Modal>,bindings: Bindings.KeybindingsManage
         result : Result<&2,&2,String,String> <- removeSession(path)
         Ref.write(Modal,modal,Open{removed(state,path,result)})
     case _: modalTransition(modal,bindings,words,chosen,state,data)
-def receivedModalOpen(modal: Ref.Ref<Modal>,+bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,+state: State,+data: String) -> IO(Unit):
+def sessionName(info: Session.SessionInfo) -> String:
+  match info: case Session.SessionInfo{_,_,_,name,_,_,_,_,_,_}: Maybe.default(&2,String,name,"")
+def sessionCwd(info: Session.SessionInfo) -> String:
+  match info: case Session.SessionInfo{_,_,cwd,_,_,_,_,_,_,_}: cwd
+def namedInfo(info: Session.SessionInfo,name: String) -> Session.SessionInfo:
+  match info:
+    case Session.SessionInfo{path,id,cwd,_,parent,created,modified,count,first,messages}:
+      Session.SessionInfo{path,id,cwd,Some{name},parent,created,modified,count,first,messages}
+def namedEntries(items: List<&2,Session.SessionInfo>,+path: String,+name: String) -> List<&2,Session.SessionInfo>:
+  match items:
+    case Nil{}: Nil{}
+    case +info <> +rest:
+      Bool.pick(Unit -> List<&2,Session.SessionInfo>,Strings.equal(infoPath(info),path),
+        _ => namedInfo(info,name) <> namedEntries(rest,path,name),
+        _ => info <> namedEntries(rest,path,name))(Unit{})
+def namedState(state: State,+path: String,+name: String) -> State:
   match state:
-    case State{_,_,_,_,_,Pending{},Controls{_,_,_,Some{+path},_}}:
-      modalDeleteAction(modal,bindings,words,chosen,state,path,data,action(bindings,data))
-    case _: modalTransition(modal,bindings,words,chosen,state,data)
+    case State{current,all,scope,query,index,choice,controls}:
+      State{namedEntries(current,path,name),namedEntries(all,path,name),scope,query,index,choice,controls}
+def selectedIndex(state: State) -> Nat:
+  match state: case State{_,_,_,_,index,_,_}: index
+def renameOpened(opened: Persistence.Outcome(AgentSession.Session()),name: String) -> IO(Bool):
+  match opened:
+    case Fail{_}: IO.pure(Bool,False{})
+    case Done{session}:
+      do IO<Bool>:
+        result : Persistence.Outcome(AgentSession.Appended()) <- AgentSession.recordName(session,name)
+        return Result.is_done(&2,&2,Persistence.Error,AgentSession.Appended(),result)
+def renameStored(+info: Session.SessionInfo,name: String) -> IO(Bool):
+  do IO<Bool>:
+    opened : Persistence.Outcome(AgentSession.Session()) <- AgentSession.openSession(infoPath(info),None{},sessionCwd(info))
+    renameOpened(opened,name)
+def beginRenameFound(modal: Ref.Ref<Modal>,+state: State,selected: Maybe<&2,Session.SessionInfo>) -> IO(Unit):
+  match selected:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{+info}: Ref.write(Modal,modal,Renaming{state,info,SearchInput.setValue(newQuery(),sessionName(info))})
+def beginRename(modal: Ref.Ref<Modal>,+state: State) -> IO(Unit):
+  beginRenameFound(modal,state,List.get(&2,Session.SessionInfo,visible(state),selectedIndex(state)))
+def renamedModalAction(modal: Ref.Ref<Modal>,+state: State,+target: Session.SessionInfo,input: SearchInput.Input,words: Ref.Ref<Words.Source>,bindings: Bindings.KeybindingsManager,data: String,selected: Action) -> IO(Unit):
+  match selected:
+    case Cancel{}: Ref.write(Modal,modal,Open{state})
+    case Confirm{}:
+      +name = String.trim(queryText(input))
+      Bool.pick(Unit -> IO(Unit),String.is_empty(name),_ => IO.pure(Unit,Unit{}),_ => do IO<Unit>:
+        saved : Bool <- renameStored(target,name)
+        Ref.write(Modal,modal,Open{Bool.pick(State,saved,namedState(state,infoPath(target),name),state)}))(Unit{})
+    case _:
+      do IO<Unit>:
+        next : SearchInput.Input <- editQuery(input,words,bindings,data)
+        Ref.write(Modal,modal,Renaming{state,target,next})
+def renamedModal(modal: Ref.Ref<Modal>,state: State,target: Session.SessionInfo,input: SearchInput.Input,words: Ref.Ref<Words.Source>,+bindings: Bindings.KeybindingsManager,+data: String) -> IO(Unit):
+  renamedModalAction(modal,state,target,input,words,bindings,data,action(bindings,data))
+def receivedModalOpenAction(modal: Ref.Ref<Modal>,+bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,+state: State,+data: String,selected: Action) -> IO(Unit):
+  match state selected:
+    case State{_,_,_,_,_,Pending{},Controls{_,_,_,Some{+path},_}} _:
+      modalDeleteAction(modal,bindings,words,chosen,state,path,data,selected)
+    case state Rename{}: beginRename(modal,state)
+    case _ _: modalTransition(modal,bindings,words,chosen,state,data)
+def receivedModalOpen(modal: Ref.Ref<Modal>,+bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,+state: State,+data: String) -> IO(Unit):
+  receivedModalOpenAction(modal,bindings,words,chosen,state,data,action(bindings,data))
 def receivedModalCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,data: String) -> IO(Unit):
   match current:
     case Closed{}: Component.handleInput(editor,data)
     case Open{state}: receivedModalOpen(modal,bindings,words,chosen,state,data)
+    case Renaming{state,target,input}: renamedModal(modal,state,target,input,words,bindings,data)
 def receivedModal(host: Host,data: String) -> IO(Unit):
   match host:
     case Host{+modal,editor,bindings,_,words,handler}:

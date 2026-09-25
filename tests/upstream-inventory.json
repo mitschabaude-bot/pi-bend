@@ -2803,9 +2803,13 @@
     },
     {
       "source": "packages/coding-agent/test/session-selector-rename.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "065648e89d3898fa6a5ebfac26fb606cea21b1aa54b8f189afc1d504943f6791"
+      "status": "partial",
+      "ports": [
+        "tests/parity/scenarios.py",
+        "tests/parity/session_picker_input.py"
+      ],
+      "sha256": "065648e89d3898fa6a5ebfac26fb606cea21b1aa54b8f189afc1d504943f6791",
+      "notes": "Interactive /resume rename hint, prompt, saved name, existing-name insertion and reopening match pi in terminal parity; the standalone --resume picker still hides the hint and passes its input parity script. The isolated callback assertions are not yet ported as native tests. A selected-title ANSI reset differs."
     },
     {
       "source": "packages/coding-agent/test/session-selector-search.test.ts",
