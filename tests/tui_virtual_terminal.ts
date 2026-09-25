@@ -8,6 +8,8 @@
 //        TUI_RUNNER=build/tui-virtual-terminal bun tests/tui_virtual_terminal.ts
 import assert from "node:assert";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 const ROOT = path.resolve(import.meta.dir, "..");
@@ -44,7 +46,7 @@ type Op =
 	| { op: "clear" }
 	| { op: "clearOnShrink" }
 	| { op: "check" }
-	| { op: "render"; width: number; height: number; termux?: boolean };
+	| { op: "render"; width: number; height: number; termux?: boolean; force?: boolean };
 
 // Upstream writes percentages as "N%"; the fixture reads {"percent": N}.
 function encodeOptions(options: Options | undefined): Options {
@@ -73,7 +75,14 @@ function fixture(): string[] {
 
 function frames(ops: Op[]): Report[] {
 	const [command, ...args] = fixture();
-	const result = spawnSync(command, [...args, JSON.stringify(ops.map(encode))], { encoding: "utf8", maxBuffer: 1 << 28 });
+	// A command-line argument holds at most 128 KiB; larger scripts go in a file.
+	let script = JSON.stringify(ops.map(encode));
+	if (script.length > 100_000) {
+		const file = path.join(mkdtempSync(path.join(tmpdir(), "tui-vt-")), "script.json");
+		writeFileSync(file, script);
+		script = `@${file}`;
+	}
+	const result = spawnSync(command, [...args, script], { encoding: "utf8", maxBuffer: 1 << 28 });
 	if (result.status !== 0) throw new Error(`fixture failed (${result.status}): ${result.stderr}`);
 	return result.stdout
 		.split("\n")
@@ -1409,6 +1418,117 @@ it(ORDER, "unfocus() does not change visual order until another overlay is focus
 	b.focus();
 	t.renderAndFlush(() => assert.strictEqual(t.viewport()[0]?.charAt(0), "B"));
 	return t.run();
+});
+
+// tui-render.test.ts: Kitty image cleanup. Upstream's Image and Kitty
+// encoders (test data only) build the image lines and expected sequences;
+// the native renderer places them. `writes` after the first render stand in
+// for LoggingVirtualTerminal's writes after clearWrites().
+const TI = await import(`${PI_MONO}/packages/tui/src/terminal-image.ts`);
+const { Image } = await import(`${PI_MONO}/packages/tui/src/components/image.ts`);
+async function withKitty(body: () => Promise<void>) {
+	TI.setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+	TI.setCellDimensions({ widthPx: 10, heightPx: 10 });
+	try {
+		await body();
+	} finally {
+		TI.resetCapabilitiesCache();
+		TI.setCellDimensions({ widthPx: 9, heightPx: 18 });
+	}
+}
+const imageOf = (cells: number, px: number): string[] =>
+	new Image("AAAA", "image/png", { fallbackColor: (value: string) => value }, { maxWidthCells: cells }, { widthPx: px, heightPx: px }).render(40);
+// Writes after the first render, and the reports' redraw counts.
+async function afterFirst(columns: number, rows: number, ops: Op[]) {
+	let writes = "";
+	const redraws: number[] = [];
+	await replay(columns, rows, ops, (k, _, report) => {
+		redraws.push(report.redraws);
+		if (k > 0) writes += report.writes.join("");
+	});
+	return { writes, redraws };
+}
+const KITTY = "TUI Kitty image cleanup";
+it(KITTY, "clears reserved Kitty image rows before drawing appended image placements", () => withKitty(async () => {
+	const imageLines = imageOf(2, 20);
+	const imageSequence = imageLines[0];
+	const { writes } = await afterFirst(40, 10, [{ op: "add", lines: ["before"] }, RENDER(40, 10), set(["before", ...imageLines, "after"]), RENDER(40, 10)]);
+	assert.ok(writes.includes(`\x1b[2K\r\n\x1b[2K\x1b[1A${imageSequence}\x1b[1B`), "reserved rows should be cleared before the image placement is drawn");
+	assert.ok(!writes.includes(`${imageSequence}\r\n\x1b[2K`), "reserved row clears must not run after the image placement is drawn");
+}));
+it(KITTY, "falls back to full redraw when Kitty image pre-clear would scroll", () => withKitty(async () => {
+	const { writes, redraws } = await afterFirst(40, 2, [{ op: "add", lines: ["before"] }, RENDER(40, 2), set(["before", ...imageOf(3, 30), "after"]), RENDER(40, 2)]);
+	assert.ok(redraws[1] > redraws[0], "unsafe image pre-clear should force a full redraw");
+	assert.ok(writes.includes("\x1b[2J"), "fallback should clear and fully redraw");
+}));
+it(KITTY, "reserves Kitty image rows before drawing during full redraw fallbacks", () => withKitty(async () => {
+	const imageLines = imageOf(3, 30);
+	const imageSequence = imageLines[0];
+	const base = ["l0", "l1", "l2", "l3", "l4"];
+	const { writes, redraws } = await afterFirst(40, 5, [{ op: "add", lines: base }, RENDER(40, 5), set([...base, ...imageLines, "after"]), RENDER(40, 5)]);
+	assert.ok(redraws[1] > redraws[0], "scrolling image append should force a full redraw");
+	assert.ok(writes.includes(`\r\n\r\n\x1b[2A${imageSequence}\x1b[2B`), "full redraw should reserve visible image rows before drawing the placement");
+	assert.ok(!writes.includes(`${imageSequence}\r\n\x1b[0m`), "full redraw must not write reserved padding rows after drawing the placement");
+}));
+it(KITTY, "does not use cursor-up placement for Kitty images taller than the viewport", () => withKitty(async () => {
+	const imageLines = imageOf(6, 60);
+	const imageSequence = imageLines[0];
+	assert.ok(imageLines.length > 5, "test image should exceed the viewport height");
+	const { writes } = await afterFirst(40, 5, [{ op: "add", lines: ["before"] }, RENDER(40, 5), set(["before", ...imageLines, "after"]), RENDER(40, 5, { force: true })]);
+	assert.ok(writes.includes(imageSequence), "image placement should be drawn");
+	assert.ok(!writes.includes(`\x1b[${imageLines.length - 1}A${imageSequence}`), "taller-than-viewport images must keep the #4461 first-row placement path");
+}));
+it(KITTY, "deletes changed image ids before drawing moved placements", async () => {
+	const oldImage = TI.encodeKitty("AAAA", { columns: 2, rows: 2, imageId: 42, moveCursor: false });
+	const newImage = TI.encodeKitty("BBBB", { columns: 2, rows: 1, imageId: 42, moveCursor: false });
+	const { writes } = await afterFirst(40, 10, [{ op: "add", lines: ["top", oldImage] }, RENDER(40, 10), set([newImage, ""]), RENDER(40, 10)]);
+	const deleteIndex = writes.indexOf(TI.deleteKittyImage(42));
+	const drawIndex = writes.indexOf(newImage);
+	assert.ok(deleteIndex >= 0, "changed old image should be deleted");
+	assert.ok(drawIndex >= 0, "new image should be drawn");
+	assert.ok(deleteIndex < drawIndex, "old image must be deleted before the new placement is drawn");
+});
+it(KITTY, "redraws image lines when an earlier reserved image row changes", async () => {
+	const image = TI.encodeKitty("AAAA", { columns: 2, rows: 2, imageId: 88, moveCursor: false });
+	const { writes } = await afterFirst(40, 10, [{ op: "add", lines: ["", image] }, RENDER(40, 10), set(["covered", image]), RENDER(40, 10)]);
+	const deleteIndex = writes.indexOf(TI.deleteKittyImage(88));
+	const drawIndex = writes.indexOf(image);
+	assert.ok(deleteIndex >= 0, "image should be deleted when a reserved row changes");
+	assert.ok(drawIndex >= 0, "unchanged image line should be redrawn after deleting the placement");
+	assert.ok(deleteIndex < drawIndex, "old placement must be deleted before the image line is redrawn");
+	assert.ok(!writes.includes("\x1b[2J"), "reserved row changes should not force a full redraw");
+});
+it(KITTY, "deletes previously rendered image ids during full redraws", async () => {
+	const { writes } = await afterFirst(40, 10, [{ op: "add", lines: [TI.encodeKitty("AAAA", { columns: 2, rows: 2, imageId: 77, moveCursor: false })] }, RENDER(40, 10), set(["plain text"]), RENDER(40, 10, { force: true })]);
+	const deleteIndex = writes.indexOf(TI.deleteKittyImage(77));
+	const clearIndex = writes.indexOf("\x1b[2J");
+	assert.ok(deleteIndex >= 0, "previous image should be deleted during full redraw");
+	assert.ok(clearIndex >= 0, "full redraw should clear the screen");
+	assert.ok(deleteIndex < clearIndex, "old image should be deleted before the screen is cleared");
+});
+
+// tui-render.test.ts: bounded render output. Upstream renders into a plain
+// recording terminal; the fixture's report lists the same writes. Its cursor
+// visibility entries are upstream's hideCursor()/showCursor() calls, which
+// that terminal does not record as writes, so they are left out here.
+const MAX_RENDER_WRITE_CHARS = 1024 * 1024;
+const boundedWrites = (report: Report) => report.writes.filter((w) => w !== "\x1b[?25l" && w !== "\x1b[?25h");
+it("TUI bounded render output", "splits a large full render without changing its output", async () => {
+	const kittyLine = `\x1b_Ga=T,f=100;${"A".repeat(1_200_000)}\x1b\\`;
+	const writes = boundedWrites(frames([{ op: "add", lines: [kittyLine, kittyLine] }, RENDER(80, 24)])[0]);
+	assert.ok(writes.length > 2, "large output should be split across terminal writes");
+	assert.ok(writes.every((write) => write.length <= MAX_RENDER_WRITE_CHARS), "each terminal write should stay below the configured limit");
+	assert.strictEqual(writes.join(""), `\x1b[?2026h${kittyLine}\r\n${kittyLine}\x1b[?2026l`, "chunking must preserve the synchronized render output");
+});
+it("TUI bounded render output", "splits large differential updates without a full redraw", async () => {
+	const kittyLine = `\x1b_Ga=T,f=100;${"A".repeat(1_200_000)}\x1b\\`;
+	const writes = boundedWrites(frames([{ op: "add", lines: ["before"] }, RENDER(80, 24), set(["before", kittyLine, kittyLine]), RENDER(80, 24)])[1]);
+	assert.ok(writes.length > 2, "large output should be split across terminal writes");
+	assert.ok(writes.every((write) => write.length <= MAX_RENDER_WRITE_CHARS));
+	const output = writes.join("");
+	assert.ok(output.startsWith("\x1b[?2026h"));
+	assert.ok(output.endsWith("\x1b[?2026l"));
+	assert.ok(!output.includes("\x1b[2J"), "the update should stay on the differential render path");
 });
 
 const only = process.argv[2];

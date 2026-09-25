@@ -8,6 +8,8 @@ import ../packages/tui/src/overlays.bend as O
 import ../packages/runtime/src/callback.bend as Call
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/json.bend as J
+import ../packages/runtime/src/filesystem.bend as FS
+import ../packages/runtime/src/utf8.bend as Utf8
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/record.bend as R
 import ../packages/ai/src/utils/json.bend as Json
@@ -34,7 +36,8 @@ import ../packages/ai/src/utils/schema-json.bend as S
 # {"op":"check"} prints {"components":[{"width","inputs","focused"}],
 # "focused":[...]}: per component the width it was last asked to render at,
 # its input and focus; per overlay OverlayHandle.isFocused().
-# {"op":"render","width":w,"height":h,"termux":b} draws a frame (as in Termux
+# {"op":"render","width":w,"height":h,"termux":b,"force":f} draws a frame (forced
+# like requestRender(true) when f; as in Termux
 # when b) and prints the same with "writes" and "redraws" (upstream's
 # tui.fullRedraws). A line is a string or {"prefix":p,"fill":c,"less":n,
 # "suffix":s}: c repeated (width - n) times.
@@ -295,16 +298,22 @@ def planned(plan: Result<&2, &2, Screen.RenderError, Screen.Plan>, +prepared: Tu
       do IO<Harness>:
         reported(tui, scene, R.Property{"writes", V.ArrayValue{events(output)}} <> R.Property{"redraws", redraws(state)} <> Nil{})
         return Harness{tui, state, scene}
-def rendered(result: Tui.ResultOf(Tui.PreparedFrame), harness: Harness, +width: Nat, +height: Nat, termux: Bool) -> IO(Harness):
+# A forced render resets the screen state first, as tui-process does for
+# the scheduler's ResetRenderState effect (upstream requestRender(true)).
+def fresh(screen: Screen.State, force: Bool) -> Screen.State:
+  match force:
+    case True{}: Screen.resetRenderState(screen)
+    case False{}: screen
+def rendered(result: Tui.ResultOf(Tui.PreparedFrame), harness: Harness, +width: Nat, +height: Nat, termux: Bool, force: Bool) -> IO(Harness):
   match result harness:
     case Fail{_} _: IO.die(Harness, 1, "compose failed")
-    case Done{+prepared} Harness{_, screen, scene}: planned(Process.planned(prepared, screen, termux, width, height), prepared, scene)
-def render(+harness: Harness, +width: Nat, +height: Nat, termux: Bool) -> IO(Harness):
+    case Done{+prepared} Harness{_, screen, scene}: planned(Process.planned(prepared, fresh(screen, force), termux, width, height), prepared, scene)
+def render(+harness: Harness, +width: Nat, +height: Nat, termux: Bool, force: Bool) -> IO(Harness):
   match harness:
     case Harness{tui, _, _}:
       do IO<Harness>:
         prepared : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(tui, width, height)
-        rendered(prepared, harness, width, height, termux)
+        rendered(prepared, harness, width, height, termux, force)
 
 # Focus changes run in source order through the components' setFocused.
 def focusApplied(result: Tui.ResultOf(Tui.TuiBase), screen: Screen.State, scene: Scene) -> IO(Harness):
@@ -455,7 +464,7 @@ def dispatch(+kind: String, harness: Harness, +operation: V.Value) -> IO(Harness
     case "clear": IO.pure(Harness, cleared(harness))
     case "clearOnShrink": IO.pure(Harness, clearingOnShrink(harness))
     case "check": check(harness)
-    case "render": render(harness, number(get(operation, "width")), number(get(operation, "height")), flag(get(operation, "termux")))
+    case "render": render(harness, number(get(operation, "width")), number(get(operation, "height")), flag(get(operation, "termux")), flag(get(operation, "force")))
     case _: IO.die(Harness, 1, "unknown operation")
 
 def step(harness: Harness, +operation: V.Value) -> IO(Harness): dispatch(text(get(operation, "op")), harness, operation)
@@ -489,10 +498,28 @@ def script(value: Result<&2, &2, J.ParseError, V.Value>) -> IO(Unit):
         started(operations, pending)
     case _: IO.die(Unit, 1, "expected a JSON array of operations")
 
+# The script is the argument, or read from the file named after "@" (for
+# scripts larger than one command-line argument may be).
+def scriptText(text: Result<&2, &2, Utf8.Error, String>) -> IO(Unit):
+  match text:
+    case Fail{_}: IO.die(Unit, 1, "the script file is not UTF-8")
+    case Done{text}: script(J.parse(text))
+def scriptFile(bytes: Result<&2, &2, FS.Error, List<&2, U32>>) -> IO(Unit):
+  match bytes:
+    case Fail{_}: IO.die(Unit, 1, "cannot read the script file")
+    case Done{bytes}: scriptText(Utf8.decodeStrict(bytes))
+def argumentAt(file: Bool, +arg: String) -> IO(Unit):
+  match file:
+    case True{}:
+      do IO<Unit>:
+        bytes : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile(String.drop(arg, 1n))
+        scriptFile(bytes)
+    case False{}: script(J.parse(arg))
+def argument(+arg: String) -> IO(Unit): argumentAt(String.starts_with(arg, "@"), arg)
 def run(args: List<String>) -> IO(Unit):
   match args:
-    case arg <> Nil{}: script(J.parse(arg))
-    case _: IO.die(Unit, 1, "usage: tui-virtual-terminal '<operations>'")
+    case arg <> Nil{}: argument(arg)
+    case _: IO.die(Unit, 1, "usage: tui-virtual-terminal '<operations>' | @file")
 
 def main() -> IO(Unit):
   do IO<Unit>:
