@@ -418,6 +418,17 @@ SCENARIOS = [
                   ("key", "C-p"), ("settle", 0.5), ("snap", "model-cycled")],
     },
     {
+        # Pi uses the target model's saved level, then the global default,
+        # before retaining the current level during a model switch.
+        "name": "model-cycle-default-thinking",
+        "args": ["--provider", "openai", "--models", "gpt-5,gpt-5-mini", "--thinking", "low"],
+        "files": {"home/.pi/agent/settings.json": json.dumps({
+            "defaultProvider": "openai", "defaultModel": "gpt-5", "defaultThinkingLevel": "high"})},
+        "steps": [("wait", r"gpt-5 • low", "startup"), ("settle", 0.3), ("snap", "before"),
+                  ("key", "C-p"), ("wait", r"gpt-5-mini • high", "cycled"),
+                  ("settle", 0.3), ("snap", "after")],
+    },
+    {
         # models.json provider headers reach the request (upstream prepareRequest).
         "name": "provider-headers",
         "args": MODEL,
