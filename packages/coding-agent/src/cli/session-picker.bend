@@ -2,7 +2,10 @@ import Base
 import ../core/session-manager.bend as Session
 import ../core/session-persistence.bend as Persistence
 import ../core/keybindings.bend as AppKeys
+import ../modes/interactive/theme/theme.bend as Theme
+import ../modes/interactive/theme/color.bend as Color
 import ../../../runtime/src/filesystem.bend as FS
+import ../../../runtime/src/posix-path.bend as Path
 import ../../../runtime/src/child-process.bend as Child
 import ../../../runtime/src/regex.bend as Regex
 import ../../../runtime/src/callback.bend as Callback
@@ -21,6 +24,7 @@ import ../../../tui/src/tui-main-screen.bend as Screen
 import ../../../tui/src/tui-process.bend as Process
 import ../../../tui/src/terminal.bend as Terminal
 import ../../../tui/src/utils.bend as Utils
+import ../../../tui/src/terminal-image.bend as Image
 
 # The startup picker has one focusable component. The TUI process owns raw
 # terminal state and ordered redraws; this state owns only selection semantics.
@@ -36,7 +40,8 @@ type Count is Data: Count{loaded: Nat,total: Nat}
 type Loads is Data: Loads{current: Maybe<&2,Count>,all: Maybe<&2,Count>}
 type Input is Data:
   Input{state: Ref.Ref<State>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,bindings: Bindings.KeybindingsManager}
-type Paint is Data: Paint{state: Ref.Ref<State>,loads: Ref.Ref<Loads>,scopeHint: String,normalHint: String,deleteHint: String}
+type Paint is Data: Paint{state: Ref.Ref<State>,loads: Ref.Ref<Loads>,bindings: Bindings.KeybindingsManager,theme: Theme.Theme}
+type Visual is Data: Visual{themeName: Maybe<&2,String>,assetsRoot: String,agentDir: String,home: String,trueColor: Maybe<&2,Bool>}
 type Owner is Data:
   Owner{state: Ref.Ref<State>,loads: Ref.Ref<Loads>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
 def Outcome() -> Data: Result<&2,&2,String,Maybe<&2,String>>
@@ -269,29 +274,54 @@ def prefixFor(parent: Maybe<&2,String>,info: Session.SessionInfo,+items: List<&2
 def treePrefix(+info: Session.SessionInfo,items: List<&2,Session.SessionInfo>) -> String:
   prefixFor(parentPath(info),info,items)
 
-def label(+info: Session.SessionInfo,index: Nat,chosen: Nat,all: Bool,thread: Bool,showPath: Bool,items: List<&2,Session.SessionInfo>,+width: Nat,now: F64,home: String) -> String:
+def selectedBackground(+theme: Theme.Theme,+line: String,selected: Bool) -> String:
+  Bool.pick(String,selected,Result.default(&2,&2,Theme.Error,String,Theme.background(theme,"selectedBg",line),line),line)
+def label(+info: Session.SessionInfo,index: Nat,chosen: Nat,all: Bool,thread: Bool,showPath: Bool,items: List<&2,Session.SessionInfo>,+width: Nat,now: F64,home: String,+theme: Theme.Theme) -> String:
   +prefix = Bool.pick(String,thread,treePrefix(info,items),"")
   +right = infoRight(info,all,showPath,now,home)
   +available = width - 2n - Utils.visibleWidth(prefix) - Utils.visibleWidth(right) - 2n
-  +left = Bool.pick(String,Nat.is_eq(index,chosen),"› ","  ") ++ prefix ++ Utils.truncateToWidth(infoText(info),Nat.max(10n,available),"…",False{})
-  Utils.truncateToWidth(left ++ Utils.spaces(Nat.max(1n,width - Utils.visibleWidth(left) - Utils.visibleWidth(right)),"") ++ right,width,"…",False{})
+  +selected = Nat.is_eq(index,chosen)
+  +title = Utils.truncateToWidth(infoText(info),Nat.max(10n,available),"…",False{})
+  +namedTitle = Bool.pick(String,named(info),Theme.fg(theme,"warning",title),title)
+  +styledTitle = Bool.pick(String,selected,Theme.bold(namedTitle),namedTitle)
+  +left = Bool.pick(String,selected,Theme.fg(theme,"accent","› "),"  ") ++ Theme.fg(theme,"dim",prefix) ++ styledTitle
+  +line = left ++ Utils.spaces(Nat.max(1n,width - Utils.visibleWidth(left) - Utils.visibleWidth(right)),"") ++ Theme.fg(theme,"dim",right)
+  Utils.truncateToWidth(selectedBackground(theme,line,selected),width,"…",False{})
 
-def listLines(items: List<&2,Session.SessionInfo>,+index: Nat,+chosen: Nat,+all: Bool,+thread: Bool,+showPath: Bool,+allItems: List<&2,Session.SessionInfo>,+width: Nat,+now: F64,+home: String,count: Nat,reversed: List<&2,String>) -> List<&2,String>:
+def listLines(items: List<&2,Session.SessionInfo>,+index: Nat,+chosen: Nat,+all: Bool,+thread: Bool,+showPath: Bool,+allItems: List<&2,Session.SessionInfo>,+width: Nat,+now: F64,+home: String,+theme: Theme.Theme,count: Nat,reversed: List<&2,String>) -> List<&2,String>:
   match items count:
     case _ Zero{}: List.reverse(&2,String,reversed)
     case Nil{} _: List.reverse(&2,String,reversed)
-    case +info <> rest Succ{left}: listLines(rest,index + 1n,chosen,all,thread,showPath,allItems,width,now,home,left,label(info,index,chosen,all,thread,showPath,allItems,width,now,home) <> reversed)
+    case +info <> rest Succ{left}: listLines(rest,index + 1n,chosen,all,thread,showPath,allItems,width,now,home,theme,left,label(info,index,chosen,all,thread,showPath,allItems,width,now,home,theme) <> reversed)
 
 def windowStart(items: List<&2,Session.SessionInfo>,selected: Nat) -> Nat:
   Nat.min(selected - 5n,List.length(&2,Session.SessionInfo,items) - 10n)
-def hintMessage(message: Maybe<&2,String>,scopeHint: String,normal: String) -> String & String:
+def formattedFirst(keys: List<&2,Keys.KeyId>,name: String) -> String:
+  match keys:
+    case Nil{}: name
+    case key <> _: Keys.formatKeyId(key)
+def firstKey(bindings: Bindings.KeybindingsManager,+name: String) -> String:
+  formattedFirst(Bindings.getKeys(bindings,name),name)
+def keyHint(+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,key: String,description: String) -> String:
+  Theme.fg(theme,"dim",firstKey(bindings,key)) ++ Theme.fg(theme,"muted"," " ++ description)
+def scopeHint(+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager) -> String:
+  keyHint(theme,bindings,"tui.input.tab","scope") ++ Theme.fg(theme,"muted"," · re:<pattern> regex · \"phrase\" exact")
+def normalHint(+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,showPath: Bool) -> String:
+  +separator = Theme.fg(theme,"muted"," · ")
+  keyHint(theme,bindings,"app.session.toggleSort","sort") ++ separator ++
+  keyHint(theme,bindings,"app.session.toggleNamedFilter","named") ++ separator ++
+  keyHint(theme,bindings,"app.session.delete","delete") ++ separator ++
+  keyHint(theme,bindings,"app.session.togglePath","path" ++ Bool.pick(String,showPath," (on)"," (off)"))
+def deleteHint(+bindings: Bindings.KeybindingsManager) -> String:
+  firstKey(bindings,"tui.select.confirm") ++ " confirm · " ++ firstKey(bindings,"tui.select.cancel") ++ " cancel"
+def hintMessage(message: Maybe<&2,String>,+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,showPath: Bool) -> String & String:
   match message:
-    case Some{value}: (value,"")
-    case None{}: (scopeHint,normal)
-def hintLines(deleting: Maybe<&2,String>,status: Maybe<&2,String>,problem: Maybe<&2,String>,scopeHint: String,normal: String,confirm: String) -> String & String:
+    case Some{value}: (Theme.fg(theme,"accent",value),"")
+    case None{}: (scopeHint(theme,bindings),normalHint(theme,bindings,showPath))
+def hintLines(deleting: Maybe<&2,String>,status: Maybe<&2,String>,problem: Maybe<&2,String>,theme: Theme.Theme,bindings: Bindings.KeybindingsManager,showPath: Bool) -> String & String:
   match deleting:
-    case Some{_}: ("Delete session? " ++ confirm,"")
-    case None{}: hintMessage(Maybe.or(&2,String,problem,status),scopeHint,normal)
+    case Some{_}: (Theme.fg(theme,"error","Delete session? " ++ deleteHint(bindings)),"")
+    case None{}: hintMessage(Maybe.or(&2,String,problem,status),theme,bindings,showPath)
 def countHint(count: Maybe<&2,Count>) -> Maybe<&2,String>:
   match count:
     case None{}: None{}
@@ -300,34 +330,34 @@ def loadingHint(scope: Scope,loads: Loads) -> Maybe<&2,String>:
   match scope loads:
     case Current{} Loads{current,_}: countHint(current)
     case All{} Loads{_,all}: countHint(all)
-def emptyRow(+all: Bool,namedFilter: Bool) -> List<&2,String>:
-  [Bool.pick(String,namedFilter,
+def emptyRow(+all: Bool,namedFilter: Bool,+theme: Theme.Theme) -> List<&2,String>:
+  [Theme.fg(theme,"muted",Bool.pick(String,namedFilter,
     Bool.pick(String,all,"  No named sessions found. Press Ctrl+N to show all.","  No named sessions in current folder. Press Ctrl+N to show all, or Tab to view all."),
-    Bool.pick(String,all,"  No sessions found","  No sessions in current folder. Press Tab to view all."))]
+    Bool.pick(String,all,"  No sessions found","  No sessions in current folder. Press Tab to view all.")))]
 def rule(width: Nat) -> String:
   match width:
     case Zero{}: ""
     case Succ{rest}: "─" ++ rule(rest)
-def idleScope(scope: Scope) -> String:
+def idleScope(scope: Scope,+theme: Theme.Theme) -> String:
   match scope:
-    case Current{}: "◉ Current Folder | ○ All"
-    case All{}: "○ Current Folder | ◉ All"
-def scopeLabel(scope: Scope,loading: Maybe<&2,String>) -> String:
+    case Current{}: Theme.fg(theme,"accent","◉ Current Folder") ++ Theme.fg(theme,"muted"," | ○ All")
+    case All{}: Theme.fg(theme,"muted","○ Current Folder | ") ++ Theme.fg(theme,"accent","◉ All")
+def scopeLabel(scope: Scope,loading: Maybe<&2,String>,+theme: Theme.Theme) -> String:
   match loading:
-    case Some{progress}: "○ Current Folder | " ++ progress
-    case None{}: idleScope(scope)
-def heading(+scope: Scope,sort: Sort,namedFilter: Bool,loading: Maybe<&2,String>,+width: Nat) -> String:
-  +left = Bool.pick(String,isAll(scope),"Resume Session (All)","Resume Session (Current Folder)")
-  +right = scopeLabel(scope,loading) ++ "  Name: " ++ Bool.pick(String,namedFilter,"Named","All") ++ "  Sort: " ++ sortLabel(sort)
+    case Some{progress}: Theme.fg(theme,"muted","○ Current Folder | ") ++ Theme.fg(theme,"accent",progress)
+    case None{}: idleScope(scope,theme)
+def heading(+scope: Scope,sort: Sort,namedFilter: Bool,loading: Maybe<&2,String>,+width: Nat,+theme: Theme.Theme) -> String:
+  +left = Theme.bold(Bool.pick(String,isAll(scope),"Resume Session (All)","Resume Session (Current Folder)"))
+  +right = scopeLabel(scope,loading,theme) ++ "  " ++ Theme.fg(theme,"muted","Name: ") ++ Theme.fg(theme,"accent",Bool.pick(String,namedFilter,"Named","All")) ++ "  " ++ Theme.fg(theme,"muted","Sort: ") ++ Theme.fg(theme,"accent",sortLabel(sort))
   +fitted = Utils.truncateToWidth(right,width,"",False{})
   +title = Utils.truncateToWidth(left,width - Utils.visibleWidth(fitted) - 1n,"",False{})
   title ++ Utils.spaces(width - Utils.visibleWidth(title) - Utils.visibleWidth(fitted),"") ++ fitted
-def scrollLine(+start: Nat,count: Nat,+total: Nat,selected: Nat) -> List<&2,String>:
-  Bool.pick(List<&2,String>,Nat.is_gt(start,0n) || Nat.is_lt(start + count,total),["  (" ++ Nat.show(selected + 1n) ++ "/" ++ Nat.show(total) ++ ")"],Nil{})
+def scrollLine(+start: Nat,count: Nat,+total: Nat,selected: Nat,+theme: Theme.Theme) -> List<&2,String>:
+  Bool.pick(List<&2,String>,Nat.is_gt(start,0n) || Nat.is_lt(start + count,total),[Theme.fg(theme,"muted","  (" ++ Nat.show(selected + 1n) ++ "/" ++ Nat.show(total) ++ ")")],Nil{})
 def hintRows(hints: String & String,+width: Nat) -> List<&2,String>:
   match hints:
     case (first,second): [Utils.truncateToWidth(first,width,"…",False{}),Utils.truncateToWidth(second,width,"…",False{})]
-def renderState(+state: State,+width: Nat,scopeHint: String,normalHint: String,deleteHint: String,loads: Loads,now: F64,home: String) -> List<&2,String>:
+def renderState(+state: State,+width: Nat,bindings: Bindings.KeybindingsManager,+theme: Theme.Theme,loads: Loads,now: F64,home: String) -> List<&2,String>:
   match state:
     case State{_,_,scope,query,index,_,Controls{sort,namedFilter,showPath,deleting,status}}:
       +items = visible(state)
@@ -336,21 +366,21 @@ def renderState(+state: State,+width: Nat,scopeHint: String,normalHint: String,d
       +total = List.length(&2,Session.SessionInfo,items)
       +thread = threadedMode(sort,query)
       +loading = loadingHint(scope,loads)
-      +body = Bool.pick(List<&2,String>,List.is_empty(&2,Session.SessionInfo,items),emptyRow(all,namedFilter),
-        List.append(&2,String,listLines(List.drop(&2,Session.SessionInfo,items,start),start,index,all,thread,showPath,items,width,now,home,10n,Nil{}),scrollLine(start,Nat.min(total - start,10n),total,index)))
-      List.concat(&2,String,[["",rule(width),"",heading(scope,sort,namedFilter,loading,width)],
-        hintRows(hintLines(deleting,status,searchProblem(parsedSearch(query)),scopeHint,normalHint ++ Bool.pick(String,showPath," (on)"," (off)"),deleteHint),width),
-        ["",Utils.truncateToWidth("> " ++ safeText(query),width,"…",False{}),""],body,["",rule(width)]])
+      +body = Bool.pick(List<&2,String>,List.is_empty(&2,Session.SessionInfo,items),emptyRow(all,namedFilter,theme),
+        List.append(&2,String,listLines(List.drop(&2,Session.SessionInfo,items,start),start,index,all,thread,showPath,items,width,now,home,theme,10n,Nil{}),scrollLine(start,Nat.min(total - start,10n),total,index,theme)))
+      List.concat(&2,String,[["",Theme.fg(theme,"accent",rule(width)),"",heading(scope,sort,namedFilter,loading,width,theme)],
+        hintRows(hintLines(deleting,status,searchProblem(parsedSearch(query)),theme,bindings,showPath),width),
+        ["",Utils.truncateToWidth("> " ++ safeText(query) ++ "\u{1b}[7m \u{1b}[0m",width,"…",False{}),""],body,["",Theme.fg(theme,"accent",rule(width))]])
 
 def paint(environment: Paint,width: Nat) -> IO(List<&2,String>):
   match environment:
-    case Paint{state,loads,scope,normal,confirm}:
+    case Paint{state,loads,bindings,theme}:
       do IO<List<&2,String>>:
         value : State <- Ref.read(State,state)
         loading : Loads <- Ref.read(Loads,loads)
         now : F64 <- Date.now()
         home : Result<&2,&2,FS.Error,String> <- FS.homedir()
-        return renderState(value,width,scope,normal,confirm,loading,now,Result.default(&2,&2,FS.Error,String,home,""))
+        return renderState(value,width,bindings,theme,loading,now,Result.default(&2,&2,FS.Error,String,home,""))
 def ignore(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
 def ignoreFocus(_: Unit,_: Bool) -> IO(Unit): IO.pure(Unit,Unit{})
 
@@ -539,26 +569,13 @@ def received(input: Input,data: String) -> IO(Unit): receivedShared(input,data)
 
 def made(state: Ref.Ref<State>,loads: Ref.Ref<Loads>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,+render: Callback.Callback<Nat,List<&2,String>>,+input: Callback.Callback<String,Unit>,+invalidate: Callback.Callback<Unit,Unit>,+focus: Callback.Callback<Bool,Unit>) -> Owner:
   Owner{state,loads,stop,allRequested,Component.Component{Component.ComponentId{1n},render,Some{input},None{},invalidate,Some{focus},False{}},render,input,invalidate,focus}
-def formattedFirst(keys: List<&2,Keys.KeyId>,name: String) -> String:
-  match keys:
-    case Nil{}: name
-    case key <> _: Keys.formatKeyId(key)
-def firstKey(bindings: Bindings.KeybindingsManager,+name: String) -> String:
-  formattedFirst(Bindings.getKeys(bindings,name),name)
-def scopeHint(+bindings: Bindings.KeybindingsManager) -> String:
-  firstKey(bindings,"tui.input.tab") ++ " scope · re:<pattern> regex · \"phrase\" exact"
-def normalHint(+bindings: Bindings.KeybindingsManager) -> String:
-  firstKey(bindings,"app.session.toggleSort") ++ " sort · " ++ firstKey(bindings,"app.session.toggleNamedFilter") ++ " named · " ++
-  firstKey(bindings,"app.session.delete") ++ " delete · " ++ firstKey(bindings,"app.session.togglePath") ++ " path"
-def deleteHint(+bindings: Bindings.KeybindingsManager) -> String:
-  firstKey(bindings,"tui.select.confirm") ++ " confirm · " ++ firstKey(bindings,"tui.select.cancel") ++ " cancel"
-def create(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,+bindings: Bindings.KeybindingsManager) -> IO(Owner):
+def create(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,+bindings: Bindings.KeybindingsManager,theme: Theme.Theme) -> IO(Owner):
   do IO<Owner>:
     +state : Ref.Ref<State> <- Ref.new(State,State{current,all,Current{},"",0n,Pending{},Controls{Threaded{},False{},False{},None{},None{}}})
     +loads : Ref.Ref<Loads> <- Ref.new(Loads,Loads{Some{Count{0n,0n}},Some{Count{0n,0n}}})
     +stop : Deferred.Deferred<Unit> <- Deferred.new(Unit)
     +allRequested : Deferred.Deferred<Unit> <- Deferred.new(Unit)
-    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Paint,~Nat,~List<&2,String>,~paint,Paint{state,loads,scopeHint(bindings),normalHint(bindings),deleteHint(bindings)})
+    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Paint,~Nat,~List<&2,String>,~paint,Paint{state,loads,bindings,theme})
     +input : Callback.Callback<String,Unit> <- Callback.create(~Input,~String,~Unit,~received,Input{state,stop,allRequested,bindings})
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~ignore,Unit{})
     +focus : Callback.Callback<Bool,Unit> <- Callback.create(~Unit,~Bool,~Unit,~ignoreFocus,Unit{})
@@ -722,39 +739,51 @@ def run(owner: Owner,context: LoadContext) -> IO(Outcome()):
       do IO<Outcome()>:
         mounted : Tui.ResultOf(Tui.TuiBase) <- Tui.setFocus(Tui.added(Tui.newTui(),component),[component],[Component.ComponentId{1n}],Some{Component.ComponentId{1n}})
         runMounted(Owner{state,loads,stop,allRequested,component,render,input,invalidate,focus},mounted,context)
-def loadedBindings(context: LoadContext,loaded: Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager>) -> IO(Outcome()):
+def loadedBindings(context: LoadContext,theme: Theme.Theme,loaded: Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager>) -> IO(Outcome()):
   match loaded:
     case Fail{_}: IO.pure(Outcome(),Fail{"Cannot load session selector keybindings"})
     case Done{AppKeys.KeybindingsManager{bindings,_,_}}:
       do IO<Outcome()>:
-        owner : Owner <- create(Nil{},Nil{},bindings)
+        owner : Owner <- create(Nil{},Nil{},bindings,theme)
         run(owner,context)
-def selectSession(cwd: String,+sessionDir: Maybe<&2,String>,+agentDir: String,sessionsDir: String) -> IO(Outcome()):
+def visualTheme(visual: Visual) -> IO(Result<&2,&2,Theme.LoadError,Theme.Theme>):
+  match visual:
+    case Visual{name,assets,agentDir,home,trueColor}:
+      do IO<Result<&2,&2,Theme.LoadError,Theme.Theme>>:
+        environment : Image.Environment <- Image.processEnvironment("linux",home)
+        Theme.loadByName(Maybe.default(&2,String,name,"dark"),Path.join(assets,"packages/coding-agent/src/modes/interactive/theme"),Path.join(agentDir,"themes"),Color.modeFor(Image.trueColor(environment,trueColor)))
+def selectedTheme(context: LoadContext,loaded: Result<&2,&2,Theme.LoadError,Theme.Theme>,bindings: Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager>) -> IO(Outcome()):
+  match loaded:
+    case Fail{_}: IO.pure(Outcome(),Fail{"Cannot load session selector theme"})
+    case Done{theme}: loadedBindings(context,theme,bindings)
+def selectSession(cwd: String,+sessionDir: Maybe<&2,String>,+agentDir: String,sessionsDir: String,visual: Visual) -> IO(Outcome()):
   do IO<Outcome()>:
     bindings : Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager> <- AppKeys.create(AppKeys.Environment{"linux",None{},None{}},agentDir)
-    loadedBindings(LoadContext{cwd,sessionDir,agentDir,sessionsDir},bindings)
+    loaded : Result<&2,&2,Theme.LoadError,Theme.Theme> <- visualTheme(visual)
+    selectedTheme(LoadContext{cwd,sessionDir,agentDir,sessionsDir},loaded,bindings)
 
 # The same picker can occupy the interactive editor without starting a second
 # terminal process. Both entry points share filtering, ordering and keybindings.
 type Modal is Data: Closed{} Open{state: State}
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,chosen: Callback.Callback<String,Unit>}
+  Host{modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,chosen: Callback.Callback<String,Unit>}
 type HostOwner is Type:
   HostOwner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
-def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindings.KeybindingsManager,width: Nat) -> IO(List<&2,String>):
+def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,width: Nat) -> IO(List<&2,String>):
   match current:
     case Closed{}: Component.render(editor,width)
     case Open{state}:
       do IO<List<&2,String>>:
         now : F64 <- Date.now()
         home : Result<&2,&2,FS.Error,String> <- FS.homedir()
-        return renderState(state,width,scopeHint(bindings),normalHint(bindings),deleteHint(bindings),Loads{None{},None{}},now,Result.default(&2,&2,FS.Error,String,home,""))
+        currentTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
+        return renderState(state,width,bindings,currentTheme,Loads{None{},None{}},now,Result.default(&2,&2,FS.Error,String,home,""))
 def drawModal(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
-    case Host{+modal,editor,bindings,_}:
+    case Host{+modal,editor,bindings,theme,_}:
       do IO<List<&2,String>>:
         current : Modal <- Ref.read(Modal,modal)
-        drawModalCurrent(current,editor,bindings,width)
+        drawModalCurrent(current,editor,bindings,theme,width)
 def afterTransition(modal: Ref.Ref<Modal>,chosen: Callback.Callback<String,Unit>,next: State) -> IO(Unit):
   match next:
     case State{_,_,_,_,_,Chosen{path},_}:
@@ -786,7 +815,7 @@ def receivedModalCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.
     case Open{state}: receivedModalOpen(modal,bindings,chosen,state,data)
 def receivedModal(host: Host,data: String) -> IO(Unit):
   match host:
-    case Host{+modal,editor,bindings,handler}:
+    case Host{+modal,editor,bindings,_,handler}:
       do IO<Unit>:
         current : Modal <- Ref.read(Modal,modal)
         receivedModalCurrent(current,modal,editor,bindings,handler,data)
@@ -796,18 +825,18 @@ def mouseCurrent(current: Modal,mouse: Maybe<&2,Callback.Callback<Ui.TuiMouseEve
     case _ _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
 def modalMouse(host: Host,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match host:
-    case Host{+modal,Component.Component{_,_,_,mouse,_,_,_},_,_}:
+    case Host{+modal,Component.Component{_,_,_,mouse,_,_,_},_,_,_}:
       do IO<Maybe<&2,Component.MouseResponse>>:
         current : Modal <- Ref.read(Modal,modal)
         mouseCurrent(current,mouse,event)
 def modalInvalidate(host: Host,_: Unit) -> IO(Unit):
-  match host: case Host{_,editor,_,_}: Component.invalidate(editor)
+  match host: case Host{_,editor,_,_,_}: Component.invalidate(editor)
 def modalFocus(host: Host,value: Bool) -> IO(Unit):
-  match host: case Host{_,editor,_,_}: Component.setFocused(editor,value)
-def createHost(+editor: Component.Component,bindings: Bindings.KeybindingsManager,chosen: Callback.Callback<String,Unit>) -> IO(HostOwner):
+  match host: case Host{_,editor,_,_,_}: Component.setFocused(editor,value)
+def createHost(+editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,chosen: Callback.Callback<String,Unit>) -> IO(HostOwner):
   do IO<HostOwner>:
     modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
-    +host : Host <- IO.pure(Host,Host{modal,editor,bindings,chosen})
+    +host : Host <- IO.pure(Host,Host{modal,editor,bindings,theme,chosen})
     +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~drawModal,host)
     +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receivedModal,host)
     +mouse : Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Host,~Ui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~modalMouse,host)
@@ -819,10 +848,10 @@ def borrowHost(owner: HostOwner) -> HostOwner & Host & Component.Component:
   match owner: case HostOwner{+host,+component,render,input,mouse,invalidate,focus}: (HostOwner{host,component,render,input,mouse,invalidate,focus},host,component)
 def openHost(host: Host,current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>) -> IO(Unit):
   match host:
-    case Host{modal,_,_,_}: Ref.write(Modal,modal,Open{State{current,all,Current{},"",0n,Pending{},Controls{Threaded{},False{},False{},None{},None{}}}})
+    case Host{modal,_,_,_,_}: Ref.write(Modal,modal,Open{State{current,all,Current{},"",0n,Pending{},Controls{Threaded{},False{},False{},None{},None{}}}})
 def disposeHost(owner: HostOwner) -> IO(Unit):
   match owner:
-    case HostOwner{Host{modal,_,_,_},_,render,input,mouse,invalidate,focus}:
+    case HostOwner{Host{modal,_,_,_,_},_,render,input,mouse,invalidate,focus}:
       do IO<Unit>:
         discarded : Modal <- Ref.dispose(Modal,modal)
         Callback.dispose(Nat,List<&2,String>,render)

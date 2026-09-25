@@ -415,7 +415,7 @@ def picked(result: Picker.Outcome(),cwd: String,sessionDir: Maybe<&2,String>) ->
 # upstream createSessionManager: --no-session (and help/model listing) stay
 # in memory; --fork and --session resolve their argument; --continue takes
 # the latest session; --session-id reopens or names a new session.
-def selectSession(continue: Bool, +resume: Bool, +session: Maybe<&2, String>, +sessionId: Maybe<&2, String>, fork: Maybe<&2, String>, +environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, +sessionsDir: String) -> IO(Selected()):
+def selectSession(continue: Bool, +resume: Bool, +session: Maybe<&2, String>, +sessionId: Maybe<&2, String>, fork: Maybe<&2, String>, +environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, +sessionsDir: String, visual: Picker.Visual) -> IO(Selected()):
   match continue resume session fork:
     case _ _ _ Some{arg}:
       do IO<Selected()>:
@@ -427,7 +427,7 @@ def selectSession(continue: Bool, +resume: Bool, +session: Maybe<&2, String>, +s
         openResolved(resolved, cwd, sessionDir, agentDir)
     case _ True{} None{} None{}:
       do IO<Selected()>:
-        choice : Picker.Outcome() <- Picker.selectSession(cwd,sessionDir,agentDir,sessionsDir)
+        choice : Picker.Outcome() <- Picker.selectSession(cwd,sessionDir,agentDir,sessionsDir,visual)
         picked(choice,cwd,sessionDir)
     case True{} False{} None{} None{}:
       do IO<Selected()>:
@@ -438,17 +438,17 @@ def selectSession(continue: Bool, +resume: Bool, +session: Maybe<&2, String>, +s
         existing : Maybe<&2, String> <- existingById(sessionId, cwd, sessionDir, agentDir)
         openOrCreateById(existing, cwd, sessionDir, agentDir, sessionId)
 
-def inMemoryOrSelected(ephemeral: Bool, continue: Bool, resume: Bool, session: Maybe<&2, String>, +sessionId: Maybe<&2, String>, fork: Maybe<&2, String>, environment: Paths.Environment, +cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String) -> IO(Selected()):
+def inMemoryOrSelected(ephemeral: Bool, continue: Bool, resume: Bool, session: Maybe<&2, String>, +sessionId: Maybe<&2, String>, fork: Maybe<&2, String>, environment: Paths.Environment, +cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String, visual: Picker.Visual) -> IO(Selected()):
   match ephemeral:
     case True{}:
       do IO<Selected()>:
         memory : Sessions.Outcome(Session()) <- AgentSession.memorySession(cwd, Sessions.NewSessionOptions{sessionId, None{}})
         return selected(memory)
-    case False{}: selectSession(continue, resume, session, sessionId, fork, environment, cwd, sessionDir, agentDir, sessionsDir)
+    case False{}: selectSession(continue, resume, session, sessionId, fork, environment, cwd, sessionDir, agentDir, sessionsDir, visual)
 
-def createSessionManager(flags: SessionFlags, environment: Paths.Environment, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String) -> IO(Selected()):
+def createSessionManager(flags: SessionFlags, environment: Paths.Environment, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String, visual: Picker.Visual) -> IO(Selected()):
   match flags:
-    case SessionFlags{continue, resume, help, listModels, _, noSession, session, sessionId, fork, _}: inMemoryOrSelected(noSession || help || listModels, continue, resume, session, sessionId, fork, environment, cwd, sessionDir, agentDir, sessionsDir)
+    case SessionFlags{continue, resume, help, listModels, _, noSession, session, sessionId, fork, _}: inMemoryOrSelected(noSession || help || listModels, continue, resume, session, sessionId, fork, environment, cwd, sessionDir, agentDir, sessionsDir, visual)
 
 def directoryExists(path: String) -> IO(Bool):
   do IO<Bool>:
@@ -1193,13 +1193,17 @@ def resolvedPackageDir(cwd: String, configured: Result<&1,&1,U32 & String,String
       do IO<String>:
         executable : Result<&2,&2,FS.Error,String> <- FS.realpath("/proc/self/exe")
         discoveredPackageDir(cwd,executable)
+def pickerTrueColor(capabilities: Settings.TerminalCapabilities) -> Maybe<&2,Bool>:
+  match capabilities:
+    case Settings.TerminalCapabilities{_,color,_}: color
 
-def runConfigured(parsed: Args.Args, mode: AppMode, initial: InitialMessage, +flags: SessionFlags, +cwd: String, +home: String, +url: URL.Context, agentDirLocated: Result<&2, &2, FS.Error, String>, authPath: Result<&2, &2, FS.Error, String>, bundle: Result<&1, &1, U32 & String, String>, packageDir: Result<&1, &1, U32 & String, String>, sessionEnv: Result<&1, &1, U32 & String, String>) -> IO(Unit):
+def runConfigured(+parsed: Args.Args, mode: AppMode, initial: InitialMessage, +flags: SessionFlags, +cwd: String, +home: String, +url: URL.Context, agentDirLocated: Result<&2, &2, FS.Error, String>, authPath: Result<&2, &2, FS.Error, String>, bundle: Result<&1, &1, U32 & String, String>, packageDir: Result<&1, &1, U32 & String, String>, sessionEnv: Result<&1, &1, U32 & String, String>) -> IO(Unit):
   +agentDir = located(agentDirLocated, Path.join(cwd, ".pi"))
   do IO<Unit>:
-    startup : Settings.SettingsManager <- loadSettings(cwd, agentDir)
-    selection : Selected() <- createSessionManager(flags, Paths.Environment{cwd, home, url}, cwd, sessionDirectory(flagSessionDir(flags), sessionEnv, home, cwd, Result.default(&2, &2, Paths.Error, Maybe<&2, String>, Settings.getSessionDir(Paths.Environment{cwd, home, url}, startup), None{})), agentDir, Path.join(agentDir, "sessions"))
-    assets : String <- resolvedPackageDir(cwd,packageDir)
+    +startup : Settings.SettingsManager <- loadSettings(cwd, agentDir)
+    +assets : String <- resolvedPackageDir(cwd,packageDir)
+    +visual : Picker.Visual <- IO.pure(Picker.Visual,Picker.Visual{selectedTheme(themeOverride(parsed),startup),assets,agentDir,home,pickerTrueColor(Settings.getTerminalCapabilityOverrides(startup))})
+    selection : Selected() <- createSessionManager(flags, Paths.Environment{cwd, home, url}, cwd, sessionDirectory(flagSessionDir(flags), sessionEnv, home, cwd, Result.default(&2, &2, Paths.Error, Maybe<&2, String>, Settings.getSessionDir(Paths.Environment{cwd, home, url}, startup), None{})), agentDir, Path.join(agentDir, "sessions"), visual)
     runSelected(parsed, mode, initial, cwd, selection, flagName(flags), agentDir, located(authPath, Path.join(cwd, "auth.json")), envOr(bundle, "/etc/ssl/certs/ca-certificates.crt"), assets)
 
 def runWithFiles(+parsed: Args.Args, mode: AppMode, stdin: Maybe<&2, String>, messages: List<&2, String>, environment: Paths.Environment, files: Files.ResultOf(Files.ProcessedFiles)) -> IO(Unit):

@@ -2024,7 +2024,7 @@ def runTrustHosted(borrowed: TrustPicker.Owner & TrustPicker.Host & Component.Co
     case (trust,host,component):
       do IO<Result<&2,&2,Error,Unit>>:
         Ref.write(Maybe<&2,TrustPicker.Host>,trustSelectorRefOf(contextInteraction(context)),Some{host})
-        picker : SessionPicker.HostOwner <- SessionPicker.createHost(component,contextBindings(context),resumeChosen)
+        picker : SessionPicker.HostOwner <- SessionPicker.createHost(component,contextBindings(context),contextTheme(context),resumeChosen)
         result : Result<&2,&2,Error,Unit> <- runPickerHosted(SessionPicker.borrowHost(picker),settings,retained,tree,live,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,treeChosen,modelChosen,resumeChosen)
         TrustPicker.disposeHost(trust)
         Callback.dispose(Trust.ProjectTrustOption,Unit,choice)
