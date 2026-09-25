@@ -268,7 +268,7 @@ def mountedTool(state: State,toolId: String,componentId: Nat,value: Tool.ToolExe
         mountedBorrowed(State{entries,tools,active,nextId,view,theme,styles,expanded,hidden,pad},toolId,Tool.borrow(owner))
 # Tool previews highlight code with the Markdown theme's highlightCode.
 def codeHighlighter(styles: Markdown.MarkdownTheme) -> Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>:
-  match styles: case Markdown.MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,_,_,_,highlight,_}: highlight
+  match styles: case Markdown.MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,_,_,_,highlight,_,_}: highlight
 def ensureFound(state: State,+id: String,name: String,args: Schema.Value,componentId: Nat,theme: Theme.Theme,highlight: Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>,found: Maybe<&2,Tool.Handle>) -> IO(State & Bool):
   match found:
     case Some{+handle}:

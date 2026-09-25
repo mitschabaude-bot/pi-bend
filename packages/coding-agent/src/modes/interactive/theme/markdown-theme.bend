@@ -59,7 +59,7 @@ def create(+theme: Theme.Theme,+highlighter: SyntaxHighlight.Highlighter) -> IO(
     +italic : Callback.Callback<String,String> <- effect(Italic{})
     +strike : Callback.Callback<String,String> <- effect(Strike{})
     +underline : Callback.Callback<String,String> <- effect(Underline{})
-    return Styles{Markdown.MarkdownTheme{heading,link,url,code,block,blockBorder,quote,quoteBorder,rule,bullet,bold,italic,strike,underline,Some{highlight},None{}},heading <> link <> url <> code <> block <> blockBorder <> quote <> quoteBorder <> rule <> bullet <> bold <> italic <> strike <> underline <> Nil{},live,highlighter}
+    return Styles{Markdown.MarkdownTheme{heading,link,url,code,block,blockBorder,quote,quoteBorder,rule,bullet,bold,italic,strike,underline,Some{highlight},None{},Markdown.newParser()},heading <> link <> url <> code <> block <> blockBorder <> quote <> quoteBorder <> rule <> bullet <> bold <> italic <> strike <> underline <> Nil{},live,highlighter}
 def theme(styles: Styles) -> Markdown.MarkdownTheme:
   match styles:
     case Styles{value,_,_,_}: value
@@ -77,7 +77,7 @@ def disposeCallbacks(values: List<&2,Callback.Callback<String,String>>) -> IO(Un
         disposeCallbacks(rest)
 def disposeHighlight(theme: Markdown.MarkdownTheme) -> IO(Unit):
   match theme:
-    case Markdown.MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,_,_,_,Some{highlight},_}: Callback.dispose(Markdown.HighlightInput,List<&2,String>,highlight)
+    case Markdown.MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,_,_,_,Some{highlight},_,_}: Callback.dispose(Markdown.HighlightInput,List<&2,String>,highlight)
     case _: IO.pure(Unit,Unit{})
 def dispose(styles: Styles) -> IO(Unit):
   match styles:

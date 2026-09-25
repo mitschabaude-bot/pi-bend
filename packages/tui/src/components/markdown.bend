@@ -25,7 +25,10 @@ import ../../../runtime/src/marked/lexer.bend as Marked
 def Style() -> Data: C.Callback<String,String>
 type HighlightInput is Data: HighlightInput{code: String,lang: Maybe<&2,String>}
 type MarkdownTheme is Data:
-  MarkdownTheme{heading: Style(),link: Style(),linkUrl: Style(),code: Style(),codeBlock: Style(),codeBlockBorder: Style(),quote: Style(),quoteBorder: Style(),hr: Style(),listBullet: Style(),bold: Style(),italic: Style(),strikethrough: Style(),underline: Style(),highlightCode: Maybe<&2,C.Callback<HighlightInput,List<&2,String>>>,codeBlockIndent: Maybe<&2,String>}
+  MarkdownTheme{heading: Style(),link: Style(),linkUrl: Style(),code: Style(),codeBlock: Style(),codeBlockBorder: Style(),quote: Style(),quoteBorder: Style(),hr: Style(),listBullet: Style(),bold: Style(),italic: Style(),strikethrough: Style(),underline: Style(),highlightCode: Maybe<&2,C.Callback<HighlightInput,List<&2,String>>>,codeBlockIndent: Maybe<&2,String>,parser: Marked.Marked}
+# upstream's module-level `markdownParser`: Bend has no compile-once
+# constants, so the long-lived theme carries the compiled marked grammar.
+def newParser() -> Marked.Marked: Marked.new()
 type DefaultTextStyle is Data:
   DefaultTextStyle{color: Maybe<&2,Style()>,bgColor: Maybe<&2,Style()>,bold: Bool,italic: Bool,strikethrough: Bool,underline: Bool}
 type MarkdownOptions is Data:
@@ -288,35 +291,37 @@ def trimPartialClosingFences(+tokens: List<&2,T.Token<Latex>>) -> List<&2,T.Toke
 # ------
 
 def themeHeading(+theme: MarkdownTheme) -> Style():
-  match theme: case MarkdownTheme{found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
+  match theme: case MarkdownTheme{found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
 def themeLink(+theme: MarkdownTheme) -> Style():
-  match theme: case MarkdownTheme{_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
+  match theme: case MarkdownTheme{_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
 def themeLinkUrl(+theme: MarkdownTheme) -> Style():
-  match theme: case MarkdownTheme{_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
+  match theme: case MarkdownTheme{_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
 def themeCode(+theme: MarkdownTheme) -> Style():
-  match theme: case MarkdownTheme{_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_}: found
+  match theme: case MarkdownTheme{_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
 def themeCodeBlock(+theme: MarkdownTheme) -> Style():
-  match theme: case MarkdownTheme{_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_}: found
+  match theme: case MarkdownTheme{_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_}: found
 def themeCodeBlockBorder(+theme: MarkdownTheme) -> Style():
-  match theme: case MarkdownTheme{_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_}: found
+  match theme: case MarkdownTheme{_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_}: found
 def themeQuote(+theme: MarkdownTheme) -> Style():
-  match theme: case MarkdownTheme{_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_}: found
+  match theme: case MarkdownTheme{_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_}: found
 def themeQuoteBorder(+theme: MarkdownTheme) -> Style():
-  match theme: case MarkdownTheme{_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_}: found
+  match theme: case MarkdownTheme{_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_}: found
 def themeHr(+theme: MarkdownTheme) -> Style():
-  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_}: found
+  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_}: found
 def themeListBullet(+theme: MarkdownTheme) -> Style():
-  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_}: found
+  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_}: found
 def themeBold(+theme: MarkdownTheme) -> Style():
-  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_}: found
+  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_}: found
 def themeItalic(+theme: MarkdownTheme) -> Style():
-  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_}: found
+  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_}: found
 def themeStrikethrough(+theme: MarkdownTheme) -> Style():
-  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_}: found
+  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_}: found
 def themeUnderline(+theme: MarkdownTheme) -> Style():
-  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_}: found
+  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_}: found
 def codeIndent(+theme: MarkdownTheme) -> String:
-  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,indent}: Maybe.default(&2,String,indent,"  ")
+  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,indent,_}: Maybe.default(&2,String,indent,"  ")
+def themeParser(+theme: MarkdownTheme) -> Marked.Marked:
+  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,parser}: parser
 def styled(+style: Style(),+text: String) -> IO(String): C.call(String,String,style,text)
 
 # What rendering reads: the theme, the default text style and the options.
@@ -763,7 +768,7 @@ def codeBody(+env: Env,+highlight: Maybe<&2,C.Callback<HighlightInput,List<&2,St
         return indentedLines(lines,codeIndent(envTheme(env)))
     case None{}: codeLines(env,MarkedHelpers.linesOf(text),codeIndent(envTheme(env)),Nil{})
 def highlighterOf(+theme: MarkdownTheme) -> Maybe<&2,C.Callback<HighlightInput,List<&2,String>>>:
-  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_}: found
+  match theme: case MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_}: found
 def codeBlockLines(+env: Env,+lang: Maybe<&2,String>,+text: String,+next: Maybe<&2,String>) -> IO(List<&2,String>):
   do IO<List<&2,String>>:
     +opening : String <- styled(themeCodeBlockBorder(envTheme(env)),"```" ++ Maybe.default(&2,String,lang,""))
@@ -1006,7 +1011,7 @@ def uncached(+state: Markdown,+width: Nat) -> IO(Markdown & List<&2,String>):
         Bool.pick(Unit -> IO(Markdown & List<&2,String>),Text.blank(text),
           _ => IO.pure(Markdown & List<&2,String>,cached(state,width,Nil{})),
           _ => do IO<Markdown & List<&2,String>>:
-            +lines : List<&2,String> <- renderBlocks(Env{theme,style,options},Blocks{trimPartialClosingFences(lexed(Marked.new(),Strings.replaceAll(text,"\t","   "))),contentWidth,None{},Nil{}})
+            +lines : List<&2,String> <- renderBlocks(Env{theme,style,options},Blocks{trimPartialClosingFences(lexed(themeParser(theme),Strings.replaceAll(text,"\t","   "))),contentWidth,None{},Nil{}})
             finish(state,width,lines))(Unit{})
 def render(+state: Markdown,+width: Nat) -> IO(Markdown & List<&2,String>):
   match state:

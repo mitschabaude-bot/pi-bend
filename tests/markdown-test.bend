@@ -109,7 +109,7 @@ def stylesOf(values: List<&2,V.Value>,reversed: List<&2,C.Callback<String,String
 def themeFrom(styles: List<&2,C.Callback<String,String>>,indent: Maybe<&2,String>) -> Maybe<&2,M.MarkdownTheme>:
   match styles:
     case [heading,link,linkUrl,code,codeBlock,codeBlockBorder,quote,quoteBorder,hr,listBullet,bold,italic,strike,underline]:
-      Some{M.MarkdownTheme{heading,link,linkUrl,code,codeBlock,codeBlockBorder,quote,quoteBorder,hr,listBullet,bold,italic,strike,underline,None{},indent}}
+      Some{M.MarkdownTheme{heading,link,linkUrl,code,codeBlock,codeBlockBorder,quote,quoteBorder,hr,listBullet,bold,italic,strike,underline,None{},indent,M.newParser()}}
     case _: None{}
 def indentOf(value: Maybe<&2,V.Value>) -> Maybe<&2,String>:
   match value:

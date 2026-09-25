@@ -5,7 +5,7 @@ import ../packages/runtime/src/ref.bend as Ref
 
 def plain(_: Unit,value: String) -> IO(String): IO.pure(String,value)
 def theme(+style: C.Callback<String,String>) -> M.MarkdownTheme:
-  M.MarkdownTheme{style,style,style,style,style,style,style,style,style,style,style,style,style,style,None{},None{}}
+  M.MarkdownTheme{style,style,style,style,style,style,style,style,style,style,style,style,style,style,None{},None{},M.newParser()}
 def cases() -> List<&2,String>:
   "hello" <> "hello world" <> "**bold**" <> "*italic*" <> "~~gone~~" <> "`code`" <> "# title" <> "## subtitle" <> "line\nnext" <> "hello\n\nworld" <> "- one\n- two" <> "1. one\n2. two" <> "> quoted" <> "---" <> "```js\nconst x = 1;\n```" <> "[site](https://example.com)" <> "a  \nb" <> "- outer\n  - inner\n- other" <> "3. a\n7. b" <> "# heading\nnext" <> "```js\nx\n```\nnext" <> "> a\n> b" <> "---\nnext" <> "simple <b>tag</b>" <> "\\*literal*" <> "~~foo~~ ~bar~" <> "```x\nfoo\n```\n" <> "| A | B |\n|---|---|\n| one | two |" <> "| A | B |\n|---|---|\n| x | y |\n| z | w |" <> "| Keys | Action |\n| --- | --- |\n| `Ctrl+P` / `Ctrl+K` | choose |" <> Nil{}
 def shown(+lines: List<&2,String>) -> String:
@@ -37,7 +37,7 @@ def styledCases(+plain: C.Callback<String,String>) -> IO(Unit):
     +underline : C.Callback<String,String> <- makeStyle("\u{1b}[4m","\u{1b}[24m")
     +italic : C.Callback<String,String> <- makeStyle("\u{1b}[3m","\u{1b}[23m")
     +quote : C.Callback<String,String> <- makeStyle("\u{1b}[35m","\u{1b}[39m")
-    +styled : M.MarkdownTheme <- IO.pure(M.MarkdownTheme,M.MarkdownTheme{heading,plain,plain,code,plain,plain,quote,plain,plain,plain,bold,italic,plain,underline,None{},None{}})
+    +styled : M.MarkdownTheme <- IO.pure(M.MarkdownTheme,M.MarkdownTheme{heading,plain,plain,code,plain,plain,quote,plain,plain,plain,bold,italic,plain,underline,None{},None{},M.newParser()})
     runWidth("# Title with `code` inside",80n,styled)
     runWidth("## Heading with **bold** and more",80n,styled)
     runWidth("> Quote with **bold** and `code`",80n,styled)

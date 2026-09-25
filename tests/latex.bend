@@ -16,7 +16,7 @@ import ../packages/runtime/src/utf8.bend as Utf8
 
 def plain(_: Unit,value: String) -> IO(String): IO.pure(String,value)
 def theme(+style: C.Callback<String,String>) -> M.MarkdownTheme:
-  M.MarkdownTheme{style,style,style,style,style,style,style,style,style,style,style,style,style,style,None{},None{}}
+  M.MarkdownTheme{style,style,style,style,style,style,style,style,style,style,style,style,style,style,None{},None{},M.newParser()}
 def maybeText(value: Maybe<&2,String>) -> String:
   match value:
     case Some{text}: Json.quote(text)

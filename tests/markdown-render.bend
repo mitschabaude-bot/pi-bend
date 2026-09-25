@@ -61,10 +61,10 @@ def themes() -> IO(Themes):
     +white : C.Callback<String,String> <- makeStyle("\u{1b}[37m","\u{1b}[39m")
     +highlight : C.Callback<M.HighlightInput,List<&2,String>> <- C.create(~Unit,~M.HighlightInput,~List<&2,String>,~highlighted,Unit{})
     return Themes{
-      M.MarkdownTheme{plain,plain,plain,plain,plain,plain,plain,plain,plain,plain,plain,plain,plain,plain,None{},None{}},
-      M.MarkdownTheme{h,l,u,c,k,f,q,qb,r,b,bold,italic,strike,under,None{},None{}},
-      M.MarkdownTheme{ah,al,gray,ac,ak,gray,aq,gray,gray,ah,abold,aitalic,astrike,aunder,None{},None{}},
-      M.MarkdownTheme{h,l,u,c,k,f,q,qb,r,b,bold,italic,strike,under,Some{highlight},Some{"| "}},
+      M.MarkdownTheme{plain,plain,plain,plain,plain,plain,plain,plain,plain,plain,plain,plain,plain,plain,None{},None{},M.newParser()},
+      M.MarkdownTheme{h,l,u,c,k,f,q,qb,r,b,bold,italic,strike,under,None{},None{},M.newParser()},
+      M.MarkdownTheme{ah,al,gray,ac,ak,gray,aq,gray,gray,ah,abold,aitalic,astrike,aunder,None{},None{},M.newParser()},
+      M.MarkdownTheme{h,l,u,c,k,f,q,qb,r,b,bold,italic,strike,under,Some{highlight},Some{"| "},M.newParser()},
       Styles{M.DefaultTextStyle{Some{g},None{},False{},True{},False{},False{}},M.DefaultTextStyle{Some{cc},None{},True{},True{},True{},True{}},M.DefaultTextStyle{Some{white},Some{bg},False{},False{},False{},False{}}}}
 
 def textOf(value: Maybe<&2,V.Value>) -> String:
