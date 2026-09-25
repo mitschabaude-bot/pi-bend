@@ -1177,3 +1177,35 @@ Fix (`patches/bend-wide-arity.patch`, +8 lines, installed in `build/bend-native-
 Follow-up the same day, from reading the runtime: `term_drop` walks a dropped value with a cursor word holding the node's field count and current index in 8 bits each, the one other place that assumed byte arities. Dropping a node with more than 255 fields (the `marked` build has a 325-field constructor) truncated the count, leaking the remaining fields, and the count's high bits spilled into the size-class byte. Now a node that wide drops its fields directly, recursing only through wide nodes; other nodes keep the compact cursor. Regression: `tests/compiler-wide-drop.bend` drops 20,000 unmatched 300-field records of heap strings; peak RSS 359 MB before, 2 MB after, same result. The CLI binaries built from C emitted before this hunk were rebuilt.
 
 Remaining observation for the compiler work: every host segment is a `preserve_none` function whose signature is the whole register bank (166 words in the CLI), so each of the ~61,000 tail calls passes all of them.
+
+## BEND-039 — Every segment's C signature is as wide as the widest segment (2026-09-25)
+
+Cause, from reading `compile_tables` and the runtime's segment entries: each host segment is a `preserve_none` C function taking the shared register bank, and segments pass control by `musttail`, which needs one signature. The bank is as wide as the widest segment that takes its words in registers: a definition's parameters or a closure's captures, one word per inline cell. In the CLI, closures in `run.bend`'s `runBound` capture about 165 words, so all ~57,000 segment functions took 166 `Term` parameters. Every translation unit forward-declares all of them for the dispatch table: in one unit's preprocessed text, 123 of 312 MB were these signatures.
+
+Continuations already avoid this: they take their held words from a stack frame, and `FID_RESW_T` tells `FID_ENTER` how many words go to registers. Fix (`patches/bend-register-bank.patch`, +27/−6 lines): a definition or closure segment with more than `BEND_BANK` (default 32) words takes its first ones the same way. A jump pushes them, closure application splits the closure node's words as `FID_ENTER` splits a task's, and a wide self-jump is a plain jump. Spins, joins and effect definitions keep their conventions.
+
+Evidence: with a bank of 4 (so nearly every segment takes a frame), the native `marked` lexer matches its Bun build on all 1,358 cases, `packages/agent/test/agent.bend` and the agent-session harness (117 checks) give identical results on one and four threads, and the parallel tool batch passes its 112 schedules. With the default bank the CLI's register bank is 32 words instead of 166, and one translation unit's preprocessed text shrinks from 324 MB to 197 MB. Its full terminal parity equals the uncapped build's. Clang measurements are in BEND-042, since the three patches were measured together.
+
+## BEND-040 — String-literal matches expand into a trie with a release per failure (2026-09-25)
+
+Cause, from reading `match_flatten`: a string pattern is a chain of `SCon{Chr{U32}, …}`, so a column of string literals is flattened one character at a time. Every trie node copies the wildcard rows into its default, and each copy releases whatever partial state is live there. `settings-selector.change` (about 60 two-column rows) was one 3.6 MB C function with 18,000 releases; a 20-row reproducer was 680 KB with 632.
+
+Fix (`patches/bend-string-literal-arms.patch`, +90/−29 lines), extending the word-literal arms: a column of complete string literals (at least one non-empty) gets one arm per literal. The evaluator compares character by character (a known differing character or a longer string is a mismatch; an unknown character is stuck, as the trie was), the checker checks the arm at the literal, C compares in place against a static code-point table without taking the string and releases it in the matched arm, and JavaScript compares with `===`. `patt_lit` is memoized, because the flattener asks again at every level of a literal column (quadratic before: a 533-arm Unicode table checks in 8.8 s instead of 10.0 s).
+
+Evidence: the 20-row reproducer drops from 680 KB (632 releases) to 26 KB (40), with identical results for 19 inputs (prefixes, over-long near misses, the empty string) natively and on Bun. A leak check matching 900,000 heap strings stays at 2 MB. The proof gate passes. Two defects found on the way were fixed before measurement: a stuck comparison when the scrutinee is `SCon{_, _}` against `""` (a proof in `laws/url.bend` needed it), and a literal chain swallowing an ordinary constructor match as its default (crashed the CLI build). The CLI's C shrinks from 173 MB to 143 MB with the register-bank cap in both.
+
+## BEND-041 — Re-emitting a unit filtered the whole segment list (2026-09-25)
+
+Performance cliff, from reading `compile_unit` and confirmed by profile. Before a unit is emitted again in the facts' fixed point, its old segments and spins were removed from the global lists by `filter`: units times segments. On the CLI that is 29,524 unit emissions over some 57,000 segments. Fix (`patches/bend-stale-segments.patch`, +18/−8 lines): the replaced segments and spins are collected and dropped once after the fixed point. Segment names use the count of live segments, so the emitted C is byte-identical (checked on `tests/agent-session.bend`).
+
+## BEND-042 — Combined measurement: register bank, string-literal arms, stale segments (2026-09-25)
+
+One build of the CLI at main f91f6260 with the three patches (installed in `build/bend-native-toolchain/bend2`, 11,319 lines, +5.2% over Bend 2.0.7), against the installed compiler's build of the same source earlier the same day. Single runs; the baseline shared the machine with other work.
+
+| | Before | After |
+| --- | --- | --- |
+| Bend emission | 457 s, 20.2 GB | 149 s, 17.3 GB |
+| C size | 169.2 MB | 139.9 MB |
+| Clang `-O1`, four units in parallel (wall) | 504 s | 270 s, 7.4 GB per unit |
+
+The emission's fixed-point rounds take 94 s together (51.8 s and 38.8 s for the first two), plus 13 s to assemble; checking is most of the rest. Full terminal parity of the patched CLI equals main's (93 matches, the same known differences); runtime timings are equal or slightly better (flood stream 12.3 s against 13.5 s, large-session startup 0.90 s against 0.97 s, typing 11-13 ms either way). The proof gate and the agent-session harness (117 checks, one and four threads) pass.

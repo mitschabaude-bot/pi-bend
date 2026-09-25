@@ -1,0 +1,80 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -1859,6 +1859,15 @@
+     refs: new Set() };
+ }
+ 
++// The widest register bank: a def or closure segment with more words takes
++// its first ones on the stack, as a continuation takes its frame, so every
++// segment's C signature stays this narrow.
++const BANK = Number(process.env.BEND_BANK ?? "32");
++
++function seg_wide(n: number): Seg["frame"] {
++  return n > BANK ? { pop: n - BANK, at: [...Array(n - BANK).keys()] } : null;
++}
++
+ function seg_fid(k: Bend.Name): string {
+   return "FID_" + name_clean(k).toUpperCase();
+ }
+@@ -2340,8 +2349,16 @@
+ // A self-jump reads its parameters back: the device's loop carries them
+ // typed, not as words (raytrace GPU 1.72x otherwise).
+ function emit_jump(fl: File, args: string[], k: Bend.Name): void {
+-  args.forEach((a, i) => file_push(fl, `r${i} = ${a};`));
+-  if (fl.seg.def !== k) {
++  // a self-jump keeps its segment's convention (a spin has no frame)
++  const frame = fl.seg.def === k ? fl.seg.frame
++    : fl.book.tlds[k]?.$ === "Def" && !def_foreign(fl.book.tlds[k]) ? seg_wide(args.length) : null;
++  if (frame !== null) {
++    file_push(fl, `WL_ROOM(${frame.pop});`);
++    args.slice(0, frame.pop).forEach((a, i) => file_push(fl, `STK(${i}) = ${a};`));
++    file_push(fl, `WL_PUSHN(${frame.pop});`);
++  }
++  args.slice(frame?.pop ?? 0).forEach((a, i) => file_push(fl, `r${i} = ${a};`));
++  if (fl.seg.def !== k || frame !== null) {
+     return file_push(fl, `WL_JMP(${seg_ref(fl, seg_fid(k))});`);
+   }
+   fl.seg.spin = true;
+@@ -2452,8 +2469,8 @@
+     val_new(l.ks.map(() => name_local(fl, live[i][1])), l));
+   brw_of(fl, k).forEach((b, i) => b && vals[i].ws.forEach((w, j) =>
+     lays[i].ks[j] === "box" && fl.brwl.set(w, k + "~" + i)));
+-  fl.seg = seg_new(k, ret, vals.flatMap((v) => v.ws),
+-    vals.flatMap((v) => v.lay.ks));
++  const ws = vals.flatMap((v) => v.ws);
++  fl.seg = seg_new(k, ret, ws, vals.flatMap((v) => v.lay.ks), seg_wide(ws.length));
+   return vals;
+ }
+ 
+@@ -2477,6 +2494,7 @@
+   const vals = emit_open(fl, ck.k);
+   const seg = fl.seg;
+   seg.fid = name;
++  seg.frame = null; // a spin is a C function: every word an argument
+   const dst = val_new(seg.ret.ks.map(() => name_local(fl, "v")), seg.ret);
+   emit_body(fl, tld.h as HTerm, tld.T, ers, vals, dst);
+   fl.spins.push([name, fl.emit ? [`${seg.lines.length < SPIN_FAR ? "INLINE" : "FAR"} Term ${name}(Env e, THR Term* o${
+@@ -2563,7 +2581,8 @@
+   const clo = seg_clo(fl, seg_fid(name), words);
+   const outer = { seg: fl.seg, uses: fl.uses, spares: fl.spares,
+     tab: fl.tab, rest: fl.rest };
+-  const [arg] = seg_open(fl, name, BOX, null, live, "x", ["w64"], [x]);
++  const [arg] = seg_open(fl, name, BOX, seg_wide(words.length + 1), live, "x",
++    ["w64"], [x]);
+   emit_body(fl, x, ty, [], [val_new([arg], BOX)], null);
+   Object.assign(fl, outer);
+   return val_new([clo], BOX);
+@@ -4822,8 +4841,12 @@
+     Fid f    = (Fid)term_aux(fun);
+     u32 war  = fid_arity(f) - 1;
+     Loc a    = term_loc(fun);
+-    WL_LOAD(a, war)
++    // a wide closure takes its first words on the stack
++    u32 st   = fid_seqk(f) ? war + 1 - fid_resw(f) : 0;
++    WL_ARGS(a, st + 1)
++    WL_LOAD(a + st, war - st)
+     spare_free(e, cls_fit(war), a);
++    war -= st;
+     WL_LAST(arg)
+     WL_DYN(f);
+   }}

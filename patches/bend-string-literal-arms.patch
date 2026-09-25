@@ -1,0 +1,262 @@
+--- a/bend.ts
++++ b/bend.ts
+@@ -284,7 +284,7 @@
+   | { $: "App"; f: TermOf<B>; x: TermOf<B> }                                       // f(x)
+   | { $: "ADT"; k: Name; x: TermOf<B>[]; r: Name[] }                               // A<x0,x1,...>
+   | { $: "Ctr"; k: Name; x: TermOf<B>[] }                                          // A{x0,x1,...}
+-  | { $: "Mat"; k: Name; h: TermOf<B>; m: TermOf<B>; ks?: Span; w?: U32 }          // \{A: h; m}; w: a word literal arm
++  | { $: "Mat"; k: Name; h: TermOf<B>; m: TermOf<B>; ks?: Span; w?: U32 | string } // \{A: h; m}; w: a word or string literal arm
+   | { $: "Efq" }                                                                   // \{}
+   | { $: "Eql"; a: TermOf<B>; b: TermOf<B>; T: TermOf<B> }                         // {a == b : T}
+   | { $: "Rfl" }                                                                   // {==}
+@@ -417,7 +417,7 @@
+   return { $: "Ctr", k, x, s };
+ }
+ 
+-export function Mat<X>(k: Name, h: TermOf<X>, m: TermOf<X>, s?: Span, ks?: Span, w?: U32): TermOf<X> {
++export function Mat<X>(k: Name, h: TermOf<X>, m: TermOf<X>, s?: Span, ks?: Span, w?: U32 | string): TermOf<X> {
+   return w === undefined ? { $: "Mat", k, h, m, s, ks } : { $: "Mat", k, h, m, s, ks, w };
+ }
+ 
+@@ -1183,6 +1183,31 @@
+   return Ctr("U32", [word_to_term(n, s)], s);
+ }
+ 
++export function str_to_term(w: string, s?: Span): LTerm {
++  const out = [...w].reduceRight<LTerm>((tail, c) => Ctr("SCon",
++    [Ctr("Chr", [u32_to_term(c.codePointAt(0)!, s)], s), tail], s), Ctr("SNil", [], s));
++  STRING_TREES.add(out);
++  return out;
++}
++
++// A closed string's text; with a book, each node is first evaluated, and a
++// string known to differ from `w` (a known character, or longer) is false.
++export function str_from_term<X>(tm: TermOf<X>, book?: Book, w?: string): string | false | null {
++  let out = "";
++  for (let t = tm; ;) {
++    const x = term_strip(book ? term_wnf(book, t as HTerm) : t);
++    if (x.$ === "Ctr" && x.k === "SNil") return out;
++    if (x.$ !== "Ctr" || x.k !== "SCon") return null;
++    if (out === w) return false;
++    const h = term_strip(book ? term_wnf(book, x.x[0] as HTerm) : x.x[0]);
++    const c = h.$ === "Ctr" && h.k === "Chr" ? u32_from_term(book ? term_wnf(book, h.x[0] as HTerm) : h.x[0]) : null;
++    if (c === null) return null;
++    out += String.fromCodePoint(c);
++    if (w !== undefined && !w.startsWith(out)) return false;
++    t = x.x[1];
++  }
++}
++
+ // A nat literal up to NAT_LITERAL_MAX expands into a Succ chain, which the
+ // checker unfolds in patterns and proofs; a larger one, up to the u32 bound,
+ // parses as U32.to_nat(n), so no chain outgrows the checker's stack.
+@@ -1458,7 +1483,7 @@
+         const arms: string[] = [];
+         let m: LTerm = tm;
+         while (m.$ === "Mat") {
+-          arms.push((m.w === undefined ? m.k : String(m.w)) + ": " + go(m.h, 1));
++          arms.push((m.w === undefined ? m.k : JSON.stringify(m.w)) + ": " + go(m.h, 1));
+           m = m.m;
+         }
+         if (m.$ !== "Efq") {
+@@ -2017,12 +2042,7 @@
+         }
+         cs.push(parse_char(p));
+       }
+-      const spn = parse_span(p, beg);
+-      const out = cs.reduceRight<LTerm>((tail, c) =>
+-        Ctr("SCon", [Ctr("Chr", [u32_to_term(c, spn)], spn), tail], spn),
+-        Ctr("SNil", [], spn));
+-      STRING_TREES.add(out);
+-      return out;
++      return str_to_term(String.fromCodePoint(...cs), parse_span(p, beg));
+     }
+     case "?": {
+       parse_bump(p);
+@@ -2804,22 +2824,24 @@
+     } else if (v === x) {
+       if (c === null) {
+         return Efq(m.s);
+-      } else if (patt_word(c) !== null && m.r.every((row) =>
+-        row.p[0].$ === "PVar" || patt_word(row.p[0]) !== null)) {
+-        // A column of word literals: one arm compares the whole word, so
+-        // the default is flattened once per literal, not once per bit.
+-        const w = patt_word(c) as U32;
++      } else if (patt_lit(c) !== null && m.r.every((row) =>
++        row.p[0].$ === "PVar" || patt_lit(row.p[0]) !== null) && (typeof patt_lit(c) === "number"
++        || m.r.some((row) => (patt_lit(row.p[0]) ?? "") !== ""))) {
++        // A column of word or string literals (not only ""): one arm compares
++        // the whole literal, so the default is flattened once per literal,
++        // not once per bit or character.
++        const w = patt_lit(c) as U32 | string;
+         const ps = m.r.flatMap((row): Rows => {
+           const p0 = row.p[0];
+           if (p0.$ === "PCtr") {
+-            return patt_word(p0) === w
++            return patt_lit(p0) === w
+               ? [{ p: row.p.slice(1), f: body_sub(row.f, x.i, c) }] : [];
+           }
+           const g = body_sub(row.f, p0.i, x);
+           return [{ p: row.p.slice(1), f: body_sub(g, x.i, c) }];
+         });
+         const pt = match_flatten({ $: "Match", e: m.e.slice(1), r: ps, s: m.s }, vars.slice(1), fr);
+-        const ds = m.r.filter((row) => row.p[0].$ !== "PCtr" || patt_word(row.p[0]) !== w);
++        const ds = m.r.filter((row) => row.p[0].$ !== "PCtr" || patt_lit(row.p[0]) !== w);
+         const dt = match_flatten({ $: "Match", e: m.e, r: ds, s: m.s }, vars, fr);
+         return Mat(c.k, pt, dt, m.s, c.s, w);
+       } else {
+@@ -2882,6 +2904,16 @@
+   return q.$ === "PCtr" && q.k === "U32" ? u32_from_term(patt_term(q)) : null;
+ }
+ 
++// A complete word or string literal pattern (memoized: match_flatten asks
++// again at every level of a literal column).
++const PATT_LITS = new WeakMap<Patt, U32 | string | null>();
++export function patt_lit(q: Patt): U32 | string | null {
++  if (q.$ !== "PCtr") return null;
++  let w = PATT_LITS.get(q);
++  if (w === undefined) PATT_LITS.set(q, w = patt_word(q) ?? str_from_term(patt_term(q)) as string | null);
++  return w;
++}
++
+ export function body_flatten(b: Body, vars: PVar[], fr: () => number): LTerm {
+   switch (b.$) {
+     case "Reply": {
+@@ -3101,7 +3133,8 @@
+                   }
+                   case "Mat": {
+                     if (t.w !== undefined) {
+-                      const n = u32_from_term(ctr);
++                      const n = typeof t.w === "string" ? str_from_term(ctr, book, t.w)
++                        : u32_from_term(ctr);
+                       if (n === null) {
+                         tm = term_apply(fr.lhs === null ? fr.t : fr.lhs.t(), fr.e, fr.s);
+                         continue back;
+@@ -3685,12 +3718,14 @@
+           if (ctr === null) {
+             throw Err(book, ctx, "a constructor of " + a_wnf.k + " (missing, or already matched)", tm, tm.ks ?? tm.s, lhs.def);
+           }
+-          // A word literal arm: h at P(literal), the rest over the whole type.
++          // A literal arm: h at P(literal), the rest over the whole type.
+           if (tm.w !== undefined) {
+-            if (a_wnf.k !== "U32") {
+-              throw Err(book, ctx, "a U32 scrutinee for a word literal", tm, tm.ks ?? tm.s, lhs.def);
++            const str = typeof tm.w === "string";
++            if (a_wnf.k !== (str ? "String" : "U32")) {
++              throw Err(book, ctx, str ? "a String scrutinee for a string literal"
++                : "a U32 scrutinee for a word literal", tm, tm.ks ?? tm.s, lhs.def);
+             }
+-            const lit = u32_to_term(tm.w, tm.s);
++            const lit = typeof tm.w === "string" ? str_to_term(tm.w, tm.s) : u32_to_term(tm.w, tm.s);
+             const l_lhs = lhs.n > 0
+               ? { ...lhs, t: term_apply(lhs.t, lit), n: lhs.n - 1 } : lhs;
+             const l_chk = term_check(book, l_lhs, tm.h, qt, t_all.B(lit), ctx, d);
+--- a/comp.ts
++++ b/comp.ts
+@@ -1391,11 +1391,13 @@
+ }
+ 
+ function mat_arms(t: HTerm): { arms: [Bend.Name, HTerm][]; end: HTerm;
+-  lits: (Bend.U32 | undefined)[] } {
++  lits: (Bend.U32 | string | undefined)[] } {
+   const arms: [Bend.Name, HTerm][] = [];
+-  const lits: (Bend.U32 | undefined)[] = [];
++  const lits: (Bend.U32 | string | undefined)[] = [];
+   let cur = t;
+-  for (let m = Bend.term_strip(cur); m.$ === "Mat"; m = Bend.term_strip(cur)) {
++  // a chain is all literal arms or all constructor arms; a change ends it
++  for (let m = Bend.term_strip(cur); m.$ === "Mat" && (arms.length === 0
++    || (m.w === undefined) === (lits[0] === undefined)); m = Bend.term_strip(cur)) {
+     arms.push([m.k, m.h]);
+     lits.push(m.w);
+     cur = m.m;
+@@ -2663,11 +2665,12 @@
+         return null;
+       }
+       const { arms, end, lits } = mat_arms(w);
+-      const lit = lits[0] !== undefined ? Bend.u32_from_term(c) : null;
+-      if (lits[0] !== undefined && lit === null) {
++      const lit = lits[0] === undefined ? null : typeof lits[0] === "string"
++        ? Bend.str_from_term(c) : Bend.u32_from_term(c);
++      if (lits[0] !== undefined && (lit === null || lit === false)) {
+         return null;
+       }
+-      const at = lits[0] !== undefined ? lits.indexOf(lit as Bend.U32)
++      const at = lits[0] !== undefined ? lits.indexOf(lit as Bend.U32 | string)
+         : arms.findIndex(([k]) => k === c.k);
+       const arm = at < 0 ? undefined : arms[at];
+       if (arm === undefined && Bend.term_strip(end).$ === "Efq") {
+@@ -2976,6 +2979,14 @@
+   return id;
+ }
+ 
++// A string literal's code points, a static table (0-terminated, never empty).
++function emit_str(fl: File, w: string): number {
++  const key = [...[...w].map((c) => c.codePointAt(0)!), 0].map((c) => c + "ull").join(", ");
++  const id = fl.tabs.get(key) ?? fl.tabs.size;
++  fl.tabs.set(key, id);
++  return id;
++}
++
+ function emit_nat(x: HTerm): Chain {
+   const ls: Chain = [];
+   for (let m = x, n = 0; ; n++) {
+@@ -3018,7 +3029,10 @@
+       n === null ? [] : [val_new([`(${sw} - ${n})`], lay)]])
+     : arms.map(([k, h], i): Level => {
+       if (lit) {
+-        return [`${sw} == ${lits[i]}u`, h, () => []];
++        const w = lits[i]!;
++        return typeof w === "number" ? [`${sw} == ${w}u`, h, () => []]
++          : [`str_is(e, ${sw}, TAB_${emit_str(fl, w)}, ${[...w].length})`, h,
++            () => (val_sink(fl, s), [])];
+       }
+       if (adt.k === "Array") {
+         const el = lay_of(fl.book, adt.x[0]);
+@@ -3479,7 +3493,7 @@
+     const { arms, end, lits } = mat_arms(x);
+     const total = Bend.book_adt(fl.book, adt, Bend.Emp()).c.length;
+     if (lits[0] !== undefined) {
+-      return emit_chain(fl, (i) => `${s} === ${lits[i]}`, [...arms.map(([, h]) =>
++      return emit_chain(fl, (i) => `${s} === ${JSON.stringify(lits[i])}`, [...arms.map(([, h]) =>
+         () => js_func(fl, h, null, rest)), () => js_func(fl, end, null, [s, ...rest])]);
+     }
+     if (adt.k === "IO.OP") {
+@@ -3683,6 +3697,7 @@
+ #define INLINE  inline
+ #define OUTLINE static
+ #define CONSTV  constant
++#define TABV    constant
+ #define DEVICE  1
+ #define CLZ(x)  clz(x)
+ #define A32(p)  ((DEV atomic_uint*)(p))
+@@ -3700,6 +3715,7 @@
+ #define THR
+ #define INLINE  static inline
+ #define CONSTV  static const
++#define TABV    const
+ 
+ #define g32_ini(p)    a32_store(p, 0)
+ #define g32_add(p, v) a32_add(p, v)
+@@ -4490,6 +4506,21 @@
+   return x;
+ }
+ 
++// A String equals a literal's n code points: read in place, not taken.
++INLINE bool str_is(Env e, Term s, TABV u64* cs, u32 n) {
++  for (u32 i = 0; i < n; i += 1) {
++    if (term_aux(s) != CID_SCON) {
++      return false;
++    }
++    Loc l = term_peek(e, s);
++    if ((u32)e.mem[l] != (u32)cs[i]) {
++      return false;
++    }
++    s = e.mem[l + 1];
++  }
++  return term_aux(s) == CID_SNIL;
++}
++
+ // Blk
+ // ===
+ 
