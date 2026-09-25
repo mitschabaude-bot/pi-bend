@@ -27,7 +27,7 @@ type Mode is Data: TreeMode{} ForkMode{}
 type Filter is Data: Default{} NoTools{} UserOnly{} LabeledOnly{} All{}
 type Action is Data: Continue{} Cancel{} Chosen{id: String}
 type Row is Data:
-  Row{id: String,parent: Maybe<&2,String>,label: Maybe<&2,String>,text: String,prefix: String,connector: String,active: Bool,user: Bool,tool: Bool,bookkeeping: Bool}
+  Row{id: String,parent: Maybe<&2,String>,label: Maybe<&2,String>,text: String,prefix: String,connector: String,active: Bool,user: Bool,tool: Bool,bookkeeping: Bool,usage: Bool}
 type State is Data:
   State{mode: Mode,all: List<&2,Row>,visible: List<&2,Row>,selected: Nat,filter: Filter,search: String,leaf: Maybe<&2,String>,folded: List<&2,String>,height: Nat}
 
@@ -48,6 +48,7 @@ def entryText(entry: Entry()) -> String:
     case Tree.Compaction{_}: "[compaction]"
     case Tree.BranchSummaryEntry{_,_,summary,_,_,_}: "[branch summary] " ++ summary
     case Tree.ModelChangeEntry{_,provider,id}: "[model: " ++ provider ++ "/" ++ id ++ "]"
+    case Tree.UsageEntry{_,kind,_,_,_,_}: "[usage: " ++ kind ++ "]"
     case Tree.ThinkingLevelChangeEntry{_,level}: "[thinking: " ++ level ++ "]"
     case Tree.SessionInfoEntry{_,name}: "[session: " ++ Maybe.default(&2,String,name,"") ++ "]"
     case Tree.LabelEntry{_,_,_}: "[label]"
@@ -70,11 +71,17 @@ def isBookkeeping(entry: Entry()) -> Bool:
     case Tree.ContextEditEntry{_,_,_}: True{}
     case Tree.CustomEntry{_,_,_}: True{}
     case _: False{}
+# Usage entries (cache refreshes) are hidden from the tree in every filter
+# mode, as upstream's TreeList.
+def isUsage(entry: Entry()) -> Bool:
+  match entry:
+    case Tree.UsageEntry{_,_,_,_,_,_}: True{}
+    case _: False{}
 def rowOf(node: Node(),prefix: String,connector: String,active: Bool) -> Row:
   match node:
     case Tree.SessionTreeNode{+entry,_,label,_}:
       +base = Tree.entryBase(Unit,Tools.ToolDetails,V.Value,entry)
-      Row{Tree.baseId(base),Tree.baseParent(base),label,entryText(entry),prefix,connector,active,isUser(entry),isTool(entry),isBookkeeping(entry)}
+      Row{Tree.baseId(base),Tree.baseParent(base),label,entryText(entry),prefix,connector,active,isUser(entry),isTool(entry),isBookkeeping(entry),isUsage(entry)}
 
 @unsafe def containsWork(nodes: List<&2,Node()>,+leaf: Maybe<&2,String>) -> Bool:
   match nodes:
@@ -123,15 +130,19 @@ def everyToken(tokens: List<&2,String>,+haystack: String) -> Bool:
 def matchesSearch(text: String,label: Maybe<&2,String>,search: String) -> Bool:
   +haystack = CaseMap.lower(text ++ " " ++ Maybe.default(&2,String,label,""))
   everyToken(String.split(CaseMap.lower(spaceSeparated(search,"")),' '),haystack)
-def passes(row: Row,mode: Mode,filter: Filter,search: String) -> Bool:
+def shown(row: Row,mode: Mode,filter: Filter,search: String) -> Bool:
   match row mode filter:
-    case Row{_,_,label,text,_,_,_,user,tool,bookkeeping} ForkMode{} _: user && matchesSearch(text,label,search)
-    case Row{_,_,label,text,_,_,_,user,tool,bookkeeping} TreeMode{} Default{}: Bool.not(bookkeeping) && matchesSearch(text,label,search)
-    case Row{_,_,label,text,_,_,_,user,tool,bookkeeping} TreeMode{} NoTools{}: Bool.not(bookkeeping || tool) && matchesSearch(text,label,search)
-    case Row{_,_,label,text,_,_,_,user,tool,bookkeeping} TreeMode{} UserOnly{}: user && matchesSearch(text,label,search)
-    case Row{_,_,Some{label},text,_,_,_,_,_,_} TreeMode{} LabeledOnly{}: matchesSearch(text,Some{label},search)
+    case Row{_,_,label,text,_,_,_,user,tool,bookkeeping,_} ForkMode{} _: user && matchesSearch(text,label,search)
+    case Row{_,_,label,text,_,_,_,user,tool,bookkeeping,_} TreeMode{} Default{}: Bool.not(bookkeeping) && matchesSearch(text,label,search)
+    case Row{_,_,label,text,_,_,_,user,tool,bookkeeping,_} TreeMode{} NoTools{}: Bool.not(bookkeeping || tool) && matchesSearch(text,label,search)
+    case Row{_,_,label,text,_,_,_,user,tool,bookkeeping,_} TreeMode{} UserOnly{}: user && matchesSearch(text,label,search)
+    case Row{_,_,Some{label},text,_,_,_,_,_,_,_} TreeMode{} LabeledOnly{}: matchesSearch(text,Some{label},search)
     case _ TreeMode{} LabeledOnly{}: False{}
-    case Row{_,_,label,text,_,_,_,_,_,_} TreeMode{} All{}: matchesSearch(text,label,search)
+    case Row{_,_,label,text,_,_,_,_,_,_,_} TreeMode{} All{}: matchesSearch(text,label,search)
+def usageRow(row: Row) -> Bool:
+  match row: case Row{_,_,_,_,_,_,_,_,_,_,usage}: usage
+def passes(+row: Row,mode: Mode,filter: Filter,search: String) -> Bool:
+  Bool.not(usageRow(row)) && shown(row,mode,filter,search)
 def filtered(rows: List<&2,Row>,+mode: Mode,+filter: Filter,+search: String) -> List<&2,Row>:
   match rows:
     case Nil{}: Nil{}
@@ -141,11 +152,11 @@ def filtered(rows: List<&2,Row>,+mode: Mode,+filter: Filter,+search: String) -> 
 def indexOf(rows: List<&2,Row>,+id: String,+index: Nat) -> Maybe<&2,Nat>:
   match rows:
     case Nil{}: None{}
-    case Row{found,_,_,_,_,_,_,_,_,_} <> rest: Bool.pick(Maybe<&2,Nat>,String.eq(found,id),Some{index},indexOf(rest,id,index + 1n))
+    case Row{found,_,_,_,_,_,_,_,_,_,_} <> rest: Bool.pick(Maybe<&2,Nat>,String.eq(found,id),Some{index},indexOf(rest,id,index + 1n))
 def rowId(row: Row) -> String:
-  match row: case Row{id,_,_,_,_,_,_,_,_,_}: id
+  match row: case Row{id,_,_,_,_,_,_,_,_,_,_}: id
 def rowParent(row: Row) -> Maybe<&2,String>:
-  match row: case Row{_,parent,_,_,_,_,_,_,_,_}: parent
+  match row: case Row{_,parent,_,_,_,_,_,_,_,_,_}: parent
 def parentOf(rows: List<&2,Row>,+id: String) -> Maybe<&2,String>:
   match rows:
     case Nil{}: None{}
@@ -406,7 +417,7 @@ def filterStatus(filter: Filter) -> String:
     case All{}: " [all]"
 def line(row: Row,+selected: Bool,folded: List<&2,String>,mode: Mode,+theme: Theme.Theme,width: Nat) -> String:
   match row:
-    case Row{+id,_,label,text,prefix,connector,active,user,_,_}:
+    case Row{+id,_,label,text,prefix,connector,active,user,_,_,_}:
       +gutter = Bool.pick(String,selected,paint(theme,"accent","› "),"  ")
       +foldMarker = Bool.pick(String,containsId(folded,id),paint(theme,"accent","⊞ "),"")
       +path = Bool.pick(String,active,paint(theme,"accent","• "),"")

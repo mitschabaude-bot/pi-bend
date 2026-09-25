@@ -50,6 +50,7 @@ def addEntry(entry: S.SessionEntry<Unit,Tools.ToolDetails,V.Value>,totals: Total
     case S.SessionMessageEntry{_,message}: addMessage(message,totals)
     case S.Compaction{S.CompactionEntry{_,_,_,_,_,usage,_,_}}: addOptionalUsage(usage,totals)
     case S.BranchSummaryEntry{_,_,_,_,usage,_}: addOptionalUsage(usage,totals)
+    case S.UsageEntry{_,_,_,_,usage,_}: addUsage(usage,totals)
     case _: totals
 def aggregate(entries: List<&2,S.SessionEntry<Unit,Tools.ToolDetails,V.Value>>,totals: Totals) -> Totals:
   match entries:

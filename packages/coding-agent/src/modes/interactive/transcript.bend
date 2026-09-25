@@ -95,6 +95,17 @@ def sessionInfo(handle: Handle,info: SessionInfo.SessionInfo) -> IO(Unit):
 def newSession(handle: Handle) -> IO(Unit):
   match handle:
     case Handle{resource,_}: Serial.run(State,Unit,resource,newSessionAppended)
+def noticeAppended(state: State,text: String) -> IO(State & Unit):
+  match state:
+    case State{entries,tools,active,id,view,+theme,styles,expanded,hidden,pad}:
+      do IO<State & Unit>:
+        pair : State & Bool <- append(State{entries,tools,active,id,view,theme,styles,expanded,hidden,pad},Messages.StatusBody{text,theme},False{})
+        return appendedUnit(pair)
+# A dim transcript notice (upstream's Spacer and dim Text) that stays in the
+# chat; unlike `status`, a later status does not replace it.
+def notice(handle: Handle,text: String) -> IO(Unit):
+  match handle:
+    case Handle{resource,_}: Serial.run(State,Unit,resource,state => noticeAppended(state,text))
 def errorAppended(state: State,message: String) -> IO(State & Unit):
   match state:
     case State{entries,tools,active,id,view,+theme,styles,expanded,hidden,pad}:

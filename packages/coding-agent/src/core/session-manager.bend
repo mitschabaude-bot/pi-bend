@@ -41,6 +41,10 @@ type SessionEntry<-D: Data,-T: Data,-C: Data> is Data:
   SessionMessageEntry{base: SessionEntryBase, message: Agent.AgentMessage<D,T,Messages.CodingMessage<C>>}
   ThinkingLevelChangeEntry{base: SessionEntryBase, thinkingLevel: String}
   ModelChangeEntry{base: SessionEntryBase, provider: String, modelId: String}
+  # Model-attributed usage that is not an assistant message and does not
+  # participate in LLM context. `kind` is an arbitrary category, such as
+  # "cache_warm"; `note` is an optional qualifier for usage notices.
+  UsageEntry{base: SessionEntryBase, kind: String, provider: String, model: String, usage: Ai.Usage, note: Maybe<&2,String>}
   Compaction{entry: CompactionEntry<C>}
   BranchSummaryEntry{base: SessionEntryBase, fromId: String, summary: String, details: Maybe<&2,C>, usage: Maybe<&2,Ai.Usage>, fromHook: Maybe<&2,Bool>}
   CustomEntry{base: SessionEntryBase, customType: String, data: Maybe<&2,C>}
@@ -88,6 +92,7 @@ def entryBase(-D: Data,-T: Data,-C: Data, entry: SessionEntry<D,T,C>) -> Session
     case SessionMessageEntry{base,_}: base
     case ThinkingLevelChangeEntry{base,_}: base
     case ModelChangeEntry{base,_,_}: base
+    case UsageEntry{base,_,_,_,_,_}: base
     case Compaction{CompactionEntry{base,_,_,_,_,_,_,_}}: base
     case BranchSummaryEntry{base,_,_,_,_,_}: base
     case CustomEntry{base,_,_}: base
@@ -514,6 +519,18 @@ def appendModelChange(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>,
   +base = stampBase(stamp,getLeafId(D,T,C,state))
   appendChecked(D,T,C,state,ModelChangeEntry{base,provider,model},base)
 
+def presentNote(note: Maybe<&2,String>) -> Maybe<&2,String>:
+  match note:
+    case None{}: None{}
+    case Some{SNil{}}: None{}
+    case Some{SCon{first,rest}}: Some{SCon{first,rest}}
+
+# Append model-attributed usage that does not participate in LLM context. An
+# empty note is omitted, as upstream's `...(note ? { note } : {})`.
+def appendUsage(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, stamp: EntryStamp, kind: String, provider: String, model: String, usage: Ai.Usage, note: Maybe<&2,String>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
+  +base = stampBase(stamp,getLeafId(D,T,C,state))
+  appendChecked(D,T,C,state,UsageEntry{base,kind,provider,model,usage,presentNote(note)},base)
+
 def appendCustomEntry(-D: Data,-T: Data,-C: Data, +state: SessionManager<D,T,C>, stamp: EntryStamp, kind: String, data: Maybe<&2,C>) -> Result<&2,&2,Error,SessionManager<D,T,C>>:
   +base = stampBase(stamp,getLeafId(D,T,C,state))
   appendChecked(D,T,C,state,CustomEntry{base,kind,data},base)
@@ -754,6 +771,7 @@ def reparent(-D: Data,-T: Data,-C: Data, entry: SessionEntry<D,T,C>, parent: May
     case SessionMessageEntry{base,message}: SessionMessageEntry{reparentBase(base,parent),message}
     case ThinkingLevelChangeEntry{base,level}: ThinkingLevelChangeEntry{reparentBase(base,parent),level}
     case ModelChangeEntry{base,provider,model}: ModelChangeEntry{reparentBase(base,parent),provider,model}
+    case UsageEntry{base,kind,provider,model,usage,note}: UsageEntry{reparentBase(base,parent),kind,provider,model,usage,note}
     case Compaction{CompactionEntry{base,summary,keep,tokens,details,usage,hook,system}}: Compaction{CompactionEntry{reparentBase(base,parent),summary,linkedId(replacements,keep),tokens,details,usage,hook,system}}
     case BranchSummaryEntry{base,from,summary,details,usage,hook}: BranchSummaryEntry{reparentBase(base,parent),from,summary,details,usage,hook}
     case CustomEntry{base,kind,data}: CustomEntry{reparentBase(base,parent),kind,data}

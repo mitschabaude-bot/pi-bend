@@ -61,6 +61,7 @@ import ./components/trust-selector.bend as TrustPicker
 import ./components/messages.bend as MessageUI
 import ./components/custom-editor.bend as CustomEditor
 import ./components/session-info.bend as SessionInfo
+import ../../core/cache-warmer.bend as Warmer
 import ../../core/cache-stats.bend as CacheStats
 import ../../core/usage-totals.bend as UsageTotals
 import ./components/login-dialog.bend as LoginDialog
@@ -214,13 +215,32 @@ def disposeWorking(working: Working) -> IO(Unit):
         oldOwner : Maybe<&1,WorkingOwned> <- Ref.dispose(Maybe<&1,WorkingOwned>,owned)
         disposeWorkingOwned(oldOwner)
 type Observation is Data:
-  Observation{transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,footer: Ref.Ref<Footer.State>,working: Working}
+  Observation{transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,footer: Ref.Ref<Footer.State>,working: Working,session: Ref.Ref<Session.AgentSession>}
+def warmNoticeShown(show: Bool,transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,text: String) -> IO(Unit):
+  match show:
+    case False{}: IO.pure(Unit,Unit{})
+    case True{}:
+      do IO<Unit>:
+        Transcript.notice(transcript,text)
+        Interactive.requestRender(redraw)
+# upstream addCacheWarmingUsage: a persisted cache refresh is noted in the
+# transcript when cache notices are enabled.
+def cacheWarmNotice(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>,note: Maybe<&2,String>,spent: Ai.Usage) -> IO(Unit):
+  do IO<Unit>:
+    live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+    settings : Settings.SettingsManager <- Session.getSettings(live)
+    warmNoticeShown(Settings.getShowCacheMissNotices(settings),transcript,redraw,Warmer.formatCacheWarmingUsage(note,spent))
+def usageNotice(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>,event: Session.AgentSessionEvent) -> IO(Unit):
+  match event:
+    case Session.EntryAppended{Tree.UsageEntry{_,kind,_,_,spent,note}}: Bool.pick(Unit -> IO(Unit),String.eq(kind,"cache_warm"),_ => cacheWarmNotice(transcript,redraw,session,note,spent),_ => IO.pure(Unit,Unit{}))(Unit{})
+    case _: IO.pure(Unit,Unit{})
 def observeCopied(input: Observation,+event: Session.AgentSessionEvent) -> IO(Unit):
   match input:
-    case Observation{transcript,+redraw,footer,working}:
+    case Observation{+transcript,+redraw,footer,working,session}:
       do IO<Unit>:
         changed : Bool <- Ref.modify(Footer.State,Bool,footer,state => footerEvent(state,event))
         workingEvent(working,redraw,event)
+        usageNotice(transcript,redraw,session,event)
         Interactive.onSessionEvent(Interactive.Events{transcript,redraw},event)
         Bool.pick(Unit -> IO(Unit),changed,_ => Interactive.requestRender(redraw),_ => IO.pure(Unit,Unit{}))(Unit{})
 def observed(input: Observation,event: Session.AgentSessionEvent) -> IO(Unit):
@@ -648,18 +668,27 @@ def copyText(transcript: Transcript.Handle,cwd: String,text: Maybe<&2,String>) -
         copyResult(transcript,result)
 # upstream handleSessionCommand: session stats, cache waste and the per-model
 # cost breakdown over every stored entry.
-def sessionInfoOf(stats: Stats.Stats,+state: Tree.SessionManager<Unit,Tools.ToolDetails,Schema.Value>,models: Models.ModelRuntime) -> SessionInfo.SessionInfo:
+def sessionInfoOf(stats: Stats.Stats,+state: Tree.SessionManager<Unit,Tools.ToolDetails,Schema.Value>,models: Models.ModelRuntime,warming: SessionInfo.CacheWarmingInfo) -> SessionInfo.SessionInfo:
   match stats:
     case Stats.Stats{file,id,Stats.Totals{users,assistants,calls,results,messages,input,output,cacheRead,cacheWrite,cost},_}:
       +entries = Tree.getEntries(Unit,Tools.ToolDetails,Schema.Value,state)
-      SessionInfo.SessionInfo{Tree.getSessionName(Unit,Tools.ToolDetails,Schema.Value,state),file,id,messages,users,assistants,calls,results,input,output,cacheRead,cacheWrite,cost,CacheStats.computeCacheWaste(~Models.ModelRuntime,~Models.cacheReadPrice,Unit,Tools.ToolDetails,Schema.Value,models,entries),UsageTotals.getUsageCostBreakdown(Unit,Tools.ToolDetails,Schema.Value,entries)}
+      SessionInfo.SessionInfo{Tree.getSessionName(Unit,Tools.ToolDetails,Schema.Value,state),file,id,messages,users,assistants,calls,results,input,output,cacheRead,cacheWrite,cost,warming,CacheStats.computeCacheWaste(~Models.ModelRuntime,~Models.cacheReadPrice,Unit,Tools.ToolDetails,Schema.Value,models,entries),UsageTotals.getUsageCostBreakdown(Unit,Tools.ToolDetails,Schema.Value,entries)}
+# upstream reads the cache-warming mode from the settings and the status
+# from the session, formatted at the time of the command.
+def cacheWarmingInfo(+live: Session.AgentSession) -> IO(SessionInfo.CacheWarmingInfo):
+  do IO<SessionInfo.CacheWarmingInfo>:
+    settings : Settings.SettingsManager <- Ref.read(Settings.SettingsManager,Session.settingsOf(live))
+    status : Warmer.CacheWarmingStatus <- Session.cacheWarmingStatus(live)
+    now : F64 <- Date.now()
+    return SessionInfo.CacheWarmingInfo{Settings.getCacheWarmingMode(settings),status,now}
 def sessionInfoShown(transcript: Transcript.Handle,+live: Session.AgentSession,stats: Result<&2,&2,Tree.Error,Stats.Stats>) -> IO(Unit):
   match stats:
     case Fail{_}: Transcript.showError(transcript,"Session history is invalid")
     case Done{value}:
       do IO<Unit>:
         stored : Session.Session() <- Session.sessionOf(live)
-        Transcript.sessionInfo(transcript,sessionInfoOf(value,Session.stateOf(stored),Session.modelRuntime(live)))
+        warming : SessionInfo.CacheWarmingInfo <- cacheWarmingInfo(live)
+        Transcript.sessionInfo(transcript,sessionInfoOf(value,Session.stateOf(stored),Session.modelRuntime(live),warming))
 def sessionInfoObserved(input: CommandObservation) -> IO(Unit):
   match input:
     case CommandObservation{_,session,_,_,redraw,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_}:
@@ -2125,7 +2154,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +workingOwnerRef : Ref.Ref<Maybe<&1,WorkingOwned>> <- Ref.new(Maybe<&1,WorkingOwned>,None{})
         +working : Working <- IO.pure(Working,Working{workingActiveRef,workingOwnerRef})
         +stopped : Deferred.Deferred<Unit> <- Deferred.new(Unit)
-        +listener : Callback.Callback<Session.AgentSessionEvent,Unit> <- Callback.create(~Observation,~Session.AgentSessionEvent,~Unit,~observed,Observation{transcriptHandle,redraw,footerState(foot),working})
+        +listener : Callback.Callback<Session.AgentSessionEvent,Unit> <- Callback.create(~Observation,~Session.AgentSessionEvent,~Unit,~observed,Observation{transcriptHandle,redraw,footerState(foot),working,current})
         failureObserver : Callback.Callback<Controller.PromptFailure,Unit> <- Callback.create(~WorkerFailure,~Controller.PromptFailure,~Unit,~promptFailed,WorkerFailure{footerFailure(foot),redraw})
         +modelSelectorRef : Ref.Ref<Maybe<&2,ModelPicker.Host>> <- Ref.new(Maybe<&2,ModelPicker.Host>,None{})
         +settingsSelectorRef : Ref.Ref<Maybe<&2,SettingsPicker.Host>> <- Ref.new(Maybe<&2,SettingsPicker.Host>,None{})

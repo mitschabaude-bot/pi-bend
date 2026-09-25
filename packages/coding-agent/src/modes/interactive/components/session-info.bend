@@ -3,13 +3,19 @@ import ../../../../../runtime/src/f64.bend as F
 import ../../../../../runtime/src/number-string.bend as NumberString
 import ../../../../../tui/src/components/text.bend as TuiText
 import ../../../core/cache-stats.bend as Cache
+import ../../../core/cache-warmer.bend as Warmer
+import ../../../core/settings-manager.bend as Settings
 import ../../../core/usage-totals.bend as Usage
 import ../theme/theme.bend as Theme
 import ./footer.bend as Footer
 
+# The configured mode and the session's warming status, formatted at `now`.
+type CacheWarmingInfo is Data:
+  CacheWarmingInfo{mode: Settings.CacheWarmingMode, status: Warmer.CacheWarmingStatus, now: F64}
+
 # upstream interactive-mode handleSessionCommand: the /session summary.
 type SessionInfo is Data:
-  SessionInfo{name: Maybe<&2, String>, sessionFile: Maybe<&2, String>, sessionId: String, totalMessages: Nat, userMessages: Nat, assistantMessages: Nat, toolCalls: Nat, toolResults: Nat, input: F64, output: F64, cacheRead: F64, cacheWrite: F64, cost: F64, waste: Cache.CacheWasteTotals, breakdown: List<&2, Usage.UsageCostBreakdownEntry>}
+  SessionInfo{name: Maybe<&2, String>, sessionFile: Maybe<&2, String>, sessionId: String, totalMessages: Nat, userMessages: Nat, assistantMessages: Nat, toolCalls: Nat, toolResults: Nat, input: F64, output: F64, cacheRead: F64, cacheWrite: F64, cost: F64, cacheWarming: CacheWarmingInfo, waste: Cache.CacheWasteTotals, breakdown: List<&2, Usage.UsageCostBreakdownEntry>}
 
 def paint(theme: Theme.Theme, key: String, +text: String) -> String:
   Result.default(&2, &2, Theme.Error, String, Theme.foreground(theme, key, text), text)
@@ -68,6 +74,24 @@ def wasteLine(+theme: Theme.Theme, waste: Cache.CacheWasteTotals) -> String:
           "\n" ++ labelled(theme, "Cache Re-billed:", detail)),
         "")
 
+def warmingCosts(+theme: Theme.Theme, decision: Maybe<&2, Warmer.CacheWarmingDecision>) -> String:
+  match decision:
+    case Some{Warmer.CacheWarmingDecision{_, warmCost, missCost, _, _, True{}, _}}:
+      labelled(theme, "Cache miss penalty:", "$" ++ fixed(missCost, 3n)) ++ "\n" ++ labelled(theme, "Refresh cost:", "$" ++ fixed(warmCost, 3n)) ++ "\n"
+    case _: ""
+
+def decisionOf(status: Warmer.CacheWarmingStatus) -> Maybe<&2, Warmer.CacheWarmingDecision>:
+  match status:
+    case Warmer.CacheWarmingStatus{_, _, _, decision, _}: decision
+
+def warmingSection(+theme: Theme.Theme, info: CacheWarmingInfo) -> String:
+  match info:
+    case CacheWarmingInfo{mode, +status, now}:
+      "\n" ++ bold("Cache Warming") ++ "\n"
+        ++ labelled(theme, "Mode:", Settings.cacheWarmingModeName(mode)) ++ "\n"
+        ++ labelled(theme, "Status:", Warmer.formatCacheWarmingStatus(status, now)) ++ "\n"
+        ++ warmingCosts(theme, decisionOf(status))
+
 def missedTokens(waste: Cache.CacheWasteTotals) -> F64:
   match waste: case Cache.CacheWasteTotals{tokens, _, _}: tokens
 
@@ -78,7 +102,7 @@ def costSection(+theme: Theme.Theme, +cost: F64, +waste: Cache.CacheWasteTotals,
 
 def text(+theme: Theme.Theme, info: SessionInfo) -> String:
   match info:
-    case SessionInfo{name, file, id, total, users, assistants, calls, results, +input, +output, +cacheRead, +cacheWrite, +cost, +waste, entries}:
+    case SessionInfo{name, file, id, total, users, assistants, calls, results, +input, +output, +cacheRead, +cacheWrite, +cost, warming, +waste, entries}:
       +prompt = F.add(input, F.add(cacheRead, cacheWrite))
       bold("Session Info") ++ "\n\n" ++ nameLine(theme, name)
         ++ labelled(theme, "File:", Maybe.default(&2, String, file, "In-memory")) ++ "\n"
@@ -93,6 +117,7 @@ def text(+theme: Theme.Theme, info: SessionInfo) -> String:
         ++ cacheLines(theme, input, cacheRead, cacheWrite, prompt)
         ++ labelled(theme, "Output:", localeCount(output)) ++ "\n"
         ++ labelled(theme, "Total:", localeCount(F.add(prompt, output))) ++ "\n"
+        ++ warmingSection(theme, warming)
         ++ costSection(theme, cost, waste, entries)
 
 def lines(pair: TuiText.Text & List<&2, String>) -> List<&2, String>:

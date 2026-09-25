@@ -7,7 +7,7 @@ Between the two commits, 56 non-merge commits touch `packages/{ai,agent,coding-a
 | Commit | Change | Ported files | Status |
 |---|---|---|---|
 | f5c946480 | image input limits | ai types; file-processor, agent-session, read tool, main | types and catalog done; behaviour pending |
-| c596d09d9 | prompt cache warming | ai types (`promptCache`), agent-session, session-manager, settings-manager | `Model.promptCache` done; warming pending |
+| c596d09d9, 3390bd936 | prompt cache warming | ai types (`promptCache`), cache-warmer, agent-session, session-manager, settings-manager, cache-stats, usage-totals, interactive | done except the `cache_warming_decision` extension event and historical notices (see "Cache warming" below) |
 | 466db0fec | canonical session context boundaries | agent loop/agent/types, agent-session, compaction, session-manager | agent package done (`finishTurn`, `prepareRequest`, `peekQueuedMessages`, 24 new named tests); session-manager context edits, `buildSessionProjection` and projected compaction done (session-context-edit.test.ts ported); agent-session request projection, durable recovery omission and projection-aware compaction done; extension boundaries (`turn_end`, `agent_before_settle`) wait for the extension module |
 | de2de549b | compaction cancellation races | agent-session | pending |
 | 8bdcd4498 | compact oversized trailing tool results | compaction | done: last valid cut point as fallback; #9740 case in tests/compaction |
@@ -41,6 +41,20 @@ Prompt templates were converted with b6419322e. The prompt-template load check c
 ## Test inventory
 
 `tests/upstream-inventory.json` now pins f07218c4d. Suites whose upstream file changed and that were already ported or partial are marked `needs-review` (18) until their diffs are ported; changed suites that were never ported stay pending.
+
+## Cache warming (2026-09-25)
+
+`core/cache-warmer.bend` ports `cache-warmer.ts`. The warmer is an immutable state machine (`Warmer`, `ActiveRun`) whose transitions (`started`, `fired`, `decided`, `replayed`, `settledState`, `modeChangedState`, `cancelled`, `statusOf`) take the clock, the global mode, the session's current model and transcript, and the branch's last prompt size as values and return their effects (a controller to abort, a usage record, the worker's next action). The I/O shell runs one worker per run: it sleeps on the run's abort signal, asks the decide hook, replays the request with `maxTokens` 1, `maxRetries` 0 and the run's own signal, and records successful refreshes; each transition is applied atomically on the warmer's `Ref`. Language-driven changes:
+
+- Upstream's `this.run === run` identity is a run generation number; a replaced or stopped run's worker exits at its next transition.
+- Upstream's `isCurrent` closure compares message identity. The port keeps the request's `CacheContext` (provider, model id, agent transcript) and compares it with the current one structurally (messages through their session JSON), so an equal transcript is current; a shorter or edited one is not.
+- `status` is an `IO` read (mode, context and branch are observed, then the pure `statusOf` runs); `extensionOverride` is a `Bool` (upstream's absent flag reads as false).
+- The warmer is created by `AgentSession.create`, which replaces the agent's stream function with the warming hook (upstream sdk's `streamFn`; session requests only) and restores it on dispose. `dispose` cancels and waits for workers, so no refresh touches a disposed session. The decide hook is pi's own decision: the extension runner and its `cache_warming_decision` event are not ported.
+- A refresh can append while the agent persists a message, so AgentSession appends now hold the shared session state across their persistence (`Ref.update`, new in `runtime/src/ref.bend`); before, a read-append-write could lose a concurrent entry.
+
+The `usage` session entry (`UsageEntry`, `appendUsage`, JSONL `type: "usage"`), its branches in cache-stats, usage totals, session stats and footer totals, the tree filter, the global-only `cacheWarming` setting (an unknown value stays an unknown field and reads as streaming), the settings selector row, `AgentSession.cacheWarmingStatus`/`setCacheWarmingMode`, the `/session` "Cache Warming" section and the live "Cache warmed" notice (behind cache notices) are ported. Not ported: rendering stored cache-warm notices when a session is resumed (the transcript is seeded from messages; upstream's entry-level rebuild, custom entries and compaction cost notices are not ported either) and the `cache_warming_decision` extension event. The Anthropic provider does not yet read `PI_CACHE_RETENTION`, while the warmer does, so with `PI_CACHE_RETENTION=long` the warmer would assume a one-hour entry for a five-minute write.
+
+Tests: `tests/cache-warmer.bend` (eight upstream cases, two shell cases with real timers), `tests/cache-stats.bend` (new case), `tests/settings-cache-warming.bend` (both settings cases on real files), `tests/agent-session-stats.bend` (the cache-warming case and the usage JSONL line).
 
 ## Context edits: typed replacement content
 

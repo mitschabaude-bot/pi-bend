@@ -105,6 +105,7 @@ def entry(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V
     case S.SessionMessageEntry{base, message}: based("message", base, Json.field("message", agentMessage(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, message), Nil{}))
     case S.ThinkingLevelChangeEntry{base, thinkingLevel}: based("thinking_level_change", base, Json.field("thinkingLevel", Json.text(thinkingLevel), Nil{}))
     case S.ModelChangeEntry{base, provider, modelId}: based("model_change", base, Json.field("provider", Json.text(provider), Json.field("modelId", Json.text(modelId), Nil{})))
+    case S.UsageEntry{base, kind, provider, model, usageValue, note}: based("usage", base, Json.field("kind", Json.text(kind), Json.field("provider", Json.text(provider), Json.field("model", Json.text(model), Json.field("usage", Json.usage(usageValue), Json.optionalText("note", note, Nil{}))))))
     case S.Compaction{value}: compaction(~C, ~custom, value)
     case S.BranchSummaryEntry{base, fromId, summary, details, usageValue, fromHook}:
       based("branch_summary", base, Json.field("fromId", Json.text(fromId), Json.field("summary", Json.text(summary), Json.optional("details", Maybe.map(&2, C, V.Value, custom, details), Json.optional("usage", usage(usageValue), Json.optionalBoolean("fromHook", fromHook, Nil{}))))))
@@ -286,6 +287,15 @@ def entryOf(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D), ~t
         provider : String <- tagged(fields, "provider")
         modelId : String <- tagged(fields, "modelId")
         return S.ModelChangeEntry{base, provider, modelId}
+    case "usage":
+      do Result<&2, &2, Decode.Error, S.SessionEntry<D, T, C>>:
+        base : S.SessionEntryBase <- baseFields(fields)
+        category : String <- tagged(fields, "kind")
+        provider : String <- tagged(fields, "provider")
+        model : String <- tagged(fields, "model")
+        usageValue : Ai.Usage <- Decode.required(Ai.Usage, fields, "usage", Json.decodeUsage)
+        note : Maybe<&2, String> <- Decode.optional(String, fields, "note", Decode.string)
+        return S.UsageEntry{base, category, provider, model, usageValue, note}
     case "compaction": Result.map(&2, &2, Decode.Error, S.CompactionEntry<C>, S.SessionEntry<D, T, C>, item => S.Compaction{item}, compactionFields(~C, ~custom, fields))
     case "branch_summary":
       do Result<&2, &2, Decode.Error, S.SessionEntry<D, T, C>>:

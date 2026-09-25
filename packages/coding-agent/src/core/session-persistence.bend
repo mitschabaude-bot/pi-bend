@@ -914,6 +914,10 @@ def appendModelChange(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~
   +state = stateOf(D, T, C, session)
   append(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, session, stamp => S.appendModelChange(D, T, C, state, stamp, provider, model))
 
+def appendUsage(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, +session: Session<D, T, C>, kind: String, provider: String, model: String, usage: Ai.Usage, note: Maybe<&2, String>) -> IO(Outcome(Appended<D, T, C>)):
+  +state = stateOf(D, T, C, session)
+  append(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, session, stamp => S.appendUsage(D, T, C, state, stamp, kind, provider, model, usage, note))
+
 def appendCompaction(~D: Data, ~T: Data, ~C: Data, ~diagnostic: D -> V.Value, ~tool: T -> V.Value, ~custom: C -> V.Value, +session: Session<D, T, C>, summary: String, firstKeptEntryId: Maybe<&2, String>, tokensBefore: Nat, details: Maybe<&2, C>, fromHook: Maybe<&2, Bool>, usage: Maybe<&2, Ai.Usage>) -> IO(Outcome(Appended<D, T, C>)):
   +state = stateOf(D, T, C, session)
   append(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, session, stamp => S.appendCompaction(D, T, C, state, stamp, summary, firstKeptEntryId, tokensBefore, details, fromHook, usage))

@@ -44,6 +44,25 @@ def modify(-A: Type, -R: Type, reference: Ref<A>, transform: A -> A & R) -> IO(R
         taken : Maybe<&1, A> <- Chan.recv(A, channel)
         modifyTaken(A, R, channel, transform, taken)
 
+def updateTaken(-A: Type, -R: Type, channel: Chan(A), transform: A -> IO(A & R), taken: Maybe<&1, A>) -> IO(R):
+  match taken:
+    case None{}: IO.die(R, 1, "Ref: backing channel closed")
+    case Some{value}:
+      do IO<R>:
+        pair : A & R <- transform(value)
+        restore(A, R, channel, pair)
+
+# An effectful update keeps the value exclusively owned until its operation
+# returns the next state, so a read-effect-write sequence is atomic: other
+# updates, modifications and reads of this reference wait. The operation must
+# not access the same reference.
+def update(-A: Type, -R: Type, reference: Ref<A>, transform: A -> IO(A & R)) -> IO(R):
+  match reference:
+    case Ref{+channel}:
+      do IO<R>:
+        taken : Maybe<&1, A> <- Chan.recv(A, channel)
+        updateTaken(A, R, channel, transform, taken)
+
 def copied(-A: Data, +value: A) -> A & A: (value, value)
 
 # Only Data can be copied out. Affine state is accessed through modify.

@@ -57,6 +57,27 @@ type MermaidRenderingMode is Data:
   MermaidFinal{}
   MermaidStreaming{}
 
+# Cache-warming profile. "idle" also warms between agent runs.
+type CacheWarmingMode is Data:
+  CacheWarmingOff{}
+  CacheWarmingStreaming{}
+  CacheWarmingIdle{}
+
+def CACHE_WARMING_MODES() -> List<&2,CacheWarmingMode>: [CacheWarmingOff{}, CacheWarmingStreaming{}, CacheWarmingIdle{}]
+
+def cacheWarmingModeName(value: CacheWarmingMode) -> String:
+  match value:
+    case CacheWarmingOff{}: "off"
+    case CacheWarmingStreaming{}: "streaming"
+    case CacheWarmingIdle{}: "idle"
+
+def cacheWarmingModeNamed(value: String) -> Maybe<&2,CacheWarmingMode>:
+  match value:
+    case "off": Some{CacheWarmingOff{}}
+    case "streaming": Some{CacheWarmingStreaming{}}
+    case "idle": Some{CacheWarmingIdle{}}
+    case _: None{}
+
 type OutputPadding is Data:
   NoPadding{}
   OnePadding{}
@@ -133,6 +154,7 @@ type Setting is Data:
   AutocompleteMaxVisible{value: W.U64}
   HttpIdleTimeoutMs{value: W.U64}
   WebsocketConnectTimeoutMs{value: W.U64}
+  CacheWarming{value: CacheWarmingMode}
   NpmCommand{value: List<&2,String>}
   Extensions{value: List<&2,String>}
   Skills{value: List<&2,String>}
@@ -653,6 +675,7 @@ def name(value: Setting) -> String:
     case AutocompleteMaxVisible{_}: "autocompleteMaxVisible"
     case HttpIdleTimeoutMs{_}: "httpIdleTimeoutMs"
     case WebsocketConnectTimeoutMs{_}: "websocketConnectTimeoutMs"
+    case CacheWarming{_}: "cacheWarming"
     case NpmCommand{_}: "npmCommand"
     case Extensions{_}: "extensions"
     case Skills{_}: "skills"
@@ -707,6 +730,7 @@ def settingValue(value: Setting) -> V.Value:
     case AutocompleteMaxVisible{value}: numberValue(value)
     case HttpIdleTimeoutMs{value}: numberValue(value)
     case WebsocketConnectTimeoutMs{value}: numberValue(value)
+    case CacheWarming{value}: V.Text{cacheWarmingModeName(value)}
     case NpmCommand{value}: encodeStrings(value)
     case Extensions{value}: encodeStrings(value)
     case Skills{value}: encodeStrings(value)
@@ -736,6 +760,14 @@ def settingValue(value: Setting) -> V.Value:
     case Markdown{value}: encodeMarkdownSettings(value)
     case Warnings{value}: encodeWarningSettings(value)
 
+# Upstream reads cacheWarming without validating it and falls back to the
+# default for an unknown mode, so an unknown value stays an unknown field
+# (preserved on save) instead of rejecting the settings file.
+def cacheWarmingSetting(value: V.Value) -> Maybe<&2,Setting>:
+  match value:
+    case V.Text{modeText}: Maybe.map(&2,CacheWarmingMode,Setting,chosen => CacheWarming{chosen},cacheWarmingModeNamed(modeText))
+    case _: None{}
+
 def knownField(key: String,value: V.Value) -> Result<&2,&2,J.Error,Maybe<&2,Setting>>:
   match key:
     case "lastChangelogVersion": Result.map(&2,&2,J.Error,String,Maybe<&2,Setting>,parsed => Some{LastChangelogVersion{parsed}},J.string(value))
@@ -761,6 +793,7 @@ def knownField(key: String,value: V.Value) -> Result<&2,&2,J.Error,Maybe<&2,Sett
     case "autocompleteMaxVisible": Result.map(&2,&2,J.Error,W.U64,Maybe<&2,Setting>,parsed => Some{AutocompleteMaxVisible{parsed}},natural(value))
     case "httpIdleTimeoutMs": Result.map(&2,&2,J.Error,W.U64,Maybe<&2,Setting>,parsed => Some{HttpIdleTimeoutMs{parsed}},decodeTimeout(value))
     case "websocketConnectTimeoutMs": Result.map(&2,&2,J.Error,W.U64,Maybe<&2,Setting>,parsed => Some{WebsocketConnectTimeoutMs{parsed}},decodeTimeout(value))
+    case "cacheWarming": Done{cacheWarmingSetting(value)}
     case "npmCommand": Result.map(&2,&2,J.Error,List<&2,String>,Maybe<&2,Setting>,parsed => Some{NpmCommand{parsed}},decodeStrings(value))
     case "extensions": Result.map(&2,&2,J.Error,List<&2,String>,Maybe<&2,Setting>,parsed => Some{Extensions{parsed}},decodeStrings(value))
     case "skills": Result.map(&2,&2,J.Error,List<&2,String>,Maybe<&2,Setting>,parsed => Some{Skills{parsed}},decodeStrings(value))
@@ -1628,6 +1661,14 @@ def getHttpIdleTimeoutMs(state: SettingsManager) -> W.U64: Maybe.default(&2,W.U6
 
 def getWebSocketConnectTimeoutMs(state: SettingsManager) -> Maybe<&2,W.U64>: selectedWebsocketConnectTimeoutMs(get(effective(state),"websocketConnectTimeoutMs"))
 
+def selectedCacheWarming(value: Maybe<&2,Setting>) -> CacheWarmingMode:
+  match value:
+    case Some{CacheWarming{mode}}: mode
+    case _: CacheWarmingStreaming{}
+
+# Read from global settings only because warming costs money.
+def getCacheWarmingMode(state: SettingsManager) -> CacheWarmingMode: selectedCacheWarming(get(getGlobalSettings(state),"cacheWarming"))
+
 def getNpmCommand(state: SettingsManager) -> Maybe<&2,List<&2,String>>: selectedNpmCommand(get(effective(state),"npmCommand"))
 
 def getExtensionPaths(state: SettingsManager) -> List<&2,String>: Maybe.default(&2,List<&2,String>,selectedExtensions(get(effective(state),"extensions")),Nil{})
@@ -1711,6 +1752,8 @@ def setEditorPaddingX(value: W.U64,state: SettingsManager) -> Outcome(SettingsMa
 def setAutocompleteMaxVisible(value: W.U64,state: SettingsManager) -> Outcome(SettingsManager): set(AutocompleteMaxVisible{countMaximum(W.U64{0,3},countMinimum(value,W.U64{0,20}))},state)
 
 def setHttpIdleTimeoutMs(value: W.U64,state: SettingsManager) -> Outcome(SettingsManager): set(HttpIdleTimeoutMs{value},state)
+
+def setCacheWarmingMode(value: CacheWarmingMode,state: SettingsManager) -> Outcome(SettingsManager): set(CacheWarming{value},state)
 
 def setNpmCommand(value: Maybe<&2,List<&2,String>>,state: SettingsManager) -> Outcome(SettingsManager):
   match value:

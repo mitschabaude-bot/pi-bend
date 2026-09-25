@@ -37,6 +37,7 @@ import ./session-manager.bend as S
 import ./session-persistence.bend as Sessions
 import ./settings-manager.bend as Settings
 import ./session-stats.bend as Stats
+import ./cache-warmer.bend as Warmer
 import ./tools/index.bend as Tools
 import ./system-prompt.bend as Prompt
 import ./bash-executor.bend as BashExec
@@ -230,11 +231,17 @@ def TurnResult() -> Data: Agent.PrepareResult(TurnUpdate(), Runtime.Error())
 def NextTurnHook() -> Data: Agent.ContextHook(Turn(), TurnUpdate(), Runtime.Error())
 def LegacyTurnHook() -> Data: Agent.LegacyHook(TurnUpdate(), Runtime.Error())
 
-# The session's handles on the agent: its event subscription and the
-# next-turn and request hooks that replaced the agent's own (restored on
-# dispose).
+# Cache warming (upstream sdk's CacheWarmer and its streamFn hook): the
+# warmer, the stream function that starts it for session requests (replacing
+# the agent's own, restored on dispose) and the warmer's injected interfaces.
+type Warming is Data:
+  Warming{warmer: Warmer.CacheWarmer, stream: Runtime.Stream(), replaced: Runtime.Stream(), replay: C.Callback<Warmer.CacheWarmRequest, Ai.AssistantMessage<V.Value, Unit>>, append: C.Callback<Warmer.UsageRecord, Maybe<&2, Entry()>>, branch: C.Callback<Unit, List<&2, Entry()>>, mode: C.Callback<Unit, Settings.CacheWarmingMode>, context: C.Callback<Unit, Warmer.CacheContext>, decide: C.Callback<Warmer.CacheWarmingDecisionEvent, Warmer.CacheWarmingAction>, warmed: C.Callback<Entry(), Unit>}
+
+# The session's handles on the agent: its event subscription, the
+# next-turn, request and stream hooks that replaced the agent's own
+# (restored on dispose) and cache warming.
 type SessionHooks is Data:
-  SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>, request: T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()), replacedRequest: Maybe<&2, T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>, context: Ctx.ContextFactory()}
+  SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>, request: T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()), replacedRequest: Maybe<&2, T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>, context: Ctx.ContextFactory(), warming: Warming}
 
 type AgentSession is Data:
   AgentSession{agent: Runtime.Owner(), shared: R.Ref<Shared>, hooks: SessionHooks, settings: R.Ref<Settings.SettingsManager>, cwd: String, loadout: R.Ref<Runtime.Loadout>, models: Models.ModelRuntime, scoped: R.Ref<List<&2, Models.ScopedModel>>}
@@ -340,20 +347,40 @@ def trimQueues(+shared: R.Ref<Shared>, text: Maybe<&2, String>) -> IO(Unit):
 # Persistence
 # -----------
 
-def storedId(shared: R.Ref<Shared>, outcome: Sessions.Outcome(Appended())) -> IO(Maybe<&2, String>):
+def SessionRecord() -> Type: Session() -> IO(Sessions.Outcome(Appended()))
+
+def withOutcome(+state: Shared, outcome: Sessions.Outcome(Appended())) -> Shared & Sessions.Outcome(Appended()):
   match outcome:
-    case Done{Sessions.Appended{session, id}}:
-      do IO<Maybe<&2, String>>:
-        R.modify(Shared, Unit, shared, current => (withSession(current, session), Unit{}))
-        return Some{id}
+    case Done{Sessions.Appended{+session, id}}: (withSession(state, session), Done{Sessions.Appended{session, id}})
+    case Fail{error}: (state, Fail{error})
+
+def appendHeld(record: SessionRecord(), +state: Shared) -> IO(Shared & Sessions.Outcome(Appended())):
+  do IO<Shared & Sessions.Outcome(Appended())>:
+    outcome : Sessions.Outcome(Appended()) <- record(sharedSession(state))
+    return withOutcome(state, outcome)
+
+# Appends hold the shared state across their persistence, so an append from
+# another task (a cache-warm refresh during a tool run) waits instead of one
+# of the two entries being lost.
+def appendEntry(shared: R.Ref<Shared>, record: SessionRecord()) -> IO(Sessions.Outcome(Appended())):
+  R.update(Shared, Sessions.Outcome(Appended()), shared, state => appendHeld(record, state))
+
+def appendedId(outcome: Sessions.Outcome(Appended())) -> IO(Maybe<&2, String>):
+  match outcome:
+    case Done{Sessions.Appended{_, id}}: IO.pure(Maybe<&2, String>, Some{id})
     case Fail{error}:
       do IO<Maybe<&2, String>>:
         IO.print_err("Could not persist the session entry: " ++ Sessions.message(error))
         return None{}
 
-def stored(shared: R.Ref<Shared>, outcome: Sessions.Outcome(Appended())) -> IO(Unit):
+def storedId(shared: R.Ref<Shared>, record: SessionRecord()) -> IO(Maybe<&2, String>):
+  do IO<Maybe<&2, String>>:
+    outcome : Sessions.Outcome(Appended()) <- appendEntry(shared, record)
+    appendedId(outcome)
+
+def stored(shared: R.Ref<Shared>, record: SessionRecord()) -> IO(Unit):
   do IO<Unit>:
-    id : Maybe<&2, String> <- storedId(shared, outcome)
+    id : Maybe<&2, String> <- storedId(shared, record)
     return Unit{}
 
 def withLastTurn(state: Shared, lastTurn: Maybe<&2, LastTurn>) -> Shared:
@@ -387,15 +414,10 @@ def persistFinished(+shared: R.Ref<Shared>, +message: Message()) -> IO(Unit):
   match message:
     case T.LlmMessage{+value}:
       do IO<Unit>:
-        state : Shared <- R.read(Shared, shared)
-        outcome : Sessions.Outcome(Appended()) <- recordMessage(sharedSession(state), T.LlmMessage{value})
-        id : Maybe<&2, String> <- storedId(shared, outcome)
+        id : Maybe<&2, String> <- storedId(shared, target => recordMessage(target, T.LlmMessage{value}))
         rememberTurn(shared, T.LlmMessage{value}, id)
     case T.CustomMessage{Messages.Custom{Messages.CustomMessage{customType, content, display, details, _}}}:
-      do IO<Unit>:
-        state : Shared <- R.read(Shared, shared)
-        outcome : Sessions.Outcome(Appended()) <- recordCustomMessage(sharedSession(state), customType, content, display, details)
-        stored(shared, outcome)
+      stored(shared, target => recordCustomMessage(target, customType, content, display, details))
     case _: IO.pure(Unit, Unit{})
 
 def persist(shared: R.Ref<Shared>, event: SessionEvent()) -> IO(Unit):
@@ -454,9 +476,7 @@ def omitEntries(+shared: R.Ref<Shared>, ids: List<&2, String>) -> IO(Unit):
     case Nil{}: IO.pure(Unit, Unit{})
     case id <> rest:
       do IO<Unit>:
-        state : Shared <- R.read(Shared, shared)
-        outcome : Sessions.Outcome(Appended()) <- Sessions.appendContextEdit(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, sharedSession(state), id, None{})
-        appended : Maybe<&2, String> <- storedId(shared, outcome)
+        appended : Maybe<&2, String> <- storedId(shared, target => Sessions.appendContextEdit(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, target, id, None{}))
         announce(shared, appended)
         omitEntries(shared, rest)
 
@@ -750,9 +770,7 @@ def appendAll(+shared: R.Ref<Shared>, messages: List<&2, Message()>) -> IO(Unit)
     case Nil{}: IO.pure(Unit, Unit{})
     case message <> rest:
       do IO<Unit>:
-        state : Shared <- R.read(Shared, shared)
-        outcome : Sessions.Outcome(Appended()) <- recordMessage(sharedSession(state), message)
-        stored(shared, outcome)
+        stored(shared, target => recordMessage(target, message))
         appendAll(shared, rest)
 
 def appendPending(agent: Runtime.Owner(), +shared: R.Ref<Shared>, pending: List<&2, Message()>) -> IO(Unit):
@@ -915,14 +933,39 @@ def bindContext(loadout: Runtime.Loadout, factory: Maybe<&2, Ctx.ContextFactory(
     case Runtime.Loadout{_, _, _, _, None{}, _, _}: IO.pure(Unit, Unit{})
     case Runtime.Loadout{_, _, _, _, Some{source}, _, _}: Ctx.bind(source, factory)
 
+def StreamInput() -> Data: T.StreamInput<Unit, Runtime.Details(), Runtime.LoopConfig()>
+def StreamOutput() -> Type: Result<&2, &1, Runtime.Error(), T.StreamLease<Unit, Runtime.Error()>>
+
+# Restore the agent's stream function, stop warming (waiting for refreshes in
+# flight) and release the warmer's interfaces.
+def disposeWarming(agent: Runtime.Owner(), warming: Warming) -> IO(Unit):
+  match warming:
+    case Warming{warmer, stream, replaced, replay, append, branch, mode, context, decide, warmed}:
+      do IO<Unit>:
+        Agent.setStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replaced)
+        Warmer.dispose(warmer)
+        C.dispose(StreamInput(), StreamOutput(), stream)
+        C.dispose(Warmer.CacheWarmRequest, Ai.AssistantMessage<V.Value, Unit>, replay)
+        C.dispose(Warmer.UsageRecord, Maybe<&2, Entry()>, append)
+        C.dispose(Unit, List<&2, Entry()>, branch)
+        C.dispose(Unit, Settings.CacheWarmingMode, mode)
+        C.dispose(Unit, Warmer.CacheContext, context)
+        C.dispose(Warmer.CacheWarmingDecisionEvent, Warmer.CacheWarmingAction, decide)
+        C.dispose(Entry(), Unit, warmed)
+
+def warmerOf(hooks: SessionHooks) -> Warmer.CacheWarmer:
+  match hooks:
+    case SessionHooks{_, _, _, _, _, _, _, Warming{warmer, _, _, _, _, _, _, _, _, _}}: warmer
+
 def dispose(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{+agent, +shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context}, settings, _, loadout, _, _}:
+    case AgentSession{+agent, +shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context, warming}, settings, _, loadout, _, _}:
       do IO<Unit>:
         abortSleeping(shared)
         abortCompactions(shared)
         abortBashIn(shared)
         Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        disposeWarming(agent, warming)
         Agent.unsubscribe(SessionEvent(), Runtime.Error(), subscription)
         C.dispose(Agent.Input<SessionEvent()>, Loop.Emission<Runtime.Error()>, handler)
         Agent.setPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replaced)
@@ -1349,9 +1392,7 @@ def applyCompaction(agent: Runtime.Owner(), +shared: R.Ref<Shared>, result: Comp
   match result:
     case Compaction.CompactionResult{+summary, +firstKeptEntryId, +tokensBefore, _, +usage, +details}:
       do IO<Compaction.CompactionResult>:
-        state : Shared <- R.read(Shared, shared)
-        outcome : Sessions.Outcome(Appended()) <- recordCompaction(sharedSession(state), summary, firstKeptEntryId, tokensNat(tokensBefore), details, usage)
-        stored(shared, outcome)
+        stored(shared, target => recordCompaction(target, summary, firstKeptEntryId, tokensNat(tokensBefore), details, usage))
         rebuilt : Shared <- R.read(Shared, shared)
         estimatedTokensAfter : F64 <- replaceContext(agent, sessionMessages(sharedSession(rebuilt)))
         return Compaction.CompactionResult{summary, firstKeptEntryId, tokensBefore, Some{estimatedTokensAfter}, usage, details}
@@ -1660,6 +1701,117 @@ def requestHook(env: RequestEnv, input: RequestInput()) -> IO(RequestResult()):
   match env input:
     case RequestEnv{agent, shared, previous} T.ToolHookInput{T.PrepareRequestContext{context, _, _}, signal}: projectRequest(agent, shared, previous, context, signal)
 
+# Cache warming
+# -------------
+
+type WarmingEnv is Data:
+  WarmingEnv{agent: Runtime.Owner(), shared: R.Ref<Shared>, settings: R.Ref<Settings.SettingsManager>, stream: Runtime.Stream()}
+
+# The warmer replays through the agent's own stream function (upstream's
+# modelRuntime.streamSimple), not the warming hook.
+def replayWarm(env: WarmingEnv, request: Warmer.CacheWarmRequest) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+  match env request:
+    case WarmingEnv{_, _, _, stream} Warmer.CacheWarmRequest{+model, context, options}:
+      do IO<Ai.AssistantMessage<V.Value, Unit>>:
+        response : StreamOutput() <- C.call(StreamInput(), StreamOutput(), stream, T.StreamInput{model, context, Some{options}})
+        leaseMessage(model, response)
+
+def appendedEntry(outcome: Sessions.Outcome(Appended())) -> IO(Maybe<&2, Entry()>):
+  match outcome:
+    case Done{Sessions.Appended{session, id}}: IO.pure(Maybe<&2, Entry()>, S.getEntry(Unit, Tools.ToolDetails, V.Value, stateOf(session), id))
+    case Fail{error}:
+      do IO<Maybe<&2, Entry()>>:
+        IO.print_err("Could not persist the session entry: " ++ Sessions.message(error))
+        return None{}
+
+def appendWarmUsage(env: WarmingEnv, record: Warmer.UsageRecord) -> IO(Maybe<&2, Entry()>):
+  match env record:
+    case WarmingEnv{_, shared, _, _} Warmer.UsageRecord{kind, provider, model, usage, note}:
+      do IO<Maybe<&2, Entry()>>:
+        outcome : Sessions.Outcome(Appended()) <- appendEntry(shared, target => Sessions.appendUsage(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, target, kind, provider, model, usage, note))
+        appendedEntry(outcome)
+
+def warmBranch(env: WarmingEnv, unit: Unit) -> IO(List<&2, Entry()>):
+  match env:
+    case WarmingEnv{_, shared, _, _}: branchEntries(shared)
+
+def warmingMode(env: WarmingEnv, unit: Unit) -> IO(Settings.CacheWarmingMode):
+  match env:
+    case WarmingEnv{_, _, settings, _}:
+      do IO<Settings.CacheWarmingMode>:
+        current : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
+        return Settings.getCacheWarmingMode(current)
+
+def modelKey(model: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> String & String:
+  match model:
+    case Some{Ai.Model{id, _, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}}: (provider, id)
+    case None{}: ("", "")
+
+def cacheContextOf(key: String & String, current: AgentState()) -> Warmer.CacheContext:
+  match key:
+    case (provider, id): Warmer.CacheContext{provider, id, stateMessages(current)}
+
+def warmContext(env: WarmingEnv, unit: Unit) -> IO(Warmer.CacheContext):
+  match env:
+    case WarmingEnv{agent, _, _, _}:
+      do IO<Warmer.CacheContext>:
+        +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        return cacheContextOf(modelKey(stateModel(current)), current)
+
+def announceWarm(env: WarmingEnv, entry: Entry()) -> IO(Unit):
+  match env:
+    case WarmingEnv{_, shared, _, _}: emit(shared, EntryAppended{entry})
+
+type StreamEnv is Data:
+  StreamEnv{stream: Runtime.Stream(), warmer: Warmer.CacheWarmer, agent: Runtime.Owner(), shared: R.Ref<Shared>}
+
+def configSessionId(config: Runtime.LoopConfig()) -> Maybe<&2, String>:
+  match config:
+    case T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, sessionId, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _, _}: sessionId
+
+def isSessionRequest(requested: Maybe<&2, String>, state: Shared) -> Bool:
+  match requested:
+    case Some{id}: String.eq(id, S.getSessionId(Unit, Tools.ToolDetails, V.Value, stateOf(sharedSession(state))))
+    case None{}: False{}
+
+def warmRequest(warmer: Warmer.CacheWarmer, agent: Runtime.Owner(), +model: Ai.Model<Ai.JsonValue>, context: Ai.TranscriptContext<V.Value, V.Value, Unit, Runtime.Details()>, config: Runtime.LoopConfig()) -> IO(Unit):
+  do IO<Unit>:
+    +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    Warmer.start(warmer, Warmer.CacheWarmRequest{model, context, config}, cacheContextOf(modelKey(Some{model}), current))
+
+def warmIfSession(warmer: Warmer.CacheWarmer, agent: Runtime.Owner(), shared: R.Ref<Shared>, model: Ai.Model<Ai.JsonValue>, context: Ai.TranscriptContext<V.Value, V.Value, Unit, Runtime.Details()>, options: Maybe<&2, Runtime.LoopConfig()>) -> IO(Unit):
+  match options:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{+config}:
+      do IO<Unit>:
+        state : Shared <- R.read(Shared, shared)
+        Bool.pick(Unit -> IO(Unit), isSessionRequest(configSessionId(config), state), _ => warmRequest(warmer, agent, model, context, config), _ => IO.pure(Unit, Unit{}))(Unit{})
+
+# upstream sdk streamFn: compaction and summaries use their own request ids;
+# only session requests replace the cache entry, so warming restarts from
+# them and continues while the transcript still extends the request's prefix.
+def warmingStream(env: StreamEnv, input: StreamInput()) -> IO(StreamOutput()):
+  match env input:
+    case StreamEnv{stream, warmer, agent, shared} T.StreamInput{+model, +context, +options}:
+      do IO<StreamOutput()>:
+        warmIfSession(warmer, agent, shared, model, context, options)
+        C.call(StreamInput(), StreamOutput(), stream, T.StreamInput{model, context, options})
+
+def createWarming(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: R.Ref<Settings.SettingsManager>, +inner: Runtime.Stream()) -> IO(Warming):
+  do IO<Warming>:
+    +env : WarmingEnv = WarmingEnv{agent, shared, settings, inner}
+    +replay : C.Callback<Warmer.CacheWarmRequest, Ai.AssistantMessage<V.Value, Unit>> <- C.create(~WarmingEnv, ~Warmer.CacheWarmRequest, ~Ai.AssistantMessage<V.Value, Unit>, ~replayWarm, env)
+    +append : C.Callback<Warmer.UsageRecord, Maybe<&2, Entry()>> <- C.create(~WarmingEnv, ~Warmer.UsageRecord, ~Maybe<&2, Entry()>, ~appendWarmUsage, env)
+    +branch : C.Callback<Unit, List<&2, Entry()>> <- C.create(~WarmingEnv, ~Unit, ~List<&2, Entry()>, ~warmBranch, env)
+    +mode : C.Callback<Unit, Settings.CacheWarmingMode> <- C.create(~WarmingEnv, ~Unit, ~Settings.CacheWarmingMode, ~warmingMode, env)
+    +context : C.Callback<Unit, Warmer.CacheContext> <- C.create(~WarmingEnv, ~Unit, ~Warmer.CacheContext, ~warmContext, env)
+    +decide : C.Callback<Warmer.CacheWarmingDecisionEvent, Warmer.CacheWarmingAction> <- C.create(~Unit, ~Warmer.CacheWarmingDecisionEvent, ~Warmer.CacheWarmingAction, ~Warmer.piDecision, Unit{})
+    +warmed : C.Callback<Entry(), Unit> <- C.create(~WarmingEnv, ~Entry(), ~Unit, ~announceWarm, env)
+    +warmer : Warmer.CacheWarmer <- Warmer.create(replay, Warmer.CacheWarmerSession{append, branch}, mode, context, decide, warmed)
+    +stream : Runtime.Stream() <- C.create(~StreamEnv, ~StreamInput(), ~StreamOutput(), ~warmingStream, StreamEnv{inner, warmer, agent, shared})
+    Agent.setStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, stream)
+    return Warming{warmer, stream, inner, replay, append, branch, mode, context, decide, warmed}
+
 def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
   do IO<AgentSession>:
     scoped : R.Ref<List<&2, Models.ScopedModel>> <- R.new(List<&2, Models.ScopedModel>, scopedModels)
@@ -1679,7 +1831,9 @@ def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.Sett
     Agent.setPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{request})
     +context : Ctx.ContextFactory() <- C.create(~ContextEnv, ~Unit, ~Ctx.ExtensionContext, ~toolContext, ContextEnv{agent, shared, cwd})
     bindContext(loadout, Some{context})
-    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context}, settingsRef, cwd, loadoutRef, models, scoped}
+    inner : Runtime.Stream() <- Agent.getStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    warming : Warming <- createWarming(agent, shared, settingsRef, inner)
+    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context, warming}, settingsRef, cwd, loadoutRef, models, scoped}
 
 # A final error after retries reports the failure and resets the counter.
 def failedRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason, finalError: Maybe<&2, String>) -> IO(Unit):
@@ -1753,7 +1907,7 @@ def runUntilSettled(fuel: Nat, +agent: Runtime.Owner(), +shared: R.Ref<Shared>, 
 # and the agent runs until post-run handling settles.
 def runAgentPrompt(session: AgentSession, +text: String, images: List<&2, Ai.ImageContent>) -> IO(Result<&2, &2, String, Unit>):
   match session:
-    case AgentSession{+agent, +shared, _, settingsRef, _, loadoutRef, _, _}:
+    case AgentSession{+agent, +shared, hooks, settingsRef, _, loadoutRef, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
         +settings : Settings.SettingsManager <- R.read(Settings.SettingsManager,settingsRef)
         loadout : Runtime.Loadout <- R.read(Runtime.Loadout, loadoutRef)
@@ -1768,6 +1922,7 @@ def runAgentPrompt(session: AgentSession, +text: String, images: List<&2, Ai.Ima
         outcome : Result<&2, &2, String, Unit> <- runUntilSettled(1000n, agent, shared, settings, step)
         setRunActive(shared, False{})
         flushPendingBash(agent, shared)
+        Warmer.onAgentSettled(warmerOf(hooks))
         emit(shared, AgentSettled{})
         return outcome
 
@@ -2117,13 +2272,15 @@ def forkTarget(entry: Entry()) -> Maybe<&2, Navigation>:
 # Mutations
 # ---------
 
-def recorded(shared: R.Ref<Shared>, outcome: Sessions.Outcome(Appended())) -> IO(Result<&2, &2, String, Unit>):
+def outcomeResult(outcome: Sessions.Outcome(Appended())) -> Result<&2, &2, String, Unit>:
   match outcome:
-    case Done{Sessions.Appended{session, _}}:
-      do IO<Result<&2, &2, String, Unit>>:
-        R.modify(Shared, Unit, shared, current => (withSession(current, session), Unit{}))
-        return Done{Unit{}}
-    case Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{Sessions.message(error)})
+    case Done{_}: Done{Unit{}}
+    case Fail{error}: Fail{Sessions.message(error)}
+
+def recorded(shared: R.Ref<Shared>, record: SessionRecord()) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    outcome : Sessions.Outcome(Appended()) <- appendEntry(shared, record)
+    return outcomeResult(outcome)
 
 def checkedSetting(value: Settings.SettingsManager & List<&2,Settings.SettingsError>) -> Result<&2,&2,String,Settings.SettingsManager>:
   match value:
@@ -2177,6 +2334,28 @@ def getAutoRetryEnabled(session: AgentSession) -> IO(Bool):
       do IO<Bool>:
         +current : Settings.SettingsManager <- R.read(Settings.SettingsManager,settings)
         return Settings.getRetryEnabled(current)
+
+# upstream cacheWarmingStatus: the current cache-warming state and the policy
+# inputs that produced it.
+def cacheWarmingStatus(session: AgentSession) -> IO(Warmer.CacheWarmingStatus):
+  match session:
+    case AgentSession{_, _, hooks, _, _, _, _, _}: Warmer.status(warmerOf(hooks))
+
+def modeApplied(warmer: Warmer.CacheWarmer, settings: R.Ref<Settings.SettingsManager>, updated: Result<&2, &2, String, Settings.SettingsManager>) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    result : Result<&2, &2, String, Unit> <- settingApplied(settings, updated)
+    Warmer.onModeChanged(warmer)
+    return result
+
+# upstream setCacheWarmingMode: persist the mode and immediately reconcile
+# active warming.
+def setCacheWarmingMode(session: AgentSession, mode: Settings.CacheWarmingMode) -> IO(Result<&2, &2, String, Unit>):
+  match session:
+    case AgentSession{_, _, hooks, +settings, _, _, _, _}:
+      do IO<Result<&2, &2, String, Unit>>:
+        +current : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
+        updated : Result<&2, &2, String, Settings.SettingsManager> <- persistedSetting(Settings.setCacheWarmingMode(mode, current))
+        modeApplied(warmerOf(hooks), settings, updated)
 
 # upstream setSteeringMode / setFollowUpMode: the agent's queue mode, persisted
 # to the settings.
@@ -2246,9 +2425,7 @@ def sameLevel(left: Ai.ModelThinkingLevel, right: Ai.ModelThinkingLevel) -> Bool
 
 def recordThinkingChange(+shared: R.Ref<Shared>, +level: Ai.ModelThinkingLevel) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
-    stored : Shared <- R.read(Shared, shared)
-    outcome : Sessions.Outcome(Appended()) <- recordThinking(sharedSession(stored), level)
-    result : Result<&2, &2, String, Unit> <- recorded(shared, outcome)
+    result : Result<&2, &2, String, Unit> <- recorded(shared, target => recordThinking(target, level))
     emit(shared, ThinkingLevelChanged{level})
     return result
 
@@ -2378,9 +2555,7 @@ def switchModel(session: AgentSession, +model: Ai.Model<Ai.JsonValue>, explicit:
         +level : Ai.ModelThinkingLevel = switchThinking(manager, model, explicit, stateThinking(current))
         Agent.setModel(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, model)
         R.modify(Shared, Unit, shared, value => (withContextWindow(value, Ai.modelContextWindow(model)), Unit{}))
-        stored : Shared <- R.read(Shared, shared)
-        outcome : Sessions.Outcome(Appended()) <- recordModel(sharedSession(stored), model)
-        modelResult : Result<&2, &2, String, Unit> <- recorded(shared, outcome)
+        modelResult : Result<&2, &2, String, Unit> <- recorded(shared, target => recordModel(target, model))
         persisted : Result<&2, &2, String, Unit> <- persistModel(settings, scoped, model, options)
         thought : Result<&2, &2, String, Unit> <- applyThinking(agent, shared, settings, level, ModelMutationOptions{False{}})
         return both(modelResult, both(persisted, thought))
@@ -2480,9 +2655,7 @@ def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, St
   match session:
     case AgentSession{_, +shared, _, _, _, _, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
-        stored : Shared <- R.read(Shared, shared)
-        outcome : Sessions.Outcome(Appended()) <- recordName(sharedSession(stored), name)
-        result : Result<&2, &2, String, Unit> <- recorded(shared, outcome)
+        result : Result<&2, &2, String, Unit> <- recorded(shared, target => recordName(target, name))
         emit(shared, SessionInfoChanged{Some{name}})
         return result
 

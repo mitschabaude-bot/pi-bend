@@ -103,6 +103,12 @@ def isTrue(value: Maybe<&2, Bool>) -> Bool:
     case Some{True{}}: True{}
     case _: False{}
 
+def usageEntry(+kind: String, timestamp: String) -> S.SessionEntry<Unit, Unit, Unit>:
+  S.UsageEntry{S.SessionEntryBase{"usage-" ++ kind, None{}, timestamp}, kind, "test", "test-model", Ai.Usage{zero(), zero(), n(100000), zero(), None{}, None{}, n(100000), Ai.UsageCost{zero(), zero(), zero(), zero(), zero()}}, None{}}
+
+def refreshed(kind: String) -> Maybe<&2, Cache.CacheMiss>:
+  Cache.detectCacheMiss(~Unit, ~models, Unit, Unit, Unit, Schema.Value, Unit{}, [entry(turn1()), usageEntry(kind, "1970-01-01T00:08:20.000Z")], missTurn("test-model", n(600000)))
+
 def detectCacheMiss() -> IO(Unit):
   +idle = detected(missTurn("test-model", n(600000)))
   +switched = detected(missTurn("other-model", n(120000)))
@@ -111,6 +117,7 @@ def detectCacheMiss() -> IO(Unit):
   do IO<Unit>:
     check(same(missTokens(idle), n(105000)) && close(costOf(idle), ratio(36225, 100000)) && same(idleOf(idle), n(540000)) && isFalse(changedOf(idle)), "detects a miss on a just-completed message with idle time")
     check(same(missTokens(switched), n(105000)) && isTrue(changedOf(switched)), "flags model switches on detected misses")
+    check(same(idleOf(refreshed("cache_warm")), n(100000)) && same(idleOf(refreshed("custom_operation")), n(600000)), "uses only cache-warm usage entries as cache refreshes")
     check(isNone(healthy), "returns undefined for healthy turns")
     check(isNone(first), "returns undefined for the first turn of a session")
 

@@ -27,11 +27,12 @@ def assistantKey(-A: Data, -D: Data, message: Ai.AssistantMessage<A, D>) -> Keye
 def summaryUsage(usage: Maybe<&2, Ai.Usage>) -> Maybe<&2, Keyed>:
   Maybe.map(&2, Ai.Usage, Keyed, value => Keyed{"Tools/summaries", value}, usage)
 
-# Assistant usage is attributed to its provider/model; tool-result, branch
-# summary and compaction usage share one bucket.
+# Assistant and usage-entry usage is attributed to its provider/model;
+# tool-result, branch summary and compaction usage share one bucket.
 def keyedUsage(-D: Data, -T: Data, -C: Data, entry: S.SessionEntry<D, T, C>) -> Maybe<&2, Keyed>:
   match entry:
     case S.SessionMessageEntry{_, Agent.LlmMessage{Ai.Assistant{message}}}: Some{assistantKey(Schema.Value, D, message)}
+    case S.UsageEntry{_, _, provider, model, usage, _}: Some{Keyed{provider ++ "/" ++ model, usage}}
     case S.SessionMessageEntry{_, Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{_, _, _, _, usage, _, _}}}}: summaryUsage(usage)
     case S.BranchSummaryEntry{_, _, _, _, usage, _}: summaryUsage(usage)
     case S.Compaction{S.CompactionEntry{_, _, _, _, _, usage, _, _}}: summaryUsage(usage)
@@ -109,7 +110,7 @@ def byCost(entries: List<&2, UsageCostBreakdownEntry>, sorted: List<&2, UsageCos
     case Nil{}: sorted
     case entry <> rest: byCost(rest, inserted(entry, sorted))
 
-# Attributable assistant usage by model and all other usage in one bucket,
-# most expensive first.
+# Model-attributed usage by model and all other usage in one bucket, most
+# expensive first.
 def getUsageCostBreakdown(-D: Data, -T: Data, -C: Data, entries: List<&2, S.SessionEntry<D, T, C>>) -> List<&2, UsageCostBreakdownEntry>:
   byCost(meaningful(collected(D, T, C, entries, Nil{})), Nil{})

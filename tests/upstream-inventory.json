@@ -1672,9 +1672,12 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-stats.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "dc40827bab481ef671a0ca76eb0fe7d79458e12974b90ca12472262248943afe"
+      "status": "partial",
+      "ports": [
+        "tests/agent-session-stats.bend"
+      ],
+      "sha256": "dc40827bab481ef671a0ca76eb0fe7d79458e12974b90ca12472262248943afe",
+      "notes": "Only 'includes cache-warming usage exactly once without adding messages' is ported: AgentSession.getSessionStats aggregates stored entries through session-stats, so the port checks that aggregation, the empty session context and getUsageCostBreakdown over a session holding one usage entry; a native supplement reads and re-encodes the documented usage JSONL line. The other cases remain pending."
     },
     {
       "source": "packages/coding-agent/test/agent-session-tree-navigation.test.ts",
@@ -1777,18 +1780,22 @@
     },
     {
       "source": "packages/coding-agent/test/cache-stats.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/cache-stats.bend"
       ],
       "sha256": "7c2b46ca4a37b4f716dd3c0c55e41d11812fa3b4bfff01a3d28e906b78a3506f",
-      "notes": "Ten of eleven cases. Pending: 'uses only cache-warm usage entries as cache refreshes' — the session manager has no usage (cache warming) entries yet, so cache-stats and usage-totals omit their usage-entry branches. Misses are keyed by session entry id instead of the assistant message object; toBeCloseTo(x, 5) is an absolute difference below 5e-6; the price source is a function over a source value (ModelRuntime in the CLI)."
+      "notes": "All eleven cases, including the 0.87.1 case for cache-warm usage entries. Misses are keyed by session entry id instead of the assistant message object; toBeCloseTo(x, 5) is an absolute difference below 5e-6; the price source is a function over a source value (ModelRuntime in the CLI)."
     },
     {
       "source": "packages/coding-agent/test/cache-warmer.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a3a1f077a7a3bdd57a93e1d946f507a5d0ffc5a92e64f89f9adba0d330c751ed"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/cache-warmer.bend",
+        "tests/cache-warmer.bend"
+      ],
+      "sha256": "a3a1f077a7a3bdd57a93e1d946f507a5d0ffc5a92e64f89f9adba0d330c751ed",
+      "notes": "All eight 'cache warming' cases ported by name. The warmer is a pure state machine whose transitions take the clock, mode, conversation and prompt size as values; vi fake timers become explicit observation times (a timer armed for its delay fires at start + delay), and calls, decision events and usage records are the transitions' effects (appendUsage/onWarmed are the shell's handling of the record effect). 'aborts replaced requests' checks that the replacing start releases the in-flight run's controller and that the late reply is not recorded; two native shell cases run the I/O worker with real timers (10.05 s lifetime, 50 ms refreshes): refresh/record/onWarmed until disposal, and abort of a replaced run's request in flight. toBeCloseTo uses its default absolute tolerance 0.005. Pending: 'ExtensionRunner.emitCacheWarmingDecision uses the last extension override' (no native extension runner or cache_warming_decision event yet; the decide hook is injected and AgentSession passes pi's own decision)."
     },
     {
       "source": "packages/coding-agent/test/changelog.test.ts",
@@ -2625,7 +2632,8 @@
       "source": "packages/coding-agent/test/sdk-stream-options.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "2bd2362c91704e04ebd6dff6b6d1ec4db3f545104c2345b240c3633a667ce10e"
+      "sha256": "2bd2362c91704e04ebd6dff6b6d1ec4db3f545104c2345b240c3633a667ce10e",
+      "notes": "Pending. Its 0.87.1 cache-warming cases ('schedules cache warming after a completed session request', 'waits for the next request instead of restoring cache warming') need an AgentSession prompt through a fake provider; AgentSession starts the warmer from its stream hook (core/agent-session.bend warmingStream), but those cases are not yet ported."
     },
     {
       "source": "packages/coding-agent/test/session-context-edit.test.ts",
@@ -2835,10 +2843,11 @@
         "tests/settings-manager.bend",
         "tests/settings_manager_check.py",
         "tests/settings-files.bend",
-        "tests/settings_files_check.py"
+        "tests/settings_files_check.py",
+        "tests/settings-cache-warming.bend"
       ],
       "sha256": "9174509b95e92feaf18cb5adf77e601c5c631c5b875eca5906c949653f3edbe3",
-      "notes": "Canonical typed manager integrated; 203 pinned-source comparisons, 60 strict-input checks, analytics UUID lifecycle and 16 filesystem/concurrency checks. Named contracts and approved strict-input adaptations are recorded in tests/settings-manager.md. Suite remains partial until assertion-by-assertion coverage is audited; CLI/session integration is separate."
+      "notes": "Canonical typed manager integrated; 203 pinned-source comparisons, 60 strict-input checks, analytics UUID lifecycle and 16 filesystem/concurrency checks. Named contracts and approved strict-input adaptations are recorded in tests/settings-manager.md. Suite remains partial until assertion-by-assertion coverage is audited; CLI/session integration is separate. The 0.87.1 describe('cacheWarming') cases run natively in tests/settings-cache-warming.bend on real files; an unknown cacheWarming value stays an unknown field (upstream reads it unvalidated and falls back to streaming) instead of failing the strict decoder."
     },
     {
       "source": "packages/coding-agent/test/settings-selector.test.ts",

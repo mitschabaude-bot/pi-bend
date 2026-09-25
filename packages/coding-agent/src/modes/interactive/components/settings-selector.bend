@@ -68,6 +68,10 @@ def outputPadding(value: Settings.OutputPadding) -> String:
 def smallNumber(value: W.U64) -> String:
   match value:
     case W.U64{_,low}: U32.show(low)
+def modeNames(modes: List<&2,Settings.CacheWarmingMode>) -> List<&2,String>:
+  match modes:
+    case Nil{}: Nil{}
+    case mode <> rest: Settings.cacheWarmingModeName(mode) <> modeNames(rest)
 def rows(+settings: Settings.SettingsManager) -> List<&2,ListUI.SettingItem>:
   boolean("autocompact","Auto-compact","Automatically compact context when it gets too large",Settings.getCompactionEnabled(settings)) <>
   boolean("auto-resize-images","Auto-resize images","Resize large images to 2000x2000 max for better model compatibility",Settings.getImageAutoResize(settings)) <>
@@ -82,6 +86,7 @@ def rows(+settings: Settings.SettingsManager) -> List<&2,ListUI.SettingItem>:
   item("steering-mode","Steering mode","Enter while streaming queues steering messages. 'one-at-a-time': deliver one, wait for response. 'all': deliver all at once.",queue(Settings.getSteeringMode(settings)),choices("one-at-a-time","all")) <>
   item("follow-up-mode","Follow-up mode","Queues follow-up messages until agent stops. 'one-at-a-time': deliver one, wait for response. 'all': deliver all at once.",queue(Settings.getFollowUpMode(settings)),choices("one-at-a-time","all")) <>
   item("transport","Transport","Preferred transport for providers that support multiple transports",transport(Settings.getTransport(settings)),"sse" <> "websocket" <> "websocket-cached" <> "auto" <> Nil{}) <>
+  item("cache-warming-mode","Cache warming","off; streaming while the agent runs; idle also between runs while continuation stays profitable",Settings.cacheWarmingModeName(Settings.getCacheWarmingMode(settings)),modeNames(Settings.CACHE_WARMING_MODES())) <>
   boolean("hide-thinking","Hide thinking","Hide thinking blocks in assistant responses",Settings.getHideThinkingBlock(settings)) <>
   item("mermaid-rendering","Mermaid diagrams","Render Mermaid code blocks as Unicode diagrams",mermaid(Settings.getMermaidRenderingMode(settings)),"off" <> "final" <> "streaming" <> Nil{}) <>
   boolean("cache-miss-notices","Cache miss notices","Show transcript notices for cache costs and provider recovery diagnostics",Settings.getShowCacheMissNotices(settings)) <>
@@ -204,6 +209,9 @@ def applied(id: String,value: String,session: Session.AgentSession) -> IO(Result
     case "transport" "websocket": Session.setTransport(session,Ai.WebSocket{})
     case "transport" "websocket-cached": Session.setTransport(session,Ai.WebSocketCached{})
     case "transport" "auto": Session.setTransport(session,Ai.AutoTransport{})
+    case "cache-warming-mode" "off": Session.setCacheWarmingMode(session,Settings.CacheWarmingOff{})
+    case "cache-warming-mode" "streaming": Session.setCacheWarmingMode(session,Settings.CacheWarmingStreaming{})
+    case "cache-warming-mode" "idle": Session.setCacheWarmingMode(session,Settings.CacheWarmingIdle{})
     case _ _: Session.changeSettings(session,settings => change(id,value,settings))
 def editorChoice(current: Maybe<&2,Live.Handle>,id: String,value: String) -> IO(Unit):
   match current id value:

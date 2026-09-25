@@ -3,6 +3,7 @@ import ../../../ai/src/types.bend as Ai
 import ../../../agent/src/types.bend as Agent
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/schema-value.bend as Schema
+import ../../../runtime/src/date.bend as Date
 import ./session-manager.bend as S
 
 # upstream core/cache-stats.ts: prompt-cache misses across a session.
@@ -109,6 +110,23 @@ def assistantStep(~Source: Data, ~prices: ModelPriceSource(Source), -A: Data, -D
     case Scan{+previous, totals, misses}:
       recorded(id, detectMiss(~Source, ~prices, A, D, source, previous, message), Maybe.or(&2, PreviousRequest, asPreviousRequest(A, D, message, reportedOf(previous)), previous), totals, misses)
 
+# A cache-warm refresh re-read the whole prompt: it becomes the previous
+# request (a provider that reports cache activity), so the next turn's idle
+# time counts from the refresh. An unparseable timestamp is NaN, as Date.parse.
+def refreshed(positive: Bool, promptTokens: F64, modelKey: String, timestamp: Result<&2, &2, Date.ParseError, F64>, scan: Scan) -> Scan:
+  match positive scan:
+    case False{} _: scan
+    case True{} Scan{_, totals, misses}: Scan{Some{PreviousRequest{promptTokens, modelKey, Result.default(&2, &2, Date.ParseError, F64, timestamp, F.nan()), True{}}}, totals, misses}
+
+def warmed(+promptTokens: F64, modelKey: String, timestamp: String, scan: Scan) -> Scan:
+  refreshed(F64.is_gt(promptTokens, zero()), promptTokens, modelKey, Date.parseIso(timestamp), scan)
+
+# Only cache-warm usage refreshes the cache; other usage kinds do not.
+def usageStep(isWarm: Bool, provider: String, model: String, usage: Ai.Usage, timestamp: String, scan: Scan) -> Scan:
+  match isWarm:
+    case True{}: warmed(promptTokensOf(usage), provider ++ "/" ++ model, timestamp, scan)
+    case False{}: scan
+
 def resetScan(scan: Scan) -> Scan:
   match scan: case Scan{_, totals, misses}: Scan{None{}, totals, misses}
 
@@ -118,6 +136,7 @@ def scanStep(~Source: Data, ~prices: ModelPriceSource(Source), -D: Data, -T: Dat
   match entry:
     case S.Compaction{_}: resetScan(scan)
     case S.BranchSummaryEntry{_, _, _, _, _, _}: resetScan(scan)
+    case S.UsageEntry{S.SessionEntryBase{_, _, timestamp}, kind, provider, model, usage, _}: usageStep(String.eq(kind, "cache_warm"), provider, model, usage, timestamp, scan)
     case S.SessionMessageEntry{S.SessionEntryBase{id, _, _}, Agent.LlmMessage{Ai.Assistant{message}}}: assistantStep(~Source, ~prices, Schema.Value, D, source, id, message, scan)
     case _: scan
 
