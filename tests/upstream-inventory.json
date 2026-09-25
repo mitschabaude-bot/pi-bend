@@ -2168,21 +2168,30 @@
     },
     {
       "source": "packages/coding-agent/test/export-html-skill-block.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "1050bd9e8e0ba42bf8d3a35ad596fc0364d4621dd576ff26a93e6c6987a37f3f"
+      "status": "ported",
+      "ports": [
+        "tests/export_html_template.test.ts"
+      ],
+      "sha256": "1050bd9e8e0ba42bf8d3a35ad596fc0364d4621dd576ff26a93e6c6987a37f3f",
+      "notes": "All four cases, upstream bodies, on the port's shipped export asset packages/coding-agent/src/core/export-html/template.js (inlined by export-html/index.bend). bun test."
     },
     {
       "source": "packages/coding-agent/test/export-html-whitespace.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "aa471e8d88300857497d9458c975d662181bab5bcaa96105c3633f15bf36e142"
+      "status": "partial",
+      "ports": [
+        "tests/export_html_template.test.ts"
+      ],
+      "sha256": "aa471e8d88300857497d9458c975d662181bab5bcaa96105c3633f15bf36e142",
+      "notes": "The template.css whitespace case passes with upstream's body on the shipped asset. Pending: ansiLinesToHtml and the custom tool HTML renderer (export-html/ansi-to-html.ts and tool-renderer.ts are not ported; exports carry no pre-rendered extension tool HTML)."
     },
     {
       "source": "packages/coding-agent/test/export-html-xss.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "61b68968b6f1f4f0181e3fafaf5e34064e59dae7980f3280d8499d9e8f182454"
+      "status": "ported",
+      "ports": [
+        "tests/export_html_template.test.ts"
+      ],
+      "sha256": "61b68968b6f1f4f0181e3fafaf5e34064e59dae7980f3280d8499d9e8f182454",
+      "notes": "All nine cases, upstream bodies, on the port's shipped template.js. bun test."
     },
     {
       "source": "packages/coding-agent/test/export-jsonl-share.test.ts",
@@ -2719,9 +2728,12 @@
     },
     {
       "source": "packages/coding-agent/test/scrollbar-theme.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d25755cee45f4705f53d1d4cc129e06455fe9385f863bf8b008c623386c62f7f"
+      "status": "ported",
+      "ports": [
+        "tests/theme-fallbacks.bend"
+      ],
+      "sha256": "d25755cee45f4705f53d1d4cc129e06455fe9385f863bf8b008c623386c62f7f",
+      "notes": "All five cases (both it.each fallback rows, explicit scrollbar colors, search-highlight fallback and explicit colors) on edited dark.json themes in truecolor mode; getFgAnsi/getBgAnsi read the theme's escape maps. The edited JSON text goes through Theme.parse instead of a written file. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/sdk-openrouter-attribution.test.ts",
@@ -3866,9 +3878,12 @@
     },
     {
       "source": "packages/coding-agent/test/truncate-to-width.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e7f65fa6d913a8d51f74a65f08765a82b2115922a877b3b651cf124a36a977fa"
+      "status": "ported",
+      "ports": [
+        "tests/truncate-to-width.bend"
+      ],
+      "sha256": "e7f65fa6d913a8d51f74a65f08765a82b2115922a877b3b651cf124a36a977fa",
+      "notes": "All six cases on pi-tui's truncateToWidth (default ellipsis '...', no padding) and visibleWidth in packages/tui/src/utils.bend. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/trust-manager.test.ts",
@@ -3881,9 +3896,12 @@
     },
     {
       "source": "packages/coding-agent/test/trust-selector.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "60b57f95ad14919ef0184bf232a7487c11bb5fcceb45258a40663df39d3f6496"
+      "status": "ported",
+      "ports": [
+        "tests/trust-selector.bend"
+      ],
+      "sha256": "60b57f95ad14919ef0184bf232a7487c11bb5fcceb45258a40663df39d3f6496",
+      "notes": "All four cases on the selector state over getProjectTrustOptions: saved-decision mark while browsing, a confirmed selection's trusted flag and updates, inherited ancestor decisions, and the parent option's selection. Rendered with the dark theme and ANSI stripped. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/user-message.test.ts",
