@@ -33,7 +33,7 @@ console.log(JSON.stringify(rows.map(([y,m,d,h,mi,s,ms])=>{
 """
 converted=iter(json.loads(subprocess.check_output(['node','-e',script],input=json.dumps(valid),text=True,cwd=ROOT)))
 expected=[invalid(row) or next(converted) for row in cases]
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/calendar.bend','build/calendar'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/calendar.bend','build/calendar'],cwd=ROOT,check=True)
 for threads in ['1','4']:
  for start in range(0,len(cases),32):
   args=[';'.join(map(str,row)) for row in cases[start:start+32]]

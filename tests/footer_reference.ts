@@ -1,15 +1,16 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { strict as assert } from 'node:assert';
-import { FooterComponent } from '/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/components/footer.ts';
-import { initTheme } from '/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/theme/theme.ts';
+const { FooterComponent } = await import(UPSTREAM + '/packages/coding-agent/src/modes/interactive/components/footer.ts');
+const { initTheme } = await import(UPSTREAM + '/packages/coding-agent/src/modes/interactive/theme/theme.ts');
 
 // f07218c4d: compare against the actual upstream component, not copied output.
 for (const [file, digest] of [
   ['components/footer.ts', '9e0f71e0f405a9f0fdae901de2778834649facd0f78a78b53c682179f8faf693'],
   ['theme/dark.json', '103a5aecb74a2dab5cc903c9741845ee6158658ce2ff6e5445948784116eaef8'],
 ] as const) {
-  const path = '/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/' + file;
+  const path = UPSTREAM + '/packages/coding-agent/src/modes/interactive/' + file;
   assert.equal(createHash('sha256').update(readFileSync(path)).digest('hex'), digest);
 }
 initTheme('dark');

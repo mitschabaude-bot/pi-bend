@@ -44,11 +44,11 @@ for variant, body in re.findall(r'^  (\w+)\{([^\n]*)\}', native.split('type Agen
 assert actual_events == expected_events, (expected_events, actual_events)
 assert len(actual_events) == 10
 
-subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/agent/test/message-events.bend', 'build/test-agent-message-events'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/agent/test/message-events.bend', 'build/test-agent-message-events'], cwd=ROOT, check=True)
 for threads in ('1', '4'):
     subprocess.run(['build/test-agent-message-events', '--threads', threads], cwd=ROOT, check=True, timeout=30)
 
-subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/agent/test/context.bend', 'build/test-agent-context'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/agent/test/context.bend', 'build/test-agent-context'], cwd=ROOT, check=True)
 for threads in ('1', '4'):
     subprocess.run(['build/test-agent-context', '--threads', threads], cwd=ROOT, check=True, timeout=30)
 assert 'export interface PrepareNextTurnContext extends AgentTurnContext {}' in source

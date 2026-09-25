@@ -1,6 +1,4 @@
 """Native context heuristic compared with pinned Pi, including usage selection."""
-from upstream_pin import check_sibling
-check_sibling()
 import itertools, json, random, subprocess
 from pathlib import Path
 from schema_literals import string as literal_string, value, floating, seq
@@ -65,5 +63,5 @@ for start in range(0,len(cases),30):
     name=f'group{start}';groups.append(name);lines += [f'def {name}() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(start,min(start+30,len(cases)))]
 lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {g}()' for g in groups]+[f'    IO.print("PASS {len(cases)} context estimates and every constituent message estimate")']
 src=BUILD/'context-estimate-check.bend';src.write_text('\n'.join(lines)+'\n');out=BUILD/'context-estimate-check'
-subprocess.run(['sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
 for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,check=True,timeout=120)

@@ -6,7 +6,7 @@ import subprocess
 import sys
 ROOT=Path(__file__).resolve().parents[1]
 if '--no-build' not in sys.argv:
-    commands=[['sh','scripts/build-pure.sh','tests/json-finite-growth.bend','build/json-finite-growth'],[BEND,'tests/json-finite-growth.bend','-o','build/json-finite-growth.js']]
+    commands=[['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','tests/json-finite-growth.bend','build/json-finite-growth'],[BEND,'tests/json-finite-growth.bend','-o','build/json-finite-growth.js']]
     for index,command in enumerate(commands):
         subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--limit-gib','4','--stats',f'build/json-finite-growth-rebuild-{index}.json','--',*command],cwd=ROOT,check=True)
 for label,command in [('native 1',['build/json-finite-growth','--threads','1']),('native 4',['build/json-finite-growth','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/json-finite-growth.js'])]:

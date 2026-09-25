@@ -31,7 +31,7 @@ console.log(JSON.stringify(inputs.map(text=>{
 expected=json.loads(subprocess.check_output(['node','--no-warnings','-e',oracle],input=json.dumps(texts),text=True))
 arguments=[','.join(str(ord(char)) for char in text) for text in texts]
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/idna-ace.bend','build/idna-ace'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/idna-ace.bend','build/idna-ace'],cwd=ROOT,check=True)
 subprocess.run([str(Path(BEND)),'packages/runtime/test/idna-ace.bend','-o','build/idna-ace.js'],cwd=ROOT,check=True)
 for label,command in [('native 1',['build/idna-ace','--threads','1']),('native 4',['build/idna-ace','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/idna-ace.js'])]:
     for start in range(0,len(arguments),64):

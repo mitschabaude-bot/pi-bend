@@ -58,7 +58,7 @@ with tempfile.TemporaryDirectory(prefix='socket-endpoint-layout-',dir=ROOT/'buil
         subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',str(folder/f'{suffix}-build.json'),'--',str(bun),str(candidate/'main.ts'),'tests/socket-endpoint-probe.bend','-o',str(folder/f'probe.{suffix}')],cwd=ROOT,check=True)
     p=folder/'probe.c';text=p.read_text();original=(candidate/'effs/socket_endpoint.c').read_text();assert original in text
     changed=c_helper+original.replace('getsockname(fd, (struct sockaddr*)&address, &length)','endpoint_probe(fd, (struct sockaddr*)&address, &length, 0)').replace('getpeername(fd, (struct sockaddr*)&address, &length)','endpoint_probe(fd, (struct sockaddr*)&address, &length, 1)')
-    p.write_text(text.replace(original,changed));subprocess.run(['clang','-fbracket-depth=2048','-std=c11','-O1',str(p),'-lpthread','-lm','-o',str(folder/'probe')],check=True,timeout=60)
+    p.write_text(text.replace(original,changed));subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-fbracket-depth=2048','-std=c11','-O1',str(p),'-lpthread','-lm','-o',str(folder/'probe')],check=True,timeout=60)
     p=folder/'probe.js';text=p.read_text();original=(candidate/'effs/socket_endpoint.js').read_text();assert original in text
     assert original.count('  const sys = io_sys();')==1;p.write_text(text.replace(original,original.replace('  const sys = io_sys();',js_mock)))
     commands=[('native 1',[str(folder/'probe'),'--threads','1'],False),('native 4',[str(folder/'probe'),'--threads','4'],False),('Bun Linux layout',[str(bun),str(p)],False),('Bun simulated Darwin layout',[str(bun),str(p)],True)]

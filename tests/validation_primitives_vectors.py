@@ -1,6 +1,4 @@
 """Differential tests for the original validation type predicates."""
-from upstream_pin import check_sibling
-check_sibling()
 import json
 from pathlib import Path
 import random
@@ -44,6 +42,6 @@ lines += [f'    IO.print("PASS {len(values)*len(kinds)} upstream type predicates
 source=BUILD/'validation-primitives-vectors.bend'
 source.write_text('\n'.join(lines)+'\n')
 output=BUILD/'test-validation-primitives'
-subprocess.run(['sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
 for threads in ['1','4']:
  subprocess.run([str(output),'--threads',threads],cwd=ROOT,check=True,timeout=60)

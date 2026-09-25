@@ -1,8 +1,9 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import path from 'node:path';
 import {EventEmitter} from 'node:events';
 import {stripTypeScriptTypes} from 'node:module';
-const text=stripTypeScriptTypes(fs.readFileSync('../pi-mono/packages/tui/src/terminal.ts','utf8')).replace(/^import .*;$/gm,'').replace(/^export /gm,'');
+const text=stripTypeScriptTypes(fs.readFileSync(UPSTREAM + '/packages/tui/src/terminal.ts','utf8')).replace(/^import .*;$/gm,'').replace(/^export /gm,'');
 let now=0,timers=[];
 const stdout=new EventEmitter(),stdin=new EventEmitter();
 let writes=[],input=[];stdout.write=x=>{writes.push(x);return true};stdin.pause=()=>{};

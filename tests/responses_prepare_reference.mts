@@ -1,6 +1,7 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-const root='../pi-mono/packages/ai/src/';
+const root=UPSTREAM + '/packages/ai/src/';
 const shared=fs.readFileSync(root+'api/openai-responses-shared.ts','utf8');
 const sources=['utils/hash.ts','utils/sanitize-unicode.ts','utils/text.ts','utils/transcript.ts','api/constrained-sampling.ts','api/transform-messages.ts','api/openai-prompt-cache.ts','api/github-copilot-headers.ts'].map(p=>fs.readFileSync(root+p,'utf8'));
 sources.push(shared.slice(shared.indexOf('function encodeTextSignatureV1('),shared.indexOf('// Stream processing')));

@@ -1,7 +1,8 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
 import assert from 'node:assert/strict';
-const source=fs.readFileSync('../pi-mono/packages/ai/src/api/transform-messages.ts','utf8');
+const source=fs.readFileSync(UPSTREAM + '/packages/ai/src/api/transform-messages.ts','utf8');
 const transform=new Function(stripTypeScriptTypes(source).replace(/^export /gm,'')+';return transformMessages;')();
 const call=id=>({type:'toolCall',id,name:'tool-'+id,arguments:'args',thoughtSignature:'thought',namespace:'ns'});
 const ids={a1:['1'],a2:['2'],a12:['1','2'],a11:['1','1'],error:['1'],aborted:['2']};

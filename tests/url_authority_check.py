@@ -82,7 +82,7 @@ for index, scheme, username, password, host, port in actual:
     assert (username, password, host, port) == (*(user or ('', '')), raw_host, want_port), (index, scheme, texts[index])
 print(f'Node authority cross-check: {len(actual)} cases PASS', flush=True)
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/url-authority.bend', 'build/url-authority'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/url-authority.bend', 'build/url-authority'], cwd=ROOT, check=True)
 subprocess.run([str(Path(BEND)), 'packages/runtime/test/url-authority.bend', '-o', 'build/url-authority.js'], cwd=ROOT, check=True)
 arguments = ['t;' + codes(text) for text in texts]
 for special in [False, True]:

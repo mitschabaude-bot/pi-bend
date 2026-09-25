@@ -32,7 +32,7 @@ static void __attribute__((destructor)) pair_audit(void) {
 }
 '''
 (ROOT/'build/dns-address-pair-audit.c').write_text((ROOT/'build/dns-address-pair.c').read_text()+audit)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-address-pair-audit.c','-lpthread','-lm','-o','build/dns-address-pair'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-address-pair-audit.c','-lpthread','-lm','-o','build/dns-address-pair'],cwd=ROOT,check=True)
 (ROOT/'build/dns-address-pair-audit.js').write_text(instrument((ROOT/'build/dns-address-pair.js').read_text()))
 
 def exact(peer,n):

@@ -53,7 +53,7 @@ def main():
             if args.backend in ("native1", "native4", "all"):
                 target = temporary / kind
                 build_env = dict(os.environ, BEND=args.toolchain)
-                execute(["sh", "scripts/build-pure.sh", source.relative_to(ROOT), target], env=build_env)
+                execute(['flock', '/tmp/pi-bend-build.lock', "sh", "scripts/build-pure.sh", source.relative_to(ROOT), target], env=build_env)
                 for backend, threads in (("native1", "1"), ("native4", "4")):
                     runners[kind, backend] = [str(target), "--threads", threads]
         for backend in ("bun", "native1", "native4"):

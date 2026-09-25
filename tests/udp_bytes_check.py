@@ -9,7 +9,7 @@ parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('candida
 candidate=parser.parse_args().candidate.resolve()
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/udp-bytes-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/udp-bytes.bend','-o',f'build/udp-bytes.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-bytes.c','-lpthread','-lm','-o','build/udp-bytes'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-bytes.c','-lpthread','-lm','-o','build/udp-bytes'],cwd=ROOT,check=True)
 cases=[(0,b''),(0,b'x'),(1,b''),(1,b'\xff'),(1,b'\0\xff'),(4,b'\0\xff\xc0\x80'),(4,b'\0\xff\xc0\x80!'),(1024,bytes(range(256))*4),(65535,bytes(range(256))*255+b'END'),(65536,b'kept\0\xff'),(4294967295,b'kept-again')]
 rows=[]
 for backend,cmd in [('native 1',['build/udp-bytes','--threads','1']),('native 4',['build/udp-bytes','--threads','4']),('Bun',[str(bun),'build/udp-bytes.js'])]:

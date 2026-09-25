@@ -132,5 +132,5 @@ for start in range(0, len(checks), 30):
 source += 'def main() -> IO(Unit):\n  do IO<Unit>:\n' + ''.join(f'    {name}()\n' for name in groups)
 entry = BUILD / f'json-stringify-vectors{suffix}.bend'
 entry.write_text(source)
-subprocess.run(['sh', 'scripts/build-pure.sh', str(entry), f'build/test-json-stringify{suffix}'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(entry), f'build/test-json-stringify{suffix}'], cwd=ROOT, check=True)
 subprocess.run([f'build/test-json-stringify{suffix}', '--threads', '1'], cwd=ROOT, check=True, timeout=240)

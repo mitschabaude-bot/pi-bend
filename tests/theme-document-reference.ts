@@ -1,9 +1,10 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
-import {loadThemeFromPath} from '/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/theme/theme.ts';
+const { loadThemeFromPath } = await import(UPSTREAM + '/packages/coding-agent/src/modes/interactive/theme/theme.ts');
 
-const root='/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/theme/';
+const root=UPSTREAM + '/packages/coding-agent/src/modes/interactive/theme/';
 const source=readFileSync(root+'theme.ts','utf8');
 assert.equal(createHash('sha256').update(source).digest('hex'),'c3bf2e3b72f6bb782f34de0535fcc1758b9b6ea7a0d2e7d6f17244fa55c3f31a');
 const [file,mode]=process.argv.slice(2);

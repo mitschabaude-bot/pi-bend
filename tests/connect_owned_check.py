@@ -53,7 +53,7 @@ with tempfile.TemporaryDirectory(prefix='connect-owned-',dir=ROOT/'build') as di
         effect.write_text('const connect_probe_rows=[]; let connect_probe_parked=0;\n'+source.replace('return io_done(io_tup(row, row));','connect_probe_rows.push(row); return io_done(io_tup(row, row));').replace('io.waits.splice(index, 1);','io.waits.splice(index, 1); connect_probe_parked += 1;')+js_audit)
     for suffix in ['c','js']:
         subprocess.run([str(bun),str(compiler/'main.ts'),('tests/connect-races.bend' if args.races else 'tests/connect-owned.bend'),'-o',str(folder/f'probe.{suffix}')],cwd=ROOT,check=True,capture_output=True,timeout=120)
-    subprocess.run(['clang','-fbracket-depth=2048','-std=c11','-O1',str(folder/'probe.c'),'-lpthread','-lm','-o',str(folder/'probe')],check=True,timeout=120)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-fbracket-depth=2048','-std=c11','-O1',str(folder/'probe.c'),'-lpthread','-lm','-o',str(folder/'probe')],check=True,timeout=120)
     def run(label,command,mode,family,port):
         result=subprocess.run([*command,mode,str(family),str(port)],cwd=ROOT,capture_output=True,text=True,timeout=15)
         assert result.returncode==0,(label,mode,family,result.stdout,result.stderr)

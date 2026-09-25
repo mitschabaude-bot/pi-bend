@@ -219,14 +219,14 @@ lines += [f'    IO.print("PASS {checks} native {mode}-schema checks against Type
 source = BUILD / f'schema-{mode}-check.bend'
 source.write_text('\n'.join(lines) + '\n')
 output = BUILD / f'test-schema-{mode}-check'
-subprocess.run(['sh', 'scripts/build-pure.sh', str(source), str(output)], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(source), str(output)], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     subprocess.run([str(output), '--threads', threads], cwd=ROOT, check=True, timeout=120)
 
 # Native dictionary, IEEE and loader-error contracts avoid JS reflection.
 entry = 'schema-errors' if DIAGNOSTICS else ('schema-load' if LOADED else 'schema')
 native = BUILD / f'test-native-{entry}'
-subprocess.run(['sh', 'scripts/build-pure.sh', f'packages/runtime/test/{entry}.bend', str(native)], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', f'packages/runtime/test/{entry}.bend', str(native)], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     subprocess.run([str(native), '--threads', threads], cwd=ROOT, check=True, timeout=120)
 if not LOADED:

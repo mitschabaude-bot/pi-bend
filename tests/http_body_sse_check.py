@@ -45,7 +45,7 @@ for mode in ['empty','0']:
 # Close-delimited streams validate bytes and only finish at explicit clean EOF.
 args += ['close;256','close;100,97,116,97,58,32,97,10,10;256','1','chunked']
 want += ['error||','error|none:97|','error||','error||']
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/http-body-sse.bend','build/http-body-sse'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/http-body-sse.bend','build/http-body-sse'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(args),16):
         p=subprocess.run([str(ROOT/'build/http-body-sse'),'--threads',threads,*args[start:start+16]],cwd=ROOT,text=True,capture_output=True,check=True,timeout=30)

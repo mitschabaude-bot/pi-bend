@@ -1,5 +1,6 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
-const source=fs.readFileSync('../pi-mono/packages/agent/src/agent-loop.ts','utf8');
+const source=fs.readFileSync(UPSTREAM + '/packages/agent/src/agent-loop.ts','utf8');
 const start=source.indexOf('if (signal?.aborted)',source.indexOf('const beforeResult ='));
 const end=source.indexOf('\n\t\t}\n\t\tif (signal?.aborted)',start);
 if(start<0||end<=start)throw new Error('upstream before-hook decision block missing');

@@ -11,10 +11,10 @@ ROOT = Path(__file__).resolve().parents[1]
 BEND = BEND
 output = ROOT / 'build/tcp-bytes-contract'
 source = 'tests/tcp-bytes-contract.bend'
-subprocess.run(['sh', 'scripts/build-pure.sh', source, str(output)], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', source, str(output)], cwd=ROOT, check=True)
 subprocess.run([BEND, source, '-o', str(output.with_suffix('.js'))], cwd=ROOT, check=True)
 error_output = ROOT / 'build/tcp-bytes-errors'
-subprocess.run(['sh', 'scripts/build-pure.sh', 'tests/tcp-bytes-errors.bend', str(error_output)], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'tests/tcp-bytes-errors.bend', str(error_output)], cwd=ROOT, check=True)
 subprocess.run([BEND, 'tests/tcp-bytes-errors.bend', '-o', str(error_output.with_suffix('.js'))], cwd=ROOT, check=True)
 sent = bytes(range(256))
 received = sent * 3 + bytes([239, 187, 191, 237, 160, 128, 255, 0])

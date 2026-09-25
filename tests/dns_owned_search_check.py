@@ -33,7 +33,7 @@ static void __attribute__((destructor)) configured_audit(void) {
 }
 '''
 (ROOT/'build/dns-owned-search-audit.c').write_text(source)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-owned-search-audit.c','-lpthread','-lm','-o','build/dns-owned-search'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-owned-search-audit.c','-lpthread','-lm','-o','build/dns-owned-search'],cwd=ROOT,check=True)
 (ROOT/'build/dns-owned-search-audit.js').write_text('process.on("exit",()=>console.error(`AUDIT ${globalThis.BEND_IO.live} ${globalThis.BEND_IO.waits.length}`));\n'+(ROOT/'build/dns-owned-search.js').read_text())
 
 def exact(peer,n):

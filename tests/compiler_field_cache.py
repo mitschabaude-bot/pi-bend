@@ -39,7 +39,7 @@ for fixture in ['compiler-string-pattern-return', 'compiler-word-field-cache', '
             subprocess.run(['bun', str(compiler), str(source), '-o', str(prefix.with_suffix('.c')),
                             '-o', str(prefix.with_suffix('.js'))], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True)
         artifacts[variant] = {ext: hashlib.sha256(prefix.with_suffix(ext).read_bytes()).hexdigest() for ext in ['.c', '.js']}
-        subprocess.run(['clang', '-O1', '-std=c11', '-fbracket-depth=2048', str(prefix.with_suffix('.c')),
+        subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-O1', '-std=c11', '-fbracket-depth=2048', str(prefix.with_suffix('.c')),
                         '-o', str(prefix), '-lpthread', '-lm'], check=True)
         for command in [[str(prefix), '--threads', '1'], [str(prefix), '--threads', '4'], ['bun', str(prefix.with_suffix('.js'))]]:
             run = subprocess.run(command + inputs, capture_output=True, text=True, check=True, timeout=60)

@@ -1,6 +1,7 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-const source=fs.readFileSync('../pi-mono/packages/agent/src/agent.ts','utf8');
+const source=fs.readFileSync(UPSTREAM + '/packages/agent/src/agent.ts','utf8');
 const start=source.indexOf('\tprivate normalizePromptInput(');
 const end=source.indexOf('\n\tprivate async runPromptMessages(',start);
 const body=stripTypeScriptTypes('class Prompt {'+source.slice(start,end)+'}');

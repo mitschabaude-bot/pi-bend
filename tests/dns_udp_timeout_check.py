@@ -10,7 +10,7 @@ ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun'
 compiler=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-udp-timeout-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/dns-udp-timeout.bend','-o',f'build/dns-udp-timeout.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-udp-timeout.c','-lpthread','-lm','-o','build/dns-udp-timeout'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-udp-timeout.c','-lpthread','-lm','-o','build/dns-udp-timeout'],cwd=ROOT,check=True)
 cases=[]
 for count in [1,2,3]:
     for index in range(count):

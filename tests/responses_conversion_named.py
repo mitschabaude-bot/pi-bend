@@ -16,7 +16,7 @@ for suite in suites:
 raw=re.search(r'const COPILOT_RAW_TOOL_CALL_ID =\s*"([^"]+)";', (UPSTREAM / 'packages/ai/test/openai-responses-foreign-toolcall-id.test.ts').read_text()).group(1)
 assert f'def rawId() -> String: "{raw}"' in (ROOT/'packages/ai/test/openai-responses-foreign-toolcall-id.bend').read_text()
 output=ROOT/'build/test-responses-conversion-named'
-subprocess.run(['sh','scripts/build-pure.sh','tests/responses-conversion-named.bend',str(output)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','tests/responses-conversion-named.bend',str(output)],cwd=ROOT,check=True)
 for threads in ['1','4']:
     result=subprocess.check_output([str(output),'--threads',threads],cwd=ROOT,text=True,timeout=120)
     assert result.splitlines()==expected,result

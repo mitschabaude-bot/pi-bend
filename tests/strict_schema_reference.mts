@@ -1,6 +1,7 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-const source=fs.readFileSync('../pi-mono/packages/ai/src/api/constrained-sampling.ts','utf8');
+const source=fs.readFileSync(UPSTREAM + '/packages/ai/src/api/constrained-sampling.ts','utf8');
 const api=new Function(stripTypeScriptTypes(source).replace(/^export /gm,'')+';return {makeStrictJsonSchema,getJsonSchemaToolParameters,resolveJsonSchemaStrictSampling};')();
 const result=fn=>{try{return {ok:true,value:fn()??null}}catch(e){return {ok:false,error:e.message}}};
 let input='';for await(const chunk of process.stdin)input+=chunk;

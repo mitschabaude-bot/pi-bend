@@ -37,6 +37,6 @@ lines.append(f'    IO.print("PASS {len(cases)} builder scalar conversions, with 
 source=BUILD/'schema-convert-check.bend';source.write_text('\n'.join(lines)+'\n')
 for source,name in [(source,'schema-convert-check'),('packages/runtime/test/schema-convert.bend','schema-convert-native')]:
     output=BUILD/name
-    subprocess.run(['sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
     for threads in ['1','4']:
         subprocess.run([str(output),'--threads',threads],cwd=ROOT,check=True,timeout=120)

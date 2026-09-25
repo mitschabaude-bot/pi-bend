@@ -1,6 +1,4 @@
 """Compare retry-loop effect traces to upstream with only sleep replaced."""
-from upstream_pin import check_sibling
-check_sibling()
 import json
 from pathlib import Path
 import subprocess
@@ -8,7 +6,7 @@ import sys
 
 root = Path(__file__).resolve().parents[1]
 if '--no-build' not in sys.argv:
-    subprocess.run([sys.executable, 'scripts/run-rss-guarded.py', '--stats',
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', sys.executable, 'scripts/run-rss-guarded.py', '--stats',
                     'build/provider-retry-build.json', '--', 'sh', 'scripts/build-pure.sh',
                     'packages/ai/test/provider-retry.bend', 'build/provider-retry'], cwd=root, check=True)
 expected = json.loads(subprocess.check_output(

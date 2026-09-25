@@ -45,7 +45,7 @@ add(organization='bad\norg', client={'OpenAI-Organization': None})
 raw = json.loads(subprocess.check_output(['node', 'tests/openai_request_headers_reference.mts'], input=json.dumps(CASES), text=True, cwd=ROOT))
 expected = [{k: v for k, v in case.items() if k != 'diagnostic'} for case in raw]
 if '--no-build' not in sys.argv:
-    subprocess.run([sys.executable, 'scripts/run-rss-guarded.py', '--limit-gib', '14', '--stats', 'build/openai-request-headers-build.json', '--', 'sh', 'scripts/build-pure.sh', 'packages/ai/test/openai-request-headers.bend', 'build/openai-request-headers'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', sys.executable, 'scripts/run-rss-guarded.py', '--limit-gib', '14', '--stats', 'build/openai-request-headers-build.json', '--', 'sh', 'scripts/build-pure.sh', 'packages/ai/test/openai-request-headers.bend', 'build/openai-request-headers'], cwd=ROOT, check=True)
 
 def encode(value):
     return ','.join(str(ord(c)) for c in json.dumps(value, ensure_ascii=True, separators=(',', ':')))

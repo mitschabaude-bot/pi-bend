@@ -51,7 +51,7 @@ for c,result,actual in zip(cases,want,observed,strict=True):
     assert actual==target,(c,result,actual,target)
 def codes(s):return ','.join(str(ord(x)) for x in s)
 args=[';'.join([c['method'],str(c['major']),str(c['minor']),str(c['status']),*[codes(k)+':'+codes(v) for k,v in c['fields']]]) for c in cases]
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/http-response-policy.bend','build/http-response-policy'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/http-response-policy.bend','build/http-response-policy'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(args),32):
         p=subprocess.run([str(ROOT/'build/http-response-policy'),'--threads',threads,*args[start:start+32]],cwd=ROOT,text=True,capture_output=True,check=True,timeout=30)

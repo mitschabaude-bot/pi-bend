@@ -1,6 +1,4 @@
 """Differential model thinking tests using the actual upstream helper bodies."""
-from upstream_pin import check_sibling
-check_sibling()
 import json
 from pathlib import Path
 import random
@@ -75,7 +73,7 @@ source.append('    IO.print("PASS 64 model identity pairs and 30 API predicates 
 source.append(f'    IO.print("PASS {len(cases)} upstream thinking configurations and all seven clamp inputs")')
 entry = BUILD / 'model-metadata-vectors.bend'
 entry.write_text('\n'.join(source) + '\n')
-subprocess.run(['sh', 'scripts/build-pure.sh', str(entry), 'build/test-model-metadata'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(entry), 'build/test-model-metadata'], cwd=ROOT, check=True)
 subprocess.run(['build/test-model-metadata', '--threads', '1'], cwd=ROOT, check=True, timeout=90)
-subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/ai/test/model-thinking.bend', 'build/test-model-thinking'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/ai/test/model-thinking.bend', 'build/test-model-thinking'], cwd=ROOT, check=True)
 subprocess.run(['build/test-model-thinking', '--threads', '1'], cwd=ROOT, check=True, timeout=30)

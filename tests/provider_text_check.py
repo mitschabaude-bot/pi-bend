@@ -1,6 +1,4 @@
 """Provider ID hashing and Unicode cleanup against the pinned Pi functions."""
-from upstream_pin import check_sibling
-check_sibling()
 import itertools,json,random,subprocess
 from pathlib import Path
 from schema_literals import string
@@ -19,5 +17,5 @@ for start in range(0,len(cases),35):
     name=f'group{start}';groups.append(name);lines += [f'def {name}() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(start,min(start+35,len(cases)))]
 lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {g}()' for g in groups]+['    A.assertion(String.eq(H.base36(0), "0") && String.eq(H.base36(4294967295), "1z141z3"), "unsigned base36 boundaries")',f'    IO.print("PASS {len(cases)} provider ID hashes and Unicode cleanup comparisons")']
 src=BUILD/'provider-text-check.bend';src.write_text('\n'.join(lines)+'\n');out=BUILD/'provider-text-check'
-subprocess.run(['sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
 for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,check=True,timeout=120)

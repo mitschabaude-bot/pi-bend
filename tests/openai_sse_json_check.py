@@ -57,7 +57,7 @@ expected = json.loads(subprocess.check_output(['node', '--input-type=module', '-
 def codes(text):
     return ','.join(str(ord(c)) for c in text)
 arguments = ['s'+ '/'.join([str(int(done)), str(int(synthesize)), 'N' if event is None else codes(event), codes(data), codes(want)]) for (done,synthesize,event,data),want in zip(cases,expected)]
-subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/ai/test/openai-sse-json-runner.bend', 'build/test-openai-sse-json'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/ai/test/openai-sse-json-runner.bend', 'build/test-openai-sse-json'], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     for start in range(0, len(cases), 32):
         actual = subprocess.check_output([str(ROOT / 'build/test-openai-sse-json'), '--threads', threads, *arguments[start:start+32]], text=True, timeout=30).splitlines()

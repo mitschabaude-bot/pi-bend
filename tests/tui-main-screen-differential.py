@@ -4,8 +4,7 @@ Set BEND_COMPILER to a current bend2/main.ts when the installed compiler lacks
 recent process constructors. Setting `BEND_MAIN_SCREEN_NATIVE` also compares a prebuilt binary named by
 BEND_MAIN_SCREEN_NATIVE; it never starts a build itself.
 """
-from upstream_pin import UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import UPSTREAM
 import json
 import os
 from pathlib import Path

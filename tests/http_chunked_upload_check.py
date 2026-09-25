@@ -20,7 +20,7 @@ for payload in [bytes(range(256)), b'\x00\xff\r\n']:
 args.append('b256')
 expected.append('error')
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/http-chunked-upload.bend', 'build/http-chunked-upload'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/http-chunked-upload.bend', 'build/http-chunked-upload'], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     for start in range(0, len(args), 8):
         result = subprocess.run([str(ROOT / 'build/http-chunked-upload'), '--threads', threads, *args[start:start + 8]], cwd=ROOT, text=True, capture_output=True, check=True, timeout=30)

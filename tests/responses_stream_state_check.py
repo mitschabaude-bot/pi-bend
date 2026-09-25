@@ -55,7 +55,7 @@ lines += ['def run(index: U32, expected: String) -> IO(Unit):','  match index:']
 lines += ['def main() -> IO(Unit):','  do IO<Unit>:','    values : List<String> <- IO.args()','    dispatch(values)']
 lines.insert(len(lines)-4,'def dispatch(values: List<String>) -> IO(Unit):\n  match values:\n    case index <> expected <> Nil{}: run(Text.decimal(index, 0), expected)\n    case _: IO.die(Unit, 1, "expected index expected")')
 source=ROOT/'build/responses-stream-state-check.bend';source.write_text('\n'.join(lines)+'\n');out=ROOT/'build/responses-stream-state-check'
-subprocess.run(['sh','scripts/build-pure.sh',str(source),str(out)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(out)],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for i,r in enumerate(expected):subprocess.run([str(out),'--threads',threads,str(i),r],cwd=ROOT,check=True,timeout=120)
     print(f'PASS {len(cases)} Responses multiplexed stream sequences on {threads} threads')

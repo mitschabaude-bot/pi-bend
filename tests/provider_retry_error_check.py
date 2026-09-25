@@ -1,6 +1,4 @@
 """Exact retry errors against pinned pi; binary64 ceil against native Math.ceil."""
-from upstream_pin import check_sibling
-check_sibling()
 import json, math, random, struct, subprocess, sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -15,7 +13,7 @@ for delay in [1.,1.0001,999.9,1000.,1000.00001,1001.,60001.,277403000.,1e20,1e24
 cases += ['a','o','p','r']
 expected=json.loads(subprocess.check_output(['node','--disable-warning=ExperimentalWarning','tests/provider_retry_error_reference.mts'],input=json.dumps(cases),text=True,cwd=ROOT))
 if '--no-build' not in sys.argv:
- subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--stats','build/provider-retry-error-build.json','--','sh','scripts/build-pure.sh','packages/ai/test/provider-retry-error.bend','build/provider-retry-error'],cwd=ROOT,check=True)
+ subprocess.run(['flock', '/tmp/pi-bend-build.lock', sys.executable,'scripts/run-rss-guarded.py','--stats','build/provider-retry-error-build.json','--','sh','scripts/build-pure.sh','packages/ai/test/provider-retry-error.bend','build/provider-retry-error'],cwd=ROOT,check=True)
 for threads in ['1','4']:
  for start in range(0,len(cases),24):
   result=subprocess.run([str(ROOT/'build/provider-retry-error'),'--threads',threads,*cases[start:start+24]],capture_output=True,text=True,check=True,timeout=30)

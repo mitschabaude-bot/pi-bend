@@ -43,7 +43,7 @@ for row, observation in zip(rows, observed, strict=True):
         wire = (b'3\r\nabc\r\n0\r\n\r\n' if payload else b'0\r\n\r\n') if observation['transfer'] == 'chunked' else payload
         expected.append(field(observation['length']) + ';' + field(observation['transfer']) + ';' + ','.join(map(str, wire)))
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/http-buffered-framing.bend', 'build/http-buffered-framing'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/http-buffered-framing.bend', 'build/http-buffered-framing'], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     for start in range(0, len(args), 16):
         result = subprocess.run([str(ROOT / 'build/http-buffered-framing'), '--threads', threads, *args[start:start + 16]], cwd=ROOT, text=True, capture_output=True, check=True, timeout=30)

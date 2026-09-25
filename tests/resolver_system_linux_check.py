@@ -32,7 +32,7 @@ static void __attribute__((destructor)) audit(void) {
 }
 '''
 (ROOT/'build/resolver-system-linux-audit.c').write_text((ROOT/'build/resolver-system-linux.c').read_text()+audit)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-system-linux-audit.c','-lpthread','-lm','-o','build/resolver-system-linux'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-system-linux-audit.c','-lpthread','-lm','-o','build/resolver-system-linux'],cwd=ROOT,check=True)
 
 allowed = {errno.EPERM, errno.ENOENT, errno.EACCES, errno.ENOTDIR, errno.EISDIR, errno.ELOOP}
 def fields(values): return ''.join(f'{len(x)}:{x}' for x in values)

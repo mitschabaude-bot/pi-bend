@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Byte-compare native JSONL framing with pi v0.87.1's actual jsonl.ts."""
-from upstream_pin import UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import UPSTREAM
 import hashlib
 import os
 import subprocess

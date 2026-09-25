@@ -1,9 +1,10 @@
 // Test-only oracle: actual pinned queue methods and Agent.continue, with only
 // the selected run entry points intercepted to observe the planning decision.
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-import {createInitialSystemMessage,getCurrentSystemMessage,getCurrentSystemPrompt,toToolDeclaration} from '../../pi-mono/packages/ai/src/utils/transcript.ts';
-const source=fs.readFileSync('../pi-mono/packages/agent/src/agent.ts','utf8');
+const { createInitialSystemMessage, getCurrentSystemMessage, getCurrentSystemPrompt, toToolDeclaration } = await import(UPSTREAM + '/packages/ai/src/utils/transcript.ts');
+const source=fs.readFileSync(UPSTREAM + '/packages/agent/src/agent.ts','utf8');
 const body=stripTypeScriptTypes(source.slice(source.indexOf('function defaultConvertToLlm('))).replace(/^export /gm,'');
 const {Agent,PendingMessageQueue}=new Function('createInitialSystemMessage','getCurrentSystemMessage','getCurrentSystemPrompt','toToolDeclaration','getDefaultStreamFn',body+';return {Agent,PendingMessageQueue};')(createInitialSystemMessage,getCurrentSystemMessage,getCurrentSystemPrompt,toToolDeclaration,()=>{throw Error('unexpected fallback')});
 let input='';for await(const part of process.stdin)input+=part;

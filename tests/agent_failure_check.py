@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-from upstream_pin import check_sibling
-check_sibling()
 import itertools,json,pathlib,subprocess
 root=pathlib.Path(__file__).resolve().parents[1]
 fixtures=[dict(aborted=a,error=e,stage=s,listener=l) for a,e,s,l in itertools.product([False,True],['boom',''],range(5),range(2))]
@@ -13,5 +11,5 @@ for f,trace in zip(fixtures,expected):
 lines.append(f'    IO.print("PASS {len(fixtures)} Agent failure recovery source scenarios")')
 (root/'build').mkdir(exist_ok=True)
 (root/'build/agent-failure-check.bend').write_text('\n'.join(lines)+'\n')
-subprocess.run(['sh','scripts/build-pure.sh','build/agent-failure-check.bend','build/agent-failure-check'],cwd=root,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','build/agent-failure-check.bend','build/agent-failure-check'],cwd=root,check=True)
 for threads in [1,4]:subprocess.run(['build/agent-failure-check','--threads',str(threads)],cwd=root,check=True,timeout=120)

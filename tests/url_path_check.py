@@ -72,7 +72,7 @@ for index, got in actual:
     assert got == expected[index], (index, cases[index], got, expected[index])
 print(f'Node path-state cross-check: {len(actual)} cases PASS', flush=True)
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/url-path.bend', 'build/url-path'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/url-path.bend', 'build/url-path'], cwd=ROOT, check=True)
 subprocess.run([str(Path(BEND)), 'packages/runtime/test/url-path.bend', '-o', 'build/url-path.js'], cwd=ROOT, check=True)
 def codes(text): return ','.join(map(str, map(ord, text)))
 def wire(values):

@@ -65,7 +65,7 @@ console.log(JSON.stringify({values,nodeComparisons}));
 reference=json.loads(subprocess.check_output(['node','-e',oracle],input=json.dumps(rows),text=True))
 arguments=[mode+';'+','.join(map(str,map(ord,text))) for mode,text in rows]
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/url-host.bend','build/url-host'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/url-host.bend','build/url-host'],cwd=ROOT,check=True)
 subprocess.run([str(Path(BEND)),'packages/runtime/test/url-host.bend','-o','build/url-host.js'],cwd=ROOT,check=True)
 for label,command in [('native 1',['build/url-host','--threads','1']),('native 4',['build/url-host','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/url-host.js'])]:
     for start in range(0,len(arguments),64):

@@ -107,7 +107,7 @@ def main():
     prefix = ROOT / 'build/filesystem-read'
     compiler = args.bend or Path(os.environ.get('BEND', str(ROOT / 'build/bend-native-toolchain/bend2/main.ts')))
     if not args.no_build:
-        subprocess.run(['sh', 'scripts/build-pure.sh', 'tests/filesystem-read.bend', str(prefix)], cwd=ROOT,
+        subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'tests/filesystem-read.bend', str(prefix)], cwd=ROOT,
                        env=dict(os.environ, BEND=str(compiler)), check=True)
         subprocess.run([str(compiler), 'tests/filesystem-read.bend', '-o', str(prefix)+'.js'], cwd=ROOT, check=True)
     with tempfile.TemporaryDirectory(prefix='bend-read-') as directory:

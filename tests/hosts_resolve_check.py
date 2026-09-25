@@ -15,7 +15,7 @@ bun=Path.home()/'.bun/bin/bun'; compiler=TOOLCHAIN
 for suffix in ['c','js']:
     with (ROOT/f'build/hosts-resolve-{suffix}.log').open('w') as log:
         subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/hosts-resolve-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/hosts-resolve.bend','-o',f'build/hosts-resolve.{suffix}'],cwd=ROOT,check=True,stdout=log,stderr=subprocess.STDOUT)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/hosts-resolve.c','-lpthread','-lm','-o','build/hosts-resolve'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/hosts-resolve.c','-lpthread','-lm','-o','build/hosts-resolve'],cwd=ROOT,check=True)
 # Reuse only the independent reference functions, without its eager builds.
 source=ast.parse((ROOT/'tests/hosts_file_check.py').read_text())
 functions=[node for node in source.body if isinstance(node,ast.FunctionDef) and node.name in {'scalars','fold','oracle'}]

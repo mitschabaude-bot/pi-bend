@@ -1,7 +1,8 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-import {getCurrentTools, getToolStateChanges, toToolDeclaration} from '../../pi-mono/packages/ai/src/utils/transcript.ts';
-const source=fs.readFileSync('../pi-mono/packages/agent/src/agent-loop.ts','utf8');
+const { getCurrentTools, getToolStateChanges, toToolDeclaration } = await import(UPSTREAM + '/packages/ai/src/utils/transcript.ts');
+const source=fs.readFileSync(UPSTREAM + '/packages/agent/src/agent-loop.ts','utf8');
 const declarations=source.slice(source.indexOf('function declareToolChanges('),source.indexOf('\n/**\n * Stream an assistant response'));
 const body=source.slice(source.indexOf('let preparedMessages: AgentMessage[] = [];'),source.indexOf('// Stream assistant response'));
 const code=declarations+'\nasync function stage(currentContext,newMessages,config,lastCompletedTurn,pendingMessages,emit){\n'+body+'\nreturn {currentContext,newMessages,config};\n}';

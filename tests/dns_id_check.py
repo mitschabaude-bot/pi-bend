@@ -10,7 +10,7 @@ ROOT=Path(__file__).resolve().parents[1]
 candidate=Path(sys.argv[1] if len(sys.argv)>1 and not sys.argv[1].startswith('--') else TOOLCHAIN).resolve();bun=Path.home()/'.bun/bin/bun'
 for suffix in ['c','js']:
     subprocess.run([str(bun),str(candidate/'main.ts'),'tests/dns-id.bend','-o',f'build/dns-id.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-O1','build/dns-id.c','-lpthread','-lm','-o','build/dns-id'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-O1','build/dns-id.c','-lpthread','-lm','-o','build/dns-id'],cwd=ROOT,check=True)
 # Independently decode network bytes, exercising every octet in both positions.
 pairs=sorted({(a,b) for a in range(256) for b in [0,1,127,128,255]}|{(a,b) for a in [0,1,127,128,255] for b in range(256)})
 inputs=[f'{a},{b}' for a,b in pairs]

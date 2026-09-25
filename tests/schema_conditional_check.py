@@ -1,6 +1,4 @@
 """Conditional checking and complete Pi diagnostics, including nested branches."""
-from upstream_pin import check_sibling
-check_sibling()
 import json, subprocess
 from pathlib import Path
 from schema_literals import value, string
@@ -39,5 +37,5 @@ for start in range(0,count,60):
     lines += [f'def {name}() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(start,min(start+60,count))]
 lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {name}()' for name in groups]+[f'    IO.print("PASS {len(cases)} conditional outcomes/exact messages and {len(malformed)} malformed-schema paths")']
 src=BUILD/'schema-conditional-check.bend';src.write_text('\n'.join(lines)+'\n');out=BUILD/'schema-conditional-check'
-subprocess.run(['sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
 for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,check=True,timeout=120)

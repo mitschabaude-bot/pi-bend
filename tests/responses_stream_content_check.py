@@ -59,5 +59,5 @@ for start in range(0,len(cases),20):
 lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {g}()' for g in groups]+[f'    IO.print("PASS {len(cases)} Responses content-stream sequences")']
 source=ROOT/'build/responses-stream-content-check.bend';source.write_text('\n'.join(lines)+'\n')
 out=ROOT/'build/responses-stream-content-check'
-subprocess.run(['sh','scripts/build-pure.sh',str(source),str(out)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(out)],cwd=ROOT,check=True)
 for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,check=True,timeout=120)

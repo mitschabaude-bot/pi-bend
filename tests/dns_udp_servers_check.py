@@ -51,7 +51,7 @@ needle = 'Term udp_bind_family_run(Env e, Term* f, IoWork* w) {'
 assert source.count(needle) == 1
 source = source.replace(needle, 'static void servers_before_bind(void);\n' + needle + '\n  servers_before_bind();')
 (ROOT / 'build/dns-udp-servers-audit.c').write_text(source + audit)
-subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1',
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1',
                 'build/dns-udp-servers-audit.c', '-lpthread', '-lm',
                 '-o', 'build/dns-udp-servers'], cwd=ROOT, check=True)
 js_source = (ROOT / 'build/dns-udp-servers.js').read_text()

@@ -18,8 +18,7 @@ parser.add_argument('--no-build', action='store_true')
 args = parser.parse_args()
 WORK = args.worktree.resolve()
 from bend_toolchain import BEND as BEND_PATH
-from upstream_pin import PIN, UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import PIN, UPSTREAM
 BEND = Path(BEND_PATH)
 BUN = str(Path.home() / '.bun/bin/bun')
 SOURCE = 'tests/provider-retry-owned.bend'
@@ -42,7 +41,7 @@ static void __attribute__((destructor)) openai_http_reader_audit(void) {
 ''')
 Path(f'{prefix}-audit.js').write_text(instrument(Path(f'{prefix}.js').read_text()))
 for suffix in ['', '-audit']:
-    subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1', f'{prefix}{suffix}.c',
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1', f'{prefix}{suffix}.c',
                     '-lpthread', '-lm', '-o', str(prefix) + suffix], cwd=WORK, check=True)
 
 reference_commit = subprocess.check_output(['git','rev-parse','HEAD'],cwd=UPSTREAM,text=True).strip()

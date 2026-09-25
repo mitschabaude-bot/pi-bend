@@ -1,5 +1,6 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
-const source = fs.readFileSync('../pi-mono/packages/agent/src/agent-loop.ts', 'utf8');
+const source = fs.readFileSync(UPSTREAM + '/packages/agent/src/agent-loop.ts', 'utf8');
 const selection = source.slice(source.indexOf('async function executeToolCalls('));
 const start = selection.indexOf('const toolCalls =');
 const end = selection.indexOf('return executeToolCallsSequential(');

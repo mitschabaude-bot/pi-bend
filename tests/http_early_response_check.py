@@ -157,7 +157,7 @@ with tempfile.TemporaryDirectory(prefix='http-early-response-', dir=ROOT / 'buil
     launcher.chmod(0o755)
     environment = dict(os.environ, BEND=str(launcher))
     binary = directory / 'test'
-    subprocess.run(['sh', 'scripts/build-pure.sh', 'tests/http-early-response.bend', str(binary)], cwd=ROOT, env=environment, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'tests/http-early-response.bend', str(binary)], cwd=ROOT, env=environment, check=True)
     javascript = directory / 'test.js'
     subprocess.run([str(launcher), 'tests/http-early-response.bend', '-o', str(javascript)], cwd=ROOT, check=True)
     for threads in ['1', '4']:

@@ -70,7 +70,7 @@ with tempfile.TemporaryDirectory(prefix='exchange-write-', dir=ROOT / 'build') a
     launcher.chmod(0o755)
     environment = dict(os.environ, BEND=str(launcher))
     binary = directory / 'test'
-    subprocess.run(['sh', 'scripts/build-pure.sh', 'tests/http-exchange-write-error.bend', str(binary)], cwd=ROOT, env=environment, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'tests/http-exchange-write-error.bend', str(binary)], cwd=ROOT, env=environment, check=True)
     javascript = directory / 'test.js'
     subprocess.run([str(launcher), 'tests/http-exchange-write-error.bend', '-o', str(javascript)], cwd=ROOT, check=True)
     for threads in ['1', '4']:

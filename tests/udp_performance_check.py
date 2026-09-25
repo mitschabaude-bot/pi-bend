@@ -31,7 +31,7 @@ for name,candidate in [('baseline',baseline),('candidate',current)]:
         stats=f'build/udp-throughput-{name}-{suffix}-build.json'
         subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',stats,'--',str(bun),str(candidate/'main.ts'),'tests/udp-throughput.bend','-o',f'build/udp-throughput-{name}.{suffix}'],cwd=ROOT,check=True)
         builds[name+'-'+suffix]=json.loads((ROOT/stats).read_text())
-    subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O2',f'build/udp-throughput-{name}.c','-lpthread','-lm','-o',f'build/udp-throughput-{name}'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O2',f'build/udp-throughput-{name}.c','-lpthread','-lm','-o',f'build/udp-throughput-{name}'],cwd=ROOT,check=True)
     hashes[name]={p:hashlib.sha256((candidate/p).read_bytes()).hexdigest() for p in ['main.ts','bend.ts','comp.ts','base.bend']+['effs/'+n for n in effects]}
 rows=[];summaries=[]
 for backend in args.backend or ['native 1','native 4','Bun']:

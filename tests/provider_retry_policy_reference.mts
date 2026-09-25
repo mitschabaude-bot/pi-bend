@@ -1,6 +1,7 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-const source=stripTypeScriptTypes(fs.readFileSync('../pi-mono/packages/ai/src/utils/provider-retry.ts','utf8')).replace(/^export /gm,'').replace('function validateServerRetryDelayMs(', 'function originalValidateServerRetryDelayMs(');
+const source=stripTypeScriptTypes(fs.readFileSync(UPSTREAM + '/packages/ai/src/utils/provider-retry.ts','utf8')).replace(/^export /gm,'').replace('function validateServerRetryDelayMs(', 'function originalValidateServerRetryDelayMs(');
 let observed;
 const dateRequested={};
 let dateText;

@@ -1,8 +1,9 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import assert from 'node:assert';
 import {EventEmitter} from 'node:events';
 import {stripTypeScriptTypes} from 'node:module';
-const root='../pi-mono/packages/tui/';
+const root=UPSTREAM + '/packages/tui/';
 const code=stripTypeScriptTypes(fs.readFileSync(root+'src/stdin-buffer.ts','utf8')).replace(/^import .*;$/gm,'').replace(/^export /gm,'');
 const Real=new Function('EventEmitter',code+';return StdinBuffer;')(EventEmitter);
 const keys=stripTypeScriptTypes(fs.readFileSync(root+'src/keys.ts','utf8')).replace(/^export /gm,'');

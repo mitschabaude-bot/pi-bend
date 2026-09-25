@@ -52,12 +52,12 @@ def keyed(key: Maybe<&2, String>, input: Auth.ResolveInput) -> IO(Auth.AuthOutco
 def ambientAuth() -> IO(Auth.ProviderAuth):
   do IO<Auth.ProviderAuth>:
     resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~Unit, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~ambient, Unit{})
-    return Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Ambient", resolve}}, None{}}
+    return Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Ambient", None{}, resolve}}, None{}}
 
 def envKeyAuth(key: Maybe<&2, String>) -> IO(Auth.ProviderAuth):
   do IO<Auth.ProviderAuth>:
     resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~Maybe<&2, String>, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~keyed, key)
-    return Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Test API key", resolve}}, None{}}
+    return Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Test API key", None{}, resolve}}, None{}}
 
 def rotated(unit: Unit, input: Auth.RefreshInput) -> IO(Result<&2, &2, String, Auth.Credential>):
   do IO<Result<&2, &2, String, Auth.Credential>>:

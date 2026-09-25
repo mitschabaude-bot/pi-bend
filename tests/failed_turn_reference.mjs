@@ -1,5 +1,6 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
-const source=fs.readFileSync('../pi-mono/packages/agent/src/agent-loop.ts','utf8');
+const source=fs.readFileSync(UPSTREAM + '/packages/agent/src/agent-loop.ts','utf8');
 const start=source.indexOf('newMessages.push(message);',source.indexOf('// Stream assistant response'));
 const end=source.indexOf('// Check for tool calls',start);
 if(start<0 || end<=start) throw new Error('upstream post-response failure block missing');

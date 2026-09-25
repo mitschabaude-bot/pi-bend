@@ -1,8 +1,7 @@
 """Replay editing-history traces against actual pinned KillRing/UndoStack."""
 import argparse,json,random,subprocess
 from pathlib import Path
-from upstream_pin import PIN, UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import PIN, UPSTREAM
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser();p.add_argument('command',nargs=argparse.REMAINDER);args=p.parse_args();command=args.command
 if command[:1]==['--']:command=command[1:]

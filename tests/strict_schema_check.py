@@ -1,6 +1,4 @@
 """Strict provider schemas, fallback policy and exact error precedence from Pi."""
-from upstream_pin import check_sibling
-check_sibling()
 import json,random,subprocess
 from pathlib import Path
 from schema_literals import value,string,seq
@@ -39,5 +37,5 @@ for start in range(0,len(cases),25):
     name=f'group{start}';groups.append(name);lines += [f'def {name}() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(start,min(start+25,len(cases)))]
 lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {g}()' for g in groups]+[f'    IO.print("PASS {len(cases)} strict schemas, {len(cases)*10} policy resolutions and schema parameter selection")']
 src=BUILD/'strict-schema-check.bend';src.write_text('\n'.join(lines)+'\n');out=BUILD/'strict-schema-check'
-subprocess.run(['sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
 for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,check=True,timeout=120)

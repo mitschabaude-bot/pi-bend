@@ -1,6 +1,4 @@
 """Pinned schema grapheme policy and composed tool-validation length messages."""
-from upstream_pin import check_sibling
-check_sibling()
 import json, random, subprocess
 from pathlib import Path
 from schema_literals import value,string
@@ -44,5 +42,5 @@ lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {name}()' for name 
 source=BUILD/'schema-string-check.bend';source.write_text('\n'.join(lines)+'\n')
 for src,name in [(source,'schema-string-check'),('packages/runtime/test/schema-string.bend','schema-string-native')]:
     output=BUILD/name
-    subprocess.run(['sh','scripts/build-pure.sh',str(src),str(output)],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(src),str(output)],cwd=ROOT,check=True)
     for threads in ['1','4']:subprocess.run([str(output),'--threads',threads],cwd=ROOT,check=True,timeout=120)

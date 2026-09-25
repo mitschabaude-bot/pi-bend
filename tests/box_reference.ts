@@ -1,9 +1,10 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { strict as assert } from "node:assert";
-import { Box } from "/home/agent/code/pi-mono/packages/tui/src/components/box.ts";
-import type { Component, TuiMouseEvent } from "/home/agent/code/pi-mono/packages/tui/src/tui.ts";
-assert.equal(createHash("sha256").update(readFileSync("/home/agent/code/pi-mono/packages/tui/src/components/box.ts")).digest("hex"), "f79d30c9c263064df656dc55674b5d951bf765ffbbf658f400f449c44f6dab98");
+const { Box } = await import(UPSTREAM + "/packages/tui/src/components/box.ts");
+
+assert.equal(createHash("sha256").update(readFileSync(UPSTREAM + "/packages/tui/src/components/box.ts")).digest("hex"), "f79d30c9c263064df656dc55674b5d951bf765ffbbf658f400f449c44f6dab98");
 let value = "abc";
 let seen = "";
 let invalidations = 0;

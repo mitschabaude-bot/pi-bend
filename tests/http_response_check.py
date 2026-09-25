@@ -65,7 +65,7 @@ if '--no-build' not in sys.argv:
                             '--stats', f'build/{STEM}-{backend}-build.json', '--',
                             BEND, SOURCE, '-o', f'build/{STEM}.{backend}'],
                            cwd=ROOT, check=True, stdout=log, stderr=subprocess.STDOUT)
-    subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1',
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1',
                     f'build/{STEM}.c', '-lpthread', '-lm', '-o', f'build/{STEM}'], cwd=ROOT, check=True)
 
 c = ROOT / f'build/{STEM}.c'
@@ -78,7 +78,7 @@ static void __attribute__((destructor)) callback_audit(void) {
 }
 """)
 (ROOT / f'build/{STEM}-audit.js').write_text(instrument((ROOT / f'build/{STEM}.js').read_text()))
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1',str(audit_c),'-lpthread','-lm','-o',str(ROOT/f'build/{STEM}-audit')],check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1',str(audit_c),'-lpthread','-lm','-o',str(ROOT/f'build/{STEM}-audit')],check=True)
 runs = []
 for audited in [False, True]:
     suffix = '-audit' if audited else ''

@@ -1,15 +1,16 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {strict as assert} from 'node:assert';
-import {KeybindingsManager,setKeybindings} from '/home/agent/code/pi-mono/packages/tui/src/keybindings.ts';
-import {KEYBINDINGS} from '/home/agent/code/pi-mono/packages/coding-agent/src/core/keybindings.ts';
-import {ToolExecutionComponent} from '/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/components/tool-execution.ts';
-import {initTheme} from '/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/theme/theme.ts';
-import {Text} from '/home/agent/code/pi-mono/packages/tui/src/components/text.ts';
-import {readRenderers} from '/home/agent/code/pi-mono/packages/coding-agent/src/core/tools/renderers/read.ts';
-import {createShellRenderers} from '/home/agent/code/pi-mono/packages/coding-agent/src/core/tools/renderers/bash.ts';
-import {editRenderers} from '/home/agent/code/pi-mono/packages/coding-agent/src/core/tools/renderers/edit.ts';
-import {writeRenderers} from '/home/agent/code/pi-mono/packages/coding-agent/src/core/tools/renderers/write.ts';
+const { KeybindingsManager, setKeybindings } = await import(UPSTREAM + '/packages/tui/src/keybindings.ts');
+const { KEYBINDINGS } = await import(UPSTREAM + '/packages/coding-agent/src/core/keybindings.ts');
+const { ToolExecutionComponent } = await import(UPSTREAM + '/packages/coding-agent/src/modes/interactive/components/tool-execution.ts');
+const { initTheme } = await import(UPSTREAM + '/packages/coding-agent/src/modes/interactive/theme/theme.ts');
+const { Text } = await import(UPSTREAM + '/packages/tui/src/components/text.ts');
+const { readRenderers } = await import(UPSTREAM + '/packages/coding-agent/src/core/tools/renderers/read.ts');
+const { createShellRenderers } = await import(UPSTREAM + '/packages/coding-agent/src/core/tools/renderers/bash.ts');
+const { editRenderers } = await import(UPSTREAM + '/packages/coding-agent/src/core/tools/renderers/edit.ts');
+const { writeRenderers } = await import(UPSTREAM + '/packages/coding-agent/src/core/tools/renderers/write.ts');
 for (const [file,digest] of [
  ['packages/coding-agent/src/modes/interactive/components/tool-execution.ts','1463e89622b305847fd129ea81a5f8d969778a650daf5357bd3771c79aef349f'],
  ['packages/coding-agent/src/core/tools/render-utils.ts','38913e15575b7c314687c1a7d53b2763eecb8e7a86b0b58d7b5532c900503cf3'],
@@ -23,7 +24,7 @@ for (const [file,digest] of [
  ['packages/coding-agent/src/core/tools/renderers/bash.ts','f04ab261d9f915f7b43a97ac679fb38d5646110855a886474593dc5d973f6764'],
  ['packages/coding-agent/src/core/tools/renderers/edit.ts','0c1bafcf74ad2b703bf5ab193e72084a1da80231a77abddefc23c5bb20558731'],
  ['packages/coding-agent/src/core/tools/renderers/write.ts','84d715671a72c77821ab81aef79b39f5022082c78568683ab643d38ee735d07f'],
-] as const) assert.equal(createHash('sha256').update(readFileSync('/home/agent/code/pi-mono/'+file)).digest('hex'),digest);
+] as const) assert.equal(createHash('sha256').update(readFileSync(UPSTREAM + '/'+file)).digest('hex'),digest);
 initTheme('dark');
 setKeybindings(new KeybindingsManager(KEYBINDINGS));
 const ui:any={requestRender(){}};

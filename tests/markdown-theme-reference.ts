@@ -1,8 +1,9 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 
-const root = '/home/agent/code/pi-mono';
+const root = UPSTREAM;
 for (const [path, hash] of [
   ['packages/coding-agent/src/modes/interactive/theme/theme.ts', 'c3bf2e3b72f6bb782f34de0535fcc1758b9b6ea7a0d2e7d6f17244fa55c3f31a'],
   ['packages/tui/src/components/markdown.ts', '704c1c714a7ff6bdec55573ab38393726fa73a7b47cf4c1161ccc4f08530ac28'],

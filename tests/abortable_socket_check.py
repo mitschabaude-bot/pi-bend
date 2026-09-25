@@ -15,7 +15,7 @@ launcher.write_text('#!/bin/sh\nexec ' + shlex.quote(str(Path.home() / '.bun/bin
 launcher.chmod(0o755)
 environment = dict(os.environ, BEND=str(launcher))
 binary = ROOT / 'build/abortable-socket'
-subprocess.run(['sh', 'scripts/build-pure.sh', 'tests/abortable-socket.bend', str(binary)], cwd=ROOT, env=environment, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'tests/abortable-socket.bend', str(binary)], cwd=ROOT, env=environment, check=True)
 javascript = binary.with_suffix('.js')
 subprocess.run([str(launcher), 'tests/abortable-socket.bend', '-o', str(javascript)], cwd=ROOT, check=True)
 

@@ -1,6 +1,4 @@
 """Compare complete tool-state changes with the actual upstream implementation."""
-from upstream_pin import check_sibling
-check_sibling()
 import json
 from pathlib import Path
 import random
@@ -63,5 +61,5 @@ for index, ((previous, current), want) in enumerate(zip(cases, expected, strict=
 source.append(f'    IO.print("PASS {len(cases)} upstream tool-state change cases")')
 entry = BUILD / 'tool-state-vectors.bend'
 entry.write_text('\n'.join(source) + '\n')
-subprocess.run(['sh', 'scripts/build-pure.sh', str(entry), 'build/test-tool-state'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(entry), 'build/test-tool-state'], cwd=ROOT, check=True)
 subprocess.run(['build/test-tool-state', '--threads', '1'], cwd=ROOT, check=True, timeout=90)

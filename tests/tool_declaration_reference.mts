@@ -1,5 +1,6 @@
-import { toToolDeclaration, declarationsEqual, getToolStateChanges, hasToolRedefinitions, hasNonAdditiveToolChanges } from '../../pi-mono/packages/ai/src/utils/transcript.ts';
-import type { Tool } from '../../pi-mono/packages/ai/src/types.ts';
+import { UPSTREAM } from "./upstream_pin.mjs";
+const { toToolDeclaration, declarationsEqual, getToolStateChanges, hasToolRedefinitions, hasNonAdditiveToolChanges } = await import(UPSTREAM + '/packages/ai/src/utils/transcript.ts');
+
 import { readFileSync } from 'node:fs';
 
 function schema(v: any): any {

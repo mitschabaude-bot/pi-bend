@@ -59,7 +59,7 @@ console.log(JSON.stringify(output));
 '''
 observed=json.loads(subprocess.check_output(['node','--input-type=module','-e',script],input=json.dumps(fixtures),cwd=ROOT,text=True,timeout=30))
 for fields,actual in zip(fixtures,observed,strict=True):assert actual==projection(fields),(fields,actual,projection(fields))
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/http-head.bend','build/http-head'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/http-head.bend','build/http-head'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(args),32):
         p=subprocess.run([str(ROOT/'build/http-head'),'--threads',threads,*args[start:start+32]],cwd=ROOT,text=True,capture_output=True,check=True,timeout=30)

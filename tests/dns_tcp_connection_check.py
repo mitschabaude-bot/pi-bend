@@ -23,7 +23,7 @@ parser.add_argument('--no-build',action='store_true')
 args=parser.parse_args();candidate=args.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 launcher=ROOT/'build/dns-tcp-compiler';launcher.write_text('#!/bin/sh\nexec '+shlex.quote(str(bun))+' '+shlex.quote(str(candidate/'main.ts'))+' "$@"\n');launcher.chmod(0o755)
 if not args.no_build:
-    subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-tcp-connection-build.json','--','sh','scripts/build-pure.sh','tests/dns-tcp-connection.bend','build/dns-tcp-connection'],cwd=ROOT,env=dict(os.environ,BEND=str(launcher)),check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-tcp-connection-build.json','--','sh','scripts/build-pure.sh','tests/dns-tcp-connection.bend','build/dns-tcp-connection'],cwd=ROOT,env=dict(os.environ,BEND=str(launcher)),check=True)
 subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-tcp-connection-js-build.json','--',str(launcher),'tests/dns-tcp-connection.bend','-o','build/dns-tcp-connection.js'],cwd=ROOT,check=True)
 def exact(peer,count):
     data=b''

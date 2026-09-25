@@ -83,7 +83,7 @@ def main():
             if args.backend in ("native", "all"):
                 output = target / kind
                 environment = dict(os.environ, BEND=args.toolchain)
-                subprocess.run(["sh", "scripts/build-pure.sh", str(source.relative_to(ROOT)), str(output)], cwd=ROOT, env=environment, check=True)
+                subprocess.run(['flock', '/tmp/pi-bend-build.lock', "sh", "scripts/build-pure.sh", str(source.relative_to(ROOT)), str(output)], cwd=ROOT, env=environment, check=True)
                 commands += [(kind, "native1", [str(output), "--threads", "1"]), (kind, "native4", [str(output), "--threads", "4"])]
 
         server = http.server.HTTPServer(("127.0.0.1", 0), Handler)

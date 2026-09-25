@@ -54,7 +54,7 @@ expected=json.loads(subprocess.check_output(['node','--disable-warning=Experimen
 def encode(s):return ','.join(str(ord(c)) for c in s)
 def record_arg(r):return '|'.join(encode(k)+';'+('~' if v is None else encode(v)) for k,v in (r or {}).items())
 args=['#'.join([encode(c['agent']),record_arg(c['model']),record_arg(c['copilot']),c['format'],'n' if c['sid'] is None else 'p'+encode(c['sid']),record_arg(c['options']),record_arg(c['base'])]) for c in cases]
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/ai/test/request-headers.bend','build/request-headers'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/ai/test/request-headers.bend','build/request-headers'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(args),16):
         p=subprocess.run([str(ROOT/'build/request-headers'),'--threads',threads,*args[start:start+16]],cwd=ROOT,text=True,capture_output=True,check=True,timeout=30)

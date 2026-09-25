@@ -1,6 +1,7 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-const base='../pi-mono/packages/ai/src/';
+const base=UPSTREAM + '/packages/ai/src/';
 const source=fs.readFileSync(base+'api/openai-responses-shared.ts','utf8');
 const sampling=fs.readFileSync(base+'api/constrained-sampling.ts','utf8');
 const start=source.indexOf('\n\t\t\tconst output: ResponseInput = []');

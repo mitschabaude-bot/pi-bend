@@ -94,5 +94,5 @@ lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {name}()' for name 
 source=BUILD/'schema-builder-check.bend';source.write_text('\n'.join(lines)+'\n')
 for src,name in [(source,'schema-builder-check'),('packages/runtime/test/schema-builder.bend','schema-builder-native'),('packages/runtime/test/schema-builder-options.bend','schema-builder-options-native')]:
     output=BUILD/name
-    subprocess.run(['sh','scripts/build-pure.sh',str(src),str(output)],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(src),str(output)],cwd=ROOT,check=True)
     for threads in ['1','4']: subprocess.run([str(output),'--threads',threads],cwd=ROOT,check=True,timeout=120)

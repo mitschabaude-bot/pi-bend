@@ -78,5 +78,5 @@ for i, ((kind, ops, order), result) in enumerate(zip(cases, expected, strict=Tru
 source.append(f'    IO.print("PASS {len(cases)} constrained-sampling JSON and grammar-property cases")')
 entry = BUILD / 'constrained-sampling-vectors.bend'
 entry.write_text('\n'.join(source) + '\n')
-subprocess.run(['sh', 'scripts/build-pure.sh', str(entry), 'build/test-constrained-sampling'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(entry), 'build/test-constrained-sampling'], cwd=ROOT, check=True)
 subprocess.run(['build/test-constrained-sampling', '--threads', '1'], cwd=ROOT, check=True, timeout=60)

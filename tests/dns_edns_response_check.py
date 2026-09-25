@@ -14,7 +14,7 @@ COMPILER = Path(BEND)
 if '--no-build' not in sys.argv:
     for suffix in ['c', 'js']:
         subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', f'build/dns-edns-response-{suffix}-build.json', '--', str(BUN), str(COMPILER), 'tests/dns-edns-response.bend', '-o', f'build/dns-edns-response.{suffix}'], cwd=ROOT, check=True)
-    subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1', 'build/dns-edns-response.c', '-lpthread', '-lm', '-o', 'build/dns-edns-response'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1', 'build/dns-edns-response.c', '-lpthread', '-lm', '-o', 'build/dns-edns-response'], cwd=ROOT, check=True)
 
 def rr(kind=41, payload=1232, upper=0, version=0, flags=0, data=b'', owner=b'\0'):
     return owner + struct.pack('!HHIH', kind, payload, upper << 24 | version << 16 | flags, len(data)) + data

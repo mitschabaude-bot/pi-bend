@@ -10,7 +10,7 @@ BUILD.mkdir(exist_ok=True)
 BEND = BEND
 SOURCE = 'packages/runtime/test/identity.bend'
 
-subprocess.run(['sh', 'scripts/build-pure.sh', SOURCE, 'build/test-identity'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', SOURCE, 'build/test-identity'], cwd=ROOT, check=True)
 for threads in ('1', '4'):
     subprocess.run([str(BUILD / 'test-identity'), '--threads', threads], check=True, timeout=30)
 

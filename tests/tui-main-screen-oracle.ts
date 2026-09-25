@@ -1,5 +1,6 @@
 // Test-only oracle pinned to ../pi-mono@f07218c4d; no production dependency.
-import { TuiMainScreen } from "../../pi-mono/packages/tui/src/tui-main-screen.ts";
+import { UPSTREAM } from "./upstream_pin.mjs";
+const { TuiMainScreen } = await import(UPSTREAM + "/packages/tui/src/tui-main-screen.ts");
 
 class Terminal {
   writes: string[] = [];

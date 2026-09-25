@@ -16,7 +16,7 @@ expected = [str(math.floor(value)) if math.isfinite(value) and 0 <= value < 2**3
 fixture = root/'packages/runtime/test/timer-delay.bend'
 for suffix in ['c', 'js']:
     subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', f'build/timer-delay-{suffix}-build.json', '--', str(bun), str(candidate/'main.ts'), str(fixture), '-o', f'build/timer-delay.{suffix}'], cwd=root, check=True)
-subprocess.run(['clang', '-std=c11', '-O1', '-fbracket-depth=2048', 'build/timer-delay.c', '-lpthread', '-lm', '-o', 'build/timer-delay'], cwd=root, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-O1', '-fbracket-depth=2048', 'build/timer-delay.c', '-lpthread', '-lm', '-o', 'build/timer-delay'], cwd=root, check=True)
 results = []
 for backend, command in [('native-1', [str(root/'build/timer-delay'), '--threads', '1']), ('native-4', [str(root/'build/timer-delay'), '--threads', '4']), ('bun', [str(bun), str(root/'build/timer-delay.js')])]:
     for start in range(0, len(cases), 32):

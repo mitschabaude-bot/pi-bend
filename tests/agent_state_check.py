@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """Compare native state transitions with pinned Agent initialization/processEvents."""
-from upstream_pin import check_sibling
-check_sibling()
 import json
 import pathlib
 import subprocess
@@ -17,5 +15,5 @@ for mode,states in zip(modes,expected):
 lines.append('    IO.print("PASS 161 Agent initialization/lifecycle/event state comparisons")')
 (root/'build').mkdir(exist_ok=True)
 (root/'build/agent-state-check.bend').write_text('\n'.join(lines)+'\n')
-subprocess.run(['sh','scripts/build-pure.sh','build/agent-state-check.bend','build/agent-state-check'],cwd=root,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','build/agent-state-check.bend','build/agent-state-check'],cwd=root,check=True)
 for threads in [1,4]:subprocess.run(['build/agent-state-check','--threads',str(threads)],cwd=root,check=True,timeout=120)

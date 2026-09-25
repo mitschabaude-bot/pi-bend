@@ -17,7 +17,7 @@ for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/resolver-load-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/resolver-load.bend','-o',f'build/resolver-load.{suffix}'],cwd=ROOT,check=True)
 audit='\n#include <unistd.h>\nstatic void __attribute__((destructor)) audit(void) {\n  const char* root=getenv("PI_BEND_FILE_TEST_ROOT");\n  unsigned live=0;\n  if(root) for(int fd=3;fd<512;fd++) {\n    char link[64], target[4096];\n    snprintf(link,sizeof(link),"/proc/self/fd/%d",fd);\n    ssize_t n=readlink(link,target,sizeof(target)-1);\n    if(n>=0) {\n      target[n]=0;\n      size_t len=strlen(root);\n      if(!strncmp(target,root,len) && (target[len]==0 || target[len]==\'/\')) live++;\n    }\n  }\n  fprintf(stderr,"FILES %u\\n",live);\n}\n'
 (ROOT/'build/resolver-load-audit.c').write_text((ROOT/'build/resolver-load.c').read_text()+audit)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-load-audit.c','-lpthread','-lm','-o','build/resolver-load'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-load-audit.c','-lpthread','-lm','-o','build/resolver-load'],cwd=ROOT,check=True)
 libc=ctypes.CDLL(None);aton=libc.__inet_aton_exact;aton.argtypes=[ctypes.c_char_p,ctypes.c_void_p];aton.restype=ctypes.c_int
 
 def address(text):

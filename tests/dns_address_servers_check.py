@@ -19,7 +19,7 @@ candidate=a.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 if not a.no_build:
     for suffix in ['c','js']:
         subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','16','--stats',f'build/dns-address-servers-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/dns-address-servers.bend','-o',f'build/dns-address-servers.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-address-servers.c','-lpthread','-lm','-o','build/dns-address-servers'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-address-servers.c','-lpthread','-lm','-o','build/dns-address-servers'],cwd=ROOT,check=True)
 
 def wire(owner):return bytes([len(owner)])+owner.encode()+b'\0'
 def exact(peer,size):

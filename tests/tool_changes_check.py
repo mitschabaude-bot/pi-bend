@@ -1,6 +1,4 @@
 """Pinned declaration reconciliation, including last-system intent and replay."""
-from upstream_pin import check_sibling
-check_sibling()
 import itertools
 import json
 import random
@@ -49,5 +47,5 @@ for i,(case,result) in enumerate(zip(cases,expected,strict=True)):
     lines.append('    Test.check('+', '.join(args)+')')
 lines.append(f'    IO.print("PASS {len(cases)} upstream tool declaration reconciliation cases")')
 source=ROOT/'build/tool-changes-check.bend';source.write_text('\n'.join(lines)+'\n');output=ROOT/'build/tool-changes-check'
-subprocess.run(['sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
 for threads in ['1','4']:subprocess.run([str(output),'--threads',threads],cwd=ROOT,check=True,timeout=60)

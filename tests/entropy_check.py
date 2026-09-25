@@ -26,7 +26,7 @@ for suffix in ['c', 'js']:
                     str(folder / f'live.{suffix}')], cwd=ROOT, check=True)
 
 def compile_c(source, binary):
-    subprocess.run(['clang', '-std=c11', '-O1', str(source), '-lpthread', '-lm',
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-O1', str(source), '-lpthread', '-lm',
                     '-o', str(binary)], check=True)
 
 compile_c(folder / 'live.c', folder / 'live')

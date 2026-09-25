@@ -1,7 +1,8 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import {execFileSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
-const repo=process.argv[2] ?? '/home/agent/code/pi-mono';
+const repo=process.argv[2] ?? UPSTREAM;
 const pinned='f07218c4d';
 const hashes={
  'components/text.ts':'3042e09dd8dcb870c23506e6fafb2dfcc095e7e375adad2fb62e447da17e5e3b',

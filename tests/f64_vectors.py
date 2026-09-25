@@ -62,6 +62,6 @@ for index, (a, b) in enumerate(vectors):
 source.append('def main() -> IO(Unit):\n  H.checkAll(' + ' <> '.join(f'case{i}()' for i in range(len(vectors))) + ' <> Nil{})')
 pathlib.Path('build').mkdir(exist_ok=True)
 pathlib.Path('build/f64-vectors.bend').write_text('\n\n'.join(source) + '\n')
-subprocess.run(['sh', 'scripts/build-pure.sh', 'build/f64-vectors.bend', 'build/test-f64'], check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'build/f64-vectors.bend', 'build/test-f64'], check=True)
 subprocess.run(['build/test-f64', '--threads', '1'], check=True, timeout=60)
 print(f'f64: {len(vectors)} vectors passed (signed zeros, subnormals, ties, cancellation, overflow, infinities, NaNs)')

@@ -17,7 +17,7 @@ for bad in ['',text+' junk',text.replace('Sun,','Sunday,'),text.replace('Sun,','
 # Syntax deliberately retains invalid calendar fields for the interpreter.
 cases += [('Sun, 31 Feb 2024 25:61:60 GMT','imf:7:2024:2:31:25:61:60')]
 if '--no-build' not in sys.argv:
- subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--stats','build/http-date-syntax-build.json','--','sh','scripts/build-pure.sh','packages/runtime/test/http-date-syntax.bend','build/http-date-syntax'],cwd=ROOT,check=True)
+ subprocess.run(['flock', '/tmp/pi-bend-build.lock', sys.executable,'scripts/run-rss-guarded.py','--stats','build/http-date-syntax-build.json','--','sh','scripts/build-pure.sh','packages/runtime/test/http-date-syntax.bend','build/http-date-syntax'],cwd=ROOT,check=True)
 for threads in ['1','4']:
  for start in range(0,len(cases),24):
   batch=cases[start:start+24]

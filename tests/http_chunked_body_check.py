@@ -73,7 +73,7 @@ console.log(JSON.stringify(results));
 observed=json.loads(subprocess.check_output(['node','--input-type=module','-e',script],input=json.dumps(network),cwd=ROOT,text=True,timeout=30))
 for (wire,payload),actual in zip(network,observed,strict=True):
     assert actual==(None if payload is None else dict(bytes=payload,trail=None,cookies=[])),(wire,actual,payload)
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/http-chunked-body.bend','build/http-chunked-body'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/http-chunked-body.bend','build/http-chunked-body'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(args),32):
         p=subprocess.run([str(ROOT/'build/http-chunked-body'),'--threads',threads,*args[start:start+32]],cwd=ROOT,text=True,capture_output=True,check=True,timeout=30)

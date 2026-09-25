@@ -22,7 +22,7 @@ args=parser.parse_args();candidate=args.candidate.resolve()
 launcher=ROOT/'build/ipv6-http-compiler'
 launcher.write_text('#!/bin/sh\nexec '+shlex.quote(str(Path.home()/'.bun/bin/bun'))+' '+shlex.quote(str(candidate/'main.ts'))+' "$@"\n');launcher.chmod(0o755)
 if not args.no_native_build:
-    subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','24','--stats','build/ipv6-http-build.json','--','sh','scripts/build-pure.sh','tests/ipv6-http-exchange.bend','build/ipv6-http-exchange'],cwd=ROOT,env=dict(os.environ,BEND=str(launcher)),check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'python3','scripts/run-rss-guarded.py','--limit-gib','24','--stats','build/ipv6-http-build.json','--','sh','scripts/build-pure.sh','tests/ipv6-http-exchange.bend','build/ipv6-http-exchange'],cwd=ROOT,env=dict(os.environ,BEND=str(launcher)),check=True)
 subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/ipv6-http-js-build.json','--',str(launcher),'tests/ipv6-http-exchange.bend','-o','build/ipv6-http-exchange.js'],cwd=ROOT,check=True)
 body='{"text":"hé🙂"}'.encode()
 

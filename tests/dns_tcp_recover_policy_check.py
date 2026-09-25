@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[1]
 candidate=Path(sys.argv[1] if len(sys.argv)>1 and not sys.argv[1].startswith('--') else TOOLCHAIN).resolve();bun=Path.home()/'.bun/bin/bun'
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-tcp-recover-policy-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/dns-tcp-recover-policy.bend','-o',f'build/dns-tcp-recover-policy.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-tcp-recover-policy.c','-lpthread','-lm','-o','build/dns-tcp-recover-policy'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-tcp-recover-policy.c','-lpthread','-lm','-o','build/dns-tcp-recover-policy'],cwd=ROOT,check=True)
 for backend,command in [('native 1',['build/dns-tcp-recover-policy','--threads','1']),('native 4',['build/dns-tcp-recover-policy','--threads','4']),('Bun',[str(bun),'build/dns-tcp-recover-policy.js'])]:
     run=subprocess.run([*command,str(errno.ECONNRESET)],cwd=ROOT,capture_output=True,text=True,timeout=15)
     assert run.returncode==0 and run.stdout=='PASS reset policy\n' and not run.stderr,(backend,run)

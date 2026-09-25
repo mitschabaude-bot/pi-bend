@@ -124,7 +124,7 @@ def codes(value):
     return ','.join(str(ord(c)) for c in value)
 arguments = ['s'+mode+'/'+codes(json.dumps(source,ensure_ascii=True))+'/'+codes(expected) for mode,source,expected in cases]
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh','scripts/build-pure.sh','packages/ai/test/openai-responses-wire-runner.bend','build/test-openai-responses-wire'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/ai/test/openai-responses-wire-runner.bend','build/test-openai-responses-wire'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(cases),8):
         actual=subprocess.check_output([str(ROOT/'build/test-openai-responses-wire'),'--threads',threads,*arguments[start:start+8]],text=True,timeout=30).splitlines()

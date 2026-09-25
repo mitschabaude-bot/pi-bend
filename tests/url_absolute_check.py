@@ -63,7 +63,7 @@ for row in review['cases']:
 print(f'{parity_count} Node absolute-URL cases; {len(review["cases"])} explicit strict-policy cases',flush=True)
 if '--prepare-only' in sys.argv:raise SystemExit(0)
 if '--no-build' not in sys.argv and '--js-only' not in sys.argv:
-    subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--limit-gib','32','--stats','build/url-absolute-check-build.json','--','sh','scripts/build-pure.sh','packages/runtime/test/url-absolute.bend','build/url-absolute'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', sys.executable,'scripts/run-rss-guarded.py','--limit-gib','32','--stats','build/url-absolute-check-build.json','--','sh','scripts/build-pure.sh','packages/runtime/test/url-absolute.bend','build/url-absolute'],cwd=ROOT,check=True)
 if '--native-only' not in sys.argv and '--no-js-build' not in sys.argv:
     subprocess.run([str(Path(BEND)),'packages/runtime/test/url-absolute.bend','-o','build/url-absolute.js'],cwd=ROOT,check=True)
 arguments=list(map(codes,texts))

@@ -2,8 +2,9 @@
 // against the scripted local server of tests/openai_completions_stream_check.py.
 // stdin: {cases: [...]}; stdout: per case the events (without the aliased
 // `partial`) and the final message.
-import { stream, streamSimple } from "/home/agent/code/pi-mono/packages/ai/src/api/openai-completions.ts";
-import { normalizeContext } from "/home/agent/code/pi-mono/packages/ai/src/utils/transcript.ts";
+import { UPSTREAM } from "./upstream_pin.mjs";
+const { stream, streamSimple } = await import(UPSTREAM + "/packages/ai/src/api/openai-completions.ts");
+const { normalizeContext } = await import(UPSTREAM + "/packages/ai/src/utils/transcript.ts");
 
 function modelOf(c: any): any {
 	return { ...c.model, api: "openai-completions", provider: c.provider, baseUrl: c.baseUrl };

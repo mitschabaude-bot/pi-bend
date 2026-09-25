@@ -47,7 +47,7 @@ for text, value in zip(inputs, expected, strict=True):
         standard = 'invalid'
     assert standard == value, (text, standard, value)
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/url-ipv6.bend', 'build/url-ipv6'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/url-ipv6.bend', 'build/url-ipv6'], cwd=ROOT, check=True)
 subprocess.run([str(Path(BEND)), 'packages/runtime/test/url-ipv6.bend', '-o', 'build/url-ipv6.js'], cwd=ROOT, check=True)
 for label, command in [('native 1', ['build/url-ipv6', '--threads', '1']), ('native 4', ['build/url-ipv6', '--threads', '4']), ('Bun', [str(Path.home() / '.bun/bin/bun'), 'build/url-ipv6.js'])]:
     for start in range(0, len(inputs), 16):

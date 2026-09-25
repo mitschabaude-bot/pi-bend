@@ -1,7 +1,8 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { Compile } from '../build/schema-reference/node_modules/typebox/build/compile/index.mjs';
-const source = fs.readFileSync('../pi-mono/packages/ai/src/utils/validation.ts', 'utf8');
+const source = fs.readFileSync(UPSTREAM + '/packages/ai/src/utils/validation.ts', 'utf8');
 const start = source.indexOf('const validatorCache =');
 const end = source.indexOf('\nfunction formatValidationPath(', start);
 if (start < 0 || end <= start) throw new Error('upstream coercion/cache helpers missing');

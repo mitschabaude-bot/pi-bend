@@ -19,7 +19,7 @@ console.log(JSON.stringify(JSON.parse(fs.readFileSync(0,'utf8')).map(value=>{
 expected=json.loads(subprocess.check_output(['node','--disable-warning=ExperimentalWarning','-e',script],input=json.dumps(cases),cwd=ROOT,text=True))
 encode=lambda s:','.join(str(ord(c)) for c in s)
 args=['n' if value is None else 'p'+''.join('|'+encode(k)+';'+('~' if v is None else encode(v)) for k,v in value.items()) for value in cases]
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/ai/test/provider-headers.bend','build/provider-headers'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/ai/test/provider-headers.bend','build/provider-headers'],cwd=ROOT,check=True)
 for threads in ['1','4']:
  for start in range(0,len(args),32):
   p=subprocess.run([str(ROOT/'build/provider-headers'),'--threads',threads,*args[start:start+32]],capture_output=True,text=True,cwd=ROOT,check=True,timeout=10)

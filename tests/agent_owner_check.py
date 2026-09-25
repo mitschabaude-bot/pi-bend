@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Compare the Agent owner with actual pinned Agent and loop execution."""
-from upstream_pin import UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import UPSTREAM
 import json
 import re
 from pathlib import Path
@@ -29,6 +28,6 @@ for mode, value in enumerate(expected):
 lines.append('    IO.print("PASS 10 Agent owner source comparisons, constructor defaults and borrowed ownership")')
 source = root / 'build/agent-owner-check.bend'
 source.write_text('\n'.join(lines) + '\n')
-subprocess.run(['sh', 'scripts/build-pure.sh', str(source), 'build/agent-owner-check'], cwd=root, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(source), 'build/agent-owner-check'], cwd=root, check=True)
 for threads in ['1', '4']:
     subprocess.run(['build/agent-owner-check', '--threads', threads], cwd=root, check=True, timeout=120)

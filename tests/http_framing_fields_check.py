@@ -56,7 +56,7 @@ for fields,result,actual in zip(cases,want,observed,strict=True):
 want=[result if result=='error' else result+';'+('chunked' if result.startswith('chunked;') else 'close' if result.endswith(';none') else 'fixed:'+result.split(';')[1]) for result in want]
 def codes(s):return ','.join(str(ord(c)) for c in s)
 args=[';'.join(codes(k)+':'+codes(v) for k,v in fields) for fields in cases]
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/http-framing-fields.bend','build/http-framing-fields'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/http-framing-fields.bend','build/http-framing-fields'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(args),32):
         p=subprocess.run([str(ROOT/'build/http-framing-fields'),'--threads',threads,*args[start:start+32]],cwd=ROOT,text=True,capture_output=True,check=True,timeout=30)

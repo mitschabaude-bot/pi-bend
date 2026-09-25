@@ -15,7 +15,7 @@ assert js('tests/compiler-js-list-append.bend', 'build/js-list-append.js') == 'c
 print('PASS List.append doubles a 256-element list eight times on Bun', flush=True)
 assert js('tests/compiler-js-list-length.bend', 'build/js-list-length.js') == '200000 50001 40001'
 print('PASS List.length, String.split and String.join over 200,000/50,000/20,000 elements on Bun', flush=True)
-subprocess.run(['sh', 'scripts/build-pure.sh', 'tests/compiler-js-list-append.bend', 'build/js-list-append'], check=True, cwd=ROOT, capture_output=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'tests/compiler-js-list-append.bend', 'build/js-list-append'], check=True, cwd=ROOT, capture_output=True)
 native = subprocess.run([str(ROOT / 'build/js-list-append'), '--threads', '1'], capture_output=True, text=True, timeout=120)
 assert native.returncode == 0 and native.stdout.strip() == 'constructed', native
 print('PASS the native build agrees', flush=True)

@@ -1,8 +1,9 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import assert from 'node:assert';
 import {createHash} from 'node:crypto';
 import {stripTypeScriptTypes} from 'node:module';
-const root='../pi-mono/packages/tui/';
+const root=UPSTREAM + '/packages/tui/';
 for(const [file,hash] of [['src/terminal-colors.ts','2aa702f6e59dc51d78be64516f40c46981780a00d1f0900fb5504ad9da67b9e6'],['test/terminal-colors.test.ts','83299038dbb51f1496c2985f0d7f95c8e67c3e1d1be0f65dd1d214277d888566']])assert.equal(createHash('sha256').update(fs.readFileSync(root+file)).digest('hex'),hash);
 const strip=(file:string)=>stripTypeScriptTypes(fs.readFileSync(root+file,'utf8')).replace(/^import[\s\S]*?;\s*$/gm,'').replace(/^export /gm,'');
 const names=['isOsc11BackgroundColorResponse','parseOsc11BackgroundColor','parseTerminalColorSchemeReport'];

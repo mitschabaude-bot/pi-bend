@@ -52,11 +52,11 @@ lines.append(f'    IO.print("PASS {len(vectors)} exact monotonic interval conver
 source = BUILD / 'clock-vectors.bend'
 source.write_text('\n'.join(lines) + '\n')
 output = BUILD / 'test-clock-vectors'
-subprocess.run(['sh', 'scripts/build-pure.sh', str(source), str(output)], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(source), str(output)], cwd=ROOT, check=True)
 for threads in ('1', '4'):
     subprocess.run([str(output), '--threads', threads], check=True, timeout=30)
 
-subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/clock.bend', 'build/test-clock'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/clock.bend', 'build/test-clock'], cwd=ROOT, check=True)
 for threads in ('1', '4'):
     subprocess.run([str(BUILD / 'test-clock'), '--threads', threads], check=True, timeout=30)
 # Test the compiler's second lowering, without using JS in native programs.

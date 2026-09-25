@@ -1,7 +1,8 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-const helper=fs.readFileSync('../pi-mono/packages/ai/src/api/constrained-sampling.ts','utf8');
-const shared=fs.readFileSync('../pi-mono/packages/ai/src/api/openai-responses-shared.ts','utf8');
+const helper=fs.readFileSync(UPSTREAM + '/packages/ai/src/api/constrained-sampling.ts','utf8');
+const shared=fs.readFileSync(UPSTREAM + '/packages/ai/src/api/openai-responses-shared.ts','utf8');
 const start=shared.indexOf('export function convertResponsesTools(');
 const end=shared.indexOf('// Stream processing',start);
 const code=stripTypeScriptTypes(helper+'\n'+shared.slice(start,end)).replace(/^export /gm,'');

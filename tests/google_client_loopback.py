@@ -98,7 +98,7 @@ def main():
                 commands.append((kind, "bun", ["bun", str(output)]))
             if args.backend in ("native", "all"):
                 output = pathlib.Path(directory) / kind
-                subprocess.run(["sh", "scripts/build-pure.sh", str(source.relative_to(ROOT)), str(output)], cwd=ROOT, env=dict(os.environ, BEND=args.toolchain), check=True)
+                subprocess.run(['flock', '/tmp/pi-bend-build.lock', "sh", "scripts/build-pure.sh", str(source.relative_to(ROOT)), str(output)], cwd=ROOT, env=dict(os.environ, BEND=args.toolchain), check=True)
                 commands.extend([(kind, "native1", [str(output), "--threads", "1"]), (kind, "native4", [str(output), "--threads", "4"])])
 
         for kind, name, command in commands:

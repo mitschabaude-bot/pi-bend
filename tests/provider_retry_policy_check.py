@@ -2,8 +2,6 @@
 
 Date parsing and cancellable waiting are explicitly outside this pure policy.
 """
-from upstream_pin import check_sibling
-check_sibling()
 import itertools,json,random,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -31,7 +29,7 @@ def encode(c,e):
     if c['mode']=='d':return ';'.join(['d',c['epoch'],c['now'],number(c['max']),e])
     return ';'.join(['r',number(c['status']),text(c['should']),text(c['ms']),text(c['seconds']),number(c['max']),str(c['index']),c['random'],e])
 if '--no-build' not in sys.argv:
-    subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--stats','build/provider-retry-policy-build.json','--','sh','scripts/build-pure.sh','packages/ai/test/provider-retry-policy.bend','build/provider-retry-policy'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', sys.executable,'scripts/run-rss-guarded.py','--stats','build/provider-retry-policy-build.json','--','sh','scripts/build-pure.sh','packages/ai/test/provider-retry-policy.bend','build/provider-retry-policy'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(cases),32):
         args=[encode(c,e) for c,e in zip(cases[start:start+32],expected[start:start+32])]

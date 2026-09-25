@@ -1,7 +1,8 @@
 // Execute the pinned upstream normalization helper; TypeScript erasure is test-only.
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import { Compile } from '../build/schema-reference/node_modules/typebox/build/compile/index.mjs';
-const source = fs.readFileSync('../pi-mono/packages/ai/src/utils/validation.ts', 'utf8');
+const source = fs.readFileSync(UPSTREAM + '/packages/ai/src/utils/validation.ts', 'utf8');
 const start = source.indexOf('function normalizeOptionalNulls(');
 const end = source.indexOf('\nfunction getValidator(', start);
 if (start < 0 || end <= start) throw new Error('upstream normalization helper missing');

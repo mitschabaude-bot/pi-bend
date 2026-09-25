@@ -1,8 +1,9 @@
 // Actual pinned runWithLifecycle/handleRunFailure/processEvents; injected executor failure.
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-import {createInitialSystemMessage,getCurrentSystemMessage,getCurrentSystemPrompt,toToolDeclaration} from '../../pi-mono/packages/ai/src/utils/transcript.ts';
-const source=fs.readFileSync('../pi-mono/packages/agent/src/agent.ts','utf8');
+const { createInitialSystemMessage, getCurrentSystemMessage, getCurrentSystemPrompt, toToolDeclaration } = await import(UPSTREAM + '/packages/ai/src/utils/transcript.ts');
+const source=fs.readFileSync(UPSTREAM + '/packages/agent/src/agent.ts','utf8');
 const body=stripTypeScriptTypes(source.slice(source.indexOf('function defaultConvertToLlm('))).replace(/^export /gm,'');
 const {Agent}=new Function('createInitialSystemMessage','getCurrentSystemMessage','getCurrentSystemPrompt','toToolDeclaration','getDefaultStreamFn',body+';return {Agent};')(createInitialSystemMessage,getCurrentSystemMessage,getCurrentSystemPrompt,toToolDeclaration,()=>{throw Error('unexpected fallback')});
 const roles=messages=>messages.map(m=>({system:'s',user:'u',assistant:'a'}[m.role]??'?')).join('');

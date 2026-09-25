@@ -36,7 +36,7 @@ with tempfile.TemporaryDirectory(prefix='bend-file-bytes-') as directory:
  assert received==bytes(range(256))*4096
  # Deterministic OS-boundary short-write/EINTR/zero-progress behavior.
  shim=pathlib.Path('build/filesystem-write-fragments.so').resolve()
- subprocess.run(['clang','-shared','-fPIC','tests/filesystem-write-fragments.c','-ldl','-o',str(shim)],check=True)
+ subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-shared','-fPIC','tests/filesystem-write-fragments.c','-ldl','-o',str(shim)],check=True)
  fault_command=command[:]
  is_bun=pathlib.Path(command[0]).name=='bun'
  if is_bun:fault_command[1:1]=['--preload',str(pathlib.Path('tests/filesystem-write-fragments.cjs').resolve())]

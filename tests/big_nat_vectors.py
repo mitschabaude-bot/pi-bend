@@ -75,5 +75,5 @@ source.append('    H.assertion(H.sameMaybe(B.fromDecimal("000000000"), Some{B.ze
 source.append(f'    IO.print("big-nat: {len(vectors)} arithmetic/division/decimal vectors and power/input edge cases passed")')
 entry = BUILD / 'big-nat-vectors.bend'
 entry.write_text('\n\n'.join(source) + '\n')
-subprocess.run(['sh', 'scripts/build-pure.sh', str(entry), 'build/test-big-nat'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(entry), 'build/test-big-nat'], cwd=ROOT, check=True)
 subprocess.run(['build/test-big-nat', '--threads', '1'], cwd=ROOT, check=True, timeout=180)

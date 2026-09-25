@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--no-build', action='store_true')
 args = parser.parse_args()
 if not args.no_build:
-    subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', 'build/dns-name-build.json', '--', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/dns-name.bend', 'build/dns-name'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', 'build/dns-name-build.json', '--', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/dns-name.bend', 'build/dns-name'], cwd=ROOT, check=True)
 subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', 'build/dns-name-js-build.json', '--', str(Path(BEND)), 'packages/runtime/test/dns-name.bend', '-o', 'build/dns-name.js'], cwd=ROOT, check=True)
 rng = random.Random(1035)
 cases = []

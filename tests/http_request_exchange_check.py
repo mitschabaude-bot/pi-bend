@@ -17,7 +17,7 @@ launcher.chmod(0o755)
 environment = dict(os.environ, BEND=str(launcher))
 binary = ROOT / 'build/http-request-exchange'
 if '--no-native-build' not in sys.argv and '--no-build' not in sys.argv:
-    subprocess.run(['sh', 'scripts/build-pure.sh', 'tests/http-request-exchange.bend', str(binary)], cwd=ROOT, env=environment, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'tests/http-request-exchange.bend', str(binary)], cwd=ROOT, env=environment, check=True)
 javascript = binary.with_suffix('.js')
 if '--no-build' not in sys.argv:
     subprocess.run([str(launcher), 'tests/http-request-exchange.bend', '-o', str(javascript)], cwd=ROOT, check=True)

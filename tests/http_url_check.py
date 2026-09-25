@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--no-build', action='store_true')
 args = parser.parse_args()
 if not args.no_build:
-    subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', 'build/http-url-native-build.json', '--', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/http-url.bend', 'build/http-url'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', 'build/http-url-native-build.json', '--', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/http-url.bend', 'build/http-url'], cwd=ROOT, check=True)
     subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', 'build/http-url-js-build.json', '--', str(Path(BEND)), 'packages/runtime/test/http-url.bend', '-o', 'build/http-url.js'], cwd=ROOT, check=True)
 rng = random.Random(20260919)
 hosts = ['example.com', 'EXAMPLE.com', 'bücher.example', '127.1', '0x7f.1', '[::1]', '[2001:0db8::1]', 'localhost.']

@@ -9,7 +9,7 @@ BUILD=ROOT/'build'
 BUILD.mkdir(exist_ok=True)
 source=ROOT/'tests/static-layout.bend'
 output=BUILD/'test-static-layout'
-subprocess.run(['sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
 for threads in ['1','4']:
     subprocess.run([str(output),'--threads',threads],cwd=ROOT,check=True,timeout=30)
 bend=BEND

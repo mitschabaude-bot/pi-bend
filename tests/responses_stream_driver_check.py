@@ -66,6 +66,6 @@ for start in range(0,len(cases),batch_size):
     lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(start,stop)]+[f'    IO.print("PASS Responses async driver cases {start}–{stop-1}")']
     source=ROOT/f'build/responses-stream-driver-check-{start}.bend';source.write_text('\n'.join(lines)+'\n');out=source.with_suffix('')
     if args.generate_only:continue
-    subprocess.run(['sh','scripts/build-pure.sh',str(source),str(out)],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(out)],cwd=ROOT,check=True)
     for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,check=True,timeout=120)
 print(f'GENERATED {len(cases)} Responses async-driver fixtures; native tests not run' if args.generate_only else f'PASS {len(cases)} Responses async-driver sequences on one/four threads',flush=True)

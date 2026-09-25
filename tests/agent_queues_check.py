@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """Source comparisons for pending queues and the Agent.continue decision boundary."""
-from upstream_pin import check_sibling
-check_sibling()
 import itertools
 import json
 import pathlib
@@ -33,5 +31,5 @@ count=sum(len(trace) for trace in expected['queues'])
 lines.append(f'    IO.print("PASS {count} queue snapshots and {len(continuations)} continuation source comparisons")')
 (root/'build').mkdir(exist_ok=True)
 (root/'build/agent-queues-check.bend').write_text('\n'.join(lines)+'\n')
-subprocess.run(['sh','scripts/build-pure.sh','build/agent-queues-check.bend','build/agent-queues-check'],cwd=root,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','build/agent-queues-check.bend','build/agent-queues-check'],cwd=root,check=True)
 for threads in [1,4]:subprocess.run(['build/agent-queues-check','--threads',str(threads)],cwd=root,check=True,timeout=120)

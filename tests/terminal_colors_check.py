@@ -1,6 +1,4 @@
 """Replay pinned parser assertions and compare generated valid protocol inputs."""
-from upstream_pin import check_sibling
-check_sibling()
 import json, pathlib, random, subprocess, sys
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 ESC='\x1b'

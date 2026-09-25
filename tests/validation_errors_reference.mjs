@@ -1,8 +1,9 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { Compile } from '../build/schema-reference/node_modules/typebox/build/compile/index.mjs';
 import { Value } from '../build/schema-reference/node_modules/typebox/build/value/index.mjs';
-const source = fs.readFileSync('../pi-mono/packages/ai/src/utils/validation.ts', 'utf8');
+const source = fs.readFileSync(UPSTREAM + '/packages/ai/src/utils/validation.ts', 'utf8');
 const start = source.indexOf('const validatorCache =');
 if (start < 0) throw new Error('upstream validation helpers missing');
 const code = stripTypeScriptTypes(source.slice(start)).replace(/^export /gm, '');

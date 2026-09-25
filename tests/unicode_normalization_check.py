@@ -72,7 +72,7 @@ print(f'{rows} Unicode conformance rows, {unlisted} unlisted scalars: Node/ICU a
 arguments = [form + ';' + ','.join(map(str, points)) for (form, points), _ in items]
 expected = [','.join(map(str, value)) for _, value in items]
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/unicode-normalization.bend', 'build/unicode-normalization'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/unicode-normalization.bend', 'build/unicode-normalization'], cwd=ROOT, check=True)
 subprocess.run([str(Path(BEND)), 'packages/runtime/test/unicode-normalization.bend', '-o', 'build/unicode-normalization.js'], cwd=ROOT, check=True)
 for label, command in [('native 1', ['build/unicode-normalization', '--threads', '1']), ('native 4', ['build/unicode-normalization', '--threads', '4']), ('Bun', [str(Path.home() / '.bun/bin/bun'), 'build/unicode-normalization.js'])]:
     for start in range(0, len(arguments), 128):

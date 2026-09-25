@@ -1,6 +1,4 @@
 """Full native request builder versus pinned buildParams with real converters."""
-from upstream_pin import check_sibling
-check_sibling()
 import argparse,itertools,json,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -36,7 +34,7 @@ expected=json.loads(subprocess.check_output(['node','tests/responses_request_ref
 if not arguments.no_build:
     entry='packages/ai/test/openai-responses-request.bend'
     if any(name.startswith('native') for name in arguments.backends):
-        subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--stats',arguments.prefix+'-build.json','--','sh','scripts/build-pure.sh',entry,arguments.prefix],cwd=ROOT,check=True)
+        subprocess.run(['flock', '/tmp/pi-bend-build.lock', sys.executable,'scripts/run-rss-guarded.py','--stats',arguments.prefix+'-build.json','--','sh','scripts/build-pure.sh',entry,arguments.prefix],cwd=ROOT,check=True)
     if 'bun' in arguments.backends:
         subprocess.run(['build/bend-native-toolchain/bend2/main.ts',entry,'-o',arguments.prefix+'.js'],cwd=ROOT,check=True)
 def encode(value):return ','.join(str(ord(c)) for c in json.dumps(value,ensure_ascii=True,separators=(',',':')))

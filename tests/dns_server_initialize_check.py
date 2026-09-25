@@ -18,7 +18,7 @@ for fixture in fixtures:
         audited=ROOT/'build/dns-server-initialize-audit.c'
         audited.write_text(source.read_text()+'\nstatic void __attribute__((destructor)) audit(void) { unsigned live=0; for(u32 i=0;i<chan_len;i++) live+=chan_rows[i].live; fprintf(stderr,"LIVE %u\\n",live); }\n')
         source=audited
-    subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1',str(source),'-lpthread','-lm','-o',f'build/{fixture}'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1',str(source),'-lpthread','-lm','-o',f'build/{fixture}'],cwd=ROOT,check=True)
 
 rng=random.Random(913)
 width=1<<32

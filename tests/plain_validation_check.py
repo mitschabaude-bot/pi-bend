@@ -1,6 +1,4 @@
 """Check the composed plain-schema path against actual validateToolArguments."""
-from upstream_pin import check_sibling
-check_sibling()
 import json
 from pathlib import Path
 import subprocess
@@ -55,6 +53,6 @@ source=BUILD/'plain-validation-check.bend'
 source.write_text('\n'.join(lines)+'\n')
 for source,name in [(source,'plain-validation-check'),('packages/ai/test/plain-validation.bend','plain-validation-errors'),('packages/ai/test/plain-validation-upstream.bend','plain-validation-upstream')]:
     output=BUILD/name
-    subprocess.run(['sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
     for threads in ['1','4']:
         subprocess.run([str(output),'--threads',threads],cwd=ROOT,check=True,timeout=120)

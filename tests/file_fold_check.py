@@ -33,7 +33,7 @@ static void __attribute__((destructor)) audit(void) {
 }
 """
 (ROOT/'build/file-fold-audit.c').write_text((ROOT/'build/file-fold.c').read_text()+audit)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/file-fold-audit.c','-lpthread','-lm','-o','build/file-fold'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/file-fold-audit.c','-lpthread','-lm','-o','build/file-fold'],cwd=ROOT,check=True)
 
 def rendered(status,chunks,data=b''):
     return status+':'+str(chunks)+':999,'+''.join(str(v)+',' for v in data)

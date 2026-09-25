@@ -71,7 +71,7 @@ def codes(text):
 arguments=list(map(codes,texts))
 expected=['+'+codes(value) if isinstance(value,str) else 'invalid;'+str(value['error']) for value in expected_values]
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/idna-prepare.bend','build/idna-prepare'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/idna-prepare.bend','build/idna-prepare'],cwd=ROOT,check=True)
 subprocess.run([str(Path(BEND)),'packages/runtime/test/idna-prepare.bend','-o','build/idna-prepare.js'],cwd=ROOT,check=True)
 for label,command in [('native 1',['build/idna-prepare','--threads','1']),('native 4',['build/idna-prepare','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/idna-prepare.js'])]:
     for start in range(0,len(arguments),128):

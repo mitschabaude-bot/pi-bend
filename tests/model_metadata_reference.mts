@@ -1,9 +1,10 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 
 // Execute the unmodified leaf-function tail of pinned models.ts. Importing the
 // whole registry would load provider/auth dependencies unrelated to these tests.
-const path = new URL('../../pi-mono/packages/ai/src/models.ts', import.meta.url);
+const path = new URL(UPSTREAM + '/packages/ai/src/models.ts', import.meta.url);
 const source = readFileSync(path, 'utf8');
 const start = source.indexOf('export function hasApi<');
 if (start < 0) throw new Error('upstream model helper boundary changed');

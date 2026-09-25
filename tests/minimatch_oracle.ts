@@ -2,7 +2,8 @@
 // on posix with default options. Prints {match, brace}: `match` holds
 // [path, pattern, expected] with expected "true", "false" or "throw" (the
 // upstream constructor throws), `brace` holds [pattern, expansions joined by U+001E].
-import { minimatch, braceExpand } from "/home/agent/code/pi-mono/node_modules/minimatch/dist/esm/index.js";
+import { UPSTREAM } from "./upstream_pin.mjs";
+const { minimatch, braceExpand } = await import(UPSTREAM + "/node_modules/minimatch/dist/esm/index.js");
 
 let seed = 0x5eed1234;
 function random(): number {

@@ -1,7 +1,6 @@
 """Original named fuzzy tests, complete scores/order, generated and native Unicode cases."""
 import json,pathlib,random,struct,subprocess,sys
-from upstream_pin import PIN, UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import PIN, UPSTREAM
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=UPSTREAM,text=True).strip()==PIN
 rng=random.Random(1409); alphabet='abcXYZ012_-./: '

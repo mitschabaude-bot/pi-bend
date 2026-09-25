@@ -28,7 +28,7 @@ if not args.no_build:
                             '--stats', f'{prefix}-{backend}-build.json', '--',
                             str(BEND), SOURCE, '-o', f'{prefix}.{backend}'],
                            cwd=WORK, check=True, stdout=log, stderr=subprocess.STDOUT)
-    subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1',
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1',
                     f'{prefix}.c', '-lpthread', '-lm', '-o', str(prefix)], cwd=WORK, check=True)
 
 cases = [

@@ -1,6 +1,4 @@
 """Native structural uniqueness with the approved signed-zero adaptation."""
-from upstream_pin import check_sibling
-check_sibling()
 import json,subprocess
 from pathlib import Path
 from schema_literals import value,string
@@ -42,5 +40,5 @@ for c in changed:
     lines.append(f'    E.validated("echo", {value(schema)}, {value(c["value"])}, {string(message)})')
 lines.append(f'    IO.print("PASS {len(cases)} uniqueness comparisons and 2 approved signed-zero differences")')
 source=BUILD/'unique-items-check.bend';source.write_text('\n'.join(lines)+'\n');output=BUILD/'unique-items-check'
-subprocess.run(['sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
 for threads in ['1','4']:subprocess.run([str(output),'--threads',threads],cwd=ROOT,check=True,timeout=120)

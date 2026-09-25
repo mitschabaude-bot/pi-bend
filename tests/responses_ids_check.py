@@ -1,6 +1,4 @@
 """Actual Responses ID normalization closure versus native typed helper."""
-from upstream_pin import check_sibling
-check_sibling()
 import itertools,json,random,subprocess
 from pathlib import Path
 from schema_literals import string
@@ -19,5 +17,5 @@ for start in range(0,len(cases),40):
     name=f'group{start}';groups.append(name);lines += [f'def {name}() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(start,min(start+40,len(cases)))]
 lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {g}()' for g in groups]+[f'    IO.print("PASS {len(cases)} Responses tool-call ID source comparisons")']
 src=BUILD/'responses-ids-check.bend';src.write_text('\n'.join(lines)+'\n');out=BUILD/'responses-ids-check'
-subprocess.run(['sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
 for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,check=True,timeout=120)

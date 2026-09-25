@@ -38,7 +38,7 @@ expected=json.loads(subprocess.check_output(['node','--disable-warning=Experimen
 def encode(s):return ','.join(str(ord(c)) for c in s)
 def record(headers):return 'n' if headers is None else 'p'+'|'.join(encode(k)+';'+('~' if v is None else encode(v)) for k,v in headers.items())
 args=['#'.join([encode(p),'n' if k is None else 'p'+encode(k),record(h)]) for p,k,h in cases]
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/ai/test/responses-auth.bend','build/responses-auth'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/ai/test/responses-auth.bend','build/responses-auth'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(args),64):
         p=subprocess.run([str(ROOT/'build/responses-auth'),'--threads',threads,*args[start:start+64]],cwd=ROOT,capture_output=True,text=True,check=True,timeout=30)

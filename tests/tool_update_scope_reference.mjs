@@ -1,6 +1,7 @@
 // Execute the pinned helper to check error selection around tool settlement.
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
-const source = fs.readFileSync('../pi-mono/packages/agent/src/agent-loop.ts', 'utf8');
+const source = fs.readFileSync(UPSTREAM + '/packages/agent/src/agent-loop.ts', 'utf8');
 const start = source.indexOf('async function executePreparedToolCall(');
 const end = source.indexOf('\nasync function finalizeExecutedToolCall(', start);
 if (start < 0 || end <= start) throw new Error('upstream execution helper missing');

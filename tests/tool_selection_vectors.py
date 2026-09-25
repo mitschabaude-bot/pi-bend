@@ -1,6 +1,4 @@
 """Compare normal tool extraction and batch routing with upstream."""
-from upstream_pin import check_sibling
-check_sibling()
 import json
 from pathlib import Path
 import subprocess
@@ -20,6 +18,6 @@ lines.append(f'    IO.print("PASS {len(reference["cases"])} upstream tool-call e
 source = BUILD / 'tool-selection-vectors.bend'
 source.write_text('\n'.join(lines) + '\n')
 output = BUILD / 'test-tool-selection-vectors'
-subprocess.run(['sh', 'scripts/build-pure.sh', str(source), str(output)], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(source), str(output)], cwd=ROOT, check=True)
 for threads in ('1', '4'):
     subprocess.run([str(output), '--threads', threads], check=True, timeout=30)

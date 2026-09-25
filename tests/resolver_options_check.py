@@ -17,7 +17,7 @@ import subprocess
 ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/resolver-options-{suffix}-build.json','--',str(bun),str(compiler),'tests/resolver-options.bend','-o',f'build/resolver-options.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-options.c','-lpthread','-lm','-o','build/resolver-options'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-options.c','-lpthread','-lm','-o','build/resolver-options'],cwd=ROOT,check=True)
 subprocess.run(['cc','-std=c11','-O2','tests/resolver-options-oracle.c','-lresolv','-o','build/resolver-options-oracle'],cwd=ROOT,check=True)
 features=['rotate','edns0','single-request-reopen','single-request','no-tld-query','no-reload','use-vc','trust-ad','no-aaaa']
 limits={'ndots':15,'timeout':30,'attempts':5}

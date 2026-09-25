@@ -2,8 +2,7 @@
 import argparse,hashlib,json,math,random,re,struct,subprocess
 from pathlib import Path
 from bend_toolchain import BEND
-from upstream_pin import PIN, UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import PIN, UPSTREAM
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser()
 parser.add_argument('--prefix',default='build/openai-service-tier')
@@ -28,7 +27,7 @@ args=[','.join([r['model'],r['tier'] or '-']+[';'.join(map(str,n)) for n in r['c
 for backend in ['c','js']:
     with Path(str(prefix)+'-'+backend+'.log').open('w') as log:
         subprocess.run([BEND,source,'-o',str(prefix)+'.'+backend],cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=180)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1',str(prefix)+'.c','-lpthread','-lm','-o',str(prefix)],check=True,timeout=180)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1',str(prefix)+'.c','-lpthread','-lm','-o',str(prefix)],check=True,timeout=180)
 runs=[]
 for name,cmd in [('native-1',[str(prefix),'--threads','1']),('native-4',[str(prefix),'--threads','4']),('bun',[str(Path.home()/'.bun/bin/bun'),str(prefix)+'.js'])]:
     result=subprocess.run(cmd+args,cwd=ROOT,capture_output=True,text=True,timeout=40,check=True)

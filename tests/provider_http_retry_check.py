@@ -11,8 +11,7 @@ import subprocess
 import sys
 import threading
 from channel_audit import instrument
-from upstream_pin import PIN, UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import PIN, UPSTREAM
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
@@ -42,7 +41,7 @@ static void __attribute__((destructor)) openai_http_reader_audit(void) {
 ''')
 Path(f'{prefix}-audit.js').write_text(instrument(Path(f'{prefix}.js').read_text()))
 for suffix in ['', '-audit']:
-    subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1', f'{prefix}{suffix}.c',
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1', f'{prefix}{suffix}.c',
                     '-lpthread', '-lm', '-o', str(prefix) + suffix], cwd=WORK, check=True)
 
 

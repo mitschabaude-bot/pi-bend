@@ -14,7 +14,7 @@ import subprocess
 ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-search-run-{suffix}-build.json','--',str(bun),str(compiler),'tests/dns-search-run.bend','-o',f'build/dns-search-run.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-search-run.c','-lpthread','-lm','-o','build/dns-search-run'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-search-run.c','-lpthread','-lm','-o','build/dns-search-run'],cwd=ROOT,check=True)
 # Disposable exit-only instrumentation; production source/effects are unchanged.
 audit='''\nstatic void __attribute__((destructor)) search_run_audit(void) {
   unsigned live=0;
@@ -22,7 +22,7 @@ audit='''\nstatic void __attribute__((destructor)) search_run_audit(void) {
   fprintf(stderr,"SEARCH_CHANNELS %u\\n",live);
 }\n'''
 (ROOT/'build/dns-search-run-audit.c').write_text((ROOT/'build/dns-search-run.c').read_text()+audit)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-search-run-audit.c','-lpthread','-lm','-o','build/dns-search-run-audit'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-search-run-audit.c','-lpthread','-lm','-o','build/dns-search-run-audit'],cwd=ROOT,check=True)
 libc=ctypes.CDLL(None);pton=libc.ns_name_pton;pton.argtypes=[ctypes.c_char_p,ctypes.c_void_p,ctypes.c_size_t];pton.restype=ctypes.c_int
 
 def wire(text):

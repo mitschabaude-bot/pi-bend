@@ -3,8 +3,7 @@
 SDK shape/status extraction belongs to provider adapters; this checks body
 selection, normalization and formatting after that explicit boundary.
 """
-from upstream_pin import UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import UPSTREAM
 import itertools
 import json
 import re
@@ -68,7 +67,7 @@ for index,(case,name) in enumerate(zip(cases,names)):
 (ROOT/'build/error-body-scalar-boundaries.json').write_text(json.dumps(adaptations,indent=2)+'\n')
 
 if '--no-build' not in sys.argv:
-    subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--stats','build/error-body-build.json','--','sh','scripts/build-pure.sh','packages/ai/test/error-body-runner.bend','build/error-body-runner'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', sys.executable,'scripts/run-rss-guarded.py','--stats','build/error-body-build.json','--','sh','scripts/build-pure.sh','packages/ai/test/error-body-runner.bend','build/error-body-runner'],cwd=ROOT,check=True)
 def encode(value):return ','.join(str(ord(c)) for c in json.dumps(value,ensure_ascii=True,separators=(',',':')))
 # Private/unread handles are represented explicitly as unavailable native data.
 native=[]

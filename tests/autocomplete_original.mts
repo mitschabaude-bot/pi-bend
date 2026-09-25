@@ -1,5 +1,6 @@
 // Execute all actual pinned assertions through a native provider adapter. The
 // source provider also runs against each live tree before it is removed.
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,7 +8,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {spawn,spawnSync} from 'node:child_process';
 import {stripTypeScriptTypes} from 'node:module';
-const root=process.env.PI_MONO || '/home/agent/code/pi-mono';
+const root=UPSTREAM;
 const source=path.join(root,'packages/tui');
 const hashes={
  'src/autocomplete.ts':'8af77f28f9eab1768c8e15ca7dab0d530b2a883de13431a03e70206c22526ef6',

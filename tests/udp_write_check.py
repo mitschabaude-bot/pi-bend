@@ -11,7 +11,7 @@ for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/udp-write-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/udp-write.bend','-o',f'build/udp-write.{suffix}'],cwd=ROOT,check=True)
 audit='\nstatic void __attribute__((destructor)) udp_write_audit(void) {\n  unsigned rows=0, channels=0, sockets=0;\n  for(u32 i=0;i<udp_write_len;i++) rows+=udp_write_rows[i].live;\n  for(u32 i=0;i<chan_len;i++) channels+=chan_rows[i].live;\n  for(int fd=0;fd<4096;fd++){int type; socklen_t n=sizeof(type); if(getsockopt(fd,SOL_SOCKET,SO_TYPE,&type,&n)==0)sockets++;}\n  fprintf(stderr,"AUDIT %u %u %u %u\\n",rows,channels,io_park.head!=NULL,sockets);\n}\n'
 (ROOT/'build/udp-write-audit.c').write_text((ROOT/'build/udp-write.c').read_text()+audit)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-write-audit.c','-lpthread','-lm','-o','build/udp-write'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-write-audit.c','-lpthread','-lm','-o','build/udp-write'],cwd=ROOT,check=True)
 rows=[]
 for backend,cmd in [('native 1',['build/udp-write','--threads','1']),('native 4',['build/udp-write','--threads','4']),('Bun',[str(bun),'build/udp-write.js'])]:
     for family,af,host in [(4,socket.AF_INET,'127.0.0.1'),(6,socket.AF_INET6,'::1')]:

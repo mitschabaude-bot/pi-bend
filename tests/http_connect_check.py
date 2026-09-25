@@ -33,7 +33,7 @@ static void __attribute__((destructor)) pair_audit(void) {
 }
 '''
 (ROOT/'build/http-connect-audit.c').write_text((ROOT/'build/http-connect.c').read_text()+audit)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/http-connect-audit.c','-lpthread','-lm','-o','build/http-connect'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/http-connect-audit.c','-lpthread','-lm','-o','build/http-connect'],cwd=ROOT,check=True)
 (ROOT/'build/http-connect-audit.js').write_text(instrument((ROOT/'build/http-connect.js').read_text()))
 
 def exact(peer,n):

@@ -23,7 +23,7 @@ candidate=args.candidate.resolve()
 bun=Path.home()/'.bun/bin/bun'
 if not args.no_build:
     subprocess.run([str(bun),str(candidate/'main.ts'),'tests/ipv6-connect.bend','-o','build/ipv6-connect.c'],cwd=ROOT,check=True)
-    subprocess.run(['clang','-fbracket-depth=2048','-std=c11','-O1','build/ipv6-connect.c','-lpthread','-lm','-o','build/ipv6-connect'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-fbracket-depth=2048','-std=c11','-O1','build/ipv6-connect.c','-lpthread','-lm','-o','build/ipv6-connect'],cwd=ROOT,check=True)
 subprocess.run([str(bun),str(candidate/'main.ts'),'tests/ipv6-connect.bend','-o','build/ipv6-connect.js'],cwd=ROOT,check=True)
 report={'scope':__doc__,'cases':[],'sha256':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in [candidate/'base.bend',candidate/'comp.ts',candidate/'effs/tcp_connect_ipv6.c',candidate/'effs/tcp_connect_ipv6.js',ROOT/'tests/ipv6-connect.bend',ROOT/'build/ipv6-connect',ROOT/'build/ipv6-connect.js']}}
 for label,command in [('native 1',['build/ipv6-connect','--threads','1']),('native 4',['build/ipv6-connect','--threads','4']),('Bun',[str(bun),'build/ipv6-connect.js'])]:

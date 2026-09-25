@@ -40,7 +40,7 @@ console.log(JSON.stringify(JSON.parse(fs.readFileSync(0,'utf8')).map(input=>{
 })));
 '''
 expected=json.loads(subprocess.check_output(['node','--disable-warning=ExperimentalWarning','-e',script],input=json.dumps(cases),cwd=ROOT,text=True))
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/ai/test/copilot-headers.bend','build/copilot-headers'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/ai/test/copilot-headers.bend','build/copilot-headers'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(cases),32):
         result=subprocess.run([str(ROOT/'build/copilot-headers'),'--threads',threads,*cases[start:start+32]],cwd=ROOT,text=True,capture_output=True,check=True,timeout=30)

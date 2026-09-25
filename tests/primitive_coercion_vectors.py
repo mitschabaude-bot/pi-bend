@@ -1,6 +1,4 @@
 """Run original primitive coercion over tagged values without JSON erasure."""
-from upstream_pin import check_sibling
-check_sibling()
 import json
 from pathlib import Path
 import random
@@ -29,6 +27,6 @@ lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in
 source=BUILD/'primitive-coercion-vectors.bend'
 source.write_text('\n'.join(lines)+'\n')
 output=BUILD/'test-primitive-coercion'
-subprocess.run(['sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
 for threads in ['1','4']:
     subprocess.run([str(output),'--threads',threads],cwd=ROOT,check=True,timeout=180)

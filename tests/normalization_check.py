@@ -1,6 +1,5 @@
 """Compare immutable Bend normalization with pi's actual optional-null helper."""
-from upstream_pin import UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import UPSTREAM
 import json
 from pathlib import Path
 import subprocess
@@ -82,6 +81,6 @@ source = BUILD / 'normalization-check.bend'
 source.write_text('\n'.join(lines) + '\n')
 for source, name in [(source, 'normalization-check'), ('packages/ai/test/validation-normalize.bend', 'normalization-errors')]:
     output = BUILD / name
-    subprocess.run(['sh', 'scripts/build-pure.sh', str(source), str(output)], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(source), str(output)], cwd=ROOT, check=True)
     for threads in ['1', '4']:
         subprocess.run([str(output), '--threads', threads], cwd=ROOT, check=True, timeout=120)

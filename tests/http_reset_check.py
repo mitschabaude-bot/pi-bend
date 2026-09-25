@@ -106,7 +106,7 @@ if len(sys.argv) > 1:
     binary = ROOT / 'build/http-reset'
     javascript = binary.with_suffix('.js')
     if '--no-build' not in sys.argv:
-        subprocess.run(['sh', 'scripts/build-pure.sh', 'tests/http-reset.bend', str(binary)], cwd=ROOT, env=dict(os.environ, BEND=str(launcher)), check=True)
+        subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'tests/http-reset.bend', str(binary)], cwd=ROOT, env=dict(os.environ, BEND=str(launcher)), check=True)
         subprocess.run([str(launcher), 'tests/http-reset.bend', '-o', str(javascript)], cwd=ROOT, check=True)
     for label, command in [('native 1', [str(binary), '--threads', '1']), ('native 4', [str(binary), '--threads', '4']), ('Bun', [str(Path.home() / '.bun/bin/bun'), str(javascript)])]:
         actual = check(command, label)

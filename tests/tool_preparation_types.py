@@ -19,7 +19,7 @@ for name, kind in [('PreparedToolCall', 'prepared'), ('ImmediateToolCallOutcome'
     actual = re.findall(r'(\w+):', record)
     assert actual == [field for field in expected if field != 'kind'], (name, expected, actual)
 
-subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/agent/test/tool-preparation-types.bend', 'build/test-tool-preparation-types'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/agent/test/tool-preparation-types.bend', 'build/test-tool-preparation-types'], cwd=ROOT, check=True)
 for threads in ('1', '4'):
     subprocess.run(['build/test-tool-preparation-types', '--threads', threads], cwd=ROOT, check=True, timeout=30)
 

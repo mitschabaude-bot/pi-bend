@@ -20,7 +20,7 @@ for stem in ['io-pair','dns-search-parallel']:
   with (ROOT/f'build/{stem}-{suffix}.log').open('w') as log:
    subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/{stem}-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),f'tests/{stem}.bend','-o',f'build/{stem}.{suffix}'],cwd=ROOT,check=True,stdout=log,stderr=subprocess.STDOUT)
  (ROOT/f'build/{stem}-audit.c').write_text((ROOT/f'build/{stem}.c').read_text()+audit)
- subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1',f'build/{stem}-audit.c','-lpthread','-lm','-o',f'build/{stem}'],cwd=ROOT,check=True)
+ subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1',f'build/{stem}-audit.c','-lpthread','-lm','-o',f'build/{stem}'],cwd=ROOT,check=True)
  (ROOT/f'build/{stem}-audit.js').write_text(instrument((ROOT/f'build/{stem}.js').read_text()))
 
 def wire(name):

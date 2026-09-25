@@ -53,7 +53,7 @@ for data, invalid in [([256], 256), ([65, 4294967295, 256], 4294967295), ([0, 25
     args.append(';'.join([text('POST'), 'bytes', numbers(data), '-']))
     expected.append('invalid-byte:' + str(invalid))
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/http-buffered-body.bend', 'build/http-buffered-body'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/http-buffered-body.bend', 'build/http-buffered-body'], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     for start in range(0, len(args), 16):
         result = subprocess.run([str(ROOT / 'build/http-buffered-body'), '--threads', threads, *args[start:start + 16]], cwd=ROOT, text=True, capture_output=True, check=True, timeout=30)

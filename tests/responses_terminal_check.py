@@ -76,6 +76,6 @@ for start in range(0,len(cases),16):
     lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(start,stop)]
     lines += [f'    IO.print("PASS Responses terminal cases {start}–{stop-1}")']
     source=ROOT/f'build/responses-terminal-check-{start}.bend';source.write_text('\n'.join(lines)+'\n');out=source.with_suffix('')
-    subprocess.run(['sh','scripts/build-pure.sh',str(source),str(out)],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(out)],cwd=ROOT,check=True)
     for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,check=True,timeout=120)
 print(f'PASS {len(cases)} Responses terminal sequences on one/four threads',flush=True)

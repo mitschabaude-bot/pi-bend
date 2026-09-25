@@ -13,7 +13,7 @@ for suffix in ['c', 'js']:
     subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', f'build/dns-server-position-{suffix}-build.json', '--', str(BUN), str(COMPILER/'main.ts'), 'tests/dns-server-position.bend', '-o', f'build/dns-server-position.{suffix}'], cwd=ROOT, check=True)
 audit = '\nstatic void __attribute__((destructor)) audit(void) { unsigned live=0; for(u32 i=0;i<chan_len;i++) live+=chan_rows[i].live; fprintf(stderr,"LIVE %u\\n",live); }\n'
 (ROOT/'build/dns-server-position-audit.c').write_text((ROOT/'build/dns-server-position.c').read_text()+audit)
-subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1', 'build/dns-server-position-audit.c', '-lpthread', '-lm', '-o', 'build/dns-server-position'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1', 'build/dns-server-position-audit.c', '-lpthread', '-lm', '-o', 'build/dns-server-position'], cwd=ROOT, check=True)
 flags = [''.join(bits) for bits in itertools.product('01', repeat=6)]
 cases = [(values, offset, switches) for values in [[], [7], [0,1], [0,1,2], [9,9,7]] for offset in [0,1,2,3,7,257,2147483648,4294967295] for switches in flags]
 cases += [(list(range(8192)), 4294967295, '001011'), ([0,1,2], 2, '1'*10002), ([0,1,2], 1, '')]

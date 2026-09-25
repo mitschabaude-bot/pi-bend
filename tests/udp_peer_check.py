@@ -13,7 +13,7 @@ static void __attribute__((destructor)) peer_audit(void) {
 }
 '''
 (ROOT/'build/udp-peer-audit.c').write_text(source)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-peer-audit.c','-lpthread','-lm','-o','build/udp-peer'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-peer-audit.c','-lpthread','-lm','-o','build/udp-peer'],cwd=ROOT,check=True)
 rows=[]
 for backend,cmd in [('native 1',['build/udp-peer','--threads','1']),('native 4',['build/udp-peer','--threads','4']),('Bun',[str(bun),'build/udp-peer.js'])]:
     for family,af,host,address in [(4,socket.AF_INET,'127.0.0.1',[4,2130706433,0,0,0]),(6,socket.AF_INET6,'::1',[6,0,0,0,1])]:

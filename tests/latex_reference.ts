@@ -11,13 +11,14 @@
 //   fragments, inline and display, and LaTeX-bearing Markdown.
 //
 //   bun tests/latex_reference.ts OUT_DIR [PI_MONO]
+import { UPSTREAM } from "./upstream_pin.mjs";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const out = resolve(process.argv[2] ?? "build/latex");
-const root = process.argv[3] ?? "/home/agent/code/pi-mono";
+const root = process.argv[3] ?? UPSTREAM;
 mkdirSync(out, { recursive: true });
 const pinned: Record<string, string> = {
 	"packages/tui/src/latex.ts": "c4ef99bef1d3a54c73006912c9a7fa67ef99412b4f6cd28d608cf0e07b38cece",
