@@ -57,6 +57,14 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   plain code colour: the port needs an ECMAScript regex engine (captures,
   lookaround, backreferences; Bend's regex is a Thompson matcher for grep),
   the highlight.js mode engine and the grammars, all in Bend. Not started.
+- **LaTeX in markdown** (answers with `$…$`/`$$…$$`): pi renders math with
+  `packages/tui/src/latex.ts` unless `renderLatex` is false. Bend's
+  `MarkdownOptions.renderLatex` exists but no LaTeX tokenizer or renderer is
+  ported, so math stays raw text. Queued after syntax highlighting (both edit
+  markdown.bend).
+- **Fullscreen TUI mode** (`--tui-mode fullscreen`, setting `tuiMode`): the
+  arguments parse, but `tui-alt-screen.ts` (alternate screen, scroll view,
+  copy-on-select, fullscreen images) is not ported; the default regular mode is.
 - **RPC command ordering around a prompt** (`steer-and-queue`): Node runs a
   prompt's microtasks up to its first awaited I/O before reading the next
   stdin line, so a steer sent right after the prompt response arrives while
