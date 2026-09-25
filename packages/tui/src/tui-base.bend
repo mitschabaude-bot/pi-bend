@@ -263,6 +263,10 @@ def setTerminalPreferences(base: TuiBase,showHardwareCursor: Bool,clearOnShrink:
       TuiBase{root,focus,bindings,displayed,scheduler,showHardwareCursor,clearOnShrink,layout}
 def layoutRoot(base: TuiBase) -> Maybe<&2,N.LayoutNode>:
   match base: case TuiBase{_,_,_,_,_,_,_,node}: node
+def indicatorRow(base: TuiBase) -> Maybe<&2,Nat>:
+  match base:
+    case TuiBase{_,_,_,_,_,_,_,Some{layout}}: N.indicatorRow(layout)
+    case _: None{}
 def scrolledRoot(base: TuiBase,result: Scroll.ScrollByResult) -> ScrollChange:
   match result:
     case Scroll.ScrollByResult{next,unused,render}:
@@ -274,6 +278,14 @@ def scrollRootBy(base: TuiBase,root: Maybe<&2,N.LayoutNode>,delta: T.Offset,now:
     case _: ScrollChange{base,delta,False{}}
 def scrollLayoutRootBy(+base: TuiBase,delta: T.Offset,now: Nat) -> ScrollChange:
   scrollRootBy(base,layoutRoot(base),delta,now)
+def scrolledPrimary(base: TuiBase,result: N.ScrollResult) -> ScrollChange:
+  match result:
+    case N.ScrollResult{node,_,unused,render}: ScrollChange{setLayoutRoot(base,Some{node}),unused,render}
+def scrollPrimaryBy(base: TuiBase,motion: N.ScrollMotion,now: Nat) -> ScrollChange:
+  match base:
+    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,Some{layout}}:
+      scrolledPrimary(TuiBase{root,focus,bindings,displayed,scheduler,show,clear,None{}},N.scrollPrimary(layout,motion,now))
+    case _: ScrollChange{base,T.Forward{0n},False{}}
 def added(base: TuiBase,component: C.Component) -> TuiBase:
   match base:
     case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout}:

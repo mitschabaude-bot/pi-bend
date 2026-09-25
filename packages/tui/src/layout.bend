@@ -205,14 +205,17 @@ def scrollbarGlyph(view: Scroll.ScrollView,+row: Nat,geometry: ScrollbarGeometry
     case ScrollbarGeometry{_,_,_,+thumbTop,thumbHeight,_}:
       Bool.pick(String,Nat.is_le(thumbTop,row) && Nat.is_lt(row,thumbTop + thumbHeight),
         Bool.pick(String,scrollbarActive(view),"█","┃"),"│")
-def styledGlyph(+glyph: String) -> String:
-  Bool.pick(String,String.eq(glyph,"│"),"\u{1b}[90m" ++ glyph ++ "\u{1b}[39m","\u{1b}[37m" ++ glyph ++ "\u{1b}[39m")
-def overScrollbar(row: String,index: Nat,view: Scroll.ScrollView,width: Nat,geometry: Maybe<&2,ScrollbarGeometry>) -> String:
+def styledGlyph(view: Scroll.ScrollView,+glyph: String) -> String:
+  +interactive = Scroll.isPrimary(view)
+  +track = Bool.pick(String,interactive,"\u{1b}[38;5;239m","\u{1b}[90m")
+  +thumb = Bool.pick(String,interactive,"\u{1b}[38;5;188m","\u{1b}[37m")
+  Bool.pick(String,String.eq(glyph,"│"),track ++ glyph ++ "\u{1b}[39m",thumb ++ glyph ++ "\u{1b}[39m")
+def overScrollbar(row: String,index: Nat,+view: Scroll.ScrollView,width: Nat,geometry: Maybe<&2,ScrollbarGeometry>) -> String:
   match geometry:
     case None{}: row
     case Some{ScrollbarGeometry{+column,top,height,thumbTop,thumbHeight,maxTop}}:
       +glyph = scrollbarGlyph(view,index,ScrollbarGeometry{column,top,height,thumbTop,thumbHeight,maxTop})
-      T.compositeTuiLine(row,styledGlyph(glyph),column,1n,width)
+      T.compositeTuiLine(row,styledGlyph(view,glyph),column,1n,width)
 def dropLines(lines: List<&2,String>,offset: Nat) -> List<&2,String>:
   match lines offset:
     case Nil{} _: Nil{}

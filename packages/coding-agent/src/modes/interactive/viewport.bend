@@ -101,18 +101,19 @@ def dispose(view: View) -> IO(Unit):
 
 # upstream widgetContainerAbove holds a Spacer(1) when no widgets are set; it
 # keeps its line when the transcript overflows.
-def entries(document: Component.Component,editor: Component.Component,footer: Component.Component) -> Node.LayoutNode:
-  +scroll = Scroll.new(document,Scroll.ScrollViewOptions{Scroll.FollowEnd{},True{},Scroll.Chain{},Scroll.Hidden{},1000n})
+def entries(document: Component.Component,editor: Component.Component,footer: Component.Component,fullscreen: Bool) -> Node.LayoutNode:
+  +scrollbar = Bool.pick(Scroll.ScrollViewScrollbar,fullscreen,Scroll.Auto{},Scroll.Hidden{})
+  +scroll = Scroll.new(document,Scroll.ScrollViewOptions{Scroll.FollowEnd{},True{},Scroll.Chain{},scrollbar,1000n})
   Node.Children{Node.child(Node.ScrollNode{scroll},Stack.sized(None{},1n,1n,0n,100000n),None{}),
     Node.Children{Node.child(Node.Spacer{1n},Stack.sized(None{},0n,0n,1n,1n),None{}),
       Node.Children{Node.child(Node.Leaf{editor},Stack.sized(None{},0n,0n,1n,100000n),None{}),
         Node.Children{Node.child(Node.Leaf{footer},Stack.sized(None{},0n,0n,1n,100000n),None{}),Node.Empty{}}}}}
 def layout(+document: Component.Component,+editor: Component.Component,+footer: Component.Component) -> Node.LayoutNode:
-  Node.Inline{Node.VStack{entries(document,editor,footer),0n}}
+  Node.Inline{Node.VStack{entries(document,editor,footer,False{}),0n}}
 def layoutFor(+document: Component.Component,+editor: Component.Component,+footer: Component.Component,fullscreen: Bool) -> Node.LayoutNode:
   match fullscreen:
     case False{}: layout(document,editor,footer)
-    case True{}: Node.VStack{entries(document,editor,footer),0n}
+    case True{}: Node.VStack{entries(document,editor,footer,True{}),0n}
 def mountComponents(+document: Component.Component,+editor: Component.Component,+footer: Component.Component,fullscreen: Bool) -> IO(Tui.ResultOf(Tui.TuiBase)):
   +base = Tui.setLayoutRoot(Tui.added(Tui.added(Tui.added(Tui.newTui(),document),editor),footer),Some{layoutFor(document,editor,footer,fullscreen)})
   Tui.setFocus(base,document <> editor <> footer <> Nil{},Component.id(document) <> Component.id(editor) <> Component.id(footer) <> Nil{},Some{Component.id(editor)})

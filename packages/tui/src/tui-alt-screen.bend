@@ -33,7 +33,7 @@ def reset(state: State) -> State:
   match state:
     case State{_,_,_}: initial()
 def rowText(row: Nat,line: String) -> String:
-  "\u{1b}[" ++ Nat.show(row + 1n) ++ ";1H\u{1b}[2K" ++ line
+  "\u{1b}[" ++ Nat.show(row + 1n) ++ ";1H\u{1b}[2K\u{1b}[0m" ++ line
 def addRow(operation: Maybe<&2,Screen.Operation>,reversed: List<&2,Screen.Operation>) -> List<&2,Screen.Operation>:
   match operation:
     case None{}: reversed
@@ -69,3 +69,19 @@ def plan(state: State,+lines: List<&2,String>,cursor: Maybe<&2,Tui.CursorPositio
       +clear = Bool.pick(List<&2,Screen.Operation>,full,Screen.Text{"\u{1b}[2J"} <> body,body)
       +output = Screen.stream(Screen.Text{"\u{1b}[?2026h"} <> List.append(&2,Screen.Operation,clear,Screen.Text{cursorText(cursor,width) ++ "\u{1b}[?2026l"} <> Nil{}))
       Plan{State{fitted,Some{width},Some{height}},output}
+
+def jumpLabel() -> String:
+  "\u{1b}[38;5;188m\u{1b}[48;5;59m ↓ Jump to latest message · End \u{1b}[39m\u{1b}[49m"
+def indicatorLine(line: String,+width: Nat) -> String:
+  +label = jumpLabel()
+  +size = Layout.visibleWidth(label)
+  Tui.compositeTuiLine(line,label,(width - size) / 2n,size,width)
+def indicatorLines(lines: List<&2,String>,row: Nat,width: Nat) -> List<&2,String>:
+  match lines row:
+    case Nil{} _: Nil{}
+    case line <> rest Zero{}: indicatorLine(line,width) <> rest
+    case line <> rest Succ{above}: line <> indicatorLines(rest,above,width)
+def planWithIndicator(state: State,lines: List<&2,String>,cursor: Maybe<&2,Tui.CursorPosition>,+width: Nat,height: Nat,row: Maybe<&2,Nat>) -> Plan:
+  match row:
+    case None{}: plan(state,lines,cursor,width,height)
+    case Some{position}: plan(state,indicatorLines(lines,position,width),cursor,width,height)

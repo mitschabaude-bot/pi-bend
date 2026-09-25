@@ -7,6 +7,8 @@ import ./overlays.bend as O
 import ./terminal.bend as Terminal
 import ./terminal-query.bend as Query
 import ./tui-base.bend as Tui
+import ./layout-node.bend as Layout
+import ./tui.bend as T
 import ./tui-main-screen.bend as Screen
 import ./tui-alt-screen.bend as Alt
 
@@ -76,7 +78,8 @@ def executeAltPlan(value: Alt.Plan,old: Session,prepared: Tui.PreparedFrame,hand
         return finishedAlt(written,old,prepared,next)
 def executeAlt(+prepared: Tui.PreparedFrame,old: Session,screen: Alt.State,handle: Terminal.Handle,width: Nat,height: Nat) -> IO(Draw):
   match prepared:
-    case Tui.PreparedFrame{_,_,+lines,+cursor}: executeAltPlan(Alt.plan(screen,lines,cursor,width,height),old,prepared,handle)
+    case Tui.PreparedFrame{+tui,_,+lines,+cursor}:
+      executeAltPlan(Alt.planWithIndicator(screen,lines,cursor,width,height,Tui.indicatorRow(tui)),old,prepared,handle)
 def executePrepared(result: Tui.ResultOf(Tui.PreparedFrame),+old: Session,handle: Terminal.Handle,termux: Bool,width: Nat,height: Nat) -> IO(Draw):
   match result:
     case Fail{error}: IO.pure(Draw,Rejected{old,Owner{error}})
@@ -104,8 +107,37 @@ def afterInput(result: Tui.ResultOf(Tui.InputResult),old: Session,handle: Termin
   match result old:
     case Fail{error} old: IO.pure(Input,Input{Rejected{old,Owner{error}},False{},False{}})
     case Done{Tui.InputResult{tui,handled,immediate}} Session{_,screen}: IO.pure(Input,Input{Drawn{Session{tui,screen}},handled,immediate})
+type ViewportAction is Data: Scroll{motion: Layout.ScrollMotion} Consume{} Pass{}
+def viewportAction(+data: String) -> ViewportAction:
+  match data:
+    case "\u{1b}[5~": Scroll{Layout.ScrollPageUp{}}
+    case "\u{1b}[6~": Scroll{Layout.ScrollPageDown{}}
+    case _:
+      Bool.pick(Unit -> ViewportAction,String.starts_with(data,"\u{1b}[<64;"),_ => Scroll{Layout.ScrollLines{T.Backward{1n}}},
+        _ => Bool.pick(Unit -> ViewportAction,String.starts_with(data,"\u{1b}[<65;"),_ => Scroll{Layout.ScrollLines{T.Forward{1n}}},
+          _ => Bool.pick(Unit -> ViewportAction,String.starts_with(data,"\u{1b}[<72;"),_ => Scroll{Layout.ScrollLines{T.Backward{5n}}},
+            _ => Bool.pick(Unit -> ViewportAction,String.starts_with(data,"\u{1b}[<73;"),_ => Scroll{Layout.ScrollLines{T.Forward{5n}}},
+              _ => Bool.pick(ViewportAction,String.starts_with(data,"\u{1b}[<"),Consume{},Pass{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
+def scrollInput(result: Tui.ScrollChange,screen: Alt.State) -> Input:
+  match result:
+    case Tui.ScrollChange{next,_,render}: Input{Drawn{Session{next,Fullscreen{screen}}},True{},render}
+def viewportScrolled(tui: Tui.TuiBase,screen: Alt.State,motion: Layout.ScrollMotion) -> IO(Input):
+  do IO<Input>:
+    now : Nat <- IO.now()
+    return scrollInput(Tui.scrollPrimaryBy(tui,motion,now),screen)
+def fullscreenAction(action: ViewportAction,+tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
+  match action:
+    case Scroll{motion}: viewportScrolled(tui,screen,motion)
+    case Consume{}: IO.pure(Input,Input{Drawn{Session{tui,Fullscreen{screen}}},True{},False{}})
+    case Pass{}:
+      do IO<Input>:
+        result : Tui.ResultOf(Tui.InputResult) <- Tui.dispatchInput(tui,registry,mounted,data)
+        afterInput(result,Session{tui,Fullscreen{screen}},handle,termux)
+def fullscreenInput(tui: Tui.TuiBase,screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,+data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
+  fullscreenAction(viewportAction(data),tui,screen,registry,mounted,data,handle,termux)
 def input(+session: Session,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
   match session:
+    case Session{tui,Fullscreen{screen}}: fullscreenInput(tui,screen,registry,mounted,data,handle,termux)
     case Session{+tui,_}:
       do IO<Input>:
         result : Tui.ResultOf(Tui.InputResult) <- Tui.dispatchInput(tui,registry,mounted,data)

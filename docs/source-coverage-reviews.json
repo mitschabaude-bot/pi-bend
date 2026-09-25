@@ -129,13 +129,13 @@
         "packages/coding-agent/src/modes/interactive/viewport.bend",
         "packages/coding-agent/src/main.bend"
       ],
-      "note": "Interactive theme selection, per-model thinking overrides, /thinking and /scoped-models flows work. Fullscreen startup/typing match terminal parity via CLI override and saved setting; regular Ctrl+D exit and persisted-session resume hint also match. Fullscreen exit presentation, mouse/search controls, dynamic mode switching, and broader commands remain partial.",
+      "note": "Interactive theme selection, per-model thinking overrides, /thinking and /scoped-models flows work. Fullscreen startup, typing, and viewport scrolling match terminal parity; regular Ctrl+D exit and persisted-session resume hint also match. Fullscreen exit presentation, mouse selection/search, dynamic mode switching, and broader commands remain partial.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "23a8e54c1d30b54424d1e29508abdf12385cb5dec8e142b675becdb2c540b2d4",
         "packages/coding-agent/src/modes/interactive/run.bend": "59545810e0627743d6f57b3a9389ca950f127d19ff1cb457f00e226b0573e385",
         "packages/coding-agent/src/modes/interactive/commands.bend": "346a1437fb1f5d4b429ae47416c1ab464e043ee8a5d7ec79a269fdc417a3092a",
-        "packages/coding-agent/src/modes/interactive/viewport.bend": "b5e0bae4b4c857909a36a9f14c3f60bbc3a1c6ab04391492a36958b9616a6eb2",
+        "packages/coding-agent/src/modes/interactive/viewport.bend": "c26551ed6c7f5f80837817ede0eed9c68a20fcab25dfb1b17dec2b90c1fd8550",
         "packages/coding-agent/src/main.bend": "01410adc82ed2d2cae836504662a63e14c88051321d081dac8c907ad20da3535"
       }
     },
@@ -152,12 +152,12 @@
     },
     "packages/tui/src/tui-alt-screen.ts": {
       "state": "partial",
-      "note": "Native alternate-screen startup/typing match upstream in plain and ANSI terminal captures. On exit the full document and resume hint are restored for persisted conversations, but dock spacing/cursor styling and empty-session output differ. Mouse selection, search, image placement, and viewport scrolling controls remain unported; the upstream test suite is pending.",
+      "note": "Native fullscreen startup, typing, and viewport page/wheel scrolling match upstream terminal captures. Completed-turn exit restores the document and resume hint, but dock spacing/cursor styling and empty-session output differ. Search, mouse selection, image placement, custom keybindings, and the upstream suite remain open.",
       "source_sha256": "5f6032a07398b8df3f72d65c38dbed2e52649a25823a52946d6414ddb2f8a929",
       "port_sha256": {
-        "packages/tui/src/tui-alt-screen.bend": "b6ab2ca8eccaece23ff2b390b2a74b57571bbbb0e5563b31ec222b8a3cdba800",
-        "packages/tui/src/tui-base.bend": "9242bad46a7bf3f72320d46193d1d70f26717ff21e488439311a3ce43bd8cc86",
-        "packages/tui/src/tui-process.bend": "145c8580930eccda0e36976aea501fdb86a80ed2addc7927f42add11e05ae759"
+        "packages/tui/src/tui-alt-screen.bend": "b79c2683c623f2c36bb7f4423ed8a462cbf4c15ac198a833fb3f03184ba16a06",
+        "packages/tui/src/tui-base.bend": "8760d3f4f21d182feda60dddbf0d8c48d4bdc2324d1a60df817183bedf8f3274",
+        "packages/tui/src/tui-process.bend": "8393fdcf4f6420b1d78ea3d89aa9514e7872b84b39049879bfbe6a8e745a43ec"
       },
       "ports": [
         "packages/tui/src/tui-alt-screen.bend",
@@ -271,6 +271,41 @@
       "port_sha256": {
         "packages/coding-agent/src/cli/session-picker.bend": "4971f9ba65525a119e6daf31a08771b4c77fe2bc3588ba5e43ed275bc0844e20"
       }
+    },
+    "packages/tui/src/layout-node.ts": {
+      "state": "partial",
+      "note": "Native immutable layout nodes represent stack and scroll structure; the complete upstream layout contract is not yet validated.",
+      "source_sha256": "31dd68c9edafdc4f882bbb6c16f8deb1c514111020b647f0037b34d6b8c70a85",
+      "port_sha256": {
+        "packages/tui/src/layout-node.bend": "2c6843988285b402b64f75d58b873b629dd3dff803388740811987931da9d9d3"
+      },
+      "ports": [
+        "packages/tui/src/layout-node.bend"
+      ]
+    },
+    "packages/tui/src/components/scroll-view.ts": {
+      "state": "partial",
+      "note": "Follow-end, manual scrolling, scrollbars, and viewport state are implemented. Mouse-hover behavior, transient hide timing, configurable styles, and the full upstream suite remain open.",
+      "source_sha256": "76dfd9f8a88cabc064f0652b83f16a945fbc988c9fe7c0423a4cd796907ef77d",
+      "port_sha256": {
+        "packages/tui/src/components/scroll-view.bend": "0b6d7081ad10aabbe5f6e25ed4c7871b85ed38d10f45774be294c4a9ae6db95b",
+        "packages/tui/src/layout.bend": "dc7eafd16cf1c1c3a703eb237cddc1270a7cadfb398e942070284493442a02f8"
+      },
+      "ports": [
+        "packages/tui/src/components/scroll-view.bend",
+        "packages/tui/src/layout.bend"
+      ]
+    },
+    "packages/coding-agent/src/modes/interactive/chat-viewport.ts": {
+      "state": "partial",
+      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
+      "source_sha256": "24bbdd06a5e17d6c0631f7de51329eb7bb4ecd4a460dec7b3d593ff9e6219960",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/viewport.bend": "c26551ed6c7f5f80837817ede0eed9c68a20fcab25dfb1b17dec2b90c1fd8550"
+      },
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/viewport.bend"
+      ]
     }
   }
 }

@@ -21,6 +21,10 @@ def new(child: C.Component,options: ScrollViewOptions) -> ScrollView:
       ScrollView{child,end,primary,overscroll,scrollbar,delay,0n,0n,0n,end,False{},False{},False{},None{}}
 def maxScrollTop(view: ScrollView) -> Nat:
   match view: case ScrollView{_,_,_,_,_,_,_,+content,+viewport,_,_,_,_,_}: content - viewport
+def isPrimary(view: ScrollView) -> Bool:
+  match view: case ScrollView{_,_,primary,_,_,_,_,_,_,_,_,_,_,_}: primary
+def visibleRows(view: ScrollView) -> Nat:
+  match view: case ScrollView{_,_,_,_,_,_,_,_,rows,_,_,_,_,_}: rows
 def getContentWidth(view: ScrollView,+width: Nat) -> Nat:
   match view:
     case ScrollView{_,_,_,_,Always{},_,_,_,_,_,_,_,_,_}: Bool.pick(Nat,Nat.is_gt(width,1n),width - 1n,width)
