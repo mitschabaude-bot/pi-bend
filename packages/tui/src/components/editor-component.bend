@@ -1,5 +1,6 @@
 import Base
 import ./editor.bend as Editor
+import ../autocomplete.bend as AC
 import ./loader.bend as Loader
 import ../component.bend as Component
 import ../keybindings.bend as Keybindings
@@ -22,16 +23,32 @@ type RenderInput is Data: RenderInput{editor: Handle,working: Maybe<&2,Ref.Ref<M
 type Owner is Type:
   Owner{resource: Serial.Owner<State>,component: Component.Component,handle: Handle}
 
+def accepted(previous: State,result: Editor.ResultOf(Editor.Editor)) -> State:
+  match previous result:
+    case State{_,words,bindings,keyboard,rows,_} Done{editor}: State{editor,words,bindings,keyboard,rows,None{}}
+    case State{editor,words,bindings,keyboard,rows,_} Fail{error}: State{editor,words,bindings,keyboard,rows,Some{error}}
+# Autocomplete results arrive asynchronously and ask for a render, as
+# upstream applies them before requesting one; rendering applies them first.
+def polled(state: State) -> IO(State):
+  match state:
+    case State{+editor,words,bindings,keyboard,rows,error}:
+      do IO<State>:
+        result : Editor.ResultOf(Editor.Editor) <- Editor.pollAutocomplete(editor)
+        return accepted(State{editor,words,bindings,keyboard,rows,error},result)
 def renderedPair(pair: Editor.Editor & List<&2,String>,words: Segmenter.Source,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,rows: Ref.Ref<Nat>,error: Maybe<&2,Editor.Error>) -> State & List<&2,String>:
   match pair:
     case (next,lines): (State{next,words,bindings,keyboard,rows,error},lines)
-def rendered(state: State,width: Nat) -> IO(State & List<&2,String>):
+def renderedCurrent(state: State,width: Nat) -> IO(State & List<&2,String>):
   match state:
     case State{editor,words,bindings,keyboard,+rows,error}:
       do IO<State & List<&2,String>>:
         height : Nat <- Ref.read(Nat,rows)
         pair : Editor.Editor & List<&2,String> <- Editor.render(editor,width,height)
         return renderedPair(pair,words,bindings,keyboard,rows,error)
+def rendered(state: State,width: Nat) -> IO(State & List<&2,String>):
+  do IO<State & List<&2,String>>:
+    current : State <- polled(state)
+    renderedCurrent(current,width)
 def statusLine(handle: Maybe<&2,Loader.Handle>,width: Nat) -> IO(Maybe<&2,String>):
   match handle:
     case None{}: IO.pure(Maybe<&2,String>,None{})
@@ -39,13 +56,17 @@ def statusLine(handle: Maybe<&2,Loader.Handle>,width: Nat) -> IO(Maybe<&2,String
       do IO<Maybe<&2,String>>:
         lines : List<&2,String> <- Loader.renderLive(loader,width + 2n)
         return Some{Strings.trim(Maybe.default(&2,String,List.get(&2,String,lines,1n),""))}
-def renderedStatus(state: State,width: Nat,status: Maybe<&2,String>) -> IO(State & List<&2,String>):
+def renderedStatusCurrent(state: State,width: Nat,status: Maybe<&2,String>) -> IO(State & List<&2,String>):
   match state:
     case State{editor,words,bindings,keyboard,+rows,error}:
       do IO<State & List<&2,String>>:
         height : Nat <- Ref.read(Nat,rows)
         pair : Editor.Editor & List<&2,String> <- Editor.renderWithStatus(editor,width,height,status)
         return renderedPair(pair,words,bindings,keyboard,rows,error)
+def renderedStatus(state: State,width: Nat,status: Maybe<&2,String>) -> IO(State & List<&2,String>):
+  do IO<State & List<&2,String>>:
+    current : State <- polled(state)
+    renderedStatusCurrent(current,width,status)
 def renderLiveCopied(input: RenderInput,+width: Nat) -> IO(List<&2,String>):
   match input:
     case RenderInput{Handle{resource},None{}}: Serial.run(State,List<&2,String>,resource,state => rendered(state,width))
@@ -57,10 +78,6 @@ def renderLiveCopied(input: RenderInput,+width: Nat) -> IO(List<&2,String>):
 def renderLive(input: RenderInput,width: Nat) -> IO(List<&2,String>):
   renderLiveCopied(input,width)
 
-def accepted(previous: State,result: Editor.ResultOf(Editor.Editor)) -> State:
-  match previous result:
-    case State{_,words,bindings,keyboard,rows,_} Done{editor}: State{editor,words,bindings,keyboard,rows,None{}}
-    case State{editor,words,bindings,keyboard,rows,_} Fail{error}: State{editor,words,bindings,keyboard,rows,Some{error}}
 # The editor's word commands (upstream's Intl.Segmenter users).
 def wordCommand(+bindings: Keybindings.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> Bool:
   Keybindings.matches(bindings,keyboard,data,"tui.editor.cursorWordLeft") || Keybindings.matches(bindings,keyboard,data,"tui.editor.cursorWordRight") || Keybindings.matches(bindings,keyboard,data,"tui.editor.deleteWordBackward") || Keybindings.matches(bindings,keyboard,data,"tui.editor.deleteWordForward")
@@ -158,6 +175,17 @@ def autocompleteState(state: State,maximum: Nat) -> IO(State & Unit):
 def setAutocompleteMaxVisible(handle: Handle,maximum: Nat) -> IO(Unit):
   match handle:
     case Handle{resource}: Serial.run(State,Unit,resource,state => autocompleteState(state,maximum))
+
+def providerState(state: State,provider: AC.AutocompleteProvider) -> IO(State & Unit):
+  match state:
+    case State{editor,words,bindings,keyboard,rows,error}:
+      do IO<State & Unit>:
+        next : Editor.Editor <- Editor.setAutocompleteProvider(editor,provider)
+        return (State{next,words,bindings,keyboard,rows,error},Unit{})
+# The editor borrows the provider; its owner disposes it after replacing it.
+def setAutocompleteProvider(handle: Handle,provider: AC.AutocompleteProvider) -> IO(Unit):
+  match handle:
+    case Handle{resource}: Serial.run(State,Unit,resource,state => providerState(state,provider))
 
 def created(id: Component.ComponentId,pair: Serial.Owner<State> & Serial.Handle<State>,working: Maybe<&2,Ref.Ref<Maybe<&2,Loader.Handle>>>) -> IO(Owner):
   match pair:

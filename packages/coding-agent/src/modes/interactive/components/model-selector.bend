@@ -10,6 +10,7 @@ import ../../../../../tui/src/tui.bend as Tui
 import ../../../../../tui/src/utils.bend as Utils
 import ../../../core/model-runtime.bend as Models
 import ../theme/theme.bend as Theme
+import ../model-search.bend as Search
 
 # A searchable, mounted catalog selector. The catalog is already limited to
 # authenticated providers by ModelRuntime; selection carries the real model.
@@ -28,11 +29,8 @@ def currentFirst(items: List<&2,Models.Model()>,+current: Maybe<&2,Models.Model(
     case Nil{}: List.reverse(&2,Models.Model(),other)
     case +model <> +rest:
       Bool.pick(Unit -> List<&2,Models.Model()>,isCurrent(model,current),_ => model <> List.append(&2,Models.Model(),List.reverse(&2,Models.Model(),other),rest),_ => currentFirst(rest,current,model <> other))(Unit{})
-def searchText(model: Models.Model()) -> String:
-  match model:
-    case Ai.Model{+id,name,_,+provider,_,_,_,_,_,_,_,_,_,_,_,_}: provider ++ " " ++ provider ++ "/" ++ id ++ " " ++ provider ++ " " ++ id ++ " " ++ name
 def filtered(+items: List<&2,Models.Model()>,+query: String) -> List<&2,Models.Model()>:
-  Bool.pick(List<&2,Models.Model()>,String.is_empty(query),items,Fuzzy.fuzzyFilter(~Models.Model(),~searchText,items,query))
+  Bool.pick(List<&2,Models.Model()>,String.is_empty(query),items,Fuzzy.fuzzyFilter(~Models.Model(),~Search.modelSelectorText,items,query))
 def create(items: List<&2,Models.Model()>,+current: Maybe<&2,Models.Model()>,+query: String,height: Nat) -> State:
   +ordered = currentFirst(items,current,Nil{})
   State{ordered,filtered(ordered,query),0n,query,current,Nat.max(5n,height / 2n)}

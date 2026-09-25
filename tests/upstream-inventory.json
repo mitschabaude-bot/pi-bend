@@ -2281,9 +2281,12 @@
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-status.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6bc7ed9f4122344b1476ea5b669f43e9cd11a342ef31a90de9b7b4a7f278a995"
+      "status": "partial",
+      "ports": [
+        "tests/interactive-autocomplete.bend"
+      ],
+      "sha256": "6bc7ed9f4122344b1476ea5b669f43e9cd11a342ef31a90de9b7b4a7f278a995",
+      "notes": "The two createBaseAutocompleteProvider cases (model and login argument completions) run through the combined provider. setupAutocompleteProvider wrapper cases need extension autocomplete wrappers (not ported); status and showLoadedResources cases are pending."
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-suspend.test.ts",

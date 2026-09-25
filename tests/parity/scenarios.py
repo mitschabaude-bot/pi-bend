@@ -8,6 +8,8 @@ Paths in `files` are relative to the scenario root (home/, project/). Steps:
 """
 import base64
 import json
+import os
+import shutil
 
 MODEL = ["--provider", "openai", "--model", "gpt-5"]
 READY = r"gpt-5 • "  # the footer's model line: the editor is mounted
@@ -24,6 +26,11 @@ def typed(word):
         steps.append(("keys", word[index - 1]))
         steps.append(("wait", rf"(^|\s){word[:index]}(\s|$)", f"key{index}"))
     return steps
+
+# @ file completion needs fd (pi's fdPath); scenarios that use it put the
+# directory of an installed fd on PATH.
+FD = shutil.which("fd") or os.path.expanduser("~/.pi/agent/bin/fd")
+FD_PATH = {"PATH": os.path.dirname(FD) + ":" + os.environ.get("PATH", "")}
 
 ANSWER = " ".join(f"word{index}" for index in range(1, 121)) + " END-OF-ANSWER"
 
@@ -214,6 +221,31 @@ SCENARIOS = [
         "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "/hotkeys"), ("key", "Enter"),
                   ("wait", "Run bash command \\(excluded from context\\)", "hotkeys"), ("settle", 0.3), ("snap", "hotkeys"),
                   ("key", "C-k"), ("wait", "Only showing models", "picker"), ("settle", 0.3), ("snap", "picker")],
+    },
+    # Editor autocomplete: slash commands (skills rank by bare name), @ after
+    # CJK punctuation, and Tab path completion after CJK punctuation.
+    {
+        "name": "autocomplete-slash",
+        "args": MODEL,
+        "files": {**RESOURCES, "home/.agents/skills/research-idea/SKILL.md": "---\nname: research-idea\ndescription: Refine an idea.\n---\nRefine.\n"},
+        "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "/idea"), ("wait", "research-idea", "popup"), ("settle", 0.3), ("snap", "idea"),
+                  ("key", "C-u"), ("keys", "/mo"), ("wait", "model", "popup2"), ("settle", 0.3), ("snap", "mo")],
+    },
+    {
+        "name": "autocomplete-at-cjk",
+        "args": MODEL,
+        "env": FD_PATH,
+        "files": {"project/说明.md": "text\n", "project/文档/说明.md": "nested\n", "project/README.md": "readme\n"},
+        "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "查看，@说"), ("wait", "说明.md", "popup"), ("settle", 0.3), ("snap", "popup"),
+                  ("key", "Tab"), ("settle", 0.5), ("snap", "accepted"),
+                  ("key", "C-u"), ("keys", "查看@REA"), ("settle", 0.8), ("snap", "letters")],
+    },
+    {
+        "name": "autocomplete-tab-cjk",
+        "args": MODEL,
+        "files": {"project/文档/说明.md": "nested\n"},
+        "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "查看。文"), ("key", "Tab"), ("settle", 0.8), ("snap", "directory"),
+                  ("keys", "说"), ("key", "Tab"), ("settle", 0.8), ("snap", "file")],
     },
     {
         "name": "basic-turn",

@@ -14,7 +14,7 @@ Recursive search checks cancellation before filesystem work, during traversal an
 
 ## Explicit adaptations and remaining scope
 
-- Locale collation is pending, consistent with the unresolved `ls` ordering choice. Callers must choose `ScalarOrder` or `FoldedScalarOrder`; neither silently becomes Pi's locale-sensitive default. Folded ordering/prefix matching use the existing Unicode case-fold tables, rather than JS lowercase/UTF-16 behavior.
+- `LocaleOrder{collator}` orders labels and paths with the runtime root collation, as upstream's `localeCompare`; interactive mode uses it. `ScalarOrder` and `FoldedScalarOrder` remain for callers without collation data (the fixtures use `ScalarOrder`). Folded prefix matching uses the Unicode case-fold tables rather than JS lowercase/UTF-16 behavior.
 - Cursor offsets, path lengths and string operations count native Unicode scalars. Invalid line/column/prefix edits return typed errors instead of JS slicing/coercion behavior.
 - Directory-first direct sorting uses the item label, as upstream does since v0.87.1.
 - Native paths retain literal Unix backslashes, newlines and surrounding whitespace. Only `~` and `~/` expand to home; `~name` is an ordinary filename, correcting upstream's inconsistent directory/display handling. Windows path behavior remains unported.
@@ -31,3 +31,7 @@ python3 tests/autocomplete_check.py
 ```
 
 Root integration independently rebuilt hosted/native artifacts with the shared compiler and passed the full autocomplete runner on all three backends. The same integrated traversal also passed all 85 Find and 109 Grep scenarios on each backend.
+
+## Interactive provider
+
+`modes/interactive/interactive-mode.bend` ports `createBaseAutocompleteProvider`: the built-in slash commands (`core/slash-commands.bend`), prompt templates and `skill:` commands with their `[u]`/`[p]` source tags, and argument completions for `/model`, `/thinking` and `/login` that read the live session. `@` file search is enabled when managed-tool setup finds fd, as upstream's `fdPath`, although the search itself is native. The provider is rebuilt after `/reload`; extension commands and autocomplete wrappers wait for the extension runtime. `tests/interactive-autocomplete.bend` runs upstream's two `createBaseAutocompleteProvider` cases, and the `autocomplete-*` parity scenarios compare the popups with pi.

@@ -246,8 +246,53 @@ def environmentValue(result: Result<&1,&1,U32 & String,String>) -> Maybe<&2,Stri
   match result:
     case Fail{_}: None{}
     case Done{value}: Some{value}
+# upstream autocompleteProvider and fdPath: the provider the editor borrows,
+# and whether fd was available when managed tools were set up.
+type AutocompleteSlot is Data:
+  AutocompleteSlot{owner: Ref.Ref<Maybe<&2,Interactive.AutocompleteOwner>>,files: Ref.Ref<Bool>,home: String,data: String}
 type CommandObservation is Data:
-  CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,builtinDir: String,importState: ImportState,resumeState: ResumeState,selector: Ref.Ref<Maybe<&2,Selector.Host>>,bash: BashInput,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,trust: TrustContext,header: Maybe<&2,Header.Handle>,bindings: Keybindings.KeybindingsManager}
+  CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,builtinDir: String,importState: ImportState,resumeState: ResumeState,selector: Ref.Ref<Maybe<&2,Selector.Host>>,bash: BashInput,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,trust: TrustContext,header: Maybe<&2,Header.Handle>,bindings: Keybindings.KeybindingsManager,autocomplete: AutocompleteSlot}
+# builtinDir is <assets>/packages/coding-agent/src/modes/interactive/theme.
+def autocompleteSlot(home: Maybe<&2,String>,builtinDir: String) -> IO(AutocompleteSlot):
+  do IO<AutocompleteSlot>:
+    owner : Ref.Ref<Maybe<&2,Interactive.AutocompleteOwner>> <- Ref.new(Maybe<&2,Interactive.AutocompleteOwner>,None{})
+    files : Ref.Ref<Bool> <- Ref.new(Bool,False{})
+    return AutocompleteSlot{owner,files,Maybe.default(&2,String,home,"/"),Path.normalize(builtinDir ++ "/../../../../../runtime/data")}
+def disposeOwner(owner: Maybe<&2,Interactive.AutocompleteOwner>) -> IO(Unit):
+  match owner:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{value}: Interactive.disposeAutocompleteProvider(value)
+def disposeAutocompleteSlot(slot: AutocompleteSlot) -> IO(Unit):
+  match slot:
+    case AutocompleteSlot{owner,files,_,_}:
+      do IO<Unit>:
+        previous : Maybe<&2,Interactive.AutocompleteOwner> <- Ref.dispose(Maybe<&2,Interactive.AutocompleteOwner>,owner)
+        disposeOwner(previous)
+        found : Bool <- Ref.dispose(Bool,files)
+        return Unit{}
+def installProvider(editor: Maybe<&2,Live.Handle>,+owner: Interactive.AutocompleteOwner) -> IO(Unit):
+  match editor owner:
+    case None{} _: IO.pure(Unit,Unit{})
+    case Some{handle} Interactive.AutocompleteOwner{provider,_}: Live.setAutocompleteProvider(handle,provider)
+def replaceProvider(slot: AutocompleteSlot,editor: Ref.Ref<Maybe<&2,Live.Handle>>,created: Maybe<&2,Interactive.AutocompleteOwner>) -> IO(Unit):
+  match slot created:
+    case _ None{}: IO.pure(Unit,Unit{})
+    case AutocompleteSlot{owner,_,_,_} Some{+next}:
+      do IO<Unit>:
+        target : Maybe<&2,Live.Handle> <- Ref.read(Maybe<&2,Live.Handle>,editor)
+        installProvider(target,next)
+        previous : Maybe<&2,Interactive.AutocompleteOwner> <- Ref.swap(Maybe<&2,Interactive.AutocompleteOwner>,owner,Some{next})
+        disposeOwner(previous)
+# upstream setupAutocompleteProvider: rebuilt at startup and on /reload.
+def autocompleteFiles(slot: AutocompleteSlot) -> Ref.Ref<Bool>:
+  match slot: case AutocompleteSlot{_,files,_,_}: files
+def setupAutocomplete(+slot: AutocompleteSlot,editor: Ref.Ref<Maybe<&2,Live.Handle>>,session: Ref.Ref<Session.AgentSession>) -> IO(Unit):
+  match slot:
+    case AutocompleteSlot{_,files,home,data}:
+      do IO<Unit>:
+        recursive : Bool <- Ref.read(Bool,files)
+        created : Maybe<&2,Interactive.AutocompleteOwner> <- Interactive.createAutocompleteProvider(session,home,data,recursive)
+        replaceProvider(slot,editor,created)
 def firstPath(args: List<&2,String>) -> Maybe<&2,String>:
   match args:
     case Nil{}: None{}
@@ -320,7 +365,7 @@ def exportNotice(result: Result<&2,&2,String,String>) -> Interactive.SubmissionF
     case Fail{message}: Interactive.CommandFailure{"Failed to export session: " ++ message}
 def exportObserved(input: CommandObservation,requested: Maybe<&2,String>) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,failure,redraw,cwd,builtinDir,_,_,_,_,_,_,_,_}:
+    case CommandObservation{_,session,_,failure,redraw,cwd,builtinDir,_,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         result : Result<&2,&2,String,String> <- exportCurrent(live,cwd,builtinDir,requested)
@@ -392,7 +437,7 @@ def importRequested(+state: ImportState,path: Maybe<&2,String>) -> IO(Unit):
         importConfirmed(state,input,answer)
 def importObserved(input: CommandObservation,requested: Maybe<&2,String>) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,_,_,_,state,_,_,_,_,_,_,_}: importRequested(state,exportPath(requested))
+    case CommandObservation{_,_,_,_,_,_,_,state,_,_,_,_,_,_,_,_}: importRequested(state,exportPath(requested))
 def resumeStatus(state: ResumeState,status: Interactive.SubmissionFailure) -> IO(Unit):
   match state:
     case ResumeState{_,_,_,_,failure,redraw}:
@@ -452,7 +497,7 @@ def resumeRequested(+state: ResumeState) -> IO(Unit):
         choices : SessionChoices <- Callback.call(Unit,SessionChoices,backend,Unit{})
         resumeOpen(state,choices)
 def resumeObserved(input: CommandObservation) -> IO(Unit):
-  match input: case CommandObservation{_,_,_,_,_,_,_,_,state,_,_,_,_,_,_}: resumeRequested(state)
+  match input: case CommandObservation{_,_,_,_,_,_,_,_,state,_,_,_,_,_,_,_}: resumeRequested(state)
 def selectorNotice(failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,message: String) -> IO(Unit):
   Ref.write(Maybe<&2,Interactive.SubmissionFailure>,failure,Some{Interactive.CommandNotice{message}})
 def openTree(target: Maybe<&2,Selector.Host>,state: Selector.State) -> IO(Unit):
@@ -488,7 +533,7 @@ def openSessionSelector(mode: Selector.Mode,session: Ref.Ref<Session.AgentSessio
     Interactive.requestRender(redraw)
 def treeObserved(input: CommandObservation,mode: Selector.Mode) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,failure,redraw,_,_,_,_,selector,_,_,_,_,_}: openSessionSelector(mode,session,selector,failure,redraw)
+    case CommandObservation{_,session,_,failure,redraw,_,_,_,_,selector,_,_,_,_,_,_}: openSessionSelector(mode,session,selector,failure,redraw)
 type BashChunk is Data: BashChunk{message: MessageUI.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 def bashChunk(target: BashChunk,delta: String) -> IO(Unit):
   match target:
@@ -580,10 +625,10 @@ def bashRequested(+input: BashInput,+command: String,+excluded: Bool) -> IO(Unit
           reservation : BashReservation <- Ref.modify(BashActivity,BashReservation,activity,current => reserveBash(current,fresh))
           bashReserved(input,command,excluded,reservation))(Unit{})
 def bashObserved(input: CommandObservation,command: String,excluded: Bool) -> IO(Unit):
-  match input: case CommandObservation{_,_,_,_,_,_,_,_,_,_,bash,_,_,_,_}: bashRequested(bash,command,excluded)
+  match input: case CommandObservation{_,_,_,_,_,_,_,_,_,_,bash,_,_,_,_,_}: bashRequested(bash,command,excluded)
 def ordinaryCommandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match input:
-    case CommandObservation{sink,session,footer,_,_,_,_,_,_,_,_,_,_,_,_}:
+    case CommandObservation{sink,session,footer,_,_,_,_,_,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
         changed : Bool <- Interactive.commandResult(sink,action)
         Bool.pick(Unit -> IO(Unit),changed,_ => do IO<Unit>:
@@ -617,7 +662,7 @@ def sessionInfoShown(transcript: Transcript.Handle,+live: Session.AgentSession,s
         Transcript.sessionInfo(transcript,sessionInfoOf(value,Session.stateOf(stored),Session.modelRuntime(live)))
 def sessionInfoObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,_,redraw,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_}:
+    case CommandObservation{_,session,_,_,redraw,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_}:
       do IO<Unit>:
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         stats : Result<&2,&2,Tree.Error,Stats.Stats> <- Session.getSessionStats(live)
@@ -625,7 +670,7 @@ def sessionInfoObserved(input: CommandObservation) -> IO(Unit):
         Interactive.requestRender(redraw)
 def copyObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,_,redraw,cwd,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_}:
+    case CommandObservation{_,session,_,_,redraw,cwd,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         text : Maybe<&2,String> <- Session.getLastAssistantText(live)
@@ -646,7 +691,7 @@ def changelogText(entries: List<&2,Changelog.ChangelogEntry>) -> String:
     case entries: String.join(linkedEntries(List.reverse(&2,Changelog.ChangelogEntry,entries)),"\n\n")
 def changelogObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,redraw,_,builtinDir,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_}:
+    case CommandObservation{_,_,_,_,redraw,_,builtinDir,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_}:
       do IO<Unit>:
         entries : List<&2,Changelog.ChangelogEntry> <- Changelog.parseChangelog(changelogPath(builtinDir))
         Transcript.changelog(transcript,MessageUI.FullChangelog{changelogText(entries)})
@@ -702,7 +747,7 @@ def hotkeysMarkdown(+bindings: Keybindings.KeybindingsManager) -> String:
   ],"\n")
 def hotkeysObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,redraw,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,bindings}:
+    case CommandObservation{_,_,_,_,redraw,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,bindings,_}:
       do IO<Unit>:
         Transcript.hotkeys(transcript,hotkeysMarkdown(bindings))
         Interactive.requestRender(redraw)
@@ -712,7 +757,7 @@ def matchSettings(host: Maybe<&2,SettingsPicker.Host>) -> IO(Unit):
     case Some{ready}: SettingsPicker.open(ready)
 def settingsObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,_,_,_,_,_,_,_,settings,_,_,_}:
+    case CommandObservation{_,_,_,_,_,_,_,_,_,_,_,settings,_,_,_,_}:
       do IO<Unit>:
         host : Maybe<&2,SettingsPicker.Host> <- Ref.read(Maybe<&2,SettingsPicker.Host>,settings)
         matchSettings(host)
@@ -729,7 +774,7 @@ def trustOpened(target: Ref.Ref<Maybe<&2,TrustPicker.Host>>,cwd: String,options:
         openTrustHost(host,cwd,options,saved,trusted)
 def trustObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,_,redraw,+cwd,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,TrustContext{host,store,_},_,_}:
+    case CommandObservation{_,session,_,_,redraw,+cwd,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,TrustContext{host,store,_},_,_,_}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         settings : Settings.SettingsManager <- Session.getSettings(live)
@@ -802,29 +847,41 @@ def reloadResult(+transcript: Transcript.Handle,header: Maybe<&2,Header.Handle>,
         reloadListed(header,session)
         saved : Bool <- maybeSaveImplicitTrust(trust,cwd,session,transcript)
         Transcript.status(transcript,"Reloaded keybindings, extensions, skills, prompts, themes, and context files" ++ Bool.pick(String,saved,"; saved project trust",""))
-def reloadIdle(transcript: Transcript.Handle,header: Maybe<&2,Header.Handle>,+session: Session.AgentSession,trust: TrustContext,cwd: String,streaming: Bool,compacting: Bool) -> IO(Unit):
+def reloaded(result: Result<&2,&2,String,Unit>) -> Bool:
+  match result:
+    case Done{_}: True{}
+    case Fail{_}: False{}
+def reloadIdle(transcript: Transcript.Handle,header: Maybe<&2,Header.Handle>,+session: Session.AgentSession,trust: TrustContext,cwd: String,streaming: Bool,compacting: Bool) -> IO(Bool):
   match streaming compacting:
-    case True{} _: Transcript.showWarning(transcript,"Wait for the current response to finish before reloading.")
-    case False{} True{}: Transcript.showWarning(transcript,"Wait for compaction to finish before reloading.")
+    case True{} _:
+      do IO<Bool>:
+        Transcript.showWarning(transcript,"Wait for the current response to finish before reloading.")
+        return False{}
+    case False{} True{}:
+      do IO<Bool>:
+        Transcript.showWarning(transcript,"Wait for compaction to finish before reloading.")
+        return False{}
     case False{} False{}:
-      do IO<Unit>:
-        result : Result<&2,&2,String,Unit> <- Session.reload(session)
+      do IO<Bool>:
+        +result : Result<&2,&2,String,Unit> <- Session.reload(session)
         reloadResult(transcript,header,session,trust,cwd,result)
+        return reloaded(result)
 def reloadObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,_,redraw,cwd,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,trust,header,_}:
+    case CommandObservation{_,+session,_,_,redraw,cwd,_,_,_,_,BashInput{_,transcript,editor,_,_,_},_,trust,header,_,+autocomplete}:
       do IO<Unit>:
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         streaming : Bool <- Session.isStreaming(live)
         compacting : Bool <- Session.isCompacting(live)
-        reloadIdle(transcript,header,live,trust,cwd,streaming,compacting)
+        done : Bool <- reloadIdle(transcript,header,live,trust,cwd,streaming,compacting)
+        Bool.pick(Unit -> IO(Unit),done,_ => setupAutocomplete(autocomplete,editor,session),_ => IO.pure(Unit,Unit{}))(Unit{})
         Interactive.requestRender(redraw)
 def sessionStatus(input: CommandObservation,message: String) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,_,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_}: Transcript.status(transcript,message)
+    case CommandObservation{_,_,_,_,_,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_}: Transcript.status(transcript,message)
 def newSessionStatus(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,_,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_}: Transcript.newSession(transcript)
+    case CommandObservation{_,_,_,_,_,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_}: Transcript.newSession(transcript)
 def commandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match action:
     case Commands.CopyLastAssistant{}: copyObserved(input)
@@ -924,6 +981,8 @@ def disposeFooter(owner: FooterOwner) -> IO(Unit):
         oldFailure : Maybe<&2,Interactive.SubmissionFailure> <- Ref.dispose(Maybe<&2,Interactive.SubmissionFailure>,failure)
         return Unit{}
 
+# upstream getSelectListTheme: accent selection, muted descriptions, scroll
+# info and no-match text.
 def editorTheme(theme: Ref.Ref<Theme.Theme>) -> IO(Callback.Callback<String,String>):
   MarkdownTheme.color(theme,"accent")
 # upstream updateEditorBorderColor, evaluated when the border is painted: bash
@@ -958,12 +1017,12 @@ type ThemeLive is Data:
   ThemeLive{selection: Ref.Ref<Maybe<&2,ThemeController.Handle>>,theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,requestRender: Callback.Callback<Unit,Unit>}
 type ThemeOwned is Type:
   ThemeOwned{controller: ThemeController.Owner,render: Callback.Callback<Unit,Unit>}
-type ThemeStartup is Data:
-  ThemeStartup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>,theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,session: Ref.Ref<Session.AgentSession>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,managed: Maybe<&2,Manager.ToolsManager>}
 type ThemeStopping is Data:
   ThemeStopping{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>}
 type Interaction is Data:
-  Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,modelSelector: Ref.Ref<Maybe<&2,ModelPicker.Host>>,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,trust: Ref.Ref<Maybe<&2,TrustPicker.Host>>,header: Maybe<&2,Header.Handle>,bashActivity: Ref.Ref<BashActivity>,working: Working}
+  Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,modelSelector: Ref.Ref<Maybe<&2,ModelPicker.Host>>,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,trust: Ref.Ref<Maybe<&2,TrustPicker.Host>>,header: Maybe<&2,Header.Handle>,bashActivity: Ref.Ref<BashActivity>,working: Working,autocomplete: AutocompleteSlot}
+type ThemeStartup is Data:
+  ThemeStartup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>,theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,session: Ref.Ref<Session.AgentSession>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,managed: Maybe<&2,Manager.ToolsManager>,interaction: Interaction}
 type LoginRequest is Data: LoginRequest{provider: String,signal: Abort.AbortSignal<Unit>,notice: AuthLogin.Notice(),manual: Callback.Callback<AuthLogin.ManualPrompt,Unit>,manualDone: Callback.Callback<Unit,Unit>}
 type Binding is Data:
   Binding{current: Ref.Ref<Session.AgentSession>,replacement: Controller.Replacement,onRebind: Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>,login: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,refreshModels: Callback.Callback<Unit,List<&2,Models.Model()>>,importer: Callback.Callback<ImportRequest,SessionHost.ImportOutcome>,sessions: Callback.Callback<Unit,SessionChoices>,resume: Callback.Callback<ResumeRequest,SessionHost.ResumeOutcome>,managed: Maybe<&2,Manager.ToolsManager>,autoTrustOnReload: Bool}
@@ -1300,15 +1359,15 @@ def chosenModel(input: SelectInput,model: Models.Model()) -> IO(Unit):
         result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitCommand(queue,Commands.SwitchModel{model})
         Interactive.submittedResult(failure,result)
 def selectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,Selector.Host>>:
-  match interaction: case Interaction{_,_,_,selector,_,_,_,_,_,_}: selector
+  match interaction: case Interaction{_,_,_,selector,_,_,_,_,_,_,_}: selector
 def modelSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,ModelPicker.Host>>:
-  match interaction: case Interaction{_,_,_,_,selector,_,_,_,_,_}: selector
+  match interaction: case Interaction{_,_,_,_,selector,_,_,_,_,_,_}: selector
 def settingsSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,SettingsPicker.Host>>:
-  match interaction: case Interaction{_,_,_,_,_,settings,_,_,_,_}: settings
+  match interaction: case Interaction{_,_,_,_,_,settings,_,_,_,_,_}: settings
 def editorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,Live.Handle>>:
-  match interaction: case Interaction{editor,_,_,_,_,_,_,_,_,_}: editor
+  match interaction: case Interaction{editor,_,_,_,_,_,_,_,_,_,_}: editor
 def trustSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,TrustPicker.Host>>:
-  match interaction: case Interaction{_,_,_,_,_,_,trust,_,_,_}: trust
+  match interaction: case Interaction{_,_,_,_,_,_,trust,_,_,_,_}: trust
 def contextTheme(context: ThemeContext) -> Ref.Ref<Theme.Theme>:
   match context: case ThemeContext{theme,_,_,_,_,_,_,_,_,_,_,_}: theme
 def contextTranscript(context: ThemeContext) -> Transcript.Handle:
@@ -1318,13 +1377,13 @@ def contextAgentDir(context: ThemeContext) -> String:
 def contextInteraction(context: ThemeContext) -> Interaction:
   match context: case ThemeContext{_,_,_,_,_,_,interaction,_,_,_,_,_}: interaction
 def lastClearOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,F64>>:
-  match interaction: case Interaction{_,lastClear,_,_,_,_,_,_,_,_}: lastClear
+  match interaction: case Interaction{_,lastClear,_,_,_,_,_,_,_,_,_}: lastClear
 def recordEditor(interaction: Interaction,handle: Live.Handle) -> IO(Unit):
-  match interaction: case Interaction{editor,_,_,_,_,_,_,_,_,_}: Ref.write(Maybe<&2,Live.Handle>,editor,Some{handle})
+  match interaction: case Interaction{editor,_,_,_,_,_,_,_,_,_,_}: Ref.write(Maybe<&2,Live.Handle>,editor,Some{handle})
 def bashActivityOf(interaction: Interaction) -> Ref.Ref<BashActivity>:
-  match interaction: case Interaction{_,_,_,_,_,_,_,_,activity,_}: activity
+  match interaction: case Interaction{_,_,_,_,_,_,_,_,activity,_,_}: activity
 def workingOf(interaction: Interaction) -> Working:
-  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,working}: working
+  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,working,_}: working
 def contextModels(context: ThemeContext) -> Ref.Ref<List<&2,Models.Model()>>:
   match context: case ThemeContext{_,_,_,_,_,_,_,models,_,_,_,_}: models
 def contextSession(context: ThemeContext) -> Ref.Ref<Session.AgentSession>:
@@ -1361,7 +1420,7 @@ def disposeLoginState(state: LoginState) -> IO(Unit):
         return Unit{}
 def keyInput(queue: Controller.Handle,stop: Deferred.Deferred<Unit>,+failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,interaction: Interaction,+session: Ref.Ref<Session.AgentSession>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,transcript: Transcript.Handle,models: Ref.Ref<List<&2,Models.Model()>>) -> KeyInput:
   match interaction:
-    case Interaction{_,lastClear,lastEscape,selector,+modelSelector,_,_,header,_,_}: KeyInput{queue,stop,failure,lastClear,lastEscape,selector,session,redraw,header,transcript,Interactive.CommandSink{failure,redraw,modelSelector,session,models}}
+    case Interaction{_,lastClear,lastEscape,selector,+modelSelector,_,_,header,_,_,_}: KeyInput{queue,stop,failure,lastClear,lastEscape,selector,session,redraw,header,transcript,Interactive.CommandSink{failure,redraw,modelSelector,session,models}}
 def openedTree(input: KeyInput,mode: Selector.Mode) -> IO(Unit):
   match input:
     case KeyInput{_,_,failure,_,_,selector,session,redraw,_,_,_}: openSessionSelector(mode,session,selector,failure,redraw)
@@ -1611,8 +1670,9 @@ def controllerFor(mode: Maybe<&2,Binding>,current: Ref.Ref<Session.AgentSession>
     case Some{Binding{_,replacement,_,_,_,_,_,_,_,_}}: Controller.startBound(current,listener,replacement,limit,failure,command,control,selection,models,Some{login})
 def disposeInteraction(interaction: Interaction) -> IO(Unit):
   match interaction:
-    case Interaction{editor,lastClear,lastEscape,selector,modelSelector,settings,trust,_,bashActivity,working}:
+    case Interaction{editor,lastClear,lastEscape,selector,modelSelector,settings,trust,_,bashActivity,working,autocomplete}:
       do IO<Unit>:
+        disposeAutocompleteSlot(autocomplete)
         oldEditor : Maybe<&2,Live.Handle> <- Ref.dispose(Maybe<&2,Live.Handle>,editor)
         oldClear : Maybe<&2,F64> <- Ref.dispose(Maybe<&2,F64>,lastClear)
         oldEscape : Maybe<&2,F64> <- Ref.dispose(Maybe<&2,F64>,lastEscape)
@@ -1634,8 +1694,8 @@ def autoTrustOnReloadOf(mode: Maybe<&2,Binding>) -> Bool:
     case Some{Binding{_,_,_,_,_,_,_,_,_,eligible}}: eligible
 def startup(context: ThemeContext,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Ref.Ref<Maybe<&2,Interactive.SubmissionFailure>>,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>) -> ThemeStartup:
   match context:
-    case ThemeContext{theme,transcript,session,setting,builtinDir,customDir,_,_,mode,_,_,_}:
-      ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managedOf(mode)}
+    case ThemeContext{theme,transcript,session,setting,builtinDir,customDir,interaction,_,mode,_,_,_}:
+      ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managedOf(mode),interaction}
 def selectionTheme(value: ThemeController.Selection) -> Theme.Theme:
   match value: case ThemeController.Selection{_,_,_,theme,_,_,_}: theme
 def syncSelected(live: ThemeLive,handle: ThemeController.Handle) -> IO(Unit):
@@ -1681,22 +1741,22 @@ def managedReported(sink: ManagedSink,status: Manager.ToolStatus) -> IO(Unit):
         +text : String <- IO.pure(String,managedText(warning,message))
         Transcript.managedStatus(transcript,text,warning,Bool.not(previous))
         Callback.call(Unit,Unit,render,Unit{})
-def ensureManagedOne(managed: Manager.ToolsManager,tool: Manager.Tool,status: Callback.Callback<Manager.ToolStatus,Unit>) -> IO(Unit):
-  do IO<Unit>:
+def ensureManagedOne(managed: Manager.ToolsManager,tool: Manager.Tool,status: Callback.Callback<Manager.ToolStatus,Unit>) -> IO(Bool):
+  do IO<Bool>:
     path : Maybe<&2,String> <- Manager.ensureTool(managed,tool,Some{status})
-    return Unit{}
-def setupManaged(managed: Maybe<&2,Manager.ToolsManager>,transcript: Transcript.Handle,render: Callback.Callback<Unit,Unit>) -> IO(Unit):
+    return Maybe.is_some(&2,String,path)
+def setupManaged(managed: Maybe<&2,Manager.ToolsManager>,transcript: Transcript.Handle,render: Callback.Callback<Unit,Unit>) -> IO(Bool):
   match managed:
-    case None{}: IO.pure(Unit,Unit{})
+    case None{}: IO.pure(Bool,False{})
     case Some{+manager}:
-      do IO<Unit>:
+      do IO<Bool>:
         +started : Ref.Ref<Bool> <- Ref.new(Bool,False{})
         +status : Callback.Callback<Manager.ToolStatus,Unit> <- Callback.create(~ManagedSink,~Manager.ToolStatus,~Unit,~managedReported,ManagedSink{transcript,render,started})
-        ensureManagedOne(manager,Manager.Fd{},status)
-        ensureManagedOne(manager,Manager.Rg{},status)
+        fd : Bool <- ensureManagedOne(manager,Manager.Fd{},status)
+        rg : Bool <- ensureManagedOne(manager,Manager.Rg{},status)
         Callback.dispose(Manager.ToolStatus,Unit,status)
         wasStarted : Bool <- Ref.dispose(Bool,started)
-        return Unit{}
+        return fd
 # upstream getChangelogForDisplay/showStartupNoticesIfNeeded: a fresh install
 # records the version silently; after an update the new entries are shown
 # (condensed when collapseChangelog is set). Resumed sessions show nothing.
@@ -1751,18 +1811,27 @@ def startupProjectTrustWarning(transcript: Transcript.Handle,session: Ref.Ref<Se
     Bool.pick(Unit -> IO(Unit),resources && Bool.not(Settings.isProjectTrusted(settings)),
       _ => Transcript.showProjectTrustWarning(transcript,"This project is not trusted. Project .pi resources and packages are ignored. Use /trust to save a trust decision, then restart pi."),
       _ => IO.pure(Unit,Unit{}))(Unit{})
+# upstream: after fd and rg setup, the session rebinds and builds the
+# autocomplete provider with the resolved fd path.
+def startAutocomplete(interaction: Interaction,session: Ref.Ref<Session.AgentSession>,found: Bool) -> IO(Unit):
+  match interaction:
+    case Interaction{editor,_,_,_,_,_,_,_,_,_,+autocomplete}:
+      do IO<Unit>:
+        Ref.write(Bool,autocompleteFiles(autocomplete),found)
+        setupAutocomplete(autocomplete,editor,session)
 def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle>,startup: ThemeStartup,+render: Callback.Callback<Unit,Unit>) -> IO(Unit):
   match result startup:
-    case Done{(controller,+handle)} ThemeStartup{redraw,queue,initial,failure,_,+selected,owned,_,theme,+transcript,+session,_,builtinDir,_,managed}:
+    case Done{(controller,+handle)} ThemeStartup{redraw,queue,initial,failure,_,+selected,owned,_,theme,+transcript,+session,_,builtinDir,_,managed,interaction}:
       do IO<Unit>:
         Ref.write(Maybe<&2,ThemeController.Handle>,selected,Some{handle})
         Ref.write(Maybe<&1,ThemeOwned>,owned,Some{ThemeOwned{controller,render}})
         syncSelected(ThemeLive{selected,theme,transcript,render},handle)
-        setupManaged(managed,transcript,render)
+        files : Bool <- setupManaged(managed,transcript,render)
+        startAutocomplete(interaction,session,files)
         startupProjectTrustWarning(transcript,session)
         startupChangelog(transcript,session,builtinDir)
         startInput(handle,redraw,queue,initial,failure,render)
-    case Fail{cause} ThemeStartup{_,_,_,_,stopped,_,_,error,_,_,_,_,_,_,_}:
+    case Fail{cause} ThemeStartup{_,_,_,_,stopped,_,_,error,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
         Callback.dispose(Unit,Unit,render)
         Ref.write(Maybe<&2,Theme.LoadError>,error,Some{cause})
@@ -1770,13 +1839,13 @@ def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & T
         return Unit{}
 def themeReady(startup: ThemeStartup,ready: Process.QueryReady) -> IO(Unit):
   match startup ready:
-    case ThemeStartup{redraw,queue,initial,failure,stopped,+selected,owned,error,+theme,+transcript,+session,+setting,+builtinDir,+customDir,+managed} Process.QueryReady{queries,terminal,write,requestRender}:
+    case ThemeStartup{redraw,queue,initial,failure,stopped,+selected,owned,error,+theme,+transcript,+session,+setting,+builtinDir,+customDir,+managed,+interaction} Process.QueryReady{queries,terminal,write,requestRender}:
       do IO<Unit>:
         +render : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeLive,~Unit,~Unit,~syncRender,ThemeLive{selected,theme,transcript,requestRender})
         detected : Result<&1,&1,U32 & String,String> <- IO.get_env("COLORFGBG")
         initialTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
         result : Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle> <- ThemeController.start(Process.QueryReady{queries,terminal,write,render},setting,environmentValue(detected),builtinDir,customDir,Theme.colorMode(initialTheme))
-        readySelected(result,ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managed},render)
+        readySelected(result,ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managed,interaction},render)
 def closeTheme(current: Maybe<&1,ThemeOwned>) -> IO(Unit):
   match current:
     case None{}: IO.pure(Unit,Unit{})
@@ -1983,6 +2052,8 @@ def updateHeaderBindings(handle: Maybe<&2,Header.Handle>,bindings: Keybindings.K
   match handle:
     case None{}: IO.pure(Unit,Unit{})
     case Some{ready}: Header.setBindings(ready,bindings)
+# The editor's requestRender: asynchronous autocomplete results repaint.
+def editorRenderRequested(redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,unit: Unit) -> IO(Unit): Interactive.requestRender(redraw)
 def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,changed: Callback.Callback<String,Unit>,controller: Controller.Controller,+queue: Controller.Handle,+submitted: Callback.Callback<String,Unit>,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,+words: Words.Source,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (+paint,uiTheme):
@@ -1993,7 +2064,8 @@ def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,chang
         padded : Editor.Editor <- Editor.setPaddingX(editor,smallCount(Settings.getEditorPaddingX(settings)))
         configuredEditor : Editor.Editor <- Editor.setAutocompleteMaxVisible(padded,smallCount(Settings.getAutocompleteMaxVisible(settings)))
         +keys : Callback.Callback<CustomEditor.AppAction,Unit> <- Callback.create(~KeyInput,~CustomEditor.AppAction,~Unit,~keyAction,keyInput(queue,stopped,footerFailure(foot),contextInteraction(context),contextSession(context),redraw,contextTranscript(context),contextModels(context)))
-        +configured : Editor.Editor <- IO.pure(Editor.Editor,Editor.setCallbacks(configuredEditor,Editor.EditorCallbacks{Some{changed},Some{submitted},None{}}))
+        requested : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,~Unit,~Unit,~editorRenderRequested,redraw)
+        +configured : Editor.Editor <- IO.pure(Editor.Editor,Editor.setCallbacks(configuredEditor,Editor.EditorCallbacks{Some{changed},Some{submitted},Some{requested}}))
         +rows : Ref.Ref<Nat> <- Ref.new(Nat,24n)
         +working : Working <- IO.pure(Working,workingOf(contextInteraction(context)))
         setupWorking(working,paint,redraw)
@@ -2005,10 +2077,11 @@ def startController(pair: Controller.Controller & Controller.Handle,view: View.V
       do IO<Result<&2,&2,Error,Unit>>:
         submitted : Callback.Callback<String,Unit> <- Callback.create(~Interactive.SubmissionInput,~String,~Unit,~Interactive.submitted,Interactive.SubmissionInput{queue,stopped,footerFailure(foot)})
         +paint : Callback.Callback<String,String> <- editorTheme(contextTheme(context))
+        +muted : Callback.Callback<String,String> <- MarkdownTheme.color(contextTheme(context),"muted")
         +bash : Ref.Ref<Bool> <- Ref.new(Bool,False{})
         +border : Callback.Callback<String,String> <- Callback.create(~BorderStyle,~String,~String,~paintBorder,BorderStyle{contextTheme(context),contextSession(context),bash})
         +changed : Callback.Callback<String,Unit> <- Callback.create(~Ref.Ref<Bool>,~String,~Unit,~bashModeChanged,bash)
-        result : Result<&2,&2,Error,Unit> <- startPaint((paint,Editor.EditorTheme{border,Select.SelectListTheme{paint,paint,paint,paint,paint}}),changed,controller,queue,submitted,view,transcript,styles,initial,foot,words,stopped,redraw,context)
+        result : Result<&2,&2,Error,Unit> <- startPaint((paint,Editor.EditorTheme{border,Select.SelectListTheme{paint,paint,muted,muted,muted}}),changed,controller,queue,submitted,view,transcript,styles,initial,foot,words,stopped,redraw,context)
         Callback.dispose(String,String,border)
         Callback.dispose(String,Unit,changed)
         oldBash : Bool <- Ref.dispose(Bool,bash)
@@ -2068,14 +2141,15 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +commandSink : Interactive.CommandSink <- IO.pure(Interactive.CommandSink,Interactive.CommandSink{footerFailure(foot),redraw,modelSelectorRef,current,modelsRef})
         +editorHandle : Ref.Ref<Maybe<&2,Live.Handle>> <- Ref.new(Maybe<&2,Live.Handle>,None{})
         +bashActivity : Ref.Ref<BashActivity> <- Ref.new(BashActivity,BashActivity{False{},False{},None{}})
-        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),footerFailure(foot),redraw,cwd,builtinDir,importStateOf(mode,loginHost,footerFailure(foot),redraw),resumeState,selectorRef,BashInput{current,transcriptHandle,editorHandle,footerFailure(foot),redraw,bashActivity},settingsSelectorRef,TrustContext{trustSelectorRef,Trust.create(Path.normalize(customDir ++ "/..")),autoTrustOnReloadOf(mode)},View.headerHandle(viewHandle),bindings})
+        +autocomplete : AutocompleteSlot <- autocompleteSlot(home,builtinDir)
+        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),footerFailure(foot),redraw,cwd,builtinDir,importStateOf(mode,loginHost,footerFailure(foot),redraw),resumeState,selectorRef,BashInput{current,transcriptHandle,editorHandle,footerFailure(foot),redraw,bashActivity},settingsSelectorRef,TrustContext{trustSelectorRef,Trust.create(Path.normalize(customDir ++ "/..")),autoTrustOnReloadOf(mode)},View.headerHandle(viewHandle),bindings,autocomplete})
         +lastClear : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         +lastEscape : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         selectionObserver : Callback.Callback<Controller.SelectionResult,Unit> <- Callback.create(~SelectionSink,~Controller.SelectionResult,~Unit,~selectionResult,SelectionSink{current,transcriptHandle,editorHandle,footerState(foot),footerFailure(foot),redraw,cwd,home})
         controlObserver : Callback.Callback<Controller.ControlResult,Unit> <- Callback.create(~ControlSink,~Controller.ControlResult,~Unit,~controlResult,ControlSink{editorHandle,footerFailure(foot),redraw})
         bindOptional(mode,listener,transcriptHandle,editorHandle,footerState(foot),footerFailure(foot),redraw,cwd,home)
         controllerPair : Controller.Controller & Controller.Handle <- controllerFor(mode,current,session,listener,32n,Some{failureObserver},Some{commandObserver},Some{controlObserver},Some{selectionObserver},modelsRef,loginCallback)
-        startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,current,setting,builtinDir,customDir,Interaction{editorHandle,lastClear,lastEscape,selectorRef,modelSelectorRef,settingsSelectorRef,trustSelectorRef,View.headerHandle(viewHandle),bashActivity,working},modelsRef,mode,loginState,resumeState,bindings})
+        startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,current,setting,builtinDir,customDir,Interaction{editorHandle,lastClear,lastEscape,selectorRef,modelSelectorRef,settingsSelectorRef,trustSelectorRef,View.headerHandle(viewHandle),bashActivity,working,autocomplete},modelsRef,mode,loginState,resumeState,bindings})
 def startStyles(styles: MarkdownTheme.Styles,view: View.View,+viewHandle: View.Handle,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Source,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match styles:
     case MarkdownTheme.Styles{+markdown,callbacks,+live}:

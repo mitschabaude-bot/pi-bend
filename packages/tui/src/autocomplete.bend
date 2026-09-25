@@ -9,6 +9,7 @@ import ../../runtime/src/string.bend as Strings
 import ../../runtime/src/text.bend as Text
 import ../../runtime/src/case-fold.bend as Fold
 import ../../runtime/src/stable-sort.bend as Sort
+import ../../runtime/src/collation.bend as Collation
 import ../../runtime/src/file-search.bend as Search
 import ../../runtime/src/regex.bend as Regex
 
@@ -28,8 +29,10 @@ type SlashCommand is Data:
 type Command is Data:
   Slash{command: SlashCommand}
   Item{item: AutocompleteItem}
-# Explicit policy: locale collation is pending, not silently replaced by either.
-type SortPolicy is Data: ScalarOrder{} FoldedScalarOrder{}
+# upstream orders by localeCompare, which LocaleOrder reproduces with the root
+# collation; the scalar orders serve callers without collation data.
+type SortPolicy is Data: ScalarOrder{} FoldedScalarOrder{} LocaleOrder{collator: Collation.Collator}
+type OrderKey is Data: TextKey{text: String} CollatedKey{key: Collation.Key}
 type CombinedAutocompleteProvider is Data:
   CombinedAutocompleteProvider{commands: List<&2,Command>,basePath: String,homePath: String,sortPolicy: SortPolicy,recursiveFiles: Bool}
 type Options is Data:
@@ -236,10 +239,23 @@ def scalarItemBefore(+a: AutocompleteItem,+b: AutocompleteItem) -> Bool:
 def foldedItemBefore(+a: AutocompleteItem,+b: AutocompleteItem) -> Bool:
   match a b:
     case AutocompleteItem{_,aLabel,_} AutocompleteItem{_,bLabel,_}: Maybe.default(&2,Bool,directoryOrder(a,b),lessEqual(foldedCompare(aLabel,bLabel)))
+type KeyedItem is Data: KeyedItem{key: Collation.Key,item: AutocompleteItem}
+def keyedItems(+collator: Collation.Collator,items: List<&2,AutocompleteItem>) -> List<&2,KeyedItem>:
+  match items:
+    case Nil{}: Nil{}
+    case AutocompleteItem{value,+label,about} <> rest: KeyedItem{Collation.key(collator,label),AutocompleteItem{value,label,about}} <> keyedItems(collator,rest)
+def keyedItemBefore(a: KeyedItem,b: KeyedItem) -> Bool:
+  match a b:
+    case KeyedItem{aKey,+aItem} KeyedItem{bKey,+bItem}: Maybe.default(&2,Bool,directoryOrder(aItem,bItem),lessEqual(Collation.compareKeys(aKey,bKey)))
+def unkeyedItems(values: List<&2,KeyedItem>) -> List<&2,AutocompleteItem>:
+  match values:
+    case Nil{}: Nil{}
+    case KeyedItem{_,item} <> rest: item <> unkeyedItems(rest)
 def sortItems(policy: SortPolicy,items: List<&2,AutocompleteItem>) -> List<&2,AutocompleteItem>:
   match policy:
     case ScalarOrder{}: Sort.sort(~AutocompleteItem,~(a => b => scalarItemBefore(a,b)),items)
     case FoldedScalarOrder{}: Sort.sort(~AutocompleteItem,~(a => b => foldedItemBefore(a,b)),items)
+    case LocaleOrder{collator}: unkeyedItems(Sort.sort(~KeyedItem,~keyedItemBefore,keyedItems(collator,items)))
 
 # POSIX lexical path components. Backslashes remain literal filename characters.
 def skipSlashes(text: String) -> String:
@@ -371,7 +387,7 @@ def create(commands: List<&2,Command>,+basePath: String,+homePath: String,policy
 # independent shallow pass so deep matches cannot crowd them out.
 type SearchScope is Data: SearchScope{root: String,query: String,displayBase: String}
 type Candidate is Data:
-  Candidate{path: String,name: String,directory: Bool,score: Nat,depth: Nat,length: Nat,order: String}
+  Candidate{path: String,name: String,directory: Bool,score: Nat,depth: Nat,length: Nat,order: OrderKey}
 def lastSlash(text: String,+index: Nat,+found: Maybe<&2,Nat>) -> Maybe<&2,Nat>:
   match text:
     case SNil{}: found
@@ -396,10 +412,17 @@ def foldedText(text: String,reversed: String) -> String:
   match text:
     case SNil{}: String.reverse(reversed)
     case SCon{+char,rest}: foldedText(rest,SCon{Chr{minimumCode(Fold.variants(char),Char.to_u32(char))},reversed})
-def orderKey(policy: SortPolicy,text: String) -> String:
+def orderKey(policy: SortPolicy,text: String) -> OrderKey:
   match policy:
-    case ScalarOrder{}: text
-    case FoldedScalarOrder{}: foldedText(text,"")
+    case ScalarOrder{}: TextKey{text}
+    case FoldedScalarOrder{}: TextKey{foldedText(text,"")}
+    case LocaleOrder{collator}: CollatedKey{Collation.key(collator,text)}
+def orderCompare(a: OrderKey,b: OrderKey) -> Cmp:
+  match a b:
+    case TextKey{left} TextKey{right}: scalarCompare(left,right)
+    case CollatedKey{left} CollatedKey{right}: Collation.compareKeys(left,right)
+    case TextKey{_} CollatedKey{_}: LT{}
+    case CollatedKey{_} TextKey{_}: GT{}
 def pathDepth(text: String,inside: Bool,count: Nat) -> Nat:
   match text:
     case SNil{}: count
@@ -415,7 +438,7 @@ def candidateBefore(a: Candidate,b: Candidate) -> Bool:
     case Candidate{_,_,_,+ascore,+adepth,+alen,akey} Candidate{_,_,_,+bscore,+bdepth,+blen,bkey}:
       Bool.pick(Unit -> Bool,Nat.is_eq(ascore,bscore),
         _ => Bool.pick(Unit -> Bool,Nat.is_eq(adepth,bdepth),
-          _ => Bool.pick(Unit -> Bool,Nat.is_eq(alen,blen),_ => lessEqual(scalarCompare(akey,bkey)),_ => Nat.is_lt(alen,blen))(Unit{}),
+          _ => Bool.pick(Unit -> Bool,Nat.is_eq(alen,blen),_ => lessEqual(orderCompare(akey,bkey)),_ => Nat.is_lt(alen,blen))(Unit{}),
           _ => Nat.is_lt(adepth,bdepth))(Unit{}),
         _ => Nat.is_gt(ascore,bscore))(Unit{})
 def supportedKind(kind: FS.FileKind) -> Bool:
