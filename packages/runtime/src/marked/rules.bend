@@ -26,17 +26,31 @@ def caretFree(text: String,pairs: Bool,+reversed: String) -> String:
     case SCon{+char,+rest}:
       Bool.pick(Unit -> String,pairs && Char.is_eq(char,'^'),_ => caretFree(rest,False{},reversed),
         _ => caretFree(rest,Bool.not(Char.is_eq(char,'[')),SCon{char,reversed}))(Unit{})
+# Whether `name` starts `text`, comparing its first character first.
+def startsName(+text: String,+name: String) -> Bool:
+  match text name:
+    case SCon{+char,_} SCon{+first,_}: Bool.pick(Unit -> Bool,Char.is_eq(char,first),_ => String.starts_with(text,name),_ => False{})(Unit{})
+    case _ _: False{}
 def firstReplaced(text: String,+name: String,+value: String,+reversed: String) -> String:
   match text:
     case SNil{}: String.reverse(reversed)
     case SCon{+char,+rest}:
-      Bool.pick(Unit -> String,String.starts_with(SCon{char,rest},name),
+      Bool.pick(Unit -> String,startsName(SCon{char,rest},name),
         _ => String.reverse(reversed) ++ value ++ String.drop(SCon{char,rest},String.length(name)),
         _ => firstReplaced(rest,name,value,SCon{char,reversed}))(Unit{})
+# /name/g: every occurrence, left to right; `skip` counts the rest of a
+# replaced occurrence.
+def everyReplaced(text: String,+name: String,+value: String,+skip: Nat,+reversed: String) -> String:
+  match text:
+    case SNil{}: String.reverse(reversed)
+    case SCon{+char,+rest}:
+      Bool.pick(Unit -> String,Nat.is_gt(skip,0n),_ => everyReplaced(rest,name,value,skip - 1n,reversed),
+        _ => Bool.pick(Unit -> String,startsName(SCon{char,rest},name),_ => everyReplaced(rest,name,value,String.length(name) - 1n,String.reverse(value) ++ reversed),
+          _ => everyReplaced(rest,name,value,0n,SCon{char,reversed}))(Unit{}))(Unit{})
 def replace(value: Edit,name: String,replacement: String) -> Edit:
   match value: case Edit{source,flags}: Edit{firstReplaced(source,name,caretFree(replacement,True{},""),""),flags}
 def replaceAll(value: Edit,name: String,replacement: String) -> Edit:
-  match value: case Edit{source,flags}: Edit{Strings.replaceAll(source,name,caretFree(replacement,True{},"")),flags}
+  match value: case Edit{source,flags}: Edit{everyReplaced(source,name,caretFree(replacement,True{},""),0n,""),flags}
 def sourceOf(value: Edit) -> String:
   match value: case Edit{source,_}: source
 def flagsOf(value: Edit) -> String:
@@ -133,8 +147,9 @@ def createParagraph(interrupt: String) -> Edit:
 def blockquote() -> Edit: replace(edit(bqCore(),""),"paragraph",sourceOf(createParagraph(bqListInterrupt())))
 def gfmTable() -> Edit:
   replace(replace(replace(replace(replace(replace(replace(replace(edit(gfmTableCore(),""),"hr",hrRule()),"heading",pHeading()),"blockquote",pBlockquote()),"code",tCode()),"fences",pFences()),"list",tList()),"html",pHtml()),"tag",tagNames())
-def gfmParagraph() -> Edit:
-  replace(replace(replace(replace(replace(replace(replace(replace(replace(edit(paragraphCore(),""),"hr",hrRule()),"heading",pHeading()),"|lheading",""),"table",sourceOf(gfmTable())),"blockquote",pBlockquote()),"fences",pFences()),"list",gfmPList()),"html",pHtml()),"tag",tagNames())
+def gfmParagraphWith(+table: Edit) -> Edit:
+  replace(replace(replace(replace(replace(replace(replace(replace(replace(edit(paragraphCore(),""),"hr",hrRule()),"heading",pHeading()),"|lheading",""),"table",sourceOf(table)),"blockquote",pBlockquote()),"fences",pFences()),"list",gfmPList()),"html",pHtml()),"tag",tagNames())
+def gfmParagraph() -> Edit: gfmParagraphWith(gfmTable())
 
 # Inline grammar
 # --------------
@@ -194,11 +209,12 @@ type Block is Data: Block{blockquote: Search,code: Search,definition: Search,fen
 type Inline is Data: Inline{backpedal: Search,autolink: Search,blockSkip: Search,br: Search,code: Search,delLDelim: Search,delRDelim: Search,emStrongLDelim: Search,emStrongRDelimAst: Search,emStrongRDelimUnd: Search,escape: Search,link: Search,nolink: Search,reflink: Search,reflinkSearch: Search,tag: Search,text: Search,url: Search,breaks: Bool}
 type Rules is Data: Rules{block: Block,inline: Inline}
 # The rules for marked's default options, with `breaks` or without.
-def rules(+breaks: Bool) -> Rules:
-  Rules{Block{searchOf(blockquote()),searchOf(edit(blockCodeRule(),"")),searchOf(definition()),searchOf(edit(fencesRule(),"")),searchOf(edit(headingRule(),"")),searchOf(edit(hrRule(),"")),searchOf(html()),searchOf(lheadingGfm()),searchOf(listRule()),searchOf(edit(newlineRule(),"")),searchOf(gfmParagraph()),searchOf(gfmTable()),searchOf(edit(blockTextRule(),""))},
+def rulesWith(+breaks: Bool,+table: Edit) -> Rules:
+  Rules{Block{searchOf(blockquote()),searchOf(edit(blockCodeRule(),"")),searchOf(definition()),searchOf(edit(fencesRule(),"")),searchOf(edit(headingRule(),"")),searchOf(edit(hrRule(),"")),searchOf(html()),searchOf(lheadingGfm()),searchOf(listRule()),searchOf(edit(newlineRule(),"")),searchOf(gfmParagraphWith(table)),searchOf(table),searchOf(edit(blockTextRule(),""))},
     Inline{searchOf(edit(backpedal(),"")),searchOf(autolink()),searchOf(blockSkip()),searchOf(Bool.pick(Unit -> Edit,breaks,_ => breaksBr(),_ => edit(brRule(),""))(Unit{})),searchOf(edit(inlineCodeRule(),"")),searchOf(delLDelim()),searchOf(delRDelim()),searchOf(emStrongLDelimGfm()),searchOf(emStrongRDelimAstGfm()),searchOf(emStrongRDelimUnd()),searchOf(edit(escapeRule(),"")),searchOf(link()),searchOf(nolink()),searchOf(reflink()),searchOf(reflinkSearch()),searchOf(tag()),searchOf(Bool.pick(Unit -> Edit,breaks,_ => breaksText(),_ => gfmText())(Unit{})),searchOf(url()),breaks}}
 
 # Block rules by name.
+def rules(+breaks: Bool) -> Rules: rulesWith(breaks,gfmTable())
 def blockBlockquote(value: Block) -> Search:
   match value: case Block{found,_,_,_,_,_,_,_,_,_,_,_,_}: found
 def blockCode(value: Block) -> Search:
