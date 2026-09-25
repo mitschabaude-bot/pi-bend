@@ -40,15 +40,19 @@ def indent(parts: List<&2,String>) -> List<&2,String>:
   match parts:
     case Nil{}: Nil{}
     case part <> rest: (" " ++ part) <> indent(rest)
+def boldLines(lines: List<&2,String>) -> List<&2,String>:
+  match lines:
+    case Nil{}: Nil{}
+    case line <> rest: ("\u{1b}[1m" ++ line ++ "\u{1b}[22m") <> boldLines(rest)
 def titled(title: String,+theme: Theme.Theme,+width: Nat) -> List<&2,String>:
-  indent(Utils.wrapTextWithAnsi(colored(theme,"accent","\u{1b}[1m" ++ title ++ "\u{1b}[22m"),width - 2n))
+  indent(Utils.wrapTextWithAnsi(colored(theme,"accent",String.join(boldLines(String.split(title,'\n')),"\n")),width - 2n))
 def choices(options: List<&2,String>,+index: Nat,+selected: Nat,+theme: Theme.Theme) -> List<&2,String>:
   match options:
     case Nil{}: Nil{}
-    case option <> rest:
+    case +option <> rest:
       +active = Nat.is_eq(index,selected)
-      +prefix = Bool.pick(String,active,"→ ","  ")
-      (" " ++ colored(theme,Bool.pick(String,active,"accent","text"),prefix ++ option)) <> choices(rest,index + 1n,selected,theme)
+      +line = Bool.pick(String,active," " ++ colored(theme,"accent","→ " ++ option),"   " ++ colored(theme,"text",option))
+      line <> choices(rest,index + 1n,selected,theme)
 def namedKey(keys: List<&2,Keys.KeyId>,name: String) -> String:
   match keys:
     case Nil{}: name
