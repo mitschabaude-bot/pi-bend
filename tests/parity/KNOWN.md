@@ -24,9 +24,14 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   over a local TLS server, Bend's first token arrives about 250 ms after pi's
   (the handshake: 350-390 ms versus pi's 90-120 ms). A long answer (10 KB of
   Markdown with 30 code blocks, 500 deltas) paced at 4 ms per delta now ends
-  within the bound (last token 2.48-2.53 s versus pi's 2.07-2.10 s); flooded,
-  it ends at 0.89-0.92 s versus pi's 0.15-0.16 s, of which the handshake
-  alone exceeds the 1.25x bound. Until 2026-09-25 both took 12-17 s: an
+  within the bound (last token 2.42-2.44 s versus pi's 2.07-2.08 s); flooded,
+  it ends at 0.84-0.89 s versus pi's 0.16-0.18 s, of which the handshake
+  alone exceeds the 1.25x bound. In the flooded run (native profile at
+  873533e9) the handshake's X25519 and certificate checks take about 250 ms,
+  and of the ~550 ms after the first byte about a fifth is AES decryption
+  (the constant-time S-box computes an inverse by 13 field multiplications
+  per byte), several tenths are the ~10 frames, and the rest is per-delta
+  work, including one copy of the growing text per delta. Until 2026-09-25 both took 12-17 s: an
   expired Bend Timer completes at once, so a zero-delay frame timer drew
   after every one or two deltas instead of after the received events, as
   Node's setTimeout (at least 1 ms, fired from the event loop) does.
