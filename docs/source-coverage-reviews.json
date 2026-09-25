@@ -138,11 +138,11 @@
         "packages/coding-agent/src/modes/interactive/viewport.bend",
         "packages/coding-agent/src/main.bend"
       ],
-      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native API-key login saves credentials and refreshes model availability; its selector and prompt presentation still differ. Fullscreen startup, typing and viewport scrolling match; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection/search, dynamic mode switching and broader commands remain partial.",
+      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native API-key login saves credentials and refreshes model availability; method, filtered-provider and empty prompt text match terminal captures, while the unfiltered provider catalog and secret masking differ. Fullscreen startup, typing and viewport scrolling match; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection/search, dynamic mode switching and broader commands remain partial.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "d7baf2d18f3290274d621777b67d5c691d2f743e0b9eb04069b3d1799f73266e",
-        "packages/coding-agent/src/modes/interactive/run.bend": "74546fc31326b61f9c71542c4ef4e93832cadd6d8425dc2afb15804a06bfb60e",
+        "packages/coding-agent/src/modes/interactive/run.bend": "fe23d6e6bed96fead06b1431b07a2ef70a0e3ce7296effb9ab8c457660f16810",
         "packages/coding-agent/src/modes/interactive/commands.bend": "8449a234b3cc969830d79b4462042968060562ee619a8b4e3c7ff2dba814265a",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "14557c415d7d4b0dd3c2d6921ce0f3dbd7b1717f23db27fdd8657b1e3d5eb547",
         "packages/coding-agent/src/main.bend": "01410adc82ed2d2cae836504662a63e14c88051321d081dac8c907ad20da3535"
@@ -223,10 +223,10 @@
     },
     "packages/coding-agent/src/modes/interactive/components/oauth-selector.ts": {
       "state": "partial",
-      "note": "Native login offers account and API-key methods, searchable provider choices and key prompts. The provider selector lacks upstream sorting, configured-status badges, full catalog coverage and matching terminal layout.",
+      "note": "Native login offers account and API-key methods, configured-status badges, searchable choices, an eight-row provider window and native key prompts. Method and filtered-provider text match upstream terminal captures. Full provider coverage, OAuth provider options and mouse behavior remain partial.",
       "source_sha256": "d4c92352cc8035e4092d9bd67e0250a2eab3124e13f15ac45433acfde92db53f",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "877d2c60b47f1d7c3ab206c213c6e0378e798badbd7c828eab34d62432a7ffda"
+        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "0c737271d450ee75f0801a4ad03168b129dad23650ceae8cf63f239e51122a05"
       },
       "ports": [
         "packages/coding-agent/src/modes/interactive/components/login-dialog.bend"
@@ -361,10 +361,10 @@
     },
     "packages/coding-agent/src/modes/interactive/components/login-dialog.ts": {
       "state": "partial",
-      "note": "Native OAuth and API-key prompts work, including cancellation and masked key entry. Prompt layout and provider-specific title differ from upstream; other dialog methods remain partial.",
+      "note": "Native OAuth and API-key prompts work, including cancellation. The API-key prompt title and empty-input layout match upstream; Bend deliberately masks entered secrets. Provider-owned info screens render, while links, progress and remaining OAuth details are partial.",
       "source_sha256": "37608848ca7b72707437aed9627a612eadf570c57a54b1c86972c3532918298c",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "877d2c60b47f1d7c3ab206c213c6e0378e798badbd7c828eab34d62432a7ffda"
+        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "0c737271d450ee75f0801a4ad03168b129dad23650ceae8cf63f239e51122a05"
       }
     }
   }
