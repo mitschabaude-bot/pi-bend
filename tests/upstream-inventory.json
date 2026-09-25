@@ -3565,9 +3565,12 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7443-model-command-cached-match.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f338ec3e03e046629206afe930c46182ba91ee1aa22fdd78a0f31cdf7066ad2c"
+      "status": "partial",
+      "ports": [
+        "tests/parity/scenarios.py"
+      ],
+      "sha256": "f338ec3e03e046629206afe930c46182ba91ee1aa22fdd78a0f31cdf7066ad2c",
+      "notes": "Terminal parity: cached exact /model match completes without refresh, while a miss shows the refresh notice and opens a filtered picker with the completed catalog status. Plain frames match pi; the prefilled search cursor position differs in ANSI capture. The injected refresh-count and AbortSignal assertions from upstream are not yet ported."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7497-session-discovery-symlink.test.ts",

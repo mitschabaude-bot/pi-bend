@@ -138,12 +138,12 @@
         "packages/coding-agent/src/modes/interactive/viewport.bend",
         "packages/coding-agent/src/main.bend"
       ],
-      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native API-key login saves credentials and refreshes model availability; method, filtered-provider and empty prompt text match terminal captures, while the unfiltered provider catalog and secret masking differ. Fullscreen startup, typing, viewport scrolling, and keyboard transcript search match focused terminal captures; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection, dynamic mode switching and broader commands remain partial.",
+      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native API-key login saves credentials and refreshes model availability; method, filtered-provider and empty prompt text match terminal captures, while the unfiltered provider catalog and secret masking differ. Fullscreen startup, typing, viewport scrolling, and keyboard transcript search match focused terminal captures; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection, dynamic mode switching and broader commands remain partial. Exact /model matches use the cached scoped or available list; misses refresh the catalog with a 15-second abort deadline, retry exact matching, then open the filtered picker. The miss picker matches plain terminal frames; prefilled search cursor styling remains different.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "d7baf2d18f3290274d621777b67d5c691d2f743e0b9eb04069b3d1799f73266e",
+        "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "2df7941821123ecdc58b9e9b03f1b9c00c13f3f50ad7ed2a54dd79a77eae95d4",
         "packages/coding-agent/src/modes/interactive/run.bend": "fcf7c82b2b25c2084ff19a4d70f7525b75884418b27438c80b86575a68833d00",
-        "packages/coding-agent/src/modes/interactive/commands.bend": "8449a234b3cc969830d79b4462042968060562ee619a8b4e3c7ff2dba814265a",
+        "packages/coding-agent/src/modes/interactive/commands.bend": "2c22354d3f1a7a080d3298e338943a2a49c3665589c41cda5308eea8903d0785",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "14557c415d7d4b0dd3c2d6921ce0f3dbd7b1717f23db27fdd8657b1e3d5eb547",
         "packages/coding-agent/src/main.bend": "99011f58ca1281916d8542b42366cdbacf3dbf2374e4a8b58a75d6f333ed7589"
       }

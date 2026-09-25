@@ -2,6 +2,7 @@ import Base
 import ../../../../agent/src/types.bend as Agent
 import ../../../../runtime/src/callback.bend as Callback
 import ../../../../runtime/src/deferred.bend as Deferred
+import ../../../../runtime/src/abort.bend as Abort
 import ../../../../runtime/src/ref.bend as Ref
 import ../../../../runtime/src/record.bend as Record
 import ../../../../runtime/src/text.bend as Text
@@ -145,7 +146,7 @@ def startPickerRefresh(host: Maybe<&2,ModelPicker.Host>,catalog: Ref.Ref<List<&2
   match host:
     case None{}: IO.pure(Unit,Unit{})
     case Some{current}: IO.spawn(Unit,refreshPicker(current,catalog,redraw,runtime))
-def openPickerResult(failure: StatusSink,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,catalog: Ref.Ref<List<&2,Models.Model()>>,+session: Session.AgentSession,models: List<&2,Models.Model()>,search: Maybe<&2,String>) -> IO(Bool):
+def openPickerResult(failure: StatusSink,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,catalog: Ref.Ref<List<&2,Models.Model()>>,+session: Session.AgentSession,models: List<&2,Models.Model()>,search: Maybe<&2,String>,refresh: Bool) -> IO(Bool):
   match models:
     case Nil{}:
       do IO<Bool>:
@@ -160,8 +161,109 @@ def openPickerResult(failure: StatusSink,+redraw: Ref.Ref<Maybe<&2,Callback.Call
         +target : Maybe<&2,ModelPicker.Host> <- Ref.read(Maybe<&2,ModelPicker.Host>,picker)
         openPicker(target,model <> rest,scoped,current,search,defaultReference(settings))
         requestRender(redraw)
-        startPickerRefresh(target,catalog,redraw,Session.modelRuntime(session))
+        Bool.pick(Unit -> IO(Unit),refresh,_ => startPickerRefresh(target,catalog,redraw,Session.modelRuntime(session)),_ => IO.pure(Unit,Unit{}))(Unit{})
         return False{}
+def deadlineResult(controller: Abort.AbortController<Unit>,result: Timer & Bool) -> IO(Unit):
+  match result:
+    case (timer,elapsed):
+      do IO<Unit>:
+        Timer.close(timer)
+        Bool.pick(Unit -> IO(Unit),elapsed,_ => do IO<Unit>:
+          won : Bool <- Abort.abort(Unit,controller,None{})
+          return Unit{},_ => IO.pure(Unit,Unit{}))(Unit{})
+def modelRefreshDeadline(controller: Abort.AbortController<Unit>,owner: Timer) -> IO(Unit):
+  do IO<Unit>:
+    result : Timer & Bool <- Timer.wait(owner)
+    deadlineResult(controller,result)
+def refreshWithTimer(runtime: Models.ModelRuntime,+controller: Abort.AbortController<Unit>,timer: Timer & TimerCancel) -> IO(Models.ModelsRefreshResult & Bool):
+  match timer:
+    case (owner,cancel):
+      do IO<Models.ModelsRefreshResult & Bool>:
+        task : Chan(Unit) <- IO.fork(Unit,modelRefreshDeadline(controller,owner))
+        result : Models.ModelsRefreshResult <- Models.refresh(runtime,Models.ModelsRefreshOptions{None{},None{},None{},Some{Abort.signal(Unit,controller)}})
+        cancelled : Bool <- Timer.cancel(cancel)
+        IO.join(Unit,task)
+        timedOut : Bool <- Abort.aborted(Unit,Abort.signal(Unit,controller))
+        Abort.dispose(Unit,controller)
+        return (result,timedOut)
+def refreshModelMatch(runtime: Models.ModelRuntime) -> IO(Models.ModelsRefreshResult & Bool):
+  do IO<Models.ModelsRefreshResult & Bool>:
+    controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    timer : Timer & TimerCancel <- Timer.new(15000)
+    refreshWithTimer(runtime,controller,timer)
+def refreshErrorWarning(failure: StatusSink,errors: List<&2,Record.Property<String>>) -> IO(Unit):
+  match errors:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case first <> rest: commandStatus(failure,CommandWarning{refreshErrorStatus(first <> rest)})
+def modelRefreshWarning(+failure: StatusSink,result: Models.ModelsRefreshResult,timedOut: Bool) -> IO(Unit):
+  match result:
+    case Models.ModelsRefreshResult{aborted,errors}:
+      Bool.pick(Unit -> IO(Unit),timedOut,_ => commandStatus(failure,CommandWarning{"Model refresh timed out; searching cached models."}),_ =>
+        Bool.pick(Unit -> IO(Unit),aborted,_ => commandStatus(failure,CommandWarning{"Model refresh was canceled; searching cached models."}),_ =>
+          refreshErrorWarning(failure,Record.entries(String,errors)))(Unit{}))(Unit{})
+def selectionResult(+failure: StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,model: Models.Model(),selected: Result<&2,&2,String,Unit>) -> IO(Bool):
+  match selected:
+    case Done{_}:
+      do IO<Bool>:
+        commandStatus(failure,CommandNotice{"Model: " ++ Models.modelId(model)})
+        requestRender(redraw)
+        return True{}
+    case Fail{reason}:
+      do IO<Bool>:
+        commandStatus(failure,CommandFailure{reason})
+        return False{}
+def refreshedSelection(failure: StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Session.AgentSession,+model: Models.Model()) -> IO(Bool):
+  do IO<Bool>:
+    selected : Result<&2,&2,String,Unit> <- Session.setModel(session,model,Session.ModelMutationOptions{False{}})
+    selectionResult(failure,redraw,model,selected)
+def refreshedModelMatch(+failure: StatusSink,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,catalog: Ref.Ref<List<&2,Models.Model()>>,session: Session.AgentSession,+query: String,models: List<&2,Models.Model()>,found: Maybe<&2,Models.Model()>) -> IO(Bool):
+  match found:
+    case Some{model}: refreshedSelection(failure,redraw,session,model)
+    case None{}: openPickerResult(failure,redraw,picker,catalog,session,models,Some{query},False{})
+def refreshedModelResult(failure: StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,catalog: Ref.Ref<List<&2,Models.Model()>>,session: Session.AgentSession,+query: String,+models: List<&2,Models.Model()>) -> IO(Bool):
+  refreshedModelMatch(failure,redraw,picker,catalog,session,query,models,Commands.exactModel(models,query))
+def refreshedOrCached(cached: List<&2,Models.Model()>,available: List<&2,Models.Model()>) -> List<&2,Models.Model()>:
+  match available:
+    case Nil{}: cached
+    case model <> rest: model <> rest
+def showRefreshedPicker(host: Maybe<&2,ModelPicker.Host>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,models: List<&2,Models.Model()>,status: String) -> IO(Unit):
+  match host:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{value}:
+      do IO<Unit>:
+        changed : Bool <- ModelPicker.refreshed(value,models,status)
+        Bool.pick(Unit -> IO(Unit),changed,_ => requestRender(redraw),_ => IO.pure(Unit,Unit{}))(Unit{})
+def pickerRefreshDone(picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,models: List<&2,Models.Model()>,status: String) -> IO(Unit):
+  do IO<Unit>:
+    host : Maybe<&2,ModelPicker.Host> <- Ref.read(Maybe<&2,ModelPicker.Host>,picker)
+    showRefreshedPicker(host,redraw,models,status)
+def requestedAfterRefresh(+failure: StatusSink,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,+catalog: Ref.Ref<List<&2,Models.Model()>>,+session: Session.AgentSession,+query: String,cached: List<&2,Models.Model()>,result: Models.ModelsRefreshResult & Bool) -> IO(Bool):
+  match result:
+    case (+outcome,timedOut):
+      do IO<Bool>:
+        modelRefreshWarning(failure,outcome,timedOut)
+        available : List<&2,Models.Model()> <- Models.getAvailable(Session.modelRuntime(session))
+        +visible : List<&2,Models.Model()> <- IO.pure(List<&2,Models.Model()>,refreshedOrCached(cached,available))
+        Ref.write(List<&2,Models.Model()>,catalog,visible)
+        selected : Bool <- refreshedModelResult(failure,redraw,picker,catalog,session,query,visible)
+        pickerRefreshDone(picker,redraw,visible,refreshStatus(outcome))
+        return selected
+def requestedWithinScope(+failure: StatusSink,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,+catalog: Ref.Ref<List<&2,Models.Model()>>,+session: Session.AgentSession,+query: String,models: List<&2,Models.Model()>,scoped: List<&2,Models.ScopedModel>) -> IO(Bool):
+  match scoped:
+    case _ <> _: openPickerResult(failure,redraw,picker,catalog,session,models,Some{query},True{})
+    case Nil{}:
+      do IO<Bool>:
+        commandStatus(failure,CommandNotice{"Refreshing model catalogs…"})
+        result : Models.ModelsRefreshResult & Bool <- refreshModelMatch(Session.modelRuntime(session))
+        requestedAfterRefresh(failure,redraw,picker,catalog,session,query,models,result)
+def requestedModel(failure: StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,catalog: Ref.Ref<List<&2,Models.Model()>>,+session: Session.AgentSession,+query: String,models: List<&2,Models.Model()>) -> IO(Bool):
+  do IO<Bool>:
+    scoped : List<&2,Models.ScopedModel> <- Session.getScopedModels(session)
+    requestedWithinScope(failure,redraw,picker,catalog,session,query,models,scoped)
+def openModelCommand(+failure: StatusSink,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,catalog: Ref.Ref<List<&2,Models.Model()>>,session: Session.AgentSession,models: List<&2,Models.Model()>,search: Maybe<&2,String>) -> IO(Bool):
+  match search:
+    case None{}: openPickerResult(failure,redraw,picker,catalog,session,models,None{},True{})
+    case Some{query}: requestedModel(failure,redraw,picker,catalog,session,query,models)
 def showThinking(picker: Maybe<&2,ThinkingPicker.Host>,levels: List<&2,Ai.ModelThinkingLevel>,current: Ai.ModelThinkingLevel,defaultLevel: Ai.ModelThinkingLevel) -> IO(Unit):
   match picker:
     case None{}: IO.pure(Unit,Unit{})
@@ -240,7 +342,7 @@ def commandResult(+sink: CommandSink,result: Commands.Action) -> IO(Bool):
       do IO<Bool>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         available : List<&2,Models.Model()> <- Ref.read(List<&2,Models.Model()>,models)
-        openPickerResult(failure,redraw,picker,models,live,available,search)
+        openModelCommand(failure,redraw,picker,models,live,available,search)
     case CommandSink{_,redraw,_,thinking,_,session,_} Commands.OpenThinkingPicker{}:
       do IO<Bool>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)

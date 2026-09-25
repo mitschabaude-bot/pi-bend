@@ -510,6 +510,21 @@ SCENARIOS = [
                   ("settle", 0.2), ("snap", "saved")],
     },
     {
+        "name": "model-command-cached-match",
+        "args": MODEL,
+        "steps": [("wait", READY, "startup"), ("settle", 0.3),
+                  ("keys", "/model openai/gpt-5"), ("key", "Enter"), ("settle", 0.1),
+                  ("key", "Enter"),
+                  ("wait", "Model: gpt-5", "selected"), ("settle", 0.2), ("snap", "selected")],
+    },
+    {
+        "name": "model-command-cache-miss",
+        "args": MODEL,
+        "steps": [("wait", READY, "startup"), ("settle", 0.3),
+                  ("keys", "/model no-such-model"), ("key", "Enter"),
+                  ("wait", "No matching models", "picker"), ("settle", 0.2), ("snap", "picker")],
+    },
+    {
         "name": "login-api-key",
         "args": MODEL,
         "env": FD_PATH,

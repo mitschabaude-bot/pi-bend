@@ -177,10 +177,17 @@ def matchedModel(session: Session.AgentSession,query: String,found: Maybe<&2,Mod
   match found:
     case Some{model}: switchModel(session,model,False{})
     case None{}: IO.pure(Action,OpenModelPicker{Some{query}})
-def showModel(session: Session.AgentSession,models: List<&2,Models.Model()>,requested: Maybe<&2,String>) -> IO(Action):
+def modelsInScope(models: List<&2,Models.Model()>,scoped: List<&2,Models.ScopedModel>) -> List<&2,Models.Model()>:
+  match scoped:
+    case Nil{}: models
+    case _: Session.scopedModels(scoped)
+def showModel(+session: Session.AgentSession,models: List<&2,Models.Model()>,requested: Maybe<&2,String>) -> IO(Action):
   match requested:
     case None{}: IO.pure(Action,OpenModelPicker{None{}})
-    case Some{+query}: matchedModel(session,query,exactModel(models,query))
+    case Some{+query}:
+      do IO<Action>:
+        scoped : List<&2,Models.ScopedModel> <- Session.getScopedModels(session)
+        matchedModel(session,query,exactModel(modelsInScope(models,scoped),query))
 def compacted(result: Result<&2,&2,String,Compaction.CompactionResult>) -> Action:
   match result:
     case Done{_}: Notice{"Session compacted"}
