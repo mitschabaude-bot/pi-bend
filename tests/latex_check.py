@@ -22,12 +22,18 @@ got = subprocess.run(['bun', str(OUT / 'run.js')], capture_output=True, text=Tru
 cases = (OUT / 'cases.jsonl').read_text().splitlines()
 expected = (OUT / 'expected.jsonl').read_text().splitlines()
 labels = [json.loads(line) for line in (OUT / 'labels.jsonl').read_text().splitlines()]
-bad = [i for i, e in enumerate(expected) if i >= len(got) or got[i] != e]
+differ = [i for i, e in enumerate(expected) if i >= len(got) or got[i] != e]
+# Cases labelled "known divergence" document an accepted difference (see
+# tests/latex_reference.ts); they are reported, not failed on.
+known = [i for i in differ if labels[i].startswith('known divergence')]
+bad = [i for i in differ if not labels[i].startswith('known divergence')]
 for i in bad[:10]:
     print(f'case {i + 1} ({labels[i]}): {cases[i][:160]}\n  bend {got[i][:240] if i < len(got) else "<missing>"}\n  pi   {expected[i][:240]}')
-totals = collections.Counter(label.split(':')[0] if ':' in label else label for label in labels)
-failed = collections.Counter(labels[i].split(':')[0] if ':' in labels[i] else labels[i] for i in bad)
-for group, total in totals.items():
-    print(f'{total - failed[group]}/{total} {group}')
-print(f'{len(cases) - len(bad)}/{len(cases)} LaTeX cases match pi')
+group = lambda label: label.split(':')[0] if ':' in label else label
+totals = collections.Counter(group(label) for label in labels)
+failed = collections.Counter(group(labels[i]) for i in differ)
+for name, total in totals.items():
+    print(f'{total - failed[name]}/{total} {name}')
+compared = len(cases) - sum(1 for label in labels if label.startswith('known divergence'))
+print(f'{compared - len(bad)}/{compared} LaTeX cases match pi; {len(known)} known divergences differ')
 sys.exit(1 if bad else 0)

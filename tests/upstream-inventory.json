@@ -3977,9 +3977,15 @@
     },
     {
       "source": "packages/tui/test/latex.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "870a9507190a830e1aac7398d4b4f6c2b2cc6982b9fac288aa4b299956561ebf"
+      "status": "ported",
+      "ports": [
+        "packages/tui/src/latex.bend",
+        "tests/latex.bend",
+        "tests/latex_reference.ts",
+        "tests/latex_check.py"
+      ],
+      "sha256": "870a9507190a830e1aac7398d4b4f6c2b2cc6982b9fac288aa4b299956561ebf",
+      "notes": "All 111 named tests (149 assertions) run from the pinned test file with recording stand-ins and pass on Bun; 1,828 further inline/display differential inputs match pi. Recursive descent is an explicit parser machine; command tables hold only pi's own entries (no Object.prototype names); \\p{L}/\\p{N} come from the generated Unicode 17 category table (tests/unicode_category_check.py). Native lanes not run."
     },
     {
       "source": "packages/tui/test/layout.test.ts",
@@ -4003,10 +4009,13 @@
       "status": "partial",
       "ports": [
         "tests/markdown.bend",
-        "tests/markdown-reference.ts"
+        "tests/markdown-reference.ts",
+        "tests/latex.bend",
+        "tests/latex_reference.ts",
+        "tests/latex_check.py"
       ],
       "sha256": "1060dbf84302c3984479b7a33ad4aaf21ae0616b8c02a45f066ba6e8f200f14d",
-      "notes": "Core native Markdown rendering and cache invalidation match 40 source-pinned outputs on Bun/native one/four. Advanced Marked grammar, table wrapping/alignment, ANSI restoration, OSC8 links, streaming fences and LaTeX remain pending."
+      "notes": "Core native Markdown rendering and cache invalidation match 40 source-pinned outputs on Bun/native one/four. All 12 \"LaTeX math\" tests (16 renders) and 176 LaTeX Markdown differential renders match on Bun (tests/latex_check.py); five multi-line-paragraph/list-item LaTeX cases are tracked known divergences (line-based paragraphs). Advanced Marked grammar, table wrapping/alignment, ANSI restoration, OSC8 links and streaming fences remain pending."
     },
     {
       "source": "packages/tui/test/mouse-components.test.ts",

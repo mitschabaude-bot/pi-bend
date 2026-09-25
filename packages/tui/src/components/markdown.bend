@@ -1,5 +1,6 @@
 import Base
 import ../utils.bend as U
+import ../latex.bend as Latex
 import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/text.bend as Text
 import ../../../runtime/src/string.bend as Strings
@@ -53,8 +54,14 @@ def transformed(source: String,width: Nat,options: MarkdownOptions) -> IO(String
   match options:
     case MarkdownOptions{_,_,None{},_,_}: IO.pure(String,source)
     case MarkdownOptions{_,_,Some{transform},_,_}: C.call(String & Nat,String,transform,(source,width))
-def linkCapability(options: MarkdownOptions) -> Bool:
-  match options: case MarkdownOptions{_,_,_,_,enabled}: enabled
+# The options inline rendering reads.
+type InlineFlags is Data: InlineFlags{hyperlinks: Bool,renderLatex: Bool}
+def inlineFlags(options: MarkdownOptions) -> InlineFlags:
+  match options: case MarkdownOptions{_,_,_,latex,enabled}: InlineFlags{enabled,latex}
+def hyperlinksOf(flags: InlineFlags) -> Bool:
+  match flags: case InlineFlags{enabled,_}: enabled
+def latexOf(flags: InlineFlags) -> Bool:
+  match flags: case InlineFlags{_,enabled}: enabled
 def background(style: Maybe<&2,DefaultTextStyle>) -> Maybe<&2,Style()>:
   match style:
     case None{}: None{}
@@ -106,6 +113,7 @@ type InlineStep is Data:
   End{}
   Literal{char: Char,rest: String}
   Styled{kind: InlineKind,content: String,rest: String}
+  Math{raw: String,text: String,pending: Bool,rest: String}
 type Split is Data: Split{before: String,after: String}
 def cut(+source: String,+marker: String,+reversed: String) -> Maybe<&2,Split>:
   match source:
@@ -153,14 +161,96 @@ def preferredInline(+source: String,link: Maybe<&2,InlineStep>) -> InlineStep:
 def escapeStep(source: String) -> Maybe<&2,InlineStep>:
   match source:
     case SCon{'\\',SCon{+char,rest}}:
-      Bool.pick(Unit -> Maybe<&2,InlineStep>,String.contains("\\`*_{}[]()#+-.!~>",SCon{char,SNil{}}),
+      Bool.pick(Unit -> Maybe<&2,InlineStep>,String.contains("\\`*_{}[]()#+-.!~>$",SCon{char,SNil{}}),
         _ => Some{Literal{char,rest}},_ => None{})(Unit{})
     case _: None{}
 def escapedInline(+source: String,candidate: Maybe<&2,InlineStep>) -> InlineStep:
   match candidate:
     case Some{step}: step
     case None{}: preferredInline(source,linkStep(source))
-def nextInline(+source: String) -> InlineStep: escapedInline(source,escapeStep(source))
+# LaTeX
+# -----
+# pi's `latex` Marked extension: `$…$`, `$$…$$`, `\(…\)` and `\[…\]` on a
+# line, and an unclosed delimiter while streaming (`pending`, shown raw).
+
+def isAsciiLetter(+char: Char) -> Bool: Char.is_alpha(char)
+# JavaScript's `\s`.
+def isWhitespace(char: Char) -> Bool: Text.whitespace(Char.to_u32(char))
+def startsWithAsciiLetter(text: String) -> Bool:
+  match text:
+    case SCon{char,_}: isAsciiLetter(char)
+    case _: False{}
+# `/\\[A-Za-z]+|[_^=+*/<>()[\]|±≤≥≠≈∈→⇒∞∫∑√-]/`
+def looksLikePendingDollarMath(text: String) -> Bool:
+  match text:
+    case SNil{}: False{}
+    case SCon{+char,+rest}:
+      (Char.is_eq(char,'\\') && startsWithAsciiLetter(rest)) || String.contains("_^=+*/<>()[]|±≤≥≠≈∈→⇒∞∫∑√-",SCon{char,SNil{}}) || looksLikePendingDollarMath(rest)
+def isIdentifierChar(+char: Char) -> Bool: isAsciiLetter(char) || Char.is_digit(char) || Char.is_eq(char,'_')
+type Closed is Data: Closed{inner: String,after: String}
+# `findClosingDelimiter`: the first `closing` not preceded by an odd run of
+# backslashes; an escaped occurrence is skipped whole.
+def closingDelimiter(text: String,+closing: String,+odd: Bool,+skip: Nat,+reversed: String) -> Maybe<&2,Closed>:
+  match text:
+    case SNil{}: None{}
+    case SCon{+char,+rest}:
+      +here = Nat.is_eq(skip,0n) && String.starts_with(SCon{char,rest},closing)
+      Bool.pick(Unit -> Maybe<&2,Closed>,here && Bool.not(odd),
+        _ => Some{Closed{String.reverse(reversed),String.drop(SCon{char,rest},String.length(closing))}},
+        _ => closingDelimiter(rest,closing,Char.is_eq(char,'\\') && Bool.not(odd),Bool.pick(Nat,here,String.length(closing) - 1n,skip - 1n),SCon{char,reversed}))(Unit{})
+# `/^[A-Z_][A-Z0-9_]*(?:[^A-Za-z0-9_\s])?$/`: a shell variable such as
+# `$HOME/`.
+def shellTail(text: String) -> Bool:
+  match text:
+    case SNil{}: True{}
+    case SCon{+char,+rest}:
+      Bool.pick(Unit -> Bool,Char.is_upper(char) || Char.is_digit(char) || Char.is_eq(char,'_'),_ => shellTail(rest),
+        _ => Bool.not(isIdentifierChar(char)) && Bool.not(isWhitespace(char)) && String.eq(rest,""))(Unit{})
+def shellVariable(text: String) -> Bool:
+  match text:
+    case SCon{+char,rest}: (Char.is_upper(char) || Char.is_eq(char,'_')) && shellTail(rest)
+    case _: False{}
+def startsWithIdentifier(text: String) -> Bool:
+  match text:
+    case SCon{+char,_}: isAsciiLetter(char) || Char.is_eq(char,'_')
+    case _: False{}
+# Single dollars skip currency (`$5`), a space before the closing dollar,
+# shell variables followed by a word, and code spans.
+def dollarRejected(+inner: String,+after: String) -> Bool:
+  Bool.not(String.eq(Text.trimEnd(inner),inner)) || Char.is_digit(Maybe.default(&2,Char,String.get(after,0n),' ')) || (shellVariable(inner) && startsWithIdentifier(after)) || String.contains(inner,"`")
+def closedMath(+opening: String,+closing: String,found: Closed) -> Maybe<&2,InlineStep>:
+  match found:
+    case Closed{+inner,after}:
+      Bool.pick(Maybe<&2,InlineStep>,String.eq(inner,"") || String.contains(inner,"\n"),None{},Some{Math{opening ++ inner ++ closing,inner,False{},after}})
+def delimitedMath(found: Maybe<&2,Closed>,+source: String,+opening: String,+closing: String,single: Bool) -> Maybe<&2,InlineStep>:
+  match found:
+    case None{}:
+      +pendingSource = String.drop(source,String.length(opening))
+      Bool.pick(Maybe<&2,InlineStep>,String.starts_with(opening,"\\") || looksLikePendingDollarMath(pendingSource),Some{Math{source,pendingSource,True{},""}},None{})
+    case Some{Closed{+inner,+after}}:
+      Bool.pick(Unit -> Maybe<&2,InlineStep>,single && dollarRejected(inner,after),_ => None{},_ => closedMath(opening,closing,Closed{inner,after}))(Unit{})
+def mathDelimited(+source: String,+opening: String,+closing: String,single: Bool) -> Maybe<&2,InlineStep>:
+  delimitedMath(closingDelimiter(String.drop(source,String.length(opening)),closing,False{},0n,""),source,opening,closing,single)
+# `tokenizeInlineLatex`
+def latexInline(+source: String) -> Maybe<&2,InlineStep>:
+  Bool.pick(Unit -> Maybe<&2,InlineStep>,String.starts_with(source,"$$"),_ => mathDelimited(source,"$$","$$",False{}),
+    _ => Bool.pick(Unit -> Maybe<&2,InlineStep>,String.starts_with(source,"\\("),_ => mathDelimited(source,"\\(","\\)",False{}),
+    _ => Bool.pick(Unit -> Maybe<&2,InlineStep>,String.starts_with(source,"\\["),_ => mathDelimited(source,"\\[","\\]",False{}),
+    _ => Bool.pick(Unit -> Maybe<&2,InlineStep>,String.starts_with(source,"$") && Bool.not(isWhitespace(Maybe.default(&2,Char,String.get(source,1n),'x'))),
+      _ => mathDelimited(source,"$","$",True{}),_ => None{})(Unit{}))(Unit{}))(Unit{}))(Unit{})
+def latexFirst(+source: String,math: Maybe<&2,InlineStep>) -> InlineStep:
+  match math:
+    case Some{step}: step
+    case None{}: escapedInline(source,escapeStep(source))
+def nextInline(+source: String) -> InlineStep: latexFirst(source,latexInline(source))
+# An underscore after a word character is literal: Marked does not open
+# `_` emphasis inside a word (`$XDG_CONFIG_HOME`, `snake_case`).
+def nextInlineAfter(+previous: Char,+source: String) -> InlineStep:
+  Bool.pick(Unit -> InlineStep,isIdentifierChar(previous) && String.starts_with(source,"_"),_ => literalInline(source),_ => nextInline(source))(Unit{})
+# A math token as shown: rendered, or its source while pending, when
+# rendering is disabled or when pi's renderer does not support it.
+def mathText(pending: Bool,+enabled: Bool,+raw: String,text: String) -> String:
+  Bool.pick(Unit -> String,Bool.not(pending) && enabled,_ => Maybe.default(&2,String,Latex.renderLatex(text,Latex.defaultRenderLatexOptions()),raw),_ => raw)(Unit{})
 def inlineStyle(kind: InlineKind,theme: MarkdownTheme) -> Style():
   match kind theme:
     case Strong{} theme: themeBold(theme)
@@ -170,13 +260,13 @@ def inlineStyle(kind: InlineKind,theme: MarkdownTheme) -> Style():
     case Link{_} MarkdownTheme{_,link,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: link
 def themeLinkUrl(theme: MarkdownTheme) -> Style():
   match theme: case MarkdownTheme{_,_,linkUrl,_,_,_,_,_,_,_,_,_,_,_,_,_}: linkUrl
-def styledInline(+kind: InlineKind,raw: String,inner: String,+theme: MarkdownTheme,links: Bool) -> IO(String):
+def styledInline(+kind: InlineKind,raw: String,inner: String,+theme: MarkdownTheme,flags: InlineFlags) -> IO(String):
   match kind:
     case Link{href}:
       do IO<String>:
         underlined : String <- C.call(String,String,themeUnderline(theme),inner)
         +linked : String <- C.call(String,String,inlineStyle(kind,theme),underlined)
-        Bool.pick(Unit -> IO(String),links,
+        Bool.pick(Unit -> IO(String),hyperlinksOf(flags),
           _ => IO.pure(String,"\u{1b}]8;;" ++ href ++ "\u{1b}\\" ++ linked ++ "\u{1b}]8;;\u{1b}\\"),
         _ => Bool.pick(Unit -> IO(String),String.eq(raw,href),_ => IO.pure(String,linked),
           _ => do IO<String>:
@@ -192,21 +282,34 @@ def prefixPart(value: Maybe<&2,Split>) -> String:
     case None{}: ""
     case Some{Split{before,_}}: before
 def prefixOf(styled: String) -> String: prefixPart(cut(styled,"\u{0}",""))
-@unsafe def renderDefault(step: InlineStep,+plain: String,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,+links: Bool,+prefix: String) -> IO(String):
+def styledSegments(segments: List<&2,String>,+style: Maybe<&2,DefaultTextStyle>,+theme: MarkdownTheme,reversed: List<&2,String>) -> IO(String):
+  match segments:
+    case Nil{}: IO.pure(String,String.join(List.reverse(&2,String,reversed),"\n"))
+    case segment <> rest:
+      do IO<String>:
+        styled : String <- styleText(segment,style,theme)
+        styledSegments(rest,style,theme,styled <> reversed)
+@unsafe def renderDefault(step: InlineStep,+plain: String,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,+flags: InlineFlags,+prefix: String) -> IO(String):
   match step:
     case End{}: Bool.pick(Unit -> IO(String),String.eq(plain,""),_ => IO.pure(String,""),_ => styleText(String.reverse(plain),style,theme))(Unit{})
-    case Literal{char,rest}: renderDefault(nextInline(rest),SCon{char,plain},theme,style,links,prefix)
+    case Literal{+char,rest}: renderDefault(nextInlineAfter(char,rest),SCon{char,plain},theme,style,flags,prefix)
+    case Math{raw,text,pending,rest}:
+      do IO<String>:
+        before : String <- Bool.pick(Unit -> IO(String),String.eq(plain,""),_ => IO.pure(String,""),_ => styleText(String.reverse(plain),style,theme))(Unit{})
+        shown : String <- styledSegments(Strings.split(mathText(pending,latexOf(flags),raw,text),'\n'),style,theme,Nil{})
+        following : String <- renderDefault(nextInline(rest),"",theme,style,flags,prefix)
+        return before ++ shown ++ following
     case Styled{+kind,+content,+rest}:
       do IO<String>:
         before : String <- Bool.pick(Unit -> IO(String),String.eq(plain,""),_ => IO.pure(String,""),_ => styleText(String.reverse(plain),style,theme))(Unit{})
-        inner : String <- Bool.pick(Unit -> IO(String),isCode(kind),_ => IO.pure(String,content),_ => renderDefault(nextInline(content),"",theme,style,links,prefix))(Unit{})
-        highlighted : String <- styledInline(kind,content,inner,theme,links)
-        following : String <- renderDefault(nextInline(rest),"",theme,style,links,prefix)
+        inner : String <- Bool.pick(Unit -> IO(String),isCode(kind),_ => IO.pure(String,content),_ => renderDefault(nextInline(content),"",theme,style,flags,prefix))(Unit{})
+        highlighted : String <- styledInline(kind,content,inner,theme,flags)
+        following : String <- renderDefault(nextInline(rest),"",theme,style,flags,prefix)
         return before ++ highlighted ++ Bool.pick(String,String.eq(rest,""),"",prefix) ++ following
-def renderInline(step: InlineStep,plain: String,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,+links: Bool) -> IO(String):
+def renderInline(step: InlineStep,plain: String,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,+flags: InlineFlags) -> IO(String):
   do IO<String>:
     sentinel : String <- styleText("\u{0}",style,theme)
-    renderDefault(step,plain,theme,style,links,prefixOf(sentinel))
+    renderDefault(step,plain,theme,style,flags,prefixOf(sentinel))
 
 def headingLevel(text: String,count: Nat) -> Nat:
   match text:
@@ -228,36 +331,49 @@ def contextPlain(text: String,context: InlineContext,theme: MarkdownTheme) -> IO
   match context:
     case HeadingContext{level}: styledHeading(text,level,theme)
     case QuoteContext{}: IO.pure(String,text)
+def contextSegments(segments: List<&2,String>,+context: InlineContext,+theme: MarkdownTheme,reversed: List<&2,String>) -> IO(String):
+  match segments:
+    case Nil{}: IO.pure(String,String.join(List.reverse(&2,String,reversed),"\n"))
+    case segment <> rest:
+      do IO<String>:
+        styled : String <- contextPlain(segment,context,theme)
+        contextSegments(rest,context,theme,styled <> reversed)
 def hashes(count: Nat,reversed: String) -> String:
   match count:
     case Zero{}: reversed
     case Succ{rest}: hashes(rest,"#" ++ reversed)
-@unsafe def renderContext(step: InlineStep,+plain: String,+context: InlineContext,+prefix: String,+theme: MarkdownTheme,+links: Bool) -> IO(String):
+@unsafe def renderContext(step: InlineStep,+plain: String,+context: InlineContext,+prefix: String,+theme: MarkdownTheme,+flags: InlineFlags) -> IO(String):
   match step:
     case End{}:
       Bool.pick(Unit -> IO(String),String.eq(plain,""),_ => IO.pure(String,""),_ => contextPlain(String.reverse(plain),context,theme))(Unit{})
-    case Literal{char,rest}: renderContext(nextInline(rest),SCon{char,plain},context,prefix,theme,links)
+    case Literal{+char,rest}: renderContext(nextInlineAfter(char,rest),SCon{char,plain},context,prefix,theme,flags)
+    case Math{raw,text,pending,rest}:
+      do IO<String>:
+        before : String <- Bool.pick(Unit -> IO(String),String.eq(plain,""),_ => IO.pure(String,""),_ => contextPlain(String.reverse(plain),context,theme))(Unit{})
+        shown : String <- contextSegments(Strings.split(mathText(pending,latexOf(flags),raw,text),'\n'),context,theme,Nil{})
+        following : String <- renderContext(nextInline(rest),"",context,prefix,theme,flags)
+        return before ++ shown ++ following
     case Styled{+kind,+content,+rest}:
       do IO<String>:
         before : String <- Bool.pick(Unit -> IO(String),String.eq(plain,""),_ => IO.pure(String,""),_ => contextPlain(String.reverse(plain),context,theme))(Unit{})
-        inner : String <- Bool.pick(Unit -> IO(String),isCode(kind),_ => IO.pure(String,content),_ => renderContext(nextInline(content),"",context,prefix,theme,links))(Unit{})
-        highlighted : String <- styledInline(kind,content,inner,theme,links)
-        following : String <- renderContext(nextInline(rest),"",context,prefix,theme,links)
+        inner : String <- Bool.pick(Unit -> IO(String),isCode(kind),_ => IO.pure(String,content),_ => renderContext(nextInline(content),"",context,prefix,theme,flags))(Unit{})
+        highlighted : String <- styledInline(kind,content,inner,theme,flags)
+        following : String <- renderContext(nextInline(rest),"",context,prefix,theme,flags)
         return before ++ highlighted ++ Bool.pick(String,String.eq(rest,""),"",prefix) ++ following
-def headingInline(content: String,+level: Nat,+theme: MarkdownTheme,+links: Bool) -> IO(String):
+def headingInline(content: String,+level: Nat,+theme: MarkdownTheme,+flags: InlineFlags) -> IO(String):
   do IO<String>:
     styled : String <- styledHeading("\u{0}",level,theme)
-    +rendered : String <- renderContext(nextInline(content),"",HeadingContext{level},prefixOf(styled),theme,links)
+    +rendered : String <- renderContext(nextInline(content),"",HeadingContext{level},prefixOf(styled),theme,flags)
     Bool.pick(Unit -> IO(String),Nat.is_ge(level,3n),_ => do IO<String>:
       marker : String <- styledHeading(hashes(level,"") ++ " ",level,theme)
       return marker ++ rendered,_ => IO.pure(String,rendered))(Unit{})
 def themeQuote(theme: MarkdownTheme) -> Style():
   match theme: case MarkdownTheme{_,_,_,_,_,_,quote,_,_,_,_,_,_,_,_,_}: quote
-def quoteInline(content: String,+theme: MarkdownTheme,links: Bool) -> IO(String):
+def quoteInline(content: String,+theme: MarkdownTheme,flags: InlineFlags) -> IO(String):
   do IO<String>:
     italic : String <- C.call(String,String,themeItalic(theme),"\u{0}")
     styled : String <- C.call(String,String,themeQuote(theme),italic)
-    renderContext(nextInline(content),"",QuoteContext{},prefixOf(styled),theme,links)
+    renderContext(nextInline(content),"",QuoteContext{},prefixOf(styled),theme,flags)
 type BlockLine is Data:
   HeadingLine{level: Nat,content: String}
   BulletLine{depth: Nat,marker: String,content: String}
@@ -309,23 +425,23 @@ def repeatText(+text: String,count: Nat,reversed: String) -> String:
   match count:
     case Zero{}: reversed
     case Succ{rest}: repeatText(text,rest,text ++ reversed)
-def lineResult(kind: BlockLine,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,width: Nat,+links: Bool) -> IO(String):
+def lineResult(kind: BlockLine,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,width: Nat,+flags: InlineFlags) -> IO(String):
   match kind:
-    case HeadingLine{level,content}: headingInline(content,level,theme,links)
+    case HeadingLine{level,content}: headingInline(content,level,theme,flags)
     case BulletLine{depth,mark,content}:
       do IO<String>:
         bullet : String <- C.call(String,String,themeListBullet(theme),mark)
-        rendered : String <- renderInline(nextInline(content),"",theme,style,links)
+        rendered : String <- renderInline(nextInline(content),"",theme,style,flags)
         return U.spaces(depth * 4n,"") ++ bullet ++ rendered
     case QuoteLine{content}:
       do IO<String>:
         border : String <- C.call(String,String,themeQuoteBorder(theme),"│ ")
-        rendered : String <- renderInline(nextInline(content),"",theme,None{},links)
+        rendered : String <- renderInline(nextInline(content),"",theme,None{},flags)
         quoted : String <- C.call(String,String,themeItalic(theme),rendered)
         result : String <- C.call(String,String,themeQuote(theme),quoted)
         return border ++ result
     case RuleLine{}: C.call(String,String,themeHr(theme),repeatText("─",Nat.min(width,80n),""))
-    case PlainLine{content}: renderInline(nextInline(content),"",theme,style,links)
+    case PlainLine{content}: renderInline(nextInline(content),"",theme,style,flags)
 def continuation(lines: List<&2,String>,+prefix: String,reversed: List<&2,String>) -> List<&2,String>:
   match lines:
     case Nil{}: List.reverse(&2,String,reversed)
@@ -342,29 +458,29 @@ def quotedParts(parts: List<&2,String>,+prefix: String,+theme: MarkdownTheme,rev
         italic : String <- C.call(String,String,themeItalic(theme),fragment)
         styled : String <- C.call(String,String,themeQuote(theme),italic)
         quotedParts(rest,prefix,theme,(prefix ++ styled) <> reversed)
-def quoteWrapped(content: String,+theme: MarkdownTheme,width: Nat,links: Bool) -> IO(List<&2,String>):
+def quoteWrapped(content: String,+theme: MarkdownTheme,width: Nat,flags: InlineFlags) -> IO(List<&2,String>):
   do IO<List<&2,String>>:
     +border : String <- C.call(String,String,themeQuoteBorder(theme),"│ ")
-    rendered : String <- quoteInline(content,theme,links)
+    rendered : String <- quoteInline(content,theme,flags)
     quotedParts(U.wrapTextWithAnsi(rendered,Nat.max(1n,width - U.visibleWidth(border))),border,theme,Nil{})
-def bulletWrapped(depth: Nat,mark: String,content: String,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,width: Nat,links: Bool) -> IO(List<&2,String>):
+def bulletWrapped(depth: Nat,mark: String,content: String,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,width: Nat,flags: InlineFlags) -> IO(List<&2,String>):
   do IO<List<&2,String>>:
     bullet : String <- C.call(String,String,themeListBullet(theme),mark)
-    rendered : String <- renderInline(nextInline(content),"",theme,style,links)
+    rendered : String <- renderInline(nextInline(content),"",theme,style,flags)
     +prefix : String <- IO.pure(String,U.spaces(depth * 4n,"") ++ bullet)
     +space : String <- IO.pure(String,U.spaces(U.visibleWidth(prefix),""))
     +parts : List<&2,String> <- IO.pure(List<&2,String>,U.wrapTextWithAnsi(rendered,Nat.max(1n,width - U.visibleWidth(prefix))))
     return prefixedParts(parts,prefix,space)
-def blockKind(kind: BlockLine,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,width: Nat,links: Bool) -> IO(List<&2,String>):
+def blockKind(kind: BlockLine,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,width: Nat,flags: InlineFlags) -> IO(List<&2,String>):
   match kind:
-    case BulletLine{depth,mark,content}: bulletWrapped(depth,mark,content,theme,style,width,links)
-    case QuoteLine{content}: quoteWrapped(content,theme,width,links)
+    case BulletLine{depth,mark,content}: bulletWrapped(depth,mark,content,theme,style,width,flags)
+    case QuoteLine{content}: quoteWrapped(content,theme,width,flags)
     case kind:
       do IO<List<&2,String>>:
-        rendered : String <- lineResult(kind,theme,style,width,links)
+        rendered : String <- lineResult(kind,theme,style,width,flags)
         return rendered <> Nil{}
-def blockLine(line: String,theme: MarkdownTheme,style: Maybe<&2,DefaultTextStyle>,width: Nat,links: Bool) -> IO(List<&2,String>):
-  blockKind(classify(line),theme,style,width,links)
+def blockLine(line: String,theme: MarkdownTheme,style: Maybe<&2,DefaultTextStyle>,width: Nat,flags: InlineFlags) -> IO(List<&2,String>):
+  blockKind(classify(line),theme,style,width,flags)
 def dropTrailingBlank(+reversed: List<&2,String>) -> List<&2,String>:
   match reversed:
     case Nil{}: Nil{}
@@ -376,10 +492,96 @@ def hasFollowing(lines: List<&2,String>) -> Bool:
   match lines:
     case Nil{}: False{}
     case line <> _: Bool.not(Text.blank(line))
-def classifiedSpacing(kind: BlockLine,rest: List<&2,String>) -> Bool:
+# Display math
+# ------------
+# pi's `latexBlock` extension: a block opening with `$$` or `\[` after up to
+# three spaces, through a closing delimiter that ends a line. An unclosed
+# `\[`, or an unclosed `$$` whose text looks like math, is pending: it takes
+# the rest of the document and shows it raw.
+type BlockMath is Data: BlockMath{raw: String,text: String,pending: Bool,remaining: List<&2,String>}
+type MathEnd is Data:
+  TextEnd{}
+  LineEnd{tail: String}
+type MathClose is Data: MathClose{inner: String,end: MathEnd}
+# `[ \t]*(?:\n|$)` after a closing delimiter.
+def mathEnd(text: String) -> Maybe<&2,MathEnd>:
+  match text:
+    case SNil{}: Some{TextEnd{}}
+    case SCon{'\n',rest}: Some{LineEnd{rest}}
+    case SCon{' ',rest}: mathEnd(rest)
+    case SCon{'\t',rest}: mathEnd(rest)
+    case _: None{}
+def closingAt(+text: String,+closing: String) -> Maybe<&2,MathEnd>:
+  Bool.pick(Unit -> Maybe<&2,MathEnd>,String.starts_with(text,closing),_ => mathEnd(String.drop(text,String.length(closing))),_ => None{})(Unit{})
+# The shortest text before a closing delimiter that ends a line.
+def blockClose(text: String,+closing: String,+reversed: String) -> Maybe<&2,MathClose>:
+  match text:
+    case SNil{}: None{}
+    case SCon{+char,+rest}:
+      +ending = closingAt(SCon{char,rest},closing)
+      Bool.pick(Unit -> Maybe<&2,MathClose>,Maybe.is_some(&2,MathEnd,ending),
+        _ => Some{MathClose{String.reverse(reversed),Maybe.default(&2,MathEnd,ending,TextEnd{})}},
+        _ => blockClose(rest,closing,SCon{char,reversed}))(Unit{})
+def openingSpaces(text: String,+count: Nat) -> String:
+  match text:
+    case SCon{' ',+rest}: Bool.pick(Unit -> String,Nat.is_lt(count,3n),_ => openingSpaces(rest,Succ{count}),_ => SCon{' ',rest})(Unit{})
+    case text: text
+def blankPrefix(text: String) -> String:
+  match text:
+    case SCon{' ',rest}: blankPrefix(rest)
+    case SCon{'\t',rest}: blankPrefix(rest)
+    case SCon{'\n',rest}: rest
+    case text: text
+# `[ \t]*(?:\n)?` after the opening delimiter.
+def mathContent(+body: String,+opening: String) -> String: blankPrefix(String.drop(body,String.length(opening)))
+def closedBlockMath(end: MathEnd,+source: String,text: String) -> BlockMath:
+  match end:
+    case TextEnd{}: BlockMath{source,text,False{},Nil{}}
+    case LineEnd{+tail}: BlockMath{String.take(source,String.length(source) - String.length(tail)),text,False{},Strings.split(tail,'\n')}
+def closedBlock(found: Maybe<&2,MathClose>,+source: String) -> Maybe<&2,BlockMath>:
+  match found:
+    case None{}: None{}
+    case Some{MathClose{+inner,end}}:
+      Bool.pick(Unit -> Maybe<&2,BlockMath>,String.eq(inner,""),_ => None{},_ => Some{closedBlockMath(end,source,Text.trim(inner))})(Unit{})
+def completeBlock(+source: String,+body: String,+opening: String,+closing: String) -> Maybe<&2,BlockMath>:
+  Bool.pick(Unit -> Maybe<&2,BlockMath>,String.starts_with(body,opening),_ => closedBlock(blockClose(mathContent(body,opening),closing,""),source),_ => None{})(Unit{})
+def pendingBlock(+source: String,+body: String,+opening: String,requireMath: Bool) -> Maybe<&2,BlockMath>:
+  +content = mathContent(body,opening)
+  Bool.pick(Unit -> Maybe<&2,BlockMath>,String.starts_with(body,opening) && (Bool.not(requireMath) || (Bool.not(String.eq(content,"")) && looksLikePendingDollarMath(content))),
+    _ => Some{BlockMath{source,content,True{},Nil{}}},_ => None{})(Unit{})
+# `tokenizeBlockLatex` over the rest of the document.
+def blockMath(+source: String) -> Maybe<&2,BlockMath>:
+  +body = openingSpaces(source,0n)
+  Maybe.or(&2,BlockMath,completeBlock(source,body,"$$","$$"),Maybe.or(&2,BlockMath,completeBlock(source,body,"\\[","\\]"),
+    Maybe.or(&2,BlockMath,pendingBlock(source,body,"\\[",False{}),pendingBlock(source,body,"$$",True{}))))
+def opensMath(+line: String) -> Bool:
+  +body = openingSpaces(line,0n)
+  String.starts_with(body,"$$") || String.starts_with(body,"\\[")
+def mathBlockAt(+lines: List<&2,String>) -> Maybe<&2,BlockMath>:
+  match lines:
+    case Nil{}: None{}
+    case +line <> _: Bool.pick(Unit -> Maybe<&2,BlockMath>,opensMath(line),_ => blockMath(String.join(lines,"\n")),_ => None{})(Unit{})
+def mathRemaining(block: BlockMath) -> List<&2,String>:
+  match block: case BlockMath{_,_,_,remaining}: remaining
+def styledLines(lines: List<&2,String>,+style: Maybe<&2,DefaultTextStyle>,+theme: MarkdownTheme,reversed: List<&2,String>) -> IO(List<&2,String>):
+  match lines:
+    case Nil{}: IO.pure(List<&2,String>,List.reverse(&2,String,reversed))
+    case line <> rest:
+      do IO<List<&2,String>>:
+        styled : String <- styleText(line,style,theme)
+        styledLines(rest,style,theme,styled <> reversed)
+# Rendered in display mode, or the trimmed source while pending, when
+# disabled or when pi's renderer does not support it.
+def mathBlockLines(block: BlockMath,enabled: Bool,+style: Maybe<&2,DefaultTextStyle>,+theme: MarkdownTheme) -> IO(List<&2,String>):
+  match block:
+    case BlockMath{+raw,text,pending,_}:
+      +shown = Bool.pick(Unit -> String,Bool.not(pending) && enabled,_ => Maybe.default(&2,String,Latex.renderLatex(text,Latex.RenderLatexOptions{True{}}),Text.trim(raw)),_ => Text.trim(raw))(Unit{})
+      styledLines(Strings.split(shown,'\n'),style,theme,Nil{})
+def classifiedSpacing(kind: BlockLine,+rest: List<&2,String>) -> Bool:
   match kind:
     case HeadingLine{_,_}: hasFollowing(rest)
     case RuleLine{}: hasFollowing(rest)
+    case PlainLine{content}: Bool.not(Text.blank(content)) && Maybe.is_some(&2,BlockMath,mathBlockAt(rest))
     case _: False{}
 def blockSpace(line: String,rest: List<&2,String>) -> Bool: classifiedSpacing(classify(line),rest)
 def withSpacing(line: String,+rendered: List<&2,String>,rest: List<&2,String>,+following: List<&2,String>) -> List<&2,String>:
@@ -405,14 +607,39 @@ def quoteLines(group: QuoteGroup) -> List<&2,String>:
   match group: case QuoteGroup{lines,_}: lines
 def quoteRest(group: QuoteGroup) -> List<&2,String>:
   match group: case QuoteGroup{_,rest}: rest
-def renderQuoteLines(lines: List<&2,String>,+theme: MarkdownTheme,+width: Nat,+links: Bool) -> IO(List<&2,String>):
+def quotedLines(lines: List<&2,String>,+theme: MarkdownTheme,+width: Nat) -> IO(List<&2,String>):
   match lines:
     case Nil{}: IO.pure(List<&2,String>,Nil{})
     case line <> rest:
       do IO<List<&2,String>>:
-        rendered : List<&2,String> <- quoteWrapped(line,theme,width,links)
-        following : List<&2,String> <- renderQuoteLines(rest,theme,width,links)
-        return List.append(&2,String,rendered,following)
+        +border : String <- C.call(String,String,themeQuoteBorder(theme),"│ ")
+        quoted : List<&2,String> <- quotedParts(U.wrapTextWithAnsi(line,Nat.max(1n,width - U.visibleWidth(border))),border,theme,Nil{})
+        following : List<&2,String> <- quotedLines(rest,theme,width)
+        return List.append(&2,String,quoted,following)
+# pi separates display math from the other blocks of a quote with an empty
+# quote line.
+def quoteGap(present: Bool,+theme: MarkdownTheme,+width: Nat) -> IO(List<&2,String>):
+  match present:
+    case True{}: quotedLines([""],theme,width)
+    case False{}: IO.pure(List<&2,String>,Nil{})
+# A quote's lines; display math renders with the default text style, as in
+# pi, before the quote styling.
+@unsafe def renderQuoteLines(display: Maybe<&2,BlockMath>,lines: List<&2,String>,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,+width: Nat,+flags: InlineFlags) -> IO(List<&2,String>):
+  match display lines:
+    case Some{+block} _:
+      do IO<List<&2,String>>:
+        shown : List<&2,String> <- mathBlockLines(block,latexOf(flags),style,theme)
+        quoted : List<&2,String> <- quotedLines(shown,theme,width)
+        gap : List<&2,String> <- quoteGap(Bool.not(List.is_empty(&2,String,mathRemaining(block))),theme,width)
+        following : List<&2,String> <- renderQuoteLines(mathBlockAt(mathRemaining(block)),mathRemaining(block),theme,style,width,flags)
+        return List.append(&2,String,quoted,List.append(&2,String,gap,following))
+    case None{} Nil{}: IO.pure(List<&2,String>,Nil{})
+    case None{} line <> +rest:
+      do IO<List<&2,String>>:
+        rendered : List<&2,String> <- quoteWrapped(line,theme,width,flags)
+        gap : List<&2,String> <- quoteGap(Maybe.is_some(&2,BlockMath,mathBlockAt(rest)),theme,width)
+        following : List<&2,String> <- renderQuoteLines(mathBlockAt(rest),rest,theme,style,width,flags)
+        return List.append(&2,String,rendered,List.append(&2,String,gap,following))
 def fenceLines(value: Fence) -> List<&2,String>:
   match value: case Fence{code,_}: code
 def fenceRest(value: Fence) -> List<&2,String>:
@@ -510,21 +737,21 @@ def tableRows(value: TableRows) -> List<&2,List<&2,String>>:
   match value: case TableRows{rows,_}: rows
 def tableRemaining(value: TableRows) -> List<&2,String>:
   match value: case TableRows{_,rest}: rest
-def inlineCells(cells: List<&2,String>,+theme: MarkdownTheme,+links: Bool) -> IO(List<&2,String>):
+def inlineCells(cells: List<&2,String>,+theme: MarkdownTheme,+flags: InlineFlags) -> IO(List<&2,String>):
   match cells:
     case Nil{}: IO.pure(List<&2,String>,Nil{})
     case cell <> rest:
       do IO<List<&2,String>>:
-        rendered : String <- renderInline(nextInline(cell),"",theme,None{},links)
-        following : List<&2,String> <- inlineCells(rest,theme,links)
+        rendered : String <- renderInline(nextInline(cell),"",theme,None{},flags)
+        following : List<&2,String> <- inlineCells(rest,theme,flags)
         return rendered <> following
-def inlineRows(rows: List<&2,List<&2,String>>,+theme: MarkdownTheme,+links: Bool) -> IO(List<&2,List<&2,String>>):
+def inlineRows(rows: List<&2,List<&2,String>>,+theme: MarkdownTheme,+flags: InlineFlags) -> IO(List<&2,List<&2,String>>):
   match rows:
     case Nil{}: IO.pure(List<&2,List<&2,String>>,Nil{})
     case row <> rest:
       do IO<List<&2,List<&2,String>>>:
-        rendered : List<&2,String> <- inlineCells(row,theme,links)
-        following : List<&2,List<&2,String>> <- inlineRows(rest,theme,links)
+        rendered : List<&2,String> <- inlineCells(row,theme,flags)
+        following : List<&2,List<&2,String>> <- inlineRows(rest,theme,flags)
         return rendered <> following
 def rowWidth(rows: List<&2,List<&2,String>>,+index: Nat) -> Nat:
   match rows:
@@ -637,43 +864,49 @@ def renderedRows(rows: List<&2,List<&2,String>>,+widths: List<&2,Nat>,+theme: Ma
         line : List<&2,String> <- wrappedRow(row,widths,False{},theme)
         following : List<&2,String> <- renderedRows(rest,widths,theme,separator)
         return List.append(&2,String,line,separator <> following)
-def tableRegular(header: String,rest: List<&2,String>,+theme: MarkdownTheme,+width: Nat,+links: Bool) -> IO(TableResult):
+def tableRegular(header: String,rest: List<&2,String>,+theme: MarkdownTheme,+width: Nat,+flags: InlineFlags) -> IO(TableResult):
   do IO<TableResult>:
     +parsed : TableRows <- IO.pure(TableRows,collectRows(afterDivider(rest),Nil{}))
-    +cells : List<&2,String> <- inlineCells(tableHeader(header),theme,links)
-    +body : List<&2,List<&2,String>> <- inlineRows(tableRows(parsed),theme,links)
+    +cells : List<&2,String> <- inlineCells(tableHeader(header),theme,flags)
+    +body : List<&2,List<&2,String>> <- inlineRows(tableRows(parsed),theme,flags)
     +columns : List<&2,Nat> <- IO.pure(List<&2,Nat>,tableWidths(widths(cells,body,0n),minimumWidths(cells,body,0n),width - (3n * List.length(&2,String,cells) + 1n)))
     heading : List<&2,String> <- wrappedRow(cells,columns,True{},theme)
     rows : List<&2,String> <- renderedRows(body,columns,theme,border(columns,"├─","─┼─","─┤"))
     return TableResult{border(columns,"┌─","─┬─","─┐") <> List.append(&2,String,heading,border(columns,"├─","─┼─","─┤") <> List.append(&2,String,rows,border(columns,"└─","─┴─","─┘") <> Nil{})),tableRemaining(parsed)}
-def tableRendered(+header: String,+rest: List<&2,String>,+theme: MarkdownTheme,+width: Nat,+links: Bool) -> IO(TableResult):
+def tableRendered(+header: String,+rest: List<&2,String>,+theme: MarkdownTheme,+width: Nat,+flags: InlineFlags) -> IO(TableResult):
   Bool.pick(Unit -> IO(TableResult),Nat.is_lt(width,4n * List.length(&2,String,tableHeader(header)) + 1n),
-    _ => IO.pure(TableResult,narrowTable(header,rest,width)),_ => tableRegular(header,rest,theme,width,links))(Unit{})
-@unsafe def renderBlocks(lines: List<&2,String>,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,+width: Nat,+links: Bool) -> IO(List<&2,String>):
-  match lines:
-    case Nil{}: IO.pure(List<&2,String>,Nil{})
-    case +line <> +rest:
+    _ => IO.pure(TableResult,narrowTable(header,rest,width)),_ => tableRegular(header,rest,theme,width,flags))(Unit{})
+# `display` is the display math starting at `lines`, if any.
+@unsafe def renderBlocks(display: Maybe<&2,BlockMath>,lines: List<&2,String>,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,+width: Nat,+flags: InlineFlags) -> IO(List<&2,String>):
+  match display lines:
+    case Some{+block} _:
+      do IO<List<&2,String>>:
+        rendered : List<&2,String> <- mathBlockLines(block,latexOf(flags),style,theme)
+        following : List<&2,String> <- renderBlocks(mathBlockAt(mathRemaining(block)),mathRemaining(block),theme,style,width,flags)
+        return afterFence(rendered,mathRemaining(block),following)
+    case None{} Nil{}: IO.pure(List<&2,String>,Nil{})
+    case None{} +line <> +rest:
       Bool.pick(Unit -> IO(List<&2,String>),String.starts_with(line,"```"),
         _ => do IO<List<&2,String>>:
           +fence : Fence <- IO.pure(Fence,collectFence(rest,"```",Nil{}))
           rendered : List<&2,String> <- fenceRendered(line,fenceLines(fence),theme)
-          following : List<&2,String> <- renderBlocks(fenceRest(fence),theme,style,width,links)
+          following : List<&2,String> <- renderBlocks(mathBlockAt(fenceRest(fence)),fenceRest(fence),theme,style,width,flags)
           return afterFence(rendered,fenceRest(fence),following),
         _ => Bool.pick(Unit -> IO(List<&2,String>),Bool.not(Maybe.is_none(&2,BlockLine,quoteLine(line))),
           _ => do IO<List<&2,String>>:
             +group : QuoteGroup <- IO.pure(QuoteGroup,collectQuote(rest,Nil{}))
-            first : List<&2,String> <- blockLine(line,theme,style,width,links)
-            more : List<&2,String> <- renderQuoteLines(quoteLines(group),theme,width,links)
-            following : List<&2,String> <- renderBlocks(quoteRest(group),theme,style,width,links)
-            return afterFence(List.append(&2,String,first,more),quoteRest(group),following),
+            +contents : List<&2,String> <- IO.pure(List<&2,String>,Maybe.default(&2,String,quoteLineContent(line),"") <> quoteLines(group))
+            quoted : List<&2,String> <- renderQuoteLines(mathBlockAt(contents),contents,theme,style,width,flags)
+            following : List<&2,String> <- renderBlocks(mathBlockAt(quoteRest(group)),quoteRest(group),theme,style,width,flags)
+            return afterFence(quoted,quoteRest(group),following),
         _ => Bool.pick(Unit -> IO(List<&2,String>),isTable(line,rest),
           _ => do IO<List<&2,String>>:
-            +table : TableResult <- tableRendered(line,rest,theme,width,links)
-            following : List<&2,String> <- renderBlocks(tableRest(table),theme,style,width,links)
+            +table : TableResult <- tableRendered(line,rest,theme,width,flags)
+            following : List<&2,String> <- renderBlocks(mathBlockAt(tableRest(table)),tableRest(table),theme,style,width,flags)
             return List.append(&2,String,tableLines(table),following),
           _ => do IO<List<&2,String>>:
-            rendered : List<&2,String> <- Bool.pick(Unit -> IO(List<&2,String>),Text.blank(line),_ => IO.pure(List<&2,String>,"" <> Nil{}),_ => blockLine(line,theme,style,width,links))(Unit{})
-            following : List<&2,String> <- renderBlocks(rest,theme,style,width,links)
+            rendered : List<&2,String> <- Bool.pick(Unit -> IO(List<&2,String>),Text.blank(line),_ => IO.pure(List<&2,String>,"" <> Nil{}),_ => blockLine(line,theme,style,width,flags))(Unit{})
+            following : List<&2,String> <- renderBlocks(mathBlockAt(rest),rest,theme,style,width,flags)
             return withSpacing(line,rendered,rest,following))(Unit{}))(Unit{}))(Unit{})
 
 type OrderedLine is Data: OrderedLine{number: Nat,content: String}
@@ -723,7 +956,8 @@ def uncached(+state: Markdown,+width: Nat) -> IO(Markdown & List<&2,String>):
         Bool.pick(Unit -> IO(Markdown & List<&2,String>),Text.blank(transformedText),
           _ => IO.pure(Markdown & List<&2,String>,rendered(state,width,Nil{})),
           _ => do IO<Markdown & List<&2,String>>:
-            blocks : List<&2,String> <- renderBlocks(preparedLines(trimTrailing(Strings.split(String.join(Strings.split(transformedText,'\t'),"   "),'\n')),options),theme,style,Nat.max(1n,width - x * 2n),linkCapability(options))
+            +lines : List<&2,String> <- IO.pure(List<&2,String>,preparedLines(trimTrailing(Strings.split(String.join(Strings.split(transformedText,'\t'),"   "),'\n')),options))
+            blocks : List<&2,String> <- renderBlocks(mathBlockAt(lines),lines,theme,style,Nat.max(1n,width - x * 2n),inlineFlags(options))
             finish(state,width,blocks))(Unit{})
 def render(+state: Markdown,+width: Nat) -> IO(Markdown & List<&2,String>):
   match state:

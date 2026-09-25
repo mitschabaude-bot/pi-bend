@@ -49,10 +49,15 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   Cloudflare providers (account/gateway auth and base-URL wrappers), and
   bedrock, vertex, mistral and radius (APIs not ported). A bare
   `--model gpt-5` therefore lists three candidates instead of pi's four.
-- **LaTeX in markdown** (answers with `$…$`/`$$…$$`): pi renders math with
-  `packages/tui/src/latex.ts` unless `renderLatex` is false. Bend's
-  `MarkdownOptions.renderLatex` exists but no LaTeX tokenizer or renderer is
-  ported, so math stays raw text. Being ported.
+- **LaTeX in multi-line paragraphs and list items** (answers with math):
+  `packages/tui/src/latex.bend` and the Markdown `latex`/`latexBlock` tokens
+  match pi on 2,170 cases (`tests/latex_check.py`). The Bend Markdown
+  component still renders a paragraph line by line and has no list-item
+  continuation model, so a `$` closed on a later line of the same paragraph,
+  an unclosed delimiter while streaming (pi shows the rest of the paragraph
+  raw, Bend only the rest of the line) and display math inside a list item
+  (pi keeps the item indentation) differ; five such cases are tracked as
+  known divergences in the check.
 - **Fullscreen TUI mode** (`--tui-mode fullscreen`, setting `tuiMode`): the
   arguments parse, but `tui-alt-screen.ts` (alternate screen, scroll view,
   copy-on-select, fullscreen images) is not ported; the default regular mode is.
