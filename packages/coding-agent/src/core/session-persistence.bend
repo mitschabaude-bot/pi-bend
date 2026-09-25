@@ -4,6 +4,8 @@ import ../../../ai/src/utils/uuid.bend as Uuid
 import ../../../agent/src/types.bend as Agent
 import ../../../runtime/src/filesystem.bend as FS
 import ../../../runtime/src/file-fold.bend as Fold
+import ../../../runtime/src/abort.bend as Abort
+import ../../../runtime/src/callback.bend as Callback
 import ../../../runtime/src/posix-path.bend as Path
 import ../../../runtime/src/date.bend as Date
 import ../../../runtime/src/utf8.bend as Utf8
@@ -734,6 +736,84 @@ def listAll(sessionDir: Maybe<&2, String>, +sessionsDir: String) -> IO(List<&2, 
       do IO<List<&2, S.SessionInfo>>:
         result : Result<&2, &2, FS.Error, List<&2, FS.DirectoryEntry>> <- FS.readDirectory(sessionsDir)
         listedProjects(sessionsDir, result)
+
+# The startup picker receives sorted, immutable snapshots as files arrive.
+# Cancellation is checked between files; the current file is always closed by
+# the JSONL fold before the scanner returns.
+type ListProgress is Data: ListProgress{loaded: Nat, total: Nat, sessions: Maybe<&2, List<&2, S.SessionInfo>>}
+def selectedIf(include: Bool, value: S.SessionInfo, found: List<&2, S.SessionInfo>) -> List<&2, S.SessionInfo>:
+  match include:
+    case True{}: value <> found
+    case False{}: found
+def selectedInfo(info: Maybe<&2, S.SessionInfo>, cwd: Maybe<&2, String>, found: List<&2, S.SessionInfo>) -> List<&2, S.SessionInfo>:
+  match info:
+    case None{}: found
+    case Some{+value}:
+      selectedIf(Maybe.default(&2, Bool, Maybe.map(&2, String, Bool, expected => sessionCwdMatches(infoCwd(value), expected), cwd), True{}), value, found)
+def partialSnapshot(publish: Bool, found: List<&2, S.SessionInfo>) -> Maybe<&2, List<&2, S.SessionInfo>>:
+  match publish:
+    case True{}: Some{Sort.sort(~S.SessionInfo, ~recentFirst, found)}
+    case False{}: None{}
+def reportProgress(+loaded: Nat, +total: Nat, found: List<&2, S.SessionInfo>, +interval: Nat, publish: Callback.Callback<ListProgress, Unit>) -> IO(Unit):
+  Callback.call(ListProgress, Unit, publish, ListProgress{loaded, total, partialSnapshot(Nat.is_eq(loaded, 1n) || Nat.is_eq(loaded, total) || Nat.is_eq(loaded % interval, 0n), found)})
+def scanProgress(files: List<&2, String>, +found: List<&2, S.SessionInfo>, +loaded: Nat, +total: Nat, +interval: Nat, +cwd: Maybe<&2, String>, +signal: Abort.AbortSignal<Unit>, +publish: Callback.Callback<ListProgress, Unit>) -> IO(List<&2, S.SessionInfo>):
+  match files:
+    case Nil{}: IO.pure(List<&2, S.SessionInfo>, Sort.sort(~S.SessionInfo, ~recentFirst, found))
+    case path <> rest:
+      do IO<List<&2, S.SessionInfo>>:
+        stopped : Bool <- Abort.aborted(Unit, signal)
+        Bool.pick(Unit -> IO(List<&2, S.SessionInfo>), stopped,
+          _ => IO.pure(List<&2, S.SessionInfo>, Sort.sort(~S.SessionInfo, ~recentFirst, found)),
+          _ => do IO<List<&2, S.SessionInfo>>:
+            info : Maybe<&2, S.SessionInfo> <- buildSessionInfo(path)
+            +next : List<&2, S.SessionInfo> <- IO.pure(List<&2, S.SessionInfo>, selectedInfo(info, cwd, found))
+            reportProgress(loaded + 1n, total, next, interval, publish)
+            scanProgress(rest, next, loaded + 1n, total, interval, cwd, signal, publish))(Unit{})
+def scanFiles(files: Maybe<&2, List<&2, String>>, interval: Nat, cwd: Maybe<&2, String>, signal: Abort.AbortSignal<Unit>, +publish: Callback.Callback<ListProgress, Unit>) -> IO(List<&2, S.SessionInfo>):
+  match files:
+    case None{}: IO.pure(List<&2, S.SessionInfo>, Nil{})
+    case Some{+paths}:
+      do IO<List<&2, S.SessionInfo>>:
+        +total : Nat <- IO.pure(Nat, List.length(&2, String, paths))
+        Bool.pick(Unit -> IO(Unit), Nat.is_eq(total, 0n), _ => Callback.call(ListProgress, Unit, publish, ListProgress{0n, 0n, Some{Nil{}}}), _ => IO.pure(Unit, Unit{}))(Unit{})
+        scanProgress(paths, Nil{}, 0n, total, interval, cwd, signal, publish)
+def currentProgress(chosen: Outcome(String), sessionDir: Maybe<&2, String>, +cwd: String, agentDir: String, signal: Abort.AbortSignal<Unit>, publish: Callback.Callback<ListProgress, Unit>) -> IO(List<&2, S.SessionInfo>):
+  match chosen:
+    case Fail{_}: IO.pure(List<&2, S.SessionInfo>, Nil{})
+    case Done{+dir}:
+      do IO<List<&2, S.SessionInfo>>:
+        files : Maybe<&2, List<&2, String>> <- sessionFiles(dir)
+        scanFiles(files, 10n, Bool.pick(Maybe<&2, String>, filtersCwd(sessionDir, dir, cwd, agentDir), Some{cwd}, None{}), signal, publish)
+def listProgress(+cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, signal: Abort.AbortSignal<Unit>, publish: Callback.Callback<ListProgress, Unit>) -> IO(List<&2, S.SessionInfo>):
+  do IO<List<&2, S.SessionInfo>>:
+    chosen : Outcome(String) <- chosenDir(sessionDir, cwd, agentDir)
+    currentProgress(chosen, sessionDir, cwd, agentDir, signal, publish)
+def pathsInDirs(dirs: List<&2, String>) -> IO(List<&2, String>):
+  match dirs:
+    case Nil{}: IO.pure(List<&2, String>, Nil{})
+    case dir <> rest:
+      do IO<List<&2, String>>:
+        files : Maybe<&2, List<&2, String>> <- sessionFiles(dir)
+        others : List<&2, String> <- pathsInDirs(rest)
+        return List.append(&2, String, Maybe.default(&2, List<&2, String>, files, Nil{}), others)
+def allPathsResult(sessionsDir: String, result: Result<&2, &2, FS.Error, List<&2, FS.DirectoryEntry>>) -> IO(Maybe<&2, List<&2, String>>):
+  match result:
+    case Fail{_}: IO.pure(Maybe<&2, List<&2, String>>, None{})
+    case Done{entries}:
+      do IO<Maybe<&2, List<&2, String>>>:
+        files : List<&2, String> <- pathsInDirs(projectDirs(sessionsDir, entries, Nil{}))
+        return Some{files}
+def allPaths(sessionDir: Maybe<&2, String>, +sessionsDir: String) -> IO(Maybe<&2, List<&2, String>>):
+  match sessionDir:
+    case Some{custom}: sessionFiles(Path.normalize(custom))
+    case None{}:
+      do IO<Maybe<&2, List<&2, String>>>:
+        result : Result<&2, &2, FS.Error, List<&2, FS.DirectoryEntry>> <- FS.readDirectory(sessionsDir)
+        allPathsResult(sessionsDir, result)
+def listAllProgress(sessionDir: Maybe<&2, String>, sessionsDir: String, signal: Abort.AbortSignal<Unit>, publish: Callback.Callback<ListProgress, Unit>) -> IO(List<&2, S.SessionInfo>):
+  do IO<List<&2, S.SessionInfo>>:
+    files : Maybe<&2, List<&2, String>> <- allPaths(sessionDir, sessionsDir)
+    scanFiles(files, 100n, None{}, signal, publish)
 
 # The session
 # -----------

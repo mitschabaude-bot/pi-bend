@@ -6,6 +6,7 @@ import ../../../runtime/src/filesystem.bend as FS
 import ../../../runtime/src/child-process.bend as Child
 import ../../../runtime/src/regex.bend as Regex
 import ../../../runtime/src/callback.bend as Callback
+import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/deferred.bend as Deferred
 import ../../../runtime/src/ref.bend as Ref
 import ../../../runtime/src/string.bend as Strings
@@ -30,11 +31,13 @@ type Action is Data:
   Cancel{} Confirm{} SwitchScope{} SwitchSort{} SwitchNamed{} TogglePath{} Delete{} DeleteAlias{} MoveUp{} MoveDown{} PageUp{} PageDown{} Erase{} TypeText{text: String} Ignore{}
 type State is Data:
   State{current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,scope: Scope,query: String,index: Nat,choice: Choice,controls: Controls}
+type Count is Data: Count{loaded: Nat,total: Nat}
+type Loads is Data: Loads{current: Maybe<&2,Count>,all: Maybe<&2,Count>}
 type Input is Data:
-  Input{state: Ref.Ref<State>,stop: Deferred.Deferred<Unit>,bindings: Bindings.KeybindingsManager}
-type Paint is Data: Paint{state: Ref.Ref<State>,normalHint: String,deleteHint: String}
+  Input{state: Ref.Ref<State>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,bindings: Bindings.KeybindingsManager}
+type Paint is Data: Paint{state: Ref.Ref<State>,loads: Ref.Ref<Loads>,normalHint: String,deleteHint: String}
 type Owner is Data:
-  Owner{state: Ref.Ref<State>,stop: Deferred.Deferred<Unit>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
+  Owner{state: Ref.Ref<State>,loads: Ref.Ref<Loads>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
 def Outcome() -> Data: Result<&2,&2,String,Maybe<&2,String>>
 
 def searchText(info: Session.SessionInfo) -> String:
@@ -268,8 +271,20 @@ def hint(deleting: Maybe<&2,String>,status: Maybe<&2,String>,problem: Maybe<&2,S
   match deleting:
     case Some{_}: "Trash this session? Falls back to permanent deletion · " ++ confirm
     case None{}: Maybe.default(&2,String,problem,Maybe.default(&2,String,status,normal))
+def countHint(count: Maybe<&2,Count>) -> Maybe<&2,String>:
+  match count:
+    case None{}: None{}
+    case Some{Count{loaded,total}}: Some{"Loading sessions " ++ Nat.show(loaded) ++ "/" ++ Nat.show(total)}
+def loadingHint(scope: Scope,loads: Loads) -> Maybe<&2,String>:
+  match scope loads:
+    case Current{} Loads{current,_}: countHint(current)
+    case All{} Loads{_,all}: countHint(all)
+def emptyRow(loading: Maybe<&2,String>) -> List<&2,String>:
+  match loading:
+    case Some{_}: ["  Loading sessions..."]
+    case None{}: ["  No sessions found"]
 
-def renderState(+state: State,+width: Nat,normalHint: String,deleteHint: String) -> List<&2,String>:
+def renderState(+state: State,+width: Nat,normalHint: String,deleteHint: String,loads: Loads) -> List<&2,String>:
   match state:
     case State{_,_,scope,query,index,_,Controls{sort,namedFilter,showPath,deleting,status}}:
       +items = visible(state)
@@ -278,18 +293,20 @@ def renderState(+state: State,+width: Nat,normalHint: String,deleteHint: String)
       +title = Bool.pick(String,all,"Resume Session (All)","Resume Session (Current Folder)") ++ "  ·  " ++ sortLabel(sort) ++ Bool.pick(String,namedFilter," · Named","") ++ Bool.pick(String,showPath," · Path on","")
       +thread = threadedMode(sort,query)
       +body = listLines(window(items,index),start,index,all,thread,showPath,items,width,10n,Nil{})
-      +help = hint(deleting,status,searchProblem(parsedSearch(query)),normalHint,deleteHint)
+      +loading = loadingHint(scope,loads)
+      +help = hint(deleting,Maybe.or(&2,String,status,loading),searchProblem(parsedSearch(query)),normalHint,deleteHint)
       List.append(&2,String,[Utils.truncateToWidth(title,width,"…",False{}),
        Utils.truncateToWidth("Search: " ++ safeText(query),width,"…",False{}),
        Utils.truncateToWidth(help,width,"…",False{})],
-       Bool.pick(List<&2,String>,List.is_empty(&2,Session.SessionInfo,items),["  No sessions found"],body))
+       Bool.pick(List<&2,String>,List.is_empty(&2,Session.SessionInfo,items),emptyRow(loading),body))
 
 def paint(environment: Paint,width: Nat) -> IO(List<&2,String>):
   match environment:
-    case Paint{state,normal,confirm}:
+    case Paint{state,loads,normal,confirm}:
       do IO<List<&2,String>>:
         value : State <- Ref.read(State,state)
-        return renderState(value,width,normal,confirm)
+        loading : Loads <- Ref.read(Loads,loads)
+        return renderState(value,width,normal,confirm,loading)
 def ignore(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
 def ignoreFocus(_: Unit,_: Bool) -> IO(Unit): IO.pure(Unit,Unit{})
 
@@ -443,26 +460,41 @@ def deleteFor(state: Ref.Ref<State>,value: State,data: String,bindings: Bindings
     case _: IO.pure(Bool,False{})
 def deleteIfConfirmed(input: Input,data: String) -> IO(Bool):
   match input:
-    case Input{+state,_,bindings}:
+    case Input{+state,_,_,bindings}:
       do IO<Bool>:
         value : State <- Ref.read(State,state)
         handled : Bool <- deleteFor(state,value,data,bindings)
         return handled
 
+def stateIsAll(state: State) -> Bool:
+  match state: case State{_,_,All{},_,_,_,_}: True{} case _: False{}
+def resolvedAll(request: Deferred.Deferred<Unit>,all: Bool) -> IO(Unit):
+  Bool.pick(Unit -> IO(Unit),all,_ => do IO<Unit>:
+    resolved : Bool <- Deferred.resolve(Unit,request,Unit{})
+    return Unit{},_ => IO.pure(Unit,Unit{}))(Unit{})
+def requestAll(state: Ref.Ref<State>,request: Deferred.Deferred<Unit>,selected: Action) -> IO(Unit):
+  match selected:
+    case SwitchScope{}:
+      do IO<Unit>:
+        current : State <- Ref.read(State,state)
+        resolvedAll(request,stateIsAll(current))
+    case _: IO.pure(Unit,Unit{})
+
 def receivedShared(input: Input,+data: String) -> IO(Unit):
   match input:
-    case Input{+state,+stop,+bindings}:
+    case Input{+state,+stop,+allRequested,+bindings}:
       do IO<Unit>:
-        deleted : Bool <- deleteIfConfirmed(Input{state,stop,bindings},data)
+        deleted : Bool <- deleteIfConfirmed(Input{state,stop,allRequested,bindings},data)
         Bool.pick(Unit -> IO(Unit),deleted,_ => IO.pure(Unit,Unit{}),_ => do IO<Unit>:
           done : Bool <- Ref.modify(State,Bool,state,current => transition(current,data,bindings))
+          requestAll(state,allRequested,action(bindings,data))
           Bool.pick(Unit -> IO(Unit),done,_ => do IO<Unit>:
             resolved : Bool <- Deferred.resolve(Unit,stop,Unit{})
             return Unit{},_ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{})
 def received(input: Input,data: String) -> IO(Unit): receivedShared(input,data)
 
-def made(state: Ref.Ref<State>,stop: Deferred.Deferred<Unit>,+render: Callback.Callback<Nat,List<&2,String>>,+input: Callback.Callback<String,Unit>,+invalidate: Callback.Callback<Unit,Unit>,+focus: Callback.Callback<Bool,Unit>) -> Owner:
-  Owner{state,stop,Component.Component{Component.ComponentId{1n},render,Some{input},None{},invalidate,Some{focus},False{}},render,input,invalidate,focus}
+def made(state: Ref.Ref<State>,loads: Ref.Ref<Loads>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,+render: Callback.Callback<Nat,List<&2,String>>,+input: Callback.Callback<String,Unit>,+invalidate: Callback.Callback<Unit,Unit>,+focus: Callback.Callback<Bool,Unit>) -> Owner:
+  Owner{state,loads,stop,allRequested,Component.Component{Component.ComponentId{1n},render,Some{input},None{},invalidate,Some{focus},False{}},render,input,invalidate,focus}
 def formattedFirst(keys: List<&2,Keys.KeyId>,name: String) -> String:
   match keys:
     case Nil{}: name
@@ -478,12 +510,14 @@ def deleteHint(+bindings: Bindings.KeybindingsManager) -> String:
 def create(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,+bindings: Bindings.KeybindingsManager) -> IO(Owner):
   do IO<Owner>:
     +state : Ref.Ref<State> <- Ref.new(State,State{current,all,Current{},"",0n,Pending{},Controls{Threaded{},False{},False{},None{},None{}}})
+    +loads : Ref.Ref<Loads> <- Ref.new(Loads,Loads{Some{Count{0n,0n}},Some{Count{0n,0n}}})
     +stop : Deferred.Deferred<Unit> <- Deferred.new(Unit)
-    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Paint,~Nat,~List<&2,String>,~paint,Paint{state,normalHint(bindings),deleteHint(bindings)})
-    +input : Callback.Callback<String,Unit> <- Callback.create(~Input,~String,~Unit,~received,Input{state,stop,bindings})
+    +allRequested : Deferred.Deferred<Unit> <- Deferred.new(Unit)
+    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Paint,~Nat,~List<&2,String>,~paint,Paint{state,loads,normalHint(bindings),deleteHint(bindings)})
+    +input : Callback.Callback<String,Unit> <- Callback.create(~Input,~String,~Unit,~received,Input{state,stop,allRequested,bindings})
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~ignore,Unit{})
     +focus : Callback.Callback<Bool,Unit> <- Callback.create(~Unit,~Bool,~Unit,~ignoreFocus,Unit{})
-    return made(state,stop,render,input,invalidate,focus)
+    return made(state,loads,stop,allRequested,render,input,invalidate,focus)
 
 def result(state: State) -> Outcome():
   match state:
@@ -499,46 +533,161 @@ def settled(outcome: Result<&2,&2,Terminal.Error,Process.Active>,final: State) -
     case Done{_}: result(final)
 def finish(owner: Owner,outcome: Result<&2,&2,Terminal.Error,Process.Active>) -> IO(Outcome()):
   match owner:
-    case Owner{state,stop,_,render,input,invalidate,focus}:
+    case Owner{state,loads,stop,allRequested,_,render,input,invalidate,focus}:
       do IO<Outcome()>:
         final : State <- Ref.dispose(State,state)
+        oldLoads : Loads <- Ref.dispose(Loads,loads)
         Callback.dispose(Nat,List<&2,String>,render)
         Callback.dispose(String,Unit,input)
         Callback.dispose(Unit,Unit,invalidate)
         Callback.dispose(Bool,Unit,focus)
+        Deferred.dispose(Unit,allRequested)
         Deferred.dispose(Unit,stop)
         return settled(outcome,final)
 
-def runMounted(owner: Owner,mounted: Tui.ResultOf(Tui.TuiBase)) -> IO(Outcome()):
-  match owner mounted:
-    case Owner{state,stop,component,render,input,invalidate,focus} Fail{_}:
-      finish(Owner{state,stop,component,render,input,invalidate,focus},Fail{Terminal.Closed{}})
-    case Owner{state,+stop,+component,render,input,invalidate,focus} Done{base}:
-      do IO<Outcome()>:
-        outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runProcess(Process.active(Process.Session{base,Screen.initial()},[component],[Component.ComponentId{1n}]),stop,False{})
-        finish(Owner{state,stop,component,render,input,invalidate,focus},outcome)
-
-def run(owner: Owner) -> IO(Outcome()):
+type LoadContext is Data:
+  LoadContext{cwd: String,sessionDir: Maybe<&2,String>,agentDir: String,sessionsDir: String}
+type ProgressInput is Data:
+  ProgressInput{state: Ref.Ref<State>,loads: Ref.Ref<Loads>,request: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,scope: Scope}
+def findIndex(items: List<&2,Session.SessionInfo>,+path: String,+index: Nat) -> Maybe<&2,Nat>:
+  match items:
+    case Nil{}: None{}
+    case info <> rest: Bool.pick(Maybe<&2,Nat>,Strings.equal(infoPath(info),path),Some{index},findIndex(rest,path,index + 1n))
+def retainedPrevious(previous: Maybe<&2,Session.SessionInfo>,+next: State,position: Nat) -> Nat:
+  match previous:
+    case None{}: 0n
+    case Some{info}: Maybe.default(&2,Nat,findIndex(visible(next),infoPath(info),0n),Nat.min(position,List.length(&2,Session.SessionInfo,visible(next)) - 1n))
+def retainedIndex(previous: Maybe<&2,Session.SessionInfo>,+next: State,+position: Nat) -> Nat:
+  Bool.pick(Unit -> Nat,Nat.is_eq(position,0n),_ => 0n,_ => retainedPrevious(previous,next,position))(Unit{})
+def changedSessions(state: State,scope: Scope,+sessions: List<&2,Session.SessionInfo>) -> State:
+  match state scope:
+    case State{+current,+all,+activeScope,+query,+index,+choice,+controls} Current{}:
+      +previous = List.get(&2,Session.SessionInfo,visible(State{current,all,activeScope,query,index,choice,controls}),index)
+      +updated = {State{sessions,all,activeScope,query,index,choice,controls} : State}
+      State{sessions,all,activeScope,query,retainedIndex(previous,updated,index),choice,controls}
+    case State{+current,+all,+activeScope,+query,+index,+choice,+controls} All{}:
+      +previous = List.get(&2,Session.SessionInfo,visible(State{current,all,activeScope,query,index,choice,controls}),index)
+      +updated = {State{current,sessions,activeScope,query,index,choice,controls} : State}
+      State{current,sessions,activeScope,query,retainedIndex(previous,updated,index),choice,controls}
+def counted(loads: Loads,scope: Scope,count: Maybe<&2,Count>) -> Loads:
+  match loads scope:
+    case Loads{_,all} Current{}: Loads{count,all}
+    case Loads{current,_} All{}: Loads{current,count}
+def requestedProgress(callback: Maybe<&2,Callback.Callback<Unit,Unit>>) -> IO(Unit):
+  match callback:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{ready}: Callback.call(Unit,Unit,ready,Unit{})
+def requestProgress(request: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
+  do IO<Unit>:
+    callback : Maybe<&2,Callback.Callback<Unit,Unit>> <- Ref.read(Maybe<&2,Callback.Callback<Unit,Unit>>,request)
+    requestedProgress(callback)
+def partialProgress(state: Ref.Ref<State>,scope: Scope,sessions: Maybe<&2,List<&2,Session.SessionInfo>>) -> IO(Unit):
+  match sessions:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{items}: Ref.modify(State,Unit,state,old => (changedSessions(old,scope,items),Unit{}))
+def progress(input: ProgressInput,update: Persistence.ListProgress) -> IO(Unit):
+  match input update:
+    case ProgressInput{state,loads,request,+scope} Persistence.ListProgress{loaded,total,sessions}:
+      do IO<Unit>:
+        partialProgress(state,scope,sessions)
+        Ref.modify(Loads,Unit,loads,old => (counted(old,scope,Some{Count{loaded,total}}),Unit{}))
+        requestProgress(request)
+def completedLoad(input: ProgressInput,sessions: List<&2,Session.SessionInfo>) -> IO(Unit):
+  match input:
+    case ProgressInput{state,loads,request,+scope}:
+      do IO<Unit>:
+        Ref.modify(State,Unit,state,old => (changedSessions(old,scope,sessions),Unit{}))
+        Ref.modify(Loads,Unit,loads,old => (counted(old,scope,None{}),Unit{}))
+        requestProgress(request)
+def readyRequest(request: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,event: Process.QueryReady) -> IO(Unit):
+  match event:
+    case Process.QueryReady{_,_,_,redraw}: Ref.write(Maybe<&2,Callback.Callback<Unit,Unit>>,request,Some{redraw})
+type Stopping is Data: Stopping{request: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cancel: Abort.AbortController<Unit>,allRequested: Deferred.Deferred<Unit>,currentDone: Deferred.Deferred<Unit>,allDone: Deferred.Deferred<Unit>}
+def stoppingRequest(context: Stopping,_: Unit) -> IO(Unit):
+  match context:
+    case Stopping{request,cancel,allRequested,currentDone,allDone}:
+      do IO<Unit>:
+        Ref.write(Maybe<&2,Callback.Callback<Unit,Unit>>,request,None{})
+        stopped : Bool <- Abort.abort(Unit,cancel,None{})
+        woken : Bool <- Deferred.resolve(Unit,allRequested,Unit{})
+        Deferred.result(Unit,currentDone)
+        Deferred.result(Unit,allDone)
+def loadCurrent(context: LoadContext,signal: Abort.AbortSignal<Unit>,current: ProgressInput,callback: Callback.Callback<Persistence.ListProgress,Unit>) -> IO(Unit):
+  match context:
+    case LoadContext{cwd,sessionDir,agentDir,_}:
+      do IO<Unit>:
+        sessions : List<&2,Session.SessionInfo> <- Persistence.listProgress(cwd,sessionDir,agentDir,signal,callback)
+        completedLoad(current,sessions)
+def loadRequested(context: LoadContext,+signal: Abort.AbortSignal<Unit>,request: Deferred.Deferred<Unit>,all: ProgressInput,callback: Callback.Callback<Persistence.ListProgress,Unit>) -> IO(Unit):
+  match context:
+    case LoadContext{_,sessionDir,_,sessionsDir}:
+      do IO<Unit>:
+        wake : Unit <- Deferred.result(Unit,request)
+        cancelled : Bool <- Abort.aborted(Unit,signal)
+        Bool.pick(Unit -> IO(Unit),cancelled,_ => IO.pure(Unit,Unit{}),_ => do IO<Unit>:
+          everything : List<&2,Session.SessionInfo> <- Persistence.listAllProgress(sessionDir,sessionsDir,signal,callback)
+          completedLoad(all,everything))(Unit{})
+def currentTask(context: LoadContext,signal: Abort.AbortSignal<Unit>,current: ProgressInput,callback: Callback.Callback<Persistence.ListProgress,Unit>,done: Deferred.Deferred<Unit>) -> IO(Unit):
+  do IO<Unit>:
+    loadCurrent(context,signal,current,callback)
+    settled : Bool <- Deferred.resolve(Unit,done,Unit{})
+    return Unit{}
+def allTask(context: LoadContext,signal: Abort.AbortSignal<Unit>,request: Deferred.Deferred<Unit>,all: ProgressInput,callback: Callback.Callback<Persistence.ListProgress,Unit>,done: Deferred.Deferred<Unit>) -> IO(Unit):
+  do IO<Unit>:
+    loadRequested(context,signal,request,all,callback)
+    settled : Bool <- Deferred.resolve(Unit,done,Unit{})
+    return Unit{}
+def loadedProcess(owner: Owner,base: Tui.TuiBase,+context: LoadContext) -> IO(Outcome()):
   match owner:
-    case Owner{state,stop,+component,render,input,invalidate,focus}:
+    case Owner{+state,+loads,+stop,+allRequested,+component,render,input,invalidate,focus}:
+      do IO<Outcome()>:
+        +request : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,None{})
+        +current : ProgressInput <- IO.pure(ProgressInput,ProgressInput{state,loads,request,Current{}})
+        +all : ProgressInput <- IO.pure(ProgressInput,ProgressInput{state,loads,request,All{}})
+        +currentCallback : Callback.Callback<Persistence.ListProgress,Unit> <- Callback.create(~ProgressInput,~Persistence.ListProgress,~Unit,~progress,current)
+        +allCallback : Callback.Callback<Persistence.ListProgress,Unit> <- Callback.create(~ProgressInput,~Persistence.ListProgress,~Unit,~progress,all)
+        +ready : Callback.Callback<Process.QueryReady,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,~Process.QueryReady,~Unit,~readyRequest,request)
+        +cancel : Abort.AbortController<Unit> <- Abort.new(Unit)
+        +currentDone : Deferred.Deferred<Unit> <- Deferred.new(Unit)
+        +allDone : Deferred.Deferred<Unit> <- Deferred.new(Unit)
+        +stopping : Callback.Callback<Unit,Unit> <- Callback.create(~Stopping,~Unit,~Unit,~stoppingRequest,Stopping{request,cancel,allRequested,currentDone,allDone})
+        currentWorker : Chan(Unit) <- IO.fork(Unit,currentTask(context,Abort.signal(Unit,cancel),current,currentCallback,currentDone))
+        allWorker : Chan(Unit) <- IO.fork(Unit,allTask(context,Abort.signal(Unit,cancel),allRequested,all,allCallback,allDone))
+        outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runProcessWithLifecycle(Process.active(Process.Session{base,Screen.initial()},[component],[Component.ComponentId{1n}]),stop,False{},ready,stopping)
+        aborted : Bool <- Abort.abort(Unit,cancel,None{})
+        wake : Bool <- Deferred.resolve(Unit,allRequested,Unit{})
+        IO.join(Unit,currentWorker)
+        IO.join(Unit,allWorker)
+        Deferred.dispose(Unit,currentDone)
+        Deferred.dispose(Unit,allDone)
+        Abort.dispose(Unit,cancel)
+        Callback.dispose(Persistence.ListProgress,Unit,currentCallback)
+        Callback.dispose(Persistence.ListProgress,Unit,allCallback)
+        Callback.dispose(Process.QueryReady,Unit,ready)
+        Callback.dispose(Unit,Unit,stopping)
+        oldRequest : Maybe<&2,Callback.Callback<Unit,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<Unit,Unit>>,request)
+        finish(Owner{state,loads,stop,allRequested,component,render,input,invalidate,focus},outcome)
+def runMounted(owner: Owner,mounted: Tui.ResultOf(Tui.TuiBase),context: LoadContext) -> IO(Outcome()):
+  match mounted:
+    case Fail{_}: finish(owner,Fail{Terminal.Closed{}})
+    case Done{base}: loadedProcess(owner,base,context)
+def run(owner: Owner,context: LoadContext) -> IO(Outcome()):
+  match owner:
+    case Owner{state,loads,stop,allRequested,+component,render,input,invalidate,focus}:
       do IO<Outcome()>:
         mounted : Tui.ResultOf(Tui.TuiBase) <- Tui.setFocus(Tui.added(Tui.newTui(),component),[component],[Component.ComponentId{1n}],Some{Component.ComponentId{1n}})
-        runMounted(Owner{state,stop,component,render,input,invalidate,focus},mounted)
-
-def loadedBindings(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,loaded: Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager>) -> IO(Outcome()):
+        runMounted(Owner{state,loads,stop,allRequested,component,render,input,invalidate,focus},mounted,context)
+def loadedBindings(context: LoadContext,loaded: Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager>) -> IO(Outcome()):
   match loaded:
     case Fail{_}: IO.pure(Outcome(),Fail{"Cannot load session selector keybindings"})
     case Done{AppKeys.KeybindingsManager{bindings,_,_}}:
       do IO<Outcome()>:
-        owner : Owner <- create(current,all,bindings)
-        run(owner)
+        owner : Owner <- create(Nil{},Nil{},bindings)
+        run(owner,context)
 def selectSession(cwd: String,+sessionDir: Maybe<&2,String>,+agentDir: String,sessionsDir: String) -> IO(Outcome()):
   do IO<Outcome()>:
-    current : List<&2,Session.SessionInfo> <- Persistence.list(cwd,sessionDir,agentDir)
-    all : List<&2,Session.SessionInfo> <- Persistence.listAll(sessionDir,sessionsDir)
     bindings : Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager> <- AppKeys.create(AppKeys.Environment{"linux",None{},None{}},agentDir)
-    outcome : Outcome() <- loadedBindings(current,all,bindings)
-    return outcome
+    loadedBindings(LoadContext{cwd,sessionDir,agentDir,sessionsDir},bindings)
 
 # The same picker can occupy the interactive editor without starting a second
 # terminal process. Both entry points share filtering, ordering and keybindings.
@@ -550,7 +699,7 @@ type HostOwner is Type:
 def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindings.KeybindingsManager,width: Nat) -> IO(List<&2,String>):
   match current:
     case Closed{}: Component.render(editor,width)
-    case Open{state}: IO.pure(List<&2,String>,renderState(state,width,normalHint(bindings),deleteHint(bindings)))
+    case Open{state}: IO.pure(List<&2,String>,renderState(state,width,normalHint(bindings),deleteHint(bindings),Loads{None{},None{}}))
 def drawModal(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
     case Host{+modal,editor,bindings,_}:
