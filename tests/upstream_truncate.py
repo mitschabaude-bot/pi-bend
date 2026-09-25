@@ -46,8 +46,9 @@ def sampled_limits(text):
 def buffer_tail(text, size):
     data = utf8(text)
     if len(data) <= size:
-        # JSON round-trip joins paired UTF-16 units, preserving isolated units.
-        return json.loads(json.dumps(text))
+        # Native Bend strings are Unicode scalars, so isolated UTF-16 units
+        # are represented by Buffer's UTF-8 replacement scalar here too.
+        return data.decode("utf-8")
     start = len(data) - size
     while start < len(data) and data[start] & 0xC0 == 0x80:
         start += 1
@@ -61,7 +62,9 @@ def flush():
     if not pending:
         return
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json") as file:
-        json.dump(pending, file)
+        # Bend strings contain Unicode scalars; normalize isolated UTF-16
+        # surrogates to the replacement scalars used by Buffer's UTF-8 path.
+        json.dump([{**case, "text": utf8(case["text"]).decode("utf-8")} for case in pending], file)
         file.flush()
         actual = json.loads(subprocess.check_output(["build/test-truncate-runner", file.name], text=True, timeout=30))
     assert len(actual) == len(pending)

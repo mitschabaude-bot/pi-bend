@@ -1,6 +1,6 @@
 # pi-bend
 
-A native Bend port of [pi](https://github.com/earendil-works/pi), targeting v0.87.1 (`f07218c4d`). The full modular port is **in progress**. The executable under `src/` is an older bootstrap prototype; the library-based CLI is `packages/coding-agent/src/main.bend`.
+A native Bend port of [pi](https://github.com/earendil-works/pi), targeting v0.87.1 (`f07218c4d`). The full modular port is **in progress**. The CLI entry point is `packages/coding-agent/src/main.bend`.
 
 The target is pi's functionality, public abstractions and terminal behavior, with its complex dependencies implemented in pure Bend. Small OS effects provide system calls; networking protocols, cryptography, parsing and application behavior live in Bend. Extensions will use Bend; JavaScript/TypeScript extension compatibility is excluded. Immutable values, structural equality and explicit errors replace incidental JavaScript object semantics. See [architecture](docs/architecture.md) and [native semantics](docs/native-bend.md).
 
@@ -20,7 +20,7 @@ The required toolchain patches and their evidence are in [patches/README.md](pat
 
 For example, with that toolchain configured:
 
-Canonical library tests currently use Bend 2.0.7 with the explicit [compiler patches](patches/README.md) for shared imports, channel identity and exact monotonic clock ticks. Their pure build path does not link the bootstrap's libcurl/ICU adapters. `scripts/build-pure.sh` honours `PI_BEND_OPT` (Clang optimisation, `-O1` by default; `-O0` for development iterations) and `BEND_TUS` (compile the generated C as that many translation units in parallel; the compiler reads the same variable when it emits).
+Canonical library tests currently use Bend 2.0.7 with the explicit [compiler patches](patches/README.md) for shared imports, channel identity and exact monotonic clock ticks. `scripts/build-pure.sh` honours `PI_BEND_OPT` (Clang optimisation, `-O1` by default; `-O0` for development iterations) and `BEND_TUS` (compile the generated C as that many translation units in parallel; the compiler reads the same variable when it emits).
 ```sh
 BEND_TUS=8 sh scripts/build-pure.sh tests/glob-agent.bend build/glob-agent
 python3 tests/glob_check.py build/glob-agent --threads 1
@@ -43,7 +43,7 @@ python3 tests/export_cli_check.py
 
 The CLI owns its whole command line, as pi does; `BEND_THREADS=N` sets the native worker count. The interactive check runs on one and four native threads from a separate project directory and verifies terminal restoration.
 
-The legacy `scripts/setup.sh`, `scripts/build.sh` and `scripts/test.sh` target the bootstrap executable and require libcurl/ICU development libraries. They are not the acceptance gate for the modular port. Credentials and private sessions must stay outside the repository.
+Credentials and private sessions must stay outside the repository.
 
 Generic contracts and machine-checked proofs live in [LAWS.bend](LAWS.bend) and [PROOF.bend](PROOF.bend). Differential, integration, concurrency and performance checks complement those proofs. The [source-hashed upstream inventory](tests/upstream-inventory.json) records each suite as pending, partial or ported; successful demonstrations and test counts do not imply complete parity.
 

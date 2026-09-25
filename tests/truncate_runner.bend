@@ -1,42 +1,78 @@
 import Base
-import ../src/native.bend as N
-import ../src/json.bend as J
-import ../src/util.bend as U
 import ../packages/agent/src/harness/utils/truncate.bend as T
+import ../packages/runtime/src/filesystem.bend as FS
+import ../packages/runtime/src/utf8.bend as Utf8
+import ../packages/runtime/src/json.bend as Json
+import ../packages/runtime/src/schema-value.bend as V
+import ../packages/runtime/src/record.bend as R
+import ../packages/runtime/src/f64.bend as F
+import ../packages/ai/src/utils/json.bend as Render
+import ../packages/ai/src/utils/schema-json.bend as SchemaJson
 
-def cause(value: T.TruncationBy) -> J.Json:
+def field(value: V.Value,key: String) -> V.Value:
   match value:
-    case T.NoLimit{}: J.Null{}
-    case T.LineLimit{}: J.Text{"lines"}
-    case T.ByteLimit{}: J.Text{"bytes"}
-
-def number(key: String, value: Nat, rest: J.Json) -> J.Json:
-  J.Field{key, J.Number{Nat.show(value)}, rest}
-
-def encoded(value: T.TruncationResult) -> J.Json:
+    case V.ObjectValue{fields}: Maybe.default(&2,V.Value,R.get(V.Value,fields,key),V.Null{})
+    case _: V.Null{}
+def text(value: V.Value) -> String:
   match value:
-    case T.TruncationResult{content, truncated, by, totalLines, totalBytes, outputLines, outputBytes, partial, first, maxLines, maxBytes}:
-      limits = number("maxLines", maxLines, number("maxBytes", maxBytes, J.End{}))
-      flags = {J.Field{"lastLinePartial", J.Boolean{partial}, J.Field{"firstLineExceedsLimit", J.Boolean{first}, limits}} : J.Json}
-      totals = number("totalLines", totalLines, number("totalBytes", totalBytes, number("outputLines", outputLines, number("outputBytes", outputBytes, flags))))
-      J.Object{J.str_field("content", content, J.Field{"truncated", J.Boolean{truncated}, J.Field{"truncatedBy", cause(by), totals}})}
-
-def evaluate(+value: J.Json) -> J.Json:
-  +content = U.field(value, "text")
-  +lines = J.number(J.get(value, "lines"), 0n)
-  +bytes = J.number(J.get(value, "bytes"), 0n)
-  head = encoded(T.truncateHead(content, T.TruncationOptions{Some{lines}, Some{bytes}}))
-  tail = encoded(T.truncateTail(content, T.TruncationOptions{Some{lines}, Some{bytes}}))
-  J.Object{J.Field{"head", head, J.Field{"tail", tail, J.End{}}}}
-
-def cases(values: J.Json) -> J.Json:
+    case V.Text{value}: value
+    case _: ""
+def natural(value: V.Value) -> Nat:
+  match value:
+    case V.Number{value}: U32.to_nat(F64.to_u32(value))
+    case _: 0n
+def number(value: Nat) -> V.Value: V.Number{F.fromNat(value)}
+def object(fields: List<&2,R.Property<V.Value>>) -> V.Value: V.ObjectValue{R.Record{fields}}
+def property(key: String,value: V.Value) -> R.Property<V.Value>: R.Property{key,value}
+def cause(value: T.TruncationBy) -> V.Value:
+  match value:
+    case T.NoLimit{}: V.Null{}
+    case T.LineLimit{}: V.Text{"lines"}
+    case T.ByteLimit{}: V.Text{"bytes"}
+def encoded(value: T.TruncationResult) -> V.Value:
+  match value:
+    case T.TruncationResult{content,truncated,by,totalLines,totalBytes,outputLines,outputBytes,partial,first,maxLines,maxBytes}:
+      object([
+        property("content",V.Text{content}),
+        property("truncated",V.Boolean{truncated}),
+        property("truncatedBy",cause(by)),
+        property("totalLines",number(totalLines)),
+        property("totalBytes",number(totalBytes)),
+        property("outputLines",number(outputLines)),
+        property("outputBytes",number(outputBytes)),
+        property("lastLinePartial",V.Boolean{partial}),
+        property("firstLineExceedsLimit",V.Boolean{first}),
+        property("maxLines",number(maxLines)),
+        property("maxBytes",number(maxBytes))
+      ])
+def evaluate(+value: V.Value) -> V.Value:
+  +content = text(field(value,"text"))
+  +lines = natural(field(value,"lines"))
+  +bytes = natural(field(value,"bytes"))
+  object([
+    property("head",encoded(T.truncateHead(content,T.TruncationOptions{Some{lines},Some{bytes}}))),
+    property("tail",encoded(T.truncateTail(content,T.TruncationOptions{Some{lines},Some{bytes}})))
+  ])
+def cases(values: List<&2,V.Value>) -> List<&2,V.Value>:
   match values:
-    case J.Item{value, rest}: J.Item{evaluate(value), cases(rest)}
-    case _: J.End{}
-
+    case Nil{}: Nil{}
+    case value <> rest: evaluate(value) <> cases(rest)
+def run(parsed: Result<&2,&2,Json.ParseError,V.Value>) -> IO(Unit):
+  match parsed:
+    case Done{V.ArrayValue{values}}: IO.print(Maybe.default(&2,String,Render.stringify(SchemaJson.toJson(V.ArrayValue{cases(values)})),"null"))
+    case _: IO.die(Unit,1,"invalid truncation cases")
+def read(result: Result<&2,&2,FS.Error,List<&2,U32>>) -> IO(Unit):
+  match result:
+    case Done{bytes}: run(Json.parse(Utf8.decodeBytes(bytes)))
+    case Fail{_}: IO.die(Unit,1,"cannot read truncation cases")
+def runArguments(arguments: List<String>) -> IO(Unit):
+  match arguments:
+    case path <> Nil{}:
+      do IO<Unit>:
+        result : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile(path)
+        read(result)
+    case _: IO.die(Unit,1,"expected cases file")
 def main() -> IO(Unit):
   do IO<Unit>:
-    path : String <- N.arg(1n)
-    data : String <- IO.try(String, N.read(path))
-    values : J.Json <- U.parsed(J.parse(data))
-    IO.print(J.encode(J.Array{cases(J.array(values))}))
+    arguments : List<String> <- IO.args()
+    runArguments(arguments)
