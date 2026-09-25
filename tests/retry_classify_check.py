@@ -59,6 +59,8 @@ RETRY_TEXTS = [
     "input (5 tokens) is longer than the models context length (4 tokens)", "maximum prompt length is x", "unknown error", "Bad Request", "context window", "prompt is too longish",
 ]
 
+NAMED = {}
+
 def cases():
     out = []
     for text in RETRY_TEXTS:
@@ -71,6 +73,14 @@ def cases():
             out.append({'provider': provider, 'errorMessage': text, 'stopReason': 'error', 'input': 0, 'cacheRead': 0, 'output': 0, 'contextWindow': 200000, 'desiredMaxOutput': 0, 'baseDelayMs': 2000, 'maxAgentDelayMs': None, 'attempt': 1})
     for text in ['{"code":"1261","message":"Prompt too long"}', 'Prompt too long', 'prompt is too long', 'prompt  too long']:
         out.append({'provider': 'zai', 'errorMessage': text, 'stopReason': 'error', 'input': 0, 'cacheRead': 0, 'output': 0, 'contextWindow': 200000, 'desiredMaxOutput': 0, 'baseDelayMs': 2000, 'maxAgentDelayMs': None, 'attempt': 1})
+    # overflow.test.ts v0.87.1, as written: "detects z.ai prompt-too-long errors" (#9805) and
+    # "only treats bodyless 400 and 413 errors as overflow for Cerebras" (#9482)
+    NAMED.update({'zai-1261': len(out)})
+    out.append({'provider': 'zai', 'errorMessage': '400 {"code":"1261","message":"Prompt too long"}', 'stopReason': 'error', 'input': 0, 'cacheRead': 0, 'output': 0, 'contextWindow': 1048576, 'desiredMaxOutput': 0, 'baseDelayMs': 2000, 'maxAgentDelayMs': None, 'attempt': 1})
+    for text in ['400 status code (no body)', '413 status code (no body)']:
+        for provider, window in [('cerebras', 131072), ('opencode-go', 1000000)]:
+            NAMED[provider + ':' + text] = len(out)
+            out.append({'provider': provider, 'errorMessage': text, 'stopReason': 'error', 'input': 0, 'cacheRead': 0, 'output': 0, 'contextWindow': window, 'desiredMaxOutput': 0, 'baseDelayMs': 2000, 'maxAgentDelayMs': None, 'attempt': 1})
     # usage-based overflow (overflow.test.ts and z.ai / Xiaomi shapes)
     usage = [
         ('stop', 200001, 0, 10, 200000), ('stop', 100000, 100001, 10, 200000), ('stop', 200000, 0, 10, 200000), ('stop', 300000, 0, 10, 0),
@@ -119,6 +129,9 @@ def main():
     byText = {row['errorMessage']: json.loads(actual) for row, actual in zip(rows, ported) if row['stopReason'] == 'error' and row['input'] == 0}
     assert byText['overloaded_error']['retryable'] and byText['520 status code (no body)']['retryable'] and not byText['429 quota exceeded']['retryable'] and not byText['not an error']['retryable']
     assert byText['prompt is too long: 213462 tokens > 200000 maximum']['overflow'] and not byText['Throttling error: Too many tokens']['overflow']
+    assert json.loads(ported[NAMED['zai-1261']])['overflow'], 'detects z.ai prompt-too-long errors'
+    for text in ['400 status code (no body)', '413 status code (no body)']:
+        assert json.loads(ported[NAMED['cerebras:' + text]])['overflow'] and not json.loads(ported[NAMED['opencode-go:' + text]])['overflow'], 'only treats bodyless 400 and 413 errors as overflow for Cerebras'
     if failures:
         sys.exit('retry-classify: %d of %d cases differ' % (failures, len(rows)))
     print('retry-classify: %d cases agree with upstream' % len(rows))

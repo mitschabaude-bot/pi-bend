@@ -497,9 +497,11 @@ def attach(frames: List<&2,BlockFrame>,value: Value,lines: List<&2,Line>,anchors
     case BlockFrame{indent,BlockSequence{reversed,True{}}} <> rest previous:
       Block{lines,BlockFrame{indent,BlockSequence{value <> reversed,False{}}} <> rest,anchors,previous}
     case _ _: BlockError{Error{1n,1n,"Unexpected indented value"}}
-def parsedAt(result: ResultOf(Parsed),+line: Nat,frames: List<&2,BlockFrame>,lines: List<&2,Line>,root: Maybe<&2,Value>) -> Block:
+# `column` is where the inline value starts on its line; the inline parser's
+# columns count from there.
+def parsedAt(result: ResultOf(Parsed),+line: Nat,column: Nat,frames: List<&2,BlockFrame>,lines: List<&2,Line>,root: Maybe<&2,Value>) -> Block:
   match result:
-    case Fail{Error{_,column,message}}: BlockError{Error{line,column,message}}
+    case Fail{Error{_,offset,message}}: BlockError{Error{line,Nat.sub(Nat.add(column,offset),1n),message}}
     case Done{Parsed{value,anchors}}: attach(frames,value,lines,anchors,root)
 def finishKind(kind: BlockKind) -> Value:
   match kind:
@@ -522,9 +524,9 @@ def continuation(lines: List<&2,Line>,+indent: Nat,reversed: List<&2,String>) ->
       Bool.pick(Unit -> Continuation,Nat.is_gt(level,indent) || emptyLine(content),
         _ => continuation(rest,indent,content <> reversed),
         _ => Continuation{String.join(List.reverse(&2,String,reversed),"\n"),Line{number,level,content,terminated} <> rest})(Unit{})
-def inlineLines(part: Continuation,number: Nat,frames: List<&2,BlockFrame>,anchors: R.Record<Value>,root: Maybe<&2,Value>) -> Block:
+def inlineLines(part: Continuation,number: Nat,column: Nat,frames: List<&2,BlockFrame>,anchors: R.Record<Value>,root: Maybe<&2,Value>) -> Block:
   match part:
-    case Continuation{text,remaining}: parsedAt(inline(text,anchors),number,frames,remaining,root)
+    case Continuation{text,remaining}: parsedAt(inline(text,anchors),number,column,frames,remaining,root)
 def scalarResult(rows: ScalarRows,folded: Bool,chomp: Chomp,frames: List<&2,BlockFrame>,anchors: R.Record<Value>,root: Maybe<&2,Value>) -> Block:
   match rows:
     case ScalarRows{rows,remaining,indent}: attach(frames,Text{renderRows(stripRows(rows,indent,Nil{}),folded,chomp,None{},0n,"")},remaining,anchors,root)
@@ -533,15 +535,15 @@ def blockScalar(header: ResultOf(ScalarHeader),lines: List<&2,Line>,number: Nat,
     case Fail{Error{_,column,message}}: BlockError{Error{number,column,message}}
     case Done{ScalarHeader{folded,chomp,indent}}:
       scalarResult(scalarRows(lines,parent,Maybe.map(&2,Nat,Nat,value => Nat.add(parent,value),indent),Nil{}),folded,chomp,frames,anchors,root)
-def scalarValue(+raw: String,lines: List<&2,Line>,number: Nat,indent: Nat,frames: List<&2,BlockFrame>,anchors: R.Record<Value>,root: Maybe<&2,Value>) -> Block:
+def scalarValue(+raw: String,lines: List<&2,Line>,number: Nat,indent: Nat,column: Nat,frames: List<&2,BlockFrame>,anchors: R.Record<Value>,root: Maybe<&2,Value>) -> Block:
   match raw:
     case SCon{'|',_}: blockScalar(scalarHeader(raw),lines,number,indent,frames,anchors,root)
     case SCon{'>',_}: blockScalar(scalarHeader(raw),lines,number,indent,frames,anchors,root)
-    case _: inlineLines(continuation(lines,indent,raw <> Nil{}),number,frames,anchors,root)
+    case _: inlineLines(continuation(lines,indent,raw <> Nil{}),number,column,frames,anchors,root)
 
 def frame(indent: Nat,kind: BlockKind,tail: List<&2,BlockFrame>) -> List<&2,BlockFrame>:
   BlockFrame{indent,kind} <> tail
-def mapKey(result: ResultOf(Parsed),raw: String,+number: Nat,+indent: Nat,fields: R.Record<Value>,tail: List<&2,BlockFrame>,+lines: List<&2,Line>,+anchors: R.Record<Value>,+root: Maybe<&2,Value>) -> Block:
+def mapKey(result: ResultOf(Parsed),raw: String,+number: Nat,+indent: Nat,column: Nat,fields: R.Record<Value>,tail: List<&2,BlockFrame>,+lines: List<&2,Line>,+anchors: R.Record<Value>,+root: Maybe<&2,Value>) -> Block:
   match result:
     case Fail{Error{_,column,message}}: BlockError{Error{number,column,message}}
     case Done{Parsed{Text{+key},_}}:
@@ -550,16 +552,19 @@ def mapKey(result: ResultOf(Parsed),raw: String,+number: Nat,+indent: Nat,fields
       +next = frame(indent,BlockMap{fields,Some{key}},tail)
       Bool.pick(Unit -> Block,Bool.not(Maybe.is_none(&2,Value,R.get(Value,fields,key))),
         _ => BlockError{Error{number,1n,"Duplicate mapping key: " ++ key}},
-        _ => Bool.pick(Unit -> Block,ignoredLine(raw),_ => Block{lines,next,anchors,root},_ => scalarValue(raw,lines,number,indent,next,anchors,root))(Unit{}))(Unit{})
+        _ => Bool.pick(Unit -> Block,ignoredLine(raw),_ => Block{lines,next,anchors,root},_ => scalarValue(raw,lines,number,indent,column,next,anchors,root))(Unit{}))(Unit{})
     case Done{_}: BlockError{Error{number,1n,"Mapping keys must be strings"}}
-def mapLine(pair: Maybe<&2,KeyValue>,number: Nat,+indent: Nat,fields: R.Record<Value>,tail: List<&2,BlockFrame>,lines: List<&2,Line>,+anchors: R.Record<Value>,root: Maybe<&2,Value>) -> Block:
+# A mapping value starts after the line's indentation and its key and separator.
+def valueColumn(indent: Nat,content: String,raw: String) -> Nat:
+  Nat.add(Nat.add(indent,Nat.sub(String.length(content),String.length(raw))),1n)
+def mapLine(pair: Maybe<&2,KeyValue>,+content: String,number: Nat,+indent: Nat,fields: R.Record<Value>,tail: List<&2,BlockFrame>,lines: List<&2,Line>,+anchors: R.Record<Value>,root: Maybe<&2,Value>) -> Block:
   match pair:
     case None{}: BlockError{Error{number,1n,"Expected a mapping entry"}}
-    case Some{KeyValue{key,raw}}: mapKey(inline(key,anchors),raw,number,indent,fields,tail,lines,anchors,root)
+    case Some{KeyValue{key,+raw}}: mapKey(inline(key,anchors),raw,number,indent,valueColumn(indent,content,raw),fields,tail,lines,anchors,root)
 def nestedSequence(raw: String,pair: Maybe<&2,KeyValue>,number: Nat,+indent: Nat,next: List<&2,BlockFrame>,lines: List<&2,Line>,anchors: R.Record<Value>,root: Maybe<&2,Value>) -> Block:
   match pair:
     case Some{_}: Block{Line{number,2n+indent,raw,True{}} <> lines,BlockFrame{2n+indent,BlockMap{R.new(Value),None{}}} <> next,anchors,root}
-    case None{}: scalarValue(raw,lines,number,indent,next,anchors,root)
+    case None{}: scalarValue(raw,lines,number,indent,1n,next,anchors,root)
 def sequenceLine(item: Maybe<&2,String>,number: Nat,+indent: Nat,reversed: List<&2,Value>,tail: List<&2,BlockFrame>,+lines: List<&2,Line>,+anchors: R.Record<Value>,+root: Maybe<&2,Value>) -> Block:
   match item:
     case None{}: BlockError{Error{number,1n,"Expected a sequence entry"}}
@@ -568,7 +573,7 @@ def sequenceLine(item: Maybe<&2,String>,number: Nat,+indent: Nat,reversed: List<
       Bool.pick(Unit -> Block,ignoredLine(raw),_ => Block{lines,next,anchors,root},_ => nestedSequence(raw,splitPair(raw),number,indent,next,lines,anchors,root))(Unit{})
 def ordinaryLine(number: Nat,+indent: Nat,+content: String,kind: BlockKind,tail: List<&2,BlockFrame>,lines: List<&2,Line>,anchors: R.Record<Value>,root: Maybe<&2,Value>) -> Block:
   match kind:
-    case BlockMap{fields,None{}}: mapLine(splitPair(content),number,indent,fields,tail,lines,anchors,root)
+    case BlockMap{fields,None{}}: mapLine(splitPair(content),content,number,indent,fields,tail,lines,anchors,root)
     case BlockSequence{reversed,False{}}: sequenceLine(sequenceItem(content),number,indent,reversed,tail,lines,anchors,root)
     case waiting: attach(BlockFrame{indent,waiting} <> tail,Null{},Line{number,indent,content,True{}} <> lines,anchors,root)
 def openKind(item: Maybe<&2,String>,pair: Maybe<&2,KeyValue>) -> Maybe<&2,BlockKind>:
@@ -579,7 +584,7 @@ def openKind(item: Maybe<&2,String>,pair: Maybe<&2,KeyValue>) -> Maybe<&2,BlockK
 def openNode(kind: Maybe<&2,BlockKind>,line: Line,lines: List<&2,Line>,frames: List<&2,BlockFrame>,anchors: R.Record<Value>,root: Maybe<&2,Value>) -> Block:
   match kind line:
     case Some{kind} Line{number,+indent,content,terminated}: Block{Line{number,indent,content,terminated} <> lines,BlockFrame{indent,kind} <> frames,anchors,root}
-    case None{} Line{number,indent,content,_}: scalarValue(content,lines,number,indent,frames,anchors,root)
+    case None{} Line{number,indent,content,_}: scalarValue(content,lines,number,indent,1n,frames,anchors,root)
 def descend(number: Nat,indent: Nat,+content: String,terminated: Bool,lines: List<&2,Line>,frames: List<&2,BlockFrame>,anchors: R.Record<Value>,root: Maybe<&2,Value>) -> Block:
   openNode(openKind(sequenceItem(content),splitPair(content)),Line{number,indent,content,terminated},lines,frames,anchors,root)
 # A mapping value may be a sequence whose dash shares the mapping indentation.

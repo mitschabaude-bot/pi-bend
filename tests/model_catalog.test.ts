@@ -482,3 +482,27 @@ describe("getSupportedThinkingLevels", () => {
 	});
 
 });
+
+// max-thinking.test.ts catalog case (upstream body; getSupportedThinkingLevels
+// is the native one). Its fixture-model cases are in
+// packages/ai/test/model-thinking.bend, the Codex payload case in
+// packages/ai/test/max-thinking-codex.bend.
+describe("max thinking level", () => {
+	it.each(["gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-luna", "gpt-6-sol"] as const)(
+		"exposes xhigh and max for openai-codex/%s",
+		(modelId) => {
+			const model = getModel("openai-codex", modelId);
+			expect(model).toBeDefined();
+			expect(model?.thinkingLevelMap).toMatchObject({ xhigh: "xhigh", max: "max" });
+			expect(getSupportedThinkingLevels(model!)).toEqual([
+				"off",
+				"minimal",
+				"low",
+				"medium",
+				"high",
+				"xhigh",
+				"max",
+			]);
+		},
+	);
+});

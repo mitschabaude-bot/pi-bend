@@ -735,12 +735,12 @@
     },
     {
       "source": "packages/ai/test/constrained-sampling.test.ts",
-      "status": "needs-review",
+      "status": "ported",
       "ports": [
         "packages/ai/test/constrained-sampling.bend"
       ],
       "sha256": "23fd75e3869712320954feb046258e94ef2962c7bc54999eb3a76dd45a3ace60",
-      "notes": "All six original named cases pass on one/four threads: strict/grammar capability conversion and fallback/rejection, unchanged tool declarations, unsafe-schema policies, grammar call/result replay, append-only grammar JSON deltas and streamed initial custom input. The public asynchronous processor receives the sample_tool-to-payload mapping; the retained start snapshot contains a, final sole tool call contains abc, concatenated emitted deltas parse to payload abc and final stop reason is toolUse. Native immutable schema builders, result values and event snapshots replace JS mutation while retaining all meaningful original assertions."
+      "notes": "All six original named cases pass on one/four threads: strict/grammar capability conversion and fallback/rejection, unchanged tool declarations, unsafe-schema policies, grammar call/result replay, append-only grammar JSON deltas and streamed initial custom input. The public asynchronous processor receives the sample_tool-to-payload mapping; the retained start snapshot contains a, final sole tool call contains abc, concatenated emitted deltas parse to payload abc and final stop reason is toolUse. Native immutable schema builders, result values and event snapshots replace JS mutation while retaining all meaningful original assertions. v0.87.1 diff reviewed (46c9de402..f07218c4d): the invalid-arguments list gained a TypeScript annotation only; no behavior change."
     },
     {
       "source": "packages/ai/test/context-estimate.test.ts",
@@ -951,12 +951,14 @@
     },
     {
       "source": "packages/ai/test/max-thinking.test.ts",
-      "status": "needs-review",
+      "status": "ported",
       "ports": [
-        "packages/ai/test/model-thinking.bend"
+        "packages/ai/test/model-thinking.bend",
+        "packages/ai/test/max-thinking-codex.bend",
+        "tests/model_catalog.test.ts"
       ],
       "sha256": "dfa570b185133172b9cdf731fc91835df38649ad12ffe37ff17fed240ca59592",
-      "notes": "Two standalone named cases are ported with original model fields/assertions: ordinary reasoning models opt in to max, and a hole between high and max clamps upward. Catalog-backed cases and Codex provider payload cases remain pending. Supplemental direct-upstream helper tests cover 212 configurations and every typed requested level; model registry/provider parity is not claimed."
+      "notes": "All cases: 'is opt-in for ordinary reasoning models' and 'supports a hole between high and max' with the original fixture models (model-thinking.bend); 'exposes xhigh and max for openai-codex/%s' (upstream body, all five v0.87.1 ids) against the native catalog and native getSupportedThinkingLevels (tests/model_catalog.test.ts); 'sends max to the Codex Responses API for %s' (gpt-5.6-sol, gpt-6-astra, gpt-6-sol, gpt-6-luna) captures the native streamSimple Codex body through onPayload, as upstream (max-thinking-codex.bend, Bun and native one/four)."
     },
     {
       "source": "packages/ai/test/message-types.test.ts",
@@ -1318,14 +1320,14 @@
     },
     {
       "source": "packages/ai/test/overflow.test.ts",
-      "status": "needs-review",
+      "status": "ported",
       "ports": [
         "tests/retry-classify.bend",
         "tests/retry_classify_check.py"
       ],
       "sha256": "f63a109436e369e32b788ec8eb3065e34cc04c6d952326f7ad6951a83506bbbd",
       "implementation": "packages/ai/src/utils/overflow.bend",
-      "notes": "All isContextOverflow and isRecoverableLength cases are in the differential corpus of tests/retry_classify_check.py, compared with the pinned overflow.ts."
+      "notes": "All isContextOverflow and isRecoverableLength cases are in the differential corpus of tests/retry_classify_check.py, compared with the pinned overflow.ts; the v0.87.1 z.ai (#9805) and Cerebras bodyless 400/413 (#9482) cases run with their exact inputs, providers and context windows and are also asserted as upstream (175 cases, Bun and native one/four)."
     },
     {
       "source": "packages/ai/test/pi-messages.test.ts",
@@ -1532,13 +1534,13 @@
     },
     {
       "source": "packages/ai/test/validation.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "packages/ai/test/plain-validation-upstream.bend",
         "packages/ai/test/plain-validation-cases-upstream.bend"
       ],
       "sha256": "26b5fee2cb64eb5df1e9accdbc478d4bc055c7110c1a66d0f01327a067e953d5",
-      "notes": "Six original named cases are ported with 24 assertions: plain-JSON primitive coercion, nullable local-reference preservation, nullable oneOf preservation, nullable union coercion, nullable arrays (native compiled checker and public validation), and invalid primitive coercions. Supplemental tests compare 285 composed outcomes, 54 complete messages and 536 acyclic local-reference outcomes/exact messages with actual validateToolArguments, and exercise native formatted rejection through agent preparation/execution. Builder-specific conversion, recursive/external references, anchors, remaining schema vocabulary and the other named cases remain pending; this is not complete validation parity."
+      "notes": "Six original named cases are ported with 24 assertions: plain-JSON primitive coercion, nullable local-reference preservation, nullable oneOf preservation, nullable union coercion, nullable arrays (native compiled checker and public validation), and invalid primitive coercions. Supplemental tests compare 285 composed outcomes, 54 complete messages and 536 acyclic local-reference outcomes/exact messages with actual validateToolArguments, and exercise native formatted rejection through agent preparation/execution. Builder-specific conversion, recursive/external references, anchors, remaining schema vocabulary and the other named cases remain pending; this is not complete validation parity. v0.87.1 diff reviewed (46c9de402..f07218c4d): the tool-call fixture gained a JsonValue cast only."
     },
     {
       "source": "packages/ai/test/xai-oauth.test.ts",
@@ -1730,14 +1732,14 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-concurrent.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "tests/agent-session.bend",
         "tests/agent_session_check.py"
       ],
       "sha256": "0c2409ec9ce8b4b060c4ecb1fd779ed3412e997f81d372fd0ddbdbbd3f1ed0ac",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'should throw when prompt() called while streaming', 'should allow steer()/followUp() while streaming' and 'should allow prompt() after previous completes' are the busy scenario of tests/agent_session_check.py with the provider held open instead of a waiting tool. Extension-origin steering, tool_call ordering with queued events and slow extension handlers remain pending."
+      "notes": "'should throw when prompt() called while streaming', 'should allow steer()/followUp() while streaming' and 'should allow prompt() after previous completes' are the busy scenario of tests/agent_session_check.py with the provider held open instead of a waiting tool. Extension-origin steering, tool_call ordering with queued events and slow extension handlers remain pending. v0.87.1 diff reviewed (46c9de402..f07218c4d): the changed case ('should persist message_end events in order with slow extension handlers' now expects the system loadout message) is not ported."
     },
     {
       "source": "packages/coding-agent/test/agent-session-dynamic-provider.test.ts",
@@ -1795,13 +1797,13 @@
     },
     {
       "source": "packages/coding-agent/test/args.test.ts",
-      "status": "needs-review",
+      "status": "ported",
       "ports": [
         "tests/cli-args.bend",
         "tests/cli_args_check.py",
         "tests/cli_args_reference.ts"
       ],
-      "notes": "All 81 pinned named cases and complete parser results pass on Bun and native one/four workers. Approved malformed-input rejection changes and remaining CLI integration are documented in tests/cli-args.md.",
+      "notes": "All 81 pinned named cases and complete parser results pass on Bun and native one/four workers. Approved malformed-input rejection changes and remaining CLI integration are documented in tests/cli-args.md. v0.87.1 diff reviewed (46c9de402..f07218c4d): the --mode describe block (valid modes, invalid and empty values, a missing value, an option not consumed as the value, an invalid value after a valid one) runs through the pinned test file: 87 named tests on Bun and native one/four.",
       "sha256": "e418975576b51f7495c5c823e9866c38afddc91dbd54577894e7f1a31511e056"
     },
     {
@@ -1983,7 +1985,7 @@
     },
     {
       "source": "packages/coding-agent/test/compaction.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "packages/coding-agent/src/core/compaction/compaction.bend",
         "packages/coding-agent/src/core/compaction/utils.bend",
@@ -1991,7 +1993,7 @@
         "tests/compaction_check.py"
       ],
       "sha256": "829f29b4dc268b77baa4904c6283206ff19993f65e4503bcc1ce995be26c4b3b",
-      "notes": "Token calculation, getLastAssistantUsage, estimateContextTokens, shouldCompact, findCutPoint, buildSessionContext and prepareCompaction cases pinned to upstream expectations (tests/compaction.md). The large-session fixture and the ANTHROPIC_OAUTH_TOKEN LLM summarization cases are not ported."
+      "notes": "Token calculation, getLastAssistantUsage, estimateContextTokens, shouldCompact, findCutPoint, buildSessionContext and prepareCompaction cases pinned to upstream expectations (tests/compaction.md). The large-session fixture and the ANTHROPIC_OAUTH_TOKEN LLM summarization cases are not ported. v0.87.1 diff reviewed (46c9de402..f07218c4d): the #9740 oversized-trailing-tool-result case is in tests/compaction.bend."
     },
     {
       "source": "packages/coding-agent/test/config-value-migration.test.ts",
@@ -2312,13 +2314,15 @@
     },
     {
       "source": "packages/coding-agent/test/image-process.test.ts",
-      "status": "needs-review",
+      "status": "ported",
       "ports": [
         "tests/image-process.bend",
-        "tests/image_process_check.py"
+        "tests/image_process_check.py",
+        "tests/image-mime.bend",
+        "tests/image_mime_check.py"
       ],
       "sha256": "5519a74fccb82fdfbef288c4f40613059addcbf49c50c44999df04fe6f53f0f7",
-      "notes": "All three original BMP assertions are covered with the upstream red 1x1 BMP bytes: magic detection through the public read tool, PNG attachment/conversion hint without resizing, and conversion before default resizing. The harness runs pinned process-image source as its oracle and checks PNG magic explicitly. All three backends pass; this suite does not establish complete image codec or async-worker coverage."
+      "notes": "All three original BMP assertions are covered with the upstream red 1x1 BMP bytes: magic detection through the public read tool, PNG attachment/conversion hint without resizing, and conversion before default resizing. The harness runs pinned process-image source as its oracle and checks PNG magic explicitly. All three backends pass; this suite does not establish complete image codec or async-worker coverage. v0.87.1 diff reviewed (46c9de402..f07218c4d): 'detects the complete %s signature' (GIF87a, GIF89a) is in the tests/image_mime_check.py corpus compared with the pinned mime.ts."
     },
     {
       "source": "packages/coding-agent/test/image-processing.test.ts",
@@ -2336,7 +2340,7 @@
     },
     {
       "source": "packages/coding-agent/test/image-resize-callers.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "tests/read-public.bend",
         "tests/image_process_check.py",
@@ -2344,7 +2348,7 @@
         "tests/file_processor_check.py"
       ],
       "sha256": "49913b4a056d53ed3df4686836fad1431e4e43f280c81baf049c3969e7965554",
-      "notes": "Both original caller assertions pass: public read returns text-only omission, and CLI file processing emits omission text with no image attachment. Fixtures exercise real malformed image processing instead of mocking a null resize result. Bun and optimized native one/four-thread checks pass; this suite does not establish image-worker scheduling or complete CLI parity."
+      "notes": "The two original caller assertions pass: public read returns text-only omission, and CLI file processing emits omission text with no image attachment. Pending (v0.87.1, f5c946480): 'passes the current model resize profile to the read tool' and 'can defer resizing file attachments until prompt dispatch'; the model's image input limits are not yet applied by the read tool or file processor."
     },
     {
       "source": "packages/coding-agent/test/initial-message.test.ts",
@@ -2633,7 +2637,7 @@
     },
     {
       "source": "packages/coding-agent/test/prompt-templates.test.ts",
-      "status": "needs-review",
+      "status": "ported",
       "ports": [
         "tests/prompt-templates.bend",
         "tests/prompt_templates_check.py",
@@ -2641,7 +2645,7 @@
         "tests/prompt_templates_reference.ts"
       ],
       "sha256": "4e6a5d427a78abe7c5ed92f71600f8777fddfd0f1f0d3cb1eb0a7e8655ecd2ee",
-      "notes": "All pinned pure assertions (119 original-only captured calls) and five original argument-hint loader cases ported. Bun/native one/four pass 563 pure comparisons and seven discovery scenarios/65 templates against final shared parser. Ordered duplicates/source attribution, native IO errors and UTF16-safe description boundaries covered; strict unfinished quotes and malformed metadata return typed diagnostics. Final-dependency verification and YAML/renderer/resource integration limits are in tests/prompt-templates.md."
+      "notes": "All pinned pure assertions (119 original-only captured calls) and five original argument-hint loader cases ported. Bun/native one/four pass 563 pure comparisons and seven discovery scenarios/65 templates against final shared parser. Ordered duplicates/source attribution, native IO errors and UTF16-safe description boundaries covered; strict unfinished quotes and malformed metadata return typed diagnostics. Final-dependency verification and YAML/renderer/resource integration limits are in tests/prompt-templates.md. v0.87.1 diff reviewed (46c9de402..f07218c4d): 'loadPromptTemplates - diagnostics / reports invalid YAML frontmatter and keeps valid siblings' runs on the native and pinned loaders in tests/prompt_templates_load_check.py (the YAML module now reports a block mapping value's error at the value's column, line 1, column 14); the other changes destructure the new { templates } result."
     },
     {
       "source": "packages/coding-agent/test/radius.test.ts",
@@ -2667,7 +2671,7 @@
     },
     {
       "source": "packages/coding-agent/test/resource-loader.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "tests/project-context.bend",
         "tests/project_context_check.py",
@@ -2677,7 +2681,7 @@
       ],
       "sha256": "1ebd3d0a1f10f0a2dec6fdbab7a75bc8c85c681190bcba1ae9e3d6b2a68b2f6d",
       "implementation": "packages/coding-agent/src/core/resource-loader.bend",
-      "notes": "All nine named nested-worktree context tests retain their original assertions and exact results; candidate-precedence/directory-skip context assertions also have direct coverage. Bun/native one/four pass 32 full context/Git comparisons and strict UTF8 fallback, including 70 ancestor levels and 180 KB content. The real agent-runtime prompt boundary uses this loader and checks layering, shadowing, the no-context flag and warning fallback. Resource orchestration, extensions/themes/packages, trust/reload, and prompt overrides remain pending; see tests/project-context.md."
+      "notes": "All nine named nested-worktree context tests retain their original assertions and exact results; candidate-precedence/directory-skip context assertions also have direct coverage. Bun/native one/four pass 32 full context/Git comparisons and strict UTF8 fallback, including 70 ancestor levels and 180 KB content. The real agent-runtime prompt boundary uses this loader and checks layering, shadowing, the no-context flag and warning fallback. Resource orchestration, extensions/themes/packages, trust/reload, and prompt overrides remain pending; see tests/project-context.md. v0.87.1 diff reviewed (46c9de402..f07218c4d): 'should report invalid prompt frontmatter while loading valid siblings' is pending: DefaultResourceLoader's prompt aggregation (getPrompts with diagnostics) is not ported; the loader's diagnostic itself is checked by the prompt-templates suite."
     },
     {
       "source": "packages/coding-agent/test/restore-sandbox-env.test.ts",
@@ -2983,7 +2987,7 @@
     },
     {
       "source": "packages/coding-agent/test/settings-manager.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "packages/coding-agent/src/core/settings-manager.bend",
         "tests/settings-manager.bend",
@@ -2993,7 +2997,7 @@
         "tests/settings-cache-warming.bend"
       ],
       "sha256": "9174509b95e92feaf18cb5adf77e601c5c631c5b875eca5906c949653f3edbe3",
-      "notes": "Canonical typed manager integrated; 203 pinned-source comparisons, 60 strict-input checks, analytics UUID lifecycle and 16 filesystem/concurrency checks. Named contracts and approved strict-input adaptations are recorded in tests/settings-manager.md. Suite remains partial until assertion-by-assertion coverage is audited; CLI/session integration is separate. The 0.87.1 describe('cacheWarming') cases run natively in tests/settings-cache-warming.bend on real files; an unknown cacheWarming value stays an unknown field (upstream reads it unvalidated and falls back to streaming) instead of failing the strict decoder."
+      "notes": "Canonical typed manager integrated; 203 pinned-source comparisons, 60 strict-input checks, analytics UUID lifecycle and 16 filesystem/concurrency checks. Named contracts and approved strict-input adaptations are recorded in tests/settings-manager.md. Suite remains partial until assertion-by-assertion coverage is audited; CLI/session integration is separate. The 0.87.1 describe('cacheWarming') cases run natively in tests/settings-cache-warming.bend on real files; an unknown cacheWarming value stays an unknown field (upstream reads it unvalidated and falls back to streaming) instead of failing the strict decoder. v0.87.1 diff reviewed (46c9de402..f07218c4d): the cacheWarming cases run in tests/settings-cache-warming.bend."
     },
     {
       "source": "packages/coding-agent/test/settings-selector.test.ts",
@@ -3057,7 +3061,7 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-compaction.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "packages/coding-agent/src/core/agent-session.bend",
         "packages/coding-agent/src/core/compaction/compaction.bend",
@@ -3067,29 +3071,29 @@
         "tests/agent-session.md"
       ],
       "sha256": "a20cd44a3a24debefc9eba72fb9ab07033221de0c6075e67e40081074829da02",
-      "notes": "Faux-provider scenarios cover persisted manual compaction usage, abortCompaction and abort() waiting for idle, one overflow compact-and-retry, the recovery-failed report, threshold compaction, and no compaction below the threshold or when disabled. Extension-provided summaries, system-state checkpoints, queued prompts during compaction, auth/model-override cases, length-stop recovery and the _checkCompaction boundary cases with stale or error usage are not ported."
+      "notes": "Faux-provider scenarios cover persisted manual compaction usage, abortCompaction and abort() waiting for idle, one overflow compact-and-retry, the recovery-failed report, threshold compaction, and no compaction below the threshold or when disabled. Extension-provided summaries, system-state checkpoints, queued prompts during compaction, auth/model-override cases, length-stop recovery and the _checkCompaction boundary cases with stale or error usage are not ported. v0.87.1 diff reviewed (46c9de402..f07218c4d): the changed cases (the #9652 split-turn request boundary and 'compacts after an oversized tool result in the same run') are not ported."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-model-extension.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "tests/agent-session.bend",
         "tests/agent_session_check.py"
       ],
       "sha256": "0b1a86e5b1beb1824867a05029a7e6cfd3ad31b8173e6eb13b94bf09ce934a52",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'setModel saves the model to the session' (entry) and 'clamps thinking levels to model capabilities' (clamp) are the mutate scenario of tests/agent_session_check.py; model_select, cycling, per-model overrides, settings persistence and extension handlers remain pending."
+      "notes": "'setModel saves the model to the session' (entry) and 'clamps thinking levels to model capabilities' (clamp) are the mutate scenario of tests/agent_session_check.py; model_select, cycling, per-model overrides, settings persistence and extension handlers remain pending. v0.87.1 diff reviewed (46c9de402..f07218c4d): the tool-result details check gained a JsonObject narrowing only."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-prompt.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "tests/agent-session.bend",
         "tests/agent_session_check.py"
       ],
       "sha256": "51130e6ca7339ff3a6d09cb244533a9c4a82b8251dc1a62b03f2870bb77ecced",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'prompts while idle and records a single text response' (persist scenario) and 'throws when prompted during streaming without a streamingBehavior' (busy scenario, provider held on a gate) are in tests/agent_session_check.py. Tool-call turns, image attachments, skills/prompt templates, extension commands, input handlers, manual compaction and the no-model/no-auth errors remain pending."
+      "notes": "'prompts while idle and records a single text response' (persist scenario) and 'throws when prompted during streaming without a streamingBehavior' (busy scenario, provider held on a gate) are in tests/agent_session_check.py. Tool-call turns, image attachments, skills/prompt templates, extension commands, input handlers, manual compaction and the no-model/no-auth errors remain pending. v0.87.1 diff reviewed (46c9de402..f07218c4d): 'uses the model selected by before_agent_start for image normalization' (#9631) is pending: it needs the before_agent_start extension event and f5c946480's image normalization in AgentSession."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-queue.test.ts",

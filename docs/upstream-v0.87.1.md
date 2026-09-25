@@ -31,7 +31,7 @@ Model catalogs are regenerated with `scripts/generate-model-catalog.py` from the
 
 Before 2026-09-23 some loaders deliberately deviated from upstream. They rejected malformed input where upstream tolerates it, and reported errors where upstream is silent. Gregor's rule now is exact upstream behaviour, so these deviations are to be retired module by module:
 
-- The YAML module keeps its own error prose; the `yaml` package's messages and code frames are pending.
+- The YAML module keeps its own error prose; the `yaml` package's messages and code frames are pending. Locations are being aligned: a block mapping value's error is reported at the value's column (prompt-templates' `description: Broken: unquoted colon` is line 1, column 14, as upstream); inline flow and quoted-scalar errors still report where the value starts rather than the failing token.
 - Frontmatter rejects `---suffix` fences and nonmapping frontmatter.
 - The skills loader warns on unreadable directories and invalid ignore patterns where upstream stays silent.
 - Default tool-argument validation rejects coercible scalar mismatches that upstream coerces (`packages/agent/test/agent-validation.bend`, `packages/agent/README.md`).
@@ -40,7 +40,11 @@ Prompt templates were converted with b6419322e. The prompt-template load check c
 
 ## Test inventory
 
-`tests/upstream-inventory.json` now pins f07218c4d. Suites whose upstream file changed and that were already ported or partial are marked `needs-review` (18) until their diffs are ported; changed suites that were never ported stay pending.
+`tests/upstream-inventory.json` now pins f07218c4d. Suites whose upstream file changed and that were already ported or partial were marked `needs-review` (18) until their diffs were ported; changed suites that were never ported stay pending. On 2026-09-25 all but autocomplete.test.ts (Codex, TUI owner) were reviewed against `git diff 46c9de402 f07218c4d`:
+
+- Ported: constrained-sampling (annotation only), max-thinking (all cases, including the five catalog ids and the Codex `max` payload), overflow (exact z.ai and Cerebras inputs), args (the `--mode` block), image-process (GIF87a/GIF89a in the mime corpus), prompt-templates (invalid frontmatter keeps valid siblings) and file-operations (cancelled listing; the 512 MiB string-limit case stays pending, so the suite is partial).
+- Still partial, with the new or changed cases pending: agent-session-concurrent (slow extension handlers), agent-session-compaction (#9652 request boundary, oversized tool result in the same run), agent-session-prompt and image-resize-callers (f5c946480 image limits behaviour), resource-loader (DefaultResourceLoader prompt diagnostics). Partial suites whose diff was type-only or already ported: validation, agent-session-model-extension, compaction (#9740), settings-manager (cacheWarming), agent-session-retry-events (the #9340 abort case).
+- The new suite suite/regressions/9340-9777-auto-compaction-cancellation.test.ts is partial (three of six cases; see tests/agent-session.md).
 
 ## Cache warming (2026-09-25)
 
