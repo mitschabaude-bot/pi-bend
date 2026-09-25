@@ -1,6 +1,5 @@
 import Base
 import ../ecma-regex.bend as Re
-import ../text.bend as Text
 import ./tokens.bend as T
 import ./rules.bend as Rules
 import ./helpers.bend as H

@@ -1,5 +1,4 @@
 import Base
-import ../string.bend as Strings
 import ../ecma-regex.bend as Re
 
 # marked 18.0.11's grammar (src/rules.ts) for its default options (gfm,
