@@ -91,9 +91,8 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   raw, Bend only the rest of the line) and display math inside a list item
   (pi keeps the item indentation) differ; five such cases are tracked as
   known divergences in the check.
-- **Fullscreen TUI mode** (`--tui-mode fullscreen`, setting `tuiMode`): the
-  arguments parse, but `tui-alt-screen.ts` (alternate screen, scroll view,
-  copy-on-select, fullscreen images) is not ported; the default regular mode is.
+- **Fullscreen TUI mode** (`--tui-mode fullscreen`, setting `tuiMode`): alternate-screen startup, transcript scrolling, and the jump indicator are ported. Search, mouse selection, copy-on-select, fullscreen images, and remaining dock/cursor styling are still open.
+- **Fullscreen scroll styling** (`fullscreen-scroll`, `fullscreen-indicator-light-custom-key`): Home/End and the configured jump key reach the same content as pi. At the top, Bend resets the background around the scrollbar on a user-message row differently; in the light theme, scrollbar colors also differ. The indicator badge itself matches.
 - **RPC command ordering around a prompt** (`steer-and-queue`): Node runs a
   prompt's microtasks up to its first awaited I/O before reading the next
   stdin line, so a steer sent right after the prompt response arrives while

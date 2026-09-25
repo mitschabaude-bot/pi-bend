@@ -29,26 +29,34 @@ def child(node: LayoutNode,size: Stack.StackEntryOptions,visible: Maybe<&2,Callb
 
 # A viewport can nest inside stacks and inline layouts. Keep its updated
 # immutable node in the tree so the next layout frame retains manual scroll.
-type ScrollMotion is Data: ScrollLines{delta: T.Offset} ScrollPageUp{} ScrollPageDown{}
+type ScrollMotion is Data: ScrollLines{delta: T.Offset} ScrollPageUp{} ScrollPageDown{} ScrollHalfPageUp{} ScrollHalfPageDown{} ScrollTop{} ScrollBottom{}
 type ScrollResult is Data: ScrollResult{node: LayoutNode,found: Bool,unused: T.Offset,render: Bool}
 def pageDelta(view: Scroll.ScrollView,up: Bool) -> T.Offset:
   +lines = Nat.max(1n,Scroll.visibleRows(view) - 4n)
   Bool.pick(T.Offset,up,T.Backward{lines},T.Forward{lines})
-def motionDelta(view: Scroll.ScrollView,motion: ScrollMotion) -> T.Offset:
-  match motion:
-    case ScrollLines{delta}: delta
-    case ScrollPageUp{}: pageDelta(view,True{})
-    case ScrollPageDown{}: pageDelta(view,False{})
+def halfPageDelta(view: Scroll.ScrollView,up: Bool) -> T.Offset:
+  +lines = Nat.max(1n,Scroll.visibleRows(view) / 2n)
+  Bool.pick(T.Offset,up,T.Backward{lines},T.Forward{lines})
 def noScroll(node: LayoutNode) -> ScrollResult: ScrollResult{node,False{},T.Forward{0n},False{}}
 def scrolled(result: Scroll.ScrollByResult) -> ScrollResult:
   match result:
     case Scroll.ScrollByResult{view,unused,render}: ScrollResult{ScrollNode{view},True{},unused,render}
+def jumped(result: Scroll.Transition) -> ScrollResult:
+  match result:
+    case Scroll.Transition{view,render}: ScrollResult{ScrollNode{view},True{},T.Forward{0n},render}
+def scrollPrimaryView(+view: Scroll.ScrollView,motion: ScrollMotion,now: Nat) -> ScrollResult:
+  match motion:
+    case ScrollTop{}: jumped(Scroll.scrollToStart(view,now))
+    case ScrollBottom{}: jumped(Scroll.scrollToEnd(view,now))
+    case ScrollLines{delta}: scrolled(Scroll.scrollBy(view,delta,now))
+    case ScrollPageUp{}: scrolled(Scroll.scrollBy(view,pageDelta(view,True{}),now))
+    case ScrollPageDown{}: scrolled(Scroll.scrollBy(view,pageDelta(view,False{}),now))
+    case ScrollHalfPageUp{}: scrolled(Scroll.scrollBy(view,halfPageDelta(view,True{}),now))
+    case ScrollHalfPageDown{}: scrolled(Scroll.scrollBy(view,halfPageDelta(view,False{}),now))
 def scrollView(+view: Scroll.ScrollView,motion: ScrollMotion,now: Nat,primary: Bool) -> ScrollResult:
   match primary:
     case False{}: noScroll(ScrollNode{view})
-    case True{}:
-      +delta = motionDelta(view,motion)
-      scrolled(Scroll.scrollBy(view,delta,now))
+    case True{}: scrollPrimaryView(view,motion,now)
 def inlineResult(result: ScrollResult) -> ScrollResult:
   match result:
     case ScrollResult{node,found,unused,render}: ScrollResult{Inline{node},found,unused,render}

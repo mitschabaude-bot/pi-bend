@@ -113,7 +113,9 @@ SCENARIOS = [
                   ("snap", "bottom"), ("key", "PageUp"), ("settle", 0.2),
                   ("snap", "page-up"), ("key", "PageDown"), ("settle", 0.2),
                   ("snap", "page-down"), ("keys", "\x1b[<64;5;5M"),
-                  ("settle", 0.2), ("snap", "wheel-up")],
+                  ("settle", 0.2), ("snap", "wheel-up"),
+                  ("key", "Home"), ("settle", 0.2), ("snap", "top"),
+                  ("key", "End"), ("settle", 0.2), ("snap", "end")],
     },
     {
         "name": "fullscreen-indicator-light-custom-key",
@@ -125,7 +127,8 @@ SCENARIOS = [
         "steps": [("wait", READY, "startup"), ("wait", "Warning: fd not found", "ready"),
                   ("settle", 0.3), ("keys", "hello"), ("key", "Enter"),
                   ("wait", "END-OF-STREAM", "answer"), ("settle", 0.5),
-                  ("key", "PageUp"), ("settle", 0.2), ("snap", "page-up")],
+                  ("key", "PageUp"), ("settle", 0.2), ("snap", "page-up"),
+                  ("key", "C-g"), ("settle", 0.2), ("snap", "bottom")],
     },
     {
         "name": "regular-turn-exit",

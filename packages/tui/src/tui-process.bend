@@ -1,6 +1,7 @@
 import Base
 import ../../runtime/src/callback.bend as Callback
 import ../../runtime/src/deferred.bend as Deferred
+import ../../runtime/src/ref.bend as Ref
 import ../../runtime/src/serial-resource.bend as Serial
 import ./component.bend as Component
 import ./overlays.bend as O
@@ -8,6 +9,8 @@ import ./terminal.bend as Terminal
 import ./terminal-query.bend as Query
 import ./tui-base.bend as Tui
 import ./layout-node.bend as Layout
+import ./keybindings.bend as Bindings
+import ./keys.bend as Keys
 import ./tui.bend as T
 import ./tui-main-screen.bend as Screen
 import ./tui-alt-screen.bend as Alt
@@ -115,16 +118,29 @@ def afterInput(result: Tui.ResultOf(Tui.InputResult),old: Session,handle: Termin
     case Fail{error} old: IO.pure(Input,Input{Rejected{old,Owner{error}},False{},False{}})
     case Done{Tui.InputResult{tui,handled,immediate}} Session{_,screen}: IO.pure(Input,Input{Drawn{Session{tui,screen}},handled,immediate})
 type ViewportAction is Data: Scroll{motion: Layout.ScrollMotion} Consume{} Pass{}
-def viewportAction(+data: String) -> ViewportAction:
-  match data:
-    case "\u{1b}[5~": Scroll{Layout.ScrollPageUp{}}
-    case "\u{1b}[6~": Scroll{Layout.ScrollPageDown{}}
-    case _:
-      Bool.pick(Unit -> ViewportAction,String.starts_with(data,"\u{1b}[<64;"),_ => Scroll{Layout.ScrollLines{T.Backward{1n}}},
-        _ => Bool.pick(Unit -> ViewportAction,String.starts_with(data,"\u{1b}[<65;"),_ => Scroll{Layout.ScrollLines{T.Forward{1n}}},
-          _ => Bool.pick(Unit -> ViewportAction,String.starts_with(data,"\u{1b}[<72;"),_ => Scroll{Layout.ScrollLines{T.Backward{5n}}},
-            _ => Bool.pick(Unit -> ViewportAction,String.starts_with(data,"\u{1b}[<73;"),_ => Scroll{Layout.ScrollLines{T.Forward{5n}}},
-              _ => Bool.pick(ViewportAction,String.starts_with(data,"\u{1b}[<"),Consume{},Pass{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
+type ViewportKey is Data: ViewportKey{action: String,motion: Layout.ScrollMotion}
+def viewportKeys() -> List<&2,ViewportKey>:
+  [ViewportKey{"tui.altScreen.pageUp",Layout.ScrollPageUp{}},ViewportKey{"tui.altScreen.pageDown",Layout.ScrollPageDown{}},
+   ViewportKey{"tui.altScreen.halfPageUp",Layout.ScrollHalfPageUp{}},ViewportKey{"tui.altScreen.halfPageDown",Layout.ScrollHalfPageDown{}},
+   ViewportKey{"tui.altScreen.lineUp",Layout.ScrollLines{T.Backward{1n}}},ViewportKey{"tui.altScreen.lineDown",Layout.ScrollLines{T.Forward{1n}}},
+   ViewportKey{"tui.altScreen.top",Layout.ScrollTop{}},ViewportKey{"tui.altScreen.bottom",Layout.ScrollBottom{}}]
+def boundViewport(+bindings: Bindings.KeybindingsManager,+data: String,keys: List<&2,ViewportKey>) -> Maybe<&2,Layout.ScrollMotion>:
+  match keys:
+    case Nil{}: None{}
+    case ViewportKey{action,motion} <> rest:
+      Bool.pick(Unit -> Maybe<&2,Layout.ScrollMotion>,Bindings.matches(bindings,Keys.defaults(),data,action),_ => Some{motion},_ => boundViewport(bindings,data,rest))(Unit{})
+def mouseViewport(+data: String) -> ViewportAction:
+  Bool.pick(Unit -> ViewportAction,String.starts_with(data,"\u{1b}[<64;"),_ => Scroll{Layout.ScrollLines{T.Backward{1n}}},
+    _ => Bool.pick(Unit -> ViewportAction,String.starts_with(data,"\u{1b}[<65;"),_ => Scroll{Layout.ScrollLines{T.Forward{1n}}},
+      _ => Bool.pick(Unit -> ViewportAction,String.starts_with(data,"\u{1b}[<72;"),_ => Scroll{Layout.ScrollLines{T.Backward{5n}}},
+        _ => Bool.pick(Unit -> ViewportAction,String.starts_with(data,"\u{1b}[<73;"),_ => Scroll{Layout.ScrollLines{T.Forward{5n}}},
+          _ => Bool.pick(ViewportAction,String.starts_with(data,"\u{1b}[<"),Consume{},Pass{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
+def viewportFound(found: Maybe<&2,Layout.ScrollMotion>,data: String) -> ViewportAction:
+  match found:
+    case Some{motion}: Scroll{motion}
+    case None{}: mouseViewport(data)
+def viewportAction(bindings: Bindings.KeybindingsManager,+data: String) -> ViewportAction:
+  viewportFound(boundViewport(bindings,data,viewportKeys()),data)
 def scrollInput(result: Tui.ScrollChange,screen: Alt.State) -> Input:
   match result:
     case Tui.ScrollChange{next,_,render}: Input{Drawn{Session{next,Fullscreen{screen}}},True{},render}
@@ -140,8 +156,10 @@ def fullscreenAction(action: ViewportAction,+tui: Tui.TuiBase,+screen: Alt.State
       do IO<Input>:
         result : Tui.ResultOf(Tui.InputResult) <- Tui.dispatchInput(tui,registry,mounted,data)
         afterInput(result,Session{tui,Fullscreen{screen}},handle,termux)
-def fullscreenInput(tui: Tui.TuiBase,screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,+data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
-  fullscreenAction(viewportAction(data),tui,screen,registry,mounted,data,handle,termux)
+def fullscreenInput(tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,+data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
+  do IO<Input>:
+    bindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,Alt.bindings(screen))
+    fullscreenAction(viewportAction(bindings,data),tui,screen,registry,mounted,data,handle,termux)
 def input(+session: Session,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
   match session:
     case Session{tui,Fullscreen{screen}}: fullscreenInput(tui,screen,registry,mounted,data,handle,termux)
