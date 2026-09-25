@@ -1,0 +1,17 @@
+# Upstream source coverage
+
+This is the source-to-source map for the pinned pi-mono revision `f07218c4d4bbc12bef056a7058c3dd49dfe41abe` (pi v0.87.1). The [machine-readable map](source-coverage.json) lists every TypeScript implementation source in the four core packages, its source hash, candidate Bend files and a separately reviewed coverage state. Edit [the reviews](source-coverage-reviews.json), then run `python3 scripts/source_coverage.py` to regenerate the map; `python3 scripts/source_coverage.py --check` detects drift. The generator refuses to run against a different upstream revision or a nonexistent reviewed Bend target.
+
+**A matching path is a locator, not proof of a port.** The generator finds same-path `.bend` files automatically. Such entries remain `unreviewed` until someone checks the source's public behavior, call sites and tests. A missing same-path file can mean unported code, a Bend module with a different name, an upstream-only adapter or an aggregate export; it is not automatically labelled `missing`. Review states mean: `ported` = meaningful source contract covered and validated, `partial` = some behavior exists with a stated gap, `missing` = reviewed absence, `excluded` = explicit scope decision, `unreviewed` = no coverage claim. The upstream [test inventory](../tests/upstream-inventory.json) tracks *suites*, not source modules, and must not be substituted for this map.
+
+| Upstream area | Sources | Located Bend counterparts | What this establishes |
+| --- | ---: | ---: | --- |
+| `ai/src` | 182 | 112 | Source locations only; provider and auth behavior needs review |
+| `agent/src` | 116 | 5 | 108 files belong to the newer `harness/` tree, largely unmapped |
+| `tui/src` | 42 | 36 | Default TUI has counterparts; alternate-screen mode is reviewed missing |
+| `coding-agent/src` | 274 | 88 | Interactive, core, CLI and utilities are mixed; many integrations need review |
+| **Total** | **614** | **241** | **No completion percentage is inferred** |
+
+The current reviewed examples show why file-level tracking matters. The native OpenAI Responses provider, agent loop, sessions and basic tools are **partial**: they run meaningful paths, but their source-wide contracts still have gaps or incomplete review. `interactive-mode.ts` is also **partial** despite having a Bend counterpart: interactive use works, while command and terminal parity remain incomplete. `thinking-selector.ts` is **missing**: the setting persists and Ctrl+P uses it, but `/thinking` has no selector or save-as-default action. `scoped-models-selector.ts` and `tui-alt-screen.ts` are reviewed missing. `tui/editor-component.ts` has a Bend counterpart at a different path, explicitly recorded rather than counted as absent.
+
+This is the first coverage baseline, not an audit declaring the unreviewed files complete or incomplete. The most valuable next reviews are the user-facing paths in `coding-agent/src/modes/interactive`, the default provider/auth paths in `ai/src`, and the core agent/session/tool APIs. For each reviewed source, record its Bend targets, actual state and a concise behavior gap in the reviews file; use the pinned upstream tests and terminal/request parity checks as evidence. The non-core pi-mono packages (`chord`, `client`, `durable`, `evals`, `protocol`, `server`, `session-backends`, `telemetry`) still need an explicit applicability decision and are outside this map's current scope. The coordination ledger is not a source of truth for coverage.

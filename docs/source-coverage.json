@@ -1,0 +1,4195 @@
+{
+  "revision": "f07218c4d4bbc12bef056a7058c3dd49dfe41abe",
+  "scope": [
+    "packages/ai/src",
+    "packages/agent/src",
+    "packages/tui/src",
+    "packages/coding-agent/src"
+  ],
+  "entries": [
+    {
+      "source": "packages/ai/src/api/anthropic-messages.lazy.ts",
+      "sha256": "5d1925e8b2664c91a11ef4c73d8c400b4075597c8c4e8beb085f8e4ba137fc08",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/anthropic-messages.ts",
+      "sha256": "d4c34523a3c278b23b831352ec7fc9c9d091f9ffc07c37081e43b8f3dd3d3203",
+      "ports": [
+        "packages/ai/src/api/anthropic-messages.bend"
+      ],
+      "state": "partial",
+      "note": "Registered and locally validated with OAuth refresh; no verified live Anthropic request yet."
+    },
+    {
+      "source": "packages/ai/src/api/azure-openai-responses.lazy.ts",
+      "sha256": "de36a9a2749ac4cb45a5449356bceadb676d1a16e6d46f4fc5522a3f700aa2fd",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/azure-openai-responses.ts",
+      "sha256": "e541956baec0cd1cf354dd242dfa52b3294880e3cfc403e644cae8435885e947",
+      "ports": [
+        "packages/ai/src/api/azure-openai-responses.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/bedrock-converse-stream.lazy.ts",
+      "sha256": "3ee8a1b2a2cd58927bee18ab5b4150401da810e9d5f4595822b3b10ded35de86",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/bedrock-converse-stream.ts",
+      "sha256": "cd4b63f95787c9f775a96a19edf760bbf266987b51f9cc9f6ac0ecd34cffe047",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/cloudflare-ai-binding.ts",
+      "sha256": "57f702b91453810241fd50a5629628fcc3d556e75909a37fae857d0a5d27d8fb",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/cloudflare.ts",
+      "sha256": "6333a0f78e8cd6b75e408fdeb594d5e1e02605206247c5a921c2f56dd99cf96a",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/constrained-sampling.ts",
+      "sha256": "1b869f139e5cd1f09b4ebecb8f7ce9ea44b63e75dc6d6158ac8f5d00f2eaddbb",
+      "ports": [
+        "packages/ai/src/api/constrained-sampling.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/github-copilot-headers.ts",
+      "sha256": "32d154965223d746140957ca6754f69955f1c631ed5e8445dcf2be11bb4b5180",
+      "ports": [
+        "packages/ai/src/api/github-copilot-headers.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/google-generative-ai.lazy.ts",
+      "sha256": "ba7700f2e44838fb19da46f866f47f35f4e10f5068800be1ea698e9e95e1e1ce",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/google-generative-ai.ts",
+      "sha256": "c20f1a40875b2106b6d39d8b7837cd30a882c6a5fcf8c311ccc42a090e18e956",
+      "ports": [
+        "packages/ai/src/api/google-generative-ai.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/google-shared.ts",
+      "sha256": "62500d190085d9725ab9dd547ff1ee37e1f47daecf047836700a48980d2ec113",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/google-vertex.lazy.ts",
+      "sha256": "891f0e07eaaa1bb1df97f0a2d8f067df6acbab50078242108d93b96a710c4712",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/google-vertex.ts",
+      "sha256": "d0a53a2faaad20620800a1e95d2d2175d641011c4d6b00b0877d905c57f16ec1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/lazy.ts",
+      "sha256": "ff4ce241fb72cdd1900d56865a6295815d8d073b321c2ed20435639ed74bf39a",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/mistral-conversations.lazy.ts",
+      "sha256": "74267bc430c0c2562d166e4ae9d05966634e91b226bc564010b2b199db52dd86",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/mistral-conversations.ts",
+      "sha256": "b54b0998ff3e0f0ff0804ca62dbcc2061922c770d9ff8267096580907f21faf5",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/openai-codex-responses.lazy.ts",
+      "sha256": "89e1883f937df0992b852970f574b5e1fc2a69fefaacc89628cd1d924a8af63f",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/openai-codex-responses.ts",
+      "sha256": "ea1860ea6f78d1ed4e935e86b5dcb149ccb1f03a12669ff8550cc7243ec6ddc8",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/openai-completions.lazy.ts",
+      "sha256": "a1defe07f6d7bd37de3933164cc88cfeb2d46cf390d0bbb52c85b280cc58d193",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/openai-completions.ts",
+      "sha256": "a682245959c697d4f7a5ac54152f2db189099561b304725c651d6dbee22fd752",
+      "ports": [
+        "packages/ai/src/api/openai-completions.bend"
+      ],
+      "state": "partial",
+      "note": "Registered provider path exists; broader provider parity and live validation are not claimed."
+    },
+    {
+      "source": "packages/ai/src/api/openai-prompt-cache.ts",
+      "sha256": "78727b9b42d5c5cdc47d17f44d532cdf951cbee3b158cacfb3e640d8f792e8a4",
+      "ports": [
+        "packages/ai/src/api/openai-prompt-cache.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/openai-responses-shared.ts",
+      "sha256": "0caa593dfd0d1a54ac02361745cbc963ba5f93fe2856db7fa5e8512f59a27b36",
+      "ports": [
+        "packages/ai/src/api/openai-responses-shared.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/openai-responses.lazy.ts",
+      "sha256": "ea6bf6019f6b2f949bce4ad248ec1e0fa25dd058a009cf70fb5eb0e99b4c94db",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/openai-responses.ts",
+      "sha256": "5d524184ea001a2717fd35b4562126043338d1ef3279f4e2ce192ae5592e8479",
+      "ports": [
+        "packages/ai/src/api/openai-responses.bend"
+      ],
+      "state": "partial",
+      "note": "Native OpenAI/Codex request and stream path works; provider suites remain partial and some upstream request/header behavior differs."
+    },
+    {
+      "source": "packages/ai/src/api/openrouter-images.lazy.ts",
+      "sha256": "04c18f8c065779c2f705850e593cee4e0d6207a4121473540a223fc83026a8f4",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/openrouter-images.ts",
+      "sha256": "c658f331cb2278e7accc925fa72eb3c3902d32d6ff37c4263b6bb6108888d440",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/pi-messages.lazy.ts",
+      "sha256": "620e55f1a498f70c8578deb6375f9433c6991c98f6c323465b1889c2f07a72d9",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/pi-messages.ts",
+      "sha256": "6660a06ba769bbd11e587c25231b3c627073f4bc6b7d28e0808f381954f41fc5",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/simple-options.ts",
+      "sha256": "7fdc74ee2cdf3d82213cdecfb0883174cd470c22d9a9346bbef1428f4294cc94",
+      "ports": [
+        "packages/ai/src/api/simple-options.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/api/transform-messages.ts",
+      "sha256": "6d82d11a49213a4193e0d074f36d7af76e8a911b003104c0aa2c22569b2fe669",
+      "ports": [
+        "packages/ai/src/api/transform-messages.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/context.ts",
+      "sha256": "03101bfa711fad214af111e25328b6f607d6b0a7ebfe289af58a89cd55baf639",
+      "ports": [
+        "packages/ai/src/auth/context.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/credential-store.ts",
+      "sha256": "50ebde56b80b5862025e031719006ea303edd9aa80fec780fbc64319bb9e2847",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/helpers.ts",
+      "sha256": "2799858cc159794451870b86d2e2f50e2bd9453900f31b8ab50bb4ed8ca4a5fc",
+      "ports": [
+        "packages/ai/src/auth/helpers.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/oauth/anthropic.ts",
+      "sha256": "8bf457ab5f0e7756898bff324d54d7ad9e4d4977c1053cb744791ac024945810",
+      "ports": [
+        "packages/ai/src/auth/oauth/anthropic.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/oauth/device-code.ts",
+      "sha256": "b402bbbf66d693ee7dd6c5e2c4e45544050722d5bfa3668b100df76284a4fb37",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/oauth/github-copilot.ts",
+      "sha256": "72b771b1aacb75707eb5b89eff4999762301f75d0fec0cbc22aa9b9e279fa9ba",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/oauth/kimi-coding.ts",
+      "sha256": "5461cc78e6bf118061b67ba2bb26109217863f332904f0601b6da85309ea3657",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/oauth/load.ts",
+      "sha256": "1e16b8caa658946d50e1034d43cec73640095d88b07993e5707d874ed2f149d0",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/oauth/meta.ts",
+      "sha256": "b885a59e1ea71ce718c9246b4907b79d3e70524639a8a49589fa96f465ad38ad",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/oauth/oauth-page.ts",
+      "sha256": "f58b133d271be4ff47352947fd4e55ab66230dc2647b7cbc7c79a574a93de632",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/oauth/openai-codex.ts",
+      "sha256": "757c6cff2bc67d89df30ad175eead549519e1d3756397b5b4189460ac9dbcaba",
+      "ports": [
+        "packages/ai/src/auth/oauth/openai-codex.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/oauth/openrouter.ts",
+      "sha256": "3215ff89c9e4615d3b205455225f87763ef02973380abce070aced81bbe1fbed",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/oauth/pkce.ts",
+      "sha256": "33835111577490103dbb7509b7687db1643691d7b425845428f3cbeb873fe9cf",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/oauth/radius.ts",
+      "sha256": "a4c520d7ea0f605da1cb4499e8532c5e058cb9fda4d162bd347526bd66351801",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/oauth/xai.ts",
+      "sha256": "d78bc70b7031326d51bf1348266fcd576e77590ceefdea9a4ed962e403444a78",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/resolve.ts",
+      "sha256": "08dfcdcbd74dbae5b011b105b9b335321fea816ce262758729a2b29a630bd1b9",
+      "ports": [
+        "packages/ai/src/auth/resolve.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/auth/types.ts",
+      "sha256": "82e2209fd3291978afd7f77b10d81d8d411fd82d0e3ac52121cb41f735946ba5",
+      "ports": [
+        "packages/ai/src/auth/types.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/bedrock-provider.ts",
+      "sha256": "427a4e76812ea4ac42133e7f41e75df99e0edaff883659c96a0e4ec78f670f9f",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/bun-oauth.ts",
+      "sha256": "a09722fb4d58a1b3cc9e30d89e52c61a70d3507672bc663956c7b069263e5117",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/cli.ts",
+      "sha256": "e04e6cd5f0e9da829d10b9b285592d5170d59eff29ae985aecf3f5f9bd15cb2d",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/compat/extension-oauth-types.ts",
+      "sha256": "52065af0c8958696c9e37852d5005bf410679f4afba1b92a6e107e9320c44ff3",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/compat.ts",
+      "sha256": "fe077a90f918a69fa6595cf9a7b4571e28e78b57fd52ccde498c5151838569be",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/env-api-keys.ts",
+      "sha256": "c19591b8ba8451ed34de143162abd36fbd746b62dc406d3fb360e1cb05fd6370",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/image-models.generated.ts",
+      "sha256": "1ce6e12ec4ce41f4ac69556ca1417464d235bf203d48194fc9a16535987014b1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/image-models.ts",
+      "sha256": "58f11488a6623fe8528153235f9216c249d70e146b0f99f8b22db8d88a49ae74",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/images-api-registry.ts",
+      "sha256": "604636b0a4b59d1798d79aad48a1dfdd96ee79e3f16b16cdc54dbd1b81c44ffe",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/images-models.ts",
+      "sha256": "9a3a2bf47263e577925850b182d2b508d0bbf0e1437124b1240bff95b8deeb3a",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/images.ts",
+      "sha256": "de83a96c1eb420cfb1b6f4e3ce8430f19b2312399d195fb786c76ebae4111dcf",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/index.ts",
+      "sha256": "3382426ed6dd9dd4ac8df5279074dfcfea9eddea438bade9e8281673da72e78e",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/legacy-api-aliases.ts",
+      "sha256": "784ae74c00b3cf2836b6ed930519b5d7d3aa1a7a4e7ace933af3bdad77df67e3",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/model-catalog.ts",
+      "sha256": "49ea2292bcc7a1cec41dde2c7e263ecd7f5fd6784084619f6e5f85323fb43452",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/models-store.ts",
+      "sha256": "9b5b110a2cbd1b558f7facf4441b0b4b6824b033d34c9062add35e642a138fdf",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/models.generated.ts",
+      "sha256": "4ffb2a29b84b1ca411744f0d54677d8f5329a48664cd8a8b522c09fa95f7f592",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/models.ts",
+      "sha256": "84f2799b0bf45fb01237c5c2c19641b0da5d1245670b208c05bacb5cff36b96f",
+      "ports": [
+        "packages/ai/src/models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/oauth.ts",
+      "sha256": "1250a2a276dc310849e64a0fd306a896d42e47ad0fc8d9394279eaee4e11cdff",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/all.ts",
+      "sha256": "9eea39075241e66b488cb98cabf555fa99605b3a0ccd06f3d7f510f52ec63b65",
+      "ports": [
+        "packages/ai/src/providers/all.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/amazon-bedrock.models.ts",
+      "sha256": "9c9cbe9b1c977177454ed12dc48c521fdc88d257ee1b92bc3805aa77eaf9b982",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/amazon-bedrock.ts",
+      "sha256": "e32611e8d2d4e71ee5d0ba426da60c0aecf42d1bc34ccc3d0d49ce877c621a8c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/ant-ling.models.ts",
+      "sha256": "da223d56dbe033f48b96ed451591498cb7ffa8d4851785ea9ad7542377f6c855",
+      "ports": [
+        "packages/ai/src/providers/ant-ling.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/ant-ling.ts",
+      "sha256": "20ba100f8a9150f809fc42bf60f1d23840cc358d636793f1ec9fddf0e9feb2a7",
+      "ports": [
+        "packages/ai/src/providers/ant-ling.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/anthropic.models.ts",
+      "sha256": "35fb58e216e45b3d1319b610f3f3021ef30e699a9e44250cbfcbefeeaaea2ff7",
+      "ports": [
+        "packages/ai/src/providers/anthropic.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/anthropic.ts",
+      "sha256": "dda69449a53c84b8b0a17b28f80fba278988d85665557be2db0dc3b20557567a",
+      "ports": [
+        "packages/ai/src/providers/anthropic.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/azure-openai-responses.models.ts",
+      "sha256": "9d0525eab9472b48dee748f7c6d2f3b65f25467389ff1facbf34dc2d40732717",
+      "ports": [
+        "packages/ai/src/providers/azure-openai-responses.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/azure-openai-responses.ts",
+      "sha256": "76e9f5cde761fcd516370d4d99519e4658e0db1029518746d0d0c0550ce54fa5",
+      "ports": [
+        "packages/ai/src/providers/azure-openai-responses.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/baseten.models.ts",
+      "sha256": "c3844bac330f9b0d04eef4349a37dbd6cbe5b6782b9f6726277148526c03ea0a",
+      "ports": [
+        "packages/ai/src/providers/baseten.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/baseten.ts",
+      "sha256": "c3833be0c64c4d5c96810403e23e966bb779bf2c045619b6fbac18ff27ac92f5",
+      "ports": [
+        "packages/ai/src/providers/baseten.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/cerebras.models.ts",
+      "sha256": "45412b6f921b67cf7b82276bac1d8b95f164c5bf2ff3297b950f94f773162c57",
+      "ports": [
+        "packages/ai/src/providers/cerebras.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/cerebras.ts",
+      "sha256": "457fc35499abea92be4ad7add4f08502d069293380be61bf05b11ae5352bce4f",
+      "ports": [
+        "packages/ai/src/providers/cerebras.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/cloudflare-ai-gateway.models.ts",
+      "sha256": "c90e50ce6cd8b536e893ca7180a5b9731581d76b31125aff5bdfc62bd17efe26",
+      "ports": [
+        "packages/ai/src/providers/cloudflare-ai-gateway.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/cloudflare-ai-gateway.ts",
+      "sha256": "6f19bdcb965750aa1367f1c09eb883da16526644ad3a3cbcb60da8b53ca418ff",
+      "ports": [
+        "packages/ai/src/providers/cloudflare-ai-gateway.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/cloudflare-auth.ts",
+      "sha256": "d0532efb4f00126286d71dbce6fcb95e581cd9477467dc4bd20f1df1a466f03e",
+      "ports": [
+        "packages/ai/src/providers/cloudflare-auth.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/cloudflare-stream.ts",
+      "sha256": "866117c0e12f6bba9da36842271d0208b200364dc785dc968fa5d31b6da6594b",
+      "ports": [
+        "packages/ai/src/providers/cloudflare-stream.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/cloudflare-workers-ai.models.ts",
+      "sha256": "95da6a78965178d952b46a4de4e2ea52723ac051ad37583537a3b79e4033ecde",
+      "ports": [
+        "packages/ai/src/providers/cloudflare-workers-ai.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/cloudflare-workers-ai.ts",
+      "sha256": "5ab1575a34fd66e35706fcae8a38516d7c2e427521b7f8680e1f756d8420ec9c",
+      "ports": [
+        "packages/ai/src/providers/cloudflare-workers-ai.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/deepseek.models.ts",
+      "sha256": "afce9b250edda8c9df66e800cfa791f1a2c2546503956c45c5262204265624cf",
+      "ports": [
+        "packages/ai/src/providers/deepseek.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/deepseek.ts",
+      "sha256": "4d4ac9870d3dcdb13a90627a95598314459f5cc2f8a122f802fab3b0d2840fee",
+      "ports": [
+        "packages/ai/src/providers/deepseek.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/faux.ts",
+      "sha256": "dcf37d154680cef0fa5188efd4881450073c5342a9b56cc9e25cee9b9f1ccfcc",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/fireworks.models.ts",
+      "sha256": "68f77ac268a3e643944401e96fdc71abe7b34e1ccc3c50f885eb3e236b4fb45e",
+      "ports": [
+        "packages/ai/src/providers/fireworks.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/fireworks.ts",
+      "sha256": "72dbb53e3bb8b0bc6c42dd7937ec11dd0126efe3176f11153b1d599a0c7776af",
+      "ports": [
+        "packages/ai/src/providers/fireworks.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/github-copilot.models.ts",
+      "sha256": "6bd4c4ae054ea91fe4c9eea8c8372901584e851532352cb621a9e9de6ecece5c",
+      "ports": [
+        "packages/ai/src/providers/github-copilot.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/github-copilot.ts",
+      "sha256": "9f898d669b65e9650009e4e45518fc207416c94ca9570276ef9bd7f13fde8f3b",
+      "ports": [
+        "packages/ai/src/providers/github-copilot.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/google-vertex.models.ts",
+      "sha256": "964109cc69cadf77329846f4fb4baf6c86b00995f33a813230c5a9e54573e93e",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/google-vertex.ts",
+      "sha256": "5e321e6d5b80824752ca96e7c9aba8a3fccce722a1793a40d5341a0406ef4878",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/google.models.ts",
+      "sha256": "cdb63f50fae431dc67c6627ae7a5b9580039b9807f014f838ebe568b11831d27",
+      "ports": [
+        "packages/ai/src/providers/google.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/google.ts",
+      "sha256": "2d807d5f9273ede8c23970fe0414883ab362c677df80e4603d30b621232a2036",
+      "ports": [
+        "packages/ai/src/providers/google.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/groq.models.ts",
+      "sha256": "41fbe59a9104788078b57b490ebf2312291905e579a67ceaeff803ff41ffc9c0",
+      "ports": [
+        "packages/ai/src/providers/groq.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/groq.ts",
+      "sha256": "a8bbced4fbc37370892fec68fb7f03cf634d08d134d9f003fa63edb5a8b60873",
+      "ports": [
+        "packages/ai/src/providers/groq.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/huggingface.models.ts",
+      "sha256": "0da3c6e72a35d04571f1800989c3731df686a8ab1291065b6dd8855966f0e675",
+      "ports": [
+        "packages/ai/src/providers/huggingface.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/huggingface.ts",
+      "sha256": "51c4af194c9989ab033c5b3303831ec9e2df999f51d9fa40ab6d28f632e8ff43",
+      "ports": [
+        "packages/ai/src/providers/huggingface.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/images/register-builtins.ts",
+      "sha256": "8c8bd4e614b8b733c0a4232f7cc974bf38c5a4bb6b9615c732e3b794ff1d908f",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/kimi-coding.models.ts",
+      "sha256": "57ca50b17d1e96ba8f064b63adfe9773c2e494d7495c52336769ef6b86a7e2ff",
+      "ports": [
+        "packages/ai/src/providers/kimi-coding.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/kimi-coding.ts",
+      "sha256": "ef864d572eef11900f24bb6a5dc620982bd9c39fac600970deec55466348f8b0",
+      "ports": [
+        "packages/ai/src/providers/kimi-coding.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/meta.models.ts",
+      "sha256": "4f62023956cec32056151c345f87072b5cd68fae8aab791c04d2eeb3e549e07d",
+      "ports": [
+        "packages/ai/src/providers/meta.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/meta.ts",
+      "sha256": "71fdf9ee2c1cdeda61913088e019cc8e8618977611b3c5ccbf6219d4817e771c",
+      "ports": [
+        "packages/ai/src/providers/meta.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/minimax-cn.models.ts",
+      "sha256": "25dd4d8e980898f274a3c787a59e6e7570d596330c7f833f080b780817cdea74",
+      "ports": [
+        "packages/ai/src/providers/minimax-cn.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/minimax-cn.ts",
+      "sha256": "ae3170234556ef355f7cffcfc666888992ae50caa8daf07352f22bac69cca0ba",
+      "ports": [
+        "packages/ai/src/providers/minimax-cn.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/minimax.models.ts",
+      "sha256": "e80186fef0f1b647990f029281604c435da5d8ceb659d3f6a79681cdb03c3b41",
+      "ports": [
+        "packages/ai/src/providers/minimax.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/minimax.ts",
+      "sha256": "d571a6a8b5a47daf40b034a2dae4ac902a252fbd44b073c4caee8eeb1d7035b5",
+      "ports": [
+        "packages/ai/src/providers/minimax.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/mistral.models.ts",
+      "sha256": "949f1e72e32a0028beb855db2642f13783c8697c4be236e9061c241f1d698a51",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/mistral.ts",
+      "sha256": "dfcd087d7317d6a6cd1acf701547567435f5eaf0c1cc1d8eb89eed7e977c2fb3",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/moonshotai-cn.models.ts",
+      "sha256": "059db388929164d03595ead666c3bcf56e8e078be072dc2d4d3a784b9e207cc2",
+      "ports": [
+        "packages/ai/src/providers/moonshotai-cn.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/moonshotai-cn.ts",
+      "sha256": "da8ec0ed30a2cf42972cead61a93b1fcb64380095f9d062ee4ed9e4807ebd5bc",
+      "ports": [
+        "packages/ai/src/providers/moonshotai-cn.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/moonshotai.models.ts",
+      "sha256": "ddafd640693869455756b31e87d09df13388531cf8e0421bd3618d8836ac5eb2",
+      "ports": [
+        "packages/ai/src/providers/moonshotai.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/moonshotai.ts",
+      "sha256": "2e269cca0231ebdbd2a58848ab3d19b0a43697e132b48a679e3c1b0cd4897665",
+      "ports": [
+        "packages/ai/src/providers/moonshotai.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/nvidia.models.ts",
+      "sha256": "15b8e279632a231d1794aec8083f00c17ac94cd5e89717393dd48fc182c0e4b4",
+      "ports": [
+        "packages/ai/src/providers/nvidia.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/nvidia.ts",
+      "sha256": "73c981d27b364f83a32983d19f4ded346acf6af7eb4a653334622f891aedf860",
+      "ports": [
+        "packages/ai/src/providers/nvidia.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/openai-codex.models.ts",
+      "sha256": "11045582d310b854c4a55e510e3628b8a8652efab918f9f017541b9261db474f",
+      "ports": [
+        "packages/ai/src/providers/openai-codex.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/openai-codex.ts",
+      "sha256": "c63a59ad55921466182f2033240178fca715faf09dd7fd9878533829ca90a70f",
+      "ports": [
+        "packages/ai/src/providers/openai-codex.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/openai.models.ts",
+      "sha256": "9424770fdbf0ca5f3307c6b20217686d8c448379fd8548ac1c362ad678ac7898",
+      "ports": [
+        "packages/ai/src/providers/openai.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/openai.ts",
+      "sha256": "1904f9511221f47bbe890dc007571add9ac16ab28cd48c4090b58f13950cbfd0",
+      "ports": [
+        "packages/ai/src/providers/openai.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/opencode-go.models.ts",
+      "sha256": "db2994d632b02692e3cb1a9c7fde97e5b7e4f77719f7d530c9a2cb2628aee52d",
+      "ports": [
+        "packages/ai/src/providers/opencode-go.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/opencode-go.ts",
+      "sha256": "7262ef8f8961f5228e4574780092e7d0ae38d888ced223bbe3ffb53fbda78253",
+      "ports": [
+        "packages/ai/src/providers/opencode-go.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/opencode-headers.ts",
+      "sha256": "57a97177294665039f40a34cf421514ecd41527d5042f5185639557b6a7d80a1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/opencode.models.ts",
+      "sha256": "ddbfa6ca1f40c0ed1bf96904d3e0ecdb9b8298a4fb8d12a084cd4e1669a6596c",
+      "ports": [
+        "packages/ai/src/providers/opencode.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/opencode.ts",
+      "sha256": "4d8c13e0b45aaf0ccfad2c86e210d17ae919afca658d40a286229249096871e7",
+      "ports": [
+        "packages/ai/src/providers/opencode.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/openrouter-images.ts",
+      "sha256": "921e057fa1880412c29a849505ddd7dbe466996d78087c0c0628437ec2051880",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/openrouter.models.ts",
+      "sha256": "101afc36afce8bdac7f893b8c2b1dffddc13caf7774c1a371f37e82e69a87b90",
+      "ports": [
+        "packages/ai/src/providers/openrouter.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/openrouter.ts",
+      "sha256": "0985e9d352e1a9794c7ed807d81e06a254abce49aa231e7c5ccc7c4355f01d5e",
+      "ports": [
+        "packages/ai/src/providers/openrouter.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/qwen-token-plan-cn.models.ts",
+      "sha256": "cf75bfef4683dd80f98a33cc8894d5b0a37930c13907f29b08e33a745b7d48f0",
+      "ports": [
+        "packages/ai/src/providers/qwen-token-plan-cn.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/qwen-token-plan-cn.ts",
+      "sha256": "1869aabbff4baaa12faef00071aab0a5b1b1d38d43f16ce735137fc0e13fa897",
+      "ports": [
+        "packages/ai/src/providers/qwen-token-plan-cn.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/qwen-token-plan-individual.models.ts",
+      "sha256": "a12f1307cece97d0a582b6ce09f34cef310012052bcb59582324fc26fbeab99c",
+      "ports": [
+        "packages/ai/src/providers/qwen-token-plan-individual.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/qwen-token-plan-individual.ts",
+      "sha256": "0336ecc9c677d9e295a4832fbc84d9197f58e0468fcd00daff3aec491b896375",
+      "ports": [
+        "packages/ai/src/providers/qwen-token-plan-individual.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/qwen-token-plan.models.ts",
+      "sha256": "5a45908ccd14785c3aca0307f12e4e462702b0d469ea06bd90ba20b848c918c7",
+      "ports": [
+        "packages/ai/src/providers/qwen-token-plan.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/qwen-token-plan.ts",
+      "sha256": "c26b85ab529779c4c2e61f6dd749592b515ec25b121b49dc81989d8a767d51f5",
+      "ports": [
+        "packages/ai/src/providers/qwen-token-plan.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/radius-config.ts",
+      "sha256": "1f82a7db25753be09374792ae0a3cd63417739018fb69b3212ad8b3b9eb11c21",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/radius.models.ts",
+      "sha256": "070228f3763de61e4d96b0a851c666a2908f0d9ecb99f5b9205f6b917556ec55",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/radius.ts",
+      "sha256": "18bb70120329026fe8277d66cacee69a4108a069f2de990396c8ef5c38730379",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/together.models.ts",
+      "sha256": "09e3a5b9a2afbced7314acb8bfd7f2d77a17283dab78a49ca786a04b466f9d15",
+      "ports": [
+        "packages/ai/src/providers/together.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/together.ts",
+      "sha256": "cbf232b1bfe5753bba855f0a95e2c4d180db8155121effcbdffc955fe090738c",
+      "ports": [
+        "packages/ai/src/providers/together.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/vercel-ai-gateway.models.ts",
+      "sha256": "3c4227acdc66f716f4a0af4f84d1ba1e8582384763f6850ed9dcc2fdadee10c5",
+      "ports": [
+        "packages/ai/src/providers/vercel-ai-gateway.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/vercel-ai-gateway.ts",
+      "sha256": "57b77111d50a2238128f56b7f4cc0680415b58c7d3d2eb51cc9f88e508b40343",
+      "ports": [
+        "packages/ai/src/providers/vercel-ai-gateway.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/xai.models.ts",
+      "sha256": "8d0a7bf9fd4fc8a0030d9cf93dab88421625bf250030a6d3b2397eea48ea2298",
+      "ports": [
+        "packages/ai/src/providers/xai.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/xai.ts",
+      "sha256": "841c361fc5ebb2d91c3f6aa46ce008f354ea287cce36ed2105ae815b7e5e9831",
+      "ports": [
+        "packages/ai/src/providers/xai.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/xiaomi-token-plan-ams.models.ts",
+      "sha256": "26bc2100a4471d0605e768b8aff2e82aedce9c880622b5c7046ac6e32c14fb8b",
+      "ports": [
+        "packages/ai/src/providers/xiaomi-token-plan-ams.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/xiaomi-token-plan-ams.ts",
+      "sha256": "59d03fc70eca720f8ca9a9f676aedaf241524dac26c179a78e2e30aabe116e0f",
+      "ports": [
+        "packages/ai/src/providers/xiaomi-token-plan-ams.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/xiaomi-token-plan-cn.models.ts",
+      "sha256": "bcd190721ecfe6233f2d66e86e68f68e2a9d14a8d6afe27132131e5721793093",
+      "ports": [
+        "packages/ai/src/providers/xiaomi-token-plan-cn.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/xiaomi-token-plan-cn.ts",
+      "sha256": "255528bca12e929f0f683bcbf5a6b8ef0de779bb484b128bdda23bf2fb80caa8",
+      "ports": [
+        "packages/ai/src/providers/xiaomi-token-plan-cn.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/xiaomi-token-plan-sgp.models.ts",
+      "sha256": "26f56144eac6a3e7d6c86d558a348dc96cea1bb7ec655beea04dc6088e67d761",
+      "ports": [
+        "packages/ai/src/providers/xiaomi-token-plan-sgp.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/xiaomi-token-plan-sgp.ts",
+      "sha256": "536da73a1588741c6a70809b5e94ab5a1ba2b8e81f24116e3ed734d6bc60b5e8",
+      "ports": [
+        "packages/ai/src/providers/xiaomi-token-plan-sgp.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/xiaomi.models.ts",
+      "sha256": "326ec2a587d3f83a92aea6dd9548b317ba91ce9dd8dccdfd83ea14035897dcef",
+      "ports": [
+        "packages/ai/src/providers/xiaomi.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/xiaomi.ts",
+      "sha256": "d0d20dbcbcecca8b02948df1506ffa474461565546f7c24dfce44aebebef2344",
+      "ports": [
+        "packages/ai/src/providers/xiaomi.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/zai-coding-cn.models.ts",
+      "sha256": "b96ff0b9ebb1792993256178de1b6c89741a651dfd07a7735c38dd05bfc25708",
+      "ports": [
+        "packages/ai/src/providers/zai-coding-cn.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/zai-coding-cn.ts",
+      "sha256": "89ff82b1f7b1a7e3427498598ce03574d76217f1c38b0d1731be82b6d8ff87a7",
+      "ports": [
+        "packages/ai/src/providers/zai-coding-cn.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/zai.models.ts",
+      "sha256": "9ff2f0e33f4299651cd265543d6387ee3d9ef2715ab7315dfaf5e67130c14125",
+      "ports": [
+        "packages/ai/src/providers/zai.models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/providers/zai.ts",
+      "sha256": "489a48539c3abc291315dad6f8b7c5554f5f3f9bf8b2a11a60d4ab2cbd3c2f74",
+      "ports": [
+        "packages/ai/src/providers/zai.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/session-resources.ts",
+      "sha256": "3e6d76f038d6b7fe515ede0b6650d41a7df16eb4b3a9f1aa91c9de329ff092e2",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/types.ts",
+      "sha256": "547080208799ae828adc64b1935138f04c0f5431638932ee282fd867f196e39b",
+      "ports": [
+        "packages/ai/src/types.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/abort-signals.ts",
+      "sha256": "320d17e2354c4e66afccf48337d79d1cdb78bc3c42a6f5be993702175711f4ab",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/abort.ts",
+      "sha256": "e81dc16de331e82d7f15759b27e38c7d0a3d28955693e0cf157dd52dadea7035",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/assistant-message-frame.ts",
+      "sha256": "e3db9eb5fb4a56f6c45b43ff6a5ef87347c8c19f28b0cbdf389b1ddf1928a6e9",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/diagnostics.ts",
+      "sha256": "06fcbc2347f65a43938078094a7118036b5f12e73147affb5c73cd72753443f0",
+      "ports": [
+        "packages/ai/src/utils/diagnostics.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/error-body.ts",
+      "sha256": "7170181ae6926709fe4ab7ac6b5b51c46ffe906868a7aac3c7627cb28ad77c09",
+      "ports": [
+        "packages/ai/src/utils/error-body.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/estimate.ts",
+      "sha256": "8df2512ca8c3e71eea5574b3d56c3569963e1fdabaef4bd17baaba86186c1840",
+      "ports": [
+        "packages/ai/src/utils/estimate.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/event-stream.ts",
+      "sha256": "147084657f76665ff7d6c8dcd6eb0745149e3aaee3e7b9c272b315a1b5679386",
+      "ports": [
+        "packages/ai/src/utils/event-stream.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/hash.ts",
+      "sha256": "2cdfce4af41810d1a92c7f0a55c78637a3173041038aafd85b378be345761ed8",
+      "ports": [
+        "packages/ai/src/utils/hash.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/headers.ts",
+      "sha256": "db52ff4621bef3e5a6b6ace56fd0ff09063ae840517c16b1690c60f89f85e106",
+      "ports": [
+        "packages/ai/src/utils/headers.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/json-parse.ts",
+      "sha256": "828440b19a64773f696ced9461166913ddaddd8479697fbde32d3f298872b153",
+      "ports": [
+        "packages/ai/src/utils/json-parse.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/node-http-proxy.ts",
+      "sha256": "a13ab6556d127e6fb097147b209c68e47aed8e724e2774e7dd7df21ff91d9d5b",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/overflow.ts",
+      "sha256": "9a7200aac0cce1769e3acdf01e66048fea0ee62f3a93a3dac08055c41a33e2cb",
+      "ports": [
+        "packages/ai/src/utils/overflow.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/pi-user-agent.ts",
+      "sha256": "c60d2777f4362985b74f7d7cfadf35a47ae2c6f8b5cc0b809efbb4c546579b8e",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/provider-env.ts",
+      "sha256": "3829251ae0674cef7ca09800cee9f46d4e305770129b72b822ea2f6f85efe675",
+      "ports": [
+        "packages/ai/src/utils/provider-env.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/provider-retry.ts",
+      "sha256": "d0f68cfe9fe6a5d4be778eaefedc0b453021f89026810691dcd1479371dca699",
+      "ports": [
+        "packages/ai/src/utils/provider-retry.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/retry.ts",
+      "sha256": "e262b1b936890015633e6e82d198f64ac7fbab778596f520716aa6dc8806929d",
+      "ports": [
+        "packages/ai/src/utils/retry.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/sanitize-unicode.ts",
+      "sha256": "f8ef2c957f9f13a77df45ebf344f1b852dfe8f2e3d164d815127ea7290c12e22",
+      "ports": [
+        "packages/ai/src/utils/sanitize-unicode.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/sleep.ts",
+      "sha256": "c6d01d46a40b0aa99d3308a5ecec37417f434bdc839ea8f8853f776e2fb1981c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/text.ts",
+      "sha256": "d37c1825855c7fc71669a545b5b266810242c1c7e58d57228c0c143f29c1c544",
+      "ports": [
+        "packages/ai/src/utils/text.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/transcript.ts",
+      "sha256": "cad0c126cdfadc1b4f430cc5a95b1c9285ecd1ee9957642d7773b1357bbc9ac5",
+      "ports": [
+        "packages/ai/src/utils/transcript.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/typebox-helpers.ts",
+      "sha256": "caf756258ce20c793dc8002cb8130a8efce18a7b5262ba0c54832b96f5a76e9f",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/uuid.ts",
+      "sha256": "234a48d4b999e69188fdfa49173ccfa7887d947e443ef206cc30219515105a1f",
+      "ports": [
+        "packages/ai/src/utils/uuid.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/ai/src/utils/validation.ts",
+      "sha256": "460786b57dead200e411b9afec916a5049c96ebcff4da082096456ac06d44fb7",
+      "ports": [
+        "packages/ai/src/utils/validation.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/agent-loop.ts",
+      "sha256": "c3d99a5b0f24d1e7fde41cbeb2cd7a2f3559aa3e9c1df975abef21d7e0ecd189",
+      "ports": [
+        "packages/agent/src/agent-loop.bend"
+      ],
+      "state": "partial",
+      "note": "All named agent-loop test cases are ported, but source-wide integration and higher-level Agent behavior are separate coverage questions."
+    },
+    {
+      "source": "packages/agent/src/agent.ts",
+      "sha256": "fad42fdcea126f8b47f01876431def6f866ad72260b1e95d1a10e3acb0b6ddeb",
+      "ports": [
+        "packages/agent/src/agent.bend"
+      ],
+      "state": "partial",
+      "note": "Native agent loop runs model requests and tools; full Agent API and extension integration remain incomplete."
+    },
+    {
+      "source": "packages/agent/src/harness/agent-harness.ts",
+      "sha256": "f00e89cdf1412e4193db0207c9358d89116e240fba1823c9db81eb6e8f1f85f5",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/compaction/branch-summarization.ts",
+      "sha256": "38fed20de82bad088ab0a49c7c46e8c801c0bf448dc8a86d7c0f8f225d43792e",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/compaction/compaction.ts",
+      "sha256": "6e7aec0d27cb566f8f85f7dd13850eda98f5ddf7e78f9a919fb3dd03c3ea3a8a",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/compaction/utils.ts",
+      "sha256": "85ea768b590e683727aecaf6ac72cf4218806e66313bc3ed2e1593867592d6c0",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/config.ts",
+      "sha256": "b95461edf229c73ab181a09a4dcc7ad609593e8422c6a5080529d2eff8fc8659",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/context.ts",
+      "sha256": "de3e6afc553327d7fca456f06393039dce033c4c97508649063c285c968bca86",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/env/nodejs.ts",
+      "sha256": "8cdd46309bacc1e0bfed1fd09b1960fb495c557d07f457b09cc9837482d7ae0b",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/events.ts",
+      "sha256": "8e69fd404703ff88d487b26323e2b8950500c16b4945e115d8a1ab2bedf38769",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/execution/assistant.ts",
+      "sha256": "b524fbb0019ae9153bd0b3b5e150a49836d5d761591572c685bb32379302614f",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/execution/effect-gate.ts",
+      "sha256": "eb2e140917ec55d7297f13208bb696bcd38666cf806b842c319946555ec7d37c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/execution/tools.ts",
+      "sha256": "446b8624b365162a8878efeadcdc97ac053dc953f25155743d6a0646cf8868d5",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/hooks.ts",
+      "sha256": "1f86b9da3ab1a80b6896bbc409eb020f947b296765e26aa8a3672f75bbbfe8a1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/messages.ts",
+      "sha256": "6a4e24af6571bf6d1309a753b3cb34e936a189096f05ccf10fa80cf8abcd6d33",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/bash.ts",
+      "sha256": "506434cd76b0f2325b34ac7d20efcf2410b1ada9d5d2afa9690c3ad4e57c57ac",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/bounded.ts",
+      "sha256": "249c07bff790c83ad12147d2fe5229303299933bfb261144d77e4d10c86882a0",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/chord.ts",
+      "sha256": "018903aff2f332eee5815e99ce250042e9fbae520d6ff25641d7f3eecb10e52f",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/context.ts",
+      "sha256": "681583934f872fee32c3d0fdb6945efded1e09592f6dff85ac139b954fe8f588",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/harness.ts",
+      "sha256": "470747d7c8eaa40243f60a44e27e5b03b0951f6aa8913be09406f1f3b4901a3a",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/hooks.ts",
+      "sha256": "409fb63660264e15fef37aa3cf78084100678b0d9d4d047fb262048f445df380",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/index.ts",
+      "sha256": "ed16bfba0f151b0cfde690dc49c94a3af6719c55dd8fdea3ff8c1b9fb26a1462",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/jsonl.ts",
+      "sha256": "a6bb5d65d95677b743486b7ae25ef11bf8f1a37dc4611dcfcaa406c5c5d620a9",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/kinds/collapse.ts",
+      "sha256": "8c6bfc6ec41920b520e5a8d286a4c3096e713f1e442a2a4750b4bc6efcf54b97",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/kinds/entries.ts",
+      "sha256": "f427e2bfeb01429a5696cf26bd906dce22e6154bc9c7cd9f58495abe5c35f219",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/kinds/frames.ts",
+      "sha256": "dbbe66dbea8ca323cacc2b5b293fdbefe3cd9dd3a9f38de743e06b53bf8c3455",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/kinds/generation.ts",
+      "sha256": "222034db7e8ca88fcf5045856ccd81166323df53649d9a0d27142648adc3c870",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/kinds/job.ts",
+      "sha256": "08205fe559a0da527909bc34262a9e810922f7c111967e4c3ae16243e494193c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/kinds/plugin.ts",
+      "sha256": "6507efe6cb3e42e14a72b85f8e74c03cf7dce9f83d831c35cab61d507e26ee10",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/kinds/post-tools.ts",
+      "sha256": "6aa2fda40eb10079cf6f96ba0b438f6cbff46d53c9ce2114c111e752dd89df74",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/kinds/task-api.ts",
+      "sha256": "a3495e72ffe34936565be5849db4322364f94c3a5083746b5aab838ec01e7332",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/kinds/tool.ts",
+      "sha256": "e38bad34121aced0507f907973df75517949c1273583cb5c9876ed12c13d46b1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/membrane.ts",
+      "sha256": "384da7ddfea925e1a94126bdb88ffc56ef798af3ef0a4130c50954d98be6155b",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/memory.ts",
+      "sha256": "4c390267e65d9569453001e353169a8b3c14b62c06a7de21c124c2f3164c0244",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/scheduler.ts",
+      "sha256": "536e944221a9ce78439db7e2e7b8581a713b14b84a3c45f8b449a8f33de9dfe4",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/session.ts",
+      "sha256": "de59114f9da43f65a2e88082625743543fd5d6ff1ada20b107cf902237acef5c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/system.ts",
+      "sha256": "33aaa66a141684ace3c24ad26ae5d108751fa55b0902a03b1baab69c6c64d7ea",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/types.ts",
+      "sha256": "277b4d6f153827e83a43155d1b23ce9174c01909a27b28680b7eb8a015b7eac0",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/pico3/view.ts",
+      "sha256": "4a7b805ff90ccd63def015b29e008fe5fc8500b6ebe5ba430bf9e65679c755ec",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/prompt-templates.ts",
+      "sha256": "edeed31ed4cea3353b47d1061356a898a52b131c9f50100f20bb21f1fca6b554",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/result.ts",
+      "sha256": "035a0e603043a1d598e49949936dda132dce1f098923f2b5722fbf09ffbebbd1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/drive/boundary.ts",
+      "sha256": "c530ec12400f430a3c1128a63e50a4b04a96719c3fd4d16625ed12248a24aa70",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/drive/checkpoint.ts",
+      "sha256": "e886ee81be75d72723922488b3fb7f133e25464ad113fa12c6508950267c33b1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/drive/deferred.ts",
+      "sha256": "025e35aa88fd90844e91c0f74da28c9165791a7d5e15fed707a92dd453bcc4cb",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/drive/generation.ts",
+      "sha256": "c0d6a0c61bdf573fe56f9919111ffef40b6654cc9f38dac4d6d16a1deebd3cf1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/drive/reconcile.ts",
+      "sha256": "4fcc904b6ec1ffa508f2174fa78aa8ffc7e53093ff0e1992b6edf90f19e9f651",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/drive/recovery.ts",
+      "sha256": "3b731dddd703b4fc6f09e193d5ad438fc0330d25333993ae9cd774f97f2086e1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/drive/response.ts",
+      "sha256": "6e66e581e63af08833cda2c0e305e9695bd131022b71389b61d3ce268ed3f157",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/drive/retry.ts",
+      "sha256": "633f94d7176c3aa6dd963f265cddeac28639a2d4afa17c914345eee235a99b65",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/drive/structural.ts",
+      "sha256": "b5da9f9b8a6fe4bd8624eb2f833e02d955d229cbac3d0e8f9a2cda9a2c15154c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/drive/terminal.ts",
+      "sha256": "eefb1981fd025a0e8cb1d51a2d8f1a27fd7cf9a957cbc3a5ac8eb54715f5261e",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/drive/tool-placement.ts",
+      "sha256": "de4c8b797531438f798d89a2fe5c8d49ec60f9ae603e63c32d8065ef0bb328ff",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/drive/tools.ts",
+      "sha256": "0dbfd29f893bd01a296cf243523db1e0fedf5b2ff7f1ce828588f33a7b16d7a3",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/drive.ts",
+      "sha256": "a939752796f5e7182ab06fd736c5dffd38d836050adc65ab079f4583305e6b24",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/harness.ts",
+      "sha256": "0d92dcd8802e5de32d15f6aa2650c349c0df3c9da206449959941594d9e69b05",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/index.ts",
+      "sha256": "773be18f13b3c4792032d17637119d572cf0b82a3d6455a60c483ea2960744f0",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/lane.ts",
+      "sha256": "00e66cd00a1912ae05615e3f2ba110ab40008c1570bf07f4d5476bbb4291ccde",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/progress.ts",
+      "sha256": "397e5447644ad1552cd35b34342369a8f47e77369369d1a5a0e8fa8b34843f8c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/reducer.ts",
+      "sha256": "f3066a2c4710ecdba1a87befe175330a3f19b87e31d8a2b5be4b237eea16849d",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/restore.ts",
+      "sha256": "7bc8f2817707297ead81f29a30531c3c8a9cc99f747124e300e7d931b7cd7ec4",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/transcript.ts",
+      "sha256": "ebba52d98b71eb684610c24320321c5a580dc368835e6fc827810e1c217f5b64",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/runtime/types.ts",
+      "sha256": "2fd2fe18ea57483a3274d4612e4716d27666592c025db418377e59998943311b",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/commit.ts",
+      "sha256": "78f930aadd8b5d6245a9bf3b4514df454a404de53b46d65525dffc7d00a5a383",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/context.ts",
+      "sha256": "409078e31155a77bbfa1fff20ab81d55370fa379ad95c12933eecbf832efeaf1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/fork-policy.ts",
+      "sha256": "118cddc6f6ed112dec6c69013da5fbcfca7bb2477cf6e15083cd86cc7697183f",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/fork.ts",
+      "sha256": "ac4e8552d10a723d915cdffa702f0d085763f9a24e49604cb0234844bd1adcff",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/in-memory-storage-state.ts",
+      "sha256": "1b61fd8dea1e2d609c449c48006c236d0f418b2569d9d9a9e2687f42daf74762",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/index.ts",
+      "sha256": "8ff08ac3c9b7c43c31c62a6bd722f8e82df452fb87a811c0de859e310e8897ee",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/jsonl/codec.ts",
+      "sha256": "f1104b8b6dfc1eac68741cd5cca688057476c5c45e3572930fe19f9a46bc2c9e",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/jsonl/fork.ts",
+      "sha256": "f244e5fc01a76840ad770b3697f9d309b3daf3371dddc634ae05e23fc328a2e0",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/jsonl/index.ts",
+      "sha256": "bf99e7ebda3fbde7ebe11e26c15ce94c9b60e9536a18e019fd8919266005ad89",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/jsonl/io.ts",
+      "sha256": "71384ac4300af71656a82fb39dd9acf1ed1821daa67d9cc48f43ec3ee9319da0",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/jsonl/legacy-v3.ts",
+      "sha256": "bd64d390dab0ae52192cd024e312185b5806bf3fb34fcb8a9472c5d7ca135dc8",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/jsonl/repo.ts",
+      "sha256": "b0370397238b0ebbb8ff5ac9cceb0a3c22ded3e381f8462b7aff8e41de952a49",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/jsonl/storage.ts",
+      "sha256": "3de2f2b426c6e8770ea882d43b601d36a70000ee551e09fe485ed2e1b0ede3d4",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/jsonl/types.ts",
+      "sha256": "adf69fa5c1a61a83e4bead6307bfd8c30c9e09d36e6288419ed47093d4bc067d",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/memory.ts",
+      "sha256": "733c14c12e1c87ed480861eea3d3039b96dc0a1bd44ab8a8dbe239b8ef49d08f",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/mutation-line.ts",
+      "sha256": "50004c3538aa5318cc89951f5f967d0af1db4c5ae52f06a3adc562a914fb426c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/session.ts",
+      "sha256": "df77596e51a83ed6a41b1021c1453a00a7e4be2c2dce0c85de3ec20d334953a0",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/testing/benchmark/datasets.ts",
+      "sha256": "9b9a64d1bdc805a408fb94f67b21f039f8066595dc0e7b363658e3ff83103c56",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/testing/benchmark/session-repo.ts",
+      "sha256": "5f6fcf6bc9a42aa5f79d25f2c2f33f67623542a3b113b5b62274665944017503",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/testing/benchmark/storage.ts",
+      "sha256": "448fa4d44b313352a19fb52ef1e187e1a3e726f6a83656cfd4e64190f97a87d3",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/testing/conformance/session-repo.ts",
+      "sha256": "b915403a55e27afb615f9916b104e3de4dc873a72f038d00371c55e38e3e142c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/testing/conformance/storage.ts",
+      "sha256": "237e1d475e4fbd8b1826c5bba0eb6284fbc983d83e35c25a9a177ff44be1a9e1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/testing/gating-storage.ts",
+      "sha256": "63e4afa995b42c13fc82292d74eb5ab569c5613fdde6f84e7f57de1ba7a821c3",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/testing/index.ts",
+      "sha256": "3cbf84599465bcad0888f6318a7f2d04422ec17c11baed29737d4b7367858834",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/testing/instrumented-storage.ts",
+      "sha256": "0a9dd9e397c34fb5846952f88ce64607195727174b9c5f68f5d9802fa283694f",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/testing/storage-decorator.ts",
+      "sha256": "230fafd8bf472396e68926364ac74ffe94095d950196b46eff9da566558d8706",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/testing/types.ts",
+      "sha256": "f0716c330fea469a0468d2145756f40c028c8ea96803809eb363a96c3911dd86",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/types.ts",
+      "sha256": "5dd08a32b83dce0fd050662488dbd9b015a321eec4644671e51c901a3969fa42",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/session/values.ts",
+      "sha256": "b3f87fef7b5faf58e4ab99a1baaafd9df47f73acf2a92cefcc7279b9eb43e50b",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/skills.ts",
+      "sha256": "b88025e1bcf65de30649aa15ca045caadff23ae46a147e1e078a998610ac253b",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/system-prompt.ts",
+      "sha256": "a3a8f4e2e343562277d348e99762447131632aea963c9ee4633369e5d1a9e9f4",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/telemetry.ts",
+      "sha256": "2a93a876ecea19b8d16609b8985c58540c93d12ef29bdac50496fce8208443ea",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/tools/bash.ts",
+      "sha256": "7ebd769d320feb9c25f9878731aed08f71053dbed7bb398f6eb0e848cc85f80a",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/tools/edit-diff.ts",
+      "sha256": "70f486d5d5e54a76913d96597e792fc3e2c0938813b01595824a63b2300800db",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/tools/edit.ts",
+      "sha256": "c66f9cab3daa9da5196ca1e98c03a82be7a7756df989e16ceac31f69d9dfb07d",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/tools/file-mutation-queue.ts",
+      "sha256": "f9b10b428e6f3006bf27835ad09e9e69cc652dfca41a2f3d51fbfb81fa8ce88e",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/tools/image.ts",
+      "sha256": "80b4f8898ec55a4898643156c90aa6916dd29537d7eb357b5d5f8e0ad47ff526",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/tools/index.ts",
+      "sha256": "7b11295ec3517b9677886a717ece40183cb70dc92720741a201a9012f8f6f9a4",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/tools/path-utils.ts",
+      "sha256": "61fee524375d679759305569fdebc2ed41a3ba06e8cc9ac8bab268c3f99116f5",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/tools/read.ts",
+      "sha256": "55dc4a19734dd94c2abf4603d5a41ba385e5a48e22d33bc09de4b1a079c99de1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/tools/tool-context.ts",
+      "sha256": "6c224cc5c58e2b9bb8ed177eddca2a26870a3604995181198163a19aea2440d9",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/tools/write.ts",
+      "sha256": "10f3086670e64cf531f39c170dcf5da75a7d97f900d18ba4666758aaa4eb5c79",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/types.ts",
+      "sha256": "ce92e0a00a6b5f7b95ef9f41e909d7a0e5c269956a782c83c65d885c50680770",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/utils/adaptive-publisher.ts",
+      "sha256": "6ba0636fd50ff0f02988d04f11f0857c8a117ccd562c3cec3d903f75caf791d5",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/utils/output-capture.ts",
+      "sha256": "4ebb5406519c6681769497943c473a95f8016bf0aac3fce3d76fbe7b3bb9fe60",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/utils/shell-output.ts",
+      "sha256": "17f5b99a3400b6bcddd5fed7e23ffd3d93039bb44782f1900ed6fffd9bd82e89",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/utils/truncate.ts",
+      "sha256": "0b1d69f589ebced5ed7b3527c515e6fe7a0aca08660c6f8e84310fe040d73e34",
+      "ports": [
+        "packages/agent/src/harness/utils/truncate.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/harness/utils/usage.ts",
+      "sha256": "4a0baab54475263a73fef362a8c15f2386a69c1e5d5c4b579b312c88291c7278",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/index.ts",
+      "sha256": "f335c42e75a0ab39eab9d8a08a01cd8804b720ed89f1f0a25ea12239210132d3",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/node.ts",
+      "sha256": "63d8dc9b22d93b3b1172ed1f1e83cc62bb370789f56f8dd31affb5c2a0a8dff3",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/proxy.ts",
+      "sha256": "9c23fc8a625e79c6f8d180a65146288eaa8c10995d7c6fd91b75f57ff934fd40",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/search/index.ts",
+      "sha256": "ca385395c326d76c99dd42bcfd7bf4a0ca93368c5fe59f1ea00d288ec0603ea3",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/stream-fn.ts",
+      "sha256": "1f9dee101a5ce1052558458d9ce47e53e05187224e879217899059a80d90bc45",
+      "ports": [
+        "packages/agent/src/stream-fn.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/agent/src/types.ts",
+      "sha256": "bc8db50886cdf164c55d636f2755da22b2bf12d9172b1fb7383f37c2fe439fe7",
+      "ports": [
+        "packages/agent/src/types.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/alt-screen-search.ts",
+      "sha256": "7d339e83cf0f160847335dc9be0d1f1db2a0945c463c3d636c7b84ceb9665d40",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/autocomplete.ts",
+      "sha256": "8af77f28f9eab1768c8e15ca7dab0d530b2a883de13431a03e70206c22526ef6",
+      "ports": [
+        "packages/tui/src/autocomplete.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/alt-screen-flash.ts",
+      "sha256": "6d341546b59958e93e4d33fdc1766b10d13c98a779031e2c01b827f0a4c6e30c",
+      "ports": [
+        "packages/tui/src/components/alt-screen-flash.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/box.ts",
+      "sha256": "f79d30c9c263064df656dc55674b5d951bf765ffbbf658f400f449c44f6dab98",
+      "ports": [
+        "packages/tui/src/components/box.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/cancellable-loader.ts",
+      "sha256": "5f0ae0a56f299e5f6c9585c79bbe16c38a845f038a7254f8dffe7a44f6082e16",
+      "ports": [
+        "packages/tui/src/components/cancellable-loader.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/editor.ts",
+      "sha256": "241695859d48f49c6aaba9b9cfc14c6cd28639c6c247adb4fe2c202a9e2c6e20",
+      "ports": [
+        "packages/tui/src/components/editor.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/h-stack.ts",
+      "sha256": "6622e1e2605e500a420c3cdf3ffcae0548b2d86ec496a0f6bf1dd5c95aeb0b6b",
+      "ports": [
+        "packages/tui/src/components/h-stack.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/image.ts",
+      "sha256": "cdef2f757008ce2fecfde6c0108366ebdc160bac70355db855fd264aec8d53f8",
+      "ports": [
+        "packages/tui/src/components/image.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/input.ts",
+      "sha256": "416ceeb28f10b7146f6a284f276589797763b604d439574fbdc2a3ca52c00234",
+      "ports": [
+        "packages/tui/src/components/input.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/loader.ts",
+      "sha256": "614b39cd2f493e289a12ee4f42404f779cc3a5784735066760c1d9f13bf5d287",
+      "ports": [
+        "packages/tui/src/components/loader.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/markdown.ts",
+      "sha256": "704c1c714a7ff6bdec55573ab38393726fa73a7b47cf4c1161ccc4f08530ac28",
+      "ports": [
+        "packages/tui/src/components/markdown.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/mouse-region.ts",
+      "sha256": "9dbcac616e8f8271b522b374bae29ab0b829d3771ce0ed228d6ae3da1c2be759",
+      "ports": [
+        "packages/tui/src/components/mouse-region.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/scroll-view.ts",
+      "sha256": "76dfd9f8a88cabc064f0652b83f16a945fbc988c9fe7c0423a4cd796907ef77d",
+      "ports": [
+        "packages/tui/src/components/scroll-view.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/select-list.ts",
+      "sha256": "0fc369801e745eff15567d72829bf67887f5efec8bc6816aaf1ee65338618373",
+      "ports": [
+        "packages/tui/src/components/select-list.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/settings-list.ts",
+      "sha256": "8d6b91d3c4aaaf11225854847d42ae6da852ef2646d54542c5b51a97dde15605",
+      "ports": [
+        "packages/tui/src/components/settings-list.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/spacer.ts",
+      "sha256": "b511acec1d33885dad23e7ab2108b2d04dff0589b3bfda53b1f7458be4381e66",
+      "ports": [
+        "packages/tui/src/components/spacer.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/stack.ts",
+      "sha256": "93208d326fa43431b930eaa3250a1e19747063d696e97ec2f002f5feaa54fc18",
+      "ports": [
+        "packages/tui/src/components/stack.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/text.ts",
+      "sha256": "3042e09dd8dcb870c23506e6fafb2dfcc095e7e375adad2fb62e447da17e5e3b",
+      "ports": [
+        "packages/tui/src/components/text.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/truncated-text.ts",
+      "sha256": "c383487099d1864b51493a5838dd28a1bd3e5e440a675ec1dbcaf0177534fad0",
+      "ports": [
+        "packages/tui/src/components/truncated-text.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/components/v-stack.ts",
+      "sha256": "0f36c9417bfffe5f6b9cc5fd40d420390cf9bebae70a073a409ac5f931f1f813",
+      "ports": [
+        "packages/tui/src/components/v-stack.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/editor-component.ts",
+      "sha256": "0e40ba454b74e2ce21dfc6d831c185e5fb5619b0987fa158be98ed98564e8716",
+      "ports": [
+        "packages/tui/src/components/editor-component.bend"
+      ],
+      "state": "partial",
+      "note": "The Bend editor component lives under components; complete source contract review is pending."
+    },
+    {
+      "source": "packages/tui/src/fuzzy.ts",
+      "sha256": "0ae2bedc6a4f043d875ec415202a6e3d9e45405741359d7d2dc2855240dff633",
+      "ports": [
+        "packages/tui/src/fuzzy.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/index.ts",
+      "sha256": "24b4decd4a28bdd1e501bffec9ddc8abdc6a2a6e3f5649ec41d04c30d4832341",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/keybindings.ts",
+      "sha256": "eea5e3fe258ad50337595bb5320955a6d97bac0c8f6c0a838f988d75079bcf38",
+      "ports": [
+        "packages/tui/src/keybindings.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/keys.ts",
+      "sha256": "b972facce4233a4623239fc38029e28cae15d0fb326558c0c09dc02cf4345fa7",
+      "ports": [
+        "packages/tui/src/keys.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/kill-ring.ts",
+      "sha256": "d829ae816560b12d2800a38db9f7278f76d9ef43d0e53e004a86add9b56c559a",
+      "ports": [
+        "packages/tui/src/kill-ring.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/latex.ts",
+      "sha256": "c4ef99bef1d3a54c73006912c9a7fa67ef99412b4f6cd28d608cf0e07b38cece",
+      "ports": [
+        "packages/tui/src/latex.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/layout-node.ts",
+      "sha256": "31dd68c9edafdc4f882bbb6c16f8deb1c514111020b647f0037b34d6b8c70a85",
+      "ports": [
+        "packages/tui/src/layout-node.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/layout.ts",
+      "sha256": "7530a8eaa30f44fef82e8b7020b5068ba89d34884463c6cb526073b20fcdeef0",
+      "ports": [
+        "packages/tui/src/layout.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/native-modifiers.ts",
+      "sha256": "8bfe66389dee2e6e962cb82f54050f8fe10df0d0b26d56186a581a00f70d6d8e",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/native-module-path.ts",
+      "sha256": "e0955c6d733085d89cc81ef4d991e2a04368a54b52007273c0a688b23abba28b",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/native-platform.ts",
+      "sha256": "6559bfaa34aa0870f0dd6f9ebbc5d560cd532198c34555ae970063516eed783c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/stdin-buffer.ts",
+      "sha256": "a96af34c1c304a033b482b57ded426f4a51a5d1158f01c2d9daee5225fe60914",
+      "ports": [
+        "packages/tui/src/stdin-buffer.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/terminal-colors.ts",
+      "sha256": "2aa702f6e59dc51d78be64516f40c46981780a00d1f0900fb5504ad9da67b9e6",
+      "ports": [
+        "packages/tui/src/terminal-colors.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/terminal-image.ts",
+      "sha256": "f29572354977fd4ef4cc76878d31cce3cb5c45cebdfc9b5c49b50ad9cfb3171f",
+      "ports": [
+        "packages/tui/src/terminal-image.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/terminal.ts",
+      "sha256": "d281681398b9832d98a9a2d75d18a5f586190b601d9a7c82fa92927be5fae3b4",
+      "ports": [
+        "packages/tui/src/terminal.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/tui-alt-screen.ts",
+      "sha256": "5f6032a07398b8df3f72d65c38dbed2e52649a25823a52946d6414ddb2f8a929",
+      "ports": [],
+      "state": "missing",
+      "note": "Fullscreen alternate-screen mode is not ported; default regular mode is available."
+    },
+    {
+      "source": "packages/tui/src/tui-main-screen.ts",
+      "sha256": "d2271afc2ce0d2302014ae0c20ab1b6af6a9765de90254b21cef0ce2c6ca062d",
+      "ports": [
+        "packages/tui/src/tui-main-screen.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/tui.ts",
+      "sha256": "2ca47c56f4a4f24b8c6a4c9c9f2a06004bfc312d9dbcd0ac1921a2cae32bc675",
+      "ports": [
+        "packages/tui/src/tui.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/undo-stack.ts",
+      "sha256": "1373c1e0a1e2c58ac90c93d32a9e5c1226d7f53314c77dd3d0f8ec349d2b3627",
+      "ports": [
+        "packages/tui/src/undo-stack.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/utils.ts",
+      "sha256": "8cda2d53e2361ac5aaf6d7345b2fee058c8df5743eae4e4e90c89a7072c026c3",
+      "ports": [
+        "packages/tui/src/utils.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/tui/src/word-navigation.ts",
+      "sha256": "b73e915a524926ac8881731e89026b0bc7b5b0bd465de67257af81a420465c7f",
+      "ports": [
+        "packages/tui/src/word-navigation.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/bun/cli.ts",
+      "sha256": "66ba026436566ebeb8c349b8996a10f04f5bcb28f619b93d0e9bba644aeef7a3",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/bun/restore-sandbox-env.ts",
+      "sha256": "4dbbbc01b6e701457651c1c116d37a0a4f3f0143bc52047fc49c0891464c6194",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/bun/runtime-setup.ts",
+      "sha256": "83070c11e2f380780127b231ea51a1c0d656416749893119353ff602dc554b26",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/bun/sandbox-env-setup.ts",
+      "sha256": "5953e43431b4d6b3bc59a35ee21b46891ab223ba824e1e3f3d816b6129a2e360",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/args.ts",
+      "sha256": "94d1490f9c0f66ae40482c8fec9a37ab541f92eb813ae859af66ed776da44315",
+      "ports": [
+        "packages/coding-agent/src/cli/args.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/auth-check.ts",
+      "sha256": "bed735dae4b5b6a68f78e282f0bd1e48f1f9c90aad1be6d2c43510b816947144",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/auth-command.ts",
+      "sha256": "c313c83c6a8981cad0872be8d753a2efa049c1fbb7c216fc01f2b0f0c262b9be",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/config-selector.ts",
+      "sha256": "780107f9a3a23afbd56786dfd3dc361e6d0f3a7f41e5bef13d01abf734ea87e8",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/credential-print.ts",
+      "sha256": "67400cdf9459bf2bb5539fe44f23770934166b6c576e9b3c036beaeb4be42984",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/experimental/cli.ts",
+      "sha256": "65d7601b4946b761f645518582c15829860186d4df5a04f75e246dc4d804dc92",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/experimental/command-options.ts",
+      "sha256": "d6251c5e21bdb370fa346d099a6b18da919b09f358262007df27fbc3e00cf76c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/experimental/command.ts",
+      "sha256": "e5fed217d6fa0ddaf7875b3d2902e029aab63adb2ecb0727380abb524748e98a",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/experimental/commands/client.ts",
+      "sha256": "9ffed74a3acd7ca824a5887fdd23ce6b1ade3548f8afe286baa62ac7c192e57b",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/experimental/commands/server.ts",
+      "sha256": "63537bdf1aabb62fd587fd46e8f23f550798229e3a9a9c4fefd3c6c35fe07f32",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/file-processor.ts",
+      "sha256": "df2db268e6098519c9cac5bed7c2e164a68d6070e01daa8e8b89d40ac6af4abf",
+      "ports": [
+        "packages/coding-agent/src/cli/file-processor.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/initial-message.ts",
+      "sha256": "b9df15ffa8769bf419c411cd152c8b807dd0bc2997b6ed3638c2f02376a9b43f",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/list-models.ts",
+      "sha256": "a8a47f1de6405a0a61a2659e8b761c8f9e561d8ff4448390c93d80f5970ac860",
+      "ports": [
+        "packages/coding-agent/src/cli/list-models.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/project-trust.ts",
+      "sha256": "f53dace044983ef779b0c99ea3f1a75155116ace6e4569c623b95d6c24972c3b",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/session-picker.ts",
+      "sha256": "e0fd17128dce7ff0748a098e546ca717d309072c6e000253c49c9176dd279de2",
+      "ports": [
+        "packages/coding-agent/src/cli/session-picker.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/setup.ts",
+      "sha256": "94e76bf5f1f4d8f5bfcb35a4578a9ee264085bdfbbf8a6244970dbbf6cd0dff7",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli/startup-ui.ts",
+      "sha256": "109f7896fbc8ec8923ae609a803ef3ab5353413e1b036375e8067247106183b2",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/cli.ts",
+      "sha256": "bb46a9e981c56b15d35858ec1ddbf629a9125eecb2b8b78ec4ac6e033d2b0d47",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/client/index.ts",
+      "sha256": "9a6054b2e665162814f8bd3b748e0164543e87504c7e83e3918ea75fa9ed7d62",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/config.ts",
+      "sha256": "7874d7f63a62778f4281a324f99ba4faee8dc9a5c7ae80e2c531552d199257f9",
+      "ports": [
+        "packages/coding-agent/src/config.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/agent-session-runtime.ts",
+      "sha256": "ee66f90f4774ace21290fc6a0ed0fc2065376b57af4223371f1d1680b302036d",
+      "ports": [
+        "packages/coding-agent/src/core/agent-session-runtime.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/agent-session-services.ts",
+      "sha256": "831c56842c394969567199a9e5ccdaebb9a3df7bdde825aa677935b825afedd6",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/agent-session.ts",
+      "sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7",
+      "ports": [
+        "packages/coding-agent/src/core/agent-session.bend"
+      ],
+      "state": "partial",
+      "note": "Native interactive and RPC sessions work; extension boundaries and some upstream integration behaviors remain open."
+    },
+    {
+      "source": "packages/coding-agent/src/core/auth-guidance.ts",
+      "sha256": "8fbee7c272953bf881f22e9ce4b163bb0df9c091f63ee823dbfe32186991efe0",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/auth-storage.ts",
+      "sha256": "32d36165760959766807b8797042e69b65a65c7aad7d1b79a2621c41fe29b48d",
+      "ports": [
+        "packages/coding-agent/src/core/auth-storage.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/bash-executor.ts",
+      "sha256": "c0c3043846e107bbfcb236e28cc0505909bc476b67cd91f386a299ba83d08760",
+      "ports": [
+        "packages/coding-agent/src/core/bash-executor.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/bug-report-upload.ts",
+      "sha256": "3765668a4e70ff01d870ae381e74dd01819f27a0615fc58a9fd6540765afd7c9",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/bug-report.ts",
+      "sha256": "0bb4f084cdcbd58b657555ae82f0eceeb6c2e41f587e0d7193d946a09922a08b",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/cache-stats.ts",
+      "sha256": "5998714de13c0548331ec3f953a3fa4d820464592fc4826671397289ed4e4eff",
+      "ports": [
+        "packages/coding-agent/src/core/cache-stats.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/cache-warmer.ts",
+      "sha256": "596080fbe60702a44bcd8a31aeca45a5048d24c53fb0f0b40dd8781f776a8842",
+      "ports": [
+        "packages/coding-agent/src/core/cache-warmer.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/compaction/branch-summarization.ts",
+      "sha256": "0279195d2cddfe99d4e42a1327d18c7f55ff15a8807d2c5d6cd465b2ab163011",
+      "ports": [
+        "packages/coding-agent/src/core/compaction/branch-summarization.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/compaction/compaction.ts",
+      "sha256": "07c92263026e4c7792a64a1097246199dae70c8ecf3abc8ee55971cd1fcfc41b",
+      "ports": [
+        "packages/coding-agent/src/core/compaction/compaction.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/compaction/index.ts",
+      "sha256": "f82bde781410ae1a638989ff91bde9cc7045341a76bb9757de2ea6beea4c077d",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/compaction/utils.ts",
+      "sha256": "6e9d2c0b6076d5cac5fd444e5381a1fc01da5acf30eb776319a6b562fc42a02c",
+      "ports": [
+        "packages/coding-agent/src/core/compaction/utils.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/crash-log.ts",
+      "sha256": "7f88a79e4c672844baf01828e02ed79d6cce03e14bce04b0f193dd46471bae07",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/defaults.ts",
+      "sha256": "e05e32e5613066667b52fa1d8864fec27b3564636f93af7983f53984bce02955",
+      "ports": [
+        "packages/coding-agent/src/core/defaults.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/diagnostics.ts",
+      "sha256": "1914431098db1b4638e4fb3582ac22e8125356c4ab024671494f565c6d5ffb39",
+      "ports": [
+        "packages/coding-agent/src/core/diagnostics.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/event-bus.ts",
+      "sha256": "fe5c39a57081fb9674c5bdc8c4bc6779bb8524c8895afc337af5ea517bdc71a2",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/exec.ts",
+      "sha256": "1a55e7416847ea0c548775b28596bb817c8cd4aa97bc36b8da7403959fcd350f",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/experimental.ts",
+      "sha256": "b91285b8dbd14bfbb3fce3775dc4c994a057cf3efa07882fc1bd42c44fbfced5",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/export-html/ansi-to-html.ts",
+      "sha256": "09232a1add3bbb0cd436c881dca877b81efa754c1b6133b57e057ef212ec9926",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/export-html/index.ts",
+      "sha256": "a82435411f3a49c65c2a81776c784552993d9ad3160eee2bbde3c49381899cf5",
+      "ports": [
+        "packages/coding-agent/src/core/export-html/index.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/export-html/tool-renderer.ts",
+      "sha256": "305f0407b26b63035fd81566a456c8ae5496191f86a8117790a4b201a990ebfa",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/extensions/index.ts",
+      "sha256": "73f8b18ea7e72836dc90198bb74c29045f1d14571925fb706184c5eba6c7e666",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/extensions/jiti-loader.ts",
+      "sha256": "199594e72a9d8abe002c5e80420b94bb65ad0d7953f301249cf7a08652359042",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/extensions/jiti-static-loader.ts",
+      "sha256": "b8507bc36a9c9bcb2f4bafbc70b103269ffc3fb7c9052d5d76bf290c4d51bc7b",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/extensions/loader.ts",
+      "sha256": "ba9af64db7ff81df6c94193613f3447bf110497698eb118b379f32af12cff075",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/extensions/runner.ts",
+      "sha256": "bf68eaf27a3e54f1cfc0982554e0598c050fd9a06c8e8b7d6cd2d8e3d8d5990c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/extensions/types.ts",
+      "sha256": "601261b3deee1d61f85c930efed2767d66fe6c8d9637e19f4f53135b5fecf4d1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/extensions/virtual-modules.ts",
+      "sha256": "9a6cdfd7c21fd38fcf1e885990886e38a45f0f0355b918a4bbd757f460470622",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/extensions/wrapper.ts",
+      "sha256": "f71eaefd00aad08c8934fec1e5e89b49b048b599d26ff7fa01ca9780345188cd",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/footer-data-provider.ts",
+      "sha256": "024ae5b3f50a15db9c149f644845ffb267df838b3a555a0756db95043e05a0e2",
+      "ports": [
+        "packages/coding-agent/src/core/footer-data-provider.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/http-dispatcher.ts",
+      "sha256": "d64922c476d11b90555b8f23cab92ce1f4f83174cb750c125a96d8d4374744e2",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/index.ts",
+      "sha256": "f12f5159161d394ff3239153741648c839b41dc15d2c6ede866a512a32dc0b0c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/keybindings.ts",
+      "sha256": "38e8b20700e40452acab4c9583d96d9c304bbe15c471e214e50b65ec3b3f1945",
+      "ports": [
+        "packages/coding-agent/src/core/keybindings.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/messages.ts",
+      "sha256": "5397e3c96c9504266e4ee8b6e88d5098b3280ee7dbb0c687b74708c62a06c8d4",
+      "ports": [
+        "packages/coding-agent/src/core/messages.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/model-config.ts",
+      "sha256": "fda5acc6e80ed31750efd33cacb417f012f19ff22b2e24fcc1bed2d03261513c",
+      "ports": [
+        "packages/coding-agent/src/core/model-config.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/model-registry.ts",
+      "sha256": "b94ea3640c3df228eda475665fb10e4812b88a9e98f336349893e73a75ec91e9",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/model-resolver.ts",
+      "sha256": "b0119e2e18f2b480cfd714c121dda1a0b9282bc9d8caa2ead1891b34642d4ed8",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/model-runtime.ts",
+      "sha256": "20c1dbfa1dd757a594cf0b4ab6e401fc6c6155484a3f490096bc5328e3c33c2c",
+      "ports": [
+        "packages/coding-agent/src/core/model-runtime.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/models-store.ts",
+      "sha256": "9a93afb3ad9123e59cb61606e77d431b38bbeb3063afc0e2974341109f23db02",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/output-guard.ts",
+      "sha256": "68c0e9a7533f0cf7270bb50a7558185a9f9a0f71304c85bb438dd620161a4f04",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/package-manager.ts",
+      "sha256": "e2fdd18093dc69cb8fe82bb6bef674f20f8a5093d0d13fd1b7180f49dbe751fd",
+      "ports": [
+        "packages/coding-agent/src/core/package-manager.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/pi-manifest.ts",
+      "sha256": "cdeed96fef83e03043bb25081ad4b7abd26e739dfa464a0e1763c6473330bac3",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/project-trust.ts",
+      "sha256": "39d5874a2a001ae7ac797ea297e31bf061eff07f9b2883f3eeaf6d3e1f5637ba",
+      "ports": [
+        "packages/coding-agent/src/core/project-trust.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/prompt-templates.ts",
+      "sha256": "11db52a6bea6f3f094c6f533d4a3162462bdef4693f238ba1a8a1be6729d4545",
+      "ports": [
+        "packages/coding-agent/src/core/prompt-templates.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/provider-attribution.ts",
+      "sha256": "c3d342e08f2297a9bb4bb1dc18066ed9b60a254ffbefc72517cadb2288242235",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/provider-composer.ts",
+      "sha256": "d0088e387e7cc060e73e8e1bd11ca73c969c7433e368cab6fbb3e5a1d6676f21",
+      "ports": [
+        "packages/coding-agent/src/core/provider-composer.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/radius.ts",
+      "sha256": "d0baa74c722f42392059240b5568ca861db5687ff8b4d010fc467eb07cd6098e",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/remote-catalog-provider.ts",
+      "sha256": "72c74d4d41954deabc9b1b52c9274e76a95f8148b732400f9225ff529aacb915",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/resolve-config-value.ts",
+      "sha256": "0f53dad47fe5d5d8837c022b7951ccd3bd5a9b577bd662f0986272110e83bcc7",
+      "ports": [
+        "packages/coding-agent/src/core/resolve-config-value.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/resource-loader.ts",
+      "sha256": "60e8b49790ab7ab7997dcaa647bef5eaaabdb8273c317c72b1f9567d78e99620",
+      "ports": [
+        "packages/coding-agent/src/core/resource-loader.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/runtime-credentials.ts",
+      "sha256": "ddbedbe209da4314a873c9e435c2a80404a25bcf63406351888bd613068b7036",
+      "ports": [
+        "packages/coding-agent/src/core/runtime-credentials.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/sdk.ts",
+      "sha256": "b419cd7aa1515d5f85d68d210daa0d79360a1e8eabe456e96b97857bec0498de",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/session-cwd.ts",
+      "sha256": "581c849ce1ccb50da0ee9eabb3c34b80aed757aafcb79784349229e50df4d727",
+      "ports": [
+        "packages/coding-agent/src/core/session-cwd.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/session-export.ts",
+      "sha256": "8ec53e13bd4bc9097e4f7640e2fd2e58ffbbdcadce6df5efdf5cb5622f98d285",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/session-manager.ts",
+      "sha256": "ded5d65112f8666f0e3ae71dab39a302607c29a000745a3d06e00c2103c8f257",
+      "ports": [
+        "packages/coding-agent/src/core/session-manager.bend"
+      ],
+      "state": "partial",
+      "note": "Session persistence, resume, tree and fork work; complete upstream session/recovery parity is not claimed."
+    },
+    {
+      "source": "packages/coding-agent/src/core/settings-diagnostics.ts",
+      "sha256": "8ef3554ff841468a2493d9bab2754aa7a305471ea5754e54efccc363fe0dd0e1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/settings-manager.ts",
+      "sha256": "5d1bdac20da52fdbac76d49fb9ce22d142c375e8efd5bf446bf6c047c5edac42",
+      "ports": [
+        "packages/coding-agent/src/core/settings-manager.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/skills.ts",
+      "sha256": "055dbfde974fd1951267dd6f9204b5d713ff0004e0991eb870fce9158c6e359a",
+      "ports": [
+        "packages/coding-agent/src/core/skills.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/slash-commands.ts",
+      "sha256": "f0fee97e4b10d337593736ff8d9370fe5ea2c713d357397dba88c69677f07ce6",
+      "ports": [
+        "packages/coding-agent/src/core/slash-commands.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/source-info.ts",
+      "sha256": "9736ba7876085249e036fdf5f4d3bba565b5bc11b832e200a0d3ba58743c747b",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/system-prompt.ts",
+      "sha256": "f92aef055417513395a1e7d5f4ef9cd66ccdb34d9f8fbb7bc368154ab6280939",
+      "ports": [
+        "packages/coding-agent/src/core/system-prompt.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/telemetry.ts",
+      "sha256": "5ec837b287ea0303f704a5278c586e2a5d4003f3ad2ccad94997d2fa59164855",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/timings.ts",
+      "sha256": "55e4d7f31bdf3727baa4e89f361a6abee9ae4a76f64a30369ea157cb37bbc2b2",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/bash.ts",
+      "sha256": "3f43b6d80b460bd38334975bee2726b5438ee6e54bf52abdb6fc54400aad28d2",
+      "ports": [
+        "packages/coding-agent/src/core/tools/bash.bend"
+      ],
+      "state": "partial",
+      "note": "Native Bash execution and interactive streaming work; output preview and exact terminal parity have known gaps."
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/edit-diff.ts",
+      "sha256": "f85a9809eb44b9828236050cf38a8e45933e5cfd583a186e9a0e55a664dd3e8d",
+      "ports": [
+        "packages/coding-agent/src/core/tools/edit-diff.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/edit.ts",
+      "sha256": "31a368c14cf5437ecac157765660001b16063302d9bd746303d6d1b1dcb5625d",
+      "ports": [
+        "packages/coding-agent/src/core/tools/edit.bend"
+      ],
+      "state": "partial",
+      "note": "Native edit execution works; complete upstream edit behavior is not established by the current source review."
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/file-mutation-queue.ts",
+      "sha256": "33cb06ac9bcdf32c8b84d9d12e33be44c503a7670f668e003a3262cd34294d11",
+      "ports": [
+        "packages/coding-agent/src/core/tools/file-mutation-queue.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/find.ts",
+      "sha256": "b06bcae6821a0e9fda1b63be613a7ce28eb0e66e1d01d16564e59e83f9ce10ea",
+      "ports": [
+        "packages/coding-agent/src/core/tools/find.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/grep.ts",
+      "sha256": "88be3d00217d1a1caf8a9e7bb2b8d2e6d96edfa4b790c2cf76c746ab36b8841b",
+      "ports": [
+        "packages/coding-agent/src/core/tools/grep.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/index.ts",
+      "sha256": "3c66ea1e03530fb85436ee639f35add8bf72718ac6e76b738a1f41be58a2b472",
+      "ports": [
+        "packages/coding-agent/src/core/tools/index.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/ls.ts",
+      "sha256": "3d0a5457e4f5b9e9967c44608b76b060374d047e80d6871ecec4459b612cb6a3",
+      "ports": [
+        "packages/coding-agent/src/core/tools/ls.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/output-accumulator.ts",
+      "sha256": "c601ddd8e10934be6f3db30696eacba7b9544f2dd1648a5ec3c9935f0d4625c3",
+      "ports": [
+        "packages/coding-agent/src/core/tools/output-accumulator.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/path-utils.ts",
+      "sha256": "ab6f420d2388a41366113c17a25e356867820b87b02a169d044cfcf83e1997d3",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/powershell.ts",
+      "sha256": "56645690718f03e6c5a19b574a74e3f28f0d0df7563fb226eeee5c88576aefad",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/read.ts",
+      "sha256": "297d26092979651091f44de8862a6fd55aaf59e7252f8fb8dd3d7cb3f9771518",
+      "ports": [
+        "packages/coding-agent/src/core/tools/read.bend"
+      ],
+      "state": "partial",
+      "note": "Native text read works; image reading and full upstream behavior remain open."
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/render-utils.ts",
+      "sha256": "38913e15575b7c314687c1a7d53b2763eecb8e7a86b0b58d7b5532c900503cf3",
+      "ports": [
+        "packages/coding-agent/src/core/tools/render-utils.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/renderers/bash.ts",
+      "sha256": "f04ab261d9f915f7b43a97ac679fb38d5646110855a886474593dc5d973f6764",
+      "ports": [
+        "packages/coding-agent/src/core/tools/renderers/bash.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/renderers/edit.ts",
+      "sha256": "0c1bafcf74ad2b703bf5ab193e72084a1da80231a77abddefc23c5bb20558731",
+      "ports": [
+        "packages/coding-agent/src/core/tools/renderers/edit.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/renderers/find.ts",
+      "sha256": "a33591e8193eb2a5591596019676899587f783149434f857eaf331edb8fabe70",
+      "ports": [
+        "packages/coding-agent/src/core/tools/renderers/find.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/renderers/grep.ts",
+      "sha256": "8a990da5f4305b0976ad4c245188fbf1fd5e4a3bad69b86c2ffd85bdd1115927",
+      "ports": [
+        "packages/coding-agent/src/core/tools/renderers/grep.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/renderers/index.ts",
+      "sha256": "fc74bbf32ad8a3ec3d0651ffc20edd5026e7e57cc077c6accc9ce46b556e52d2",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/renderers/ls.ts",
+      "sha256": "69ef43c9bcc3082b4c7880b0ad2edf4c0605c84fac326a2254e55397b9c81084",
+      "ports": [
+        "packages/coding-agent/src/core/tools/renderers/ls.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/renderers/read.ts",
+      "sha256": "93699c267fc824c0016ac182b68c01c45feeb621c64fc44a814a96e3c951f106",
+      "ports": [
+        "packages/coding-agent/src/core/tools/renderers/read.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/renderers/write.ts",
+      "sha256": "84d715671a72c77821ab81aef79b39f5022082c78568683ab643d38ee735d07f",
+      "ports": [
+        "packages/coding-agent/src/core/tools/renderers/write.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/tool-definition-wrapper.ts",
+      "sha256": "98c04e593457dfefdc4160fa84c4e16f1a693adad21672bdf1fbfa4912ef2f8b",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/truncate.ts",
+      "sha256": "104e61ea602c7f7894097b2771dad8c68de75c5a10ea6222e615c4ad144451c7",
+      "ports": [
+        "packages/coding-agent/src/core/tools/truncate.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/tools/write.ts",
+      "sha256": "2ee0a438c24cf83fefd733e349d55a21aa5b633c18934b2c80759fcf14b6f297",
+      "ports": [
+        "packages/coding-agent/src/core/tools/write.bend"
+      ],
+      "state": "partial",
+      "note": "Native write execution works; complete upstream source contract has not been reviewed."
+    },
+    {
+      "source": "packages/coding-agent/src/core/trust-manager.ts",
+      "sha256": "b19e0a54037f48cc9c6c65d2ccdacb6809ac961111848e1c2d99db99bbed388c",
+      "ports": [
+        "packages/coding-agent/src/core/trust-manager.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/core/usage-totals.ts",
+      "sha256": "4f5e027dc03d3db8c4b702bd622b65b251b42c069a5be0534cfab9da4cebdfb9",
+      "ports": [
+        "packages/coding-agent/src/core/usage-totals.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/cli.ts",
+      "sha256": "08976c75cd1a2b934611e363be3d39c5b038bdd66ffc1b8f16ec097d1c289c0a",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/client-runtime.ts",
+      "sha256": "9f467a682b00c75bab5fe8d15119a08cb6d79442bd26258615d82767db9881c8",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/client-tui-chat.ts",
+      "sha256": "ca088b5d58711be5ce997fc76fef6ddf4d74ec5dd0bf0b17ae8e788fb9428ebf",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/client-tui.ts",
+      "sha256": "6e30d12494602871b61f7c0c3650be82c53e9f7ca717ae1852d1ff67545756fd",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/client.ts",
+      "sha256": "5d1f039e5ff99de786aff0bf22eba2616d68e7334cc35453fc98164928120098",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/commands.ts",
+      "sha256": "5e9763c2a8774ee1fc0a2c28be69bc46464f6067c6ed2b6f575208d2759e35a5",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/coordinator-entry.ts",
+      "sha256": "ee772c3d86c3cb504235637593d4bf434bca8c8a470cbbc814fcbded46c28cb0",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/coordinator.ts",
+      "sha256": "c65c9b03ab980d12b4a0bf938b39af7462f40a79d4a4331f94cda9df0ea12b62",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/micro/api.ts",
+      "sha256": "3f0ea3b127ae3fb6602c8728fe1ffb0cf2738eb7b02b8302705caabb00452621",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/micro/main.ts",
+      "sha256": "b38e844f64b0082541d949cb331c7ed3c1d0426c940ab7cdf0e4dc3dff263dc1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/micro/models.ts",
+      "sha256": "7bd6a3c3770112582ee5be032355e8ea7de03532f2b2b200b9dd5386b0e5fc88",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/micro/runtime.ts",
+      "sha256": "0e77b46306e73967fef27600ff3f3e340025824d9e8d526c50e98c9577b0c729",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/micro/sessions.ts",
+      "sha256": "0d3a548b56b6b94f5b1377ce0b2c44168478a32a966d71fedeca61641403f3be",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/micro/tools.ts",
+      "sha256": "78394a8b0afc5eb31a9317ad8a484d2076f7674047a65f30190d02fc2b8a4ca1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/micro/tui.ts",
+      "sha256": "5163bf2fec900bd70a0034900a63f81781440f2a07df5d4f56dc0acb709a8bc6",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/mini/main.ts",
+      "sha256": "18d6a400c706ef80a1f9b836ea2f2246a6b6fa08036720ebb0770e7f4011bfba",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/mini/server/entry.ts",
+      "sha256": "6dc333e3fce73814da56afd2e70397d52b1bf1f49cf1e8a7122342315f3a39cc",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/mini/server/run.ts",
+      "sha256": "f5fed2f24494ebf7429287e8fcf9257a67eb6d6061fffc9d8af6e6f51b6b6197",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/mini/shared/protocol.ts",
+      "sha256": "f0f34fbb10c01514f3bb5d6fafee93848bbcd5f392ecca194b183f66928b8869",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/mini/shared/rpc.ts",
+      "sha256": "7f85079d32670b96619adfeba914c118477a64f1f984d9c93f2b9592b1e066e2",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/mini/shared/transport.ts",
+      "sha256": "90ac3a280be3469b6911ee89339ca67b60660752076d590c08282d58e85d2bdb",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/mini/tui/run.ts",
+      "sha256": "d4813570a77f540348162b33839d486c0895cb9c4e9b60d43ed42b883e4ae500",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/mini/tui/session.ts",
+      "sha256": "72995da0986ce0074279b58cd134b19c203eb60a68c332855134e4e5644d4350",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/mini/tui/view.ts",
+      "sha256": "9467789d00830b0f198dc1b08d7474c0e66ca3cdd13525e5871783b2f9dd1a42",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/mini/worker/entry.ts",
+      "sha256": "c70dc5132b9923e3486c65bfc1c8bf0eeda991137cfad8677745d30a92d58a31",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/mini/worker/lane-service.ts",
+      "sha256": "fd528140bbd0af1a96f2a81d0a8b0347fae902b247568e24a1bd15a568d4d264",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/mini/worker/models-service.ts",
+      "sha256": "a9757453fd7a45425adc316c1b9c71305ba40248ead2250c7b2b1fde4cd6d095",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/mini/worker/run.ts",
+      "sha256": "fc5ae86711d55d05a7a13690139ea4380c5d29dce67dbad62e805a10fa92a324",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/plugin.ts",
+      "sha256": "2d8b713f17d3240697c74374c7ead0ba1b4d0d891cc904e7d62a6be458a4c5e6",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/plugins/bundled.ts",
+      "sha256": "aeb9e63fcd487c0230e1f54ec033c6a1f6fef283802250945c05159d03d65244",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/plugins/package.ts",
+      "sha256": "ea626c8a56aa2bf81b2b67646e60a9f1f0467633e4f8cf9836ba948dd2b0702f",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/process.ts",
+      "sha256": "9f28b373093bb82fae889fda6fc2cb8c747a5112e3a27b2936cbd27c376a178c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/radius-auth.ts",
+      "sha256": "3793e99e9b4704e86921741aba5defd810947422dbb56f7316df4b7e89fdf58f",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/radius-relay.ts",
+      "sha256": "731814cce6098efde8a15bdcd92568f23400925b2c3e197871a5d80919e0a80a",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/server.ts",
+      "sha256": "d98412be6f8f8566a119be2236a306021530ef2fac6b900e9cb79aaed90373e4",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/services/agent-controller-provider.ts",
+      "sha256": "d676d15ab727e43ee775314c767ce5ac79eec8a5ca32b6d98b88d8285c76d3a5",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/services/agent-controller.ts",
+      "sha256": "9478b5ef7438af579f248cf04cc7bf334923f86685135b8535b632ac221e30ab",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/services/connection.ts",
+      "sha256": "075804faa30108e43fedd99207cd4355eeb608c6260fb0c17a7e51314c0964be",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/services/models-provider.ts",
+      "sha256": "e3ec94b6664edf48e82d3e650a21a9ec5a79d27345942069e72571c441dbe030",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/services/models.ts",
+      "sha256": "85396dcd7bedf0b3e66ae9a5aed23a91117356a50786937acdd68894d6f00db5",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/services/plugins.ts",
+      "sha256": "7eff6043195922a68092737fa04b4b357175e82534bffd207456952fd7aa6af1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/services/presentation-ui.ts",
+      "sha256": "cc2c1796cfb7ecd160f50c02895abdd2db5e9234c7c884be2a54a80a2490b1b8",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/services/server.ts",
+      "sha256": "e0d790830e118890a60f4f73f971e4397a3037cec2510a4909a602d4c4555f42",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/services/sessions.ts",
+      "sha256": "451a74e2562f44958a48fe5cc6a609e84a6e0e783450dc72b93d3955b2359fc8",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/services/slash-commands-provider.ts",
+      "sha256": "672d3d914e42ea27c18ad43726d12338a96e10ba6f214c5f585cada215b6668d",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/services/slash-commands.ts",
+      "sha256": "be377b318d0d0ac1b17a792245f1690a9d0610670dcdd7e17f0cc5733f566132",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/services/transcript-provider.ts",
+      "sha256": "5b610e86c10a2a769fba744b971e3820fa66b3abc8b8e462fd316296ee30748c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/services/transcript.ts",
+      "sha256": "ede4d2fbe4285ab69d96e9b7150f9e1d76710447a44c98758f3ad9a863f499fd",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/services/worker.ts",
+      "sha256": "3d7f193d6d6fe3f5bd956e8f06bf4c3ba57ed4f2f941669d74f32225a01dcafd",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/session-worker-manager.ts",
+      "sha256": "880d00516909d6bbb64a7108a2bc2e04c230c98f2b532be404ad6e3bb862a140",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/session-worker.ts",
+      "sha256": "f2ec55d9f48eb8ddb39f40e8681ce8424298742e7a2893db8f7d12923262b043",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/experimental/source-resolver.ts",
+      "sha256": "c584d52fb68860c0c6ae5dfbbcb6052fa104d6e34c7ef231b9e6eb7e0ec5b2a6",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/extensions/index.ts",
+      "sha256": "29c9dc5de4ec9c895223e8991ff02871f8eb67702435abed64a2b412430b4d7c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/extensions/llama/client.ts",
+      "sha256": "21dd9b4c662ba4329e1448f93859c6028471347495ca8bb23d3a5a799d03d709",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/extensions/llama/huggingface.ts",
+      "sha256": "eb606891ead96898a4bb4a05220ddd5cd7acb814055ec649a6497335fc14bd3c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/extensions/llama/index.ts",
+      "sha256": "748974470600b6a59d8076c4dde266e2abb7e2c54e63dcb6c7e3649bb8946a58",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/extensions/llama/provider.ts",
+      "sha256": "8e20963cf6f49148eab235c72c5a5316f248f9c60384947f7927416ce0fdbc8e",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/extensions/llama/ui.ts",
+      "sha256": "c64835394ff9f8242acffe00dea890c8b707d348b86afac0bc0e1cda9fdf2f9e",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/index.ts",
+      "sha256": "60472823b30980d1c482f6aed19e4cab09cfeddffaa3be570d67a6cc1d7af2a0",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/main.ts",
+      "sha256": "d5f38460ed5ff89a8822a56bb40d279c08fe00b4d1d501e83cce0faf0b99addd",
+      "ports": [
+        "packages/coding-agent/src/main.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/migrations.ts",
+      "sha256": "59fc18cedfcbecd993918bb335e5e76a9f9c899c61ecf9eab110f86d976af1bc",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/index.ts",
+      "sha256": "546cf0e6fa0d645265116bec02b2e53313a2359f5b20bd23c286e6c33c0829f3",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/bug-report.ts",
+      "sha256": "d55147d46ed0754c759b98efe2dbd79d1f41cef7203964859862251ec47cd862",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/chat-viewport.ts",
+      "sha256": "24bbdd06a5e17d6c0631f7de51329eb7bb4ecd4a460dec7b3d593ff9e6219960",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/armin.ts",
+      "sha256": "063490225c2367762a33d0518f21458ec0684b924d905d5196d4b55f3dad6db5",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/assistant-message.ts",
+      "sha256": "f8a20228291816aec253d3f115fec5ba765807275bc14077780225117e5912cb",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/bash-execution.ts",
+      "sha256": "59e252e04122eeb849daa7a5cdb02f98c7cac24fec4f0aed6291df10c5d861e8",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/bordered-loader.ts",
+      "sha256": "f4a6487b80360bde89d8e96ebec16d84d4cd106dcc57c53757be571c7c4da1f6",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/branch-summary-message.ts",
+      "sha256": "32525e00f5fd9c4e6706aeb77b0647d20d4fa2e35f6384a8b6d4d2fbcd0bb041",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/compaction-summary-message.ts",
+      "sha256": "90f5d197364755431678229959f233527e2b07076d2e7d8ffde83da09b77905a",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/config-selector.ts",
+      "sha256": "2a1f2594ff2f78aa2305f7128bacbd8c227d5bd4efa94b156f45a7d9268c0805",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/countdown-timer.ts",
+      "sha256": "6ade4aa41c2c2400bdb79d47701c95504be48e3ab9f2b1aee3836a888c2d1da9",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/custom-editor.ts",
+      "sha256": "a19deef137c3c653e24372842dd49bb819f8fcc24a69a5dc6ec60fc2bad3f8f1",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/custom-editor.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/custom-entry.ts",
+      "sha256": "8796bd95c4b496aad74674bbfb0e286768731532ad5ab8f51e6471cfbfd9404e",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/custom-message.ts",
+      "sha256": "321af8afdff8da4924a7dbf5623b5637eb160ea7d73a70e6662d8125249bde9b",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/daxnuts.ts",
+      "sha256": "5567f1ca8217b3d536d304fa365a627ee4f8096aa435fd1088eb55e743275bfc",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/diff.ts",
+      "sha256": "b43f8d91ba9f19088dc9dc86126091c3fdfca25eac6461f5510f5e1e9ddd6491",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/dynamic-border.ts",
+      "sha256": "1f7fa398a861906e3dbbd217434f290f09d23c5e561ab7d6ef24808db4353cb0",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/earendil-announcement.ts",
+      "sha256": "49b1711624425b7d504bf7d871810225814138b64bb2152fe3e70dbf1dd005d4",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/extension-editor.ts",
+      "sha256": "d41f13dfaf73596643111fac10520b190998202627c6004eb6846d42ce9d37f1",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/extension-input.ts",
+      "sha256": "efd8f7c27b2a1f1a9215e0cca31a34b3d54db2783ade2914dfa1facf8e1945bd",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/extension-selector.ts",
+      "sha256": "d83767b09d73264eb0cb9af54b6f13e0e9c15a429a6dd7b9c8e7498e013b7704",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/first-time-setup.ts",
+      "sha256": "1a8f74713297b0ac2bc010a0d3ce7e1909b40d74dc07a40632c20a262964914c",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/footer.ts",
+      "sha256": "9e0f71e0f405a9f0fdae901de2778834649facd0f78a78b53c682179f8faf693",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/footer.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/index.ts",
+      "sha256": "33f3214fbbd5afc45eb7dd85e71413fca9d6ee5233195e2b14785bc1dcdc5c21",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/keybinding-hints.ts",
+      "sha256": "76b13ee8bfc6e49d5b2b5496eac13523bd9aad95770cbfa4a239336131f94aae",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/keybinding-hints.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/login-dialog.ts",
+      "sha256": "37608848ca7b72707437aed9627a612eadf570c57a54b1c86972c3532918298c",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/markdown-transform.ts",
+      "sha256": "657edd0453dab59d362e0d18c330486b86a47fe7a33b8c32204db8ce23a142a9",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/mermaid.ts",
+      "sha256": "994acb562b70957ed828770d74879e03cfffbc472acef94073ad74cda8defe58",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/model-selector.ts",
+      "sha256": "92d70b9faffc9febf2ce0c519c7c086938bddfc5da9ad28d819f408d54e3637e",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/model-selector.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/oauth-selector.ts",
+      "sha256": "d4c92352cc8035e4092d9bd67e0250a2eab3124e13f15ac45433acfde92db53f",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/scoped-models-selector.ts",
+      "sha256": "a8524d7ccfaf6fd6044a268a06d43f6eee7325b047057c73bb43fa0b1286c612",
+      "ports": [],
+      "state": "missing",
+      "note": "The /scoped-models interactive selector is absent; model cycling exists separately."
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/session-selector-search.ts",
+      "sha256": "5b1811240c39c958f863091ece06d67cb8432d4d7e70185087d5e041432dff36",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/session-selector.ts",
+      "sha256": "8d8744ed7ba79d04fbc5e2fac16ef38083ba2d1e871d12a1a2460faa27e29f27",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/session-selector.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/settings-selector.ts",
+      "sha256": "8134b93329c9155bd017df5b6278e2d72b403c8ca1f22c26a81234659ab7e6ea",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/settings-selector.bend"
+      ],
+      "state": "partial",
+      "note": "The selector works for supported settings; some upstream rows depend on unfinished behavior and are omitted."
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/settings-submenu.ts",
+      "sha256": "3fcce39ae104343e20a564fb06db52e7553759b0636a4252de5ae6adb03ad5ac",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/show-images-selector.ts",
+      "sha256": "6bea191c5442c0fa46c7fd54836de31df2042c8ed3aef3225b2a56a5fc1a65a9",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/skill-invocation-message.ts",
+      "sha256": "7ec5c3e95413187aab7937740062cfa3c4dbac4754afbfa78810b6ad89ff0b27",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/status-indicator.ts",
+      "sha256": "1deb7f7ce7d05e4ab6ea8f088f36aac6a64273dfda8c1d46483c98297777cd2d",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/theme-selector.ts",
+      "sha256": "267be3176c67bddb72f0f64a9c3561a256c758707afbeabe2ac68112c8e3b5f8",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/thinking-selector.ts",
+      "sha256": "a8e562022d04ef4266191ba35a0417fced547666be6e6e97329aa3918b512e18",
+      "ports": [],
+      "state": "missing",
+      "note": "The /thinking selector and its save-as-default action are absent; the setting and current-session /thinking command exist separately."
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/tool-execution.ts",
+      "sha256": "1463e89622b305847fd129ea81a5f8d969778a650daf5357bd3771c79aef349f",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/tree-selector.ts",
+      "sha256": "767bee39141acf21f70b4e8c01c62dfefa588bc2edd8fe2093886a70a77e115f",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/trust-selector.ts",
+      "sha256": "2872e04461df34437d0ea2275ec24b76c9eaf22727ce496d88b471b366e82a3a",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/trust-selector.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/user-message-selector.ts",
+      "sha256": "bd48d99cc3eea80d833f9933d4281d2b79b40d7c63727663b2a4c9605930369a",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/user-message.ts",
+      "sha256": "234d4f2544a0cb60082a6012a63576cdda4e9f99cdd0560129dd1efe5c6c7b1d",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/components/visual-truncate.ts",
+      "sha256": "05eb9a43fb379e54d677622a287a865e3be6cce185e60332e367f2432e4e37b5",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/external-editor.ts",
+      "sha256": "b05a9c1e8a88fd5c39937564160463d7d670df4bc2148b70a7325c601a96dee7",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/interactive-mode.ts",
+      "sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/interactive-mode.bend",
+        "packages/coding-agent/src/modes/interactive/run.bend"
+      ],
+      "state": "partial",
+      "note": "The interactive loop runs, but command and terminal parity remain incomplete; /thinking and /scoped-models selectors are known gaps."
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/model-catalog-refresh.ts",
+      "sha256": "a7a10647deaba5036019737c376ab3f73eed12703dafeb8cb8920581ec8672e2",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/model-search.ts",
+      "sha256": "9be620174c0f25516b0c537dcd4ef9be7c9c9a145e6489e186cc6c4787b25412",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/model-search.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/session-share.ts",
+      "sha256": "8204ea1382273641e943ca02877ca466f5642dab73f4bda29508c2337637c0cd",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/theme/theme-controller.ts",
+      "sha256": "ad18b680f43a63c0d7a0da3e946d38e95a436d9fcf593f7268f7562f7c4be25e",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/theme/theme-controller.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/theme/theme-json.ts",
+      "sha256": "144a2c1e6b9a92c5f31ecc8cd37d979e473309716439aca57c7e6a542ad20f73",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/theme/theme.ts",
+      "sha256": "c3bf2e3b72f6bb782f34de0535fcc1758b9b6ea7a0d2e7d6f17244fa55c3f31a",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/theme/theme.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/interactive/tui-renderer.ts",
+      "sha256": "98e233fa33fd3ca08a2307db860e7594ef8515da328e92b816ce15020a7dd6cb",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/json-event.ts",
+      "sha256": "87f6fa86cd73b817470062f5ab0a99c790d0c0e222e25979b96bfcd157e119bf",
+      "ports": [
+        "packages/coding-agent/src/modes/json-event.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/print-mode.ts",
+      "sha256": "18dd0c2c214421c3dffbe56f3520330c8bb0fca87d4872f5b5ba653b213f7200",
+      "ports": [
+        "packages/coding-agent/src/modes/print-mode.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/rpc/jsonl.ts",
+      "sha256": "95723d349fcebad1f1da7ce103d02ba7d5e2c876b7d178d41d8b56beedbd93e0",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/rpc/rpc-client.ts",
+      "sha256": "6d1a586cfa38fd3be62d21feacfe9e700f6e88d4fc842adcc345130acd0d57ff",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/rpc/rpc-mode.ts",
+      "sha256": "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/modes/rpc/rpc-types.ts",
+      "sha256": "34057257456fd5f935587a0e9650fb5777738674e491a68fd037425703c45e26",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/package-manager-cli.ts",
+      "sha256": "8f75c01f9c2c2e07d2144eaef43a0739435844cacf28a6fd6b316692e510a1c0",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/rpc-entry.ts",
+      "sha256": "3222ea0128d7c779a2fcf964c692420761fd014f4f42795bf9da5962e2e83b1d",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/abort.ts",
+      "sha256": "f3a3265a2fb2b577bf32334ae8849c1f3dd1ac1487b81d7bc2d5007897fb5790",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/ansi.ts",
+      "sha256": "65f53effde0303bda407ffd923cf7a1ad9159cc8ff0b35872d781239c885116c",
+      "ports": [
+        "packages/coding-agent/src/utils/ansi.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/changelog.ts",
+      "sha256": "d4dae0df7e79f53dfb600da439b9c0be2ae21a5c1ed86033e6232f9a8f147360",
+      "ports": [
+        "packages/coding-agent/src/utils/changelog.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/child-process.ts",
+      "sha256": "cd324f5b9a1abadd85ab5a331750d475c8bd51ec65cae091ad9b416245ec85d4",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/clipboard-command.ts",
+      "sha256": "9ec41f5195b08929e697b3ec718f72e99852ab19f125aed330f23cf78d961d33",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/clipboard-image.ts",
+      "sha256": "d0f228cbf7df4bd11bc0fd039c23049a8f2166b2e48a5df2e1a3e51723058904",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/clipboard.ts",
+      "sha256": "1331d3b9ade0eeb3c71500eabad44f2eab52fa4c1cc5154c66cf9aec9c0c811c",
+      "ports": [
+        "packages/coding-agent/src/utils/clipboard.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/deprecation.ts",
+      "sha256": "5d299ae61779d60507f8634caada1283b0b63077bcc5d5a03d0a328168f3e46f",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/exif-orientation.ts",
+      "sha256": "fbca93e04682d00139c319a0721417d47b505e0c6e5787f4d9d9dba164194ad0",
+      "ports": [
+        "packages/coding-agent/src/utils/exif-orientation.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/frontmatter.ts",
+      "sha256": "99142d78b94e658e0be65cf05046be8069b3700168a683e0af64219ad903bcd6",
+      "ports": [
+        "packages/coding-agent/src/utils/frontmatter.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/fs-watch.ts",
+      "sha256": "f40e22497371b59286e516eeff70495b20a099daef160c82cc1c196cf637df41",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/git.ts",
+      "sha256": "bff4590aefa988ba625026769ac5ad02f02558d59bd7d566f4728e1ee4da1da9",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/html.ts",
+      "sha256": "d3abd075ab64807a1facae1511ec0b9b22f63153c7808eb63e7560fb00b1d48b",
+      "ports": [
+        "packages/coding-agent/src/utils/html.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/image-convert.ts",
+      "sha256": "791f2a134995ecd2d337c5e881971bc257889615c1245ea54013203af1ef8e16",
+      "ports": [
+        "packages/coding-agent/src/utils/image-convert.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/image-process.ts",
+      "sha256": "fffb65fba877607644f8028c0f24aa6e74228e15427e112ee367e7983f2a79e5",
+      "ports": [
+        "packages/coding-agent/src/utils/image-process.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/image-resize-core.ts",
+      "sha256": "b3523329397d47473b76c40e8802283a79d3a3e3f317f4da0124ccba5152edd8",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/image-resize-worker.ts",
+      "sha256": "c77213875e45d2aea46deb67b6cc03bcfb57cba84c8a17ccc2158aa3e79873c7",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/image-resize.ts",
+      "sha256": "d93a007eb45a02b73b1a4777d193614dae5fbcadd9139c8b755ea35c1d649757",
+      "ports": [
+        "packages/coding-agent/src/utils/image-resize.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/json.ts",
+      "sha256": "7ee95ee422abcc3610033e27d1e1da08ebadac0502b6326a1540b64843a084dd",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/management-http.ts",
+      "sha256": "2195b345fdd5c607f87a55b93e7d00c6d70d7dcfe2989b08bbd9f39b529a756a",
+      "ports": [
+        "packages/coding-agent/src/utils/management-http.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/mime.ts",
+      "sha256": "561d5511a976cdf4fc2d1b2ac773b21820bbad62e954e39c473f77c46a77f0af",
+      "ports": [
+        "packages/coding-agent/src/utils/mime.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/open-browser.ts",
+      "sha256": "134233cdbc3079566b217a5714461ba8189a1673ea1380e8e081f8d3bc4f00ef",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/paths.ts",
+      "sha256": "a687cdb54b82216673fea5be1210c48e64ffa8398d64cfabf2bd7dba5c9d4210",
+      "ports": [
+        "packages/coding-agent/src/utils/paths.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/photon.ts",
+      "sha256": "806c3941b96e09705e26cd2d449ee8971b3498bbde495f7512b20906120d96a9",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/pi-user-agent.ts",
+      "sha256": "cd2329beb4b18fd99f5180d603fd1371c8f50441d4688f7d75918a051e565c26",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/shell.ts",
+      "sha256": "7ae7fe532fecdf90af48beeae1f0bb465f2f83123d5326e86a559fef4b1568c2",
+      "ports": [
+        "packages/coding-agent/src/utils/shell.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/sleep.ts",
+      "sha256": "41bb3a7cccc0420483993d6fbc4e85d7cc1ab5a4ec46ce440deaae224f1005fc",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/syntax-highlight.ts",
+      "sha256": "f5bc699e8609a8217ae60bb3cc9be73efd47df4c3e2a3b62608664603b2fdd56",
+      "ports": [
+        "packages/coding-agent/src/utils/syntax-highlight.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/text.ts",
+      "sha256": "bb323f9607c499115b532021f4f0163c6df04d834aee9c32c3c77b273bd2d7c6",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/tool-result-images.ts",
+      "sha256": "151a2c2a2724e4b09858218a0cb6c9c076fd987080c934597699ab3956a27cf6",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/tools-manager.ts",
+      "sha256": "cfd082080d10a6209d7994ac7829c29dbb39694bdf3fe549e907c28cfc506a17",
+      "ports": [
+        "packages/coding-agent/src/utils/tools-manager.bend"
+      ],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/version-check.ts",
+      "sha256": "23279d94eae94dc19b1221c58a7993677327a47a8b6e37c9c1e4201f3adcf983",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/windows-self-update.ts",
+      "sha256": "4289579fd8219b63dbe2d01bff20dd6afb806fb8e4d14484bc911868bfd83844",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/wsl.ts",
+      "sha256": "689ab1d024e0d7e6d956ee9040c50ca8d741627c07718bf487dfdb560985d024",
+      "ports": [],
+      "state": "unreviewed"
+    },
+    {
+      "source": "packages/coding-agent/src/utils/zip.ts",
+      "sha256": "9e523bcac3e9fcc3996b483ca8b4ab2934b551b03e8764ba8a6e92932ee8a548",
+      "ports": [],
+      "state": "unreviewed"
+    }
+  ]
+}

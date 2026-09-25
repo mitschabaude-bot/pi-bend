@@ -1,0 +1,78 @@
+{
+  "revision": "f07218c4d4bbc12bef056a7058c3dd49dfe41abe",
+  "reviews": {
+    "packages/ai/src/api/openai-responses.ts": {
+      "state": "partial",
+      "note": "Native OpenAI/Codex request and stream path works; provider suites remain partial and some upstream request/header behavior differs."
+    },
+    "packages/ai/src/api/anthropic-messages.ts": {
+      "state": "partial",
+      "note": "Registered and locally validated with OAuth refresh; no verified live Anthropic request yet."
+    },
+    "packages/ai/src/api/openai-completions.ts": {
+      "state": "partial",
+      "note": "Registered provider path exists; broader provider parity and live validation are not claimed."
+    },
+    "packages/agent/src/agent-loop.ts": {
+      "state": "partial",
+      "note": "All named agent-loop test cases are ported, but source-wide integration and higher-level Agent behavior are separate coverage questions."
+    },
+    "packages/agent/src/agent.ts": {
+      "state": "partial",
+      "note": "Native agent loop runs model requests and tools; full Agent API and extension integration remain incomplete."
+    },
+    "packages/coding-agent/src/core/agent-session.ts": {
+      "state": "partial",
+      "note": "Native interactive and RPC sessions work; extension boundaries and some upstream integration behaviors remain open."
+    },
+    "packages/coding-agent/src/core/session-manager.ts": {
+      "state": "partial",
+      "note": "Session persistence, resume, tree and fork work; complete upstream session/recovery parity is not claimed."
+    },
+    "packages/coding-agent/src/core/tools/bash.ts": {
+      "state": "partial",
+      "note": "Native Bash execution and interactive streaming work; output preview and exact terminal parity have known gaps."
+    },
+    "packages/coding-agent/src/core/tools/read.ts": {
+      "state": "partial",
+      "note": "Native text read works; image reading and full upstream behavior remain open."
+    },
+    "packages/coding-agent/src/core/tools/edit.ts": {
+      "state": "partial",
+      "note": "Native edit execution works; complete upstream edit behavior is not established by the current source review."
+    },
+    "packages/coding-agent/src/core/tools/write.ts": {
+      "state": "partial",
+      "note": "Native write execution works; complete upstream source contract has not been reviewed."
+    },
+    "packages/coding-agent/src/modes/interactive/components/settings-selector.ts": {
+      "state": "partial",
+      "note": "The selector works for supported settings; some upstream rows depend on unfinished behavior and are omitted."
+    },
+    "packages/coding-agent/src/modes/interactive/components/thinking-selector.ts": {
+      "state": "missing",
+      "note": "The /thinking selector and its save-as-default action are absent; the setting and current-session /thinking command exist separately."
+    },
+    "packages/coding-agent/src/modes/interactive/components/scoped-models-selector.ts": {
+      "state": "missing",
+      "note": "The /scoped-models interactive selector is absent; model cycling exists separately."
+    },
+    "packages/coding-agent/src/modes/interactive/interactive-mode.ts": {
+      "state": "partial",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/interactive-mode.bend",
+        "packages/coding-agent/src/modes/interactive/run.bend"
+      ],
+      "note": "The interactive loop runs, but command and terminal parity remain incomplete; /thinking and /scoped-models selectors are known gaps."
+    },
+    "packages/tui/src/editor-component.ts": {
+      "state": "partial",
+      "ports": ["packages/tui/src/components/editor-component.bend"],
+      "note": "The Bend editor component lives under components; complete source contract review is pending."
+    },
+    "packages/tui/src/tui-alt-screen.ts": {
+      "state": "missing",
+      "note": "Fullscreen alternate-screen mode is not ported; default regular mode is available."
+    }
+  }
+}
