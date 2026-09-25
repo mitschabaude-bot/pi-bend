@@ -84,7 +84,7 @@ def transportError(cause: Client.FetchError<Unit>) -> String:
     case Client.FetchFailure{Response.DispatchFailure{Fetch.HeaderFailure{_, _, detail}, _}}: headerError(detail)
     case Client.FetchFailure{Response.DispatchFailure{Fetch.Unresolved{_}, _}}: "DNS resolution failed"
     case Client.FetchFailure{Response.DispatchFailure{Fetch.ExchangeFailure{_, _, _}, _}}: "connection setup failed"
-    case other: P.describeTransport(Unit, other)
+    case other: Client.describeTransport(Unit, other)
 
 def attemptError(cause: Client.AttemptError<Unit>) -> String:
   match cause:

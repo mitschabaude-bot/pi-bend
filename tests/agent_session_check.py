@@ -74,7 +74,23 @@ def image_checks(runner, threads, work):
     texts = [''.join(b['text'] for b in m['content'] if b['type'] == 'text') for m in users]
     assert [len(i) for i in images] == [1, 1] and image_size(images[0][0]) == (1100, 4) and image_size(images[1][0]) == (1000, 4), [image_size(i[0]) for i in images]
     assert texts[0] == 'inspect' and texts[1].startswith('inspect\n\n') and '1100x4' in texts[1], texts
-    return 3
+    # passes image settings and the current model profile to tool result normalization
+    # (suite/agent-session-tool-result-images.test.ts): upstream observes normalizeToolResultImages' arguments
+    # through a mock; here the stored tool result shows them. A 1300 px screenshot shrinks to the model's
+    # 1200 px profile with the dimension note, and stays 1300 px with images.autoResize false or without a profile.
+    screenshot = base64.b64encode(png(1300, 4)).decode()
+    def tool_result(mode, settings):
+        events = run_configured(runner, threads, work, settings, 'tool_images', mode, screenshot)
+        results = [m for m in only(events, 'messages')['messages'] if m['role'] == 'toolResult']
+        assert len(results) == 1, events
+        return results[0]['content']
+    content = tool_result('profile', {})
+    assert [b['type'] for b in content] == ['text', 'image', 'text'] and content[0]['text'] == 'captured' and image_size(content[1]) == (1200, 4), content
+    assert content[2]['text'].startswith('[Image: original 1300x4, displayed at 1200x4.'), content[2]
+    for mode, settings in [('no-resize', {'images': {'autoResize': False}}), ('default', {})]:
+        content = tool_result(mode, settings)
+        assert [b['type'] for b in content] == ['text', 'image'] and image_size(content[1]) == (1300, 4), (mode, content)
+    return 6
 
 def compaction_checks(runner, threads, work):
     checks = 0

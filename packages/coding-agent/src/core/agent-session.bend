@@ -40,6 +40,7 @@ import ./session-persistence.bend as Sessions
 import ./settings-manager.bend as Settings
 import ../utils/image-process.bend as Images
 import ../utils/image-resize.bend as Resize
+import ../utils/tool-result-images.bend as ToolResultImages
 import ../../../runtime/src/base64.bend as Base64
 import ./session-stats.bend as Stats
 import ./cache-warmer.bend as Warmer
@@ -258,8 +259,13 @@ type ExtensionBinding is Data:
 type StatsKey is Data: StatsKey{count: Nat, leaf: Maybe<&2, String>, file: Maybe<&2, String>, window: F64}
 type StatsMemo is Data: StatsMemo{key: StatsKey, stats: Result<&2, &2, S.Error, Stats.Stats>}
 
+def AfterToolInput() -> Data: T.ToolHookInput<T.AfterToolCallContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>
+def AfterToolResult() -> Data: Result<&2, &2, Runtime.Error(), Maybe<&2, T.AfterToolCallResult<Runtime.Details()>>>
+def AfterToolHook() -> Data: C.Callback<T.ToolHookInput<T.AfterToolCallContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>, Result<&2, &2, Runtime.Error(), Maybe<&2, T.AfterToolCallResult<Runtime.Details()>>>>
+type ToolResultHooks is Data: ToolResultHooks{hook: AfterToolHook(), replaced: Maybe<&2, AfterToolHook()>}
+
 type SessionHooks is Data:
-  SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>, request: T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()), replacedRequest: Maybe<&2, T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>, context: ExtensionBinding, warming: Warming, stats: R.Ref<Maybe<&2, StatsMemo>>}
+  SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>, request: T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()), replacedRequest: Maybe<&2, T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>, context: ExtensionBinding, warming: Warming, stats: R.Ref<Maybe<&2, StatsMemo>>, toolResults: ToolResultHooks}
 
 type AgentSession is Data:
   AgentSession{agent: Runtime.Owner(), shared: R.Ref<Shared>, hooks: SessionHooks, settings: R.Ref<Settings.SettingsManager>, cwd: String, loadout: R.Ref<Runtime.Loadout>, models: Models.ModelRuntime, scoped: R.Ref<List<&2, Models.ScopedModel>>}
@@ -1048,7 +1054,7 @@ def disposeWarming(agent: Runtime.Owner(), warming: Warming) -> IO(Unit):
 
 def warmerOf(hooks: SessionHooks) -> Warmer.CacheWarmer:
   match hooks:
-    case SessionHooks{_, _, _, _, _, _, _, Warming{warmer, _, _, _, _, _, _, _, _, _}, _}: warmer
+    case SessionHooks{_, _, _, _, _, _, _, Warming{warmer, _, _, _, _, _, _, _, _, _}, _, _}: warmer
 
 # upstream dispose, in two steps. `shutdown` ends the session's activity: work
 # is aborted, cache warming stops and listeners are unsubscribed. `retire`
@@ -1057,7 +1063,7 @@ def warmerOf(hooks: SessionHooks) -> Warmer.CacheWarmer:
 # frames read the live session concurrently. `dispose` does both.
 def shutdown(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{+agent, +shared, SessionHooks{subscription, _, _, _, _, _, _, warming, _}, _, _, _, _, _}:
+    case AgentSession{+agent, +shared, SessionHooks{subscription, _, _, _, _, _, _, warming, _, _}, _, _, _, _, _}:
       do IO<Unit>:
         abortSleeping(shared)
         abortCompactions(shared)
@@ -1068,12 +1074,14 @@ def shutdown(session: AgentSession) -> IO(Unit):
 
 def retire(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{+agent, shared, SessionHooks{_, handler, nextTurn, replaced, request, replacedRequest, context, _, stats}, settings, _, loadout, _, _}:
+    case AgentSession{+agent, shared, SessionHooks{_, handler, nextTurn, replaced, request, replacedRequest, context, _, stats, ToolResultHooks{afterTool, replacedAfterTool}}, settings, _, loadout, _, _}:
       do IO<Unit>:
         C.dispose(Agent.Input<SessionEvent()>, Loop.Emission<Runtime.Error()>, handler)
         Agent.setPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replaced)
         C.dispose(T.ToolHookInput<Turn()>, TurnResult(), nextTurn)
         Agent.setPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedRequest)
+        Agent.setAfterToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedAfterTool)
+        C.dispose(AfterToolInput(), AfterToolResult(), afterTool)
         C.dispose(T.ToolHookInput<T.PrepareRequestContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>, Result<&2, &2, Runtime.Error(), Maybe<&2, T.AgentRequestUpdate<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>>, request)
         current : Runtime.Loadout <- R.dispose(Runtime.Loadout, loadout)
         bindContext(current, None{})
@@ -1839,6 +1847,59 @@ def requestHook(env: RequestEnv, input: RequestInput()) -> IO(RequestResult()):
   match env input:
     case RequestEnv{agent, shared, previous} T.ToolHookInput{T.PrepareRequestContext{context, _, _}, signal}: projectRequest(agent, shared, previous, context, signal)
 
+# Tool result images
+# ------------------
+# upstream _installAgentToolHooks' afterToolCall: tool results enter the
+# history with their images normalized (normalizeToolResultImages) under the
+# image auto-resize setting and the current model's resize profile. It runs
+# after a hook the agent already had (upstream: the extension tool_result
+# handlers, not ported), so images such a hook injects are normalized too.
+
+type AfterToolEnv is Data:
+  AfterToolEnv{agent: Runtime.Owner(), settings: R.Ref<Settings.SettingsManager>, previous: Maybe<&2, AfterToolHook()>}
+
+def previousAfterTool(previous: Maybe<&2, AfterToolHook()>, +input: AfterToolInput()) -> IO(AfterToolResult()):
+  match previous:
+    case None{}: IO.pure(AfterToolResult(), Done{None{}})
+    case Some{hook}: C.call(AfterToolInput(), AfterToolResult(), hook, input)
+
+def resultContent(result: T.AgentToolResult<Runtime.Details()>) -> List<&2, Ai.TextImageContent>:
+  match result:
+    case T.AgentToolResult{content, _, _, _}: content
+
+def hookContent(hooked: Maybe<&2, T.AfterToolCallResult<Runtime.Details()>>) -> Maybe<&2, List<&2, Ai.TextImageContent>>:
+  match hooked:
+    case Some{T.AfterToolCallResult{content, _, _, _, _}}: content
+    case None{}: None{}
+
+def withNormalized(hooked: Maybe<&2, T.AfterToolCallResult<Runtime.Details()>>, normalized: Maybe<&2, List<&2, Ai.TextImageContent>>) -> Maybe<&2, T.AfterToolCallResult<Runtime.Details()>>:
+  match hooked normalized:
+    case hooked None{}: hooked
+    case None{} Some{content}: Some{T.AfterToolCallResult{Some{content}, None{}, None{}, None{}, None{}}}
+    case Some{T.AfterToolCallResult{_, details, isError, usage, terminate}} Some{content}: Some{T.AfterToolCallResult{Some{content}, details, isError, usage, terminate}}
+
+def toolImageOptions(settings: Settings.SettingsManager, model: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> ToolResultImages.NormalizeToolResultImagesOptions:
+  ToolResultImages.NormalizeToolResultImagesOptions{Some{Settings.getImageAutoResize(settings)}, Maybe.bind(&2, Ai.Model<Ai.JsonValue>, Resize.ImageResizeOptions, model, found => Images.modelResizeOptions(found))}
+
+def normalizedToolResult(+original: List<&2, Ai.TextImageContent>, options: ToolResultImages.NormalizeToolResultImagesOptions, hooked: AfterToolResult()) -> AfterToolResult():
+  match hooked:
+    case Fail{error}: Fail{error}
+    case Done{+found}: Done{withNormalized(found, ToolResultImages.normalizeToolResultImages(Maybe.default(&2, List<&2, Ai.TextImageContent>, hookContent(found), original), options))}
+
+def toolCallResult(context: T.AfterToolCallContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>) -> T.AgentToolResult<Runtime.Details()>:
+  match context:
+    case T.AfterToolCallContext{_, _, _, result, _, _}: result
+
+def afterToolHook(env: AfterToolEnv, input: AfterToolInput()) -> IO(AfterToolResult()):
+  match env input:
+    case AfterToolEnv{+agent, settingsRef, previous} T.ToolHookInput{+context, signal}:
+      do IO<AfterToolResult()>:
+        hooked : AfterToolResult() <- previousAfterTool(previous, T.ToolHookInput{context, signal})
+        +result : T.AgentToolResult<Runtime.Details()> = toolCallResult(context)
+        settings : Settings.SettingsManager <- R.read(Settings.SettingsManager, settingsRef)
+        current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        return normalizedToolResult(resultContent(result), toolImageOptions(settings, stateModel(current)), hooked)
+
 # Cache warming
 # -------------
 
@@ -1972,7 +2033,10 @@ def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.Sett
     inner : Runtime.Stream() <- Agent.getStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     warming : Warming <- createWarming(agent, shared, settingsRef, inner)
     stats : R.Ref<Maybe<&2, StatsMemo>> <- R.new(Maybe<&2, StatsMemo>, None{})
-    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context, warming, stats}, settingsRef, cwd, loadoutRef, models, scoped}
+    +replacedAfterTool : Maybe<&2, AfterToolHook()> <- Agent.getAfterToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +afterTool : AfterToolHook() <- C.create(~AfterToolEnv, ~AfterToolInput(), ~AfterToolResult(), ~afterToolHook, AfterToolEnv{agent, settingsRef, replacedAfterTool})
+    Agent.setAfterToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{afterTool})
+    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context, warming, stats, ToolResultHooks{afterTool, replacedAfterTool}}, settingsRef, cwd, loadoutRef, models, scoped}
 
 # A final error after retries reports the failure and resets the counter.
 def failedRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason, finalError: Maybe<&2, String>) -> IO(Unit):
@@ -2977,7 +3041,7 @@ def sameKey(left: StatsKey, right: StatsKey) -> Bool:
     case StatsKey{count, leaf, file, window} StatsKey{otherCount, otherLeaf, otherFile, otherWindow}: Nat.is_eq(count, otherCount) && sameText(leaf, otherLeaf) && sameText(file, otherFile) && F64.is_eq(window, otherWindow)
 def statsRefOf(session: AgentSession) -> R.Ref<Maybe<&2, StatsMemo>>:
   match session:
-    case AgentSession{_, _, SessionHooks{_, _, _, _, _, _, _, _, stats}, _, _, _, _, _}: stats
+    case AgentSession{_, _, SessionHooks{_, _, _, _, _, _, _, _, stats, _}, _, _, _, _, _}: stats
 def recomputed(+memo: R.Ref<Maybe<&2, StatsMemo>>, +key: StatsKey, stored: Session(), model: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> IO(Result<&2, &2, S.Error, Stats.Stats>):
   do IO<Result<&2, &2, S.Error, Stats.Stats>>:
     +result : Result<&2, &2, S.Error, Stats.Stats> <- IO.pure(Result<&2, &2, S.Error, Stats.Stats>, Stats.stats(stored, model))

@@ -3139,9 +3139,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-tool-result-images.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "106f068005ed81834bbc63d0b60cbbfb3be22831344d57d5b9f09554a0836bd2"
+      "status": "ported",
+      "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "106f068005ed81834bbc63d0b60cbbfb3be22831344d57d5b9f09554a0836bd2",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "'passes image settings and the current model profile to tool result normalization': a scripted screenshot tool call; the stored tool result shows the effect of the image auto-resize setting and the model's resize profile (upstream observes normalizeToolResultImages' arguments through a mock). Bun and native one/four. See tests/agent-session.md."
     },
     {
       "source": "packages/coding-agent/test/suite/lax-message-content.test.ts",
@@ -3882,9 +3887,14 @@
     },
     {
       "source": "packages/coding-agent/test/tool-result-images.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ea6be817dd453b2c3c35051b829b5c9df890a4a9dfeb77ea20ff3abe3036cd11"
+      "status": "ported",
+      "ports": [
+        "tests/tool-result-images.bend",
+        "tests/tool_result_images_check.py"
+      ],
+      "sha256": "ea6be817dd453b2c3c35051b829b5c9df890a4a9dfeb77ea20ff3abe3036cd11",
+      "implementation": "packages/coding-agent/src/utils/tool-result-images.bend",
+      "notes": "All seven cases with upstream's fixtures (grayscale PNGs up to 2400x4800, the 1x1 BMP, undecodable base64) on native one/four threads. 'Returns the original array' is the None result (upstream's same-array identity). The Bun lane overflows its stack on the large fixtures (docs/bend-issues.md BEND-019)."
     },
     {
       "source": "packages/coding-agent/test/tool-system-prompt-contributions.test.ts",
