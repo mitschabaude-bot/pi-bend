@@ -19,4 +19,11 @@ def main() -> IO(Unit):
     +message : T.SystemMessage<Unit> = T.SystemMessage{T.SystemBlocks{T.TextContent{"", None{}} <> T.TextContent{"base", None{}} <> Nil{}}, Some{sections}, None{}, None{}, N.fromU32(0)}
     assertion(String.eq(Text.renderComplete(Unit, message), "\nbase\n\nlast\n\nten\n\ntwo"), "insertion order and omitted empty sections")
     assertion(String.eq(Text.renderUpdate(Unit, message), "\nbase\n\nUpdated system prompt section \"a\":\n\nlast\n\nUpdated system prompt section \"10\":\n\nten\n\nUpdated system prompt section \"2\":\n\ntwo\n\nUpdated system prompt section \"empty\":\n\n"), "empty updates still include their framing")
-    IO.print("PASS text filtering, separators, section enumeration and empty update framing")
+    # upstream text.test.ts (contentText)
+    +upstream : Text.ContentInput<Unit> = Text.ContentBlocks{Text.ThinkingBlock{T.ThinkingContent{"reasoning", None{}, None{}}} <> Text.TextBlock{T.TextContent{"first", None{}}} <> Text.ToolCallBlock{T.ToolCall{"1", "read", Unit{}, None{}, None{}}} <> Text.TextBlock{T.TextContent{"second", None{}}} <> Nil{}}
+    assertion(String.eq(Text.contentTextDefault(Unit, upstream), "first\nsecond"), "contentText extracts assistant text blocks")
+    assertion(String.eq(Text.contentText(Unit, upstream, ""), "firstsecond"), "contentText supports custom separators")
+    assertion(String.eq(Text.contentTextDefault(Unit, Text.ContentString{"hello"}), "hello"), "contentText passes string content through")
+    toolResult : Text.ContentInput<Unit> = Text.ContentBlocks{Text.TextBlock{T.TextContent{"first", None{}}} <> Text.ImageBlock{T.ImageContent{"...", "image/png"}} <> Text.TextBlock{T.TextContent{"second", None{}}} <> Nil{}}
+    assertion(String.eq(Text.contentText(Unit, toolResult, ""), "firstsecond"), "contentText extracts text from tool-result content")
+    IO.print("PASS text filtering, separators, section enumeration and empty update framing; upstream contentText suite")

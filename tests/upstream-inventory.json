@@ -1428,8 +1428,10 @@
     },
     {
       "source": "packages/ai/test/text.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/text.bend"
+      ],
       "sha256": "e731172d854c7d603705fb43be143c98dfb4a722f7b4e98a8866d92e85d54a67"
     },
     {
