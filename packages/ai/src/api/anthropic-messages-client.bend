@@ -41,8 +41,8 @@ type Request is Data:
 
 def addressReversed(base: String, reversed: String) -> String:
   match reversed:
-    case SCon{'/', _}: base ++ "v1/messages"
-    case _: base ++ "/v1/messages"
+    case SCon{'/', _}: base ++ "v1/messages?beta=true"
+    case _: base ++ "/v1/messages?beta=true"
 
 def address(+base: String) -> String: addressReversed(base, String.reverse(base))
 
@@ -121,14 +121,14 @@ def oauthIdentity(fields: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Head
   match oauth:
     case False{}: fields
     case True{}:
-      layer(layer(layer(fields, "anthropic-dangerous-direct-browser-access", "true"), "user-agent", "claude-cli/2.1.280"), "x-app", "cli")
+      layer(layer(fields, "user-agent", "claude-cli/2.1.280"), "x-app", "cli")
 def oauthHeaders(fields: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>, key: Maybe<&2, String>) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
   match key:
     case None{}: fields
     case Some{value}: oauthIdentity(fields, String.contains(value, "sk-ant-oat"))
 
 def requestHeaders(+key: Maybe<&2, String>, custom: Maybe<&2, T.ProviderHeaders()>, beta: Maybe<&2, String>) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
-  requestHeadersWith(oauthHeaders(withBeta(layer(layer(layer(Done{Headers.new()}, "accept", "application/json"), "content-type", "application/json"), "anthropic-version", "2023-06-01"), beta), key), key, custom)
+  requestHeadersWith(oauthHeaders(withBeta(layer(layer(layer(layer(Done{Headers.new()}, "accept", "application/json"), "anthropic-dangerous-direct-browser-access", "true"), "content-type", "application/json"), "anthropic-version", "2023-06-01"), beta), key), key, custom)
 
 def encoded(-Reason: Data, url: URL.URL, fields: Headers.Headers, body: Maybe<&2, String>) -> Result<&2, &2, Error<Reason>, Request>:
   match body:

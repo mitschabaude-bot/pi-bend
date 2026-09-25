@@ -66,7 +66,7 @@ def layer(fields: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>, na
     case Done{current}: Headers.set(current, name, value)
 
 def baseHeaders(key: String, agent: String) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
-  layer(layer(layer(layer(Done{Headers.new()}, "accept", "text/event-stream"), "content-type", "application/json"), "authorization", "Bearer " ++ key), "user-agent", agent)
+  layer(layer(layer(layer(Done{Headers.new()}, "accept", "application/json"), "content-type", "application/json"), "authorization", "Bearer " ++ key), "user-agent", agent)
 
 def fromConfiguration(current: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>, config: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
   match current:
@@ -96,11 +96,21 @@ def encodedWith(-Reason: Data, base: String, headers: Maybe<&2, R.Record<String>
 def encoded(-Reason: Data, base: String, headers: Maybe<&2, R.Record<String>>, custom: Maybe<&2, T.ProviderHeaders()>, key: String, agent: String, +payload: T.JsonValue, urlContext: URL.Context) -> Result<&2, &2, Error<Reason>, Prepared>:
   encodedWith(Reason, base, headers, custom, key, agent, payload, urlContext, JsonWire.stringify(payload))
 
-def authorized(-Reason: Data, urlContext: URL.Context, model: T.Model<T.JsonValue>, payload: T.JsonValue, key: Maybe<&2, String>, agent: String, custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Error<Reason>, Prepared>:
+# upstream getClientApiKey: header-owned auth (Authorization or
+# cf-aig-authorization) sends the placeholder key "unused", which those
+# headers then replace or remove.
+def clientKey(key: Maybe<&2, String>, +custom: Maybe<&2, T.ProviderHeaders()>) -> Maybe<&2, String>:
+  match key:
+    case Some{SCon{first, rest}}: Some{SCon{first, rest}}
+    case _: Bool.pick(Maybe<&2, String>, HeaderUtils.hasHeader(custom, "authorization") || HeaderUtils.hasHeader(custom, "cf-aig-authorization"), Some{"unused"}, None{})
+
+def keyed(-Reason: Data, urlContext: URL.Context, model: T.Model<T.JsonValue>, payload: T.JsonValue, agent: String, custom: Maybe<&2, T.ProviderHeaders()>, key: Maybe<&2, String>) -> Result<&2, &2, Error<Reason>, Prepared>:
   match model key:
     case _ None{}: Fail{MissingAuth{}}
-    case _ Some{SNil{}}: Fail{MissingAuth{}}
     case T.Model{_, _, _, _, base, _, _, _, _, _, _, _, _, _, headers, _} Some{selected}: encoded(Reason, base, headers, custom, selected, agent, payload, urlContext)
+
+def authorized(-Reason: Data, urlContext: URL.Context, model: T.Model<T.JsonValue>, payload: T.JsonValue, key: Maybe<&2, String>, agent: String, +custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Error<Reason>, Prepared>:
+  keyed(Reason, urlContext, model, payload, agent, custom, clientKey(key, custom))
 
 def supported(-Reason: Data, issue: Maybe<&2, String>, urlContext: URL.Context, model: T.Model<T.JsonValue>, payload: T.JsonValue, key: Maybe<&2, String>, agent: String, custom: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, Error<Reason>, Prepared>:
   match issue:

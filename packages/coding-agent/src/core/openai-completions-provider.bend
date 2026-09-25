@@ -2,6 +2,7 @@ import Base
 import ../../../ai/src/types.bend as Ai
 import ../../../ai/src/api/openai-completions.bend as Request
 import ../../../ai/src/api/openai-completions-client.bend as Client
+import ../../../ai/src/api/constrained-sampling.bend as Sampling
 import ../../../ai/src/api/openai-completions-stream.bend as Fold
 import ../../../ai/src/api/simple-options.bend as Simple
 import ../../../ai/src/utils/thinking-levels.bend as Levels
@@ -86,6 +87,10 @@ def requestHeaders(value: Options()) -> Maybe<&2, Ai.ProviderHeaders()>:
   match value:
     case Ai.SimpleStreamOptions{_, _, _, _, _, _, _, headers, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: headers
 
+def requestSession(value: Options()) -> Maybe<&2, String>:
+  match value:
+    case Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, sessionId, _, _, _, _, _, _}: sessionId
+
 def retryCount(value: Options()) -> Maybe<&2, F64>:
   match value:
     case Ai.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, retries, _, _, _, _, _, _, _, _, _, _, _, _, _}: retries
@@ -147,10 +152,18 @@ def prepared(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch
     case Fail{_}: pushFailure(stream, model, timestamp, "Could not prepare Completions request")
     case Done{detailed}: preparedWithHook(stream, callback, fetch, signal, model, timestamp, retries, delay, detailed, hook)
 
-def exchange(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +context: Context(), +options: Options(), timestamp: F64) -> IO(Unit):
+def payloaded(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +options: Options(), timestamp: F64, agent: String, selected: Request.Behavior, params: Request.ParamsResult()) -> IO(Unit):
+  match params:
+    case Fail{error}: pushFailure(stream, model, timestamp, Sampling.errorMessage(error))
+    case Done{payload}: prepared(stream, callback, fetch, signal, model, timestamp, retryCount(options), retryDelay(options), Ai.onPayloadOption(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error(), options), Client.prepare(Unit, urlContext, model, payload, requestKey(options), agent, Request.clientHeaders(selected, requestSession(options), requestHeaders(options))))
+
+def built(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +context: Context(), +options: Options(), timestamp: F64, agent: String, +selected: Request.Behavior) -> IO(Unit):
+  payloaded(stream, callback, fetch, signal, urlContext, model, options, timestamp, agent, selected, Request.params(Unit, Details(), model, context, requestOptions(model, context, options), selected))
+
+def exchange(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, context: Context(), options: Options(), timestamp: F64) -> IO(Unit):
   do IO<Unit>:
     agent : String <- IO.try(String, UserAgent.get())
-    prepared(stream, callback, fetch, signal, model, timestamp, retryCount(options), retryDelay(options), Ai.onPayloadOption(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error(), options), Client.prepare(Unit, urlContext, model, Request.params(Unit, Details(), model, context, requestOptions(model, context, options), Request.behavior(model)), requestKey(options), agent, requestHeaders(options)))
+    built(stream, callback, fetch, signal, urlContext, model, context, options, timestamp, agent, Request.behavior(model))
 
 def borrowed(+stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), options: Options(), timestamp: F64, pair: Deadline.Scope<Unit> & Fetch.Signal(Unit)) -> IO(Unit):
   match pair:

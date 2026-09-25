@@ -3,7 +3,8 @@ import ../packages/ai/src/api/anthropic-messages-client.bend as Client
 import ../packages/runtime/src/http-message.bend as Headers
 
 # Claude Code identity is required for OAuth requests, and must not leak into
-# ordinary API-key requests.
+# ordinary API-key requests. Every upstream client sends
+# anthropic-dangerous-direct-browser-access.
 def same(actual: Maybe<&2,String>,want: Maybe<&2,String>) -> Bool:
   match actual want:
     case None{} None{}: True{}
@@ -28,13 +29,13 @@ def checkAuth(+headers: Headers.Headers,oauth: Bool) -> IO(Unit):
       do IO<Unit>:
         check(headers,"x-api-key",Some{"test-key"})
         check(headers,"x-app",None{})
-        check(headers,"anthropic-dangerous-direct-browser-access",None{})
 def checked(result: Result<&2,&2,Headers.HeaderSyntaxError,Headers.Headers>,oauth: Bool) -> IO(Unit):
   match result:
     case Fail{_}: IO.die(Unit,1,"invalid request headers")
     case Done{+headers}:
       do IO<Unit>:
         check(headers,"anthropic-version",Some{"2023-06-01"})
+        check(headers,"anthropic-dangerous-direct-browser-access",Some{"true"})
         checkAuth(headers,oauth)
 def main() -> IO(Unit):
   do IO<Unit>:

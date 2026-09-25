@@ -3,6 +3,7 @@ import ../types.bend as T
 import ../../../runtime/src/http-message.bend as H
 import ../../../runtime/src/http-message.bend as Field
 import ../../../runtime/src/record.bend as R
+import ../../../runtime/src/text.bend as Space
 
 # pi `headers.ts` plus the provider-header overlays from `types.ts`: provider
 # configuration keeps its spelling until the HTTP boundary, and null is an
@@ -75,3 +76,20 @@ def apply(headers: H.Headers, configuration: Maybe<&2, T.ProviderHeaders()>) -> 
   match configuration:
     case None{}: Done{headers}
     case Some{R.Record{entries}}: applyEntries(entries, Done{headers})
+
+# Whether a request header is set to a nonblank value, by case-insensitive
+# name (the api modules' hasHeader).
+def nonblankHeader(value: T.Nullable<String>) -> Bool:
+  match value:
+    case T.NullValue{}: False{}
+    case T.PresentValue{text}: Bool.not(Space.blank(text))
+
+def matchingHeader(entries: List<&2, R.Property<T.Nullable<String>>>, +name: String) -> Bool:
+  match entries:
+    case Nil{}: False{}
+    case R.Property{key, value} <> rest: (String.eq(Space.asciiLower(key), name) && nonblankHeader(value)) || matchingHeader(rest, name)
+
+def hasHeader(headers: Maybe<&2, T.ProviderHeaders()>, name: String) -> Bool:
+  match headers:
+    case None{}: False{}
+    case Some{R.Record{entries}}: matchingHeader(entries, Space.asciiLower(name))

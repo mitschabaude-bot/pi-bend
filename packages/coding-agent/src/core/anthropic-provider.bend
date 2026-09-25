@@ -61,9 +61,10 @@ def thoughtKind(level: Ai.ThinkingLevel, budgets: Maybe<&2, Ai.ThinkingBudgets>,
     case True{}: Messages.AdaptiveThinking{Some{levelName(level)}, "summarized"}
     case False{}: Messages.BudgetThinking{Simple.thinkingBudgetForLevel(level, budgets), "summarized"}
 
+# upstream streamSimple: without a reasoning level thinking is disabled.
 def thought(level: Maybe<&2, Ai.ThinkingLevel>, budgets: Maybe<&2, Ai.ThinkingBudgets>, adaptiveModel: Bool) -> Messages.Thinking:
   match level:
-    case None{}: Messages.NoThinking{}
+    case None{}: Messages.DisabledThinking{}
     case Some{value}: thoughtKind(value, budgets, adaptiveModel)
 
 def retention(value: Maybe<&2, Ai.CacheRetention>) -> Ai.CacheRetention:
@@ -85,9 +86,9 @@ def requestKey(value: Options()) -> Maybe<&2, String>:
   match value:
     case Ai.SimpleStreamOptions{_, _, key, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: key
 
-def requestHeaders(value: Options()) -> Maybe<&2, Ai.ProviderHeaders()>:
+def requestHeaders(+model: Ai.Model<Ai.JsonValue>, value: Options()) -> Maybe<&2, Ai.ProviderHeaders()>:
   match value:
-    case Ai.SimpleStreamOptions{_, _, _, _, _, _, _, headers, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: headers
+    case Ai.SimpleStreamOptions{_, _, key, _, _, _, _, headers, _, _, _, _, _, _, _, _, sessionId, _, _, _, _, _, _}: Messages.clientHeaders(model, sessionId, oauth(key), headers)
 
 def parentSignal(value: Options()) -> Maybe<&2, Abort.AbortSignal<Unit>>:
   match value:
@@ -118,7 +119,7 @@ def prepared(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch
         return Unit{}
 
 def exchange(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, context: Context(), +options: Options(), timestamp: F64) -> IO(Unit):
-  prepared(stream, callback, fetch, signal, model, timestamp, Client.prepare(Unit, Unit, Details(), urlContext, model, context, requestOptions(model, options), requestKey(options), requestHeaders(options)))
+  prepared(stream, callback, fetch, signal, model, timestamp, Client.prepare(Unit, Unit, Details(), urlContext, model, context, requestOptions(model, options), requestKey(options), requestHeaders(model, options)))
 
 def borrowed(+stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), options: Options(), timestamp: F64, pair: Deadline.Scope<Unit> & Fetch.Signal(Unit)) -> IO(Unit):
   match pair:

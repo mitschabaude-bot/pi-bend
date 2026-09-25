@@ -6,7 +6,9 @@ import ../utils/text.bend as Text
 import ../utils/transcript.bend as Transcript
 import ../utils/thinking-levels.bend as Levels
 import ./simple-options.bend as Simple
+import ./constrained-sampling.bend as Sampling
 import ../utils/sanitize-unicode.bend as Unicode
+import ../utils/headers.bend as Headers
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/f64.bend as F
@@ -36,7 +38,7 @@ type ThinkingWire is Data:
   TogetherWire{}
 
 type Behavior is Data:
-  Behavior{legacyMaxTokens: Bool, supportsStore: Bool, supportsDeveloperRole: Bool, supportsUsageInStreaming: Bool, supportsReasoningEffort: Bool, thinkingWire: ThinkingWire}
+  Behavior{legacyMaxTokens: Bool, supportsStore: Bool, supportsDeveloperRole: Bool, supportsUsageInStreaming: Bool, supportsReasoningEffort: Bool, thinkingWire: ThinkingWire, supportsStrictMode: Bool, sendSessionAffinityHeaders: Bool, sessionAffinityFormat: T.SessionAffinityFormat}
 
 def detectedWire(provider: String, +base: String) -> ThinkingWire:
   match provider:
@@ -64,12 +66,12 @@ def detected(+provider: String, +base: String, +id: String, reasoning: Bool) -> 
   +router = String.eq(provider, "openrouter") || String.contains(base, "openrouter.ai")
   +developer = reasoning && ((Bool.not(nonStandard) && Bool.not(router)) || (router && (String.starts_with(id, "openai/") || String.starts_with(id, "anthropic/"))))
   +effort = Bool.not(String.eq(provider, "xai") || String.eq(provider, "zai") || String.eq(provider, "zai-coding-cn") || String.eq(provider, "moonshotai") || String.eq(provider, "moonshotai-cn") || String.eq(provider, "together") || String.eq(provider, "cloudflare-ai-gateway") || String.eq(provider, "nvidia") || String.eq(provider, "ant-ling"))
-  Behavior{legacy, Bool.not(nonStandard), developer, True{}, effort, detectedWire(provider, base)}
+  Behavior{legacy, Bool.not(nonStandard), developer, True{}, effort, detectedWire(provider, base), False{}, router, Bool.pick(T.SessionAffinityFormat, router, T.OpenRouterSession{}, T.OpenAISession{})}
 
 def overrides(api: T.ModelApi, compat: Maybe<&2, T.ModelCompatibility(api)>, default: Behavior, reasoning: Bool) -> Behavior:
   match api compat default:
-    case T.OpenAICompletionsApi{} Some{T.OpenAICompletionsCompat{store, developer, effort, usage, _, selectedField, _, _, _, _, format, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}} Behavior{legacy, defaultStore, defaultDeveloper, defaultUsage, defaultEffort, wire}:
-      Behavior{legacyField(selectedField, legacy), boolean(store, defaultStore), reasoning && boolean(developer, defaultDeveloper), boolean(usage, defaultUsage), boolean(effort, defaultEffort), selectedWire(format, wire)}
+    case T.OpenAICompletionsApi{} Some{T.OpenAICompletionsCompat{store, developer, effort, usage, _, selectedField, _, _, _, _, format, _, _, _, _, _, _, _, _, _, _, strict, _, affinity, affinityFormat, _, _}} Behavior{legacy, defaultStore, defaultDeveloper, defaultUsage, defaultEffort, wire, defaultStrict, defaultAffinity, defaultFormat}:
+      Behavior{legacyField(selectedField, legacy), boolean(store, defaultStore), reasoning && boolean(developer, defaultDeveloper), boolean(usage, defaultUsage), boolean(effort, defaultEffort), selectedWire(format, wire), boolean(strict, defaultStrict), boolean(affinity, defaultAffinity), Maybe.default(&2, T.SessionAffinityFormat, affinityFormat, defaultFormat)}
     case _ _ fallback: fallback
 
 def behavior(model: T.Model<J()>) -> Behavior:
@@ -94,7 +96,7 @@ def defaultThinking(value: Maybe<&2, T.ThinkingFormat>) -> Bool:
 # common wire path has not implemented yet.
 def compatibilityIssue(api: T.ModelApi, compat: Maybe<&2, T.ModelCompatibility(api)>) -> Maybe<&2, String>:
   match api compat:
-    case T.OpenAICompletionsApi{} Some{T.OpenAICompletionsCompat{_, _, _, _, finish, _, toolName, assistantAfter, thinkingText, reasoningContent, thinkingFormat, kwargs, args, openRouter, vercel, zaiStream, budgetField, budget, grammar, midSystem, midTools, strict, cacheFormat, affinity, _, _, priority}}:
+    case T.OpenAICompletionsApi{} Some{T.OpenAICompletionsCompat{_, _, _, _, finish, _, toolName, assistantAfter, thinkingText, reasoningContent, thinkingFormat, kwargs, args, openRouter, vercel, zaiStream, budgetField, budget, grammar, midSystem, midTools, _, cacheFormat, _, _, _, priority}}:
       +a = issue(enabled(toolName), "requiresToolResultName", None{})
       +b = issue(enabled(assistantAfter), "requiresAssistantAfterToolResult", a)
       +c = issue(enabled(thinkingText), "requiresThinkingAsText", b)
@@ -106,10 +108,8 @@ def compatibilityIssue(api: T.ModelApi, compat: Maybe<&2, T.ModelCompatibility(a
       +i = issue(Maybe.is_some(&2, T.ThinkingTokenBudgetField, budgetField) || enabled(budget), "thinking token budget", h)
       +j = issue(enabled(grammar), "grammar tools", i)
       +k = issue(enabled(midSystem) || enabled(midTools), "mid-conversation updates", j)
-      +l = issue(enabled(strict), "strict tool schemas", k)
-      +m = issue(Maybe.is_some(&2, T.CacheControlFormat, cacheFormat), "cache control", l)
-      +n = issue(enabled(affinity), "session affinity headers", m)
-      +o = issue(Maybe.is_some(&2, F64, priority), "vllm priority", n)
+      +m = issue(Maybe.is_some(&2, T.CacheControlFormat, cacheFormat), "cache control", k)
+      +o = issue(Maybe.is_some(&2, F64, priority), "vllm priority", m)
       issue(Bool.not(boolean(finish, True{})), "missing finish_reason fallback", o)
     case _ _: None{}
 
@@ -247,22 +247,58 @@ def messages(-G: Data, -D: Data, values: List<&2, T.Message<V.Value, V.Value, G,
       +additional = Bool.pick(List<&2, J()>, images, resultImages(D, result), Nil{})
       toolResult(D, result) <> messages(G, D, rest, False{}, developer, images, List.append(&2, J(), pending, additional))
 
-def tool(value: T.Tool<V.Value>) -> J():
+# upstream convertTools. modelIssue refuses models with grammar tools, so
+# only the unsupported grammar resolution runs here (it rejects tools that
+# require a grammar). Only strict-mode providers receive the `strict` field.
+def ToolResult() -> Data: Result<&2, &2, Sampling.Error, J()>
+
+def strictField(supported: Bool, strict: Maybe<&2, Bool>) -> List<&2, R.Property<J()>>:
+  match supported:
+    case True{}: field("strict", T.JsonBoolean{Maybe.default(&2, Bool, strict, False{})}) <> Nil{}
+    case False{}: Nil{}
+
+def functionFields(name: String, description: String, schema: V.Value, strict: Maybe<&2, Bool>, supported: Bool) -> List<&2, R.Property<J()>>:
+  field("name", str(name)) <> field("description", str(description)) <> field("parameters", Schema.toJson(schema)) <> strictField(supported, strict)
+
+def functionTool(tool: T.Tool<V.Value>, strict: Maybe<&2, Bool>, supported: Bool, parameters: Result<&2, &2, Sampling.Error, V.Value>) -> ToolResult():
+  match tool parameters:
+    case _ Fail{error}: Fail{error}
+    case T.Tool{name, description, _, _} Done{schema}:
+      Done{obj(R.Record{field("type", str("function")) <> field("function", obj(R.Record{functionFields(name, description, schema, strict, supported)})) <> Nil{}})}
+
+def strictTool(+tool: T.Tool<V.Value>, supported: Bool, resolved: Result<&2, &2, Sampling.Error, Maybe<&2, Bool>>) -> ToolResult():
+  match resolved:
+    case Fail{error}: Fail{error}
+    case Done{+strict}: functionTool(tool, strict, supported, Sampling.getJsonSchemaToolParameters(tool, strict))
+
+def grammarChecked(+tool: T.Tool<V.Value>, +supported: Bool, grammar: Result<&2, &2, Sampling.Error, Maybe<&2, Sampling.GrammarConstrainedSampling>>) -> ToolResult():
+  match grammar:
+    case Fail{error}: Fail{error}
+    case Done{_}: strictTool(tool, supported, Sampling.resolveJsonSchemaStrictSampling(tool, supported))
+
+def tool(+value: T.Tool<V.Value>, supported: Bool) -> ToolResult():
+  grammarChecked(value, supported, Sampling.resolveGrammarConstrainedSampling(value, False{}))
+
+def ToolsResult() -> Data: Result<&2, &2, Sampling.Error, List<&2, J()>>
+
+def collected(value: ToolResult(), reversed: List<&2, J()>) -> ToolsResult():
   match value:
-    case T.Tool{name, description, schema, _}:
-      obj(R.Record{field("type", str("function")) <> field("function", obj(R.Record{field("name", str(name)) <> field("description", str(description)) <> field("parameters", Schema.toJson(schema)) <> Nil{}})) <> Nil{}})
+    case Fail{error}: Fail{error}
+    case Done{converted}: Done{converted <> reversed}
 
-def tools(values: List<&2, T.Tool<V.Value>>) -> List<&2, J()>:
-  match values:
-    case Nil{}: Nil{}
-    case first <> rest: tool(first) <> tools(rest)
+# Tools convert in declaration order and the first error wins.
+def tools(values: List<&2, T.Tool<V.Value>>, +supported: Bool, result: ToolsResult()) -> ToolsResult():
+  match values result:
+    case _ Fail{error}: Fail{error}
+    case Nil{} Done{reversed}: Done{List.reverse(&2, J(), reversed)}
+    case first <> rest Done{reversed}: tools(rest, supported, collected(tool(first, supported), reversed))
 
-def toolList(value: Transcript.TranscriptTools<V.Value>) -> List<&2, J()>:
+def toolList(value: Transcript.TranscriptTools<V.Value>, supported: Bool) -> ToolsResult():
   match value:
-    case Transcript.TranscriptTools{values, _}: tools(values)
+    case Transcript.TranscriptTools{values, _}: tools(values, supported, Done{Nil{}})
 
-def requestedTools(-G: Data, -D: Data, messages: List<&2, T.Message<V.Value, V.Value, G, D>>) -> List<&2, J()>:
-  toolList(Transcript.resolveTranscriptTools(V.Value, V.Value, G, D, messages, False{}))
+def requestedTools(-G: Data, -D: Data, messages: List<&2, T.Message<V.Value, V.Value, G, D>>, supported: Bool) -> ToolsResult():
+  toolList(Transcript.resolveTranscriptTools(V.Value, V.Value, G, D, messages, False{}), supported)
 
 def choice(value: T.ToolChoice) -> J():
   match value:
@@ -308,20 +344,45 @@ def withSampling(fields: Fields(), sampling: Maybe<&2, R.Record<J()>>) -> Fields
     case None{}: fields
     case Some{selected}: Simple.mergeFields(J(), R.entries(J(), selected), fields)
 
-def normalizedParams(-G: Data, -D: Data, id: String, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options, legacy: Bool, store: Bool, developer: Bool, usage: Bool, images: Bool, reasoning: Bool, supported: Bool, wire: ThinkingWire, mapping: Maybe<&2, T.ThinkingLevelMap>) -> J():
+def ParamsResult() -> Data: Result<&2, &2, Sampling.Error, J()>
+
+def withTools(+fields: Fields(), options: Options, reasoning: Bool, supported: Bool, wire: ThinkingWire, mapping: Maybe<&2, T.ThinkingLevelMap>, declared: ToolsResult()) -> ParamsResult():
+  match options declared:
+    case _ Fail{error}: Fail{error}
+    case Options{_, _, toolChoice, reasoningEffort, requested, sampling} Done{+converted}:
+      +listed = Bool.pick(Fields(), List.is_empty(&2, J(), converted), fields, put(fields, "tools", T.JsonArray{converted}))
+      +withChoice = maybe(listed, "tool_choice", Maybe.map(&2, T.ToolChoice, J(), choice, toolChoice))
+      Done{obj(withSampling(withReasoning(withChoice, wire, reasoning, requested, supported, reasoningEffort, mapping), sampling))}
+
+def normalizedParams(-G: Data, -D: Data, id: String, context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Options, legacy: Bool, store: Bool, developer: Bool, usage: Bool, images: Bool, reasoning: Bool, supported: Bool, wire: ThinkingWire, mapping: Maybe<&2, T.ThinkingLevelMap>, strict: Bool) -> ParamsResult():
   match context options:
-    case T.TranscriptContext{+normalizedMessages} Options{maxTokens, temperature, toolChoice, reasoningEffort, requested, sampling}:
-      +declared = requestedTools(G, D, normalizedMessages)
+    case T.TranscriptContext{+normalizedMessages} Options{maxTokens, temperature, _, _, _, _}:
       +base = {R.Record{field("model", str(id)) <> field("messages", T.JsonArray{messages(G, D, normalizedMessages, True{}, developer, images, Nil{})}) <> field("stream", T.JsonBoolean{True{}}) <> Nil{}} : Fields()}
       +withUsage = Bool.pick(Fields(), usage, put(base, "stream_options", obj(R.Record{field("include_usage", T.JsonBoolean{True{}}) <> Nil{}})), base)
       +withStore = Bool.pick(Fields(), store, put(withUsage, "store", T.JsonBoolean{False{}}), withUsage)
       +withMax = maxField(maxTokens, legacy, withStore)
-      +withTemp = maybe(withMax, "temperature", number(temperature))
-      +withTools = Bool.pick(Fields(), List.is_empty(&2, J(), declared), withTemp, put(withTemp, "tools", T.JsonArray{declared}))
-      +withChoice = maybe(withTools, "tool_choice", Maybe.map(&2, T.ToolChoice, J(), choice, toolChoice))
-      obj(withSampling(withReasoning(withChoice, wire, reasoning, requested, supported, reasoningEffort, mapping), sampling))
+      withTools(maybe(withMax, "temperature", number(temperature)), options, reasoning, supported, wire, mapping, requestedTools(G, D, normalizedMessages, strict))
 
-def params(-G: Data, -D: Data, model: T.Model<J()>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options, selected: Behavior) -> J():
+# The request body, or the first tool whose constrained sampling the model
+# cannot honor (upstream convertTools throws).
+def params(-G: Data, -D: Data, model: T.Model<J()>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options, selected: Behavior) -> ParamsResult():
   match model context options selected:
-    case T.Model{id, _, _, _, _, reasoning, mapping, input, _, _, _, _, _, _, _, _} _ _ Behavior{legacy, store, developer, usage, supported, wire}:
-      normalizedParams(G, D, id, Transcript.resolveTranscript(V.Value, V.Value, G, D, context, Some{False{}}), options, legacy, store, developer, usage, imageInput(input), reasoning, supported, wire, mapping)
+    case T.Model{id, _, _, _, _, reasoning, mapping, input, _, _, _, _, _, _, _, _} _ _ Behavior{legacy, store, developer, usage, supported, wire, strict, _, _}:
+      normalizedParams(G, D, id, Transcript.resolveTranscript(V.Value, V.Value, G, D, context, Some{False{}}), options, legacy, store, developer, usage, imageInput(input), reasoning, supported, wire, mapping, strict)
+
+# upstream createClient's session-affinity headers.
+def affinityFor(format: T.SessionAffinityFormat, +sessionId: String) -> R.Record<String>:
+  match format:
+    case T.OpenRouterSession{}: R.Record{[R.Property{"x-session-id", sessionId}]}
+    case T.OpenAISession{}: R.Record{[R.Property{"session_id", sessionId}, R.Property{"x-client-request-id", sessionId}, R.Property{"x-session-affinity", sessionId}]}
+    case T.OpenAINoSession{}: R.Record{[R.Property{"x-client-request-id", sessionId}, R.Property{"x-session-affinity", sessionId}]}
+
+def sessionAffinityHeaders(selected: Behavior, sessionId: Maybe<&2, String>) -> R.Record<String>:
+  match selected sessionId:
+    case Behavior{_, _, _, _, _, _, _, True{}, format} Some{SCon{c, cs}}: affinityFor(format, SCon{c, cs})
+    case _ _: R.new(String)
+
+# The request headers applied after the model's: session affinity, then the
+# options' headers, which override them (upstream createClient).
+def clientHeaders(selected: Behavior, sessionId: Maybe<&2, String>, custom: Maybe<&2, T.ProviderHeaders()>) -> Maybe<&2, T.ProviderHeaders()>:
+  Some{Headers.overlay(Headers.fromRecord(sessionAffinityHeaders(selected, sessionId)), custom)}

@@ -148,7 +148,7 @@ def main():
                 if body != {"grant_type": "refresh_token", "client_id": "9d1c250a-e61b-44d9-88ed-5944d1962f5e", "refresh_token": "old-refresh"}:
                     raise AssertionError("unexpected OAuth refresh payload")
             for path, key, beta, body in Handler.requests:
-                if path != "/v1/messages" or key != "test-key" or body["model"] != "claude-opus-5" or body["stream"] is not True or "betas" in body or "mid-conversation-output-config-2026-07-01" not in (beta or ""):
+                if path != "/v1/messages?beta=true" or key != "test-key" or body["model"] != "claude-opus-5" or body["stream"] is not True or "betas" in body or "mid-conversation-output-config-2026-07-01" not in (beta or ""):
                     raise AssertionError((path, key, beta, body))
         finally:
             server.shutdown()

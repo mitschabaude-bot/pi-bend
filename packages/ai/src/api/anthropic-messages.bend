@@ -3,10 +3,12 @@ import ../types.bend as T
 import ../utils/schema-json.bend as Schema
 import ../utils/text.bend as Text
 import ../utils/transcript.bend as Transcript
+import ../utils/thinking-levels.bend as Levels
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
 import ../utils/sanitize-unicode.bend as Unicode
+import ../utils/headers.bend as HeaderUtils
 
 # Native Anthropic Messages wire format. This module owns provider decisions;
 # the HTTP transport and SSE framing remain runtime facilities.
@@ -160,15 +162,21 @@ def dropInitialSystem(-P: Data, -G: Data, -D: Data, messages: List<&2, T.Message
     case T.System{_} <> rest: rest
     case values: values
 
-def initialSystemValue(-P: Data, initial: Maybe<&2, T.SystemMessage<P>>, oauth: Bool, +cache: Maybe<&2, J()>) -> Maybe<&2, J()>:
-  match initial oauth:
-    case None{} False{}: None{}
-    case None{} True{}: Some{T.JsonArray{obj(setMaybe(R.Record{field("type", str("text")) <> field("text", str("You are Claude Code, Anthropic's official CLI for Claude.")) <> Nil{}}, "cache_control", cache)) <> Nil{}}}
-    case Some{system} False{}: Some{T.JsonArray{obj(setMaybe(R.Record{field("type", str("text")) <> field("text", str(Text.renderComplete(P, system))) <> Nil{}}, "cache_control", cache)) <> Nil{}}}
-    case Some{system} True{}: Some{T.JsonArray{obj(setMaybe(R.Record{field("type", str("text")) <> field("text", str("You are Claude Code, Anthropic's official CLI for Claude.")) <> Nil{}}, "cache_control", cache)) <> obj(setMaybe(R.Record{field("type", str("text")) <> field("text", str(Text.renderComplete(P, system))) <> Nil{}}, "cache_control", cache)) <> Nil{}}}
+# An empty initial system text is omitted, as upstream's `if (initialSystemText)`.
+def initialSystemValue(text: String, oauth: Bool, +cache: Maybe<&2, J()>) -> Maybe<&2, J()>:
+  match text oauth:
+    case SNil{} False{}: None{}
+    case SNil{} True{}: Some{T.JsonArray{obj(setMaybe(R.Record{field("type", str("text")) <> field("text", str("You are Claude Code, Anthropic's official CLI for Claude.")) <> Nil{}}, "cache_control", cache)) <> Nil{}}}
+    case SCon{c, cs} False{}: Some{T.JsonArray{obj(setMaybe(R.Record{field("type", str("text")) <> field("text", str(SCon{c, cs})) <> Nil{}}, "cache_control", cache)) <> Nil{}}}
+    case SCon{c, cs} True{}: Some{T.JsonArray{obj(setMaybe(R.Record{field("type", str("text")) <> field("text", str("You are Claude Code, Anthropic's official CLI for Claude.")) <> Nil{}}, "cache_control", cache)) <> obj(setMaybe(R.Record{field("type", str("text")) <> field("text", str(SCon{c, cs})) <> Nil{}}, "cache_control", cache)) <> Nil{}}}
+
+def systemText(-P: Data, initial: Maybe<&2, T.SystemMessage<P>>) -> String:
+  match initial:
+    case None{}: ""
+    case Some{system}: Text.renderComplete(P, system)
 
 def initialSystem(-P: Data, -G: Data, -D: Data, messages: List<&2, T.Message<P, V.Value, G, D>>, oauth: Bool, cache: Maybe<&2, J()>) -> Maybe<&2, J()>:
-  initialSystemValue(P, Transcript.getInitialSystemMessage(P, V.Value, G, D, messages), oauth, cache)
+  initialSystemValue(systemText(P, Transcript.getInitialSystemMessage(P, V.Value, G, D, messages)), oauth, cache)
 
 def toolSchema(schema: V.Value) -> J(): Schema.toJson(schema)
 def strictSampling(value: Maybe<&2, T.ToolConstrainedSampling>) -> Bool:
@@ -214,6 +222,21 @@ def selectedManaged(requested: Thinking) -> Thinking:
     case NoThinking{}: AdaptiveThinking{Some{"high"}, "summarized"}
     case DisabledThinking{}: AdaptiveThinking{Some{"high"}, "summarized"}
     case value: value
+
+# Thinking applies to reasoning models only; disabling it is omitted when the
+# model maps the off level to null.
+def reasoningThinking(reasoning: Bool, requested: Thinking, omitted: Bool) -> Thinking:
+  match reasoning requested omitted:
+    case False{} _ _: NoThinking{}
+    case True{} DisabledThinking{} True{}: NoThinking{}
+    case True{} value _: value
+
+def nullMapped(value: Maybe<&2, T.Nullable<String>>) -> Bool:
+  match value:
+    case Some{T.NullValue{}}: True{}
+    case _: False{}
+
+def offOmitted(levels: Maybe<&2, T.ThinkingLevelMap>) -> Bool: nullMapped(Levels.mapped(levels, T.Off{}))
 
 def selectedThinking(requested: Thinking, managed: Bool) -> Thinking:
   match managed:
@@ -358,10 +381,10 @@ def temperatureAllowed(thought: Thinking, managed: Bool, supported: Bool) -> Boo
 
 def buildParamsWith(-G: Data, -D: Data, model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options, compat: T.AnthropicMessagesCompat) -> J():
   match model context options compat:
-    case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, modelMax, _, _, _} T.TranscriptContext{+messages} Options{maxTokens, temperature, +thought, toolChoice, retention, +oauth} T.AnthropicMessagesCompat{+eager, longCache, _, _, toolCache, supportsTemp, _, emptySignature, strict, managed, midSystem, midTools, +fallbacks}:
+    case T.Model{id, _, _, _, _, reasoning, mapping, _, _, _, _, _, modelMax, _, _, _} T.TranscriptContext{+messages} Options{maxTokens, temperature, thought, toolChoice, retention, +oauth} T.AnthropicMessagesCompat{+eager, longCache, _, _, toolCache, supportsTemp, _, emptySignature, strict, managed, midSystem, midTools, +fallbacks}:
       +cache = cacheControl(retention, optionalBool(longCache, True{}))
       +managedEnabled = optionalBool(managed, False{})
-      +selected = selectedThinking(thought, managedEnabled)
+      +selected = selectedThinking(reasoningThinking(reasoning, thought, offOmitted(mapping)), managedEnabled)
       +wireMessages = appendMarker(cacheLast(messageList(V.Value, G, D, dropInitialSystem(V.Value, G, D, messages), optionalBool(emptySignature, False{}), Nil{}, Nil{}), cache), selected, managedEnabled)
       +base = {R.Record{field("model", str(id)) <> field("messages", T.JsonArray{wireMessages}) <> field("max_tokens", T.JsonNumber{optionalNumber(maxTokens, modelMax)}) <> field("stream", bool(True{})) <> Nil{}} : Fields()}
       +withSystem = setMaybe(base, "system", initialSystem(V.Value, G, D, messages, oauth, cache))
@@ -378,3 +401,40 @@ def buildParamsWith(-G: Data, -D: Data, model: T.Model<T.JsonValue>, context: T.
 
 def buildParams(-G: Data, -D: Data, +model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options) -> J():
   buildParamsWith(G, D, model, context, options, modelCompat(model))
+
+# upstream createClient's session-affinity header for API-key and
+# header-owned auth; Copilot and OAuth clients send none.
+def affinityHeader(format: Maybe<&2, T.AnthropicSessionAffinityFormat>, router: Bool) -> String:
+  match format:
+    case Some{T.AnthropicOpenRouterSession{}}: "x-session-id"
+    case None{}: Bool.pick(String, router, "x-session-id", "x-session-affinity")
+
+def affinityFor(send: Bool, header: String, sessionId: Maybe<&2, String>) -> R.Record<String>:
+  match send sessionId:
+    case True{} Some{SCon{c, cs}}: R.Record{R.Property{header, SCon{c, cs}} <> Nil{}}
+    case _ _: R.new(String)
+
+def affinityOf(+router: Bool, compat: T.AnthropicMessagesCompat, sessionId: Maybe<&2, String>) -> R.Record<String>:
+  match compat:
+    case T.AnthropicMessagesCompat{_, _, send, format, _, _, _, _, _, _, _, _, _}: affinityFor(optionalBool(send, router), affinityHeader(format, router), sessionId)
+
+def routed(model: T.Model<T.JsonValue>) -> Bool:
+  match model:
+    case T.Model{_, _, _, provider, base, _, _, _, _, _, _, _, _, _, _, _}: String.eq(provider, "openrouter") || String.contains(base, "openrouter.ai")
+
+def copilot(model: T.Model<T.JsonValue>) -> Bool:
+  match model:
+    case T.Model{_, _, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}: String.eq(provider, "github-copilot")
+
+def sessionAffinityHeaders(+model: T.Model<T.JsonValue>, sessionId: Maybe<&2, String>) -> R.Record<String>:
+  affinityOf(routed(model), modelCompat(model), sessionId)
+
+# The request headers the client applies after its own: session affinity,
+# then the options' headers, which override it.
+def headersFor(bearer: Bool, affinity: R.Record<String>, custom: Maybe<&2, T.ProviderHeaders()>) -> Maybe<&2, T.ProviderHeaders()>:
+  match bearer:
+    case True{}: custom
+    case False{}: Some{HeaderUtils.overlay(HeaderUtils.fromRecord(affinity), custom)}
+
+def clientHeaders(+model: T.Model<T.JsonValue>, sessionId: Maybe<&2, String>, oauth: Bool, custom: Maybe<&2, T.ProviderHeaders()>) -> Maybe<&2, T.ProviderHeaders()>:
+  headersFor(oauth || copilot(model), sessionAffinityHeaders(model, sessionId), custom)

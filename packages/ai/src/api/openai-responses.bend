@@ -38,7 +38,6 @@ import ../../../runtime/src/json.bend as JsonParse
 import ../../../runtime/src/random.bend as Seed
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
-import ../../../runtime/src/text.bend as Space
 import ../../../runtime/src/url.bend as URL
 import ../../../runtime/src/u64.bend as Word
 import ../../../runtime/src/http-message.bend as Header
@@ -186,23 +185,8 @@ def promptCacheKey(retention: T.CacheRetention, sessionId: Maybe<&2, String>) ->
 # Credentials
 # -----------
 
-def nonblankHeader(value: T.Nullable<String>) -> Bool:
-  match value:
-    case T.NullValue{}: False{}
-    case T.PresentValue{text}: Bool.not(Space.blank(text))
-
-def matchingHeader(entries: List<&2, R.Property<T.Nullable<String>>>, +name: String) -> Bool:
-  match entries:
-    case Nil{}: False{}
-    case R.Property{key, value} <> rest: (String.eq(Space.asciiLower(key), name) && nonblankHeader(value)) || matchingHeader(rest, name)
-
-def hasHeader(headers: Maybe<&2, T.ProviderHeaders()>, name: String) -> Bool:
-  match headers:
-    case None{}: False{}
-    case Some{R.Record{entries}}: matchingHeader(entries, Space.asciiLower(name))
-
 def headerCredential(provider: String, +headers: Maybe<&2, T.ProviderHeaders()>) -> Result<&2, &2, String, String>:
-  Bool.pick(Result<&2, &2, String, String>, hasHeader(headers, "authorization") || hasHeader(headers, "cf-aig-authorization"), Done{"unused"}, Fail{provider})
+  Bool.pick(Result<&2, &2, String, String>, ProviderHeaders.hasHeader(headers, "authorization") || ProviderHeaders.hasHeader(headers, "cf-aig-authorization"), Done{"unused"}, Fail{provider})
 
 # A caller-supplied Authorization header replaces the key with "unused". The
 # failure carries the provider name for the "No API key" diagnostic.
