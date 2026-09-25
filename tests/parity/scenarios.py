@@ -6,6 +6,7 @@ Paths in `files` are relative to the scenario root (home/, project/). Steps:
   ("settle"[, seconds])     wait for a quiet screen   ("snap", name)
   ("write", path, text)     change a file under the scenario root
 """
+import sys; sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[2] / "tests"))
 from upstream_pin import UPSTREAM
 import base64
 import json
