@@ -6,6 +6,7 @@ import ../../../../../tui/src/components/loader.bend as Loader
 import ../../../core/tools/truncate.bend as Truncate
 import ../../../../../tui/src/utils.bend as U
 import ../theme/theme.bend as Theme
+import ./session-info.bend as SessionInfo
 import ../../../../../runtime/src/callback.bend as Callback
 import ../../../../../runtime/src/ref.bend as Ref
 import ../../../../../runtime/src/text.bend as Text
@@ -79,8 +80,8 @@ def renderUser(state: UserMessage,+width: Nat) -> IO(List<&2,String>):
         Callback.dispose(String,String,background)
         return lines
 
-def assistant(content: List<&2,Content>,theme: Theme.Theme,styles: Markdown.MarkdownTheme) -> AssistantMessage:
-  AssistantMessage{content,False{},"Thinking...",1n,False{},Stop{},None{},theme,styles}
+def assistant(content: List<&2,Content>,theme: Theme.Theme,styles: Markdown.MarkdownTheme,outputPad: Nat) -> AssistantMessage:
+  AssistantMessage{content,False{},"Thinking...",outputPad,False{},Stop{},None{},theme,styles}
 def updateContent(state: AssistantMessage,content: List<&2,Content>,stop: Stop,errorMessage: Maybe<&2,String>,streaming: Bool) -> AssistantMessage:
   match state: case AssistantMessage{_,hide,label,pad,_,_,_,theme,styles}: AssistantMessage{content,hide,label,pad,streaming,stop,errorMessage,theme,styles}
 def setHideThinkingBlock(state: AssistantMessage,hide: Bool) -> AssistantMessage:
@@ -330,7 +331,7 @@ type Changelog is Data:
   FullChangelog{markdown: String}
   WhatsNew{markdown: String,spaced: Bool}
   UpdatedTo{version: String,spaced: Bool}
-type Body is Data: UserBody{value: UserMessage,preceded: Bool} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} StatusBody{text: String,theme: Theme.Theme} NewSessionBody{theme: Theme.Theme} ErrorBody{text: String,theme: Theme.Theme} WarningBody{text: String,theme: Theme.Theme,label: Bool} ManagedBody{text: String,theme: Theme.Theme,warning: Bool,first: Bool} ChangelogBody{value: Changelog,theme: Theme.Theme,styles: Markdown.MarkdownTheme}
+type Body is Data: UserBody{value: UserMessage,preceded: Bool} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} StatusBody{text: String,theme: Theme.Theme} NewSessionBody{theme: Theme.Theme} ErrorBody{text: String,theme: Theme.Theme} WarningBody{text: String,theme: Theme.Theme,label: Bool} ManagedBody{text: String,theme: Theme.Theme,warning: Bool,first: Bool} ChangelogBody{value: Changelog,theme: Theme.Theme,styles: Markdown.MarkdownTheme} SessionInfoBody{value: SessionInfo.SessionInfo,theme: Theme.Theme}
 def expandedBody(body: Body,expanded: Bool) -> Body:
   match body:
     case BashBody{value}: BashBody{bashExpanded(value,expanded)}
@@ -347,6 +348,7 @@ def retheme(body: Body,theme: Theme.Theme) -> Body:
     case WarningBody{text,_,label}: WarningBody{text,theme,label}
     case ManagedBody{text,_,warning,first}: ManagedBody{text,theme,warning,first}
     case ChangelogBody{value,_,styles}: ChangelogBody{value,theme,styles}
+    case SessionInfoBody{value,_}: SessionInfoBody{value,theme}
 type Owner is Type:
   Owner{state: Ref.Ref<Body>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
 type Handle is Data: Handle{state: Ref.Ref<Body>}
@@ -429,6 +431,7 @@ def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
         lines : List<&2,String> <- textLines(colored,1n,width)
         return managedLines(first,lines)
     case ChangelogBody{value,theme,styles}: renderChangelog(value,theme,styles,width)
+    case SessionInfoBody{value,theme}: SessionInfo.render(value,theme,width)
 def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
   match handle:
     case Handle{state}:
@@ -463,6 +466,18 @@ def hiddenBody(body: Body,hidden: Bool) -> Body:
   match body:
     case AssistantBody{value}: AssistantBody{setHideThinkingBlock(value,hidden)}
     case other: other
+def paddedBody(body: Body,pad: Nat) -> Body:
+  match body:
+    case UserBody{value,preceded}: UserBody{setUserOutputPad(value,pad),preceded}
+    case AssistantBody{value}: AssistantBody{setAssistantOutputPad(value,pad)}
+    case other: other
+def padOwner(owner: Owner,pad: Nat) -> IO(Owner):
+  match owner:
+    case Owner{+state,+component,render,invalidate}:
+      do IO<Owner>:
+        body : Body <- Ref.read(Body,state)
+        Ref.write(Body,state,paddedBody(body,pad))
+        return Owner{state,component,render,invalidate}
 def hideThinkingOwner(owner: Owner,hidden: Bool) -> IO(Owner):
   match owner:
     case Owner{+state,+component,render,invalidate}:

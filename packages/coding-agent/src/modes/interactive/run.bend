@@ -59,6 +59,9 @@ import ./components/settings-selector.bend as SettingsPicker
 import ./components/trust-selector.bend as TrustPicker
 import ./components/messages.bend as MessageUI
 import ./components/custom-editor.bend as CustomEditor
+import ./components/session-info.bend as SessionInfo
+import ../../core/cache-stats.bend as CacheStats
+import ../../core/usage-totals.bend as UsageTotals
 import ./components/login-dialog.bend as LoginDialog
 import ./theme/color.bend as Color
 import ../../../../tui/src/terminal-image.bend as Image
@@ -597,6 +600,28 @@ def copyText(transcript: Transcript.Handle,cwd: String,text: Maybe<&2,String>) -
       do IO<Unit>:
         result : Result<&2,&2,String,Unit> <- Clipboard.copy(value,cwd)
         copyResult(transcript,result)
+# upstream handleSessionCommand: session stats, cache waste and the per-model
+# cost breakdown over every stored entry.
+def sessionInfoOf(stats: Stats.Stats,state: Tree.SessionManager<Unit,Tools.ToolDetails,Schema.Value>,models: Models.ModelRuntime) -> SessionInfo.SessionInfo:
+  match stats:
+    case Stats.Stats{file,id,Stats.Totals{users,assistants,calls,results,messages,input,output,cacheRead,cacheWrite,cost},_}:
+      +entries = Tree.getEntries(Unit,Tools.ToolDetails,Schema.Value,state)
+      SessionInfo.SessionInfo{Tree.getSessionName(Unit,Tools.ToolDetails,Schema.Value,state),file,id,messages,users,assistants,calls,results,input,output,cacheRead,cacheWrite,cost,CacheStats.computeCacheWaste(~Models.ModelRuntime,~Models.cacheReadPrice,Unit,Tools.ToolDetails,Schema.Value,models,entries),UsageTotals.getUsageCostBreakdown(Unit,Tools.ToolDetails,Schema.Value,entries)}
+def sessionInfoShown(transcript: Transcript.Handle,+live: Session.AgentSession,stats: Result<&2,&2,Tree.Error,Stats.Stats>) -> IO(Unit):
+  match stats:
+    case Fail{_}: Transcript.showError(transcript,"Session history is invalid")
+    case Done{value}:
+      do IO<Unit>:
+        stored : Session.Session() <- Session.sessionOf(live)
+        Transcript.sessionInfo(transcript,sessionInfoOf(value,Session.stateOf(stored),Session.modelRuntime(live)))
+def sessionInfoObserved(input: CommandObservation) -> IO(Unit):
+  match input:
+    case CommandObservation{_,session,_,_,redraw,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_}:
+      do IO<Unit>:
+        +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        stats : Result<&2,&2,Tree.Error,Stats.Stats> <- Session.getSessionStats(live)
+        sessionInfoShown(transcript,live,stats)
+        Interactive.requestRender(redraw)
 def copyObserved(input: CommandObservation) -> IO(Unit):
   match input:
     case CommandObservation{_,session,_,_,redraw,cwd,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_}:
@@ -747,6 +772,7 @@ def newSessionStatus(input: CommandObservation) -> IO(Unit):
 def commandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match action:
     case Commands.CopyLastAssistant{}: copyObserved(input)
+    case Commands.ShowSessionInfo{}: sessionInfoObserved(input)
     case Commands.NewSessionStarted{}: newSessionStatus(input)
     case Commands.ClonedSession{}: sessionStatus(input,"Cloned to new session")
     case Commands.OpenSettings{}: settingsObserved(input)
@@ -1883,6 +1909,10 @@ def runLive(borrowed: Live.Owner & Component.Component & Live.Handle,words: Word
         withCustomEditor(CustomEditor.borrow(custom),live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context)
 def smallCount(value: W.U64) -> Nat:
   match value: case W.U64{_,low}: U32.to_nat(low)
+def outputPad(value: Settings.OutputPadding) -> Nat:
+  match value:
+    case Settings.NoPadding{}: 0n
+    case Settings.OnePadding{}: 1n
 def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,changed: Callback.Callback<String,Unit>,controller: Controller.Controller,+queue: Controller.Handle,+submitted: Callback.Callback<String,Unit>,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,+words: Words.Source,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (+paint,uiTheme):
@@ -1920,6 +1950,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +existing : List<&2,Session.Message()> <- Session.messages(session)
         +settings : Settings.SettingsManager <- Session.getSettings(session)
         Transcript.setHideThinking(transcriptHandle,Settings.getHideThinkingBlock(settings))
+        Transcript.setOutputPad(transcriptHandle,outputPad(Settings.getOutputPad(settings)))
         Transcript.seedSession(transcriptHandle,existing)
         agentState : Session.AgentState() <- Session.state(session)
         +current : Ref.Ref<Session.AgentSession> <- modeCurrent(mode,session)

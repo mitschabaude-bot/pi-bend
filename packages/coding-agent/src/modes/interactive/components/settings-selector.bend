@@ -222,13 +222,15 @@ def editorEffect(id: String,value: String,editor: Ref.Ref<Maybe<&2,Live.Handle>>
   do IO<Unit>:
     current : Maybe<&2,Live.Handle> <- Ref.read(Maybe<&2,Live.Handle>,editor)
     editorChoice(current,id,value)
-def thinkingEffect(id: String,value: String,transcript: Transcript.Handle) -> IO(Unit):
-  match id:
-    case "hide-thinking": Transcript.setHideThinking(transcript,boolValue(value))
-    case _: IO.pure(Unit,Unit{})
+def transcriptEffect(id: String,value: String,transcript: Transcript.Handle) -> IO(Unit):
+  match id value:
+    case "hide-thinking" _: Transcript.setHideThinking(transcript,boolValue(value))
+    case "output-padding" "0": Transcript.setOutputPad(transcript,0n)
+    case "output-padding" "1": Transcript.setOutputPad(transcript,1n)
+    case _ _: IO.pure(Unit,Unit{})
 def liveEffectDone(+id: String,+value: String,transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>) -> IO(Unit):
   do IO<Unit>:
-    thinkingEffect(id,value,transcript)
+    transcriptEffect(id,value,transcript)
     editorEffect(id,value,editor)
 def liveEffect(id: String,value: String,transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,result: Result<&2,&2,String,Unit>) -> IO(Unit):
   match result:

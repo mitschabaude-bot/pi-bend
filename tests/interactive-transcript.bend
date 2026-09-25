@@ -46,6 +46,10 @@ def clean(lines: List<&2,String>) -> String:
     case Nil{}: ""
     case line <> rest: Utils.stripTerminalSequences(line) ++ clean(rest)
 def contains(text: String,part: String) -> Bool: String.contains(text,part)
+def rowContaining(rows: List<&2,String>,+needle: String) -> String:
+  match rows:
+    case Nil{}: ""
+    case +row <> rest: Bool.pick(String,contains(Utils.stripTerminalSequences(row),needle),Utils.stripTerminalSequences(row),rowContaining(rest,needle))
 def childCount(value: Component.Container) -> Nat:
   match value: case Component.Container{children,_}: List.length(&2,Component.Component,children)
 def mountedCount(handle: View.Handle) -> IO(Nat):
@@ -90,6 +94,12 @@ def runEvents(pair: Transcript.Owner & Transcript.Handle,view: View.View,+docume
         check(completed,"assistant end did not settle")
         +final : List<&2,String> <- Component.render(document,20n)
         check(contains(clean(final),"final") && Bool.not(contains(clean(final),"answer")),"assistant end retained stale content")
+        Transcript.setOutputPad(handle,0n)
+        +compact : List<&2,String> <- Component.render(document,20n)
+        check(Bool.not(String.eq(rowContaining(final,"hello"),rowContaining(compact,"hello"))) && Bool.not(String.eq(rowContaining(final,"final"),rowContaining(compact,"final"))),"output padding did not update mounted user and assistant messages")
+        Transcript.setOutputPad(handle,1n)
+        +restored : List<&2,String> <- Component.render(document,20n)
+        check(String.eq(rowContaining(final,"hello"),rowContaining(restored,"hello")) && String.eq(rowContaining(final,"final"),rowContaining(restored,"final")),"restoring output padding did not restore mounted messages")
         Transcript.seed(Value.Value,Unit,handle,historical("archived") <> Nil{})
         seeded : List<&2,String> <- Component.render(document,20n)
         check(contains(clean(seeded),"archived"),"stored message was not restored")
