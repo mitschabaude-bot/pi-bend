@@ -24,17 +24,24 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   over a local TLS server (P-256 certificates), Bend's first token now
   arrives before pi's (72-77 ms versus 110-115 ms in `stream-paced`). A long
   answer (10 KB of Markdown with 30 code blocks, 500 deltas) paced at 4 ms
-  per delta ends within the bound (last token 2.13-2.15 s versus pi's
-  2.07-2.08 s); flooded, it ends at 0.44-0.45 s versus pi's 0.16-0.17 s
-  (3 runs each at main 89ba73a4, 2026-09-25). TLS is no longer the cause:
-  the same flood over plain HTTP (a local copy of the scenario without
-  `tls`) ends at 0.36-0.38 s versus pi's 0.13 s, so TLS adds about 80 ms
-  to Bend and 30-40 ms to pi. Of the streaming window, roughly a quarter copies
-  and releases the accumulated text (each delta appends to a `String` that
-  the agent and transcript still hold, so the whole text so far is copied;
-  docs/bend-issues.md BEND-046) and about 30% draws the eight frames. pi
-  appends in O(1). Removing the copy needs either a runtime string
-  concatenation node or a different text type in streamed messages. Until
+  per delta ends with pi's (last token 2.05-2.09 s versus pi's
+  2.07-2.11 s); flooded, it ends at 0.36-0.40 s versus pi's 0.16-0.19 s
+  (7 runs, 2026-09-25; before the frame work below 2.18-2.24 s and
+  0.42-0.46 s at the same base). TLS is no longer the cause: the same
+  flood over plain HTTP (a local copy of the scenario without `tls`) ended
+  at 0.36-0.38 s versus pi's 0.13 s before the frame work, so TLS adds
+  about 80 ms to Bend and 30-40 ms to pi. What remains is mostly copying
+  and releasing the accumulated text: each delta appends to a `String`
+  that the agent and transcript still hold, so the whole text so far is
+  copied (docs/bend-issues.md BEND-046); pi appends in O(1). Removing the
+  copy needs either a runtime string concatenation node or a different
+  text type in streamed messages. Frames are now cheap. A full render of
+  the 10 KB answer still takes 32-36 ms natively against pi's 6 ms, but a
+  streaming frame reuses the finished lines of every unchanged Markdown
+  block from the previous frame (`Markdown.Memo`), so the 40 growing
+  frames of a benchmark take 3 ms each where they took about 17 ms, and pi
+  re-renders in 1-6 ms. Before, the runner's theme sync also rethemed, and
+  so re-rendered, every transcript entry on each render request. Until
   2026-09-25 the handshake took 350-390 ms and the flood 0.84-0.89 s:
   X25519 used lists of byte limbs (98 ms per scalar multiplication, twice
   per handshake; now sixteen 16-bit limbs in a record, 0.43 ms), AES
