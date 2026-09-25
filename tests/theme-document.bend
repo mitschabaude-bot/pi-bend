@@ -12,7 +12,7 @@ def colors(values: List<&2,Record.Property<Color.Color>>,+mode: Color.Mode,+bg: 
         colors(rest,mode,bg)
 def display(theme: Theme.Theme) -> IO(Unit):
   match theme:
-    case Theme.Theme{name,+mode,fg,bg}:
+    case Theme.Theme{name,+mode,fg,bg,_,_}:
       do IO<Unit>:
         IO.print("N|" ++ name)
         colors(Record.entries(Color.Color,fg),mode,False{})

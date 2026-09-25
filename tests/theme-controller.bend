@@ -18,7 +18,7 @@ def decision(+value: Maybe<&2,String>) -> IO(Unit):
 def loaded(result: Result<&2,&2,Theme.LoadError,Controller.Loaded>) -> String:
   match result:
     case Fail{_}: "fatal"
-    case Done{Controller.Loaded{name,Theme.Theme{loadedName,_,_,_},error}}:
+    case Done{Controller.Loaded{name,Theme.Theme{loadedName,_,_,_,_,_},error}}:
       name ++ ":" ++ loadedName ++ ":" ++ Bool.show(Bool.not(Maybe.is_none(&2,Theme.LoadError,error)))
 def main() -> IO(Unit):
   do IO<Unit>:

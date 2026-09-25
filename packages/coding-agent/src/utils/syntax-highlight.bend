@@ -21,7 +21,11 @@ import ./html.bend as Html
 def eagerLanguages() -> List<&2, String>:
   ["python", "java", "go", "javascript", "cpp", "typescript", "php", "ruby", "c", "csharp", "nix", "bash", "rust", "scala", "kotlin", "swift", "dart", "groovy", "perl", "lua"]
 
-type HighlighterState is Data: HighlighterState{registry: H.Registry, grammars: H.Grammars, allLanguages: Bool}
+type Remembered is Data: Unknown{} Remembered{tokens: Maybe<&2, List<&2, H.Token>>}
+type Recalled is Data: Missing{} Recent{tokens: Maybe<&2, List<&2, H.Token>>} Older{tokens: Maybe<&2, List<&2, H.Token>>}
+# `recent` and `older` remember highlight.js's tokens for recently
+# highlighted code (see `memoized`).
+type HighlighterState is Data: HighlighterState{registry: H.Registry, grammars: H.Grammars, allLanguages: Bool, recent: Map<&2, Remembered>, older: Map<&2, Remembered>, size: Nat}
 type Highlighter is Data: Highlighter{directory: String, languages: List<&2, H.LanguageInfo>, state: Ref.Ref<HighlighterState>}
 
 def indexed(languages: List<&2, H.LanguageInfo>, +name: String) -> Maybe<&2, H.LanguageInfo>:
@@ -51,11 +55,11 @@ def create(+directory: String) -> IO(Highlighter):
   do IO<Highlighter>:
     loaded : Result<&2, &2, String, List<&2, H.LanguageInfo>> <- H.loadIndex(directory)
     +languages : List<&2, H.LanguageInfo> <- IO.pure(List<&2, H.LanguageInfo>, indexLanguages(loaded))
-    state : Ref.Ref<HighlighterState> <- Ref.new(HighlighterState, HighlighterState{registeredNamed(languages, eagerLanguages(), H.emptyRegistry()), H.noGrammars(), False{}})
+    state : Ref.Ref<HighlighterState> <- Ref.new(HighlighterState, HighlighterState{registeredNamed(languages, eagerLanguages(), H.emptyRegistry()), H.noGrammars(), False{}, Map.new(&2, Remembered), Map.new(&2, Remembered), 0n})
     return Highlighter{directory, languages, state}
 def allRegistered(languages: List<&2, H.LanguageInfo>, state: HighlighterState) -> HighlighterState & Unit:
   match state:
-    case HighlighterState{registry, grammars, False{}}: (HighlighterState{registeredAll(languages, registry), grammars, True{}}, Unit{})
+    case HighlighterState{registry, grammars, False{}, _, _, _}: (HighlighterState{registeredAll(languages, registry), grammars, True{}, Map.new(&2, Remembered), Map.new(&2, Remembered), 0n}, Unit{})
     case loaded: (loaded, Unit{})
 # Registers every highlight.js language (once), as importing
 # highlight.js/lib/index.js does upstream.
@@ -63,7 +67,7 @@ def loadAllHighlightLanguages(highlighter: Highlighter) -> IO(Unit):
   match highlighter:
     case Highlighter{_, languages, state}: Ref.modify(HighlighterState, Unit, state, current => allRegistered(languages, current))
 def stateRegistry(state: HighlighterState) -> H.Registry:
-  match state: case HighlighterState{registry, _, _}: registry
+  match state: case HighlighterState{registry, _, _, _, _, _}: registry
 def supportsLanguage(highlighter: Highlighter, name: String) -> IO(Bool):
   match highlighter:
     case Highlighter{_, _, state}:
@@ -222,9 +226,9 @@ def renderHighlightedHtml(~F: Data, ~format: F -> String -> String, html: String
 # ------------
 
 def withGrammars(state: HighlighterState, grammars: H.Grammars) -> HighlighterState & Unit:
-  match state: case HighlighterState{registry, _, all}: (HighlighterState{registry, grammars, all}, Unit{})
+  match state: case HighlighterState{registry, _, all, recent, older, size}: (HighlighterState{registry, grammars, all, recent, older, size}, Unit{})
 def stateGrammars(state: HighlighterState) -> H.Grammars:
-  match state: case HighlighterState{_, grammars, _}: grammars
+  match state: case HighlighterState{_, grammars, _, _, _, _}: grammars
 # Loads (and keeps) the grammars `names` can use; returns the registry and
 # grammars to highlight with.
 def prepared(highlighter: Highlighter, names: List<&2, String>) -> IO(H.Registry & H.Grammars):
@@ -243,17 +247,68 @@ def loadedInfo(info: Maybe<&2, H.LanguageInfo>, grammars: H.Grammars) -> Bool:
     case Some{H.LanguageInfo{known, _, _, _}}: Bool.not(Maybe.is_none(&2, H.Language, H.grammarOf(grammars, known)))
     case None{}: False{}
 def loadedLanguage(registry: H.Registry, grammars: H.Grammars, name: String) -> Bool: loadedInfo(H.getLanguage(registry, name), grammars)
-def rendered(~F: Data, ~format: F -> String -> String, result: Maybe<&2, H.HighlightResult>, theme: R.Record<F>) -> Maybe<&2, String>:
+def resultTokens(result: Maybe<&2, H.HighlightResult>) -> Maybe<&2, List<&2, H.Token>>:
   match result:
-    case Some{H.HighlightResult{_, _, tokens, _}}: Some{renderTokens(~F, ~format, tokens, theme, "", Nil{}, Nil{})}
+    case Some{H.HighlightResult{_, _, tokens, _}}: Some{tokens}
     case None{}: None{}
-def highlightNamed(~F: Data, ~format: F -> String -> String, prepared: H.Registry & H.Grammars, +code: String, +language: String, ignoreIllegals: Bool, theme: R.Record<F>) -> Maybe<&2, String>:
+def rendered(~F: Data, ~format: F -> String -> String, tokens: Maybe<&2, List<&2, H.Token>>, theme: R.Record<F>) -> Maybe<&2, String>:
+  match tokens:
+    case Some{found}: Some{renderTokens(~F, ~format, found, theme, "", Nil{}, Nil{})}
+    case None{}: None{}
+
+# Streaming re-renders a message on every frame, highlighting its code blocks
+# again. Once a language's grammars are loaded, highlight.js's tokens are a
+# function of the registry, language, flag and code, so they are remembered
+# until more languages are registered. The memory is generational: `recent`
+# holds at most MEMO_SIZE entries before it becomes `older`, and an entry
+# found in `older` moves back into `recent`.
+def MEMO_SIZE() -> Nat: 256n
+def memoKey(language: String, ignoreIllegals: Bool, code: String) -> String:
+  language ++ Bool.pick(String, ignoreIllegals, "\u{0}1\u{0}", "\u{0}0\u{0}") ++ code
+def recalled(recent: Remembered, older: Remembered) -> Recalled:
+  match recent older:
+    case Remembered{tokens} _: Recent{tokens}
+    case Unknown{} Remembered{tokens}: Older{tokens}
+    case Unknown{} Unknown{}: Missing{}
+def lookedUp(registry: H.Registry, grammars: H.Grammars, all: Bool, recent: Map<&2, Remembered> & Remembered, older: Map<&2, Remembered> & Remembered, size: Nat) -> HighlighterState & Recalled:
+  match recent older:
+    case Tuple{recentMap, first} Tuple{olderMap, second}: (HighlighterState{registry, grammars, all, recentMap, olderMap, size}, recalled(first, second))
+def lookup(state: HighlighterState, +key: String) -> HighlighterState & Recalled:
+  match state:
+    case HighlighterState{registry, grammars, all, recent, older, size}:
+      lookedUp(registry, grammars, all, Map.get(Remembered, Unknown{}, recent, key), Map.get(Remembered, Unknown{}, older, key), size)
+def rotated(registry: H.Registry, grammars: H.Grammars, all: Bool, recent: Map<&2, Remembered>, older: Map<&2, Remembered>, size: Nat, full: Bool) -> HighlighterState:
+  match full:
+    case False{}: HighlighterState{registry, grammars, all, recent, older, size}
+    case True{}: HighlighterState{registry, grammars, all, Map.new(&2, Remembered), recent, 0n}
+def added(state: HighlighterState, key: String, tokens: Maybe<&2, List<&2, H.Token>>) -> HighlighterState & Unit:
+  match state:
+    case HighlighterState{registry, grammars, all, recent, older, size}: (HighlighterState{registry, grammars, all, Map.set(&2, Remembered, recent, key, Remembered{tokens}), older, size + 1n}, Unit{})
+def remembered(state: HighlighterState, key: String, tokens: Maybe<&2, List<&2, H.Token>>) -> HighlighterState & Unit:
+  match state:
+    case HighlighterState{registry, grammars, all, recent, older, +size}: added(rotated(registry, grammars, all, recent, older, size, Nat.is_ge(size, MEMO_SIZE())), key, tokens)
+def kept(+state: Ref.Ref<HighlighterState>, +key: String, +tokens: Maybe<&2, List<&2, H.Token>>) -> IO(Maybe<&2, List<&2, H.Token>>):
+  do IO<Maybe<&2, List<&2, H.Token>>>:
+    Ref.modify(HighlighterState, Unit, state, current => remembered(current, key, tokens))
+    return tokens
+def recall(+state: Ref.Ref<HighlighterState>, +key: String, value: Recalled, compute: Unit -> Maybe<&2, List<&2, H.Token>>) -> IO(Maybe<&2, List<&2, H.Token>>):
+  match value:
+    case Recent{tokens}: IO.pure(Maybe<&2, List<&2, H.Token>>, tokens)
+    case Older{tokens}: kept(state, key, tokens)
+    case Missing{}: kept(state, key, compute(Unit{}))
+def memoized(+state: Ref.Ref<HighlighterState>, +key: String, compute: Unit -> Maybe<&2, List<&2, H.Token>>) -> IO(Maybe<&2, List<&2, H.Token>>):
+  do IO<Maybe<&2, List<&2, H.Token>>>:
+    value : Recalled <- Ref.modify(HighlighterState, Recalled, state, current => lookup(current, key))
+    recall(state, key, value, compute)
+def namedTokens(+state: Ref.Ref<HighlighterState>, prepared: H.Registry & H.Grammars, +code: String, +language: String, +ignoreIllegals: Bool) -> IO(Maybe<&2, List<&2, H.Token>>):
   match prepared:
     case (+registry, +grammars):
-      Bool.pick(Unit -> Maybe<&2, String>, loadedLanguage(registry, grammars, language), _ => rendered(~F, ~format, H.highlight(registry, grammars, code, language, ignoreIllegals), theme), _ => None{})(Unit{})
+      Bool.pick(Unit -> IO(Maybe<&2, List<&2, H.Token>>), loadedLanguage(registry, grammars, language),
+        _ => memoized(state, memoKey(language, ignoreIllegals, code), _ => resultTokens(H.highlight(registry, grammars, code, language, ignoreIllegals))),
+        _ => IO.pure(Maybe<&2, List<&2, H.Token>>, None{}))(Unit{})
 def highlightDetected(~F: Data, ~format: F -> String -> String, prepared: H.Registry & H.Grammars, +code: String, subset: Maybe<&2, List<&2, String>>, theme: R.Record<F>) -> Maybe<&2, String>:
   match prepared:
-    case (+registry, +grammars): rendered(~F, ~format, Some{H.highlightAuto(registry, grammars, code, subset)}, theme)
+    case (+registry, +grammars): rendered(~F, ~format, resultTokens(Some{H.highlightAuto(registry, grammars, code, subset)}), theme)
 def subsetNames(+registry: H.Registry, subset: Maybe<&2, List<&2, String>>) -> List<&2, String>:
   match subset:
     case None{}: H.listLanguages(registry)
@@ -266,7 +321,8 @@ def highlight(~F: Data, ~format: F -> String -> String, +highlighter: Highlighte
     case HighlightOptions{Some{+language}, ignoreIllegals, _}:
       do IO<Maybe<&2, String>>:
         ready : H.Registry & H.Grammars <- prepared(highlighter, [language])
-        return highlightNamed(~F, ~format, ready, code, language, ignoreIllegals, theme)
+        tokens : Maybe<&2, List<&2, H.Token>> <- namedTokens(highlighterState(highlighter), ready, code, language, ignoreIllegals)
+        return rendered(~F, ~format, tokens, theme)
     case HighlightOptions{None{}, _, +subset}:
       do IO<Maybe<&2, String>>:
         current : HighlighterState <- Ref.read(HighlighterState, highlighterState(highlighter))

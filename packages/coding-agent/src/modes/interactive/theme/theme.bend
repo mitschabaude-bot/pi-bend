@@ -13,9 +13,22 @@ import ../../../utils/syntax-highlight.bend as SyntaxHighlight
 # Theme documents are immutable data. Variables are resolved once when a theme
 # is loaded, so rendering never depends on JSON or mutable global state.
 type Token is Data: Literal{color: C.Color} Reference{name: String}
-type Theme is Data: Theme{name: String,mode: C.Mode,foreground: R.Record<C.Color>,background: R.Record<C.Color>}
+# Like upstream's fgColors/bgColors maps, a theme keeps each color's escape
+# sequence, computed once, beside the resolved colors.
+type Theme is Data: Theme{name: String,mode: C.Mode,foreground: R.Record<C.Color>,background: R.Record<C.Color>,fgAnsi: Map<&2,String>,bgAnsi: Map<&2,String>}
 def colorMode(theme: Theme) -> C.Mode:
-  match theme: case Theme{_,mode,_,_}: mode
+  match theme: case Theme{_,mode,_,_,_,_}: mode
+def escape(color: C.Color,mode: C.Mode,bg: Bool) -> String:
+  match bg:
+    case True{}: C.background(color,mode)
+    case False{}: C.foreground(color,mode)
+def escapes(colors: List<&2,R.Property<C.Color>>,+mode: C.Mode,+bg: Bool,codes: Map<&2,String>) -> Map<&2,String>:
+  match colors:
+    case Nil{}: codes
+    case R.Property{key,color} <> rest: escapes(rest,mode,bg,Map.set(&2,String,codes,key,escape(color,mode,bg)))
+def create(name: String,+mode: C.Mode,+fg: R.Record<C.Color>,+bg: R.Record<C.Color>) -> Theme:
+  Theme{name,mode,fg,bg,escapes(R.entries(C.Color,fg),mode,False{},Map.new(&2,String)),escapes(R.entries(C.Color,bg),mode,True{},Map.new(&2,String))}
+
 type Error is Data:
   InvalidJson{}
   InvalidDocument{}
@@ -130,7 +143,7 @@ def fallbacks(colors: R.Record<Token>) -> R.Record<Token>:
 def assemble(name: String,mode: C.Mode,+vars: R.Record<Token>,+colors: R.Record<Token>) -> Result<&2,&2,Error,Theme>:
   bind(Unit,Theme,checkRequired(required(),colors),_ =>
     bind(R.Record<C.Color>,Theme,resolveOne(R.entries(Token,fallbacks(colors)),vars,False{},R.new(C.Color)),fg =>
-      bind(R.Record<C.Color>,Theme,resolveOne(R.entries(Token,fallbacks(colors)),vars,True{},R.new(C.Color)),bg => Done{Theme{name,mode,fg,bg}})))
+      bind(R.Record<C.Color>,Theme,resolveOne(R.entries(Token,fallbacks(colors)),vars,True{},R.new(C.Color)),bg => Done{create(name,mode,fg,bg)})))
 def fromColorsFields(themeName: String,mode: C.Mode,colors: R.Record<V.Value>,varsValue: Maybe<&2,V.Value>) -> Result<&2,&2,Error,Theme>:
   match varsValue:
     case Some{V.ObjectValue{vars}}: bind(R.Record<Token>,Theme,tokenMap(vars),resolvedVars => bind(R.Record<Token>,Theme,tokenMap(colors),values => assemble(themeName,mode,resolvedVars,values)))
@@ -155,20 +168,18 @@ def stripBom(content: String) -> String:
 def parse(content: String,mode: C.Mode) -> Result<&2,&2,Error,Theme>:
   parsed(Json.parse(stripBom(content)),mode)
 
-def wrapped(found: Maybe<&2,C.Color>,+mode: C.Mode,key: String,+text: String,bg: Bool) -> Result<&2,&2,Error,String>:
+# An escape sequence is never empty, so "" marks a missing color.
+def wrapped(found: Map<&2,String> & String,key: String,text: String,reset: String) -> Result<&2,&2,Error,String>:
   match found:
-    case None{}: Fail{MissingColor{key}}
-    case Some{+color}:
-      Bool.pick(Unit -> Result<&2,&2,Error,String>,bg,
-        _ => Done{C.background(color,mode) ++ text ++ "\u{1b}[49m"},
-        _ => Done{C.foreground(color,mode) ++ text ++ "\u{1b}[39m"})(Unit{})
+    case (_,""): Fail{MissingColor{key}}
+    case (_,code): Done{code ++ text ++ reset}
 
 def foreground(theme: Theme,+key: String,text: String) -> Result<&2,&2,Error,String>:
   match theme:
-    case Theme{_,mode,colors,_}: wrapped(R.get(C.Color,colors,key),mode,key,text,False{})
+    case Theme{_,_,_,_,codes,_}: wrapped(Map.get(String,"",codes,key),key,text,"\u{1b}[39m")
 def background(theme: Theme,+key: String,text: String) -> Result<&2,&2,Error,String>:
   match theme:
-    case Theme{_,mode,_,colors}: wrapped(R.get(C.Color,colors,key),mode,key,text,True{})
+    case Theme{_,_,_,_,_,codes}: wrapped(Map.get(String,"",codes,key),key,text,"\u{1b}[49m")
 
 def loaded(result: Result<&2,&2,Error,Theme>) -> Result<&2,&2,LoadError,Theme>:
   match result:
