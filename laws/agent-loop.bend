@@ -64,7 +64,7 @@ law one_continuing_result_continues_the_run:
   for -Details: Data
   for call: Ai.ToolCall<Schema.Value>
   for content: List<&2, Ai.TextImageContent>
-  for details: Details
+  for details: Maybe<&2, Details>
   for usage: Maybe<&2, Ai.Usage>
   for terminate: Maybe<&2, Bool>
   for isError: Bool

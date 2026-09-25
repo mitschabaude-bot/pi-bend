@@ -11,10 +11,27 @@ law put_equivalent:
   for +value: A
   {Map.put(A, properties, key, value) == Record.setProperties(A, properties, key, value) : List<&2, Record.Property<A>>}
 
+# A record update's head step, whichever way its key comparison goes.
+law set_from_pick:
+  for -A: Data
+  for +name: String
+  for +old: A
+  for +rest: List<&2, Record.Property<A>>
+  for +key: String
+  for +value: A
+  for same: Bool
+  {Bool.pick(List<&2, Record.Property<A>>, same, Record.Property{key, value} <> rest, Record.Property{name, old} <> Record.setProperties(A, rest, key, value)) == Record.setFrom(A, Record.Property{name, old} <> rest, same, key, value) : List<&2, Record.Property<A>>}
+
+def set_from_pick(A, name, old, rest, key, value, same):
+  match same:
+    case True{}: {==}
+    case False{}: {==}
+
 def put_equivalent(A, properties, key, value):
   match properties:
     case Nil{}: {==}
     case Record.Property{+name, +old} <> +rest:
+      %set_from_pick(A, name, old, rest, key, value, String.eq(key, name)) : {Map.put(A, Record.Property{name, old} <> rest, key, value) == _ : List<&2, Record.Property<A>>}
       %StringEquality.eq_symmetric(name, key) : {Map.put(A, Record.Property{name, old} <> rest, key, value) == Bool.pick(List<&2, Record.Property<A>>, _, Record.Property{key, value} <> rest, Record.Property{name, old} <> Record.setProperties(A, rest, key, value)) : List<&2, Record.Property<A>>}
       %put_equivalent(A, rest, key, value) : {Map.put(A, Record.Property{name, old} <> rest, key, value) == Bool.pick(List<&2, Record.Property<A>>, String.eq(name, key), Record.Property{key, value} <> rest, Record.Property{name, old} <> _) : List<&2, Record.Property<A>>}
       {==}

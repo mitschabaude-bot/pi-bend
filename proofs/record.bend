@@ -3,6 +3,19 @@ import ./string-equality.bend as StringEquality
 import ../laws/record.bend as Laws
 import ../packages/runtime/src/record.bend as R
 
+# A lookup that has found a value keeps it through the rest of the list.
+law found_kept:
+  for -A: Data
+  for properties: List<&2, R.Property<A>>
+  for value: A
+  for +key: String
+  {R.getFrom(A, properties, Some{value}, key) == Some{value} : Maybe<&2, A>}
+
+def found_kept(A, properties, value, key):
+  match properties:
+    case Nil{}: {==}
+    case R.Property{_, _} <> _: {==}
+
 law remove_properties_absent:
   for -A: Data
   for properties: List<&2, R.Property<A>>
@@ -24,7 +37,7 @@ def filtered_head_absent(A, name, value, rest, key, same, equal, absent):
   match same:
     case True{}: absent
     case False{}:
-      %equal : {Bool.pick(Maybe<&2, A>, _, Some{value}, R.getProperties(A, rest, key)) == None{} : Maybe<&2, A>}
+      %equal : {R.getFrom(A, rest, Bool.pick(Maybe<&2, A>, _, Some{value}, None{}), key) == None{} : Maybe<&2, A>}
       absent
 
 def remove_properties_absent(A, properties, key):
@@ -88,16 +101,16 @@ law set_head_lookup:
   for +same: Bool
   for equal: {same == String.eq(key, name) : Bool}
   for found: {R.getProperties(A, R.setProperties(A, rest, key, value), key) == Some{value} : Maybe<&2, A>}
-  {R.getProperties(A, Bool.pick(List<&2, R.Property<A>>, same, R.Property{key, value} <> rest, R.Property{name, old} <> R.setProperties(A, rest, key, value)), key) == Some{value} : Maybe<&2, A>}
+  {R.getProperties(A, R.setFrom(A, R.Property{name, old} <> rest, same, key, value), key) == Some{value} : Maybe<&2, A>}
 
 def set_head_lookup(A, name, old, rest, key, value, same, equal, found):
   match same:
     case True{}:
-      %StringEquality.eq_reflexive(key) : {Bool.pick(Maybe<&2, A>, _, Some{value}, R.getProperties(A, rest, key)) == Some{value} : Maybe<&2, A>}
-      {==}
+      %StringEquality.eq_reflexive(key) : {R.getFrom(A, rest, Bool.pick(Maybe<&2, A>, _, Some{value}, None{}), key) == Some{value} : Maybe<&2, A>}
+      found_kept(A, rest, value, key)
     case False{}:
-      %StringEquality.eq_symmetric(key, name) : {Bool.pick(Maybe<&2, A>, _, Some{old}, R.getProperties(A, R.setProperties(A, rest, key, value), key)) == Some{value} : Maybe<&2, A>}
-      %equal : {Bool.pick(Maybe<&2, A>, _, Some{old}, R.getProperties(A, R.setProperties(A, rest, key, value), key)) == Some{value} : Maybe<&2, A>}
+      %StringEquality.eq_symmetric(key, name) : {R.getFrom(A, R.setProperties(A, rest, key, value), Bool.pick(Maybe<&2, A>, _, Some{old}, None{}), key) == Some{value} : Maybe<&2, A>}
+      %equal : {R.getFrom(A, R.setProperties(A, rest, key, value), Bool.pick(Maybe<&2, A>, _, Some{old}, None{}), key) == Some{value} : Maybe<&2, A>}
       found
 
 law set_properties_lookup:
@@ -110,7 +123,7 @@ law set_properties_lookup:
 def set_properties_lookup(A, properties, key, value):
   match properties:
     case Nil{}:
-      %StringEquality.eq_reflexive(key) : {Bool.pick(Maybe<&2, A>, _, Some{value}, None{}) == Some{value} : Maybe<&2, A>}
+      %StringEquality.eq_reflexive(key) : {R.getFrom(A, [], Bool.pick(Maybe<&2, A>, _, Some{value}, None{}), key) == Some{value} : Maybe<&2, A>}
       {==}
     case R.Property{+name, old} <> +rest:
       set_head_lookup(A, name, old, rest, key, value, String.eq(key, name), {==}, set_properties_lookup(A, rest, key, value))
@@ -130,15 +143,15 @@ law set_head_overwrite:
   for +same: Bool
   for equal: {same == String.eq(key, name) : Bool}
   for tail: {R.setProperties(A, R.setProperties(A, rest, key, first), key, last) == R.setProperties(A, rest, key, last) : List<&2, R.Property<A>>}
-  {R.setProperties(A, Bool.pick(List<&2, R.Property<A>>, same, R.Property{key, first} <> rest, R.Property{name, old} <> R.setProperties(A, rest, key, first)), key, last) == Bool.pick(List<&2, R.Property<A>>, same, R.Property{key, last} <> rest, R.Property{name, old} <> R.setProperties(A, rest, key, last)) : List<&2, R.Property<A>>}
+  {R.setProperties(A, R.setFrom(A, R.Property{name, old} <> rest, same, key, first), key, last) == R.setFrom(A, R.Property{name, old} <> rest, same, key, last) : List<&2, R.Property<A>>}
 
 def set_head_overwrite(A, name, old, rest, key, first, last, same, equal, tail):
   match same:
     case True{}:
-      %StringEquality.eq_reflexive(key) : {Bool.pick(List<&2, R.Property<A>>, _, R.Property{key, last} <> rest, R.Property{key, first} <> R.setProperties(A, rest, key, last)) == R.Property{key, last} <> rest : List<&2, R.Property<A>>}
+      %StringEquality.eq_reflexive(key) : {R.setFrom(A, R.Property{key, first} <> rest, _, key, last) == R.Property{key, last} <> rest : List<&2, R.Property<A>>}
       {==}
     case False{}:
-      %equal : {Bool.pick(List<&2, R.Property<A>>, _, R.Property{key, last} <> R.setProperties(A, rest, key, first), R.Property{name, old} <> R.setProperties(A, R.setProperties(A, rest, key, first), key, last)) == R.Property{name, old} <> R.setProperties(A, rest, key, last) : List<&2, R.Property<A>>}
+      %equal : {R.setFrom(A, R.Property{name, old} <> R.setProperties(A, rest, key, first), _, key, last) == R.Property{name, old} <> R.setProperties(A, rest, key, last) : List<&2, R.Property<A>>}
       Equal.cong(List<&2, R.Property<A>>, List<&2, R.Property<A>>, items => R.Property{name, old} <> items, R.setProperties(A, R.setProperties(A, rest, key, first), key, last), R.setProperties(A, rest, key, last), tail)
 
 law set_properties_overwrite:
@@ -152,7 +165,7 @@ law set_properties_overwrite:
 def set_properties_overwrite(A, properties, key, first, last):
   match properties:
     case Nil{}:
-      %StringEquality.eq_reflexive(key) : {Bool.pick(List<&2, R.Property<A>>, _, R.Property{key, last} <> Nil{}, R.Property{key, first} <> (R.Property{key, last} <> Nil{})) == R.Property{key, last} <> Nil{} : List<&2, R.Property<A>>}
+      %StringEquality.eq_reflexive(key) : {R.setFrom(A, R.Property{key, first} <> Nil{}, _, key, last) == R.Property{key, last} <> Nil{} : List<&2, R.Property<A>>}
       {==}
     case R.Property{+name, +old} <> +rest:
       set_head_overwrite(A, name, old, rest, key, first, last, String.eq(key, name), {==}, set_properties_overwrite(A, rest, key, first, last))
@@ -172,7 +185,7 @@ law set_head_remove:
   for +same: Bool
   for equal: {same == String.eq(key, name) : Bool}
   for tail: {R.removeProperties(A, R.setProperties(A, rest, key, value), key) == R.removeProperties(A, rest, key) : List<&2, R.Property<A>>}
-  {R.removeProperties(A, Bool.pick(List<&2, R.Property<A>>, same, R.Property{key, value} <> rest, R.Property{name, old} <> R.setProperties(A, rest, key, value)), key) == Bool.pick(List<&2, R.Property<A>>, same, R.removeProperties(A, rest, key), R.Property{name, old} <> R.removeProperties(A, rest, key)) : List<&2, R.Property<A>>}
+  {R.removeProperties(A, R.setFrom(A, R.Property{name, old} <> rest, same, key, value), key) == Bool.pick(List<&2, R.Property<A>>, same, R.removeProperties(A, rest, key), R.Property{name, old} <> R.removeProperties(A, rest, key)) : List<&2, R.Property<A>>}
 
 def set_head_remove(A, name, old, rest, key, value, same, equal, tail):
   match same:

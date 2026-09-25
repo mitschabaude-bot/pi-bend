@@ -292,7 +292,7 @@ law message_end:
 # Loop events cannot edit configuration or declare the run idle. The owner
 # settles listeners and calls finishRun separately.
 type Configuration<-D: Data, -E: Data> is Data:
-  Configuration{model: Ai.Model<Ai.JsonValue>, thinking: T.ThinkingLevel(), tools: List<&2, T.AgentTool<D, E>>, streaming: Bool}
+  Configuration{model: Maybe<&2, Ai.Model<Ai.JsonValue>>, thinking: T.ThinkingLevel(), tools: List<&2, T.AgentTool<D, E>>, streaming: Bool}
 
 def configuration(-G: Data, -D: Data, -C: Data, -E: Data, state: T.AgentState<G, D, C, E>) -> Configuration<D, E>:
   match state:
