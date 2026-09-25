@@ -58,6 +58,35 @@ Instrumented on the CLI:
 Restarting a unit as soon as it read a fact that then grew was tried and was
 slower (round 1 64 s, round 2 31 s), because most of the dirt is cross-unit.
 
+## Tried: an on-disk cache of checked definitions (rejected, 2026-09-26)
+
+Each definition's checked tree (`def.e`) was stored under a hash of the
+definition, and reused while every book entry its check looked up (recorded
+through a proxy on the book) had the same fingerprint. Spans were dropped.
+Measured on the CLI at main f9824927, 64 units, against 25.5 s of checking
+and 129 s / 17.7 GB for the whole emission without the cache:
+
+| Run | Checking | Emission total | Peak memory | C |
+| --- | --- | --- | --- | --- |
+| Cold (fills the cache) | 118 s | 231 s | 17.9 GB | identical |
+| Warm (every definition hits) | 51 s | 278 s | 46.8 GB | differs |
+
+- `def.e` is not first-order: every checked subterm carries its type as a
+  cell, `Var("_", -1, ty)`, holding a closure term that several cells
+  share. Quoting it (`term_lower(term_higher(e))`) expands that sharing into
+  trees: 1.6 GB of cache, 2.6x the emission memory, and different C.
+- Fingerprinting every entry by lowering and hashing it took 39.5 s, more
+  than checking. Fifteen large data tables take 68% of that (lowering a long
+  list literal is superlinear; `unicode-17-regex.ranges` alone takes 20.7 s).
+
+Caching emission instead would skip both the check and the emission of an
+unchanged definition, but emitting a unit writes shared state beyond its
+segments (spins, the static image, constructor ids, closures, bangs, borrow
+maps, three fact sets), all of which a hit would have to replay. In one
+process, `compile_unit` already drops and re-emits a unit's contributions,
+which is what the fact rounds rely on; that is the machinery a resident
+compiler would reuse.
+
 ## Next steps
 
 - Cache type-check results per definition, keyed by its source and its
