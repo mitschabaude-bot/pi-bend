@@ -49,7 +49,6 @@ def invalidate(+state: Markdown) -> Markdown:
 # scalars.
 
 type Latex is Data: Latex{text: String,pending: Bool}
-def Token() -> Data: T.Token<Latex>
 def latexToken(+name: String,+raw: String,+text: String,+pending: Bool) -> T.Token<Latex>: T.Generic{name,raw,Latex{text,pending}}
 
 def startsWithText(+codes: List<&2,U32>,+prefix: String) -> Bool:
@@ -144,10 +143,6 @@ def inlineStartFrom(+codes: List<&2,U32>,+index: Nat) -> Maybe<&2,Nat>:
 def tokenizeInlineLatex(source: List<&2,U32>) -> Maybe<&2,T.Token<Latex>>: inlineLatex(source)
 def startInlineLatex(source: List<&2,U32>) -> Maybe<&2,Nat>: inlineStartFrom(source,0n)
 
-def dropSpaces(+codes: List<&2,U32>) -> List<&2,U32>:
-  match codes:
-    case +code <> +rest: Bool.pick(Unit -> List<&2,U32>,U32.is_eq(code,32),_ => dropSpaces(rest),_ => code <> rest)(Unit{})
-    case Nil{}: Nil{}
 # ` {0,3}` then `opening`: the scalars after the opening.
 def afterIndent(codes: List<&2,U32>,+count: Nat) -> Maybe<&2,List<&2,U32>>:
   match codes:

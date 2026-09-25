@@ -551,7 +551,7 @@ def listFinished(collected: Collected,ordered: Bool,start: Maybe<&2,Nat>) -> May
   match collected:
     case Collected{Nil{},_,_}: None{}
     case Collected{+items,loose,_}: Some{ListDraft{Text.trimEnd(rawsReversed(items,"")),ordered,start,loose,List.reverse(&2,ItemDraft,trimmedHead(items))}}
-# `^( {0,3}BULL)((?:[\t ][^\n]*)?(?:\n|$))` for the list's bullet.
+# The bullet's last character: its mark, or an ordered list's delimiter.
 def lastScalar(+text: String) -> U32: Maybe.default(&2,U32,Maybe.map(&2,Char,U32,Char.to_u32,H.lastChar(text)),0)
 def listWith(+rules: Rules.Block,+src: List<&2,U32>,+bull: String) -> Maybe<&2,ListDraft>:
   +ordered = Nat.is_gt(String.length(bull),1n)

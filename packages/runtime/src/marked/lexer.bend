@@ -187,8 +187,6 @@ def giveBlock(-X: Data,+state: BlockState,+frames: List<&2,BlockFrame<X>>,+given
 type Here<-X: Data> is Data: Here{src: List<&2,U32>,clipped: Bool,tokens: List<&2,T.Token<X>>,state: BlockState,frames: List<&2,BlockFrame<X>>}
 def hereSrc(-X: Data,+here: Here<X>) -> List<&2,U32>:
   match here: case Here{src,_,_,_,_}: src
-def hereTokens(-X: Data,+here: Here<X>) -> List<&2,T.Token<X>>:
-  match here: case Here{_,_,tokens,_,_}: tokens
 def hereState(-X: Data,+here: Here<X>) -> BlockState:
   match here: case Here{_,_,_,state,_}: state
 # The iteration consumed `raw`, leaving `tokens` and `state`.
@@ -691,14 +689,10 @@ def textJoined(-X: Data,+tokens: List<&2,T.Token<X>>,+raw: String,+escaped: Bool
     case T.Text{last,text,inner,before} <> rest: T.Text{last ++ raw,text ++ raw,inner,before} <> rest
     case tokens: T.Text{raw,raw,Nil{},escaped} <> tokens
 
-def withInLink(+state: InlineState,+inLink: Bool) -> InlineState:
-  match state: case InlineState{_,rawBlock,emitted}: InlineState{inLink,rawBlock,emitted}
 def inLinkOf(+state: InlineState) -> Bool:
   match state: case InlineState{inLink,_,_}: inLink
 def rawBlockOf(+state: InlineState) -> Bool:
   match state: case InlineState{_,rawBlock,_}: rawBlock
-def emittedOf(+state: InlineState) -> Bool:
-  match state: case InlineState{_,_,emitted}: emitted
 
 # inlineTokens
 # ------------

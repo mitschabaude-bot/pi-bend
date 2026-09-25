@@ -113,5 +113,3 @@ def rawOf(-X: Data,token: Token<X>) -> String:
 
 # A reference link definition (`tokens.links[tag]`).
 type LinkDefinition is Data: LinkDefinition{tag: String,href: String,title: Maybe<&2,String>}
-# The definitions of a document, first definition of a tag first.
-def Links() -> Data: List<&2,LinkDefinition>

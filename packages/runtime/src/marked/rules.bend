@@ -197,10 +197,6 @@ type Rules is Data: Rules{block: Block,inline: Inline}
 def rules(+breaks: Bool) -> Rules:
   Rules{Block{searchOf(blockquote()),searchOf(edit(blockCodeRule(),"")),searchOf(definition()),searchOf(edit(fencesRule(),"")),searchOf(edit(headingRule(),"")),searchOf(edit(hrRule(),"")),searchOf(html()),searchOf(lheadingGfm()),searchOf(listRule()),searchOf(edit(newlineRule(),"")),searchOf(gfmParagraph()),searchOf(gfmTable()),searchOf(edit(blockTextRule(),""))},
     Inline{searchOf(edit(backpedal(),"")),searchOf(autolink()),searchOf(blockSkip()),searchOf(Bool.pick(Unit -> Edit,breaks,_ => breaksBr(),_ => edit(brRule(),""))(Unit{})),searchOf(edit(inlineCodeRule(),"")),searchOf(delLDelim()),searchOf(delRDelim()),searchOf(emStrongLDelimGfm()),searchOf(emStrongRDelimAstGfm()),searchOf(emStrongRDelimUnd()),searchOf(edit(escapeRule(),"")),searchOf(link()),searchOf(nolink()),searchOf(reflink()),searchOf(reflinkSearch()),searchOf(tag()),searchOf(Bool.pick(Unit -> Edit,breaks,_ => breaksText(),_ => gfmText())(Unit{})),searchOf(url()),breaks}}
-def blockOf(value: Rules) -> Block:
-  match value: case Rules{found,_}: found
-def inlineOf(value: Rules) -> Inline:
-  match value: case Rules{_,found}: found
 
 # Block rules by name.
 def blockBlockquote(value: Block) -> Search:
