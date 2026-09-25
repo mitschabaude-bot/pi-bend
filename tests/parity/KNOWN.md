@@ -93,6 +93,9 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   known divergences in the check.
 - **Fullscreen TUI mode** (`--tui-mode fullscreen`, setting `tuiMode`): alternate-screen startup, transcript scrolling, and the jump indicator are ported. Search, mouse selection, copy-on-select, fullscreen images, and remaining dock/cursor styling are still open.
 - **Fullscreen scroll styling** (`fullscreen-scroll`, `fullscreen-indicator-light-custom-key`): Home/End and the configured jump key reach the same content as pi. At the top, Bend resets the background around the scrollbar on a user-message row differently; in the light theme, scrollbar colors also differ. The indicator badge itself matches.
+- **Fullscreen exit presentation** (`fullscreen-exit`, `fullscreen-turn-exit`): pi's default transcript exit switches from fullscreen to its regular renderer before stopping; Bend writes the alternate-screen document directly. On an empty session Bend's visible pane retains startup header/resources, and after a turn it has fewer blank lines around the dock and resume hint.
+- **Model picker ANSI row resets** (`hotkeys-custom-binding`, `model-selector-all-filter`): the configured model-select key works and plain screen content matches. The native main-screen renderer places a few ANSI resets at the starts of following rows instead of at the ends of the preceding rows.
+- **Resumed large session startup latency** (`large-session-typing`): the terminal capture now matches after moving restored messages behind tool setup. Reaching the editor after the resume prompt was still about six times slower than pi in the measured run; individual keystrokes painted at similar speed.
 - **RPC command ordering around a prompt** (`steer-and-queue`): Node runs a
   prompt's microtasks up to its first awaited I/O before reading the next
   stdin line, so a steer sent right after the prompt response arrives while

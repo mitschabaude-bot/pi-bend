@@ -138,11 +138,11 @@
         "packages/coding-agent/src/modes/interactive/viewport.bend",
         "packages/coding-agent/src/main.bend"
       ],
-      "note": "Interactive theme selection, per-model thinking overrides, /thinking, /scoped-models, and /model flows work. The /model selector matches scoped browsing, search and default save in terminal parity. Fullscreen startup, typing, and viewport scrolling match; regular Ctrl+D exit and persisted-session resume hint match. Fullscreen exit presentation, mouse selection/search, dynamic mode switching, and broader commands remain partial.",
+      "note": "Interactive theme selection, per-model thinking overrides, /thinking, /scoped-models, and /model flows work. The /model selector matches scoped browsing, search and default save in terminal parity. Fullscreen startup, typing, and viewport scrolling match; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings now precede restored messages and the large-session terminal capture matches, though startup remains slower. Fullscreen exit presentation, mouse selection/search, dynamic mode switching, and broader commands remain partial.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "d7baf2d18f3290274d621777b67d5c691d2f743e0b9eb04069b3d1799f73266e",
-        "packages/coding-agent/src/modes/interactive/run.bend": "d8ac6a7710a8ec597734b9b1e1af5d1b3ac6c03ea9780b961ec564ea90707027",
+        "packages/coding-agent/src/modes/interactive/run.bend": "c0f95a8d86db3713786332c31c1ba90292e334dbdd186b90dc48b44539332f90",
         "packages/coding-agent/src/modes/interactive/commands.bend": "8449a234b3cc969830d79b4462042968060562ee619a8b4e3c7ff2dba814265a",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "c26551ed6c7f5f80837817ede0eed9c68a20fcab25dfb1b17dec2b90c1fd8550",
         "packages/coding-agent/src/main.bend": "01410adc82ed2d2cae836504662a63e14c88051321d081dac8c907ad20da3535"
