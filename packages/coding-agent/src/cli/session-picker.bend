@@ -10,6 +10,7 @@ import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/deferred.bend as Deferred
 import ../../../runtime/src/ref.bend as Ref
 import ../../../runtime/src/string.bend as Strings
+import ../../../runtime/src/date.bend as Date
 import ../../../tui/src/component.bend as Component
 import ../../../tui/src/keys.bend as Keys
 import ../../../tui/src/keybindings.bend as Bindings
@@ -35,7 +36,7 @@ type Count is Data: Count{loaded: Nat,total: Nat}
 type Loads is Data: Loads{current: Maybe<&2,Count>,all: Maybe<&2,Count>}
 type Input is Data:
   Input{state: Ref.Ref<State>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,bindings: Bindings.KeybindingsManager}
-type Paint is Data: Paint{state: Ref.Ref<State>,loads: Ref.Ref<Loads>,normalHint: String,deleteHint: String}
+type Paint is Data: Paint{state: Ref.Ref<State>,loads: Ref.Ref<Loads>,scopeHint: String,normalHint: String,deleteHint: String}
 type Owner is Data:
   Owner{state: Ref.Ref<State>,loads: Ref.Ref<Loads>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
 def Outcome() -> Data: Result<&2,&2,String,Maybe<&2,String>>
@@ -207,11 +208,24 @@ def safeText(text: String) -> String:
     case SCon{+char,rest}:
       +point = U32.to_nat(Char.to_u32(char))
       Bool.pick(String,Nat.is_lt(point,32n) || Nat.is_eq(point,127n)," ",SCon{char,SNil{}}) ++ safeText(rest)
-def infoLabel(info: Session.SessionInfo,all: Bool,showPath: Bool) -> String:
+def shortened(+path: String,+home: String) -> String:
+  Bool.pick(String,Bool.not(String.is_empty(home)) && String.starts_with(path,home),"~" ++ String.drop(path,String.length(home)),path)
+def age(modified: F64,now: F64) -> String:
+  +elapsed = F64.max(U32.to_f64(0),F64.sub(now,modified))
+  +minutes = F64.to_u32(F64.floor(F64.div(elapsed,U32.to_f64(60000))))
+  Bool.pick(Unit -> String,U32.is_lt(minutes,1),_ => "now",
+    _ => Bool.pick(Unit -> String,U32.is_lt(minutes,60),_ => U32.show(minutes) ++ "m",
+      _ => Bool.pick(Unit -> String,U32.is_lt(minutes,1440),_ => U32.show(U32.div(minutes,60)) ++ "h",
+        _ => Bool.pick(Unit -> String,U32.is_lt(minutes,10080),_ => U32.show(U32.div(minutes,1440)) ++ "d",
+          _ => Bool.pick(Unit -> String,U32.is_lt(minutes,43200),_ => U32.show(U32.div(minutes,10080)) ++ "w",
+            _ => Bool.pick(String,U32.is_lt(minutes,525600),U32.show(U32.div(minutes,43200)) ++ "mo",U32.show(U32.div(minutes,525600)) ++ "y"))(Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
+def infoText(info: Session.SessionInfo) -> String:
   match info:
-    case Session.SessionInfo{path,_,cwd,name,_,_,_,count,first,_}:
-      +title = Maybe.default(&2,String,name,first)
-      safeText(title) ++ "  (" ++ Nat.show(count) ++ ")" ++ Bool.pick(String,all,"  " ++ safeText(cwd),"") ++ Bool.pick(String,showPath,"  " ++ safeText(path),"")
+    case Session.SessionInfo{_,_,_,name,_,_,_,_,first,_}: safeText(Maybe.default(&2,String,name,first))
+def infoRight(info: Session.SessionInfo,all: Bool,showPath: Bool,now: F64,+home: String) -> String:
+  match info:
+    case Session.SessionInfo{path,_,cwd,_,_,_,modified,count,_,_}:
+      Bool.pick(String,showPath,shortened(path,home) ++ " ","") ++ Bool.pick(String,all,shortened(cwd,home) ++ " ","") ++ Nat.show(count) ++ " " ++ age(modified,now)
 
 def findPath(items: List<&2,Session.SessionInfo>,+path: String) -> Maybe<&2,Session.SessionInfo>:
   match items:
@@ -255,58 +269,88 @@ def prefixFor(parent: Maybe<&2,String>,info: Session.SessionInfo,+items: List<&2
 def treePrefix(+info: Session.SessionInfo,items: List<&2,Session.SessionInfo>) -> String:
   prefixFor(parentPath(info),info,items)
 
-def label(+info: Session.SessionInfo,index: Nat,chosen: Nat,all: Bool,thread: Bool,showPath: Bool,items: List<&2,Session.SessionInfo>,width: Nat) -> String:
+def label(+info: Session.SessionInfo,index: Nat,chosen: Nat,all: Bool,thread: Bool,showPath: Bool,items: List<&2,Session.SessionInfo>,+width: Nat,now: F64,home: String) -> String:
   +prefix = Bool.pick(String,thread,treePrefix(info,items),"")
-  Utils.truncateToWidth(Bool.pick(String,Nat.is_eq(index,chosen),"› ","  ") ++ prefix ++ infoLabel(info,all,showPath),width,"…",False{})
+  +right = infoRight(info,all,showPath,now,home)
+  +available = width - 2n - Utils.visibleWidth(prefix) - Utils.visibleWidth(right) - 2n
+  +left = Bool.pick(String,Nat.is_eq(index,chosen),"› ","  ") ++ prefix ++ Utils.truncateToWidth(infoText(info),Nat.max(10n,available),"…",False{})
+  Utils.truncateToWidth(left ++ Utils.spaces(Nat.max(1n,width - Utils.visibleWidth(left) - Utils.visibleWidth(right)),"") ++ right,width,"…",False{})
 
-def listLines(items: List<&2,Session.SessionInfo>,+index: Nat,+chosen: Nat,+all: Bool,+thread: Bool,+showPath: Bool,+allItems: List<&2,Session.SessionInfo>,+width: Nat,count: Nat,reversed: List<&2,String>) -> List<&2,String>:
+def listLines(items: List<&2,Session.SessionInfo>,+index: Nat,+chosen: Nat,+all: Bool,+thread: Bool,+showPath: Bool,+allItems: List<&2,Session.SessionInfo>,+width: Nat,+now: F64,+home: String,count: Nat,reversed: List<&2,String>) -> List<&2,String>:
   match items count:
     case _ Zero{}: List.reverse(&2,String,reversed)
     case Nil{} _: List.reverse(&2,String,reversed)
-    case +info <> rest Succ{left}: listLines(rest,index + 1n,chosen,all,thread,showPath,allItems,width,left,label(info,index,chosen,all,thread,showPath,allItems,width) <> reversed)
+    case +info <> rest Succ{left}: listLines(rest,index + 1n,chosen,all,thread,showPath,allItems,width,now,home,left,label(info,index,chosen,all,thread,showPath,allItems,width,now,home) <> reversed)
 
-def window(items: List<&2,Session.SessionInfo>,+selected: Nat) -> List<&2,Session.SessionInfo>:
-  List.drop(&2,Session.SessionInfo,items,Bool.pick(Nat,Nat.is_gt(selected,8n),selected - 8n,0n))
-def hint(deleting: Maybe<&2,String>,status: Maybe<&2,String>,problem: Maybe<&2,String>,normal: String,confirm: String) -> String:
+def windowStart(items: List<&2,Session.SessionInfo>,selected: Nat) -> Nat:
+  Nat.min(selected - 5n,List.length(&2,Session.SessionInfo,items) - 10n)
+def hintMessage(message: Maybe<&2,String>,scopeHint: String,normal: String) -> String & String:
+  match message:
+    case Some{value}: (value,"")
+    case None{}: (scopeHint,normal)
+def hintLines(deleting: Maybe<&2,String>,status: Maybe<&2,String>,problem: Maybe<&2,String>,scopeHint: String,normal: String,confirm: String) -> String & String:
   match deleting:
-    case Some{_}: "Trash this session? Falls back to permanent deletion · " ++ confirm
-    case None{}: Maybe.default(&2,String,problem,Maybe.default(&2,String,status,normal))
+    case Some{_}: ("Delete session? " ++ confirm,"")
+    case None{}: hintMessage(Maybe.or(&2,String,problem,status),scopeHint,normal)
 def countHint(count: Maybe<&2,Count>) -> Maybe<&2,String>:
   match count:
     case None{}: None{}
-    case Some{Count{loaded,total}}: Some{"Loading sessions " ++ Nat.show(loaded) ++ "/" ++ Nat.show(total)}
+    case Some{Count{loaded,+total}}: Some{Bool.pick(String,Nat.is_eq(total,0n),"Loading ...","Loading " ++ Nat.show(loaded) ++ "/" ++ Nat.show(total))}
 def loadingHint(scope: Scope,loads: Loads) -> Maybe<&2,String>:
   match scope loads:
     case Current{} Loads{current,_}: countHint(current)
     case All{} Loads{_,all}: countHint(all)
-def emptyRow(loading: Maybe<&2,String>) -> List<&2,String>:
+def emptyRow(+all: Bool,namedFilter: Bool) -> List<&2,String>:
+  [Bool.pick(String,namedFilter,
+    Bool.pick(String,all,"  No named sessions found. Press Ctrl+N to show all.","  No named sessions in current folder. Press Ctrl+N to show all, or Tab to view all."),
+    Bool.pick(String,all,"  No sessions found","  No sessions in current folder. Press Tab to view all."))]
+def rule(width: Nat) -> String:
+  match width:
+    case Zero{}: ""
+    case Succ{rest}: "─" ++ rule(rest)
+def idleScope(scope: Scope) -> String:
+  match scope:
+    case Current{}: "◉ Current Folder | ○ All"
+    case All{}: "○ Current Folder | ◉ All"
+def scopeLabel(scope: Scope,loading: Maybe<&2,String>) -> String:
   match loading:
-    case Some{_}: ["  Loading sessions..."]
-    case None{}: ["  No sessions found"]
-
-def renderState(+state: State,+width: Nat,normalHint: String,deleteHint: String,loads: Loads) -> List<&2,String>:
+    case Some{progress}: "○ Current Folder | " ++ progress
+    case None{}: idleScope(scope)
+def heading(+scope: Scope,sort: Sort,namedFilter: Bool,loading: Maybe<&2,String>,+width: Nat) -> String:
+  +left = Bool.pick(String,isAll(scope),"Resume Session (All)","Resume Session (Current Folder)")
+  +right = scopeLabel(scope,loading) ++ "  Name: " ++ Bool.pick(String,namedFilter,"Named","All") ++ "  Sort: " ++ sortLabel(sort)
+  +fitted = Utils.truncateToWidth(right,width,"",False{})
+  +title = Utils.truncateToWidth(left,width - Utils.visibleWidth(fitted) - 1n,"",False{})
+  title ++ Utils.spaces(width - Utils.visibleWidth(title) - Utils.visibleWidth(fitted),"") ++ fitted
+def scrollLine(+start: Nat,count: Nat,+total: Nat,selected: Nat) -> List<&2,String>:
+  Bool.pick(List<&2,String>,Nat.is_gt(start,0n) || Nat.is_lt(start + count,total),["  (" ++ Nat.show(selected + 1n) ++ "/" ++ Nat.show(total) ++ ")"],Nil{})
+def hintRows(hints: String & String,+width: Nat) -> List<&2,String>:
+  match hints:
+    case (first,second): [Utils.truncateToWidth(first,width,"…",False{}),Utils.truncateToWidth(second,width,"…",False{})]
+def renderState(+state: State,+width: Nat,scopeHint: String,normalHint: String,deleteHint: String,loads: Loads,now: F64,home: String) -> List<&2,String>:
   match state:
     case State{_,_,scope,query,index,_,Controls{sort,namedFilter,showPath,deleting,status}}:
       +items = visible(state)
       +all = isAll(scope)
-      +start = Bool.pick(Nat,Nat.is_gt(index,8n),index - 8n,0n)
-      +title = Bool.pick(String,all,"Resume Session (All)","Resume Session (Current Folder)") ++ "  ·  " ++ sortLabel(sort) ++ Bool.pick(String,namedFilter," · Named","") ++ Bool.pick(String,showPath," · Path on","")
+      +start = windowStart(items,index)
+      +total = List.length(&2,Session.SessionInfo,items)
       +thread = threadedMode(sort,query)
-      +body = listLines(window(items,index),start,index,all,thread,showPath,items,width,10n,Nil{})
       +loading = loadingHint(scope,loads)
-      +help = hint(deleting,Maybe.or(&2,String,status,loading),searchProblem(parsedSearch(query)),normalHint,deleteHint)
-      List.append(&2,String,[Utils.truncateToWidth(title,width,"…",False{}),
-       Utils.truncateToWidth("Search: " ++ safeText(query),width,"…",False{}),
-       Utils.truncateToWidth(help,width,"…",False{})],
-       Bool.pick(List<&2,String>,List.is_empty(&2,Session.SessionInfo,items),emptyRow(loading),body))
+      +body = Bool.pick(List<&2,String>,List.is_empty(&2,Session.SessionInfo,items),emptyRow(all,namedFilter),
+        List.append(&2,String,listLines(List.drop(&2,Session.SessionInfo,items,start),start,index,all,thread,showPath,items,width,now,home,10n,Nil{}),scrollLine(start,Nat.min(total - start,10n),total,index)))
+      List.concat(&2,String,[["",rule(width),"",heading(scope,sort,namedFilter,loading,width)],
+        hintRows(hintLines(deleting,status,searchProblem(parsedSearch(query)),scopeHint,normalHint ++ Bool.pick(String,showPath," (on)"," (off)"),deleteHint),width),
+        ["",Utils.truncateToWidth("> " ++ safeText(query),width,"…",False{}),""],body,["",rule(width)]])
 
 def paint(environment: Paint,width: Nat) -> IO(List<&2,String>):
   match environment:
-    case Paint{state,loads,normal,confirm}:
+    case Paint{state,loads,scope,normal,confirm}:
       do IO<List<&2,String>>:
         value : State <- Ref.read(State,state)
         loading : Loads <- Ref.read(Loads,loads)
-        return renderState(value,width,normal,confirm,loading)
+        now : F64 <- Date.now()
+        home : Result<&2,&2,FS.Error,String> <- FS.homedir()
+        return renderState(value,width,scope,normal,confirm,loading,now,Result.default(&2,&2,FS.Error,String,home,""))
 def ignore(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
 def ignoreFocus(_: Unit,_: Bool) -> IO(Unit): IO.pure(Unit,Unit{})
 
@@ -501,10 +545,11 @@ def formattedFirst(keys: List<&2,Keys.KeyId>,name: String) -> String:
     case key <> _: Keys.formatKeyId(key)
 def firstKey(bindings: Bindings.KeybindingsManager,+name: String) -> String:
   formattedFirst(Bindings.getKeys(bindings,name),name)
+def scopeHint(+bindings: Bindings.KeybindingsManager) -> String:
+  firstKey(bindings,"tui.input.tab") ++ " scope · re:<pattern> regex · \"phrase\" exact"
 def normalHint(+bindings: Bindings.KeybindingsManager) -> String:
-  firstKey(bindings,"tui.input.tab") ++ " scope · " ++ firstKey(bindings,"app.session.toggleSort") ++ " sort · " ++
-  firstKey(bindings,"app.session.toggleNamedFilter") ++ " named · " ++ firstKey(bindings,"app.session.togglePath") ++ " path · " ++
-  firstKey(bindings,"app.session.delete") ++ " delete · ↑↓ move · " ++ firstKey(bindings,"tui.select.confirm") ++ " open · " ++ firstKey(bindings,"tui.select.cancel") ++ " cancel"
+  firstKey(bindings,"app.session.toggleSort") ++ " sort · " ++ firstKey(bindings,"app.session.toggleNamedFilter") ++ " named · " ++
+  firstKey(bindings,"app.session.delete") ++ " delete · " ++ firstKey(bindings,"app.session.togglePath") ++ " path"
 def deleteHint(+bindings: Bindings.KeybindingsManager) -> String:
   firstKey(bindings,"tui.select.confirm") ++ " confirm · " ++ firstKey(bindings,"tui.select.cancel") ++ " cancel"
 def create(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,+bindings: Bindings.KeybindingsManager) -> IO(Owner):
@@ -513,7 +558,7 @@ def create(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInf
     +loads : Ref.Ref<Loads> <- Ref.new(Loads,Loads{Some{Count{0n,0n}},Some{Count{0n,0n}}})
     +stop : Deferred.Deferred<Unit> <- Deferred.new(Unit)
     +allRequested : Deferred.Deferred<Unit> <- Deferred.new(Unit)
-    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Paint,~Nat,~List<&2,String>,~paint,Paint{state,loads,normalHint(bindings),deleteHint(bindings)})
+    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Paint,~Nat,~List<&2,String>,~paint,Paint{state,loads,scopeHint(bindings),normalHint(bindings),deleteHint(bindings)})
     +input : Callback.Callback<String,Unit> <- Callback.create(~Input,~String,~Unit,~received,Input{state,stop,allRequested,bindings})
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~ignore,Unit{})
     +focus : Callback.Callback<Bool,Unit> <- Callback.create(~Unit,~Bool,~Unit,~ignoreFocus,Unit{})
@@ -699,7 +744,11 @@ type HostOwner is Type:
 def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindings.KeybindingsManager,width: Nat) -> IO(List<&2,String>):
   match current:
     case Closed{}: Component.render(editor,width)
-    case Open{state}: IO.pure(List<&2,String>,renderState(state,width,normalHint(bindings),deleteHint(bindings),Loads{None{},None{}}))
+    case Open{state}:
+      do IO<List<&2,String>>:
+        now : F64 <- Date.now()
+        home : Result<&2,&2,FS.Error,String> <- FS.homedir()
+        return renderState(state,width,scopeHint(bindings),normalHint(bindings),deleteHint(bindings),Loads{None{},None{}},now,Result.default(&2,&2,FS.Error,String,home,""))
 def drawModal(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
     case Host{+modal,editor,bindings,_}:
