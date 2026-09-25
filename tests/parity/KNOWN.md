@@ -23,13 +23,14 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
 - **Streaming throughput and TLS handshake** (`stream-paced`, `stream-flood`):
   over a local TLS server, Bend's first token arrives about 250 ms after pi's
   (the handshake: 350-390 ms versus pi's 90-120 ms). A long answer (10 KB of
-  Markdown with 30 code blocks, 500 deltas) streams far slower than pi: the
-  last token at 13-17 s versus pi's 0.15-2.1 s, flooded or paced, on main at
-  79885d41 (2026-09-25, idle machine). Each delta re-renders the whole
-  message, and string handling dominates: every string cell built by shared
-  code gets a reference-count cell, and walking a shared string copies it
-  cell by cell (174 million wrappers and 187 million two-field copies in one
-  flood run). The scenarios report `slow:last-token` until fixed.
+  Markdown with 30 code blocks, 500 deltas) paced at 4 ms per delta now ends
+  within the bound (last token 2.48-2.53 s versus pi's 2.07-2.10 s); flooded,
+  it ends at 0.89-0.92 s versus pi's 0.15-0.16 s, of which the handshake
+  alone exceeds the 1.25x bound. Until 2026-09-25 both took 12-17 s: an
+  expired Bend Timer completes at once, so a zero-delay frame timer drew
+  after every one or two deltas instead of after the received events, as
+  Node's setTimeout (at least 1 ms, fired from the event loop) does.
+  `stream-flood` reports `slow:last-token` until fixed.
 
 - **Request headers** (every scenario with a model turn): Bend sends neither
   Node fetch's default fields (`accept-encoding`, `accept-language`,

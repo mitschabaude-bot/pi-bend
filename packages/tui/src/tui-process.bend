@@ -210,9 +210,12 @@ def scheduled(listener: EventSink,event: Tui.RenderEvent) -> IO(List<&2,Tui.Rend
       do IO<List<&2,Tui.RenderEffect>>:
         handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
         Serial.run(Active,List<&2,Tui.RenderEffect>,state,current => scheduledOperation(event,current,handle,termux))
+# Like Node's setTimeout, a frame timer waits at least 1 ms: an expired Timer
+# completes at once, while a pending one fires only once no task is ready, so
+# events already received (upstream's queued microtasks) are handled first.
 def timerFired(+listener: EventSink,id: Nat,delay: Nat) -> IO(Unit):
   do IO<Unit>:
-    timer : Timer & TimerCancel <- Timer.new(U32.from_nat(delay))
+    timer : Timer & TimerCancel <- Timer.new(U32.from_nat(Nat.max(1n,delay)))
     slept(timer)
     effects : List<&2,Tui.RenderEffect> <- scheduled(listener,Tui.TimerFired{id})
     return Unit{}
