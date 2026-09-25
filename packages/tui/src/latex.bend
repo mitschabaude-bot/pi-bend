@@ -1,7 +1,7 @@
 import Base
 import ./utils.bend as U
 import ../../runtime/src/record.bend as R
-import ../../runtime/src/regex.bend as Regex
+import ../../runtime/src/unicode-17-category.bend as Category
 import ../../runtime/src/text.bend as Text
 import ../../runtime/src/string.bend as Strings
 
@@ -165,7 +165,6 @@ def accents() -> R.Record<String>:
     R.Property{"tilde","\u{303}"},R.Property{"underline","\u{332}"},R.Property{"vec","\u{20d7}"},
     R.Property{"widehat","\u{302}"},R.Property{"widetilde","\u{303}"}]}
 
-
 # Characters and strings
 # ----------------------
 
@@ -245,30 +244,19 @@ def digitValue(char: Char) -> Nat:
   match char:
     case Chr{code}: U32.to_nat((code - 48 : U32))
 
-# Unicode letters and numbers (`\p{L}`, `\p{N}`), decoded once per render.
-type Classes is Data: Classes{letters: Regex.Class,numbers: Regex.Class}
-def propertyClass(result: Result<&2,&2,Regex.Error,Regex.Class>) -> Regex.Class:
-  match result:
-    case Done{value}: value
-    case Fail{_}: Regex.EmptyClass{}
-def unicodeClasses() -> Classes: Classes{propertyClass(Regex.property("L")),propertyClass(Regex.property("N"))}
-def isLetter(classes: Classes,char: Char) -> Bool:
-  match classes char:
-    case Classes{letters,_} Chr{code}: Regex.contains(letters,code)
-def isNumber(classes: Classes,char: Char) -> Bool:
-  match classes char:
-    case Classes{_,numbers} Chr{code}: Regex.contains(numbers,code)
-def isAlphanumeric(+classes: Classes,+char: Char) -> Bool: isLetter(classes,char) || isNumber(classes,char)
+# `\p{L}` or `\p{N}`, and `\p{N}`.
+def isAlphanumeric(char: Char) -> Bool: U32.is_ne(Category.category(Char.to_u32(char)),0)
+def isNumber(char: Char) -> Bool: Category.isNumber(Char.to_u32(char))
 # `/^[\p{L}\p{N}.]+$/u`
-def plainWord(text: String,+classes: Classes,seen: Bool) -> Bool:
+def plainWord(text: String,seen: Bool) -> Bool:
   match text:
     case SNil{}: seen
-    case SCon{+char,+rest}: (Char.is_eq(char,'.') || isAlphanumeric(classes,char)) && plainWord(rest,classes,True{})
+    case SCon{+char,+rest}: (Char.is_eq(char,'.') || isAlphanumeric(char)) && plainWord(rest,True{})
 # `/^[\p{N}.]+$/u`
-def plainNumber(text: String,+classes: Classes,seen: Bool) -> Bool:
+def plainNumber(text: String,seen: Bool) -> Bool:
   match text:
     case SNil{}: seen
-    case SCon{+char,+rest}: (Char.is_eq(char,'.') || isNumber(classes,char)) && plainNumber(rest,classes,True{})
+    case SCon{+char,+rest}: (Char.is_eq(char,'.') || isNumber(char)) && plainNumber(rest,True{})
 
 # Scripts, fractions and roots
 # ----------------------------
@@ -310,38 +298,38 @@ def formatPlainScript(unicode: Maybe<&2,String>,+value: String,+sub: Bool) -> St
 def formatScript(value: String,+sub: Bool) -> String:
   +normalized = normalizeScriptValue(value)
   formatPlainScript(formatUnicodeScript(normalized,sub),normalized,sub)
-def formatFraction(numerator: String,denominator: String,+classes: Classes) -> String:
+def formatFraction(numerator: String,denominator: String) -> String:
   +top = Text.trim(numerator)
   +bottom = Text.trim(denominator)
-  Bool.pick(String,plainWord(top,classes,False{}),top,"(" ++ top ++ ")") ++ "/" ++
-    Bool.pick(String,plainNumber(bottom,classes,False{}) || Nat.is_eq(String.length(bottom),1n),bottom,"(" ++ bottom ++ ")")
-def formatRoot(value: String,+symbol: String,+classes: Classes) -> String:
+  Bool.pick(String,plainWord(top,False{}),top,"(" ++ top ++ ")") ++ "/" ++
+    Bool.pick(String,plainNumber(bottom,False{}) || Nat.is_eq(String.length(bottom),1n),bottom,"(" ++ bottom ++ ")")
+def formatRoot(value: String,+symbol: String) -> String:
   +root = Text.trim(value)
-  Bool.pick(String,plainWord(root,classes,False{}),symbol ++ root,symbol ++ "(" ++ root ++ ")")
+  Bool.pick(String,plainWord(root,False{}),symbol ++ root,symbol ++ "(" ++ root ++ ")")
 
 # Output normalization
 # --------------------
 
 # `[\p{L}\p{N})\]}\u{f0001}]` before a named operator gets a space.
-def spacesBeforeOperator(+classes: Classes,+char: Char) -> Bool:
-  isAlphanumeric(classes,char) || Char.is_eq(char,')') || Char.is_eq(char,']') || Char.is_eq(char,'}') || Char.is_eq(char,layoutMarkerEnd())
+def spacesBeforeOperator(+char: Char) -> Bool:
+  isAlphanumeric(char) || Char.is_eq(char,')') || Char.is_eq(char,']') || Char.is_eq(char,'}') || Char.is_eq(char,layoutMarkerEnd())
 # `[\p{L}\p{N}√\u{f0000}]` after a named operator gets a space.
-def spacesAfterOperator(text: String,+classes: Classes) -> Bool:
+def spacesAfterOperator(text: String) -> Bool:
   match text:
     case SNil{}: False{}
-    case SCon{+char,_}: isAlphanumeric(classes,char) || Char.is_eq(char,'√') || Char.is_eq(char,layoutMarkerStart())
-def operatorLeftSpacing(text: String,+classes: Classes,+spaced: Bool,+reversed: String) -> String:
+    case SCon{+char,_}: isAlphanumeric(char) || Char.is_eq(char,'√') || Char.is_eq(char,layoutMarkerStart())
+def operatorLeftSpacing(text: String,+spaced: Bool,+reversed: String) -> String:
   match text:
     case SNil{}: String.reverse(reversed)
     case SCon{+char,+rest}:
-      operatorLeftSpacing(rest,classes,spacesBeforeOperator(classes,char),
+      operatorLeftSpacing(rest,spacesBeforeOperator(char),
         Bool.pick(String,Char.is_eq(char,namedOperatorStart()),Bool.pick(String,spaced,SCon{' ',reversed},reversed),SCon{char,reversed}))
-def operatorRightSpacing(text: String,+classes: Classes,+reversed: String) -> String:
+def operatorRightSpacing(text: String,+reversed: String) -> String:
   match text:
     case SNil{}: String.reverse(reversed)
     case SCon{+char,+rest}:
-      operatorRightSpacing(rest,classes,
-        Bool.pick(String,Char.is_eq(char,namedOperatorEnd()),Bool.pick(String,spacesAfterOperator(rest,classes),SCon{' ',reversed},reversed),SCon{char,reversed}))
+      operatorRightSpacing(rest,
+        Bool.pick(String,Char.is_eq(char,namedOperatorEnd()),Bool.pick(String,spacesAfterOperator(rest),SCon{' ',reversed},reversed),SCon{char,reversed}))
 # `line.replace(/[ \t]+/g, " ")`
 def collapseBlanks(text: String,+blank: Bool,+reversed: String) -> String:
   match text:
@@ -355,8 +343,8 @@ def normalizedLines(lines: List<&2,String>,reversed: List<&2,String>) -> List<&2
     case line <> rest: normalizedLines(rest,Text.trim(collapseBlanks(line,False{},"")) <> reversed)
 # pi drops an empty first and last line before the final trim; the trim
 # removes them anyway, so the lines are joined and trimmed directly.
-def normalizeOutput(value: String,+classes: Classes) -> String:
-  Text.trim(String.join(normalizedLines(Strings.split(operatorRightSpacing(operatorLeftSpacing(value,classes,False{},""),classes,""),'\n'),Nil{}),"\n"))
+def normalizeOutput(value: String) -> String:
+  Text.trim(String.join(normalizedLines(Strings.split(operatorRightSpacing(operatorLeftSpacing(value,False{},""),""),'\n'),Nil{}),"\n"))
 
 # Layout
 # ------
@@ -1097,28 +1085,28 @@ def blocksLayout(value: Maybe<&2,String>) -> Bool:
   match value:
     case None{}: False{}
     case Some{+text}: String.contains(text,"/") || (Bool.not(String.contains(text,single(layoutMarkerStart()))) && Nat.is_gt(String.length(text),1n) && Bool.not(hasCapitalOrStar(text)))
-def optionalNormalized(value: Maybe<&2,String>,+classes: Classes) -> Maybe<&2,String>:
+def optionalNormalized(value: Maybe<&2,String>) -> Maybe<&2,String>:
   match value:
     case None{}: None{}
-    case Some{text}: Some{normalizeOutput(text,classes)}
-def scriptsResult(layout: Bool,+firstSub: Bool,+first: String,+second: Maybe<&2,String>,+sub: Maybe<&2,String>,+sup: Maybe<&2,String>,input: String,context: Context,+nodes: List<&2,LayoutNode>,frames: List<&2,Frame>,+classes: Classes) -> Machine:
+    case Some{text}: Some{normalizeOutput(text)}
+def scriptsResult(layout: Bool,+firstSub: Bool,+first: String,+second: Maybe<&2,String>,+sub: Maybe<&2,String>,+sup: Maybe<&2,String>,input: String,context: Context,+nodes: List<&2,LayoutNode>,frames: List<&2,Frame>) -> Machine:
   match layout:
-    case True{}: giveNode(input,context,nodes,frames,ScriptNode{optionalNormalized(sub,classes),optionalNormalized(sup,classes)})
+    case True{}: giveNode(input,context,nodes,frames,ScriptNode{optionalNormalized(sub),optionalNormalized(sup)})
     case False{}: give(input,context,nodes,frames,formatScript(first,firstSub) ++ optionalScript(second,Bool.not(firstSub)))
-def finishScripts(+firstSub: Bool,+first: String,+second: Maybe<&2,String>,input: String,+context: Context,nodes: List<&2,LayoutNode>,frames: List<&2,Frame>,+classes: Classes) -> Machine:
+def finishScripts(+firstSub: Bool,+first: String,+second: Maybe<&2,String>,input: String,+context: Context,nodes: List<&2,LayoutNode>,frames: List<&2,Frame>) -> Machine:
   +sub = Bool.pick(Maybe<&2,String>,firstSub,Some{first},second)
   +sup = Bool.pick(Maybe<&2,String>,firstSub,second,Some{first})
   +layout = displayOf(context) && Bool.not(blocksLayout(sub) || blocksLayout(sup)) &&
     (Nat.is_gt(depthOf(context),0n) || unicodeMissing(sub,True{}) || unicodeMissing(sup,False{}))
-  scriptsResult(layout,firstSub,first,second,sub,sup,input,context,nodes,frames,classes)
-def secondScript(present: Bool,+firstSub: Bool,+first: String,+input: String,+after: String,+context: Context,nodes: List<&2,LayoutNode>,frames: List<&2,Frame>,+classes: Classes) -> Machine:
+  scriptsResult(layout,firstSub,first,second,sub,sup,input,context,nodes,frames)
+def secondScript(present: Bool,+firstSub: Bool,+first: String,+input: String,+after: String,+context: Context,nodes: List<&2,LayoutNode>,frames: List<&2,Frame>) -> Machine:
   match present:
     case True{}: run(String.drop(after,1n),deeper(context),nodes,SecondScript{firstSub,first} <> frames,Required{False{}})
-    case False{}: finishScripts(firstSub,first,None{},input,context,nodes,frames,classes)
-def firstScriptDone(+sub: Bool,+first: String,+input: String,+context: Context,nodes: List<&2,LayoutNode>,frames: List<&2,Frame>,+classes: Classes) -> Machine:
+    case False{}: finishScripts(firstSub,first,None{},input,context,nodes,frames)
+def firstScriptDone(+sub: Bool,+first: String,+input: String,+context: Context,nodes: List<&2,LayoutNode>,frames: List<&2,Frame>) -> Machine:
   +after = skipSpace(input)
   +present = (headIs(after,'^') && sub) || (headIs(after,'_') && Bool.not(sub))
-  secondScript(present,sub,first,input,after,context,nodes,frames,classes)
+  secondScript(present,sub,first,input,after,context,nodes,frames)
 
 # parseOperator
 # -------------
@@ -1206,9 +1194,9 @@ def nestedStart(+source: String,stack: Bool,input: String,+context: Context,node
   run(source,Context{True{},True{},0n,displayOf(context) && stack},nodes,NestedEnd{input,context,source} <> frames,Sequence{False{},""})
 # A nested render that was unsupported or stopped early makes its caller
 # unsupported and yields its source.
-def nestedDone(complete: Bool,input: String,context: Context,source: String,value: String,nodes: List<&2,LayoutNode>,frames: List<&2,Frame>,+classes: Classes) -> Machine:
+def nestedDone(complete: Bool,input: String,context: Context,source: String,value: String,nodes: List<&2,LayoutNode>,frames: List<&2,Frame>) -> Machine:
   match complete:
-    case True{}: give(input,context,nodes,frames,normalizeOutput(value,classes))
+    case True{}: give(input,context,nodes,frames,normalizeOutput(value))
     case False{}: give(input,rejected(context),nodes,frames,source)
 def rowsStep(sources: List<&2,String>,done: List<&2,String>,input: String,context: Context,nodes: List<&2,LayoutNode>,frames: List<&2,Frame>) -> Machine:
   match sources:
@@ -1253,54 +1241,54 @@ def mathbbText(text: String,reversed: String) -> String:
   match text:
     case SNil{}: String.reverse(reversed)
     case SCon{+char,+rest}: mathbbText(rest,String.reverse(Maybe.default(&2,String,lookup(blackboard(),single(char)),single(char))) ++ reversed)
-def rootText(degree: Maybe<&2,String>,+value: String,+classes: Classes) -> String:
+def rootText(degree: Maybe<&2,String>,+value: String) -> String:
   match degree:
-    case None{}: formatRoot(value,"√",classes)
+    case None{}: formatRoot(value,"√")
     case Some{+index}:
-      Bool.pick(Unit -> String,String.eq(index,"2"),_ => formatRoot(value,"√",classes),
-        _ => Bool.pick(Unit -> String,String.eq(index,"3"),_ => formatRoot(value,"∛",classes),
-          _ => Bool.pick(Unit -> String,String.eq(index,"4"),_ => formatRoot(value,"∜",classes),
-            _ => formatScript(index,False{}) ++ formatRoot(value,"√",classes))(Unit{}))(Unit{}))(Unit{})
+      Bool.pick(Unit -> String,String.eq(index,"2"),_ => formatRoot(value,"√"),
+        _ => Bool.pick(Unit -> String,String.eq(index,"3"),_ => formatRoot(value,"∛"),
+          _ => Bool.pick(Unit -> String,String.eq(index,"4"),_ => formatRoot(value,"∜"),
+            _ => formatScript(index,False{}) ++ formatRoot(value,"√"))(Unit{}))(Unit{}))(Unit{})
 def negatedText(found: Maybe<&2,String>,+value: String,input: String,context: Context,nodes: List<&2,LayoutNode>,frames: List<&2,Frame>) -> Machine:
   match found value:
     case Some{negated} _: give(input,context,nodes,frames," " ++ negated ++ " ")
     case None{} SNil{}: give(input,rejected(context),nodes,frames,"")
     case None{} SCon{first,rest}: give(input,context,nodes,frames," " ++ SCon{first,SCon{'\u{338}',rest}} ++ " ")
-def fractionDone(stack: Bool,numerator: String,denominator: String,input: String,context: Context,+nodes: List<&2,LayoutNode>,frames: List<&2,Frame>,+classes: Classes) -> Machine:
+def fractionDone(stack: Bool,numerator: String,denominator: String,input: String,context: Context,+nodes: List<&2,LayoutNode>,frames: List<&2,Frame>) -> Machine:
   match stack:
-    case True{}: giveNode(input,context,nodes,frames,FractionNode{normalizeOutput(numerator,classes),normalizeOutput(denominator,classes)})
-    case False{}: give(input,context,nodes,frames,formatFraction(numerator,denominator,classes))
-def resume(frame: Frame,+value: String,+input: String,+context: Context,+nodes: List<&2,LayoutNode>,frames: List<&2,Frame>,+classes: Classes) -> Machine:
+    case True{}: giveNode(input,context,nodes,frames,FractionNode{normalizeOutput(numerator),normalizeOutput(denominator)})
+    case False{}: give(input,context,nodes,frames,formatFraction(numerator,denominator))
+def resume(frame: Frame,+value: String,+input: String,+context: Context,+nodes: List<&2,LayoutNode>,frames: List<&2,Frame>) -> Machine:
   match frame:
     case AfterGroup{closing,reversed}: run(input,context,nodes,frames,Sequence{closing,String.reverse(value) ++ reversed})
     case AfterCommand{closing,reversed}: run(input,context,nodes,frames,Sequence{closing,afterCommand(value,reversed)})
     case AfterScript{closing,reversed}: run(input,context,nodes,frames,Sequence{closing,attachScript(value,reversed)})
     case RestoreStack{previous}: give(input,withStack(context,previous),nodes,frames,value)
-    case FirstScript{sub}: firstScriptDone(sub,value,input,shallower(context),nodes,frames,classes)
-    case SecondScript{sub,first}: finishScripts(sub,first,Some{value},input,shallower(context),nodes,frames,classes)
+    case FirstScript{sub}: firstScriptDone(sub,value,input,shallower(context),nodes,frames)
+    case SecondScript{sub,first}: finishScripts(sub,first,Some{value},input,shallower(context),nodes,frames)
     case NotArgument{}:
       +trimmed = Text.trim(value)
       negatedText(lookup(negatedSymbols(),trimmed),trimmed,input,context,nodes,frames)
     case Numerator{+stack}: run(input,context,nodes,Denominator{stack,value} <> frames,Required{Bool.not(stack)})
-    case Denominator{stack,numerator}: fractionDone(stack,numerator,value,input,context,nodes,frames,classes)
+    case Denominator{stack,numerator}: fractionDone(stack,numerator,value,input,context,nodes,frames)
     case RootDegree{}: run(input,context,nodes,RootValue{Some{Text.trim(value)}} <> frames,Required{True{}})
-    case RootValue{degree}: give(input,context,nodes,frames,rootText(degree,value,classes))
+    case RootValue{degree}: give(input,context,nodes,frames,rootText(degree,value))
     case BoxedArgument{}: give(input,context,nodes,frames,"[" ++ Text.trim(value) ++ "]")
     case BinomTop{}: run(input,context,nodes,BinomBottom{value} <> frames,Required{True{}})
     case BinomBottom{top}: give(input,context,nodes,frames,"(" ++ top ++ " choose " ++ value ++ ")")
     case AccentArgument{+command,+accent}:
       give(input,context,nodes,frames,Bool.pick(String,Nat.is_eq(String.length(value),1n),value ++ accent,command ++ "(" ++ value ++ ")"))
     case BlackboardArgument{}: give(input,context,nodes,frames,mathbbText(value,""))
-    case OperatorNameArgument{starred}: run(input,context,nodes,frames,Operator{Text.trim(normalizeOutput(value,classes)),True{},starred,True{}})
+    case OperatorNameArgument{starred}: run(input,context,nodes,frames,Operator{Text.trim(normalizeOutput(value)),True{},starred,True{}})
     case ModArgument{pmod}: give(input,context,nodes,frames,Bool.pick(String,pmod," (mod " ++ Text.trim(value) ++ ")"," (" ++ Text.trim(value) ++ ")"))
     case OverTop{sub}: run(input,context,nodes,OverBase{sub,value} <> frames,Required{True{}})
     case OverBase{sub,script}: give(input,context,nodes,frames,Text.trim(value) ++ formatScript(script,sub))
     case WrapperArgument{text}: give(input,context,nodes,frames,Bool.pick(String,text,value,Text.trim(value)))
     case OperatorScript{operator,bracket,limits,spaced,+sub,+lower,+upper}:
-      +script = withoutChar(normalizeOutput(value,classes),' ',"")
+      +script = withoutChar(normalizeOutput(value),' ',"")
       run(input,operatorScriptDone(sub,lower,upper,context),nodes,frames,
         OperatorScripts{operator,bracket,limits,spaced,Bool.pick(Maybe<&2,String>,sub,Some{script},lower),Bool.pick(Maybe<&2,String>,sub,upper,Some{script})})
-    case NestedEnd{outerInput,outerContext,source}: nestedDone(supportedOf(context) && String.eq(input,""),outerInput,outerContext,source,value,nodes,frames,classes)
+    case NestedEnd{outerInput,outerContext,source}: nestedDone(supportedOf(context) && String.eq(input,""),outerInput,outerContext,source,value,nodes,frames)
     case Trimmed{}: give(input,context,nodes,frames,Text.trim(value))
     case RowRendered{sources,done}: run(input,context,nodes,frames,Rows{sources,withRow(Text.trim(value),done)})
     case CellRendered{grid,rows,pending,cells,done}: run(input,context,nodes,frames,Cells{grid,rows,pending,Text.trim(value) <> cells,done})
@@ -1309,11 +1297,11 @@ type Final is Data: Final{input: String,context: Context,nodes: List<&2,LayoutNo
 # Runs tasks and returns values to frames until the outermost sequence
 # returns. Every task consumes input or returns to a frame pushed by a task
 # that did, so the loop ends; the termination argument is not mechanized.
-@unsafe def drive(machine: Machine,+classes: Classes) -> Final:
+@unsafe def drive(machine: Machine) -> Final:
   match machine:
     case Machine{input,context,nodes,Nil{},Give{value}}: Final{input,context,nodes,value}
-    case Machine{input,context,nodes,frame <> frames,Give{value}}: drive(resume(frame,value,input,context,nodes,frames,classes),classes)
-    case Machine{input,context,nodes,frames,Run{task}}: drive(execute(task,input,context,nodes,frames),classes)
+    case Machine{input,context,nodes,frame <> frames,Give{value}}: drive(resume(frame,value,input,context,nodes,frames))
+    case Machine{input,context,nodes,frames,Run{task}}: drive(execute(task,input,context,nodes,frames))
 
 # renderLatex
 # -----------
@@ -1342,13 +1330,13 @@ def layoutText(+lines: List<&2,String>) -> String:
 def laidOut(+nodes: List<&2,LayoutNode>,+rendered: String) -> String:
   Bool.pick(Unit -> String,List.is_empty(&2,LayoutNode,nodes),_ => unprotected(rendered),
     _ => layoutText(layoutLinesOf(renderLayout(rendered,placeAll(nodes,Nil{})))))(Unit{})
-def accepted(complete: Bool,nodes: List<&2,LayoutNode>,value: String,+classes: Classes) -> Maybe<&2,String>:
+def accepted(complete: Bool,nodes: List<&2,LayoutNode>,value: String) -> Maybe<&2,String>:
   match complete:
-    case True{}: Some{laidOut(nodes,normalizeOutput(value,classes))}
+    case True{}: Some{laidOut(nodes,normalizeOutput(value))}
     case False{}: None{}
-def finished(final: Final,+classes: Classes) -> Maybe<&2,String>:
+def finished(final: Final) -> Maybe<&2,String>:
   match final:
-    case Final{input,context,nodes,value}: accepted(supportedOf(context) && String.eq(input,""),nodes,value,classes)
+    case Final{input,context,nodes,value}: accepted(supportedOf(context) && String.eq(input,""),nodes,value)
 
 # Renders a basic LaTeX math expression as terminal-friendly Unicode text,
 # or None for unsupported or malformed syntax. Display mode stacks
@@ -1356,5 +1344,4 @@ def finished(final: Final,+classes: Classes) -> Maybe<&2,String>:
 def renderLatex(source: String,options: RenderLatexOptions) -> Maybe<&2,String>:
   match options:
     case RenderLatexOptions{display}:
-      +classes = unicodeClasses()
-      finished(drive(run(source,Context{True{},True{},0n,display},Nil{},Nil{},Sequence{False{},""}),classes),classes)
+      finished(drive(run(source,Context{True{},True{},0n,display},Nil{},Nil{},Sequence{False{},""})))
