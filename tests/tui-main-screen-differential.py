@@ -11,7 +11,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPILER = Path(os.environ.get("BEND_COMPILER", "/home/agent/code/pi-bend-tls/build/bend-process-files/bend2/main.ts"))
+COMPILER = Path(os.environ.get("BEND_COMPILER", str(Path(__file__).resolve().parents[1] / "build/bend-native-toolchain/bend2/main.ts")))
 
 
 def run(command, env=None):

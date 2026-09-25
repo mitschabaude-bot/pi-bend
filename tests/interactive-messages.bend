@@ -22,7 +22,7 @@ def run(+theme: Theme.Theme,styles: Styles.Styles) -> IO(Unit):
     output("user",lines)
     unpadded : List<&2,String> <- M.renderUser(M.setUserOutputPad(user,0n),20n)
     output("user-pad0",unpadded)
-    +base : M.AssistantMessage <- IO.pure(M.AssistantMessage,M.assistant(Nil{},theme,md))
+    +base : M.AssistantMessage <- IO.pure(M.AssistantMessage,M.assistant(Nil{},theme,md,1n))
     first : List<&2,String> <- M.renderAssistant(M.updateContent(base,M.TextBlock{"  hello **world**  "} <> Nil{},M.Stop{},None{},False{}),20n)
     output("text",first)
     +thinking : M.AssistantMessage <- IO.pure(M.AssistantMessage,M.updateContent(base,M.ThinkingBlock{"  first thought  "} <> M.ThinkingBlock{"second thought"} <> M.TextBlock{"answer"} <> Nil{},M.Stop{},None{},False{}))
