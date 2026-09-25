@@ -3,8 +3,8 @@ import ../packages/ai/src/types.bend as T
 import ../packages/ai/src/api/openai-responses.bend as P
 import ../laws/openai-responses.bend as Laws
 
-def Laws.cancellation_precedes_stop_validation(Reason, E, reason, detail): {==}
-def Laws.pending_stop_is_missing(Reason, E, detail): {==}
+def Laws.cancellation_precedes_stop_validation(Reason, E, reason, api, detail): {==}
+def Laws.pending_stop_is_missing(Reason, E, api, detail): {==}
 def Laws.failure_keeps_cause_under_cancellation(G, provider, output, aborted, cause): {==}
 def Laws.failure_preserves_message_fields(G, content, api, provider, model, responseModel, responseId, thinking, diagnostics, usage, stop, deferred, error, raw, endTurn, timestamp, aborted, detail): {==}
 def Laws.disposal_failure_never_replaces_processing_outcome(Reason, G, E, output, error, cause): {==}

@@ -582,6 +582,7 @@ def supportedApi(api: Ai.ModelApi, +model: Models.Model()) -> Result<&2, &2, Str
   match api:
     case Ai.OpenAIResponsesApi{}: Done{Some{model}}
     case Ai.OpenAICodexResponsesApi{}: Done{Some{model}}
+    case Ai.AzureOpenAIResponsesApi{}: Done{Some{model}}
     case Ai.AnthropicMessagesApi{}: Done{Some{model}}
     case Ai.GoogleGenerativeAiApi{}: Done{Some{model}}
     case Ai.OpenAICompletionsApi{}: Done{Some{model}}

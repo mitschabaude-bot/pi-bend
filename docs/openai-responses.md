@@ -33,6 +33,14 @@ Public type, field, function and event names follow upstream where Bend permits.
 
 `tests/native_edit_agent_check.py BACKEND --prefix build/native-edit-agent-f64` drives the native TLS provider and canonical write/edit/read tools through four model turns. Its local HTTPS peer checks actual file contents, exact read results, transcript replay, event ordering, schema rejection and malformed-edit rejection. This is integration evidence against a controlled peer, not a live model or complete coding-agent CLI.
 
+## Azure OpenAI Responses
+
+`api/azure-openai-responses.bend` ports `azure-openai-responses.ts`; `providers/azure-openai-responses.bend` and its generated catalog (41 models) port the provider. Its `prepare` resolves the deployment name (`azureDeploymentName`, then `AZURE_OPENAI_DEPLOYMENT_NAME_MAP`, then the model id), the API key, the base URL (`azureBaseUrl`/`AZURE_OPENAI_BASE_URL`, `azureResourceName`/`AZURE_OPENAI_RESOURCE_NAME`, then `model.baseUrl`, normalized as upstream for Azure hosts) and API version (default `v1`), then builds the Azure body from the shared conversions with Azure's tool-call providers and strict-mode default. It yields a `ProviderRequest` for the shared lifecycle (`startRequest`/`start`), whose `AzureTarget` makes the client send `api-key` authentication and the `api-version` query (`openai-client.prepareAzureRequest`, AzureOpenAI's non-deployment `/responses` path). OpenAI Responses and Codex preparations project into the same `ProviderRequest`. API errors use the fixed `Azure OpenAI API error` prefix, a missing stop reason names the Azure stream, and no service-tier pricing is applied, as upstream passes none.
+
+Language-driven changes: `AzureOpenAIResponsesOptions` holds the inherited `StreamOptions` as one `base` field. Upstream `streamSimple` throws before creating a stream when no API key is given; the native entry settles the stream with the same `No API key for provider` error instead. A model whose API is not Azure gets the Azure compatibility defaults (upstream's type forbids such a call).
+
+Validation: `python3 tests/azure_openai_responses_check.py` (set `PI_MONO` when the checkout is not a sibling) compares 80 requests or error messages with the pinned upstream `stream` using the real AzureOpenAI SDK and a capturing fetch; the three upstream Azure suites are ported under `packages/ai/test/azure-*.bend`. All run on the JavaScript lane; no native build or live Azure request has been made.
+
 ## Limitations
 
 Native TLS 1.3 is connected to the provider. Authentication flows beyond the tested API-key path, WebSocket transport and the other providers remain incomplete. The tier hooks cannot fail, so upstream's failing-hook cases have no native equivalent.

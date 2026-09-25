@@ -603,21 +603,33 @@
     },
     {
       "source": "packages/ai/test/azure-openai-base-url.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "b48c1cc3dca54fbc8451455991565d93b68aa57f6624c33b8d7cf6712ce822a8"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/azure-openai-base-url.bend",
+        "packages/ai/test/azure-openai-responses-request.bend",
+        "tests/azure_openai_responses_check.py",
+        "tests/azure_openai_responses_reference.ts"
+      ],
+      "sha256": "b48c1cc3dca54fbc8451455991565d93b68aa57f6624c33b8d7cf6712ce822a8",
+      "notes": "All 16 named cases pass on the JavaScript lane. Upstream mocks the AzureOpenAI constructor; the port reads the same values from the prepared request (normalized base URL, client headers, payload), and 'throws on invalid URLs' runs the full stream to its error message. Upstream sets process.env; the port passes the same variables as options.env, which getProviderEnvValue consults first. The User-Agent is the native pi-user-agent value. Supplemented by 80 differential cases against the pinned upstream stream with the real AzureOpenAI SDK and a capturing fetch (URL with api-version, all wire headers, exact body bytes, or the error message): base URL normalization edge cases, option/env/resource/model resolution order, API version, deployment-name maps, parameters, reasoning and headers. No native-lane run or live Azure request yet."
     },
     {
       "source": "packages/ai/test/azure-openai-responses-reasoning-replay.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "fe5ebeb1fa7ca72e6e45239287cc55de24db00225492820393db8387f19d07cf"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/azure-openai-responses-reasoning-replay.bend"
+      ],
+      "sha256": "fe5ebeb1fa7ca72e6e45239287cc55de24db00225492820393db8387f19d07cf",
+      "notes": "Both named cases pass on the JavaScript lane: the shared processResponsesStream keeps output_item.done's encrypted_content or backfills it from response.completed for an Azure model, and convertResponsesMessagesWith replays it with the Azure tool-call provider. Typed stream events replace the SDK event objects; toMatchObject becomes field checks on the replayed reasoning item. Native lane not run."
     },
     {
       "source": "packages/ai/test/azure-openai-tool-choice.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6f670f6f477c395bfd562beb104213389b562eeb7535a3c74ee3ee421c35ecee"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/azure-openai-tool-choice.bend"
+      ],
+      "sha256": "6f670f6f477c395bfd562beb104213389b562eeb7535a3c74ee3ee421c35ecee",
+      "notes": "Both named cases pass on the JavaScript lane through the real stream and streamSimple lifecycle: as upstream, onPayload captures the body by failing (the hook's typed error is the payload, returned as the run's failure cause); tool_choice and the single tool definition are asserted. No transport is opened. Native lane not run."
     },
     {
       "source": "packages/ai/test/baseten-models.test.ts",

@@ -87,6 +87,8 @@ def preparationError(cause: Prepare.PreparationError) -> String:
     case Prepare.GrammarFailure{error}: Sampling.errorMessage(error)
     case Prepare.PayloadFailure{_}: "payload conversion failed"
     case Prepare.UnsupportedApi{_}: "unsupported API"
+    case Prepare.InvalidAzureBaseUrl{_}: "invalid Azure base URL"
+    case Prepare.MissingAzureBaseUrl{}: "missing Azure base URL"
 
 def preparationValue(result: Result<&2, &2, Prepare.PreparationError, Prepare.Prepared>) -> V.Value:
   match result:

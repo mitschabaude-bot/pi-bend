@@ -20,14 +20,16 @@ law cancellation_precedes_stop_validation:
   for -Reason: Data
   for -E: Data
   for reason: T.StopReason
+  for api: String
   for detail: Maybe<&2, String>
-  {P.check(Reason, E, True{}, reason, detail) == Fail{P.RequestAborted{}} : Result<&2, &2, P.Error<Reason, E>, T.DoneReason>}
+  {P.check(Reason, E, True{}, reason, api, detail) == Fail{P.RequestAborted{}} : Result<&2, &2, P.Error<Reason, E>, T.DoneReason>}
 
 law pending_stop_is_missing:
   for -Reason: Data
   for -E: Data
+  for api: String
   for detail: Maybe<&2, String>
-  {P.check(Reason, E, False{}, T.Pending{}, detail) == Fail{P.MissingStopReason{}} : Result<&2, &2, P.Error<Reason, E>, T.DoneReason>}
+  {P.check(Reason, E, False{}, T.Pending{}, api, detail) == Fail{P.MissingStopReason{api}} : Result<&2, &2, P.Error<Reason, E>, T.DoneReason>}
 
 # An existing failure keeps its cause even when the signal was also aborted.
 law failure_keeps_cause_under_cancellation:

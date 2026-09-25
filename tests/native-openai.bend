@@ -212,7 +212,7 @@ def diagnosticError(cause: P.Error<Unit,String>) -> String:
     case P.DisposalFailure{_}: "dispose.body"
     case P.HookFailure{_}: "hook"
     case P.OutputFailure{_}: "output"
-    case P.MissingStopReason{}: "missing-stop-reason"
+    case P.MissingStopReason{_}: "missing-stop-reason"
     case P.InvalidRetryOptions{_}: "retry-options"
     case P.EntropyFailure{_}: "entropy"
     case cause: error(cause)

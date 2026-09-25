@@ -3,6 +3,7 @@ import ../models.bend as Models
 import ../auth/types.bend as Auth
 import ./ant-ling.bend as AntLing
 import ./anthropic.bend as Anthropic
+import ./azure-openai-responses.bend as AzureOpenAIResponses
 import ./baseten.bend as Baseten
 import ./cerebras.bend as Cerebras
 import ./deepseek.bend as Deepseek
@@ -37,7 +38,7 @@ import ./zai.bend as Zai
 import ./zai-coding-cn.bend as ZaiCodingCn
 
 # upstream builtinProviders(), in providers/all.ts order. Omitted:
-# amazon-bedrock, azure-openai-responses, google-vertex, mistral and radius,
+# amazon-bedrock, google-vertex, mistral and radius,
 # whose APIs are not ported, and cloudflare-ai-gateway and
 # cloudflare-workers-ai, whose account/gateway auth and base-URL placeholder
 # stream wrapper are not ported. OAuth handlers are created by the caller.
@@ -82,6 +83,7 @@ def builtinProviders(codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuth
     providers : List<&2, Models.Provider> <- prepended(Deepseek.deepseekProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(Cerebras.cerebrasProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(Baseten.basetenProvider(), providers)
+    providers : List<&2, Models.Provider> <- prepended(AzureOpenAIResponses.azureOpenAIResponsesProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(Anthropic.anthropicProvider(anthropicOAuth), providers)
     providers : List<&2, Models.Provider> <- prepended(AntLing.antLingProvider(), providers)
     return providers

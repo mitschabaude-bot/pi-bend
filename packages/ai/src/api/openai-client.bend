@@ -179,8 +179,12 @@ def defaultHeaders(configuration: Defaults, retryCount: Nat, timeout: Maybe<&2, 
       decorated = Configuration.overlayStrings(optionalTimeout(base, timeout), Some{platform})
       R.set(T.Nullable<String>, R.set(T.Nullable<String>, decorated, "OpenAI-Organization", nullable(organization)), "OpenAI-Project", nullable(project))
 
+# The credential layer: bearer auth for OpenAI, `api-key` for AzureOpenAI.
 def authorization(apiKey: String) -> T.ProviderHeaders():
   R.Record{R.Property{"Authorization", T.PresentValue{"Bearer " ++ apiKey}} <> Nil{}}
+
+def azureApiKey(apiKey: String) -> T.ProviderHeaders():
+  R.Record{R.Property{"api-key", T.PresentValue{apiKey}} <> Nil{}}
 
 def credentialAllows(+value: Maybe<&2, T.Nullable<String>>) -> Bool:
   nonempty(value) || removed(value)
@@ -201,15 +205,15 @@ def assembled(result: Result<&2, &2, H.HeaderSyntaxError, HeaderState>) -> Resul
     case Fail{cause}: Fail{HeaderFailure{cause}}
     case Done{+state}: authenticate(state, authenticated(state))
 
-def layered(configuration: Defaults, apiKey: String, retryCount: Nat, client: Maybe<&2, T.ProviderHeaders()>, body: Maybe<&2, T.ProviderHeaders()>, request: Maybe<&2, T.ProviderHeaders()>, timeout: Result<&2, &2, HeaderError, Maybe<&2, String>>) -> Result<&2, &2, HeaderError, Headers.Headers>:
+def layered(configuration: Defaults, credential: T.ProviderHeaders(), retryCount: Nat, client: Maybe<&2, T.ProviderHeaders()>, body: Maybe<&2, T.ProviderHeaders()>, request: Maybe<&2, T.ProviderHeaders()>, timeout: Result<&2, &2, HeaderError, Maybe<&2, String>>) -> Result<&2, &2, HeaderError, Headers.Headers>:
   match timeout:
     case Fail{cause}: Fail{cause}
-    case Done{value}: assembled(build(Some{defaultHeaders(configuration, retryCount, value)} <> Some{authorization(apiKey)} <> client <> body <> request <> Nil{}))
+    case Done{value}: assembled(build(Some{defaultHeaders(configuration, retryCount, value)} <> Some{credential} <> client <> body <> request <> Nil{}))
 
 def validated(configuration: Defaults, apiKey: String, retryCount: Nat, client: Maybe<&2, T.ProviderHeaders()>, body: Maybe<&2, T.ProviderHeaders()>, request: Maybe<&2, T.ProviderHeaders()>, timeout: Result<&2, &2, HeaderError, F64>) -> Result<&2, &2, HeaderError, Headers.Headers>:
   match timeout:
     case Fail{cause}: Fail{cause}
-    case Done{+value}: layered(configuration, apiKey, retryCount, client, body, request, timeoutField(value, F.compare(value, F.fromU32(0))))
+    case Done{+value}: layered(configuration, authorization(apiKey), retryCount, client, body, request, timeoutField(value, F.compare(value, F.fromU32(0))))
 
 # SDK request order: defaults/platform, credentials, client defaults, serializer
 # headers, per-request overrides, then authentication validation. Pi disables
@@ -250,26 +254,37 @@ def withQuery(url: URL.URL, query: Maybe<&2, String>) -> URL.URL:
   match url:
     case URL.URL{scheme, username, password, host, port, path, _, fragment}: URL.URL{scheme, username, password, host, port, path, query, fragment}
 
-def normalizedQuery(url: URL.URL, parsed: Result<&2, &2, Strict.FormStrictError, List<&2, Form.Entry>>) -> Result<&2, &2, URLError, URL.URL>:
+def searched(url: URL.URL, fields: R.Record<String>) -> URL.URL:
+  match fields:
+    case R.Record{Nil{}}: url
+    case values: withQuery(url, Some{serializeQuery(values)})
+
+# The client's default query overrides the path's; the search is rewritten
+# only when either is nonempty.
+def normalizedQuery(url: URL.URL, defaults: List<&2, Form.Entry>, parsed: Result<&2, &2, Strict.FormStrictError, List<&2, Form.Entry>>) -> Result<&2, &2, URLError, URL.URL>:
   match parsed:
     case Fail{cause}: Fail{InvalidQuery{cause}}
-    case Done{Nil{}}: Done{url}
-    case Done{tuples}: Done{withQuery(url, Some{serializeQuery(collect(tuples, R.new(String)))})}
+    case Done{tuples}: Done{searched(url, collect(defaults, collect(tuples, R.new(String))))}
 
-def queried(url: URL.URL, query: Maybe<&2, String>) -> Result<&2, &2, URLError, URL.URL>:
+def queried(url: URL.URL, defaults: List<&2, Form.Entry>, query: Maybe<&2, String>) -> Result<&2, &2, URLError, URL.URL>:
   match query:
-    case None{}: Done{url}
-    case Some{text}: normalizedQuery(url, Strict.parseFormStrict(text))
+    case None{}: normalizedQuery(url, defaults, Done{Nil{}})
+    case Some{text}: normalizedQuery(url, defaults, Strict.parseFormStrict(text))
 
-def parsedURL(result: Result<&2, &2, Absolute.Error, URL.URL>) -> Result<&2, &2, URLError, URL.URL>:
+def parsedURL(defaults: List<&2, Form.Entry>, result: Result<&2, &2, Absolute.Error, URL.URL>) -> Result<&2, &2, URLError, URL.URL>:
   match result:
     case Fail{cause}: Fail{InvalidURL{cause}}
     case Done{URL.URL{scheme, username, password, host, port, path, +query, fragment}}:
-      queried(URL.URL{scheme, username, password, host, port, path, query, fragment}, query)
+      queried(URL.URL{scheme, username, password, host, port, path, query, fragment}, defaults, query)
 
 # The URL parser receives its immutable Unicode/IDNA tables from the caller.
 def responsesURL(context: Absolute.Context, base: String) -> Result<&2, &2, URLError, URL.URL>:
-  parsedURL(Absolute.parse(context, address(base)))
+  parsedURL(Nil{}, Absolute.parse(context, address(base)))
+
+# AzureOpenAI adds `api-version` as the client's default query. `/responses`
+# is not one of its deployment-scoped paths, so the URL keeps the base.
+def azureResponsesURL(context: Absolute.Context, base: String, apiVersion: String) -> Result<&2, &2, URLError, URL.URL>:
+  parsedURL(Form.Entry{"api-version", apiVersion} <> Nil{}, Absolute.parse(context, address(base)))
 
 # Requests
 # --------
@@ -305,25 +320,30 @@ def completed(url: URL.URL, body: String, timeout: F64, headers: Result<&2, &2, 
     case Fail{cause}: Fail{HeaderRejected{cause}}
     case Done{fields}: Done{Request{url, "post", fields, body, timeout}}
 
-def serialized(configuration: Defaults, apiKey: String, client: T.ProviderHeaders(), url: URL.URL, timeout: F64, original: Maybe<&2, F64>, body: Result<&2, &2, RequestError, String>) -> Result<&2, &2, RequestError, Request>:
+def serialized(configuration: Defaults, credential: T.ProviderHeaders(), client: T.ProviderHeaders(), url: URL.URL, timeout: F64, original: Maybe<&2, F64>, body: Result<&2, &2, RequestError, String>) -> Result<&2, &2, RequestError, Request>:
   match body:
     case Fail{cause}: Fail{cause}
-    case Done{text}: completed(url, text, timeout, layered(configuration, apiKey, 0n, Some{client}, Some{bodyHeaders()}, None{}, timeoutHeader(original)))
+    case Done{text}: completed(url, text, timeout, layered(configuration, credential, 0n, Some{client}, Some{bodyHeaders()}, None{}, timeoutHeader(original)))
 
-def timed(configuration: Defaults, apiKey: String, client: T.ProviderHeaders(), url: URL.URL, payload: T.JsonValue, original: Maybe<&2, F64>, timeout: Result<&2, &2, HeaderError, F64>) -> Result<&2, &2, RequestError, Request>:
+def timed(configuration: Defaults, credential: T.ProviderHeaders(), client: T.ProviderHeaders(), url: URL.URL, payload: T.JsonValue, original: Maybe<&2, F64>, timeout: Result<&2, &2, HeaderError, F64>) -> Result<&2, &2, RequestError, Request>:
   match timeout:
     case Fail{cause}: Fail{HeaderRejected{cause}}
-    case Done{value}: serialized(configuration, apiKey, client, url, value, original, serialize(payload))
+    case Done{value}: serialized(configuration, credential, client, url, value, original, serialize(payload))
 
-def addressed(configuration: Defaults, apiKey: String, client: T.ProviderHeaders(), +timeout: Maybe<&2, F64>, payload: T.JsonValue, url: Result<&2, &2, URLError, URL.URL>) -> Result<&2, &2, RequestError, Request>:
+def addressed(configuration: Defaults, credential: T.ProviderHeaders(), client: T.ProviderHeaders(), +timeout: Maybe<&2, F64>, payload: T.JsonValue, url: Result<&2, &2, URLError, URL.URL>) -> Result<&2, &2, RequestError, Request>:
   match url:
     case Fail{cause}: Fail{URLFailure{cause}}
-    case Done{value}: timed(configuration, apiKey, client, value, payload, timeout, validateTimeout(effectiveTimeout(timeout)))
+    case Done{value}: timed(configuration, credential, client, value, payload, timeout, validateTimeout(effectiveTimeout(timeout)))
 
 # SDK preparation order is URL, timeout, body, headers. The payload is the
 # hook-selected one; this layer neither invokes nor retries hooks.
 def prepareRequest(context: Absolute.Context, configuration: Defaults, apiKey: String, client: T.ProviderHeaders(), baseUrl: String, timeout: Maybe<&2, F64>, payload: T.JsonValue) -> Result<&2, &2, RequestError, Request>:
-  addressed(configuration, apiKey, client, timeout, payload, responsesURL(context, baseUrl))
+  addressed(configuration, authorization(apiKey), client, timeout, payload, responsesURL(context, baseUrl))
+
+# The same request through AzureOpenAI: `api-key` authentication and the
+# `api-version` query.
+def prepareAzureRequest(context: Absolute.Context, configuration: Defaults, apiKey: String, apiVersion: String, client: T.ProviderHeaders(), baseUrl: String, timeout: Maybe<&2, F64>, payload: T.JsonValue) -> Result<&2, &2, RequestError, Request>:
+  addressed(configuration, azureApiKey(apiKey), client, timeout, payload, azureResponsesURL(context, baseUrl, apiVersion))
 
 # Codex requests
 # --------------
@@ -347,7 +367,7 @@ def codexAddress(base: String) -> String:
   codexSuffix(String.reverse(stripLeadingSlashes(String.reverse(codexBase(base)))))
 
 def codexURL(context: Absolute.Context, base: String) -> Result<&2, &2, URLError, URL.URL>:
-  parsedURL(Absolute.parse(context, codexAddress(base)))
+  parsedURL(Nil{}, Absolute.parse(context, codexAddress(base)))
 
 def sessionHeaders(fields: T.ProviderHeaders(), sessionId: Maybe<&2, String>) -> T.ProviderHeaders():
   match sessionId:

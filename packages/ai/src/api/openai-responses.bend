@@ -47,7 +47,9 @@ import ../../../runtime/src/http-message.bend as Header
 # the request, runs it through the native client with pi's retry policy, folds
 # the SSE response into the canonical assistant event stream and settles the
 # final message. Message/tool conversion and response processing are shared
-# with the other Responses providers through the two shared modules.
+# with the other Responses providers through the two shared modules; Azure
+# (azure-openai-responses.bend) prepares its own requests and runs them
+# through this module's request lifecycle (`startRequest`).
 
 def Signal(-Reason: Data) -> Data: Abort.AbortSignal<Reason>
 def StreamOptions(-Reason: Data, -Telemetry: Data, -E: Data) -> Data: T.StreamOptions<T.JsonValue, Signal(Reason), Telemetry, Fetch.Fetch(Reason), E>
@@ -308,16 +310,25 @@ def reasoningRequested(effort: Maybe<&2, T.ThinkingLevel>, summary: Maybe<&2, St
 def encryptedContent(fields: R.Record<T.JsonValue>) -> R.Record<T.JsonValue>:
   R.set(T.JsonValue, fields, "include", T.JsonArray{T.JsonString{"reasoning.encrypted_content"} <> Nil{}})
 
+# Without a requested effort or summary, reasoning is turned off explicitly
+# unless the model maps "off" to null.
+def offEffort(fields: R.Record<T.JsonValue>, mapping: Maybe<&2, T.Nullable<String>>) -> R.Record<T.JsonValue>:
+  match mapping:
+    case Some{T.NullValue{}}: fields
+    case value: R.set(T.JsonValue, fields, "reasoning", T.JsonObject{R.Record{R.Property{"effort", T.JsonString{mappedEffort(value, "none")}} <> Nil{}}})
+
 def offReasoning(fields: R.Record<T.JsonValue>, provider: String, mapping: Maybe<&2, T.Nullable<String>>) -> R.Record<T.JsonValue>:
-  match provider mapping:
-    case "github-copilot" _: fields
-    case _ Some{T.NullValue{}}: fields
-    case _ value: R.set(T.JsonValue, fields, "reasoning", T.JsonObject{R.Record{R.Property{"effort", T.JsonString{mappedEffort(value, "none")}} <> Nil{}}})
+  match provider:
+    case "github-copilot": fields
+    case _: offEffort(fields, mapping)
+
+def requestedReasoning(fields: R.Record<T.JsonValue>, mapping: Maybe<&2, T.ThinkingLevelMap>, effort: Maybe<&2, T.ThinkingLevel>, summary: Maybe<&2, String>) -> R.Record<T.JsonValue>:
+  encryptedContent(R.set(T.JsonValue, fields, "reasoning", T.JsonObject{R.Record{R.Property{"effort", T.JsonString{requestedEffort(effort, mapping)}} <> R.Property{"summary", T.JsonString{summaryOrAuto(summary)}} <> Nil{}}}))
 
 def configuredReasoning(requested: Bool, fields: R.Record<T.JsonValue>, provider: String, mapping: Maybe<&2, T.ThinkingLevelMap>, effort: Maybe<&2, T.ThinkingLevel>, summary: Maybe<&2, String>) -> R.Record<T.JsonValue>:
   match requested:
     case False{}: offReasoning(fields, provider, Thinking.mapped(mapping, T.Off{}))
-    case True{}: encryptedContent(R.set(T.JsonValue, fields, "reasoning", T.JsonObject{R.Record{R.Property{"effort", T.JsonString{requestedEffort(effort, mapping)}} <> R.Property{"summary", T.JsonString{summaryOrAuto(summary)}} <> Nil{}}}))
+    case True{}: requestedReasoning(fields, mapping, effort, summary)
 
 def xaiInclude(provider: String, fields: R.Record<T.JsonValue>) -> R.Record<T.JsonValue>:
   match provider:
@@ -469,11 +480,38 @@ type PreparationError is Data:
   MissingAccountId{}
   GrammarFailure{cause: Sampling.Error}
   PayloadFailure{cause: BuildError}
+  InvalidAzureBaseUrl{baseUrl: String}
+  MissingAzureBaseUrl{}
 
 # Everything `stream` computes before touching the network. No socket,
 # callback or task is acquired by preparation.
 type Prepared is Data:
   Prepared{apiKey: String, baseUrl: String, headers: T.ProviderHeaders(), payload: T.JsonValue, compat: ResolvedCompat, grammarToolInputProperties: R.Record<String>, cacheRetention: T.CacheRetention, endpoint: Endpoint, accountId: Maybe<&2, String>, sessionId: Maybe<&2, String>}
+
+# What the shared request lifecycle needs from a provider's preparation. The
+# wire target selects URL, authentication and fixed headers.
+type Target is Data:
+  SDKTarget{}
+  CodexTarget{accountId: String, sessionId: Maybe<&2, String>}
+  AzureTarget{apiVersion: String}
+
+type ProviderRequest is Data:
+  ProviderRequest{apiKey: String, baseUrl: String, headers: T.ProviderHeaders(), payload: T.JsonValue, target: Target, streamOptions: Stream.OpenAIResponsesStreamOptions}
+
+def wireTarget(endpoint: Endpoint, accountId: Maybe<&2, String>, sessionId: Maybe<&2, String>) -> Target:
+  match endpoint:
+    case ResponsesEndpoint{}: SDKTarget{}
+    case CodexEndpoint{}: CodexTarget{Maybe.default(&2, String, accountId, ""), sessionId}
+
+def requestedTier(tier: Maybe<&2, T.Nullable<ServiceTier>>) -> Maybe<&2, String>:
+  match tier:
+    case Some{T.PresentValue{selected}}: Some{tierName(selected)}
+    case _: None{}
+
+def providerRequest(prepared: Prepared, tier: Maybe<&2, T.Nullable<ServiceTier>>) -> ProviderRequest:
+  match prepared:
+    case Prepared{apiKey, baseUrl, headers, payload, _, grammar, _, endpoint, accountId, sessionId}:
+      ProviderRequest{apiKey, baseUrl, headers, payload, wireTarget(endpoint, accountId, sessionId), Stream.OpenAIResponsesStreamOptions{requestedTier(tier), grammar}}
 
 type ModelSettings is Data:
   ModelSettings{provider: String, baseUrl: String, headers: Maybe<&2, R.Record<String>>, compat: ResolvedCompat, endpoint: Endpoint}
@@ -626,6 +664,12 @@ def applyServiceTierPricing(model: T.Model<T.JsonValue>, serviceTier: Maybe<&2, 
   match model:
     case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: scaled(getServiceTierCostMultiplier(id, serviceTier), usage)
 
+# Azure passes no service-tier pricing to processResponsesStream.
+def tierPricing(model: T.Model<T.JsonValue>, serviceTier: Maybe<&2, String>, usage: T.Usage) -> T.Usage:
+  match model:
+    case T.Model{_, _, T.AzureOpenAIResponsesApi{}, _, _, _, _, _, _, _, _, _, _, _, _, _}: usage
+    case other: applyServiceTierPricing(other, serviceTier, usage)
+
 # Errors
 # ------
 
@@ -641,7 +685,7 @@ type Error<-Reason: Data, -E: Data> is Data:
   ReleaseFailure{cause: Progress.ResponseProgressError<Client.ReadError(Reason)>}
   DisposalFailure{cause: Sse.CloseError<Reason>}
   RequestAborted{}
-  MissingStopReason{}
+  MissingStopReason{api: String}
   OutputFailure{message: String}
 
 def json(cause: JsonParse.ParseError) -> String:
@@ -674,6 +718,8 @@ def describePreparation(cause: PreparationError) -> String:
     case MissingAccountId{}: "Failed to extract accountId from token"
     case GrammarFailure{why}: Sampling.errorMessage(why)
     case PayloadFailure{why}: describePayload(why)
+    case InvalidAzureBaseUrl{text}: "Invalid Azure OpenAI base URL: " ++ text
+    case MissingAzureBaseUrl{}: "Azure OpenAI base URL is required. Set AZURE_OPENAI_BASE_URL or AZURE_OPENAI_RESOURCE_NAME, or pass azureBaseUrl, azureResourceName, or model.baseUrl."
 
 def describeHeaderField(error: Header.HeaderSyntaxError) -> String:
   match error:
@@ -799,6 +845,13 @@ def describeProcessing(-Reason: Data, error: Stream.Error<ReaderError(Reason)>) 
     case Stream.ContentFailure{cause}: Sampling.errorMessage(cause)
     case Stream.TerminalFailure{cause}: Stream.terminalMessage(cause)
 
+# Each upstream provider names its own stream.
+def missingStopReason(api: String) -> String:
+  match api:
+    case "azure-openai-responses": "Azure OpenAI Responses stream ended without a stop reason"
+    case "openai-codex-responses": "Codex stream ended without a stop reason"
+    case _: "OpenAI Responses stream ended without a stop reason"
+
 def describeRetryOptions(cause: Retry.OptionsError) -> String:
   match cause:
     case Retry.InvalidRetryCount{_}: "maxRetries must be a non-negative integer within the native natural-number range"
@@ -819,7 +872,7 @@ def describe(~Reason: Data, ~E: Data, ~render: E -> String, provider: String, er
     case ReleaseFailure{_}: "Could not close the response body"
     case DisposalFailure{_}: "Could not close the response body"
     case RequestAborted{}: "Request was aborted"
-    case MissingStopReason{}: "OpenAI Responses events ended without a stop reason"
+    case MissingStopReason{api}: missingStopReason(api)
     case OutputFailure{message}: message
 
 # Lifecycle
@@ -864,10 +917,10 @@ def outputError(value: Maybe<&2, String>) -> String:
 
 # The upstream checks after processing: cancellation first, then a missing or
 # failed stop reason.
-def check(-Reason: Data, -E: Data, aborted: Bool, reason: T.StopReason, detail: Maybe<&2, String>) -> Result<&2, &2, Error<Reason, E>, T.DoneReason>:
+def check(-Reason: Data, -E: Data, aborted: Bool, reason: T.StopReason, api: String, detail: Maybe<&2, String>) -> Result<&2, &2, Error<Reason, E>, T.DoneReason>:
   match aborted reason:
     case True{} _: Fail{RequestAborted{}}
-    case False{} T.Pending{}: Fail{MissingStopReason{}}
+    case False{} T.Pending{}: Fail{MissingStopReason{api}}
     case False{} T.Error{}: Fail{OutputFailure{outputError(detail)}}
     case False{} T.Aborted{}: Fail{OutputFailure{outputError(detail)}}
     case False{} T.Stop{}: Done{T.DoneStop{}}
@@ -877,7 +930,7 @@ def check(-Reason: Data, -E: Data, aborted: Bool, reason: T.StopReason, detail: 
 
 def validate(-Reason: Data, -G: Data, -E: Data, output: T.AssistantMessage<V.Value, G>, aborted: Bool) -> Result<&2, &2, Error<Reason, E>, T.DoneReason>:
   match output:
-    case T.AssistantMessage{_, _, _, _, _, _, _, _, _, reason, _, detail, _, _, _}: check(Reason, E, aborted, reason, detail)
+    case T.AssistantMessage{_, api, _, _, _, _, _, _, _, reason, _, detail, _, _, _}: check(Reason, E, aborted, reason, api, detail)
 
 def failed(~Reason: Data, ~E: Data, ~render: E -> String, -G: Data, provider: String, output: T.AssistantMessage<V.Value, G>, +aborted: Bool, +cause: Error<Reason, E>) -> Terminal<Reason, G, E>:
   Failed{Bool.pick(T.ErrorReason, aborted, T.ErrorAborted{}, T.ErrorError{}), withFailure(G, output, aborted, describe(~Reason, ~E, ~render, provider, cause)), cause}
@@ -1142,7 +1195,7 @@ def opened(~Reason: Data, ~G: Data, ~E: Data, model: T.Model<T.JsonValue>, optio
   match pair:
     case (body, cursor):
       do IO<Outcome<Reason, G, E>>:
-        result : Source<Reason, G> & Stream.RunResult<G, ReaderError(Reason)> <- Stream.processResponsesStream(~Source<Reason, G>, ~(ReaderError(Reason)), ~T.JsonValue, ~G, ~(sourceNext(~Reason, ~G)), ~(sourceClose(~Reason, ~G)), ~(sourceEmit(~Reason, ~G)), ~Stream.resolveServiceTier, ~applyServiceTierPricing, Source{body, cursor, events}, output, model, options)
+        result : Source<Reason, G> & Stream.RunResult<G, ReaderError(Reason)> <- Stream.processResponsesStream(~Source<Reason, G>, ~(ReaderError(Reason)), ~T.JsonValue, ~G, ~(sourceNext(~Reason, ~G)), ~(sourceClose(~Reason, ~G)), ~(sourceEmit(~Reason, ~G)), ~Stream.resolveServiceTier, ~tierPricing, Source{body, cursor, events}, output, model, options)
         disposedSource(Reason, G, E, result)
 
 # processResponsesStream over the acquired body, then release everything the
@@ -1205,36 +1258,36 @@ def requested(~Reason: Data, ~G: Data, ~E: Data, +config: Config, hooks: Sse.Hoo
         opened : Result<&2, &1, Error<Reason, E>, Transport<Reason>> <- openTransport(~Reason, ~E, config, custom)
         transported(~Reason, ~G, ~E, config, hooks, model, options, hook, output, events, wire, parent, retry, opened)
 
-def streamOptions(prepared: Prepared, tier: Maybe<&2, T.Nullable<ServiceTier>>) -> Stream.OpenAIResponsesStreamOptions:
-  match prepared tier:
-    case Prepared{_, _, _, _, _, grammar, _, _, _, _} Some{T.PresentValue{selected}}: Stream.OpenAIResponsesStreamOptions{Some{tierName(selected)}, grammar}
-    case Prepared{_, _, _, _, _, grammar, _, _, _, _} _: Stream.OpenAIResponsesStreamOptions{None{}, grammar}
+def envelope(config: Config, request: ProviderRequest, timeout: Maybe<&2, F64>, payload: T.JsonValue) -> Result<&2, &2, Client.RequestError, Client.Request>:
+  match config request:
+    case Config{url, defaults, _, _, _, _, _} ProviderRequest{apiKey, baseUrl, headers, _, SDKTarget{}, _}: Client.prepareRequest(url, defaults, apiKey, headers, baseUrl, timeout, payload)
+    case Config{url, defaults, _, _, _, _, _} ProviderRequest{apiKey, baseUrl, headers, _, CodexTarget{accountId, sessionId}, _}: Client.prepareCodexRequest(url, defaults, apiKey, accountId, headers, sessionId, baseUrl, timeout, payload)
+    case Config{url, defaults, _, _, _, _, _} ProviderRequest{apiKey, baseUrl, headers, _, AzureTarget{apiVersion}, _}: Client.prepareAzureRequest(url, defaults, apiKey, apiVersion, headers, baseUrl, timeout, payload)
 
-def envelope(config: Config, prepared: Prepared, timeout: Maybe<&2, F64>, payload: T.JsonValue) -> Result<&2, &2, Client.RequestError, Client.Request>:
-  match config prepared:
-    case Config{url, defaults, _, _, _, _, _} Prepared{apiKey, baseUrl, headers, _, _, _, _, ResponsesEndpoint{}, _, _}: Client.prepareRequest(url, defaults, apiKey, headers, baseUrl, timeout, payload)
-    case Config{url, defaults, _, _, _, _, _} Prepared{apiKey, baseUrl, headers, _, _, _, _, CodexEndpoint{}, accountId, sessionId}: Client.prepareCodexRequest(url, defaults, apiKey, Maybe.default(&2, String, accountId, ""), headers, sessionId, baseUrl, timeout, payload)
+def processingOptions(request: ProviderRequest) -> Stream.OpenAIResponsesStreamOptions:
+  match request:
+    case ProviderRequest{_, _, _, _, _, options}: options
 
-def selectedPayload(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, +config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, +options: OpenAIResponsesOptions<Reason, Telemetry, E>, output: T.AssistantMessage<V.Value, G>, events: Events.AssistantMessageEventStream(V.Value, G), +parent: Signal(Reason), +prepared: Prepared, retry: Result<&2, &2, Retry.OptionsError, Retry.ProviderRetryOptions<Reason>>, payload: Result<&2, &2, E, T.JsonValue>) -> IO(Outcome<Reason, G, E>):
+def selectedPayload(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, +config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, +options: StreamOptions(Reason, Telemetry, E), output: T.AssistantMessage<V.Value, G>, events: Events.AssistantMessageEventStream(V.Value, G), +parent: Signal(Reason), +request: ProviderRequest, retry: Result<&2, &2, Retry.OptionsError, Retry.ProviderRetryOptions<Reason>>, payload: Result<&2, &2, E, T.JsonValue>) -> IO(Outcome<Reason, G, E>):
   match options retry payload:
     case _ _ Fail{cause}: IO.pure(Outcome<Reason, G, E>, Outcome{output, Some{HookFailure{cause}}, None{}})
     case _ Fail{cause} _: IO.pure(Outcome<Reason, G, E>, Outcome{output, Some{InvalidRetryOptions{cause}}, None{}})
-    case OpenAIResponsesOptions{_, _, _, custom, _, _, hook, _, timeout, _, _, _, _, _, _, _, _, _, _, _, _, tier, _} Done{resolvedRetry} Done{chosen}:
+    case T.StreamOptions{_, _, _, custom, _, _, hook, _, timeout, _, _, _, _, _, _, _, _, _, _} Done{resolvedRetry} Done{chosen}:
       do IO<Outcome<Reason, G, E>>:
         aborted : Bool <- Abort.aborted(Reason, parent)
-        requested(~Reason, ~G, ~E, config, hooks, model, streamOptions(prepared, tier), custom, hook, output, events, parent, resolvedRetry, aborted, envelope(config, prepared, timeout, chosen))
+        requested(~Reason, ~G, ~E, config, hooks, model, processingOptions(request), custom, hook, output, events, parent, resolvedRetry, aborted, envelope(config, request, timeout, chosen))
 
-def retryOptions(-Reason: Data, -Telemetry: Data, -E: Data, +parent: Signal(Reason), options: OpenAIResponsesOptions<Reason, Telemetry, E>) -> Result<&2, &2, Retry.OptionsError, Retry.ProviderRetryOptions<Reason>>:
+def retryOptions(-Reason: Data, -Telemetry: Data, -E: Data, +parent: Signal(Reason), options: StreamOptions(Reason, Telemetry, E)) -> Result<&2, &2, Retry.OptionsError, Retry.ProviderRetryOptions<Reason>>:
   match options:
-    case OpenAIResponsesOptions{_, _, _, _, _, _, _, _, _, retries, limit, _, _, _, _, _, _, _, _, _, _, _, _}: Retry.resolve(Reason, retries, limit, Some{parent})
+    case T.StreamOptions{_, _, _, _, _, _, _, _, _, retries, limit, _, _, _, _, _, _, _, _}: Retry.resolve(Reason, retries, limit, Some{parent})
 
-def preparedRequest(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, +options: OpenAIResponsesOptions<Reason, Telemetry, E>, output: T.AssistantMessage<V.Value, G>, events: Events.AssistantMessageEventStream(V.Value, G), +parent: Signal(Reason), result: Result<&2, &2, PreparationError, Prepared>) -> IO(Outcome<Reason, G, E>):
+def preparedRequest(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, +options: StreamOptions(Reason, Telemetry, E), output: T.AssistantMessage<V.Value, G>, events: Events.AssistantMessageEventStream(V.Value, G), +parent: Signal(Reason), result: Result<&2, &2, PreparationError, ProviderRequest>) -> IO(Outcome<Reason, G, E>):
   match options result:
     case _ Fail{cause}: IO.pure(Outcome<Reason, G, E>, Outcome{output, Some{PreparationFailure{cause}}, None{}})
-    case OpenAIResponsesOptions{_, _, _, _, _, hook, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _} Done{Prepared{apiKey, baseUrl, headers, +payload, compat, grammar, retention, endpoint, accountId, sessionId}}:
+    case T.StreamOptions{_, _, _, _, _, hook, _, _, _, _, _, _, _, _, _, _, _, _, _} Done{ProviderRequest{apiKey, baseUrl, headers, +payload, target, processing}}:
       do IO<Outcome<Reason, G, E>>:
         chosen : Result<&2, &2, E, T.JsonValue> <- payloadHook(E, payload, model, hook)
-        selectedPayload(~Reason, ~Telemetry, ~G, ~E, config, hooks, model, options, output, events, parent, Prepared{apiKey, baseUrl, headers, payload, compat, grammar, retention, endpoint, accountId, sessionId}, retryOptions(Reason, Telemetry, E, parent, options), chosen)
+        selectedPayload(~Reason, ~Telemetry, ~G, ~E, config, hooks, model, options, output, events, parent, ProviderRequest{apiKey, baseUrl, headers, payload, target, processing}, retryOptions(Reason, Telemetry, E, parent, options), chosen)
 
 def settled(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, +events: Events.AssistantMessageEventStream(V.Value, G), provider: String, owner: SignalOwner<Reason>, finalizer: IO(Unit), aborted: Bool, outcome: Outcome<Reason, G, E>) -> IO(RunResult<Reason, G, E>):
   match outcome:
@@ -1247,41 +1300,74 @@ def settled(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, +events: Ev
         finalizer
         return RunResult{terminal, cleanup}
 
-def produceWith(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, +config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, context: Context(G, D), +options: OpenAIResponsesOptions<Reason, Telemetry, E>, +events: Events.AssistantMessageEventStream(V.Value, G), timestamp: F64, finalizer: IO(Unit), pair: SignalOwner<Reason> & Signal(Reason)) -> IO(RunResult<Reason, G, E>):
+# The provider named by API error prefixes; AzureOpenAI's is fixed.
+def errorProvider(model: T.Model<T.JsonValue>) -> String:
+  match model:
+    case T.Model{_, _, T.AzureOpenAIResponsesApi{}, _, _, _, _, _, _, _, _, _, _, _, _, _}: "Azure OpenAI"
+    case T.Model{_, _, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}: provider
+
+def produceWith(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, ~render: E -> String, +config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, options: StreamOptions(Reason, Telemetry, E), +events: Events.AssistantMessageEventStream(V.Value, G), timestamp: F64, finalizer: IO(Unit), preparation: IO(Result<&2, &2, PreparationError, ProviderRequest>), pair: SignalOwner<Reason> & Signal(Reason)) -> IO(RunResult<Reason, G, E>):
   match pair:
     case (owner, +parent):
       do IO<RunResult<Reason, G, E>>:
-        preparation : Result<&2, &2, PreparationError, Prepared> <- prepare(~Reason, ~Telemetry, ~E, ~G, ~D, model, context, options, userAgent(config))
-        outcome : Outcome<Reason, G, E> <- preparedRequest(~Reason, ~Telemetry, ~G, ~E, config, hooks, model, options, initialMessage(G, model, timestamp), events, parent, preparation)
+        ready : Result<&2, &2, PreparationError, ProviderRequest> <- preparation
+        outcome : Outcome<Reason, G, E> <- preparedRequest(~Reason, ~Telemetry, ~G, ~E, config, hooks, model, options, initialMessage(G, model, timestamp), events, parent, ready)
         aborted : Bool <- Abort.aborted(Reason, parent)
-        settled(~Reason, ~G, ~E, ~render, events, T.modelProvider(model), owner, finalizer, aborted, outcome)
+        settled(~Reason, ~G, ~E, ~render, events, errorProvider(model), owner, finalizer, aborted, outcome)
 
 # The body of upstream `stream`'s async task: try everything, then settle the
 # message, publish `done`/`error` and end the canonical stream.
-def produce(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, model: T.Model<T.JsonValue>, context: Context(G, D), options: OpenAIResponsesOptions<Reason, Telemetry, E>, events: Events.AssistantMessageEventStream(V.Value, G), signal: SignalOwner<Reason>, timestamp: F64, finalizer: IO(Unit)) -> IO(RunResult<Reason, G, E>):
-  produceWith(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, config, hooks, model, context, options, events, timestamp, finalizer, ownedSignal(Reason, signal))
+def produce(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, ~render: E -> String, config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, model: T.Model<T.JsonValue>, options: StreamOptions(Reason, Telemetry, E), events: Events.AssistantMessageEventStream(V.Value, G), signal: SignalOwner<Reason>, timestamp: F64, finalizer: IO(Unit), preparation: IO(Result<&2, &2, PreparationError, ProviderRequest>)) -> IO(RunResult<Reason, G, E>):
+  produceWith(~Reason, ~Telemetry, ~G, ~E, ~render, config, hooks, model, options, events, timestamp, finalizer, preparation, ownedSignal(Reason, signal))
+
+# Shared request lifecycle
+# ------------------------
+
+# Start a Responses request from its preparation, which runs in the producer
+# task, with an explicit timestamp, SSE hooks and a finalizer that runs after
+# the producer has retired everything it owns. Returns the run owner
+# immediately; borrow its event stream, then wait or dispose.
+def startRequest(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, ~render: E -> String, config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, model: T.Model<T.JsonValue>, +options: StreamOptions(Reason, Telemetry, E), preparation: IO(Result<&2, &2, PreparationError, ProviderRequest>), timestamp: F64, finalizer: IO(Unit)) -> IO(Run<Reason, G, E>):
+  match options:
+    case T.StreamOptions{requestedSignal, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+      do IO<Run<Reason, G, E>>:
+        signal : SignalOwner<Reason> <- selectSignal(Reason, requestedSignal)
+        +events : Events.AssistantMessageEventStream(V.Value, G) <- Events.createAssistantMessageEventStream(~V.Value, ~G)
+        task : Chan(RunResult<Reason, G, E>) <- IO.fork(RunResult<Reason, G, E>, produce(~Reason, ~Telemetry, ~G, ~E, ~render, config, hooks, model, options, events, signal, timestamp, finalizer, preparation))
+        return Running{events, task}
+
+# startRequest at the current time with the default SSE hooks.
+def start(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, ~render: E -> String, config: Config, model: T.Model<T.JsonValue>, options: StreamOptions(Reason, Telemetry, E), preparation: IO(Result<&2, &2, PreparationError, ProviderRequest>)) -> IO(Run<Reason, G, E>):
+  do IO<Run<Reason, G, E>>:
+    timestamp : F64 <- Date.now()
+    +hooks : Sse.Hooks<Sse.TransportError(Reason)> <- Sse.defaultHooks(~(Sse.TransportError(Reason)))
+    startRequest(~Reason, ~Telemetry, ~G, ~E, ~render, config, hooks, model, options, preparation, timestamp, Sse.disposeHooks(Sse.TransportError(Reason), hooks))
 
 # Public entry points
 # -------------------
 
-# Start the request with an explicit timestamp, SSE hooks and a finalizer that
-# runs after the producer has retired everything it owns. Returns the run
-# owner immediately; borrow its event stream, then wait or dispose.
-def streamAt(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, model: T.Model<T.JsonValue>, context: Context(G, D), +options: OpenAIResponsesOptions<Reason, Telemetry, E>, timestamp: F64, finalizer: IO(Unit)) -> IO(Run<Reason, G, E>):
+def optionTier(-Reason: Data, -Telemetry: Data, -E: Data, options: OpenAIResponsesOptions<Reason, Telemetry, E>) -> Maybe<&2, T.Nullable<ServiceTier>>:
   match options:
-    case OpenAIResponsesOptions{requestedSignal, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
-      do IO<Run<Reason, G, E>>:
-        signal : SignalOwner<Reason> <- selectSignal(Reason, requestedSignal)
-        +events : Events.AssistantMessageEventStream(V.Value, G) <- Events.createAssistantMessageEventStream(~V.Value, ~G)
-        task : Chan(RunResult<Reason, G, E>) <- IO.fork(RunResult<Reason, G, E>, produce(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, config, hooks, model, context, options, events, signal, timestamp, finalizer))
-        return Running{events, task}
+    case OpenAIResponsesOptions{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, tier, _}: tier
+
+def requestFrom(tier: Maybe<&2, T.Nullable<ServiceTier>>, result: Result<&2, &2, PreparationError, Prepared>) -> Result<&2, &2, PreparationError, ProviderRequest>:
+  match result:
+    case Fail{cause}: Fail{cause}
+    case Done{prepared}: Done{providerRequest(prepared, tier)}
+
+def responsesPreparation(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, config: Config, model: T.Model<T.JsonValue>, context: Context(G, D), +options: OpenAIResponsesOptions<Reason, Telemetry, E>) -> IO(Result<&2, &2, PreparationError, ProviderRequest>):
+  do IO<Result<&2, &2, PreparationError, ProviderRequest>>:
+    result : Result<&2, &2, PreparationError, Prepared> <- prepare(~Reason, ~Telemetry, ~E, ~G, ~D, model, context, options, userAgent(config))
+    return requestFrom(optionTier(Reason, Telemetry, E, options), result)
+
+# The OpenAI Responses request with an explicit timestamp, SSE hooks and
+# finalizer (see startRequest).
+def streamAt(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, +config: Config, hooks: Sse.Hooks<Sse.TransportError(Reason)>, +model: T.Model<T.JsonValue>, context: Context(G, D), +options: OpenAIResponsesOptions<Reason, Telemetry, E>, timestamp: F64, finalizer: IO(Unit)) -> IO(Run<Reason, G, E>):
+  startRequest(~Reason, ~Telemetry, ~G, ~E, ~render, config, hooks, model, toStreamOptions(Reason, Telemetry, E, options), responsesPreparation(~Reason, ~Telemetry, ~G, ~D, ~E, config, model, context, options), timestamp, finalizer)
 
 # Generate function for the OpenAI Responses API.
-def stream(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Config, model: T.Model<T.JsonValue>, context: Context(G, D), options: OpenAIResponsesOptions<Reason, Telemetry, E>) -> IO(Run<Reason, G, E>):
-  do IO<Run<Reason, G, E>>:
-    timestamp : F64 <- Date.now()
-    +hooks : Sse.Hooks<Sse.TransportError(Reason)> <- Sse.defaultHooks(~(Sse.TransportError(Reason)))
-    streamAt(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, config, hooks, model, context, options, timestamp, Sse.disposeHooks(Sse.TransportError(Reason), hooks))
+def stream(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, +config: Config, +model: T.Model<T.JsonValue>, context: Context(G, D), +options: OpenAIResponsesOptions<Reason, Telemetry, E>) -> IO(Run<Reason, G, E>):
+  start(~Reason, ~Telemetry, ~G, ~E, ~render, config, model, toStreamOptions(Reason, Telemetry, E, options), responsesPreparation(~Reason, ~Telemetry, ~G, ~D, ~E, config, model, context, options))
 
 def choiceValue(value: Maybe<&2, T.ToolChoice>) -> Maybe<&2, T.JsonValue>:
   match value:
