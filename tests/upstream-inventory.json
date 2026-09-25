@@ -1847,7 +1847,7 @@
         "tests/bash-execution-width.bend"
       ],
       "sha256": "83b750fbcf7d491a36cbaf28f01c4b034c66d1d25e4b911dca4d23dfd8b6e5ba",
-      "notes": "Both cases on the port's bash message value (messages.bend bash/appendBash/completeBash/renderBash): 150-column output rendered at 80 columns, and one message rendered at 200 then 60 columns, keep every line within the render width. Bun lane."
+      "notes": "Both cases on the port's bash message value (messages.bend bash/appendBash/completeBash/renderBash): 150-column output rendered at 80 columns, and one message rendered at 200 then 60 columns, keep every line within the render width. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/block-images.test.ts",
@@ -2383,7 +2383,7 @@
         "tests/clone-command.bend"
       ],
       "sha256": "9a1a93c08797b54f8819021b6283f43ad34699faea211fa091cf8aa91176dc20",
-      "notes": "Both cases through Controller.cloneLeaf (the port's handleCloneCommand): the current leaf is forked with position 'at' and reported as ClonedSession, which the interactive run shows as 'Cloned to new session'; without a leaf there is no fork and the notice is 'Nothing to clone yet'. Not observed: upstream's editor.setText('') and the absence of renderCurrentSessionState/requestRender, which belong to the interactive run's action handling. Bun lane."
+      "notes": "Both cases through Controller.cloneLeaf (the port's handleCloneCommand): the current leaf is forked with position 'at' and reported as ClonedSession, which the interactive run shows as 'Cloned to new session'; without a leaf there is no fork and the notice is 'Nothing to clone yet'. Not observed: upstream's editor.setText('') and the absence of renderCurrentSessionState/requestRender, which belong to the interactive run's action handling. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-compaction.test.ts",
@@ -2478,7 +2478,7 @@
         "tests/thinking-level.bend"
       ],
       "sha256": "01c76a966d964388bce071842d0cefc79408d43de04cef0eddecd3033a225ed5",
-      "notes": "isValidThinkingLevel('max'), SettingsManager.inMemory with setDefaultThinkingLevel(max) and flush, and a dark theme without thinkingMax (renamed legacy-theme) painting thinkingMax like thinkingXhigh. upstream getThinkingBorderColor(level) is the interactive run's level-to-key choice plus theme.fg, so the colors of the two keys are compared; the legacy theme is parsed from the edited JSON text rather than written to a file. Bun lane."
+      "notes": "isValidThinkingLevel('max'), SettingsManager.inMemory with setDefaultThinkingLevel(max) and flush, and a dark theme without thinkingMax (renamed legacy-theme) painting thinkingMax like thinkingXhigh. upstream getThinkingBorderColor(level) is the interactive run's level-to-key choice plus theme.fg, so the colors of the two keys are compared; the legacy theme is parsed from the edited JSON text rather than written to a file. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/mermaid.test.ts",
@@ -2750,7 +2750,7 @@
         "tests/theme-fallbacks.bend"
       ],
       "sha256": "d25755cee45f4705f53d1d4cc129e06455fe9385f863bf8b008c623386c62f7f",
-      "notes": "All five cases (both it.each fallback rows, explicit scrollbar colors, search-highlight fallback and explicit colors) on edited dark.json themes in truecolor mode; getFgAnsi/getBgAnsi read the theme's escape maps. The edited JSON text goes through Theme.parse instead of a written file. Bun lane."
+      "notes": "All five cases (both it.each fallback rows, explicit scrollbar colors, search-highlight fallback and explicit colors) on edited dark.json themes in truecolor mode; getFgAnsi/getBgAnsi read the theme's escape maps. The edited JSON text goes through Theme.parse instead of a written file. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/sdk-openrouter-attribution.test.ts",
@@ -3833,7 +3833,7 @@
         "tests/thinking-level.bend"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun lane."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",
@@ -3920,7 +3920,7 @@
         "tests/truncate-to-width.bend"
       ],
       "sha256": "e7f65fa6d913a8d51f74a65f08765a82b2115922a877b3b651cf124a36a977fa",
-      "notes": "All six cases on pi-tui's truncateToWidth (default ellipsis '...', no padding) and visibleWidth in packages/tui/src/utils.bend. Bun lane."
+      "notes": "All six cases on pi-tui's truncateToWidth (default ellipsis '...', no padding) and visibleWidth in packages/tui/src/utils.bend. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/trust-manager.test.ts",
@@ -3938,7 +3938,7 @@
         "tests/trust-selector.bend"
       ],
       "sha256": "60b57f95ad14919ef0184bf232a7487c11bb5fcceb45258a40663df39d3f6496",
-      "notes": "All four cases on the selector state over getProjectTrustOptions: saved-decision mark while browsing, a confirmed selection's trusted flag and updates, inherited ancestor decisions, and the parent option's selection. Rendered with the dark theme and ANSI stripped. Bun lane."
+      "notes": "All four cases on the selector state over getProjectTrustOptions: saved-decision mark while browsing, a confirmed selection's trusted flag and updates, inherited ancestor decisions, and the parent option's selection. Rendered with the dark theme and ANSI stripped. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/user-message.test.ts",
