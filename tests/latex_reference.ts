@@ -350,14 +350,12 @@ for (const source of markdownSources) {
 }
 markdownCase("markdown (narrow)", "$$\n\\frac{a+b+c+d+e+f}{g}\n$$\n\ninline $\\alpha+\\beta+\\gamma+\\delta$ wraps here", 20);
 
-// Known divergences, reported by tests/latex_check.py but not failed on.
-// The Bend Markdown component renders a paragraph line by line and has no
-// list-item continuation model: a `$` whose closing `$` is on a later line
-// of the same paragraph, or an unclosed delimiter (which in pi swallows
-// the rest of the paragraph while streaming), only sees its own line, and
-// display math inside a list item loses the item's indentation.
+// Math across the lines of a paragraph (a `$` closed on a later line, an
+// unclosed delimiter taking the rest of the paragraph while streaming) and
+// display math inside list items: once known divergences of the line-based
+// renderer, now lexed by the marked port.
 for (const source of ["a $x+1 **b**\nc$", "$x^2\n**b**", "- a\n  $$\n  x\n  $$", "- a\n$$x$$", "1. $$\n   x\n   $$"]) {
-	markdownCase("known divergence (line-based paragraphs and lists)", source);
+	markdownCase("markdown (multi-line paragraphs and lists)", source);
 }
 
 writeFileSync(join(out, "cases.jsonl"), `${cases.join("\n")}\n`);

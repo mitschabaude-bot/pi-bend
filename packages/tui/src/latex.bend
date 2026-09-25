@@ -245,7 +245,8 @@ def digitValue(char: Char) -> Nat:
     case Chr{code}: U32.to_nat((code - 48 : U32))
 
 # `\p{L}` or `\p{N}`, and `\p{N}`.
-def isAlphanumeric(char: Char) -> Bool: U32.is_ne(Category.category(Char.to_u32(char)),0)
+def letterOrNumber(+category: U32) -> Bool: U32.is_eq(category,1) || U32.is_eq(category,2)
+def isAlphanumeric(char: Char) -> Bool: letterOrNumber(Category.category(Char.to_u32(char)))
 def isNumber(char: Char) -> Bool: Category.isNumber(Char.to_u32(char))
 # `/^[\p{L}\p{N}.]+$/u`
 def plainWord(text: String,seen: Bool) -> Bool:
