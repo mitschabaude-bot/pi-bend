@@ -45,11 +45,12 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   (`packages/coding-agent/src/extensions/llama`). The port has no extension
   runtime yet, so `get_commands` lacks it.
 - **Built-in provider catalog** (`print-bare-unauthed`, `print-bare-two-authed`):
-  Bend registers 5 of pi 0.87.1's built-in providers (openai, openai-codex,
-  anthropic, google, cerebras), so a bare `--model gpt-5` has one candidate
-  instead of pi's four (azure-openai-responses, cloudflare-ai-gateway, openai,
-  opencode). The ambiguity rules themselves are ported and unit-tested
-  (`tests/model-resolver.bend`).
+  Bend registers 35 of pi 0.87.1's built-in providers. Missing: the two
+  Cloudflare providers (account/gateway auth and base-URL wrappers), and
+  bedrock, vertex, mistral and radius (APIs not ported). A bare
+  `--model gpt-5` therefore lists three candidates instead of pi's four.
+- **Cache warming** (`session-info`): pi 0.87.1's cache warmer and the
+  /session "Cache Warming" section are being ported.
 - **Syntax highlighting** (colour snaps with code): pi highlights code blocks
   in answers and read/write tool output with highlight.js 10.7 (20 eager
   grammars, the rest loaded in the background). Bend renders them in the
