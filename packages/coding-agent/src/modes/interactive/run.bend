@@ -1716,6 +1716,16 @@ def processThemeResult(result: Result<&2,&2,Terminal.Error,Process.Active>,failu
   match failure:
     case None{}: processResult(result)
     case Some{cause}: Fail{ThemeData{cause}}
+def configuredTui(base: Tui.TuiBase,session: Ref.Ref<Session.AgentSession>) -> IO(Tui.TuiBase):
+  do IO<Tui.TuiBase>:
+    live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+    +settings : Settings.SettingsManager <- Session.getSettings(live)
+    hardwareEnv : Result<&1,&1,U32 & String,String> <- IO.get_env("PI_HARDWARE_CURSOR")
+    clearEnv : Result<&1,&1,U32 & String,String> <- IO.get_env("PI_CLEAR_ON_SHRINK")
+    hardwareFallback : Bool <- IO.pure(Bool,String.eq(Maybe.default(&2,String,environmentValue(hardwareEnv),""),"1"))
+    clearFallback : Bool <- IO.pure(Bool,String.eq(Maybe.default(&2,String,environmentValue(clearEnv),""),"1"))
+    show : Bool <- IO.pure(Bool,Maybe.default(&2,Bool,Settings.selectedShowHardwareCursor(Settings.get(Settings.effective(settings),"showHardwareCursor")),hardwareFallback))
+    return Tui.setTerminalPreferences(base,show,Settings.resolvedClearOnShrink(Settings.terminalOptions(settings),clearFallback))
 def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),document: Component.Component,editorComponent: Component.Component,+foot: FooterOwner,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
   match mounted:
     case (view,_,Fail{cause}): IO.pure(View.View & Result<&2,&2,Error,Unit>,(view,Fail{Layout{cause}}))
@@ -1728,7 +1738,8 @@ def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),
         +stopping : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeStopping,~Unit,~Unit,~themeStopping,ThemeStopping{redraw,selected,owned})
         +ids : List<&2,Component.ComponentId> <- IO.pure(List<&2,Component.ComponentId>,Component.ComponentId{1n} <> Component.ComponentId{2n} <> Component.ComponentId{3n} <> Nil{})
         +components : List<&2,Component.Component> <- IO.pure(List<&2,Component.Component>,document <> editorComponent <> footerComponent(foot) <> Nil{})
-        outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runProcessWithLifecycle(Process.active(Process.Session{base,Screen.initial()},components,ids),stopped,False{},ready,stopping)
+        configured : Tui.TuiBase <- configuredTui(base,contextSession(context))
+        outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runProcessWithLifecycle(Process.active(Process.Session{configured,Screen.initial()},components,ids),stopped,False{},ready,stopping)
         Callback.dispose(Process.QueryReady,Unit,ready)
         Callback.dispose(Unit,Unit,stopping)
         oldSelected : Maybe<&2,ThemeController.Handle> <- Ref.dispose(Maybe<&2,ThemeController.Handle>,selected)

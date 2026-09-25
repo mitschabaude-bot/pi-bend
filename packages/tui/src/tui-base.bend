@@ -257,6 +257,10 @@ def setLayoutRoot(base: TuiBase,node: Maybe<&2,N.LayoutNode>) -> TuiBase:
   match base:
     case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,_}:
       TuiBase{root,focus,bindings,displayed,scheduler,show,clear,node}
+def setTerminalPreferences(base: TuiBase,showHardwareCursor: Bool,clearOnShrink: Bool) -> TuiBase:
+  match base:
+    case TuiBase{root,focus,bindings,displayed,scheduler,_,_,layout}:
+      TuiBase{root,focus,bindings,displayed,scheduler,showHardwareCursor,clearOnShrink,layout}
 def layoutRoot(base: TuiBase) -> Maybe<&2,N.LayoutNode>:
   match base: case TuiBase{_,_,_,_,_,_,_,node}: node
 def scrolledRoot(base: TuiBase,result: Scroll.ScrollByResult) -> ScrollChange:
