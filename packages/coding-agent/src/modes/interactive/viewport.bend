@@ -1,6 +1,7 @@
 import Base
 import ../../../../runtime/src/callback.bend as Callback
 import ../../../../runtime/src/ref.bend as Ref
+import ../../../../runtime/src/serial-resource.bend as Serial
 import ../../../../tui/src/component.bend as Component
 import ../../../../tui/src/components/scroll-view.bend as Scroll
 import ../../../../tui/src/components/stack.bend as Stack
@@ -12,15 +13,15 @@ import ../../core/system-prompt.bend as Prompt
 import ../../core/skills.bend as Skills
 
 # The document changes as session events arrive; the editor and footer stay
-# mounted. A frame reads one document snapshot and paints its children at the
-# current width, so resizes do not freeze earlier message wrapping.
+# mounted. A frame paints the document's children at the current width, so
+# resizes do not freeze earlier message wrapping. Frames and document changes
+# are serialized: once `clear` returns, no frame still renders the removed
+# children, so their owners may be disposed.
 type View is Type:
-  View{document: Ref.Ref<Component.Container>,header: Maybe<&1,Header.Owner>,headerHandle: Maybe<&2,Header.Handle>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
-type Handle is Data: Handle{document: Ref.Ref<Component.Container>,header: Maybe<&2,Header.Handle>}
-type Display is Data: Display{document: Ref.Ref<Component.Container>,header: Maybe<&2,Component.Component>}
+  View{document: Serial.Owner<Component.Container>,header: Maybe<&1,Header.Owner>,headerHandle: Maybe<&2,Header.Handle>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
+type Handle is Data: Handle{document: Serial.Handle<Component.Container>,header: Maybe<&2,Header.Handle>}
+type Display is Data: Display{document: Serial.Handle<Component.Container>,header: Maybe<&2,Component.Component>}
 
-def displayed(pair: Component.Container & List<&2,String>) -> List<&2,String>:
-  match pair: case (_,lines): lines
 def headerLines(header: Maybe<&2,Component.Component>,width: Nat) -> IO(List<&2,String>):
   match header:
     case None{}: IO.pure(List<&2,String>,Nil{})
@@ -30,17 +31,21 @@ def draw(display: Display,width: Nat) -> IO(List<&2,String>):
     case Display{document,header}:
       do IO<List<&2,String>>:
         +size : Nat <- IO.pure(Nat,width)
-        current : Component.Container <- Ref.read(Component.Container,document)
-        pair : Component.Container & List<&2,String> <- Component.renderContainer(current,size)
+        lines : List<&2,String> <- Serial.run(Component.Container,List<&2,String>,document,current => Component.renderContainer(current,size))
         heading : List<&2,String> <- headerLines(header,size)
-        return List.append(&2,String,heading,displayed(pair))
+        return List.append(&2,String,heading,lines)
 def ignore(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
+def withDocument(id: Component.ComponentId,pair: Serial.Owner<Component.Container> & Serial.Handle<Component.Container>,header: Maybe<&1,Header.Owner>,component: Maybe<&2,Component.Component>,handle: Maybe<&2,Header.Handle>) -> IO(View):
+  match pair:
+    case (document,+shared):
+      do IO<View>:
+        +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Display,~Nat,~List<&2,String>,~draw,Display{shared,component})
+        +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~ignore,Unit{})
+        return View{document,header,handle,Component.Component{id,render,None{},None{},invalidate,None{},False{}},render,invalidate}
 def created(id: Component.ComponentId,header: Maybe<&1,Header.Owner>,component: Maybe<&2,Component.Component>,handle: Maybe<&2,Header.Handle>) -> IO(View):
   do IO<View>:
-    +document : Ref.Ref<Component.Container> <- Ref.new(Component.Container,Component.new())
-    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Display,~Nat,~List<&2,String>,~draw,Display{document,component})
-    +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~ignore,Unit{})
-    return View{document,header,handle,Component.Component{id,render,None{},None{},invalidate,None{},False{}},render,invalidate}
+    document : Serial.Owner<Component.Container> <- Serial.create(Component.Container,Component.new())
+    withDocument(id,Serial.borrow(Component.Container,document),header,component,handle)
 def create(id: Component.ComponentId) -> IO(View): created(id,None{},None{},None{})
 def withHeader(id: Component.ComponentId,pair: Header.Owner & Component.Component & Header.Handle) -> IO(View):
   match pair:
@@ -49,19 +54,24 @@ def createWithHeader(id: Component.ComponentId,theme: Ref.Ref<Theme.Theme>,quiet
   do IO<View>:
     header : Header.Owner <- Header.create(theme,quiet,cwd,home,contexts,skills)
     withHeader(id,Header.borrow(header))
+def borrowedView(pair: Serial.Owner<Component.Container> & Serial.Handle<Component.Container>,header: Maybe<&1,Header.Owner>,+handle: Maybe<&2,Header.Handle>,+value: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>) -> View & Component.Component & Handle:
+  match pair:
+    case (document,shared): (View{document,header,handle,value,render,invalidate},value,Handle{shared,handle})
 def borrow(view: View) -> View & Component.Component & Handle:
   match view:
-    case View{+document,header,+handle,+value,render,invalidate}: (View{document,header,handle,value,render,invalidate},value,Handle{document,handle})
+    case View{document,header,handle,value,render,invalidate}: borrowedView(Serial.borrow(Component.Container,document),header,handle,value,render,invalidate)
 def headerHandle(handle: Handle) -> Maybe<&2,Header.Handle>:
   match handle: case Handle{_,value}: value
-def added(current: Component.Container,entry: Component.Component) -> Component.Container & Unit:
-  (Component.addChild(current,entry),Unit{})
+def added(current: Component.Container,entry: Component.Component) -> IO(Component.Container & Unit):
+  IO.pure(Component.Container & Unit,(Component.addChild(current,entry),Unit{}))
 def append(handle: Handle,entry: Component.Component) -> IO(Unit):
   match handle:
-    case Handle{document,_}: Ref.modify(Component.Container,Unit,document,current => added(current,entry))
+    case Handle{document,_}: Serial.run(Component.Container,Unit,document,current => added(current,entry))
+def emptied(current: Component.Container) -> IO(Component.Container & Unit):
+  IO.pure(Component.Container & Unit,(Component.new(),Unit{}))
 def clear(handle: Handle) -> IO(Unit):
   match handle:
-    case Handle{document,_}: Ref.write(Component.Container,document,Component.new())
+    case Handle{document,_}: Serial.run(Component.Container,Unit,document,emptied)
 def disposeHeader(header: Maybe<&1,Header.Owner>) -> IO(Unit):
   match header:
     case None{}: IO.pure(Unit,Unit{})
@@ -70,7 +80,7 @@ def dispose(view: View) -> IO(Unit):
   match view:
     case View{document,header,_,_,render,invalidate}:
       do IO<Unit>:
-        old : Component.Container <- Ref.dispose(Component.Container,document)
+        old : Component.Container <- Serial.retire(Component.Container,document)
         Callback.dispose(Nat,List<&2,String>,render)
         Callback.dispose(Unit,Unit,invalidate)
         disposeHeader(header)

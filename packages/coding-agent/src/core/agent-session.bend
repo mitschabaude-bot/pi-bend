@@ -957,9 +957,14 @@ def warmerOf(hooks: SessionHooks) -> Warmer.CacheWarmer:
   match hooks:
     case SessionHooks{_, _, _, _, _, _, _, Warming{warmer, _, _, _, _, _, _, _, _, _}}: warmer
 
-def dispose(session: AgentSession) -> IO(Unit):
+# upstream dispose, in two steps. `shutdown` ends the session's activity: work
+# is aborted, cache warming stops and listeners are unsubscribed. `retire`
+# frees what readers may still hold (hooks and state); a replaced session is
+# retired only after the interactive UI has moved to its successor, since
+# frames read the live session concurrently. `dispose` does both.
+def shutdown(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{+agent, +shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context, warming}, settings, _, loadout, _, _}:
+    case AgentSession{+agent, +shared, SessionHooks{subscription, _, _, _, _, _, _, warming}, _, _, _, _, _}:
       do IO<Unit>:
         abortSleeping(shared)
         abortCompactions(shared)
@@ -967,6 +972,11 @@ def dispose(session: AgentSession) -> IO(Unit):
         Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         disposeWarming(agent, warming)
         Agent.unsubscribe(SessionEvent(), Runtime.Error(), subscription)
+
+def retire(session: AgentSession) -> IO(Unit):
+  match session:
+    case AgentSession{+agent, shared, SessionHooks{_, handler, nextTurn, replaced, request, replacedRequest, context, _}, settings, _, loadout, _, _}:
+      do IO<Unit>:
         C.dispose(Agent.Input<SessionEvent()>, Loop.Emission<Runtime.Error()>, handler)
         Agent.setPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replaced)
         C.dispose(T.ToolHookInput<Turn()>, TurnResult(), nextTurn)
@@ -978,6 +988,11 @@ def dispose(session: AgentSession) -> IO(Unit):
         oldSettings : Settings.SettingsManager <- R.dispose(Settings.SettingsManager,settings)
         released : Shared <- R.dispose(Shared, shared)
         return Unit{}
+
+def dispose(+session: AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    shutdown(session)
+    retire(session)
 
 # State
 # -----

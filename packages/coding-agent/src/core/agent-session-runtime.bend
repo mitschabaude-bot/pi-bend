@@ -42,8 +42,15 @@ type Current<-S: Type> is Type:
   Active{services: S, session: Session.AgentSession, cwd: String}
   Released{}
 
+# A replaced session stops at teardown but is released one replacement later
+# (or with the runtime): concurrent readers, such as interactive frames, may
+# still hold it until they observe its successor.
+type Retiring<-S: Type> is Type:
+  Retiring{services: S, session: Session.AgentSession}
+  NothingRetiring{}
+
 type AgentSessionRuntime<-S: Type> is Data:
-  AgentSessionRuntime{current: R.Ref<Current<S>>, factory: Factory(S), release: C.Callback<S, Unit>, agentDir: String, rebind: R.Ref<Maybe<&2, Rebind()>>}
+  AgentSessionRuntime{current: R.Ref<Current<S>>, factory: Factory(S), release: C.Callback<S, Unit>, agentDir: String, rebind: R.Ref<Maybe<&2, Rebind()>>, retiring: R.Ref<Retiring<S>>}
 
 def installed(-S: Type, +factory: Factory(S), +release: C.Callback<S, Unit>, +agentDir: String, +directory: String, result: Result<&1, &1, String, Created<S>>) -> IO(Result<&2, &2, String, AgentSessionRuntime<S>>):
   match result:
@@ -52,7 +59,8 @@ def installed(-S: Type, +factory: Factory(S), +release: C.Callback<S, Unit>, +ag
       do IO<Result<&2, &2, String, AgentSessionRuntime<S>>>:
         current : R.Ref<Current<S>> <- R.new(Current<S>, Active{services, live, directory})
         rebind : R.Ref<Maybe<&2, Rebind()>> <- R.new(Maybe<&2, Rebind()>, None{})
-        return Done{AgentSessionRuntime{current, factory, release, agentDir, rebind}}
+        retiring : R.Ref<Retiring<S>> <- R.new(Retiring<S>, NothingRetiring{})
+        return Done{AgentSessionRuntime{current, factory, release, agentDir, rebind, retiring}}
 
 def createChecked(-S: Type, +factory: Factory(S), +release: C.Callback<S, Unit>, +agentDir: String, +directory: String, live: Session.Session(), checked: Result<&2, &2, String, Unit>) -> IO(Result<&2, &2, String, AgentSessionRuntime<S>>):
   match checked:
@@ -77,7 +85,7 @@ def sessionIn(-S: Type, current: Current<S>) -> Current<S> & Maybe<&2, Session.A
 # The current session; None only after a failed replacement or dispose.
 def session(-S: Type, runtime: AgentSessionRuntime<S>) -> IO(Maybe<&2, Session.AgentSession>):
   match runtime:
-    case AgentSessionRuntime{current, _, _, _, _}: R.modify(Current<S>, Maybe<&2, Session.AgentSession>, current, value => sessionIn(S, value))
+    case AgentSessionRuntime{current, _, _, _, _, _}: R.modify(Current<S>, Maybe<&2, Session.AgentSession>, current, value => sessionIn(S, value))
 
 def cwdIn(-S: Type, current: Current<S>) -> Current<S> & Maybe<&2, String>:
   match current:
@@ -86,7 +94,7 @@ def cwdIn(-S: Type, current: Current<S>) -> Current<S> & Maybe<&2, String>:
 
 def cwd(-S: Type, runtime: AgentSessionRuntime<S>) -> IO(Maybe<&2, String>):
   match runtime:
-    case AgentSessionRuntime{current, _, _, _, _}: R.modify(Current<S>, Maybe<&2, String>, current, value => cwdIn(S, value))
+    case AgentSessionRuntime{current, _, _, _, _, _}: R.modify(Current<S>, Maybe<&2, String>, current, value => cwdIn(S, value))
 
 def restored(-S: Type, -A: Type, current: R.Ref<Current<S>>, +live: Session.AgentSession, +directory: String, pair: S & A) -> IO(A):
   match pair:
@@ -107,7 +115,7 @@ def servicesAction(-S: Type, -A: Type, current: R.Ref<Current<S>>, action: S -> 
 # catalog) without releasing them.
 def withServices(-S: Type, -A: Type, runtime: AgentSessionRuntime<S>, action: S -> IO(S & A), fallback: A) -> IO(A):
   match runtime:
-    case AgentSessionRuntime{+current, _, _, _, _}:
+    case AgentSessionRuntime{+current, _, _, _, _, _}:
       do IO<A>:
         taken : Current<S> <- R.modify(Current<S>, Current<S>, current, value => (Released{}, value))
         servicesAction(S, A, current, action, fallback, taken)
@@ -116,17 +124,26 @@ def withServices(-S: Type, -A: Type, runtime: AgentSessionRuntime<S>, action: S 
 # replacement.
 def setRebindSession(-S: Type, runtime: AgentSessionRuntime<S>, rebind: Maybe<&2, Rebind()>) -> IO(Unit):
   match runtime:
-    case AgentSessionRuntime{_, _, _, _, hook}: R.modify(Maybe<&2, Rebind()>, Unit, hook, previous => (rebind, Unit{}))
+    case AgentSessionRuntime{_, _, _, _, hook, _}: R.modify(Maybe<&2, Rebind()>, Unit, hook, previous => (rebind, Unit{}))
 
-def released(-S: Type, release: C.Callback<S, Unit>, taken: Current<S>) -> IO(Maybe<&2, Session.Session()>):
+def finishRetiring(-S: Type, release: C.Callback<S, Unit>, retired: Retiring<S>) -> IO(Unit):
+  match retired:
+    case NothingRetiring{}: IO.pure(Unit, Unit{})
+    case Retiring{services, live}:
+      do IO<Unit>:
+        Session.retire(live)
+        C.call(S, Unit, release, services)
+
+def released(-S: Type, +release: C.Callback<S, Unit>, retiring: R.Ref<Retiring<S>>, taken: Current<S>) -> IO(Maybe<&2, Session.Session()>):
   match taken:
     case Released{}: IO.pure(Maybe<&2, Session.Session()>, None{})
     case Active{services, +live, _}:
       do IO<Maybe<&2, Session.Session()>>:
         Session.abort(live)
         outgoing : Session.Session() <- Session.sessionOf(live)
-        Session.dispose(live)
-        C.call(S, Unit, release, services)
+        Session.shutdown(live)
+        previous : Retiring<S> <- R.modify(Retiring<S>, Retiring<S>, retiring, value => (Retiring{services, live}, value))
+        finishRetiring(S, release, previous)
         return Some{outgoing}
 
 # upstream teardownCurrent: settle an active response so the aborted turn is
@@ -134,10 +151,10 @@ def released(-S: Type, release: C.Callback<S, Unit>, taken: Current<S>) -> IO(Ma
 # outgoing session record is returned.
 def teardownCurrent(-S: Type, runtime: AgentSessionRuntime<S>) -> IO(Maybe<&2, Session.Session()>):
   match runtime:
-    case AgentSessionRuntime{current, _, release, _, _}:
+    case AgentSessionRuntime{current, _, release, _, _, retiring}:
       do IO<Maybe<&2, Session.Session()>>:
         taken : Current<S> <- R.modify(Current<S>, Current<S>, current, value => (Released{}, value))
-        released(S, release, taken)
+        released(S, release, retiring, taken)
 
 def rebound(hook: Maybe<&2, Rebind()>, live: Session.AgentSession) -> IO(Unit):
   match hook:
@@ -147,7 +164,7 @@ def rebound(hook: Maybe<&2, Rebind()>, live: Session.AgentSession) -> IO(Unit):
 def applied(-S: Type, runtime: AgentSessionRuntime<S>, +directory: String, result: Result<&1, &1, String, Created<S>>) -> IO(Result<&2, &2, String, Unit>):
   match runtime result:
     case _ Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{error})
-    case AgentSessionRuntime{current, _, _, _, hook} Done{Created{services, +live}}:
+    case AgentSessionRuntime{current, _, _, _, hook, _} Done{Created{services, +live}}:
       do IO<Result<&2, &2, String, Unit>>:
         R.modify(Current<S>, Unit, current, previous => (Active{services, live, directory}, Unit{}))
         rebind : Maybe<&2, Rebind()> <- R.read(Maybe<&2, Rebind()>, hook)
@@ -156,7 +173,7 @@ def applied(-S: Type, runtime: AgentSessionRuntime<S>, +directory: String, resul
 
 def createNext(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String, next: Session.Session(), start: SessionStart) -> IO(Result<&2, &2, String, Unit>):
   match runtime:
-    case AgentSessionRuntime{_, factory, _, _, _}:
+    case AgentSessionRuntime{_, factory, _, _, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
         result : Result<&1, &1, String, Created<S>> <- C.call(Request, Result<&1, &1, String, Created<S>>, factory, Request{directory, next, Some{start}})
         applied(S, runtime, directory, result)
@@ -199,7 +216,7 @@ def replacedWith(-S: Type, runtime: AgentSessionRuntime<S>, +directory: String, 
 def newFrom(-S: Type, +runtime: AgentSessionRuntime<S>, parentSession: Maybe<&2, String>, found: Maybe<&2, Snapshot>) -> IO(Result<&2, &2, String, Unit>):
   match runtime found:
     case _ None{}: IO.pure(Result<&2, &2, String, Unit>, Fail{noSession()})
-    case AgentSessionRuntime{_, _, _, agentDir, _} Some{Snapshot{+directory, +stored}}:
+    case AgentSessionRuntime{_, _, _, agentDir, _, _} Some{Snapshot{+directory, +stored}}:
       do IO<Result<&2, &2, String, Unit>>:
         next : Sessions.Outcome(Session.Session()) <- createdNext(directory, Sessions.isPersisted(Unit, Tools.ToolDetails, V.Value, stored), Sessions.getSessionDir(Unit, Tools.ToolDetails, V.Value, stored), agentDir, Sessions.NewSessionOptions{None{}, parentSession})
         replacedWith(S, runtime, directory, SessionStart{NewStart{}, Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, stored)}, next)
@@ -361,7 +378,7 @@ def importFromJsonl(-S: Type,runtime: AgentSessionRuntime<S>,+inputPath: String,
 
 def agentDirOf(-S: Type, runtime: AgentSessionRuntime<S>) -> String:
   match runtime:
-    case AgentSessionRuntime{_, _, _, agentDir, _}: agentDir
+    case AgentSessionRuntime{_, _, _, agentDir, _, _}: agentDir
 
 type ForkPosition is Data:
   ForkBefore{}
@@ -484,9 +501,11 @@ def disposed(-S: Type, release: C.Callback<S, Unit>, taken: Current<S>) -> IO(Un
 # upstream dispose: the session and its services end with the host.
 def dispose(-S: Type, runtime: AgentSessionRuntime<S>) -> IO(Unit):
   match runtime:
-    case AgentSessionRuntime{current, _, release, _, hook}:
+    case AgentSessionRuntime{current, _, +release, _, hook, retiring}:
       do IO<Unit>:
         last : Current<S> <- R.dispose(Current<S>, current)
         disposed(S, release, last)
+        retired : Retiring<S> <- R.dispose(Retiring<S>, retiring)
+        finishRetiring(S, release, retired)
         rebind : Maybe<&2, Rebind()> <- R.dispose(Maybe<&2, Rebind()>, hook)
         return Unit{}
