@@ -25,7 +25,7 @@ def run(arguments: List<String>) -> IO(Unit):
     case +cwd <> +agentDir <> enabled <> skills <> Nil{}:
       do IO<Unit>:
         pair : Settings.InMemorySettingsStorage & Settings.SettingsManager <- Settings.inMemory(Settings.empty(),Settings.options())
-        result : Result<&2,&2,String,Record.Record<String>> <- Runtime.systemPromptFor(Paths.Environment{cwd,agentDir,Runtime.urlContext()},Runtime.CreateOptions{cwd,agentDir,"","","/pi",None{},None{},None{},None{},Some{"fixture system prompt"},Nil{},Tools.ReadTool{} <> Nil{},String.eq(enabled,"on"),Runtime.emptySeed(),managerOf(pair),Runtime.ResourceOptions{Nil{},String.eq(skills,"off"),Nil{},False{}}},"/pi")
+        result : Result<&2,&2,String,Record.Record<String>> <- Runtime.systemPromptFor(Paths.Environment{cwd,agentDir,Runtime.urlContext()},Runtime.CreateOptions{cwd,agentDir,"","","/pi",None{},None{},None{},None{},Some{"fixture system prompt"},Nil{},Runtime.ToolSelection{Some{["read"]},None{},None{}},String.eq(enabled,"on"),Runtime.emptySeed(),managerOf(pair),Runtime.ResourceOptions{Nil{},String.eq(skills,"off"),Nil{},False{}}},"/pi")
         rendered(result)
     case _: IO.die(Unit,1,"expected cwd, agentDir, on/off, skills on/off")
 

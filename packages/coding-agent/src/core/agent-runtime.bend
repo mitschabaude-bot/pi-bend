@@ -310,8 +310,104 @@ type ResourceOptions is Data:
 
 def noResources() -> ResourceOptions: ResourceOptions{Nil{}, False{}, Nil{}, False{}}
 
+# upstream createAgentSession's tool options: `tools` is the allowlist,
+# `noTools` the default suppression when there is none (all tools, or the
+# default built-ins only), `excludeTools` the denylist applied after both.
+type NoTools is Data:
+  NoToolsAll{}
+  NoToolsBuiltin{}
+type ToolSelection is Data:
+  ToolSelection{tools: Maybe<&2, List<&2, String>>, noTools: Maybe<&2, NoTools>, excludeTools: Maybe<&2, List<&2, String>>}
+def defaultToolSelection() -> ToolSelection: ToolSelection{None{}, None{}, None{}}
+
+# The tool registry (the built-in tools that pass the allow- and denylists, in
+# upstream's registry order) and the initially active tool names.
+type ToolSetup is Data:
+  ToolSetup{registry: List<&2, Tools.ToolName>, active: List<&2, String>}
+
+def containsText(values: List<&2, String>, +name: String) -> Bool:
+  match values:
+    case Nil{}: False{}
+    case value <> rest: String.eq(value, name) || containsText(rest, name)
+
+def allowedOf(selection: ToolSelection) -> Maybe<&2, List<&2, String>>:
+  match selection:
+    case ToolSelection{Some{names}, _, _}: Some{names}
+    case ToolSelection{None{}, Some{NoToolsAll{}}, _}: Some{Nil{}}
+    case _: None{}
+
+def excludedOf(selection: ToolSelection) -> List<&2, String>:
+  match selection:
+    case ToolSelection{_, _, excluded}: Maybe.default(&2, List<&2, String>, excluded, Nil{})
+
+# upstream isAllowedTool
+def isAllowedTool(allowed: Maybe<&2, List<&2, String>>, excluded: List<&2, String>, +name: String) -> Bool:
+  Bool.and(Maybe.default(&2, Bool, Maybe.map(&2, List<&2, String>, Bool, names => containsText(names, name), allowed), True{}), Bool.not(containsText(excluded, name)))
+
+def defaultActiveToolNames() -> List<&2, String>: ["read", "bash", "edit", "write"]
+
+def initialRequested(selection: ToolSelection, configured: Maybe<&2, List<&2, String>>) -> List<&2, String>:
+  match selection:
+    case ToolSelection{Some{names}, _, _}: names
+    case ToolSelection{None{}, Some{_}, _}: Nil{}
+    case ToolSelection{None{}, None{}, _}: Maybe.default(&2, List<&2, String>, configured, defaultActiveToolNames())
+
+def registryNames(names: List<&2, Tools.ToolName>, +allowed: Maybe<&2, List<&2, String>>, +excluded: List<&2, String>) -> List<&2, Tools.ToolName>:
+  match names:
+    case Nil{}: Nil{}
+    case +name <> rest:
+      +tail = registryNames(rest, allowed, excluded)
+      Bool.pick(List<&2, Tools.ToolName>, isAllowedTool(allowed, excluded, Tools.toolName(name)), name <> tail, tail)
+
+def texts(names: List<&2, Tools.ToolName>) -> List<&2, String>:
+  match names:
+    case Nil{}: Nil{}
+    case name <> rest: Tools.toolName(name) <> texts(rest)
+
+def keptNames(names: List<&2, String>, +registry: List<&2, String>, +allowed: Maybe<&2, List<&2, String>>, +excluded: List<&2, String>) -> List<&2, String>:
+  match names:
+    case Nil{}: Nil{}
+    case +name <> rest:
+      +tail = keptNames(rest, registry, allowed, excluded)
+      Bool.pick(List<&2, String>, isAllowedTool(allowed, excluded, name) && containsText(registry, name), name <> tail, tail)
+
+def listedFrom(names: List<&2, String>, +listed: List<&2, String>) -> List<&2, String>:
+  match names:
+    case Nil{}: Nil{}
+    case +name <> rest:
+      +tail = listedFrom(rest, listed)
+      Bool.pick(List<&2, String>, containsText(listed, name), name <> tail, tail)
+
+def listedIn(names: List<&2, String>, allowed: Maybe<&2, List<&2, String>>) -> List<&2, String>:
+  match allowed:
+    case None{}: Nil{}
+    case Some{listed}: listedFrom(names, listed)
+
+def distinctNames(names: List<&2, String>, +seen: List<&2, String>) -> List<&2, String>:
+  match names:
+    case Nil{}: List.reverse(&2, String, seen)
+    case +name <> rest: distinctNames(rest, Bool.pick(List<&2, String>, containsText(seen, name), seen, name <> seen))
+
+# upstream createAgentSession and AgentSession._refreshToolRegistry for the
+# built-in tools: the requested names that are allowed and registered, then
+# every registered tool the allowlist names, without duplicates.
+def resolveTools(+selection: ToolSelection, configured: Maybe<&2, List<&2, String>>) -> ToolSetup:
+  +allowed = allowedOf(selection)
+  +excluded = excludedOf(selection)
+  +registry = registryNames(Tools.builtinToolNames(), allowed, excluded)
+  +registered = texts(registry)
+  ToolSetup{registry, distinctNames(List.append(&2, String, keptNames(initialRequested(selection, configured), registered, allowed, excluded), listedIn(registered, allowed)), Nil{})}
+
+def activeNamesOf(setup: ToolSetup) -> List<&2, String>:
+  match setup:
+    case ToolSetup{_, active}: active
+
 type CreateOptions is Data:
-  CreateOptions{cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, provider: Maybe<&2, String>, model: Maybe<&2, String>, apiKey: Maybe<&2, String>, thinking: Maybe<&2, Ai.ModelThinkingLevel>, systemPrompt: Maybe<&2, String>, appendSystemPrompt: List<&2, String>, tools: List<&2, Tools.ToolName>, contextFiles: Bool, seed: SessionSeed, settings: Settings.SettingsManager, resources: ResourceOptions}
+  CreateOptions{cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, provider: Maybe<&2, String>, model: Maybe<&2, String>, apiKey: Maybe<&2, String>, thinking: Maybe<&2, Ai.ModelThinkingLevel>, systemPrompt: Maybe<&2, String>, appendSystemPrompt: List<&2, String>, tools: ToolSelection, contextFiles: Bool, seed: SessionSeed, settings: Settings.SettingsManager, resources: ResourceOptions}
+
+def toolSetupOf(options: CreateOptions) -> ToolSetup:
+  match options:
+    case CreateOptions{_, _, _, _, _, _, _, _, _, _, _, selection, _, _, settings, _}: resolveTools(selection, Settings.getDefaultTools(settings))
 
 # The model and thinking level the runtime settled on, for the session record.
 type Selection is Data:
@@ -324,9 +420,11 @@ type Selection is Data:
 type LoadoutSource is Data: LoadoutSource{environment: Paths.Environment, options: CreateOptions, packageDir: String}
 
 # `source` rebuilds the prompt resources on reload (upstream AgentSession.reload).
+# `registry` holds every tool that can be activated (upstream _toolRegistry);
+# `tools` are the active ones, in activation order.
 # `extensions` is the runtime's extension runner; the tools read its context.
 type Loadout is Data:
-  Loadout{sections: Prompt.SystemPromptSections(), tools: List<&2, Tools.Tool()>, skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>, extensions: Maybe<&2, ExtensionRunner.ExtensionRunner>, contextFiles: List<&2, Prompt.ContextFile>, source: Maybe<&2, LoadoutSource>}
+  Loadout{sections: Prompt.SystemPromptSections(), tools: List<&2, Tools.Tool()>, skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>, extensions: Maybe<&2, ExtensionRunner.ExtensionRunner>, contextFiles: List<&2, Prompt.ContextFile>, source: Maybe<&2, LoadoutSource>, registry: List<&2, Tools.Tool()>}
 
 # The system prompt with the resources it was built from.
 type Prepared is Data:
@@ -334,6 +432,13 @@ type Prepared is Data:
 
 type AgentRuntime is Type:
   AgentRuntime{transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), agent: Owner(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout}
+
+def parsedNames(names: List<&2, String>) -> List<&2, Tools.ToolName>:
+  match names:
+    case Nil{}: Nil{}
+    case name <> rest:
+      +tail = parsedNames(rest)
+      Maybe.default(&2, List<&2, Tools.ToolName>, Maybe.map(&2, Tools.ToolName, List<&2, Tools.ToolName>, found => found <> tail, Tools.parseToolName(name)), tail)
 
 def snippets(names: List<&2, Tools.ToolName>, +record: R.Record<String>) -> R.Record<String>:
   match names:
@@ -359,10 +464,17 @@ def nonemptyAppend(parts: List<&2, String>) -> Maybe<&2, String>:
     case Nil{}: None{}
     case values: Some{String.join(values, "\n\n")}
 
-def promptOptions(options: CreateOptions, contextList: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>) -> Prompt.BuildSystemPromptOptions:
+# The system prompt options for the active tools (upstream _rebuildSystemPrompt).
+def promptOptionsFor(options: CreateOptions, +names: List<&2, Tools.ToolName>, contextList: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>) -> Prompt.BuildSystemPromptOptions:
   match options:
-    case CreateOptions{cwd, _, _, _, _, _, _, _, _, systemPrompt, appendSystemPrompt, +names, _, _, _, _}:
+    case CreateOptions{cwd, _, _, _, _, _, _, _, _, systemPrompt, appendSystemPrompt, _, _, _, _, _}:
       Prompt.BuildSystemPromptOptions{systemPrompt, None{}, Some{toolNames(names)}, Some{snippets(names, R.new(String))}, Some{guidelines(names, R.new(List<&2, String>))}, None{}, nonemptyAppend(appendSystemPrompt), None{}, cwd, Some{contextList}, Some{skills}}
+
+def promptOptions(options: CreateOptions, active: List<&2, String>, contextList: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>) -> Prompt.BuildSystemPromptOptions:
+  promptOptionsFor(options, parsedNames(active), contextList, skills)
+
+def documentationPaths(+packageDir: String) -> Prompt.DocumentationPaths:
+  Prompt.DocumentationPaths{Path.join(packageDir, "README.md"), Path.join(packageDir, "docs"), Path.join(packageDir, "examples")}
 
 def reportContextDiagnostics(issues: List<&2,Diagnostics.ResourceDiagnostic>) -> IO(Unit):
   match issues:
@@ -549,23 +661,32 @@ def preparedWith(skills: List<&2, Skills.Skill>, templates: List<&2, Templates.P
     case Fail{error}: Fail{error}
     case Done{sections}: Done{Prepared{sections, skills, templates, agentsFiles}}
 
-def preparedFor(+environment: Paths.Environment, +options: CreateOptions, +packageDir: String) -> IO(Result<&2, &2, String, Prepared>):
+# The system prompt sections again for other active tools, from the resources
+# already loaded.
+def sectionsForTools(source: LoadoutSource, active: List<&2, String>, contextList: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>) -> Result<&2, &2, String, Prompt.SystemPromptSections()>:
+  match source:
+    case LoadoutSource{_, options, packageDir}: promptResult(Prompt.buildSystemPromptSections(documentationPaths(packageDir), promptOptions(options, active, contextList, skills)))
+
+def preparedWithTools(+environment: Paths.Environment, +options: CreateOptions, +packageDir: String, active: List<&2, String>) -> IO(Result<&2, &2, String, Prepared>):
   do IO<Result<&2, &2, String, Prepared>>:
     loaded : Resources.ContextFiles <- contextFilesFor(environment,options)
     +contextList : List<&2,Prompt.ContextFile> <- contextFilesReported(loaded)
     +resolved : PackageManager.ResolvedPaths <- resolvedFor(environment, options)
     +skills : List<&2, Skills.Skill> <- skillsFor(environment, options, resolved)
     templates : List<&2, Templates.PromptTemplate> <- templatesFor(environment, options, resolved)
-    return preparedWith(skills, templates, contextList, promptResult(Prompt.buildSystemPromptSections(Prompt.DocumentationPaths{Path.join(packageDir, "README.md"), Path.join(packageDir, "docs"), Path.join(packageDir, "examples")}, promptOptions(options, contextList, skills))))
+    return preparedWith(skills, templates, contextList, promptResult(Prompt.buildSystemPromptSections(documentationPaths(packageDir), promptOptions(options, active, contextList, skills))))
+
+def preparedFor(+environment: Paths.Environment, +options: CreateOptions, +packageDir: String) -> IO(Result<&2, &2, String, Prepared>):
+  preparedWithTools(environment, options, packageDir, activeNamesOf(toolSetupOf(options)))
 
 def withSettings(options: CreateOptions, settings: Settings.SettingsManager) -> CreateOptions:
   match options:
     case CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, _, resources}: CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings, resources}
 # Skills, prompt templates, context files and the system prompt again, under
 # reloaded settings.
-def reprepare(source: LoadoutSource, settings: Settings.SettingsManager) -> IO(Result<&2, &2, String, Prepared>):
+def reprepare(source: LoadoutSource, settings: Settings.SettingsManager, active: List<&2, String>) -> IO(Result<&2, &2, String, Prepared>):
   match source:
-    case LoadoutSource{environment, options, packageDir}: preparedFor(environment, withSettings(options, settings), packageDir)
+    case LoadoutSource{environment, options, packageDir}: preparedWithTools(environment, withSettings(options, settings), packageDir, active)
 def sectionsOf(result: Result<&2, &2, String, Prepared>) -> Result<&2, &2, String, Prompt.SystemPromptSections()>:
   match result:
     case Fail{error}: Fail{error}
@@ -823,8 +944,8 @@ def disposeServices(transport: Transport, storage: Storage.AuthStorageOwner, sto
 
 def disposeLoadout(loadout: Loadout) -> IO(Unit):
   match loadout:
-    case Loadout{_, _, _, _, None{}, _, _}: IO.pure(Unit, Unit{})
-    case Loadout{_, _, _, _, Some{runner}, _, _}: ExtensionRunner.dispose(runner)
+    case Loadout{_, _, _, _, None{}, _, _, _}: IO.pure(Unit, Unit{})
+    case Loadout{_, _, _, _, Some{runner}, _, _, _}: ExtensionRunner.dispose(runner)
 
 # Assembly with cleanup on every failure path.
 def constructed(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout, result: Result<&2, &2, StreamFn.MissingDefault, Owner()>) -> IO(Outcome(AgentRuntime)):
@@ -853,9 +974,27 @@ def createToolList(names: List<&2, Tools.ToolName>, paths: Paths.Environment, cw
         owners : List<&1, Tools.ToolOwner> <- Tools.createTools(names, environment(paths, cwd, agentDir, packageDir, fetch, handle, context), toolsOptions())
         return (queue, Tools.borrowTools(owners))
 
-def loadoutFrom(prepared: Prepared, tools: List<&2, Tools.Tool()>, extensions: ExtensionRunner.ExtensionRunner, source: LoadoutSource) -> Loadout:
-  match prepared:
-    case Prepared{sections, skills, templates, agentsFiles}: Loadout{sections, tools, skills, templates, Some{extensions}, agentsFiles, Some{source}}
+def nameOfTool(tool: Tools.Tool()) -> String:
+  match tool:
+    case T.AgentTool{name, _, _, _, _, _, _, _, _}: name
+
+def toolNamed(tools: List<&2, Tools.Tool()>, +name: String) -> Maybe<&2, Tools.Tool()>:
+  match tools:
+    case Nil{}: None{}
+    case +tool <> rest: Bool.pick(Unit -> Maybe<&2, Tools.Tool()>, String.eq(nameOfTool(tool), name), _ => Some{tool}, _ => toolNamed(rest, name))(Unit{})
+
+# upstream setActiveToolsByName: the registered tools named, in that order;
+# unknown names are ignored.
+def activeTools(+registry: List<&2, Tools.Tool()>, names: List<&2, String>) -> List<&2, Tools.Tool()>:
+  match names:
+    case Nil{}: Nil{}
+    case +name <> rest:
+      +tail = activeTools(registry, rest)
+      Maybe.default(&2, List<&2, Tools.Tool()>, Maybe.map(&2, Tools.Tool(), List<&2, Tools.Tool()>, tool => tool <> tail, toolNamed(registry, name)), tail)
+
+def loadoutFrom(prepared: Prepared, +registry: List<&2, Tools.Tool()>, extensions: ExtensionRunner.ExtensionRunner, source: LoadoutSource) -> Loadout:
+  match prepared source:
+    case Prepared{sections, skills, templates, agentsFiles} LoadoutSource{paths, +options, packageDir}: Loadout{sections, activeTools(registry, activeNamesOf(toolSetupOf(options))), skills, templates, Some{extensions}, agentsFiles, Some{LoadoutSource{paths, options, packageDir}}, registry}
 
 def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Maybe<&2, Models.Model()>, +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager, extensions: ExtensionRunner.ExtensionRunner, source: LoadoutSource) -> IO(Outcome(AgentRuntime)):
   match created:
@@ -886,9 +1025,13 @@ def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey
         disposeBase(transport, storage, storageStore, credentials, credentialStore, models, extensions)
         return Fail{error}
 
+def registryOf(setup: ToolSetup) -> List<&2, Tools.ToolName>:
+  match setup:
+    case ToolSetup{registry, _}: registry
+
 def withModel(+options: CreateOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, +paths: Paths.Environment, prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
   match options:
-    case CreateOptions{cwd, agentDir, _, _, +packageDir, _, _, apiKey, thinking, _, _, names, _, seed, settings, _}: withModelFields(cwd, agentDir, packageDir, apiKey, thinking, seed, settings, names, transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected, LoadoutSource{paths, options, packageDir}, extensions)
+    case CreateOptions{cwd, agentDir, _, _, +packageDir, _, _, apiKey, thinking, _, _, _, _, seed, settings, _}: withModelFields(cwd, agentDir, packageDir, apiKey, thinking, seed, settings, registryOf(toolSetupOf(options)), transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected, LoadoutSource{paths, options, packageDir}, extensions)
 
 # A runtime API key changes the provider's availability (upstream
 # setRuntimeApiKey refreshes it).

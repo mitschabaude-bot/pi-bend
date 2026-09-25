@@ -38,6 +38,10 @@ type ToolName is Data:
 
 def allToolNames() -> List<&2, ToolName>: [ReadTool{}, BashTool{}, EditTool{}, WriteTool{}]
 
+# Every built-in tool, in upstream createAllToolDefinitions order (powershell
+# is not ported).
+def builtinToolNames() -> List<&2, ToolName>: [ReadTool{}, BashTool{}, EditTool{}, WriteTool{}, GrepTool{}, FindTool{}, LsTool{}]
+
 def toolName(name: ToolName) -> String:
   match name:
     case ReadTool{}: "read"

@@ -117,39 +117,14 @@ def fileError(error: Files.Error) -> String:
 # Tools
 # -----
 
-def prependName(+name: Maybe<&2, Tools.ToolName>, +rest: List<&2, Tools.ToolName>) -> List<&2, Tools.ToolName>:
-  match name:
-    case None{}: rest
-    case Some{name}: name <> rest
-
-def parseNames(names: List<&2, String>) -> List<&2, Tools.ToolName>:
-  match names:
-    case Nil{}: Nil{}
-    case name <> rest: prependName(Tools.parseToolName(name), parseNames(rest))
-
-def sameName(+left: Tools.ToolName, +right: Tools.ToolName) -> Bool:
-  String.eq(Tools.toolName(left), Tools.toolName(right))
-
-def containsName(names: List<&2, Tools.ToolName>, +name: Tools.ToolName) -> Bool:
-  match names:
-    case Nil{}: False{}
-    case +first <> rest: sameName(first, name) || containsName(rest, name)
-
-def without(names: List<&2, Tools.ToolName>, +excluded: List<&2, Tools.ToolName>) -> List<&2, Tools.ToolName>:
-  match names:
-    case Nil{}: Nil{}
-    case +name <> rest:
-      +tail = without(rest, excluded)
-      Bool.pick(List<&2, Tools.ToolName>, containsName(excluded, name), tail, name <> tail)
-
-# --no-tools disables everything; --tools allowlists; --exclude-tools denylists;
-# otherwise the settings' defaultTools, else read/bash/edit/write.
-def selectedTools(noTools: Maybe<&2, Bool>, allow: Maybe<&2, List<&2, String>>, exclude: Maybe<&2, List<&2, String>>, defaults: Maybe<&2, List<&2, String>>) -> List<&2, Tools.ToolName>:
-  match noTools allow exclude defaults:
-    case Some{True{}} _ _ _: Nil{}
-    case _ Some{names} excluded _: without(parseNames(names), parseNames(Maybe.default(&2, List<&2, String>, excluded, Nil{})))
-    case _ None{} excluded Some{configured}: without(parseNames(configured), parseNames(Maybe.default(&2, List<&2, String>, excluded, Nil{})))
-    case _ None{} excluded None{}: without(Tools.allToolNames(), parseNames(Maybe.default(&2, List<&2, String>, excluded, Nil{})))
+# upstream main: --no-tools disables every tool, --no-builtin-tools only the
+# default built-ins; --tools and --exclude-tools pass through (the runtime
+# resolves them as createAgentSession does).
+def noToolsOf(noTools: Maybe<&2, Bool>, noBuiltinTools: Maybe<&2, Bool>) -> Maybe<&2, Runtime.NoTools>:
+  match noTools noBuiltinTools:
+    case Some{True{}} _: Some{Runtime.NoToolsAll{}}
+    case _ Some{True{}}: Some{Runtime.NoToolsBuiltin{}}
+    case _ _: None{}
 
 # Paths
 # -----
@@ -610,8 +585,8 @@ def modelsOf(runtime: Runtime.AgentRuntime) -> Runtime.AgentRuntime & Models.Mod
       (Runtime.AgentRuntime{transport,storage,storageStore,credentials,credentialStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout},models)
 def createOptions(parsed: Args.Args, cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, seed: Runtime.SessionSeed, +settings: Settings.SettingsManager) -> Runtime.CreateOptions:
   match parsed:
-    case Args.Args{provider, model, apiKey, systemPrompt, appendSystemPrompt, thinking, _, _, _, _, _, _, _, _, _, _, _, _, tools, excludeTools, noTools, _, _, _, _, _, noSkills, skills, promptTemplates, noPromptTemplates, _, _, _, noContextFiles, _, _, _, _, _, _, _, _, _}:
-      Runtime.CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, Maybe.default(&2, List<&2, String>, appendSystemPrompt, Nil{}), selectedTools(noTools, tools, excludeTools, Settings.getDefaultTools(settings)), Bool.not(Maybe.default(&2, Bool, noContextFiles, False{})), seed, settings, Runtime.ResourceOptions{Maybe.default(&2, List<&2, String>, skills, Nil{}), Maybe.default(&2, Bool, noSkills, False{}), Maybe.default(&2, List<&2, String>, promptTemplates, Nil{}), Maybe.default(&2, Bool, noPromptTemplates, False{})}}
+    case Args.Args{provider, model, apiKey, systemPrompt, appendSystemPrompt, thinking, _, _, _, _, _, _, _, _, _, _, _, _, tools, excludeTools, noTools, noBuiltinTools, _, _, _, _, noSkills, skills, promptTemplates, noPromptTemplates, _, _, _, noContextFiles, _, _, _, _, _, _, _, _, _}:
+      Runtime.CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, Maybe.default(&2, List<&2, String>, appendSystemPrompt, Nil{}), Runtime.ToolSelection{tools, noToolsOf(noTools, noBuiltinTools), excludeTools}, Bool.not(Maybe.default(&2, Bool, noContextFiles, False{})), seed, settings, Runtime.ResourceOptions{Maybe.default(&2, List<&2, String>, skills, Nil{}), Maybe.default(&2, Bool, noSkills, False{}), Maybe.default(&2, List<&2, String>, promptTemplates, Nil{}), Maybe.default(&2, Bool, noPromptTemplates, False{})}}
 
 type ScopeFlags is Data: ScopeFlags{patterns: List<&2,String>,explicitModel: Bool,thinking: Maybe<&2,Ai.ModelThinkingLevel>}
 def scopeFlags(parsed: Args.Args,settings: Settings.SettingsManager) -> ScopeFlags:

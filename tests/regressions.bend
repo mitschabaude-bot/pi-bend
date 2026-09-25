@@ -17,6 +17,7 @@ import ../packages/coding-agent/src/core/agent-runtime.bend as Runtime
 import ../packages/coding-agent/src/core/agent-session.bend as Session
 import ../packages/coding-agent/src/core/session-persistence.bend as Sessions
 import ../packages/coding-agent/src/core/session-manager.bend as S
+import ../packages/coding-agent/src/core/system-prompt.bend as Prompt
 import ../packages/coding-agent/src/core/compaction/compaction.bend as Compaction
 import ../packages/coding-agent/src/core/settings-manager.bend as Settings
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
@@ -24,6 +25,7 @@ import ../packages/coding-agent/src/core/model-runtime.bend as Models
 import ../packages/coding-agent/src/modes/json-event.bend as JsonEvent
 import ./model-runtime-fixture.bend as ModelFixture
 import ./agent-session.bend as H
+import ../packages/coding-agent/src/utils/paths.bend as Paths
 
 # Scenarios for upstream's suite/regressions tests that need AgentSession
 # behavior beyond tests/agent-session.bend. The provider streams like
@@ -191,7 +193,7 @@ def observe(env: Unit, event: Session.AgentSessionEvent) -> IO(Unit): observed(e
 type Fixture is Data:
   Fixture{session: Session.AgentSession, listener: Session.Listener(), stream: Runtime.Stream(), validator: Loop.Validator(Tools.ToolError), converter: Runtime.Converter(), registry: StreamFn.Registry(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError), faux: Faux}
 
-def emptyLoadout() -> Runtime.Loadout: Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}}
+def emptyLoadout() -> Runtime.Loadout: Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}, Nil{}}
 
 # The agent starts from the stored session's context, as the upstream
 # harness's `agent.state.messages = buildSessionContext().messages`.
@@ -206,7 +208,7 @@ def contextOf(stored: Session.Session()) -> List<&2, Session.Message()>:
 type Setup is Data:
   Setup{replies: List<&2, Reply>, gates: List<&2, Hold>, model: Ai.Model<Ai.JsonValue>}
 
-def fixtureWith(+stored: Session.Session(), +cwd: String, +settings: Settings.SettingsManager, setup: Setup) -> IO(Fixture):
+def fixtureWithLoadout(+stored: Session.Session(), +cwd: String, +settings: Settings.SettingsManager, setup: Setup, +loadout: Runtime.Loadout) -> IO(Fixture):
   match setup:
     case Setup{replies, gates, +model}:
       do IO<Fixture>:
@@ -222,10 +224,13 @@ def fixtureWith(+stored: Session.Session(), +cwd: String, +settings: Settings.Se
         +agent : Runtime.Owner() <- H.requireAgent(created)
         Agent.replaceMessages(Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit, agent, contextOf(stored))
         models : Models.ModelRuntime <- ModelFixture.create(ModelFixture.Source{"faux", "PI_FAUX_API_KEY", model <> Nil{}} <> Nil{})
-        +session : Session.AgentSession <- Session.create(agent, stored, settings, cwd, emptyLoadout(), models, Nil{})
+        +session : Session.AgentSession <- Session.create(agent, stored, settings, cwd, loadout, models, Nil{})
         +listener : Session.Listener() <- C.create(~Unit, ~Session.AgentSessionEvent, ~Unit, ~observe, Unit{})
         Session.subscribe(session, listener)
         return Fixture{session, listener, stream, validator, converter, registry, Faux{replyRef, streams, gateRef, Ai.modelId(model), signalRef}}
+
+def fixtureWith(+stored: Session.Session(), +cwd: String, +settings: Settings.SettingsManager, setup: Setup) -> IO(Fixture):
+  fixtureWithLoadout(stored, cwd, settings, setup, emptyLoadout())
 
 def fixture(+stored: Session.Session(), +cwd: String, agentDir: String, setup: Setup) -> IO(Fixture):
   do IO<Fixture>:
@@ -257,6 +262,10 @@ def sessionOf(value: Fixture) -> Session.AgentSession:
     case Fixture{session, _, _, _, _, _, _}: session
 
 def plainSetup(replies: List<&2, Reply>) -> Setup: Setup{replies, Nil{}, H.fauxModel()}
+
+def fixtureLoaded(+stored: Session.Session(), +cwd: String, +settings: Settings.SettingsManager, +loadout: Runtime.Loadout) -> IO(Fixture):
+  fixtureWithLoadout(stored, cwd, settings, plainSetup(Nil{}), loadout)
+
 
 def requireAppended(result: Sessions.Outcome(Sessions.Appended<Unit, Tools.ToolDetails, V.Value>)) -> IO(Session.Session()):
   match result:
@@ -581,6 +590,81 @@ def compactDuringResponse(+dir: String, agentDir: String) -> IO(Unit):
     Chan.close(Result<&2, &2, String, Unit>, prompted)
     Chan.close(Compacted, compacted)
 
+# Tool registry scenarios (5109, 2835): the runtime's tool resolution
+# (Runtime.resolveTools) over the built-in tools, a loadout assembled as the
+# runtime assembles it (registry, active tools, system prompt sections for
+# them) and the session's tool API. The registry's tools carry the built-in
+# names and descriptions with a stub execution: the scenarios never run them.
+def stubExecute(unit: Unit, input: Tools.Input()) -> IO(Tools.Output()):
+  IO.pure(Tools.Output(), Fail{Tools.failure("not executed")})
+
+def stubTools(names: List<&2, Tools.ToolName>, +execute: Tools.Execute()) -> List<&2, Tools.Tool()>:
+  match names:
+    case Nil{}: Nil{}
+    case +name <> rest: T.AgentTool{Tools.toolName(name), Tools.promptSnippet(name), V.Null{}, None{}, Tools.toolName(name), None{}, execute, None{}, None{}} <> stubTools(rest, execute)
+
+def optionalList(+text: String) -> Maybe<&2, List<&2, String>>:
+  Bool.pick(Maybe<&2, List<&2, String>>, String.eq(text, "-"), None{}, Some{Bool.pick(List<&2, String>, String.is_empty(text), Nil{}, String.split(text, ','))})
+
+def noToolsNamed(text: String) -> Maybe<&2, Runtime.NoTools>:
+  match text:
+    case "all": Some{Runtime.NoToolsAll{}}
+    case "builtin": Some{Runtime.NoToolsBuiltin{}}
+    case _: None{}
+
+def toolOptions(+cwd: String, +agentDir: String, selection: Runtime.ToolSelection, +settings: Settings.SettingsManager) -> Runtime.CreateOptions:
+  Runtime.CreateOptions{cwd, agentDir, "", "", "/pi", None{}, None{}, None{}, None{}, None{}, Nil{}, selection, False{}, Runtime.emptySeed(), settings, Runtime.ResourceOptions{Nil{}, True{}, Nil{}, True{}}}
+
+def toolLoadout(+source: Runtime.LoadoutSource, setup: Runtime.ToolSetup, +execute: Tools.Execute()) -> Runtime.Loadout:
+  match setup:
+    case Runtime.ToolSetup{registry, active}:
+      +tools = stubTools(registry, execute)
+      +chosen = Runtime.activeTools(tools, active)
+      Runtime.Loadout{Result.default(&2, &2, String, Prompt.SystemPromptSections(), Runtime.sectionsForTools(source, Session.toolNamesOf(chosen), Nil{}, Nil{}), Rec.new(String)), chosen, Nil{}, Nil{}, None{}, Nil{}, Some{source}, tools}
+
+def infoNames(infos: List<&2, Session.ToolInfo>) -> List<&2, V.Value>:
+  match infos:
+    case Nil{}: Nil{}
+    case Session.ToolInfo{name, _, _} <> rest: V.Text{name} <> infoNames(rest)
+
+def texts(values: List<&2, String>) -> List<&2, V.Value>:
+  match values:
+    case Nil{}: Nil{}
+    case value <> rest: V.Text{value} <> texts(rest)
+
+def reportTools(+label: String, +session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    all : List<&2, Session.ToolInfo> <- Session.getAllTools(session)
+    active : List<&2, String> <- Session.getActiveToolNames(session)
+    prompt : String <- Session.systemPrompt(session)
+    H.printed(Done{Json.object(Json.field("type", Json.text(label), Json.field("all", V.ArrayValue{infoNames(all)}, Json.field("active", V.ArrayValue{texts(active)}, Json.field("systemPrompt", Json.text(prompt), Nil{})))))})
+
+def activated(+session: Session.AgentSession, activate: Maybe<&2, List<&2, String>>) -> IO(Unit):
+  match activate:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{names}:
+      do IO<Unit>:
+        Session.setActiveToolsByName(session, names)
+        reportTools("activated", session)
+
+def toolsWith(+dir: String, +agentDir: String, selection: Runtime.ToolSelection, activate: Maybe<&2, List<&2, String>>, +settings: Settings.SettingsManager) -> IO(Unit):
+  do IO<Unit>:
+    +execute : Tools.Execute() <- C.create(~Unit, ~Tools.Input(), ~Tools.Output(), ~stubExecute, Unit{})
+    +options : Runtime.CreateOptions = toolOptions(dir, agentDir, selection, settings)
+    +loadout : Runtime.Loadout = toolLoadout(Runtime.LoadoutSource{Paths.Environment{dir, agentDir, Runtime.urlContext()}, options, "/pi"}, Runtime.toolSetupOf(options), execute)
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    stored : Session.Session() <- H.requireSession(created)
+    +value : Fixture <- fixtureLoaded(stored, dir, settings, loadout)
+    reportTools("tools", sessionOf(value))
+    activated(sessionOf(value), activate)
+    teardown(value)
+    C.dispose(Tools.Input(), Tools.Output(), execute)
+
+def toolsScenario(+dir: String, +agentDir: String, +allow: String, +exclude: String, +noTools: String, +activate: String) -> IO(Unit):
+  do IO<Unit>:
+    loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(dir, agentDir, Settings.options())
+    toolsWith(dir, agentDir, Runtime.ToolSelection{optionalList(allow), noToolsNamed(noTools), optionalList(exclude)}, optionalList(activate), H.settingsOf(loaded))
+
 def number(+text: String) -> Nat: Maybe.default(&2, Nat, Nat.read(text), 0n)
 
 def run(args: List<String>) -> IO(Unit):
@@ -595,6 +679,7 @@ def run(args: List<String>) -> IO(Unit):
     case "compaction_prompt" <> dir <> agentDir <> Nil{}: promptDuringCompaction(dir, agentDir)
     case "tree_streaming" <> dir <> agentDir <> Nil{}: treeDuringStreaming(dir, agentDir)
     case "compact_during_response" <> dir <> agentDir <> Nil{}: compactDuringResponse(dir, agentDir)
+    case "tools" <> dir <> agentDir <> allow <> exclude <> noTools <> activate <> Nil{}: toolsScenario(dir, agentDir, allow, exclude, noTools, activate)
     case "settings_reload" <> dir <> agentDir <> settings <> Nil{}: reloadScenario(dir, decoded(Decode.parse(settings)))
     case _: IO.die(Unit, 1, "usage: regressions <name <dir> <agentDir> <name> | prompt <dir> <agentDir> <text> <reply> | stream <dir> <agentDir> <characters> | toolcall <dir> <agentDir>>")
 

@@ -260,6 +260,48 @@ def discovery_checks(f):
     return checks
 
 
+def tool_checks(f):
+    """Tool allow- and denylists (5109, 2835) for the built-in tools; the extension tools
+    (ask_question, dynamic_tool) are not registered because the native extension API has no
+    registerTool, so they only appear as unknown names in the lists."""
+    checks = 0
+
+    def tools(allow='-', exclude='-', no_tools='-', activate='-'):
+        events = f.session('regressions', 'tools', allow, exclude, no_tools, activate)
+        return last(events, 'tools'), (of_type(events, 'activated') or [None])[-1]
+
+    # 5109-exclude-tools: filters built-in and extension tools from available and active tools
+    state, _ = tools(exclude='read,ask_question')
+    assert 'read' not in state['all'] and 'ask_question' not in state['all'] and 'bash' in state['all'], state['all']
+    assert sorted(state['active']) == ['bash', 'edit', 'write'], state['active']
+    assert '- read:' not in state['systemPrompt'] and 'ask_question' not in state['systemPrompt']
+    checks += 1
+    # 5109-exclude-tools: lets excluded tools override the allowlist
+    state, _ = tools(allow='read,bash,ask_question', exclude='read,ask_question')
+    assert state['all'] == ['bash'] and state['active'] == ['bash'], state
+    assert '- bash:' in state['systemPrompt'] and '- read:' not in state['systemPrompt'] and 'ask_question' not in state['systemPrompt']
+    checks += 1
+    # 2835-tools-allowlist-filters-extension-tools: allows only explicitly listed built-in and extension tools
+    state, _ = tools(allow='read,dynamic_tool')
+    assert sorted(state['all']) == ['read'] and sorted(state['active']) == ['read'], state
+    prompt = state['systemPrompt']
+    assert '- read: Read file contents' in prompt and '- bash:' not in prompt and '- edit:' not in prompt
+    checks += 1
+    # 2835-tools-allowlist-filters-extension-tools: disables all tools when the allowlist is empty
+    state, _ = tools(allow='')
+    assert state['all'] == [] and state['active'] == [] and '<tools>\n(none)\n' in state['systemPrompt'] and 'dynamic_tool' not in state['systemPrompt'], state
+    checks += 1
+    # setActiveToolsByName: registered tools in the given order, unknown names ignored, prompt rebuilt.
+    state, activated = tools(activate='bash,grep,nope')
+    assert state['active'] == ['read', 'bash', 'edit', 'write'] and state['all'] == ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'], state
+    assert activated['active'] == ['bash', 'grep'] and '- grep:' in activated['systemPrompt'] and '- read:' not in activated['systemPrompt'], activated
+    # --no-tools and --no-builtin-tools without an allowlist start with nothing active.
+    for mode in ('all', 'builtin'):
+        state, _ = tools(no_tools=mode)
+        assert state['active'] == [] and state['all'] == ([] if mode == 'all' else ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls']), (mode, state)
+    return checks
+
+
 def cli_checks(f):
     checks = 0
     # 7269-cli-end-of-options: passes %j as a prompt after --
@@ -330,7 +372,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-regressions-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = retry_checks(fixtures) + json_stream_checks(fixtures) + session_name_checks(fixtures) + tree_checks(fixtures) + compaction_checks(fixtures) + session_manager_checks(fixtures) + discovery_checks(fixtures) + cli_checks(fixtures) + settings_checks(fixtures)
+    checks = retry_checks(fixtures) + json_stream_checks(fixtures) + session_name_checks(fixtures) + tree_checks(fixtures) + compaction_checks(fixtures) + session_manager_checks(fixtures) + discovery_checks(fixtures) + tool_checks(fixtures) + cli_checks(fixtures) + settings_checks(fixtures)
     print('regressions: %d upstream cases passed' % checks)
 
 

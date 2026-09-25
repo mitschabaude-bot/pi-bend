@@ -1029,8 +1029,8 @@ def boundWith(runner: ExtensionRunner.ExtensionRunner, binding: Maybe<&2, Extens
 
 def bindContext(loadout: Runtime.Loadout, binding: Maybe<&2, ExtensionBinding>) -> IO(Unit):
   match loadout:
-    case Runtime.Loadout{_, _, _, _, None{}, _, _}: IO.pure(Unit, Unit{})
-    case Runtime.Loadout{_, _, _, _, Some{runner}, _, _}: boundWith(runner, binding)
+    case Runtime.Loadout{_, _, _, _, None{}, _, _, _}: IO.pure(Unit, Unit{})
+    case Runtime.Loadout{_, _, _, _, Some{runner}, _, _, _}: boundWith(runner, binding)
 
 def StreamInput() -> Data: T.StreamInput<Unit, Runtime.Details(), Runtime.LoopConfig()>
 def StreamOutput() -> Type: Result<&2, &1, Runtime.Error(), T.StreamLease<Unit, Runtime.Error()>>
@@ -1678,7 +1678,7 @@ def sectionPatch(patch: Maybe<&2, Rec.Record<Maybe<&2, String>>>, now: F64) -> M
 
 def prepareLoadout(agent: Runtime.Owner(), loadout: Runtime.Loadout, messages: List<&2, Message()>, now: F64) -> IO(Maybe<&2, Message()>):
   match loadout:
-    case Runtime.Loadout{sections, tools, _, _, _, _, _}:
+    case Runtime.Loadout{sections, tools, _, _, _, _, _, _}:
       do IO<Maybe<&2, Message()>>:
         Agent.setTools(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, tools)
         return sectionPatch(Prompt.diffSystemPromptSections(sectionsOf(Transcript.getCurrentSystemMessage(V.Value, V.Value, Unit, Runtime.Details(), llmOnly(messages))), sections), now)
@@ -2199,7 +2199,7 @@ def expandSkillCommand(skills: List<&2, Skills.Skill>, +text: String) -> IO(Stri
 
 def expandWith(loadout: Runtime.Loadout, +text: String) -> IO(String):
   match loadout:
-    case Runtime.Loadout{_, _, skills, templates, _, _, _}:
+    case Runtime.Loadout{_, _, skills, templates, _, _, _, _}:
       do IO<String>:
         expanded : String <- expandSkillCommand(skills, text)
         return Templates.expandPromptTemplate(expanded, templates)
@@ -2287,7 +2287,7 @@ def promptExpanded(+session: AgentSession, text: String, images: List<&2, Ai.Ima
 
 def runnerOf(loadout: Runtime.Loadout) -> Maybe<&2, ExtensionRunner.ExtensionRunner>:
   match loadout:
-    case Runtime.Loadout{_, _, _, _, runner, _, _}: runner
+    case Runtime.Loadout{_, _, _, _, runner, _, _, _}: runner
 
 # The session's extension runner (upstream session.extensionRunner); None for
 # sessions created without one.
@@ -2974,13 +2974,13 @@ def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, St
 # resources this session was loaded (or last reloaded) with.
 def templatesOf(loadout: Runtime.Loadout) -> List<&2, Templates.PromptTemplate>:
   match loadout:
-    case Runtime.Loadout{_, _, _, templates, _, _, _}: templates
+    case Runtime.Loadout{_, _, _, templates, _, _, _, _}: templates
 def skillsOf(loadout: Runtime.Loadout) -> List<&2, Skills.Skill>:
   match loadout:
-    case Runtime.Loadout{_, _, loaded, _, _, _, _}: loaded
+    case Runtime.Loadout{_, _, loaded, _, _, _, _, _}: loaded
 def agentsFilesOf(loadout: Runtime.Loadout) -> List<&2, Prompt.ContextFile>:
   match loadout:
-    case Runtime.Loadout{_, _, _, _, _, agentsFiles, _}: agentsFiles
+    case Runtime.Loadout{_, _, _, _, _, agentsFiles, _, _}: agentsFiles
 def promptTemplates(session: AgentSession) -> IO(List<&2, Templates.PromptTemplate>):
   do IO<List<&2, Templates.PromptTemplate>>:
     loadout : Runtime.Loadout <- loadoutOf(session)
@@ -2994,6 +2994,71 @@ def getAgentsFiles(session: AgentSession) -> IO(List<&2, Prompt.ContextFile>):
     loadout : Runtime.Loadout <- loadoutOf(session)
     return agentsFilesOf(loadout)
 
+# Tools
+# -----
+
+def toolNamesOf(tools: List<&2, Tools.Tool()>) -> List<&2, String>:
+  match tools:
+    case Nil{}: Nil{}
+    case T.AgentTool{name, _, _, _, _, _, _, _, _} <> rest: name <> toolNamesOf(rest)
+
+# upstream ToolInfo without source metadata.
+type ToolInfo is Data:
+  ToolInfo{name: String, description: String, parameters: V.Value}
+
+def toolInfos(tools: List<&2, Tools.Tool()>) -> List<&2, ToolInfo>:
+  match tools:
+    case Nil{}: Nil{}
+    case T.AgentTool{name, description, parameters, _, _, _, _, _, _} <> rest: ToolInfo{name, description, parameters} <> toolInfos(rest)
+
+def activeNamesIn(loadout: Runtime.Loadout) -> List<&2, String>:
+  match loadout:
+    case Runtime.Loadout{_, tools, _, _, _, _, _, _}: toolNamesOf(tools)
+
+def registryIn(loadout: Runtime.Loadout) -> List<&2, ToolInfo>:
+  match loadout:
+    case Runtime.Loadout{_, _, _, _, _, _, _, registry}: toolInfos(registry)
+
+# upstream getActiveToolNames: the active tools, in activation order.
+def getActiveToolNames(session: AgentSession) -> IO(List<&2, String>):
+  do IO<List<&2, String>>:
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    return activeNamesIn(loadout)
+
+# upstream getAllTools: every tool that can be activated.
+def getAllTools(session: AgentSession) -> IO(List<&2, ToolInfo>):
+  do IO<List<&2, ToolInfo>>:
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    return registryIn(loadout)
+
+def sectionsAfter(+sections: Prompt.SystemPromptSections(), source: Maybe<&2, Runtime.LoadoutSource>, +names: List<&2, String>, contextFiles: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>) -> Prompt.SystemPromptSections():
+  match source:
+    case None{}: sections
+    case Some{found}: Result.default(&2, &2, String, Prompt.SystemPromptSections(), Runtime.sectionsForTools(found, names, contextFiles, skills), sections)
+
+def activated(loadout: Runtime.Loadout, +names: List<&2, String>) -> Runtime.Loadout:
+  match loadout:
+    case Runtime.Loadout{+sections, _, +skills, templates, extensions, +files, +source, +registry}:
+      +active = Runtime.activeTools(registry, names)
+      Runtime.Loadout{sectionsAfter(sections, source, toolNamesOf(active), files, skills), active, skills, templates, extensions, files, source, registry}
+
+# upstream setActiveToolsByName: only registered tools can be activated,
+# unknown names are ignored, and the system prompt is rebuilt for the new set;
+# the next request declares it (the loadout diff).
+def setActiveToolsByName(session: AgentSession, names: List<&2, String>) -> IO(Unit):
+  match session:
+    case AgentSession{_, _, _, _, _, loadoutRef, _, _}: R.modify(Runtime.Loadout, Unit, loadoutRef, current => (activated(current, names), Unit{}))
+
+def sectionsIn(loadout: Runtime.Loadout) -> Prompt.SystemPromptSections():
+  match loadout:
+    case Runtime.Loadout{sections, _, _, _, _, _, _, _}: sections
+
+# upstream systemPrompt: the effective system prompt for the next request.
+def systemPrompt(session: AgentSession) -> IO(String):
+  do IO<String>:
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    return Result.default(&2, &2, Prompt.Error, String, Prompt.promptText(Done{Prompt.SystemPromptState{"", Some{sectionsIn(loadout)}}}), "")
+
 # upstream AgentSession.reload without extensions: settings are reloaded from
 # their files, then skills, prompt templates, context files and the system
 # prompt are prepared again; the tools stay. The next request declares the new
@@ -3001,7 +3066,7 @@ def getAgentsFiles(session: AgentSession) -> IO(List<&2, Prompt.ContextFile>):
 def reloadedLoadout(loadout: Runtime.Loadout, prepared: Result<&2, &2, String, Runtime.Prepared>) -> Result<&2, &2, String, Runtime.Loadout>:
   match loadout prepared:
     case _ Fail{message}: Fail{message}
-    case Runtime.Loadout{_, tools, _, _, context, _, source} Done{Runtime.Prepared{sections, skills, templates, files}}: Done{Runtime.Loadout{sections, tools, skills, templates, context, files, source}}
+    case Runtime.Loadout{_, tools, _, _, context, _, source, registry} Done{Runtime.Prepared{sections, skills, templates, files}}: Done{Runtime.Loadout{sections, tools, skills, templates, context, files, source, registry}}
 def storeReloaded(+loadoutRef: R.Ref<Runtime.Loadout>, result: Result<&2, &2, String, Runtime.Loadout>) -> IO(Result<&2, &2, String, Unit>):
   match result:
     case Fail{message}: IO.pure(Result<&2, &2, String, Unit>, Fail{message})
@@ -3011,10 +3076,10 @@ def storeReloaded(+loadoutRef: R.Ref<Runtime.Loadout>, result: Result<&2, &2, St
         return Done{Unit{}}
 def reloadFrom(+loadoutRef: R.Ref<Runtime.Loadout>, +loadout: Runtime.Loadout, settings: Settings.SettingsManager) -> IO(Result<&2, &2, String, Unit>):
   match loadout:
-    case Runtime.Loadout{_, _, _, _, _, _, None{}}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
-    case Runtime.Loadout{_, _, _, _, _, _, Some{source}}:
+    case Runtime.Loadout{_, _, _, _, _, _, None{}, _}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+    case Runtime.Loadout{_, tools, _, _, _, _, Some{source}, _}:
       do IO<Result<&2, &2, String, Unit>>:
-        prepared : Result<&2, &2, String, Runtime.Prepared> <- Runtime.reprepare(source, settings)
+        prepared : Result<&2, &2, String, Runtime.Prepared> <- Runtime.reprepare(source, settings, toolNamesOf(tools))
         storeReloaded(loadoutRef, reloadedLoadout(loadout, prepared))
 def reload(session: AgentSession) -> IO(Result<&2, &2, String, Unit>):
   match session:

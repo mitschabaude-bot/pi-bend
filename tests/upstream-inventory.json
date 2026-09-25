@@ -3186,9 +3186,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2835-tools-allowlist-filters-extension-tools.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "399e5369a79209f30f15e530f940a61230b876bed587b8287eb58520b40b138b"
+      "status": "partial",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "399e5369a79209f30f15e530f940a61230b876bed587b8287eb58520b40b138b",
+      "notes": "Both cases for the built-in tools: an allowlist of read and dynamic_tool registers and activates only read and the prompt lists only '- read: Read file contents'; an empty allowlist registers nothing and the prompt's tools section is '(none)'. Pending: the extension tool dynamic_tool, which the native extension API cannot register. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2860-replaced-session-context.test.ts",
@@ -3285,9 +3290,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5109-exclude-tools.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "3fa0f1a92fd7fb8a5a72c64bdc4ce86959e98b1fdc9a5dfe046f02600f8dcef1"
+      "status": "partial",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "3fa0f1a92fd7fb8a5a72c64bdc4ce86959e98b1fdc9a5dfe046f02600f8dcef1",
+      "notes": "Both cases for the built-in tools: excluded read is neither registered nor active nor in the system prompt while bash, edit and write stay active; excluded names override the allowlist (only bash registered and active). Pending: the extension tools (ask_question, dynamic_tool registered from session_start), which the native extension API cannot register. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5208-late-bash-output.test.ts",
