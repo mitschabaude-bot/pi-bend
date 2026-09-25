@@ -1,0 +1,117 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -3267,8 +3267,9 @@
+ // guarded by its unit number, so `clang -DBEND_TU=k` compiles one share;
+ // with one unit (the default) every guard is unit 0.
+ // With several units, each declares only the segments its own code names
+-// (the dispatch table and its declarations live in unit 0).
+-function compile_segs(fl: File): string {
++// (the dispatch table and its declarations live in unit 0). Also gives
++// what each unit's segments name (the last entry: every unit's).
++function compile_segs(fl: File): [string, Set<string>[]] {
+   const units = Math.max(1, Number(process.env.BEND_TUS ?? "1") | 0);
+   // unit 0 also holds the static image and dispatch table: no segments
+   const sizes = Array(units).fill(0).fill(Infinity, 0, units > 2 ? 1 : 0);
+@@ -3279,7 +3280,7 @@
+       "    WL_OPEN", ...seg.spin ? ["    WL_SPIN"] : [],
+       ...seg.lines, ...seg.spin ? ["    WL_SPUN"] : [], "  }}"];
+     const unit = !seg.host ? units : sizes.indexOf(Math.min(...sizes));
+-    seg.refs.forEach((r) => r.startsWith("FID_") && named[unit].add(r));
++    seg.refs.forEach((r) => named[unit].add(r));
+     if (!seg.host) {
+       return out.join("\n");
+     }
+@@ -3288,8 +3289,49 @@
+   });
+   const decls = named.map((fids, unit) => [unit < units
+     ? `#if !DEVICE && BEND_TUS > 1 && BEND_TU == ${unit}` : "#if !DEVICE && BEND_TUS > 1",
+-  ...[...fids].map((f) => `WL_FN WL_${f}(WL_SIG);`), "#endif"].join("\n"));
+-  return [...decls, ...segs].join("\n\n");
++  ...[...fids].filter((f) => f.startsWith("FID_")).map((f) =>
++    `WL_FN WL_${f}(WL_SIG);`), "#endif"].join("\n"));
++  return [[...decls, ...segs].join("\n\n"), named];
++}
++
++// Each unit holds the spins its segments reach, not all of them: Clang
++// takes seconds per unit to read the unused ones.
++function compile_spins(fl: File, named: Set<string>[]): string[] {
++  const at = new Map(fl.spins.map((s) => [s[0], { s, us: new Set<number>() }]));
++  const reach = (u: number) => (r: string): void => {
++    const x = at.get(r);
++    if (x !== undefined && !x.us.has(u)) {
++      x.us.add(u);
++      x.s[2].forEach(reach(u));
++    }
++  };
++  named.forEach((refs, u) => refs.forEach(reach(u)));
++  const guard = (n: string, c: string) => at.get(n)!.us.has(named.length - 1)
++    ? c : [`#if ${["BEND_TUS == 1", "DEVICE", ...[...at.get(n)!.us].map((u) =>
++      `BEND_TU == ${u}`)].join(" || ")}`, c, "#endif"].join("\n");
++  return [fl.spins.map((s) => guard(s[0], s[1].split("\n")[0]
++    .replace(/ \{$/, ";"))).join("\n"), ...fl.spins.map((s) => guard(s[0], s[1]))];
++}
++
++// The image as literals (Clang folds 300,000 term_make expressions in half
++// a minute). A word that points into the image holds its offset there, and
++// the loader adds STAT_OFF to the words STAT_RELS lists.
++function compile_img(fl: File): [string[], number[]] {
++  const cids = new Map([...fl.cids.keys()].map((k, i) =>
++    [cid_mac(k), BigInt(i)]));
++  const rels: number[] = [];
++  const img = fl.img.map((x, i) => {
++    const m = /^term_(pak|ctr)\((\w+), (STAT_OFF \+ )?(\d+)\)$/.exec(x);
++    const cid = m === null ? undefined : cids.get(m[2]);
++    if (cid === undefined) {
++      return x;
++    }
++    if (m![3] !== undefined) rels.push(i);
++    // TAG_PAK is 1, TAG_CTR 2 (term_make)
++    return `${BigInt(m![1] === "pak" ? 1 : 2) << 56n | cid << 40n
++      | BigInt(m![4])}ull`;
++  });
++  return [img, rels];
+ }
+ 
+ export function compile_book(book: Bend.Book): string {
+@@ -3367,6 +3409,8 @@
+   const defs = compile_tables(fl, entries);
+   defs.push(`#define MAIN_FID ${seg_fid("main")}`, `#define MAIN_PURE ${
+     Number(show !== null)}`);
++  const [segs, named] = compile_segs(fl);
++  const [img, rels] = compile_img(fl);
+   const fills: [string, string[]][] = [
+     ["Tables", [defs.join("\n"), ...[...fl.tabs].map(([r, i]) =>
+       `CONSTV u64 TAB_${i}[] = { ${r} };`)]],
+@@ -3374,16 +3418,17 @@
+     // With several host units, unit 0 holds the static image.
+     ["Spins", [`#if BEND_TUS > 1 && !DEVICE
+ extern const u64 STAT_IMG[];
++extern const u32 STAT_RELS[];
+ #define STAT_KEEP const
+ #else
+ #define STAT_KEEP CONSTV
+ #endif
++#define STAT_RELN ${rels.length}
+ #if BEND_TUS == 1 || DEVICE || BEND_TU == 0
+-STAT_KEEP u64 STAT_IMG[] = { ${fl.img.join(", ") || 0} };
+-#endif`,
+-      fl.spins.map((s) => s[1].split("\n")[0].replace(/ \{$/, ";")).join("\n"),
+-      ...fl.spins.map((s) => s[1])]],
+-    ["Segments", [compile_segs(fl)]],
++STAT_KEEP u64 STAT_IMG[] = { ${img.join(", ") || 0} };
++STAT_KEEP u32 STAT_RELS[] = { ${rels.join(", ") || 0} };
++#endif`, ...compile_spins(fl, named)]],
++    ["Segments", [segs]],
+     ["Requests", [fl.reqs]],
+   ];
+   if (fills.some(([, parts]) => /\bundefined\b/.test(parts.join("\n")))) {
+@@ -5677,6 +5722,9 @@
+   }
+ #endif
+   memcpy(H + STAT_OFF, STAT_IMG, STAT_LEN * sizeof(u64));
++  for (u64 i = 0; i < STAT_RELN; i += 1) {
++    H[STAT_OFF + STAT_RELS[i]] += STAT_OFF;
++  }
+   u64    at = HEAP_OFF + (cap << PAGE_BITS);
+   for (u32 c = 0; c < NCLS_ALL; c += 1) {
+     bank_at(H, c)->off = at;
