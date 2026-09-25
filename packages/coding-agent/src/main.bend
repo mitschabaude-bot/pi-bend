@@ -39,6 +39,7 @@ import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/json.bend as Decode
 import ../../runtime/src/callback.bend as Callback
 import ../../runtime/src/ref.bend as Ref
+import ../../runtime/src/string.bend as Strings
 import ../../runtime/src/record.bend as Record
 import ../../runtime/src/abort.bend as Abort
 
@@ -1013,6 +1014,34 @@ def managedInServices(agentDir: String,services: Services) -> IO(Services & Mayb
   match services:
     case Services{runtime,scope}: managedInRuntime(scope,Runtime.managedTools(runtime,agentDir))
 
+def safeResumeChar(+char: Char) -> Bool:
+  Char.is_alpha(char) || Char.is_digit(char) || Char.is_eq(char,'_') || Char.is_eq(char,'-') || Char.is_eq(char,'.') || Char.is_eq(char,'/') || Char.is_eq(char,'~') || Char.is_eq(char,':') || Char.is_eq(char,'@')
+def safeResumeArg(value: String) -> Bool:
+  match value:
+    case SNil{}: False{}
+    case SCon{char,SNil{}}: safeResumeChar(char)
+    case SCon{char,rest}: safeResumeChar(char) && safeResumeArg(rest)
+def quotedResumeArg(+value: String) -> String:
+  Bool.pick(String,safeResumeArg(value),value,Strings.quoteShell(value))
+type ResumeCommand is Data: ResumeCommand{file: String,command: String}
+def resumeTextFound(file: Maybe<&2,String>,+stored: AgentSession.Session(),agentDir: String) -> Maybe<&2,ResumeCommand>:
+  match file:
+    case None{}: None{}
+    case Some{path}:
+      +directory = Sessions.getSessionDir(Unit,Tools.ToolDetails,V.Value,stored)
+      +custom = Bool.not(Sessions.usesDefaultSessionDir(Unit,Tools.ToolDetails,V.Value,stored,agentDir))
+      +option = Bool.pick(String,custom," --session-dir " ++ quotedResumeArg(directory),"")
+      +command = Config.appName() ++ option ++ " --session " ++ Sessions.getSessionId(Unit,Tools.ToolDetails,V.Value,stored)
+      Bool.pick(Maybe<&2,ResumeCommand>,Sessions.isPersisted(Unit,Tools.ToolDetails,V.Value,stored),Some{ResumeCommand{path,command}},None{})
+def resumeText(+stored: AgentSession.Session(),agentDir: String) -> Maybe<&2,ResumeCommand>:
+  resumeTextFound(Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),stored,agentDir)
+def printResumeFound(found: Maybe<&2,ResumeCommand>) -> IO(Unit):
+  match found:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{ResumeCommand{path,command}}:
+      do IO<Unit>:
+        exists : Bool <- FS.accessible(path,0)
+        Bool.pick(Unit -> IO(Unit),exists,_ => IO.print("\u{1b}[2m\u{1b}[39mTo resume this session:\u{1b}[0m " ++ command),_ => IO.pure(Unit,Unit{}))(Unit{})
 def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, autoTrustOnReload: Bool, tuiMode: Maybe<&2,Settings.TuiMode>, +cwd: String, +agentDir: String, packageDir: String, +host: Host()) -> IO(Unit):
   do IO<Unit>:
     current : Maybe<&2, AgentSession.AgentSession> <- SessionRuntime.session(Services, host)
@@ -1032,7 +1061,7 @@ def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, 
     +resume : Callback.Callback<InteractiveRun.ResumeRequest,SessionRuntime.ResumeOutcome> <- Callback.create(~Host(),~InteractiveRun.ResumeRequest,~SessionRuntime.ResumeOutcome,~resumeInteractive,host)
     tools : Maybe<&2,Manager.ToolsManager> <- SessionRuntime.withServices(Services,Maybe<&2,Manager.ToolsManager>,host,services => managedInServices(agentDir,services),None{})
     SessionRuntime.setRebindSession(Services,host,Some{rebinder})
-    result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.runBound(live,InteractiveRun.Binding{current,Controller.Replacement{startNew,forking},onRebind,login,refresh,importer,sessions,resume,tools,autoTrustOnReload,tuiMode},initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings),catalogModels(catalog))
+    +result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.runBound(live,InteractiveRun.Binding{current,Controller.Replacement{startNew,forking},onRebind,login,refresh,importer,sessions,resume,tools,autoTrustOnReload,tuiMode},initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings),catalogModels(catalog))
     SessionRuntime.setRebindSession(Services,host,None{})
     Callback.dispose(InteractiveRun.LoginRequest,AuthLogin.Outcome(),login)
     Callback.dispose(Unit,List<&2,Models.Model()>,refresh)
@@ -1044,7 +1073,9 @@ def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, 
     Callback.dispose(AgentSession.AgentSession,Unit,rebinder)
     oldHook : Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>,onRebind)
     oldSession : AgentSession.AgentSession <- Ref.dispose(AgentSession.AgentSession,current)
+    stored : AgentSession.Session() <- AgentSession.sessionOf(oldSession)
     SessionRuntime.dispose(Services, host)
+    Bool.pick(Unit -> IO(Unit),Result.is_done(&2,&2,InteractiveRun.Error,Unit,result),_ => printResumeFound(resumeText(stored,agentDir)),_ => IO.pure(Unit,Unit{}))(Unit{})
     interactiveFinished(result)
 
 def rpcNewSession(host: Host(), parent: Maybe<&2,String>) -> IO(Result<&2,&2,String,Unit>):

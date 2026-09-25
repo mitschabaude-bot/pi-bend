@@ -345,8 +345,21 @@ def renderRoot(+base: TuiBase,+width: Nat,+height: Nat) -> IO(ResultOf(PreparedF
             composedRoot(base,result,width,height)
         case Some{node}:
           do IO<ResultOf(PreparedFrame)>:
-            tree : Tree.TreeFrame <- Tree.renderTreeFrame(node,width,height)
-            composedLayout(base,root,tree,width,height)
+          tree : Tree.TreeFrame <- Tree.renderTreeFrame(node,width,height)
+          composedLayout(base,root,tree,width,height)
+
+# The alternate screen restores its complete document to the regular terminal
+# on exit. Rendering the child container here includes offscreen transcript
+# rows, unlike the viewport-sized layout frame.
+def renderedDocument(result: C.Container & List<&2,String>,focus: O.State,bindings: List<&2,Overlay>,displayed: Frame,scheduler: RenderSchedule,show: Bool,clear: Bool,layout: Maybe<&2,N.LayoutNode>) -> TuiBase & List<&2,String>:
+  match result:
+    case (next,lines): (TuiBase{next,focus,bindings,displayed,scheduler,show,clear,layout},lines)
+def renderDocument(base: TuiBase,width: Nat) -> IO(TuiBase & List<&2,String>):
+  match base:
+    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout}:
+      do IO<TuiBase & List<&2,String>>:
+        result : C.Container & List<&2,String> <- C.renderContainer(root,width)
+        return renderedDocument(result,focus,bindings,displayed,scheduler,show,clear,layout)
 
 # Publish displayed hit bounds only after the terminal accepted the prepared frame.
 def commitFrame(value: PreparedFrame) -> TuiBase:

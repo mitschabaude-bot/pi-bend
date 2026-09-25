@@ -126,15 +126,17 @@
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend",
         "packages/coding-agent/src/modes/interactive/run.bend",
         "packages/coding-agent/src/modes/interactive/commands.bend",
-        "packages/coding-agent/src/modes/interactive/viewport.bend"
+        "packages/coding-agent/src/modes/interactive/viewport.bend",
+        "packages/coding-agent/src/main.bend"
       ],
-      "note": "Interactive theme selection, per-model thinking overrides, /thinking and /scoped-models flows work. Fullscreen startup and typing now match terminal parity with both CLI override and saved setting; exit output, mouse/search controls, dynamic mode switching, and broader command behavior remain partial.",
+      "note": "Interactive theme selection, per-model thinking overrides, /thinking and /scoped-models flows work. Fullscreen startup/typing match terminal parity via CLI override and saved setting; regular Ctrl+D exit and persisted-session resume hint also match. Fullscreen exit presentation, mouse/search controls, dynamic mode switching, and broader commands remain partial.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "23a8e54c1d30b54424d1e29508abdf12385cb5dec8e142b675becdb2c540b2d4",
         "packages/coding-agent/src/modes/interactive/run.bend": "59545810e0627743d6f57b3a9389ca950f127d19ff1cb457f00e226b0573e385",
         "packages/coding-agent/src/modes/interactive/commands.bend": "346a1437fb1f5d4b429ae47416c1ab464e043ee8a5d7ec79a269fdc417a3092a",
-        "packages/coding-agent/src/modes/interactive/viewport.bend": "b5e0bae4b4c857909a36a9f14c3f60bbc3a1c6ab04391492a36958b9616a6eb2"
+        "packages/coding-agent/src/modes/interactive/viewport.bend": "b5e0bae4b4c857909a36a9f14c3f60bbc3a1c6ab04391492a36958b9616a6eb2",
+        "packages/coding-agent/src/main.bend": "01410adc82ed2d2cae836504662a63e14c88051321d081dac8c907ad20da3535"
       }
     },
     "packages/tui/src/editor-component.ts": {
@@ -150,14 +152,16 @@
     },
     "packages/tui/src/tui-alt-screen.ts": {
       "state": "partial",
-      "note": "Native alternate-screen lifecycle and frame diff render match upstream startup and typing in a 100x32 terminal. Upstream mouse selection, search, image placement, exit transcript/resume hint, and scrolling controls remain unported; the upstream test suite is still pending.",
+      "note": "Native alternate-screen startup/typing match upstream in plain and ANSI terminal captures. On exit the full document and resume hint are restored for persisted conversations, but dock spacing/cursor styling and empty-session output differ. Mouse selection, search, image placement, and viewport scrolling controls remain unported; the upstream test suite is pending.",
       "source_sha256": "5f6032a07398b8df3f72d65c38dbed2e52649a25823a52946d6414ddb2f8a929",
       "port_sha256": {
-        "packages/tui/src/tui-alt-screen.bend": "78580f6d89bba846586342c3740f660641e704b88455af7e581d3bbdd486e3d8",
-        "packages/tui/src/tui-process.bend": "ad3b9e79b2bf850ea1990ecd3cdd1485314fd76239b13bdc4d7f6ee9172a85a2"
+        "packages/tui/src/tui-alt-screen.bend": "b6ab2ca8eccaece23ff2b390b2a74b57571bbbb0e5563b31ec222b8a3cdba800",
+        "packages/tui/src/tui-base.bend": "9242bad46a7bf3f72320d46193d1d70f26717ff21e488439311a3ce43bd8cc86",
+        "packages/tui/src/tui-process.bend": "145c8580930eccda0e36976aea501fdb86a80ed2addc7927f42add11e05ae759"
       },
       "ports": [
         "packages/tui/src/tui-alt-screen.bend",
+        "packages/tui/src/tui-base.bend",
         "packages/tui/src/tui-process.bend"
       ]
     },

@@ -1,6 +1,8 @@
 import Base
 import ../../runtime/src/string.bend as Strings
 import ./tui-main-screen.bend as Screen
+import ./terminal-image.bend as Image
+import ./utils.bend as Layout
 import ./tui.bend as Tui
 
 # The alternate screen owns a fixed-size image of the terminal. Rendering is a
@@ -11,6 +13,22 @@ type Plan is Data: Plan{state: State,output: Screen.Stream}
 def initial() -> State: State{Nil{},None{},None{}}
 def enter() -> String: "\u{1b}[?1049h\u{1b}[?7l\u{1b}[?1000h\u{1b}[?1002h\u{1b}[?1006h\u{1b}[2J\u{1b}[H\u{1b}[?25l"
 def leave() -> String: "\u{1b}[?2026h\u{1b}[?1000l\u{1b}[?1002l\u{1b}[?1003l\u{1b}[?1006l\u{1b}[?7h\u{1b}[?1049l\u{1b}[?25h\u{1b}[?2026l"
+def documentLinePrepared(reset: List<&2,String>,+width: Nat) -> String:
+  match reset:
+    case Nil{}: ""
+    case +value <> _:
+      Bool.pick(Unit -> String,Image.isImageLine(value) || Nat.is_le(Layout.visibleWidth(value),width),_ => value,_ => Layout.sliceByColumn(value,0n,width,True{}))(Unit{})
+def documentLine(line: String,width: Nat) -> String:
+  documentLinePrepared(Tui.applyLineResets(Strings.replaceAll(line,Tui.CURSOR_MARKER(),"") <> Nil{}),width)
+def documentRows(lines: List<&2,String>,+width: Nat,first: Bool,reversed: List<&2,Screen.Operation>) -> List<&2,Screen.Operation>:
+  match lines:
+    case Nil{}: List.reverse(&2,Screen.Operation,reversed)
+    case +line <> rest:
+      +prefix = Bool.pick(String,first,"","\r\n")
+      documentRows(rest,width,False{},Screen.Text{prefix ++ "\r\u{1b}[2K" ++ documentLine(line,width)} <> reversed)
+def leaveWithDocument(lines: List<&2,String>,width: Nat) -> Screen.Stream:
+  Screen.stream(Screen.Text{"\u{1b}[?2026h\u{1b}[?1006l\u{1b}[?1004l\u{1b}[?1003l\u{1b}[?1002l\u{1b}[?1000l\u{1b}[?7h\u{1b}[?1049l\u{1b}[?7l"} <>
+    List.append(&2,Screen.Operation,documentRows(lines,width,True{},Nil{}),Screen.Text{"\u{1b}[0m\u{1b}[?7h\r\n\u{1b}[?25h\u{1b}[?2026l"} <> Nil{}))
 def reset(state: State) -> State:
   match state:
     case State{_,_,_}: initial()

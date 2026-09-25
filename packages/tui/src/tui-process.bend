@@ -326,12 +326,17 @@ def queryResult(closed: Result<&2,&2,Terminal.Error,Unit>,failure: Maybe<&2,Term
   match failure:
     case Some{error}: Fail{error}
     case None{}: completed(closed,state)
-def beforeStop(current: Active) -> IO(Active & Screen.Stream):
+def afterDocument(document: Tui.TuiBase & List<&2,String>,state: Alt.State,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,error: Maybe<&2,Error>,owed: Bool,ticks: Nat,width: Nat) -> Active & Screen.Stream:
+  match document:
+    case (next,lines): (Active{Session{next,Fullscreen{state}},components,mounted,error,owed,ticks},Alt.leaveWithDocument(lines,width))
+def beforeStop(current: Active,+width: Nat) -> IO(Active & Screen.Stream):
   match current:
     case Active{Session{tui,Main{+state}},components,mounted,error,owed,ticks}:
       IO.pure(Active & Screen.Stream,(Active{Session{tui,Main{state}},components,mounted,error,owed,ticks},Screen.beforeTerminalStop(state,False{})))
     case Active{Session{tui,Fullscreen{state}},components,mounted,error,owed,ticks}:
-      IO.pure(Active & Screen.Stream,(Active{Session{tui,Fullscreen{state}},components,mounted,error,owed,ticks},Screen.stream(Screen.Text{Alt.leave()} <> Nil{})))
+      do IO<Active & Screen.Stream>:
+        document : Tui.TuiBase & List<&2,String> <- Tui.renderDocument(tui,width)
+        return afterDocument(document,state,components,mounted,error,owed,ticks,width)
 def isFullscreen(current: Active) -> IO(Active & Bool):
   match current:
     case Active{Session{_,Main{_}},_,_,_,_,_}: IO.pure(Active & Bool,(current,False{}))
@@ -361,7 +366,8 @@ def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Ow
         stopRendering : List<&2,Tui.RenderEffect> <- Serial.run(Active,List<&2,Tui.RenderEffect>,handle,current => scheduledOperation(Tui.StopRendering{},current,terminalHandle,termux))
         waitTicks(handle,1000n)
         Query.setRunning(queries,writer,False{})
-        cleanup : Screen.Stream <- Serial.run(Active,Screen.Stream,handle,beforeStop)
+        columns : U32 <- Terminal.getColumns(terminalHandle)
+        cleanup : Screen.Stream <- Serial.run(Active,Screen.Stream,handle,current => beforeStop(current,U32.to_nat(columns)))
         written : Result<&2,&2,Terminal.Error,Unit> <- writeEffects(terminalHandle,cleanup)
         closed : Result<&2,&2,Terminal.Error,Unit> <- Terminal.stop(terminal)
         final : Active <- Serial.retire(Active,owner)
