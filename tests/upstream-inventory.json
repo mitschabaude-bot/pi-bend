@@ -2459,9 +2459,14 @@
     },
     {
       "source": "packages/coding-agent/test/management-http.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2b0e2f0e179c2ddbe4aa91540728265d8703167f482375e519aebe459c4f406b"
+      "status": "partial",
+      "ports": [
+        "tests/tools-manager.bend",
+        "tests/tools_manager_check.py",
+        "tests/tools-manager.md"
+      ],
+      "sha256": "2b0e2f0e179c2ddbe4aa91540728265d8703167f482375e519aebe459c4f406b",
+      "notes": "Through tools-manager downloads against a local server on native 1 and 4 threads: 'retries a transient transport failure once' (two dropped connections, then success, three requests) and 'retries transient HTTP responses and returns the successful response' (503s then 200). 'shares the timeout budget across attempts' holds by construction (one Deadline scope and signal for all attempts) but is not asserted. Pending: 'retries an attempt timeout' (attemptTimeoutMs is not ported; upstream uses it only for the unported remote catalog) and 'does not retry caller cancellation' (the fixture has no aborted caller signal)."
     },
     {
       "source": "packages/coding-agent/test/max-thinking.test.ts",
@@ -3222,7 +3227,7 @@
         "tests/regressions.bend"
       ],
       "sha256": "f70380b8bfa385cf648745405522b92378b9c73d039879995337973dddc167ba",
-      "notes": "Direct reload and setter/flush/reload through tests/settings-manager.bend; the DefaultResourceLoader case is AgentSession.reload over SettingsManager.inMemory (tests/regressions.bend settings_reload). Bun lane."
+      "notes": "Direct reload and setter/flush/reload through tests/settings-manager.bend; the DefaultResourceLoader case is AgentSession.reload over SettingsManager.inMemory (tests/regressions.bend settings_reload). Bun lane; the tests/regressions.bend scenarios also pass natively on 1 and 4 threads."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3686-session-name-event.test.ts",
@@ -3232,7 +3237,7 @@
         "tests/regressions.bend"
       ],
       "sha256": "71fca90399b614893741b8e0bc28dd976b20134939cd5d44997bd4e02cb25f7c",
-      "notes": "'emits session_info_changed when AgentSession.setSessionName is called' passes. Pending: the two extension cases (pi.setSessionName and session_info_changed delivered to extensions), which the native extension API does not expose yet. Bun lane."
+      "notes": "'emits session_info_changed when AgentSession.setSessionName is called' passes. Pending: the two extension cases (pi.setSessionName and session_info_changed delivered to extensions), which the native extension API does not expose yet. Bun lane; the tests/regressions.bend scenarios also pass natively on 1 and 4 threads."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3688-tree-cancel-compacting.test.ts",
@@ -3471,7 +3476,7 @@
         "tests/regressions.md"
       ],
       "sha256": "bde1a3c51d6867ff2c453357dd07516b423b5c26aae4f30933553aa28328019b",
-      "notes": "A prompt while a manual compaction's summary request is held open fails with the compaction-in-progress error; the probe is neither in the context nor persisted; no agent_start or agent_settled. The hold is a gated summarizer request instead of a session_before_compact handler; the failed result stands for preflightResult(false). Bun lane."
+      "notes": "A prompt while a manual compaction's summary request is held open fails with the compaction-in-progress error; the probe is neither in the context nor persisted; no agent_start or agent_settled. The hold is a gated summarizer request instead of a session_before_compact handler; the failed result stands for preflightResult(false). Bun lane; the tests/regressions.bend scenarios also pass natively on 1 and 4 threads."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7153-scoped-models-refresh.test.ts",
@@ -3509,7 +3514,7 @@
         "tests/regressions.md"
       ],
       "sha256": "088eade6d22da9ea35b4f1668dfe19b68651042cf4a30f51d9a220999e6392d1",
-      "notes": "The second response is held until compact() has aborted it, then released: one manual compaction_start/end, the aborted assistant entry is persisted before the single compaction entry. Adaptations: the noop tool call runs against no tools, and the summary is a scripted reply (the result's summary contains 'manual summary'). Bun lane."
+      "notes": "The second response is held until compact() has aborted it, then released: one manual compaction_start/end, the aborted assistant entry is persisted before the single compaction entry. Adaptations: the noop tool call runs against no tools, and the summary is a scripted reply (the result's summary contains 'manual summary'). Bun lane; the tests/regressions.bend scenarios also pass natively on 1 and 4 threads."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7269-cli-end-of-options.test.ts",
@@ -3520,7 +3525,7 @@
         "tests/cli-args.bend"
       ],
       "sha256": "679b006e7ca063961eac153b8d5958c56bb5bb4ea4658415b361d01eb8817420",
-      "notes": "All three cases: parseArgs through tests/cli-args.bend (messages, unknownFlags, diagnostics, fileArgs) and the parsed prompt through the faux session's user messages. Bun lane."
+      "notes": "All three cases: parseArgs through tests/cli-args.bend (messages, unknownFlags, diagnostics, fileArgs) and the parsed prompt through the faux session's user messages. Bun lane; the tests/regressions.bend scenarios also pass natively on 1 and 4 threads."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7290-json-stream-linear.test.ts",
@@ -3531,7 +3536,7 @@
         "tests/regressions.md"
       ],
       "sha256": "51353e72b7bd93fbade029e8c411e05f3104ffdba5bb2ff161764181df722e41",
-      "notes": "Wire message_update bytes for 2000 and 4000 characters over a chunking faux: larger, ratio below 2.2, no message or partial on the wire. Adaptations in tests/regressions.md (fixed chunk size; typed session events). Bun lane."
+      "notes": "Wire message_update bytes for 2000 and 4000 characters over a chunking faux: larger, ratio below 2.2, no message or partial on the wire. Adaptations in tests/regressions.md (fixed chunk size; typed session events). Bun lane; the tests/regressions.bend scenarios also pass natively on 1 and 4 threads."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7301-stalled-availability-refresh.test.ts",
@@ -3586,7 +3591,7 @@
         "tests/regressions.md"
       ],
       "sha256": "22454a026f3e7456bec9cf19934ed2ea2374250eda6574b7f58fc7d868a2f11b",
-      "notes": "The wire update's usage equals the session event's assistant usage, without snapshots. Bun lane."
+      "notes": "The wire update's usage equals the session event's assistant usage, without snapshots. Bun lane; the tests/regressions.bend scenarios also pass natively on 1 and 4 threads."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7925-toolcall-start-metadata.test.ts",
@@ -3597,7 +3602,7 @@
         "tests/regressions.md"
       ],
       "sha256": "fd05bd39358272ec460f00eb886a9d4dd8e483b19a19b0e92a61f7bd175a8599",
-      "notes": "The toolcall_start wire event equals upstream's expected object (usage, contentIndex, id, toolName). The session has no write tool, so the call's result is an error; not asserted upstream. Bun lane."
+      "notes": "The toolcall_start wire event equals upstream's expected object (usage, contentIndex, id, toolName). The session has no write tool, so the call's result is an error; not asserted upstream. Bun lane; the tests/regressions.bend scenarios also pass natively on 1 and 4 threads."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8237-node-sea-extension-loading.test.ts",
@@ -3620,7 +3625,7 @@
         "tests/regressions.md"
       ],
       "sha256": "d674c7a6ec94e556c900217e3dfb2e72cba55cfac4598929cc1fd939517d30dc",
-      "notes": "Both cases end to end: a zero-usage reply to 400 characters under a 100-token window compacts with reason threshold and willRetry false; a short prompt does not. Upstream spies _runAutoCompaction; the port observes the compaction events (keepRecentTokens: 1 so a preparation exists). Bun lane."
+      "notes": "Both cases end to end: a zero-usage reply to 400 characters under a 100-token window compacts with reason threshold and willRetry false; a short prompt does not. Upstream spies _runAutoCompaction; the port observes the compaction events (keepRecentTokens: 1 so a preparation exists). Bun lane; the tests/regressions.bend scenarios also pass natively on 1 and 4 threads."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8337-utf8-bom-parsing.test.ts",
@@ -3680,7 +3685,7 @@
         "tests/regressions.bend"
       ],
       "sha256": "5fed6fff1f8102587cd2676be2365685a10328679cc6af068c70f2d62ec94628",
-      "notes": "SessionManager.inMemory, label, compaction at the label, createBranchedSession: firstKeptEntryId moves to the kept entry and the context is summary, kept, after. Ids are explicit stamps. Bun lane."
+      "notes": "SessionManager.inMemory, label, compaction at the label, createBranchedSession: firstKeptEntryId moves to the kept entry and the context is summary, kept, after. Ids are explicit stamps. Bun lane; the tests/regressions.bend scenarios also pass natively on 1 and 4 threads."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9068-user-bash-fail-closed.test.ts",
@@ -3727,7 +3732,7 @@
         "tests/regressions.md"
       ],
       "sha256": "1eb3a140e8be50683ab91d3ee85561f8d050d2ce802bcc1677f8903a2a28fd4b",
-      "notes": "Seeded length-stop assistant with usage 100 in a 100-token window: the prompt compacts first (overflow, not aborted, willRetry true), then runs once; no continue request. The summary is a scripted reply instead of a session_before_compact result, so the provider sees two requests. Bun lane."
+      "notes": "Seeded length-stop assistant with usage 100 in a 100-token window: the prompt compacts first (overflow, not aborted, willRetry true), then runs once; no continue request. The summary is a scripted reply instead of a session_before_compact result, so the provider sees two requests. Bun lane; the tests/regressions.bend scenarios also pass natively on 1 and 4 threads."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/startup-session-rebind-duplicate-subscription.test.ts",

@@ -9,6 +9,7 @@ import io
 import os
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 import tarfile
 import tempfile
@@ -49,6 +50,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.reply(302, headers=[('Location', '/loop')])
         elif self.path == '/flaky':
             self.reply(503 if count <= 2 else 200, b'flaky' if count <= 2 else PAYLOAD)
+        elif self.path == '/dropped':
+            # A transport failure: the connection closes without a response.
+            if count <= 2:
+                self.close_connection = True
+                self.connection.shutdown(socket.SHUT_RDWR)
+            else:
+                self.reply(200, PAYLOAD)
         elif self.path == '/unavailable':
             self.reply(503, b'down')
         elif self.path == '/teapot':
@@ -100,9 +108,14 @@ for backend in a.backends:
         assert dest.read_bytes() == PAYLOAD
         assert run('download', f'http://127.0.0.1:{port}/loop', str(base / 'loop')) == [('error', 'fetch failed: redirect count exceeded')]
         assert hits['/loop'] == 3 * 21, hits  # every attempt follows 20 redirects
+        # management-http.test.ts: 'retries transient HTTP responses and returns the successful response'
         dest = base / 'flaky'
         assert run('download', f'http://127.0.0.1:{port}/flaky', str(dest)) == [('ok', '')]
         assert dest.read_bytes() == PAYLOAD and hits['/flaky'] == 3
+        # management-http.test.ts: 'retries a transient transport failure once' (two failures, then success)
+        dest = base / 'dropped'
+        assert run('download', f'http://127.0.0.1:{port}/dropped', str(dest)) == [('ok', '')]
+        assert dest.read_bytes() == PAYLOAD and hits['/dropped'] == 3
         url = f'http://127.0.0.1:{port}/unavailable'
         assert run('download', url, str(base / 'down')) == [('error', f'Download failed with HTTP 503: {url}')]
         assert hits['/unavailable'] == 3 and not (base / 'down').exists()

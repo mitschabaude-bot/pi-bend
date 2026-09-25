@@ -1,6 +1,6 @@
 # tools-manager and management HTTP
 
-`coding-agent/src/utils/tools-manager.bend` ports upstream's `tools-manager.ts`, and `utils/management-http.bend` ports its `fetchWithRetry`. Upstream has no test file for either, so these are native checks.
+`coding-agent/src/utils/tools-manager.bend` ports upstream's `tools-manager.ts`, and `utils/management-http.bend` ports its `fetchWithRetry`. Upstream has no test file for the tools manager; `management-http.test.ts` is partly ported here (below), and the rest are native checks.
 
 - **Lookup.** `getToolPath` checks the bin directory first, then the system names on PATH (`fd`/`fdfind`, `rg`). A candidate counts only if it can be started with `--version`, as in upstream's `commandExists`.
 - **ensureTool.** `PI_OFFLINE` values `1`, `true` or `yes` (case-insensitive) skip the download with upstream's warning. Otherwise it reports "… not found. Downloading…" and then "… installed to …" or "Failed to download …: …" through the optional status callback.
@@ -22,10 +22,11 @@
 
 ## Checks
 
-`tests/tools_manager_check.py` runs 16 scenarios on native one and four workers against a local HTTP server and generated archives:
+`tests/tools_manager_check.py` runs 17 scenarios on native one and four workers against a local HTTP server and generated archives:
 - plain, relative and absolute redirects;
 - the 21-request redirect limit on each of 3 attempts;
-- retried 503/429 followed by success or a final status;
+- retried 503/429 followed by success or a final status (management-http.test.ts: "retries transient HTTP responses and returns the successful response");
+- two dropped connections followed by success (management-http.test.ts: "retries a transient transport failure once");
 - no retry for 404;
 - versioned, root and nested archive layouts;
 - a missing binary and a corrupt archive (with cleanup and 0755 checks);
