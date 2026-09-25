@@ -11,7 +11,7 @@
 - An object that parses as JSON but does not decode as a session entry is skipped like a malformed line; upstream would carry it untyped.
 - Usage members `totalTokens` and `cost` absent from sessions written before they existed read as zero.
 - `inMemory` with typed entries cannot carry a `hookMessage` role; the v2-header case is checked through the header version and entry ids, and the headerless `hookMessage` case is not representable.
-- Session listings summarize files one after another; upstream loads ten concurrently.
+- Session listings summarize files one after another; upstream loads ten concurrently. Each file is now folded one JSONL record at a time, so listing does not also retain a full decoded file and a parsed-value list.
 - Session ids are validated by a character walk equivalent to `/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/`; short entry ids are eight hex digits from four OS-random bytes, collision-checked against the index, with a UUIDv7 after 100 collisions, as upstream.
 
 ## Primitives

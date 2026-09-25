@@ -361,6 +361,28 @@ def check_modified(results, path):
     session = [s for s in results[5]['sessions'] if s['path'] == path][0]
     assert session['modified'] == msg_time, (session['modified'], msg_time)
 
+def scenario_streamed_listing(temp):
+    path = Path(temp) / 'streamed.jsonl'
+    header = header_line('streamed', '/project') + '\n'
+    message = {'type': 'message', 'id': '00000001', 'parentId': None, 'timestamp': '2025-01-01T00:00:01Z',
+               'message': {'role': 'user', 'content': '', 'timestamp': 1}}
+    sample = json.dumps(message, ensure_ascii=False)
+    marker = sample.index('"content": "') + len('"content": "')
+    padding = (4095 - (len(header.encode()) + marker) % 4096) % 4096
+    message['message']['content'] = 'a' * padding + '文'
+    path.write_text(header + json.dumps(message, ensure_ascii=False) + '\nnot-json\n'
+                    + json.dumps({'type': 'session_info', 'name': 'Streamed'}) + '\n'
+                    + json.dumps({'type': 'message', 'id': '00000002', 'parentId': '00000001',
+                                  'timestamp': '2025-01-01T00:00:02Z',
+                                  'message': {'role': 'user', 'content': 'last line', 'timestamp': 2}}))
+    return [{'op': 'list', 'cwd': '/project', 'sessionDir': temp}]
+
+def check_streamed_listing(results):
+    session = results[0]['sessions'][0]
+    assert session['messageCount'] == 2
+    assert session['name'] == 'Streamed'
+    assert '文' in session['allMessagesText'] and 'last line' in session['allMessagesText']
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--runner', default='build/session-file.js')
@@ -394,6 +416,7 @@ def main():
         def file_ops(temp):
             ops, checks = scenario_file_operations(temp); file_ops.checks = checks; return ops
         both('file-operations', file_ops, checks=lambda temp: file_ops.checks, post=lambda n, t, o, r: check_same_id(r))
+        both('streamed-listing', scenario_streamed_listing, post=lambda n, t, o, r: check_streamed_listing(r))
         both('flat-directory', lambda temp: scenario_flat_directory(temp)[0], post=lambda n, t, o, r: scenario_flat_checks(r))
         # load-entries runs in two phases: stored entries are built per runner, then restored.
         phase_one, sources = {}, None

@@ -618,17 +618,33 @@ def infoOf(path: String, summary: Summary, mtime: F64) -> Maybe<&2, S.SessionInf
       Some{S.SessionInfo{path, id, cwd, name, parentSession, Maybe.default(&2, F64, created, F.nan()), modifiedTime(activity, created, mtime), count, Bool.pick(String, String.is_empty(first), "(no messages)", first), String.join(List.reverse(&2, String, texts), " ")}}
     case _: None{}
 
-def summarized(path: String, bytes: Result<&2, &2, FS.Error, List<&2, U32>>, modified: Result<&2, &2, FS.Error, F64>) -> Maybe<&2, S.SessionInfo>:
-  match bytes modified:
-    case Done{content} Done{mtime}:
-      Maybe.bind(&2, String, S.SessionInfo, decodedText(content), text => infoOf(path, summarize(SJ.parsedLines(String.split(text, '\n'), Nil{}), emptySummary()), mtime))
+# Session metadata is a fold over JSONL records. A long session should not
+# materialize its entire file, its lines, and all parsed values just to draw a
+# row in the picker.
+type InfoScan is Data: InfoScan{pending: List<&2, U32>, summary: Summary}
+def summarizedValue(value: Maybe<&2, V.Value>, summary: Summary) -> Summary:
+  match value:
+    case None{}: summary
+    case Some{value}: summarizeValue(summary, value)
+def summarizedLine(pending: List<&2, U32>, summary: Summary) -> Summary:
+  summarizedValue(parsedBytes(List.reverse(&2, U32, pending)), summary)
+def scannedBytes(bytes: List<&2, U32>, scan: InfoScan) -> InfoScan:
+  match bytes scan:
+    case Nil{} current: current
+    case 10 <> rest InfoScan{pending, summary}: scannedBytes(rest, InfoScan{Nil{}, summarizedLine(pending, summary)})
+    case byte <> rest InfoScan{pending, summary}: scannedBytes(rest, InfoScan{byte <> pending, summary})
+def consumeInfo(scan: InfoScan, bytes: List<&2, U32>) -> Fold.Control<InfoScan>:
+  Fold.Continue{scannedBytes(bytes, scan)}
+def scannedInfo(path: String, outcome: Fold.Outcome<InfoScan>, modified: Result<&2, &2, FS.Error, F64>) -> Maybe<&2, S.SessionInfo>:
+  match outcome modified:
+    case Fold.Outcome{InfoScan{pending, summary}, Done{_}} Done{mtime}: infoOf(path, summarizedLine(pending, summary), mtime)
     case _ _: None{}
 
 def buildSessionInfo(+path: String) -> IO(Maybe<&2, S.SessionInfo>):
   do IO<Maybe<&2, S.SessionInfo>>:
     modified : Result<&2, &2, FS.Error, F64> <- FS.modified(path)
-    bytes : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile(path)
-    return summarized(path, bytes, modified)
+    scan : Fold.Outcome<InfoScan> <- Fold.read(~InfoScan, ~consumeInfo, path, 4096, InfoScan{Nil{}, emptySummary()})
+    return scannedInfo(path, scan, modified)
 
 def infosOf(files: List<&2, String>, +reversed: List<&2, S.SessionInfo>) -> IO(List<&2, S.SessionInfo>):
   match files:
