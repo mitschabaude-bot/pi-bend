@@ -6,6 +6,8 @@ import ../../../../../tui/src/components/loader.bend as Loader
 import ../../../core/tools/truncate.bend as Truncate
 import ../../../../../tui/src/utils.bend as U
 import ../theme/theme.bend as Theme
+import ../../../../../tui/src/keybindings.bend as Bindings
+import ./keybinding-hints.bend as Hints
 import ./session-info.bend as SessionInfo
 import ../../../../../runtime/src/callback.bend as Callback
 import ../../../../../runtime/src/ref.bend as Ref
@@ -191,9 +193,9 @@ type BashStatus is Data:
   BashRunning{}
   BashComplete{exitCode: Maybe<&2,U32>,cancelled: Bool,truncated: Bool,fullOutputPath: Maybe<&2,String>}
 type BashMessage is Data:
-  BashMessage{command: String,output: String,status: BashStatus,excluded: Bool,theme: Theme.Theme,expanded: Bool}
-def bash(command: String,excluded: Bool,theme: Theme.Theme,expanded: Bool) -> BashMessage:
-  BashMessage{command,"",BashRunning{},excluded,theme,expanded}
+  BashMessage{command: String,output: String,status: BashStatus,excluded: Bool,theme: Theme.Theme,expanded: Bool,bindings: Bindings.KeybindingsManager}
+def bash(command: String,excluded: Bool,theme: Theme.Theme,expanded: Bool,bindings: Bindings.KeybindingsManager) -> BashMessage:
+  BashMessage{command,"",BashRunning{},excluded,theme,expanded,bindings}
 def normalizedOutput(text: String) -> String:
   match text:
     case SNil{}: ""
@@ -202,19 +204,19 @@ def normalizedOutput(text: String) -> String:
     case SCon{char,rest}: SCon{char,normalizedOutput(rest)}
 def appendBash(state: BashMessage,chunk: String) -> BashMessage:
   match state:
-    case BashMessage{command,output,status,excluded,theme,expanded}: BashMessage{command,output ++ normalizedOutput(U.stripTerminalSequences(chunk)),status,excluded,theme,expanded}
+    case BashMessage{command,output,status,excluded,theme,expanded,bindings}: BashMessage{command,output ++ normalizedOutput(U.stripTerminalSequences(chunk)),status,excluded,theme,expanded,bindings}
 def completeBash(state: BashMessage,output: String,exitCode: Maybe<&2,U32>,cancelled: Bool,truncated: Bool,path: Maybe<&2,String>) -> BashMessage:
   match state:
-    case BashMessage{command,_,_,excluded,theme,expanded}: BashMessage{command,normalizedOutput(U.stripTerminalSequences(output)),BashComplete{exitCode,cancelled,truncated,path},excluded,theme,expanded}
+    case BashMessage{command,_,_,excluded,theme,expanded,bindings}: BashMessage{command,normalizedOutput(U.stripTerminalSequences(output)),BashComplete{exitCode,cancelled,truncated,path},excluded,theme,expanded,bindings}
 # upstream: a failed execution completes without an exit code; the caller
 # shows the error.
 def failBash(state: BashMessage) -> BashMessage:
   match state:
-    case BashMessage{command,output,_,excluded,theme,expanded}: BashMessage{command,output,BashComplete{None{},False{},False{},None{}},excluded,theme,expanded}
+    case BashMessage{command,output,_,excluded,theme,expanded,bindings}: BashMessage{command,output,BashComplete{None{},False{},False{},None{}},excluded,theme,expanded,bindings}
 def bashTheme(state: BashMessage,theme: Theme.Theme) -> BashMessage:
-  match state: case BashMessage{command,output,status,excluded,_,expanded}: BashMessage{command,output,status,excluded,theme,expanded}
+  match state: case BashMessage{command,output,status,excluded,_,expanded,bindings}: BashMessage{command,output,status,excluded,theme,expanded,bindings}
 def bashExpanded(state: BashMessage,expanded: Bool) -> BashMessage:
-  match state: case BashMessage{command,output,status,excluded,theme,_}: BashMessage{command,output,status,excluded,theme,expanded}
+  match state: case BashMessage{command,output,status,excluded,theme,_,bindings}: BashMessage{command,output,status,excluded,theme,expanded,bindings}
 def bashBorder(count: Nat) -> String:
   match count:
     case Zero{}: ""
@@ -224,12 +226,11 @@ def bashColor(excluded: Bool) -> String:
 # upstream BashExecutionComponent. Key texts are keyText's defaults for
 # tui.select.cancel and app.tools.expand.
 def PREVIEW_LINES() -> Nat: 20n
-def cancelKeys() -> String: "escape/ctrl+c"
 def expandKeys() -> String: "ctrl+o"
-def bashRunning(+theme: Theme.Theme,key: String,width: Nat) -> IO(List<&2,String>):
+def bashRunning(+theme: Theme.Theme,key: String,width: Nat,bindings: Bindings.KeybindingsManager) -> IO(List<&2,String>):
   do IO<List<&2,String>>:
     spinner : String <- foregroundText(theme,key,Loader.frameAt(Loader.defaultFrames(),0n))
-    message : String <- foregroundText(theme,"muted","Running... (" ++ cancelKeys() ++ " to cancel)")
+    message : String <- foregroundText(theme,"muted","Running... (" ++ Hints.keyText(bindings,"tui.select.cancel") ++ " to cancel)")
     lines : List<&2,String> <- textLines(spinner ++ " " ++ message,1n,width)
     return "" <> lines
 # The displayed lines follow the context truncation of the bash tool.
@@ -258,24 +259,19 @@ def bashOutput(lines: List<&2,String>,+theme: Theme.Theme,+expanded: Bool,width:
         painted : List<&2,String> <- bashPaintedLines(Bool.pick(List<&2,String>,expanded,lines,lastLines(lines,PREVIEW_LINES())),theme,Nil{})
         +visual : List<&2,String> <- textLines("\n" ++ String.join(painted,"\n"),1n,width)
         return Bool.pick(List<&2,String>,expanded,visual,lastLines(visual,PREVIEW_LINES()))
-def keyHint(+theme: Theme.Theme,description: String) -> IO(String):
-  do IO<String>:
-    key : String <- foregroundText(theme,"dim",expandKeys())
-    text : String <- foregroundText(theme,"muted"," " ++ description)
-    return key ++ text
-def hiddenPart(+theme: Theme.Theme,+hidden: Nat,expanded: Bool) -> IO(List<&2,String>):
+def hiddenPart(+theme: Theme.Theme,+hidden: Nat,expanded: Bool,bindings: Bindings.KeybindingsManager) -> IO(List<&2,String>):
   match hidden expanded:
     case Zero{} _: IO.pure(List<&2,String>,Nil{})
     case Succ{_} True{}:
       do IO<List<&2,String>>:
         open : String <- foregroundText(theme,"muted","(")
-        hint : String <- keyHint(theme,"to collapse")
+        hint : String <- IO.pure(String,Hints.keyHint(theme,bindings,"app.tools.expand","to collapse"))
         close : String <- foregroundText(theme,"muted",")")
         return [open ++ hint ++ close]
     case Succ{_} False{}:
       do IO<List<&2,String>>:
         open : String <- foregroundText(theme,"muted","... " ++ Nat.show(hidden) ++ " more lines (")
-        hint : String <- keyHint(theme,"to expand")
+        hint : String <- IO.pure(String,Hints.keyHint(theme,bindings,"app.tools.expand","to expand"))
         close : String <- foregroundText(theme,"muted",")")
         return [open ++ hint ++ close]
 def endingPart(+theme: Theme.Theme,cancelled: Bool,exitCode: Maybe<&2,U32>) -> IO(List<&2,String>):
@@ -300,18 +296,18 @@ def statusLines(parts: List<&2,String>,width: Nat) -> IO(List<&2,String>):
   match parts:
     case Nil{}: IO.pure(List<&2,String>,Nil{})
     case parts: textLines("\n" ++ String.join(parts,"\n"),1n,width)
-def bashStatus(status: BashStatus,+theme: Theme.Theme,key: String,+hidden: Nat,expanded: Bool,contextCut: Bool,+width: Nat) -> IO(List<&2,String>):
+def bashStatus(status: BashStatus,+theme: Theme.Theme,key: String,+hidden: Nat,expanded: Bool,contextCut: Bool,+width: Nat,bindings: Bindings.KeybindingsManager) -> IO(List<&2,String>):
   match status:
-    case BashRunning{}: bashRunning(theme,key,width)
+    case BashRunning{}: bashRunning(theme,key,width,bindings)
     case BashComplete{exitCode,cancelled,truncated,path}:
       do IO<List<&2,String>>:
-        more : List<&2,String> <- hiddenPart(theme,hidden,expanded)
+        more : List<&2,String> <- hiddenPart(theme,hidden,expanded,bindings)
         ending : List<&2,String> <- endingPart(theme,cancelled,exitCode)
         cut : List<&2,String> <- truncationPart(theme,truncated || contextCut,path)
         statusLines(List.append(&2,String,more,List.append(&2,String,ending,cut)),width)
 def renderBash(state: BashMessage,+width: Nat) -> IO(List<&2,String>):
   match state:
-    case BashMessage{command,output,status,excluded,+theme,+expanded}:
+    case BashMessage{command,output,status,excluded,+theme,+expanded,bindings}:
       +key = bashColor(excluded)
       +truncation = Truncate.truncateTail(output,Truncate.TruncationOptions{None{},None{}})
       +available = bashAvailable(truncation)
@@ -321,7 +317,7 @@ def renderBash(state: BashMessage,+width: Nat) -> IO(List<&2,String>):
         header : String <- foregroundText(theme,key,"\u{1b}[1m$ " ++ command ++ "\u{1b}[22m")
         headerLines : List<&2,String> <- textLines(header,1n,width)
         body : List<&2,String> <- bashOutput(available,theme,expanded,width)
-        after : List<&2,String> <- bashStatus(status,theme,key,hidden,expanded,contextTruncated(truncation),width)
+        after : List<&2,String> <- bashStatus(status,theme,key,hidden,expanded,contextTruncated(truncation),width,bindings)
         return List.append(&2,String,"" <> top <> headerLines,List.append(&2,String,body,List.append(&2,String,after,top <> Nil{})))
 
 # A mounted message renders the latest immutable snapshot. The transcript owns

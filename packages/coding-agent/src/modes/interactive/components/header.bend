@@ -5,18 +5,23 @@ import ../../../../../runtime/src/posix-path.bend as Path
 import ../../../../../runtime/src/string.bend as Strings
 import ../../../../../tui/src/component.bend as Component
 import ../../../../../tui/src/components/text.bend as Text
+import ../../../../../tui/src/keybindings.bend as Bindings
+import ../../../../../tui/src/keys.bend as Keys
+import ../../../../../runtime/src/record.bend as Record
 import ../../../core/system-prompt.bend as Prompt
 import ../../../core/skills.bend as Skills
+import ../../../core/keybindings.bend as AppKeys
 import ../../../config.bend as Config
 import ../theme/theme.bend as Theme
+import ./keybinding-hints.bend as Hints
 
 # The built-in header belongs to the scrollable document, but survives a
 # transcript replacement. Expansion and theme changes are read at render time.
 # The loaded context files and skills; /reload replaces them.
 type Loaded is Data: Loaded{contexts: List<&2,Prompt.ContextFile>,skills: List<&2,Skills.Skill>}
-type Header is Data: Header{expanded: Ref.Ref<Bool>,theme: Ref.Ref<Theme.Theme>,quiet: Bool,cwd: String,home: Maybe<&2,String>,loaded: Ref.Ref<Loaded>,heading: Ref.Ref<Text.Text>,resources: Ref.Ref<Text.Text>}
-type Owner is Type: Owner{expanded: Ref.Ref<Bool>,loaded: Ref.Ref<Loaded>,heading: Ref.Ref<Text.Text>,resources: Ref.Ref<Text.Text>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
-type Handle is Data: Handle{expanded: Ref.Ref<Bool>,loaded: Ref.Ref<Loaded>}
+type Header is Data: Header{expanded: Ref.Ref<Bool>,theme: Ref.Ref<Theme.Theme>,quiet: Bool,cwd: String,home: Maybe<&2,String>,loaded: Ref.Ref<Loaded>,heading: Ref.Ref<Text.Text>,resources: Ref.Ref<Text.Text>,bindings: Ref.Ref<Bindings.KeybindingsManager>}
+type Owner is Type: Owner{expanded: Ref.Ref<Bool>,loaded: Ref.Ref<Loaded>,heading: Ref.Ref<Text.Text>,resources: Ref.Ref<Text.Text>,bindings: Ref.Ref<Bindings.KeybindingsManager>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
+type Handle is Data: Handle{expanded: Ref.Ref<Bool>,loaded: Ref.Ref<Loaded>,bindings: Ref.Ref<Bindings.KeybindingsManager>}
 
 def colorResult(result: Result<&2,&2,Theme.Error,String>) -> IO(String):
   match result:
@@ -29,8 +34,6 @@ def logo(+theme: Theme.Theme) -> IO(String):
     name : String <- colored(theme,"accent","pi")
     version : String <- colored(theme,"dim"," v" ++ Config.version())
     return "\u{1b}[1m" ++ name ++ "\u{1b}[22m" ++ version
-# upstream keyHint/rawKeyHint: a dim key and a muted description. Key texts
-# are the default bindings' keyText.
 type Hint is Data: Hint{key: String,description: String}
 def hints(+theme: Theme.Theme,items: List<&2,Hint>) -> IO(List<&2,String>):
   match items:
@@ -41,21 +44,21 @@ def hints(+theme: Theme.Theme,items: List<&2,Hint>) -> IO(List<&2,String>):
         muted : String <- colored(theme,"muted"," " ++ description)
         more : List<&2,String> <- hints(theme,rest)
         return (dim ++ muted) <> more
-def COMPACT_HINTS() -> List<&2,Hint>:
-  [Hint{"escape","interrupt"},Hint{"ctrl+c/ctrl+d","clear/exit"},Hint{"/","commands"},Hint{"!","bash"},Hint{"ctrl+o","more"}]
-def EXPANDED_HINTS() -> List<&2,Hint>:
-  [Hint{"escape","to interrupt"},Hint{"ctrl+c","to clear"},Hint{"ctrl+c twice","to exit"},Hint{"ctrl+d","to exit (empty)"},Hint{"ctrl+z","to suspend"},Hint{"ctrl+k","to delete to end"},Hint{"shift+tab","to cycle thinking level"},Hint{"ctrl+p/shift+ctrl+p","to cycle models"},Hint{"ctrl+l","to select model"},Hint{"ctrl+o","to expand tools"},Hint{"ctrl+t","to expand thinking"},Hint{"ctrl+g","for external editor"},Hint{"/","for commands"},Hint{"!","to run bash"},Hint{"!!","to run bash (no context)"},Hint{"alt+enter","to queue follow-up"},Hint{"alt+up","to edit all queued messages"},Hint{"ctrl+v","to paste image (with text fallback)"},Hint{"drop files","to attach"}]
-def compact(+theme: Theme.Theme,brand: String) -> IO(String):
+def COMPACT_HINTS(+bindings: Bindings.KeybindingsManager) -> List<&2,Hint>:
+  [Hint{Hints.keyText(bindings,"app.interrupt"),"interrupt"},Hint{Hints.keyText(bindings,"app.clear") ++ "/" ++ Hints.keyText(bindings,"app.exit"),"clear/exit"},Hint{"/","commands"},Hint{"!","bash"},Hint{Hints.keyText(bindings,"app.tools.expand"),"more"}]
+def EXPANDED_HINTS(+bindings: Bindings.KeybindingsManager) -> List<&2,Hint>:
+  [Hint{Hints.keyText(bindings,"app.interrupt"),"to interrupt"},Hint{Hints.keyText(bindings,"app.clear"),"to clear"},Hint{Hints.keyText(bindings,"app.clear") ++ " twice","to exit"},Hint{Hints.keyText(bindings,"app.exit"),"to exit (empty)"},Hint{Hints.keyText(bindings,"app.suspend"),"to suspend"},Hint{Hints.keyText(bindings,"tui.editor.deleteToLineEnd"),"to delete to end"},Hint{Hints.keyText(bindings,"app.thinking.cycle"),"to cycle thinking level"},Hint{Hints.keyText(bindings,"app.model.cycleForward") ++ "/" ++ Hints.keyText(bindings,"app.model.cycleBackward"),"to cycle models"},Hint{Hints.keyText(bindings,"app.model.select"),"to select model"},Hint{Hints.keyText(bindings,"app.tools.expand"),"to expand tools"},Hint{Hints.keyText(bindings,"app.thinking.toggle"),"to expand thinking"},Hint{Hints.keyText(bindings,"app.editor.external"),"for external editor"},Hint{"/","for commands"},Hint{"!","to run bash"},Hint{"!!","to run bash (no context)"},Hint{Hints.keyText(bindings,"app.message.followUp"),"to queue follow-up"},Hint{Hints.keyText(bindings,"app.message.dequeue"),"to edit all queued messages"},Hint{Hints.keyText(bindings,"app.clipboard.pasteImage"),"to paste image (with text fallback)"},Hint{"drop files","to attach"}]
+def compact(+theme: Theme.Theme,brand: String,+bindings: Bindings.KeybindingsManager) -> IO(String):
   do IO<String>:
-    parts : List<&2,String> <- hints(theme,COMPACT_HINTS())
+    parts : List<&2,String> <- hints(theme,COMPACT_HINTS(bindings))
     separator : String <- colored(theme,"muted"," · ")
     +instructions : String <- IO.pure(String,String.join(parts,separator))
-    more : String <- colored(theme,"dim","Press ctrl+o to show full startup help and loaded resources.")
+    more : String <- colored(theme,"dim","Press " ++ Hints.keyText(bindings,"app.tools.expand") ++ " to show full startup help and loaded resources.")
     onboarding : String <- colored(theme,"dim","Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.")
     return brand ++ "\n" ++ instructions ++ "\n" ++ more ++ "\n\n" ++ onboarding
-def expanded(+theme: Theme.Theme,brand: String) -> IO(String):
+def expanded(+theme: Theme.Theme,brand: String,bindings: Bindings.KeybindingsManager) -> IO(String):
   do IO<String>:
-    parts : List<&2,String> <- hints(theme,EXPANDED_HINTS())
+    parts : List<&2,String> <- hints(theme,EXPANDED_HINTS(bindings))
     +instructions : String <- IO.pure(String,String.join(parts,"\n"))
     onboarding : String <- colored(theme,"dim","Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.")
     return brand ++ "\n" ++ instructions ++ "\n\n" ++ onboarding
@@ -171,7 +174,7 @@ def listedText(+theme: Theme.Theme,listed: Loaded,cwd: String,+home: Maybe<&2,St
     case Loaded{contexts,skills}: resourceText(theme,contexts,skills,cwd,home,expanded)
 def draw(input: Header,width: Nat) -> IO(List<&2,String>):
   match input:
-    case Header{state,theme,quiet,cwd,home,loaded,heading,resources}:
+    case Header{state,theme,quiet,cwd,home,loaded,heading,resources,keybindings}:
       match quiet:
         case True{}: IO.pure(List<&2,String>,Nil{})
         case False{}:
@@ -179,9 +182,10 @@ def draw(input: Header,width: Nat) -> IO(List<&2,String>):
             +size : Nat <- IO.pure(Nat,width)
             +isExpanded : Bool <- Ref.read(Bool,state)
             +current : Theme.Theme <- Ref.read(Theme.Theme,theme)
+            +bindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,keybindings)
             listed : Loaded <- Ref.read(Loaded,loaded)
             +brand : String <- logo(current)
-            body : String <- Bool.pick(Unit -> IO(String),isExpanded,_ => expanded(current,brand),_ => compact(current,brand))(Unit{})
+            body : String <- Bool.pick(Unit -> IO(String),isExpanded,_ => expanded(current,brand,bindings),_ => compact(current,brand,bindings))(Unit{})
             headerLines : List<&2,String> <- cached(heading,body,size)
             +details : String <- listedText(current,listed,cwd,home,isExpanded)
             resourceLines : List<&2,String> <- cached(resources,details,size)
@@ -195,22 +199,25 @@ def create(theme: Ref.Ref<Theme.Theme>,quiet: Bool,cwd: String,home: Maybe<&2,St
     +loaded : Ref.Ref<Loaded> <- Ref.new(Loaded,Loaded{contexts,skills})
     +heading : Ref.Ref<Text.Text> <- Ref.new(Text.Text,Text.new("",Some{1n},Some{0n},None{}))
     +resources : Ref.Ref<Text.Text> <- Ref.new(Text.Text,Text.new("",Some{0n},Some{0n},None{}))
-    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Header,~Nat,~List<&2,String>,~draw,Header{state,theme,quiet,cwd,home,loaded,heading,resources})
+    +bindings : Ref.Ref<Bindings.KeybindingsManager> <- Ref.new(Bindings.KeybindingsManager,Bindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)))
+    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Header,~Nat,~List<&2,String>,~draw,Header{state,theme,quiet,cwd,home,loaded,heading,resources,bindings})
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~ignore,Unit{})
-    return Owner{state,loaded,heading,resources,Component.Component{Component.ComponentId{90n},render,None{},None{},invalidate,None{},False{}},render,invalidate}
+    return Owner{state,loaded,heading,resources,bindings,Component.Component{Component.ComponentId{90n},render,None{},None{},invalidate,None{},False{}},render,invalidate}
 def borrow(owner: Owner) -> Owner & Component.Component & Handle:
   match owner:
-    case Owner{+state,+loaded,heading,resources,+component,render,invalidate}: (Owner{state,loaded,heading,resources,component,render,invalidate},component,Handle{state,loaded})
+    case Owner{+state,+loaded,heading,resources,+bindings,+component,render,invalidate}: (Owner{state,loaded,heading,resources,bindings,component,render,invalidate},component,Handle{state,loaded,bindings})
 def toggle(handle: Handle) -> IO(Unit):
   match handle:
-    case Handle{state,_}: Ref.modify(Bool,Unit,state,previous => (Bool.not(previous),Unit{}))
+    case Handle{state,_,_}: Ref.modify(Bool,Unit,state,previous => (Bool.not(previous),Unit{}))
+def setBindings(handle: Handle,bindings: Bindings.KeybindingsManager) -> IO(Unit):
+  match handle: case Handle{_,_,target}: Ref.write(Bindings.KeybindingsManager,target,bindings)
 # upstream showLoadedResources after /reload: the listing shows the reloaded resources.
 def setResources(handle: Handle,contexts: List<&2,Prompt.ContextFile>,skills: List<&2,Skills.Skill>) -> IO(Unit):
   match handle:
-    case Handle{_,loaded}: Ref.write(Loaded,loaded,Loaded{contexts,skills})
+    case Handle{_,loaded,_}: Ref.write(Loaded,loaded,Loaded{contexts,skills})
 def dispose(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{state,loaded,heading,resources,_,render,invalidate}:
+    case Owner{state,loaded,heading,resources,bindings,_,render,invalidate}:
       do IO<Unit>:
         oldLoaded : Loaded <- Ref.dispose(Loaded,loaded)
         Callback.dispose(Nat,List<&2,String>,render)
@@ -218,4 +225,5 @@ def dispose(owner: Owner) -> IO(Unit):
         previous : Bool <- Ref.dispose(Bool,state)
         oldHeading : Text.Text <- Ref.dispose(Text.Text,heading)
         oldResources : Text.Text <- Ref.dispose(Text.Text,resources)
+        oldBindings : Bindings.KeybindingsManager <- Ref.dispose(Bindings.KeybindingsManager,bindings)
         return Unit{}

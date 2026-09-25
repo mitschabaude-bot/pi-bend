@@ -1,6 +1,7 @@
 import Base
 import ../../../core/trust-manager.bend as Trust
 import ../theme/theme.bend as Theme
+import ./keybinding-hints.bend as Hints
 import ../../../../../tui/src/component.bend as Component
 import ../../../../../tui/src/keybindings.bend as Bindings
 import ../../../../../tui/src/keys.bend as Keys
@@ -65,15 +66,6 @@ def choiceRows(options: List<&2,Trust.ProjectTrustOption>,+saved: Maybe<&2,Trust
       +marker = Bool.pick(String,isSaved(option,saved),color(theme,"accent","✓ "),"  ")
       +label = color(theme,Bool.pick(String,active,"accent","text"),optionLabel(option))
       List.append(&2,String,padded(prefix ++ marker ++ label,width),choiceRows(rest,saved,index + 1n,selectedIndex,theme,width))
-def namedKeys(keys: List<&2,Keys.KeyId>,fallback: String) -> String:
-  match keys:
-    case Nil{}: fallback
-    case key <> Nil{}: Keys.formatKeyId(key)
-    case key <> rest: Keys.formatKeyId(key) ++ "/" ++ namedKeys(rest,fallback)
-def rawKeyHint(+theme: Theme.Theme,key: String,description: String) -> String:
-  color(theme,"dim",key) ++ color(theme,"muted"," " ++ description)
-def keyHint(+theme: Theme.Theme,bindings: Bindings.KeybindingsManager,+action: String,description: String) -> String:
-  rawKeyHint(theme,namedKeys(Bindings.getKeys(bindings,action),action),description)
 def render(state: State,+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,+width: Nat) -> List<&2,String>:
   match state:
     case State{cwd,+options,+saved,trusted,index}:
@@ -82,7 +74,7 @@ def render(state: State,+theme: Theme.Theme,+bindings: Bindings.KeybindingsManag
       +location = padded(color(theme,"muted",cwd),width)
       +savedLine = padded(color(theme,"muted","Saved decision: " ++ decision(saved,trustPathOf(options))),width)
       +current = padded(color(theme,"muted","Current session: " ++ Bool.pick(String,trusted,"trusted","untrusted")),width)
-      +help = padded(rawKeyHint(theme,"↑↓","navigate") ++ "  " ++ keyHint(theme,bindings,"tui.select.confirm","save") ++ "  " ++ keyHint(theme,bindings,"tui.select.cancel","cancel"),width)
+      +help = padded(Hints.rawKeyHint(theme,"↑↓","navigate") ++ "  " ++ Hints.keyHint(theme,bindings,"tui.select.confirm","save") ++ "  " ++ Hints.keyHint(theme,bindings,"tui.select.cancel","cancel"),width)
       rule <> "" <> List.append(&2,String,title,List.append(&2,String,location,
         "" <> List.append(&2,String,savedLine,List.append(&2,String,current,
           "" <> List.append(&2,String,choiceRows(options,saved,0n,index,theme,width),

@@ -53,6 +53,7 @@ import ../../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../core/keybindings.bend as AppKeys
 import ./components/footer.bend as Footer
 import ./components/header.bend as Header
+import ./components/keybinding-hints.bend as Hints
 import ./components/session-selector.bend as Selector
 import ./components/model-selector.bend as ModelPicker
 import ./components/settings-selector.bend as SettingsPicker
@@ -650,28 +651,12 @@ def changelogObserved(input: CommandObservation) -> IO(Unit):
         entries : List<&2,Changelog.ChangelogEntry> <- Changelog.parseChangelog(changelogPath(builtinDir))
         Transcript.changelog(transcript,MessageUI.FullChangelog{changelogText(entries)})
         Interactive.requestRender(redraw)
-def capitalPart(part: String) -> String:
-  match part:
-    case SNil{}: ""
-    case SCon{first,rest}: String.to_upper(SCon{first,SNil{}}) ++ rest
-def displayParts(parts: List<&2,String>) -> List<&2,String>:
-  match parts:
-    case Nil{}: Nil{}
-    case part <> rest: capitalPart(part) <> displayParts(rest)
-def displayKey(key: Keys.KeyId) -> String:
-  String.join(displayParts(String.split(Keys.formatKeyId(key),'+')),"+")
-def displayKeys(keys: List<&2,Keys.KeyId>) -> List<&2,String>:
-  match keys:
-    case Nil{}: Nil{}
-    case key <> rest: displayKey(key) <> displayKeys(rest)
-def keyText(bindings: Keybindings.KeybindingsManager,action: String) -> String:
-  String.join(displayKeys(Keybindings.getKeys(bindings,action)),"/")
 def hotkeyRow(key: String,description: String) -> String:
   "| `" ++ key ++ "` | " ++ description ++ " |"
 def boundRow(bindings: Keybindings.KeybindingsManager,action: String,description: String) -> String:
-  hotkeyRow(keyText(bindings,action),description)
+  hotkeyRow(Hints.keyDisplayText(bindings,action),description)
 def keyPair(+bindings: Keybindings.KeybindingsManager,left: String,right: String) -> String:
-  keyText(bindings,left) ++ "` / `" ++ keyText(bindings,right)
+  Hints.keyDisplayText(bindings,left) ++ "` / `" ++ Hints.keyDisplayText(bindings,right)
 def keyFour(+bindings: Keybindings.KeybindingsManager,a: String,b: String,c: String,d: String) -> String:
   keyPair(bindings,a,b) ++ "` / `" ++ keyPair(bindings,c,d)
 def hotkeysMarkdown(+bindings: Keybindings.KeybindingsManager) -> String:
@@ -1994,6 +1979,10 @@ def loadedBindings(result: Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager
       do IO<Keybindings.KeybindingsManager>:
         Transcript.showError(transcript,"Cannot load keybindings.json; using default shortcuts")
         return Keybindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>))
+def updateHeaderBindings(handle: Maybe<&2,Header.Handle>,bindings: Keybindings.KeybindingsManager) -> IO(Unit):
+  match handle:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{ready}: Header.setBindings(ready,bindings)
 def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,changed: Callback.Callback<String,Unit>,controller: Controller.Controller,+queue: Controller.Handle,+submitted: Callback.Callback<String,Unit>,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,+words: Words.Source,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (+paint,uiTheme):
@@ -2024,6 +2013,21 @@ def startController(pair: Controller.Controller & Controller.Handle,view: View.V
         Callback.dispose(String,Unit,changed)
         oldBash : Bool <- Ref.dispose(Bool,bash)
         return result
+# Upstream prints scoped models before the UI starts, using the configured cycle key.
+def scopedLabel(scoped: Models.ScopedModel) -> String:
+  match scoped:
+    case Models.ScopedModel{selected,thinking}: Models.modelId(selected) ++ Maybe.default(&2,String,Maybe.map(&2,Ai.ModelThinkingLevel,String,level => ":" ++ Levels.name(level),thinking),"")
+def scopedLabels(scope: List<&2,Models.ScopedModel>) -> List<&2,String>:
+  match scope:
+    case Nil{}: Nil{}
+    case scoped <> rest: scopedLabel(scoped) <> scopedLabels(rest)
+def printModelScope(+theme: Theme.Theme,scope: List<&2,Models.ScopedModel>,quiet: Bool,bindings: Keybindings.KeybindingsManager) -> IO(Unit):
+  match scope quiet:
+    case Nil{} _: IO.pure(Unit,Unit{})
+    case _ True{}: IO.pure(Unit,Unit{})
+    case scope False{}:
+      +hint = Result.default(&2,&2,Theme.Error,String,Theme.foreground(theme,"muted"," (" ++ Hints.keyDisplayText(bindings,"app.model.cycleForward") ++ " to cycle)"),"")
+      IO.print(Result.default(&2,&2,Theme.Error,String,Theme.foreground(theme,"dim","Model scope: " ++ String.join(scopedLabels(scope),", ") ++ hint),""))
 def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.View,+viewHandle: View.Handle,styles: MarkdownTheme.Styles,+liveTheme: Ref.Ref<Theme.Theme>,+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,words: Words.Source,setting: Maybe<&2,String>,+builtinDir: String,+customDir: String,+models: List<&2,Models.Model()>,+mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (transcript,+transcriptHandle):
@@ -2032,6 +2036,11 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +settings : Settings.SettingsManager <- Session.getSettings(session)
         loaded : Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager> <- AppKeys.create(AppKeys.Environment{"linux",None{},None{}},Path.normalize(customDir ++ "/.."))
         +bindings : Keybindings.KeybindingsManager <- loadedBindings(loaded,transcriptHandle)
+        updateHeaderBindings(View.headerHandle(viewHandle),bindings)
+        Transcript.setBindings(transcriptHandle,bindings)
+        scope : List<&2,Models.ScopedModel> <- Session.getScopedModels(session)
+        scopeTheme : Theme.Theme <- Ref.read(Theme.Theme,liveTheme)
+        printModelScope(scopeTheme,scope,Settings.getQuietStartup(settings),bindings)
         Transcript.setHideThinking(transcriptHandle,Settings.getHideThinkingBlock(settings))
         Transcript.setOutputPad(transcriptHandle,outputPad(Settings.getOutputPad(settings)))
         Transcript.seedSession(transcriptHandle,existing)
@@ -2088,28 +2097,10 @@ def withHeader(styles: MarkdownTheme.Styles,quiet: Bool,+session: Session.AgentS
 def prepared(pair: View.View & MarkdownTheme.Styles,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,theme: Theme.Theme,words: Words.Source,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (view,styles): startView(View.borrow(view),styles,session,initial,cwd,home,theme,words,setting,builtinDir,customDir,models,mode)
-# upstream init: before the UI starts, a scoped model list is printed (the
-# cycle key is the default app.model.cycleForward binding).
-def scopedLabel(scoped: Models.ScopedModel) -> String:
-  match scoped:
-    case Models.ScopedModel{selected,thinking}: Models.modelId(selected) ++ Maybe.default(&2,String,Maybe.map(&2,Ai.ModelThinkingLevel,String,level => ":" ++ Levels.name(level),thinking),"")
-def scopedLabels(scope: List<&2,Models.ScopedModel>) -> List<&2,String>:
-  match scope:
-    case Nil{}: Nil{}
-    case scoped <> rest: scopedLabel(scoped) <> scopedLabels(rest)
-def printModelScope(+theme: Theme.Theme,scope: List<&2,Models.ScopedModel>,quiet: Bool) -> IO(Unit):
-  match scope quiet:
-    case Nil{} _: IO.pure(Unit,Unit{})
-    case _ True{}: IO.pure(Unit,Unit{})
-    case scope False{}:
-      +hint = Result.default(&2,&2,Theme.Error,String,Theme.foreground(theme,"muted"," (Ctrl+P to cycle)"),"")
-      IO.print(Result.default(&2,&2,Theme.Error,String,Theme.foreground(theme,"dim","Model scope: " ++ String.join(scopedLabels(scope),", ") ++ hint),""))
 def started(+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Source,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   do IO<Result<&2,&2,Error,Unit>>:
     styles : MarkdownTheme.Styles <- MarkdownTheme.create(theme)
     +settings : Settings.SettingsManager <- Ref.read(Settings.SettingsManager,Session.settingsOf(session))
-    scope : List<&2,Models.ScopedModel> <- Session.getScopedModels(session)
-    printModelScope(theme,scope,Settings.getQuietStartup(settings))
     pair : View.View & MarkdownTheme.Styles <- withHeader(styles,Settings.getQuietStartup(settings),session,cwd,home)
     prepared(pair,session,initial,cwd,home,theme,words,setting,builtinDir,customDir,models,mode)
 def themed(session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,words: Words.Source,loaded: Result<&2,&2,Theme.LoadError,Theme.Theme>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):

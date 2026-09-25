@@ -1,4 +1,9 @@
 import Base
+import ../../../../runtime/src/ref.bend as Ref
+import ../../../../runtime/src/record.bend as Record
+import ../../../../tui/src/keybindings.bend as Bindings
+import ../../../../tui/src/keys.bend as Keys
+import ../../core/keybindings.bend as AppKeys
 import ../../../../agent/src/types.bend as Agent
 import ../../../../ai/src/types.bend as Ai
 import ../../../../runtime/src/serial-resource.bend as Serial
@@ -19,19 +24,22 @@ type Entry is Type: MessageEntry{owner: Messages.Owner} ToolEntry{owner: Tool.Ow
 type ToolLink is Data: ToolLink{id: String,handle: Tool.Handle}
 type State is Type:
   State{entries: List<&1,Entry>,tools: List<&2,ToolLink>,active: Maybe<&2,Messages.Handle>,nextId: Nat,view: View.Handle,theme: Theme.Theme,styles: Markdown.MarkdownTheme,expanded: Bool,hidden: Bool,outputPad: Nat}
-type Owner is Type: Owner{resource: Serial.Owner<State>}
-type Handle is Data: Handle{resource: Serial.Handle<State>}
+type Owner is Type: Owner{resource: Serial.Owner<State>,bindings: Ref.Ref<Bindings.KeybindingsManager>}
+type Handle is Data: Handle{resource: Serial.Handle<State>,bindings: Ref.Ref<Bindings.KeybindingsManager>}
 
 def create(view: View.Handle,theme: Theme.Theme,styles: Markdown.MarkdownTheme) -> IO(Owner):
   do IO<Owner>:
     resource : Serial.Owner<State> <- Serial.create(State,State{Nil{},Nil{},None{},100n,view,theme,styles,False{},False{},1n})
-    return Owner{resource}
-def borrowed(pair: Serial.Owner<State> & Serial.Handle<State>) -> Owner & Handle:
+    bindings : Ref.Ref<Bindings.KeybindingsManager> <- Ref.new(Bindings.KeybindingsManager,Bindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)))
+    return Owner{resource,bindings}
+def borrowed(pair: Serial.Owner<State> & Serial.Handle<State>,+bindings: Ref.Ref<Bindings.KeybindingsManager>) -> Owner & Handle:
   match pair:
-    case (resource,handle): (Owner{resource},Handle{handle})
+    case (resource,handle): (Owner{resource,bindings},Handle{handle,bindings})
 def borrow(owner: Owner) -> Owner & Handle:
   match owner:
-    case Owner{resource}: borrowed(Serial.borrow(State,resource))
+    case Owner{resource,+bindings}: borrowed(Serial.borrow(State,resource),bindings)
+def setBindings(handle: Handle,bindings: Bindings.KeybindingsManager) -> IO(Unit):
+  match handle: case Handle{_,target}: Ref.write(Bindings.KeybindingsManager,target,bindings)
 def insertedState(state: State,owner: Messages.Owner,component: Component.Component,handle: Messages.Handle,assistant: Bool) -> IO(State & Bool):
   match state:
     case State{entries,tools,_,id,+view,theme,styles,expanded,hidden,pad}:
@@ -65,7 +73,7 @@ def statusChanged(state: State,+message: String) -> IO(State & Unit):
         statusAppended(Messages.borrow(owner),entries,tools,active,id,view,theme,styles,expanded,hidden,pad)
 def status(handle: Handle,message: String) -> IO(Unit):
   match handle:
-    case Handle{resource}: Serial.run(State,Unit,resource,state => statusChanged(state,message))
+    case Handle{resource,_}: Serial.run(State,Unit,resource,state => statusChanged(state,message))
 def appendedUnit(pair: State & Bool) -> State & Unit:
   match pair:
     case (next,_): (next,Unit{})
@@ -83,10 +91,10 @@ def sessionInfoAppended(state: State,info: SessionInfo.SessionInfo) -> IO(State 
         return appendedUnit(pair)
 def sessionInfo(handle: Handle,info: SessionInfo.SessionInfo) -> IO(Unit):
   match handle:
-    case Handle{resource}: Serial.run(State,Unit,resource,state => sessionInfoAppended(state,info))
+    case Handle{resource,_}: Serial.run(State,Unit,resource,state => sessionInfoAppended(state,info))
 def newSession(handle: Handle) -> IO(Unit):
   match handle:
-    case Handle{resource}: Serial.run(State,Unit,resource,newSessionAppended)
+    case Handle{resource,_}: Serial.run(State,Unit,resource,newSessionAppended)
 def errorAppended(state: State,message: String) -> IO(State & Unit):
   match state:
     case State{entries,tools,active,id,view,+theme,styles,expanded,hidden,pad}:
@@ -95,7 +103,7 @@ def errorAppended(state: State,message: String) -> IO(State & Unit):
         return appendedUnit(pair)
 def showError(handle: Handle,message: String) -> IO(Unit):
   match handle:
-    case Handle{resource}: Serial.run(State,Unit,resource,state => errorAppended(state,message))
+    case Handle{resource,_}: Serial.run(State,Unit,resource,state => errorAppended(state,message))
 def warningAppended(state: State,message: String,label: Bool) -> IO(State & Unit):
   match state:
     case State{entries,tools,active,id,view,+theme,styles,expanded,hidden,pad}:
@@ -104,10 +112,10 @@ def warningAppended(state: State,message: String,label: Bool) -> IO(State & Unit
         return appendedUnit(pair)
 def showWarning(handle: Handle,message: String) -> IO(Unit):
   match handle:
-    case Handle{resource}: Serial.run(State,Unit,resource,state => warningAppended(state,message,True{}))
+    case Handle{resource,_}: Serial.run(State,Unit,resource,state => warningAppended(state,message,True{}))
 def showProjectTrustWarning(handle: Handle,message: String) -> IO(Unit):
   match handle:
-    case Handle{resource}: Serial.run(State,Unit,resource,state => warningAppended(state,message,False{}))
+    case Handle{resource,_}: Serial.run(State,Unit,resource,state => warningAppended(state,message,False{}))
 def managedAppended(state: State,message: String,warning: Bool,first: Bool) -> IO(State & Unit):
   match state:
     case State{entries,tools,active,id,view,+theme,styles,expanded,hidden,pad}:
@@ -116,7 +124,7 @@ def managedAppended(state: State,message: String,warning: Bool,first: Bool) -> I
         return appendedUnit(pair)
 def managedStatus(handle: Handle,message: String,warning: Bool,first: Bool) -> IO(Unit):
   match handle:
-    case Handle{resource}: Serial.run(State,Unit,resource,state => managedAppended(state,message,warning,first))
+    case Handle{resource,_}: Serial.run(State,Unit,resource,state => managedAppended(state,message,warning,first))
 # upstream adds a Spacer before the startup notice only after other chat content.
 def changelogBlock(value: Messages.Changelog,spaced: Bool) -> Messages.Changelog:
   match value:
@@ -135,7 +143,7 @@ def changelogAppended(state: State,value: Messages.Changelog) -> IO(State & Unit
         return appendedUnit(pair)
 def changelog(handle: Handle,value: Messages.Changelog) -> IO(Unit):
   match handle:
-    case Handle{resource}: Serial.run(State,Unit,resource,state => changelogAppended(state,value))
+    case Handle{resource,_}: Serial.run(State,Unit,resource,state => changelogAppended(state,value))
 def hotkeysAppended(state: State,markdown: String) -> IO(State & Unit):
   match state:
     case State{entries,tools,active,id,view,+theme,+styles,expanded,hidden,pad}:
@@ -144,7 +152,7 @@ def hotkeysAppended(state: State,markdown: String) -> IO(State & Unit):
         return appendedUnit(pair)
 def hotkeys(handle: Handle,markdown: String) -> IO(Unit):
   match handle:
-    case Handle{resource}: Serial.run(State,Unit,resource,state => hotkeysAppended(state,markdown))
+    case Handle{resource,_}: Serial.run(State,Unit,resource,state => hotkeysAppended(state,markdown))
 def mountedBashState(state: State,owner: Messages.Owner,component: Component.Component,handle: Messages.Handle) -> IO(State & Messages.Handle):
   match state:
     case State{entries,tools,active,+id,+view,theme,styles,expanded,hidden,pad}:
@@ -154,15 +162,18 @@ def mountedBashState(state: State,owner: Messages.Owner,component: Component.Com
 def mountedBash(state: State,pair: Messages.Owner & Component.Component & Messages.Handle) -> IO(State & Messages.Handle):
   match pair:
     case (owner,component,handle): mountedBashState(state,owner,component,handle)
-def bashCreated(state: State,command: String,excluded: Bool) -> IO(State & Messages.Handle):
+def bashCreated(state: State,command: String,excluded: Bool,bindings: Bindings.KeybindingsManager) -> IO(State & Messages.Handle):
   match state:
     case State{entries,tools,active,+id,view,+theme,styles,+expanded,hidden,pad}:
       do IO<State & Messages.Handle>:
-        owner : Messages.Owner <- Messages.create(Component.ComponentId{id},Messages.BashBody{Messages.bash(command,excluded,theme,expanded)})
+        owner : Messages.Owner <- Messages.create(Component.ComponentId{id},Messages.BashBody{Messages.bash(command,excluded,theme,expanded,bindings)})
         mountedBash(State{entries,tools,active,id,view,theme,styles,expanded,hidden,pad},Messages.borrow(owner))
 def startBash(handle: Handle,command: String,excluded: Bool) -> IO(Messages.Handle):
   match handle:
-    case Handle{resource}: Serial.run(State,Messages.Handle,resource,state => bashCreated(state,command,excluded))
+    case Handle{resource,bindings}:
+      do IO<Messages.Handle>:
+        current : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        Serial.run(State,Messages.Handle,resource,state => bashCreated(state,command,excluded,current))
 def bashAppended(body: Messages.Body,delta: String) -> Messages.Body:
   match body:
     case Messages.BashBody{state}: Messages.BashBody{Messages.appendBash(state,delta)}
@@ -355,7 +366,7 @@ def transition(-G: Data,-C: Data,state: State,event: Agent.AgentEvent<G,Tools.To
     case _: IO.pure(State & Bool,(state,False{}))
 def accept(-G: Data,-C: Data,handle: Handle,event: Agent.AgentEvent<G,Tools.ToolDetails,C,Agent.AgentToolResult<Tools.ToolDetails>,Agent.AgentToolResult<Tools.ToolDetails>>) -> IO(Bool):
   match handle:
-    case Handle{resource}: Serial.run(State,Bool,resource,state => transition(G,C,state,event))
+    case Handle{resource,_}: Serial.run(State,Bool,resource,state => transition(G,C,state,event))
 def seed(-G: Data,-C: Data,+handle: Handle,messages: List<&2,Agent.AgentMessage<G,Tools.ToolDetails,C>>) -> IO(Unit):
   match messages:
     case Nil{}: IO.pure(Unit,Unit{})
@@ -412,7 +423,7 @@ def rethemed(state: State,+theme: Theme.Theme) -> IO(State & Unit):
         return (State{next,tools,active,nextId,view,theme,styles,expanded,hidden,pad},Unit{})
 def retheme(handle: Handle,theme: Theme.Theme) -> IO(Unit):
   match handle:
-    case Handle{resource}: Serial.run(State,Unit,resource,state => rethemed(state,theme))
+    case Handle{resource,_}: Serial.run(State,Unit,resource,state => rethemed(state,theme))
 def expandEntries(entries: List<&1,Entry>,+expanded: Bool) -> IO(List<&1,Entry>):
   match entries:
     case Nil{}: IO.pure(List<&1,Entry>,Nil{})
@@ -439,7 +450,7 @@ def toggled(state: State) -> IO(State & Bool):
         return (State{changed,tools,active,nextId,view,theme,styles,next,hidden,pad},next)
 def toggleExpanded(handle: Handle) -> IO(Bool):
   match handle:
-    case Handle{resource}: Serial.run(State,Bool,resource,toggled)
+    case Handle{resource,_}: Serial.run(State,Bool,resource,toggled)
 def hideThinkingEntries(entries: List<&1,Entry>,+hidden: Bool) -> IO(List<&1,Entry>):
   match entries:
     case Nil{}: IO.pure(List<&1,Entry>,Nil{})
@@ -464,7 +475,7 @@ def changedThinking(state: State,+hidden: Bool) -> IO(State & Unit):
         return (State{changed,tools,active,id,view,theme,styles,expanded,hidden,pad},Unit{})
 def setHideThinking(handle: Handle,hidden: Bool) -> IO(Unit):
   match handle:
-    case Handle{resource}: Serial.run(State,Unit,resource,state => changedThinking(state,hidden))
+    case Handle{resource,_}: Serial.run(State,Unit,resource,state => changedThinking(state,hidden))
 def padEntries(entries: List<&1,Entry>,+pad: Nat) -> IO(List<&1,Entry>):
   match entries:
     case Nil{}: IO.pure(List<&1,Entry>,Nil{})
@@ -489,7 +500,7 @@ def changedPadding(state: State,+pad: Nat) -> IO(State & Unit):
         return (State{changed,tools,active,id,view,theme,styles,expanded,hidden,pad},Unit{})
 def setOutputPad(handle: Handle,pad: Nat) -> IO(Unit):
   match handle:
-    case Handle{resource}: Serial.run(State,Unit,resource,state => changedPadding(state,pad))
+    case Handle{resource,_}: Serial.run(State,Unit,resource,state => changedPadding(state,pad))
 def disposeEntries(entries: List<&1,Entry>) -> IO(Unit):
   match entries:
     case Nil{}: IO.pure(Unit,Unit{})
@@ -514,13 +525,15 @@ def cleared(state: State) -> IO(State & Unit):
         return (State{Nil{},Nil{},None{},nextId,view,theme,styles,expanded,hidden,pad},Unit{})
 def clear(handle: Handle) -> IO(Unit):
   match handle:
-    case Handle{resource}: Serial.run(State,Unit,resource,cleared)
+    case Handle{resource,_}: Serial.run(State,Unit,resource,cleared)
 def disposeState(state: State) -> IO(Unit):
   match state:
     case State{entries,_,_,_,_,_,_,_,_,_}: disposeEntries(entries)
 def dispose(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{resource}:
+    case Owner{resource,bindings}:
       do IO<Unit>:
         state : State <- Serial.retire(State,resource)
         disposeState(state)
+        old : Bindings.KeybindingsManager <- Ref.dispose(Bindings.KeybindingsManager,bindings)
+        return Unit{}
