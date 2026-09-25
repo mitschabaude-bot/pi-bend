@@ -2453,9 +2453,12 @@
     },
     {
       "source": "packages/coding-agent/test/max-thinking.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "01c76a966d964388bce071842d0cefc79408d43de04cef0eddecd3033a225ed5"
+      "status": "ported",
+      "ports": [
+        "tests/thinking-level.bend"
+      ],
+      "sha256": "01c76a966d964388bce071842d0cefc79408d43de04cef0eddecd3033a225ed5",
+      "notes": "isValidThinkingLevel('max'), SettingsManager.inMemory with setDefaultThinkingLevel(max) and flush, and a dark theme without thinkingMax (renamed legacy-theme) painting thinkingMax like thinkingXhigh. upstream getThinkingBorderColor(level) is the interactive run's level-to-key choice plus theme.fg, so the colors of the two keys are compared; the legacy theme is parsed from the edited JSON text rather than written to a file. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/mermaid.test.ts",
@@ -3175,9 +3178,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3317-network-connection-lost-retry.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "284f28f007e337c75709cfd54593295ea0fcbacdd4bb2bce83ee1b165b73f663"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/agent-session.bend"
+      ],
+      "sha256": "284f28f007e337c75709cfd54593295ea0fcbacdd4bb2bce83ee1b165b73f663",
+      "notes": "The one case runs through tests/agent-session.bend's retry scenario under upstream's retry settings: one auto_retry_start with the error message, auto_retry_end success, both scripted replies consumed (callCount 2), the recovered text. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3592-no-builtin-tools-keeps-extension-tools.test.ts",
@@ -3187,15 +3194,24 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3616-settings-inmemory-reload.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f70380b8bfa385cf648745405522b92378b9c73d039879995337973dddc167ba"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/settings-manager.bend",
+        "tests/regressions.bend"
+      ],
+      "sha256": "f70380b8bfa385cf648745405522b92378b9c73d039879995337973dddc167ba",
+      "notes": "Direct reload and setter/flush/reload through tests/settings-manager.bend; the DefaultResourceLoader case is AgentSession.reload over SettingsManager.inMemory (tests/regressions.bend settings_reload). Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3686-session-name-event.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "71fca90399b614893741b8e0bc28dd976b20134939cd5d44997bd4e02cb25f7c"
+      "status": "partial",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend"
+      ],
+      "sha256": "71fca90399b614893741b8e0bc28dd976b20134939cd5d44997bd4e02cb25f7c",
+      "notes": "'emits session_info_changed when AgentSession.setSessionName is called' passes. Pending: the two extension cases (pi.setSessionName and session_info_changed delivered to extensions), which the native extension API does not expose yet. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3688-tree-cancel-compacting.test.ts",
@@ -3311,9 +3327,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6019-explicit-provider-retry-message.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "375b8630dc3646c479664325e5db590bfdd1ed4a703235ca9aab257edd99d6b9"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/agent-session.bend"
+      ],
+      "sha256": "375b8630dc3646c479664325e5db590bfdd1ed4a703235ca9aab257edd99d6b9",
+      "notes": "Both it.each rows (openai, bedrock) run through tests/agent-session.bend's retry scenario. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6104-find-root-relativization.test.ts",
@@ -3377,9 +3397,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6904-dns-transport-retry.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f16d09bdf5ef2d2538bac38c7a3250e13ef19a9227ef81191387d281fa803ef0"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/agent-session.bend"
+      ],
+      "sha256": "f16d09bdf5ef2d2538bac38c7a3250e13ef19a9227ef81191387d281fa803ef0",
+      "notes": "The one case runs through tests/agent-session.bend's retry scenario with upstream's wrapped getaddrinfo message. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6949-unavailable-scoped-model.test.ts",
@@ -3415,9 +3439,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7150-rpc-prompt-during-compaction.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "bde1a3c51d6867ff2c453357dd07516b423b5c26aae4f30933553aa28328019b"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "bde1a3c51d6867ff2c453357dd07516b423b5c26aae4f30933553aa28328019b",
+      "notes": "A prompt while a manual compaction's summary request is held open fails with the compaction-in-progress error; the probe is neither in the context nor persisted; no agent_start or agent_settled. The hold is a gated summarizer request instead of a session_before_compact handler; the failed result stands for preflightResult(false). Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7153-scoped-models-refresh.test.ts",
@@ -3454,15 +3483,25 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7269-cli-end-of-options.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "679b006e7ca063961eac153b8d5958c56bb5bb4ea4658415b361d01eb8817420"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/cli-args.bend"
+      ],
+      "sha256": "679b006e7ca063961eac153b8d5958c56bb5bb4ea4658415b361d01eb8817420",
+      "notes": "All three cases: parseArgs through tests/cli-args.bend (messages, unknownFlags, diagnostics, fileArgs) and the parsed prompt through the faux session's user messages. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7290-json-stream-linear.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "51353e72b7bd93fbade029e8c411e05f3104ffdba5bb2ff161764181df722e41"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "51353e72b7bd93fbade029e8c411e05f3104ffdba5bb2ff161764181df722e41",
+      "notes": "Wire message_update bytes for 2000 and 4000 characters over a chunking faux: larger, ratio below 2.2, no message or partial on the wire. Adaptations in tests/regressions.md (fixed chunk size; typed session events). Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7301-stalled-availability-refresh.test.ts",
@@ -3484,9 +3523,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7572-provider-retry-settings-merge.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "7b50e25746f36f0118df8f7931a772166da8656618768bd6ff094f873c02936a"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/settings-manager.bend"
+      ],
+      "sha256": "7b50e25746f36f0118df8f7931a772166da8656618768bd6ff094f873c02936a",
+      "notes": "InMemorySettingsStorage with global and project JSON through tests/settings-manager.bend; getProviderRetrySettings equals upstream's merged object. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7731-tui-method-wrapping.test.ts",
@@ -3502,15 +3545,25 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7911-json-stream-usage.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "22454a026f3e7456bec9cf19934ed2ea2374250eda6574b7f58fc7d868a2f11b"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "22454a026f3e7456bec9cf19934ed2ea2374250eda6574b7f58fc7d868a2f11b",
+      "notes": "The wire update's usage equals the session event's assistant usage, without snapshots. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7925-toolcall-start-metadata.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "fd05bd39358272ec460f00eb886a9d4dd8e483b19a19b0e92a61f7bd175a8599"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "fd05bd39358272ec460f00eb886a9d4dd8e483b19a19b0e92a61f7bd175a8599",
+      "notes": "The toolcall_start wire event equals upstream's expected object (usage, contentIndex, id, toolName). The session has no write tool, so the call's result is an error; not asserted upstream. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8237-node-sea-extension-loading.test.ts",
@@ -3526,15 +3579,25 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8328-zero-usage-auto-compaction.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d674c7a6ec94e556c900217e3dfb2e72cba55cfac4598929cc1fd939517d30dc"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "d674c7a6ec94e556c900217e3dfb2e72cba55cfac4598929cc1fd939517d30dc",
+      "notes": "Both cases end to end: a zero-usage reply to 400 characters under a 100-token window compacts with reason threshold and willRetry false; a short prompt does not. Upstream spies _runAutoCompaction; the port observes the compaction events (keepRecentTokens: 1 so a preparation exists). Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8337-utf8-bom-parsing.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "c747d81f18f6929cffa7b9228fb99552f15c36116ef3a4396d2582804ad2b62f"
+      "status": "partial",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/frontmatter.bend",
+        "tests/settings-files.bend"
+      ],
+      "sha256": "c747d81f18f6929cffa7b9228fb99552f15c36116ef3a4396d2582804ad2b62f",
+      "notes": "parseFrontmatter with a BOM and SettingsManager.create over BOM-prefixed global/project files (getters read from the global/project settings; setTheme+flush writes without BOM) pass. Pending: splitBom, which the port has no helper for (five private stripBom copies instead). Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8423-extension-factory-failure.test.ts",
@@ -3574,9 +3637,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8989-fork-compaction-label-boundary.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5fed6fff1f8102587cd2676be2365685a10328679cc6af068c70f2d62ec94628"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend"
+      ],
+      "sha256": "5fed6fff1f8102587cd2676be2365685a10328679cc6af068c70f2d62ec94628",
+      "notes": "SessionManager.inMemory, label, compaction at the label, createBranchedSession: firstKeptEntryId moves to the kept entry and the context is summary, kept, after. Ids are explicit stamps. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9068-user-bash-fail-closed.test.ts",
@@ -3616,9 +3683,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/pre-prompt-compaction-no-continue.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "1eb3a140e8be50683ab91d3ee85561f8d050d2ce802bcc1677f8903a2a28fd4b"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "1eb3a140e8be50683ab91d3ee85561f8d050d2ce802bcc1677f8903a2a28fd4b",
+      "notes": "Seeded length-stop assistant with usage 100 in a 100-token window: the prompt compacts first (overflow, not aborted, willRetry true), then runs once; no continue request. The summary is a scripted reply instead of a session_before_compact result, so the provider sees two requests. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/startup-session-rebind-duplicate-subscription.test.ts",
@@ -3711,9 +3783,12 @@
     },
     {
       "source": "packages/coding-agent/test/thinking-selector.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e"
+      "status": "ported",
+      "ports": [
+        "tests/thinking-level.bend"
+      ],
+      "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",

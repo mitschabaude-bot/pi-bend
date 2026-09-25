@@ -1,0 +1,28 @@
+# Small coding-agent regression suites
+
+`tests/regressions_check.py` ports pi-mono's small `packages/coding-agent/test/suite/regressions/*.test.ts` suites. Each block cites its upstream file and test name and applies upstream's assertions to native results. It drives existing fixtures and `tests/regressions.bend`:
+
+```sh
+BEND=build/bend-native-toolchain/bend2/main.ts
+for t in agent-session regressions settings-manager settings-files frontmatter cli-args; do bun $BEND tests/$t.bend -o build/$t.js; done
+python3 tests/regressions_check.py            # Bun lane
+python3 tests/regressions_check.py --regressions build/regressions ...   # a native runner per fixture
+```
+
+`tests/regressions.bend` builds an `AgentSession` over a faux provider that streams like upstream's `registerFauxProvider`: a `start` event, then each block's start/delta/end events, with the text or the tool call's JSON arguments split into chunks, then `done`. Gates hold a request open, as in `tests/agent-session.bend`. Seed messages are stored in the session and loaded into the agent, as the harness's `agent.state.messages = buildSessionContext().messages`.
+
+## Adaptations
+
+- Chunks are a fixed four tokens (16 characters) instead of a random 3-5 tokens. Usage reports the output estimate `ceil(characters / 4)` without upstream's prompt estimate. Upstream's harness wires the built-in tools; the 7925 tool call runs against no tools and gets an error result, which the assertions don't cover.
+- `harness.faux.state.callCount` is the number of scripted replies consumed (`remaining`).
+- Session events are typed, so upstream's check that a session `message_update` has `message` and `partial` holds by construction. The fixture prints the session event's assistant message next to its wire form so usage can be compared (7911, 7925).
+- Upstream injects compaction summaries through `session_before_compact` extension handlers, which the native extension runtime doesn't dispatch yet. 7150 holds the default summarizer's request open instead. Pre-prompt compaction scripts the summary as a provider reply, so "no continue" means the provider sees exactly the summary request and the prompt's request.
+- 8328 spies `_runAutoCompaction`. The port observes the same decision as a `threshold` compaction, with `keepRecentTokens: 1` so that the compaction has something to cut.
+- 7150's `preflightResult(false)` and rejection are the prompt's failed result.
+- 3616's `DefaultResourceLoader.reload()` is the session's resource reload, `AgentSession.reload`, which reloads its settings manager.
+- 7269 runs `parseArgs` through `tests/cli-args.bend` and prompts the session with the parsed message.
+- 8337: settings files with a BOM go through `tests/settings-files.bend` (`SettingsManager.create`, then `setTheme` and flush). The merged getters are read from the global and project settings, which don't overlap. The port has no `splitBom` helper, so that assertion stays pending.
+
+## Pending cases with gaps
+
+- 5996 (`setSessionName` with newlines) and `tree-during-streaming`: `AgentSession.setSessionName` emits the raw name instead of the session manager's sanitized name, and `navigateTree` merges upstream's two error messages. The `name` and `tree_streaming` scenarios reproduce both. The module is reserved by another agent; see AGENT-LOG.md.

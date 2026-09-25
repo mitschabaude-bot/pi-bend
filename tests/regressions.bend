@@ -1,0 +1,518 @@
+import Base
+import ../packages/agent/src/agent.bend as Agent
+import ../packages/agent/src/agent-loop.bend as Loop
+import ../packages/agent/src/stream-fn.bend as StreamFn
+import ../packages/agent/src/types.bend as T
+import ../packages/ai/src/types.bend as Ai
+import ../packages/ai/src/utils/event-stream.bend as Stream
+import ../packages/ai/src/utils/message-json.bend as Json
+import ../packages/runtime/src/json.bend as Decode
+import ../packages/runtime/src/callback.bend as C
+import ../packages/runtime/src/ref.bend as R
+import ../packages/runtime/src/record.bend as Rec
+import ../packages/runtime/src/schema-value.bend as V
+import ../packages/runtime/src/date.bend as Date
+import ../packages/coding-agent/src/core/agent-runtime.bend as Runtime
+import ../packages/coding-agent/src/core/agent-session.bend as Session
+import ../packages/coding-agent/src/core/session-persistence.bend as Sessions
+import ../packages/coding-agent/src/core/session-manager.bend as S
+import ../packages/coding-agent/src/core/compaction/compaction.bend as Compaction
+import ../packages/coding-agent/src/core/settings-manager.bend as Settings
+import ../packages/coding-agent/src/core/tools/index.bend as Tools
+import ../packages/coding-agent/src/core/model-runtime.bend as Models
+import ../packages/coding-agent/src/modes/json-event.bend as JsonEvent
+import ./model-runtime-fixture.bend as ModelFixture
+import ./agent-session.bend as H
+
+# Scenarios for upstream's suite/regressions tests that need AgentSession
+# behavior beyond tests/agent-session.bend. The provider streams like
+# upstream's registerFauxProvider: a start event, then each content block's
+# start/delta/end events with the text (or the tool call's JSON arguments)
+# split into chunks, then done. Adaptations: chunks are a fixed four tokens
+# (16 characters) instead of a random 3-5 tokens, and usage reports the
+# output estimate ceil(characters / 4) without upstream's prompt estimate.
+# tests/regressions_check.py reads the printed JSON lines.
+
+def EventStream() -> Data: Stream.AssistantMessageEventStream(V.Value, Unit)
+
+type Reply is Data:
+  Text{text: String}
+  Plain{text: String}
+  Call{id: String, name: String, arguments: V.Value, json: String}
+
+# A gate holds one request open (tests/agent-session.bend's Gate); requests
+# after the listed gates run at once.
+type Faux is Data:
+  Faux{replies: R.Ref<List<&2, Reply>>, streams: R.Ref<List<&2, EventStream()>>, gates: R.Ref<List<&2, H.Gate>>, model: String}
+
+def zero() -> F64: U32.to_f64(0)
+
+def estimate(text: String) -> F64: U32.to_f64(U32.from_nat((String.length(text) + 3n) / 4n))
+
+def usageOf(+output: F64) -> Ai.Usage:
+  Ai.Usage{zero(), output, zero(), zero(), None{}, None{}, output, Ai.UsageCost{zero(), zero(), zero(), zero(), zero()}}
+
+# The model a reply comes from and its time.
+type Stamp is Data:
+  Stamp{model: String, time: F64}
+
+def message(content: List<&2, Ai.AssistantContent<V.Value>>, stop: Ai.StopReason, usage: Ai.Usage, now: Stamp) -> Ai.AssistantMessage<V.Value, Unit>:
+  match now:
+    case Stamp{model, time}: Ai.AssistantMessage{content, "openai-responses", "faux", model, None{}, None{}, None{}, None{}, usage, stop, None{}, None{}, None{}, None{}, time}
+
+def textBlock(text: String) -> List<&2, Ai.AssistantContent<V.Value>>: Ai.AssistantText{Ai.TextContent{text, None{}}} <> Nil{}
+
+def callBlock(+id: String, +name: String, arguments: V.Value) -> List<&2, Ai.AssistantContent<V.Value>>:
+  Ai.AssistantToolCall{Ai.ToolCall{id, name, arguments, None{}, None{}}} <> Nil{}
+
+# Chunks of 16 characters, collected reversed; empty text is one empty chunk.
+def gather(text: String, +reversed: String, +count: Nat) -> List<&2, String>:
+  match text:
+    case SNil{}: Bool.pick(List<&2, String>, Nat.is_eq(count, 0n), Nil{}, String.reverse(reversed) <> Nil{})
+    case SCon{+c, +rest}: Bool.pick(Unit -> List<&2, String>, Nat.is_eq(count, 15n), _ => String.reverse(SCon{c, reversed}) <> gather(rest, "", 0n), _ => gather(rest, SCon{c, reversed}, count + 1n))(Unit{})
+
+def chunks(text: String) -> List<&2, String>:
+  match text:
+    case SNil{}: "" <> Nil{}
+    case SCon{c, rest}: gather(SCon{c, rest}, "", 0n)
+
+def push(stream: EventStream(), event: Ai.AssistantMessageEvent<V.Value, Unit>) -> IO(Unit):
+  Stream.push(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, stream, event)
+
+def textDeltas(+stream: EventStream(), parts: List<&2, String>, +sofar: String, +usage: Ai.Usage, +now: Stamp) -> IO(Unit):
+  match parts:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case +part <> rest:
+      +next = sofar ++ part
+      do IO<Unit>:
+        push(stream, Ai.TextDelta{zero(), part, message(textBlock(next), Ai.Pending{}, usage, now)})
+        textDeltas(stream, rest, next, usage, now)
+
+def callDeltas(+stream: EventStream(), parts: List<&2, String>, +partial: Ai.AssistantMessage<V.Value, Unit>) -> IO(Unit):
+  match parts:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case +part <> rest:
+      do IO<Unit>:
+        push(stream, Ai.ToolcallDelta{zero(), part, partial})
+        callDeltas(stream, rest, partial)
+
+def answer(+stream: EventStream(), reply: Reply, +now: Stamp) -> IO(Unit):
+  match reply:
+    case Text{+text}:
+      +usage = usageOf(estimate(text))
+      do IO<Unit>:
+        push(stream, Ai.Start{message(Nil{}, Ai.Pending{}, usage, now)})
+        push(stream, Ai.TextStart{zero(), message(textBlock(""), Ai.Pending{}, usage, now)})
+        textDeltas(stream, chunks(text), "", usage, now)
+        push(stream, Ai.TextEnd{zero(), text, message(textBlock(text), Ai.Pending{}, usage, now)})
+        push(stream, Ai.StreamDone{Ai.DoneStop{}, message(textBlock(text), Ai.Stop{}, usage, now)})
+    case Plain{+text}:
+      +usage = usageOf(zero())
+      do IO<Unit>:
+        push(stream, Ai.Start{message(Nil{}, Ai.Pending{}, usage, now)})
+        push(stream, Ai.TextStart{zero(), message(textBlock(""), Ai.Pending{}, usage, now)})
+        textDeltas(stream, chunks(text), "", usage, now)
+        push(stream, Ai.TextEnd{zero(), text, message(textBlock(text), Ai.Pending{}, usage, now)})
+        push(stream, Ai.StreamDone{Ai.DoneStop{}, message(textBlock(text), Ai.Stop{}, usage, now)})
+    case Call{+id, +name, +arguments, +json}:
+      +usage = usageOf(estimate(json))
+      +started = message(callBlock(id, name, V.ObjectValue{Rec.new(V.Value)}), Ai.Pending{}, usage, now)
+      do IO<Unit>:
+        push(stream, Ai.Start{message(Nil{}, Ai.Pending{}, usage, now)})
+        push(stream, Ai.ToolcallStart{zero(), started})
+        callDeltas(stream, chunks(json), started)
+        push(stream, Ai.ToolcallEnd{zero(), Ai.ToolCall{id, name, arguments, None{}, None{}}, message(callBlock(id, name, arguments), Ai.Pending{}, usage, now)})
+        push(stream, Ai.StreamDone{Ai.DoneToolUse{}, message(callBlock(id, name, arguments), Ai.ToolUse{}, usage, now)})
+
+def popReply(replies: List<&2, Reply>) -> List<&2, Reply> & Reply:
+  match replies:
+    case Nil{}: (Nil{}, Text{"(no scripted response)"})
+    case reply <> rest: (rest, reply)
+
+def provider(faux: Faux, input: H.Input()) -> IO(H.Output()):
+  match faux:
+    case Faux{replies, streams, gates, +model}:
+      do IO<H.Output()>:
+        gate : Maybe<&2, H.Gate> <- R.modify(List<&2, H.Gate>, Maybe<&2, H.Gate>, gates, remaining => H.popGate(remaining))
+        H.holdAt(gate)
+        reply : Reply <- R.modify(List<&2, Reply>, Reply, replies, remaining => popReply(remaining))
+        IO.sleep(1)
+        +now : F64 <- Date.now()
+        +stream : EventStream() <- Stream.createAssistantMessageEventStream(~V.Value, ~Unit)
+        R.modify(List<&2, EventStream()>, Unit, streams, old => (stream <> old, Unit{}))
+        answer(stream, reply, Stamp{model, now})
+        return Done{T.borrowedStream(Unit, Tools.ToolError, stream)}
+
+# Prints every session event on the wire, and for message_update also the
+# session event's own assistant message, which the wire form omits.
+def observed(+event: Session.AgentSessionEvent) -> IO(Unit):
+  match event:
+    case Session.AgentEvent{T.MessageUpdate{+value, _}}:
+      do IO<Unit>:
+        H.printed(JsonEvent.toSessionJsonEvent(event))
+        H.printed(Done{Json.object(Json.field("type", Json.text("session_update_message"), Json.field("message", JsonEvent.message(value), Nil{})))})
+    case _: H.printed(JsonEvent.toSessionJsonEvent(event))
+
+def observe(env: Unit, event: Session.AgentSessionEvent) -> IO(Unit): observed(event)
+
+type Fixture is Data:
+  Fixture{session: Session.AgentSession, listener: Session.Listener(), stream: Runtime.Stream(), validator: Loop.Validator(Tools.ToolError), converter: Runtime.Converter(), registry: StreamFn.Registry(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError), faux: Faux}
+
+def emptyLoadout() -> Runtime.Loadout: Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}}
+
+# The agent starts from the stored session's context, as the upstream
+# harness's `agent.state.messages = buildSessionContext().messages`.
+def contextList(context: Result<&2, &2, S.Error, S.SessionContext<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, Session.Message()>:
+  match context:
+    case Done{S.SessionContext{messages, _, _}}: messages
+    case Fail{_}: Nil{}
+
+def contextOf(stored: Session.Session()) -> List<&2, Session.Message()>:
+  contextList(S.sessionContext(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))
+
+type Setup is Data:
+  Setup{replies: List<&2, Reply>, gates: List<&2, H.Gate>, model: Ai.Model<Ai.JsonValue>}
+
+def fixtureWith(+stored: Session.Session(), +cwd: String, +settings: Settings.SettingsManager, setup: Setup) -> IO(Fixture):
+  match setup:
+    case Setup{replies, gates, +model}:
+      do IO<Fixture>:
+        +replyRef : R.Ref<List<&2, Reply>> <- R.new(List<&2, Reply>, replies)
+        +streams : R.Ref<List<&2, EventStream()>> <- R.new(List<&2, EventStream()>, Nil{})
+        +gateRef : R.Ref<List<&2, H.Gate>> <- R.new(List<&2, H.Gate>, gates)
+        +stream : Runtime.Stream() <- C.create(~Faux, ~H.Input(), ~H.Output(), ~provider, Faux{replyRef, streams, gateRef, Ai.modelId(model)})
+        +registry : StreamFn.Registry(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError) <- StreamFn.create(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError)
+        +validator : Loop.Validator(Tools.ToolError) <- Loop.createPlain(~Tools.ToolError, ~Runtime.validationError)
+        +converter : Runtime.Converter() <- Runtime.createConverter(False{})
+        created : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~Unit, ~Tools.ToolDetails, ~Runtime.Custom(), ~Tools.ToolError, ~Unit, H.options(stream, converter, Sessions.getSessionId(Unit, Tools.ToolDetails, V.Value, stored), Some{model}), registry, validator, Tools.emptyDetails())
+        +agent : Runtime.Owner() <- H.requireAgent(created)
+        Agent.replaceMessages(Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit, agent, contextOf(stored))
+        models : Models.ModelRuntime <- ModelFixture.create(ModelFixture.Source{"faux", "PI_FAUX_API_KEY", model <> Nil{}} <> Nil{})
+        +session : Session.AgentSession <- Session.create(agent, stored, settings, cwd, emptyLoadout(), models, Nil{})
+        +listener : Session.Listener() <- C.create(~Unit, ~Session.AgentSessionEvent, ~Unit, ~observe, Unit{})
+        Session.subscribe(session, listener)
+        return Fixture{session, listener, stream, validator, converter, registry, Faux{replyRef, streams, gateRef, Ai.modelId(model)}}
+
+def fixture(+stored: Session.Session(), +cwd: String, agentDir: String, setup: Setup) -> IO(Fixture):
+  do IO<Fixture>:
+    loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.options())
+    fixtureWith(stored, cwd, H.settingsOf(loaded), setup)
+
+def teardown(value: Fixture) -> IO(Unit):
+  match value:
+    case Fixture{+session, +listener, stream, validator, converter, registry, Faux{replies, streams, gates, _}}:
+      do IO<Unit>:
+        Session.unsubscribe(session, listener)
+        C.dispose(Session.AgentSessionEvent, Unit, listener)
+        +agent : Runtime.Owner() = Session.agentOf(session)
+        Session.dispose(session)
+        Agent.dispose(Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit, agent)
+        StreamFn.dispose(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError, registry)
+        Loop.disposeValidation(Tools.ToolError, validator)
+        Runtime.disposeConverter(converter)
+        C.dispose(H.Input(), H.Output(), stream)
+        unused : List<&2, Reply> <- R.dispose(List<&2, Reply>, replies)
+        opened : List<&2, EventStream()> <- R.dispose(List<&2, EventStream()>, streams)
+        H.disposeStreams(opened)
+        held : List<&2, H.Gate> <- R.dispose(List<&2, H.Gate>, gates)
+        return Unit{}
+
+def sessionOf(value: Fixture) -> Session.AgentSession:
+  match value:
+    case Fixture{session, _, _, _, _, _, _}: session
+
+def plainSetup(replies: List<&2, Reply>) -> Setup: Setup{replies, Nil{}, H.fauxModel()}
+
+def requireAppended(result: Sessions.Outcome(Sessions.Appended<Unit, Tools.ToolDetails, V.Value>)) -> IO(Session.Session()):
+  match result:
+    case Done{Sessions.Appended{session, _}}: IO.pure(Session.Session(), session)
+    case Fail{error}: IO.die(Session.Session(), 1, Sessions.message(error))
+
+# The session starts from the seed messages, stored in memory.
+def seeded(seed: List<&2, Session.Message()>, +stored: Session.Session()) -> IO(Session.Session()):
+  match seed:
+    case Nil{}: IO.pure(Session.Session(), stored)
+    case message <> rest:
+      do IO<Session.Session()>:
+        appended : Sessions.Outcome(Sessions.Appended<Unit, Tools.ToolDetails, V.Value>) <- Sessions.appendMessage(~Unit, ~Tools.ToolDetails, ~V.Value, ~Session.unitValue, ~Tools.detailsValue, ~Session.rawValue, stored, message)
+        next : Session.Session() <- requireAppended(appended)
+        seeded(rest, next)
+
+def withSeeded(+dir: String, agentDir: String, seed: List<&2, Session.Message()>, setup: Setup, body: Session.AgentSession -> IO(Unit)) -> IO(Unit):
+  do IO<Unit>:
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    empty : Session.Session() <- H.requireSession(created)
+    stored : Session.Session() <- seeded(seed, empty)
+    +value : Fixture <- fixture(stored, dir, agentDir, setup)
+    body(sessionOf(value))
+    teardown(value)
+
+def withSession(+dir: String, agentDir: String, replies: List<&2, Reply>, body: Session.AgentSession -> IO(Unit)) -> IO(Unit):
+  withSeeded(dir, agentDir, Nil{}, plainSetup(replies), body)
+
+def promptWith(+text: String, +session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2, &2, String, Unit> <- Session.prompt(session, text, Nil{}, None{})
+    H.reportPrompt(result)
+    H.reportMessages(session)
+
+def reportName(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    +stored : Session.Session() <- Session.sessionOf(session)
+    IO.print("{\"type\":\"session_name\",\"name\":" ++ H.maybeQuoted(S.getSessionName(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored))) ++ "}")
+
+def named(+name: String, +session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2, &2, String, Unit> <- Session.setSessionName(session, name)
+    H.reportOutcome("set_name", result)
+    reportName(session)
+
+# 'x' repeated.
+def repeated(count: Nat) -> String: String.repeat("x", count)
+
+def writeCall() -> Reply:
+  +content = repeated(100n)
+  Call{"call_7925", "write", Json.object(Json.field("path", Json.text("output.txt"), Json.field("content", Json.text(content), Nil{}))), "{\"path\":\"output.txt\",\"content\":\"" ++ content ++ "\"}"}
+
+# upstream SettingsManager.inMemory(settings) behind a session whose resource
+# reload (upstream DefaultResourceLoader.reload) reloads its settings.
+def managerOf(pair: Settings.InMemorySettingsStorage & Settings.SettingsManager) -> Settings.SettingsManager:
+  match pair:
+    case (_, manager): manager
+
+def reportSettings(+label: String, +manager: Settings.SettingsManager) -> IO(Unit):
+  H.printed(Done{Json.object(Json.field("type", Json.text(label), Json.field("defaultThinkingLevel", Maybe.default(&2, V.Value, Maybe.map(&2, Ai.ModelThinkingLevel, V.Value, Settings.encodeThinking, Settings.getDefaultThinkingLevel(manager)), V.Null{}), Json.field("imageAutoResize", V.Boolean{Settings.getImageAutoResize(manager)}, Json.field("compactionEnabled", V.Boolean{Settings.getCompactionEnabled(manager)}, Json.field("global", Settings.toValue(Settings.getGlobalSettings(manager)), Nil{}))))))})
+
+def reloadSettings(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2, &2, String, Unit> <- Session.reload(session)
+    H.reportOutcome("reload", result)
+    manager : Settings.SettingsManager <- Session.getSettings(session)
+    reportSettings("settings", manager)
+
+def decoded(value: Result<&2, &2, Decode.ParseError, V.Value>) -> Settings.Outcome(Settings.Settings):
+  match value:
+    case Done{value}: Settings.decode(Settings.migrate(value))
+    case Fail{_}: Settings.decode(V.Null{})
+
+def reloadScenario(+dir: String, +initial: Settings.Outcome(Settings.Settings)) -> IO(Unit):
+  match initial:
+    case Fail{_}: IO.die(Unit, 1, "invalid initial settings")
+    case Done{settings}:
+      do IO<Unit>:
+        created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+        stored : Session.Session() <- H.requireSession(created)
+        memory : Settings.InMemorySettingsStorage & Settings.SettingsManager <- Settings.inMemory(settings, Settings.options())
+        +value : Fixture <- fixtureWith(stored, dir, managerOf(memory), plainSetup(Nil{}))
+        reloadSettings(sessionOf(value))
+        teardown(value)
+
+# suite/regressions/8989: a fork removes the context-invisible label that a
+# compaction's boundary pointed to. Ids are the stamps upstream generates.
+def Manager() -> Data: S.SessionManager<Unit, Tools.ToolDetails, V.Value>
+def Step() -> Data: Result<&2, &2, S.Error, Manager()>
+
+def then(step: Step(), next: Manager() -> Step()) -> Step():
+  Result.bind(&2, &2, S.Error, Manager(), Manager(), step, next)
+
+def stamp(+id: String) -> S.EntryStamp: S.EntryStamp{id, "2026-01-01T00:00:00.000Z"}
+
+def userMsg(text: String) -> Session.Message(): T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text}, zero()}}}
+
+def forkedAtLabel() -> Step():
+  start = S.inMemory(Unit, Tools.ToolDetails, V.Value, S.SessionHeader{Some{3n}, "session", "2026-01-01T00:00:00.000Z", "/tmp", None{}})
+  old = then(start, state => S.appendMessage(Unit, Tools.ToolDetails, V.Value, state, stamp("old"), userMsg("old")))
+  labeled = then(old, state => S.appendLabelChange(Unit, Tools.ToolDetails, V.Value, state, stamp("label"), "old", Some{"checkpoint"}))
+  kept = then(labeled, state => S.appendMessage(Unit, Tools.ToolDetails, V.Value, state, stamp("kept"), userMsg("kept")))
+  compacted = then(kept, state => S.appendCompaction(Unit, Tools.ToolDetails, V.Value, state, stamp("compaction"), "summary", Some{"label"}, 100n, None{}, None{}, None{}))
+  after = then(compacted, state => S.appendMessage(Unit, Tools.ToolDetails, V.Value, state, stamp("after"), userMsg("after")))
+  then(after, state => S.createBranchedSession(Unit, Tools.ToolDetails, V.Value, state, "after", stamp("fork"), "copied-label" <> Nil{}))
+
+def firstKept(entry: Maybe<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> V.Value:
+  match entry:
+    case Some{S.Compaction{S.CompactionEntry{_, _, keep, _, _, _, _, _}}}: V.Text{keep}
+    case _: V.Null{}
+
+def contextMessages(context: Result<&2, &2, S.Error, S.SessionContext<Unit, Tools.ToolDetails, V.Value>>) -> V.Value:
+  match context:
+    case Done{S.SessionContext{messages, _, _}}: V.ArrayValue{JsonEvent.messages(messages)}
+    case Fail{_}: V.Null{}
+
+def reportFork(step: Step()) -> IO(Unit):
+  match step:
+    case Fail{_}: IO.print("{\"type\":\"fork_failed\"}")
+    case Done{+state}: H.printed(Done{Json.object(Json.field("type", Json.text("fork"), Json.field("firstKeptEntryId", firstKept(S.getEntry(Unit, Tools.ToolDetails, V.Value, state, "compaction")), Json.field("messages", contextMessages(S.sessionContext(Unit, Tools.ToolDetails, V.Value, state)), Nil{}))))})
+
+# A faux model with upstream's `models: [{ id: "faux-1", contextWindow, maxTokens }]`.
+def sizedModel(window: U32, maxTokens: U32) -> Ai.Model<Ai.JsonValue>:
+  Ai.Model{"faux-1", "faux-1", Ai.OpenAIResponsesApi{}, "faux", "https://faux.invalid", False{}, None{}, Ai.InputText{} <> Nil{}, None{}, Ai.ModelCost{zero(), zero(), zero(), zero(), None{}}, None{}, U32.to_f64(window), U32.to_f64(maxTokens), None{}, None{}, None{}}
+
+def userAt(text: String, +timestamp: F64) -> Session.Message(): T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserBlocks{Ai.TextImageText{Ai.TextContent{text, None{}}} <> Nil{}}, timestamp}}}
+
+def assistantAt(text: String, stop: Ai.StopReason, usage: Ai.Usage, +timestamp: F64) -> Session.Message():
+  T.LlmMessage{Ai.Assistant{Ai.AssistantMessage{textBlock(text), "openai-responses", "faux", "faux-1", None{}, None{}, None{}, None{}, usage, stop, None{}, None{}, None{}, None{}, timestamp}}}
+
+def before(now: F64, ms: U32) -> F64: F64.sub(now, U32.to_f64(ms))
+
+def reportRemaining(replies: R.Ref<List<&2, Reply>>) -> IO(Unit):
+  do IO<Unit>:
+    remaining : List<&2, Reply> <- R.read(List<&2, Reply>, replies)
+    IO.print("{\"type\":\"remaining\",\"count\":" ++ Nat.show(List.length(&2, Reply, remaining)) ++ "}")
+
+def repliesOf(value: Fixture) -> R.Ref<List<&2, Reply>>:
+  match value:
+    case Fixture{_, _, _, _, _, _, Faux{replies, _, _, _}}: replies
+
+# Persisted entries as JSON messages (upstream sessionManager.getEntries()).
+def entryMessages(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
+  match entries:
+    case Nil{}: Nil{}
+    case S.SessionMessageEntry{_, message} <> rest: JsonEvent.message(message) <> entryMessages(rest)
+    case _ <> rest: entryMessages(rest)
+
+def reportPersisted(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    +stored : Session.Session() <- Session.sessionOf(session)
+    H.printed(Done{Json.object(Json.field("type", Json.text("persisted"), Json.field("messages", V.ArrayValue{entryMessages(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))}, Nil{})))})
+    H.reportEntries(session)
+
+def settingsFrom(+cwd: String, agentDir: String) -> IO(Settings.SettingsManager):
+  do IO<Settings.SettingsManager>:
+    loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.options())
+    return H.settingsOf(loaded)
+
+def seededFixture(+dir: String, agentDir: String, seed: List<&2, Session.Message()>, setup: Setup) -> IO(Fixture):
+  do IO<Fixture>:
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    empty : Session.Session() <- H.requireSession(created)
+    stored : Session.Session() <- seeded(seed, empty)
+    fixture(stored, dir, agentDir, setup)
+
+# 8328: a zero-usage reply to `text` under a 100-token window.
+def zeroUsageScenario(+dir: String, agentDir: String, +text: String) -> IO(Unit):
+  do IO<Unit>:
+    +value : Fixture <- seededFixture(dir, agentDir, Nil{}, Setup{Plain{"response"} <> Text{"threshold summary"} <> Nil{}, Nil{}, sizedModel(100, 20)})
+    result : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), text, Nil{}, None{})
+    H.reportPrompt(result)
+    Session.waitForIdle(sessionOf(value))
+    reportRemaining(repliesOf(value))
+    teardown(value)
+
+def fullUsage() -> Ai.Usage: Ai.Usage{U32.to_f64(100), zero(), zero(), zero(), None{}, None{}, U32.to_f64(100), Ai.UsageCost{zero(), zero(), zero(), zero(), zero()}}
+
+# pre-prompt-compaction-no-continue: a length-stopped reply that fills the
+# window is compacted before the next prompt, which then runs by itself.
+def prePromptScenario(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +now : F64 <- Date.now()
+    +value : Fixture <- seededFixture(dir, agentDir, userAt("previous prompt", before(now, 1000)) <> assistantAt("length-stop assistant response", Ai.Length{}, fullUsage(), before(now, 500)) <> Nil{}, Setup{Text{"pre-prompt summary"} <> Text{"answered next prompt"} <> Nil{}, Nil{}, sizedModel(100, 100)})
+    result : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "next prompt", Nil{}, None{})
+    H.reportPrompt(result)
+    reportRemaining(repliesOf(value))
+    H.reportMessages(sessionOf(value))
+    teardown(value)
+
+type Compacted is Data:
+  Compacted{result: Result<&2, &2, String, Compaction.CompactionResult>}
+
+def compactInBackground(session: Session.AgentSession, done: Chan(Compacted)) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2, &2, String, Compaction.CompactionResult> <- Session.compact(session, None{})
+    sent : Bool <- Chan.send(Compacted, done, Compacted{result})
+    R.requireSent(sent)
+
+def reportCompacted(received: Maybe<&1, Compacted>) -> IO(Unit):
+  match received:
+    case Some{Compacted{result}}: H.reportCompact(result)
+    case None{}: IO.print("{\"type\":\"compact_failed\",\"error\":\"compaction fiber did not finish\"}")
+
+def release(gate: Chan(Unit)) -> IO(Unit):
+  do IO<Unit>:
+    sent : Bool <- Chan.send(Unit, gate, Unit{})
+    R.requireSent(sent)
+
+# 7150: a prompt while a manual compaction's summary request is held open.
+def promptDuringCompaction(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +now : F64 <- Date.now()
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +gate : Chan(Unit) <- Chan.new(Unit, 1)
+    +done : Chan(Compacted) <- Chan.new(Compacted, 1)
+    +value : Fixture <- seededFixture(dir, agentDir, userAt("old user message", before(now, 1000)) <> assistantAt("old assistant response", Ai.Stop{}, usageOf(zero()), before(now, 500)) <> Nil{}, Setup{Text{"manual compacted"} <> Text{"probe response"} <> Nil{}, H.Gate{started, gate} <> Nil{}, H.fauxModel()})
+    IO.spawn(Unit, compactInBackground(sessionOf(value), done))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    H.reportCompacting(sessionOf(value))
+    probe : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "PROBE-7150", Nil{}, None{})
+    H.reportOutcome("probe", probe)
+    release(gate)
+    finished : Maybe<&1, Compacted> <- Chan.recv(Compacted, done)
+    reportCompacted(finished)
+    H.reportMessages(sessionOf(value))
+    reportPersisted(sessionOf(value))
+    teardown(value)
+    Chan.close(Unit, started)
+    Chan.close(Unit, gate)
+    Chan.close(Compacted, done)
+
+def promptLater(session: Session.AgentSession, +text: String, done: Chan(Result<&2, &2, String, Unit>)) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2, &2, String, Unit> <- Session.prompt(session, text, Nil{}, None{})
+    sent : Bool <- Chan.send(Result<&2, &2, String, Unit>, done, result)
+    R.requireSent(sent)
+
+def reportLeaf(+label: String, +session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    stored : Session.Session() <- Session.sessionOf(session)
+    IO.print("{\"type\":\"" ++ label ++ "\",\"leafId\":" ++ Decode.quote(H.currentLeaf(stored)) ++ "}")
+
+def firstId(ids: List<&2, String>) -> String:
+  match ids:
+    case id <> _: id
+    case Nil{}: "missing-entry"
+
+def firstUser(stored: Session.Session()) -> String:
+  firstId(H.userIds(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored))))
+
+# tree-during-streaming: navigation from inside the active response.
+def treeDuringStreaming(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +gate : Chan(Unit) <- Chan.new(Unit, 1)
+    +done : Chan(Result<&2, &2, String, Unit>) <- Chan.new(Result<&2, &2, String, Unit>, 1)
+    +value : Fixture <- seededFixture(dir, agentDir, userMsg("first") <> Nil{}, Setup{Text{"response"} <> Nil{}, H.Gate{started, gate} <> Nil{}, H.fauxModel()})
+    reportLeaf("target", sessionOf(value))
+    IO.spawn(Unit, promptLater(sessionOf(value), "second", done))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    reportLeaf("active", sessionOf(value))
+    stored : Session.Session() <- Session.sessionOf(sessionOf(value))
+    navigated : Result<&2, &2, String, Session.Navigation> <- Session.navigateTree(sessionOf(value), firstUser(stored))
+    H.reportNavigation(navigated)
+    reportLeaf("after_navigation", sessionOf(value))
+    release(gate)
+    finished : Maybe<&1, Result<&2, &2, String, Unit>> <- Chan.recv(Result<&2, &2, String, Unit>, done)
+    H.reportFinished(finished)
+    teardown(value)
+    Chan.close(Unit, started)
+    Chan.close(Unit, gate)
+    Chan.close(Result<&2, &2, String, Unit>, done)
+
+def number(+text: String) -> Nat: Maybe.default(&2, Nat, Nat.read(text), 0n)
+
+def run(args: List<String>) -> IO(Unit):
+  match args:
+    case "name" <> dir <> agentDir <> name <> Nil{}: withSession(dir, agentDir, Nil{}, session => named(name, session))
+    case "prompt" <> dir <> agentDir <> text <> reply <> Nil{}: withSession(dir, agentDir, Text{reply} <> Nil{}, session => promptWith(text, session))
+    case "stream" <> dir <> agentDir <> count <> Nil{}: withSession(dir, agentDir, Text{repeated(number(count))} <> Nil{}, session => promptWith("respond", session))
+    case "toolcall" <> dir <> agentDir <> Nil{}: withSession(dir, agentDir, writeCall() <> Text{"done"} <> Nil{}, session => promptWith("write a file", session))
+    case "fork_label" <> Nil{}: reportFork(forkedAtLabel())
+    case "zero_usage" <> dir <> agentDir <> text <> Nil{}: zeroUsageScenario(dir, agentDir, text)
+    case "pre_prompt" <> dir <> agentDir <> Nil{}: prePromptScenario(dir, agentDir)
+    case "compaction_prompt" <> dir <> agentDir <> Nil{}: promptDuringCompaction(dir, agentDir)
+    case "tree_streaming" <> dir <> agentDir <> Nil{}: treeDuringStreaming(dir, agentDir)
+    case "settings_reload" <> dir <> agentDir <> settings <> Nil{}: reloadScenario(dir, decoded(Decode.parse(settings)))
+    case _: IO.die(Unit, 1, "usage: regressions <name <dir> <agentDir> <name> | prompt <dir> <agentDir> <text> <reply> | stream <dir> <agentDir> <characters> | toolcall <dir> <agentDir>>")
+
+def main() -> IO(Unit):
+  do IO<Unit>:
+    args : List<String> <- IO.args()
+    run(args)
