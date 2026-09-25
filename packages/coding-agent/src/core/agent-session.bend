@@ -240,8 +240,15 @@ type Warming is Data:
 # The session's handles on the agent: its event subscription, the
 # next-turn, request and stream hooks that replaced the agent's own
 # (restored on dispose) and cache warming.
+# getSessionStats is a pure function of the stored entries, the leaf, the
+# session file and the model's context window. Entries are append-only, so
+# the entry count, leaf and file identify the stored state; frames reading the
+# footer reuse the last result until one of them changes.
+type StatsKey is Data: StatsKey{count: Nat, leaf: Maybe<&2, String>, file: Maybe<&2, String>, window: F64}
+type StatsMemo is Data: StatsMemo{key: StatsKey, stats: Result<&2, &2, S.Error, Stats.Stats>}
+
 type SessionHooks is Data:
-  SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>, request: T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()), replacedRequest: Maybe<&2, T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>, context: Ctx.ContextFactory(), warming: Warming}
+  SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>, request: T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()), replacedRequest: Maybe<&2, T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>, context: Ctx.ContextFactory(), warming: Warming, stats: R.Ref<Maybe<&2, StatsMemo>>}
 
 type AgentSession is Data:
   AgentSession{agent: Runtime.Owner(), shared: R.Ref<Shared>, hooks: SessionHooks, settings: R.Ref<Settings.SettingsManager>, cwd: String, loadout: R.Ref<Runtime.Loadout>, models: Models.ModelRuntime, scoped: R.Ref<List<&2, Models.ScopedModel>>}
@@ -955,7 +962,7 @@ def disposeWarming(agent: Runtime.Owner(), warming: Warming) -> IO(Unit):
 
 def warmerOf(hooks: SessionHooks) -> Warmer.CacheWarmer:
   match hooks:
-    case SessionHooks{_, _, _, _, _, _, _, Warming{warmer, _, _, _, _, _, _, _, _, _}}: warmer
+    case SessionHooks{_, _, _, _, _, _, _, Warming{warmer, _, _, _, _, _, _, _, _, _}, _}: warmer
 
 # upstream dispose, in two steps. `shutdown` ends the session's activity: work
 # is aborted, cache warming stops and listeners are unsubscribed. `retire`
@@ -964,7 +971,7 @@ def warmerOf(hooks: SessionHooks) -> Warmer.CacheWarmer:
 # frames read the live session concurrently. `dispose` does both.
 def shutdown(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{+agent, +shared, SessionHooks{subscription, _, _, _, _, _, _, warming}, _, _, _, _, _}:
+    case AgentSession{+agent, +shared, SessionHooks{subscription, _, _, _, _, _, _, warming, _}, _, _, _, _, _}:
       do IO<Unit>:
         abortSleeping(shared)
         abortCompactions(shared)
@@ -975,7 +982,7 @@ def shutdown(session: AgentSession) -> IO(Unit):
 
 def retire(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{+agent, shared, SessionHooks{_, handler, nextTurn, replaced, request, replacedRequest, context, _}, settings, _, loadout, _, _}:
+    case AgentSession{+agent, shared, SessionHooks{_, handler, nextTurn, replaced, request, replacedRequest, context, _, stats}, settings, _, loadout, _, _}:
       do IO<Unit>:
         C.dispose(Agent.Input<SessionEvent()>, Loop.Emission<Runtime.Error()>, handler)
         Agent.setPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replaced)
@@ -986,6 +993,7 @@ def retire(session: AgentSession) -> IO(Unit):
         bindContext(current, None{})
         C.dispose(Unit, Ctx.ExtensionContext, context)
         oldSettings : Settings.SettingsManager <- R.dispose(Settings.SettingsManager,settings)
+        memo : Maybe<&2, StatsMemo> <- R.dispose(Maybe<&2, StatsMemo>, stats)
         released : Shared <- R.dispose(Shared, shared)
         return Unit{}
 
@@ -1848,7 +1856,8 @@ def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.Sett
     bindContext(loadout, Some{context})
     inner : Runtime.Stream() <- Agent.getStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     warming : Warming <- createWarming(agent, shared, settingsRef, inner)
-    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context, warming}, settingsRef, cwd, loadoutRef, models, scoped}
+    stats : R.Ref<Maybe<&2, StatsMemo>> <- R.new(Maybe<&2, StatsMemo>, None{})
+    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context, warming, stats}, settingsRef, cwd, loadoutRef, models, scoped}
 
 # A final error after retries reports the failure and resets the counter.
 def failedRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason, finalError: Maybe<&2, String>) -> IO(Unit):
@@ -2732,11 +2741,37 @@ def reload(session: AgentSession) -> IO(Result<&2, &2, String, Unit>):
 
 # upstream getSessionStats: counts and billed usage over every stored entry,
 # with the current context usage.
+def statsKey(+stored: Session(), model: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> StatsKey:
+  +manager = stateOf(stored)
+  StatsKey{List.length(&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>, S.getEntries(Unit, Tools.ToolDetails, V.Value, manager)), S.getLeafId(Unit, Tools.ToolDetails, V.Value, manager), Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, stored), Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, model), F.fromU32(0))}
+def sameText(left: Maybe<&2, String>, right: Maybe<&2, String>) -> Bool:
+  match left right:
+    case None{} None{}: True{}
+    case Some{a} Some{b}: String.eq(a, b)
+    case _ _: False{}
+def sameKey(left: StatsKey, right: StatsKey) -> Bool:
+  match left right:
+    case StatsKey{count, leaf, file, window} StatsKey{otherCount, otherLeaf, otherFile, otherWindow}: Nat.is_eq(count, otherCount) && sameText(leaf, otherLeaf) && sameText(file, otherFile) && F64.is_eq(window, otherWindow)
+def statsRefOf(session: AgentSession) -> R.Ref<Maybe<&2, StatsMemo>>:
+  match session:
+    case AgentSession{_, _, SessionHooks{_, _, _, _, _, _, _, _, stats}, _, _, _, _, _}: stats
+def recomputed(+memo: R.Ref<Maybe<&2, StatsMemo>>, +key: StatsKey, stored: Session(), model: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> IO(Result<&2, &2, S.Error, Stats.Stats>):
+  do IO<Result<&2, &2, S.Error, Stats.Stats>>:
+    +result : Result<&2, &2, S.Error, Stats.Stats> <- IO.pure(Result<&2, &2, S.Error, Stats.Stats>, Stats.stats(stored, model))
+    R.write(Maybe<&2, StatsMemo>, memo, Some{StatsMemo{key, result}})
+    return result
+def memoized(cached: Maybe<&2, StatsMemo>, +memo: R.Ref<Maybe<&2, StatsMemo>>, +key: StatsKey, stored: Session(), model: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> IO(Result<&2, &2, S.Error, Stats.Stats>):
+  match cached:
+    case Some{StatsMemo{previous, result}}: Bool.pick(Unit -> IO(Result<&2, &2, S.Error, Stats.Stats>), sameKey(previous, key), _ => IO.pure(Result<&2, &2, S.Error, Stats.Stats>, result), _ => recomputed(memo, key, stored, model))(Unit{})
+    case None{}: recomputed(memo, key, stored, model)
 def getSessionStats(+session: AgentSession) -> IO(Result<&2, &2, S.Error, Stats.Stats>):
   do IO<Result<&2, &2, S.Error, Stats.Stats>>:
-    stored : Session() <- sessionOf(session)
+    +stored : Session() <- sessionOf(session)
     current : AgentState() <- state(session)
-    return Stats.stats(stored, stateModel(current))
+    +model : Maybe<&2, Ai.Model<Ai.JsonValue>> <- IO.pure(Maybe<&2, Ai.Model<Ai.JsonValue>>, stateModel(current))
+    +memo : R.Ref<Maybe<&2, StatsMemo>> <- IO.pure(R.Ref<Maybe<&2, StatsMemo>>, statsRefOf(session))
+    cached : Maybe<&2, StatsMemo> <- R.read(Maybe<&2, StatsMemo>, memo)
+    memoized(cached, memo, statsKey(stored, model), stored, model)
 
 # upstream getContextUsage: None without a model or context window; unknown
 # tokens after a compaction until an assistant responds.
