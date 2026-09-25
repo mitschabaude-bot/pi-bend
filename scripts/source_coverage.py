@@ -35,9 +35,14 @@ def check(upstream):
             raise ValueError(f"ported source has no Bend target: {source}")
         if review["state"] == "missing" and ports:
             raise ValueError(f"missing source has Bend targets: {source}")
+        port_hashes = review.get("port_sha256", {})
+        if set(port_hashes) != set(ports):
+            raise ValueError(f"Bend target hashes do not match targets for {source}")
         for port in ports:
             if not port.startswith("packages/") or not port.endswith(".bend") or not (ROOT / port).is_file():
                 raise ValueError(f"invalid Bend target {port} for {source}")
+            if port_hashes[port] != hashlib.sha256((ROOT / port).read_bytes()).hexdigest():
+                raise ValueError(f"review of changed Bend target {port} is stale")
     print(f"Upstream source reviews: {len(data['reviews'])} checked at {revision[:9]}")
 
 

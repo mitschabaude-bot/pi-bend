@@ -4,72 +4,110 @@
     "packages/ai/src/api/openai-responses.ts": {
       "state": "partial",
       "note": "Native OpenAI/Codex request and stream path works; provider suites remain partial and some upstream request/header behavior differs.",
-      "source_sha256": "5d524184ea001a2717fd35b4562126043338d1ef3279f4e2ce192ae5592e8479"
+      "source_sha256": "5d524184ea001a2717fd35b4562126043338d1ef3279f4e2ce192ae5592e8479",
+      "port_sha256": {
+        "packages/ai/src/api/openai-responses.bend": "e9b55ad7209d7249305fcb9bcd276c503951fe0e65316e108b33f8ab7a643210"
+      }
     },
     "packages/ai/src/api/anthropic-messages.ts": {
       "state": "partial",
       "note": "Registered and locally validated with OAuth refresh; no verified live Anthropic request yet.",
-      "source_sha256": "d4c34523a3c278b23b831352ec7fc9c9d091f9ffc07c37081e43b8f3dd3d3203"
+      "source_sha256": "d4c34523a3c278b23b831352ec7fc9c9d091f9ffc07c37081e43b8f3dd3d3203",
+      "port_sha256": {
+        "packages/ai/src/api/anthropic-messages.bend": "c121815368080408c43882d50b0d5a2af8662c0e31a6a9612437a60b8a3941d5"
+      }
     },
     "packages/ai/src/api/openai-completions.ts": {
       "state": "partial",
       "note": "Registered provider path exists; broader provider parity and live validation are not claimed.",
-      "source_sha256": "a682245959c697d4f7a5ac54152f2db189099561b304725c651d6dbee22fd752"
+      "source_sha256": "a682245959c697d4f7a5ac54152f2db189099561b304725c651d6dbee22fd752",
+      "port_sha256": {
+        "packages/ai/src/api/openai-completions.bend": "8042d3f67903f2043f2c6a720d9dc80953f8b007d4ac47945e34e6112d8dceec"
+      }
     },
     "packages/agent/src/agent-loop.ts": {
       "state": "partial",
       "note": "All named agent-loop test cases are ported, but source-wide integration and higher-level Agent behavior are separate coverage questions.",
-      "source_sha256": "c3d99a5b0f24d1e7fde41cbeb2cd7a2f3559aa3e9c1df975abef21d7e0ecd189"
+      "source_sha256": "c3d99a5b0f24d1e7fde41cbeb2cd7a2f3559aa3e9c1df975abef21d7e0ecd189",
+      "port_sha256": {
+        "packages/agent/src/agent-loop.bend": "a01d86dcecbe9189bdd70e3861851449342dc1cd9d4219b7d853594c0cbd1248"
+      }
     },
     "packages/agent/src/agent.ts": {
       "state": "partial",
       "note": "Native agent loop runs model requests and tools; full Agent API and extension integration remain incomplete.",
-      "source_sha256": "fad42fdcea126f8b47f01876431def6f866ad72260b1e95d1a10e3acb0b6ddeb"
+      "source_sha256": "fad42fdcea126f8b47f01876431def6f866ad72260b1e95d1a10e3acb0b6ddeb",
+      "port_sha256": {
+        "packages/agent/src/agent.bend": "33baf1abe7eb491aacf9dc6e039e61f093b07ad6a6642d58b21c18b90b1bd76b"
+      }
     },
     "packages/coding-agent/src/core/agent-session.ts": {
       "state": "partial",
       "note": "Native interactive and RPC sessions work; extension boundaries and some upstream integration behaviors remain open.",
-      "source_sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7"
+      "source_sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7",
+      "port_sha256": {
+        "packages/coding-agent/src/core/agent-session.bend": "74564dc20692380d3959bab8b4f21737440689f706801f2aa1f086ee64b4b2f6"
+      }
     },
     "packages/coding-agent/src/core/session-manager.ts": {
       "state": "partial",
       "note": "Session persistence, resume, tree and fork work; complete upstream session/recovery parity is not claimed.",
-      "source_sha256": "ded5d65112f8666f0e3ae71dab39a302607c29a000745a3d06e00c2103c8f257"
+      "source_sha256": "ded5d65112f8666f0e3ae71dab39a302607c29a000745a3d06e00c2103c8f257",
+      "port_sha256": {
+        "packages/coding-agent/src/core/session-manager.bend": "66905475905747fb9c53670f213967704ee46c3ed9020e2144a0ebbd9da56158"
+      }
     },
     "packages/coding-agent/src/core/tools/bash.ts": {
       "state": "partial",
       "note": "Native Bash execution and interactive streaming work; output preview and exact terminal parity have known gaps.",
-      "source_sha256": "3f43b6d80b460bd38334975bee2726b5438ee6e54bf52abdb6fc54400aad28d2"
+      "source_sha256": "3f43b6d80b460bd38334975bee2726b5438ee6e54bf52abdb6fc54400aad28d2",
+      "port_sha256": {
+        "packages/coding-agent/src/core/tools/bash.bend": "e8cea6a721912438d027513c95195cddc316418c50c41bc8c21465fc469ede85"
+      }
     },
     "packages/coding-agent/src/core/tools/read.ts": {
       "state": "partial",
       "note": "Native text read works; image reading and full upstream behavior remain open.",
-      "source_sha256": "297d26092979651091f44de8862a6fd55aaf59e7252f8fb8dd3d7cb3f9771518"
+      "source_sha256": "297d26092979651091f44de8862a6fd55aaf59e7252f8fb8dd3d7cb3f9771518",
+      "port_sha256": {
+        "packages/coding-agent/src/core/tools/read.bend": "666cf3f542fe175c1becd000c88fb315f0054f8aa31e6eb95f466fc056fc7103"
+      }
     },
     "packages/coding-agent/src/core/tools/edit.ts": {
       "state": "partial",
       "note": "Native edit execution works; complete upstream edit behavior is not established by the current source review.",
-      "source_sha256": "31a368c14cf5437ecac157765660001b16063302d9bd746303d6d1b1dcb5625d"
+      "source_sha256": "31a368c14cf5437ecac157765660001b16063302d9bd746303d6d1b1dcb5625d",
+      "port_sha256": {
+        "packages/coding-agent/src/core/tools/edit.bend": "cb362dd19ddaa55b16bb8d65c7f07e410abaf8ddc54a2209cd8585a60f139d1d"
+      }
     },
     "packages/coding-agent/src/core/tools/write.ts": {
       "state": "partial",
       "note": "Native write execution works; complete upstream source contract has not been reviewed.",
-      "source_sha256": "2ee0a438c24cf83fefd733e349d55a21aa5b633c18934b2c80759fcf14b6f297"
+      "source_sha256": "2ee0a438c24cf83fefd733e349d55a21aa5b633c18934b2c80759fcf14b6f297",
+      "port_sha256": {
+        "packages/coding-agent/src/core/tools/write.bend": "9b3e0aa7b56a5b1073f7892376cd885af6d10ce7a3e6cb099447ef8825c8d20b"
+      }
     },
     "packages/coding-agent/src/modes/interactive/components/settings-selector.ts": {
       "state": "partial",
       "note": "The selector works for supported settings; some upstream rows depend on unfinished behavior and are omitted.",
-      "source_sha256": "8134b93329c9155bd017df5b6278e2d72b403c8ca1f22c26a81234659ab7e6ea"
+      "source_sha256": "8134b93329c9155bd017df5b6278e2d72b403c8ca1f22c26a81234659ab7e6ea",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/settings-selector.bend": "47d8b887c9b8bb3cebf7dca5b0d1e6e9d3a5860f90bf36350573dcdd25b6c9c6"
+      }
     },
     "packages/coding-agent/src/modes/interactive/components/thinking-selector.ts": {
       "state": "missing",
       "note": "The /thinking selector and its save-as-default action are absent; the setting and current-session /thinking command exist separately.",
-      "source_sha256": "a8e562022d04ef4266191ba35a0417fced547666be6e6e97329aa3918b512e18"
+      "source_sha256": "a8e562022d04ef4266191ba35a0417fced547666be6e6e97329aa3918b512e18",
+      "port_sha256": {}
     },
     "packages/coding-agent/src/modes/interactive/components/scoped-models-selector.ts": {
       "state": "missing",
       "note": "The /scoped-models interactive selector is absent; model cycling exists separately.",
-      "source_sha256": "a8524d7ccfaf6fd6044a268a06d43f6eee7325b047057c73bb43fa0b1286c612"
+      "source_sha256": "a8524d7ccfaf6fd6044a268a06d43f6eee7325b047057c73bb43fa0b1286c612",
+      "port_sha256": {}
     },
     "packages/coding-agent/src/modes/interactive/interactive-mode.ts": {
       "state": "partial",
@@ -78,7 +116,11 @@
         "packages/coding-agent/src/modes/interactive/run.bend"
       ],
       "note": "The interactive loop runs, but command and terminal parity remain incomplete; /thinking and /scoped-models selectors are known gaps.",
-      "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388"
+      "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "978177d944713ab9f00d09b3473c5a8cf898ca21c0786c8adf67738141817505",
+        "packages/coding-agent/src/modes/interactive/run.bend": "dfd2c3ed30e93b5f1e50fb99d7a207e324ed569f4c095fffe8f7c3a028674bed"
+      }
     },
     "packages/tui/src/editor-component.ts": {
       "state": "partial",
@@ -86,12 +128,16 @@
         "packages/tui/src/components/editor-component.bend"
       ],
       "note": "The Bend editor component lives under components; complete source contract review is pending.",
-      "source_sha256": "0e40ba454b74e2ce21dfc6d831c185e5fb5619b0987fa158be98ed98564e8716"
+      "source_sha256": "0e40ba454b74e2ce21dfc6d831c185e5fb5619b0987fa158be98ed98564e8716",
+      "port_sha256": {
+        "packages/tui/src/components/editor-component.bend": "663f5c5cb3147e198a0a331234c58fdd3755f3b2b37ce5e63a421b5dae943eee"
+      }
     },
     "packages/tui/src/tui-alt-screen.ts": {
       "state": "missing",
       "note": "Fullscreen alternate-screen mode is not ported; default regular mode is available.",
-      "source_sha256": "5f6032a07398b8df3f72d65c38dbed2e52649a25823a52946d6414ddb2f8a929"
+      "source_sha256": "5f6032a07398b8df3f72d65c38dbed2e52649a25823a52946d6414ddb2f8a929",
+      "port_sha256": {}
     }
   }
 }
