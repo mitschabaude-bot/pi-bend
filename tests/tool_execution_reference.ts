@@ -1,6 +1,8 @@
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {strict as assert} from 'node:assert';
+import {KeybindingsManager,setKeybindings} from '/home/agent/code/pi-mono/packages/tui/src/keybindings.ts';
+import {KEYBINDINGS} from '/home/agent/code/pi-mono/packages/coding-agent/src/core/keybindings.ts';
 import {ToolExecutionComponent} from '/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/components/tool-execution.ts';
 import {initTheme} from '/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/theme/theme.ts';
 import {Text} from '/home/agent/code/pi-mono/packages/tui/src/components/text.ts';
@@ -13,6 +15,8 @@ for (const [file,digest] of [
  ['packages/coding-agent/src/core/tools/render-utils.ts','38913e15575b7c314687c1a7d53b2763eecb8e7a86b0b58d7b5532c900503cf3'],
  ['packages/coding-agent/src/modes/interactive/theme/dark.json','103a5aecb74a2dab5cc903c9741845ee6158658ce2ff6e5445948784116eaef8'],
  ['packages/coding-agent/src/modes/interactive/components/keybinding-hints.ts','76b13ee8bfc6e49d5b2b5496eac13523bd9aad95770cbfa4a239336131f94aae'],
+ ['packages/coding-agent/src/core/keybindings.ts','38e8b20700e40452acab4c9583d96d9c304bbe15c471e214e50b65ec3b3f1945'],
+ ['packages/tui/src/keybindings.ts','eea5e3fe258ad50337595bb5320955a6d97bac0c8f6c0a838f988d75079bcf38'],
  ['packages/tui/src/components/box.ts','f79d30c9c263064df656dc55674b5d951bf765ffbbf658f400f449c44f6dab98'],
  ['packages/tui/src/components/text.ts','3042e09dd8dcb870c23506e6fafb2dfcc095e7e375adad2fb62e447da17e5e3b'],
  ['packages/coding-agent/src/core/tools/renderers/read.ts','93699c267fc824c0016ac182b68c01c45feeb621c64fc44a814a96e3c951f106'],
@@ -21,6 +25,7 @@ for (const [file,digest] of [
  ['packages/coding-agent/src/core/tools/renderers/write.ts','84d715671a72c77821ab81aef79b39f5022082c78568683ab643d38ee735d07f'],
 ] as const) assert.equal(createHash('sha256').update(readFileSync('/home/agent/code/pi-mono/'+file)).digest('hex'),digest);
 initTheme('dark');
+setKeybindings(new KeybindingsManager(KEYBINDINGS));
 const ui:any={requestRender(){}};
 const out=(label:string,component:ToolExecutionComponent,width=28)=>process.stdout.write(label+'\x1e'+component.render(width).join('\x1f')+'\n');
 const generic=new ToolExecutionComponent('custom_tool','g1',{path:'notes.txt'}, {}, undefined, ui, process.cwd());
