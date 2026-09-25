@@ -4110,8 +4110,11 @@
     },
     {
       "source": "packages/tui/test/overlay-non-capturing.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/tui-virtual-terminal.bend",
+        "tests/tui_virtual_terminal.ts"
+      ],
       "sha256": "353c51e18e087c648addf59316455e8fa923e8b0bcebab1be217ea3ed0ea1cef"
     },
     {

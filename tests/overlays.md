@@ -8,7 +8,7 @@ The policy covers showing, permanent removal, temporary hiding, explicit focus/u
 
 A permanently removed handle cannot reactivate a component. Upstream's retained `setHidden(false)` closure can steal focus after its entry was removed; native stale handles are inert. Four independently asserted removed-handle operations cover this lifetime correction. This follows the user's instruction to avoid retaining legacy object-lifetime defects.
 
-This is a pure policy milestone, not completed TUI or overlay-suite parity. Geometry, bounds, visibility callback execution, renderer/component adapters and terminal input dispatch are separate integration work. Generic focus/lifetime laws and the original whole-TUI suites remain pending; differential traces do not constitute a proof.
+This is the pure policy. `tui-base.bend` integrates it with the renderer, overlay handles and terminal input dispatch; upstream's whole-TUI suites `overlay-options` and `overlay-non-capturing` run against that integration on a virtual terminal (`tests/tui-virtual-terminal.md`). Generic focus/lifetime laws remain pending; differential traces do not constitute a proof.
 
 ```sh
 bun build/bend-process-files/bend2/main.ts tests/overlays.bend -o build/overlays.js

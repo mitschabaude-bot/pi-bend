@@ -18,15 +18,32 @@ type Terminal = InstanceType<typeof VirtualTerminal>;
 type Options = Record<string, unknown>;
 // A line, or `fill` repeated (render width - less) times between prefix and suffix.
 type Line = string | { prefix?: string; fill: string; less?: number; suffix?: string };
-type Report = { writes: string[]; widths: (number | null)[]; redraws: number };
+// Per component (numbered in creation order): the width it was last asked to
+// render at, the input it received and its `focused` flag; per overlay shown,
+// OverlayHandle.isFocused(). A render adds its writes and tui.fullRedraws.
+type ComponentState = { width: number | null; inputs: string[]; focused: boolean };
+type State = { components: ComponentState[]; focused: boolean[] };
+type Report = State & { writes: string[]; redraws: number; widths: (number | null)[] };
+// A new component is {lines, focusable?, on?}: `on` maps input data to the
+// operations its handleInput performs. "add" and "overlay" take a new one or
+// {component: i}.
+type Spec = { lines?: Line[]; focusable?: boolean; on?: Record<string, Op[]> };
 type Op =
-	| { op: "add"; lines: Line[] }
+	| ({ op: "component" } & Spec)
+	| ({ op: "add"; component?: number } & Spec)
 	| { op: "set"; component: number; lines: Line[] }
-	| { op: "overlay"; lines: Line[]; options?: Options }
+	| ({ op: "overlay"; component?: number; options?: Options } & Spec)
 	| { op: "hide"; overlay: number }
+	| { op: "focus"; overlay: number }
+	| { op: "unfocus"; overlay: number; target?: number | null }
+	| { op: "setHidden"; overlay: number; hidden: boolean }
+	| { op: "visible"; overlay: number; visible: boolean }
 	| { op: "hideTop" }
+	| { op: "setFocus"; component: number | null }
+	| { op: "input"; data: string }
 	| { op: "clear" }
 	| { op: "clearOnShrink" }
+	| { op: "check" }
 	| { op: "render"; width: number; height: number; termux?: boolean };
 
 // Upstream writes percentages as "N%"; the fixture reads {"percent": N}.
@@ -38,28 +55,52 @@ function encodeOptions(options: Options | undefined): Options {
 	return out;
 }
 
+const encode = (o: Op): Op => {
+	const on = "on" in o && o.on ? { on: Object.fromEntries(Object.entries(o.on).map(([data, ops]) => [data, ops.map(encode)])) } : {};
+	return o.op === "overlay" ? { ...o, ...on, options: encodeOptions(o.options) } : { ...o, ...on };
+};
+
+// The Bun lane compiles the fixture to JavaScript once per run.
+let runner = process.env.TUI_RUNNER ? [path.resolve(ROOT, process.env.TUI_RUNNER)] : undefined;
+function fixture(): string[] {
+	if (runner) return runner;
+	const out = path.join(ROOT, "build/tui-virtual-terminal.js");
+	const built = spawnSync(path.join(ROOT, "build/bend-native-toolchain/bend2/main.ts"), [path.join(ROOT, "tests/tui-virtual-terminal.bend"), "-o", out], { encoding: "utf8" });
+	if (built.status !== 0) throw new Error(`fixture build failed: ${built.stdout}${built.stderr}`);
+	runner = [process.execPath, out];
+	return runner;
+}
+
 function frames(ops: Op[]): Report[] {
-	const script = JSON.stringify(ops.map((o) => (o.op === "overlay" ? { ...o, options: encodeOptions(o.options) } : o)));
-	const command = process.env.TUI_RUNNER
-		? [path.resolve(ROOT, process.env.TUI_RUNNER), script]
-		: [path.join(ROOT, "build/bend-native-toolchain/bend2/main.ts"), path.join(ROOT, "tests/tui-virtual-terminal.bend"), script];
-	const result = spawnSync(command[0], command.slice(1), { encoding: "utf8", maxBuffer: 1 << 28 });
+	const [command, ...args] = fixture();
+	const result = spawnSync(command, [...args, JSON.stringify(ops.map(encode))], { encoding: "utf8", maxBuffer: 1 << 28 });
 	if (result.status !== 0) throw new Error(`fixture failed (${result.status}): ${result.stderr}`);
-	return result.stdout.split("\n").filter((line) => line.length > 0).map((line) => JSON.parse(line));
+	return result.stdout
+		.split("\n")
+		.filter((line) => line.length > 0)
+		.map((line) => {
+			const report = JSON.parse(line);
+			return { writes: [], redraws: 0, ...report, widths: report.components.map((c: ComponentState) => c.width) };
+		});
 }
 
 // Replays the script's frames into a fresh VirtualTerminal, resized first
 // when a render's size differs, as upstream resizes before the TUI renders;
-// `after(k)` runs the assertions that upstream makes after the k-th render.
-// In a report, `widths[i]` is the width component i (in creation order) was
-// last asked to render at, and `redraws` upstream's tui.fullRedraws.
+// `after(k)` runs the assertions that upstream makes after the k-th render or
+// check. In a report, `widths[i]` is the width component i (in creation
+// order) was last asked to render at, and `redraws` upstream's tui.fullRedraws.
 async function replay(columns: number, rows: number, ops: Op[], after: (k: number, terminal: Terminal, report: Report) => void) {
 	const terminal = new VirtualTerminal(columns, rows);
 	terminal.start(() => {}, () => {});
-	const sizes = ops.filter((o): o is Extract<Op, { op: "render" }> => o.op === "render");
+	const points = ops.filter((o): o is Extract<Op, { op: "render" | "check" }> => o.op === "render" || o.op === "check");
 	let size = [columns, rows];
 	for (const [k, report] of frames(ops).entries()) {
-		const { width, height } = sizes[k];
+		const point = points[k];
+		if (point.op === "check") {
+			after(k, terminal, report);
+			continue;
+		}
+		const { width, height } = point;
 		if (width !== size[0] || height !== size[1]) {
 			terminal.resize(width, height);
 			size = [width, height];
@@ -432,6 +473,942 @@ it("TUI differential rendering", "clears stale content when maxLinesRendered was
 		}
 		assert.deepStrictEqual(viewport, ["Chat 5", "Chat 6", "Chat 7", "Chat 8", "Chat 9", "Chat 10", "Chat 11", "Editor 0", "Editor 1", "Editor 2"]);
 	});
+});
+
+// overlay-non-capturing.test.ts. A Session writes upstream's TUI calls as
+// fixture operations. Its component and handle objects read the report of the
+// render or check whose assertions are running, so the assertions keep
+// upstream's form (`editor.focused`, `editor.inputs`, `handle.isFocused()`).
+// `renderAndFlush(check)` stands for upstream's renderAndFlush followed by
+// its assertions; `check(assertions)` for assertions made without a render.
+class Comp {
+	constructor(private session: Session, readonly id: number, readonly spec: Extract<Op, { op: "component" }>) {}
+	get focused() {
+		return this.session.state().components[this.id].focused;
+	}
+	get inputs() {
+		return this.session.state().components[this.id].inputs;
+	}
+}
+class Handle {
+	constructor(private session: Session, readonly index: number) {}
+	hide() {
+		this.session.push({ op: "hide", overlay: this.index });
+	}
+	focus() {
+		this.session.push({ op: "focus", overlay: this.index });
+	}
+	unfocus(options?: { target: Comp | null }) {
+		this.session.push({ op: "unfocus", overlay: this.index, ...(options ? { target: options.target?.id ?? null } : {}) });
+	}
+	setHidden(hidden: boolean) {
+		this.session.push({ op: "setHidden", overlay: this.index, hidden });
+	}
+	// The overlay's `visible` option returns a variable; this assigns it.
+	setVisible(visible: boolean) {
+		this.session.push({ op: "visible", overlay: this.index, visible });
+	}
+	isFocused() {
+		return this.session.state().focused[this.index];
+	}
+}
+class Session {
+	private ops: Op[] = [];
+	private target = this.ops;
+	private components = 0;
+	private overlays = 0;
+	private checks: (() => void)[] = [];
+	private report?: Report;
+	private screen?: Terminal;
+	constructor(readonly columns = 80, readonly rows = 24) {}
+	push(op: Op) {
+		this.target.push(op);
+	}
+	state(): Report {
+		assert.ok(this.report, "no report yet");
+		return this.report;
+	}
+	viewport(): string[] {
+		assert.ok(this.screen, "no terminal yet");
+		return this.screen.getViewport();
+	}
+	private make(spec: Spec): Comp {
+		const op = { op: "component" as const, ...spec };
+		this.push(op);
+		return new Comp(this, this.components++, op);
+	}
+	// upstream FocusableOverlay
+	focusable(lines: string[]) {
+		return this.make({ lines, focusable: true });
+	}
+	// upstream StaticOverlay; EmptyContent is plain([])
+	plain(lines: string[]) {
+		return this.make({ lines });
+	}
+	// Replaces `component.handleInput` for `data`: the input is still
+	// recorded, then the calls `body` makes run.
+	onInput(component: Comp, data: string, body: () => void) {
+		const outer = this.target;
+		this.target = [];
+		body();
+		component.spec.on = { ...component.spec.on, [data]: this.target };
+		this.target = outer;
+	}
+	addChild(component: Comp) {
+		this.push({ op: "add", component: component.id });
+	}
+	clear() {
+		this.push({ op: "clear" });
+	}
+	setFocus(component: Comp | null) {
+		this.push({ op: "setFocus", component: component?.id ?? null });
+	}
+	showOverlay(component: Comp, options?: Options) {
+		this.push({ op: "overlay", component: component.id, options });
+		return new Handle(this, this.overlays++);
+	}
+	hideOverlay() {
+		this.push({ op: "hideTop" });
+	}
+	sendInput(data: string) {
+		this.push({ op: "input", data });
+	}
+	renderAndFlush(assertions: () => void = () => {}) {
+		this.push({ op: "render", width: this.columns, height: this.rows });
+		this.checks.push(assertions);
+	}
+	check(assertions: () => void) {
+		this.push({ op: "check" });
+		this.checks.push(assertions);
+	}
+	async run() {
+		let ran = 0;
+		await replay(this.columns, this.rows, this.ops, (k, terminal, report) => {
+			this.report = report;
+			this.screen = terminal;
+			this.checks[k]();
+			ran += 1;
+		});
+		assert.strictEqual(ran, this.checks.length, "every render and check reported");
+	}
+}
+const NC = "TUI overlay non-capturing";
+const FOCUS = `${NC} › focus management`;
+it(FOCUS, "non-capturing overlay preserves focus on creation", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	t.showOverlay(overlay, { nonCapturing: true });
+	t.renderAndFlush(() => {
+		assert.strictEqual(editor.focused, true);
+		assert.strictEqual(overlay.focused, false);
+	});
+	return t.run();
+});
+it(FOCUS, "focus() transfers focus to the overlay", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const handle = t.showOverlay(overlay, { nonCapturing: true });
+	handle.focus();
+	t.renderAndFlush(() => {
+		assert.strictEqual(editor.focused, false);
+		assert.strictEqual(overlay.focused, true);
+		assert.strictEqual(handle.isFocused(), true);
+	});
+	return t.run();
+});
+it(FOCUS, "unfocus() restores previous focus", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const handle = t.showOverlay(overlay, { nonCapturing: true });
+	handle.focus();
+	handle.unfocus();
+	t.renderAndFlush(() => {
+		assert.strictEqual(editor.focused, true);
+		assert.strictEqual(overlay.focused, false);
+		assert.strictEqual(handle.isFocused(), false);
+	});
+	return t.run();
+});
+it(FOCUS, "setHidden(false) on non-capturing overlay does not auto-focus", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const handle = t.showOverlay(overlay, { nonCapturing: true });
+	handle.setHidden(true);
+	handle.setHidden(false);
+	t.renderAndFlush(() => {
+		assert.strictEqual(editor.focused, true);
+		assert.strictEqual(overlay.focused, false);
+	});
+	return t.run();
+});
+it(FOCUS, "hide() when overlay is not focused does not change focus", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const handle = t.showOverlay(overlay, { nonCapturing: true });
+	handle.hide();
+	t.renderAndFlush(() => assert.strictEqual(editor.focused, true));
+	return t.run();
+});
+it(FOCUS, "hide() when focused restores focus correctly", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const handle = t.showOverlay(overlay, { nonCapturing: true });
+	handle.focus();
+	handle.hide();
+	t.renderAndFlush(() => {
+		assert.strictEqual(editor.focused, true);
+		assert.strictEqual(overlay.focused, false);
+	});
+	return t.run();
+});
+it(FOCUS, "capturing overlay removed with non-capturing below restores focus to editor", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const nonCapturing = t.focusable(["NC"]);
+	const capturing = t.focusable(["CAP"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	t.showOverlay(nonCapturing, { nonCapturing: true });
+	const handle = t.showOverlay(capturing);
+	t.check(() => assert.strictEqual(capturing.focused, true));
+	handle.hide();
+	t.renderAndFlush(() => {
+		assert.strictEqual(editor.focused, true);
+		assert.strictEqual(nonCapturing.focused, false);
+	});
+	return t.run();
+});
+it(FOCUS, "sub-overlay cleanup then hideOverlay restores focus and input to editor", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const timer = t.focusable(["TIMER"]);
+	const controller = t.focusable(["CTRL"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const timerHandle = t.showOverlay(timer, { nonCapturing: true });
+	t.showOverlay(controller);
+	t.check(() => {
+		assert.strictEqual(controller.focused, true);
+		assert.strictEqual(editor.focused, false);
+	});
+	timerHandle.hide();
+	t.hideOverlay();
+	t.renderAndFlush(() => {
+		assert.strictEqual(editor.focused, true);
+		assert.strictEqual(controller.focused, false);
+		assert.strictEqual(timer.focused, false);
+	});
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(editor.inputs, ["x"]);
+		assert.deepStrictEqual(controller.inputs, []);
+		assert.deepStrictEqual(timer.inputs, []);
+	});
+	return t.run();
+});
+it(FOCUS, "removed focused child overlay does not become parent overlay fallback", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const child = t.focusable(["CHILD"]);
+	const parent = t.focusable(["PARENT"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const childHandle = t.showOverlay(child, { nonCapturing: true });
+	childHandle.focus();
+	const parentHandle = t.showOverlay(parent);
+	t.check(() => assert.strictEqual(parent.focused, true));
+	childHandle.hide();
+	parentHandle.hide();
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(editor.inputs, ["x"]);
+		assert.deepStrictEqual(child.inputs, []);
+		assert.deepStrictEqual(parent.inputs, []);
+		assert.strictEqual(editor.focused, true);
+	});
+	return t.run();
+});
+// Adaptation: upstream schedules the controller's showOverlay as a microtask
+// and awaits a promise around doneFn; the TUI calls those produce, in order,
+// are written here directly.
+it(FOCUS, "microtask-deferred sub-overlay pattern (showExtensionCustom simulation) restores focus", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const timer = t.focusable(["TIMER"]);
+	const controller = t.focusable(["CTRL"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const timerHandle = t.showOverlay(timer, { nonCapturing: true });
+	t.showOverlay(controller);
+	t.renderAndFlush(() => {
+		assert.strictEqual(controller.focused, true);
+		assert.strictEqual(editor.focused, false);
+	});
+	// doneFn
+	timerHandle.hide();
+	t.hideOverlay();
+	t.renderAndFlush(() => {
+		assert.strictEqual(editor.focused, true, "editor should regain focus");
+		assert.strictEqual(controller.focused, false);
+		assert.strictEqual(timer.focused, false);
+	});
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(editor.inputs, ["x"], "editor should receive input after close");
+		assert.deepStrictEqual(controller.inputs, []);
+	});
+	return t.run();
+});
+it(FOCUS, "handleInput redirection skips non-capturing overlays when focused overlay becomes invisible", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const fallbackCapturing = t.focusable(["FALLBACK"]);
+	const nonCapturing = t.focusable(["NC"]);
+	const primary = t.focusable(["PRIMARY"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	t.showOverlay(fallbackCapturing);
+	t.showOverlay(nonCapturing, { nonCapturing: true });
+	const primaryHandle = t.showOverlay(primary, { visible: true });
+	t.check(() => assert.strictEqual(primary.focused, true));
+	primaryHandle.setVisible(false);
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(primary.inputs, []);
+		assert.deepStrictEqual(nonCapturing.inputs, []);
+		assert.deepStrictEqual(fallbackCapturing.inputs, ["x"]);
+		assert.strictEqual(fallbackCapturing.focused, true);
+	});
+	return t.run();
+});
+it(FOCUS, "active base focus replacement receives close input before overlay restore", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const replacement = t.focusable(["REPLACEMENT"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.onInput(overlay, "b", () => t.setFocus(replacement));
+	t.onInput(replacement, "\r", () => t.setFocus(editor));
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	t.showOverlay(overlay);
+	t.check(() => assert.strictEqual(overlay.focused, true));
+	t.sendInput("b");
+	t.renderAndFlush(() => assert.strictEqual(replacement.focused, true));
+	t.sendInput("\r");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(replacement.inputs, ["\r"]);
+		assert.deepStrictEqual(overlay.inputs, ["b"]);
+		assert.strictEqual(overlay.focused, true);
+	});
+	t.sendInput("x");
+	t.renderAndFlush(() => assert.deepStrictEqual(overlay.inputs, ["b", "x"]));
+	return t.run();
+});
+it(FOCUS, "active replacement still receives input when it is another overlay preFocus", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const replacement = t.focusable(["REPLACEMENT"]);
+	const passive = t.focusable(["PASSIVE"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.onInput(overlay, "b", () => t.setFocus(replacement));
+	t.onInput(replacement, "\r", () => t.setFocus(editor));
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	t.setFocus(replacement);
+	t.showOverlay(passive, { nonCapturing: true });
+	t.setFocus(editor);
+	t.showOverlay(overlay);
+	t.sendInput("b");
+	t.renderAndFlush(() => assert.strictEqual(replacement.focused, true));
+	t.sendInput("1");
+	t.sendInput("\r");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(replacement.inputs, ["1", "\r"]);
+		assert.deepStrictEqual(overlay.inputs, ["b"]);
+		assert.strictEqual(overlay.focused, true);
+	});
+	return t.run();
+});
+// Adaptation: upstream's `base` Container is the TUI's only child; its
+// children are added to the TUI directly here, so base.clear() and
+// base.addChild(editor) become tui.clear() and tui.addChild(editor). Mounting
+// and rendering are the same.
+it(FOCUS, "blocked replacement can move focus internally before overlay restore", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const firstReplacement = t.focusable(["FIRST"]);
+	const secondReplacement = t.focusable(["SECOND"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.onInput(overlay, "b", () => t.setFocus(firstReplacement));
+	t.onInput(firstReplacement, "n", () => t.setFocus(secondReplacement));
+	t.onInput(secondReplacement, "\r", () => {
+		t.clear();
+		t.addChild(editor);
+		t.setFocus(editor);
+	});
+	t.addChild(editor);
+	t.addChild(firstReplacement);
+	t.addChild(secondReplacement);
+	t.setFocus(editor);
+	t.showOverlay(overlay);
+	t.sendInput("b");
+	t.renderAndFlush();
+	t.sendInput("n");
+	t.renderAndFlush();
+	t.sendInput("2");
+	t.sendInput("\r");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(overlay.inputs, ["b"]);
+		assert.deepStrictEqual(firstReplacement.inputs, ["n"]);
+		assert.deepStrictEqual(secondReplacement.inputs, ["2", "\r"]);
+		assert.strictEqual(overlay.focused, true);
+	});
+	return t.run();
+});
+it(FOCUS, "removed replacement restores overlay even when overlay preFocus differs from next focus", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const palette = t.focusable(["PALETTE"]);
+	const replacement = t.focusable(["REPLACEMENT"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.onInput(overlay, "b", () => t.setFocus(replacement));
+	t.onInput(replacement, "\r", () => {
+		t.clear();
+		t.addChild(editor);
+		t.setFocus(editor);
+	});
+	t.addChild(editor);
+	t.addChild(palette);
+	t.addChild(replacement);
+	t.setFocus(palette);
+	t.showOverlay(overlay);
+	t.sendInput("b");
+	t.renderAndFlush();
+	t.sendInput("\r");
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(overlay.inputs, ["b", "x"]);
+		assert.deepStrictEqual(replacement.inputs, ["\r"]);
+		assert.deepStrictEqual(editor.inputs, []);
+		assert.strictEqual(overlay.focused, true);
+	});
+	return t.run();
+});
+it(FOCUS, "unfocus target releases a blocked overlay while replacement remains focused", () => {
+	const t = new Session();
+	const fallback = t.focusable(["FALLBACK"]);
+	const target = t.focusable(["TARGET"]);
+	const replacement = t.focusable(["REPLACEMENT"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.onInput(replacement, "\r", () => t.setFocus(fallback));
+	t.addChild(t.plain([]));
+	const overlayHandle = t.showOverlay(overlay);
+	t.onInput(overlay, "b", () => {
+		t.setFocus(replacement);
+		overlayHandle.unfocus({ target });
+	});
+	t.sendInput("b");
+	t.renderAndFlush(() => assert.strictEqual(replacement.focused, true));
+	t.sendInput("\r");
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(overlay.inputs, ["b"]);
+		assert.deepStrictEqual(replacement.inputs, ["\r"]);
+		assert.deepStrictEqual(fallback.inputs, []);
+		assert.deepStrictEqual(target.inputs, ["x"]);
+	});
+	return t.run();
+});
+it(FOCUS, "handleInput restores focus to a visible focused overlay after base focus steal", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const replacement = t.focusable(["REPLACEMENT"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	t.showOverlay(overlay);
+	t.check(() => assert.strictEqual(overlay.focused, true));
+	t.setFocus(replacement);
+	t.setFocus(editor);
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(overlay.inputs, ["x"]);
+		assert.deepStrictEqual(editor.inputs, []);
+		assert.strictEqual(overlay.focused, true);
+	});
+	return t.run();
+});
+it(FOCUS, "handleInput restores focus to explicitly focused raw sub-overlay after base focus steal", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const controller = t.focusable(["CONTROLLER"]);
+	const subOverlay = t.focusable(["SUB"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	t.showOverlay(controller);
+	const subHandle = t.showOverlay(subOverlay, { nonCapturing: true });
+	subHandle.focus();
+	t.setFocus(editor);
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(subOverlay.inputs, ["x"]);
+		assert.deepStrictEqual(controller.inputs, []);
+		assert.deepStrictEqual(editor.inputs, []);
+	});
+	return t.run();
+});
+it(FOCUS, "passive non-capturing overlay does not regain input after base focus", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const passive = t.focusable(["PASSIVE"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	t.showOverlay(passive, { nonCapturing: true });
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(editor.inputs, ["x"]);
+		assert.deepStrictEqual(passive.inputs, []);
+		assert.strictEqual(editor.focused, true);
+	});
+	return t.run();
+});
+it(FOCUS, "explicitly focused non-capturing overlay regains input after base focus steal", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const overlay = t.focusable(["NC"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const handle = t.showOverlay(overlay, { nonCapturing: true });
+	handle.focus();
+	t.setFocus(editor);
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(overlay.inputs, ["x"]);
+		assert.deepStrictEqual(editor.inputs, []);
+	});
+	return t.run();
+});
+it(FOCUS, "unfocus() prevents visible overlay from regaining input", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const handle = t.showOverlay(overlay);
+	handle.unfocus();
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(editor.inputs, ["x"]);
+		assert.deepStrictEqual(overlay.inputs, []);
+		assert.strictEqual(editor.focused, true);
+	});
+	return t.run();
+});
+it(FOCUS, "setFocus(null) explicitly clears visible overlay restore", () => {
+	const t = new Session();
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	t.showOverlay(overlay);
+	t.setFocus(null);
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(overlay.inputs, []);
+		assert.strictEqual(overlay.focused, false);
+	});
+	return t.run();
+});
+it(FOCUS, "blocked replacement setFocus(null) resumes the visible overlay", () => {
+	const t = new Session();
+	const replacement = t.focusable(["REPLACEMENT"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.onInput(replacement, "\r", () => t.setFocus(null));
+	t.onInput(overlay, "b", () => t.setFocus(replacement));
+	t.addChild(t.plain([]));
+	t.showOverlay(overlay);
+	t.sendInput("b");
+	t.renderAndFlush();
+	t.sendInput("\r");
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(replacement.inputs, ["\r"]);
+		assert.deepStrictEqual(overlay.inputs, ["b", "x"]);
+		assert.strictEqual(overlay.focused, true);
+	});
+	return t.run();
+});
+it(FOCUS, "temporarily invisible focused overlay falls back without losing restore eligibility", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const handle = t.showOverlay(overlay, { visible: true });
+	t.setFocus(editor);
+	handle.setVisible(false);
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(editor.inputs, ["x"]);
+		assert.deepStrictEqual(overlay.inputs, []);
+	});
+	handle.setVisible(true);
+	t.sendInput("y");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(editor.inputs, ["x"]);
+		assert.deepStrictEqual(overlay.inputs, ["y"]);
+	});
+	return t.run();
+});
+it(FOCUS, "temporarily invisible focused overlay with null preFocus restores when visible again", () => {
+	const t = new Session();
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	const handle = t.showOverlay(overlay, { visible: true });
+	handle.setVisible(false);
+	t.sendInput("x");
+	t.renderAndFlush(() => assert.deepStrictEqual(overlay.inputs, []));
+	handle.setVisible(true);
+	t.sendInput("y");
+	t.renderAndFlush(() => assert.deepStrictEqual(overlay.inputs, ["y"]));
+	return t.run();
+});
+it(FOCUS, "cyclic overlay preFocus ancestry does not hang focus changes", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	t.setFocus(overlay);
+	const handle = t.showOverlay(overlay, { nonCapturing: true });
+	handle.focus();
+	t.setFocus(editor);
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(editor.inputs, ["x"]);
+		assert.deepStrictEqual(overlay.inputs, []);
+	});
+	return t.run();
+});
+it(FOCUS, "handleInput restores the focus-order top overlay after base focus steal", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const lower = t.focusable(["LOWER"]);
+	const upper = t.focusable(["UPPER"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const lowerHandle = t.showOverlay(lower);
+	t.showOverlay(upper);
+	lowerHandle.focus();
+	t.setFocus(editor);
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(lower.inputs, ["x"]);
+		assert.deepStrictEqual(upper.inputs, []);
+		assert.deepStrictEqual(editor.inputs, []);
+	});
+	return t.run();
+});
+it(FOCUS, "hideOverlay() does not reassign focus when topmost overlay is non-capturing", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const capturing = t.focusable(["CAP"]);
+	const nonCapturing = t.focusable(["NC"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	t.showOverlay(capturing);
+	t.showOverlay(nonCapturing, { nonCapturing: true });
+	t.check(() => assert.strictEqual(capturing.focused, true));
+	t.hideOverlay();
+	t.renderAndFlush(() => assert.strictEqual(capturing.focused, true));
+	return t.run();
+});
+it(FOCUS, "multiple capturing and non-capturing overlays restore focus through removals", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const c1 = t.focusable(["C1"]);
+	const n1 = t.focusable(["N1"]);
+	const c2 = t.focusable(["C2"]);
+	const n2 = t.focusable(["N2"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const c1Handle = t.showOverlay(c1);
+	t.showOverlay(n1, { nonCapturing: true });
+	const c2Handle = t.showOverlay(c2);
+	t.showOverlay(n2, { nonCapturing: true });
+	t.check(() => assert.strictEqual(c2.focused, true));
+	c2Handle.hide();
+	t.renderAndFlush(() => assert.strictEqual(c1.focused, true));
+	c1Handle.hide();
+	t.renderAndFlush(() => assert.strictEqual(editor.focused, true));
+	return t.run();
+});
+it(FOCUS, "capturing overlay unfocus() on topmost capturing overlay falls back to preFocus", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const capturing = t.focusable(["CAP"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const handle = t.showOverlay(capturing);
+	t.check(() => assert.strictEqual(capturing.focused, true));
+	handle.unfocus();
+	t.renderAndFlush(() => {
+		assert.strictEqual(editor.focused, true);
+		assert.strictEqual(capturing.focused, false);
+	});
+	return t.run();
+});
+
+const GUARDS = `${NC} › no-op guards`;
+it(GUARDS, "focus() on hidden overlay is a no-op", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const handle = t.showOverlay(overlay, { nonCapturing: true });
+	handle.setHidden(true);
+	handle.focus();
+	t.renderAndFlush(() => {
+		assert.strictEqual(editor.focused, true);
+		assert.strictEqual(handle.isFocused(), false);
+	});
+	return t.run();
+});
+it(GUARDS, "focus() after hide() is a no-op", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const handle = t.showOverlay(overlay, { nonCapturing: true });
+	handle.hide();
+	handle.focus();
+	t.renderAndFlush(() => {
+		assert.strictEqual(editor.focused, true);
+		assert.strictEqual(handle.isFocused(), false);
+	});
+	return t.run();
+});
+it(GUARDS, "unfocus() when overlay does not have focus is a no-op", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const handle = t.showOverlay(overlay, { nonCapturing: true });
+	handle.unfocus();
+	t.renderAndFlush(() => {
+		assert.strictEqual(editor.focused, true);
+		assert.strictEqual(overlay.focused, false);
+	});
+	return t.run();
+});
+it(GUARDS, "unfocus() with null preFocus clears focus and does not route input back to overlay", () => {
+	const t = new Session();
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	const handle = t.showOverlay(overlay);
+	t.check(() => assert.strictEqual(overlay.focused, true));
+	handle.unfocus();
+	t.check(() => assert.strictEqual(overlay.focused, false));
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(overlay.inputs, []);
+		assert.strictEqual(handle.isFocused(), false);
+	});
+	return t.run();
+});
+
+const CYCLE = `${NC} › focus cycle prevention`;
+it(CYCLE, "toggle focus between non-capturing overlays then unfocus returns to editor", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const a = t.focusable(["A"]);
+	const b = t.focusable(["B"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const aHandle = t.showOverlay(a, { nonCapturing: true });
+	const bHandle = t.showOverlay(b, { nonCapturing: true });
+	aHandle.focus();
+	bHandle.focus();
+	aHandle.focus();
+	aHandle.unfocus();
+	t.renderAndFlush(() => {
+		assert.strictEqual(editor.focused, true);
+		assert.strictEqual(a.focused, false);
+		assert.strictEqual(b.focused, false);
+	});
+	return t.run();
+});
+it(CYCLE, "explicit unfocus target supports cycling between three overlays and editor", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const a = t.focusable(["A"]);
+	const b = t.focusable(["B"]);
+	const c = t.focusable(["C"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const aHandle = t.showOverlay(a);
+	const bHandle = t.showOverlay(b);
+	const cHandle = t.showOverlay(c);
+	aHandle.focus();
+	t.sendInput("a");
+	t.renderAndFlush();
+	bHandle.focus();
+	t.sendInput("b");
+	t.renderAndFlush();
+	cHandle.focus();
+	t.sendInput("c");
+	t.renderAndFlush();
+	cHandle.unfocus({ target: editor });
+	t.sendInput("e");
+	t.renderAndFlush();
+	aHandle.focus();
+	t.sendInput("A");
+	t.renderAndFlush();
+	aHandle.unfocus({ target: editor });
+	t.sendInput("E");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(a.inputs, ["a", "A"]);
+		assert.deepStrictEqual(b.inputs, ["b"]);
+		assert.deepStrictEqual(c.inputs, ["c"]);
+		assert.deepStrictEqual(editor.inputs, ["e", "E"]);
+		assert.strictEqual(editor.focused, true);
+	});
+	return t.run();
+});
+it(CYCLE, "explicit null unfocus target clears focus without restoring overlays", () => {
+	const t = new Session();
+	const overlay = t.focusable(["OVERLAY"]);
+	t.addChild(t.plain([]));
+	const handle = t.showOverlay(overlay);
+	handle.unfocus({ target: null });
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(overlay.inputs, []);
+		assert.strictEqual(handle.isFocused(), false);
+	});
+	return t.run();
+});
+it(CYCLE, "hiding focused overlay falls back to next visual-frontmost overlay", () => {
+	const t = new Session();
+	const editor = t.focusable(["EDITOR"]);
+	const a = t.focusable(["A"]);
+	const b = t.focusable(["B"]);
+	const c = t.focusable(["C"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const aHandle = t.showOverlay(a);
+	const bHandle = t.showOverlay(b);
+	t.showOverlay(c);
+	aHandle.focus();
+	bHandle.focus();
+	bHandle.setHidden(true);
+	t.sendInput("x");
+	t.renderAndFlush(() => {
+		assert.deepStrictEqual(a.inputs, ["x"]);
+		assert.deepStrictEqual(c.inputs, []);
+		assert.strictEqual(a.focused, true);
+	});
+	return t.run();
+});
+
+const ORDER = `${NC} › rendering order`;
+const cell = { row: 0, col: 0, width: 1 };
+it(ORDER, "focus() on already-focused overlay bumps visual order", () => {
+	const t = new Session(20, 6);
+	const editor = t.focusable(["EDITOR"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const aHandle = t.showOverlay(t.plain(["A"]), { ...cell, nonCapturing: true });
+	t.showOverlay(t.plain(["B"]), { ...cell, nonCapturing: true });
+	aHandle.focus();
+	t.showOverlay(t.plain(["C"]), { ...cell, nonCapturing: true });
+	t.renderAndFlush(() => assert.strictEqual(t.viewport()[0]?.charAt(0), "C"));
+	aHandle.focus();
+	t.renderAndFlush(() => {
+		assert.strictEqual(t.viewport()[0]?.charAt(0), "A");
+		assert.strictEqual(aHandle.isFocused(), true);
+	});
+	return t.run();
+});
+it(ORDER, "default rendering order for overlapping overlays follows creation order", () => {
+	const t = new Session(20, 6);
+	t.addChild(t.plain([]));
+	t.showOverlay(t.plain(["A"]), { ...cell, nonCapturing: true });
+	t.showOverlay(t.plain(["B"]), { ...cell, nonCapturing: true });
+	t.renderAndFlush(() => assert.strictEqual(t.viewport()[0]?.charAt(0), "B"));
+	return t.run();
+});
+it(ORDER, "focus() on lower overlay renders it on top", () => {
+	const t = new Session(20, 6);
+	t.addChild(t.plain([]));
+	const lower = t.showOverlay(t.plain(["A"]), { ...cell, nonCapturing: true });
+	t.showOverlay(t.plain(["B"]), { ...cell, nonCapturing: true });
+	t.renderAndFlush(() => assert.strictEqual(t.viewport()[0]?.charAt(0), "B"));
+	lower.focus();
+	t.renderAndFlush(() => assert.strictEqual(t.viewport()[0]?.charAt(0), "A"));
+	return t.run();
+});
+it(ORDER, "focusing middle overlay places it on top while preserving others relative order", () => {
+	const t = new Session(20, 6);
+	t.addChild(t.plain([]));
+	t.showOverlay(t.plain(["A"]), { ...cell, nonCapturing: true });
+	const middle = t.showOverlay(t.plain(["B"]), { ...cell, nonCapturing: true });
+	const top = t.showOverlay(t.plain(["C"]), { ...cell, nonCapturing: true });
+	t.renderAndFlush(() => assert.strictEqual(t.viewport()[0]?.charAt(0), "C"));
+	middle.focus();
+	t.renderAndFlush(() => assert.strictEqual(t.viewport()[0]?.charAt(0), "B"));
+	middle.hide();
+	t.renderAndFlush(() => assert.strictEqual(t.viewport()[0]?.charAt(0), "C"));
+	top.hide();
+	t.renderAndFlush(() => assert.strictEqual(t.viewport()[0]?.charAt(0), "A"));
+	return t.run();
+});
+it(ORDER, "capturing overlay hidden and shown again renders on top after unhide", () => {
+	const t = new Session(20, 6);
+	t.addChild(t.plain([]));
+	t.showOverlay(t.plain(["A"]), { ...cell, nonCapturing: true });
+	const capturing = t.showOverlay(t.plain(["B"]), cell);
+	t.renderAndFlush(() => assert.strictEqual(t.viewport()[0]?.charAt(0), "B"));
+	capturing.setHidden(true);
+	t.showOverlay(t.plain(["C"]), { ...cell, nonCapturing: true });
+	t.renderAndFlush(() => assert.strictEqual(t.viewport()[0]?.charAt(0), "C"));
+	capturing.setHidden(false);
+	t.renderAndFlush(() => assert.strictEqual(t.viewport()[0]?.charAt(0), "B"));
+	return t.run();
+});
+it(ORDER, "unfocus() does not change visual order until another overlay is focused", () => {
+	const t = new Session(20, 6);
+	const editor = t.focusable(["EDITOR"]);
+	t.addChild(t.plain([]));
+	t.setFocus(editor);
+	const a = t.showOverlay(t.plain(["A"]), { ...cell, nonCapturing: true });
+	const b = t.showOverlay(t.plain(["B"]), { ...cell, nonCapturing: true });
+	t.renderAndFlush(() => assert.strictEqual(t.viewport()[0]?.charAt(0), "B"));
+	a.focus();
+	t.renderAndFlush(() => assert.strictEqual(t.viewport()[0]?.charAt(0), "A"));
+	a.unfocus();
+	t.renderAndFlush(() => assert.strictEqual(t.viewport()[0]?.charAt(0), "A"));
+	b.focus();
+	t.renderAndFlush(() => assert.strictEqual(t.viewport()[0]?.charAt(0), "B"));
+	return t.run();
 });
 
 const only = process.argv[2];
