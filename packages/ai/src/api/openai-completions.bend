@@ -1478,11 +1478,3 @@ def grammarIssue(properties: R.Record<String>) -> Maybe<&2, String>:
   match properties:
     case R.Record{Nil{}}: None{}
     case _: Some{"grammar tools"}
-
-# The behaviors a model must opt into through compat, and the two it keeps
-# unless compat turns them off (laws/openai-completions.bend).
-type OptInFeatures is Data:
-  OptInFeatures{requiresToolResultName: Bool, requiresAssistantAfterToolResult: Bool, requiresThinkingAsText: Bool, zaiToolStream: Bool, supportsThinkingTokenBudget: Bool, supportsOpenAIGrammarTools: Bool, supportsMidConvoSystemMessages: Bool, supportsMidConvoToolAdditions: Bool, supportsStrictMode: Bool, vllmPriority: Maybe<&2, F64>, supportsUsageInStreaming: Bool, supportsFinishReason: Bool}
-
-def optInFeatures(+compat: Compat()) -> OptInFeatures:
-  OptInFeatures{requiresToolResultName(compat), requiresAssistantAfterToolResult(compat), requiresThinkingAsText(compat), zaiToolStream(compat), supportsThinkingTokenBudget(compat), supportsOpenAIGrammarTools(compat), supportsMidConvoSystemMessages(compat), supportsMidConvoToolAdditions(compat), supportsStrictMode(compat), vllmPriority(compat), supportsUsageInStreaming(compat), supportsFinishReason(compat)}
