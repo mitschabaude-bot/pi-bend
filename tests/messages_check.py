@@ -1,4 +1,5 @@
 """Pinned message text and strict zoned timestamp compatibility."""
+from upstream_pin import UPSTREAM
 import argparse,datetime,json,random,subprocess,tempfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -20,7 +21,7 @@ def main():
       m=dict(command='printf `x`',output=output,exitCode=exit,cancelled=cancelled,truncated=truncated,fullOutputPath=path)
       cases.append(dict(kind='bash',message=m));commands.append('|'.join(['b',wire(m['command']),wire(output),'none' if exit is None else str(exit),str(int(cancelled)),str(int(truncated)),'none' if path is None else wire(path)]))
  with tempfile.TemporaryDirectory() as tmp:
-  f=Path(tmp)/'cases.json';f.write_text(json.dumps(cases));oracle=[json.loads(x) for x in subprocess.check_output(['bun',str(ROOT/'tests/messages_reference.ts'),str(ROOT.parent/'pi-mono/packages/coding-agent/src'),str(f)],text=True).splitlines()]
+  f=Path(tmp)/'cases.json';f.write_text(json.dumps(cases));oracle=[json.loads(x) for x in subprocess.check_output(['bun',str(ROOT/'tests/messages_reference.ts'),str(UPSTREAM / 'packages/coding-agent/src'),str(f)],text=True).splitlines()]
  wanted=[str(v) if c['kind']=='date' else wire(v) for c,v in zip(cases,oracle)]
  for start in range(0,len(commands),80):
   r=subprocess.run([*cmd,*commands[start:start+80]],text=True,capture_output=True,timeout=30)

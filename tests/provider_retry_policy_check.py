@@ -2,6 +2,8 @@
 
 Date parsing and cancellable waiting are explicitly outside this pure policy.
 """
+from upstream_pin import check_sibling
+check_sibling()
 import itertools,json,random,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]

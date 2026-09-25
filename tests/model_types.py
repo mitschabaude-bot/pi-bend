@@ -1,4 +1,5 @@
 """Check model field coverage and API-dependent compatibility constraints."""
+from upstream_pin import UPSTREAM
 import os
 from pathlib import Path
 from bend_toolchain import BEND
@@ -8,7 +9,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'build'
 BUILD.mkdir(exist_ok=True)
-upstream = (ROOT.parent / 'pi-mono/packages/ai/src/types.ts').read_text()
+upstream = (UPSTREAM / 'packages/ai/src/types.ts').read_text()
 native = (ROOT / 'packages/ai/src/types.bend').read_text()
 
 def source_fields(name):

@@ -8,6 +8,7 @@ received must be equal; each named case then applies the upstream test's own
 assertions to the native result. convertMessages cases of the thinking-as-text
 suite run through the request harness (tests/openai-completions-request.bend).
 """
+from upstream_pin import UPSTREAM
 import argparse
 import copy
 import http.server
@@ -18,10 +19,10 @@ import random
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-UPSTREAM = Path('/home/agent/code/pi-mono')
 ENTRY = 'tests/openai-completions-stream.bend'
 REQUEST_ENTRY = 'tests/openai-completions-request.bend'
 
@@ -57,11 +58,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_response(response.get('status', 200))
         for key, value in response.get('headers', {}).items():
             self.send_header(key, value)
-        payload = response['body'].encode()
+        parts = [part.encode() for part in response.get('parts', [response.get('body', '')])]
         self.send_header('Content-Type', response.get('type', 'text/event-stream'))
-        self.send_header('Content-Length', str(len(payload)))
+        self.send_header('Content-Length', str(sum(len(part) for part in parts)))
         self.end_headers()
-        self.wfile.write(payload)
+        try:
+            for index, part in enumerate(parts):
+                if index:
+                    time.sleep(response.get('stall', 0))
+                self.wfile.write(part)
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def log_message(self, *_):
         pass
@@ -501,6 +509,69 @@ CACHE_USAGE = dict(prompt_tokens=100, completion_tokens=5, prompt_tokens_details
 test(S, 'preserves prompt_tokens_details cache read/write fields from chunk usage', simple(gpt4o_mini(), [user('Reply with exactly OK')], [sse([dict(id='chatcmpl-cache-write', choices=[dict(delta=dict(content='OK'), finish_reason=None)]), dict(id='chatcmpl-cache-write', choices=[dict(delta={}, finish_reason='stop')], usage=CACHE_USAGE)])]), usage_is(input=20, cacheRead=50, cacheWrite=30, totalTokens=105))
 test(S, 'preserves prompt_tokens_details cache read/write fields from choice usage fallback', simple(gpt4o_mini(), [user('Reply with exactly OK')], [sse([dict(id='chatcmpl-cache-write-choice', choices=[dict(delta=dict(content='OK'), finish_reason=None)]), dict(id='chatcmpl-cache-write-choice', choices=[dict(delta={}, finish_reason='stop', usage=CACHE_USAGE)])])]), usage_is(input=20, cacheRead=50, cacheWrite=30, totalTokens=105))
 
+# Follow-up differential cases
+# ----------------------------
+
+S = 'native: github-copilot dynamic headers'
+COPILOT = model_of(dict(id='gpt-4.1', name='GPT-4.1', provider='github-copilot', reasoning=False, input=['text', 'image'], cost=COST, contextWindow=128000, maxTokens=4096, headers={'Editor-Version': 'vscode/1.107.0'}))
+IMAGE = dict(type='image', data='ZmFrZQ==', mimeType='image/png')
+OK_ONLY = [sse([chunk(dict(content='ok')), chunk({}, 'stop')])]
+COPILOT_TOOL_TURN = [user('look'), dict(role='assistant', content=[dict(type='toolCall', id='c1', name='read', arguments=dict(path='a.png'))], api='openai-completions', provider='github-copilot', model='gpt-4.1', usage=ZERO_USAGE, stopReason='toolUse', timestamp=NOW), dict(role='toolResult', toolCallId='c1', toolName='read', content=[dict(type='text', text='image'), IMAGE], isError=False, timestamp=NOW)]
+
+
+def copilot_headers(initiator, vision):
+    def check(results):
+        headers = results[0]['requests'][0]['headers']
+        equal(headers.get('x-initiator'), initiator)
+        equal(headers.get('openai-intent'), 'conversation-edits')
+        equal(headers.get('copilot-vision-request'), vision)
+        equal(headers.get('editor-version'), 'vscode/1.107.0')
+    return check
+
+
+test(S, 'user-initiated text request', simple(COPILOT, [user('hi')], OK_ONLY), copilot_headers('user', None))
+test(S, 'agent-initiated request after an image tool result', simple(COPILOT, COPILOT_TOOL_TURN, OK_ONLY, tools=[READ]), copilot_headers('agent', 'true'))
+test(S, 'user image blocks request vision', simple(COPILOT, [user([dict(type='text', text='see'), IMAGE])], OK_ONLY), copilot_headers('user', 'true'))
+test(S, 'option headers override the dynamic headers', simple(COPILOT, [user('hi')], OK_ONLY, dict(headers={'X-Initiator': 'agent', 'Openai-Intent': 'custom'})), lambda r: (equal(r[0]['requests'][0]['headers'].get('x-initiator'), 'agent'), equal(r[0]['requests'][0]['headers'].get('openai-intent'), 'custom')))
+
+S = 'native: OpenRouter raw metadata as String(raw)'
+RAW_VALUES = [('string', 'raw upstream text'), ('number', 42), ('fraction', 1.5), ('true', True), ('false', False), ('zero', 0), ('empty', ''), ('null', None), ('array', [1, 'a', [2, None], True]), ('object', {'x': 1}), ('empty-array', []), ('contained', 'Provider returned error')]
+
+
+# upstream appends `\n${raw}` for a truthy raw unless the message already
+# contains String(raw).
+def raw_suffix(expected):
+    def check(results):
+        message_text = message(results[0])['errorMessage']
+        if expected is None:
+            assert '\n' not in message_text, message_text
+        else:
+            head, _, tail = message_text.partition('\n')
+            assert (tail == expected and expected not in head) or (not tail and expected in head), (message_text, expected)
+    return check
+
+
+JS_STRING = dict(string='raw upstream text', number='42', fraction='1.5', true='true', array='1,a,2,,true', object='[object Object]')
+for label, raw in RAW_VALUES:
+    error = {'message': 'Provider returned error', 'metadata': {'raw': raw}}
+    test(S, f'HTTP error with {label} metadata.raw', streamed(test_model(), [user('hi')], [dict(status=400, type='application/json', body=json.dumps({'error': error}))]), raw_suffix(JS_STRING.get(label)))
+    test(S, f'in-stream error with {label} metadata.raw', streamed(test_model(), [user('hi')], [sse([chunk(dict(content='x')), dict(error=error)])]), raw_suffix(JS_STRING.get(label)))
+
+S = 'native: mid-stream abort'
+
+
+def aborted(results):
+    value = message(results[0])
+    equal(value['stopReason'], 'aborted')
+    equal([e['type'] for e in results[0]['events']][-1], 'error')
+    equal(results[0]['events'][-1]['reason'], 'aborted')
+    equal(value['content'], [dict(type='text', text='partial')])
+
+
+STALLED = dict(status=200, parts=['data: ' + json.dumps(chunk(dict(content='partial'))) + '\n\n', 'data: ' + json.dumps(chunk({}, 'stop')) + '\n\ndata: [DONE]\n\n'], stall=3)
+test(S, 'aborting after the first text delta ends the stream as aborted', fixture('stream', test_model(), [user('hi')], [STALLED], dict(apiKey='test'), abortAfter='text_delta'), aborted)
+test(S, 'aborting through streamSimple after the first text delta', fixture('simple', test_model(), [user('hi')], [STALLED], dict(apiKey='test'), abortAfter='text_delta'), aborted)
+
 # Supplementary differential streams
 # ----------------------------------
 
@@ -578,7 +649,7 @@ for status, body_type in itertools.product([400, 401, 404, 429, 500, 503], ['jso
 # Running
 # -------
 
-HEADERS = ('authorization', 'user-agent', 'x-stainless-retry-count', 'x-stainless-timeout', 'content-type', 'accept')
+HEADERS = ('authorization', 'user-agent', 'x-stainless-retry-count', 'x-stainless-timeout', 'content-type', 'accept', 'x-initiator', 'openai-intent', 'copilot-vision-request', 'editor-version')
 
 
 def masked(value):

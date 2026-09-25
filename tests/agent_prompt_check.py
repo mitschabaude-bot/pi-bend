@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from upstream_pin import check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import subprocess

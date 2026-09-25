@@ -1,4 +1,6 @@
 """Cumulative grammar input -> immutable JSON-delta transitions against Pi."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools,json,subprocess
 from pathlib import Path
 from schema_literals import string,value,seq

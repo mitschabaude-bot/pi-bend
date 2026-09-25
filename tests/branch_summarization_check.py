@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Compare native branch collection with pinned pi v0.87.1."""
+from upstream_pin import UPSTREAM
 import hashlib
 import os
 from pathlib import Path
@@ -7,7 +8,6 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = Path(subprocess.check_output(["git", "rev-parse", "--git-common-dir"], cwd=ROOT, text=True).strip()).resolve()
-UPSTREAM = Path(os.environ.get("PI_MONO", COMMON.parent.parent / "pi-mono"))
 SOURCE = UPSTREAM / "packages/coding-agent/src/core/compaction/branch-summarization.ts"
 assert hashlib.sha256(SOURCE.read_bytes()).hexdigest() == "0279195d2cddfe99d4e42a1327d18c7f55ff15a8807d2c5d6cd465b2ab163011"
 

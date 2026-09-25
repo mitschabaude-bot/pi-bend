@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Mounted Ctrl+D behavior pinned to pi f07218c4d CustomEditor.handleInput."""
+from upstream_pin import UPSTREAM
 import fcntl
 import hashlib
 import os
@@ -14,7 +15,6 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = Path(subprocess.check_output(["git", "rev-parse", "--git-common-dir"], cwd=ROOT, text=True).strip()).resolve()
-UPSTREAM = Path(os.environ.get("PI_MONO", COMMON.parent.parent / "pi-mono"))
 SOURCE = UPSTREAM / "packages/coding-agent/src/modes/interactive/components/custom-editor.ts"
 assert hashlib.sha256(SOURCE.read_bytes()).hexdigest() == "a19deef137c3c653e24372842dd49bb819f8fcc24a69a5dc6ec60fc2bad3f8f1"
 BINARY = Path(os.environ.get("PI_BEND_EXIT_RUN", ROOT / "build/interactive-navigation-fixture")).resolve()

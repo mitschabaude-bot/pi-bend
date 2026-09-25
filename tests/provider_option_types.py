@@ -1,4 +1,5 @@
 """Check request-option inheritance and optionality against pinned TypeScript."""
+from upstream_pin import UPSTREAM
 from pathlib import Path
 from bend_toolchain import BEND
 import os
@@ -7,7 +8,7 @@ import subprocess
 ROOT=Path(__file__).resolve().parents[1]
 BUILD=ROOT/'build'
 BUILD.mkdir(exist_ok=True)
-source=(ROOT.parent/'pi-mono/packages/ai/src/types.ts').read_text()
+source=(UPSTREAM / 'packages/ai/src/types.ts').read_text()
 native=(ROOT/'packages/ai/src/types.bend').read_text()
 def fields(name):
     body=re.search(r'export interface '+name+r'\b[^\n]*\{(.*?)\n}',source,re.S).group(1)

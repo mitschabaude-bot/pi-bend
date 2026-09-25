@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Mounted tree/fork selection against pi f07218c4d interactive selectors."""
+from upstream_pin import UPSTREAM
 import errno
 import fcntl
 import hashlib
@@ -16,7 +17,6 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = Path(subprocess.check_output(["git", "rev-parse", "--git-common-dir"], cwd=ROOT, text=True).strip()).resolve()
-UPSTREAM = Path(os.environ.get("PI_MONO", ROOT.parent / "pi-mono" if (ROOT.parent / "pi-mono").is_dir() else COMMON.parent.parent / "pi-mono"))
 SOURCES = {
     "interactive-mode.ts": ("packages/coding-agent/src/modes/interactive/interactive-mode.ts", "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388"),
     "tree-selector.ts": ("packages/coding-agent/src/modes/interactive/components/tree-selector.ts", "767bee39141acf21f70b4e8c01c62dfefa588bc2edd8fe2093886a70a77e115f"),

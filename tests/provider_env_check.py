@@ -1,4 +1,6 @@
 """Native scoped/process environment resolution versus actual pi helpers."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools,json,os,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]

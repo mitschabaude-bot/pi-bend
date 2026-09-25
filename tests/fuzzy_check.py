@@ -1,8 +1,9 @@
 """Original named fuzzy tests, complete scores/order, generated and native Unicode cases."""
 import json,pathlib,random,struct,subprocess,sys
-from upstream_pin import PIN
+from upstream_pin import PIN, UPSTREAM, check_sibling
+check_sibling()
 ROOT=pathlib.Path(__file__).resolve().parents[1]
-assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT.parent/'pi-mono',text=True).strip()==PIN
+assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=UPSTREAM,text=True).strip()==PIN
 rng=random.Random(1409); alphabet='abcXYZ012_-./: '
 def word(n):return ''.join(rng.choices(alphabet,k=n))
 extra=[{'kind':'match','query':word(rng.randrange(9)),'text':word(rng.randrange(35))} for _ in range(1800)]

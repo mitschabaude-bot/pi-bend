@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """RPC model command contract against pinned pi-mono v0.87.1."""
+from upstream_pin import UPSTREAM
 import hashlib
 import json
 import os
@@ -8,7 +9,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = Path(subprocess.check_output(["git", "rev-parse", "--git-common-dir"], cwd=ROOT, text=True).strip()).resolve()
-UPSTREAM = Path(os.environ.get("PI_MONO", ROOT.parent / "pi-mono" if (ROOT.parent / "pi-mono").is_dir() else COMMON.parent.parent / "pi-mono"))
 assert hashlib.sha256((UPSTREAM / "packages/coding-agent/src/modes/rpc/rpc-mode.ts").read_bytes()).hexdigest() == "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc"
 assert hashlib.sha256((UPSTREAM / "packages/coding-agent/src/core/agent-session.ts").read_bytes()).hexdigest() == "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7"
 

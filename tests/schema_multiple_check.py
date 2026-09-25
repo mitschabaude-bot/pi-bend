@@ -1,4 +1,6 @@
 """Composed multipleOf validation and exact diagnostics against pinned Pi."""
+from upstream_pin import check_sibling
+check_sibling()
 import json, math, subprocess
 from pathlib import Path
 from schema_literals import value, string

@@ -1,11 +1,9 @@
 """Check controller setting precedence and fallback against pi v0.87.1."""
+from upstream_pin import UPSTREAM
 from pathlib import Path
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-UPSTREAM = ROOT.parent / 'pi-mono'
-if not UPSTREAM.exists():
-    UPSTREAM = Path('/home/agent/code/pi-mono')
 PIN = 'f07218c4d'
 source = subprocess.check_output(['git', 'show', f'{PIN}:packages/coding-agent/src/modes/interactive/theme/theme-controller.ts'], cwd=UPSTREAM, text=True)
 tests = subprocess.check_output(['git', 'show', f'{PIN}:packages/coding-agent/test/theme-controller.test.ts'], cwd=UPSTREAM, text=True)

@@ -6,6 +6,8 @@ Paths in `files` are relative to the scenario root (home/, project/). Steps:
   ("settle"[, seconds])     wait for a quiet screen   ("snap", name)
   ("write", path, text)     change a file under the scenario root
 """
+import sys; sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[2] / "tests"))
+from upstream_pin import UPSTREAM
 import base64
 import json
 import os
@@ -357,7 +359,7 @@ SCENARIOS = [
     {
         "name": "large-session-typing",
         "args": MODEL + ["--session", "large.jsonl"],
-        "files": {"project/large.jsonl": open("/home/agent/code/pi-mono/packages/coding-agent/test/fixtures/large-session.jsonl").read()},
+        "files": {"project/large.jsonl": open(str(UPSTREAM / 'packages/coding-agent/test/fixtures/large-session.jsonl')).read()},
         "steps": [("wait", "Continue", "prompt"), ("key", "Enter"), ("wait", READY, "startup"), ("settle", 1.0), *typed("typing"), ("settle", 0.3), ("snap", "typed")],
     },
     # A stored session whose cwd is gone: interactive mode asks (upstream
@@ -365,7 +367,7 @@ SCENARIOS = [
     {
         "name": "session-missing-cwd",
         "args": MODEL + ["--session", "large.jsonl"],
-        "files": {"project/large.jsonl": open("/home/agent/code/pi-mono/packages/coding-agent/test/fixtures/large-session.jsonl").read()},
+        "files": {"project/large.jsonl": open(str(UPSTREAM / 'packages/coding-agent/test/fixtures/large-session.jsonl')).read()},
         "steps": [("wait", "Continue", "prompt"), ("settle", 0.3), ("snap", "prompt"), ("key", "Down"), ("key", "Enter"), ("settle", 1.0), ("snap", "cancelled")],
     },
     {

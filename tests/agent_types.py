@@ -1,4 +1,5 @@
 """Check canonical agent declarations against pinned upstream field contracts."""
+from upstream_pin import UPSTREAM
 import os
 from pathlib import Path
 from bend_toolchain import BEND
@@ -8,7 +9,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 BUILD = ROOT / 'build'
 BUILD.mkdir(exist_ok=True)
-source = (ROOT.parent / 'pi-mono/packages/agent/src/types.ts').read_text()
+source = (UPSTREAM / 'packages/agent/src/types.ts').read_text()
 native = (ROOT / 'packages/agent/src/types.bend').read_text()
 
 for name in ('BeforeToolCallResult', 'AfterToolCallResult', 'AgentContext', 'BeforeToolCallContext', 'AfterToolCallContext', 'AgentTurnContext', 'PrepareRequestContext', 'AgentLoopTurnUpdate'):

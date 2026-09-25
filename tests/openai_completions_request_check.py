@@ -6,6 +6,7 @@ model, context and options. Request bodies must be byte-identical and the
 session/auth/custom headers equal; each named case then applies the upstream
 test's own assertions to the native result.
 """
+from upstream_pin import UPSTREAM
 import argparse
 import copy
 import json
@@ -15,7 +16,6 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-UPSTREAM = Path('/home/agent/code/pi-mono')
 ENTRY = 'tests/openai-completions-request.bend'
 
 parser = argparse.ArgumentParser(description=__doc__)

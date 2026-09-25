@@ -1,4 +1,6 @@
 """Shared provider thinking budgets compared with actual pinned Pi helpers."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 import random
 import struct

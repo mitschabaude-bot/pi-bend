@@ -1,9 +1,10 @@
 """Actual TuiBase overlay composition and displayed-frame mouse dispatch."""
+from upstream_pin import UPSTREAM
 import argparse,json,random,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('backends',nargs='*',default=['bun','native-1','native-4']);p.add_argument('--prefix',type=Path,default=ROOT/'build/tui-base');a=p.parse_args()
-oracle=['bun','tests/tui_base_reference.ts',str(ROOT.parent/'pi-mono'),str(ROOT/'build/input-reference/node_modules/get-east-asian-width/index.js')]
+oracle=['bun','tests/tui_base_reference.ts',str(UPSTREAM),str(ROOT/'build/input-reference/node_modules/get-east-asian-width/index.js')]
 def run(command,values):
  r=subprocess.run(command+[json.dumps(values,ensure_ascii=False)],cwd=ROOT,text=True,capture_output=True,timeout=90)
  assert r.returncode==0 and not r.stderr,(command,r.returncode,r.stderr[-3000:])

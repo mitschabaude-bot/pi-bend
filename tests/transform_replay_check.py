@@ -1,4 +1,6 @@
 """Reasoning/signature replay against the actual pinned full transform."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools,json,subprocess
 from pathlib import Path
 from schema_literals import string

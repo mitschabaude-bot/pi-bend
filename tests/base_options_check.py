@@ -1,4 +1,6 @@
 """Full base option construction compared with actual upstream helper."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools,json,subprocess
 from pathlib import Path
 from schema_literals import floating,string,value,seq

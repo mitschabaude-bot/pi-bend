@@ -4,6 +4,7 @@ Test-only hooks target temporary paths, close the real descriptor before
 reporting close failure, and audit exactly-once close with no live handles.
 MIME results are compared with the pinned public file-IO function.
 """
+from upstream_pin import UPSTREAM
 import argparse
 import errno
 import json
@@ -101,7 +102,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--bend', type=Path)
     parser.add_argument('--no-build', action='store_true')
-    parser.add_argument('--reference', type=Path, default=ROOT.parent/'pi-mono')
+    parser.add_argument('--reference', type=Path, default=UPSTREAM)
     args = parser.parse_args()
     prefix = ROOT / 'build/filesystem-read'
     compiler = args.bend or Path(os.environ.get('BEND', str(ROOT / 'build/bend-native-toolchain/bend2/main.ts')))

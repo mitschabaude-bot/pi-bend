@@ -1,4 +1,6 @@
 """Conditional checking and complete Pi diagnostics, including nested branches."""
+from upstream_pin import check_sibling
+check_sibling()
 import json, subprocess
 from pathlib import Path
 from schema_literals import value, string

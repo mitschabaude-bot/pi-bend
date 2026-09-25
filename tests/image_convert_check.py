@@ -8,7 +8,7 @@ import struct
 import subprocess
 import tempfile
 import zlib
-from upstream_pin import PIN
+from upstream_pin import PIN, UPSTREAM
 
 ROOT = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser(description=__doc__)
@@ -72,7 +72,7 @@ for transparent in [False, True]:
     fixtures.append((1, 1, 'gif', image))
 
 
-upstream_tests = subprocess.check_output(['git','-C',str(ROOT.parent/'pi-mono'),'show',
+upstream_tests = subprocess.check_output(['git','-C',str(UPSTREAM),'show',
     f'{PIN}:packages/coding-agent/test/image-processing.test.ts'],text=True)
 original = dict(re.findall(r'const (TINY_PNG|TINY_JPEG|TINY_JPEG_2X1)\s*=\s*"([^"]+)"',upstream_tests))
 fixtures += [(2,2,'png',base64.b64decode(original['TINY_PNG'])),

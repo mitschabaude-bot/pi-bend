@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Actual Image source, original component assertions and cache/callback behavior."""
+from upstream_pin import UPSTREAM
 import argparse,json,re,subprocess,random
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -43,7 +44,7 @@ def corpus():
    a.append(dict(data='AAAA',mime='image/png',env={'TERM_PROGRAM':program},dimensions=dims(4294967295,1),options={'imageId':42,'maxWidthCells':10000000000,'maxHeightCells':3},cells=dims(1,1),steps=[{'width':width}]))
  return a
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('--upstream',default='../pi-mono');p.add_argument('--width-reference',default='/home/agent/code/pi-bend-tui-ansi/build/ansi-reference/node_modules/get-east-asian-width/index.js');p.add_argument('command',nargs='+');args=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--upstream',default=str(UPSTREAM));p.add_argument('--width-reference',default='/home/agent/code/pi-bend-tui-ansi/build/ansi-reference/node_modules/get-east-asian-width/index.js');p.add_argument('command',nargs='+');args=p.parse_args()
  oracle=['bun','tests/image_component_reference.ts',args.upstream,args.width_reference];values=corpus();expected=batch(oracle,values);actual=batch(args.command,values)
  for index,(v,want,got) in enumerate(zip(values,expected,actual)):
   configured=v.get('options',{}).get('imageId');assert normalized(got,configured)==normalized(want,configured),(index,v,want,got)

@@ -1,8 +1,9 @@
 """Compare TuiBase scheduling transitions with hash-pinned upstream methods."""
+from upstream_pin import UPSTREAM
 import json, subprocess
 from pathlib import Path
 root=Path(__file__).resolve().parents[1]
-oracle=['bun',str(root/'tests/tui_schedule_reference.ts'),str(root.parent/'pi-mono')]
+oracle=['bun',str(root/'tests/tui_schedule_reference.ts'),str(UPSTREAM)]
 cases=[
  'rq', 'rqt', 'rrqtrqt', 'rfrqq', 'rqftq', 'rqfq',
  'rqnq', 'rqnqt', 'fqi', 'ffqq', 'rfqq', 'irqq',

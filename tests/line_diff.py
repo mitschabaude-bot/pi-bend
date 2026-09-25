@@ -1,4 +1,5 @@
 """Compare native line diffs and both Pi renderers with pinned diff 8.0.4."""
+from upstream_pin import UPSTREAM
 import argparse
 import itertools
 import json
@@ -92,7 +93,7 @@ def invariants(case, value):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bend", type=Path)
-    parser.add_argument("--reference", type=Path, default=ROOT.parent / "pi-mono")
+    parser.add_argument("--reference", type=Path, default=UPSTREAM)
     parser.add_argument("--diff-package", type=Path, default=ROOT / "build/package")
     parser.add_argument("--backends", nargs="+", choices=["bun", "native-1", "native-4"], default=["bun", "native-1", "native-4"])
     parser.add_argument("--no-build", action="store_true")

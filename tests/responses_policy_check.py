@@ -3,6 +3,8 @@
 The oracle executes upstream createClient with a capturing SDK constructor;
 no network, credentials, provider wrapper or HTTP header normalization is tested.
 """
+from upstream_pin import UPSTREAM, check_sibling
+check_sibling()
 import itertools,json,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -10,7 +12,7 @@ fields=['supportsDeveloperRole','supportsMidConvoSystemMessages','sessionAffinit
 bools=[f for f in fields if f!='sessionAffinityFormat']
 affinity={'openai':'a','openai-nosession':'n','openrouter':'r'}
 # Confirm the actual public union spelling instead of accepting a made-up alias.
-assert '"openai-nosession"' in (ROOT/'../pi-mono/packages/ai/src/types.ts').read_text()
+assert '"openai-nosession"' in (UPSTREAM / 'packages/ai/src/types.ts').read_text()
 cases=[]
 def add(**kwargs):
     case=dict(provider='openai',url='https://api.openai.com/v1',compat=None,retention=None,env=None,session='session')

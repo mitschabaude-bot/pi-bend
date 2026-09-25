@@ -4,9 +4,8 @@
 Build first: BEND_TUS=4 sh scripts/build-cli.sh build/pi-cli
 Live checks run when PI_BEND_LIVE=1 and OPENAI_API_KEY are set."""
 import json, os, pathlib, re, subprocess, sys, tempfile
-from upstream_pin import PIN
+from upstream_pin import PIN, UPSTREAM
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-UPSTREAM = ROOT.parent / 'pi-mono'
 CLI = pathlib.Path(os.environ.get('PI_BEND_CLI', str(ROOT / 'build/pi-cli')))
 
 def source(path):

@@ -1,4 +1,6 @@
 """Stream wrappers retain event order, settle before consumption and close on errors."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools
 import json
 import subprocess

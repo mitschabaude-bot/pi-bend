@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Compare the composed Agent run with actual pinned Agent and loop execution."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import subprocess

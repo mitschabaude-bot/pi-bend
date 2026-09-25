@@ -26,7 +26,7 @@ for _ in range(500):
     cases.append(case)
 script = r'''
 const fs=require('fs');const {stripTypeScriptTypes}=require('node:module');
-const source=stripTypeScriptTypes(fs.readFileSync('../pi-mono/packages/ai/src/utils/headers.ts','utf8')).replace(/^export /gm,'');
+const source=stripTypeScriptTypes(fs.readFileSync(process.env.PI_MONO+'/packages/ai/src/utils/headers.ts','utf8')).replace(/^export /gm,'');
 const project=new Function(source+';return headersToRecord;')();
 const codes=s=>Array.from(s,c=>c.codePointAt(0)).join(',');
 const pairs=xs=>Array.from(xs,([k,v])=>codes(k)+';'+codes(v)).join('|');

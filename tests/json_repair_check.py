@@ -1,4 +1,6 @@
 """Original Pi string-literal repair and strict parse fallback in pure Bend."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools,json,random,subprocess
 from pathlib import Path
 from schema_literals import string,value

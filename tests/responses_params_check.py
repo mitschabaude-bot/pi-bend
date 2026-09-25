@@ -3,6 +3,8 @@
 Converters are substituted with preconverted values in this boundary oracle;
 this is not a transcript/tool conversion or provider transport test.
 """
+from upstream_pin import check_sibling
+check_sibling()
 import itertools,json,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]

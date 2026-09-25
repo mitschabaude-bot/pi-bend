@@ -3,6 +3,7 @@
 TypeScript is a test oracle only. The Bend implementation owns all production
 behavior. Whole-character grep cuts intentionally avoid isolated surrogates.
 """
+from upstream_pin import UPSTREAM
 import json
 from pathlib import Path
 import random
@@ -10,7 +11,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-UPSTREAM = ROOT.parent / 'pi-mono/packages/coding-agent/src/core/tools/truncate.ts'
+UPSTREAM = UPSTREAM / 'packages/coding-agent/src/core/tools/truncate.ts'
 PREFIX = Path(sys.argv[1] if len(sys.argv) > 1 else 'build/tool-truncate').resolve()
 cases = []
 texts = ['', '\n', '\n\n', 'a', 'a\n', 'a\nb', 'a\nb\n', '\r\n',

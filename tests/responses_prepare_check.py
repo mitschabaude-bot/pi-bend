@@ -12,11 +12,12 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from upstream_pin import PIN
+from upstream_pin import PIN, UPSTREAM, check_sibling
+check_sibling()
 
 ROOT = Path(__file__).resolve().parents[1]
 FIELDS = ['supportsDeveloperRole', 'supportsMidConvoSystemMessages', 'sessionAffinityFormat', 'supportsLongCacheRetention', 'supportsStrictMode', 'supportsOpenAIGrammarTools', 'supportsAdditionalTools', 'supportsToolSearch', 'supportsExplicitPromptCacheMode', 'supportsMaxOutputTokens']
-assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT.parent / 'pi-mono', text=True).strip() == PIN
+assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=UPSTREAM, text=True).strip() == PIN
 
 def tool(name, grammar=False):
     value = dict(name=name, description='A tool', parameters={'type': 'object', 'properties': {'input': {'type': 'string'}}, 'required': ['input']})

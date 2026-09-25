@@ -1,4 +1,5 @@
 """Streaming accumulator snapshots and actual spill bytes against pinned Pi."""
+from upstream_pin import UPSTREAM
 import argparse
 import json
 import os
@@ -7,7 +8,7 @@ import random
 import subprocess
 import tempfile
 ROOT=Path(__file__).resolve().parents[1]
-UPSTREAM=ROOT.parent/'pi-mono/packages/coding-agent/src/core/tools/output-accumulator.ts'
+UPSTREAM=UPSTREAM / 'packages/coding-agent/src/core/tools/output-accumulator.ts'
 
 def parsed(line):
     fields=line.split('|');assert len(fields)==14,fields

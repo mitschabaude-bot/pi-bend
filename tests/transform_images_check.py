@@ -1,4 +1,6 @@
 """Typed image downgrade compared with the actual pinned transcript transform."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools,json,subprocess
 from pathlib import Path
 from schema_literals import string

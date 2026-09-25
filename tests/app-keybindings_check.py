@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Pinned application keybindings source and native filesystem integration."""
+from upstream_pin import UPSTREAM
 import argparse,itertools,json,random,subprocess,tempfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -29,7 +30,7 @@ def corpus(mappings):
   config['z.extra']='escape';config['a.extra']='ctrl+q';out.append({'method':'migration','config':config})
  return out
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('--reference',default='/home/agent/code/pi-mono');p.add_argument('command',nargs=argparse.REMAINDER);a=p.parse_args();command=a.command
+ p=argparse.ArgumentParser();p.add_argument('--reference',default=str(UPSTREAM));p.add_argument('command',nargs=argparse.REMAINDER);a=p.parse_args();command=a.command
  if command[:1]==['--']:command=command[1:]
  oracle=['bun','tests/app-keybindings_reference.ts',a.reference]
  originals=raw(oracle,'--original')

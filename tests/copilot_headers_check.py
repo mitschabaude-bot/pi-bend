@@ -14,9 +14,9 @@ cases += [''.join(rng.choices(alphabet,k=rng.randrange(4,80))) for _ in range(50
 cases += ['i'+'u'*256, 'j'+'a'*256, 'u'*256, 't'*256]
 script=r'''
 const fs=require('fs');const {stripTypeScriptTypes}=require('node:module');
-const source=stripTypeScriptTypes(fs.readFileSync('../pi-mono/packages/ai/src/api/github-copilot-headers.ts','utf8')).replace(/^export /gm,'');
+const source=stripTypeScriptTypes(fs.readFileSync(process.env.PI_MONO+'/packages/ai/src/api/github-copilot-headers.ts','utf8')).replace(/^export /gm,'');
 const {inferCopilotInitiator,hasCopilotVisionInput,buildCopilotDynamicHeaders}=new Function(source+';return {inferCopilotInitiator,hasCopilotVisionInput,buildCopilotDynamicHeaders};')();
-const responses=stripTypeScriptTypes(fs.readFileSync('../pi-mono/packages/ai/src/api/openai-responses.ts','utf8'));
+const responses=stripTypeScriptTypes(fs.readFileSync(process.env.PI_MONO+'/packages/ai/src/api/openai-responses.ts','utf8'));
 const start=responses.indexOf('function createClient('),end=responses.indexOf('\nfunction buildParams(',start);
 if(start<0||end<0)throw Error('createClient extraction failed');
 const create=new Function('getCompat','getPiUserAgent','hasCopilotVisionInput','buildCopilotDynamicHeaders','OpenAI',responses.slice(start,end)+';return createClient;')(()=>({sessionAffinityFormat:'openai'}),()=>'pi/test',hasCopilotVisionInput,buildCopilotDynamicHeaders,class{constructor(options){this.options=options}});

@@ -1,4 +1,5 @@
 """Prompt discovery, frontmatter and source attribution against the pinned loader."""
+from upstream_pin import UPSTREAM
 import argparse,json,os,subprocess,tempfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -9,7 +10,7 @@ def row(t):
  return '|'.join(['template',wire(t['name']),wire(t['description']),optional(t.get('argumentHint')),wire(t['content']),wire(t['filePath']),wire(s['path']),s['source'],s['scope'],s['origin'],optional(s.get('baseDir'))])
 def diagnostic(d):return '|'.join(['diagnostic',d['type'],optional(d.get('path')),wire(d['message'])])
 def main():
- p=argparse.ArgumentParser();p.add_argument('--runner',required=True);p.add_argument('--threads',default='1');p.add_argument('--reference',type=Path,default=ROOT.parent/'pi-mono/packages/coding-agent');a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--runner',required=True);p.add_argument('--threads',default='1');p.add_argument('--reference',type=Path,default=UPSTREAM / 'packages/coding-agent');a=p.parse_args()
  cmd=['bun',a.runner] if a.runner.endswith('.js') else [a.runner,'--threads',a.threads]
  with tempfile.TemporaryDirectory(prefix='pi-prompt-') as directory:
   root=Path(directory);cwd=root/'project';agent=root/'agent';home=root/'home';extras=root/'extras'

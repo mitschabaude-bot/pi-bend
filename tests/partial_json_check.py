@@ -1,4 +1,6 @@
 """Pinned partial-json default mode and Pi's full streaming JSON composition."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools,json,random,subprocess
 from pathlib import Path
 from schema_literals import string,seq

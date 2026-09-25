@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exercise RPC model commands through the authenticated CLI runtime."""
+from upstream_pin import UPSTREAM
 import json
 import hashlib
 import os
@@ -9,7 +10,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = Path(subprocess.check_output(["git", "rev-parse", "--git-common-dir"], cwd=ROOT, text=True).strip()).resolve()
-UPSTREAM = Path(os.environ.get("PI_MONO", ROOT.parent / "pi-mono" if (ROOT.parent / "pi-mono").is_dir() else COMMON.parent.parent / "pi-mono"))
 assert hashlib.sha256((UPSTREAM / "packages/coding-agent/src/core/model-resolver.ts").read_bytes()).hexdigest() == "b0119e2e18f2b480cfd714c121dda1a0b9282bc9d8caa2ead1891b34642d4ed8"
 COMMANDS = [
     {"id": "available", "type": "get_available_models"},

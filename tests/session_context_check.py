@@ -1,4 +1,5 @@
 """Pinned session context assertions and typed invalid-tree boundaries."""
+from upstream_pin import UPSTREAM
 import argparse,datetime,json,random,subprocess,tempfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -44,7 +45,7 @@ def command(c,operation=None):
 def base(i,parent,kind,**fields):return dict(id=str(i),parentId=parent,type=kind,timestamp=STAMP,**fields)
 def user(i,parent,text):return base(i,parent,'message',message=dict(role='user',content=text,timestamp=1))
 def main():
- p=argparse.ArgumentParser();p.add_argument('--runner',required=True);p.add_argument('--threads',default='1');p.add_argument('--reference',type=Path,default=ROOT.parent/'pi-mono/packages/coding-agent');a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--runner',required=True);p.add_argument('--threads',default='1');p.add_argument('--reference',type=Path,default=UPSTREAM / 'packages/coding-agent');a=p.parse_args()
  cmd=['bun',a.runner] if a.runner.endswith('.js') else [a.runner,'--threads',a.threads]
  cases=[];rng=random.Random(606)
  for _ in range(150):

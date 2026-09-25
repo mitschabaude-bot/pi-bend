@@ -1,4 +1,6 @@
 """Public transform composition, stateful mappings and callback error behavior."""
+from upstream_pin import UPSTREAM, check_sibling
+check_sibling()
 import json,subprocess
 from pathlib import Path
 from schema_literals import string
@@ -21,7 +23,7 @@ for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,
 
 # Preserve every original named assertion case and verify the executable reports it.
 import re
-upstream=ROOT.parent/'pi-mono/packages/ai/test/transform-messages-copilot-openai-to-anthropic.test.ts'
+upstream=UPSTREAM / 'packages/ai/test/transform-messages-copilot-openai-to-anthropic.test.ts'
 names=re.findall(r'\bit\("([^"\n]+)"',upstream.read_text())
 named=ROOT/'packages/ai/test/transform-messages-copilot-openai-to-anthropic.bend'
 assert re.findall(r'IO.print\("PASS ([^"\n]+)"\)',named.read_text())==names

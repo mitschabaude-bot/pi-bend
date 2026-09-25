@@ -1,4 +1,5 @@
 """Pinned source wrapping oracle, including registered atomic paste markers."""
+from upstream_pin import UPSTREAM
 import argparse,json,random,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -10,7 +11,7 @@ cases=[dict(text=t,width=w,ids=ids) for t in texts for w in [0,2,3,5,8,12,20,40]
 r=random.Random(13827)
 for _ in range(500):
  cases.append(dict(text=''.join(r.choice(['a',' ', '   ','中','😀','e\u0301','[paste #1 +20 lines]','[paste #7]']) for _ in range(r.randrange(1,30))),width=r.randrange(2,40),ids=[1,7]))
-expected=json.loads(subprocess.check_output(['bun','tests/editor_wrap_reference.ts',str(ROOT.parent/'pi-mono'),a.width_reference],input=json.dumps(cases),text=True,cwd=ROOT))
+expected=json.loads(subprocess.check_output(['bun','tests/editor_wrap_reference.ts',str(UPSTREAM),a.width_reference],input=json.dumps(cases),text=True,cwd=ROOT))
 for start in range(0,len(cases),50):
  actual=json.loads(subprocess.check_output(command+[json.dumps(cases[start:start+50],ensure_ascii=False)],text=True,cwd=ROOT))
  for i,(actual,wanted) in enumerate(zip(actual,expected[start:start+50])): assert actual==wanted,(start+i,cases[start+i],actual,wanted)

@@ -1,4 +1,5 @@
 """Replay actual pinned SessionManager mutations against immutable native state."""
+from upstream_pin import UPSTREAM
 import argparse,json,subprocess,tempfile
 from pathlib import Path
 import session_context_check as context
@@ -56,7 +57,7 @@ def operation(step):
  raise AssertionError(k)
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--runner',required=True);p.add_argument('--threads',default='1');p.add_argument('--reference',type=Path,default=ROOT.parent/'pi-mono/packages/coding-agent');a=p.parse_args();cmd=['bun',a.runner] if a.runner.endswith('.js') else [a.runner,'--threads',a.threads]
+ p=argparse.ArgumentParser();p.add_argument('--runner',required=True);p.add_argument('--threads',default='1');p.add_argument('--reference',type=Path,default=UPSTREAM / 'packages/coding-agent');a=p.parse_args();cmd=['bun',a.runner] if a.runner.endswith('.js') else [a.runner,'--threads',a.threads]
  ref=json.loads(subprocess.check_output(['bun',str(ROOT/'tests/session_state_reference.ts'),str(a.reference)],text=True));count=0
  for case in ref['cases']:
   h=case['header'];wire='|'.join([':'.join([w(h['id']),w(h['timestamp']),w(h['cwd'])]),*[operation(s) for s in case['steps']]])

@@ -1,4 +1,5 @@
 """Exact pure-edit traces through the pinned Editor implementation."""
+from upstream_pin import UPSTREAM
 import argparse,json,random,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -13,7 +14,7 @@ for _ in range(100):
   text=r.choice(['abc','hello world','中😀','e\u0301','\r\n','\t']) if op!='type' else r.choice(['a','b',' ', '😀','中','e\u0301'])
   ops.append(dict(op=op,text=text))
  traces.append(ops)
-expected=json.loads(subprocess.check_output(['bun','tests/editor_edit_reference.ts',str(ROOT.parent/'pi-mono'),a.width_reference],input=json.dumps(traces),text=True,cwd=ROOT))
+expected=json.loads(subprocess.check_output(['bun','tests/editor_edit_reference.ts',str(UPSTREAM),a.width_reference],input=json.dumps(traces),text=True,cwd=ROOT))
 for i,trace in enumerate(traces):
  actual=json.loads(subprocess.check_output(command+[json.dumps([trace])],text=True,cwd=ROOT))[0]
  for step,(got,wanted) in enumerate(zip(actual,expected[i])): assert got==wanted,(i,step,trace[:step+1],got,wanted)

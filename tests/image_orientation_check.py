@@ -1,4 +1,5 @@
 """Compare pixels with pinned Pi's actual EXIF orientation implementation."""
+from upstream_pin import UPSTREAM
 import argparse
 import json
 from pathlib import Path
@@ -9,7 +10,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--prefix', default='build/image-orientation')
 args = parser.parse_args()
 oracle = ROOT / 'build/image-orientation-oracle.mts'
-source = ROOT.parent / 'pi-mono/packages/coding-agent/src/utils/exif-orientation.ts'
+source = UPSTREAM / 'packages/coding-agent/src/utils/exif-orientation.ts'
 oracle.write_text('import { applyExifOrientation } from ' + json.dumps(str(source)) + ';\n' + r'''
 class Image {
   constructor(public data: Uint8Array, public w: number, public h: number) {}

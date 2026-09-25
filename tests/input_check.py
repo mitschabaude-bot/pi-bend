@@ -1,11 +1,12 @@
 """Original Input tests and native editing/rendering/input protocol comparisons."""
+from upstream_pin import UPSTREAM
 import argparse,json,random,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('backends',nargs='*',default=['bun','native-1','native-4'])
 p.add_argument('--prefix',type=Path,default=ROOT/'build/input')
-p.add_argument('--reference',default='/home/agent/code/pi-mono')
+p.add_argument('--reference',default=str(UPSTREAM))
 a=p.parse_args(); E='\x1b';rng=random.Random(1707)
 oracle=['bun','tests/input_reference.ts',a.reference,'build/input-reference/node_modules']
 def run(command,values):

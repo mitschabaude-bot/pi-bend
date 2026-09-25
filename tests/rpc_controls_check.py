@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Source-pinned RPC settings and user bash lifecycle against pi-mono v0.87.1."""
+from upstream_pin import UPSTREAM
 import hashlib
 import json
 import os
@@ -10,7 +11,6 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-UPSTREAM = Path(os.environ.get("PI_MONO", "/home/agent/code/pi-mono"))
 assert hashlib.sha256((UPSTREAM / "packages/coding-agent/src/modes/rpc/rpc-mode.ts").read_bytes()).hexdigest() == "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc"
 assert hashlib.sha256((UPSTREAM / "packages/coding-agent/src/core/agent-session.ts").read_bytes()).hexdigest() == "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7"
 

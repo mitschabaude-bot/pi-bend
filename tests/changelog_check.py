@@ -7,11 +7,12 @@ normalizeChangelogLinks on ../pi-mono/packages/coding-agent/CHANGELOG.md.
 
   python3 tests/changelog_check.py
 """
+from upstream_pin import UPSTREAM
 import subprocess, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BEND = str(ROOT / "build/bend-native-toolchain/bend2/main.ts")
-UPSTREAM = ROOT.parent / "pi-mono/packages/coding-agent"
+UPSTREAM = UPSTREAM / 'packages/coding-agent'
 unit = subprocess.run(["bun", BEND, "tests/changelog.bend"], cwd=ROOT, capture_output=True, text=True, timeout=900)
 print(unit.stdout, end="")
 assert unit.returncode == 0 and "FAIL" not in unit.stdout, unit.stdout + unit.stderr

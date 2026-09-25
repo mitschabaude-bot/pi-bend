@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """No-summary navigateTree projection pinned to pi v0.87.1."""
+from upstream_pin import UPSTREAM
 import hashlib
 import json
 import os
@@ -9,7 +10,6 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = Path(subprocess.check_output(["git", "rev-parse", "--git-common-dir"], cwd=ROOT, text=True).strip()).resolve()
-UPSTREAM = Path(os.environ.get("PI_MONO", COMMON.parent.parent / "pi-mono"))
 SOURCE = UPSTREAM / "packages/coding-agent/src/core/agent-session.ts"
 assert hashlib.sha256(SOURCE.read_bytes()).hexdigest() == "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7"
 

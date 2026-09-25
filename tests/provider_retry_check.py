@@ -1,4 +1,6 @@
 """Compare retry-loop effect traces to upstream with only sleep replaced."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import subprocess

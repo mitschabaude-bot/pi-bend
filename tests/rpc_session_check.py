@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Check the RPC command/worker lifecycle against the pinned prompt contract."""
+from upstream_pin import UPSTREAM
 import hashlib
 import json
 import os
@@ -10,7 +11,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = Path(subprocess.check_output(["git", "rev-parse", "--git-common-dir"], cwd=ROOT, text=True).strip()).resolve()
-UPSTREAM = Path(os.environ.get("PI_MONO", ROOT.parent / "pi-mono" if (ROOT.parent / "pi-mono").is_dir() else COMMON.parent.parent / "pi-mono"))
 SOURCE = UPSTREAM / "packages/coding-agent/src/modes/rpc/rpc-mode.ts"
 assert hashlib.sha256(SOURCE.read_bytes()).hexdigest() == "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc"
 STATS_SOURCE = UPSTREAM / "packages/coding-agent/src/core/agent-session.ts"

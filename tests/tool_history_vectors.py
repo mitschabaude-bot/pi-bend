@@ -1,4 +1,6 @@
 """Check immutable tool history against upstream transcript functions."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import random

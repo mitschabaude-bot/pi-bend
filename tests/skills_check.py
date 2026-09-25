@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Run pinned named assertions and real temporary-tree loader comparisons."""
+from upstream_pin import UPSTREAM
 import argparse
 import json
 import os
@@ -8,7 +9,7 @@ import subprocess
 import tempfile
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--upstream', default='../pi-mono')
+parser.add_argument('--upstream', default=str(UPSTREAM))
 parser.add_argument('command', nargs=argparse.REMAINDER)
 args = parser.parse_args()
 command = args.command[1:] if args.command[:1] == ['--'] else args.command

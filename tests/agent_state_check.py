@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Compare native state transitions with pinned Agent initialization/processEvents."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 import pathlib
 import subprocess

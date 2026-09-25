@@ -14,11 +14,11 @@ Runs the JavaScript lane; pass --native with a native build of the fixture.
 """
 import argparse, json, os, subprocess
 from pathlib import Path
-from upstream_pin import PIN
+from upstream_pin import PIN, UPSTREAM
 from bend_toolchain import BEND
 
 ROOT = Path(__file__).resolve().parents[1]
-PI_MONO = Path(os.environ.get('PI_MONO', ROOT.parent / 'pi-mono'))
+PI_MONO = UPSTREAM
 ENTRY = 'tests/cloudflare-request.bend'
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--prefix', default='build/cloudflare-request')

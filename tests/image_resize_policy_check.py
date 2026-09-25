@@ -9,7 +9,7 @@ import struct
 import subprocess
 import tempfile
 import zlib
-from upstream_pin import PIN
+from upstream_pin import PIN, UPSTREAM
 
 ROOT = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser(description=__doc__)
@@ -22,7 +22,7 @@ assert json.loads((photon.parent/'package.json').read_text())['version'] == '0.3
 
 
 def source(name):
-    return subprocess.check_output(['git', '-C', str(ROOT.parent/'pi-mono'), 'show',
+    return subprocess.check_output(['git', '-C', str(UPSTREAM), 'show',
                                     f'{PIN}:packages/coding-agent/src/utils/{name}'], text=True)
 
 
@@ -49,7 +49,7 @@ for limit in [6000, 4000, 2000, 1200, 900, 800]:
 
 # Replay the original suite's exact image fixtures and options as well as the
 # broader generated corpus above. Obtain fixtures from the pinned source.
-upstream_tests = subprocess.check_output(['git', '-C', str(ROOT.parent/'pi-mono'), 'show',
+upstream_tests = subprocess.check_output(['git', '-C', str(UPSTREAM), 'show',
     f'{PIN}:packages/coding-agent/test/image-processing.test.ts'], text=True)
 original = dict(re.findall(r'const (TINY_PNG|TINY_JPEG|MEDIUM_PNG_100x100|LARGE_PNG_200x200)\s*=\s*"([^"]+)"', upstream_tests))
 for name, mime, options in [

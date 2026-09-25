@@ -1,4 +1,6 @@
 """Compare normal tool extraction and batch routing with upstream."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import subprocess

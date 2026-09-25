@@ -1,4 +1,6 @@
 """Compare recursive coercion with the pinned helper, including its real cache."""
+from upstream_pin import UPSTREAM, check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import subprocess
@@ -11,7 +13,7 @@ if not dependency.exists():
     subprocess.run(['npm', 'install', '--prefix', str(BUILD / 'schema-reference'),
                     '--ignore-scripts', '--no-audit', '--no-fund', 'typebox@1.3.27'], check=True)
 assert json.loads(dependency.read_text())['version'] == '1.3.27'
-assert json.loads((ROOT.parent / 'pi-mono/packages/ai/package.json').read_text())['dependencies']['typebox'] == '1.3.27'
+assert json.loads((UPSTREAM / 'packages/ai/package.json').read_text())['dependencies']['typebox'] == '1.3.27'
 cases = []
 def case(schema, instance, name, pending=False):
     cases.append({'schema': schema, 'value': instance, 'name': name, 'pending': pending})

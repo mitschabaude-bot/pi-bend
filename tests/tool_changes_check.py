@@ -1,4 +1,6 @@
 """Pinned declaration reconciliation, including last-system intent and replay."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools
 import json
 import random

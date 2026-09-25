@@ -1,4 +1,5 @@
 """Replay source Editor keyboard/history/paste callbacks; word engine is explicit oracle data."""
+from upstream_pin import UPSTREAM
 import argparse,json,random,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -27,7 +28,7 @@ for _ in range(80):
   elif kind==10: ops.append(dict(op='render',width=r.choice([8,15,40,80])))
   else: ops.append(key('\x1b[200~'+r.choice(['pasted\ntext','x\tq','\x1b[106;5u','./file'])+'\x1b[201~'))
  traces.append(ops)
-reference=json.loads(subprocess.check_output(['bun','tests/editor_input_reference.ts',str(ROOT.parent/'pi-mono'),a.width_reference],input=json.dumps(traces),text=True,cwd=ROOT))
+reference=json.loads(subprocess.check_output(['bun','tests/editor_input_reference.ts',str(UPSTREAM),a.width_reference],input=json.dumps(traces),text=True,cwd=ROOT))
 for i,(ops,ref) in enumerate(zip(traces,reference)):
  case=dict(ops=ops,words=ref['words'])
  actual=json.loads(subprocess.check_output(command+[json.dumps([case])],text=True,cwd=ROOT))[0]

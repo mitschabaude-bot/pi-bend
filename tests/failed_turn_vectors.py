@@ -1,4 +1,6 @@
 """Compare failed/aborted turn completion with the original runLoop block."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import subprocess

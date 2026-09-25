@@ -9,7 +9,8 @@ from bend_toolchain import BEND, TOOLCHAIN
 import re
 import subprocess
 import sys
-from upstream_pin import PIN
+from upstream_pin import PIN, UPSTREAM, check_sibling
+check_sibling()
 
 ROOT = Path(__file__).resolve().parents[1]
 BEND = BEND
@@ -38,7 +39,7 @@ for provider in ['openai','openrouter','custom','']:
         ordinary.append(dict(status=403,provider=provider,id='trace-42',raw=raw))
 ordinary.append(dict(status=500,provider='openai',id='trace-long',raw=compact({'error':{'message':'x'*4050}})))
 ordinary.append(dict(status=500,provider='openai',id='trace-long',raw=compact({'error':{'message':'🙂'*2020}})))
-reference_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT.parent/'pi-mono',text=True).strip()
+reference_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=UPSTREAM,text=True).strip()
 assert reference_commit.startswith(PIN[:9])
 def oracle(cases):
     return json.loads(subprocess.check_output(['node','--disable-warning=ExperimentalWarning','tests/openai_http_error_reference.mts'],cwd=ROOT,input=json.dumps(cases),text=True))

@@ -8,11 +8,11 @@ only through options.env. Runs the JavaScript lane (compiled once); pass
 """
 import argparse, json, os, subprocess, sys
 from pathlib import Path
-from upstream_pin import PIN
+from upstream_pin import PIN, UPSTREAM
 from bend_toolchain import BEND
 
 ROOT = Path(__file__).resolve().parents[1]
-PI_MONO = Path(os.environ.get('PI_MONO', ROOT.parent / 'pi-mono'))
+PI_MONO = UPSTREAM
 CATALOG = Path('/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/dist/providers/data/azure-openai-responses.json')
 ENTRY = 'packages/ai/test/azure-openai-responses-request.bend'
 parser = argparse.ArgumentParser(description=__doc__)

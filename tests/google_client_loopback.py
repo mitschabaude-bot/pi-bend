@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exercise Google Generative AI over the native Fetch/SSE path."""
+from upstream_pin import UPSTREAM
 import argparse
 import http.server
 import json
@@ -10,7 +11,6 @@ import tempfile
 import threading
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-UPSTREAM = ROOT.parent / "pi-mono"
 
 
 def oracle(mode):

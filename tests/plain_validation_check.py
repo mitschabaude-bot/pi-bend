@@ -1,4 +1,6 @@
 """Check the composed plain-schema path against actual validateToolArguments."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import subprocess

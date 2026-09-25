@@ -1,4 +1,5 @@
 """Original Pi prompt assertions plus direct differential and malformed-input checks."""
+from upstream_pin import UPSTREAM
 import argparse,json,random,subprocess,tempfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -12,7 +13,7 @@ def expected(case):
  value=case['expected']
  return 'ok|'+(';'.join(map(wire,value)) if isinstance(value,list) else wire(value))
 def main():
- p=argparse.ArgumentParser();p.add_argument('--runner',required=True);p.add_argument('--threads',default='1');p.add_argument('--reference',type=Path,default=ROOT.parent/'pi-mono/packages/coding-agent');a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--runner',required=True);p.add_argument('--threads',default='1');p.add_argument('--reference',type=Path,default=UPSTREAM / 'packages/coding-agent');a=p.parse_args()
  cmd=['bun',a.runner] if a.runner.endswith('.js') else [a.runner,'--threads',a.threads]
  rng=random.Random(809);cases=[]
  placeholders=['$1','$2','$0','$0001','$12','$@','$ARGUMENTS','${1:-fallback}','${2:-$1 $@}','${ARGUMENTS:-$2}','${@:-}','${@:0}','${@:2}','${@:1:0}','${@:1:3}','${@:99:1}','${1}','${@:-$ARGUMENTS}','$$1','\\$1','${wat$1}','${1:-unclosed $1','$arguments','$ARGUMENTSsuffix','${@:+1}','${@:2:-1}','${01:-z}','$'+'9'*500,'${@:'+('9'*500)+':1}']

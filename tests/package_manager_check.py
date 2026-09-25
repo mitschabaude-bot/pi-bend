@@ -5,11 +5,13 @@ directories up to the Git root, ignore files, symlinks, settings entries and
 exact +/- overrides and minimatch glob patterns) and compares the Bend resolution with the reference
 script run under Bun from ../pi-mono/packages/coding-agent.
 """
+from upstream_pin import UPSTREAM, check_sibling
+check_sibling()
 import argparse, json, os, subprocess, tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-UPSTREAM = ROOT.parent / 'pi-mono' / 'packages' / 'coding-agent'
+UPSTREAM = UPSTREAM / 'packages' / 'coding-agent'
 
 def write(path, text=''):
     path.parent.mkdir(parents=True, exist_ok=True)

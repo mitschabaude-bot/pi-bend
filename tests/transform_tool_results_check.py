@@ -1,4 +1,6 @@
 """Orphan repair, interruptions and system-message ordering against pinned Pi."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools,json,random,subprocess
 from pathlib import Path
 from schema_literals import string

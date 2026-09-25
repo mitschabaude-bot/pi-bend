@@ -1,11 +1,12 @@
 """Compare native POSIX path-input policy with the actual pinned Pi source."""
+from upstream_pin import UPSTREAM
 import json
 from pathlib import Path
 import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-UPSTREAM = ROOT.parent / 'pi-mono/packages/coding-agent/src/utils/paths.ts'
+UPSTREAM = UPSTREAM / 'packages/coding-agent/src/utils/paths.ts'
 PREFIX = ROOT / 'build/coding-paths'
 cases = []
 texts = ['', '.', '..', '../..', '/x//y/../z/', '@x', '@@x', '@~/x', '~', '~/x',

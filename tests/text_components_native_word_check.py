@@ -1,4 +1,5 @@
 """Input/SettingsList integration with decoded native six native ICU word assets."""
+from upstream_pin import UPSTREAM
 import argparse,json,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -10,7 +11,7 @@ texts += ['ภาษา','ภาษาไทย','ประเทศไทย','
 key_sets=[[E+'b']*8,["\x01"]+[E+'f']*8,['\x17']*8,['\x01']+[E+'d']*8,[E+'b','\x17','\x19',E+'f',E+'d','\x19',E+'[45;5u']]
 cases=[dict(text=text,keys=keys) for text in texts for keys in key_sets]
 fixture=ROOT/'build/text-components-native-word.json'; fixture.write_text(json.dumps(cases,ensure_ascii=False))
-oracle=['bun','tests/text_components_native_word_reference.ts','/home/agent/code/pi-mono','build/input-reference/node_modules',str(fixture)]
+oracle=['bun','tests/text_components_native_word_reference.ts',str(UPSTREAM),'build/input-reference/node_modules',str(fixture)]
 expected=[json.loads(s) for s in subprocess.check_output(oracle,cwd=ROOT,text=True).splitlines()]
 for backend in a.backends:
  command=['bun','build/text-components-native-word.js'] if backend=='bun' else ['build/text-components-native-word','--threads',backend[-1]]

@@ -1,4 +1,6 @@
 """Compare ordered schema-type selection with the actual source block."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import subprocess

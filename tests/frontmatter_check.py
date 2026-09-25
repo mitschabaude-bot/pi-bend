@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+from upstream_pin import UPSTREAM
 import argparse,json,pathlib,subprocess
-p=argparse.ArgumentParser();p.add_argument('--upstream',default='../pi-mono');p.add_argument('command',nargs=argparse.REMAINDER);a=p.parse_args();command=a.command[1:] if a.command[:1]==['--'] else a.command
+p=argparse.ArgumentParser();p.add_argument('--upstream',default=str(UPSTREAM));p.add_argument('command',nargs=argparse.REMAINDER);a=p.parse_args();command=a.command[1:] if a.command[:1]==['--'] else a.command
 root=pathlib.Path(__file__).resolve().parent.parent
 reference=json.loads(subprocess.check_output(['bun','tests/frontmatter_reference.ts',str(pathlib.Path(a.upstream).resolve())],text=True,cwd=root))
 # Consumers read named keys from the cast frontmatter, so a scalar or

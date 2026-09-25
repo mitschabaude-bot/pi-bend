@@ -1,4 +1,6 @@
 """Next-turn preparation composed with actual tool declaration reconciliation."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools
 import json
 import subprocess

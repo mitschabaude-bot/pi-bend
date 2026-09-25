@@ -1,8 +1,9 @@
 """All original named constrained-sampling contracts."""
+from upstream_pin import UPSTREAM
 import re,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-source=(ROOT.parent/'pi-mono/packages/ai/test/constrained-sampling.test.ts').read_text()
+source=(UPSTREAM / 'packages/ai/test/constrained-sampling.test.ts').read_text()
 native=ROOT/'packages/ai/test/constrained-sampling.bend'
 names=re.findall(r'\bit\("([^"\n]+)"',source)
 ported=re.findall(r'IO.print\("PASS ([^"\n]+)"\)',native.read_text())

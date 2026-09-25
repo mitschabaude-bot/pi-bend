@@ -1,4 +1,6 @@
 """Actual Responses ID normalization closure versus native typed helper."""
+from upstream_pin import check_sibling
+check_sibling()
 import itertools,json,random,subprocess
 from pathlib import Path
 from schema_literals import string

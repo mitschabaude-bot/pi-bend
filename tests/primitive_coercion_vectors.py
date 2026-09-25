@@ -1,4 +1,6 @@
 """Run original primitive coercion over tagged values without JSON erasure."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import random

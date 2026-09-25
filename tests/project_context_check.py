@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
+from upstream_pin import UPSTREAM
 import argparse, json, pathlib, subprocess, tempfile, os
 
 p = argparse.ArgumentParser()
-p.add_argument("--upstream", default="../pi-mono")
+p.add_argument("--upstream", default=str(UPSTREAM))
 p.add_argument("command", nargs=argparse.REMAINDER)
 a = p.parse_args()
 command = a.command[1:] if a.command[:1] == ["--"] else a.command

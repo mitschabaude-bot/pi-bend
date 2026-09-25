@@ -3,6 +3,8 @@
 SDK shape/status extraction belongs to provider adapters; this checks body
 selection, normalization and formatting after that explicit boundary.
 """
+from upstream_pin import UPSTREAM, check_sibling
+check_sibling()
 import itertools
 import json
 import re
@@ -31,7 +33,7 @@ add('surfaces status and body without a prefix',403,'403 status code (no body)',
 add('applies a provider prefix with status and body',403,'403 status code (no body)',[None,['json',{'error':'blocked by gateway WAF'}]],'OpenAI API error')
 add('preserves the message (with prefix + status) when it already carries the body',403,'{"error":{"message":"Permission denied"}}',[],'OpenAI API error')
 names.append('returns the bare message for a non-Error value');cases.append(['value',{'reason':'boom'},None])
-original_names=re.findall(r'it\("([^"\n]+)"', (ROOT/'../pi-mono/packages/ai/test/error-body.test.ts').read_text())
+original_names=re.findall(r'it\("([^"\n]+)"', (UPSTREAM / 'packages/ai/test/error-body.test.ts').read_text())
 assert names==original_names, 'Original named scenario mapping changed'
 # Supported source shapes, ordered precedence, empty-first suppression, trim,
 # truncation boundaries and message inclusion, including split surrogate pairs.

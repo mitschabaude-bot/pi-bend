@@ -3,6 +3,7 @@
 One build exercises both public streaming and replay without recompiling their
 common dependency graph for each suite. Individual suite runners remain usable.
 """
+from upstream_pin import UPSTREAM
 import re
 import subprocess
 from pathlib import Path
@@ -12,7 +13,7 @@ suites = ['openai-responses-message-id', 'openai-responses-foreign-toolcall-id',
           'openai-responses-empty-tool-result', 'openai-responses-namespace', 'constrained-sampling']
 expected = []
 for suite in suites:
-    source = (ROOT.parent / f'pi-mono/packages/ai/test/{suite}.test.ts').read_text()
+    source = (UPSTREAM / f'packages/ai/test/{suite}.test.ts').read_text()
     native = (ROOT / f'packages/ai/test/{suite}.bend').read_text()
     names = re.findall(r'\bit\("([^"\n]+)"', source)
     ported = re.findall(r'IO.print\("PASS ([^"\n]+)"\)', native)
@@ -20,7 +21,7 @@ for suite in suites:
     expected.extend('PASS ' + name for name in names)
 
 # Retain the original conversion runner's exact foreign-ID fixture check.
-foreign_source = (ROOT.parent / 'pi-mono/packages/ai/test/openai-responses-foreign-toolcall-id.test.ts').read_text()
+foreign_source = (UPSTREAM / 'packages/ai/test/openai-responses-foreign-toolcall-id.test.ts').read_text()
 raw = re.search(r'const COPILOT_RAW_TOOL_CALL_ID =\s*"([^"]+)";', foreign_source).group(1)
 assert f'def rawId() -> String: "{raw}"' in (ROOT / 'packages/ai/test/openai-responses-foreign-toolcall-id.bend').read_text()
 

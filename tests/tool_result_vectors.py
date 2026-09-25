@@ -1,4 +1,6 @@
 """Run typed hook merges against the actual pinned upstream merge expression."""
+from upstream_pin import check_sibling
+check_sibling()
 import json
 from pathlib import Path
 import subprocess

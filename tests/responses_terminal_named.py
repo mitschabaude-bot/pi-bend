@@ -3,6 +3,7 @@
 The provider wrapper early-EOF case stays pending; all three it.each phase
 rows are retained. Inventory changes require this native run to pass.
 """
+from upstream_pin import UPSTREAM
 import argparse,re,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -10,7 +11,7 @@ parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--batch-size',type=int,default=4)
 args=parser.parse_args()
 if args.batch_size < 1:parser.error('--batch-size must be positive')
-source=(ROOT.parent/'pi-mono/packages/ai/test/openai-responses-terminal-event.test.ts').read_text()
+source=(UPSTREAM / 'packages/ai/test/openai-responses-terminal-event.test.ts').read_text()
 native=(ROOT/'packages/ai/test/openai-responses-terminal-event.bend').read_text()
 names=re.findall(r'\bit\("([^"\n]+)"',source)
 ported=re.findall(r'IO.print\("PASS ([^"\n]+)"\)',native)
