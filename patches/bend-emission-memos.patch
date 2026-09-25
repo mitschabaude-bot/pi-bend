@@ -1,0 +1,60 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -924,11 +924,12 @@
+   return out;
+ }
+ 
+-const WORDVALS = new Map<HTerm, number | null>();
++// A word literal's value, per bit tree: kept across units and rounds.
++const WORDVALS = new WeakMap<object, number | null>();
+ 
+ function memo_gc(): void {
+   PROBES.length = 1; // Keep DUMMY; opened binders belong to this definition.
+-  [OPENS, USES, FOLDS, SPINES, CONSTS, TELES, TAILS, LAYS, CLOSED_LAYS, WORDVALS].forEach((m) => m.clear());
++  [OPENS, USES, FOLDS, SPINES, CONSTS, TELES, TAILS, LAYS, CLOSED_LAYS].forEach((m) => m.clear());
+ }
+ 
+ // Probe
+@@ -1312,8 +1313,9 @@
+     die("a constructor outside a datatype");
+   }
+   const word = adt.k === "U32" || adt.k === "F32";
+-  return [arr_open(fl.book, adt), word ? memo(WORDVALS, x, () =>
+-    Bend.u32_from_term(x, adt.k)) : null];
++  const bits = x.x[0] ?? x;
++  if (word && !WORDVALS.has(bits)) WORDVALS.set(bits, Bend.u32_from_term(x, adt.k));
++  return [arr_open(fl.book, adt), word ? WORDVALS.get(bits)! : null];
+ }
+ 
+ // A constructor's fields: the last n domains of its type, over the
+@@ -1700,7 +1702,7 @@
+ // reference used as a value is no call; Clo.apply is never flat), and
+ // whether it is flat: no fork, no bang call, self-calls in tail position.
+ function carb_book(src: Bend.Book, roots: Bend.Name[]): Carb {
+-  [TELES, SRCS, NODES, CYCLES, FLATS, SIGS, BRWS].forEach((m) => m.clear());
++  [TELES, SRCS, NODES, CYCLES, FLATS, SIGS, BRWS, CID_MACS].forEach((m) => m.clear());
+   LOCAL.clear();
+   for (const [k, tld] of Object.entries(src.tlds)) {
+     if (def_foreign(tld)) {
+@@ -1803,8 +1805,10 @@
+ // Cid
+ // ===
+ 
++const CID_MACS = new Map<string, string>();
++
+ function cid_mac(k: string): string {
+-  return "CID_" + name_clean(k).toUpperCase();
++  return memo(CID_MACS, k, () => "CID_" + name_clean(k).toUpperCase());
+ }
+ 
+ // File
+@@ -3195,7 +3199,8 @@
+   const defs: string[] = [];
+   for (const ms of [[...fl.cids.keys()].map(cid_mac),
+     [...entries.map((s) => s.fid), "FID_EXIT", "FID_ENTER"]]) {
+-    const dup = [...ms, ...TABLES].find((m, i, a) => a.indexOf(m) < i);
++    const seen = new Set<string>();
++    const dup = [...ms, ...TABLES].find((m) => seen.has(m) || !seen.add(m));
+     if (ms.length > 65536 || dup !== undefined) {
+       die(dup === undefined ? "an id over 65535"
+         : "two names mangle to " + dup);
