@@ -57,8 +57,9 @@ def withCompat(value: Ai.Model<Ai.JsonValue>, compat: Ai.OpenAICompletionsCompat
 def overrideModel(base: String) -> Ai.Model<Ai.JsonValue>:
   withCompat(model(base), Ai.OpenAICompletionsCompat{Some{False{}}, None{}, None{}, Some{False{}}, None{}, Some{Ai.MaxTokens{}}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}})
 
+# The stream fold has no fallback for providers without finish_reason yet.
 def unsupportedModel(base: String) -> Ai.Model<Ai.JsonValue>:
-  withCompat(model(base), Ai.OpenAICompletionsCompat{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{Ai.DeepSeekThinking{}}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}})
+  withCompat(model(base), Ai.OpenAICompletionsCompat{None{}, None{}, None{}, None{}, Some{False{}}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}})
 
 def context() -> Completions.Context():
   Ai.TranscriptContext{Ai.User{Ai.UserMessage{Ai.UserText{"ping"}, F.fromU32(1)}} <> Nil{}}
@@ -196,7 +197,7 @@ def scenario(+fetch: Fetch.Fetch(Unit), +base: String, mode: String) -> IO(Unit)
       do IO<Unit>:
         message : Ai.AssistantMessage<V.Value, Unit> <- samplingRequest(fetch, base)
         return Unit{}
-    case "deepseek_unsupported":
+    case "deepseek":
       do IO<Unit>:
         message : Ai.AssistantMessage<V.Value, Unit> <- providerRequest(fetch, base, "deepseek", True{})
         return Unit{}

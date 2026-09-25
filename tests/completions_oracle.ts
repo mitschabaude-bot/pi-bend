@@ -36,8 +36,8 @@ if (mode === "tool" || mode === "tool_image") {
 } else if (mode === "sampling") {
   model.samplingParams = { seed: 7, temperature: 1, top_p: 0 };
   await request(normalizeContext({ messages: [{ role: "user", content: "ping", timestamp: 1 }] }), { temperature: 2, samplingParams: { temperature: 3, top_p: 1, presence_penalty: 1 } });
-} else if (mode === "openrouter" || mode === "openrouter_off" || mode === "together" || mode === "together_off") {
-  model.provider = mode.startsWith("openrouter") ? "openrouter" : "together";
+} else if (mode === "openrouter" || mode === "openrouter_off" || mode === "together" || mode === "together_off" || mode === "deepseek") {
+  model.provider = mode.startsWith("openrouter") ? "openrouter" : mode === "deepseek" ? "deepseek" : "together";
   model.reasoning = true;
   await request(normalizeContext({ messages: [{ role: "user", content: "ping", timestamp: 1 }] }), mode.endsWith("_off") ? {} : { reasoning: "low" });
 } else {
