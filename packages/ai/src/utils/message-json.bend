@@ -187,7 +187,7 @@ def strictness(value: T.SamplingStrictness) -> String:
 def samplingConfig(value: T.ConstrainedSamplingConfig) -> V.Value:
   match value:
     case T.JsonSchemaSampling{strict}: object(field("type", text("json_schema"), field("strict", text(strictness(strict)), Nil{})))
-    case T.GrammarSampling{T.GrammarVariants{lark, regex}}: object(field("type", text("grammar"), field("variants", object(optionalText("openaiLark", lark, optionalText("openaiRegex", regex, Nil{}))), Nil{})))
+    case T.GrammarSampling{T.GrammarVariants{lark, regex}}: object(field("type", text("grammar"), field("variants", object(optionalText("openai_lark", lark, optionalText("openai_regex", regex, Nil{}))), Nil{})))
 
 def constrainedSampling(value: T.ToolConstrainedSampling) -> V.Value:
   match value:
@@ -484,8 +484,8 @@ def samplingConfigOf(+kind: String, fields: R.Record<V.Value>) -> Decoded(T.Cons
     case "grammar":
       do Result<&2, &2, Decode.Error, T.ConstrainedSamplingConfig>:
         +variants : R.Record<V.Value> <- Decode.required(R.Record<V.Value>, fields, "variants", Decode.object)
-        lark : Maybe<&2, String> <- Decode.located(Maybe<&2, String>, Decode.optional(String, variants, "openaiLark", Decode.string), Decode.Field{"variants"})
-        regex : Maybe<&2, String> <- Decode.located(Maybe<&2, String>, Decode.optional(String, variants, "openaiRegex", Decode.string), Decode.Field{"variants"})
+        lark : Maybe<&2, String> <- Decode.located(Maybe<&2, String>, Decode.optional(String, variants, "openai_lark", Decode.string), Decode.Field{"variants"})
+        regex : Maybe<&2, String> <- Decode.located(Maybe<&2, String>, Decode.optional(String, variants, "openai_regex", Decode.string), Decode.Field{"variants"})
         return T.GrammarSampling{T.GrammarVariants{lark, regex}}
     case _: Fail{Decode.InvalidValue{Decode.Field{"type"} <> Nil{}, "json_schema or grammar"}}
 
