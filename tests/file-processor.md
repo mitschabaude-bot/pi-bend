@@ -19,3 +19,5 @@ python3 tests/file_processor_check.py --photon /path/to/photon_rs.js bun native-
 The native runner explicitly passes `--threads 1` and `--threads 4`. The public read fixture is also rerun after shared path-policy consolidation; its actual file/path/argument/truncation and injected image-processing cases guard the existing caller.
 
 Validation completed on the exact source with Bun and optimized (`-O1`) native one/four threads: all twelve file-list comparisons and additional assertions passed on each backend. The existing public read suite also passed on all three backends after the policy move.
+
+Since v0.87.1 (f5c946480) the CLI processes `@file` images with `autoResizeImages: false`; AgentSession resizes prompt images once the request model is settled. `tests/file_processor_check.py` ports "can defer resizing file attachments until prompt dispatch": with auto-resize off, a 2010 px PNG that the default would shrink is attached with its original bytes.

@@ -52,10 +52,10 @@
     },
     "packages/coding-agent/src/core/agent-session.ts": {
       "state": "partial",
-      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal. Full upstream session and extension integration behavior remains unverified.",
+      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal, and prompt images are normalized with the current model's resize profile (f5c946480) without the before_agent_start event or tool-result image normalization. Full upstream session and extension integration behavior remains unverified.",
       "source_sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7",
       "port_sha256": {
-        "packages/coding-agent/src/core/agent-session.bend": "70ecda21181e23785db108c07f4b035166ca8859332fa4d2daa17bd0ae087a41"
+        "packages/coding-agent/src/core/agent-session.bend": "9c950d25726ba93721a0d0163c5a53af7b3e7c86bb4328b100bcd06b4568b90d"
       }
     },
     "packages/coding-agent/src/core/session-manager.ts": {
@@ -76,10 +76,10 @@
     },
     "packages/coding-agent/src/core/tools/read.ts": {
       "state": "partial",
-      "note": "Native text read and live model context are wired; image reading and full upstream behavior remain open.",
+      "note": "Native text and image reading with live model context are wired: the non-vision note and the context model's image resize profile (else the tool's own resizeOptions, v0.87.1) reach native image processing. Background image-worker scheduling and full upstream behavior remain open.",
       "source_sha256": "297d26092979651091f44de8862a6fd55aaf59e7252f8fb8dd3d7cb3f9771518",
       "port_sha256": {
-        "packages/coding-agent/src/core/tools/read.bend": "2d6d4ca43c391f27a45f68f456df033ed204f3e3e2bbe0a01ad4303e4dc09936"
+        "packages/coding-agent/src/core/tools/read.bend": "b0bb2888475e05a40aa6753783f9417a4bd50857f2a8836bf2c66f4da37cbf5f"
       }
     },
     "packages/coding-agent/src/core/tools/edit.ts": {
@@ -145,7 +145,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "fe23d6e6bed96fead06b1431b07a2ef70a0e3ce7296effb9ab8c457660f16810",
         "packages/coding-agent/src/modes/interactive/commands.bend": "8449a234b3cc969830d79b4462042968060562ee619a8b4e3c7ff2dba814265a",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "14557c415d7d4b0dd3c2d6921ce0f3dbd7b1717f23db27fdd8657b1e3d5eb547",
-        "packages/coding-agent/src/main.bend": "9168814925d18f09c6981d24750eb64bd523792653231fae98895288701092c3"
+        "packages/coding-agent/src/main.bend": "99011f58ca1281916d8542b42366cdbacf3dbf2374e4a8b58a75d6f333ed7589"
       }
     },
     "packages/tui/src/editor-component.ts": {

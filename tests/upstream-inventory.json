@@ -2340,15 +2340,15 @@
     },
     {
       "source": "packages/coding-agent/test/image-resize-callers.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/read-public.bend",
-        "tests/image_process_check.py",
+        "tests/read_public_check.py",
         "tests/file-processor.bend",
         "tests/file_processor_check.py"
       ],
       "sha256": "49913b4a056d53ed3df4686836fad1431e4e43f280c81baf049c3969e7965554",
-      "notes": "The two original caller assertions pass: public read returns text-only omission, and CLI file processing emits omission text with no image attachment. Pending (v0.87.1, f5c946480): 'passes the current model resize profile to the read tool' and 'can defer resizing file attachments until prompt dispatch'; the model's image input limits are not yet applied by the read tool or file processor."
+      "notes": "All four cases: public read returns text-only omission; CLI file processing emits omission text with no image attachment (real malformed images instead of a mocked null resize); v0.87.1 'passes the current model resize profile to the read tool' (pinned read tool and native tool, context model profile observed at the image processor, plus the fallback profile) and 'can defer resizing file attachments until prompt dispatch' (auto-resize off keeps an oversized PNG's bytes). Bun and native one/four."
     },
     {
       "source": "packages/coding-agent/test/initial-message.test.ts",
@@ -3101,7 +3101,7 @@
       ],
       "sha256": "51130e6ca7339ff3a6d09cb244533a9c4a82b8251dc1a62b03f2870bb77ecced",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'prompts while idle and records a single text response' (persist scenario) and 'throws when prompted during streaming without a streamingBehavior' (busy scenario, provider held on a gate) are in tests/agent_session_check.py. Tool-call turns, image attachments, skills/prompt templates, extension commands, input handlers, manual compaction and the no-model/no-auth errors remain pending. v0.87.1 diff reviewed (46c9de402..f07218c4d): 'uses the model selected by before_agent_start for image normalization' (#9631) is pending: it needs the before_agent_start extension event and f5c946480's image normalization in AgentSession."
+      "notes": "'prompts while idle and records a single text response' (persist scenario), 'throws when prompted during streaming without a streamingBehavior' (busy scenario) and, adapted, v0.87.1's 'uses the model selected by before_agent_start for image normalization' (images scenario: the model is switched with setModel because before_agent_start is not ported; real processing, the strict model's maxWidth shrinks the stored image) are in tests/agent_session_check.py. Tool-call turns, skills/prompt templates, extension commands, input handlers, manual compaction and the no-model/no-auth errors remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-queue.test.ts",

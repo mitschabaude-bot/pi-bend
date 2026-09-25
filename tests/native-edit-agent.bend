@@ -147,7 +147,7 @@ def runQueue(bundle: List<&2, X509.Certificate>, name: String, base: String, pro
         +unbound2 : Ctx.ContextSource() <- Ctx.create()
         edit : Edit.ToolOwner <- Edit.createEditTool(environment, handle, cwd, Edit.EditToolOptions{None{}},unbound2)
         +unbound3 : Ctx.ContextSource() <- Ctx.create()
-        read : Read.ToolOwner <- Read.createReadTool(environment,cwd,Read.ReadToolOptions{None{},None{},None{}},unbound3)
+        read : Read.ToolOwner <- Read.createReadTool(environment,cwd,Read.ReadToolOptions{None{},None{},None{},None{}},unbound3)
         +unbound4 : Ctx.ContextSource() <- Ctx.create()
         bash : Bash.ToolOwner <- Bash.createBashTool(cwd ++ "/.pi/bin",cwd,Bash.defaults(),unbound4)
         result : Runner.Outcome() <- runOwned(bundle, name, base, prompt, Write.borrowTool(write), Edit.borrowTool(edit),Read.borrowTool(read),Bash.borrowTool(bash))

@@ -748,6 +748,30 @@ def compactScenario(+dir: String, +agentDir: String, prompts: String, responses:
     reportSession(sessionOf(value))
     teardown(value)
 
+# images (agent-session-prompt.test.ts #9631, f5c946480): prompt images are
+# normalized with the request model's resize profile. The session starts on
+# "wide" (no profile: the 2000 px default), then switches to "strict"
+# (maxWidth 1000) before the second prompt. Upstream switches from a
+# before_agent_start handler, which is not ported; here setModel does.
+def imageModel(+id: String, profile: Maybe<&2, Ai.ModelImageResizeOptions>) -> Ai.Model<Ai.JsonValue>:
+  Ai.Model{id, id, Ai.OpenAIResponsesApi{}, "faux", "https://faux.invalid", False{}, None{}, Ai.InputText{} <> Ai.InputImage{} <> Nil{}, Maybe.map(&2, Ai.ModelImageResizeOptions, Ai.ModelInputLimits, resize => Ai.ModelInputLimits{None{}, Some{Ai.ModelImageInputLimits{Some{resize}, None{}, None{}}}}, profile), Ai.ModelCost{U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), U32.to_f64(0), None{}}, None{}, U32.to_f64(128000), U32.to_f64(4096), None{}, None{}, None{}}
+def wideModel() -> Ai.Model<Ai.JsonValue>: imageModel("wide", None{})
+def strictModel() -> Ai.Model<Ai.JsonValue>: imageModel("strict", Some{Ai.ModelImageResizeOptions{Some{U32.to_f64(1000)}, Some{U32.to_f64(1000)}, Some{U32.to_f64(500000)}, Some{U32.to_f64(70)}}})
+
+def imagesScenario(+dir: String, agentDir: String, +image: String) -> IO(Unit):
+  do IO<Unit>:
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    stored : Session.Session() <- requireSession(created)
+    +value : Fixture <- fixtureWithModel(stored, dir, agentDir, "wide done" <> "strict done" <> Nil{}, Nil{}, Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}}, Some{wideModel()}, ModelFixture.Source{"faux", "PI_FAUX_API_KEY", wideModel() <> strictModel() <> Nil{}} <> Nil{})
+    first : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "inspect", Ai.ImageContent{image, "image/png"} <> Nil{}, None{})
+    reportPrompt(first)
+    switched : Result<&2, &2, String, Unit> <- Session.setModel(sessionOf(value), strictModel(), Session.ModelMutationOptions{False{}})
+    reportOutcome("set_strict", switched)
+    second : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "inspect", Ai.ImageContent{image, "image/png"} <> Nil{}, None{})
+    reportPrompt(second)
+    reportMessages(sessionOf(value))
+    teardown(value)
+
 # bash: user bash commands (suite/agent-session-bash-persistence.test.ts).
 def ExecResult() -> Data: Result<&2, &2, Bash.OperationError, Maybe<&2, U32>>
 def BashOutcome() -> Data: Result<&2, &2, String, BashExec.BashResult>
@@ -945,6 +969,7 @@ def run(args: List<String>) -> IO(Unit):
     case "queue" <> dir <> agentDir <> Nil{}: queueScenario(dir, agentDir)
     case "mutate" <> dir <> agentDir <> Nil{}: mutateScenario(dir, agentDir)
     case "busy" <> dir <> agentDir <> Nil{}: busyScenario(dir, agentDir)
+    case "images" <> dir <> agentDir <> image <> Nil{}: imagesScenario(dir, agentDir, image)
     case "retry" <> dir <> agentDir <> responses <> "abort_second_error" <> Nil{}: abortedRetryScenario(dir, agentDir, responses)
     case "retry" <> dir <> agentDir <> responses <> cancel <> Nil{}: retryScenario(dir, agentDir, responses, cancel)
     case "compact" <> dir <> agentDir <> prompts <> responses <> action <> Nil{}: compactScenario(dir, agentDir, prompts, responses, action)

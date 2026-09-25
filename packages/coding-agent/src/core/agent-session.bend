@@ -38,6 +38,9 @@ import ../../../runtime/src/text.bend as Text
 import ./session-manager.bend as S
 import ./session-persistence.bend as Sessions
 import ./settings-manager.bend as Settings
+import ../utils/image-process.bend as Images
+import ../utils/image-resize.bend as Resize
+import ../../../runtime/src/base64.bend as Base64
 import ./session-stats.bend as Stats
 import ./cache-warmer.bend as Warmer
 import ./tools/index.bend as Tools
@@ -1613,8 +1616,36 @@ def firstMessage(messages: List<&2, Message()>, fallback: Message()) -> Message(
     case message <> _: message
     case Nil{}: fallback
 
+# upstream _normalizePromptImages (f5c946480): prompt images are processed
+# with the image auto-resize setting and the request model's resize profile
+# (Model.inputLimits.images.resize) once the model is settled; an image that
+# cannot be processed is replaced by its message, and processing hints join
+# the prompt text. Base64 that does not decode is processed as no bytes
+# (Node's decoder is lenient), so it is omitted with processImage's message.
+type NormalizedImages is Data: NormalizedImages{images: List<&2, Ai.ImageContent>, hints: List<&2, String>}
+def decodedImage(value: Result<&2, &2, Base64.Error, List<&2, U32>>) -> List<&2, U32>:
+  match value:
+    case Done{bytes}: bytes
+    case Fail{_}: Nil{}
+def normalizedImage(result: Images.ProcessImageResult, found: NormalizedImages) -> NormalizedImages:
+  match result found:
+    case Images.Processed{data, mime, processedHints} NormalizedImages{images, hints}: NormalizedImages{List.append(&2, Ai.ImageContent, images, Ai.ImageContent{data, mime} <> Nil{}), List.append(&2, String, hints, processedHints)}
+    case Images.Unsupported{message} NormalizedImages{images, hints}: NormalizedImages{images, List.append(&2, String, hints, message <> Nil{})}
+def normalizePromptImages(+options: Images.ProcessImageOptions, images: List<&2, Ai.ImageContent>, found: NormalizedImages) -> NormalizedImages:
+  match images:
+    case Nil{}: found
+    case Ai.ImageContent{data, mime} <> rest: normalizePromptImages(options, rest, normalizedImage(Images.processImage(decodedImage(Base64.decode(data)), mime, options), found))
+def promptImageOptions(settings: Settings.SettingsManager, model: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> Images.ProcessImageOptions:
+  Images.ProcessImageOptions{Some{Settings.getImageAutoResize(settings)}, Maybe.bind(&2, Ai.Model<Ai.JsonValue>, Resize.ImageResizeOptions, model, found => Images.modelResizeOptions(found))}
+def hintedText(+text: String, hints: List<&2, String>) -> String:
+  match hints:
+    case Nil{}: text
+    case _: text ++ "\n\n" ++ String.join(hints, "\n")
 def userMessageAt(+text: String, images: List<&2, Ai.ImageContent>, +now: F64) -> Message():
   firstMessage(Agent.normalizePromptInputAt(Unit, Runtime.Details(), Runtime.Custom(), Agent.Text{text, images}, now), T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text}, now}}})
+def normalizedUserMessage(+text: String, normalized: NormalizedImages, +now: F64) -> Message():
+  match normalized:
+    case NormalizedImages{images, hints}: userMessageAt(hintedText(text, hints), images, now)
 
 # Prompt and tool loadout
 # -----------------------
@@ -2020,9 +2051,9 @@ def runAgentPrompt(session: AgentSession, +text: String, images: List<&2, Ai.Ima
         +settings : Settings.SettingsManager <- R.read(Settings.SettingsManager,settingsRef)
         loadout : Runtime.Loadout <- R.read(Runtime.Loadout, loadoutRef)
         compactBeforePrompt(agent, shared, settings)
-        current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +now : F64 <- Date.now()
-        +user : Message() = userMessageAt(text, images, now)
+        +user : Message() = normalizedUserMessage(text, normalizePromptImages(promptImageOptions(settings, stateModel(current)), images, NormalizedImages{Nil{}, Nil{}}), now)
         patch : Maybe<&2, Message()> <- prepareLoadout(agent, loadout, stateMessages(current), now)
         setRunActive(shared, True{})
         result : Result<&2, &2, Agent.AgentError<Runtime.Error()>, Unit> <- Agent.prompt(~Unit, ~Runtime.Details(), ~Runtime.Custom(), ~Runtime.Error(), ~Unit, ~Runtime.render, ~Runtime.fromString, ~Runtime.declarationError, agent, Agent.Messages{withPatch(patch, user <> Nil{})})

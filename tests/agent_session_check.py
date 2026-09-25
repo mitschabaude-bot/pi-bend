@@ -3,7 +3,7 @@
 Scenario names cite the upstream tests whose assertions they port
 (suite/agent-session-runtime.test.ts, agent-session-runtime-events.test.ts, agent-queues).
 """
-import argparse, json, os, subprocess, tempfile
+import argparse, base64, json, os, struct, subprocess, tempfile, zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,6 +47,34 @@ def types(events):
 
 OVERFLOW = '!prompt is too long: 213462 tokens > 200000 maximum'
 KEEP_RECENT = {'compaction': {'keepRecentTokens': 1}}
+
+def png(width, height):
+    def chunk(kind, data): return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
+    rows = b''.join(b'\0' + b''.join(bytes([(x * 7) % 256, (y * 13) % 256, 90, 255]) for x in range(width)) for y in range(height))
+    return b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 6, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b'')
+
+def image_size(block):
+    data = base64.b64decode(block['data'])
+    if data.startswith(b'\x89PNG'): return struct.unpack('>II', data[16:24])
+    index = 2
+    while index < len(data):
+        marker, length = data[index + 1], struct.unpack('>H', data[index + 2:index + 4])[0]
+        if marker in (0xc0, 0xc1, 0xc2): height, width = struct.unpack('>HH', data[index + 5:index + 9]); return width, height
+        index += 2 + length
+    raise AssertionError('no image size')
+
+def image_checks(runner, threads, work):
+    # uses the model selected by before_agent_start for image normalization (agent-session-prompt.test.ts, #9631):
+    # a 1100 px wide image stays 1100 px under the default profile and shrinks to the strict model's 1000 px.
+    os.environ.setdefault('PI_FAUX_API_KEY', 'faux-key')  # both faux models need auth to be selectable
+    events = run_configured(runner, threads, work, {}, 'images', base64.b64encode(png(1100, 4)).decode())
+    assert [e['type'] for e in events if e['type'] in ('prompt_done', 'set_strict')] == ['prompt_done', 'set_strict', 'prompt_done'], events
+    users = [m for m in only(events, 'messages')['messages'] if m['role'] == 'user']
+    images = [[b for b in m['content'] if b['type'] == 'image'] for m in users]
+    texts = [''.join(b['text'] for b in m['content'] if b['type'] == 'text') for m in users]
+    assert [len(i) for i in images] == [1, 1] and image_size(images[0][0]) == (1100, 4) and image_size(images[1][0]) == (1000, 4), [image_size(i[0]) for i in images]
+    assert texts[0] == 'inspect' and texts[1].startswith('inspect\n\n') and '1100x4' in texts[1], texts
+    return 3
 
 def compaction_checks(runner, threads, work):
     checks = 0
@@ -403,6 +431,7 @@ def main():
     checks += bash_checks(runner, args.threads, work)
     checks += expand_checks(runner, args.threads, work)
     checks += compaction_checks(runner, args.threads, work)
+    checks += image_checks(runner, args.threads, work)
     print('agent-session: %d checks passed' % checks)
 
 if __name__ == '__main__':

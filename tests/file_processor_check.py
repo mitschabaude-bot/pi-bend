@@ -53,6 +53,11 @@ with tempfile.TemporaryDirectory(prefix='file-processor-') as directory:
       path=root/f'compare-{n}';path.write_bytes(base64.b64decode(image['data']));paths.append(str(path))
      pixels=[json.loads(x) for x in subprocess.check_output(['bun',str(ROOT/'tests/png_reference.cjs'),str(photon),*paths],text=True).splitlines()]
      assert pixels[0]==pixels[1],(backend,i,j)
+  # image-resize-callers.test.ts (v0.87.1) "can defer resizing file attachments until prompt dispatch": with
+  # autoResizeImages false the attachment is kept as read (upstream: resizeImage is not called); an image the
+  # default would shrink keeps its original bytes.
+  deferred=run(['large.png'],'false');assert len(deferred['images'])==1 and base64.b64decode(deferred['images'][0]['data'])==(cwd/'large.png').read_bytes(),(backend,'deferred')
+  assert base64.b64decode(run(['large.png'])['images'][0]['data'])!=(cwd/'large.png').read_bytes(),(backend,'default resizes')
   omission=run(['broken.gif']);assert omission['images']==[] and 'Image omitted: could not be resized below the inline image size limit.' in omission['text']
   for files,kind,path in [(['missing'],'missing',str(cwd/'missing')),(['.'],'read',str(cwd)),(['invalid'],'encoding',str(cwd/'invalid')),(['file://remote/no'],'path','file://remote/no')]:assert run(files)=={'error':kind,'path':path},(backend,files)
   # Exact spelling wins over all fallback variants; file URLs are accepted natively.

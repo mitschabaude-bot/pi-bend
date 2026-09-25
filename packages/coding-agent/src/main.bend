@@ -1223,7 +1223,8 @@ def runInputFiles(parsed: Args.Args,mode: AppMode,stdin: Maybe<&2,String>,messag
     case Rpc{} _ <> _: fail("Error: @file arguments are not supported in RPC mode")
     case _ args:
       do IO<Unit>:
-        files : Files.ResultOf(Files.ProcessedFiles) <- Files.processFileArguments(environment,args,Files.defaults())
+        # AgentSession resizes these after the request model is settled (f5c946480).
+        files : Files.ResultOf(Files.ProcessedFiles) <- Files.processFileArguments(environment,args,Files.ProcessFileOptions{Some{False{}}})
         runWithFiles(parsed,mode,stdin,messages,environment,files)
 
 def runWithInput(+parsed: Args.Args, mode: AppMode, stdinTty: Bool, environment: Result<&2, &2, FS.Error, Paths.Environment>) -> IO(Unit):
