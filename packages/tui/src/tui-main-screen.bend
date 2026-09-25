@@ -133,10 +133,13 @@ def parsedHeader(value: Maybe<&2,Image.KittyHeader>) -> Header:
   match value:
     case None{}: Header{Nil{},1n}
     case Some{Image.KittyHeader{_,controls,_}}: headerControls(Strings.split(controls,','),Header{Nil{},1n})
-type Row is Data: Row{text: String,width: Nat,image: Bool,ids: List<&2,U32>,requestedRows: Nat}
-def rowHeader(+text: String,+image: Bool,header: Header) -> Row:
+# A row's visible width is measured only where upstream measures it: rows being
+# written (the overflow check) and blank-row checks under an image.
+type Row is Data: Row{text: String,image: Bool,ids: List<&2,U32>,requestedRows: Nat}
+def rowWidth(+text: String,image: Bool) -> Nat: Bool.pick(Unit -> Nat,image,_ => 0n,_ => Layout.visibleWidth(text))(Unit{})
+def rowHeader(text: String,image: Bool,header: Header) -> Row:
   match header:
-    case Header{ids,rows}: Row{text,Bool.pick(Unit -> Nat,image,_ => 0n,_ => Layout.visibleWidth(text))(Unit{}),image,ids,rows}
+    case Header{ids,rows}: Row{text,image,ids,rows}
 def prepareRows(lines: List<&2,String>,reversed: List<&2,Row>) -> List<&2,Row>:
   match lines:
     case Nil{}: List.reverse(&2,Row,reversed)
@@ -147,10 +150,14 @@ def prepareRows(lines: List<&2,String>,reversed: List<&2,Row>) -> List<&2,Row>:
 def allIds(rows: List<&2,Row>,reversed: List<&2,U32>) -> List<&2,U32>:
   match rows:
     case Nil{}: List.reverse(&2,U32,reversed)
-    case Row{_,_,_,ids,_} <> rest: allIds(rest,addIds(ids,reversed))
-def reserved(left: Nat,rows: List<&2,Row>,count: Nat) -> Nat:
+    case Row{_,_,ids,_} <> rest: allIds(rest,addIds(ids,reversed))
+def blankRow(row: Row) -> Bool:
+  match row:
+    case Row{text,False{},_,_}: Nat.is_eq(Layout.visibleWidth(text),0n)
+    case _: False{}
+def reserved(left: Nat,rows: List<&2,Row>,+count: Nat) -> Nat:
   match left rows:
-    case Succ{left} Row{_,Zero{},False{},_,_} <> rest: reserved(left,rest,Succ{count})
+    case Succ{left} +row <> rest: Bool.pick(Unit -> Nat,blankRow(row),_ => reserved(left,rest,Succ{count}),_ => count)(Unit{})
     case _ _: count
 
 def at(rows: List<&2,Row>,index: Nat) -> Maybe<&2,Row>:
@@ -169,21 +176,21 @@ def changedValue(value: Changed,+index: Nat,different: Bool) -> Changed:
 def changed(previous: List<&2,Row>,current: List<&2,Row>,+index: Nat,value: Changed) -> Changed:
   match previous current:
     case Nil{} Nil{}: value
-    case Row{old,_,_,_,_} <> rest Row{next,_,_,_,_} <> more:
+    case Row{old,_,_,_} <> rest Row{next,_,_,_} <> more:
       changed(rest,more,Succ{index},changedValue(value,index,Bool.not(Strings.equal(old,next))))
-    case Row{old,_,_,_,_} <> rest Nil{}:
+    case Row{old,_,_,_} <> rest Nil{}:
       changed(rest,Nil{},Succ{index},changedValue(value,index,Bool.not(Strings.equal(old,""))))
-    case Nil{} Row{next,_,_,_,_} <> more:
+    case Nil{} Row{next,_,_,_} <> more:
       changed(Nil{},more,Succ{index},changedValue(value,index,Bool.not(Strings.equal("",next))))
 def reservedFound(found: Maybe<&2,Row>,+rows: List<&2,Row>,+index: Nat,maxIndex: Nat) -> Nat:
   match found:
-    case Some{Row{_,_,_,_,+requested}}:
+    case Some{Row{_,_,_,+requested}}:
       Bool.pick(Nat,Nat.is_le(requested,1n),1n,1n + reserved(min(requested - 1n,min(maxIndex - index,rowCount(rows) - index - 1n)),List.drop(&2,Row,rows,Succ{index}),0n))
     case None{}: 1n
 def reservedRows(+rows: List<&2,Row>,+index: Nat,maxIndex: Nat) -> Nat: reservedFound(at(rows,index),rows,index,maxIndex)
 def rowHasIds(found: Maybe<&2,Row>) -> Bool:
   match found:
-    case Some{Row{_,_,_,ids,_}}: Bool.not(emptyIds(ids))
+    case Some{Row{_,_,ids,_}}: Bool.not(emptyIds(ids))
     case None{}: False{}
 def expandFor(left: Nat,+rows: List<&2,Row>,+index: Nat,+originalFirst: Nat,+originalLast: Nat,expanded: Changed) -> Changed:
   match left expanded:
@@ -206,7 +213,7 @@ def expandRange(value: Changed,previous: List<&2,Row>,current: List<&2,Row>,oldC
 def hasImageIds(rows: List<&2,Row>) -> Bool:
   match rows:
     case Nil{}: False{}
-    case Row{_,_,_,ids,_} <> rest: Bool.not(emptyIds(ids)) || hasImageIds(rest)
+    case Row{_,_,ids,_} <> rest: Bool.not(emptyIds(ids)) || hasImageIds(rest)
 def expandedRange(+value: Changed,+previous: List<&2,Row>,+current: List<&2,Row>,oldCount: Nat,newCount: Nat) -> Changed:
   Bool.pick(Unit -> Changed,hasImageIds(previous) || hasImageIds(current),
     _ => expandRange(value,previous,current,oldCount,newCount),
@@ -226,7 +233,7 @@ def deleteIds(ids: List<&2,U32>,reversed: List<&2,Operation>) -> List<&2,Operati
 def idsInRange(rows: List<&2,Row>,+index: Nat,+last: Nat,+reversed: List<&2,U32>) -> List<&2,U32>:
   match rows:
     case Nil{}: List.reverse(&2,U32,reversed)
-    case Row{_,_,_,ids,_} <> rest:
+    case Row{_,_,ids,_} <> rest:
       +next = Bool.pick(List<&2,U32>,Nat.is_le(index,last),addIds(ids,reversed),reversed)
       idsInRange(rest,Succ{index},last,next)
 def oldRangeIds(rows: List<&2,Row>,+first: Nat,last: Nat) -> List<&2,U32>:
@@ -239,25 +246,25 @@ def appendRepeat(+count: Nat,value: String,+reversed: List<&2,Operation>) -> Lis
   Bool.pick(List<&2,Operation>,Nat.is_eq(count,0n),reversed,Repeat{count,value} <> reversed)
 def writeLine(row: Row,+rows: List<&2,Row>,+index: Nat,end: Nat,+height: Nat,+full: Bool,+reversed: List<&2,Operation>) -> List<&2,Operation>:
   match row:
-    case Row{+text,_,True{},_,_}:
+    case Row{+text,True{},_,_}:
       +count = reservedRows(rows,index,end)
       Bool.pick(List<&2,Operation>,Nat.is_gt(count,1n) && (Bool.not(full) || Nat.is_le(count,height)),
         appendText("\u{1b}[" ++ Nat.show(count - 1n) ++ "B",appendText(text,appendText("\u{1b}[" ++ Nat.show(count - 1n) ++ "A",appendRepeat(count - 1n,Bool.pick(String,full,"\r\n","\r\n\u{1b}[2K"),Bool.pick(List<&2,Operation>,full,reversed,appendText("\u{1b}[2K",reversed)))))),
         appendText(text,Bool.pick(List<&2,Operation>,full,reversed,appendText("\u{1b}[2K",reversed))))
-    case Row{text,_,_,_,_}: appendText(text,Bool.pick(List<&2,Operation>,full,reversed,appendText("\u{1b}[2K",reversed)))
+    case Row{text,_,_,_}: appendText(text,Bool.pick(List<&2,Operation>,full,reversed,appendText("\u{1b}[2K",reversed)))
 type LinesOutput is Data: LinesOutput{reversed: List<&2,Operation>,finalRow: Nat,kittyScroll: Bool,error: Maybe<&2,RenderError>}
 @unsafe def outputLines(rows: List<&2,Row>,+index: Nat,+end: Nat,+height: Nat,+viewportTop: Nat,+full: Bool,+first: Nat,+reversed: List<&2,Operation>) -> LinesOutput:
   match rows:
     case Nil{}: LinesOutput{reversed,Bool.pick(Nat,Nat.is_eq(index,0n),0n,index - 1n),False{},None{}}
-    case Row{+text,+width,+image,+ids,+requested} <> +rest:
-      +count = Bool.pick(Nat,image,reservedRows(Row{text,width,image,ids,requested} <> rest,0n,end - index),1n)
+    case Row{+text,+image,+ids,+requested} <> +rest:
+      +count = Bool.pick(Nat,image,reservedRows(Row{text,image,ids,requested} <> rest,0n,end - index),1n)
       +scroll = Bool.not(full) && image && Nat.is_gt(count,1n) && (Nat.is_lt(index,viewportTop) || Nat.is_gt(index - viewportTop + count,height))
       +separator = Bool.pick(List<&2,Operation>,Nat.is_gt(index,first),appendText("\r\n",reversed),reversed)
-      +written = writeLine(Row{text,width,image,ids,requested},Row{text,width,image,ids,requested} <> rest,0n,end - index,height,full,separator)
+      +written = writeLine(Row{text,image,ids,requested},Row{text,image,ids,requested} <> rest,0n,end - index,height,full,separator)
       +skip = Bool.pick(Nat,image && Nat.is_gt(count,1n) && (Bool.not(full) || Nat.is_le(count,height)),count,1n)
       Bool.pick(Unit -> LinesOutput,Nat.is_gt(index,end) || scroll,
         _ => LinesOutput{reversed,index - 1n,Bool.not(Nat.is_gt(index,end)),None{}},
-        _ => outputLines(List.drop(&2,Row,Row{text,width,image,ids,requested} <> rest,skip),index + skip,end,height,viewportTop,full,first,written))(Unit{})
+        _ => outputLines(List.drop(&2,Row,Row{text,image,ids,requested} <> rest,skip),index + skip,end,height,viewportTop,full,first,written))(Unit{})
 def finishFull(body: LinesOutput) -> List<&2,Operation>:
   match body:
     case LinesOutput{reversed,_,_,_}: List.reverse(&2,Operation,Flush{} <> appendText("\u{1b}[?2026l",reversed))
@@ -281,7 +288,7 @@ def cursorHardware(cursor: Maybe<&2,Tui.CursorPosition>,+length: Nat,hardware: N
 def rowTexts(rows: List<&2,Row>,reversed: List<&2,String>) -> List<&2,String>:
   match rows:
     case Nil{}: List.reverse(&2,String,reversed)
-    case Row{text,_,_,_,_} <> rest: rowTexts(rest,text <> reversed)
+    case Row{text,_,_,_} <> rest: rowTexts(rest,text <> reversed)
 
 def committed(state: State,+rows: List<&2,Row>,width: Nat,height: Nat,cursorRow: Nat,hardware: Nat,maximum: Nat,top: Nat,redraw: Bool) -> State:
   match state:
@@ -314,15 +321,15 @@ def previousTop(+snapshot: TuiMainScreenRenderState,+height: Nat,+heightChanged:
     case TuiMainScreenRenderState{_,_,+old,_,_,_,+top}:
       +buffer = Bool.pick(Nat,Nat.is_gt(previousHeightValue(old,height),0n),top + previousHeightValue(old,height),height)
       Bool.pick(Nat,heightChanged,buffer - min(buffer,height),top)
+def tooWide(+index: Nat,+actual: Nat,+width: Nat) -> Maybe<&2,RenderError>:
+  Bool.pick(Maybe<&2,RenderError>,Nat.is_gt(actual,width),Some{LineTooWide{index,actual,width}},None{})
 def wideInRange(+rows: List<&2,Row>,+index: Nat,+end: Nat,+width: Nat) -> Maybe<&2,RenderError>:
   match rows:
     case Nil{}: None{}
-    case Row{_,+actual,image,_,_} <> rest:
+    case Row{text,image,_,_} <> rest:
       Bool.pick(Unit -> Maybe<&2,RenderError>,Nat.is_gt(index,end),
         _ => None{},
-        _ => Bool.pick(Unit -> Maybe<&2,RenderError>,Bool.not(image) && Nat.is_gt(actual,width),
-          _ => Some{LineTooWide{index,actual,width}},
-          _ => wideInRange(rest,Succ{index},end,width))(Unit{}))(Unit{})
+        _ => Maybe.or(&2,RenderError,tooWide(index,rowWidth(text,image),width),wideInRange(rest,Succ{index},end,width)))(Unit{})
 def changedPreflight(+rows: List<&2,Row>,+first: Nat,+last: Nat,+width: Nat) -> Maybe<&2,RenderError>:
   wideInRange(List.drop(&2,Row,rows,first),first,last,width)
 def noChange(+state: State,+rows: List<&2,Row>,+cursor: Maybe<&2,Tui.CursorPosition>,+height: Nat,+top: Nat,+show: Bool) -> Plan:
