@@ -256,10 +256,10 @@
     },
     "packages/coding-agent/src/modes/interactive/theme/theme.ts": {
       "state": "partial",
-      "note": "Built-in and custom theme loading, JSON-name discovery and sorted catalog are implemented; registered themes, reload and export behavior remain partial.",
+      "note": "Built-in and custom theme loading, JSON-name discovery, sorted catalog and theme render equality are implemented; registered themes, reload and export behavior remain partial.",
       "source_sha256": "c3bf2e3b72f6bb782f34de0535fcc1758b9b6ea7a0d2e7d6f17244fa55c3f31a",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/theme/theme.bend": "f6410fc680cf50cb88452076f4eafbaa780d950d3f5328e6574061bad167c2ba"
+        "packages/coding-agent/src/modes/interactive/theme/theme.bend": "e86fc8b9b4eaa27aa6e80adabd95f3f996d5139c607fe6ecb7c6e5ba2a87c072"
       }
     },
     "packages/coding-agent/src/modes/interactive/theme/theme-controller.ts": {
