@@ -16,7 +16,7 @@
 -    const get = () => lay_pack(tld.c.map((c): Arm =>
 -      ({ k: c.k, fs: lay_fields(book, ctr_doms(book, c, t.x)) })));
 +    // Wide records stay boxed: every live inline cell is a parameter of each
-+    // segment that holds the value, and the C arity table is a byte.
++    // segment that holds the value, which inflates the C and its emission.
 +    const get = () => {
 +      const lay = lay_pack(tld.c.map((c): Arm =>
 +        ({ k: c.k, fs: lay_fields(book, ctr_doms(book, c, t.x)) })));

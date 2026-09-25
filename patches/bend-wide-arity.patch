@@ -1,0 +1,39 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -3163,10 +3163,12 @@
+     defs.push(...ms.map((m, i) => `#define ${m} ${i}`));
+   }
+   const table = (nm: string, vals: number[], names: string[] = []) => {
+-    if (vals.some((v) => v > 255)) {
+-      die("an arity over 255" + vals.map((v, i) => v > 255 ? " " + (names[i] ?? String(i)) + "=" + String(v) : "").join(""));
++    if (vals.some((v) => v > 65535)) {
++      die("an arity over 65535" + vals.map((v, i) => v > 65535 ? " " + (names[i] ?? String(i)) + "=" + String(v) : "").join(""));
+     }
+-    defs.push(`CONSTV u8 ${nm}[] = { ${vals.join(", ")} };`);
++    // a byte per entry unless some arity needs more
++    const w = vals.some((v) => v > 255) ? "u16" : "u8";
++    defs.push(`CONSTV ${w} ${nm}[] = { ${vals.join(", ")} };`);
+   };
+   table("FID_ARITY_T", entries.map((s) => s.params.length), entries.map((s) => s.fid));
+   // A segment may fork when it, or one it reaches, does.
+@@ -3783,17 +3785,20 @@
+ #ifdef __METAL_VERSION__
+ typedef ulong u64;
+ typedef uint  u32;
++typedef ushort u16;
+ typedef uchar u8;
+ typedef float f32;
+ #elif defined(__CUDACC_RTC__)
+ typedef unsigned long long u64;
+ typedef long long          int64_t;
+ typedef unsigned int       u32;
++typedef unsigned short     u16;
+ typedef unsigned char      u8;
+ typedef float              f32;
+ #else
+ typedef uint64_t u64;
+ typedef uint32_t u32;
++typedef uint16_t u16;
+ typedef uint8_t  u8;
+ typedef float    f32;
+ #endif
