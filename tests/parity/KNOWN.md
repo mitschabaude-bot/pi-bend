@@ -24,13 +24,17 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   over a local TLS server (P-256 certificates), Bend's first token now
   arrives before pi's (72-77 ms versus 110-115 ms in `stream-paced`). A long
   answer (10 KB of Markdown with 30 code blocks, 500 deltas) paced at 4 ms
-  per delta ends within the bound (last token 2.21-2.22 s versus pi's
-  2.09-2.10 s); flooded, it ends at 0.43-0.47 s versus pi's 0.15-0.20 s
-  (7 runs, 2026-09-25). TLS is no longer the cause: the same flood over
-  plain HTTP (a local copy of the scenario without `tls`) ends at
-  0.36-0.38 s versus pi's 0.13 s, so TLS adds about 80 ms to Bend and
-  30-40 ms to pi, and the rest is per-delta event and render work (see the
-  native profile: about 45% of the streaming window frees terms). Until
+  per delta ends within the bound (last token 2.13-2.15 s versus pi's
+  2.07-2.08 s); flooded, it ends at 0.44-0.45 s versus pi's 0.16-0.17 s
+  (3 runs each at main 89ba73a4, 2026-09-25). TLS is no longer the cause:
+  the same flood over plain HTTP (a local copy of the scenario without
+  `tls`) ends at 0.36-0.38 s versus pi's 0.13 s, so TLS adds about 80 ms
+  to Bend and 30-40 ms to pi. Of the streaming window, roughly a quarter copies
+  and releases the accumulated text (each delta appends to a `String` that
+  the agent and transcript still hold, so the whole text so far is copied;
+  docs/bend-issues.md BEND-046) and about 30% draws the eight frames. pi
+  appends in O(1). Removing the copy needs either a runtime string
+  concatenation node or a different text type in streamed messages. Until
   2026-09-25 the handshake took 350-390 ms and the flood 0.84-0.89 s:
   X25519 used lists of byte limbs (98 ms per scalar multiplication, twice
   per handshake; now sixteen 16-bit limbs in a record, 0.43 ms), AES
