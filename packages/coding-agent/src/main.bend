@@ -283,15 +283,23 @@ def localOrGlobal(found: Maybe<&2, S.SessionInfo>, +arg: String, sessionDir: May
 def resolvedArgument(+arg: String, environment: Paths.Environment, cwd: String) -> String:
   Result.default(&2, &2, Paths.Error, String, Paths.resolveToCwd(environment, arg, cwd), arg)
 
+def exactOrListed(found: Maybe<&2, String>, +arg: String, +cwd: String, +sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String) -> IO(Resolved):
+  match found:
+    case Some{path}: IO.pure(Resolved, ResolvedLocal{path})
+    case None{}:
+      do IO<Resolved>:
+        local : List<&2, S.SessionInfo> <- Sessions.list(cwd, sessionDir, agentDir)
+        localOrGlobal(matched(local, arg), arg, sessionDir, sessionsDir)
+
 # A path-like argument is used as a file; otherwise the id is matched in the
 # project's sessions, then across all projects.
-def resolveWhen(pathLike: Bool, +arg: String, environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String) -> IO(Resolved):
+def resolveWhen(pathLike: Bool, +arg: String, environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, sessionsDir: String) -> IO(Resolved):
   match pathLike:
     case True{}: IO.pure(Resolved, ResolvedPath{resolvedArgument(arg, environment, cwd)})
     case False{}:
       do IO<Resolved>:
-        local : List<&2, S.SessionInfo> <- Sessions.list(cwd, sessionDir, agentDir)
-        localOrGlobal(matched(local, arg), arg, sessionDir, sessionsDir)
+        exact : Maybe<&2, String> <- Sessions.findById(cwd, arg, sessionDir, agentDir)
+        exactOrListed(exact, arg, cwd, sessionDir, agentDir, sessionsDir)
 
 def resolveSessionPath(+arg: String, environment: Paths.Environment, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String) -> IO(Resolved):
   resolveWhen(looksLikePath(arg), arg, environment, cwd, sessionDir, agentDir, sessionsDir)
