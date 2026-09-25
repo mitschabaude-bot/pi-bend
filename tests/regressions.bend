@@ -411,11 +411,6 @@ def reportPersisted(+session: Session.AgentSession) -> IO(Unit):
     H.printed(Done{Json.object(Json.field("type", Json.text("persisted"), Json.field("messages", V.ArrayValue{entryMessages(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))}, Nil{})))})
     H.reportEntries(session)
 
-def settingsFrom(+cwd: String, agentDir: String) -> IO(Settings.SettingsManager):
-  do IO<Settings.SettingsManager>:
-    loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.options())
-    return H.settingsOf(loaded)
-
 def seededFixture(+dir: String, agentDir: String, seed: List<&2, Session.Message()>, setup: Setup) -> IO(Fixture):
   do IO<Fixture>:
     created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())

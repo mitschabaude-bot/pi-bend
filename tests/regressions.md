@@ -17,6 +17,7 @@ python3 tests/regressions_check.py --regressions build/regressions ...   # a nat
 - `harness.faux.state.callCount` is the number of scripted replies consumed (`remaining`).
 - Session events are typed, so upstream's check that a session `message_update` has `message` and `partial` holds by construction. The fixture prints the session event's assistant message next to its wire form so usage can be compared (7911, 7925).
 - Upstream injects compaction summaries through `session_before_compact` extension handlers, which the native extension runtime doesn't dispatch yet. 7150 holds the default summarizer's request open instead. Pre-prompt compaction scripts the summary as a provider reply, so "no continue" means the provider sees exactly the summary request and the prompt's request.
+- `tree-during-streaming` holds the response at a gate and navigates meanwhile, instead of navigating from inside upstream's response factory.
 - 7253 holds the second response until `compact()` has aborted it (the fixture waits for the request's signal), then releases it. The first response's `noop` tool call runs against no tools, and the manual summary is a scripted reply, so the result's summary contains it instead of equaling it.
 - 8328 spies `_runAutoCompaction`. The port observes the same decision as a `threshold` compaction, with `keepRecentTokens: 1` so that the compaction has something to cut.
 - 7150's `preflightResult(false)` and rejection are the prompt's failed result.
@@ -25,7 +26,3 @@ python3 tests/regressions_check.py --regressions build/regressions ...   # a nat
 - 7497 lists sessions through `tests/session-file.bend`'s `listAll` operation (`SessionManager.listAll`) with the agent directory in `PI_CODING_AGENT_DIR`; a session's id is its file stem.
 - 5661's registry half is a fixture of `tests/models_json_check.py` (differential against upstream's ModelRuntime, plus the literal request auth). Its migration half stays pending: the port has no `runMigrations`.
 - 8337: settings files with a BOM go through `tests/settings-files.bend` (`SettingsManager.create`, then `setTheme` and flush). The merged getters are read from the global and project settings, which don't overlap. The port has no `splitBom` helper, so that assertion stays pending.
-
-## Pending cases with gaps
-
-- 5996 (`setSessionName` with newlines) and `tree-during-streaming`: `AgentSession.setSessionName` emits the raw name instead of the session manager's sanitized name, and `navigateTree` merges upstream's two error messages. The `name` and `tree_streaming` scenarios reproduce both. The module is reserved by another agent; see AGENT-LOG.md.

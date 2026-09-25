@@ -2461,11 +2461,13 @@ def navigateTree(+session: AgentSession, targetId: String) -> IO(Result<&2, &2, 
       do IO<Result<&2, &2, String, Navigation>>:
         streaming : Bool <- isStreaming(session)
         compacting : Bool <- isCompacting(session)
-        Bool.pick(Unit -> IO(Result<&2, &2, String, Navigation>), streaming || compacting,
-          _ => IO.pure(Result<&2, &2, String, Navigation>, Fail{"Wait for the current response or compaction to finish before navigating the session tree."}),
-          _ => do IO<Result<&2, &2, String, Navigation>>:
-            snapshot : Shared <- R.read(Shared, shared)
-            navigateSnapshot(agent, shared, snapshot, targetId))(Unit{})
+        Bool.pick(Unit -> IO(Result<&2, &2, String, Navigation>), streaming,
+          _ => IO.pure(Result<&2, &2, String, Navigation>, Fail{"Wait for the current response to finish before navigating the session tree."}),
+          _ => Bool.pick(Unit -> IO(Result<&2, &2, String, Navigation>), compacting,
+            _ => IO.pure(Result<&2, &2, String, Navigation>, Fail{"Wait for the current compaction or tree navigation to finish before navigating the session tree."}),
+            _ => do IO<Result<&2, &2, String, Navigation>>:
+              snapshot : Shared <- R.read(Shared, shared)
+              navigateSnapshot(agent, shared, snapshot, targetId))(Unit{}))(Unit{})
 
 def forkText(text: Maybe<&2, String>, parent: Maybe<&2, String>) -> Maybe<&2, Navigation>:
   match text:
@@ -2859,12 +2861,18 @@ def cycleModel(+session: AgentSession, direction: CycleDirection, options: Model
     cycleWithin(session, scope, available, direction, stateModel(current), options)
 
 # upstream setSessionName: record the name and notify.
+# upstream emits sessionManager.getSessionName(): the sanitized name the
+# session info entry recorded (newlines become spaces, trimmed, empty unset).
+def sessionName(state: Shared) -> Maybe<&2, String>:
+  S.getSessionName(Unit, Tools.ToolDetails, V.Value, stateOf(sharedSession(state)))
+
 def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, String, Unit>):
   match session:
     case AgentSession{_, +shared, _, _, _, _, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
         result : Result<&2, &2, String, Unit> <- recorded(shared, target => recordName(target, name))
-        emit(shared, SessionInfoChanged{Some{name}})
+        state : Shared <- R.read(Shared, shared)
+        emit(shared, SessionInfoChanged{sessionName(state)})
         return result
 
 # upstream session.promptTemplates and resourceLoader.getSkills(): the

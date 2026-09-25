@@ -55,7 +55,7 @@
       "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal. Full upstream session and extension integration behavior remains unverified.",
       "source_sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7",
       "port_sha256": {
-        "packages/coding-agent/src/core/agent-session.bend": "167ddfff9785b183fafaa6432b3c36e4b8bb21763fcef9ea5ce9bb31cd86ded6"
+        "packages/coding-agent/src/core/agent-session.bend": "70ecda21181e23785db108c07f4b035166ca8859332fa4d2daa17bd0ae087a41"
       }
     },
     "packages/coding-agent/src/core/session-manager.ts": {
@@ -145,7 +145,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "fe23d6e6bed96fead06b1431b07a2ef70a0e3ce7296effb9ab8c457660f16810",
         "packages/coding-agent/src/modes/interactive/commands.bend": "8449a234b3cc969830d79b4462042968060562ee619a8b4e3c7ff2dba814265a",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "14557c415d7d4b0dd3c2d6921ce0f3dbd7b1717f23db27fdd8657b1e3d5eb547",
-        "packages/coding-agent/src/main.bend": "9c50fcc1708bc7fdaddd40a8ed3d82d0ec044968b35f1dd1e7fba6f57587068b"
+        "packages/coding-agent/src/main.bend": "9168814925d18f09c6981d24750eb64bd523792653231fae98895288701092c3"
       }
     },
     "packages/tui/src/editor-component.ts": {
@@ -365,6 +365,22 @@
       "source_sha256": "37608848ca7b72707437aed9627a612eadf570c57a54b1c86972c3532918298c",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "0c737271d450ee75f0801a4ad03168b129dad23650ceae8cf63f239e51122a05"
+      }
+    },
+    "packages/coding-agent/src/cli/initial-message.ts": {
+      "state": "ported",
+      "note": "buildInitialMessage: stdin content (when present), non-empty @file text and the first CLI message join into the initial prompt; the remaining messages are returned instead of shifted off parsed.messages. main.bend passes its result to print and interactive startup. tests/initial-message.bend ports initial-message.test.ts.",
+      "source_sha256": "b9df15ffa8769bf419c411cd152c8b807dd0bc2997b6ed3638c2f02376a9b43f",
+      "port_sha256": {
+        "packages/coding-agent/src/cli/initial-message.bend": "41596d9ca9991e0f70bd3296b4305d8228d6a3410e814ea65b86eac9a4d14cd3"
+      }
+    },
+    "packages/coding-agent/src/core/settings-diagnostics.ts": {
+      "state": "ported",
+      "note": "collectSettingsDiagnostics drains the manager's load errors into warnings with the file path, or the scope when storage has none, and returns the drained manager; deduplicateDiagnostics keeps the first of each type and message. AgentSessionRuntimeDiagnostic (agent-session-services.ts) lives here with `type` renamed `kind`. Error messages are the port's typed settings errors rendered as text. main.bend reports startup settings diagnostics through them. tests/settings-diagnostics.bend ports settings-diagnostics.test.ts.",
+      "source_sha256": "8ef3554ff841468a2493d9bab2754aa7a305471ea5754e54efccc363fe0dd0e1",
+      "port_sha256": {
+        "packages/coding-agent/src/core/settings-diagnostics.bend": "405a62a513984a20e20f45366bcd966dc78090f082ca51e3ab31b59948a8e56c"
       }
     }
   }

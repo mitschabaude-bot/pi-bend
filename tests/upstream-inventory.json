@@ -2352,9 +2352,13 @@
     },
     {
       "source": "packages/coding-agent/test/initial-message.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "8b95eb212ced64c20423f7dd5ffa9a972652f6d5ab1abb205a424cff2e17b356"
+      "status": "ported",
+      "ports": [
+        "tests/initial-message.bend",
+        "packages/coding-agent/src/cli/initial-message.bend"
+      ],
+      "sha256": "8b95eb212ced64c20423f7dd5ffa9a972652f6d5ab1abb205a424cff2e17b356",
+      "notes": "All three cases on buildInitialMessage (cli/initial-message.bend, moved out of main.bend to its upstream module); the remaining messages are returned instead of shifted off parsed.messages. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/input-transform-streaming-example.test.ts",
@@ -2955,9 +2959,13 @@
     },
     {
       "source": "packages/coding-agent/test/settings-diagnostics.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9917a7f5cd35ac5c42fc7277920c1d5ea3f706f29593a4aa1ab9e80d7ce95d9e"
+      "status": "ported",
+      "ports": [
+        "tests/settings-diagnostics.bend",
+        "packages/coding-agent/src/core/settings-diagnostics.bend"
+      ],
+      "sha256": "9917a7f5cd35ac5c42fc7277920c1d5ea3f706f29593a4aa1ab9e80d7ce95d9e",
+      "notes": "All three cases on core/settings-diagnostics.bend (moved out of main.bend to its upstream module): a malformed settings file gives one warning naming the file, storage without paths names the scope ('Invalid global settings: backend failed'), and deduplication keeps the first of each type and message. The diagnostic's `type` field is `kind`. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/settings-manager-bug.test.ts",
@@ -3330,7 +3338,7 @@
         "tests/models-json.bend"
       ],
       "sha256": "0ffc9a48b0f980339bd8748d7064ea2e832e7a817441de29f68ad94695ac7149",
-      "notes": "Registry half: a models.json provider with apiKey CUSTOM_API_KEY and header Authorization: BEARER, with both names set in the environment, resolves the literal key and header (differential fixture against upstream's ModelRuntime plus the literal auth). Pending: the startup-migration half, since runMigrations (migrations.ts) is not ported."
+      "notes": "Registry half: a models.json provider with apiKey CUSTOM_API_KEY and header Authorization: BEARER, with both names set in the environment, resolves the literal key and header (differential fixture against upstream's ModelRuntime plus the literal auth; Bun and native four threads). Pending: the startup-migration half, since runMigrations (migrations.ts) is not ported."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5724-sigterm-signal-exit.test.ts",
@@ -3352,9 +3360,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5996-session-name-newlines.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2d95a395a3ef2bbe1847908b0066dd3745ef691685e07b29bf6520f3ff8a65a4"
+      "status": "partial",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend"
+      ],
+      "sha256": "2d95a395a3ef2bbe1847908b0066dd3745ef691685e07b29bf6520f3ff8a65a4",
+      "notes": "'filters newlines when AgentSession.setSessionName is called' passes: the session name and the session_info_changed event are 'hello world again'. Pending: the extension case (pi.setSessionName), which the native extension API does not expose yet. Bun and native (tests/regressions.bend, 1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5998-blocked-tool-terminate.test.ts",
@@ -3754,9 +3766,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/tree-during-streaming.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "1b37324e37da5a293e598ff1912e5e56b3e30212cf87afe0c351db04c75e4023"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "1b37324e37da5a293e598ff1912e5e56b3e30212cf87afe0c351db04c75e4023",
+      "notes": "Navigation while the response is held at the provider fails with upstream's message and leaves the active leaf unchanged; the prompt then completes. The request is held at a gate instead of navigating from inside the response factory. Bun and native (tests/regressions.bend, 1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/syntax-highlight.test.ts",
