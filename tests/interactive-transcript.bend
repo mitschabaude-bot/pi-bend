@@ -10,7 +10,7 @@ import ../packages/coding-agent/src/modes/interactive/theme/color.bend as Color
 import ../packages/coding-agent/src/modes/interactive/theme/markdown-theme.bend as Styles
 import ../packages/coding-agent/src/utils/syntax-highlight.bend as SyntaxHighlight
 import ../packages/runtime/src/schema-value.bend as Value
-import ../packages/runtime/src/ref.bend as Ref
+import ../packages/runtime/src/serial-resource.bend as Serial
 import ../packages/tui/src/component.bend as Component
 import ../packages/tui/src/components/markdown.bend as Markdown
 import ../packages/tui/src/utils.bend as Utils
@@ -30,6 +30,8 @@ def thinking(text: String) -> Ai.AssistantMessage<Value.Value,Value.Value>:
   Ai.AssistantMessage{Ai.AssistantThinking{Ai.ThinkingContent{text,None{},None{}}} <> Ai.AssistantText{Ai.TextContent{"visible answer",None{}}} <> Nil{},"openai-responses","openai","gpt-4o-mini",None{},None{},None{},None{},Ai.Usage{F64{0,0},F64{0,0},F64{0,0},F64{0,0},None{},None{},F64{0,0},Ai.UsageCost{F64{0,0},F64{0,0},F64{0,0},F64{0,0},F64{0,0}}},Ai.Stop{},None{},None{},None{},None{},F64{0,0}}
 def withTools(text: String) -> Ai.AssistantMessage<Value.Value,Value.Value>:
   Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{text,None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"call-1","sample_tool",Value.Null{},None{},None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"call-2","second_tool",Value.Null{},None{},None{}}} <> Nil{},"openai-responses","openai","gpt-4o-mini",None{},None{},None{},None{},Ai.Usage{F64{0,0},F64{0,0},F64{0,0},F64{0,0},None{},None{},F64{0,0},Ai.UsageCost{F64{0,0},F64{0,0},F64{0,0},F64{0,0},F64{0,0}}},Ai.Stop{},None{},None{},None{},None{},F64{0,0}}
+def withBash(text: String) -> Ai.AssistantMessage<Value.Value,Value.Value>:
+  Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{text,None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"thinking-bash","bash",Value.Null{},None{},None{}}} <> Nil{},"openai-responses","openai","gpt-4o-mini",None{},None{},None{},None{},Ai.Usage{F64{0,0},F64{0,0},F64{0,0},F64{0,0},None{},None{},F64{0,0},Ai.UsageCost{F64{0,0},F64{0,0},F64{0,0},F64{0,0},F64{0,0}}},Ai.Stop{},None{},None{},None{},None{},F64{0,0}}
 def resumedAssistant() -> Agent.AgentMessage<Value.Value,Tools.ToolDetails,Unit>:
   Agent.LlmMessage{Ai.Assistant{Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{"resumed turn",None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"resume-1","first_saved",Value.Null{},None{},None{}}} <> Ai.AssistantToolCall{Ai.ToolCall{"resume-2","second_saved",Value.Null{},None{},None{}}} <> Nil{},"openai-responses","openai","gpt-4o-mini",None{},None{},None{},None{},Ai.Usage{F64{0,0},F64{0,0},F64{0,0},F64{0,0},None{},None{},F64{0,0},Ai.UsageCost{F64{0,0},F64{0,0},F64{0,0},F64{0,0},F64{0,0}}},Ai.Stop{},None{},None{},None{},None{},F64{0,0}}}}
 def savedResult(id: String,name: String,text: String,error: Bool) -> Agent.AgentMessage<Value.Value,Tools.ToolDetails,Unit>:
@@ -51,14 +53,12 @@ def rowContaining(rows: List<&2,String>,+needle: String) -> String:
   match rows:
     case Nil{}: ""
     case +row <> rest: Bool.pick(String,contains(Utils.stripTerminalSequences(row),needle),Utils.stripTerminalSequences(row),rowContaining(rest,needle))
-def childCount(value: Component.Container) -> Nat:
-  match value: case Component.Container{children,_}: List.length(&2,Component.Component,children)
+def countDocument(document: View.Document) -> IO(View.Document & Nat):
+  match document:
+    case View.Document{+children}: IO.pure(View.Document & Nat,(View.Document{children},List.length(&2,Component.Component,children)))
 def mountedCount(handle: View.Handle) -> IO(Nat):
   match handle:
-    case View.Handle{document,_}:
-      do IO<Nat>:
-        value : Component.Container <- Ref.read(Component.Container,document)
-        return childCount(value)
+    case View.Handle{document,_,_}: Serial.run(View.Document,Nat,document,countDocument)
 def lineOf(rows: List<&2,String>,+needle: String,+index: Nat) -> Maybe<&2,Nat>:
   match rows:
     case Nil{}: None{}
@@ -172,6 +172,16 @@ def runEvents(pair: Transcript.Owner & Transcript.Handle,view: View.View,+docume
         Transcript.setHideThinking(handle,False{})
         +thoughtShown : List<&2,String> <- Component.render(document,80n)
         check(contains(clean(thoughtShown),"private reasoning") && contains(clean(thoughtShown),"future reasoning"),"toggle did not restore mounted thinking")
+        bashCall : Bool <- Transcript.accept(Value.Value,Unit,handle,started(withBash("running bash")))
+        bashPartial : Bool <- Transcript.accept(Value.Value,Unit,handle,Agent.ToolExecutionUpdate{"thinking-bash","bash",Value.Null{},toolResult("first output")})
+        +beforeToggle : List<&2,String> <- Component.render(document,80n)
+        check(bashCall && bashPartial && contains(clean(beforeToggle),"first output"),"partial bash output did not render")
+        Transcript.setHideThinking(handle,True{})
+        +afterToggle : List<&2,String> <- Component.render(document,80n)
+        check(contains(clean(afterToggle),"first output"),"thinking toggle lost partial bash output")
+        bashEnd : Bool <- Transcript.accept(Value.Value,Unit,handle,Agent.ToolExecutionEnd{"thinking-bash","bash",toolResult("final output"),False{}})
+        +afterBash : List<&2,String> <- Component.render(document,80n)
+        check(bashEnd && contains(clean(afterBash),"final output") && Bool.not(contains(clean(afterBash),"first output")),"thinking toggle broke live bash completion")
         beforeStatus : Nat <- mountedCount(viewHandle)
         Transcript.status(handle,"Tool output: expanded")
         +firstStatus : List<&2,String> <- Component.render(document,80n)

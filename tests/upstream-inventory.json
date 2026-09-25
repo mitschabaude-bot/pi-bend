@@ -3674,9 +3674,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8611-thinking-toggle-pending-bash-output.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f06dee724fcf6e1e909ad72e7db0a99fe0bc165d64a41e9e6144ce734009b283"
+      "status": "partial",
+      "ports": [
+        "tests/interactive-transcript.bend",
+        "tests/interactive_thinking_run_check.py"
+      ],
+      "sha256": "f06dee724fcf6e1e909ad72e7db0a99fe0bc165d64a41e9e6144ce734009b283",
+      "notes": "Native transcript covers a live bash tool's partial output surviving a thinking-visibility change and still accepting its final result; interactive_thinking_run_check.py covers Ctrl+T and settings persistence. The two checks do not yet run Ctrl+T while the actual tool is pending in one terminal scenario."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8724-in-memory-fork-active-tool.test.ts",
