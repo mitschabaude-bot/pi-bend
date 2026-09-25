@@ -1,0 +1,12 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -929,7 +929,8 @@
+ 
+ function memo_gc(): void {
+   PROBES.length = 1; // Keep DUMMY; opened binders belong to this definition.
+-  [OPENS, USES, FOLDS, SPINES, CONSTS, TELES, TAILS, LAYS, CLOSED_LAYS].forEach((m) => m.clear());
++  // TAILS and CLOSED_LAYS depend only on the book: kept across defs.
++  [OPENS, USES, FOLDS, SPINES, CONSTS, TELES, LAYS].forEach((m) => m.clear());
+ }
+ 
+ // Probe
