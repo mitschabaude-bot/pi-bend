@@ -340,10 +340,14 @@ def snippets(names: List<&2, Tools.ToolName>, +record: R.Record<String>) -> R.Re
     case Nil{}: record
     case +name <> rest: snippets(rest, R.set(String, record, Tools.toolName(name), Tools.promptSnippet(name)))
 
+# The options the built-in tools are created with; the prompt guidelines
+# follow them as upstream's tool definitions do.
+def toolsOptions() -> Tools.ToolsOptions: Tools.defaultOptions()
+
 def guidelines(names: List<&2, Tools.ToolName>, +record: R.Record<List<&2, String>>) -> R.Record<List<&2, String>>:
   match names:
     case Nil{}: record
-    case +name <> rest: guidelines(rest, R.set(List<&2, String>, record, Tools.toolName(name), Tools.promptGuidelines(name)))
+    case +name <> rest: guidelines(rest, R.set(List<&2, String>, record, Tools.toolName(name), Tools.definitionGuidelines(name, toolsOptions())))
 
 def toolNames(names: List<&2, Tools.ToolName>) -> List<&2, String>:
   match names:
@@ -846,7 +850,7 @@ def createToolList(names: List<&2, Tools.ToolName>, paths: Paths.Environment, cw
   match borrowed:
     case Tuple{queue, handle}:
       do IO<Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>)>:
-        owners : List<&1, Tools.ToolOwner> <- Tools.createTools(names, environment(paths, cwd, agentDir, packageDir, fetch, handle, context), Tools.defaultOptions())
+        owners : List<&1, Tools.ToolOwner> <- Tools.createTools(names, environment(paths, cwd, agentDir, packageDir, fetch, handle, context), toolsOptions())
         return (queue, Tools.borrowTools(owners))
 
 def loadoutFrom(prepared: Prepared, tools: List<&2, Tools.Tool()>, extensions: ExtensionRunner.ExtensionRunner, source: LoadoutSource) -> Loadout:

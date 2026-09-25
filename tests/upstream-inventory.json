@@ -3904,7 +3904,7 @@
         "tests/tool-prompt-contributions.bend"
       ],
       "sha256": "eff9fdb9335cdcac14d26b90b3caf353fc7cb4473d096e67c414555d85984403",
-      "notes": "The seven ported tools' rows of 'keeps the %s tool definition aligned with its contribution': the port has one source for a tool's prompt snippet and guidelines (Tools.promptSnippet/promptGuidelines, read by the system prompt builder), compared with upstream's *ToolSystemPromptContribution constants imported from the pinned pi-mono. Pending: the powershell row (tool not ported) and 'keeps %s session-environment guidance conditional' (gap: the port's guidelines ignore BashToolOptions.exposeSessionEnvironment). bun test."
+      "notes": "The seven ported tools' rows of 'keeps the %s tool definition aligned with its contribution' (Tools.promptSnippet and Tools.definitionGuidelines, which the system prompt builder reads, against upstream's *ToolSystemPromptContribution constants from the pinned pi-mono) and the bash row of 'keeps %s session-environment guidance conditional' (the bash definition with exposeSessionEnvironment false has no guidelines; upstream's undefined is an empty list). Pending: the powershell rows (tool not ported). The runtime creates its tools with default options (agent-runtime toolsOptions); there is no caller-supplied tool option yet. bun test."
     },
     {
       "source": "packages/coding-agent/test/tools-manager.test.ts",

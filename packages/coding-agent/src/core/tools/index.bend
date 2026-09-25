@@ -249,6 +249,20 @@ type ToolsOptions is Data:
 
 def defaultOptions() -> ToolsOptions: ToolsOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}}
 
+# upstream createBashToolDefinition(cwd, {exposeSessionEnvironment}): the
+# definition's guidelines are the contribution's, except that bash without the
+# session environment has none (the guideline points at PI_* variables).
+def exposesSessionEnvironment(options: Maybe<&2, Bash.BashToolOptions>) -> Bool:
+  match options:
+    case Some{Bash.BashToolOptions{_, _, _, Some{expose}, _}}: expose
+    case _: True{}
+
+def definitionGuidelines(name: ToolName, options: ToolsOptions) -> List<&2, String>:
+  match name options:
+    case BashTool{} ToolsOptions{_, bash, _, _, _, _, _}: Bool.pick(List<&2, String>, exposesSessionEnvironment(bash), promptGuidelines(BashTool{}), Nil{})
+    case other _: promptGuidelines(other)
+
+
 # What every tool constructor needs besides its own options: the resolved
 # path environment, the working directory, the manager of pi's bin directory
 # (fd, rg) and the shared file-mutation queue.
