@@ -1269,7 +1269,7 @@ def candidate(~Environment: Data, ~Left: Data, ~Right: Data, ~Failure: Data, ~Va
 # Search advances only after both children have returned and been joined.
 # Callbacks own cleanup; a shared abort/deadline must make each one finish.
 def run(~Environment: Data, ~Left: Data, ~Right: Data, ~Failure: Data, ~Value: Data, ~left: Environment -> SearchRunRequest -> IO(Left), ~right: Environment -> SearchRunRequest -> IO(Right), ~merge: Left -> Right -> Outcome<Failure, Value>, environment: Environment, cursor: SearchCursor) -> IO(Result<&2, &2, SearchRunError<Failure>, Value>):
-  runSearch(~Environment, ~Failure, ~Value, ~searchCandidate(~Environment, ~Left, ~Right, ~Failure, ~Value, ~left, ~right, ~merge), environment, cursor)
+  runSearch(~Environment, ~Failure, ~Value, ~candidate(~Environment, ~Left, ~Right, ~Failure, ~Value, ~left, ~right, ~merge), environment, cursor)
 
 type Family is Data:
   IPv4{}
