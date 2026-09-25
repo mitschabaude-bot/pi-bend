@@ -72,6 +72,13 @@ def stream_section(index):
             f"- first point of section {index}\n- second point, *emphasised*\n- third point\n\n"
             f"```python\ndef step_{index}(values):\n    return [value * {index} for value in values if value > 0]\n```\n\n")
 STREAM_ANSWER = "STREAM-START\n\n" + "".join(stream_section(index) for index in range(1, 31)) + "END-OF-STREAM"
+SEARCH_STEPS = [("wait", READY, "startup"), ("wait", "Warning: fd not found", "ready"),
+                ("keys", "hello"), ("key", "Enter"), ("wait", "needle two", "answer"),
+                ("settle", 0.3), ("keys", "\x1b[102;6u"), ("settle", 0.2),
+                ("snap", "open"), ("keys", "needle"), ("settle", 0.2),
+                ("snap", "matches"), ("key", "Enter"), ("settle", 0.2),
+                ("snap", "next"), ("key", "Escape"), ("settle", 0.2),
+                ("snap", "closed")]
 
 SCENARIOS = [
     {
@@ -80,6 +87,20 @@ SCENARIOS = [
         "files": RESOURCES,
         "steps": [("wait", READY, "startup"), ("settle", 0.5), ("snap", "startup"),
                   ("keys", "hello fullscreen"), ("settle", 0.3), ("snap", "typed")],
+    },
+    {
+        "name": "fullscreen-search",
+        "args": MODEL + ["--tui-mode", "fullscreen"],
+        "files": {**RESOURCES, "home/.pi/agent/settings.json": '{"lastChangelogVersion":"0.87.1"}'},
+        "turns": [{"text": "needle one\nmiddle\nneedle two\nend"}],
+        "steps": SEARCH_STEPS,
+    },
+    {
+        "name": "fullscreen-search-light",
+        "args": MODEL + ["--tui-mode", "fullscreen"],
+        "files": {**RESOURCES, "home/.pi/agent/settings.json": '{"theme":"light","lastChangelogVersion":"0.87.1"}'},
+        "turns": [{"text": "needle one\nmiddle\nneedle two\nend"}],
+        "steps": SEARCH_STEPS,
     },
     {
         "name": "fullscreen-settings",

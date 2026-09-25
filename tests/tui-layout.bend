@@ -20,7 +20,7 @@ def top(root: Maybe<&2,N.LayoutNode>) -> Nat:
     case _: 0n
 def report(label: String,ready: B.PreparedFrame) -> IO(Unit):
   match ready:
-    case B.PreparedFrame{state,_,lines,_}:
+    case B.PreparedFrame{state,_,lines,_,_}:
       IO.print(label ++ ":" ++ Nat.show(top(B.layoutRoot(state))) ++ ":[" ++ clean(lines) ++ "]")
 def success(value: B.ResultOf(B.PreparedFrame)) -> IO(B.PreparedFrame):
   match value:

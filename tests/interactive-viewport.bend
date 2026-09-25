@@ -24,7 +24,7 @@ def clean(rows: List<&2,String>) -> List<&2,String>:
     case value <> rest: Utils.trimEnd(Utils.stripTerminalSequences(value)) <> clean(rest)
 def frame(value: Tui.ResultOf(Tui.PreparedFrame)) -> IO(String):
   match value:
-    case Done{Tui.PreparedFrame{_,_,rows,_}}: IO.pure(String,String.join(clean(rows),"|"))
+    case Done{Tui.PreparedFrame{_,_,rows,_,_}}: IO.pure(String,String.join(clean(rows),"|"))
     case Fail{_}: IO.die(String,1,"viewport render failed")
 def same(+actual: String,expected: String) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit),String.eq(actual,expected),_ => IO.pure(Unit,Unit{}),_ => IO.die(Unit,1,"viewport mismatch: " ++ actual))(Unit{})

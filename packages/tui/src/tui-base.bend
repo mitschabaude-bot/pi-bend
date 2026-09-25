@@ -236,7 +236,26 @@ def scheduleOf(tui: TuiBase) -> RenderSchedule:
 def scheduleRender(+tui: TuiBase,event: RenderEvent,now: Nat) -> TuiBase & List<&2,RenderEffect>:
   scheduledTui(tui,schedule(event,scheduleOf(tui),now))
 type PreparedFrame is Data:
-  PreparedFrame{tui: TuiBase,frame: Frame,lines: List<&2,String>,cursor: Maybe<&2,T.CursorPosition>}
+  PreparedFrame{tui: TuiBase,frame: Frame,lines: List<&2,String>,cursor: Maybe<&2,T.CursorPosition>,layout: Maybe<&2,Layout.LayoutFrame>}
+type PrimaryContent is Data: PrimaryContent{lines: List<&2,String>,top: Nat,rows: Nat,rect: Layout.LayoutRect,clip: Layout.LayoutRect}
+@unsafe def primaryAt(boxes: List<&2,Layout.LayoutBox>,+wanted: C.ComponentId,+top: Nat,+rows: Nat) -> Maybe<&2,PrimaryContent>:
+  match boxes:
+    case Nil{}: None{}
+    case Layout.LayoutBox{Some{component},rect,clip,children,Some{lines},_,_} <> rest:
+      Bool.pick(Unit -> Maybe<&2,PrimaryContent>,C.same(component,wanted),
+        _ => Some{PrimaryContent{lines,top,rows,rect,clip}},
+        _ => primaryAt(List.append(&2,Layout.LayoutBox,children,rest),wanted,top,rows))(Unit{})
+    case Layout.LayoutBox{_,_,_,children,_,_,_} <> rest:
+      primaryAt(List.append(&2,Layout.LayoutBox,children,rest),wanted,top,rows)
+def primaryFrom(layout: Maybe<&2,Layout.LayoutFrame>,view: Maybe<&2,N.Primary>) -> Maybe<&2,PrimaryContent>:
+  match layout view:
+    case Some{Layout.LayoutFrame{root,_,_,_}} Some{N.Primary{component,top,rows}}:
+      primaryAt(root <> Nil{},component,top,rows)
+    case _ _: None{}
+def primaryContent(frame: PreparedFrame) -> Maybe<&2,PrimaryContent>:
+  match frame:
+    case PreparedFrame{TuiBase{_,_,_,_,_,_,_,Some{node}},_,_,_,layout}: primaryFrom(layout,N.primaryInfo(node))
+    case _: None{}
 type OverlayChange is Data:
   OverlayChange{tui: TuiBase,handle: O.OverlayHandle,focusChanges: List<&2,O.FocusChange>,hideCursor: Bool,render: Bool}
 type ScrollChange is Data: ScrollChange{tui: TuiBase,unused: T.Offset,requestRender: Bool}
@@ -358,31 +377,31 @@ def focusedEntry(focus: Maybe<&2,C.ComponentId>,entry: Maybe<&2,O.Entry>) -> Boo
 def isOverlayFocused(base: TuiBase,handle: O.OverlayHandle) -> Bool:
   match base:
     case TuiBase{_,O.State{entries,focus,_,_,_},_,_,_,_,_,_}: focusedEntry(focus,O.find(entries,handle))
-def cursorPrepared(base: TuiBase,container: C.Container,bounds: List<&2,OverlayBounds>,result: T.CursorFrame) -> PreparedFrame:
+def cursorPrepared(base: TuiBase,container: C.Container,bounds: List<&2,OverlayBounds>,result: T.CursorFrame,layoutFrame: Maybe<&2,Layout.LayoutFrame>) -> PreparedFrame:
   match base result:
     case TuiBase{_,focus,bindings,displayed,scheduler,show,clear,layout} T.CursorFrame{lines,cursor}:
       +lines = T.applyLineResets(lines)
-      PreparedFrame{TuiBase{container,focus,bindings,displayed,scheduler,show,clear,layout},Frame{lines,bounds},lines,cursor}
-def prepared(base: TuiBase,container: C.Container,frame: Frame,height: Nat) -> PreparedFrame:
+      PreparedFrame{TuiBase{container,focus,bindings,displayed,scheduler,show,clear,layout},Frame{lines,bounds},lines,cursor,layoutFrame}
+def prepared(base: TuiBase,container: C.Container,frame: Frame,height: Nat,layoutFrame: Maybe<&2,Layout.LayoutFrame>) -> PreparedFrame:
   match frame:
-    case Frame{lines,bounds}: cursorPrepared(base,container,bounds,T.extractCursorPosition(lines,height))
-def preparedResult(base: TuiBase,container: C.Container,result: ResultOf(Frame),height: Nat) -> ResultOf(PreparedFrame):
+    case Frame{lines,bounds}: cursorPrepared(base,container,bounds,T.extractCursorPosition(lines,height),layoutFrame)
+def preparedResult(base: TuiBase,container: C.Container,result: ResultOf(Frame),height: Nat,layoutFrame: Maybe<&2,Layout.LayoutFrame>) -> ResultOf(PreparedFrame):
   match result:
     case Fail{error}: Fail{error}
-    case Done{frame}: Done{prepared(base,container,frame,height)}
-def composeRoot(+base: TuiBase,container: C.Container,lines: List<&2,String>,width: Nat,+height: Nat) -> IO(ResultOf(PreparedFrame)):
+    case Done{frame}: Done{prepared(base,container,frame,height,layoutFrame)}
+def composeRoot(+base: TuiBase,container: C.Container,lines: List<&2,String>,width: Nat,+height: Nat,layoutFrame: Maybe<&2,Layout.LayoutFrame>) -> IO(ResultOf(PreparedFrame)):
   match base:
     case TuiBase{_,focus,+bindings,_,_,_,_,_}:
       do IO<ResultOf(PreparedFrame)>:
         result : ResultOf(Frame) <- compositeOverlays(focus,bindings,lines,width,height)
-        return preparedResult(base,container,result,height)
+        return preparedResult(base,container,result,height,layoutFrame)
 def composedRoot(base: TuiBase,result: C.Container & List<&2,String>,width: Nat,height: Nat) -> IO(ResultOf(PreparedFrame)):
   match result:
-    case (container,lines): composeRoot(base,container,lines,width,height)
+    case (container,lines): composeRoot(base,container,lines,width,height,None{})
 def composedLayout(base: TuiBase,root: C.Container,tree: Tree.TreeFrame,width: Nat,height: Nat) -> IO(ResultOf(PreparedFrame)):
   match tree:
-    case Tree.TreeFrame{node,Layout.LayoutFrame{_,_,_,lines}}:
-      composeRoot(setLayoutRoot(base,Some{node}),root,lines,width,height)
+    case Tree.TreeFrame{node,Layout.LayoutFrame{box,frameWidth,frameHeight,+lines}}:
+      composeRoot(setLayoutRoot(base,Some{node}),root,lines,width,height,Some{Layout.LayoutFrame{box,frameWidth,frameHeight,lines}})
 def renderRoot(+base: TuiBase,+width: Nat,+height: Nat) -> IO(ResultOf(PreparedFrame)):
   match base:
     case TuiBase{root,_,_,_,_,_,_,layout}:
@@ -412,7 +431,7 @@ def renderDocument(base: TuiBase,width: Nat) -> IO(TuiBase & List<&2,String>):
 # Publish displayed hit bounds only after the terminal accepted the prepared frame.
 def commitFrame(value: PreparedFrame) -> TuiBase:
   match value:
-    case PreparedFrame{TuiBase{root,focus,bindings,_,scheduler,show,clear,layout},frame,_,_}:
+    case PreparedFrame{TuiBase{root,focus,bindings,_,scheduler,show,clear,layout},frame,_,_,_}:
       TuiBase{root,focus,bindings,frame,scheduler,show,clear,layout}
 
 # Component registries include nested controls supplied by the application.

@@ -29,6 +29,7 @@ import ../../../../tui/src/keys.bend as Keys
 import ../../../../tui/src/tui-base.bend as Tui
 import ../../../../tui/src/tui-main-screen.bend as Screen
 import ../../../../tui/src/tui-alt-screen.bend as AltScreen
+import ../../../../tui/src/alt-screen-search.bend as AltSearch
 import ../../../../tui/src/tui-process.bend as Process
 import ../../../../tui/src/terminal.bend as Terminal
 import ../../../../tui/src/utils.bend as Utils
@@ -2196,19 +2197,23 @@ def indicatorText(style: IndicatorStyle,_: Unit) -> IO(String):
       do IO<String>:
         current : Theme.Theme <- Ref.read(Theme.Theme,theme)
         return styledIndicator(current,bindings)
-def screenForMode(mode: Settings.TuiMode,indicator: Callback.Callback<Unit,String>,bindings: Ref.Ref<Keybindings.KeybindingsManager>) -> Process.ScreenState:
+def searchPalette(theme: Ref.Ref<Theme.Theme>,_: Unit) -> IO(AltSearch.Styles):
+  do IO<AltSearch.Styles>:
+    +current : Theme.Theme <- Ref.read(Theme.Theme,theme)
+    return AltSearch.Styles{Theme.foregroundCode(current,"searchMatchText"),Theme.backgroundCode(current,"searchMatchBg")}
+def screenForMode(mode: Settings.TuiMode,indicator: Callback.Callback<Unit,String>,bindings: Ref.Ref<Keybindings.KeybindingsManager>,styles: Callback.Callback<Unit,AltSearch.Styles>) -> Process.ScreenState:
   match mode:
     case Settings.Regular{}: Process.Main{Screen.initial()}
-    case Settings.Fullscreen{}: Process.Fullscreen{AltScreen.initial(indicator,bindings)}
+    case Settings.Fullscreen{}: Process.Fullscreen{AltScreen.initial(indicator,bindings,styles)}
 def tuiModeOverride(binding: Maybe<&2,Binding>) -> Maybe<&2,Settings.TuiMode>:
   match binding:
     case None{}: None{}
     case Some{Binding{_,_,_,_,_,_,_,_,_,_,mode}}: mode
-def configuredScreen(session: Ref.Ref<Session.AgentSession>,override: Maybe<&2,Settings.TuiMode>,indicator: Callback.Callback<Unit,String>,bindings: Ref.Ref<Keybindings.KeybindingsManager>) -> IO(Process.ScreenState):
+def configuredScreen(session: Ref.Ref<Session.AgentSession>,override: Maybe<&2,Settings.TuiMode>,indicator: Callback.Callback<Unit,String>,bindings: Ref.Ref<Keybindings.KeybindingsManager>,styles: Callback.Callback<Unit,AltSearch.Styles>) -> IO(Process.ScreenState):
   do IO<Process.ScreenState>:
     live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
     +settings : Settings.SettingsManager <- Session.getSettings(live)
-    return screenForMode(Maybe.default(&2,Settings.TuiMode,override,Settings.getTuiMode(settings)),indicator,bindings)
+    return screenForMode(Maybe.default(&2,Settings.TuiMode,override,Settings.getTuiMode(settings)),indicator,bindings,styles)
 def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),document: Component.Component,editorComponent: Component.Component,+foot: FooterOwner,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,+screen: Process.ScreenState,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
   match mounted:
     case (view,_,Fail{cause}): IO.pure(View.View & Result<&2,&2,Error,Unit>,(view,Fail{Layout{cause}}))
@@ -2239,11 +2244,13 @@ def processEditorBorrowed(borrowed: View.View & Component.Component & View.Handl
     case (view,document,_):
       do IO<View.View & Result<&2,&2,Error,Unit>>:
         +indicator : Callback.Callback<Unit,String> <- Callback.create(~IndicatorStyle,~Unit,~String,~indicatorText,IndicatorStyle{contextTheme(context),contextBindings(context)})
+        +searchStyles : Callback.Callback<Unit,AltSearch.Styles> <- Callback.create(~Ref.Ref<Theme.Theme>,~Unit,~AltSearch.Styles,~searchPalette,contextTheme(context))
         +viewportBindings : Ref.Ref<Keybindings.KeybindingsManager> <- Ref.new(Keybindings.KeybindingsManager,contextBindings(context))
-        +screen : Process.ScreenState <- configuredScreen(contextSession(context),tuiModeOverride(contextBinding(context)),indicator,viewportBindings)
+        +screen : Process.ScreenState <- configuredScreen(contextSession(context),tuiModeOverride(contextBinding(context)),indicator,viewportBindings,searchStyles)
         mounted : View.View & View.Handle & Tui.ResultOf(Tui.TuiBase) <- View.mountFor(view,editorComponent,footerComponent(foot),fullscreenScreen(screen))
         outcome : View.View & Result<&2,&2,Error,Unit> <- processMounted(mounted,document,editorComponent,foot,stopped,redraw,queue,initial,screen,context)
         oldBindings : Keybindings.KeybindingsManager <- Ref.dispose(Keybindings.KeybindingsManager,viewportBindings)
+        Callback.dispose(Unit,AltSearch.Styles,searchStyles)
         Callback.dispose(Unit,String,indicator)
         return outcome
 def processEditor(view: View.View,editorComponent: Component.Component,foot: FooterOwner,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):

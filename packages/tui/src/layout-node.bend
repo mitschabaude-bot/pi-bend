@@ -29,7 +29,7 @@ def child(node: LayoutNode,size: Stack.StackEntryOptions,visible: Maybe<&2,Callb
 
 # A viewport can nest inside stacks and inline layouts. Keep its updated
 # immutable node in the tree so the next layout frame retains manual scroll.
-type ScrollMotion is Data: ScrollLines{delta: T.Offset} ScrollPageUp{} ScrollPageDown{} ScrollHalfPageUp{} ScrollHalfPageDown{} ScrollTop{} ScrollBottom{}
+type ScrollMotion is Data: ScrollLines{delta: T.Offset} ScrollPageUp{} ScrollPageDown{} ScrollHalfPageUp{} ScrollHalfPageDown{} ScrollTop{} ScrollBottom{} ScrollRow{row: Nat}
 type ScrollResult is Data: ScrollResult{node: LayoutNode,found: Bool,unused: T.Offset,render: Bool}
 def pageDelta(view: Scroll.ScrollView,up: Bool) -> T.Offset:
   +lines = Nat.max(1n,Scroll.visibleRows(view) - 4n)
@@ -48,6 +48,7 @@ def scrollPrimaryView(+view: Scroll.ScrollView,motion: ScrollMotion,now: Nat) ->
   match motion:
     case ScrollTop{}: jumped(Scroll.scrollToStart(view,now))
     case ScrollBottom{}: jumped(Scroll.scrollToEnd(view,now))
+    case ScrollRow{row}: jumped(Scroll.scrollTo(view,row,True{},now))
     case ScrollLines{delta}: scrolled(Scroll.scrollBy(view,delta,now))
     case ScrollPageUp{}: scrolled(Scroll.scrollBy(view,pageDelta(view,True{}),now))
     case ScrollPageDown{}: scrolled(Scroll.scrollBy(view,pageDelta(view,False{}),now))
@@ -101,4 +102,22 @@ def indicatorRow(node: LayoutNode) -> Maybe<&2,Nat>:
     case HStack{entries,_,_}: indicatorRow(entries)
     case Entry{nested,_,_}: indicatorRow(nested)
     case Children{first,rest}: firstIndicator(indicatorRow(first),indicatorRow(rest))
+    case _: None{}
+type Primary is Data: Primary{component: C.ComponentId,top: Nat,rows: Nat}
+def primary(view: Scroll.ScrollView) -> Maybe<&2,Primary>:
+  match view:
+    case Scroll.ScrollView{component,_,True{},_,_,_,top,_,rows,_,_,_,_,_}: Some{Primary{C.id(component),top,rows}}
+    case _: None{}
+def firstPrimary(first: Maybe<&2,Primary>,rest: Maybe<&2,Primary>) -> Maybe<&2,Primary>:
+  match first:
+    case Some{_}: first
+    case None{}: rest
+def primaryInfo(node: LayoutNode) -> Maybe<&2,Primary>:
+  match node:
+    case ScrollNode{view}: primary(view)
+    case Inline{nested}: primaryInfo(nested)
+    case VStack{entries,_}: primaryInfo(entries)
+    case HStack{entries,_,_}: primaryInfo(entries)
+    case Entry{nested,_,_}: primaryInfo(nested)
+    case Children{first,rest}: firstPrimary(primaryInfo(first),primaryInfo(rest))
     case _: None{}

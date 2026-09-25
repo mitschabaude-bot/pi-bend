@@ -54,10 +54,10 @@ def displayed(value: B.TuiBase) -> String:
     case B.TuiBase{_,_,_,shown,_,_,_,_}: frame(shown)
 def prepared(value: B.PreparedFrame) -> String:
   match value:
-    case B.PreparedFrame{_,shown,_,_}: frame(shown)
+    case B.PreparedFrame{_,shown,_,_,_}: frame(shown)
 def stagedDisplayed(value: B.PreparedFrame) -> String:
   match value:
-    case B.PreparedFrame{tui,_,_,_}: displayed(tui)
+    case B.PreparedFrame{tui,_,_,_,_}: displayed(tui)
 def committed(value: B.PreparedFrame) -> B.TuiBase: B.commitFrame(value)
 def success(value: B.ResultOf(B.PreparedFrame)) -> IO(B.PreparedFrame):
   match value:

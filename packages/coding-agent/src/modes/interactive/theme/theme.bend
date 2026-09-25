@@ -204,6 +204,14 @@ def foreground(theme: Theme,+key: String,text: String) -> Result<&2,&2,Error,Str
 def background(theme: Theme,+key: String,text: String) -> Result<&2,&2,Error,String>:
   match theme:
     case Theme{_,_,_,_,_,codes}: wrapped(Map.get(String,"",codes,key),key,text,"\u{1b}[49m")
+def colorCode(found: Map<&2,String> & String) -> String:
+  match found: case (_,code): code
+def foregroundCode(theme: Theme,key: String) -> String:
+  match theme:
+    case Theme{_,_,_,_,codes,_}: colorCode(Map.get(String,"",codes,key))
+def backgroundCode(theme: Theme,key: String) -> String:
+  match theme:
+    case Theme{_,_,_,_,_,codes}: colorCode(Map.get(String,"",codes,key))
 
 def loaded(result: Result<&2,&2,Error,Theme>) -> Result<&2,&2,LoadError,Theme>:
   match result:

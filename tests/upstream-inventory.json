@@ -4456,9 +4456,13 @@
     },
     {
       "source": "packages/tui/test/tui-alt-screen.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "1c3e5210d61e0bbf322a218fc77efe90469ce741aeb718589ddb4c497089edd7"
+      "status": "partial",
+      "ports": [
+        "tests/tui-alt-search.bend",
+        "tests/parity/scenarios.py"
+      ],
+      "sha256": "1c3e5210d61e0bbf322a218fc77efe90469ce741aeb718589ddb4c497089edd7",
+      "notes": "The search corpus, Unicode column mapping, cache, box rendering and visible highlights have native checks; fullscreen-search exercises keyboard navigation and closing against the upstream terminal. The rest of the fullscreen suite, including mouse navigation and selection, remains open."
     },
     {
       "source": "packages/tui/test/tui-cell-size-input.test.ts",

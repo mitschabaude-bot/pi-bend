@@ -14,6 +14,8 @@ import ./keys.bend as Keys
 import ./tui.bend as T
 import ./tui-main-screen.bend as Screen
 import ./tui-alt-screen.bend as Alt
+import ./alt-screen-search.bend as Search
+import ../../runtime/src/grapheme.bend as Grapheme
 
 # Rendering is a transaction: the owner publishes mouse bounds and the screen
 # retains its new diff state only after every ordered terminal effect succeeds.
@@ -35,10 +37,10 @@ def options(tui: Tui.TuiBase,termux: Bool) -> Screen.Options:
       Screen.Options{termux,clear,Bool.not(List.is_empty(&2,O.Entry,entries)),show,stopped}
 def frame(prepared: Tui.PreparedFrame,width: Nat,height: Nat) -> Screen.Frame:
   match prepared:
-    case Tui.PreparedFrame{_,_,lines,cursor}: Screen.Frame{lines,cursor,width,height}
+    case Tui.PreparedFrame{_,_,lines,cursor,_}: Screen.Frame{lines,cursor,width,height}
 def planned(+prepared: Tui.PreparedFrame,screen: Screen.State,termux: Bool,width: Nat,height: Nat) -> Result<&2,&2,Screen.RenderError,Screen.Plan>:
   match prepared:
-    case Tui.PreparedFrame{+tui,_,_,_}:
+    case Tui.PreparedFrame{+tui,_,_,_,_}:
       Screen.checkedPlan(screen,frame(prepared,width,height),options(tui,termux))
 
 def effect(handle: Terminal.Handle,value: Screen.Effect) -> IO(Result<&2,&2,Terminal.Error,Unit>):
@@ -83,13 +85,47 @@ def indicatorText(screen: Alt.State,row: Maybe<&2,Nat>) -> IO(String):
   match row:
     case None{}: IO.pure(String,"")
     case Some{_}: Callback.call(Unit,String,Alt.indicator(screen),Unit{})
-def executeAlt(+prepared: Tui.PreparedFrame,old: Session,+screen: Alt.State,handle: Terminal.Handle,width: Nat,height: Nat) -> IO(Draw):
+def appliedRefresh(screen: Alt.State,result: Search.Refreshed) -> Alt.State & Maybe<&2,Nat>:
+  match result:
+    case Search.Refreshed{next,target}: (Alt.withSearch(screen,Some{next}),target)
+def refreshedActive(screen: Alt.State,active: Maybe<&2,Search.Session>,lines: List<&2,String>,top: Nat,rows: Nat) -> Alt.State & Maybe<&2,Nat>:
+  match active:
+    case None{}: (screen,None{})
+    case Some{value}: appliedRefresh(screen,Search.refreshed(value,lines,top,rows))
+def refreshedSearch(+screen: Alt.State,content: Maybe<&2,Tui.PrimaryContent>) -> Alt.State & Maybe<&2,Nat>:
+  match content:
+    case None{}: (screen,None{})
+    case Some{Tui.PrimaryContent{lines,top,rows,_,_}}: refreshedActive(screen,Alt.search(screen),lines,top,rows)
+def executeAltReady(+prepared: Tui.PreparedFrame,old: Session,+screen: Alt.State,handle: Terminal.Handle,width: Nat,height: Nat) -> IO(Draw):
   match prepared:
-    case Tui.PreparedFrame{+tui,_,+lines,+cursor}:
+    case Tui.PreparedFrame{+tui,_,+lines,+cursor,_}:
       do IO<Draw>:
         +row : Maybe<&2,Nat> <- IO.pure(Maybe<&2,Nat>,Tui.indicatorRow(tui))
         label : String <- indicatorText(screen,row)
-        executeAltPlan(Alt.planWithIndicator(screen,lines,cursor,width,height,row,label),old,prepared,handle)
+        palette : Search.Styles <- Callback.call(Unit,Search.Styles,Alt.styles(screen),Unit{})
+        executeAltPlan(Alt.planWithIndicator(screen,Alt.highlightSearch(screen,lines,Tui.primaryContent(prepared),palette),cursor,width,height,row,label),old,prepared,handle)
+def executeAltMoved(result: Tui.ResultOf(Tui.PreparedFrame),screen: Alt.State,old: Session,handle: Terminal.Handle,width: Nat,height: Nat) -> IO(Draw):
+  match result:
+    case Fail{error}: IO.pure(Draw,Rejected{old,Owner{error}})
+    case Done{prepared}: executeAltReady(prepared,old,screen,handle,width,height)
+def executeAltScroll(change: Tui.ScrollChange,screen: Alt.State,old: Session,handle: Terminal.Handle,+width: Nat,+height: Nat) -> IO(Draw):
+  match change:
+    case Tui.ScrollChange{next,_,_}:
+      do IO<Draw>:
+        rerendered : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(next,width,height)
+        executeAltMoved(rerendered,screen,old,handle,width,height)
+def executeAltTarget(prepared: Tui.PreparedFrame,screen: Alt.State,old: Session,handle: Terminal.Handle,width: Nat,height: Nat,target: Nat) -> IO(Draw):
+  match prepared:
+    case Tui.PreparedFrame{tui,_,_,_,_}:
+      do IO<Draw>:
+        now : Nat <- IO.now()
+        executeAltScroll(Tui.scrollPrimaryBy(tui,Layout.ScrollRow{target},now),screen,old,handle,width,height)
+def executeAltRefreshed(pair: Alt.State & Maybe<&2,Nat>,prepared: Tui.PreparedFrame,old: Session,handle: Terminal.Handle,width: Nat,height: Nat) -> IO(Draw):
+  match pair:
+    case (screen,None{}): executeAltReady(prepared,old,screen,handle,width,height)
+    case (screen,Some{target}): executeAltTarget(prepared,screen,old,handle,width,height,target)
+def executeAlt(+prepared: Tui.PreparedFrame,old: Session,screen: Alt.State,handle: Terminal.Handle,width: Nat,height: Nat) -> IO(Draw):
+  executeAltRefreshed(refreshedSearch(screen,Tui.primaryContent(prepared)),prepared,old,handle,width,height)
 def executePrepared(result: Tui.ResultOf(Tui.PreparedFrame),+old: Session,handle: Terminal.Handle,termux: Bool,width: Nat,height: Nat) -> IO(Draw):
   match result:
     case Fail{error}: IO.pure(Draw,Rejected{old,Owner{error}})
@@ -148,6 +184,58 @@ def viewportScrolled(tui: Tui.TuiBase,screen: Alt.State,motion: Layout.ScrollMot
   do IO<Input>:
     now : Nat <- IO.now()
     return scrollInput(Tui.scrollPrimaryBy(tui,motion,now),screen)
+def topOf(primary: Maybe<&2,Layout.Primary>) -> Nat:
+  match primary:
+    case None{}: 0n
+    case Some{Layout.Primary{_,top,_}}: top
+def primaryTop(view: Maybe<&2,Layout.LayoutNode>) -> Nat:
+  match view:
+    case None{}: 0n
+    case Some{node}: topOf(Layout.primaryInfo(node))
+def searchInputResult(tui: Tui.TuiBase,screen: Alt.State) -> Input:
+  Input{Drawn{Session{tui,Fullscreen{screen}}},True{},True{}}
+def toggleSearchActive(+tui: Tui.TuiBase,+screen: Alt.State,active: Maybe<&2,Search.Session>) -> Input:
+  match active:
+    case None{}: searchInputResult(tui,Alt.withSearch(screen,Some{Search.open(primaryTop(Tui.layoutRoot(tui)))}))
+    case Some{_}: searchInputResult(tui,Alt.withSearch(screen,None{}))
+def toggleSearch(+tui: Tui.TuiBase,+screen: Alt.State) -> Input:
+  toggleSearchActive(tui,screen,Alt.search(screen))
+def withoutLast(parts: List<&2,String>) -> String:
+  match parts:
+    case Nil{}: ""
+    case _ <> Nil{}: ""
+    case first <> rest: first ++ withoutLast(rest)
+def queryEdit(+query: String,+data: String) -> Maybe<&2,String>:
+  match data:
+    case "\u{7f}": Some{withoutLast(Grapheme.segments(query))}
+    case "\u{8}": Some{withoutLast(Grapheme.segments(query))}
+    case SCon{char,_}:
+      Bool.pick(Maybe<&2,String>,U32.is_ge(Char.to_u32(char),32) && Bool.not(String.starts_with(data,"\u{1b}")),Some{query ++ data},None{})
+    case _: None{}
+def editedResult(value: Maybe<&2,String>,+tui: Tui.TuiBase,screen: Alt.State,active: Search.Session) -> Maybe<&2,Input>:
+  match value:
+    case None{}: None{}
+    case Some{query}: Some{searchInputResult(tui,Alt.withSearch(screen,Some{Search.withQuery(active,query,primaryTop(Tui.layoutRoot(tui)))}))}
+def editedSearch(+tui: Tui.TuiBase,screen: Alt.State,+active: Search.Session,data: String) -> Maybe<&2,Input>:
+  editedResult(queryEdit(Search.queryText(active),data),tui,screen,active)
+def searchActive(+tui: Tui.TuiBase,+screen: Alt.State,+active: Search.Session,+bindings: Bindings.KeybindingsManager,+data: String) -> Maybe<&2,Input>:
+  Bool.pick(Unit -> Maybe<&2,Input>,Bindings.matches(bindings,Keys.defaults(),data,"tui.altScreen.searchClose"),
+    _ => Some{searchInputResult(tui,Alt.withSearch(screen,None{}))},
+    _ => Bool.pick(Unit -> Maybe<&2,Input>,Bindings.matches(bindings,Keys.defaults(),data,"tui.altScreen.searchNext"),
+      _ => Some{searchInputResult(tui,Alt.withSearch(screen,Some{Search.navigate(active,Search.Next{})}))},
+      _ => Bool.pick(Unit -> Maybe<&2,Input>,Bindings.matches(bindings,Keys.defaults(),data,"tui.altScreen.searchPrevious"),
+        _ => Some{searchInputResult(tui,Alt.withSearch(screen,Some{Search.navigate(active,Search.Previous{})}))},
+        _ => editedSearch(tui,screen,active,data))(Unit{}))(Unit{}))(Unit{})
+def searchIfActive(tui: Tui.TuiBase,screen: Alt.State,bindings: Bindings.KeybindingsManager,data: String,active: Maybe<&2,Search.Session>) -> Maybe<&2,Input>:
+  match active:
+    case None{}: None{}
+    case Some{active}: searchActive(tui,screen,active,bindings,data)
+def searchWhenActive(tui: Tui.TuiBase,+screen: Alt.State,bindings: Bindings.KeybindingsManager,data: String) -> Maybe<&2,Input>:
+  searchIfActive(tui,screen,bindings,data,Alt.search(screen))
+def searchAction(+tui: Tui.TuiBase,+screen: Alt.State,+bindings: Bindings.KeybindingsManager,+data: String) -> Maybe<&2,Input>:
+  Bool.pick(Unit -> Maybe<&2,Input>,Bindings.matches(bindings,Keys.defaults(),data,"tui.altScreen.search"),
+    _ => Some{toggleSearch(tui,screen)},
+    _ => searchWhenActive(tui,screen,bindings,data))(Unit{})
 def fullscreenAction(action: ViewportAction,+tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
   match action:
     case Scroll{motion}: viewportScrolled(tui,screen,motion)
@@ -156,10 +244,14 @@ def fullscreenAction(action: ViewportAction,+tui: Tui.TuiBase,+screen: Alt.State
       do IO<Input>:
         result : Tui.ResultOf(Tui.InputResult) <- Tui.dispatchInput(tui,registry,mounted,data)
         afterInput(result,Session{tui,Fullscreen{screen}},handle,termux)
-def fullscreenInput(tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,+data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
+def searchedOrViewport(found: Maybe<&2,Input>,bindings: Bindings.KeybindingsManager,tui: Tui.TuiBase,screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,+data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
+  match found:
+    case Some{value}: IO.pure(Input,value)
+    case None{}: fullscreenAction(viewportAction(bindings,data),tui,screen,registry,mounted,data,handle,termux)
+def fullscreenInput(+tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,+data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
   do IO<Input>:
-    bindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,Alt.bindings(screen))
-    fullscreenAction(viewportAction(bindings,data),tui,screen,registry,mounted,data,handle,termux)
+    +bindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,Alt.bindings(screen))
+    searchedOrViewport(searchAction(tui,screen,bindings,data),bindings,tui,screen,registry,mounted,data,handle,termux)
 def input(+session: Session,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
   match session:
     case Session{tui,Fullscreen{screen}}: fullscreenInput(tui,screen,registry,mounted,data,handle,termux)

@@ -138,11 +138,11 @@
         "packages/coding-agent/src/modes/interactive/viewport.bend",
         "packages/coding-agent/src/main.bend"
       ],
-      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native API-key login saves credentials and refreshes model availability; method, filtered-provider and empty prompt text match terminal captures, while the unfiltered provider catalog and secret masking differ. Fullscreen startup, typing and viewport scrolling match; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection/search, dynamic mode switching and broader commands remain partial.",
+      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native API-key login saves credentials and refreshes model availability; method, filtered-provider and empty prompt text match terminal captures, while the unfiltered provider catalog and secret masking differ. Fullscreen startup, typing, viewport scrolling, and keyboard transcript search match focused terminal captures; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection, dynamic mode switching and broader commands remain partial.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "d7baf2d18f3290274d621777b67d5c691d2f743e0b9eb04069b3d1799f73266e",
-        "packages/coding-agent/src/modes/interactive/run.bend": "fe23d6e6bed96fead06b1431b07a2ef70a0e3ce7296effb9ab8c457660f16810",
+        "packages/coding-agent/src/modes/interactive/run.bend": "fcf7c82b2b25c2084ff19a4d70f7525b75884418b27438c80b86575a68833d00",
         "packages/coding-agent/src/modes/interactive/commands.bend": "8449a234b3cc969830d79b4462042968060562ee619a8b4e3c7ff2dba814265a",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "14557c415d7d4b0dd3c2d6921ce0f3dbd7b1717f23db27fdd8657b1e3d5eb547",
         "packages/coding-agent/src/main.bend": "01410adc82ed2d2cae836504662a63e14c88051321d081dac8c907ad20da3535"
@@ -161,18 +161,26 @@
     },
     "packages/tui/src/tui-alt-screen.ts": {
       "state": "partial",
-      "note": "Native fullscreen startup, typing, and page/wheel scrolling match upstream terminal captures. The jump indicator uses the active theme and keybinding; its badge colors and text match in the light-theme custom-key capture. Configured page, half-page, line, top, and bottom keys are dispatched, with Home/End and custom Ctrl+G matching upstream screen content. Light-theme scrollbar colors and user-message background resets at the top still differ. Untouched and completed-turn exits restore the correct visible document and spacing; the editor cursor and empty-session border colors differ; search, mouse selection, image placement, and the upstream suite remain open.",
+      "note": "Native fullscreen startup, typing, scrolling, and keyboard transcript search match focused upstream terminal captures. Search opens with Ctrl+Shift+F, shows themed highlights and counts, navigates with Enter, and restores the screen on Escape; the index reuses unchanged content. Mouse search controls, full input editing, mouse selection, image placement, and the rest of the upstream suite remain open. Light-theme scrollbar colors, top-of-transcript background resets, and fullscreen exit cursor/border styling still differ.",
       "source_sha256": "5f6032a07398b8df3f72d65c38dbed2e52649a25823a52946d6414ddb2f8a929",
       "port_sha256": {
-        "packages/tui/src/tui-alt-screen.bend": "792e8741fc7ad2310d16a9bd5bc328e4e5c2724ded9d30a75385a303d356d37e",
-        "packages/tui/src/tui-base.bend": "ed7ce34ce37b1f604cff9722e3ce419073ff19d76c5f67657c90968432d82d8e",
-        "packages/tui/src/tui-process.bend": "2c84bff225f8cf51954fa40aae59ac4325eeb562b9487b7081f0602b17269f74"
+        "packages/tui/src/tui-alt-screen.bend": "fc744cf11f805edc876e283d5bb308ecadfc95e505ced68536f850a34beef8f5",
+        "packages/tui/src/tui-base.bend": "30f0b8d62c944c64137631db5fd17ef30803ccc4603ea9e729c48bc18cb12842",
+        "packages/tui/src/tui-process.bend": "56ab7564599bd37d6d9fbd79f22b75ef8b2b1b19e3fde05b46e9b2bf274839ce"
       },
       "ports": [
         "packages/tui/src/tui-alt-screen.bend",
         "packages/tui/src/tui-base.bend",
         "packages/tui/src/tui-process.bend"
       ]
+    },
+    "packages/tui/src/alt-screen-search.ts": {
+      "state": "partial",
+      "note": "The native immutable search index handles rendered-text normalization, cross-row and Unicode column mapping, non-overlapping matching and cache invalidation; the fullscreen keyboard search box and themed highlights match a focused upstream terminal capture. Mouse navigation, hover, full Input-component editing and the remaining upstream search assertions are open.",
+      "source_sha256": "7d339e83cf0f160847335dc9be0d1f1db2a0945c463c3d636c7b84ceb9665d40",
+      "port_sha256": {
+        "packages/tui/src/alt-screen-search.bend": "f50b2bacdea543fe16a4459b14844fcf70239b03402dd3d4e29f6126ee5db6d7"
+      }
     },
     "packages/ai/src/auth/credential-store.ts": {
       "state": "missing",
@@ -259,7 +267,7 @@
       "note": "Built-in and custom theme loading, JSON-name discovery, sorted catalog and theme render equality are implemented; registered themes, reload and export behavior remain partial.",
       "source_sha256": "c3bf2e3b72f6bb782f34de0535fcc1758b9b6ea7a0d2e7d6f17244fa55c3f31a",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/theme/theme.bend": "e86fc8b9b4eaa27aa6e80adabd95f3f996d5139c607fe6ecb7c6e5ba2a87c072"
+        "packages/coding-agent/src/modes/interactive/theme/theme.bend": "76a42fe606b7ef048cd2fdd76f4c5a846dd4b1db0edfdb46582652411a4de7b8"
       }
     },
     "packages/coding-agent/src/modes/interactive/theme/theme-controller.ts": {
@@ -283,10 +291,10 @@
     },
     "packages/tui/src/layout-node.ts": {
       "state": "partial",
-      "note": "Native immutable layout nodes represent stack and scroll structure, including page, half-page, line, start, and end movement of the primary viewport. The complete upstream layout contract is not yet validated.",
+      "note": "Native immutable layout nodes represent stack and scroll structure, including page, half-page, line, start, end and absolute-row movement of the primary viewport. The complete upstream layout contract is not yet validated.",
       "source_sha256": "31dd68c9edafdc4f882bbb6c16f8deb1c514111020b647f0037b34d6b8c70a85",
       "port_sha256": {
-        "packages/tui/src/layout-node.bend": "356b70b90e882158bda345c865bc6683a4a72aa4890fa1ad04aa1e4b5ad3b68f"
+        "packages/tui/src/layout-node.bend": "6f9be9b03b276758146322e3b7ea9d608996c7d45007dca8dc408d326c2c9d75"
       },
       "ports": [
         "packages/tui/src/layout-node.bend"
