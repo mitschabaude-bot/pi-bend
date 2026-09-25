@@ -99,20 +99,24 @@ def warning(theme: Theme.Theme,notice: String) -> IO(String):
       do IO<String>:
         shown : String <- Messages.foregroundText(theme,"warning",value)
         return "\n\n" ++ shown
-def tenths(result: Result<&2,&2,F.Error,Nat>) -> Nat:
+def whole(result: Result<&2,&2,F.Error,Nat>) -> Nat:
   match result:
     case Done{value}: value
     case Fail{_}: 0n
 def longDuration(+seconds: Nat) -> String:
   Bool.pick(String,Nat.is_lt(seconds,3600n),Nat.show(seconds / 60n) ++ "m " ++ Nat.show(seconds % 60n) ++ "s",Nat.show(seconds / 3600n) ++ "h " ++ Nat.show((seconds % 3600n) / 60n) ++ "m " ++ Nat.show(seconds % 60n) ++ "s")
-def duration(+tenthsValue: Nat) -> String:
-  Bool.pick(String,Nat.is_lt(tenthsValue,600n),Nat.show(tenthsValue / 10n) ++ "." ++ Nat.show(tenthsValue % 10n) ++ "s",longDuration(tenthsValue / 10n))
+def shortDuration(+tenths: Nat) -> String:
+  Nat.show(tenths / 10n) ++ "." ++ Nat.show(tenths % 10n) ++ "s"
+def duration(+ms: F64) -> String:
+  Bool.pick(String,F64.is_lt(ms,F.fromU32(60000)),
+    shortDuration(whole(F.convert(F.truncate(F.divide(F.add(ms,F.fromU32(50)),F.fromU32(100)))))),
+    longDuration(whole(F.convert(F.truncate(F.divide(ms,F.fromU32(1000)))))))
 def timing(elapsed: Maybe<&2,F64>,partial: Bool,theme: Theme.Theme) -> IO(String):
   match elapsed:
     case None{}: IO.pure(String,"")
     case Some{ms}:
       do IO<String>:
-        label : String <- Messages.foregroundText(theme,"muted",Bool.pick(String,partial,"Elapsed ","Took ") ++ duration(tenths(F.convert(F.divide(F.add(ms,F.fromU32(50)),F.fromU32(100))))))
+        label : String <- Messages.foregroundText(theme,"muted",Bool.pick(String,partial,"Elapsed ","Took ") ++ duration(ms))
         return "\n\n" ++ label
 def renderResult(+output: String,+details: Maybe<&2,Tools.ToolDetails>,expanded: Bool,+partial: Bool,elapsed: Maybe<&2,F64>,+theme: Theme.Theme) -> IO(String):
   do IO<String>:
