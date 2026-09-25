@@ -43,10 +43,10 @@
     },
     "packages/coding-agent/src/core/agent-session.ts": {
       "state": "partial",
-      "note": "Native interactive and RPC sessions work; extension boundaries and some upstream integration behaviors remain open.",
+      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; full upstream session and extension integration behavior remains unverified.",
       "source_sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7",
       "port_sha256": {
-        "packages/coding-agent/src/core/agent-session.bend": "74564dc20692380d3959bab8b4f21737440689f706801f2aa1f086ee64b4b2f6"
+        "packages/coding-agent/src/core/agent-session.bend": "2349731d41f93b319e5dcec73e1fe15aa876cf17b0e61479da6ad28d6c6636ab"
       }
     },
     "packages/coding-agent/src/core/session-manager.ts": {
@@ -59,18 +59,18 @@
     },
     "packages/coding-agent/src/core/tools/bash.ts": {
       "state": "partial",
-      "note": "Native Bash execution and interactive streaming work; output preview and exact terminal parity have known gaps.",
+      "note": "Native Bash execution and interactive streaming work; the tool now reads live session context, while output preview and exact terminal parity retain known gaps.",
       "source_sha256": "3f43b6d80b460bd38334975bee2726b5438ee6e54bf52abdb6fc54400aad28d2",
       "port_sha256": {
-        "packages/coding-agent/src/core/tools/bash.bend": "e8cea6a721912438d027513c95195cddc316418c50c41bc8c21465fc469ede85"
+        "packages/coding-agent/src/core/tools/bash.bend": "95bff0c54faa3dc7fbd493c9e3078559b415efdbe7d17c8e2b9c991f1d293b5c"
       }
     },
     "packages/coding-agent/src/core/tools/read.ts": {
       "state": "partial",
-      "note": "Native text read works; image reading and full upstream behavior remain open.",
+      "note": "Native text read and live model context are wired; image reading and full upstream behavior remain open.",
       "source_sha256": "297d26092979651091f44de8862a6fd55aaf59e7252f8fb8dd3d7cb3f9771518",
       "port_sha256": {
-        "packages/coding-agent/src/core/tools/read.bend": "666cf3f542fe175c1becd000c88fb315f0054f8aa31e6eb95f466fc056fc7103"
+        "packages/coding-agent/src/core/tools/read.bend": "2d6d4ca43c391f27a45f68f456df033ed204f3e3e2bbe0a01ad4303e4dc09936"
       }
     },
     "packages/coding-agent/src/core/tools/edit.ts": {
@@ -78,7 +78,7 @@
       "note": "Native edit execution works; complete upstream edit behavior is not established by the current source review.",
       "source_sha256": "31a368c14cf5437ecac157765660001b16063302d9bd746303d6d1b1dcb5625d",
       "port_sha256": {
-        "packages/coding-agent/src/core/tools/edit.bend": "cb362dd19ddaa55b16bb8d65c7f07e410abaf8ddc54a2209cd8585a60f139d1d"
+        "packages/coding-agent/src/core/tools/edit.bend": "f82d4e67996ca4a5b28166c2eb3d10b7bfff3b3411d0461090b6cea6d0f00563"
       }
     },
     "packages/coding-agent/src/core/tools/write.ts": {
@@ -86,7 +86,7 @@
       "note": "Native write execution works; complete upstream source contract has not been reviewed.",
       "source_sha256": "2ee0a438c24cf83fefd733e349d55a21aa5b633c18934b2c80759fcf14b6f297",
       "port_sha256": {
-        "packages/coding-agent/src/core/tools/write.bend": "9b3e0aa7b56a5b1073f7892376cd885af6d10ce7a3e6cb099447ef8825c8d20b"
+        "packages/coding-agent/src/core/tools/write.bend": "19cc37cbebf64251265e9a812f411abba83a78a24f43aca83d5068d5f6cb6a29"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/settings-selector.ts": {
@@ -115,10 +115,10 @@
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend",
         "packages/coding-agent/src/modes/interactive/run.bend"
       ],
-      "note": "The interactive loop runs, but command and terminal parity remain incomplete; /thinking and /scoped-models selectors are known gaps.",
+      "note": "The interactive loop runs with extension-command dispatch and autocomplete, but command and terminal parity remain incomplete; /thinking and /scoped-models selectors are known gaps.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "978177d944713ab9f00d09b3473c5a8cf898ca21c0786c8adf67738141817505",
+        "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "d0889e1c84b96cc1d09c9e38d379bcdb8a19466142287cd79a55400ca603a9ae",
         "packages/coding-agent/src/modes/interactive/run.bend": "dfd2c3ed30e93b5f1e50fb99d7a207e324ed569f4c095fffe8f7c3a028674bed"
       }
     },
@@ -137,6 +137,76 @@
       "state": "missing",
       "note": "Fullscreen alternate-screen mode is not ported; default regular mode is available.",
       "source_sha256": "5f6032a07398b8df3f72d65c38dbed2e52649a25823a52946d6414ddb2f8a929",
+      "port_sha256": {}
+    },
+    "packages/ai/src/auth/credential-store.ts": {
+      "state": "missing",
+      "note": "The injectable CredentialStore interface and persistent auth.json store exist, but the public default InMemoryCredentialStore and its per-provider serialized modify/delete behavior do not.",
+      "source_sha256": "50ebde56b80b5862025e031719006ea303edd9aa80fec780fbc64319bb9e2847",
+      "port_sha256": {}
+    },
+    "packages/coding-agent/src/core/tools/path-utils.ts": {
+      "state": "partial",
+      "note": "Tool path expansion and resolution live in utils/paths.bend, and read-file fallback candidates live there too; the upstream path-utils test suite is still pending.",
+      "source_sha256": "ab6f420d2388a41366113c17a25e356867820b87b02a169d044cfcf83e1997d3",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/paths.bend": "b67c1efdf251875fe71e8712c23c82a5d520e9eac1bd56675215a0e1ad81ab4c"
+      },
+      "ports": [
+        "packages/coding-agent/src/utils/paths.bend"
+      ]
+    },
+    "packages/coding-agent/src/core/tools/powershell.ts": {
+      "state": "missing",
+      "note": "The Windows PowerShell tool, UTF-8 setup and public tool factory are absent; the native tool registry has no powershell entry.",
+      "source_sha256": "56645690718f03e6c5a19b574a74e3f28f0d0df7563fb226eeee5c88576aefad",
+      "port_sha256": {}
+    },
+    "packages/tui/src/components/input.ts": {
+      "state": "ported",
+      "note": "The component behavior, including input, render, mouse and callback order, has source-replayed coverage for all 36 named tests plus native word-segmenter integration.",
+      "source_sha256": "416ceeb28f10b7146f6a284f276589797763b604d439574fbdc2a3ca52c00234",
+      "port_sha256": {
+        "packages/tui/src/components/input.bend": "8085e931a7b8b2b5c64a75b8115afc35cec8cc77751a8695e7f12fdead5f74fc"
+      }
+    },
+    "packages/tui/src/components/select-list.ts": {
+      "state": "ported",
+      "note": "The five named source tests and supplemental action traces cover filtering, rendering, keyboard, mouse and callback order for the native component.",
+      "source_sha256": "0fc369801e745eff15567d72829bf67887f5efec8bc6816aaf1ee65338618373",
+      "port_sha256": {
+        "packages/tui/src/components/select-list.bend": "699a7919326cd02e7488f8cfdabe14a4099389daa8f3fec4a75e3e77510d94cb"
+      }
+    },
+    "packages/tui/src/components/settings-list.ts": {
+      "state": "partial",
+      "note": "All named source tests and state traces pass, but Unicode fuzzy-search scoring is not established as source-equivalent and whole-terminal integration is separate.",
+      "source_sha256": "8d6b91d3c4aaaf11225854847d42ae6da852ef2646d54542c5b51a97dde15605",
+      "port_sha256": {
+        "packages/tui/src/components/settings-list.bend": "4b0c2e6acfc30eb78799796379dd5e53f659e0bdfc6ee048fc20b70e242db4f5"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/oauth-selector.ts": {
+      "state": "partial",
+      "note": "The native login dialog supports fuzzy provider choice for OpenAI Codex and Anthropic subscriptions; the source selector also exposes a general provider/API-key/status UI that is not present.",
+      "source_sha256": "d4c92352cc8035e4092d9bd67e0250a2eab3124e13f15ac45433acfde92db53f",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "efebcd08c4ebe41385878bad31ede7364e3f47d9f3759369ba2ecbc5655688c5"
+      },
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend"
+      ]
+    },
+    "packages/coding-agent/src/modes/interactive/components/show-images-selector.ts": {
+      "state": "missing",
+      "note": "The exported yes/no image-display selector is absent; showImages can be changed through the settings panel instead.",
+      "source_sha256": "6bea191c5442c0fa46c7fd54836de31df2042c8ed3aef3225b2a56a5fc1a65a9",
+      "port_sha256": {}
+    },
+    "packages/coding-agent/src/modes/interactive/components/theme-selector.ts": {
+      "state": "missing",
+      "note": "The exported theme selector with selection preview is absent; theme loading and controller behavior exist elsewhere.",
+      "source_sha256": "267be3176c67bddb72f0f64a9c3561a256c758707afbeabe2ac68112c8e3b5f8",
       "port_sha256": {}
     }
   }
