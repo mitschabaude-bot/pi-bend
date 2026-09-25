@@ -1,10 +1,10 @@
 # Small coding-agent regression suites
 
-`tests/regressions_check.py` ports pi-mono's small `packages/coding-agent/test/suite/regressions/*.test.ts` suites. Each block cites its upstream file and test name and applies upstream's assertions to native results. It drives existing fixtures and `tests/regressions.bend`:
+`tests/regressions_check.py` ports pi-mono's small `packages/coding-agent/test/suite/regressions/*.test.ts` suites. Each block cites its upstream file and test name and applies upstream's assertions to native results. It drives existing fixtures (`tests/agent-session.bend`, `tests/settings-manager.bend`, `tests/settings-files.bend`, `tests/frontmatter.bend`, `tests/cli-args.bend`, `tests/session-file.bend`) and `tests/regressions.bend`:
 
 ```sh
 BEND=build/bend-native-toolchain/bend2/main.ts
-for t in agent-session regressions settings-manager settings-files frontmatter cli-args; do bun $BEND tests/$t.bend -o build/$t.js; done
+for t in agent-session regressions settings-manager settings-files frontmatter cli-args session-file; do bun $BEND tests/$t.bend -o build/$t.js; done
 python3 tests/regressions_check.py            # Bun lane
 python3 tests/regressions_check.py --regressions build/regressions ...   # a native runner per fixture
 ```
@@ -21,6 +21,8 @@ python3 tests/regressions_check.py --regressions build/regressions ...   # a nat
 - 7150's `preflightResult(false)` and rejection are the prompt's failed result.
 - 3616's `DefaultResourceLoader.reload()` is the session's resource reload, `AgentSession.reload`, which reloads its settings manager.
 - 7269 runs `parseArgs` through `tests/cli-args.bend` and prompts the session with the parsed message.
+- 7497 lists sessions through `tests/session-file.bend`'s `listAll` operation (`SessionManager.listAll`) with the agent directory in `PI_CODING_AGENT_DIR`; a session's id is its file stem.
+- 5661's registry half is a fixture of `tests/models_json_check.py` (differential against upstream's ModelRuntime, plus the literal request auth). Its migration half stays pending: the port has no `runMigrations`.
 - 8337: settings files with a BOM go through `tests/settings-files.bend` (`SettingsManager.create`, then `setTheme` and flush). The merged getters are read from the global and project settings, which don't overlap. The port has no `splitBom` helper, so that assertion stays pending.
 
 ## Pending cases with gaps

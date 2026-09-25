@@ -4,14 +4,15 @@ Each block names the upstream file and test it ports and applies upstream's
 assertions to the native results. The fixtures are existing test programs:
 tests/agent-session.bend (scripted faux session), tests/regressions.bend
 (chunked faux session), tests/settings-manager.bend (in-memory settings
-storage), tests/settings-files.bend (settings files), tests/frontmatter.bend
-and tests/cli-args.bend. Adaptations are documented in tests/regressions.md.
+storage), tests/settings-files.bend (settings files), tests/frontmatter.bend,
+tests/cli-args.bend and tests/session-file.bend. Adaptations are documented in
+tests/regressions.md.
 """
 import argparse, json, os, subprocess, tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNNERS = ['agent-session', 'regressions', 'settings-manager', 'settings-files', 'frontmatter', 'cli-args']
+RUNNERS = ['agent-session', 'regressions', 'settings-manager', 'settings-files', 'frontmatter', 'cli-args', 'session-file']
 
 
 def command(runner, threads):
@@ -179,6 +180,57 @@ def session_manager_checks(f):
     return 1
 
 
+def discovery_checks(f):
+    """7497-session-discovery-symlink over tests/session-file.bend's listAll (SessionManager.listAll)."""
+    checks = 0
+
+    def listed(setup):
+        base = Path(tempfile.mkdtemp(prefix='discovery-', dir=f.work))
+        agent = base / 'agent'
+        sessions = agent / 'sessions'
+        sessions.mkdir(parents=True)
+
+        def write_session(directory, id):
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory / (id + '.jsonl')).write_text(json.dumps({'type': 'session', 'version': 3, 'id': id, 'timestamp': '2026-08-03T00:00:00.000Z', 'cwd': str(base / 'project')}) + '\n')
+
+        setup(base, sessions, write_session)
+        ops = base / 'ops.jsonl'
+        ops.write_text(json.dumps({'op': 'listAll'}) + '\n')
+        return f.call('session-file', str(ops), cwd=base, env=dict(os.environ, PI_CODING_AGENT_DIR=str(agent)))[0]['paths'], sessions
+
+    def ids(paths):
+        return [Path(path).stem for path in paths]
+
+    # discovers a session through a directory link and preserves the alias path
+    def linked(base, sessions, write_session):
+        write_session(base / 'linked-sessions', 'linked')
+        os.symlink(base / 'linked-sessions', sessions / '--linked--', target_is_directory=True)
+    paths, sessions = listed(linked)
+    assert ids(paths) == ['linked'] and paths[0] == str(sessions / '--linked--' / 'linked.jsonl'), paths
+    checks += 1
+
+    # ignores a broken directory link without hiding valid sessions
+    def broken(base, sessions, write_session):
+        write_session(sessions / '--regular--', 'regular')
+        (base / 'removed-sessions').mkdir()
+        os.symlink(base / 'removed-sessions', sessions / '--broken--', target_is_directory=True)
+        (base / 'removed-sessions').rmdir()
+    paths, _ = listed(broken)
+    assert ids(paths) == ['regular'], paths
+    checks += 1
+
+    # ignores links to files
+    def file_link(base, sessions, write_session):
+        write_session(sessions / '--regular--', 'regular')
+        (base / 'not-a-directory').write_text('')
+        os.symlink(base / 'not-a-directory', sessions / '--file--')
+    paths, _ = listed(file_link)
+    assert ids(paths) == ['regular'], paths
+    checks += 1
+    return checks
+
+
 def cli_checks(f):
     checks = 0
     # 7269-cli-end-of-options: passes %j as a prompt after --
@@ -249,7 +301,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-regressions-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = retry_checks(fixtures) + json_stream_checks(fixtures) + session_name_checks(fixtures) + compaction_checks(fixtures) + session_manager_checks(fixtures) + cli_checks(fixtures) + settings_checks(fixtures)
+    checks = retry_checks(fixtures) + json_stream_checks(fixtures) + session_name_checks(fixtures) + compaction_checks(fixtures) + session_manager_checks(fixtures) + discovery_checks(fixtures) + cli_checks(fixtures) + settings_checks(fixtures)
     print('regressions: %d upstream cases passed' % checks)
 
 

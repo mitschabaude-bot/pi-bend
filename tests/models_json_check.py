@@ -71,6 +71,13 @@ FIXTURES = [
     dict(name='apiKey escapes and braced interpolation',
          config={'providers': {'esc': custom(api='openai-completions', apiKey='$$literal-${PART}$!x', models=[{'id': 'x1'}])}},
          env={'PART': 'mid'}, refs=[]),
+    # suite/regressions/5661-uppercase-header-values.test.ts (registry half): uppercase
+    # strings stay literals even when environment variables of those names exist.
+    dict(name='regression #5661: uppercase models.json header values stay literal',
+         config={'providers': {'my-provider': {'baseUrl': 'https://example.com/v1', 'apiKey': 'CUSTOM_API_KEY', 'api': 'openai-completions',
+                                               'headers': {'Authorization': 'BEARER'}, 'models': [{'id': 'my-model'}]}}},
+         env={'CUSTOM_API_KEY': 'env-CUSTOM_API_KEY', 'BEARER': 'env-BEARER'}, refs=['my-provider/my-model'],
+         expect_auth={'my-provider/my-model': {'apiKey': 'CUSTOM_API_KEY', 'headers': {'Authorization': 'BEARER'}}}),
     dict(name='authHeader adds a bearer header from the resolved key',
          config={'providers': {'bear': custom(api='openai-completions', apiKey='bear-key', authHeader=True, models=[{'id': 'b1'}]),
                                'nokey': custom(api='openai-completions', authHeader=True, models=[{'id': 'n1'}])}},
@@ -194,6 +201,10 @@ def main():
                     output['error'] = prefix + '<engine reason>' + suffix
             problems = []
             diff('', expected, actual, problems)
+            for ref, auth in fixture.get('expect_auth', {}).items():
+                got = actual['modelAuth'].get(ref, {})
+                if {key: got.get(key) for key in auth} != auth:
+                    problems.append(f'{ref}: request auth {got} does not match {auth}')
             if problems:
                 failures += 1
                 print(f'FAIL {fixture["name"]}:')

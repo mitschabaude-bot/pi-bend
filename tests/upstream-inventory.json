@@ -1842,9 +1842,12 @@
     },
     {
       "source": "packages/coding-agent/test/bash-execution-width.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "83b750fbcf7d491a36cbaf28f01c4b034c66d1d25e4b911dca4d23dfd8b6e5ba"
+      "status": "ported",
+      "ports": [
+        "tests/bash-execution-width.bend"
+      ],
+      "sha256": "83b750fbcf7d491a36cbaf28f01c4b034c66d1d25e4b911dca4d23dfd8b6e5ba",
+      "notes": "Both cases on the port's bash message value (messages.bend bash/appendBash/completeBash/renderBash): 150-column output rendered at 80 columns, and one message rendered at 200 then 60 columns, keep every line within the render width. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/block-images.test.ts",
@@ -2694,9 +2697,15 @@
     },
     {
       "source": "packages/coding-agent/test/rpc-jsonl.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "4a5a9738d39bb226e12535e6acdcebcd92ea675e9b1fd5ffadbdc0d7ea4babb6"
+      "status": "ported",
+      "ports": [
+        "tests/rpc-protocol.bend",
+        "tests/rpc_protocol_check.py",
+        "tests/rpc-session.bend",
+        "tests/rpc_session_check.py"
+      ],
+      "sha256": "4a5a9738d39bb226e12535e6acdcebcd92ea675e9b1fd5ffadbdc0d7ea4babb6",
+      "notes": "The four cases: serializing without escaping U+2028/U+2029 and LF-only/CRLF splitting are byte-compared with pinned upstream serializeJsonLine and attachJsonlLineReader (tests/rpc_protocol_check.py); a final record without LF stays pending in Rpc.frame and Rpc.finish runs it at EOF (the 'tail' command in tests/rpc_session_check.py). Bun lane rechecked; native per tests/rpc.md."
     },
     {
       "source": "packages/coding-agent/test/rpc-prompt-response-semantics.test.ts",
@@ -3303,9 +3312,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5661-uppercase-header-values.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "0ffc9a48b0f980339bd8748d7064ea2e832e7a817441de29f68ad94695ac7149"
+      "status": "partial",
+      "ports": [
+        "tests/models_json_check.py",
+        "tests/models-json.bend"
+      ],
+      "sha256": "0ffc9a48b0f980339bd8748d7064ea2e832e7a817441de29f68ad94695ac7149",
+      "notes": "Registry half: a models.json provider with apiKey CUSTOM_API_KEY and header Authorization: BEARER, with both names set in the environment, resolves the literal key and header (differential fixture against upstream's ModelRuntime plus the literal auth). Pending: the startup-migration half, since runMigrations (migrations.ts) is not ported."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5724-sigterm-signal-exit.test.ts",
@@ -3529,9 +3542,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7497-session-discovery-symlink.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2fbcbf5838dd6e82ace283aac992f5aced0a09fc60093469d7766386e4916782"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/session-file.bend"
+      ],
+      "sha256": "2fbcbf5838dd6e82ace283aac992f5aced0a09fc60093469d7766386e4916782",
+      "notes": "All three cases through tests/session-file.bend's listAll (SessionManager.listAll over PI_CODING_AGENT_DIR/sessions): a directory link lists its session under the alias path, a broken link and a link to a file are skipped without hiding other sessions. Ids are file stems. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7572-provider-retry-settings-merge.test.ts",
