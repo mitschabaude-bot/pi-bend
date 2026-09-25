@@ -32,7 +32,7 @@ with tempfile.TemporaryDirectory(dir=ROOT/'build',prefix='timer-races-') as dire
     path.write_text(text)
     for suffix in ['c','js']:
         subprocess.run([str(bun),str(compiler/'main.ts'),str(source),'-o',str(folder/('run.'+suffix))],cwd=ROOT,check=True)
-    subprocess.run(['clang','-std=c11','-O1','-fbracket-depth=2048',str(folder/'run.c'),'-lpthread','-lm','-o',str(folder/'run')],check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-O1','-fbracket-depth=2048',str(folder/'run.c'),'-lpthread','-lm','-o',str(folder/'run')],check=True)
     for backend,command in [('native-1',[str(folder/'run'),'--threads','1']),('native-4',[str(folder/'run'),'--threads','4']),('bun',[str(bun),str(folder/'run.js')])]:
         for rounds,size in [(10,1),(10,128),(5,1024)]:
             run=subprocess.run([*command,str(rounds),str(size)],text=True,capture_output=True,check=True,timeout=30)

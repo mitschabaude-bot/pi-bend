@@ -1,6 +1,4 @@
 """Composed multipleOf validation and exact diagnostics against pinned Pi."""
-from upstream_pin import check_sibling
-check_sibling()
 import json, math, subprocess
 from pathlib import Path
 from schema_literals import value, string
@@ -43,5 +41,5 @@ for start in range(0,count,60):
     lines += [f'def {name}() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(start,min(start+60,count))]
 lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {name}()' for name in groups]+[f'    IO.print("PASS {len(cases)} multipleOf outcomes/messages, {len(builders)} builder cases and 5 malformed-schema rejections")']
 src=BUILD/'schema-multiple-check.bend';src.write_text('\n'.join(lines)+'\n');out=BUILD/'schema-multiple-check'
-subprocess.run(['sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
 for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,check=True,timeout=120)

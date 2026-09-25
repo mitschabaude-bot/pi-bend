@@ -59,5 +59,5 @@ for raw, output in zip(ordered, expected, strict=True):
 source += f'    IO.print("f64 decimal: {len(ordered)} JavaScript spelling vectors and JSON edge cases passed")\n'
 entry = BUILD / 'f64-decimal-vectors.bend'
 entry.write_text(source)
-subprocess.run(['sh', 'scripts/build-pure.sh', str(entry), 'build/test-f64-decimal'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(entry), 'build/test-f64-decimal'], cwd=ROOT, check=True)
 subprocess.run(['build/test-f64-decimal', '--threads', '1'], cwd=ROOT, check=True, timeout=240)

@@ -1,7 +1,8 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {stripTypeScriptTypes} from 'node:module';
-const root='../pi-mono/packages/tui/';
+const root=UPSTREAM + '/packages/tui/';
 const code=stripTypeScriptTypes(fs.readFileSync(root+'src/fuzzy.ts','utf8')).replace(/^export /gm,'');
 const api=new Function(code+';return {fuzzyMatch,fuzzyFilter}')();
 const cases=[]; const names=[];

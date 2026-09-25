@@ -80,7 +80,7 @@ static void __attribute__((destructor)) body_source_audit(void) {
 (ROOT / 'build/http-body-source-audit.c').write_text(c + audit)
 (ROOT / 'build/http-body-source-audit.js').write_text(instrument((ROOT / 'build/http-body-source.js').read_text()))
 for suffix in ['', '-audit']:
-    subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1',
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1',
                     f'build/http-body-source{suffix}.c', '-lpthread', '-lm', '-o', f'build/http-body-source{suffix}'], cwd=ROOT, check=True)
 runs = []
 for audited in [False, True]:

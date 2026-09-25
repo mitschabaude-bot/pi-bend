@@ -68,7 +68,7 @@ def main():
             commands.append(('bun', ['bun', str(path)]))
         if args.backend in ('native', 'all'):
             path = Path(directory) / 'provider'
-            subprocess.run(['sh', 'scripts/build-pure.sh', str(fixture.relative_to(ROOT)), str(path)], cwd=ROOT, env=dict(os.environ, BEND=args.toolchain), check=True)
+            subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(fixture.relative_to(ROOT)), str(path)], cwd=ROOT, env=dict(os.environ, BEND=args.toolchain), check=True)
             commands += [('native1', [str(path), '--threads', '1']), ('native4', [str(path), '--threads', '4'])]
         server = http.server.HTTPServer(('127.0.0.1', 0), Handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)

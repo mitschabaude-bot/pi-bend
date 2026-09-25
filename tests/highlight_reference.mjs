@@ -4,6 +4,7 @@
 // 10.7.3's HTML for each, using the package pi installs.
 //
 //   bun tests/highlight_reference.mjs OUT_DIR [--no-corpus]
+import { UPSTREAM } from "./upstream_pin.mjs";
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
@@ -39,7 +40,7 @@ const cases = [...snippets];
 for (const name of hljs.listLanguages()) cases.push({ language: name, code: generic });
 
 // Public sources: system headers and scripts, pi-mono, and package caches.
-const roots = ["/usr/include", "/usr/lib/python3", "/usr/share", "/home/agent/code/pi-mono/packages", "/home/agent/.bun/install/cache"];
+const roots = ["/usr/include", "/usr/lib/python3", "/usr/share", UPSTREAM + "/packages", "/home/agent/.bun/install/cache"];
 const extensions = {
   python: ["py"], java: ["java"], go: ["go"], javascript: ["js", "mjs"], cpp: ["cpp", "cc", "hpp"], typescript: ["ts", "tsx"],
   php: ["php"], ruby: ["rb"], c: ["c", "h"], csharp: ["cs"], bash: ["sh", "bash"], rust: ["rs"], swift: ["swift"], perl: ["pl", "pm"],

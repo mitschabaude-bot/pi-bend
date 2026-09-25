@@ -1,6 +1,5 @@
 """Public transform composition, stateful mappings and callback error behavior."""
-from upstream_pin import UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import UPSTREAM
 import json,subprocess
 from pathlib import Path
 from schema_literals import string
@@ -18,7 +17,7 @@ for i,(case,result) in enumerate(zip(cases,expected,strict=True)):
     lines += [f'def case{i}() -> IO(Unit):',f'  T.check({case["mode"]}, {boolean(case["same"])}, {boolean(case["enabled"])}, {values(case["tags"])}, {string(result["value"])}, {string(result["trace"])}, "normalization {i}")']
 lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(len(cases))]+[f'    IO.print("PASS {len(cases)} public transform compositions and callback traces")']
 src=BUILD/'transform-normalization-check.bend';src.write_text('\n'.join(lines)+'\n');out=BUILD/'transform-normalization-check'
-subprocess.run(['sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
 for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,check=True,timeout=120)
 
 # Preserve every original named assertion case and verify the executable reports it.
@@ -28,7 +27,7 @@ names=re.findall(r'\bit\("([^"\n]+)"',upstream.read_text())
 named=ROOT/'packages/ai/test/transform-messages-copilot-openai-to-anthropic.bend'
 assert re.findall(r'IO.print\("PASS ([^"\n]+)"\)',named.read_text())==names
 output=BUILD/'test-transform-messages'
-subprocess.run(['sh','scripts/build-pure.sh',str(named),str(output)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(named),str(output)],cwd=ROOT,check=True)
 for threads in ['1','4']:
     result=subprocess.check_output([str(output),'--threads',threads],cwd=ROOT,text=True,timeout=120)
     assert result.splitlines()==['PASS '+name for name in names],result

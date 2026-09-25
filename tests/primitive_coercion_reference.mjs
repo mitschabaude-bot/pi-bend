@@ -1,6 +1,7 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-const source=fs.readFileSync('../pi-mono/packages/ai/src/utils/validation.ts','utf8');
+const source=fs.readFileSync(UPSTREAM + '/packages/ai/src/utils/validation.ts','utf8');
 const start=source.indexOf('function coercePrimitiveByType(');
 const end=source.indexOf('function applySchemaObjectCoercion(',start);
 if(start<0||end<=start)throw new Error('upstream primitive coercion block missing');

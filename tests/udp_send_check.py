@@ -9,7 +9,7 @@ parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('candida
 candidate=parser.parse_args().candidate.resolve()
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/udp-send-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/udp-send.bend','-o',f'build/udp-send.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-send.c','-lpthread','-lm','-o','build/udp-send'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-send.c','-lpthread','-lm','-o','build/udp-send'],cwd=ROOT,check=True)
 rows=[]
 for backend,cmd in [('native 1',['build/udp-send','--threads','1']),('native 4',['build/udp-send','--threads','4']),('Bun',[str(bun),'build/udp-send.js'])]:
     for family,af,host in [(4,socket.AF_INET,'127.0.0.1'),(6,socket.AF_INET6,'::1')]:

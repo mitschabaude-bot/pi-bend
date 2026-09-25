@@ -1,5 +1,6 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import { readFileSync } from 'node:fs';
-import { normalizeProviderError, formatProviderError } from '../../pi-mono/packages/ai/src/utils/error-body.ts';
+const { normalizeProviderError, formatProviderError } = await import(UPSTREAM + '/packages/ai/src/utils/error-body.ts');
 const cases = JSON.parse(readFileSync(0, 'utf8'));
 function body(value: any): any {
   if (value === null) return undefined;

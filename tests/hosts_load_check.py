@@ -20,7 +20,7 @@ for suffix in ['c','js']:
 tree=ast.parse((ROOT/'tests/resolver_file_check.py').read_text())
 audit=next(ast.literal_eval(n.value) for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='audit' for t in n.targets))
 (ROOT/'build/hosts-load-audit.c').write_text((ROOT/'build/hosts-load.c').read_text()+audit)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/hosts-load-audit.c','-lpthread','-lm','-o','build/hosts-load'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/hosts-load-audit.c','-lpthread','-lm','-o','build/hosts-load'],cwd=ROOT,check=True)
 # /proc fd inspection catches open fixture files on Bun as well as native.
 js_audit='''import {readdirSync as auditList,readlinkSync as auditLink} from 'node:fs';
 process.on('exit',()=>{let live=0;const root=process.env.PI_BEND_FILE_TEST_ROOT;

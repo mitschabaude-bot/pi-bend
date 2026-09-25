@@ -28,7 +28,7 @@ lines.append(f'    IO.print("PASS {len(values)} native URI component decoding co
 source=BUILD/'uri-component-check.bend'; source.write_text('\n'.join(lines)+'\n')
 for source,name in [(source,'uri-component-check'),('packages/runtime/test/json-pointer.bend','json-pointer-native')]:
     output=BUILD/name
-    subprocess.run(['sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
     compiler=os.environ.get('BEND',str(Path.home()/'.bend/current/bend2/main.ts'))
     subprocess.run([compiler,str(source),'-o',str(output)+'.js'],cwd=ROOT,check=True)
     subprocess.run(['bun',str(output)+'.js'],cwd=ROOT,check=True,timeout=120)

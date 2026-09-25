@@ -12,7 +12,7 @@ bun=Path.home()/'.bun/bin/bun'
 compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/resolver-search-{suffix}-build.json','--',str(bun),str(compiler),'tests/resolver-search.bend','-o',f'build/resolver-search.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-search.c','-lpthread','-lm','-o','build/resolver-search'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-search.c','-lpthread','-lm','-o','build/resolver-search'],cwd=ROOT,check=True)
 libc=ctypes.CDLL(None);pton=libc.ns_name_pton;pton.argtypes=[ctypes.c_char_p,ctypes.c_void_p,ctypes.c_size_t];pton.restype=ctypes.c_int
 
 def wire(text):

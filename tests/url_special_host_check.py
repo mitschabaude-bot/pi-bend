@@ -71,7 +71,7 @@ for row in review['cases']:
 print(f'{len(indices)} Node host comparisons; {len(texts)-len(indices)-9} raw-boundary checks; 9 pending strict-policy review cases',flush=True)
 if '--prepare-only' in sys.argv:raise SystemExit(0)
 if '--no-build' not in sys.argv and '--js-only' not in sys.argv:
-    subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/url-special-host.bend','build/url-special-host'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/url-special-host.bend','build/url-special-host'],cwd=ROOT,check=True)
 if '--native-only' not in sys.argv:
     subprocess.run([str(Path(BEND)),'packages/runtime/test/url-special-host.bend','-o','build/url-special-host.js'],cwd=ROOT,check=True)
 arguments=list(map(codes,texts))

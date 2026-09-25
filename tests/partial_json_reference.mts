@@ -1,3 +1,4 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {createRequire,stripTypeScriptTypes} from 'node:module';
 const require=createRequire(import.meta.url);
@@ -5,7 +6,7 @@ const packagePath=process.env.PI_PARTIAL_JSON_PACKAGE??'/usr/local/lib/node_modu
 const meta=JSON.parse(fs.readFileSync(packagePath+'/package.json','utf8'));
 if(meta.version!=='0.1.7')throw Error('Expected Pi-pinned partial-json 0.1.7');
 const partialParse=require(packagePath+'/dist/index.js').parse;
-const source=fs.readFileSync('../pi-mono/packages/ai/src/utils/json-parse.ts','utf8');
+const source=fs.readFileSync(UPSTREAM + '/packages/ai/src/utils/json-parse.ts','utf8');
 const code=stripTypeScriptTypes(source).replace(/^import .*;$/gm,'').replace(/^export /gm,'');
 const streaming=new Function('partialParse',code+';return parseStreamingJson;')(partialParse);
 const encode=value=>{

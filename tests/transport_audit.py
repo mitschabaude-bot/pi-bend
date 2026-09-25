@@ -64,4 +64,4 @@ if __name__ == '__main__':
     transport_audit(args.prefix, args.compiler, args.js_only)
     if args.compile:
         for suffix in ['', '-audit']:
-            subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1', f'{args.prefix}{suffix}.c', '-lpthread', '-lm', '-o', f'{args.prefix}{suffix}'], check=True)
+            subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1', f'{args.prefix}{suffix}.c', '-lpthread', '-lm', '-o', f'{args.prefix}{suffix}'], check=True)

@@ -1,7 +1,6 @@
 """Differential terminal framing with explicit flush; real timer ownership is separate."""
 import json,pathlib,random,subprocess,sys
-from upstream_pin import PIN, UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import PIN, UPSTREAM
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=UPSTREAM,text=True).strip()==PIN
 esc='\x1b'

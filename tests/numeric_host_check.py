@@ -14,7 +14,7 @@ bun=Path.home()/'.bun/bin/bun';compiler=TOOLCHAIN
 for suffix in ['c','js']:
     with (ROOT/f'build/numeric-host-{suffix}.log').open('w') as log:
         subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/numeric-host-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/numeric-host.bend','-o',f'build/numeric-host.{suffix}'],cwd=ROOT,check=True,stdout=log,stderr=subprocess.STDOUT)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/numeric-host.c','-lpthread','-lm','-o','build/numeric-host'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/numeric-host.c','-lpthread','-lm','-o','build/numeric-host'],cwd=ROOT,check=True)
 def scalars(text):return ','.join(str(ord(x)) for x in text)
 def oracle(family,text):
     host,sep,zone=text.partition('%')

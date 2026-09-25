@@ -16,7 +16,7 @@ expected = [str(int(value)) if math.isfinite(value) and value.is_integer() and 0
 fixture = root/'packages/runtime/test/timer-milliseconds.bend'
 for suffix in ['c', 'js']:
     subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', f'build/timer-milliseconds-{suffix}-build.json', '--', str(bun), str(candidate/'main.ts'), str(fixture), '-o', f'build/timer-milliseconds.{suffix}'], cwd=root, check=True)
-subprocess.run(['clang', '-std=c11', '-O1', '-fbracket-depth=2048', 'build/timer-milliseconds.c', '-lpthread', '-lm', '-o', 'build/timer-milliseconds'], cwd=root, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-O1', '-fbracket-depth=2048', 'build/timer-milliseconds.c', '-lpthread', '-lm', '-o', 'build/timer-milliseconds'], cwd=root, check=True)
 results = []
 for backend, command in [('native-1', [str(root/'build/timer-milliseconds'), '--threads', '1']), ('native-4', [str(root/'build/timer-milliseconds'), '--threads', '4']), ('bun', [str(bun), str(root/'build/timer-milliseconds.js')])]:
     for start in range(0, len(cases), 32):

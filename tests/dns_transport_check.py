@@ -52,7 +52,7 @@ static void __attribute__((destructor)) transport_exit(void) {
 }
 '''
 (ROOT / 'build/dns-transport-audit.c').write_text(source)
-subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1',
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1',
                 'build/dns-transport-audit.c', '-lpthread', '-lm',
                 '-o', 'build/dns-transport'], cwd=ROOT, check=True)
 (ROOT / 'build/dns-transport-audit.js').write_text(

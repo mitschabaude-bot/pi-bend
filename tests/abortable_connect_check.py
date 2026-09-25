@@ -25,7 +25,7 @@ parser.add_argument('--production',action='store_true')
 args=parser.parse_args();candidate=args.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 launcher=ROOT/'build/abortable-connect-compiler';launcher.write_text('#!/bin/sh\nexec '+shlex.quote(str(bun))+' '+shlex.quote(str(candidate/'main.ts'))+' "$@"\n');launcher.chmod(0o755)
 if not args.no_build:
-    subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','16','--stats','build/abortable-connect-native-build.json','--','sh','scripts/build-pure.sh','tests/abortable-connect.bend','build/abortable-connect'],cwd=ROOT,env=dict(os.environ,BEND=str(launcher)),check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'python3','scripts/run-rss-guarded.py','--limit-gib','16','--stats','build/abortable-connect-native-build.json','--','sh','scripts/build-pure.sh','tests/abortable-connect.bend','build/abortable-connect'],cwd=ROOT,env=dict(os.environ,BEND=str(launcher)),check=True)
 subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/abortable-connect-js-build.json','--',str(launcher),'tests/abortable-connect.bend','-o','build/abortable-connect.js'],cwd=ROOT,check=True)
 results=[]
 with tempfile.TemporaryDirectory(prefix='abortable-connect-',dir=ROOT/'build') as directory:
@@ -45,7 +45,7 @@ static void __attribute__((destructor)) abort_connect_audit(void) {
 }
 '''
         source=folder/'audit.c';source.write_text(generated.replace(original,effect)+audit);binary=folder/'audit'
-        subprocess.run(['clang','-fbracket-depth=2048','-std=c11','-O1',str(source),'-lpthread','-lm','-o',str(binary)],check=True,timeout=120)
+        subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-fbracket-depth=2048','-std=c11','-O1',str(source),'-lpthread','-lm','-o',str(binary)],check=True,timeout=120)
         generated=javascript.read_text();original=(candidate/'effs/connect.js').read_text();assert original in generated
         effect='const probeRows=[]; let probeCalls=0,probeParked=0;\n'+original
         for needle in ['function connect_ipv4(word, port) {','function connect_ipv6(a, b, c, d, port, scope) {']:

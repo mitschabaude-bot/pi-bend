@@ -39,7 +39,7 @@ with tempfile.TemporaryDirectory(prefix='ipv6-sockaddr-',dir=ROOT/'build') as di
     effect.write_text(original.replace(needle,"console.error([address.length, family, view.getUint16(2, false), view.getUint32(24, little), view.getUint32(4, little), [...address.subarray(8, 24)].map(x=>x.toString(16).padStart(2, '0')).join('')].join(':')); const code = 22;"))
     for suffix in ['c','js']:
         subprocess.run([str(bun),str(compiler/'main.ts'),'tests/ipv6-connect-words.bend','-o',str(folder/f'probe.{suffix}')],cwd=ROOT,check=True,capture_output=True,timeout=60)
-    subprocess.run(['clang','-fbracket-depth=2048','-std=c11','-O1',str(folder/'probe.c'),'-lpthread','-lm','-o',str(folder/'probe')],check=True,timeout=60)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-fbracket-depth=2048','-std=c11','-O1',str(folder/'probe.c'),'-lpthread','-lm','-o',str(folder/'probe')],check=True,timeout=60)
     for label,command in [('native 1',[str(folder/'probe'),'--threads','1']),('native 4',[str(folder/'probe'),'--threads','4']),('Bun',[str(bun),str(folder/'probe.js')])]:
         for words,port,scope in inputs:
             run=subprocess.run([*command,*map(str,[*words,port,scope])],capture_output=True,text=True,timeout=10)

@@ -22,7 +22,7 @@ for label, compiler in [('baseline', a.baseline.resolve()), ('candidate', a.cand
     records[label] = {'compiler': {name: hashlib.sha256((compiler.parent/name).read_bytes()).hexdigest() for name in ['main.ts', 'bend.ts', 'comp.ts', 'base.bend']}, 'programs': {ext: hashlib.sha256(prefix.with_suffix(ext).read_bytes()).hexdigest() for ext in ['.c', '.js']}}
 assert records['baseline']['programs'] == records['candidate']['programs'], records
 prefix = out / 'candidate'
-subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1', str(prefix.with_suffix('.c')), '-lpthread', '-lm', '-o', str(prefix)], check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1', str(prefix.with_suffix('.c')), '-lpthread', '-lm', '-o', str(prefix)], check=True)
 numbers = [0, 1, 2, 255, 65535, 2147483648, 4294967295]
 integers = lambda values: [f'{n}:{n}:{int(n != 0)}' for n in values]
 floats = [0.0, -0.0, 1.0, 0.1, 1.17549435e-38, 1.40129846e-45, 3.40282347e38]

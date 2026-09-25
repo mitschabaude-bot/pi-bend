@@ -33,6 +33,6 @@ lines+=['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in r
 source=BUILD/'number-string-vectors.bend'
 source.write_text('\n'.join(lines)+'\n')
 output=BUILD/'test-number-string'
-subprocess.run(['sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
 for threads in ['1','4']:
     subprocess.run([str(output),'--threads',threads],cwd=ROOT,check=True,timeout=180)

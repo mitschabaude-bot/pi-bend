@@ -1,6 +1,4 @@
 """Sequential scheduling boundaries against the original executeToolCallsSequential."""
-from upstream_pin import check_sibling
-check_sibling()
 import itertools,json,subprocess
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];BUILD=ROOT/'build'
@@ -26,5 +24,5 @@ for start in range(0,len(cases),60):
 lines+=['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {name}()' for name in groups]+[f'    IO.print("PASS {len(cases)} sequential batch scheduling comparisons")']
 source=BUILD/'tool-batch-sequential.bend';source.write_text('\n'.join(lines)+'\n');output=BUILD/'tool-batch-sequential'
 for src,binary in [(source,output),('packages/agent/test/tool-batch-sequential-gated.bend',BUILD/'tool-batch-sequential-gated')]:
-    subprocess.run(['sh','scripts/build-pure.sh',str(src),str(binary)],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(src),str(binary)],cwd=ROOT,check=True)
     for threads in ['1','4']:subprocess.run([str(binary),'--threads',threads],cwd=ROOT,check=True,timeout=120)

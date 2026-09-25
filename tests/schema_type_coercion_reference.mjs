@@ -1,6 +1,7 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-const source=fs.readFileSync('../pi-mono/packages/ai/src/utils/validation.ts','utf8');
+const source=fs.readFileSync(UPSTREAM + '/packages/ai/src/utils/validation.ts','utf8');
 function block(startText,endText){
  const start=source.indexOf(startText),end=source.indexOf(endText,start);
  if(start<0||end<=start)throw new Error('upstream coercion block missing');

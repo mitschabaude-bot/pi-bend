@@ -20,7 +20,7 @@ for suffix in ['c','js']:
 audit='\nstatic void __attribute__((destructor)) audit(void) { unsigned live=0; for(u32 i=0;i<chan_len;i++) live+=chan_rows[i].live; fprintf(stderr,"LIVE %u\\n",live); }\n'
 (ROOT/'build/resolver-system-config-audit.c').write_text((ROOT/'build/resolver-system-config.c').read_text()+audit)
 (ROOT/'build/resolver-system-config-audit.js').write_text('process.on("exit",()=>console.error(`LIVE ${globalThis.BEND_IO.live} ${globalThis.BEND_IO.waits.length}`));\n'+(ROOT/'build/resolver-system-config.js').read_text())
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-system-config-audit.c','-lpthread','-lm','-o','build/resolver-system-config'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-system-config-audit.c','-lpthread','-lm','-o','build/resolver-system-config'],cwd=ROOT,check=True)
 loopback=socket.if_nametoindex('lo')
 def fields(values):return ''.join(f'{len(x)}:{x}' for x in values)
 def settings(servers,options,invalid):

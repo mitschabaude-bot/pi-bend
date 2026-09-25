@@ -45,7 +45,7 @@ def expected(limit,chunks):
     return '|'.join(trace+['incomplete'])
 args=[str(limit)+''.join(';'+codes(chunk) for chunk in chunks) for limit,chunks in cases]
 want=[expected(limit,chunks) for limit,chunks in cases]
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/http-line.bend','build/http-line'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/http-line.bend','build/http-line'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(args),64):
         p=subprocess.run([str(ROOT/'build/http-line'),'--threads',threads,*args[start:start+64]],cwd=ROOT,capture_output=True,text=True,check=True,timeout=30)

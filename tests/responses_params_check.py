@@ -3,8 +3,6 @@
 Converters are substituted with preconverted values in this boundary oracle;
 this is not a transcript/tool conversion or provider transport test.
 """
-from upstream_pin import check_sibling
-check_sibling()
 import itertools,json,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -45,7 +43,7 @@ def encode(c,result):
     value=[model['id'],model['provider'],model['reasoning'],model['thinkingLevelMap'],options,flags(model['compat']),options.get('cacheRetention','short'),c['input'],c['tools'],result]
     return ','.join(str(ord(x)) for x in json.dumps(value,ensure_ascii=True,separators=(',',':')))
 if '--no-build' not in sys.argv:
-    subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--stats','build/responses-params-build.json','--','sh','scripts/build-pure.sh','packages/ai/test/openai-responses-params-runner.bend','build/responses-params-runner'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', sys.executable,'scripts/run-rss-guarded.py','--stats','build/responses-params-build.json','--','sh','scripts/build-pure.sh','packages/ai/test/openai-responses-params-runner.bend','build/responses-params-runner'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(cases),24):
         args=[encode(c,r) for c,r in zip(cases[start:start+24],results[start:start+24])]

@@ -1,5 +1,6 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
-const source=fs.readFileSync('../pi-mono/packages/agent/src/agent-loop.ts','utf8');
+const source=fs.readFileSync(UPSTREAM + '/packages/agent/src/agent-loop.ts','utf8');
 const begin=source.indexOf('async function executeToolCalls(');
 const start=source.indexOf('const toolCalls =',begin),end=source.indexOf('\n}',start);
 if(begin<0||start<0||end<=start)throw new Error('tool selection body missing');

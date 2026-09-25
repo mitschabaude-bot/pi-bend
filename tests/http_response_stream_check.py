@@ -74,7 +74,7 @@ console.log(JSON.stringify(results));
 '''
 observed=json.loads(subprocess.check_output(['node','--input-type=module','-e',script],input=json.dumps(fixtures),cwd=ROOT,text=True,timeout=30))
 for f,actual in zip(fixtures,observed,strict=True):assert actual=={k:f[k] for k in ['status','expose','payload']},(f,actual)
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/http-response-stream.bend','build/http-response-stream'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/http-response-stream.bend','build/http-response-stream'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(args),16):
         p=subprocess.run([str(ROOT/'build/http-response-stream'),'--threads',threads,*args[start:start+16]],cwd=ROOT,text=True,capture_output=True,check=True,timeout=30)

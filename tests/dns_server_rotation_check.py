@@ -19,7 +19,7 @@ import subprocess
 ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-server-rotation-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/dns-server-rotation.bend','-o',f'build/dns-server-rotation.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-server-rotation.c','-lpthread','-lm','-o','build/dns-server-rotation'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-server-rotation.c','-lpthread','-lm','-o','build/dns-server-rotation'],cwd=ROOT,check=True)
 subprocess.run(['cc','-O2','tests/dns-rotation-oracle.c','-lresolv','-o','build/dns-rotation-oracle'],cwd=ROOT,check=True)
 commands=[('native 1',['build/dns-server-rotation','--threads','1']),('native 4',['build/dns-server-rotation','--threads','4']),('Bun',[str(bun),'build/dns-server-rotation.js'])]
 def encoded(values):return ','.join(map(str,values))

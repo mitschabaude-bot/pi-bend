@@ -40,7 +40,7 @@ for source in benchmark['fixtures']:
         original=root/'build/indent-benchmark-slice'/stem/(variant+'.c')
         assert digest(original)==benchmark['fixtures'][source]['generated_c'][variant]['sha256']
         shutil.copyfile(original,folder/'program.c')
-        subprocess.run([sys.executable,str(root/'scripts/run-rss-guarded.py'),'--','clang','-O1','-std=c11','-fbracket-depth=2048','program.c','-o','program','-lpthread','-lm'],cwd=folder,check=True)
+        subprocess.run(['flock', '/tmp/pi-bend-build.lock', sys.executable,str(root/'scripts/run-rss-guarded.py'),'--','clang','-O1','-std=c11','-fbracket-depth=2048','program.c','-o','program','-lpthread','-lm'],cwd=folder,check=True)
         for threads in [1,4]:
             actual=subprocess.check_output([str(folder/'program'),'--threads',str(threads),*arguments],text=True,timeout=60).splitlines()
             assert actual==expected,(stem,variant,threads,actual[:10],expected[:10])

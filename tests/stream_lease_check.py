@@ -9,6 +9,6 @@ a failed open, and an earlier listener failure surviving a release failure.
 from pathlib import Path
 import subprocess
 root = Path(__file__).resolve().parents[1]
-subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/agent/test/stream-lease.bend', 'build/stream-lease-check'], cwd=root, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/agent/test/stream-lease.bend', 'build/stream-lease-check'], cwd=root, check=True)
 for threads in ['1', '4']:
     subprocess.run(['build/stream-lease-check', '--threads', threads], cwd=root, check=True, timeout=120)

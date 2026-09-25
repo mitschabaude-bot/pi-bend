@@ -8,8 +8,7 @@ Requests, retries, bodies and peer closure are asserted by the server.
 import argparse,hashlib,json,os,re,socket,struct,subprocess,tempfile,threading,time
 from pathlib import Path
 from scoped_session_audit import prepare
-from upstream_pin import PIN, UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import PIN, UPSTREAM
 ROOT=Path(__file__).resolve().parents[1]
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--prefix',type=Path,default=ROOT/'build/openai-responses')
@@ -30,7 +29,7 @@ capped=compiler
 if not args.no_build and not args.audit:
     for suffix,limit,tool in [('c','16',capped if capped.is_file() else compiler),('js','8',compiler)]:
         subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib',limit,'--stats',f'{prefix}-{suffix}-build.json','--',str(bun),str(tool),'tests/openai-responses.bend','-o',f'{prefix}.{suffix}'],cwd=ROOT,check=True,env={**os.environ,'BEND_LAY_MAX':'32'})
-    subprocess.run(['clang','-fbracket-depth=2048','-std=c11','-O1',f'{prefix}.c','-lpthread','-lm','-o',str(prefix)],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-fbracket-depth=2048','-std=c11','-O1',f'{prefix}.c','-lpthread','-lm','-o',str(prefix)],cwd=ROOT,check=True)
 
 def bits(n):b=struct.pack('>d',n);return f"{int.from_bytes(b[:4],'big')},{int.from_bytes(b[4:],'big')}"
 def scalars(s):return ','.join(str(ord(c)) for c in s)

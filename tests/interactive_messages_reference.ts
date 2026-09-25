@@ -1,10 +1,11 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { strict as assert } from 'node:assert';
-import { UserMessageComponent } from '/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/components/user-message.ts';
-import { AssistantMessageComponent } from '/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/components/assistant-message.ts';
-import { initTheme } from '/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/theme/theme.ts';
-const source='/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/';
+const { UserMessageComponent } = await import(UPSTREAM + '/packages/coding-agent/src/modes/interactive/components/user-message.ts');
+const { AssistantMessageComponent } = await import(UPSTREAM + '/packages/coding-agent/src/modes/interactive/components/assistant-message.ts');
+const { initTheme } = await import(UPSTREAM + '/packages/coding-agent/src/modes/interactive/theme/theme.ts');
+const source=UPSTREAM + '/packages/coding-agent/src/modes/interactive/';
 for (const [file,digest] of [
  ['components/user-message.ts','234d4f2544a0cb60082a6012a63576cdda4e9f99cdd0560129dd1efe5c6c7b1d'],
  ['components/assistant-message.ts','f8a20228291816aec253d3f115fec5ba765807275bc14077780225117e5912cb'],
@@ -14,7 +15,7 @@ for (const [file,digest] of [
  ['markdown.ts','704c1c714a7ff6bdec55573ab38393726fa73a7b47cf4c1161ccc4f08530ac28'],
  ['box.ts','f79d30c9c263064df656dc55674b5d951bf765ffbbf658f400f449c44f6dab98'],
  ['text.ts','3042e09dd8dcb870c23506e6fafb2dfcc095e7e375adad2fb62e447da17e5e3b'],
-] as const) assert.equal(createHash('sha256').update(readFileSync('/home/agent/code/pi-mono/packages/tui/src/components/'+file)).digest('hex'),digest);
+] as const) assert.equal(createHash('sha256').update(readFileSync(UPSTREAM + '/packages/tui/src/components/'+file)).digest('hex'),digest);
 initTheme('dark');
 const out=(label:string,lines:string[])=>process.stdout.write(label+'\x1e'+lines.join('\x1f')+'\n');
 const message=(content:any[],stopReason='stop',errorMessage?:string):any=>({role:'assistant',content,api:'openai-responses',provider:'openai',model:'gpt-4o-mini',usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}},stopReason,errorMessage,timestamp:0});

@@ -14,7 +14,7 @@ bun=Path.home()/'.bun/bin/bun'
 for suffix in ['c','js']:
  with (ROOT/f'build/dns-pair-result-{suffix}.log').open('w') as log:
   subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-pair-result-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/dns-pair-result.bend','-o',f'build/dns-pair-result.{suffix}'],cwd=ROOT,check=True,stdout=log,stderr=subprocess.STDOUT)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-pair-result.c','-lpthread','-lm','-o','build/dns-pair-result'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-pair-result.c','-lpthread','-lm','-o','build/dns-pair-result'],cwd=ROOT,check=True)
 # These are full typed report fixtures, not a simulation of network receipt
 # order or a libc end-to-end resolver oracle. Errno constants are Linux values.
 classification={

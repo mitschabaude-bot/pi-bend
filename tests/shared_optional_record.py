@@ -26,7 +26,7 @@ def main():
             subprocess.run([str(compiler), source, "-o", str(javascript)], cwd=ROOT, check=True)
         if any(backend.startswith("native") for backend in args.backends):
             env = dict(os.environ, BEND=str(compiler))
-            subprocess.run(["sh", "scripts/build-pure.sh", source, str(prefix)], cwd=ROOT, env=env, check=True)
+            subprocess.run(['flock', '/tmp/pi-bend-build.lock', "sh", "scripts/build-pure.sh", source, str(prefix)], cwd=ROOT, env=env, check=True)
     for backend in args.backends:
         command = ["bun", str(javascript)] if backend == "bun" else [str(prefix), "--threads", backend.rsplit("-", 1)[1]]
         count = 0

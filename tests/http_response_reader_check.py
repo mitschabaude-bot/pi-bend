@@ -149,7 +149,7 @@ assert rejected.returncode != 0 and 'expected : Data' in diagnostic and 'observe
 print('HTTP response cursor duplication rejected by type checker', flush=True)
 
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/http-response-reader-runner.bend', 'build/http-response-reader'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/http-response-reader-runner.bend', 'build/http-response-reader'], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     for start in range(0, len(args), 16):
         result = subprocess.run([str(ROOT / 'build/http-response-reader'), '--threads', threads, *args[start:start + 16]], cwd=ROOT, text=True, capture_output=True, check=True, timeout=30)

@@ -1,9 +1,10 @@
 // Test-only oracle: actual pinned Agent construction, processEvents and finishRun,
 // plus the unmodified begin-run block. Provider/executor/listener paths are not invoked.
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-import {createInitialSystemMessage, getCurrentSystemMessage, getCurrentSystemPrompt, getCurrentTools, toToolDeclaration} from '../../pi-mono/packages/ai/src/utils/transcript.ts';
-const source=fs.readFileSync('../pi-mono/packages/agent/src/agent.ts','utf8');
+const { createInitialSystemMessage, getCurrentSystemMessage, getCurrentSystemPrompt, getCurrentTools, toToolDeclaration } = await import(UPSTREAM + '/packages/ai/src/utils/transcript.ts');
+const source=fs.readFileSync(UPSTREAM + '/packages/agent/src/agent.ts','utf8');
 const body=stripTypeScriptTypes(source.slice(source.indexOf('function defaultConvertToLlm('))).replace(/^export /gm,'');
 const {Agent,defaultConvertToLlm}=new Function('createInitialSystemMessage','getCurrentSystemMessage','getCurrentSystemPrompt','toToolDeclaration','getDefaultStreamFn',body+';return {Agent,defaultConvertToLlm};')(createInitialSystemMessage,getCurrentSystemMessage,getCurrentSystemPrompt,toToolDeclaration,()=>{throw Error('unexpected fallback')});
 const beginStart=source.indexOf('const abortController =',source.indexOf('private async runWithLifecycle'));

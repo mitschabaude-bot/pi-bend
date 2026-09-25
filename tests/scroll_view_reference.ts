@@ -1,9 +1,10 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { strict as assert } from "node:assert";
-import { ScrollView } from "/home/agent/code/pi-mono/packages/tui/src/components/scroll-view.ts";
-import type { Component } from "/home/agent/code/pi-mono/packages/tui/src/tui.ts";
-assert.equal(createHash("sha256").update(readFileSync("/home/agent/code/pi-mono/packages/tui/src/components/scroll-view.ts")).digest("hex"), "76dfd9f8a88cabc064f0652b83f16a945fbc988c9fe7c0423a4cd796907ef77d");
+const { ScrollView } = await import(UPSTREAM + "/packages/tui/src/components/scroll-view.ts");
+
+assert.equal(createHash("sha256").update(readFileSync(UPSTREAM + "/packages/tui/src/components/scroll-view.ts")).digest("hex"), "76dfd9f8a88cabc064f0652b83f16a945fbc988c9fe7c0423a4cd796907ef77d");
 const child: Component = { render: () => ["one", "two"], invalidate: () => {} };
 const view = new ScrollView(child, { follow: "end", primary: true, scrollbarHideDelayMs: 10 });
 const report = (label: string) => console.log(`${label}:${view.scrollTop}:${view.isFollowingEnd}:${(view as any).contentHeight}/${view.viewportHeight}:${view.isScrollbarVisible}:${view.getContentWidth(6)}`);

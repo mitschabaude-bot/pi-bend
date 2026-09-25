@@ -1,6 +1,4 @@
 """Reasoning/signature replay against the actual pinned full transform."""
-from upstream_pin import check_sibling
-check_sibling()
 import itertools,json,subprocess
 from pathlib import Path
 from schema_literals import string
@@ -31,5 +29,5 @@ for start in range(0,len(cases),60):
     lines += [f'def {name}() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(start,min(start+60,len(cases)))]
 lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {name}()' for name in groups]+[f'    IO.print("PASS {len(cases)} typed assistant replay transformations")']
 src=BUILD/'transform-replay-check.bend';src.write_text('\n'.join(lines)+'\n');out=BUILD/'transform-replay-check'
-subprocess.run(['sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
 for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,check=True,timeout=120)

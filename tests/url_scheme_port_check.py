@@ -67,7 +67,7 @@ for index, scheme, port in actual:
         assert (scheme, port) == (want[0], want[-1]), (cases[index], want, scheme, port)
 print(f'Node constructor cross-check: {len(eligible)} cases PASS', flush=True)
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/url-scheme-port.bend', 'build/url-scheme-port'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/url-scheme-port.bend', 'build/url-scheme-port'], cwd=ROOT, check=True)
 subprocess.run([str(Path(BEND)), 'packages/runtime/test/url-scheme-port.bend', '-o', 'build/url-scheme-port.js'], cwd=ROOT, check=True)
 def codes(text):
     return ','.join(str(ord(c)) for c in text)

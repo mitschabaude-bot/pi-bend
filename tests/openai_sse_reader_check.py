@@ -100,7 +100,7 @@ def chunk(value):
 
 arguments = ['s' + '/'.join([str(case['closeMode']), str(case['diagnosticMode']), str(int(case['synthesize'])), case['actions'], '|'.join(map(chunk, case['chunks']))]) for case in cases]
 (ROOT / 'build').mkdir(exist_ok=True)
-subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/ai/test/openai-sse-reader-runner.bend', 'build/test-openai-sse-reader'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/ai/test/openai-sse-reader-runner.bend', 'build/test-openai-sse-reader'], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     for start in range(0, len(cases), 32):
         actual = subprocess.check_output([str(ROOT / 'build/test-openai-sse-reader'), '--threads', threads, *arguments[start:start+32]], text=True, timeout=30).splitlines()

@@ -28,7 +28,7 @@ if not a.no_build:
                         '--stats', f'build/dns-lookup-shared-{suffix}-build.json', '--',
                         str(bun), str(candidate/'main.ts'), 'tests/dns-lookup-shared.bend',
                         '-o', f'build/dns-lookup-shared.{suffix}'], cwd=ROOT, check=True)
-subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1',
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1',
                 'build/dns-lookup-shared.c', '-lpthread', '-lm', '-o',
                 'build/dns-lookup-shared'], cwd=ROOT, check=True)
 

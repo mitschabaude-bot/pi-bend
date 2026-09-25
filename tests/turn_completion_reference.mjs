@@ -1,6 +1,7 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-const source = fs.readFileSync('../pi-mono/packages/agent/src/agent-loop.ts', 'utf8');
+const source = fs.readFileSync(UPSTREAM + '/packages/agent/src/agent-loop.ts', 'utf8');
 const body = source.slice(source.indexOf('async function runLoop('), source.indexOf('\n/**\n * Declare tool loadout changes'));
 let text = ''; for await (const chunk of process.stdin) text += chunk;
 const output = [];

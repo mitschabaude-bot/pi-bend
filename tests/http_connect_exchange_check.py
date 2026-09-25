@@ -27,7 +27,7 @@ launcher = ROOT / 'build/http-connect-compiler'
 launcher.write_text('#!/bin/sh\nexec ' + shlex.quote(str(bun)) + ' ' + shlex.quote(str(candidate / 'main.ts')) + ' "$@"\n')
 launcher.chmod(0o755)
 if not args.no_build:
-    subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '24', '--stats', 'build/http-connect-build.json', '--', 'sh', 'scripts/build-pure.sh', 'tests/http-connect-exchange.bend', 'build/http-connect-exchange'], cwd=ROOT, env=dict(os.environ, BEND=str(launcher)), check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'python3', 'scripts/run-rss-guarded.py', '--limit-gib', '24', '--stats', 'build/http-connect-build.json', '--', 'sh', 'scripts/build-pure.sh', 'tests/http-connect-exchange.bend', 'build/http-connect-exchange'], cwd=ROOT, env=dict(os.environ, BEND=str(launcher)), check=True)
 subprocess.run(['python3', 'scripts/run-rss-guarded.py', '--limit-gib', '8', '--stats', 'build/http-connect-js-build.json', '--', str(launcher), 'tests/http-connect-exchange.bend', '-o', 'build/http-connect-exchange.js'], cwd=ROOT, check=True)
 results = []
 

@@ -1,6 +1,4 @@
 """Pinned partial-json default mode and Pi's full streaming JSON composition."""
-from upstream_pin import check_sibling
-check_sibling()
 import itertools,json,random,subprocess
 from pathlib import Path
 from schema_literals import string,seq
@@ -38,5 +36,5 @@ for start in range(0,len(cases),25):
     name=f'group{start}';groups.append(name);lines += [f'def {name}() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(start,min(start+25,len(cases)))]
 lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {g}()' for g in groups]+['    Check.deep()','    Check.literalKeys()',f'    IO.print("PASS {len(cases)} partial/streaming JSON comparisons and 2000 unclosed containers")']
 src=BUILD/'partial-json-check.bend';src.write_text('\n'.join(lines)+'\n');out=BUILD/'partial-json-check'
-subprocess.run(['sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
 for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,check=True,timeout=180)

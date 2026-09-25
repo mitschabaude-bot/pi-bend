@@ -71,7 +71,7 @@ def main():
     compiler = args.bend or Path(os.environ.get('BEND', str(ROOT/'build/bend-native-toolchain/bend2/main.ts')))
     if not args.no_build:
         subprocess.run([str(compiler), 'tests/image-mime.bend', '-o', str(prefix)+'.js'], cwd=ROOT, check=True)
-        subprocess.run(['sh', 'scripts/build-pure.sh', 'tests/image-mime.bend', str(prefix)], cwd=ROOT,
+        subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'tests/image-mime.bend', str(prefix)], cwd=ROOT,
                        env=dict(os.environ, BEND=str(compiler)), check=True)
     cases = corpus()
     inputs = ROOT/'build/image-mime-cases.json'

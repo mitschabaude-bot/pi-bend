@@ -1,5 +1,6 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
-const source = fs.readFileSync('../pi-mono/packages/agent/src/agent-loop.ts', 'utf8');
+const source = fs.readFileSync(UPSTREAM + '/packages/agent/src/agent-loop.ts', 'utf8');
 const start = source.indexOf('async function finalizeExecutedToolCall(');
 const body = source.slice(start).match(/if \(afterResult\) \{([\s\S]*?)\n\t\t\t\}/)[0];
 const apply = new Function('result', 'isError', 'afterResult', body + '\nreturn { result, isError };');

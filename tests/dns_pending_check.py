@@ -14,7 +14,7 @@ import subprocess
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('--no-build',action='store_true');args=p.parse_args()
 if not args.no_build:
-    subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-pending-build.json','--','sh','scripts/build-pure.sh','packages/runtime/test/dns-pending.bend','build/dns-pending'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-pending-build.json','--','sh','scripts/build-pure.sh','packages/runtime/test/dns-pending.bend','build/dns-pending'],cwd=ROOT,check=True)
 subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-pending-js-build.json','--',str(Path(BEND)),'packages/runtime/test/dns-pending.bend','-o','build/dns-pending.js'],cwd=ROOT,check=True)
 
 def wire(id,kind=1,flags=0x8180,qd=1,an=0):

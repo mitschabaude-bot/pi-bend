@@ -58,7 +58,7 @@ for index,results in enumerate(actual):
             if kind=='absolute':assert raw[1]==scheme,(index,texts[index],raw,scheme)
 print(f'Node preprocessing: {len(texts)*2} constructor comparisons ({valid} successful parses) PASS',flush=True)
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/url-input.bend','build/url-input'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/url-input.bend','build/url-input'],cwd=ROOT,check=True)
 subprocess.run([str(Path(BEND)),'packages/runtime/test/url-input.bend','-o','build/url-input.js'],cwd=ROOT,check=True)
 arguments=[]
 for text in texts:

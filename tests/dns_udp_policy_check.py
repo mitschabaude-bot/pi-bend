@@ -5,7 +5,7 @@ from bend_toolchain import BEND, TOOLCHAIN
 ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-udp-policy-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/dns-udp-policy.bend','-o',f'build/dns-udp-policy.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-udp-policy.c','-lpthread','-lm','-o','build/dns-udp-policy'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-udp-policy.c','-lpthread','-lm','-o','build/dns-udp-policy'],cwd=ROOT,check=True)
 cases=[]
 for code,aa,ra,tc,answers,additional,ignore,other in itertools.product(range(16),[0,1],[0,1],[0,1],[0,65535],[0,65535],[0,1],[0,65535]):
     flags=code | (aa<<10) | (ra<<7) | (tc<<9) | (0xF970 if other else 0)

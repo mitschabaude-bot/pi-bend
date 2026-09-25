@@ -98,7 +98,7 @@ def operation(op):
 
 
 arguments = ['s' + '|'.join(map(operation, case)) for case in cases]
-subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/sse-stream-runner.bend', 'build/test-sse-stream'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/sse-stream-runner.bend', 'build/test-sse-stream'], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     for start in range(0, len(cases), 24):
         actual = subprocess.check_output([str(ROOT / 'build/test-sse-stream'), '--threads', threads, *arguments[start:start+24]], text=True, timeout=30).splitlines()

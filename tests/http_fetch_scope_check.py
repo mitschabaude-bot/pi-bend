@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory(dir=root / 'build', prefix='http-fetch-scope-')
     folder = Path(directory)
     for suffix in ('c', 'js'):
         subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib',('16' if suffix=='c' else '8'),'--stats',str(root/'build'/('http-fetch-scope-'+suffix+'-build.json')),'--',str(bun), str(candidate / 'main.ts'), str(fixture), '-o', str(folder / ('run.' + suffix))], cwd=root, check=True)
-    subprocess.run(['clang','-std=c11','-O1','-fbracket-depth=2048',str(folder/'run.c'),'-lpthread','-lm','-o',str(folder/'production')],check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-O1','-fbracket-depth=2048',str(folder/'run.c'),'-lpthread','-lm','-o',str(folder/'production')],check=True)
     for label,command in [('native-1',[str(folder/'production'),'--threads','1']),('native-4',[str(folder/'production'),'--threads','4']),('bun',[str(bun),str(folder/'run.js')])]:
         for mode in expected:
             run=subprocess.run([*command,mode],capture_output=True,text=True,check=True,timeout=10)
@@ -73,7 +73,7 @@ static void __attribute__((destructor)) sleep_audit(void) {
     instrumented_js = instrumented_js.replace('  row.waiter = wait;', '  timerAudit.waiting++;\n  row.waiter = wait;').replace('row.waiter = null;', 'timerAudit.waiting--; row.waiter = null;')
     instrumented_js += "\nprocess.on('exit',()=>console.error('DEADLINE_AUDIT',timerAudit.created,timerAudit.closed,timerAudit.live,timerAudit.peak,timerAudit.parked,timerAudit.waiting,-1));\n"
     js.write_text(js.read_text().replace(original_js, instrumented_js))
-    subprocess.run(['clang', '-std=c11', '-O1', '-fbracket-depth=2048', str(c),
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-O1', '-fbracket-depth=2048', str(c),
                     '-lpthread', '-lm', '-o', str(folder / 'run')], check=True)
     for backend, command in [('native-1', [str(folder / 'run'), '--threads', '1']),
                              ('native-4', [str(folder / 'run'), '--threads', '4']),

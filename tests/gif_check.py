@@ -144,7 +144,7 @@ def main():
     if not args.no_build:
         compiler=os.environ.get('BEND',str(ROOT/'build/bend-native-toolchain/bend2/main.ts'))
         subprocess.run([compiler,'tests/gif.bend','-o',args.prefix+'.js'],cwd=ROOT,check=True)
-        subprocess.run(['sh','scripts/build-pure.sh','tests/gif.bend',args.prefix],cwd=ROOT,check=True)
+        subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','tests/gif.bend',args.prefix],cwd=ROOT,check=True)
     valid,bad=corpus()
     with tempfile.TemporaryDirectory(prefix='gif-oracle-') as directory:
         files=[]

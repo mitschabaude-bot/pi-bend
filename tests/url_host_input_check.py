@@ -43,7 +43,7 @@ reference=json.loads(subprocess.check_output(['node','-e',oracle],input=json.dum
 for index,(want,actual) in enumerate(zip(expected,reference,strict=True)):
     if want is not None: assert want==actual,(index,texts[index],want,actual)
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/url-host-input.bend','build/url-host-input'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/url-host-input.bend','build/url-host-input'],cwd=ROOT,check=True)
 subprocess.run([str(Path(BEND)),'packages/runtime/test/url-host-input.bend','-o','build/url-host-input.js'],cwd=ROOT,check=True)
 arguments=list(map(codes,texts))
 for label,command in [('native 1',['build/url-host-input','--threads','1']),('native 4',['build/url-host-input','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/url-host-input.js'])]:

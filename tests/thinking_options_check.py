@@ -1,6 +1,4 @@
 """Shared provider thinking budgets compared with actual pinned Pi helpers."""
-from upstream_pin import check_sibling
-check_sibling()
 import json
 import random
 import struct
@@ -60,6 +58,6 @@ lines += ['def main() -> IO(Unit):', '  do IO<Unit>:', '    T.absence()'] + [f' 
 src = BUILD / 'thinking-options-check.bend'
 out = BUILD / 'thinking-options-check'
 src.write_text('\n'.join(lines) + '\n')
-subprocess.run(['sh', 'scripts/build-pure.sh', str(src), str(out)], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(src), str(out)], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     subprocess.run([str(out), '--threads', threads], cwd=ROOT, check=True, timeout=120)

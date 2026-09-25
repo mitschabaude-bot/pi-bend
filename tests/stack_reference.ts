@@ -1,13 +1,14 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { strict as assert } from "node:assert";
-import { allocateStackSizes } from "/home/agent/code/pi-mono/packages/tui/src/components/stack.ts";
-import { VStack } from "/home/agent/code/pi-mono/packages/tui/src/components/v-stack.ts";
-import { HStack } from "/home/agent/code/pi-mono/packages/tui/src/components/h-stack.ts";
-import { getLayoutBoxesAt, renderLayoutFrame } from "/home/agent/code/pi-mono/packages/tui/src/layout.ts";
-import { stripTerminalSequences } from "/home/agent/code/pi-mono/packages/tui/src/utils.ts";
-import type { Component } from "/home/agent/code/pi-mono/packages/tui/src/tui.ts";
-const source = "/home/agent/code/pi-mono/packages/tui/src/";
+const { allocateStackSizes } = await import(UPSTREAM + "/packages/tui/src/components/stack.ts");
+const { VStack } = await import(UPSTREAM + "/packages/tui/src/components/v-stack.ts");
+const { HStack } = await import(UPSTREAM + "/packages/tui/src/components/h-stack.ts");
+const { getLayoutBoxesAt, renderLayoutFrame } = await import(UPSTREAM + "/packages/tui/src/layout.ts");
+const { stripTerminalSequences } = await import(UPSTREAM + "/packages/tui/src/utils.ts");
+
+const source = UPSTREAM + "/packages/tui/src/";
 for (const [file, digest] of [
   ["layout.ts", "7530a8eaa30f44fef82e8b7020b5068ba89d34884463c6cb526073b20fcdeef0"],
   ["components/stack.ts", "93208d326fa43431b930eaa3250a1e19747063d696e97ec2f002f5feaa54fc18"],

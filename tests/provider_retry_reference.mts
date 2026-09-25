@@ -1,6 +1,7 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-const source = stripTypeScriptTypes(fs.readFileSync('../pi-mono/packages/ai/src/utils/provider-retry.ts', 'utf8'))
+const source = stripTypeScriptTypes(fs.readFileSync(UPSTREAM + '/packages/ai/src/utils/provider-retry.ts', 'utf8'))
   .replace(/^export /gm, '').replace('function abortableSleep(', 'function originalAbortableSleep(');
 function bits(n) { const b=Buffer.alloc(8); b.writeDoubleBE(n); return b.readUInt32BE(0)+':'+b.readUInt32BE(4); }
 const cases = [

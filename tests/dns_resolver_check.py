@@ -20,7 +20,7 @@ candidate=a.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 if not a.no_build:
     for suffix in ['c','js']:
         subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','20','--stats',f'build/{fixture}-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),f'tests/{fixture}.bend','-o',f'build/{fixture}.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1',f'build/{fixture}.c','-lpthread','-lm','-o',f'build/{fixture}'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1',f'build/{fixture}.c','-lpthread','-lm','-o',f'build/{fixture}'],cwd=ROOT,check=True)
 
 def wire(owner):return b''.join(bytes([len(label)])+label.encode() for label in owner.rstrip('.').split('.'))+b'\0'
 def exact(peer,size):

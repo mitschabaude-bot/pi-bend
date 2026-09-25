@@ -4,8 +4,8 @@ and where that checkout lives.
 Differential checks read upstream sources at this commit. The checkout is the
 main pi-bend checkout's sibling `pi-mono` (found through git's common
 directory, so worktrees elsewhere resolve it too), or PI_MONO when set.
-Importing this module exports PI_MONO to subprocesses, so references and
-inline scripts can read the same location.
+Importing this module exports PI_MONO to subprocesses; the TypeScript and
+JavaScript references resolve it the same way (tests/upstream_pin.mjs).
 """
 import os
 import subprocess
@@ -33,15 +33,6 @@ def check_pin() -> Path:
     """Fail unless the upstream checkout is at the pin."""
     actual = revision()
     assert actual == PIN, f'{UPSTREAM} is at {actual}, expected {PIN}'
-    return UPSTREAM
-
-
-def check_sibling() -> Path:
-    """For checks whose TypeScript references import `../../pi-mono/...`
-    statically: that path resolves beside this checkout, so it must be the
-    pinned tree too (a worktree under /tmp would see /tmp/pi-mono)."""
-    sibling = ROOT.parent / 'pi-mono'
-    assert sibling.resolve() == UPSTREAM or (sibling.is_dir() and revision(sibling) == PIN), f'{sibling} (used by static reference imports) is not the pinned tree {UPSTREAM}; run from a checkout beside it or link it'
     return UPSTREAM
 
 

@@ -13,7 +13,7 @@ bun=Path.home()/'.bun/bin/bun'
 compiler=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/resolver-hostname-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/resolver-hostname.bend','-o',f'build/resolver-hostname.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-hostname.c','-lpthread','-lm','-o','build/resolver-hostname'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-hostname.c','-lpthread','-lm','-o','build/resolver-hostname'],cwd=ROOT,check=True)
 libc=ctypes.CDLL(None);aton=libc.__inet_aton_exact;aton.argtypes=[ctypes.c_char_p,ctypes.c_void_p];aton.restype=ctypes.c_int
 
 def address(text):

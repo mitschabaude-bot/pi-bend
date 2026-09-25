@@ -22,7 +22,7 @@ def main() -> IO(Unit):
   Bool.pick(IO(Unit), U32.is_eq((Shared.value() + Dependent.value() : U32), 83), IO.print("PASS shared namespace"), IO.die(Unit, 1, "module aliases resolved incorrectly"))
 ''')
         output = tree / 'main'
-        subprocess.run(['sh', 'scripts/build-pure.sh', str(entry), str(output)], cwd=ROOT, check=True)
+        subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(entry), str(output)], cwd=ROOT, check=True)
         subprocess.run([str(output), '--threads', '1'], check=True, timeout=20)
     # Reusing a completed import must not accidentally accept an active cycle.
     entry.write_text('import Base\nimport ../src/cycle.bend as Cycle\ndef main() -> IO(Unit): IO.print("unreachable")\n')

@@ -1,9 +1,10 @@
 // The oracle runs the actual pinned processResponsesStream, cloning each event
 // as emitted (the approved immutable-snapshot adaptation).
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {createRequire,stripTypeScriptTypes} from 'node:module';
 const require=createRequire(import.meta.url);
-const base='../pi-mono/packages/ai/src/';
+const base=UPSTREAM + '/packages/ai/src/';
 const partialPath=process.env.PI_PARTIAL_JSON_PACKAGE??'/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/partial-json';
 if(JSON.parse(fs.readFileSync(partialPath+'/package.json','utf8')).version!=='0.1.7')throw Error('partial-json version mismatch');
 const partialParse=require(partialPath+'/dist/index.js').parse;

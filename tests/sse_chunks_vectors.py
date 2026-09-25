@@ -75,7 +75,7 @@ def operation(op):
 
 
 arguments = ['s' + '|'.join(map(operation, case)) for case in cases]
-subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/sse-chunks-runner.bend', 'build/test-sse-chunks'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/sse-chunks-runner.bend', 'build/test-sse-chunks'], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     for start in range(0, len(cases), 64):
         actual = subprocess.check_output(

@@ -3,9 +3,10 @@
 // "simple"/"stream"/"params" run upstream streamSimple/stream with a capturing
 // fetch and report the request URL, headers and body; "convert" reports
 // convertMessages under the case's explicit compat, as the upstream suites call it.
-import { convertMessages, stream, streamSimple } from "/home/agent/code/pi-mono/packages/ai/src/api/openai-completions.ts";
-import { getModel } from "/home/agent/code/pi-mono/packages/ai/src/compat.ts";
-import { normalizeContext } from "/home/agent/code/pi-mono/packages/ai/src/utils/transcript.ts";
+import { UPSTREAM } from "./upstream_pin.mjs";
+const { convertMessages, stream, streamSimple } = await import(UPSTREAM + "/packages/ai/src/api/openai-completions.ts");
+const { getModel } = await import(UPSTREAM + "/packages/ai/src/compat.ts");
+const { normalizeContext } = await import(UPSTREAM + "/packages/ai/src/utils/transcript.ts");
 
 const done = 'data: {"id":"chatcmpl-1","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
 

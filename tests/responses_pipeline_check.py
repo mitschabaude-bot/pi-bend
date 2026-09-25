@@ -46,7 +46,7 @@ def chunk(value):
 arguments=['s'+'/'.join([case['closeMode'],case['sinkMode'],'|'.join(map(chunk,case['chunks'])),codes(json.dumps(want,ensure_ascii=True,separators=(',',':')))]) for case,want in zip(cases,expected,strict=True)]
 (ROOT/'build').mkdir(exist_ok=True)
 if '--no-build' not in sys.argv:
-    subprocess.run(['python3','scripts/run-rss-guarded.py','--stats','build/responses-pipeline-build-stats.json','--','sh','scripts/build-pure.sh','packages/ai/test/openai-responses-pipeline.bend','build/test-responses-pipeline'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'python3','scripts/run-rss-guarded.py','--stats','build/responses-pipeline-build-stats.json','--','sh','scripts/build-pure.sh','packages/ai/test/openai-responses-pipeline.bend','build/test-responses-pipeline'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(cases),2):
         actual=subprocess.check_output([str(ROOT/'build/test-responses-pipeline'),'--threads',threads,*arguments[start:start+2]],text=True,timeout=60).splitlines()

@@ -131,7 +131,7 @@ for row in rows:
         arguments.append('q;' + codes(row['text']) + ';' + '|'.join(ops))
 
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/url-search-params.bend', 'build/url-search-params'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/url-search-params.bend', 'build/url-search-params'], cwd=ROOT, check=True)
 if '--no-build' not in sys.argv:
     subprocess.run([BEND, 'packages/runtime/test/url-search-params.bend', '-o', 'build/url-search-params.js'], cwd=ROOT, check=True)
 differences = []

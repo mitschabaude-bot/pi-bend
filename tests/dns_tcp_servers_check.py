@@ -26,7 +26,7 @@ a=p.parse_args();candidate=a.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 if not a.no_build:
     for suffix in ['c','js']:
         subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','16','--stats',f'build/dns-tcp-servers-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/dns-tcp-servers.bend','-o',f'build/dns-tcp-servers.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-tcp-servers.c','-lpthread','-lm','-o','build/dns-tcp-servers'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-tcp-servers.c','-lpthread','-lm','-o','build/dns-tcp-servers'],cwd=ROOT,check=True)
 
 def exact(peer,size):
     data=b''

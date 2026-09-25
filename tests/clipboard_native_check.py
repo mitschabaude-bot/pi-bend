@@ -20,7 +20,7 @@ def writer(path, body):
 
 
 def main():
-    subprocess.run(["sh", "scripts/build-pure.sh", "tests/clipboard-native-probe.bend", str(PROBE)], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', "sh", "scripts/build-pure.sh", "tests/clipboard-native-probe.bend", str(PROBE)], cwd=ROOT, check=True)
 
     with tempfile.TemporaryDirectory() as tmp:
         directory = Path(tmp)

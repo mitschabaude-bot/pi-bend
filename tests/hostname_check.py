@@ -14,7 +14,7 @@ BASE=TOOLCHAIN
 CANDIDATE=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/hostname-{suffix}-build.json','--',str(BUN),str(CANDIDATE/'main.ts'),'tests/hostname.bend','-o',f'build/hostname.{suffix}'],cwd=ROOT,check=True)
-clang=['clang','-std=c11','-fbracket-depth=2048','-O1','build/hostname.c','-lpthread','-lm']
+clang=['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/hostname.c','-lpthread','-lm']
 subprocess.run([*clang,'-o','build/hostname'],cwd=ROOT,check=True)
 subprocess.run([*clang,'tests/hostname-effect-shim.c','-Wl,--wrap=uname','-o','build/hostname-shim'],cwd=ROOT,check=True)
 js_shim='''const hostTestOs = require("node:os");

@@ -1,6 +1,4 @@
 """Stream wrappers retain event order, settle before consumption and close on errors."""
-from upstream_pin import check_sibling
-check_sibling()
 import itertools
 import json
 import subprocess
@@ -47,7 +45,7 @@ lines.append(f'    IO.print("PASS {len(cases)} asynchronous wrapper comparisons 
 source = ROOT / 'build/loop-stream-check.bend'
 source.write_text('\n'.join(lines) + '\n')
 output = ROOT / 'build/loop-stream-check'
-subprocess.run(['sh', 'scripts/build-pure.sh', str(source), str(output)], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(source), str(output)], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     result = subprocess.run([str(output), '--threads', threads], cwd=ROOT,
                             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=120)

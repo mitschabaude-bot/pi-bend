@@ -1,16 +1,17 @@
 // Execute the pinned internal loop and all its helpers, including streaming,
 // declarations, tool dispatch and completion. Only the provider is a fixture.
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
-import {setDefaultStreamFn, getDefaultStreamFn} from '../../pi-mono/packages/agent/src/stream-fn.ts';
+const { setDefaultStreamFn, getDefaultStreamFn } = await import(UPSTREAM + '/packages/agent/src/stream-fn.ts');
 import {stripTypeScriptTypes} from 'node:module';
-import {getCurrentTools, getToolStateChanges, toToolDeclaration, normalizeContext} from '../../pi-mono/packages/ai/src/utils/transcript.ts';
+const { getCurrentTools, getToolStateChanges, toToolDeclaration, normalizeContext } = await import(UPSTREAM + '/packages/ai/src/utils/transcript.ts');
 import {Compile} from '../build/schema-reference/node_modules/typebox/build/compile/index.mjs';
 import {Value} from '../build/schema-reference/node_modules/typebox/build/value/index.mjs';
-const validationSource = fs.readFileSync('../pi-mono/packages/ai/src/utils/validation.ts', 'utf8');
+const validationSource = fs.readFileSync(UPSTREAM + '/packages/ai/src/utils/validation.ts', 'utf8');
 const validationBody = stripTypeScriptTypes(validationSource.slice(validationSource.indexOf('const validatorCache ='))).replace(/^export /gm, '');
 const validateToolArguments = new Function('Compile', 'Value', validationBody + ';return validateToolArguments;')(Compile, Value);
-const source = fs.readFileSync('../pi-mono/packages/agent/src/agent-loop.ts', 'utf8');
+const source = fs.readFileSync(UPSTREAM + '/packages/agent/src/agent-loop.ts', 'utf8');
 const entry = source.slice(source.indexOf('export async function runAgentLoop('), source.indexOf('function createAgentStream('));
 const body = stripTypeScriptTypes(entry + source.slice(source.indexOf('async function runLoop('))).replace(/^export /gm, '');
 let input = ''; for await (const chunk of process.stdin) input += chunk;

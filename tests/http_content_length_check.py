@@ -47,7 +47,7 @@ for fields,accepted in zip(fetch_fields,observed,strict=True):
     if len(lengths)>1 and result not in ['overflow','invalid']:result='duplicate'
     assert accepted==(result not in ['invalid','overflow','duplicate']),(fields,accepted,result)
     args.append('f'+''.join(';'+codes(k)+':'+codes(v) for k,v in fields));want.append(result)
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/http-content-length.bend','build/http-content-length'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/http-content-length.bend','build/http-content-length'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(args),64):
         p=subprocess.run([str(ROOT/'build/http-content-length'),'--threads',threads,*args[start:start+64]],cwd=ROOT,text=True,capture_output=True,check=True,timeout=30)

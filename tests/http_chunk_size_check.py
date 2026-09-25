@@ -38,7 +38,7 @@ console.log(JSON.stringify(results));
 accepted=json.loads(subprocess.check_output(['node','--input-type=module','-e',script],input=json.dumps(fetch_rows),cwd=ROOT,text=True,timeout=30))
 for row,ok in zip(fetch_rows,accepted,strict=True):add(row,'0,1' if ok else 'invalid')
 args=[','.join(map(str,row)) for row in rows]
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/http-chunk-size.bend','build/http-chunk-size'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/http-chunk-size.bend','build/http-chunk-size'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(args),64):
         p=subprocess.run([str(ROOT/'build/http-chunk-size'),'--threads',threads,*args[start:start+64]],cwd=ROOT,text=True,capture_output=True,check=True,timeout=30)

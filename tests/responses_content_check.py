@@ -1,6 +1,4 @@
 """Responses user/tool content and composition with shared image preparation."""
-from upstream_pin import check_sibling
-check_sibling()
 import itertools,json,subprocess
 from pathlib import Path
 from schema_literals import string,seq
@@ -22,5 +20,5 @@ for start in range(0,len(cases),30):
     name=f'group{start}';groups.append(name);lines += [f'def {name}() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(start,min(start+30,len(cases)))]
 lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {g}()' for g in groups]+[f'    IO.print("PASS {len(cases)} Responses content cases, direct and image-prepared")']
 src=BUILD/'responses-content-check.bend';src.write_text('\n'.join(lines)+'\n');out=BUILD/'responses-content-check'
-subprocess.run(['sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
 for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,check=True,timeout=120)

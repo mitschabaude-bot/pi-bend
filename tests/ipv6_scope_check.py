@@ -12,7 +12,7 @@ bun=Path.home()/'.bun/bin/bun'
 compiler=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/ipv6-scope-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/ipv6-scope.bend','-o',f'build/ipv6-scope.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/ipv6-scope.c','-lpthread','-lm','-o','build/ipv6-scope'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/ipv6-scope.c','-lpthread','-lm','-o','build/ipv6-scope'],cwd=ROOT,check=True)
 
 def permits(address):
     value=ipaddress.IPv6Address(address)

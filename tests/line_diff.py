@@ -111,7 +111,7 @@ def main():
                 subprocess.run([str(compiler), source, "-o", str(output) + ".js"], cwd=ROOT, check=True)
         if any(name.startswith("native") for name in args.backends):
             for source, output in [("tests/line-diff.bend", prefix), ("tests/line-diff-long.bend", long_prefix)]:
-                subprocess.run(["sh", "scripts/build-pure.sh", source, str(output)], cwd=ROOT,
+                subprocess.run(['flock', '/tmp/pi-bend-build.lock', "sh", "scripts/build-pure.sh", source, str(output)], cwd=ROOT,
                                env=dict(os.environ, BEND=str(compiler)), check=True)
     cases = corpus()
     expected = oracle(args.reference.resolve(), args.diff_package.resolve(), cases, directory)

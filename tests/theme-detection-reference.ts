@@ -1,12 +1,10 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
-import {
-  detectTerminalBackgroundFromEnv, detectTerminalThemeForAuto,
-  getThemeForRgbColor, resolveThemeSetting,
-} from '/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/theme/theme.ts';
+const { detectTerminalBackgroundFromEnv, detectTerminalThemeForAuto, getThemeForRgbColor, resolveThemeSetting } = await import(UPSTREAM + '/packages/coding-agent/src/modes/interactive/theme/theme.ts');
 
-const source=readFileSync('/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/theme/theme.ts');
+const source=readFileSync(UPSTREAM + '/packages/coding-agent/src/modes/interactive/theme/theme.ts');
 assert.equal(createHash('sha256').update(source).digest('hex'),'c3bf2e3b72f6bb782f34de0535fcc1758b9b6ea7a0d2e7d6f17244fa55c3f31a');
 for(const value of ['light/dark',' a / b ','dark','','a/b/c','a/','/b'])
   console.log(`S|${value}|${resolveThemeSetting(value,'light')??'undefined'}|${resolveThemeSetting(value,'dark')??'undefined'}`);

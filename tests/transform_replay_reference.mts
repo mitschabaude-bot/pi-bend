@@ -1,7 +1,8 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
 import assert from 'node:assert/strict';
-const source=fs.readFileSync('../pi-mono/packages/ai/src/api/transform-messages.ts','utf8');
+const source=fs.readFileSync(UPSTREAM + '/packages/ai/src/api/transform-messages.ts','utf8');
 const transform=new Function(stripTypeScriptTypes(source).replace(/^export /gm,'')+';return transformMessages;')();
 let input='';for await(const chunk of process.stdin)input+=chunk;
 process.stdout.write(JSON.stringify(JSON.parse(input).map(({content,api,provider,model})=>{

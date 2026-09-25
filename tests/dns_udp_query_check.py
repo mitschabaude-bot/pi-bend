@@ -17,7 +17,7 @@ static void __attribute__((destructor)) query_audit(void) {
 }
 '''
 (ROOT/'build/dns-udp-query-audit.c').write_text(source)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-udp-query-audit.c','-lpthread','-lm','-o','build/dns-udp-query'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-udp-query-audit.c','-lpthread','-lm','-o','build/dns-udp-query'],cwd=ROOT,check=True)
 (ROOT/'build/dns-udp-query-audit.js').write_text('process.on("exit",()=>console.error(`AUDIT ${globalThis.BEND_IO.live} ${globalThis.BEND_IO.waits.length}`));\n'+(ROOT/'build/dns-udp-query.js').read_text())
 def packet(flags=0x8180,ident=42,question=b'\0\0\1\0\1',qd=1,answer=b'',an=0):
     return struct.pack('!6H',ident,flags,qd,an,0,0)+question+answer

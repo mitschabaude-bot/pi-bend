@@ -106,7 +106,7 @@ if __name__ == '__main__':
                 '  process.stderr.write(`SHUT ${socket}\\n`);\n  return io_tup')
         compiler_command = str(compiler / 'main.ts')
         binary, javascript = directory / 'test', directory / 'test.js'
-        subprocess.run(['sh', 'scripts/build-pure.sh', source, str(binary)],
+        subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', source, str(binary)],
                        cwd=ROOT, env=dict(os.environ, BEND=compiler_command), check=True)
         subprocess.run([compiler_command, source, '-o', str(javascript)], cwd=ROOT, check=True)
         context, _ = server_context(directory, 'ecdsa')

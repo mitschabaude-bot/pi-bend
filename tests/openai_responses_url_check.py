@@ -99,7 +99,7 @@ for base, observed in zip(bases,observations,strict=True):
                 adaptations.append(dict(base=base,reason='native insertion order for numeric-looking names',sdk=observed['sdk'],native=native))
     rows.append(dict(kind='u',text=base,expected=expected))
 if '--no-build' not in sys.argv:
-    subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--limit-gib','16','--stats','build/openai-responses-url-rebuild-c.json','--','sh','scripts/build-pure.sh','packages/ai/test/openai-responses-url.bend','build/openai-responses-url'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', sys.executable,'scripts/run-rss-guarded.py','--limit-gib','16','--stats','build/openai-responses-url-rebuild-c.json','--','sh','scripts/build-pure.sh','packages/ai/test/openai-responses-url.bend','build/openai-responses-url'],cwd=ROOT,check=True)
     subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--limit-gib','10','--stats','build/openai-responses-url-rebuild-js.json','--',BEND,'packages/ai/test/openai-responses-url.bend','-o','build/openai-responses-url.js'],cwd=ROOT,check=True)
 args=[row['kind']+codes(row['text']) for row in rows]
 for label,command in [('native 1',['build/openai-responses-url','--threads','1']),('native 4',['build/openai-responses-url','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/openai-responses-url.js'])]:

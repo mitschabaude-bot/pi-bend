@@ -125,7 +125,7 @@ with tempfile.TemporaryDirectory(prefix='tcp-backpressure-', dir=ROOT / 'build')
     env = dict(os.environ, BEND=str(launcher))
     output = folder / 'probe'
     source = 'tests/tcp-bytes-backpressure.bend'
-    subprocess.run(['sh', 'scripts/build-pure.sh', source, str(output)], cwd=ROOT, env=env, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', source, str(output)], cwd=ROOT, env=env, check=True)
     subprocess.run([str(launcher), source, '-o', str(output.with_suffix('.js'))], cwd=ROOT, check=True)
     for threads in ['1', '4']:
         check([str(output), '--threads', threads], 'native threads ' + threads)

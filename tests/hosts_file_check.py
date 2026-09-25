@@ -14,7 +14,7 @@ bun=Path.home()/'.bun/bin/bun';compiler=TOOLCHAIN
 for suffix in ['c','js']:
     with (ROOT/f'build/hosts-file-{suffix}.log').open('w') as log:
         subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/hosts-file-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/hosts-file.bend','-o',f'build/hosts-file.{suffix}'],cwd=ROOT,check=True,stdout=log,stderr=subprocess.STDOUT)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/hosts-file.c','-lpthread','-lm','-o','build/hosts-file'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/hosts-file.c','-lpthread','-lm','-o','build/hosts-file'],cwd=ROOT,check=True)
 def scalars(text):return ','.join(str(ord(x)) for x in text)
 def fold(text):return text.translate(str.maketrans('ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'))
 def oracle(query,text):

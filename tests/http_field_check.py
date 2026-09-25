@@ -45,7 +45,7 @@ observed=json.loads(subprocess.check_output(['node','--input-type=module','-e',s
 for row,result in zip(fetch_rows,observed,strict=True):
     assert result==expected(row),(row,result,expected(row))
     args.append(codes(row));want.append(result)
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/http-field.bend','build/http-field'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/http-field.bend','build/http-field'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(args),64):
         p=subprocess.run([str(ROOT/'build/http-field'),'--threads',threads,*args[start:start+64]],cwd=ROOT,text=True,capture_output=True,check=True,timeout=30)

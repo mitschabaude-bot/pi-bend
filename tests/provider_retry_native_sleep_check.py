@@ -3,8 +3,6 @@
 Uses the isolated timer compiler. Real-time tests supplement, rather than
 replace, upstream virtual-clock boundary assertions.
 """
-from upstream_pin import check_sibling
-check_sibling()
 import hashlib,json,subprocess,sys,tempfile,time
 from pathlib import Path
 from bend_toolchain import BEND, TOOLCHAIN
@@ -14,7 +12,7 @@ bun=Path.home()/'.bun/bin/bun'
 binary=ROOT/'build/provider-retry-native-sleep'
 if '--no-build' not in sys.argv:
  subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--limit-gib','40','--',str(bun),str(candidate/'main.ts'),'packages/ai/test/provider-retry-native-sleep.bend','-o',str(binary)+'.c'],cwd=ROOT,check=True)
- subprocess.run(['clang','-std=c11','-O1','-fbracket-depth=2048',str(binary)+'.c','-lpthread','-lm','-o',str(binary)],check=True)
+ subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-O1','-fbracket-depth=2048',str(binary)+'.c','-lpthread','-lm','-o',str(binary)],check=True)
 expected=json.loads(subprocess.check_output(['node','--disable-warning=ExperimentalWarning','tests/provider_retry_reference.mts'],cwd=ROOT,text=True))
 # Approved strict-input adaptation: upstream setTimeout turns a NaN delay into
 # 1ms and retries. The native adapter instead rejects before allocating a timer.
@@ -42,12 +40,12 @@ with tempfile.TemporaryDirectory(dir=ROOT/'build',prefix='retry-timer-audit-') a
  folder=Path(directory);(folder/'run.c').write_text(text)
  for suffix in ['c','js']:
   subprocess.run([str(bun),str(candidate/'main.ts'),'packages/ai/test/provider-retry-sleep.bend','-o',str(folder/('smoke.'+suffix))],cwd=ROOT,check=True)
- subprocess.run(['clang','-std=c11','-O1','-fbracket-depth=2048',str(folder/'smoke.c'),'-lpthread','-lm','-o',str(folder/'smoke')],check=True)
+ subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-O1','-fbracket-depth=2048',str(folder/'smoke.c'),'-lpthread','-lm','-o',str(folder/'smoke')],check=True)
  for command in [[str(folder/'smoke'),'--threads','1'],[str(folder/'smoke'),'--threads','4'],[str(bun),str(folder/'smoke.js')]]:
   smoke=subprocess.run(command,capture_output=True,text=True,check=True,timeout=10)
   assert smoke.stdout=='PASS provider sleep\n' and not smoke.stderr,smoke
  print('provider sleep: native 1/4 and Bun PASS',flush=True)
- subprocess.run(['clang','-std=c11','-O1','-fbracket-depth=2048',str(folder/'run.c'),'-lpthread','-lm','-o',str(folder/'run')],check=True)
+ subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-O1','-fbracket-depth=2048',str(folder/'run.c'),'-lpthread','-lm','-o',str(folder/'run')],check=True)
  for threads in [1,4]:
   for mode,trace in enumerate(expected):
    start=time.monotonic();result=subprocess.run([str(folder/'run'),'--threads',str(threads),str(mode)],cwd=ROOT,capture_output=True,text=True,check=True,timeout=10)

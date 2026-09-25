@@ -17,7 +17,7 @@ static void __attribute__((destructor)) udp_scope_audit(void) {
 }
 '''
 (ROOT/f'build/{stem}-audit.c').write_text(source)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1',f'build/{stem}-audit.c','-lpthread','-lm','-o',f'build/{stem}'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1',f'build/{stem}-audit.c','-lpthread','-lm','-o',f'build/{stem}'],cwd=ROOT,check=True)
 source=(ROOT/f'build/{stem}.js').read_text();timer=(candidate/'effs/timer.js').read_text();assert source.count(timer)==1
 assert timer.count('  const row = { deadline:')==1 and timer.count('  row.state = 3;')==1
 timer='const scopeAudit={created:0,closed:0};\n'+timer.replace('  const row = { deadline:','  scopeAudit.created++;\n  const row = { deadline:').replace('  row.state = 3;','  scopeAudit.closed++;\n  row.state = 3;')

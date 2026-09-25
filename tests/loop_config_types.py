@@ -71,7 +71,7 @@ lines = ['import Base', 'import ../packages/agent/src/types.bend as T', 'import 
 '    IO.print("PASS inherited loop configuration and model values, callback handles and header contents")']
 path = BUILD / 'loop-config-types.bend'
 path.write_text('\n'.join(lines) + '\n')
-subprocess.run(['sh', 'scripts/build-pure.sh', str(path), 'build/test-loop-config-types'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(path), 'build/test-loop-config-types'], cwd=ROOT, check=True)
 for threads in ('1', '4'):
     subprocess.run(['build/test-loop-config-types', '--threads', threads], cwd=ROOT, check=True, timeout=30)
 print(f'PASS {len(expected)} loop configuration fields with upstream optionality, nested stream options and typed callback identities')

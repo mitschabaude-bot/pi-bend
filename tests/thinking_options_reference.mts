@@ -1,8 +1,9 @@
 // Test-only oracle: execute the pinned helper bodies, not a rewritten policy.
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import assert from 'node:assert/strict';
-const source = fs.readFileSync('../pi-mono/packages/ai/src/api/simple-options.ts', 'utf8');
+const source = fs.readFileSync(UPSTREAM + '/packages/ai/src/api/simple-options.ts', 'utf8');
 const js = stripTypeScriptTypes(source).replace(/^import .*estimate.*;$/m, '').replace(/^export /gm, '');
 assert(!/^import /m.test(js));
 const helpers = new Function(js + ';return {clampReasoning, thinkingBudgetForLevel, clampThinkingBudgetToAnswerRoom, adjustMaxTokensForThinking};')();

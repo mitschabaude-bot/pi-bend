@@ -14,7 +14,7 @@ bun=Path.home()/'.bun/bin/bun'
 compiler=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','12','--stats',f'build/resolver-servers-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/resolver-servers.bend','-o',f'build/resolver-servers.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-servers.c','-lpthread','-lm','-o','build/resolver-servers'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-servers.c','-lpthread','-lm','-o','build/resolver-servers'],cwd=ROOT,check=True)
 libc=ctypes.CDLL(None,use_errno=True)
 aton=libc.__inet_aton_exact;aton.argtypes=[ctypes.c_char_p,ctypes.c_void_p];aton.restype=ctypes.c_int
 indexof=libc.if_nametoindex;indexof.argtypes=[ctypes.c_char_p];indexof.restype=ctypes.c_uint

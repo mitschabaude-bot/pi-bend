@@ -22,7 +22,7 @@ for variant, compiler in [('baseline', args.baseline.resolve()), ('candidate', a
                     '-o', str(prefix.with_suffix('.js'))], cwd=ROOT, check=True)
     records[variant] = {ext: hashlib.sha256(prefix.with_suffix(ext).read_bytes()).hexdigest()
                         for ext in ['.c', '.js']}
-    subprocess.run(['clang', '-O1', '-std=c11', '-fbracket-depth=2048', str(prefix.with_suffix('.c')),
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-O1', '-std=c11', '-fbracket-depth=2048', str(prefix.with_suffix('.c')),
                     '-o', str(prefix), '-lpthread', '-lm'], check=True)
     for command in [[str(prefix), '--threads', '1'], [str(prefix), '--threads', '4'],
                     ['bun', str(prefix.with_suffix('.js'))]]:

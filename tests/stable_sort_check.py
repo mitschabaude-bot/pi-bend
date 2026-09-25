@@ -18,7 +18,7 @@ for count, seed, modulus in rows:
         hash_value = ((hash_value * 16777619) & 0xffffffff) ^ index
     expected.append(f'{count};{hash_value}')
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/stable-sort.bend','build/stable-sort'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/stable-sort.bend','build/stable-sort'],cwd=ROOT,check=True)
 subprocess.run([str(Path(BEND)),'packages/runtime/test/stable-sort.bend','-o','build/stable-sort.js'],cwd=ROOT,check=True)
 for label, command in [('native 1',['build/stable-sort','--threads','1']),('native 4',['build/stable-sort','--threads','4']),('Bun',[str(Path.home()/'.bun/bin/bun'),'build/stable-sort.js'])]:
     for start in range(0,len(rows),8):

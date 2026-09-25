@@ -16,7 +16,7 @@ audit='''\nstatic void __attribute__((destructor)) source_audit(void) {
   fprintf(stderr,"SOURCE_CHANNELS %u\\n",live);
 }\n'''
 (ROOT/'build/dns-server-source-audit.c').write_text((ROOT/'build/dns-server-source.c').read_text()+audit)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-server-source-audit.c','-lpthread','-lm','-o','build/dns-server-source'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-server-source-audit.c','-lpthread','-lm','-o','build/dns-server-source'],cwd=ROOT,check=True)
 def render(values):return ''.join(str(v)+',' for v in values)
 rows=[]
 for backend,command in [('native 1',['build/dns-server-source','--threads','1']),('native 4',['build/dns-server-source','--threads','4']),('Bun',[str(bun),'build/dns-server-source.js'])]:

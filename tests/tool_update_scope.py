@@ -1,6 +1,4 @@
 """Native invocation-scope concurrency and affine-completion ownership checks."""
-from upstream_pin import check_sibling
-check_sibling()
 from pathlib import Path
 from bend_toolchain import BEND
 import os
@@ -13,7 +11,7 @@ BUILD.mkdir(exist_ok=True)
 reference = json.loads(subprocess.check_output(['node', 'tests/tool_update_scope_reference.mjs'], cwd=ROOT, text=True))
 assert reference == {'alreadyFailed': 'first', 'afterClose': 'second', 'pending': 'second'}, reference
 print('PASS pinned tool helper failure precedence and late-update rejection', flush=True)
-subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/agent/test/tool-update-scope.bend', 'build/test-tool-update-scope'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/agent/test/tool-update-scope.bend', 'build/test-tool-update-scope'], cwd=ROOT, check=True)
 for threads in ('1', '4'):
     subprocess.run([str(BUILD / 'test-tool-update-scope'), '--threads', threads], check=True, timeout=30)
 

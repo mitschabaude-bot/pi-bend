@@ -1,6 +1,7 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-const source=fs.readFileSync('../pi-mono/packages/ai/src/api/transform-messages.ts','utf8');
+const source=fs.readFileSync(UPSTREAM + '/packages/ai/src/api/transform-messages.ts','utf8');
 const body=stripTypeScriptTypes(source).replace(/^export /gm,'');
 const transform=new Function(body+';return transformMessages;')();
 let input='';for await(const chunk of process.stdin)input+=chunk;

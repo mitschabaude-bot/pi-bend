@@ -11,7 +11,7 @@ for path,digest in validated['sha256'].items():
     if path.endswith(('.bend','.c','.js')):assert hashlib.sha256((ROOT/path).read_bytes()).hexdigest()==digest,path
 from udp_backpressure import inject
 inject(ROOT/'build/udp-write-audit.c', ROOT/'build/udp-write-blocked.c', ROOT/'build/udp-write.js', ROOT/'build/udp-write-blocked.js')
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-write-blocked.c','-lpthread','-lm','-o','build/udp-write-blocked'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-write-blocked.c','-lpthread','-lm','-o','build/udp-write-blocked'],cwd=ROOT,check=True)
 rows=[]
 for backend,cmd in [('native 1',['build/udp-write-blocked','--threads','1']),('native 4',['build/udp-write-blocked','--threads','4']),('Bun',[str(bun),'build/udp-write-blocked.js'])]:
     for family,af,host in [(4,socket.AF_INET,'127.0.0.1'),(6,socket.AF_INET6,'::1')]:

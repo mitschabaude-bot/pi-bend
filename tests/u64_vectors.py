@@ -35,6 +35,6 @@ for index, (a, b, shift) in enumerate(vectors):
 source.append('def main() -> IO(Unit):\n  H.checkAll(' + ' <> '.join(f'case{i}()' for i in range(len(vectors))) + ' <> Nil{})')
 pathlib.Path('build').mkdir(exist_ok=True)
 pathlib.Path('build/u64-vectors.bend').write_text('\n\n'.join(source) + '\n')
-subprocess.run(['sh', 'scripts/build-pure.sh', 'build/u64-vectors.bend', 'build/test-u64'], check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'build/u64-vectors.bend', 'build/test-u64'], check=True)
 subprocess.run(['build/test-u64', '--threads', '1'], check=True, timeout=60)
 print(f'u64/u128: {len(vectors)} vectors, arithmetic/bitwise/shifts/rotations/division/comparison/full products/jam passed')

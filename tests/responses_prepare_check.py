@@ -12,8 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from upstream_pin import PIN, UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import PIN, UPSTREAM
 
 ROOT = Path(__file__).resolve().parents[1]
 FIELDS = ['supportsDeveloperRole', 'supportsMidConvoSystemMessages', 'sessionAffinityFormat', 'supportsLongCacheRetention', 'supportsStrictMode', 'supportsOpenAIGrammarTools', 'supportsAdditionalTools', 'supportsToolSearch', 'supportsExplicitPromptCacheMode', 'supportsMaxOutputTokens']
@@ -60,7 +59,7 @@ cases, arguments = zip(*pairs)
 env = dict(os.environ, PI_CACHE_RETENTION='long')
 expected = json.loads(subprocess.check_output(['node', 'tests/responses_prepare_reference.mts'], input=json.dumps(cases), text=True, cwd=ROOT, env=env))
 if '--no-build' not in sys.argv:
-    subprocess.run([sys.executable, 'scripts/run-rss-guarded.py', '--limit-gib', '26', '--stats', 'build/responses-prepare-build.json', '--', 'sh', 'scripts/build-pure.sh', 'packages/ai/test/openai-responses-prepare.bend', 'build/responses-prepare'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', sys.executable, 'scripts/run-rss-guarded.py', '--limit-gib', '26', '--stats', 'build/responses-prepare-build.json', '--', 'sh', 'scripts/build-pure.sh', 'packages/ai/test/openai-responses-prepare.bend', 'build/responses-prepare'], cwd=ROOT, check=True)
 
 def encode(value):
     return ','.join(str(ord(c)) for c in json.dumps(value, ensure_ascii=True, separators=(',', ':')))

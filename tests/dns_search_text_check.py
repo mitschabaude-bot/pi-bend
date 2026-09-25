@@ -11,7 +11,7 @@ import subprocess
 ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-search-text-{suffix}-build.json','--',str(bun),str(compiler),'tests/dns-search-text.bend','-o',f'build/dns-search-text.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-search-text.c','-lpthread','-lm','-o','build/dns-search-text'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-search-text.c','-lpthread','-lm','-o','build/dns-search-text'],cwd=ROOT,check=True)
 libc=ctypes.CDLL(None);pton=libc.ns_name_pton;pton.argtypes=[ctypes.c_char_p,ctypes.c_void_p,ctypes.c_size_t];pton.restype=ctypes.c_int
 
 def oracle(text):

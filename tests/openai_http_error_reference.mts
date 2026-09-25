@@ -1,6 +1,7 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
-import { normalizeProviderError, formatProviderError } from '../../pi-mono/packages/ai/src/utils/error-body.ts';
+const { normalizeProviderError, formatProviderError } = await import(UPSTREAM + '/packages/ai/src/utils/error-body.ts');
 const require = createRequire(import.meta.url);
 const path = '/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/node_modules/openai';
 const { APIError } = require(path);

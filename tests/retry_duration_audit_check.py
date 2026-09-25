@@ -29,7 +29,7 @@ static void __attribute__((destructor)) duration_audit(void) {
 '''
 audit = Path(str(prefix) + '-audit')
 audit.with_suffix('.c').write_text(emitted)
-subprocess.run(['clang', '-std=c11', '-O1', '-fbracket-depth=2048', str(audit.with_suffix('.c')), '-lpthread', '-lm', '-o', str(audit)], check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-O1', '-fbracket-depth=2048', str(audit.with_suffix('.c')), '-lpthread', '-lm', '-o', str(audit)], check=True)
 records = []
 for threads in [1, 4]:
     result = subprocess.run([str(audit), '--threads', str(threads)], capture_output=True, text=True, check=True, timeout=10)

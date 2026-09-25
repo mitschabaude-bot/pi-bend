@@ -13,7 +13,7 @@ import subprocess
 ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run([str(bun),str(compiler),'tests/utf16-normalize.bend','-o',f'build/utf16-normalize.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-O1','build/utf16-normalize.c','-lpthread','-lm','-o','build/utf16-normalize'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-O1','build/utf16-normalize.c','-lpthread','-lm','-o','build/utf16-normalize'],cwd=ROOT,check=True)
 
 def normalize(values):
     result=[];index=0

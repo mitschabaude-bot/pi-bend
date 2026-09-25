@@ -1,7 +1,8 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
-const source = readFileSync('/home/agent/code/pi-mono/packages/coding-agent/src/modes/interactive/theme/theme.ts','utf8');
+const source = readFileSync(UPSTREAM + '/packages/coding-agent/src/modes/interactive/theme/theme.ts','utf8');
 assert.equal(createHash('sha256').update(source).digest('hex'),'c3bf2e3b72f6bb782f34de0535fcc1758b9b6ea7a0d2e7d6f17244fa55c3f31a');
 const start = source.indexOf('function hexToRgb(');
 const end = source.indexOf('function resolveVarRefs(',start);

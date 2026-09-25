@@ -1,11 +1,12 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { strict as assert } from "node:assert";
-import { ScrollView } from "/home/agent/code/pi-mono/packages/tui/src/components/scroll-view.ts";
-import { renderLayoutFrame } from "/home/agent/code/pi-mono/packages/tui/src/layout.ts";
-import { stripTerminalSequences } from "/home/agent/code/pi-mono/packages/tui/src/utils.ts";
-import type { Component } from "/home/agent/code/pi-mono/packages/tui/src/tui.ts";
-const source = "/home/agent/code/pi-mono/packages/tui/src/";
+const { ScrollView } = await import(UPSTREAM + "/packages/tui/src/components/scroll-view.ts");
+const { renderLayoutFrame } = await import(UPSTREAM + "/packages/tui/src/layout.ts");
+const { stripTerminalSequences } = await import(UPSTREAM + "/packages/tui/src/utils.ts");
+
+const source = UPSTREAM + "/packages/tui/src/";
 for (const [file, digest] of [
   ["layout.ts", "7530a8eaa30f44fef82e8b7020b5068ba89d34884463c6cb526073b20fcdeef0"],
   ["components/scroll-view.ts", "76dfd9f8a88cabc064f0652b83f16a945fbc988c9fe7c0423a4cd796907ef77d"],

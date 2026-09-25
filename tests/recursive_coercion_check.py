@@ -1,6 +1,5 @@
 """Compare recursive coercion with the pinned helper, including its real cache."""
-from upstream_pin import UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import UPSTREAM
 import json
 from pathlib import Path
 import subprocess
@@ -76,6 +75,6 @@ source = BUILD / 'recursive-coercion-check.bend'
 source.write_text('\n'.join(lines) + '\n')
 for source, name in [(source, 'recursive-coercion-check'), ('packages/ai/test/recursive-coercion.bend', 'recursive-coercion-errors')]:
     output = BUILD / name
-    subprocess.run(['sh', 'scripts/build-pure.sh', str(source), str(output)], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(source), str(output)], cwd=ROOT, check=True)
     for threads in ['1', '4']:
         subprocess.run([str(output), '--threads', threads], cwd=ROOT, check=True, timeout=120)

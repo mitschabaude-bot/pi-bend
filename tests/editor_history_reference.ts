@@ -1,5 +1,6 @@
-import { KillRing } from '../../pi-mono/packages/tui/src/kill-ring.ts';
-import { UndoStack } from '../../pi-mono/packages/tui/src/undo-stack.ts';
+import { UPSTREAM } from "./upstream_pin.mjs";
+const { KillRing } = await import(UPSTREAM + '/packages/tui/src/kill-ring.ts');
+const { UndoStack } = await import(UPSTREAM + '/packages/tui/src/undo-stack.ts');
 const traces = JSON.parse(await Bun.stdin.text());
 console.log(JSON.stringify(traces.map((ops: any[]) => {
  const ring = new KillRing(); let stack = new UndoStack<string>(); let saved: string[] = [];

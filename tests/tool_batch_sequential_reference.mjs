@@ -1,6 +1,7 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-const source=fs.readFileSync('../pi-mono/packages/agent/src/agent-loop.ts','utf8');
+const source=fs.readFileSync(UPSTREAM + '/packages/agent/src/agent-loop.ts','utf8');
 const body=source.slice(source.indexOf('async function executeToolCallsSequential('),source.indexOf('async function executeToolCallsParallel('));
 const termination=source.match(/function shouldTerminateToolBatch\([^\n]*\)\s*:\s*boolean \{([\s\S]*?)\n\}/)[1];
 const shouldTerminate=new Function('finalizedCalls',termination);

@@ -16,7 +16,7 @@ for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-native-resolver-owner-{suffix}-build.json','--',str(BUN),str(CANDIDATE/'main.ts'),'tests/dns-native-resolver-owner.bend','-o',f'build/dns-native-resolver-owner.{suffix}'],cwd=ROOT,check=True)
 audit='\nstatic void __attribute__((destructor)) audit(void) { unsigned live=0; for(u32 i=0;i<chan_len;i++) live+=chan_rows[i].live; fprintf(stderr,"LIVE %u\\n",live); }\n'
 (ROOT/'build/dns-native-resolver-owner-audit.c').write_text((ROOT/'build/dns-native-resolver-owner.c').read_text()+audit)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-native-resolver-owner-audit.c','-lpthread','-lm','-o','build/dns-native-resolver-owner'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-native-resolver-owner-audit.c','-lpthread','-lm','-o','build/dns-native-resolver-owner'],cwd=ROOT,check=True)
 (ROOT/'build/dns-native-resolver-owner-audit.js').write_text('process.on("exit",()=>console.error(`LIVE ${globalThis.BEND_IO.live} ${globalThis.BEND_IO.waits.length}`));\n'+(ROOT/'build/dns-native-resolver-owner.js').read_text())
 want=['11@second3=1;12@third3=2;10@first=2;','256:plain','unchanged','12@third3=2;10@first=2;11@second3=1;','256:plain','updated','40@first=2;41@second2=2;','288:edns','updated','60@first=2;61@second2=2;','256:plain','60@first=2;61@second2=2;','256:plain']
 checks=[]

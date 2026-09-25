@@ -1,6 +1,4 @@
 """Compare complete native validation failures and independent renderer cases."""
-from upstream_pin import check_sibling
-check_sibling()
 import json
 from pathlib import Path
 import subprocess
@@ -94,6 +92,6 @@ source.write_text('\n'.join(lines)+'\n')
 for source,name in [(source,'validation-errors-check'),('packages/ai/test/validation-errors.bend','validation-errors-native'),
                     ('packages/ai/test/plain-validation-cases-upstream.bend','plain-validation-cases-upstream')]:
     output=BUILD/name
-    subprocess.run(['sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
     for threads in ['1','4']:
         subprocess.run([str(output),'--threads',threads],cwd=ROOT,check=True,timeout=120)

@@ -1,6 +1,4 @@
 """Compare ordered schema-type selection with the actual source block."""
-from upstream_pin import check_sibling
-check_sibling()
 import json
 from pathlib import Path
 import subprocess
@@ -25,6 +23,6 @@ lines+=['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in r
 source=BUILD/'schema-type-coercion-vectors.bend'
 source.write_text('\n'.join(lines)+'\n')
 output=BUILD/'test-schema-type-coercion'
-subprocess.run(['sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
 for threads in ['1','4']:
     subprocess.run([str(output),'--threads',threads],cwd=ROOT,check=True,timeout=120)

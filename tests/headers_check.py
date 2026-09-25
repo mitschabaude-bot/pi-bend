@@ -63,7 +63,7 @@ cases.append(ordinary)
 expected.append('~'.join(traces))
 args = ['|'.join(';'.join([op[0], *map(encode,op[1:])]) for op in case) for case in cases]
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh','scripts/build-pure.sh','packages/ai/test/headers.bend','build/headers'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/ai/test/headers.bend','build/headers'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(args),16):
         result=subprocess.run([str(ROOT/'build/headers'),'--threads',threads,*args[start:start+16]],cwd=ROOT,text=True,capture_output=True,check=True,timeout=30)

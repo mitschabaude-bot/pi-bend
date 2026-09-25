@@ -11,7 +11,7 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[1]
 source = "tests/anthropic-oauth-start.bend"
 output = root / "build/anthropic-oauth-start"
-subprocess.run(["sh", "scripts/build-pure.sh", source, str(output)], cwd=root, env=dict(os.environ, PI_BEND_OPT="-O0"), check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', "sh", "scripts/build-pure.sh", source, str(output)], cwd=root, env=dict(os.environ, PI_BEND_OPT="-O0"), check=True)
 
 for command in ([str(output), "--threads", "1"], [str(output), "--threads", "4"]):
     seen = set()

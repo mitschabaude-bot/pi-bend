@@ -38,7 +38,7 @@ for count in [1024, 16384, 65536]:
               [('a', ''), ('b', ''), ('bf', ''), ('bd', 'e'), ('l', 'b'), ('af', 'a')]]
 expected = [reference(text) for text in texts]
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/idna-bidi.bend', 'build/idna-bidi'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/idna-bidi.bend', 'build/idna-bidi'], cwd=ROOT, check=True)
 subprocess.run([str(Path(BEND)), 'packages/runtime/test/idna-bidi.bend', '-o', 'build/idna-bidi.js'], cwd=ROOT, check=True)
 for label, command in [('native 1', ['build/idna-bidi', '--threads', '1']), ('native 4', ['build/idna-bidi', '--threads', '4']), ('Bun', [str(Path.home()/'.bun/bin/bun'), 'build/idna-bidi.js'])]:
     # Each large input is below Linux's per-argument bound; the batch is <2 MiB.

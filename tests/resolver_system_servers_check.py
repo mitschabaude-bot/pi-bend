@@ -14,7 +14,7 @@ bun=Path.home()/'.bun/bin/bun'
 compiler=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','16','--stats',f'build/resolver-system-servers-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/resolver-system-servers.bend','-o',f'build/resolver-system-servers.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-system-servers.c','-lpthread','-lm','-o','build/resolver-system-servers'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/resolver-system-servers.c','-lpthread','-lm','-o','build/resolver-system-servers'],cwd=ROOT,check=True)
 loopback=socket.if_nametoindex('lo')
 def fields(values):return ''.join(f'{len(x)}:{x}' for x in values)
 def settings(servers,options,invalid):

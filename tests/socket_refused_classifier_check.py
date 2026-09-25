@@ -13,7 +13,7 @@ launcher = ROOT / 'build/socket-refused-compiler'
 launcher.write_text('#!/bin/sh\nexec ' + shlex.quote(bun) + ' ' + shlex.quote(str(candidate / 'main.ts')) + ' "$@"\n')
 launcher.chmod(0o755)
 binary = ROOT / 'build/socket-refused-classifier'
-subprocess.run(['sh', 'scripts/build-pure.sh', 'tests/socket-refused-classifier.bend', str(binary)], cwd=ROOT, env=dict(os.environ, BEND=str(launcher)), check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'tests/socket-refused-classifier.bend', str(binary)], cwd=ROOT, env=dict(os.environ, BEND=str(launcher)), check=True)
 javascript = binary.with_suffix('.js')
 subprocess.run([str(launcher), 'tests/socket-refused-classifier.bend', '-o', str(javascript)], cwd=ROOT, check=True)
 codes = [*range(512), 65535, 4294967295]

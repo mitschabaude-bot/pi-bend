@@ -40,7 +40,7 @@ static void __attribute__((destructor)) sleep_audit(void) {
     instrumented_js = instrumented_js.replace('  row.waiter = wait;', '  timerAudit.waiting++;\n  row.waiter = wait;').replace('row.waiter = null;', 'timerAudit.waiting--; row.waiter = null;')
     instrumented_js += "\nprocess.on('exit',()=>console.error('SLEEP_AUDIT',timerAudit.created,timerAudit.closed,timerAudit.live,timerAudit.peak,timerAudit.parked,timerAudit.waiting,-1));\n"
     js.write_text(js.read_text().replace(original_js, instrumented_js))
-    subprocess.run(['clang', '-std=c11', '-O1', '-fbracket-depth=2048', str(c),
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-O1', '-fbracket-depth=2048', str(c),
                     '-lpthread', '-lm', '-o', str(folder / 'run')], check=True)
     for backend, command in [('native-1', [str(folder / 'run'), '--threads', '1']),
                              ('native-4', [str(folder / 'run'), '--threads', '4']),

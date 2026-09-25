@@ -48,7 +48,7 @@ for row, actual in zip(rows, observed, strict=True):
         wire = method + ' ' + target + ' HTTP/1.1\r\n' + ''.join(name + ': ' + value + '\r\n' for name, value in row['headers']) + '\r\n'
         expected.append(codes(method) + ';' + codes(wire))
 if '--no-build' not in sys.argv:
-    subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/http-request-head.bend', 'build/http-request-head'], cwd=ROOT, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/http-request-head.bend', 'build/http-request-head'], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     for start in range(0, len(args), 16):
         result = subprocess.run([str(ROOT / 'build/http-request-head'), '--threads', threads, *args[start:start + 16]], cwd=ROOT, text=True, capture_output=True, check=True, timeout=30)

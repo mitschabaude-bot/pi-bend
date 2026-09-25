@@ -16,7 +16,7 @@ static void __attribute__((destructor)) udp_audit(void) {
 }
 '''
 (ROOT/'build/udp-read-race-audit.c').write_text((ROOT/'build/udp-read-race.c').read_text()+audit)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-read-race-audit.c','-lpthread','-lm','-o','build/udp-read-race'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-read-race-audit.c','-lpthread','-lm','-o','build/udp-read-race'],cwd=ROOT,check=True)
 def line(stream):
     data=b'';until=time.monotonic()+10
     while not data.endswith(b'\n'):

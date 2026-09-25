@@ -1,6 +1,4 @@
 """Compare declaration snapshots/equality directly with pinned pi-mono code."""
-from upstream_pin import check_sibling
-check_sibling()
 import copy
 import json
 from pathlib import Path
@@ -51,5 +49,5 @@ for index, ((left, right), want) in enumerate(zip(cases, expected, strict=True))
 source.append(f'    IO.print("PASS {len(cases)} upstream tool-declaration comparisons and serialized snapshots")')
 entry = BUILD / 'tool-declaration-vectors.bend'
 entry.write_text('\n'.join(source) + '\n')
-subprocess.run(['sh', 'scripts/build-pure.sh', str(entry), 'build/test-tool-declaration'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(entry), 'build/test-tool-declaration'], cwd=ROOT, check=True)
 subprocess.run(['build/test-tool-declaration', '--threads', '1'], cwd=ROOT, check=True, timeout=90)

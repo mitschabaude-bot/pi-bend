@@ -24,10 +24,10 @@ lines.append(f'    IO.print("PASS {len(values)} signed epoch conversion vectors"
 source=BUILD/'date-vectors.bend'
 source.write_text('\n'.join(lines)+'\n')
 output=BUILD/'test-date-vectors'
-subprocess.run(['sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
 for threads in ('1','4'): subprocess.run([str(output),'--threads',threads],check=True,timeout=30)
 live=BUILD/'test-date'
-subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/date.bend',str(live)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/date.bend',str(live)],cwd=ROOT,check=True)
 js=BUILD/'test-date.js'
 subprocess.run([BEND,'packages/runtime/test/date.bend','-o',str(js)],cwd=ROOT,check=True)
 bun=shutil.which('bun') or str(Path.home()/'.bun/bin/bun')

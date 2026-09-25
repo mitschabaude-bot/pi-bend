@@ -1,4 +1,5 @@
 // Test-only oracle: installed OpenAI SDK status handling plus pinned pi retry.
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import { createRequire, stripTypeScriptTypes } from 'node:module';
 const require = createRequire(import.meta.url);
@@ -6,7 +7,7 @@ const sdkPath = '/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/nod
 const { default: OpenAI } = require(sdkPath);
 const version = JSON.parse(fs.readFileSync(sdkPath + '/package.json', 'utf8')).version;
 if (version !== '6.40.0') throw new Error('Unexpected SDK version ' + version);
-const source = stripTypeScriptTypes(fs.readFileSync('../pi-mono/packages/ai/src/utils/provider-retry.ts', 'utf8'))
+const source = stripTypeScriptTypes(fs.readFileSync(UPSTREAM + '/packages/ai/src/utils/provider-retry.ts', 'utf8'))
   .replace(/^export /gm, '').replace('function abortableSleep(', 'function originalAbortableSleep(');
 function bits(n) { const b = Buffer.alloc(8); b.writeDoubleBE(n); return b.readUInt32BE(0) + ':' + b.readUInt32BE(4); }
 function scalars(text) { return [...text].map(c => c.codePointAt(0)).join(','); }

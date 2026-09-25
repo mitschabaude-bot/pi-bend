@@ -34,7 +34,7 @@ static void __attribute__((destructor)) udp_concurrent_audit(void) {
 }
 '''
 (ROOT/'build/udp-concurrent-audit.c').write_text(source)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-concurrent-audit.c','-lpthread','-lm','-o','build/udp-concurrent'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-concurrent-audit.c','-lpthread','-lm','-o','build/udp-concurrent'],cwd=ROOT,check=True)
 source=(ROOT/'build/udp-concurrent.js').read_text()
 a=source.index('function udpread_wait(');b=source.index('function udpread_cancel(',a)
 part=source[a:b];needle='globalThis.BEND_IO.waits.push(wait);';assert part.count(needle)==1

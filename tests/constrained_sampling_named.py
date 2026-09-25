@@ -11,7 +11,7 @@ assert len(ported)==len(names) and set(ported)==set(names)
 ported=[name for name in names if name in ported]
 assert set(ported)<=set(names) and len(names)==6
 output=ROOT/'build/test-constrained-sampling'
-subprocess.run(['sh','scripts/build-pure.sh',str(native),str(output)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(native),str(output)],cwd=ROOT,check=True)
 for threads in ['1','4']:
     result=subprocess.check_output([str(output),'--threads',threads],cwd=ROOT,text=True,timeout=120)
     assert result.splitlines()==['PASS '+name for name in ported],result

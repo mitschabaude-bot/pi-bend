@@ -44,7 +44,7 @@ def main() -> IO(Unit):
     Sampling.main()
 ''')
 output = source.with_suffix('')
-subprocess.run(['sh', 'scripts/build-pure.sh', str(source), str(output)], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(source), str(output)], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     result = subprocess.check_output([str(output), '--threads', threads], cwd=ROOT, text=True, timeout=120)
     assert result.splitlines() == expected, result

@@ -1,7 +1,8 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
-const source=readFileSync('/home/agent/code/pi-mono/packages/tui/src/tui.ts','utf8');
+const source=readFileSync(UPSTREAM + '/packages/tui/src/tui.ts','utf8');
 assert.equal(createHash('sha256').update(source).digest('hex'),'2ca47c56f4a4f24b8c6a4c9c9f2a06004bfc312d9dbcd0ac1921a2cae32bc675');
 function slice(a:string,b:string){const start=source.indexOf(a);assert(start>=0);const end=source.indexOf(b,start);assert(end>start);return source.slice(start,end);}
 const methods=slice('\tgetFocusedComponent():','\t/** Check if there are any visible overlays */')+slice('\tprivate isOverlayVisible(','\toverride invalidate():');

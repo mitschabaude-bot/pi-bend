@@ -52,7 +52,7 @@ expected = json.loads(subprocess.check_output(
     ['node', '--input-type=module', '-e', oracle, str(SDK / 'core/streaming.mjs')],
     input=json.dumps(cases), text=True))
 arguments = ['s' + '|'.join(','.join(str(ord(char)) for char in line) for line in lines) for lines in cases]
-subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/sse-decoder-runner.bend', 'build/test-sse-decoder'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/sse-decoder-runner.bend', 'build/test-sse-decoder'], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     for start in range(0, len(cases), 32):
         actual = subprocess.check_output([str(ROOT / 'build/test-sse-decoder'), '--threads', threads, *arguments[start:start+32]], text=True, timeout=30).splitlines()

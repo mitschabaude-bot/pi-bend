@@ -6,6 +6,7 @@
 //
 // Usage: bun tests/tui_virtual_terminal.ts            (Bun lane)
 //        TUI_RUNNER=build/tui-virtual-terminal bun tests/tui_virtual_terminal.ts
+import { UPSTREAM } from "./upstream_pin.mjs";
 import assert from "node:assert";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
@@ -13,7 +14,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const ROOT = path.resolve(import.meta.dir, "..");
-const PI_MONO = process.env.PI_MONO ?? path.resolve(ROOT, "../pi-mono");
+const PI_MONO = UPSTREAM;
 const { VirtualTerminal } = await import(`${PI_MONO}/packages/tui/test/virtual-terminal.ts`);
 type Terminal = InstanceType<typeof VirtualTerminal>;
 

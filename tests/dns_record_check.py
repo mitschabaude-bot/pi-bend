@@ -17,7 +17,7 @@ parser.add_argument('--no-build',action='store_true')
 parser.add_argument('--baseline-js',type=Path,help='Optional retained nested-dispatch program for equivalent-output checks')
 args=parser.parse_args()
 if not args.no_build:
-    subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-record-build.json','--','sh','scripts/build-pure.sh','packages/runtime/test/dns-record.bend','build/dns-record'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-record-build.json','--','sh','scripts/build-pure.sh','packages/runtime/test/dns-record.bend','build/dns-record'],cwd=ROOT,check=True)
 subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-record-js-build.json','--',str(Path(BEND)),'packages/runtime/test/dns-record.bend','-o','build/dns-record.js'],cwd=ROOT,check=True)
 rng=random.Random(3596);cases=[]
 def csv(xs): return ','.join(map(str,xs))

@@ -3,8 +3,7 @@
 The oracle executes upstream createClient with a capturing SDK constructor;
 no network, credentials, provider wrapper or HTTP header normalization is tested.
 """
-from upstream_pin import UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import UPSTREAM
 import itertools,json,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
@@ -41,7 +40,7 @@ def result(value):
     return '|'.join([flags(value['compat']),value['retention'],codes(value['promptRetention']),'-' if option is None else 'explicit' if 'mode' in option else '30m',codes(value['session']),codes(value['key']),*[codes(h) for h in value['headers']]])
 args=[';'.join([codes(c['provider']),codes(c['url']),flags(c['compat']),c['retention'] or '-',codes(c['env']),codes(c['session']),result(r)]) for c,r in zip(cases,results,strict=True)]
 if '--no-build' not in sys.argv:
-    subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--stats','build/responses-policy-build.json','--','sh','scripts/build-pure.sh','packages/ai/test/openai-responses-policy-runner.bend','build/responses-policy-runner'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', sys.executable,'scripts/run-rss-guarded.py','--stats','build/responses-policy-build.json','--','sh','scripts/build-pure.sh','packages/ai/test/openai-responses-policy-runner.bend','build/responses-policy-runner'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(args),32):
         run=subprocess.run([str(ROOT/'build/responses-policy-runner'),'--threads',threads,*args[start:start+32]],cwd=ROOT,capture_output=True,text=True,timeout=60)

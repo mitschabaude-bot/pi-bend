@@ -1,5 +1,6 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
-const source=fs.readFileSync('../pi-mono/packages/agent/src/agent-loop.ts','utf8');
+const source=fs.readFileSync(UPSTREAM + '/packages/agent/src/agent-loop.ts','utf8');
 const start=source.indexOf('if (nextTurnSnapshot) {');
 const end=source.indexOf('\n\t\t\t\t// Preparation can be long-running',start);
 const apply=new Function('currentContext','config','nextTurnSnapshot','let preparedMessages=[];'+source.slice(start,end)+'\nreturn {currentContext,config,preparedMessages};');

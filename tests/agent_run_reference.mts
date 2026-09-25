@@ -1,19 +1,20 @@
 // Actual pinned Agent methods and full loop helpers; only the provider is a fixture.
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {stripTypeScriptTypes} from 'node:module';
-import {createInitialSystemMessage,getCurrentSystemMessage,getCurrentSystemPrompt,getCurrentTools,getToolStateChanges,toToolDeclaration,normalizeContext} from '../../pi-mono/packages/ai/src/utils/transcript.ts';
-import {getDefaultStreamFn} from '../../pi-mono/packages/agent/src/stream-fn.ts';
+const { createInitialSystemMessage, getCurrentSystemMessage, getCurrentSystemPrompt, getCurrentTools, getToolStateChanges, toToolDeclaration, normalizeContext } = await import(UPSTREAM + '/packages/ai/src/utils/transcript.ts');
+const { getDefaultStreamFn } = await import(UPSTREAM + '/packages/agent/src/stream-fn.ts');
 import {Compile} from '../build/schema-reference/node_modules/typebox/build/compile/index.mjs';
 import {Value} from '../build/schema-reference/node_modules/typebox/build/value/index.mjs';
-const validationSource=fs.readFileSync('../pi-mono/packages/ai/src/utils/validation.ts','utf8');
+const validationSource=fs.readFileSync(UPSTREAM + '/packages/ai/src/utils/validation.ts','utf8');
 const validationBody=stripTypeScriptTypes(validationSource.slice(validationSource.indexOf('const validatorCache ='))).replace(/^export /gm,'');
 const validateToolArguments=new Function('Compile','Value',validationBody+';return validateToolArguments;')(Compile,Value);
-const loopSource=fs.readFileSync('../pi-mono/packages/agent/src/agent-loop.ts','utf8');
+const loopSource=fs.readFileSync(UPSTREAM + '/packages/agent/src/agent-loop.ts','utf8');
 const entries=loopSource.slice(loopSource.indexOf('export async function runAgentLoop('),loopSource.indexOf('function createAgentStream('));
 const loopBody=stripTypeScriptTypes(entries+loopSource.slice(loopSource.indexOf('async function runLoop('))).replace(/^export /gm,'');
 const {runAgentLoop,runAgentLoopContinue}=new Function('getCurrentTools','getToolStateChanges','toToolDeclaration','normalizeContext','validateToolArguments','getDefaultStreamFn',loopBody+';return {runAgentLoop,runAgentLoopContinue};')(getCurrentTools,getToolStateChanges,toToolDeclaration,normalizeContext,validateToolArguments,getDefaultStreamFn);
-const source=fs.readFileSync('../pi-mono/packages/agent/src/agent.ts','utf8');
+const source=fs.readFileSync(UPSTREAM + '/packages/agent/src/agent.ts','utf8');
 const body=stripTypeScriptTypes(source.slice(source.indexOf('function defaultConvertToLlm('))).replace(/^export /gm,'');
 const {Agent}=new Function('createInitialSystemMessage','getCurrentSystemMessage','getCurrentSystemPrompt','toToolDeclaration','getDefaultStreamFn','runAgentLoop','runAgentLoopContinue',body+';return {Agent};')(createInitialSystemMessage,getCurrentSystemMessage,getCurrentSystemPrompt,toToolDeclaration,getDefaultStreamFn,runAgentLoop,runAgentLoopContinue);
 const role=m=>({system:'s',user:'u',assistant:'a'}[m.role]??'?');

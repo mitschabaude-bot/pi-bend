@@ -30,7 +30,7 @@ if not a.no_build:
                             '--stats', f'build/{fixture}-{suffix}-build.json', '--', str(bun),
                             str(candidate/'main.ts'), f'tests/{fixture}.bend', '-o',
                             f'build/{fixture}.{suffix}'], cwd=ROOT, check=True)
-        subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1',
+        subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1',
                         f'build/{fixture}.c', '-lpthread', '-lm', '-o', f'build/{fixture}'],
                        cwd=ROOT, check=True)
 

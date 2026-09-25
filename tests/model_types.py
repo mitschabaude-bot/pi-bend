@@ -31,7 +31,7 @@ for name in ('api', 'provider', 'reasoning', 'contextWindow', 'maxTokens', 'comp
 images.update(api=False, provider=False, output=False)
 assert images == bend_fields('ImagesModel'), (images, bend_fields('ImagesModel'))
 
-subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/ai/test/model-types.bend', 'build/test-model-types'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/ai/test/model-types.bend', 'build/test-model-types'], cwd=ROOT, check=True)
 subprocess.run(['build/test-model-types', '--threads', '1'], cwd=ROOT, check=True, timeout=30)
 
 bend = BEND

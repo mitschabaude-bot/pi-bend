@@ -72,7 +72,7 @@ arguments = [
     'i' + ','.join(map(str, case['index'])) if 'index' in case
     else 'l' + '|'.join(map(operation, case['operations'])) for case in cases
 ]
-subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/line-decoder-runner.bend', 'build/test-line-decoder'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/line-decoder-runner.bend', 'build/test-line-decoder'], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     for start in range(0, len(cases), 128):
         actual = subprocess.check_output(

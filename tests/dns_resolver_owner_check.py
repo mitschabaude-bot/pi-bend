@@ -15,7 +15,7 @@ for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','12','--stats',f'build/dns-resolver-owner-{suffix}-build.json','--',str(BUN),str(CANDIDATE/'main.ts'),'tests/dns-resolver-owner.bend','-o',f'build/dns-resolver-owner.{suffix}'],cwd=ROOT,check=True)
 audit='\nstatic void __attribute__((destructor)) audit(void) { unsigned live=0; for(u32 i=0;i<chan_len;i++) live+=chan_rows[i].live; fprintf(stderr,"LIVE %u\\n",live); }\n'
 (ROOT/'build/dns-resolver-owner-audit.c').write_text((ROOT/'build/dns-resolver-owner.c').read_text()+audit)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-resolver-owner-audit.c','-lpthread','-lm','-o','build/dns-resolver-owner'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-resolver-owner-audit.c','-lpthread','-lm','-o','build/dns-resolver-owner'],cwd=ROOT,check=True)
 want=['11,12,10,','256:plain','unchanged','12,10,11,','256:plain','updated','40,41,','288:edns','updated','60,61,','256:plain','60,61,','256:plain']
 checks=[]
 for backend,command in [('native 1',['build/dns-resolver-owner','--threads','1']),('native 4',['build/dns-resolver-owner','--threads','4']),('Bun',[str(BUN),'build/dns-resolver-owner.js'])]:

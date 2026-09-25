@@ -28,7 +28,7 @@ for start in range(0,len(functions),args.batch_size):
     path=ROOT/f'build/responses-terminal-named-{start}.bend'
     path.write_text('import Base\nimport ../packages/ai/test/openai-responses-terminal-event.bend as Check\ndef main() -> IO(Unit):\n  do IO<Unit>:\n'+''.join(f'    Check.{name}()\n' for name in selected))
     out=path.with_suffix('')
-    subprocess.run(['sh','scripts/build-pure.sh',str(path),str(out)],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(path),str(out)],cwd=ROOT,check=True)
     for threads in ['1','4']:
         result=subprocess.check_output([str(out),'--threads',threads],cwd=ROOT,text=True,timeout=120)
         assert result.splitlines()==['PASS '+name for name in ported[start:start+args.batch_size]],result

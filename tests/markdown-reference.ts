@@ -1,7 +1,8 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
-const repo=process.argv[2] ?? '/home/agent/code/pi-mono';
+const repo=process.argv[2] ?? UPSTREAM;
 const source=readFileSync(`${repo}/packages/tui/src/components/markdown.ts`);
 assert.equal(createHash('sha256').update(source).digest('hex'),'704c1c714a7ff6bdec55573ab38393726fa73a7b47cf4c1161ccc4f08530ac28');
 assert.equal(createHash('sha256').update(readFileSync(`${repo}/packages/tui/test/markdown.test.ts`)).digest('hex'),'1060dbf84302c3984479b7a33ad4aaf21ae0616b8c02a45f066ba6e8f200f14d');

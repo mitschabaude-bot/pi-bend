@@ -1,6 +1,4 @@
 """Compare pure binary64 pricing and shared cost identity with pinned pi-mono."""
-from upstream_pin import check_sibling
-check_sibling()
 import json
 from pathlib import Path
 import random
@@ -59,9 +57,9 @@ for index, ((prices, tiers, values), want) in enumerate(zip(cases, expected, str
 source.append(f'    IO.print("PASS {len(cases)} upstream cost vectors with pure returned costs")')
 entry = BUILD / 'model-cost-vectors.bend'
 entry.write_text('\n'.join(source)+'\n')
-subprocess.run(['sh','scripts/build-pure.sh',str(entry),'build/test-model-cost'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(entry),'build/test-model-cost'],cwd=ROOT,check=True)
 for threads in ('1','4'):
     subprocess.run(['build/test-model-cost','--threads',threads],cwd=ROOT,check=True,timeout=90)
 
-subprocess.run(['sh','scripts/build-pure.sh','packages/ai/test/model-cost.bend','build/test-model-cost-upstream'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/ai/test/model-cost.bend','build/test-model-cost-upstream'],cwd=ROOT,check=True)
 subprocess.run(['build/test-model-cost-upstream','--threads','1'],cwd=ROOT,check=True,timeout=30)

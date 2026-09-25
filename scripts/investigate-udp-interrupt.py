@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 bun=Path.home()/'.bun/bin/bun';candidate=ROOT/'build/bend-udp-send-candidate'
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/udp-interrupt-probe-{suffix}-build.json','--',str(bun),str(candidate/'main.ts'),'tests/udp-interrupt-probe.bend','-o',f'build/udp-interrupt-probe.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-interrupt-probe.c','-lpthread','-lm','-o','build/udp-interrupt-probe'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/udp-interrupt-probe.c','-lpthread','-lm','-o','build/udp-interrupt-probe'],cwd=ROOT,check=True)
 os_rows=[]
 for family,af,host in [(4,socket.AF_INET,'127.0.0.1'),(6,socket.AF_INET6,'::1')]:
     for connected in [False,True]:

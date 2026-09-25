@@ -9,8 +9,7 @@ from bend_toolchain import BEND, TOOLCHAIN
 import re
 import subprocess
 import sys
-from upstream_pin import PIN, UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import PIN, UPSTREAM
 
 ROOT = Path(__file__).resolve().parents[1]
 BEND = BEND
@@ -98,7 +97,7 @@ if '--no-build' not in sys.argv:
                             '--stats', f'build/openai-http-error-{backend}-build.json', '--',
                             BEND, SOURCE, '-o', f'build/openai-http-error.{backend}'],
                            cwd=ROOT, check=True, stdout=log, stderr=subprocess.STDOUT)
-    subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1',
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1',
                     'build/openai-http-error.c', '-lpthread', '-lm', '-o', 'build/openai-http-error'], cwd=ROOT, check=True)
 
 runs = []

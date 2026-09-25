@@ -2,8 +2,9 @@
 // overflow compact-and-retry (once, then exhausted) and transient-error retry.
 // Needs pi-mono's gitignored model data (packages/ai/src/providers/data) hydrated.
 // Run from ../pi-mono/packages/coding-agent: bun <this file>.
-import { fauxAssistantMessage } from "../../pi-mono/packages/ai/src/compat.ts";
-import { createHarness } from "../../pi-mono/packages/coding-agent/test/suite/harness.ts";
+import { UPSTREAM } from "./upstream_pin.mjs";
+const { fauxAssistantMessage } = await import(UPSTREAM + "/packages/ai/src/compat.ts");
+const { createHarness } = await import(UPSTREAM + "/packages/coding-agent/test/suite/harness.ts");
 const OVERFLOW = "prompt is too long: 213462 tokens > 200000 maximum";
 for (const retryTwice of [false, true]) {
   const harness = await createHarness({ settings: { compaction: { keepRecentTokens: 1 } } });

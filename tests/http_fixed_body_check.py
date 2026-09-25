@@ -66,7 +66,7 @@ for (length,data),actual in zip(network,observed,strict=True):
     cases.append((length,[data]))
 args=[str(length)+''.join(';'+codes(chunk) for chunk in chunks) for length,chunks in cases]
 want=[expected(length,chunks) for length,chunks in cases]
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/http-fixed-body.bend','build/http-fixed-body'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/http-fixed-body.bend','build/http-fixed-body'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     for start in range(0,len(args),32):
         p=subprocess.run([str(ROOT/'build/http-fixed-body'),'--threads',threads,*args[start:start+32]],cwd=ROOT,text=True,capture_output=True,check=True,timeout=30)

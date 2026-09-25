@@ -1,10 +1,11 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert';
 import {mock} from 'node:test';
 import {EventEmitter} from 'node:events';
 import {stripTypeScriptTypes} from 'node:module';
-const root='../pi-mono/packages/tui/';
+const root=UPSTREAM + '/packages/tui/';
 const strip=file=>stripTypeScriptTypes(fs.readFileSync(root+file,'utf8')).replace(/^import[\s\S]*?;\s*$/gm,'').replace(/^export /gm,'');
 const BufferClass=new Function('EventEmitter',strip('src/stdin-buffer.ts')+';return StdinBuffer')(EventEmitter);
 const stdout=new EventEmitter(),stdin=new EventEmitter();stdout.write=()=>true;stdin.pause=()=>{};

@@ -1,6 +1,7 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {stripTypeScriptTypes} from 'node:module';
-const path='../pi-mono/packages/ai/src/api/openai-responses.ts';
+const path=UPSTREAM + '/packages/ai/src/api/openai-responses.ts';
 const source=fs.readFileSync(path,'utf8');
 const offset=source.indexOf('function getServiceTierCostMultiplier(');
 if(offset<0)throw Error('service tier implementation not found');

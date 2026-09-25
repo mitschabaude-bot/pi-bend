@@ -32,7 +32,7 @@ with tempfile.TemporaryDirectory(dir=ROOT/'build',prefix='retry-clock-') as dire
  assert text.count(original_tick)==1,'review changed runtime clock source'
  text=text.replace(original_tick,virtual_tick)+'\n'+(ROOT/'tests/virtual-clock/controls.c').read_text()
  (folder/'run.c').write_text(text)
- subprocess.run(['clang','-std=c11','-O1','-fbracket-depth=2048',str(folder/'run.c'),'-lpthread','-lm','-o',str(folder/'run')],check=True)
+ subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-O1','-fbracket-depth=2048',str(folder/'run.c'),'-lpthread','-lm','-o',str(folder/'run')],check=True)
  for threads in [1,4]:
   for mode,name in enumerate(names):
    result=subprocess.run([str(folder/'run'),'--threads',str(threads),str(mode)],cwd=ROOT,text=True,capture_output=True,check=True,timeout=10)
@@ -46,7 +46,7 @@ with tempfile.TemporaryDirectory(dir=ROOT/'build',prefix='retry-clock-') as dire
  mutated=text.replace('test_clock_ns += (u64)(u32)fields[0] * 1000000ull;','test_clock_ns += ((u64)(u32)fields[0] + 1) * 1000000ull;')
  assert mutated!=text
  (folder/'early.c').write_text(mutated)
- subprocess.run(['clang','-std=c11','-O0','-fbracket-depth=2048',str(folder/'early.c'),'-lpthread','-lm','-o',str(folder/'early')],check=True)
+ subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-O0','-fbracket-depth=2048',str(folder/'early.c'),'-lpthread','-lm','-o',str(folder/'early')],check=True)
  negative=subprocess.run([str(folder/'early'),'--threads','1','0'],cwd=ROOT,text=True,capture_output=True,timeout=10)
  assert negative.returncode!=0 and 'request count' in negative.stdout+negative.stderr,negative
  print('early-deadline sensitivity control PASS',flush=True)

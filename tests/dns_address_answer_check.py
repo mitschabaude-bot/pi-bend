@@ -14,7 +14,7 @@ import subprocess
 
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('--no-build',action='store_true');args=p.parse_args()
-if not args.no_build:subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-address-answer-build.json','--','sh','scripts/build-pure.sh','packages/runtime/test/dns-address-answer.bend','build/dns-address-answer'],cwd=ROOT,check=True)
+if not args.no_build:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-address-answer-build.json','--','sh','scripts/build-pure.sh','packages/runtime/test/dns-address-answer.bend','build/dns-address-answer'],cwd=ROOT,check=True)
 subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-address-answer-js-build.json','--',str(Path(BEND)),'packages/runtime/test/dns-address-answer.bend','-o','build/dns-address-answer.js'],cwd=ROOT,check=True)
 
 def name(labels):return b''.join(bytes([len(x)])+x for x in labels)+b'\0'

@@ -12,6 +12,6 @@ result=subprocess.run([BEND,str(negative)],cwd=ROOT,capture_output=True,text=Tru
 diagnostic=result.stdout+result.stderr
 assert result.returncode!=0 and 'expected : Data' in diagnostic and 'observed : Type' in diagnostic,diagnostic
 print('PASS serial resource ownership cannot be duplicated',flush=True)
-subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/serial-resource.bend','build/test-serial-resource'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/serial-resource.bend','build/test-serial-resource'],cwd=ROOT,check=True)
 for threads in ['1','4']:
     subprocess.run([str(ROOT/'build/test-serial-resource'),'--threads',threads],cwd=ROOT,check=True,timeout=30)

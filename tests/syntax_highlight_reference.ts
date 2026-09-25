@@ -4,12 +4,13 @@
 // upstream's result for each (as JSON, one per line).
 //
 //   bun tests/syntax_highlight_reference.ts OUT_DIR
+import { UPSTREAM } from "./upstream_pin.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { snippets } from "./highlight_snippets.mjs";
 
 const out = process.argv[2] ?? "build/syntax-highlight";
-const root = "/home/agent/code/pi-mono";
+const root = UPSTREAM;
 const sh = await import(`${root}/packages/coding-agent/src/utils/syntax-highlight.ts`);
 const themeModule = await import(`${root}/packages/coding-agent/src/modes/interactive/theme/theme.ts`);
 const { Markdown } = await import(`${root}/packages/tui/src/components/markdown.ts`);

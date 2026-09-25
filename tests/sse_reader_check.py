@@ -88,7 +88,7 @@ rejected = subprocess.run([BEND, str(negative)],
 diagnostic = rejected.stdout + rejected.stderr
 assert rejected.returncode != 0 and 'expected : Data' in diagnostic and 'observed : Type' in diagnostic, diagnostic
 print('PASS SSE cursor duplication rejected by the type checker', flush=True)
-subprocess.run(['sh', 'scripts/build-pure.sh', 'packages/runtime/test/sse-reader-runner.bend', 'build/test-sse-reader'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'packages/runtime/test/sse-reader-runner.bend', 'build/test-sse-reader'], cwd=ROOT, check=True)
 for threads in ['1', '4']:
     for start in range(0, len(cases), 32):
         actual = subprocess.check_output([str(ROOT / 'build/test-sse-reader'), '--threads', threads, *arguments[start:start+32]], text=True, timeout=30).splitlines()

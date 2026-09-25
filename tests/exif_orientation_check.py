@@ -92,7 +92,7 @@ def main():
     if not args.no_build:
         compiler=os.environ.get('BEND',str(ROOT/'build/bend-native-toolchain/bend2/main.ts'))
         subprocess.run([compiler,'tests/exif-orientation.bend','-o',str(prefix)+'.js'],cwd=ROOT,check=True)
-        subprocess.run(['sh','scripts/build-pure.sh','tests/exif-orientation.bend',str(prefix)],cwd=ROOT,check=True)
+        subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','tests/exif-orientation.bend',str(prefix)],cwd=ROOT,check=True)
     valid,bad=corpus()
     inputs=ROOT/'build/exif-inputs.json'
     inputs.write_text(json.dumps([x.hex() for x in valid]))

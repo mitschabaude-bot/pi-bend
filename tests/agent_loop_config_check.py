@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-from upstream_pin import check_sibling
-check_sibling()
 import itertools,json,pathlib,subprocess
 root=pathlib.Path(__file__).resolve().parents[1]
 fixtures=[dict(skip=s,steering=a,follow=b,thinking=t) for s,a,b,t in itertools.product([False,True],range(2),range(2),range(3))]
@@ -12,5 +10,5 @@ for f,value in zip(fixtures,expected):lines.append(f'    T.scenario({"True{}" if
 lines.append('    IO.print("PASS 24 Agent loop configuration and live queue source scenarios")')
 (root/'build').mkdir(exist_ok=True)
 (root/'build/agent-loop-config-check.bend').write_text('\n'.join(lines)+'\n')
-subprocess.run(['sh','scripts/build-pure.sh','build/agent-loop-config-check.bend','build/agent-loop-config-check'],cwd=root,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','build/agent-loop-config-check.bend','build/agent-loop-config-check'],cwd=root,check=True)
 for threads in [1,4]:subprocess.run(['build/agent-loop-config-check','--threads',str(threads)],cwd=root,check=True,timeout=120)

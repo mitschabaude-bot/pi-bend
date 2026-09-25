@@ -23,7 +23,7 @@ console.log(JSON.stringify(cases.map(([name,value])=>{try{
 }catch{return 'error';}})));
 """
 expected=json.loads(subprocess.check_output(['node','-e',script],input=json.dumps(cases),cwd=ROOT,text=True))
-if '--no-build' not in sys.argv:subprocess.run(['sh','scripts/build-pure.sh','packages/runtime/test/http-header.bend','build/http-header'],cwd=ROOT,check=True)
+if '--no-build' not in sys.argv:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh','packages/runtime/test/http-header.bend','build/http-header'],cwd=ROOT,check=True)
 encode=lambda s:','.join(str(ord(ch)) for ch in s)
 for threads in ['1','4']:
  for start in range(0,len(cases),32):

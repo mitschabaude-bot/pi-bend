@@ -1,7 +1,8 @@
 // Test-only oracle: pinned pi-mono's actual Chat Completions request builder and stream.
-import { streamSimple } from "/home/agent/code/pi-mono/packages/ai/src/api/openai-completions.ts";
-import { normalizeContext } from "/home/agent/code/pi-mono/packages/ai/src/utils/transcript.ts";
-import { Type } from "/home/agent/code/pi-mono/node_modules/typebox/build/index.mjs";
+import { UPSTREAM } from "./upstream_pin.mjs";
+const { streamSimple } = await import(UPSTREAM + "/packages/ai/src/api/openai-completions.ts");
+const { normalizeContext } = await import(UPSTREAM + "/packages/ai/src/utils/transcript.ts");
+const { Type } = await import(UPSTREAM + "/node_modules/typebox/build/index.mjs");
 
 const model: any = { id: "test-model", name: "Test Model", api: "openai-completions", provider: "openai", baseUrl: "http://localhost:1/v1", reasoning: false, input: ["text"], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 4096 };
 const text = 'data: {"id":"chatcmpl-1","model":"test-model","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}\n\ndata: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';

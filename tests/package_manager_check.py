@@ -5,8 +5,7 @@ directories up to the Git root, ignore files, symlinks, settings entries and
 exact +/- overrides and minimatch glob patterns) and compares the Bend resolution with the reference
 script run under Bun from ../pi-mono/packages/coding-agent.
 """
-from upstream_pin import UPSTREAM, check_sibling
-check_sibling()
+from upstream_pin import UPSTREAM
 import argparse, json, os, subprocess, tempfile
 from pathlib import Path
 

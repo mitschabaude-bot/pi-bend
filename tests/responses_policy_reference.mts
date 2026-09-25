@@ -1,9 +1,10 @@
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
-const source = stripTypeScriptTypes(fs.readFileSync('../pi-mono/packages/ai/src/api/openai-responses.ts','utf8'));
+const source = stripTypeScriptTypes(fs.readFileSync(UPSTREAM + '/packages/ai/src/api/openai-responses.ts','utf8'));
 const policy = source.slice(source.indexOf('function detectSessionAffinityFormat('), source.indexOf('// OpenAI Responses-specific options'));
 const client = source.slice(source.indexOf('function createClient('), source.indexOf('\nfunction buildParams('));
-const cacheKey = stripTypeScriptTypes(fs.readFileSync('../pi-mono/packages/ai/src/api/openai-prompt-cache.ts','utf8')).replace(/^export /gm,'');
+const cacheKey = stripTypeScriptTypes(fs.readFileSync(UPSTREAM + '/packages/ai/src/api/openai-prompt-cache.ts','utf8')).replace(/^export /gm,'');
 const helpers = new Function('getProviderEnvValue', `
 class OpenAI { constructor(options) { this.options=options; } }
 function getPiUserAgent() { return 'test-agent'; }

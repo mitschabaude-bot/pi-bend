@@ -22,10 +22,10 @@ parser.add_argument('--no-build',action='store_true')
 args=parser.parse_args();candidate=args.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 launcher=ROOT/'build/dns-tcp-compiler';launcher.write_text('#!/bin/sh\nexec '+shlex.quote(str(bun))+' '+shlex.quote(str(candidate/'main.ts'))+' "$@"\n');launcher.chmod(0o755)
 if not args.no_build:
-    subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-tcp-peer-build.json','--','sh','scripts/build-pure.sh','tests/dns-tcp-peer.bend','build/dns-tcp-peer'],cwd=ROOT,env=dict(os.environ,BEND=str(launcher)),check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-tcp-peer-build.json','--','sh','scripts/build-pure.sh','tests/dns-tcp-peer.bend','build/dns-tcp-peer'],cwd=ROOT,env=dict(os.environ,BEND=str(launcher)),check=True)
 subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-tcp-peer-js-build.json','--',str(launcher),'tests/dns-tcp-peer.bend','-o','build/dns-tcp-peer.js'],cwd=ROOT,check=True)
 if not args.no_build:
-    subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-tcp-peer-failure-build.json','--','sh','scripts/build-pure.sh','tests/dns-tcp-peer-failure.bend','build/dns-tcp-peer-failure'],cwd=ROOT,env=dict(os.environ,BEND=str(launcher)),check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-tcp-peer-failure-build.json','--','sh','scripts/build-pure.sh','tests/dns-tcp-peer-failure.bend','build/dns-tcp-peer-failure'],cwd=ROOT,env=dict(os.environ,BEND=str(launcher)),check=True)
 subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-tcp-peer-failure-js-build.json','--',str(launcher),'tests/dns-tcp-peer-failure.bend','-o','build/dns-tcp-peer-failure.js'],cwd=ROOT,check=True)
 def exact(peer,count):
     data=b''

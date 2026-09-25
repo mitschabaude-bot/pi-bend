@@ -67,7 +67,7 @@ for index, case in enumerate(cases):
         expected[index] = streaming_expected[index]
     else:
         assert expected[index] == streaming_expected[index], case
-subprocess.run(["sh", "scripts/build-pure.sh", "packages/runtime/test/utf8-runner.bend", "build/test-utf8"], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', "sh", "scripts/build-pure.sh", "packages/runtime/test/utf8-runner.bend", "build/test-utf8"], cwd=ROOT, check=True)
 arguments = [
     "e" + ",".join(map(str, case["scalars"])) if "scalars" in case
     else "b" + ",".join(map(str, case["bytes"])) if "bytes" in case

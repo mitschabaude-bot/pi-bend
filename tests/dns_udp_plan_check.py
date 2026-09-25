@@ -5,7 +5,7 @@ from bend_toolchain import BEND, TOOLCHAIN
 ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler=TOOLCHAIN
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-udp-plan-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/dns-udp-plan.bend','-o',f'build/dns-udp-plan.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-udp-plan.c','-lpthread','-lm','-o','build/dns-udp-plan'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-udp-plan.c','-lpthread','-lm','-o','build/dns-udp-plan'],cwd=ROOT,check=True)
 cases=[]
 for timeout,count,offset,attempts in itertools.product([0,5,30,31],range(5),[0,1,2,5],[0,1,3]):
     if count==0:expected='no-servers'

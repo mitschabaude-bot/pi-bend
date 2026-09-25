@@ -7,7 +7,7 @@ candidate=Path(sys.argv[1] if len(sys.argv)>1 and not sys.argv[1].startswith('--
 binary=ROOT/'build/provider-retry-runtime'
 if '--no-build' not in sys.argv:
  subprocess.run([sys.executable,'scripts/run-rss-guarded.py','--limit-gib','40','--',str(bun),str(candidate/'main.ts'),'packages/ai/test/provider-retry-runtime.bend','-o',str(binary)+'.c'],cwd=ROOT,check=True)
- subprocess.run(['clang','-std=c11','-O1','-fbracket-depth=2048',str(binary)+'.c','-lpthread','-lm','-o',str(binary)],check=True)
+ subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-O1','-fbracket-depth=2048',str(binary)+'.c','-lpthread','-lm','-o',str(binary)],check=True)
 def scalar(text):
  high,low=map(int,text.split(':'));return struct.unpack('>d',struct.pack('>II',high,low))[0]
 # First two words of the separately tested SplitMix64 sequence from seed zero.
@@ -26,7 +26,7 @@ static void __attribute__((destructor)) runtime_audit(void) {
 }
 '''
  (folder/'run.c').write_text(source)
- subprocess.run(['clang','-std=c11','-O1','-fbracket-depth=2048',str(folder/'run.c'),'-lpthread','-lm','-o',str(folder/'run')],check=True)
+ subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-O1','-fbracket-depth=2048',str(folder/'run.c'),'-lpthread','-lm','-o',str(folder/'run')],check=True)
  subprocess.run([str(bun),str(candidate/'main.ts'),'packages/ai/test/provider-retry-runtime.bend','-o',str(folder/'run.js')],cwd=ROOT,check=True)
  for backend,command in [('native-1',[str(folder/'run'),'--threads','1']),('native-4',[str(folder/'run'),'--threads','4']),('bun',[str(bun),str(folder/'run.js')])]:
   before=time.time()*1000

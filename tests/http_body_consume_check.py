@@ -86,7 +86,7 @@ if '--no-build' not in sys.argv:
                             '--stats', f'build/http-body-consume-{backend}-build.json', '--',
                             BEND, SOURCE, '-o', f'build/http-body-consume.{backend}'],
                            cwd=ROOT, check=True, stdout=log, stderr=subprocess.STDOUT)
-    subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1',
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1',
                     'build/http-body-consume.c', '-lpthread', '-lm', '-o', 'build/http-body-consume'], cwd=ROOT, check=True)
 
 runs = []

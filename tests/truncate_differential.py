@@ -1,6 +1,4 @@
 """Compare native Bend results with the pinned upstream TypeScript implementation."""
-from upstream_pin import check_sibling
-check_sibling()
 import json
 import random
 import subprocess

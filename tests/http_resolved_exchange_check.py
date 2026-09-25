@@ -77,7 +77,7 @@ else:
     '''
     Path(f'{prefix}-audit.c').write_text(replace_once(c, original, changed) + audit)
     for suffix in ['', '-audit']:
-        subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1', f'{prefix}{suffix}.c', '-lpthread', '-lm', '-o', f'{prefix}{suffix}'], check=True)
+        subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1', f'{prefix}{suffix}.c', '-lpthread', '-lm', '-o', f'{prefix}{suffix}'], check=True)
     js = Path(f'{prefix}.js').read_text()
     original = (candidate / 'effs/timer.js').read_text()
     changed = original

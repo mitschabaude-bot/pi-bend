@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[1];bun=Path.home()/'.bun/bin/bun';compiler
 for suffix in ['c','js']:
  with (ROOT/f'build/utf8-strict-{suffix}.log').open('w') as log:
   subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/utf8-strict-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),'tests/utf8-strict.bend','-o',f'build/utf8-strict.{suffix}'],cwd=ROOT,check=True,stdout=log,stderr=subprocess.STDOUT)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/utf8-strict.c','-lpthread','-lm','-o','build/utf8-strict'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/utf8-strict.c','-lpthread','-lm','-o','build/utf8-strict'],cwd=ROOT,check=True)
 def reference(values,mode):
  # Python's incremental codec can defer rejecting ED A0 until a third byte.
  # Finalize each prefix to distinguish an incomplete but extendable prefix

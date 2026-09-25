@@ -1,6 +1,4 @@
 """Check immutable tool history against upstream transcript functions."""
-from upstream_pin import check_sibling
-check_sibling()
 import json
 from pathlib import Path
 import random
@@ -80,6 +78,6 @@ for case, ((pool, entries), want) in enumerate(zip(cases, expected, strict=True)
 source.append(f'    IO.print("PASS {len(cases)} upstream tool histories with immutable values")')
 entry = BUILD / 'tool-history-vectors.bend'
 entry.write_text('\n'.join(source) + '\n')
-subprocess.run(['sh', 'scripts/build-pure.sh', str(entry), 'build/test-tool-history'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(entry), 'build/test-tool-history'], cwd=ROOT, check=True)
 for threads in ('1', '4'):
     subprocess.run(['build/test-tool-history', '--threads', threads], cwd=ROOT, check=True, timeout=90)

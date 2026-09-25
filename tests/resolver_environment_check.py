@@ -15,7 +15,7 @@ fixtures=['resolver-environment','resolver-environment-source']
 for fixture in fixtures:
     for suffix in ['c','js']:
         subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/{fixture}-{suffix}-build.json','--',str(bun),str(compiler/'main.ts'),f'tests/{fixture}.bend','-o',f'build/{fixture}.{suffix}'],cwd=ROOT,check=True)
-    subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1',f'build/{fixture}.c','-lpthread','-lm','-o',f'build/{fixture}'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1',f'build/{fixture}.c','-lpthread','-lm','-o',f'build/{fixture}'],cwd=ROOT,check=True)
 subprocess.run(['cc','tests/resolver-environment-oracle.c','-lresolv','-o','build/resolver-environment-oracle'],cwd=ROOT,check=True)
 libc=ctypes.CDLL(None);aton=libc.__inet_aton_exact;aton.argtypes=[ctypes.c_char_p,ctypes.c_void_p];aton.restype=ctypes.c_int
 

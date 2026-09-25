@@ -1,10 +1,11 @@
 // Exact pinned outer wrapper and processor, with injected client/effects.
+import { UPSTREAM } from "./upstream_pin.mjs";
 import fs from 'node:fs';
 import {createRequire,stripTypeScriptTypes} from 'node:module';
-import {headersToRecord} from '../../pi-mono/packages/ai/src/utils/headers.ts';
-import {normalizeProviderError,formatProviderError} from '../../pi-mono/packages/ai/src/utils/error-body.ts';
+const { headersToRecord } = await import(UPSTREAM + '/packages/ai/src/utils/headers.ts');
+const { normalizeProviderError, formatProviderError } = await import(UPSTREAM + '/packages/ai/src/utils/error-body.ts');
 import {processStream} from './responses_stream_reference.mts';
-const source=fs.readFileSync('../pi-mono/packages/ai/src/api/openai-responses.ts','utf8');
+const source=fs.readFileSync(UPSTREAM + '/packages/ai/src/api/openai-responses.ts','utf8');
 const first=source.indexOf('const nextParams = await options?.onPayload?.(params, model);');
 const last=source.indexOf('\n\t})();',first);
 if(first<0||last<0)throw Error('wrapper source not found');
@@ -13,7 +14,7 @@ if(first<0||last<0)throw Error('wrapper source not found');
 const wrapper=stripTypeScriptTypes('try {\nif (preparationError !== undefined) throw new Error(preparationError);\n'+source.slice(first,last));
 const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
 const run=new AsyncFunction('params','model','options','client','retryProviderRequest','headersToRecord','stream','output','processResponsesStream','grammarToolInputProperties','applyServiceTierPricing','normalizeProviderError','formatProviderError','preparationError',wrapper);
-const retrySource=stripTypeScriptTypes(fs.readFileSync('../pi-mono/packages/ai/src/utils/provider-retry.ts','utf8')).replace(/^export /gm,'').replace('function abortableSleep(', 'function originalAbortableSleep(');
+const retrySource=stripTypeScriptTypes(fs.readFileSync(UPSTREAM + '/packages/ai/src/utils/provider-retry.ts','utf8')).replace(/^export /gm,'').replace('function abortableSleep(', 'function originalAbortableSleep(');
 const scalars=s=>Array.from(s,c=>c.codePointAt(0)).join(',');
 function bits(n,sep=','){const b=Buffer.alloc(8);b.writeDoubleBE(n);return b.readUInt32BE(0)+sep+b.readUInt32BE(4);}
 function shownMessage(m){const u=m.usage;return 'output:'+m.content.map(c=>c.type==='text'?scalars(c.text)+';':'other;').join('')+':'+(m.responseId??'none')+':'+m.stopReason+':'+[u.input,u.output,u.cacheRead,u.cacheWrite,u.totalTokens,u.cost.total].map(n=>bits(n)).join(':')+':error:'+(m.errorMessage===undefined?'none':scalars(m.errorMessage));}

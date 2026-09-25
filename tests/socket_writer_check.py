@@ -145,7 +145,7 @@ with tempfile.TemporaryDirectory(prefix='socket-writer-', dir=ROOT / 'build') as
     launcher.chmod(0o755)
     environment = dict(os.environ, BEND=str(launcher))
     binary = directory / 'test'
-    subprocess.run(['sh', 'scripts/build-pure.sh', 'tests/socket-writer.bend', str(binary)], cwd=ROOT, env=environment, check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', 'tests/socket-writer.bend', str(binary)], cwd=ROOT, env=environment, check=True)
     javascript = directory / 'test.js'
     subprocess.run([str(launcher), 'tests/socket-writer.bend', '-o', str(javascript)], cwd=ROOT, check=True)
     for threads in ['1', '4']:

@@ -70,7 +70,7 @@ lines=['import Base','import ../packages/ai/src/api/simple-options.bend as Optio
 '    IO.print("PASS option inheritance, callback handles and header contents and null/empty/missing headers")']
 path=BUILD/'provider-option-types.bend'
 path.write_text('\n'.join(lines)+'\n')
-subprocess.run(['sh','scripts/build-pure.sh',str(path),'build/test-provider-option-types'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(path),'build/test-provider-option-types'],cwd=ROOT,check=True)
 for threads in ('1','4'): subprocess.run(['build/test-provider-option-types','--threads',threads],cwd=ROOT,check=True,timeout=30)
 print('PASS three inherited option field sets and provider response field coverage')
 

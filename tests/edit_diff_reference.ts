@@ -1,8 +1,9 @@
 // Invoke the pinned upstream implementation directly; no reimplemented oracle.
+import { UPSTREAM } from "./upstream_pin.mjs";
 import { readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { createHash } from 'node:crypto';
-const source = process.env.PI_MONO ?? '/home/agent/code/pi-mono';
+const source = UPSTREAM;
 // Exclude unused IO/diff-rendering imports; execute the original pure source.
 const original=readFileSync(`${source}/packages/coding-agent/src/core/tools/edit-diff.ts`,'utf8');
 if(createHash('sha256').update(original).digest('hex')!=='f85a9809eb44b9828236050cf38a8e45933e5cfd583a186e9a0e55a664dd3e8d') throw Error('Unexpected edit-diff.ts revision; expected pinnedf07218c4d');

@@ -82,5 +82,5 @@ for operations, result in zip(sequences, expected, strict=True):
 source += f'    IO.print("record and ordered map: {len(sequences)} persistent dictionary sequences each passed")\n'
 entry = BUILD / 'record-vectors.bend'
 entry.write_text(source)
-subprocess.run(['sh', 'scripts/build-pure.sh', str(entry), 'build/record-vectors'], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(entry), 'build/record-vectors'], cwd=ROOT, check=True)
 subprocess.run(['build/record-vectors', '--threads', '1'], cwd=ROOT, check=True, timeout=60)

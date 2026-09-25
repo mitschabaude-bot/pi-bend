@@ -55,5 +55,5 @@ for start in range(0,len(cases),35):
     name=f'group{start}';groups.append(name);lines += [f'def {name}() -> IO(Unit):','  do IO<Unit>:']+[f'    case{i}()' for i in range(start,min(start+35,len(cases)))]
 lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {g}()' for g in groups]+['    T.deep()',f'    IO.print("PASS {len(cases)} strict JSON acceptance/value comparisons and 2000-level nesting")']
 src=BUILD/'json-parse-check.bend';src.write_text('\n'.join(lines)+'\n');out=BUILD/'json-parse-check'
-subprocess.run(['sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
 for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,check=True,timeout=120)

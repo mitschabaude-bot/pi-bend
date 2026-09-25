@@ -12,7 +12,7 @@ bun=Path.home()/'.bun/bin/bun'
 compiler=Path(BEND)
 for suffix in ['c','js']:
     subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats',f'build/dns-edns-{suffix}-build.json','--',str(bun),str(compiler),'tests/dns-edns.bend','-o',f'build/dns-edns.{suffix}'],cwd=ROOT,check=True)
-subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-edns.c','-lpthread','-lm','-o','build/dns-edns'],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1','build/dns-edns.c','-lpthread','-lm','-o','build/dns-edns'],cwd=ROOT,check=True)
 
 def model(case):
     identifier,flags,payload,dnssec,kind,klass,mode,count,byte,code=case

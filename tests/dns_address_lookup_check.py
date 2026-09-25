@@ -21,7 +21,7 @@ ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN);p.add_argument('--no-build',action='store_true');p.add_argument('--build-limit-gib',type=float,default=16);args=p.parse_args()
 candidate=args.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
 launcher=ROOT/'build/dns-lookup-compiler';launcher.write_text('#!/bin/sh\nexec '+shlex.quote(str(bun))+' '+shlex.quote(str(candidate/'main.ts'))+' "$@"\n');launcher.chmod(0o755)
-if not args.no_build:subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib',str(args.build_limit_gib),'--stats','build/dns-address-lookup-build.json','--','sh','scripts/build-pure.sh','tests/dns-address-lookup.bend','build/dns-address-lookup'],cwd=ROOT,env=dict(os.environ,BEND=str(launcher)),check=True)
+if not args.no_build:subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'python3','scripts/run-rss-guarded.py','--limit-gib',str(args.build_limit_gib),'--stats','build/dns-address-lookup-build.json','--','sh','scripts/build-pure.sh','tests/dns-address-lookup.bend','build/dns-address-lookup'],cwd=ROOT,env=dict(os.environ,BEND=str(launcher)),check=True)
 subprocess.run(['python3','scripts/run-rss-guarded.py','--limit-gib','8','--stats','build/dns-address-lookup-js-build.json','--',str(launcher),'tests/dns-address-lookup.bend','-o','build/dns-address-lookup.js'],cwd=ROOT,check=True)
 def exact(peer,count):
     data=b''

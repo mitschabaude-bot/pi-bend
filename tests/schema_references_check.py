@@ -1,6 +1,4 @@
 """Local acyclic reference cases through the actual public validation path."""
-from upstream_pin import check_sibling
-check_sibling()
 import json
 from pathlib import Path
 import subprocess
@@ -60,6 +58,6 @@ lines.append(f'    IO.print("PASS {len(cases)} local-reference validation outcom
 source=BUILD/'schema-references-check.bend';source.write_text('\n'.join(lines)+'\n')
 for source,name in [(source,'schema-references-check'),('packages/runtime/test/schema-load.bend','schema-reference-errors'),('packages/ai/test/plain-validation-cases-upstream.bend','plain-validation-cases-upstream')]:
     output=BUILD/name
-    subprocess.run(['sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(source),str(output)],cwd=ROOT,check=True)
     for threads in ['1','4']:
         subprocess.run([str(output),'--threads',threads],cwd=ROOT,check=True,timeout=120)

@@ -1,6 +1,4 @@
 """Cumulative grammar input -> immutable JSON-delta transitions against Pi."""
-from upstream_pin import check_sibling
-check_sibling()
 import itertools,json,subprocess
 from pathlib import Path
 from schema_literals import string,value,seq
@@ -41,5 +39,5 @@ for start in range(0,count,25):
 transitions=sum(len(c['steps']) for c in sequences)
 lines += ['def main() -> IO(Unit):','  do IO<Unit>:']+[f'    {g}()' for g in groups]+[f'    IO.print("PASS {len(sequences)} grammar sequences/{transitions} transitions and {len(arguments)} argument checks")']
 src=BUILD/'grammar-input-check.bend';src.write_text('\n'.join(lines)+'\n');out=BUILD/'grammar-input-check'
-subprocess.run(['sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh','scripts/build-pure.sh',str(src),str(out)],cwd=ROOT,check=True)
 for threads in ['1','4']:subprocess.run([str(out),'--threads',threads],cwd=ROOT,check=True,timeout=120)

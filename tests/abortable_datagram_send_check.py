@@ -22,7 +22,7 @@ static void __attribute__((destructor)) send_audit(void) {
 (ROOT/f'build/{stem}-audit.c').write_text((ROOT/f'build/{stem}.c').read_text()+audit)
 inject(ROOT/f'build/{stem}-audit.c',ROOT/f'build/{stem}-blocked.c',ROOT/f'build/{stem}.js',ROOT/f'build/{stem}-blocked.js')
 for version,source in [('',f'{stem}-audit.c'),('-blocked',f'{stem}-blocked.c')]:
-    subprocess.run(['clang','-std=c11','-fbracket-depth=2048','-O1',f'build/{source}','-lpthread','-lm','-o',f'build/{stem}{version}'],cwd=ROOT,check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-fbracket-depth=2048','-O1',f'build/{source}','-lpthread','-lm','-o',f'build/{stem}{version}'],cwd=ROOT,check=True)
 rows=[]
 for backend in ['native 1','native 4','Bun']:
     for family,af,host in [(4,socket.AF_INET,'127.0.0.1'),(6,socket.AF_INET6,'::1')]:

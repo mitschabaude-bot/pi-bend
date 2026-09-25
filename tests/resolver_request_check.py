@@ -18,7 +18,7 @@ for suffix in ('c', 'js'):
                     '--stats', f'build/resolver-request-{suffix}-build.json', '--',
                     str(bun), str(compiler / 'main.ts'), 'tests/resolver-request.bend',
                     '-o', f'build/resolver-request.{suffix}'], cwd=ROOT, check=True)
-subprocess.run(['clang', '-std=c11', '-fbracket-depth=2048', '-O1',
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang', '-std=c11', '-fbracket-depth=2048', '-O1',
                 'build/resolver-request.c', '-lpthread', '-lm', '-o',
                 'build/resolver-request'], cwd=ROOT, check=True)
 features = ['rotate', 'edns0', 'single-request-reopen', 'single-request',

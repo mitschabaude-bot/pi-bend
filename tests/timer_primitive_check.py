@@ -27,7 +27,7 @@ with tempfile.TemporaryDirectory(prefix='timer-check-',dir=ROOT/'build') as dire
 }\n''')
     source=ROOT/'tests/timer-primitive.bend'
     subprocess.run([str(bun),str(compiler/'main.ts'),str(source),'-o',str(folder/'timer.c')],cwd=ROOT,check=True)
-    subprocess.run(['clang','-std=c11','-O1','-fbracket-depth=2048',str(folder/'timer.c'),'-lpthread','-lm','-o',str(folder/'timer')],check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-O1','-fbracket-depth=2048',str(folder/'timer.c'),'-lpthread','-lm','-o',str(folder/'timer')],check=True)
     for threads in [1,4]:
         start=time.monotonic()
         run=subprocess.run([str(folder/'timer'),'--threads',str(threads)],capture_output=True,text=True,timeout=5,check=True)
@@ -57,7 +57,7 @@ def main() -> IO(Unit):
     close(pair)
 ''')
     subprocess.run([str(bun),str(candidate/'main.ts'),str(small),'-o',str(folder/'small.c')],check=True)
-    subprocess.run(['clang','-std=c11','-O1',str(folder/'small.c'),'-lpthread','-lm','-o',str(folder/'small')],check=True)
+    subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'clang','-std=c11','-O1',str(folder/'small.c'),'-lpthread','-lm','-o',str(folder/'small')],check=True)
     subprocess.run([str(folder/'small')],check=True,timeout=5)
     results['new_close_only']=True
 results['source_sha256']=hashlib.sha256((ROOT/'tests/timer-primitive.bend').read_bytes()).hexdigest()

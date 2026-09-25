@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """Compare the composed Agent run with actual pinned Agent and loop execution."""
-from upstream_pin import check_sibling
-check_sibling()
 import json
 from pathlib import Path
 import subprocess
@@ -14,6 +12,6 @@ for mode, value in enumerate(expected):
 lines.append('    IO.print("PASS 10 composed Agent/provider-loop source comparisons")')
 source = root / 'build/agent-run-check.bend'
 source.write_text('\n'.join(lines) + '\n')
-subprocess.run(['sh', 'scripts/build-pure.sh', str(source), 'build/agent-run-check'], cwd=root, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', str(source), 'build/agent-run-check'], cwd=root, check=True)
 for threads in ['1', '4']:
     subprocess.run(['build/agent-run-check', '--threads', threads], cwd=root, check=True, timeout=120)

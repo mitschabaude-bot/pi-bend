@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BEND = BEND
 output = ROOT / 'build/tcp-bytes-probe'
 source = 'tests/tcp-bytes-probe.bend'
-subprocess.run(['sh', 'scripts/build-pure.sh', source, str(output)], cwd=ROOT, check=True)
+subprocess.run(['flock', '/tmp/pi-bend-build.lock', 'sh', 'scripts/build-pure.sh', source, str(output)], cwd=ROOT, check=True)
 subprocess.run([BEND, source, '-o', str(output.with_suffix('.js'))], cwd=ROOT, check=True)
 payload = bytes(range(256))
 
