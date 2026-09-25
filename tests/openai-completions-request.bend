@@ -119,7 +119,7 @@ def choice(value: Maybe<&2, String>) -> Maybe<&2, Ai.ToolChoice>:
 
 def budgets(value: Maybe<&2, V.Value>) -> Maybe<&2, Ai.ThinkingBudgets>:
   match value:
-    case Some{+budgets}: Some{Ai.ThinkingBudgets{number(field(budgets, "minimal")), number(field(budgets, "low")), number(field(budgets, "medium")), number(field(budgets, "high"))}}
+    case Some{+levels}: Some{Ai.ThinkingBudgets{number(field(levels, "minimal")), number(field(levels, "low")), number(field(levels, "medium")), number(field(levels, "high"))}}
     case None{}: None{}
 
 # Catalog
@@ -224,10 +224,10 @@ def context(+value: V.Value) -> Context():
 def settings(+value: V.Value) -> V.Value: Maybe.default(&2, V.Value, field(value, "options"), object(Nil{}))
 
 def simpleOptions(+value: V.Value, fetch: Fetch.Fetch(Unit)) -> Completions.Options():
-  Ai.SimpleStreamOptions{None{}, None{}, text(field(value, "apiKey")), Some{fetch}, strings(field(value, "env")), None{}, None{}, H.headerLayer(field(value, "headers")), None{}, None{}, None{}, number(field(value, "temperature")), jsonRecord(field(value, "samplingParams")), number(field(value, "maxTokens")), None{}, retention(text(field(value, "cacheRetention"))), text(field(value, "sessionId")), None{}, None{}, choice(text(field(value, "toolChoice"))), level(text(field(value, "reasoning"))), None{}, budgets(field(value, "thinkingBudgets"))}
+  Ai.SimpleStreamOptions{None{}, None{}, text(field(value, "apiKey")), Some{fetch}, strings(field(value, "env")), None{}, None{}, H.headerLayer(field(value, "headers")), number(field(value, "timeoutMs")), number(field(value, "maxRetries")), number(field(value, "maxRetryDelayMs")), number(field(value, "temperature")), jsonRecord(field(value, "samplingParams")), number(field(value, "maxTokens")), None{}, retention(text(field(value, "cacheRetention"))), text(field(value, "sessionId")), None{}, None{}, choice(text(field(value, "toolChoice"))), level(text(field(value, "reasoning"))), None{}, budgets(field(value, "thinkingBudgets"))}
 
 def streamOptions(+value: V.Value, fetch: Maybe<&2, Fetch.Fetch(Unit)>) -> Completions.Completions():
-  +base = {Ai.StreamOptions{None{}, None{}, text(field(value, "apiKey")), fetch, strings(field(value, "env")), None{}, None{}, H.headerLayer(field(value, "headers")), None{}, None{}, None{}, number(field(value, "temperature")), jsonRecord(field(value, "samplingParams")), number(field(value, "maxTokens")), None{}, retention(text(field(value, "cacheRetention"))), text(field(value, "sessionId")), None{}, None{}} : Completions.Base()}
+  +base = {Ai.StreamOptions{None{}, None{}, text(field(value, "apiKey")), fetch, strings(field(value, "env")), None{}, None{}, H.headerLayer(field(value, "headers")), number(field(value, "timeoutMs")), number(field(value, "maxRetries")), number(field(value, "maxRetryDelayMs")), number(field(value, "temperature")), jsonRecord(field(value, "samplingParams")), number(field(value, "maxTokens")), None{}, retention(text(field(value, "cacheRetention"))), text(field(value, "sessionId")), None{}, None{}} : Completions.Base()}
   Request.OpenAICompletionsOptions{base, Maybe.map(&2, V.Value, Ai.JsonValue, Convert.toJson, field(value, "toolChoice")), level(text(field(value, "reasoningEffort"))), budgets(field(value, "thinkingBudgets"))}
 
 # Capture
@@ -240,7 +240,7 @@ def headerFields(entries: List<&2, Message.Header>) -> List<&2, R.Property<V.Val
 
 def bodyText(body: Message.Input) -> V.Value:
   match body:
-    case Message.Text{text}: V.Text{text}
+    case Message.Text{content}: V.Text{content}
     case _: V.Null{}
 
 def capture(slot: Ref.Ref<Captured()>, input: Fetch.Input<Unit>) -> IO(Fetch.Result_(Unit)):
@@ -252,7 +252,7 @@ def capture(slot: Ref.Ref<Captured()>, input: Fetch.Input<Unit>) -> IO(Fetch.Res
 
 def failureText(message: Ai.AssistantMessage<V.Value, Unit>) -> V.Value:
   match message:
-    case Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, _, _, Some{text}, _, _, _}: V.Text{text}
+    case Ai.AssistantMessage{_, _, _, _, _, _, _, _, _, _, _, Some{content}, _, _, _}: V.Text{content}
     case _: V.Null{}
 
 def settled(output: Output()) -> IO(V.Value):
@@ -310,7 +310,7 @@ def withGrammar(+selected: Ai.Model<Ai.JsonValue>, +normalized: Context(), optio
 
 def contextMessages(context: Context()) -> List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>:
   match context:
-    case Ai.TranscriptContext{messages}: messages
+    case Ai.TranscriptContext{transcript}: transcript
 
 # The request builder without the provider's refusal of grammar tools.
 def parameters(+value: V.Value) -> IO(V.Value):

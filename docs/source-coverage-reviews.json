@@ -6,7 +6,7 @@
       "note": "Native OpenAI/Codex request and stream path works; provider suites remain partial and some upstream request/header behavior differs.",
       "source_sha256": "5d524184ea001a2717fd35b4562126043338d1ef3279f4e2ce192ae5592e8479",
       "port_sha256": {
-        "packages/ai/src/api/openai-responses.bend": "e9b55ad7209d7249305fcb9bcd276c503951fe0e65316e108b33f8ab7a643210"
+        "packages/ai/src/api/openai-responses.bend": "cbe3854fc2861362a3e25603fa7885c89428ce44afa57f2928c688da89d04b7b"
       }
     },
     "packages/ai/src/api/anthropic-messages.ts": {
@@ -19,7 +19,7 @@
     },
     "packages/ai/src/api/openai-completions.ts": {
       "state": "partial",
-      "note": "Request side ported: ResolvedOpenAICompletionsCompat with detectCompat/getCompat; convertMessages through transformMessages (tool-call id normalization, thinking replay fields and reasoning_details, the four requires* flags, grammar tool calls, Kimi mid-conversation tools); convertTools with grammar custom tools; buildParams in upstream field order (prompt cache key/retention, empty tools for tool history, tool_stream, Anthropic cache markers, priority, every thinkingFormat with the clamped budget, OpenRouter/Vercel routing, sampling overrides); streamSimple option mapping, cache retention and session-affinity headers (openai-completions-provider.bend runs stream). Byte-identical to upstream on the named suite cases and 724 generated requests (tests/openai_completions_request_check.py). Gaps: the stream fold has no finish_reason fallback (models with supportsFinishReason false are refused) and does not parse custom (grammar) tool-call deltas (requests declaring grammar tools are refused before sending), ignores streamed reasoning_details, and records every reasoning delta under reasoning_content instead of the field that carried it; GitHub Copilot dynamic headers and onResponse are not wired.",
+      "note": "Request and stream sides ported. Request: ResolvedOpenAICompletionsCompat with detectCompat/getCompat; convertMessages (tool-call id normalization, thinking replay fields and reasoning_details, the four requires* flags, grammar tool calls, Kimi mid-conversation tools); convertTools with grammar custom tools; buildParams in upstream field order with every thinkingFormat, budgets, cache markers, routing and sampling overrides. Stream: the chunk loop (one text and one thinking block, tool calls by wire index or id, custom grammar input, streamed reasoning_details merged into the thinking signature, the reasoning field as signature with OpenCode Go's normalization, routed responseModel, parseChunkUsage), block endings and the finish_reason checks including the supportsFinishReason: false fallback; the lifecycle (getClientApiKey, onPayload, SDK request with retryProviderRequest, onResponse, SDK SSE with in-chunk error payloads, the catch block's message with OpenRouter raw metadata) in openai-completions-client.bend over the shared SDK port. Byte-identical to upstream on the suites' named cases, 724 generated requests and 114 generated streams (tests/openai_completions_request_check.py, tests/openai_completions_stream_check.py). Remaining gap: GitHub Copilot's dynamic request headers (buildCopilotDynamicHeaders) are not added for github-copilot Completions models.",
       "source_sha256": "a682245959c697d4f7a5ac54152f2db189099561b304725c651d6dbee22fd752",
       "ports": [
         "packages/ai/src/api/openai-completions.bend",
@@ -28,10 +28,10 @@
         "packages/coding-agent/src/core/openai-completions-provider.bend"
       ],
       "port_sha256": {
-        "packages/ai/src/api/openai-completions.bend": "34e8e0c1aaa980aa7231f4d9ef6dc02cf11dab343e34fe48ee7fe32259f2e8ac",
-        "packages/ai/src/api/openai-completions-client.bend": "a0e2e37a1d784e324d3c5fd63b84616ff772a4f13a31a314ec2b7b6a958f1163",
-        "packages/ai/src/api/openai-completions-stream.bend": "d0ca90f9ffa6244899838de48da2ee3bb20f7512939db2a26b1fe587253f1df3",
-        "packages/coding-agent/src/core/openai-completions-provider.bend": "10b4709e2c37de036e875b5111c5b18b6c6c776a8c037ea3c931839ed1d547c1"
+        "packages/ai/src/api/openai-completions.bend": "7ff3403a550df2582e44e1224df0bd81399ff1cff46447f7448217773f7943ef",
+        "packages/ai/src/api/openai-completions-client.bend": "a39b1559558be30ee3078ac0b047e8496b53bdcb580c4849a409844d071c5a0f",
+        "packages/ai/src/api/openai-completions-stream.bend": "87e923079f391b66ae1d5f3fc38859e9fae182fbdfe1a8a90e024c388f5d2417",
+        "packages/coding-agent/src/core/openai-completions-provider.bend": "c580234bbfad6979cf4a0b155c86be01b4c1a2d0cd95676ea4351e3edbc234ea"
       }
     },
     "packages/agent/src/agent-loop.ts": {
