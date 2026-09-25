@@ -91,11 +91,18 @@
     },
     "packages/coding-agent/src/modes/interactive/components/settings-selector.ts": {
       "state": "partial",
-      "note": "Theme preview, cancel, save and automatic selection work; the per-model thinking submenu and other upstream rows are still missing, with ANSI details partial.",
+      "note": "Native theme and per-model thinking submenus save and clear settings, with live preview or current-model thinking updates; other settings rows, some ANSI styling, and mouse behavior remain partial.",
       "source_sha256": "8134b93329c9155bd017df5b6278e2d72b403c8ca1f22c26a81234659ab7e6ea",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/settings-selector.bend": "f0f8347e88c28a46357d48ad69aad81e1111810f62c3ffed74a6117a6ee6e47c"
-      }
+        "packages/coding-agent/src/modes/interactive/components/settings-selector.bend": "82c96f439d7a2448a4a0f9c40e5acfdf1d0f0b8949fa88a5343f259d58282969",
+        "packages/coding-agent/src/modes/interactive/components/theme-selector.bend": "302bb406bb7ebf0d7844cba854b14bea8c193be907d1d1a8aef73d51c22f2bbf",
+        "packages/coding-agent/src/modes/interactive/components/model-thinking-selector.bend": "630228f3df9d033696c72c81cd2128693edeb07a88026d74ef03c3b00a882e33"
+      },
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/settings-selector.bend",
+        "packages/coding-agent/src/modes/interactive/components/theme-selector.bend",
+        "packages/coding-agent/src/modes/interactive/components/model-thinking-selector.bend"
+      ]
     },
     "packages/coding-agent/src/modes/interactive/components/thinking-selector.ts": {
       "state": "partial",
@@ -120,11 +127,11 @@
         "packages/coding-agent/src/modes/interactive/run.bend",
         "packages/coding-agent/src/modes/interactive/commands.bend"
       ],
-      "note": "Interactive theme selection and persistence, /thinking and /scoped-models flows are implemented; broader command and terminal behavior remain partial.",
+      "note": "Interactive theme selection and per-model thinking override updates, /thinking and /scoped-models flows are implemented; broader command and terminal behavior remain partial.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "23a8e54c1d30b54424d1e29508abdf12385cb5dec8e142b675becdb2c540b2d4",
-        "packages/coding-agent/src/modes/interactive/run.bend": "9efdbedf8369ee869d211a0551aa0ee7febf07960d942cb3d5a4c4e24de8a82f",
+        "packages/coding-agent/src/modes/interactive/run.bend": "a065491059b1b5035cc0b24f4d2586a5284fd4a03b831ace514dcc63e05cf532",
         "packages/coding-agent/src/modes/interactive/commands.bend": "346a1437fb1f5d4b429ae47416c1ab464e043ee8a5d7ec79a269fdc417a3092a"
       }
     },
@@ -211,10 +218,10 @@
     },
     "packages/coding-agent/src/modes/interactive/components/theme-selector.ts": {
       "state": "partial",
-      "note": "Native settings theme submenu previews, cancels, saves and configures automatic light/dark themes in terminal parity. The standalone exported selector API and mouse/ANSI details remain partial.",
+      "note": "Native settings theme submenu previews, cancels, saves and configures automatic light/dark themes; a filename/content-name mismatch appears correctly in the menu. Startup resource listing, standalone exported API and remaining ANSI/mouse details are partial.",
       "source_sha256": "267be3176c67bddb72f0f64a9c3561a256c758707afbeabe2ac68112c8e3b5f8",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/theme-selector.bend": "e230f35f69e7a21c55d9724f12db94b9beb17c39c6f3564f09fe2a285734bef4"
+        "packages/coding-agent/src/modes/interactive/components/theme-selector.bend": "302bb406bb7ebf0d7844cba854b14bea8c193be907d1d1a8aef73d51c22f2bbf"
       }
     },
     "packages/coding-agent/src/core/tools/renderers/bash.ts": {

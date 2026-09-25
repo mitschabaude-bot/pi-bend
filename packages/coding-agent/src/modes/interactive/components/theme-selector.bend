@@ -164,18 +164,37 @@ def menuRows(+state: State) -> List<&2,String>:
     case State{_,_,_,_,light,dark,_,Automatic{},_,_}: ["Light theme  " ++ light,"Dark theme   " ++ dark,"Apply        save and go back","Change mode  switch to single theme"]
     case State{_,_,available,_,light,_,_,PickLight{},_,_}: namesRows(available,light,0n)
     case State{_,_,available,_,_,dark,_,PickDark{},_,_}: namesRows(available,dark,0n)
-def selectedRow(+line: String,+index: Nat,+selected: Nat,+theme: Theme.Theme,width: Nat) -> String:
-  +prefix = Bool.pick(String,Nat.is_eq(index,selected),paint(theme,"accent","→ "),"  ")
-  +content = Bool.pick(String,Nat.is_eq(index,selected),paint(theme,"accent",line),line)
-  Utils.truncateToWidth(prefix ++ content,width,"",False{})
+def automaticRow(selected: Bool,+theme: Theme.Theme) -> String:
+  Bool.pick(String,selected,paint(theme,"accent","→   Automatic"),"    Automatic") ++ paint(theme,"muted","  Use separate themes for light and dark terminal appearance")
+def selectedRow(+line: String,+index: Nat,+selected: Nat,+theme: Theme.Theme,+width: Nat) -> String:
+  Bool.pick(Unit -> String,String.starts_with(line,"  Automatic"),_ => Utils.truncateToWidth(automaticRow(Nat.is_eq(index,selected),theme),width,"",False{}),_ =>
+    Utils.truncateToWidth(Bool.pick(String,Nat.is_eq(index,selected),paint(theme,"accent","→ "),"  ") ++ Bool.pick(String,Nat.is_eq(index,selected),paint(theme,"accent",line),line),width,"",False{}))(Unit{})
 def visibleRows(lines: List<&2,String>,skip: Nat,remaining: Nat,+index: Nat,+selected: Nat,+theme: Theme.Theme,+width: Nat) -> List<&2,String>:
   match lines skip remaining:
     case _ _ Zero{}: Nil{}
     case Nil{} _ _: Nil{}
     case _ <> rest Succ{skip} _: visibleRows(rest,skip,remaining,index + 1n,selected,theme,width)
     case line <> rest Zero{} Succ{remaining}: selectedRow(line,index,selected,theme,width) <> visibleRows(rest,0n,remaining,index + 1n,selected,theme,width)
+def automaticSettingRow(+label: String,+value: String,+selected: Bool,+theme: Theme.Theme) -> String:
+  +name = Bool.pick(String,selected,paint(theme,"accent","→ " ++ label),"  " ++ label)
+  +spacing = String.drop(Utils.truncateToWidth(label,11n,"",True{}),String.length(label)) ++ "  "
+  +shown = Bool.pick(String,selected,paint(theme,"accent",value),paint(theme,"muted",value))
+  name ++ spacing ++ shown
+def automaticRows(light: String,dark: String,+index: Nat,+theme: Theme.Theme) -> List<&2,String>:
+  automaticSettingRow("Light theme",light,Nat.is_eq(index,0n),theme) <>
+  automaticSettingRow("Dark theme",dark,Nat.is_eq(index,1n),theme) <>
+  automaticSettingRow("Apply","save and go back",Nat.is_eq(index,2n),theme) <>
+  automaticSettingRow("Change mode","switch to single theme",Nat.is_eq(index,3n),theme) <> Nil{}
+def drawnRows(state: State,lines: List<&2,String>,start: Nat,index: Nat,theme: Theme.Theme,width: Nat) -> List<&2,String>:
+  match state:
+    case State{_,_,_,_,light,dark,_,Automatic{},_,_}: automaticRows(light,dark,index,theme)
+    case _: visibleRows(lines,start,10n,0n,index,theme,width)
 def heading(state: State,theme: Theme.Theme) -> List<&2,String>:
   paint(theme,"accent",Theme.bold(title(state))) <> "" <> Nil{}
+def mutedLines(lines: List<&2,String>,+theme: Theme.Theme) -> List<&2,String>:
+  match lines:
+    case Nil{}: Nil{}
+    case line <> rest: paint(theme,"muted",line) <> mutedLines(rest,theme)
 def automaticDescription(index: Nat) -> String:
   match index:
     case 0n: "  Theme to use in automatic mode when the terminal is light"
@@ -192,7 +211,7 @@ def drawState(+state: State,+theme: Theme.Theme,width: Nat) -> List<&2,String>:
       +lines = menuRows(state)
       +count = List.length(&2,String,lines)
       +start = Nat.min(index - 5n,count - Nat.min(count,10n))
-      List.append(&2,String,heading(state,theme),List.append(&2,String,explanation(state),"" <> List.append(&2,String,visibleRows(lines,start,10n,0n,index,theme,width),footer(state,theme))))
+      List.append(&2,String,heading(state,theme),List.append(&2,String,mutedLines(explanation(state),theme),"" <> List.append(&2,String,drawnRows(state,lines,start,index,theme,width),footer(state,theme))))
 def drawCurrent(current: Modal,theme: Ref.Ref<Theme.Theme>,width: Nat) -> IO(List<&2,String>):
   match current:
     case Closed{}: IO.pure(List<&2,String>,Nil{})

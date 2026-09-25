@@ -10,9 +10,12 @@ import base64
 import json
 import os
 import shutil
+from pathlib import Path
 
 MODEL = ["--provider", "openai", "--model", "gpt-5"]
 READY = r"gpt-5 • "  # the footer's model line: the editor is mounted
+THEME_BAR = json.dumps({**json.loads((Path(__file__).resolve().parents[2] / "packages/coding-agent/src/modes/interactive/theme/dark.json").read_text()), "name": "bar"})
+THEME_OTHER = json.dumps({**json.loads(THEME_BAR), "name": "other"})
 
 RESOURCES = {
     "home/.agents/skills/demo/SKILL.md": "---\nname: demo\ndescription: A demo skill for parity tests.\n---\nDo the demo.\n",
@@ -484,6 +487,64 @@ SCENARIOS = [
                   ("key", "Enter"), ("settle", 0.2), ("snap", "automatic"),
                   ("key", "Down"), ("key", "Down"), ("key", "Enter"),
                   ("settle", 0.2), ("snap", "saved")],
+    },
+    {
+        "name": "settings-theme-custom-name",
+        "args": MODEL,
+        "files": {"home/.pi/agent/themes/foo.json": THEME_BAR},
+        "steps": [("wait", READY, "startup"), ("settle", 0.5),
+                  ("keys", "/settings"), ("key", "Enter"), ("wait", "Auto-compact", "panel"),
+                  ("keys", "Theme"), ("key", "Enter"), ("settle", 0.2), ("snap", "themes")],
+    },
+    {
+        "name": "settings-theme-marked",
+        "args": MODEL,
+        "files": {"home/.pi/agent/settings.json": '{"theme":"light"}',
+                  "home/.pi/agent/themes/other.json": THEME_OTHER},
+        "steps": [("wait", READY, "startup"), ("settle", 0.5),
+                  ("keys", "/settings"), ("key", "Enter"), ("wait", "Auto-compact", "panel"),
+                  ("keys", "Theme"), ("key", "Enter"), ("settle", 0.2), ("snap", "marked"),
+                  ("key", "Down"), ("settle", 0.2), ("snap", "moved")],
+    },
+    {
+        "name": "settings-model-thinking",
+        "args": MODEL,
+        "steps": [("wait", READY, "startup"), ("settle", 0.5),
+                  ("keys", "/settings"), ("key", "Enter"), ("wait", "Auto-compact", "panel"),
+                  ("keys", "Default thinking level per model"), ("settle", 0.2), ("snap", "row"),
+                  ("key", "Enter"), ("settle", 0.2), ("snap", "models"),
+                  ("key", "Enter"), ("settle", 0.2), ("snap", "levels")],
+    },
+    {
+        "name": "settings-model-thinking-save",
+        "args": MODEL,
+        "steps": [("wait", READY, "startup"), ("settle", 0.5),
+                  ("keys", "/settings"), ("key", "Enter"), ("wait", "Auto-compact", "panel"),
+                  ("keys", "Default thinking level per model"), ("key", "Enter"),
+                  ("key", "Enter"), ("key", "Down"), ("key", "Down"),
+                  ("key", "Enter"), ("settle", 0.2), ("snap", "models-again"),
+                  ("key", "Escape"), ("settle", 0.2), ("snap", "saved")],
+    },
+    {
+        "name": "settings-model-thinking-current",
+        "args": MODEL,
+        "steps": [("wait", READY, "startup"), ("settle", 0.5),
+                  ("keys", "/settings"), ("key", "Enter"), ("wait", "Auto-compact", "panel"),
+                  ("keys", "Default thinking level per model"), ("key", "Enter"), ("key", "Enter"),
+                  ("key", "Down"), ("key", "Down"), ("key", "Down"), ("key", "Enter"),
+                  ("settle", 0.2), ("snap", "high"),
+                  ("key", "Enter"), ("key", "Down"), ("key", "Enter"),
+                  ("key", "Escape"), ("settle", 0.2), ("snap", "cleared")],
+    },
+    {
+        "name": "settings-model-thinking-marked",
+        "args": MODEL,
+        "files": {"home/.pi/agent/settings.json": '{"modelThinkingLevels":{"openai/gpt-5":"medium"}}'},
+        "steps": [("wait", READY, "startup"), ("settle", 0.5),
+                  ("keys", "/settings"), ("key", "Enter"), ("wait", "Auto-compact", "panel"),
+                  ("keys", "Default thinking level per model"), ("key", "Enter"), ("key", "Enter"),
+                  ("settle", 0.2), ("snap", "marked"),
+                  ("key", "Down"), ("settle", 0.2), ("snap", "moved")],
     },
     {
         # On exit pi leaves its last frame, footer included, above the shell prompt.

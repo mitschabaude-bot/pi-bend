@@ -2867,9 +2867,12 @@
     },
     {
       "source": "packages/coding-agent/test/settings-selector.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2253c838e587ac1849baca239f3f6176d35619b4590f2ae5b607f9a74be62d41"
+      "status": "partial",
+      "ports": [
+        "tests/parity/scenarios.py"
+      ],
+      "sha256": "2253c838e587ac1849baca239f3f6176d35619b4590f2ae5b607f9a74be62d41",
+      "notes": "Terminal parity covers configured theme selection and preserving the per-model thinking marker while browsing, plus save/clear flows. These are differential scenarios, not a complete native port of the component test suite."
     },
     {
       "source": "packages/coding-agent/test/skills.test.ts",
@@ -3598,9 +3601,12 @@
     },
     {
       "source": "packages/coding-agent/test/theme-picker.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5973d39c837eb762eb2bf3b83adc2de52741fcb65c91c9e91df4d26f64cee57c"
+      "status": "partial",
+      "ports": [
+        "tests/parity/scenarios.py"
+      ],
+      "sha256": "5973d39c837eb762eb2bf3b83adc2de52741fcb65c91c9e91df4d26f64cee57c",
+      "notes": "Terminal parity checks that a custom foo.json theme named bar appears under bar in the picker. The source test also asserts path metadata directly; no native component test port yet."
     },
     {
       "source": "packages/coding-agent/test/thinking-selector.test.ts",
