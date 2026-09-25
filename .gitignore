@@ -4,3 +4,6 @@ vendor/
 __pycache__/
 .pi/
 .claude/
+docs/bend-issues/*.json
+docs/proof-validation/*.json
+docs/runtime-validation/*.json

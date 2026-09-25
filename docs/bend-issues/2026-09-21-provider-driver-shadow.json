@@ -1,7 +1,0 @@
-{
-  "scope": "BEND-012 recurrence when the previous provider-request fixture is imported under a namespace. Some{text} resolves to the same-module text helper. A descriptive headerText pattern binder restores namespace import; production request semantics are unchanged.",
-  "prior_commit": "f1374ccdd128b690fb2ed486a11c45e9d641406c",
-  "prior_source_sha256": "79ef49f96b8347a75a1976b12f8caf80ccda76d82bbdc0469076a5faadc7e601",
-  "diagnostic": "PROFILE {\"phase\":\"load-start\",\"rss\":29622272,\"heapTotal\":2119680,\"heapUsed\":2119680,\"external\":100,\"arrayBuffers\":100}\nError:\n- expected : a pattern (a binder or a constructor)\n- observed : provider-request.text\nLocation:\n44 |     case None{}: \"missing\"\n45>|     case Some{text}: text\n46 | \n",
-  "changed_source_sha256": "5a8d0592c5010effba4af1dd3f18aeb95a716ba056f0cf495650d5767921727b"
-}

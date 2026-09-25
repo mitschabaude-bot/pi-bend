@@ -24,11 +24,11 @@ The strict provider boundary rejects the malformed escape/encoding cases. Neithe
 
 ## Validated milestone
 
-The [proof record](proof-validation/2026-09-21-url-search-params.json) checks 339 public laws and 62 supporting lemmas, rejects 193 well-typed mutations, and verifies rejection of open obligations and a missing proof. The existing 13-declaration unsafe source audit is unchanged; no new unsafe implementation or proof was added.
+The proof record checks 339 public laws and 62 supporting lemmas, rejects 193 well-typed mutations, and verifies rejection of open obligations and a missing proof. The existing 13-declaration unsafe source audit is unchanged; no new unsafe implementation or proof was added.
 
-The [runtime record](runtime-validation/2026-09-21-url-search-params.json) retains the query comparisons and reference discrepancies, 1,110 buffered-body cases on each native thread configuration, and 24 complete JSON/form HTTP exchanges on each of native one/four threads and Bun. The exchange oracle performs another 24 Node Fetch requests. Peers verify framing, encoded bytes and client closure. Buffered-body checks cover default/preserved content type, empty forms, method rejection and invalid byte inputs. The socket fixture exercises both fixed-length and chunked form uploads; it does not claim TLS or complete provider assembly.
+The runtime record retains the query comparisons and reference discrepancies, 1,110 buffered-body cases on each native thread configuration, and 24 complete JSON/form HTTP exchanges on each of native one/four threads and Bun. The exchange oracle performs another 24 Node Fetch requests. Peers verify framing, encoded bytes and client closure. Buffered-body checks cover default/preserved content type, empty forms, method rejection and invalid byte inputs. The socket fixture exercises both fixed-length and chunked form uploads; it does not claim TLS or complete provider assembly.
 
-The [compiler record](bend-issues/2026-09-21-url-search-params-compiler.json) records unchanged candidate fingerprints and guarded build measurements. Query C/JS emission took approximately 6.90/3.17 seconds with sampled peak group RSS of 1,582,868/1,172,824 KiB. Native exchange emission plus compilation took 69.68 seconds and 3,511,496 KiB. These are workload observations, not controlled before/after performance claims. No compiler patch was changed or installed.
+The compiler record records unchanged candidate fingerprints and guarded build measurements. Query C/JS emission took approximately 6.90/3.17 seconds with sampled peak group RSS of 1,582,868/1,172,824 KiB. Native exchange emission plus compilation took 69.68 seconds and 3,511,496 KiB. These are workload observations, not controlled before/after performance claims. No compiler patch was changed or installed.
 
 ```sh
 BEND="$PWD/build/bend-profiles/dns-transport-teles/bend2/main.ts" python3 scripts/check-proofs.py

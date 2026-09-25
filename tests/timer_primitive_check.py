@@ -63,4 +63,3 @@ def main() -> IO(Unit):
 results['source_sha256']=hashlib.sha256((ROOT/'tests/timer-primitive.bend').read_bytes()).hexdigest()
 results['scope']='Core ownership/one-shot semantics, parked cancellation, queue removal, 10000 serial lifecycles. Not full race/performance acceptance.'
 print(json.dumps(results,indent=2))
-(ROOT/'docs/bend-issues/2026-09-19-timer-candidate-correctness.json').write_text(json.dumps(results,indent=2)+'\n')

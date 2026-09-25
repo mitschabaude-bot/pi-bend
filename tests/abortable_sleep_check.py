@@ -1,18 +1,14 @@
 """Check pure Bend sleep composition with the isolated owned-timer compiler."""
-import hashlib
-import json
 from pathlib import Path
 from bend_toolchain import BEND, TOOLCHAIN
 import subprocess
 import sys
 import tempfile
-import time
 
 root = Path(__file__).resolve().parents[1]
 candidate=Path(sys.argv[1] if len(sys.argv)>1 and not sys.argv[1].startswith('--') else TOOLCHAIN).resolve()
 bun = Path.home() / '.bun/bin/bun'
 fixture = root / 'packages/runtime/test/abortable-sleep.bend'
-results = []
 with tempfile.TemporaryDirectory(dir=root / 'build', prefix='abortable-sleep-') as directory:
     folder = Path(directory)
     for suffix in ('c', 'js'):
@@ -50,7 +46,6 @@ static void __attribute__((destructor)) sleep_audit(void) {
                              ('native-4', [str(folder / 'run'), '--threads', '4']),
                              ('bun', [str(bun), str(folder / 'run.js')])]:
         for repetition in range(8):
-            start = time.monotonic()
             result = subprocess.run(command, capture_output=True, text=True, check=True, timeout=10)
             assert result.stdout == 'PASS abortable sleep\n', result.stdout
             fields = result.stderr.split()
@@ -59,14 +54,4 @@ static void __attribute__((destructor)) sleep_audit(void) {
             assert created == closed and created > 34, result.stderr
             assert live == waiting == 0 and peak >= 2 and parked >= 2, result.stderr
             assert channels == (0 if backend.startswith('native') else -1), result.stderr
-            results.append(dict(backend=backend, repetition=repetition,
-                                seconds=time.monotonic()-start, created=created, closed=closed,
-                                peak_live=peak, cancelled_parked=parked, live=live, waiting=waiting,
-                                channels=channels if channels >= 0 else None))
         print(backend, 'PASS', flush=True)
-sources = [fixture, root / 'packages/runtime/src/socket.bend',
-           candidate / 'base.bend', candidate / 'effs/timer.c', candidate / 'effs/timer.js']
-(root / 'docs/bend-issues/2026-09-19-abortable-sleep-concurrency.json').write_text(json.dumps(dict(
-    scope='Core cases plus eight broadcasts to 128 sleeps each, repeated abort/reason retention, independent signals and 90 deadline/abort races per process. Creation/cancellation timing may vary. Native exit audit includes all channel rows; Bun audits timers only. Instrumented finite checks, not a performance comparison or exhaustive race proof.',
-    sources={str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in sources}, samples=results,
-), indent=2) + '\n')

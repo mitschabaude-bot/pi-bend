@@ -1,5 +1,5 @@
 """Stress the isolated timer experiment; audit all created timers are retired."""
-import hashlib,json,subprocess,sys,tempfile,shutil,time
+import subprocess,sys,tempfile,shutil
 from pathlib import Path
 from bend_toolchain import BEND, TOOLCHAIN
 ROOT=Path(__file__).resolve().parents[1]
@@ -13,7 +13,6 @@ for path in baseline.rglob('*'):
     if path.is_file() and path.relative_to(baseline)!=Path('base.bend'):
         assert path.read_bytes()==(candidate/path.relative_to(baseline)).read_bytes(),path
 for name in ['timer.c','timer.js']:assert (candidate/'effs'/name).read_bytes()==(addition/name).read_bytes()
-results={'samples':[],'source_sha256':hashlib.sha256(source.read_bytes()).hexdigest(),'scope':'Invariant stress with real-clock races; outcomes may vary. Instrumented copy, not performance evidence.'}
 with tempfile.TemporaryDirectory(dir=ROOT/'build',prefix='timer-races-') as directory:
     folder=Path(directory);compiler=folder/'bend2';shutil.copytree(candidate,compiler)
     path=compiler/'effs/timer.c';text=path.read_text()
@@ -36,7 +35,7 @@ with tempfile.TemporaryDirectory(dir=ROOT/'build',prefix='timer-races-') as dire
     subprocess.run(['clang','-std=c11','-O1','-fbracket-depth=2048',str(folder/'run.c'),'-lpthread','-lm','-o',str(folder/'run')],check=True)
     for backend,command in [('native-1',[str(folder/'run'),'--threads','1']),('native-4',[str(folder/'run'),'--threads','4']),('bun',[str(bun),str(folder/'run.js')])]:
         for rounds,size in [(10,1),(10,128),(5,1024)]:
-            start=time.monotonic();run=subprocess.run([*command,str(rounds),str(size)],text=True,capture_output=True,check=True,timeout=30)
+            run=subprocess.run([*command,str(rounds),str(size)],text=True,capture_output=True,check=True,timeout=30)
             assert run.stdout=='PASS timer races and batches\n',run.stdout
             fields=run.stderr.split();assert fields[0]=='TIMER_AUDIT',run.stderr
             counts=list(map(int,fields[1:]));created,closed,expired,cancelled,live,waiting=counts[:6]
@@ -44,7 +43,4 @@ with tempfile.TemporaryDirectory(dir=ROOT/'build',prefix='timer-races-') as dire
             assert expired+cancelled==created and expired>0 and cancelled>0,(backend,counts)
             assert live==waiting==0,(backend,counts)
             if backend.startswith('native'):assert counts[6]==size,(backend,counts)
-            results['samples'].append(dict(backend=backend,rounds=rounds,cohort_size=size,seconds=time.monotonic()-start,created=created,closed=closed,expired=expired,cancelled=cancelled,live=live,waiting=waiting,registry_slots=counts[6] if len(counts)>6 else None))
             print(backend,rounds,size,'PASS',flush=True)
-results['candidate_sha256']={name:hashlib.sha256((addition/name).read_bytes()).hexdigest() for name in ['base.bend','timer.c','timer.js']}
-(ROOT/'docs/bend-issues/2026-09-19-timer-races.json').write_text(json.dumps(results,indent=2)+'\n')

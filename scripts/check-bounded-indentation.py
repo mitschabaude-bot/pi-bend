@@ -1,7 +1,7 @@
-"""Validate retained benchmark C and fresh JS for the isolated indentation candidate.
+"""Validate benchmark C and fresh JS for the isolated indentation candidate.
 
-Usage: python3 scripts/check-bounded-indentation.py CANDIDATE_BEND2 OUTPUT_JSON
-Run benchmark-bounded-indentation.py with strategy slice first.
+Usage: python3 scripts/check-bounded-indentation.py CANDIDATE_BEND2 BENCHMARK_JSON
+Run benchmark-bounded-indentation.py with strategy slice first and pass its output.
 """
 import hashlib
 import itertools
@@ -14,14 +14,13 @@ import sys
 
 root=Path(__file__).resolve().parents[1]
 candidate=Path(sys.argv[1]).resolve()
-destination=Path(sys.argv[2])
+benchmark_path=Path(sys.argv[2])
 baseline=Path.home()/'.bend/current/bend2'
 bun=Path.home()/'.bun/bin/bun'
-benchmark=json.loads((root/'docs/bend-issues/2026-09-19-bounded-indentation-slice-performance.json').read_text())
+benchmark=json.loads(benchmark_path.read_text())
 def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 for variant,compiler in [('baseline',baseline),('candidate',candidate)]:
     assert digest(compiler/'comp.ts')==benchmark['compiler_sha256'][variant]
-result={'compiler_sha256':benchmark['compiler_sha256'],'fixtures':{}}
 for source in benchmark['fixtures']:
     stem=Path(source).stem
     arguments=[]
@@ -57,6 +56,4 @@ for source in benchmark['fixtures']:
             assert left is not None and right is not None
             assert left.lstrip(b' ')==right.lstrip(b' '),(stem,'JS tokens changed')
             changed+=left!=right
-    result['fixtures'][source]={'artifacts':evidence,'assertions_per_run':len(expected),'native_threads':[1,4],'js_runtime':'Bun','js_changed_indentation_lines':changed,'native_binaries_identical':True}
-    destination.write_text(json.dumps(result,indent=2)+'\n')
-    print(stem,'PASS',len(expected),'assertions per runtime',flush=True)
+    print(stem,'PASS',len(expected),'assertions per runtime;',changed,'JS indentation lines changed',flush=True)

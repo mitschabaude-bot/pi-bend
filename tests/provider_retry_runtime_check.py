@@ -1,5 +1,5 @@
 """Native retry effect ownership, seeded jitter, clock and real retry smoke."""
-import hashlib,json,struct,subprocess,sys,tempfile,time
+import struct,subprocess,sys,tempfile,time
 from pathlib import Path
 from bend_toolchain import BEND, TOOLCHAIN
 ROOT=Path(__file__).resolve().parents[1]
@@ -14,7 +14,6 @@ def scalar(text):
 def bits(word):
  high,low=struct.unpack('>II',struct.pack('>d',(word>>11)*2**-53));return f'{high}:{low}'
 expected_random=[bits(0xe220a8397b1dcdaf),bits(0x6e789e6aa1b965f4)]
-records=[]
 with tempfile.TemporaryDirectory(dir=ROOT/'build',prefix='retry-runtime-') as directory:
  folder=Path(directory)
  source=Path(str(binary)+'.c').read_text()
@@ -41,6 +40,4 @@ static void __attribute__((destructor)) runtime_audit(void) {
   assert lines[4:8]==['slept','request','request','done ok'],lines
   assert lines[8]=='retained 1083394048:0',lines
   assert result.stderr==('RUNTIME_AUDIT 0 0 0\n' if backend.startswith('native') else ''),result.stderr
-  records.append(dict(backend=backend,seconds=(after-before)/1000,native_exit_audit=result.stderr.strip()))
-  print(backend,'retry runtime PASS',flush=True)
-(ROOT/'docs/bend-issues/2026-09-19-retry-runtime.json').write_text(json.dumps(dict(scope='Full native effect assembly with injected parser; real jittered retry and borrowed-parser lifetime. Native timer/channel exit audit, not exhaustive leak or scheduling proof.',sources={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in [ROOT/'packages/ai/src/utils/provider-retry.bend',ROOT/'packages/ai/test/provider-retry-runtime.bend']},samples=records),indent=2)+'\n')
+  print(backend,'retry runtime PASS',round((after-before)/1000,3),'s',flush=True)
