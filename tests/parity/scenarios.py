@@ -208,6 +208,14 @@ SCENARIOS = [
                   ("wait", "Keyboard Shortcuts", "hotkeys"), ("settle", 0.3), ("snap", "hotkeys")],
     },
     {
+        "name": "hotkeys-custom-binding",
+        "args": MODEL,
+        "files": {"home/.pi/agent/keybindings.json": json.dumps({"app.model.select": "ctrl+k"})},
+        "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "/hotkeys"), ("key", "Enter"),
+                  ("wait", "Keyboard Shortcuts", "hotkeys"), ("settle", 0.3), ("snap", "hotkeys"),
+                  ("key", "C-k"), ("wait", "Select Model", "picker"), ("settle", 0.3), ("snap", "picker")],
+    },
+    {
         "name": "basic-turn",
         "args": MODEL,
         "turns": [{"text": ANSWER, "chunks": 40, "delay_ms": 10, "usage": {"input": 1200, "output": 150}}],
