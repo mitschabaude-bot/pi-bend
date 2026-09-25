@@ -1536,10 +1536,11 @@ def autoCompactPrepared(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +model:
     case None{}: IO.pure(Bool, False{})
     case Some{prepared}:
       do IO<Bool>:
-        emit(shared, CompactionStart{reason})
         +controller : A.AbortController<Unit> <- A.new(Unit)
         R.modify(Shared, Unit, shared, current => (setAutoController(current, Some{controller}), Unit{}))
-        result : Result<&2, &2, String, Compaction.CompactionResult> <- runDefaultCompaction(agent, shared, model, prepared, None{}, A.signal(Unit, controller), reason)
+        emit(shared, CompactionStart{reason})
+        cancelledAtStart : Bool <- A.aborted(Unit, A.signal(Unit, controller))
+        result : Result<&2, &2, String, Compaction.CompactionResult> <- Bool.pick(Unit -> IO(Result<&2, &2, String, Compaction.CompactionResult>), cancelledAtStart, _ => IO.pure(Result<&2, &2, String, Compaction.CompactionResult>, Fail{"Compaction cancelled"}), _ => runDefaultCompaction(agent, shared, model, prepared, None{}, A.signal(Unit, controller), reason))(Unit{})
         aborted : Bool <- A.aborted(Unit, A.signal(Unit, controller))
         R.modify(Shared, Unit, shared, current => (setAutoController(current, None{}), Unit{}))
         A.dispose(Unit, controller)
@@ -2288,6 +2289,18 @@ def isRetrying(session: AgentSession) -> IO(Bool):
         state : Shared <- R.read(Shared, shared)
         return Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, sleepingOf(retryOf(state))))
 
+def attemptOfRetry(retry: RetryState) -> Nat:
+  match retry:
+    case RetryState{_, attempt, _, _}: attempt
+
+# upstream retryAttempt: the current automatic retry attempt, 0 when none.
+def retryAttempt(session: AgentSession) -> IO(Nat):
+  match session:
+    case AgentSession{_, shared, _, _, _, _, _, _}:
+      do IO<Nat>:
+        state : Shared <- R.read(Shared, shared)
+        return attemptOfRetry(retryOf(state))
+
 def abortCompaction(session: AgentSession) -> IO(Unit):
   match session:
     case AgentSession{_, shared, _, _, _, _, _, _}: abortCompactions(shared)
@@ -2303,9 +2316,10 @@ def isCompacting(session: AgentSession) -> IO(Bool):
         state : Shared <- R.read(Shared, shared)
         return hasController(compactionOf(state))
 
-# upstream abort: cancel retry sleeps and compactions, abort the agent and
-# wait until it is idle.
-def abort(session: AgentSession) -> IO(Unit):
+# The part of upstream abort() that runs before it first awaits (what an
+# unawaited `void session.abort()` does at once): mark an active run as
+# aborted, cancel retry sleeps and compactions and abort the agent.
+def requestAbort(session: AgentSession) -> IO(Unit):
   match session:
     case AgentSession{+agent, +shared, _, _, _, _, _, _}:
       do IO<Unit>:
@@ -2313,7 +2327,12 @@ def abort(session: AgentSession) -> IO(Unit):
         abortSleeping(shared)
         abortCompactions(shared)
         Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-        Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+
+# upstream abort: requestAbort, then wait until the agent is idle.
+def abort(+session: AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    requestAbort(session)
+    Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agentOf(session))
 
 def nothingToCompact(entries: List<&2, Entry()>) -> String:
   Bool.pick(String, Compaction.lastIsCompaction(Unit, Tools.ToolDetails, V.Value, entries), "Already compacted", "Nothing to compact (session too small)")
@@ -2328,14 +2347,16 @@ def compactionOutcome(aborted: Bool, result: Result<&2, &2, String, Compaction.C
     case True{}: Fail{"Compaction cancelled"}
     case False{}: result
 
-def manualEndEvent(+message: String) -> AgentSessionEvent:
-  Bool.pick(AgentSessionEvent, String.eq(message, "Compaction cancelled"), CompactionEnd{Manual{}, None{}, True{}, False{}, None{}}, CompactionEnd{Manual{}, None{}, False{}, False{}, Some{"Compaction failed: " ++ message}})
+# Whether compaction was cancelled comes from its abort signal, not from the
+# error text (de2de549b): a failure reading "Compaction cancelled" is a failure.
+def manualEndEvent(aborted: Bool, +message: String) -> AgentSessionEvent:
+  Bool.pick(AgentSessionEvent, aborted, CompactionEnd{Manual{}, None{}, True{}, False{}, None{}}, CompactionEnd{Manual{}, None{}, False{}, False{}, Some{"Compaction failed: " ++ message}})
 
-def finishManual(agent: Runtime.Owner(), +shared: R.Ref<Shared>, result: Result<&2, &2, String, Compaction.CompactionResult>) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
+def finishManual(agent: Runtime.Owner(), +shared: R.Ref<Shared>, aborted: Bool, result: Result<&2, &2, String, Compaction.CompactionResult>) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
   match result:
     case Fail{+message}:
       do IO<Result<&2, &2, String, Compaction.CompactionResult>>:
-        emit(shared, manualEndEvent(message))
+        emit(shared, manualEndEvent(aborted, message))
         return Fail{message}
     case Done{compacted}:
       do IO<Result<&2, &2, String, Compaction.CompactionResult>>:
@@ -2364,10 +2385,10 @@ def compact(session: AgentSession, customInstructions: Maybe<&2, String>) -> IO(
         +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +entries : List<&2, Entry()> <- branchEntries(shared)
         result : Result<&2, &2, String, Compaction.CompactionResult> <- manualFor(agent, shared, settings, customInstructions, A.signal(Unit, controller), entries, stateModel(current))
-        aborted : Bool <- A.aborted(Unit, A.signal(Unit, controller))
+        +aborted : Bool <- A.aborted(Unit, A.signal(Unit, controller))
         R.modify(Shared, Unit, shared, current => (setManualController(current, None{}), Unit{}))
         A.dispose(Unit, controller)
-        finishManual(agent, shared, compactionOutcome(aborted, result))
+        finishManual(agent, shared, aborted, compactionOutcome(aborted, result))
 
 def waitForIdle(session: AgentSession) -> IO(Unit):
   Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agentOf(session))

@@ -489,6 +489,50 @@ def reportRemaining(responses: R.Ref<List<&2, String>>) -> IO(Unit):
     remaining : List<&2, String> <- R.read(List<&2, String>, responses)
     IO.print("{\"type\":\"remaining\",\"count\":" ++ Nat.show(List.length(&2, String, remaining)) ++ "}")
 
+# "abort_second_error": a listener calls abort() without awaiting it when
+# the second failed assistant message ends (upstream "finalizes retry state
+# when abort is requested after a retry attempt fails", #9340).
+type ErrorAborter is Data:
+  ErrorAborter{session: Session.AgentSession, errors: R.Ref<Nat>}
+
+def failedAssistant(message: Session.Message()) -> Bool:
+  match message:
+    case T.LlmMessage{Ai.Assistant{assistant}}: Session.isErrorStop(Ai.assistantStopReason(V.Value, Unit, assistant))
+    case _: False{}
+
+def counted(previous: Nat) -> Nat & Nat:
+  +next = previous + 1n
+  (next, next)
+
+def abortOnSecondError(env: ErrorAborter, event: Session.AgentSessionEvent) -> IO(Unit):
+  match env event:
+    case ErrorAborter{session, errors} Session.AgentEvent{T.MessageEnd{message}}:
+      Bool.pick(Unit -> IO(Unit), failedAssistant(message), _ => do IO<Unit>:
+        count : Nat <- R.modify(Nat, Nat, errors, counted)
+        Bool.pick(Unit -> IO(Unit), Nat.is_eq(count, 2n), _ => Session.requestAbort(session), _ => IO.pure(Unit, Unit{}))(Unit{}), _ => IO.pure(Unit, Unit{}))(Unit{})
+    case _ _: IO.pure(Unit, Unit{})
+
+def reportRetryAttempt(session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    attempt : Nat <- Session.retryAttempt(session)
+    IO.print("{\"type\":\"retry_attempt\",\"value\":" ++ Nat.show(attempt) ++ "}")
+
+def abortedRetryScenario(+dir: String, agentDir: String, responses: String) -> IO(Unit):
+  do IO<Unit>:
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    stored : Session.Session() <- requireSession(created)
+    +value : Fixture <- fixture(stored, dir, agentDir, String.split(responses, ';'), Nil{})
+    +errors : R.Ref<Nat> <- R.new(Nat, 0n)
+    +aborter : Session.Listener() <- C.create(~ErrorAborter, ~Session.AgentSessionEvent, ~Unit, ~abortOnSecondError, ErrorAborter{sessionOf(value), errors})
+    Session.subscribe(sessionOf(value), aborter)
+    result : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "test", Nil{}, None{})
+    reportPrompt(result)
+    reportRetryAttempt(sessionOf(value))
+    reportRemaining(responsesOf(value))
+    Session.unsubscribe(sessionOf(value), aborter)
+    C.dispose(Session.AgentSessionEvent, Unit, aborter)
+    teardown(value)
+
 def retryScenario(+dir: String, agentDir: String, responses: String, +cancel: String) -> IO(Unit):
   do IO<Unit>:
     created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
@@ -644,12 +688,46 @@ def compactAction(+session: Session.AgentSession, action: String) -> IO(Unit):
     case "context": contextAroundCompaction(session)
     case _: IO.pure(Unit, Unit{})
 
+# Regressions #9340/#9777 (de2de549b): "abort_on_error" cancels compaction
+# and requests an abort (not awaited) when an assistant message ends;
+# "cancel_on_start" cancels compaction from its compaction_start event.
+type CompactionCanceller is Data:
+  CompactionCanceller{session: Session.AgentSession, onStart: Bool}
+
+def cancelCompaction(env: CompactionCanceller, event: Session.AgentSessionEvent) -> IO(Unit):
+  match env event:
+    case CompactionCanceller{session, True{}} Session.CompactionStart{_}: Session.abortCompaction(session)
+    case CompactionCanceller{+session, False{}} Session.AgentEvent{T.MessageEnd{T.LlmMessage{Ai.Assistant{_}}}}:
+      do IO<Unit>:
+        Session.abortCompaction(session)
+        Session.requestAbort(session)
+    case _ _: IO.pure(Unit, Unit{})
+
+def cancellerFor(+session: Session.AgentSession, onStart: Bool) -> IO(Maybe<&2, Session.Listener()>):
+  do IO<Maybe<&2, Session.Listener()>>:
+    +listener : Session.Listener() <- C.create(~CompactionCanceller, ~Session.AgentSessionEvent, ~Unit, ~cancelCompaction, CompactionCanceller{session, onStart})
+    Session.subscribe(session, listener)
+    return Some{listener}
+
 # "queued" queues a follow-up before the prompts, so the run continues past
 # its first turn.
-def beforePrompts(session: Session.AgentSession, action: String) -> IO(Unit):
+def beforePrompts(+session: Session.AgentSession, action: String) -> IO(Maybe<&2, Session.Listener()>):
   match action:
-    case "queued": Session.followUp(session, "later", Nil{})
-    case _: IO.pure(Unit, Unit{})
+    case "queued":
+      do IO<Maybe<&2, Session.Listener()>>:
+        Session.followUp(session, "later", Nil{})
+        return None{}
+    case "abort_on_error": cancellerFor(session, False{})
+    case "cancel_on_start": cancellerFor(session, True{})
+    case _: IO.pure(Maybe<&2, Session.Listener()>, None{})
+
+def released(session: Session.AgentSession, listener: Maybe<&2, Session.Listener()>) -> IO(Unit):
+  match listener:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{+value}:
+      do IO<Unit>:
+        Session.unsubscribe(session, value)
+        C.dispose(Session.AgentSessionEvent, Unit, value)
 
 def promptsOf(+prompts: String) -> List<&2, String>:
   Bool.pick(List<&2, String>, String.eq(prompts, "-"), Nil{}, String.split(prompts, ';'))
@@ -660,9 +738,10 @@ def compactScenario(+dir: String, +agentDir: String, prompts: String, responses:
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixture(stored, dir, agentDir, String.split(responses, ';'), Nil{})
     +chosen : String = action
-    beforePrompts(sessionOf(value), chosen)
+    listener : Maybe<&2, Session.Listener()> <- beforePrompts(sessionOf(value), chosen)
     promptAll(sessionOf(value), promptsOf(prompts))
     compactAction(sessionOf(value), chosen)
+    released(sessionOf(value), listener)
     reportRemaining(responsesOf(value))
     reportMessages(sessionOf(value))
     reportEntries(sessionOf(value))
@@ -866,6 +945,7 @@ def run(args: List<String>) -> IO(Unit):
     case "queue" <> dir <> agentDir <> Nil{}: queueScenario(dir, agentDir)
     case "mutate" <> dir <> agentDir <> Nil{}: mutateScenario(dir, agentDir)
     case "busy" <> dir <> agentDir <> Nil{}: busyScenario(dir, agentDir)
+    case "retry" <> dir <> agentDir <> responses <> "abort_second_error" <> Nil{}: abortedRetryScenario(dir, agentDir, responses)
     case "retry" <> dir <> agentDir <> responses <> cancel <> Nil{}: retryScenario(dir, agentDir, responses, cancel)
     case "compact" <> dir <> agentDir <> prompts <> responses <> action <> Nil{}: compactScenario(dir, agentDir, prompts, responses, action)
     case "navigate" <> dir <> agentDir <> Nil{}: navigationScenario(dir, agentDir)

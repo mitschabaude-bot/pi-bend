@@ -52,10 +52,10 @@
     },
     "packages/coding-agent/src/core/agent-session.ts": {
       "state": "partial",
-      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; full upstream session and extension integration behavior remains unverified.",
+      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal. Full upstream session and extension integration behavior remains unverified.",
       "source_sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7",
       "port_sha256": {
-        "packages/coding-agent/src/core/agent-session.bend": "2349731d41f93b319e5dcec73e1fe15aa876cf17b0e61479da6ad28d6c6636ab"
+        "packages/coding-agent/src/core/agent-session.bend": "167ddfff9785b183fafaa6432b3c36e4b8bb21763fcef9ea5ce9bb31cd86ded6"
       }
     },
     "packages/coding-agent/src/core/session-manager.ts": {

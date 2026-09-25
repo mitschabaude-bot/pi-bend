@@ -164,6 +164,26 @@ def compaction_checks(runner, threads, work):
     assert [m['role'] for m in only(events, 'messages')['messages']] == ['compactionSummary', 'assistant', 'user', 'assistant'], 'the follow-up turn runs on the compacted context'
     assert only(events, 'last_assistant_text')['text'] == 'a2' and only(events, 'remaining')['count'] == 0
     checks += 4
+    # automatic compaction cancellation regressions (suite/regressions/9340-9777-auto-compaction-cancellation.test.ts)
+    # does not start post-run auto-compaction after abort (#9340). Upstream also cancels compaction from a
+    # session_before_compact extension handler; extension compaction hooks are not ported, so the control
+    # run below shows that the same error turn compacts without the abort.
+    error_turn = dict(threshold, retry={'enabled': False})
+    big = 'z' * 5000
+    events = run_compact(runner, threads, work, error_turn, 'one;' + big, 'a1#10;!Synthetic network failure;summary;prefix;unused', 'none')
+    assert only(events, 'compaction_start')['reason'] == 'threshold', 'control: the failed turn crosses the threshold'
+    events = run_compact(runner, threads, work, error_turn, 'one;' + big, 'a1#10;!Synthetic network failure;summary;prefix;unused', 'abort_on_error')
+    assert not [e for e in events if e['type'] == 'compaction_start'] and only(events, 'remaining')['count'] == 3, events
+    # cancels synchronously from compaction_start (#9777): no summarization request, reported as aborted
+    events = run_compact(runner, threads, work, threshold, 'one;two', 'a1;a2#5000;history summary;prefix summary', 'cancel_on_start')
+    end = only(events, 'compaction_end')
+    assert end['aborted'] is True and 'errorMessage' not in end and only(events, 'remaining')['count'] == 2, end
+    # reports matching error text as a failure (#9777): a failure reading "Compaction cancelled" is not a cancellation
+    # (upstream rejects getAuth; here the summarization request fails with that text)
+    events = run_compact(runner, threads, work, threshold, 'one;two', 'a1;a2#5000;!Compaction cancelled;unused', 'none')
+    end = only(events, 'compaction_end')
+    assert end['aborted'] is False and 'Compaction cancelled' in end['errorMessage'], end
+    checks += 4
     # does not trigger threshold compaction below the threshold or when disabled
     events = run_compact(runner, threads, work, threshold, 'one', 'a1#10;unused', 'none')
     assert not [e for e in events if e['type'].startswith('compaction_')] and only(events, 'remaining')['count'] == 1
@@ -373,6 +393,12 @@ def main():
     assert retry_events(events) == ['start:1', 'end:false'], retry_events(events)
     assert [e for e in events if e['type'] == 'auto_retry_end'][0]['finalError'] == 'Retry cancelled'
     assert [e for e in events if e['type'] == 'remaining'][0]['count'] == 1 and [e for e in events if e['type'] == 'retrying'][0]['value'] is False
+    checks += 3
+    # finalizes retry state when abort is requested after a retry attempt fails (#9340): abort() is requested, not awaited, from the second failure's message_end
+    events = run_retry(runner, args.threads, work, {'enabled': True, 'maxRetries': 3, 'baseDelayMs': 0}, '!overloaded_error;!overloaded_error', 'abort_second_error')
+    assert only(events, 'retry_attempt')['value'] == 0
+    assert [e['willRetry'] for e in events if e['type'] == 'agent_end'][-1] is False
+    assert {k: v for k, v in [e for e in events if e['type'] == 'auto_retry_end'][-1].items() if k != 'type'} == {'success': False, 'attempt': 1, 'finalError': 'Retry cancelled'}
     checks += 3
     checks += bash_checks(runner, args.threads, work)
     checks += expand_checks(runner, args.threads, work)

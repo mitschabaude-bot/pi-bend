@@ -3104,14 +3104,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-retry-events.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "tests/agent-session.bend",
         "tests/agent_session_check.py"
       ],
       "sha256": "6093646e00ca0bbf9b070ec189e4caa08567baba80897e0177854e3dc31a8734",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "The six retry cases (transient success, multiple failures, exhausted budget, disabled, non-retryable, abortRetry cancellation) are the retry scenarios of tests/agent_session_check.py over a faux provider. Delayed message_end handling, tool-call recovery, extension event ordering, the event-order characterizations, message_update deltas and aborted runs remain pending."
+      "notes": "The six retry cases (transient success, multiple failures, exhausted budget, disabled, non-retryable, abortRetry cancellation) and v0.87.1's 'finalizes retry state when abort is requested after a retry attempt fails' are the retry scenarios of tests/agent_session_check.py over a faux provider. Delayed message_end handling, tool-call recovery, extension event ordering, the event-order characterizations, message_update deltas and aborted runs remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-runtime.test.ts",
@@ -3704,9 +3704,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9340-9777-auto-compaction-cancellation.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "7e1894d5f9c014b61c1cbce24981910bb26c356f834ae42b461a8fa4008cbaf1"
+      "status": "partial",
+      "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "7e1894d5f9c014b61c1cbce24981910bb26c356f834ae42b461a8fa4008cbaf1",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "'does not start post-run auto-compaction after abort' (without the extension handler, plus a control run), 'cancels synchronously from compaction_start' and 'reports matching error text as a failure' (failure raised by the summarization request instead of getAuth) run in tests/agent_session_check.py. Pending: 'cancels summarization authentication' (no abort signal for getAuth), the unrelated AbortError variant and 'reports extension cancellation as aborted' (extension compaction hooks). See tests/agent-session.md."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9540-extension-loader-lazy.test.ts",
