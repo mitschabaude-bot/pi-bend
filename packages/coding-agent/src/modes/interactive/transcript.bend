@@ -223,7 +223,7 @@ def findTool(tools: List<&2,ToolLink>,+id: String) -> Maybe<&2,Tool.Handle>:
   match tools:
     case Nil{}: None{}
     case ToolLink{current,handle} <> rest:
-      Bool.pick(Maybe<&2,Tool.Handle>,String.eq(current,id),Some{handle},findTool(rest,id))
+      Bool.pick(Unit -> Maybe<&2,Tool.Handle>,String.eq(current,id),_ => Some{handle},_ => findTool(rest,id))(Unit{})
 def mountedOwned(state: State,toolId: String,owned: Tool.Owner,component: Component.Component,handle: Tool.Handle) -> IO(State & Bool):
   match state:
     case State{entries,tools,active,+id,+view,theme,styles,expanded,hidden,pad}:
