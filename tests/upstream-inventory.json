@@ -3852,9 +3852,13 @@
     },
     {
       "source": "packages/coding-agent/test/tool-system-prompt-contributions.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "eff9fdb9335cdcac14d26b90b3caf353fc7cb4473d096e67c414555d85984403"
+      "status": "partial",
+      "ports": [
+        "tests/tool_prompt_contributions.test.ts",
+        "tests/tool-prompt-contributions.bend"
+      ],
+      "sha256": "eff9fdb9335cdcac14d26b90b3caf353fc7cb4473d096e67c414555d85984403",
+      "notes": "The seven ported tools' rows of 'keeps the %s tool definition aligned with its contribution': the port has one source for a tool's prompt snippet and guidelines (Tools.promptSnippet/promptGuidelines, read by the system prompt builder), compared with upstream's *ToolSystemPromptContribution constants imported from the pinned pi-mono. Pending: the powershell row (tool not ported) and 'keeps %s session-environment guidance conditional' (gap: the port's guidelines ignore BashToolOptions.exposeSessionEnvironment). bun test."
     },
     {
       "source": "packages/coding-agent/test/tools-manager.test.ts",
