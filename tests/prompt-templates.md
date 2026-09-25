@@ -28,3 +28,5 @@ python3 tests/prompt_templates_load_check.py --runner build/prompt-templates.js
 python3 tests/prompt_templates_load_check.py --runner build/prompt-templates --threads 1
 python3 tests/prompt_templates_load_check.py --runner build/prompt-templates --threads 4
 ```
+
+v0.87.1 adds "reports invalid YAML frontmatter and keeps valid siblings" (#9354). `tests/prompt_templates_load_check.py` asserts it as upstream on both loaders: only `valid` loads, and one warning names the invalid file and line 1, column 14. The native message prose still differs from the `yaml` package's ("Mapping separator in a plain scalar" versus "Nested mappings are not allowed in compact mappings"); the location now agrees because the YAML module reports a block mapping value's error at the value's column.

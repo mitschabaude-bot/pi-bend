@@ -16,6 +16,7 @@ import ../../../runtime/src/stable-sort.bend as Sort
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/u64.bend as W
 import ../../../runtime/src/string.bend as Strings
+import ../../../runtime/src/collation.bend as Collation
 import ./messages.bend as Messages
 import ./session-manager.bend as S
 import ./session-json.bend as SJ
@@ -442,14 +443,14 @@ def withTime(timed: Maybe<&2, List<&2, Timed>>, path: String, modified: Result<&
     case Some{values} Done{time}: Some{Timed{path, time} <> values}
     case _ _: None{}
 
-# Every candidate is stat'ed first; a failed stat makes discovery unavailable,
-# as a directory access race does upstream.
+# Every candidate is stat'ed first (Stats.mtimeMs); a failed stat makes
+# discovery unavailable, as a directory access race does upstream.
 def timedFiles(files: List<&2, String>, timed: Maybe<&2, List<&2, Timed>>) -> IO(Maybe<&2, List<&2, Timed>>):
   match files:
     case Nil{}: IO.pure(Maybe<&2, List<&2, Timed>>, Maybe.map(&2, List<&2, Timed>, List<&2, Timed>, values => List.reverse(&2, Timed, values), timed))
     case +path <> rest:
       do IO<Maybe<&2, List<&2, Timed>>>:
-        modified : Result<&2, &2, FS.Error, F64> <- FS.modified(path)
+        modified : Result<&2, &2, FS.Error, F64> <- FS.modifiedExact(path)
         timedFiles(rest, withTime(timed, path, modified))
 
 # Newest first, the first file whose header belongs to the working directory.
@@ -648,24 +649,14 @@ def buildSessionInfo(+path: String) -> IO(Maybe<&2, S.SessionInfo>):
     scan : Fold.Outcome<InfoScan> <- Fold.read(~InfoScan, ~consumeInfo, path, 4096, InfoScan{Nil{}, emptySummary()})
     return scannedInfo(path, scan, modified)
 
-def infosOf(files: List<&2, String>, +reversed: List<&2, S.SessionInfo>) -> IO(List<&2, S.SessionInfo>):
-  match files:
-    case Nil{}: IO.pure(List<&2, S.SessionInfo>, List.reverse(&2, S.SessionInfo, reversed))
-    case path <> rest:
-      do IO<List<&2, S.SessionInfo>>:
-        info : Maybe<&2, S.SessionInfo> <- buildSessionInfo(path)
-        infosOf(rest, Maybe.default(&2, List<&2, S.SessionInfo>, Maybe.map(&2, S.SessionInfo, List<&2, S.SessionInfo>, found => found <> reversed, info), reversed))
-
-def listedInfos(files: Maybe<&2, List<&2, String>>) -> IO(List<&2, S.SessionInfo>):
-  match files:
-    case None{}: IO.pure(List<&2, S.SessionInfo>, Nil{})
-    case Some{paths}: infosOf(paths, Nil{})
-
-# Files are summarized one after another; upstream loads ten concurrently.
-def listSessionsFromDir(dir: String) -> IO(List<&2, S.SessionInfo>):
-  do IO<List<&2, S.SessionInfo>>:
-    files : Maybe<&2, List<&2, String>> <- sessionFiles(dir)
-    listedInfos(files)
+# A candidate stat'ed during discovery (its Stats.mtimeMs) is not stat'ed again.
+def buildSessionInfoWith(+path: String, known: Maybe<&2, F64>) -> IO(Maybe<&2, S.SessionInfo>):
+  match known:
+    case None{}: buildSessionInfo(path)
+    case Some{exact}:
+      do IO<Maybe<&2, S.SessionInfo>>:
+        scan : Fold.Outcome<InfoScan> <- Fold.read(~InfoScan, ~consumeInfo, path, 4096, InfoScan{Nil{}, emptySummary()})
+        return scannedInfo(path, scan, Done{FS.roundedMilliseconds(exact)})
 
 def infoModified(info: S.SessionInfo) -> F64:
   match info:
@@ -678,24 +669,9 @@ def infoCwd(info: S.SessionInfo) -> String:
 def recentFirst(left: S.SessionInfo, right: S.SessionInfo) -> Bool:
   F.isAtLeast(F.compare(infoModified(left), infoModified(right)))
 
-def cwdFiltered(sessions: List<&2, S.SessionInfo>, +cwd: Maybe<&2, String>, +reversed: List<&2, S.SessionInfo>) -> List<&2, S.SessionInfo>:
-  match sessions:
-    case Nil{}: List.reverse(&2, S.SessionInfo, reversed)
-    case +info <> rest: cwdFiltered(rest, cwd, Bool.pick(List<&2, S.SessionInfo>, Maybe.default(&2, Bool, Maybe.map(&2, String, Bool, resolved => sessionCwdMatches(infoCwd(info), resolved), cwd), True{}), info <> reversed, reversed))
-
-def listIn(chosen: Outcome(String), sessionDir: Maybe<&2, String>, +cwd: String, agentDir: String) -> IO(List<&2, S.SessionInfo>):
-  match chosen:
-    case Fail{_}: IO.pure(List<&2, S.SessionInfo>, Nil{})
-    case Done{+dir}:
-      do IO<List<&2, S.SessionInfo>>:
-        sessions : List<&2, S.SessionInfo> <- listSessionsFromDir(dir)
-        return Sort.sort(~S.SessionInfo, ~recentFirst, cwdFiltered(sessions, Bool.pick(Maybe<&2, String>, filtersCwd(sessionDir, dir, cwd, agentDir), Some{cwd}, None{}), Nil{}))
-
-# All sessions of a working directory, most recently modified first.
-def list(+cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String) -> IO(List<&2, S.SessionInfo>):
-  do IO<List<&2, S.SessionInfo>>:
-    chosen : Outcome(String) <- chosenDir(sessionDir, cwd, agentDir)
-    listIn(chosen, sessionDir, cwd, agentDir)
+# upstream sortSessionInfos: most recently modified first; ties keep their order.
+def sortSessionInfos(sessions: List<&2, S.SessionInfo>) -> List<&2, S.SessionInfo>:
+  Sort.sort(~S.SessionInfo, ~recentFirst, sessions)
 
 def isDirectoryLike(kind: FS.FileKind) -> Bool:
   match kind:
@@ -708,112 +684,250 @@ def projectDirs(+parent: String, entries: List<&2, FS.DirectoryEntry>, +reversed
     case Nil{}: List.reverse(&2, String, reversed)
     case FS.DirectoryEntry{name, kind} <> rest: projectDirs(parent, rest, Bool.pick(List<&2, String>, isDirectoryLike(kind), Path.join(parent, name) <> reversed, reversed))
 
-def acrossDirs(dirs: List<&2, String>, +reversed: List<&2, S.SessionInfo>) -> IO(List<&2, S.SessionInfo>):
-  match dirs:
-    case Nil{}: IO.pure(List<&2, S.SessionInfo>, reversed)
-    case dir <> rest:
-      do IO<List<&2, S.SessionInfo>>:
-        sessions : List<&2, S.SessionInfo> <- listSessionsFromDir(dir)
-        acrossDirs(rest, List.append(&2, S.SessionInfo, List.reverse(&2, S.SessionInfo, sessions), reversed))
+# File order
+# ----------
+# upstream orders session file names with localeCompare. With a collator
+# (loadFileOrder: the installed ICU root data) names compare as Node's default
+# collation does; without one they compare by code points, as the ls tool
+# falls back.
+def FileOrder() -> Data: Maybe<&2, Collation.Collator>
 
-def listedProjects(sessionsDir: String, result: Result<&2, &2, FS.Error, List<&2, FS.DirectoryEntry>>) -> IO(List<&2, S.SessionInfo>):
-  match result:
-    case Fail{_}: IO.pure(List<&2, S.SessionInfo>, Nil{})
-    case Done{entries}:
-      do IO<List<&2, S.SessionInfo>>:
-        sessions : List<&2, S.SessionInfo> <- acrossDirs(projectDirs(sessionsDir, entries, Nil{}), Nil{})
-        return Sort.sort(~S.SessionInfo, ~recentFirst, List.reverse(&2, S.SessionInfo, sessions))
+def loadedOrder(loaded: Result<&2, &2, Collation.LoadError, Collation.Collator>) -> FileOrder():
+  match loaded:
+    case Done{collator}: Some{collator}
+    case Fail{_}: None{}
 
-# All sessions across project directories (or one custom directory), most
-# recently modified first.
-def listAll(sessionDir: Maybe<&2, String>, +sessionsDir: String) -> IO(List<&2, S.SessionInfo>):
-  match sessionDir:
-    case Some{custom}:
-      do IO<List<&2, S.SessionInfo>>:
-        sessions : List<&2, S.SessionInfo> <- listSessionsFromDir(Path.normalize(custom))
-        return Sort.sort(~S.SessionInfo, ~recentFirst, sessions)
-    case None{}:
-      do IO<List<&2, S.SessionInfo>>:
-        result : Result<&2, &2, FS.Error, List<&2, FS.DirectoryEntry>> <- FS.readDirectory(sessionsDir)
-        listedProjects(sessionsDir, result)
+def loadFileOrder(packageDir: String) -> IO(FileOrder()):
+  do IO<FileOrder()>:
+    loaded : Result<&2, &2, Collation.LoadError, Collation.Collator> <- Collation.load(Path.join(packageDir, "packages/runtime/data"))
+    return loadedOrder(loaded)
 
-# The startup picker receives sorted, immutable snapshots as files arrive.
-# Cancellation is checked between files; the current file is always closed by
-# the JSONL fold before the scanner returns.
+# A session file found by discovery: its path, the collation key of its name
+# and, once stat'ed, its Stats.mtimeMs.
+type Candidate is Data:
+  Candidate{path: String, key: Maybe<&2, Collation.Key>, modified: Maybe<&2, F64>}
+
+def candidateOf(+order: FileOrder(), +path: String, modified: Maybe<&2, F64>) -> Candidate:
+  Candidate{path, Maybe.map(&2, Collation.Collator, Collation.Key, collator => Collation.key(collator, Path.basename(path)), order), modified}
+
+def nameOrder(left: String, leftKey: Maybe<&2, Collation.Key>, right: String, rightKey: Maybe<&2, Collation.Key>) -> Cmp:
+  match leftKey rightKey:
+    case Some{a} Some{b}: Collation.compareKeys(a, b)
+    case _ _: String.order(Path.basename(left), Path.basename(right))
+
+# `b.localeCompare(a)`: later names first; equal names keep their order.
+def laterName(left: Candidate, right: Candidate) -> Bool:
+  match left right:
+    case Candidate{a, ka, _} Candidate{b, kb, _}: Bool.not(Cmp.is_lt(nameOrder(a, ka, b, kb)))
+
+# A missing time is -Infinity; two of them subtract to NaN, which falls
+# through to the name as an equal time does.
+def timeOrder(left: Maybe<&2, F64>, right: Maybe<&2, F64>) -> Maybe<&2, Cmp>:
+  match left right:
+    case Some{a} Some{b}: F.compare(a, b)
+    case Some{_} None{}: Some{GT{}}
+    case None{} Some{_}: Some{LT{}}
+    case None{} None{}: None{}
+
+def byTime(order: Maybe<&2, Cmp>, byName: Bool) -> Bool:
+  match order:
+    case Some{GT{}}: True{}
+    case Some{LT{}}: False{}
+    case _: byName
+
+# listAll's candidate order: newest mtimeMs first, then later names first.
+def newerCandidate(left: Candidate, right: Candidate) -> Bool:
+  match left right:
+    case Candidate{a, ka, ma} Candidate{b, kb, mb}: byTime(timeOrder(ma, mb), Bool.not(Cmp.is_lt(nameOrder(a, ka, b, kb))))
+
+def namedCandidates(+order: FileOrder(), paths: List<&2, String>) -> List<&2, Candidate>:
+  match paths:
+    case Nil{}: Nil{}
+    case path <> rest: candidateOf(order, path, None{}) <> namedCandidates(order, rest)
+
+# Listing
+# -------
+# upstream list and listAll take an optional progress callback and abort
+# signal. Progress reports every loaded file; the first, every interval-th
+# and the last also carry the sessions loaded so far, sorted. An aborted
+# listing fails with the signal's reason (upstream rejects with it).
+# Cancellation is checked before each directory, stat and file, one after
+# another; upstream runs up to 64 discoveries and ten reads concurrently and
+# also stops a read in progress.
 type ListProgress is Data: ListProgress{loaded: Nat, total: Nat, sessions: Maybe<&2, List<&2, S.SessionInfo>>}
+type Observer is Data: Observer{signal: Maybe<&2, Abort.AbortSignal<Unit>>, publish: Maybe<&2, Callback.Callback<ListProgress, Unit>>}
+def Listing() -> Data: Result<&2, &2, Abort.AbortReason<Unit>, List<&2, S.SessionInfo>>
+def Checked() -> Data: Result<&2, &2, Abort.AbortReason<Unit>, Unit>
+
+def unobserved() -> Observer: Observer{None{}, None{}}
+
+def signalOf(observer: Observer) -> Maybe<&2, Abort.AbortSignal<Unit>>:
+  match observer:
+    case Observer{signal, _}: signal
+
+def checkAborted(signal: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Checked()):
+  match signal:
+    case None{}: IO.pure(Checked(), Done{Unit{}})
+    case Some{value}: Abort.throwIfAborted(Unit, value)
+
+# Continue unless the check found the signal aborted.
+def unlessAborted(-A: Data, check: Checked(), next: Unit -> IO(Result<&2, &2, Abort.AbortReason<Unit>, A>)) -> IO(Result<&2, &2, Abort.AbortReason<Unit>, A>):
+  match check:
+    case Fail{reason}: IO.pure(Result<&2, &2, Abort.AbortReason<Unit>, A>, Fail{reason})
+    case Done{_}: next(Unit{})
+
 def selectedIf(include: Bool, value: S.SessionInfo, found: List<&2, S.SessionInfo>) -> List<&2, S.SessionInfo>:
   match include:
     case True{}: value <> found
     case False{}: found
+
 def selectedInfo(info: Maybe<&2, S.SessionInfo>, cwd: Maybe<&2, String>, found: List<&2, S.SessionInfo>) -> List<&2, S.SessionInfo>:
   match info:
     case None{}: found
     case Some{+value}:
       selectedIf(Maybe.default(&2, Bool, Maybe.map(&2, String, Bool, expected => sessionCwdMatches(infoCwd(value), expected), cwd), True{}), value, found)
+
+# `found` holds the loaded sessions newest-loaded first.
 def partialSnapshot(publish: Bool, found: List<&2, S.SessionInfo>) -> Maybe<&2, List<&2, S.SessionInfo>>:
   match publish:
-    case True{}: Some{Sort.sort(~S.SessionInfo, ~recentFirst, found)}
+    case True{}: Some{sortSessionInfos(List.reverse(&2, S.SessionInfo, found))}
     case False{}: None{}
-def reportProgress(+loaded: Nat, +total: Nat, found: List<&2, S.SessionInfo>, +interval: Nat, publish: Callback.Callback<ListProgress, Unit>) -> IO(Unit):
-  Callback.call(ListProgress, Unit, publish, ListProgress{loaded, total, partialSnapshot(Nat.is_eq(loaded, 1n) || Nat.is_eq(loaded, total) || Nat.is_eq(loaded % interval, 0n), found)})
-def scanProgress(files: List<&2, String>, +found: List<&2, S.SessionInfo>, +loaded: Nat, +total: Nat, +interval: Nat, +cwd: Maybe<&2, String>, +signal: Abort.AbortSignal<Unit>, +publish: Callback.Callback<ListProgress, Unit>) -> IO(List<&2, S.SessionInfo>):
+
+def report(observer: Observer, +loaded: Nat, +total: Nat, +interval: Nat, found: List<&2, S.SessionInfo>) -> IO(Unit):
+  match observer:
+    case Observer{_, None{}}: IO.pure(Unit, Unit{})
+    case Observer{_, Some{publish}}: Callback.call(ListProgress, Unit, publish, ListProgress{loaded, total, partialSnapshot(Nat.is_eq(loaded, 1n) || Nat.is_eq(loaded, total) || Nat.is_eq(loaded % interval, 0n), found)})
+
+def loadInfos(candidates: List<&2, Candidate>, +loaded: Nat, +total: Nat, +interval: Nat, +cwd: Maybe<&2, String>, +observer: Observer, found: List<&2, S.SessionInfo>) -> IO(Listing()):
+  match candidates:
+    case Nil{}: IO.pure(Listing(), Done{sortSessionInfos(List.reverse(&2, S.SessionInfo, found))})
+    case Candidate{+path, _, modified} <> rest:
+      do IO<Listing()>:
+        check : Checked() <- checkAborted(signalOf(observer))
+        unlessAborted(List<&2, S.SessionInfo>, check, _ => do IO<Listing()>:
+          info : Maybe<&2, S.SessionInfo> <- buildSessionInfoWith(path, modified)
+          +next : List<&2, S.SessionInfo> <- IO.pure(List<&2, S.SessionInfo>, selectedInfo(info, cwd, found))
+          report(observer, loaded + 1n, total, interval, next)
+          loadInfos(rest, loaded + 1n, total, interval, cwd, observer, next))
+
+def loadCandidates(+candidates: List<&2, Candidate>, interval: Nat, cwd: Maybe<&2, String>, observer: Observer) -> IO(Listing()):
+  loadInfos(candidates, 0n, List.length(&2, Candidate, candidates), interval, cwd, observer, Nil{})
+
+def loadDirectory(files: Maybe<&2, List<&2, String>>, +order: FileOrder(), cwd: Maybe<&2, String>, observer: Observer) -> IO(Listing()):
   match files:
-    case Nil{}: IO.pure(List<&2, S.SessionInfo>, Sort.sort(~S.SessionInfo, ~recentFirst, found))
-    case path <> rest:
-      do IO<List<&2, S.SessionInfo>>:
-        stopped : Bool <- Abort.aborted(Unit, signal)
-        Bool.pick(Unit -> IO(List<&2, S.SessionInfo>), stopped,
-          _ => IO.pure(List<&2, S.SessionInfo>, Sort.sort(~S.SessionInfo, ~recentFirst, found)),
-          _ => do IO<List<&2, S.SessionInfo>>:
-            info : Maybe<&2, S.SessionInfo> <- buildSessionInfo(path)
-            +next : List<&2, S.SessionInfo> <- IO.pure(List<&2, S.SessionInfo>, selectedInfo(info, cwd, found))
-            reportProgress(loaded + 1n, total, next, interval, publish)
-            scanProgress(rest, next, loaded + 1n, total, interval, cwd, signal, publish))(Unit{})
-def scanFiles(files: Maybe<&2, List<&2, String>>, interval: Nat, cwd: Maybe<&2, String>, signal: Abort.AbortSignal<Unit>, +publish: Callback.Callback<ListProgress, Unit>) -> IO(List<&2, S.SessionInfo>):
-  match files:
-    case None{}: IO.pure(List<&2, S.SessionInfo>, Nil{})
-    case Some{+paths}:
-      do IO<List<&2, S.SessionInfo>>:
-        +total : Nat <- IO.pure(Nat, List.length(&2, String, paths))
-        Bool.pick(Unit -> IO(Unit), Nat.is_eq(total, 0n), _ => Callback.call(ListProgress, Unit, publish, ListProgress{0n, 0n, Some{Nil{}}}), _ => IO.pure(Unit, Unit{}))(Unit{})
-        scanProgress(paths, Nil{}, 0n, total, interval, cwd, signal, publish)
-def currentProgress(chosen: Outcome(String), sessionDir: Maybe<&2, String>, +cwd: String, agentDir: String, signal: Abort.AbortSignal<Unit>, publish: Callback.Callback<ListProgress, Unit>) -> IO(List<&2, S.SessionInfo>):
+    case None{}: IO.pure(Listing(), Done{Nil{}})
+    case Some{paths}: loadCandidates(Sort.sort(~Candidate, ~laterName, namedCandidates(order, paths)), 10n, cwd, observer)
+
+def directoryListing(check: Checked(), +dir: String, order: FileOrder(), cwd: Maybe<&2, String>, observer: Observer) -> IO(Listing()):
+  match check:
+    case Fail{reason}: IO.pure(Listing(), Fail{reason})
+    case Done{_}:
+      do IO<Listing()>:
+        files : Maybe<&2, List<&2, String>> <- sessionFiles(dir)
+        loadDirectory(files, order, cwd, observer)
+
+# upstream listSessionsFromDir: file names in reverse collation order, only
+# sessions of `cwd` when given.
+def listSessionsFromDir(+dir: String, order: FileOrder(), cwd: Maybe<&2, String>, +observer: Observer) -> IO(Listing()):
+  do IO<Listing()>:
+    check : Checked() <- checkAborted(signalOf(observer))
+    directoryListing(check, dir, order, cwd, observer)
+
+def listIn(chosen: Outcome(String), +sessionDir: Maybe<&2, String>, +cwd: String, agentDir: String, order: FileOrder(), observer: Observer) -> IO(Listing()):
   match chosen:
-    case Fail{_}: IO.pure(List<&2, S.SessionInfo>, Nil{})
-    case Done{+dir}:
-      do IO<List<&2, S.SessionInfo>>:
-        files : Maybe<&2, List<&2, String>> <- sessionFiles(dir)
-        scanFiles(files, 10n, Bool.pick(Maybe<&2, String>, filtersCwd(sessionDir, dir, cwd, agentDir), Some{cwd}, None{}), signal, publish)
-def listProgress(+cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, signal: Abort.AbortSignal<Unit>, publish: Callback.Callback<ListProgress, Unit>) -> IO(List<&2, S.SessionInfo>):
-  do IO<List<&2, S.SessionInfo>>:
+    case Fail{_}: IO.pure(Listing(), Done{Nil{}})
+    case Done{+dir}: listSessionsFromDir(dir, order, Bool.pick(Maybe<&2, String>, filtersCwd(sessionDir, dir, cwd, agentDir), Some{cwd}, None{}), observer)
+
+# upstream SessionManager.list: the sessions of a working directory, most
+# recently modified first.
+def listObserved(+cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, order: FileOrder(), observer: Observer) -> IO(Listing()):
+  do IO<Listing()>:
     chosen : Outcome(String) <- chosenDir(sessionDir, cwd, agentDir)
-    currentProgress(chosen, sessionDir, cwd, agentDir, signal, publish)
-def pathsInDirs(dirs: List<&2, String>) -> IO(List<&2, String>):
-  match dirs:
-    case Nil{}: IO.pure(List<&2, String>, Nil{})
-    case dir <> rest:
-      do IO<List<&2, String>>:
-        files : Maybe<&2, List<&2, String>> <- sessionFiles(dir)
-        others : List<&2, String> <- pathsInDirs(rest)
-        return List.append(&2, String, Maybe.default(&2, List<&2, String>, files, Nil{}), others)
-def allPathsResult(sessionsDir: String, result: Result<&2, &2, FS.Error, List<&2, FS.DirectoryEntry>>) -> IO(Maybe<&2, List<&2, String>>):
-  match result:
-    case Fail{_}: IO.pure(Maybe<&2, List<&2, String>>, None{})
-    case Done{entries}:
-      do IO<Maybe<&2, List<&2, String>>>:
-        files : List<&2, String> <- pathsInDirs(projectDirs(sessionsDir, entries, Nil{}))
-        return Some{files}
-def allPaths(sessionDir: Maybe<&2, String>, +sessionsDir: String) -> IO(Maybe<&2, List<&2, String>>):
-  match sessionDir:
-    case Some{custom}: sessionFiles(Path.normalize(custom))
-    case None{}:
-      do IO<Maybe<&2, List<&2, String>>>:
-        result : Result<&2, &2, FS.Error, List<&2, FS.DirectoryEntry>> <- FS.readDirectory(sessionsDir)
-        allPathsResult(sessionsDir, result)
-def listAllProgress(sessionDir: Maybe<&2, String>, sessionsDir: String, signal: Abort.AbortSignal<Unit>, publish: Callback.Callback<ListProgress, Unit>) -> IO(List<&2, S.SessionInfo>):
+    listIn(chosen, sessionDir, cwd, agentDir, order, observer)
+
+def unaborted(listing: Listing()) -> List<&2, S.SessionInfo>:
+  Result.default(&2, &2, Abort.AbortReason<Unit>, List<&2, S.SessionInfo>, listing, Nil{})
+
+def list(+cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, order: FileOrder()) -> IO(List<&2, S.SessionInfo>):
   do IO<List<&2, S.SessionInfo>>:
-    files : Maybe<&2, List<&2, String>> <- allPaths(sessionDir, sessionsDir)
-    scanFiles(files, 100n, None{}, signal, publish)
+    listing : Listing() <- listObserved(cwd, sessionDir, agentDir, order, unobserved())
+    return unaborted(listing)
+
+def listProgress(+cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, order: FileOrder(), signal: Abort.AbortSignal<Unit>, publish: Callback.Callback<ListProgress, Unit>) -> IO(Listing()):
+  listObserved(cwd, sessionDir, agentDir, order, Observer{Some{signal}, Some{publish}})
+
+# The session files of each project directory; an unreadable one has none.
+def pathsInDirs(dirs: List<&2, String>, +signal: Maybe<&2, Abort.AbortSignal<Unit>>, reversed: List<&2, String>) -> IO(Result<&2, &2, Abort.AbortReason<Unit>, List<&2, String>>):
+  match dirs:
+    case Nil{}: IO.pure(Result<&2, &2, Abort.AbortReason<Unit>, List<&2, String>>, Done{List.reverse(&2, String, reversed)})
+    case +dir <> rest:
+      do IO<Result<&2, &2, Abort.AbortReason<Unit>, List<&2, String>>>:
+        check : Checked() <- checkAborted(signal)
+        unlessAborted(List<&2, String>, check, _ => do IO<Result<&2, &2, Abort.AbortReason<Unit>, List<&2, String>>>:
+          files : Maybe<&2, List<&2, String>> <- sessionFiles(dir)
+          pathsInDirs(rest, signal, List.append(&2, String, List.reverse(&2, String, Maybe.default(&2, List<&2, String>, files, Nil{})), reversed)))
+
+def statedTime(modified: Result<&2, &2, FS.Error, F64>) -> Maybe<&2, F64>:
+  match modified:
+    case Done{time}: Some{time}
+    case Fail{_}: None{}
+
+# Every file is stat'ed first; a failed stat leaves the candidate without a time.
+def statCandidates(paths: List<&2, String>, +order: FileOrder(), +signal: Maybe<&2, Abort.AbortSignal<Unit>>, reversed: List<&2, Candidate>) -> IO(Result<&2, &2, Abort.AbortReason<Unit>, List<&2, Candidate>>):
+  match paths:
+    case Nil{}: IO.pure(Result<&2, &2, Abort.AbortReason<Unit>, List<&2, Candidate>>, Done{List.reverse(&2, Candidate, reversed)})
+    case +path <> rest:
+      do IO<Result<&2, &2, Abort.AbortReason<Unit>, List<&2, Candidate>>>:
+        check : Checked() <- checkAborted(signal)
+        unlessAborted(List<&2, Candidate>, check, _ => do IO<Result<&2, &2, Abort.AbortReason<Unit>, List<&2, Candidate>>>:
+          modified : Result<&2, &2, FS.Error, F64> <- FS.modifiedExact(path)
+          statCandidates(rest, order, signal, candidateOf(order, path, statedTime(modified)) <> reversed))
+
+def loadStated(stated: Result<&2, &2, Abort.AbortReason<Unit>, List<&2, Candidate>>, observer: Observer) -> IO(Listing()):
+  match stated:
+    case Fail{reason}: IO.pure(Listing(), Fail{reason})
+    case Done{candidates}: loadCandidates(Sort.sort(~Candidate, ~newerCandidate, candidates), 100n, None{}, observer)
+
+def statFound(found: Result<&2, &2, Abort.AbortReason<Unit>, List<&2, String>>, order: FileOrder(), +observer: Observer) -> IO(Listing()):
+  match found:
+    case Fail{reason}: IO.pure(Listing(), Fail{reason})
+    case Done{paths}:
+      do IO<Listing()>:
+        stated : Result<&2, &2, Abort.AbortReason<Unit>, List<&2, Candidate>> <- statCandidates(paths, order, signalOf(observer), Nil{})
+        loadStated(stated, observer)
+
+def listedProjects(sessionsDir: String, result: Result<&2, &2, FS.Error, List<&2, FS.DirectoryEntry>>, order: FileOrder(), +observer: Observer) -> IO(Listing()):
+  match result:
+    case Fail{_}: IO.pure(Listing(), Done{Nil{}})
+    case Done{entries}:
+      do IO<Listing()>:
+        found : Result<&2, &2, Abort.AbortReason<Unit>, List<&2, String>> <- pathsInDirs(projectDirs(sessionsDir, entries, Nil{}), signalOf(observer), Nil{})
+        statFound(found, order, observer)
+
+def allListing(check: Checked(), sessionDir: Maybe<&2, String>, +sessionsDir: String, order: FileOrder(), observer: Observer) -> IO(Listing()):
+  match check sessionDir:
+    case Fail{reason} _: IO.pure(Listing(), Fail{reason})
+    case Done{_} Some{custom}: listSessionsFromDir(Path.normalize(custom), order, None{}, observer)
+    case Done{_} None{}:
+      do IO<Listing()>:
+        result : Result<&2, &2, FS.Error, List<&2, FS.DirectoryEntry>> <- FS.readDirectory(sessionsDir)
+        listedProjects(sessionsDir, result, order, observer)
+
+# upstream SessionManager.listAll: all sessions across project directories
+# (or of one custom directory), most recently modified first. Project
+# sessions load newest file first, so the first rows are the recent ones.
+def listAllObserved(sessionDir: Maybe<&2, String>, +sessionsDir: String, order: FileOrder(), +observer: Observer) -> IO(Listing()):
+  do IO<Listing()>:
+    check : Checked() <- checkAborted(signalOf(observer))
+    allListing(check, sessionDir, sessionsDir, order, observer)
+
+def listAll(sessionDir: Maybe<&2, String>, +sessionsDir: String, order: FileOrder()) -> IO(List<&2, S.SessionInfo>):
+  do IO<List<&2, S.SessionInfo>>:
+    listing : Listing() <- listAllObserved(sessionDir, sessionsDir, order, unobserved())
+    return unaborted(listing)
+
+def listAllProgress(sessionDir: Maybe<&2, String>, sessionsDir: String, order: FileOrder(), signal: Abort.AbortSignal<Unit>, publish: Callback.Callback<ListProgress, Unit>) -> IO(Listing()):
+  listAllObserved(sessionDir, sessionsDir, order, Observer{Some{signal}, Some{publish}})
 
 # The session
 # -----------

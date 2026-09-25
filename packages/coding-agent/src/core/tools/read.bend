@@ -2,6 +2,7 @@ import Base
 import ../../utils/paths.bend as Paths
 import ../../utils/mime.bend as Mime
 import ../../utils/image-process.bend as Images
+import ../../utils/image-resize.bend as Resize
 import ../../../../agent/src/types.bend as Agent
 import ../../../../ai/src/types.bend as Ai
 import ../../../../runtime/src/schema-value.bend as Value
@@ -105,20 +106,20 @@ type ReadOperations is Data:
   ReadOperations{readFile: Callback.Callback<String,ResultOf(List<&2,U32>)>, access: Callback.Callback<String,ResultOf(Unit)>, detectImageMimeType: Maybe<&2,Callback.Callback<String,ResultOf(Maybe<&2,String>)>>}
 
 type ImageInput is Data:
-  ImageInput{bytes: List<&2,U32>, mimeType: String, autoResizeImages: Bool}
+  ImageInput{bytes: List<&2,U32>, mimeType: String, autoResizeImages: Bool, resizeOptions: Maybe<&2,Resize.ImageResizeOptions>}
 
 type ProcessedImage is Data:
   Processed{data: String, mimeType: String, hints: List<&2,String>}
   Unsupported{message: String}
 
 type ReadToolOptions is Data:
-  ReadToolOptions{autoResizeImages: Maybe<&2,Bool>, operations: Maybe<&2,ReadOperations>, imageProcessor: Maybe<&2,Callback.Callback<ImageInput,ResultOf(ProcessedImage)>>}
+  ReadToolOptions{autoResizeImages: Maybe<&2,Bool>, resizeOptions: Maybe<&2,Resize.ImageResizeOptions>, operations: Maybe<&2,ReadOperations>, imageProcessor: Maybe<&2,Callback.Callback<ImageInput,ResultOf(ProcessedImage)>>}
 
 type ReadContext is Data:
-  ReadContext{cwd: Maybe<&2,String>, supportsImages: Maybe<&2,Bool>}
+  ReadContext{cwd: Maybe<&2,String>, supportsImages: Maybe<&2,Bool>, resizeOptions: Maybe<&2,Resize.ImageResizeOptions>}
 
 type Invocation is Data:
-  Invocation{paths: Paths.Environment, cwd: String, operations: ReadOperations, autoResizeImages: Bool, imageProcessor: Maybe<&2,Callback.Callback<ImageInput,ResultOf(ProcessedImage)>>}
+  Invocation{paths: Paths.Environment, cwd: String, operations: ReadOperations, autoResizeImages: Bool, resizeOptions: Maybe<&2,Resize.ImageResizeOptions>, imageProcessor: Maybe<&2,Callback.Callback<ImageInput,ResultOf(ProcessedImage)>>}
 
 type ToolOwner is Type:
   ToolOwner{tool: Agent.AgentTool<ReadToolDetails,Error>, ownedOperations: Maybe<&2,ReadOperations>}
@@ -217,16 +218,16 @@ def defaultProcessed(value: Images.ProcessImageResult) -> ResultOf(ProcessedImag
     case Images.Processed{data,mime,hints}: Done{Processed{data,mime,hints}}
     case Images.Unsupported{message}: Done{Unsupported{message}}
 
-def processed(processor: Maybe<&2,Callback.Callback<ImageInput,ResultOf(ProcessedImage)>>, bytes: List<&2,U32>, mime: String, resize: Bool) -> IO(ResultOf(ProcessedImage)):
+def processed(processor: Maybe<&2,Callback.Callback<ImageInput,ResultOf(ProcessedImage)>>, bytes: List<&2,U32>, mime: String, resize: Bool, profile: Maybe<&2,Resize.ImageResizeOptions>) -> IO(ResultOf(ProcessedImage)):
   match processor:
-    case None{}: IO.pure(ResultOf(ProcessedImage),defaultProcessed(Images.processImage(bytes,mime,Images.ProcessImageOptions{Some{resize},None{}})))
-    case Some{callback}: Callback.call(ImageInput,ResultOf(ProcessedImage),callback,ImageInput{bytes,mime,resize})
+    case None{}: IO.pure(ResultOf(ProcessedImage),defaultProcessed(Images.processImage(bytes,mime,Images.ProcessImageOptions{Some{resize},profile})))
+    case Some{callback}: Callback.call(ImageInput,ResultOf(ProcessedImage),callback,ImageInput{bytes,mime,resize,profile})
 
-def content(input: ReadToolInput, bytes: List<&2,U32>, mime: Maybe<&2,String>, resize: Bool, processor: Maybe<&2,Callback.Callback<ImageInput,ResultOf(ProcessedImage)>>, note: Maybe<&2,Bool>) -> IO(ToolResult()):
+def content(input: ReadToolInput, bytes: List<&2,U32>, mime: Maybe<&2,String>, resize: Bool, profile: Maybe<&2,Resize.ImageResizeOptions>, processor: Maybe<&2,Callback.Callback<ImageInput,ResultOf(ProcessedImage)>>, note: Maybe<&2,Bool>) -> IO(ToolResult()):
   match mime:
     case None{}: IO.pure(ToolResult(),textContent(input,Utf8.decodeWith(Utf8.Preserve{},bytes)))
     case Some{+mime}:
-      then(ProcessedImage,Agent.AgentToolResult<ReadToolDetails>,processed(processor,bytes,mime,resize),value => IO.pure(ToolResult(),Done{imageResult(mime,note,value)}))
+      then(ProcessedImage,Agent.AgentToolResult<ReadToolDetails>,processed(processor,bytes,mime,resize,profile),value => IO.pure(ToolResult(),Done{imageResult(mime,note,value)}))
 
 def nonempty(value: Maybe<&2,String>) -> Maybe<&2,String>:
   match value:
@@ -241,7 +242,7 @@ def detect(callback: Maybe<&2,Callback.Callback<String,ResultOf(Maybe<&2,String>
         result : ResultOf(Maybe<&2,String>) <- Callback.call(String,ResultOf(Maybe<&2,String>),callback,path)
         return Result.map(&2,&2,Error,Maybe<&2,String>,Maybe<&2,String>,nonempty,result)
 
-def read(operations: ReadOperations, +absolute: String, input: ReadToolInput, resize: Bool, processor: Maybe<&2,Callback.Callback<ImageInput,ResultOf(ProcessedImage)>>, note: Maybe<&2,Bool>, +signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ToolResult()):
+def read(operations: ReadOperations, +absolute: String, input: ReadToolInput, resize: Bool, profile: Maybe<&2,Resize.ImageResizeOptions>, processor: Maybe<&2,Callback.Callback<ImageInput,ResultOf(ProcessedImage)>>, note: Maybe<&2,Bool>, +signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(ToolResult()):
   match operations:
     case ReadOperations{reader,access,mime}:
       then(Unit,Agent.AgentToolResult<ReadToolDetails>,check(signal),_ =>
@@ -249,7 +250,7 @@ def read(operations: ReadOperations, +absolute: String, input: ReadToolInput, re
           then(Unit,Agent.AgentToolResult<ReadToolDetails>,check(signal),_ =>
             then(Maybe<&2,String>,Agent.AgentToolResult<ReadToolDetails>,detect(mime,absolute),detected =>
               then(List<&2,U32>,Agent.AgentToolResult<ReadToolDetails>,Callback.call(String,ResultOf(List<&2,U32>),reader,absolute),bytes =>
-                content(input,bytes,detected,resize,processor,note))))))
+                content(input,bytes,detected,resize,profile,processor,note))))))
 
 def numeric(value: Result<&2,&2,Number.Error,Nat>) -> ResultOf(Maybe<&2,Nat>):
   match value:
@@ -272,13 +273,15 @@ def parseInput(value: Value.Value) -> ResultOf(ReadToolInput):
     case Value.ObjectValue{+fields}: parameters(Record.get(Value.Value,fields,"path"),countArgument(Record.get(Value.Value,fields,"offset")),countArgument(Record.get(Value.Value,fields,"limit")))
     case _: Fail{InvalidArguments{}}
 
-def execute(environment: Invocation, +input: ReadToolInput, note: Maybe<&2,Bool>, +signal: Maybe<&2,Abort.AbortSignal<Unit>>, resolved: Result<&2,&2,Paths.Error,String>) -> IO(ToolResult()):
+# `profile` is the context model's resize profile (ctx.model.inputLimits.images.resize);
+# without one the tool's own resizeOptions apply.
+def execute(environment: Invocation, +input: ReadToolInput, note: Maybe<&2,Bool>, profile: Maybe<&2,Resize.ImageResizeOptions>, +signal: Maybe<&2,Abort.AbortSignal<Unit>>, resolved: Result<&2,&2,Paths.Error,String>) -> IO(ToolResult()):
   match environment resolved:
     case _ Fail{cause}: IO.pure(ToolResult(),Fail{InvalidPath{cause}})
-    case Invocation{paths,_,operations,resize,processor} Done{path}:
+    case Invocation{paths,_,operations,resize,fallback,processor} Done{path}:
       do IO<ToolResult()>:
         absolute : String <- Paths.resolvedReadPath(paths,path)
-        value : ToolResult() <- read(operations,absolute,input,resize,processor,note,signal)
+        value : ToolResult() <- read(operations,absolute,input,resize,Maybe.or(&2,Resize.ImageResizeOptions,profile,fallback),processor,note,signal)
         settled(Agent.AgentToolResult<ReadToolDetails>,signal,value)
 
 def resolveInput(environment: Paths.Environment, cwd: String, input: ReadToolInput) -> Result<&2,&2,Paths.Error,String>:
@@ -293,8 +296,8 @@ def workingDirectory(override: Maybe<&2,String>, +fallback: String) -> String:
 def invokeInput(+environment: Invocation, context: ReadContext, +signal: Maybe<&2,Abort.AbortSignal<Unit>>, input: ResultOf(ReadToolInput)) -> IO(ToolResult()):
   match environment context input:
     case _ _ Fail{error}: IO.pure(ToolResult(),Fail{error})
-    case Invocation{+paths,cwd,_,_,_} ReadContext{override,note} Done{+value}:
-      then(Unit,Agent.AgentToolResult<ReadToolDetails>,check(signal),_ => execute(environment,value,note,signal,resolveInput(paths,workingDirectory(override,cwd),value)))
+    case Invocation{+paths,cwd,_,_,_,_} ReadContext{override,note,profile} Done{+value}:
+      then(Unit,Agent.AgentToolResult<ReadToolDetails>,check(signal),_ => execute(environment,value,note,profile,signal,resolveInput(paths,workingDirectory(override,cwd),value)))
 
 # Extension adapters can pass dynamic cwd/model capability here. AgentTool's
 # public execute input has no ExtensionContext and uses the absent context.
@@ -314,12 +317,15 @@ def modelImages(model: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> Maybe<&2,Bool>:
   match model:
     case None{}: None{}
     case Some{Ai.Model{_,_,_,_,_,_,_,input,_,_,_,_,_,_,_,_}}: Some{acceptsImages(input)}
-# ctx.cwd and getNonVisionImageNote(ctx.model); the model's inputLimits image
-# resize options are not modelled by the native reader.
+def modelProfile(model: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> Maybe<&2,Resize.ImageResizeOptions>:
+  match model:
+    case None{}: None{}
+    case Some{found}: Images.modelResizeOptions(found)
+# ctx.cwd, getNonVisionImageNote(ctx.model) and ctx.model's image resize profile.
 def toolContext(context: Maybe<&2,Ctx.ContextView>) -> ReadContext:
   match context:
-    case None{}: ReadContext{None{},None{}}
-    case Some{Ctx.ContextView{cwd,model,_,_,_}}: ReadContext{Some{cwd},modelImages(model)}
+    case None{}: ReadContext{None{},None{},None{}}
+    case Some{Ctx.ContextView{cwd,+model,_,_,_}}: ReadContext{Some{cwd},modelImages(model),modelProfile(model)}
 def invoke(registered: Registered, request: Agent.ToolExecutionInput<ReadToolDetails>) -> IO(ToolResult()):
   match registered:
     case Registered{environment,source}:
@@ -346,11 +352,11 @@ def created(environment: Registered, owned: Maybe<&2,ReadOperations>) -> IO(Tool
 
 def createReadTool(paths: Paths.Environment, cwd: String, options: ReadToolOptions, source: Ctx.ContextSource()) -> IO(ToolOwner):
   match options:
-    case ReadToolOptions{resize,Some{operations},processor}: created(Registered{Invocation{paths,cwd,operations,Maybe.default(&2,Bool,resize,True{}),processor},source},None{})
-    case ReadToolOptions{resize,None{},processor}:
+    case ReadToolOptions{resize,profile,Some{operations},processor}: created(Registered{Invocation{paths,cwd,operations,Maybe.default(&2,Bool,resize,True{}),profile,processor},source},None{})
+    case ReadToolOptions{resize,profile,None{},processor}:
       do IO<ToolOwner>:
         +operations : ReadOperations <- defaultReadOperations()
-        created(Registered{Invocation{paths,cwd,operations,Maybe.default(&2,Bool,resize,True{}),processor},source},Some{operations})
+        created(Registered{Invocation{paths,cwd,operations,Maybe.default(&2,Bool,resize,True{}),profile,processor},source},Some{operations})
 
 def borrowTool(owner: ToolOwner) -> ToolOwner & Agent.AgentTool<ReadToolDetails,Error>:
   match owner:

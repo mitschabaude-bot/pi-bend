@@ -4,7 +4,7 @@
 // has one source for both, Tools.promptSnippet/promptGuidelines, which the
 // system prompt builder reads; tests/tool-prompt-contributions.bend prints
 // them and this test compares them with upstream's contribution constants,
-// imported from the pinned pi-mono (PI_MONO). Test-only.
+// imported from the pinned pi-mono (tests/upstream_pin.mjs). Test-only.
 // Pending: the powershell tool (not ported) and "keeps %s session-environment
 // guidance conditional": the port's guidelines ignore the bash tool's
 // exposeSessionEnvironment option.
@@ -14,9 +14,9 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { UPSTREAM } from "./upstream_pin.mjs";
 
 const ROOT = path.resolve(import.meta.dir, "..");
-const PI_MONO = process.env.PI_MONO ?? path.resolve(ROOT, "../pi-mono");
 
 type Contribution = { snippet: string; guidelines: string[] };
 
@@ -33,7 +33,7 @@ function nativeContributions(): Map<string, Contribution> {
 const NATIVE = nativeContributions();
 
 async function upstream(name: string): Promise<Contribution> {
-	const module = await import(`${PI_MONO}/packages/coding-agent/src/core/tools/${name}.ts`);
+	const module = await import(`${UPSTREAM}/packages/coding-agent/src/core/tools/${name}.ts`);
 	return module[`${name}ToolSystemPromptContribution`] as Contribution;
 }
 

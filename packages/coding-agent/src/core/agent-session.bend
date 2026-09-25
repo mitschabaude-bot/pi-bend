@@ -38,6 +38,9 @@ import ../../../runtime/src/text.bend as Text
 import ./session-manager.bend as S
 import ./session-persistence.bend as Sessions
 import ./settings-manager.bend as Settings
+import ../utils/image-process.bend as Images
+import ../utils/image-resize.bend as Resize
+import ../../../runtime/src/base64.bend as Base64
 import ./session-stats.bend as Stats
 import ./cache-warmer.bend as Warmer
 import ./tools/index.bend as Tools
@@ -1536,10 +1539,11 @@ def autoCompactPrepared(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +model:
     case None{}: IO.pure(Bool, False{})
     case Some{prepared}:
       do IO<Bool>:
-        emit(shared, CompactionStart{reason})
         +controller : A.AbortController<Unit> <- A.new(Unit)
         R.modify(Shared, Unit, shared, current => (setAutoController(current, Some{controller}), Unit{}))
-        result : Result<&2, &2, String, Compaction.CompactionResult> <- runDefaultCompaction(agent, shared, model, prepared, None{}, A.signal(Unit, controller), reason)
+        emit(shared, CompactionStart{reason})
+        cancelledAtStart : Bool <- A.aborted(Unit, A.signal(Unit, controller))
+        result : Result<&2, &2, String, Compaction.CompactionResult> <- Bool.pick(Unit -> IO(Result<&2, &2, String, Compaction.CompactionResult>), cancelledAtStart, _ => IO.pure(Result<&2, &2, String, Compaction.CompactionResult>, Fail{"Compaction cancelled"}), _ => runDefaultCompaction(agent, shared, model, prepared, None{}, A.signal(Unit, controller), reason))(Unit{})
         aborted : Bool <- A.aborted(Unit, A.signal(Unit, controller))
         R.modify(Shared, Unit, shared, current => (setAutoController(current, None{}), Unit{}))
         A.dispose(Unit, controller)
@@ -1612,8 +1616,36 @@ def firstMessage(messages: List<&2, Message()>, fallback: Message()) -> Message(
     case message <> _: message
     case Nil{}: fallback
 
+# upstream _normalizePromptImages (f5c946480): prompt images are processed
+# with the image auto-resize setting and the request model's resize profile
+# (Model.inputLimits.images.resize) once the model is settled; an image that
+# cannot be processed is replaced by its message, and processing hints join
+# the prompt text. Base64 that does not decode is processed as no bytes
+# (Node's decoder is lenient), so it is omitted with processImage's message.
+type NormalizedImages is Data: NormalizedImages{images: List<&2, Ai.ImageContent>, hints: List<&2, String>}
+def decodedImage(value: Result<&2, &2, Base64.Error, List<&2, U32>>) -> List<&2, U32>:
+  match value:
+    case Done{bytes}: bytes
+    case Fail{_}: Nil{}
+def normalizedImage(result: Images.ProcessImageResult, found: NormalizedImages) -> NormalizedImages:
+  match result found:
+    case Images.Processed{data, mime, processedHints} NormalizedImages{images, hints}: NormalizedImages{List.append(&2, Ai.ImageContent, images, Ai.ImageContent{data, mime} <> Nil{}), List.append(&2, String, hints, processedHints)}
+    case Images.Unsupported{message} NormalizedImages{images, hints}: NormalizedImages{images, List.append(&2, String, hints, message <> Nil{})}
+def normalizePromptImages(+options: Images.ProcessImageOptions, images: List<&2, Ai.ImageContent>, found: NormalizedImages) -> NormalizedImages:
+  match images:
+    case Nil{}: found
+    case Ai.ImageContent{data, mime} <> rest: normalizePromptImages(options, rest, normalizedImage(Images.processImage(decodedImage(Base64.decode(data)), mime, options), found))
+def promptImageOptions(settings: Settings.SettingsManager, model: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> Images.ProcessImageOptions:
+  Images.ProcessImageOptions{Some{Settings.getImageAutoResize(settings)}, Maybe.bind(&2, Ai.Model<Ai.JsonValue>, Resize.ImageResizeOptions, model, found => Images.modelResizeOptions(found))}
+def hintedText(+text: String, hints: List<&2, String>) -> String:
+  match hints:
+    case Nil{}: text
+    case _: text ++ "\n\n" ++ String.join(hints, "\n")
 def userMessageAt(+text: String, images: List<&2, Ai.ImageContent>, +now: F64) -> Message():
   firstMessage(Agent.normalizePromptInputAt(Unit, Runtime.Details(), Runtime.Custom(), Agent.Text{text, images}, now), T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserText{text}, now}}})
+def normalizedUserMessage(+text: String, normalized: NormalizedImages, +now: F64) -> Message():
+  match normalized:
+    case NormalizedImages{images, hints}: userMessageAt(hintedText(text, hints), images, now)
 
 # Prompt and tool loadout
 # -----------------------
@@ -2019,9 +2051,9 @@ def runAgentPrompt(session: AgentSession, +text: String, images: List<&2, Ai.Ima
         +settings : Settings.SettingsManager <- R.read(Settings.SettingsManager,settingsRef)
         loadout : Runtime.Loadout <- R.read(Runtime.Loadout, loadoutRef)
         compactBeforePrompt(agent, shared, settings)
-        current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +now : F64 <- Date.now()
-        +user : Message() = userMessageAt(text, images, now)
+        +user : Message() = normalizedUserMessage(text, normalizePromptImages(promptImageOptions(settings, stateModel(current)), images, NormalizedImages{Nil{}, Nil{}}), now)
         patch : Maybe<&2, Message()> <- prepareLoadout(agent, loadout, stateMessages(current), now)
         setRunActive(shared, True{})
         result : Result<&2, &2, Agent.AgentError<Runtime.Error()>, Unit> <- Agent.prompt(~Unit, ~Runtime.Details(), ~Runtime.Custom(), ~Runtime.Error(), ~Unit, ~Runtime.render, ~Runtime.fromString, ~Runtime.declarationError, agent, Agent.Messages{withPatch(patch, user <> Nil{})})
@@ -2288,6 +2320,18 @@ def isRetrying(session: AgentSession) -> IO(Bool):
         state : Shared <- R.read(Shared, shared)
         return Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, sleepingOf(retryOf(state))))
 
+def attemptOfRetry(retry: RetryState) -> Nat:
+  match retry:
+    case RetryState{_, attempt, _, _}: attempt
+
+# upstream retryAttempt: the current automatic retry attempt, 0 when none.
+def retryAttempt(session: AgentSession) -> IO(Nat):
+  match session:
+    case AgentSession{_, shared, _, _, _, _, _, _}:
+      do IO<Nat>:
+        state : Shared <- R.read(Shared, shared)
+        return attemptOfRetry(retryOf(state))
+
 def abortCompaction(session: AgentSession) -> IO(Unit):
   match session:
     case AgentSession{_, shared, _, _, _, _, _, _}: abortCompactions(shared)
@@ -2303,9 +2347,10 @@ def isCompacting(session: AgentSession) -> IO(Bool):
         state : Shared <- R.read(Shared, shared)
         return hasController(compactionOf(state))
 
-# upstream abort: cancel retry sleeps and compactions, abort the agent and
-# wait until it is idle.
-def abort(session: AgentSession) -> IO(Unit):
+# The part of upstream abort() that runs before it first awaits (what an
+# unawaited `void session.abort()` does at once): mark an active run as
+# aborted, cancel retry sleeps and compactions and abort the agent.
+def requestAbort(session: AgentSession) -> IO(Unit):
   match session:
     case AgentSession{+agent, +shared, _, _, _, _, _, _}:
       do IO<Unit>:
@@ -2313,7 +2358,12 @@ def abort(session: AgentSession) -> IO(Unit):
         abortSleeping(shared)
         abortCompactions(shared)
         Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-        Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+
+# upstream abort: requestAbort, then wait until the agent is idle.
+def abort(+session: AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    requestAbort(session)
+    Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agentOf(session))
 
 def nothingToCompact(entries: List<&2, Entry()>) -> String:
   Bool.pick(String, Compaction.lastIsCompaction(Unit, Tools.ToolDetails, V.Value, entries), "Already compacted", "Nothing to compact (session too small)")
@@ -2328,14 +2378,16 @@ def compactionOutcome(aborted: Bool, result: Result<&2, &2, String, Compaction.C
     case True{}: Fail{"Compaction cancelled"}
     case False{}: result
 
-def manualEndEvent(+message: String) -> AgentSessionEvent:
-  Bool.pick(AgentSessionEvent, String.eq(message, "Compaction cancelled"), CompactionEnd{Manual{}, None{}, True{}, False{}, None{}}, CompactionEnd{Manual{}, None{}, False{}, False{}, Some{"Compaction failed: " ++ message}})
+# Whether compaction was cancelled comes from its abort signal, not from the
+# error text (de2de549b): a failure reading "Compaction cancelled" is a failure.
+def manualEndEvent(aborted: Bool, +message: String) -> AgentSessionEvent:
+  Bool.pick(AgentSessionEvent, aborted, CompactionEnd{Manual{}, None{}, True{}, False{}, None{}}, CompactionEnd{Manual{}, None{}, False{}, False{}, Some{"Compaction failed: " ++ message}})
 
-def finishManual(agent: Runtime.Owner(), +shared: R.Ref<Shared>, result: Result<&2, &2, String, Compaction.CompactionResult>) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
+def finishManual(agent: Runtime.Owner(), +shared: R.Ref<Shared>, aborted: Bool, result: Result<&2, &2, String, Compaction.CompactionResult>) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
   match result:
     case Fail{+message}:
       do IO<Result<&2, &2, String, Compaction.CompactionResult>>:
-        emit(shared, manualEndEvent(message))
+        emit(shared, manualEndEvent(aborted, message))
         return Fail{message}
     case Done{compacted}:
       do IO<Result<&2, &2, String, Compaction.CompactionResult>>:
@@ -2364,10 +2416,10 @@ def compact(session: AgentSession, customInstructions: Maybe<&2, String>) -> IO(
         +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +entries : List<&2, Entry()> <- branchEntries(shared)
         result : Result<&2, &2, String, Compaction.CompactionResult> <- manualFor(agent, shared, settings, customInstructions, A.signal(Unit, controller), entries, stateModel(current))
-        aborted : Bool <- A.aborted(Unit, A.signal(Unit, controller))
+        +aborted : Bool <- A.aborted(Unit, A.signal(Unit, controller))
         R.modify(Shared, Unit, shared, current => (setManualController(current, None{}), Unit{}))
         A.dispose(Unit, controller)
-        finishManual(agent, shared, compactionOutcome(aborted, result))
+        finishManual(agent, shared, aborted, compactionOutcome(aborted, result))
 
 def waitForIdle(session: AgentSession) -> IO(Unit):
   Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agentOf(session))
@@ -2440,11 +2492,13 @@ def navigateTree(+session: AgentSession, targetId: String) -> IO(Result<&2, &2, 
       do IO<Result<&2, &2, String, Navigation>>:
         streaming : Bool <- isStreaming(session)
         compacting : Bool <- isCompacting(session)
-        Bool.pick(Unit -> IO(Result<&2, &2, String, Navigation>), streaming || compacting,
-          _ => IO.pure(Result<&2, &2, String, Navigation>, Fail{"Wait for the current response or compaction to finish before navigating the session tree."}),
-          _ => do IO<Result<&2, &2, String, Navigation>>:
-            snapshot : Shared <- R.read(Shared, shared)
-            navigateSnapshot(agent, shared, snapshot, targetId))(Unit{})
+        Bool.pick(Unit -> IO(Result<&2, &2, String, Navigation>), streaming,
+          _ => IO.pure(Result<&2, &2, String, Navigation>, Fail{"Wait for the current response to finish before navigating the session tree."}),
+          _ => Bool.pick(Unit -> IO(Result<&2, &2, String, Navigation>), compacting,
+            _ => IO.pure(Result<&2, &2, String, Navigation>, Fail{"Wait for the current compaction or tree navigation to finish before navigating the session tree."}),
+            _ => do IO<Result<&2, &2, String, Navigation>>:
+              snapshot : Shared <- R.read(Shared, shared)
+              navigateSnapshot(agent, shared, snapshot, targetId))(Unit{}))(Unit{})
 
 def forkText(text: Maybe<&2, String>, parent: Maybe<&2, String>) -> Maybe<&2, Navigation>:
   match text:
@@ -2838,12 +2892,18 @@ def cycleModel(+session: AgentSession, direction: CycleDirection, options: Model
     cycleWithin(session, scope, available, direction, stateModel(current), options)
 
 # upstream setSessionName: record the name and notify.
+# upstream emits sessionManager.getSessionName(): the sanitized name the
+# session info entry recorded (newlines become spaces, trimmed, empty unset).
+def sessionName(state: Shared) -> Maybe<&2, String>:
+  S.getSessionName(Unit, Tools.ToolDetails, V.Value, stateOf(sharedSession(state)))
+
 def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, String, Unit>):
   match session:
     case AgentSession{_, +shared, _, _, _, _, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
         result : Result<&2, &2, String, Unit> <- recorded(shared, target => recordName(target, name))
-        emit(shared, SessionInfoChanged{Some{name}})
+        state : Shared <- R.read(Shared, shared)
+        emit(shared, SessionInfoChanged{sessionName(state)})
         return result
 
 # upstream session.promptTemplates and resourceLoader.getSkills(): the

@@ -735,12 +735,12 @@
     },
     {
       "source": "packages/ai/test/constrained-sampling.test.ts",
-      "status": "needs-review",
+      "status": "ported",
       "ports": [
         "packages/ai/test/constrained-sampling.bend"
       ],
       "sha256": "23fd75e3869712320954feb046258e94ef2962c7bc54999eb3a76dd45a3ace60",
-      "notes": "All six original named cases pass on one/four threads: strict/grammar capability conversion and fallback/rejection, unchanged tool declarations, unsafe-schema policies, grammar call/result replay, append-only grammar JSON deltas and streamed initial custom input. The public asynchronous processor receives the sample_tool-to-payload mapping; the retained start snapshot contains a, final sole tool call contains abc, concatenated emitted deltas parse to payload abc and final stop reason is toolUse. Native immutable schema builders, result values and event snapshots replace JS mutation while retaining all meaningful original assertions."
+      "notes": "All six original named cases pass on one/four threads: strict/grammar capability conversion and fallback/rejection, unchanged tool declarations, unsafe-schema policies, grammar call/result replay, append-only grammar JSON deltas and streamed initial custom input. The public asynchronous processor receives the sample_tool-to-payload mapping; the retained start snapshot contains a, final sole tool call contains abc, concatenated emitted deltas parse to payload abc and final stop reason is toolUse. Native immutable schema builders, result values and event snapshots replace JS mutation while retaining all meaningful original assertions. v0.87.1 diff reviewed (46c9de402..f07218c4d): the invalid-arguments list gained a TypeScript annotation only; no behavior change."
     },
     {
       "source": "packages/ai/test/context-estimate.test.ts",
@@ -951,12 +951,14 @@
     },
     {
       "source": "packages/ai/test/max-thinking.test.ts",
-      "status": "needs-review",
+      "status": "ported",
       "ports": [
-        "packages/ai/test/model-thinking.bend"
+        "packages/ai/test/model-thinking.bend",
+        "packages/ai/test/max-thinking-codex.bend",
+        "tests/model_catalog.test.ts"
       ],
       "sha256": "dfa570b185133172b9cdf731fc91835df38649ad12ffe37ff17fed240ca59592",
-      "notes": "Two standalone named cases are ported with original model fields/assertions: ordinary reasoning models opt in to max, and a hole between high and max clamps upward. Catalog-backed cases and Codex provider payload cases remain pending. Supplemental direct-upstream helper tests cover 212 configurations and every typed requested level; model registry/provider parity is not claimed."
+      "notes": "All cases: 'is opt-in for ordinary reasoning models' and 'supports a hole between high and max' with the original fixture models (model-thinking.bend); 'exposes xhigh and max for openai-codex/%s' (upstream body, all five v0.87.1 ids) against the native catalog and native getSupportedThinkingLevels (tests/model_catalog.test.ts); 'sends max to the Codex Responses API for %s' (gpt-5.6-sol, gpt-6-astra, gpt-6-sol, gpt-6-luna) captures the native streamSimple Codex body through onPayload, as upstream (max-thinking-codex.bend, Bun and native one/four)."
     },
     {
       "source": "packages/ai/test/message-types.test.ts",
@@ -1318,14 +1320,14 @@
     },
     {
       "source": "packages/ai/test/overflow.test.ts",
-      "status": "needs-review",
+      "status": "ported",
       "ports": [
         "tests/retry-classify.bend",
         "tests/retry_classify_check.py"
       ],
       "sha256": "f63a109436e369e32b788ec8eb3065e34cc04c6d952326f7ad6951a83506bbbd",
       "implementation": "packages/ai/src/utils/overflow.bend",
-      "notes": "All isContextOverflow and isRecoverableLength cases are in the differential corpus of tests/retry_classify_check.py, compared with the pinned overflow.ts."
+      "notes": "All isContextOverflow and isRecoverableLength cases are in the differential corpus of tests/retry_classify_check.py, compared with the pinned overflow.ts; the v0.87.1 z.ai (#9805) and Cerebras bodyless 400/413 (#9482) cases run with their exact inputs, providers and context windows and are also asserted as upstream (175 cases, Bun and native one/four)."
     },
     {
       "source": "packages/ai/test/pi-messages.test.ts",
@@ -1532,13 +1534,13 @@
     },
     {
       "source": "packages/ai/test/validation.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "packages/ai/test/plain-validation-upstream.bend",
         "packages/ai/test/plain-validation-cases-upstream.bend"
       ],
       "sha256": "26b5fee2cb64eb5df1e9accdbc478d4bc055c7110c1a66d0f01327a067e953d5",
-      "notes": "Six original named cases are ported with 24 assertions: plain-JSON primitive coercion, nullable local-reference preservation, nullable oneOf preservation, nullable union coercion, nullable arrays (native compiled checker and public validation), and invalid primitive coercions. Supplemental tests compare 285 composed outcomes, 54 complete messages and 536 acyclic local-reference outcomes/exact messages with actual validateToolArguments, and exercise native formatted rejection through agent preparation/execution. Builder-specific conversion, recursive/external references, anchors, remaining schema vocabulary and the other named cases remain pending; this is not complete validation parity."
+      "notes": "Six original named cases are ported with 24 assertions: plain-JSON primitive coercion, nullable local-reference preservation, nullable oneOf preservation, nullable union coercion, nullable arrays (native compiled checker and public validation), and invalid primitive coercions. Supplemental tests compare 285 composed outcomes, 54 complete messages and 536 acyclic local-reference outcomes/exact messages with actual validateToolArguments, and exercise native formatted rejection through agent preparation/execution. Builder-specific conversion, recursive/external references, anchors, remaining schema vocabulary and the other named cases remain pending; this is not complete validation parity. v0.87.1 diff reviewed (46c9de402..f07218c4d): the tool-call fixture gained a JsonValue cast only."
     },
     {
       "source": "packages/ai/test/xai-oauth.test.ts",
@@ -1730,14 +1732,14 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-concurrent.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "tests/agent-session.bend",
         "tests/agent_session_check.py"
       ],
       "sha256": "0c2409ec9ce8b4b060c4ecb1fd779ed3412e997f81d372fd0ddbdbbd3f1ed0ac",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'should throw when prompt() called while streaming', 'should allow steer()/followUp() while streaming' and 'should allow prompt() after previous completes' are the busy scenario of tests/agent_session_check.py with the provider held open instead of a waiting tool. Extension-origin steering, tool_call ordering with queued events and slow extension handlers remain pending."
+      "notes": "'should throw when prompt() called while streaming', 'should allow steer()/followUp() while streaming' and 'should allow prompt() after previous completes' are the busy scenario of tests/agent_session_check.py with the provider held open instead of a waiting tool. Extension-origin steering, tool_call ordering with queued events and slow extension handlers remain pending. v0.87.1 diff reviewed (46c9de402..f07218c4d): the changed case ('should persist message_end events in order with slow extension handlers' now expects the system loadout message) is not ported."
     },
     {
       "source": "packages/coding-agent/test/agent-session-dynamic-provider.test.ts",
@@ -1795,13 +1797,13 @@
     },
     {
       "source": "packages/coding-agent/test/args.test.ts",
-      "status": "needs-review",
+      "status": "ported",
       "ports": [
         "tests/cli-args.bend",
         "tests/cli_args_check.py",
         "tests/cli_args_reference.ts"
       ],
-      "notes": "All 81 pinned named cases and complete parser results pass on Bun and native one/four workers. Approved malformed-input rejection changes and remaining CLI integration are documented in tests/cli-args.md.",
+      "notes": "All 81 pinned named cases and complete parser results pass on Bun and native one/four workers. Approved malformed-input rejection changes and remaining CLI integration are documented in tests/cli-args.md. v0.87.1 diff reviewed (46c9de402..f07218c4d): the --mode describe block (valid modes, invalid and empty values, a missing value, an option not consumed as the value, an invalid value after a valid one) runs through the pinned test file: 87 named tests on Bun and native one/four.",
       "sha256": "e418975576b51f7495c5c823e9866c38afddc91dbd54577894e7f1a31511e056"
     },
     {
@@ -1847,7 +1849,7 @@
         "tests/bash-execution-width.bend"
       ],
       "sha256": "83b750fbcf7d491a36cbaf28f01c4b034c66d1d25e4b911dca4d23dfd8b6e5ba",
-      "notes": "Both cases on the port's bash message value (messages.bend bash/appendBash/completeBash/renderBash): 150-column output rendered at 80 columns, and one message rendered at 200 then 60 columns, keep every line within the render width. Bun lane."
+      "notes": "Both cases on the port's bash message value (messages.bend bash/appendBash/completeBash/renderBash): 150-column output rendered at 80 columns, and one message rendered at 200 then 60 columns, keep every line within the render width. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/block-images.test.ts",
@@ -1983,7 +1985,7 @@
     },
     {
       "source": "packages/coding-agent/test/compaction.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "packages/coding-agent/src/core/compaction/compaction.bend",
         "packages/coding-agent/src/core/compaction/utils.bend",
@@ -1991,7 +1993,7 @@
         "tests/compaction_check.py"
       ],
       "sha256": "829f29b4dc268b77baa4904c6283206ff19993f65e4503bcc1ce995be26c4b3b",
-      "notes": "Token calculation, getLastAssistantUsage, estimateContextTokens, shouldCompact, findCutPoint, buildSessionContext and prepareCompaction cases pinned to upstream expectations (tests/compaction.md). The large-session fixture and the ANTHROPIC_OAUTH_TOKEN LLM summarization cases are not ported."
+      "notes": "Token calculation, getLastAssistantUsage, estimateContextTokens, shouldCompact, findCutPoint, buildSessionContext and prepareCompaction cases pinned to upstream expectations (tests/compaction.md). The large-session fixture and the ANTHROPIC_OAUTH_TOKEN LLM summarization cases are not ported. v0.87.1 diff reviewed (46c9de402..f07218c4d): the #9740 oversized-trailing-tool-result case is in tests/compaction.bend."
     },
     {
       "source": "packages/coding-agent/test/config-value-migration.test.ts",
@@ -2312,13 +2314,15 @@
     },
     {
       "source": "packages/coding-agent/test/image-process.test.ts",
-      "status": "needs-review",
+      "status": "ported",
       "ports": [
         "tests/image-process.bend",
-        "tests/image_process_check.py"
+        "tests/image_process_check.py",
+        "tests/image-mime.bend",
+        "tests/image_mime_check.py"
       ],
       "sha256": "5519a74fccb82fdfbef288c4f40613059addcbf49c50c44999df04fe6f53f0f7",
-      "notes": "All three original BMP assertions are covered with the upstream red 1x1 BMP bytes: magic detection through the public read tool, PNG attachment/conversion hint without resizing, and conversion before default resizing. The harness runs pinned process-image source as its oracle and checks PNG magic explicitly. All three backends pass; this suite does not establish complete image codec or async-worker coverage."
+      "notes": "All three original BMP assertions are covered with the upstream red 1x1 BMP bytes: magic detection through the public read tool, PNG attachment/conversion hint without resizing, and conversion before default resizing. The harness runs pinned process-image source as its oracle and checks PNG magic explicitly. All three backends pass; this suite does not establish complete image codec or async-worker coverage. v0.87.1 diff reviewed (46c9de402..f07218c4d): 'detects the complete %s signature' (GIF87a, GIF89a) is in the tests/image_mime_check.py corpus compared with the pinned mime.ts."
     },
     {
       "source": "packages/coding-agent/test/image-processing.test.ts",
@@ -2336,21 +2340,25 @@
     },
     {
       "source": "packages/coding-agent/test/image-resize-callers.test.ts",
-      "status": "needs-review",
+      "status": "ported",
       "ports": [
         "tests/read-public.bend",
-        "tests/image_process_check.py",
+        "tests/read_public_check.py",
         "tests/file-processor.bend",
         "tests/file_processor_check.py"
       ],
       "sha256": "49913b4a056d53ed3df4686836fad1431e4e43f280c81baf049c3969e7965554",
-      "notes": "Both original caller assertions pass: public read returns text-only omission, and CLI file processing emits omission text with no image attachment. Fixtures exercise real malformed image processing instead of mocking a null resize result. Bun and optimized native one/four-thread checks pass; this suite does not establish image-worker scheduling or complete CLI parity."
+      "notes": "All four cases: public read returns text-only omission; CLI file processing emits omission text with no image attachment (real malformed images instead of a mocked null resize); v0.87.1 'passes the current model resize profile to the read tool' (pinned read tool and native tool, context model profile observed at the image processor, plus the fallback profile) and 'can defer resizing file attachments until prompt dispatch' (auto-resize off keeps an oversized PNG's bytes). Bun and native one/four."
     },
     {
       "source": "packages/coding-agent/test/initial-message.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "8b95eb212ced64c20423f7dd5ffa9a972652f6d5ab1abb205a424cff2e17b356"
+      "status": "ported",
+      "ports": [
+        "tests/initial-message.bend",
+        "packages/coding-agent/src/cli/initial-message.bend"
+      ],
+      "sha256": "8b95eb212ced64c20423f7dd5ffa9a972652f6d5ab1abb205a424cff2e17b356",
+      "notes": "All three cases on buildInitialMessage (cli/initial-message.bend, moved out of main.bend to its upstream module); the remaining messages are returned instead of shifted off parsed.messages. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/input-transform-streaming-example.test.ts",
@@ -2383,7 +2391,7 @@
         "tests/clone-command.bend"
       ],
       "sha256": "9a1a93c08797b54f8819021b6283f43ad34699faea211fa091cf8aa91176dc20",
-      "notes": "Both cases through Controller.cloneLeaf (the port's handleCloneCommand): the current leaf is forked with position 'at' and reported as ClonedSession, which the interactive run shows as 'Cloned to new session'; without a leaf there is no fork and the notice is 'Nothing to clone yet'. Not observed: upstream's editor.setText('') and the absence of renderCurrentSessionState/requestRender, which belong to the interactive run's action handling. Bun lane."
+      "notes": "Both cases through Controller.cloneLeaf (the port's handleCloneCommand): the current leaf is forked with position 'at' and reported as ClonedSession, which the interactive run shows as 'Cloned to new session'; without a leaf there is no fork and the notice is 'Nothing to clone yet'. Not observed: upstream's editor.setText('') and the absence of renderCurrentSessionState/requestRender, which belong to the interactive run's action handling. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-compaction.test.ts",
@@ -2478,7 +2486,7 @@
         "tests/thinking-level.bend"
       ],
       "sha256": "01c76a966d964388bce071842d0cefc79408d43de04cef0eddecd3033a225ed5",
-      "notes": "isValidThinkingLevel('max'), SettingsManager.inMemory with setDefaultThinkingLevel(max) and flush, and a dark theme without thinkingMax (renamed legacy-theme) painting thinkingMax like thinkingXhigh. upstream getThinkingBorderColor(level) is the interactive run's level-to-key choice plus theme.fg, so the colors of the two keys are compared; the legacy theme is parsed from the edited JSON text rather than written to a file. Bun lane."
+      "notes": "isValidThinkingLevel('max'), SettingsManager.inMemory with setDefaultThinkingLevel(max) and flush, and a dark theme without thinkingMax (renamed legacy-theme) painting thinkingMax like thinkingXhigh. upstream getThinkingBorderColor(level) is the interactive run's level-to-key choice plus theme.fg, so the colors of the two keys are compared; the legacy theme is parsed from the edited JSON text rather than written to a file. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/mermaid.test.ts",
@@ -2633,7 +2641,7 @@
     },
     {
       "source": "packages/coding-agent/test/prompt-templates.test.ts",
-      "status": "needs-review",
+      "status": "ported",
       "ports": [
         "tests/prompt-templates.bend",
         "tests/prompt_templates_check.py",
@@ -2641,7 +2649,7 @@
         "tests/prompt_templates_reference.ts"
       ],
       "sha256": "4e6a5d427a78abe7c5ed92f71600f8777fddfd0f1f0d3cb1eb0a7e8655ecd2ee",
-      "notes": "All pinned pure assertions (119 original-only captured calls) and five original argument-hint loader cases ported. Bun/native one/four pass 563 pure comparisons and seven discovery scenarios/65 templates against final shared parser. Ordered duplicates/source attribution, native IO errors and UTF16-safe description boundaries covered; strict unfinished quotes and malformed metadata return typed diagnostics. Final-dependency verification and YAML/renderer/resource integration limits are in tests/prompt-templates.md."
+      "notes": "All pinned pure assertions (119 original-only captured calls) and five original argument-hint loader cases ported. Bun/native one/four pass 563 pure comparisons and seven discovery scenarios/65 templates against final shared parser. Ordered duplicates/source attribution, native IO errors and UTF16-safe description boundaries covered; strict unfinished quotes and malformed metadata return typed diagnostics. Final-dependency verification and YAML/renderer/resource integration limits are in tests/prompt-templates.md. v0.87.1 diff reviewed (46c9de402..f07218c4d): 'loadPromptTemplates - diagnostics / reports invalid YAML frontmatter and keeps valid siblings' runs on the native and pinned loaders in tests/prompt_templates_load_check.py (the YAML module now reports a block mapping value's error at the value's column, line 1, column 14); the other changes destructure the new { templates } result."
     },
     {
       "source": "packages/coding-agent/test/radius.test.ts",
@@ -2667,7 +2675,7 @@
     },
     {
       "source": "packages/coding-agent/test/resource-loader.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "tests/project-context.bend",
         "tests/project_context_check.py",
@@ -2677,7 +2685,7 @@
       ],
       "sha256": "1ebd3d0a1f10f0a2dec6fdbab7a75bc8c85c681190bcba1ae9e3d6b2a68b2f6d",
       "implementation": "packages/coding-agent/src/core/resource-loader.bend",
-      "notes": "All nine named nested-worktree context tests retain their original assertions and exact results; candidate-precedence/directory-skip context assertions also have direct coverage. Bun/native one/four pass 32 full context/Git comparisons and strict UTF8 fallback, including 70 ancestor levels and 180 KB content. The real agent-runtime prompt boundary uses this loader and checks layering, shadowing, the no-context flag and warning fallback. Resource orchestration, extensions/themes/packages, trust/reload, and prompt overrides remain pending; see tests/project-context.md."
+      "notes": "All nine named nested-worktree context tests retain their original assertions and exact results; candidate-precedence/directory-skip context assertions also have direct coverage. Bun/native one/four pass 32 full context/Git comparisons and strict UTF8 fallback, including 70 ancestor levels and 180 KB content. The real agent-runtime prompt boundary uses this loader and checks layering, shadowing, the no-context flag and warning fallback. Resource orchestration, extensions/themes/packages, trust/reload, and prompt overrides remain pending; see tests/project-context.md. v0.87.1 diff reviewed (46c9de402..f07218c4d): 'should report invalid prompt frontmatter while loading valid siblings' is pending: DefaultResourceLoader's prompt aggregation (getPrompts with diagnostics) is not ported; the loader's diagnostic itself is checked by the prompt-templates suite."
     },
     {
       "source": "packages/coding-agent/test/restore-sandbox-env.test.ts",
@@ -2750,7 +2758,7 @@
         "tests/theme-fallbacks.bend"
       ],
       "sha256": "d25755cee45f4705f53d1d4cc129e06455fe9385f863bf8b008c623386c62f7f",
-      "notes": "All five cases (both it.each fallback rows, explicit scrollbar colors, search-highlight fallback and explicit colors) on edited dark.json themes in truecolor mode; getFgAnsi/getBgAnsi read the theme's escape maps. The edited JSON text goes through Theme.parse instead of a written file. Bun lane."
+      "notes": "All five cases (both it.each fallback rows, explicit scrollbar colors, search-highlight fallback and explicit colors) on edited dark.json themes in truecolor mode; getFgAnsi/getBgAnsi read the theme's escape maps. The edited JSON text goes through Theme.parse instead of a written file. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/sdk-openrouter-attribution.test.ts",
@@ -2851,7 +2859,7 @@
     },
     {
       "source": "packages/coding-agent/test/session-manager/file-operations.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "tests/session-file.bend",
         "tests/session_file_check.py",
@@ -2859,7 +2867,7 @@
       ],
       "sha256": "b43bca02bb2769161f5fb41d7000499d4c9b2e98e9ff1a69b9861281fa948b49",
       "implementation": "packages/coding-agent/src/core/session-persistence.bend",
-      "notes": "All loadEntriesFromFile, header discovery, scan-limit, findMostRecentSession, flat custom directory and corrupted-file cases pass on Bun and native one/four threads against the pinned SessionManager. Pending: 'opens session files larger than Node's max string length' (a JavaScript string-limit case with a 512 MiB sparse file). See tests/session-persistence.md."
+      "notes": "All loadEntriesFromFile, header discovery, scan-limit, findMostRecentSession, flat custom directory, corrupted-file and v0.87.1 'rejects a cancelled session listing' cases pass on native one/four threads against the pinned SessionManager, with a native listing-order scenario (collation file order, newest mtimeMs first). Pending: 'opens session files larger than Node's max string length' (a JavaScript string-limit case with a 512 MiB sparse file). See tests/session-persistence.md."
     },
     {
       "source": "packages/coding-agent/test/session-manager/labels.test.ts",
@@ -2951,9 +2959,13 @@
     },
     {
       "source": "packages/coding-agent/test/settings-diagnostics.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9917a7f5cd35ac5c42fc7277920c1d5ea3f706f29593a4aa1ab9e80d7ce95d9e"
+      "status": "ported",
+      "ports": [
+        "tests/settings-diagnostics.bend",
+        "packages/coding-agent/src/core/settings-diagnostics.bend"
+      ],
+      "sha256": "9917a7f5cd35ac5c42fc7277920c1d5ea3f706f29593a4aa1ab9e80d7ce95d9e",
+      "notes": "All three cases on core/settings-diagnostics.bend (moved out of main.bend to its upstream module): a malformed settings file gives one warning naming the file, storage without paths names the scope ('Invalid global settings: backend failed'), and deduplication keeps the first of each type and message. The diagnostic's `type` field is `kind`. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/settings-manager-bug.test.ts",
@@ -2983,7 +2995,7 @@
     },
     {
       "source": "packages/coding-agent/test/settings-manager.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "packages/coding-agent/src/core/settings-manager.bend",
         "tests/settings-manager.bend",
@@ -2993,7 +3005,7 @@
         "tests/settings-cache-warming.bend"
       ],
       "sha256": "9174509b95e92feaf18cb5adf77e601c5c631c5b875eca5906c949653f3edbe3",
-      "notes": "Canonical typed manager integrated; 203 pinned-source comparisons, 60 strict-input checks, analytics UUID lifecycle and 16 filesystem/concurrency checks. Named contracts and approved strict-input adaptations are recorded in tests/settings-manager.md. Suite remains partial until assertion-by-assertion coverage is audited; CLI/session integration is separate. The 0.87.1 describe('cacheWarming') cases run natively in tests/settings-cache-warming.bend on real files; an unknown cacheWarming value stays an unknown field (upstream reads it unvalidated and falls back to streaming) instead of failing the strict decoder."
+      "notes": "Canonical typed manager integrated; 203 pinned-source comparisons, 60 strict-input checks, analytics UUID lifecycle and 16 filesystem/concurrency checks. Named contracts and approved strict-input adaptations are recorded in tests/settings-manager.md. Suite remains partial until assertion-by-assertion coverage is audited; CLI/session integration is separate. The 0.87.1 describe('cacheWarming') cases run natively in tests/settings-cache-warming.bend on real files; an unknown cacheWarming value stays an unknown field (upstream reads it unvalidated and falls back to streaming) instead of failing the strict decoder. v0.87.1 diff reviewed (46c9de402..f07218c4d): the cacheWarming cases run in tests/settings-cache-warming.bend."
     },
     {
       "source": "packages/coding-agent/test/settings-selector.test.ts",
@@ -3057,7 +3069,7 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-compaction.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "packages/coding-agent/src/core/agent-session.bend",
         "packages/coding-agent/src/core/compaction/compaction.bend",
@@ -3067,29 +3079,29 @@
         "tests/agent-session.md"
       ],
       "sha256": "a20cd44a3a24debefc9eba72fb9ab07033221de0c6075e67e40081074829da02",
-      "notes": "Faux-provider scenarios cover persisted manual compaction usage, abortCompaction and abort() waiting for idle, one overflow compact-and-retry, the recovery-failed report, threshold compaction, and no compaction below the threshold or when disabled. Extension-provided summaries, system-state checkpoints, queued prompts during compaction, auth/model-override cases, length-stop recovery and the _checkCompaction boundary cases with stale or error usage are not ported."
+      "notes": "Faux-provider scenarios cover persisted manual compaction usage, abortCompaction and abort() waiting for idle, one overflow compact-and-retry, the recovery-failed report, threshold compaction, and no compaction below the threshold or when disabled. Extension-provided summaries, system-state checkpoints, queued prompts during compaction, auth/model-override cases, length-stop recovery and the _checkCompaction boundary cases with stale or error usage are not ported. v0.87.1 diff reviewed (46c9de402..f07218c4d): the changed cases (the #9652 split-turn request boundary and 'compacts after an oversized tool result in the same run') are not ported."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-model-extension.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "tests/agent-session.bend",
         "tests/agent_session_check.py"
       ],
       "sha256": "0b1a86e5b1beb1824867a05029a7e6cfd3ad31b8173e6eb13b94bf09ce934a52",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'setModel saves the model to the session' (entry) and 'clamps thinking levels to model capabilities' (clamp) are the mutate scenario of tests/agent_session_check.py; model_select, cycling, per-model overrides, settings persistence and extension handlers remain pending."
+      "notes": "'setModel saves the model to the session' (entry) and 'clamps thinking levels to model capabilities' (clamp) are the mutate scenario of tests/agent_session_check.py; model_select, cycling, per-model overrides, settings persistence and extension handlers remain pending. v0.87.1 diff reviewed (46c9de402..f07218c4d): the tool-result details check gained a JsonObject narrowing only."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-prompt.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "tests/agent-session.bend",
         "tests/agent_session_check.py"
       ],
       "sha256": "51130e6ca7339ff3a6d09cb244533a9c4a82b8251dc1a62b03f2870bb77ecced",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'prompts while idle and records a single text response' (persist scenario) and 'throws when prompted during streaming without a streamingBehavior' (busy scenario, provider held on a gate) are in tests/agent_session_check.py. Tool-call turns, image attachments, skills/prompt templates, extension commands, input handlers, manual compaction and the no-model/no-auth errors remain pending."
+      "notes": "'prompts while idle and records a single text response' (persist scenario), 'throws when prompted during streaming without a streamingBehavior' (busy scenario) and, adapted, v0.87.1's 'uses the model selected by before_agent_start for image normalization' (images scenario: the model is switched with setModel because before_agent_start is not ported; real processing, the strict model's maxWidth shrinks the stored image) are in tests/agent_session_check.py. Tool-call turns, skills/prompt templates, extension commands, input handlers, manual compaction and the no-model/no-auth errors remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-queue.test.ts",
@@ -3104,14 +3116,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-retry-events.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "tests/agent-session.bend",
         "tests/agent_session_check.py"
       ],
       "sha256": "6093646e00ca0bbf9b070ec189e4caa08567baba80897e0177854e3dc31a8734",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "The six retry cases (transient success, multiple failures, exhausted budget, disabled, non-retryable, abortRetry cancellation) are the retry scenarios of tests/agent_session_check.py over a faux provider. Delayed message_end handling, tool-call recovery, extension event ordering, the event-order characterizations, message_update deltas and aborted runs remain pending."
+      "notes": "The six retry cases (transient success, multiple failures, exhausted budget, disabled, non-retryable, abortRetry cancellation) and v0.87.1's 'finalizes retry state when abort is requested after a retry attempt fails' are the retry scenarios of tests/agent_session_check.py over a faux provider. Delayed message_end handling, tool-call recovery, extension event ordering, the event-order characterizations, message_update deltas and aborted runs remain pending."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-runtime.test.ts",
@@ -3326,7 +3338,7 @@
         "tests/models-json.bend"
       ],
       "sha256": "0ffc9a48b0f980339bd8748d7064ea2e832e7a817441de29f68ad94695ac7149",
-      "notes": "Registry half: a models.json provider with apiKey CUSTOM_API_KEY and header Authorization: BEARER, with both names set in the environment, resolves the literal key and header (differential fixture against upstream's ModelRuntime plus the literal auth). Pending: the startup-migration half, since runMigrations (migrations.ts) is not ported."
+      "notes": "Registry half: a models.json provider with apiKey CUSTOM_API_KEY and header Authorization: BEARER, with both names set in the environment, resolves the literal key and header (differential fixture against upstream's ModelRuntime plus the literal auth; Bun and native four threads). Pending: the startup-migration half, since runMigrations (migrations.ts) is not ported."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5724-sigterm-signal-exit.test.ts",
@@ -3348,9 +3360,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5996-session-name-newlines.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2d95a395a3ef2bbe1847908b0066dd3745ef691685e07b29bf6520f3ff8a65a4"
+      "status": "partial",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend"
+      ],
+      "sha256": "2d95a395a3ef2bbe1847908b0066dd3745ef691685e07b29bf6520f3ff8a65a4",
+      "notes": "'filters newlines when AgentSession.setSessionName is called' passes: the session name and the session_info_changed event are 'hello world again'. Pending: the extension case (pi.setSessionName), which the native extension API does not expose yet. Bun and native (tests/regressions.bend, 1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5998-blocked-tool-terminate.test.ts",
@@ -3704,9 +3720,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9340-9777-auto-compaction-cancellation.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "7e1894d5f9c014b61c1cbce24981910bb26c356f834ae42b461a8fa4008cbaf1"
+      "status": "partial",
+      "ports": [
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "7e1894d5f9c014b61c1cbce24981910bb26c356f834ae42b461a8fa4008cbaf1",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "'does not start post-run auto-compaction after abort' (without the extension handler, plus a control run), 'cancels synchronously from compaction_start' and 'reports matching error text as a failure' (failure raised by the summarization request instead of getAuth) run in tests/agent_session_check.py. Pending: 'cancels summarization authentication' (no abort signal for getAuth), the unrelated AbortError variant and 'reports extension cancellation as aborted' (extension compaction hooks). See tests/agent-session.md."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9540-extension-loader-lazy.test.ts",
@@ -3745,9 +3766,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/tree-during-streaming.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "1b37324e37da5a293e598ff1912e5e56b3e30212cf87afe0c351db04c75e4023"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "1b37324e37da5a293e598ff1912e5e56b3e30212cf87afe0c351db04c75e4023",
+      "notes": "Navigation while the response is held at the provider fails with upstream's message and leaves the active leaf unchanged; the prompt then completes. The request is held at a gate instead of navigating from inside the response factory. Bun and native (tests/regressions.bend, 1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/syntax-highlight.test.ts",
@@ -3833,7 +3859,7 @@
         "tests/thinking-level.bend"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun lane."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",
@@ -3920,7 +3946,7 @@
         "tests/truncate-to-width.bend"
       ],
       "sha256": "e7f65fa6d913a8d51f74a65f08765a82b2115922a877b3b651cf124a36a977fa",
-      "notes": "All six cases on pi-tui's truncateToWidth (default ellipsis '...', no padding) and visibleWidth in packages/tui/src/utils.bend. Bun lane."
+      "notes": "All six cases on pi-tui's truncateToWidth (default ellipsis '...', no padding) and visibleWidth in packages/tui/src/utils.bend. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/trust-manager.test.ts",
@@ -3938,7 +3964,7 @@
         "tests/trust-selector.bend"
       ],
       "sha256": "60b57f95ad14919ef0184bf232a7487c11bb5fcceb45258a40663df39d3f6496",
-      "notes": "All four cases on the selector state over getProjectTrustOptions: saved-decision mark while browsing, a confirmed selection's trusted flag and updates, inherited ancestor decisions, and the parent option's selection. Rendered with the dark theme and ANSI stripped. Bun lane."
+      "notes": "All four cases on the selector state over getProjectTrustOptions: saved-decision mark while browsing, a confirmed selection's trusted flag and updates, inherited ancestor decisions, and the parent option's selection. Rendered with the dark theme and ANSI stripped. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/user-message.test.ts",

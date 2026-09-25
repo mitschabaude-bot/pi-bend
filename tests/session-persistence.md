@@ -11,10 +11,15 @@
 - An object that parses as JSON but does not decode as a session entry is skipped like a malformed line; upstream would carry it untyped.
 - Usage members `totalTokens` and `cost` absent from sessions written before they existed read as zero.
 - `inMemory` with typed entries cannot carry a `hookMessage` role; the v2-header case is checked through the header version and entry ids, and the headerless `hookMessage` case is not representable.
-- Session listings summarize files one after another; upstream loads ten concurrently. Each file is now folded one JSONL record at a time, so listing does not also retain a full decoded file and a parsed-value list.
+- Session listings summarize files one after another; upstream loads ten concurrently (and discovers directories and stats files 64 at a time). Each file is folded one JSONL record at a time, so listing does not also retain a full decoded file and a parsed-value list. Cancellation (`listProgress`/`listAllProgress`/`listObserved`/`listAllObserved` with an abort signal) is checked before each directory, stat and file; upstream also stops a read in progress. An aborted listing fails with the signal's reason, as upstream rejects with it.
+- File names are ordered with `localeCompare` upstream. The port compares them with the ICU root collation of the installed runtime data (`loadFileOrder(packageDir)`, `packages/runtime/src/collation.bend`), which callers pass in as a `FileOrder`; without that data it falls back to code-point order, as the ls tool does.
 - Session ids are validated by a character walk equivalent to `/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/`; short entry ids are eight hex digits from four OS-random bytes, collision-checked against the index, with a UUIDv7 after 100 collisions, as upstream.
 
 ## Primitives
+
+## Discovery and listing (v0.87.1)
+
+`findMostRecentSession` stats every `.jsonl` candidate first (`Stats.mtimeMs`, sub-millisecond, `FS.modifiedExact`), sorts newest first and returns the first whose header matches; a failed stat (a dangling link) makes discovery unavailable (dd01f5b24). `list` loads a directory's files in reverse name order; `listAll` gathers every project directory's files, stats them, and loads newest `mtimeMs` first (unstat'ed files last, ties by reverse name), so the first progress snapshots hold the recent sessions (dfbf793b7). Progress reports every file; the first, every tenth (current directory, or a custom directory) or hundredth (all projects) and the last also carry the sessions loaded so far, sorted by activity. Nothing is reported for an empty directory. Sessions of equal activity keep their load order in snapshots and results. `main`'s `--session`/`--fork` argument tries the exact id through the session headers (`findById`) first, then a prefix among the project's sessions, then an exact id or prefix across all projects.
 
 Modification times come from `File.modified_time` (native-tls's `bend-file-lock-effects.patch`, signed seconds and nanoseconds), rounded to milliseconds as Node's `Stats.mtime.getTime()` by `FS.modified`, including pre-epoch times; the file-operations scenario checks sub-millisecond ordering (999.4 ms versus 999.6 ms round apart) and a pre-epoch file against the pinned SessionManager. `FS.appendFile` and `FS.writeFileExclusive` wrap the existing open modes.
 
@@ -22,7 +27,7 @@ Modification times come from `File.modified_time` (native-tls's `bend-file-lock-
 
 `tests/session_file_reference.ts` drives the actual pinned `SessionManager` with JSON operations; `tests/session-file.bend` answers the same operations through the port; `tests/session_file_check.py` writes the fixture files, runs both, asserts the upstream expectations on each, and compares the two result streams after normalizing generated ids, timestamps and timestamped file names.
 
-Ported by name: file-operations.test.ts (`loadEntriesFromFile` ×9, header discovery ×3, the scan-limit cases, `findMostRecentSession` ×9, the flat custom directory case, `setSessionFile` with corrupted files ×5), load-entries.test.ts (13 of 14; "adopts headerless entries as current-version without migrating them" is not representable), migration.test.ts (2), save-entry.test.ts (1), custom-session-id.test.ts (13) and session-info-modified-timestamp.test.ts (1). "opens session files larger than Node's max string length" writes a 512 MiB sparse file to exercise a JavaScript string limit and is not ported.
+Ported by name: file-operations.test.ts (`loadEntriesFromFile` ×9, header discovery ×3, the scan-limit cases, `findMostRecentSession` ×9, the flat custom directory case, "rejects a cancelled session listing" (abort on the first partial result, then a listing with the aborted signal), `setSessionFile` with corrupted files ×5), load-entries.test.ts (13 of 14; "adopts headerless entries as current-version without migrating them" is not representable), migration.test.ts (2), save-entry.test.ts (1), custom-session-id.test.ts (13) and session-info-modified-timestamp.test.ts (1). "opens session files larger than Node's max string length" writes a 512 MiB sparse file to exercise a JavaScript string limit and is not ported.
 
 ```sh
 build/bend-process-files/bend2/main.ts tests/session-file.bend -o build/session-file.js
@@ -31,6 +36,8 @@ python3 tests/session_file_check.py --runner build/session-file.js
 python3 tests/session_file_check.py --runner build/session-file --threads 1
 python3 tests/session_file_check.py --runner build/session-file --threads 4
 ```
+
+The `listing-order` scenario (native addition) checks the v0.87.1 order against the pinned `SessionManager`: names whose collation order differs from code-point order (`b`/`B`/`Z`, `a_1`/`a-1`/`a1`, `10`/`9`, `_x`, `ä`) in a custom directory, and across projects newest `mtimeMs` first, with 0.2 ms apart ordered and an equal time broken by reverse collation (`same-B` before `same-a`). A second findMostRecentSession case orders 999.4 ms before 999.2 ms, which rounding to milliseconds would tie. 398 operations agree on native one/four threads (2026-09-25). The Bun lane still overflows its stack on the oversized-header fixture (see above), so this check runs natively. Set `PI_MONO` when running from a worktree outside the main checkout's parent.
 
 ## CLI
 

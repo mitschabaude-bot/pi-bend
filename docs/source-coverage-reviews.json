@@ -52,10 +52,10 @@
     },
     "packages/coding-agent/src/core/agent-session.ts": {
       "state": "partial",
-      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; full upstream session and extension integration behavior remains unverified.",
+      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal, and prompt images are normalized with the current model's resize profile (f5c946480) without the before_agent_start event or tool-result image normalization. Full upstream session and extension integration behavior remains unverified.",
       "source_sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7",
       "port_sha256": {
-        "packages/coding-agent/src/core/agent-session.bend": "2349731d41f93b319e5dcec73e1fe15aa876cf17b0e61479da6ad28d6c6636ab"
+        "packages/coding-agent/src/core/agent-session.bend": "9c950d25726ba93721a0d0163c5a53af7b3e7c86bb4328b100bcd06b4568b90d"
       }
     },
     "packages/coding-agent/src/core/session-manager.ts": {
@@ -76,10 +76,10 @@
     },
     "packages/coding-agent/src/core/tools/read.ts": {
       "state": "partial",
-      "note": "Native text read and live model context are wired; image reading and full upstream behavior remain open.",
+      "note": "Native text and image reading with live model context are wired: the non-vision note and the context model's image resize profile (else the tool's own resizeOptions, v0.87.1) reach native image processing. Background image-worker scheduling and full upstream behavior remain open.",
       "source_sha256": "297d26092979651091f44de8862a6fd55aaf59e7252f8fb8dd3d7cb3f9771518",
       "port_sha256": {
-        "packages/coding-agent/src/core/tools/read.bend": "2d6d4ca43c391f27a45f68f456df033ed204f3e3e2bbe0a01ad4303e4dc09936"
+        "packages/coding-agent/src/core/tools/read.bend": "b0bb2888475e05a40aa6753783f9417a4bd50857f2a8836bf2c66f4da37cbf5f"
       }
     },
     "packages/coding-agent/src/core/tools/edit.ts": {
@@ -145,7 +145,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "fcf7c82b2b25c2084ff19a4d70f7525b75884418b27438c80b86575a68833d00",
         "packages/coding-agent/src/modes/interactive/commands.bend": "8449a234b3cc969830d79b4462042968060562ee619a8b4e3c7ff2dba814265a",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "14557c415d7d4b0dd3c2d6921ce0f3dbd7b1717f23db27fdd8657b1e3d5eb547",
-        "packages/coding-agent/src/main.bend": "01410adc82ed2d2cae836504662a63e14c88051321d081dac8c907ad20da3535"
+        "packages/coding-agent/src/main.bend": "99011f58ca1281916d8542b42366cdbacf3dbf2374e4a8b58a75d6f333ed7589"
       }
     },
     "packages/tui/src/editor-component.ts": {
@@ -280,13 +280,13 @@
     },
     "packages/coding-agent/src/modes/interactive/components/session-selector.ts": {
       "state": "partial",
-      "note": "The native /resume picker lists sessions and supports interactive rename, checked against terminal parity. Selected-title ANSI styling differs; broader loading, sorting, deletion, mouse and cancellation behavior has not been fully reviewed.",
+      "note": "The native /resume picker lists sessions and supports interactive rename, checked against terminal parity. The startup picker loads progressively from cancellable listings (a cancelled load leaves its rows). Selected-title ANSI styling differs; broader loading, sorting, deletion, mouse and cancellation behavior has not been fully reviewed.",
       "ports": [
         "packages/coding-agent/src/cli/session-picker.bend"
       ],
       "source_sha256": "8d8744ed7ba79d04fbc5e2fac16ef38083ba2d1e871d12a1a2460faa27e29f27",
       "port_sha256": {
-        "packages/coding-agent/src/cli/session-picker.bend": "4971f9ba65525a119e6daf31a08771b4c77fe2bc3588ba5e43ed275bc0844e20"
+        "packages/coding-agent/src/cli/session-picker.bend": "e4cd4b1811b9b02c35b354328097285aa59a892a1b6d985d7ec74cce1ffd90c6"
       }
     },
     "packages/tui/src/layout-node.ts": {
@@ -373,6 +373,22 @@
       "source_sha256": "37608848ca7b72707437aed9627a612eadf570c57a54b1c86972c3532918298c",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "0c737271d450ee75f0801a4ad03168b129dad23650ceae8cf63f239e51122a05"
+      }
+    },
+    "packages/coding-agent/src/cli/initial-message.ts": {
+      "state": "ported",
+      "note": "buildInitialMessage: stdin content (when present), non-empty @file text and the first CLI message join into the initial prompt; the remaining messages are returned instead of shifted off parsed.messages. main.bend passes its result to print and interactive startup. tests/initial-message.bend ports initial-message.test.ts.",
+      "source_sha256": "b9df15ffa8769bf419c411cd152c8b807dd0bc2997b6ed3638c2f02376a9b43f",
+      "port_sha256": {
+        "packages/coding-agent/src/cli/initial-message.bend": "41596d9ca9991e0f70bd3296b4305d8228d6a3410e814ea65b86eac9a4d14cd3"
+      }
+    },
+    "packages/coding-agent/src/core/settings-diagnostics.ts": {
+      "state": "ported",
+      "note": "collectSettingsDiagnostics drains the manager's load errors into warnings with the file path, or the scope when storage has none, and returns the drained manager; deduplicateDiagnostics keeps the first of each type and message. AgentSessionRuntimeDiagnostic (agent-session-services.ts) lives here with `type` renamed `kind`. Error messages are the port's typed settings errors rendered as text. main.bend reports startup settings diagnostics through them. tests/settings-diagnostics.bend ports settings-diagnostics.test.ts.",
+      "source_sha256": "8ef3554ff841468a2493d9bab2754aa7a305471ea5754e54efccc363fe0dd0e1",
+      "port_sha256": {
+        "packages/coding-agent/src/core/settings-diagnostics.bend": "405a62a513984a20e20f45366bcd966dc78090f082ca51e3ab31b59948a8e56c"
       }
     }
   }

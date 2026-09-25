@@ -9,7 +9,7 @@ let current = '';
 const suites: string[] = [];
 function describe(name: string,body:()=>void) { suites.push(name); body(); suites.pop(); }
 function test(name: string,body:()=>void) { current=[...suites,name].join(' / '); names.push(current); body(); }
-(test as any).each=(values:any[]) => (name:string,body:(value:any)=>void) => { for(const value of values) test(name.replace("%s",String(value)),()=>body(value)); };
+(test as any).each=(values:any[]) => (name:string,body:(value:any)=>void) => { for(const value of values) test(name.replace("%s",String(value)).replace("%j",JSON.stringify(value)),()=>body(value)); };
 function match(actual:any,wanted:any) { for (const [key,value] of Object.entries(wanted)) assert.deepEqual(actual[key],value); }
 function expect(value:any) { return {
   toBe:(wanted:any)=>assert.strictEqual(value,wanted),

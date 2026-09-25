@@ -3,7 +3,7 @@
 Scenario names cite the upstream tests whose assertions they port
 (suite/agent-session-runtime.test.ts, agent-session-runtime-events.test.ts, agent-queues).
 """
-import argparse, json, os, subprocess, tempfile
+import argparse, base64, json, os, struct, subprocess, tempfile, zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,6 +47,34 @@ def types(events):
 
 OVERFLOW = '!prompt is too long: 213462 tokens > 200000 maximum'
 KEEP_RECENT = {'compaction': {'keepRecentTokens': 1}}
+
+def png(width, height):
+    def chunk(kind, data): return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
+    rows = b''.join(b'\0' + b''.join(bytes([(x * 7) % 256, (y * 13) % 256, 90, 255]) for x in range(width)) for y in range(height))
+    return b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 6, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b'')
+
+def image_size(block):
+    data = base64.b64decode(block['data'])
+    if data.startswith(b'\x89PNG'): return struct.unpack('>II', data[16:24])
+    index = 2
+    while index < len(data):
+        marker, length = data[index + 1], struct.unpack('>H', data[index + 2:index + 4])[0]
+        if marker in (0xc0, 0xc1, 0xc2): height, width = struct.unpack('>HH', data[index + 5:index + 9]); return width, height
+        index += 2 + length
+    raise AssertionError('no image size')
+
+def image_checks(runner, threads, work):
+    # uses the model selected by before_agent_start for image normalization (agent-session-prompt.test.ts, #9631):
+    # a 1100 px wide image stays 1100 px under the default profile and shrinks to the strict model's 1000 px.
+    os.environ.setdefault('PI_FAUX_API_KEY', 'faux-key')  # both faux models need auth to be selectable
+    events = run_configured(runner, threads, work, {}, 'images', base64.b64encode(png(1100, 4)).decode())
+    assert [e['type'] for e in events if e['type'] in ('prompt_done', 'set_strict')] == ['prompt_done', 'set_strict', 'prompt_done'], events
+    users = [m for m in only(events, 'messages')['messages'] if m['role'] == 'user']
+    images = [[b for b in m['content'] if b['type'] == 'image'] for m in users]
+    texts = [''.join(b['text'] for b in m['content'] if b['type'] == 'text') for m in users]
+    assert [len(i) for i in images] == [1, 1] and image_size(images[0][0]) == (1100, 4) and image_size(images[1][0]) == (1000, 4), [image_size(i[0]) for i in images]
+    assert texts[0] == 'inspect' and texts[1].startswith('inspect\n\n') and '1100x4' in texts[1], texts
+    return 3
 
 def compaction_checks(runner, threads, work):
     checks = 0
@@ -163,6 +191,26 @@ def compaction_checks(runner, threads, work):
     assert end['reason'] == 'threshold' and end['willRetry'] is False and end['result']['tokensBefore'] == 5000, end
     assert [m['role'] for m in only(events, 'messages')['messages']] == ['compactionSummary', 'assistant', 'user', 'assistant'], 'the follow-up turn runs on the compacted context'
     assert only(events, 'last_assistant_text')['text'] == 'a2' and only(events, 'remaining')['count'] == 0
+    checks += 4
+    # automatic compaction cancellation regressions (suite/regressions/9340-9777-auto-compaction-cancellation.test.ts)
+    # does not start post-run auto-compaction after abort (#9340). Upstream also cancels compaction from a
+    # session_before_compact extension handler; extension compaction hooks are not ported, so the control
+    # run below shows that the same error turn compacts without the abort.
+    error_turn = dict(threshold, retry={'enabled': False})
+    big = 'z' * 5000
+    events = run_compact(runner, threads, work, error_turn, 'one;' + big, 'a1#10;!Synthetic network failure;summary;prefix;unused', 'none')
+    assert only(events, 'compaction_start')['reason'] == 'threshold', 'control: the failed turn crosses the threshold'
+    events = run_compact(runner, threads, work, error_turn, 'one;' + big, 'a1#10;!Synthetic network failure;summary;prefix;unused', 'abort_on_error')
+    assert not [e for e in events if e['type'] == 'compaction_start'] and only(events, 'remaining')['count'] == 3, events
+    # cancels synchronously from compaction_start (#9777): no summarization request, reported as aborted
+    events = run_compact(runner, threads, work, threshold, 'one;two', 'a1;a2#5000;history summary;prefix summary', 'cancel_on_start')
+    end = only(events, 'compaction_end')
+    assert end['aborted'] is True and 'errorMessage' not in end and only(events, 'remaining')['count'] == 2, end
+    # reports matching error text as a failure (#9777): a failure reading "Compaction cancelled" is not a cancellation
+    # (upstream rejects getAuth; here the summarization request fails with that text)
+    events = run_compact(runner, threads, work, threshold, 'one;two', 'a1;a2#5000;!Compaction cancelled;unused', 'none')
+    end = only(events, 'compaction_end')
+    assert end['aborted'] is False and 'Compaction cancelled' in end['errorMessage'], end
     checks += 4
     # does not trigger threshold compaction below the threshold or when disabled
     events = run_compact(runner, threads, work, threshold, 'one', 'a1#10;unused', 'none')
@@ -374,9 +422,16 @@ def main():
     assert [e for e in events if e['type'] == 'auto_retry_end'][0]['finalError'] == 'Retry cancelled'
     assert [e for e in events if e['type'] == 'remaining'][0]['count'] == 1 and [e for e in events if e['type'] == 'retrying'][0]['value'] is False
     checks += 3
+    # finalizes retry state when abort is requested after a retry attempt fails (#9340): abort() is requested, not awaited, from the second failure's message_end
+    events = run_retry(runner, args.threads, work, {'enabled': True, 'maxRetries': 3, 'baseDelayMs': 0}, '!overloaded_error;!overloaded_error', 'abort_second_error')
+    assert only(events, 'retry_attempt')['value'] == 0
+    assert [e['willRetry'] for e in events if e['type'] == 'agent_end'][-1] is False
+    assert {k: v for k, v in [e for e in events if e['type'] == 'auto_retry_end'][-1].items() if k != 'type'} == {'success': False, 'attempt': 1, 'finalError': 'Retry cancelled'}
+    checks += 3
     checks += bash_checks(runner, args.threads, work)
     checks += expand_checks(runner, args.threads, work)
     checks += compaction_checks(runner, args.threads, work)
+    checks += image_checks(runner, args.threads, work)
     print('agent-session: %d checks passed' % checks)
 
 if __name__ == '__main__':

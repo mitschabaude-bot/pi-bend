@@ -1,5 +1,7 @@
 import Base
 import ./cli/args.bend as Args
+import ./cli/initial-message.bend as Initial
+import ./core/settings-diagnostics.bend as SettingsDiagnostics
 import ./cli/auth-login.bend as AuthLogin
 import ./cli/file-processor.bend as Files
 import ./cli/list-models.bend as ModelList
@@ -36,12 +38,12 @@ import ../../runtime/src/utf8.bend as Utf8
 import ../../runtime/src/posix-path.bend as Path
 import ../../runtime/src/url.bend as URL
 import ../../runtime/src/schema-value.bend as V
-import ../../runtime/src/json.bend as Decode
 import ../../runtime/src/callback.bend as Callback
 import ../../runtime/src/ref.bend as Ref
 import ../../runtime/src/string.bend as Strings
 import ../../runtime/src/record.bend as Record
 import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/case-map.bend as CaseMap
 
 # The pi entry point: argument parsing, mode selection, session selection,
 # initial message assembly, runtime creation and exit behavior. Extensions
@@ -95,25 +97,6 @@ def readPipedStdin(stdinTty: Bool) -> IO(Maybe<&2, String>):
       do IO<Maybe<&2, String>>:
         bytes : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile("/dev/stdin")
         return trimmed(bytes)
-
-type InitialMessage is Data:
-  InitialMessage{text: Maybe<&2, String>, images: List<&2, Ai.ImageContent>, remaining: List<&2, String>}
-
-def joined(parts: List<&2, String>) -> Maybe<&2, String>:
-  match parts:
-    case Nil{}: None{}
-    case values: Some{String.join(values, "")}
-
-def optionalPart(value: Maybe<&2, String>, +rest: List<&2, String>) -> List<&2, String>:
-  match value:
-    case None{}: rest
-    case Some{text}: text <> rest
-
-# stdin content, @file text and the first CLI message form the initial prompt.
-def buildInitialMessage(+stdin: Maybe<&2, String>, +fileText: Maybe<&2, String>, +images: List<&2, Ai.ImageContent>, messages: List<&2, String>) -> InitialMessage:
-  match messages:
-    case Nil{}: InitialMessage{joined(optionalPart(stdin, optionalPart(fileText, Nil{}))), images, Nil{}}
-    case first <> rest: InitialMessage{joined(optionalPart(stdin, optionalPart(fileText, [first]))), images, rest}
 
 def processedText(files: Files.ProcessedFiles) -> Maybe<&2, String>:
   match files:
@@ -274,37 +257,40 @@ def globalMatch(found: Maybe<&2, S.SessionInfo>, arg: String) -> Resolved:
     case Some{S.SessionInfo{path, _, cwd, _, _, _, _, _, _, _}}: ResolvedGlobal{path, cwd}
     case None{}: NotFound{arg}
 
-def localOrGlobal(found: Maybe<&2, S.SessionInfo>, +arg: String, sessionDir: Maybe<&2, String>, sessionsDir: String) -> IO(Resolved):
+def localOrGlobal(found: Maybe<&2, S.SessionInfo>, +arg: String, sessionDir: Maybe<&2, String>, sessionsDir: String, order: Sessions.FileOrder()) -> IO(Resolved):
   match found:
     case Some{S.SessionInfo{path, _, _, _, _, _, _, _, _, _}}: IO.pure(Resolved, ResolvedLocal{path})
     case None{}:
       do IO<Resolved>:
-        everywhere : List<&2, S.SessionInfo> <- Sessions.listAll(sessionDir, sessionsDir)
+        everywhere : List<&2, S.SessionInfo> <- Sessions.listAll(sessionDir, sessionsDir, order)
         return globalMatch(matched(everywhere, arg), arg)
 
 def resolvedArgument(+arg: String, environment: Paths.Environment, cwd: String) -> String:
   Result.default(&2, &2, Paths.Error, String, Paths.resolveToCwd(environment, arg, cwd), arg)
 
-def exactOrListed(found: Maybe<&2, String>, +arg: String, +cwd: String, +sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String) -> IO(Resolved):
+# Exact ids only need session headers (findById); the metadata listing then
+# matches a prefix in the project, and an exact id or a prefix everywhere.
+def exactOrListed(found: Maybe<&2, String>, +arg: String, +cwd: String, +sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String, packageDir: String) -> IO(Resolved):
   match found:
     case Some{path}: IO.pure(Resolved, ResolvedLocal{path})
     case None{}:
       do IO<Resolved>:
-        local : List<&2, S.SessionInfo> <- Sessions.list(cwd, sessionDir, agentDir)
-        localOrGlobal(matched(local, arg), arg, sessionDir, sessionsDir)
+        +order : Sessions.FileOrder() <- Sessions.loadFileOrder(packageDir)
+        local : List<&2, S.SessionInfo> <- Sessions.list(cwd, sessionDir, agentDir, order)
+        localOrGlobal(matching(local, arg, False{}), arg, sessionDir, sessionsDir, order)
 
 # A path-like argument is used as a file; otherwise the id is matched in the
 # project's sessions, then across all projects.
-def resolveWhen(pathLike: Bool, +arg: String, environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, sessionsDir: String) -> IO(Resolved):
+def resolveWhen(pathLike: Bool, +arg: String, environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, sessionsDir: String, packageDir: String) -> IO(Resolved):
   match pathLike:
     case True{}: IO.pure(Resolved, ResolvedPath{resolvedArgument(arg, environment, cwd)})
     case False{}:
       do IO<Resolved>:
         exact : Maybe<&2, String> <- Sessions.findById(cwd, arg, sessionDir, agentDir)
-        exactOrListed(exact, arg, cwd, sessionDir, agentDir, sessionsDir)
+        exactOrListed(exact, arg, cwd, sessionDir, agentDir, sessionsDir, packageDir)
 
-def resolveSessionPath(+arg: String, environment: Paths.Environment, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String) -> IO(Resolved):
-  resolveWhen(looksLikePath(arg), arg, environment, cwd, sessionDir, agentDir, sessionsDir)
+def resolveSessionPath(+arg: String, environment: Paths.Environment, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String, packageDir: String) -> IO(Resolved):
+  resolveWhen(looksLikePath(arg), arg, environment, cwd, sessionDir, agentDir, sessionsDir, packageDir)
 
 # How session selection ends without a session: a failure (stderr, exit 1)
 # or a user abort (stdout, exit 0).
@@ -319,8 +305,9 @@ def selected(outcome: Sessions.Outcome(Session())) -> Selected():
     case Done{session}: Done{session}
     case Fail{error}: Fail{Failed{"Error: " ++ Sessions.message(error)}}
 
-def affirmative(+answer: String) -> Bool:
-  String.eq(answer, "y") || String.eq(answer, "Y") || String.eq(answer, "yes") || String.eq(answer, "YES") || String.eq(answer, "Yes")
+# upstream: answer.toLowerCase() === "y" || answer.toLowerCase() === "yes"
+def affirmed(+answer: String) -> Bool: String.eq(answer, "y") || String.eq(answer, "yes")
+def affirmative(answer: String) -> Bool: affirmed(CaseMap.lower(answer))
 
 def firstLine(text: String) -> String:
   match text:
@@ -376,12 +363,12 @@ def forkResolved(resolved: Resolved, +cwd: String, +sessionDir: Maybe<&2, String
         forked : Sessions.Outcome(Session()) <- AgentSession.forkSession(path, cwd, sessionDir, agentDir, Sessions.NewSessionOptions{sessionId, None{}})
         return selected(forked)
 
-def forkUnlessExisting(existing: Maybe<&2, String>, arg: String, environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, sessionsDir: String, +sessionId: Maybe<&2, String>) -> IO(Selected()):
+def forkUnlessExisting(existing: Maybe<&2, String>, arg: String, environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, sessionsDir: String, +sessionId: Maybe<&2, String>, packageDir: String) -> IO(Selected()):
   match existing sessionId:
     case Some{_} Some{+id}: IO.pure(Selected(), Fail{Failed{"Session already exists with id '" ++ id ++ "'"}})
     case _ _:
       do IO<Selected()>:
-        resolved : Resolved <- resolveSessionPath(arg, environment, cwd, sessionDir, agentDir, sessionsDir)
+        resolved : Resolved <- resolveSessionPath(arg, environment, cwd, sessionDir, agentDir, sessionsDir, packageDir)
         forkResolved(resolved, cwd, sessionDir, agentDir, sessionId)
 
 def existingById(sessionId: Maybe<&2, String>, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String) -> IO(Maybe<&2, String>):
@@ -422,10 +409,10 @@ def selectSession(continue: Bool, +resume: Bool, +session: Maybe<&2, String>, +s
     case _ _ _ Some{arg}:
       do IO<Selected()>:
         existing : Maybe<&2, String> <- existingById(sessionId, cwd, sessionDir, agentDir)
-        forkUnlessExisting(existing, arg, environment, cwd, sessionDir, agentDir, sessionsDir, sessionId)
+        forkUnlessExisting(existing, arg, environment, cwd, sessionDir, agentDir, sessionsDir, sessionId, Picker.assetsOf(visual))
     case _ _ Some{arg} None{}:
       do IO<Selected()>:
-        resolved : Resolved <- resolveSessionPath(arg, environment, cwd, sessionDir, agentDir, sessionsDir)
+        resolved : Resolved <- resolveSessionPath(arg, environment, cwd, sessionDir, agentDir, sessionsDir, Picker.assetsOf(visual))
         openResolved(resolved, cwd, sessionDir, agentDir)
     case _ True{} None{} None{}:
       do IO<Selected()>:
@@ -525,11 +512,11 @@ def queuedMessages(messages: List<&2,String>) -> List<&2,Controller.Submission>:
     case Nil{}: Nil{}
     case text <> rest: Controller.Submission{text,Nil{},None{}} <> queuedMessages(rest)
 
-def initialSubmissions(initial: InitialMessage) -> List<&2,Controller.Submission>:
+def initialSubmissions(initial: Initial.InitialMessage) -> List<&2,Controller.Submission>:
   match initial:
-    case InitialMessage{None{},Nil{},remaining}: queuedMessages(remaining)
-    case InitialMessage{None{},images,remaining}: Controller.Submission{"",images,None{}} <> queuedMessages(remaining)
-    case InitialMessage{Some{text},images,remaining}: Controller.Submission{text,images,None{}} <> queuedMessages(remaining)
+    case Initial.InitialMessage{None{},Nil{},remaining}: queuedMessages(remaining)
+    case Initial.InitialMessage{None{},images,remaining}: Controller.Submission{"",images,None{}} <> queuedMessages(remaining)
+    case Initial.InitialMessage{Some{text},images,remaining}: Controller.Submission{text,images,None{}} <> queuedMessages(remaining)
 
 def outputMode(mode: AppMode) -> Args.Mode:
   match mode:
@@ -668,73 +655,36 @@ def startupScope(runtime: Runtime.AgentRuntime,scope: List<&2,Models.ScopedModel
 # Settings
 # --------
 
-def segmentText(segment: Decode.Segment) -> String:
-  match segment:
-    case Decode.Field{name}: "." ++ name
-    case Decode.Index{index}: "[" ++ Nat.show(index) ++ "]"
+# upstream reportDiagnostics for runtime diagnostics: each on stderr,
+# prefixed by its type.
+def diagnosticText(diagnostic: SettingsDiagnostics.AgentSessionRuntimeDiagnostic) -> String:
+  match diagnostic:
+    case SettingsDiagnostics.AgentSessionRuntimeDiagnostic{SettingsDiagnostics.Error{}, message}: "Error: " ++ message
+    case SettingsDiagnostics.AgentSessionRuntimeDiagnostic{SettingsDiagnostics.Warning{}, message}: "Warning: " ++ message
+    case SettingsDiagnostics.AgentSessionRuntimeDiagnostic{SettingsDiagnostics.Info{}, message}: message
 
-def pathText(path: List<&2, Decode.Segment>) -> String:
-  match path:
-    case Nil{}: ""
-    case segment <> rest: segmentText(segment) ++ pathText(rest)
-
-def decodeText(error: Decode.Error) -> String:
-  match error:
-    case Decode.MissingField{path}: "missing " ++ pathText(path)
-    case Decode.WrongType{path, expected}: "expected " ++ expected ++ " at " ++ pathText(path)
-    case Decode.InvalidValue{path, expected}: "expected " ++ expected ++ " at " ++ pathText(path)
-
-def settingsErrorText(error: Settings.Error) -> String:
-  match error:
-    case Settings.InvalidJson{_}: "invalid JSON"
-    case Settings.InvalidSetting{cause}: decodeText(cause)
-    case Settings.DuplicateSetting{path}: "duplicate setting " ++ path
-    case Settings.UntrustedProject{}: "project settings are not trusted"
-    case Settings.StorageFailure{message}: message
-    case Settings.FileFailure{_}: "could not read the settings file"
-    case Settings.InvalidEncoding{_}: "the settings file is not valid UTF-8"
-    case Settings.LockFailure{_}: "could not lock the settings file"
-    case Settings.CleanupFailure{_, _}: "could not release the settings lock"
-
-def scopeText(scope: Settings.SettingsScope) -> String:
-  match scope:
-    case Settings.Global{}: "global"
-    case Settings.Project{}: "project"
-
-# upstream collectSettingsDiagnostics: each load error is a warning.
-def settingsWarning(error: Settings.SettingsError) -> String:
-  match error:
-    case Settings.SettingsError{_, Some{path}, cause}: "Warning: Invalid settings file " ++ path ++ ": " ++ settingsErrorText(cause)
-    case Settings.SettingsError{scope, None{}, cause}: "Warning: Invalid " ++ scopeText(scope) ++ " settings: " ++ settingsErrorText(cause)
-
-def seenBefore(seen: List<&2, String>, +text: String) -> Bool:
-  match seen:
-    case Nil{}: False{}
-    case previous <> rest: String.eq(previous, text) || seenBefore(rest, text)
-
-# Startup and runtime settings managers can report the same file error once.
-def reportSettings(errors: List<&2, Settings.SettingsError>, +seen: List<&2, String>) -> IO(Unit):
-  match errors:
+def reportRuntimeDiagnostics(diagnostics: List<&2, SettingsDiagnostics.AgentSessionRuntimeDiagnostic>) -> IO(Unit):
+  match diagnostics:
     case Nil{}: IO.pure(Unit, Unit{})
-    case error <> +rest:
-      +text = settingsWarning(error)
-      Bool.pick(Unit -> IO(Unit), seenBefore(seen, text), _ => reportSettings(rest, seen), _ => IO.bind(Unit, Unit, IO.print_err(text), unused => reportSettings(rest, text <> seen)))(Unit{})
+    case diagnostic <> rest: IO.bind(Unit, Unit, IO.print_err(diagnosticText(diagnostic)), unused => reportRuntimeDiagnostics(rest))
 
-def drained(loaded: Settings.FileSettingsStorage & Settings.SettingsManager) -> Settings.SettingsManager & List<&2, Settings.SettingsError>:
+def managerOf(loaded: Settings.FileSettingsStorage & Settings.SettingsManager) -> Settings.SettingsManager:
   match loaded:
-    case Tuple{_, manager}: Settings.drainErrors(manager)
+    case Tuple{_, manager}: manager
 
-def reported(pair: Settings.SettingsManager & List<&2, Settings.SettingsError>) -> IO(Settings.SettingsManager):
+# Startup settings errors, collected (upstream collectSettingsDiagnostics)
+# and reported once each (deduplicateDiagnostics).
+def reported(pair: Settings.SettingsManager & List<&2, SettingsDiagnostics.AgentSessionRuntimeDiagnostic>) -> IO(Settings.SettingsManager):
   match pair:
-    case Tuple{manager, errors}:
+    case Tuple{manager, diagnostics}:
       do IO<Settings.SettingsManager>:
-        reportSettings(errors, Nil{})
+        reportRuntimeDiagnostics(SettingsDiagnostics.deduplicateDiagnostics(diagnostics))
         return manager
 
 def loadSettings(cwd: String, agentDir: String) -> IO(Settings.SettingsManager):
   do IO<Settings.SettingsManager>:
     loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.options())
-    reported(drained(loaded))
+    reported(SettingsDiagnostics.collectSettingsDiagnostics(managerOf(loaded)))
 
 def themeOverride(parsed: Args.Args) -> Maybe<&2,String>:
   match parsed:
@@ -848,7 +798,7 @@ def unknownOptions(names: List<&2, String>) -> Maybe<&2, String>:
 def loadSettingsTrusted(cwd: String, agentDir: String, trusted: Bool) -> IO(Settings.SettingsManager):
   do IO<Settings.SettingsManager>:
     loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.SettingsManagerCreateOptions{trusted})
-    reported(drained(loaded))
+    reported(SettingsDiagnostics.collectSettingsDiagnostics(managerOf(loaded)))
 def envHome(value: Result<&1, &1, U32 & String, String>) -> Maybe<&2, String>:
   match value:
     case Done{home}: Some{home}
@@ -981,14 +931,14 @@ def refreshInteractive(host: Host(),_: Unit) -> IO(List<&2,Models.Model()>):
 def importInteractive(host: Host(),request: InteractiveRun.ImportRequest) -> IO(SessionRuntime.ImportOutcome):
   match request:
     case InteractiveRun.ImportRequest{path,cwdOverride}: SessionRuntime.importFromJsonl(Services,host,path,cwdOverride)
-type InteractiveSessionSource is Data: InteractiveSessionSource{host: Host(),agentDir: String}
+type InteractiveSessionSource is Data: InteractiveSessionSource{host: Host(),agentDir: String,packageDir: String}
 def sessionOverride(default: Bool,directory: String) -> Maybe<&2,String>:
   match default:
     case True{}: None{}
     case False{}: Some{directory}
 def listInteractive(source: InteractiveSessionSource,_: Unit) -> IO(InteractiveRun.SessionChoices):
   match source:
-    case InteractiveSessionSource{host,+agentDir}:
+    case InteractiveSessionSource{host,+agentDir,packageDir}:
       do IO<InteractiveRun.SessionChoices>:
         current : Maybe<&2,AgentSession.AgentSession> <- SessionRuntime.session(Services,host)
         +live : AgentSession.AgentSession <- activeSession(current)
@@ -996,8 +946,9 @@ def listInteractive(source: InteractiveSessionSource,_: Unit) -> IO(InteractiveR
         +cwd : String <- IO.pure(String,Sessions.getCwd(Unit,Tools.ToolDetails,V.Value,stored))
         +directory : String <- IO.pure(String,Sessions.getSessionDir(Unit,Tools.ToolDetails,V.Value,stored))
         +override : Maybe<&2,String> <- IO.pure(Maybe<&2,String>,sessionOverride(Sessions.usesDefaultSessionDir(Unit,Tools.ToolDetails,V.Value,stored,agentDir),directory))
-        local : List<&2,S.SessionInfo> <- Sessions.list(cwd,override,agentDir)
-        all : List<&2,S.SessionInfo> <- Sessions.listAll(override,Path.join(agentDir,"sessions"))
+        +order : Sessions.FileOrder() <- Sessions.loadFileOrder(packageDir)
+        local : List<&2,S.SessionInfo> <- Sessions.list(cwd,override,agentDir,order)
+        all : List<&2,S.SessionInfo> <- Sessions.listAll(override,Path.join(agentDir,"sessions"),order)
         return InteractiveRun.SessionChoices{local,all}
 def resumeInteractive(host: Host(),request: InteractiveRun.ResumeRequest) -> IO(SessionRuntime.ResumeOutcome):
   match request:
@@ -1042,7 +993,7 @@ def printResumeFound(found: Maybe<&2,ResumeCommand>) -> IO(Unit):
       do IO<Unit>:
         exists : Bool <- FS.accessible(path,0)
         Bool.pick(Unit -> IO(Unit),exists,_ => IO.print("\u{1b}[2m\u{1b}[39mTo resume this session:\u{1b}[0m " ++ command),_ => IO.pure(Unit,Unit{}))(Unit{})
-def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, autoTrustOnReload: Bool, tuiMode: Maybe<&2,Settings.TuiMode>, +cwd: String, +agentDir: String, packageDir: String, +host: Host()) -> IO(Unit):
+def interactiveHosted(initial: Initial.InitialMessage, themeOverride: Maybe<&2,String>, autoTrustOnReload: Bool, tuiMode: Maybe<&2,Settings.TuiMode>, +cwd: String, +agentDir: String, +packageDir: String, +host: Host()) -> IO(Unit):
   do IO<Unit>:
     current : Maybe<&2, AgentSession.AgentSession> <- SessionRuntime.session(Services, host)
     +live : AgentSession.AgentSession <- activeSession(current)
@@ -1057,7 +1008,7 @@ def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, 
     +login : Callback.Callback<InteractiveRun.LoginRequest,AuthLogin.Outcome()> <- Callback.create(~Unit,~InteractiveRun.LoginRequest,~AuthLogin.Outcome(),~loginInteractive,Unit{})
     +refresh : Callback.Callback<Unit,List<&2,Models.Model()>> <- Callback.create(~Host(),~Unit,~List<&2,Models.Model()>,~refreshInteractive,host)
     +importer : Callback.Callback<InteractiveRun.ImportRequest,SessionRuntime.ImportOutcome> <- Callback.create(~Host(),~InteractiveRun.ImportRequest,~SessionRuntime.ImportOutcome,~importInteractive,host)
-    +sessions : Callback.Callback<Unit,InteractiveRun.SessionChoices> <- Callback.create(~InteractiveSessionSource,~Unit,~InteractiveRun.SessionChoices,~listInteractive,InteractiveSessionSource{host,agentDir})
+    +sessions : Callback.Callback<Unit,InteractiveRun.SessionChoices> <- Callback.create(~InteractiveSessionSource,~Unit,~InteractiveRun.SessionChoices,~listInteractive,InteractiveSessionSource{host,agentDir,packageDir})
     +resume : Callback.Callback<InteractiveRun.ResumeRequest,SessionRuntime.ResumeOutcome> <- Callback.create(~Host(),~InteractiveRun.ResumeRequest,~SessionRuntime.ResumeOutcome,~resumeInteractive,host)
     tools : Maybe<&2,Manager.ToolsManager> <- SessionRuntime.withServices(Services,Maybe<&2,Manager.ToolsManager>,host,services => managedInServices(agentDir,services),None{})
     SessionRuntime.setRebindSession(Services,host,Some{rebinder})
@@ -1129,12 +1080,12 @@ def rpcHosted(assetsRoot: String, +host: Host()) -> IO(Unit):
     +live : AgentSession.AgentSession <- activeSession(current)
     state : AgentSession.AgentState() <- AgentSession.state(live)
     rpcSelected(live, assetsRoot, host, AgentSession.stateModel(state))
-def runHosted(mode: AppMode, initial: InitialMessage, themeOverride: Maybe<&2,String>, autoTrustOnReload: Bool, tuiMode: Maybe<&2,Settings.TuiMode>, cwd: String, agentDir: String, packageDir: String, started: Result<&2, &2, String, Host()>) -> IO(Unit):
+def runHosted(mode: AppMode, initial: Initial.InitialMessage, themeOverride: Maybe<&2,String>, autoTrustOnReload: Bool, tuiMode: Maybe<&2,Settings.TuiMode>, cwd: String, agentDir: String, packageDir: String, started: Result<&2, &2, String, Host()>) -> IO(Unit):
   match mode initial started:
     case _ _ Fail{message}: fail(message)
     case Interactive{} _ Done{host}: interactiveHosted(initial, themeOverride, autoTrustOnReload, tuiMode, cwd, agentDir, packageDir, host)
     case Rpc{} _ Done{host}: rpcHosted(packageDir, host)
-    case _ InitialMessage{text, images, remaining} Done{host}: printHosted(Print.PrintModeOptions{outputMode(mode), remaining, text, images}, host)
+    case _ Initial.InitialMessage{text, images, remaining} Done{host}: printHosted(Print.PrintModeOptions{outputMode(mode), remaining, text, images}, host)
 
 def noTrustOverride(value: Maybe<&2,Bool>) -> Bool:
   match value:
@@ -1145,7 +1096,7 @@ def resolvedTuiMode(value: Maybe<&2,Args.TuiMode>) -> Maybe<&2,Settings.TuiMode>
     case None{}: None{}
     case Some{Args.Regular{}}: Some{Settings.Regular{}}
     case Some{Args.Fullscreen{}}: Some{Settings.Fullscreen{}}
-def runSeeded(+parsed: Args.Args, +mode: AppMode, initial: InitialMessage, +session: Session(), +agentDir: String, authPath: String, bundlePath: String, +packageDir: String) -> IO(Unit):
+def runSeeded(+parsed: Args.Args, +mode: AppMode, initial: Initial.InitialMessage, +session: Session(), +agentDir: String, authPath: String, bundlePath: String, +packageDir: String) -> IO(Unit):
   +sessionCwd = Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, session)
   do IO<Unit>:
     home : Result<&2,&2,FS.Error,String> <- FS.homedir()
@@ -1161,7 +1112,7 @@ def runSeeded(+parsed: Args.Args, +mode: AppMode, initial: InitialMessage, +sess
     decision : Record.Record<Bool> <- Ref.dispose(Record.Record<Bool>,trust)
     return Unit{}
 
-def runNamed(parsed: Args.Args, mode: AppMode, initial: InitialMessage, named: Selected(), agentDir: String, authPath: String, bundlePath: String, packageDir: String) -> IO(Unit):
+def runNamed(parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage, named: Selected(), agentDir: String, authPath: String, bundlePath: String, packageDir: String) -> IO(Unit):
   match named:
     case Fail{Failed{message}}: fail(message)
     case Fail{Aborted{note}}: IO.print(note)
@@ -1170,7 +1121,7 @@ def runNamed(parsed: Args.Args, mode: AppMode, initial: InitialMessage, named: S
 # An abort with an empty note ends quietly (upstream process.exit(0)).
 def noted(+note: String) -> IO(Unit): Bool.pick(Unit -> IO(Unit), String.is_empty(note), _ => IO.pure(Unit, Unit{}), _ => IO.print(note))(Unit{})
 
-def runChecked(parsed: Args.Args, mode: AppMode, initial: InitialMessage, checked: Selected(), name: Maybe<&2, String>, agentDir: String, authPath: String, bundlePath: String, packageDir: String) -> IO(Unit):
+def runChecked(parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage, checked: Selected(), name: Maybe<&2, String>, agentDir: String, authPath: String, bundlePath: String, packageDir: String) -> IO(Unit):
   match checked:
     case Fail{Failed{message}}: fail(message)
     case Fail{Aborted{note}}: noted(note)
@@ -1205,7 +1156,7 @@ def cwdResolved(mode: AppMode, +session: Session(), issue: Maybe<&2, SessionCwd.
     case None{}: IO.pure(Selected(), Done{session})
     case Some{found}: missingCwd(interactive(mode), found, sessionDir, agentDir, assets, settings)
 
-def runSelected(parsed: Args.Args, +mode: AppMode, initial: InitialMessage, cwd: String, selection: Selected(), name: Maybe<&2, String>, +agentDir: String, authPath: String, bundlePath: String, +packageDir: String, startup: Settings.SettingsManager, sessionDir: Maybe<&2, String>) -> IO(Unit):
+def runSelected(parsed: Args.Args, +mode: AppMode, initial: Initial.InitialMessage, cwd: String, selection: Selected(), name: Maybe<&2, String>, +agentDir: String, authPath: String, bundlePath: String, +packageDir: String, startup: Settings.SettingsManager, sessionDir: Maybe<&2, String>) -> IO(Unit):
   match selection:
     case Fail{Failed{message}}: fail(message)
     case Fail{Aborted{note}}: noted(note)
@@ -1245,7 +1196,7 @@ def pickerTrueColor(capabilities: Settings.TerminalCapabilities) -> Maybe<&2,Boo
   match capabilities:
     case Settings.TerminalCapabilities{_,color,_}: color
 
-def runConfigured(+parsed: Args.Args, mode: AppMode, initial: InitialMessage, +flags: SessionFlags, +cwd: String, +home: String, +url: URL.Context, agentDirLocated: Result<&2, &2, FS.Error, String>, authPath: Result<&2, &2, FS.Error, String>, bundle: Result<&1, &1, U32 & String, String>, packageDir: Result<&1, &1, U32 & String, String>, sessionEnv: Result<&1, &1, U32 & String, String>) -> IO(Unit):
+def runConfigured(+parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage, +flags: SessionFlags, +cwd: String, +home: String, +url: URL.Context, agentDirLocated: Result<&2, &2, FS.Error, String>, authPath: Result<&2, &2, FS.Error, String>, bundle: Result<&1, &1, U32 & String, String>, packageDir: Result<&1, &1, U32 & String, String>, sessionEnv: Result<&1, &1, U32 & String, String>) -> IO(Unit):
   +agentDir = located(agentDirLocated, Path.join(cwd, ".pi"))
   do IO<Unit>:
     +startup : Settings.SettingsManager <- loadSettings(cwd, agentDir)
@@ -1265,14 +1216,15 @@ def runWithFiles(+parsed: Args.Args, mode: AppMode, stdin: Maybe<&2, String>, me
         bundle : Result<&1, &1, U32 & String, String> <- IO.get_env("SSL_CERT_FILE")
         packageDir : Result<&1, &1, U32 & String, String> <- IO.get_env("PI_BEND_PACKAGE_DIR")
         sessionEnv : Result<&1, &1, U32 & String, String> <- IO.get_env(Config.envSessionDir())
-        runConfigured(parsed, mode, buildInitialMessage(stdin, processedText(processed), processedImages(processed), messages), sessionFlags(parsed), cwd, home, url, agentDirLocated, authPath, bundle, packageDir, sessionEnv)
+        runConfigured(parsed, mode, Initial.buildInitialMessage(stdin, processedText(processed), processedImages(processed), messages), sessionFlags(parsed), cwd, home, url, agentDirLocated, authPath, bundle, packageDir, sessionEnv)
 
 def runInputFiles(parsed: Args.Args,mode: AppMode,stdin: Maybe<&2,String>,messages: List<&2,String>,+environment: Paths.Environment,fileArgs: List<&2,String>) -> IO(Unit):
   match mode fileArgs:
     case Rpc{} _ <> _: fail("Error: @file arguments are not supported in RPC mode")
     case _ args:
       do IO<Unit>:
-        files : Files.ResultOf(Files.ProcessedFiles) <- Files.processFileArguments(environment,args,Files.defaults())
+        # AgentSession resizes these after the request model is settled (f5c946480).
+        files : Files.ResultOf(Files.ProcessedFiles) <- Files.processFileArguments(environment,args,Files.ProcessFileOptions{Some{False{}}})
         runWithFiles(parsed,mode,stdin,messages,environment,files)
 
 def runWithInput(+parsed: Args.Args, mode: AppMode, stdinTty: Bool, environment: Result<&2, &2, FS.Error, Paths.Environment>) -> IO(Unit):

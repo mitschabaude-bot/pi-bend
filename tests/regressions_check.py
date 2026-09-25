@@ -129,7 +129,23 @@ def session_name_checks(f):
     assert last(events, 'session_name')['name'] == 'hello world'
     assert [e.get('name') for e in of_type(events, 'session_info_changed')] == ['hello world']
     checks += 1
+    # 5996-session-name-newlines: filters newlines when AgentSession.setSessionName is called
+    events = f.session('regressions', 'name', 'hello\nworld\r\nagain')
+    assert last(events, 'session_name')['name'] == 'hello world again'
+    assert [e.get('name') for e in of_type(events, 'session_info_changed')] == ['hello world again'], events
+    checks += 1
     return checks
+
+
+def tree_checks(f):
+    # tree-during-streaming: rejects navigation without changing the active leaf. The request is held
+    # at a gate instead of navigating from inside the response factory.
+    events = f.session('regressions', 'tree_streaming')
+    assert last(events, 'navigation_error')['error'] == 'Wait for the current response to finish before navigating the session tree.'
+    active, target = last(events, 'active')['leafId'], last(events, 'target')['leafId']
+    assert active != target and last(events, 'after_navigation')['leafId'] == active, events
+    assert last(events, 'prompt_done')
+    return 1
 
 
 def compaction_checks(f):
@@ -314,7 +330,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-regressions-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = retry_checks(fixtures) + json_stream_checks(fixtures) + session_name_checks(fixtures) + compaction_checks(fixtures) + session_manager_checks(fixtures) + discovery_checks(fixtures) + cli_checks(fixtures) + settings_checks(fixtures)
+    checks = retry_checks(fixtures) + json_stream_checks(fixtures) + session_name_checks(fixtures) + tree_checks(fixtures) + compaction_checks(fixtures) + session_manager_checks(fixtures) + discovery_checks(fixtures) + cli_checks(fixtures) + settings_checks(fixtures)
     print('regressions: %d upstream cases passed' % checks)
 
 

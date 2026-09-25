@@ -227,13 +227,18 @@ def size(path: String) -> IO(Result<&2,&2,Error,Word.U64>):
     result : Result<&1,&1,U32 & String,U32 & U32> <- File.size_bytes(path)
     return fileSize(result)
 
-# Node's Stats.mtime.getTime(): the exact modification time (signed seconds
-# high/low, nanoseconds) as milliseconds, rounded to the nearest integer.
-def modifiedMilliseconds(value: U32 & U32 & U32) -> F64:
+# Node's Stats.mtimeMs: the exact modification time (signed seconds high/low,
+# nanoseconds) as fractional milliseconds, seconds * 1e3 + nanoseconds / 1e6.
+def exactMilliseconds(value: U32 & U32 & U32) -> F64:
   match value:
-    case (high,(low,nanos)):
-      +raw = F64.add(F64.mul(Date.fromMilliseconds(Word.U64{high,low}),U32.to_f64(1000)),F64.div(U32.to_f64(nanos),U32.to_f64(1000000)))
-      F64.floor(F64.add(raw,F64.div(U32.to_f64(1),U32.to_f64(2))))
+    case (high,(low,nanos)): F64.add(F64.mul(Date.fromMilliseconds(Word.U64{high,low}),U32.to_f64(1000)),F64.div(U32.to_f64(nanos),U32.to_f64(1000000)))
+
+# Node's Stats.mtime.getTime(): mtimeMs rounded to the nearest integer.
+def roundedMilliseconds(+exact: F64) -> F64:
+  F64.floor(F64.add(exact,F64.div(U32.to_f64(1),U32.to_f64(2))))
+
+def modifiedMilliseconds(value: U32 & U32 & U32) -> F64:
+  roundedMilliseconds(exactMilliseconds(value))
 
 def modifiedResult(result: Result<&1,&1,U32 & String,U32 & U32 & U32>) -> Result<&2,&2,Error,F64>:
   match result:
@@ -244,6 +249,17 @@ def modified(path: String) -> IO(Result<&2,&2,Error,F64>):
   do IO<Result<&2,&2,Error,F64>>:
     result : Result<&1,&1,U32 & String,U32 & U32 & U32> <- File.modified_time(path)
     return modifiedResult(result)
+
+def exactResult(result: Result<&1,&1,U32 & String,U32 & U32 & U32>) -> Result<&2,&2,Error,F64>:
+  match result:
+    case Fail{(code,message)}: Fail{System{code,message}}
+    case Done{value}: Done{exactMilliseconds(value)}
+
+# Stats.mtimeMs (sub-millisecond); `modified` is Stats.mtime.getTime().
+def modifiedExact(path: String) -> IO(Result<&2,&2,Error,F64>):
+  do IO<Result<&2,&2,Error,F64>>:
+    result : Result<&1,&1,U32 & String,U32 & U32 & U32> <- File.modified_time(path)
+    return exactResult(result)
 
 # Metadata inspection never opens the contents of FIFOs, devices or sockets.
 type FileKind is Data:

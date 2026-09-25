@@ -36,7 +36,7 @@ def detector(environment: Scenario, path: String) -> IO(Read.ResultOf(Maybe<&2,S
 
 def processor(environment: Scenario, input: Read.ImageInput) -> IO(Read.ResultOf(Read.ProcessedImage)):
   match input:
-    case Read.ImageInput{bytes,mime,resize}:
+    case Read.ImageInput{bytes,mime,resize,_}:
       Read.then(Unit,Read.ProcessedImage,event(environment,"image"),_ => IO.pure(Read.ResultOf(Read.ProcessedImage),Done{Read.Processed{"AQID",mime,Bool.pick(List<&2,String>,resize,"resized" <> Nil{},Nil{})}}))
 
 def parameters() -> V.Value:
@@ -62,13 +62,13 @@ def scenario(+mode: String) -> IO(Unit):
     +operations : Read.ReadOperations = Read.ReadOperations{reader,access,Bool.pick(Maybe<&2,C.Callback<String,Read.ResultOf(Maybe<&2,String>)>>,String.eq(mode,"text"),None{},Some{detect})}
     ignored : Bool <- Bool.pick(Unit -> IO(Bool),String.eq(mode,"pre-abort"),_ => Abort.abort(Unit,controller,None{}),_ => IO.pure(Bool,False{}))(Unit{})
     +unbound1 : Ctx.ContextSource() <- Ctx.create()
-    tool : Read.ToolOwner <- Read.createReadTool(Public.environment("/tmp/read-test","/tmp"),"/tmp/read-test",Read.ReadToolOptions{None{},Some{operations},Some{process}},unbound1)
+    tool : Read.ToolOwner <- Read.createReadTool(Public.environment("/tmp/read-test","/tmp"),"/tmp/read-test",Read.ReadToolOptions{None{},None{},Some{operations},Some{process}},unbound1)
     result : Read.ToolResult() <- call(Read.borrowTool(tool),Abort.signal(Unit,controller))
     log : String <- Ref.read(String,trace)
     IO.print("[" ++ Json.quote(mode) ++ "," ++ Public.report(result) ++ "," ++ Json.quote(log) ++ "]")
     # Disposal of the tool must not retire borrowed operation callbacks.
     stillLive : Read.ResultOf(List<&2,U32>) <- C.call(String,Read.ResultOf(List<&2,U32>),reader,"ignored")
-    context : Read.ToolResult() <- Read.invokeWithContext(Read.Invocation{Public.environment("/tmp/read-test","/tmp"),"/tmp/read-test",operations,False{},Some{process}},Read.ReadContext{Some{"/tmp/override"},Some{False{}}},Agent.ToolExecutionInput{"context",parameters(),None{},None{}})
+    context : Read.ToolResult() <- Read.invokeWithContext(Read.Invocation{Public.environment("/tmp/read-test","/tmp"),"/tmp/read-test",operations,False{},None{},Some{process}},Read.ReadContext{Some{"/tmp/override"},Some{False{}},None{}},Agent.ToolExecutionInput{"context",parameters(),None{},None{}})
     contextLog : String <- Ref.read(String,trace)
     IO.print("[" ++ Json.quote(mode ++ "-context") ++ "," ++ Public.report(context) ++ "," ++ Json.quote(contextLog) ++ "]")
     C.dispose(String,Read.ResultOf(List<&2,U32>),reader)
@@ -119,7 +119,7 @@ def inflight() -> IO(Unit):
     +reader : C.Callback<String,Read.ResultOf(List<&2,U32>)> <- C.create(~Gate,~String,~Read.ResultOf(List<&2,U32>),~gated,Gate{entered,resume,finished})
     +access : C.Callback<String,Read.ResultOf(Unit)> <- C.create(~Unit,~String,~Read.ResultOf(Unit),~allowed,Unit{})
     +operations : Read.ReadOperations = Read.ReadOperations{reader,access,None{}}
-    channel : Chan(Read.ToolResult()) <- IO.fork(Read.ToolResult(),Read.execute(Read.Invocation{Public.environment("/tmp","/tmp"),"/tmp",operations,True{},None{}},Read.ReadToolInput{"file",None{},None{}},None{},Some{Abort.signal(Unit,controller)},Done{"/tmp/read-test/file"}))
+    channel : Chan(Read.ToolResult()) <- IO.fork(Read.ToolResult(),Read.execute(Read.Invocation{Public.environment("/tmp","/tmp"),"/tmp",operations,True{},None{},None{}},Read.ReadToolInput{"file",None{},None{}},None{},None{},Some{Abort.signal(Unit,controller)},Done{"/tmp/read-test/file"}))
     IO.join(Unit,entered)
     aborted : Bool <- Abort.abort(Unit,controller,None{})
     sent : Bool <- Chan.send(Unit,resume,Unit{})

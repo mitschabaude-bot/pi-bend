@@ -27,16 +27,23 @@ const readSchema = {}, readRenderers = {};
 const readToolSystemPromptContribution = {snippet:'Read file contents',guidelines:[]};
 const defaultReadOperations = {readFile,access:path=>access(path,constants.R_OK),detectImageMimeType:detectSupportedImageMimeTypeFromFile};
 const mode = process.argv[3];
-async function processImage(buffer,mime,{autoResizeImages}) {
+async function processImage(buffer,mime,{autoResizeImages,resizeOptions}) {
   if(mode==='unsupported') return {ok:false,message:'Unsupported test image'};
   if(mode==='failed') throw new Error('processor failure');
+  // The resize profile processImage hands to resizeImage (upstream's test observes that call).
+  if(['profile','fallback','profile-over-fallback'].includes(mode)) return {ok:true,data:'AQID',mimeType:'image/png',hints:['resize:'+JSON.stringify(resizeOptions??null)]};
   return {ok:true,data:'AQID',mimeType:'image/png',hints:autoResizeImages?['resized']:[]};
 }
+// image-resize-callers.test.ts's model and a fallback profile of the tool's own.
+const model = {id:'vision-model',name:'Vision model',api:'test',provider:'test',baseUrl:'https://example.com',reasoning:false,input:['text','image'],
+  inputLimits:{images:{resize:{maxWidth:1234,maxHeight:1000,maxBytes:500000,jpegQuality:70}}},cost:{input:0,output:0,cacheRead:0,cacheWrite:0},contextWindow:1000,maxTokens:100};
+const fallback = ['fallback','profile-over-fallback'].includes(mode) ? {resizeOptions:{maxWidth:1100}} : {};
+const ctx = ['profile','profile-over-fallback'].includes(mode) ? {cwd:process.argv[2],model} : undefined;
 """ + body + r"""
-const tool = createReadToolDefinition(process.argv[2],{autoResizeImages:mode!=='noresize'});
+const tool = createReadToolDefinition(process.argv[2],{autoResizeImages:mode!=='noresize',...fallback});
 for(const value of process.argv.slice(4)) {
   try {
-    const result = await tool.execute('test',JSON.parse(value));
+    const result = await tool.execute('test',JSON.parse(value),undefined,undefined,ctx);
     console.log(JSON.stringify({content:result.content.map(x=>x.type==='text'?['text',x.text]:['image',x.data,x.mimeType]),truncated:!!result.details}));
   } catch(e) { console.log(JSON.stringify({error:e.message})); }
 }
@@ -95,7 +102,13 @@ for backend, command in [('bun', ['bun', str(prefix)+'.js']),
         assert run([{'path':'image'}], 'noresize') == [{'content':[['text','Read image file [image/png]'],['image','AQID','image/png']], 'truncated':False}]
         assert run([{'path':'image'}], 'unsupported') == [text('Read image file [image/gif]\nUnsupported test image')]
         assert run([{'path':'image'}], 'failed') == [{'error':'processor failure'}]
-        for mode in ['processed','noresize','unsupported','failed']:
+        # image-resize-callers.test.ts (v0.87.1) "passes the current model resize profile to the read tool":
+        # the context model's profile reaches image processing, before the tool's own fallback profile.
+        profile = 'resize:{"maxWidth":1234,"maxHeight":1000,"maxBytes":500000,"jpegQuality":70}'
+        assert run([{'path':'image'}], 'profile') == [{'content':[['text','Read image file [image/png]\n'+profile],['image','AQID','image/png']], 'truncated':False}]
+        assert run([{'path':'image'}], 'profile-over-fallback') == run([{'path':'image'}], 'profile')
+        assert run([{'path':'image'}], 'fallback') == [{'content':[['text','Read image file [image/png]\nresize:{"maxWidth":1100}'],['image','AQID','image/png']], 'truncated':False}]
+        for mode in ['processed','noresize','unsupported','failed','profile','fallback','profile-over-fallback']:
             upstream = [json.loads(line) for line in subprocess.check_output(['bun',str(oracle),str(cwd),mode,json.dumps({'path':'image'})],text=True).splitlines()]
             assert run([{'path':'image'}],mode) == upstream
     print(f'{backend}: public read files/paths/arguments/truncation and typed image processing PASS', flush=True)

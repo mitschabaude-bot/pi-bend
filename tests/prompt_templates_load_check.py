@@ -70,6 +70,16 @@ def main():
    return (kind,level,path,text[text.index(' at line '):].split(':')[0])
   assert [r for r in rows if not r.startswith('diagnostic|')]==[r for r in want if not r.startswith('diagnostic|')],(rows,want)
   assert [located(r) for r in rows if r.startswith('diagnostic|')]==[located(r) for r in want if r.startswith('diagnostic|')],(rows,want)
+  # loadPromptTemplates - diagnostics: "reports invalid YAML frontmatter and keeps valid siblings" (#9354, v0.87.1),
+  # asserted as upstream on both loaders: only the valid template loads, with one warning for the invalid file
+  # whose message names line 1, column 14.
+  siblings=root/'siblings';siblings.mkdir()
+  invalid=put(siblings/'invalid.md','---\ndescription: Broken: unquoted colon\n---\nDo something.\n');put(siblings/'valid.md','Valid prompt content.')
+  for rows in [native([siblings],False),reference([siblings],False)]:
+   templates=[r for r in rows if r.startswith('template|')];diagnostics=[r.split('|') for r in rows if r.startswith('diagnostic|')]
+   assert [t.split('|')[1] for t in templates]==[wire('valid')],rows
+   assert len(diagnostics)==1 and diagnostics[0][1]=='warning' and diagnostics[0][2]==wire(str(invalid)),rows
+   assert 'line 1, column 14' in ''.join(chr(int(c)) for c in diagnostics[0][3].split(',')),rows
   # A 60-UTF16-unit display budget must not manufacture half a surrogate pair.
   boundary=put(root/'boundary.md','x'*59+'😀end')
   rows=native([boundary],False);assert rows[0].split('|')[2]==wire('x'*59+'...'),rows

@@ -16,6 +16,8 @@ import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/json.bend as Decode
 import ../packages/runtime/src/f64.bend as F
+import ../packages/runtime/src/abort.bend as Abort
+import ../packages/runtime/src/callback.bend as Callback
 
 # Answers the JSON operations of tests/session_file_check.py through the
 # native session persistence, one JSON result line per operation, as
@@ -43,6 +45,28 @@ def textOf(found: Maybe<&2, V.Value>) -> Maybe<&2, String>:
     case _: None{}
 
 def opt(fields: R.Record<V.Value>, key: String) -> Maybe<&2, String>: textOf(R.get(V.Value, fields, key))
+
+# The file-name collation of the installed runtime data, when the operation names a package directory.
+def orderOf(packageDir: Maybe<&2, String>) -> IO(P.FileOrder()):
+  match packageDir:
+    case None{}: IO.pure(P.FileOrder(), None{})
+    case Some{dir}: P.loadFileOrder(dir)
+
+# upstream "rejects a cancelled session listing": abort on the first partial result.
+def abortOnPartial(controller: Abort.AbortController<Unit>, progress: P.ListProgress) -> IO(Unit):
+  match progress:
+    case P.ListProgress{_, _, Some{_}}:
+      do IO<Unit>:
+        won : Bool <- Abort.abort(Unit, controller, None{})
+        return Unit{}
+    case _: IO.pure(Unit, Unit{})
+
+# A rejected listing reports its error name, as the reference reports err.name.
+def rejection(listing: P.Listing()) -> V.Value:
+  match listing:
+    case Fail{Abort.DefaultAbort{}}: V.Text{"AbortError"}
+    case Fail{Abort.Supplied{_}}: V.Text{"supplied reason"}
+    case Done{_}: V.Null{}
 def str(fields: R.Record<V.Value>, key: String) -> String: Maybe.default(&2, String, opt(fields, key), "")
 
 def numberOf(found: Maybe<&2, V.Value>) -> Nat:
@@ -309,12 +333,24 @@ def step(world: World, +fields: R.Record<V.Value>, +op: String) -> IO(World & V.
         return (World{previous, agentDir, cwd}, Json.object(Json.field("path", nullable(found), Nil{})))
     case World{previous, +agentDir, +cwd} "list":
       do IO<World & V.Value>:
-        infos : List<&2, S.SessionInfo> <- P.list(str(fields, "cwd"), opt(fields, "sessionDir"), agentDir)
+        order : P.FileOrder() <- orderOf(opt(fields, "packageDir"))
+        infos : List<&2, S.SessionInfo> <- P.list(str(fields, "cwd"), opt(fields, "sessionDir"), agentDir, order)
         return (World{previous, agentDir, cwd}, Json.object(Json.field("sessions", V.ArrayValue{infoValues(infos)}, Nil{})))
     case World{previous, +agentDir, +cwd} "listAll":
       do IO<World & V.Value>:
-        infos : List<&2, S.SessionInfo> <- P.listAll(opt(fields, "sessionDir"), Path.join(agentDir, "sessions"))
+        order : P.FileOrder() <- orderOf(opt(fields, "packageDir"))
+        infos : List<&2, S.SessionInfo> <- P.listAll(opt(fields, "sessionDir"), Path.join(agentDir, "sessions"), order)
         return (World{previous, agentDir, cwd}, Json.object(Json.field("paths", V.ArrayValue{infoPaths(infos)}, Nil{})))
+    case World{previous, +agentDir, +cwd} "listAllCancelled":
+      do IO<World & V.Value>:
+        order : P.FileOrder() <- orderOf(opt(fields, "packageDir"))
+        +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+        +callback : Callback.Callback<P.ListProgress, Unit> <- Callback.create(~Abort.AbortController<Unit>, ~P.ListProgress, ~Unit, ~abortOnPartial, controller)
+        first : P.Listing() <- P.listAllProgress(opt(fields, "sessionDir"), Path.join(agentDir, "sessions"), order, Abort.signal(Unit, controller), callback)
+        second : P.Listing() <- P.listAllObserved(None{}, Path.join(agentDir, "sessions"), None{}, P.Observer{Some{Abort.signal(Unit, controller)}, None{}})
+        Callback.dispose(P.ListProgress, Unit, callback)
+        Abort.dispose(Unit, controller)
+        return (World{previous, agentDir, cwd}, Json.object(Json.field("first", rejection(first), Json.field("second", rejection(second), Nil{}))))
     case World{previous, +agentDir, +cwd} "migrate":
       do IO<World & V.Value>:
         migration : SJ.Migration <- SJ.migrated(Maybe.default(&2, List<&2, V.Value>, valuesOf(value(fields, "entries")), Nil{}))

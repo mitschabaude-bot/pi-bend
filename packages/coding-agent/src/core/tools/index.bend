@@ -272,7 +272,7 @@ def createReadTool(environment: Environment, options: Maybe<&2, Read.ReadToolOpt
   match environment:
     case Environment{paths, cwd, _, _, _, context}:
       do IO<ToolOwner>:
-        owner : Read.ToolOwner <- Read.createReadTool(paths, cwd, Maybe.default(&2, Read.ReadToolOptions, options, Read.ReadToolOptions{None{}, None{}, None{}}), context)
+        owner : Read.ToolOwner <- Read.createReadTool(paths, cwd, Maybe.default(&2, Read.ReadToolOptions, options, Read.ReadToolOptions{None{}, None{}, None{}, None{}}), context)
         bridgedRead(Read.borrowTool(owner))
 
 def bridgedFind(pair: Find.ToolOwner & Agent.AgentTool<Find.FindToolDetails, Find.Error>) -> IO(ToolOwner):
