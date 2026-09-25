@@ -963,6 +963,14 @@ Same host, same archived full fixture (`build/compiler-memory-reading/provider-b
 
 The layout cap boxes records wider than `BEND_LAY_MAX` (32) cells, but a continuation still receives every live inline cell as a parameter. `packages/ai/src/providers/all.bend` `builtinProviders` bound 33 `Provider` values (each under the cap) in one `do` block before building the list; C emission failed with `an arity over 255` (`BUILTINPROVIDERS_C99618=260`). Status: confirmed limit of the byte arity table with the installed compiler (still a missing facility: segments cannot spill live cells). The code now prepends each provider to a boxed list as soon as it is created, so a continuation holds one list cell; this is also the natural functional shape, not a fixture reduction. Regression command: the full CLI build (`scripts/build-cli.sh`).
 
+### Observation: `+kind` is not accepted as a pattern binder (2026-09-25)
+
+In `packages/runtime/src/ecma-regex.bend`, `case Frame{+kind, +opened, alternatives, terms}:` failed with "expected : a quantified datatype after + (+D<..> sets D's leading quantities to &2) / observed : ','", while the same pattern with `+group, +before` compiles. The module type-checked on its own; the error appeared only when a program importing it was compiled. Hypothesis: `kind` is taken as a type-level word after `+`. Status: unreduced; the binder was renamed. Regression: compile `tests/ecma-regex.bend`.
+
+### Observation: JavaScript-lane stack depth in long list recursion (2026-09-25)
+
+Non-tail recursion over tens of thousands of elements (`code <> codes(rest)` over a 7,271-scalar pattern, Base `String.split` over a 35 KB line) ends the JavaScript lane with "memory fault (machine stack overflow?)". `ecma-regex.bend` accumulates in reverse instead; the replay harness (`tests/ecma-regex-replay.bend`) splits lines with its own tail-recursive function. Separately, one JavaScript-lane process replaying many heavy regex cases overflows although each case alone succeeds; `tests/ecma_regex_check.py` replays in batches of 20. Status: observed on the JavaScript lane only; native behaviour not measured.
+
 ### BEND-009 observation: intermittent exit-time socket count (2026-09-22)
 
 `tests/provider_retry_owned_check.py` reported `AUDIT 0 0 1` (one socket descriptor open when the native single-thread audited program's exit destructor ran) for its first audited case in three of five runs during the utility consolidation, and `AUDIT 0 0 0` in the other two and in twelve direct repetitions of the same program and mode. The retry module change was a verbatim merge; the fixture's `Socket.close` calls precede its final print. The remaining candidate is ordering between a completed close request and process exit in the single-thread scheduler, observed only under host load. Not reduced yet; treat repeated exit-audit runs as required evidence rather than a single pass.
