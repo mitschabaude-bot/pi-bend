@@ -1,0 +1,17 @@
+--- a/bend.ts
++++ b/bend.ts
+@@ -3282,6 +3282,14 @@
+   if (lhs === rhs) {
+     return true;
+   }
++  // one definition applied to convertible arguments is convertible whatever
++  // it unfolds to, so a constant such as 65536n is not expanded to compare
++  const [f, xs] = term_unapply(term_force(lhs));
++  const [g, ys] = term_unapply(term_force(rhs));
++  if (f.$ === "Ref" && g.$ === "Ref" && f.k === g.k && xs.length === ys.length
++      && xs.every((x, j) => term_compare("EQ", book, x, ys[j], dep))) {
++    return true;
++  }
+   const a = term_wnf(book, lhs);
+   const b = term_wnf(book, rhs);
+   if (a === b) {
