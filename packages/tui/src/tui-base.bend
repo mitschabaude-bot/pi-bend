@@ -331,6 +331,33 @@ def hiddenTop(+base: TuiBase,last: Maybe<&2,O.Entry>,components: List<&2,C.Compo
 def hideOverlay(+base: TuiBase,components: List<&2,C.ComponentId>) -> Maybe<&2,OverlayChange>:
   match base:
     case TuiBase{_,O.State{entries,_,_,_,_},_,_,_,_,_,_}: hiddenTop(base,O.lastEntry(entries,None{}),components)
+# Upstream OverlayHandle.focus/unfocus/setHidden. Like addOverlay and
+# overlayRemoved (OverlayHandle.hide), each is a pure transition whose focus
+# assignments the owner runs with applyOverlayChange. A handle whose overlay
+# was removed is inert (see tests/overlays.md).
+def focusTransition(base: TuiBase,+handle: O.OverlayHandle,change: O.Change) -> OverlayChange:
+  match base change:
+    case TuiBase{root,_,bindings,displayed,scheduler,show,clear,layout} O.Change{focus,assignments,hide,render}:
+      OverlayChange{TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout},handle,assignments,hide,render}
+def focusState(base: TuiBase) -> O.State:
+  match base:
+    case TuiBase{_,focus,_,_,_,_,_,_}: focus
+def focusOverlay(+base: TuiBase,+handle: O.OverlayHandle,components: List<&2,C.ComponentId>) -> OverlayChange:
+  focusTransition(base,handle,O.focusOverlay(focusState(base),components,handle))
+# `target` is upstream's OverlayUnfocusOptions: None when omitted, Some{None}
+# for an explicit null target.
+def unfocusOverlay(+base: TuiBase,+handle: O.OverlayHandle,target: Maybe<&2,Maybe<&2,C.ComponentId>>,components: List<&2,C.ComponentId>) -> OverlayChange:
+  focusTransition(base,handle,O.unfocus(focusState(base),components,handle,target))
+def setOverlayHidden(+base: TuiBase,+handle: O.OverlayHandle,hidden: Bool,components: List<&2,C.ComponentId>) -> OverlayChange:
+  focusTransition(base,handle,O.setHidden(focusState(base),components,handle,hidden))
+def focusedEntry(focus: Maybe<&2,C.ComponentId>,entry: Maybe<&2,O.Entry>) -> Bool:
+  match entry:
+    case None{}: False{}
+    case Some{value}: O.sameFocus(focus,Some{O.entryComponent(value)})
+# upstream OverlayHandle.isFocused
+def isOverlayFocused(base: TuiBase,handle: O.OverlayHandle) -> Bool:
+  match base:
+    case TuiBase{_,O.State{entries,focus,_,_,_},_,_,_,_,_,_}: focusedEntry(focus,O.find(entries,handle))
 def cursorPrepared(base: TuiBase,container: C.Container,bounds: List<&2,OverlayBounds>,result: T.CursorFrame) -> PreparedFrame:
   match base result:
     case TuiBase{_,focus,bindings,displayed,scheduler,show,clear,layout} T.CursorFrame{lines,cursor}:
@@ -461,6 +488,11 @@ def focusChange(base: TuiBase,change: O.Change,+registry: List<&2,C.Component>) 
   match base change:
     case TuiBase{root,_,bindings,displayed,scheduler,show,clear,layout} O.Change{focus,+changes,_,_}:
       focusResult(validateChanges(changes,registry),TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout},registry,changes)
+# Runs an overlay transition's focus assignments in source order, as upstream
+# showOverlay and the handle methods set `focused` synchronously.
+def applyOverlayChange(change: OverlayChange,+registry: List<&2,C.Component>) -> IO(ResultOf(TuiBase)):
+  match change:
+    case OverlayChange{tui,_,+changes,_,_}: focusResult(validateChanges(changes,registry),tui,registry,changes)
 def setFocus(+base: TuiBase,registry: List<&2,C.Component>,mounted: List<&2,C.ComponentId>,target: Maybe<&2,C.ComponentId>) -> IO(ResultOf(TuiBase)):
   match base:
     case TuiBase{_,+focus,_,_,_,_,_,_}: focusChange(base,O.setFocus(focus,mounted,target),registry)

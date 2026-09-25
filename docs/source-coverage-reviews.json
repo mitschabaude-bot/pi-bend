@@ -165,7 +165,7 @@
       "source_sha256": "5f6032a07398b8df3f72d65c38dbed2e52649a25823a52946d6414ddb2f8a929",
       "port_sha256": {
         "packages/tui/src/tui-alt-screen.bend": "65c3c86714907d7ff92cdd344da704cf9b61e775dd89fec3e4f6a515aaf3f5eb",
-        "packages/tui/src/tui-base.bend": "a47279982b17408602c6c98450e6483b1a05c5eefdd6e3f46be76fc1fc48bfdf",
+        "packages/tui/src/tui-base.bend": "ed7ce34ce37b1f604cff9722e3ce419073ff19d76c5f67657c90968432d82d8e",
         "packages/tui/src/tui-process.bend": "659c447bfc9fd75176a82da3e86ac1fbadef2f166291eb35ead45c7c5f76cc27"
       },
       "ports": [
