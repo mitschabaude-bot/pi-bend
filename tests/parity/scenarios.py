@@ -59,6 +59,15 @@ END-OF-CODE"""
 
 ANSWER = " ".join(f"word{index}" for index in range(1, 121)) + " END-OF-ANSWER"
 
+# A long Markdown answer for the streaming benchmark: paragraphs, lists,
+# emphasis and highlighted code, about 11 KB.
+def stream_section(index):
+    return (f"## Section {index}\n\nParagraph {index} explains **step {index}** of the plan in plain words, "
+            f"with `inline code`, a [link](https://example.com/{index}) and enough text to wrap across the terminal width twice over.\n\n"
+            f"- first point of section {index}\n- second point, *emphasised*\n- third point\n\n"
+            f"```python\ndef step_{index}(values):\n    return [value * {index} for value in values if value > 0]\n```\n\n")
+STREAM_ANSWER = "STREAM-START\n\n" + "".join(stream_section(index) for index in range(1, 31)) + "END-OF-STREAM"
+
 SCENARIOS = [
     {
         "name": "startup",
@@ -295,6 +304,28 @@ SCENARIOS = [
         "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "hello"), ("key", "Enter"),
                   ("wait", r"word1\b", "first-token"), ("snap", "working"), ("wait", "END-OF-ANSWER", "last-token"),
                   ("settle", 0.5), ("snap", "answered")],
+    },
+    # Streaming benchmark over each CLI's own TLS stack: a long Markdown answer
+    # in 500 deltas, paced (about 250 per second) and as fast as the server
+    # writes. Bend may take at most 1.25x pi's time to render the last token.
+    {
+        "name": "stream-paced",
+        "args": MODEL, "tls": True, "timeout": 60,
+        "turns": [{"text": STREAM_ANSWER, "chunks": 500, "delay_ms": 4}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "stream"), ("key", "Enter"),
+                  ("wait", r"STREAM-START", "first-token"), ("wait", "END-OF-STREAM", "last-token"),
+                  ("settle", 0.5), ("snap", "answered")],
+        "within": {"last-token": 1.25},
+    },
+    {
+        "name": "stream-flood",
+        "args": MODEL, "tls": True, "timeout": 60,
+        "turns": [{"text": STREAM_ANSWER, "chunks": 500}],
+        # The start scrolls away faster than the screen is polled.
+        "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "stream"), ("key", "Enter"),
+                  ("wait", "END-OF-STREAM", "last-token"),
+                  ("settle", 0.5), ("snap", "answered")],
+        "within": {"last-token": 1.25},
     },
     # Highlighted code blocks in an answer, then typing with them on screen.
     {

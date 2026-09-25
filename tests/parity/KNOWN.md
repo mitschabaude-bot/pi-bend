@@ -20,12 +20,23 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
 
 ## Open (to fix)
 
+- **Streaming throughput and TLS handshake** (`stream-paced`, `stream-flood`):
+  over a local TLS server, Bend's first token arrives about 300 ms after pi's
+  (the handshake: 350-390 ms versus pi's 115 ms; over plain HTTP Bend is
+  faster, 27-38 ms versus 60-68 ms). Paced at about 250 deltas per second,
+  Bend otherwise keeps up (last token 2.4 s versus 2.07 s). Flooded, Bend
+  renders the 500-delta answer in 834-871 ms versus 153-166 ms, of which
+  about 380 ms against pi's 135 ms remain over plain HTTP: event handling
+  and rendering are about 3x slower at full speed. Measured 2026-09-25 on
+  the v36 binary; `stream-flood` reports `slow:last-token` until fixed.
+
 - **Request headers** (every scenario with a model turn): Bend sends neither
   Node fetch's default fields (`accept-encoding`, `accept-language`,
   `connection`, `sec-fetch-mode`; see tests/fetch-keepalive.md) nor the OpenAI
   SDK's platform fields (`x-stainless-arch/lang/os/package-version/runtime/
   runtime-version`). Sending `x-stainless-runtime: node` from a Bend binary
-  would misreport the client; awaiting Gregor's decision.
+  would misreport the client, so Bend sends none (Gregor, 2026-09-25; headers
+  describing pi-bend itself are a possible later addition).
 - **Docs path** (`basic-turn` requests): the system prompt names the install
   directory; the runner masks it as `<package>`. Its length also enters
   token estimates, so with an overridden small context window

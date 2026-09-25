@@ -12,6 +12,7 @@ Requests are appended as JSON lines to the log path so scenarios can compare
 what each client sent.
 """
 import json
+import ssl
 import sys
 import threading
 import time
@@ -107,8 +108,13 @@ def handler(script):
 
     return Handler
 
-def serve(turns, log_path=None, port=0):
+def serve(turns, log_path=None, port=0, tls=None):
+    """tls: (certificate, key) paths to serve HTTPS instead of HTTP."""
     server = ThreadingHTTPServer(("127.0.0.1", port), handler(Script(turns, log_path)))
+    if tls:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(*tls)
+        server.socket = context.wrap_socket(server.socket, server_side=True)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server

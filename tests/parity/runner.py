@@ -180,6 +180,23 @@ def trust_snap(agent, root, snaps):
     path = agent / "trust.json"
     snaps["trust"] = normalise(path.read_text(), root) if path.exists() else ""
 
+def local_ca():
+    """A throwaway CA and a 127.0.0.1 server certificate it signed, made once per run:
+    TLS scenarios exercise each CLI's own TLS stack against the scripted server."""
+    directory = Path(tempfile.mkdtemp(prefix="pi-parity-ca-"))
+    def openssl(*args):
+        subprocess.run(["openssl", *args], cwd=directory, check=True, capture_output=True)
+    curve = ["-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes"]
+    openssl("req", "-x509", *curve, "-keyout", "ca.key", "-out", "ca.pem", "-days", "2", "-subj", "/CN=pi parity CA",
+            "-addext", "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign")
+    openssl("req", *curve, "-keyout", "server.key", "-out", "server.csr", "-subj", "/CN=127.0.0.1")
+    (directory / "server.ext").write_text("subjectAltName=IP:127.0.0.1\nextendedKeyUsage=serverAuth\n")
+    openssl("x509", "-req", "-in", "server.csr", "-CA", "ca.pem", "-CAkey", "ca.key", "-CAcreateserial",
+            "-out", "server.pem", "-days", "2", "-extfile", "server.ext")
+    return {"ca": str(directory / "ca.pem"), "tls": (str(directory / "server.pem"), str(directory / "server.key"))}
+
+LOCAL_CA = None
+
 def run_side(label, argv, scenario, keep):
     # Equal-length names: the cwd enters the system prompt and token estimates.
     root = Path(tempfile.mkdtemp(prefix=f"pi-parity-{label[0]}-"))
@@ -194,13 +211,18 @@ def run_side(label, argv, scenario, keep):
         # `<root>` in a text file stands for this run's temporary root.
         path.write_bytes(content) if isinstance(content, bytes) else path.write_text(content.replace("<root>", str(root)))
     log = root / "requests.jsonl"
-    server = fake_openai.serve(scenario.get("turns", []), str(log))
+    global LOCAL_CA
+    if scenario.get("tls") and LOCAL_CA is None:
+        LOCAL_CA = local_ca()
+    tls = LOCAL_CA if scenario.get("tls") else None
+    server = fake_openai.serve(scenario.get("turns", []), str(log), tls=tls and tls["tls"])
     port = server.server_address[1]
-    provider = {"baseUrl": f"http://127.0.0.1:{port}/v1", **scenario.get("provider", {})}
+    provider = {"baseUrl": f"{'https' if tls else 'http'}://127.0.0.1:{port}/v1", **scenario.get("provider", {})}
     (agent / "models.json").write_text(json.dumps({"providers": {"openai": provider}}))
     env = {"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "PATH": os.environ["PATH"],
            "TERM": "xterm-256color", "LANG": "C.UTF-8", "OPENAI_API_KEY": "sk-parity", "PI_OFFLINE": "1",
            **package_links(),
+           **({"SSL_CERT_FILE": tls["ca"], "NODE_EXTRA_CA_CERTS": tls["ca"]} if tls else {}),
            **scenario.get("env", {})}
     snaps, timings = {}, {}
     if scenario.get("process"):
@@ -312,6 +334,10 @@ def main():
                 (directory / "requests.diff").write_text("\n".join(diff) + "\n")
         timing = {key: {"pi": upstream["timings"].get(key), "bend": native["timings"].get(key)} for key in upstream["timings"]}
         (directory / "timings.json").write_text(json.dumps(timing, indent=1) + "\n")
+        # A scenario may bound Bend's time for a step relative to pi's: {step: ratio}.
+        slow = [key for key, ratio in scenario.get("within", {}).items()
+                if None in (timing[key]["pi"], timing[key]["bend"]) or timing[key]["bend"] > ratio * timing[key]["pi"]]
+        mismatched += [f"slow:{key}" for key in slow]
         status = "MATCH" if not mismatched else "DIFF " + ",".join(mismatched)
         failures += bool(mismatched)
         rendered = ", ".join(f"{k}: pi {fmt(v['pi'])} / bend {fmt(v['bend'])}" for k, v in timing.items())
