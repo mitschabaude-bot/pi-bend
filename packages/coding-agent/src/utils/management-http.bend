@@ -7,6 +7,7 @@ import ../../../runtime/src/http-response.bend as Response
 import ../../../runtime/src/http-exchange.bend as Exchange
 import ../../../runtime/src/http-message.bend as Message
 import ../../../runtime/src/url.bend as URL
+import ../../../runtime/src/clock.bend as Clock
 
 # Management requests (version checks, catalogs, downloads) with a bounded
 # immediate retry, as upstream's fetchWithRetry. Model requests are retried by
@@ -24,11 +25,11 @@ type Redirect is Data:
 type Request is Data:
   Request{url: URL.URL, headers: Message.Headers, redirect: Redirect}
 
-# timeoutMs is the budget shared by all attempts and the response body.
-# Upstream's optional per-attempt timeout serves only the remote catalog,
-# which is not ported.
+# timeoutMs is the budget shared by all attempts and the response body; the
+# port requires it. attemptTimeoutMs ends only the current attempt (and its
+# body), so a hung connection can be retried.
 type FetchRetryOptions is Data:
-  FetchRetryOptions{maxRetries: Maybe<&2,Nat>, retryOnStatus: Maybe<&2,Bool>, timeoutMs: U32}
+  FetchRetryOptions{maxRetries: Maybe<&2,Nat>, retryOnStatus: Maybe<&2,Bool>, timeoutMs: U32, attemptTimeoutMs: Maybe<&2,U32>}
 
 type Error is Data:
   TimedOut{}
@@ -205,16 +206,118 @@ def scoped(scope: Deadline.Scope<Unit>,result: Outcome()) -> IO(ScopedOutcome())
 
 def run(options: FetchRetryOptions,fetch: Fetch.Fetch(Unit),context: URL.Context,request: Request,pair: Deadline.Scope<Unit> & Fetch.Signal(Unit)) -> IO(ScopedOutcome()):
   match options pair:
-    case FetchRetryOptions{maxRetries,retryOnStatus,_} Tuple{scope,signal}:
+    case FetchRetryOptions{maxRetries,retryOnStatus,_,_} Tuple{scope,signal}:
       do IO<ScopedOutcome()>:
         result : Outcome() <- attempts(Maybe.default(&2,Nat,maxRetries,2n),Maybe.default(&2,Bool,retryOnStatus,True{}),fetch,context,signal,request)
         scoped(scope,result)
+
+# Per-attempt timeouts (upstream attemptTimeoutMs). Each attempt gets its own
+# deadline under the caller's signal: the attempt timeout or what is left of
+# the shared budget, whichever is shorter. Only an attempt timeout that fired
+# before the shared budget ran out is retried; the budget and the caller's
+# signal stay terminal. The successful attempt's deadline covers its body.
+type Timing is Data:
+  Timing{clock: Clock.Clock, budget: U32, attempt: U32}
+
+# An attempt's deadline, and whether it is the shared budget's end.
+type Window is Data:
+  Window{milliseconds: U32, budgetBinding: Bool}
+
+def attemptWindow(+left: U32,+attempt: U32) -> Window:
+  Bool.pick(Window,U32.is_le(left,attempt),Window{left,True{}},Window{attempt,False{}})
+
+def leftOf(+budget: U32,elapsed: F64) -> U32:
+  +spent = F64.to_u32(elapsed)
+  Bool.pick(U32,U32.is_le(budget,spent),0,U32.sub(budget,spent))
+
+# Whether the attempt ended because its own timeout fired (not the shared
+# budget, not the caller).
+def attemptExpired(budgetBinding: Bool,reason: Maybe<&2,Abort.AbortReason<Deadline.Cause<Unit>>>) -> Bool:
+  match budgetBinding reason:
+    case False{} Some{Abort.Supplied{Deadline.Expired{}}}: True{}
+    case _ _: False{}
+
+def retriedOr(retry: Bool,failure: Error,again: Unit -> IO(ScopedOutcome())) -> IO(ScopedOutcome()):
+  match retry:
+    case True{}: again(Unit{})
+    case False{}: IO.pure(ScopedOutcome(),Fail{failure})
+
+def timedFailure(error: Error,+canRetry: Bool,budgetBinding: Bool,reason: Maybe<&2,Abort.AbortReason<Deadline.Cause<Unit>>>,again: Unit -> IO(ScopedOutcome())) -> IO(ScopedOutcome()):
+  match reason:
+    case None{}: retriedOr(canRetry,error,again)
+    case Some{+cause}: retriedOr(canRetry && attemptExpired(budgetBinding,Some{cause}),TimedOut{},again)
+
+def finalStatus(retry: Bool,scope: Deadline.Scope<Unit>,response: Response.Response<Transport()>,again: Unit -> IO(ScopedOutcome())) -> IO(ScopedOutcome()):
+  match retry:
+    case True{}:
+      do IO<ScopedOutcome()>:
+        discard(response)
+        reason : Maybe<&2,Abort.AbortReason<Deadline.Cause<Unit>>> <- Deadline.close(Unit,scope)
+        again(Unit{})
+    case False{}:
+      do IO<ScopedOutcome()>:
+        attached : Response.Response<Scoped()> <- Response.attach(Unit,Transport(),scope,response)
+        return Done{attached}
+
+def timedStatus(retryOnStatus: Bool,+canRetry: Bool,scope: Deadline.Scope<Unit>,pair: Response.Response<Transport()> & U32,again: Unit -> IO(ScopedOutcome())) -> IO(ScopedOutcome()):
+  match pair:
+    case Tuple{response,code}: finalStatus(retryOnStatus && canRetry && retryableStatus(code),scope,response,again)
+
+def timedResult(retryOnStatus: Bool,+canRetry: Bool,budgetBinding: Bool,scope: Deadline.Scope<Unit>,result: Outcome(),again: Unit -> IO(ScopedOutcome())) -> IO(ScopedOutcome()):
+  match result:
+    case Done{response}: timedStatus(retryOnStatus,canRetry,scope,statusOf(response),again)
+    case Fail{error}:
+      do IO<ScopedOutcome()>:
+        reason : Maybe<&2,Abort.AbortReason<Deadline.Cause<Unit>>> <- Deadline.close(Unit,scope)
+        timedFailure(error,canRetry,budgetBinding,reason,again)
+
+def timedBorrowed(+retryOnStatus: Bool,+canRetry: Bool,+fetch: Fetch.Fetch(Unit),+context: URL.Context,+request: Request,budgetBinding: Bool,pair: Deadline.Scope<Unit> & Fetch.Signal(Unit),again: Unit -> IO(ScopedOutcome())) -> IO(ScopedOutcome()):
+  match pair:
+    case Tuple{scope,signal}:
+      do IO<ScopedOutcome()>:
+        result : Outcome() <- follow(21n,fetch,context,signal,request)
+        timedResult(retryOnStatus,canRetry,budgetBinding,scope,result,again)
+
+def timedFetch(+retryOnStatus: Bool,+canRetry: Bool,+fetch: Fetch.Fetch(Unit),+context: URL.Context,+request: Request,window: Window,+parent: Abort.AbortSignal<Unit>,again: Unit -> IO(ScopedOutcome())) -> IO(ScopedOutcome()):
+  match window:
+    case Window{milliseconds,budgetBinding}:
+      do IO<ScopedOutcome()>:
+        scope : Deadline.Scope<Unit> <- Deadline.create(Unit,milliseconds,parent)
+        timedBorrowed(retryOnStatus,canRetry,fetch,context,request,budgetBinding,Deadline.borrow(Unit,scope),again)
+
+def windowFor(timing: Timing) -> IO(Maybe<&2,Window>):
+  match timing:
+    case Timing{clock,+budget,+attempt}:
+      do IO<Maybe<&2,Window>>:
+        elapsed : F64 <- Clock.now(clock)
+        +left : U32 = leftOf(budget,elapsed)
+        return Bool.pick(Maybe<&2,Window>,U32.is_eq(left,0),None{},Some{attemptWindow(left,attempt)})
+
+def timedWindow(window: Maybe<&2,Window>,+retryOnStatus: Bool,+canRetry: Bool,+fetch: Fetch.Fetch(Unit),+context: URL.Context,+request: Request,+parent: Abort.AbortSignal<Unit>,again: Unit -> IO(ScopedOutcome())) -> IO(ScopedOutcome()):
+  match window:
+    case None{}: IO.pure(ScopedOutcome(),Fail{TimedOut{}})
+    case Some{value}: timedFetch(retryOnStatus,canRetry,fetch,context,request,value,parent,again)
+
+def timedAttempts(remaining: Nat,+retryOnStatus: Bool,+fetch: Fetch.Fetch(Unit),+context: URL.Context,+parent: Abort.AbortSignal<Unit>,+request: Request,+timing: Timing) -> IO(ScopedOutcome()):
+  match remaining:
+    case 0n:
+      do IO<ScopedOutcome()>:
+        window : Maybe<&2,Window> <- windowFor(timing)
+        timedWindow(window,retryOnStatus,False{},fetch,context,request,parent,_ => IO.pure(ScopedOutcome(),Fail{TimedOut{}}))
+    case 1n+rest:
+      do IO<ScopedOutcome()>:
+        window : Maybe<&2,Window> <- windowFor(timing)
+        timedWindow(window,retryOnStatus,True{},fetch,context,request,parent,_ => timedAttempts(rest,retryOnStatus,fetch,context,parent,request,timing))
 
 # The response keeps the deadline through its body: closing the body ends
 # both. The caller's signal ends every attempt, too; it must outlive the body.
 def fetchWithRetry(fetch: Fetch.Fetch(Unit),context: URL.Context,request: Request,parent: Abort.AbortSignal<Unit>,+options: FetchRetryOptions) -> IO(ScopedOutcome()):
   match options:
-    case FetchRetryOptions{_,_,timeoutMs}:
+    case FetchRetryOptions{maxRetries,retryOnStatus,timeoutMs,Some{attempt}}:
+      do IO<ScopedOutcome()>:
+        clock : Clock.Clock <- Clock.new()
+        timedAttempts(Maybe.default(&2,Nat,maxRetries,2n),Maybe.default(&2,Bool,retryOnStatus,True{}),fetch,context,parent,request,Timing{clock,timeoutMs,attempt})
+    case FetchRetryOptions{_,_,timeoutMs,None{}}:
       do IO<ScopedOutcome()>:
         scope : Deadline.Scope<Unit> <- Deadline.create(Unit,timeoutMs,parent)
         run(options,fetch,context,request,Deadline.borrow(Unit,scope))

@@ -2470,14 +2470,14 @@
     },
     {
       "source": "packages/coding-agent/test/management-http.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/tools-manager.bend",
         "tests/tools_manager_check.py",
         "tests/tools-manager.md"
       ],
       "sha256": "2b0e2f0e179c2ddbe4aa91540728265d8703167f482375e519aebe459c4f406b",
-      "notes": "Through tools-manager downloads against a local server on native 1 and 4 threads: 'retries a transient transport failure once' (two dropped connections, then success, three requests) and 'retries transient HTTP responses and returns the successful response' (503s then 200). 'shares the timeout budget across attempts' holds by construction (one Deadline scope and signal for all attempts) but is not asserted. Pending: 'retries an attempt timeout' (attemptTimeoutMs is not ported; upstream uses it only for the unported remote catalog) and 'does not retry caller cancellation' (the fixture has no aborted caller signal)."
+      "notes": "Through tests/tools-manager.bend against a local server, native 1 and 4 threads: 'retries a transient transport failure once' (two dropped connections, three requests), 'retries an attempt timeout' (a hung first attempt past attemptTimeoutMs, two requests), 'retries transient HTTP responses and returns the successful response', 'does not retry caller cancellation' (an aborted caller signal, no request). 'shares the timeout budget across attempts' asserts upstream's signal identity; the port's contract is one budget for all attempts (one Deadline without attemptTimeoutMs; each attempt's deadline bounded by the remaining budget with it), checked by attempts that keep hanging and end with the timeout."
     },
     {
       "source": "packages/coding-agent/test/max-thinking.test.ts",

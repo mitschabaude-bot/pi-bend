@@ -17,16 +17,17 @@
 
 - **No global fetch.** Bend has no global `fetch`, so `ToolsManager{binDir, url, fetch}` carries the agent's transport. The tools registry passes it to grep and find, in the same way bash receives the bin directory. Without a fetch (tests), a download fails with "fetch failed: no network transport".
 - **Platforms.** Only Linux assets are chosen. The architecture comes from the ELF header of `/proc/self/exe` (aarch64 or x86_64, like `os.arch()` for the built binary), and the process id from `/proc/self`. Android and Windows branches are outside this POSIX port.
-- **No per-attempt timeout.** `attemptTimeoutMs` exists upstream only for the remote model catalog, which is not ported. `timeoutMs` is therefore required.
+- **Timeouts.** `timeoutMs` is required (the budget shared by all attempts and the body). `attemptTimeoutMs` gives each attempt its own deadline under the caller's signal: the attempt timeout or what is left of the budget, whichever is shorter, measured on the monotonic clock. Only an attempt timeout that fired before the budget ran out is retried; the successful attempt's deadline covers its body, as upstream's combined signal does.
 - **New primitives.** Installation needed `File.rename`, `File.chmod`, `File.unlink` and `File.link_kind` (`patches/bend-file-rename-chmod-unlink.patch`). `FS.remove` implements Node's `rmSync` semantics over them: force, recursive, and links not followed.
 
 ## Checks
 
-`tests/tools_manager_check.py` runs 17 scenarios on native one and four workers against a local HTTP server and generated archives:
+`tests/tools_manager_check.py` runs 20 scenarios on native one and four workers against a local HTTP server and generated archives:
 - plain, relative and absolute redirects;
 - the 21-request redirect limit on each of 3 attempts;
 - retried 503/429 followed by success or a final status (management-http.test.ts: "retries transient HTTP responses and returns the successful response");
 - two dropped connections followed by success (management-http.test.ts: "retries a transient transport failure once");
+- a first attempt hanging past `attemptTimeoutMs` and a second that answers ("retries an attempt timeout"), attempts that keep hanging until the shared budget ends, and a caller signal aborted before the call, which makes no request ("does not retry caller cancellation");
 - no retry for 404;
 - versioned, root and nested archive layouts;
 - a missing binary and a corrupt archive (with cleanup and 0755 checks);

@@ -14,6 +14,7 @@ import subprocess
 import tarfile
 import tempfile
 import threading
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 p = argparse.ArgumentParser(description=__doc__)
@@ -55,6 +56,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if count <= 2:
                 self.close_connection = True
                 self.connection.shutdown(socket.SHUT_RDWR)
+            else:
+                self.reply(200, PAYLOAD)
+        elif self.path in ('/hung-first', '/hung'):
+            # An attempt that never answers within the client's attempt timeout.
+            if self.path == '/hung' or count == 1:
+                time.sleep(2)
+                try:
+                    self.reply(200, b'late')
+                except OSError:
+                    pass
             else:
                 self.reply(200, PAYLOAD)
         elif self.path == '/unavailable':
@@ -116,6 +127,16 @@ for backend in a.backends:
         dest = base / 'dropped'
         assert run('download', f'http://127.0.0.1:{port}/dropped', str(dest)) == [('ok', '')]
         assert dest.read_bytes() == PAYLOAD and hits['/dropped'] == 3
+        # management-http.test.ts: 'retries an attempt timeout' (the first attempt hangs past
+        # attemptTimeoutMs, the second answers)
+        assert run('probe', f'http://127.0.0.1:{port}/hung-first', '400', '10000', 'run') == [('status', '200')]
+        assert hits['/hung-first'] == 2, hits
+        # The shared budget stays terminal: attempts that keep hanging end with the timeout.
+        assert run('probe', f'http://127.0.0.1:{port}/hung', '300', '1000', 'run') == [('error', 'The operation was aborted due to timeout')]
+        assert hits['/hung'] <= 3, hits
+        # management-http.test.ts: 'does not retry caller cancellation' (no request is made)
+        [(kind, _)] = run('probe', f'http://127.0.0.1:{port}/file-cancelled', '0', '10000', 'cancelled')
+        assert kind == 'error' and '/file-cancelled' not in hits, hits
         url = f'http://127.0.0.1:{port}/unavailable'
         assert run('download', url, str(base / 'down')) == [('error', f'Download failed with HTTP 503: {url}')]
         assert hits['/unavailable'] == 3 and not (base / 'down').exists()
