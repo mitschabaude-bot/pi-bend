@@ -322,6 +322,15 @@ def overlayRemoved(base: TuiBase,+handle: O.OverlayHandle,components: List<&2,C.
   match base:
     case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout}:
       removedOverlay(root,bindings,displayed,scheduler,show,clear,layout,handle,O.hide(focus,components,handle))
+def hiddenTop(+base: TuiBase,last: Maybe<&2,O.Entry>,components: List<&2,C.ComponentId>) -> Maybe<&2,OverlayChange>:
+  match last:
+    case None{}: None{}
+    case Some{entry}: Some{overlayRemoved(base,O.entryHandle(entry),components)}
+# upstream TUI.hideOverlay: removes the overlay shown last, visible or not
+# (None when there is none).
+def hideOverlay(+base: TuiBase,components: List<&2,C.ComponentId>) -> Maybe<&2,OverlayChange>:
+  match base:
+    case TuiBase{_,O.State{entries,_,_,_,_},_,_,_,_,_,_}: hiddenTop(base,O.lastEntry(entries,None{}),components)
 def cursorPrepared(base: TuiBase,container: C.Container,bounds: List<&2,OverlayBounds>,result: T.CursorFrame) -> PreparedFrame:
   match base result:
     case TuiBase{_,focus,bindings,displayed,scheduler,show,clear,layout} T.CursorFrame{lines,cursor}:
