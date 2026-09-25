@@ -202,6 +202,12 @@ SCENARIOS = [
         "steps": [("wait", READY, "startup"), ("settle", 0.5), *typed("parity"), ("settle", 0.3), ("snap", "typed")],
     },
     {
+        "name": "hotkeys",
+        "args": MODEL,
+        "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "/hotkeys"), ("key", "Enter"),
+                  ("wait", "Keyboard Shortcuts", "hotkeys"), ("settle", 0.3), ("snap", "hotkeys")],
+    },
+    {
         "name": "basic-turn",
         "args": MODEL,
         "turns": [{"text": ANSWER, "chunks": 40, "delay_ms": 10, "usage": {"input": 1200, "output": 150}}],

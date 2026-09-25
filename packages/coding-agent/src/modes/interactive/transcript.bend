@@ -136,6 +136,15 @@ def changelogAppended(state: State,value: Messages.Changelog) -> IO(State & Unit
 def changelog(handle: Handle,value: Messages.Changelog) -> IO(Unit):
   match handle:
     case Handle{resource}: Serial.run(State,Unit,resource,state => changelogAppended(state,value))
+def hotkeysAppended(state: State,markdown: String) -> IO(State & Unit):
+  match state:
+    case State{entries,tools,active,id,view,+theme,+styles,expanded,hidden,pad}:
+      do IO<State & Unit>:
+        pair : State & Bool <- append(State{entries,tools,active,id,view,theme,styles,expanded,hidden,pad},Messages.HotkeysBody{markdown,theme,styles},False{})
+        return appendedUnit(pair)
+def hotkeys(handle: Handle,markdown: String) -> IO(Unit):
+  match handle:
+    case Handle{resource}: Serial.run(State,Unit,resource,state => hotkeysAppended(state,markdown))
 def mountedBashState(state: State,owner: Messages.Owner,component: Component.Component,handle: Messages.Handle) -> IO(State & Messages.Handle):
   match state:
     case State{entries,tools,active,+id,+view,theme,styles,expanded,hidden,pad}:

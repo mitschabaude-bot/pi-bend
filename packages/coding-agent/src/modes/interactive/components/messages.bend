@@ -331,7 +331,7 @@ type Changelog is Data:
   FullChangelog{markdown: String}
   WhatsNew{markdown: String,spaced: Bool}
   UpdatedTo{version: String,spaced: Bool}
-type Body is Data: UserBody{value: UserMessage,preceded: Bool} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} StatusBody{text: String,theme: Theme.Theme} NewSessionBody{theme: Theme.Theme} ErrorBody{text: String,theme: Theme.Theme} WarningBody{text: String,theme: Theme.Theme,label: Bool} ManagedBody{text: String,theme: Theme.Theme,warning: Bool,first: Bool} ChangelogBody{value: Changelog,theme: Theme.Theme,styles: Markdown.MarkdownTheme} SessionInfoBody{value: SessionInfo.SessionInfo,theme: Theme.Theme}
+type Body is Data: UserBody{value: UserMessage,preceded: Bool} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} StatusBody{text: String,theme: Theme.Theme} NewSessionBody{theme: Theme.Theme} ErrorBody{text: String,theme: Theme.Theme} WarningBody{text: String,theme: Theme.Theme,label: Bool} ManagedBody{text: String,theme: Theme.Theme,warning: Bool,first: Bool} ChangelogBody{value: Changelog,theme: Theme.Theme,styles: Markdown.MarkdownTheme} SessionInfoBody{value: SessionInfo.SessionInfo,theme: Theme.Theme} HotkeysBody{markdown: String,theme: Theme.Theme,styles: Markdown.MarkdownTheme}
 def expandedBody(body: Body,expanded: Bool) -> Body:
   match body:
     case BashBody{value}: BashBody{bashExpanded(value,expanded)}
@@ -349,6 +349,7 @@ def retheme(body: Body,theme: Theme.Theme) -> Body:
     case ManagedBody{text,_,warning,first}: ManagedBody{text,theme,warning,first}
     case ChangelogBody{value,_,styles}: ChangelogBody{value,theme,styles}
     case SessionInfoBody{value,_}: SessionInfoBody{value,theme}
+    case HotkeysBody{markdown,_,styles}: HotkeysBody{markdown,theme,styles}
 type Owner is Type:
   Owner{state: Ref.Ref<Body>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
 type Handle is Data: Handle{state: Ref.Ref<Body>}
@@ -397,6 +398,13 @@ def renderChangelog(value: Changelog,+theme: Theme.Theme,styles: Markdown.Markdo
         +border : String <- dynamicBorder(theme,width)
         text : List<&2,String> <- textLines("Updated to v" ++ version ++ ". Use \u{1b}[1m/changelog\u{1b}[22m to view full changelog.",1n,width)
         return spacedLines(spaced,border <> List.append(&2,String,text,[border]))
+def renderHotkeys(markdown: String,+theme: Theme.Theme,styles: Markdown.MarkdownTheme,+width: Nat) -> IO(List<&2,String>):
+  do IO<List<&2,String>>:
+    +border : String <- dynamicBorder(theme,width)
+    titleColor : String <- foregroundText(theme,"accent","Keyboard Shortcuts")
+    title : List<&2,String> <- textLines("\u{1b}[1m" ++ titleColor ++ "\u{1b}[22m",1n,width)
+    body : List<&2,String> <- changelogMarkdown(markdown,1n,width,styles)
+    return "" <> border <> List.append(&2,String,title,"" <> List.append(&2,String,body,[border]))
 def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
   match body:
     case UserBody{value,preceded}:
@@ -432,6 +440,7 @@ def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
         return managedLines(first,lines)
     case ChangelogBody{value,theme,styles}: renderChangelog(value,theme,styles,width)
     case SessionInfoBody{value,theme}: SessionInfo.render(value,theme,width)
+    case HotkeysBody{markdown,theme,styles}: renderHotkeys(markdown,theme,styles,width)
 def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
   match handle:
     case Handle{state}:

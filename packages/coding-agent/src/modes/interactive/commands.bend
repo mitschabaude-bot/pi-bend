@@ -31,6 +31,7 @@ type Action is Data:
   ClonedSession{}
   ShowChangelog{}
   ShowSessionInfo{}
+  ShowHotkeys{}
   ReloadResources{}
   RunBash{command: String,excluded: Bool}
 type CredentialCommand is Data:
@@ -58,6 +59,7 @@ type Command is Data:
   Trust{}
   Changelog{}
   Session{}
+  Hotkeys{}
   Reload{}
   Bash{command: String,excluded: Bool}
   Unsupported{text: String}
@@ -74,7 +76,6 @@ def unported(parts: List<&2,String>) -> Bool:
   match parts:
     case "/share" <> Nil{}: True{}
     case "/bug" <> _: True{}
-    case "/hotkeys" <> Nil{}: True{}
     case "/debug" <> Nil{}: True{}
     case _: False{}
 
@@ -99,6 +100,7 @@ def classify(+text: String,+parts: List<&2,String>) -> Command:
     case "/fork" <> Nil{}: Fork{}
     case "/copy" <> Nil{}: Copy{}
     case "/session" <> Nil{}: Session{}
+    case "/hotkeys" <> Nil{}: Hotkeys{}
     case "/settings" <> Nil{}: Settings{}
     case "/trust" <> Nil{}: Trust{}
     case "/changelog" <> Nil{}: Changelog{}
@@ -230,6 +232,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case Fork{}: IO.pure(Action,OpenFork{})
     case Copy{}: IO.pure(Action,CopyLastAssistant{})
     case Session{}: IO.pure(Action,ShowSessionInfo{})
+    case Hotkeys{}: IO.pure(Action,ShowHotkeys{})
     case Settings{}: IO.pure(Action,OpenSettings{})
     case Trust{}: IO.pure(Action,OpenTrust{})
     case Changelog{}: IO.pure(Action,ShowChangelog{})

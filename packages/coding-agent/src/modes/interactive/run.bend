@@ -650,6 +650,78 @@ def changelogObserved(input: CommandObservation) -> IO(Unit):
         entries : List<&2,Changelog.ChangelogEntry> <- Changelog.parseChangelog(changelogPath(builtinDir))
         Transcript.changelog(transcript,MessageUI.FullChangelog{changelogText(entries)})
         Interactive.requestRender(redraw)
+def capitalPart(part: String) -> String:
+  match part:
+    case SNil{}: ""
+    case SCon{first,rest}: String.to_upper(SCon{first,SNil{}}) ++ rest
+def displayParts(parts: List<&2,String>) -> List<&2,String>:
+  match parts:
+    case Nil{}: Nil{}
+    case part <> rest: capitalPart(part) <> displayParts(rest)
+def displayKey(key: Keys.KeyId) -> String:
+  String.join(displayParts(String.split(Keys.formatKeyId(key),'+')),"+")
+def displayKeys(keys: List<&2,Keys.KeyId>) -> List<&2,String>:
+  match keys:
+    case Nil{}: Nil{}
+    case key <> rest: displayKey(key) <> displayKeys(rest)
+def keyText(bindings: Keybindings.KeybindingsManager,action: String) -> String:
+  String.join(displayKeys(Keybindings.getKeys(bindings,action)),"/")
+def hotkeyRow(key: String,description: String) -> String:
+  "| `" ++ key ++ "` | " ++ description ++ " |"
+def boundRow(bindings: Keybindings.KeybindingsManager,action: String,description: String) -> String:
+  hotkeyRow(keyText(bindings,action),description)
+def keyPair(+bindings: Keybindings.KeybindingsManager,left: String,right: String) -> String:
+  keyText(bindings,left) ++ "` / `" ++ keyText(bindings,right)
+def keyFour(+bindings: Keybindings.KeybindingsManager,a: String,b: String,c: String,d: String) -> String:
+  keyPair(bindings,a,b) ++ "` / `" ++ keyPair(bindings,c,d)
+def hotkeysMarkdown(+bindings: Keybindings.KeybindingsManager) -> String:
+  String.join([
+    "**Navigation**",
+    "| Key | Action |", "|-----|--------|",
+    hotkeyRow(keyFour(bindings,"tui.editor.cursorUp","tui.editor.cursorDown","tui.editor.cursorLeft","tui.editor.cursorRight"),"Move cursor / browse history"),
+    hotkeyRow(keyPair(bindings,"tui.editor.cursorWordLeft","tui.editor.cursorWordRight"),"Move by word"),
+    boundRow(bindings,"tui.editor.cursorLineStart","Start of line"),
+    boundRow(bindings,"tui.editor.cursorLineEnd","End of line"),
+    boundRow(bindings,"tui.editor.jumpForward","Jump forward to character"),
+    boundRow(bindings,"tui.editor.jumpBackward","Jump backward to character"),
+    hotkeyRow(keyPair(bindings,"tui.editor.pageUp","tui.editor.pageDown"),"Scroll by page"),
+    "", "**Editing**", "| Key | Action |", "|-----|--------|",
+    boundRow(bindings,"tui.input.submit","Send message"),
+    boundRow(bindings,"tui.input.newLine","New line"),
+    boundRow(bindings,"tui.editor.deleteWordBackward","Delete word backwards"),
+    boundRow(bindings,"tui.editor.deleteWordForward","Delete word forwards"),
+    boundRow(bindings,"tui.editor.deleteToLineStart","Delete to start of line"),
+    boundRow(bindings,"tui.editor.deleteToLineEnd","Delete to end of line"),
+    boundRow(bindings,"tui.editor.yank","Paste the most-recently-deleted text"),
+    boundRow(bindings,"tui.editor.yankPop","Cycle through the deleted text after pasting"),
+    boundRow(bindings,"tui.editor.undo","Undo"),
+    "", "**Other**", "| Key | Action |", "|-----|--------|",
+    boundRow(bindings,"tui.input.tab","Path completion / accept autocomplete"),
+    boundRow(bindings,"app.interrupt","Cancel autocomplete / abort streaming"),
+    boundRow(bindings,"app.clear","Clear editor (first) / exit (second)"),
+    boundRow(bindings,"app.exit","Exit (when editor is empty)"),
+    boundRow(bindings,"app.suspend","Suspend to background"),
+    boundRow(bindings,"app.thinking.cycle","Cycle thinking level"),
+    hotkeyRow(keyPair(bindings,"app.model.cycleForward","app.model.cycleBackward"),"Cycle models"),
+    boundRow(bindings,"app.model.select","Open model selector"),
+    boundRow(bindings,"app.tools.expand","Toggle tool output expansion"),
+    boundRow(bindings,"app.thinking.toggle","Toggle thinking block visibility"),
+    boundRow(bindings,"app.editor.external","Edit message in external editor"),
+    boundRow(bindings,"app.message.copy","Copy selection or last assistant message"),
+    boundRow(bindings,"app.message.followUp","Queue follow-up message"),
+    boundRow(bindings,"app.message.dequeue","Restore queued messages"),
+    boundRow(bindings,"app.clipboard.pasteImage","Paste image or text from clipboard"),
+    hotkeyRow("/","Slash commands"),
+    hotkeyRow("!","Run bash command"),
+    hotkeyRow("!!","Run bash command (excluded from context)")
+  ],"\n")
+def hotkeysObserved(input: CommandObservation) -> IO(Unit):
+  match input:
+    case CommandObservation{_,_,_,_,redraw,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_}:
+      do IO<Unit>:
+        bindings : Keybindings.KeybindingsManager <- IO.pure(Keybindings.KeybindingsManager,Keybindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)))
+        Transcript.hotkeys(transcript,hotkeysMarkdown(bindings))
+        Interactive.requestRender(redraw)
 def matchSettings(host: Maybe<&2,SettingsPicker.Host>) -> IO(Unit):
   match host:
     case None{}: IO.pure(Unit,Unit{})
@@ -773,6 +845,7 @@ def commandObserved(input: CommandObservation,action: Commands.Action) -> IO(Uni
   match action:
     case Commands.CopyLastAssistant{}: copyObserved(input)
     case Commands.ShowSessionInfo{}: sessionInfoObserved(input)
+    case Commands.ShowHotkeys{}: hotkeysObserved(input)
     case Commands.NewSessionStarted{}: newSessionStatus(input)
     case Commands.ClonedSession{}: sessionStatus(input,"Cloned to new session")
     case Commands.OpenSettings{}: settingsObserved(input)
