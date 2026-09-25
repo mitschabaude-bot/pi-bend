@@ -37,3 +37,24 @@
  typedef uint8_t  u8;
  typedef float    f32;
  #endif
+@@ -4379,9 +4384,17 @@
+           n   = ar;
+           cls = cls_fit(tag == TAG_TSK ? ar + 2 : ar);
+         }
+-        c0 = H[loc];
+-        H[loc] = cur;
+-        cur = loc | ((u64)n << 48) | ((u64)cls << 56);
++        if (n > 255) {
++          // past the cursor's byte counters: its fields drop here
++          for (u32 j = 0; j < n; j += 1) {
++            term_drop(e, H[loc + j]);
++          }
++          heap_free(e, cls, loc);
++        } else {
++          c0 = H[loc];
++          H[loc] = cur;
++          cur = loc | ((u64)n << 48) | ((u64)cls << 56);
++        }
+       }
+     }
+     for (;;) {
