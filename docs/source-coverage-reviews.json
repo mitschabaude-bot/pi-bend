@@ -145,7 +145,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "fe23d6e6bed96fead06b1431b07a2ef70a0e3ce7296effb9ab8c457660f16810",
         "packages/coding-agent/src/modes/interactive/commands.bend": "8449a234b3cc969830d79b4462042968060562ee619a8b4e3c7ff2dba814265a",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "14557c415d7d4b0dd3c2d6921ce0f3dbd7b1717f23db27fdd8657b1e3d5eb547",
-        "packages/coding-agent/src/main.bend": "f6cba3d47ea2cc546c1888a95ed9cd1cba5c6d1c2e98de7ff52d264e56ac556d"
+        "packages/coding-agent/src/main.bend": "9c50fcc1708bc7fdaddd40a8ed3d82d0ec044968b35f1dd1e7fba6f57587068b"
       }
     },
     "packages/tui/src/editor-component.ts": {

@@ -42,6 +42,7 @@ import ../../runtime/src/ref.bend as Ref
 import ../../runtime/src/string.bend as Strings
 import ../../runtime/src/record.bend as Record
 import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/case-map.bend as CaseMap
 
 # The pi entry point: argument parsing, mode selection, session selection,
 # initial message assembly, runtime creation and exit behavior. Extensions
@@ -322,8 +323,9 @@ def selected(outcome: Sessions.Outcome(Session())) -> Selected():
     case Done{session}: Done{session}
     case Fail{error}: Fail{Failed{"Error: " ++ Sessions.message(error)}}
 
-def affirmative(+answer: String) -> Bool:
-  String.eq(answer, "y") || String.eq(answer, "Y") || String.eq(answer, "yes") || String.eq(answer, "YES") || String.eq(answer, "Yes")
+# upstream: answer.toLowerCase() === "y" || answer.toLowerCase() === "yes"
+def affirmed(+answer: String) -> Bool: String.eq(answer, "y") || String.eq(answer, "yes")
+def affirmative(answer: String) -> Bool: affirmed(CaseMap.lower(answer))
 
 def firstLine(text: String) -> String:
   match text:
