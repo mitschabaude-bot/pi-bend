@@ -8,12 +8,15 @@ import ./filesystem.bend as FS
 
 # ICU78 word rules with preloaded CJK and Southeast Asian dictionaries.
 # The pinned reference runtime has no Thai/Myanmar LSTM model resources.
-type Context is Data: Context{rules: Rules.Rules,cjk: Cjk.Context,khmer: Sea.Context,lao: Sea.Context,thai: Sea.Context,myanmar: Sea.Context}
+# Dictionaries are optional: an engine is loaded when text of its script is
+# first segmented (see `readyFor`), as ICU loads dictionary data lazily.
+type Context is Data: Context{rules: Rules.Rules,cjk: Maybe<&2,Cjk.Context>,khmer: Maybe<&2,Sea.Context>,lao: Maybe<&2,Sea.Context>,thai: Maybe<&2,Sea.Context>,myanmar: Maybe<&2,Sea.Context>}
 type Segment is Data: Segment{text: String,isWordLike: Bool,status: U32}
 type Error is Data: MissingEngine{language: String} InvalidState{}
 def ResultOf(-A: Data) -> Data: Result<&2,&2,Error,A>
 def create(rules: Rules.Rules,dictionary: Dictionary.Trie,khmer: Dictionary.Trie,lao: Dictionary.Trie,thai: Dictionary.Trie,myanmar: Dictionary.Trie) -> Context:
-  Context{rules,Cjk.create(dictionary),Sea.Context{SeaData.Khmer{},khmer},Sea.Context{SeaData.Lao{},lao},Sea.Context{SeaData.Thai{},thai},Sea.Context{SeaData.Myanmar{},myanmar}}
+  Context{rules,Some{Cjk.create(dictionary)},Some{Sea.Context{SeaData.Khmer{},khmer}},Some{Sea.Context{SeaData.Lao{},lao}},Some{Sea.Context{SeaData.Thai{},thai}},Some{Sea.Context{SeaData.Myanmar{},myanmar}}}
+def rulesOnly(rules: Rules.Rules) -> Context: Context{rules,None{},None{},None{},None{},None{}}
 
 type LoadError is Data:
   ReadFailed{path: String,cause: FS.Error}
@@ -65,22 +68,109 @@ def loadDefault(+directory: String) -> IO(Loaded(Context)):
     return assembled(cjk,khmer,lao,thai,myanmar,rules)
 
 # Word data is read when a word command first needs it, as ICU loads its data
-# lazily: decoding the dictionaries costs about as much as the rest of startup.
+# lazily: the rules first, and each dictionary when text of its script is
+# segmented (decoding all of them costs about as much as the rest of startup).
 type Source is Data:
   Pending{directory: String}
-  Ready{context: Context}
+  Ready{context: Context,directory: String}
   Unavailable{error: LoadError}
-def sourceOf(loaded: Loaded(Context)) -> Source:
+def rulesSource(+directory: String,loaded: Loaded(Rules.Rules)) -> Source:
   match loaded:
-    case Done{context}: Ready{context}
+    case Done{rules}: Ready{rulesOnly(rules),directory}
     case Fail{error}: Unavailable{error}
 def ready(source: Source) -> IO(Source):
   match source:
-    case Pending{directory}:
+    case Pending{+directory}:
       do IO<Source>:
-        loaded : Loaded(Context) <- loadDefault(directory)
-        return sourceOf(loaded)
+        loaded : Loaded(Rules.Rules) <- loadRules(directory ++ "/icu78-word-rules.bin")
+        return rulesSource(directory,loaded)
     case source: IO.pure(Source,source)
+
+# The dictionary engines text needs: rules route dictionary characters to CJK
+# (kinds 1, 2, 7), Thai (3), Lao (4), Myanmar (5) or Khmer (6).
+type Needs is Data: Needs{cjk: Bool,khmer: Bool,lao: Bool,thai: Bool,myanmar: Bool}
+def needed(needs: Needs,+properties: U32) -> Needs:
+  match needs:
+    case Needs{cjk,khmer,lao,thai,myanmar}:
+      +dictionary = U32.is_ge((properties % 256: U32),24)
+      +kind = (properties / 256: U32)
+      Needs{cjk || (dictionary && (U32.is_eq(kind,1) || U32.is_eq(kind,2) || U32.is_eq(kind,7))),khmer || (dictionary && U32.is_eq(kind,6)),lao || (dictionary && U32.is_eq(kind,4)),thai || (dictionary && U32.is_eq(kind,3)),myanmar || (dictionary && U32.is_eq(kind,5))}
+def needsIn(text: String,+rules: Rules.Rules,needs: Needs) -> Needs:
+  match text:
+    case SNil{}: needs
+    case SCon{char,rest}: needsIn(rest,rules,needed(needs,Rules.properties(rules,char)))
+def loadedCjk(+wanted: Bool,current: Maybe<&2,Cjk.Context>,+directory: String) -> IO(Loaded(Maybe<&2,Cjk.Context>)):
+  match current:
+    case Some{value}: IO.pure(Loaded(Maybe<&2,Cjk.Context>),Done{Some{value}})
+    case None{}:
+      Bool.pick(Unit -> IO(Loaded(Maybe<&2,Cjk.Context>)),wanted,
+        _ => do IO<Loaded(Maybe<&2,Cjk.Context>)>:
+          trie : Loaded(Dictionary.Trie) <- loadTrie(directory ++ "/icu78-cjk.bin",Dictionary.decode)
+          return Result.map(&2,&2,LoadError,Dictionary.Trie,Maybe<&2,Cjk.Context>,value => Some{Cjk.create(value)},trie),
+        _ => IO.pure(Loaded(Maybe<&2,Cjk.Context>),Done{None{}}))(Unit{})
+def seaFile(language: SeaData.Language) -> String:
+  match language:
+    case SeaData.Khmer{}: "/icu78-khmer.bin"
+    case SeaData.Lao{}: "/icu78-lao.bin"
+    case SeaData.Thai{}: "/icu78-thai.bin"
+    case SeaData.Myanmar{}: "/icu78-burmese.bin"
+def seaDecoded(language: SeaData.Language,bytes: List<&2,U32>) -> Dictionary.Parsed(Dictionary.Trie):
+  match language:
+    case SeaData.Khmer{}: SeaData.decodeKhmer(bytes)
+    case SeaData.Lao{}: SeaData.decodeLao(bytes)
+    case SeaData.Thai{}: SeaData.decodeThai(bytes)
+    case SeaData.Myanmar{}: SeaData.decodeMyanmar(bytes)
+def seaTrie(+language: SeaData.Language,+path: String,read: Result<&2,&2,FS.Error,List<&2,U32>>) -> Loaded(Dictionary.Trie):
+  match read:
+    case Fail{cause}: Fail{ReadFailed{path,cause}}
+    case Done{bytes}: checkedTrie(path,seaDecoded(language,bytes))
+def loadedSea(+language: SeaData.Language,+wanted: Bool,current: Maybe<&2,Sea.Context>,+directory: String) -> IO(Loaded(Maybe<&2,Sea.Context>)):
+  match current:
+    case Some{value}: IO.pure(Loaded(Maybe<&2,Sea.Context>),Done{Some{value}})
+    case None{}:
+      Bool.pick(Unit -> IO(Loaded(Maybe<&2,Sea.Context>)),wanted,
+        _ => do IO<Loaded(Maybe<&2,Sea.Context>)>:
+          +path : String <- IO.pure(String,directory ++ seaFile(language))
+          read : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile(path)
+          return Result.map(&2,&2,LoadError,Dictionary.Trie,Maybe<&2,Sea.Context>,value => Some{Sea.Context{language,value}},seaTrie(language,path,read)),
+        _ => IO.pure(Loaded(Maybe<&2,Sea.Context>),Done{None{}}))(Unit{})
+def withEngines(rules: Rules.Rules,+directory: String,cjk: Loaded(Maybe<&2,Cjk.Context>),khmer: Loaded(Maybe<&2,Sea.Context>),lao: Loaded(Maybe<&2,Sea.Context>),thai: Loaded(Maybe<&2,Sea.Context>),myanmar: Loaded(Maybe<&2,Sea.Context>)) -> Source:
+  match cjk khmer lao thai myanmar:
+    case Fail{error} _ _ _ _: Unavailable{error}
+    case _ Fail{error} _ _ _: Unavailable{error}
+    case _ _ Fail{error} _ _: Unavailable{error}
+    case _ _ _ Fail{error} _: Unavailable{error}
+    case _ _ _ _ Fail{error}: Unavailable{error}
+    case Done{cjk} Done{khmer} Done{lao} Done{thai} Done{myanmar}: Ready{Context{rules,cjk,khmer,lao,thai,myanmar},directory}
+def withNeeds(context: Context,+directory: String,needs: Needs) -> IO(Source):
+  match context needs:
+    case Context{+rules,cjk,khmer,lao,thai,myanmar} Needs{wantCjk,wantKhmer,wantLao,wantThai,wantMyanmar}:
+      do IO<Source>:
+        cjk : Loaded(Maybe<&2,Cjk.Context>) <- loadedCjk(wantCjk,cjk,directory)
+        khmer : Loaded(Maybe<&2,Sea.Context>) <- loadedSea(SeaData.Khmer{},wantKhmer,khmer,directory)
+        lao : Loaded(Maybe<&2,Sea.Context>) <- loadedSea(SeaData.Lao{},wantLao,lao,directory)
+        thai : Loaded(Maybe<&2,Sea.Context>) <- loadedSea(SeaData.Thai{},wantThai,thai,directory)
+        myanmar : Loaded(Maybe<&2,Sea.Context>) <- loadedSea(SeaData.Myanmar{},wantMyanmar,myanmar,directory)
+        return withEngines(rules,directory,cjk,khmer,lao,thai,myanmar)
+def rulesOf(context: Context) -> Rules.Rules:
+  match context: case Context{rules,_,_,_,_,_}: rules
+def readiedFor(source: Source,+text: String) -> IO(Source):
+  match source:
+    case Ready{+context,+directory}: withNeeds(context,directory,needsIn(text,rulesOf(context),Needs{False{},False{},False{},False{},False{}}))
+    case source: IO.pure(Source,source)
+def loadedFor(need: Bool,present: Bool) -> Bool: Bool.not(need) || present
+def coveredBy(needs: Needs,cjk: Maybe<&2,Cjk.Context>,khmer: Maybe<&2,Sea.Context>,lao: Maybe<&2,Sea.Context>,thai: Maybe<&2,Sea.Context>,myanmar: Maybe<&2,Sea.Context>) -> Bool:
+  match needs:
+    case Needs{a,b,c,d,e}: loadedFor(a,Maybe.is_some(&2,Cjk.Context,cjk)) && loadedFor(b,Maybe.is_some(&2,Sea.Context,khmer)) && loadedFor(c,Maybe.is_some(&2,Sea.Context,lao)) && loadedFor(d,Maybe.is_some(&2,Sea.Context,thai)) && loadedFor(e,Maybe.is_some(&2,Sea.Context,myanmar))
+# Whether every dictionary `text` needs is loaded.
+def covers(context: Context,text: String) -> Bool:
+  match context:
+    case Context{+rules,cjk,khmer,lao,thai,myanmar}: coveredBy(needsIn(text,rules,Needs{False{},False{},False{},False{},False{}}),cjk,khmer,lao,thai,myanmar)
+# The source ready to segment `text`: rules, and the dictionaries its scripts use.
+def readyFor(source: Source,text: String) -> IO(Source):
+  do IO<Source>:
+    +loaded : Source <- ready(source)
+    readiedFor(loaded,text)
 
 type Mode is Data: Outside{} CjkRange{} KoreanRange{} KhmerRange{} LaoRange{} ThaiRange{} MyanmarRange{}
 type DictionaryScan is Data:
@@ -91,13 +181,22 @@ def internalBreaks(ends: List<&2,Nat>,+start: Nat,reversed: List<&2,Nat>) -> Lis
     case Nil{}: reversed
     case _ <> Nil{}: reversed
     case endpoint <> rest: internalBreaks(rest,start,(start + endpoint) <> reversed)
+# An engine not loaded for this text leaves the range whole.
+def seaEnds(engine: Maybe<&2,Sea.Context>,text: String) -> List<&2,Nat>:
+  match engine:
+    case Some{value}: Sea.boundaries(value,text)
+    case None{}: Nil{}
+def cjkEnds(engine: Maybe<&2,Cjk.Context>,text: String) -> List<&2,Nat>:
+  match engine:
+    case Some{value}: Cjk.boundaries(value,text)
+    case None{}: Nil{}
 def rangeEnds(context: Context,mode: Mode,text: String) -> List<&2,Nat>:
   match context mode:
-    case Context{_,_,khmer,_,_,_} KhmerRange{}: Sea.boundaries(khmer,text)
-    case Context{_,_,_,lao,_,_} LaoRange{}: Sea.boundaries(lao,text)
-    case Context{_,_,_,_,thai,_} ThaiRange{}: Sea.boundaries(thai,text)
-    case Context{_,_,_,_,_,myanmar} MyanmarRange{}: Sea.boundaries(myanmar,text)
-    case Context{_,cjk,_,_,_,_} _: Cjk.boundaries(cjk,text)
+    case Context{_,_,khmer,_,_,_} KhmerRange{}: seaEnds(khmer,text)
+    case Context{_,_,_,lao,_,_} LaoRange{}: seaEnds(lao,text)
+    case Context{_,_,_,_,thai,_} ThaiRange{}: seaEnds(thai,text)
+    case Context{_,_,_,_,_,myanmar} MyanmarRange{}: seaEnds(myanmar,text)
+    case Context{_,cjk,_,_,_,_} _: cjkEnds(cjk,text)
 def flush(context: Context,mode: Mode,start: Nat,reversed: String,breaks: List<&2,Nat>) -> List<&2,Nat>:
   match reversed:
     case SNil{}: breaks

@@ -484,7 +484,7 @@ def retriedInput(+query: SearchInput.Input,+words: Ref.Ref<Words.Source>,binding
     case Fail{Word.WordDataPending{}}:
       do IO<SearchInput.Input>:
         source : Words.Source <- Ref.read(Words.Source,words)
-        +ready : Words.Source <- Words.ready(source)
+        +ready : Words.Source <- Words.readyFor(source,SearchInput.getValue(query))
         Ref.write(Words.Source,words,ready)
         result : Word.ResultOf(SearchInput.Input) <- editedInput(query,ready,bindings,data)
         return Result.default(&2,&2,Word.Error,SearchInput.Input,result,query)

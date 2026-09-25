@@ -272,6 +272,22 @@ SCENARIOS = [
         "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "查看。文"), ("key", "Tab"), ("settle", 0.8), ("snap", "directory"),
                   ("keys", "说"), ("key", "Tab"), ("settle", 0.8), ("snap", "file")],
     },
+    # Typing latency with a large resumed session on screen (upstream's
+    # large-session fixture: ~1000 entries).
+    {
+        "name": "large-session-typing",
+        "args": MODEL + ["--session", "large.jsonl"],
+        "files": {"project/large.jsonl": open("/home/agent/code/pi-mono/packages/coding-agent/test/fixtures/large-session.jsonl").read()},
+        "steps": [("wait", "Continue", "prompt"), ("key", "Enter"), ("wait", READY, "startup"), ("settle", 1.0), *typed("typing"), ("settle", 0.3), ("snap", "typed")],
+    },
+    # A stored session whose cwd is gone: interactive mode asks (upstream
+    # promptForMissingSessionCwd); Cancel exits quietly.
+    {
+        "name": "session-missing-cwd",
+        "args": MODEL + ["--session", "large.jsonl"],
+        "files": {"project/large.jsonl": open("/home/agent/code/pi-mono/packages/coding-agent/test/fixtures/large-session.jsonl").read()},
+        "steps": [("wait", "Continue", "prompt"), ("settle", 0.3), ("snap", "prompt"), ("key", "Down"), ("key", "Enter"), ("settle", 1.0), ("snap", "cancelled")],
+    },
     {
         "name": "basic-turn",
         "args": MODEL,

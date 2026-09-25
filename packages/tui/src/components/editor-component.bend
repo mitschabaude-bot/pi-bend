@@ -81,16 +81,16 @@ def renderLive(input: RenderInput,width: Nat) -> IO(List<&2,String>):
 # The editor's word commands (upstream's Intl.Segmenter users).
 def wordCommand(+bindings: Keybindings.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> Bool:
   Keybindings.matches(bindings,keyboard,data,"tui.editor.cursorWordLeft") || Keybindings.matches(bindings,keyboard,data,"tui.editor.cursorWordRight") || Keybindings.matches(bindings,keyboard,data,"tui.editor.deleteWordBackward") || Keybindings.matches(bindings,keyboard,data,"tui.editor.deleteWordForward")
-def wordsFor(needed: Bool,words: Segmenter.Source) -> IO(Segmenter.Source):
+def wordsFor(needed: Bool,words: Segmenter.Source,text: String) -> IO(Segmenter.Source):
   match needed:
-    case True{}: Segmenter.ready(words)
+    case True{}: Segmenter.readyFor(words,text)
     case False{}: IO.pure(Segmenter.Source,words)
 def inputState(state: State,+data: String) -> IO(State & Unit):
   match state:
     case State{+editor,words,+bindings,+keyboard,+rows,error}:
       do IO<State & Unit>:
         height : Nat <- Ref.read(Nat,rows)
-        +source : Segmenter.Source <- wordsFor(wordCommand(bindings,keyboard,data),words)
+        +source : Segmenter.Source <- wordsFor(wordCommand(bindings,keyboard,data),words,Editor.getText(editor))
         result : Editor.ResultOf(Editor.Editor) <- Editor.handleInput(~Segmenter.Source,~Word.sourceSegments,source,editor,bindings,keyboard,data,height)
         return (accepted(State{editor,source,bindings,keyboard,rows,error},result),Unit{})
 def inputLive(handle: Handle,data: String) -> IO(Unit):

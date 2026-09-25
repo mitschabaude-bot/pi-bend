@@ -121,8 +121,10 @@ def nativeResult(value: Native.ResultOf(List<&2,Native.Segment>)) -> ResultOf(Li
 def nativeSegments(context: Native.Context,text: String) -> ResultOf(List<&2,Segment>):
   nativeResult(Native.segments(context,text))
 # Callers make the source ready before a word command.
+def readySegments(+context: Native.Context,+text: String) -> ResultOf(List<&2,Segment>):
+  Bool.pick(Unit -> ResultOf(List<&2,Segment>),Native.covers(context,text),_ => nativeSegments(context,text),_ => Fail{WordDataPending{}})(Unit{})
 def sourceSegments(source: Native.Source,text: String) -> ResultOf(List<&2,Segment>):
   match source:
-    case Native.Ready{context}: nativeSegments(context,text)
+    case Native.Ready{context,_}: readySegments(context,text)
     case Native.Unavailable{error}: Fail{WordData{error}}
     case Native.Pending{_}: Fail{WordDataPending{}}
