@@ -672,19 +672,24 @@ def managerOf(loaded: Settings.FileSettingsStorage & Settings.SettingsManager) -
   match loaded:
     case Tuple{_, manager}: manager
 
-# Startup settings errors, collected (upstream collectSettingsDiagnostics)
-# and reported once each (deduplicateDiagnostics).
-def reported(pair: Settings.SettingsManager & List<&2, SettingsDiagnostics.AgentSessionRuntimeDiagnostic>) -> IO(Settings.SettingsManager):
-  match pair:
-    case Tuple{manager, diagnostics}:
-      do IO<Settings.SettingsManager>:
-        reportRuntimeDiagnostics(SettingsDiagnostics.deduplicateDiagnostics(diagnostics))
-        return manager
+def Diagnostics() -> Data: List<&2, SettingsDiagnostics.AgentSessionRuntimeDiagnostic>
 
-def loadSettings(cwd: String, agentDir: String) -> IO(Settings.SettingsManager):
-  do IO<Settings.SettingsManager>:
-    loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.options())
-    reported(SettingsDiagnostics.collectSettingsDiagnostics(managerOf(loaded)))
+# A settings manager with the load errors it collected (upstream
+# collectSettingsDiagnostics); they are reported later, once each.
+def loadSettingsWith(cwd: String, agentDir: String, options: Settings.SettingsManagerCreateOptions) -> IO(Settings.SettingsManager & Diagnostics()):
+  do IO<Settings.SettingsManager & Diagnostics()>:
+    loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, options)
+    return SettingsDiagnostics.collectSettingsDiagnostics(managerOf(loaded))
+
+def loadSettings(cwd: String, agentDir: String) -> IO(Settings.SettingsManager & Diagnostics()):
+  loadSettingsWith(cwd, agentDir, Settings.options())
+
+# upstream main: the startup settings diagnostics and those of the created
+# runtime, deduplicated (deduplicateDiagnostics) and reported once. Upstream
+# shows them in the interactive transcript instead; the port still reports
+# them on stderr in every mode.
+def reportStartup(startup: Diagnostics(), runtime: Diagnostics()) -> IO(Unit):
+  reportRuntimeDiagnostics(SettingsDiagnostics.deduplicateDiagnostics(List.append(&2, SettingsDiagnostics.AgentSessionRuntimeDiagnostic, startup, runtime)))
 
 def themeOverride(parsed: Args.Args) -> Maybe<&2,String>:
   match parsed:
@@ -707,7 +712,7 @@ def Created() -> Type: SessionRuntime.Created<Services>
 def Host() -> Data: SessionRuntime.AgentSessionRuntime<Services>
 
 type FactoryEnv is Data:
-  FactoryEnv{parsed: Args.Args, agentDir: String, authPath: String, bundlePath: String, packageDir: String, mode: AppMode, trust: Ref.Ref<Record.Record<Bool>>}
+  FactoryEnv{parsed: Args.Args, agentDir: String, authPath: String, bundlePath: String, packageDir: String, mode: AppMode, trust: Ref.Ref<Record.Record<Bool>>, diagnostics: Ref.Ref<Diagnostics()>}
 type StartupSelect is Data: StartupSelect{agentDir: String,assetsRoot: String,settings: Settings.SettingsManager}
 def selectedTrust(context: StartupSelect,request: ProjectTrust.SelectRequest) -> IO(Maybe<&2,String>):
   match context:
@@ -795,17 +800,25 @@ def unknownOptions(names: List<&2, String>) -> Maybe<&2, String>:
 
 # upstream main createRuntime: project settings and resources load only for a
 # trusted project (resolveProjectTrusted); the startup settings stay trusted.
-def loadSettingsTrusted(cwd: String, agentDir: String, trusted: Bool) -> IO(Settings.SettingsManager):
+# The settings manager a runtime is created with; its load errors become the
+# runtime's diagnostics (upstream createRuntime's collectSettingsDiagnostics).
+def recordedSettings(diagnostics: Ref.Ref<Diagnostics()>, pair: Settings.SettingsManager & Diagnostics()) -> IO(Settings.SettingsManager):
+  match pair:
+    case Tuple{manager, found}:
+      do IO<Settings.SettingsManager>:
+        Ref.write(Diagnostics(), diagnostics, found)
+        return manager
+def loadSettingsTrusted(cwd: String, agentDir: String, trusted: Bool, diagnostics: Ref.Ref<Diagnostics()>) -> IO(Settings.SettingsManager):
   do IO<Settings.SettingsManager>:
-    loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd, agentDir, Settings.SettingsManagerCreateOptions{trusted})
-    reported(SettingsDiagnostics.collectSettingsDiagnostics(managerOf(loaded)))
+    loaded : Settings.SettingsManager & Diagnostics() <- loadSettingsWith(cwd, agentDir, Settings.SettingsManagerCreateOptions{trusted})
+    recordedSettings(diagnostics, loaded)
 def envHome(value: Result<&1, &1, U32 & String, String>) -> Maybe<&2, String>:
   match value:
     case Done{home}: Some{home}
     case Fail{_}: None{}
 def runtimeWithSettings(env: FactoryEnv, +cwd: String, +session: Session(), +value: Runtime.SessionSeed, +settings: Settings.SettingsManager) -> IO(Result<&1, &1, String, Created()>):
   match env:
-    case FactoryEnv{+parsed, agentDir, authPath, bundlePath, packageDir,_,_}:
+    case FactoryEnv{+parsed, agentDir, authPath, bundlePath, packageDir,_,_,_}:
       do IO<Result<&1, &1, String, Created()>>:
         created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.create(createOptions(parsed, cwd, agentDir, authPath, bundlePath, packageDir, value, settings))
         runtimeCreated(cwd, session, seedMessages(value), seedThinking(value), settings, value, scopeFlags(parsed, settings), created)
@@ -813,10 +826,10 @@ def trustedRuntime(env: FactoryEnv, +cwd: String, +session: Session(), +value: R
   match env trust:
     case _ Fail{message}: IO.pure(Result<&1, &1, String, Created()>, Fail{"Error: " ++ message})
     case env Done{True{}}: runtimeWithSettings(env, cwd, session, value, startup)
-    case FactoryEnv{parsed, +agentDir, authPath, bundlePath, packageDir,mode,cache} Done{False{}}:
+    case FactoryEnv{parsed, +agentDir, authPath, bundlePath, packageDir,mode,cache,+diagnostics} Done{False{}}:
       do IO<Result<&1, &1, String, Created()>>:
-        +untrusted : Settings.SettingsManager <- loadSettingsTrusted(cwd, agentDir, False{})
-        runtimeWithSettings(FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir,mode,cache}, cwd, session, value, untrusted)
+        +untrusted : Settings.SettingsManager <- loadSettingsTrusted(cwd, agentDir, False{}, diagnostics)
+        runtimeWithSettings(FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir,mode,cache,diagnostics}, cwd, session, value, untrusted)
 def overrideFor(explicit: Maybe<&2,Bool>,cached: Maybe<&2,Bool>) -> Maybe<&2,Bool>:
   match explicit:
     case Some{value}: Some{value}
@@ -837,20 +850,20 @@ def rememberTrust(cache: Ref.Ref<Record.Record<Bool>>,cwd: String,result: Result
 def flaggedRuntime(env: FactoryEnv, +cwd: String, +session: Session(), +value: Runtime.SessionSeed, unknown: Maybe<&2, String>,initial: Bool) -> IO(Result<&1, &1, String, Created()>):
   match env unknown:
     case _ Some{message}: IO.pure(Result<&1, &1, String, Created()>, Fail{message})
-    case FactoryEnv{+parsed, +agentDir, authPath, bundlePath, +packageDir,+mode,+cache} None{}:
+    case FactoryEnv{+parsed, +agentDir, authPath, bundlePath, +packageDir,+mode,+cache,+diagnostics} None{}:
       do IO<Result<&1, &1, String, Created()>>:
-        +startup : Settings.SettingsManager <- loadSettings(cwd, agentDir)
+        +startup : Settings.SettingsManager <- loadSettingsTrusted(cwd, agentDir, True{}, diagnostics)
         home : Result<&1, &1, U32 & String, String> <- IO.get_env("HOME")
         known : Record.Record<Bool> <- Ref.read(Record.Record<Bool>,cache)
         +trust : Result<&2, &2, String, Bool> <- resolvedTrust(ProjectTrust.ResolveProjectTrustedOptions{cwd, envHome(home), Trust.create(agentDir), overrideFor(Args.projectTrustOverrideOf(parsed),Record.get(Bool,known,cwd)), Settings.getDefaultProjectTrust(startup)},initial && interactive(mode),agentDir,packageDir,startup)
         rememberTrust(cache,cwd,trust)
-        trustedRuntime(FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir,mode,cache}, cwd, session, value, startup, trust)
+        trustedRuntime(FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir,mode,cache,diagnostics}, cwd, session, value, startup, trust)
 
 def seededRuntime(env: FactoryEnv, +cwd: String, +session: Session(), seed: Result<&2, &2, Stop, Runtime.SessionSeed>,initial: Bool) -> IO(Result<&1, &1, String, Created()>):
   match env seed:
     case _ Fail{Failed{message}}: IO.pure(Result<&1, &1, String, Created()>, Fail{message})
     case _ Fail{Aborted{note}}: IO.pure(Result<&1, &1, String, Created()>, Fail{note})
-    case FactoryEnv{+parsed, agentDir, authPath, bundlePath, packageDir,mode,cache} Done{value}: flaggedRuntime(FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir,mode,cache}, cwd, session, value, unknownOptions(Args.unknownFlagNames(parsed)),initial)
+    case FactoryEnv{+parsed, agentDir, authPath, bundlePath, packageDir,mode,cache,diagnostics} Done{value}: flaggedRuntime(FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir,mode,cache,diagnostics}, cwd, session, value, unknownOptions(Args.unknownFlagNames(parsed)),initial)
 
 def createRuntime(env: FactoryEnv, request: SessionRuntime.Request) -> IO(Result<&1, &1, String, Created()>):
   match request:
@@ -1096,39 +1109,43 @@ def resolvedTuiMode(value: Maybe<&2,Args.TuiMode>) -> Maybe<&2,Settings.TuiMode>
     case None{}: None{}
     case Some{Args.Regular{}}: Some{Settings.Regular{}}
     case Some{Args.Fullscreen{}}: Some{Settings.Fullscreen{}}
-def runSeeded(+parsed: Args.Args, +mode: AppMode, initial: Initial.InitialMessage, +session: Session(), +agentDir: String, authPath: String, bundlePath: String, +packageDir: String) -> IO(Unit):
+def runSeeded(+parsed: Args.Args, +mode: AppMode, initial: Initial.InitialMessage, +session: Session(), +agentDir: String, authPath: String, bundlePath: String, +packageDir: String, startupDiagnostics: Diagnostics()) -> IO(Unit):
   +sessionCwd = Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, session)
   do IO<Unit>:
     home : Result<&2,&2,FS.Error,String> <- FS.homedir()
     resources : Bool <- Trust.hasTrustRequiringProjectResources(sessionCwd,optionalHome(home))
     autoTrustOnReload : Bool = noTrustOverride(Args.projectTrustOverrideOf(parsed)) && Bool.not(resources)
     +trust : Ref.Ref<Record.Record<Bool>> <- Ref.new(Record.Record<Bool>,Record.new(Bool))
-    +factory : SessionRuntime.Factory(Services) <- Callback.create(~FactoryEnv, ~SessionRuntime.Request, ~Result<&1, &1, String, Created()>, ~createRuntime, FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir,mode,trust})
+    +diagnostics : Ref.Ref<Diagnostics()> <- Ref.new(Diagnostics(), Nil{})
+    +factory : SessionRuntime.Factory(Services) <- Callback.create(~FactoryEnv, ~SessionRuntime.Request, ~Result<&1, &1, String, Created()>, ~createRuntime, FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir,mode,trust,diagnostics})
     +release : Callback.Callback<Services, Unit> <- Callback.create(~Unit, ~Services, ~Unit, ~releaseServices, Unit{})
     started : Result<&2, &2, String, Host()> <- SessionRuntime.create(Services, factory, release, agentDir, sessionCwd, session)
+    runtimeDiagnostics : Diagnostics() <- Ref.read(Diagnostics(), diagnostics)
+    reportStartup(startupDiagnostics, runtimeDiagnostics)
     runHosted(mode, initial, themeOverride(parsed), autoTrustOnReload, resolvedTuiMode(Args.tuiModeOf(parsed)), sessionCwd, agentDir, packageDir, started)
     Callback.dispose(SessionRuntime.Request, Result<&1, &1, String, Created()>, factory)
     Callback.dispose(Services, Unit, release)
     decision : Record.Record<Bool> <- Ref.dispose(Record.Record<Bool>,trust)
+    reported : Diagnostics() <- Ref.dispose(Diagnostics(), diagnostics)
     return Unit{}
 
-def runNamed(parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage, named: Selected(), agentDir: String, authPath: String, bundlePath: String, packageDir: String) -> IO(Unit):
+def runNamed(parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage, named: Selected(), agentDir: String, authPath: String, bundlePath: String, packageDir: String, startupDiagnostics: Diagnostics()) -> IO(Unit):
   match named:
     case Fail{Failed{message}}: fail(message)
     case Fail{Aborted{note}}: IO.print(note)
-    case Done{+session}: runSeeded(parsed, mode, initial, session, agentDir, authPath, bundlePath, packageDir)
+    case Done{+session}: runSeeded(parsed, mode, initial, session, agentDir, authPath, bundlePath, packageDir, startupDiagnostics)
 
 # An abort with an empty note ends quietly (upstream process.exit(0)).
 def noted(+note: String) -> IO(Unit): Bool.pick(Unit -> IO(Unit), String.is_empty(note), _ => IO.pure(Unit, Unit{}), _ => IO.print(note))(Unit{})
 
-def runChecked(parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage, checked: Selected(), name: Maybe<&2, String>, agentDir: String, authPath: String, bundlePath: String, packageDir: String) -> IO(Unit):
+def runChecked(parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage, checked: Selected(), name: Maybe<&2, String>, agentDir: String, authPath: String, bundlePath: String, packageDir: String, startupDiagnostics: Diagnostics()) -> IO(Unit):
   match checked:
     case Fail{Failed{message}}: fail(message)
     case Fail{Aborted{note}}: noted(note)
     case Done{+session}:
       do IO<Unit>:
         result : Selected() <- named(session, name)
-        runNamed(parsed, mode, initial, result, agentDir, authPath, bundlePath, packageDir)
+        runNamed(parsed, mode, initial, result, agentDir, authPath, bundlePath, packageDir, startupDiagnostics)
 
 # upstream main: a stored session whose cwd no longer exists asks, in
 # interactive mode, whether to continue in the current cwd (Cancel exits);
@@ -1156,7 +1173,7 @@ def cwdResolved(mode: AppMode, +session: Session(), issue: Maybe<&2, SessionCwd.
     case None{}: IO.pure(Selected(), Done{session})
     case Some{found}: missingCwd(interactive(mode), found, sessionDir, agentDir, assets, settings)
 
-def runSelected(parsed: Args.Args, +mode: AppMode, initial: Initial.InitialMessage, cwd: String, selection: Selected(), name: Maybe<&2, String>, +agentDir: String, authPath: String, bundlePath: String, +packageDir: String, startup: Settings.SettingsManager, sessionDir: Maybe<&2, String>) -> IO(Unit):
+def runSelected(parsed: Args.Args, +mode: AppMode, initial: Initial.InitialMessage, cwd: String, selection: Selected(), name: Maybe<&2, String>, +agentDir: String, authPath: String, bundlePath: String, +packageDir: String, startup: Settings.SettingsManager, sessionDir: Maybe<&2, String>, startupDiagnostics: Diagnostics()) -> IO(Unit):
   match selection:
     case Fail{Failed{message}}: fail(message)
     case Fail{Aborted{note}}: noted(note)
@@ -1164,7 +1181,7 @@ def runSelected(parsed: Args.Args, +mode: AppMode, initial: Initial.InitialMessa
       do IO<Unit>:
         issue : Maybe<&2, SessionCwd.SessionCwdIssue> <- SessionCwd.getMissingSessionCwdIssue(Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, session), Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, session), cwd)
         checked : Selected() <- cwdResolved(mode, session, issue, sessionDir, agentDir, packageDir, startup)
-        runChecked(parsed, mode, initial, checked, name, agentDir, authPath, bundlePath, packageDir)
+        runChecked(parsed, mode, initial, checked, name, agentDir, authPath, bundlePath, packageDir, startupDiagnostics)
 
 def flagName(flags: SessionFlags) -> Maybe<&2, String>:
   match flags:
@@ -1196,15 +1213,21 @@ def pickerTrueColor(capabilities: Settings.TerminalCapabilities) -> Maybe<&2,Boo
   match capabilities:
     case Settings.TerminalCapabilities{_,color,_}: color
 
+def runLoaded(+parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage, +flags: SessionFlags, +cwd: String, +home: String, +url: URL.Context, +agentDir: String, authPath: Result<&2, &2, FS.Error, String>, bundle: Result<&1, &1, U32 & String, String>, packageDir: Result<&1, &1, U32 & String, String>, sessionEnv: Result<&1, &1, U32 & String, String>, loaded: Settings.SettingsManager & Diagnostics()) -> IO(Unit):
+  match loaded:
+    case Tuple{+startup, startupDiagnostics}:
+      do IO<Unit>:
+        +assets : String <- resolvedPackageDir(cwd,packageDir)
+        +visual : Picker.Visual <- IO.pure(Picker.Visual,Picker.Visual{selectedTheme(themeOverride(parsed),startup),assets,agentDir,home,pickerTrueColor(Settings.getTerminalCapabilityOverrides(startup))})
+        +sessionDir : Maybe<&2, String> <- IO.pure(Maybe<&2, String>, sessionDirectory(flagSessionDir(flags), sessionEnv, home, cwd, Result.default(&2, &2, Paths.Error, Maybe<&2, String>, Settings.getSessionDir(Paths.Environment{cwd, home, url}, startup), None{})))
+        selection : Selected() <- createSessionManager(flags, Paths.Environment{cwd, home, url}, cwd, sessionDir, agentDir, Path.join(agentDir, "sessions"), visual)
+        runSelected(parsed, mode, initial, cwd, selection, flagName(flags), agentDir, located(authPath, Path.join(cwd, "auth.json")), envOr(bundle, "/etc/ssl/certs/ca-certificates.crt"), assets, startup, sessionDir, startupDiagnostics)
+
 def runConfigured(+parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage, +flags: SessionFlags, +cwd: String, +home: String, +url: URL.Context, agentDirLocated: Result<&2, &2, FS.Error, String>, authPath: Result<&2, &2, FS.Error, String>, bundle: Result<&1, &1, U32 & String, String>, packageDir: Result<&1, &1, U32 & String, String>, sessionEnv: Result<&1, &1, U32 & String, String>) -> IO(Unit):
   +agentDir = located(agentDirLocated, Path.join(cwd, ".pi"))
   do IO<Unit>:
-    +startup : Settings.SettingsManager <- loadSettings(cwd, agentDir)
-    +assets : String <- resolvedPackageDir(cwd,packageDir)
-    +visual : Picker.Visual <- IO.pure(Picker.Visual,Picker.Visual{selectedTheme(themeOverride(parsed),startup),assets,agentDir,home,pickerTrueColor(Settings.getTerminalCapabilityOverrides(startup))})
-    +sessionDir : Maybe<&2, String> <- IO.pure(Maybe<&2, String>, sessionDirectory(flagSessionDir(flags), sessionEnv, home, cwd, Result.default(&2, &2, Paths.Error, Maybe<&2, String>, Settings.getSessionDir(Paths.Environment{cwd, home, url}, startup), None{})))
-    selection : Selected() <- createSessionManager(flags, Paths.Environment{cwd, home, url}, cwd, sessionDir, agentDir, Path.join(agentDir, "sessions"), visual)
-    runSelected(parsed, mode, initial, cwd, selection, flagName(flags), agentDir, located(authPath, Path.join(cwd, "auth.json")), envOr(bundle, "/etc/ssl/certs/ca-certificates.crt"), assets, startup, sessionDir)
+    loaded : Settings.SettingsManager & Diagnostics() <- loadSettings(cwd, agentDir)
+    runLoaded(parsed, mode, initial, flags, cwd, home, url, agentDir, authPath, bundle, packageDir, sessionEnv, loaded)
 
 def runWithFiles(+parsed: Args.Args, mode: AppMode, stdin: Maybe<&2, String>, messages: List<&2, String>, environment: Paths.Environment, files: Files.ResultOf(Files.ProcessedFiles)) -> IO(Unit):
   match environment files:
@@ -1365,6 +1388,24 @@ def listModels(search: Maybe<&2,String>) -> IO(Unit):
     transport : Runtime.Outcome(Runtime.Transport) <- Runtime.createTransport(envOr(bundle,"/etc/ssl/certs/ca-certificates.crt"))
     listReady(transport,authPath,search)
 
+# upstream main reports the startup settings diagnostics before --help and
+# --list-models output.
+def reportLoaded(loaded: Settings.SettingsManager & Diagnostics()) -> IO(Unit):
+  match loaded:
+    case Tuple{_, diagnostics}: reportStartup(diagnostics, Nil{})
+def startupSettingsIn(cwd: Result<&2,&2,FS.Error,String>, agentDir: Result<&2,&2,FS.Error,String>) -> IO(Unit):
+  match cwd:
+    case Fail{_}: IO.pure(Unit,Unit{})
+    case Done{+path}:
+      do IO<Unit>:
+        loaded : Settings.SettingsManager & Diagnostics() <- loadSettings(path, located(agentDir, Path.join(path, ".pi")))
+        reportLoaded(loaded)
+def reportStartupSettings() -> IO(Unit):
+  do IO<Unit>:
+    cwd : Result<&2,&2,FS.Error,String> <- FS.cwd()
+    agentDir : Result<&2,&2,FS.Error,String> <- Config.getAgentDir()
+    startupSettingsIn(cwd, agentDir)
+
 def dispatchExport(+parsed: Args.Args,request: Maybe<&2,ExportRequest>,+stdinTty: Bool,stdoutTty: Bool) -> IO(Unit):
   match request:
     case Some{value}: exportFile(value)
@@ -1372,12 +1413,12 @@ def dispatchExport(+parsed: Args.Args,request: Maybe<&2,ExportRequest>,+stdinTty
 
 def dispatchList(+parsed: Args.Args,search: Maybe<&2,Maybe<&2,String>>,stdinTty: Bool,stdoutTty: Bool) -> IO(Unit):
   match search:
-    case Some{pattern}: listModels(pattern)
+    case Some{pattern}: IO.bind(Unit, Unit, reportStartupSettings(), _ => listModels(pattern))
     case None{}: dispatchExport(parsed,exportRequest(parsed),stdinTty,stdoutTty)
 
 def dispatch(+parsed: Args.Args, help: Bool, version: Bool, invalid: Bool, +stdinTty: Bool, stdoutTty: Bool, flagError: Maybe<&2, String>) -> IO(Unit):
   match help version invalid flagError:
-    case True{} _ _ _: IO.print(Args.helpText(Config.appName()))
+    case True{} _ _ _: IO.bind(Unit, Unit, reportStartupSettings(), _ => IO.print(Args.helpText(Config.appName())))
     case _ True{} _ _: IO.print(Config.version())
     case _ _ True{} _: IO.die(Unit, 1, "")
     case _ _ _ Some{message}: fail(message)
