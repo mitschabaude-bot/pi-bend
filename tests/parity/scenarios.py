@@ -32,6 +32,31 @@ def typed(word):
 FD = shutil.which("fd") or os.path.expanduser("~/.pi/agent/bin/fd")
 FD_PATH = {"PATH": os.path.dirname(FD) + ":" + os.environ.get("PATH", "")}
 
+CODE_ANSWER = """Here is the code:
+
+```typescript
+interface Point { x: number; y: number }
+// Distance between two points.
+export function distance(a: Point, b: Point): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+const origin: Point = { x: 0, y: 0 };
+console.log(`distance: ${distance(origin, { x: 3, y: 4 })}`);
+```
+
+```python
+def fib(n: int) -> int:
+    \"\"\"Return the n-th Fibonacci number.\"\"\"
+    a, b = 0, 1
+    for _ in range(n):
+        a, b = b, a + b
+    return a
+```
+
+END-OF-CODE"""
+
 ANSWER = " ".join(f"word{index}" for index in range(1, 121)) + " END-OF-ANSWER"
 
 SCENARIOS = [
@@ -254,6 +279,14 @@ SCENARIOS = [
         "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "hello"), ("key", "Enter"),
                   ("wait", r"word1\b", "first-token"), ("snap", "working"), ("wait", "END-OF-ANSWER", "last-token"),
                   ("settle", 0.5), ("snap", "answered")],
+    },
+    # Highlighted code blocks in an answer, then typing with them on screen.
+    {
+        "name": "code-answer",
+        "args": MODEL,
+        "turns": [{"text": CODE_ANSWER}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "code"), ("key", "Enter"),
+                  ("wait", "END-OF-CODE", "answer"), ("settle", 0.5), ("snap", "answer"), *typed("more"), ("settle", 0.3), ("snap", "typed")],
     },
     {
         "name": "new-session",

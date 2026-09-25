@@ -49,19 +49,10 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   Cloudflare providers (account/gateway auth and base-URL wrappers), and
   bedrock, vertex, mistral and radius (APIs not ported). A bare
   `--model gpt-5` therefore lists three candidates instead of pi's four.
-- **Cache warming** (`session-info`): pi 0.87.1's cache warmer and the
-  /session "Cache Warming" section are being ported.
-- **Syntax highlighting** (colour snaps with code): pi highlights code blocks
-  in answers and read/write tool output with highlight.js 10.7 (20 eager
-  grammars, the rest loaded in the background). Bend renders them in the
-  plain code colour: the port needs an ECMAScript regex engine (captures,
-  lookaround, backreferences; Bend's regex is a Thompson matcher for grep),
-  the highlight.js mode engine and the grammars, all in Bend. Not started.
 - **LaTeX in markdown** (answers with `$…$`/`$$…$$`): pi renders math with
   `packages/tui/src/latex.ts` unless `renderLatex` is false. Bend's
   `MarkdownOptions.renderLatex` exists but no LaTeX tokenizer or renderer is
-  ported, so math stays raw text. Queued after syntax highlighting (both edit
-  markdown.bend).
+  ported, so math stays raw text. Being ported.
 - **Fullscreen TUI mode** (`--tui-mode fullscreen`, setting `tuiMode`): the
   arguments parse, but `tui-alt-screen.ts` (alternate screen, scroll view,
   copy-on-select, fullscreen images) is not ported; the default regular mode is.

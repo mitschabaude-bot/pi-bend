@@ -1863,6 +1863,7 @@ def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & T
         # upstream init: once startup is rendered, register the remaining
         # highlight.js languages, then invalidate and render again.
         SyntaxHighlight.loadAllHighlightLanguages(highlighter)
+        Transcript.invalidate(transcript)
         Callback.call(Unit,Unit,render,Unit{})
         startInput(handle,redraw,queue,initial,failure,render)
     case Fail{cause} ThemeStartup{_,_,_,_,stopped,_,_,error,_,_,_,_,_,_,_,_,_}:

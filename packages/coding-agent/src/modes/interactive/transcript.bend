@@ -507,6 +507,33 @@ def padEntries(entries: List<&1,Entry>,+pad: Nat) -> IO(List<&1,Entry>):
       do IO<List<&1,Entry>>:
         next : List<&1,Entry> <- padEntries(rest,pad)
         return StatusEntry{owner,handle} <> next
+# upstream ui.invalidate(): message components drop their rendered lines.
+def invalidateEntries(entries: List<&1,Entry>) -> IO(List<&1,Entry>):
+  match entries:
+    case Nil{}: IO.pure(List<&1,Entry>,Nil{})
+    case MessageEntry{owner} <> rest:
+      do IO<List<&1,Entry>>:
+        kept : Messages.Owner <- Messages.invalidateOwner(owner)
+        next : List<&1,Entry> <- invalidateEntries(rest)
+        return MessageEntry{kept} <> next
+    case ToolEntry{owner} <> rest:
+      do IO<List<&1,Entry>>:
+        next : List<&1,Entry> <- invalidateEntries(rest)
+        return ToolEntry{owner} <> next
+    case StatusEntry{owner,handle} <> rest:
+      do IO<List<&1,Entry>>:
+        kept : Messages.Owner <- Messages.invalidateOwner(owner)
+        next : List<&1,Entry> <- invalidateEntries(rest)
+        return StatusEntry{kept,handle} <> next
+def invalidated(state: State) -> IO(State & Unit):
+  match state:
+    case State{entries,tools,active,nextId,view,theme,styles,expanded,hidden,pad}:
+      do IO<State & Unit>:
+        next : List<&1,Entry> <- invalidateEntries(entries)
+        return (State{next,tools,active,nextId,view,theme,styles,expanded,hidden,pad},Unit{})
+def invalidate(handle: Handle) -> IO(Unit):
+  match handle:
+    case Handle{resource,_}: Serial.run(State,Unit,resource,invalidated)
 def changedPadding(state: State,+pad: Nat) -> IO(State & Unit):
   match state:
     case State{entries,tools,active,id,view,theme,styles,expanded,hidden,_}:

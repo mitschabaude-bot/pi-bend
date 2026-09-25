@@ -346,9 +346,14 @@ def retheme(body: Body,theme: Theme.Theme) -> Body:
     case ChangelogBody{value,_,styles}: ChangelogBody{value,theme,styles}
     case SessionInfoBody{value,_}: SessionInfoBody{value,theme}
     case HotkeysBody{markdown,_,styles}: HotkeysBody{markdown,theme,styles}
+# Like upstream's components (Markdown caches its lines per width), a message
+# renders again only after its body or the width changes. Every write bumps the
+# version, so lines rendered from an older body never serve a newer one.
+type Stamped is Data: Stamped{body: Body,version: Nat}
+type Rendered is Data: Rendered{version: Nat,width: Nat,lines: List<&2,String>}
 type Owner is Type:
-  Owner{state: Ref.Ref<Body>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
-type Handle is Data: Handle{state: Ref.Ref<Body>}
+  Owner{state: Ref.Ref<Stamped>,rendered: Ref.Ref<Maybe<&2,Rendered>>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
+type Handle is Data: Handle{state: Ref.Ref<Stamped>,rendered: Ref.Ref<Maybe<&2,Rendered>>}
 def managedLines(first: Bool,lines: List<&2,String>) -> List<&2,String>:
   match first:
     case True{}: "" <> lines
@@ -437,36 +442,64 @@ def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
     case ChangelogBody{value,theme,styles}: renderChangelog(value,theme,styles,width)
     case SessionInfoBody{value,theme}: SessionInfo.render(value,theme,width)
     case HotkeysBody{markdown,theme,styles}: renderHotkeys(markdown,theme,styles,width)
+def renderStamped(current: Stamped,+width: Nat,rendered: Ref.Ref<Maybe<&2,Rendered>>) -> IO(List<&2,String>):
+  match current:
+    case Stamped{body,version}:
+      do IO<List<&2,String>>:
+        +lines : List<&2,String> <- renderBody(body,width)
+        Ref.write(Maybe<&2,Rendered>,rendered,Some{Rendered{version,width,lines}})
+        return lines
+def cachedLines(cached: Maybe<&2,Rendered>,current: Stamped,+width: Nat,rendered: Ref.Ref<Maybe<&2,Rendered>>) -> IO(List<&2,String>):
+  match cached current:
+    case Some{Rendered{version,oldWidth,lines}} Stamped{body,+now}:
+      Bool.pick(Unit -> IO(List<&2,String>),Nat.is_eq(version,now) && Nat.is_eq(oldWidth,width),
+        _ => IO.pure(List<&2,String>,lines),
+        _ => renderStamped(Stamped{body,now},width,rendered))(Unit{})
+    case None{} current: renderStamped(current,width,rendered)
 def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
   match handle:
-    case Handle{state}:
+    case Handle{state,+rendered}:
       do IO<List<&2,String>>:
-        body : Body <- Ref.read(Body,state)
-        renderBody(body,width)
-def noInvalidate(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
+        current : Stamped <- Ref.read(Stamped,state)
+        cached : Maybe<&2,Rendered> <- Ref.read(Maybe<&2,Rendered>,rendered)
+        cachedLines(cached,current,width,rendered)
+# upstream invalidate(): the next render starts afresh.
+def invalidateLive(handle: Handle,unit: Unit) -> IO(Unit):
+  match handle: case Handle{_,rendered}: Ref.write(Maybe<&2,Rendered>,rendered,None{})
 def create(id: Component.ComponentId,body: Body) -> IO(Owner):
   do IO<Owner>:
-    +state : Ref.Ref<Body> <- Ref.new(Body,body)
-    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Handle,~Nat,~List<&2,String>,~renderLive,Handle{state})
-    +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~noInvalidate,Unit{})
-    return Owner{state,Component.Component{id,render,None{},None{},invalidate,None{},False{}},render,invalidate}
+    +state : Ref.Ref<Stamped> <- Ref.new(Stamped,Stamped{body,0n})
+    +rendered : Ref.Ref<Maybe<&2,Rendered>> <- Ref.new(Maybe<&2,Rendered>,None{})
+    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Handle,~Nat,~List<&2,String>,~renderLive,Handle{state,rendered})
+    +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Handle,~Unit,~Unit,~invalidateLive,Handle{state,rendered})
+    return Owner{state,rendered,Component.Component{id,render,None{},None{},invalidate,None{},False{}},render,invalidate}
 def borrow(owner: Owner) -> Owner & Component.Component & Handle:
   match owner:
-    case Owner{+state,+component,render,invalidate}: (Owner{state,component,render,invalidate},component,Handle{state})
+    case Owner{+state,+rendered,+component,render,invalidate}: (Owner{state,rendered,component,render,invalidate},component,Handle{state,rendered})
+def rethemed(current: Stamped,theme: Theme.Theme) -> Stamped:
+  match current: case Stamped{body,version}: Stamped{retheme(body,theme),version + 1n}
+def expandedStamp(current: Stamped,expanded: Bool) -> Stamped:
+  match current: case Stamped{body,version}: Stamped{expandedBody(body,expanded),version + 1n}
+def invalidateOwner(owner: Owner) -> IO(Owner):
+  match owner:
+    case Owner{state,+rendered,component,render,invalidate}:
+      do IO<Owner>:
+        Ref.write(Maybe<&2,Rendered>,rendered,None{})
+        return Owner{state,rendered,component,render,invalidate}
 def rethemeOwner(owner: Owner,theme: Theme.Theme) -> IO(Owner):
   match owner:
-    case Owner{+state,+component,render,invalidate}:
+    case Owner{+state,rendered,+component,render,invalidate}:
       do IO<Owner>:
-        body : Body <- Ref.read(Body,state)
-        Ref.write(Body,state,retheme(body,theme))
-        return Owner{state,component,render,invalidate}
+        current : Stamped <- Ref.read(Stamped,state)
+        Ref.write(Stamped,state,rethemed(current,theme))
+        return Owner{state,rendered,component,render,invalidate}
 def expandOwner(owner: Owner,expanded: Bool) -> IO(Owner):
   match owner:
-    case Owner{+state,+component,render,invalidate}:
+    case Owner{+state,rendered,+component,render,invalidate}:
       do IO<Owner>:
-        body : Body <- Ref.read(Body,state)
-        Ref.write(Body,state,expandedBody(body,expanded))
-        return Owner{state,component,render,invalidate}
+        current : Stamped <- Ref.read(Stamped,state)
+        Ref.write(Stamped,state,expandedStamp(current,expanded))
+        return Owner{state,rendered,component,render,invalidate}
 def hiddenBody(body: Body,hidden: Bool) -> Body:
   match body:
     case AssistantBody{value}: AssistantBody{setHideThinkingBlock(value,hidden)}
@@ -476,30 +509,45 @@ def paddedBody(body: Body,pad: Nat) -> Body:
     case UserBody{value,preceded}: UserBody{setUserOutputPad(value,pad),preceded}
     case AssistantBody{value}: AssistantBody{setAssistantOutputPad(value,pad)}
     case other: other
+def paddedStamp(current: Stamped,pad: Nat) -> Stamped:
+  match current: case Stamped{body,version}: Stamped{paddedBody(body,pad),version + 1n}
 def padOwner(owner: Owner,pad: Nat) -> IO(Owner):
   match owner:
-    case Owner{+state,+component,render,invalidate}:
+    case Owner{+state,rendered,+component,render,invalidate}:
       do IO<Owner>:
-        body : Body <- Ref.read(Body,state)
-        Ref.write(Body,state,paddedBody(body,pad))
-        return Owner{state,component,render,invalidate}
+        current : Stamped <- Ref.read(Stamped,state)
+        Ref.write(Stamped,state,paddedStamp(current,pad))
+        return Owner{state,rendered,component,render,invalidate}
+def hiddenStamp(current: Stamped,hidden: Bool) -> Stamped:
+  match current: case Stamped{body,version}: Stamped{hiddenBody(body,hidden),version + 1n}
 def hideThinkingOwner(owner: Owner,hidden: Bool) -> IO(Owner):
   match owner:
-    case Owner{+state,+component,render,invalidate}:
+    case Owner{+state,rendered,+component,render,invalidate}:
       do IO<Owner>:
-        body : Body <- Ref.read(Body,state)
-        Ref.write(Body,state,hiddenBody(body,hidden))
-        return Owner{state,component,render,invalidate}
+        current : Stamped <- Ref.read(Stamped,state)
+        Ref.write(Stamped,state,hiddenStamp(current,hidden))
+        return Owner{state,rendered,component,render,invalidate}
+def replaced(current: Stamped,body: Body) -> Stamped:
+  match current: case Stamped{_,version}: Stamped{body,version + 1n}
 def set(handle: Handle,body: Body) -> IO(Unit):
   match handle:
-    case Handle{state}: Ref.write(Body,state,body)
+    case Handle{+state,_}:
+      do IO<Unit>:
+        current : Stamped <- Ref.read(Stamped,state)
+        Ref.write(Stamped,state,replaced(current,body))
+def bodyOf(current: Stamped) -> Body:
+  match current: case Stamped{body,_}: body
 def current(handle: Handle) -> IO(Body):
   match handle:
-    case Handle{state}: Ref.read(Body,state)
+    case Handle{state,_}:
+      do IO<Body>:
+        value : Stamped <- Ref.read(Stamped,state)
+        return bodyOf(value)
 def dispose(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{state,_,render,invalidate}:
+    case Owner{state,rendered,_,render,invalidate}:
       do IO<Unit>:
-        old : Body <- Ref.dispose(Body,state)
+        old : Stamped <- Ref.dispose(Stamped,state)
+        lines : Maybe<&2,Rendered> <- Ref.dispose(Maybe<&2,Rendered>,rendered)
         Callback.dispose(Nat,List<&2,String>,render)
         Callback.dispose(Unit,Unit,invalidate)
