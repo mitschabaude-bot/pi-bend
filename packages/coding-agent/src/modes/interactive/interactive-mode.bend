@@ -20,6 +20,9 @@ import ../../core/prompt-templates.bend as Templates
 import ../../core/settings-manager.bend as Settings
 import ../../core/skills.bend as Skills
 import ../../core/slash-commands.bend as Slash
+import ../../core/diagnostics.bend as Diagnostics
+import ../../core/extensions/runner.bend as ExtensionRunner
+import ../../core/extensions/types.bend as ExtensionTypes
 import ./model-search.bend as Search
 import ./components/model-selector.bend as ModelPicker
 import ./session-controller.bend as Controller
@@ -241,7 +244,7 @@ def providerEntries(+id: String,+name: String,auth: Auth.ProviderAuth,+rest: Lis
 def providerOptions(providers: List<&2,AiModels.Provider>) -> List<&2,AuthSelectorProvider>:
   match providers:
     case Nil{}: Nil{}
-    case AiModels.Provider{id,name,_,auth,_,_} <> rest: providerEntries(id,name,auth,providerOptions(rest))
+    case AiModels.Provider{id,name,_,auth,_,_,_} <> rest: providerEntries(id,name,auth,providerOptions(rest))
 def notAfter(order: Cmp) -> Bool:
   match order:
     case GT{}: False{}
@@ -357,7 +360,8 @@ def loginCompletions(state: LoginCompletion,prefix: String) -> IO(AC.ResultOf(Ma
     case LoginCompletion{session,+collator}:
       do IO<AC.ResultOf(Maybe<&2,List<&2,AC.AutocompleteItem>>)>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
-        return loginArgumentItems(collator,getLoginProviderOptions(collator,Models.getProviders(Session.modelRuntime(live))),prefix)
+        providers : List<&2,AiModels.Provider> <- Models.getProviders(Session.modelRuntime(live))
+        return loginArgumentItems(collator,getLoginProviderOptions(collator,providers),prefix)
 
 # upstream getAutocompleteSourceTag and prefixAutocompleteDescription. Package
 # sources (npm and git installs) are not ported, so resources carry auto,
@@ -376,6 +380,8 @@ def sourceTag(info: Skills.SourceInfo) -> String:
 def prefixAutocompleteDescription(+description: String,info: Skills.SourceInfo) -> Maybe<&2,String>:
   +tag = sourceTag(info)
   Some{Bool.pick(String,String.is_empty(description),"[" ++ tag ++ "]","[" ++ tag ++ "] " ++ description)}
+def prefixOptionalDescription(description: Maybe<&2,String>,info: Skills.SourceInfo) -> Maybe<&2,String>:
+  prefixAutocompleteDescription(Maybe.default(&2,String,description,""),info)
 
 type Arguments is Data: Arguments{model: Callback.Callback<String,AC.ResultOf(Maybe<&2,List<&2,AC.AutocompleteItem>>)>,thinking: Callback.Callback<String,AC.ResultOf(Maybe<&2,List<&2,AC.AutocompleteItem>>)>,login: Callback.Callback<String,AC.ResultOf(Maybe<&2,List<&2,AC.AutocompleteItem>>)>}
 def argumentsFor(+name: String,arguments: Arguments) -> Maybe<&2,Callback.Callback<String,AC.ResultOf(Maybe<&2,List<&2,AC.AutocompleteItem>>)>>:
@@ -399,6 +405,50 @@ def skillCommands(skills: List<&2,Skills.Skill>) -> List<&2,AC.Command>:
     case Nil{}: Nil{}
     case Skills.Skill{name,description,_,_,info,_} <> rest:
       AC.Slash{AC.SlashCommand{"skill:" ++ name,prefixAutocompleteDescription(description,info),None{},None{}}} <> skillCommands(rest)
+def builtinNames(commands: List<&2,Slash.BuiltinSlashCommand>) -> List<&2,String>:
+  match commands:
+    case Nil{}: Nil{}
+    case Slash.BuiltinSlashCommand{name,_,_} <> rest: name <> builtinNames(rest)
+def isBuiltinName(names: List<&2,String>,+name: String) -> Bool:
+  match names:
+    case Nil{}: False{}
+    case first <> rest: String.eq(first,name) || isBuiltinName(rest,name)
+# upstream createBaseAutocompleteProvider's extension commands: those whose
+# name is not a built-in command, by invocation name, with the source tag and
+# their own argument completions (which stay with the extension).
+def extensionCommands(commands: List<&2,ExtensionTypes.ResolvedCommand>,+builtins: List<&2,String>) -> List<&2,AC.Command>:
+  match commands:
+    case Nil{}: Nil{}
+    case ExtensionTypes.ResolvedCommand{+name,invocation,info,description,completions,_} <> rest:
+      +tail = extensionCommands(rest,builtins)
+      Bool.pick(List<&2,AC.Command>,isBuiltinName(builtins,name),tail,AC.Slash{AC.SlashCommand{invocation,prefixOptionalDescription(description,info),None{},completions}} <> tail)
+def conflictMessage(+name: String,+invocation: String) -> String:
+  Bool.pick(String,String.eq(invocation,name),"Extension command '/" ++ name ++ "' conflicts with built-in interactive command. Skipping in autocomplete.","Extension command '/" ++ name ++ "' conflicts with built-in interactive command. Available as '/" ++ invocation ++ "'.")
+def sourcePath(info: Skills.SourceInfo) -> String:
+  match info:
+    case Skills.SourceInfo{path,_,_,_,_}: path
+def conflicts(commands: List<&2,ExtensionTypes.ResolvedCommand>,+builtins: List<&2,String>) -> List<&2,Diagnostics.ResourceDiagnostic>:
+  match commands:
+    case Nil{}: Nil{}
+    case ExtensionTypes.ResolvedCommand{+name,invocation,info,_,_,_} <> rest:
+      +tail = conflicts(rest,builtins)
+      Bool.pick(List<&2,Diagnostics.ResourceDiagnostic>,isBuiltinName(builtins,name),Diagnostics.warning(conflictMessage(name,invocation),sourcePath(info)) <> tail,tail)
+# upstream getBuiltInCommandConflictDiagnostics: a warning for each extension
+# command named like a built-in interactive command, which autocomplete skips.
+def getBuiltInCommandConflictDiagnostics(commands: List<&2,ExtensionTypes.ResolvedCommand>) -> List<&2,Diagnostics.ResourceDiagnostic>:
+  conflicts(commands,builtinNames(Slash.BUILTIN_SLASH_COMMANDS()))
+def registeredCommands(runner: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> IO(List<&2,ExtensionTypes.ResolvedCommand>):
+  match runner:
+    case None{}: IO.pure(List<&2,ExtensionTypes.ResolvedCommand>,Nil{})
+    case Some{found}: ExtensionRunner.getRegisteredCommands(found)
+# upstream isExtensionCommand: `/name ...` names a registered extension
+# command (by invocation name). Input that is one runs at once, even while
+# compacting, instead of being queued.
+def isExtensionCommand(session: Session.AgentSession,+text: String) -> IO(Bool):
+  do IO<Bool>:
+    runner : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(session)
+    commands : List<&2,ExtensionTypes.ResolvedCommand> <- registeredCommands(runner)
+    return String.starts_with(text,"/") && Maybe.is_some(&2,ExtensionTypes.ResolvedCommand,ExtensionRunner.findInvocation(commands,Session.commandName(text)))
 def enabledSkills(enabled: Bool,skills: List<&2,Skills.Skill>) -> List<&2,AC.Command>:
   match enabled:
     case True{}: skillCommands(skills)
@@ -438,13 +488,15 @@ def createAutocompleteProvider(+session: Ref.Ref<Session.AgentSession>,home: Str
     settings : Settings.SettingsManager <- Session.getSettings(live)
     templates : List<&2,Templates.PromptTemplate> <- Session.promptTemplates(live)
     skills : List<&2,Skills.Skill> <- Session.getSkills(live)
+    runner : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(live)
+    extensions : List<&2,ExtensionTypes.ResolvedCommand> <- registeredCommands(runner)
     model : Callback.Callback<String,AC.ResultOf(Maybe<&2,List<&2,AC.AutocompleteItem>>)> <- Callback.create(~Ref.Ref<Session.AgentSession>,~String,~AC.ResultOf(Maybe<&2,List<&2,AC.AutocompleteItem>>),~modelCompletions,session)
     thinking : Callback.Callback<String,AC.ResultOf(Maybe<&2,List<&2,AC.AutocompleteItem>>)> <- Callback.create(~Ref.Ref<Session.AgentSession>,~String,~AC.ResultOf(Maybe<&2,List<&2,AC.AutocompleteItem>>),~thinkingCompletions,session)
     loaded : Result<&2,&2,Collation.LoadError,Collation.Collator> <- Collation.load(data)
     +collator : Maybe<&2,Collation.Collator> <- IO.pure(Maybe<&2,Collation.Collator>,loadedCollator(loaded))
     login : Callback.Callback<String,AC.ResultOf(Maybe<&2,List<&2,AC.AutocompleteItem>>)> <- Callback.create(~LoginCompletion,~String,~AC.ResultOf(Maybe<&2,List<&2,AC.AutocompleteItem>>),~loginCompletions,LoginCompletion{session,collator})
     +arguments : Arguments <- IO.pure(Arguments,Arguments{model,thinking,login})
-    +commands : List<&2,AC.Command> <- IO.pure(List<&2,AC.Command>,List.append(&2,AC.Command,builtinCommands(Slash.BUILTIN_SLASH_COMMANDS(),arguments),List.append(&2,AC.Command,templateCommands(templates),enabledSkills(Settings.getEnableSkillCommands(settings),skills))))
+    +commands : List<&2,AC.Command> <- IO.pure(List<&2,AC.Command>,List.append(&2,AC.Command,builtinCommands(Slash.BUILTIN_SLASH_COMMANDS(),arguments),List.concat(&2,AC.Command,[templateCommands(templates),extensionCommands(extensions,builtinNames(Slash.BUILTIN_SLASH_COMMANDS())),enabledSkills(Settings.getEnableSkillCommands(settings),skills)])))
     combinedOwner(arguments,AC.create(commands,sessionCwd(live),home,sortPolicy(collator),recursiveFiles))
 def disposeAutocompleteProvider(owner: AutocompleteOwner) -> IO(Unit):
   match owner:

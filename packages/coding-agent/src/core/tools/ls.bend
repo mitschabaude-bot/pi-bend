@@ -277,7 +277,7 @@ def invoke(~le: String -> String -> Bool, registered: Registered, request: Agent
   match registered:
     case Registered{environment,source}:
       do IO<ToolResult()>:
-        context : Maybe<&2,Ctx.ExtensionContext> <- Ctx.current(source)
+        context : Maybe<&2,Ctx.ContextView> <- Ctx.current(source)
         invokeWithContext(~le,environment,LsContext{Ctx.cwdOf(context)},request)
 
 def parameter(kind: String, description: String) -> Value.Value:

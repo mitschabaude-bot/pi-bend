@@ -422,15 +422,15 @@ def modelField(model: Maybe<&2,Ai.Model<Ai.JsonValue>>, provider: Bool) -> Maybe
   match model:
     case None{}: None{}
     case Some{Ai.Model{id,_,_,owner,_,_,_,_,_,_,_,_,_,_,_,_}}: Some{Bool.pick(String,provider,owner,id)}
-def toolContext(context: Maybe<&2,Ctx.ExtensionContext>) -> BashContext:
+def toolContext(context: Maybe<&2,Ctx.ContextView>) -> BashContext:
   match context:
     case None{}: noContext()
-    case Some{Ctx.ExtensionContext{cwd,+model,session,file,thinking}}: BashContext{Some{cwd},Some{session},file,modelField(model,True{}),modelField(model,False{}),Some{Levels.name(thinking)}}
+    case Some{Ctx.ContextView{cwd,+model,session,file,thinking}}: BashContext{Some{cwd},Some{session},file,modelField(model,True{}),modelField(model,False{}),Some{Levels.name(thinking)}}
 def invoke(registered: Registered, request: Agent.ToolExecutionInput<BashToolDetails>) -> IO(ToolResult()):
   match registered:
     case Registered{invocation,source}:
       do IO<ToolResult()>:
-        context : Maybe<&2,Ctx.ExtensionContext> <- Ctx.current(source)
+        context : Maybe<&2,Ctx.ContextView> <- Ctx.current(source)
         invokeWithContext(invocation,toolContext(context),request)
 
 def created(invocation: Registered, owned: Maybe<&2,BashOperations>, consumers: Ref.Ref<Consumers()>) -> IO(ToolOwner):

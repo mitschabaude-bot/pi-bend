@@ -10,4 +10,4 @@ import ./cloudflare-ai-gateway.models.bend as Catalog
 def cloudflareAIGatewayProvider() -> IO(Models.Provider):
   do IO<Models.Provider>:
     apiKey : Auth.ApiKeyAuth <- CloudflareAuth.cloudflareAIGatewayAuth()
-    return Models.Provider{"cloudflare-ai-gateway", "Cloudflare AI Gateway", "", Auth.ProviderAuth{Some{apiKey}, None{}}, Catalog.CLOUDFLARE_AI_GATEWAY_MODELS(), Models.CloudflareStreams{[T.AnthropicMessagesApi{}, T.OpenAICompletionsApi{}, T.OpenAIResponsesApi{}]}}
+    return Models.Provider{"cloudflare-ai-gateway", "Cloudflare AI Gateway", "", Auth.ProviderAuth{Some{apiKey}, None{}}, Catalog.CLOUDFLARE_AI_GATEWAY_MODELS(), Models.CloudflareStreams{[T.AnthropicMessagesApi{}, T.OpenAICompletionsApi{}, T.OpenAIResponsesApi{}]}, None{}}

@@ -63,7 +63,7 @@ def authValue(resolution: Resolve.Resolution()) -> V.Value:
 
 def providerValue(+runtime: Models.ModelRuntime, provider: AiModels.Provider) -> IO(V.Value):
   match provider:
-    case AiModels.Provider{+id, name, baseUrl, _, models, _}:
+    case AiModels.Provider{+id, name, baseUrl, _, models, _, _}:
       do IO<V.Value>:
         available : Bool <- Models.hasConfiguredAuth(runtime, id)
         auth : Resolve.Resolution() <- Models.getAuth(runtime, id, Resolve.noOverrides())
@@ -87,7 +87,8 @@ def configuredValues(+runtime: Models.ModelRuntime, ids: List<&2, String>) -> IO
     case Nil{}: IO.pure(List<&2, V.Value>, Nil{})
     case +id <> rest:
       do IO<List<&2, V.Value>>:
-        value : Maybe<&2, V.Value> <- presentValue(runtime, Models.getProvider(runtime, id))
+        provider : Maybe<&2, AiModels.Provider> <- Models.getProvider(runtime, id)
+        value : Maybe<&2, V.Value> <- presentValue(runtime, provider)
         others : List<&2, V.Value> <- configuredValues(runtime, rest)
         return prepend(value, others)
 
@@ -109,7 +110,8 @@ def modelAuths(+runtime: Models.ModelRuntime, references: List<String>) -> IO(Li
     case Nil{}: IO.pure(List<&2, R.Property<V.Value>>, Nil{})
     case +reference <> rest:
       do IO<List<&2, R.Property<V.Value>>>:
-        entry : R.Property<V.Value> <- modelAuthValue(runtime, reference, Models.findExactModelReferenceMatch(reference, Models.getModels(runtime)))
+        models : List<&2, Models.Model()> <- Models.getModels(runtime)
+        entry : R.Property<V.Value> <- modelAuthValue(runtime, reference, Models.findExactModelReferenceMatch(reference, models))
         others : List<&2, R.Property<V.Value>> <- modelAuths(runtime, rest)
         return entry <> others
 
@@ -117,7 +119,8 @@ def report(+runtime: Models.ModelRuntime, references: List<String>) -> IO(String
   do IO<String>:
     configured : List<&2, V.Value> <- configuredValues(runtime, Config.getProviderIds(Models.getModelConfig(runtime)))
     auths : List<&2, R.Property<V.Value>> <- modelAuths(runtime, references)
-    return line(object([R.Property{"error", optionalText(Models.getError(runtime))}, R.Property{"providers", V.ArrayValue{texts(providerIds(Models.getProviders(runtime)))}}, R.Property{"configured", V.ArrayValue{configured}}, R.Property{"modelAuth", object(auths)}]))
+    providers : List<&2, AiModels.Provider> <- Models.getProviders(runtime)
+    return line(object([R.Property{"error", optionalText(Models.getError(runtime))}, R.Property{"providers", V.ArrayValue{texts(providerIds(providers))}}, R.Property{"configured", V.ArrayValue{configured}}, R.Property{"modelAuth", object(auths)}]))
 
 def unusedRefresh(unused: Unit, input: Auth.RefreshInput) -> IO(Result<&2, &2, String, Auth.Credential>):
   IO.pure(Result<&2, &2, String, Auth.Credential>, Fail{"unused"})

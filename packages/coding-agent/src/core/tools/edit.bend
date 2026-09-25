@@ -262,7 +262,7 @@ def resolved(environment: Invocation, path: String, edits: List<&2, Edits.Edit>,
     case _ Fail{cause}: IO.pure(ToolResult(), Fail{InvalidPath{cause}})
     case Invocation{_, _, queue, operations} Done{absolute}: execute(queue, operations, absolute, path, edits, signal)
 
-def invokeInput(+environment: Invocation, context: Maybe<&2, Ctx.ExtensionContext>, signal: Maybe<&2, Abort.AbortSignal<Unit>>, parsed: ResultOf(EditToolInput)) -> IO(ToolResult()):
+def invokeInput(+environment: Invocation, context: Maybe<&2, Ctx.ContextView>, signal: Maybe<&2, Abort.AbortSignal<Unit>>, parsed: ResultOf(EditToolInput)) -> IO(ToolResult()):
   match environment parsed:
     case _ Fail{error}: IO.pure(ToolResult(), Fail{error})
     case Invocation{paths, cwd, _, _} Done{EditToolInput{+path, edits}}: resolved(environment, path, edits, signal, Paths.resolveToCwd(paths, path, Ctx.cwdOr(context, cwd)))
@@ -270,7 +270,7 @@ def invokeInput(+environment: Invocation, context: Maybe<&2, Ctx.ExtensionContex
 # upstream wrapToolDefinition: the registered tool resolves paths against the
 # session's cwd when it runs, or its own without a bound session.
 type Registered is Data: Registered{environment: Invocation, source: Ctx.ContextSource()}
-def invokeRequest(environment: Invocation, context: Maybe<&2, Ctx.ExtensionContext>, request: Agent.ToolExecutionInput<EditToolDetails>) -> IO(ToolResult()):
+def invokeRequest(environment: Invocation, context: Maybe<&2, Ctx.ContextView>, request: Agent.ToolExecutionInput<EditToolDetails>) -> IO(ToolResult()):
   match request:
     case Agent.ToolExecutionInput{_, arguments, signal, _}: invokeInput(environment, context, signal, parseInput(arguments))
 
@@ -278,7 +278,7 @@ def invoke(registered: Registered, request: Agent.ToolExecutionInput<EditToolDet
   match registered:
     case Registered{environment, source}:
       do IO<ToolResult()>:
-        context : Maybe<&2, Ctx.ExtensionContext> <- Ctx.current(source)
+        context : Maybe<&2, Ctx.ContextView> <- Ctx.current(source)
         invokeRequest(environment, context, request)
 
 def stringParameter(description: String) -> Value.Value:

@@ -62,6 +62,11 @@ import ./tools/index.bend as Tools
 import ../utils/tools-manager.bend as Manager
 import ./tools/file-mutation-queue.bend as Queue
 import ./extensions/context.bend as Ctx
+import ./extensions/loader.bend as ExtensionLoader
+import ./extensions/runner.bend as ExtensionRunner
+import ./extensions/types.bend as ExtensionTypes
+import ../extensions/index.bend as BuiltinExtensions
+import ../config.bend as AppConfig
 import ./provider-composer.bend as Composer
 
 # The owned services behind one agent: transport, credentials, model runtime,
@@ -259,7 +264,8 @@ def openProvider(config: ProviderStreams, input: Providers.Input(LoopConfig(), U
     case ProviderStreams{responses, +fetch, defaults, KeySource{+models, apiKey}} T.StreamInput{+model, context, options}:
       do IO<Providers.Output(Unit, Error())>:
         resolution : Resolve.Resolution() <- Models.getModelAuth(models, model, Resolve.AuthResolutionOverrides{apiKey, None{}, None{}, None{}})
-        preparedRequest(responses, fetch, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => requestConfig(fetch, defaults, value), options), Models.getProviderStreams(models, Models.modelProvider(model)), resolution)
+        streams : AiModels.ProviderStreams <- Models.getProviderStreams(models, Models.modelProvider(model))
+        preparedRequest(responses, fetch, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => requestConfig(fetch, defaults, value), options), streams, resolution)
 
 def createStream(authorizer: C.Callback<URL.Host, TLSClient.Authorization>, fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource) -> IO(Stream()):
   do IO<Stream()>:
@@ -318,8 +324,9 @@ type Selection is Data:
 type LoadoutSource is Data: LoadoutSource{environment: Paths.Environment, options: CreateOptions, packageDir: String}
 
 # `source` rebuilds the prompt resources on reload (upstream AgentSession.reload).
+# `extensions` is the runtime's extension runner; the tools read its context.
 type Loadout is Data:
-  Loadout{sections: Prompt.SystemPromptSections(), tools: List<&2, Tools.Tool()>, skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>, context: Maybe<&2, Ctx.ContextSource()>, contextFiles: List<&2, Prompt.ContextFile>, source: Maybe<&2, LoadoutSource>}
+  Loadout{sections: Prompt.SystemPromptSections(), tools: List<&2, Tools.Tool()>, skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>, extensions: Maybe<&2, ExtensionRunner.ExtensionRunner>, contextFiles: List<&2, Prompt.ContextFile>, source: Maybe<&2, LoadoutSource>}
 
 # The system prompt with the resources it was built from.
 type Prepared is Data:
@@ -618,7 +625,10 @@ def authorizedRestore(+models: Models.ModelRuntime, found: Maybe<&2, Models.Mode
 def restoredModel(+models: Models.ModelRuntime, seed: SessionSeed) -> IO(Maybe<&2, Models.Model()>):
   match seed:
     case SessionSeed{_, _, None{}, _}: IO.pure(Maybe<&2, Models.Model()>, None{})
-    case SessionSeed{_, _, Some{S.SessionModel{provider, id}}, _}: authorizedRestore(models, Models.getModel(models, provider, id))
+    case SessionSeed{_, _, Some{S.SessionModel{provider, id}}, _}:
+      do IO<Maybe<&2, Models.Model()>>:
+        found : Maybe<&2, Models.Model()> <- Models.getModel(models, provider, id)
+        authorizedRestore(models, found)
 
 def chosenOrRestored(+models: Models.ModelRuntime, settings: Settings.SettingsManager, resolution: Models.ResolveCliModelResult, restored: Maybe<&2, Models.Model()>) -> IO(Result<&2, &2, String, Maybe<&2, Models.Model()>>):
   match restored:
@@ -810,7 +820,7 @@ def disposeServices(transport: Transport, storage: Storage.AuthStorageOwner, sto
 def disposeLoadout(loadout: Loadout) -> IO(Unit):
   match loadout:
     case Loadout{_, _, _, _, None{}, _, _}: IO.pure(Unit, Unit{})
-    case Loadout{_, _, _, _, Some{context}, _, _}: Ctx.dispose(context)
+    case Loadout{_, _, _, _, Some{runner}, _, _}: ExtensionRunner.dispose(runner)
 
 # Assembly with cleanup on every failure path.
 def constructed(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, queue: Queue.Owner, tools: List<&1, Tools.ToolOwner>, stream: Stream(), registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), validator: Loop.Validator(Error()), keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, converter: Converter(), model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLevel, loadout: Loadout, result: Result<&2, &2, StreamFn.MissingDefault, Owner()>) -> IO(Outcome(AgentRuntime)):
@@ -822,8 +832,9 @@ def constructed(transport: Transport, storage: Storage.AuthStorageOwner, storage
         disposeLoadout(loadout)
         return Fail{StreamFn.errorMessage(error)}
 
-def disposeBase(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime) -> IO(Unit):
+def disposeBase(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, extensions: ExtensionRunner.ExtensionRunner) -> IO(Unit):
   do IO<Unit>:
+    ExtensionRunner.dispose(extensions)
     Models.dispose(models)
     Auth.disposeStore(credentialStore)
     Runtime.dispose(credentials)
@@ -838,42 +849,42 @@ def createToolList(names: List<&2, Tools.ToolName>, paths: Paths.Environment, cw
         owners : List<&1, Tools.ToolOwner> <- Tools.createTools(names, environment(paths, cwd, agentDir, packageDir, fetch, handle, context), Tools.defaultOptions())
         return (queue, Tools.borrowTools(owners))
 
-def loadoutFrom(prepared: Prepared, tools: List<&2, Tools.Tool()>, context: Ctx.ContextSource(), source: LoadoutSource) -> Loadout:
+def loadoutFrom(prepared: Prepared, tools: List<&2, Tools.Tool()>, extensions: ExtensionRunner.ExtensionRunner, source: LoadoutSource) -> Loadout:
   match prepared:
-    case Prepared{sections, skills, templates, agentsFiles}: Loadout{sections, tools, skills, templates, Some{context}, agentsFiles, Some{source}}
+    case Prepared{sections, skills, templates, agentsFiles}: Loadout{sections, tools, skills, templates, Some{extensions}, agentsFiles, Some{source}}
 
-def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Maybe<&2, Models.Model()>, +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager, context: Ctx.ContextSource(), source: LoadoutSource) -> IO(Outcome(AgentRuntime)):
+def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Maybe<&2, Models.Model()>, +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager, extensions: ExtensionRunner.ExtensionRunner, source: LoadoutSource) -> IO(Outcome(AgentRuntime)):
   match created:
     case Tuple{queue, Tuple{owners, tools}}:
       do IO<Outcome(AgentRuntime)>:
         result : Result<&2, &2, StreamFn.MissingDefault, Owner()> <- Agent.new(~Unit, ~Details(), ~Custom(), ~Error(), ~Unit, agentOptions(model, thinking, stream, keys, converter, seed, settings), registry, validator, Tools.emptyDetails())
-        constructed(transport, storage, storageStore, credentials, credentialStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, loadoutFrom(prepared, tools, context, source), result)
+        constructed(transport, storage, storageStore, credentials, credentialStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, loadoutFrom(prepared, tools, extensions, source), result)
 
-def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, source: LoadoutSource) -> IO(Outcome(AgentRuntime)):
+def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, source: LoadoutSource, +extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
   match transport prompt selected:
     case Transport{+authorizer, runtime, +fetch} Done{prompt} Done{+model}:
       do IO<Outcome(AgentRuntime)>:
         queue : Queue.Owner <- Queue.create()
-        +context : Ctx.ContextSource() <- Ctx.create()
+        +context : Ctx.ContextSource() <- IO.pure(Ctx.ContextSource(), Some{ExtensionRunner.createContext(extensions)})
         created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- createToolList(names, paths, cwd, agentDir, packageDir, fetch, context, Queue.borrow(queue))
         +stream : Stream() <- createStream(authorizer, fetch, requestDefaults(settings), KeySource{models, apiKey})
         +registry : StreamFn.Registry(Unit, Details(), LoopConfig(), Error()) <- StreamFn.create(Unit, Details(), LoopConfig(), Error())
         +validator : Loop.Validator(Error()) <- Loop.createPlain(~Error(), ~validationError)
         +keys : C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>> <- C.create(~KeySource, ~String, ~Result<&2, &2, Error(), Maybe<&2, String>>, ~resolveKey, KeySource{models, apiKey})
         +converter : Converter() <- createConverter(Settings.getBlockImages(settings))
-        assembled(Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, created, stream, registry, validator, keys, converter, prompt, model, thinkingForSelection(requested, seed, settings, model), seed, settings, context, source)
+        assembled(Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, created, stream, registry, validator, keys, converter, prompt, model, thinkingForSelection(requested, seed, settings, model), seed, settings, extensions, source)
     case transport Fail{error} _:
       do IO<Outcome(AgentRuntime)>:
-        disposeBase(transport, storage, storageStore, credentials, credentialStore, models)
+        disposeBase(transport, storage, storageStore, credentials, credentialStore, models, extensions)
         return Fail{error}
     case transport _ Fail{error}:
       do IO<Outcome(AgentRuntime)>:
-        disposeBase(transport, storage, storageStore, credentials, credentialStore, models)
+        disposeBase(transport, storage, storageStore, credentials, credentialStore, models, extensions)
         return Fail{error}
 
-def withModel(+options: CreateOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, +paths: Paths.Environment, prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>) -> IO(Outcome(AgentRuntime)):
+def withModel(+options: CreateOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, +paths: Paths.Environment, prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
   match options:
-    case CreateOptions{cwd, agentDir, _, _, +packageDir, _, _, apiKey, thinking, _, _, names, _, seed, settings, _}: withModelFields(cwd, agentDir, packageDir, apiKey, thinking, seed, settings, names, transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected, LoadoutSource{paths, options, packageDir})
+    case CreateOptions{cwd, agentDir, _, _, +packageDir, _, _, apiKey, thinking, _, _, names, _, seed, settings, _}: withModelFields(cwd, agentDir, packageDir, apiKey, thinking, seed, settings, names, transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected, LoadoutSource{paths, options, packageDir}, extensions)
 
 # A runtime API key changes the provider's availability (upstream
 # setRuntimeApiKey refreshes it).
@@ -886,6 +897,57 @@ def applyKey(credentials: Runtime.RuntimeCredentials, +models: Models.ModelRunti
         Models.refreshProviderAvailability(models, provider)
     case _ _: IO.pure(Unit, Unit{})
 
+# Extensions (upstream resource loader and agent-session-services)
+# ------------------------------------------------------------------
+
+def cwdOf(options: CreateOptions) -> String:
+  match options:
+    case CreateOptions{cwd, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: cwd
+
+type Extensions is Data:
+  Extensions{runner: ExtensionRunner.ExtensionRunner, loadErrors: List<&2, ExtensionTypes.LoadError>, providerErrors: List<&2, ExtensionTypes.ExtensionError>}
+
+def runnerOf(extensions: Extensions) -> ExtensionRunner.ExtensionRunner:
+  match extensions:
+    case Extensions{runner, _, _}: runner
+
+def loadMessages(errors: List<&2, ExtensionTypes.LoadError>) -> List<&2, String>:
+  match errors:
+    case Nil{}: Nil{}
+    case ExtensionTypes.LoadError{path, error} <> rest: ("Error: Failed to load extension \"" ++ path ++ "\": " ++ error) <> loadMessages(rest)
+
+def providerMessages(errors: List<&2, ExtensionTypes.ExtensionError>) -> List<&2, String>:
+  match errors:
+    case Nil{}: Nil{}
+    case ExtensionTypes.ExtensionError{path, _, error, _} <> rest: ("Error: Extension \"" ++ path ++ "\" error: " ++ error) <> providerMessages(rest)
+
+# upstream main: extension load and provider registration errors are runtime
+# errors that stop startup, with a hint after load failures.
+def extensionFailure(extensions: Extensions) -> Maybe<&2, String>:
+  match extensions:
+    case Extensions{_, Nil{}, Nil{}}: None{}
+    case Extensions{_, Nil{}, providerErrors}: Some{String.join(providerMessages(providerErrors), "\n")}
+    case Extensions{_, loadErrors, providerErrors}: Some{String.join(List.append(&2, String, providerMessages(providerErrors), loadMessages(loadErrors)), "\n") ++ "\nHint: Start without extensions using \"" ++ AppConfig.appName() ++ " -ne\"."}
+
+def failedWith(failure: Maybe<&2, String>, prompt: Result<&2, &2, String, Prepared>) -> Result<&2, &2, String, Prepared>:
+  match failure:
+    case None{}: prompt
+    case Some{message}: Fail{message}
+
+# The built-in extensions load as inline factories and their queued providers
+# join the model runtime (upstream createAgentSessionServices); the runner is
+# created for the runtime. Upstream's following offline refresh restores
+# cached catalogs: here each registration already refreshes, and built-in
+# providers have no dynamic catalog, so it would only repeat the
+# availability check.
+def loadExtensions(+cwd: String, +models: Models.ModelRuntime) -> IO(Extensions):
+  do IO<Extensions>:
+    +runtime : ExtensionTypes.ExtensionRuntime() <- ExtensionLoader.createExtensionRuntime()
+    loadErrors : List<&2, ExtensionTypes.LoadError> <- ExtensionLoader.loadExtensionFactories(runtime, BuiltinExtensions.builtInExtensions())
+    providerErrors : List<&2, ExtensionTypes.ExtensionError> <- ExtensionLoader.bindProviders(runtime, models, None{})
+    runner : ExtensionRunner.ExtensionRunner <- ExtensionRunner.create(runtime, cwd, models)
+    return Extensions{runner, loadErrors, providerErrors}
+
 def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, +paths: Paths.Environment, borrowed: Storage.AuthStorageOwner & Storage.AuthStorage) -> IO(Outcome(AgentRuntime)):
   match transport borrowed:
     case Transport{+authorizer, runtime, +fetch} Tuple{storage, view}:
@@ -896,12 +958,13 @@ def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, 
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch, urlContext())
         anthropicOAuth : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch, urlContext())
         +models : Models.ModelRuntime <- Models.createWithAnthropic(credentialStore, oauth, Some{anthropicOAuth})
+        +extensions : Extensions <- loadExtensions(cwdOf(options), models)
         +resolution : Models.ResolveCliModelResult <- cliResolution(models, options, packageDir)
         reportResolution(resolution)
         +selected : Result<&2, &2, String, Maybe<&2, Models.Model()>> <- selectModel(models, options, resolution)
         applyKey(credentials, models, apiKey, selected)
         prompt : Result<&2, &2, String, Prepared> <- preparedFor(paths, options, packageDir)
-        withModel(withSuffixThinking(options, resolution), Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected)
+        withModel(withSuffixThinking(options, resolution), Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, paths, failedWith(extensionFailure(extensions), prompt), selected, runnerOf(extensions))
 
 def withPathsFields(options: CreateOptions, authPath: String, packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, paths: Paths.Environment) -> IO(Outcome(AgentRuntime)):
   do IO<Outcome(AgentRuntime)>:

@@ -8,4 +8,4 @@ import ./kimi-coding.models.bend as Catalog
 def kimiCodingProvider() -> IO(Models.Provider):
   do IO<Models.Provider>:
     apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("Kimi API key", ["KIMI_API_KEY"])
-    return Models.Provider{"kimi-coding", "Kimi For Coding", "https://api.kimi.com/coding", Auth.ProviderAuth{Some{apiKey}, None{}}, Catalog.KIMI_CODING_MODELS(), Models.ApiStreams{}}
+    return Models.Provider{"kimi-coding", "Kimi For Coding", "https://api.kimi.com/coding", Auth.ProviderAuth{Some{apiKey}, None{}}, Catalog.KIMI_CODING_MODELS(), Models.ApiStreams{}, None{}}

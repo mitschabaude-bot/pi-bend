@@ -10,4 +10,4 @@ import ./opencode.models.bend as Catalog
 def opencodeProvider() -> IO(Models.Provider):
   do IO<Models.Provider>:
     apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("OpenCode API key", ["OPENCODE_API_KEY"])
-    return Models.Provider{"opencode", "OpenCode Zen", "", Auth.ProviderAuth{Some{apiKey}, None{}}, Catalog.OPENCODE_MODELS(), Models.ApiStreams{}}
+    return Models.Provider{"opencode", "OpenCode Zen", "", Auth.ProviderAuth{Some{apiKey}, None{}}, Catalog.OPENCODE_MODELS(), Models.ApiStreams{}, None{}}

@@ -1005,10 +1005,11 @@
       "source": "packages/ai/test/models-runtime.test.ts",
       "status": "partial",
       "ports": [
-        "packages/ai/test/model-cost.bend"
+        "packages/ai/test/model-cost.bend",
+        "tests/models-refresh.bend"
       ],
       "sha256": "49c86cd856972ee8453da6a3d0e546a8465e1426f48e0a1220f5756707e07dc8",
-      "notes": "The named request-wide pricing-tier case is ported with its original model/usage inputs and all short/long charge assertions. Supplemental direct-upstream cost vectors cover 159 inputs and returned-object identity through shared cost references. Registry, provider publication, auth and other runtime cases remain pending."
+      "notes": "The named request-wide pricing-tier case is ported with its original model/usage inputs and all short/long charge assertions. Supplemental direct-upstream cost vectors cover 159 inputs and returned-object identity through shared cost references. tests/models-refresh.bend ports nine refresh cases with their names against ModelRuntime (the port's Models collection): every configured dynamic provider and failures, selected providers, persistent deletion and ephemeral publication, persisted catalogs restored offline, effective API-key credentials and force, expired OAuth refreshed before models, a concrete signal, aborted state without provider errors, and late publication from a superseded provider (a forked refresh blocked on a channel). A publication's `update` closure is its model list; the flaky provider joins through registerNativeProvider. Pending: restoring cached models while auth blocks, model-store signal identity, signal-ignoring providers, auth callback signals, credential queues and the other registry/auth/stream cases. Native lane not run."
     },
     {
       "source": "packages/ai/test/node-http-proxy.test.ts",
@@ -2112,9 +2113,13 @@
     },
     {
       "source": "packages/coding-agent/test/extensions-runner.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f6ce2f169d04c748e3587ca42c797ed3acf71152903b45b6340c1208845c7dbb"
+      "status": "partial",
+      "ports": [
+        "tests/extensions-runner.bend"
+      ],
+      "sha256": "f6ce2f169d04c748e3587ca42c797ed3acf71152903b45b6340c1208845c7dbb",
+      "implementation": "packages/coding-agent/src/core/extensions/runner.bend",
+      "notes": "Ported with upstream names on the Bun lane (25 checks): command collection (all three cases), context creation (all five), scopedModels, provider registration 'pre-bind unregister removes all queued registrations for a provider' and 'post-bind register and unregister take effect immediately', command context, event subscriptions (all five), hasHandlers and 'calls error listeners when handler throws'. Adaptations: extensions are inline factories instead of discovered files; provider cases register native Provider values because config-form registerProvider(name, config) is not ported; the event cases use agent_end, the one event dispatched so far (hasHandlers swaps the roles of tool_call and agent_end; the error-listener case throws from agent_end instead of context); duplicate registrations of one function are one callback registered twice. Native cases add invocation-name skipping, discarding a failed factory, queued providers joining the model runtime, a rejected queued provider as an extension error, RPC get_commands entries and autocomplete built-in conflicts. Pending: project_trust, shortcut conflicts, tool collection, user_bash, renderers, flags, before_agent_start, boundary chaining, tool_result chaining, before_provider_headers and 'bindCore ignores invalid queued registrations' (config validation). Native lane not run."
     },
     {
       "source": "packages/coding-agent/test/external-editor.test.ts",

@@ -137,7 +137,8 @@ def found(+runtime: Models.ModelRuntime, +provider: String, agent: String, fetch
     case Some{+selected}:
       do IO<Unit>:
         resolution : Resolve.Resolution() <- Models.getModelAuth(runtime, selected, Resolve.noOverrides())
-        streamed(agent, fetch, Models.getProviderStreams(runtime, provider), selected, resolution)
+        streams : AiModels.ProviderStreams <- Models.getProviderStreams(runtime, provider)
+        streamed(agent, fetch, streams, selected, resolution)
 
 def printed(value: Captured()) -> IO(Unit):
   match value:
@@ -154,7 +155,8 @@ def run(+provider: String, +modelId: String, mode: String) -> IO(Unit):
     +runtime : Models.ModelRuntime <- Models.fromProviders([gateway, workers], store, ambient)
     +slot : Ref.Ref<Captured()> <- Ref.new(Captured(), None{})
     +fetch : Fetch.Fetch(Unit) <- C.create(~Ref.Ref<Captured()>, ~Fetch.Input<Unit>, ~Fetch.Result_(Unit), ~capture, slot)
-    found(runtime, provider, "pi-test", fetch, Models.getModel(runtime, provider, modelId))
+    model : Maybe<&2, Ai.Model<Ai.JsonValue>> <- Models.getModel(runtime, provider, modelId)
+    found(runtime, provider, "pi-test", fetch, model)
     C.dispose(Fetch.Input<Unit>, Fetch.Result_(Unit), fetch)
     captured : Captured() <- Ref.dispose(Captured(), slot)
     Models.dispose(runtime)

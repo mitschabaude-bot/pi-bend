@@ -7,4 +7,4 @@ import ./deepseek.models.bend as Catalog
 def deepseekProvider() -> IO(Models.Provider):
   do IO<Models.Provider>:
     apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("DeepSeek API key", ["DEEPSEEK_API_KEY"])
-    return Models.Provider{"deepseek", "DeepSeek", "https://api.deepseek.com", Auth.ProviderAuth{Some{apiKey}, None{}}, Catalog.DEEPSEEK_MODELS(), Models.ApiStreams{}}
+    return Models.Provider{"deepseek", "DeepSeek", "https://api.deepseek.com", Auth.ProviderAuth{Some{apiKey}, None{}}, Catalog.DEEPSEEK_MODELS(), Models.ApiStreams{}, None{}}

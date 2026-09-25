@@ -25,7 +25,7 @@ def providers(sources: List<&2, Source>) -> IO(List<&2, AiModels.Provider>):
       do IO<List<&2, AiModels.Provider>>:
         apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("Test API key", envVar <> Nil{})
         others : List<&2, AiModels.Provider> <- providers(rest)
-        return AiModels.Provider{provider, provider, "https://faux.invalid", Auth.ProviderAuth{Some{apiKey}, None{}}, models, AiModels.ApiStreams{}} <> others
+        return AiModels.Provider{provider, provider, "https://faux.invalid", Auth.ProviderAuth{Some{apiKey}, None{}}, models, AiModels.ApiStreams{}, None{}} <> others
 
 def create(sources: List<&2, Source>) -> IO(Models.ModelRuntime):
   do IO<Models.ModelRuntime>:

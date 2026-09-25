@@ -61,7 +61,7 @@ def apiNames(streams: Models.ProviderStreams) -> String:
     case Models.CloudflareStreams{apis}: String.join(names(apis), ",")
 
 def baseProvider(models: List<&2, T.Model<T.JsonValue>>, streams: Models.ProviderStreams) -> Maybe<&2, Models.Provider>:
-  Some{Models.Provider{"cloudflare-ai-gateway", "Cloudflare AI Gateway", "", Auth.ProviderAuth{None{}, None{}}, models, streams}}
+  Some{Models.Provider{"cloudflare-ai-gateway", "Cloudflare AI Gateway", "", Auth.ProviderAuth{None{}, None{}}, models, streams, None{}}}
 
 def main() -> IO(Unit):
   do IO<Unit>:

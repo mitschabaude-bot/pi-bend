@@ -10,4 +10,4 @@ import ./anthropic.models.bend as Catalog
 def anthropicProvider(oauth: Maybe<&2, Auth.OAuthAuth>) -> IO(Models.Provider):
   do IO<Models.Provider>:
     apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("Anthropic API key", ["ANTHROPIC_OAUTH_TOKEN", "ANTHROPIC_API_KEY"])
-    return Models.Provider{"anthropic", "Anthropic", "https://api.anthropic.com", Auth.ProviderAuth{Some{apiKey}, oauth}, Catalog.ANTHROPIC_MODELS(), Models.ApiStreams{}}
+    return Models.Provider{"anthropic", "Anthropic", "https://api.anthropic.com", Auth.ProviderAuth{Some{apiKey}, oauth}, Catalog.ANTHROPIC_MODELS(), Models.ApiStreams{}, None{}}

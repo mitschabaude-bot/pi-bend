@@ -14,32 +14,50 @@ import ../../../runtime/src/filesystem.bend as FS
 import ../config.bend as AppConfig
 import ./model-config.bend as Config
 import ./provider-composer.bend as Composer
+import ../../../ai/src/models-store.bend as Store
+import ../../../runtime/src/abort.bend as Abort
+import ../../../runtime/src/callback.bend as C
+import ../../../runtime/src/f64.bend as F
+import ../../../runtime/src/date.bend as Date
 
 # The provider catalog with auth resolution: pi-ai's Models collection and the
 # coding agent's ModelRuntime. Built-in providers are composed with their
-# models.json entries and models.json custom providers are added; dynamic
-# catalog refresh, models-store.json, radius OAuth providers and the
-# extension provider registry are not ported.
+# models.json entries and models.json custom providers are added. Extensions
+# register native providers (registerNativeProvider) and dynamic providers
+# publish catalogs through refresh(). Not ported: models-store.json (catalogs
+# persist in an in-memory ModelsStore), reloading models.json on refresh,
+# models.json overlays on extension providers, config-form extension
+# providers (registerProvider(name, config)) and radius OAuth providers.
 
 def Model() -> Data: Ai.Model<Ai.JsonValue>
 
-# `retained` owns the built-in auth parts that composed providers wrap.
-# `configured` is upstream's snapshot.configuredProviders: computed when the
-# runtime is created and refreshed after credential changes, so availability
-# queries do not read the credential store.
+# What changes after creation: extension providers in registration order,
+# the catalogs dynamic providers published, each provider's refresh
+# generation, and upstream's snapshot.configuredProviders (computed at
+# creation and refreshed after credential or provider changes, so
+# availability queries do not read the credential store).
+type Catalog is Data:
+  Catalog{natives: List<&2, AiModels.Provider>, published: R.Record<List<&2, Model()>>, generations: R.Record<Nat>, configured: List<&2, String>}
+
+def emptyCatalog() -> Catalog: Catalog{Nil{}, R.new(List<&2, Model()>), R.new(Nat), Nil{}}
+
+# `providers` is the composition of built-in and models.json providers;
+# `builtins` are the built-in ids among them. `retained` owns the built-in
+# auth parts that composed providers wrap. Extension providers are owned by
+# the extensions that registered them.
 type ModelRuntime is Data:
-  ModelRuntime{providers: List<&2, AiModels.Provider>, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, compositionErrors: List<&2, String>, retained: List<&2, Composer.Retained>, configured: Ref.Ref<List<&2, String>>}
+  ModelRuntime{providers: List<&2, AiModels.Provider>, builtins: List<&2, String>, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, compositionErrors: List<&2, String>, retained: List<&2, Composer.Retained>, catalog: Ref.Ref<Catalog>, store: Store.ModelsStore}
 
 # Composition (recomposeProvider/rebuildProviders)
 # -----------------------------------------------
 
 def providerId(provider: AiModels.Provider) -> String:
   match provider:
-    case AiModels.Provider{id, _, _, _, _, _}: id
+    case AiModels.Provider{id, _, _, _, _, _, _}: id
 
 def providerModels(provider: AiModels.Provider) -> List<&2, Model()>:
   match provider:
-    case AiModels.Provider{_, _, _, _, models, _}: models
+    case AiModels.Provider{_, _, _, _, models, _, _}: models
 
 def findProvider(providers: List<&2, AiModels.Provider>, +id: String) -> Maybe<&2, AiModels.Provider>:
   match providers:
@@ -49,7 +67,7 @@ def findProvider(providers: List<&2, AiModels.Provider>, +id: String) -> Maybe<&
 def base(provider: Maybe<&2, AiModels.Provider>) -> Maybe<&2, Composer.Base>:
   match provider:
     case None{}: None{}
-    case Some{AiModels.Provider{_, name, url, auth, models, _}}: Some{Composer.Base{name, url, auth, models}}
+    case Some{AiModels.Provider{_, name, url, auth, models, _, _}}: Some{Composer.Base{name, url, auth, models}}
 
 type Composition is Data:
   Composition{providers: List<&2, AiModels.Provider>, errors: List<&2, String>, retained: List<&2, Composer.Retained>}
@@ -64,7 +82,7 @@ def added(provider: Maybe<&2, AiModels.Provider>, composition: Composition) -> C
 def recomposed(+id: String, +builtin: Maybe<&2, AiModels.Provider>, result: Result<&2, &2, String, Composer.Composed>, composition: Composition) -> Composition:
   match result composition:
     case Fail{error} Composition{providers, errors, retained}: added(builtin, Composition{providers, ("Provider \"" ++ id ++ "\": " ++ error) <> errors, retained})
-    case Done{Composer.Composed{name, url, auth, models, owned}} Composition{providers, errors, retained}: Composition{AiModels.Provider{id, name, url, auth, models, AiModels.inheritedStreams(builtin)} <> providers, errors, List.append(&2, Composer.Retained, owned, retained)}
+    case Done{Composer.Composed{name, url, auth, models, owned}} Composition{providers, errors, retained}: Composition{AiModels.Provider{id, name, url, auth, models, AiModels.inheritedStreams(builtin), None{}} <> providers, errors, List.append(&2, Composer.Retained, owned, retained)}
 
 def recomposeProvider(+id: String, +builtin: Maybe<&2, AiModels.Provider>, entry: Maybe<&2, Config.ModelsJsonProvider>, composition: Composition) -> IO(Composition):
   match entry:
@@ -104,13 +122,13 @@ def rebuildProviders(ids: List<&2, String>, +builtins: List<&2, AiModels.Provide
         next : Composition <- recomposeProvider(id, findProvider(builtins, id), Config.getProvider(config, id), composition)
         rebuildProviders(rest, builtins, config, next)
 
-def assembled(composition: Composition, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, authed: Ref.Ref<List<&2, String>>) -> ModelRuntime:
+def assembled(composition: Composition, builtins: List<&2, String>, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, catalog: Ref.Ref<Catalog>, store: Store.ModelsStore) -> ModelRuntime:
   match composition:
-    case Composition{providers, errors, retained}: ModelRuntime{List.reverse(&2, AiModels.Provider, providers), credentials, context, config, List.reverse(&2, String, errors), retained, authed}
+    case Composition{providers, errors, retained}: ModelRuntime{List.reverse(&2, AiModels.Provider, providers), builtins, credentials, context, config, List.reverse(&2, String, errors), retained, catalog, store}
 
 def supportsOAuth(provider: Maybe<&2, AiModels.Provider>) -> Bool:
   match provider:
-    case Some{AiModels.Provider{_, _, _, Auth.ProviderAuth{_, Some{_}}, _, _}}: True{}
+    case Some{AiModels.Provider{_, _, _, Auth.ProviderAuth{_, Some{_}}, _, _, _}}: True{}
     case _: False{}
 
 def unknownProvider(id: String) -> Resolve.ModelsError:
@@ -118,23 +136,100 @@ def unknownProvider(id: String) -> Resolve.ModelsError:
 
 def providerRef(provider: AiModels.Provider) -> Resolve.ProviderRef:
   match provider:
-    case AiModels.Provider{id, _, _, auth, _, _}: Resolve.ProviderRef{id, auth}
+    case AiModels.Provider{id, _, _, auth, _, _, _}: Resolve.ProviderRef{id, auth}
+
+# Current catalog
+# ---------------
+
+def credentialsOf(runtime: ModelRuntime) -> Auth.CredentialStore:
+  match runtime:
+    case ModelRuntime{_, _, credentials, _, _, _, _, _, _}: credentials
+
+def contextOf(runtime: ModelRuntime) -> Auth.AuthContext:
+  match runtime:
+    case ModelRuntime{_, _, _, context, _, _, _, _, _}: context
+
+def catalogRef(runtime: ModelRuntime) -> Ref.Ref<Catalog>:
+  match runtime:
+    case ModelRuntime{_, _, _, _, _, _, _, catalog, _}: catalog
+
+def storeOf(runtime: ModelRuntime) -> Store.ModelsStore:
+  match runtime:
+    case ModelRuntime{_, _, _, _, _, _, _, _, store}: store
+
+def readCatalog(runtime: ModelRuntime) -> IO(Catalog):
+  Ref.read(Catalog, catalogRef(runtime))
+
+def withNative(+natives: List<&2, AiModels.Provider>, +provider: AiModels.Provider) -> AiModels.Provider:
+  Maybe.default(&2, AiModels.Provider, findProvider(natives, providerId(provider)), provider)
+
+# The providers of one part (built-in or not), each replaced by the
+# extension provider of its id when one is registered.
+def overridden(providers: List<&2, AiModels.Provider>, +natives: List<&2, AiModels.Provider>, +builtin: Bool, +builtins: List<&2, String>) -> List<&2, AiModels.Provider>:
+  match providers:
+    case Nil{}: Nil{}
+    case +provider <> rest:
+      +tail = overridden(rest, natives, builtin, builtins)
+      Bool.pick(List<&2, AiModels.Provider>, Bool.xor(containsId(builtins, providerId(provider)), Bool.not(builtin)), withNative(natives, provider) <> tail, tail)
+
+def addedNatives(natives: List<&2, AiModels.Provider>, +known: List<&2, String>) -> List<&2, AiModels.Provider>:
+  match natives:
+    case Nil{}: Nil{}
+    case +provider <> rest:
+      +tail = addedNatives(rest, known)
+      Bool.pick(List<&2, AiModels.Provider>, containsId(known, providerId(provider)), tail, provider <> tail)
+
+def publishedModels(+published: R.Record<List<&2, Model()>>, provider: AiModels.Provider) -> AiModels.Provider:
+  match provider:
+    case AiModels.Provider{+id, name, url, auth, models, streams, refresher}: AiModels.Provider{id, name, url, auth, Maybe.default(&2, List<&2, Model()>, R.get(List<&2, Model()>, published, id), models), streams, refresher}
+
+def withPublished(providers: List<&2, AiModels.Provider>, +published: R.Record<List<&2, Model()>>) -> List<&2, AiModels.Provider>:
+  match providers:
+    case Nil{}: Nil{}
+    case provider <> rest: publishedModels(published, provider) <> withPublished(rest, published)
+
+# upstream providerIds() order: built-in providers, extension providers with
+# new ids, then models.json providers. An extension provider replaces the
+# provider of its id, and a dynamic provider's models are its published
+# catalog.
+def effectiveProviders(+base: List<&2, AiModels.Provider>, +builtins: List<&2, String>, catalog: Catalog) -> List<&2, AiModels.Provider>:
+  match catalog:
+    case Catalog{+natives, +published, _, _}:
+      withPublished(List.concat(&2, AiModels.Provider, [overridden(base, natives, True{}, builtins), addedNatives(natives, builtinIds(base)), overridden(base, natives, False{}, builtins)]), published)
+
+def providersIn(runtime: ModelRuntime, catalog: Catalog) -> List<&2, AiModels.Provider>:
+  match runtime:
+    case ModelRuntime{providers, builtins, _, _, _, _, _, _, _}: effectiveProviders(providers, builtins, catalog)
+
+def getProviders(+runtime: ModelRuntime) -> IO(List<&2, AiModels.Provider>):
+  do IO<List<&2, AiModels.Provider>>:
+    catalog : Catalog <- readCatalog(runtime)
+    return providersIn(runtime, catalog)
+
+def getProvider(+runtime: ModelRuntime, +id: String) -> IO(Maybe<&2, AiModels.Provider>):
+  do IO<Maybe<&2, AiModels.Provider>>:
+    providers : List<&2, AiModels.Provider> <- getProviders(runtime)
+    return findProvider(providers, id)
+
+# Auth
+# ----
 
 def resolveFor(credentials: Auth.CredentialStore, context: Auth.AuthContext, id: String, +provider: Maybe<&2, AiModels.Provider>, overrides: Resolve.AuthResolutionOverrides) -> IO(Resolve.Resolution()):
   match provider:
     case None{}: IO.pure(Resolve.Resolution(), Fail{unknownProvider(id)})
     case Some{provider}: Resolve.resolveProviderAuth(providerRef(provider), credentials, context, overrides)
 
-def getAuth(runtime: ModelRuntime, +id: String, overrides: Resolve.AuthResolutionOverrides) -> IO(Resolve.Resolution()):
-  match runtime:
-    case ModelRuntime{providers, credentials, context, _, _, _, _}: resolveFor(credentials, context, id, findProvider(providers, id), overrides)
+def getAuth(+runtime: ModelRuntime, +id: String, overrides: Resolve.AuthResolutionOverrides) -> IO(Resolve.Resolution()):
+  do IO<Resolve.Resolution()>:
+    provider : Maybe<&2, AiModels.Provider> <- getProvider(runtime, id)
+    resolveFor(credentialsOf(runtime), contextOf(runtime), id, provider, overrides)
 
 def resolvedAuth(resolution: Resolve.Resolution()) -> Bool:
   match resolution:
     case Done{Some{_}}: True{}
     case _: False{}
 
-def resolvesAuth(runtime: ModelRuntime, id: String) -> IO(Bool):
+def resolvesAuth(+runtime: ModelRuntime, +id: String) -> IO(Bool):
   do IO<Bool>:
     resolution : Resolve.Resolution() <- getAuth(runtime, id, Resolve.noOverrides())
     return resolvedAuth(resolution)
@@ -142,53 +237,58 @@ def resolvesAuth(runtime: ModelRuntime, id: String) -> IO(Bool):
 # A models.json apiKey is checked without resolving it, so a command-backed
 # key is never run for availability (upstream composed ApiKeyAuth.check).
 def checkedConfigured(+runtime: ModelRuntime, +id: String, key: Maybe<&2, String>) -> IO(Bool):
-  match runtime key:
-    case ModelRuntime{_, _, context, _, _, _, _} Some{key}: Composer.checkConfiguredApiKey(key, context)
-    case _ None{}: resolvesAuth(runtime, id)
+  match key:
+    case Some{key}: Composer.checkConfiguredApiKey(key, contextOf(runtime))
+    case None{}: resolvesAuth(runtime, id)
 
 def configuredKey(entry: Maybe<&2, Config.ModelsJsonProvider>) -> Maybe<&2, String>:
   match entry:
     case Some{Config.ModelsJsonProvider{_, _, apiKey, _, _, _, _, _, _, _}}: apiKey
     case None{}: None{}
 
-def checkedStored(+runtime: ModelRuntime, +id: String, stored: Auth.StoreResult(Maybe<&2, Auth.Credential>)) -> IO(Bool):
-  match runtime stored:
-    case ModelRuntime{providers, _, _, _, _, _, _} Done{Some{Auth.OAuthCredential{_, _, _, _}}}: IO.pure(Bool, supportsOAuth(findProvider(providers, id)))
-    case ModelRuntime{_, _, _, config, _, _, _} Done{None{}}: checkedConfigured(runtime, id, configuredKey(Config.getProvider(config, id)))
-    case _ _: resolvesAuth(runtime, id)
+def getModelConfig(runtime: ModelRuntime) -> Config.ModelConfig:
+  match runtime:
+    case ModelRuntime{_, _, _, _, config, _, _, _, _}: config
+
+def checkedStored(+runtime: ModelRuntime, +id: String, +providers: List<&2, AiModels.Provider>, stored: Auth.StoreResult(Maybe<&2, Auth.Credential>)) -> IO(Bool):
+  match stored:
+    case Done{Some{Auth.OAuthCredential{_, _, _, _}}}: IO.pure(Bool, supportsOAuth(findProvider(providers, id)))
+    case Done{None{}}: checkedConfigured(runtime, id, configuredKey(Config.getProvider(getModelConfig(runtime), id)))
+    case _: resolvesAuth(runtime, id)
+
+def checkAmong(+runtime: ModelRuntime, +id: String, +providers: List<&2, AiModels.Provider>) -> IO(Bool):
+  do IO<Bool>:
+    stored : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(credentialsOf(runtime), id, None{})
+    checkedStored(runtime, id, providers, stored)
 
 # upstream Models.checkProviderAuth: a stored OAuth credential counts when the
 # provider supports OAuth, without refreshing it; otherwise the provider's
 # API key must resolve.
 def checkProviderAuth(+runtime: ModelRuntime, +id: String) -> IO(Bool):
-  match runtime:
-    case ModelRuntime{_, +credentials, _, _, _, _, _}:
-      do IO<Bool>:
-        stored : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(credentials, id, None{})
-        checkedStored(runtime, id, stored)
+  do IO<Bool>:
+    providers : List<&2, AiModels.Provider> <- getProviders(runtime)
+    checkAmong(runtime, id, providers)
 
-def configuredIds(+runtime: ModelRuntime, providers: List<&2, AiModels.Provider>) -> IO(List<&2, String>):
+def configuredIds(+runtime: ModelRuntime, +all: List<&2, AiModels.Provider>, providers: List<&2, AiModels.Provider>) -> IO(List<&2, String>):
   match providers:
     case Nil{}: IO.pure(List<&2, String>, Nil{})
     case provider <> rest:
       +id = providerId(provider)
       do IO<List<&2, String>>:
-        ready : Bool <- checkProviderAuth(runtime, id)
-        +others : List<&2, String> <- configuredIds(runtime, rest)
+        ready : Bool <- checkAmong(runtime, id, all)
+        +others : List<&2, String> <- configuredIds(runtime, all, rest)
         return Bool.pick(List<&2, String>, ready, id <> others, others)
 
-def getProviders(runtime: ModelRuntime) -> List<&2, AiModels.Provider>:
-  match runtime:
-    case ModelRuntime{providers, _, _, _, _, _, _}: providers
-
-def configuredRef(runtime: ModelRuntime) -> Ref.Ref<List<&2, String>>:
-  match runtime: case ModelRuntime{_, _, _, _, _, _, authed}: authed
+def withConfigured(catalog: Catalog, configured: List<&2, String>) -> Catalog:
+  match catalog:
+    case Catalog{natives, published, generations, _}: Catalog{natives, published, generations, configured}
 
 # upstream runAvailabilityRefresh: every provider's auth is checked again.
 def refreshAvailability(+runtime: ModelRuntime) -> IO(Unit):
   do IO<Unit>:
-    ids : List<&2, String> <- configuredIds(runtime, getProviders(runtime))
-    Ref.write(List<&2, String>, configuredRef(runtime), ids)
+    +providers : List<&2, AiModels.Provider> <- getProviders(runtime)
+    ids : List<&2, String> <- configuredIds(runtime, providers, providers)
+    Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (withConfigured(catalog, ids), Unit{}))
 
 # The credential store is borrowed; the built-in providers are owned from here on.
 def createWithProviders(credentials: Auth.CredentialStore, +builtins: List<&2, AiModels.Provider>, modelsPath: Maybe<&2, String>) -> IO(ModelRuntime):
@@ -196,18 +296,25 @@ def createWithProviders(credentials: Auth.CredentialStore, +builtins: List<&2, A
     +config : Config.ModelConfig <- Config.load(modelsPath)
     composition : Composition <- rebuildProviders(composedIds(builtins, config), builtins, config, Composition{Nil{}, Nil{}, Nil{}})
     context : Auth.AuthContext <- Context.defaultProviderAuthContext()
-    authed : Ref.Ref<List<&2, String>> <- Ref.new(List<&2, String>, Nil{})
-    +runtime : ModelRuntime <- IO.pure(ModelRuntime, assembled(composition, credentials, context, config, authed))
+    catalog : Ref.Ref<Catalog> <- Ref.new(Catalog, emptyCatalog())
+    store : Store.ModelsStore <- Store.inMemoryModelsStore()
+    +runtime : ModelRuntime <- IO.pure(ModelRuntime, assembled(composition, builtinIds(builtins), credentials, context, config, catalog, store))
     refreshAvailability(runtime)
     return runtime
 
-# Providers without models.json, as test fixtures build them.
-def fromProviders(providers: List<&2, AiModels.Provider>, credentials: Auth.CredentialStore, context: Auth.AuthContext) -> IO(ModelRuntime):
+# Providers without models.json, as test fixtures build them. The runtime
+# owns the store.
+def fromProvidersWithStore(+providers: List<&2, AiModels.Provider>, credentials: Auth.CredentialStore, context: Auth.AuthContext, store: Store.ModelsStore) -> IO(ModelRuntime):
   do IO<ModelRuntime>:
-    authed : Ref.Ref<List<&2, String>> <- Ref.new(List<&2, String>, Nil{})
-    +runtime : ModelRuntime <- IO.pure(ModelRuntime, ModelRuntime{providers, credentials, context, Config.empty(), Nil{}, Nil{}, authed})
+    catalog : Ref.Ref<Catalog> <- Ref.new(Catalog, emptyCatalog())
+    +runtime : ModelRuntime <- IO.pure(ModelRuntime, ModelRuntime{providers, builtinIds(providers), credentials, context, Config.empty(), Nil{}, Nil{}, catalog, store})
     refreshAvailability(runtime)
     return runtime
+
+def fromProviders(providers: List<&2, AiModels.Provider>, credentials: Auth.CredentialStore, context: Auth.AuthContext) -> IO(ModelRuntime):
+  do IO<ModelRuntime>:
+    store : Store.ModelsStore <- Store.inMemoryModelsStore()
+    fromProvidersWithStore(providers, credentials, context, store)
 
 def locatedPath(path: Result<&2, &2, FS.Error, String>) -> Maybe<&2, String>:
   match path:
@@ -238,19 +345,21 @@ def create(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth) -> IO(Model
 def disposeProviders(providers: List<&2, AiModels.Provider>) -> IO(Unit):
   match providers:
     case Nil{}: IO.pure(Unit, Unit{})
-    case AiModels.Provider{_, _, _, auth, _, _} <> rest:
+    case AiModels.Provider{_, _, _, auth, _, _, _} <> rest:
       do IO<Unit>:
         Auth.disposeProviderAuth(auth)
         disposeProviders(rest)
 
+# Extension providers stay with the extensions that registered them.
 def dispose(runtime: ModelRuntime) -> IO(Unit):
   match runtime:
-    case ModelRuntime{providers, _, context, _, _, retained, authed}:
+    case ModelRuntime{providers, _, _, context, _, _, retained, catalog, store}:
       do IO<Unit>:
         disposeProviders(providers)
         Composer.disposeRetained(retained)
         Auth.disposeContext(context)
-        old : List<&2, String> <- Ref.dispose(List<&2, String>, authed)
+        Store.dispose(store)
+        old : Catalog <- Ref.dispose(Catalog, catalog)
         return Unit{}
 
 # models.json load and provider composition errors, as upstream getError().
@@ -262,34 +371,31 @@ def joinedErrors(configError: Maybe<&2, String>, errors: List<&2, String>) -> Ma
 
 def getError(runtime: ModelRuntime) -> Maybe<&2, String>:
   match runtime:
-    case ModelRuntime{_, _, _, config, errors, _, _}: joinedErrors(Config.getError(config), errors)
-
-def getModelConfig(runtime: ModelRuntime) -> Config.ModelConfig:
-  match runtime:
-    case ModelRuntime{_, _, _, config, _, _, _}: config
+    case ModelRuntime{_, _, _, _, config, errors, _, _, _}: joinedErrors(Config.getError(config), errors)
 
 # Catalog
 # -------
 
-def getProvider(runtime: ModelRuntime, id: String) -> Maybe<&2, AiModels.Provider>:
-  findProvider(getProviders(runtime), id)
-
 def streamsOf(provider: Maybe<&2, AiModels.Provider>) -> AiModels.ProviderStreams:
   match provider:
     case None{}: AiModels.ApiStreams{}
-    case Some{AiModels.Provider{_, _, _, _, _, streams}}: streams
+    case Some{AiModels.Provider{_, _, _, _, _, streams, _}}: streams
 
 # How the provider's requests stream (upstream prepareRequest's provider).
-def getProviderStreams(runtime: ModelRuntime, id: String) -> AiModels.ProviderStreams:
-  streamsOf(getProvider(runtime, id))
+def getProviderStreams(+runtime: ModelRuntime, +id: String) -> IO(AiModels.ProviderStreams):
+  do IO<AiModels.ProviderStreams>:
+    provider : Maybe<&2, AiModels.Provider> <- getProvider(runtime, id)
+    return streamsOf(provider)
 
 def allModels(providers: List<&2, AiModels.Provider>) -> List<&2, Model()>:
   match providers:
     case Nil{}: Nil{}
     case provider <> rest: List.append(&2, Model(), providerModels(provider), allModels(rest))
 
-def getModels(runtime: ModelRuntime) -> List<&2, Model()>:
-  allModels(getProviders(runtime))
+def getModels(+runtime: ModelRuntime) -> IO(List<&2, Model()>):
+  do IO<List<&2, Model()>>:
+    providers : List<&2, AiModels.Provider> <- getProviders(runtime)
+    return allModels(providers)
 
 def modelId(model: Model()) -> String:
   match model:
@@ -313,16 +419,23 @@ def findModel(models: List<&2, Model()>, +provider: String, +id: String) -> Mayb
 def modelCacheRead(model: Model()) -> F64:
   match model: case Ai.Model{_, _, _, _, _, _, _, _, _, Ai.ModelCost{_, _, cacheRead, _, _}, _, _, _, _, _, _}: cacheRead
 
-def getModel(runtime: ModelRuntime, provider: String, id: String) -> Maybe<&2, Model()>:
-  findModel(getModels(runtime), provider, id)
+def getModel(+runtime: ModelRuntime, +provider: String, +id: String) -> IO(Maybe<&2, Model()>):
+  do IO<Maybe<&2, Model()>>:
+    models : List<&2, Model()> <- getModels(runtime)
+    return findModel(models, provider, id)
+
+def baseModels(runtime: ModelRuntime) -> List<&2, Model()>:
+  match runtime:
+    case ModelRuntime{providers, _, _, _, _, _, _, _, _}: allModels(providers)
 
 # Auth
 # ----
 
 # upstream ModelPriceSource (cache-stats): a model's cache-read price, $ per
-# million tokens.
+# million tokens. The price source is synchronous, so it prices the built-in
+# and models.json catalog; extension and refreshed catalogs are not consulted.
 def cacheReadPrice(runtime: ModelRuntime, provider: String) -> String -> Maybe<&2, F64>:
-  id => Maybe.map(&2, Model(), F64, modelCacheRead, getModel(runtime, provider, id))
+  id => Maybe.map(&2, Model(), F64, modelCacheRead, findModel(baseModels(runtime), provider, id))
 
 def sameHeaderName(+left: String, +right: String) -> Bool: String.eq(String.to_lower(left), String.to_lower(right))
 
@@ -398,22 +511,30 @@ def withProvider(ready: Bool, id: String, others: List<&2, String>) -> List<&2, 
     case True{}: id <> others
     case False{}: others
 
+def readied(catalog: Catalog, ready: Bool, +id: String) -> Catalog:
+  match catalog:
+    case Catalog{natives, published, generations, configured}: Catalog{natives, published, generations, withProvider(ready, id, withoutId(configured, id))}
+
 # upstream refreshProviderAvailability: one provider after its credentials
-# changed (login, logout, a runtime API key).
+# or its registration changed (login, logout, a runtime API key).
 def refreshProviderAvailability(+runtime: ModelRuntime, +id: String) -> IO(Unit):
   do IO<Unit>:
     ready : Bool <- checkProviderAuth(runtime, id)
-    Ref.modify(List<&2, String>, Unit, configuredRef(runtime), ids => (withProvider(ready, id, withoutId(ids, id)), Unit{}))
+    Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (readied(catalog, ready, id), Unit{}))
 
 def containsProvider(ids: List<&2, String>, +id: String) -> Bool:
   match ids:
     case Nil{}: False{}
     case other <> rest: String.eq(other, id) || containsProvider(rest, id)
 
+def configuredOf(catalog: Catalog) -> List<&2, String>:
+  match catalog:
+    case Catalog{_, _, _, configured}: configured
+
 def hasConfiguredAuth(runtime: ModelRuntime, +id: String) -> IO(Bool):
   do IO<Bool>:
-    ids : List<&2, String> <- Ref.read(List<&2, String>, configuredRef(runtime))
-    return containsProvider(ids, id)
+    catalog : Catalog <- readCatalog(runtime)
+    return containsProvider(configuredOf(catalog), id)
 
 def configuredProviders(+ids: List<&2, String>, providers: List<&2, AiModels.Provider>) -> List<&2, AiModels.Provider>:
   match providers:
@@ -425,8 +546,8 @@ def configuredProviders(+ids: List<&2, String>, providers: List<&2, AiModels.Pro
 # Models whose provider had configured auth at the last availability refresh.
 def getAvailable(+runtime: ModelRuntime) -> IO(List<&2, Model()>):
   do IO<List<&2, Model()>>:
-    +ids : List<&2, String> <- Ref.read(List<&2, String>, configuredRef(runtime))
-    return allModels(configuredProviders(ids, getProviders(runtime)))
+    +catalog : Catalog <- readCatalog(runtime)
+    return allModels(configuredProviders(configuredOf(catalog), providersIn(runtime, catalog)))
 
 # Model resolution (model-resolver.ts)
 # ------------------------------------
@@ -927,8 +1048,8 @@ def resolveCliModel(+runtime: ModelRuntime, cliProvider: Maybe<&2, String>, cliM
   match cliModel:
     case None{}: IO.pure(Resolution, Resolved{ResolveCliModelResult{None{}, None{}, None{}, None{}}})
     case Some{pattern}:
-      +models = getModels(runtime)
       do IO<Resolution>:
+        +models : List<&2, Model()> <- getModels(runtime)
         authed : List<&2, String> <- authenticatedProviders(runtime, providersOf(models, Nil{}))
         return resolveCliModelWith(cliProvider, pattern, cliThinking, authed, models)
 
@@ -951,7 +1072,10 @@ def authorizedModel(+runtime: ModelRuntime, found: Maybe<&2, Model()>) -> IO(May
 
 def savedDefault(+runtime: ModelRuntime, defaultProvider: Maybe<&2, String>, defaultModelId: Maybe<&2, String>) -> IO(Maybe<&2, Model()>):
   match defaultProvider defaultModelId:
-    case Some{provider} Some{id}: authorizedModel(runtime, getModel(runtime, provider, id))
+    case Some{provider} Some{id}:
+      do IO<Maybe<&2, Model()>>:
+        found : Maybe<&2, Model()> <- getModel(runtime, provider, id)
+        authorizedModel(runtime, found)
     case _ _: IO.pure(Maybe<&2, Model()>, None{})
 
 def firstAvailable(+runtime: ModelRuntime, saved: Maybe<&2, Model()>) -> IO(Maybe<&2, Model()>):
@@ -970,3 +1094,355 @@ def findInitialModel(+runtime: ModelRuntime, defaultProvider: Maybe<&2, String>,
   do IO<Maybe<&2, Model()>>:
     saved : Maybe<&2, Model()> <- savedDefault(runtime, defaultProvider, defaultModelId)
     firstAvailable(runtime, saved)
+
+# Extension providers and dynamic catalogs
+# ----------------------------------------
+
+# A new provider for an id supersedes refreshes of the provider it replaces,
+# whose published catalog belonged to it (upstream supersedeProviderRefresh
+# in setProvider/deleteProvider).
+def superseded(+id: String, catalog: Catalog) -> Catalog:
+  match catalog:
+    case Catalog{natives, published, +generations, configured}:
+      Catalog{natives, R.remove(List<&2, Model()>, published, id), R.set(Nat, generations, id, Nat.add(Maybe.default(&2, Nat, R.get(Nat, generations, id), 0n), 1n)), configured}
+
+def withoutProvider(providers: List<&2, AiModels.Provider>, +id: String) -> List<&2, AiModels.Provider>:
+  match providers:
+    case Nil{}: Nil{}
+    case +provider <> rest:
+      +tail = withoutProvider(rest, id)
+      Bool.pick(List<&2, AiModels.Provider>, String.eq(providerId(provider), id), tail, provider <> tail)
+
+# An id keeps its position when an extension registers it again.
+def replacedIn(providers: List<&2, AiModels.Provider>, +provider: AiModels.Provider) -> List<&2, AiModels.Provider>:
+  match providers:
+    case Nil{}: Nil{}
+    case +current <> rest: Bool.pick(AiModels.Provider, String.eq(providerId(current), providerId(provider)), provider, current) <> replacedIn(rest, provider)
+
+def replacedProvider(+providers: List<&2, AiModels.Provider>, +provider: AiModels.Provider) -> List<&2, AiModels.Provider>:
+  Bool.pick(List<&2, AiModels.Provider>, containsId(builtinIds(providers), providerId(provider)), replacedIn(providers, provider), List.append(&2, AiModels.Provider, providers, [provider]))
+
+def withNatives(catalog: Catalog, update: List<&2, AiModels.Provider> -> List<&2, AiModels.Provider>) -> Catalog:
+  match catalog:
+    case Catalog{natives, published, generations, configured}: Catalog{update(natives), published, generations, configured}
+
+def registeredNative(+provider: AiModels.Provider, catalog: Catalog) -> Catalog:
+  withNatives(superseded(providerId(provider), catalog), natives => replacedProvider(natives, provider))
+
+def unregisteredNative(+id: String, catalog: Catalog) -> Catalog:
+  withNatives(superseded(id, catalog), natives => withoutProvider(natives, id))
+
+def isBlank(text: String) -> Bool: String.is_empty(String.trim(text))
+
+type ModelsRefreshOptions is Data:
+  ModelsRefreshOptions{allowNetwork: Maybe<&2, Bool>, providers: Maybe<&2, List<&2, String>>, force: Maybe<&2, Bool>, signal: Maybe<&2, Abort.AbortSignal<Unit>>}
+
+def refreshOptions() -> ModelsRefreshOptions: ModelsRefreshOptions{None{}, None{}, None{}, None{}}
+
+# `errors` maps provider ids to the refresh failure message.
+type ModelsRefreshResult is Data:
+  ModelsRefreshResult{aborted: Bool, errors: R.Record<String>}
+
+type Publisher is Data:
+  Publisher{catalog: Ref.Ref<Catalog>, store: Store.ModelsStore, id: String, generation: Nat, signal: Abort.AbortSignal<Unit>}
+
+def generationOf(catalog: Catalog, id: String) -> Maybe<&2, Nat>:
+  match catalog:
+    case Catalog{_, _, generations, _}: R.get(Nat, generations, id)
+
+def stillCurrent(+catalog: Ref.Ref<Catalog>, +id: String, generation: Nat, signal: Abort.AbortSignal<Unit>) -> IO(Bool):
+  do IO<Bool>:
+    aborted : Bool <- Abort.aborted(Unit, signal)
+    state : Catalog <- Ref.read(Catalog, catalog)
+    return Bool.not(aborted) && Maybe.default(&2, Bool, Maybe.map(&2, Nat, Bool, latest => Nat.is_eq(latest, generation), generationOf(state, id)), False{})
+
+def persisted(store: Store.ModelsStore, id: String, persist: AiModels.Persist, signal: Abort.AbortSignal<Unit>) -> IO(Store.StoreResult(Unit)):
+  match persist:
+    case AiModels.KeepStored{}: IO.pure(Store.StoreResult(Unit), Done{Unit{}})
+    case AiModels.DeleteStored{}: Store.delete(store, id, Some{signal})
+    case AiModels.StoreEntry{entry}: Store.write(store, id, entry, Some{signal})
+
+def withPublication(catalog: Catalog, +id: String, models: Maybe<&2, List<&2, Model()>>) -> Catalog:
+  match catalog models:
+    case catalog None{}: catalog
+    case Catalog{natives, published, generations, configured} Some{list}: Catalog{natives, R.set(List<&2, Model()>, published, id, list), generations, configured}
+
+def applied(+catalog: Ref.Ref<Catalog>, +id: String, models: Maybe<&2, List<&2, Model()>>, accepted: Bool) -> IO(Bool):
+  match accepted:
+    case False{}: IO.pure(Bool, False{})
+    case True{}:
+      do IO<Bool>:
+        Ref.modify(Catalog, Unit, catalog, state => (withPublication(state, id, models), Unit{}))
+        return True{}
+
+def afterPersist(+catalog: Ref.Ref<Catalog>, +id: String, generation: Nat, +signal: Abort.AbortSignal<Unit>, models: Maybe<&2, List<&2, Model()>>, stored: Store.StoreResult(Unit)) -> IO(Bool):
+  match stored:
+    case Fail{_}: IO.pure(Bool, False{})
+    case Done{_}:
+      do IO<Bool>:
+        accepted : Bool <- stillCurrent(catalog, id, generation, signal)
+        applied(catalog, id, models, accepted)
+
+def publishAccepted(accepted: Bool, publisher: Publisher, publication: AiModels.ModelsPublication) -> IO(Bool):
+  match accepted publisher publication:
+    case False{} _ _: IO.pure(Bool, False{})
+    case True{} Publisher{+catalog, store, +id, +generation, +signal} AiModels.ModelsPublication{persist, models}:
+      do IO<Bool>:
+        stored : Store.StoreResult(Unit) <- persisted(store, id, persist, signal)
+        afterPersist(catalog, id, generation, signal, models, stored)
+
+# upstream publishProviderModels: a superseded or aborted refresh publishes
+# nothing; otherwise the persistence change happens first and the catalog
+# update only if the refresh is still current afterwards. A store failure
+# rejects the publication.
+def publishModels(publisher: Publisher, publication: AiModels.ModelsPublication) -> IO(Bool):
+  match publisher:
+    case Publisher{+catalog, store, +id, +generation, +signal}:
+      do IO<Bool>:
+        accepted : Bool <- stillCurrent(catalog, id, generation, signal)
+        publishAccepted(accepted, Publisher{catalog, store, id, generation, signal}, publication)
+
+def providerAuthOf(provider: AiModels.Provider) -> Auth.ProviderAuth:
+  match provider:
+    case AiModels.Provider{_, _, _, auth, _, _, _}: auth
+
+def refreshOf(provider: AiModels.Provider) -> Maybe<&2, AiModels.RefreshModels()>:
+  match provider:
+    case AiModels.Provider{_, _, _, _, _, _, refresher}: refresher
+
+def storedOAuth(stored: Auth.StoreResult(Maybe<&2, Auth.Credential>)) -> Maybe<&2, Auth.Credential>:
+  match stored:
+    case Done{Some{Auth.OAuthCredential{refresher, access, expires, extra}}}: Some{Auth.OAuthCredential{refresher, access, expires, extra}}
+    case _: None{}
+
+def reread(+runtime: ModelRuntime, +id: String, resolution: Resolve.Resolution()) -> IO(Result<&2, &2, String, Maybe<&2, Auth.Credential>>):
+  match resolution:
+    case Fail{error}: IO.pure(Result<&2, &2, String, Maybe<&2, Auth.Credential>>, Fail{Resolve.errorMessage(error)})
+    case Done{_}:
+      do IO<Result<&2, &2, String, Maybe<&2, Auth.Credential>>>:
+        stored : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(credentialsOf(runtime), id, None{})
+        return Done{storedOAuth(stored)}
+
+def refreshedOAuth(+runtime: ModelRuntime, +id: String, oauth: Auth.OAuthAuth, +credential: Auth.Credential, signal: Abort.AbortSignal<Unit>, fresh: Bool) -> IO(Result<&2, &2, String, Maybe<&2, Auth.Credential>>):
+  match fresh:
+    case True{}: IO.pure(Result<&2, &2, String, Maybe<&2, Auth.Credential>>, Done{Some{credential}})
+    case False{}:
+      do IO<Result<&2, &2, String, Maybe<&2, Auth.Credential>>>:
+        resolution : Resolve.Resolution() <- Resolve.refreshStored(credentialsOf(runtime), id, oauth, signal, None{}, F.fromU32(0))
+        reread(runtime, id, resolution)
+
+def expiry(credential: Auth.Credential) -> F64:
+  match credential:
+    case Auth.OAuthCredential{_, _, expires, _}: expires
+    case _: F.fromU32(0)
+
+def resolvedKey(resolution: Resolve.Resolution()) -> Result<&2, &2, String, Maybe<&2, Auth.Credential>>:
+  match resolution:
+    case Fail{error}: Fail{Resolve.errorMessage(error)}
+    case Done{None{}}: Done{None{}}
+    case Done{Some{Auth.AuthResult{Auth.ModelAuth{key, _, _}, env, _}}}: Done{Some{Auth.ApiKeyCredential{key, env}}}
+
+def apiKeyCredential(stored: Maybe<&2, Auth.Credential>) -> Maybe<&2, Auth.Credential>:
+  match stored:
+    case Some{Auth.ApiKeyCredential{key, env}}: Some{Auth.ApiKeyCredential{key, env}}
+    case _: None{}
+
+# upstream resolveRefreshCredential: an OAuth credential is refreshed when it
+# expired; otherwise the provider's API key auth must resolve.
+def resolveRefreshCredential(+runtime: ModelRuntime, +id: String, stored: Maybe<&2, Auth.Credential>, auth: Auth.ProviderAuth, signal: Abort.AbortSignal<Unit>) -> IO(Result<&2, &2, String, Maybe<&2, Auth.Credential>>):
+  match stored auth:
+    case Some{Auth.OAuthCredential{refresher, access, expires, extra}} Auth.ProviderAuth{_, None{}}: IO.pure(Result<&2, &2, String, Maybe<&2, Auth.Credential>>, Done{None{}})
+    case Some{Auth.OAuthCredential{refresher, access, +expires, extra}} Auth.ProviderAuth{_, Some{oauth}}:
+      do IO<Result<&2, &2, String, Maybe<&2, Auth.Credential>>>:
+        now : F64 <- Date.now()
+        refreshedOAuth(runtime, id, oauth, Auth.OAuthCredential{refresher, access, expires, extra}, signal, F64.is_lt(now, expires))
+    case stored Auth.ProviderAuth{None{}, _}: IO.pure(Result<&2, &2, String, Maybe<&2, Auth.Credential>>, Done{None{}})
+    case stored Auth.ProviderAuth{Some{apiKey}, _}:
+      do IO<Result<&2, &2, String, Maybe<&2, Auth.Credential>>>:
+        resolution : Resolve.Resolution() <- Resolve.resolveApiKey(contextOf(runtime), apiKey, id, apiKeyCredential(stored), signal)
+        return resolvedKey(resolution)
+
+type Phase is Data:
+  Phase{refresher: AiModels.RefreshModels(), publishing: C.Callback<AiModels.ModelsPublication, Bool>, signal: Abort.AbortSignal<Unit>}
+
+def phaseStored(stored: Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>), phase: Phase, credential: Maybe<&2, Auth.Credential>, allowNetwork: Bool, force: Maybe<&2, Bool>) -> IO(Result<&2, &2, String, Unit>):
+  match stored phase:
+    case Fail{error} _: IO.pure(Result<&2, &2, String, Unit>, Fail{error})
+    case Done{entry} Phase{refresher, publishing, signal}: C.call(AiModels.RefreshModelsContext, Result<&2, &2, String, Unit>, refresher, AiModels.RefreshModelsContext{credential, entry, publishing, allowNetwork, force, signal})
+
+# upstream runProviderRefreshPhase: the provider sees the stored catalog as
+# of this phase.
+def runPhase(+runtime: ModelRuntime, +id: String, +phase: Phase, credential: Maybe<&2, Auth.Credential>, allowNetwork: Bool, force: Maybe<&2, Bool>) -> IO(Result<&2, &2, String, Unit>):
+  match phase:
+    case Phase{+refresher, +publishing, +signal}:
+      do IO<Result<&2, &2, String, Unit>>:
+        stored : Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>) <- Store.read(storeOf(runtime), id, Some{signal})
+        phaseStored(stored, Phase{refresher, publishing, signal}, credential, allowNetwork, force)
+
+def networkPhase(+runtime: ModelRuntime, +id: String, +phase: Phase, force: Maybe<&2, Bool>, credential: Result<&2, &2, String, Maybe<&2, Auth.Credential>>) -> IO(Result<&2, &2, String, Unit>):
+  match credential:
+    case Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{error})
+    case Done{None{}}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+    case Done{Some{credential}}: runPhase(runtime, id, phase, Some{credential}, True{}, force)
+
+def phaseSignal(phase: Phase) -> Abort.AbortSignal<Unit>:
+  match phase:
+    case Phase{_, _, signal}: signal
+
+def afterCache(+runtime: ModelRuntime, +id: String, auth: Auth.ProviderAuth, +phase: Phase, allowNetwork: Bool, force: Maybe<&2, Bool>, cached: Result<&2, &2, String, Unit>, stored: Auth.StoreResult(Maybe<&2, Auth.Credential>)) -> IO(Result<&2, &2, String, Unit>):
+  match cached stored:
+    case Fail{error} _: IO.pure(Result<&2, &2, String, Unit>, Fail{error})
+    case Done{_} Fail{cause}: IO.pure(Result<&2, &2, String, Unit>, Fail{"Credential store read failed for " ++ id ++ ": " ++ cause})
+    case Done{_} Done{credential}:
+      do IO<Result<&2, &2, String, Unit>>:
+        aborted : Bool <- Abort.aborted(Unit, phaseSignal(phase))
+        Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), Bool.not(allowNetwork) || aborted, _ => IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}}), _ => do IO<Result<&2, &2, String, Unit>>:
+          resolved : Result<&2, &2, String, Maybe<&2, Auth.Credential>> <- resolveRefreshCredential(runtime, id, credential, auth, phaseSignal(phase))
+          networkPhase(runtime, id, phase, force, resolved))(Unit{})
+
+def credentialOf(stored: Auth.StoreResult(Maybe<&2, Auth.Credential>)) -> Maybe<&2, Auth.Credential>:
+  match stored:
+    case Done{credential}: credential
+    case Fail{_}: None{}
+
+# upstream Models.refresh for one provider: restore the cached catalog before
+# auth resolution or network access, then refresh with the effective
+# credential when the network is allowed.
+def refreshPhases(+runtime: ModelRuntime, +id: String, auth: Auth.ProviderAuth, +phase: Phase, allowNetwork: Bool, force: Maybe<&2, Bool>) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    +stored : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(credentialsOf(runtime), id, Some{phaseSignal(phase)})
+    cached : Result<&2, &2, String, Unit> <- runPhase(runtime, id, phase, credentialOf(stored), False{}, None{})
+    afterCache(runtime, id, auth, phase, allowNetwork, force, cached, stored)
+
+# Starting a refresh supersedes an older one without discarding the catalog
+# it published.
+def begun(+id: String, catalog: Catalog) -> Catalog & Nat:
+  match catalog:
+    case Catalog{natives, published, +generations, configured}:
+      +next = Nat.add(Maybe.default(&2, Nat, R.get(Nat, generations, id), 0n), 1n)
+      (Catalog{natives, published, R.set(Nat, generations, id, next), configured}, next)
+
+def recordedError(errors: R.Record<String>, +id: String, aborted: Bool, result: Result<&2, &2, String, Unit>) -> R.Record<String>:
+  match aborted result:
+    case False{} Fail{error}: R.set(String, errors, id, error)
+    case _ _: errors
+
+def refreshProvider(+runtime: ModelRuntime, +provider: AiModels.Provider, refresher: AiModels.RefreshModels(), allowNetwork: Bool, force: Maybe<&2, Bool>, +signal: Abort.AbortSignal<Unit>, errors: R.Record<String>) -> IO(R.Record<String>):
+  +id = providerId(provider)
+  do IO<R.Record<String>>:
+    generation : Nat <- Ref.modify(Catalog, Nat, catalogRef(runtime), catalog => begun(id, catalog))
+    +publishing : C.Callback<AiModels.ModelsPublication, Bool> <- C.create(~Publisher, ~AiModels.ModelsPublication, ~Bool, ~publishModels, Publisher{catalogRef(runtime), storeOf(runtime), id, generation, signal})
+    result : Result<&2, &2, String, Unit> <- refreshPhases(runtime, id, providerAuthOf(provider), Phase{refresher, publishing, signal}, allowNetwork, force)
+    C.dispose(AiModels.ModelsPublication, Bool, publishing)
+    aborted : Bool <- Abort.aborted(Unit, signal)
+    return recordedError(errors, id, aborted, result)
+
+def selected(filter: Maybe<&2, List<&2, String>>, +id: String) -> Bool:
+  match filter:
+    case None{}: True{}
+    case Some{ids}: containsId(ids, id)
+
+def refreshSelected(+runtime: ModelRuntime, provider: AiModels.Provider, chosen: Bool, refresher: Maybe<&2, AiModels.RefreshModels()>, allowNetwork: Bool, force: Maybe<&2, Bool>, +signal: Abort.AbortSignal<Unit>, errors: R.Record<String>) -> IO(R.Record<String>):
+  match chosen refresher:
+    case True{} Some{refresher}: refreshProvider(runtime, provider, refresher, allowNetwork, force, signal, errors)
+    case _ _: IO.pure(R.Record<String>, errors)
+
+def refreshEach(+runtime: ModelRuntime, providers: List<&2, AiModels.Provider>, +filter: Maybe<&2, List<&2, String>>, +allowNetwork: Bool, +force: Maybe<&2, Bool>, +signal: Abort.AbortSignal<Unit>, errors: R.Record<String>) -> IO(R.Record<String>):
+  match providers:
+    case Nil{}: IO.pure(R.Record<String>, errors)
+    case +provider <> rest:
+      do IO<R.Record<String>>:
+        next : R.Record<String> <- refreshSelected(runtime, provider, selected(filter, providerId(provider)), refreshOf(provider), allowNetwork, force, signal, errors)
+        refreshEach(runtime, rest, filter, allowNetwork, force, signal, next)
+
+def availabilityOf(+runtime: ModelRuntime, ids: List<&2, String>) -> IO(Unit):
+  match ids:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case id <> rest:
+      do IO<Unit>:
+        refreshProviderAvailability(runtime, id)
+        availabilityOf(runtime, rest)
+
+def refreshedAvailability(+runtime: ModelRuntime, filter: Maybe<&2, List<&2, String>>) -> IO(Unit):
+  match filter:
+    case None{}: refreshAvailability(runtime)
+    case Some{ids}: availabilityOf(runtime, ids)
+
+def refreshSignalled(+runtime: ModelRuntime, +filter: Maybe<&2, List<&2, String>>, allowNetwork: Bool, force: Maybe<&2, Bool>, +signal: Abort.AbortSignal<Unit>) -> IO(ModelsRefreshResult):
+  do IO<ModelsRefreshResult>:
+    providers : List<&2, AiModels.Provider> <- getProviders(runtime)
+    errors : R.Record<String> <- refreshEach(runtime, providers, filter, allowNetwork, force, signal, R.new(String))
+    refreshedAvailability(runtime, filter)
+    aborted : Bool <- Abort.aborted(Unit, signal)
+    return ModelsRefreshResult{aborted, errors}
+
+def refreshUnlessAborted(+runtime: ModelRuntime, filter: Maybe<&2, List<&2, String>>, allowNetwork: Bool, force: Maybe<&2, Bool>, +signal: Abort.AbortSignal<Unit>, aborted: Bool) -> IO(ModelsRefreshResult):
+  match aborted:
+    case True{}: IO.pure(ModelsRefreshResult, ModelsRefreshResult{True{}, R.new(String)})
+    case False{}: refreshSignalled(runtime, filter, allowNetwork, force, signal)
+
+def refreshWithSignal(+runtime: ModelRuntime, filter: Maybe<&2, List<&2, String>>, allowNetwork: Bool, force: Maybe<&2, Bool>, +signal: Abort.AbortSignal<Unit>) -> IO(ModelsRefreshResult):
+  do IO<ModelsRefreshResult>:
+    aborted : Bool <- Abort.aborted(Unit, signal)
+    refreshUnlessAborted(runtime, filter, allowNetwork, force, signal, aborted)
+
+# upstream operationSignal: providers always receive a concrete signal.
+def refreshOwned(+runtime: ModelRuntime, filter: Maybe<&2, List<&2, String>>, allowNetwork: Bool, force: Maybe<&2, Bool>, signal: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(ModelsRefreshResult):
+  match signal:
+    case Some{signal}: refreshWithSignal(runtime, filter, allowNetwork, force, signal)
+    case None{}:
+      do IO<ModelsRefreshResult>:
+        +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+        result : ModelsRefreshResult <- refreshWithSignal(runtime, filter, allowNetwork, force, Abort.signal(Unit, controller))
+        Abort.dispose(Unit, controller)
+        return result
+
+def networkEnabled(offline: Result<&1, &1, U32 & String, String>) -> Bool:
+  match offline:
+    case Done{_}: False{}
+    case Fail{_}: True{}
+
+# upstream ModelRuntime.refresh: dynamic providers (all, or the selected
+# ones) restore their stored catalog and refresh it when the network is
+# allowed (by default unless PI_OFFLINE is set); then availability is
+# checked again. Refreshes run one provider at a time, and a superseded
+# refresh keeps running but can no longer publish.
+def refresh(+runtime: ModelRuntime, options: ModelsRefreshOptions) -> IO(ModelsRefreshResult):
+  match options:
+    case ModelsRefreshOptions{allowNetwork, filter, force, signal}:
+      do IO<ModelsRefreshResult>:
+        offline : Result<&1, &1, U32 & String, String> <- IO.get_env("PI_OFFLINE")
+        refreshOwned(runtime, filter, Maybe.default(&2, Bool, allowNetwork, networkEnabled(offline)), force, signal)
+
+# upstream registerNativeProvider: the extension provider replaces any
+# provider of its id until it is unregistered, and the cached catalogs are
+# restored without network access.
+def registerUnlessBlank(+runtime: ModelRuntime, +provider: AiModels.Provider, blank: Bool) -> IO(Result<&2, &2, String, Unit>):
+  match blank:
+    case True{}: IO.pure(Result<&2, &2, String, Unit>, Fail{"Provider id must not be empty."})
+    case False{}:
+      do IO<Result<&2, &2, String, Unit>>:
+        Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (registeredNative(provider, catalog), Unit{}))
+        result : ModelsRefreshResult <- refresh(runtime, ModelsRefreshOptions{Some{False{}}, None{}, None{}, None{}})
+        return Done{Unit{}}
+
+def registerNativeProvider(+runtime: ModelRuntime, +provider: AiModels.Provider) -> IO(Result<&2, &2, String, Unit>):
+  registerUnlessBlank(runtime, provider, isBlank(providerId(provider)))
+
+# upstream unregisterProvider: the built-in or models.json provider of the id,
+# if any, is restored.
+def unregisterProvider(+runtime: ModelRuntime, +id: String) -> IO(Unit):
+  do IO<Unit>:
+    Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (unregisteredNative(id, catalog), Unit{}))
+    result : ModelsRefreshResult <- refresh(runtime, ModelsRefreshOptions{Some{False{}}, None{}, None{}, None{}})
+    return Unit{}
+
+def nativeIdsOf(catalog: Catalog) -> List<&2, String>:
+  match catalog:
+    case Catalog{natives, _, _, _}: builtinIds(natives)
+
+# upstream getRegisteredProviderIds (native extension providers).
+def getRegisteredProviderIds(runtime: ModelRuntime) -> IO(List<&2, String>):
+  do IO<List<&2, String>>:
+    catalog : Catalog <- readCatalog(runtime)
+    return nativeIdsOf(catalog)

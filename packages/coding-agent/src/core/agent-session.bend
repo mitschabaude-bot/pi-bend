@@ -25,6 +25,8 @@ import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/json.bend as Decode
 import ./agent-runtime.bend as Runtime
 import ./extensions/context.bend as Ctx
+import ./extensions/runner.bend as ExtensionRunner
+import ./extensions/types.bend as ExtensionTypes
 import ./model-runtime.bend as Models
 import ./messages.bend as Messages
 import ./skills.bend as Skills
@@ -237,6 +239,12 @@ def LegacyTurnHook() -> Data: Agent.LegacyHook(TurnUpdate(), Runtime.Error())
 type Warming is Data:
   Warming{warmer: Warmer.CacheWarmer, stream: Runtime.Stream(), replaced: Runtime.Stream(), replay: C.Callback<Warmer.CacheWarmRequest, Ai.AssistantMessage<V.Value, Unit>>, append: C.Callback<Warmer.UsageRecord, Maybe<&2, Entry()>>, branch: C.Callback<Unit, List<&2, Entry()>>, mode: C.Callback<Unit, Settings.CacheWarmingMode>, context: C.Callback<Unit, Warmer.CacheContext>, decide: C.Callback<Warmer.CacheWarmingDecisionEvent, Warmer.CacheWarmingAction>, warmed: C.Callback<Entry(), Unit>}
 
+# What the session binds its extension runner to (upstream
+# _bindExtensionCore): the context actions, and the refresh of the current
+# model after an extension changed a provider.
+type ExtensionBinding is Data:
+  ExtensionBinding{actions: Ctx.ExtensionContextActions, providersChanged: C.Callback<Unit, Unit>}
+
 # The session's handles on the agent: its event subscription, the
 # next-turn, request and stream hooks that replaced the agent's own
 # (restored on dispose) and cache warming.
@@ -248,7 +256,7 @@ type StatsKey is Data: StatsKey{count: Nat, leaf: Maybe<&2, String>, file: Maybe
 type StatsMemo is Data: StatsMemo{key: StatsKey, stats: Result<&2, &2, S.Error, Stats.Stats>}
 
 type SessionHooks is Data:
-  SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>, request: T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()), replacedRequest: Maybe<&2, T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>, context: Ctx.ContextFactory(), warming: Warming, stats: R.Ref<Maybe<&2, StatsMemo>>}
+  SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>, request: T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()), replacedRequest: Maybe<&2, T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>, context: ExtensionBinding, warming: Warming, stats: R.Ref<Maybe<&2, StatsMemo>>}
 
 type AgentSession is Data:
   AgentSession{agent: Runtime.Owner(), shared: R.Ref<Shared>, hooks: SessionHooks, settings: R.Ref<Settings.SettingsManager>, cwd: String, loadout: R.Ref<Runtime.Loadout>, models: Models.ModelRuntime, scoped: R.Ref<List<&2, Models.ScopedModel>>}
@@ -920,25 +928,100 @@ def executeBash(+session: AgentSession, +command: String, onChunk: Maybe<&2, C.C
         settings : Settings.SettingsManager <- R.read(Settings.SettingsManager, settingsOf(session))
         withLocalOperations(session, command, onChunk, excludeFromContext, id, binDir, shellPathOf(settings, environment))
 
-# Abort the agent and disconnect; the agent itself belongs to the runtime.
-# upstream runner.createContext() as tools see it: the session's cwd, and
-# its model, identity and thinking level when the tool runs.
+# upstream _bindExtensionCore's context actions: the extension context reads
+# the session's model, scope, identity and activity when it is used.
 type ContextEnv is Data:
-  ContextEnv{agent: Runtime.Owner(), shared: R.Ref<Shared>, cwd: String}
+  ContextEnv{agent: Runtime.Owner(), shared: R.Ref<Shared>, scoped: R.Ref<List<&2, Models.ScopedModel>>, settings: R.Ref<Settings.SettingsManager>}
 
-def toolContext(env: ContextEnv, unit: Unit) -> IO(Ctx.ExtensionContext):
+def queuedIn(state: Shared) -> Bool:
+  match state:
+    case Shared{_, steering, followUp, _, _, _, _, _, _}: Bool.not(List.is_empty(&2, String, steering) && List.is_empty(&2, String, followUp))
+
+def sessionState(env: ContextEnv, unit: Unit) -> IO(Ctx.SessionState):
   match env:
-    case ContextEnv{+agent, shared, cwd}:
-      do IO<Ctx.ExtensionContext>:
+    case ContextEnv{+agent, shared, scoped, settings}:
+      do IO<Ctx.SessionState>:
         +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-        stored : Shared <- R.read(Shared, shared)
+        +stored : Shared <- R.read(Shared, shared)
         +live : Session() = sharedSession(stored)
-        return Ctx.ExtensionContext{cwd, stateModel(current), S.getSessionId(Unit, Tools.ToolDetails, V.Value, stateOf(live)), Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, live), stateThinking(current)}
+        models : List<&2, Models.ScopedModel> <- R.read(List<&2, Models.ScopedModel>, scoped)
+        manager : Settings.SettingsManager <- R.read(Settings.SettingsManager, settings)
+        signal : Maybe<&2, A.AbortSignal<Unit>> <- Agent.signal(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        return Ctx.SessionState{stateModel(current), models, stateThinking(current), S.getSessionId(Unit, Tools.ToolDetails, V.Value, stateOf(live)), Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, live), Bool.not(runActiveOf(stored)), Settings.isProjectTrusted(manager), queuedIn(stored), signal}
 
-def bindContext(loadout: Runtime.Loadout, factory: Maybe<&2, Ctx.ContextFactory()>) -> IO(Unit):
+# upstream ctx.abort(): the session aborts without waiting for idle, since
+# extension code (a tool, say) may call it from within the run.
+def contextAbort(env: ContextEnv, unit: Unit) -> IO(Unit):
+  match env:
+    case ContextEnv{+agent, +shared, _, _}:
+      do IO<Unit>:
+        R.modify(Shared,Unit,shared,current => (requestRunAbort(current),Unit{}))
+        abortSleeping(shared)
+        abortCompactions(shared)
+        Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+
+# The mode binds shutdown (upstream bindExtensions); until then it does
+# nothing, as upstream's default shutdownHandler.
+def contextShutdown(env: ContextEnv, unit: Unit) -> IO(Unit): IO.pure(Unit, Unit{})
+
+def createContextActions(+env: ContextEnv) -> IO(Ctx.ExtensionContextActions):
+  do IO<Ctx.ExtensionContextActions>:
+    reader : C.Callback<Unit, Ctx.SessionState> <- C.create(~ContextEnv, ~Unit, ~Ctx.SessionState, ~sessionState, env)
+    aborter : C.Callback<Unit, Unit> <- C.create(~ContextEnv, ~Unit, ~Unit, ~contextAbort, env)
+    stopper : C.Callback<Unit, Unit> <- C.create(~ContextEnv, ~Unit, ~Unit, ~contextShutdown, env)
+    return Ctx.ExtensionContextActions{reader, aborter, stopper}
+
+type ModelEnv is Data:
+  ModelEnv{agent: Runtime.Owner(), models: Models.ModelRuntime}
+
+def refreshedModel(+agent: Runtime.Owner(), found: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> IO(Unit):
+  match found:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{model}: Agent.setModel(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, model)
+
+def currentFrom(+agent: Runtime.Owner(), +models: Models.ModelRuntime, current: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> IO(Unit):
+  match current:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{+model}:
+      do IO<Unit>:
+        found : Maybe<&2, Ai.Model<Ai.JsonValue>> <- Models.getModel(models, Models.modelProvider(model), Models.modelId(model))
+        refreshedModel(agent, found)
+
+# upstream _refreshCurrentModelFromRegistry: the current model is replaced by
+# the catalog's model of the same provider and id, when there is one.
+def refreshCurrentModel(env: ModelEnv, unit: Unit) -> IO(Unit):
+  match env:
+    case ModelEnv{+agent, models}:
+      do IO<Unit>:
+        current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+        currentFrom(agent, models, stateModel(current))
+
+def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime) -> IO(ExtensionBinding):
+  match env:
+    case ContextEnv{+agent, shared, scoped, settings}:
+      do IO<ExtensionBinding>:
+        actions : Ctx.ExtensionContextActions <- createContextActions(ContextEnv{agent, shared, scoped, settings})
+        changed : C.Callback<Unit, Unit> <- C.create(~ModelEnv, ~Unit, ~Unit, ~refreshCurrentModel, ModelEnv{agent, models})
+        return ExtensionBinding{actions, changed}
+
+def disposeExtensionBinding(binding: ExtensionBinding) -> IO(Unit):
+  match binding:
+    case ExtensionBinding{Ctx.ExtensionContextActions{reader, aborter, stopper}, changed}:
+      do IO<Unit>:
+        C.dispose(Unit, Ctx.SessionState, reader)
+        C.dispose(Unit, Unit, aborter)
+        C.dispose(Unit, Unit, stopper)
+        C.dispose(Unit, Unit, changed)
+
+def boundWith(runner: ExtensionRunner.ExtensionRunner, binding: Maybe<&2, ExtensionBinding>) -> IO(Unit):
+  match binding:
+    case None{}: ExtensionRunner.bindCore(runner, None{}, None{})
+    case Some{ExtensionBinding{actions, changed}}: ExtensionRunner.bindCore(runner, Some{actions}, Some{changed})
+
+def bindContext(loadout: Runtime.Loadout, binding: Maybe<&2, ExtensionBinding>) -> IO(Unit):
   match loadout:
     case Runtime.Loadout{_, _, _, _, None{}, _, _}: IO.pure(Unit, Unit{})
-    case Runtime.Loadout{_, _, _, _, Some{source}, _, _}: Ctx.bind(source, factory)
+    case Runtime.Loadout{_, _, _, _, Some{runner}, _, _}: boundWith(runner, binding)
 
 def StreamInput() -> Data: T.StreamInput<Unit, Runtime.Details(), Runtime.LoopConfig()>
 def StreamOutput() -> Type: Result<&2, &1, Runtime.Error(), T.StreamLease<Unit, Runtime.Error()>>
@@ -991,7 +1074,7 @@ def retire(session: AgentSession) -> IO(Unit):
         C.dispose(T.ToolHookInput<T.PrepareRequestContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>, Result<&2, &2, Runtime.Error(), Maybe<&2, T.AgentRequestUpdate<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>>, request)
         current : Runtime.Loadout <- R.dispose(Runtime.Loadout, loadout)
         bindContext(current, None{})
-        C.dispose(Unit, Ctx.ExtensionContext, context)
+        disposeExtensionBinding(context)
         oldSettings : Settings.SettingsManager <- R.dispose(Settings.SettingsManager,settings)
         memo : Maybe<&2, StatsMemo> <- R.dispose(Maybe<&2, StatsMemo>, stats)
         released : Shared <- R.dispose(Shared, shared)
@@ -1835,9 +1918,9 @@ def createWarming(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: R.R
     Agent.setStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, stream)
     return Warming{warmer, stream, inner, replay, append, branch, mode, context, decide, warmed}
 
-def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
+def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
   do IO<AgentSession>:
-    scoped : R.Ref<List<&2, Models.ScopedModel>> <- R.new(List<&2, Models.ScopedModel>, scopedModels)
+    +scoped : R.Ref<List<&2, Models.ScopedModel>> <- R.new(List<&2, Models.ScopedModel>, scopedModels)
     initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +window : F64 = Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, stateModel(initial)), F.fromU32(0))
     +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, RunState{False{},False{}}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, window, None{}}, CompactionState{False{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}})
@@ -1852,7 +1935,7 @@ def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.Sett
     +replacedRequest : Maybe<&2, RequestHook()> <- Agent.getPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +request : RequestHook() <- C.create(~RequestEnv, ~RequestInput(), ~RequestResult(), ~requestHook, RequestEnv{agent, shared, replacedRequest})
     Agent.setPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{request})
-    +context : Ctx.ContextFactory() <- C.create(~ContextEnv, ~Unit, ~Ctx.ExtensionContext, ~toolContext, ContextEnv{agent, shared, cwd})
+    +context : ExtensionBinding <- createExtensionBinding(ContextEnv{agent, shared, scoped, settingsRef}, models)
     bindContext(loadout, Some{context})
     inner : Runtime.Stream() <- Agent.getStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     warming : Warming <- createWarming(agent, shared, settingsRef, inner)
@@ -2103,16 +2186,96 @@ def promptExpanded(+session: AgentSession, text: String, images: List<&2, Ai.Ima
     current : AgentState() <- state(session)
     promptSelected(session, text, images, behavior, stateModel(current))
 
-# upstream prompt(): no prompt while a manual compaction runs; skill commands
-# and prompt templates are expanded, then the message runs or, while
-# streaming, is queued by streamingBehavior. Extension commands and input
-# handlers are not ported.
-def prompt(+session: AgentSession, text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>) -> IO(Result<&2, &2, String, Unit>):
+# Extension commands
+# ------------------
+
+def runnerOf(loadout: Runtime.Loadout) -> Maybe<&2, ExtensionRunner.ExtensionRunner>:
+  match loadout:
+    case Runtime.Loadout{_, _, _, _, runner, _, _}: runner
+
+# The session's extension runner (upstream session.extensionRunner); None for
+# sessions created without one.
+def extensionRunner(session: AgentSession) -> IO(Maybe<&2, ExtensionRunner.ExtensionRunner>):
+  do IO<Maybe<&2, ExtensionRunner.ExtensionRunner>>:
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    return runnerOf(loadout)
+
+type CommandText is Data:
+  CommandText{name: String, args: String}
+
+def splitCommand(chars: List<&2, Char>, reversed: List<&2, Char>) -> CommandText:
+  match chars:
+    case Nil{}: CommandText{String.from_list(List.reverse(&2, Char, reversed)), ""}
+    case ' ' <> rest: CommandText{String.from_list(List.reverse(&2, Char, reversed)), String.from_list(rest)}
+    case char <> rest: splitCommand(rest, char <> reversed)
+
+# `/name args`: the name up to the first space, the rest after it.
+def commandText(text: String) -> CommandText:
+  splitCommand(String.to_list(String.drop(text, 1n)), Nil{})
+
+def nameOf(command: CommandText) -> String:
+  match command:
+    case CommandText{name, _}: name
+
+def commandName(text: String) -> String: nameOf(commandText(text))
+
+def commandFailed(+runner: ExtensionRunner.ExtensionRunner, name: String, result: Result<&2, &2, String, Unit>) -> IO(Unit):
+  match result:
+    case Done{_}: IO.pure(Unit, Unit{})
+    case Fail{error}: ExtensionRunner.emitError(runner, ExtensionTypes.ExtensionError{"command:" ++ name, "command", error, None{}})
+
+def executeCommand(+runner: ExtensionRunner.ExtensionRunner, +name: String, args: String, found: Maybe<&2, ExtensionTypes.ResolvedCommand>) -> IO(Bool):
+  match found:
+    case None{}: IO.pure(Bool, False{})
+    case Some{ExtensionTypes.ResolvedCommand{_, _, _, _, _, handler}}:
+      do IO<Bool>:
+        result : Result<&2, &2, String, Unit> <- C.call(ExtensionTypes.CommandCall, Result<&2, &2, String, Unit>, handler, ExtensionTypes.CommandCall{args, ExtensionRunner.createCommandContext(runner)})
+        commandFailed(runner, name, result)
+        return True{}
+
+def executeWith(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, command: CommandText) -> IO(Bool):
+  match runner command:
+    case None{} _: IO.pure(Bool, False{})
+    case Some{+runner} CommandText{+name, args}:
+      do IO<Bool>:
+        found : Maybe<&2, ExtensionTypes.ResolvedCommand> <- ExtensionRunner.getCommand(runner, name)
+        executeCommand(runner, name, args, found)
+
+def executeSlash(+session: AgentSession, +text: String, slash: Bool) -> IO(Bool):
+  match slash:
+    case False{}: IO.pure(Bool, False{})
+    case True{}:
+      do IO<Bool>:
+        runner : Maybe<&2, ExtensionRunner.ExtensionRunner> <- extensionRunner(session)
+        executeWith(runner, commandText(text))
+
+# upstream _tryExecuteExtensionCommand: `/name args` runs the extension
+# command invoked as `name` with the command context; a failing handler is
+# reported as an extension error of `command:name`. True when a command ran.
+def tryExecuteExtensionCommand(+session: AgentSession, +text: String) -> IO(Bool):
+  executeSlash(session, text, String.starts_with(text, "/"))
+
+def promptUnlessCompacting(+session: AgentSession, text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
     compacting : Bool <- manualCompacting(session)
     Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), compacting,
       _ => IO.pure(Result<&2, &2, String, Unit>, Fail{"Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry."}),
       _ => promptExpanded(session, text, images, behavior))(Unit{})
+
+def promptUnlessHandled(+session: AgentSession, text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>, handled: Bool) -> IO(Result<&2, &2, String, Unit>):
+  match handled:
+    case True{}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+    case False{}: promptUnlessCompacting(session, text, images, behavior)
+
+# upstream prompt(): an extension command runs first, even while streaming or
+# compacting, and nothing is sent. Otherwise no prompt runs while a manual
+# compaction does; skill commands and prompt templates are expanded, then the
+# message runs or, while streaming, is queued by streamingBehavior. Input
+# handlers are not ported.
+def prompt(+session: AgentSession, +text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    handled : Bool <- tryExecuteExtensionCommand(session, text)
+    promptUnlessHandled(session, text, images, behavior, handled)
 
 def abortRetry(session: AgentSession) -> IO(Unit):
   match session:

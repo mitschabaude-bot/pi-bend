@@ -28,3 +28,17 @@ pi's extensions are TypeScript modules loaded at runtime (`core/extensions/loade
 3. **Tools, shortcuts, flags, renderers, UI dialogs.** `registerTool` (joined to the tool registry with `sourceInfo`), `registerShortcut` (the keybinding conflict rules), `registerFlag`, message/entry renderers and markdown transformers, `select`/`confirm`/`input` dialogs and autocomplete provider wrappers.
 
 Each phase ports the upstream test files it covers (`test/extensions-*.test.ts`) and records them in `tests/upstream-inventory.json`.
+
+## Phase 1 core: implementation notes
+
+Modules: `core/extensions/context.bend` (`ExtensionContext`, `ExtensionCommandContext`, `ExtensionUIContext`, context actions), `types.bend` (commands, events, `ExtensionError`, `InlineExtension`, runtime state), `loader.bend` (`createExtensionRuntime`, the `ExtensionAPI` operations, `loadExtensionFromFactory`, `loadExtensionFactories`, provider binding), `runner.bend` (`ExtensionRunner`) and `extensions/index.bend` (`builtInExtensions`, empty until llama.cpp is ported). Model runtime: `ModelRuntime.refresh`, `registerNativeProvider`, `unregisterProvider`; pi-ai `Provider.refreshModels`, `RefreshModelsContext`, `ModelsPublication`, `createProvider`'s fetch refresh (`fetchedRefresh`, `mergeModels`) and `models-store.bend`.
+
+Language-driven changes:
+
+- **API as a handle.** `ExtensionAPI` is `{runtime, extension}`; its methods are `loader.bend` functions (`registerCommand(pi, name, options)`, `registerProvider`, `unregisterProvider`, `on`). They return `Result` instead of throwing; a failed extension's API fails with upstream's message.
+- **Context as a handle.** `ExtensionContext` holds the runner's cwd, model runtime and bindings. Upstream's lazy getters are IO accessors (`Ctx.model(ctx)`, `Ctx.isIdle(ctx)`, `Ctx.notify(ctx, …)`), so they read the session at call time. `sessionManager` is reduced to the session id and file.
+- **Publication carries the catalog.** Upstream's `update` closure replaces a provider's private model list. Here `ModelsPublication.models` is that list, and the model runtime keeps it per provider. A superseded refresh keeps running, but its publications are rejected by generation. It is not aborted.
+- **`custom`** receives a component factory and a `done` callback and answers when `done` runs. The generic result travels through the extension's own state.
+- **Inline factories are functions.** `InlineExtension` is `Type`-kinded and consumed on load.
+
+Not yet ported: config-form `registerProvider(name, config)` and its validation, models.json overlays on extension providers, reloading models.json on refresh, `FileModelsStore` (models-store.json), stale-context invalidation, `withSession`/`setup` continuations, extension error listeners in the modes, re-running factories on `/reload`, and the interactive UI binding. The UI binding is left to the interactive mode.

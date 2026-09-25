@@ -435,12 +435,12 @@ def invokeWithContext(environment: Invocation,context: GrepContext,request: Agen
 # upstream wrapToolDefinition: the registered tool reads the session's
 # context when it runs; without a bound session it keeps its own cwd.
 type Registered is Data: Registered{environment: Invocation, source: Ctx.ContextSource()}
-def toolContext(context: Maybe<&2,Ctx.ExtensionContext>) -> GrepContext: GrepContext{Ctx.cwdOf(context)}
+def toolContext(context: Maybe<&2,Ctx.ContextView>) -> GrepContext: GrepContext{Ctx.cwdOf(context)}
 def invoke(registered: Registered, request: Agent.ToolExecutionInput<GrepToolDetails>) -> IO(ToolResult()):
   match registered:
     case Registered{environment,source}:
       do IO<ToolResult()>:
-        context : Maybe<&2,Ctx.ExtensionContext> <- Ctx.current(source)
+        context : Maybe<&2,Ctx.ContextView> <- Ctx.current(source)
         invokeWithContext(environment,toolContext(context),request)
 
 def errorMessage(error: Error) -> String:

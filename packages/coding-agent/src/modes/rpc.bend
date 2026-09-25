@@ -12,6 +12,8 @@ import ../../../ai/src/utils/model-json.bend as ModelJson
 import ../../../ai/src/types.bend as Ai
 import ../../../agent/src/agent.bend as Agent
 import ../../../agent/src/types.bend as AgentTypes
+import ../core/extensions/runner.bend as ExtensionRunner
+import ../core/extensions/types.bend as ExtensionTypes
 import ../core/agent-session.bend as Session
 import ../core/bash-executor.bend as Bash
 import ../core/agent-runtime.bend as Runtime
@@ -689,8 +691,8 @@ def cloneCommand(handle: Command,host: Host,id: Maybe<&2,String>) -> IO(Unit):
         stored : Session.Session() <- Session.sessionOf(session)
         cloneLeaf(sink,host,id,S.getLeafId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)))
 
-# get_commands: prompt templates, then skills (extension commands are not
-# ported), each with its source metadata.
+# get_commands: extension commands by invocation name, prompt templates, then
+# skills, each with its source metadata.
 def scopeName(scope: Skills.SourceScope) -> String:
   match scope:
     case Skills.User{}: "user"
@@ -706,6 +708,16 @@ def sourceInfoValue(info: Skills.SourceInfo) -> V.Value:
       MessageJson.object(MessageJson.field("path",V.Text{path},MessageJson.field("source",V.Text{source},MessageJson.field("scope",V.Text{scopeName(scope)},MessageJson.field("origin",V.Text{originName(origin)},MessageJson.optionalText("baseDir",baseDir,Nil{}))))))
 def commandValue(name: String,description: String,source: String,info: Skills.SourceInfo) -> V.Value:
   MessageJson.object(MessageJson.field("name",V.Text{name},MessageJson.field("description",V.Text{description},MessageJson.field("source",V.Text{source},MessageJson.field("sourceInfo",sourceInfoValue(info),Nil{})))))
+def extensionCommandValue(name: String,description: Maybe<&2,String>,info: Skills.SourceInfo) -> V.Value:
+  MessageJson.object(MessageJson.field("name",V.Text{name},MessageJson.optionalText("description",description,MessageJson.field("source",V.Text{"extension"},MessageJson.field("sourceInfo",sourceInfoValue(info),Nil{})))))
+def extensionCommands(commands: List<&2,ExtensionTypes.ResolvedCommand>,rest: List<&2,V.Value>) -> List<&2,V.Value>:
+  match commands:
+    case Nil{}: rest
+    case ExtensionTypes.ResolvedCommand{_,invocation,info,description,_,_} <> others: extensionCommandValue(invocation,description,info) <> extensionCommands(others,rest)
+def registeredCommands(runner: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> IO(List<&2,ExtensionTypes.ResolvedCommand>):
+  match runner:
+    case None{}: IO.pure(List<&2,ExtensionTypes.ResolvedCommand>,Nil{})
+    case Some{runner}: ExtensionRunner.getRegisteredCommands(runner)
 def skillCommands(skills: List<&2,Skills.Skill>) -> List<&2,V.Value>:
   match skills:
     case Nil{}: Nil{}
@@ -718,9 +730,11 @@ def getCommands(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
     case Command{+session,sink,_,_,_,_}:
       do IO<Unit>:
+        runner : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(session)
+        extensions : List<&2,ExtensionTypes.ResolvedCommand> <- registeredCommands(runner)
         templates : List<&2,Templates.PromptTemplate> <- Session.promptTemplates(session)
         skills : List<&2,Skills.Skill> <- Session.getSkills(session)
-        output(sink,data(id,"get_commands",MessageJson.object(MessageJson.field("commands",V.ArrayValue{templateCommands(templates,skills)},Nil{}))))
+        output(sink,data(id,"get_commands",MessageJson.object(MessageJson.field("commands",V.ArrayValue{extensionCommands(extensions,templateCommands(templates,skills))},Nil{}))))
 def dispatch(handle: Command,host: Host,id: Maybe<&2,String>,+command: String,+object: R.Record<V.Value>) -> IO(Unit):
   match command:
     case "new_session": newSessionCommand(handle,host,id,optionalText(field(object,"parentSession")))

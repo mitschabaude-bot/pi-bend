@@ -316,15 +316,15 @@ def modelImages(model: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> Maybe<&2,Bool>:
     case Some{Ai.Model{_,_,_,_,_,_,_,input,_,_,_,_,_,_,_,_}}: Some{acceptsImages(input)}
 # ctx.cwd and getNonVisionImageNote(ctx.model); the model's inputLimits image
 # resize options are not modelled by the native reader.
-def toolContext(context: Maybe<&2,Ctx.ExtensionContext>) -> ReadContext:
+def toolContext(context: Maybe<&2,Ctx.ContextView>) -> ReadContext:
   match context:
     case None{}: ReadContext{None{},None{}}
-    case Some{Ctx.ExtensionContext{cwd,model,_,_,_}}: ReadContext{Some{cwd},modelImages(model)}
+    case Some{Ctx.ContextView{cwd,model,_,_,_}}: ReadContext{Some{cwd},modelImages(model)}
 def invoke(registered: Registered, request: Agent.ToolExecutionInput<ReadToolDetails>) -> IO(ToolResult()):
   match registered:
     case Registered{environment,source}:
       do IO<ToolResult()>:
-        context : Maybe<&2,Ctx.ExtensionContext> <- Ctx.current(source)
+        context : Maybe<&2,Ctx.ContextView> <- Ctx.current(source)
         invokeWithContext(environment,toolContext(context),request)
 
 def parameter(kind: String, description: String) -> Value.Value:
