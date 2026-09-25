@@ -4282,8 +4282,11 @@
     },
     {
       "source": "packages/tui/test/tui-render.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/tui-virtual-terminal.bend",
+        "tests/tui_virtual_terminal.ts"
+      ],
       "sha256": "ace909b9dfca424f4c0e08e348163ecb98e86513d55c3f4fef5028a715fb9896"
     },
     {

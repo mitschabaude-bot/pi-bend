@@ -23,9 +23,11 @@ import ../packages/ai/src/utils/schema-json.bend as S
 # {"op":"overlay","lines":[...],"options":{...}} shows an overlay;
 # {"op":"hide","overlay":k} hides the k-th overlay shown; {"op":"hideTop"}
 # is upstream's tui.hideOverlay(); {"op":"clear"} removes every child;
-# {"op":"render","width":w,"height":h} draws a frame and prints
-# {"writes":[...],"widths":[...]}, the widths each component (by id) was last
-# asked to render at. A line is a string or
+# {"op":"clearOnShrink"} is tui.setClearOnShrink(true);
+# {"op":"render","width":w,"height":h,"termux":b} draws a frame (as in Termux
+# when b) and prints {"writes":[...],"widths":[...],"redraws":n}: the widths
+# each component (by id) was last asked to render at, and the full redraws
+# so far (upstream's tui.fullRedraws). A line is a string or
 # {"prefix":p,"fill":c,"less":n,"suffix":s}: c repeated (width - n) times.
 
 def get(value: V.Value, key: String) -> V.Value:
@@ -168,8 +170,11 @@ def widths(contents: List<&2, Content>) -> IO(List<&2, V.Value>):
         later : List<&2, V.Value> <- widths(rest)
         return widthValue(asked) <> later
 
-def report(output: Screen.Stream, asked: List<&2, V.Value>) -> String:
-  Maybe.default(&2, String, Json.stringify(S.toJson(V.ObjectValue{R.Record{R.Property{"writes", V.ArrayValue{events(output)}} <> R.Property{"widths", V.ArrayValue{asked}} <> Nil{}}})), "null")
+def redraws(state: Screen.State) -> V.Value:
+  match state:
+    case Screen.State{_, _, count}: V.Number{T.dimension(count)}
+def report(output: Screen.Stream, asked: List<&2, V.Value>, state: Screen.State) -> String:
+  Maybe.default(&2, String, Json.stringify(S.toJson(V.ObjectValue{R.Record{R.Property{"writes", V.ArrayValue{events(output)}} <> R.Property{"widths", V.ArrayValue{asked}} <> R.Property{"redraws", redraws(state)} <> Nil{}}})), "null")
 
 def planned(plan: Result<&2, &2, Screen.RenderError, Screen.Plan>, +prepared: Tui.PreparedFrame, +contents: List<&2, Content>, overlays: List<&2, O.OverlayHandle>, mounted: List<&2, C.ComponentId>) -> IO(Harness):
   match plan:
@@ -177,24 +182,24 @@ def planned(plan: Result<&2, &2, Screen.RenderError, Screen.Plan>, +prepared: Tu
     case Done{Screen.Plan{+state, output, _}}:
       do IO<Harness>:
         asked : List<&2, V.Value> <- widths(contents)
-        IO.print(report(output, asked))
+        IO.print(report(output, asked, state))
         return Harness{Tui.commitFrame(prepared), state, contents, overlays, mounted}
 
-def emitted(+prepared: Tui.PreparedFrame, harness: Harness, +width: Nat, +height: Nat) -> IO(Harness):
+def emitted(+prepared: Tui.PreparedFrame, harness: Harness, +width: Nat, +height: Nat, termux: Bool) -> IO(Harness):
   match harness:
-    case Harness{_, screen, contents, overlays, mounted}: planned(Process.planned(prepared, screen, False{}, width, height), prepared, contents, overlays, mounted)
+    case Harness{_, screen, contents, overlays, mounted}: planned(Process.planned(prepared, screen, termux, width, height), prepared, contents, overlays, mounted)
 
-def rendered(result: Tui.ResultOf(Tui.PreparedFrame), harness: Harness, +width: Nat, +height: Nat) -> IO(Harness):
+def rendered(result: Tui.ResultOf(Tui.PreparedFrame), harness: Harness, +width: Nat, +height: Nat, termux: Bool) -> IO(Harness):
   match result:
     case Fail{_}: IO.die(Harness, 1, "compose failed")
-    case Done{prepared}: emitted(prepared, harness, width, height)
+    case Done{prepared}: emitted(prepared, harness, width, height, termux)
 
-def render(+harness: Harness, +width: Nat, +height: Nat) -> IO(Harness):
+def render(+harness: Harness, +width: Nat, +height: Nat, termux: Bool) -> IO(Harness):
   match harness:
     case Harness{+tui, screen, contents, overlays, mounted}:
       do IO<Harness>:
         prepared : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(tui, width, height)
-        rendered(prepared, Harness{tui, screen, contents, overlays, mounted}, width, height)
+        rendered(prepared, Harness{tui, screen, contents, overlays, mounted}, width, height, termux)
 
 def joined(pair: C.Component & List<&2, Content>, tui: Tui.TuiBase, screen: Screen.State, overlays: List<&2, O.OverlayHandle>, mounted: List<&2, C.ComponentId>) -> Harness:
   match pair:
@@ -256,6 +261,15 @@ def hideTop(harness: Harness) -> Harness:
   match harness:
     case Harness{+tui, screen, contents, overlays, +mounted}: toppled(Tui.hideOverlay(tui, mounted), Harness{tui, screen, contents, overlays, mounted})
 
+def flag(value: V.Value) -> Bool:
+  match value:
+    case V.Boolean{value}: value
+    case _: False{}
+
+def clearingOnShrink(harness: Harness) -> Harness:
+  match harness:
+    case Harness{tui, screen, contents, overlays, mounted}: Harness{Tui.setTerminalPreferences(tui, False{}, True{}), screen, contents, overlays, mounted}
+
 def cleared(harness: Harness) -> Harness:
   match harness:
     case Harness{tui, screen, contents, overlays, mounted}: Harness{Tui.cleared(tui), screen, contents, overlays, mounted}
@@ -268,7 +282,8 @@ def dispatch(+kind: String, harness: Harness, +operation: V.Value) -> IO(Harness
     case "hide": hide(harness, number(get(operation, "overlay")))
     case "hideTop": IO.pure(Harness, hideTop(harness))
     case "clear": IO.pure(Harness, cleared(harness))
-    case "render": render(harness, number(get(operation, "width")), number(get(operation, "height")))
+    case "clearOnShrink": IO.pure(Harness, clearingOnShrink(harness))
+    case "render": render(harness, number(get(operation, "width")), number(get(operation, "height")), flag(get(operation, "termux")))
     case _: IO.die(Harness, 1, "unknown operation")
 
 def step(harness: Harness, +operation: V.Value) -> IO(Harness): dispatch(text(get(operation, "op")), harness, operation)
