@@ -1765,12 +1765,12 @@
     },
     {
       "source": "packages/coding-agent/test/cache-stats.test.ts",
-      "status": "ported",
+      "status": "partial",
       "ports": [
         "tests/cache-stats.bend"
       ],
       "sha256": "7c2b46ca4a37b4f716dd3c0c55e41d11812fa3b4bfff01a3d28e906b78a3506f",
-      "notes": "All ten cases. Misses are keyed by session entry id instead of the assistant message object; toBeCloseTo(x, 5) is an absolute difference below 5e-6; the price source is a function over a source value (ModelRuntime in the CLI)."
+      "notes": "Ten of eleven cases. Pending: 'uses only cache-warm usage entries as cache refreshes' — the session manager has no usage (cache warming) entries yet, so cache-stats and usage-totals omit their usage-entry branches. Misses are keyed by session entry id instead of the assistant message object; toBeCloseTo(x, 5) is an absolute difference below 5e-6; the price source is a function over a source value (ModelRuntime in the CLI)."
     },
     {
       "source": "packages/coding-agent/test/cache-warmer.test.ts",

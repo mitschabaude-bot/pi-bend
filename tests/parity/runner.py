@@ -104,7 +104,8 @@ def normalise(text, root):
     # Session directories encode the project path.
     text = text.replace("--" + str(root / "project").strip("/").replace("/", "-") + "--", "<cwd-dir>")
     text = text.replace(str(root), "<root>")
-    text = re.sub(r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_", "<stamp>_", text)
+    # A session file stamp, possibly wrapped after its date on screen.
+    text = re.sub(r"\d{4}-\d{2}-\d{2}T(\n *)?\d{2}-\d{2}-\d{2}-\d{3}Z_", lambda m: "<stamp>" + (m.group(1) or "") + "_", text)
     text = re.sub(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", "<uuid>", text)
     text = re.sub(r"/tmp/pi-bash-[0-9a-f]+\.log", "<bash-output>", text)
     text = re.sub(r"\b\d+(\.\d+)?(ms|s)\b", "<duration>", text)

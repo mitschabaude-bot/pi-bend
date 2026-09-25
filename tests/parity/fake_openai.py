@@ -5,7 +5,7 @@ Each POST /responses consumes the next scripted turn and streams it as SSE in
 the event shapes upstream's openai-responses parser reads. A turn is
   {"text": "...", "chunks": N, "delay_ms": D}          assistant text
   {"tool": {"name": "...", "arguments": {...}}}         one function call
-  {"usage": {"input": I, "output": O}}                  optional, with either
+  {"usage": {"input": I, "output": O, "cacheRead": R}}  optional (I includes R), with either
   {"status": 500, "error": {...}}                       an HTTP error response
   {"failed": {"code": "...", "message": "..."}}         a response.failed event
 Requests are appended as JSON lines to the log path so scenarios can compare
@@ -63,7 +63,7 @@ def events(turn, index):
     total = usage["input"] + usage["output"]
     yield {"type": "response.completed", "response": {"id": rid, "status": "completed",
            "usage": {"input_tokens": usage["input"], "output_tokens": usage["output"], "total_tokens": total,
-                     "input_tokens_details": {"cached_tokens": 0}, "output_tokens_details": {"reasoning_tokens": 0}}}}
+                     "input_tokens_details": {"cached_tokens": usage.get("cacheRead", 0)}, "output_tokens_details": {"reasoning_tokens": 0}}}}
 
 def handler(script):
     class Handler(BaseHTTPRequestHandler):

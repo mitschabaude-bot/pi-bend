@@ -236,6 +236,18 @@ SCENARIOS = [
                   ("wait", "Tool finished", "turn"), ("settle", 0.5), ("snap", "tool")],
     },
     {
+        # upstream handleSessionCommand: counts, cached/uncached prompt split
+        # and cost after two turns (the second with cache reads).
+        "name": "session-info",
+        "args": MODEL,
+        "turns": [{"text": "First.", "usage": {"input": 1500, "output": 20}},
+                  {"text": "Second.", "usage": {"input": 1500, "output": 40, "cacheRead": 1200}}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.5),
+                  ("keys", "one"), ("key", "Enter"), ("wait", "First\\.", "first"), ("settle", 0.3),
+                  ("keys", "two"), ("key", "Enter"), ("wait", "Second\\.", "second"), ("settle", 0.3),
+                  ("keys", "/session"), ("key", "Enter"), ("wait", "Session Info", "info"), ("settle", 0.3), ("snap", "info")],
+    },
+    {
         "name": "copy",
         "args": MODEL,
         "turns": [{"text": "Copy me."}],
