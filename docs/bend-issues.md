@@ -1260,3 +1260,9 @@ Evidence, same source (main at 40c1e5cc), baseline = the installed toolchain:
 
 Regression: `tests/compiler-f64-fold.bend` prints `0.02 14 -8`, and its C has no runtime F64 conversions.
 
+
+## BEND-048 — The JS lane rejects an out-of-range `Chr` that an eager branch builds and discards (2026-09-25)
+
+Library defect in our code, exposed by a backend difference. The Chat Completions tool-call id truncation split each character into UTF-16 units with `Bool.pick(String, U32.is_gt(code, 65535), <surrogate pair>, <the character>)`. `Bool.pick` evaluates both branches, so a BMP character also built `Chr{(55296 + (code - 65536) / 1024 : U32)}` from an underflowed U32. The Bun lane stops with `bend: 4249536 is not a Unicode scalar value` although the value is never used; the native lane (one thread) prints `a` and exits 0, so it builds and discards the invalid character without checking. Reduced: `tests/compiler-js-invalid-char.bend` (`bun build/bend-native-toolchain/bend2/main.ts tests/compiler-js-invalid-char.bend`). Fixed in `packages/ai/src/api/openai-completions.bend` by selecting a thunk (`Bool.pick(Unit -> String, …)(Unit{})`), as other string code already does; no toolchain change. Status: confirmed on the JS lane; whether the backends should agree on validating `Chr` construction is open.
+
+Recurrences seen in the same port, no new cause: parameters named `supported` and `converted` next to imported definitions of those names were refused with "a match on a parameter or field (this name is a def or a consumed binder)" (BEND-032 shape; renamed or split into helpers), and the request differential's Bun runner overflows the host stack decoding an 8,000-character decimal-protocol argument (BEND-019 shape in the test harness; `tests/openai_completions_request_check.py` checks those two cases on the native lane, where they pass).

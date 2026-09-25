@@ -1052,21 +1052,36 @@
     },
     {
       "source": "packages/ai/test/openai-completions-cache-control-format.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "fa9cf13c76fc50736273d05bb2f23671b2fcdef4ef0b0ee154f9f24758b165d3"
+      "status": "ported",
+      "ports": [
+        "tests/openai-completions-request.bend",
+        "tests/openai_completions_request_check.py",
+        "tests/openai_completions_request_reference.ts"
+      ],
+      "sha256": "fa9cf13c76fc50736273d05bb2f23671b2fcdef4ef0b0ee154f9f24758b165d3",
+      "notes": "Named cases run tests/openai_completions_request_check.py: the native Completions provider (streamSimple/stream with a capturing fetch) or convertMessages versus pinned upstream on the same model, context and options; bodies are byte-identical and session/auth/custom headers equal, then the upstream assertions run on the native result. Catalog models come from the generated Bend catalog (upstream getModel for the oracle). Bun lane passes; all four cases: markers from explicit compat and the OpenRouter Anthropic batch catalog alias, the conversation marker moving to a tool result, and none with cacheRetention none."
     },
     {
       "source": "packages/ai/test/openai-completions-empty-tools.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9782d5ea322751d01ba52296681a7bac5580d9d337a06921179789ea300176c0"
+      "status": "partial",
+      "ports": [
+        "tests/openai-completions-request.bend",
+        "tests/openai_completions_request_check.py",
+        "tests/openai_completions_request_reference.ts"
+      ],
+      "sha256": "9782d5ea322751d01ba52296681a7bac5580d9d337a06921179789ea300176c0",
+      "notes": "Named cases run tests/openai_completions_request_check.py: the native Completions provider (streamSimple/stream with a capturing fetch) or convertMessages versus pinned upstream on the same model, context and options; bodies are byte-identical and session/auth/custom headers equal, then the upstream assertions run on the native result. Catalog models come from the generated Bend catalog (upstream getModel for the oracle). Bun lane passes; ten of eleven cases. The three Cloudflare AI Gateway cases receive the materialized gateway endpoint and the provider's cf-aig-authorization/Authorization headers as request inputs; their materialization from provider auth is covered by tests/cloudflare_request_check.py (model-runtime-cloudflare-compat), and 'resolves Cloudflare AI Gateway base URL through provider auth' is not ported here. The two context-clamp cases overflow the Bun lane's host stack while decoding the 8,000-character argument (BEND-019 class, harness only) and are checked on the native lane."
     },
     {
       "source": "packages/ai/test/openai-completions-prompt-cache.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "0d5e5362c8bb73645d949bfac43092e6f552d050b09c8762d31dd7cd88083578"
+      "status": "ported",
+      "ports": [
+        "tests/openai-completions-request.bend",
+        "tests/openai_completions_request_check.py",
+        "tests/openai_completions_request_reference.ts"
+      ],
+      "sha256": "0d5e5362c8bb73645d949bfac43092e6f552d050b09c8762d31dd7cd88083578",
+      "notes": "Named cases run tests/openai_completions_request_check.py: the native Completions provider (streamSimple/stream with a capturing fetch) or convertMessages versus pinned upstream on the same model, context and options; bodies are byte-identical and session/auth/custom headers equal, then the upstream assertions run on the native result. Catalog models come from the generated Bend catalog (upstream getModel for the oracle). Bun lane passes; all fifteen cases including both Fireworks it.each rows and PI_CACHE_RETENTION (set in the native process environment and the oracle's process.env)."
     },
     {
       "source": "packages/ai/test/openai-completions-raw-stop-reason.test.ts",
@@ -1100,27 +1115,47 @@
     },
     {
       "source": "packages/ai/test/openai-completions-thinking-token-budget.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "8e01f02a1ea71d8f658924f4c6aa32cde9fc1205dcc2d9a4d693490cba9fac92"
+      "status": "ported",
+      "ports": [
+        "tests/openai-completions-request.bend",
+        "tests/openai_completions_request_check.py",
+        "tests/openai_completions_request_reference.ts"
+      ],
+      "sha256": "8e01f02a1ea71d8f658924f4c6aa32cde9fc1205dcc2d9a4d693490cba9fac92",
+      "notes": "Named cases run tests/openai_completions_request_check.py: the native Completions provider (streamSimple/stream with a capturing fetch) or convertMessages versus pinned upstream on the same model, context and options; bodies are byte-identical and session/auth/custom headers equal, then the upstream assertions run on the native result. Catalog models come from the generated Bend catalog (upstream getModel for the oracle). Bun lane passes; all eleven cases including both thinkingTokenBudgetField it.each rows."
     },
     {
       "source": "packages/ai/test/openai-completions-tool-choice.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "0eabc918c66894434e9d48f60bc77a57317e213132dd7c50120e9a3dc4289b64"
+      "status": "partial",
+      "ports": [
+        "tests/openai-completions-request.bend",
+        "tests/openai_completions_request_check.py",
+        "tests/openai_completions_request_reference.ts"
+      ],
+      "sha256": "0eabc918c66894434e9d48f60bc77a57317e213132dd7c50120e9a3dc4289b64",
+      "notes": "Named cases run tests/openai_completions_request_check.py: the native Completions provider (streamSimple/stream with a capturing fetch) or convertMessages versus pinned upstream on the same model, context and options; bodies are byte-identical and session/auth/custom headers equal, then the upstream assertions run on the native result. Catalog models come from the generated Bend catalog (upstream getModel for the oracle). Bun lane passes; 37 of 49 cases: every request-side and catalog-metadata case (metadata cases compare the Bend catalog entry with the upstream values the test asserts). Adaptations: 'forwards toolChoice from simple options to payload' passes \"required\" through OpenAICompletionsOptions.toolChoice (stream), because SimpleStreamOptions.toolChoice is typed \"auto\" | \"none\" and upstream casts past that type; 'omits reasoning effort for OpenCode Grok Build' declares the catalog model as a Completions model with its catalog compat, because upstream's catalog attaches the Completions-only supportsReasoningEffort to an openai-responses model and native compat is typed by API. Pending (stream side, openai-completions-stream.bend): finish_reason mapping, null chunks, missing finish_reason with and without compat, custom/empty tool-call deltas, id mutation, mixed deltas, OpenCode Go reasoning field naming, and usage accounting (12 cases)."
     },
     {
       "source": "packages/ai/test/openai-completions-tool-result-images.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "3a7cd0c2ae1cb81491f8b99876ea14753df9436b5ec5a672bdd2149eedff9ad0"
+      "status": "ported",
+      "ports": [
+        "tests/openai-completions-request.bend",
+        "tests/openai_completions_request_check.py",
+        "tests/openai_completions_request_reference.ts"
+      ],
+      "sha256": "3a7cd0c2ae1cb81491f8b99876ea14753df9436b5ec5a672bdd2149eedff9ad0",
+      "notes": "Named cases run tests/openai_completions_request_check.py: the native Completions provider (streamSimple/stream with a capturing fetch) or convertMessages versus pinned upstream on the same model, context and options; bodies are byte-identical and session/auth/custom headers equal, then the upstream assertions run on the native result. Catalog models come from the generated Bend catalog (upstream getModel for the oracle). Bun lane passes; all three convertMessages cases with the suite's explicit resolved compat (set as the model's compat and resolved by getCompat, which returns it unchanged when every field is given)."
     },
     {
       "source": "packages/ai/test/openai-completions-vllm-priority.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9d00326b56828a0f230940872bcb5831005aedd609e081d2889a6b96807580e1"
+      "status": "ported",
+      "ports": [
+        "tests/openai-completions-request.bend",
+        "tests/openai_completions_request_check.py",
+        "tests/openai_completions_request_reference.ts"
+      ],
+      "sha256": "9d00326b56828a0f230940872bcb5831005aedd609e081d2889a6b96807580e1",
+      "notes": "Named cases run tests/openai_completions_request_check.py: the native Completions provider (streamSimple/stream with a capturing fetch) or convertMessages versus pinned upstream on the same model, context and options; bodies are byte-identical and session/auth/custom headers equal, then the upstream assertions run on the native result. Catalog models come from the generated Bend catalog (upstream getModel for the oracle). Bun lane passes; both cases (priority sent, omitted when unset)."
     },
     {
       "source": "packages/ai/test/openai-responses-cache-affinity-e2e.test.ts",

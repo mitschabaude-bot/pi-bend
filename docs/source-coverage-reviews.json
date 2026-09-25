@@ -19,10 +19,19 @@
     },
     "packages/ai/src/api/openai-completions.ts": {
       "state": "partial",
-      "note": "Registered provider path exists; broader provider parity and live validation are not claimed.",
+      "note": "Request side ported: ResolvedOpenAICompletionsCompat with detectCompat/getCompat; convertMessages through transformMessages (tool-call id normalization, thinking replay fields and reasoning_details, the four requires* flags, grammar tool calls, Kimi mid-conversation tools); convertTools with grammar custom tools; buildParams in upstream field order (prompt cache key/retention, empty tools for tool history, tool_stream, Anthropic cache markers, priority, every thinkingFormat with the clamped budget, OpenRouter/Vercel routing, sampling overrides); streamSimple option mapping, cache retention and session-affinity headers (openai-completions-provider.bend runs stream). Byte-identical to upstream on the named suite cases and 724 generated requests (tests/openai_completions_request_check.py). Gaps: the stream fold has no finish_reason fallback (models with supportsFinishReason false are refused) and does not parse custom (grammar) tool-call deltas (requests declaring grammar tools are refused before sending), ignores streamed reasoning_details, and records every reasoning delta under reasoning_content instead of the field that carried it; GitHub Copilot dynamic headers and onResponse are not wired.",
       "source_sha256": "a682245959c697d4f7a5ac54152f2db189099561b304725c651d6dbee22fd752",
+      "ports": [
+        "packages/ai/src/api/openai-completions.bend",
+        "packages/ai/src/api/openai-completions-client.bend",
+        "packages/ai/src/api/openai-completions-stream.bend",
+        "packages/coding-agent/src/core/openai-completions-provider.bend"
+      ],
       "port_sha256": {
-        "packages/ai/src/api/openai-completions.bend": "8042d3f67903f2043f2c6a720d9dc80953f8b007d4ac47945e34e6112d8dceec"
+        "packages/ai/src/api/openai-completions.bend": "782cbe173ce60a2414476362ce8410b0454d4c38ccaba5d7adcaf0b83b87dc28",
+        "packages/ai/src/api/openai-completions-client.bend": "a0e2e37a1d784e324d3c5fd63b84616ff772a4f13a31a314ec2b7b6a958f1163",
+        "packages/ai/src/api/openai-completions-stream.bend": "d0ca90f9ffa6244899838de48da2ee3bb20f7512939db2a26b1fe587253f1df3",
+        "packages/coding-agent/src/core/openai-completions-provider.bend": "10b4709e2c37de036e875b5111c5b18b6c6c776a8c037ea3c931839ed1d547c1"
       }
     },
     "packages/agent/src/agent-loop.ts": {
@@ -306,6 +315,14 @@
       "ports": [
         "packages/coding-agent/src/modes/interactive/viewport.bend"
       ]
+    },
+    "packages/ai/src/api/openai-prompt-cache.ts": {
+      "state": "ported",
+      "note": "clampOpenAIPromptCacheKey keeps 64 code points (surrogate pairs normalized first); exercised by the prompt-cache suite's clamping case through the Completions request.",
+      "source_sha256": "78727b9b42d5c5cdc47d17f44d532cdf951cbee3b158cacfb3e640d8f792e8a4",
+      "port_sha256": {
+        "packages/ai/src/api/openai-prompt-cache.bend": "19e7d619d6a8453a8f3f153e74f6018f0dfc78539dfbe8f710fbb53d66188f63"
+      }
     }
   }
 }
