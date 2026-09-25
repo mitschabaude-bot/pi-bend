@@ -205,15 +205,15 @@ SCENARIOS = [
         "name": "hotkeys",
         "args": MODEL,
         "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "/hotkeys"), ("key", "Enter"),
-                  ("wait", "Keyboard Shortcuts", "hotkeys"), ("settle", 0.3), ("snap", "hotkeys")],
+                  ("wait", "Run bash command \\(excluded from context\\)", "hotkeys"), ("settle", 0.3), ("snap", "hotkeys")],
     },
     {
         "name": "hotkeys-custom-binding",
         "args": MODEL,
         "files": {"home/.pi/agent/keybindings.json": json.dumps({"app.model.select": "ctrl+k"})},
         "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "/hotkeys"), ("key", "Enter"),
-                  ("wait", "Keyboard Shortcuts", "hotkeys"), ("settle", 0.3), ("snap", "hotkeys"),
-                  ("key", "C-k"), ("wait", "Select Model", "picker"), ("settle", 0.3), ("snap", "picker")],
+                  ("wait", "Run bash command \\(excluded from context\\)", "hotkeys"), ("settle", 0.3), ("snap", "hotkeys"),
+                  ("key", "C-k"), ("wait", "Only showing models", "picker"), ("settle", 0.3), ("snap", "picker")],
     },
     {
         "name": "basic-turn",
