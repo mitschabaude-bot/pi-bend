@@ -32,3 +32,17 @@ with tempfile.TemporaryDirectory(prefix='pi-runtime-context-') as folder:
         assert 'Warning:' in errors and 'AGENTS.override.md' in errors and 'LOWER_PRIORITY_MARKER' in text
         (child/'AGENTS.override.md').write_text('NEAREST_CONTEXT_MARKER')
         print(f'{label}: runtime context layering, shadowing, disable flag, diagnostic fallback and user skills passed',flush=True)
+        # Built-in tool options: settings fill read autoResizeImages and bash
+        # commandPrefix/shellPath (upstream _buildRuntime); caller-supplied
+        # options win, and bash guidelines follow exposeSessionEnvironment.
+        home=str(agent)
+        result=subprocess.run(command+['tool-options',str(child),home],cwd=ROOT,capture_output=True,text=True,timeout=120)
+        assert result.returncode==0 and not result.stderr,(label,result.stderr)
+        lines=result.stdout.split('\n')
+        shell=f'{home}/bin/settings-shell'
+        assert lines[0]==f'defaults: read.autoResizeImages=false bash.commandPrefix=settings prefix bash.shellPath={shell} bash.exposeSessionEnvironment=unset',(label,lines[0])
+        assert lines[1]==f'caller: read.autoResizeImages=false bash.commandPrefix=caller prefix bash.shellPath={shell} bash.exposeSessionEnvironment=false',(label,lines[1])
+        guidance='You can inspect PI_* environment variables for current model and session details.'
+        prompts=result.stdout.split('--- prompt\n')
+        assert len(prompts)==3 and guidance in prompts[1] and guidance not in prompts[2],(label,result.stdout)
+        print(f'{label}: runtime built-in tool options from settings and caller passed',flush=True)

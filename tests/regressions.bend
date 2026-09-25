@@ -986,7 +986,7 @@ def toolsWith(+dir: String, +agentDir: String, selection: Runtime.ToolSelection,
 def toolsScenario(+dir: String, +agentDir: String, +allow: String, +exclude: String, +noTools: String, +activate: String) -> IO(Unit):
   do IO<Unit>:
     loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(dir, agentDir, Settings.options())
-    toolsWith(dir, agentDir, Runtime.ToolSelection{optionalList(allow), noToolsNamed(noTools), optionalList(exclude)}, optionalList(activate), H.settingsOf(loaded))
+    toolsWith(dir, agentDir, Runtime.ToolSelection{optionalList(allow), noToolsNamed(noTools), optionalList(exclude), None{}}, optionalList(activate), H.settingsOf(loaded))
 
 # 6324: navigation with a summary of the abandoned branch.
 def branchUsageCost(usage: Maybe<&2, Ai.Usage>) -> V.Value:

@@ -926,6 +926,16 @@ SCENARIOS = [
         "steps": [],
     },
     {
+        # The settings' shellCommandPrefix reaches the built-in bash tool
+        # (upstream AgentSession._buildRuntime).
+        "name": "print-tool-settings",
+        "process": True,
+        "args": MODEL + ["-p", "run it"],
+        "files": {"home/.pi/agent/settings.json": json.dumps({"shellCommandPrefix": "export PI_PARITY_PREFIX=applied"})},
+        "turns": [{"tool": {"name": "bash", "arguments": {"command": "echo prefix:$PI_PARITY_PREFIX"}}}, {"text": "Tool finished."}],
+        "steps": [],
+    },
+    {
         # The JSON event stream of one tool turn (timestamps and ids normalised).
         "name": "json-turn",
         "process": True,

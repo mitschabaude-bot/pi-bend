@@ -2051,7 +2051,8 @@
       "source": "packages/coding-agent/test/agent-session-dynamic-tools.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "d0e3053b05635eb80891962db05c24ae3eaaf26e0ab8b9cfc7f4f90ac212fd79"
+      "sha256": "d0e3053b05635eb80891962db05c24ae3eaaf26e0ab8b9cfc7f4f90ac212fd79",
+      "notes": "Pending: every case registers tools through an extension (pi.registerTool) on a session created by createAgentSession, which the port's native extensions do not yet expose to the tool registry. Related coverage: the default bash tool's PI_* guidance and its exposeSessionEnvironment opt-out in the runtime's system prompt (tests/runtime_context_check.py) and the bash tool's session environment with and without exposeSessionEnvironment (tests/bash-tool.bend)."
     },
     {
       "source": "packages/coding-agent/test/agent-session-retry.test.ts",
@@ -4349,7 +4350,7 @@
         "tests/tool-prompt-contributions.bend"
       ],
       "sha256": "eff9fdb9335cdcac14d26b90b3caf353fc7cb4473d096e67c414555d85984403",
-      "notes": "The seven ported tools' rows of 'keeps the %s tool definition aligned with its contribution' (Tools.promptSnippet and Tools.definitionGuidelines, which the system prompt builder reads, against upstream's *ToolSystemPromptContribution constants from the pinned pi-mono) and the bash row of 'keeps %s session-environment guidance conditional' (the bash definition with exposeSessionEnvironment false has no guidelines; upstream's undefined is an empty list). Pending: the powershell rows (tool not ported). The runtime creates its tools with default options (agent-runtime toolsOptions); there is no caller-supplied tool option yet. bun test."
+      "notes": "The seven ported tools' rows of 'keeps the %s tool definition aligned with its contribution' (Tools.promptSnippet and Tools.definitionGuidelines, which the system prompt builder reads, against upstream's *ToolSystemPromptContribution constants from the pinned pi-mono) and the bash row of 'keeps %s session-environment guidance conditional' (the bash definition with exposeSessionEnvironment false has no guidelines; upstream's undefined is an empty list). Pending: the powershell rows (tool not ported). Runtime callers pass the built-ins' options in ToolSelection.builtins (the port's adaptation of upstream's customTools built with createBashToolDefinition); the runtime's prompt guidelines and created tools both follow them, with settings filling read autoResizeImages and bash commandPrefix/shellPath (tests/runtime_context_check.py, parity scenario print-tool-settings). bun test."
     },
     {
       "source": "packages/coding-agent/test/tools-manager.test.ts",

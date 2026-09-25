@@ -790,7 +790,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "69f30b17c98f1b36bc08ee11af03c75478e29aaa797afedb12626da20aa557c9",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "5251961f780f6011fd173b198ccd6e4dd82ab65743f2df4463bc06f71a497075",
-        "packages/coding-agent/src/main.bend": "3dbefc6db3127fbb6d532c0208f27ab2a172c601d852f50a106083bf7641f1bb",
+        "packages/coding-agent/src/main.bend": "e49186ac0ab758c5d4b07473497621fc9550f196423910d55b03a08c7e9ea143",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6"
       }
     },
