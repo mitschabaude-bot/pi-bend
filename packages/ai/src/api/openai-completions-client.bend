@@ -4,6 +4,7 @@ import ../utils/event-stream.bend as Events
 import ../utils/headers.bend as ProviderHeaders
 import ../utils/provider-retry.bend as Retry
 import ../utils/schema-json.bend as Convert
+import ../utils/json.bend as JsonWire
 import ./openai-client.bend as Client
 import ./openai-sse.bend as Sse
 import ./openai-completions-stream.bend as Fold
@@ -47,10 +48,11 @@ def getClientApiKey(provider: String, apiKey: Maybe<&2, String>, headers: Maybe<
     case Some{SCon{c, cs}}: Done{SCon{c, cs}}
     case _: headerKey(provider, headers)
 
-# createClient's default headers: pi's User-Agent, the model's headers, then
-# the session-affinity and option headers (Request.clientHeaders).
-def defaultHeaders(agent: String, modelHeaders: Maybe<&2, R.Record<String>>, requestHeaders: Maybe<&2, T.ProviderHeaders()>) -> T.ProviderHeaders():
-  ProviderHeaders.overlay(ProviderHeaders.overlayStrings(ProviderHeaders.fromRecord(R.Record{R.Property{"User-Agent", agent} <> Nil{}}), modelHeaders), requestHeaders)
+# createClient's default headers: pi's User-Agent, the model's headers,
+# GitHub Copilot's dynamic headers, then the session-affinity and option
+# headers (Request.clientHeaders).
+def defaultHeaders(agent: String, modelHeaders: Maybe<&2, R.Record<String>>, copilotHeaders: Maybe<&2, R.Record<String>>, requestHeaders: Maybe<&2, T.ProviderHeaders()>) -> T.ProviderHeaders():
+  ProviderHeaders.overlay(ProviderHeaders.overlayStrings(ProviderHeaders.overlayStrings(ProviderHeaders.fromRecord(R.Record{R.Property{"User-Agent", agent} <> Nil{}}), modelHeaders), copilotHeaders), requestHeaders)
 
 # Failures
 # --------
@@ -93,10 +95,54 @@ def jsonField(value: Maybe<&2, J()>, name: String) -> Maybe<&2, J()>:
     case Some{T.JsonObject{fields}}: R.get(J(), fields, name)
     case _: None{}
 
+# JavaScript's String(value) for a parsed JSON value: arrays join their
+# elements with commas (nested arrays likewise, null elements as empty),
+# objects are "[object Object]". One walk over explicit tasks.
+type Render is Data:
+  RenderValue{value: J(), element: Bool}
+  RenderComma{}
+
+def elementTasks(items: List<&2, J()>, first: Bool) -> List<&2, Render>:
+  match items:
+    case Nil{}: Nil{}
+    case item <> rest:
+      +tail = {RenderValue{item, True{}} <> elementTasks(rest, False{}) : List<&2, Render>}
+      Bool.pick(List<&2, Render>, first, tail, RenderComma{} <> tail)
+
+def scalarText(value: J(), element: Bool) -> String:
+  match value:
+    case T.JsonString{text}: text
+    case T.JsonNumber{number}: Maybe.default(&2, String, JsonWire.stringify(T.JsonNumber{number}), "NaN")
+    case T.JsonBoolean{True{}}: "true"
+    case T.JsonBoolean{False{}}: "false"
+    case T.JsonNull{}: Bool.pick(String, element, "", "null")
+    case _: "[object Object]"
+
+# Each step consumes one task; a value's JSON text is longer than the number
+# of tasks it can produce, which bounds the walk.
+def render(fuel: Nat, tasks: List<&2, Render>, reversed: List<&2, String>) -> String:
+  match fuel tasks:
+    case _ Nil{}: String.join(List.reverse(&2, String, reversed), "")
+    case 0n _: String.join(List.reverse(&2, String, reversed), "")
+    case 1n+left RenderComma{} <> rest: render(left, rest, "," <> reversed)
+    case 1n+left RenderValue{T.JsonArray{items}, _} <> rest: render(left, List.append(&2, Render, elementTasks(items, True{}), rest), reversed)
+    case 1n+left RenderValue{value, element} <> rest: render(left, rest, scalarText(value, element) <> reversed)
+
+def jsString(+value: J()) -> String: render(1n + 2n * String.length(Maybe.default(&2, String, JsonWire.stringify(value), "")), RenderValue{value, False{}} <> Nil{}, Nil{})
+
+def truthyJson(value: J()) -> Bool:
+  match value:
+    case T.JsonString{SNil{}}: False{}
+    case T.JsonNumber{+number}: Bool.not(F.isNaN(number)) && Bool.not(F.isEqual(F.compare(number, F.fromU32(0))))
+    case T.JsonBoolean{flag}: flag
+    case T.JsonNull{}: False{}
+    case _: True{}
+
+# `if (rawMetadata && ...)` with `${rawMetadata}`.
 def rawText(value: Maybe<&2, J()>) -> Maybe<&2, String>:
   match value:
-    case Some{T.JsonString{SCon{c, cs}}}: Some{SCon{c, cs}}
-    case _: None{}
+    case Some{+raw}: Bool.pick(Maybe<&2, String>, truthyJson(raw), Some{jsString(raw)}, None{})
+    case None{}: None{}
 
 # OpenRouter puts the upstream provider's text in error.metadata.raw.
 def withRaw(+message: String, raw: Maybe<&2, String>) -> String:

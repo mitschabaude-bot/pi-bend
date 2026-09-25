@@ -4,6 +4,7 @@ import ../../../ai/src/api/openai-completions.bend as Request
 import ../../../ai/src/api/openai-completions-client.bend as Client
 import ../../../ai/src/api/openai-client.bend as SDK
 import ../../../ai/src/api/constrained-sampling.bend as Sampling
+import ../../../ai/src/api/github-copilot-headers.bend as Copilot
 import ../../../ai/src/api/openai-completions-stream.bend as Fold
 import ../../../ai/src/utils/transcript.bend as Transcript
 import ../../../ai/src/utils/event-stream.bend as Events
@@ -120,8 +121,8 @@ def propertiesOrEmpty(value: Result<&2, &2, Sampling.Error, R.Record<String>>) -
     case Done{properties}: properties
     case Fail{_}: R.new(String)
 
-def launched(+stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, timestamp: F64, +signal: Abort.AbortSignal<Unit>, +compat: Request.Compat(), +shared: Base(), grammar: Result<&2, &2, Sampling.Error, R.Record<String>>, +agent: String, retention: Ai.CacheRetention, params: Result<&2, &2, String, Ai.JsonValue>) -> IO(Unit):
-  +headers = Client.defaultHeaders(agent, modelHeaders(model), Request.clientHeaders(compat, Request.cacheSessionId(retention, sessionOf(shared)), headersOf(shared)))
+def launched(+stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, timestamp: F64, +signal: Abort.AbortSignal<Unit>, +compat: Request.Compat(), +shared: Base(), grammar: Result<&2, &2, Sampling.Error, R.Record<String>>, +agent: String, retention: Ai.CacheRetention, params: Result<&2, &2, String, Ai.JsonValue>, copilot: Maybe<&2, R.Record<String>>) -> IO(Unit):
+  +headers = Client.defaultHeaders(agent, modelHeaders(model), copilot, Request.clientHeaders(compat, Request.cacheSessionId(retention, sessionOf(shared)), headersOf(shared)))
   +settings = {Fold.Settings{model, Request.supportsFinishReason(compat), propertiesOrEmpty(grammar)} : Fold.Settings}
   +plan = {Client.Prepared{Client.getClientApiKey(Ai.modelProvider(model), keyOf(shared), headersOf(shared)), headers, timeoutOf(shared), retriesOf(shared), delayOf(shared), params, payloadHookOf(shared), responseHookOf(shared)} : Client.Prepared<Error()>}
   Client.stream(~Unit, ~Error(), ~Unit, ~Tools.errorMessage, stream, settings, signal, Client.Context{urlContext, SDK.Defaults{agent, R.new(String), None{}, None{}}, Maybe.default(&2, Fetch.Fetch(Unit), fetchOf(shared), fetch)}, timestamp, plan)
@@ -138,7 +139,7 @@ def produced(+stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Contex
     +agent : String <- IO.try(String, UserAgent.get())
     +retention : Ai.CacheRetention <- Request.resolveCacheRetention(retentionOf(shared), envOf(shared))
     params : Result<&2, &2, String, Ai.JsonValue> <- built(model, normalized, options, compat, retention, grammar)
-    launched(stream, fetch, urlContext, model, timestamp, signal, compat, shared, grammar, agent, retention, params)
+    launched(stream, fetch, urlContext, model, timestamp, signal, compat, shared, grammar, agent, retention, params, Copilot.forProvider(V.Value, V.Value, Unit, Details(), Ai.modelProvider(model), contextMessages(normalized)))
 
 def disposeLocal(local: Maybe<&2, Abort.AbortController<Unit>>) -> IO(Unit):
   match local:

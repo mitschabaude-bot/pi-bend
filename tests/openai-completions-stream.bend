@@ -9,11 +9,13 @@ import ../packages/agent/src/types.bend as Agent
 import ../packages/coding-agent/src/core/openai-completions-provider.bend as Completions
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
 import ../packages/runtime/src/fetch.bend as Fetch
+import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/json.bend as Decode
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/test/utf8-runner.bend as Text
 import ./openai-completions-request.bend as Fixture
+import ../packages/ai/src/api/openai-completions.bend as Request
 
 # The Chat Completions stream path against upstream `stream`/`streamSimple`
 # over a scripted local HTTP server (tests/openai_completions_stream_check.py).
@@ -31,12 +33,30 @@ def noDetails(value: Unit) -> V.Value: V.Null{}
 
 def eventJson(event: StreamEvent()) -> V.Value: MessageJson.assistantMessageEvent(~Unit, ~noDetails, event)
 
-@unsafe def drain(next: Events.Iteration<StreamEvent()>, +cursor: Events.Iterator<StreamEvent(), Message()>, reversed: List<&2, V.Value>) -> IO(List<&2, V.Value>):
+# `abortAfter` names the event type after whose first occurrence the case
+# aborts its request signal, as a caller cancelling mid-stream would.
+def triggered(+json: V.Value, trigger: Maybe<&2, String>) -> Bool:
+  match trigger:
+    case Some{name}: String.eq(Maybe.default(&2, String, Fixture.text(Fixture.field(json, "type")), ""), name)
+    case None{}: False{}
+
+def fired(controller: Abort.AbortController<Unit>, fire: Bool) -> IO(Unit):
+  match fire:
+    case True{}:
+      do IO<Unit>:
+        done : Bool <- Abort.abort(Unit, controller, None{})
+        return Unit{}
+    case False{}: IO.pure(Unit, Unit{})
+
+@unsafe def drain(next: Events.Iteration<StreamEvent()>, +cursor: Events.Iterator<StreamEvent(), Message()>, +controller: Abort.AbortController<Unit>, +trigger: Maybe<&2, String>, reversed: List<&2, V.Value>) -> IO(List<&2, V.Value>):
   match next:
     case Events.Yield{event}:
+      +json = eventJson(event)
+      +fire = triggered(json, trigger)
       do IO<List<&2, V.Value>>:
+        fired(controller, fire)
         following : Events.Iteration<StreamEvent()> <- Events.nextValue(StreamEvent(), Message(), cursor)
-        drain(following, cursor, eventJson(event) <> reversed)
+        drain(following, cursor, controller, Bool.pick(Maybe<&2, String>, fire, None{}, trigger), json <> reversed)
     case Events.End{}:
       do IO<List<&2, V.Value>>:
         Events.disposeIterator(StreamEvent(), Message(), cursor)
@@ -45,22 +65,26 @@ def eventJson(event: StreamEvent()) -> V.Value: MessageJson.assistantMessageEven
 def report(events: List<&2, V.Value>, message: Message()) -> V.Value:
   V.ObjectValue{R.Record{R.Property{"events", V.ArrayValue{events}} <> R.Property{"message", MessageJson.assistantMessage(~Unit, ~noDetails, message)} <> Nil{}}}
 
-def consumed(output: Output()) -> IO(V.Value):
+def consumed(+controller: Abort.AbortController<Unit>, trigger: Maybe<&2, String>, output: Output()) -> IO(V.Value):
   match output:
     case Fail{_}: IO.pure(V.Value, V.Text{"provider failed to open"})
     case Done{Agent.StreamLease{+events, release}}:
       do IO<V.Value>:
         +cursor : Events.Iterator<StreamEvent(), Message()> <- Events.iterator(StreamEvent(), Message(), events)
         first : Events.Iteration<StreamEvent()> <- Events.nextValue(StreamEvent(), Message(), cursor)
-        values : List<&2, V.Value> <- drain(first, cursor, Nil{})
+        values : List<&2, V.Value> <- drain(first, cursor, controller, trigger, Nil{})
         message : Message() <- Events.resultValue(StreamEvent(), Message(), events)
         result : Result<&2, &2, Error(), Unit> <- release
         return report(values, message)
 
-def opened(+entry: String, +fetch: Fetch.Fetch(Unit), +value: V.Value) -> IO(Output()):
+def signalled(options: Completions.Completions(), signal: Abort.AbortSignal<Unit>) -> Completions.Completions():
+  match options:
+    case Request.OpenAICompletionsOptions{Ai.StreamOptions{_, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r}, choice, effort, budgets}: Request.OpenAICompletionsOptions{Ai.StreamOptions{Some{signal}, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r}, choice, effort, budgets}
+
+def opened(+entry: String, +fetch: Fetch.Fetch(Unit), +signal: Abort.AbortSignal<Unit>, +value: V.Value) -> IO(Output()):
   match entry:
-    case "stream": Completions.openStream(fetch, Fixture.urls(), Fixture.model(value), Fixture.context(value), Fixture.streamOptions(Fixture.settings(value), Some{fetch}))
-    case _: Completions.open(fetch, Fixture.urls(), Fixture.model(value), Fixture.context(value), Some{Fixture.simpleOptions(Fixture.settings(value), fetch)})
+    case "stream": Completions.openStream(fetch, Fixture.urls(), Fixture.model(value), Fixture.context(value), signalled(Fixture.streamOptions(Fixture.settings(value), Some{fetch}), signal))
+    case _: Completions.open(fetch, Fixture.urls(), Fixture.model(value), Fixture.context(value), Some{Ai.withSignal(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error(), Fixture.simpleOptions(Fixture.settings(value), fetch), Some{signal})})
 
 def shown(value: V.Value) -> String:
   Maybe.default(&2, String, Wire.stringify(Convert.toJson(value)), "null")
@@ -70,8 +94,10 @@ def run(+fetch: Fetch.Fetch(Unit), result: Result<&2, &2, Decode.ParseError, V.V
     case Fail{_}: IO.print("R " ++ Text.showText("{\"error\":\"invalid case\"}"))
     case Done{+value}:
       do IO<Unit>:
-        output : Output() <- opened(Maybe.default(&2, String, Fixture.text(Fixture.field(value, "entry")), "simple"), fetch, value)
-        reported : V.Value <- consumed(output)
+        +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+        output : Output() <- opened(Maybe.default(&2, String, Fixture.text(Fixture.field(value, "entry")), "simple"), fetch, Abort.signal(Unit, controller), value)
+        reported : V.Value <- consumed(controller, Fixture.text(Fixture.field(value, "abortAfter")), output)
+        Abort.dispose(Unit, controller)
         IO.print("R " ++ Text.showText(shown(reported)))
 
 def all(+fetch: Fetch.Fetch(Unit), arguments: List<String>) -> IO(Unit):
