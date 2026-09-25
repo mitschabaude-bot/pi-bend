@@ -64,6 +64,18 @@
    emit_body(fl, x, ty, [], [val_new([arg], BOX)], null);
    Object.assign(fl, outer);
    return val_new([clo], BOX);
+@@ -3191,8 +3210,8 @@
+-  // One bank for both lanes, as wide as the widest segment or return; rp
++  // One bank for both lanes, as wide as a segment's register words or a return; rp
+   // pads the host's twelfth slot so rax stays free for the tail call.
+   const resw = Math.max(...entries.map((s) => s.ret.ks.length));
+-  const n = Math.max(resw, ...entries.filter((s) => s.frame === null)
+-    .map((s) => s.params.length));
++  const n = Math.max(resw, ...entries.map((s) =>
++    s.params.length - (s.frame?.at.length ?? 0)));
+   const rs = [...Array(n).keys()].map((i) => "r" + i);
+   const ws = n > 6 ? [...rs.slice(0, 6), "rp", ...rs.slice(6)] : rs;
+   // a ladder: a fallthrough switch's phi cascade costs clang O(n^2) to build
 @@ -4822,8 +4841,12 @@
      Fid f    = (Fid)term_aux(fun);
      u32 war  = fid_arity(f) - 1;
