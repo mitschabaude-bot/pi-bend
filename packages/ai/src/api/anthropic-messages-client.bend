@@ -117,8 +117,18 @@ def withBeta(fields: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>,
     case None{}: fields
     case Some{value}: layer(fields, "anthropic-beta", value)
 
-def requestHeaders(key: Maybe<&2, String>, custom: Maybe<&2, T.ProviderHeaders()>, beta: Maybe<&2, String>) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
-  requestHeadersWith(withBeta(layer(layer(layer(Done{Headers.new()}, "accept", "application/json"), "content-type", "application/json"), "anthropic-version", "2023-06-01"), beta), key, custom)
+def oauthIdentity(fields: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>, oauth: Bool) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
+  match oauth:
+    case False{}: fields
+    case True{}:
+      layer(layer(layer(fields, "anthropic-dangerous-direct-browser-access", "true"), "user-agent", "claude-cli/2.1.280"), "x-app", "cli")
+def oauthHeaders(fields: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>, key: Maybe<&2, String>) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
+  match key:
+    case None{}: fields
+    case Some{value}: oauthIdentity(fields, String.contains(value, "sk-ant-oat"))
+
+def requestHeaders(+key: Maybe<&2, String>, custom: Maybe<&2, T.ProviderHeaders()>, beta: Maybe<&2, String>) -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
+  requestHeadersWith(oauthHeaders(withBeta(layer(layer(layer(Done{Headers.new()}, "accept", "application/json"), "content-type", "application/json"), "anthropic-version", "2023-06-01"), beta), key), key, custom)
 
 def encoded(-Reason: Data, url: URL.URL, fields: Headers.Headers, body: Maybe<&2, String>) -> Result<&2, &2, Error<Reason>, Request>:
   match body:
