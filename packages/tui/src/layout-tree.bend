@@ -9,8 +9,13 @@ import ../../runtime/src/callback.bend as Callback
 
 type CachedLine is Data: CachedLine{component: C.ComponentId,width: Nat,lines: List<&2,String>}
 type Rendered is Data: Rendered{lines: List<&2,String>,cache: List<&2,CachedLine>}
+# A natural width is known, or the widest of the item's lines, measured only
+# when a horizontal stack or an enclosing measure asks for it (upstream
+# measures widths only there; a scroll view's content can be the whole
+# transcript).
+type Width is Data: Known{value: Nat} OfLines{}
 type Item is Data:
-  Item{node: N.LayoutNode,box: L.LayoutBox,lines: List<&2,String>,naturalWidth: Nat,naturalHeight: Nat,size: Maybe<&2,S.StackEntryOptions>}
+  Item{node: N.LayoutNode,box: L.LayoutBox,lines: List<&2,String>,naturalWidth: Width,naturalHeight: Nat,size: Maybe<&2,S.StackEntryOptions>}
 type Result is Data:
   Single{item: Item,cache: List<&2,CachedLine>}
   Group{entries: N.LayoutNode,items: List<&2,Item>,cache: List<&2,CachedLine>}
@@ -61,7 +66,9 @@ def resultItems(value: Result) -> List<&2,Item>:
 def itemNode(value: Item) -> N.LayoutNode:
   match value: case Item{node,_,_,_,_,_}: node
 def itemWidth(value: Item) -> Nat:
-  match value: case Item{_,_,_,width,_,_}: width
+  match value:
+    case Item{_,_,_,Known{width},_,_}: width
+    case Item{_,_,lines,OfLines{},_,_}: L.lineWidth(lines)
 def itemHeight(value: Item) -> Nat:
   match value: case Item{_,_,_,_,height,_}: height
 def itemSize(value: Item) -> S.StackEntryOptions:
@@ -97,7 +104,7 @@ def verticalPaint(items: List<&2,Item>,+parentY: Nat,+used: Nat,+height: Nat,+wi
       +child = L.paint(L.blank(visible,Nil{}),lines,0n,0n,childWidth,visible,width)
       List.append(&2,String,space,List.append(&2,String,child,verticalPaint(rest,parentY,top + visible,height,width)))
 def one(node: N.LayoutNode,box: L.LayoutBox,lines: List<&2,String>,naturalWidth: Nat,naturalHeight: Nat,cache: List<&2,CachedLine>) -> Result:
-  Single{Item{node,box,lines,naturalWidth,naturalHeight,None{}},cache}
+  Single{Item{node,box,lines,Known{naturalWidth},naturalHeight,None{}},cache}
 def placeholder(node: N.LayoutNode,+width: Nat,+height: Nat,lines: List<&2,String>,cache: List<&2,CachedLine>) -> Result:
   +bounds = L.rect(0n,0n,width,height)
   one(node,L.LayoutBox{None{},bounds,bounds,Nil{},None{},0n,0n},lines,width,height,cache)
@@ -115,7 +122,7 @@ def wrapEntry(result: Result,+size: S.StackEntryOptions,visible: Maybe<&2,Callba
     case Group{entries,items,cache}: Group{entries,items,cache}
 def fixedEntry(node: N.LayoutNode,+size: S.StackEntryOptions,visible: Maybe<&2,Callback.Callback<S.LayoutViewport,Bool>>,+basis: Nat,cache: List<&2,CachedLine>) -> Result:
   +bounds = L.rect(0n,0n,basis,basis)
-  Single{Item{N.Entry{node,size,visible},L.LayoutBox{None{},bounds,bounds,Nil{},None{},0n,0n},Nil{},basis,basis,Some{size}},cache}
+  Single{Item{N.Entry{node,size,visible},L.LayoutBox{None{},bounds,bounds,Nil{},None{},0n,0n},Nil{},Known{basis},basis,Some{size}},cache}
 def visible(predicate: Maybe<&2,Callback.Callback<S.LayoutViewport,Bool>>,viewport: S.LayoutViewport) -> IO(Bool):
   match predicate:
     case None{}: IO.pure(Bool,True{})
@@ -171,7 +178,9 @@ def placedLeaf(+component: C.Component,rendered: Rendered,x: Nat,y: Nat,+width: 
 def measuredScroll(view: Scroll.ScrollView,rendered: Rendered,width: Nat) -> Result:
   match rendered:
     case Rendered{+lines,cache}:
-      placeholder(N.ScrollNode{view},L.lineWidth(lines),List.length(&2,String,lines),lines,cache)
+      +height = List.length(&2,String,lines)
+      +bounds = L.rect(0n,0n,0n,height)
+      Single{Item{N.ScrollNode{view},L.LayoutBox{None{},bounds,bounds,Nil{},None{},0n,0n},lines,OfLines{},height,None{}},cache}
 def placedScrollFrame(value: L.ScrollLayoutFrame,cache: List<&2,CachedLine>,x: Nat,y: Nat,clip: L.LayoutRect,naturalHeight: Nat) -> Result:
   match value:
     case L.ScrollLayoutFrame{+next,L.LayoutFrame{box,width,height,+screen}}:
