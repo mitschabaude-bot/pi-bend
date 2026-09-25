@@ -1309,3 +1309,23 @@ def instance(n): {==}
 `Nat.mul(16n, 16n)` and `Nat.mul(64n, 64n)` check; `Nat.mul(256n, 256n)`, `Nat.add(40000n, 40000n)` and the literal `65536n` overflow. Runtime code is unaffected: compiled Nats are native integers up to 2^48-1. Classification: confirmed limitation; the cause is a hypothesis (the checker expands the constant into successor form while normalizing the stuck comparison), not investigated. Not a soundness problem. Consequence: `laws/uuid.bend` states the ordering laws for `Uuid.advanceWithin` at every sequence limit, and `Uuid.advance` is that transition at upstream's 2^41-1 by definition; instantiating the laws at the constant is what the checker cannot do. Toolchain work is reserved to its owner.
 
 Cause and fix (2026-09-26, compiler owner). A literal above 256 parses as `U32.to_nat(n)`. Conversion (`term_compare`) put both sides in weak head normal form before comparing them, so two stuck `Nat.cmp(n, big())` terms unfolded `big()` into `Succ` nodes and compared them one level of recursion per unit, which exhausts the stack between 4,096 and 65,536. `patches/bend-compare-congruence.patch` (+8 lines of `bend.ts`) first tries congruence: the same definition applied to convertible arguments is convertible, whatever it unfolds to. It is sound, and when it fails the comparison proceeds as before. Evidence: `tests/compiler-nat-constant-compare.bend` checks; the proof gate passes (3.3–3.4 s against 3.5–3.6 s); checking the CLI takes 25.9–26.1 s against 27.1–30.2 s (three runs each); the CLI's emitted C (main 3c9dd069, `BEND_TUS=16`) is byte-identical. Status: fixed. The UUIDv7 laws stay stated for every limit, which is the stronger form.
+
+## BEND-053 — Where the emitter's memory goes, and what did not reduce it (2026-09-26)
+
+Measured on the CLI (main 3c9dd069, `BEND_TUS=16`, installed toolchain): emission takes 127–128 s and peaks at 17.6 GB RSS. After a full collection at the end of each round, the live JavaScript heap is 2.1 GB when emission starts (the checked book), 4.0 GB after round 1 and 5.35 GB after round 2, while RSS is 11.9 and 14.5 GB. So most of the footprint is garbage from emitting units that the allocator keeps, not live data.
+
+Two live-data causes, fixed by `patches/bend-segment-memory.patch` (+17 −5 lines of `comp.ts`):
+- The C of units that a later round re-emitted stayed alive until the fixed point, because stale segments and spins were only filtered out of the file's lists after the last round. They are now dropped after every round. The segment numbering reads `fl.segs.length - STALE_SEGS.size`, which filtering and clearing together leave unchanged.
+- Each segment kept one string per C line (about 60 million strings after round 2). A unit's segments are finished when the unit is, so they are joined into one string then. The count of added newlines is kept so that dealing segments to translation units by size is unchanged.
+
+Evidence: the CLI's C is byte-identical. Live strings after round 2: 52.5 M → 3.9 M; live heap 5.35 → 3.53 GB. Two alternating runs, baseline against patched: 127.5 s / 17.64 GB against 127.0 s / 16.39 GB, and 128.4 s / 17.62 GB against 125.0 s / 15.55 GB.
+
+Tried and rejected, same source and measurement:
+- `bun --smol`, `MIMALLOC_PURGE_DELAY=0` and lower JSC heap growth factors: peak and time unchanged.
+- Skipping a repeated forced `facts_hot` walk of the same type within a unit: 134 s and 17.3 GB, slower than the walks it saves.
+- Keeping opened binders (`OPENS`, `PROBES`) across definitions, alone or with the `CONSTS` and `USES` memos: byte-identical C, no faster (round 2 32.1–32.8 s against 33.0 s), up to 2 GB more memory.
+- Emitting callers first (`BEND_ORDER=callers`): four large rounds, 155 s.
+- Compiling large (`FAR`) spins once instead of in every unit that reaches them: they are 2 MB of the 26 MB of spin copies. The rest are small inlined spins, whose copies are what lets Clang inline them.
+
+Round 2 re-emits 19,176 units, and 17,825 of them produce different C, so the late facts do change the code rather than dirtying units needlessly. Observation, not investigated: callers-first order reaches a different fixed point (34,229 ownership facts against 34,144), so the own, hot and stat facts of a unit's replaced output persist and the result depends on emission order. They are conservative, so this affects code quality, not correctness.
+

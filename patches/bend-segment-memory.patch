@@ -1,0 +1,67 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -39,6 +39,8 @@
+   host?: boolean;
+   spin?: boolean;
+   fork?: boolean;
++  // newlines added when its finished lines were joined into one
++  nl?: number;
+ };
+ 
+ type Spine = {
+@@ -66,8 +68,8 @@
+ // The units whose retained output read a fact that has since grown.
+ const DIRTY = new Set<Bend.Name>();
+ let SPIN_NEXT = 0;
+-// Segments and spins that a unit's re-emission replaced: dropped once after
+-// the fixed point, as filtering the whole lists per unit was quadratic.
++// Segments and spins that a unit's re-emission replaced: dropped after each
++// round, as filtering the whole lists per unit was quadratic.
+ const STALE_SEGS = new Set<Seg>();
+ const STALE_SPINS = new Set<unknown>();
+ const SPIN_AT = new Map<string, unknown>();
+@@ -3183,9 +3185,17 @@
+   fl.lend.forget(k);
+   unit.segs = [];
+   UNIT = k;
++  const from = fl.segs.length;
+   compile_def(fl, k, tld);
+   for (const s of unit.spins) emit_native(fl, s.ck, s.ers, s);
+   UNIT = "";
++  // the segments made here are finished: one string each, not one per line
++  for (const s of fl.segs.slice(from)) {
++    if (s.lines.length > 1) {
++      s.nl = s.lines.length - 1;
++      s.lines = [s.lines.join("\n")];
++    }
++  }
+ }
+ 
+ function compile_def(fl: File, k: Bend.Name, tld: Def): void {
+@@ -3318,7 +3328,7 @@
+     if (!seg.host) {
+       return out.join("\n");
+     }
+-    sizes[unit] += out.reduce((n, l) => n + l.length, 0);
++    sizes[unit] += out.reduce((n, l) => n + l.length, 0) - (seg.nl ?? 0);
+     return [`#if !DEVICE && BEND_TU == ${unit}`, ...out, "#endif"].join("\n");
+   });
+   const decls = named.map((fids, unit) => [unit < units
+@@ -3401,13 +3411,15 @@
+     cb.lend.clear();
+     gave.forEach((l) => cb.lend.add(l));
+     facts_lend(cb);
++    fl.segs = fl.segs.filter((s) => !STALE_SEGS.has(s));
++    fl.spins = fl.spins.filter((s) => !STALE_SPINS.has(s));
++    STALE_SEGS.clear();
++    STALE_SPINS.clear();
+     rounds += 1;
+     if (process.env.BEND_TIMES !== undefined) console.error(`TIME round ${rounds} ${((performance.now() - t0) / 1000).toFixed(1)}s units=${todo.size} dirty=${DIRTY.size} own=${cb.own.size} hot=${cb.hot.size} stat=${cb.stat.size} rss=${(process.memoryUsage().rss / 2 ** 30).toFixed(2)}GiB`);
+     if (todo.size > 256) Bun.gc(true);
+   }
+   const ta = performance.now();
+-  fl.segs = fl.segs.filter((s) => !STALE_SEGS.has(s));
+-  fl.spins = fl.spins.filter((s) => !STALE_SPINS.has(s));
+   const rank = new Map(order.map(([k], i) => [k, i]));
+   const of = (s: Seg) => rank.get(s.def.split("$")[0]) ?? 1e9;
+   fl.segs.sort((a, b) => of(a) - of(b));
