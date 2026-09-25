@@ -45,10 +45,11 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   (`packages/coding-agent/src/extensions/llama`). The port has no extension
   runtime yet, so `get_commands` lacks it.
 - **Built-in provider catalog** (`print-bare-unauthed`, `print-bare-two-authed`):
-  Bend registers 35 of pi 0.87.1's built-in providers. Missing: the two
-  Cloudflare providers (account/gateway auth and base-URL wrappers), and
-  bedrock, vertex, mistral and radius (APIs not ported). A bare
-  `--model gpt-5` therefore lists three candidates instead of pi's four.
+  Bend registers 37 of pi 0.87.1's built-in providers, including both
+  Cloudflare providers; a bare `--model gpt-5` lists pi's four candidates and
+  `--list-models cloudflare` matches pi. Missing: bedrock, vertex, mistral
+  and radius (APIs not ported). API-key `/login` (including Cloudflare's
+  key/account/gateway prompts) is not ported for any provider.
 - **LaTeX in multi-line paragraphs and list items** (answers with math):
   `packages/tui/src/latex.bend` and the Markdown `latex`/`latexBlock` tokens
   match pi on 2,170 cases (`tests/latex_check.py`). The Bend Markdown

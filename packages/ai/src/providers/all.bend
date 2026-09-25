@@ -6,6 +6,8 @@ import ./anthropic.bend as Anthropic
 import ./azure-openai-responses.bend as AzureOpenAIResponses
 import ./baseten.bend as Baseten
 import ./cerebras.bend as Cerebras
+import ./cloudflare-ai-gateway.bend as CloudflareAIGateway
+import ./cloudflare-workers-ai.bend as CloudflareWorkersAI
 import ./deepseek.bend as Deepseek
 import ./fireworks.bend as Fireworks
 import ./github-copilot.bend as GithubCopilot
@@ -38,10 +40,8 @@ import ./zai.bend as Zai
 import ./zai-coding-cn.bend as ZaiCodingCn
 
 # upstream builtinProviders(), in providers/all.ts order. Omitted:
-# amazon-bedrock, google-vertex, mistral and radius,
-# whose APIs are not ported, and cloudflare-ai-gateway and
-# cloudflare-workers-ai, whose account/gateway auth and base-URL placeholder
-# stream wrapper are not ported. OAuth handlers are created by the caller.
+# amazon-bedrock, google-vertex, mistral and radius, whose APIs are not
+# ported. OAuth handlers are created by the caller.
 # Each provider joins the list as soon as it is created: holding all of them
 # in separate binders exceeds the native backend's closure arity (BEND-010).
 def prepended(action: IO(Models.Provider), rest: List<&2, Models.Provider>) -> IO(List<&2, Models.Provider>):
@@ -81,6 +81,8 @@ def builtinProviders(codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuth
     providers : List<&2, Models.Provider> <- prepended(GithubCopilot.githubCopilotProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(Fireworks.fireworksProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(Deepseek.deepseekProvider(), providers)
+    providers : List<&2, Models.Provider> <- prepended(CloudflareWorkersAI.cloudflareWorkersAIProvider(), providers)
+    providers : List<&2, Models.Provider> <- prepended(CloudflareAIGateway.cloudflareAIGatewayProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(Cerebras.cerebrasProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(Baseten.basetenProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(AzureOpenAIResponses.azureOpenAIResponsesProvider(), providers)

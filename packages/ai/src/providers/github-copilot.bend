@@ -10,4 +10,4 @@ import ./github-copilot.models.bend as Catalog
 def githubCopilotProvider() -> IO(Models.Provider):
   do IO<Models.Provider>:
     apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("GitHub Copilot token", ["COPILOT_GITHUB_TOKEN"])
-    return Models.Provider{"github-copilot", "GitHub Copilot", "https://api.individual.githubcopilot.com", Auth.ProviderAuth{Some{apiKey}, None{}}, Catalog.GITHUB_COPILOT_MODELS()}
+    return Models.Provider{"github-copilot", "GitHub Copilot", "https://api.individual.githubcopilot.com", Auth.ProviderAuth{Some{apiKey}, None{}}, Catalog.GITHUB_COPILOT_MODELS(), Models.ApiStreams{}}

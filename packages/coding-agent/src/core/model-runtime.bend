@@ -35,11 +35,11 @@ type ModelRuntime is Data:
 
 def providerId(provider: AiModels.Provider) -> String:
   match provider:
-    case AiModels.Provider{id, _, _, _, _}: id
+    case AiModels.Provider{id, _, _, _, _, _}: id
 
 def providerModels(provider: AiModels.Provider) -> List<&2, Model()>:
   match provider:
-    case AiModels.Provider{_, _, _, _, models}: models
+    case AiModels.Provider{_, _, _, _, models, _}: models
 
 def findProvider(providers: List<&2, AiModels.Provider>, +id: String) -> Maybe<&2, AiModels.Provider>:
   match providers:
@@ -49,7 +49,7 @@ def findProvider(providers: List<&2, AiModels.Provider>, +id: String) -> Maybe<&
 def base(provider: Maybe<&2, AiModels.Provider>) -> Maybe<&2, Composer.Base>:
   match provider:
     case None{}: None{}
-    case Some{AiModels.Provider{_, name, url, auth, models}}: Some{Composer.Base{name, url, auth, models}}
+    case Some{AiModels.Provider{_, name, url, auth, models, _}}: Some{Composer.Base{name, url, auth, models}}
 
 type Composition is Data:
   Composition{providers: List<&2, AiModels.Provider>, errors: List<&2, String>, retained: List<&2, Composer.Retained>}
@@ -64,7 +64,7 @@ def added(provider: Maybe<&2, AiModels.Provider>, composition: Composition) -> C
 def recomposed(+id: String, +builtin: Maybe<&2, AiModels.Provider>, result: Result<&2, &2, String, Composer.Composed>, composition: Composition) -> Composition:
   match result composition:
     case Fail{error} Composition{providers, errors, retained}: added(builtin, Composition{providers, ("Provider \"" ++ id ++ "\": " ++ error) <> errors, retained})
-    case Done{Composer.Composed{name, url, auth, models, owned}} Composition{providers, errors, retained}: Composition{AiModels.Provider{id, name, url, auth, models} <> providers, errors, List.append(&2, Composer.Retained, owned, retained)}
+    case Done{Composer.Composed{name, url, auth, models, owned}} Composition{providers, errors, retained}: Composition{AiModels.Provider{id, name, url, auth, models, AiModels.inheritedStreams(builtin)} <> providers, errors, List.append(&2, Composer.Retained, owned, retained)}
 
 def recomposeProvider(+id: String, +builtin: Maybe<&2, AiModels.Provider>, entry: Maybe<&2, Config.ModelsJsonProvider>, composition: Composition) -> IO(Composition):
   match entry:
@@ -110,7 +110,7 @@ def assembled(composition: Composition, credentials: Auth.CredentialStore, conte
 
 def supportsOAuth(provider: Maybe<&2, AiModels.Provider>) -> Bool:
   match provider:
-    case Some{AiModels.Provider{_, _, _, Auth.ProviderAuth{_, Some{_}}, _}}: True{}
+    case Some{AiModels.Provider{_, _, _, Auth.ProviderAuth{_, Some{_}}, _, _}}: True{}
     case _: False{}
 
 def unknownProvider(id: String) -> Resolve.ModelsError:
@@ -118,7 +118,7 @@ def unknownProvider(id: String) -> Resolve.ModelsError:
 
 def providerRef(provider: AiModels.Provider) -> Resolve.ProviderRef:
   match provider:
-    case AiModels.Provider{id, _, _, auth, _}: Resolve.ProviderRef{id, auth}
+    case AiModels.Provider{id, _, _, auth, _, _}: Resolve.ProviderRef{id, auth}
 
 def resolveFor(credentials: Auth.CredentialStore, context: Auth.AuthContext, id: String, +provider: Maybe<&2, AiModels.Provider>, overrides: Resolve.AuthResolutionOverrides) -> IO(Resolve.Resolution()):
   match provider:
@@ -238,7 +238,7 @@ def create(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth) -> IO(Model
 def disposeProviders(providers: List<&2, AiModels.Provider>) -> IO(Unit):
   match providers:
     case Nil{}: IO.pure(Unit, Unit{})
-    case AiModels.Provider{_, _, _, auth, _} <> rest:
+    case AiModels.Provider{_, _, _, auth, _, _} <> rest:
       do IO<Unit>:
         Auth.disposeProviderAuth(auth)
         disposeProviders(rest)
@@ -273,6 +273,15 @@ def getModelConfig(runtime: ModelRuntime) -> Config.ModelConfig:
 
 def getProvider(runtime: ModelRuntime, id: String) -> Maybe<&2, AiModels.Provider>:
   findProvider(getProviders(runtime), id)
+
+def streamsOf(provider: Maybe<&2, AiModels.Provider>) -> AiModels.ProviderStreams:
+  match provider:
+    case None{}: AiModels.ApiStreams{}
+    case Some{AiModels.Provider{_, _, _, _, _, streams}}: streams
+
+# How the provider's requests stream (upstream prepareRequest's provider).
+def getProviderStreams(runtime: ModelRuntime, id: String) -> AiModels.ProviderStreams:
+  streamsOf(getProvider(runtime, id))
 
 def allModels(providers: List<&2, AiModels.Provider>) -> List<&2, Model()>:
   match providers:

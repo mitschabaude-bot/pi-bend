@@ -717,9 +717,12 @@
     },
     {
       "source": "packages/ai/test/cloudflare-stream.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a4fa89e5925737c7c1a00b06f6050b3f146955ffdd6f4092ad5fe6932c3157e0"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/cloudflare-stream.bend"
+      ],
+      "sha256": "a4fa89e5925737c7c1a00b06f6050b3f146955ffdd6f4092ad5fe6932c3157e0",
+      "notes": "Both named cases pass on the JavaScript lane. Upstream wraps an API implementation and records the model its stream and streamSimple receive; Bend requests dispatch on the model's api after the provider's ProviderStreams transform (Models.streamModel over resolveCloudflareModel), so each case checks that one transform. Native cases add partial environments, the anthropic-messages endpoint, unwrapped APIs, every AI Gateway and Workers AI catalog endpoint, and models.json composition (inheritedStreams, upstream provider-composer supportsBaseApi). Native lane not run."
     },
     {
       "source": "packages/ai/test/compat-env.test.ts",
@@ -1295,9 +1298,12 @@
     },
     {
       "source": "packages/ai/test/providers.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "05398664e04241071153801789cc3017bad1b820c1926a91ac04dc9cdff785a6"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/cloudflare-auth.bend"
+      ],
+      "sha256": "05398664e04241071153801789cc3017bad1b820c1926a91ac04dc9cdff785a6",
+      "notes": "Only the two Cloudflare cases are ported ('requires Cloudflare Workers AI account config and returns scoped env', 'requires Cloudflare AI Gateway account and gateway config and returns scoped env headers'), each with its missing-config and configured halves. Upstream resolves through createModels().getAuth with a fake auth context; the port calls the provider's ApiKeyAuth.resolve with the same context. Native cases cover the per-field credential/env merge, the source label, an empty stored key and abort checks. Every other case of the suite remains pending. Native lane not run."
     },
     {
       "source": "packages/ai/test/qwen-token-plan-models.test.ts",
@@ -2395,9 +2401,14 @@
     },
     {
       "source": "packages/coding-agent/test/model-runtime-cloudflare-compat.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "0d8d70cc2c4b19be55ad102f0d9a98c5a3f1f5a215538de777e439d696fc3559"
+      "status": "partial",
+      "ports": [
+        "tests/cloudflare-request.bend",
+        "tests/cloudflare_request_check.py",
+        "tests/cloudflare_request_reference.ts"
+      ],
+      "sha256": "0d8d70cc2c4b19be55ad102f0d9a98c5a3f1f5a215538de777e439d696fc3559",
+      "notes": "'materializes the Cloudflare endpoint through ModelRuntime streaming' is covered by the first case of the Cloudflare request differential (same stored credential and model): the upstream ModelRuntime with the real OpenAI SDK and a capturing fetch versus the Bend model runtime, provider streams and native Completions provider, comparing URL, auth/session/protocol headers and JSON body. 'materializes the Cloudflare endpoint after extension-style auth resolution' is pending: ModelRegistry.getApiKeyAndHeaders and the compat complete() entry point are not ported. The differential's 12 cases pass on the JavaScript lane (three gateway APIs, Workers AI, stored/ambient/merged credentials, unconfigured gateway); native lane not run."
     },
     {
       "source": "packages/coding-agent/test/model-runtime-credential-sync.test.ts",

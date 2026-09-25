@@ -63,7 +63,7 @@ def authValue(resolution: Resolve.Resolution()) -> V.Value:
 
 def providerValue(+runtime: Models.ModelRuntime, provider: AiModels.Provider) -> IO(V.Value):
   match provider:
-    case AiModels.Provider{+id, name, baseUrl, _, models}:
+    case AiModels.Provider{+id, name, baseUrl, _, models, _}:
       do IO<V.Value>:
         available : Bool <- Models.hasConfiguredAuth(runtime, id)
         auth : Resolve.Resolution() <- Models.getAuth(runtime, id, Resolve.noOverrides())

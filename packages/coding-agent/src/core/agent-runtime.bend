@@ -238,19 +238,28 @@ def preparedConfig(auth: Auth.AuthResult, config: LoopConfig()) -> LoopConfig():
   match config:
     case T.AgentLoopConfig{options, model, convert, transform, key, a, b, c, d, e, f, g, h}: T.AgentLoopConfig{preparedOptions(auth, options), model, convert, transform, key, a, b, c, d, e, f, g, h}
 
-def preparedRequest(responses: Responses.Config, fetch: Fetch.Fetch(Unit), +model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, options: Maybe<&2, LoopConfig()>, resolution: Resolve.Resolution()) -> IO(Providers.Output(Unit, Error())):
+def requestEnv(options: Maybe<&2, LoopConfig()>) -> Maybe<&2, Ai.ProviderEnv()>:
+  match options:
+    case Some{T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, env, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _, _}}: env
+    case None{}: None{}
+
+# The provider's stream then dispatches the model for the request's merged
+# provider env (upstream provider.stream after prepareRequest).
+def preparedRequest(responses: Responses.Config, fetch: Fetch.Fetch(Unit), +model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, +options: Maybe<&2, LoopConfig()>, streams: AiModels.ProviderStreams, resolution: Resolve.Resolution()) -> IO(Providers.Output(Unit, Error())):
   match resolution:
-    case Done{Some{Auth.AuthResult{Auth.ModelAuth{key, headers, +url}, env, source}}}:
-      +model = withBaseUrl(model, url)
+    case Done{Some{Auth.AuthResult{Auth.ModelAuth{key, headers, +url}, +env, source}}}:
+      +model = AiModels.streamModel(Ai.JsonValue, streams, withBaseUrl(model, url), mergedEnv(env, requestEnv(options)))
       selectedProvider(responses, fetch, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => preparedConfig(Auth.AuthResult{Auth.ModelAuth{key, headers, url}, env, source}, value), options), modelApi(model))
-    case _: selectedProvider(responses, fetch, model, context, options, modelApi(model))
+    case _:
+      +model = AiModels.streamModel(Ai.JsonValue, streams, model, requestEnv(options))
+      selectedProvider(responses, fetch, model, context, options, modelApi(model))
 
 def openProvider(config: ProviderStreams, input: Providers.Input(LoopConfig(), Unit, Details())) -> IO(Providers.Output(Unit, Error())):
   match config input:
-    case ProviderStreams{responses, +fetch, defaults, KeySource{models, apiKey}} T.StreamInput{+model, context, options}:
+    case ProviderStreams{responses, +fetch, defaults, KeySource{+models, apiKey}} T.StreamInput{+model, context, options}:
       do IO<Providers.Output(Unit, Error())>:
         resolution : Resolve.Resolution() <- Models.getModelAuth(models, model, Resolve.AuthResolutionOverrides{apiKey, None{}, None{}, None{}})
-        preparedRequest(responses, fetch, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => requestConfig(fetch, defaults, value), options), resolution)
+        preparedRequest(responses, fetch, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => requestConfig(fetch, defaults, value), options), Models.getProviderStreams(models, Models.modelProvider(model)), resolution)
 
 def createStream(authorizer: C.Callback<URL.Host, TLSClient.Authorization>, fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource) -> IO(Stream()):
   do IO<Stream()>:

@@ -58,3 +58,35 @@ def equal(left: String, right: String) -> Bool:
 # Preserve a path as one POSIX shell argument. File IO rejects NUL paths.
 def quoteShell(value: String) -> String:
   "'" ++ String.join(split(value, '\''), "'\\\''") ++ "'"
+
+# JavaScript's String.prototype.replaceAll with a string pattern: every
+# non-overlapping occurrence, scanning left to right; an empty pattern matches
+# before each character and at the end. After a match the scan skips the rest
+# of the matched text; the output accumulates reversed.
+type Scan is Data:
+  Scan{skip: Nat, reversed: String}
+
+def matchedHere(here: Bool, char: Char, +replacement: String, width: Nat, reversed: String) -> Scan:
+  match here:
+    case True{}: Scan{width, String.reverse(replacement) ++ reversed}
+    case False{}: Scan{0n, SCon{char, reversed}}
+
+def scanned(state: Scan, here: Bool, char: Char, +replacement: String, width: Nat) -> Scan:
+  match state:
+    case Scan{1n+skip, reversed}: Scan{skip, reversed}
+    case Scan{0n, reversed}: matchedHere(here, char, replacement, width, reversed)
+
+def replaceScan(text: String, +pattern: String, +replacement: String, +width: Nat, state: Scan) -> String:
+  match text state:
+    case SNil{} Scan{_, reversed}: String.reverse(reversed)
+    case SCon{+char, +rest} previous: replaceScan(rest, pattern, replacement, width, scanned(previous, String.starts_with(SCon{char, rest}, pattern), char, replacement, width))
+
+def interleave(text: String, +replacement: String, reversed: String) -> String:
+  match text:
+    case SNil{}: String.reverse(String.reverse(replacement) ++ reversed)
+    case SCon{char, rest}: interleave(rest, replacement, SCon{char, String.reverse(replacement) ++ reversed})
+
+def replaceAll(text: String, pattern: String, replacement: String) -> String:
+  match pattern:
+    case SNil{}: interleave(text, replacement, "")
+    case SCon{first, +rest}: replaceScan(text, SCon{first, rest}, replacement, String.length(rest), Scan{0n, ""})
