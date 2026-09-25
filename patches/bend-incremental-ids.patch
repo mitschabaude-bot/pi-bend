@@ -1,0 +1,372 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -65,7 +65,11 @@
+ let UNIT: Bend.Name = "";
+ // The units whose retained output read a fact that has since grown.
+ const DIRTY = new Set<Bend.Name>();
+-let SPIN_NEXT = 0;
++// Per definition, its segments made so far (named in that order).
++const SEG_NEXT = new Map<string, number>();
++// What BEND_IDS keeps (see ids_keep), and the last image's layout by hash.
++let IDS: { cid?: string[]; fid?: string[]; len?: number;
++  img?: [string, number, number][]; was?: Map<string, [number, number]> } = {};
+ // Segments and spins that a unit's re-emission replaced: dropped once after
+ // the fixed point, as filtering the whole lists per unit was quadratic.
+ const STALE_SEGS = new Set<Seg>();
+@@ -128,7 +132,7 @@
+   tab: number;
+   decl: string;
+   cids: Map<string, number>;
+-  tabs: Map<string, number>;
++  tabs: Map<string, string>;
+   spins: [string, string, Set<string>][];
+   spun: Map<string, string>;
+   clos: Set<string>;
+@@ -1366,8 +1370,7 @@
+   }
+   if (stat) {
+     fl.stat.add(k);
+-    const at = memo(fl.lits, exprs.join(", "), () =>
+-      fl.img.push(...exprs) - exprs.length);
++    const at = memo(fl.lits, exprs.join(", "), () => img_put(fl, exprs));
+     return `term_ctr(${cid}, STAT_OFF + ${at})`;
+   }
+   const alloc = `heap_alloc(e, cls_fit(${exprs.length}))`;
+@@ -1905,7 +1908,10 @@
+ }
+ 
+ function seg_name(fl: File, stem: string): string {
+-  return fl.seg.def.split("$")[0] + "$" + stem + (fl.segs.length - STALE_SEGS.size);
++  const def = fl.seg.def.split("$")[0];
++  const n = SEG_NEXT.get(def) ?? 0;
++  SEG_NEXT.set(def, n + 1);
++  return def + "$" + stem + n;
+ }
+ 
+ // Opens `name`: takes `live` (per `frame`, else in r0..), then `ks` words.
+@@ -2492,9 +2498,9 @@
+   if (got !== undefined) {
+     return seg_ref(fl, got);
+   }
+-  // The counter lives outside `fl`: a spin emitted within a spin restores
+-  // `fl` afterwards, and the name must never be reused.
+-  const name = again?.name ?? seg_ref(fl, `spin_${SPIN_NEXT++}`);
++  // Named by its key, the same in every build that has it.
++  const name = again?.name ?? seg_ref(fl,
++    `spin_${name_clean(ck.k)}_${Bun.hash(key).toString(36)}`);
+   fl.spun.set(key, name);
+   if (again === undefined) {
+     unit_of(fl, ck.k).spins.push({ name, key, ck, ers });
+@@ -2991,7 +2997,15 @@
+   return xs.includes(null) ? null : tpl(it.JS, xs as string[]);
+ }
+ 
+-function emit_tab(fl: File, rows: Chain | null, ty: HTerm): number | null {
++// A static table, named by its contents so that the name is the same in
++// every build that has it.
++function tab_id(fl: File, key: string): string {
++  const id = memo(fl.tabs, key, () => Bun.hash(key).toString(36));
++  seg_ref(fl, "TAB_" + id);
++  return id;
++}
++
++function emit_tab(fl: File, rows: Chain | null, ty: HTerm): string | null {
+   const ret = lay_of(fl.book, ty);
+   const ls = rows === null || ret.ks.length !== 1 || ret.ks[0] === "box"
+     ? [null] : rows.map(([t]) => emit_row(fl, t, ty));
+@@ -3004,17 +3018,13 @@
+   const key = fl.decl === "const" ? ls.join(", ") : vs.map((v: number) =>
+     (ty_adt(fl.book, ty)?.k === "F32" ? Bend.f32_to_bits(v) : BigInt(v))
+     + "ull").join(", ");
+-  const id = fl.tabs.get(key) ?? fl.tabs.size;
+-  fl.tabs.set(key, id);
+-  return id;
++  return tab_id(fl, key);
+ }
+ 
+ // A string literal's code points, a static table (0-terminated, never empty).
+-function emit_str(fl: File, w: string): number {
++function emit_str(fl: File, w: string): string {
+   const key = [...[...w].map((c) => c.codePointAt(0)!), 0].map((c) => c + "ull").join(", ");
+-  const id = fl.tabs.get(key) ?? fl.tabs.size;
+-  fl.tabs.set(key, id);
+-  return id;
++  return tab_id(fl, key);
+ }
+ 
+ function emit_nat(x: HTerm): Chain {
+@@ -3140,7 +3150,10 @@
+ // their callers hold them) and the facts it gave are dropped first.
+ function compile_unit(fl: File, k: Bend.Name, tld: Def): void {
+   const unit = unit_of(fl, k);
+-  unit.segs.forEach((s) => STALE_SEGS.add(s));
++  for (const s of unit.segs) {
++    STALE_SEGS.add(s);
++    SEG_NEXT.delete(s.def.split("$")[0]);
++  }
+   for (const s of unit.spins) {
+     STALE_SPINS.add(SPIN_AT.get(s.name));
+     fl.spun.delete(s.key);
+@@ -3195,27 +3208,67 @@
+ const RUNTIME_ADTS = ["Sigma", "String", "Word.Con", "IO.OP", "Result", "F64",
+   "Maybe", "Bool", "Unit"];
+ 
+-function compile_tables(fl: File, entries: Seg[]): string[] {
++// BEND_IDS names a file that keeps segment and constructor ids and the
++// image's layout between builds: a name keeps its number, and a gone one
++// leaves a hole ("") until holes are a quarter, so that unchanged code
++// compiles to the same C.
++function ids_keep(kind: "cid" | "fid", ms: string[]): string[] {
++  if (process.env.BEND_IDS === undefined) {
++    return ms;
++  }
++  const want = new Set(ms);
++  const kept = (IDS[kind] ?? []).map((m) => want.delete(m) ? m : "");
++  IDS[kind] = kept.filter((m) => m === "").length * 4 > kept.length ? ms
++    : [...kept, ...want];
++  return IDS[kind]!;
++}
++
++// A static node goes where the last build put the same one (by a hash of
++// its words), when that place is still free, else after the rest.
++function img_put(fl: File, exprs: string[]): number {
++  const h = Bun.hash(exprs.join(", ")).toString(36);
++  const [at, n] = IDS.was?.get(h) ?? [-1, 0];
++  const put = n === exprs.length && exprs.every((_, j) =>
++    fl.img[at + j] === undefined) ? at : fl.img.length;
++  exprs.forEach((x, j) => fl.img[put + j] = x);
++  IDS.img!.push([h, put, exprs.length]);
++  return put;
++}
++
++// The id macros and tables. Gives the constructor ids and the segments
++// that may fork.
++function compile_tables(fl: File, entries: Seg[]): [string[], Map<string, number>, Set<string>] {
+   const defs: string[] = [];
+-  for (const ms of [[...fl.cids.keys()].map(cid_mac),
+-    [...entries.map((s) => s.fid), "FID_EXIT", "FID_ENTER"]]) {
++  const cids = ids_keep("cid", [...fl.cids.keys()].map(cid_mac));
++  const fids = ids_keep("fid", [...entries.map((s) => s.fid), "FID_EXIT", "FID_ENTER"]);
++  for (const ms of [cids, fids]) {
+     const seen = new Set<string>();
+-    const dup = [...ms, ...TABLES].find((m) => seen.has(m) || !seen.add(m));
++    const dup = [...ms, ...TABLES].find((m) => m !== "" && (seen.has(m) || !seen.add(m)));
+     if (ms.length > 65536 || dup !== undefined) {
+       die(dup === undefined ? "an id over 65535"
+         : "two names mangle to " + dup);
+     }
+-    defs.push(...ms.map((m, i) => `#define ${m} ${i}`));
++    defs.push(...ms.flatMap((m, i) => m === "" ? [] : [`#define ${m} ${i}`]));
+   }
++  const segs = new Map(entries.map((s) => [s.fid, s]));
++  const at = fids.map((f) => segs.get(f));
+   const table = (nm: string, vals: number[], names: string[] = []) => {
+     if (vals.some((v) => v > 65535)) {
+       die("an arity over 65535" + vals.map((v, i) => v > 65535 ? " " + (names[i] ?? String(i)) + "=" + String(v) : "").join(""));
+     }
+     // a byte per entry unless some arity needs more
+     const w = vals.some((v) => v > 255) ? "u16" : "u8";
+-    defs.push(`CONSTV ${w} ${nm}[] = { ${vals.join(", ")} };`);
++    defs.push(`#if STAT_HERE\nSTAT_KEEP ${w} ${nm}[] = { ${vals.join(", ")} };`,
++      `#else\nextern const ${w} ${nm}[];\n#endif`);
+   };
+-  table("FID_ARITY_T", entries.map((s) => s.params.length), entries.map((s) => s.fid));
++  defs.push(`#if BEND_TUS > 1 && !DEVICE
++#define STAT_KEEP const
++#define STAT_HERE (BEND_TU == 0)
++#else
++#define STAT_KEEP CONSTV
++#define STAT_HERE 1
++#endif`);
++  table("FID_ARITY_T", at.map((s) => s?.params.length ?? 0), fids);
+   // A segment may fork when it, or one it reaches, does.
+   const forky = new Set(["FID_CLO_APPLY",
+     ...fl.segs.filter((s) => s.fork).map((s) => s.fid)]);
+@@ -3227,12 +3280,15 @@
+       }
+     }
+   }
+-  table("FID_FLAG_T", entries.map((s) => Number(fl.bangs.has(s.def))
+-    | Number(!forky.has(s.fid)) << 1));
+-  table("FID_RESW_T", entries.map((s) =>
+-    s.frame === null ? 0 : s.params.length - s.frame.at.length));
+-  table("CID_ARITY_T", [...fl.cids.values()]);
+-  defs.push(`#define STAT_LEN ${fl.img.length}`, "");
++  table("FID_FLAG_T", at.map((s) => s === undefined ? 0
++    : Number(fl.bangs.has(s.def)) | Number(!forky.has(s.fid)) << 1));
++  table("FID_RESW_T", at.map((s) => s === undefined || s.frame === null ? 0
++    : s.params.length - s.frame.at.length));
++  const ars = new Map([...fl.cids].map(([k, n]) => [cid_mac(k), n]));
++  table("CID_ARITY_T", cids.map((m) => ars.get(m) ?? 0));
++  // the image's room, in steps of 2^16 words, so the heap's offset moves
++  // only when the image outgrows it
++  defs.push(`#define STAT_CAP ${Math.ceil((fl.img.length + 1) / 65536) * 65536}`, "");
+   // One bank for both lanes, as wide as a segment's register words or a return; rp
+   // pads the host's twelfth slot so rax stays free for the tail call.
+   const resw = Math.max(...entries.map((s) => s.ret.ks.length));
+@@ -3258,9 +3314,8 @@
+   `#define WL_SIG Env e, Stk sp, u32 seq, u32 rn, ${ws.map((w) =>
+     "Term " + w).join(", ")}`, "", `#define WL_ALL e, sp, seq, rn, ${ws
+     .join(", ")}`, "",
+-  `#define WL_TABLE ${entries.map((s) => `WL_X(${s.fid})`).join(" ")}`
+-    + " WL_X(FID_EXIT)");
+-  return defs;
++  `#define WL_TABLE ${fids.map((f) => `WL_X(${f || "FID_EXIT"})`).join(" ")}`);
++  return [defs, new Map(cids.map((m, i) => [m, i])), forky];
+ }
+ 
+ // Host segments are dealt to BEND_TUS translation units by size, each
+@@ -3269,7 +3324,7 @@
+ // With several units, each declares only the segments its own code names
+ // (the dispatch table and its declarations live in unit 0). Also gives
+ // what each unit's segments name (the last entry: every unit's).
+-function compile_segs(fl: File): [string, Set<string>[]] {
++function compile_segs(fl: File, forky: Set<string>): [string, Set<string>[]] {
+   const units = Math.max(1, Number(process.env.BEND_TUS ?? "1") | 0);
+   // unit 0 also holds the static image and dispatch table: no segments
+   const sizes = Array(units).fill(0).fill(Infinity, 0, units > 2 ? 1 : 0);
+@@ -3278,8 +3333,13 @@
+     const out = [`  WL_CASE(${seg.fid})`, "  {",
+       ...seg_take(seg).map((l) => "    " + l),
+       "    WL_OPEN", ...seg.spin ? ["    WL_SPIN"] : [],
+-      ...seg.lines, ...seg.spin ? ["    WL_SPUN"] : [], "  }}"];
+-    const unit = !seg.host ? units : sizes.indexOf(Math.min(...sizes));
++      ...seg.lines.map((l) => l.includes("fid_nofk(") ? l.replace(/fid_nofk\((\w+)\)/g,
++        (_, f) => forky.has(f) ? "0" : "1") : l),
++      ...seg.spin ? ["    WL_SPUN"] : [], "  }}"];
++    // a def's segments stay in one unit, whatever else changes
++    const unit = !seg.host ? units : units > 2
++      ? 1 + Number(BigInt(Bun.hash(seg.def.split("$")[0])) % BigInt(units - 1))
++      : sizes.indexOf(Math.min(...sizes));
+     seg.refs.forEach((r) => named[unit].add(r));
+     if (!seg.host) {
+       return out.join("\n");
+@@ -3294,33 +3354,40 @@
+   return [[...decls, ...segs].join("\n\n"), named];
+ }
+ 
+-// Each unit holds the spins its segments reach, not all of them: Clang
+-// takes seconds per unit to read the unused ones.
++// Each unit holds the spins and static tables its segments reach, not all
++// of them: Clang takes seconds per unit to read the unused ones, and a
++// unit's C then changes only with what it uses.
+ function compile_spins(fl: File, named: Set<string>[]): string[] {
+-  const at = new Map(fl.spins.map((s) => [s[0], { s, us: new Set<number>() }]));
++  const at = new Map<string, { c: string; refs: Iterable<string>; us: Set<number> }>();
++  for (const [r, i] of fl.tabs) {
++    at.set("TAB_" + i, { c: `CONSTV u64 TAB_${i}[] = { ${r} };`, refs: [], us: new Set() });
++  }
++  for (const [n, c, refs] of fl.spins) {
++    at.set(n, { c, refs, us: new Set() });
++  }
+   const reach = (u: number) => (r: string): void => {
+     const x = at.get(r);
+     if (x !== undefined && !x.us.has(u)) {
+       x.us.add(u);
+-      x.s[2].forEach(reach(u));
++      for (const q of x.refs) reach(u)(q);
+     }
+   };
+   named.forEach((refs, u) => refs.forEach(reach(u)));
+   const guard = (n: string, c: string) => at.get(n)!.us.has(named.length - 1)
+     ? c : [`#if ${["BEND_TUS == 1", "DEVICE", ...[...at.get(n)!.us].map((u) =>
+       `BEND_TU == ${u}`)].join(" || ")}`, c, "#endif"].join("\n");
+-  return [fl.spins.map((s) => guard(s[0], s[1].split("\n")[0]
++  return [[...fl.tabs.values()].map((i) => guard("TAB_" + i, at.get("TAB_" + i)!.c))
++    .join("\n"), fl.spins.map((s) => guard(s[0], s[1].split("\n")[0]
+     .replace(/ \{$/, ";"))).join("\n"), ...fl.spins.map((s) => guard(s[0], s[1]))];
+ }
+ 
+ // The image as literals (Clang folds 300,000 term_make expressions in half
+ // a minute). A word that points into the image holds its offset there, and
+ // the loader adds STAT_OFF to the words STAT_RELS lists.
+-function compile_img(fl: File): [string[], number[]] {
+-  const cids = new Map([...fl.cids.keys()].map((k, i) =>
+-    [cid_mac(k), BigInt(i)]));
++function compile_img(fl: File, cidn: Map<string, number>): [string[], number[]] {
++  const cids = new Map([...cidn].map(([m, i]) => [m, BigInt(i)]));
+   const rels: number[] = [];
+-  const img = fl.img.map((x, i) => {
++  const img = Array.from(fl.img, (x = "0", i) => {
+     const m = /^term_(pak|ctr)\((\w+), (STAT_OFF \+ )?(\d+)\)$/.exec(x);
+     const cid = m === null ? undefined : cids.get(m[2]);
+     if (cid === undefined) {
+@@ -3344,8 +3411,16 @@
+   BRWS.clear();
+   DIRTY.clear();
+   [STALE_SEGS, STALE_SPINS, SPIN_AT].forEach((m) => m.clear());
+-  SPIN_NEXT = 0;
++  SEG_NEXT.clear();
++  const ids = process.env.BEND_IDS;
++  IDS = ids !== undefined && fs.existsSync(ids) ? JSON.parse(fs.readFileSync(ids, "utf8")) : {};
++  const olds = IDS.img ?? [];
++  // an image a quarter holes is laid out afresh
++  IDS.was = olds.reduce((n, [, , k]) => n + k, 0) * 4 < (IDS.len ?? 0) * 3
++    ? new Map() : new Map(olds.map(([h, at, k]) => [h, [at, k]]));
++  IDS.img = [];
+   const fl = file_new(cb, "Term");
++  fl.img.length = IDS.was.size === 0 ? 0 : IDS.len ?? 0;
+   for (const k of SRCS.keys()) {
+     for (const c of (cb.book.tlds[k] as Bend.ADT).c ?? []) {
+       fl.cids.set(c.k, lay_node(fl.book, c.k).ks.length);
+@@ -3406,27 +3481,26 @@
+       typeof c === "string" ? cid_mac(c) : c).join(", ")} };`,
+     `static const char* SHOW_NAMES[] = { ${show.names.map((n) =>
+       JSON.stringify(n)).join(", ")} };`, "#endif"];
+-  const defs = compile_tables(fl, entries);
++  const [defs, cidn, forky] = compile_tables(fl, entries);
+   defs.push(`#define MAIN_FID ${seg_fid("main")}`, `#define MAIN_PURE ${
+     Number(show !== null)}`);
+-  const [segs, named] = compile_segs(fl);
+-  const [img, rels] = compile_img(fl);
++  const [segs, named] = compile_segs(fl, forky);
++  const [img, rels] = compile_img(fl, cidn);
++  if (ids !== undefined) {
++    fs.writeFileSync(ids, JSON.stringify({ ...IDS, was: undefined, len: img.length }));
++  }
+   const fills: [string, string[]][] = [
+-    ["Tables", [defs.join("\n"), ...[...fl.tabs].map(([r, i]) =>
+-      `CONSTV u64 TAB_${i}[] = { ${r} };`)]],
++    ["Tables", [defs.join("\n")]],
+     // A spin emitted again lands after the spins that call it: declare all.
+     // With several host units, unit 0 holds the static image.
+-    ["Spins", [`#if BEND_TUS > 1 && !DEVICE
+-extern const u64 STAT_IMG[];
+-extern const u32 STAT_RELS[];
+-#define STAT_KEEP const
+-#else
+-#define STAT_KEEP CONSTV
+-#endif
+-#define STAT_RELN ${rels.length}
+-#if BEND_TUS == 1 || DEVICE || BEND_TU == 0
++    ["Spins", [`#if STAT_HERE
+ STAT_KEEP u64 STAT_IMG[] = { ${img.join(", ") || 0} };
+ STAT_KEEP u32 STAT_RELS[] = { ${rels.join(", ") || 0} };
++STAT_KEEP u64 STAT_LENS[] = { ${img.length}, ${rels.length} };
++#else
++extern const u64 STAT_IMG[];
++extern const u32 STAT_RELS[];
++extern const u64 STAT_LENS[];
+ #endif`, ...compile_spins(fl, named)]],
+     ["Segments", [segs]],
+     ["Requests", [fl.reqs]],
+@@ -4023,7 +4097,7 @@
+ #define RING_OFF (ALC_OFF + CUBE * 2 * ALC_WORDS)
+ #define STAK_OFF (RING_OFF + CUBE * RING_WORDS)
+ #define STAT_OFF (STAK_OFF + CUBE * STAK_LEN)
+-#define HEAP_OFF (STAT_OFF + PAGE_UP(STAT_LEN))
++#define HEAP_OFF (STAT_OFF + PAGE_UP(STAT_CAP))
+ 
+ // Globals
+ // =======
+@@ -5721,8 +5795,8 @@
+     cuCtxSynchronize();
+   }
+ #endif
+-  memcpy(H + STAT_OFF, STAT_IMG, STAT_LEN * sizeof(u64));
+-  for (u64 i = 0; i < STAT_RELN; i += 1) {
++  memcpy(H + STAT_OFF, STAT_IMG, STAT_LENS[0] * sizeof(u64));
++  for (u64 i = 0; i < STAT_LENS[1]; i += 1) {
+     H[STAT_OFF + STAT_RELS[i]] += STAT_OFF;
+   }
+   u64    at = HEAP_OFF + (cap << PAGE_BITS);
