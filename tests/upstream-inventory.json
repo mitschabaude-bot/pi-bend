@@ -2464,9 +2464,12 @@
     },
     {
       "source": "packages/coding-agent/test/model-selector.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "82a440482fa15aff46765396dba3cf8877f914235bee2cdd36778d08615814a5"
+      "status": "partial",
+      "ports": [
+        "tests/parity/scenarios.py"
+      ],
+      "sha256": "82a440482fa15aff46765396dba3cf8877f914235bee2cdd36778d08615814a5",
+      "notes": "Current-model marker while browsing and configured Ctrl+R save binding match upstream in the terminal. Real refresh success is shown. The named multi-catalog refresh-error case and the full component harness assertions remain pending."
     },
     {
       "source": "packages/coding-agent/test/models-store.test.ts",
@@ -3380,9 +3383,12 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7209-model-selector-filter-resets-selection.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5ca7bfc1c50f66593d29a59c2915b0374c06c402ebafb27ac1b2e1f4119f695f"
+      "status": "partial",
+      "ports": [
+        "tests/parity/scenarios.py"
+      ],
+      "sha256": "5ca7bfc1c50f66593d29a59c2915b0374c06c402ebafb27ac1b2e1f4119f695f",
+      "notes": "Terminal parity checks that typing a query resets selection to the first result in both scoped and all-catalog modes. The exact upstream alpha-model harness fixture is not ported."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7253-manual-compact-during-response.test.ts",

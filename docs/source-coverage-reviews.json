@@ -105,7 +105,7 @@
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/settings-selector.bend": "82c96f439d7a2448a4a0f9c40e5acfdf1d0f0b8949fa88a5343f259d58282969",
         "packages/coding-agent/src/modes/interactive/components/theme-selector.bend": "302bb406bb7ebf0d7844cba854b14bea8c193be907d1d1a8aef73d51c22f2bbf",
-        "packages/coding-agent/src/modes/interactive/components/model-thinking-selector.bend": "630228f3df9d033696c72c81cd2128693edeb07a88026d74ef03c3b00a882e33"
+        "packages/coding-agent/src/modes/interactive/components/model-thinking-selector.bend": "0d6bf4c4c89fa884f69d51a0f51938c8f5e14d9c9076e8004a23e152687d3a78"
       },
       "ports": [
         "packages/coding-agent/src/modes/interactive/components/settings-selector.bend",
@@ -138,12 +138,12 @@
         "packages/coding-agent/src/modes/interactive/viewport.bend",
         "packages/coding-agent/src/main.bend"
       ],
-      "note": "Interactive theme selection, per-model thinking overrides, /thinking and /scoped-models flows work. Fullscreen startup, typing, and viewport scrolling match terminal parity; regular Ctrl+D exit and persisted-session resume hint also match. Fullscreen exit presentation, mouse selection/search, dynamic mode switching, and broader commands remain partial.",
+      "note": "Interactive theme selection, per-model thinking overrides, /thinking, /scoped-models, and /model flows work. The /model selector matches scoped browsing, search and default save in terminal parity. Fullscreen startup, typing, and viewport scrolling match; regular Ctrl+D exit and persisted-session resume hint match. Fullscreen exit presentation, mouse selection/search, dynamic mode switching, and broader commands remain partial.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "23a8e54c1d30b54424d1e29508abdf12385cb5dec8e142b675becdb2c540b2d4",
-        "packages/coding-agent/src/modes/interactive/run.bend": "59545810e0627743d6f57b3a9389ca950f127d19ff1cb457f00e226b0573e385",
-        "packages/coding-agent/src/modes/interactive/commands.bend": "346a1437fb1f5d4b429ae47416c1ab464e043ee8a5d7ec79a269fdc417a3092a",
+        "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "d7baf2d18f3290274d621777b67d5c691d2f743e0b9eb04069b3d1799f73266e",
+        "packages/coding-agent/src/modes/interactive/run.bend": "81663eed3cbbb3bd3a47101faec95cc9e2ebbde581228cada6b49dc826c4c1a3",
+        "packages/coding-agent/src/modes/interactive/commands.bend": "8449a234b3cc969830d79b4462042968060562ee619a8b4e3c7ff2dba814265a",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "c26551ed6c7f5f80837817ede0eed9c68a20fcab25dfb1b17dec2b90c1fd8550",
         "packages/coding-agent/src/main.bend": "01410adc82ed2d2cae836504662a63e14c88051321d081dac8c907ad20da3535"
       }
@@ -323,6 +323,17 @@
       "port_sha256": {
         "packages/ai/src/api/openai-prompt-cache.bend": "19e7d619d6a8453a8f3f153e74f6018f0dfc78539dfbe8f710fbb53d66188f63"
       }
+    },
+    "packages/coding-agent/src/modes/interactive/components/model-selector.ts": {
+      "state": "partial",
+      "note": "Native /model selector matches upstream scoped browsing, search, current-model marking, real catalog refresh status, and save-as-default including custom bindings in terminal parity. The All-tab filter matches text but has three ANSI row-reset differences. Multi-catalog refresh failure, timeout/cancellation, mouse behavior, and the full upstream suite remain open.",
+      "source_sha256": "92d70b9faffc9febf2ce0c519c7c086938bddfc5da9ad28d819f408d54e3637e",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/model-selector.bend": "91e8d840a9fb80dd67fa8ce814ee2e2ab94e9e09703b48fea9bd14c6dcbee9b3"
+      },
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/model-selector.bend"
+      ]
     }
   }
 }

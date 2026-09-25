@@ -21,7 +21,7 @@ type Action is Data:
   OpenThinkingPicker{}
   OpenScopedModels{}
   ThinkingSelected{level: Ai.ModelThinkingLevel,persist: Bool}
-  ModelSelected{model: Ai.Model<Ai.JsonValue>}
+  ModelSelected{model: Ai.Model<Ai.JsonValue>,persist: Bool}
   ExportSession{path: Maybe<&2,String>}
   ImportSession{path: Maybe<&2,String>}
   ResumeSession{}
@@ -44,7 +44,7 @@ type Command is Data:
   Send{text: String}
   Stop{}
   ShowModel{requested: Maybe<&2,String>}
-  SwitchModel{model: Ai.Model<Ai.JsonValue>}
+  SwitchModel{model: Ai.Model<Ai.JsonValue>,persist: Bool}
   SetThinking{requested: Maybe<&2,String>}
   SelectThinking{level: Ai.ModelThinkingLevel,persist: Bool}
   ScopedModels{}
@@ -148,14 +148,14 @@ def thinking(+session: Session.AgentSession,requested: Maybe<&2,String>) -> IO(A
   do IO<Action>:
     +current : Session.AgentState() <- Session.state(session)
     thinkingWith(session,current,available(Session.stateModel(current)),requested)
-def switched(model: Ai.Model<Ai.JsonValue>,result: Result<&2,&2,String,Unit>) -> Action:
+def switched(model: Ai.Model<Ai.JsonValue>,persist: Bool,result: Result<&2,&2,String,Unit>) -> Action:
   match result:
-    case Done{_}: ModelSelected{model}
+    case Done{_}: ModelSelected{model,persist}
     case Fail{reason}: CommandError{reason}
-def switchModel(session: Session.AgentSession,+model: Ai.Model<Ai.JsonValue>) -> IO(Action):
+def switchModel(session: Session.AgentSession,+model: Ai.Model<Ai.JsonValue>,+persist: Bool) -> IO(Action):
   do IO<Action>:
-    result : Result<&2,&2,String,Unit> <- Session.setModel(session,model,Session.ModelMutationOptions{False{}})
-    return switched(model,result)
+    result : Result<&2,&2,String,Unit> <- Session.setModel(session,model,Session.ModelMutationOptions{persist})
+    return switched(model,persist,result)
 def matchingModels(models: List<&2,Models.Model()>,+query: String,+reference: Bool) -> List<&2,Models.Model()>:
   match models:
     case Nil{}: Nil{}
@@ -175,7 +175,7 @@ def exactModel(+models: List<&2,Models.Model()>,+query: String) -> Maybe<&2,Mode
   matchId(uniqueModel(matchingModels(models,normalized,True{})),models,normalized)
 def matchedModel(session: Session.AgentSession,query: String,found: Maybe<&2,Models.Model()>) -> IO(Action):
   match found:
-    case Some{model}: switchModel(session,model)
+    case Some{model}: switchModel(session,model,False{})
     case None{}: IO.pure(Action,OpenModelPicker{Some{query}})
 def showModel(session: Session.AgentSession,models: List<&2,Models.Model()>,requested: Maybe<&2,String>) -> IO(Action):
   match requested:
@@ -223,7 +223,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case Send{text}: IO.pure(Action,Prompt{text})
     case Stop{}: IO.pure(Action,Exit{})
     case ShowModel{requested}: showModel(session,models,requested)
-    case SwitchModel{model}: switchModel(session,model)
+    case SwitchModel{model,persist}: switchModel(session,model,persist)
     case SetThinking{requested}: thinking(session,requested)
     case SelectThinking{level,persist}: choose(session,level,persist)
     case ScopedModels{}: IO.pure(Action,OpenScopedModels{})

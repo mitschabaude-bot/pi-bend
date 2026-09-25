@@ -1357,11 +1357,11 @@ def chosenSelection(input: SelectInput,choice: Selector.Choice) -> IO(Unit):
       do IO<Unit>:
         result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitSelection(queue,selectionJob(mode,id))
         Interactive.submittedResult(failure,result)
-def chosenModel(input: SelectInput,model: Models.Model()) -> IO(Unit):
-  match input:
-    case SelectInput{queue,failure,_}:
+def chosenModel(input: SelectInput,choice: ModelPicker.Choice) -> IO(Unit):
+  match input choice:
+    case SelectInput{queue,failure,_} ModelPicker.Choice{chosen,persist}:
       do IO<Unit>:
-        result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitCommand(queue,Commands.SwitchModel{model})
+        result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitCommand(queue,Commands.SwitchModel{chosen,persist})
         Interactive.submittedResult(failure,result)
 def chosenThinking(input: SelectInput,choice: ThinkingPicker.Choice) -> IO(Unit):
   match input choice:
@@ -2055,7 +2055,7 @@ def runLoginHosted(borrowed: LoginDialog.Owner & LoginDialog.Host & Component.Co
         setLoginHost(contextLogin(context),None{})
         LoginDialog.dispose(retained)
         return outcome
-def runPickerHosted(borrowed: SessionPicker.HostOwner & SessionPicker.Host & Component.Component,settings: SettingsPicker.Owner,retained: ModelPicker.Owner,tree: Selector.Owner,live: Live.Owner,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,treeChosen: Callback.Callback<Selector.Choice,Unit>,modelChosen: Callback.Callback<Models.Model(),Unit>,resumeChosen: Callback.Callback<String,Unit>) -> IO(Result<&2,&2,Error,Unit>):
+def runPickerHosted(borrowed: SessionPicker.HostOwner & SessionPicker.Host & Component.Component,settings: SettingsPicker.Owner,retained: ModelPicker.Owner,tree: Selector.Owner,live: Live.Owner,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,treeChosen: Callback.Callback<Selector.Choice,Unit>,modelChosen: Callback.Callback<ModelPicker.Choice,Unit>,resumeChosen: Callback.Callback<String,Unit>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (picker,pickerHost,component):
       do IO<Result<&2,&2,Error,Unit>>:
@@ -2074,10 +2074,10 @@ def runPickerHosted(borrowed: SessionPicker.HostOwner & SessionPicker.Host & Com
         Ref.write(Maybe<&2,Selector.Host>,selectorRefOf(contextInteraction(context)),None{})
         ModelPicker.disposeHost(retained)
         Selector.disposeHost(tree)
-        Callback.dispose(Models.Model(),Unit,modelChosen)
+        Callback.dispose(ModelPicker.Choice,Unit,modelChosen)
         Callback.dispose(Selector.Choice,Unit,treeChosen)
         finish(outcome,transcript,live,foot,submitted,keys,paint,styles,rows,redraw,stopped,contextInteraction(context),contextSession(context),contextBinding(context),contextLogin(context))
-def runTrustHosted(borrowed: TrustPicker.Owner & TrustPicker.Host & Component.Component,choice: Callback.Callback<Trust.ProjectTrustOption,Unit>,settings: SettingsPicker.Owner,retained: ModelPicker.Owner,tree: Selector.Owner,live: Live.Owner,words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,treeChosen: Callback.Callback<Selector.Choice,Unit>,modelChosen: Callback.Callback<Models.Model(),Unit>,+resumeChosen: Callback.Callback<String,Unit>) -> IO(Result<&2,&2,Error,Unit>):
+def runTrustHosted(borrowed: TrustPicker.Owner & TrustPicker.Host & Component.Component,choice: Callback.Callback<Trust.ProjectTrustOption,Unit>,settings: SettingsPicker.Owner,retained: ModelPicker.Owner,tree: Selector.Owner,live: Live.Owner,words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,treeChosen: Callback.Callback<Selector.Choice,Unit>,modelChosen: Callback.Callback<ModelPicker.Choice,Unit>,+resumeChosen: Callback.Callback<String,Unit>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (trust,host,component):
       do IO<Result<&2,&2,Error,Unit>>:
@@ -2087,7 +2087,7 @@ def runTrustHosted(borrowed: TrustPicker.Owner & TrustPicker.Host & Component.Co
         TrustPicker.disposeHost(trust)
         Callback.dispose(Trust.ProjectTrustOption,Unit,choice)
         return result
-def runSettingsHosted(borrowed: SettingsPicker.Owner & SettingsPicker.Host & Component.Component,retained: ModelPicker.Owner,tree: Selector.Owner,live: Live.Owner,words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,treeChosen: Callback.Callback<Selector.Choice,Unit>,modelChosen: Callback.Callback<Models.Model(),Unit>,+resumeChosen: Callback.Callback<String,Unit>) -> IO(Result<&2,&2,Error,Unit>):
+def runSettingsHosted(borrowed: SettingsPicker.Owner & SettingsPicker.Host & Component.Component,retained: ModelPicker.Owner,tree: Selector.Owner,live: Live.Owner,words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,treeChosen: Callback.Callback<Selector.Choice,Unit>,modelChosen: Callback.Callback<ModelPicker.Choice,Unit>,+resumeChosen: Callback.Callback<String,Unit>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (settings,host,component):
       do IO<Result<&2,&2,Error,Unit>>:
@@ -2095,7 +2095,7 @@ def runSettingsHosted(borrowed: SettingsPicker.Owner & SettingsPicker.Host & Com
         +choice : Callback.Callback<Trust.ProjectTrustOption,Unit> <- Callback.create(~TrustChoiceInput,~Trust.ProjectTrustOption,~Unit,~trustChosen,TrustChoiceInput{Trust.create(contextAgentDir(context)),contextTranscript(context)})
         trust : TrustPicker.Owner <- TrustPicker.createHost(component,contextTheme(context),contextBindings(context),Keys.defaults(),choice)
         runTrustHosted(TrustPicker.borrowHost(trust),choice,settings,retained,tree,live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,treeChosen,modelChosen,resumeChosen)
-def runModelHosted(borrowed: ModelPicker.Owner & ModelPicker.Host & Component.Component,tree: Selector.Owner,treeHandle: Selector.Host,live: Live.Owner,+words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,treeChosen: Callback.Callback<Selector.Choice,Unit>,modelChosen: Callback.Callback<Models.Model(),Unit>) -> IO(Result<&2,&2,Error,Unit>):
+def runModelHosted(borrowed: ModelPicker.Owner & ModelPicker.Host & Component.Component,tree: Selector.Owner,treeHandle: Selector.Host,live: Live.Owner,+words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,treeChosen: Callback.Callback<Selector.Choice,Unit>,modelChosen: Callback.Callback<ModelPicker.Choice,Unit>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (retained,modelHandle,modal):
       do IO<Result<&2,&2,Error,Unit>>:
@@ -2109,7 +2109,7 @@ def runThinkingHosted(borrowed: ThinkingPicker.Owner & ThinkingPicker.Host & Com
     case (thinking,thinkingHandle,component):
       do IO<Result<&2,&2,Error,Unit>>:
         Ref.write(Maybe<&2,ThinkingPicker.Host>,thinkingSelectorRefOf(contextInteraction(context)),Some{thinkingHandle})
-        +modelChosen : Callback.Callback<Models.Model(),Unit> <- Callback.create(~SelectInput,~Models.Model(),~Unit,~chosenModel,SelectInput{queue,contextStatus(context),redraw})
+        +modelChosen : Callback.Callback<ModelPicker.Choice,Unit> <- Callback.create(~SelectInput,~ModelPicker.Choice,~Unit,~chosenModel,SelectInput{queue,contextStatus(context),redraw})
         modelHost : ModelPicker.Owner <- ModelPicker.createHost(component,contextTheme(context),contextBindings(context),Keys.defaults(),modelChosen)
         result : Result<&2,&2,Error,Unit> <- runModelHosted(ModelPicker.borrowHost(modelHost),tree,treeHandle,live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,treeChosen,modelChosen)
         ThinkingPicker.disposeHost(thinking)

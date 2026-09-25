@@ -44,6 +44,22 @@ def modify(-A: Type, -R: Type, reference: Ref<A>, transform: A -> A & R) -> IO(R
         taken : Maybe<&1, A> <- Chan.recv(A, channel)
         modifyTaken(A, R, channel, transform, taken)
 
+# A late asynchronous completion may race with owner disposal. It can publish
+# while the reference is live and quietly decline after the channel closes.
+def tryModifyTaken(-A: Type, -R: Type, channel: Chan(A), transform: A -> A & R, taken: Maybe<&1,A>) -> IO(Maybe<&1,R>):
+  match taken:
+    case None{}: IO.pure(Maybe<&1,R>,None{})
+    case Some{value}:
+      do IO<Maybe<&1,R>>:
+        result : R <- restore(A,R,channel,transform(value))
+        return Some{result}
+def tryModify(-A: Type, -R: Type, reference: Ref<A>, transform: A -> A & R) -> IO(Maybe<&1,R>):
+  match reference:
+    case Ref{+channel}:
+      do IO<Maybe<&1,R>>:
+        taken : Maybe<&1,A> <- Chan.recv(A,channel)
+        tryModifyTaken(A,R,channel,transform,taken)
+
 def updateTaken(-A: Type, -R: Type, channel: Chan(A), transform: A -> IO(A & R), taken: Maybe<&1, A>) -> IO(R):
   match taken:
     case None{}: IO.die(R, 1, "Ref: backing channel closed")
@@ -62,6 +78,21 @@ def update(-A: Type, -R: Type, reference: Ref<A>, transform: A -> IO(A & R)) -> 
       do IO<R>:
         taken : Maybe<&1, A> <- Chan.recv(A, channel)
         updateTaken(A, R, channel, transform, taken)
+
+def tryUpdateTaken(-A: Type, -R: Type, channel: Chan(A), transform: A -> IO(A & R), taken: Maybe<&1,A>) -> IO(Maybe<&1,R>):
+  match taken:
+    case None{}: IO.pure(Maybe<&1,R>,None{})
+    case Some{value}:
+      do IO<Maybe<&1,R>>:
+        pair : A & R <- transform(value)
+        result : R <- restore(A,R,channel,pair)
+        return Some{result}
+def tryUpdate(-A: Type, -R: Type, reference: Ref<A>, transform: A -> IO(A & R)) -> IO(Maybe<&1,R>):
+  match reference:
+    case Ref{+channel}:
+      do IO<Maybe<&1,R>>:
+        taken : Maybe<&1,A> <- Chan.recv(A,channel)
+        tryUpdateTaken(A,R,channel,transform,taken)
 
 def copied(-A: Data, +value: A) -> A & A: (value, value)
 

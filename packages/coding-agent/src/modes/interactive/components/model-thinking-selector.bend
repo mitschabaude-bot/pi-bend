@@ -54,7 +54,7 @@ def modelRows(items: List<&2,Models.Model()>,skip: Nat,remaining: Nat,+index: Na
     case model <> rest Zero{} Succ{remaining}: modelRow(model,Nat.is_eq(index,selected),theme,width,overrides) <> modelRows(rest,0n,remaining,index + 1n,selected,theme,width,overrides)
 def renderModels(list: ModelPicker.State,+theme: Theme.Theme,width: Nat,settings: Settings.SettingsManager) -> List<&2,String>:
   match list:
-    case ModelPicker.State{_,+visible,+index,query,_,_}:
+    case ModelPicker.State{_,_,+visible,+index,query,_,_,_,_}:
       +count = List.length(&2,Models.Model(),visible)
       +start = Nat.min(index - 5n,count - Nat.min(count,10n))
       +body = Bool.pick(List<&2,String>,Nat.is_eq(count,0n),"  No matching models" <> Nil{},modelRows(visible,start,10n,0n,index,theme,width,Settings.getAllModelThinkingLevels(settings)))
@@ -189,7 +189,7 @@ def modelAction(host: Host,done: SettingsList.SubmenuDone,pair: ModelPicker.Stat
   match pair:
     case (list,ModelPicker.Continue{}): writeStage(host,Models{list},done)
     case (list,ModelPicker.Cancel{}): finish(host,done)
-    case (list,ModelPicker.Chosen{model}): showLevel(host,list,model,done)
+    case (list,ModelPicker.Chosen{model,_}): showLevel(host,list,model,done)
 def levelInput(+host: Host,+list: ModelPicker.State,+model: Models.Model(),+options: List<&2,Ai.ModelThinkingLevel>,+index: Nat,+override: Maybe<&2,Ai.ModelThinkingLevel>,+done: SettingsList.SubmenuDone,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> IO(Unit):
   +count = List.length(&2,Ai.ModelThinkingLevel,options) + Bool.pick(Nat,Maybe.is_some(&2,Ai.ModelThinkingLevel,override),1n,0n)
   Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.up"),_ => writeStage(host,Levels{list,model,options,moveIndex(index,count,True{}),override},done),
