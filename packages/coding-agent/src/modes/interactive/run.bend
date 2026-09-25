@@ -1955,19 +1955,31 @@ def configuredTui(base: Tui.TuiBase,session: Ref.Ref<Session.AgentSession>) -> I
     clearFallback : Bool <- IO.pure(Bool,String.eq(Maybe.default(&2,String,environmentValue(clearEnv),""),"1"))
     show : Bool <- IO.pure(Bool,Maybe.default(&2,Bool,Settings.selectedShowHardwareCursor(Settings.get(Settings.effective(settings),"showHardwareCursor")),hardwareFallback))
     return Tui.setTerminalPreferences(base,show,Settings.resolvedClearOnShrink(Settings.terminalOptions(settings),clearFallback))
-def screenForMode(mode: Settings.TuiMode) -> Process.ScreenState:
+type IndicatorStyle is Data: IndicatorStyle{theme: Ref.Ref<Theme.Theme>,bindings: Keybindings.KeybindingsManager}
+def styledIndicator(+current: Theme.Theme,bindings: Keybindings.KeybindingsManager) -> String:
+  +shortcut = Hints.keyDisplayText(bindings,"tui.altScreen.bottom")
+  +text = " ↓ Jump to latest message" ++ Bool.pick(String,String.is_empty(shortcut),""," · " ++ shortcut) ++ " "
+  +foreground = Result.default(&2,&2,Theme.Error,String,Theme.foreground(current,"text",text),text)
+  Result.default(&2,&2,Theme.Error,String,Theme.background(current,"selectedBg",foreground),foreground)
+def indicatorText(style: IndicatorStyle,_: Unit) -> IO(String):
+  match style:
+    case IndicatorStyle{theme,bindings}:
+      do IO<String>:
+        current : Theme.Theme <- Ref.read(Theme.Theme,theme)
+        return styledIndicator(current,bindings)
+def screenForMode(mode: Settings.TuiMode,indicator: Callback.Callback<Unit,String>) -> Process.ScreenState:
   match mode:
     case Settings.Regular{}: Process.Main{Screen.initial()}
-    case Settings.Fullscreen{}: Process.Fullscreen{AltScreen.initial()}
+    case Settings.Fullscreen{}: Process.Fullscreen{AltScreen.initial(indicator)}
 def tuiModeOverride(binding: Maybe<&2,Binding>) -> Maybe<&2,Settings.TuiMode>:
   match binding:
     case None{}: None{}
     case Some{Binding{_,_,_,_,_,_,_,_,_,_,mode}}: mode
-def configuredScreen(session: Ref.Ref<Session.AgentSession>,override: Maybe<&2,Settings.TuiMode>) -> IO(Process.ScreenState):
+def configuredScreen(session: Ref.Ref<Session.AgentSession>,override: Maybe<&2,Settings.TuiMode>,indicator: Callback.Callback<Unit,String>) -> IO(Process.ScreenState):
   do IO<Process.ScreenState>:
     live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
     +settings : Settings.SettingsManager <- Session.getSettings(live)
-    return screenForMode(Maybe.default(&2,Settings.TuiMode,override,Settings.getTuiMode(settings)))
+    return screenForMode(Maybe.default(&2,Settings.TuiMode,override,Settings.getTuiMode(settings)),indicator)
 def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),document: Component.Component,editorComponent: Component.Component,+foot: FooterOwner,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,screen: Process.ScreenState,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
   match mounted:
     case (view,_,Fail{cause}): IO.pure(View.View & Result<&2,&2,Error,Unit>,(view,Fail{Layout{cause}}))
@@ -1997,9 +2009,12 @@ def processEditorBorrowed(borrowed: View.View & Component.Component & View.Handl
   match borrowed:
     case (view,document,_):
       do IO<View.View & Result<&2,&2,Error,Unit>>:
-        +screen : Process.ScreenState <- configuredScreen(contextSession(context),tuiModeOverride(contextBinding(context)))
+        +indicator : Callback.Callback<Unit,String> <- Callback.create(~IndicatorStyle,~Unit,~String,~indicatorText,IndicatorStyle{contextTheme(context),contextBindings(context)})
+        +screen : Process.ScreenState <- configuredScreen(contextSession(context),tuiModeOverride(contextBinding(context)),indicator)
         mounted : View.View & View.Handle & Tui.ResultOf(Tui.TuiBase) <- View.mountFor(view,editorComponent,footerComponent(foot),fullscreenScreen(screen))
-        processMounted(mounted,document,editorComponent,foot,stopped,redraw,queue,initial,screen,context)
+        outcome : View.View & Result<&2,&2,Error,Unit> <- processMounted(mounted,document,editorComponent,foot,stopped,redraw,queue,initial,screen,context)
+        Callback.dispose(Unit,String,indicator)
+        return outcome
 def processEditor(view: View.View,editorComponent: Component.Component,foot: FooterOwner,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
   processEditorBorrowed(View.borrow(view),editorComponent,foot,stopped,redraw,queue,initial,context)
 def process(view: View.View,editor: Component.Component,foot: FooterOwner,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):

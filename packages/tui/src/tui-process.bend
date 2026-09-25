@@ -76,10 +76,17 @@ def executeAltPlan(value: Alt.Plan,old: Session,prepared: Tui.PreparedFrame,hand
       do IO<Draw>:
         written : Result<&2,&2,Terminal.Error,Unit> <- writeEffects(handle,output)
         return finishedAlt(written,old,prepared,next)
-def executeAlt(+prepared: Tui.PreparedFrame,old: Session,screen: Alt.State,handle: Terminal.Handle,width: Nat,height: Nat) -> IO(Draw):
+def indicatorText(screen: Alt.State,row: Maybe<&2,Nat>) -> IO(String):
+  match row:
+    case None{}: IO.pure(String,"")
+    case Some{_}: Callback.call(Unit,String,Alt.indicator(screen),Unit{})
+def executeAlt(+prepared: Tui.PreparedFrame,old: Session,+screen: Alt.State,handle: Terminal.Handle,width: Nat,height: Nat) -> IO(Draw):
   match prepared:
     case Tui.PreparedFrame{+tui,_,+lines,+cursor}:
-      executeAltPlan(Alt.planWithIndicator(screen,lines,cursor,width,height,Tui.indicatorRow(tui)),old,prepared,handle)
+      do IO<Draw>:
+        +row : Maybe<&2,Nat> <- IO.pure(Maybe<&2,Nat>,Tui.indicatorRow(tui))
+        label : String <- indicatorText(screen,row)
+        executeAltPlan(Alt.planWithIndicator(screen,lines,cursor,width,height,row,label),old,prepared,handle)
 def executePrepared(result: Tui.ResultOf(Tui.PreparedFrame),+old: Session,handle: Terminal.Handle,termux: Bool,width: Nat,height: Nat) -> IO(Draw):
   match result:
     case Fail{error}: IO.pure(Draw,Rejected{old,Owner{error}})

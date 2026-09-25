@@ -116,6 +116,18 @@ SCENARIOS = [
                   ("settle", 0.2), ("snap", "wheel-up")],
     },
     {
+        "name": "fullscreen-indicator-light-custom-key",
+        "args": MODEL + ["--tui-mode", "fullscreen"],
+        "files": {**RESOURCES,
+                  "home/.pi/agent/settings.json": json.dumps({"theme": "light"}),
+                  "home/.pi/agent/keybindings.json": json.dumps({"tui.altScreen.bottom": "ctrl+g"})},
+        "turns": [{"text": STREAM_ANSWER}],
+        "steps": [("wait", READY, "startup"), ("wait", "Warning: fd not found", "ready"),
+                  ("settle", 0.3), ("keys", "hello"), ("key", "Enter"),
+                  ("wait", "END-OF-STREAM", "answer"), ("settle", 0.5),
+                  ("key", "PageUp"), ("settle", 0.2), ("snap", "page-up")],
+    },
+    {
         "name": "regular-turn-exit",
         "args": MODEL,
         "files": RESOURCES,
