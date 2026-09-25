@@ -46,6 +46,8 @@ type Input is Data:
   Input{state: Ref.Ref<State>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>}
 type Paint is Data: Paint{state: Ref.Ref<State>,loads: Ref.Ref<Loads>,bindings: Bindings.KeybindingsManager,theme: Theme.Theme}
 type Visual is Data: Visual{themeName: Maybe<&2,String>,assetsRoot: String,agentDir: String,home: String,trueColor: Maybe<&2,Bool>}
+def assetsOf(visual: Visual) -> String:
+  match visual: case Visual{_,assets,_,_,_}: assets
 type Owner is Data:
   Owner{state: Ref.Ref<State>,loads: Ref.Ref<Loads>,words: Ref.Ref<Words.Source>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
 def Outcome() -> Data: Result<&2,&2,String,Maybe<&2,String>>
@@ -710,21 +712,28 @@ def stoppingRequest(context: Stopping,_: Unit) -> IO(Unit):
         woken : Bool <- Deferred.resolve(Unit,allRequested,Unit{})
         Deferred.result(Unit,currentDone)
         Deferred.result(Unit,allDone)
+# A cancelled listing (the picker closed) leaves the loaded rows as they are.
+def completedListing(input: ProgressInput,listing: Persistence.Listing()) -> IO(Unit):
+  match listing:
+    case Done{sessions}: completedLoad(input,sessions)
+    case Fail{_}: IO.pure(Unit,Unit{})
 def loadCurrent(context: LoadContext,signal: Abort.AbortSignal<Unit>,current: ProgressInput,callback: Callback.Callback<Persistence.ListProgress,Unit>) -> IO(Unit):
   match context:
-    case LoadContext{cwd,sessionDir,agentDir,_,_}:
+    case LoadContext{cwd,sessionDir,agentDir,_,assets}:
       do IO<Unit>:
-        sessions : List<&2,Session.SessionInfo> <- Persistence.listProgress(cwd,sessionDir,agentDir,signal,callback)
-        completedLoad(current,sessions)
+        order : Persistence.FileOrder() <- Persistence.loadFileOrder(assets)
+        listing : Persistence.Listing() <- Persistence.listProgress(cwd,sessionDir,agentDir,order,signal,callback)
+        completedListing(current,listing)
 def loadRequested(context: LoadContext,+signal: Abort.AbortSignal<Unit>,request: Deferred.Deferred<Unit>,all: ProgressInput,callback: Callback.Callback<Persistence.ListProgress,Unit>) -> IO(Unit):
   match context:
-    case LoadContext{_,sessionDir,_,sessionsDir,_}:
+    case LoadContext{_,sessionDir,_,sessionsDir,assets}:
       do IO<Unit>:
         wake : Unit <- Deferred.result(Unit,request)
         cancelled : Bool <- Abort.aborted(Unit,signal)
         Bool.pick(Unit -> IO(Unit),cancelled,_ => IO.pure(Unit,Unit{}),_ => do IO<Unit>:
-          everything : List<&2,Session.SessionInfo> <- Persistence.listAllProgress(sessionDir,sessionsDir,signal,callback)
-          completedLoad(all,everything))(Unit{})
+          order : Persistence.FileOrder() <- Persistence.loadFileOrder(assets)
+          listing : Persistence.Listing() <- Persistence.listAllProgress(sessionDir,sessionsDir,order,signal,callback)
+          completedListing(all,listing))(Unit{})
 def currentTask(context: LoadContext,signal: Abort.AbortSignal<Unit>,current: ProgressInput,callback: Callback.Callback<Persistence.ListProgress,Unit>,done: Deferred.Deferred<Unit>) -> IO(Unit):
   do IO<Unit>:
     loadCurrent(context,signal,current,callback)

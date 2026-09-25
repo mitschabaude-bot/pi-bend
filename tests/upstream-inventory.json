@@ -2851,7 +2851,7 @@
     },
     {
       "source": "packages/coding-agent/test/session-manager/file-operations.test.ts",
-      "status": "needs-review",
+      "status": "partial",
       "ports": [
         "tests/session-file.bend",
         "tests/session_file_check.py",
@@ -2859,7 +2859,7 @@
       ],
       "sha256": "b43bca02bb2769161f5fb41d7000499d4c9b2e98e9ff1a69b9861281fa948b49",
       "implementation": "packages/coding-agent/src/core/session-persistence.bend",
-      "notes": "All loadEntriesFromFile, header discovery, scan-limit, findMostRecentSession, flat custom directory and corrupted-file cases pass on Bun and native one/four threads against the pinned SessionManager. Pending: 'opens session files larger than Node's max string length' (a JavaScript string-limit case with a 512 MiB sparse file). See tests/session-persistence.md."
+      "notes": "All loadEntriesFromFile, header discovery, scan-limit, findMostRecentSession, flat custom directory, corrupted-file and v0.87.1 'rejects a cancelled session listing' cases pass on native one/four threads against the pinned SessionManager, with a native listing-order scenario (collation file order, newest mtimeMs first). Pending: 'opens session files larger than Node's max string length' (a JavaScript string-limit case with a 512 MiB sparse file). See tests/session-persistence.md."
     },
     {
       "source": "packages/coding-agent/test/session-manager/labels.test.ts",

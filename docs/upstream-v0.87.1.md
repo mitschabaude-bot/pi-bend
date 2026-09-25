@@ -12,8 +12,8 @@ Between the two commits, 56 non-merge commits touch `packages/{ai,agent,coding-a
 | de2de549b | compaction cancellation races | agent-session | pending |
 | 8bdcd4498 | compact oversized trailing tool results | compaction | done: last valid cut point as fallback; #9740 case in tests/compaction |
 | d192bd6dc | avoid split-turn summary refusals | compaction | done: new prompt, `# Conversation`/`# Instructions` sections |
-| dd01f5b24 | faster recent-session discovery | session-manager | pending |
-| dfbf793b7 | progressive session picker | session-manager, main | pending |
+| dd01f5b24 | faster recent-session discovery | session-manager | done: every candidate stat'ed first (`Stats.mtimeMs`), headers read newest first; a failed stat makes discovery unavailable |
+| dfbf793b7 | progressive session picker | session-manager, main | session-manager and main done: cancellable listings (rejected with the abort reason), reverse-collation file order, all projects loaded newest `mtimeMs` first, periodic sorted snapshots, exact-id lookup through headers before the prefix listing; the startup `--resume` picker loads progressively and drops a cancelled load. The interactive `/resume` selector (Codex) still lists without progress or cancellation (tests/session-persistence.md) |
 | 3c75b2747 | bug reporting | agent-session | pending (module not ported) |
 | 890f92088 | unknown providers default to non-strict tools | ai types | done: doc-only in ported code (completions API not ported) |
 | cf8d5fac3 | Pico storage foundation | agent/ai types, diagnostics | done: TypeScript-level JSON typing only; typed arguments already |

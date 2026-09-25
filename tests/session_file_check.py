@@ -32,7 +32,10 @@ class Runner:
         self.name, self.command, self.env = name, command, env
     def run(self, ops, cwd):
         with tempfile.NamedTemporaryFile('w', suffix='.jsonl', delete=False, dir=cwd) as f:
-            for op in ops: f.write(json.dumps(op) + '\n')
+            for op in ops:
+                # Listings order file names with the installed collation data (the reference ignores the field).
+                if op['op'] in ('list', 'listAll', 'listAllCancelled'): op = dict(op, packageDir=str(ROOT))
+                f.write(json.dumps(op) + '\n')
         try:
             result = subprocess.run(self.command + [f.name], cwd=cwd, env=self.env, capture_output=True, text=True, timeout=600)
         finally:
@@ -158,6 +161,11 @@ def scenario_file_operations(temp):
     (fine / 'a.jsonl').write_text(header_line('a', '/tmp') + '\n'); os.utime(fine / 'a.jsonl', ns=(1700000000_999_400_000, 1700000000_999_400_000))
     (fine / 'b.jsonl').write_text(header_line('b', '/tmp') + '\n'); os.utime(fine / 'b.jsonl', ns=(1700000000_999_600_000, 1700000000_999_600_000))
     add({'op': 'findMostRecent', 'dir': str(fine)}, lambda r: r['path'] == str(fine / 'b.jsonl'))
+    # v0.87.1 (dd01f5b24) compares Stats.mtimeMs, so 999.4 ms is newer than 999.2 ms although both round to 999
+    finer = d / 'recent-finer'; finer.mkdir()
+    (finer / 'a.jsonl').write_text(header_line('a', '/tmp') + '\n'); os.utime(finer / 'a.jsonl', ns=(1700000000_999_400_000, 1700000000_999_400_000))
+    (finer / 'b.jsonl').write_text(header_line('b', '/tmp') + '\n'); os.utime(finer / 'b.jsonl', ns=(1700000000_999_200_000, 1700000000_999_200_000))
+    add({'op': 'findMostRecent', 'dir': str(finer)}, lambda r: r['path'] == str(finer / 'a.jsonl'))
     ancient = d / 'recent-ancient'; ancient.mkdir()
     (ancient / 'old.jsonl').write_text(header_line('old', '/tmp') + '\n'); os.utime(ancient / 'old.jsonl', ns=(-86400_000_000_000, -86400_000_000_000))
     (ancient / 'new.jsonl').write_text(header_line('new', '/tmp') + '\n'); os.utime(ancient / 'new.jsonl', ns=(1_000_000_000, 1_000_000_000))
@@ -192,14 +200,43 @@ def scenario_flat_directory(temp):
     ops = [{'op': 'create', 'cwd': str(project_a), 'sessionDir': temp}, {'op': 'appendUser', 'text': 'from A'}, {'op': 'appendAssistant', 'text': 'reply to from A'}, {'op': 'snapshot'},
            {'op': 'sleep', 'ms': 20},
            {'op': 'create', 'cwd': str(project_b), 'sessionDir': temp}, {'op': 'appendUser', 'text': 'from B'}, {'op': 'appendAssistant', 'text': 'reply to from B'}, {'op': 'snapshot'},
-           {'op': 'list', 'cwd': str(project_a), 'sessionDir': temp}, {'op': 'listAll', 'sessionDir': temp}, {'op': 'continueRecent', 'cwd': str(project_a), 'sessionDir': temp}]
+           {'op': 'list', 'cwd': str(project_a), 'sessionDir': temp}, {'op': 'listAll', 'sessionDir': temp}, {'op': 'continueRecent', 'cwd': str(project_a), 'sessionDir': temp},
+           # rejects a cancelled session listing (v0.87.1, dfbf793b7): abort on the first partial result, then list with the aborted signal
+           {'op': 'listAllCancelled', 'sessionDir': temp}]
     def checks(results):
         session_a, session_b = results[3]['sessionFile'], results[8]['sessionFile']
         assert session_a and session_b and Path(session_a).exists() and Path(session_b).exists()
         assert [s['path'] for s in results[9]['sessions']] == [session_a], results[9]
         assert sorted(results[10]['paths']) == sorted([session_a, session_b]), results[10]
         assert results[11]['sessionFile'] == session_a, results[11]
+        assert results[12] == {'first': 'AbortError', 'second': 'AbortError'}, results[12]
     return ops, checks
+
+# Names whose collation order differs from code-point order (case, punctuation, digits, accents).
+ORDER_NAMES = ['b', 'B', 'a_1', 'a-1', 'a1', '10', '9', 'Z', '_x', '\u00e4', 'same-a']
+
+def scenario_listing_order(temp, sessions_dir):
+    """v0.87.1 listing order (dfbf793b7): a directory lists its files in reverse localeCompare order, all
+    projects list newest Stats.mtimeMs first and then by reverse name; sessions of equal activity keep that order."""
+    d = Path(temp); flat = d / 'flat'; flat.mkdir(); cwd = str(d / 'project')
+    for name in ORDER_NAMES:
+        (flat / (name + '.jsonl')).write_text(header_line(name, cwd) + '\n')
+    base = 1700000000_000_000_000
+    layout = [('p1', 'old', -2000_000_000), ('p2', 'new', 0), ('p1', 'same-a', -1000_000_000), ('p2', 'same-B', -1000_000_000),
+              ('p1', 'sub', -500_200_000), ('p2', 'sub2', -500_400_000)]
+    for project, name, offset in layout:
+        (sessions_dir / project).mkdir(parents=True, exist_ok=True)
+        path = sessions_dir / project / (name + '.jsonl'); path.write_text(header_line(name, cwd) + '\n')
+        os.utime(path, ns=(base + offset, base + offset))
+    os.symlink(str(sessions_dir / 'p1' / 'missing-target'), sessions_dir / 'p1' / 'dangling.jsonl')
+    return [{'op': 'list', 'cwd': cwd, 'sessionDir': str(flat)}, {'op': 'listAll', 'sessionDir': str(flat)}, {'op': 'listAll'}]
+
+def check_listing_order(results):
+    names = [Path(s['path']).stem for s in results[0]['sessions']]
+    assert sorted(names) == sorted(ORDER_NAMES) and names == [Path(p).stem for p in results[1]['paths']], results[:2]
+    assert names.index('b') < names.index('a1') and names.index('Z') < names.index('b'), names
+    everything = [Path(p).stem for p in results[2]['paths']]
+    assert everything == ['new', 'sub', 'sub2', 'same-B', 'same-a', 'old'], everything
 
 def scenario_load_entries_sources(temp):
     """Stored entries built in memory, as storedEntries() does (load-entries.test.ts)."""
@@ -419,6 +456,10 @@ def main():
         both('file-operations', file_ops, checks=lambda temp: file_ops.checks, post=lambda n, t, o, r: check_same_id(r))
         both('streamed-listing', scenario_streamed_listing, post=lambda n, t, o, r: check_streamed_listing(r))
         both('flat-directory', lambda temp: scenario_flat_directory(temp)[0], post=lambda n, t, o, r: scenario_flat_checks(r))
+        # listing order needs an agent directory of its own: listAll reads every project there
+        for runner in [reference, native]: runner.env = dict(env, PI_CODING_AGENT_DIR=str(work / ('listing-order-' + runner.name) / 'agent'))
+        both('listing-order', lambda temp: scenario_listing_order(temp, Path(temp) / 'agent' / 'sessions'), post=lambda n, t, o, r: check_listing_order(r))
+        for runner in [reference, native]: runner.env = env
         # load-entries runs in two phases: stored entries are built per runner, then restored.
         phase_one, sources = {}, None
         for runner in [reference, native]:
@@ -450,6 +491,7 @@ def scenario_flat_checks(results):
     assert [s['path'] for s in results[9]['sessions']] == [session_a], results[9]
     assert sorted(results[10]['paths']) == sorted([session_a, session_b]), results[10]
     assert results[11]['sessionFile'] == session_a, results[11]
+    assert results[12] == {'first': 'AbortError', 'second': 'AbortError'}, results[12]
 
 if __name__ == '__main__':
     main()

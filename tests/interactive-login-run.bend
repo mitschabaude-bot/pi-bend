@@ -48,8 +48,8 @@ def listSessions(source: Listings,_: Unit) -> IO(Run.SessionChoices):
   match source:
     case Listings{+cwd,agentDir}:
       do IO<Run.SessionChoices>:
-        current : List<&2,Tree.SessionInfo> <- Sessions.list(cwd,Some{cwd},agentDir)
-        all : List<&2,Tree.SessionInfo> <- Sessions.listAll(Some{cwd},cwd)
+        current : List<&2,Tree.SessionInfo> <- Sessions.list(cwd,Some{cwd},agentDir,None{})
+        all : List<&2,Tree.SessionInfo> <- Sessions.listAll(Some{cwd},cwd,None{})
         return Run.SessionChoices{current,all}
 def loginCopied(+base: String,request: Run.LoginRequest) -> IO(AuthLogin.Outcome()):
   match request:

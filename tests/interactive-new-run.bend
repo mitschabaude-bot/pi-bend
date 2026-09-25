@@ -45,8 +45,8 @@ def listSessions(source: Listings,_: Unit) -> IO(Run.SessionChoices):
   match source:
     case Listings{+cwd,agentDir}:
       do IO<Run.SessionChoices>:
-        current : List<&2,Tree.SessionInfo> <- Sessions.list(cwd,Some{cwd},agentDir)
-        all : List<&2,Tree.SessionInfo> <- Sessions.listAll(Some{cwd},cwd)
+        current : List<&2,Tree.SessionInfo> <- Sessions.list(cwd,Some{cwd},agentDir,None{})
+        all : List<&2,Tree.SessionInfo> <- Sessions.listAll(Some{cwd},cwd,None{})
         return Run.SessionChoices{current,all}
 def noLogin(_: Unit,_: Run.LoginRequest) -> IO(AuthLogin.Outcome()): IO.pure(AuthLogin.Outcome(),Fail{"Login fixture is unavailable"})
 def models(_: Unit,_: Unit) -> IO(List<&2,Models.Model()>): IO.pure(List<&2,Models.Model()>,Faux.fauxModel() <> Nil{})

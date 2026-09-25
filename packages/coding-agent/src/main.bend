@@ -274,37 +274,40 @@ def globalMatch(found: Maybe<&2, S.SessionInfo>, arg: String) -> Resolved:
     case Some{S.SessionInfo{path, _, cwd, _, _, _, _, _, _, _}}: ResolvedGlobal{path, cwd}
     case None{}: NotFound{arg}
 
-def localOrGlobal(found: Maybe<&2, S.SessionInfo>, +arg: String, sessionDir: Maybe<&2, String>, sessionsDir: String) -> IO(Resolved):
+def localOrGlobal(found: Maybe<&2, S.SessionInfo>, +arg: String, sessionDir: Maybe<&2, String>, sessionsDir: String, order: Sessions.FileOrder()) -> IO(Resolved):
   match found:
     case Some{S.SessionInfo{path, _, _, _, _, _, _, _, _, _}}: IO.pure(Resolved, ResolvedLocal{path})
     case None{}:
       do IO<Resolved>:
-        everywhere : List<&2, S.SessionInfo> <- Sessions.listAll(sessionDir, sessionsDir)
+        everywhere : List<&2, S.SessionInfo> <- Sessions.listAll(sessionDir, sessionsDir, order)
         return globalMatch(matched(everywhere, arg), arg)
 
 def resolvedArgument(+arg: String, environment: Paths.Environment, cwd: String) -> String:
   Result.default(&2, &2, Paths.Error, String, Paths.resolveToCwd(environment, arg, cwd), arg)
 
-def exactOrListed(found: Maybe<&2, String>, +arg: String, +cwd: String, +sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String) -> IO(Resolved):
+# Exact ids only need session headers (findById); the metadata listing then
+# matches a prefix in the project, and an exact id or a prefix everywhere.
+def exactOrListed(found: Maybe<&2, String>, +arg: String, +cwd: String, +sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String, packageDir: String) -> IO(Resolved):
   match found:
     case Some{path}: IO.pure(Resolved, ResolvedLocal{path})
     case None{}:
       do IO<Resolved>:
-        local : List<&2, S.SessionInfo> <- Sessions.list(cwd, sessionDir, agentDir)
-        localOrGlobal(matched(local, arg), arg, sessionDir, sessionsDir)
+        +order : Sessions.FileOrder() <- Sessions.loadFileOrder(packageDir)
+        local : List<&2, S.SessionInfo> <- Sessions.list(cwd, sessionDir, agentDir, order)
+        localOrGlobal(matching(local, arg, False{}), arg, sessionDir, sessionsDir, order)
 
 # A path-like argument is used as a file; otherwise the id is matched in the
 # project's sessions, then across all projects.
-def resolveWhen(pathLike: Bool, +arg: String, environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, sessionsDir: String) -> IO(Resolved):
+def resolveWhen(pathLike: Bool, +arg: String, environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, sessionsDir: String, packageDir: String) -> IO(Resolved):
   match pathLike:
     case True{}: IO.pure(Resolved, ResolvedPath{resolvedArgument(arg, environment, cwd)})
     case False{}:
       do IO<Resolved>:
         exact : Maybe<&2, String> <- Sessions.findById(cwd, arg, sessionDir, agentDir)
-        exactOrListed(exact, arg, cwd, sessionDir, agentDir, sessionsDir)
+        exactOrListed(exact, arg, cwd, sessionDir, agentDir, sessionsDir, packageDir)
 
-def resolveSessionPath(+arg: String, environment: Paths.Environment, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String) -> IO(Resolved):
-  resolveWhen(looksLikePath(arg), arg, environment, cwd, sessionDir, agentDir, sessionsDir)
+def resolveSessionPath(+arg: String, environment: Paths.Environment, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String, packageDir: String) -> IO(Resolved):
+  resolveWhen(looksLikePath(arg), arg, environment, cwd, sessionDir, agentDir, sessionsDir, packageDir)
 
 # How session selection ends without a session: a failure (stderr, exit 1)
 # or a user abort (stdout, exit 0).
@@ -376,12 +379,12 @@ def forkResolved(resolved: Resolved, +cwd: String, +sessionDir: Maybe<&2, String
         forked : Sessions.Outcome(Session()) <- AgentSession.forkSession(path, cwd, sessionDir, agentDir, Sessions.NewSessionOptions{sessionId, None{}})
         return selected(forked)
 
-def forkUnlessExisting(existing: Maybe<&2, String>, arg: String, environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, sessionsDir: String, +sessionId: Maybe<&2, String>) -> IO(Selected()):
+def forkUnlessExisting(existing: Maybe<&2, String>, arg: String, environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, sessionsDir: String, +sessionId: Maybe<&2, String>, packageDir: String) -> IO(Selected()):
   match existing sessionId:
     case Some{_} Some{+id}: IO.pure(Selected(), Fail{Failed{"Session already exists with id '" ++ id ++ "'"}})
     case _ _:
       do IO<Selected()>:
-        resolved : Resolved <- resolveSessionPath(arg, environment, cwd, sessionDir, agentDir, sessionsDir)
+        resolved : Resolved <- resolveSessionPath(arg, environment, cwd, sessionDir, agentDir, sessionsDir, packageDir)
         forkResolved(resolved, cwd, sessionDir, agentDir, sessionId)
 
 def existingById(sessionId: Maybe<&2, String>, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String) -> IO(Maybe<&2, String>):
@@ -422,10 +425,10 @@ def selectSession(continue: Bool, +resume: Bool, +session: Maybe<&2, String>, +s
     case _ _ _ Some{arg}:
       do IO<Selected()>:
         existing : Maybe<&2, String> <- existingById(sessionId, cwd, sessionDir, agentDir)
-        forkUnlessExisting(existing, arg, environment, cwd, sessionDir, agentDir, sessionsDir, sessionId)
+        forkUnlessExisting(existing, arg, environment, cwd, sessionDir, agentDir, sessionsDir, sessionId, Picker.assetsOf(visual))
     case _ _ Some{arg} None{}:
       do IO<Selected()>:
-        resolved : Resolved <- resolveSessionPath(arg, environment, cwd, sessionDir, agentDir, sessionsDir)
+        resolved : Resolved <- resolveSessionPath(arg, environment, cwd, sessionDir, agentDir, sessionsDir, Picker.assetsOf(visual))
         openResolved(resolved, cwd, sessionDir, agentDir)
     case _ True{} None{} None{}:
       do IO<Selected()>:
@@ -981,14 +984,14 @@ def refreshInteractive(host: Host(),_: Unit) -> IO(List<&2,Models.Model()>):
 def importInteractive(host: Host(),request: InteractiveRun.ImportRequest) -> IO(SessionRuntime.ImportOutcome):
   match request:
     case InteractiveRun.ImportRequest{path,cwdOverride}: SessionRuntime.importFromJsonl(Services,host,path,cwdOverride)
-type InteractiveSessionSource is Data: InteractiveSessionSource{host: Host(),agentDir: String}
+type InteractiveSessionSource is Data: InteractiveSessionSource{host: Host(),agentDir: String,packageDir: String}
 def sessionOverride(default: Bool,directory: String) -> Maybe<&2,String>:
   match default:
     case True{}: None{}
     case False{}: Some{directory}
 def listInteractive(source: InteractiveSessionSource,_: Unit) -> IO(InteractiveRun.SessionChoices):
   match source:
-    case InteractiveSessionSource{host,+agentDir}:
+    case InteractiveSessionSource{host,+agentDir,packageDir}:
       do IO<InteractiveRun.SessionChoices>:
         current : Maybe<&2,AgentSession.AgentSession> <- SessionRuntime.session(Services,host)
         +live : AgentSession.AgentSession <- activeSession(current)
@@ -996,8 +999,9 @@ def listInteractive(source: InteractiveSessionSource,_: Unit) -> IO(InteractiveR
         +cwd : String <- IO.pure(String,Sessions.getCwd(Unit,Tools.ToolDetails,V.Value,stored))
         +directory : String <- IO.pure(String,Sessions.getSessionDir(Unit,Tools.ToolDetails,V.Value,stored))
         +override : Maybe<&2,String> <- IO.pure(Maybe<&2,String>,sessionOverride(Sessions.usesDefaultSessionDir(Unit,Tools.ToolDetails,V.Value,stored,agentDir),directory))
-        local : List<&2,S.SessionInfo> <- Sessions.list(cwd,override,agentDir)
-        all : List<&2,S.SessionInfo> <- Sessions.listAll(override,Path.join(agentDir,"sessions"))
+        +order : Sessions.FileOrder() <- Sessions.loadFileOrder(packageDir)
+        local : List<&2,S.SessionInfo> <- Sessions.list(cwd,override,agentDir,order)
+        all : List<&2,S.SessionInfo> <- Sessions.listAll(override,Path.join(agentDir,"sessions"),order)
         return InteractiveRun.SessionChoices{local,all}
 def resumeInteractive(host: Host(),request: InteractiveRun.ResumeRequest) -> IO(SessionRuntime.ResumeOutcome):
   match request:
@@ -1042,7 +1046,7 @@ def printResumeFound(found: Maybe<&2,ResumeCommand>) -> IO(Unit):
       do IO<Unit>:
         exists : Bool <- FS.accessible(path,0)
         Bool.pick(Unit -> IO(Unit),exists,_ => IO.print("\u{1b}[2m\u{1b}[39mTo resume this session:\u{1b}[0m " ++ command),_ => IO.pure(Unit,Unit{}))(Unit{})
-def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, autoTrustOnReload: Bool, tuiMode: Maybe<&2,Settings.TuiMode>, +cwd: String, +agentDir: String, packageDir: String, +host: Host()) -> IO(Unit):
+def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, autoTrustOnReload: Bool, tuiMode: Maybe<&2,Settings.TuiMode>, +cwd: String, +agentDir: String, +packageDir: String, +host: Host()) -> IO(Unit):
   do IO<Unit>:
     current : Maybe<&2, AgentSession.AgentSession> <- SessionRuntime.session(Services, host)
     +live : AgentSession.AgentSession <- activeSession(current)
@@ -1057,7 +1061,7 @@ def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, 
     +login : Callback.Callback<InteractiveRun.LoginRequest,AuthLogin.Outcome()> <- Callback.create(~Unit,~InteractiveRun.LoginRequest,~AuthLogin.Outcome(),~loginInteractive,Unit{})
     +refresh : Callback.Callback<Unit,List<&2,Models.Model()>> <- Callback.create(~Host(),~Unit,~List<&2,Models.Model()>,~refreshInteractive,host)
     +importer : Callback.Callback<InteractiveRun.ImportRequest,SessionRuntime.ImportOutcome> <- Callback.create(~Host(),~InteractiveRun.ImportRequest,~SessionRuntime.ImportOutcome,~importInteractive,host)
-    +sessions : Callback.Callback<Unit,InteractiveRun.SessionChoices> <- Callback.create(~InteractiveSessionSource,~Unit,~InteractiveRun.SessionChoices,~listInteractive,InteractiveSessionSource{host,agentDir})
+    +sessions : Callback.Callback<Unit,InteractiveRun.SessionChoices> <- Callback.create(~InteractiveSessionSource,~Unit,~InteractiveRun.SessionChoices,~listInteractive,InteractiveSessionSource{host,agentDir,packageDir})
     +resume : Callback.Callback<InteractiveRun.ResumeRequest,SessionRuntime.ResumeOutcome> <- Callback.create(~Host(),~InteractiveRun.ResumeRequest,~SessionRuntime.ResumeOutcome,~resumeInteractive,host)
     tools : Maybe<&2,Manager.ToolsManager> <- SessionRuntime.withServices(Services,Maybe<&2,Manager.ToolsManager>,host,services => managedInServices(agentDir,services),None{})
     SessionRuntime.setRebindSession(Services,host,Some{rebinder})

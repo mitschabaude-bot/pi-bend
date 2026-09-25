@@ -6,12 +6,14 @@ const root=process.argv[2];const ops=readFileSync(process.argv[3],'utf8').split(
 const sm=await import(root+'/src/core/session-manager.ts');
 const SessionManager=sm.SessionManager;
 let session:any;
+// A cancelled listing's aborted read streams also report the AbortError on their own; the listing's rejection is the result.
+for(const event of ['uncaughtException','unhandledRejection'])process.on(event as any,(e:any)=>{if(e?.name!=='AbortError')throw e;});
 const usage={input:1,output:1,cacheRead:0,cacheWrite:0,totalTokens:2,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}};
 const shape=(s:any)=>({sessionId:s.getSessionId(),cwd:s.getCwd(),sessionFile:s.getSessionFile()??null,sessionDir:s.getSessionDir(),persisted:s.isPersisted(),entries:s.getEntries().length,header:s.getHeader()});
 function tree(nodes:any[],depth=0):string[]{const out:string[]=[];for(const n of nodes){out.push([depth,n.entry.id,n.label??'',n.labelTimestamp??''].join(':'));out.push(...tree(n.children,depth+1));}return out;}
 function snapshot(s:any){const labels:Record<string,string>={};for(const e of s.getEntries()){const l=s.getLabel(e.id);if(l!==undefined)labels[e.id]=l;}
  return {sessionId:s.getSessionId(),sessionFile:s.getSessionFile()??null,cwd:s.getCwd(),persisted:s.isPersisted(),leafId:s.getLeafId(),entries:s.getEntries(),branch:s.getBranch().map((e:any)=>e.id),tree:tree(s.getTree()),context:s.buildContextEntries().map((e:any)=>e.id),messages:s.buildSessionContext().messages.length,labels,name:s.getSessionName()??null};}
-function run(op:any):any{
+async function run(op:any):Promise<any>{
  switch(op.op){
   case 'load':return {entries:sm.loadEntriesFromFile(op.path)};
   case 'open':session=SessionManager.open(op.path,op.sessionDir,op.cwdOverride);return shape(session);
@@ -34,6 +36,10 @@ function run(op:any):any{
   case 'findById':return {path:SessionManager.findById(op.cwd,op.id,op.sessionDir)??null};
   case 'list':return SessionManager.list(op.cwd,op.sessionDir).then((infos:any[])=>({sessions:infos.map(i=>({path:i.path,id:i.id,cwd:i.cwd,name:i.name??null,parentSessionPath:i.parentSessionPath??null,created:i.created.getTime(),modified:i.modified.getTime(),messageCount:i.messageCount,firstMessage:i.firstMessage,allMessagesText:i.allMessagesText}))}));
   case 'listAll':return SessionManager.listAll(op.sessionDir).then((infos:any[])=>({paths:infos.map(i=>i.path)}));
+  // file-operations.test.ts "rejects a cancelled session listing", as written upstream.
+  case 'listAllCancelled':{const controller=new AbortController();const name=(p:Promise<any>)=>p.then(()=>null,(e:any)=>e?.name??String(e));
+   const first=await name(SessionManager.listAll(op.sessionDir,(_l:number,_t:number,partial:any)=>{if(partial)controller.abort();},controller.signal));
+   const second=await name(SessionManager.listAll(undefined,controller.signal));return {first,second};}
   case 'migrate':{const entries=op.entries;sm.migrateSessionEntries(entries);return {entries};}
   case 'sleep':Bun.sleepSync(op.ms);return {};
   default:throw new Error('unknown op '+op.op);

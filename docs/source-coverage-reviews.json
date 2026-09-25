@@ -145,7 +145,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "fe23d6e6bed96fead06b1431b07a2ef70a0e3ce7296effb9ab8c457660f16810",
         "packages/coding-agent/src/modes/interactive/commands.bend": "8449a234b3cc969830d79b4462042968060562ee619a8b4e3c7ff2dba814265a",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "14557c415d7d4b0dd3c2d6921ce0f3dbd7b1717f23db27fdd8657b1e3d5eb547",
-        "packages/coding-agent/src/main.bend": "01410adc82ed2d2cae836504662a63e14c88051321d081dac8c907ad20da3535"
+        "packages/coding-agent/src/main.bend": "f6cba3d47ea2cc546c1888a95ed9cd1cba5c6d1c2e98de7ff52d264e56ac556d"
       }
     },
     "packages/tui/src/editor-component.ts": {
@@ -272,13 +272,13 @@
     },
     "packages/coding-agent/src/modes/interactive/components/session-selector.ts": {
       "state": "partial",
-      "note": "The native /resume picker lists sessions and supports interactive rename, checked against terminal parity. Selected-title ANSI styling differs; broader loading, sorting, deletion, mouse and cancellation behavior has not been fully reviewed.",
+      "note": "The native /resume picker lists sessions and supports interactive rename, checked against terminal parity. The startup picker loads progressively from cancellable listings (a cancelled load leaves its rows). Selected-title ANSI styling differs; broader loading, sorting, deletion, mouse and cancellation behavior has not been fully reviewed.",
       "ports": [
         "packages/coding-agent/src/cli/session-picker.bend"
       ],
       "source_sha256": "8d8744ed7ba79d04fbc5e2fac16ef38083ba2d1e871d12a1a2460faa27e29f27",
       "port_sha256": {
-        "packages/coding-agent/src/cli/session-picker.bend": "4971f9ba65525a119e6daf31a08771b4c77fe2bc3588ba5e43ed275bc0844e20"
+        "packages/coding-agent/src/cli/session-picker.bend": "e4cd4b1811b9b02c35b354328097285aa59a892a1b6d985d7ec74cce1ffd90c6"
       }
     },
     "packages/tui/src/layout-node.ts": {
