@@ -771,7 +771,7 @@ def imagesScenario(+dir: String, agentDir: String, +image: String) -> IO(Unit):
   do IO<Unit>:
     created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
-    +value : Fixture <- fixtureWithModel(stored, dir, agentDir, "wide done" <> "strict done" <> Nil{}, Nil{}, Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}}, Some{wideModel()}, ModelFixture.Source{"faux", "PI_FAUX_API_KEY", wideModel() <> strictModel() <> Nil{}} <> Nil{})
+    +value : Fixture <- fixtureWithModel(stored, dir, agentDir, "wide done" <> "strict done" <> Nil{}, Nil{}, Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}, Nil{}}, Some{wideModel()}, ModelFixture.Source{"faux", "PI_FAUX_API_KEY", wideModel() <> strictModel() <> Nil{}} <> Nil{})
     first : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "inspect", Ai.ImageContent{image, "image/png"} <> Nil{}, None{})
     reportPrompt(first)
     switched : Result<&2, &2, String, Unit> <- Session.setModel(sessionOf(value), strictModel(), Session.ModelMutationOptions{False{}})
@@ -801,7 +801,7 @@ def toolImagesScenario(+dir: String, agentDir: String, +mode: String, image: Str
     stored : Session.Session() <- requireSession(created)
     +execute : C.Callback<Tools.Input(), Tools.Output()> <- C.create(~String, ~Tools.Input(), ~Tools.Output(), ~screenshot, image)
     +model : Ai.Model<Ai.JsonValue> = screenshotModel(mode)
-    +value : Fixture <- fixtureWithModel(stored, dir, agentDir, "@screenshot" <> "done" <> Nil{}, Nil{}, Runtime.Loadout{Rec.new(String), screenshotTool(execute) <> Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}}, Some{model}, ModelFixture.Source{"faux", "PI_FAUX_API_KEY", model <> Nil{}} <> Nil{})
+    +value : Fixture <- fixtureWithModel(stored, dir, agentDir, "@screenshot" <> "done" <> Nil{}, Nil{}, Runtime.Loadout{Rec.new(String), screenshotTool(execute) <> Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}, screenshotTool(execute) <> Nil{}}, Some{model}, ModelFixture.Source{"faux", "PI_FAUX_API_KEY", model <> Nil{}} <> Nil{})
     result : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "take a screenshot", Nil{}, None{})
     reportPrompt(result)
     reportMessages(sessionOf(value))
