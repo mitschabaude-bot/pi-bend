@@ -148,6 +148,28 @@ def tree_checks(f):
     return 1
 
 
+def branch_summary_checks(f):
+    checks = 0
+    # 6324-branch-summary-ambient-auth: summarizes tree branches when request auth has no API key
+    events = f.session('regressions', 'branch_summary')
+    result = last(events, 'tree_navigation')
+    summaries = [e for e in of_type(events, 'request')]
+    assert result['cancelled'] is False and len(summaries) == 1 and summaries[0]['apiKey'] is None, (result, summaries)
+    assert result['summaryEntry']['type'] == 'branch_summary' and 'branch summary text' in result['summaryEntry']['summary'] and result['summaryEntry']['costTotal'] == 0.25, result
+    checks += 1
+    # 9178-tree-during-compaction: rejects navigation before the active leaf can change
+    events = f.session('regressions', 'tree_during_compaction', settings={'compaction': {'keepRecentTokens': 1}})
+    original = last(events, 'original')['leafId']
+    assert last(events, 'compacting')['value'] is True
+    assert last(events, 'navigation_error')['error'] == 'Wait for the current compaction or tree navigation to finish before navigating the session tree.'
+    assert last(events, 'during')['leafId'] == original
+    entries = last(events, 'entry_shapes')['entries']
+    assert entries[-1]['type'] == 'compaction' and entries[-1]['parentId'] == original, entries[-1]
+    assert 'second assistant' in [text_of(m) for m in last(events, 'messages')['messages'] if 'content' in m]
+    checks += 1
+    return checks
+
+
 def compaction_checks(f):
     checks = 0
     # 8328-zero-usage-auto-compaction: uses the message estimate when no assistant has reported usage
@@ -372,7 +394,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-regressions-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = retry_checks(fixtures) + json_stream_checks(fixtures) + session_name_checks(fixtures) + tree_checks(fixtures) + compaction_checks(fixtures) + session_manager_checks(fixtures) + discovery_checks(fixtures) + tool_checks(fixtures) + cli_checks(fixtures) + settings_checks(fixtures)
+    checks = retry_checks(fixtures) + json_stream_checks(fixtures) + session_name_checks(fixtures) + tree_checks(fixtures) + branch_summary_checks(fixtures) + compaction_checks(fixtures) + session_manager_checks(fixtures) + discovery_checks(fixtures) + tool_checks(fixtures) + cli_checks(fixtures) + settings_checks(fixtures)
     print('regressions: %d upstream cases passed' % checks)
 
 

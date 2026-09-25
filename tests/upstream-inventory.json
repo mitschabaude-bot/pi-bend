@@ -1781,9 +1781,14 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-tree-navigation.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "26030678b0a8e9044bb3c021477eb1e7b4945eb2f7f06328544ce93eac7471d7"
+      "status": "ported",
+      "ports": [
+        "tests/tree_navigation_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "26030678b0a8e9044bb3c021477eb1e7b4945eb2f7f06328544ce93eac7471d7",
+      "notes": "All ten cases on the faux session instead of a live model (prompts answered 'reply N', the summary 'branch summary'): editor text and leaf for user and assistant targets, summary placement at the root, under the target's parent and under an assistant target, abort during summarization (summary request held, isCompacting true, abortBranchSummary, session unchanged), no summary without the option, same-position no-op, custom instructions (checked in the summarization request, since the scripted summary cannot follow them) and navigation between branches (the summary request covers only the abandoned branch). Bun lane."
     },
     {
       "source": "packages/coding-agent/test/ansi-utils.test.ts",
@@ -3423,9 +3428,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6324-branch-summary-ambient-auth.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6d35ff8fdce4b909a53b027b9cda24f71e7bcb03af625dd04512d4f81f500ef3"
+      "status": "ported",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "6d35ff8fdce4b909a53b027b9cda24f71e7bcb03af625dd04512d4f81f500ef3",
+      "notes": "navigateTreeWith(target, summarize) on a seeded session makes one summarization request through the agent's stream function without an API key in its options; the result is not cancelled and its branch_summary entry contains the reply text with the reply's usage (cost 0.25). Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6363-agent-settled-event.test.ts",
@@ -3736,9 +3746,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9178-tree-during-compaction.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "21dee83475afbc7421e4c44594b51cd4f3666b68953fc91266de4ab0e305c482"
+      "status": "partial",
+      "ports": [
+        "tests/regressions_check.py",
+        "tests/regressions.bend",
+        "tests/regressions.md"
+      ],
+      "sha256": "21dee83475afbc7421e4c44594b51cd4f3666b68953fc91266de4ab0e305c482",
+      "notes": "'rejects navigation before the active leaf can change' passes with the manual compaction held at its summary request: navigation fails with the compaction message, the leaf is unchanged, the compaction entry follows the original leaf and the context keeps 'second assistant'. Pending: 'rejects a second navigation while the first is waiting', which waits in a session_before_tree extension handler. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9340-9777-auto-compaction-cancellation.test.ts",
