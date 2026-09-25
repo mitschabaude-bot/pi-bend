@@ -88,7 +88,7 @@ def apiKeyOutcome(providerId: String, outcome: Auth.AuthOutcome()) -> Resolution
 
 def resolveApiKey(authContext: Auth.AuthContext, apiKey: Auth.ApiKeyAuth, providerId: String, credential: Maybe<&2, Auth.Credential>, signal: Abort.AbortSignal<Unit>) -> IO(Resolution()):
   match apiKey:
-    case Auth.ApiKeyAuth{_, resolve}:
+    case Auth.ApiKeyAuth{_, _, resolve}:
       do IO<Resolution()>:
         outcome : Auth.AuthOutcome() <- C.call(Auth.ResolveInput, Auth.AuthOutcome(), resolve, Auth.ResolveInput{authContext, credential, signal})
         return apiKeyOutcome(providerId, outcome)

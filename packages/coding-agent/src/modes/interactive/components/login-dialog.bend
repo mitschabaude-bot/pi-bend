@@ -13,7 +13,7 @@ import ../theme/theme.bend as Theme
 # Replaces the editor while the native device flow waits for authorization.
 # Esc calls the flow's abort controller; closing restores the original editor.
 type Choice is Data: Choice{id: String,label: String,description: String}
-type State is Data: Closed{} Choosing{title: String,all: List<&2,Choice>,visible: List<&2,Choice>,selected: Nat,query: String} Waiting{} Device{url: String,code: String} Manual{url: String,input: String}
+type State is Data: Closed{} Choosing{title: String,all: List<&2,Choice>,visible: List<&2,Choice>,selected: Nat,query: String} Waiting{} Device{url: String,code: String} Manual{url: String,input: String} Prompt{message: String,secret: Bool,input: String}
 type Host is Data:
   Host{state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Deferred.Deferred<String>>>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,cancel: Callback.Callback<Unit,Unit>}
 type Owner is Type:
@@ -62,6 +62,9 @@ def choosing(+theme: Theme.Theme,+width: Nat,title: String,+visible: List<&2,Cho
   frame(theme,width,title,(paint(theme,"muted"," Search: ") ++ paint(theme,"accent",query)) <> List.append(&2,String,body,"" <> paint(theme,"dim"," ↑/↓ select · Enter confirm · Esc cancel") <> Nil{}))
 def manual(+theme: Theme.Theme,+width: Nat,+url: String,+input: String) -> List<&2,String>:
   linkedFrame(theme,width," Login to Anthropic",url,paint(theme,"dim"," Ctrl+click to open") <> "" <> paint(theme,"dim"," Complete login in your browser; paste the redirect URL if it is on another machine.") <> paint(theme,"warning"," Paste authorization code or redirect URL:") <> clipped(" " ++ input,width) <> "" <> paint(theme,"dim"," Enter to submit · Esc to cancel") <> Nil{})
+def promptFrame(+theme: Theme.Theme,+width: Nat,message: String,secret: Bool,+input: String) -> List<&2,String>:
+  +visible = Bool.pick(String,secret,String.repeat("•",String.length(input)),input)
+  frame(theme,width," Login · API key",paint(theme,"warning"," " ++ message) <> clipped(" " ++ visible,width) <> "" <> paint(theme,"dim"," Enter to save · Esc to cancel") <> Nil{})
 def device(+theme: Theme.Theme,+width: Nat,+url: String,code: String) -> List<&2,String>:
   linkedFrame(theme,width," Login to OpenAI Codex",url,paint(theme,"dim"," Ctrl+click to open") <> "" <> paint(theme,"warning"," Enter code: " ++ code) <> "" <> paint(theme,"dim"," Waiting for authentication...") <> " (Esc to cancel)" <> Nil{})
 def drawCurrent(state: State,editor: Component.Component,theme: Theme.Theme,width: Nat) -> IO(List<&2,String>):
@@ -71,6 +74,7 @@ def drawCurrent(state: State,editor: Component.Component,theme: Theme.Theme,widt
     case Waiting{}: IO.pure(List<&2,String>,waiting(theme,width))
     case Device{url,code}: IO.pure(List<&2,String>,device(theme,width,url,code))
     case Manual{url,input}: IO.pure(List<&2,String>,manual(theme,width,url,input))
+    case Prompt{message,secret,input}: IO.pure(List<&2,String>,promptFrame(theme,width,message,secret,input))
 def draw(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
     case Host{state,_,editor,theme,_,_,_}:
@@ -106,6 +110,10 @@ def inputManual(+state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Deferred.Deferred
   Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.confirm"),_ => do IO<Unit>:
     Ref.write(State,state,Waiting{})
     settle(reply,input),_ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.editor.deleteCharBackward"),_ => Ref.write(State,state,Manual{url,withoutLast(input)}),_ => Bool.pick(Unit -> IO(Unit),printable(data),_ => Ref.write(State,state,Manual{url,input ++ data}),_ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{}))(Unit{})
+def inputPrompt(+state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Deferred.Deferred<String>>>,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+message: String,+secret: Bool,+input: String,+data: String) -> IO(Unit):
+  Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.confirm"),_ => do IO<Unit>:
+    Ref.write(State,state,Waiting{})
+    settle(reply,input),_ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.editor.deleteCharBackward"),_ => Ref.write(State,state,Prompt{message,secret,withoutLast(input)}),_ => Bool.pick(Unit -> IO(Unit),printable(data),_ => Ref.write(State,state,Prompt{message,secret,input ++ data}),_ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{}))(Unit{})
 def choiceId(choice: Maybe<&2,Choice>) -> Maybe<&2,String>:
   match choice:
     case None{}: None{}
@@ -148,6 +156,8 @@ def receiveCurrent(current: State,+state: Ref.Ref<State>,+reply: Ref.Ref<Maybe<&
       Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => Callback.call(Unit,Unit,cancel,Unit{}),_ => menuInput(state,reply,bindings,keyboard,title,all,visible,selected,query,data))(Unit{})
     case Manual{url,input}:
       Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => Callback.call(Unit,Unit,cancel,Unit{}),_ => inputManual(state,reply,bindings,keyboard,url,input,data))(Unit{})
+    case Prompt{message,secret,input}:
+      Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => Callback.call(Unit,Unit,cancel,Unit{}),_ => inputPrompt(state,reply,bindings,keyboard,message,secret,input,data))(Unit{})
     case _:
       Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => do IO<Unit>:
         Ref.write(State,state,Closed{})
@@ -202,7 +212,11 @@ def openChoices(host: Host,title: String,+choices: List<&2,Choice>) -> IO(Deferr
         Ref.write(State,state,Choosing{title,choices,choices,0n,""})
         return choice
 def open(host: Host) -> IO(Deferred.Deferred<String>):
+  openChoices(host," Login",Choice{"oauth","Sign in with an account",""} <> Choice{"api_key","Sign in with an API key",""} <> Nil{})
+def openOAuth(host: Host) -> IO(Deferred.Deferred<String>):
   openChoices(host," Login · Choose a provider",Choice{"openai-codex","OpenAI Codex","subscription"} <> Choice{"anthropic","Anthropic (Claude Pro/Max)","subscription"} <> Nil{})
+def openApiKeys(host: Host,choices: List<&2,Choice>) -> IO(Deferred.Deferred<String>):
+  openChoices(host," Login · Choose a provider",choices)
 def openDirect(host: Host) -> IO(Unit):
   match host:
     case Host{state,_,editor,_,_,_,_}:
@@ -215,6 +229,12 @@ def showManual(host: Host,url: String,answer: Deferred.Deferred<String>) -> IO(U
       do IO<Unit>:
         Ref.write(Maybe<&2,Deferred.Deferred<String>>,reply,Some{answer})
         Ref.write(State,state,Manual{url,""})
+def showPrompt(host: Host,message: String,secret: Bool,answer: Deferred.Deferred<String>) -> IO(Unit):
+  match host:
+    case Host{state,reply,_,_,_,_,_}:
+      do IO<Unit>:
+        Ref.write(Maybe<&2,Deferred.Deferred<String>>,reply,Some{answer})
+        Ref.write(State,state,Prompt{message,secret,""})
 def waitingAfterManual(current: State) -> State & Unit:
   match current:
     case Closed{}: (Closed{},Unit{})

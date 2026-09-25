@@ -487,6 +487,18 @@ SCENARIOS = [
                   ("settle", 0.2), ("snap", "saved")],
     },
     {
+        "name": "login-api-key",
+        "args": MODEL,
+        "env": FD_PATH,
+        "steps": [("wait", READY, "startup"), ("settle", 0.3),
+                  ("keys", "/login"), ("key", "Enter"), ("settle", 0.2), ("snap", "method"),
+                  ("key", "Down"), ("key", "Enter"), ("settle", 0.2), ("snap", "providers"),
+                  ("keys", "OpenAI"), ("settle", 0.2), ("snap", "filtered"),
+                  ("key", "Enter"), ("wait", "Enter OpenAI API key", "prompt"), ("snap", "prompt"),
+                  ("keys", "sk-parity-new"), ("settle", 0.1), ("snap", "entered"),
+                  ("key", "Enter"), ("settle", 0.3), ("snap", "saved")],
+    },
+    {
         "name": "scoped-models-selector",
         "args": MODEL,
         "env": FD_PATH,

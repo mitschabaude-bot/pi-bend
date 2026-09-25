@@ -641,7 +641,25 @@ type KeyConfig is Data:
 def inheritedResolve(inheritedAuth: Maybe<&2, Auth.ApiKeyAuth>, input: Auth.ResolveInput) -> IO(Auth.AuthOutcome()):
   match inheritedAuth:
     case None{}: IO.pure(Auth.AuthOutcome(), Done{None{}})
-    case Some{Auth.ApiKeyAuth{_, resolve}}: C.call(Auth.ResolveInput, Auth.AuthOutcome(), resolve, input)
+    case Some{Auth.ApiKeyAuth{_, _, resolve}}: C.call(Auth.ResolveInput, Auth.AuthOutcome(), resolve, input)
+def loginDefaultResult(value: Result<&2,&2,String,String>) -> Auth.LoginOutcome():
+  match value:
+    case Fail{reason}: Fail{reason}
+    case Done{SNil{}}: Fail{"API key cannot be empty"}
+    case Done{key}: Done{Auth.ApiKeyCredential{Some{key},None{}}}
+def loginDefault(interaction: Auth.LoginInteraction) -> IO(Auth.LoginOutcome()):
+  match interaction:
+    case Auth.LoginInteraction{_,prompt}:
+      do IO<Auth.LoginOutcome()>:
+        value : Result<&2,&2,String,String> <- C.call(Auth.LoginPrompt,Result<&2,&2,String,String>,prompt,Auth.LoginPrompt{"Enter API key",True{}})
+        return loginDefaultResult(value)
+def loginInherited(inherited: Maybe<&2,Auth.ApiKeyAuth>,interaction: Auth.LoginInteraction) -> IO(Auth.LoginOutcome()):
+  match inherited:
+    case Some{Auth.ApiKeyAuth{_,Some{callback},_}}: C.call(Auth.LoginInteraction,Auth.LoginOutcome(),callback,interaction)
+    case _: loginDefault(interaction)
+def loginConfigured(config: KeyConfig,interaction: Auth.LoginInteraction) -> IO(Auth.LoginOutcome()):
+  match config:
+    case KeyConfig{_,inherited,_,_,_}: loginInherited(inherited,interaction)
 
 def keyResult(key: String, env: Maybe<&2, T.ProviderEnv()>, source: String) -> Auth.AuthOutcome():
   Done{Some{Auth.AuthResult{Auth.ModelAuth{Some{key}, None{}, None{}}, env, Some{source}}}}
@@ -722,7 +740,7 @@ def retainedKey(inheritedAuth: Maybe<&2, Auth.ApiKeyAuth>) -> List<&2, Retained>
 
 def inheritedName(inheritedAuth: Maybe<&2, Auth.ApiKeyAuth>) -> String:
   match inheritedAuth:
-    case Some{Auth.ApiKeyAuth{name, _}}: name
+    case Some{Auth.ApiKeyAuth{name, _, _}}: name
     case None{}: "API key"
 
 def wrappedKey(+config: KeyConfig) -> IO(Composition<Auth.ApiKeyAuth>):
@@ -730,7 +748,8 @@ def wrappedKey(+config: KeyConfig) -> IO(Composition<Auth.ApiKeyAuth>):
     case KeyConfig{_, +inherited, _, _, _}:
       do IO<Composition<Auth.ApiKeyAuth>>:
         resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~KeyConfig, ~Auth.ResolveInput, ~(Auth.AuthOutcome()), ~resolveConfigured, config)
-        return Composition{Some{Auth.ApiKeyAuth{inheritedName(inherited), resolve}}, retainedKey(inherited)}
+        login : C.Callback<Auth.LoginInteraction,Auth.LoginOutcome()> <- C.create(~KeyConfig,~Auth.LoginInteraction,~(Auth.LoginOutcome()),~loginConfigured,config)
+        return Composition{Some{Auth.ApiKeyAuth{inheritedName(inherited), Some{login}, resolve}}, retainedKey(inherited)}
 
 def configuredHeaders(config: Config.ModelsJsonProvider) -> Maybe<&2, R.Record<String>>:
   match config:

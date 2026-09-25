@@ -138,11 +138,11 @@
         "packages/coding-agent/src/modes/interactive/viewport.bend",
         "packages/coding-agent/src/main.bend"
       ],
-      "note": "Interactive theme selection, per-model thinking overrides, /thinking, /scoped-models, and /model flows work. The /model selector matches scoped browsing, search and default save in terminal parity. Fullscreen startup, typing, and viewport scrolling match; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings now precede restored messages and the large-session terminal capture matches, though startup remains slower. Fullscreen exit presentation, mouse selection/search, dynamic mode switching, and broader commands remain partial.",
+      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native API-key login saves credentials and refreshes model availability; its selector and prompt presentation still differ. Fullscreen startup, typing and viewport scrolling match; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit presentation, mouse selection/search, dynamic mode switching and broader commands remain partial.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "d7baf2d18f3290274d621777b67d5c691d2f743e0b9eb04069b3d1799f73266e",
-        "packages/coding-agent/src/modes/interactive/run.bend": "c0f95a8d86db3713786332c31c1ba90292e334dbdd186b90dc48b44539332f90",
+        "packages/coding-agent/src/modes/interactive/run.bend": "f2624b8a3d4d8ef07b3594076a8e9c14f8127049f1fc3de0c7e56f72626bf6b0",
         "packages/coding-agent/src/modes/interactive/commands.bend": "8449a234b3cc969830d79b4462042968060562ee619a8b4e3c7ff2dba814265a",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "c26551ed6c7f5f80837817ede0eed9c68a20fcab25dfb1b17dec2b90c1fd8550",
         "packages/coding-agent/src/main.bend": "01410adc82ed2d2cae836504662a63e14c88051321d081dac8c907ad20da3535"
@@ -223,10 +223,10 @@
     },
     "packages/coding-agent/src/modes/interactive/components/oauth-selector.ts": {
       "state": "partial",
-      "note": "The native login dialog supports fuzzy provider choice for OpenAI Codex and Anthropic subscriptions; the source selector also exposes a general provider/API-key/status UI that is not present.",
+      "note": "Native login offers account and API-key methods, searchable provider choices and key prompts. The provider selector lacks upstream sorting, configured-status badges, full catalog coverage and matching terminal layout.",
       "source_sha256": "d4c92352cc8035e4092d9bd67e0250a2eab3124e13f15ac45433acfde92db53f",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "efebcd08c4ebe41385878bad31ede7364e3f47d9f3759369ba2ecbc5655688c5"
+        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "877d2c60b47f1d7c3ab206c213c6e0378e798badbd7c828eab34d62432a7ffda"
       },
       "ports": [
         "packages/coding-agent/src/modes/interactive/components/login-dialog.bend"
@@ -334,6 +334,38 @@
       "ports": [
         "packages/coding-agent/src/modes/interactive/components/model-selector.bend"
       ]
+    },
+    "packages/ai/src/auth/types.ts": {
+      "state": "partial",
+      "note": "Credential storage and provider auth types include a native API-key login callback and prompt interaction. The full OAuth and auth-context type contract remains partial.",
+      "source_sha256": "82e2209fd3291978afd7f77b10d81d8d411fd82d0e3ac52121cb41f735946ba5",
+      "port_sha256": {
+        "packages/ai/src/auth/types.bend": "58f4eb066f2267bd6a879e02e96617f0973e9258494e04fcc4b24d72e773e4eb"
+      }
+    },
+    "packages/ai/src/auth/helpers.ts": {
+      "state": "partial",
+      "note": "Standard API-key providers prompt for a key and resolve stored credentials before environment variables. The lazy OAuth helper is not represented by this Bend module.",
+      "source_sha256": "2799858cc159794451870b86d2e2f50e2bd9453900f31b8ab50bb4ed8ca4a5fc",
+      "port_sha256": {
+        "packages/ai/src/auth/helpers.bend": "07fb2bb93bb216be9452c89c79344e93ebc0e56aaefb6c7b954e168882ea9bab"
+      }
+    },
+    "packages/ai/src/providers/cloudflare-auth.ts": {
+      "state": "partial",
+      "note": "Workers AI and AI Gateway resolve per-field stored and ambient values; native login prompts for key, account ID and optional gateway ID. Focused Bend tests exercise both login credential shapes and the existing resolver cases; broader model-runtime integration remains partial.",
+      "source_sha256": "d0532efb4f00126286d71dbce6fcb95e581cd9477467dc4bd20f1df1a466f03e",
+      "port_sha256": {
+        "packages/ai/src/providers/cloudflare-auth.bend": "91100db847ba80b22b2fa422d205c5bd1b4b59321571a05d90896c6313e94af7"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/login-dialog.ts": {
+      "state": "partial",
+      "note": "Native OAuth and API-key prompts work, including cancellation and masked key entry. Prompt layout and provider-specific title differ from upstream; other dialog methods remain partial.",
+      "source_sha256": "37608848ca7b72707437aed9627a612eadf570c57a54b1c86972c3532918298c",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "877d2c60b47f1d7c3ab206c213c6e0378e798badbd7c828eab34d62432a7ffda"
+      }
     }
   }
 }

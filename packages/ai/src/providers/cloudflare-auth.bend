@@ -9,8 +9,7 @@ import ../../../runtime/src/abort.bend as Abort
 # key; AI Gateway sends it as cf-aig-authorization and removes the SDKs'
 # Authorization and x-api-key headers. Both publish the account (and gateway)
 # id as provider env, from which cloudflare-stream.bend materializes the
-# endpoint. Upstream's interactive `login` is not ported: Bend's ApiKeyAuth
-# has no login flow for any provider yet.
+# endpoint. Their login flow asks for the required provider fields.
 
 type CloudflareAuthKind is Data:
   WorkersAI{}
@@ -109,10 +108,56 @@ def resolveCloudflareEnv(kind: CloudflareAuthKind, input: Auth.ResolveInput) -> 
         apiKey : Lookup() <- resolveValue(CLOUDFLARE_API_KEY(), context, credential, signal)
         withKey(kind, context, credential, signal, apiKey)
 
-def cloudflareAuth(kind: CloudflareAuthKind) -> IO(Auth.ApiKeyAuth):
+def nonemptyField(value: Result<&2,&2,String,String>) -> Result<&2,&2,String,String>:
+  match value:
+    case Done{SNil{}}: Fail{"Required Cloudflare credential cannot be empty"}
+    case other: other
+def checkedField(value: Result<&2,&2,String,String>,cancelled: Bool) -> Result<&2,&2,String,String>:
+  match cancelled:
+    case True{}: Fail{abortedError()}
+    case False{}: nonemptyField(value)
+def ask(interaction: Auth.LoginInteraction,message: String,secret: Bool) -> IO(Result<&2,&2,String,String>):
+  match interaction:
+    case Auth.LoginInteraction{+signal,prompt}:
+      do IO<Result<&2,&2,String,String>>:
+        answer : Result<&2,&2,String,String> <- C.call(Auth.LoginPrompt,Result<&2,&2,String,String>,prompt,Auth.LoginPrompt{message,secret})
+        cancelled : Bool <- Abort.aborted(Unit,signal)
+        return checkedField(answer,cancelled)
+def loginCredential(key: String,accountId: String,gatewayId: Maybe<&2,String>) -> Auth.Credential:
+  match gatewayId:
+    case None{}: Auth.ApiKeyCredential{Some{key},Some{R.Record{[R.Property{CLOUDFLARE_ACCOUNT_ID(),accountId}]}}}
+    case Some{id}: Auth.ApiKeyCredential{Some{key},Some{R.Record{[R.Property{CLOUDFLARE_ACCOUNT_ID(),accountId},R.Property{CLOUDFLARE_GATEWAY_ID(),id}]}}}
+def gatewayLogin(key: String,accountId: String,answer: Result<&2,&2,String,String>) -> Auth.LoginOutcome():
+  match answer:
+    case Fail{reason}: Fail{reason}
+    case Done{gatewayId}: Done{loginCredential(key,accountId,Some{gatewayId})}
+def accountLogin(kind: CloudflareAuthKind,key: String,interaction: Auth.LoginInteraction,answer: Result<&2,&2,String,String>) -> IO(Auth.LoginOutcome()):
+  match kind answer:
+    case _ Fail{reason}: IO.pure(Auth.LoginOutcome(),Fail{reason})
+    case WorkersAI{} Done{accountId}: IO.pure(Auth.LoginOutcome(),Done{loginCredential(key,accountId,None{})})
+    case AIGateway{} Done{accountId}:
+      do IO<Auth.LoginOutcome()>:
+        gateway : Result<&2,&2,String,String> <- ask(interaction,"Enter Cloudflare AI Gateway ID",False{})
+        return gatewayLogin(key,accountId,gateway)
+def keyLogin(kind: CloudflareAuthKind,+interaction: Auth.LoginInteraction,answer: Result<&2,&2,String,String>) -> IO(Auth.LoginOutcome()):
+  match answer:
+    case Fail{reason}: IO.pure(Auth.LoginOutcome(),Fail{reason})
+    case Done{key}:
+      do IO<Auth.LoginOutcome()>:
+        account : Result<&2,&2,String,String> <- ask(interaction,"Enter Cloudflare account ID",False{})
+        accountLogin(kind,key,interaction,account)
+def loginCloudflareRun(kind: CloudflareAuthKind,+interaction: Auth.LoginInteraction) -> IO(Auth.LoginOutcome()):
+  do IO<Auth.LoginOutcome()>:
+    key : Result<&2,&2,String,String> <- ask(interaction,"Enter Cloudflare API key",True{})
+    keyLogin(kind,interaction,key)
+def loginCloudflare(kind: CloudflareAuthKind,interaction: Auth.LoginInteraction) -> IO(Auth.LoginOutcome()):
+  loginCloudflareRun(kind,interaction)
+
+def cloudflareAuth(+kind: CloudflareAuthKind) -> IO(Auth.ApiKeyAuth):
   do IO<Auth.ApiKeyAuth>:
     resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~CloudflareAuthKind, ~Auth.ResolveInput, ~(Auth.AuthOutcome()), ~resolveCloudflareEnv, kind)
-    return Auth.ApiKeyAuth{"Cloudflare API key", resolve}
+    login : C.Callback<Auth.LoginInteraction,Auth.LoginOutcome()> <- C.create(~CloudflareAuthKind,~Auth.LoginInteraction,~(Auth.LoginOutcome()),~loginCloudflare,kind)
+    return Auth.ApiKeyAuth{"Cloudflare API key", Some{login}, resolve}
 
 def cloudflareWorkersAIAuth() -> IO(Auth.ApiKeyAuth): cloudflareAuth(WorkersAI{})
 

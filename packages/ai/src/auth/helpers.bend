@@ -57,7 +57,26 @@ def resolveEnv(config: EnvApiKey, input: Auth.ResolveInput) -> IO(Auth.AuthOutco
         cancelled : Bool <- Abort.aborted(Unit, signal)
         resolveUnlessAborted(envVars, context, credential, cancelled)
 
+def entered(name: String,result: Result<&2,&2,String,String>) -> Auth.LoginOutcome():
+  match result:
+    case Fail{reason}: Fail{reason}
+    case Done{SNil{}}: Fail{name ++ " cannot be empty"}
+    case Done{key}: Done{Auth.ApiKeyCredential{Some{key},None{}}}
+def promptEnv(+name: String,signal: Abort.AbortSignal<Unit>,prompt: C.Callback<Auth.LoginPrompt,Result<&2,&2,String,String>>) -> IO(Auth.LoginOutcome()):
+  do IO<Auth.LoginOutcome()>:
+    value : Result<&2,&2,String,String> <- C.call(Auth.LoginPrompt,Result<&2,&2,String,String>,prompt,Auth.LoginPrompt{"Enter " ++ name,True{}})
+    cancelled : Bool <- Abort.aborted(Unit,signal)
+    return Bool.pick(Auth.LoginOutcome(),cancelled,Fail{"The operation was aborted"},entered(name,value))
+def loginEnv(config: EnvApiKey, interaction: Auth.LoginInteraction) -> IO(Auth.LoginOutcome()):
+  match config interaction:
+    case EnvApiKey{name,_} Auth.LoginInteraction{+signal,prompt}:
+      do IO<Auth.LoginOutcome()>:
+        cancelled : Bool <- Abort.aborted(Unit,signal)
+        Bool.pick(Unit -> IO(Auth.LoginOutcome()),cancelled,_ => IO.pure(Auth.LoginOutcome(),Fail{"The operation was aborted"}),_ => promptEnv(name,signal,prompt))(Unit{})
+
 def envApiKeyAuth(+name: String, envVars: List<&2, String>) -> IO(Auth.ApiKeyAuth):
   do IO<Auth.ApiKeyAuth>:
-    resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~EnvApiKey, ~Auth.ResolveInput, ~(Auth.AuthOutcome()), ~resolveEnv, EnvApiKey{name, envVars})
-    return Auth.ApiKeyAuth{name, resolve}
+    +config : EnvApiKey = EnvApiKey{name,envVars}
+    resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~EnvApiKey, ~Auth.ResolveInput, ~(Auth.AuthOutcome()), ~resolveEnv, config)
+    login : C.Callback<Auth.LoginInteraction,Auth.LoginOutcome()> <- C.create(~EnvApiKey,~Auth.LoginInteraction,~(Auth.LoginOutcome()),~loginEnv,config)
+    return Auth.ApiKeyAuth{name,Some{login},resolve}

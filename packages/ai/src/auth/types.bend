@@ -116,11 +116,15 @@ type ResolveInput is Data:
 
 def AuthOutcome() -> Data: Result<&2, &2, String, Maybe<&2, AuthResult>>
 
-# Api-key auth: stored key/provider env plus ambient sources. Resolution is
-# provider-scoped; endpoint preparation happens after auth is resolved.
-# Interactive login is a separate flow and is not part of request auth.
+# API-key login asks the host for one or more values. The host controls how
+# secrets are displayed; providers decide which values belong in a credential.
+type LoginPrompt is Data: LoginPrompt{message: String, secret: Bool}
+type LoginInteraction is Data: LoginInteraction{signal: Abort.AbortSignal<Unit>, prompt: C.Callback<LoginPrompt, Result<&2, &2, String, String>>}
+def LoginOutcome() -> Data: Result<&2, &2, String, Credential>
+
+# Resolution is provider-scoped; endpoint preparation follows auth resolution.
 type ApiKeyAuth is Data:
-  ApiKeyAuth{name: String, resolve: C.Callback<ResolveInput, AuthOutcome()>}
+  ApiKeyAuth{name: String, login: Maybe<&2, C.Callback<LoginInteraction, LoginOutcome()>>, resolve: C.Callback<ResolveInput, AuthOutcome()>}
 
 type RefreshInput is Data:
   RefreshInput{credential: Credential, signal: Abort.AbortSignal<Unit>}
@@ -132,9 +136,16 @@ type OAuthAuth is Data:
 type ProviderAuth is Data:
   ProviderAuth{apiKey: Maybe<&2, ApiKeyAuth>, oauth: Maybe<&2, OAuthAuth>}
 
+def disposeLogin(value: Maybe<&2,C.Callback<LoginInteraction, LoginOutcome()>>) -> IO(Unit):
+  match value:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{callback}: C.dispose(LoginInteraction, LoginOutcome(), callback)
 def disposeApiKeyAuth(auth: ApiKeyAuth) -> IO(Unit):
   match auth:
-    case ApiKeyAuth{_, resolve}: C.dispose(ResolveInput, AuthOutcome(), resolve)
+    case ApiKeyAuth{_, login, resolve}:
+      do IO<Unit>:
+        disposeLogin(login)
+        C.dispose(ResolveInput, AuthOutcome(), resolve)
 
 def disposeOAuthAuth(auth: OAuthAuth) -> IO(Unit):
   match auth:

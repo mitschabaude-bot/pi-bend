@@ -80,8 +80,8 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   Bend registers 37 of pi 0.87.1's built-in providers, including both
   Cloudflare providers; a bare `--model gpt-5` lists pi's four candidates and
   `--list-models cloudflare` matches pi. Missing: bedrock, vertex, mistral
-  and radius (APIs not ported). API-key `/login` (including Cloudflare's
-  key/account/gateway prompts) is not ported for any provider.
+  and radius (APIs not ported). The native API-key `/login` flow now saves credentials for registered providers, including Cloudflare's key/account/gateway prompts; Bedrock remains unavailable because its provider is missing.
+- **API-key login presentation** (`login-api-key`): The account/API-key and provider selectors work, but Bend uses a compact list without pi's configured-status badges or exact row layout. Bend masks secret entry while pi 0.87.1 echoes it, and the prompt layout differs. The native flow saves the same provider credential and returns to the editor.
 - **LaTeX in multi-line paragraphs and list items** (answers with math):
   `packages/tui/src/latex.bend` and the Markdown `latex`/`latexBlock` tokens
   match pi on 2,170 cases (`tests/latex_check.py`). The Bend Markdown

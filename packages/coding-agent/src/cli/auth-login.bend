@@ -34,6 +34,32 @@ def save(store: Auth.CredentialStore, +provider: String, credential: Auth.Creden
     C.dispose(Maybe<&2, Auth.Credential>, Auth.StoreResult(Maybe<&2, Auth.Credential>), update)
     return saved(provider,result)
 
+def saveApiKeyCredential(store: Auth.CredentialStore,provider: String,credential: Auth.LoginOutcome(),signal: Abort.AbortSignal<Unit>) -> IO(Outcome()):
+  match credential:
+    case Fail{reason}: IO.pure(Outcome(),Fail{reason})
+    case Done{value}: save(store,provider,value,signal)
+def saveApiKey(provider: String,credential: Auth.LoginOutcome(),signal: Abort.AbortSignal<Unit>,pair: Storage.AuthStorageOwner & Storage.AuthStorage) -> IO(Outcome()):
+  match pair:
+    case (owner,view):
+      do IO<Outcome()>:
+        +store : Auth.CredentialStore <- Storage.store(view)
+        result : Outcome() <- saveApiKeyCredential(store,provider,credential,signal)
+        Auth.disposeStore(store)
+        Storage.dispose(owner)
+        return result
+def apiKeyPath(provider: String,credential: Auth.LoginOutcome(),signal: Abort.AbortSignal<Unit>,path: Result<&2,&2,FS.Error,String>) -> IO(Outcome()):
+  match path:
+    case Fail{_}: IO.pure(Outcome(),Fail{"Could not locate the auth file"})
+    case Done{value}:
+      do IO<Outcome()>:
+        owner : Storage.AuthStorageOwner <- Storage.create(value)
+        saveApiKey(provider,credential,signal,Storage.borrow(owner))
+def authenticateApiKey(provider: String,login: C.Callback<Auth.LoginInteraction,Auth.LoginOutcome()>,+signal: Abort.AbortSignal<Unit>,prompt: C.Callback<Auth.LoginPrompt,Result<&2,&2,String,String>>) -> IO(Outcome()):
+  do IO<Outcome()>:
+    credential : Auth.LoginOutcome() <- C.call(Auth.LoginInteraction,Auth.LoginOutcome(),login,Auth.LoginInteraction{signal,prompt})
+    path : Result<&2,&2,FS.Error,String> <- Config.getAuthPath()
+    apiKeyPath(provider,credential,signal,path)
+
 def exchanged(store: Auth.CredentialStore, result: Result<&2, &2, String, Auth.Credential>, signal: Abort.AbortSignal<Unit>) -> IO(Outcome()):
   match result:
     case Fail{message}: IO.pure(Outcome(), Fail{message})

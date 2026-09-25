@@ -68,7 +68,7 @@ def rendered(outcome: Auth.AuthOutcome()) -> String:
 
 def resolveWith(auth: Auth.ApiKeyAuth, context: Auth.AuthContext, credential: Maybe<&2, Auth.Credential>, signal: Abort.AbortSignal<Unit>) -> IO(Auth.AuthOutcome()):
   match auth:
-    case Auth.ApiKeyAuth{_, resolve}: C.call(Auth.ResolveInput, Auth.AuthOutcome(), resolve, Auth.ResolveInput{context, credential, signal})
+    case Auth.ApiKeyAuth{_, _, resolve}: C.call(Auth.ResolveInput, Auth.AuthOutcome(), resolve, Auth.ResolveInput{context, credential, signal})
 
 def resolvedText(auth: IO(Auth.ApiKeyAuth), env: Env(), credential: Maybe<&2, Auth.Credential>, cancel: Bool) -> IO(String):
   do IO<String>:
@@ -95,6 +95,31 @@ def storedCredential(value: Maybe<&2, String>, env: List<&2, R.Property<String>>
 def workers() -> IO(Auth.ApiKeyAuth): Cloudflare.cloudflareWorkersAIAuth()
 def gatewayAuth() -> IO(Auth.ApiKeyAuth): Cloudflare.cloudflareAIGatewayAuth()
 
+def promptAnswer(_: Unit,prompt: Auth.LoginPrompt) -> IO(Result<&2,&2,String,String>):
+  match prompt:
+    case Auth.LoginPrompt{"Enter Cloudflare API key",True{}}: IO.pure(Result<&2,&2,String,String>,Done{"cf-key"})
+    case Auth.LoginPrompt{"Enter Cloudflare account ID",False{}}: IO.pure(Result<&2,&2,String,String>,Done{"account-id"})
+    case Auth.LoginPrompt{"Enter Cloudflare AI Gateway ID",False{}}: IO.pure(Result<&2,&2,String,String>,Done{"gateway-id"})
+    case _: IO.pure(Result<&2,&2,String,String>,Fail{"unexpected prompt"})
+def credentialText(result: Auth.LoginOutcome()) -> String:
+  match result:
+    case Fail{reason}: "error:" ++ reason
+    case Done{Auth.ApiKeyCredential{key,env}}: optional(key) ++ "|" ++ envText(env)
+    case Done{_}: "wrong credential type"
+def callLogin(auth: Auth.ApiKeyAuth,interaction: Auth.LoginInteraction) -> IO(Auth.LoginOutcome()):
+  match auth:
+    case Auth.ApiKeyAuth{_,Some{callback},_}: C.call(Auth.LoginInteraction,Auth.LoginOutcome(),callback,interaction)
+    case _: IO.pure(Auth.LoginOutcome(),Fail{"login unavailable"})
+def loginText(auth: IO(Auth.ApiKeyAuth)) -> IO(String):
+  do IO<String>:
+    selected : Auth.ApiKeyAuth <- auth
+    +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    +prompt : C.Callback<Auth.LoginPrompt,Result<&2,&2,String,String>> <- C.create(~Unit,~Auth.LoginPrompt,~Result<&2,&2,String,String>,~promptAnswer,Unit{})
+    result : Auth.LoginOutcome() <- callLogin(selected,Auth.LoginInteraction{Abort.signal(Unit,controller),prompt})
+    C.dispose(Auth.LoginPrompt,Result<&2,&2,String,String>,prompt)
+    Abort.dispose(Unit,controller)
+    return credentialText(result)
+
 def main() -> IO(Unit):
   do IO<Unit>:
     expect("requires Cloudflare Workers AI account config and returns scoped env (missing account)", resolvedText(workers(), vars([keyVar()]), None{}, False{}), "undefined")
@@ -107,3 +132,5 @@ def main() -> IO(Unit):
     expect("the workers provider ignores the gateway id", resolvedText(workers(), vars([keyVar(), accountVar(), gatewayVar()]), None{}, False{}), "cf-key|-|CLOUDFLARE_ACCOUNT_ID=account-id|CLOUDFLARE_API_KEY")
     expect("an aborted signal stops an environment lookup", resolvedText(workers(), vars([keyVar(), accountVar()]), None{}, True{}), "error:The operation was aborted")
     expect("stored values need no environment lookup under an aborted signal", resolvedText(workers(), vars(Nil{}), storedCredential(Some{"stored-key"}, [accountVar()]), True{}), "stored-key|-|CLOUDFLARE_ACCOUNT_ID=account-id|stored credential")
+    expect("Workers AI login saves the key and account",loginText(workers()),"cf-key|CLOUDFLARE_ACCOUNT_ID=account-id")
+    expect("AI Gateway login also saves its gateway",loginText(gatewayAuth()),"cf-key|CLOUDFLARE_ACCOUNT_ID=account-id,CLOUDFLARE_GATEWAY_ID=gateway-id")
