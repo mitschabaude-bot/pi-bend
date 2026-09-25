@@ -1026,7 +1026,7 @@ type ThemeLive is Data:
 type ThemeOwned is Type:
   ThemeOwned{controller: ThemeController.Owner,render: Callback.Callback<Unit,Unit>}
 type ThemeStopping is Data:
-  ThemeStopping{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>}
+  ThemeStopping{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,view: View.Handle,screen: Process.ScreenState,session: Ref.Ref<Session.AgentSession>}
 type Interaction is Data:
   Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,modelSelector: Ref.Ref<Maybe<&2,ModelPicker.Host>>,thinkingSelector: Ref.Ref<Maybe<&2,ThinkingPicker.Host>>,scopedSelector: Ref.Ref<Maybe<&2,ScopePicker.Host>>,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,trust: Ref.Ref<Maybe<&2,TrustPicker.Host>>,header: Maybe<&2,Header.Handle>,bashActivity: Ref.Ref<BashActivity>,working: Working,autocomplete: AutocompleteSlot}
 type ThemeStartup is Data:
@@ -2052,10 +2052,23 @@ def closeTheme(current: Maybe<&1,ThemeOwned>) -> IO(Unit):
       do IO<Unit>:
         ThemeController.close(controller)
         Callback.dispose(Unit,Unit,render)
+def hasSessionMessages(messages: List<&2,Session.Message()>) -> Bool:
+  match messages:
+    case Nil{}: False{}
+    case _ <> _: True{}
+def prepareFullscreenExit(screen: Process.ScreenState,view: View.Handle,session: Ref.Ref<Session.AgentSession>) -> IO(Unit):
+  match screen:
+    case Process.Main{_}: IO.pure(Unit,Unit{})
+    case Process.Fullscreen{_}:
+      do IO<Unit>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        messages : List<&2,Session.Message()> <- Session.messages(live)
+        View.prepareExit(view,hasSessionMessages(messages))
 def themeStopping(stopping: ThemeStopping,_: Unit) -> IO(Unit):
   match stopping:
-    case ThemeStopping{redraw,selected,owned}:
+    case ThemeStopping{redraw,selected,owned,view,screen,session}:
       do IO<Unit>:
+        prepareFullscreenExit(screen,view,session)
         Ref.write(Maybe<&2,Callback.Callback<Unit,Unit>>,redraw,None{})
         Ref.write(Maybe<&2,ThemeController.Handle>,selected,None{})
         current : Maybe<&1,ThemeOwned> <- Ref.swap(Maybe<&1,ThemeOwned>,owned,None{})
@@ -2104,16 +2117,16 @@ def configuredScreen(session: Ref.Ref<Session.AgentSession>,override: Maybe<&2,S
     live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
     +settings : Settings.SettingsManager <- Session.getSettings(live)
     return screenForMode(Maybe.default(&2,Settings.TuiMode,override,Settings.getTuiMode(settings)),indicator,bindings)
-def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),document: Component.Component,editorComponent: Component.Component,+foot: FooterOwner,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,screen: Process.ScreenState,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
+def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),document: Component.Component,editorComponent: Component.Component,+foot: FooterOwner,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,+screen: Process.ScreenState,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
   match mounted:
     case (view,_,Fail{cause}): IO.pure(View.View & Result<&2,&2,Error,Unit>,(view,Fail{Layout{cause}}))
-    case (view,_,Done{base}):
+    case (view,viewHandle,Done{base}):
       do IO<View.View & Result<&2,&2,Error,Unit>>:
         +selected : Ref.Ref<Maybe<&2,ThemeController.Handle>> <- Ref.new(Maybe<&2,ThemeController.Handle>,None{})
         +owned : Ref.Ref<Maybe<&1,ThemeOwned>> <- Ref.new(Maybe<&1,ThemeOwned>,None{})
         +error : Ref.Ref<Maybe<&2,Theme.LoadError>> <- Ref.new(Maybe<&2,Theme.LoadError>,None{})
         +ready : Callback.Callback<Process.QueryReady,Unit> <- Callback.create(~ThemeStartup,~Process.QueryReady,~Unit,~themeReady,startup(context,redraw,queue,initial,contextStatus(context),stopped,selected,owned,error))
-        +stopping : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeStopping,~Unit,~Unit,~themeStopping,ThemeStopping{redraw,selected,owned})
+        +stopping : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeStopping,~Unit,~Unit,~themeStopping,ThemeStopping{redraw,selected,owned,viewHandle,screen,contextSession(context)})
         +ids : List<&2,Component.ComponentId> <- IO.pure(List<&2,Component.ComponentId>,Component.ComponentId{1n} <> Component.ComponentId{2n} <> Component.ComponentId{3n} <> Nil{})
         +components : List<&2,Component.Component> <- IO.pure(List<&2,Component.Component>,document <> editorComponent <> footerComponent(foot) <> Nil{})
         configured : Tui.TuiBase <- configuredTui(base,contextSession(context))

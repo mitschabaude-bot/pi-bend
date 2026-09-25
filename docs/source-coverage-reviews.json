@@ -138,13 +138,13 @@
         "packages/coding-agent/src/modes/interactive/viewport.bend",
         "packages/coding-agent/src/main.bend"
       ],
-      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native API-key login saves credentials and refreshes model availability; its selector and prompt presentation still differ. Fullscreen startup, typing and viewport scrolling match; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit presentation, mouse selection/search, dynamic mode switching and broader commands remain partial.",
+      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native API-key login saves credentials and refreshes model availability; its selector and prompt presentation still differ. Fullscreen startup, typing and viewport scrolling match; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection/search, dynamic mode switching and broader commands remain partial.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "d7baf2d18f3290274d621777b67d5c691d2f743e0b9eb04069b3d1799f73266e",
-        "packages/coding-agent/src/modes/interactive/run.bend": "f2624b8a3d4d8ef07b3594076a8e9c14f8127049f1fc3de0c7e56f72626bf6b0",
+        "packages/coding-agent/src/modes/interactive/run.bend": "74546fc31326b61f9c71542c4ef4e93832cadd6d8425dc2afb15804a06bfb60e",
         "packages/coding-agent/src/modes/interactive/commands.bend": "8449a234b3cc969830d79b4462042968060562ee619a8b4e3c7ff2dba814265a",
-        "packages/coding-agent/src/modes/interactive/viewport.bend": "c26551ed6c7f5f80837817ede0eed9c68a20fcab25dfb1b17dec2b90c1fd8550",
+        "packages/coding-agent/src/modes/interactive/viewport.bend": "14557c415d7d4b0dd3c2d6921ce0f3dbd7b1717f23db27fdd8657b1e3d5eb547",
         "packages/coding-agent/src/main.bend": "01410adc82ed2d2cae836504662a63e14c88051321d081dac8c907ad20da3535"
       }
     },
@@ -161,10 +161,10 @@
     },
     "packages/tui/src/tui-alt-screen.ts": {
       "state": "partial",
-      "note": "Native fullscreen startup, typing, and page/wheel scrolling match upstream terminal captures. The jump indicator uses the active theme and keybinding; its badge colors and text match in the light-theme custom-key capture. Configured page, half-page, line, top, and bottom keys are dispatched, with Home/End and custom Ctrl+G matching upstream screen content. Light-theme scrollbar colors and user-message background resets at the top still differ. Completed-turn exit restores the document and resume hint; search, mouse selection, image placement, and the upstream suite remain open.",
+      "note": "Native fullscreen startup, typing, and page/wheel scrolling match upstream terminal captures. The jump indicator uses the active theme and keybinding; its badge colors and text match in the light-theme custom-key capture. Configured page, half-page, line, top, and bottom keys are dispatched, with Home/End and custom Ctrl+G matching upstream screen content. Light-theme scrollbar colors and user-message background resets at the top still differ. Untouched and completed-turn exits restore the correct visible document and spacing; the editor cursor and empty-session border colors differ; search, mouse selection, image placement, and the upstream suite remain open.",
       "source_sha256": "5f6032a07398b8df3f72d65c38dbed2e52649a25823a52946d6414ddb2f8a929",
       "port_sha256": {
-        "packages/tui/src/tui-alt-screen.bend": "0a0919355fec52fe4a6a05f4ab4d9fd610cfc898d89b60ce1229129ff2680cde",
+        "packages/tui/src/tui-alt-screen.bend": "792e8741fc7ad2310d16a9bd5bc328e4e5c2724ded9d30a75385a303d356d37e",
         "packages/tui/src/tui-base.bend": "ed7ce34ce37b1f604cff9722e3ce419073ff19d76c5f67657c90968432d82d8e",
         "packages/tui/src/tui-process.bend": "2c84bff225f8cf51954fa40aae59ac4325eeb562b9487b7081f0602b17269f74"
       },
@@ -310,7 +310,7 @@
       "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
       "source_sha256": "24bbdd06a5e17d6c0631f7de51329eb7bb4ecd4a460dec7b3d593ff9e6219960",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/viewport.bend": "c26551ed6c7f5f80837817ede0eed9c68a20fcab25dfb1b17dec2b90c1fd8550"
+        "packages/coding-agent/src/modes/interactive/viewport.bend": "14557c415d7d4b0dd3c2d6921ce0f3dbd7b1717f23db27fdd8657b1e3d5eb547"
       },
       "ports": [
         "packages/coding-agent/src/modes/interactive/viewport.bend"

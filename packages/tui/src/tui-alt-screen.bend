@@ -35,7 +35,7 @@ def documentRows(lines: List<&2,String>,+width: Nat,first: Bool,reversed: List<&
       documentRows(rest,width,False{},Screen.Text{prefix ++ "\r\u{1b}[2K" ++ documentLine(line,width)} <> reversed)
 def leaveWithDocument(lines: List<&2,String>,width: Nat) -> Screen.Stream:
   Screen.stream(Screen.Text{"\u{1b}[?2026h\u{1b}[?1006l\u{1b}[?1004l\u{1b}[?1003l\u{1b}[?1002l\u{1b}[?1000l\u{1b}[?7h\u{1b}[?1049l\u{1b}[?7l"} <>
-    List.append(&2,Screen.Operation,documentRows(lines,width,True{},Nil{}),Screen.Text{"\u{1b}[0m\u{1b}[?7h\r\n\u{1b}[?25h\u{1b}[?2026l"} <> Nil{}))
+    List.append(&2,Screen.Operation,documentRows(lines,width,True{},Nil{}),Screen.Text{"\u{1b}[0m\u{1b}[?7h\r\n\r\n\u{1b}[?25h\u{1b}[?2026l"} <> Nil{}))
 def reset(state: State) -> State:
   match state:
     case State{_,_,_,label,keys}: initial(label,keys)
