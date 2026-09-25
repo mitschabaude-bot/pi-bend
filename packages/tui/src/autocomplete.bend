@@ -1,5 +1,6 @@
 import Base
 import ./fuzzy.bend as Fuzzy
+import ./utils.bend as U
 import ../../runtime/src/abort.bend as Abort
 import ../../runtime/src/callback.bend as Callback
 import ../../runtime/src/filesystem.bend as FS
@@ -60,7 +61,11 @@ def replaceLine(lines: List<&2,String>,index: Nat,value: String,reversed: List<&
     case head <> rest Succ{left}: replaceLine(rest,left,value,head <> reversed)
     case Nil{} _: Nil{}
 def delimiter(+char: Char) -> Bool:
-  Char.is_eq(char,' ') || Char.is_eq(char,'\t') || Char.is_eq(char,'"') || Char.is_eq(char,'\'') || Char.is_eq(char,'=')
+  Char.is_eq(char,' ') || Char.is_eq(char,'\t') || Char.is_eq(char,'"') || Char.is_eq(char,'\'') || Char.is_eq(char,'=') || U.autocompleteSeparator(Char.to_u32(char))
+def separated(text: String) -> Bool:
+  match text:
+    case SNil{}: False{}
+    case SCon{char,rest}: Bool.pick(Unit -> Bool,U.autocompleteSeparator(Char.to_u32(char)),_ => True{},_ => separated(rest))(Unit{})
 def blank(text: String) -> Bool: String.is_empty(Text.trimStart(text))
 def starts(text: String,prefix: String) -> Bool:
   match text prefix:
@@ -73,6 +78,8 @@ def last(text: String,previous: Maybe<&2,Char>) -> Maybe<&2,Char>:
     case SCon{char,rest}: last(rest,Some{char})
 def ends(text: String,wanted: Char) -> Bool:
   Maybe.default(&2,Bool,Maybe.map(&2,Char,Bool,char => Char.is_eq(char,wanted),last(text,None{})),False{})
+# upstream tokenStartRegex on nonempty text: it ends with a separator.
+def endsSeparated(text: String) -> Bool: Maybe.default(&2,Bool,Maybe.map(&2,Char,Bool,char => U.autocompleteSeparator(Char.to_u32(char)),last(text,None{})),False{})
 def contains(text: String,+wanted: Char) -> Bool:
   match text:
     case SNil{}: False{}
@@ -109,7 +116,7 @@ def pathFrom(text: String,force: Bool,value: PrefixScan) -> Maybe<&2,String>:
   match value:
     case PrefixScan{_,Some{quoted},_,_,_}: Some{quoted}
     case PrefixScan{+token,_,_,_,_}:
-      Bool.pick(Maybe<&2,String>,force || contains(token,'/') || starts(token,".") || (String.is_empty(token) && ends(text,' ')),Some{token},None{})
+      Bool.pick(Maybe<&2,String>,force || contains(token,'/') || starts(token,".") || (String.is_empty(token) && endsSeparated(text)),Some{token},None{})
 def extractPathPrefix(+text: String,force: Bool) -> Maybe<&2,String>: pathFrom(text,force,prefixes(text))
 def parsePathPrefix(prefix: String) -> PathPrefix:
   match prefix:
@@ -118,7 +125,7 @@ def parsePathPrefix(prefix: String) -> PathPrefix:
     case SCon{'@',rest}: PathPrefix{rest,True{},False{}}
     case text: PathPrefix{text,False{},False{}}
 def buildCompletionValue(+path: String,at: Bool,quoted: Bool) -> String:
-  Bool.pick(String,at,"@","") ++ Bool.pick(String,quoted || contains(path,' '),"\"" ++ path ++ "\"",path)
+  Bool.pick(String,at,"@","") ++ Bool.pick(String,quoted || separated(path),"\"" ++ path ++ "\"",path)
 
 def shouldTrigger(parts: ResultOf(LineParts)) -> ResultOf(Bool):
   match parts:
@@ -176,8 +183,17 @@ def commandItems(values: List<&2,Command>,reversed: List<&2,AutocompleteItem>) -
   match values:
     case Nil{}: List.reverse(&2,AutocompleteItem,reversed)
     case command <> rest: commandItems(rest,commandItem(command) <> reversed)
+# Skills rank by their bare name unless the query itself names the prefix.
+def bareSkillText(value: AutocompleteItem) -> String:
+  match value:
+    case AutocompleteItem{+text,_,_}: Bool.pick(String,starts(text,"skill:"),String.drop(text,6n),text)
+def commandMatches(skills: Bool,query: String,items: List<&2,AutocompleteItem>) -> List<&2,AutocompleteItem>:
+  match skills:
+    case True{}: Fuzzy.fuzzyFilter(~AutocompleteItem,~itemText,items,query)
+    case False{}: Fuzzy.fuzzyFilter(~AutocompleteItem,~bareSkillText,items,query)
 def commandSuggestions(commands: List<&2,Command>,+prefix: String) -> Maybe<&2,AutocompleteSuggestions>:
-  suggestions(prefix,Fuzzy.fuzzyFilter(~AutocompleteItem,~itemText,commandItems(commands,Nil{}),String.drop(prefix,1n)))
+  +query = String.drop(prefix,1n)
+  suggestions(prefix,commandMatches(starts(query,"skill:"),query,commandItems(commands,Nil{})))
 
 def foldedStarts(text: String,prefix: String) -> Bool:
   match text prefix:

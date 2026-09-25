@@ -7,7 +7,7 @@ const {eastAsianWidth}=await import(join(vendor,'get-east-asian-width/index.js')
 const {Chalk}=await import(join(vendor,'chalk/source/index.js'));
 const transpiler=new Bun.Transpiler({loader:'ts'});
 const hashes:Record<string,string>={
- 'src/utils.ts':'014e017a0cb45d8f4e07af6e472c282c6dec7c5856a335a3e3beeb6054f385d3',
+ 'src/utils.ts':'8cda2d53e2361ac5aaf6d7345b2fee058c8df5743eae4e4e90c89a7072c026c3',
  'src/components/text.ts':'3042e09dd8dcb870c23506e6fafb2dfcc095e7e375adad2fb62e447da17e5e3b',
  'src/components/truncated-text.ts':'c383487099d1864b51493a5838dd28a1bd3e5e440a675ec1dbcaf0177534fad0',
  'test/truncated-text.test.ts':'ba67883169e19dcb2013498d4b6659daa82b63daf01399f8471dc2b88b598141',

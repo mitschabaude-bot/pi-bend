@@ -3858,9 +3858,13 @@
     },
     {
       "source": "packages/tui/test/autocomplete-skill-slash.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "627c312bde9a434b9a30bf567dea3640159b5c245f54fcd2a75dd8d54c55c728"
+      "status": "ported",
+      "ports": [
+        "tests/autocomplete.bend",
+        "tests/autocomplete_check.py"
+      ],
+      "sha256": "627c312bde9a434b9a30bf567dea3640159b5c245f54fcd2a75dd8d54c55c728",
+      "notes": "All 3 original test bodies execute through the native provider next to the pinned source provider (tests/autocomplete_original.mts)."
     },
     {
       "source": "packages/tui/test/autocomplete.test.ts",
@@ -3870,7 +3874,7 @@
         "tests/autocomplete_check.py"
       ],
       "sha256": "23d6aaa52acc11f9a36d667e6783ca2fb9041509aadacc127a9701768f93b40f",
-      "notes": "All 27 original test bodies execute through the native provider on Bun/native one/four, supplemented by live-source calls and native-policy checks. Locale-default ordering remains pending; source item-set comparisons deliberately ignore ordering while original ranking assertions remain unchanged. Native scalar cursors and strict input/path adaptations are documented in tests/autocomplete.md. Generic editor-provider integration and Windows behavior remain pending."
+      "notes": "All 33 original test bodies (including the v0.87.1 CJK-punctuation cases) execute through the native provider on Bun/native one/four, supplemented by live-source calls and native-policy checks. Locale-default ordering remains pending; source item-set comparisons deliberately ignore ordering while original ranking assertions remain unchanged. Native scalar cursors and strict input/path adaptations are documented in tests/autocomplete.md. Generic editor-provider integration and Windows behavior remain pending."
     },
     {
       "source": "packages/tui/test/bug-regression-isimageline-startswith-bug.test.ts",
@@ -3893,9 +3897,13 @@
     },
     {
       "source": "packages/tui/test/editor.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "b25d663eda552a486aa35965441b6fae056414b2b5750ddec96b69faec72bdd6"
+      "status": "partial",
+      "ports": [
+        "tests/editor-trigger.bend",
+        "tests/editor_trigger_check.py"
+      ],
+      "sha256": "b25d663eda552a486aa35965441b6fae056414b2b5750ddec96b69faec72bdd6",
+      "notes": "Only the symbol-trigger/debounce context of the CJK-punctuation cases is compared, against the pinned trigger and debounce patterns on random texts. The editor.test.ts bodies themselves are not yet executed."
     },
     {
       "source": "packages/tui/test/fuzzy.test.ts",

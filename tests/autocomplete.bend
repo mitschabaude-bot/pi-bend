@@ -45,11 +45,16 @@ def reportTrigger(value: A.ResultOf(Bool)) -> IO(Unit):
 def argumentCompletions(unused: Unit,+prefix: String) -> IO(A.ResultOf(Maybe<&2,List<&2,A.AutocompleteItem>>)):
   Bool.pick(Unit -> IO(A.ResultOf(Maybe<&2,List<&2,A.AutocompleteItem>>)),S.equal(prefix,"error"),_ => IO.pure(A.ResultOf(Maybe<&2,List<&2,A.AutocompleteItem>>),Fail{A.Operation{"callback"}}),
     _ => IO.pure(A.ResultOf(Maybe<&2,List<&2,A.AutocompleteItem>>),Done{Some{A.AutocompleteItem{prefix ++ "one","argument",Some{"callback result"}} <> Nil{}}}))(Unit{})
-def commands(mode: String,callback: C.Callback<String,A.ResultOf(Maybe<&2,List<&2,A.AutocompleteItem>>)> ) -> List<&2,A.Command>:
+# The commands of upstream autocomplete-skill-slash.test.ts.
+def skillCommand(name: String,description: String) -> A.Command: A.Slash{A.SlashCommand{name,Some{description},None{},None{}}}
+def skillCommands() -> List<&2,A.Command>:
+  [skillCommand("skill:deep-research","Multi-agent deep research"),skillCommand("skill:research-idea","Refine a raw idea into a falsifiable seed"),skillCommand("skill:to-sidecar","Route work to a sidecar"),skillCommand("model","Select the active model")]
+def commands(+mode: String,callback: C.Callback<String,A.ResultOf(Maybe<&2,List<&2,A.AutocompleteItem>>)> ) -> List<&2,A.Command>:
   Bool.pick(List<&2,A.Command>,S.equal(mode,"commands"),
     A.Slash{A.SlashCommand{"model",Some{"Choose model"},Some{"[name]"},Some{callback}}} <>
     A.Slash{A.SlashCommand{"compact",Some{"Compact context"},None{},None{}}} <>
-    A.Item{A.AutocompleteItem{"clear","ignored label",Some{"Clear"}}} <> Nil{},Nil{})
+    A.Item{A.AutocompleteItem{"clear","ignored label",Some{"Clear"}}} <> Nil{},
+    Bool.pick(List<&2,A.Command>,S.equal(mode,"skills"),skillCommands(),Nil{}))
 def query(+mode: String,root: String,home: String,lines: String,line: Nat,column: Nat,force: String,recursive: String,policy: String) -> IO(Unit):
   do IO<Unit>:
     +callback : C.Callback<String,A.ResultOf(Maybe<&2,List<&2,A.AutocompleteItem>>)> <- C.create(~Unit,~String,~A.ResultOf(Maybe<&2,List<&2,A.AutocompleteItem>>),~(unused => prefix => argumentCompletions(unused,prefix)),Unit{})

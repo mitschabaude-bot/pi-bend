@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import {resolve,join} from 'node:path';
 import assert from 'node:assert/strict';
 const root=process.argv[2];
-for(const [file,hash] of [['src/utils.ts','014e017a0cb45d8f4e07af6e472c282c6dec7c5856a335a3e3beeb6054f385d3'],['test/truncate-to-width.test.ts','fd75a99d47ff465d56a1f3ede16e37ca7d29aa910e2322881e824e6c2937b7b8'],['test/tab-width.test.ts','59fff93aeecb3809f41f7bf68d88ef8ba9f0f38cd3a2db785a1f16a0ac114419']])assert.equal(createHash('sha256').update(readFileSync(join(root,'packages/tui',file))).digest('hex'),hash);
+for(const [file,hash] of [['src/utils.ts','8cda2d53e2361ac5aaf6d7345b2fee058c8df5743eae4e4e90c89a7072c026c3'],['test/truncate-to-width.test.ts','fd75a99d47ff465d56a1f3ede16e37ca7d29aa910e2322881e824e6c2937b7b8'],['test/tab-width.test.ts','59fff93aeecb3809f41f7bf68d88ef8ba9f0f38cd3a2db785a1f16a0ac114419']])assert.equal(createHash('sha256').update(readFileSync(join(root,'packages/tui',file))).digest('hex'),hash);
 const {eastAsianWidth}=await import(resolve(process.argv[3]));
 const transpiler=new Bun.Transpiler({loader:'ts'});
 const raw=readFileSync(join(root,'packages/tui/src/utils.ts'),'utf8');

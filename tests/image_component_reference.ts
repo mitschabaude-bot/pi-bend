@@ -4,7 +4,7 @@ import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
 const root=process.argv[2],{eastAsianWidth}=await import(resolve(process.argv[3])),transpiler=new Bun.Transpiler({loader:'ts'});
-const hashes={"packages/tui/src/utils.ts": "014e017a0cb45d8f4e07af6e472c282c6dec7c5856a335a3e3beeb6054f385d3", "packages/tui/src/terminal-image.ts": "f29572354977fd4ef4cc76878d31cce3cb5c45cebdfc9b5c49b50ad9cfb3171f", "packages/tui/src/components/image.ts": "cdef2f757008ce2fecfde6c0108366ebdc160bac70355db855fd264aec8d53f8", "packages/tui/test/terminal-image.test.ts": "d4e7e72dc1ef01aa5f1d217228db5d1f79bc447ef991986dde0ec2006d02cfd2"};
+const hashes={"packages/tui/src/utils.ts": "8cda2d53e2361ac5aaf6d7345b2fee058c8df5743eae4e4e90c89a7072c026c3", "packages/tui/src/terminal-image.ts": "f29572354977fd4ef4cc76878d31cce3cb5c45cebdfc9b5c49b50ad9cfb3171f", "packages/tui/src/components/image.ts": "cdef2f757008ce2fecfde6c0108366ebdc160bac70355db855fd264aec8d53f8", "packages/tui/test/terminal-image.test.ts": "d4e7e72dc1ef01aa5f1d217228db5d1f79bc447ef991986dde0ec2006d02cfd2"};
 function source(path:string){const s=readFileSync(join(root,path),'utf8');assert.equal(createHash('sha256').update(s).digest('hex'),hashes[path],path);return s;}
 const utils=transpiler.transformSync(source('packages/tui/src/utils.ts').replace(/^import.*\n/gm,'')).replace(/\bexport /g,'');
 const u=new Function('eastAsianWidth',utils+';return {truncateToWidth,visibleWidth}')(eastAsianWidth);

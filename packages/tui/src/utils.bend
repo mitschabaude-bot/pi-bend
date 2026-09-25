@@ -548,6 +548,12 @@ def cjkBreak(text: String) -> Bool:
     case SCon{char,rest}:
       isCjk = U32.is_ne(U32.and(Display.properties(Char.to_u32(char)),256),0)
       Bool.pick(Unit -> Bool,isCjk,_ => True{},_ => cjkBreak(rest))(Unit{})
+# upstream cjkPunctuationRegex and autocompleteSeparatorRegex: CJK letters
+# stay part of words and paths; only whitespace and punctuation separate
+# prose from completions. Property bit 512 is punctuation in a CJK script.
+def cjkPunctuation(+point: U32) -> Bool:
+  U32.is_ne(U32.and(Display.properties(point),512),0) || String.contains("，．：；！？（）［］｛｝“”‘’…—",SCon{Chr{point},""})
+def autocompleteSeparator(+point: U32) -> Bool: whitespaceScalar(point) || cjkPunctuation(point)
 def flushGroup(+current: String,+done: List<&2,String>) -> List<&2,String>:
   Bool.pick(List<&2,String>,Strings.equal(current,""),done,reverseInto(current,"") <> done)
 def finishGroups(+current: String,+pending: String,done: List<&2,String>) -> List<&2,String>:

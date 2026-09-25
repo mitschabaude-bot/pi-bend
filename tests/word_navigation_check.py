@@ -10,7 +10,7 @@ source=(a.upstream/'packages/tui/src/word-navigation.ts').read_text()
 assert hashlib.sha256(source.encode()).hexdigest()=='b73e915a524926ac8881731e89026b0bc7b5b0bd465de67257af81a420465c7f'
 source=source[source.index('const wordSegmenter'):].replace('getWordSegmenter()', 'new Intl.Segmenter("en",{granularity:"word"})')
 utils=(a.upstream/'packages/tui/src/utils.ts').read_text()
-assert hashlib.sha256(utils.encode()).hexdigest()=='014e017a0cb45d8f4e07af6e472c282c6dec7c5856a335a3e3beeb6054f385d3'
+assert hashlib.sha256(utils.encode()).hexdigest()=='8cda2d53e2361ac5aaf6d7345b2fee058c8df5743eae4e4e90c89a7072c026c3'
 punctuation=next(line for line in utils.splitlines() if line.startswith('export const PUNCTUATION_REGEX'))
 oracle=ROOT/'build/word-navigation-oracle.ts'
 oracle.write_text(punctuation+'\nconst isWhitespaceChar=(s:string)=>/\\s/.test(s);\n'+source+'''

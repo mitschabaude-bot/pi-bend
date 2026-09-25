@@ -1000,24 +1000,30 @@ def providerTriggers(provider: Maybe<&2,AC.AutocompleteProvider>) -> List<&2,Cha
   match provider:
     case None{}: ['@','#']
     case Some{AC.AutocompleteProvider{_,_,_,chars}}: triggerCharacters(chars,['@','#'])
-def tokenTail(text: String) -> Bool: Bool.not(Word.whitespace(text))
-def debounceTail(char: Char,+text: String) -> Bool:
+def separatorFree(text: String) -> Bool:
+  match text:
+    case SNil{}: True{}
+    case SCon{char,rest}: Bool.pick(Unit -> Bool,U.autocompleteSeparator(Char.to_u32(char)),_ => False{},_ => separatorFree(rest))(Unit{})
+def openQuote(char: Char,text: String) -> Bool:
   match char text:
     case '@' SCon{'"',rest}: Bool.not(String.contains(rest,"\""))
-    case _ text: tokenTail(text)
-def symbolContext(text: String,+chars: List<&2,Char>,+boundary: Bool,+debounce: Bool) -> Bool:
+    case _ _: False{}
+# upstream autocompleteTriggerPattern (and the equivalent debounce pattern):
+# after the start or a separator, a trigger followed by no separator, or an
+# unclosed `@"` quote, ending at the cursor.
+def symbolContext(text: String,+chars: List<&2,Char>,+boundary: Bool) -> Bool:
   match text:
     case SNil{}: False{}
     case SCon{+char,+rest}:
-      Bool.pick(Unit -> Bool,boundary && symbolIn(chars,char) && Bool.pick(Bool,debounce,debounceTail(char,rest),tokenTail(rest)),
+      Bool.pick(Unit -> Bool,boundary && symbolIn(chars,char) && (openQuote(char,rest) || separatorFree(rest)),
         _ => True{},
-        _ => symbolContext(rest,chars,Bool.pick(Bool,debounce,Char.is_eq(char,' ') || Char.is_eq(char,'\t'),Word.whitespace(SCon{char,""})),debounce))(Unit{})
+        _ => symbolContext(rest,chars,U.autocompleteSeparator(Char.to_u32(char))))(Unit{})
 def slashContext(state: EditorState) -> Bool:
   match state:
     case EditorState{lines,+line,column}: Nat.is_eq(line,0n) && AC.starts(Text.trimStart(takePrefix(textAt(lines,line),column,"")),"/")
 def autocompleteDelay(value: Editor,options: AutocompleteRequestOptions) -> U32:
   match value options:
-    case Editor{editing,_,_,_,AutocompleteState{provider,_,_},_,_} AutocompleteRequestOptions{force,tab}: Bool.pick(U32,Bool.not(force || tab) && symbolContext(stateBefore(editingState(editing)),providerTriggers(provider),True{},True{}),20,0)
+    case Editor{editing,_,_,_,AutocompleteState{provider,_,_},_,_} AutocompleteRequestOptions{force,tab}: Bool.pick(U32,Bool.not(force || tab) && symbolContext(stateBefore(editingState(editing)),providerTriggers(provider),True{}),20,0)
 def setRuntime(value: Editor,runtime: AutocompleteRuntime) -> Editor:
   match value:
     case Editor{editing,history,geometry,settings,AutocompleteState{provider,_,ui},paste,jump}: Editor{editing,history,geometry,settings,AutocompleteState{provider,runtime,ui},paste,jump}
@@ -1169,9 +1175,6 @@ def isTriggerText(text: String,characters: List<&2,Char>) -> Bool:
   match text:
     case SCon{char,SNil{}}: symbolIn(characters,char)
     case _: False{}
-def triggerBoundary(+before: String) -> Bool:
-  +prior = takePrefix(before,String.length(before) - 1n,"")
-  Nat.is_eq(String.length(before),1n) || AC.ends(prior,' ') || AC.ends(prior,'\t')
 def characterTrigger(+value: Editor,+char: String) -> Bool:
   match value:
     case Editor{editing,_,_,_,AutocompleteState{provider,_,_},_,_}:
@@ -1181,15 +1184,15 @@ def characterTrigger(+value: Editor,+char: String) -> Bool:
       Bool.pick(Unit -> Bool,String.eq(char,"/"),
         _ => slashContext(state) && String.eq(Text.trim(before),"/"),
         _ => Bool.pick(Unit -> Bool,isTriggerText(char,symbols),
-          _ => triggerBoundary(before),
-          _ => containsAutocompleteLetter(char) && (slashContext(state) || symbolContext(before,symbols,True{},False{})))(Unit{}))(Unit{})
+          _ => symbolContext(before,symbols,True{}),
+          _ => (containsAutocompleteLetter(char) || U.cjkBreak(char)) && (slashContext(state) || symbolContext(before,symbols,True{})))(Unit{}))(Unit{})
 def afterTyping(+value: Editor,char: String) -> IO(ResultOf(Editor)):
   Bool.pick(Unit -> IO(ResultOf(Editor)),isShowingAutocomplete(value),_ => updateAutocomplete(value),_ => Bool.pick(Unit -> IO(ResultOf(Editor)),characterTrigger(value,char),_ => triggerAutocomplete(value,AutocompleteRequestOptions{False{},False{}}),_ => IO.pure(ResultOf(Editor),Done{value}))(Unit{}))(Unit{})
 def afterDeletion(+value: Editor) -> IO(ResultOf(Editor)):
   match value:
     case Editor{editing,_,_,_,AutocompleteState{provider,_,_},_,_}:
       +state = editingState(editing)
-      Bool.pick(Unit -> IO(ResultOf(Editor)),isShowingAutocomplete(value),_ => updateAutocomplete(value),_ => Bool.pick(Unit -> IO(ResultOf(Editor)),slashContext(state) || symbolContext(stateBefore(state),providerTriggers(provider),True{},False{}),_ => triggerAutocomplete(value,AutocompleteRequestOptions{False{},False{}}),_ => IO.pure(ResultOf(Editor),Done{value}))(Unit{}))(Unit{})
+      Bool.pick(Unit -> IO(ResultOf(Editor)),isShowingAutocomplete(value),_ => updateAutocomplete(value),_ => Bool.pick(Unit -> IO(ResultOf(Editor)),slashContext(state) || symbolContext(stateBefore(state),providerTriggers(provider),True{}),_ => triggerAutocomplete(value,AutocompleteRequestOptions{False{},False{}}),_ => IO.pure(ResultOf(Editor),Done{value}))(Unit{}))(Unit{})
 
 def syncEditor(+value: Editor) -> IO(Editor):
   match value:

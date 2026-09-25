@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const root=process.argv[2], vendor=resolve(process.argv[3]);
 const {eastAsianWidth}=await import(join(vendor,'get-east-asian-width/index.js'));
 const transpiler=new Bun.Transpiler({loader:'ts'});
-const hashes:Record<string,string>={"src/utils.ts": "014e017a0cb45d8f4e07af6e472c282c6dec7c5856a335a3e3beeb6054f385d3", "src/keys.ts": "b972facce4233a4623239fc38029e28cae15d0fb326558c0c09dc02cf4345fa7", "src/keybindings.ts": "eea5e3fe258ad50337595bb5320955a6d97bac0c8f6c0a838f988d75079bcf38", "src/components/select-list.ts": "0fc369801e745eff15567d72829bf67887f5efec8bc6816aaf1ee65338618373", "test/select-list.test.ts": "0135b531ef8dfe52de6625c2004a4ed95566214bc9860068106c862efcf22376"};
+const hashes:Record<string,string>={"src/utils.ts": "8cda2d53e2361ac5aaf6d7345b2fee058c8df5743eae4e4e90c89a7072c026c3", "src/keys.ts": "b972facce4233a4623239fc38029e28cae15d0fb326558c0c09dc02cf4345fa7", "src/keybindings.ts": "eea5e3fe258ad50337595bb5320955a6d97bac0c8f6c0a838f988d75079bcf38", "src/components/select-list.ts": "0fc369801e745eff15567d72829bf67887f5efec8bc6816aaf1ee65338618373", "test/select-list.test.ts": "0135b531ef8dfe52de6625c2004a4ed95566214bc9860068106c862efcf22376"};
 function source(path:string){const value=readFileSync(join(root,'packages/tui',path),'utf8'); assert.equal(createHash('sha256').update(value).digest('hex'),hashes[path],path); return value;}
 function compiled(path:string){return transpiler.transformSync(source(path).replace(/^import.*\n/gm,'')).replace(/\bexport /g,'');}
 const utils=new Function('eastAsianWidth',compiled('src/utils.ts')+';return {visibleWidth,truncateToWidth};')(eastAsianWidth);

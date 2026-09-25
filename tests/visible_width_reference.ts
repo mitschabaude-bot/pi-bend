@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 const root=process.argv[2],{eastAsianWidth}=await import(resolve(process.argv[3]));
 const transpiler=new Bun.Transpiler({loader:'ts'});
 const hashes:Record<string,string>={
- 'packages/tui/src/utils.ts':'014e017a0cb45d8f4e07af6e472c282c6dec7c5856a335a3e3beeb6054f385d3',
+ 'packages/tui/src/utils.ts':'8cda2d53e2361ac5aaf6d7345b2fee058c8df5743eae4e4e90c89a7072c026c3',
  'packages/tui/test/truncate-to-width.test.ts':'fd75a99d47ff465d56a1f3ede16e37ca7d29aa910e2322881e824e6c2937b7b8',
  'packages/tui/test/wrap-ansi.test.ts':'9c238d85ad676ca6d4e063caa8d44d493b0c220dd9aba9ea11a31d51c92d791d',
  'packages/tui/test/regression-regional-indicator-width.test.ts':'a057bc5b61cd287e2f2f554e878222ebace84a515e6cf67b87191eba5c91ae47',

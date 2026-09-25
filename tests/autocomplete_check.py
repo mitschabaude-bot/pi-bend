@@ -51,7 +51,8 @@ for backend in a.backends:
   assert values('@[')==['@[literal].txt']
   assert values('@back\\')==['@back\\slash.txt']
   assert values('./back\\')==['./back\\slash.txt']
-  assert '@new\nline.txt' in values('@new')
+  # Upstream quotes values containing any autocomplete separator, including a newline.
+  assert '@"new\nline.txt"' in values('@new')
   assert '@" leading "' in values('@leading')
   # Follow sibling aliases, but never follow a directory cycle indefinitely.
   write(root/'actual'/'needle.txt');(root/'alias').symlink_to('actual',target_is_directory=True);(root/'actual'/'loop').symlink_to('..',target_is_directory=True)
@@ -68,4 +69,4 @@ for backend in a.backends:
   write(xdg/'fd'/'ignore','global.txt\n');write(root/'global.txt');assert values('@global')==[]
   # Invalid UTF-8 ignore content is rejected, not silently decoded/reinterpreted.
   (root/'.fdignore').write_bytes(b'\xff');assert query('@')=={'error':'other'}
- print(f'{backend}: 27 actual pinned tests and source comparisons passed; {checks} native-policy checks passed')
+ print(f'{backend}: 36 actual pinned tests and source comparisons passed; {checks} native-policy checks passed')
