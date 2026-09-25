@@ -7,6 +7,7 @@ import ../../../../../runtime/src/f64.bend as F
 import ../../../../../runtime/src/filesystem.bend as FS
 import ../../../../../runtime/src/utf8.bend as Utf8
 import ../../../../../runtime/src/posix-path.bend as Path
+import ../../../../../runtime/src/stable-sort.bend as Sort
 import ../../../../../runtime/src/case-map.bend as Case
 import ../../../utils/syntax-highlight.bend as SyntaxHighlight
 
@@ -197,18 +198,84 @@ def loadFromPath(path: String,mode: C.Mode) -> IO(Result<&2,&2,LoadError,Theme>)
   do IO<Result<&2,&2,LoadError,Theme>>:
     bytes : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile(path)
     return read(bytes,mode)
-def customTheme(+path: String,themeName: String,mode: C.Mode) -> IO(Result<&2,&2,LoadError,Theme>):
+type ThemeInfo is Data: ThemeInfo{themeName: String,path: String}
+def infoName(info: ThemeInfo) -> String:
+  match info: case ThemeInfo{themeName,_}: themeName
+def loadedInfo(path: String,result: Result<&2,&2,LoadError,Theme>) -> Maybe<&2,ThemeInfo>:
+  match result:
+    case Done{Theme{themeName,_,_,_,_,_}}: Some{ThemeInfo{themeName,path}}
+    case Fail{_}: None{}
+def maybeInfo(found: Maybe<&2,ThemeInfo>,rest: List<&2,ThemeInfo>) -> List<&2,ThemeInfo>:
+  match found:
+    case Some{info}: info <> rest
+    case None{}: rest
+def customInfos(entries: List<&2,FS.DirectoryEntry>,+directory: String,+mode: C.Mode) -> IO(List<&2,ThemeInfo>):
+  match entries:
+    case Nil{}: IO.pure(List<&2,ThemeInfo>,Nil{})
+    case FS.DirectoryEntry{+fileName,_} <> +rest:
+      Bool.pick(Unit -> IO(List<&2,ThemeInfo>),String.ends_with(fileName,".json"),
+        _ => do IO<List<&2,ThemeInfo>>:
+          +path : String <- IO.pure(String,Path.join(directory,fileName))
+          found : Result<&2,&2,LoadError,Theme> <- loadFromPath(path,mode)
+          tail : List<&2,ThemeInfo> <- customInfos(rest,directory,mode)
+          return maybeInfo(loadedInfo(path,found),tail),
+        _ => customInfos(rest,directory,mode))(Unit{})
+def directoryInfos(result: Result<&2,&2,FS.Error,List<&2,FS.DirectoryEntry>>,directory: String,mode: C.Mode) -> IO(Result<&2,&2,FS.Error,List<&2,ThemeInfo>>):
+  match result:
+    case Fail{FS.System{2,_}}: IO.pure(Result<&2,&2,FS.Error,List<&2,ThemeInfo>>,Done{Nil{}})
+    case Fail{cause}: IO.pure(Result<&2,&2,FS.Error,List<&2,ThemeInfo>>,Fail{cause})
+    case Done{entries}:
+      do IO<Result<&2,&2,FS.Error,List<&2,ThemeInfo>>>:
+        found : List<&2,ThemeInfo> <- customInfos(entries,directory,mode)
+        return Done{found}
+def containsInfo(items: List<&2,ThemeInfo>,+name: String) -> Bool:
+  match items:
+    case Nil{}: False{}
+    case ThemeInfo{candidate,_} <> rest: String.eq(candidate,name) || containsInfo(rest,name)
+def distinctInfos(items: List<&2,ThemeInfo>,+seen: List<&2,ThemeInfo>) -> List<&2,ThemeInfo>:
+  match items:
+    case Nil{}: Nil{}
+    case +info <> +rest:
+      Bool.pick(Unit -> List<&2,ThemeInfo>,containsInfo(seen,infoName(info)),
+        _ => distinctInfos(rest,seen),
+        _ => info <> distinctInfos(rest,info <> seen))(Unit{})
+def infoBefore(left: ThemeInfo,right: ThemeInfo) -> Bool: String.is_le(infoName(left),infoName(right))
+def catalog(+customDir: String,mode: C.Mode) -> IO(Result<&2,&2,FS.Error,List<&2,ThemeInfo>>):
+  do IO<Result<&2,&2,FS.Error,List<&2,ThemeInfo>>>:
+    entries : Result<&2,&2,FS.Error,List<&2,FS.DirectoryEntry>> <- FS.readDirectory(customDir)
+    found : Result<&2,&2,FS.Error,List<&2,ThemeInfo>> <- directoryInfos(entries,customDir,mode)
+    return Result.map(&2,&2,FS.Error,List<&2,ThemeInfo>,List<&2,ThemeInfo>,items => Sort.sort(~ThemeInfo,~infoBefore,distinctInfos(ThemeInfo{"dark",""} <> ThemeInfo{"light",""} <> items,Nil{})),found)
+def names(items: List<&2,ThemeInfo>) -> List<&2,String>:
+  match items:
+    case Nil{}: Nil{}
+    case ThemeInfo{themeName,_} <> rest: themeName <> names(rest)
+def findInfo(items: List<&2,ThemeInfo>,+wanted: String) -> Maybe<&2,ThemeInfo>:
+  match items:
+    case Nil{}: None{}
+    case ThemeInfo{+themeName,path} <> rest:
+      Bool.pick(Unit -> Maybe<&2,ThemeInfo>,String.eq(themeName,wanted),_ => Some{ThemeInfo{themeName,path}},_ => findInfo(rest,wanted))(Unit{})
+def namedInfo(found: Maybe<&2,ThemeInfo>,wanted: String,mode: C.Mode) -> IO(Result<&2,&2,LoadError,Theme>):
+  match found:
+    case None{}: IO.pure(Result<&2,&2,LoadError,Theme>,Fail{NotFound{wanted}})
+    case Some{ThemeInfo{_,path}}: loadFromPath(path,mode)
+def namedCustom(result: Result<&2,&2,FS.Error,List<&2,ThemeInfo>>,+wanted: String,mode: C.Mode) -> IO(Result<&2,&2,LoadError,Theme>):
+  match result:
+    case Fail{cause}: IO.pure(Result<&2,&2,LoadError,Theme>,Fail{Read{cause}})
+    case Done{items}: namedInfo(findInfo(items,wanted),wanted,mode)
+def customTheme(+path: String,themeName: String,customDir: String,+mode: C.Mode) -> IO(Result<&2,&2,LoadError,Theme>):
   do IO<Result<&2,&2,LoadError,Theme>>:
     present : Bool <- FS.accessible(path,0)
     Bool.pick(Unit -> IO(Result<&2,&2,LoadError,Theme>),present,
       _ => loadFromPath(path,mode),
-      _ => IO.pure(Result<&2,&2,LoadError,Theme>,Fail{NotFound{themeName}}))(Unit{})
-def loadByName(+themeName: String,builtinDir: String,customDir: String,+mode: C.Mode) -> IO(Result<&2,&2,LoadError,Theme>):
+      _ => do IO<Result<&2,&2,LoadError,Theme>>:
+        found : Result<&2,&2,FS.Error,List<&2,ThemeInfo>> <- catalog(customDir,mode)
+        namedCustom(found,themeName,mode))(Unit{})
+def loadByName(+themeName: String,builtinDir: String,+customDir: String,+mode: C.Mode) -> IO(Result<&2,&2,LoadError,Theme>):
   Bool.pick(Unit -> IO(Result<&2,&2,LoadError,Theme>),String.contains(themeName,"/"),
     _ => IO.pure(Result<&2,&2,LoadError,Theme>,Fail{Invalid{InvalidName{themeName}}}),
     _ => Bool.pick(Unit -> IO(Result<&2,&2,LoadError,Theme>),String.eq(themeName,"dark") || String.eq(themeName,"light"),
       _ => loadFromPath(Path.join(builtinDir,themeName ++ ".json"),mode),
-      _ => customTheme(Path.join(customDir,themeName ++ ".json"),themeName,mode))(Unit{}))(Unit{})
+      _ => customTheme(Path.join(customDir,themeName ++ ".json"),themeName,customDir,mode))(Unit{}))(Unit{})
 
 # TUI helpers
 # -----------

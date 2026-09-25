@@ -1877,11 +1877,22 @@ def startAutocomplete(interaction: Interaction,session: Ref.Ref<Session.AgentSes
       do IO<Unit>:
         Ref.write(Bool,autocompleteFiles(autocomplete),found)
         setupAutocomplete(autocomplete,editor,session)
+def installSettingsTheme(current: Maybe<&2,SettingsPicker.Host>,handle: ThemeController.Handle) -> IO(Unit):
+  match current:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{host}: SettingsPicker.installController(host,handle)
+def connectSettingsTheme(interaction: Interaction,handle: ThemeController.Handle) -> IO(Unit):
+  match interaction:
+    case Interaction{_,_,_,_,_,_,_,settings,_,_,_,_,_}:
+      do IO<Unit>:
+        current : Maybe<&2,SettingsPicker.Host> <- Ref.read(Maybe<&2,SettingsPicker.Host>,settings)
+        installSettingsTheme(current,handle)
 def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle>,startup: ThemeStartup,+render: Callback.Callback<Unit,Unit>) -> IO(Unit):
   match result startup:
-    case Done{(controller,+handle)} ThemeStartup{redraw,queue,initial,failure,_,+selected,owned,_,theme,+transcript,+session,_,builtinDir,_,managed,interaction,highlighter}:
+    case Done{(controller,+handle)} ThemeStartup{redraw,queue,initial,failure,_,+selected,owned,_,theme,+transcript,+session,_,builtinDir,_,managed,+interaction,highlighter}:
       do IO<Unit>:
         Ref.write(Maybe<&2,ThemeController.Handle>,selected,Some{handle})
+        connectSettingsTheme(interaction,handle)
         Ref.write(Maybe<&1,ThemeOwned>,owned,Some{ThemeOwned{controller,render}})
         syncSelected(ThemeLive{selected,theme,transcript,render},handle)
         files : Bool <- setupManaged(managed,transcript,render)

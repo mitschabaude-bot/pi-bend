@@ -91,10 +91,10 @@
     },
     "packages/coding-agent/src/modes/interactive/components/settings-selector.ts": {
       "state": "partial",
-      "note": "The selector works for supported settings; some upstream rows depend on unfinished behavior and are omitted.",
+      "note": "Theme preview, cancel, save and automatic selection work; the per-model thinking submenu and other upstream rows are still missing, with ANSI details partial.",
       "source_sha256": "8134b93329c9155bd017df5b6278e2d72b403c8ca1f22c26a81234659ab7e6ea",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/settings-selector.bend": "47d8b887c9b8bb3cebf7dca5b0d1e6e9d3a5860f90bf36350573dcdd25b6c9c6"
+        "packages/coding-agent/src/modes/interactive/components/settings-selector.bend": "f0f8347e88c28a46357d48ad69aad81e1111810f62c3ffed74a6117a6ee6e47c"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/thinking-selector.ts": {
@@ -120,11 +120,11 @@
         "packages/coding-agent/src/modes/interactive/run.bend",
         "packages/coding-agent/src/modes/interactive/commands.bend"
       ],
-      "note": "Interactive /thinking and basic /scoped-models selection and settings persistence are implemented and checked against terminal parity; broader command and terminal behavior remain incomplete.",
+      "note": "Interactive theme selection and persistence, /thinking and /scoped-models flows are implemented; broader command and terminal behavior remain partial.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "23a8e54c1d30b54424d1e29508abdf12385cb5dec8e142b675becdb2c540b2d4",
-        "packages/coding-agent/src/modes/interactive/run.bend": "be0594baf5184199012fb46f17d823f0ef6d35ba88c26fad59aea3f6c80f2ab1",
+        "packages/coding-agent/src/modes/interactive/run.bend": "9efdbedf8369ee869d211a0551aa0ee7febf07960d942cb3d5a4c4e24de8a82f",
         "packages/coding-agent/src/modes/interactive/commands.bend": "346a1437fb1f5d4b429ae47416c1ab464e043ee8a5d7ec79a269fdc417a3092a"
       }
     },
@@ -210,10 +210,12 @@
       "port_sha256": {}
     },
     "packages/coding-agent/src/modes/interactive/components/theme-selector.ts": {
-      "state": "missing",
-      "note": "The exported theme selector with selection preview is absent; theme loading and controller behavior exist elsewhere.",
+      "state": "partial",
+      "note": "Native settings theme submenu previews, cancels, saves and configures automatic light/dark themes in terminal parity. The standalone exported selector API and mouse/ANSI details remain partial.",
       "source_sha256": "267be3176c67bddb72f0f64a9c3561a256c758707afbeabe2ac68112c8e3b5f8",
-      "port_sha256": {}
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/theme-selector.bend": "e230f35f69e7a21c55d9724f12db94b9beb17c39c6f3564f09fe2a285734bef4"
+      }
     },
     "packages/coding-agent/src/core/tools/renderers/bash.ts": {
       "state": "partial",
@@ -221,6 +223,22 @@
       "source_sha256": "f04ab261d9f915f7b43a97ac679fb38d5646110855a886474593dc5d973f6764",
       "port_sha256": {
         "packages/coding-agent/src/core/tools/renderers/bash.bend": "b45d1aa09eaf1fed25a2d74228da2aa84003f609e2769f56268ca4ef6a54210d"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/theme/theme.ts": {
+      "state": "partial",
+      "note": "Built-in and custom theme loading, JSON-name discovery and sorted catalog are implemented; registered themes, reload and export behavior remain partial.",
+      "source_sha256": "c3bf2e3b72f6bb782f34de0535fcc1758b9b6ea7a0d2e7d6f17244fa55c3f31a",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/theme/theme.bend": "f6410fc680cf50cb88452076f4eafbaa780d950d3f5328e6574061bad167c2ba"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/theme/theme-controller.ts": {
+      "state": "partial",
+      "note": "Native controller applies and previews themes, restores cancelled previews and handles automatic mode; the full upstream reload and terminal-notification behavior remains partial.",
+      "source_sha256": "ad18b680f43a63c0d7a0da3e946d38e95a436d9fcf593f7268f7562f7c4be25e",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/theme/theme-controller.bend": "dc2e19e70f6153e6c3ac419724d260316c3e1ffc3c8668953ed2b3c5231443c9"
       }
     }
   }

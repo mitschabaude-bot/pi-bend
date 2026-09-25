@@ -196,6 +196,26 @@ def setThemeSetting(+handle: Handle,setting: Maybe<&2,String>) -> IO(Result<&2,&
       do IO<Result<&2,&2,Theme.LoadError,Selection>>:
         next : Result<&2,&2,Theme.LoadError,Selection> <- select(ready,setting,env,builtinDir,customDir,mode)
         setReady(handle,next)
+def previewState(state: Selection,theme: Theme.Theme) -> Selection & Unit:
+  match state:
+    case Selection{setting,terminal,name,_,auto,persist,error}: (Selection{setting,terminal,name,theme,auto,persist,error},Unit{})
+def previewReady(handle: Handle,theme: Theme.Theme) -> IO(Result<&2,&2,Theme.LoadError,Unit>):
+  match handle:
+    case Handle{resource,Process.QueryReady{_,_,_,render},_,_,_,_}:
+      do IO<Result<&2,&2,Theme.LoadError,Unit>>:
+        result : Unit <- Serial.run(Selection,Unit,resource,state => IO.pure(Selection & Unit,previewState(state,theme)))
+        Callback.call(Unit,Unit,render,Unit{})
+        return Done{Unit{}}
+def previewLoaded(handle: Handle,result: Result<&2,&2,Theme.LoadError,Theme.Theme>) -> IO(Result<&2,&2,Theme.LoadError,Unit>):
+  match result:
+    case Fail{cause}: IO.pure(Result<&2,&2,Theme.LoadError,Unit>,Fail{cause})
+    case Done{theme}: previewReady(handle,theme)
+def preview(+handle: Handle,name: String) -> IO(Result<&2,&2,Theme.LoadError,Unit>):
+  match handle:
+    case Handle{_,_,_,builtinDir,customDir,mode}:
+      do IO<Result<&2,&2,Theme.LoadError,Unit>>:
+        result : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadByName(name,builtinDir,customDir,mode)
+        previewLoaded(handle,result)
 # Stop notifications and retire this controller while its QueryReady handles
 # are still live. The caller finishes any in-flight terminal input first.
 def close(owner: Owner) -> IO(Unit):

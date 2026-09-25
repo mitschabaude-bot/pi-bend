@@ -16,7 +16,9 @@ import ../../../core/agent-session.bend as Session
 import ../../../core/settings-manager.bend as Settings
 import ../../../../../runtime/src/u64.bend as W
 import ../theme/theme.bend as Theme
+import ../theme/theme-controller.bend as ThemeController
 import ../transcript.bend as Transcript
+import ./theme-selector.bend as ThemePicker
 
 # The rows are real settings, in the same order and with the same choices as
 # pi's selector. A choice is decoded before it touches the persisted manager.
@@ -29,6 +31,8 @@ def enabled(value: Bool) -> String:
     case False{}: "false"
 def boolean(id: String,label: String,description: String,value: Bool) -> ListUI.SettingItem:
   item(id,label,description,enabled(value),choices("true","false"))
+def themeRow(current: String,submenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>) -> ListUI.SettingItem:
+  ListUI.SettingItem{"theme","Theme",Some{"Color theme for the interface"},current,None{},Some{submenu}}
 def queue(value: Agent.QueueMode) -> String:
   match value:
     case Agent.All{}: "all"
@@ -72,7 +76,7 @@ def modeNames(modes: List<&2,Settings.CacheWarmingMode>) -> List<&2,String>:
   match modes:
     case Nil{}: Nil{}
     case mode <> rest: Settings.cacheWarmingModeName(mode) <> modeNames(rest)
-def rows(+settings: Settings.SettingsManager) -> List<&2,ListUI.SettingItem>:
+def rows(+settings: Settings.SettingsManager,currentTheme: String,submenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>) -> List<&2,ListUI.SettingItem>:
   boolean("autocompact","Auto-compact","Automatically compact context when it gets too large",Settings.getCompactionEnabled(settings)) <>
   boolean("auto-resize-images","Auto-resize images","Resize large images to 2000x2000 max for better model compatibility",Settings.getImageAutoResize(settings)) <>
   boolean("block-images","Block images","Prevent images from being sent to LLM providers",Settings.getBlockImages(settings)) <>
@@ -96,6 +100,7 @@ def rows(+settings: Settings.SettingsManager) -> List<&2,ListUI.SettingItem>:
   item("default-project-trust","Default project trust","Fallback behavior when no extension or saved trust decision decides project trust",trust(Settings.getDefaultProjectTrust(settings)),"Ask" <> "Always trust" <> "Never trust" <> Nil{}) <>
   item("double-escape-action","Double-escape action","Action when pressing Escape twice with empty editor",escape(Settings.getDoubleEscapeAction(settings)),"tree" <> "fork" <> "none" <> Nil{}) <>
   item("tree-filter-mode","Tree filter mode","Default filter when opening /tree",treeFilter(Settings.getTreeFilterMode(settings)),"default" <> "no-tools" <> "user-only" <> "labeled-only" <> "all" <> Nil{}) <>
+  themeRow(currentTheme,submenu) <>
   Nil{}
 
 # An invalid choice fails at the boundary instead of silently changing state.
@@ -153,6 +158,7 @@ def change(id: String,value: String,settings: Settings.SettingsManager) -> Setti
     case "tree-filter-mode" "all": Settings.setTreeFilterMode(Settings.AllEntries{},settings)
     case "show-images" "true": Settings.setShowImages(True{},settings)
     case "show-images" "false": Settings.setShowImages(False{},settings)
+    case "theme" _: Settings.setTheme(value,settings)
     case "auto-resize-images" "true": Settings.setImageAutoResize(True{},settings)
     case "auto-resize-images" "false": Settings.setImageAutoResize(False{},settings)
     case "block-images" "true": Settings.setBlockImages(True{},settings)
@@ -166,13 +172,15 @@ def change(id: String,value: String,settings: Settings.SettingsManager) -> Setti
 type Modal is Data: Closed{} Open{list: ListUI.SettingsList}
 type Paint is Data: Paint{theme: Ref.Ref<Theme.Theme>,ordinary: String,selected: String}
 type ChangeContext is Data:
-  ChangeContext{session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>}
+  ChangeContext{session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>}
 type CancelContext is Data:
   CancelContext{modal: Ref.Ref<Modal>}
+type CompletionContext is Data:
+  CompletionContext{pending: Ref.Ref<Maybe<&2,ListUI.Completion>>}
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,words: Ref.Ref<Segmenter.Source>,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,style: ListUI.SettingsListTheme,changed: Callback.Callback<ListUI.Change,Unit>,cancelled: Callback.Callback<Unit,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>}
+  Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,words: Ref.Ref<Segmenter.Source>,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,style: ListUI.SettingsListTheme,changed: Callback.Callback<ListUI.Change,Unit>,cancelled: Callback.Callback<Unit,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>,controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,themeSubmenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>,pending: Ref.Ref<Maybe<&2,ListUI.Completion>>}
 type Owner is Type:
-  Owner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>,label: Callback.Callback<ListUI.ThemeText,String>,value: Callback.Callback<ListUI.ThemeText,String>,description: Callback.Callback<String,String>,hint: Callback.Callback<String,String>,changed: Callback.Callback<ListUI.Change,Unit>,cancelled: Callback.Callback<Unit,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>}
+  Owner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>,label: Callback.Callback<ListUI.ThemeText,String>,value: Callback.Callback<ListUI.ThemeText,String>,description: Callback.Callback<String,String>,hint: Callback.Callback<String,String>,changed: Callback.Callback<ListUI.Change,Unit>,cancelled: Callback.Callback<Unit,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>,themeOwner: ThemePicker.Owner}
 
 def requested(callback: Maybe<&2,Callback.Callback<Unit,Unit>>) -> IO(Unit):
   match callback:
@@ -195,7 +203,9 @@ def plainPaint(context: Paint,text: String) -> IO(String):
       do IO<String>:
         current : Theme.Theme <- Ref.read(Theme.Theme,theme)
         return Result.default(&2,&2,Theme.Error,String,Theme.foreground(current,key,value),value)
-def noCompletion(_: Unit,_: ListUI.Completion) -> IO(Unit): IO.pure(Unit,Unit{})
+def completedSubmenu(context: CompletionContext,completion: ListUI.Completion) -> IO(Unit):
+  match context:
+    case CompletionContext{pending}: Ref.write(Maybe<&2,ListUI.Completion>,pending,Some{completion})
 def boolValue(value: String) -> Bool: String.eq(value,"true")
 def applied(id: String,value: String,session: Session.AgentSession) -> IO(Result<&2,&2,String,Unit>):
   match id value:
@@ -244,13 +254,36 @@ def liveEffect(id: String,value: String,transcript: Transcript.Handle,editor: Re
   match result:
     case Fail{message}: Transcript.showError(transcript,message)
     case Done{_}: liveEffectDone(id,value,transcript,editor)
+def themeResult(result: Result<&2,&2,Theme.LoadError,ThemeController.Selection>,transcript: Transcript.Handle) -> IO(Unit):
+  match result:
+    case Done{_}: IO.pure(Unit,Unit{})
+    case Fail{_}: Transcript.showError(transcript,"Cannot apply theme")
+def themeChanged(current: Maybe<&2,ThemeController.Handle>,value: String,transcript: Transcript.Handle) -> IO(Unit):
+  match current:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{handle}:
+      do IO<Unit>:
+        result : Result<&2,&2,Theme.LoadError,ThemeController.Selection> <- ThemeController.setThemeSetting(handle,Some{value})
+        themeResult(result,transcript)
+def themeEffect(id: String,value: String,controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,transcript: Transcript.Handle) -> IO(Unit):
+  match id:
+    case "theme":
+      do IO<Unit>:
+        current : Maybe<&2,ThemeController.Handle> <- Ref.read(Maybe<&2,ThemeController.Handle>,controller)
+        themeChanged(current,value,transcript)
+    case _: IO.pure(Unit,Unit{})
+def themeAfter(result: Result<&2,&2,String,Unit>,id: String,value: String,controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,transcript: Transcript.Handle) -> IO(Unit):
+  match result:
+    case Fail{_}: IO.pure(Unit,Unit{})
+    case Done{_}: themeEffect(id,value,controller,transcript)
 def changeSetting(context: ChangeContext,selection: ListUI.Change) -> IO(Unit):
   match context selection:
-    case ChangeContext{session,+transcript,editor} ListUI.Change{+id,+newValue}:
+    case ChangeContext{session,+transcript,editor,controller} ListUI.Change{+id,+newValue}:
       do IO<Unit>:
         current : Session.AgentSession <- Ref.read(Session.AgentSession,session)
-        result : Result<&2,&2,String,Unit> <- applied(id,newValue,current)
+        +result : Result<&2,&2,String,Unit> <- applied(id,newValue,current)
         liveEffect(id,newValue,transcript,editor,result)
+        themeAfter(result,id,newValue,controller,transcript)
 def cancelPanel(context: CancelContext,_: Unit) -> IO(Unit):
   match context:
     case CancelContext{modal}: Ref.write(Modal,modal,Closed{})
@@ -271,10 +304,10 @@ def displayedPair(modal: Ref.Ref<Modal>,theme: Ref.Ref<Theme.Theme>,width: Nat,p
         return rule <> List.append(&2,String,lines,rule <> Nil{})
 def displayedClosed(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
-    case Host{_,editor,_,_,_,_,_,_,_,_,_,_}: Component.render(editor,width)
+    case Host{_,editor,_,_,_,_,_,_,_,_,_,_,_,_,_}: Component.render(editor,width)
 def displayedOpen(host: Host,+width: Nat,list: ListUI.SettingsList) -> IO(List<&2,String>):
   match host:
-    case Host{modal,_,theme,_,_,_,_,_,_,_,_,_}:
+    case Host{modal,_,theme,_,_,_,_,_,_,_,_,_,_,_,_}:
       do IO<List<&2,String>>:
         pair : ListUI.SettingsList & List<&2,String> <- ListUI.render(list,width)
         displayedPair(modal,theme,width,pair)
@@ -284,10 +317,10 @@ def displayed(host: Host,width: Nat,current: Modal) -> IO(List<&2,String>):
     case Open{list}: displayedOpen(host,width,list)
 def draw(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
-    case Host{+modal,editor,theme,session,words,bindings,keyboard,redraw,style,changed,cancelled,completed}:
+    case Host{+modal,editor,theme,session,words,bindings,keyboard,redraw,style,changed,cancelled,completed,controller,themeSubmenu,pending}:
       do IO<List<&2,String>>:
         current : Modal <- Ref.read(Modal,modal)
-        displayed(Host{modal,editor,theme,session,words,bindings,keyboard,redraw,style,changed,cancelled,completed},width,current)
+        displayed(Host{modal,editor,theme,session,words,bindings,keyboard,redraw,style,changed,cancelled,completed,controller,themeSubmenu,pending},width,current)
 def nonAtomic(_: Segmenter.Source,_: String) -> Bool: False{}
 def keepOpen(current: Modal,modal: Ref.Ref<Modal>,next: ListUI.SettingsList) -> IO(Unit):
   match current:
@@ -300,23 +333,36 @@ def accepted(+modal: Ref.Ref<Modal>,result: Word.ResultOf(ListUI.SettingsList)) 
         current : Modal <- Ref.read(Modal,modal)
         keepOpen(current,modal,next)
     case Fail{_}: IO.pure(Unit,Unit{})
+def completedInput(result: Word.ResultOf(ListUI.SettingsList),completion: Maybe<&2,ListUI.Completion>) -> IO(Word.ResultOf(ListUI.SettingsList)):
+  match result completion:
+    case Done{list} Some{choice}:
+      do IO<Word.ResultOf(ListUI.SettingsList)>:
+        next : ListUI.SettingsList <- ListUI.completeSubmenu(list,choice)
+        return Done{next}
+    case _ _: IO.pure(Word.ResultOf(ListUI.SettingsList),result)
+def applyCompletion(result: Word.ResultOf(ListUI.SettingsList),+pending: Ref.Ref<Maybe<&2,ListUI.Completion>>) -> IO(Word.ResultOf(ListUI.SettingsList)):
+  do IO<Word.ResultOf(ListUI.SettingsList)>:
+    completion : Maybe<&2,ListUI.Completion> <- Ref.read(Maybe<&2,ListUI.Completion>,pending)
+    Ref.write(Maybe<&2,ListUI.Completion>,pending,None{})
+    completedInput(result,completion)
 def inputOpen(host: Host,list: ListUI.SettingsList,data: String) -> IO(Unit):
   match host:
-    case Host{modal,_,_,_,words,bindings,keyboard,_,_,_,_,_}:
+    case Host{modal,_,_,_,words,bindings,keyboard,_,_,_,_,_,_,_,pending}:
       do IO<Unit>:
         source : Segmenter.Source <- Ref.read(Segmenter.Source,words)
         result : Word.ResultOf(ListUI.SettingsList) <- ListUI.handleInput(~Segmenter.Source,~Word.sourceSegments,~nonAtomic,source,list,bindings,keyboard,data)
-        accepted(modal,result)
+        completed : Word.ResultOf(ListUI.SettingsList) <- applyCompletion(result,pending)
+        accepted(modal,completed)
 def receiveCurrent(current: Modal,host: Host,editor: Component.Component,data: String) -> IO(Unit):
   match current:
     case Closed{}: Component.handleInput(editor,data)
     case Open{list}: inputOpen(host,list,data)
 def receive(host: Host,data: String) -> IO(Unit):
   match host:
-    case Host{+modal,+editor,theme,session,words,bindings,keyboard,redraw,style,changed,cancelled,completed}:
+    case Host{+modal,+editor,theme,session,words,bindings,keyboard,redraw,style,changed,cancelled,completed,controller,themeSubmenu,pending}:
       do IO<Unit>:
         current : Modal <- Ref.read(Modal,modal)
-        receiveCurrent(current,Host{modal,editor,theme,session,words,bindings,keyboard,redraw,style,changed,cancelled,completed},editor,data)
+        receiveCurrent(current,Host{modal,editor,theme,session,words,bindings,keyboard,redraw,style,changed,cancelled,completed,controller,themeSubmenu,pending},editor,data)
 def editorMouse(editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match editor:
     case Component.Component{_,_,_,Some{callback},_,_,_}: Callback.call(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,callback,event)
@@ -340,55 +386,65 @@ def mouseCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Componen
         mousePair(modal,pair)
 def mouseEvent(host: Host,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match host:
-    case Host{+modal,editor,_,_,_,_,_,_,_,_,_,_}:
+    case Host{+modal,editor,_,_,_,_,_,_,_,_,_,_,_,_,_}:
       do IO<Maybe<&2,Component.MouseResponse>>:
         current : Modal <- Ref.read(Modal,modal)
         result : Maybe<&2,Component.MouseResponse> <- mouseCurrent(current,modal,editor,event)
         return result
 def invalidated(host: Host,_: Unit) -> IO(Unit):
-  match host: case Host{_,editor,_,_,_,_,_,_,_,_,_,_}: Component.invalidate(editor)
+  match host: case Host{_,editor,_,_,_,_,_,_,_,_,_,_,_,_,_}: Component.invalidate(editor)
 def focused(host: Host,value: Bool) -> IO(Unit):
-  match host: case Host{_,editor,_,_,_,_,_,_,_,_,_,_}: Component.setFocused(editor,value)
-def createHost(+editor: Component.Component,+theme: Ref.Ref<Theme.Theme>,+session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle,editorHandle: Ref.Ref<Maybe<&2,Live.Handle>>,words: Segmenter.Source,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Owner):
+  match host: case Host{_,editor,_,_,_,_,_,_,_,_,_,_,_,_,_}: Component.setFocused(editor,value)
+def createHost(+editor: Component.Component,+theme: Ref.Ref<Theme.Theme>,+session: Ref.Ref<Session.AgentSession>,+transcript: Transcript.Handle,editorHandle: Ref.Ref<Maybe<&2,Live.Handle>>,words: Segmenter.Source,+bindings: Keybindings.KeybindingsManager,+keyboard: Keys.Context,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Owner):
   do IO<Owner>:
     +modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
+    +pending : Ref.Ref<Maybe<&2,ListUI.Completion>> <- Ref.new(Maybe<&2,ListUI.Completion>,None{})
+    +themeController : Ref.Ref<Maybe<&2,ThemeController.Handle>> <- Ref.new(Maybe<&2,ThemeController.Handle>,None{})
+    +themeOwner : ThemePicker.Owner <- ThemePicker.createHost(editor,theme,themeController,transcript,bindings,keyboard)
+    +themeSubmenu : Callback.Callback<ListUI.SubmenuRequest,Component.Component> <- IO.pure(Callback.Callback<ListUI.SubmenuRequest,Component.Component>,ThemePicker.factoryOf(themeOwner))
     source : Ref.Ref<Segmenter.Source> <- Ref.new(Segmenter.Source,words)
     +label : Callback.Callback<ListUI.ThemeText,String> <- Callback.create(~Paint,~ListUI.ThemeText,~String,~painted,Paint{theme,"","accent"})
     +value : Callback.Callback<ListUI.ThemeText,String> <- Callback.create(~Paint,~ListUI.ThemeText,~String,~painted,Paint{theme,"muted","accent"})
     +description : Callback.Callback<String,String> <- Callback.create(~Paint,~String,~String,~plainPaint,Paint{theme,"dim","dim"})
     +hint : Callback.Callback<String,String> <- Callback.create(~Paint,~String,~String,~plainPaint,Paint{theme,"dim","dim"})
-    +changedCallback : Callback.Callback<ListUI.Change,Unit> <- Callback.create(~ChangeContext,~ListUI.Change,~Unit,~changeSetting,ChangeContext{session,transcript,editorHandle})
+    +changedCallback : Callback.Callback<ListUI.Change,Unit> <- Callback.create(~ChangeContext,~ListUI.Change,~Unit,~changeSetting,ChangeContext{session,transcript,editorHandle,themeController})
     +cancelledCallback : Callback.Callback<Unit,Unit> <- Callback.create(~CancelContext,~Unit,~Unit,~cancelPanel,CancelContext{modal})
-    +completed : Callback.Callback<ListUI.Completion,Unit> <- Callback.create(~Unit,~ListUI.Completion,~Unit,~noCompletion,Unit{})
+    +completed : Callback.Callback<ListUI.Completion,Unit> <- Callback.create(~CompletionContext,~ListUI.Completion,~Unit,~completedSubmenu,CompletionContext{pending})
     currentTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
     cursor : String <- IO.pure(String,Result.default(&2,&2,Theme.Error,String,Theme.foreground(currentTheme,"accent","→ "),"→ "))
     +style : ListUI.SettingsListTheme <- IO.pure(ListUI.SettingsListTheme,ListUI.SettingsListTheme{label,value,description,cursor,hint})
-    +host : Host <- IO.pure(Host,Host{modal,editor,theme,session,source,bindings,keyboard,redraw,style,changedCallback,cancelledCallback,completed})
+    +host : Host <- IO.pure(Host,Host{modal,editor,theme,session,source,bindings,keyboard,redraw,style,changedCallback,cancelledCallback,completed,themeController,themeSubmenu,pending})
     +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~draw,host)
     +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receive,host)
     +mouseCallback : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Host,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~mouseEvent,host)
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Host,~Unit,~Unit,~invalidated,host)
     +focus : Callback.Callback<Bool,Unit> <- Callback.create(~Host,~Bool,~Unit,~focused,host)
     +component : Component.Component <- IO.pure(Component.Component,Component.Component{Component.id(editor),render,Some{input},Some{mouseCallback},invalidate,Some{focus},False{}})
-    return Owner{host,component,render,input,mouseCallback,invalidate,focus,label,value,description,hint,changedCallback,cancelledCallback,completed}
+    return Owner{host,component,render,input,mouseCallback,invalidate,focus,label,value,description,hint,changedCallback,cancelledCallback,completed,themeOwner}
 def borrowHost(owner: Owner) -> Owner & Host & Component.Component:
   match owner:
-    case Owner{+host,+component,render,input,mouse,invalidate,focus,label,value,description,hint,changed,cancelled,completed}:
-      (Owner{host,component,render,input,mouse,invalidate,focus,label,value,description,hint,changed,cancelled,completed},host,component)
+    case Owner{+host,+component,render,input,mouse,invalidate,focus,label,value,description,hint,changed,cancelled,completed,themeOwner}:
+      (Owner{host,component,render,input,mouse,invalidate,focus,label,value,description,hint,changed,cancelled,completed,themeOwner},host,component)
 def open(host: Host) -> IO(Unit):
   match host:
-    case Host{modal,_,_,session,_,_,_,redraw,style,changed,cancelled,completed}:
+    case Host{modal,_,_,session,_,_,_,redraw,style,changed,cancelled,completed,_,themeSubmenu,_}:
       do IO<Unit>:
         current : Session.AgentSession <- Ref.read(Session.AgentSession,session)
-        settings : Settings.SettingsManager <- Session.getSettings(current)
-        Ref.write(Modal,modal,Open{ListUI.new(rows(settings),10n,style,changed,cancelled,Some{ListUI.SettingsListOptions{True{}}},completed)})
+        +settings : Settings.SettingsManager <- Session.getSettings(current)
+        Ref.write(Modal,modal,Open{ListUI.new(rows(settings,Maybe.default(&2,String,Settings.getThemeSetting(settings),"dark"),themeSubmenu),10n,style,changed,cancelled,Some{ListUI.SettingsListOptions{True{}}},completed)})
         request(redraw)
+def installController(host: Host,handle: ThemeController.Handle) -> IO(Unit):
+  match host:
+    case Host{_,_,_,_,_,_,_,_,_,_,_,_,controller,_,_}: Ref.write(Maybe<&2,ThemeController.Handle>,controller,Some{handle})
 def disposeHost(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{Host{modal,_,_,_,words,_,_,_,_,_,_,_},_,render,input,mouse,invalidate,focus,label,value,description,hint,changed,cancelled,completed}:
+    case Owner{Host{modal,_,_,_,words,_,_,_,_,_,_,_,controller,_,pending},_,render,input,mouse,invalidate,focus,label,value,description,hint,changed,cancelled,completed,themeOwner}:
       do IO<Unit>:
         oldModal : Modal <- Ref.dispose(Modal,modal)
         oldSource : Segmenter.Source <- Ref.dispose(Segmenter.Source,words)
+        oldController : Maybe<&2,ThemeController.Handle> <- Ref.dispose(Maybe<&2,ThemeController.Handle>,controller)
+        oldPending : Maybe<&2,ListUI.Completion> <- Ref.dispose(Maybe<&2,ListUI.Completion>,pending)
+        ThemePicker.disposeHost(themeOwner)
         Callback.dispose(Nat,List<&2,String>,render)
         Callback.dispose(String,Unit,input)
         Callback.dispose(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,mouse)
