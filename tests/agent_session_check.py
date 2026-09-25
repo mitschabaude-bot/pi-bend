@@ -368,6 +368,12 @@ def main():
     assert [e for e in events if e['type'] == 'remaining'][0]['count'] == 1 and [e for e in events if e['type'] == 'retrying'][0]['value'] is False
     assert types(events)[-9:-4] == ['auto_retry_start', 'entry_appended', 'auto_retry_end', 'agent_settled', 'prompt_done'], types(events)
     checks += 4
+    # A user abort during backoff ends this turn without another request.
+    events = run_retry(runner, args.threads, work, {'enabled': True, 'maxRetries': 3, 'baseDelayMs': 60000}, '!overloaded_error;unused', 'abort')
+    assert retry_events(events) == ['start:1', 'end:false'], retry_events(events)
+    assert [e for e in events if e['type'] == 'auto_retry_end'][0]['finalError'] == 'Retry cancelled'
+    assert [e for e in events if e['type'] == 'remaining'][0]['count'] == 1 and [e for e in events if e['type'] == 'retrying'][0]['value'] is False
+    checks += 3
     checks += bash_checks(runner, args.threads, work)
     checks += expand_checks(runner, args.threads, work)
     checks += compaction_checks(runner, args.threads, work)

@@ -470,10 +470,10 @@ def signalRetry(env: RetrySignal, event: Session.AgentSessionEvent) -> IO(Unit):
     case RetrySignal{started} Session.SummarizationRetryScheduled{_, _, _, _}: signalStarted(started)
     case _ _: IO.pure(Unit, Unit{})
 
-def cancelOnRetry(session: Session.AgentSession, started: Chan(Unit)) -> IO(Unit):
+def cancelOnRetry(+session: Session.AgentSession, started: Chan(Unit),abortRun: Bool) -> IO(Unit):
   do IO<Unit>:
     seen : Maybe<&1, Unit> <- Chan.recv(Unit, started)
-    Session.abortRetry(session)
+    Bool.pick(Unit -> IO(Unit),abortRun,_ => Session.abort(session),_ => Session.abortRetry(session))(Unit{})
 
 def responsesOf(value: Fixture) -> R.Ref<List<&2, String>>:
   match value:
@@ -489,14 +489,14 @@ def reportRemaining(responses: R.Ref<List<&2, String>>) -> IO(Unit):
     remaining : List<&2, String> <- R.read(List<&2, String>, responses)
     IO.print("{\"type\":\"remaining\",\"count\":" ++ Nat.show(List.length(&2, String, remaining)) ++ "}")
 
-def retryScenario(+dir: String, agentDir: String, responses: String, cancel: String) -> IO(Unit):
+def retryScenario(+dir: String, agentDir: String, responses: String, +cancel: String) -> IO(Unit):
   do IO<Unit>:
     created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixture(stored, dir, agentDir, String.split(responses, ';'), Nil{})
     +started : Chan(Unit) <- Chan.new(Unit, 1)
     +canceller : Session.Listener() <- C.create(~RetrySignal, ~Session.AgentSessionEvent, ~Unit, ~signalRetry, RetrySignal{started})
-    Bool.pick(Unit -> IO(Unit), String.eq(cancel, "cancel"), _ => IO.bind(Unit, Unit, Session.subscribe(sessionOf(value), canceller), _ => IO.spawn(Unit, cancelOnRetry(sessionOf(value), started))), _ => IO.pure(Unit, Unit{}))(Unit{})
+    Bool.pick(Unit -> IO(Unit), String.eq(cancel, "cancel") || String.eq(cancel,"abort"), _ => IO.bind(Unit, Unit, Session.subscribe(sessionOf(value), canceller), _ => IO.spawn(Unit, cancelOnRetry(sessionOf(value), started, String.eq(cancel,"abort")))), _ => IO.pure(Unit, Unit{}))(Unit{})
     result : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "test", Nil{}, None{})
     reportPrompt(result)
     reportRetrying(sessionOf(value))

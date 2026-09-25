@@ -219,9 +219,10 @@ type RunningBash is Data:
   RunningBash{ticket: Nat, controller: A.AbortController<Unit>}
 type BashState is Data:
   BashState{running: List<&2, RunningBash>, next: Nat, pending: List<&2, Message()>}
+type RunState is Data: RunState{active: Bool,abortRequested: Bool}
 
 type Shared is Data:
-  Shared{session: Session(), steering: List<&2, String>, followUp: List<&2, String>, listeners: List<&2, Listener()>, runActive: Bool, lastAssistant: Maybe<&2, LastTurn>, retry: RetryState, compaction: CompactionState, bash: BashState}
+  Shared{session: Session(), steering: List<&2, String>, followUp: List<&2, String>, listeners: List<&2, Listener()>, runActive: RunState, lastAssistant: Maybe<&2, LastTurn>, retry: RetryState, compaction: CompactionState, bash: BashState}
 
 def Turn() -> Data: Agent.Turn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())
 def TurnUpdate() -> Data: Agent.Update(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())
@@ -246,9 +247,10 @@ def withSession(state: Shared, session: Session()) -> Shared:
   match state:
     case Shared{_, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, bash}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, bash}
 
-def withRunActive(state: Shared, runActive: Bool) -> Shared:
+def withRunActive(state: Shared, +active: Bool) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, _, lastAssistant, retry, compaction, bash}: Shared{session, steering, followUp, listeners, runActive, lastAssistant, retry, compaction, bash}
+    case Shared{session, steering, followUp, listeners, RunState{_,requested}, lastAssistant, retry, compaction, bash}:
+      Shared{session, steering, followUp, listeners, RunState{active,Bool.pick(Bool,active,False{},requested)}, lastAssistant, retry, compaction, bash}
 
 def deliver(listeners: List<&2, Listener()>, +event: AgentSessionEvent) -> IO(Unit):
   match listeners:
@@ -286,7 +288,7 @@ def removeFirst(values: List<&2, String>, +wanted: String) -> Maybe<&2, List<&2,
     case Nil{}: None{}
     case +value <> +rest: Bool.pick(Unit -> Maybe<&2, List<&2, String>>, String.eq(value, wanted), _ => Some{rest}, _ => Maybe.map(&2, List<&2, String>, List<&2, String>, others => value <> others, removeFirst(rest, wanted)))(Unit{})
 
-def dequeuedFrom(+session: Session(), +steering: List<&2, String>, +followUp: List<&2, String>, listeners: List<&2, Listener()>, +runActive: Bool, +lastAssistant: Maybe<&2, LastTurn>, +retry: RetryState, +compaction: CompactionState, +bash: BashState, fromSteering: Maybe<&2, List<&2, String>>, fromFollowUp: Maybe<&2, List<&2, String>>) -> Shared & Bool:
+def dequeuedFrom(+session: Session(), +steering: List<&2, String>, +followUp: List<&2, String>, listeners: List<&2, Listener()>, +runActive: RunState, +lastAssistant: Maybe<&2, LastTurn>, +retry: RetryState, +compaction: CompactionState, +bash: BashState, fromSteering: Maybe<&2, List<&2, String>>, fromFollowUp: Maybe<&2, List<&2, String>>) -> Shared & Bool:
   match fromSteering fromFollowUp:
     case Some{remaining} _: (Shared{session, remaining, followUp, listeners, runActive, lastAssistant, retry, compaction, bash}, True{})
     case None{} Some{remaining}: (Shared{session, steering, remaining, listeners, runActive, lastAssistant, retry, compaction, bash}, True{})
@@ -533,6 +535,7 @@ def retryableLast(found: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>, contextW
 
 def willRetryAfterAgentEnd(state: Shared, messages: List<&2, Message()>) -> Bool:
   match state:
+    case Shared{_, _, _, _, RunState{_,True{}}, _, _, _, _}: False{}
     case Shared{_, _, _, _, _, _, RetryState{Retry.RetryPolicy{enabled, maxRetries, _, _}, attempt, contextWindow, _}, _, _}:
       Bool.and(enabled, Bool.and(Nat.is_lt(attempt, maxRetries), retryableLast(lastAssistantIn(messages, None{}), contextWindow)))
 
@@ -545,6 +548,10 @@ def retryEnded(shared: R.Ref<Shared>, previous: Nat, success: Bool, finalError: 
   match previous:
     case 0n: IO.pure(Unit, Unit{})
     case 1n+_: emit(shared, AutoRetryEnd{success, previous, finalError})
+def finishCancelledRetry(+shared: R.Ref<Shared>) -> IO(Unit):
+  do IO<Unit>:
+    previous : Nat <- R.modify(Shared,Nat,shared,current => resetAttempt(current))
+    retryEnded(shared,previous,False{},Some{"Retry cancelled"})
 
 # A successful assistant message resets the attempt counter at once, so
 # attempts do not accumulate across the calls of one turn.
@@ -656,7 +663,14 @@ def abortCompactions(shared: R.Ref<Shared>) -> IO(Unit):
 
 def runActiveOf(value: Shared) -> Bool:
   match value:
-    case Shared{_, _, _, _, runActive, _, _, _, _}: runActive
+    case Shared{_, _, _, _, RunState{active,_}, _, _, _, _}: active
+def abortRequestedOf(value: Shared) -> Bool:
+  match value:
+    case Shared{_, _, _, _, RunState{_,requested}, _, _, _, _}: requested
+def requestRunAbort(value: Shared) -> Shared:
+  match value:
+    case Shared{session,steering,followUp,listeners,RunState{+active,requested},lastAssistant,retry,compaction,bash}:
+      Shared{session,steering,followUp,listeners,RunState{active,active || requested},lastAssistant,retry,compaction,bash}
 
 # User bash
 # ---------
@@ -1651,7 +1665,7 @@ def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.Sett
     scoped : R.Ref<List<&2, Models.ScopedModel>> <- R.new(List<&2, Models.ScopedModel>, scopedModels)
     initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +window : F64 = Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, stateModel(initial)), F.fromU32(0))
-    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, False{}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, window, None{}}, CompactionState{False{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}})
+    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, RunState{False{},False{}}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, window, None{}}, CompactionState{False{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}})
     +settingsRef : R.Ref<Settings.SettingsManager> <- R.new(Settings.SettingsManager,settings)
     +handler : Agent.Handler(SessionEvent(), Runtime.Error()) <- C.create(~R.Ref<Shared>, ~Agent.Input<SessionEvent()>, ~Loop.Emission<Runtime.Error()>, ~handleAgentEvent, shared)
     subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, handler)
@@ -1680,13 +1694,17 @@ def failedRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason, finalError: M
 def finishFailed(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, +turn: LastTurn) -> IO(Bool):
   do IO<Bool>:
     failedRetry(shared, Ai.assistantStopReason(V.Value, Unit, turnMessage(turn)), Ai.assistantErrorMessage(V.Value, Unit, turnMessage(turn)))
-    checkCompaction(agent, shared, settings, turn, True{})
+    state : Shared <- R.read(Shared,shared)
+    Bool.pick(Unit -> IO(Bool),abortRequestedOf(state),_ => IO.pure(Bool,False{}),_ => checkCompaction(agent, shared, settings, turn, True{}))(Unit{})
 
 def retryOrFinish(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, +turn: LastTurn) -> IO(Bool):
   do IO<Bool>:
     state : Shared <- R.read(Shared, shared)
     prepared : Bool <- prepareRetry(agent, shared, turn, retryOf(state))
-    Bool.pick(Unit -> IO(Bool), prepared, _ => IO.pure(Bool, True{}), _ => finishFailed(agent, shared, settings, turn))(Unit{})
+    latest : Shared <- R.read(Shared,shared)
+    Bool.pick(Unit -> IO(Bool),abortRequestedOf(latest),_ => do IO<Bool>:
+      finishCancelledRetry(shared)
+      return False{},_ => Bool.pick(Unit -> IO(Bool), prepared, _ => IO.pure(Bool, True{}), _ => finishFailed(agent, shared, settings, turn))(Unit{}))(Unit{})
 
 def afterRun(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Settings.SettingsManager, taken: Maybe<&2, LastTurn>, contextWindow: F64) -> IO(Bool):
   match taken:
@@ -1697,8 +1715,10 @@ def afterRun(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: Setting
 def handlePostAgentRun(agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager) -> IO(Bool):
   do IO<Bool>:
     taken : Maybe<&2, LastTurn> <- R.modify(Shared, Maybe<&2, LastTurn>, shared, current => takeLastAssistant(current))
-    state : Shared <- R.read(Shared, shared)
-    afterRun(agent, shared, settings, taken, contextWindowOf(state))
+    +state : Shared <- R.read(Shared, shared)
+    Bool.pick(Unit -> IO(Bool),abortRequestedOf(state),_ => do IO<Bool>:
+      finishCancelledRetry(shared)
+      return False{},_ => afterRun(agent, shared, settings, taken, contextWindowOf(state)))(Unit{})
 
 def stepOf(+agent: Runtime.Owner(), shared: R.Ref<Shared>, settings: Settings.SettingsManager, result: Result<&2, &2, Agent.AgentError<Runtime.Error()>, Unit>) -> IO(Step):
   match result:
@@ -1720,9 +1740,13 @@ def runUntilSettled(fuel: Nat, +agent: Runtime.Owner(), +shared: R.Ref<Shared>, 
     case 0n Step{True{}, outcome}: IO.pure(Result<&2, &2, String, Unit>, outcome)
     case 1n+rest Step{True{}, _}:
       do IO<Result<&2, &2, String, Unit>>:
-        result : Result<&2, &2, Agent.AgentError<Runtime.Error()>, Unit> <- continueRun(agent)
-        next : Step <- stepOf(agent, shared, settings, result)
-        runUntilSettled(rest, agent, shared, settings, next)
+        state : Shared <- R.read(Shared,shared)
+        Bool.pick(Unit -> IO(Result<&2,&2,String,Unit>),abortRequestedOf(state),_ => do IO<Result<&2,&2,String,Unit>>:
+          finishCancelledRetry(shared)
+          return Done{Unit{}},_ => do IO<Result<&2,&2,String,Unit>>:
+          result : Result<&2, &2, Agent.AgentError<Runtime.Error()>, Unit> <- continueRun(agent)
+          next : Step <- stepOf(agent, shared, settings, result)
+          runUntilSettled(rest, agent, shared, settings, next))(Unit{})
 
 # upstream prompt() and _runAgentPrompt: compaction is checked before
 # sending, the prompt and tool loadout are declared ahead of the user message,
@@ -1943,6 +1967,7 @@ def abort(session: AgentSession) -> IO(Unit):
   match session:
     case AgentSession{+agent, +shared, _, _, _, _, _, _}:
       do IO<Unit>:
+        R.modify(Shared,Unit,shared,current => (requestRunAbort(current),Unit{}))
         abortSleeping(shared)
         abortCompactions(shared)
         Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
