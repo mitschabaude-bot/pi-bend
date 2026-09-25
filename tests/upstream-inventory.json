@@ -937,8 +937,10 @@
     },
     {
       "source": "packages/ai/test/lax-message-content.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/lax-message-content.bend"
+      ],
       "sha256": "2a8ee2048658a1a0a2a8928cc9570c7db41ed295ca20b1d23098b70d4d39e196"
     },
     {

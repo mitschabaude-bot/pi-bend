@@ -433,7 +433,7 @@ def decodeDiagnostic(~Details: Data, ~details: V.Value -> Decoded(Details), valu
 def decodeAssistantMessage(~Details: Data, ~details: V.Value -> Decoded(Details), value: V.Value) -> Decoded(T.AssistantMessage<V.Value, Details>):
   do Result<&2, &2, Decode.Error, T.AssistantMessage<V.Value, Details>>:
     +fields : R.Record<V.Value> <- Decode.object(value)
-    content : List<&2, T.AssistantContent<V.Value>> <- Decode.required(List<&2, T.AssistantContent<V.Value>>, fields, "content", item => Decode.list(~T.AssistantContent<V.Value>, ~decodeAssistantContent, item))
+    content : Maybe<&2, List<&2, T.AssistantContent<V.Value>>> <- Decode.optional(List<&2, T.AssistantContent<V.Value>>, fields, "content", item => Decode.list(~T.AssistantContent<V.Value>, ~decodeAssistantContent, item))
     api : String <- Decode.required(String, fields, "api", Decode.string)
     provider : String <- Decode.required(String, fields, "provider", Decode.string)
     model : String <- Decode.required(String, fields, "model", Decode.string)
@@ -448,28 +448,31 @@ def decodeAssistantMessage(~Details: Data, ~details: V.Value -> Decoded(Details)
     rawStopReason : Maybe<&2, String> <- Decode.optional(String, fields, "rawStopReason", Decode.string)
     endTurn : Maybe<&2, Bool> <- Decode.optional(Bool, fields, "endTurn", decodeBoolean)
     timestamp : F64 <- Decode.required(F64, fields, "timestamp", Decode.number)
-    return T.AssistantMessage{content, api, provider, model, responseModel, responseId, providerThinkingLevel, diagnosticList, usageValue, stop, deferred, errorMessage, rawStopReason, endTurn, timestamp}
+    return T.AssistantMessage{Maybe.default(&2, List<&2, T.AssistantContent<V.Value>>, content, Nil{}), api, provider, model, responseModel, responseId, providerThinkingLevel, diagnosticList, usageValue, stop, deferred, errorMessage, rawStopReason, endTurn, timestamp}
 
 # Other messages
 
+# Content that is null or missing (hand-built histories, old session files)
+# decodes as empty, as upstream transformMessages normalizes it (issues #6259,
+# #6276; lax-message-content.test.ts).
 def decodeUserMessage(value: V.Value) -> Decoded(T.UserMessage):
   do Result<&2, &2, Decode.Error, T.UserMessage>:
     +fields : R.Record<V.Value> <- Decode.object(value)
-    content : T.UserContent <- Decode.required(T.UserContent, fields, "content", decodeUserContent)
+    content : Maybe<&2, T.UserContent> <- Decode.optional(T.UserContent, fields, "content", decodeUserContent)
     timestamp : F64 <- Decode.required(F64, fields, "timestamp", Decode.number)
-    return T.UserMessage{content, timestamp}
+    return T.UserMessage{Maybe.default(&2, T.UserContent, content, T.UserBlocks{Nil{}}), timestamp}
 
 def decodeToolResultMessage(~Details: Data, ~details: V.Value -> Decoded(Details), value: V.Value) -> Decoded(T.ToolResultMessage<Details>):
   do Result<&2, &2, Decode.Error, T.ToolResultMessage<Details>>:
     +fields : R.Record<V.Value> <- Decode.object(value)
     toolCallId : String <- Decode.required(String, fields, "toolCallId", Decode.string)
     toolName : String <- Decode.required(String, fields, "toolName", Decode.string)
-    content : List<&2, T.TextImageContent> <- Decode.required(List<&2, T.TextImageContent>, fields, "content", item => Decode.list(~T.TextImageContent, ~decodeTextImageContent, item))
+    content : Maybe<&2, List<&2, T.TextImageContent>> <- Decode.optional(List<&2, T.TextImageContent>, fields, "content", item => Decode.list(~T.TextImageContent, ~decodeTextImageContent, item))
     extra : Maybe<&2, Details> <- Decode.optional(Details, fields, "details", details)
     usageValue : Maybe<&2, T.Usage> <- Decode.optional(T.Usage, fields, "usage", decodeUsage)
     isError : Bool <- Decode.required(Bool, fields, "isError", decodeBoolean)
     timestamp : F64 <- Decode.required(F64, fields, "timestamp", Decode.number)
-    return T.ToolResultMessage{toolCallId, toolName, content, extra, usageValue, isError, timestamp}
+    return T.ToolResultMessage{toolCallId, toolName, Maybe.default(&2, List<&2, T.TextImageContent>, content, Nil{}), extra, usageValue, isError, timestamp}
 
 def strictnessOf(+value: String) -> Decoded(T.SamplingStrictness):
   match value:
