@@ -149,9 +149,9 @@ def main():
                     assert selected == baselines[mode]['payloads'][0], (mode, selected, baselines[mode])
                     print(f'{backend}: {mode} reasoning request')
                 Handler.requests.clear()
-                run(command, base, 'unsupported', ['error'])
-                assert Handler.requests == [], Handler.requests
-                print(f'{backend}: unsupported compatibility rejected before HTTP')
+                run(command, base, 'unsupported', ['start','text_start','text_delta','text_end','done'])
+                assert len(Handler.requests) == 1, Handler.requests
+                print(f'{backend}: compat without finish_reason support streams normally')
         finally:
             server.shutdown()
             thread.join()

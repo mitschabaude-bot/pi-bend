@@ -2,9 +2,9 @@ import Base
 import ../../../ai/src/types.bend as Ai
 import ../../../ai/src/api/openai-completions.bend as Request
 import ../../../ai/src/api/openai-completions-client.bend as Client
+import ../../../ai/src/api/openai-client.bend as SDK
 import ../../../ai/src/api/constrained-sampling.bend as Sampling
 import ../../../ai/src/api/openai-completions-stream.bend as Fold
-import ../../../ai/src/api/simple-options.bend as Simple
 import ../../../ai/src/utils/transcript.bend as Transcript
 import ../../../ai/src/utils/event-stream.bend as Events
 import ../../../agent/src/types.bend as Agent
@@ -12,7 +12,6 @@ import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/date.bend as Date
 import ../../../runtime/src/pi-user-agent.bend as UserAgent
-import ../../../runtime/src/deadline.bend as Deadline
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/fetch.bend as Fetch
 import ../../../runtime/src/record.bend as R
@@ -26,15 +25,6 @@ def Options() -> Data: Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Un
 def Context() -> Data: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>
 def Stream() -> Data: Events.AssistantMessageEventStream(V.Value, Unit)
 def Output() -> Type: Result<&2, &1, Error(), Agent.StreamLease<Unit, Error()>>
-
-def pushEvent(stream: Stream(), event: Ai.AssistantMessageEvent<V.Value, Unit>) -> IO(Unit):
-  Events.push(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, stream, event)
-def pushFailureStep(stream: Stream(), step: Fold.Step<Unit>) -> IO(Unit):
-  match step:
-    case Fold.Step{_, event <> _, _}: pushEvent(stream, event)
-    case _: IO.pure(Unit, Unit{})
-def pushFailure(stream: Stream(), model: Ai.Model<Ai.JsonValue>, timestamp: F64, message: String) -> IO(Unit):
-  pushFailureStep(stream, Fold.failed(Unit, Fold.create(Unit, model, timestamp), message))
 
 def modelId(model: Ai.Model<Ai.JsonValue>) -> String:
   match model:
@@ -87,123 +77,82 @@ def signalOf(value: Base()) -> Maybe<&2, Abort.AbortSignal<Unit>>:
   match value:
     case Ai.StreamOptions{signal, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: signal
 
-def timeoutNumber(value: Result<&2, &2, F.Error, Nat>) -> U32:
+def fetchOf(value: Base()) -> Maybe<&2, Fetch.Fetch(Unit)>:
   match value:
-    case Done{number}: U32.from_nat(Nat.min(4294967295n, number))
-    case Fail{_}: 600000
+    case Ai.StreamOptions{_, _, _, fetch, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: fetch
 
-def timeoutValue(value: Maybe<&2, F64>) -> U32:
+def responseHookOf(value: Base()) -> Maybe<&2, Ai.ResponseCallback(Ai.Model<Ai.JsonValue>, Error())>:
   match value:
-    case None{}: 600000
-    case Some{milliseconds}: timeoutNumber(F.convert(F.truncate(milliseconds)))
-
-def timeout(value: Base()) -> U32: timeoutValue(timeoutOf(value))
+    case Ai.StreamOptions{_, _, _, _, _, _, hook, _, _, _, _, _, _, _, _, _, _, _, _}: hook
 
 def resolvedOptions(value: Maybe<&2, Options()>) -> Options():
   match value:
     case None{}: Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error())
     case Some{selected}: selected
 
-def preparedRequest(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), model: Ai.Model<Ai.JsonValue>, timestamp: F64, retries: Maybe<&2, F64>, delay: Maybe<&2, F64>, value: Result<&2, &2, Client.Error<Unit>, Client.Request>) -> IO(Unit):
-  match value:
-    case Fail{Client.UnsupportedPayloadModel{}}: pushFailure(stream, model, timestamp, "Completions onPayload cannot change the model in the native adapter")
-    case Fail{Client.UnsupportedCompat{message}}: pushFailure(stream, model, timestamp, "Unsupported Completions compatibility: " ++ message)
-    case Fail{_}: pushFailure(stream, model, timestamp, "Could not prepare Completions request")
-    case Done{request}:
-      do IO<Unit>:
-        result : Result<&2, &2, Client.Error<Unit>, Ai.AssistantMessage<V.Value, Unit>> <- Client.runWithRetry(~Unit, ~Unit, fetch, signal, callback, model, request, timestamp, retries, delay)
-        return Unit{}
-
-def hookedPayload(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), +model: Ai.Model<Ai.JsonValue>, timestamp: F64, retries: Maybe<&2, F64>, delay: Maybe<&2, F64>, request: Client.Request, result: Result<&2, &2, Error(), Maybe<&2, Ai.JsonValue>>) -> IO(Unit):
-  match result:
-    case Fail{cause}: pushFailure(stream, model, timestamp, Tools.errorMessage(cause))
-    case Done{None{}}: preparedRequest(stream, callback, fetch, signal, model, timestamp, retries, delay, Done{request})
-    case Done{Some{payload}}: preparedRequest(stream, callback, fetch, signal, model, timestamp, retries, delay, Client.replacePayload(Unit, request, payload, modelId(model)))
-
-def preparedPayload(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), +model: Ai.Model<Ai.JsonValue>, timestamp: F64, retries: Maybe<&2, F64>, delay: Maybe<&2, F64>, request: Client.Request, payload: Ai.JsonValue, hook: Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, Error())>) -> IO(Unit):
-  match hook:
-    case None{}: preparedRequest(stream, callback, fetch, signal, model, timestamp, retries, delay, Done{request})
-    case Some{selected}:
-      do IO<Unit>:
-        result : Result<&2, &2, Error(), Maybe<&2, Ai.JsonValue>> <- C.call(Ai.PayloadInput<Ai.JsonValue, Ai.Model<Ai.JsonValue>>, Result<&2, &2, Error(), Maybe<&2, Ai.JsonValue>>, selected, Ai.PayloadInput{payload, model})
-        hookedPayload(stream, callback, fetch, signal, model, timestamp, retries, delay, request, result)
-
-def preparedWithHook(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), +model: Ai.Model<Ai.JsonValue>, timestamp: F64, retries: Maybe<&2, F64>, delay: Maybe<&2, F64>, value: Client.Prepared, hook: Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, Error())>) -> IO(Unit):
-  match value:
-    case Client.Prepared{request, payload}: preparedPayload(stream, callback, fetch, signal, model, timestamp, retries, delay, request, payload, hook)
-
-def prepared(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), model: Ai.Model<Ai.JsonValue>, timestamp: F64, retries: Maybe<&2, F64>, delay: Maybe<&2, F64>, hook: Maybe<&2, Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, Error())>, value: Result<&2, &2, Client.Error<Unit>, Client.Prepared>) -> IO(Unit):
-  match value:
-    case Fail{_}: pushFailure(stream, model, timestamp, "Could not prepare Completions request")
-    case Done{detailed}: preparedWithHook(stream, callback, fetch, signal, model, timestamp, retries, delay, detailed, hook)
-
-def payloaded(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +options: Base(), timestamp: F64, agent: String, headers: Maybe<&2, Ai.ProviderHeaders()>, params: Request.ParamsResult()) -> IO(Unit):
-  match params:
-    case Fail{error}: pushFailure(stream, model, timestamp, Sampling.errorMessage(error))
-    case Done{payload}: prepared(stream, callback, fetch, signal, model, timestamp, retriesOf(options), delayOf(options), payloadHookOf(options), Client.prepare(Unit, urlContext, model, payload, keyOf(options), agent, headers))
-
-def built(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +context: Context(), +options: Completions(), timestamp: F64, agent: String, +compat: Request.Compat(), +retention: Ai.CacheRetention, properties: R.Record<String>) -> IO(Unit):
-  +shared = base(options)
-  do IO<Unit>:
-    params : Request.ParamsResult() <- Request.buildParams(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, context, options, compat, retention, properties)
-    payloaded(stream, callback, fetch, signal, urlContext, model, shared, timestamp, agent, Request.clientHeaders(compat, Request.cacheSessionId(retention, sessionOf(shared)), headersOf(shared)), params)
-
-def supportedGrammar(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, context: Context(), options: Completions(), timestamp: F64, agent: String, compat: Request.Compat(), retention: Ai.CacheRetention, +properties: R.Record<String>, issue: Maybe<&2, String>) -> IO(Unit):
-  match issue:
-    case Some{message}: pushFailure(stream, model, timestamp, "Unsupported Completions compatibility: " ++ message)
-    case None{}: built(stream, callback, fetch, signal, urlContext, model, context, options, timestamp, agent, compat, retention, properties)
-
-def grammarResolved(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, context: Context(), options: Completions(), timestamp: F64, agent: String, compat: Request.Compat(), retention: Ai.CacheRetention, properties: Result<&2, &2, Sampling.Error, R.Record<String>>) -> IO(Unit):
-  match properties:
-    case Fail{error}: pushFailure(stream, model, timestamp, Sampling.errorMessage(error))
-    case Done{+selected}: supportedGrammar(stream, callback, fetch, signal, urlContext, model, context, options, timestamp, agent, compat, retention, selected, Request.grammarIssue(selected))
-
 def contextMessages(context: Context()) -> List<&2, Ai.Message<V.Value, V.Value, Unit, Details()>>:
   match context:
     case Ai.TranscriptContext{messages}: messages
 
+def paramsText(result: Request.ParamsResult()) -> Result<&2, &2, String, Ai.JsonValue>:
+  match result:
+    case Fail{error}: Fail{Sampling.errorMessage(error)}
+    case Done{payload}: Done{payload}
+
+def modelHeaders(model: Ai.Model<Ai.JsonValue>) -> Maybe<&2, R.Record<String>>:
+  match model:
+    case Ai.Model{_, _, _, _, _, _, _, _, _, _, _, _, _, _, headers, _}: headers
+
+# The grammar properties' failure is thrown by upstream before buildParams.
+def built(+model: Ai.Model<Ai.JsonValue>, +normalized: Context(), options: Completions(), +compat: Request.Compat(), retention: Ai.CacheRetention, properties: Result<&2, &2, Sampling.Error, R.Record<String>>) -> IO(Result<&2, &2, String, Ai.JsonValue>):
+  match properties:
+    case Fail{error}: IO.pure(Result<&2, &2, String, Ai.JsonValue>, Fail{Sampling.errorMessage(error)})
+    case Done{selected}:
+      do IO<Result<&2, &2, String, Ai.JsonValue>>:
+        params : Request.ParamsResult() <- Request.buildParams(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, normalized, options, compat, retention, selected)
+        return paramsText(params)
+
+def grammarOf(+normalized: Context(), +compat: Request.Compat()) -> Result<&2, &2, Sampling.Error, R.Record<String>>:
+  Sampling.createGrammarToolInputProperties(Some{Transcript.getDeclaredTools(V.Value, V.Value, Unit, Details(), contextMessages(normalized))}, Request.supportsOpenAIGrammarTools(compat))
+
+def propertiesOrEmpty(value: Result<&2, &2, Sampling.Error, R.Record<String>>) -> R.Record<String>:
+  match value:
+    case Done{properties}: properties
+    case Fail{_}: R.new(String)
+
+def launched(+stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, timestamp: F64, +signal: Abort.AbortSignal<Unit>, +compat: Request.Compat(), +shared: Base(), grammar: Result<&2, &2, Sampling.Error, R.Record<String>>, +agent: String, retention: Ai.CacheRetention, params: Result<&2, &2, String, Ai.JsonValue>) -> IO(Unit):
+  +headers = Client.defaultHeaders(agent, modelHeaders(model), Request.clientHeaders(compat, Request.cacheSessionId(retention, sessionOf(shared)), headersOf(shared)))
+  +settings = {Fold.Settings{model, Request.supportsFinishReason(compat), propertiesOrEmpty(grammar)} : Fold.Settings}
+  +plan = {Client.Prepared{Client.getClientApiKey(Ai.modelProvider(model), keyOf(shared), headersOf(shared)), headers, timeoutOf(shared), retriesOf(shared), delayOf(shared), params, payloadHookOf(shared), responseHookOf(shared)} : Client.Prepared<Error()>}
+  Client.stream(~Unit, ~Error(), ~Unit, ~Tools.errorMessage, stream, settings, signal, Client.Context{urlContext, SDK.Defaults{agent, R.new(String), None{}, None{}}, Maybe.default(&2, Fetch.Fetch(Unit), fetchOf(shared), fetch)}, timestamp, plan)
+
 # upstream stream: the transcript resolved for the model's mid-conversation
-# support, grammar tool input properties, cache retention, then buildParams.
-def exchange(stream: Stream(), callback: Client.Events(Unit), fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, context: Context(), +options: Completions(), timestamp: F64) -> IO(Unit):
+# support, the client key, grammar tool input properties, cache retention,
+# the client's headers and buildParams; then the request lifecycle.
+def produced(+stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, context: Context(), +options: Completions(), timestamp: F64, +signal: Abort.AbortSignal<Unit>) -> IO(Unit):
   +compat = Request.getCompat(model)
   +normalized = Transcript.resolveTranscript(V.Value, V.Value, Unit, Details(), context, Some{Request.supportsMidConvoSystemMessages(compat)})
   +shared = base(options)
+  +grammar = grammarOf(normalized, compat)
   do IO<Unit>:
-    agent : String <- IO.try(String, UserAgent.get())
-    retention : Ai.CacheRetention <- Request.resolveCacheRetention(retentionOf(shared), envOf(shared))
-    grammarResolved(stream, callback, fetch, signal, urlContext, model, normalized, options, timestamp, agent, compat, retention, Sampling.createGrammarToolInputProperties(Some{Transcript.getDeclaredTools(V.Value, V.Value, Unit, Details(), contextMessages(normalized))}, Request.supportsOpenAIGrammarTools(compat)))
-
-def borrowed(+stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), options: Completions(), timestamp: F64, pair: Deadline.Scope<Unit> & Fetch.Signal(Unit)) -> IO(Unit):
-  match pair:
-    case (owned, signal):
-      do IO<Unit>:
-        +callback : Client.Events(Unit) <- C.create(~Stream(), ~Ai.AssistantMessageEvent<V.Value, Unit>, ~Unit, ~pushEvent, stream)
-        exchange(stream, callback, fetch, signal, urlContext, model, context, options, timestamp)
-        C.dispose(Ai.AssistantMessageEvent<V.Value, Unit>, Unit, callback)
-        closed : Maybe<&2, Abort.AbortReason<Deadline.Cause<Unit>>> <- Deadline.close(Unit, owned)
-        Events.end(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, stream, None{})
-
-def scoped(stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), options: Completions(), timestamp: F64, scope: Deadline.Scope<Unit>) -> IO(Unit):
-  borrowed(stream, fetch, urlContext, model, context, options, timestamp, Deadline.borrow(Unit, scope))
+    +agent : String <- IO.try(String, UserAgent.get())
+    +retention : Ai.CacheRetention <- Request.resolveCacheRetention(retentionOf(shared), envOf(shared))
+    params : Result<&2, &2, String, Ai.JsonValue> <- built(model, normalized, options, compat, retention, grammar)
+    launched(stream, fetch, urlContext, model, timestamp, signal, compat, shared, grammar, agent, retention, params)
 
 def disposeLocal(local: Maybe<&2, Abort.AbortController<Unit>>) -> IO(Unit):
   match local:
     case None{}: IO.pure(Unit, Unit{})
     case Some{controller}: Abort.dispose(Unit, controller)
 
-def started(stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), +options: Completions(), timestamp: F64, parent: Abort.AbortSignal<Unit>, local: Maybe<&2, Abort.AbortController<Unit>>) -> IO(Unit):
-  do IO<Unit>:
-    scope : Deadline.Scope<Unit> <- Deadline.create(Unit, timeout(base(options)), parent)
-    scoped(stream, fetch, urlContext, model, context, options, timestamp, scope)
-    disposeLocal(local)
-
 def producerWith(stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), options: Completions(), timestamp: F64, parent: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Unit):
   match parent:
-    case Some{signal}: started(stream, fetch, urlContext, model, context, options, timestamp, signal, None{})
+    case Some{signal}: produced(stream, fetch, urlContext, model, context, options, timestamp, signal)
     case None{}:
       do IO<Unit>:
         +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
-        started(stream, fetch, urlContext, model, context, options, timestamp, Abort.signal(Unit, controller), Some{controller})
+        produced(stream, fetch, urlContext, model, context, options, timestamp, Abort.signal(Unit, controller))
+        disposeLocal(Some{controller})
 
 def producer(stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), +options: Completions(), timestamp: F64) -> IO(Unit):
   producerWith(stream, fetch, urlContext, model, context, options, timestamp, signalOf(base(options)))

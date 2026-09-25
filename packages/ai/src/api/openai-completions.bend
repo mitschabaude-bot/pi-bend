@@ -1462,19 +1462,3 @@ def sessionAffinityHeaders(+compat: Compat(), sessionId: Maybe<&2, String>) -> R
 # caching session id, then the options' headers, which override them.
 def clientHeaders(compat: Compat(), sessionId: Maybe<&2, String>, custom: Maybe<&2, T.ProviderHeaders()>) -> Maybe<&2, T.ProviderHeaders()>:
   Some{Headers.overlay(Headers.fromRecord(sessionAffinityHeaders(compat, sessionId)), custom)}
-
-# Unported behavior
-# -----------------
-
-# The stream fold still requires a finish_reason (upstream's fallback for
-# providers without one is stream-side work), so such models are refused
-# before any request is sent.
-def modelIssue(model: T.Model<J()>) -> Maybe<&2, String>:
-  Bool.pick(Maybe<&2, String>, supportsFinishReason(getCompat(model)), None{}, Some{"missing finish_reason fallback"})
-
-# Grammar tools are sent as custom tools, whose streamed custom tool-call
-# deltas the stream fold does not parse yet.
-def grammarIssue(properties: R.Record<String>) -> Maybe<&2, String>:
-  match properties:
-    case R.Record{Nil{}}: None{}
-    case _: Some{"grammar tools"}
