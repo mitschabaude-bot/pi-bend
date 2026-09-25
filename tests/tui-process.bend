@@ -29,7 +29,7 @@ def prepare(+component: Component.Component) -> IO(Process.Active):
   do IO<Process.Active>:
     focused : Tui.ResultOf(Tui.TuiBase) <- Tui.setFocus(Tui.added(Tui.newTui(),component),component <> Nil{},Component.id(component) <> Nil{},Some{Component.id(component)})
     tui : Tui.TuiBase <- requireFocus(focused)
-    return Process.active(Process.Session{tui,Screen.initial()},component <> Nil{},Component.id(component) <> Nil{})
+    return Process.active(Process.Session{tui,Process.Main{Screen.initial()}},component <> Nil{},Component.id(component) <> Nil{})
 def requireActive(value: Process.Active) -> IO(Unit):
   match value:
     case Process.Active{_,_,_,None{},_,_}: IO.pure(Unit,Unit{})

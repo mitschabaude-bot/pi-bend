@@ -8,10 +8,12 @@ import ./terminal.bend as Terminal
 import ./terminal-query.bend as Query
 import ./tui-base.bend as Tui
 import ./tui-main-screen.bend as Screen
+import ./tui-alt-screen.bend as Alt
 
 # Rendering is a transaction: the owner publishes mouse bounds and the screen
 # retains its new diff state only after every ordered terminal effect succeeds.
-type Session is Data: Session{tui: Tui.TuiBase,screen: Screen.State}
+type ScreenState is Data: Main{state: Screen.State} Fullscreen{state: Alt.State}
+type Session is Data: Session{tui: Tui.TuiBase,screen: ScreenState}
 type Error is Data:
   Owner{cause: Tui.Error}
   InvalidFrame{cause: Screen.RenderError}
@@ -21,7 +23,7 @@ type Draw is Data:
   Rejected{session: Session,cause: Error}
 type Input is Data: Input{outcome: Draw,handled: Bool,owed: Bool}
 
-def initial() -> Session: Session{Tui.newTui(),Screen.initial()}
+def initial() -> Session: Session{Tui.newTui(),Main{Screen.initial()}}
 def options(tui: Tui.TuiBase,termux: Bool) -> Screen.Options:
   match tui:
     case Tui.TuiBase{_,O.State{entries,_,_,_,_},_,_,Tui.RenderSchedule{_,_,_,_,_,stopped},show,clear,_}:
@@ -52,8 +54,13 @@ def writeEffects(handle: Terminal.Handle,output: Screen.Stream) -> IO(Result<&2,
   writeNext(handle,Screen.nextEffect(output))
 def finished(result: Result<&2,&2,Terminal.Error,Unit>,old: Session,prepared: Tui.PreparedFrame,next: Screen.State) -> Draw:
   match result old:
-    case Done{_} _: Drawn{Session{Tui.commitFrame(prepared),next}}
-    case Fail{error} Session{tui,screen}: Rejected{Session{tui,Screen.resetRenderState(screen)},Output{error}}
+    case Done{_} _: Drawn{Session{Tui.commitFrame(prepared),Main{next}}}
+    case Fail{error} Session{tui,Main{screen}}: Rejected{Session{tui,Main{Screen.resetRenderState(screen)}},Output{error}}
+    case Fail{error} Session{tui,Fullscreen{screen}}: Rejected{Session{tui,Fullscreen{Alt.reset(screen)}},Output{error}}
+def finishedAlt(result: Result<&2,&2,Terminal.Error,Unit>,old: Session,prepared: Tui.PreparedFrame,next: Alt.State) -> Draw:
+  match result old:
+    case Done{_} _: Drawn{Session{Tui.commitFrame(prepared),Fullscreen{next}}}
+    case Fail{error} Session{tui,screen}: Rejected{Session{tui,screen},Output{error}}
 def executePlan(result: Result<&2,&2,Screen.RenderError,Screen.Plan>,old: Session,prepared: Tui.PreparedFrame,handle: Terminal.Handle) -> IO(Draw):
   match result:
     case Fail{error}: IO.pure(Draw,Rejected{old,InvalidFrame{error}})
@@ -61,12 +68,22 @@ def executePlan(result: Result<&2,&2,Screen.RenderError,Screen.Plan>,old: Sessio
       do IO<Draw>:
         written : Result<&2,&2,Terminal.Error,Unit> <- writeEffects(handle,output)
         return finished(written,old,prepared,next)
+def executeAltPlan(value: Alt.Plan,old: Session,prepared: Tui.PreparedFrame,handle: Terminal.Handle) -> IO(Draw):
+  match value:
+    case Alt.Plan{next,output}:
+      do IO<Draw>:
+        written : Result<&2,&2,Terminal.Error,Unit> <- writeEffects(handle,output)
+        return finishedAlt(written,old,prepared,next)
+def executeAlt(+prepared: Tui.PreparedFrame,old: Session,screen: Alt.State,handle: Terminal.Handle,width: Nat,height: Nat) -> IO(Draw):
+  match prepared:
+    case Tui.PreparedFrame{_,_,+lines,+cursor}: executeAltPlan(Alt.plan(screen,lines,cursor,width,height),old,prepared,handle)
 def executePrepared(result: Tui.ResultOf(Tui.PreparedFrame),+old: Session,handle: Terminal.Handle,termux: Bool,width: Nat,height: Nat) -> IO(Draw):
   match result:
     case Fail{error}: IO.pure(Draw,Rejected{old,Owner{error}})
     case Done{+prepared}:
       match old:
-        case Session{_,+screen}: executePlan(planned(prepared,screen,termux,width,height),old,prepared,handle)
+        case Session{_,Main{+screen}}: executePlan(planned(prepared,screen,termux,width,height),old,prepared,handle)
+        case Session{_,Fullscreen{+screen}}: executeAlt(prepared,old,screen,handle,width,height)
 def sized(+session: Session,handle: Terminal.Handle,termux: Bool,+columns: U32,+rows: U32) -> IO(Draw):
   match session:
     case Session{+tui,_}:
@@ -147,7 +164,7 @@ def scheduledActive(outcome: Draw,components: List<&2,Component.Component>,mount
   match outcome:
     case Drawn{session}: Active{session,components,mounted,previous,owed && Bool.not(drew),ticks}
     case Rejected{session,error}: Active{session,components,mounted,Some{error},False{},ticks}
-def afterSchedule(pair: Tui.TuiBase & List<&2,Tui.RenderEffect>,screen: Screen.State,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,previous: Maybe<&2,Error>,owed: Bool,ticks: Nat,handle: Terminal.Handle,termux: Bool) -> IO(Active & List<&2,Tui.RenderEffect>):
+def afterSchedule(pair: Tui.TuiBase & List<&2,Tui.RenderEffect>,screen: ScreenState,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,previous: Maybe<&2,Error>,owed: Bool,ticks: Nat,handle: Terminal.Handle,termux: Bool) -> IO(Active & List<&2,Tui.RenderEffect>):
   match pair:
     case (tui,+effects):
       do IO<Active & List<&2,Tui.RenderEffect>>:
@@ -311,8 +328,14 @@ def queryResult(closed: Result<&2,&2,Terminal.Error,Unit>,failure: Maybe<&2,Term
     case None{}: completed(closed,state)
 def beforeStop(current: Active) -> IO(Active & Screen.Stream):
   match current:
-    case Active{Session{tui,+screen},components,mounted,error,owed,ticks}:
-      IO.pure(Active & Screen.Stream,(Active{Session{tui,screen},components,mounted,error,owed,ticks},Screen.beforeTerminalStop(screen,False{})))
+    case Active{Session{tui,Main{+state}},components,mounted,error,owed,ticks}:
+      IO.pure(Active & Screen.Stream,(Active{Session{tui,Main{state}},components,mounted,error,owed,ticks},Screen.beforeTerminalStop(state,False{})))
+    case Active{Session{tui,Fullscreen{state}},components,mounted,error,owed,ticks}:
+      IO.pure(Active & Screen.Stream,(Active{Session{tui,Fullscreen{state}},components,mounted,error,owed,ticks},Screen.stream(Screen.Text{Alt.leave()} <> Nil{})))
+def isFullscreen(current: Active) -> IO(Active & Bool):
+  match current:
+    case Active{Session{_,Main{_}},_,_,_,_,_}: IO.pure(Active & Bool,(current,False{}))
+    case Active{Session{_,Fullscreen{_}},_,_,_,_,_}: IO.pure(Active & Bool,(current,True{}))
 def stoppedResult(cleanup: Result<&2,&2,Terminal.Error,Unit>,closed: Result<&2,&2,Terminal.Error,Unit>,failure: Maybe<&2,Terminal.Error>,state: Active) -> Result<&2,&2,Terminal.Error,Active>:
   match cleanup:
     case Done{_}: queryResult(closed,failure,state)
@@ -327,6 +350,9 @@ def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Ow
         +failure : Deferred.Deferred<Terminal.Error> <- Deferred.new(Terminal.Error)
         +writer : Callback.Callback<String,Unit> <- Callback.create(~QueryWriter,~String,~Unit,~queryWrite,QueryWriter{terminalHandle,stopped,failure})
         Query.setRunning(queries,writer,True{})
+        fullscreen : Bool <- Serial.run(Active,Bool,handle,isFullscreen)
+        entered : Result<&2,&2,Terminal.Error,Unit> <- Bool.pick(Unit -> IO(Result<&2,&2,Terminal.Error,Unit>),fullscreen,_ => Terminal.write(terminalHandle,Alt.enter()),_ => IO.pure(Result<&2,&2,Terminal.Error,Unit>,Done{Unit{}}))(Unit{})
+        matchWrite(entered,stopped,failure)
         notifyReady(onReady,QueryReady{queries,terminalHandle,writer,requestRender})
         initial : Unit <- Serial.run(Active,Unit,handle,current => resizeOperation(current,terminalHandle,termux))
         finished : Unit <- Deferred.result(Unit,stopped)

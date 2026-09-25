@@ -73,6 +73,26 @@ STREAM_ANSWER = "STREAM-START\n\n" + "".join(stream_section(index) for index in 
 
 SCENARIOS = [
     {
+        "name": "fullscreen-startup",
+        "args": MODEL + ["--tui-mode", "fullscreen"],
+        "files": RESOURCES,
+        "steps": [("wait", READY, "startup"), ("settle", 0.5), ("snap", "startup"),
+                  ("keys", "hello fullscreen"), ("settle", 0.3), ("snap", "typed")],
+    },
+    {
+        "name": "fullscreen-settings",
+        "args": MODEL,
+        "files": {**RESOURCES, "home/.pi/agent/settings.json": '{"tuiMode":"fullscreen"}'},
+        "steps": [("wait", READY, "startup"), ("settle", 0.5), ("snap", "startup")],
+    },
+    {
+        "name": "fullscreen-exit",
+        "args": MODEL + ["--tui-mode", "fullscreen"],
+        "files": RESOURCES,
+        "steps": [("wait", READY, "startup"), ("key", "C-d"),
+                  ("wait", "shell\\$", "exit"), ("snap", "exit")],
+    },
+    {
         "name": "startup",
         "args": MODEL,
         "files": RESOURCES,

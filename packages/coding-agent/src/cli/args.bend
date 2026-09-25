@@ -26,6 +26,10 @@ type Diagnostic is Data:
 type Args is Data:
   Args{provider: Maybe<&2,String>, model: Maybe<&2,String>, apiKey: Maybe<&2,String>, systemPrompt: Maybe<&2,String>, appendSystemPrompt: Maybe<&2,List<&2,String>>, thinking: Maybe<&2,Ai.ModelThinkingLevel>, continue: Maybe<&2,Bool>, resume: Maybe<&2,Bool>, help: Maybe<&2,Bool>, version: Maybe<&2,Bool>, mode: Maybe<&2,Mode>, name: Maybe<&2,String>, noSession: Maybe<&2,Bool>, session: Maybe<&2,String>, sessionId: Maybe<&2,String>, fork: Maybe<&2,String>, sessionDir: Maybe<&2,String>, models: Maybe<&2,List<&2,String>>, tools: Maybe<&2,List<&2,String>>, excludeTools: Maybe<&2,List<&2,String>>, noTools: Maybe<&2,Bool>, noBuiltinTools: Maybe<&2,Bool>, extensions: Maybe<&2,List<&2,String>>, noExtensions: Maybe<&2,Bool>, print: Maybe<&2,Bool>, export: Maybe<&2,String>, noSkills: Maybe<&2,Bool>, skills: Maybe<&2,List<&2,String>>, promptTemplates: Maybe<&2,List<&2,String>>, noPromptTemplates: Maybe<&2,Bool>, themes: Maybe<&2,List<&2,String>>, useTheme: Maybe<&2,String>, noThemes: Maybe<&2,Bool>, noContextFiles: Maybe<&2,Bool>, listModels: Maybe<&2,ListModels>, offline: Maybe<&2,Bool>, tuiMode: Maybe<&2,TuiMode>, verbose: Maybe<&2,Bool>, projectTrustOverride: Maybe<&2,Bool>, messages: List<&2,String>, fileArgs: List<&2,String>, unknownFlags: Record.Record<FlagValue>, diagnostics: List<&2,Diagnostic>}
 
+def tuiModeOf(args: Args) -> Maybe<&2,TuiMode>:
+  match args:
+    case Args{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,mode,_,_,_,_,_,_}: mode
+
 type TextField is Data:
   ProviderField{}
   ModelField{}

@@ -55,7 +55,7 @@ def prepare(+component: Component.Component) -> IO(Process.Active):
   do IO<Process.Active>:
     focused : Tui.ResultOf(Tui.TuiBase) <- Tui.setFocus(Tui.added(Tui.newTui(),component),component <> Nil{},Component.id(component) <> Nil{},Some{Component.id(component)})
     tui : Tui.TuiBase <- requireFocus(focused)
-    return Process.active(Process.Session{tui,Screen.initial()},component <> Nil{},Component.id(component) <> Nil{})
+    return Process.active(Process.Session{tui,Process.Main{Screen.initial()}},component <> Nil{},Component.id(component) <> Nil{})
 def requireRun(result: Result<&2,&2,Terminal.Error,Process.Active>) -> IO(Unit):
   match result:
     case Done{Process.Active{_,_,_,None{},_,_}}: IO.print_err("done")

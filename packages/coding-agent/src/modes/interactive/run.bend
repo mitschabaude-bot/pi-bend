@@ -26,6 +26,7 @@ import ../../../../tui/src/keybindings.bend as Keybindings
 import ../../../../tui/src/keys.bend as Keys
 import ../../../../tui/src/tui-base.bend as Tui
 import ../../../../tui/src/tui-main-screen.bend as Screen
+import ../../../../tui/src/tui-alt-screen.bend as AltScreen
 import ../../../../tui/src/tui-process.bend as Process
 import ../../../../tui/src/terminal.bend as Terminal
 import ../../../../tui/src/utils.bend as Utils
@@ -1031,7 +1032,7 @@ type ThemeStartup is Data:
   ThemeStartup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Interactive.StatusSink,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>,theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,session: Ref.Ref<Session.AgentSession>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,managed: Maybe<&2,Manager.ToolsManager>,interaction: Interaction,highlighter: SyntaxHighlight.Highlighter}
 type LoginRequest is Data: LoginRequest{provider: String,signal: Abort.AbortSignal<Unit>,notice: AuthLogin.Notice(),manual: Callback.Callback<AuthLogin.ManualPrompt,Unit>,manualDone: Callback.Callback<Unit,Unit>}
 type Binding is Data:
-  Binding{current: Ref.Ref<Session.AgentSession>,replacement: Controller.Replacement,onRebind: Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>,login: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,refreshModels: Callback.Callback<Unit,List<&2,Models.Model()>>,importer: Callback.Callback<ImportRequest,SessionHost.ImportOutcome>,sessions: Callback.Callback<Unit,SessionChoices>,resume: Callback.Callback<ResumeRequest,SessionHost.ResumeOutcome>,managed: Maybe<&2,Manager.ToolsManager>,autoTrustOnReload: Bool}
+  Binding{current: Ref.Ref<Session.AgentSession>,replacement: Controller.Replacement,onRebind: Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>,login: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,refreshModels: Callback.Callback<Unit,List<&2,Models.Model()>>,importer: Callback.Callback<ImportRequest,SessionHost.ImportOutcome>,sessions: Callback.Callback<Unit,SessionChoices>,resume: Callback.Callback<ResumeRequest,SessionHost.ResumeOutcome>,managed: Maybe<&2,Manager.ToolsManager>,autoTrustOnReload: Bool,tuiMode: Maybe<&2,Settings.TuiMode>}
 type LoginState is Data:
   LoginState{host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,abort: Ref.Ref<Maybe<&2,Abort.AbortController<Unit>>>,backend: Maybe<&2,Callback.Callback<LoginRequest,AuthLogin.Outcome()>>,refresh: Maybe<&2,Callback.Callback<Unit,List<&2,Models.Model()>>>,models: Ref.Ref<List<&2,Models.Model()>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>}
 def showLoginCode(target: Maybe<&2,LoginDialog.Host>,url: String,code: String) -> IO(Unit):
@@ -1459,15 +1460,15 @@ def contextBindings(context: ThemeContext) -> Keybindings.KeybindingsManager:
 def loginStateOf(mode: Maybe<&2,Binding>,host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,abort: Ref.Ref<Maybe<&2,Abort.AbortController<Unit>>>,models: Ref.Ref<List<&2,Models.Model()>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>) -> LoginState:
   match mode:
     case None{}: LoginState{host,abort,None{},None{},models,failure,redraw,session}
-    case Some{Binding{_,_,_,backend,refresh,_,_,_,_,_}}: LoginState{host,abort,Some{backend},Some{refresh},models,failure,redraw,session}
+    case Some{Binding{_,_,_,backend,refresh,_,_,_,_,_,_}}: LoginState{host,abort,Some{backend},Some{refresh},models,failure,redraw,session}
 def importStateOf(mode: Maybe<&2,Binding>,host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> ImportState:
   match mode:
     case None{}: ImportState{host,None{},failure,redraw}
-    case Some{Binding{_,_,_,_,_,backend,_,_,_,_}}: ImportState{host,Some{backend},failure,redraw}
+    case Some{Binding{_,_,_,_,_,backend,_,_,_,_,_}}: ImportState{host,Some{backend},failure,redraw}
 def resumeStateOf(mode: Maybe<&2,Binding>,picker: Ref.Ref<Maybe<&2,SessionPicker.Host>>,dialog: Ref.Ref<Maybe<&2,LoginDialog.Host>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> ResumeState:
   match mode:
     case None{}: ResumeState{picker,dialog,None{},None{},failure,redraw}
-    case Some{Binding{_,_,_,_,_,_,sessions,resume,_,_}}: ResumeState{picker,dialog,Some{sessions},Some{resume},failure,redraw}
+    case Some{Binding{_,_,_,_,_,_,sessions,resume,_,_,_}}: ResumeState{picker,dialog,Some{sessions},Some{resume},failure,redraw}
 def disposeLoginState(state: LoginState) -> IO(Unit):
   match state:
     case LoginState{host,abort,_,_,models,_,_,_}:
@@ -1686,7 +1687,7 @@ def rebound(sink: RebindSink,session: Session.AgentSession) -> IO(Unit):
   reboundCopied(sink,session)
 def bindRebound(binding: Binding,listener: Session.Listener(),transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>) -> IO(Unit):
   match binding:
-    case Binding{_,_,hook,_,_,_,_,_,_,_}:
+    case Binding{_,_,hook,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
         callback : Callback.Callback<Session.AgentSession,Unit> <- Callback.create(~RebindSink,~Session.AgentSession,~Unit,~rebound,RebindSink{listener,transcript,editor,footer,failure,redraw,cwd,home})
         Ref.write(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,hook,Some{callback})
@@ -1701,7 +1702,7 @@ def disposeRebindCallback(value: Maybe<&2,Callback.Callback<Session.AgentSession
 def unbind(mode: Maybe<&2,Binding>) -> IO(Unit):
   match mode:
     case None{}: IO.pure(Unit,Unit{})
-    case Some{Binding{_,_,hook,_,_,_,_,_,_,_}}:
+    case Some{Binding{_,_,hook,_,_,_,_,_,_,_,_}}:
       do IO<Unit>:
         callback : Maybe<&2,Callback.Callback<Session.AgentSession,Unit>> <- Ref.swap(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,hook,None{})
         disposeRebindCallback(callback)
@@ -1715,7 +1716,7 @@ def finishSessionRef(session: Ref.Ref<Session.AgentSession>,mode: Maybe<&2,Bindi
 def modeCurrent(mode: Maybe<&2,Binding>,session: Session.AgentSession) -> IO(Ref.Ref<Session.AgentSession>):
   match mode:
     case None{}: Ref.new(Session.AgentSession,session)
-    case Some{Binding{current,_,_,_,_,_,_,_,_,_}}: IO.pure(Ref.Ref<Session.AgentSession>,current)
+    case Some{Binding{current,_,_,_,_,_,_,_,_,_,_}}: IO.pure(Ref.Ref<Session.AgentSession>,current)
 def controllerFor(mode: Maybe<&2,Binding>,current: Ref.Ref<Session.AgentSession>,session: Session.AgentSession,listener: Session.Listener(),limit: Nat,failure: Maybe<&2,Callback.Callback<Controller.PromptFailure,Unit>>,command: Maybe<&2,Callback.Callback<Commands.Action,Unit>>,control: Maybe<&2,Callback.Callback<Controller.ControlResult,Unit>>,selection: Maybe<&2,Callback.Callback<Controller.SelectionResult,Unit>>,models: Ref.Ref<List<&2,Models.Model()>>,login: Callback.Callback<Commands.CredentialCommand,Unit>) -> IO(Controller.Controller & Controller.Handle):
   match mode:
     case None{}:
@@ -1723,7 +1724,7 @@ def controllerFor(mode: Maybe<&2,Binding>,current: Ref.Ref<Session.AgentSession>
         available : List<&2,Models.Model()> <- Ref.read(List<&2,Models.Model()>,models)
         Callback.dispose(Commands.CredentialCommand,Unit,login)
         Controller.start(session,listener,limit,failure,command,control,selection,available)
-    case Some{Binding{_,replacement,_,_,_,_,_,_,_,_}}: Controller.startBound(current,listener,replacement,limit,failure,command,control,selection,models,Some{login})
+    case Some{Binding{_,replacement,_,_,_,_,_,_,_,_,_}}: Controller.startBound(current,listener,replacement,limit,failure,command,control,selection,models,Some{login})
 def disposeInteraction(interaction: Interaction) -> IO(Unit):
   match interaction:
     case Interaction{editor,lastClear,lastEscape,selector,modelSelector,thinkingSelector,scopedSelector,settings,trust,_,bashActivity,working,autocomplete}:
@@ -1745,11 +1746,11 @@ def disposeInteraction(interaction: Interaction) -> IO(Unit):
 def managedOf(mode: Maybe<&2,Binding>) -> Maybe<&2,Manager.ToolsManager>:
   match mode:
     case None{}: None{}
-    case Some{Binding{_,_,_,_,_,_,_,_,managed,_}}: managed
+    case Some{Binding{_,_,_,_,_,_,_,_,managed,_,_}}: managed
 def autoTrustOnReloadOf(mode: Maybe<&2,Binding>) -> Bool:
   match mode:
     case None{}: False{}
-    case Some{Binding{_,_,_,_,_,_,_,_,_,eligible}}: eligible
+    case Some{Binding{_,_,_,_,_,_,_,_,_,eligible,_}}: eligible
 def startup(context: ThemeContext,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Interactive.StatusSink,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>) -> ThemeStartup:
   match context:
     case ThemeContext{theme,transcript,session,setting,builtinDir,customDir,interaction,_,mode,_,_,_,highlighter,_}:
@@ -1954,7 +1955,20 @@ def configuredTui(base: Tui.TuiBase,session: Ref.Ref<Session.AgentSession>) -> I
     clearFallback : Bool <- IO.pure(Bool,String.eq(Maybe.default(&2,String,environmentValue(clearEnv),""),"1"))
     show : Bool <- IO.pure(Bool,Maybe.default(&2,Bool,Settings.selectedShowHardwareCursor(Settings.get(Settings.effective(settings),"showHardwareCursor")),hardwareFallback))
     return Tui.setTerminalPreferences(base,show,Settings.resolvedClearOnShrink(Settings.terminalOptions(settings),clearFallback))
-def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),document: Component.Component,editorComponent: Component.Component,+foot: FooterOwner,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
+def screenForMode(mode: Settings.TuiMode) -> Process.ScreenState:
+  match mode:
+    case Settings.Regular{}: Process.Main{Screen.initial()}
+    case Settings.Fullscreen{}: Process.Fullscreen{AltScreen.initial()}
+def tuiModeOverride(binding: Maybe<&2,Binding>) -> Maybe<&2,Settings.TuiMode>:
+  match binding:
+    case None{}: None{}
+    case Some{Binding{_,_,_,_,_,_,_,_,_,_,mode}}: mode
+def configuredScreen(session: Ref.Ref<Session.AgentSession>,override: Maybe<&2,Settings.TuiMode>) -> IO(Process.ScreenState):
+  do IO<Process.ScreenState>:
+    live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+    +settings : Settings.SettingsManager <- Session.getSettings(live)
+    return screenForMode(Maybe.default(&2,Settings.TuiMode,override,Settings.getTuiMode(settings)))
+def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),document: Component.Component,editorComponent: Component.Component,+foot: FooterOwner,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,screen: Process.ScreenState,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
   match mounted:
     case (view,_,Fail{cause}): IO.pure(View.View & Result<&2,&2,Error,Unit>,(view,Fail{Layout{cause}}))
     case (view,_,Done{base}):
@@ -1967,7 +1981,7 @@ def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),
         +ids : List<&2,Component.ComponentId> <- IO.pure(List<&2,Component.ComponentId>,Component.ComponentId{1n} <> Component.ComponentId{2n} <> Component.ComponentId{3n} <> Nil{})
         +components : List<&2,Component.Component> <- IO.pure(List<&2,Component.Component>,document <> editorComponent <> footerComponent(foot) <> Nil{})
         configured : Tui.TuiBase <- configuredTui(base,contextSession(context))
-        outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runProcessWithLifecycle(Process.active(Process.Session{configured,Screen.initial()},components,ids),stopped,False{},ready,stopping)
+        outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runProcessWithLifecycle(Process.active(Process.Session{configured,screen},components,ids),stopped,False{},ready,stopping)
         Callback.dispose(Process.QueryReady,Unit,ready)
         Callback.dispose(Unit,Unit,stopping)
         oldSelected : Maybe<&2,ThemeController.Handle> <- Ref.dispose(Maybe<&2,ThemeController.Handle>,selected)
@@ -1975,12 +1989,17 @@ def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),
         failure : Maybe<&2,Theme.LoadError> <- Ref.dispose(Maybe<&2,Theme.LoadError>,error)
         return (view,processThemeResult(outcome,failure))
 
+def fullscreenScreen(screen: Process.ScreenState) -> Bool:
+  match screen:
+    case Process.Main{_}: False{}
+    case Process.Fullscreen{_}: True{}
 def processEditorBorrowed(borrowed: View.View & Component.Component & View.Handle,+editorComponent: Component.Component,+foot: FooterOwner,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
   match borrowed:
     case (view,document,_):
       do IO<View.View & Result<&2,&2,Error,Unit>>:
-        mounted : View.View & View.Handle & Tui.ResultOf(Tui.TuiBase) <- View.mount(view,editorComponent,footerComponent(foot))
-        processMounted(mounted,document,editorComponent,foot,stopped,redraw,queue,initial,context)
+        +screen : Process.ScreenState <- configuredScreen(contextSession(context),tuiModeOverride(contextBinding(context)))
+        mounted : View.View & View.Handle & Tui.ResultOf(Tui.TuiBase) <- View.mountFor(view,editorComponent,footerComponent(foot),fullscreenScreen(screen))
+        processMounted(mounted,document,editorComponent,foot,stopped,redraw,queue,initial,screen,context)
 def processEditor(view: View.View,editorComponent: Component.Component,foot: FooterOwner,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
   processEditorBorrowed(View.borrow(view),editorComponent,foot,stopped,redraw,queue,initial,context)
 def process(view: View.View,editor: Component.Component,foot: FooterOwner,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):

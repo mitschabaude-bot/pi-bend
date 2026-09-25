@@ -751,7 +751,7 @@ def loadedProcess(owner: Owner,base: Tui.TuiBase,+context: LoadContext) -> IO(Ou
         +stopping : Callback.Callback<Unit,Unit> <- Callback.create(~Stopping,~Unit,~Unit,~stoppingRequest,Stopping{request,cancel,allRequested,currentDone,allDone})
         currentWorker : Chan(Unit) <- IO.fork(Unit,currentTask(context,Abort.signal(Unit,cancel),current,currentCallback,currentDone))
         allWorker : Chan(Unit) <- IO.fork(Unit,allTask(context,Abort.signal(Unit,cancel),allRequested,all,allCallback,allDone))
-        outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runProcessWithLifecycle(Process.active(Process.Session{base,Screen.initial()},[component],[Component.ComponentId{1n}]),stop,False{},ready,stopping)
+        outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runProcessWithLifecycle(Process.active(Process.Session{base,Process.Main{Screen.initial()}},[component],[Component.ComponentId{1n}]),stop,False{},ready,stopping)
         aborted : Bool <- Abort.abort(Unit,cancel,None{})
         wake : Bool <- Deferred.resolve(Unit,allRequested,Unit{})
         IO.join(Unit,currentWorker)

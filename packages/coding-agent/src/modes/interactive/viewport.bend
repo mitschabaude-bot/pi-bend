@@ -109,14 +109,20 @@ def entries(document: Component.Component,editor: Component.Component,footer: Co
         Node.Children{Node.child(Node.Leaf{footer},Stack.sized(None{},0n,0n,1n,100000n),None{}),Node.Empty{}}}}}
 def layout(+document: Component.Component,+editor: Component.Component,+footer: Component.Component) -> Node.LayoutNode:
   Node.Inline{Node.VStack{entries(document,editor,footer),0n}}
-def mountComponents(+document: Component.Component,+editor: Component.Component,+footer: Component.Component) -> IO(Tui.ResultOf(Tui.TuiBase)):
-  +base = Tui.setLayoutRoot(Tui.added(Tui.added(Tui.added(Tui.newTui(),document),editor),footer),Some{layout(document,editor,footer)})
+def layoutFor(+document: Component.Component,+editor: Component.Component,+footer: Component.Component,fullscreen: Bool) -> Node.LayoutNode:
+  match fullscreen:
+    case False{}: layout(document,editor,footer)
+    case True{}: Node.VStack{entries(document,editor,footer),0n}
+def mountComponents(+document: Component.Component,+editor: Component.Component,+footer: Component.Component,fullscreen: Bool) -> IO(Tui.ResultOf(Tui.TuiBase)):
+  +base = Tui.setLayoutRoot(Tui.added(Tui.added(Tui.added(Tui.newTui(),document),editor),footer),Some{layoutFor(document,editor,footer,fullscreen)})
   Tui.setFocus(base,document <> editor <> footer <> Nil{},Component.id(document) <> Component.id(editor) <> Component.id(footer) <> Nil{},Some{Component.id(editor)})
-def mountBorrowed(pair: View & Component.Component & Handle,editor: Component.Component,footer: Component.Component) -> IO(View & Handle & Tui.ResultOf(Tui.TuiBase)):
+def mountBorrowed(pair: View & Component.Component & Handle,editor: Component.Component,footer: Component.Component,fullscreen: Bool) -> IO(View & Handle & Tui.ResultOf(Tui.TuiBase)):
   match pair:
     case (view,document,handle):
       do IO<View & Handle & Tui.ResultOf(Tui.TuiBase)>:
-        result : Tui.ResultOf(Tui.TuiBase) <- mountComponents(document,editor,footer)
+        result : Tui.ResultOf(Tui.TuiBase) <- mountComponents(document,editor,footer,fullscreen)
         return (view,handle,result)
+def mountFor(view: View,editor: Component.Component,footer: Component.Component,fullscreen: Bool) -> IO(View & Handle & Tui.ResultOf(Tui.TuiBase)):
+  mountBorrowed(borrow(view),editor,footer,fullscreen)
 def mount(view: View,editor: Component.Component,footer: Component.Component) -> IO(View & Handle & Tui.ResultOf(Tui.TuiBase)):
-  mountBorrowed(borrow(view),editor,footer)
+  mountFor(view,editor,footer,False{})

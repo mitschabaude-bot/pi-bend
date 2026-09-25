@@ -1013,7 +1013,7 @@ def managedInServices(agentDir: String,services: Services) -> IO(Services & Mayb
   match services:
     case Services{runtime,scope}: managedInRuntime(scope,Runtime.managedTools(runtime,agentDir))
 
-def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, autoTrustOnReload: Bool, +cwd: String, +agentDir: String, packageDir: String, +host: Host()) -> IO(Unit):
+def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, autoTrustOnReload: Bool, tuiMode: Maybe<&2,Settings.TuiMode>, +cwd: String, +agentDir: String, packageDir: String, +host: Host()) -> IO(Unit):
   do IO<Unit>:
     current : Maybe<&2, AgentSession.AgentSession> <- SessionRuntime.session(Services, host)
     +live : AgentSession.AgentSession <- activeSession(current)
@@ -1032,7 +1032,7 @@ def interactiveHosted(initial: InitialMessage, themeOverride: Maybe<&2,String>, 
     +resume : Callback.Callback<InteractiveRun.ResumeRequest,SessionRuntime.ResumeOutcome> <- Callback.create(~Host(),~InteractiveRun.ResumeRequest,~SessionRuntime.ResumeOutcome,~resumeInteractive,host)
     tools : Maybe<&2,Manager.ToolsManager> <- SessionRuntime.withServices(Services,Maybe<&2,Manager.ToolsManager>,host,services => managedInServices(agentDir,services),None{})
     SessionRuntime.setRebindSession(Services,host,Some{rebinder})
-    result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.runBound(live,InteractiveRun.Binding{current,Controller.Replacement{startNew,forking},onRebind,login,refresh,importer,sessions,resume,tools,autoTrustOnReload},initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings),catalogModels(catalog))
+    result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.runBound(live,InteractiveRun.Binding{current,Controller.Replacement{startNew,forking},onRebind,login,refresh,importer,sessions,resume,tools,autoTrustOnReload,tuiMode},initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings),catalogModels(catalog))
     SessionRuntime.setRebindSession(Services,host,None{})
     Callback.dispose(InteractiveRun.LoginRequest,AuthLogin.Outcome(),login)
     Callback.dispose(Unit,List<&2,Models.Model()>,refresh)
@@ -1098,10 +1098,10 @@ def rpcHosted(assetsRoot: String, +host: Host()) -> IO(Unit):
     +live : AgentSession.AgentSession <- activeSession(current)
     state : AgentSession.AgentState() <- AgentSession.state(live)
     rpcSelected(live, assetsRoot, host, AgentSession.stateModel(state))
-def runHosted(mode: AppMode, initial: InitialMessage, themeOverride: Maybe<&2,String>, autoTrustOnReload: Bool, cwd: String, agentDir: String, packageDir: String, started: Result<&2, &2, String, Host()>) -> IO(Unit):
+def runHosted(mode: AppMode, initial: InitialMessage, themeOverride: Maybe<&2,String>, autoTrustOnReload: Bool, tuiMode: Maybe<&2,Settings.TuiMode>, cwd: String, agentDir: String, packageDir: String, started: Result<&2, &2, String, Host()>) -> IO(Unit):
   match mode initial started:
     case _ _ Fail{message}: fail(message)
-    case Interactive{} _ Done{host}: interactiveHosted(initial, themeOverride, autoTrustOnReload, cwd, agentDir, packageDir, host)
+    case Interactive{} _ Done{host}: interactiveHosted(initial, themeOverride, autoTrustOnReload, tuiMode, cwd, agentDir, packageDir, host)
     case Rpc{} _ Done{host}: rpcHosted(packageDir, host)
     case _ InitialMessage{text, images, remaining} Done{host}: printHosted(Print.PrintModeOptions{outputMode(mode), remaining, text, images}, host)
 
@@ -1109,6 +1109,11 @@ def noTrustOverride(value: Maybe<&2,Bool>) -> Bool:
   match value:
     case None{}: True{}
     case Some{_}: False{}
+def resolvedTuiMode(value: Maybe<&2,Args.TuiMode>) -> Maybe<&2,Settings.TuiMode>:
+  match value:
+    case None{}: None{}
+    case Some{Args.Regular{}}: Some{Settings.Regular{}}
+    case Some{Args.Fullscreen{}}: Some{Settings.Fullscreen{}}
 def runSeeded(+parsed: Args.Args, +mode: AppMode, initial: InitialMessage, +session: Session(), +agentDir: String, authPath: String, bundlePath: String, +packageDir: String) -> IO(Unit):
   +sessionCwd = Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, session)
   do IO<Unit>:
@@ -1119,7 +1124,7 @@ def runSeeded(+parsed: Args.Args, +mode: AppMode, initial: InitialMessage, +sess
     +factory : SessionRuntime.Factory(Services) <- Callback.create(~FactoryEnv, ~SessionRuntime.Request, ~Result<&1, &1, String, Created()>, ~createRuntime, FactoryEnv{parsed, agentDir, authPath, bundlePath, packageDir,mode,trust})
     +release : Callback.Callback<Services, Unit> <- Callback.create(~Unit, ~Services, ~Unit, ~releaseServices, Unit{})
     started : Result<&2, &2, String, Host()> <- SessionRuntime.create(Services, factory, release, agentDir, sessionCwd, session)
-    runHosted(mode, initial, themeOverride(parsed), autoTrustOnReload, sessionCwd, agentDir, packageDir, started)
+    runHosted(mode, initial, themeOverride(parsed), autoTrustOnReload, resolvedTuiMode(Args.tuiModeOf(parsed)), sessionCwd, agentDir, packageDir, started)
     Callback.dispose(SessionRuntime.Request, Result<&1, &1, String, Created()>, factory)
     Callback.dispose(Services, Unit, release)
     decision : Record.Record<Bool> <- Ref.dispose(Record.Record<Bool>,trust)

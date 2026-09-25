@@ -138,7 +138,7 @@ def mounted(owner: Owner,base: Tui.ResultOf(Tui.TuiBase)) -> IO(Result<&2,&2,Str
     case owner Fail{_}: finish(owner,Fail{Terminal.Closed{}})
     case Owner{state,+stop,+component,render,input,invalidate,focus} Done{tui}:
       do IO<Result<&2,&2,String,Maybe<&2,String>>>:
-        +outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runProcess(Process.active(Process.Session{tui,Screen.initial()},[component],[Component.ComponentId{1n}]),stop,False{})
+        +outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runProcess(Process.active(Process.Session{tui,Process.Main{Screen.initial()}},[component],[Component.ComponentId{1n}]),stop,False{})
         clearPrompt(outcome)
         finish(Owner{state,stop,component,render,input,invalidate,focus},outcome)
 def run(owner: Owner) -> IO(Result<&2,&2,String,Maybe<&2,String>>):

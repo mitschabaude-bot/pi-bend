@@ -125,14 +125,16 @@
       "ports": [
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend",
         "packages/coding-agent/src/modes/interactive/run.bend",
-        "packages/coding-agent/src/modes/interactive/commands.bend"
+        "packages/coding-agent/src/modes/interactive/commands.bend",
+        "packages/coding-agent/src/modes/interactive/viewport.bend"
       ],
-      "note": "Interactive theme selection and per-model thinking override updates, /thinking and /scoped-models flows are implemented; broader command and terminal behavior remain partial.",
+      "note": "Interactive theme selection, per-model thinking overrides, /thinking and /scoped-models flows work. Fullscreen startup and typing now match terminal parity with both CLI override and saved setting; exit output, mouse/search controls, dynamic mode switching, and broader command behavior remain partial.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "23a8e54c1d30b54424d1e29508abdf12385cb5dec8e142b675becdb2c540b2d4",
-        "packages/coding-agent/src/modes/interactive/run.bend": "a065491059b1b5035cc0b24f4d2586a5284fd4a03b831ace514dcc63e05cf532",
-        "packages/coding-agent/src/modes/interactive/commands.bend": "346a1437fb1f5d4b429ae47416c1ab464e043ee8a5d7ec79a269fdc417a3092a"
+        "packages/coding-agent/src/modes/interactive/run.bend": "93f70f701333d91a639f40ee2c54dc9e22a209f840a1759f7c743368d1da01d9",
+        "packages/coding-agent/src/modes/interactive/commands.bend": "346a1437fb1f5d4b429ae47416c1ab464e043ee8a5d7ec79a269fdc417a3092a",
+        "packages/coding-agent/src/modes/interactive/viewport.bend": "b5e0bae4b4c857909a36a9f14c3f60bbc3a1c6ab04391492a36958b9616a6eb2"
       }
     },
     "packages/tui/src/editor-component.ts": {
@@ -147,10 +149,17 @@
       }
     },
     "packages/tui/src/tui-alt-screen.ts": {
-      "state": "missing",
-      "note": "Fullscreen alternate-screen mode is not ported; default regular mode is available.",
+      "state": "partial",
+      "note": "Native alternate-screen lifecycle and frame diff render match upstream startup and typing in a 100x32 terminal. Upstream mouse selection, search, image placement, exit transcript/resume hint, and scrolling controls remain unported; the upstream test suite is still pending.",
       "source_sha256": "5f6032a07398b8df3f72d65c38dbed2e52649a25823a52946d6414ddb2f8a929",
-      "port_sha256": {}
+      "port_sha256": {
+        "packages/tui/src/tui-alt-screen.bend": "78580f6d89bba846586342c3740f660641e704b88455af7e581d3bbdd486e3d8",
+        "packages/tui/src/tui-process.bend": "ad3b9e79b2bf850ea1990ecd3cdd1485314fd76239b13bdc4d7f6ee9172a85a2"
+      },
+      "ports": [
+        "packages/tui/src/tui-alt-screen.bend",
+        "packages/tui/src/tui-process.bend"
+      ]
     },
     "packages/ai/src/auth/credential-store.ts": {
       "state": "missing",
@@ -256,7 +265,7 @@
       ],
       "source_sha256": "8d8744ed7ba79d04fbc5e2fac16ef38083ba2d1e871d12a1a2460faa27e29f27",
       "port_sha256": {
-        "packages/coding-agent/src/cli/session-picker.bend": "9ebb4af8bc4e29c5dad8fa49de994a356867b2d43db497d192988d807d9fbb47"
+        "packages/coding-agent/src/cli/session-picker.bend": "4971f9ba65525a119e6daf31a08771b4c77fe2bc3588ba5e43ed275bc0844e20"
       }
     }
   }
