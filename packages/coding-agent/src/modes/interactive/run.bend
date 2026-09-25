@@ -277,8 +277,9 @@ def environmentValue(result: Result<&1,&1,U32 & String,String>) -> Maybe<&2,Stri
 # and whether fd was available when managed tools were set up.
 type AutocompleteSlot is Data:
   AutocompleteSlot{owner: Ref.Ref<Maybe<&2,Interactive.AutocompleteOwner>>,files: Ref.Ref<Bool>,home: String,data: String}
+type ExportTheme is Data: ExportTheme{active: Ref.Ref<Theme.Theme>,customDir: String}
 type CommandObservation is Data:
-  CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,builtinDir: String,importState: ImportState,resumeState: ResumeState,selector: Ref.Ref<Maybe<&2,Selector.Host>>,bash: BashInput,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,trust: TrustContext,header: Maybe<&2,Header.Handle>,bindings: Keybindings.KeybindingsManager,autocomplete: AutocompleteSlot}
+  CommandObservation{sink: Interactive.CommandSink,session: Ref.Ref<Session.AgentSession>,footer: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,builtinDir: String,importState: ImportState,resumeState: ResumeState,selector: Ref.Ref<Maybe<&2,Selector.Host>>,bash: BashInput,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,trust: TrustContext,header: Maybe<&2,Header.Handle>,bindings: Keybindings.KeybindingsManager,autocomplete: AutocompleteSlot,exportTheme: ExportTheme}
 # builtinDir is <assets>/packages/coding-agent/src/modes/interactive/theme.
 def autocompleteSlot(home: Maybe<&2,String>,builtinDir: String) -> IO(AutocompleteSlot):
   do IO<AutocompleteSlot>:
@@ -364,38 +365,44 @@ def exportJsonlResolved(session: Session.AgentSession,resolved: Maybe<&2,String>
         writeBranch(target,branchAt(stored,timestamp))
 def exportJsonl(session: Session.AgentSession,cwd: String,path: String) -> IO(Result<&2,&2,String,String>):
   exportJsonlResolved(session,Path.resolve(cwd,path))
-def exportWithAssets(+session: Session.AgentSession,path: Maybe<&2,String>,assets: Result<&2,&2,String,Export.Assets>) -> IO(Result<&2,&2,String,String>):
+def exportWithAssets(+session: Session.AgentSession,path: Maybe<&2,String>,theme: Theme.Theme,themePath: String,assets: Result<&2,&2,String,Export.Assets>) -> IO(Result<&2,&2,String,String>):
   match assets:
     case Fail{message}: IO.pure(Result<&2,&2,String,String>,Fail{message})
     case Done{loaded}:
       do IO<Result<&2,&2,String,String>>:
+        styled : Export.Assets <- Export.themed(loaded,theme,themePath)
         stored : Session.Session() <- Session.sessionOf(session)
         agentState : Session.AgentState() <- Session.state(session)
-        Export.write(loaded,stored,agentState,path)
-def exportHtml(session: Session.AgentSession,builtinDir: String,path: Maybe<&2,String>) -> IO(Result<&2,&2,String,String>):
+        Export.write(styled,stored,agentState,path)
+def exportThemePath(theme: Theme.Theme,builtinDir: String,customDir: String) -> String:
+  match theme:
+    case Theme.Theme{+name,_,_,_,_,_}:
+      Bool.pick(String,String.eq(name,"dark") || String.eq(name,"light"),Path.join(builtinDir,name ++ ".json"),Path.join(customDir,name ++ ".json"))
+def exportHtml(session: Session.AgentSession,+builtinDir: String,customDir: String,+theme: Theme.Theme,path: Maybe<&2,String>) -> IO(Result<&2,&2,String,String>):
   do IO<Result<&2,&2,String,String>>:
     assets : Result<&2,&2,String,Export.Assets> <- Export.loadAssets(Path.join(builtinDir,"../../../core/export-html"))
-    exportWithAssets(session,path,assets)
-def exportWithPath(session: Session.AgentSession,cwd: String,builtinDir: String,+path: String,jsonl: Bool) -> IO(Result<&2,&2,String,String>):
+    exportWithAssets(session,path,theme,exportThemePath(theme,builtinDir,customDir),assets)
+def exportWithPath(session: Session.AgentSession,cwd: String,builtinDir: String,customDir: String,theme: Theme.Theme,+path: String,jsonl: Bool) -> IO(Result<&2,&2,String,String>):
   match jsonl:
     case True{}: exportJsonl(session,cwd,path)
-    case False{}: exportHtml(session,builtinDir,Some{path})
-def exportChosen(session: Session.AgentSession,cwd: String,builtinDir: String,path: Maybe<&2,String>) -> IO(Result<&2,&2,String,String>):
+    case False{}: exportHtml(session,builtinDir,customDir,theme,Some{path})
+def exportChosen(session: Session.AgentSession,cwd: String,builtinDir: String,customDir: String,theme: Theme.Theme,path: Maybe<&2,String>) -> IO(Result<&2,&2,String,String>):
   match path:
-    case Some{+path}: exportWithPath(session,cwd,builtinDir,path,String.ends_with(path,".jsonl"))
-    case None{}: exportHtml(session,builtinDir,None{})
-def exportCurrent(session: Session.AgentSession,cwd: String,builtinDir: String,requested: Maybe<&2,String>) -> IO(Result<&2,&2,String,String>):
-  exportChosen(session,cwd,builtinDir,exportPath(requested))
+    case Some{+path}: exportWithPath(session,cwd,builtinDir,customDir,theme,path,String.ends_with(path,".jsonl"))
+    case None{}: exportHtml(session,builtinDir,customDir,theme,None{})
+def exportCurrent(session: Session.AgentSession,cwd: String,builtinDir: String,customDir: String,theme: Theme.Theme,requested: Maybe<&2,String>) -> IO(Result<&2,&2,String,String>):
+  exportChosen(session,cwd,builtinDir,customDir,theme,exportPath(requested))
 def exportNotice(result: Result<&2,&2,String,String>) -> Interactive.SubmissionFailure:
   match result:
     case Done{path}: Interactive.CommandNotice{"Session exported to: " ++ path}
     case Fail{message}: Interactive.CommandFailure{"Failed to export session: " ++ message}
 def exportObserved(input: CommandObservation,requested: Maybe<&2,String>) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,failure,redraw,cwd,builtinDir,_,_,_,_,_,_,_,_,_}:
+    case CommandObservation{_,session,_,failure,redraw,cwd,builtinDir,_,_,_,_,_,_,_,_,_,ExportTheme{active,customDir}}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
-        result : Result<&2,&2,String,String> <- exportCurrent(live,cwd,builtinDir,requested)
+        theme : Theme.Theme <- Ref.read(Theme.Theme,active)
+        result : Result<&2,&2,String,String> <- exportCurrent(live,cwd,builtinDir,customDir,theme,requested)
         Interactive.report(failure,exportNotice(result))
 def importStatus(state: ImportState,status: Interactive.SubmissionFailure) -> IO(Unit):
   match state:
@@ -462,7 +469,7 @@ def importRequested(+state: ImportState,path: Maybe<&2,String>) -> IO(Unit):
         importConfirmed(state,input,answer)
 def importObserved(input: CommandObservation,requested: Maybe<&2,String>) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,_,_,_,state,_,_,_,_,_,_,_,_}: importRequested(state,exportPath(requested))
+    case CommandObservation{_,_,_,_,_,_,_,state,_,_,_,_,_,_,_,_,_}: importRequested(state,exportPath(requested))
 def resumeStatus(state: ResumeState,status: Interactive.SubmissionFailure) -> IO(Unit):
   match state:
     case ResumeState{_,_,_,_,failure,redraw}:
@@ -521,7 +528,7 @@ def resumeRequested(+state: ResumeState) -> IO(Unit):
         choices : SessionChoices <- Callback.call(Unit,SessionChoices,backend,Unit{})
         resumeOpen(state,choices)
 def resumeObserved(input: CommandObservation) -> IO(Unit):
-  match input: case CommandObservation{_,_,_,_,_,_,_,_,state,_,_,_,_,_,_,_}: resumeRequested(state)
+  match input: case CommandObservation{_,_,_,_,_,_,_,_,state,_,_,_,_,_,_,_,_}: resumeRequested(state)
 def selectorNotice(failure: Interactive.StatusSink,message: String) -> IO(Unit):
   Interactive.report(failure,Interactive.CommandNotice{message})
 def openTree(target: Maybe<&2,Selector.Host>,state: Selector.State) -> IO(Unit):
@@ -557,7 +564,7 @@ def openSessionSelector(mode: Selector.Mode,session: Ref.Ref<Session.AgentSessio
     Interactive.requestRender(redraw)
 def treeObserved(input: CommandObservation,mode: Selector.Mode) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,failure,redraw,_,_,_,_,selector,_,_,_,_,_,_}: openSessionSelector(mode,session,selector,failure,redraw)
+    case CommandObservation{_,session,_,failure,redraw,_,_,_,_,selector,_,_,_,_,_,_,_}: openSessionSelector(mode,session,selector,failure,redraw)
 type BashChunk is Data: BashChunk{message: MessageUI.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 def bashChunk(target: BashChunk,delta: String) -> IO(Unit):
   match target:
@@ -647,10 +654,10 @@ def bashRequested(+input: BashInput,+command: String,+excluded: Bool) -> IO(Unit
           reservation : BashReservation <- Ref.modify(BashActivity,BashReservation,activity,current => reserveBash(current,fresh))
           bashReserved(input,command,excluded,reservation))(Unit{})
 def bashObserved(input: CommandObservation,command: String,excluded: Bool) -> IO(Unit):
-  match input: case CommandObservation{_,_,_,_,_,_,_,_,_,_,bash,_,_,_,_,_}: bashRequested(bash,command,excluded)
+  match input: case CommandObservation{_,_,_,_,_,_,_,_,_,_,bash,_,_,_,_,_,_}: bashRequested(bash,command,excluded)
 def ordinaryCommandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match input:
-    case CommandObservation{sink,session,footer,_,_,_,_,_,_,_,_,_,_,_,_,_}:
+    case CommandObservation{sink,session,footer,_,_,_,_,_,_,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
         changed : Bool <- Interactive.commandResult(sink,action)
         Bool.pick(Unit -> IO(Unit),changed,_ => do IO<Unit>:
@@ -693,7 +700,7 @@ def sessionInfoShown(transcript: Transcript.Handle,+live: Session.AgentSession,s
         Transcript.sessionInfo(transcript,sessionInfoOf(value,Session.stateOf(stored),Session.modelRuntime(live),warming))
 def sessionInfoObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,_,redraw,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_}:
+    case CommandObservation{_,session,_,_,redraw,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_,_}:
       do IO<Unit>:
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         stats : Result<&2,&2,Tree.Error,Stats.Stats> <- Session.getSessionStats(live)
@@ -701,7 +708,7 @@ def sessionInfoObserved(input: CommandObservation) -> IO(Unit):
         Interactive.requestRender(redraw)
 def copyObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,_,redraw,cwd,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_}:
+    case CommandObservation{_,session,_,_,redraw,cwd,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_,_}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         text : Maybe<&2,String> <- Session.getLastAssistantText(live)
@@ -722,7 +729,7 @@ def changelogText(entries: List<&2,Changelog.ChangelogEntry>) -> String:
     case entries: String.join(linkedEntries(List.reverse(&2,Changelog.ChangelogEntry,entries)),"\n\n")
 def changelogObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,redraw,_,builtinDir,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_}:
+    case CommandObservation{_,_,_,_,redraw,_,builtinDir,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_,_}:
       do IO<Unit>:
         entries : List<&2,Changelog.ChangelogEntry> <- Changelog.parseChangelog(changelogPath(builtinDir))
         Transcript.changelog(transcript,MessageUI.FullChangelog{changelogText(entries)})
@@ -778,7 +785,7 @@ def hotkeysMarkdown(+bindings: Keybindings.KeybindingsManager) -> String:
   ],"\n")
 def hotkeysObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,redraw,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,bindings,_}:
+    case CommandObservation{_,_,_,_,redraw,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,bindings,_,_}:
       do IO<Unit>:
         Transcript.hotkeys(transcript,hotkeysMarkdown(bindings))
         Interactive.requestRender(redraw)
@@ -788,7 +795,7 @@ def matchSettings(host: Maybe<&2,SettingsPicker.Host>) -> IO(Unit):
     case Some{ready}: SettingsPicker.open(ready)
 def settingsObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,_,_,_,_,_,_,_,settings,_,_,_,_}:
+    case CommandObservation{_,_,_,_,_,_,_,_,_,_,_,settings,_,_,_,_,_}:
       do IO<Unit>:
         host : Maybe<&2,SettingsPicker.Host> <- Ref.read(Maybe<&2,SettingsPicker.Host>,settings)
         matchSettings(host)
@@ -805,7 +812,7 @@ def trustOpened(target: Ref.Ref<Maybe<&2,TrustPicker.Host>>,cwd: String,options:
         openTrustHost(host,cwd,options,saved,trusted)
 def trustObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,_,redraw,+cwd,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,TrustContext{host,store,_},_,_,_}:
+    case CommandObservation{_,session,_,_,redraw,+cwd,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,TrustContext{host,store,_},_,_,_,_}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         settings : Settings.SettingsManager <- Session.getSettings(live)
@@ -899,7 +906,7 @@ def reloadIdle(transcript: Transcript.Handle,header: Maybe<&2,Header.Handle>,+se
         return reloaded(result)
 def reloadObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,+session,_,_,redraw,cwd,_,_,_,_,BashInput{_,transcript,editor,_,_,_},_,trust,header,_,+autocomplete}:
+    case CommandObservation{_,+session,_,_,redraw,cwd,_,_,_,_,BashInput{_,transcript,editor,_,_,_},_,trust,header,_,+autocomplete,_}:
       do IO<Unit>:
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         streaming : Bool <- Session.isStreaming(live)
@@ -909,10 +916,10 @@ def reloadObserved(input: CommandObservation) -> IO(Unit):
         Interactive.requestRender(redraw)
 def sessionStatus(input: CommandObservation,message: String) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,_,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_}: Transcript.status(transcript,message)
+    case CommandObservation{_,_,_,_,_,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_,_}: Transcript.status(transcript,message)
 def newSessionStatus(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,_,_,_,_,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_}: Transcript.newSession(transcript)
+    case CommandObservation{_,_,_,_,_,_,_,_,_,_,BashInput{_,transcript,_,_,_,_},_,_,_,_,_,_}: Transcript.newSession(transcript)
 def commandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match action:
     case Commands.CopyLastAssistant{}: copyObserved(input)
@@ -2512,7 +2519,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +editorHandle : Ref.Ref<Maybe<&2,Live.Handle>> <- Ref.new(Maybe<&2,Live.Handle>,None{})
         +bashActivity : Ref.Ref<BashActivity> <- Ref.new(BashActivity,BashActivity{False{},False{},None{}})
         +autocomplete : AutocompleteSlot <- autocompleteSlot(home,builtinDir)
-        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),status,redraw,cwd,builtinDir,importStateOf(mode,loginHost,status,redraw),resumeState,selectorRef,BashInput{current,transcriptHandle,editorHandle,status,redraw,bashActivity},settingsSelectorRef,TrustContext{trustSelectorRef,Trust.create(Path.normalize(customDir ++ "/..")),autoTrustOnReloadOf(mode)},View.headerHandle(viewHandle),bindings,autocomplete})
+        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),status,redraw,cwd,builtinDir,importStateOf(mode,loginHost,status,redraw),resumeState,selectorRef,BashInput{current,transcriptHandle,editorHandle,status,redraw,bashActivity},settingsSelectorRef,TrustContext{trustSelectorRef,Trust.create(Path.normalize(customDir ++ "/..")),autoTrustOnReloadOf(mode)},View.headerHandle(viewHandle),bindings,autocomplete,ExportTheme{liveTheme,customDir}})
         +lastClear : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         +lastEscape : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         selectionObserver : Callback.Callback<Controller.SelectionResult,Unit> <- Callback.create(~SelectionSink,~Controller.SelectionResult,~Unit,~selectionResult,SelectionSink{current,transcriptHandle,editorHandle,footerState(foot),status,redraw,cwd,home})

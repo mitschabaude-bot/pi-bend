@@ -3331,9 +3331,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5596-missing-theme-export.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "358e48a430ee9e06e94e2d4d040447d0aab4cf751f6020d8820455b398ebb692"
+      "status": "partial",
+      "ports": [
+        "tests/export-html-theme.bend",
+        "tests/interactive_export_theme_check.py"
+      ],
+      "sha256": "358e48a430ee9e06e94e2d4d040447d0aab4cf751f6020d8820455b398ebb692",
+      "notes": "Native theme/export checks cover light, dark, and missing-theme fallback. A PTY test resumes a saved session, runs /export with light and missing themes, and checks the saved HTML palette. The upstream AgentSession.exportToHtml invocation with a stored invalid setting and settings-preservation assertion remain unported."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5661-uppercase-header-values.test.ts",
