@@ -1,5 +1,6 @@
 import Base
 import ../packages/coding-agent/src/modes/interactive/theme/markdown-theme.bend as Styles
+import ../packages/coding-agent/src/utils/syntax-highlight.bend as SyntaxHighlight
 import ../packages/coding-agent/src/modes/interactive/theme/theme.bend as Theme
 import ../packages/coding-agent/src/modes/interactive/theme/color.bend as Color
 import ../packages/tui/src/components/markdown.bend as Markdown
@@ -35,7 +36,8 @@ def loaded(result: Result<&2,&2,Theme.LoadError,Theme.Theme>) -> IO(Unit):
   match result:
     case Done{theme}:
       do IO<Unit>:
-        styles : Styles.Styles <- Styles.create(theme)
+        highlighter : SyntaxHighlight.Highlighter <- SyntaxHighlight.create("packages/runtime/data/highlight")
+        styles : Styles.Styles <- Styles.create(theme,highlighter)
         withStyles(styles)
     case Fail{_}: IO.die(Unit,1,"theme failed to load")
 def main() -> IO(Unit):

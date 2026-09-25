@@ -3,12 +3,13 @@ import ./theme.bend as Theme
 import ../../../../../tui/src/components/markdown.bend as Markdown
 import ../../../../../runtime/src/callback.bend as Callback
 import ../../../../../runtime/src/ref.bend as Ref
+import ../../../utils/syntax-highlight.bend as SyntaxHighlight
 
 # The theme document owns colors; this value owns the callbacks borrowed by
 # Markdown components. Retire those components before disposing these styles.
 type ColorStyle is Data: ColorStyle{theme: Ref.Ref<Theme.Theme>,key: String}
 type Effect is Data: Bold{} Italic{} Underline{} Strike{}
-type Styles is Type: Styles{markdown: Markdown.MarkdownTheme,callbacks: List<&2,Callback.Callback<String,String>>,theme: Ref.Ref<Theme.Theme>}
+type Styles is Type: Styles{markdown: Markdown.MarkdownTheme,callbacks: List<&2,Callback.Callback<String,String>>,theme: Ref.Ref<Theme.Theme>,highlighter: SyntaxHighlight.Highlighter}
 
 def colorResult(result: Result<&2,&2,Theme.Error,String>) -> IO(String):
   match result:
@@ -31,9 +32,19 @@ def color(theme: Ref.Ref<Theme.Theme>,key: String) -> IO(Callback.Callback<Strin
   Callback.create(~ColorStyle,~String,~String,~colored,ColorStyle{theme,key})
 def effect(value: Effect) -> IO(Callback.Callback<String,String>):
   Callback.create(~Effect,~String,~String,~effectStyle,value)
-def create(+theme: Theme.Theme) -> IO(Styles):
+# getMarkdownTheme().highlightCode: code blocks highlighted with the current
+# theme; a failed highlight keeps the code-block colour.
+type CodeStyle is Data: CodeStyle{theme: Ref.Ref<Theme.Theme>,highlighter: SyntaxHighlight.Highlighter}
+def highlighted(style: CodeStyle,input: Markdown.HighlightInput) -> IO(List<&2,String>):
+  match style input:
+    case CodeStyle{theme,highlighter} Markdown.HighlightInput{code,lang}:
+      do IO<List<&2,String>>:
+        current : Theme.Theme <- Ref.read(Theme.Theme,theme)
+        Theme.highlightLines(highlighter,current,code,lang,True{})
+def create(+theme: Theme.Theme,+highlighter: SyntaxHighlight.Highlighter) -> IO(Styles):
   do IO<Styles>:
     +live : Ref.Ref<Theme.Theme> <- Ref.new(Theme.Theme,theme)
+    highlight : Callback.Callback<Markdown.HighlightInput,List<&2,String>> <- Callback.create(~CodeStyle,~Markdown.HighlightInput,~List<&2,String>,~highlighted,CodeStyle{live,highlighter})
     +heading : Callback.Callback<String,String> <- color(live,"mdHeading")
     +link : Callback.Callback<String,String> <- color(live,"mdLink")
     +url : Callback.Callback<String,String> <- color(live,"mdLinkUrl")
@@ -48,15 +59,15 @@ def create(+theme: Theme.Theme) -> IO(Styles):
     +italic : Callback.Callback<String,String> <- effect(Italic{})
     +strike : Callback.Callback<String,String> <- effect(Strike{})
     +underline : Callback.Callback<String,String> <- effect(Underline{})
-    return Styles{Markdown.MarkdownTheme{heading,link,url,code,block,blockBorder,quote,quoteBorder,rule,bullet,bold,italic,strike,underline,None{},None{}},heading <> link <> url <> code <> block <> blockBorder <> quote <> quoteBorder <> rule <> bullet <> bold <> italic <> strike <> underline <> Nil{},live}
+    return Styles{Markdown.MarkdownTheme{heading,link,url,code,block,blockBorder,quote,quoteBorder,rule,bullet,bold,italic,strike,underline,Some{highlight},None{}},heading <> link <> url <> code <> block <> blockBorder <> quote <> quoteBorder <> rule <> bullet <> bold <> italic <> strike <> underline <> Nil{},live,highlighter}
 def theme(styles: Styles) -> Markdown.MarkdownTheme:
   match styles:
-    case Styles{value,_,_}: value
+    case Styles{value,_,_,_}: value
 def live(styles: Styles) -> Ref.Ref<Theme.Theme>:
-  match styles: case Styles{_,_,liveTheme}: liveTheme
+  match styles: case Styles{_,_,liveTheme,_}: liveTheme
 def borrow(styles: Styles) -> Styles & Markdown.MarkdownTheme:
   match styles:
-    case Styles{+value,callbacks,liveTheme}: (Styles{value,callbacks,liveTheme},value)
+    case Styles{+value,callbacks,liveTheme,highlighter}: (Styles{value,callbacks,liveTheme,highlighter},value)
 def disposeCallbacks(values: List<&2,Callback.Callback<String,String>>) -> IO(Unit):
   match values:
     case Nil{}: IO.pure(Unit,Unit{})
@@ -64,10 +75,15 @@ def disposeCallbacks(values: List<&2,Callback.Callback<String,String>>) -> IO(Un
       do IO<Unit>:
         Callback.dispose(String,String,callback)
         disposeCallbacks(rest)
+def disposeHighlight(theme: Markdown.MarkdownTheme) -> IO(Unit):
+  match theme:
+    case Markdown.MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,_,_,_,Some{highlight},_}: Callback.dispose(Markdown.HighlightInput,List<&2,String>,highlight)
+    case _: IO.pure(Unit,Unit{})
 def dispose(styles: Styles) -> IO(Unit):
   match styles:
-    case Styles{_,callbacks,liveTheme}:
+    case Styles{markdown,callbacks,liveTheme,_}:
       do IO<Unit>:
+        disposeHighlight(markdown)
         disposeCallbacks(callbacks)
         old : Theme.Theme <- Ref.dispose(Theme.Theme,liveTheme)
         return Unit{}

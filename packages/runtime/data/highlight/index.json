@@ -1,27 +1,5 @@
 {
  "version": "10.7.3",
- "eager": [
-  "python",
-  "java",
-  "go",
-  "javascript",
-  "cpp",
-  "typescript",
-  "php",
-  "ruby",
-  "c",
-  "csharp",
-  "nix",
-  "bash",
-  "rust",
-  "scala",
-  "kotlin",
-  "swift",
-  "dart",
-  "groovy",
-  "perl",
-  "lua"
- ],
  "languages": [
   {
    "name": "1c",

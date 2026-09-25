@@ -7,8 +7,8 @@
 // highlight.js grammars are JavaScript functions that highlight.js compiles
 // lazily (compileLanguage) on the first highlight call. This script lets
 // highlight.js compile every language and writes the resulting mode graph:
-// one JSON file per language plus index.json (registration order, aliases,
-// pi's eager languages). Modes are numbered in breadth-first order from the
+// one JSON file per language plus index.json (registration order and
+// language metadata). Modes are numbered in breadth-first order from the
 // language root (mode 0); `contains` and `starts` refer to those numbers, so
 // shared and self-referential modes keep their identity.
 //
@@ -29,8 +29,6 @@ const hljs = require(join(packageDir, "lib/index.js"));
 const version = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8")).version;
 if (version !== "10.7.3") throw new Error(`expected highlight.js 10.7.3, found ${version}`);
 
-// pi-mono packages/coding-agent/src/utils/syntax-highlight.ts eagerLanguages.
-const eager = ["python", "java", "go", "javascript", "cpp", "typescript", "php", "ruby", "c", "csharp", "nix", "bash", "rust", "scala", "kotlin", "swift", "dart", "groovy", "perl", "lua"];
 
 // Registration order of highlight.js/lib/index.js.
 const indexSource = readFileSync(join(packageDir, "lib/index.js"), "utf8");
@@ -96,9 +94,12 @@ function serializeLanguage(name) {
     }
     out.keywordPattern = mode.keywordPatternRe.source;
     if (mode.relevance !== undefined) out.relevance = mode.relevance;
-    for (const flag of ["excludeBegin", "excludeEnd", "returnBegin", "returnEnd", "endsWithParent", "endsParent", "skip", "endSameAsBegin"]) {
+    for (const flag of ["excludeBegin", "excludeEnd", "returnBegin", "returnEnd", "endsWithParent", "endsParent", "skip"]) {
       if (mode[flag]) out[flag] = true;
     }
+    // No 10.7.3 grammar sets the endSameAsBegin mode flag (END_SAME_AS_BEGIN
+    // is the callback pair below); the Bend port does not implement it.
+    if (mode.endSameAsBegin) throw new Error(`${name}: endSameAsBegin mode flag`);
     if (mode.subLanguage !== undefined && mode.subLanguage !== null) out.subLanguage = mode.subLanguage;
     if (mode.__beforeBegin) out.beforeBegin = callbackName(mode.__beforeBegin, "__beforeBegin");
     if (mode["on:begin"]) out.onBegin = callbackName(mode["on:begin"], "on:begin");
@@ -120,7 +121,7 @@ function serializeLanguage(name) {
 
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
-const index = { version, eager, languages: [] };
+const index = { version, languages: [] };
 let total = 0;
 for (const name of order) {
   const language = hljs.getLanguage(name);

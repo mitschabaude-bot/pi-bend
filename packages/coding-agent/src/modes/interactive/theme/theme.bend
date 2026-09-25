@@ -7,6 +7,8 @@ import ../../../../../runtime/src/f64.bend as F
 import ../../../../../runtime/src/filesystem.bend as FS
 import ../../../../../runtime/src/utf8.bend as Utf8
 import ../../../../../runtime/src/posix-path.bend as Path
+import ../../../../../runtime/src/case-map.bend as Case
+import ../../../utils/syntax-highlight.bend as SyntaxHighlight
 
 # Theme documents are immutable data. Variables are resolved once when a theme
 # is loaded, so rendering never depends on JSON or mutable global state.
@@ -196,3 +198,166 @@ def loadByName(+themeName: String,builtinDir: String,customDir: String,+mode: C.
     _ => Bool.pick(Unit -> IO(Result<&2,&2,LoadError,Theme>),String.eq(themeName,"dark") || String.eq(themeName,"light"),
       _ => loadFromPath(Path.join(builtinDir,themeName ++ ".json"),mode),
       _ => customTheme(Path.join(customDir,themeName ++ ".json"),themeName,mode))(Unit{}))(Unit{})
+
+# TUI helpers
+# -----------
+
+def bold(text: String) -> String: "\u{1b}[1m" ++ text ++ "\u{1b}[22m"
+def italic(text: String) -> String: "\u{1b}[3m" ++ text ++ "\u{1b}[23m"
+def underline(text: String) -> String: "\u{1b}[4m" ++ text ++ "\u{1b}[24m"
+def fg(theme: Theme,+key: String,+text: String) -> String: Result.default(&2,&2,Error,String,foreground(theme,key,text),text)
+
+# The formatters of the CLI highlight theme: a theme foreground or an effect.
+type CliStyle is Data: CliColor{key: String} CliBold{} CliItalic{} CliUnderline{}
+type CliFormatter is Data: CliFormatter{theme: Theme,style: CliStyle}
+def cliFormat(formatter: CliFormatter,text: String) -> String:
+  match formatter:
+    case CliFormatter{theme,CliColor{key}}: fg(theme,key,text)
+    case CliFormatter{_,CliBold{}}: bold(text)
+    case CliFormatter{_,CliItalic{}}: italic(text)
+    case CliFormatter{_,CliUnderline{}}: underline(text)
+def cliEntries(+theme: Theme,styles: List<&2,R.Property<CliStyle>>,record: R.Record<CliFormatter>) -> R.Record<CliFormatter>:
+  match styles:
+    case Nil{}: record
+    case R.Property{scope,style} <> rest: cliEntries(theme,rest,R.set(CliFormatter,record,scope,CliFormatter{theme,style}))
+def buildCliHighlightTheme(theme: Theme) -> R.Record<CliFormatter>:
+  cliEntries(theme,[
+    R.Property{"keyword",CliColor{"syntaxKeyword"}},
+    R.Property{"built_in",CliColor{"syntaxType"}},
+    R.Property{"literal",CliColor{"syntaxNumber"}},
+    R.Property{"number",CliColor{"syntaxNumber"}},
+    R.Property{"regexp",CliColor{"syntaxString"}},
+    R.Property{"string",CliColor{"syntaxString"}},
+    R.Property{"comment",CliColor{"syntaxComment"}},
+    R.Property{"doctag",CliColor{"syntaxComment"}},
+    R.Property{"meta",CliColor{"muted"}},
+    R.Property{"function",CliColor{"syntaxFunction"}},
+    R.Property{"title",CliColor{"syntaxFunction"}},
+    R.Property{"class",CliColor{"syntaxType"}},
+    R.Property{"type",CliColor{"syntaxType"}},
+    R.Property{"tag",CliColor{"syntaxPunctuation"}},
+    R.Property{"name",CliColor{"syntaxKeyword"}},
+    R.Property{"attr",CliColor{"syntaxVariable"}},
+    R.Property{"variable",CliColor{"syntaxVariable"}},
+    R.Property{"params",CliColor{"syntaxVariable"}},
+    R.Property{"operator",CliColor{"syntaxOperator"}},
+    R.Property{"punctuation",CliColor{"syntaxPunctuation"}},
+    R.Property{"emphasis",CliItalic{}},
+    R.Property{"strong",CliBold{}},
+    R.Property{"link",CliUnderline{}},
+    R.Property{"addition",CliColor{"toolDiffAdded"}},
+    R.Property{"deletion",CliColor{"toolDiffRemoved"}}],R.new(CliFormatter))
+
+# text.split("\n"), accumulating backwards (code can be long).
+def splitLines(text: String,+current: String,+lines: List<&2,String>) -> List<&2,String>:
+  match text:
+    case SNil{}: List.reverse(&2,String,String.reverse(current) <> lines)
+    case SCon{Chr{10},rest}: splitLines(rest,"",String.reverse(current) <> lines)
+    case SCon{char,rest}: splitLines(rest,SCon{char,current},lines)
+def lines(text: String) -> List<&2,String>: splitLines(text,"",Nil{})
+def colouredLines(+theme: Theme,+key: String,values: List<&2,String>,reversed: List<&2,String>) -> List<&2,String>:
+  match values:
+    case Nil{}: List.reverse(&2,String,reversed)
+    case line <> rest: colouredLines(theme,key,rest,fg(theme,key,line) <> reversed)
+def validLanguage(+highlighter: SyntaxHighlight.Highlighter,lang: Maybe<&2,String>) -> IO(Maybe<&2,String>):
+  match lang:
+    case None{}: IO.pure(Maybe<&2,String>,None{})
+    case Some{""}: IO.pure(Maybe<&2,String>,None{})
+    case Some{+language}:
+      do IO<Maybe<&2,String>>:
+        supported : Bool <- SyntaxHighlight.supportsLanguage(highlighter,language)
+        return Bool.pick(Maybe<&2,String>,supported,Some{language},None{})
+def highlightedLines(+theme: Theme,+code: String,result: Maybe<&2,String>,fallback: Bool) -> List<&2,String>:
+  match result fallback:
+    case Some{text} _: lines(text)
+    case None{} True{}: colouredLines(theme,"mdCodeBlock",lines(code),Nil{})
+    case None{} False{}: lines(code)
+def highlightValid(highlighter: SyntaxHighlight.Highlighter,+theme: Theme,+code: String,valid: Maybe<&2,String>,fallback: Bool) -> IO(List<&2,String>):
+  match valid:
+    case None{}: IO.pure(List<&2,String>,colouredLines(theme,"mdCodeBlock",lines(code),Nil{}))
+    case Some{language}:
+      do IO<List<&2,String>>:
+        result : Maybe<&2,String> <- SyntaxHighlight.highlight(~CliFormatter,~cliFormat,highlighter,code,SyntaxHighlight.HighlightOptions{Some{language},True{},None{}},buildCliHighlightTheme(theme))
+        return highlightedLines(theme,code,result,fallback)
+# highlightCode (and the Markdown theme's variant, whose failure fallback
+# keeps the code-block colour): lines of `code` highlighted as `lang` when
+# highlight.js knows it; unhighlighted mdCodeBlock lines otherwise, as
+# auto-detection misreads prose.
+def highlightLines(+highlighter: SyntaxHighlight.Highlighter,+theme: Theme,+code: String,lang: Maybe<&2,String>,fallback: Bool) -> IO(List<&2,String>):
+  do IO<List<&2,String>>:
+    valid : Maybe<&2,String> <- validLanguage(highlighter,lang)
+    highlightValid(highlighter,theme,code,valid,fallback)
+def highlightCode(highlighter: SyntaxHighlight.Highlighter,theme: Theme,code: String,lang: Maybe<&2,String>) -> IO(List<&2,String>):
+  highlightLines(highlighter,theme,code,lang,False{})
+
+# The language highlight.js knows a file by, from its extension.
+def extensionLanguage(extension: String) -> Maybe<&2,String>:
+  match extension:
+    case "ts": Some{"typescript"}
+    case "tsx": Some{"typescript"}
+    case "js": Some{"javascript"}
+    case "jsx": Some{"javascript"}
+    case "mjs": Some{"javascript"}
+    case "cjs": Some{"javascript"}
+    case "py": Some{"python"}
+    case "rb": Some{"ruby"}
+    case "rs": Some{"rust"}
+    case "go": Some{"go"}
+    case "java": Some{"java"}
+    case "kt": Some{"kotlin"}
+    case "swift": Some{"swift"}
+    case "c": Some{"c"}
+    case "h": Some{"c"}
+    case "cpp": Some{"cpp"}
+    case "cc": Some{"cpp"}
+    case "cxx": Some{"cpp"}
+    case "hpp": Some{"cpp"}
+    case "cs": Some{"csharp"}
+    case "php": Some{"php"}
+    case "sh": Some{"bash"}
+    case "bash": Some{"bash"}
+    case "zsh": Some{"bash"}
+    case "fish": Some{"fish"}
+    case "ps1": Some{"powershell"}
+    case "sql": Some{"sql"}
+    case "html": Some{"html"}
+    case "htm": Some{"html"}
+    case "css": Some{"css"}
+    case "scss": Some{"scss"}
+    case "sass": Some{"sass"}
+    case "less": Some{"less"}
+    case "json": Some{"json"}
+    case "yaml": Some{"yaml"}
+    case "yml": Some{"yaml"}
+    case "toml": Some{"toml"}
+    case "xml": Some{"xml"}
+    case "md": Some{"markdown"}
+    case "markdown": Some{"markdown"}
+    case "dockerfile": Some{"dockerfile"}
+    case "makefile": Some{"makefile"}
+    case "cmake": Some{"cmake"}
+    case "lua": Some{"lua"}
+    case "perl": Some{"perl"}
+    case "r": Some{"r"}
+    case "scala": Some{"scala"}
+    case "clj": Some{"clojure"}
+    case "ex": Some{"elixir"}
+    case "exs": Some{"elixir"}
+    case "erl": Some{"erlang"}
+    case "hs": Some{"haskell"}
+    case "ml": Some{"ocaml"}
+    case "vim": Some{"vim"}
+    case "graphql": Some{"graphql"}
+    case "proto": Some{"protobuf"}
+    case "tf": Some{"hcl"}
+    case "hcl": Some{"hcl"}
+    case _: None{}
+def lastSegment(parts: List<&2,String>) -> String:
+  match parts:
+    case Nil{}: ""
+    case part <> Nil{}: part
+    case _ <> rest: lastSegment(rest)
+# filePath.split(".").pop(): the text after the last "." (the whole path
+# without one).
+def getLanguageFromPath(filePath: String) -> Maybe<&2,String>:
+  extensionLanguage(Case.lower(lastSegment(String.split(filePath,'.'))))

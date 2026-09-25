@@ -12,9 +12,9 @@ def registered(languages: List<&2, H.LanguageInfo>, registry: H.Registry) -> H.R
   match languages:
     case Nil{}: registry
     case info <> rest: registered(rest, H.registerLanguage(registry, info))
-def fromIndex(index: Result<&2, &2, String, H.Index>) -> H.Registry:
+def fromIndex(index: Result<&2, &2, String, List<&2, H.LanguageInfo>>) -> H.Registry:
   match index:
-    case Done{H.Index{languages, _}}: registered(languages, H.emptyRegistry())
+    case Done{languages}: registered(languages, H.emptyRegistry())
     case Fail{_}: H.emptyRegistry()
 def tokenCount(result: Maybe<&2, H.HighlightResult>) -> Nat:
   match result:
@@ -29,7 +29,7 @@ def trimmed(value: String) -> String: String.trim(value)
 def main() -> IO(Unit):
   do IO<Unit>:
     +clock : Clock.Clock <- Clock.new()
-    index : Result<&2, &2, String, H.Index> <- H.loadIndex(dataDir())
+    index : Result<&2, &2, String, List<&2, H.LanguageInfo>> <- H.loadIndex(dataDir())
     +registry : H.Registry <- IO.pure(H.Registry, fromIndex(index))
     codeBytes : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile("build/highlight/bench.txt")
     languageBytes : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile("build/highlight/bench-language.txt")

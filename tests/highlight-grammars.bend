@@ -19,14 +19,14 @@ def checkAll(languages: List<&2, H.LanguageInfo>, failures: Nat) -> IO(Nat):
         loaded : Result<&2, &2, String, H.Language> <- H.loadLanguage(dataDir(), name)
         +failed : Nat <- reported(loaded, name)
         checkAll(rest, failures + failed)
-def summary(index: Result<&2, &2, String, H.Index>) -> IO(Unit):
+def summary(index: Result<&2, &2, String, List<&2, H.LanguageInfo>>) -> IO(Unit):
   match index:
     case Fail{message}: IO.die(Unit, 1, "index: " ++ message)
-    case Done{H.Index{languages, _}}:
+    case Done{languages}:
       do IO<Unit>:
         +failures : Nat <- checkAll(languages, 0n)
         Bool.pick(Unit -> IO(Unit), Nat.is_eq(failures, 0n), _ => IO.print("all grammars load"), _ => IO.die(Unit, 1, Nat.show(failures) ++ " grammars fail to load"))(Unit{})
 def main() -> IO(Unit):
   do IO<Unit>:
-    index : Result<&2, &2, String, H.Index> <- H.loadIndex(dataDir())
+    index : Result<&2, &2, String, List<&2, H.LanguageInfo>> <- H.loadIndex(dataDir())
     summary(index)

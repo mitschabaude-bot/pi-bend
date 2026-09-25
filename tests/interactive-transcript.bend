@@ -8,6 +8,7 @@ import ../packages/coding-agent/src/modes/interactive/viewport.bend as View
 import ../packages/coding-agent/src/modes/interactive/theme/theme.bend as Theme
 import ../packages/coding-agent/src/modes/interactive/theme/color.bend as Color
 import ../packages/coding-agent/src/modes/interactive/theme/markdown-theme.bend as Styles
+import ../packages/coding-agent/src/utils/syntax-highlight.bend as SyntaxHighlight
 import ../packages/runtime/src/schema-value.bend as Value
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/tui/src/component.bend as Component
@@ -198,6 +199,7 @@ def main() -> IO(Unit):
   do IO<Unit>:
     result : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadFromPath("packages/coding-agent/src/modes/interactive/theme/dark.json",Color.Palette256{})
     +theme : Theme.Theme <- loaded(result)
-    styles : Styles.Styles <- Styles.create(theme)
+    highlighter : SyntaxHighlight.Highlighter <- SyntaxHighlight.create("packages/runtime/data/highlight")
+    styles : Styles.Styles <- Styles.create(theme,highlighter)
     view : View.View <- View.create(Component.ComponentId{1n})
     runView(View.borrow(view),theme,styles)

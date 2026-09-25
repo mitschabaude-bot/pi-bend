@@ -1167,20 +1167,34 @@ def drive(fuel: Nat, +registry: Registry, +grammars: Grammars, machine: Machine)
 # Highlighting
 # ------------
 
-# hljs.highlight's result; `tokens` is the TokenTree walk that `value`
-# renders as HTML.
-type HighlightResult is Data: HighlightResult{language: String, relevance: F64, tokens: List<&2, Token>, illegal: Bool}
-def machineResult(+language: String, +code: String, machine: Machine) -> HighlightResult:
+# hljs.highlight's result (`language` is none for highlightAuto's plain-text
+# result); `tokens` is the TokenTree walk that `value` renders as HTML.
+type HighlightResult is Data: HighlightResult{language: Maybe<&2, String>, relevance: F64, tokens: List<&2, Token>, illegal: Bool}
+def machineResult(+code: String, machine: Machine) -> HighlightResult:
   match machine:
-    case Machine{_, _, Some{Outcome{_, tokens, relevance, _, Completed{}}}}: HighlightResult{language, relevance, tokens, False{}}
-    case Machine{_, _, Some{Outcome{_, _, _, _, Illegal{}}}}: HighlightResult{language, zero(), addTokens(code), True{}}
-    case _: HighlightResult{language, zero(), addTokens(code), False{}}
+    case Machine{_, _, Some{Outcome{language, tokens, relevance, _, Completed{}}}}: HighlightResult{language, relevance, tokens, False{}}
+    case Machine{_, _, Some{Outcome{_, _, _, _, Illegal{}}}}: HighlightResult{None{}, zero(), addTokens(code), True{}}
+    case Machine{_, _, Some{Outcome{language, _, _, _, Failed{}}}}: HighlightResult{language, zero(), addTokens(code), False{}}
+    case _: HighlightResult{None{}, zero(), addTokens(code), False{}}
+def driven(+registry: Registry, +grammars: Grammars, +input: List<&2, U32>, frame: Frame) -> Machine:
+  drive(1000000n + 64n * countFrom(input, 0n), registry, grammars, Machine{[frame], Nil{}, None{}})
 # hljs.highlight(code, {language, ignoreIllegals}); none for an unknown
 # language (highlight.js throws). A run that fails (highlight.js's safe-mode
 # errors, or grammar data that is not loaded) yields the plain code.
 def highlight(+registry: Registry, +grammars: Grammars, +code: String, +language: String, ignoreIllegals: Bool) -> Maybe<&2, HighlightResult>:
   +input = Re.codes(code)
-  Maybe.map(&2, LanguageInfo, HighlightResult, _ => machineResult(language, code, drive(1000000n + 64n * countFrom(input, 0n), registry, grammars, Machine{[runFrame(contextFor(registry, grammars, language, input, ignoreIllegals), language, Nil{}, Nil{})], Nil{}, None{}})), getLanguage(registry, language))
+  Maybe.map(&2, LanguageInfo, HighlightResult, _ => machineResult(code, driven(registry, grammars, input, runFrame(contextFor(registry, grammars, language, input, ignoreIllegals), language, Nil{}, Nil{}))), getLanguage(registry, language))
+# The languages hljs.highlightAuto tries: the subset (or every registered
+# language) that is registered and allows auto-detection.
+def autoCandidates(+registry: Registry, subset: Maybe<&2, List<&2, String>>) -> List<&2, String>:
+  match subset:
+    case None{}: detectableNames(registry, listLanguages(registry), Nil{})
+    case Some{names}: detectableNames(registry, names, Nil{})
+# hljs.highlightAuto(code, languageSubset): the most relevant result, plain
+# text unless a language scores higher.
+def highlightAuto(+registry: Registry, +grammars: Grammars, +code: String, subset: Maybe<&2, List<&2, String>>) -> HighlightResult:
+  +input = Re.codes(code)
+  machineResult(code, driven(registry, grammars, input, Detecting{input, autoCandidates(registry, subset), Nil{}}))
 
 # HTMLRenderer: result.value.
 def escapeHtml(text: String, reversed: String) -> String:
@@ -1208,9 +1222,8 @@ def toHtml(tokens: List<&2, Token>) -> String: htmlFrom(tokens, Nil{})
 # Loading
 # -------
 # index.json lists the languages in highlight.js/lib/index.js registration
-# order with their aliases, and the eager languages pi registers at startup.
+# order with their metadata (name, aliases, disableAutodetect, supersetOf).
 
-type Index is Data: Index{languages: List<&2, LanguageInfo>, eager: List<&2, String>}
 def infoFrom(+fields: R.Record<V.Value>) -> Loaded(LanguageInfo):
   do Result<&2, &2, String, LanguageInfo>:
     aliasValues : List<&2, V.Value> <- arrayOf(R.get(V.Value, fields, "aliases"))
@@ -1224,18 +1237,15 @@ def infosFrom(values: List<&2, V.Value>, reversed: List<&2, LanguageInfo>) -> Lo
         fields : R.Record<V.Value> <- objectOf(value)
         info : LanguageInfo <- infoFrom(fields)
         infosFrom(rest, info <> reversed)
-def indexFrom(+fields: R.Record<V.Value>) -> Loaded(Index):
-  do Result<&2, &2, String, Index>:
+def indexFrom(+fields: R.Record<V.Value>) -> Loaded(List<&2, LanguageInfo>):
+  do Result<&2, &2, String, List<&2, LanguageInfo>>:
     languageValues : List<&2, V.Value> <- arrayOf(R.get(V.Value, fields, "languages"))
-    languages : List<&2, LanguageInfo> <- infosFrom(languageValues, Nil{})
-    eagerValues : List<&2, V.Value> <- arrayOf(R.get(V.Value, fields, "eager"))
-    eager : List<&2, String> <- textsFrom(eagerValues, Nil{})
-    return Index{languages, eager}
-def parsedIndex(result: Result<&2, &2, Json.ParseError, V.Value>) -> Loaded(Index):
+    infosFrom(languageValues, Nil{})
+def parsedIndex(result: Result<&2, &2, Json.ParseError, V.Value>) -> Loaded(List<&2, LanguageInfo>):
   match result:
     case Done{V.ObjectValue{fields}}: indexFrom(fields)
     case _: Fail{"invalid highlight index"}
-def parseIndex(text: String) -> Loaded(Index): parsedIndex(Json.parse(text))
+def parseIndex(text: String) -> Loaded(List<&2, LanguageInfo>): parsedIndex(Json.parse(text))
 
 def utf8Text(result: Result<&2, &2, Utf8.Error, String>, path: String) -> Loaded(String):
   match result:
@@ -1249,10 +1259,10 @@ def readText(+path: String) -> IO(Loaded(String)):
   do IO<Result<&2, &2, String, String>>:
     bytes : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile(path)
     return readBytes(bytes, path)
-def loadIndex(directory: String) -> IO(Loaded(Index)):
-  do IO<Result<&2, &2, String, Index>>:
+def loadIndex(directory: String) -> IO(Loaded(List<&2, LanguageInfo>)):
+  do IO<Result<&2, &2, String, List<&2, LanguageInfo>>>:
     text : Result<&2, &2, String, String> <- readText(Path.join(directory, "index.json"))
-    return Result.bind(&2, &2, String, String, Index, text, parseIndex)
+    return Result.bind(&2, &2, String, String, List<&2, LanguageInfo>, text, parseIndex)
 def loadLanguage(directory: String, name: String) -> IO(Loaded(Language)):
   do IO<Result<&2, &2, String, Language>>:
     text : Result<&2, &2, String, String> <- readText(Path.join(directory, name ++ ".json"))
@@ -1296,7 +1306,8 @@ def prepareLoop(fuel: Nat, +directory: String, +registry: Registry, +grammars: G
           +loaded : Result<&2, &2, String, Language> <- cachedOr(grammarOf(grammars, name), directory, name)
           prepareLoop(more, directory, registry, withLoaded(grammars, name, loaded), namesAfter(registry, loaded, rest), name <> seen))(Unit{})
     case _ _: IO.pure(Grammars, grammars)
-# Loads the grammars a highlight of `name` can use from `directory`: the
-# language and, transitively, its registered sub-languages.
-def prepare(directory: String, +registry: Registry, grammars: Grammars, name: String) -> IO(Grammars):
-  prepareLoop(100000n, directory, registry, grammars, resolvedNames(registry, [name], Nil{}), Nil{})
+# Loads the grammars highlighting with `names` can use from `directory`: the
+# languages and, transitively, their registered sub-languages.
+def prepareAll(directory: String, +registry: Registry, grammars: Grammars, names: List<&2, String>) -> IO(Grammars):
+  prepareLoop(100000n, directory, registry, grammars, resolvedNames(registry, names, Nil{}), Nil{})
+def prepare(directory: String, registry: Registry, grammars: Grammars, name: String) -> IO(Grammars): prepareAll(directory, registry, grammars, [name])

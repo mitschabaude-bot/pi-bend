@@ -10,6 +10,7 @@ import ../../../../runtime/src/serial-resource.bend as Serial
 import ../../../../runtime/src/schema-value.bend as Schema
 import ../../../../tui/src/component.bend as Component
 import ../../../../tui/src/components/markdown.bend as Markdown
+import ../../../../runtime/src/callback.bend as Callback
 import ./theme/theme.bend as Theme
 import ./components/messages.bend as Messages
 import ./components/session-info.bend as SessionInfo
@@ -238,18 +239,21 @@ def mountedTool(state: State,toolId: String,componentId: Nat,value: Tool.ToolExe
       do IO<State & Bool>:
         owner : Tool.Owner <- Tool.create(Component.ComponentId{componentId},Tool.setExpanded(value,expanded))
         mountedBorrowed(State{entries,tools,active,nextId,view,theme,styles,expanded,hidden,pad},toolId,Tool.borrow(owner))
-def ensureFound(state: State,+id: String,name: String,args: Schema.Value,componentId: Nat,theme: Theme.Theme,found: Maybe<&2,Tool.Handle>) -> IO(State & Bool):
+# Tool previews highlight code with the Markdown theme's highlightCode.
+def codeHighlighter(styles: Markdown.MarkdownTheme) -> Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>:
+  match styles: case Markdown.MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,_,_,_,highlight,_}: highlight
+def ensureFound(state: State,+id: String,name: String,args: Schema.Value,componentId: Nat,theme: Theme.Theme,highlight: Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>,found: Maybe<&2,Tool.Handle>) -> IO(State & Bool):
   match found:
     case Some{+handle}:
       do IO<State & Bool>:
         current : Tool.ToolExecution <- Tool.current(handle)
         Tool.set(handle,Tool.updateArgs(current,args))
         return (state,True{})
-    case None{}: mountedTool(state,id,componentId,Tool.new(name,id,args,theme,Tool.Generic{}))
+    case None{}: mountedTool(state,id,componentId,Tool.withHighlightCode(Tool.new(name,id,args,theme,Tool.Generic{}),highlight))
 def ensureTool(state: State,+id: String,name: String,args: Schema.Value) -> IO(State & Bool):
   match state:
-    case State{entries,+tools,active,+componentId,view,+theme,styles,expanded,hidden,pad}:
-      ensureFound(State{entries,tools,active,componentId,view,theme,styles,expanded,hidden,pad},id,name,args,componentId,theme,findTool(tools,id))
+    case State{entries,+tools,active,+componentId,view,+theme,+styles,expanded,hidden,pad}:
+      ensureFound(State{entries,tools,active,componentId,view,theme,styles,expanded,hidden,pad},id,name,args,componentId,theme,codeHighlighter(styles),findTool(tools,id))
 def stateOf(pair: State & Bool) -> State:
   match pair: case (next,_): next
 def mountCalls(content: List<&2,Ai.AssistantContent<Schema.Value>>,state: State) -> IO(State & Bool):
