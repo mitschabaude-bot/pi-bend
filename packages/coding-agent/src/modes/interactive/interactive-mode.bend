@@ -34,13 +34,16 @@ type SubmissionFailure is Data:
   QueueFailure{cause: Controller.SubmitError}
   PromptFailure{message: String}
   CommandFailure{message: String}
+  CommandWarning{message: String}
   CommandNotice{message: String}
+type StatusSink is Data:
+  StatusSink{transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type SubmissionInput is Data:
-  SubmissionInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,SubmissionFailure>>}
+  SubmissionInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: StatusSink}
 type CommandSink is Data:
-  CommandSink{failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>}
+  CommandSink{failure: StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>}
 type Startup is Data:
-  Startup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Ref.Ref<Maybe<&2,SubmissionFailure>>}
+  Startup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: StatusSink}
 
 def failureText(failure: SubmissionFailure) -> String:
   match failure:
@@ -48,11 +51,8 @@ def failureText(failure: SubmissionFailure) -> String:
     case QueueFailure{Controller.Closed{}}: "Session is closed"
     case PromptFailure{message}: message
     case CommandFailure{message}: message
+    case CommandWarning{message}: message
     case CommandNotice{message}: message
-def submittedResult(failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,result: Result<&2,&2,Controller.SubmitError,Unit>) -> IO(Unit):
-  match result:
-    case Done{_}: Ref.write(Maybe<&2,SubmissionFailure>,failure,None{})
-    case Fail{cause}: Ref.write(Maybe<&2,SubmissionFailure>,failure,Some{QueueFailure{cause}})
 
 def renderRequested(callback: Maybe<&2,Callback.Callback<Unit,Unit>>) -> IO(Unit):
   match callback:
@@ -72,8 +72,25 @@ def onSessionEvent(events: Events,event: Session.AgentSessionEvent) -> IO(Unit):
   match event:
     case Session.AgentEvent{value}: observed(events,value)
     case _: IO.pure(Unit,Unit{})
-def commandStatus(failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,status: SubmissionFailure) -> IO(Unit):
-  Ref.write(Maybe<&2,SubmissionFailure>,failure,Some{status})
+def report(sink: StatusSink,status: SubmissionFailure) -> IO(Unit):
+  match sink status:
+    case StatusSink{transcript,redraw} CommandNotice{message}:
+      do IO<Unit>:
+        Transcript.status(transcript,message)
+        requestRender(redraw)
+    case StatusSink{transcript,redraw} CommandWarning{message}:
+      do IO<Unit>:
+        Transcript.showWarning(transcript,message)
+        requestRender(redraw)
+    case StatusSink{transcript,redraw} other:
+      do IO<Unit>:
+        Transcript.showError(transcript,failureText(other))
+        requestRender(redraw)
+def submittedResult(failure: StatusSink,result: Result<&2,&2,Controller.SubmitError,Unit>) -> IO(Unit):
+  match result:
+    case Done{_}: IO.pure(Unit,Unit{})
+    case Fail{cause}: report(failure,QueueFailure{cause})
+def commandStatus(failure: StatusSink,status: SubmissionFailure) -> IO(Unit): report(failure,status)
 def pickerCurrent(session: Session.AgentSession) -> IO(Maybe<&2,Models.Model()>):
   do IO<Maybe<&2,Models.Model()>>:
     current : Session.AgentState() <- Session.state(session)
@@ -82,7 +99,7 @@ def openPicker(host: Maybe<&2,ModelPicker.Host>,models: List<&2,Models.Model()>,
   match host:
     case None{}: IO.pure(Unit,Unit{})
     case Some{value}: ModelPicker.open(value,ModelPicker.create(models,current,Maybe.default(&2,String,query,""),24n))
-def openPickerResult(failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,session: Session.AgentSession,models: List<&2,Models.Model()>,search: Maybe<&2,String>) -> IO(Bool):
+def openPickerResult(failure: StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,session: Session.AgentSession,models: List<&2,Models.Model()>,search: Maybe<&2,String>) -> IO(Bool):
   match models:
     case Nil{}:
       do IO<Bool>:
@@ -119,7 +136,7 @@ def commandResult(+sink: CommandSink,result: Commands.Action) -> IO(Bool):
         available : List<&2,Models.Model()> <- Ref.read(List<&2,Models.Model()>,models)
         openPickerResult(failure,redraw,picker,live,available,search)
     case _ _: IO.pure(Bool,False{})
-def act(queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,command: Commands.Command) -> IO(Unit):
+def act(queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: StatusSink,command: Commands.Command) -> IO(Unit):
   match command:
     case Commands.Stop{}:
       do IO<Unit>:
@@ -139,7 +156,7 @@ def submitOwned(input: SubmissionInput,+text: String) -> IO(Unit):
       Bool.pick(Unit -> IO(Unit),String.is_empty(Text.trim(text)),_ => IO.pure(Unit,Unit{}),_ => do IO<Unit>:
         act(queue,stop,failure,Commands.parse(text)))(Unit{})
 def submitted(input: SubmissionInput,text: String) -> IO(Unit): submitOwned(input,text)
-def queueInitial(+queue: Controller.Handle,+failure: Ref.Ref<Maybe<&2,SubmissionFailure>>,initial: List<&2,Controller.Submission>) -> IO(Unit):
+def queueInitial(+queue: Controller.Handle,+failure: StatusSink,initial: List<&2,Controller.Submission>) -> IO(Unit):
   match initial:
     case Nil{}: IO.pure(Unit,Unit{})
     case item <> rest:

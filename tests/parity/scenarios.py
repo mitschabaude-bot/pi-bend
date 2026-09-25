@@ -323,6 +323,18 @@ SCENARIOS = [
                   ("wait", "Cloned to new session", "clone"), ("settle", 0.2), ("snap", "after")],
     },
     {
+        "name": "clone-empty-error",
+        "args": MODEL,
+        "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "/clone"), ("key", "Enter"),
+                  ("wait", "This session has not been saved yet", "error"), ("settle", 0.3), ("snap", "after")],
+    },
+    {
+        "name": "thinking-invalid-error",
+        "args": MODEL,
+        "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "/thinking bogus"), ("key", "Enter"),
+                  ("wait", "Error:", "error"), ("settle", 0.3), ("snap", "after")],
+    },
+    {
         "name": "tool-call",
         "args": MODEL,
         "turns": [{"tool": {"name": "bash", "arguments": {"command": "echo tool-output"}}, "start_delay_ms": 1000}, {"text": "Tool finished."}],
