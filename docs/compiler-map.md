@@ -60,7 +60,9 @@ A definition becomes one or more *segments*. On the host each segment is a
 each is a `case` of one switch.
 
 - **Parameters** are the live words at entry. A segment takes them in the
-  shared register bank `r0..rN`.
+  shared register bank `r0..rN`, at most `BEND_BANK` (32) words; a wider
+  definition or closure takes its first words from the stack, as a
+  continuation does.
 - **Calls**: a call in tail position is a jump that sets `r0..` and tail-calls
   the callee. A call whose result is needed (`emit_fork`) pushes a *frame*
   (the live words plus the continuation's segment id) on the explicit stack
@@ -83,9 +85,8 @@ each is a `case` of one switch.
 - **Fusion**: a definition called from exactly one site is emitted inside
   its caller (`emit_fuse`).
 
-Every host segment function has the same signature: the whole bank. So the
-widest register-passed segment sets the width of all of them (see the bank
-cap in `docs/bend-issues.md`).
+Every host segment function has the same signature: the whole bank, so its
+width is capped (BEND-039 in `docs/bend-issues.md`).
 
 ## Runtime representation
 
@@ -103,7 +104,9 @@ cap in `docs/bend-issues.md`).
 
 ## Where the size of the CLI's C comes from
 
-As measured on 2026-09-25, on 168 MB of C:
+As measured on 2026-09-25, on 168 MB of C, before the register-bank cap,
+string-literal arms and stale-segment patches (BEND-039 to BEND-042, which
+brought it to 140 MB):
 
 - about 57,000 segment functions, each with a signature as wide as the bank
   (166 words), forward-declared in every translation unit for the dispatch

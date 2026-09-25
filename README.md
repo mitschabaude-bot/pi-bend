@@ -30,6 +30,8 @@ python3 scripts/check-proofs.py
 
 Build and run the modular CLI with an OpenAI API key already configured in the environment or pi authentication storage:
 
+A build takes about 7 minutes (2.5 minutes of Bend emission, 4.5 of Clang at `-O1`). For correctness checks, `PI_BEND_OPT=-O0` cuts Clang to about 1.5 minutes; the binary runs 3-5x slower, so measure timings on `-O1` builds.
+
 ```sh
 BEND_TUS=4 sh scripts/build-cli.sh build/pi-cli
 ./build/pi-cli --model gpt-4.1-mini -p "Summarize this directory"
