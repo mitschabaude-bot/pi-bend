@@ -168,6 +168,19 @@ def compaction_checks(f):
     assert of_type(events, 'agent_start') == [] and of_type(events, 'agent_settled') == []
     assert of_type(events, 'compact_result'), events
     checks += 1
+    # 7253-manual-compact-during-response: persists the aborted response before running the requested
+    # manual compaction. The second response is held at the provider until compact() has aborted it; the
+    # tool call runs against no tools, and the summary is a scripted reply.
+    events = f.session('regressions', 'compact_during_response', settings={'compaction': {'enabled': True, 'reserveTokens': 200, 'keepRecentTokens': 2}})
+    assert last(events, 'request_aborted')['value'] is True and last(events, 'prompt_done')
+    assert 'manual summary' in last(events, 'compact_result')['result']['summary']
+    assert [e['reason'] for e in of_type(events, 'compaction_start')] == ['manual']
+    assert [e['reason'] for e in of_type(events, 'compaction_end')] == ['manual']
+    entries = last(events, 'entry_shapes')['entries']
+    aborted = next((i for i, e in enumerate(entries) if e['type'] == 'message' and e['message']['role'] == 'assistant' and e['message'].get('stopReason') == 'aborted'), -1)
+    compaction = next((i for i, e in enumerate(entries) if e['type'] == 'compaction'), -1)
+    assert aborted > -1 and compaction > aborted and len([e for e in entries if e['type'] == 'compaction']) == 1, entries
+    checks += 1
     return checks
 
 

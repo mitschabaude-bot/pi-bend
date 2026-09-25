@@ -12,6 +12,7 @@ import ../packages/runtime/src/ref.bend as R
 import ../packages/runtime/src/record.bend as Rec
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/date.bend as Date
+import ../packages/runtime/src/abort.bend as Abort
 import ../packages/coding-agent/src/core/agent-runtime.bend as Runtime
 import ../packages/coding-agent/src/core/agent-session.bend as Session
 import ../packages/coding-agent/src/core/session-persistence.bend as Sessions
@@ -40,10 +41,34 @@ type Reply is Data:
   Plain{text: String}
   Call{id: String, name: String, arguments: V.Value, json: String}
 
-# A gate holds one request open (tests/agent-session.bend's Gate); requests
-# after the listed gates run at once.
+# Each request takes the next hold: Pass runs at once, Hold waits at a gate
+# (tests/agent-session.bend's Gate); requests after the listed holds pass.
+# The last request's abort signal is kept, and a request whose signal is
+# aborted when it proceeds ends as aborted, as upstream's faux stream does.
+type Hold is Data:
+  Pass{}
+  Held{gate: H.Gate}
+
+def Signal() -> Data: Abort.AbortSignal<Unit>
+
 type Faux is Data:
-  Faux{replies: R.Ref<List<&2, Reply>>, streams: R.Ref<List<&2, EventStream()>>, gates: R.Ref<List<&2, H.Gate>>, model: String}
+  Faux{replies: R.Ref<List<&2, Reply>>, streams: R.Ref<List<&2, EventStream()>>, gates: R.Ref<List<&2, Hold>>, model: String, signal: R.Ref<Maybe<&2, Signal()>>}
+
+def popHold(holds: List<&2, Hold>) -> List<&2, Hold> & Maybe<&2, H.Gate>:
+  match holds:
+    case Nil{}: (Nil{}, None{})
+    case Pass{} <> rest: (rest, None{})
+    case Held{gate} <> rest: (rest, Some{gate})
+
+def signalOf(input: H.Input()) -> Maybe<&2, Signal()>:
+  match input:
+    case T.StreamInput{_, _, Some{T.AgentLoopConfig{Ai.SimpleStreamOptions{signal, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _, _}}}: signal
+    case _: None{}
+
+def isAborted(signal: Maybe<&2, Signal()>) -> IO(Bool):
+  match signal:
+    case None{}: IO.pure(Bool, False{})
+    case Some{value}: Abort.aborted(Unit, value)
 
 def zero() -> F64: U32.to_f64(0)
 
@@ -124,6 +149,11 @@ def answer(+stream: EventStream(), reply: Reply, +now: Stamp) -> IO(Unit):
         push(stream, Ai.ToolcallEnd{zero(), Ai.ToolCall{id, name, arguments, None{}, None{}}, message(callBlock(id, name, arguments), Ai.Pending{}, usage, now)})
         push(stream, Ai.StreamDone{Ai.DoneToolUse{}, message(callBlock(id, name, arguments), Ai.ToolUse{}, usage, now)})
 
+def abortedReply(+stream: EventStream(), +now: Stamp) -> IO(Unit):
+  do IO<Unit>:
+    push(stream, Ai.Start{message(Nil{}, Ai.Pending{}, usageOf(zero()), now)})
+    push(stream, Ai.StreamError{Ai.ErrorAborted{}, message(Nil{}, Ai.Aborted{}, usageOf(zero()), now)})
+
 def popReply(replies: List<&2, Reply>) -> List<&2, Reply> & Reply:
   match replies:
     case Nil{}: (Nil{}, Text{"(no scripted response)"})
@@ -131,16 +161,19 @@ def popReply(replies: List<&2, Reply>) -> List<&2, Reply> & Reply:
 
 def provider(faux: Faux, input: H.Input()) -> IO(H.Output()):
   match faux:
-    case Faux{replies, streams, gates, +model}:
+    case Faux{replies, streams, gates, +model, signals}:
+      +signal = signalOf(input)
       do IO<H.Output()>:
-        gate : Maybe<&2, H.Gate> <- R.modify(List<&2, H.Gate>, Maybe<&2, H.Gate>, gates, remaining => H.popGate(remaining))
+        R.write(Maybe<&2, Signal()>, signals, signal)
+        gate : Maybe<&2, H.Gate> <- R.modify(List<&2, Hold>, Maybe<&2, H.Gate>, gates, remaining => popHold(remaining))
         H.holdAt(gate)
+        aborted : Bool <- isAborted(signal)
         reply : Reply <- R.modify(List<&2, Reply>, Reply, replies, remaining => popReply(remaining))
         IO.sleep(1)
         +now : F64 <- Date.now()
         +stream : EventStream() <- Stream.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, EventStream()>, Unit, streams, old => (stream <> old, Unit{}))
-        answer(stream, reply, Stamp{model, now})
+        Bool.pick(Unit -> IO(Unit), aborted, _ => abortedReply(stream, Stamp{model, now}), _ => answer(stream, reply, Stamp{model, now}))(Unit{})
         return Done{T.borrowedStream(Unit, Tools.ToolError, stream)}
 
 # Prints every session event on the wire, and for message_update also the
@@ -171,7 +204,7 @@ def contextOf(stored: Session.Session()) -> List<&2, Session.Message()>:
   contextList(S.sessionContext(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))
 
 type Setup is Data:
-  Setup{replies: List<&2, Reply>, gates: List<&2, H.Gate>, model: Ai.Model<Ai.JsonValue>}
+  Setup{replies: List<&2, Reply>, gates: List<&2, Hold>, model: Ai.Model<Ai.JsonValue>}
 
 def fixtureWith(+stored: Session.Session(), +cwd: String, +settings: Settings.SettingsManager, setup: Setup) -> IO(Fixture):
   match setup:
@@ -179,8 +212,9 @@ def fixtureWith(+stored: Session.Session(), +cwd: String, +settings: Settings.Se
       do IO<Fixture>:
         +replyRef : R.Ref<List<&2, Reply>> <- R.new(List<&2, Reply>, replies)
         +streams : R.Ref<List<&2, EventStream()>> <- R.new(List<&2, EventStream()>, Nil{})
-        +gateRef : R.Ref<List<&2, H.Gate>> <- R.new(List<&2, H.Gate>, gates)
-        +stream : Runtime.Stream() <- C.create(~Faux, ~H.Input(), ~H.Output(), ~provider, Faux{replyRef, streams, gateRef, Ai.modelId(model)})
+        +gateRef : R.Ref<List<&2, Hold>> <- R.new(List<&2, Hold>, gates)
+        +signalRef : R.Ref<Maybe<&2, Signal()>> <- R.new(Maybe<&2, Signal()>, None{})
+        +stream : Runtime.Stream() <- C.create(~Faux, ~H.Input(), ~H.Output(), ~provider, Faux{replyRef, streams, gateRef, Ai.modelId(model), signalRef})
         +registry : StreamFn.Registry(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError) <- StreamFn.create(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError)
         +validator : Loop.Validator(Tools.ToolError) <- Loop.createPlain(~Tools.ToolError, ~Runtime.validationError)
         +converter : Runtime.Converter() <- Runtime.createConverter(False{})
@@ -191,7 +225,7 @@ def fixtureWith(+stored: Session.Session(), +cwd: String, +settings: Settings.Se
         +session : Session.AgentSession <- Session.create(agent, stored, settings, cwd, emptyLoadout(), models, Nil{})
         +listener : Session.Listener() <- C.create(~Unit, ~Session.AgentSessionEvent, ~Unit, ~observe, Unit{})
         Session.subscribe(session, listener)
-        return Fixture{session, listener, stream, validator, converter, registry, Faux{replyRef, streams, gateRef, Ai.modelId(model)}}
+        return Fixture{session, listener, stream, validator, converter, registry, Faux{replyRef, streams, gateRef, Ai.modelId(model), signalRef}}
 
 def fixture(+stored: Session.Session(), +cwd: String, agentDir: String, setup: Setup) -> IO(Fixture):
   do IO<Fixture>:
@@ -200,7 +234,7 @@ def fixture(+stored: Session.Session(), +cwd: String, agentDir: String, setup: S
 
 def teardown(value: Fixture) -> IO(Unit):
   match value:
-    case Fixture{+session, +listener, stream, validator, converter, registry, Faux{replies, streams, gates, _}}:
+    case Fixture{+session, +listener, stream, validator, converter, registry, Faux{replies, streams, gates, _, signals}}:
       do IO<Unit>:
         Session.unsubscribe(session, listener)
         C.dispose(Session.AgentSessionEvent, Unit, listener)
@@ -214,7 +248,8 @@ def teardown(value: Fixture) -> IO(Unit):
         unused : List<&2, Reply> <- R.dispose(List<&2, Reply>, replies)
         opened : List<&2, EventStream()> <- R.dispose(List<&2, EventStream()>, streams)
         H.disposeStreams(opened)
-        held : List<&2, H.Gate> <- R.dispose(List<&2, H.Gate>, gates)
+        held : List<&2, Hold> <- R.dispose(List<&2, Hold>, gates)
+        signal : Maybe<&2, Signal()> <- R.dispose(Maybe<&2, Signal()>, signals)
         return Unit{}
 
 def sessionOf(value: Fixture) -> Session.AgentSession:
@@ -361,7 +396,7 @@ def reportRemaining(replies: R.Ref<List<&2, Reply>>) -> IO(Unit):
 
 def repliesOf(value: Fixture) -> R.Ref<List<&2, Reply>>:
   match value:
-    case Fixture{_, _, _, _, _, _, Faux{replies, _, _, _}}: replies
+    case Fixture{_, _, _, _, _, _, Faux{replies, _, _, _, _}}: replies
 
 # Persisted entries as JSON messages (upstream sessionManager.getEntries()).
 def entryMessages(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
@@ -438,7 +473,7 @@ def promptDuringCompaction(+dir: String, agentDir: String) -> IO(Unit):
     +started : Chan(Unit) <- Chan.new(Unit, 1)
     +gate : Chan(Unit) <- Chan.new(Unit, 1)
     +done : Chan(Compacted) <- Chan.new(Compacted, 1)
-    +value : Fixture <- seededFixture(dir, agentDir, userAt("old user message", before(now, 1000)) <> assistantAt("old assistant response", Ai.Stop{}, usageOf(zero()), before(now, 500)) <> Nil{}, Setup{Text{"manual compacted"} <> Text{"probe response"} <> Nil{}, H.Gate{started, gate} <> Nil{}, H.fauxModel()})
+    +value : Fixture <- seededFixture(dir, agentDir, userAt("old user message", before(now, 1000)) <> assistantAt("old assistant response", Ai.Stop{}, usageOf(zero()), before(now, 500)) <> Nil{}, Setup{Text{"manual compacted"} <> Text{"probe response"} <> Nil{}, Held{H.Gate{started, gate}} <> Nil{}, H.fauxModel()})
     IO.spawn(Unit, compactInBackground(sessionOf(value), done))
     began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
     H.reportCompacting(sessionOf(value))
@@ -479,7 +514,7 @@ def treeDuringStreaming(+dir: String, agentDir: String) -> IO(Unit):
     +started : Chan(Unit) <- Chan.new(Unit, 1)
     +gate : Chan(Unit) <- Chan.new(Unit, 1)
     +done : Chan(Result<&2, &2, String, Unit>) <- Chan.new(Result<&2, &2, String, Unit>, 1)
-    +value : Fixture <- seededFixture(dir, agentDir, userMsg("first") <> Nil{}, Setup{Text{"response"} <> Nil{}, H.Gate{started, gate} <> Nil{}, H.fauxModel()})
+    +value : Fixture <- seededFixture(dir, agentDir, userMsg("first") <> Nil{}, Setup{Text{"response"} <> Nil{}, Held{H.Gate{started, gate}} <> Nil{}, H.fauxModel()})
     reportLeaf("target", sessionOf(value))
     IO.spawn(Unit, promptLater(sessionOf(value), "second", done))
     began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
@@ -496,6 +531,61 @@ def treeDuringStreaming(+dir: String, agentDir: String) -> IO(Unit):
     Chan.close(Unit, gate)
     Chan.close(Result<&2, &2, String, Unit>, done)
 
+# Entries in order, message entries with their message (upstream
+# sessionManager.getEntries()).
+def entryShapes(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
+  match entries:
+    case Nil{}: Nil{}
+    case S.SessionMessageEntry{_, message} <> rest: Json.object(Json.field("type", Json.text("message"), Json.field("message", JsonEvent.message(message), Nil{}))) <> entryShapes(rest)
+    case S.Compaction{_} <> rest: Json.object(Json.field("type", Json.text("compaction"), Nil{})) <> entryShapes(rest)
+    case _ <> rest: Json.object(Json.field("type", Json.text("other"), Nil{})) <> entryShapes(rest)
+
+def reportEntryShapes(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    +stored : Session.Session() <- Session.sessionOf(session)
+    H.printed(Done{Json.object(Json.field("type", Json.text("entry_shapes"), Json.field("entries", V.ArrayValue{entryShapes(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))}, Nil{})))})
+
+def signalsOf(value: Fixture) -> R.Ref<Maybe<&2, Signal()>>:
+  match value:
+    case Fixture{_, _, _, _, _, _, Faux{_, _, _, _, signals}}: signals
+
+# Waits (up to a second) until the held request's signal is aborted.
+def untilAborted(fuel: Nat, +signals: R.Ref<Maybe<&2, Signal()>>) -> IO(Bool):
+  match fuel:
+    case 0n: IO.pure(Bool, False{})
+    case 1n+rest:
+      do IO<Bool>:
+        signal : Maybe<&2, Signal()> <- R.read(Maybe<&2, Signal()>, signals)
+        aborted : Bool <- isAborted(signal)
+        Bool.pick(Unit -> IO(Bool), aborted, _ => IO.pure(Bool, True{}), _ => IO.bind(Unit, Bool, IO.sleep(1), _ => untilAborted(rest, signals)))(Unit{})
+
+def reportAbortSeen(seen: Bool) -> IO(Unit): IO.print("{\"type\":\"request_aborted\",\"value\":" ++ H.boolJson(seen) ++ "}")
+
+# 7253: a manual compaction requested while the second response is held.
+def compactDuringResponse(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +gate : Chan(Unit) <- Chan.new(Unit, 1)
+    +prompted : Chan(Result<&2, &2, String, Unit>) <- Chan.new(Result<&2, &2, String, Unit>, 1)
+    +compacted : Chan(Compacted) <- Chan.new(Compacted, 1)
+    +value : Fixture <- seededFixture(dir, agentDir, Nil{}, Setup{Call{"call_noop", "noop", V.ObjectValue{Rec.new(V.Value)}, "{}"} <> Text{"second response:" ++ repeated(4000n)} <> Text{"manual summary"} <> Text{"manual summary"} <> Nil{}, Pass{} <> Held{H.Gate{started, gate}} <> Nil{}, sizedModel(1000, 1000)})
+    IO.spawn(Unit, promptLater(sessionOf(value), "Run the tool, then continue responding.", prompted))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    IO.spawn(Unit, compactInBackground(sessionOf(value), compacted))
+    seen : Bool <- untilAborted(1000n, signalsOf(value))
+    reportAbortSeen(seen)
+    release(gate)
+    finished : Maybe<&1, Result<&2, &2, String, Unit>> <- Chan.recv(Result<&2, &2, String, Unit>, prompted)
+    H.reportFinished(finished)
+    result : Maybe<&1, Compacted> <- Chan.recv(Compacted, compacted)
+    reportCompacted(result)
+    reportEntryShapes(sessionOf(value))
+    teardown(value)
+    Chan.close(Unit, started)
+    Chan.close(Unit, gate)
+    Chan.close(Result<&2, &2, String, Unit>, prompted)
+    Chan.close(Compacted, compacted)
+
 def number(+text: String) -> Nat: Maybe.default(&2, Nat, Nat.read(text), 0n)
 
 def run(args: List<String>) -> IO(Unit):
@@ -509,6 +599,7 @@ def run(args: List<String>) -> IO(Unit):
     case "pre_prompt" <> dir <> agentDir <> Nil{}: prePromptScenario(dir, agentDir)
     case "compaction_prompt" <> dir <> agentDir <> Nil{}: promptDuringCompaction(dir, agentDir)
     case "tree_streaming" <> dir <> agentDir <> Nil{}: treeDuringStreaming(dir, agentDir)
+    case "compact_during_response" <> dir <> agentDir <> Nil{}: compactDuringResponse(dir, agentDir)
     case "settings_reload" <> dir <> agentDir <> settings <> Nil{}: reloadScenario(dir, decoded(Decode.parse(settings)))
     case _: IO.die(Unit, 1, "usage: regressions <name <dir> <agentDir> <name> | prompt <dir> <agentDir> <text> <reply> | stream <dir> <agentDir> <characters> | toolcall <dir> <agentDir>>")
 

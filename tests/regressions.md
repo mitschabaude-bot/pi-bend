@@ -9,7 +9,7 @@ python3 tests/regressions_check.py            # Bun lane
 python3 tests/regressions_check.py --regressions build/regressions ...   # a native runner per fixture
 ```
 
-`tests/regressions.bend` builds an `AgentSession` over a faux provider that streams like upstream's `registerFauxProvider`: a `start` event, then each block's start/delta/end events, with the text or the tool call's JSON arguments split into chunks, then `done`. Gates hold a request open, as in `tests/agent-session.bend`. Seed messages are stored in the session and loaded into the agent, as the harness's `agent.state.messages = buildSessionContext().messages`.
+`tests/regressions.bend` builds an `AgentSession` over a faux provider that streams like upstream's `registerFauxProvider`: a `start` event, then each block's start/delta/end events, with the text or the tool call's JSON arguments split into chunks, then `done`. Each request takes the next hold: it passes or waits at a gate (as in `tests/agent-session.bend`). The provider keeps the last request's abort signal, and a request whose signal is aborted when it proceeds ends as aborted, as upstream's faux does. Seed messages are stored in the session and loaded into the agent, as the harness's `agent.state.messages = buildSessionContext().messages`.
 
 ## Adaptations
 
@@ -17,6 +17,7 @@ python3 tests/regressions_check.py --regressions build/regressions ...   # a nat
 - `harness.faux.state.callCount` is the number of scripted replies consumed (`remaining`).
 - Session events are typed, so upstream's check that a session `message_update` has `message` and `partial` holds by construction. The fixture prints the session event's assistant message next to its wire form so usage can be compared (7911, 7925).
 - Upstream injects compaction summaries through `session_before_compact` extension handlers, which the native extension runtime doesn't dispatch yet. 7150 holds the default summarizer's request open instead. Pre-prompt compaction scripts the summary as a provider reply, so "no continue" means the provider sees exactly the summary request and the prompt's request.
+- 7253 holds the second response until `compact()` has aborted it (the fixture waits for the request's signal), then releases it. The first response's `noop` tool call runs against no tools, and the manual summary is a scripted reply, so the result's summary contains it instead of equaling it.
 - 8328 spies `_runAutoCompaction`. The port observes the same decision as a `threshold` compaction, with `keepRecentTokens: 1` so that the compaction has something to cut.
 - 7150's `preflightResult(false)` and rejection are the prompt's failed result.
 - 3616's `DefaultResourceLoader.reload()` is the session's resource reload, `AgentSession.reload`, which reloads its settings manager.
