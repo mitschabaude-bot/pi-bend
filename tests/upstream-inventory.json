@@ -501,8 +501,11 @@
     },
     {
       "source": "packages/ai/test/anthropic-adaptive-thinking-models.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/model-catalog.bend",
+        "tests/model_catalog.test.ts"
+      ],
       "sha256": "b7d4fe33fd3508d09b109e7b029548ea54244be8428901c7ba32e64e3bca03d9"
     },
     {
@@ -991,8 +994,11 @@
     },
     {
       "source": "packages/ai/test/model-catalog-types.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/model-catalog.bend",
+        "tests/model_catalog.test.ts"
+      ],
       "sha256": "c47f1953bc68f6af093ead5618100f2cb6e20feda121f891c3fbfd3c303ecdb5"
     },
     {
@@ -1246,8 +1252,11 @@
     },
     {
       "source": "packages/ai/test/openrouter-cache-control-models.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/model-catalog.bend",
+        "tests/model_catalog.test.ts"
+      ],
       "sha256": "47a926ba994c20e61186bbf7e0e6764f840d011f7a28c82dc434e1718f3fcffb"
     },
     {
@@ -1425,8 +1434,11 @@
     },
     {
       "source": "packages/ai/test/together-models.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/model-catalog.bend",
+        "tests/model_catalog.test.ts"
+      ],
       "sha256": "49a7b4bdce46b0d0a6c338900cae2ba5cd41c92d7c02971a9086d71460291190"
     },
     {
@@ -1510,8 +1522,11 @@
     },
     {
       "source": "packages/ai/test/xiaomi-models.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/model-catalog.bend",
+        "tests/model_catalog.test.ts"
+      ],
       "sha256": "cacc517d959a97f0351a79a94610631f4caffec87fef5d45f882a532aa7ac9a4"
     },
     {
@@ -1522,8 +1537,11 @@
     },
     {
       "source": "packages/ai/test/zai-coding-plan-models.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/model-catalog.bend",
+        "tests/model_catalog.test.ts"
+      ],
       "sha256": "d4020126a964b8a67d3a13fe7694b6cec2ab26eeed1a05285ccebef239a69bb9"
     },
     {
