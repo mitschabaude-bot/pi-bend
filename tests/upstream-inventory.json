@@ -2378,9 +2378,12 @@
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-clone-command.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9a1a93c08797b54f8819021b6283f43ad34699faea211fa091cf8aa91176dc20"
+      "status": "partial",
+      "ports": [
+        "tests/clone-command.bend"
+      ],
+      "sha256": "9a1a93c08797b54f8819021b6283f43ad34699faea211fa091cf8aa91176dc20",
+      "notes": "Both cases through Controller.cloneLeaf (the port's handleCloneCommand): the current leaf is forked with position 'at' and reported as ClonedSession, which the interactive run shows as 'Cloned to new session'; without a leaf there is no fork and the notice is 'Nothing to clone yet'. Not observed: upstream's editor.setText('') and the absence of renderCurrentSessionState/requestRender, which belong to the interactive run's action handling. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-compaction.test.ts",
