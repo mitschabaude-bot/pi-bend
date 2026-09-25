@@ -81,10 +81,11 @@ def fauxSources() -> List<&2, ModelFixture.Source>:
 
 # A scripted response is its text, optionally "text#tokens" to report that
 # much context usage, "~text" to stop at the length limit, or "!message" to
-# fail with that error message.
+# fail with that error message, "@tool" to call that tool without arguments.
 type Scripted is Data:
   Answered{text: String, stop: Ai.StopReason, tokens: F64}
   Failed{message: String}
+  ToolCalled{name: String}
 
 def zero() -> F64: U32.to_f64(0)
 
@@ -93,6 +94,9 @@ def usageOf(+tokens: F64) -> Ai.Usage:
 
 def reply(text: String, stop: Ai.StopReason, tokens: F64, now: F64) -> Ai.AssistantMessage<V.Value, Unit>:
   Ai.AssistantMessage{Ai.AssistantText{Ai.TextContent{text, None{}}} <> Nil{}, "openai-responses", "faux", "faux-model", None{}, None{}, None{}, None{}, usageOf(tokens), stop, None{}, None{}, None{}, None{}, now}
+
+def toolCallReply(name: String, now: F64) -> Ai.AssistantMessage<V.Value, Unit>:
+  Ai.AssistantMessage{Ai.AssistantToolCall{Ai.ToolCall{"call-1", name, V.ObjectValue{Rec.Record{Nil{}}}, None{}, None{}}} <> Nil{}, "openai-responses", "faux", "faux-model", None{}, None{}, None{}, None{}, Agent.emptyUsage(), Ai.ToolUse{}, None{}, None{}, None{}, None{}, now}
 
 def failure(message: String, now: F64) -> Ai.AssistantMessage<V.Value, Unit>:
   Ai.AssistantMessage{Nil{}, "openai-responses", "faux", "faux-model", None{}, None{}, None{}, None{}, Agent.emptyUsage(), Ai.Error{}, None{}, Some{message}, None{}, None{}, now}
@@ -115,6 +119,7 @@ def answered(stop: Ai.StopReason, +text: String) -> Scripted: withTokens(stop, t
 def scripted(text: String) -> Scripted:
   match text:
     case SCon{'!', message}: Failed{message}
+    case SCon{'@', name}: ToolCalled{name}
     case SCon{'~', rest}: answered(Ai.Length{}, rest)
     case _: answered(Ai.Stop{}, text)
 
@@ -129,6 +134,10 @@ def answer(+stream: EventStream(), script: Scripted, +now: F64) -> IO(Unit):
       do IO<Unit>:
         push(stream, Ai.Start{reply("", Ai.Stop{}, zero(), now)})
         push(stream, Ai.StreamError{Ai.ErrorError{}, failure(message, now)})
+    case ToolCalled{name}:
+      do IO<Unit>:
+        push(stream, Ai.Start{reply("", Ai.ToolUse{}, zero(), now)})
+        push(stream, Ai.StreamDone{Ai.DoneToolUse{}, toolCallReply(name, now)})
     case Answered{+text, +stop, +tokens}:
       do IO<Unit>:
         push(stream, Ai.Start{reply("", stop, zero(), now)})
@@ -772,6 +781,33 @@ def imagesScenario(+dir: String, agentDir: String, +image: String) -> IO(Unit):
     reportMessages(sessionOf(value))
     teardown(value)
 
+# tool_images (agent-session-tool-result-images.test.ts): a screenshot tool
+# returns text and an image; the stored tool result shows which image
+# settings and model profile normalized it. Modes: "profile" (a model with
+# maxWidth 1200), "no-resize" (the same model, images.autoResize false),
+# "default" (a model without a profile).
+def screenshot(image: String, request: Tools.Input()) -> IO(Tools.Output()):
+  IO.pure(Tools.Output(), Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"captured", None{}}} <> Ai.TextImageImage{Ai.ImageContent{image, "image/png"}} <> Nil{}, None{}, None{}, None{}}})
+
+def screenshotTool(execute: C.Callback<Tools.Input(), Tools.Output()>) -> Tools.Tool():
+  T.AgentTool{"screenshot", "Return a screenshot", V.ObjectValue{Rec.Record{Rec.Property{"type", V.Text{"object"}} <> Nil{}}}, None{}, "Screenshot", None{}, execute, None{}, None{}}
+
+def screenshotModel(+mode: String) -> Ai.Model<Ai.JsonValue>:
+  Bool.pick(Ai.Model<Ai.JsonValue>, String.eq(mode, "default"), imageModel("wide", None{}), imageModel("strict", Some{Ai.ModelImageResizeOptions{Some{U32.to_f64(1200)}, Some{U32.to_f64(1000)}, Some{U32.to_f64(500000)}, Some{U32.to_f64(70)}}}))
+
+def toolImagesScenario(+dir: String, agentDir: String, +mode: String, image: String) -> IO(Unit):
+  do IO<Unit>:
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    stored : Session.Session() <- requireSession(created)
+    +execute : C.Callback<Tools.Input(), Tools.Output()> <- C.create(~String, ~Tools.Input(), ~Tools.Output(), ~screenshot, image)
+    +model : Ai.Model<Ai.JsonValue> = screenshotModel(mode)
+    +value : Fixture <- fixtureWithModel(stored, dir, agentDir, "@screenshot" <> "done" <> Nil{}, Nil{}, Runtime.Loadout{Rec.new(String), screenshotTool(execute) <> Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}}, Some{model}, ModelFixture.Source{"faux", "PI_FAUX_API_KEY", model <> Nil{}} <> Nil{})
+    result : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "take a screenshot", Nil{}, None{})
+    reportPrompt(result)
+    reportMessages(sessionOf(value))
+    teardown(value)
+    C.dispose(Tools.Input(), Tools.Output(), execute)
+
 # bash: user bash commands (suite/agent-session-bash-persistence.test.ts).
 def ExecResult() -> Data: Result<&2, &2, Bash.OperationError, Maybe<&2, U32>>
 def BashOutcome() -> Data: Result<&2, &2, String, BashExec.BashResult>
@@ -970,6 +1006,7 @@ def run(args: List<String>) -> IO(Unit):
     case "mutate" <> dir <> agentDir <> Nil{}: mutateScenario(dir, agentDir)
     case "busy" <> dir <> agentDir <> Nil{}: busyScenario(dir, agentDir)
     case "images" <> dir <> agentDir <> image <> Nil{}: imagesScenario(dir, agentDir, image)
+    case "tool_images" <> dir <> agentDir <> mode <> image <> Nil{}: toolImagesScenario(dir, agentDir, mode, image)
     case "retry" <> dir <> agentDir <> responses <> "abort_second_error" <> Nil{}: abortedRetryScenario(dir, agentDir, responses)
     case "retry" <> dir <> agentDir <> responses <> cancel <> Nil{}: retryScenario(dir, agentDir, responses, cancel)
     case "compact" <> dir <> agentDir <> prompts <> responses <> action <> Nil{}: compactScenario(dir, agentDir, prompts, responses, action)
