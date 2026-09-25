@@ -15,6 +15,12 @@ def sameMaybe(actual: Maybe<&2, B.BigNat>, expected: Maybe<&2, B.BigNat>) -> Boo
     case Some{a} Some{b}: B.equal(a, b)
     case _ _: False{}
 
+def sameBytes(actual: List<&2, U32>, expected: List<&2, U32>) -> Bool:
+  match actual expected:
+    case Nil{} Nil{}: True{}
+    case a <> as b <> bs: U32.is_eq(a, b) && sameBytes(as, bs)
+    case _ _: False{}
+
 def sameDivision(actual: Maybe<&2, B.Division>, expected: Maybe<&2, B.Division>) -> Bool:
   match actual expected:
     case None{} None{}: True{}

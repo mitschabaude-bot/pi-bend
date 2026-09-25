@@ -13,6 +13,15 @@ def encrypt(key: Maybe<&2, AES.Block>, block: Maybe<&2, AES.Block>) -> String:
     case Some{key} Some{block}: show(AES.encrypt(AES.expand(key), block))
     case _ _: "invalid"
 
+def pairShow(pair: AES.Pair) -> String:
+  match pair:
+    case AES.Pair{first, second}: show(first) ++ "|" ++ show(second)
+
+def encryptPair(key: Maybe<&2, AES.Block>, first: Maybe<&2, AES.Block>, second: Maybe<&2, AES.Block>) -> String:
+  match key first second:
+    case Some{key} Some{first} Some{second}: pairShow(AES.encryptPair(AES.expand(key), first, second))
+    case _ _ _: "invalid"
+
 def keys(values: List<&2, AES.Block>) -> List<&2, String>:
   match values:
     case Nil{}: Nil{}
@@ -26,6 +35,7 @@ def schedule(key: Maybe<&2, AES.Block>) -> String:
 def request(parts: List<&2, String>) -> String:
   match parts:
     case key <> block <> Nil{}: encrypt(parse(key), parse(block))
+    case key <> first <> second <> Nil{}: encryptPair(parse(key), parse(first), parse(second))
     case key <> Nil{}: schedule(parse(key))
     case _: "invalid"
 

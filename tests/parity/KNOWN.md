@@ -21,21 +21,31 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
 ## Open (to fix)
 
 - **Streaming throughput and TLS handshake** (`stream-paced`, `stream-flood`):
-  over a local TLS server, Bend's first token arrives about 250 ms after pi's
-  (the handshake: 350-390 ms versus pi's 90-120 ms). A long answer (10 KB of
-  Markdown with 30 code blocks, 500 deltas) paced at 4 ms per delta now ends
-  within the bound (last token 2.42-2.44 s versus pi's 2.07-2.08 s); flooded,
-  it ends at 0.84-0.89 s versus pi's 0.16-0.18 s, of which the handshake
-  alone exceeds the 1.25x bound. In the flooded run (native profile at
-  873533e9) the handshake's X25519 and certificate checks take about 250 ms,
-  and of the ~550 ms after the first byte about a fifth is AES decryption
-  (the constant-time S-box computes an inverse by 13 field multiplications
-  per byte), several tenths are the ~10 frames, and the rest is per-delta
-  work, including one copy of the growing text per delta. Until 2026-09-25 both took 12-17 s: an
-  expired Bend Timer completes at once, so a zero-delay frame timer drew
-  after every one or two deltas instead of after the received events, as
-  Node's setTimeout (at least 1 ms, fired from the event loop) does.
-  `stream-flood` reports `slow:last-token` until fixed.
+  over a local TLS server (P-256 certificates), Bend's first token now
+  arrives before pi's (72-77 ms versus 110-115 ms in `stream-paced`). A long
+  answer (10 KB of Markdown with 30 code blocks, 500 deltas) paced at 4 ms
+  per delta ends within the bound (last token 2.21-2.22 s versus pi's
+  2.09-2.10 s); flooded, it ends at 0.43-0.47 s versus pi's 0.15-0.20 s
+  (7 runs, 2026-09-25). TLS is no longer the cause: the same flood over
+  plain HTTP (a local copy of the scenario without `tls`) ends at
+  0.36-0.38 s versus pi's 0.13 s, so TLS adds about 80 ms to Bend and
+  30-40 ms to pi, and the rest is per-delta event and render work (see the
+  native profile: about 45% of the streaming window frees terms). Until
+  2026-09-25 the handshake took 350-390 ms and the flood 0.84-0.89 s:
+  X25519 used lists of byte limbs (98 ms per scalar multiplication, twice
+  per handshake; now sixteen 16-bit limbs in a record, 0.43 ms), AES
+  computed each S-box inverse by 13 field multiplications and GHASH went bit
+  by bit (21 ms to open 16 KB; now a bitsliced cipher and 32-bit carryless
+  products, 1 ms; `tests/tls-crypto-benchmark.bend`), and record bodies
+  were buffered byte by byte through closures. RSA-2048 verification also
+  went from 97 ms to 13 ms (one-pass Montgomery rows, linear byte
+  conversion), which matters for RSA chains; the providers' own chains
+  (api.openai.com, chatgpt.com, api.anthropic.com) are ECDSA P-256/P-384.
+  Before that, both scenarios took 12-17 s: an expired Bend Timer completes
+  at once, so a zero-delay frame timer drew after every one or two deltas
+  instead of after the received events, as Node's setTimeout (at least
+  1 ms, fired from the event loop) does. `stream-flood` reports
+  `slow:last-token` until fixed.
 
 - **Request headers** (every scenario with a model turn): Bend sends neither
   Node fetch's default fields (`accept-encoding`, `accept-language`,

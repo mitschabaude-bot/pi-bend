@@ -333,22 +333,53 @@ def finishInput(outgoing: List<&2, List<&2, U32>>, incoming: List<&2, List<&2, U
     case Done{Step{client, outbound, inbound}}:
       Reception{Done{client}, List.reverse(&2, List<&2, U32>, List.reverse.go(&2, List<&2, U32>, outbound, outgoing)), List.reverse(&2, List<&2, U32>, List.reverse.go(&2, List<&2, U32>, inbound, incoming))}
 
-def feed(bytes: List<&2, U32>, result: Result<&2, &1, Error, Step>, outgoing: List<&2, List<&2, U32>>, incoming: List<&2, List<&2, U32>>) -> Reception:
-  match bytes result:
-    case Nil{} result: finishInput(outgoing, incoming, result)
-    case _ Fail{cause}: finishInput(outgoing, incoming, Fail{cause})
-    case _ Done{Step{Client{Connected{write, None{}, cs, ss, parameters}, fragments, limit, input}, outbound, inbound}}:
+# A record body's bytes are taken in one pass up to its remaining length,
+# checking that each is a byte; only headers go byte by byte.
+type Collected is Data:
+  Collected{rest: List<&2, U32>, reverse: List<&2, U32>, remaining: U32, high: U32}
+
+def collect(bytes: List<&2, U32>, reverse: List<&2, U32>, remaining: U32, +high: U32) -> Collected:
+  match bytes remaining:
+    case rest 0: Collected{rest, reverse, 0, high}
+    case Nil{} left: Collected{Nil{}, reverse, left, high}
+    case +byte <> rest left: collect(rest, byte <> reverse, (left - 1 : U32), U32.or(high, U32.shrn(byte, 8n)))
+
+def collectedRest(chunk: Collected) -> List<&2, U32>:
+  match chunk:
+    case Collected{rest, _, _, _}: rest
+
+def bodyChecked(valid: Bool, complete: Bool, reverse: List<&2, U32>, remaining: U32, phase: Phase, fragments: H.Buffer, limit: U32) -> Result<&2, &1, Error, Step>:
+  match valid complete:
+    case False{} _: Fail{RecordFailure{R.InvalidByte{}}}
+    case True{} True{}: receiveComplete(Client{phase, fragments, limit, emptyInput()}, List.reverse(&2, U32, reverse))
+    case True{} False{}: Done{Step{Client{phase, fragments, limit, RecordBody{reverse, remaining}}, Nil{}, Nil{}}}
+
+def bodyResult(chunk: Collected, phase: Phase, fragments: H.Buffer, limit: U32) -> Result<&2, &1, Error, Step>:
+  match chunk:
+    case Collected{_, reverse, +remaining, high}: bodyChecked(U32.is_eq(high, 0), U32.is_eq(remaining, 0), reverse, remaining, phase, fragments, limit)
+
+# fuel bounds the steps: each consumes at least one byte.
+def feed(fuel: Nat, bytes: List<&2, U32>, result: Result<&2, &1, Error, Step>, outgoing: List<&2, List<&2, U32>>, incoming: List<&2, List<&2, U32>>) -> Reception:
+  match fuel bytes result:
+    case _ Nil{} result: finishInput(outgoing, incoming, result)
+    case _ _ Fail{cause}: finishInput(outgoing, incoming, Fail{cause})
+    case _ _ Done{Step{Client{Connected{write, None{}, cs, ss, parameters}, fragments, limit, input}, outbound, inbound}}:
       finishInput(outgoing, incoming, Done{Step{Client{Connected{write, None{}, cs, ss, parameters}, fragments, limit, input}, outbound, inbound}})
-    case +byte <> rest Done{Step{Client{phase, fragments, limit, input}, outbound, inbound}}:
-      feed(rest,
+    case 0n _ result: finishInput(outgoing, incoming, result)
+    case 1n+fuel bytes Done{Step{Client{phase, fragments, limit, RecordBody{reverse, remaining}}, outbound, inbound}}:
+      +chunk = collect(bytes, reverse, remaining, 0)
+      feed(fuel, collectedRest(chunk), bodyResult(chunk, phase, fragments, limit),
+        List.reverse.go(&2, List<&2, U32>, outbound, outgoing), List.reverse.go(&2, List<&2, U32>, inbound, incoming))
+    case 1n+fuel +byte <> rest Done{Step{Client{phase, fragments, limit, input}, outbound, inbound}}:
+      feed(fuel, rest,
         Result.bind(&2, &1, Error, Unit, Step,
           Bool.pick(Result<&2, &1, Error, Unit>, U32.is_le(byte, 255), Done{Unit{}}, Fail{RecordFailure{R.InvalidByte{}}}), unused =>
             Result.bind(&2, &1, Error, BufferedRecord, Step, inputByte(input, byte), record =>
               buffered(Client{phase, fragments, limit, emptyInput()}, record))),
         List.reverse.go(&2, List<&2, U32>, outbound, outgoing), List.reverse.go(&2, List<&2, U32>, inbound, incoming))
 
-def receive(client: Client, bytes: List<&2, U32>) -> Reception:
-  feed(bytes, Done{Step{client, Nil{}, Nil{}}}, Nil{}, Nil{})
+def receive(client: Client, +bytes: List<&2, U32>) -> Reception:
+  feed(List.length(&2, U32, bytes), bytes, Done{Step{client, Nil{}, Nil{}}}, Nil{}, Nil{})
 
 # A transport EOF is clean only after the authenticated close_notify. Keep the
 # writer available after a clean read EOF, as with the closure alert itself.

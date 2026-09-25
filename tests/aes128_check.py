@@ -46,6 +46,11 @@ for i in range(128):
         cases.append((encode(key)+':'+encode(block),oracle(key,block)))
 for key,block in [(bytes([255])*16,bytes([255])*16),(bytes(range(16)),bytes(reversed(range(16))))]:
     cases.append((encode(key)+':'+encode(block),oracle(key,block)))
+# Two blocks share one bitsliced cipher call; each half must be independent.
+for i in range(64):
+    key,first,second=rng.randbytes(16),rng.randbytes(16),rng.randbytes(16)
+    if i==0: second=first
+    cases.append((encode(key)+':'+encode(first)+':'+encode(second),oracle(key,first)+'|'+oracle(key,second)))
 for n in [0,1,15,17,32]:
     cases.extend([(encode(bytes(n))+':'+encode(bytes(16)),'invalid'),(encode(bytes(16))+':'+encode(bytes(n)),'invalid')])
 for value in [256,4294967295]:

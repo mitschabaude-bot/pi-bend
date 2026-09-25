@@ -47,10 +47,17 @@ for a, b in pairs:
         field_cases.append((request(operation, integer(a), integer(b)), encode(integer(expected))))
 for a in values:
     field_cases.append((request('i', integer(a), b''), encode(integer(pow(a, P - 2, P)))))
-# Exercise the actual coefficient bound and both conditional subtractions.
-for coefficients in [[0] * 32, [255] * 32, [79070400] * 32] + [[rng.randrange(79070401) for _ in range(32)] for _ in range(64)]:
-    expected = sum(c << (8 * i) for i, c in enumerate(coefficients)) % P
-    field_cases.append((request('n', coefficients, b''), encode(integer(expected))))
+# The field holds any value below 2^256 between operations, so noncanonical
+# inputs up to 2^256 - 1 exercise every carry fold and both final subtractions.
+# (The earlier byte-limb field's coefficient-normalization cases tested an
+# internal representation that no longer exists.)
+wide = [P, P + 18, 2**255, 2**256 - 38, 2**256 - 1]
+for a in wide:
+    for b in values + wide:
+        for x, y in [(a, b), (b, a)]:
+            for operation, expected in [('a', (x + y) % P), ('d', (x - y) % P), ('m', (x * y) % P)]:
+                field_cases.append((request(operation, integer(x), integer(y)), encode(integer(expected))))
+    field_cases.append((request('i', integer(a), b''), encode(integer(pow(a, P - 2, P)))))
 
 curve_cases = []
 # https://www.rfc-editor.org/rfc/rfc7748#section-5.2
@@ -65,6 +72,12 @@ for scalar, point, expected in [
     secret, point, expected = map(bytes.fromhex, (scalar, point, expected))
     assert shared(secret, point) == expected
     curve_cases.append((request('x', secret, point), encode(expected)))
+# RFC 7748 section 5.2, iterated: k and u start at 9; each step sets
+# k, u = X25519(k, u), k.
+nine = integer(9)
+for count, expected in [(1, '422c8e7a6227d7bca1350b3e2bb7279f7897b87bb6854b783c60e80311ae3079'),
+                        (1000, '684cf59ba83309552800ef566f2f4d3c1c3887c49360e3875f2eb94d99532c51')]:
+    curve_cases.append((f'r:{count}:' + encode(nine), encode(bytes.fromhex(expected))))
 # RFC 7748 section 6.1: both parties' public keys and shared secret.
 alice = bytes.fromhex('77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a')
 bob = bytes.fromhex('5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb')

@@ -17,8 +17,8 @@ vectors += [(5**1074, 10**300), (2**2200-1, 2**1074+1)]
 def big(value):
     limbs = []
     while value:
-        limbs.append(str(value & 0xFFFFFFFF))
-        value >>= 32
+        limbs.append(str(value & 0xFFFF))
+        value >>= 16
     return 'B.BigNat{' + ' <> '.join(limbs + ['Nil{}']) + '}'
 
 source = ['import Base', 'import ../packages/runtime/src/big-nat.bend as B',
@@ -50,9 +50,23 @@ prime256 = 2**256 - 2**224 + 2**192 + 2**96 - 1
 modexp = [(2, 10, 1000), (3, 0, 7), (3, 1, 7), (5, 3, 1), (2**70 + 3, 65537, 2**64 + 13),
           (2**64 + 13 + 5, 65537, 2**64 + 13), (7, 2**33, 2**66), (7, 2**33 + 1, 2**66 + 2),
           (rng.getrandbits(255), prime256 - 2, prime256), (rng.getrandbits(2047), 65537, rng.getrandbits(2048) | (1 << 2047) | 1),
-          (rng.getrandbits(1023), rng.getrandbits(1024), rng.getrandbits(1024) | (1 << 1023) | 1), (65536, 65536, 65536 * 3)]
+          (rng.getrandbits(1023), rng.getrandbits(1024), rng.getrandbits(1024) | (1 << 1023) | 1), (65536, 65536, 65536 * 3),
+          # Limb counts whose R^2 = R*2^(16k) takes the odd (doubling) step, and RSA-3072/4096 sizes.
+          (rng.getrandbits(1039), 65537, rng.getrandbits(1040) | (1 << 1039) | 1), (rng.getrandbits(3071), 3, rng.getrandbits(3072) | (1 << 3071) | 1),
+          (rng.getrandbits(4095), 65537, rng.getrandbits(4096) | (1 << 4095) | 1), (2**4096 - 5, 65537, rng.getrandbits(4096) | (1 << 4095) | 1)]
 for i, (base, exponent, modulus) in enumerate(modexp):
     source.append(f'    H.assertion(B.equal(B.powerMod({bytes_of(exponent)}, {big(base)}, {big(modulus)}), {big(pow(base, exponent, modulus))}), "powerMod {i}")')
+
+# Big-endian octets: odd lengths, leading zeros, and widths that pad or keep
+# only the least significant bytes.
+def octets(data):
+    return ' <> '.join([str(b) for b in data] + ['Nil{}'])
+for i, data in enumerate([b'', b'\x00', b'\x01', b'\x00\x00\x01\x02\x03', bytes(range(1, 256)), rng.randbytes(256), rng.randbytes(513)]):
+    value = int.from_bytes(data, 'big')
+    source.append(f'    H.assertion(B.equal(B.fromBigEndian({octets(data)}), {big(value)}), "fromBigEndian {i}")')
+    for width in sorted({0, 1, len(data), len(data) + 3, max(len(data) - 1, 0)}):
+        expected = (value % (256 ** width)).to_bytes(width, 'big')
+        source.append(f'    H.assertion(H.sameBytes(B.toBigEndian({width}n, {big(value)}), {octets(expected)}), "toBigEndian {i} {width}")')
 
 for invalid in ['', '+1', '-1', ' 1', '1 ', '1.0', '1e2', '1x', '١']:
     source.append(f'    H.assertion(H.sameMaybe(B.fromDecimal("{invalid}"), None{{}}), "reject decimal {invalid}")')

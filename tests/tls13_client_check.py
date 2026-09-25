@@ -178,6 +178,11 @@ def check(command, algorithm, folder, streaming=False, post=False, live=False):
         assert (actual_out, actual_in) == (expected_out, [b'pong'])
         # Reject oversized advertised lengths before receiving their bodies.
         invoke(['r23,3,3,65,1'], expected='error:record')
+        # A non-byte inside a record body fails as a record error, whether the
+        # body arrives in one read or split across reads.
+        invoke(['r23,3,3,0,4,1,2,256,3'], expected='error:record')
+        invoke(['r23,3,3,0,4,1,2', 'r256,3'], expected='error:record')
+        invoke(['r23,3,3,0,4,1', 'r2,3,256'], expected='error:record')
         invoke(['r22,3,3,64,1'], expected='error:record')
         invoke(['r22,3,3,0,1,256'], expected='error:record')
         invoke(['r'], expected='hello')
