@@ -92,16 +92,68 @@ def wrap(lines: List<&2,String>,+width: Nat,reversed: List<&2,String>) -> List<&
 def rendered(state: Markdown,width: Nat,+lines: List<&2,String>) -> Markdown & List<&2,String>:
   match state:
     case Markdown{text,x,y,theme,style,options,_}: (Markdown{text,x,y,theme,style,options,Some{Cache{width,lines}}},lines)
-def finish(+state: Markdown,+width: Nat,lines: List<&2,String>) -> IO(Markdown & List<&2,String>):
+# The body's lines arrive wrapped and painted (see `Frame`); the vertical
+# padding is added here.
+def finish(+state: Markdown,+width: Nat,body: List<&2,String>) -> IO(Markdown & List<&2,String>):
   match state:
-    case Markdown{_,x,y,_,style,_,_}:
+    case Markdown{_,_,y,_,style,_,_}:
       do IO<Markdown & List<&2,String>>:
         +bg : Maybe<&2,Style()> <- IO.pure(Maybe<&2,Style()>,background(style))
-        margin : String <- IO.pure(String,U.spaces(x,""))
-        body : List<&2,String> <- paint(wrap(lines,Nat.max(1n,width - x * 2n),Nil{}),margin,width,bg,Nil{})
         top : List<&2,String> <- padding(y,width,bg,Nil{})
         bottom : List<&2,String> <- padding(y,width,bg,Nil{})
         return rendered(state,width,List.append(&2,String,top,List.append(&2,String,body,bottom)))
+
+# Wrapping and painting treat each rendered line alone, so each block's lines
+# are finished as the block is rendered: `inner` is the content width,
+# `margin` the horizontal padding, `gap` the finished empty line between
+# blocks.
+type Frame is Data: Frame{inner: Nat,margin: String,width: Nat,bg: Maybe<&2,Style()>,gap: List<&2,String>}
+def finishLines(lines: List<&2,String>,frame: Frame) -> IO(List<&2,String>):
+  match frame:
+    case Frame{inner,margin,width,bg,_}: paint(wrap(lines,inner,Nil{}),margin,width,bg,Nil{})
+def frameGap(frame: Frame) -> List<&2,String>:
+  match frame: case Frame{_,_,_,_,gap}: gap
+def withGap(frame: Frame,+inner: Nat,+margin: String,+width: Nat,+bg: Maybe<&2,Style()>) -> IO(Frame):
+  do IO<Frame>:
+    gap : List<&2,String> <- finishLines("" <> Nil{},Frame{inner,margin,width,bg,Nil{}})
+    return Frame{inner,margin,width,bg,gap}
+def newFrame(+inner: Nat,+margin: String,+width: Nat,+bg: Maybe<&2,Style()>) -> IO(Frame):
+  withGap(Frame{inner,margin,width,bg,Nil{}},inner,margin,width,bg)
+
+# Streaming renders a growing text again for every frame, and most of its
+# blocks are unchanged. A memo carries the finished lines of the previous
+# render's blocks, keyed by their source, into the next render of the same
+# component: same theme, style and options, which its owner guarantees. The
+# width and padding are checked here. Each render keeps only the blocks it
+# used.
+def Remembered() -> Data: Maybe<&2,List<&2,String>>
+type Memo is Data: Memo{width: Nat,paddingX: Nat,blocks: Map<&2,Remembered()>}
+def emptyMemo() -> Memo: Memo{0n,0n,Map.new(&2,Remembered())}
+type Memos is Data: Memos{previous: Map<&2,Remembered()>,next: Map<&2,Remembered()>}
+type Rendering is Data: Rendering{lines: List<&2,String>,memos: Memos}
+def memoFor(memo: Memo,width: Nat,paddingX: Nat) -> Memos:
+  match memo:
+    case Memo{oldWidth,oldPadding,blocks}:
+      Memos{Bool.pick(Map<&2,Remembered()>,Nat.is_eq(oldWidth,width) && Nat.is_eq(oldPadding,paddingX),blocks,Map.new(&2,Remembered())),Map.new(&2,Remembered())}
+def memoAfter(memos: Memos,width: Nat,paddingX: Nat) -> Memo:
+  match memos: case Memos{_,next}: Memo{width,paddingX,next}
+def kept(+key: String,+lines: List<&2,String>,previous: Map<&2,Remembered()>,next: Map<&2,Remembered()>) -> Rendering:
+  Rendering{lines,Memos{previous,Map.set(&2,Remembered(),next,key,Some{lines})}}
+def recalled(+key: String,compute: Unit -> IO(List<&2,String>),previous: Map<&2,Remembered()> & Remembered(),next: Map<&2,Remembered()> & Remembered()) -> IO(Rendering):
+  match previous next:
+    case Tuple{earlier,_} Tuple{later,Some{lines}}: IO.pure(Rendering,Rendering{lines,Memos{earlier,later}})
+    case Tuple{earlier,Some{lines}} Tuple{later,None{}}: IO.pure(Rendering,kept(key,lines,earlier,later))
+    case Tuple{earlier,None{}} Tuple{later,None{}}:
+      do IO<Rendering>:
+        lines : List<&2,String> <- compute(Unit{})
+        return kept(key,lines,earlier,later)
+def memoized(+key: String,compute: Unit -> IO(List<&2,String>),memos: Memos) -> IO(Rendering):
+  match memos:
+    case Memos{previous,next}: recalled(key,compute,Map.get(Remembered(),None{},previous,key),Map.get(Remembered(),None{},next,key))
+def linesOf(pair: Rendering) -> List<&2,String>:
+  match pair: case Rendering{lines,_}: lines
+def memosOf(pair: Rendering) -> Memos:
+  match pair: case Rendering{_,memos}: memos
 
 type InlineKind is Data:
   Strong{}
@@ -584,10 +636,12 @@ def classifiedSpacing(kind: BlockLine,+rest: List<&2,String>) -> Bool:
     case PlainLine{content}: Bool.not(Text.blank(content)) && Maybe.is_some(&2,BlockMath,mathBlockAt(rest))
     case _: False{}
 def blockSpace(line: String,rest: List<&2,String>) -> Bool: classifiedSpacing(classify(line),rest)
-def withSpacing(line: String,+rendered: List<&2,String>,rest: List<&2,String>,+following: List<&2,String>) -> List<&2,String>:
-  Bool.pick(List<&2,String>,blockSpace(line,rest),List.append(&2,String,rendered,"" <> following),List.append(&2,String,rendered,following))
-def afterFence(+rendered: List<&2,String>,rest: List<&2,String>,+following: List<&2,String>) -> List<&2,String>:
-  Bool.pick(List<&2,String>,hasFollowing(rest),List.append(&2,String,rendered,"" <> following),List.append(&2,String,rendered,following))
+def spaced(+rendered: List<&2,String>,space: Bool,frame: Frame,+following: List<&2,String>) -> List<&2,String>:
+  Bool.pick(List<&2,String>,space,List.append(&2,String,rendered,List.append(&2,String,frameGap(frame),following)),List.append(&2,String,rendered,following))
+def withSpacing(line: String,+rendered: List<&2,String>,rest: List<&2,String>,frame: Frame,+following: List<&2,String>) -> List<&2,String>:
+  spaced(rendered,blockSpace(line,rest),frame,following)
+def afterFence(+rendered: List<&2,String>,rest: List<&2,String>,frame: Frame,+following: List<&2,String>) -> List<&2,String>:
+  spaced(rendered,hasFollowing(rest),frame,following)
 type Fence is Data: Fence{code: List<&2,String>,remaining: List<&2,String>}
 type QuoteGroup is Data: QuoteGroup{content: List<&2,String>,remaining: List<&2,String>}
 def quoteContent(kind: BlockLine) -> Maybe<&2,String>:
@@ -876,38 +930,51 @@ def tableRegular(header: String,rest: List<&2,String>,+theme: MarkdownTheme,+wid
 def tableRendered(+header: String,+rest: List<&2,String>,+theme: MarkdownTheme,+width: Nat,+flags: InlineFlags) -> IO(TableResult):
   Bool.pick(Unit -> IO(TableResult),Nat.is_lt(width,4n * List.length(&2,String,tableHeader(header)) + 1n),
     _ => IO.pure(TableResult,narrowTable(header,rest,width)),_ => tableRegular(header,rest,theme,width,flags))(Unit{})
-# `display` is the display math starting at `lines`, if any.
-@unsafe def renderBlocks(display: Maybe<&2,BlockMath>,lines: List<&2,String>,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,+width: Nat,+flags: InlineFlags) -> IO(List<&2,String>):
+# `display` is the display math starting at `lines`, if any. Fenced code
+# and single lines are remembered in `memos`.
+def fenceKey(line: String,code: List<&2,String>) -> String: "F" ++ line ++ "\n" ++ String.join(code,"\n")
+def fenceFinished(+opening: String,code: List<&2,String>,+theme: MarkdownTheme,frame: Frame) -> IO(List<&2,String>):
+  do IO<List<&2,String>>:
+    rendered : List<&2,String> <- fenceRendered(opening,code,theme)
+    finishLines(rendered,frame)
+def lineFinished(+line: String,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,+width: Nat,+flags: InlineFlags,frame: Frame) -> IO(List<&2,String>):
+  do IO<List<&2,String>>:
+    rendered : List<&2,String> <- Bool.pick(Unit -> IO(List<&2,String>),Text.blank(line),_ => IO.pure(List<&2,String>,"" <> Nil{}),_ => blockLine(line,theme,style,width,flags))(Unit{})
+    finishLines(rendered,frame)
+@unsafe def renderBlocks(display: Maybe<&2,BlockMath>,lines: List<&2,String>,+theme: MarkdownTheme,+style: Maybe<&2,DefaultTextStyle>,+width: Nat,+flags: InlineFlags,+frame: Frame,+memos: Memos) -> IO(Rendering):
   match display lines:
     case Some{+block} _:
-      do IO<List<&2,String>>:
-        rendered : List<&2,String> <- mathBlockLines(block,latexOf(flags),style,theme)
-        following : List<&2,String> <- renderBlocks(mathBlockAt(mathRemaining(block)),mathRemaining(block),theme,style,width,flags)
-        return afterFence(rendered,mathRemaining(block),following)
-    case None{} Nil{}: IO.pure(List<&2,String>,Nil{})
+      do IO<Rendering>:
+        shown : List<&2,String> <- mathBlockLines(block,latexOf(flags),style,theme)
+        rendered : List<&2,String> <- finishLines(shown,frame)
+        +following : Rendering <- renderBlocks(mathBlockAt(mathRemaining(block)),mathRemaining(block),theme,style,width,flags,frame,memos)
+        return Rendering{afterFence(rendered,mathRemaining(block),frame,linesOf(following)),memosOf(following)}
+    case None{} Nil{}: IO.pure(Rendering,Rendering{Nil{},memos})
     case None{} +line <> +rest:
-      Bool.pick(Unit -> IO(List<&2,String>),String.starts_with(line,"```"),
-        _ => do IO<List<&2,String>>:
+      Bool.pick(Unit -> IO(Rendering),String.starts_with(line,"```"),
+        _ => do IO<Rendering>:
           +fence : Fence <- IO.pure(Fence,collectFence(rest,"```",Nil{}))
-          rendered : List<&2,String> <- fenceRendered(line,fenceLines(fence),theme)
-          following : List<&2,String> <- renderBlocks(mathBlockAt(fenceRest(fence)),fenceRest(fence),theme,style,width,flags)
-          return afterFence(rendered,fenceRest(fence),following),
-        _ => Bool.pick(Unit -> IO(List<&2,String>),Bool.not(Maybe.is_none(&2,BlockLine,quoteLine(line))),
-          _ => do IO<List<&2,String>>:
+          +block : Rendering <- memoized(fenceKey(line,fenceLines(fence)),_ => fenceFinished(line,fenceLines(fence),theme,frame),memos)
+          +following : Rendering <- renderBlocks(mathBlockAt(fenceRest(fence)),fenceRest(fence),theme,style,width,flags,frame,memosOf(block))
+          return Rendering{afterFence(linesOf(block),fenceRest(fence),frame,linesOf(following)),memosOf(following)},
+        _ => Bool.pick(Unit -> IO(Rendering),Bool.not(Maybe.is_none(&2,BlockLine,quoteLine(line))),
+          _ => do IO<Rendering>:
             +group : QuoteGroup <- IO.pure(QuoteGroup,collectQuote(rest,Nil{}))
             +contents : List<&2,String> <- IO.pure(List<&2,String>,Maybe.default(&2,String,quoteLineContent(line),"") <> quoteLines(group))
             quoted : List<&2,String> <- renderQuoteLines(mathBlockAt(contents),contents,theme,style,width,flags)
-            following : List<&2,String> <- renderBlocks(mathBlockAt(quoteRest(group)),quoteRest(group),theme,style,width,flags)
-            return afterFence(quoted,quoteRest(group),following),
-        _ => Bool.pick(Unit -> IO(List<&2,String>),isTable(line,rest),
-          _ => do IO<List<&2,String>>:
+            rendered : List<&2,String> <- finishLines(quoted,frame)
+            +following : Rendering <- renderBlocks(mathBlockAt(quoteRest(group)),quoteRest(group),theme,style,width,flags,frame,memos)
+            return Rendering{afterFence(rendered,quoteRest(group),frame,linesOf(following)),memosOf(following)},
+        _ => Bool.pick(Unit -> IO(Rendering),isTable(line,rest),
+          _ => do IO<Rendering>:
             +table : TableResult <- tableRendered(line,rest,theme,width,flags)
-            following : List<&2,String> <- renderBlocks(mathBlockAt(tableRest(table)),tableRest(table),theme,style,width,flags)
-            return List.append(&2,String,tableLines(table),following),
-          _ => do IO<List<&2,String>>:
-            rendered : List<&2,String> <- Bool.pick(Unit -> IO(List<&2,String>),Text.blank(line),_ => IO.pure(List<&2,String>,"" <> Nil{}),_ => blockLine(line,theme,style,width,flags))(Unit{})
-            following : List<&2,String> <- renderBlocks(mathBlockAt(rest),rest,theme,style,width,flags)
-            return withSpacing(line,rendered,rest,following))(Unit{}))(Unit{}))(Unit{})
+            rendered : List<&2,String> <- finishLines(tableLines(table),frame)
+            +following : Rendering <- renderBlocks(mathBlockAt(tableRest(table)),tableRest(table),theme,style,width,flags,frame,memos)
+            return Rendering{List.append(&2,String,rendered,linesOf(following)),memosOf(following)},
+          _ => do IO<Rendering>:
+            +block : Rendering <- memoized("L" ++ line,_ => lineFinished(line,theme,style,width,flags,frame),memos)
+            +following : Rendering <- renderBlocks(mathBlockAt(rest),rest,theme,style,width,flags,frame,memosOf(block))
+            return Rendering{withSpacing(line,linesOf(block),rest,frame,linesOf(following)),memosOf(following)})(Unit{}))(Unit{}))(Unit{})
 
 type OrderedLine is Data: OrderedLine{number: Nat,content: String}
 type Numbered is Data: Numbered{line: String,next: Maybe<&2,Nat>}
@@ -948,19 +1015,36 @@ def preparedLines(lines: List<&2,String>,options: MarkdownOptions) -> List<&2,St
   match options:
     case MarkdownOptions{True{},_,_,_,_}: lines
     case _: normalizeOrdered(lines,None{})
-def uncached(+state: Markdown,+width: Nat) -> IO(Markdown & List<&2,String>):
+def withMemo(pair: Markdown & List<&2,String>,memo: Memo) -> Markdown & List<&2,String> & Memo:
+  match pair: case (state,lines): (state,lines,memo)
+def uncached(+state: Markdown,+width: Nat,+memo: Memo) -> IO(Markdown & List<&2,String> & Memo):
   match state:
-    case Markdown{+source,x,_,theme,style,options,_}:
-      do IO<Markdown & List<&2,String>>:
-        +transformedText : String <- transformed(source,Nat.max(1n,width - x * 2n),options)
-        Bool.pick(Unit -> IO(Markdown & List<&2,String>),Text.blank(transformedText),
-          _ => IO.pure(Markdown & List<&2,String>,rendered(state,width,Nil{})),
-          _ => do IO<Markdown & List<&2,String>>:
+    case Markdown{+source,+x,_,theme,+style,options,_}:
+      do IO<Markdown & List<&2,String> & Memo>:
+        +inner : Nat <- IO.pure(Nat,Nat.max(1n,width - x * 2n))
+        +transformedText : String <- transformed(source,inner,options)
+        Bool.pick(Unit -> IO(Markdown & List<&2,String> & Memo),Text.blank(transformedText),
+          _ => IO.pure(Markdown & List<&2,String> & Memo,withMemo(rendered(state,width,Nil{}),memo)),
+          _ => do IO<Markdown & List<&2,String> & Memo>:
             +lines : List<&2,String> <- IO.pure(List<&2,String>,preparedLines(trimTrailing(Strings.split(String.join(Strings.split(transformedText,'\t'),"   "),'\n')),options))
-            blocks : List<&2,String> <- renderBlocks(mathBlockAt(lines),lines,theme,style,Nat.max(1n,width - x * 2n),inlineFlags(options))
-            finish(state,width,blocks))(Unit{})
+            +frame : Frame <- newFrame(inner,U.spaces(x,""),width,background(style))
+            +blocks : Rendering <- renderBlocks(mathBlockAt(lines),lines,theme,style,inner,inlineFlags(options),frame,memoFor(memo,width,x))
+            finished : Markdown & List<&2,String> <- finish(state,width,linesOf(blocks))
+            return withMemo(finished,memoAfter(memosOf(blocks),width,x)))(Unit{})
+def withoutMemo(value: Markdown & List<&2,String> & Memo) -> Markdown & List<&2,String>:
+  match value: case (state,lines,_): (state,lines)
+def uncachedAlone(+state: Markdown,+width: Nat) -> IO(Markdown & List<&2,String>):
+  do IO<Markdown & List<&2,String>>:
+    value : Markdown & List<&2,String> & Memo <- uncached(state,width,emptyMemo())
+    return withoutMemo(value)
 def render(+state: Markdown,+width: Nat) -> IO(Markdown & List<&2,String>):
   match state:
     case Markdown{_,_,_,_,_,_,Some{Cache{oldWidth,lines}}}:
-      Bool.pick(Unit -> IO(Markdown & List<&2,String>),Nat.is_eq(oldWidth,width),_ => IO.pure(Markdown & List<&2,String>,(state,lines)),_ => uncached(state,width))(Unit{})
-    case _: uncached(state,width)
+      Bool.pick(Unit -> IO(Markdown & List<&2,String>),Nat.is_eq(oldWidth,width),_ => IO.pure(Markdown & List<&2,String>,(state,lines)),_ => uncachedAlone(state,width))(Unit{})
+    case _: uncachedAlone(state,width)
+# `render` with the memo of the component's previous render (see `Memo`).
+def renderWithMemo(+state: Markdown,+width: Nat,+memo: Memo) -> IO(Markdown & List<&2,String> & Memo):
+  match state:
+    case Markdown{_,_,_,_,_,_,Some{Cache{oldWidth,lines}}}:
+      Bool.pick(Unit -> IO(Markdown & List<&2,String> & Memo),Nat.is_eq(oldWidth,width),_ => IO.pure(Markdown & List<&2,String> & Memo,(state,lines,memo)),_ => uncached(state,width,memo))(Unit{})
+    case _: uncached(state,width,memo)

@@ -1,0 +1,19 @@
+--- a/bend.ts
++++ b/bend.ts
+@@ -2809,6 +2809,16 @@
+     }
+   } else {
+     const x   = vars[0];
++    // A later column that destructures the next binder is decided first:
++    // otherwise that binder closes as a lambda before its column is reached.
++    // Rows are conjunctions of ctr/var patterns, so column order does not
++    // change which row matches.
++    const j = m.e.findIndex((e, k) => k > 0 && e.$ === "Var" && e.i === x.i
++      && m.r.some((row) => row.p[k].$ === "PCtr"));
++    if (j > 0 && !(m.e[0].$ === "Var" && m.e[0].i === x.i)) {
++      const move = <T>(xs: T[]): T[] => [xs[j], ...xs.slice(0, j), ...xs.slice(j + 1)];
++      return match_flatten({ ...m, e: move(m.e), r: m.r.map((row) => ({ ...row, p: move(row.p) })) }, vars, fr);
++    }
+     const scu = m.e[0];
+     const c   = m.r.map((row) => row.p[0]).find((q): q is PCtr => q.$ === "PCtr") ?? null;
+     const v   = vars.find((w) => scu.$ === "Var" && w.i === scu.i);

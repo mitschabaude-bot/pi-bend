@@ -13,7 +13,15 @@ def trimStart(text: String) -> String:
     case SNil{}: SNil{}
     case SCon{Chr{+code}, +rest}: Bool.pick(Unit -> String, whitespace(code), _ => trimStart(rest), _ => SCon{Chr{code}, rest})(Unit{})
 
-def trimEnd(text: String) -> String: String.reverse(trimStart(String.reverse(text)))
+# One pass: a character stays unless it is whitespace with nothing after it.
+def keptBefore(+code: U32, rest: String) -> String:
+  match rest:
+    case SNil{}: Bool.pick(String, whitespace(code), SNil{}, SCon{Chr{code}, SNil{}})
+    case tail: SCon{Chr{code}, tail}
+def trimEnd(text: String) -> String:
+  match text:
+    case SNil{}: SNil{}
+    case SCon{Chr{+code}, rest}: keptBefore(code, trimEnd(rest))
 def trim(text: String) -> String: trimEnd(trimStart(text))
 
 # ASCII case folding for protocol tokens and ASCII keywords; other code points

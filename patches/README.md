@@ -180,3 +180,5 @@ Validation with the patched compiler, all passing:
 `bend-literal-folds.patch` (2026-09-25, installed after `bend-unit-spins-image.patch`): F64 arithmetic on literals is folded at compile time, so records holding such values (the model catalogs) go into the static image, and literal fields of shared nodes are not sealed (BEND-047). CLI C 148.0 → 142.2 MB, slowest Clang unit 85 → 78 s; parity unchanged. The compiler is then 11,434 lines.
 
 `bend-book-caches.patch` (2026-09-25, installed after `bend-literal-folds.patch`): per-definition cache clearing keeps the two caches that depend only on the book (BEND-049). CLI emission about 140 s → 128 s, byte-identical C, slightly lower peak memory.
+
+`bend-match-binder-order.patch` (2026-09-25, installed after `bend-book-caches.patch`, changes `bend.ts`): a match column that destructures the next parameter is decided before earlier columns, so `match x setup` with a skipped then destructured `setup` compiles (BEND-050). The CLI's C is byte-identical.

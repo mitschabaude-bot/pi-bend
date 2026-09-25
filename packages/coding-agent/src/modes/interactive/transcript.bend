@@ -430,12 +430,22 @@ def rethemeEntries(entries: List<&1,Entry>,+theme: Theme.Theme) -> IO(List<&1,En
         kept : Messages.Owner <- Messages.rethemeOwner(owner,theme)
         next : List<&1,Entry> <- rethemeEntries(rest,theme)
         return StatusEntry{kept,handle} <> next
-def rethemed(state: State,+theme: Theme.Theme) -> IO(State & Unit):
+def applyTheme(state: State,+theme: Theme.Theme) -> IO(State & Unit):
   match state:
     case State{entries,tools,active,nextId,view,_,styles,expanded,hidden,pad}:
       do IO<State & Unit>:
         next : List<&1,Entry> <- rethemeEntries(entries,theme)
         return (State{next,tools,active,nextId,view,theme,styles,expanded,hidden,pad},Unit{})
+def rethemeWhen(changed: Bool,state: State,theme: Theme.Theme) -> IO(State & Unit):
+  match changed:
+    case True{}: applyTheme(state,theme)
+    case False{}: IO.pure(State & Unit,(state,Unit{}))
+# The runner syncs the live theme before every render; entries are rethemed,
+# and render again, only when it changed.
+def rethemed(state: State,+theme: Theme.Theme) -> IO(State & Unit):
+  match state:
+    case State{entries,tools,active,nextId,view,+current,styles,expanded,hidden,pad}:
+      rethemeWhen(Bool.not(Theme.same(current,theme)),State{entries,tools,active,nextId,view,current,styles,expanded,hidden,pad},theme)
 def retheme(handle: Handle,theme: Theme.Theme) -> IO(Unit):
   match handle:
     case Handle{resource,_}: Serial.run(State,Unit,resource,state => rethemed(state,theme))

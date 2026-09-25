@@ -23,6 +23,7 @@ import ../../../runtime/src/http-response.bend as Progress
 import ../../../runtime/src/http-response.bend as Metadata
 import ../../../runtime/src/http-response.bend as Consume
 import ../../../runtime/src/json.bend as Parse
+import ../../../runtime/src/random.bend as Seed
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/timer.bend as Duration
@@ -228,13 +229,16 @@ type URLError is Data:
   InvalidURL{cause: Absolute.Error}
   InvalidQuery{cause: Strict.FormStrictError}
 
-# Responses uses a fixed SDK resource path, not general relative resolution.
-def suffix(base: String, reversed: String) -> String:
+# SDK resources have fixed paths joined to the base URL, not general relative
+# resolution: one slash between them.
+def resourceSuffix(base: String, reversed: String, resource: String) -> String:
   match reversed:
-    case SCon{'/', _}: base ++ "responses"
-    case _: base ++ "/responses"
+    case SCon{'/', _}: base ++ resource
+    case _: base ++ "/" ++ resource
 
-def address(+base: String) -> String: suffix(base, String.reverse(base))
+def resourceAddress(+base: String, resource: String) -> String: resourceSuffix(base, String.reverse(base), resource)
+
+def address(base: String) -> String: resourceAddress(base, "responses")
 
 # The SDK's query dictionary retains the last value of a repeated name.
 def collect(tuples: List<&2, Form.Entry>, fields: R.Record<String>) -> R.Record<String>:
@@ -280,6 +284,10 @@ def parsedURL(defaults: List<&2, Form.Entry>, result: Result<&2, &2, Absolute.Er
 # The URL parser receives its immutable Unicode/IDNA tables from the caller.
 def responsesURL(context: Absolute.Context, base: String) -> Result<&2, &2, URLError, URL.URL>:
   parsedURL(Nil{}, Absolute.parse(context, address(base)))
+
+# `client.chat.completions.create`'s resource.
+def chatCompletionsURL(context: Absolute.Context, base: String) -> Result<&2, &2, URLError, URL.URL>:
+  parsedURL(Nil{}, Absolute.parse(context, resourceAddress(base, "chat/completions")))
 
 # AzureOpenAI adds `api-version` as the client's default query. `/responses`
 # is not one of its deployment-scoped paths, so the URL keeps the base.
@@ -339,6 +347,10 @@ def addressed(configuration: Defaults, credential: T.ProviderHeaders(), client: 
 # hook-selected one; this layer neither invokes nor retries hooks.
 def prepareRequest(context: Absolute.Context, configuration: Defaults, apiKey: String, client: T.ProviderHeaders(), baseUrl: String, timeout: Maybe<&2, F64>, payload: T.JsonValue) -> Result<&2, &2, RequestError, Request>:
   addressed(configuration, authorization(apiKey), client, timeout, payload, responsesURL(context, baseUrl))
+
+# The same SDK request for Chat Completions.
+def prepareChatRequest(context: Absolute.Context, configuration: Defaults, apiKey: String, client: T.ProviderHeaders(), baseUrl: String, timeout: Maybe<&2, F64>, payload: T.JsonValue) -> Result<&2, &2, RequestError, Request>:
+  addressed(configuration, authorization(apiKey), client, timeout, payload, chatCompletionsURL(context, baseUrl))
 
 # The same request through AzureOpenAI: `api-key` authentication and the
 # `api-version` query.
@@ -570,10 +582,13 @@ def prefix(provider: String) -> String:
     case "openai": "OpenAI API error"
     case name: name ++ " API error"
 
-def format(value: APIError, provider: String) -> Result<&2, &2, Body.NormalizationError, String>:
+def formatWith(value: APIError, prefix: Maybe<&2, String>) -> Result<&2, &2, Body.NormalizationError, String>:
   do Result<&2, &2, Body.NormalizationError, String>:
     normalized : Body.NormalizedProviderError <- normalize(value)
-    Body.formatProviderError(normalized, Some{prefix(provider)})
+    Body.formatProviderError(normalized, prefix)
+
+def format(value: APIError, provider: String) -> Result<&2, &2, Body.NormalizationError, String>:
+  formatWith(value, Some{prefix(provider)})
 
 # One attempt
 # -----------
@@ -691,3 +706,98 @@ def release(-Reason: Data, response: Response.Response<State(Reason)>) -> IO(Res
       do IO<Result<&2, &2, Progress.ResponseProgressError<ReadError(Reason)>, Unit>>:
         result : Response.Next<ReadError(Reason), State(Reason)> <- Response.closeWith(ReadError(Reason), State(Reason), close(Reason), body)
         return released(Reason, result)
+
+# Error descriptions
+# ------------------
+
+# The messages pi reports for SDK failures. API errors go through
+# formatProviderError(normalizeProviderError(error), prefix); Responses names
+# its provider in the prefix, Chat Completions uses none.
+def describeHeaderField(error: H.HeaderSyntaxError) -> String:
+  match error:
+    case H.InvalidName{}: "Invalid HTTP header name"
+    case H.InvalidValue{}: "Invalid HTTP header value"
+    case H.NonByteValue{}: "HTTP header value contains a non-byte character"
+
+def describeHeader(error: HeaderError) -> String:
+  match error:
+    case TimeoutNotInteger{_}: "timeout must be an integer"
+    case TimeoutNegative{_}: "timeout must be a positive integer"
+    case TimeoutEncodingFailure{_}: "Could not encode request timeout"
+    case HeaderFailure{cause}: describeHeaderField(cause)
+    case MissingAuthentication{}: "Could not resolve authentication method. Expected either apiKey or adminAPIKey to be set. Or for one of the \"Authorization\" or \"api-key\" headers to be explicitly omitted"
+
+def describeRequest(error: RequestError) -> String:
+  match error:
+    case URLFailure{InvalidURL{_}}: "Invalid URL"
+    case URLFailure{InvalidQuery{_}}: "Invalid URL query"
+    case HeaderRejected{cause}: describeHeader(cause)
+    case NonFinitePayload{}: "Request payload contains a non-finite number"
+    case PayloadEncodingFailure{}: "Could not encode request payload as JSON"
+
+def describeEntropy(error: Seed.SeedError) -> String:
+  match error:
+    case Seed.SeedSourceFailure{sourceCode, sourceMessage}: "Could not obtain retry entropy (code " ++ Nat.show(U32.to_nat(sourceCode)) ++ "): " ++ sourceMessage
+    case Seed.ShortSeed{bytes}: "Retry entropy source returned " ++ Nat.show(bytes) ++ " bytes; expected 8"
+
+# formatProviderError(normalizeProviderError(error), prefix); a diagnostic
+# whose status cannot be formatted keeps the SDK message.
+def apiMessage(error: APIError) -> String:
+  match error:
+    case APIError{_, _, message}: message
+
+def formattedAPIError(error: APIError, formatted: Result<&2, &2, Body.NormalizationError, String>) -> String:
+  match formatted:
+    case Done{text}: text
+    case Fail{_}: apiMessage(error)
+
+def describeAPIError(+error: APIError, prefix: Maybe<&2, String>) -> String:
+  formattedAPIError(error, formatWith(error, prefix))
+
+def describeFetch(-Reason: Data, error: Fetch.Error<Reason>) -> String:
+  match error:
+    case Fetch.InvalidRequest{_}: "Invalid request"
+    case Fetch.Rejected{_}: "Unsupported request URL"
+    case Fetch.Unresolved{_}: "Could not resolve the request host"
+    case Fetch.ExchangeFailure{_, _, _}: "Connection error."
+    case Fetch.HeaderFailure{_, _, _}: "Connection error."
+    case Fetch.ReusedExchangeFailure{_}: "Connection error."
+    case Fetch.ReusedHeaderFailure{_}: "Connection error."
+
+def describeCategory(-Reason: Data, cause: Fetch.Error<Reason>, category: Fetch.Category) -> String:
+  match category:
+    case Fetch.Connection{}: "Connection error."
+    case Fetch.Timeout{}: "Request timed out."
+    case Fetch.NonRetryable{}: describeFetch(Reason, cause)
+
+def describeAbort(-Reason: Data, reason: Abort.AbortReason<Deadline.Cause<Reason>>) -> String:
+  match reason:
+    case Abort.Supplied{Deadline.Expired{}}: "Request timed out."
+    case _: "Request was aborted."
+
+def describeTransport(-Reason: Data, error: FetchError<Reason>) -> String:
+  match error:
+    case InvalidTimeout{_}: "Invalid request timeout"
+    case FetchFailure{Scope.Aborted{why}}: describeAbort(Reason, why)
+    case FetchFailure{Scope.DispatchFailure{cause, Some{why}}}: describeAbort(Reason, why)
+    case FetchFailure{Scope.DispatchFailure{+cause, None{}}}: describeCategory(Reason, cause, Fetch.classify(Reason, cause))
+
+def describeAttempt(-Reason: Data, error: AttemptError<Reason>, prefix: Maybe<&2, String>) -> String:
+  match error:
+    case TransportFailure{cause}: describeTransport(Reason, cause)
+    case HTTPFailure{cause}: describeAPIError(cause, prefix)
+    case DiagnosticFailure{DiagnosticReadFailure{_, _}}: "Could not read the error response diagnostic."
+    case DiagnosticFailure{DiagnosticEncodingFailure{_, _}}: "Could not encode the error response diagnostic."
+
+def describeDelay(result: Result<&2, &2, Retry.FormattingError, Retry.RenderedError>) -> String:
+  match result:
+    case Done{Retry.RenderedError{_, message}}: message
+    case Fail{_}: "Server requested a retry delay above the configured maximum"
+
+def describeRetry(-Reason: Data, error: Retry.RetryFailure<AttemptError<Reason>>, prefix: Maybe<&2, String>) -> String:
+  match error:
+    case Retry.RequestFailed{Retry.Other{cause}}: describeAttempt(Reason, cause, prefix)
+    case Retry.RequestFailed{Retry.Provider{Retry.ProviderError{cause, _, _, _, _, _}}}: describeAttempt(Reason, cause, prefix)
+    case Retry.RequestAborted{}: "Request aborted"
+    case Retry.SleepRejected{_}: "Retry delay is outside the native timer range"
+    case Retry.DelayRejected{cause, message}: describeDelay(Retry.delayError(cause, message))

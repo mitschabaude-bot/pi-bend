@@ -30,6 +30,29 @@ def escapes(colors: List<&2,R.Property<C.Color>>,+mode: C.Mode,+bg: Bool,codes: 
 def create(name: String,+mode: C.Mode,+fg: R.Record<C.Color>,+bg: R.Record<C.Color>) -> Theme:
   Theme{name,mode,fg,bg,escapes(R.entries(C.Color,fg),mode,False{},Map.new(&2,String)),escapes(R.entries(C.Color,bg),mode,True{},Map.new(&2,String))}
 
+# Whether two themes render alike: the escape maps derive from the name's
+# colors and the mode.
+def sameColor(left: C.Color,right: C.Color) -> Bool:
+  match left right:
+    case C.Default{} C.Default{}: True{}
+    case C.Indexed{a} C.Indexed{b}: Nat.is_eq(a,b)
+    case C.RgbColor{C.Rgb{r1,g1,b1}} C.RgbColor{C.Rgb{r2,g2,b2}}: Nat.is_eq(r1,r2) && Nat.is_eq(g1,g2) && Nat.is_eq(b1,b2)
+    case _ _: False{}
+def sameColors(left: List<&2,R.Property<C.Color>>,right: List<&2,R.Property<C.Color>>) -> Bool:
+  match left right:
+    case Nil{} Nil{}: True{}
+    case R.Property{k1,c1} <> rest1 R.Property{k2,c2} <> rest2: String.eq(k1,k2) && sameColor(c1,c2) && sameColors(rest1,rest2)
+    case _ _: False{}
+def sameMode(left: C.Mode,right: C.Mode) -> Bool:
+  match left right:
+    case C.TrueColor{} C.TrueColor{}: True{}
+    case C.Palette256{} C.Palette256{}: True{}
+    case _ _: False{}
+def same(left: Theme,right: Theme) -> Bool:
+  match left right:
+    case Theme{n1,m1,f1,b1,_,_} Theme{n2,m2,f2,b2,_,_}:
+      String.eq(n1,n2) && sameMode(m1,m2) && sameColors(R.entries(C.Color,f1),R.entries(C.Color,f2)) && sameColors(R.entries(C.Color,b1),R.entries(C.Color,b2))
+
 type Error is Data:
   InvalidJson{}
   InvalidDocument{}

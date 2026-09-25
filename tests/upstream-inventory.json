@@ -937,8 +937,10 @@
     },
     {
       "source": "packages/ai/test/lax-message-content.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/lax-message-content.bend"
+      ],
       "sha256": "2a8ee2048658a1a0a2a8928cc9570c7db41ed295ca20b1d23098b70d4d39e196"
     },
     {
@@ -1091,33 +1093,61 @@
     },
     {
       "source": "packages/ai/test/openai-completions-raw-stop-reason.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "0d004f282f6f9f1ca261fba9a866de6ac2ed65da136c4b40abf4de919f3fa751"
+      "status": "ported",
+      "ports": [
+        "tests/openai-completions-stream.bend",
+        "tests/openai_completions_stream_check.py",
+        "tests/openai_completions_stream_reference.ts"
+      ],
+      "sha256": "0d004f282f6f9f1ca261fba9a866de6ac2ed65da136c4b40abf4de919f3fa751",
+      "notes": "Named cases run tests/openai_completions_stream_check.py: the native Completions provider and pinned upstream stream from the same scripted local HTTP server; every event (without upstream's aliased partial), the final message (timestamp masked) and every received request (body and auth/UA/X-Stainless headers) are equal, then the upstream assertions run on the native result. Bun and native one/four threads pass. Both cases (stop, content_filter)."
     },
     {
       "source": "packages/ai/test/openai-completions-reasoning-details.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9889371c9cf0f079880dc033cdaaf239770edc82b95841d6529fdb3ffc0b6587"
+      "status": "ported",
+      "ports": [
+        "tests/openai-completions-stream.bend",
+        "tests/openai_completions_stream_check.py",
+        "tests/openai_completions_stream_reference.ts"
+      ],
+      "sha256": "9889371c9cf0f079880dc033cdaaf239770edc82b95841d6529fdb3ffc0b6587",
+      "notes": "Named cases run tests/openai_completions_stream_check.py: the native Completions provider and pinned upstream stream from the same scripted local HTTP server; every event (without upstream's aliased partial), the final message (timestamp masked) and every received request (body and auth/UA/X-Stainless headers) are equal, then the upstream assertions run on the native result. Bun and native one/four threads pass. All four cases, each with its replay turn: the second request replays the first turn's message (the legacy case first removes thinking and moves the detail into thoughtSignature, as the test does), and its assistant reasoning_details are checked."
     },
     {
       "source": "packages/ai/test/openai-completions-response-model.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9657044e00ef3a46bf1c60b69afc876ad6b88827c3d1cb278cd3db2fc5ae214b"
+      "status": "ported",
+      "ports": [
+        "tests/openai-completions-stream.bend",
+        "tests/openai_completions_stream_check.py",
+        "tests/openai_completions_stream_reference.ts"
+      ],
+      "sha256": "9657044e00ef3a46bf1c60b69afc876ad6b88827c3d1cb278cd3db2fc5ae214b",
+      "notes": "Named cases run tests/openai_completions_stream_check.py: the native Completions provider and pinned upstream stream from the same scripted local HTTP server; every event (without upstream's aliased partial), the final message (timestamp masked) and every received request (body and auth/UA/X-Stainless headers) are equal, then the upstream assertions run on the native result. Bun and native one/four threads pass. All three cases (routed chunk.model, echoed id, empty or missing model) through streamSimple, which the suite's complete() wraps."
     },
     {
       "source": "packages/ai/test/openai-completions-retry.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "dbbc87cd0f014b25f511f5d0912436e2320e311544b37b3ba034153ee11f5b4d"
+      "status": "ported",
+      "ports": [
+        "tests/openai-completions-stream.bend",
+        "tests/openai_completions_stream_check.py",
+        "tests/openai_completions_stream_reference.ts"
+      ],
+      "sha256": "dbbc87cd0f014b25f511f5d0912436e2320e311544b37b3ba034153ee11f5b4d",
+      "notes": "Named cases run tests/openai_completions_stream_check.py: the native Completions provider and pinned upstream stream from the same scripted local HTTP server; every event (without upstream's aliased partial), the final message (timestamp masked) and every received request (body and auth/UA/X-Stainless headers) are equal, then the upstream assertions run on the native result. Bun and native one/four threads pass. All three cases. The SDK call option maxRetries: 0 is observed on the wire: every request carries X-Stainless-Retry-Count: 0 and the server sees one request per provider attempt. The provider retries use the real 100 ms retry-after-ms delays instead of fake timers; the delay-limit case reports the same message as upstream."
     },
     {
       "source": "packages/ai/test/openai-completions-thinking-as-text.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "3526abb4e6cdc71d18a1c5308c067d52e15e958556cbe4130815e6216d5f6f48"
+      "status": "ported",
+      "ports": [
+        "tests/openai-completions-stream.bend",
+        "tests/openai_completions_stream_check.py",
+        "tests/openai_completions_stream_reference.ts",
+        "tests/openai-completions-request.bend",
+        "tests/openai_completions_request_check.py",
+        "tests/openai_completions_request_reference.ts"
+      ],
+      "sha256": "3526abb4e6cdc71d18a1c5308c067d52e15e958556cbe4130815e6216d5f6f48",
+      "notes": "Named cases run tests/openai_completions_stream_check.py: the native Completions provider and pinned upstream stream from the same scripted local HTTP server; every event (without upstream's aliased partial), the final message (timestamp masked) and every received request (body and auth/UA/X-Stainless headers) are equal, then the upstream assertions run on the native result. Bun and native one/four threads pass. All three cases: the two convertMessages cases through the request harness against upstream convertMessages with the suite's compat, and the end-to-end case against the scripted server."
     },
     {
       "source": "packages/ai/test/openai-completions-thinking-token-budget.test.ts",
@@ -1132,14 +1162,17 @@
     },
     {
       "source": "packages/ai/test/openai-completions-tool-choice.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/openai-completions-request.bend",
         "tests/openai_completions_request_check.py",
-        "tests/openai_completions_request_reference.ts"
+        "tests/openai_completions_request_reference.ts",
+        "tests/openai-completions-stream.bend",
+        "tests/openai_completions_stream_check.py",
+        "tests/openai_completions_stream_reference.ts"
       ],
       "sha256": "0eabc918c66894434e9d48f60bc77a57317e213132dd7c50120e9a3dc4289b64",
-      "notes": "Named cases run tests/openai_completions_request_check.py: the native Completions provider (streamSimple/stream with a capturing fetch) or convertMessages versus pinned upstream on the same model, context and options; bodies are byte-identical and session/auth/custom headers equal, then the upstream assertions run on the native result. Catalog models come from the generated Bend catalog (upstream getModel for the oracle). Bun lane passes; 37 of 49 cases: every request-side and catalog-metadata case (metadata cases compare the Bend catalog entry with the upstream values the test asserts). Adaptations: 'forwards toolChoice from simple options to payload' passes \"required\" through OpenAICompletionsOptions.toolChoice (stream), because SimpleStreamOptions.toolChoice is typed \"auto\" | \"none\" and upstream casts past that type; 'omits reasoning effort for OpenCode Grok Build' declares the catalog model as a Completions model with its catalog compat, because upstream's catalog attaches the Completions-only supportsReasoningEffort to an openai-responses model and native compat is typed by API. Pending (stream side, openai-completions-stream.bend): finish_reason mapping, null chunks, missing finish_reason with and without compat, custom/empty tool-call deltas, id mutation, mixed deltas, OpenCode Go reasoning field naming, and usage accounting (12 cases)."
+      "notes": "Request-side and catalog-metadata cases run tests/openai_completions_request_check.py (byte-identical request bodies and headers); the 12 stream-side cases run tests/openai_completions_stream_check.py (events, final message and requests equal to upstream over a scripted server). All 49 cases pass on Bun and native one/four threads. Adaptations: 'forwards toolChoice from simple options to payload' passes \"required\" through OpenAICompletionsOptions.toolChoice (stream), because SimpleStreamOptions.toolChoice is typed \"auto\" | \"none\" and upstream casts past that type; 'omits reasoning effort for OpenCode Grok Build' declares the catalog model as a Completions model with its catalog compat, because upstream's catalog attaches the Completions-only supportsReasoningEffort to an openai-responses model and native compat is typed by API."
     },
     {
       "source": "packages/ai/test/openai-completions-tool-result-images.test.ts",

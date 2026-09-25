@@ -1,5 +1,6 @@
 import Base
 import ./openai-client.bend as Client
+import ../utils/schema-json.bend as Convert
 import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/deadline.bend as Deadline
 import ../../../runtime/src/sse.bend as Bytes
@@ -370,3 +371,29 @@ def dispose(-Reason: Data, source: Body(Reason), cursor: Cursor<TransportError(R
   do IO<Result<&2, &2, CloseError<Reason>, Unit>>:
     result : CloseResult<TransportError(Reason)> <- close(TransportError(Reason), cursor)
     disposed(Reason, source, result)
+
+# Error descriptions
+# ------------------
+
+def json(cause: Json.ParseError) -> String:
+  match cause:
+    case Json.ParseInvalidValue{}: "invalid value"
+    case Json.InvalidEscape{}: "invalid escape"
+    case Json.UnescapedControl{}: "unescaped control character"
+    case Json.UnterminatedString{}: "unterminated string"
+    case Json.UnexpectedToken{}: "unexpected token"
+    case Json.UnexpectedEnd{}: "unexpected end"
+    case Json.TrailingInput{}: "trailing input"
+    case Json.InputLimit{}: "input limit exceeded"
+
+
+def describeDispatch(error: DispatchError) -> String:
+  match error:
+    case InvalidJson{cause, _, _, _}: "Invalid SSE JSON: " ++ json(cause)
+    case ApiErrorPayload{value}: Maybe.default(&2, String, Client.detail(Client.JSONDiagnostic{Convert.toJson(value)}), "(no status code or body)")
+
+def describeStreaming(-Reason: Data, error: Error<TransportError(Reason)>) -> String:
+  match error:
+    case TransportFailure{_}: "Connection error."
+    case DiagnosticFailure{_}: "Connection error."
+    case DispatchFailure{cause}: describeDispatch(cause)

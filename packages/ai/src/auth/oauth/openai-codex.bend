@@ -2,7 +2,6 @@ import Base
 import ../types.bend as Auth
 import ../../types.bend as T
 import ../../api/openai-client.bend as Client
-import ../../api/openai-responses.bend as Responses
 import ../../utils/provider-retry.bend as Retry
 import ../../utils/jwt.bend as Jwt
 import ../../../../runtime/src/fetch.bend as Fetch
@@ -125,7 +124,7 @@ def bodyText(body: Response.Body<Client.State(Unit)>) -> IO(Result<&2, &2, Strin
 
 def responded(outcome: Client.Outcome(Unit)) -> IO(Result<&2, &2, String, String>):
   match outcome:
-    case Fail{failure}: IO.pure(Result<&2, &2, String, String>, Fail{"OpenAI Codex token refresh error: " ++ Responses.describeRetry(Unit, Retry.RequestFailed{failure}, "openai-codex")})
+    case Fail{failure}: IO.pure(Result<&2, &2, String, String>, Fail{"OpenAI Codex token refresh error: " ++ Client.describeRetry(Unit, Retry.RequestFailed{failure}, Some{Client.prefix("openai-codex")})})
     case Done{Response.Response{_, body}}: bodyText(body)
 
 def parsedToken(now: F64, text: Result<&2, &2, String, String>) -> Result<&2, &2, String, OAuthToken>:

@@ -672,20 +672,9 @@ type Error<-Reason: Data, -E: Data> is Data:
   MissingStopReason{api: String}
   OutputFailure{message: String}
 
-def json(cause: JsonParse.ParseError) -> String:
-  match cause:
-    case JsonParse.ParseInvalidValue{}: "invalid value"
-    case JsonParse.InvalidEscape{}: "invalid escape"
-    case JsonParse.UnescapedControl{}: "unescaped control character"
-    case JsonParse.UnterminatedString{}: "unterminated string"
-    case JsonParse.UnexpectedToken{}: "unexpected token"
-    case JsonParse.UnexpectedEnd{}: "unexpected end"
-    case JsonParse.TrailingInput{}: "trailing input"
-    case JsonParse.InputLimit{}: "input limit exceeded"
-
 def describeAssistant(cause: Shared.AssistantError) -> String:
   match cause:
-    case Shared.InvalidReasoningSignature{why}: "Invalid reasoning signature JSON: " ++ json(why)
+    case Shared.InvalidReasoningSignature{why}: "Invalid reasoning signature JSON: " ++ Sse.json(why)
     case Shared.InvalidGrammarInput{why}: Sampling.errorMessage(why)
     case Shared.InvalidArguments{}: "Tool call arguments cannot be represented as JSON"
 
@@ -705,106 +694,6 @@ def describePreparation(cause: PreparationError) -> String:
     case InvalidAzureBaseUrl{text}: "Invalid Azure OpenAI base URL: " ++ text
     case MissingAzureBaseUrl{}: "Azure OpenAI base URL is required. Set AZURE_OPENAI_BASE_URL or AZURE_OPENAI_RESOURCE_NAME, or pass azureBaseUrl, azureResourceName, or model.baseUrl."
 
-def describeHeaderField(error: Header.HeaderSyntaxError) -> String:
-  match error:
-    case Header.InvalidName{}: "Invalid HTTP header name"
-    case Header.InvalidValue{}: "Invalid HTTP header value"
-    case Header.NonByteValue{}: "HTTP header value contains a non-byte character"
-
-def describeHeader(error: Client.HeaderError) -> String:
-  match error:
-    case Client.TimeoutNotInteger{_}: "timeout must be an integer"
-    case Client.TimeoutNegative{_}: "timeout must be a positive integer"
-    case Client.TimeoutEncodingFailure{_}: "Could not encode request timeout"
-    case Client.HeaderFailure{cause}: describeHeaderField(cause)
-    case Client.MissingAuthentication{}: "Could not resolve authentication method. Expected either apiKey or adminAPIKey to be set. Or for one of the \"Authorization\" or \"api-key\" headers to be explicitly omitted"
-
-def describeRequest(error: Client.RequestError) -> String:
-  match error:
-    case Client.URLFailure{Client.InvalidURL{_}}: "Invalid URL"
-    case Client.URLFailure{Client.InvalidQuery{_}}: "Invalid URL query"
-    case Client.HeaderRejected{cause}: describeHeader(cause)
-    case Client.NonFinitePayload{}: "Request payload contains a non-finite number"
-    case Client.PayloadEncodingFailure{}: "Could not encode request payload as JSON"
-
-def describeEntropy(error: Seed.SeedError) -> String:
-  match error:
-    case Seed.SeedSourceFailure{code, message}: "Could not obtain retry entropy (code " ++ Nat.show(U32.to_nat(code)) ++ "): " ++ message
-    case Seed.ShortSeed{bytes}: "Retry entropy source returned " ++ Nat.show(bytes) ++ " bytes; expected 8"
-
-# formatProviderError(normalizeProviderError(error), prefix); a diagnostic
-# whose status cannot be formatted keeps the SDK message.
-def apiMessage(error: Client.APIError) -> String:
-  match error:
-    case Client.APIError{_, _, message}: message
-
-def formattedAPIError(error: Client.APIError, formatted: Result<&2, &2, Body.NormalizationError, String>) -> String:
-  match formatted:
-    case Done{text}: text
-    case Fail{_}: apiMessage(error)
-
-def describeAPIError(+error: Client.APIError, provider: String) -> String:
-  formattedAPIError(error, Client.format(error, provider))
-
-def describeFetch(-Reason: Data, error: Fetch.Error<Reason>) -> String:
-  match error:
-    case Fetch.InvalidRequest{_}: "Invalid request"
-    case Fetch.Rejected{_}: "Unsupported request URL"
-    case Fetch.Unresolved{_}: "Could not resolve the request host"
-    case Fetch.ExchangeFailure{_, _, _}: "Connection error."
-    case Fetch.HeaderFailure{_, _, _}: "Connection error."
-    case Fetch.ReusedExchangeFailure{_}: "Connection error."
-    case Fetch.ReusedHeaderFailure{_}: "Connection error."
-
-def describeCategory(-Reason: Data, cause: Fetch.Error<Reason>, category: Fetch.Category) -> String:
-  match category:
-    case Fetch.Connection{}: "Connection error."
-    case Fetch.Timeout{}: "Request timed out."
-    case Fetch.NonRetryable{}: describeFetch(Reason, cause)
-
-def describeAbort(-Reason: Data, reason: Abort.AbortReason<Deadline.Cause<Reason>>) -> String:
-  match reason:
-    case Abort.Supplied{Deadline.Expired{}}: "Request timed out."
-    case _: "Request was aborted."
-
-def describeTransport(-Reason: Data, error: Client.FetchError<Reason>) -> String:
-  match error:
-    case Client.InvalidTimeout{_}: "Invalid request timeout"
-    case Client.FetchFailure{Scope.Aborted{why}}: describeAbort(Reason, why)
-    case Client.FetchFailure{Scope.DispatchFailure{cause, Some{why}}}: describeAbort(Reason, why)
-    case Client.FetchFailure{Scope.DispatchFailure{+cause, None{}}}: describeCategory(Reason, cause, Fetch.classify(Reason, cause))
-
-def describeAttempt(-Reason: Data, error: Client.AttemptError<Reason>, provider: String) -> String:
-  match error:
-    case Client.TransportFailure{cause}: describeTransport(Reason, cause)
-    case Client.HTTPFailure{cause}: describeAPIError(cause, provider)
-    case Client.DiagnosticFailure{Client.DiagnosticReadFailure{_, _}}: "Could not read the error response diagnostic."
-    case Client.DiagnosticFailure{Client.DiagnosticEncodingFailure{_, _}}: "Could not encode the error response diagnostic."
-
-def describeDelay(result: Result<&2, &2, Retry.FormattingError, Retry.RenderedError>) -> String:
-  match result:
-    case Done{Retry.RenderedError{_, message}}: message
-    case Fail{_}: "Server requested a retry delay above the configured maximum"
-
-def describeRetry(-Reason: Data, error: Retry.RetryFailure<Client.AttemptError<Reason>>, provider: String) -> String:
-  match error:
-    case Retry.RequestFailed{Retry.Other{cause}}: describeAttempt(Reason, cause, provider)
-    case Retry.RequestFailed{Retry.Provider{Retry.ProviderError{cause, _, _, _, _, _}}}: describeAttempt(Reason, cause, provider)
-    case Retry.RequestAborted{}: "Request aborted"
-    case Retry.SleepRejected{_}: "Retry delay is outside the native timer range"
-    case Retry.DelayRejected{cause, message}: describeDelay(Retry.delayError(cause, message))
-
-def describeDispatch(error: Sse.DispatchError) -> String:
-  match error:
-    case Sse.InvalidJson{cause, _, _, _}: "Invalid SSE JSON: " ++ json(cause)
-    case Sse.ApiErrorPayload{value}: Maybe.default(&2, String, Client.detail(Client.JSONDiagnostic{Convert.toJson(value)}), "(no status code or body)")
-
-def describeStreaming(-Reason: Data, error: Sse.Error<Sse.TransportError(Reason)>) -> String:
-  match error:
-    case Sse.TransportFailure{_}: "Connection error."
-    case Sse.DiagnosticFailure{_}: "Connection error."
-    case Sse.DispatchFailure{cause}: describeDispatch(cause)
-
 def describeSegments(path: List<&2, Decode.Segment>) -> String:
   match path:
     case Nil{}: ""
@@ -819,7 +708,7 @@ def describeDecode(error: Decode.Error) -> String:
 
 def describeReader(-Reason: Data, error: ReaderError(Reason)) -> String:
   match error:
-    case Stream.StreamingFailure{cause}: describeStreaming(Reason, cause)
+    case Stream.StreamingFailure{cause}: Sse.describeStreaming(Reason, cause)
     case Stream.ProtocolFailure{cause}: "Invalid Responses event: " ++ describeDecode(cause)
 
 def describeProcessing(-Reason: Data, error: Stream.Error<ReaderError(Reason)>) -> String:
@@ -848,10 +737,10 @@ def describe(~Reason: Data, ~E: Data, ~render: E -> String, provider: String, er
     case PreparationFailure{cause}: describePreparation(cause)
     case HookFailure{cause}: render(cause)
     case InvalidRetryOptions{cause}: describeRetryOptions(cause)
-    case RequestRejected{cause}: describeRequest(cause)
+    case RequestRejected{cause}: Client.describeRequest(cause)
     case InitializationFailure{cause}: Fetch.format(cause)
-    case EntropyFailure{cause}: describeEntropy(cause)
-    case RequestFailure{cause}: describeRetry(Reason, cause, provider)
+    case EntropyFailure{cause}: Client.describeEntropy(cause)
+    case RequestFailure{cause}: Client.describeRetry(Reason, cause, Some{Client.prefix(provider)})
     case ProcessingFailure{cause}: describeProcessing(Reason, cause)
     case ReleaseFailure{_}: "Could not close the response body"
     case DisposalFailure{_}: "Could not close the response body"
