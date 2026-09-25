@@ -1,0 +1,77 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -3261,21 +3261,30 @@
+ // Host segments are dealt to BEND_TUS translation units by size, each
+ // guarded by its unit number, so `clang -DBEND_TU=k` compiles one share;
+ // with one unit (the default) every guard is unit 0.
++// With several units, each declares only the segments its own code names
++// (the dispatch table and its declarations live in unit 0).
+ function compile_segs(fl: File): string {
+   const units = Math.max(1, Number(process.env.BEND_TUS ?? "1") | 0);
+-  const sizes = Array(units).fill(0);
+-  return fl.segs.map((seg) => {
++  // unit 0 also holds the static image and dispatch table: no segments
++  const sizes = Array(units).fill(0).fill(Infinity, 0, units > 2 ? 1 : 0);
++  const named: Set<string>[] = [...Array(units + 1)].map(() => new Set());
++  const segs = fl.segs.map((seg) => {
+     const out = [`  WL_CASE(${seg.fid})`, "  {",
+       ...seg_take(seg).map((l) => "    " + l),
+       "    WL_OPEN", ...seg.spin ? ["    WL_SPIN"] : [],
+       ...seg.lines, ...seg.spin ? ["    WL_SPUN"] : [], "  }}"];
++    const unit = !seg.host ? units : sizes.indexOf(Math.min(...sizes));
++    seg.refs.forEach((r) => r.startsWith("FID_") && named[unit].add(r));
+     if (!seg.host) {
+       return out.join("\n");
+     }
+-    const unit = sizes.indexOf(Math.min(...sizes));
+     sizes[unit] += out.reduce((n, l) => n + l.length, 0);
+     return [`#if !DEVICE && BEND_TU == ${unit}`, ...out, "#endif"].join("\n");
+-  }).join("\n\n");
++  });
++  const decls = named.map((fids, unit) => [unit < units
++    ? `#if !DEVICE && BEND_TUS > 1 && BEND_TU == ${unit}` : "#if !DEVICE && BEND_TUS > 1",
++  ...[...fids].map((f) => `WL_FN WL_${f}(WL_SIG);`), "#endif"].join("\n"));
++  return [...decls, ...segs].join("\n\n");
+ }
+ 
+ export function compile_book(book: Bend.Book): string {
+@@ -3357,7 +3366,16 @@
+     ["Tables", [defs.join("\n"), ...[...fl.tabs].map(([r, i]) =>
+       `CONSTV u64 TAB_${i}[] = { ${r} };`)]],
+     // A spin emitted again lands after the spins that call it: declare all.
+-    ["Spins", [`CONSTV u64 STAT_IMG[] = { ${fl.img.join(", ") || 0} };`,
++    // With several host units, unit 0 holds the static image.
++    ["Spins", [`#if BEND_TUS > 1 && !DEVICE
++extern const u64 STAT_IMG[];
++#define STAT_KEEP const
++#else
++#define STAT_KEEP CONSTV
++#endif
++#if BEND_TUS == 1 || DEVICE || BEND_TU == 0
++STAT_KEEP u64 STAT_IMG[] = { ${fl.img.join(", ") || 0} };
++#endif`,
+       fl.spins.map((s) => s[1].split("\n")[0].replace(/ \{$/, ";")).join("\n"),
+       ...fl.spins.map((s) => s[1])]],
+     ["Segments", [compile_segs(fl)]],
+@@ -4816,10 +4834,21 @@
+ 
+ typedef Reply (PRESERVE(preserve_none) *WlFn)(WL_SIG);
+ #define WL_X(F) WL_FN WL_##F(WL_SIG);
++#if BEND_TUS > 1
++WL_X(FID_ENTER) WL_X(FID_EXIT) WL_X(FID_CLO_APPLY) WL_X(FID_IO_EMIT)
++extern const WlFn wl_tab[];
++#if BEND_TU == 0
++WL_TABLE
++#undef WL_X
++#define WL_X(F) WL_##F,
++const WlFn wl_tab[] = { WL_TABLE };
++#endif
++#else
+ WL_TABLE WL_X(FID_ENTER)
+ #undef WL_X
+ #define WL_X(F) WL_##F,
+ static const WlFn wl_tab[] = { WL_TABLE };
++#endif
+ #undef WL_X
+ #endif
+ 

@@ -1209,3 +1209,11 @@ One build of the CLI at main f91f6260 with the three patches (installed in `buil
 | Clang `-O1`, four units in parallel (wall) | 504 s | 270 s, 7.4 GB per unit |
 
 The emission's fixed-point rounds take 94 s together (51.8 s and 38.8 s for the first two), plus 13 s to assemble; checking is most of the rest. Full terminal parity of the patched CLI equals main's (93 matches, the same known differences); runtime timings are equal or slightly better (flood stream 12.3 s against 13.5 s, large-session startup 0.90 s against 0.97 s, typing 11-13 ms either way). The proof gate and the agent-session harness (117 checks, one and four threads) pass.
+
+## BEND-043 — Every translation unit carried the whole static image and all segment declarations (2026-09-25)
+
+Performance cliff, measured on the CLI (140 MB of C in four units). Each unit's preprocessed text was 175 MB, of which 76 MB was the static image (`STAT_IMG`, mostly Unicode tables) and 25 MB the forward declarations of all ~53,000 segment functions, both needed by one unit only: the image is copied into memory once at boot, and the declarations serve the dispatch table `wl_tab`. Each unit parsed them, so a unit needed 7.3 GB and more units did not pay off.
+
+Fix (`patches/bend-unit-contents.patch`, +34/−5 lines): with several host units, unit 0 defines the static image and the dispatch table (with the full declarations) and holds no segments; other units declare the image `extern` and only the segment functions their own code names. One unit, and GPU builds, are unchanged.
+
+Evidence, the CLI at main f91f6260, one build each: four units' Clang wall time was 270 s at 7.3 GB per unit. With the patch, eight units take 169 s at about 2 GB (unit 0 slowest before it was emptied of segments), and sixteen take 102 s at 1.4-1.5 GB (unit 0 3.3 GB). The sixteen-unit binary's terminal parity equals main's. On `tests/agent-session.bend` (sixteen units) Clang's total CPU drops from 909 s to 312 s. One unit is unchanged, and the agent-session harness passes with one and four units. `scripts/build-cli.sh` now uses one unit per core, at most 16.
