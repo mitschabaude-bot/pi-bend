@@ -47,6 +47,6 @@ The legacy `scripts/setup.sh`, `scripts/build.sh` and `scripts/test.sh` target t
 
 Generic contracts and machine-checked proofs live in [LAWS.bend](LAWS.bend) and [PROOF.bend](PROOF.bend). Differential, integration, concurrency and performance checks complement those proofs. The [source-hashed upstream inventory](tests/upstream-inventory.json) records each suite as pending, partial or ported; successful demonstrations and test counts do not imply complete parity.
 
-The [upstream source coverage map](docs/source-coverage.md) locates Bend counterparts for every source file in pi's four core packages and records separately reviewed port states. File presence alone is never counted as completion.
+The [upstream source coverage map](docs/source-coverage.md) locates Bend counterparts for every source file in pi's four core packages and records separately reviewed port states. File presence alone is never counted as completion; `python3 scripts/test-inventory.py` checks both source and test inventories.
 
 Bend bugs and performance problems are investigated in [the issue log](docs/bend-issues.md). Missing primitives are implemented here, with design and validation records alongside their code. Agents coordinate ownership and handoffs in [AGENT-LOG.md](AGENT-LOG.md).

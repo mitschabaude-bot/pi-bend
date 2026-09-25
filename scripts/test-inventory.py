@@ -5,6 +5,7 @@ import hashlib
 import json
 import pathlib
 import subprocess
+import sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--reference", default="../pi-mono")
@@ -31,3 +32,5 @@ elif current != previous:
     raise SystemExit("Upstream inventory differs; review changes and run with --update")
 counts = {status: sum(s["status"] == status for s in suites) for status in sorted({s["status"] for s in suites})}
 print(f"Upstream {revision[:9]}: {len(suites)} suites; {counts}")
+if not args.update:
+    subprocess.check_call([sys.executable, "scripts/source_coverage.py", "--check", "--reference", str(root)])

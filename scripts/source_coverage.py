@@ -14,16 +14,15 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
-UPSTREAM = ROOT.parent / "pi-mono"
 PACKAGES = ("ai", "agent", "tui", "coding-agent")
 REVIEWS = ROOT / "docs/source-coverage-reviews.json"
 OUTPUT = ROOT / "docs/source-coverage.json"
 VALID_STATES = {"unreviewed", "partial", "ported", "missing", "excluded"}
 
 
-def source_files():
+def source_files(upstream):
     for package in PACKAGES:
-        source_root = UPSTREAM / "packages" / package / "src"
+        source_root = upstream / "packages" / package / "src"
         for path in sorted(source_root.rglob("*")):
             if path.is_file() and path.suffix in {".ts", ".tsx"} and not path.name.endswith(".d.ts"):
                 yield path
@@ -38,24 +37,27 @@ def load_reviews():
     return data
 
 
-def build():
+def build(upstream):
     reviews = load_reviews()
-    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=UPSTREAM, text=True).strip()
+    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=upstream, text=True).strip()
     if revision != reviews["revision"]:
         raise ValueError(f"upstream is at {revision}; reviews target {reviews['revision']}")
 
     entries = []
     seen = set()
-    for path in source_files():
-        source = path.relative_to(UPSTREAM).as_posix()
+    for path in source_files(upstream):
+        source = path.relative_to(upstream).as_posix()
         seen.add(source)
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
         direct = ROOT / Path(source).with_suffix(".bend")
         review = reviews["reviews"].get(source, {})
-        if set(review) - {"state", "ports", "note"}:
+        if set(review) - {"state", "ports", "note", "source_sha256"}:
             raise ValueError(f"unknown review keys for {source}")
         state = review.get("state", "unreviewed")
         if state not in VALID_STATES:
             raise ValueError(f"invalid state {state} for {source}")
+        if state != "unreviewed" and review.get("source_sha256") != digest:
+            raise ValueError(f"review of changed source {source} is stale; inspect upstream and update source_sha256")
         ports = review.get("ports", [direct.relative_to(ROOT).as_posix()] if direct.is_file() else [])
         if not isinstance(ports, list) or any(not isinstance(p, str) or not p.startswith("packages/") or not p.endswith(".bend") for p in ports):
             raise ValueError(f"invalid ports for {source}")
@@ -68,7 +70,7 @@ def build():
             raise ValueError(f"missing source has targets: {source}")
         entry = {
             "source": source,
-            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "sha256": digest,
             "ports": ports,
             "state": state,
         }
@@ -85,8 +87,9 @@ def build():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="fail if generated map is stale")
+    parser.add_argument("--reference", type=Path, default=ROOT.parent / "pi-mono", help="upstream checkout")
     args = parser.parse_args()
-    result = json.dumps(build(), ensure_ascii=False, indent=2) + "\n"
+    result = json.dumps(build(args.reference.resolve()), ensure_ascii=False, indent=2) + "\n"
     if args.check:
         if not OUTPUT.exists() or OUTPUT.read_text() != result:
             raise SystemExit("source-coverage.json is stale; run scripts/source_coverage.py")
