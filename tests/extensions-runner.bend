@@ -267,7 +267,7 @@ def keyResolved(unit: Unit, input: Auth.ResolveInput) -> IO(Auth.AuthOutcome()):
 def keyedProvider(+id: String, models: List<&2, Models.Model()>) -> IO(AiModels.Provider):
   do IO<AiModels.Provider>:
     resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~Unit, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~keyResolved, Unit{})
-    return AiModels.Provider{id, id, "https://provider.test/v1", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Test", resolve}}, None{}}, models, AiModels.ApiStreams{}, None{}}
+    return AiModels.Provider{id, id, "https://provider.test/v1", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Test", None{}, resolve}}, None{}}, models, AiModels.ApiStreams{}, None{}}
 
 def capture(slot: R.Ref<Maybe<&2, T.ExtensionAPI>>, api: T.ExtensionAPI) -> IO(Outcome()):
   do IO<Outcome()>:
@@ -698,6 +698,92 @@ def autocompleteSkipsBuiltinNames() -> IO(Unit):
     +commands : List<&2, T.ResolvedCommand> <- Runner.getRegisteredCommands(runner)
     same(joined(slashNames(Interactive.extensionCommands(commands, Interactive.builtinNames(Slash.BUILTIN_SLASH_COMMANDS())))) ++ " | " ++ String.join(diagnosticMessages(Interactive.getBuiltInCommandConflictDiagnostics(commands)), " / "), "llama=[t] Manage llama.cpp | Extension command '/model' conflicts with built-in interactive command. Skipping in autocomplete. @<inline:one> / Extension command '/tree' conflicts with built-in interactive command. Available as '/tree:1'. @<inline:three> / Extension command '/tree' conflicts with built-in interactive command. Available as '/tree:2'. @<inline:four>", "autocomplete lists extension commands and reports built-in conflicts")
 
+# suite/regressions/8423-extension-factory-failure.test.ts. Adaptations:
+# registerFlag/getFlag and the event bus are not ported, so the failed API's
+# late call is registerProvider and the event-bus assertion stays pending;
+# upstream's config-form registerProvider(name, config) is a Provider value.
+def pendingNames(pending: List<&2, T.PendingProvider>) -> List<&2, String>:
+  match pending:
+    case Nil{}: Nil{}
+    case T.PendingProvider{provider, _} <> rest: Loader.providerIdOf(provider) <> pendingNames(rest)
+
+def pendingNamesOf(state: T.ExtensionRuntimeState) -> String:
+  match state:
+    case T.ExtensionRuntimeState{_, pending, _, _}: joined(pendingNames(pending))
+
+def pendingText(runtime: T.ExtensionRuntime()) -> IO(String):
+  do IO<String>:
+    state : T.ExtensionRuntimeState <- R.read(T.ExtensionRuntimeState, runtime)
+    return pendingNamesOf(state)
+
+def registeringProvider(+id: String, api: T.ExtensionAPI) -> IO(Outcome()):
+  do IO<Outcome()>:
+    provider : AiModels.Provider <- keyedProvider(id, Nil{})
+    Loader.registerProvider(api, provider)
+
+def failingAfterChanges(slot: R.Ref<Maybe<&2, T.ExtensionAPI>>, +api: T.ExtensionAPI) -> IO(Outcome()):
+  do IO<Outcome()>:
+    R.write(Maybe<&2, T.ExtensionAPI>, slot, Some{api})
+    removed : Outcome() <- Loader.unregisterProvider(api, "working-provider")
+    registered : Outcome() <- registeringProvider("failed-provider", api)
+    return Fail{"factory failed"}
+
+def lateRegistration(found: Maybe<&2, T.ExtensionAPI>) -> IO(Outcome()):
+  match found:
+    case None{}: IO.pure(Outcome(), Fail{"the failing factory did not run"})
+    case Some{api}: registeringProvider("late-provider", api)
+
+def discardsRuntimeChangesOfAFailedFactory() -> IO(Unit):
+  do IO<Unit>:
+    +runtime : T.ExtensionRuntime() <- Loader.createExtensionRuntime()
+    working : Outcome() <- Loader.loadExtensionFromFactory(runtime, api => registeringProvider("working-provider", api), "<working>", False{})
+    +slot : R.Ref<Maybe<&2, T.ExtensionAPI>> <- R.new(Maybe<&2, T.ExtensionAPI>, None{})
+    failed : Outcome() <- Loader.loadExtensionFromFactory(runtime, api => failingAfterChanges(slot, api), "<failing>", False{})
+    names : String <- pendingText(runtime)
+    captured : Maybe<&2, T.ExtensionAPI> <- R.dispose(Maybe<&2, T.ExtensionAPI>, slot)
+    late : Outcome() <- lateRegistration(captured)
+    same(shownOutcome(failed) ++ " | " ++ names ++ " | " ++ shownOutcome(late), "factory failed | working-provider | Extension \"<failing>\" failed to load and its API is no longer active.", "discards runtime changes and disables the failed API")
+
+def signalled(gate: Chan(Unit)) -> IO(Unit):
+  do IO<Unit>:
+    sent : Bool <- Chan.send(Unit, gate, Unit{})
+    return Unit{}
+
+def failingLater(started: Chan(Unit), release: Chan(Unit), +api: T.ExtensionAPI) -> IO(Outcome()):
+  do IO<Outcome()>:
+    registered : Outcome() <- registeringProvider("failed-provider", api)
+    signalled(started)
+    released : Maybe<&1, Unit> <- Chan.recv(Unit, release)
+    return Fail{"factory failed"}
+
+def loadInBackground(+runtime: T.ExtensionRuntime(), started: Chan(Unit), release: Chan(Unit), done: Chan(Outcome())) -> IO(Unit):
+  do IO<Unit>:
+    result : Outcome() <- Loader.loadExtensionFromFactory(runtime, api => failingLater(started, release, api), "<failing>", False{})
+    sent : Bool <- Chan.send(Outcome(), done, result)
+    return Unit{}
+
+def finishedOutcome(value: Maybe<&1, Outcome()>) -> String:
+  match value:
+    case Some{result}: shownOutcome(result)
+    case None{}: "unfinished"
+
+def keepsAConcurrentlyLoadedProvider() -> IO(Unit):
+  do IO<Unit>:
+    +runtime : T.ExtensionRuntime() <- Loader.createExtensionRuntime()
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +release : Chan(Unit) <- Chan.new(Unit, 1)
+    +done : Chan(Outcome()) <- Chan.new(Outcome(), 1)
+    IO.spawn(Unit, loadInBackground(runtime, started, release, done))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    working : Outcome() <- Loader.loadExtensionFromFactory(runtime, api => registeringProvider("working-provider", api), "<working>", False{})
+    signalled(release)
+    failed : Maybe<&1, Outcome()> <- Chan.recv(Outcome(), done)
+    names : String <- pendingText(runtime)
+    same(finishedOutcome(failed) ++ " | " ++ names, "factory failed | working-provider", "does not discard a concurrently loaded factory's provider")
+    Chan.close(Unit, started)
+    Chan.close(Unit, release)
+    Chan.close(Outcome(), done)
+
 def main() -> IO(Unit):
   do IO<Unit>:
     collectsCommandsFromMultipleExtensions()
@@ -725,3 +811,5 @@ def main() -> IO(Unit):
     callsErrorListenersWhenHandlerThrows()
     rpcCommandsListExtensionCommands()
     autocompleteSkipsBuiltinNames()
+    discardsRuntimeChangesOfAFailedFactory()
+    keepsAConcurrentlyLoadedProvider()

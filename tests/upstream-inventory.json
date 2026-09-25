@@ -3635,9 +3635,12 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8423-extension-factory-failure.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ab6b2c52acd5282b8a40efa51a1fa291b0d5c0bce9128a9f9867ea5255ca18b8"
+      "status": "partial",
+      "ports": [
+        "tests/extensions-runner.bend"
+      ],
+      "sha256": "ab6b2c52acd5282b8a40efa51a1fa291b0d5c0bce9128a9f9867ea5255ca18b8",
+      "notes": "Both cases' provider contracts pass in tests/extensions-runner.bend: a failing factory's unregisterProvider/registerProvider changes are discarded (pending registrations stay ['working-provider']) and its captured API then rejects registration with upstream's inactive-API message; a factory failing after another factory loaded concurrently (a fiber held on a channel) does not discard that factory's provider. Pending: flags (registerFlag/getFlag, runtime.flagValues) and the event bus, which the native extension API does not have; the late call is registerProvider instead of registerFlag. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8537-custom-message-tool-result-ordering.test.ts",
