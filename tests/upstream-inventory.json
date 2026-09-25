@@ -1405,8 +1405,11 @@
     },
     {
       "source": "packages/ai/test/supports-xhigh.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/model-catalog.bend",
+        "tests/model_catalog.test.ts"
+      ],
       "sha256": "d684347596f6b2af364e85163860616e1faa1d4ae3cc35139782cb49a1ad8c83"
     },
     {

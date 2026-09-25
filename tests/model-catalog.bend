@@ -1,9 +1,12 @@
 import Base
 import ../packages/ai/src/types.bend as T
 import ../packages/ai/src/utils/model-json.bend as MJ
+import ../packages/ai/src/models.bend as Models
+import ../packages/ai/src/utils/thinking-levels.bend as Thinking
 import ../packages/ai/src/utils/json.bend as Json
 import ../packages/ai/src/utils/schema-json.bend as S
 import ../packages/runtime/src/schema-value.bend as V
+import ../packages/runtime/src/record.bend as R
 import ../packages/ai/src/providers/ant-ling.models.bend as C0
 import ../packages/ai/src/providers/anthropic.models.bend as C1
 import ../packages/ai/src/providers/azure-openai-responses.models.bend as C2
@@ -42,10 +45,17 @@ import ../packages/ai/src/providers/xiaomi.models.bend as C34
 import ../packages/ai/src/providers/zai-coding-cn.models.bend as C35
 import ../packages/ai/src/providers/zai.models.bend as C36
 
-# Every built-in model, in the public JSON shape (upstream Model), one per line:
-# tests/model_catalog_suites.ts runs upstream catalog assertions on them.
+# Every built-in model, one per line as {"model": <public JSON shape of
+# upstream Model>, "levels": <getSupportedThinkingLevels>}:
+# tests/model_catalog.test.ts runs upstream catalog assertions on them.
 # Generated imports: one per providers/*.models.bend catalog.
-def line(model: T.Model<T.JsonValue>) -> String: Maybe.default(&2, String, Json.stringify(S.toJson(MJ.model(model))), "null")
+def levelNames(levels: List<&2, T.ModelThinkingLevel>) -> List<&2, V.Value>:
+  match levels:
+    case Nil{}: Nil{}
+    case level <> rest: V.Text{Thinking.name(level)} <> levelNames(rest)
+def entry(+model: T.Model<T.JsonValue>) -> V.Value:
+  V.ObjectValue{R.Record{R.Property{"model", MJ.model(model)} <> R.Property{"levels", V.ArrayValue{levelNames(Models.getSupportedThinkingLevels(T.JsonValue, model))}} <> Nil{}}}
+def line(model: T.Model<T.JsonValue>) -> String: Maybe.default(&2, String, Json.stringify(S.toJson(entry(model))), "null")
 def lines(models: List<&2, T.Model<T.JsonValue>>) -> String:
   match models:
     case Nil{}: ""
