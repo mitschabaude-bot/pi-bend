@@ -3,12 +3,16 @@
 import argparse
 import hashlib
 import json
+import os
 import pathlib
 import subprocess
 import sys
 
+# The sibling of the main checkout, also from a linked worktree elsewhere.
+common = subprocess.check_output(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], text=True).strip()
+default_reference = os.environ.get("PI_MONO", str(pathlib.Path(common).parent.parent / "pi-mono"))
 parser = argparse.ArgumentParser()
-parser.add_argument("--reference", default="../pi-mono")
+parser.add_argument("--reference", default=default_reference)
 parser.add_argument("--update", action="store_true")
 args = parser.parse_args()
 root = pathlib.Path(args.reference).resolve()

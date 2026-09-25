@@ -4116,8 +4116,11 @@
     },
     {
       "source": "packages/tui/test/overlay-options.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/tui-virtual-terminal.bend",
+        "tests/tui_virtual_terminal.ts"
+      ],
       "sha256": "45b9a7cb0245dfd6f4e65dabe94c1094827fb540f980f05a154e22f8199c99f6"
     },
     {
@@ -4285,8 +4288,11 @@
     },
     {
       "source": "packages/tui/test/tui-render.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/tui-virtual-terminal.bend",
+        "tests/tui_virtual_terminal.ts"
+      ],
       "sha256": "ace909b9dfca424f4c0e08e348163ecb98e86513d55c3f4fef5028a715fb9896"
     },
     {
