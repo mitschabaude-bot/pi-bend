@@ -18,6 +18,8 @@ type Action is Data:
   Notice{text: String}
   CommandError{text: String}
   OpenModelPicker{search: Maybe<&2,String>}
+  OpenThinkingPicker{}
+  ThinkingSelected{level: Ai.ModelThinkingLevel,persist: Bool}
   ModelSelected{model: Ai.Model<Ai.JsonValue>}
   ExportSession{path: Maybe<&2,String>}
   ImportSession{path: Maybe<&2,String>}
@@ -43,6 +45,7 @@ type Command is Data:
   ShowModel{requested: Maybe<&2,String>}
   SwitchModel{model: Ai.Model<Ai.JsonValue>}
   SetThinking{requested: Maybe<&2,String>}
+  SelectThinking{level: Ai.ModelThinkingLevel,persist: Bool}
   Compact{instructions: Maybe<&2,String>}
   NewSession{}
   Clone{}
@@ -122,21 +125,21 @@ def findLevel(levels: List<&2,Ai.ModelThinkingLevel>,+wanted: String) -> Maybe<&
     case Nil{}: None{}
     case +level <> rest:
       Bool.pick(Maybe<&2,Ai.ModelThinkingLevel>,String.eq(Levels.name(level),wanted),Some{level},findLevel(rest,wanted))
-def selected(level: Ai.ModelThinkingLevel,result: Result<&2,&2,String,Unit>) -> Action:
+def selected(level: Ai.ModelThinkingLevel,persist: Bool,result: Result<&2,&2,String,Unit>) -> Action:
   match result:
-    case Done{_}: Notice{"Thinking level: " ++ Levels.name(level)}
+    case Done{_}: ThinkingSelected{level,persist}
     case Fail{reason}: CommandError{reason}
-def choose(session: Session.AgentSession,+level: Ai.ModelThinkingLevel) -> IO(Action):
+def choose(session: Session.AgentSession,+level: Ai.ModelThinkingLevel,+persist: Bool) -> IO(Action):
   do IO<Action>:
-    result : Result<&2,&2,String,Unit> <- Session.setThinkingLevel(session,level,Session.ModelMutationOptions{False{}})
-    return selected(level,result)
+    result : Result<&2,&2,String,Unit> <- Session.setThinkingLevel(session,level,Session.ModelMutationOptions{persist})
+    return selected(level,persist,result)
 def thinkingSelected(session: Session.AgentSession,levels: List<&2,Ai.ModelThinkingLevel>,requested: String,found: Maybe<&2,Ai.ModelThinkingLevel>) -> IO(Action):
   match found:
-    case Some{level}: choose(session,level)
+    case Some{level}: choose(session,level,False{})
     case None{}: IO.pure(Action,CommandError{"Unknown thinking level \"" ++ requested ++ "\". Available levels: " ++ String.join(names(levels),", ") ++ "."})
 def thinkingWith(session: Session.AgentSession,current: Session.AgentState(),+levels: List<&2,Ai.ModelThinkingLevel>,requested: Maybe<&2,String>) -> IO(Action):
   match requested:
-    case None{}: IO.pure(Action,Notice{"Thinking level: " ++ Levels.name(Session.stateThinking(current)) ++ ". Available: " ++ String.join(names(levels),", ")})
+    case None{}: IO.pure(Action,OpenThinkingPicker{})
     case Some{+value}: thinkingSelected(session,levels,value,findLevel(levels,String.to_lower(value)))
 def thinking(+session: Session.AgentSession,requested: Maybe<&2,String>) -> IO(Action):
   do IO<Action>:
@@ -219,6 +222,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case ShowModel{requested}: showModel(session,models,requested)
     case SwitchModel{model}: switchModel(session,model)
     case SetThinking{requested}: thinking(session,requested)
+    case SelectThinking{level,persist}: choose(session,level,persist)
     case Compact{instructions}: compact(session,instructions)
     case NewSession{}: IO.pure(Action,CommandError{"Starting a new session is not available yet"})
     case Clone{}: IO.pure(Action,CommandError{"Cloning is not available"})

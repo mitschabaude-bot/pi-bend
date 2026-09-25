@@ -98,10 +98,12 @@
       }
     },
     "packages/coding-agent/src/modes/interactive/components/thinking-selector.ts": {
-      "state": "missing",
-      "note": "The /thinking selector and its save-as-default action are absent; the setting and current-session /thinking command exist separately.",
+      "state": "partial",
+      "note": "The interactive picker matches upstream terminal frames for search, selection and save-as-default; mouse input and the full navigation/cancellation contract remain unverified.",
       "source_sha256": "a8e562022d04ef4266191ba35a0417fced547666be6e6e97329aa3918b512e18",
-      "port_sha256": {}
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/thinking-selector.bend": "b2874a95ffd83ab8e7568c3a4613ac4c0e9b336a71229a6931dcc9e07cc55460"
+      }
     },
     "packages/coding-agent/src/modes/interactive/components/scoped-models-selector.ts": {
       "state": "missing",
@@ -113,13 +115,15 @@
       "state": "partial",
       "ports": [
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend",
-        "packages/coding-agent/src/modes/interactive/run.bend"
+        "packages/coding-agent/src/modes/interactive/run.bend",
+        "packages/coding-agent/src/modes/interactive/commands.bend"
       ],
-      "note": "The interactive loop runs with extension-command dispatch and autocomplete, but command and terminal parity remain incomplete; /thinking and /scoped-models selectors are known gaps.",
+      "note": "Interactive /thinking selection and save-as-default match terminal parity; /scoped-models remains missing and broader command/terminal parity remains incomplete.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "d0889e1c84b96cc1d09c9e38d379bcdb8a19466142287cd79a55400ca603a9ae",
-        "packages/coding-agent/src/modes/interactive/run.bend": "dfd2c3ed30e93b5f1e50fb99d7a207e324ed569f4c095fffe8f7c3a028674bed"
+        "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "1e656fd8e3bfd5b60998553a9cc796c291ec2bec77fc0833b97ee5802f666923",
+        "packages/coding-agent/src/modes/interactive/run.bend": "b6feca600d81dbf3cfb1d4008605b20021bb29646089b96699b1511556a18fce",
+        "packages/coding-agent/src/modes/interactive/commands.bend": "6b4021d7464a3d91754ca38f757ee054ea96e2f756aa6114116150825d8c0e94"
       }
     },
     "packages/tui/src/editor-component.ts": {
@@ -208,6 +212,14 @@
       "note": "The exported theme selector with selection preview is absent; theme loading and controller behavior exist elsewhere.",
       "source_sha256": "267be3176c67bddb72f0f64a9c3561a256c758707afbeabe2ac68112c8e3b5f8",
       "port_sha256": {}
+    },
+    "packages/coding-agent/src/core/tools/renderers/bash.ts": {
+      "state": "partial",
+      "note": "Width-aware five-visual-line tail previews, skipped-line counts and ordinary bash snapshots match upstream; the broader renderer contract is not yet fully validated.",
+      "source_sha256": "f04ab261d9f915f7b43a97ac679fb38d5646110855a886474593dc5d973f6764",
+      "port_sha256": {
+        "packages/coding-agent/src/core/tools/renderers/bash.bend": "b45d1aa09eaf1fed25a2d74228da2aa84003f609e2769f56268ca4ef6a54210d"
+      }
     }
   }
 }

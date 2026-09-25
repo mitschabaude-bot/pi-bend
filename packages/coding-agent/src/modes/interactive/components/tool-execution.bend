@@ -164,11 +164,11 @@ def bashElapsed(result: Maybe<&2,ToolResult>,elapsed: Maybe<&2,F64>) -> Maybe<&2
   match result:
     case None{}: None{}
     case Some{_}: elapsed
-def builtResult(+name: String,+args: Value.Value,+highlight: Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>,+result: Maybe<&2,ToolResult>,+expanded: Bool,partial: Bool,elapsed: Maybe<&2,F64>,+theme: Theme.Theme) -> IO(String):
+def builtResult(+name: String,+args: Value.Value,+highlight: Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>,+result: Maybe<&2,ToolResult>,+expanded: Bool,partial: Bool,elapsed: Maybe<&2,F64>,+theme: Theme.Theme,width: Nat) -> IO(String):
   match name:
     case "read": ReadRenderer.renderResult(args,highlight,textOutput(result),resultDetails(result),expanded,errorOutput(result),theme)
     case "write": WriteRenderer.renderResult(textOutput(result),errorOutput(result),theme)
-    case "bash": BashRenderer.renderResult(textOutput(result),resultDetails(result),expanded,partial,bashElapsed(result,elapsed),theme)
+    case "bash": BashRenderer.renderResult(textOutput(result),resultDetails(result),expanded,partial,bashElapsed(result,elapsed),theme,width)
     case "find": FindRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
     case "grep": GrepRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
     case "ls": LsRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
@@ -187,7 +187,7 @@ def boxedBuiltin(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>,write:
     case ToolExecution{name,_,+args,result,expanded,_,partial,_,_,+theme,_,+highlight}:
       do IO<List<&2,String>>:
         call : String <- builtCall(name,args,highlight,write,expanded,theme)
-        extra : String <- builtResult(name,args,highlight,result,expanded,partial,elapsed,theme)
+        extra : String <- builtResult(name,args,highlight,result,expanded,partial,elapsed,theme,Nat.max(1n,width - 2n))
         +bg : Callback.Callback<String,String> <- Messages.color(theme,backgroundKey(state),True{})
         lines : List<&2,String> <- textLines(call ++ extra,0n,0n,Nat.max(1n,width - 2n),None{})
         +body : List<&2,String> <- Box.paintContent(Box.prependMargin(lines," ",Nil{}),width,Some{bg},Nil{})

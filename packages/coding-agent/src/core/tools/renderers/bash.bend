@@ -1,6 +1,7 @@
 import Base
 import ../../../modes/interactive/components/messages.bend as Messages
 import ../../../modes/interactive/theme/theme.bend as Theme
+import ../../../../../tui/src/utils.bend as Visual
 import ../../../../../runtime/src/schema-value.bend as Value
 import ../../../../../runtime/src/f64.bend as F
 import ../render-utils.bend as Render
@@ -41,23 +42,28 @@ def expandHint(+theme: Theme.Theme,skipped: Nat) -> IO(String):
     key : String <- Messages.foregroundText(theme,"dim",Messages.expandKeys())
     ending : String <- Messages.foregroundText(theme,"muted"," to expand)")
     return "\n\n" ++ start ++ " " ++ key ++ ending
-def trimmedOutput(source: String,+expanded: Bool,+theme: Theme.Theme) -> IO(String):
+def previewLines(display: List<&2,String>,expanded: Bool,width: Nat) -> List<&2,String>:
+  match expanded:
+    case True{}: display
+    case False{}: Visual.wrapTextWithAnsi(Visual.normalizeTerminalOutput(String.join(display,"\n")),Nat.max(1n,width))
+def trimmedOutput(source: String,+expanded: Bool,+theme: Theme.Theme,width: Nat) -> IO(String):
   match source:
     case "": IO.pure(String,"")
     case source:
       do IO<String>:
         +lines : List<&2,String> <- IO.pure(List<&2,String>,String.split(source,'\n'))
-        +count : Nat <- IO.pure(Nat,List.length(&2,String,lines))
-        +shown : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,expanded,lines,List.drop(&2,String,lines,count - 5n)))
-        +display : List<&2,String> <- colored(shown,theme,Nil{})
+        display : List<&2,String> <- colored(lines,theme,Nil{})
+        +visual : List<&2,String> <- IO.pure(List<&2,String>,previewLines(display,expanded,width))
+        +count : Nat <- IO.pure(Nat,List.length(&2,String,visual))
+        +shown : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,expanded,visual,List.drop(&2,String,visual,count - 5n)))
         +skipped : Nat <- IO.pure(Nat,count - List.length(&2,String,shown))
         Bool.pick(Unit -> IO(String),Bool.not(expanded) && Nat.is_gt(skipped,0n),
           _ => do IO<String>:
             hint : String <- expandHint(theme,skipped)
-            return hint ++ "\n" ++ String.join(display,"\n"),
-          _ => IO.pure(String,"\n\n" ++ String.join(display,"\n")))(Unit{})
-def outputText(output: String,expanded: Bool,theme: Theme.Theme) -> IO(String):
-  trimmedOutput(String.trim(output),expanded,theme)
+            return hint ++ "\n" ++ String.join(shown,"\n"),
+          _ => IO.pure(String,"\n\n" ++ String.join(shown,"\n")))(Unit{})
+def outputText(output: String,expanded: Bool,theme: Theme.Theme,width: Nat) -> IO(String):
+  trimmedOutput(String.trim(output),expanded,theme,width)
 def withoutFooter(reversed: List<&2,String>,+output: String,path: String) -> String:
   match reversed:
     case +footer <> ("" <> earlier):
@@ -118,9 +124,9 @@ def timing(elapsed: Maybe<&2,F64>,partial: Bool,theme: Theme.Theme) -> IO(String
       do IO<String>:
         label : String <- Messages.foregroundText(theme,"muted",Bool.pick(String,partial,"Elapsed ","Took ") ++ duration(ms))
         return "\n\n" ++ label
-def renderResult(+output: String,+details: Maybe<&2,Tools.ToolDetails>,expanded: Bool,+partial: Bool,elapsed: Maybe<&2,F64>,+theme: Theme.Theme) -> IO(String):
+def renderResult(+output: String,+details: Maybe<&2,Tools.ToolDetails>,expanded: Bool,+partial: Bool,elapsed: Maybe<&2,F64>,+theme: Theme.Theme,width: Nat) -> IO(String):
   do IO<String>:
-    body : String <- outputText(stripFooter(output,details,partial),expanded,theme)
+    body : String <- outputText(stripFooter(output,details,partial),expanded,theme,width)
     notice : String <- warning(theme,detailsNotice(details))
     durationText : String <- timing(elapsed,partial,theme)
     return body ++ notice ++ durationText
