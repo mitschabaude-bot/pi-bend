@@ -4116,8 +4116,11 @@
     },
     {
       "source": "packages/tui/test/overlay-short-content.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/tui-virtual-terminal.bend",
+        "tests/tui_virtual_terminal.ts"
+      ],
       "sha256": "f26889d16c098a5f389d7f0e03c8ff2a89e2db5e661072904fc862dfa124923b"
     },
     {
@@ -4267,8 +4270,11 @@
     },
     {
       "source": "packages/tui/test/tui-overlay-style-leak.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/tui-virtual-terminal.bend",
+        "tests/tui_virtual_terminal.ts"
+      ],
       "sha256": "ef6da1f722856ab3a1d5543b7ed80a2be8bf3df70d9c17f910ad9289998c669e"
     },
     {
@@ -4279,8 +4285,11 @@
     },
     {
       "source": "packages/tui/test/tui-shrink.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/tui-virtual-terminal.bend",
+        "tests/tui_virtual_terminal.ts"
+      ],
       "sha256": "c136db2c4e886c43509f48e36a74bdf2c0897cd3c989b4cca1bd689697a3bf03"
     },
     {

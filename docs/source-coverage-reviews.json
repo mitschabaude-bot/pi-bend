@@ -28,7 +28,7 @@
         "packages/coding-agent/src/core/openai-completions-provider.bend"
       ],
       "port_sha256": {
-        "packages/ai/src/api/openai-completions.bend": "782cbe173ce60a2414476362ce8410b0454d4c38ccaba5d7adcaf0b83b87dc28",
+        "packages/ai/src/api/openai-completions.bend": "34e8e0c1aaa980aa7231f4d9ef6dc02cf11dab343e34fe48ee7fe32259f2e8ac",
         "packages/ai/src/api/openai-completions-client.bend": "a0e2e37a1d784e324d3c5fd63b84616ff772a4f13a31a314ec2b7b6a958f1163",
         "packages/ai/src/api/openai-completions-stream.bend": "d0ca90f9ffa6244899838de48da2ee3bb20f7512939db2a26b1fe587253f1df3",
         "packages/coding-agent/src/core/openai-completions-provider.bend": "10b4709e2c37de036e875b5111c5b18b6c6c776a8c037ea3c931839ed1d547c1"
