@@ -507,7 +507,7 @@ def padEntries(entries: List<&1,Entry>,+pad: Nat) -> IO(List<&1,Entry>):
       do IO<List<&1,Entry>>:
         next : List<&1,Entry> <- padEntries(rest,pad)
         return StatusEntry{owner,handle} <> next
-# upstream ui.invalidate(): message components drop their rendered lines.
+# upstream ui.invalidate(): components drop their rendered lines.
 def invalidateEntries(entries: List<&1,Entry>) -> IO(List<&1,Entry>):
   match entries:
     case Nil{}: IO.pure(List<&1,Entry>,Nil{})
@@ -518,8 +518,9 @@ def invalidateEntries(entries: List<&1,Entry>) -> IO(List<&1,Entry>):
         return MessageEntry{kept} <> next
     case ToolEntry{owner} <> rest:
       do IO<List<&1,Entry>>:
+        kept : Tool.Owner <- Tool.invalidateOwner(owner)
         next : List<&1,Entry> <- invalidateEntries(rest)
-        return ToolEntry{owner} <> next
+        return ToolEntry{kept} <> next
     case StatusEntry{owner,handle} <> rest:
       do IO<List<&1,Entry>>:
         kept : Messages.Owner <- Messages.invalidateOwner(owner)

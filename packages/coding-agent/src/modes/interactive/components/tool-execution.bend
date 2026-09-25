@@ -274,65 +274,111 @@ def render(state: ToolExecution,width: Nat) -> IO(List<&2,String>):
   renderWithDuration(state,width,None{})
 
 # The viewport keeps this component mounted while the transcript replaces its
-# immutable state as tool events arrive.
+# immutable state as tool events arrive. As upstream's components keep their
+# rendered text between frames, rendered lines are reused until the state
+# (version), the width or the shown elapsed time changes.
+type Stamped is Data: Stamped{value: ToolExecution,version: Nat}
+type Rendered is Data: Rendered{version: Nat,width: Nat,elapsed: Maybe<&2,F64>,lines: List<&2,String>}
 type Owner is Type:
-  Owner{state: Ref.Ref<ToolExecution>,timing: Serial.Owner<Timing>,component: Component.Component,draw: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
-type Handle is Data: Handle{state: Ref.Ref<ToolExecution>,timing: Serial.Handle<Timing>}
+  Owner{state: Ref.Ref<Stamped>,rendered: Ref.Ref<Maybe<&2,Rendered>>,timing: Serial.Owner<Timing>,component: Component.Component,draw: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
+type Handle is Data: Handle{state: Ref.Ref<Stamped>,rendered: Ref.Ref<Maybe<&2,Rendered>>,timing: Serial.Handle<Timing>}
+def sameElapsed(left: Maybe<&2,F64>,right: Maybe<&2,F64>) -> Bool:
+  match left right:
+    case None{} None{}: True{}
+    case Some{a} Some{b}: F64.is_eq(a,b)
+    case _ _: False{}
+def renderStamped(current: Stamped,+width: Nat,+elapsed: Maybe<&2,F64>,rendered: Ref.Ref<Maybe<&2,Rendered>>) -> IO(List<&2,String>):
+  match current:
+    case Stamped{value,version}:
+      do IO<List<&2,String>>:
+        +lines : List<&2,String> <- renderWithDuration(value,width,elapsed)
+        Ref.write(Maybe<&2,Rendered>,rendered,Some{Rendered{version,width,elapsed,lines}})
+        return lines
+def cachedLines(cached: Maybe<&2,Rendered>,current: Stamped,+width: Nat,+elapsed: Maybe<&2,F64>,rendered: Ref.Ref<Maybe<&2,Rendered>>) -> IO(List<&2,String>):
+  match cached current:
+    case Some{Rendered{version,oldWidth,oldElapsed,lines}} Stamped{value,+now}:
+      Bool.pick(Unit -> IO(List<&2,String>),Nat.is_eq(version,now) && Nat.is_eq(oldWidth,width) && sameElapsed(oldElapsed,elapsed),
+        _ => IO.pure(List<&2,String>,lines),
+        _ => renderStamped(Stamped{value,now},width,elapsed,rendered))(Unit{})
+    case None{} current: renderStamped(current,width,elapsed,rendered)
 def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
   match handle:
-    case Handle{state,timing}:
+    case Handle{state,+rendered,timing}:
       do IO<List<&2,String>>:
-        value : ToolExecution <- Ref.read(ToolExecution,state)
+        current : Stamped <- Ref.read(Stamped,state)
         elapsed : Maybe<&2,F64> <- Serial.run(Timing,Maybe<&2,F64>,timing,measured)
-        renderWithDuration(value,width,elapsed)
-def noInvalidate(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
-def created(id: Component.ComponentId,+state: Ref.Ref<ToolExecution>,pair: Serial.Owner<Timing> & Serial.Handle<Timing>) -> IO(Owner):
+        cached : Maybe<&2,Rendered> <- Ref.read(Maybe<&2,Rendered>,rendered)
+        cachedLines(cached,current,width,elapsed,rendered)
+# upstream invalidate(): the next render starts afresh.
+def invalidateLive(rendered: Ref.Ref<Maybe<&2,Rendered>>,unit: Unit) -> IO(Unit): Ref.write(Maybe<&2,Rendered>,rendered,None{})
+def created(id: Component.ComponentId,+state: Ref.Ref<Stamped>,pair: Serial.Owner<Timing> & Serial.Handle<Timing>) -> IO(Owner):
   match pair:
     case (timing,handle):
       do IO<Owner>:
-        +draw : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Handle,~Nat,~List<&2,String>,~renderLive,Handle{state,handle})
-        +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~noInvalidate,Unit{})
-        return Owner{state,timing,Component.Component{id,draw,None{},None{},invalidate,None{},False{}},draw,invalidate}
+        +rendered : Ref.Ref<Maybe<&2,Rendered>> <- Ref.new(Maybe<&2,Rendered>,None{})
+        +draw : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Handle,~Nat,~List<&2,String>,~renderLive,Handle{state,rendered,handle})
+        +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Rendered>>,~Unit,~Unit,~invalidateLive,rendered)
+        return Owner{state,rendered,timing,Component.Component{id,draw,None{},None{},invalidate,None{},False{}},draw,invalidate}
 def create(id: Component.ComponentId,value: ToolExecution) -> IO(Owner):
   do IO<Owner>:
-    +state : Ref.Ref<ToolExecution> <- Ref.new(ToolExecution,value)
+    +state : Ref.Ref<Stamped> <- Ref.new(Stamped,Stamped{value,0n})
     timing : Serial.Owner<Timing> <- Serial.create(Timing,Waiting{})
     created(id,state,Serial.borrow(Timing,timing))
-def borrowed(pair: Serial.Owner<Timing> & Serial.Handle<Timing>,+state: Ref.Ref<ToolExecution>,+component: Component.Component,draw: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>) -> Owner & Component.Component & Handle:
+def borrowed(pair: Serial.Owner<Timing> & Serial.Handle<Timing>,+state: Ref.Ref<Stamped>,+rendered: Ref.Ref<Maybe<&2,Rendered>>,+component: Component.Component,draw: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>) -> Owner & Component.Component & Handle:
   match pair:
-    case (timing,handle): (Owner{state,timing,component,draw,invalidate},component,Handle{state,handle})
+    case (timing,handle): (Owner{state,rendered,timing,component,draw,invalidate},component,Handle{state,rendered,handle})
 def borrow(owner: Owner) -> Owner & Component.Component & Handle:
   match owner:
-    case Owner{+state,timing,+component,draw,invalidate}: borrowed(Serial.borrow(Timing,timing),state,component,draw,invalidate)
+    case Owner{+state,+rendered,timing,+component,draw,invalidate}: borrowed(Serial.borrow(Timing,timing),state,rendered,component,draw,invalidate)
+def invalidateOwner(owner: Owner) -> IO(Owner):
+  match owner:
+    case Owner{state,+rendered,timing,component,draw,invalidate}:
+      do IO<Owner>:
+        Ref.write(Maybe<&2,Rendered>,rendered,None{})
+        return Owner{state,rendered,timing,component,draw,invalidate}
+def rethemed(current: Stamped,theme: Theme.Theme) -> Stamped:
+  match current: case Stamped{value,version}: Stamped{retheme(value,theme),version + 1n}
 def rethemeOwner(owner: Owner,theme: Theme.Theme) -> IO(Owner):
   match owner:
-    case Owner{+state,timing,+component,draw,invalidate}:
+    case Owner{+state,rendered,timing,+component,draw,invalidate}:
       do IO<Owner>:
-        value : ToolExecution <- Ref.read(ToolExecution,state)
-        Ref.write(ToolExecution,state,retheme(value,theme))
-        return Owner{state,timing,component,draw,invalidate}
+        current : Stamped <- Ref.read(Stamped,state)
+        Ref.write(Stamped,state,rethemed(current,theme))
+        return Owner{state,rendered,timing,component,draw,invalidate}
+def expandedStamp(current: Stamped,expanded: Bool) -> Stamped:
+  match current: case Stamped{value,version}: Stamped{setExpanded(value,expanded),version + 1n}
 def expandOwner(owner: Owner,expanded: Bool) -> IO(Owner):
   match owner:
-    case Owner{+state,timing,+component,draw,invalidate}:
+    case Owner{+state,rendered,timing,+component,draw,invalidate}:
       do IO<Owner>:
-        value : ToolExecution <- Ref.read(ToolExecution,state)
-        Ref.write(ToolExecution,state,setExpanded(value,expanded))
-        return Owner{state,timing,component,draw,invalidate}
+        current : Stamped <- Ref.read(Stamped,state)
+        Ref.write(Stamped,state,expandedStamp(current,expanded))
+        return Owner{state,rendered,timing,component,draw,invalidate}
+def replaced(current: Stamped,value: ToolExecution) -> Stamped:
+  match current: case Stamped{_,version}: Stamped{value,version + 1n}
 def set(handle: Handle,+value: ToolExecution) -> IO(Unit):
   match handle:
-    case Handle{state,timing}:
+    case Handle{+state,_,timing}:
       do IO<Unit>:
         updated : Unit <- Serial.run(Timing,Unit,timing,current => updateTiming(current,finished(value)))
-        Ref.write(ToolExecution,state,value)
+        current : Stamped <- Ref.read(Stamped,state)
+        Ref.write(Stamped,state,replaced(current,value))
 def executionBegan(handle: Handle) -> IO(Unit):
-  match handle: case Handle{_,timing}: Serial.run(Timing,Unit,timing,beginTiming)
+  match handle: case Handle{_,_,timing}: Serial.run(Timing,Unit,timing,beginTiming)
+def valueOf(current: Stamped) -> ToolExecution:
+  match current: case Stamped{value,_}: value
 def current(handle: Handle) -> IO(ToolExecution):
-  match handle: case Handle{state,_}: Ref.read(ToolExecution,state)
+  match handle:
+    case Handle{state,_,_}:
+      do IO<ToolExecution>:
+        stamped : Stamped <- Ref.read(Stamped,state)
+        return valueOf(stamped)
 def dispose(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{state,timing,_,draw,invalidate}:
+    case Owner{state,rendered,timing,_,draw,invalidate}:
       do IO<Unit>:
-        old : ToolExecution <- Ref.dispose(ToolExecution,state)
+        old : Stamped <- Ref.dispose(Stamped,state)
+        lines : Maybe<&2,Rendered> <- Ref.dispose(Maybe<&2,Rendered>,rendered)
         oldTiming : Timing <- Serial.retire(Timing,timing)
         Callback.dispose(Nat,List<&2,String>,draw)
         Callback.dispose(Unit,Unit,invalidate)
