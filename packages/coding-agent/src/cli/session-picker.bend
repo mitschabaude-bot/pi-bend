@@ -14,9 +14,12 @@ import ../../../runtime/src/deferred.bend as Deferred
 import ../../../runtime/src/ref.bend as Ref
 import ../../../runtime/src/string.bend as Strings
 import ../../../runtime/src/date.bend as Date
+import ../../../runtime/src/word-segmenter.bend as Words
 import ../../../tui/src/component.bend as Component
+import ../../../tui/src/components/input.bend as SearchInput
 import ../../../tui/src/keys.bend as Keys
 import ../../../tui/src/keybindings.bend as Bindings
+import ../../../tui/src/word-navigation.bend as Word
 import ../../../tui/src/fuzzy.bend as Fuzzy
 import ../../../tui/src/tui-base.bend as Tui
 import ../../../tui/src/tui.bend as Ui
@@ -33,18 +36,20 @@ type Scope is Data: Current{} All{}
 type Sort is Data: Threaded{} Recent{} Relevance{}
 type Controls is Data: Controls{sort: Sort,named: Bool,showPath: Bool,deleting: Maybe<&2,String>,status: Maybe<&2,String>}
 type Action is Data:
-  Cancel{} Confirm{} SwitchScope{} SwitchSort{} SwitchNamed{} TogglePath{} Delete{} DeleteAlias{} MoveUp{} MoveDown{} PageUp{} PageDown{} Erase{} TypeText{text: String} Ignore{}
+  Cancel{} Confirm{} SwitchScope{} SwitchSort{} SwitchNamed{} TogglePath{} Delete{} DeleteAlias{} MoveUp{} MoveDown{} PageUp{} PageDown{} Edit{data: String}
 type State is Data:
-  State{current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,scope: Scope,query: String,index: Nat,choice: Choice,controls: Controls}
+  State{current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,scope: Scope,query: SearchInput.Input,index: Nat,choice: Choice,controls: Controls}
 type Count is Data: Count{loaded: Nat,total: Nat}
 type Loads is Data: Loads{current: Maybe<&2,Count>,all: Maybe<&2,Count>}
 type Input is Data:
-  Input{state: Ref.Ref<State>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,bindings: Bindings.KeybindingsManager}
+  Input{state: Ref.Ref<State>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>}
 type Paint is Data: Paint{state: Ref.Ref<State>,loads: Ref.Ref<Loads>,bindings: Bindings.KeybindingsManager,theme: Theme.Theme}
 type Visual is Data: Visual{themeName: Maybe<&2,String>,assetsRoot: String,agentDir: String,home: String,trueColor: Maybe<&2,Bool>}
 type Owner is Data:
-  Owner{state: Ref.Ref<State>,loads: Ref.Ref<Loads>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
+  Owner{state: Ref.Ref<State>,loads: Ref.Ref<Loads>,words: Ref.Ref<Words.Source>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
 def Outcome() -> Data: Result<&2,&2,String,Maybe<&2,String>>
+def queryText(query: SearchInput.Input) -> String: SearchInput.getValue(query)
+def newQuery() -> SearchInput.Input: SearchInput.setFocused(SearchInput.new(None{}),True{})
 
 def searchText(info: Session.SessionInfo) -> String:
   match info:
@@ -205,7 +210,7 @@ def visible(state: State) -> List<&2,Session.SessionInfo>:
   match state:
     case State{current,all,scope,query,_,_,Controls{sort,namedFilter,_,_,_}}:
       +items = scopeSessions(current,all,scope)
-      arranged(namedOnly(items,namedFilter),query,sort)
+      arranged(namedOnly(items,namedFilter),queryText(query),sort)
 
 def safeText(text: String) -> String:
   match text:
@@ -357,20 +362,25 @@ def scrollLine(+start: Nat,count: Nat,+total: Nat,selected: Nat,+theme: Theme.Th
 def hintRows(hints: String & String,+width: Nat) -> List<&2,String>:
   match hints:
     case (first,second): [Utils.truncateToWidth(first,width,"…",False{}),Utils.truncateToWidth(second,width,"…",False{})]
-def renderState(+state: State,+width: Nat,bindings: Bindings.KeybindingsManager,+theme: Theme.Theme,loads: Loads,now: F64,home: String) -> List<&2,String>:
+def renderedQuery(pair: SearchInput.Input & List<&2,String>) -> List<&2,String>:
+  match pair: case (_,lines): lines
+def renderState(+state: State,+width: Nat,bindings: Bindings.KeybindingsManager,+theme: Theme.Theme,loads: Loads,now: F64,home: String) -> IO(List<&2,String>):
   match state:
     case State{_,_,scope,query,index,_,Controls{sort,namedFilter,showPath,deleting,status}}:
       +items = visible(state)
       +all = isAll(scope)
       +start = windowStart(items,index)
       +total = List.length(&2,Session.SessionInfo,items)
-      +thread = threadedMode(sort,query)
+      +text = queryText(query)
+      +thread = threadedMode(sort,text)
       +loading = loadingHint(scope,loads)
       +body = Bool.pick(List<&2,String>,List.is_empty(&2,Session.SessionInfo,items),emptyRow(all,namedFilter,theme),
         List.append(&2,String,listLines(List.drop(&2,Session.SessionInfo,items,start),start,index,all,thread,showPath,items,width,now,home,theme,10n,Nil{}),scrollLine(start,Nat.min(total - start,10n),total,index,theme)))
-      List.concat(&2,String,[["",Theme.fg(theme,"accent",rule(width)),"",heading(scope,sort,namedFilter,loading,width,theme)],
-        hintRows(hintLines(deleting,status,searchProblem(parsedSearch(query)),theme,bindings,showPath),width),
-        ["",Utils.truncateToWidth("> " ++ safeText(query) ++ "\u{1b}[7m \u{1b}[0m",width,"…",False{}),""],body,["",Theme.fg(theme,"accent",rule(width))]])
+      do IO<List<&2,String>>:
+        input : SearchInput.Input & List<&2,String> <- SearchInput.render(query,width)
+        return List.concat(&2,String,[["",Theme.fg(theme,"accent",rule(width)),"",heading(scope,sort,namedFilter,loading,width,theme)],
+          hintRows(hintLines(deleting,status,searchProblem(parsedSearch(text)),theme,bindings,showPath),width),
+          [""],renderedQuery(input),[""],body,["",Theme.fg(theme,"accent",rule(width))]])
 
 def paint(environment: Paint,width: Nat) -> IO(List<&2,String>):
   match environment:
@@ -380,7 +390,7 @@ def paint(environment: Paint,width: Nat) -> IO(List<&2,String>):
         loading : Loads <- Ref.read(Loads,loads)
         now : F64 <- Date.now()
         home : Result<&2,&2,FS.Error,String> <- FS.homedir()
-        return renderState(value,width,bindings,theme,loading,now,Result.default(&2,&2,FS.Error,String,home,""))
+        renderState(value,width,bindings,theme,loading,now,Result.default(&2,&2,FS.Error,String,home,""))
 def ignore(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
 def ignoreFocus(_: Unit,_: Bool) -> IO(Unit): IO.pure(Unit,Unit{})
 
@@ -390,21 +400,6 @@ def chosenAt(found: Maybe<&2,Session.SessionInfo>) -> Choice:
     case Some{info}: Chosen{infoPath(info)}
 def chosen(items: List<&2,Session.SessionInfo>,index: Nat) -> Choice:
   chosenAt(List.get(&2,Session.SessionInfo,items,index))
-
-def lastRemoved(reversed: String) -> String:
-  match reversed:
-    case SNil{}: ""
-    case SCon{_,rest}: String.reverse(rest)
-def withoutLast(text: String) -> String: lastRemoved(String.reverse(text))
-
-def printableTail(text: String) -> Bool:
-  match text:
-    case SNil{}: True{}
-    case SCon{char,rest}: Nat.is_ge(U32.to_nat(Char.to_u32(char)),32n) && printableTail(rest)
-def printable(text: String) -> Bool:
-  match text:
-    case SNil{}: False{}
-    case SCon{char,rest}: Nat.is_ge(U32.to_nat(Char.to_u32(char)),32n) && printableTail(rest)
 
 type Binding is Data: Binding{name: String,action: Action}
 def selectorBindings() -> List<&2,Binding>:
@@ -418,17 +413,10 @@ def bound(items: List<&2,Binding>,+bindings: Bindings.KeybindingsManager,+data: 
     case Nil{}: None{}
     case Binding{name,action} <> rest:
       Bool.pick(Unit -> Maybe<&2,Action>,Bindings.matches(bindings,Keys.defaults(),data,name),_ => Some{action},_ => bound(rest,bindings,data))(Unit{})
-def typed(key: Maybe<&2,Keys.KeyId>,+data: String) -> Action:
-  match key:
-    case Some{Keys.KeyId{Keys.Backspace{},_}}: Erase{}
-    case Some{Keys.KeyId{Keys.Space{},Keys.Modifiers{_,False{},False{},False{}}}}: TypeText{" "}
-    case Some{Keys.KeyId{Keys.Printable{_},Keys.Modifiers{_,False{},False{},False{}}}}: TypeText{data}
-    case None{}: Bool.pick(Action,printable(data),TypeText{data},Ignore{})
-    case _: Ignore{}
 def action(+bindings: Bindings.KeybindingsManager,+data: String) -> Action:
-  Maybe.default(&2,Action,bound(selectorBindings(),bindings,data),typed(Keys.parseKey(Keys.defaults(),data),data))
+  Maybe.default(&2,Action,bound(selectorBindings(),bindings,data),Edit{data})
 
-def revised(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,scope: Scope,query: String,index: Nat,choice: Choice,controls: Controls) -> State:
+def revised(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,scope: Scope,query: SearchInput.Input,index: Nat,choice: Choice,controls: Controls) -> State:
   State{current,all,scope,query,index,choice,controls}
 def toggled(scope: Scope) -> Scope:
   match scope: case Current{}: All{} case All{}: Current{}
@@ -437,16 +425,16 @@ def advanced(+index: Nat,count: Nat,down: Bool) -> Nat:
     case Zero{}: 0n
     case Succ{last}: Bool.pick(Nat,down,Nat.min(index + 1n,last),Bool.pick(Nat,Nat.is_eq(index,0n),0n,index - 1n))
 
-def selected(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,scope: Scope,query: String,index: Nat,choice: Choice,controls: Controls) -> State & Bool:
+def selected(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,scope: Scope,query: SearchInput.Input,index: Nat,choice: Choice,controls: Controls) -> State & Bool:
   match choice:
     case Pending{}: (revised(current,all,scope,query,index,Pending{},controls),False{})
     case value: (revised(current,all,scope,query,index,value,controls),True{})
-def deletingSelected(+current: List<&2,Session.SessionInfo>,+all: List<&2,Session.SessionInfo>,+scope: Scope,+query: String,+index: Nat,+controls: Controls) -> State & Bool:
+def deletingSelected(+current: List<&2,Session.SessionInfo>,+all: List<&2,Session.SessionInfo>,+scope: Scope,+query: SearchInput.Input,+index: Nat,+controls: Controls) -> State & Bool:
   +items = visible(revised(current,all,scope,query,index,Pending{},controls))
   +next = Maybe.default(&2,Controls,Maybe.map(&2,Session.SessionInfo,Controls,info => confirming(controls,infoPath(info)),List.get(&2,Session.SessionInfo,items,index)),controls)
   (revised(current,all,scope,query,index,Pending{},next),False{})
 
-def pending(+current: List<&2,Session.SessionInfo>,+all: List<&2,Session.SessionInfo>,+scope: Scope,+query: String,+index: Nat,+controls: Controls,action: Action) -> State & Bool:
+def pending(+current: List<&2,Session.SessionInfo>,+all: List<&2,Session.SessionInfo>,+scope: Scope,+query: SearchInput.Input,+index: Nat,+controls: Controls,action: Action) -> State & Bool:
   match action:
     case Cancel{}: (revised(current,all,scope,query,index,Cancelled{},controls),True{})
     case Confirm{}:
@@ -458,7 +446,7 @@ def pending(+current: List<&2,Session.SessionInfo>,+all: List<&2,Session.Session
     case TogglePath{}: (revised(current,all,scope,query,index,Pending{},toggledPath(controls)),False{})
     case Delete{}: deletingSelected(current,all,scope,query,index,controls)
     case DeleteAlias{}:
-      Bool.pick(Unit -> State & Bool,String.is_empty(query),_ => deletingSelected(current,all,scope,query,index,controls),_ => (revised(current,all,scope,withoutLast(query),0n,Pending{},controls),False{}))(Unit{})
+      Bool.pick(Unit -> State & Bool,String.is_empty(queryText(query)),_ => deletingSelected(current,all,scope,query,index,controls),_ => (revised(current,all,scope,query,index,Pending{},controls),False{}))(Unit{})
     case MoveUp{}:
       +count = List.length(&2,Session.SessionInfo,visible(revised(current,all,scope,query,index,Pending{},controls)))
       (revised(current,all,scope,query,advanced(index,count,False{}),Pending{},controls),False{})
@@ -469,11 +457,9 @@ def pending(+current: List<&2,Session.SessionInfo>,+all: List<&2,Session.Session
     case PageDown{}:
       +count = List.length(&2,Session.SessionInfo,visible(revised(current,all,scope,query,index,Pending{},controls)))
       (revised(current,all,scope,query,Nat.min(index + 10n,count - 1n),Pending{},controls),False{})
-    case Erase{}: (revised(current,all,scope,withoutLast(query),0n,Pending{},controls),False{})
-    case TypeText{text}: (revised(current,all,scope,query ++ text,0n,Pending{},controls),False{})
-    case Ignore{}: (revised(current,all,scope,query,index,Pending{},controls),False{})
+    case Edit{_}: (revised(current,all,scope,query,index,Pending{},controls),False{})
 
-def duringConfirmation(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,scope: Scope,query: String,index: Nat,controls: Controls,action: Action) -> State & Bool:
+def duringConfirmation(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,scope: Scope,query: SearchInput.Input,index: Nat,controls: Controls,action: Action) -> State & Bool:
   match action:
     case Cancel{}: (revised(current,all,scope,query,index,Pending{},cleared(controls)),False{})
     case _: (revised(current,all,scope,query,index,Pending{},controls),False{})
@@ -483,6 +469,49 @@ def transition(state: State,data: String,bindings: Bindings.KeybindingsManager) 
       duringConfirmation(current,all,scope,query,index,Controls{sort,namedFilter,showPath,Some{path},status},action(bindings,data))
     case State{current,all,scope,query,index,Pending{},controls}: pending(current,all,scope,query,index,cleared(controls),action(bindings,data))
     case state: (state,False{})
+def editable(state: State,selected: Action) -> Bool:
+  match state selected:
+    case State{_,_,_,_,_,Pending{},Controls{_,_,_,Some{_},_}} _: False{}
+    case State{_,_,_,_,_,Pending{},_} Edit{_}: True{}
+    case State{_,_,_,query,_,Pending{},_} DeleteAlias{}: Bool.not(String.is_empty(queryText(query)))
+    case _ _: False{}
+def nonAtomic(_: Words.Source,_: String) -> Bool: False{}
+def editedInput(query: SearchInput.Input,source: Words.Source,bindings: Bindings.KeybindingsManager,data: String) -> IO(Word.ResultOf(SearchInput.Input)):
+  SearchInput.handleInput(~Words.Source,~Word.sourceSegments,~nonAtomic,source,query,bindings,Keys.defaults(),data)
+def retriedInput(+query: SearchInput.Input,+words: Ref.Ref<Words.Source>,bindings: Bindings.KeybindingsManager,data: String,first: Word.ResultOf(SearchInput.Input)) -> IO(SearchInput.Input):
+  match first:
+    case Done{next}: IO.pure(SearchInput.Input,next)
+    case Fail{Word.WordDataPending{}}:
+      do IO<SearchInput.Input>:
+        source : Words.Source <- Ref.read(Words.Source,words)
+        +ready : Words.Source <- Words.ready(source)
+        Ref.write(Words.Source,words,ready)
+        result : Word.ResultOf(SearchInput.Input) <- editedInput(query,ready,bindings,data)
+        return Result.default(&2,&2,Word.Error,SearchInput.Input,result,query)
+    case Fail{_}: IO.pure(SearchInput.Input,query)
+def editQuery(+query: SearchInput.Input,+words: Ref.Ref<Words.Source>,+bindings: Bindings.KeybindingsManager,+data: String) -> IO(SearchInput.Input):
+  do IO<SearchInput.Input>:
+    source : Words.Source <- Ref.read(Words.Source,words)
+    first : Word.ResultOf(SearchInput.Input) <- editedInput(query,source,bindings,data)
+    retriedInput(query,words,bindings,data,first)
+def withQuery(state: State,+next: SearchInput.Input) -> State:
+  match state:
+    case State{current,all,scope,_,Zero{},choice,controls}:
+      State{current,all,scope,next,0n,choice,cleared(controls)}
+    case State{+current,+all,+scope,_,+index,+choice,+controls}:
+      +candidate = {State{current,all,scope,next,index,choice,cleared(controls)} : State}
+      +count = List.length(&2,Session.SessionInfo,visible(candidate))
+      State{current,all,scope,next,Nat.min(index,count - 1n),choice,cleared(controls)}
+def queryOf(state: State) -> SearchInput.Input:
+  match state: case State{_,_,_,query,_,_,_}: query
+def editedTransition(+state: Ref.Ref<State>,words: Ref.Ref<Words.Source>,+bindings: Bindings.KeybindingsManager,+data: String) -> IO(Bool):
+  do IO<Bool>:
+    +current : State <- Ref.read(State,state)
+    Bool.pick(Unit -> IO(Bool),editable(current,action(bindings,data)),
+      _ => do IO<Bool>:
+        next : SearchInput.Input <- editQuery(queryOf(current),words,bindings,data)
+        Ref.modify(State,Bool,state,value => (withQuery(value,next),False{})),
+      _ => Ref.modify(State,Bool,state,value => transition(value,data,bindings)))(Unit{})
 
 def withoutPath(items: List<&2,Session.SessionInfo>,+path: String) -> List<&2,Session.SessionInfo>:
   match items:
@@ -534,7 +563,7 @@ def deleteFor(state: Ref.Ref<State>,value: State,data: String,bindings: Bindings
     case _: IO.pure(Bool,False{})
 def deleteIfConfirmed(input: Input,data: String) -> IO(Bool):
   match input:
-    case Input{+state,_,_,bindings}:
+    case Input{+state,_,_,bindings,_}:
       do IO<Bool>:
         value : State <- Ref.read(State,state)
         handled : Bool <- deleteFor(state,value,data,bindings)
@@ -556,30 +585,31 @@ def requestAll(state: Ref.Ref<State>,request: Deferred.Deferred<Unit>,selected: 
 
 def receivedShared(input: Input,+data: String) -> IO(Unit):
   match input:
-    case Input{+state,+stop,+allRequested,+bindings}:
+    case Input{+state,+stop,+allRequested,+bindings,+words}:
       do IO<Unit>:
-        deleted : Bool <- deleteIfConfirmed(Input{state,stop,allRequested,bindings},data)
+        deleted : Bool <- deleteIfConfirmed(Input{state,stop,allRequested,bindings,words},data)
         Bool.pick(Unit -> IO(Unit),deleted,_ => IO.pure(Unit,Unit{}),_ => do IO<Unit>:
-          done : Bool <- Ref.modify(State,Bool,state,current => transition(current,data,bindings))
+          done : Bool <- editedTransition(state,words,bindings,data)
           requestAll(state,allRequested,action(bindings,data))
           Bool.pick(Unit -> IO(Unit),done,_ => do IO<Unit>:
             resolved : Bool <- Deferred.resolve(Unit,stop,Unit{})
             return Unit{},_ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{})
 def received(input: Input,data: String) -> IO(Unit): receivedShared(input,data)
 
-def made(state: Ref.Ref<State>,loads: Ref.Ref<Loads>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,+render: Callback.Callback<Nat,List<&2,String>>,+input: Callback.Callback<String,Unit>,+invalidate: Callback.Callback<Unit,Unit>,+focus: Callback.Callback<Bool,Unit>) -> Owner:
-  Owner{state,loads,stop,allRequested,Component.Component{Component.ComponentId{1n},render,Some{input},None{},invalidate,Some{focus},False{}},render,input,invalidate,focus}
-def create(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,+bindings: Bindings.KeybindingsManager,theme: Theme.Theme) -> IO(Owner):
+def made(state: Ref.Ref<State>,loads: Ref.Ref<Loads>,words: Ref.Ref<Words.Source>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,+render: Callback.Callback<Nat,List<&2,String>>,+input: Callback.Callback<String,Unit>,+invalidate: Callback.Callback<Unit,Unit>,+focus: Callback.Callback<Bool,Unit>) -> Owner:
+  Owner{state,loads,words,stop,allRequested,Component.Component{Component.ComponentId{1n},render,Some{input},None{},invalidate,Some{focus},False{}},render,input,invalidate,focus}
+def create(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,+bindings: Bindings.KeybindingsManager,theme: Theme.Theme,words: Words.Source) -> IO(Owner):
   do IO<Owner>:
-    +state : Ref.Ref<State> <- Ref.new(State,State{current,all,Current{},"",0n,Pending{},Controls{Threaded{},False{},False{},None{},None{}}})
+    +state : Ref.Ref<State> <- Ref.new(State,State{current,all,Current{},newQuery(),0n,Pending{},Controls{Threaded{},False{},False{},None{},None{}}})
     +loads : Ref.Ref<Loads> <- Ref.new(Loads,Loads{Some{Count{0n,0n}},Some{Count{0n,0n}}})
+    +wordRef : Ref.Ref<Words.Source> <- Ref.new(Words.Source,words)
     +stop : Deferred.Deferred<Unit> <- Deferred.new(Unit)
     +allRequested : Deferred.Deferred<Unit> <- Deferred.new(Unit)
     +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Paint,~Nat,~List<&2,String>,~paint,Paint{state,loads,bindings,theme})
-    +input : Callback.Callback<String,Unit> <- Callback.create(~Input,~String,~Unit,~received,Input{state,stop,allRequested,bindings})
+    +input : Callback.Callback<String,Unit> <- Callback.create(~Input,~String,~Unit,~received,Input{state,stop,allRequested,bindings,wordRef})
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~ignore,Unit{})
     +focus : Callback.Callback<Bool,Unit> <- Callback.create(~Unit,~Bool,~Unit,~ignoreFocus,Unit{})
-    return made(state,loads,stop,allRequested,render,input,invalidate,focus)
+    return made(state,loads,wordRef,stop,allRequested,render,input,invalidate,focus)
 
 def result(state: State) -> Outcome():
   match state:
@@ -595,10 +625,11 @@ def settled(outcome: Result<&2,&2,Terminal.Error,Process.Active>,final: State) -
     case Done{_}: result(final)
 def finish(owner: Owner,outcome: Result<&2,&2,Terminal.Error,Process.Active>) -> IO(Outcome()):
   match owner:
-    case Owner{state,loads,stop,allRequested,_,render,input,invalidate,focus}:
+    case Owner{state,loads,words,stop,allRequested,_,render,input,invalidate,focus}:
       do IO<Outcome()>:
         final : State <- Ref.dispose(State,state)
         oldLoads : Loads <- Ref.dispose(Loads,loads)
+        oldWords : Words.Source <- Ref.dispose(Words.Source,words)
         Callback.dispose(Nat,List<&2,String>,render)
         Callback.dispose(String,Unit,input)
         Callback.dispose(Unit,Unit,invalidate)
@@ -608,7 +639,9 @@ def finish(owner: Owner,outcome: Result<&2,&2,Terminal.Error,Process.Active>) ->
         return settled(outcome,final)
 
 type LoadContext is Data:
-  LoadContext{cwd: String,sessionDir: Maybe<&2,String>,agentDir: String,sessionsDir: String}
+  LoadContext{cwd: String,sessionDir: Maybe<&2,String>,agentDir: String,sessionsDir: String,assets: String}
+def contextAssets(context: LoadContext) -> String:
+  match context: case LoadContext{_,_,_,_,assets}: assets
 type ProgressInput is Data:
   ProgressInput{state: Ref.Ref<State>,loads: Ref.Ref<Loads>,request: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,scope: Scope}
 def findIndex(items: List<&2,Session.SessionInfo>,+path: String,+index: Nat) -> Maybe<&2,Nat>:
@@ -676,13 +709,13 @@ def stoppingRequest(context: Stopping,_: Unit) -> IO(Unit):
         Deferred.result(Unit,allDone)
 def loadCurrent(context: LoadContext,signal: Abort.AbortSignal<Unit>,current: ProgressInput,callback: Callback.Callback<Persistence.ListProgress,Unit>) -> IO(Unit):
   match context:
-    case LoadContext{cwd,sessionDir,agentDir,_}:
+    case LoadContext{cwd,sessionDir,agentDir,_,_}:
       do IO<Unit>:
         sessions : List<&2,Session.SessionInfo> <- Persistence.listProgress(cwd,sessionDir,agentDir,signal,callback)
         completedLoad(current,sessions)
 def loadRequested(context: LoadContext,+signal: Abort.AbortSignal<Unit>,request: Deferred.Deferred<Unit>,all: ProgressInput,callback: Callback.Callback<Persistence.ListProgress,Unit>) -> IO(Unit):
   match context:
-    case LoadContext{_,sessionDir,_,sessionsDir}:
+    case LoadContext{_,sessionDir,_,sessionsDir,_}:
       do IO<Unit>:
         wake : Unit <- Deferred.result(Unit,request)
         cancelled : Bool <- Abort.aborted(Unit,signal)
@@ -701,7 +734,7 @@ def allTask(context: LoadContext,signal: Abort.AbortSignal<Unit>,request: Deferr
     return Unit{}
 def loadedProcess(owner: Owner,base: Tui.TuiBase,+context: LoadContext) -> IO(Outcome()):
   match owner:
-    case Owner{+state,+loads,+stop,+allRequested,+component,render,input,invalidate,focus}:
+    case Owner{+state,+loads,+words,+stop,+allRequested,+component,render,input,invalidate,focus}:
       do IO<Outcome()>:
         +request : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,None{})
         +current : ProgressInput <- IO.pure(ProgressInput,ProgressInput{state,loads,request,Current{}})
@@ -728,23 +761,23 @@ def loadedProcess(owner: Owner,base: Tui.TuiBase,+context: LoadContext) -> IO(Ou
         Callback.dispose(Process.QueryReady,Unit,ready)
         Callback.dispose(Unit,Unit,stopping)
         oldRequest : Maybe<&2,Callback.Callback<Unit,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<Unit,Unit>>,request)
-        finish(Owner{state,loads,stop,allRequested,component,render,input,invalidate,focus},outcome)
+        finish(Owner{state,loads,words,stop,allRequested,component,render,input,invalidate,focus},outcome)
 def runMounted(owner: Owner,mounted: Tui.ResultOf(Tui.TuiBase),context: LoadContext) -> IO(Outcome()):
   match mounted:
     case Fail{_}: finish(owner,Fail{Terminal.Closed{}})
     case Done{base}: loadedProcess(owner,base,context)
 def run(owner: Owner,context: LoadContext) -> IO(Outcome()):
   match owner:
-    case Owner{state,loads,stop,allRequested,+component,render,input,invalidate,focus}:
+    case Owner{state,loads,words,stop,allRequested,+component,render,input,invalidate,focus}:
       do IO<Outcome()>:
         mounted : Tui.ResultOf(Tui.TuiBase) <- Tui.setFocus(Tui.added(Tui.newTui(),component),[component],[Component.ComponentId{1n}],Some{Component.ComponentId{1n}})
-        runMounted(Owner{state,loads,stop,allRequested,component,render,input,invalidate,focus},mounted,context)
-def loadedBindings(context: LoadContext,theme: Theme.Theme,loaded: Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager>) -> IO(Outcome()):
+        runMounted(Owner{state,loads,words,stop,allRequested,component,render,input,invalidate,focus},mounted,context)
+def loadedBindings(+context: LoadContext,theme: Theme.Theme,loaded: Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager>) -> IO(Outcome()):
   match loaded:
     case Fail{_}: IO.pure(Outcome(),Fail{"Cannot load session selector keybindings"})
     case Done{AppKeys.KeybindingsManager{bindings,_,_}}:
       do IO<Outcome()>:
-        owner : Owner <- create(Nil{},Nil{},bindings,theme)
+        owner : Owner <- create(Nil{},Nil{},bindings,theme,Words.Pending{Path.join(contextAssets(context),"packages/runtime/data")})
         run(owner,context)
 def visualTheme(visual: Visual) -> IO(Result<&2,&2,Theme.LoadError,Theme.Theme>):
   match visual:
@@ -756,17 +789,19 @@ def selectedTheme(context: LoadContext,loaded: Result<&2,&2,Theme.LoadError,Them
   match loaded:
     case Fail{_}: IO.pure(Outcome(),Fail{"Cannot load session selector theme"})
     case Done{theme}: loadedBindings(context,theme,bindings)
-def selectSession(cwd: String,+sessionDir: Maybe<&2,String>,+agentDir: String,sessionsDir: String,visual: Visual) -> IO(Outcome()):
-  do IO<Outcome()>:
-    bindings : Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager> <- AppKeys.create(AppKeys.Environment{"linux",None{},None{}},agentDir)
-    loaded : Result<&2,&2,Theme.LoadError,Theme.Theme> <- visualTheme(visual)
-    selectedTheme(LoadContext{cwd,sessionDir,agentDir,sessionsDir},loaded,bindings)
+def selectSession(cwd: String,+sessionDir: Maybe<&2,String>,+agentDir: String,sessionsDir: String,+visual: Visual) -> IO(Outcome()):
+  match visual:
+    case Visual{_,+assets,_,_,_}:
+      do IO<Outcome()>:
+        bindings : Result<&2,&2,AppKeys.Error,AppKeys.KeybindingsManager> <- AppKeys.create(AppKeys.Environment{"linux",None{},None{}},agentDir)
+        loaded : Result<&2,&2,Theme.LoadError,Theme.Theme> <- visualTheme(visual)
+        selectedTheme(LoadContext{cwd,sessionDir,agentDir,sessionsDir,assets},loaded,bindings)
 
 # The same picker can occupy the interactive editor without starting a second
 # terminal process. Both entry points share filtering, ordering and keybindings.
 type Modal is Data: Closed{} Open{state: State}
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,chosen: Callback.Callback<String,Unit>}
+  Host{modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>}
 type HostOwner is Type:
   HostOwner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
 def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,width: Nat) -> IO(List<&2,String>):
@@ -777,10 +812,10 @@ def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindi
         now : F64 <- Date.now()
         home : Result<&2,&2,FS.Error,String> <- FS.homedir()
         currentTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        return renderState(state,width,bindings,currentTheme,Loads{None{},None{}},now,Result.default(&2,&2,FS.Error,String,home,""))
+        renderState(state,width,bindings,currentTheme,Loads{None{},None{}},now,Result.default(&2,&2,FS.Error,String,home,""))
 def drawModal(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
-    case Host{+modal,editor,bindings,theme,_}:
+    case Host{+modal,editor,bindings,theme,_,_}:
       do IO<List<&2,String>>:
         current : Modal <- Ref.read(Modal,modal)
         drawModalCurrent(current,editor,bindings,theme,width)
@@ -795,48 +830,53 @@ def afterTransition(modal: Ref.Ref<Modal>,chosen: Callback.Callback<String,Unit>
 def modalTransitionPair(modal: Ref.Ref<Modal>,chosen: Callback.Callback<String,Unit>,pair: State & Bool) -> IO(Unit):
   match pair:
     case (next,_): afterTransition(modal,chosen,next)
-def modalTransition(modal: Ref.Ref<Modal>,bindings: Bindings.KeybindingsManager,chosen: Callback.Callback<String,Unit>,state: State,data: String) -> IO(Unit):
-  modalTransitionPair(modal,chosen,transition(state,data,bindings))
-def modalDeleteAction(modal: Ref.Ref<Modal>,bindings: Bindings.KeybindingsManager,chosen: Callback.Callback<String,Unit>,state: State,+path: String,data: String,selected: Action) -> IO(Unit):
+def modalTransition(+modal: Ref.Ref<Modal>,+bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>,+chosen: Callback.Callback<String,Unit>,+state: State,+data: String) -> IO(Unit):
+  Bool.pick(Unit -> IO(Unit),editable(state,action(bindings,data)),
+    _ => do IO<Unit>:
+      next : SearchInput.Input <- editQuery(queryOf(state),words,bindings,data)
+      afterTransition(modal,chosen,withQuery(state,next)),
+    _ => modalTransitionPair(modal,chosen,transition(state,data,bindings)))(Unit{})
+def modalDeleteAction(modal: Ref.Ref<Modal>,bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,state: State,+path: String,data: String,selected: Action) -> IO(Unit):
   match selected:
     case Confirm{}:
       do IO<Unit>:
         result : Result<&2,&2,String,String> <- removeSession(path)
         Ref.write(Modal,modal,Open{removed(state,path,result)})
-    case _: modalTransition(modal,bindings,chosen,state,data)
-def receivedModalOpen(modal: Ref.Ref<Modal>,+bindings: Bindings.KeybindingsManager,chosen: Callback.Callback<String,Unit>,+state: State,+data: String) -> IO(Unit):
+    case _: modalTransition(modal,bindings,words,chosen,state,data)
+def receivedModalOpen(modal: Ref.Ref<Modal>,+bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,+state: State,+data: String) -> IO(Unit):
   match state:
     case State{_,_,_,_,_,Pending{},Controls{_,_,_,Some{+path},_}}:
-      modalDeleteAction(modal,bindings,chosen,state,path,data,action(bindings,data))
-    case _: modalTransition(modal,bindings,chosen,state,data)
-def receivedModalCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,chosen: Callback.Callback<String,Unit>,data: String) -> IO(Unit):
+      modalDeleteAction(modal,bindings,words,chosen,state,path,data,action(bindings,data))
+    case _: modalTransition(modal,bindings,words,chosen,state,data)
+def receivedModalCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,data: String) -> IO(Unit):
   match current:
     case Closed{}: Component.handleInput(editor,data)
-    case Open{state}: receivedModalOpen(modal,bindings,chosen,state,data)
+    case Open{state}: receivedModalOpen(modal,bindings,words,chosen,state,data)
 def receivedModal(host: Host,data: String) -> IO(Unit):
   match host:
-    case Host{+modal,editor,bindings,_,handler}:
+    case Host{+modal,editor,bindings,_,words,handler}:
       do IO<Unit>:
         current : Modal <- Ref.read(Modal,modal)
-        receivedModalCurrent(current,modal,editor,bindings,handler,data)
+        receivedModalCurrent(current,modal,editor,bindings,words,handler,data)
 def mouseCurrent(current: Modal,mouse: Maybe<&2,Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>>,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match current mouse:
     case Closed{} Some{callback}: Callback.call(Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,callback,event)
     case _ _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
 def modalMouse(host: Host,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match host:
-    case Host{+modal,Component.Component{_,_,_,mouse,_,_,_},_,_,_}:
+    case Host{+modal,Component.Component{_,_,_,mouse,_,_,_},_,_,_,_}:
       do IO<Maybe<&2,Component.MouseResponse>>:
         current : Modal <- Ref.read(Modal,modal)
         mouseCurrent(current,mouse,event)
 def modalInvalidate(host: Host,_: Unit) -> IO(Unit):
-  match host: case Host{_,editor,_,_,_}: Component.invalidate(editor)
+  match host: case Host{_,editor,_,_,_,_}: Component.invalidate(editor)
 def modalFocus(host: Host,value: Bool) -> IO(Unit):
-  match host: case Host{_,editor,_,_,_}: Component.setFocused(editor,value)
-def createHost(+editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,chosen: Callback.Callback<String,Unit>) -> IO(HostOwner):
+  match host: case Host{_,editor,_,_,_,_}: Component.setFocused(editor,value)
+def createHost(+editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Words.Source,chosen: Callback.Callback<String,Unit>) -> IO(HostOwner):
   do IO<HostOwner>:
     modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
-    +host : Host <- IO.pure(Host,Host{modal,editor,bindings,theme,chosen})
+    wordRef : Ref.Ref<Words.Source> <- Ref.new(Words.Source,words)
+    +host : Host <- IO.pure(Host,Host{modal,editor,bindings,theme,wordRef,chosen})
     +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~drawModal,host)
     +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receivedModal,host)
     +mouse : Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Host,~Ui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~modalMouse,host)
@@ -848,12 +888,13 @@ def borrowHost(owner: HostOwner) -> HostOwner & Host & Component.Component:
   match owner: case HostOwner{+host,+component,render,input,mouse,invalidate,focus}: (HostOwner{host,component,render,input,mouse,invalidate,focus},host,component)
 def openHost(host: Host,current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>) -> IO(Unit):
   match host:
-    case Host{modal,_,_,_,_}: Ref.write(Modal,modal,Open{State{current,all,Current{},"",0n,Pending{},Controls{Threaded{},False{},False{},None{},None{}}}})
+    case Host{modal,_,_,_,_,_}: Ref.write(Modal,modal,Open{State{current,all,Current{},newQuery(),0n,Pending{},Controls{Threaded{},False{},False{},None{},None{}}}})
 def disposeHost(owner: HostOwner) -> IO(Unit):
   match owner:
-    case HostOwner{Host{modal,_,_,_,_},_,render,input,mouse,invalidate,focus}:
+    case HostOwner{Host{modal,_,_,_,words,_},_,render,input,mouse,invalidate,focus}:
       do IO<Unit>:
         discarded : Modal <- Ref.dispose(Modal,modal)
+        oldWords : Words.Source <- Ref.dispose(Words.Source,words)
         Callback.dispose(Nat,List<&2,String>,render)
         Callback.dispose(String,Unit,input)
         Callback.dispose(Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,mouse)
