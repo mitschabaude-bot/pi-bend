@@ -602,7 +602,7 @@ def copyText(transcript: Transcript.Handle,cwd: String,text: Maybe<&2,String>) -
         copyResult(transcript,result)
 # upstream handleSessionCommand: session stats, cache waste and the per-model
 # cost breakdown over every stored entry.
-def sessionInfoOf(stats: Stats.Stats,state: Tree.SessionManager<Unit,Tools.ToolDetails,Schema.Value>,models: Models.ModelRuntime) -> SessionInfo.SessionInfo:
+def sessionInfoOf(stats: Stats.Stats,+state: Tree.SessionManager<Unit,Tools.ToolDetails,Schema.Value>,models: Models.ModelRuntime) -> SessionInfo.SessionInfo:
   match stats:
     case Stats.Stats{file,id,Stats.Totals{users,assistants,calls,results,messages,input,output,cacheRead,cacheWrite,cost},_}:
       +entries = Tree.getEntries(Unit,Tools.ToolDetails,Schema.Value,state)

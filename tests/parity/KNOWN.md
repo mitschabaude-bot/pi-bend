@@ -50,6 +50,12 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   instead of pi's four (azure-openai-responses, cloudflare-ai-gateway, openai,
   opencode). The ambiguity rules themselves are ported and unit-tested
   (`tests/model-resolver.bend`).
+- **Syntax highlighting** (colour snaps with code): pi highlights code blocks
+  in answers and read/write tool output with highlight.js 10.7 (20 eager
+  grammars, the rest loaded in the background). Bend renders them in the
+  plain code colour: the port needs an ECMAScript regex engine (captures,
+  lookaround, backreferences; Bend's regex is a Thompson matcher for grep),
+  the highlight.js mode engine and the grammars, all in Bend. Not started.
 - **RPC command ordering around a prompt** (`steer-and-queue`): Node runs a
   prompt's microtasks up to its first awaited I/O before reading the next
   stdin line, so a steer sent right after the prompt response arrives while

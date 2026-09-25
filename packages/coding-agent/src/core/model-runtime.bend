@@ -301,11 +301,19 @@ def findModel(models: List<&2, Model()>, +provider: String, +id: String) -> Mayb
     case Nil{}: None{}
     case +model <> rest: Bool.pick(Maybe<&2, Model()>, String.eq(modelProvider(model), provider) && String.eq(modelId(model), id), Some{model}, findModel(rest, provider, id))
 
+def modelCacheRead(model: Model()) -> F64:
+  match model: case Ai.Model{_, _, _, _, _, _, _, _, _, Ai.ModelCost{_, _, cacheRead, _, _}, _, _, _, _, _, _}: cacheRead
+
 def getModel(runtime: ModelRuntime, provider: String, id: String) -> Maybe<&2, Model()>:
   findModel(getModels(runtime), provider, id)
 
 # Auth
 # ----
+
+# upstream ModelPriceSource (cache-stats): a model's cache-read price, $ per
+# million tokens.
+def cacheReadPrice(runtime: ModelRuntime, provider: String) -> String -> Maybe<&2, F64>:
+  id => Maybe.map(&2, Model(), F64, modelCacheRead, getModel(runtime, provider, id))
 
 def sameHeaderName(+left: String, +right: String) -> Bool: String.eq(String.to_lower(left), String.to_lower(right))
 
