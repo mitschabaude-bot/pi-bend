@@ -30,6 +30,7 @@ Current as of 2026-09-22. The gate is `python3 scripts/check-proofs.py`, which t
 | `laws/json.bend` | 7 | `packages/ai/src/utils/json.bend` |
 | `laws/list-interleave.bend` | 4 | `packages/runtime/src/list-interleave.bend` |
 | `laws/openai-client.bend` | 41 | `packages/ai/src/api/openai-client.bend` |
+| `laws/openai-completions.bend` | 3 | `packages/ai/src/api/openai-completions.bend` (getCompat as field-wise override of detection; detection never enables opt-in features) |
 | `laws/openai-responses-stream.bend` | 9 | `packages/ai/src/api/openai-responses-stream.bend` |
 | `laws/openai-responses.bend` | 19 | `packages/ai/src/api/openai-responses.bend` |
 | `laws/openai-sse.bend` | 12 | `packages/ai/src/api/openai-sse.bend` |
@@ -51,7 +52,7 @@ Current as of 2026-09-22. The gate is `python3 scripts/check-proofs.py`, which t
 | `laws/utf8.bend` | 6 | `packages/runtime/src/utf8.bend` |
 | `laws/validation.bend` | 7 | `packages/ai/src/utils/validation.bend` |
 | `laws/x509.bend` | 1 | `packages/runtime/src/x509.bend` (trust anchors) |
-| **Total** | **506** | |
+| **Total** | **509** | |
 
 The sections below are the dated history of how this coverage was built; earlier sections keep the file names they used at the time.
 

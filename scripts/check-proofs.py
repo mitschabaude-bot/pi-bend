@@ -75,6 +75,7 @@ assert unsafe_declarations == {
     ('packages/runtime/src/schema-value.bend', 'compare'),
     ('packages/ai/src/utils/json.bend', 'encode'),
     ('packages/ai/src/utils/schema-json.bend', 'convert'),
+    ('packages/ai/src/utils/message-json.bend', 'convert'),
     # Reached since the agent laws import the consolidated agent modules.
     ('packages/agent/src/agent-loop.bend', 'advanceCall'),
     ('packages/agent/src/agent-loop.bend', 'advanceLoop'),

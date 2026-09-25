@@ -1,6 +1,5 @@
 import Base
 import ../types.bend as T
-import ../models.bend as Models
 import ../utils/json.bend as Wire
 import ../utils/schema-json.bend as Schema
 import ../utils/model-json.bend as ModelJson
@@ -73,10 +72,15 @@ def requestedLevel(level: T.ModelThinkingLevel) -> Maybe<&2, T.ThinkingLevel>:
     case T.Off{}: None{}
     case T.Thinking{selected}: Some{selected}
 
+# upstream clampThinkingLevel (models.ts).
+def clampThinkingLevel(-Value: Data, model: T.Model<Value>, level: T.ModelThinkingLevel) -> T.ModelThinkingLevel:
+  match model:
+    case T.Model{_, _, _, _, _, reasoning, mapping, _, _, _, _, _, _, _, _, _}: Levels.closest(Levels.available(reasoning, mapping), Levels.rank(level), T.Off{})
+
 def clampedEffort(-Value: Data, model: T.Model<Value>, reasoning: Maybe<&2, T.ThinkingLevel>) -> Maybe<&2, T.ThinkingLevel>:
   match reasoning:
     case None{}: None{}
-    case Some{level}: requestedLevel(Models.clampThinkingLevel(Value, model, T.Thinking{level}))
+    case Some{level}: requestedLevel(clampThinkingLevel(Value, model, T.Thinking{level}))
 
 def simpleSettings(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>) -> Options(Signal, Telemetry, Fetch, Error):
   match options:
@@ -545,10 +549,17 @@ def utf16Units(text: String) -> Nat:
 
 # String.prototype.slice(0, count) over UTF-16 units; a split pair keeps its
 # lone high surrogate, as in JavaScript.
+def surrogatePair(+code: U32) -> String:
+  SCon{Chr{(55296 + (code - 65536) / 1024 : U32)}, SCon{Chr{(56320 + (code - 65536) % 1024 : U32)}, SNil{}}}
+
+# Lazy selection: the pair is only computed for supplementary scalars.
+def unitsOf(+code: U32) -> String:
+  Bool.pick(Unit -> String, U32.is_gt(code, 65535), _ => surrogatePair(code), _ => SCon{Chr{code}, SNil{}})(Unit{})
+
 def codeUnits(text: String) -> String:
   match text:
     case SNil{}: ""
-    case SCon{Chr{+code}, rest}: Bool.pick(String, U32.is_gt(code, 65535), SCon{Chr{(55296 + (code - 65536) / 1024 : U32)}, SCon{Chr{(56320 + (code - 65536) % 1024 : U32)}, SNil{}}}, SCon{Chr{code}, SNil{}}) ++ codeUnits(rest)
+    case SCon{Chr{code}, rest}: unitsOf(code) ++ codeUnits(rest)
 
 def takeUnits(text: String, count: Nat) -> String:
   Utf16.normalize(String.take(codeUnits(text), count))
@@ -567,12 +578,12 @@ def hashedId(+callId: String, +hash: String) -> String:
 
 def combinedId(+callId: String, +itemId: String, +original: String) -> String:
   +combined = Bool.pick(String, String.is_empty(itemId), callId, callId ++ "_" ++ itemId)
-  Bool.pick(String, Nat.is_le(utf16Units(combined), 40n), combined, hashedId(callId, String.take(Hash.shortHash(original), 8n)))
+  Bool.pick(Unit -> String, Nat.is_le(utf16Units(combined), 40n), _ => combined, _ => hashedId(callId, String.take(Hash.shortHash(original), 8n)))(Unit{})
 
 def normalizedParts(split: Maybe<&2, IdParts>, +provider: String, +id: String) -> String:
   match split:
     case Some{IdParts{call, item}}: combinedId(sanitizeIdPart(call), sanitizeIdPart(item), id)
-    case None{}: Bool.pick(String, String.eq(provider, "openai") && Nat.is_gt(utf16Units(id), 40n), takeUnits(id, 40n), id)
+    case None{}: Bool.pick(Unit -> String, String.eq(provider, "openai") && Nat.is_gt(utf16Units(id), 40n), _ => takeUnits(id, 40n), _ => id)(Unit{})
 
 # upstream convertMessages' normalizeToolCallId: Responses-style composite
 # ids keep item-level uniqueness within the 40-character limit.
@@ -1039,7 +1050,7 @@ def markNewest(reversed: List<&2, ChatMessage>, +cache: CacheControl) -> List<&2
     case Nil{}: Nil{}
     case +first <> +rest:
       +marked = markConversationMessage(first, cache)
-      Bool.pick(List<&2, ChatMessage>, Maybe.is_some(&2, ChatMessage, marked), Maybe.default(&2, ChatMessage, marked, first) <> rest, first <> markNewest(rest, cache))
+      Bool.pick(Unit -> List<&2, ChatMessage>, Maybe.is_some(&2, ChatMessage, marked), _ => Maybe.default(&2, ChatMessage, marked, first) <> rest, _ => first <> markNewest(rest, cache))(Unit{})
 
 def markInstruction(role: InstructionRole, +content: MessageContent, cache: CacheControl) -> ChatMessage:
   InstructionMessage{role, Maybe.default(&2, MessageContent, addCacheControl(content, cache), content)}
@@ -1467,3 +1478,11 @@ def grammarIssue(properties: R.Record<String>) -> Maybe<&2, String>:
   match properties:
     case R.Record{Nil{}}: None{}
     case _: Some{"grammar tools"}
+
+# The behaviors a model must opt into through compat, and the two it keeps
+# unless compat turns them off (laws/openai-completions.bend).
+type OptInFeatures is Data:
+  OptInFeatures{requiresToolResultName: Bool, requiresAssistantAfterToolResult: Bool, requiresThinkingAsText: Bool, zaiToolStream: Bool, supportsThinkingTokenBudget: Bool, supportsOpenAIGrammarTools: Bool, supportsMidConvoSystemMessages: Bool, supportsMidConvoToolAdditions: Bool, supportsStrictMode: Bool, vllmPriority: Maybe<&2, F64>, supportsUsageInStreaming: Bool, supportsFinishReason: Bool}
+
+def optInFeatures(+compat: Compat()) -> OptInFeatures:
+  OptInFeatures{requiresToolResultName(compat), requiresAssistantAfterToolResult(compat), requiresThinkingAsText(compat), zaiToolStream(compat), supportsThinkingTokenBudget(compat), supportsOpenAIGrammarTools(compat), supportsMidConvoSystemMessages(compat), supportsMidConvoToolAdditions(compat), supportsStrictMode(compat), vllmPriority(compat), supportsUsageInStreaming(compat), supportsFinishReason(compat)}
