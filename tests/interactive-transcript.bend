@@ -3,6 +3,7 @@ import ../packages/agent/src/types.bend as Agent
 import ../packages/ai/src/types.bend as Ai
 import ../packages/coding-agent/src/modes/interactive/transcript.bend as Transcript
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
+import ../packages/coding-agent/src/core/messages.bend as CoreMessages
 import ../packages/coding-agent/src/modes/interactive/components/messages.bend as Messages
 import ../packages/coding-agent/src/modes/interactive/viewport.bend as View
 import ../packages/coding-agent/src/modes/interactive/theme/theme.bend as Theme
@@ -12,6 +13,7 @@ import ../packages/coding-agent/src/utils/syntax-highlight.bend as SyntaxHighlig
 import ../packages/runtime/src/schema-value.bend as Value
 import ../packages/runtime/src/serial-resource.bend as Serial
 import ../packages/tui/src/component.bend as Component
+import ../packages/tui/src/tui.bend as Tui
 import ../packages/tui/src/components/markdown.bend as Markdown
 import ../packages/tui/src/utils.bend as Utils
 
@@ -182,6 +184,25 @@ def runEvents(pair: Transcript.Owner & Transcript.Handle,view: View.View,+docume
         bashEnd : Bool <- Transcript.accept(Value.Value,Unit,handle,Agent.ToolExecutionEnd{"thinking-bash","bash",toolResult("final output"),False{}})
         +afterBash : List<&2,String> <- Component.render(document,80n)
         check(bashEnd && contains(clean(afterBash),"final output") && Bool.not(contains(clean(afterBash),"first output")),"thinking toggle broke live bash completion")
+        Transcript.seedSession(handle,
+          Agent.CustomMessage{CoreMessages.CompactionSummary{CoreMessages.CompactionSummaryMessage{"Earlier plan",1200n,F64{0,0}}}} <>
+          Agent.CustomMessage{CoreMessages.BranchSummary{CoreMessages.BranchSummaryMessage{"Alternative path",Some{"branch"},F64{0,0}}}} <>
+          Agent.CustomMessage{CoreMessages.Custom{CoreMessages.CustomMessage{"notice",Ai.UserText{"Visible extension note"},True{},None{},F64{0,0}}}} <>
+          Agent.CustomMessage{CoreMessages.Custom{CoreMessages.CustomMessage{"private",Ai.UserText{"Hidden extension note"},False{},None{},F64{0,0}}}} <> Nil{})
+        +structural : List<&2,String> <- Component.render(document,80n)
+        check(orderedRows(structural,"[compaction]","[branch]") && orderedRows(structural,"[branch]","[notice]") && contains(clean(structural),"1,200 tokens") && contains(clean(structural),"Visible extension note"),"restored structural messages missing or reordered")
+        check(Bool.not(contains(clean(structural),"Earlier plan")) && Bool.not(contains(clean(structural),"Alternative path")) && Bool.not(contains(clean(structural),"Hidden extension note")),"collapsed or hidden messages leaked content")
+        expandedNotes : Bool <- Transcript.toggleExpanded(handle)
+        +openNotes : List<&2,String> <- Component.render(document,80n)
+        check(expandedNotes && contains(clean(openNotes),"Earlier plan") && contains(clean(openNotes),"Alternative path"),"expanding restored summaries did not reveal content")
+        collapsedNotes : Bool <- Transcript.toggleExpanded(handle)
+        check(Bool.not(collapsedNotes),"summary collapse did not restore default")
+        skillAdded : Bool <- Transcript.accept(Value.Value,Unit,handle,user("<skill name=\"example\" location=\"/tmp/example/SKILL.md\">\nSkill body\n</skill>\n\nUse this skill"))
+        +skillClosed : List<&2,String> <- Component.render(document,80n)
+        check(skillAdded && orderedRows(skillClosed,"[skill]","Use this skill") && Bool.not(contains(clean(skillClosed),"Skill body")),"skill invocation did not render as a collapsed block before its user message")
+        skillExpanded : Bool <- Transcript.toggleExpanded(handle)
+        +skillOpen : List<&2,String> <- Component.render(document,80n)
+        check(skillExpanded && contains(clean(skillOpen),"Skill body"),"expanding skill invocation did not reveal its content")
         beforeStatus : Nat <- mountedCount(viewHandle)
         Transcript.status(handle,"Tool output: expanded")
         +firstStatus : List<&2,String> <- Component.render(document,80n)
@@ -194,10 +215,33 @@ def runEvents(pair: Transcript.Owner & Transcript.Handle,view: View.View,+docume
         View.dispose(view)
         Styles.dispose(styles)
         IO.print("interactive transcript replaces stream snapshots")
-def runStyle(pair: Styles.Styles & Markdown.MarkdownTheme,view: View.View,document: Component.Component,+viewHandle: View.Handle,theme: Theme.Theme) -> IO(Unit):
+def clickNote(component: Component.Component) -> IO(Unit):
+  do IO<Unit>:
+    clicked : Maybe<&2,Component.TuiMouseDispatchResult> <- Component.dispatchMouseEvent(component,Tui.TuiMouseEvent{Tui.MouseClick{},Tui.MouseLeft{},Tui.Forward{2n},Tui.Forward{1n},Tui.Forward{2n},Tui.Forward{1n},80n,5n,False{},False{},False{},None{},Some{1n}})
+    check(Maybe.is_some(&2,Component.TuiMouseDispatchResult,clicked),"summary click was not handled")
+def testNoteClick(pair: Messages.Owner & Component.Component & Messages.Handle,+detail: String) -> IO(Unit):
   match pair:
-    case (styles,markdown):
+    case (owner,+component,_):
       do IO<Unit>:
+        +closed : List<&2,String> <- Component.render(component,80n)
+        check(Bool.not(contains(clean(closed),detail)),"summary began expanded")
+        clickNote(component)
+        +opened : List<&2,String> <- Component.render(component,80n)
+        check(contains(clean(opened),detail),"click did not expand summary")
+        clickNote(component)
+        +closedAgain : List<&2,String> <- Component.render(component,80n)
+        check(Bool.not(contains(clean(closedAgain),detail)),"second click did not collapse summary")
+        Messages.dispose(owner)
+def runStyle(pair: Styles.Styles & Markdown.MarkdownTheme,view: View.View,document: Component.Component,+viewHandle: View.Handle,+theme: Theme.Theme) -> IO(Unit):
+  match pair:
+    case (styles,+markdown):
+      do IO<Unit>:
+        note : Messages.Owner <- Messages.create(Component.ComponentId{999n},Messages.NoteBody{Messages.Note{"branch",Some{"Branch summary"},"click details",False{},theme,markdown,"ctrl+o"}})
+        testNoteClick(Messages.borrow(note),"click details")
+        compactNote : Messages.Owner <- Messages.create(Component.ComponentId{1001n},Messages.NoteBody{Messages.Note{"compaction",Some{"Compacted from 1,200 tokens"},"compaction click details",False{},theme,markdown,"ctrl+o"}})
+        testNoteClick(Messages.borrow(compactNote),"compaction click details")
+        skillNote : Messages.Owner <- Messages.create(Component.ComponentId{1000n},Messages.NoteBody{Messages.Note{"skill",Some{"example"},"skill click details",False{},theme,markdown,"ctrl+o"}})
+        testNoteClick(Messages.borrow(skillNote),"skill click details")
         transcript : Transcript.Owner <- Transcript.create(viewHandle,theme,markdown)
       runEvents(Transcript.borrow(transcript),view,document,viewHandle,styles)
 def runTranscript(view: View.View,document: Component.Component,viewHandle: View.Handle,theme: Theme.Theme,styles: Styles.Styles) -> IO(Unit):

@@ -241,6 +241,21 @@ def usageNotice(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.
   match event:
     case Session.EntryAppended{Tree.UsageEntry{_,kind,_,_,spent,note}}: Bool.pick(Unit -> IO(Unit),String.eq(kind,"cache_warm"),_ => cacheWarmNotice(transcript,redraw,session,note,spent),_ => IO.pure(Unit,Unit{}))(Unit{})
     case _: IO.pure(Unit,Unit{})
+def structuralResult(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,result: Result<&2,&2,Tree.Error,List<&2,Session.Message()>>) -> IO(Unit):
+  match result:
+    case Fail{_}: IO.pure(Unit,Unit{})
+    case Done{messages}:
+      do IO<Unit>:
+        Transcript.seedSession(transcript,messages)
+        Interactive.requestRender(redraw)
+def structuralEntry(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,entry: Tree.SessionEntry<Unit,Tools.ToolDetails,Schema.Value>) -> IO(Unit):
+  structuralResult(transcript,redraw,Tree.sessionEntryToContextMessages(Unit,Tools.ToolDetails,Schema.Value,entry))
+def structuralNotice(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,event: Session.AgentSessionEvent) -> IO(Unit):
+  match event:
+    case Session.EntryAppended{Tree.Compaction{entry}}: structuralEntry(transcript,redraw,Tree.Compaction{entry})
+    case Session.EntryAppended{Tree.BranchSummaryEntry{base,fromId,summary,details,usageValue,fromHook}}: structuralEntry(transcript,redraw,Tree.BranchSummaryEntry{base,fromId,summary,details,usageValue,fromHook})
+    case Session.EntryAppended{Tree.CustomMessageEntry{base,kind,content,details,display}}: structuralEntry(transcript,redraw,Tree.CustomMessageEntry{base,kind,content,details,display})
+    case _: IO.pure(Unit,Unit{})
 def observeCopied(input: Observation,+event: Session.AgentSessionEvent) -> IO(Unit):
   match input:
     case Observation{+transcript,+redraw,footer,working,session}:
@@ -248,6 +263,7 @@ def observeCopied(input: Observation,+event: Session.AgentSessionEvent) -> IO(Un
         changed : Bool <- Ref.modify(Footer.State,Bool,footer,state => footerEvent(state,event))
         workingEvent(working,redraw,event)
         usageNotice(transcript,redraw,session,event)
+        structuralNotice(transcript,redraw,event)
         Interactive.onSessionEvent(Interactive.Events{transcript,redraw},event)
         Bool.pick(Unit -> IO(Unit),changed,_ => Interactive.requestRender(redraw),_ => IO.pure(Unit,Unit{}))(Unit{})
 def observed(input: Observation,event: Session.AgentSessionEvent) -> IO(Unit):

@@ -28,6 +28,32 @@ type Skill is Data:
 type FileReadTool is Data:
   Read{}
   Bash{}
+type ParsedSkillBlock is Data:
+  ParsedSkillBlock{name: String,location: String,content: String,userMessage: Maybe<&2,String>}
+def skillTail(name: String,location: String,content: String,rest: List<&2,String>) -> Maybe<&2,ParsedSkillBlock>:
+  match rest:
+    case Nil{}: Some{ParsedSkillBlock{name,location,content,None{}}}
+    case "" <> remaining:
+      +text = Text.trim(String.join(remaining,"\n"))
+      Bool.pick(Maybe<&2,ParsedSkillBlock>,String.is_empty(text),None{},Some{ParsedSkillBlock{name,location,content,Some{text}}})
+    case _: None{}
+def skillLines(name: String,location: String,lines: List<&2,String>,reversed: List<&2,String>) -> Maybe<&2,ParsedSkillBlock>:
+  match lines:
+    case Nil{}: None{}
+    case "</skill>" <> rest: skillTail(name,location,String.join(List.reverse(&2,String,reversed),"\n"),rest)
+    case line <> rest: skillLines(name,location,rest,line <> reversed)
+def skillAfterLocation(+name: String,+location: String,tail: List<&2,String>) -> Maybe<&2,ParsedSkillBlock>:
+  match tail:
+    case +suffix <> rest:
+      Bool.pick(Unit -> Maybe<&2,ParsedSkillBlock>,String.starts_with(suffix,">\n") && Bool.not(String.is_empty(name)) && Bool.not(String.is_empty(location)),
+        _ => skillLines(name,location,Strings.split(String.drop(String.join(suffix <> rest,"\""),2n),'\n'),Nil{}),
+        _ => None{})(Unit{})
+    case Nil{}: None{}
+def parseSkillParts(parts: List<&2,String>) -> Maybe<&2,ParsedSkillBlock>:
+  match parts:
+    case "<skill name=" <> name <> " location=" <> location <> tail: skillAfterLocation(name,location,tail)
+    case _: None{}
+def parseSkillBlock(text: String) -> Maybe<&2,ParsedSkillBlock>: parseSkillParts(Strings.split(text,'"'))
 
 def escapeXml(text: String,reversed: String) -> String:
   match text:

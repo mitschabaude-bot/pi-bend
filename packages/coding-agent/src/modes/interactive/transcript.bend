@@ -13,10 +13,12 @@ import ../../../../tui/src/components/markdown.bend as Markdown
 import ../../../../runtime/src/callback.bend as Callback
 import ./theme/theme.bend as Theme
 import ./components/messages.bend as Messages
+import ./components/keybinding-hints.bend as Hints
 import ./components/session-info.bend as SessionInfo
 import ./components/tool-execution.bend as Tool
 import ./viewport.bend as View
 import ../../core/messages.bend as CoreMessages
+import ../../core/skills.bend as Skills
 import ../../core/tools/index.bend as Tools
 
 # The transcript owns mounted messages, tools, and transient status lines.
@@ -210,15 +212,40 @@ def failBash(+handle: Messages.Handle) -> IO(Unit):
   do IO<Unit>:
     body : Messages.Body <- Messages.current(handle)
     Messages.set(handle,bashFailed(body))
+def noteAppended(state: State,label: String,brief: Maybe<&2,String>,content: String,hint: String) -> IO(State & Unit):
+  match state:
+    case State{entries,tools,active,id,view,+theme,+styles,+expanded,hidden,pad}:
+      do IO<State & Unit>:
+        pair : State & Bool <- append(State{entries,tools,active,id,view,theme,styles,expanded,hidden,pad},Messages.NoteBody{Messages.Note{label,brief,content,expanded,theme,styles,hint}},False{})
+        return appendedUnit(pair)
+def note(handle: Handle,label: String,brief: Maybe<&2,String>,content: String) -> IO(Unit):
+  match handle:
+    case Handle{resource,bindings}:
+      do IO<Unit>:
+        keys : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
+        Serial.run(State,Unit,resource,state => noteAppended(state,label,brief,content,Hints.keyText(keys,"app.tools.expand")))
 def appendUser(state: State,text: String,preceded: Bool) -> IO(State & Bool):
   match state:
     case State{entries,tools,active,id,view,+theme,+styles,expanded,+hidden,+pad}:
       append(State{entries,tools,active,id,view,theme,styles,expanded,hidden,pad},Messages.UserBody{Messages.user(text,theme,styles,pad),preceded},False{})
-def user(state: State,text: String) -> IO(State & Bool):
+def plainUser(state: State,text: String) -> IO(State & Bool):
   match state:
     case State{Nil{},tools,active,id,view,theme,styles,expanded,hidden,pad}:
       appendUser(State{Nil{},tools,active,id,view,theme,styles,expanded,hidden,pad},text,False{})
     case current: appendUser(current,text,True{})
+def skillVisible(pair: State & Unit,userMessage: Maybe<&2,String>) -> IO(State & Bool):
+  match pair userMessage:
+    case (next,_) None{}: IO.pure(State & Bool,(next,True{}))
+    case (next,_) Some{text}: appendUser(next,text,True{})
+def parsedUser(state: State,text: String,parsed: Maybe<&2,Skills.ParsedSkillBlock>) -> IO(State & Bool):
+  match parsed:
+    case None{}: plainUser(state,text)
+    case Some{Skills.ParsedSkillBlock{+name,_,content,userMessage}}:
+      do IO<State & Bool>:
+        pair : State & Unit <- noteAppended(state,"skill",Some{name},"**" ++ name ++ "**\n\n" ++ content,"ctrl+o")
+        skillVisible(pair,userMessage)
+def user(state: State,+text: String) -> IO(State & Bool):
+  parsedUser(state,text,Skills.parseSkillBlock(text))
 def findTool(tools: List<&2,ToolLink>,+id: String) -> Maybe<&2,Tool.Handle>:
   match tools:
     case Nil{}: None{}
@@ -396,9 +423,40 @@ def seedHistoricalBash(handle: Handle,value: CoreMessages.BashExecutionMessage) 
       do IO<Unit>:
         bash : Messages.Handle <- startBash(handle,command,Maybe.default(&2,Bool,excluded,False{}))
         finishBash(bash,output,exitCode,cancelled,truncated,path)
+def groupedDigits(input: String,+count: Nat,acc: String) -> String:
+  match input:
+    case SNil{}: acc
+    case SCon{digit,rest}:
+      +separator = Bool.pick(String,Nat.is_eq(count,3n),",","")
+      groupedDigits(rest,Bool.pick(Nat,Nat.is_eq(count,3n),1n,count + 1n),SCon{digit,separator ++ acc})
+def grouped(value: Nat) -> String: groupedDigits(String.reverse(Nat.show(value)),0n,"")
+def customPieces(blocks: List<&2,Ai.TextImageContent>) -> List<&2,String>:
+  match blocks:
+    case Nil{}: Nil{}
+    case Ai.TextImageText{Ai.TextContent{text,_}} <> rest: text <> customPieces(rest)
+    case _ <> rest: customPieces(rest)
+def customText(content: Ai.UserContent) -> String:
+  match content:
+    case Ai.UserText{text}: text
+    case Ai.UserBlocks{blocks}: String.join(customPieces(blocks),"\n")
+def seedCustom(handle: Handle,value: CoreMessages.CustomMessage<Schema.Value>) -> IO(Unit):
+  match value:
+    case CoreMessages.CustomMessage{customType,content,True{},_,_}: note(handle,customType,None{},customText(content))
+    case _: IO.pure(Unit,Unit{})
+def seedCompaction(handle: Handle,value: CoreMessages.CompactionSummaryMessage) -> IO(Unit):
+  match value:
+    case CoreMessages.CompactionSummaryMessage{summary,tokens,_}:
+      +count = grouped(tokens)
+      note(handle,"compaction",Some{"Compacted from " ++ count ++ " tokens"},"**Compacted from " ++ count ++ " tokens**\n\n" ++ summary)
+def seedBranch(handle: Handle,value: CoreMessages.BranchSummaryMessage) -> IO(Unit):
+  match value:
+    case CoreMessages.BranchSummaryMessage{summary,_,_}: note(handle,"branch",Some{"Branch summary"},"**Branch Summary**\n\n" ++ summary)
 def seedSessionEntry(+handle: Handle,message: Agent.AgentMessage<Unit,Tools.ToolDetails,CoreMessages.CodingMessage<Schema.Value>>) -> IO(Unit):
   match message:
     case Agent.CustomMessage{CoreMessages.BashExecution{value}}: seedHistoricalBash(handle,value)
+    case Agent.CustomMessage{CoreMessages.Custom{value}}: seedCustom(handle,value)
+    case Agent.CustomMessage{CoreMessages.CompactionSummary{value}}: seedCompaction(handle,value)
+    case Agent.CustomMessage{CoreMessages.BranchSummary{value}}: seedBranch(handle,value)
     case Agent.LlmMessage{+value}:
       do IO<Unit>:
         begun : Bool <- accept(Unit,CoreMessages.CodingMessage<Schema.Value>,handle,Agent.MessageStart{Agent.LlmMessage{value}})

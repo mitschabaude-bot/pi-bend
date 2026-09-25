@@ -52,11 +52,16 @@
     },
     "packages/coding-agent/src/core/agent-session.ts": {
       "state": "partial",
-      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal; prompt images and tool-result images are normalized with the image setting and the current model's resize profile (f5c946480), without the before_agent_start and tool_result extension events. Full upstream session and extension integration behavior remains unverified.",
+      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal; prompt images and tool-result images are normalized with the image setting and the current model's resize profile (f5c946480), without the before_agent_start and tool_result extension events. Full upstream session and extension integration behavior remains unverified. The skill-block parser used by restored transcripts is in core/skills.bend.",
       "source_sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7",
       "port_sha256": {
-        "packages/coding-agent/src/core/agent-session.bend": "9491dad5269412051d43275d438b8c6b87a8c91874223ca6495dab45f8af7f80"
-      }
+        "packages/coding-agent/src/core/agent-session.bend": "9491dad5269412051d43275d438b8c6b87a8c91874223ca6495dab45f8af7f80",
+        "packages/coding-agent/src/core/skills.bend": "39c10b968daf609f60fe3c91154a63a7248c7cfd18173781eb776904dcfea236"
+      },
+      "ports": [
+        "packages/coding-agent/src/core/agent-session.bend",
+        "packages/coding-agent/src/core/skills.bend"
+      ]
     },
     "packages/coding-agent/src/core/session-manager.ts": {
       "state": "partial",
@@ -138,11 +143,11 @@
         "packages/coding-agent/src/modes/interactive/viewport.bend",
         "packages/coding-agent/src/main.bend"
       ],
-      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native API-key login saves credentials and refreshes model availability; method, filtered-provider and empty prompt text match terminal captures, while the unfiltered provider catalog and secret masking differ. Fullscreen startup, typing, viewport scrolling, and keyboard transcript search match focused terminal captures; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection, dynamic mode switching and broader commands remain partial. Exact /model matches use the cached scoped or available list; misses refresh the catalog with a 15-second abort deadline, retry exact matching, then open the filtered picker. The miss picker matches plain terminal frames; prefilled search cursor styling remains different. Interactive HTML export now uses the active theme palette and explicit export backgrounds.",
+      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native API-key login saves credentials and refreshes model availability; method, filtered-provider and empty prompt text match terminal captures, while the unfiltered provider catalog and secret masking differ. Fullscreen startup, typing, viewport scrolling, and keyboard transcript search match focused terminal captures; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection, dynamic mode switching and broader commands remain partial. Exact /model matches use the cached scoped or available list; misses refresh the catalog with a 15-second abort deadline, retry exact matching, then open the filtered picker. The miss picker matches plain terminal frames; prefilled search cursor styling remains different. Interactive HTML export now uses the active theme palette and explicit export backgrounds. Resumed transcripts now render compaction and branch summaries, displayed custom messages, and skill invocations in sequence; live structural entries use the same path.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "2df7941821123ecdc58b9e9b03f1b9c00c13f3f50ad7ed2a54dd79a77eae95d4",
-        "packages/coding-agent/src/modes/interactive/run.bend": "7ff585e601fb1bcc2e2ba8a42744a9f7d1a33205065cbfcc418d7aace7d26408",
+        "packages/coding-agent/src/modes/interactive/run.bend": "ae3721afba3ccff7ca67921b98bd98a071be927cc7e97fe86e2a0ed79252f6d9",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c22354d3f1a7a080d3298e338943a2a49c3665589c41cda5308eea8903d0785",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "14557c415d7d4b0dd3c2d6921ce0f3dbd7b1717f23db27fdd8657b1e3d5eb547",
         "packages/coding-agent/src/main.bend": "402a8c362d223d138f6710d0f849f5f3e9ffc4ae48e5f762484d42ebafcad13e"
@@ -400,6 +405,58 @@
       "source_sha256": "a82435411f3a49c65c2a81776c784552993d9ad3160eee2bbde3c49381899cf5",
       "port_sha256": {
         "packages/coding-agent/src/core/export-html/index.bend": "b4c8a4177e89563f59a02e309318a317204ef60f48bae6047eb02dd31f9c3605"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/compaction-summary-message.ts": {
+      "state": "partial",
+      "note": "Collapsed/expanded Markdown rendering, token count, theme and mouse toggle are present; broader terminal-frame parity remains unverified.",
+      "source_sha256": "90f5d197364755431678229959f233527e2b07076d2e7d8ffde83da09b77905a",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/messages.bend",
+        "packages/coding-agent/src/modes/interactive/transcript.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "2108bc696a289f479fe2797068a7367936f307ddbd7d79821edf0b684bb1792f",
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "590b14d48d644f88a59dbe4acec0994cbdc7e2c949b55163c2aeb425aeb6bf91"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/branch-summary-message.ts": {
+      "state": "partial",
+      "note": "Collapsed/expanded Markdown rendering, theme and mouse toggle are present; broader terminal-frame parity remains unverified.",
+      "source_sha256": "32525e00f5fd9c4e6706aeb77b0647d20d4fa2e35f6384a8b6d4d2fbcd0bb041",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/messages.bend",
+        "packages/coding-agent/src/modes/interactive/transcript.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "2108bc696a289f479fe2797068a7367936f307ddbd7d79821edf0b684bb1792f",
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "590b14d48d644f88a59dbe4acec0994cbdc7e2c949b55163c2aeb425aeb6bf91"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/skill-invocation-message.ts": {
+      "state": "partial",
+      "note": "Restored skill invocations are parsed into a collapsible card and separate user prompt; mouse toggle works. Broader terminal-frame parity remains unverified.",
+      "source_sha256": "7ec5c3e95413187aab7937740062cfa3c4dbac4754afbfa78810b6ad89ff0b27",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/messages.bend",
+        "packages/coding-agent/src/modes/interactive/transcript.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "2108bc696a289f479fe2797068a7367936f307ddbd7d79821edf0b684bb1792f",
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "590b14d48d644f88a59dbe4acec0994cbdc7e2c949b55163c2aeb425aeb6bf91"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/custom-message.ts": {
+      "state": "partial",
+      "note": "Displayed text messages use the default themed Markdown box and hidden messages are omitted. Extension-supplied custom renderers and output-pad changes are not yet ported.",
+      "source_sha256": "321af8afdff8da4924a7dbf5623b5637eb160ea7d73a70e6662d8125249bde9b",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/messages.bend",
+        "packages/coding-agent/src/modes/interactive/transcript.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "2108bc696a289f479fe2797068a7367936f307ddbd7d79821edf0b684bb1792f",
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "590b14d48d644f88a59dbe4acec0994cbdc7e2c949b55163c2aeb425aeb6bf91"
       }
     }
   }

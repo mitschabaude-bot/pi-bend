@@ -14,6 +14,7 @@ import ../../../../../runtime/src/ref.bend as Ref
 import ../../../../../runtime/src/text.bend as Text
 import ../../../../../ai/src/types.bend as Ai
 import ../../../../../tui/src/component.bend as Component
+import ../../../../../tui/src/tui.bend as Tui
 
 type Paint is Data: Paint{theme: Theme.Theme,key: String,background: Bool}
 type Content is Data: TextBlock{text: String} ThinkingBlock{text: String} ToolCall{}
@@ -358,10 +359,12 @@ type Changelog is Data:
   FullChangelog{markdown: String}
   WhatsNew{markdown: String,spaced: Bool}
   UpdatedTo{version: String,spaced: Bool}
-type Body is Data: UserBody{value: UserMessage,preceded: Bool} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} StatusBody{text: String,theme: Theme.Theme} NewSessionBody{theme: Theme.Theme} ErrorBody{text: String,theme: Theme.Theme} WarningBody{text: String,theme: Theme.Theme,label: Bool} ManagedBody{text: String,theme: Theme.Theme,warning: Bool,first: Bool} ChangelogBody{value: Changelog,theme: Theme.Theme,styles: Markdown.MarkdownTheme} SessionInfoBody{value: SessionInfo.SessionInfo,theme: Theme.Theme} HotkeysBody{markdown: String,theme: Theme.Theme,styles: Markdown.MarkdownTheme}
+type Note is Data: Note{label: String,brief: Maybe<&2,String>,content: String,expanded: Bool,theme: Theme.Theme,styles: Markdown.MarkdownTheme,hint: String}
+type Body is Data: UserBody{value: UserMessage,preceded: Bool} AssistantBody{value: AssistantMessage} BashBody{value: BashMessage} NoteBody{value: Note} StatusBody{text: String,theme: Theme.Theme} NewSessionBody{theme: Theme.Theme} ErrorBody{text: String,theme: Theme.Theme} WarningBody{text: String,theme: Theme.Theme,label: Bool} ManagedBody{text: String,theme: Theme.Theme,warning: Bool,first: Bool} ChangelogBody{value: Changelog,theme: Theme.Theme,styles: Markdown.MarkdownTheme} SessionInfoBody{value: SessionInfo.SessionInfo,theme: Theme.Theme} HotkeysBody{markdown: String,theme: Theme.Theme,styles: Markdown.MarkdownTheme}
 def expandedBody(body: Body,expanded: Bool) -> Body:
   match body:
     case BashBody{value}: BashBody{bashExpanded(value,expanded)}
+    case NoteBody{Note{label,brief,content,_,theme,styles,hint}}: NoteBody{Note{label,brief,content,expanded,theme,styles,hint}}
     case other: other
 def retheme(body: Body,theme: Theme.Theme) -> Body:
   match body:
@@ -369,6 +372,7 @@ def retheme(body: Body,theme: Theme.Theme) -> Body:
     case AssistantBody{AssistantMessage{content,hide,label,pad,streaming,stop,error,_,styles}}:
       AssistantBody{AssistantMessage{content,hide,label,pad,streaming,stop,error,theme,styles}}
     case BashBody{value}: BashBody{bashTheme(value,theme)}
+    case NoteBody{Note{label,brief,content,expanded,_,styles,hint}}: NoteBody{Note{label,brief,content,expanded,theme,styles,hint}}
     case StatusBody{text,_}: StatusBody{text,theme}
     case NewSessionBody{_}: NewSessionBody{theme}
     case ErrorBody{text,_}: ErrorBody{text,theme}
@@ -437,6 +441,40 @@ def renderHotkeys(markdown: String,+theme: Theme.Theme,styles: Markdown.Markdown
     title : List<&2,String> <- textLines("\u{1b}[1m" ++ titleColor ++ "\u{1b}[22m",1n,width)
     body : List<&2,String> <- changelogMarkdown(markdown,1n,width,styles)
     return "" <> border <> List.append(&2,String,title,"" <> List.append(&2,String,body,[border]))
+def collapsedNote(+label: String,summary: String,+theme: Theme.Theme,hint: String,+width: Nat) -> IO(List<&2,String>):
+  do IO<List<&2,String>>:
+    +title : String <- foregroundText(theme,"customMessageLabel","\u{1b}[1m[" ++ label ++ "]\u{1b}[22m")
+    +detail : String <- foregroundText(theme,"customMessageText",summary ++ " (")
+    +key : String <- foregroundText(theme,"dim",hint)
+    +suffix : String <- foregroundText(theme,"customMessageText"," to expand)")
+    Bool.pick(Unit -> IO(List<&2,String>),String.eq(label,"skill"),
+      _ => textLines(title ++ " " ++ detail ++ key ++ suffix,0n,width),
+      _ => do IO<List<&2,String>>:
+        heading : List<&2,String> <- textLines(title,0n,width)
+        body : List<&2,String> <- textLines(detail ++ key ++ suffix,0n,width)
+        return List.append(&2,String,heading,"" <> body))(Unit{})
+def noteRows(+label: String,brief: Maybe<&2,String>,content: String,expanded: Bool,+theme: Theme.Theme,styles: Markdown.MarkdownTheme,hint: String,+width: Nat) -> IO(List<&2,String>):
+  match brief expanded:
+    case Some{summary} False{}: collapsedNote(label,summary,theme,hint,width)
+    case _ _:
+      do IO<List<&2,String>>:
+        title : String <- foregroundText(theme,"customMessageLabel","\u{1b}[1m[" ++ label ++ "]\u{1b}[22m")
+        heading : List<&2,String> <- textLines(title,0n,width)
+        +paint : Callback.Callback<String,String> <- color(theme,"customMessageText",False{})
+        +body : List<&2,String> <- markdownLines(content,0n,width,styles,Some{Markdown.DefaultTextStyle{Some{paint},None{},False{},False{},False{},False{}}},None{})
+        Callback.dispose(String,String,paint)
+        return List.append(&2,String,heading,Bool.pick(List<&2,String>,String.eq(label,"skill"),body,"" <> body))
+def renderNote(value: Note,+width: Nat) -> IO(List<&2,String>):
+  match value:
+    case Note{label,brief,content,expanded,+theme,styles,hint}:
+      do IO<List<&2,String>>:
+        +background : Callback.Callback<String,String> <- color(theme,"customMessageBg",True{})
+        rows : List<&2,String> <- noteRows(label,brief,content,expanded,theme,styles,hint,Nat.max(1n,width - 2n))
+        top : List<&2,String> <- Box.paintPadding(1n,width,Some{background},Nil{})
+        body : List<&2,String> <- Box.paintContent(Box.prependMargin(rows," ",Nil{}),width,Some{background},Nil{})
+        bottom : List<&2,String> <- Box.paintPadding(1n,width,Some{background},Nil{})
+        Callback.dispose(String,String,background)
+        return "" <> List.append(&2,String,top,List.append(&2,String,body,bottom))
 def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
   match body:
     case UserBody{value,preceded}:
@@ -445,6 +483,7 @@ def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
         return spacedUser(preceded,lines)
     case AssistantBody{value}: renderAssistant(value,width)
     case BashBody{value}: renderBash(value,width)
+    case NoteBody{value}: renderNote(value,width)
     case StatusBody{text,theme}:
       do IO<List<&2,String>>:
         colored : String <- foregroundText(theme,"dim",text)
@@ -504,13 +543,42 @@ def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
 # upstream invalidate(): the next render starts afresh.
 def invalidateLive(handle: Handle,unit: Unit) -> IO(Unit):
   match handle: case Handle{_,rendered}: Ref.write(Maybe<&2,Rendered>,rendered,None{})
-def create(id: Component.ComponentId,body: Body) -> IO(Owner):
+def noteClicked(current: Stamped) -> Stamped:
+  match current:
+    case Stamped{NoteBody{Note{label,Some{brief},content,expanded,theme,styles,hint}},version}:
+      Stamped{NoteBody{Note{label,Some{brief},content,Bool.not(expanded),theme,styles,hint}},version + 1n}
+    case other: other
+def toggleNote(handle: Handle) -> IO(Maybe<&2,Component.MouseResponse>):
+  match handle:
+    case Handle{+state,rendered}:
+      do IO<Maybe<&2,Component.MouseResponse>>:
+        current : Stamped <- Ref.read(Stamped,state)
+        Ref.write(Stamped,state,noteClicked(current))
+        Ref.write(Maybe<&2,Rendered>,rendered,None{})
+        return Some{Component.LocalResult{Tui.TuiMouseEventResult{True{},False{},False{},Some{True{}}}}}
+def clickNote(handle: Handle,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+  match event:
+    case Tui.TuiMouseEvent{Tui.MouseClick{},Tui.MouseLeft{},_,_,_,_,_,_,_,_,_,_,_}: toggleNote(handle)
+    case _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
+def noteMouse(body: Body,handle: Handle) -> IO(Maybe<&2,Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>>):
+  match body:
+    case NoteBody{Note{_,Some{_},_,_,_,_,_}}:
+      do IO<Maybe<&2,Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>>>:
+        callback : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Handle,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~clickNote,handle)
+        return Some{callback}
+    case _: IO.pure(Maybe<&2,Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>>,None{})
+def disposeMouse(component: Component.Component) -> IO(Unit):
+  match component:
+    case Component.Component{_,_,_,Some{callback},_,_,_}: Callback.dispose(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,callback)
+    case _: IO.pure(Unit,Unit{})
+def create(id: Component.ComponentId,+body: Body) -> IO(Owner):
   do IO<Owner>:
     +state : Ref.Ref<Stamped> <- Ref.new(Stamped,Stamped{body,0n})
     +rendered : Ref.Ref<Maybe<&2,Rendered>> <- Ref.new(Maybe<&2,Rendered>,None{})
     +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Handle,~Nat,~List<&2,String>,~renderLive,Handle{state,rendered})
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Handle,~Unit,~Unit,~invalidateLive,Handle{state,rendered})
-    return Owner{state,rendered,Component.Component{id,render,None{},None{},invalidate,None{},False{}},render,invalidate}
+    mouse : Maybe<&2,Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>> <- noteMouse(body,Handle{state,rendered})
+    return Owner{state,rendered,Component.Component{id,render,None{},mouse,invalidate,None{},False{}},render,invalidate}
 def borrow(owner: Owner) -> Owner & Component.Component & Handle:
   match owner:
     case Owner{+state,+rendered,+component,render,invalidate}: (Owner{state,rendered,component,render,invalidate},component,Handle{state,rendered})
@@ -584,8 +652,9 @@ def current(handle: Handle) -> IO(Body):
         return bodyOf(value)
 def dispose(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{state,rendered,_,render,invalidate}:
+    case Owner{state,rendered,component,render,invalidate}:
       do IO<Unit>:
+        disposeMouse(component)
         old : Stamped <- Ref.dispose(Stamped,state)
         lines : Maybe<&2,Rendered> <- Ref.dispose(Maybe<&2,Rendered>,rendered)
         Callback.dispose(Nat,List<&2,String>,render)

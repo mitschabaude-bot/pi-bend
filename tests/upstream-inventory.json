@@ -1954,8 +1954,10 @@
     },
     {
       "source": "packages/coding-agent/test/collapsible-message-components.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/interactive-transcript.bend"
+      ],
       "sha256": "6fea83d6a520c34a927be61f11cb664e683fff647f77661ee1472f51ba8edae5"
     },
     {
