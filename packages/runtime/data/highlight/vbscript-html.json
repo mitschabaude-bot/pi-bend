@@ -1,0 +1,1 @@
+{"name":"vbscript-html","caseInsensitive":false,"classNameAliases":{},"keywords":[],"modes":[{"keywordPattern":"\\w+","relevance":1,"subLanguage":"xml","contains":[1]},{"begin":"<%","end":"%>","terminatorEnd":"%>","keywordPattern":"\\w+","relevance":1,"subLanguage":"vbscript","contains":[]}]}
