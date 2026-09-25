@@ -1242,3 +1242,21 @@ Intended semantics with a missing facility, measured. A Bend `String` is a list 
 Evidence (native `-O1`, one thread, 500 deltas of 20 characters growing to 10 KB, `tests/string-append-retained.bend`, three runs each): appending to a unique accumulator 0.02 s; with only the latest version retained 0.08-0.10 s; with every version retained 0.12 s and 61 MB. A unique accumulator that hands each consumer a copy is slower (0.15-0.19 s): the copy costs what the shared append costs, plus a pair per character. The OpenAI Responses processor over the same deltas takes 0.08-0.09 s even when the consumer drops every event, because its slot and its output message both hold the text, and 0.12 s when every event is retained; 80% of its samples are `term_drop`. In the CLI's `stream-flood` (main 89ba73a4, frame-pointer build, stack samples) roughly a quarter of the streaming window is appending and releasing these copies (27% of samples, an upper bound, as `String.append` also serves rendering) (`String.append` with its `span_fade`/`rfc_wrap`, and `term_drop` under `Ref.write` as consumers replace the previous partial), and about 30% is the eight frames' Markdown render and screen diff.
 
 No change to the pure program removes it while `TextContent.text` stays a `String` and every delta event carries the full text: at least one holder of the previous version is always alive at the append, as upstream's semantics require. Options, none adopted: (1) a runtime concatenation node for `String` (as V8's ConsString), flattened on first match, which keeps every public type; (2) a rope or reversed-chunk text type for streamed content blocks, flattened by consumers at render or serialization, which changes public `ai` types; (3) coalescing buffered deltas, which changes upstream's event sequence and is rejected. Regression: `tests/parity/runner.py --only stream-flood` and the reproducer above.
+
+## BEND-047 — Records holding F64 literals were built at runtime, and constant fields were sealed (2026-09-25)
+
+Cause, from measuring the CLI's C (148 MB). The generated model catalogs (1,254 models in 37 files) write prices as `F64.div(U32.to_f64(1), U32.to_f64(50))` and counts as `U32.to_f64(200000)`. These are intrinsic calls, not constants. So `term_const` fails, and every model record, with its cost and limits, was built by code on each call instead of being placed in the static image. That came to 27 definitions and 4.3 MB of C, the largest spins in the program. Separately, a node of a hot constructor sealed every field with `rfc_seal`, including numbers and packed constructors, for which it is a no-op: 92,500 such calls.
+
+Fix (`patches/bend-literal-folds.patch`, +32 lines):
+- `emit_fold`, which already folds calls of flat definitions on constants, now also evaluates `U32.to_f64` and F64 `add`, `sub`, `mul` and `div` on literals. It computes them with IEEE doubles, as the C code would, and gives `F64{high, low}` with literal words. A NaN result is left to run, because its bits may differ.
+- `node_fill` does not seal a field that is a number or `term_pak(...)`.
+
+Evidence, same source (main at 40c1e5cc), baseline = the installed toolchain:
+- C: 148.0 → 142.2 MB. Static constructors: 180 → 189.
+- Slowest Clang unit: 85.3 → 77.5 s. Peak memory per unit: 1.31 → 1.21 GB.
+- Whole build: 218 → 213 s.
+- A program printing every built-in model's costs, context window and max tokens gives identical output for all 1,254 models natively (folded) and on Bun.
+- Full terminal parity: 98 MATCH. The Bend captures of all differing scenarios (129 captures) are byte-identical to the baseline build's.
+
+Regression: `tests/compiler-f64-fold.bend` prints `0.02 14 -8`, and its C has no runtime F64 conversions.
+

@@ -1,0 +1,59 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -1934,7 +1934,9 @@
+   const nd = name_local(fl, k);
+   file_push(fl, `u64 ${nd} = ${alloc};`);
+   exprs.forEach((w, j) => {
+-    file_push(fl, `e.mem[${nd} + ${j}] = ${shr ? `rfc_seal(e, ${w})` : w};`);
++    // a number or packed constructor is never a shared node: no seal
++    const seal = shr && !/^(\d+(ull)?|term_pak\(.*\))$/.test(w);
++    file_push(fl, `e.mem[${nd} + ${j}] = ${seal ? `rfc_seal(e, ${w})` : w};`);
+   });
+   return nd;
+ }
+@@ -2665,12 +2667,43 @@
+     }
+     const as = m.all.map((a) =>
+       m.args.includes(a) ? emit_fold(fl, a) ?? a : a);
+-    return it.call === true ? null : as.every((a, i) => a === m.all[i]) ? s
+-      : as.reduce((f, x) => Bend.App(f, x), m.t as HTerm);
++    return it.call === true ? null
++      : fold_f64(m.t.k, as.filter((_, i) => m.args.includes(m.all[i])))
++      ?? (as.every((a, i) => a === m.all[i]) ? s
++        : as.reduce((f, x) => Bend.App(f, x), m.t as HTerm));
+   });
+   return r === s ? t : r;
+ }
+ 
++// F64 arithmetic on literals, computed here as C computes it (IEEE
++// doubles), so that a value like 1/50 is a constant F64{high, low} and the
++// data holding it can be static. A NaN is left to run: its bits may differ.
++function fold_f64(k: Bend.Name, xs: HTerm[]): HTerm | null {
++  const dv = new DataView(new ArrayBuffer(8));
++  const val = (t: HTerm): number | null => {
++    const s = Bend.term_strip(t);
++    const [h, l] = s.$ === "Ctr" && s.k === "F64" && s.x.length === 2
++      ? s.x.map((x) => Bend.u32_from_term(x)) : [null, null];
++    if (h === null || l === null) return null;
++    dv.setUint32(0, h);
++    dv.setUint32(4, l);
++    return dv.getFloat64(0);
++  };
++  const op = eff_name(k);
++  const [a, b] = op === "u32_to_f64" && xs.length === 1
++    ? [Bend.u32_from_term(xs[0]), 0]
++    : op.startsWith("f64_") && xs.length === 2 ? xs.map(val) : [null, null];
++  const r = a === null || b === null ? null : op === "u32_to_f64" ? a
++    : op === "f64_add" ? a + b : op === "f64_sub" ? a - b
++    : op === "f64_mul" ? a * b : op === "f64_div" ? a / b : null;
++  if (r === null || Number.isNaN(r)) {
++    return null;
++  }
++  dv.setFloat64(0, r);
++  return Bend.Ctr("F64", [0, 4].map((at) =>
++    Bend.term_higher(Bend.u32_to_term(dv.getUint32(at)))));
++}
++
+ function emit_unfold(fl: File, s: HTerm): HTerm | null {
+   const m = term_spine(fl, s);
+   const d = m.tld;

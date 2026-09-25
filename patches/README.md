@@ -176,3 +176,5 @@ Validation with the patched compiler, all passing:
 `bend-emission-memos.patch` (2026-09-25, installed after `bend-unit-contents.patch`): a set-based duplicate-id check and memoized word values and constructor macros (BEND-044). CLI emission 151 s → 129 s, byte-identical output.
 
 `bend-unit-spins-image.patch` (2026-09-25, installed after `bend-emission-memos.patch`): the static image as integer literals with a relocation list for the loader, and each translation unit holding only the spins its segments reach (BEND-045). CLI Clang: slowest unit 97 s → 84 s, unit 0 45 s → 12 s, 1.5 → 1.3 GB per unit; parity unchanged. The compiler is then 11,401 lines.
+
+`bend-literal-folds.patch` (2026-09-25, installed after `bend-unit-spins-image.patch`): F64 arithmetic on literals is folded at compile time, so records holding such values (the model catalogs) go into the static image, and literal fields of shared nodes are not sealed (BEND-047). CLI C 148.0 → 142.2 MB, slowest Clang unit 85 → 78 s; parity unchanged. The compiler is then 11,434 lines.
