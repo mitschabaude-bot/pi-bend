@@ -4620,7 +4620,7 @@
         "tests/thinking-level.bend"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '→ ✓ medium', then '  ✓ medium' and '→   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",
@@ -4666,7 +4666,7 @@
         "tests/tools-manager.md"
       ],
       "sha256": "09e7bdfba469506725a8df17f87bc461ce7dd4eeba7ad04ec3140c0b39e1e2d5",
-      "notes": "7 of 8 cases pass on Bun and native one/four threads (tests/tools-manager-latest.bend): all six getLatestVersion cases through a logging redirect fetch and a local server (release redirects with and without the v prefix, a relative Location, a redirect whose body is discarded, 404 without redirect, a redirect to /login; one manual-redirect request each with the pi-coding-agent user agent) and ensureTool's offline status callback. Adaptation: upstream checks response.bodyUsed; here the redirect body is released unread. Pending: \"surfaces the error cause chain when a download fails\" — the native fetch error has no cause chain, so the status reads \"Failed to download fd: fetch failed\" without the connect detail. Download, extraction and install scenarios are covered by tests/tools_manager_check.py (tests/tools-manager.md)."
+      "notes": "7 of 8 cases pass on Bun and native one/four threads (tests/tools-manager-latest.bend): all six getLatestVersion cases through a logging redirect fetch and a local server (release redirects with and without the v prefix, a relative Location, a redirect whose body is discarded, 404 without redirect, a redirect to /login; one manual-redirect request each with the pi-coding-agent user agent) and ensureTool's offline status callback. Adaptation: upstream checks response.bodyUsed; here the redirect body is released unread. Pending: \"surfaces the error cause chain when a download fails\" \u2014 the native fetch error has no cause chain, so the status reads \"Failed to download fd: fetch failed\" without the connect detail. Download, extraction and install scenarios are covered by tests/tools_manager_check.py (tests/tools-manager.md)."
     },
     {
       "source": "packages/coding-agent/test/tools.test.ts",
@@ -4766,7 +4766,7 @@
         "tests/loopback-fetch.bend"
       ],
       "sha256": "cba6b39e9767019aebe0277ab580cb603927258652afcb2b9967387f1e8d6aa7",
-      "notes": "9 of 10 cases pass on Bun and native one/four threads. Instead of stubbing the global fetch, the library's https://pi.dev request goes through a logging fetch (tests/loopback-fetch.bend) to a local server that answers, drops connections or fails per case; the request URL, User-Agent and accept headers and the request counts (3 with retry, 1 for automatic checks, 0 when PI_SKIP_VERSION_CHECK is set) are asserted. semver valid/compare come from packages/runtime/src/semver.bend (tests/semver_check.py: 1,363 pairs match node-semver 7.8.5, including JavaScript double rounding of huge numeric pre-release identifiers). Not ported: \"formats nested network error details\" — the native fetch error carries no errno codes, so formatVersionCheckError returns the management request's message."
+      "notes": "9 of 10 cases pass on Bun and native one/four threads. Instead of stubbing the global fetch, the library's https://pi.dev request goes through a logging fetch (tests/loopback-fetch.bend) to a local server that answers, drops connections or fails per case; the request URL, User-Agent and accept headers and the request counts (3 with retry, 1 for automatic checks, 0 when PI_SKIP_VERSION_CHECK is set) are asserted. semver valid/compare come from packages/runtime/src/semver.bend (tests/semver_check.py: 1,363 pairs match node-semver 7.8.5, including JavaScript double rounding of huge numeric pre-release identifiers). Not ported: \"formats nested network error details\" \u2014 the native fetch error carries no errno codes, so formatVersionCheckError returns the management request's message."
     },
     {
       "source": "packages/durable/test/memory-storage.test.ts",
@@ -5006,19 +5006,29 @@
     },
     {
       "source": "packages/tui/test/editor-history-keybindings.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a055311e76a141062038a1a835fae1271108d29034fe0d0eec7521c6c79cb948"
+      "status": "ported",
+      "ports": [
+        "tests/tui_original.ts",
+        "tests/tui_bridge.ts",
+        "tests/tui-bridge.bend",
+        "tests/original_harness.ts"
+      ],
+      "sha256": "a055311e76a141062038a1a835fae1271108d29034fe0d0eec7521c6c79cb948",
+      "notes": "The pinned test body runs unchanged against the native Editor (tests/tui_original.ts through tests/tui-bridge.bend; setKeybindings forwards the user bindings) on Bun/native one/four. See tests/editor.md."
     },
     {
       "source": "packages/tui/test/editor.test.ts",
       "status": "partial",
       "ports": [
         "tests/editor-trigger.bend",
-        "tests/editor_trigger_check.py"
+        "tests/editor_trigger_check.py",
+        "tests/tui_original.ts",
+        "tests/tui_bridge.ts",
+        "tests/tui-bridge.bend",
+        "tests/original_harness.ts"
       ],
       "sha256": "b25d663eda552a486aa35965441b6fae056414b2b5750ddec96b69faec72bdd6",
-      "notes": "Only the symbol-trigger/debounce context of the CJK-punctuation cases is compared, against the pinned trigger and debounce patterns on random texts. The editor.test.ts bodies themselves are not yet executed."
+      "notes": "tests/tui_original.ts executes the pinned file itself against the native Editor through tests/tui-bridge.bend: 166 of 192 tests pass on Bun/native one/four with their original assertions (scalar-to-UTF-16 cursor conversion and paste-registry pre-segmentation documented in tests/editor.md). Pending by name: the 26 autocomplete tests (Autocomplete group, 'undoes autocomplete', 'does not trigger autocomplete during single-line paste'), which need asynchronous providers and mocked timers the synchronous bridge cannot drive; tests/editor-autocomplete.bend and tests/editor_trigger_check.py cover parts of that behaviour separately."
     },
     {
       "source": "packages/tui/test/fuzzy.test.ts",
@@ -5117,27 +5127,36 @@
     },
     {
       "source": "packages/tui/test/mouse-components.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2f24456f3d3a0cda99e6018e055f9522b64fa51d37315bd97b0cb6d2cb2a6e63"
+      "status": "partial",
+      "ports": [
+        "tests/tui_original.ts",
+        "tests/tui_bridge.ts",
+        "tests/tui-bridge.bend",
+        "tests/original_harness.ts"
+      ],
+      "sha256": "2f24456f3d3a0cda99e6018e055f9522b64fa51d37315bd97b0cb6d2cb2a6e63",
+      "notes": "tests/tui_original.ts runs the pinned file against native Input, SelectList and SettingsList through tests/tui-bridge.bend: 7 of 10 tests pass on Bun/native one/four. Pending by name: the three TuiAltScreen tests (delegating overlay focus, editor mouse positioning through alternate-screen dispatch, drag selection copy), which need alternate-screen dispatch through a virtual terminal. See tests/editor.md."
     },
     {
       "source": "packages/tui/test/native-clipboard-linux.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "22b36f35cd4427ebeecaa5edebcfe920a9800ccb8b48a9c822db5f85c8f373f8"
+      "sha256": "22b36f35cd4427ebeecaa5edebcfe920a9800ccb8b48a9c822db5f85c8f373f8",
+      "notes": "Not applicable to the native binary: the suite builds and drives upstream's C/libxcb Node addon (linux-platform-x11.node, its worker and allocation fixtures) under Xvfb. The Bend binary has no addon; clipboard image paste is ported through the upstream command path (wl-paste/xclip, packages/coding-agent/src/utils/clipboard-image.bend), which is upstream's behaviour when no native helper is available. A pure-Bend X11 reader would additionally need a Unix-domain socket primitive the runtime lacks."
     },
     {
       "source": "packages/tui/test/native-module-path.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "8f5f0eb78e719c1818d7b109e6745b706b76d70add323dce84a3e83df7917f75"
+      "sha256": "8f5f0eb78e719c1818d7b109e6745b706b76d70add323dce84a3e83df7917f75",
+      "notes": "Not applicable to the native binary: getNativeModuleCandidates resolves where a Node `.node` addon lives (installed pi-tui package, bundle chunk directory, next to the executable). The Bend binary loads no addons; its platform code is linked in, so there is no candidate path to resolve and nothing is ported. Kept pending rather than emulated."
     },
     {
       "source": "packages/tui/test/native-platform.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "d6ba0d7bbb3a367a4dc677798772fa9e4c4e37570151f10133a0fdc0b9c26189"
+      "sha256": "d6ba0d7bbb3a367a4dc677798772fa9e4c4e37570151f10133a0fdc0b9c26189",
+      "notes": "Not applicable to the native binary: the four tests check upstream's Node addons (ELF page alignment of the shipped linux-arm64 .node prebuild, the Windows/macOS helper object identity and clipboard round trip, and lazy require of the X11 addon keyed on DISPLAY/WAYLAND_DISPLAY). The Bend binary loads no addon; clipboard reads use commands (packages/coding-agent/src/utils/clipboard-image.bend, upstream's no-native-helper case) and Windows/macOS helpers are not ported."
     },
     {
       "source": "packages/tui/test/overlay-non-capturing.test.ts",
@@ -5193,7 +5212,8 @@
       "source": "packages/tui/test/regression-sigwinch-kill-eacces.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "3d0c18e07d973784433ba298fe8d228021b970fd0d772737c49a8be3040e7ce3"
+      "sha256": "3d0c18e07d973784433ba298fe8d228021b970fd0d772737c49a8be3040e7ce3",
+      "notes": "Not applicable to the native binary: refreshTerminalDimensions sends the process a SIGWINCH so Node re-reads its cached stdout columns/rows, guarding kill(2) EACCES/EPERM and skipping win32. The native terminal measures with TIOCGWINSZ when it acquires the terminal and after every SIGWINCH it receives (self-pipe; packages/tui/src/terminal.bend), so it never signals itself and has no kill call whose errors could be ignored."
     },
     {
       "source": "packages/tui/test/select-list.test.ts",

@@ -15,3 +15,18 @@ BEND="$TOOLCHAIN" BEND_TUS=4 sh scripts/build-pure.sh tests/editor-input.bend bu
 python3 tests/editor_input_check.py --width-reference "$WIDTH" -- build/editor-input --threads 1
 python3 tests/editor_input_check.py --width-reference "$WIDTH" -- build/editor-input --threads 4
 ```
+
+## Original upstream suites through the component bridge
+
+`tests/tui_original.ts` executes the pinned `editor.test.ts`, `editor-history-keybindings.test.ts` and `mouse-components.test.ts` files themselves (hash-checked), with only their implementation imports redirected: `Editor`, `Input`, `SelectList`, `SettingsList`, `wordWrapLine`, `visibleWidth` and `setKeybindings` go to `tests/tui_bridge.ts`, which forwards every call as one synchronous JSON line to `tests/tui-bridge.bend`. Theme functions and component callbacks (`onSubmit`, `onChange`, `onSelect`, `onSelectionChange`, `onCancel`) are called back from inside the native operation and answered synchronously, so callback order is upstream's. Editor and input keys pass through the same segmenter preparation as the live components. `TuiMainScreen`/`VirtualTerminal` only carry the terminal rows the editor reads; the test themes are upstream's own. `tests/original_harness.ts` stands in for `node:test` and keeps full describe/it names; tests listed as pending are reported by name and never counted as passed.
+
+Adaptations: cursor columns and wrap chunk indices are native scalar offsets, converted to UTF-16 units for the original assertions. `wordWrapLine`'s optional pre-segmentation exists upstream to make paste markers atomic; the native wrapper takes the paste registry instead, so the bridge registers the ids of the pre-segmented markers (any other multi-grapheme segment is rejected rather than approximated).
+
+Results on Bun and native one/four threads: `editor.test.ts` 166 of 192 pass, `editor-history-keybindings.test.ts` 1 of 1, `mouse-components.test.ts` 7 of 10. Pending: the 26 editor autocomplete tests (the `Autocomplete` group, `undoes autocomplete`, `does not trigger autocomplete during single-line paste`) need asynchronous providers and `t.mock.timers`, which the synchronous bridge cannot drive, and the native debounce uses the real timer; the three alternate-screen mouse tests need `TuiAltScreen` dispatch through a virtual terminal. The editor suite exposed three differences, now fixed in `editor.bend`: Right at the end of the last line records the sticky visual column, and moving down onto a later visual line of an already visited paste marker skips its remaining visual lines (upstream's `moveToVisualLine` retry, including its partially moved restart state; a negative intermediate column saturates at zero natively).
+
+```sh
+bun tests/tui_original.ts
+BEND_TUS=8 flock /tmp/pi-bend-build.lock sh scripts/build-pure.sh tests/tui-bridge.bend build/tui-bridge
+TUI_BRIDGE="build/tui-bridge --threads 1" bun tests/tui_original.ts
+TUI_BRIDGE="build/tui-bridge --threads 4" bun tests/tui_original.ts
+```
