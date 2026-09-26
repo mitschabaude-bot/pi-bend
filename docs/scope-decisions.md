@@ -34,6 +34,13 @@ note pointing here. Everything not listed here is in scope.
   commands (`utils/clipboard-image.bend`). `regression-sigwinch-kill-eacces`
   guards upstream's self-signalling resize path, which the native terminal
   does not have (it reads the size on every resize signal).
+- **Self-update** (`config.test.ts`'s install detection and `pi update`
+  of pi itself, 2026-09-27): pi-bend is built from source; revisit if it is
+  ever distributed.
+- **Version check against pi.dev** (2026-09-27): it reports upstream pi's
+  releases, which say nothing about pi-bend.
+- **macOS and Windows clipboard images** (2026-09-27): upstream reads them
+  through its Node addon; not needed for now (see Node native addons).
 - **JavaScript/TypeScript extensions** (AGENTS.md): extensions are native
   Bend; upstream's extension loading, bundling and Node SEA behaviour have no
   counterpart.
@@ -47,3 +54,7 @@ note pointing here. Everything not listed here is in scope.
 - **Worker threads**: the default thread count is decided when the binary is
   built (`BEND_DEFAULT_THREADS`, 2026-09-25).
 - **`/share`** is ported (2026-09-25).
+- **Crash log** (2026-09-27): ported, without the notice that points to
+  `/bug` (excluded).
+- **Remote model catalog** (pi.dev, 2026-09-27): kept; requests identify as
+  pi-bend rather than pi.
