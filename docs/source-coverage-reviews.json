@@ -1231,6 +1231,19 @@
       "port_sha256": {
         "packages/coding-agent/src/core/models-store.bend": "4eb1d115a3045c395ead8923aca02cb77e83f136370eef115e4e17bc9eacc51b"
       }
+    },
+    "packages/coding-agent/src/core/tools/edit-diff.ts": {
+      "state": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/tools/edit-diff.bend",
+        "packages/coding-agent/src/core/tools/diff.bend"
+      ],
+      "note": "Pure immutable matching/replacement and diff generation are split between edit-diff.bend and diff.bend. Read-only computeEditsDiff and computeEditDiff use explicit native path context and typed Result errors; focused Bun/native1/native4 differential checks match pinned pi for a 1000-line ten-edit preview, CRLF/BOM, original-snapshot batch matching, missing/duplicate/overlapping/unchanged/empty replacements and missing files, without modifying the file. Invalid UTF-8 is rejected consistently with native edit execution under the approved strict-input policy. Full source contract review and interactive preflight integration remain incomplete.",
+      "source_sha256": "f85a9809eb44b9828236050cf38a8e45933e5cfd583a186e9a0e55a664dd3e8d",
+      "port_sha256": {
+        "packages/coding-agent/src/core/tools/edit-diff.bend": "20c97e7ba832547e1f44e87a2de510512791522af1f41db1075fe811592d6f23",
+        "packages/coding-agent/src/core/tools/diff.bend": "51f1246c01d1b557319f5bd5b208caf2ca5489b82c186b020374202ef2ef1e25"
+      }
     }
   }
 }

@@ -1,4 +1,8 @@
 import Base
+import ./diff.bend as Diff
+import ../../utils/paths.bend as Paths
+import ../../../../runtime/src/filesystem.bend as FS
+import ../../../../runtime/src/utf8.bend as Utf8
 import ../../../../runtime/src/string.bend as Strings
 import ../../../../runtime/src/stable-sort.bend as Sort
 import ../../../../runtime/src/unicode-17-compatibility.bend as Unicode
@@ -380,3 +384,45 @@ def errorMessage(+error: Error, +path: String, +totalEdits: Nat) -> String:
       "No changes made to " ++ path ++ ". The replacements produced identical content.")
     case LineCountMismatch{}: "Cannot preserve unchanged lines because the base content has a different line count."
     case OutOfRange{}: "Replacement range is outside the base content."
+
+# Read-only preflight uses the same normalized immutable snapshot as execution.
+# The explicit path environment supplies native cwd/home and URL policy.
+def EditDiffResult() -> Data: Diff.DiffResult
+def Preview() -> Data: Result<&2,&2,String,EditDiffResult()>
+def previewApplied(path: String,count: Nat,result: Result<&2,&2,Error,AppliedEditsResult>) -> Preview():
+  match result:
+    case Fail{error}: Fail{errorMessage(error,path,count)}
+    case Done{AppliedEditsResult{before,after}}: Done{Diff.generateDiffString(before,after,4n)}
+def previewDecoded(path: String,+edits: List<&2,Edit>,result: Result<&2,&2,Utf8.Error,String>) -> Preview():
+  match result:
+    case Fail{_}: Fail{"File contains invalid UTF-8"}
+    case Done{content}: previewApplied(path,List.length(&2,Edit,edits),applyEditsToNormalizedContent(normalizeToLF(content),edits))
+def previewRead(path: String,edits: List<&2,Edit>,result: Result<&2,&2,FS.Error,List<&2,U32>>) -> Preview():
+  match result:
+    case Fail{error}: Fail{FS.errorMessage(error)}
+    case Done{bytes}: previewDecoded(path,edits,Utf8.decodeStrict(bytes))
+def previewAccessError(path: String,code: U32,message: String,name: Maybe<&2,String>) -> Preview():
+  match name:
+    case Some{label}: Fail{"Could not edit file: " ++ path ++ ". Error code: " ++ label ++ "."}
+    case None{}: Fail{"Could not edit file: " ++ path ++ ". " ++ FS.errorMessage(FS.System{code,message}) ++ "."}
+def previewAccessible(absolute: String,path: String,edits: List<&2,Edit>,result: Result<&1,&1,U32 & String,Unit>) -> IO(Preview()):
+  match result:
+    case Fail{(+code,+message)}:
+      do IO<Preview()>:
+        name : Maybe<&2,String> <- System.error_name(code)
+        return previewAccessError(path,code,message,name)
+    case Done{_}:
+      do IO<Preview()>:
+        content : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile(absolute)
+        return previewRead(path,edits,content)
+def previewResolved(path: String,edits: List<&2,Edit>,result: Result<&2,&2,Paths.Error,String>) -> IO(Preview()):
+  match result:
+    case Fail{_}: IO.pure(Preview(),Fail{"Invalid file path"})
+    case Done{+absolute}:
+      do IO<Preview()>:
+        access : Result<&1,&1,U32 & String,Unit> <- File.access(absolute,4)
+        previewAccessible(absolute,path,edits,access)
+def computeEditsDiff(environment: Paths.Environment,+path: String,edits: List<&2,Edit>,cwd: String) -> IO(Preview()):
+  previewResolved(path,edits,Paths.resolveToCwd(environment,path,cwd))
+def computeEditDiff(environment: Paths.Environment,path: String,oldText: String,newText: String,cwd: String) -> IO(Preview()):
+  computeEditsDiff(environment,path,Edit{oldText,newText} <> Nil{},cwd)
