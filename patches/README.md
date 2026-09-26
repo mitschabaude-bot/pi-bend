@@ -201,3 +201,5 @@ Validation: build `tests/process-inherited.bend` and `tests/external-editor.bend
 
 `bend-import-binders.patch` (2026-09-26, installed after `bend-borrowed-scalars.patch`, changes `bend.ts`): a pattern or lambda binder named like a definition of its own module is a binder in an imported module too, as it is in an entry file (BEND-032). The CLI's C is byte-identical.
 
+`bend-js-explicit-stack.patch` (2026-09-26): installed in the shared toolchain, after `bend-import-binders.patch`. It had only been installed in the old CLI worktree's toolchain, so the Bun lane still overflowed on deep non-tail self-recursion (`tests/compiler-js-*.bend`). Regenerated against the current `comp.ts`: `js_def` now records `start`, the line where the function opens, which the rewrite needs and which a predecessor change used to provide. `tests/js_explicit_stack.py` passes, the five other `compiler-js-*` reproducers print their results on Bun, and interactive messages and markdown.test.ts (81/81) match on the Bun lane. The C backend is unchanged. The compiler is then 11,707 lines.
+

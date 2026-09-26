@@ -195,10 +195,10 @@ def compaction_checks(f):
     assert last(events, 'remaining')['count'] == 0 and len(of_type(events, 'agent_start')) == 1, [e['type'] for e in events]
     checks += 1
     # 7150-rpc-prompt-during-compaction: rejects an RPC prompt while manual compaction is in progress
-    # The compaction is held at its summary request instead of a session_before_compact handler;
-    # a failed prompt result is upstream's preflightResult(false) and rejection.
+    # The compaction is held at its summary request instead of a session_before_compact handler.
     events = f.session('regressions', 'compaction_prompt', settings={'compaction': {'keepRecentTokens': 1}})
     assert last(events, 'compacting')['value'] is True
+    assert last(events, 'preflight')['success'] is False
     probe = last(events, 'probe')
     assert probe['ok'] is False and 'compaction is in progress' in probe['error'], probe
     assert 'PROBE-7150' not in texts(events, 'user')

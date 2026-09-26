@@ -1,6 +1,7 @@
 import Base
 import ../src/types.bend as T
 import ../src/api/openai-responses.bend as Responses
+import ../src/api/openai-codex-responses.bend as Codex
 import ../src/utils/event-stream.bend as Events
 import ../src/utils/message-json.bend as MessageJson
 import ../src/utils/schema-json.bend as Convert
@@ -219,10 +220,15 @@ def simpleOptions(+value: V.Value, signal: Abort.AbortSignal<Unit>) -> Responses
 
 def rendered(error: String) -> String: error
 
-def started(entry: Maybe<&2, String>, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, Unit, Unit>, +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Run()):
+def streamed(owner: Run()) -> Responses.SimpleRun(Unit, Unit, String): Done{owner}
+
+def started(entry: Maybe<&2, String>, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, Unit, Unit>, +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Responses.SimpleRun(Unit, Unit, String)):
   match entry:
-    case Some{"simple"}: Responses.streamSimple(~Unit, ~Unit, ~Unit, ~Unit, ~String, ~rendered, RP.config(), model, context, Some{simpleOptions(options, signal)})
-    case _: Responses.stream(~Unit, ~Unit, ~Unit, ~Unit, ~String, ~rendered, RP.config(), model, context, streamOptions(options, signal))
+    case Some{"simple"}: Codex.streamSimple(~Unit, ~Unit, ~Unit, ~Unit, ~String, ~rendered, RP.config(), model, context, Some{simpleOptions(options, signal)})
+    case _:
+      do IO<Responses.SimpleRun(Unit, Unit, String)>:
+        owner : Run() <- Codex.stream(~Unit, ~Unit, ~Unit, ~Unit, ~String, ~rendered, RP.config(), model, context, streamOptions(options, signal))
+        return streamed(owner)
 
 def label(event: StreamEvent()) -> String:
   match event:
@@ -272,12 +278,18 @@ def observed(pair: Run() & Events.AssistantMessageEventStream(V.Value, Unit), +c
         result : Responses.RunResult<Unit, Unit, String> <- Responses.dispose(Unit, Unit, String, owner)
         IO.print("R " ++ Text.showText(jsonText(Convert.toJson(MessageJson.assistantMessage(~Unit, ~unitDetails, message)))))
 
+# A streamSimple that fails before a stream exists prints "T " and the message.
+def outcome(result: Responses.SimpleRun(Unit, Unit, String), +controller: Abort.AbortController<Unit>, trigger: String) -> IO(Unit):
+  match result:
+    case Fail{cause}: IO.print("T " ++ Responses.describePreparation(cause))
+    case Done{owner}: observed(Responses.borrow(Unit, Unit, String, owner), controller, trigger)
+
 def runCase(+base: String, +value: V.Value) -> IO(Unit):
   +options = Maybe.default(&2, V.Value, field(value, "options"), V.ObjectValue{R.new(V.Value)})
   do IO<Unit>:
     +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
-    owner : Run() <- started(text(field(value, "entry")), model(base, Maybe.default(&2, V.Value, field(value, "model"), V.Null{})), context(value), options, Abort.signal(Unit, controller))
-    observed(Responses.borrow(Unit, Unit, String, owner), controller, Maybe.default(&2, String, text(field(value, "abortOnEvent")), "(never)"))
+    result : Responses.SimpleRun(Unit, Unit, String) <- started(text(field(value, "entry")), model(base, Maybe.default(&2, V.Value, field(value, "model"), V.Null{})), context(value), options, Abort.signal(Unit, controller))
+    outcome(result, controller, Maybe.default(&2, String, text(field(value, "abortOnEvent")), "(never)"))
     Abort.dispose(Unit, controller)
 
 def parsed(+base: String, value: Result<&2, &2, Decode.ParseError, V.Value>) -> IO(Unit):

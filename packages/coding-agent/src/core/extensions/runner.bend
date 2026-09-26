@@ -745,6 +745,52 @@ def withSystemHandlers(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>,
         withSystemHandlers(runner, rest, next)
     case _ <> rest: withSystemHandlers(runner, rest, current)
 
+# User input (upstream emitInput)
+# -------------------------------
+
+# The input as the handlers have left it; `changed` once one transformed it.
+type InputState is Data:
+  InputState{text: String, images: List<&2, Ai.ImageContent>, changed: Bool}
+
+def inputResult(state: InputState) -> T.InputEventResult:
+  match state:
+    case InputState{text, images, True{}}: T.InputTransform{text, Some{images}}
+    case InputState{_, _, False{}}: T.InputContinue{}
+
+def transformedInput(+text: String, images: Maybe<&2, List<&2, Ai.ImageContent>>, +current: List<&2, Ai.ImageContent>) -> InputState:
+  InputState{text, Maybe.default(&2, List<&2, Ai.ImageContent>, images, current), True{}}
+
+# The state after one handler; None once it handled the input.
+def inputNext(+runner: ExtensionRunner, path: String, state: InputState, result: Result<&2, &2, String, Maybe<&2, T.InputEventResult>>) -> IO(Maybe<&2, InputState>):
+  match result state:
+    case Done{Some{T.InputHandled{}}} _: IO.pure(Maybe<&2, InputState>, None{})
+    case Done{Some{T.InputTransform{text, images}}} InputState{_, current, _}: IO.pure(Maybe<&2, InputState>, Some{transformedInput(text, images, current)})
+    case Done{_} _: IO.pure(Maybe<&2, InputState>, Some{state})
+    case Fail{error} _:
+      do IO<Maybe<&2, InputState>>:
+        emitError(runner, T.ExtensionError{path, "input", error, None{}})
+        return Some{state}
+
+def inputHandlers(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>, +source: T.InputSource, +behavior: Maybe<&2, T.UserDelivery>, state: Maybe<&2, InputState>) -> IO(T.InputEventResult):
+  match state dispatches:
+    case None{} _: IO.pure(T.InputEventResult, T.InputHandled{})
+    case Some{current} Nil{}: IO.pure(T.InputEventResult, inputResult(current))
+    case Some{InputState{+text, +images, changed}} Dispatch{path, T.OnInput{callback}} <> rest:
+      do IO<T.InputEventResult>:
+        result : Result<&2, &2, String, Maybe<&2, T.InputEventResult>> <- C.call(T.HandlerCall<T.InputEvent>, Result<&2, &2, String, Maybe<&2, T.InputEventResult>>, callback, T.HandlerCall{T.InputEvent{text, images, source, behavior}, createContext(runner)})
+        next : Maybe<&2, InputState> <- inputNext(runner, path, InputState{text, images, changed}, result)
+        inputHandlers(runner, rest, source, behavior, next)
+    case Some{current} _ <> rest: inputHandlers(runner, rest, source, behavior, Some{current})
+
+# upstream emitInput: each input handler sees the input as the previous ones
+# left it; the first that handles it ends dispatch. A failing handler is
+# reported and skipped. Upstream answers "transform" when the text or the
+# images array differ by identity; here, when a handler transformed the input.
+def emitInput(+runner: ExtensionRunner, +text: String, images: List<&2, Ai.ImageContent>, source: T.InputSource, behavior: Maybe<&2, T.UserDelivery>) -> IO(T.InputEventResult):
+  do IO<T.InputEventResult>:
+    dispatches : List<&2, Dispatch> <- snapshot(runner, "input")
+    inputHandlers(runner, dispatches, source, behavior, Some{InputState{text, images, False{}}})
+
 # upstream emitContext: context handlers first, then context_with_system
 # handlers on the restored transcript.
 def emitContext(+runner: ExtensionRunner, messages: List<&2, T.AgentMessage()>) -> IO(List<&2, T.AgentMessage()>):

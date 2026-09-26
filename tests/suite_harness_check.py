@@ -517,6 +517,84 @@ def fork_message_checks(f):
     return 0
 
 
+def prompt_checks(f):
+    """suite/agent-session-prompt.test.ts. 'prompts while idle', 'throws when prompted during streaming without a
+    streamingBehavior', 'throws when prompting without a model', 'throws when prompting without configured auth' and
+    the before_agent_start image case are in tests/agent_session_check.py. Also agent-session-model-extension's
+    input handler case."""
+    checks = 0
+    # handles a tool call turn and waits for the follow-up LLM response
+    events = run(f, 'prompt', 'tool_turn')
+    history = messages(events)
+    assert roles(history) == ['system', 'user', 'assistant', 'toolResult', 'assistant'], roles(history)
+    assert history[3]['content'] == [{'type': 'text', 'text': 'echo:hello'}], history[3]
+    checks += 1
+    # executes multiple tool calls from one response and continues with a single follow-up response
+    events = run(f, 'prompt', 'multiple_tools')
+    assert sorted(e['run'] for e in of_type(events, 'tool_run')) == ['fast:b', 'slow:a']
+    history = messages(events)
+    assert roles(history).count('toolResult') == 2 and history[-1]['role'] == 'assistant', roles(history)
+    requests = of_type(events, 'request')
+    assert len(requests) == 2 and requests[1]['roles'].count('toolResult') == 2, requests
+    checks += 1
+    # preserves image attachments in the provider context (a real 1x1 PNG instead of the mocked processImage)
+    events = run(f, 'prompt', 'image')
+    user_context = [part for part in only(events, 'request')['context'].split('\n\n') if part.startswith('user:')]
+    assert len(user_context) == 1 and '[image:image/png:' in user_context[0], user_context
+    checks += 1
+    # expands skill commands before sending the prompt
+    events = run(f, 'prompt', 'skill')
+    expanded = only(events, 'request')['lastUser']
+    assert '<skill name="test" location="' in expanded and 'Use the skill body.' in expanded and 'explain this' in expanded, expanded
+    checks += 1
+    # expands prompt templates before sending the prompt; sendUserMessage can opt into prompt template expansion
+    for case in ('template', 'send_user_template'):
+        events = run(f, 'prompt', case)
+        assert only(events, 'request')['lastUser'] == 'Review this code: src/index.ts', events
+        checks += 1
+    # dispatches extension commands without consuming a provider response
+    events = run(f, 'prompt', 'command')
+    assert [e['args'] for e in of_type(events, 'command_run')] == ['hello world']
+    assert messages(events) == [] and last(events, 'remaining')['count'] == 1, events
+    checks += 1
+    # extension sendUserMessage can opt into extension command dispatch
+    events = run(f, 'prompt', 'extension_send_command')
+    assert [e['args'] for e in of_type(events, 'command_run')] == ['hello world']
+    assert messages(events) == [] and last(events, 'remaining')['count'] == 0 and not of_type(events, 'request'), events
+    checks += 1
+    # sendUserMessage while idle triggers a turn
+    events = run(f, 'prompt', 'send_user_idle')
+    history = messages(events)
+    assert roles(history) == ['system', 'user', 'assistant'] and history[1]['content'] == [{'type': 'text', 'text': 'from extension'}], history
+    checks += 1
+    # throws when prompted during manual compaction
+    events = run(f, 'prompt', 'during_compaction', settings={'compaction': {'keepRecentTokens': 1}})
+    third = last(events, 'third')
+    assert third['ok'] is False and third['error'] == 'Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry.', third
+    assert of_type(events, 'compact_result'), events
+    checks += 1
+    # does not report streamingBehavior to input handlers while idle
+    events = run(f, 'prompt', 'input_idle')
+    assert [(e['text'], e['streamingBehavior']) for e in of_type(events, 'input')] == [('idle', None)], events
+    checks += 1
+    # reports streamingBehavior to input handlers while streaming
+    events = run(f, 'prompt', 'input_streaming')
+    assert [e['streamingBehavior'] for e in of_type(events, 'input')] == [None, 'followUp'], events
+    checks += 1
+    # agent-session-model-extension: allows extension input handlers to transform or handle input
+    events = run(f, 'prompt', 'input_transform')
+    assert [e['lastUser'] for e in of_type(events, 'request')] == ['transformed:hello'], events
+    assert roles(messages(events)).count('user') == 1, roles(messages(events))
+    checks += 1
+    return checks
+
+
+def only(events, kind):
+    found = of_type(events, kind)
+    assert len(found) == 1, (kind, found)
+    return found[0]
+
+
 def main():
     parser = argparse.ArgumentParser()
     for name in RUNNERS:
@@ -526,7 +604,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-suite-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures) + boundary_checks(fixtures) + durable_length_checks(fixtures) + context_checks(fixtures) + fork_message_checks(fixtures)
+    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures) + boundary_checks(fixtures) + durable_length_checks(fixtures) + context_checks(fixtures) + fork_message_checks(fixtures) + prompt_checks(fixtures)
     print('suite-harness: %d upstream cases passed' % checks)
 
 

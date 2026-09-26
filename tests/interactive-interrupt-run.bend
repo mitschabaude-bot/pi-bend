@@ -94,7 +94,7 @@ def run(args: List<String>) -> IO(Unit):
         candidate : Result<&2,&2,StreamFn.MissingDefault,Runtime.Owner()> <- Agent.new(~Unit,~Tools.ToolDetails,~Runtime.Custom(),~Tools.ToolError,~Unit,options(stream,converter,Sessions.getSessionId(Unit,Tools.ToolDetails,Schema.Value,stored)),registry,validator,Tools.emptyDetails())
         +agent : Runtime.Owner() <- requireAgent(candidate)
         loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd,agentDir,Settings.options())
-        models : Models.ModelRuntime <- ModelFixture.create(Nil{})
+        models : Models.ModelRuntime <- ModelFixture.create(ModelFixture.Source{"fixture","PI_FAUX_API_KEY",model() <> otherModel() <> Nil{}} <> Nil{})
         +session : Session.AgentSession <- Session.create(agent,stored,settings(loaded),cwd,Runtime.Loadout{Record.new(String),Nil{},Nil{},Nil{},None{},Nil{}, None{}, Nil{}},models,Nil{})
         result : Result<&2,&2,Run.Error,Unit> <- Run.run(session,Nil{},cwd,None{},agentDir,assetsRoot,setting(choice),model() <> otherModel() <> Nil{})
         Session.dispose(session)

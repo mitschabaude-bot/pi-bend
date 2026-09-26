@@ -37,8 +37,7 @@ NAMES = [
     "RPC extension UI > a dialog timeout answers as cancelled",
     "RPC extension UI > an aborted signal answers without a request",
 ]
-# Pending until AgentSession.prompt has upstream's preflight (tests/rpc.md).
-EXPECTED_FAILURES = {PREFLIGHT}
+EXPECTED_FAILURES = set()
 
 
 def check(label, command, threads=None):

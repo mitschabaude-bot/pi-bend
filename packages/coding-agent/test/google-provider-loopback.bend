@@ -11,6 +11,7 @@ import ../../runtime/src/f64.bend as F
 import ../../runtime/src/fetch.bend as Fetch
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/record.bend as R
+import ../../runtime/src/ref.bend as Ref
 
 def context() -> Google.Context():
   Ai.TranscriptContext{Ai.User{Ai.UserMessage{Ai.UserText{"ping"}, F.fromU32(1)}} <> Nil{}}
@@ -83,25 +84,29 @@ def opened(result: Google.Output()) -> IO(Ai.AssistantMessage<V.Value, Unit>):
 
 def request(fetch: Fetch.Fetch(Unit), base: String, context: Google.Context()) -> IO(Ai.AssistantMessage<V.Value, Unit>):
   do IO<Ai.AssistantMessage<V.Value, Unit>>:
-    result : Google.Output() <- Google.open(fetch, TestClient.urlContext(), TestClient.model(base), context, Some{options()})
+    calls : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
+    result : Google.Output() <- Google.open(fetch, TestClient.urlContext(), calls, TestClient.model(base), context, Some{options()})
     opened(result)
 
 def retryRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, Unit>):
   do IO<Ai.AssistantMessage<V.Value, Unit>>:
-    result : Google.Output() <- Google.open(fetch, TestClient.urlContext(), TestClient.model(base), context(), Some{retryOptions()})
+    calls : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
+    result : Google.Output() <- Google.open(fetch, TestClient.urlContext(), calls, TestClient.model(base), context(), Some{retryOptions()})
     opened(result)
 
 def hookRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, Unit>):
   do IO<Ai.AssistantMessage<V.Value, Unit>>:
     +hook : Ai.PayloadCallback(Ai.JsonValue, Ai.Model<Ai.JsonValue>, Google.Error()) <- C.create(~Unit, ~Ai.PayloadInput<Ai.JsonValue, Ai.Model<Ai.JsonValue>>, ~Result<&2, &2, Google.Error(), Maybe<&2, Ai.JsonValue>>, ~payloadHook, Unit{})
-    result : Google.Output() <- Google.open(fetch, TestClient.urlContext(), TestClient.model(base), context(), Some{Ai.withOnPayload(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Google.Error(), options(), Some{hook})})
+    calls : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
+    result : Google.Output() <- Google.open(fetch, TestClient.urlContext(), calls, TestClient.model(base), context(), Some{Ai.withOnPayload(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Google.Error(), options(), Some{hook})})
     message : Ai.AssistantMessage<V.Value, Unit> <- opened(result)
     C.dispose(Ai.PayloadInput<Ai.JsonValue, Ai.Model<Ai.JsonValue>>, Result<&2, &2, Google.Error(), Maybe<&2, Ai.JsonValue>>, hook)
     return message
 
 def headerRequest(fetch: Fetch.Fetch(Unit), base: String) -> IO(Ai.AssistantMessage<V.Value, Unit>):
   do IO<Ai.AssistantMessage<V.Value, Unit>>:
-    result : Google.Output() <- Google.open(fetch, TestClient.urlContext(), TestClient.model(base), context(), Some{headerOptions()})
+    calls : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
+    result : Google.Output() <- Google.open(fetch, TestClient.urlContext(), calls, TestClient.model(base), context(), Some{headerOptions()})
     opened(result)
 
 def scenario(+fetch: Fetch.Fetch(Unit), +base: String, mode: String) -> IO(Unit):

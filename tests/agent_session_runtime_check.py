@@ -7,13 +7,14 @@ in-memory new sessions, parentSession, and the missing-cwd refusal that
 leaves the current session in place; fork before a user message and clone at
 an entry, persisted and in memory.
 """
-import argparse, json, subprocess, tempfile
+import argparse, json, os, subprocess, tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 def run(command, *arguments, cwd):
-    result = subprocess.run(command + list(arguments), capture_output=True, text=True, timeout=300, cwd=cwd)
+    # The faux provider is authorized, as in upstream's harness.
+    result = subprocess.run(command + list(arguments), capture_output=True, text=True, timeout=300, cwd=cwd, env=dict(os.environ, PI_FAUX_API_KEY='faux-key'))
     assert result.returncode == 0, (arguments, result.stderr[-2000:], result.stdout[-2000:])
     return [json.loads(line) for line in result.stdout.splitlines() if line.startswith('{')]
 
@@ -79,6 +80,33 @@ def main():
     assert results['memory_fork_before']['selectedText'] == 'hello' and current['memory_fork_before']['entries'] == 0 and current['memory_fork_before']['sessionFile'] is None
     assert [e['start'] for e in events if e['type'] == 'factory'][2:] == [{'reason': 'fork', 'previousSessionFile': None}] * 2
     checks += 5
+    # agent-session-branching.test.ts (upstream runs it live; here over the faux provider)
+    def branching(kind):
+        directory = work / ('branching-' + kind); directory.mkdir()
+        events = run(command, 'branching', str(directory), str(agent), kind, cwd=directory)
+        states = {e['label']: e for e in events if e['type'] == 'branch_state'}
+        current = {e['label']: e for e in events if e['type'] == 'current'}
+        fork = [e for e in events if e['type'] == 'result' and e['label'] == 'fork'][0]
+        return states, current, fork
+    # should allow forking from single message
+    states, current, fork = branching('single')
+    assert [m['text'] for m in states['prompted']['forking']] == ['Say hello']
+    assert fork['ok'] and fork['selectedText'] == 'Say hello'
+    assert states['forked']['roles'] == [] and current['forked']['sessionFile'] is not None and not Path(current['forked']['sessionFile']).exists(), current['forked']
+    checks += 1
+    # should support in-memory forking in --no-session mode
+    states, current, fork = branching('memory')
+    assert current['initial']['sessionFile'] is None
+    assert len(states['prompted']['forking']) == 1 and len(states['prompted']['roles']) > 0
+    assert fork['ok'] and fork['selectedText'] == 'Say hi'
+    assert states['forked']['roles'] == [] and current['forked']['sessionFile'] is None
+    checks += 1
+    # should fork from middle of conversation
+    states, current, fork = branching('middle')
+    assert len(states['prompted']['forking']) == 3
+    assert fork['ok'] and fork['selectedText'] == 'Say two'
+    assert states['forked']['roles'] == ['user', 'assistant'], states['forked']
+    checks += 1
     print('agent-session-runtime: %d checks passed' % checks)
 
 main()

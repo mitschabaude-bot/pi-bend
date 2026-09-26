@@ -84,16 +84,8 @@ PING = {'name': 'ping', 'description': 'Ping', 'parameters': {'type': 'object', 
 CASES = []
 
 # Named SSE tests that fail against the native Codex path, with the upstream
-# behaviour it lacks (upstream openai-codex-responses.ts parseSSE/mapCodexEvents
-# and its SSE header timeout are not ported; Codex runs the shared Responses
-# lifecycle). They stay listed so the gap is visible; --pending runs them.
-PENDING = {
-    'processes a terminal SSE event without a trailing blank line': 'parseSSE treats EOF as the end of the residual frame; the shared SSE reader drops an unterminated final event',
-    'completes after response.completed even when the SSE body stays open': 'mapCodexEvents copies response.end_turn into AssistantMessage.endTurn',
-    'maps response.incomplete to stopReason length even when the SSE body stays open': 'mapCodexEvents stops reading after response.incomplete; the native reader waits for EOF',
-    'aborts SSE fetch after the configured HTTP timeout when response headers do not arrive': 'the Codex SSE header timeout ("Codex SSE response headers timed out after 10ms") is not ported; the native timeout fails before sending',
-    'aborts SSE body reads after response headers arrive': 'parseSSE reports "Request was aborted" when the signal aborts a body read',
-}
+# behaviour it lacks; --pending runs them.
+PENDING = {}
 
 
 def case(name, script, options=None, check=None, entry='stream', model=None, context=SAY_HELLO, **extra):
@@ -130,7 +122,10 @@ case('streams SSE responses into AssistantMessageEventStream', [step(sse())], ch
 case('processes a terminal SSE event without a trailing blank line', [step(sse().rstrip())], check=lambda r: (expect(r['message']['stopReason'] == 'stop', r['message']), expect(text_of(r['message']) == 'Hello', r['message'])))
 case('completes after response.completed even when the SSE body stays open', [step(sse(include_done=True, end_turn=False), keepOpen=True)], check=lambda r: (expect(text_of(r['message']) == 'Hello'), expect(r['message']['stopReason'] == 'stop', r['message']), expect(r['message'].get('endTurn') is False, r['message'])))
 case('maps response.incomplete to stopReason length even when the SSE body stays open', [step(sse(status='incomplete'), keepOpen=True)], check=lambda r: (expect(text_of(r['message']) == 'Hello'), expect(r['message']['stopReason'] == 'length', r['message'])))
-case('aborts SSE fetch after the configured HTTP timeout when response headers do not arrive', [step(sse(), headerDelay=2000)], dict(timeoutMs=10), check=lambda r: (expect(len(r['requests']) == 1, r['requests']), expect(r['message']['stopReason'] == 'error', r['message']), expect(r['message'].get('errorMessage') == 'Codex SSE response headers timed out after 10ms', r['message'])))
+# Upstream uses timeoutMs 10 with an in-process fetch mock; over a real
+# loopback connection the request must be sent within the deadline, so both
+# sides run with 500ms against a 3s header delay.
+case('aborts SSE fetch after the configured HTTP timeout when response headers do not arrive', [step(sse(), headerDelay=3000)], dict(timeoutMs=500), check=lambda r: (expect(len(r['requests']) == 1, r['requests']), expect(r['message']['stopReason'] == 'error', r['message']), expect(r['message'].get('errorMessage') == 'Codex SSE response headers timed out after 500ms', r['message'])))
 ONE = '\n\n'.join([data({'type': 'response.output_item.added', 'item': {'type': 'message', 'id': 'msg_1', 'role': 'assistant', 'status': 'in_progress', 'content': []}}), data({'type': 'response.content_part.added', 'part': {'type': 'output_text', 'text': ''}}), data({'type': 'response.output_text.delta', 'delta': 'one'})]) + '\n\n'
 TWO = data({'type': 'response.output_text.delta', 'delta': 'two'}) + '\n\n'
 REST = '\n\n'.join([data({'type': 'response.output_item.done', 'item': {'type': 'message', 'id': 'msg_1', 'role': 'assistant', 'status': 'completed', 'content': [{'type': 'output_text', 'text': 'onetwo'}]}}), data({'type': 'response.completed', 'response': {'status': 'completed', 'usage': USAGE}})]) + '\n\n'
@@ -173,6 +168,40 @@ for model_id, tier, multiplier in [('gpt-5.1-codex', 'flex', 0.5), ('gpt-5.1-cod
 case('does not set session-id/x-client-request-id headers when sessionId is not provided', [step(sse())], check=lambda r: (expect('session-id' not in first_request(r)['headers']), expect('session_id' not in first_request(r)['headers']), expect('x-client-request-id' not in first_request(r)['headers'])))
 
 
+def json_failure(status, error, headers=None):
+    return dict(status=status, headers={'content-type': 'application/json', **(headers or {})}, chunks=[[0, json.dumps({'error': error})]])
+
+
+for status in (429, 503):
+    case(f'fails immediately when a {status} retry delay exceeds the limit', [json_failure(status, {'code': 'temporarily_unavailable', 'message': 'retry later'}, {'retry-after': '2'})], dict(maxRetries=3, maxRetryDelayMs=1000),
+         check=lambda r: (expect(r['message']['stopReason'] == 'error', r['message']), expect(r['message'].get('errorMessage') == 'Server requested 2s retry delay (max: 1s)', r['message']), expect(len(r['requests']) == 1, r['requests'])))
+
+
+# Upstream advances fake timers and inspects setTimeout delays; here the
+# retries really wait, and the gaps between the requests the server receives
+# must follow the 1s/2s/4s backoff.
+def backoff(result):
+    expect(text_of(result['message']) == 'Hello', result['message'])
+    expect(len(result['requests']) == 4, result['requests'])
+    times = [request['at'] for request in result['requests']]
+    gaps = [b - a for a, b in zip(times, times[1:])]
+    expect(all(want <= gap < want + 1.5 for gap, want in zip(gaps, (1, 2, 4))), gaps)
+
+
+RATE_LIMITED = json_failure(429, {'code': 'rate_limit_exceeded', 'message': 'rate limited'})
+case('uses exponential backoff across repeated SSE retries without retry headers', [RATE_LIMITED, RATE_LIMITED, RATE_LIMITED, step(sse())], dict(maxRetries=3), check=backoff)
+
+
+# Native cases: parseErrorResponse's messages, which the CLI shows for Codex.
+RESETS_AT = int(time.time()) + 90 * 60 + 30
+case('native: usage limit reached reports the friendly ChatGPT message', [json_failure(429, {'code': 'usage_limit_reached', 'plan_type': 'PLUS', 'resets_at': RESETS_AT, 'message': 'The usage limit has been reached'})],
+     check=lambda r: expect(r['message'].get('errorMessage') == 'You have hit your ChatGPT usage limit (plus plan). Try again in ~90 min.', r['message']))
+case('native: a non-retryable status reports the error message', [json_failure(400, {'type': 'invalid_request_error', 'message': 'Unsupported parameter'})], dict(maxRetries=2),
+     check=lambda r: (expect(r['message'].get('errorMessage') == 'Unsupported parameter', r['message']), expect(len(r['requests']) == 3, r['requests'])))
+case('native: a plain-text error body is the message', [dict(status=502, headers={'content-type': 'text/plain'}, chunks=[[0, 'bad gateway']])],
+     check=lambda r: expect(r['message'].get('errorMessage') == 'bad gateway', r['message']))
+
+
 # Loopback server
 # ---------------
 class Server(http.server.ThreadingHTTPServer):
@@ -190,7 +219,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         raw = self.rfile.read(length)
         body = json.loads(raw.decode()) if raw else None
         seen = Handler.requests.setdefault(case_id, [])
-        seen.append({'url': self.path, 'headers': {k.lower(): v for k, v in self.headers.items()}, 'body': body})
+        seen.append({'url': self.path, 'headers': {k.lower(): v for k, v in self.headers.items()}, 'body': body, 'at': time.time()})
         script = Handler.scripts[case_id]
         current = script[min(len(seen) - 1, len(script) - 1)]
         if current.get('headerDelay'):

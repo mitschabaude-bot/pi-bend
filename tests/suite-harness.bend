@@ -34,6 +34,9 @@ import ../packages/runtime/src/date.bend as Date
 import ../packages/runtime/src/f64.bend as F
 import ./agent-session.bend as H
 import ./regressions.bend as Reg
+import ../packages/coding-agent/src/core/skills.bend as Skills
+import ../packages/coding-agent/src/core/prompt-templates.bend as Templates
+import ../packages/runtime/src/filesystem.bend as FS
 
 # The port of upstream test/suite/harness.ts (createHarness): an AgentSession
 # over tests/regressions.bend's faux provider, an in-memory session, the
@@ -54,6 +57,7 @@ type ToolKind is Data:
   Records{}
   Gated{started: Chan(Unit), release: Chan(Unit)}
   NoContent{}
+  Runs{label: String, delay: U32}
 
 type ToolSpec is Data:
   ToolSpec{name: String, kind: ToolKind}
@@ -104,6 +108,12 @@ def executeTool(env: ToolEnv, input: Tools.Input()) -> IO(Tools.Output()):
         sent : Bool <- Chan.send(Unit, started, Unit{})
         released : Maybe<&1, Unit> <- Chan.recv(Unit, release)
         return textResult("released", Json.object(Nil{}))
+    case ToolEnv{_, Runs{label, delay}} T.ToolExecutionInput{_, +params, _, _}:
+      +run = label ++ ":" ++ valueArgument(params)
+      do IO<Tools.Output()>:
+        IO.sleep(delay)
+        IO.print("{\"type\":\"tool_run\",\"run\":" ++ Decode.quote(run) ++ "}")
+        return textResult(run, Json.object(Json.field("value", Json.text(valueArgument(params)), Nil{})))
     case ToolEnv{_, Records{}} T.ToolExecutionInput{_, +params, _, _}:
       +value = valueArgument(params)
       do IO<Tools.Output()>:
@@ -123,6 +133,7 @@ def schemaOf(kind: ToolKind) -> V.Value:
     case Echo{_}: textSchema()
     case Throws{_}: textSchema()
     case Records{}: valueSchema()
+    case Runs{_, _}: valueSchema()
     case Gated{_, _}: emptySchema()
     case NoContent{}: emptySchema()
     case Notify{}: emptySchema()
@@ -176,21 +187,29 @@ type Harness is Data:
 def promptSections(+source: Runtime.LoadoutSource, tools: List<&2, Tools.Tool()>) -> Rec.Record<String>:
   Result.default(&2, &2, String, Rec.Record<String>, Runtime.sectionsForTools(source, Session.toolNamesOf(tools), Nil{}, Nil{}), Rec.new(String))
 
-def harnessLoadout(+source: Runtime.LoadoutSource, +tools: List<&2, Tools.Tool()>, runner: Maybe<&2, Runner.ExtensionRunner>) -> Runtime.Loadout:
-  Runtime.Loadout{promptSections(source, tools), tools, Nil{}, Nil{}, runner, Nil{}, Some{source}, tools}
+# upstream createHarness({ resourceLoader }): the skills and prompt
+# templates its resource loader provides.
+type Resources is Data:
+  Resources{skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>}
+
+def noResources() -> Resources: Resources{Nil{}, Nil{}}
+
+def harnessLoadout(+source: Runtime.LoadoutSource, +tools: List<&2, Tools.Tool()>, runner: Maybe<&2, Runner.ExtensionRunner>, resources: Resources) -> Runtime.Loadout:
+  match resources:
+    case Resources{skills, templates}: Runtime.Loadout{promptSections(source, tools), tools, skills, templates, runner, Nil{}, Some{source}, tools}
 
 def loadoutSource(+dir: String, +agentDir: String, +settings: Settings.SettingsManager) -> Runtime.LoadoutSource:
   Runtime.LoadoutSource{Paths.Environment{dir, agentDir, Runtime.urlContext()}, Reg.toolOptions(dir, agentDir, Runtime.defaultToolSelection(), settings), "/pi"}
 
 # upstream createTestExtensionsResult: the inline extensions load into a
 # runtime whose runner shares the session's model runtime.
-def extensionLoadout(runtime: Maybe<&2, Ext.ExtensionRuntime()>, +source: Runtime.LoadoutSource, +cwd: String, +tools: List<&2, Tools.Tool()>, models: Models.ModelRuntime) -> IO(Runtime.Loadout):
+def extensionLoadout(runtime: Maybe<&2, Ext.ExtensionRuntime()>, +source: Runtime.LoadoutSource, +cwd: String, +tools: List<&2, Tools.Tool()>, resources: Resources, models: Models.ModelRuntime) -> IO(Runtime.Loadout):
   match runtime:
-    case None{}: IO.pure(Runtime.Loadout, harnessLoadout(source, tools, None{}))
+    case None{}: IO.pure(Runtime.Loadout, harnessLoadout(source, tools, None{}, resources))
     case Some{loaded}:
       do IO<Runtime.Loadout>:
         runner : Runner.ExtensionRunner <- Runner.create(loaded, cwd, models)
-        return harnessLoadout(source, tools, Some{runner})
+        return harnessLoadout(source, tools, Some{runner}, resources)
 
 def loadErrorLines(errors: List<&2, Ext.LoadError>) -> IO(Unit):
   match errors:
@@ -278,7 +297,7 @@ def splitOwners(split: BuiltinSet) -> Maybe<&2, BuiltinsHandle>:
   match split:
     case BuiltinSet{handle, _}: handle
 
-def createHarnessFull(+dir: String, +agentDir: String, +tooling: Tooling, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>, seed: List<&2, Session.Message()>, others: List<&2, Ai.Model<Ai.JsonValue>>) -> IO(Harness):
+def createHarnessResources(+dir: String, +agentDir: String, +tooling: Tooling, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>, seed: List<&2, Session.Message()>, others: List<&2, Ai.Model<Ai.JsonValue>>, resources: Resources) -> IO(Harness):
   do IO<Harness>:
     +runtime : Maybe<&2, Ext.ExtensionRuntime()> <- loadedRuntime(extensions)
     +built : Built <- buildTools(ref, specsOf(tooling))
@@ -290,9 +309,12 @@ def createHarnessFull(+dir: String, +agentDir: String, +tooling: Tooling, setup:
     loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(dir, agentDir, Settings.options())
     +settings : Settings.SettingsManager = H.settingsOf(loaded)
     +source : Runtime.LoadoutSource = loadoutSource(dir, agentDir, settings)
-    +value : Reg.Fixture <- Reg.fixtureModels(stored, dir, settings, setup, others, models => extensionLoadout(runtime, source, dir, List.append(&2, Tools.Tool(), splitTools(split), builtTools(built)), models))
+    +value : Reg.Fixture <- Reg.fixtureModels(stored, dir, settings, setup, others, models => extensionLoadout(runtime, source, dir, List.append(&2, Tools.Tool(), splitTools(split), builtTools(built)), resources, models))
     R.write(Maybe<&2, Session.AgentSession>, ref, Some{Reg.sessionOf(value)})
     return Harness{value, ref, builtExecutes(built), splitOwners(split)}
+
+def createHarnessFull(+dir: String, +agentDir: String, +tooling: Tooling, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>, seed: List<&2, Session.Message()>, others: List<&2, Ai.Model<Ai.JsonValue>>) -> IO(Harness):
+  createHarnessResources(dir, agentDir, tooling, setup, ref, extensions, seed, others, noResources())
 
 def createHarnessWith(+dir: String, agentDir: String, tooling: Tooling, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>) -> IO(Harness):
   createHarnessFull(dir, agentDir, tooling, setup, ref, extensions, Nil{}, Nil{})
@@ -711,7 +733,7 @@ def followUpOnce(env: FollowUpEnv, call: Ext.HandlerCall<Ext.AgentEndEvent>) -> 
     case FollowUpEnv{api, queued}:
       do IO<Handled(Unit)>:
         already : Bool <- R.modify(Bool, Bool, queued, previous => (True{}, previous))
-        Bool.pick(Unit -> IO(Unit), already, _ => IO.pure(Unit, Unit{}), _ => IO.bind(Result<&2, &2, String, Unit>, Unit, Loader.sendUserMessage(api, Ai.UserText{"status follow-up"}, Some{Ext.UserFollowUp{}}), _ => IO.pure(Unit, Unit{})))(Unit{})
+        Bool.pick(Unit -> IO(Unit), already, _ => IO.pure(Unit, Unit{}), _ => IO.bind(Result<&2, &2, String, Unit>, Unit, Loader.sendUserMessage(api, Ai.UserText{"status follow-up"}, Ext.SendUserMessageOptions{Some{Ext.UserFollowUp{}}, None{}}), _ => IO.pure(Unit, Unit{})))(Unit{})
         nothing(Unit)
 
 def followUpFactoryWith(+api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
@@ -1107,7 +1129,7 @@ def sendFollowUp(found: Maybe<&2, Ext.ExtensionAPI>) -> IO(Unit):
     case None{}: IO.pure(Unit, Unit{})
     case Some{api}:
       do IO<Unit>:
-        result : Result<&2, &2, String, Unit> <- Loader.sendUserMessage(api, Ai.UserText{"/testcmd queued"}, Some{Ext.UserFollowUp{}})
+        result : Result<&2, &2, String, Unit> <- Loader.sendUserMessage(api, Ai.UserText{"/testcmd queued"}, Ext.SendUserMessageOptions{Some{Ext.UserFollowUp{}}, None{}})
         H.reportOutcome("sent", result)
 
 def queuedSlashFollowUp(+dir: String, agentDir: String) -> IO(Unit):
@@ -1163,7 +1185,7 @@ def sendAll(+api: Ext.ExtensionAPI, sends: List<&2, Send>) -> IO(Unit):
     case Nil{}: IO.pure(Unit, Unit{})
     case SendUser{text, delivery} <> rest:
       do IO<Unit>:
-        sent : Result<&2, &2, String, Unit> <- Loader.sendUserMessage(api, Ai.UserText{text}, Some{delivery})
+        sent : Result<&2, &2, String, Unit> <- Loader.sendUserMessage(api, Ai.UserText{text}, Ext.SendUserMessageOptions{Some{delivery}, None{}})
         sendAll(api, rest)
     case SendCustom{customType, text, triggerTurn} <> rest:
       do IO<Unit>:
@@ -1685,6 +1707,249 @@ def forkMessagesScenario(+dir: String, agentDir: String) -> IO(Unit):
     print("fork_messages", Json.field("messages", V.ArrayValue{forkShapes(found)}, Nil{}))
     cleanup(harness)
 
+# suite/agent-session-prompt.test.ts
+# ----------------------------------
+def runCall(+id: String, +name: String, +value: String) -> Ai.ToolCall<V.Value>:
+  Ai.ToolCall{id, name, Json.object(Json.field("value", Json.text(value), Nil{})), None{}, None{}}
+
+def tinyPng() -> String: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+
+def syntheticSource(+path: String, +scope: Skills.SourceScope, baseDir: Maybe<&2, String>) -> Skills.SourceInfo:
+  Skills.SourceInfo{path, "local", scope, Skills.TopLevel{}, baseDir}
+
+def reviewTemplate() -> Templates.PromptTemplate:
+  Templates.PromptTemplate{"review", "Review template", None{}, "Review this code: $1", syntheticSource("/virtual/review.md", Skills.Temporary{}, None{}), "/virtual/review.md"}
+
+def testSkill(+dir: String) -> Skills.Skill:
+  +path = dir ++ "/test-skill.md"
+  Skills.Skill{"test", "Test skill", path, dir, syntheticSource(path, Skills.Project{}, Some{dir}), False{}}
+
+def resourceHarness(+dir: String, agentDir: String, setupValue: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>, resources: Resources) -> IO(Harness):
+  createHarnessResources(dir, agentDir, Builtins{}, setupValue, ref, extensions, Nil{}, Nil{}, resources)
+
+def reportFauxRemaining(harness: Harness) -> IO(Unit): Reg.reportRemaining(Reg.repliesOf(harnessFixture(harness)))
+
+# "handles a tool call turn and waits for the follow-up LLM response"
+def promptToolTurn(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +harness : Harness <- createHarness(dir, agentDir, Scripted{[ToolSpec{"echo", Echo{"echo:"}}]}, setup([echoCall("call_echo", "hello"), Reg.Text{"done"}]))
+    prompted(sessionOf(harness), "start")
+    H.reportMessages(sessionOf(harness))
+    cleanup(harness)
+
+# "executes multiple tool calls from one response and continues with a
+# single follow-up response": the slow tool waits 25 ms.
+def promptMultipleTools(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +harness : Harness <- createHarness(dir, agentDir, Scripted{[ToolSpec{"slow", Runs{"slow", 25}}, ToolSpec{"fast", Runs{"fast", 0}}]}, setup([Reg.Calls{[runCall("call_slow", "slow", "a"), runCall("call_fast", "fast", "b")]}, Reg.Text{"tool results: 2"}]))
+    prompted(sessionOf(harness), "run tools")
+    H.reportMessages(sessionOf(harness))
+    cleanup(harness)
+
+# "preserves image attachments in the provider context"
+def promptImage(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +harness : Harness <- createHarness(dir, agentDir, Builtins{}, setup([Reg.Text{"ok"}]))
+    result : Result<&2, &2, String, Unit> <- Session.promptWith(sessionOf(harness), "describe", Session.PromptOptions{True{}, [Ai.ImageContent{tinyPng(), "image/png"}], None{}, Ext.InteractiveSource{}, None{}})
+    H.reportOutcome("prompted", result)
+    cleanup(harness)
+
+# "expands skill commands before sending the prompt"
+def promptSkill(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    written : Result<&2, &2, FS.Error, Unit> <- FS.writeFile(dir ++ "/test-skill.md", "# Test Skill\n\nUse the skill body.")
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"ok"}]), ref, Nil{}, Resources{[testSkill(dir)], Nil{}})
+    prompted(sessionOf(harness), "/skill:test explain this")
+    cleanup(harness)
+
+# "expands prompt templates before sending the prompt" and "sendUserMessage
+# can opt into prompt template expansion"
+def promptTemplate(+dir: String, agentDir: String, viaSendUserMessage: Bool) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"ok"}]), ref, Nil{}, Resources{Nil{}, [reviewTemplate()]})
+    result : Result<&2, &2, String, Unit> <- Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), viaSendUserMessage, _ => Session.sendUserMessage(sessionOf(harness), Ai.UserText{"/review src/index.ts"}, None{}, True{}), _ => Session.prompt(sessionOf(harness), "/review src/index.ts", Nil{}, None{}))(Unit{})
+    H.reportOutcome("prompted", result)
+    cleanup(harness)
+
+# "dispatches extension commands without consuming a provider response"
+def promptCommand(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +apiRef : R.Ref<Maybe<&2, Ext.ExtensionAPI>> <- R.new(Maybe<&2, Ext.ExtensionAPI>, None{})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"should stay queued"}]), ref, [inline("testcmd", api => testCommandFactory(apiRef, api))], noResources())
+    prompted(sessionOf(harness), "/testcmd hello world")
+    H.reportMessages(sessionOf(harness))
+    reportFauxRemaining(harness)
+    cleanup(harness)
+
+# "extension sendUserMessage can opt into extension command dispatch": the
+# command runs on the delivery's own task; the scenario waits for idle.
+def sendCommand(found: Maybe<&2, Ext.ExtensionAPI>) -> IO(Unit):
+  match found:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{api}:
+      do IO<Unit>:
+        result : Result<&2, &2, String, Unit> <- Loader.sendUserMessage(api, Ai.UserText{"/testcmd hello world"}, Ext.SendUserMessageOptions{None{}, Some{True{}}})
+        H.reportOutcome("sent", result)
+
+def untilCommandRan(fuel: Nat, +ran: R.Ref<Bool>) -> IO(Unit):
+  match fuel:
+    case 0n: IO.pure(Unit, Unit{})
+    case 1n+rest:
+      do IO<Unit>:
+        done : Bool <- R.read(Bool, ran)
+        Bool.pick(Unit -> IO(Unit), done, _ => IO.pure(Unit, Unit{}), _ => IO.bind(Unit, Unit, IO.sleep(5), _ => untilCommandRan(rest, ran)))(Unit{})
+
+def markCommand(ran: R.Ref<Bool>, call: Ext.CommandCall) -> IO(Result<&2, &2, String, Unit>):
+  match call:
+    case Ext.CommandCall{args, _}:
+      do IO<Result<&2, &2, String, Unit>>:
+        print("command_run", Json.field("args", Json.text(args), Nil{}))
+        R.write(Bool, ran, True{})
+        return Done{Unit{}}
+
+def markingCommandFactory(apiRef: R.Ref<Maybe<&2, Ext.ExtensionAPI>>, ran: R.Ref<Bool>, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    R.write(Maybe<&2, Ext.ExtensionAPI>, apiRef, Some{api})
+    handler : Ext.CommandHandler() <- C.create(~R.Ref<Bool>, ~Ext.CommandCall, ~Result<&2, &2, String, Unit>, ~markCommand, ran)
+    Loader.registerCommand(api, "testcmd", Ext.CommandOptions{Some{"Test command"}, None{}, handler})
+
+def extensionSendCommand(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +apiRef : R.Ref<Maybe<&2, Ext.ExtensionAPI>> <- R.new(Maybe<&2, Ext.ExtensionAPI>, None{})
+    +ran : R.Ref<Bool> <- R.new(Bool, False{})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup(Nil{}), ref, [inline("testcmd", api => markingCommandFactory(apiRef, ran, api))], noResources())
+    found : Maybe<&2, Ext.ExtensionAPI> <- R.read(Maybe<&2, Ext.ExtensionAPI>, apiRef)
+    sendCommand(found)
+    untilCommandRan(1000n, ran)
+    H.reportMessages(sessionOf(harness))
+    reportFauxRemaining(harness)
+    cleanup(harness)
+
+# "sendUserMessage while idle triggers a turn"
+def sendUserIdle(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +harness : Harness <- createHarness(dir, agentDir, Builtins{}, setup([Reg.Text{"response"}]))
+    result : Result<&2, &2, String, Unit> <- Session.sendUserMessage(sessionOf(harness), Ai.UserText{"from extension"}, None{}, False{})
+    H.reportOutcome("sent", result)
+    H.reportMessages(sessionOf(harness))
+    cleanup(harness)
+
+# "throws when prompted during manual compaction": session_before_compact
+# waits on a gate, then supplies the compaction.
+def heldCompaction(gate: H.Gate, call: Ext.HandlerCall<Ext.SessionBeforeCompactEvent>) -> IO(Handled(Ext.SessionBeforeCompactResult)):
+  match gate call:
+    case H.Gate{started, release} Ext.HandlerCall{Ext.SessionBeforeCompactEvent{+preparation, _, _, _, _, _}, _}:
+      do IO<Handled(Ext.SessionBeforeCompactResult)>:
+        sent : Bool <- Chan.send(Unit, started, Unit{})
+        released : Maybe<&1, Unit> <- Chan.recv(Unit, release)
+        return Done{Some{Ext.SessionBeforeCompactResult{None{}, Some{suppliedCompaction(preparation, "manual compacted")}}}}
+
+def heldCompactionFactory(gate: H.Gate, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    handler : Ext.ExtensionHandler(Ext.SessionBeforeCompactEvent, Ext.SessionBeforeCompactResult) <- C.create(~H.Gate, ~Ext.HandlerCall<Ext.SessionBeforeCompactEvent>, ~Handled(Ext.SessionBeforeCompactResult), ~heldCompaction, gate)
+    subscribe(api, Ext.OnSessionBeforeCompact{handler})
+
+def promptDuringCompaction(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +release : Chan(Unit) <- Chan.new(Unit, 1)
+    +done : Chan(Reg.Compacted) <- Chan.new(Reg.Compacted, 1)
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"one"}, Reg.Text{"two"}]), ref, [inline("held", api => heldCompactionFactory(H.Gate{started, release}, api))], noResources())
+    prompted(sessionOf(harness), "first")
+    prompted(sessionOf(harness), "second")
+    IO.spawn(Unit, Reg.compactInBackground(sessionOf(harness), done))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    third : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(harness), "third", Nil{}, None{})
+    H.reportOutcome("third", third)
+    sent : Bool <- Chan.send(Unit, release, Unit{})
+    finished : Maybe<&1, Reg.Compacted> <- Chan.recv(Reg.Compacted, done)
+    Reg.reportCompacted(finished)
+    cleanup(harness)
+
+# Input handlers: `record` prints each input event; `transform` handles
+# "ping" and prefixes everything else with "transformed:".
+def deliveryName(behavior: Maybe<&2, Ext.UserDelivery>) -> V.Value:
+  match behavior:
+    case None{}: V.Null{}
+    case Some{Ext.UserSteer{}}: Json.text("steer")
+    case Some{Ext.UserFollowUp{}}: Json.text("followUp")
+
+def recordInput(env: Unit, call: Ext.HandlerCall<Ext.InputEvent>) -> IO(Handled(Ext.InputEventResult)):
+  match call:
+    case Ext.HandlerCall{Ext.InputEvent{text, _, _, behavior}, _}:
+      do IO<Handled(Ext.InputEventResult)>:
+        print("input", Json.field("text", Json.text(text), Json.field("streamingBehavior", deliveryName(behavior), Nil{})))
+        return Done{None{}}
+
+def transformInput(env: Unit, call: Ext.HandlerCall<Ext.InputEvent>) -> IO(Handled(Ext.InputEventResult)):
+  match call:
+    case Ext.HandlerCall{Ext.InputEvent{+text, _, _, _}, _}:
+      IO.pure(Handled(Ext.InputEventResult), Done{Some{Bool.pick(Ext.InputEventResult, String.eq(text, "ping"), Ext.InputHandled{}, Ext.InputTransform{"transformed:" ++ text, None{}})}})
+
+def inputFactory(transform: Bool, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    handler : Ext.ExtensionHandler(Ext.InputEvent, Ext.InputEventResult) <- Bool.pick(Unit -> IO(Ext.ExtensionHandler(Ext.InputEvent, Ext.InputEventResult)), transform, _ => C.create(~Unit, ~Ext.HandlerCall<Ext.InputEvent>, ~Handled(Ext.InputEventResult), ~transformInput, Unit{}), _ => C.create(~Unit, ~Ext.HandlerCall<Ext.InputEvent>, ~Handled(Ext.InputEventResult), ~recordInput, Unit{}))(Unit{})
+    subscribe(api, Ext.OnInput{handler})
+
+# "does not report streamingBehavior to input handlers while idle"
+def inputIdle(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"ok"}]), ref, [inline("input", api => inputFactory(False{}, api))], noResources())
+    result : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(harness), "idle", Nil{}, Some{Session.FollowUp{}})
+    H.reportOutcome("prompted", result)
+    cleanup(harness)
+
+# "reports streamingBehavior to input handlers while streaming"
+def inputStreaming(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +toolStarted : Chan(Unit) <- Chan.new(Unit, 1)
+    +release : Chan(Unit) <- Chan.new(Unit, 1)
+    +done : Chan(Unit) <- Chan.new(Unit, 1)
+    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"wait", Gated{toolStarted, release}}]}, setup([Reg.Call{"call_wait", "wait", Json.object(Nil{}), "{}"}, Reg.Text{"done"}]), ref, [inline("input", api => inputFactory(False{}, api))])
+    IO.spawn(Unit, promptInBackground(sessionOf(harness), "start", done))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, toolStarted)
+    queued : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(harness), "queued", Nil{}, Some{Session.FollowUp{}})
+    H.reportOutcome("queued", queued)
+    sent : Bool <- Chan.send(Unit, release, Unit{})
+    finished : Maybe<&1, Unit> <- Chan.recv(Unit, done)
+    cleanup(harness)
+
+# agent-session-model-extension: "allows extension input handlers to
+# transform or handle input"
+def inputTransform(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"done"}]), ref, [inline("input", api => inputFactory(True{}, api))], noResources())
+    prompted(sessionOf(harness), "hello")
+    prompted(sessionOf(harness), "ping")
+    H.reportMessages(sessionOf(harness))
+    reportFauxRemaining(harness)
+    cleanup(harness)
+
+def promptScenario(+dir: String, agentDir: String, +name: String) -> IO(Unit):
+  match name:
+    case "tool_turn": promptToolTurn(dir, agentDir)
+    case "multiple_tools": promptMultipleTools(dir, agentDir)
+    case "image": promptImage(dir, agentDir)
+    case "skill": promptSkill(dir, agentDir)
+    case "template": promptTemplate(dir, agentDir, False{})
+    case "send_user_template": promptTemplate(dir, agentDir, True{})
+    case "command": promptCommand(dir, agentDir)
+    case "extension_send_command": extensionSendCommand(dir, agentDir)
+    case "send_user_idle": sendUserIdle(dir, agentDir)
+    case "during_compaction": promptDuringCompaction(dir, agentDir)
+    case "input_idle": inputIdle(dir, agentDir)
+    case "input_streaming": inputStreaming(dir, agentDir)
+    case "input_transform": inputTransform(dir, agentDir)
+    case _: IO.die(Unit, 1, "unknown prompt scenario")
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case "custom_order" <> dir <> agentDir <> Nil{}: customOrder(dir, agentDir)
@@ -1712,6 +1977,7 @@ def run(args: List<String>) -> IO(Unit):
     case "retained_usage" <> dir <> agentDir <> Nil{}: retainedUsage(dir, agentDir)
     case "context" <> dir <> agentDir <> name <> Nil{}: contextScenario(dir, agentDir, name)
     case "fork_messages" <> dir <> agentDir <> Nil{}: forkMessagesScenario(dir, agentDir)
+    case "prompt" <> dir <> agentDir <> name <> Nil{}: promptScenario(dir, agentDir, name)
     case "compaction_override" <> dir <> agentDir <> path <> Nil{}: compactionOverride(dir, agentDir, path)
     case "compaction_budget" <> dir <> agentDir <> path <> Nil{}: compactionBudget(dir, agentDir, path)
     case "compaction_model_switch" <> dir <> agentDir <> Nil{}: compactionModelSwitch(dir, agentDir)

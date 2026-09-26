@@ -19,6 +19,7 @@ import ../../../agent/src/providers.bend as Providers
 import ../../../agent/src/stream-fn.bend as StreamFn
 import ../../../agent/src/types.bend as T
 import ../../../runtime/src/fetch.bend as Fetch
+import ../../../runtime/src/ref.bend as Ref
 import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/pi-user-agent.bend as UserAgent
 import ../../../runtime/src/http-exchange.bend as HTTP
@@ -199,7 +200,7 @@ type KeySource is Data:
   KeySource{models: Models.ModelRuntime, apiKey: Maybe<&2, String>}
 
 type ProviderStreams is Data:
-  ProviderStreams{responses: Responses.Config, fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource}
+  ProviderStreams{responses: Responses.Config, fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource, googleToolCalls: Ref.Ref<Nat>}
 
 def selectedOptions(options: Maybe<&2, LoopConfig()>) -> Maybe<&2, Responses.SimpleStreamOptions(Unit, Unit, Error())>:
   Maybe.map(&2, LoopConfig(), Responses.SimpleStreamOptions(Unit, Unit, Error()), project, options)
@@ -215,10 +216,10 @@ def requestConfig(fetch: Fetch.Fetch(Unit), preset: RequestDefaults, config: Loo
   match config:
     case T.AgentLoopConfig{options, model, convert, transform, key, a, b, c, d, e, f, g, h}: T.AgentLoopConfig{withRequest(fetch, preset, options), model, convert, transform, key, a, b, c, d, e, f, g, h}
 
-def selectedProvider(responses: Responses.Config, fetch: Fetch.Fetch(Unit), model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, +options: Maybe<&2, LoopConfig()>, api: Ai.ModelApi) -> IO(Providers.Output(Unit, Error())):
+def selectedProvider(responses: Responses.Config, fetch: Fetch.Fetch(Unit), googleToolCalls: Ref.Ref<Nat>, model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, +options: Maybe<&2, LoopConfig()>, api: Ai.ModelApi) -> IO(Providers.Output(Unit, Error())):
   match api:
     case Ai.AnthropicMessagesApi{}: Anthropic.open(fetch, urlContext(), model, context, selectedOptions(options))
-    case Ai.GoogleGenerativeAiApi{}: Google.open(fetch, urlContext(), model, context, selectedOptions(options))
+    case Ai.GoogleGenerativeAiApi{}: Google.open(fetch, urlContext(), googleToolCalls, model, context, selectedOptions(options))
     case Ai.OpenAICompletionsApi{}: Completions.open(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.PiMessagesApi{}: StreamProviders.piMessages(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.MistralConversationsApi{}: StreamProviders.mistral(fetch, urlContext(), model, context, selectedOptions(options))
@@ -264,27 +265,28 @@ def streamedConfig(streams: AiModels.ProviderStreams, model: Models.Model(), con
 
 # The provider's stream then dispatches the model for the request's merged
 # provider env (upstream provider.stream after prepareRequest).
-def preparedRequest(responses: Responses.Config, fetch: Fetch.Fetch(Unit), +model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, +options: Maybe<&2, LoopConfig()>, +streams: AiModels.ProviderStreams, resolution: Resolve.Resolution()) -> IO(Providers.Output(Unit, Error())):
+def preparedRequest(responses: Responses.Config, fetch: Fetch.Fetch(Unit), +googleToolCalls: Ref.Ref<Nat>, +model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, +options: Maybe<&2, LoopConfig()>, +streams: AiModels.ProviderStreams, resolution: Resolve.Resolution()) -> IO(Providers.Output(Unit, Error())):
   match resolution:
     case Done{Some{Auth.AuthResult{Auth.ModelAuth{key, headers, +url}, +env, source}}}:
       +model = AiModels.streamModel(Ai.JsonValue, streams, withBaseUrl(model, url), mergedEnv(env, requestEnv(options)))
-      selectedProvider(responses, fetch, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => streamedConfig(streams, model, preparedConfig(Auth.AuthResult{Auth.ModelAuth{key, headers, url}, env, source}, value)), options), modelApi(model))
+      selectedProvider(responses, fetch, googleToolCalls, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => streamedConfig(streams, model, preparedConfig(Auth.AuthResult{Auth.ModelAuth{key, headers, url}, env, source}, value)), options), modelApi(model))
     case _:
       +model = AiModels.streamModel(Ai.JsonValue, streams, model, requestEnv(options))
-      selectedProvider(responses, fetch, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => streamedConfig(streams, model, value), options), modelApi(model))
+      selectedProvider(responses, fetch, googleToolCalls, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => streamedConfig(streams, model, value), options), modelApi(model))
 
 def openProvider(config: ProviderStreams, input: Providers.Input(LoopConfig(), Unit, Details())) -> IO(Providers.Output(Unit, Error())):
   match config input:
-    case ProviderStreams{responses, +fetch, defaults, KeySource{+models, apiKey}} T.StreamInput{+model, context, options}:
+    case ProviderStreams{responses, +fetch, defaults, KeySource{+models, apiKey}, calls} T.StreamInput{+model, context, options}:
       do IO<Providers.Output(Unit, Error())>:
         resolution : Resolve.Resolution() <- Models.getModelAuth(models, model, Resolve.AuthResolutionOverrides{apiKey, None{}, None{}, None{}})
         streams : AiModels.ProviderStreams <- Models.getProviderStreams(models, Models.modelProvider(model))
-        preparedRequest(responses, fetch, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => requestConfig(fetch, defaults, value), options), streams, resolution)
+        preparedRequest(responses, fetch, calls, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => requestConfig(fetch, defaults, value), options), streams, resolution)
 
 def createStream(authorizer: C.Callback<URL.Host, TLSClient.Authorization>, fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource) -> IO(Stream()):
   do IO<Stream()>:
     agent : String <- IO.try(String, UserAgent.get())
-    C.create(~ProviderStreams, ~Providers.Input(LoopConfig(), Unit, Details()), ~Providers.Output(Unit, Error()), ~openProvider, ProviderStreams{providerConfig(authorizer, agent), fetch, defaults, keys})
+    calls : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
+    C.create(~ProviderStreams, ~Providers.Input(LoopConfig(), Unit, Details()), ~Providers.Output(Unit, Error()), ~openProvider, ProviderStreams{providerConfig(authorizer, agent), fetch, defaults, keys, calls})
 
 # Request auth
 # ------------

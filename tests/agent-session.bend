@@ -504,6 +504,28 @@ def reportRemaining(responses: R.Ref<List<&2, String>>) -> IO(Unit):
     remaining : List<&2, String> <- R.read(List<&2, String>, responses)
     IO.print("{\"type\":\"remaining\",\"count\":" ++ Nat.show(List.length(&2, String, remaining)) ++ "}")
 
+# suite/agent-session-prompt.test.ts: "throws when prompting without a
+# model" (no model selected) and "throws when prompting without configured
+# auth" (the other provider's key is never set). Nothing reaches the
+# provider.
+def preflightModel(kind: String) -> Maybe<&2, Ai.Model<Ai.JsonValue>>:
+  Bool.pick(Maybe<&2, Ai.Model<Ai.JsonValue>>, String.eq(kind, "no_model"), None{}, Some{otherModel()})
+
+def preflightFixture(+stored: Session.Session(), +dir: String, agentDir: String, kind: String) -> IO(Fixture):
+  fixtureWithModel(stored, dir, agentDir, "unused" <> Nil{}, Nil{}, Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}, Nil{}}, preflightModel(kind), fauxSources())
+
+def preflightScenario(+dir: String, agentDir: String, +kind: String) -> IO(Unit):
+  do IO<Unit>:
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
+    stored : Session.Session() <- requireSession(created)
+    +value : Fixture <- preflightFixture(stored, dir, agentDir, kind)
+    result : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "hi", Nil{}, None{})
+    reportOutcome("prompt", result)
+    reportRemaining(responsesOf(value))
+    reportSession(sessionOf(value))
+    teardown(value)
+
 # "abort_second_error": a listener calls abort() without awaiting it when
 # the second failed assistant message ends (upstream "finalizes retry state
 # when abort is requested after a retry attempt fails", #9340).
@@ -1020,6 +1042,7 @@ def run(args: List<String>) -> IO(Unit):
     case "queue" <> dir <> agentDir <> Nil{}: queueScenario(dir, agentDir)
     case "mutate" <> dir <> agentDir <> Nil{}: mutateScenario(dir, agentDir)
     case "busy" <> dir <> agentDir <> Nil{}: busyScenario(dir, agentDir)
+    case "preflight" <> dir <> agentDir <> kind <> Nil{}: preflightScenario(dir, agentDir, kind)
     case "images" <> dir <> agentDir <> image <> Nil{}: imagesScenario(dir, agentDir, image)
     case "tool_images" <> dir <> agentDir <> mode <> image <> Nil{}: toolImagesScenario(dir, agentDir, mode, image)
     case "retry" <> dir <> agentDir <> responses <> "abort_second_error" <> Nil{}: abortedRetryScenario(dir, agentDir, responses)

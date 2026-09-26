@@ -38,7 +38,7 @@ import ../core/prompt-templates.bend as Templates
 # pi v0.87.1's headless protocol is LF-delimited JSON objects. The caller owns
 # byte transport; this endpoint owns framing, dispatch and event subscriptions.
 def Sink() -> Data: Callback.Callback<String,Unit>
-type Submission is Data: Submission{text: String,images: List<&2,Ai.ImageContent>,behavior: Maybe<&2,Session.StreamingBehavior>}
+type Submission is Data: Submission{id: Maybe<&2,String>,text: String,images: List<&2,Ai.ImageContent>,behavior: Maybe<&2,Session.StreamingBehavior>}
 type BashRequest is Data: BashRequest{id: Maybe<&2,String>,command: String,exclude: Maybe<&2,Bool>}
 # Upstream handles the next command only when the prompt reaches its first
 # awaited I/O: its user message is out and the loop has polled the steering
@@ -192,13 +192,33 @@ def startedBy(started: Started,value: Session.AgentSessionEvent) -> IO(Unit):
   match value:
     case Session.AgentEvent{AgentTypes.MessageEnd{AgentTypes.LlmMessage{Ai.User{_}}}}: signalOnce(started)
     case _: IO.pure(Unit,Unit{})
+# upstream handleCommand "prompt": the response is written once the prompt
+# passes its preflight; a prompt that fails before that is answered with its
+# error instead, and later failures are not answered.
+type PreflightEnv is Data: PreflightEnv{sink: Sink(),id: Maybe<&2,String>,accepted: Ref.Ref<Bool>}
+def preflightAnswer(env: PreflightEnv,success: Bool) -> IO(Unit):
+  match env success:
+    case PreflightEnv{sink,id,accepted} True{}:
+      do IO<Unit>:
+        Ref.write(Bool,accepted,True{})
+        output(sink,ok(id,"prompt"))
+    case _ False{}: IO.pure(Unit,Unit{})
+def unacceptedFailure(sink: Sink(),id: Maybe<&2,String>,accepted: Bool,result: Result<&2,&2,String,Unit>) -> IO(Unit):
+  match accepted result:
+    case False{} Fail{error}: output(sink,failure(id,"prompt",error))
+    case _ _: IO.pure(Unit,Unit{})
 def runJob(handle: Command,request: Submission,+started: Started) -> IO(Unit):
   match handle request:
-    case Command{+session,_,_,busy,_,_} Submission{text,images,behavior}:
+    case Command{+session,+sink,_,busy,_,_} Submission{+id,text,images,behavior}:
       do IO<Unit>:
         +watch : Session.Listener() <- Callback.create(~Started,~Session.AgentSessionEvent,~Unit,~startedBy,started)
         Session.subscribe(session,watch)
-        result : Result<&2,&2,String,Unit> <- Session.prompt(session,text,images,behavior)
+        +accepted : Ref.Ref<Bool> <- Ref.new(Bool,False{})
+        +observer : Callback.Callback<Bool,Unit> <- Callback.create(~PreflightEnv,~Bool,~Unit,~preflightAnswer,PreflightEnv{sink,id,accepted})
+        result : Result<&2,&2,String,Unit> <- Session.promptWith(session,text,Session.PromptOptions{True{},images,behavior,ExtensionTypes.RpcSource{},Some{observer}})
+        Callback.dispose(Bool,Unit,observer)
+        answered : Bool <- Ref.dispose(Bool,accepted)
+        unacceptedFailure(sink,id,answered,result)
         Session.unsubscribe(session,watch)
         Callback.dispose(Session.AgentSessionEvent,Unit,watch)
         finished(started)
@@ -608,20 +628,15 @@ def rebind(handle: Handle,+session: Session.AgentSession) -> IO(Unit):
 def acceptedPrompt(session: Session.AgentSession,sink: Sink(),busy: Ref.Ref<Bool>,jobs: Chan(Work),id: Maybe<&2,String>,text: String,images: List<&2,Ai.ImageContent>,active: Bool,behavior: Maybe<&2,Session.StreamingBehavior>) -> IO(Unit):
   match active behavior:
     case True{} None{}: output(sink,failure(id,"prompt","Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message."))
-    case True{} Some{Session.Steer{}}:
+    case True{} Some{chosen}:
       do IO<Unit>:
-        Session.steer(session,text,images)
-        output(sink,ok(id,"prompt"))
-    case True{} Some{Session.FollowUp{}}:
-      do IO<Unit>:
-        Session.followUp(session,text,images)
+        Session.queueFrom(session,chosen,text,images,ExtensionTypes.RpcSource{})
         output(sink,ok(id,"prompt"))
     case False{} _:
       do IO<Unit>:
         +started : Started <- newStarted()
         Ref.write(Bool,busy,True{})
-        output(sink,ok(id,"prompt"))
-        accepted : Bool <- Chan.send(Work,jobs,PromptWork{Submission{text,images,behavior},started})
+        accepted : Bool <- Chan.send(Work,jobs,PromptWork{Submission{id,text,images,behavior},started})
         ready : Bool <- awaitStarted(started)
         return Unit{}
 
@@ -646,7 +661,7 @@ def queueText(handle: Command,id: Maybe<&2,String>,+command: String,+text: Strin
   match handle:
     case Command{+session,sink,_,_,_,_}:
       do IO<Unit>:
-        Bool.pick(Unit -> IO(Unit),String.eq(command,"steer"),_ => Session.steer(session,text,images),_ => Session.followUp(session,text,images))(Unit{})
+        Session.queueFrom(session,Bool.pick(Session.StreamingBehavior,String.eq(command,"steer"),Session.Steer{},Session.FollowUp{}),text,images,ExtensionTypes.RpcSource{})
         output(sink,ok(id,command))
 def queued(handle: Command,id: Maybe<&2,String>,+command: String,message: Result<&2,&2,String,String>,images: Result<&2,&2,String,List<&2,Ai.ImageContent>>) -> IO(Unit):
   match message images:

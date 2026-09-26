@@ -16,7 +16,8 @@ def check(label, executable):
         cwd = Path(temporary)
         agent_dir = cwd / "agent"
         agent_dir.mkdir()
-        result = subprocess.run(executable + [str(cwd), str(agent_dir)], cwd=ROOT, capture_output=True, timeout=30)
+        # The faux provider has auth configured, as prompt() checks before running.
+        result = subprocess.run(executable + [str(cwd), str(agent_dir)], cwd=ROOT, env=dict(os.environ, PI_FAUX_API_KEY="faux-key"), capture_output=True, timeout=30)
         assert result.returncode == 0, result.stderr
         records = [json.loads(line) for line in result.stdout.splitlines()]
         responses = [r for r in records if r.get("type") == "response"]
@@ -28,7 +29,9 @@ def check(label, executable):
         prompt_index = next(i for i, r in enumerate(records) if r.get("id") == "prompt")
         bash_index = next(i for i, r in enumerate(records) if r.get("id") == "run" and r.get("type") == "response")
         starts = [i for i, r in enumerate(records) if r.get("type") == "agent_start"]
-        assert prompt_index < bash_index < starts[-1], (label, prompt_index, bash_index, starts)
+        # The endpoint's worker runs the bash command before the prompt fed after it; the prompt is answered
+        # once its preflight passes (upstream preflightResult), before its run starts.
+        assert bash_index < prompt_index < starts[-1], (label, prompt_index, bash_index, starts)
         if label == "Bun":
             assert not by_id["run"]["success"] and "Function not implemented" in by_id["run"]["error"]
         else:

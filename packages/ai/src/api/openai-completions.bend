@@ -95,9 +95,29 @@ def simpleKey(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, optio
 
 # upstream streamSimple: shared base options (context-clamped maxTokens, merged
 # sampling parameters), the tool choice and the clamped reasoning level.
-def streamSimpleOptions(~G: Data, ~D: Data, ~Signal: Data, ~Telemetry: Data, ~Fetch: Data, ~Error: Data, +model: T.Model<J()>, context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>) -> Options(Signal, Telemetry, Fetch, Error):
-  +base = Simple.buildBaseOptions(~G, ~D, ~J(), ~Signal, ~Telemetry, ~Fetch, ~Error, model, context, options, simpleKey(Signal, Telemetry, Fetch, Error, options))
-  simpleSettings(Signal, Telemetry, Fetch, Error, model, base, options)
+def simpleHeaders(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>) -> Maybe<&2, T.ProviderHeaders()>:
+  match options:
+    case None{}: None{}
+    case Some{T.SimpleStreamOptions{_, _, _, _, _, _, _, headers, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}}: headers
+
+# upstream getClientApiKey as a check: an API key, or a nonblank Authorization
+# or cf-aig-authorization header (the key is then "unused").
+def hasClientAuth(apiKey: Maybe<&2, String>, +headers: Maybe<&2, T.ProviderHeaders()>) -> Bool:
+  match apiKey:
+    case Some{SCon{_, _}}: True{}
+    case _: Headers.hasHeader(headers, "authorization") || Headers.hasHeader(headers, "cf-aig-authorization")
+
+def authorizedOptions(~G: Data, ~D: Data, ~Signal: Data, ~Telemetry: Data, ~Fetch: Data, ~Error: Data, authorized: Bool, +model: T.Model<J()>, context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>) -> Result<&2, &2, String, Options(Signal, Telemetry, Fetch, Error)>:
+  match authorized:
+    case False{}: Fail{"No API key for provider: " ++ T.modelProvider(model)}
+    case True{}:
+      +base = Simple.buildBaseOptions(~G, ~D, ~J(), ~Signal, ~Telemetry, ~Fetch, ~Error, model, context, options, simpleKey(Signal, Telemetry, Fetch, Error, options))
+      Done{simpleSettings(Signal, Telemetry, Fetch, Error, model, base, options)}
+
+# upstream streamSimple's options. Missing auth is the error upstream throws
+# (getClientApiKey) before a stream exists.
+def streamSimpleOptions(~G: Data, ~D: Data, ~Signal: Data, ~Telemetry: Data, ~Fetch: Data, ~Error: Data, +model: T.Model<J()>, context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>) -> Result<&2, &2, String, Options(Signal, Telemetry, Fetch, Error)>:
+  authorizedOptions(~G, ~D, ~Signal, ~Telemetry, ~Fetch, ~Error, hasClientAuth(simpleKey(Signal, Telemetry, Fetch, Error, options), simpleHeaders(Signal, Telemetry, Fetch, Error, options)), model, context, options)
 
 # Compatibility
 # -------------

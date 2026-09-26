@@ -164,6 +164,31 @@ type ContextWithSystemEvent is Data:
 type ContextEventResult is Data:
   ContextEventResult{messages: Maybe<&2, List<&2, AgentMessage()>>}
 
+# upstream sendUserMessage's deliverAs and an input's streamingBehavior:
+# "steer" | "followUp".
+type UserDelivery is Data:
+  UserSteer{}
+  UserFollowUp{}
+
+# upstream InputSource: where user input came from.
+type InputSource is Data:
+  InteractiveSource{}
+  RpcSource{}
+  ExtensionSource{}
+
+# upstream InputEvent: user input before skill and template expansion.
+# `streamingBehavior` is how the input is queued while streaming (None when
+# idle); input without images has an empty list.
+type InputEvent is Data:
+  InputEvent{text: String, images: List<&2, Ai.ImageContent>, source: InputSource, streamingBehavior: Maybe<&2, UserDelivery>}
+
+# upstream InputEventResult. A transform without images keeps the current
+# ones.
+type InputEventResult is Data:
+  InputContinue{}
+  InputTransform{text: String, images: Maybe<&2, List<&2, Ai.ImageContent>>}
+  InputHandled{}
+
 # Replace the finalized message; the replacement keeps the original's role.
 type MessageEndEventResult is Data:
   MessageEndEventResult{message: Maybe<&2, AgentMessage()>}
@@ -222,6 +247,7 @@ type EventHandler is Data:
   OnContext{handler: ExtensionHandler(ContextEvent, ContextEventResult)}
   OnContextWithSystem{handler: ExtensionHandler(ContextWithSystemEvent, ContextEventResult)}
   OnAgentBeforeSettle{handler: ExtensionHandler(AgentBeforeSettleEvent, BoundaryResult)}
+  OnInput{handler: ExtensionHandler(InputEvent, InputEventResult)}
 
 # Events dispatched without a result (upstream emit). Events with results
 # have their own emitters in the runner.
@@ -262,6 +288,7 @@ def handlerEventType(handler: EventHandler) -> String:
     case OnContext{_}: "context"
     case OnContextWithSystem{_}: "context_with_system"
     case OnAgentBeforeSettle{_}: "agent_before_settle"
+    case OnInput{_}: "input"
 
 def eventType(event: ExtensionEvent) -> String:
   match event:
@@ -333,13 +360,13 @@ type SendMessageOptions is Data:
 type SendMessage is Data:
   SendMessage{message: CustomMessageInput, options: SendMessageOptions}
 
-# upstream sendUserMessage's deliverAs: "steer" | "followUp".
-type UserDelivery is Data:
-  UserSteer{}
-  UserFollowUp{}
+# upstream sendUserMessage's options: expandPromptTemplates dispatches
+# extension commands and expands skill commands and prompt templates.
+type SendUserMessageOptions is Data:
+  SendUserMessageOptions{deliverAs: Maybe<&2, UserDelivery>, expandPromptTemplates: Maybe<&2, Bool>}
 
 type SendUserMessage is Data:
-  SendUserMessage{content: Ai.UserContent, deliverAs: Maybe<&2, UserDelivery>}
+  SendUserMessage{content: Ai.UserContent, options: SendUserMessageOptions}
 
 type ExtensionActions is Data:
   ExtensionActions{sendMessage: C.Callback<SendMessage, Unit>, sendUserMessage: C.Callback<SendUserMessage, Unit>}

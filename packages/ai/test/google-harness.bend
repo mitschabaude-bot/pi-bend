@@ -131,7 +131,7 @@ def produce(+model: T.Model<J()>, +context: Context(), options: Options(), mode:
     case Respond{_}:
       do IO<Unit>:
         +body : Body.Source<String> <- source(chunks)
-        Client.streamBody(~Unit, ~String, ~Unit, ~(message => message), events, body, signal, Fold.create(Unit, model, F.fromU32(1)))
+        Client.streamBody(~Unit, ~String, ~Unit, ~(message => message), events, body, signal, Fold.create(Unit, model, F.fromU32(1)), None{})
     case _: Client.stream(~Unit, ~Unit, ~String, ~Unit, ~Unit, ~(message => message), events, signal, setup, model, context, options, F.fromU32(1))
 
 # One run through the given seam; the result is the final message.
@@ -145,7 +145,8 @@ def run(+model: T.Model<J()>, +context: Context(), options: Options(), +mode: Mo
     +events : Events.AssistantMessageEventStream(V.Value, Unit) <- Events.createAssistantMessageEventStream(~V.Value, ~Unit)
     +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
     agent : String <- A.piUserAgent()
-    produce(model, context, withHook(options, optionalHook(mode, hook)), mode, events, Abort.signal(Unit, controller), Client.Setup{Network.urlContext(), agent, fetch}, chunks)
+    calls : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
+    produce(model, context, withHook(options, optionalHook(mode, hook)), mode, events, Abort.signal(Unit, controller), Client.Setup{Network.urlContext(), agent, fetch, calls}, chunks)
     +cursor : Events.Iterator<Event(), Message()> <- Events.iterator(Event(), Message(), events)
     first : Events.Iteration<Event()> <- Events.nextValue(Event(), Message(), cursor)
     emitted : List<&2, Event()> <- collect(first, cursor, Nil{})
@@ -190,7 +191,8 @@ def fetchRun(+model: T.Model<J()>, +context: Context(), useAmbient: Bool) -> IO(
     +events : Events.AssistantMessageEventStream(V.Value, Unit) <- Events.createAssistantMessageEventStream(~V.Value, ~Unit)
     +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
     agent : String <- A.piUserAgent()
-    Client.stream(~Unit, ~Unit, ~String, ~Unit, ~Unit, ~(message => message), events, Abort.signal(Unit, controller), Client.Setup{Network.urlContext(), agent, ambient}, model, context, withFetch(direct(Some{"test-key"}, None{}), Bool.pick(Fetch.Fetch(Unit), useAmbient, ambient, custom)), F.fromU32(1))
+    calls : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
+    Client.stream(~Unit, ~Unit, ~String, ~Unit, ~Unit, ~(message => message), events, Abort.signal(Unit, controller), Client.Setup{Network.urlContext(), agent, ambient, calls}, model, context, withFetch(direct(Some{"test-key"}, None{}), Bool.pick(Fetch.Fetch(Unit), useAmbient, ambient, custom)), F.fromU32(1))
     +cursor : Events.Iterator<Event(), Message()> <- Events.iterator(Event(), Message(), events)
     first : Events.Iteration<Event()> <- Events.nextValue(Event(), Message(), cursor)
     emitted : List<&2, Event()> <- collect(first, cursor, Nil{})
@@ -199,3 +201,19 @@ def fetchRun(+model: T.Model<J()>, +context: Context(), useAmbient: Bool) -> IO(
     customRequest : Maybe<&2, Fetch.Input<Unit>> <- Ref.read(Maybe<&2, Fetch.Input<Unit>>, customSeen)
     Abort.dispose(Unit, controller)
     return FetchOutcome{message, ambientRequest, customRequest}
+
+# A response body streamed with a shared tool-call id counter (the process
+# counter that upstream keeps in a module variable).
+def respondShared(+model: T.Model<J()>, chunks: List<&2, String>, counter: Ref.Ref<Nat>) -> IO(Message()):
+  do IO<Message()>:
+    +pending : Ref.Ref<List<&2, String>> <- Ref.new(List<&2, String>, chunks)
+    +events : Events.AssistantMessageEventStream(V.Value, Unit) <- Events.createAssistantMessageEventStream(~V.Value, ~Unit)
+    +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    +body : Body.Source<String> <- source(pending)
+    Client.streamBody(~Unit, ~String, ~Unit, ~(message => message), events, body, Abort.signal(Unit, controller), Fold.create(Unit, model, F.fromU32(1)), Some{counter})
+    +cursor : Events.Iterator<Event(), Message()> <- Events.iterator(Event(), Message(), events)
+    first : Events.Iteration<Event()> <- Events.nextValue(Event(), Message(), cursor)
+    emitted : List<&2, Event()> <- collect(first, cursor, Nil{})
+    message : Message() <- Events.resultValue(Event(), Message(), events)
+    Abort.dispose(Unit, controller)
+    return message

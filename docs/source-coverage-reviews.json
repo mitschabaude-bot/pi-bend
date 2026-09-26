@@ -69,12 +69,12 @@
     },
     "packages/ai/src/api/google-generative-ai.ts": {
       "state": "ported",
-      "note": "Ported as three modules: google-generative-ai.bend (GoogleOptions, streamSimple's option mapping with clamped levels, level-or-budget thinking config and getGoogleBudget, buildParams producing the SDK parameters, client headers, and the SDK's parameter-to-REST conversion with its field order); google-generative-ai-stream.bend (the SDK's processStreamResponse framing with its delimiters, in-band error chunks and incomplete-segment error, and the chunk fold: text/thinking block transitions, signatures, function calls with generated ids, responseId, usage and finish reasons); google-generative-ai-client.bend (streamSimple's missing-key and level-mapping errors fail before a stream exists, as upstream throws synchronously; the stream lifecycle: custom-fetch (accepting the process fetch handle, globalThis.fetch upstream) and API-key checks, onPayload replacement, the SDK model path and address, headers, retryProviderRequest with status-only failures, the body loop and the catch block). tests/google_generative_ai_check.py compares 560 captured params, wire requests and streamed messages/event sequences with pinned pi-mono and runs the ported suites; tests/google_client_loopback.py covers the HTTP path and the agent glue. Documented differences (the tool-call counter one is flagged for review with the user): x-goog-api-client carries the SDK label without the gl-node/<process.version> runtime label (there is no Node runtime); the generated tool-call id counter is per stream instead of module-global (upstream's `let toolCallCounter` at google-generative-ai.ts:57; ids stay unique within a response and Date.now() distinguishes streams unless two start in the same millisecond); JSON.parse's engine-specific error text is replaced by the native parser's; event partials are snapshots. No live Gemini request has been verified.",
+      "note": "Ported as three modules: google-generative-ai.bend (GoogleOptions, streamSimple's option mapping with clamped levels, level-or-budget thinking config and getGoogleBudget, buildParams producing the SDK parameters, client headers, and the SDK's parameter-to-REST conversion with its field order); google-generative-ai-stream.bend (the SDK's processStreamResponse framing with its delimiters, in-band error chunks and incomplete-segment error, and the chunk fold: text/thinking block transitions, signatures, function calls with generated ids, responseId, usage and finish reasons); google-generative-ai-client.bend (streamSimple's missing-key and level-mapping errors fail before a stream exists, as upstream throws synchronously; the stream lifecycle: custom-fetch (accepting the process fetch handle, globalThis.fetch upstream) and API-key checks, onPayload replacement, the SDK model path and address, headers, retryProviderRequest with status-only failures, the body loop and the catch block). tests/google_generative_ai_check.py compares 560 captured params, wire requests and streamed messages/event sequences with pinned pi-mono and runs the ported suites; tests/google_client_loopback.py covers the HTTP path and the agent glue. Documented differences: x-goog-api-client carries the SDK label without the gl-node/<process.version> runtime label (there is no Node runtime); JSON.parse's engine-specific error text is replaced by the native parser's; event partials are snapshots. No live Gemini request has been verified. Generated tool-call ids use one counter shared by every stream of an agent runtime (a Ref in its provider configuration; the CLI process has one runtime), as upstream's module toolCallCounter; tests/ai-misc-suites.bend checks that a second stream continues the sequence.",
       "source_sha256": "c20f1a40875b2106b6d39d8b7837cd30a882c6a5fcf8c311ccc42a090e18e956",
       "port_sha256": {
         "packages/ai/src/api/google-generative-ai.bend": "8e5fddf0912e58a6af8a24da3425ddfd4970278f1dc8811557f1ac9d524e7d46",
-        "packages/ai/src/api/google-generative-ai-stream.bend": "786ea73d7b16f635095a24c049667395a971ce730fd2a696ca699184371fb243",
-        "packages/ai/src/api/google-generative-ai-client.bend": "ccdb93b09d1c0df48c921b53ede55e3a8bd4bcbfb0b2cd92c383474f1d55f616"
+        "packages/ai/src/api/google-generative-ai-stream.bend": "c2b0cfaa0166224b146dcdb9364856cef2517b0cd060e4bc3e74238443da30f3",
+        "packages/ai/src/api/google-generative-ai-client.bend": "bc0cbabc99b20a22638b0bf43d4d4611c2e534887bf86342a0ffc8e8e74161c4"
       },
       "ports": [
         "packages/ai/src/api/google-generative-ai.bend",
@@ -109,8 +109,8 @@
       "port_sha256": {
         "packages/ai/src/api/google-vertex.bend": "0ebdb23af0dce3514a9f10f49570cdb99a9ee16a853dd2aaa2de4ac4e8a5ec09",
         "packages/ai/src/api/google-vertex-credentials.bend": "212fd2b5c048ecaf2cccd8fe8be0cabb7c299dc772c90acc1ac13882e440af2d",
-        "packages/ai/src/api/google-generative-ai-client.bend": "ccdb93b09d1c0df48c921b53ede55e3a8bd4bcbfb0b2cd92c383474f1d55f616",
-        "packages/ai/src/api/google-generative-ai-stream.bend": "786ea73d7b16f635095a24c049667395a971ce730fd2a696ca699184371fb243"
+        "packages/ai/src/api/google-generative-ai-client.bend": "bc0cbabc99b20a22638b0bf43d4d4611c2e534887bf86342a0ffc8e8e74161c4",
+        "packages/ai/src/api/google-generative-ai-stream.bend": "c2b0cfaa0166224b146dcdb9364856cef2517b0cd060e4bc3e74238443da30f3"
       }
     },
     "packages/ai/src/api/mistral-conversations.lazy.ts": {
@@ -134,9 +134,17 @@
         "packages/coding-agent/src/core/stream-providers.bend": "7cd09373017335b4b1325505127e2015050a5f6158add77ce70732e08e7fc883"
       }
     },
+    "packages/ai/src/api/openai-codex-responses.ts": {
+      "state": "partial",
+      "note": "SSE transport ported to packages/ai/src/api/openai-codex-responses.bend: stream/streamSimple (missing key fails before a stream exists), the shared buildRequestBody through Responses.prepare with the Codex endpoint, onPayload, normalizeTimeoutMs, the fetch-with-retry loop (maxRetries default 0; isRetryableError with terminal usage-limit texts; retry-after-ms/retry-after seconds or HTTP date; validateRetryDelayMs; 1s exponential backoff; failures retried unless aborted, delay-exceeded or 'usage limit'), the header-only timeout message, onResponse, parseErrorResponse's friendly ChatGPT usage-limit message, parseSSE (\\n\\n frames, data lines, [DONE], EOF terminating the residual frame, 'Invalid Codex SSE JSON'), mapCodexEvents (Codex error events, response.failed, response.done/completed/incomplete normalized to response.completed with endTurn, stopping at the first terminal event) and resolveCodexServiceTier pricing over the shared processResponsesStream. The agent's provider seam dispatches openai-codex-responses models here. tests/openai_codex_stream_check.py compares 24 named test instances and 3 native error cases with pinned pi-mono over a loopback server. Not ported: the WebSocket transport (sessions, caching, fallback bookkeeping) and zstd request bodies (upstream sends plain JSON when zstd is unavailable). Documented differences: JSON.parse's engine error text is the native parser's; the fetch implementation's error message is 'fetch failed' (Node's).",
+      "source_sha256": "ea1860ea6f78d1ed4e935e86b5dcb149ccb1f03a12669ff8550cc7243ec6ddc8",
+      "port_sha256": {
+        "packages/ai/src/api/openai-codex-responses.bend": "03e037703d3e9f22287ff7f2250a55396594f7bdce7f761f78b25172e07f5c1f"
+      }
+    },
     "packages/ai/src/api/openai-completions.ts": {
       "state": "ported",
-      "note": "Request and stream sides ported. Request: ResolvedOpenAICompletionsCompat with detectCompat/getCompat; convertMessages (tool-call id normalization, thinking replay fields and reasoning_details, the four requires* flags, grammar tool calls, Kimi mid-conversation tools); convertTools with grammar custom tools; buildParams in upstream field order with every thinkingFormat, budgets, cache markers, routing and sampling overrides; createClient's headers including GitHub Copilot's dynamic headers. Stream: the chunk loop (text, thinking and tool-call blocks by wire index or id, custom grammar input, streamed reasoning_details, reasoning-field signatures with OpenCode Go's normalization, routed responseModel, parseChunkUsage), block endings and finish_reason checks with the supportsFinishReason: false fallback; the lifecycle over the shared SDK port (getClientApiKey, onPayload, retried request, onResponse, SDK SSE with in-chunk errors, abort as stopReason aborted, the catch block's message with OpenRouter metadata.raw appended as String(raw)). Byte-identical to upstream on the suites' named cases, native cases for Copilot headers, raw metadata kinds and mid-stream abort, 724 generated requests and 114 generated streams (tests/openai_completions_request_check.py, tests/openai_completions_stream_check.py).",
+      "note": "Request and stream sides ported. Request: ResolvedOpenAICompletionsCompat with detectCompat/getCompat; convertMessages (tool-call id normalization, thinking replay fields and reasoning_details, the four requires* flags, grammar tool calls, Kimi mid-conversation tools); convertTools with grammar custom tools; buildParams in upstream field order with every thinkingFormat, budgets, cache markers, routing and sampling overrides; createClient's headers including GitHub Copilot's dynamic headers. Stream: the chunk loop (text, thinking and tool-call blocks by wire index or id, custom grammar input, streamed reasoning_details, reasoning-field signatures with OpenCode Go's normalization, routed responseModel, parseChunkUsage), block endings and finish_reason checks with the supportsFinishReason: false fallback; the lifecycle over the shared SDK port (getClientApiKey, onPayload, retried request, onResponse, SDK SSE with in-chunk errors, abort as stopReason aborted, the catch block's message with OpenRouter metadata.raw appended as String(raw)). Byte-identical to upstream on the suites' named cases, native cases for Copilot headers, raw metadata kinds and mid-stream abort, 724 generated requests and 114 generated streams (tests/openai_completions_request_check.py, tests/openai_completions_stream_check.py). streamSimpleOptions returns getClientApiKey's missing-auth error before a stream exists, as upstream throws.",
       "source_sha256": "a682245959c697d4f7a5ac54152f2db189099561b304725c651d6dbee22fd752",
       "ports": [
         "packages/ai/src/api/openai-completions.bend",
@@ -145,10 +153,10 @@
         "packages/coding-agent/src/core/openai-completions-provider.bend"
       ],
       "port_sha256": {
-        "packages/ai/src/api/openai-completions.bend": "7ff3403a550df2582e44e1224df0bd81399ff1cff46447f7448217773f7943ef",
+        "packages/ai/src/api/openai-completions.bend": "6bd697b4bafbd69e3ac95f65e8f4b0d008689d494bc98b228cd579b15af2cdde",
         "packages/ai/src/api/openai-completions-client.bend": "3fe44fd8d5cff79e17d78905796d611aad35434c48926255d35f12037c1f54bf",
         "packages/ai/src/api/openai-completions-stream.bend": "87e923079f391b66ae1d5f3fc38859e9fae182fbdfe1a8a90e024c388f5d2417",
-        "packages/coding-agent/src/core/openai-completions-provider.bend": "ed894c14c052abe1c6f3a0a90417cfc1ac45a2e7ae04873250991c8efd8f46a4"
+        "packages/coding-agent/src/core/openai-completions-provider.bend": "db0710efc3d67c4fec6bacc4c16b3346c5bd6491f62c6b5ecd4bf0c3cb1df0f6"
       }
     },
     "packages/ai/src/api/openai-prompt-cache.ts": {
@@ -161,10 +169,10 @@
     },
     "packages/ai/src/api/openai-responses.ts": {
       "state": "partial",
-      "note": "Native OpenAI/Codex request and stream path works; provider suites remain partial and some upstream request/header behavior differs. The Codex endpoint (upstream openai-codex-responses.ts, not reviewed as its own module) now sends upstream's SSE headers: model and caller headers plus the fixed Codex headers, without the SDK client's session-affinity session_id; flex/priority requests echoed as 'default' are priced at the requested tier (resolveCodexServiceTier). tests/openai_codex_stream_check.py compares 16 named openai-codex-stream test instances with pinned pi-mono over a loopback server; its PENDING list records the Codex SSE layer that is not ported (parseSSE EOF flush and abort message, mapCodexEvents endTurn and early stop after response.incomplete, the SSE header timeout), and WebSocket transport and zstd request bodies are absent.",
+      "note": "Native OpenAI/Codex request and stream path works; provider suites remain partial and some upstream request/header behavior differs. The Codex endpoint (upstream openai-codex-responses.ts, not reviewed as its own module) now sends upstream's SSE headers: model and caller headers plus the fixed Codex headers, without the SDK client's session-affinity session_id; flex/priority requests echoed as 'default' are priced at the requested tier (resolveCodexServiceTier). Codex models run their own SSE lifecycle in openai-codex-responses.bend (see its review); preparation stays here. streamSimple returns the missing-auth error before a stream exists (upstream getClientApiKey throws; for Codex models the plain-key check of openai-codex-responses.ts streamSimple).",
       "source_sha256": "5d524184ea001a2717fd35b4562126043338d1ef3279f4e2ce192ae5592e8479",
       "port_sha256": {
-        "packages/ai/src/api/openai-responses.bend": "576684141096fc1f8d406017963fd10620b4a36f8ce341e2176f53106a8fce23"
+        "packages/ai/src/api/openai-responses.bend": "13eb3322eb5c82e3aa66fb97023ac775893bf2ad6effbc06c980ef7457458d5c"
       }
     },
     "packages/ai/src/api/openrouter-images.lazy.ts": {
@@ -234,6 +242,14 @@
         "packages/ai/src/auth/oauth/browser.bend"
       ]
     },
+    "packages/ai/src/auth/oauth/device-code.ts": {
+      "state": "ported",
+      "note": "pollOAuthDeviceCodeFlow over a poll callback: the default and minimum intervals, the optional first wait, slow_down with the server's interval or +5 s, the expiry deadline with upstream's two timeout messages, and cancellation ('Login cancelled'); used by the Radius device login. abortableSleep is Timer.sleep under the signal.",
+      "source_sha256": "b402bbbf66d693ee7dd6c5e2c4e45544050722d5bfa3668b100df76284a4fb37",
+      "port_sha256": {
+        "packages/ai/src/auth/oauth/device-code.bend": "93c18b3d052142da6566a6b41d4efa9890d1c143787b26a384527f71f4bc9930"
+      }
+    },
     "packages/ai/src/auth/oauth/openai-codex.ts": {
       "state": "partial",
       "note": "Native OAuthAuth.login selects browser/device login. Browser authorization uses PKCE, independent 16-byte hex state, upstream URL fields, callback host override, state validation, manual-input fallback and token exchange with the browser redirect URI. Device login notifies the user code then polls/exchanges with the device redirect URI. Refresh and toAuth remain native. Browser/manual workers share typed first-settlement arbitration and are cancelled/joined before disposal. Callback completion HTML is simplified; exact token-error classification/rendering and source-wide edge-case parity remain incomplete.",
@@ -258,6 +274,14 @@
         "packages/ai/src/auth/oauth/browser.bend"
       ]
     },
+    "packages/ai/src/auth/oauth/radius.ts": {
+      "state": "ported",
+      "note": "createRadiusOAuth: the sign-in method select, device login (POST /v1/oauth/device, device_code event, polling the token endpoint with authorization_pending/slow_down/expired_token/access_denied), browser login (GET /v1/oauth discovery, PKCE with a random-UUID state, the callback server on 127.0.0.1:1456 with upstream's 404/state-mismatch/missing-code responses and error completion, progress and auth_url events, the code exchange), refresh through the gateway, OAuthResponseError messages and toAuth; tests/radius_check.py (the three upstream cases plus the full browser callback flow). Native differences: the success/error pages are plain HTML with upstream's messages (the styled oauth-page template is not ported); a token response missing access_token/refresh_token/expires_in is an error instead of a credential with undefined fields.",
+      "source_sha256": "a4c520d7ea0f605da1cb4499e8532c5e058cb9fda4d162bd347526bd66351801",
+      "port_sha256": {
+        "packages/ai/src/auth/oauth/radius.bend": "5f6accfc6256abbbd0399a14317707c5e9a6b42827db51f92426a2677dfc9cab"
+      }
+    },
     "packages/ai/src/auth/types.ts": {
       "state": "partial",
       "note": "Credential storage and provider auth resolution have native types. AuthPrompt covers text, secret, selection and manual code with optional per-prompt cancellation; AuthEvent covers info/links, authorization URLs, device codes and progress. AuthInteraction accepts an optional signal; ProviderAuthInteraction carries a required signal. OAuthAuth.login is required, and both API-key and OAuth callbacks use prompt/notify interactions. ApiKeyAuth.check and the remaining auth-context contract are incomplete.",
@@ -271,6 +295,14 @@
       "note": "A package entry point that re-exports stream/streamSimple so Bun-compiled binaries can preload the Bedrock module (coding-agent bun/runtime-setup.ts); Bend modules import api/bedrock-converse-stream.bend directly.",
       "source_sha256": "427a4e76812ea4ac42133e7f41e75df99e0edaff883659c96a0e4ec78f670f9f",
       "port_sha256": {}
+    },
+    "packages/ai/src/env-api-keys.ts": {
+      "state": "ported",
+      "note": "Ported to packages/ai/src/env-api-keys.bend: getApiKeyEnvVars (the provider table, Copilot's COPILOT_GITHUB_TOKEN and Anthropic's AUTH/OAUTH/API order), findEnvKeys, getEnvApiKey (skipping ANTHROPIC_AUTH_TOKEN, ambient Vertex ADC and Bedrock credentials as '<authenticated>') over getProviderEnvValue. tests/env_api_keys_check.py runs the named suite and compares 410 provider/environment cases with pinned pi-mono. Documented difference: upstream memoizes the default gcloud ADC file check in a module variable; the port checks the file on each call. The CLI resolves keys through the providers' auth helpers, so this module is not on its request path.",
+      "source_sha256": "c19591b8ba8451ed34de143162abd36fbd746b62dc406d3fb360e1cb05fd6370",
+      "port_sha256": {
+        "packages/ai/src/env-api-keys.bend": "fc9cc3764ff0d2de12ec2f40a748725aaee5c71c879635e3ffc7e2865921f04d"
+      }
     },
     "packages/ai/src/image-models.generated.ts": {
       "state": "ported",
@@ -413,6 +445,30 @@
         "packages/ai/src/providers/openrouter-images.bend": "8f8546ed016e90a08042437cb4c808bb06c950e43f23c888a787157b5170f1d5"
       }
     },
+    "packages/ai/src/providers/radius-config.ts": {
+      "state": "ported",
+      "note": "DEFAULT_RADIUS_GATEWAY, normalizeRadiusGatewayUrl, the gateway config sanitization (isRadiusGatewayModel's checks, well-formed models kept), getRadiusCredentialConfig from an OAuth credential's gatewayConfig, getRadiusModelsFromConfig/getRadiusModels and loadRadiusGatewayConfig (GET /v1/config with the bearer key, truncated error bodies) over an injected fetch; tests/radius_check.py. Gateway models carry RadiusGatewayModel's declared members (upstream's spread would also copy undeclared ones, which nothing reads); an absent cost price reads as 0 where upstream computes NaN costs; a non-JSON 2xx body reports a native message.",
+      "source_sha256": "1f82a7db25753be09374792ae0a3cd63417739018fb69b3212ad8b3b9eb11c21",
+      "port_sha256": {
+        "packages/ai/src/providers/radius-config.bend": "afc2f1bbc3b8f9633f78f25d183b0b35a35f5ccbee1e44a2d81bf5508d545b5c"
+      }
+    },
+    "packages/ai/src/providers/radius.models.ts": {
+      "state": "ported",
+      "note": "Generated from pi-ai's radius.json by scripts/generate-model-catalog.py; the catalog's gateway listing fields (lab, enabled, providers) are outside the Model type and nothing reads them, so they are not carried.",
+      "source_sha256": "070228f3763de61e4d96b0a851c666a2908f0d9ecb99f5b9205f6b917556ec55",
+      "port_sha256": {
+        "packages/ai/src/providers/radius.models.bend": "40777f8a160a59a464faa7ec7528c2ceb9690404b093ad6a706c3341954c88f2"
+      }
+    },
+    "packages/ai/src/providers/radius.ts": {
+      "state": "ported",
+      "note": "radiusProvider: id/name/gateway options, the public catalog for the default gateway only, RADIUS_API_KEY and Radius OAuth auth, pi-messages streams, and refreshModels (restore the stored catalog, import a legacy credential catalog, then load the gateway config when the network is allowed, persisting it); providers/all.bend lists it in upstream order and model-runtime configureRadiusProviders builds models.json oauth-radius gateways. The OAuth and config HTTP client is injected (Radius.RadiusTransport). tests/radius_check.py runs radius-provider.test.ts and coding-agent radius.test.ts.",
+      "source_sha256": "18bb70120329026fe8277d66cacee69a4108a069f2de990396c8ef5c38730379",
+      "port_sha256": {
+        "packages/ai/src/providers/radius.bend": "60d29f63abdba4bad7e9abde499e449e2f882f0ca07ea9d206f85ca280dc464c"
+      }
+    },
     "packages/ai/src/utils/uuid.ts": {
       "state": "ported",
       "note": "uuidv7 keeps upstream's process-wide monotonic sequence (seeded once from 40 random bits, 2^41-1 exhaustion), clamps ordinary clock rollback, preserves follower timestamps and rejects timestamps outside integers 0..2^48-1. The module state is an explicit State with a pure transition; a Generator owns it in a Ref. Bend has no module globals, so the process generator is created once by main (or by --export) and reaches session creation through the session value, AgentSession summaries and the session picker. Entropy failure is a Bend-only error result.",
@@ -431,10 +487,10 @@
     },
     "packages/coding-agent/src/core/agent-session.ts": {
       "state": "partial",
-      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal; prompt images and tool-result images are normalized with the image setting and the current model's resize profile (f5c946480). sendCustomMessage (nextTurn, steer/followUp while streaming, deferral to turn_end without triggerTurn, triggerTurn runs) and sendUserMessage (expandPromptTemplates) are ported with the pending custom-message flushes at turn_end, run settlement and prompt, and bound as the extension runtime's sendMessage/sendUserMessage actions. Extension events: agent/turn_start/message/tool_execution events reach extensions before listeners, message_end replacements are persisted and projected, tool_call and tool_result run in the agent's tool hooks, agent_settled precedes the public event; navigateTree runs session_before_tree (cancel, supplied summary, instruction and label overrides) under the branch-summary controller and emits session_tree; manual and automatic compaction run session_before_compact (cancel or supplied result), then session_compact or session_compact_failed; waitForIdle waits for session-level idleness (no run, compaction or branch summary). turn_end boundaries run from the agent's finishTurn (or the turn_end event for synthesized failures) and agent_before_settle before settlement, with drafts previewed, committed and announced after the context refresh; post-run handling continues for queued messages only after retry and compaction (no queue drain before retry). The agent's transformContext runs the extensions' context handlers; getUserMessagesForForking, pendingMessageCount and harness-style appendSessionEntry/refreshSessionContext are present. Missing: session_start/switch/fork/shutdown extension events, before_agent_start, input, user_bash, _isEmittingAgentSettled deferral, and replaced messages inside turn_end/agent_end payloads. The skill-block parser used by restored transcripts is in core/skills.bend. Native appendLabelChange exposes session-manager label mutation through shared session ownership, using the existing atomic metadata append/persistence path.",
+      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal; prompt images and tool-result images are normalized with the image setting and the current model's resize profile (f5c946480). sendCustomMessage (nextTurn, steer/followUp while streaming, deferral to turn_end without triggerTurn, triggerTurn runs) and sendUserMessage (expandPromptTemplates) are ported with the pending custom-message flushes at turn_end, run settlement and prompt, and bound as the extension runtime's sendMessage/sendUserMessage actions. Extension events: agent/turn_start/message/tool_execution events reach extensions before listeners, message_end replacements are persisted and projected, tool_call and tool_result run in the agent's tool hooks, agent_settled precedes the public event; navigateTree runs session_before_tree (cancel, supplied summary, instruction and label overrides) under the branch-summary controller and emits session_tree; manual and automatic compaction run session_before_compact (cancel or supplied result), then session_compact or session_compact_failed; waitForIdle waits for session-level idleness (no run, compaction or branch summary). turn_end boundaries run from the agent's finishTurn (or the turn_end event for synthesized failures) and agent_before_settle before settlement, with drafts previewed, committed and announced after the context refresh; post-run handling continues for queued messages only after retry and compaction (no queue drain before retry). The agent's transformContext runs the extensions' context handlers; getUserMessagesForForking, pendingMessageCount and harness-style appendSessionEntry/refreshSessionContext are present. prompt() follows upstream's order: extension command, compaction refusal, input handlers (source interactive/rpc/extension; streamingBehavior only while streaming), expansion, queue while streaming, then pending flushes and the preflight (formatNoModelSelectedMessage / formatNoApiKeyFoundMessage with the package docs path; the OAuth wording is unreachable because its snapshot entry exists exactly when hasConfiguredAuth holds); preflightResult reports acceptance before anything runs. Queued steer/followUp input passes the input handlers; upstream's refusal of extension commands there is not ported (steer/followUp report no failure). setShutdownHandler binds ctx.shutdown(). Missing: session_start/switch/fork/shutdown extension events, before_agent_start, user_bash, _isEmittingAgentSettled deferral, and replaced messages inside turn_end/agent_end payloads. The skill-block parser used by restored transcripts is in core/skills.bend. Native appendLabelChange exposes session-manager label mutation through shared session ownership, using the existing atomic metadata append/persistence path.",
       "source_sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7",
       "port_sha256": {
-        "packages/coding-agent/src/core/agent-session.bend": "bc5482effb554a2132c60d5dcb11732718f135710dd01659121f8768e70d5a27",
+        "packages/coding-agent/src/core/agent-session.bend": "dbb846b0ad220606e6f8edec35798e339ff556bcb13802685e41d3a88e46b558",
         "packages/coding-agent/src/core/skills.bend": "39c10b968daf609f60fe3c91154a63a7248c7cfd18173781eb776904dcfea236"
       },
       "ports": [
@@ -463,26 +519,26 @@
     },
     "packages/coding-agent/src/core/extensions/loader.ts": {
       "state": "partial",
-      "note": "Inline factories load into a runtime (loadExtensionFromFactory/loadExtensionFactories) with registerCommand, registerProvider/unregisterProvider (deferred while loading), on/unsubscribe, sendMessage and sendUserMessage (failing before the session binds them with upstream's not-initialized message). No file discovery or jiti loading (JS extensions are excluded; extensions are compiled Bend). Missing: registerTool/Shortcut/Flag/renderers, appendEntry, session name/label, active tools, model and thinking actions, events bus.",
+      "note": "Inline factories load into a runtime (loadExtensionFromFactory/loadExtensionFactories) with registerCommand, registerProvider/unregisterProvider (deferred while loading), on/unsubscribe, sendMessage and sendUserMessage with its options (failing before the session binds them with upstream's not-initialized message). No file discovery or jiti loading (JS extensions are excluded; extensions are compiled Bend). Missing: registerTool/Shortcut/Flag/renderers, appendEntry, session name/label, active tools, model and thinking actions, events bus.",
       "source_sha256": "ba9af64db7ff81df6c94193613f3447bf110497698eb118b379f32af12cff075",
       "port_sha256": {
-        "packages/coding-agent/src/core/extensions/loader.bend": "a7f6cdbfc2ff0bc5d604f0c465126a6c60effc547139c252a6cbccf53c3d7c7c"
+        "packages/coding-agent/src/core/extensions/loader.bend": "a3faae0ce74f9ba9a26fb2f36ad17d1da019baaf0e7348fd1d019137958589f2"
       }
     },
     "packages/coding-agent/src/core/extensions/runner.ts": {
       "state": "partial",
-      "note": "Native ExtensionRunner: bindCore/bindCommandContext/setUIContext, command resolution with invocation names, error listeners, snapshotEventHandlers, emit for events without results, emitMessageEnd (same-role replacement chain), emitToolCall (first block wins, failures propagate), emitToolResult (patched fields), and the session_before_tree/session_before_compact results of emit (last result, cancel stops dispatch, failures reported). emitBoundary (turn_end/agent_before_settle: drafts and continuation carried between handlers, a preview rebuilt after each, invalid drafts reported). emitContext (context handlers on the conversation with system messages restored, then context_with_system; unchanged is structural equality). Missing: session_before_switch/fork, emitBeforeAgentStart, emitInput, emitUserBash, provider request/header events, emitCacheWarmingDecision, emitResourcesDiscover, shortcuts, flags, renderers, tool registrations, invalidate/stale contexts.",
+      "note": "Native ExtensionRunner: bindCore/bindCommandContext/setUIContext, command resolution with invocation names, error listeners, snapshotEventHandlers, emit for events without results, emitMessageEnd (same-role replacement chain), emitToolCall (first block wins, failures propagate), emitToolResult (patched fields), and the session_before_tree/session_before_compact results of emit (last result, cancel stops dispatch, failures reported). emitBoundary (turn_end/agent_before_settle: drafts and continuation carried between handlers, a preview rebuilt after each, invalid drafts reported). emitContext (context handlers on the conversation with system messages restored, then context_with_system; unchanged is structural equality). emitInput (each handler sees the input as the previous ones left it; handled stops dispatch; failures reported; transform when a handler transformed, not by array identity). Missing: session_before_switch/fork, emitBeforeAgentStart, emitUserBash, provider request/header events, emitCacheWarmingDecision, emitResourcesDiscover, shortcuts, flags, renderers, tool registrations, invalidate/stale contexts.",
       "source_sha256": "bf68eaf27a3e54f1cfc0982554e0598c050fd9a06c8e8b7d6cd2d8e3d8d5990c",
       "port_sha256": {
-        "packages/coding-agent/src/core/extensions/runner.bend": "e9f262714ee545ce562e5a6e35a5e670b5ef6d4ad8caf7c1ed8b7aae4e828c0d"
+        "packages/coding-agent/src/core/extensions/runner.bend": "284c03dfab05e8cfeca05fc8f7eb9784dec08bca5044ba57956a13bafd476454"
       }
     },
     "packages/coding-agent/src/core/extensions/types.ts": {
       "state": "partial",
-      "note": "Typed native events and results for agent_start/end/settled, turn_start, message_start/update/end, tool_execution_*, tool_call, tool_result, session_before_tree/session_tree (TreePreparation, summary and instruction overrides), session_before_compact/session_compact/session_compact_failed, turn_end/agent_before_settle boundaries (SessionBoundaryDraft, BoundaryContextPreview, BoundaryResult, AgentActivityOutcome), commands, InlineExtension, ExtensionError and the sendMessage/sendUserMessage actions. tool_call input is one JSON value, not upstream's per-tool narrowed variants; compaction details are the typed read/modified file lists. context/context_with_system (results carry messages; no in-place edits). Missing: session_start/switch/fork/shutdown/info events, before_agent_start, input, user_bash, model/thinking select, provider request/response, UI prompt events, tools/shortcuts/flags/renderer registration types.",
+      "note": "Typed native events and results for agent_start/end/settled, turn_start, message_start/update/end, tool_execution_*, tool_call, tool_result, session_before_tree/session_tree (TreePreparation, summary and instruction overrides), session_before_compact/session_compact/session_compact_failed, turn_end/agent_before_settle boundaries (SessionBoundaryDraft, BoundaryContextPreview, BoundaryResult, AgentActivityOutcome), commands, InlineExtension, ExtensionError and the sendMessage/sendUserMessage actions. tool_call input is one JSON value, not upstream's per-tool narrowed variants; compaction details are the typed read/modified file lists. context/context_with_system (results carry messages; no in-place edits). input (InputEvent/InputSource/InputEventResult; no images is an empty list) and sendUserMessage's options (deliverAs, expandPromptTemplates). Missing: session_start/switch/fork/shutdown/info events, before_agent_start, user_bash, model/thinking select, provider request/response, UI prompt events, tools/shortcuts/flags/renderer registration types.",
       "source_sha256": "601261b3deee1d61f85c930efed2767d66fe6c8d9637e19f4f53135b5fecf4d1",
       "port_sha256": {
-        "packages/coding-agent/src/core/extensions/types.bend": "fbb174e548581d12c60790e062d47548a2480f40d20b09daf34e95e9e2aac5d6"
+        "packages/coding-agent/src/core/extensions/types.bend": "2c5ccc0fc302fcfc4483a87fdd75d306b6246246d7f5b9b5a6afaf55d5bf87a0"
       }
     },
     "packages/coding-agent/src/core/model-runtime.ts": {
@@ -764,6 +820,19 @@
         "packages/coding-agent/src/modes/interactive/components/thinking-selector.bend": "b2874a95ffd83ab8e7568c3a4613ac4c0e9b336a71229a6931dcc9e07cc55460"
       }
     },
+    "packages/coding-agent/src/modes/interactive/components/tree-selector.ts": {
+      "state": "partial",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/tree-selector.bend",
+        "packages/coding-agent/src/modes/interactive/components/session-selector.bend"
+      ],
+      "note": "Native immutable TreeList retains typed session entries and builds the active path and visible parent/child graph with native maps. Filtering reconnects hidden ancestors; search/filter transitions preserve selection through empty results. Keyboard movement, paging, folding, branch jumps, confirmation, cancellation and full-message copying are implemented. Native1/native4 differential checks compare selection, actions and full ANSI frames for linear, branching, multiple-root and hidden-metadata trees, narrow semantic help wrapping, previews and empty filters. Label timestamps, tool-call argument descriptions, standalone mounting/delayed empty cancellation, independent initial selection and remaining upstream assertions are pending. Label editing uses native Input with focus/cursor state, paste, word editing and explicit save/cancel transitions. Saving rebuilds the immutable nodes while preserving entries, topology, selection and current filter membership; empty labels remove the label. Component comparisons cover rendering, saved values, cancellation and removal. Native1/native4 mounted terminal comparisons match label entry/cursor styling, word navigation, save/reopen/cancel/removal, preserved draft and the following model request.",
+      "source_sha256": "767bee39141acf21f70b4e8c01c62dfefa588bc2edd8fe2093886a70a77e115f",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/tree-selector.bend": "48425cb216d76d14427c8a385fd3246ed4a85160eefda68ad5ae0bf348083130",
+        "packages/coding-agent/src/modes/interactive/components/session-selector.bend": "5788f1c84d33f70533310e3b70f96cea34cc09b8684387d70498b23ce0c253e0"
+      }
+    },
     "packages/coding-agent/src/modes/interactive/components/user-message-selector.ts": {
       "state": "partial",
       "ports": [
@@ -775,6 +844,14 @@
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/user-message-selector.bend": "b61bafd3b049f4267ddb60bbe95936b166a557ef09a3468b6c10fdbf13e81212",
         "packages/coding-agent/src/modes/interactive/components/session-selector.bend": "5788f1c84d33f70533310e3b70f96cea34cc09b8684387d70498b23ce0c253e0"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/external-editor.ts": {
+      "state": "ported",
+      "note": "Native POSIX helper preserves the command arguments, launching notice, private pi-editor temporary directory/prompt.md, exit-code gating, leading-BOM/single-final-newline normalization and cleanup. Native1/native4 syscall/foreground-PTY checks and actual upstream helper comparisons cover successful, failed and empty edits. Filesystem/encoding failures return Failed; malformed UTF-8 is rejected rather than replaced, following the agreed strict-input policy. JS execution is unsupported for these native process effects. Interactive Ctrl+g and terminal suspension/resume are tracked separately in interactive-mode.",
+      "source_sha256": "b05a9c1e8a88fd5c39937564160463d7d670df4bc2148b70a7325c601a96dee7",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/external-editor.bend": "77e7b7a09c8449af505b83496038c62de85ccad4a36b6569926a205e8ba11eaa"
       }
     },
     "packages/coding-agent/src/modes/interactive/interactive-mode.ts": {
@@ -838,13 +915,13 @@
     },
     "packages/coding-agent/src/modes/rpc/rpc-mode.ts": {
       "state": "partial",
-      "note": "All commands, JSONL framing, correlated errors, prompt/queue semantics, session replacement through the host, event streaming, per-line tasks (the reader waits for a line to finish or open a dialog, so extension handlers can ask the client), the whole RPC extension UI context (select/confirm/input/editor dialogs with timeouts and abort signals, notify/setStatus/setWidget/setTitle/set_editor_text requests, extension_error records), and command-context actions through the host. Gaps: the prompt response precedes AgentSession's preflight (no preflightResult); the shutdown handler is not bound; stdout backpressure and signal handling belong to main.bend. See tests/rpc.md.",
+      "note": "All commands, JSONL framing, correlated errors, prompt/queue semantics, session replacement through the host, event streaming, per-line tasks (the reader waits for a line to finish or open a dialog, so extension handlers can ask the client), the whole RPC extension UI context (select/confirm/input/editor dialogs with timeouts and abort signals, notify/setStatus/setWidget/setTitle/set_editor_text requests, extension_error records), and command-context actions through the host. The prompt response follows AgentSession's preflightResult (success when accepted, the error when rejected first; later failures unanswered) and prompts, steers and follow-ups reach input handlers with source rpc. Gaps: the shutdown handler is not bound; stdout backpressure and signal handling belong to main.bend. See tests/rpc.md.",
       "ports": [
         "packages/coding-agent/src/modes/rpc.bend"
       ],
       "source_sha256": "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc",
       "port_sha256": {
-        "packages/coding-agent/src/modes/rpc.bend": "b6111fdce0e73145c89d4ccc68b2f17c23d760d5cd7e33fbd02a111ced7a290b"
+        "packages/coding-agent/src/modes/rpc.bend": "eb2c5e9678b47938f12e07547f3e18623d432e2452068023091769ad9ee62257"
       }
     },
     "packages/coding-agent/src/modes/rpc/rpc-types.ts": {
@@ -951,75 +1028,6 @@
       "port_sha256": {
         "packages/tui/src/tui-base.bend": "f7e4a5f560ee5d8d514c3f7d53b58bb8a93404807872fc40d2e35786c386b89c",
         "packages/tui/src/tui-process.bend": "40c7b94ca549e9b4fb67540337321dbc04280398400e720f0789911cdd3e3576"
-      }
-    },
-    "packages/ai/src/env-api-keys.ts": {
-      "state": "ported",
-      "note": "Ported to packages/ai/src/env-api-keys.bend: getApiKeyEnvVars (the provider table, Copilot's COPILOT_GITHUB_TOKEN and Anthropic's AUTH/OAUTH/API order), findEnvKeys, getEnvApiKey (skipping ANTHROPIC_AUTH_TOKEN, ambient Vertex ADC and Bedrock credentials as '<authenticated>') over getProviderEnvValue. tests/env_api_keys_check.py runs the named suite and compares 410 provider/environment cases with pinned pi-mono. Documented difference: upstream memoizes the default gcloud ADC file check in a module variable; the port checks the file on each call. The CLI resolves keys through the providers' auth helpers, so this module is not on its request path.",
-      "source_sha256": "c19591b8ba8451ed34de143162abd36fbd746b62dc406d3fb360e1cb05fd6370",
-      "port_sha256": {
-        "packages/ai/src/env-api-keys.bend": "fc9cc3764ff0d2de12ec2f40a748725aaee5c71c879635e3ffc7e2865921f04d"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/external-editor.ts": {
-      "state": "ported",
-      "note": "Native POSIX helper preserves the command arguments, launching notice, private pi-editor temporary directory/prompt.md, exit-code gating, leading-BOM/single-final-newline normalization and cleanup. Native1/native4 syscall/foreground-PTY checks and actual upstream helper comparisons cover successful, failed and empty edits. Filesystem/encoding failures return Failed; malformed UTF-8 is rejected rather than replaced, following the agreed strict-input policy. JS execution is unsupported for these native process effects. Interactive Ctrl+g and terminal suspension/resume are tracked separately in interactive-mode.",
-      "source_sha256": "b05a9c1e8a88fd5c39937564160463d7d670df4bc2148b70a7325c601a96dee7",
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/external-editor.bend": "77e7b7a09c8449af505b83496038c62de85ccad4a36b6569926a205e8ba11eaa"
-      }
-    },
-    "packages/ai/src/providers/radius-config.ts": {
-      "state": "ported",
-      "note": "DEFAULT_RADIUS_GATEWAY, normalizeRadiusGatewayUrl, the gateway config sanitization (isRadiusGatewayModel's checks, well-formed models kept), getRadiusCredentialConfig from an OAuth credential's gatewayConfig, getRadiusModelsFromConfig/getRadiusModels and loadRadiusGatewayConfig (GET /v1/config with the bearer key, truncated error bodies) over an injected fetch; tests/radius_check.py. Gateway models carry RadiusGatewayModel's declared members (upstream's spread would also copy undeclared ones, which nothing reads); an absent cost price reads as 0 where upstream computes NaN costs; a non-JSON 2xx body reports a native message.",
-      "source_sha256": "1f82a7db25753be09374792ae0a3cd63417739018fb69b3212ad8b3b9eb11c21",
-      "port_sha256": {
-        "packages/ai/src/providers/radius-config.bend": "afc2f1bbc3b8f9633f78f25d183b0b35a35f5ccbee1e44a2d81bf5508d545b5c"
-      }
-    },
-    "packages/ai/src/providers/radius.ts": {
-      "state": "ported",
-      "note": "radiusProvider: id/name/gateway options, the public catalog for the default gateway only, RADIUS_API_KEY and Radius OAuth auth, pi-messages streams, and refreshModels (restore the stored catalog, import a legacy credential catalog, then load the gateway config when the network is allowed, persisting it); providers/all.bend lists it in upstream order and model-runtime configureRadiusProviders builds models.json oauth-radius gateways. The OAuth and config HTTP client is injected (Radius.RadiusTransport). tests/radius_check.py runs radius-provider.test.ts and coding-agent radius.test.ts.",
-      "source_sha256": "18bb70120329026fe8277d66cacee69a4108a069f2de990396c8ef5c38730379",
-      "port_sha256": {
-        "packages/ai/src/providers/radius.bend": "60d29f63abdba4bad7e9abde499e449e2f882f0ca07ea9d206f85ca280dc464c"
-      }
-    },
-    "packages/ai/src/providers/radius.models.ts": {
-      "state": "ported",
-      "note": "Generated from pi-ai's radius.json by scripts/generate-model-catalog.py; the catalog's gateway listing fields (lab, enabled, providers) are outside the Model type and nothing reads them, so they are not carried.",
-      "source_sha256": "070228f3763de61e4d96b0a851c666a2908f0d9ecb99f5b9205f6b917556ec55",
-      "port_sha256": {
-        "packages/ai/src/providers/radius.models.bend": "40777f8a160a59a464faa7ec7528c2ceb9690404b093ad6a706c3341954c88f2"
-      }
-    },
-    "packages/ai/src/auth/oauth/radius.ts": {
-      "state": "ported",
-      "note": "createRadiusOAuth: the sign-in method select, device login (POST /v1/oauth/device, device_code event, polling the token endpoint with authorization_pending/slow_down/expired_token/access_denied), browser login (GET /v1/oauth discovery, PKCE with a random-UUID state, the callback server on 127.0.0.1:1456 with upstream's 404/state-mismatch/missing-code responses and error completion, progress and auth_url events, the code exchange), refresh through the gateway, OAuthResponseError messages and toAuth; tests/radius_check.py (the three upstream cases plus the full browser callback flow). Native differences: the success/error pages are plain HTML with upstream's messages (the styled oauth-page template is not ported); a token response missing access_token/refresh_token/expires_in is an error instead of a credential with undefined fields.",
-      "source_sha256": "a4c520d7ea0f605da1cb4499e8532c5e058cb9fda4d162bd347526bd66351801",
-      "port_sha256": {
-        "packages/ai/src/auth/oauth/radius.bend": "5f6accfc6256abbbd0399a14317707c5e9a6b42827db51f92426a2677dfc9cab"
-      }
-    },
-    "packages/ai/src/auth/oauth/device-code.ts": {
-      "state": "ported",
-      "note": "pollOAuthDeviceCodeFlow over a poll callback: the default and minimum intervals, the optional first wait, slow_down with the server's interval or +5 s, the expiry deadline with upstream's two timeout messages, and cancellation ('Login cancelled'); used by the Radius device login. abortableSleep is Timer.sleep under the signal.",
-      "source_sha256": "b402bbbf66d693ee7dd6c5e2c4e45544050722d5bfa3668b100df76284a4fb37",
-      "port_sha256": {
-        "packages/ai/src/auth/oauth/device-code.bend": "93c18b3d052142da6566a6b41d4efa9890d1c143787b26a384527f71f4bc9930"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/components/tree-selector.ts": {
-      "state": "partial",
-      "ports": [
-        "packages/coding-agent/src/modes/interactive/components/tree-selector.bend",
-        "packages/coding-agent/src/modes/interactive/components/session-selector.bend"
-      ],
-      "note": "Native immutable TreeList retains typed session entries and builds the active path and visible parent/child graph with native maps. Filtering reconnects hidden ancestors; search/filter transitions preserve selection through empty results. Keyboard movement, paging, folding, branch jumps, confirmation, cancellation and full-message copying are implemented. Native1/native4 differential checks compare selection, actions and full ANSI frames for linear, branching, multiple-root and hidden-metadata trees, narrow semantic help wrapping, previews and empty filters. Label timestamps, tool-call argument descriptions, standalone mounting/delayed empty cancellation, independent initial selection and remaining upstream assertions are pending. Label editing uses native Input with focus/cursor state, paste, word editing and explicit save/cancel transitions. Saving rebuilds the immutable nodes while preserving entries, topology, selection and current filter membership; empty labels remove the label. Component comparisons cover rendering, saved values, cancellation and removal. Native1/native4 mounted terminal comparisons match label entry/cursor styling, word navigation, save/reopen/cancel/removal, preserved draft and the following model request.",
-      "source_sha256": "767bee39141acf21f70b4e8c01c62dfefa588bc2edd8fe2093886a70a77e115f",
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/tree-selector.bend": "48425cb216d76d14427c8a385fd3246ed4a85160eefda68ad5ae0bf348083130",
-        "packages/coding-agent/src/modes/interactive/components/session-selector.bend": "5788f1c84d33f70533310e3b70f96cea34cc09b8684387d70498b23ce0c253e0"
       }
     }
   }

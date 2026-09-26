@@ -1300,7 +1300,7 @@
         "packages/ai/test/responses-payload.bend"
       ],
       "sha256": "03e3277a307c6a02f21ee7238b51e4f38d74b7730e882c82547b178f050a827a",
-      "notes": "16 of 36 test instances (SSE transport) pass on Bun and native 1/4 threads in tests/openai_codex_stream_check.py: the runner (packages/ai/test/openai-codex-stream.bend) streams from a loopback server, and each result is compared with pinned pi-mono under the same script (request body and Codex headers, event labels, final message) before the test's own assertions. Fixtures carry output_index 0 on item events (upstream keys a missing index as the JS Map key undefined; the native decoder requires the field the backend sends). Pending with reasons in the script's PENDING list (5): EOF-terminated final event, endTurn, stop after response.incomplete with an open body, the SSE header timeout message, and the abort message during a body read (upstream openai-codex-responses.ts parseSSE/mapCodexEvents is not ported). Not ported: the 11 WebSocket instances (no WebSocket transport), zstd request compression (upstream falls back to plain JSON when zstd is unavailable) and the 3 Codex SSE retry-delay/backoff instances (Codex runs the shared Responses retry)."
+      "notes": "24 of 36 test instances pass on Bun and native 1/4 threads in tests/openai_codex_stream_check.py through packages/ai/src/api/openai-codex-responses.bend: every SSE test, both retry-delay-limit rows and the exponential backoff. The runner streams from a loopback server; each result is compared with pinned pi-mono under the same script (request body, Codex headers, event labels, final message) before the test's own assertions. Adaptations: item events carry output_index 0 (upstream keys a missing index as the JS Map key undefined; the native decoder requires the field the backend sends); the header timeout runs at 500ms against a 3s delay instead of 10ms, since a real loopback request must be sent within the deadline; the backoff test measures the gaps between received requests instead of inspecting fake-timer setTimeout calls. Not ported: the 11 WebSocket instances (no WebSocket transport) and zstd request compression."
     },
     {
       "source": "packages/ai/test/openai-completions-cache-control-format.test.ts",
@@ -1604,13 +1604,13 @@
     },
     {
       "source": "packages/ai/test/pre-generation-error.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/ai/test/pre-generation-error.bend",
         "tests/ai-misc-suites.bend"
       ],
       "sha256": "420756429c251d015dfe445bf90f5d0ba7065f26c87e2fa0b6777db861cf9b20",
-      "notes": "The single upstream test checks seven APIs. Anthropic Messages, Google Generative AI and Mistral Conversations match on Bun and native 1/4 threads (packages/ai/test/pre-generation-error.bend): their streamSimple option mapping fails with 'No API key for provider: test-provider' before a stream exists, and the agent glue returns that failure without opening a stream. Pending: Azure OpenAI Responses, OpenAI Codex Responses, OpenAI Completions and OpenAI Responses still report the missing key as a stream error event (in the CLI, agent-runtime resolves auth before dispatch, so this path is not reached there)."
+      "notes": "The named test's seven APIs all fail before a stream exists with 'No API key for provider: test-provider' (packages/ai/test/pre-generation-error.bend, run in tests/ai-misc-suites.bend on Bun and native 1/4 threads). Upstream's synchronous throw is a returned error: the options mapping's Result for Anthropic, Google, Mistral and Chat Completions, and streamSimple's Result for OpenAI Responses, Codex and Azure; the agent glue returns the failure without opening a stream."
     },
     {
       "source": "packages/ai/test/provider-error-body-passthrough.test.ts",
@@ -2020,9 +2020,14 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-branching.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ef1ef21bbebdd5381badb81eefd3a331c66bd640404c8d3ad90c7745c18a7671"
+      "status": "ported",
+      "ports": [
+        "tests/agent-session-runtime.bend",
+        "tests/agent_session_runtime_check.py"
+      ],
+      "sha256": "ef1ef21bbebdd5381badb81eefd3a331c66bd640404c8d3ad90c7745c18a7671",
+      "implementation": "packages/coding-agent/src/core/agent-session-runtime.bend",
+      "notes": "The three tests run over the faux provider instead of a live Anthropic key (upstream skips them without API_KEY): getUserMessagesForForking after the prompts, AgentSessionRuntime.fork before the chosen user message (selectedText), and the new session's messages (none, or the user/assistant pair before 'Say two'); the persisted fork's file is not written until it has an assistant message, and the --no-session fork has no file. The runtime factory loads the stored context into the agent as createAgentSessionFromServices does. Bun lane; native per tests/agent_session_runtime_check.py."
     },
     {
       "source": "packages/coding-agent/test/agent-session-compaction.test.ts",
@@ -2354,7 +2359,8 @@
       "source": "packages/coding-agent/test/custom-message.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "345716cc20a80dbe8072a3ed92bbff232f36ec83cfd02241b2ea4cb54945cc20"
+      "sha256": "345716cc20a80dbe8072a3ed92bbff232f36ec83cfd02241b2ea4cb54945cc20",
+      "notes": "Pending: the interactive CustomMessageComponent and extension message renderers (registerMessageRenderer, MessageRenderOptions.outputPad) are not ported."
     },
     {
       "source": "packages/coding-agent/test/default-tools-setting.test.ts",
@@ -3070,13 +3076,13 @@
     },
     {
       "source": "packages/coding-agent/test/rpc-prompt-response-semantics.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/rpc-mode.bend",
         "tests/rpc_mode_check.py"
       ],
       "sha256": "d3c38618c3e0a2541a9211cfa0a616d3fb9936142663621bd3e48d627e10912d",
-      "notes": "Three of four tests pass on Bun and native one/four threads: one success response on preflight success, one success response for a follow-up queued during streaming, and queued steering/follow-up returned and cleared with a single agent_start. Rpc.feed replaces the mocked line handler, a capturing sink replaces writeRawStdout, and the session is in memory over the faux provider; a faux gate holds the streaming response where upstream waits 100/500 ms. Pending: 'emits one failure response when prompt preflight rejects' \u2014 AgentSession.prompt has no auth preflight/preflightResult yet, so the RPC endpoint acknowledges the prompt before it fails (tests/rpc.md)."
+      "notes": "All four tests pass on Bun and native one/four threads: one failure response when the prompt preflight rejects (no API key for the fake provider; the response comes from AgentSession's preflightResult), one success response on preflight success, one success response for a follow-up queued during streaming, and queued steering/follow-up returned and cleared with a single agent_start. Rpc.feed replaces the mocked line handler, a capturing sink replaces writeRawStdout, and the session is in memory over the faux provider; a faux gate holds the streaming response where upstream waits 100/500 ms."
     },
     {
       "source": "packages/coding-agent/test/rpc.test.ts",
@@ -3386,9 +3392,13 @@
     },
     {
       "source": "packages/coding-agent/test/startup-session-name.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "7ffdd220ed424a946c349c11910e063366e3718c247b7c1ab2cfae957f267040"
+      "status": "ported",
+      "ports": [
+        "tests/startup_session_name_check.py"
+      ],
+      "sha256": "7ffdd220ed424a946c349c11910e063366e3718c247b7c1ab2cfae957f267040",
+      "implementation": "packages/coding-agent/src/main.bend",
+      "notes": "The one test runs against the native CLI (PI_BEND_CLI): --name is recorded on the selected session file before the missing model fails the run (exit 1). The fixture's assistant entry has no api, usage or stopReason; the native decoder skips it, so the appended session_info has parentId null where upstream links it to assistant-1 (not asserted upstream)."
     },
     {
       "source": "packages/coding-agent/test/status-indicator.test.ts",
@@ -3461,22 +3471,26 @@
       "status": "partial",
       "ports": [
         "tests/agent-session.bend",
-        "tests/agent_session_check.py"
+        "tests/agent_session_check.py",
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py"
       ],
       "sha256": "0b1a86e5b1beb1824867a05029a7e6cfd3ad31b8173e6eb13b94bf09ce934a52",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'setModel saves the model to the session' (entry) and 'clamps thinking levels to model capabilities' (clamp) are the mutate scenario of tests/agent_session_check.py; model_select, cycling, per-model overrides, settings persistence and extension handlers remain pending. v0.87.1 diff reviewed (46c9de402..f07218c4d): the tool-result details check gained a JsonObject narrowing only."
+      "notes": "'setModel saves the model to the session' (entry) and 'clamps thinking levels to model capabilities' (clamp) are the mutate scenario of tests/agent_session_check.py; 'throws when setModel is called without configured auth' is set_unavailable in the models scenario of tests/agent_session_check.py. 'allows extension input handlers to transform or handle input' is the input_transform prompt scenario of tests/suite_harness_check.py. model_select, cycling, per-model overrides, settings persistence and the other extension handlers remain pending. v0.87.1 diff reviewed (46c9de402..f07218c4d): the tool-result details check gained a JsonObject narrowing only."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-prompt.test.ts",
       "status": "partial",
       "ports": [
         "tests/agent-session.bend",
-        "tests/agent_session_check.py"
+        "tests/agent_session_check.py",
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py"
       ],
       "sha256": "51130e6ca7339ff3a6d09cb244533a9c4a82b8251dc1a62b03f2870bb77ecced",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'prompts while idle and records a single text response' (persist scenario), 'throws when prompted during streaming without a streamingBehavior' (busy scenario) and, adapted, v0.87.1's 'uses the model selected by before_agent_start for image normalization' (images scenario: the model is switched with setModel because before_agent_start is not ported; real processing, the strict model's maxWidth shrinks the stored image) are in tests/agent_session_check.py. Tool-call turns, skills/prompt templates, extension commands, input handlers, manual compaction and the no-model/no-auth errors remain pending."
+      "notes": "16 of 17 cases pass as upstream states them: 'prompts while idle' (persist), 'throws when prompted during streaming without a streamingBehavior' (busy) and the no-model/no-auth preflight errors ('preflight' scenario) in tests/agent_session_check.py; tool-call turns, parallel tool calls, image attachments, skill commands, prompt templates (prompt and sendUserMessage), extension commands (prompt and extension sendUserMessage), sendUserMessage while idle, input handlers idle/streaming and the manual-compaction rejection (a gated session_before_compact handler) in tests/suite_harness_check.py (prompt_checks). Adaptations: 'preserves image attachments' sends a real 1x1 PNG through the real image pipeline instead of mocking processImage. Partial: 'uses the model selected by before_agent_start for image normalization' switches the model with setModel because before_agent_start is not ported (images scenario of tests/agent_session_check.py)."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-queue.test.ts",
@@ -3935,7 +3949,7 @@
         "tests/regressions.md"
       ],
       "sha256": "bde1a3c51d6867ff2c453357dd07516b423b5c26aae4f30933553aa28328019b",
-      "notes": "A prompt while a manual compaction's summary request is held open fails with the compaction-in-progress error; the probe is neither in the context nor persisted; no agent_start or agent_settled. The hold is a gated summarizer request instead of a session_before_compact handler; the failed result stands for preflightResult(false). Bun lane; the tests/regressions.bend scenarios also pass natively on 1 and 4 threads."
+      "notes": "A prompt while a manual compaction's summary request is held open reports preflightResult(false) and fails with the compaction-in-progress error; the probe is neither in the context nor persisted; no agent_start or agent_settled. The hold is a gated summarizer request instead of a session_before_compact handler (agent-session-prompt's compaction case in tests/suite_harness_check.py holds the handler). Bun lane; the tests/regressions.bend scenarios also pass natively on 1 and 4 threads."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7153-scoped-models-refresh.test.ts",

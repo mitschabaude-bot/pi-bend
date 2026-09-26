@@ -29,6 +29,7 @@ import ./agent-session.bend as H
 import ../packages/coding-agent/src/utils/paths.bend as Paths
 import ../packages/ai/src/utils/uuid.bend as Uuid
 import ../packages/ai/src/utils/text.bend as AiText
+import ../packages/coding-agent/src/core/extensions/types.bend as Ext
 
 # Scenarios for upstream's suite/regressions tests that need AgentSession
 # behavior beyond tests/agent-session.bend. The provider streams like
@@ -787,6 +788,27 @@ def release(gate: Chan(Unit)) -> IO(Unit):
     sent : Bool <- Chan.send(Unit, gate, Unit{})
     R.requireSent(sent)
 
+def recordPreflight(seen: R.Ref<Maybe<&2, Bool>>, success: Bool) -> IO(Unit):
+  R.write(Maybe<&2, Bool>, seen, Some{success})
+
+def reportPreflight(seen: Maybe<&2, Bool>) -> IO(Unit):
+  match seen:
+    case None{}: IO.print("{\"type\":\"preflight\",\"success\":null}")
+    case Some{True{}}: IO.print("{\"type\":\"preflight\",\"success\":true}")
+    case Some{False{}}: IO.print("{\"type\":\"preflight\",\"success\":false}")
+
+# upstream prompt(text, { preflightResult }): the prompt's result with what
+# its preflight reported.
+def promptObserved(+session: Session.AgentSession, +text: String) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    +seen : R.Ref<Maybe<&2, Bool>> <- R.new(Maybe<&2, Bool>, None{})
+    +observer : C.Callback<Bool, Unit> <- C.create(~R.Ref<Maybe<&2, Bool>>, ~Bool, ~Unit, ~recordPreflight, seen)
+    result : Result<&2, &2, String, Unit> <- Session.promptWith(session, text, Session.PromptOptions{True{}, Nil{}, None{}, Ext.RpcSource{}, Some{observer}})
+    C.dispose(Bool, Unit, observer)
+    reported : Maybe<&2, Bool> <- R.dispose(Maybe<&2, Bool>, seen)
+    reportPreflight(reported)
+    return result
+
 # 7150: a prompt while a manual compaction's summary request is held open.
 def promptDuringCompaction(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
@@ -798,7 +820,7 @@ def promptDuringCompaction(+dir: String, agentDir: String) -> IO(Unit):
     IO.spawn(Unit, compactInBackground(sessionOf(value), done))
     began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
     H.reportCompacting(sessionOf(value))
-    probe : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "PROBE-7150", Nil{}, None{})
+    probe : Result<&2, &2, String, Unit> <- promptObserved(sessionOf(value), "PROBE-7150")
     H.reportOutcome("probe", probe)
     release(gate)
     finished : Maybe<&1, Compacted> <- Chan.recv(Compacted, done)

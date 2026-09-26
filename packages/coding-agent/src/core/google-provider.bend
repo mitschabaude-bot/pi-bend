@@ -10,6 +10,7 @@ import ../../../runtime/src/fetch.bend as Fetch
 import ../../../runtime/src/pi-user-agent.bend as UserAgent
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/url.bend as URL
+import ../../../runtime/src/ref.bend as Ref
 import ./tools/index.bend as Tools
 
 # upstream google-generative-ai streamSimple for the agent: the simple options
@@ -34,27 +35,27 @@ def resolvedOptions(value: Maybe<&2, Options()>) -> Options():
     case None{}: Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error())
     case Some{selected}: selected
 
-def produced(+stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +context: Context(), options: GoogleOptions(), timestamp: F64, +signal: Abort.AbortSignal<Unit>) -> IO(Unit):
+def produced(+stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, counter: Ref.Ref<Nat>, +model: Ai.Model<Ai.JsonValue>, +context: Context(), options: GoogleOptions(), timestamp: F64, +signal: Abort.AbortSignal<Unit>) -> IO(Unit):
   do IO<Unit>:
     +agent : String <- IO.try(String, UserAgent.get())
-    Client.stream(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~Tools.errorMessage, stream, signal, Client.Setup{urlContext, agent, fetch}, model, context, options, timestamp)
+    Client.stream(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~Tools.errorMessage, stream, signal, Client.Setup{urlContext, agent, fetch, counter}, model, context, options, timestamp)
 
 def disposeLocal(local: Maybe<&2, Abort.AbortController<Unit>>) -> IO(Unit):
   match local:
     case None{}: IO.pure(Unit, Unit{})
     case Some{controller}: Abort.dispose(Unit, controller)
 
-def producerWith(stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), options: GoogleOptions(), timestamp: F64, parent: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Unit):
+def producerWith(stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, counter: Ref.Ref<Nat>, model: Ai.Model<Ai.JsonValue>, context: Context(), options: GoogleOptions(), timestamp: F64, parent: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Unit):
   match parent:
-    case Some{signal}: produced(stream, fetch, urlContext, model, context, options, timestamp, signal)
+    case Some{signal}: produced(stream, fetch, urlContext, counter, model, context, options, timestamp, signal)
     case None{}:
       do IO<Unit>:
         +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
-        produced(stream, fetch, urlContext, model, context, options, timestamp, Abort.signal(Unit, controller))
+        produced(stream, fetch, urlContext, counter, model, context, options, timestamp, Abort.signal(Unit, controller))
         disposeLocal(Some{controller})
 
-def producer(stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), +options: GoogleOptions(), timestamp: F64) -> IO(Unit):
-  producerWith(stream, fetch, urlContext, model, context, options, timestamp, signalOf(options))
+def producer(stream: Stream(), fetch: Fetch.Fetch(Unit), urlContext: URL.Context, counter: Ref.Ref<Nat>, model: Ai.Model<Ai.JsonValue>, context: Context(), +options: GoogleOptions(), timestamp: F64) -> IO(Unit):
+  producerWith(stream, fetch, urlContext, counter, model, context, options, timestamp, signalOf(options))
 
 def release(stream: Stream(), task: Chan(Unit)) -> IO(Result<&2, &2, Error(), Unit>):
   do IO<Result<&2, &2, Error(), Unit>>:
@@ -62,19 +63,20 @@ def release(stream: Stream(), task: Chan(Unit)) -> IO(Result<&2, &2, Error(), Un
     Events.disposeAssistantMessageEventStream(V.Value, Unit, stream)
     return Done{Unit{}}
 
-def openStream(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), options: Client.Options(Unit, Unit, Error())) -> IO(Output()):
+def openStream(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, counter: Ref.Ref<Nat>, model: Ai.Model<Ai.JsonValue>, context: Context(), options: Client.Options(Unit, Unit, Error())) -> IO(Output()):
   do IO<Output()>:
     +events : Stream() <- Events.createAssistantMessageEventStream(~V.Value, ~Unit)
     timestamp : F64 <- Date.now()
-    task : Chan(Unit) <- IO.fork(Unit, producer(events, fetch, urlContext, model, context, options, timestamp))
+    task : Chan(Unit) <- IO.fork(Unit, producer(events, fetch, urlContext, counter, model, context, options, timestamp))
     return Done{Agent.StreamLease{events, release(events, task)}}
 
-def selectedStream(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), selected: GoogleResult()) -> IO(Output()):
+def selectedStream(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, counter: Ref.Ref<Nat>, model: Ai.Model<Ai.JsonValue>, context: Context(), selected: GoogleResult()) -> IO(Output()):
   match selected:
     case Fail{message}: IO.pure(Output(), Fail{Tools.Failure{message}})
-    case Done{options}: openStream(fetch, urlContext, model, context, options)
+    case Done{options}: openStream(fetch, urlContext, counter, model, context, options)
 
 # upstream streamSimple, whose missing-key and level-mapping errors are thrown
-# before a stream exists.
-def open(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +context: Context(), options: Maybe<&2, Options()>) -> IO(Output()):
-  selectedStream(fetch, urlContext, model, context, Google.streamSimpleOptions(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, context, Some{resolvedOptions(options)}))
+# before a stream exists. `counter` is the process's generated tool-call id
+# counter (upstream's module toolCallCounter).
+def open(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, counter: Ref.Ref<Nat>, +model: Ai.Model<Ai.JsonValue>, +context: Context(), options: Maybe<&2, Options()>) -> IO(Output()):
+  selectedStream(fetch, urlContext, counter, model, context, Google.streamSimpleOptions(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, context, Some{resolvedOptions(options)}))

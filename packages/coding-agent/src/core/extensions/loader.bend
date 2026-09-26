@@ -464,5 +464,5 @@ def sendUserWith(actions: T.ExtensionActions, request: T.SendUserMessage) -> IO(
     case T.ExtensionActions{_, send}: C.call(T.SendUserMessage, Unit, send, request)
 
 # upstream pi.sendUserMessage(content, options).
-def sendUserMessage(api: T.ExtensionAPI, content: Ai.UserContent, deliverAs: Maybe<&2, T.UserDelivery>) -> IO(Result<&2, &2, String, Unit>):
-  withActionsOf(api, actions => sendUserWith(actions, T.SendUserMessage{content, deliverAs}))
+def sendUserMessage(api: T.ExtensionAPI, content: Ai.UserContent, options: T.SendUserMessageOptions) -> IO(Result<&2, &2, String, Unit>):
+  withActionsOf(api, actions => sendUserWith(actions, T.SendUserMessage{content, options}))
