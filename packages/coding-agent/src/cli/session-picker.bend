@@ -1225,18 +1225,10 @@ def renamedModalAction(ids: Uuid.Generator,+modal: Ref.Ref<Modal>,state: State,+
         return Unchanged{}
 def renamedModal(ids: Uuid.Generator,modal: Ref.Ref<Modal>,state: State,target: Session.SessionInfo,input: SearchInput.Input,words: Ref.Ref<Words.Source>,+bindings: Bindings.KeybindingsManager,+data: String,loader: HostLoader) -> IO(Mutation):
   renamedModalAction(ids,modal,state,target,input,words,bindings,data,action(bindings,data),loader)
-def renameAllowed(state: State,loads: Loads) -> Bool:
-  match state loads:
-    case State{_,_,Current{},_,_,_,_} Loads{None{},_}: True{}
-    case State{_,_,All{},_,_,_,_} Loads{_,None{}}: True{}
-    case _ _: False{}
-def beginLoadedRename(modal: Ref.Ref<Modal>,+state: State,loader: HostLoader) -> IO(Mutation):
-  match loader:
-    case HostLoader{loads,_,_,_}:
-      do IO<Mutation>:
-        count : Loads <- Ref.read(Loads,loads)
-        Bool.pick(Unit -> IO(Unit),renameAllowed(state,count),_ => beginRename(modal,state),_ => IO.pure(Unit,Unit{}))(Unit{})
-        return Unchanged{}
+def beginLoadedRename(modal: Ref.Ref<Modal>,state: State,_: HostLoader) -> IO(Mutation):
+  do IO<Mutation>:
+    beginRename(modal,state)
+    return Unchanged{}
 def receivedModalOpenAction(modal: Ref.Ref<Modal>,+bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,+state: State,+data: String,selected: Action,loader: HostLoader) -> IO(Mutation):
   match state selected:
     case State{_,_,_,_,_,Pending{},Controls{_,_,_,Some{+path},_,_}} _:

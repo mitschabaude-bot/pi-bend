@@ -99,6 +99,8 @@ def run(+root: String,+assets: String) -> IO(Unit):
     waitLoaded(modal,loads,Picker.All{},10000n)
     emit("all",modal,loader)
     selectScope(modal,loader)
+    # A published row can be renamed before the remaining files finish loading.
+    Ref.write(Picker.Loads,loads,Picker.Loads{Some{Picker.Count{1n,2n}},Some{Picker.Count{1n,2n}}})
     state : Picker.Modal <- Ref.read(Picker.Modal,modal)
     unused : Picker.Mutation <- Picker.beginLoadedRename(modal,openState(state),loader)
     renamed : Picker.Modal <- Ref.read(Picker.Modal,modal)
