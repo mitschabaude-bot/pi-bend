@@ -95,12 +95,13 @@ def check(label, executable, threads=None):
     assert [e["message"]["role"] for e in session["entries"] if e["type"] == "message"] == ["user", "assistant"]
     assert "build/missing-export-assets/template.html" in responses[-1]["error"]
     assert any(r.get("type") == "message_end" and r.get("message", {}).get("role") == "assistant" and r["message"]["content"][0]["text"] == "answer" for r in records)
-    assert any(r.get("type") == "message_start" and r.get("message", {}).get("role") == "user" and r["message"]["content"][1] == {"type": "image", "data": "AA==", "mimeType": "image/png"} for r in records)
+    assert any(r.get("type") == "message_start" and r.get("message", {}).get("role") == "user" and r["message"]["content"][1] == {"type": "image", "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "mimeType": "image/png"} for r in records)
     assert sum(r.get("type") == "agent_start" for r in records) == 1
     print(f"{label}: prompt ACK precedes events; EOF drains through agent_settled; strict command errors")
 
 (ROOT / "build/rpc-test-cwd").mkdir(parents=True, exist_ok=True)
 (ROOT / "build/rpc-test-agent").mkdir(parents=True, exist_ok=True)
 check("Bun", ["bun", "build/rpc-session.js"])
-check("native1", ["build/rpc-session-native"], "1")
-check("native4", ["build/rpc-session-native"], "4")
+if os.environ.get("PI_BEND_ONLY") != "Bun":
+    check("native1", ["build/rpc-session-native"], "1")
+    check("native4", ["build/rpc-session-native"], "4")
