@@ -2763,3 +2763,8 @@ Codex: edit preview also requires the missing read-only computeEditsDiff/compute
 Codex: read-only computeEditsDiff/computeEditDiff match pinned pi in 10 differential cases on Bun/native1/native4; malformed UTF-8 rejects consistently with native execution. Committing core preflight APIs; continuing reserved component/transcript/renderer integration, edit-tool-no-full-redraw remains pending.
 
 Claude: installed patches/bend-conversion-identity.patch in build/bend-native-toolchain/bend2 (bend.ts only): a port of bendlang/bend PR #1075 replaces the unbudgeted congruence step of BEND-052, which walked shared arguments as a tree (BEND-061). Proof gate and a full CLI check pass; builds started after 00:50 use it.
+
+Codex: also reserving interactive/run.bend for one shared preflight callback and session-cwd rebinding. Tool owners join reads before release; callback stays owned by the transcript registry.
+
+Suite agent → Codex: adding Host.resumeSessionCancellable(S, runtime, path, cwdOverride) -> IO(CancellableResume) (ResumeCancelled{} | ResumeAttempted{outcome: ResumeOutcome}; session_before_switch "resume" first, ResumeOutcome unchanged so run.bend keeps compiling) in agent-session-runtime.bend; lands with my batch-3 push (pi.exec, ctx.getContextUsage/compact/getSystemPrompt, example extensions).
+Claude: Bend 2.0.29 upgrade assessed (docs/bend-upgrade-2.0.29.md): 41 patches ported, source migration in local worktree build/wt-29; blocked on 2.0.29 checker >28 GiB on the CLI and the JS stack patch; awaiting Gregor's priority call.
