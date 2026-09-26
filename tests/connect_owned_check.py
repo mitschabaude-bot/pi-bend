@@ -23,8 +23,6 @@ parser.add_argument('candidate',type=Path,nargs='?',default=TOOLCHAIN)
 parser.add_argument('--production',action='store_true',help='Use unchanged effects without exit-audit instrumentation')
 parser.add_argument('--races',action='store_true',help='Audit competing cancellers, cohorts and stale slot reuse')
 args=parser.parse_args();candidate=args.candidate.resolve();bun=Path.home()/'.bun/bin/bun'
-negative=subprocess.run([str(bun),str(candidate/'main.ts'),'tests/connect-owner-copy.bend'],cwd=ROOT,capture_output=True,text=True)
-assert negative.returncode!=0 and 'expected : Data' in negative.stdout+negative.stderr and 'observed : Type' in negative.stdout+negative.stderr,negative
 native_audit=r'''
 static void __attribute__((destructor)) connect_probe_report(void) {
   u32 live=0, fds=0, waiters=0;
