@@ -1,0 +1,17 @@
+--- a/bend.ts
++++ b/bend.ts
+@@ -2867,7 +2867,13 @@
+         const dt = match_flatten({ $: "Match", e: m.e, r: ds, s: m.s }, vars, fr);
+         return Mat(c.k, pt, dt, m.s, c.s, w);
+       } else {
+-        const xs = c.x.map((q): PVar => {
++        // a field's binder is the first row's that names it, so a
++        // diagnostic about the column names a binder, not a wildcard
++        const named = (j: number): Patt | undefined => m.r.map((row) => row.p[0])
++          .map((p) => p.$ === "PCtr" && p.k === c.k ? p.x[j] : undefined)
++          .find((p) => p?.$ === "PVar" && !p.k.startsWith("_"));
++        const xs = c.x.map((q0, j): PVar => {
++          const q = q0.$ === "PVar" && q0.k.startsWith("_") ? named(j) ?? q0 : q0;
+           if (q.$ === "PVar") {
+             return q;
+           }
