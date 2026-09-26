@@ -2,6 +2,7 @@
 """Consecutive model turns over the native session pool versus pinned pi."""
 import argparse
 import base64
+import copy
 import hashlib
 import json
 import subprocess
@@ -33,7 +34,12 @@ class ReusableHandler(Handler):
                 assert request.pop('type') == 'response.create'
                 self.server.requests.append(request)
                 self.server.identities.append(identity)
-                for value in events():
+                ordinal = len(self.server.requests)
+                for value in events(tool=self.server.tool):
+                    if value.get('item', {}).get('type') == 'message':
+                        value['item']['id'] = f'msg_{ordinal}'
+                    if 'response' in value:
+                        value['response']['id'] = f'resp_{ordinal}'
                     conn.sendall(frame(1, json.dumps(value, separators=(',', ':')).encode()))
         except (EOFError, ConnectionResetError, BrokenPipeError):
             pass
@@ -55,13 +61,39 @@ def native_results(stdout):
     return results
 
 
-def run(command, mode, reference=False):
+def run(command, mode, reference=False, previous=None, following=None):
     with Server(('127.0.0.1', 0), ReusableHandler) as server:
         server.upgrades, server.requests, server.identities, server.errors = [], [], [], []
+        server.tool = mode in ('seed-tool', 'cached-tool')
         worker = threading.Thread(target=server.serve_forever)
         worker.start()
         url = f'http://127.0.0.1:{server.server_port}'
         cases = [fixture('complete'), fixture('simple')]
+        if server.tool:
+            for c in cases:
+                c['tools'] = fixture('tool')['tools']
+        if mode.startswith('cached-') or mode in ('auto-user', 'unset-user'):
+            for c in cases:
+                c['options']['transport'] = 'auto' if mode == 'auto-user' else 'websocket-cached'
+                if mode == 'unset-user':
+                    c['options'].pop('transport')
+            prior = {**copy.deepcopy(previous), 'timestamp': 0}
+            user = {'role': 'user', 'content': 'Continue', 'timestamp': 1}
+            cases[1]['messages'] = [prior]
+            if mode != 'cached-empty':
+                cases[1]['messages'].append(user)
+            if mode == 'cached-prefix':
+                cases[1]['messages'] = [user]
+            if mode == 'cached-configuration':
+                cases[1]['options']['temperature'] = .4
+            if mode == 'cached-tool':
+                cases[1]['messages'] = [prior, {'role': 'toolResult', 'toolCallId': prior['content'][0]['id'],
+                    'toolName': 'read', 'content': [{'type': 'text', 'text': 'ready'}], 'isError': False, 'timestamp': 1}]
+            if mode == 'cached-chain':
+                third = copy.deepcopy(cases[1])
+                third['messages'] += [{**copy.deepcopy(following), 'timestamp': 2},
+                                      {**user, 'content': 'Continue again', 'timestamp': 3}]
+                cases.append(third)
         for c in cases:
             if mode == 'uncached':
                 c['options']['cacheRetention'] = 'none'
@@ -83,8 +115,8 @@ def run(command, mode, reference=False):
             worker.join()
         server.server_close()
         assert not server.errors, server.errors
-        assert len(output) == 2, output
-        expected = [0, 0] if mode == 'reuse' else [0, 1]
+        assert len(output) == len(cases), output
+        expected = [0, 1] if mode in ('uncached', 'session-isolation') else [0] * len(cases)
         assert server.identities == expected, (mode, server.identities)
         return [comparable(item) for item in output], server.requests
 
@@ -94,11 +126,27 @@ def main():
     parser.add_argument('--prefix', default='build/openai-codex-stream-pool')
     parser.add_argument('--backends', nargs='+', choices=['bun', 'native-1', 'native-4'], default=['bun'])
     args = parser.parse_args()
-    for mode in ('reuse', 'uncached', 'session-isolation'):
-        want = run(['bun', 'tests/openai_codex_websocket_reference.ts'], mode, True)
+    reference = ['bun', 'tests/openai_codex_websocket_reference.ts']
+    initial = run(reference, 'reuse', True)[0]
+    previous, following = initial[0]['message'], initial[1]['message']
+    previous_tool = run(reference, 'seed-tool', True)[0][0]['message']
+    modes = ('reuse', 'uncached', 'session-isolation', 'cached-empty', 'cached-user',
+             'auto-user', 'unset-user', 'cached-configuration', 'cached-prefix', 'cached-tool', 'cached-chain')
+    for mode in modes:
+        prior = previous_tool if mode == 'cached-tool' else previous
+        want = run(reference, mode, True, prior, following)
+        second = want[1][1]
+        delta = mode in ('cached-empty', 'cached-user', 'auto-user', 'cached-tool', 'cached-chain')
+        assert ('previous_response_id' in second) == delta, (mode, second)
+        if delta:
+            assert second['previous_response_id'] == 'resp_1', second
+            assert len(second['input']) == (0 if mode == 'cached-empty' else 1), second
+        if mode == 'cached-chain':
+            assert want[1][2]['previous_response_id'] == 'resp_2', want[1][2]
+            assert len(want[1][2]['input']) == 1, want[1][2]
         for backend in args.backends:
             command = ['bun', args.prefix + '.js'] if backend == 'bun' else [args.prefix, '--threads', backend[-1]]
-            got = run(command, mode)
+            got = run(command, mode, previous=prior, following=following)
             assert got == want, (backend, mode, got, want)
             print(f'{backend}: {mode} consecutive-turn requests/events/messages/connection identity MATCH')
 
