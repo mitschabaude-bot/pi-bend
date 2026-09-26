@@ -2173,9 +2173,15 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-auto-compaction-queue.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "c3dd09c31206891c764498d55606b044cea83767f7cefcac5f98ed0fdd70b0b4"
+      "status": "ported",
+      "ports": [
+        "tests/regressions.bend",
+        "tests/regressions_check.py",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "c3dd09c31206891c764498d55606b044cea83767f7cefcac5f98ed0fdd70b0b4",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "All six cases without private spies (auto_compaction_queue_checks): a threshold compaction with only an agent-level queued follow-up reports success and the agent does not continue (streaming stays false, no agent_start); 'should not compact repeatedly after overflow recovery already attempted' is the overflow scenario of tests/agent_session_check.py (one compaction, then the recovery-failed compaction_end); the stale-usage, error-after-success, error-alone and error-after-kept-usage cases assert the decision Session.planCompaction makes for the checked message (threshold or none), which is what upstream observes by spying on _runAutoCompaction. Upstream's Anthropic model becomes the faux model (128k window, default reserve), with the threshold usage computed from it as upstream computes it."
     },
     {
       "source": "packages/coding-agent/test/agent-session-branching.test.ts",
@@ -2221,10 +2227,14 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-dynamic-tools.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py"
+      ],
       "sha256": "d0e3053b05635eb80891962db05c24ae3eaaf26e0ab8b9cfc7f4f90ac212fd79",
-      "notes": "Pending: every case registers tools through an extension (pi.registerTool) on a session created by createAgentSession, which the port's native extensions do not yet expose to the tool registry. Related coverage: the default bash tool's PI_* guidance and its exposeSessionEnvironment opt-out in the runtime's system prompt (tests/runtime_context_check.py) and the bash tool's session environment with and without exposeSessionEnvironment (tests/bash-tool.bend)."
+      "notes": "'refreshes tool registry when tools are registered after initialization' (the guideline is checked in the system prompt; ToolInfo has no promptGuidelines or sourceInfo) and 'keeps custom tools active but omits them from available tools when promptSnippet is not provided' run in tests/suite_harness_check.py (session_start from Session.bindExtensions). Pending: 'exposes session state before custom bash spawn hooks' (built-in tool factories such as createBashTool are not exposed as extension tool definitions) and 'returns source metadata for SDK custom tools' (createAgentSession customTools and tool source metadata are not ported).",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend"
     },
     {
       "source": "packages/coding-agent/test/agent-session-retry.test.ts",
@@ -2373,7 +2383,8 @@
       "source": "packages/coding-agent/test/builtin-tool-strict-mode.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "e7b6c9145a3957a02f9eb22f04766ae46c33f938e060569439b6df925a5139f5"
+      "sha256": "e7b6c9145a3957a02f9eb22f04766ae46c33f938e060569439b6df925a5139f5",
+      "notes": "Pending: built-in tool definitions' constrained-sampling preference, wrapToolDefinition and re-registering built-in tools from an extension without strict sampling (built-in tools are not exposed as extension tool definitions)."
     },
     {
       "source": "packages/coding-agent/test/cache-stats.test.ts",
@@ -2559,9 +2570,14 @@
     },
     {
       "source": "packages/coding-agent/test/default-tools-setting.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "664e6bf07effdb3bce99dc368a44835da064f4430891f48174ed7cb0140c0b8e"
+      "status": "partial",
+      "ports": [
+        "tests/regressions.bend",
+        "tests/regressions_check.py"
+      ],
+      "sha256": "664e6bf07effdb3bce99dc368a44835da064f4430891f48174ed7cb0140c0b8e",
+      "implementation": "packages/coding-agent/src/core/agent-runtime.bend",
+      "notes": "Configured defaultTools as the initial built-in selection, extension tools (registered at load and from session_start) staying enabled, explicit tools/excludeTools/noTools precedence, and the service-based path (the same creation path natively) run on the runtime's tool resolution (tests/regressions_check.py). Pending: 'can select powershell instead of bash' (powershell is not ported); the SDK customTools part of 'keeps extension and SDK custom tools enabled' (customTools are not ported). The registry lacks powershell."
     },
     {
       "source": "packages/coding-agent/test/documentation.test.ts",
@@ -3870,14 +3886,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2835-tools-allowlist-filters-extension-tools.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/regressions_check.py",
         "tests/regressions.bend",
         "tests/regressions.md"
       ],
       "sha256": "399e5369a79209f30f15e530f940a61230b876bed587b8287eb58520b40b138b",
-      "notes": "Both cases for the built-in tools: an allowlist of read and dynamic_tool registers and activates only read and the prompt lists only '- read: Read file contents'; an empty allowlist registers nothing and the prompt's tools section is '(none)'. Pending: the extension tool dynamic_tool, which the native extension API cannot register. Bun and native (tests/regressions.bend, 1 and 4 threads)."
+      "notes": "Both cases with the extension tool: an allowlist of read and dynamic_tool registers and activates both, and the prompt lists read and dynamic_tool only; an empty allowlist registers nothing, including dynamic_tool, and the prompt's tools section is '(none)'. The extension registers dynamic_tool from session_start (Session.bindExtensions). Bun and native (tests/regressions.bend, 1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2860-replaced-session-context.test.ts",
@@ -3923,9 +3939,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3592-no-builtin-tools-keeps-extension-tools.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6357fd4fcd5c33ef20451c7edbf1a885388aa832dbc3a76f2c84eef43172db39"
+      "status": "partial",
+      "ports": [
+        "tests/regressions.bend",
+        "tests/regressions_check.py"
+      ],
+      "sha256": "6357fd4fcd5c33ef20451c7edbf1a885388aa832dbc3a76f2c84eef43172db39",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "The three cases on the runtime's tool resolution with an extension that registers dynamic_tool from session_start: with built-in defaults disabled only dynamic_tool is active and listed; noTools all registers nothing; without extensions noTools builtin starts with nothing active (the service-based path is the same creation path natively). Partial: the registry lacks powershell, which is not ported, so the first case's tool list has the other built-in tools."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3616-settings-inmemory-reload.test.ts",
@@ -3984,14 +4005,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5109-exclude-tools.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/regressions_check.py",
         "tests/regressions.bend",
         "tests/regressions.md"
       ],
       "sha256": "3fa0f1a92fd7fb8a5a72c64bdc4ce86959e98b1fdc9a5dfe046f02600f8dcef1",
-      "notes": "Both cases for the built-in tools: excluded read is neither registered nor active nor in the system prompt while bash, edit and write stay active; excluded names override the allowlist (only bash registered and active). Pending: the extension tools (ask_question, dynamic_tool registered from session_start), which the native extension API cannot register. Bun and native (tests/regressions.bend, 1 and 4 threads)."
+      "notes": "Both cases with the extension tools ask_question and dynamic_tool registered from session_start: excluded read and ask_question are neither registered, active nor in the prompt while bash, edit, write and dynamic_tool stay active and dynamic_tool is listed; excluded names override the allowlist (only bash). Bun and native (tests/regressions.bend, 1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5208-late-bash-output.test.ts",
@@ -4118,9 +4139,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6162-extension-active-tools-next-turn.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "8998c4abfe32e931a3b977cb586249b6501855fed762aea5aa283fe32c81d171"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py"
+      ],
+      "sha256": "8998c4abfe32e931a3b977cb586249b6501855fed762aea5aa283fe32c81d171",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "All three cases (extension_tool_checks): pi.setActiveTools from a tool's execute changes the next request's tools in the same run; the session's system prompt at each request (a context handler reads it) equals the provider's and changes with the tools; a before_agent_start override stays in both requests. Request tools and prompts are read from the request context (getCurrentTools/getCurrentSystemPrompt)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6260-inline-extension-naming.test.ts",

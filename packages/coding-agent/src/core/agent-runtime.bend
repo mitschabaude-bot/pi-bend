@@ -520,6 +520,27 @@ def promptOptionsFor(options: CreateOptions, +names: List<&2, Tools.ToolName>, c
 def promptOptions(options: CreateOptions, active: List<&2, String>, contextList: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>) -> Prompt.BuildSystemPromptOptions:
   promptOptionsFor(options, parsedNames(active), contextList, skills)
 
+# Prompt snippets and guidelines of registered non-built-in tools (upstream
+# _toolPromptSnippets and _toolPromptGuidelines for extension tools); they
+# override a built-in tool's of the same name.
+type ToolPrompts is Data:
+  ToolPrompts{snippets: R.Record<String>, guidelines: R.Record<List<&2, String>>}
+
+def noToolPrompts() -> ToolPrompts: ToolPrompts{R.new(String), R.new(List<&2, String>)}
+
+def mergedRecord(-V: Data, extra: List<&2, R.Property<V>>, +base: R.Record<V>) -> R.Record<V>:
+  match extra:
+    case Nil{}: base
+    case R.Property{name, value} <> rest: mergedRecord(V, rest, R.set(V, base, name, value))
+
+# upstream _rebuildSystemPrompt: every active tool is selected; built-in tools
+# have their snippets and guidelines, registered tools theirs.
+def promptOptionsWith(options: CreateOptions, +active: List<&2, String>, contextList: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>, prompts: ToolPrompts) -> Prompt.BuildSystemPromptOptions:
+  match options prompts:
+    case CreateOptions{cwd, _, _, _, _, _, _, _, _, systemPrompt, appendSystemPrompt, selection, _, _, _, _} ToolPrompts{extraSnippets, extraGuidelines}:
+      +names = parsedNames(active)
+      Prompt.BuildSystemPromptOptions{systemPrompt, None{}, Some{active}, Some{mergedRecord(String, R.entries(String, extraSnippets), snippets(names, R.new(String)))}, Some{mergedRecord(List<&2, String>, R.entries(List<&2, String>, extraGuidelines), guidelines(names, builtinsOf(selection), R.new(List<&2, String>)))}, None{}, nonemptyAppend(appendSystemPrompt), None{}, cwd, Some{contextList}, Some{skills}}
+
 def documentationPaths(+packageDir: String) -> Prompt.DocumentationPaths:
   Prompt.DocumentationPaths{Path.join(packageDir, "README.md"), Path.join(packageDir, "docs"), Path.join(packageDir, "examples")}
 
@@ -713,6 +734,11 @@ def preparedWith(skills: List<&2, Skills.Skill>, templates: List<&2, Templates.P
 def sectionsForTools(source: LoadoutSource, active: List<&2, String>, contextList: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>) -> Result<&2, &2, String, Prompt.SystemPromptSections()>:
   match source:
     case LoadoutSource{_, options, packageDir}: promptResult(Prompt.buildSystemPromptSections(documentationPaths(packageDir), promptOptions(options, active, contextList, skills)))
+
+# The sections for the active tools with registered tools' prompts.
+def sectionsForToolsWith(source: LoadoutSource, active: List<&2, String>, contextList: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>, prompts: ToolPrompts) -> Result<&2, &2, String, Prompt.SystemPromptSections()>:
+  match source:
+    case LoadoutSource{_, options, packageDir}: promptResult(Prompt.buildSystemPromptSections(documentationPaths(packageDir), promptOptionsWith(options, active, contextList, skills, prompts)))
 
 def preparedWithTools(+environment: Paths.Environment, +options: CreateOptions, +packageDir: String, active: List<&2, String>) -> IO(Result<&2, &2, String, Prepared>):
   do IO<Result<&2, &2, String, Prepared>>:
