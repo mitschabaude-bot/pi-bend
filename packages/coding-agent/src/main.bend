@@ -27,6 +27,7 @@ import ./core/session-cwd.bend as SessionCwd
 import ./core/trust-manager.bend as Trust
 import ./core/tools/index.bend as Tools
 import ./modes/print-mode.bend as Print
+import ./core/extensions/context.bend as Ctx
 import ./modes/rpc.bend as Rpc
 import ./modes/interactive/session-controller.bend as Controller
 import ./modes/interactive/run.bend as InteractiveRun
@@ -1024,10 +1025,14 @@ def interactiveHosted(initial: Initial.InitialMessage, themeOverride: Maybe<&2,S
     Bool.pick(Unit -> IO(Unit),Result.is_done(&2,&2,InteractiveRun.Error,Unit,result),_ => printResumeFound(resumeText(stored,agentDir)),_ => IO.pure(Unit,Unit{}))(Unit{})
     interactiveFinished(result)
 
-def rpcNewSession(host: Host(), parent: Maybe<&2,String>) -> IO(Result<&2,&2,String,Unit>):
-  SessionRuntime.newSession(Services, host, parent)
-def rpcSwitchSession(host: Host(), path: String) -> IO(Result<&2,&2,String,Unit>):
-  SessionRuntime.switchSession(Services, host, path, None{})
+# RPC reports cancellation by extensions (session_before_switch/fork).
+def rpcNewSession(host: Host(), parent: Maybe<&2,String>) -> IO(Result<&2,&2,String,Ctx.SessionChange>):
+  SessionRuntime.newSessionCancellable(Services, host, parent)
+def rpcSwitchSession(host: Host(), path: String) -> IO(Result<&2,&2,String,Ctx.SessionChange>):
+  SessionRuntime.switchSessionCancellable(Services, host, path, None{})
+def rpcForkHosted(host: Host(), request: SessionRuntime.ForkRequest) -> IO(Result<&2,&2,String,SessionRuntime.ForkOutcome>):
+  match request:
+    case SessionRuntime.ForkRequest{entryId, position}: SessionRuntime.forkCancellable(Services, host, entryId, position)
 def rpcRebind(handle: Rpc.Handle, live: AgentSession.AgentSession) -> IO(Unit): Rpc.rebind(handle, live)
 
 # upstream shutdown(): the runtime is disposed (extensions see
@@ -1043,9 +1048,9 @@ def disposeRpcHost(rpcHost: Rpc.Host) -> IO(Unit):
       do IO<Unit>:
         Callback.dispose(Unit,Unit,shutdown)
         wanted : Bool <- Ref.dispose(Bool,requested)
-        Callback.dispose(Maybe<&2,String>,Result<&2,&2,String,Unit>,opening)
-        Callback.dispose(String,Result<&2,&2,String,Unit>,switching)
-        Callback.dispose(SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,forking)
+        Callback.dispose(Maybe<&2,String>,Result<&2,&2,String,Ctx.SessionChange>,opening)
+        Callback.dispose(String,Result<&2,&2,String,Ctx.SessionChange>,switching)
+        Callback.dispose(SessionRuntime.ForkRequest,Result<&2,&2,String,SessionRuntime.ForkOutcome>,forking)
 
 def rpcServed(+host: Host(), rpcHost: Rpc.Host, pair: Rpc.Owner & Rpc.Handle) -> IO(Result<&2,&2,String,Unit>):
   match pair:
@@ -1068,9 +1073,9 @@ def rpcSelected(live: AgentSession.AgentSession, assetsRoot: String, +host: Host
     case Some{_}:
       do IO<Unit>:
         +sink : Callback.Callback<String,Unit> <- Callback.create(~Unit,~String,~Unit,~rpcWrite,Unit{})
-        opening : Callback.Callback<Maybe<&2,String>,Result<&2,&2,String,Unit>> <- Callback.create(~Host(),~Maybe<&2,String>,~Result<&2,&2,String,Unit>,~rpcNewSession,host)
-        switching : Callback.Callback<String,Result<&2,&2,String,Unit>> <- Callback.create(~Host(),~String,~Result<&2,&2,String,Unit>,~rpcSwitchSession,host)
-        forking : Callback.Callback<SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>> <- Callback.create(~Host(),~SessionRuntime.ForkRequest,~Result<&2,&2,String,Maybe<&2,String>>,~forkHosted,host)
+        opening : Callback.Callback<Maybe<&2,String>,Result<&2,&2,String,Ctx.SessionChange>> <- Callback.create(~Host(),~Maybe<&2,String>,~Result<&2,&2,String,Ctx.SessionChange>,~rpcNewSession,host)
+        switching : Callback.Callback<String,Result<&2,&2,String,Ctx.SessionChange>> <- Callback.create(~Host(),~String,~Result<&2,&2,String,Ctx.SessionChange>,~rpcSwitchSession,host)
+        forking : Callback.Callback<SessionRuntime.ForkRequest,Result<&2,&2,String,SessionRuntime.ForkOutcome>> <- Callback.create(~Host(),~SessionRuntime.ForkRequest,~Result<&2,&2,String,SessionRuntime.ForkOutcome>,~rpcForkHosted,host)
         shutdown : Callback.Callback<Unit,Unit> <- Callback.create(~Host(),~Unit,~Unit,~rpcShutdown,host)
         requested : Ref.Ref<Bool> <- Ref.new(Bool,False{})
         +rpcHost : Rpc.Host = Rpc.Host{opening, switching, forking, shutdown, requested}

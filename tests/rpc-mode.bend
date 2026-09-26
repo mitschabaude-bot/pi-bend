@@ -551,6 +551,29 @@ def shutdownRequested(+cwd: String,+agentDir: String) -> IO(Unit):
     two : Rpc.Owner & Rpc.Handle <- started(second)
     quitAtSettled(second,two)
 
+# upstream new_session/switch_session/fork/clone answer { cancelled } from
+# the runtime host: extensions' session_before_switch/fork can cancel.
+def cancelling(+value: Endpoint,pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
+  match pair:
+    case (owner,+handle):
+      do IO<Unit>:
+        send(handle,"{\"id\":\"n\",\"type\":\"new_session\"}")
+        send(handle,"{\"id\":\"w\",\"type\":\"switch_session\",\"sessionPath\":\"/tmp/other.jsonl\"}")
+        send(handle,"{\"id\":\"f\",\"type\":\"fork\",\"entryId\":\"e1\"}")
+        lines : List<&2,String> <- waitFor(linesOf(value),Contains{"\"id\":\"f\""},300n)
+        +captured : List<&2,String> <- cleanup(value,owner)
+        report("RPC session changes > new_session, switch_session and fork report an extension's cancel",anyContains(captured,"{\"id\":\"n\",\"type\":\"response\",\"command\":\"new_session\",\"success\":true,\"data\":{\"cancelled\":true}}") && anyContains(captured,"{\"id\":\"w\",\"type\":\"response\",\"command\":\"switch_session\",\"success\":true,\"data\":{\"cancelled\":true}}") && anyContains(captured,"\"command\":\"fork\",\"success\":true,\"data\":{\"cancelled\":true}}"))
+def cancellingStarted(+value: Endpoint) -> IO(Rpc.Owner & Rpc.Handle):
+  match value:
+    case Endpoint{fixture,_,sink}:
+      do IO<Rpc.Owner & Rpc.Handle>:
+        host : Rpc.Host <- RpcHost.createCancelling(sink)
+        Rpc.start(Faux.sessionOf(fixture),sink,None{},host)
+def sessionChangesCancelled(+cwd: String,+agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +value : Endpoint <- endpoint(cwd,agentDir,True{},Nil{})
+    pair : Rpc.Owner & Rpc.Handle <- cancellingStarted(value)
+    cancelling(value,pair)
 def run(args: List<String>) -> IO(Unit):
   match args:
     case +cwd <> +agentDir <> Nil{}:
@@ -565,6 +588,7 @@ def run(args: List<String>) -> IO(Unit):
         commandActions(cwd,agentDir)
         uiExtras(cwd,agentDir)
         shutdownRequested(cwd,agentDir)
+        sessionChangesCancelled(cwd,agentDir)
     case _: IO.die(Unit,1,"usage: rpc-mode <cwd> <agentDir>")
 def main() -> IO(Unit):
   do IO<Unit>:

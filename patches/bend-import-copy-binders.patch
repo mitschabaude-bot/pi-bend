@@ -1,0 +1,14 @@
+--- a/bend.ts
++++ b/bend.ts
+@@ -1909,6 +1909,11 @@
+       if (t.$ === "Var" && (tld === undefined || tld.$ !== "ADT")) {
+         return Var(t.k, -1, s);
+       }
++      // a binder named like one of this module's defs (see parse_binder)
++      const own = t.$ === "Ref" && p.ns !== "" && t.k.startsWith(p.ns + ".") ? t.k.slice(p.ns.length + 1) : null;
++      if (own !== null && !own.includes(".") && (tld === undefined || tld.$ !== "ADT") && book_ctr(p.book, t.k) === null) {
++        return Var(own, -1, s);
++      }
+       if (tld === undefined || tld.$ !== "ADT" || tld.g === 0 || tld.g < tld.n && t.$ !== "ADT") {
+         parse_fail(p, "a quantified datatype after + (+D<..> sets D's leading quantities to &2)");
+       }

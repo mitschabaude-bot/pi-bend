@@ -57,7 +57,7 @@ type Command is Data:
 # extension's ctx.shutdown() and honoured after the command or at
 # agent_settled.
 type Host is Data:
-  Host{newSession: Callback.Callback<Maybe<&2,String>,Result<&2,&2,String,Unit>>,switchSession: Callback.Callback<String,Result<&2,&2,String,Unit>>,fork: Callback.Callback<SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>>,shutdown: Callback.Callback<Unit,Unit>,requested: Ref.Ref<Bool>}
+  Host{newSession: Callback.Callback<Maybe<&2,String>,Result<&2,&2,String,Ctx.SessionChange>>,switchSession: Callback.Callback<String,Result<&2,&2,String,Ctx.SessionChange>>,fork: Callback.Callback<SessionRuntime.ForkRequest,Result<&2,&2,String,SessionRuntime.ForkOutcome>>,shutdown: Callback.Callback<Unit,Unit>,requested: Ref.Ref<Bool>}
 # Extension UI over the protocol (upstream createExtensionUIContext): dialogs
 # wait for the extension_ui_response with their id; `open` becomes False when
 # the endpoint stops, after which dialogs answer as cancelled at once.
@@ -471,13 +471,13 @@ def extensionError(sink: Sink(),error: ExtensionTypes.ExtensionError) -> IO(Unit
 # extension commands, through the host like the RPC commands. A host failure
 # leaves the session in place; the context can only report that as cancelled.
 type ActionEnv is Data: ActionEnv{current: Ref.Ref<Session.AgentSession>,host: Host}
-def changed(result: Result<&2,&2,String,Unit>) -> Ctx.SessionChange:
+def changed(result: Result<&2,&2,String,Ctx.SessionChange>) -> Ctx.SessionChange:
   match result:
-    case Done{_}: Ctx.SessionChange{False{}}
+    case Done{change}: change
     case Fail{_}: Ctx.SessionChange{True{}}
-def forkChanged(result: Result<&2,&2,String,Maybe<&2,String>>) -> Ctx.SessionChange:
+def forkChanged(result: Result<&2,&2,String,SessionRuntime.ForkOutcome>) -> Ctx.SessionChange:
   match result:
-    case Done{_}: Ctx.SessionChange{False{}}
+    case Done{SessionRuntime.ForkOutcome{cancelled,_}}: Ctx.SessionChange{cancelled}
     case Fail{_}: Ctx.SessionChange{True{}}
 def navigated(result: Session.TreeResult()) -> Ctx.SessionChange:
   match result:
@@ -492,7 +492,7 @@ def actionWait(env: ActionEnv,unit: Unit) -> IO(Unit):
 def actionNew(env: ActionEnv,request: Ctx.NewSessionRequest) -> IO(Ctx.SessionChange):
   match env request:
     case ActionEnv{_,Host{opening,_,_,_,_}} Ctx.NewSessionRequest{parent}:
-      IO.bind(Result<&2,&2,String,Unit>,Ctx.SessionChange,Callback.call(Maybe<&2,String>,Result<&2,&2,String,Unit>,opening,parent),result => IO.pure(Ctx.SessionChange,changed(result)))
+      IO.bind(Result<&2,&2,String,Ctx.SessionChange>,Ctx.SessionChange,Callback.call(Maybe<&2,String>,Result<&2,&2,String,Ctx.SessionChange>,opening,parent),result => IO.pure(Ctx.SessionChange,changed(result)))
 def forkPosition(position: Maybe<&2,Ctx.ForkPosition>) -> SessionRuntime.ForkPosition:
   match position:
     case Some{Ctx.ForkAt{}}: SessionRuntime.ForkAt{}
@@ -500,7 +500,7 @@ def forkPosition(position: Maybe<&2,Ctx.ForkPosition>) -> SessionRuntime.ForkPos
 def actionFork(env: ActionEnv,request: Ctx.ForkRequest) -> IO(Ctx.SessionChange):
   match env request:
     case ActionEnv{_,Host{_,_,forking,_,_}} Ctx.ForkRequest{entryId,position}:
-      IO.bind(Result<&2,&2,String,Maybe<&2,String>>,Ctx.SessionChange,Callback.call(SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,forking,SessionRuntime.ForkRequest{entryId,forkPosition(position)}),result => IO.pure(Ctx.SessionChange,forkChanged(result)))
+      IO.bind(Result<&2,&2,String,SessionRuntime.ForkOutcome>,Ctx.SessionChange,Callback.call(SessionRuntime.ForkRequest,Result<&2,&2,String,SessionRuntime.ForkOutcome>,forking,SessionRuntime.ForkRequest{entryId,forkPosition(position)}),result => IO.pure(Ctx.SessionChange,forkChanged(result)))
 def navigateOn(session: Session.AgentSession,request: Ctx.NavigateTreeRequest) -> IO(Ctx.SessionChange):
   match request:
     case Ctx.NavigateTreeRequest{targetId,summarize,custom,replace,label}:
@@ -510,7 +510,7 @@ def actionNavigate(env: ActionEnv,request: Ctx.NavigateTreeRequest) -> IO(Ctx.Se
 def actionSwitch(env: ActionEnv,request: Ctx.SwitchSessionRequest) -> IO(Ctx.SessionChange):
   match env request:
     case ActionEnv{_,Host{_,switching,_,_,_}} Ctx.SwitchSessionRequest{path}:
-      IO.bind(Result<&2,&2,String,Unit>,Ctx.SessionChange,Callback.call(String,Result<&2,&2,String,Unit>,switching,path),result => IO.pure(Ctx.SessionChange,changed(result)))
+      IO.bind(Result<&2,&2,String,Ctx.SessionChange>,Ctx.SessionChange,Callback.call(String,Result<&2,&2,String,Ctx.SessionChange>,switching,path),result => IO.pure(Ctx.SessionChange,changed(result)))
 def reloaded(result: Result<&2,&2,String,Unit>) -> IO(Unit): IO.pure(Unit,Unit{})
 def actionReload(env: ActionEnv,unit: Unit) -> IO(Unit):
   IO.bind(Session.AgentSession,Unit,currentOf(env),session => IO.bind(Result<&2,&2,String,Unit>,Unit,Session.reload(session),reloaded))
@@ -1005,35 +1005,35 @@ def abortBash(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
         output(sink,ok(id,"abort_bash"))
 # Session replacement goes through the host; the rebind hook has installed
 # the new session before the response.
-def replacedData(fields: List<&2,R.Property<V.Value>>) -> V.Value:
-  MessageJson.object(List.append(&2,R.Property<V.Value>,fields,MessageJson.field("cancelled",V.Boolean{False{}},Nil{})))
-def replacedReply(sink: Sink(),id: Maybe<&2,String>,command: String,result: Result<&2,&2,String,Unit>) -> IO(Unit):
+def replacedData(fields: List<&2,R.Property<V.Value>>,cancelled: Bool) -> V.Value:
+  MessageJson.object(List.append(&2,R.Property<V.Value>,fields,MessageJson.field("cancelled",V.Boolean{cancelled},Nil{})))
+def replacedReply(sink: Sink(),id: Maybe<&2,String>,command: String,result: Result<&2,&2,String,Ctx.SessionChange>) -> IO(Unit):
   match result:
     case Fail{message}: output(sink,failure(id,command,message))
-    case Done{_}: output(sink,data(id,command,replacedData(Nil{})))
+    case Done{Ctx.SessionChange{cancelled}}: output(sink,data(id,command,replacedData(Nil{},cancelled)))
 def newSessionCommand(handle: Command,host: Host,id: Maybe<&2,String>,parent: Result<&2,&2,String,Maybe<&2,String>>) -> IO(Unit):
   match handle host parent:
     case Command{_,sink,_,_,_,_} _ Fail{reason}: output(sink,failure(id,"new_session",reason))
     case Command{_,sink,_,_,_,_} Host{opening,_,_,_,_} Done{parentSession}:
       do IO<Unit>:
-        result : Result<&2,&2,String,Unit> <- Callback.call(Maybe<&2,String>,Result<&2,&2,String,Unit>,opening,parentSession)
+        result : Result<&2,&2,String,Ctx.SessionChange> <- Callback.call(Maybe<&2,String>,Result<&2,&2,String,Ctx.SessionChange>,opening,parentSession)
         replacedReply(sink,id,"new_session",result)
 def switchSessionCommand(handle: Command,host: Host,id: Maybe<&2,String>,path: Result<&2,&2,String,String>) -> IO(Unit):
   match handle host path:
     case Command{_,sink,_,_,_,_} _ Fail{reason}: output(sink,failure(id,"switch_session",reason))
     case Command{_,sink,_,_,_,_} Host{_,switching,_,_,_} Done{sessionPath}:
       do IO<Unit>:
-        result : Result<&2,&2,String,Unit> <- Callback.call(String,Result<&2,&2,String,Unit>,switching,sessionPath)
+        result : Result<&2,&2,String,Ctx.SessionChange> <- Callback.call(String,Result<&2,&2,String,Ctx.SessionChange>,switching,sessionPath)
         replacedReply(sink,id,"switch_session",result)
-def forkReply(sink: Sink(),id: Maybe<&2,String>,+command: String,result: Result<&2,&2,String,Maybe<&2,String>>) -> IO(Unit):
+def forkReply(sink: Sink(),id: Maybe<&2,String>,+command: String,result: Result<&2,&2,String,SessionRuntime.ForkOutcome>) -> IO(Unit):
   match result:
     case Fail{message}: output(sink,failure(id,command,message))
-    case Done{text}: output(sink,data(id,command,replacedData(Bool.pick(List<&2,R.Property<V.Value>>,String.eq(command,"fork"),MessageJson.optionalText("text",text,Nil{}),Nil{}))))
+    case Done{SessionRuntime.ForkOutcome{cancelled,text}}: output(sink,data(id,command,replacedData(Bool.pick(List<&2,R.Property<V.Value>>,String.eq(command,"fork"),MessageJson.optionalText("text",text,Nil{}),Nil{}),cancelled)))
 def forkWith(sink: Sink(),host: Host,id: Maybe<&2,String>,command: String,request: SessionRuntime.ForkRequest) -> IO(Unit):
   match host:
     case Host{_,_,forking,_,_}:
       do IO<Unit>:
-        result : Result<&2,&2,String,Maybe<&2,String>> <- Callback.call(SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,forking,request)
+        result : Result<&2,&2,String,SessionRuntime.ForkOutcome> <- Callback.call(SessionRuntime.ForkRequest,Result<&2,&2,String,SessionRuntime.ForkOutcome>,forking,request)
         forkReply(sink,id,command,result)
 def forkCommand(handle: Command,host: Host,id: Maybe<&2,String>,entry: Result<&2,&2,String,String>) -> IO(Unit):
   match handle entry:

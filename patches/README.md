@@ -205,3 +205,5 @@ Validation: build `tests/process-inherited.bend` and `tests/external-editor.bend
 
 `bend-named-column-binders.patch` (2026-09-26, installed after `bend-js-explicit-stack.patch`, changes `bend.ts`): a flattened match column's binder takes its name from the first row that names the field, so linearity errors name the binder and its case instead of an earlier wildcard (BEND-059). Only generated local names change.
 
+`bend-import-copy-binders.patch` (2026-09-26, installed after `bend-named-column-binders.patch`, changes `bend.ts`): the `+`-marked binder form of BEND-032 (`case Wrapped{+text}` next to `def text` in an imported module). The CLI's C is byte-identical.
+

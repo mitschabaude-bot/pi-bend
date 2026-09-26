@@ -17,6 +17,14 @@
         "packages/agent/src/agent.bend": "33baf1abe7eb491aacf9dc6e039e61f093b07ad6a6642d58b21c18b90b1bd76b"
       }
     },
+    "packages/agent/src/proxy.ts": {
+      "state": "ported",
+      "note": "streamProxy, processProxyEvent and the typed ProxyAssistantMessageEvent/ProxyStreamOptions over the native fetch: request body and headers, non-OK error messages, abort and transport failures, line splitting with a trailing unterminated event, partial reconstruction including toolcall_end metadata, unknown-type warnings and the unterminated-stream error. The caller supplies fetch and the URL context; options carry the whole SimpleStreamOptions and send upstream's eleven members; malformed events fail typed decoding; reading stops at the terminal event. streamLease adapts the stream to an Agent streamFn. Differential against upstream in tests/agent_proxy_check.py.",
+      "source_sha256": "9c23fc8a625e79c6f8d180a65146288eaa8c10995d7c6fd91b75f57ff934fd40",
+      "port_sha256": {
+        "packages/agent/src/proxy.bend": "f4d33dac0d9ddbbed9d47e6a07b3727f87c4525569d6a9edb04ea84522fd0d00"
+      }
+    },
     "packages/ai/src/api/anthropic-messages.ts": {
       "state": "ported",
       "note": "Ported as three modules: anthropic-messages.bend (AnthropicOptions, getAnthropicCompat, cache control with PI_CACHE_RETENTION, Claude Code tool naming, transformMessages with tool-call id normalization, convertMessages with held-back system messages, consecutive tool results and the last-message cache marker, convertTools with strict JSON-schema tools, native tool changes with the deferred placeholder, getBetaFeatures with header overrides, managed-effort markers, buildParams, streamSimple's option mapping, mapStopReason, createClient's auth and headers; streamSimple's missing-auth error fails before a stream exists, as upstream throws synchronously); anthropic-messages-stream.bend (iterateSseMessages' line decoder with its trailing flush, iterateAnthropicEvents' filtering, repair and parse errors, the event loop with fallback pricing, input transformation diagnostics and the checks after the loop); anthropic-messages-client.bend (the stream lifecycle: injected or created client, onPayload replacement forcing streaming, retryProviderRequest over the shared Stainless request port, onResponse, start, the body loop and the catch block). tests/anthropic_messages_check.py compares 1,692 captured params and wire requests and 21 streamed messages and event sequences with pinned pi-mono, key order included, and runs the ported suites; tests/anthropic_client_loopback.py covers the HTTP path. Approved differences: X-Stainless-* platform headers are not sent (the SDK defaults come from the caller and are empty in the app); options.client is a callback returning status, headers and a body chunk source, and its failures are messages that are not retried; JSON.parse's engine-specific error text is replaced by the native parser's; a failing body read reports undici's \"terminated\"; event partials are snapshots; an unclosed block does not leak the scratch index field; diagnostic details go through a caller-supplied encoder (the app's details are Unit). No live Anthropic request has been verified.",
@@ -892,7 +900,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "4e159a3485317bac364fba350fd4b8364e7689ea1438652551093bf27c2c9a24",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "91281c83b948bdb35106382375cfc14628d313a48d7676cd9a023b1bcadea32e",
-        "packages/coding-agent/src/main.bend": "6fd9c13ac3a2e36c8206185d80bbbb402a28ce5bb2587a47f1c0fd8ae07c1880",
+        "packages/coding-agent/src/main.bend": "53f39db17951a33a5c361bf278056876a1fe30ab1e9e63760af08e464712104e",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6"
       }
     },
@@ -942,7 +950,7 @@
       ],
       "source_sha256": "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc",
       "port_sha256": {
-        "packages/coding-agent/src/modes/rpc.bend": "88d428600ae6494af2be234c47ea36dbe9fba6dfdefcdb66f33a5e4d86da8703"
+        "packages/coding-agent/src/modes/rpc.bend": "3702998824e73db822eef9f4660aeaf5b89c89f8c86f066711fea0a81e13844a"
       }
     },
     "packages/coding-agent/src/modes/rpc/rpc-types.ts": {
