@@ -50,9 +50,15 @@ for threads in (1, 4):
             until(b"No model selected", start)
             start = len(output)
             os.write(master, b"/login\r")
-            until(b"Choose a provider", start)
+            until(b"Select authentication method:", start)
+            until(b"Sign in with an account", start)
+            until(b"Sign in with an API key", start)
             os.write(master, b"\x1b")
-            until(b"Login cancelled", start)
+            # Cancelling the method menu returns silently to the editor.
+            time.sleep(.3)
+            start = len(output)
+            os.write(master, b"/model\r")
+            until(b"No models available. Use /login", start)
             os.write(master, b"/quit\r")
             stderr = process.communicate(timeout=20)[1]
             assert process.returncode == 0, (threads, stderr.decode(errors="replace"))

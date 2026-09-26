@@ -1100,6 +1100,14 @@
       "port_sha256": {
         "packages/ai/src/providers/faux.bend": "018e195d8f364a8e0b90fa66acc86162680387149be57dedb355151cc6fe442d"
       }
+    },
+    "packages/coding-agent/src/extensions/index.ts": {
+      "state": "partial",
+      "note": "The native builtInExtensions API exists but returns an empty list. Upstream registers the hidden llama.cpp extension before user extensions; its provider, /login llama.cpp and /llama model-management flow are missing. This omission also removes llama.cpp from the unfiltered API-key login menu (40 entries versus upstream 41).",
+      "source_sha256": "29c9dc5de4ec9c895223e8991ff02871f8eb67702435abed64a2b412430b4d7c",
+      "port_sha256": {
+        "packages/coding-agent/src/extensions/index.bend": "44a695593349473334cbda0bce1c15a58622682bffc83ce94ee1833c112d860d"
+      }
     }
   }
 }
