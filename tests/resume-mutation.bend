@@ -13,6 +13,7 @@ import ../packages/ai/src/utils/json.bend as Json
 import ../packages/ai/src/utils/schema-json.bend as SchemaJson
 import ../packages/tui/src/keybindings.bend as Bindings
 import ../packages/tui/src/keys.bend as Keys
+import ../packages/tui/src/components/input.bend as Input
 
 def require(condition: Bool,message: String) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit),condition,_ => IO.pure(Unit,Unit{}),_ => IO.die(Unit,1,message))(Unit{})
@@ -58,7 +59,7 @@ def snapshot(stage: String,current: Picker.Modal,demand: V.Value) -> IO(Unit):
     case _: IO.die(Unit,1,"expected completed mutation to return to list")
 def emit(stage: String,+modal: Ref.Ref<Picker.Modal>,loader: Picker.HostLoader) -> IO(Unit):
   match loader:
-    case Picker.HostLoader{_,worker,_,_}:
+    case Picker.HostLoader{_,worker,_,_,_}:
       do IO<Unit>:
         current : Picker.Modal <- Ref.read(Picker.Modal,modal)
         loaded : Maybe<&2,Picker.Loading> <- Ref.read(Maybe<&2,Picker.Loading>,worker)
@@ -91,7 +92,8 @@ def run(+root: String,+assets: String) -> IO(Unit):
     +worker : Ref.Ref<Maybe<&2,Picker.Loading>> <- Ref.new(Maybe<&2,Picker.Loading>,None{})
     +redraw : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,None{})
     +touched : Ref.Ref<Bool> <- Ref.new(Bool,False{})
-    +loader : Picker.HostLoader = Picker.HostLoader{loads,worker,redraw,touched}
+    +pending : Ref.Ref<List<&2,String>> <- Ref.new(List<&2,String>,Nil{})
+    +loader : Picker.HostLoader = Picker.HostLoader{loads,worker,redraw,touched,pending}
     Picker.startLoading(modal,loader,Picker.LoadSource{Picker.LoadContext{root ++ "/project",Some{root ++ "/sessions"},root ++ "/home/.pi/agent",root ++ "/home/.pi/agent/sessions",assets},None{}},Picker.Current{},Picker.Browse{})
     waitLoaded(modal,loads,Picker.Current{},10000n)
     emit("current",modal,loader)
@@ -101,7 +103,9 @@ def run(+root: String,+assets: String) -> IO(Unit):
     selectScope(modal,loader)
     # A published row can be renamed before the remaining files finish loading.
     Ref.write(Picker.Loads,loads,Picker.Loads{Some{Picker.Count{1n,2n}},Some{Picker.Count{1n,2n}}})
-    state : Picker.Modal <- Ref.read(Picker.Modal,modal)
+    +state : Picker.Modal <- Ref.read(Picker.Modal,modal)
+    require(Picker.pickerReady(state,Picker.Loads{Some{Picker.Starting{}},Some{Picker.Starting{}}}),"published rows should accept input while loading")
+    require(Picker.pickerReady(Picker.Open{Picker.withQuery(openState(state),Input.setValue(Picker.newQuery(),"no-matching-session"))},Picker.Loads{Some{Picker.Starting{}},Some{Picker.Starting{}}}),"a search with no matches must still accept editing")
     unused : Picker.Mutation <- Picker.beginLoadedRename(modal,openState(state),loader)
     renamed : Picker.Modal <- Ref.read(Picker.Modal,modal)
     +info : Session.SessionInfo <- target(renamed)

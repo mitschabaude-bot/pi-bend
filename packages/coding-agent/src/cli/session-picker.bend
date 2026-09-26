@@ -879,7 +879,7 @@ type ScopeWorker is Data:
 type Loading is Data:
   Loading{cancel: Abort.AbortController<Unit>,current: ScopeWorker,all: ScopeWorker,source: LoadSource}
 type HostLoader is Data:
-  HostLoader{loads: Ref.Ref<Loads>,worker: Ref.Ref<Maybe<&2,Loading>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,touched: Ref.Ref<Bool>}
+  HostLoader{loads: Ref.Ref<Loads>,worker: Ref.Ref<Maybe<&2,Loading>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,touched: Ref.Ref<Bool>,input: Ref.Ref<List<&2,String>>}
 def sameScope(left: Scope,right: Scope) -> Bool:
   match left right: case Current{} Current{}: True{} case All{} All{}: True{} case _ _: False{}
 def stateScope(state: State) -> Scope:
@@ -976,7 +976,7 @@ def stopLoading(value: Maybe<&2,Loading>) -> IO(Unit):
         Abort.dispose(Unit,cancel)
 def stopHostLoading(loader: HostLoader) -> IO(Unit):
   match loader:
-    case HostLoader{loads,worker,_,_}:
+    case HostLoader{loads,worker,_,_,_}:
       do IO<Unit>:
         old : Maybe<&2,Loading> <- Ref.modify(Maybe<&2,Loading>,Maybe<&2,Loading>,worker,value => (None{},value))
         stopLoading(old)
@@ -994,7 +994,7 @@ def requestLoading(value: Maybe<&2,Loading>,scope: Scope) -> IO(Unit):
         return Unit{}
 def startLoading(+modal: Ref.Ref<Modal>,loader: HostLoader,+source: LoadSource,+scope: Scope,+purpose: LoadPurpose) -> IO(Unit):
   match loader source:
-    case HostLoader{+loads,+worker,+redraw,+touched} LoadSource{+context,+path}:
+    case HostLoader{+loads,+worker,+redraw,+touched,_} LoadSource{+context,+path}:
       do IO<Unit>:
         Ref.write(Loads,loads,Loads{Some{Starting{}},Some{Starting{}}})
         +current : ModalProgress = ModalProgress{modal,loads,redraw,Current{},path,touched,purpose}
@@ -1038,7 +1038,7 @@ def refreshSource(+modal: Ref.Ref<Modal>,+loader: HostLoader,source: Maybe<&2,Lo
 type Mutation is Data: Unchanged{} Changed{source: Maybe<&2,LoadSource>}
 def freezeLoading(+loader: HostLoader) -> IO(Maybe<&2,LoadSource>):
   match loader:
-    case HostLoader{_,worker,_,_}:
+    case HostLoader{_,worker,_,_,_}:
       do IO<Maybe<&2,LoadSource>>:
         value : Maybe<&2,Loading> <- Ref.read(Maybe<&2,Loading>,worker)
         stopHostLoading(loader)
@@ -1060,12 +1060,12 @@ def resetScopeProgress(modal: Ref.Ref<Modal>,loads: Ref.Ref<Loads>) -> IO(Unit):
     Ref.modify(Loads,Unit,loads,old => (enteredScope(current,old),Unit{}))
 def resetEnteredScope(modal: Ref.Ref<Modal>,loader: HostLoader,selected: Action) -> IO(Unit):
   match loader selected:
-    case HostLoader{loads,_,_,_} SwitchScope{}: resetScopeProgress(modal,loads)
+    case HostLoader{loads,_,_,_,_} SwitchScope{}: resetScopeProgress(modal,loads)
     case _ _: IO.pure(Unit,Unit{})
 def syncHostLoading(current: Modal,loader: HostLoader) -> IO(Unit):
   match current loader:
     case Closed{} _: stopHostLoading(loader)
-    case Open{State{_,_,scope,_,_,_,_}} HostLoader{_,worker,_,_}:
+    case Open{State{_,_,scope,_,_,_,_}} HostLoader{_,worker,_,_,_}:
       do IO<Unit>:
         value : Maybe<&2,Loading> <- Ref.read(Maybe<&2,Loading>,worker)
         requestLoading(value,scope)
@@ -1088,13 +1088,6 @@ def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindi
         +selected : Theme.Theme <- Ref.read(Theme.Theme,theme)
         rendered : SearchInput.Input & List<&2,String> <- SearchInput.render(input,width)
         return List.concat(&2,String,[["",Theme.fg(selected,"accent",rule(width)),""," " ++ Theme.bold("Rename Session"),""],renderedQuery(rendered),[""," " ++ Theme.fg(selected,"muted","enter to save · escape/ctrl+c to cancel"),"",Theme.fg(selected,"accent",rule(width))]])
-def drawModal(host: Host,width: Nat) -> IO(List<&2,String>):
-  match host:
-    case Host{+modal,editor,bindings,theme,_,_,_,_,HostLoader{loads,_,_,_}}:
-      do IO<List<&2,String>>:
-        current : Modal <- Ref.read(Modal,modal)
-        loading : Loads <- Ref.read(Loads,loads)
-        drawModalCurrent(current,editor,bindings,theme,loading,width)
 # Query editing may yield while rows arrive. Apply the input to the newest
 # cached rows rather than restoring the snapshot read before the edit.
 def inputState(latest: State,+next: State) -> State:
@@ -1253,7 +1246,7 @@ def touchesSelection(selected: Action) -> Bool:
     case MoveUp{}: True{} case MoveDown{}: True{} case PageUp{}: True{} case PageDown{}: True{} case Edit{_}: True{} case _: False{}
 def touchModal(current: Modal,loader: HostLoader,bindings: Bindings.KeybindingsManager,data: String) -> IO(Unit):
   match current loader:
-    case Open{_} HostLoader{_,_,_,touched}:
+    case Open{_} HostLoader{_,_,_,touched,_}:
       +changed = touchesSelection(action(bindings,data))
       Ref.modify(Bool,Unit,touched,old => (old || changed,Unit{}))
     case _ _: IO.pure(Unit,Unit{})
@@ -1269,17 +1262,75 @@ def receivedModalState(host: Host,current: Modal,+data: String) -> IO(Unit):
         resetEnteredScope(modal,loader,action(bindings,data))
         next : Modal <- Ref.read(Modal,modal)
         syncHostLoading(next,loader)
-def receivedModalCopied(+host: Host,data: String) -> IO(Unit):
-  match host:
-    case Host{modal,_,_,_,_,_,_,_,_}:
+# Until a scope publishes rows, preserve keystrokes instead of interpreting
+# row actions against an empty placeholder. Escape still cancels immediately.
+def scopeLoaded(scope: Scope,loads: Loads) -> Bool:
+  match scope loads:
+    case Current{} Loads{None{},_}: True{}
+    case All{} Loads{_,None{}}: True{}
+    case _ _: False{}
+
+def pickerReady(current: Modal,loads: Loads) -> Bool:
+  match current:
+    case Open{State{current,all,+scope,_,_,_,_}}: Bool.not(List.is_empty(&2,Session.SessionInfo,scopeSessions(current,all,scope))) || scopeLoaded(scope,loads)
+    case _: True{}
+def takeInput(value: List<&2,String>) -> List<&2,String> & List<&2,String>:
+  (Nil{},List.reverse(&2,String,value))
+
+# Replaying happens on the TUI's input/render owner, never on the listing
+# worker: saving or closing the picker may cancel and join that worker.
+def replayInput(+host: Host,+modal: Ref.Ref<Modal>,items: List<&2,String>,current: Modal) -> IO(Unit):
+  match items current:
+    case Nil{} _: IO.pure(Unit,Unit{})
+    case _ Closed{}: IO.pure(Unit,Unit{})
+    case data <> rest opened:
       do IO<Unit>:
+        receivedModalState(host,opened,data)
+        next : Modal <- Ref.read(Modal,modal)
+        replayInput(host,modal,rest,next)
+
+def flushInput(+host: Host) -> IO(Unit):
+  match host:
+    case Host{+modal,_,_,_,_,_,_,_,HostLoader{loads,_,_,_,pending}}:
+      do IO<Unit>:
+        +current : Modal <- Ref.read(Modal,modal)
+        loading : Loads <- Ref.read(Loads,loads)
+        Bool.pick(Unit -> IO(Unit),pickerReady(current,loading),_ => do IO<Unit>:
+          items : List<&2,String> <- Ref.modify(List<&2,String>,List<&2,String>,pending,value => takeInput(value))
+          replayInput(host,modal,items,current),_ => IO.pure(Unit,Unit{}))(Unit{})
+
+def isCancel(selected: Action) -> Bool:
+  match selected: case Cancel{}: True{} case _: False{}
+
+def receiveReady(+host: Host,+data: String,+current: Modal,loading: Loads) -> IO(Unit):
+  match host:
+    case Host{_,_,bindings,_,_,_,_,_,HostLoader{_,_,redraw,_,pending}}:
+      Bool.pick(Unit -> IO(Unit),pickerReady(current,loading) || isCancel(action(bindings,data)),
+        _ => receivedModalState(host,current,data),
+        _ => do IO<Unit>:
+          Ref.modify(List<&2,String>,Unit,pending,old => (data <> old,Unit{}))
+          requestProgress(redraw))(Unit{})
+def receivedModal(+host: Host,data: String) -> IO(Unit):
+  match host:
+    case Host{+modal,_,_,_,_,_,_,_,HostLoader{loads,_,_,_,_}}:
+      do IO<Unit>:
+        flushInput(host)
         current : Modal <- Ref.read(Modal,modal)
-        receivedModalState(host,current,data)
-def receivedModal(host: Host,data: String) -> IO(Unit): receivedModalCopied(host,data)
+        loading : Loads <- Ref.read(Loads,loads)
+        receiveReady(host,data,current,loading)
+
 def mouseCurrent(current: Modal,mouse: Maybe<&2,Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>>,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match current mouse:
     case Closed{} Some{callback}: Callback.call(Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,callback,event)
     case _ _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
+def drawModal(+host: Host,width: Nat) -> IO(List<&2,String>):
+  match host:
+    case Host{+modal,editor,bindings,theme,_,_,_,_,HostLoader{+loads,_,_,_,_}}:
+      do IO<List<&2,String>>:
+        flushInput(host)
+        current : Modal <- Ref.read(Modal,modal)
+        loading : Loads <- Ref.read(Loads,loads)
+        drawModalCurrent(current,editor,bindings,theme,loading,width)
 def modalMouse(host: Host,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match host:
     case Host{+modal,Component.Component{_,_,_,mouse,_,_,_},_,_,_,_,_,_,_}:
@@ -1297,9 +1348,10 @@ def createHost(ids: Uuid.Generator,+editor: Component.Component,bindings: Bindin
     loads : Ref.Ref<Loads> <- Ref.new(Loads,Loads{None{},None{}})
     worker : Ref.Ref<Maybe<&2,Loading>> <- Ref.new(Maybe<&2,Loading>,None{})
     touched : Ref.Ref<Bool> <- Ref.new(Bool,False{})
-    +host : Host <- IO.pure(Host,Host{modal,editor,bindings,theme,wordRef,chosen,ids,session,HostLoader{loads,worker,redraw,touched}})
-    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~drawModal,host)
-    +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receivedModal,host)
+    pendingInput : Ref.Ref<List<&2,String>> <- Ref.new(List<&2,String>,Nil{})
+    +host : Host <- IO.pure(Host,Host{modal,editor,bindings,theme,wordRef,chosen,ids,session,HostLoader{loads,worker,redraw,touched,pendingInput}})
+    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~(host => width => drawModal(host,width)),host)
+    +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~(host => data => receivedModal(host,data)),host)
     +mouse : Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Host,~Ui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~modalMouse,host)
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Host,~Unit,~Unit,~modalInvalidate,host)
     +focus : Callback.Callback<Bool,Unit> <- Callback.create(~Host,~Bool,~Unit,~modalFocus,host)
@@ -1308,29 +1360,38 @@ def createHost(ids: Uuid.Generator,+editor: Component.Component,bindings: Bindin
 def borrowHost(owner: HostOwner) -> HostOwner & Host & Component.Component:
   match owner: case HostOwner{+host,+component,render,input,mouse,invalidate,focus}: (HostOwner{host,component,render,input,mouse,invalidate,focus},host,component)
 def resetTouched(loader: HostLoader) -> IO(Unit):
-  match loader: case HostLoader{_,_,_,touched}: Ref.write(Bool,touched,False{})
-def openHost(host: Host,+current: List<&2,Session.SessionInfo>,+all: List<&2,Session.SessionInfo>) -> IO(Unit):
+  match loader:
+    case HostLoader{_,_,_,touched,pending}:
+      do IO<Unit>:
+        Ref.write(Bool,touched,False{})
+        Ref.write(List<&2,String>,pending,Nil{})
+def prepareHost(host: Host,+current: List<&2,Session.SessionInfo>,+all: List<&2,Session.SessionInfo>,progress: Loads) -> IO(Unit):
   match host:
-    case Host{modal,_,_,_,_,_,_,session,+loader}:
+    case Host{modal,_,_,_,_,_,_,session,HostLoader{+loads,+worker,+redraw,+touched,+pending}}:
+      +loader = {HostLoader{loads,worker,redraw,touched,pending}: HostLoader}
       do IO<Unit>:
         stopHostLoading(loader)
         resetTouched(loader)
         live : AgentSession.AgentSession <- Ref.read(AgentSession.AgentSession,session)
         stored : AgentSession.Session() <- AgentSession.sessionOf(live)
         active : List<&2,String> <- protectedPaths(List.append(&2,Session.SessionInfo,current,all),Persistence.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored))
+        Ref.write(Loads,loads,progress)
         Ref.write(Modal,modal,Open{State{current,all,Current{},newQuery(),0n,Pending{},Controls{Threaded{},False{},False{},None{},None{},active}}})
+def openHost(host: Host,current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>) -> IO(Unit):
+  prepareHost(host,current,all,Loads{None{},None{}})
 def openLoadingHost(+host: Host,context: LoadContext) -> IO(Unit):
   match host:
     case Host{modal,_,_,_,_,_,_,session,loader}:
       do IO<Unit>:
-        openHost(host,Nil{},Nil{})
+        prepareHost(host,Nil{},Nil{},Loads{Some{Starting{}},Some{Starting{}}})
         live : AgentSession.AgentSession <- Ref.read(AgentSession.AgentSession,session)
         stored : AgentSession.Session() <- AgentSession.sessionOf(live)
         startLoading(modal,loader,LoadSource{context,Persistence.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored)},Current{},Browse{})
 def disposeLoader(loader: HostLoader) -> IO(Unit):
   match loader:
-    case HostLoader{loads,worker,_,touched}:
+    case HostLoader{loads,worker,_,touched,pending}:
       do IO<Unit>:
+        oldInput : List<&2,String> <- Ref.dispose(List<&2,String>,pending)
         oldTouched : Bool <- Ref.dispose(Bool,touched)
         oldLoads : Loads <- Ref.dispose(Loads,loads)
         oldWorker : Maybe<&2,Loading> <- Ref.dispose(Maybe<&2,Loading>,worker)

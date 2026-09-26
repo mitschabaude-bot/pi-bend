@@ -562,6 +562,20 @@ SCENARIOS = [
                   ("settle", 0.2), ("snap", "reopened")],
     },
     {
+        "name": "resume-rename-fast-input",
+        "args": MODEL,
+        "turns": [{"text": "First answer."}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "hello"), ("key", "Enter"),
+                  ("wait", "First answer.", "answer"), ("settle", 0.5),
+                  ("keys", "/name Old"), ("key", "Enter"), ("wait", "Session name set: Old", "named"),
+                  ("keys", "/resume"), ("key", "Enter"), ("wait", "Resume Session", "picker"),
+                  # Send the whole edit before waiting for the rename frame.
+                  ("keys", "\x12\x01Fast \r"), ("wait", "Resume Session", "saved"),
+                  ("wait", "Fast Old", "renamed"), ("settle", 0.3), ("snap", "saved"), ("key", "Escape"),
+                  ("settle", 0.3), ("keys", "/resume"), ("key", "Enter"), ("wait", "Fast Old", "reopened"),
+                  ("settle", 0.3), ("snap", "reopened")],
+    },
+    {
         "name": "resume-rename-existing",
         "args": MODEL,
         "turns": [{"text": "First answer."}],

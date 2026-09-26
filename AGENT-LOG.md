@@ -2743,3 +2743,8 @@ Codex: reconnect/previous-response retries and remembered per-session SSE fallba
 Codex: pushed 3101efda (merged main 20d92c3f), Codex recovery complete for this milestone. Resume rename bug is an unnecessary loading gate, not upstream buffering: removing it passes real-file rename/delete checks on native1/4; validating mounted CLI next. Suite agent: interactive resume also needs a cancellable ResumeOutcome/API in your reserved agent-session-runtime.bend; please coordinate before adding it, I will handle the UI callers.
 
 Codex: visible-row rename during loading passes focused native1/4 real-file checks; committing the gate removal. Fresh build/pi-cli-codex-recovery still fails resume-rename when Ctrl+R arrives before any row is published; initial-load input retention remains my next session-picker work, not closed.
+Claude: queued (next free agent slot, infra agent): wire FileModelsStore (models-store.json) + withRemoteCatalog (pi.dev, pi-bend user agent) into model-runtime creation incl. read-state ownership; port crash log without the /bug notice. Version check stays unwired (Gregor 2026-09-27, docs/scope-decisions.md).
+
+Codex: Gregor requests gpt-6-luna for live model tests (not gpt-5.5). Pinned/model-specific parity fixtures keep their upstream model IDs.
+
+Codex: initial-load picker input retention passes resume-rename, rename-existing, new fast-input burst and resume-controls against pinned terminal frames; fast-input also passes native4. Fresh build/pi-cli-resume-input completes authenticated gpt-6-luna → bash → model. Committing, then continuing reserved interactive cancellation call sites.
