@@ -28,6 +28,8 @@ import ./openai-codex.bend as OpenaiCodex
 import ./opencode.bend as Opencode
 import ./opencode-go.bend as OpencodeGo
 import ./openrouter.bend as Openrouter
+import ./openrouter-images.bend as OpenrouterImages
+import ../images-models.bend as Images
 import ./qwen-token-plan.bend as QwenTokenPlan
 import ./qwen-token-plan-cn.bend as QwenTokenPlanCn
 import ./qwen-token-plan-individual.bend as QwenTokenPlanIndividual
@@ -93,3 +95,22 @@ def builtinProviders(codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuth
     providers : List<&2, Models.Provider> <- prepended(AntLing.antLingProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(AmazonBedrock.amazonBedrockProvider(), providers)
     return providers
+
+# upstream builtinImagesProviders: every built-in image-generation provider,
+# freshly constructed, over the given api.
+def builtinImagesProviders(-E: Data, openrouter: Images.ProviderImages(E)) -> IO(List<&2, Images.ImagesProvider<E>>):
+  do IO<List<&2, Images.ImagesProvider<E>>>:
+    provider : Images.ImagesProvider<E> <- OpenrouterImages.openrouterImagesProvider(E, openrouter)
+    return [provider]
+
+def registered(-E: Data, providers: List<&2, Images.ImagesProvider<E>>, models: Images.ImagesModels<E>) -> Images.ImagesModels<E>:
+  match providers:
+    case Nil{}: models
+    case provider <> rest: registered(E, rest, Images.setProvider(E, models, provider))
+
+# upstream builtinImagesModels: an ImagesModels collection with every
+# built-in image-generation provider registered.
+def builtinImagesModels(-E: Data, credentials: Auth.CredentialStore, context: Auth.AuthContext, openrouter: Images.ProviderImages(E)) -> IO(Images.ImagesModels<E>):
+  do IO<Images.ImagesModels<E>>:
+    providers : List<&2, Images.ImagesProvider<E>> <- builtinImagesProviders(E, openrouter)
+    return registered(E, providers, Images.createImagesModels(E, credentials, context))
