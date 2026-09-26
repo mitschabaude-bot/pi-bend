@@ -8,6 +8,7 @@ import ../../../ai/src/api/openai-responses.bend as Responses
 import ./anthropic-provider.bend as Anthropic
 import ./google-provider.bend as Google
 import ./openai-completions-provider.bend as Completions
+import ./stream-providers.bend as StreamProviders
 import ../../../ai/src/api/openai-client.bend as Client
 import ../../../ai/src/utils/tool-declaration.bend as Declaration
 import ../../../ai/src/utils/validation.bend as Validation
@@ -216,6 +217,7 @@ def selectedProvider(responses: Responses.Config, fetch: Fetch.Fetch(Unit), mode
     case Ai.AnthropicMessagesApi{}: Anthropic.open(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.GoogleGenerativeAiApi{}: Google.open(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.OpenAICompletionsApi{}: Completions.open(fetch, urlContext(), model, context, selectedOptions(options))
+    case Ai.PiMessagesApi{}: StreamProviders.piMessages(fetch, urlContext(), model, context, selectedOptions(options))
     case _: Providers.openResponses(~LoopConfig(), ~Unit, ~Unit, ~Details(), ~Error(), ~project, ~render, ~failure, responses, T.StreamInput{model, context, options})
 
 # upstream ModelRuntime.prepareRequest: each request resolves its model's
@@ -727,6 +729,7 @@ def supportedApi(api: Ai.ModelApi, +model: Models.Model()) -> Result<&2, &2, Str
     case Ai.AnthropicMessagesApi{}: Done{Some{model}}
     case Ai.GoogleGenerativeAiApi{}: Done{Some{model}}
     case Ai.OpenAICompletionsApi{}: Done{Some{model}}
+    case Ai.PiMessagesApi{}: Done{Some{model}}
     case _: Fail{"Model " ++ Models.reference(model) ++ " uses an API this port does not stream yet."}
 
 def supportedModel(+model: Models.Model()) -> Result<&2, &2, String, Maybe<&2, Models.Model()>>:

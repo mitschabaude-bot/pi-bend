@@ -48,3 +48,25 @@ def collect(chars: String, step: Step, reversed: String) -> String:
 def normalize(text: String) -> String: collect(text, Step{None{}, ""}, "")
 
 def equal(left: String, right: String) -> Bool: String.eq(normalize(left), normalize(right))
+
+# String.prototype.length: UTF-16 code units.
+def length(text: String) -> Nat:
+  match text:
+    case SNil{}: 0n
+    case SCon{Chr{code}, rest}: Bool.pick(Nat, U32.is_gt(code, 65535), 2n, 1n) + length(rest)
+
+def pairOf(+code: U32) -> String:
+  SCon{Chr{(55296 + (code - 65536) / 1024 : U32)}, SCon{Chr{(56320 + (code - 65536) % 1024 : U32)}, SNil{}}}
+
+def unitsOf(+code: U32) -> String:
+  Bool.pick(Unit -> String, U32.is_gt(code, 65535), _ => pairOf(code), _ => SCon{Chr{code}, SNil{}})(Unit{})
+
+def codeUnits(text: String) -> String:
+  match text:
+    case SNil{}: ""
+    case SCon{Chr{code}, rest}: unitsOf(code) ++ codeUnits(rest)
+
+# String.prototype.slice(0, count) over UTF-16 units; a split pair keeps its
+# lone high surrogate.
+def take(text: String, count: Nat) -> String:
+  normalize(String.take(codeUnits(text), count))

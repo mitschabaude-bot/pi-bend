@@ -492,6 +492,27 @@
         "packages/coding-agent/src/modes/interactive/components/footer.bend": "d924bbd85b2a33b86ec77491b3f88014fe87ffac531779233f82cb77c4ce5828",
         "packages/coding-agent/src/modes/interactive/run.bend": "88522c2d0a2be0dec4eefa1b4d8c56dbfaa8cd2abae3132849dd009b4500f0f8"
       }
+    },
+    "packages/ai/src/api/pi-messages.ts": {
+      "state": "ported",
+      "note": "stream/streamSimple, payload, headers, onPayload/onResponse, SSE framing, event conversion, rewrite and response-failure diagnostics and createErrorEvent are ported and checked against upstream traces (tests/pi_messages_check.py). Native adaptations: streamSimple takes debug as an argument (upstream reads it from a cast options object); unknown event types are skipped rather than forwarded; content blocks placed past the end are appended instead of making a sparse array; malformed JSON/events and transport failures report native messages; fetch runs under a deadline scope that never expires (the maximum U32 milliseconds), as upstream passes only the caller's signal.",
+      "ports": [
+        "packages/ai/src/api/pi-messages.bend",
+        "packages/ai/src/api/provider-fetch.bend",
+        "packages/coding-agent/src/core/stream-providers.bend"
+      ],
+      "source_sha256": "6660a06ba769bbd11e587c25231b3c627073f4bc6b7d28e0808f381954f41fc5",
+      "port_sha256": {
+        "packages/ai/src/api/pi-messages.bend": "b014bfe831a016688261bc1d18470838ca61366b4baa7647c28cc44a0452d6e7",
+        "packages/ai/src/api/provider-fetch.bend": "4f11d6da5363ffae0c3d2214e163bd9eee6a4348039d4f37d4d652a62a248275",
+        "packages/coding-agent/src/core/stream-providers.bend": "90e7f61da0fcead9bfc243cf10b0087ad22a856d33c7661825573f966408cca4"
+      }
+    },
+    "packages/ai/src/api/pi-messages.lazy.ts": {
+      "state": "excluded",
+      "note": "Lazy loading of the implementation module through a dynamic import is a JavaScript bundling concern; the Bend runtime dispatches models of this api to pi-messages.bend directly (coding-agent agent-runtime selectedProvider).",
+      "source_sha256": "620e55f1a498f70c8578deb6375f9433c6991c98f6c323465b1889c2f07a72d9",
+      "port_sha256": {}
     }
   }
 }

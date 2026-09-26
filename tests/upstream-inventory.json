@@ -1331,9 +1331,15 @@
     },
     {
       "source": "packages/ai/test/pi-messages.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "fa14e5246f00999010fe556acfd7f4f76c4285544a58b059b5b842c21c91b79c"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/pi-messages.bend",
+        "packages/ai/test/pi-messages-oracle.ts",
+        "tests/pi_messages_check.py",
+        "packages/coding-agent/test/registered-apis.bend"
+      ],
+      "sha256": "fa14e5246f00999010fe556acfd7f4f76c4285544a58b059b5b842c21c91b79c",
+      "notes": "All eight cases: the six stream cases run packages/ai/test/pi-messages.bend against the upstream test's loopback responses (chunked SSE) on Bun and native one/four threads with the upstream assertions, and each whole event trace equals upstream pi-messages.ts serving the same responses (timestamps normalized; upstream events recorded at push time, as port events are immutable snapshots; wire-only members upstream spreads into events dropped). 'is a known api usable on models' checks the typed api name; 'is registered as a builtin api provider' checks the agent runtime dispatch (packages/coding-agent/test/registered-apis.bend, JavaScript lane). A supplemental case covers CRLF framing split across chunks, comment/event lines, [DONE], thinking signatures/redaction, the rewrite diagnostic and a final event without a blank line."
     },
     {
       "source": "packages/ai/test/pre-generation-error.test.ts",
