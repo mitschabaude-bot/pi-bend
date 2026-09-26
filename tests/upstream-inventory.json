@@ -2795,15 +2795,17 @@
     },
     {
       "source": "packages/coding-agent/test/first-time-setup-fork.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "38ae7d0f1aeb002ddbe6d0f9f0820b4b09b7d25d0656bde664c88d36694eabfa"
+      "sha256": "38ae7d0f1aeb002ddbe6d0f9f0820b4b09b7d25d0656bde664c88d36694eabfa",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/first-time-setup.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "4d76184e78fba400d2bd7ba2d593d0fde6bc20a87c28d29cc11fec6fb338e035"
+      "sha256": "4d76184e78fba400d2bd7ba2d593d0fde6bc20a87c28d29cc11fec6fb338e035",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/footer-data-provider.test.ts",
@@ -3287,9 +3289,10 @@
     },
     {
       "source": "packages/coding-agent/test/restore-sandbox-env.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "14485f0f5f478475206f15ebd48191090c437f40b79ebfdf2d652d4681e71d02"
+      "sha256": "14485f0f5f478475206f15ebd48191090c437f40b79ebfdf2d652d4681e71d02",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/rpc-client-clear-queue.test.ts",
