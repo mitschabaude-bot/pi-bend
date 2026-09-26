@@ -310,6 +310,67 @@ def auto_compaction_queue_checks(f):
     return checks
 
 
+def inline_naming_checks(f):
+    """6260-inline-extension-naming.test.ts on Loader.loadExtensionFactories (upstream DefaultResourceLoader's
+    extensionFactories): bare factories are BareExtension values, named wrappers InlineExtension."""
+    def paths(kind):
+        return last(f.call('regressions', 'inline_naming', kind), 'extensions')['extensions']
+    checks = 0
+    # displays bare factories as <inline:N>
+    assert [e['path'] for e in paths('bare')] == ['<inline:1>', '<inline:2>']
+    checks += 1
+    # displays named wrappers as <inline:name>
+    assert [e['path'] for e in paths('named')] == ['<inline:my-provider>', '<inline:my-commands>']
+    checks += 1
+    # preserves hidden state for named factories
+    assert paths('hidden') == [{'path': '<inline:built-in>', 'hidden': True}]
+    checks += 1
+    # supports mixed bare and named factories
+    assert [e['path'] for e in paths('mixed')] == ['<inline:1>', '<inline:named-ext>', '<inline:3>']
+    checks += 1
+    return checks
+
+
+def input_event_checks(f):
+    """extensions-input-event.test.ts on ExtensionRunner.emitInput with inline extensions (upstream loads .ts
+    files). Input without images is an empty list natively (upstream: undefined)."""
+    def emit(mode, *kinds):
+        return f.call('regressions', 'input_event', str(f.work), mode, *kinds)
+    def result(events):
+        return last(events, 'input_result')['result']
+    checks = 0
+    # returns continue when no handlers, undefined return, or explicit continue
+    assert all(result(emit('x', *kinds)) == {'action': 'continue'} for kinds in ((), ('undefined',), ('continue',)))
+    checks += 1
+    # transforms text and preserves images when omitted
+    assert result(emit('image', 'prefix')) == {'action': 'transform', 'text': 'T:hi', 'images': [{'type': 'image', 'data': 'orig', 'mimeType': 'image/png'}]}
+    checks += 1
+    # transforms and replaces images when provided
+    assert result(emit('image', 'replace')) == {'action': 'transform', 'text': 'X', 'images': [{'type': 'image', 'data': 'new', 'mimeType': 'image/jpeg'}]}
+    checks += 1
+    # chains transforms across multiple handlers
+    assert result(emit('X', 'append1', 'append2')) == {'action': 'transform', 'text': 'X[1][2]', 'images': []}
+    checks += 1
+    # short-circuits on handled and skips subsequent handlers
+    events = emit('X', 'handled', 'record')
+    assert result(events) == {'action': 'handled'} and not of_type(events, 'seen')
+    checks += 1
+    # passes source correctly for all source types
+    assert [e['source'] for e in of_type(emit('sources', 'source'), 'seen')] == ['interactive', 'rpc', 'extension']
+    checks += 1
+    # passes streamingBehavior correctly
+    assert [e['streamingBehavior'] for e in of_type(emit('behaviors', 'behavior'), 'seen')] == ['steer', 'followUp', None]
+    checks += 1
+    # catches handler errors and continues
+    events = emit('x', 'throw')
+    assert result(events) == {'action': 'continue'} and [e['error'] for e in of_type(events, 'extension_error')] == ['boom']
+    checks += 1
+    # hasHandlers returns correct value
+    assert last(emit('x'), 'has_handlers')['value'] is False and last(emit('x', 'undefined'), 'has_handlers')['value'] is True
+    checks += 1
+    return checks
+
+
 def tool_checks(f):
     """Tool allow- and denylists (5109, 2835): the built-in tools and an extension that registers
     ask_question and dynamic_tool from session_start (bindExtensions)."""
@@ -453,6 +514,138 @@ def settings_checks(f):
     return checks
 
 
+def input_transform_streaming_checks(f):
+    """input-transform-streaming-example.test.ts on the native example extension. Upstream mocks pi.exec; here a
+    stub `git` first on PATH records its invocations and replays the mocked ExecResult through the real pi.exec
+    (spawned in the runner's cwd). One further case runs the real git in a modified repository. Cases that reach
+    pi.exec are native-only: the Bun lane has no process primitive (spawn reports ENOSYS)."""
+    diff = ' src/index.ts | 5 ++---\n 1 file changed, 2 insertions(+), 3 deletions(-)'
+    stub = f.work / 'stub-bin'
+    stub.mkdir(exist_ok=True)
+    (stub / 'git').write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$STUB_GIT_LOG"\nprintf "%s" "$STUB_GIT_STDOUT"\nprintf "%s" "$STUB_GIT_STDERR" >&2\nexit "$STUB_GIT_CODE"\n')
+    (stub / 'git').chmod(0o755)
+    def emit(text, behavior='none', stdout=diff, stderr='', code=0):
+        log = Path(tempfile.mkstemp(dir=f.work)[1])
+        env = dict(os.environ, PATH=str(stub) + os.pathsep + os.environ['PATH'], STUB_GIT_LOG=str(log), STUB_GIT_STDOUT=stdout, STUB_GIT_STDERR=stderr, STUB_GIT_CODE=str(code))
+        events = f.call('regressions', 'input_transform_streaming', str(f.work), text, behavior, env=env)
+        return last(events, 'input_result')['result'], log.read_text().splitlines()
+    checks = 0
+    # skips exec during steering
+    result, calls = emit('what changes did I make?', 'steer')
+    assert result == {'action': 'continue'} and calls == [], (result, calls)
+    checks += 1
+    # continues when text does not match trigger
+    result, calls = emit('explain this function')
+    assert result == {'action': 'continue'} and calls == [], (result, calls)
+    checks += 1
+    if f.runners['regressions'].endswith('.js'):
+        return checks
+    # transforms when idle and text matches trigger
+    result, calls = emit('review my changes')
+    assert calls == ['diff --stat'] and result['action'] == 'transform', (result, calls)
+    assert 'review my changes' in result['text'] and 'src/index.ts' in result['text']
+    checks += 1
+    # transforms when queued as follow-up
+    result, calls = emit('show me the diff', 'followUp')
+    assert calls and result['action'] == 'transform', (result, calls)
+    checks += 1
+    # continues when git diff is empty
+    assert emit('any changes?', stdout='')[0] == {'action': 'continue'}
+    checks += 1
+    # continues when git fails
+    assert emit('show modified files', stdout='', stderr='not a git repo', code=128)[0] == {'action': 'continue'}
+    checks += 1
+    # native: the real git in the runner's cwd
+    repo = Path(tempfile.mkdtemp(prefix='itsx-', dir=f.work))
+    git = lambda *a: subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', *a], cwd=repo, check=True, capture_output=True)
+    git('init', '-q')
+    (repo / 'index.ts').write_text('a\n')
+    git('add', '.')
+    git('commit', '-qm', 'init')
+    (repo / 'index.ts').write_text('b\n')
+    result = last(f.call('regressions', 'input_transform_streaming', str(repo), 'review my changes', 'none'), 'input_result')['result']
+    assert result['action'] == 'transform' and result['text'].startswith('review my changes\n\nCurrent uncommitted changes:\n```\nindex.ts | 2 +-'), result
+    checks += 1
+    return checks
+
+
+def git_merge_and_resolve_checks(f):
+    """git-merge-and-resolve-extension.test.ts on the native example extension. Upstream mocks pi.exec with a map
+    from command lines to ExecResults (default: code 1, stderr "error"); natively a stub `git` first on PATH answers
+    from the same map through the real pi.exec and logs its invocations. The session actions record
+    pi.sendUserMessage. Native-only: the Bun lane has no process primitive."""
+    if f.runners['regressions'].endswith('.js'):
+        return 0
+    import shlex
+    ok = ('', '', 0)
+    fail = ('', 'error', 1)
+    def with_upstream(results):
+        results.update({'git rev-parse --git-dir': ok, 'git rev-parse MERGE_HEAD': fail, 'git status --porcelain': ok,
+                        'git rev-parse --abbrev-ref --symbolic-full-name @{u}': ('origin/main\n', '', 0), 'git fetch origin': ok})
+        return results
+    def run(results, files=None):
+        cwd = Path(tempfile.mkdtemp(prefix='pi-merge-test-', dir=f.work))
+        for name, content in (files or {}).items():
+            (cwd / name).parent.mkdir(parents=True, exist_ok=True)
+            (cwd / name).write_text(content)
+        stub = Path(tempfile.mkdtemp(prefix='stub-', dir=f.work))
+        log = stub / 'log'
+        log.write_text('')
+        cases = ''.join("  %s) printf '%%s' %s; printf '%%s' %s >&2; exit %d;;\n" % (shlex.quote(key[4:]), shlex.quote(out), shlex.quote(err), code)
+                        for key, (out, err, code) in results.items())
+        (stub / 'git').write_text('#!/bin/sh\nprintf "git %%s\\n" "$*" >> %s\ncase "$*" in\n%s  *) printf error >&2; exit 1;;\nesac\n' % (shlex.quote(str(log)), cases))
+        (stub / 'git').chmod(0o755)
+        env = dict(os.environ, PATH=str(stub) + os.pathsep + os.environ['PATH'])
+        events = f.call('regressions', 'git_merge_and_resolve', str(cwd), env=env)
+        assert of_type(events, 'agent_end_done'), events
+        return log.read_text().splitlines(), of_type(events, 'sent_user')
+    checks = 0
+    # skips when not a git repository
+    calls, sent = run({'git rev-parse --git-dir': fail})
+    assert calls == ['git rev-parse --git-dir'] and sent == [], (calls, sent)
+    checks += 1
+    # skips when no upstream is configured
+    calls, sent = run({'git rev-parse --git-dir': ok, 'git rev-parse --abbrev-ref --symbolic-full-name @{u}': fail})
+    assert sent == [], sent
+    checks += 1
+    # re-sends conflicts when in an unfinished merge
+    conflict = '\n'.join(['<<<<<<< HEAD', 'ours', '=======', 'theirs', '>>>>>>> origin/main'])
+    calls, sent = run({'git rev-parse --git-dir': ok, 'git rev-parse MERGE_HEAD': ok, 'git diff --name-only --diff-filter=U': ('file.ts\n', '', 0)}, {'file.ts': conflict})
+    assert 'git fetch origin' not in calls and len(sent) == 1 and 'file.ts:1-5' in sent[0]['text'], (calls, sent)
+    checks += 1
+    # skips when working tree is dirty and not in a merge
+    calls, sent = run({'git rev-parse --git-dir': ok, 'git rev-parse MERGE_HEAD': fail, 'git status --porcelain': (' M src/index.ts\n', '', 0)})
+    assert 'git fetch origin' not in calls and sent == [], (calls, sent)
+    checks += 1
+    # skips when fetch fails
+    calls, sent = run(dict(with_upstream({}), **{'git fetch origin': fail}))
+    assert sent == [] and 'git fetch origin' in calls, (calls, sent)
+    checks += 1
+    # skips when merge is clean
+    calls, sent = run(dict(with_upstream({}), **{'git merge --no-ff origin/main': ok}))
+    assert sent == [] and 'git merge --no-ff origin/main' in calls, (calls, sent)
+    checks += 1
+    # sends conflict report as a follow-up
+    conflict = '\n'.join(['line 1', '<<<<<<< HEAD', 'our change', '=======', 'their change', '>>>>>>> origin/main', 'line 7',
+                          '<<<<<<< HEAD', 'second conflict', '=======', 'their second', '>>>>>>> origin/main'])
+    calls, sent = run(dict(with_upstream({}), **{'git merge --no-ff origin/main': ('', 'error', 1), 'git diff --name-only --diff-filter=U': ('src/index.ts\n', '', 0)}), {'src/index.ts': conflict})
+    assert len(sent) == 1, (calls, sent)
+    assert 'src/index.ts:2-6 (ours 3, theirs 5)' in sent[0]['text'] and 'src/index.ts:8-12 (ours 9, theirs 11)' in sent[0]['text'], sent
+    assert sent[0]['deliverAs'] == 'followUp'
+    assert sent[0]['text'] == 'Merged origin/main with conflicts:\n\n  src/index.ts:2-6 (ours 3, theirs 5)\n  src/index.ts:8-12 (ours 9, theirs 11)\n\nResolve these conflicts.', sent
+    checks += 1
+    # handles empty ours or theirs sections
+    conflict = '\n'.join(['<<<<<<< HEAD', '=======', 'only theirs', '>>>>>>> origin/main'])
+    calls, sent = run(dict(with_upstream({}), **{'git merge --no-ff origin/main': ('', 'error', 1), 'git diff --name-only --diff-filter=U': ('empty-ours.ts\n', '', 0)}), {'empty-ours.ts': conflict})
+    assert len(sent) == 1 and 'empty-ours.ts:1-4 (ours empty, theirs 3)' in sent[0]['text'], sent
+    checks += 1
+    # skips message when merge fails but no conflict markers found
+    calls, sent = run(dict(with_upstream({}), **{'git merge --no-ff origin/main': ('', 'error', 1), 'git diff --name-only --diff-filter=U': ok}))
+    assert sent == [], sent
+    checks += 1
+    return checks
+
+
 def main():
     parser = argparse.ArgumentParser()
     for name in RUNNERS:
@@ -462,7 +655,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-regressions-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = retry_checks(fixtures) + json_stream_checks(fixtures) + session_name_checks(fixtures) + tree_checks(fixtures) + branch_summary_checks(fixtures) + compaction_checks(fixtures) + session_manager_checks(fixtures) + discovery_checks(fixtures) + tool_checks(fixtures) + auto_compaction_queue_checks(fixtures) + cli_checks(fixtures) + settings_checks(fixtures)
+    checks = retry_checks(fixtures) + json_stream_checks(fixtures) + session_name_checks(fixtures) + tree_checks(fixtures) + branch_summary_checks(fixtures) + compaction_checks(fixtures) + session_manager_checks(fixtures) + discovery_checks(fixtures) + tool_checks(fixtures) + inline_naming_checks(fixtures) + input_event_checks(fixtures) + input_transform_streaming_checks(fixtures) + git_merge_and_resolve_checks(fixtures) + auto_compaction_queue_checks(fixtures) + cli_checks(fixtures) + settings_checks(fixtures)
     print('regressions: %d upstream cases passed' % checks)
 
 

@@ -653,10 +653,100 @@ def extension_tool_checks(f):
     return checks
 
 
+def reload_settings_checks(f):
+    """suite/regressions/2753-reload-stale-resource-settings.test.ts: the harness discovers prompt templates
+    (upstream's loader without noPromptTemplates); its loadout starts without discovery, so a first reload loads
+    them as startup does."""
+    directory = Path(tempfile.mkdtemp(prefix='reload-settings-', dir=f.work))
+    agent = directory / 'agent'
+    (agent / 'prompts').mkdir(parents=True)
+    events = f.call('suite-harness', 'reload_settings', str(directory), str(agent), cwd=directory, env=dict(__import__('os').environ, PI_FAUX_API_KEY='faux-key'))
+    templates = {e['label']: e['names'] for e in of_type(events, 'templates')}
+    assert 'test' in templates['startup'] and 'test' not in templates['reloaded'], templates
+    assert json.loads((agent / 'settings.json').read_text())['prompts'] == ['-prompts/test.md']
+    return 1
+
+
+def compaction_extension_checks(f):
+    """compaction-extensions.test.ts over the faux provider (upstream runs it with a live key)."""
+    def compact(mode, prompts='one'):
+        return run(f, 'compaction_extensions', mode, prompts, settings={'compaction': {'keepRecentTokens': 1}})
+    checks = 0
+    # should emit before_compact and compact events
+    events = compact('none', 'two')
+    before, after = of_type(events, 'before_compact'), of_type(events, 'compact')
+    assert len(before) == 1 and len(after) == 1
+    b = before[0]
+    assert isinstance(b['isSplitTurn'], bool) and b['tokensBefore'] >= 0 and b['branchEntries'] > 0 and b['firstKeptEntryId']
+    assert after[0]['entryType'] == 'compaction' and after[0]['summary'] and after[0]['tokensBefore'] >= 0 and after[0]['fromExtension'] is False
+    checks += 1
+    # should allow extensions to cancel compaction
+    events = compact('cancel')
+    assert last(events, 'compact_failed')['error'] == 'Compaction cancelled' and not of_type(events, 'compact')
+    checks += 1
+    # should allow extensions to provide custom compaction
+    events = compact('supply', 'two')
+    assert last(events, 'compact_result')['result']['summary'] == 'Custom summary from extension'
+    after = of_type(events, 'compact')
+    assert len(after) == 1 and after[0]['summary'] == 'Custom summary from extension' and after[0]['fromExtension'] is True
+    checks += 1
+    # should include entries in compact event after compaction is saved
+    events = compact('none')
+    assert len(of_type(events, 'compact')) == 1 and 'compaction' in [e['type'] for e in last(events, 'entries')['entries']]
+    checks += 1
+    # should continue with default compaction if extension throws error
+    events = compact('throw')
+    assert last(events, 'compact_result')['result']['summary']
+    assert [e['fromExtension'] for e in of_type(events, 'compact')] == [False]
+    checks += 1
+    # should call multiple extensions in order
+    events = compact('ordered')
+    order = ['%s-%s' % (e['extension'], 'before' if e['type'] == 'before_compact' else 'after') for e in events if e['type'] in ('before_compact', 'compact')]
+    assert order == ['extension1-before', 'extension2-before', 'extension1-after', 'extension2-after'], order
+    checks += 1
+    # should pass correct data in before_compact event
+    b = last(compact('none', 'two'), 'before_compact')
+    assert isinstance(b['isSplitTurn'], bool) and b['firstKeptEntryId'] and b['messagesToSummarize'] >= 0 and b['turnPrefixMessages'] >= 0 and b['branchEntries'] > 0
+    checks += 1
+    # should use extension compaction even with different values
+    result = last(compact('supply999'), 'compact_result')['result']
+    assert result['summary'] == 'Custom summary with modified values' and result['tokensBefore'] == 999
+    checks += 1
+    return checks
+
+
+def branch_summary_extension_checks(f):
+    """branch-summary-extensions.test.ts: persists extension-provided summary usage in session totals (the total
+    token count is the sum of the printed totals)."""
+    e = last(run(f, 'branch_summary_extension'), 'summary_entry')
+    usage = {'input': 10, 'output': 20, 'cacheRead': 30, 'cacheWrite': 40, 'totalTokens': 100, 'cost': {'input': 0.1, 'output': 0.2, 'cacheRead': 0.3, 'cacheWrite': 0.4, 'total': 1}}
+    assert e['entry'] == {'type': 'branch_summary', 'parentId': None, 'fromId': e['sourceId'], 'fromHook': True, 'summary': 'Summary provided by extension', 'usage': usage}, e
+    t = e['totals']
+    assert (t['input'], t['output'], t['cacheRead'], t['cacheWrite'], t['input'] + t['output'] + t['cacheRead'] + t['cacheWrite'], t['cost']) == (12, 22, 30, 40, 104, 1), t
+    return 1
+
+
 def only(events, kind):
     found = of_type(events, kind)
     assert len(found) == 1, (kind, found)
     return found[0]
+
+
+def trigger_compact_checks(f):
+    """trigger-compact-extension.test.ts on the native example in a faux session: an observer extension gives the
+    four turns 110k, 120k, 95k and 105k context tokens (message_end usage) and reads ctx.getContextUsage at each
+    turn_end; upstream calls the handler with stub contexts and a mocked ctx.compact. Automatic compaction is off,
+    so the only compaction is the example's ctx.compact, which runs after the crossing turn."""
+    events = run(f, 'trigger_compact', settings={'compaction': {'enabled': False, 'keepRecentTokens': 1}})
+    # only auto-compacts when context usage crosses the threshold
+    assert [e['tokens'] for e in of_type(events, 'turn_usage')] == [110000, 120000, 95000, 105000]
+    kinds = [e['type'] for e in events]
+    starts = [i for i, kind in enumerate(kinds) if kind == 'compaction_start']
+    assert len(starts) == 1 and starts[0] > kinds.index('prompts_done') and starts[0] > max(i for i, kind in enumerate(kinds) if kind == 'turn_usage'), kinds
+    assert of_type(events, 'compaction_start')[0]['reason'] == 'manual'
+    compacted = of_type(events, 'compact')
+    assert len(compacted) == 1 and compacted[0]['tokensBefore'] == 105000 and not of_type(events, 'compact_failed'), compacted
+    return 1
 
 
 def main():
@@ -668,7 +758,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-suite-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures) + boundary_checks(fixtures) + durable_length_checks(fixtures) + context_checks(fixtures) + fork_message_checks(fixtures) + prompt_checks(fixtures) + extension_tool_checks(fixtures)
+    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures) + boundary_checks(fixtures) + durable_length_checks(fixtures) + context_checks(fixtures) + fork_message_checks(fixtures) + prompt_checks(fixtures) + extension_tool_checks(fixtures) + reload_settings_checks(fixtures) + compaction_extension_checks(fixtures) + branch_summary_extension_checks(fixtures) + trigger_compact_checks(fixtures)
     print('suite-harness: %d upstream cases passed' % checks)
 
 

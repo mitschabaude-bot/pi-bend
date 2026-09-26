@@ -2234,7 +2234,8 @@
       "source": "packages/coding-agent/test/agent-session-dynamic-provider.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "34724f24c570e7c6822e864f23374f9aa7d65ef2167980c5fa21708072c03141"
+      "sha256": "34724f24c570e7c6822e864f23374f9aa7d65ef2167980c5fa21708072c03141",
+      "notes": "Pending: the config form pi.registerProvider(name, ProviderConfig) (base-URL overrides of an existing provider, cases 1, 2 and 4) is not ported; native registerProvider takes Provider values (cases 3 and 5 would be portable once the harness can observe the request base URL)."
     },
     {
       "source": "packages/coding-agent/test/agent-session-dynamic-tools.test.ts",
@@ -2350,9 +2351,10 @@
     },
     {
       "source": "packages/coding-agent/test/bash-close-hang-windows.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "1d2230b25129a365cbae417269b65c1724772104328f584ee521cb5c255b49fb"
+      "sha256": "1d2230b25129a365cbae417269b65c1724772104328f584ee521cb5c255b49fb",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/bash-execution-width.test.ts",
@@ -2382,9 +2384,14 @@
     },
     {
       "source": "packages/coding-agent/test/branch-summary-extensions.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "26109a8c04018b0a43ca44006067ce576c8272332e805cae909b88bf519af286"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py"
+      ],
+      "sha256": "26109a8c04018b0a43ca44006067ce576c8272332e805cae909b88bf519af286",
+      "notes": "session_before_tree supplies a summary with usage: the branch_summary entry (null parent, fromId the old leaf, fromHook) keeps it and the session totals include it (input 12, output 22, cache 30/40, total 104, cost 1).",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend"
     },
     {
       "source": "packages/coding-agent/test/bug-report.test.ts",
@@ -2398,7 +2405,7 @@
       "status": "pending",
       "ports": [],
       "sha256": "e7b6c9145a3957a02f9eb22f04766ae46c33f938e060569439b6df925a5139f5",
-      "notes": "Pending: built-in tool definitions' constrained-sampling preference, wrapToolDefinition and re-registering built-in tools from an extension without strict sampling (built-in tools are not exposed as extension tool definitions)."
+      "notes": "Pending: built-in tools carry constrainedSampling natively (read, bash, edit, write prefer strict JSON schema), but they are not ToolDefinition values (createAllToolDefinitions/wrapToolDefinition are not ported) and extension ToolDefinition has no constrainedSampling field, so extensions cannot re-register them."
     },
     {
       "source": "packages/coding-agent/test/cache-stats.test.ts",
@@ -2494,13 +2501,19 @@
       "source": "packages/coding-agent/test/compaction-extensions-example.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "73c0c9cac5cc35c4113d3ff5819aa8b5fcbfc8c53816699123294a6798f35481"
+      "sha256": "73c0c9cac5cc35c4113d3ff5819aa8b5fcbfc8c53816699123294a6798f35481",
+      "notes": "Pending: the custom-compaction example needs ctx.modelRegistry.find and ModelRuntime.complete, and convertToLlm/serializeConversation as extension-facing exports; the two type-check cases have no native runtime content."
     },
     {
       "source": "packages/coding-agent/test/compaction-extensions.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "318be143ecdfc18b85d98c67d17128fb612e98d06bf023a65f37869a98844158"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py"
+      ],
+      "sha256": "318be143ecdfc18b85d98c67d17128fb612e98d06bf023a65f37869a98844158",
+      "notes": "All eight cases over the faux provider instead of a live Anthropic key (upstream skips them without one): session_before_compact/session_compact with the preparation and branch, cancel, supplied compaction (fromExtension), the entry saved before session_compact, a throwing handler falling back to the default compaction, extensions called in load order, and a supplied tokensBefore.",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend"
     },
     {
       "source": "packages/coding-agent/test/compaction-serialization.test.ts",
@@ -2581,7 +2594,7 @@
       "status": "pending",
       "ports": [],
       "sha256": "345716cc20a80dbe8072a3ed92bbff232f36ec83cfd02241b2ea4cb54945cc20",
-      "notes": "Pending: the interactive CustomMessageComponent and extension message renderers (registerMessageRenderer, MessageRenderOptions.outputPad) are not ported."
+      "notes": "Pending: extension message renderers (pi.registerMessageRenderer, MessageRenderOptions with outputPad) and the interactive CustomMessageComponent that applies them are not ported."
     },
     {
       "source": "packages/coding-agent/test/default-tools-setting.test.ts",
@@ -2789,9 +2802,14 @@
     },
     {
       "source": "packages/coding-agent/test/extensions-input-event.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2ef2e816ee616f2632b4e0bfe33325c91295589913ab956fe0027df27b7574fc"
+      "status": "ported",
+      "ports": [
+        "tests/regressions.bend",
+        "tests/regressions_check.py"
+      ],
+      "sha256": "2ef2e816ee616f2632b4e0bfe33325c91295589913ab956fe0027df27b7574fc",
+      "notes": "All nine cases on ExtensionRunner.emitInput with inline extensions (upstream writes .ts files and loads them): continue without handlers or results, transforms keeping or replacing images, chained transforms, handled short-circuits, sources, streamingBehavior, errors reported and skipped, hasHandlers. Input without images is an empty list natively (upstream: undefined).",
+      "implementation": "packages/coding-agent/src/core/extensions/runner.bend"
     },
     {
       "source": "packages/coding-agent/test/extensions-runner.test.ts",
@@ -2876,9 +2894,14 @@
     },
     {
       "source": "packages/coding-agent/test/git-merge-and-resolve-extension.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "80ad9e089a32b843336834120be78d671e9b89ae5f29f45af86a4fea3f966be1"
+      "status": "ported",
+      "ports": [
+        "tests/regressions.bend",
+        "tests/regressions_check.py"
+      ],
+      "sha256": "80ad9e089a32b843336834120be78d671e9b89ae5f29f45af86a4fea3f966be1",
+      "notes": "All nine cases on the native example extension through ExtensionRunner agent_end. Upstream mocks pi.exec with a command-line map; natively a stub git first on PATH answers from the same map through the real pi.exec and logs invocations, and the bound session actions record pi.sendUserMessage. Native-only (the Bun lane has no process primitive).",
+      "implementation": "packages/coding-agent/examples/extensions/git-merge-and-resolve.bend"
     },
     {
       "source": "packages/coding-agent/test/git-ssh-url.test.ts",
@@ -2953,9 +2976,14 @@
     },
     {
       "source": "packages/coding-agent/test/input-transform-streaming-example.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ee8ea69628597b524ac8fe548586417658ba742ae51f1cd99aac4b57fbf9c6db"
+      "status": "ported",
+      "ports": [
+        "tests/regressions.bend",
+        "tests/regressions_check.py"
+      ],
+      "sha256": "ee8ea69628597b524ac8fe548586417658ba742ae51f1cd99aac4b57fbf9c6db",
+      "notes": "The native example extension on ExtensionRunner.emitInput. Upstream mocks pi.exec; natively a stub git first on PATH records invocations and replays the mocked ExecResult through the real pi.exec, plus one case with the real git in a modified repository. Cases reaching pi.exec run only natively (the Bun lane has no process primitive).",
+      "implementation": "packages/coding-agent/examples/extensions/input-transform-streaming.bend"
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-anthropic-warning.test.ts",
@@ -3246,19 +3274,27 @@
       "source": "packages/coding-agent/test/plan-mode-extension.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "c04b3602f3b11f30578f9ab3d440095ad92433e463d34b03b24b9cec4e24c13a"
+      "sha256": "c04b3602f3b11f30578f9ab3d440095ad92433e463d34b03b24b9cec4e24c13a",
+      "notes": "Pending: the plan-mode example needs pi.registerFlag/getFlag, pi.registerShortcut, pi.appendEntry, ctx.sessionManager (read-only entries) and ctx.ui.theme, none of which the native extension API has yet. Its utils are ported (plan-mode-utils)."
     },
     {
       "source": "packages/coding-agent/test/plan-mode-utils.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "392e5a603b3a83e13fec88bc2958af33f1d71c7242b84d34efc8f13c433b1091"
+      "status": "ported",
+      "ports": [
+        "tests/plan-mode-utils.bend",
+        "tests/plan_mode_utils_check.py",
+        "tests/plan_mode_utils_reference.ts"
+      ],
+      "sha256": "392e5a603b3a83e13fec88bc2958af33f1d71c7242b84d34efc8f13c433b1091",
+      "notes": "Differential: every input of the upstream suite (plus a few more) runs through the native example utils and the pinned upstream utils.ts on Bun; equal results carry the upstream assertions. markCompletedSteps returns the marked items and count instead of mutating them.",
+      "implementation": "packages/coding-agent/examples/extensions/plan-mode/utils.bend"
     },
     {
       "source": "packages/coding-agent/test/powershell-tool.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "9c958f676e44ea9fcf77e9bda616bdb74c72581bf8c0102298c64548a91cc054"
+      "sha256": "9c958f676e44ea9fcf77e9bda616bdb74c72581bf8c0102298c64548a91cc054",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/print-mode.test.ts",
@@ -3888,21 +3924,28 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2753-reload-stale-resource-settings.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "92f54641e61424c2e97b7155a55b9e895d4b9c6d134bd61efaec9f8ac1a85db3"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py"
+      ],
+      "sha256": "92f54641e61424c2e97b7155a55b9e895d4b9c6d134bd61efaec9f8ac1a85db3",
+      "notes": "reload applies a prompts setting written after startup: the discovered test template disappears and the settings file keeps the new list. The harness session discovers prompt templates like upstream's loader (no noPromptTemplates); its loadout starts without discovery, so a first reload loads them as startup does. The faux model stands in for the registered faux provider.",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend"
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2781-skill-collision-precedence.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "df64c1c98cbdf0e62ace26ec78bece41116105aef866463f2d85f3e29cc02b20"
+      "sha256": "df64c1c98cbdf0e62ace26ec78bece41116105aef866463f2d85f3e29cc02b20",
+      "notes": "Pending: every case compares auto-discovered skills with a package's skills; package resources are not resolved natively yet."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2791-fswatch-error-crash.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "aafd7dddc5f65292ee02037ca3a8beb80e8300d38ed17e1ee259598b0df13b98"
+      "sha256": "aafd7dddc5f65292ee02037ca3a8beb80e8300d38ed17e1ee259598b0df13b98",
+      "notes": "Pending: the interactive custom-theme file watcher is not ported (the test emits a Node FSWatcher error event); interactive theme work belongs to the interactive agent."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2835-tools-allowlist-filters-extension-tools.test.ts",
@@ -3925,7 +3968,8 @@
       "source": "packages/coding-agent/test/suite/regressions/3217-scoped-model-order.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "870cffdb8209b928d8ed49785086924bbfd6f06dd0168aa968dcfa822dde45d8"
+      "sha256": "870cffdb8209b928d8ed49785086924bbfd6f06dd0168aa968dcfa822dde45d8",
+      "notes": "Pending: exercises InteractiveMode or interactive components (selectors, dialogs, shutdown and startup paths); assigned to the interactive-mode port."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3302-find-path-glob.test.ts",
@@ -4021,7 +4065,8 @@
       "source": "packages/coding-agent/test/suite/regressions/5080-signal-shutdown-extension-cleanup.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "3d8757525011c1294b87ad8615e153e99b04a5e7fd5a17dbba339aef1b16c6e3"
+      "sha256": "3d8757525011c1294b87ad8615e153e99b04a5e7fd5a17dbba339aef1b16c6e3",
+      "notes": "Pending: exercises InteractiveMode or interactive components (selectors, dialogs, shutdown and startup paths); assigned to the interactive-mode port."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5109-exclude-tools.test.ts",
@@ -4072,7 +4117,8 @@
       "source": "packages/coding-agent/test/suite/regressions/5433-extension-oauth-prompt-input.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "9ce8881c1d2f5454449993c4382aea2fecfe583f75f51f545b8e3ad3c4445389"
+      "sha256": "9ce8881c1d2f5454449993c4382aea2fecfe583f75f51f545b8e3ad3c4445389",
+      "notes": "Pending: exercises InteractiveMode or interactive components (selectors, dialogs, shutdown and startup paths); assigned to the interactive-mode port."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5596-missing-theme-export.test.ts",
@@ -4098,7 +4144,8 @@
       "source": "packages/coding-agent/test/suite/regressions/5724-sigterm-signal-exit.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "914334ad9376b15ddf30e0d9f5e2576955bf66f3602aed557216b47ae6a968ef"
+      "sha256": "914334ad9376b15ddf30e0d9f5e2576955bf66f3602aed557216b47ae6a968ef",
+      "notes": "Pending: exercises InteractiveMode or interactive components (selectors, dialogs, shutdown and startup paths); assigned to the interactive-mode port."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5868-rpc-unknown-command-id.test.ts",
@@ -4114,7 +4161,8 @@
       "source": "packages/coding-agent/test/suite/regressions/5943-session-start-notify.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "95b1525ebdc048e4723ef5e9b72dfd20db8593aa252d9f4b2085ba77ccaa5b9d"
+      "sha256": "95b1525ebdc048e4723ef5e9b72dfd20db8593aa252d9f4b2085ba77ccaa5b9d",
+      "notes": "Pending: exercises InteractiveMode or interactive components (selectors, dialogs, shutdown and startup paths); assigned to the interactive-mode port."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5996-session-name-newlines.test.ts",
@@ -4170,9 +4218,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6260-inline-extension-naming.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ce7692b1620f0ab49da896d123a263903a6e531a2659f20c4ce36c0996b7e218"
+      "status": "ported",
+      "ports": [
+        "tests/regressions.bend",
+        "tests/regressions_check.py"
+      ],
+      "sha256": "ce7692b1620f0ab49da896d123a263903a6e531a2659f20c4ce36c0996b7e218",
+      "notes": "All four cases on Loader.loadExtensionFactories (upstream DefaultResourceLoader extensionFactories): bare factories (InlineExtension's BareExtension) load as <inline:N> by position, named ones as <inline:name> with hidden kept, mixed lists number bare entries by their position.",
+      "implementation": "packages/coding-agent/src/core/extensions/loader.bend"
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6324-branch-summary-ambient-auth.test.ts",
@@ -4199,9 +4252,10 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6596-taskkill-enoent.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "4ce3f882081072294b0850269caec1017266079381d8fce609423dd27118bb80"
+      "sha256": "4ce3f882081072294b0850269caec1017266079381d8fce609423dd27118bb80",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6647-compaction-retries-transient-stream-drop.test.ts",
@@ -4237,19 +4291,22 @@
       "source": "packages/coding-agent/test/suite/regressions/6949-unavailable-scoped-model.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "20c6f5a0a13fd7a666fd1f02561c35fe4223f05c309765912a1c0a31f9cde928"
+      "sha256": "20c6f5a0a13fd7a666fd1f02561c35fe4223f05c309765912a1c0a31f9cde928",
+      "notes": "Pending: exercises InteractiveMode or interactive components (selectors, dialogs, shutdown and startup paths); assigned to the interactive-mode port."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6999-models-json-hot-reload.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "f06a2e4cd202a21854d1b652eeeb202adc4645189f74191725e30ec7e021eadc"
+      "sha256": "f06a2e4cd202a21854d1b652eeeb202adc4645189f74191725e30ec7e021eadc",
+      "notes": "Pending: exercises InteractiveMode or interactive components (selectors, dialogs, shutdown and startup paths); assigned to the interactive-mode port."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7027-credential-refresh-hang.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "9fa83fcef17cf5fed6f849f74193fe568a19476001678ed20835dff356ebbfbb"
+      "sha256": "9fa83fcef17cf5fed6f849f74193fe568a19476001678ed20835dff356ebbfbb",
+      "notes": "Pending: exercises InteractiveMode or interactive components (selectors, dialogs, shutdown and startup paths); assigned to the interactive-mode port."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7048-compaction-truncated-summary.test.ts",
@@ -4280,19 +4337,22 @@
       "source": "packages/coding-agent/test/suite/regressions/7153-scoped-models-refresh.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "3403a6201a245a62421e8b43525d06f46328a6f7ac64875c2c3dd980d7935839"
+      "sha256": "3403a6201a245a62421e8b43525d06f46328a6f7ac64875c2c3dd980d7935839",
+      "notes": "Pending: exercises InteractiveMode or interactive components (selectors, dialogs, shutdown and startup paths); assigned to the interactive-mode port."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7187-malformed-package-manifest.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "7faca11638d719a5434fb5a8178ba2750060f9d80d1b687eda04494b499b0a1e"
+      "sha256": "7faca11638d719a5434fb5a8178ba2750060f9d80d1b687eda04494b499b0a1e",
+      "notes": "Pending: package resources (npm package manifests with pi.skills/prompts) are not resolved by the native package manager yet (core/package-manager.bend resolves local resources only)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7193-event-bus-lifecycle.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "18bc4f3388b37bffd7b48779a1242228f6b25ef2b6765362ed2dcf7fc9798508"
+      "sha256": "18bc4f3388b37bffd7b48779a1242228f6b25ef2b6765362ed2dcf7fc9798508",
+      "notes": "Pending: the extension event bus (pi.events) and reloading extensions on AgentSession.reload are not ported."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7209-model-selector-filter-resets-selection.test.ts",
@@ -4375,13 +4435,15 @@
       "source": "packages/coding-agent/test/suite/regressions/7731-tui-method-wrapping.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "1dfe1390fa3f920b02b3e7bf985282b1874dc034d455a08fb5d09dc86ec3b818"
+      "sha256": "1dfe1390fa3f920b02b3e7bf985282b1874dc034d455a08fb5d09dc86ec3b818",
+      "notes": "Pending: exercises InteractiveMode or interactive components (selectors, dialogs, shutdown and startup paths); assigned to the interactive-mode port."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7829-invalid-settings-warning.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "6460c0490bd1e17a00d96b3e6e2ef909944a0f5a2b8e3f24c127788fd2220118"
+      "sha256": "6460c0490bd1e17a00d96b3e6e2ef909944a0f5a2b8e3f24c127788fd2220118",
+      "notes": "Pending: exercises InteractiveMode or interactive components (selectors, dialogs, shutdown and startup paths); assigned to the interactive-mode port."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7911-json-stream-usage.test.ts",
@@ -4407,9 +4469,10 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8237-node-sea-extension-loading.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "21cb3ab08f4c5e54b338cf004cdbc335964318647cc2d88c247f234e91af1720"
+      "sha256": "21cb3ab08f4c5e54b338cf004cdbc335964318647cc2d88c247f234e91af1720",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8261-subagent-project-trust.test.ts",
@@ -4471,9 +4534,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8724-in-memory-fork-active-tool.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ff0a60e741f639f712cb00c16ce3d840bde5ecf8ce18d6f62a6e2405cae2f241"
+      "status": "ported",
+      "ports": [
+        "tests/agent-session-runtime.bend",
+        "tests/agent_session_runtime_check.py"
+      ],
+      "sha256": "ff0a60e741f639f712cb00c16ce3d840bde5ecf8ce18d6f62a6e2405cae2f241",
+      "notes": "The in-memory session forks before its first user message while a tool waits for its abort: the fork reports 'first prompt', the replacement session holds only the system entry, and the next request carries two system messages and the new prompt (no aborted turn). The replacement sessions have no tools, as upstream's noTools 'all'.",
+      "implementation": "packages/coding-agent/src/core/agent-session-runtime.bend"
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8935-parallel-preflight-abort.test.ts",
@@ -4490,7 +4558,8 @@
       "source": "packages/coding-agent/test/suite/regressions/8964-extension-provider-streaming.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "c379190d9631400232636251edb9457ee95c7667d29297ac576acabc9deba92a"
+      "sha256": "c379190d9631400232636251edb9457ee95c7667d29297ac576acabc9deba92a",
+      "notes": "Pending: ctx.modelRegistry.stream/streamSimple (ModelRuntime streaming from an extension command) is not ported; the model runtime has no request API outside the agent."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8989-fork-compaction-label-boundary.test.ts",
@@ -4506,7 +4575,8 @@
       "source": "packages/coding-agent/test/suite/regressions/9068-user-bash-fail-closed.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "ac50f627231a28486fb34ce8880dd994a56f6f8fcfef59ffef24fc0d07f9b07d"
+      "sha256": "ac50f627231a28486fb34ce8880dd994a56f6f8fcfef59ffef24fc0d07f9b07d",
+      "notes": "Pending: the user_bash extension event (emitUserBash and its fail-closed result validation) is not ported, neither in RPC bash nor in interactive ! commands."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9178-tree-during-compaction.test.ts",
@@ -4534,9 +4604,10 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9540-extension-loader-lazy.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "d9fa808503eca882b7b812166051860a669b7cf312ed4a927cbc54808170affc"
+      "sha256": "d9fa808503eca882b7b812166051860a669b7cf312ed4a927cbc54808170affc",
+      "notes": "Out of scope: see docs/scope-decisions.md (JavaScript/TypeScript extension loading: jiti imports and the module cache have no native counterpart)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9789-context-handler-system-messages.test.ts",
@@ -4552,9 +4623,10 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/extension-factory-cache.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "94f0bcf7de660cb25729676e32b1518e92b8542c08ffeb61add27034a2874222"
+      "sha256": "94f0bcf7de660cb25729676e32b1518e92b8542c08ffeb61add27034a2874222",
+      "notes": "Out of scope: see docs/scope-decisions.md (JavaScript/TypeScript extension loading: jiti imports and the module cache have no native counterpart)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/pre-prompt-compaction-no-continue.test.ts",
@@ -4763,9 +4835,14 @@
     },
     {
       "source": "packages/coding-agent/test/trigger-compact-extension.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "1d3323f8c98caa0192717f6de8b72053af8423c13db88d722859e34a330545f0"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py"
+      ],
+      "sha256": "1d3323f8c98caa0192717f6de8b72053af8423c13db88d722859e34a330545f0",
+      "notes": "The native example in a faux session: an observer extension gives the four turns 110k, 120k, 95k and 105k context tokens through message_end usage and reads ctx.getContextUsage at each turn_end (upstream calls the handler with stub contexts and a mocked ctx.compact). With automatic compaction off, the only compaction is the example's ctx.compact after the crossing turn, and it completes.",
+      "implementation": "packages/coding-agent/examples/extensions/trigger-compact.bend"
     },
     {
       "source": "packages/coding-agent/test/truncate-to-width.test.ts",

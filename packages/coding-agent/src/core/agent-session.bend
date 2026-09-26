@@ -1226,13 +1226,6 @@ def contextShutdown(env: ContextEnv, unit: Unit) -> IO(Unit):
         bound : Maybe<&2, C.Callback<Unit, Unit>> <- R.read(Maybe<&2, C.Callback<Unit, Unit>>, handler)
         shutdownWith(bound)
 
-def createContextActions(+env: ContextEnv) -> IO(Ctx.ExtensionContextActions):
-  do IO<Ctx.ExtensionContextActions>:
-    reader : C.Callback<Unit, Ctx.SessionState> <- C.create(~ContextEnv, ~Unit, ~Ctx.SessionState, ~sessionState, env)
-    aborter : C.Callback<Unit, Unit> <- C.create(~ContextEnv, ~Unit, ~Unit, ~contextAbort, env)
-    stopper : C.Callback<Unit, Unit> <- C.create(~ContextEnv, ~Unit, ~Unit, ~contextShutdown, env)
-    return Ctx.ExtensionContextActions{reader, aborter, stopper}
-
 type ModelEnv is Data:
   ModelEnv{agent: Runtime.Owner(), models: Models.ModelRuntime}
 
@@ -1257,16 +1250,6 @@ def refreshCurrentModel(env: ModelEnv, unit: Unit) -> IO(Unit):
       do IO<Unit>:
         current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         currentFrom(agent, models, stateModel(current))
-
-def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime) -> IO(ExtensionBinding):
-  match env:
-    case ContextEnv{+agent, shared, scoped, settings, handler}:
-      do IO<ExtensionBinding>:
-        actions : Ctx.ExtensionContextActions <- createContextActions(ContextEnv{agent, shared, scoped, settings, handler})
-        changed : C.Callback<Unit, Unit> <- C.create(~ModelEnv, ~Unit, ~Unit, ~refreshCurrentModel, ModelEnv{agent, models})
-        sessionActions : R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>> <- R.new(Maybe<&2, ExtensionTypes.ExtensionActions>, None{})
-        extensionTools : R.Ref<ExtensionTools> <- R.new(ExtensionTools, ExtensionTools{Nil{}, Nil{}})
-        return ExtensionBinding{actions, changed, sessionActions, handler, extensionTools}
 
 def disposeSessionActions(actions: Maybe<&2, ExtensionTypes.ExtensionActions>) -> IO(Unit):
   match actions:
@@ -1295,7 +1278,7 @@ def disposeExecutors(executors: List<&2, Tools.Execute()>) -> IO(Unit):
 
 def disposeExtensionBinding(binding: ExtensionBinding) -> IO(Unit):
   match binding:
-    case ExtensionBinding{Ctx.ExtensionContextActions{reader, aborter, stopper}, changed, sessionActions, handler, extensionTools}:
+    case ExtensionBinding{Ctx.ExtensionContextActions{reader, aborter, stopper, usage, compactor, prompt}, changed, sessionActions, handler, extensionTools}:
       do IO<Unit>:
         tools : ExtensionTools <- R.dispose(ExtensionTools, extensionTools)
         disposeExecutors(executorsOf(tools))
@@ -1303,6 +1286,9 @@ def disposeExtensionBinding(binding: ExtensionBinding) -> IO(Unit):
         C.dispose(Unit, Ctx.SessionState, reader)
         C.dispose(Unit, Unit, aborter)
         C.dispose(Unit, Unit, stopper)
+        C.dispose(Unit, Maybe<&2, Ctx.ContextUsage>, usage)
+        C.dispose(Ctx.CompactOptions, Unit, compactor)
+        C.dispose(Unit, String, prompt)
         C.dispose(Unit, Unit, changed)
         bound : Maybe<&2, ExtensionTypes.ExtensionActions> <- R.dispose(Maybe<&2, ExtensionTypes.ExtensionActions>, sessionActions)
         disposeSessionActions(bound)
@@ -2967,42 +2953,6 @@ def contextTransform(env: ContextHookEnv, input: ContextInput()) -> IO(ContextRe
         now : F64 <- Date.now()
         return forcedProjection(forcedIn(state), transformed, now)
 
-def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
-  do IO<AgentSession>:
-    +scoped : R.Ref<List<&2, Models.ScopedModel>> <- R.new(List<&2, Models.ScopedModel>, scopedModels)
-    initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +window : F64 = Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, stateModel(initial)), F.fromU32(0))
-    +loadoutRef : R.Ref<Runtime.Loadout> <- R.new(Runtime.Loadout, loadout)
-    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, RunState{False{},False{},0n,Nil{},ExtensionTypes.OutcomeCompleted{},False{},None{}}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, window, None{}}, CompactionState{False{}, None{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}, PendingMessages{Nil{}, Nil{}}, loadoutRef})
-    +settingsRef : R.Ref<Settings.SettingsManager> <- R.new(Settings.SettingsManager,settings)
-    +handler : Agent.Handler(SessionEvent(), Runtime.Error()) <- C.create(~EventEnv, ~Agent.Input<SessionEvent()>, ~Loop.Emission<Runtime.Error()>, ~handleAgentEvent, EventEnv{agent, shared, loadoutRef})
-    subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, handler)
-    +replaced : Maybe<&2, NextTurnHook()> <- Agent.getPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    legacy : Maybe<&2, LegacyTurnHook()> <- Agent.getPrepareNextTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +nextTurn : NextTurnHook() <- C.create(~NextTurnEnv, ~T.ToolHookInput<Turn()>, ~TurnResult(), ~nextTurnHook, NextTurnEnv{agent, shared, settingsRef, replaced, legacy, loadoutRef})
-    Agent.setPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{nextTurn})
-    +replacedRequest : Maybe<&2, RequestHook()> <- Agent.getPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +request : RequestHook() <- C.create(~RequestEnv, ~RequestInput(), ~RequestResult(), ~requestHook, RequestEnv{agent, shared, replacedRequest})
-    Agent.setPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{request})
-    shutdownHandler : R.Ref<Maybe<&2, C.Callback<Unit, Unit>>> <- R.new(Maybe<&2, C.Callback<Unit, Unit>>, None{})
-    +context : ExtensionBinding <- createExtensionBinding(ContextEnv{agent, shared, scoped, settingsRef, shutdownHandler}, models)
-    bindContext(loadout, Some{context})
-    inner : Runtime.Stream() <- Agent.getStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    warming : Warming <- createWarming(agent, shared, settingsRef, inner)
-    stats : R.Ref<Maybe<&2, StatsMemo>> <- R.new(Maybe<&2, StatsMemo>, None{})
-    +replacedAfterTool : Maybe<&2, AfterToolHook()> <- Agent.getAfterToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +afterTool : AfterToolHook() <- C.create(~AfterToolEnv, ~AfterToolInput(), ~AfterToolResult(), ~afterToolHook, AfterToolEnv{agent, settingsRef, replacedAfterTool, loadoutRef})
-    Agent.setAfterToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{afterTool})
-    +replacedBeforeTool : Maybe<&2, BeforeToolHook()> <- Agent.getBeforeToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +beforeTool : BeforeToolHook() <- C.create(~BeforeToolEnv, ~BeforeToolInput(), ~BeforeToolResult(), ~beforeToolHook, BeforeToolEnv{loadoutRef})
-    Agent.setBeforeToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{beforeTool})
-    +replacedFinish : Maybe<&2, FinishTurnHook()> <- Agent.getFinishTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +finish : FinishTurnHook() <- C.create(~FinishTurnEnv, ~FinishTurnInput(), ~FinishTurnResult(), ~finishTurnHook, FinishTurnEnv{agent, shared, replacedFinish})
-    Agent.setFinishTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{finish})
-    +replacedContext : Maybe<&2, ContextHook()> <- Agent.getTransformContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +contextHook : ContextHook() <- C.create(~ContextHookEnv, ~ContextInput(), ~ContextResult(), ~contextTransform, ContextHookEnv{shared, replacedContext})
-    Agent.setTransformContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{contextHook})
-    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context, warming, stats, ToolHooks{afterTool, replacedAfterTool, beforeTool, replacedBeforeTool, finish, replacedFinish, contextHook, replacedContext}}, settingsRef, cwd, loadoutRef, models, scoped}
 
 # A final error after retries reports the failure and resets the counter.
 def failedRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason, finalError: Maybe<&2, String>) -> IO(Unit):
@@ -3879,9 +3829,7 @@ def finishManual(agent: Runtime.Owner(), +shared: R.Ref<Shared>, signalled: Bool
       +aborted = signalled || cancelled
       finishManualWith(agent, shared, aborted, fromExtension, compactionOutcome(aborted, result))
 
-def compact(session: AgentSession, customInstructions: Maybe<&2, String>) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
-  match session:
-    case AgentSession{+agent, +shared, _, settingsRef, _, _, _, _}:
+def compactIn(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settingsRef: R.Ref<Settings.SettingsManager>, customInstructions: Maybe<&2, String>) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
       do IO<Result<&2, &2, String, Compaction.CompactionResult>>:
         +settings : Settings.SettingsManager <- R.read(Settings.SettingsManager,settingsRef)
         abortSleeping(shared)
@@ -3900,6 +3848,10 @@ def compact(session: AgentSession, customInstructions: Maybe<&2, String>) -> IO(
         resolveIdleWait(shared)
         A.dispose(Unit, controller)
         finishManual(agent, shared, aborted, run)
+
+def compact(session: AgentSession, customInstructions: Maybe<&2, String>) -> IO(Result<&2, &2, String, Compaction.CompactionResult>):
+  match session:
+    case AgentSession{agent, shared, _, settingsRef, _, _, _, _}: compactIn(agent, shared, settingsRef, customInstructions)
 
 
 # Tree navigation keeps the session file and its full append-only history.
@@ -4928,11 +4880,14 @@ def getSessionStats(+session: AgentSession) -> IO(Result<&2, &2, S.Error, Stats.
 
 # upstream getContextUsage: None without a model or context window; unknown
 # tokens after a compaction until an assistant responds.
-def getContextUsage(+session: AgentSession) -> IO(Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>>):
+def contextUsageIn(+agent: Runtime.Owner(), shared: R.Ref<Shared>) -> IO(Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>>):
   do IO<Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>>>:
-    stored : Session() <- sessionOf(session)
-    current : AgentState() <- state(session)
-    return Stats.context(stateOf(stored), Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, stateModel(current)), F.fromU32(0)))
+    stored : Shared <- R.read(Shared, shared)
+    current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    return Stats.context(stateOf(sharedSession(stored)), Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, stateModel(current)), F.fromU32(0)))
+
+def getContextUsage(+session: AgentSession) -> IO(Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>>):
+  contextUsageIn(agentOf(session), sharedOf(session))
 
 # upstream session.settingsManager: the modes read the effective settings and
 # change them through the session, which persists each change.
@@ -5018,6 +4973,118 @@ def bindSessionActions(+session: AgentSession) -> IO(Unit):
     R.write(Maybe<&2, ExtensionTypes.ExtensionActions>, sessionActionsOf(session), Some{ExtensionTypes.ExtensionActions{send, sendUser, switcher, tools}})
     loadout : Runtime.Loadout <- loadoutOf(session)
     bindActionsTo(runnerIn(loadout), ExtensionTypes.ExtensionActions{send, sendUser, switcher, tools})
+
+# upstream bindCore's getContextUsage, compact and getSystemPrompt.
+def contextUsageOf(result: Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>>) -> Maybe<&2, Ctx.ContextUsage>:
+  match result:
+    case Done{Some{Stats.ContextUsage{tokens, window, percent}}}: Some{Ctx.ContextUsage{tokens, window, percent}}
+    case _: None{}
+
+def contextUsage(env: ContextEnv, unit: Unit) -> IO(Maybe<&2, Ctx.ContextUsage>):
+  match env:
+    case ContextEnv{agent, shared, _, _, _}:
+      do IO<Maybe<&2, Ctx.ContextUsage>>:
+        result : Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>> <- contextUsageIn(agent, shared)
+        return contextUsageOf(result)
+
+def completedWith(callback: Maybe<&2, C.Callback<Compaction.CompactionResult, Unit>>, compacted: Compaction.CompactionResult) -> IO(Unit):
+  match callback:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{complete}: C.call(Compaction.CompactionResult, Unit, complete, compacted)
+
+def failedWith(callback: Maybe<&2, C.Callback<String, Unit>>, message: String) -> IO(Unit):
+  match callback:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{failed}: C.call(String, Unit, failed, message)
+
+def settledWith(options: Ctx.CompactOptions, result: Result<&2, &2, String, Compaction.CompactionResult>) -> IO(Unit):
+  match options result:
+    case Ctx.CompactOptions{_, complete, _} Done{compacted}: completedWith(complete, compacted)
+    case Ctx.CompactOptions{_, _, failed} Fail{message}: failedWith(failed, message)
+
+def compactSettled(+options: Ctx.CompactOptions, result: Result<&2, &2, String, Compaction.CompactionResult>) -> IO(Unit):
+  do IO<Unit>:
+    settledWith(options, result)
+    Ctx.disposeCompactOptions(options)
+
+def compactInstructions(options: Ctx.CompactOptions) -> Maybe<&2, String>:
+  match options:
+    case Ctx.CompactOptions{instructions, _, _}: instructions
+
+def compactDetached(env: ContextEnv, +options: Ctx.CompactOptions) -> IO(Unit):
+  match env:
+    case ContextEnv{agent, shared, _, settings, _}:
+      do IO<Unit>:
+        result : Result<&2, &2, String, Compaction.CompactionResult> <- compactIn(agent, shared, settings, compactInstructions(options))
+        compactSettled(options, result)
+
+# The compaction runs detached; ctx.compact returns at once.
+def contextCompact(env: ContextEnv, options: Ctx.CompactOptions) -> IO(Unit): IO.spawn(Unit, compactDetached(env, options))
+
+def contextSystemPrompt(env: ContextEnv, unit: Unit) -> IO(String):
+  match env:
+    case ContextEnv{_, shared, _, _, _}:
+      do IO<String>:
+        stored : Shared <- R.read(Shared, shared)
+        loadout : Runtime.Loadout <- R.read(Runtime.Loadout, extensionsOf(stored))
+        return Result.default(&2, &2, Prompt.Error, String, Prompt.promptText(Done{Prompt.SystemPromptState{"", Some{sectionsIn(loadout)}}}), "")
+
+def createContextActions(+env: ContextEnv) -> IO(Ctx.ExtensionContextActions):
+  do IO<Ctx.ExtensionContextActions>:
+    reader : C.Callback<Unit, Ctx.SessionState> <- C.create(~ContextEnv, ~Unit, ~Ctx.SessionState, ~sessionState, env)
+    aborter : C.Callback<Unit, Unit> <- C.create(~ContextEnv, ~Unit, ~Unit, ~contextAbort, env)
+    stopper : C.Callback<Unit, Unit> <- C.create(~ContextEnv, ~Unit, ~Unit, ~contextShutdown, env)
+    usage : C.Callback<Unit, Maybe<&2, Ctx.ContextUsage>> <- C.create(~ContextEnv, ~Unit, ~Maybe<&2, Ctx.ContextUsage>, ~contextUsage, env)
+    compactor : C.Callback<Ctx.CompactOptions, Unit> <- C.create(~ContextEnv, ~Ctx.CompactOptions, ~Unit, ~contextCompact, env)
+    prompt : C.Callback<Unit, String> <- C.create(~ContextEnv, ~Unit, ~String, ~contextSystemPrompt, env)
+    return Ctx.ExtensionContextActions{reader, aborter, stopper, usage, compactor, prompt}
+
+def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime) -> IO(ExtensionBinding):
+  match env:
+    case ContextEnv{+agent, shared, scoped, settings, handler}:
+      do IO<ExtensionBinding>:
+        actions : Ctx.ExtensionContextActions <- createContextActions(ContextEnv{agent, shared, scoped, settings, handler})
+        changed : C.Callback<Unit, Unit> <- C.create(~ModelEnv, ~Unit, ~Unit, ~refreshCurrentModel, ModelEnv{agent, models})
+        sessionActions : R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>> <- R.new(Maybe<&2, ExtensionTypes.ExtensionActions>, None{})
+        extensionTools : R.Ref<ExtensionTools> <- R.new(ExtensionTools, ExtensionTools{Nil{}, Nil{}})
+        return ExtensionBinding{actions, changed, sessionActions, handler, extensionTools}
+
+def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
+  do IO<AgentSession>:
+    +scoped : R.Ref<List<&2, Models.ScopedModel>> <- R.new(List<&2, Models.ScopedModel>, scopedModels)
+    initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +window : F64 = Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, stateModel(initial)), F.fromU32(0))
+    +loadoutRef : R.Ref<Runtime.Loadout> <- R.new(Runtime.Loadout, loadout)
+    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, RunState{False{},False{},0n,Nil{},ExtensionTypes.OutcomeCompleted{},False{},None{}}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, window, None{}}, CompactionState{False{}, None{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}, PendingMessages{Nil{}, Nil{}}, loadoutRef})
+    +settingsRef : R.Ref<Settings.SettingsManager> <- R.new(Settings.SettingsManager,settings)
+    +handler : Agent.Handler(SessionEvent(), Runtime.Error()) <- C.create(~EventEnv, ~Agent.Input<SessionEvent()>, ~Loop.Emission<Runtime.Error()>, ~handleAgentEvent, EventEnv{agent, shared, loadoutRef})
+    subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, handler)
+    +replaced : Maybe<&2, NextTurnHook()> <- Agent.getPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    legacy : Maybe<&2, LegacyTurnHook()> <- Agent.getPrepareNextTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +nextTurn : NextTurnHook() <- C.create(~NextTurnEnv, ~T.ToolHookInput<Turn()>, ~TurnResult(), ~nextTurnHook, NextTurnEnv{agent, shared, settingsRef, replaced, legacy, loadoutRef})
+    Agent.setPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{nextTurn})
+    +replacedRequest : Maybe<&2, RequestHook()> <- Agent.getPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +request : RequestHook() <- C.create(~RequestEnv, ~RequestInput(), ~RequestResult(), ~requestHook, RequestEnv{agent, shared, replacedRequest})
+    Agent.setPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{request})
+    shutdownHandler : R.Ref<Maybe<&2, C.Callback<Unit, Unit>>> <- R.new(Maybe<&2, C.Callback<Unit, Unit>>, None{})
+    +context : ExtensionBinding <- createExtensionBinding(ContextEnv{agent, shared, scoped, settingsRef, shutdownHandler}, models)
+    bindContext(loadout, Some{context})
+    inner : Runtime.Stream() <- Agent.getStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    warming : Warming <- createWarming(agent, shared, settingsRef, inner)
+    stats : R.Ref<Maybe<&2, StatsMemo>> <- R.new(Maybe<&2, StatsMemo>, None{})
+    +replacedAfterTool : Maybe<&2, AfterToolHook()> <- Agent.getAfterToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +afterTool : AfterToolHook() <- C.create(~AfterToolEnv, ~AfterToolInput(), ~AfterToolResult(), ~afterToolHook, AfterToolEnv{agent, settingsRef, replacedAfterTool, loadoutRef})
+    Agent.setAfterToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{afterTool})
+    +replacedBeforeTool : Maybe<&2, BeforeToolHook()> <- Agent.getBeforeToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +beforeTool : BeforeToolHook() <- C.create(~BeforeToolEnv, ~BeforeToolInput(), ~BeforeToolResult(), ~beforeToolHook, BeforeToolEnv{loadoutRef})
+    Agent.setBeforeToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{beforeTool})
+    +replacedFinish : Maybe<&2, FinishTurnHook()> <- Agent.getFinishTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +finish : FinishTurnHook() <- C.create(~FinishTurnEnv, ~FinishTurnInput(), ~FinishTurnResult(), ~finishTurnHook, FinishTurnEnv{agent, shared, replacedFinish})
+    Agent.setFinishTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{finish})
+    +replacedContext : Maybe<&2, ContextHook()> <- Agent.getTransformContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +contextHook : ContextHook() <- C.create(~ContextHookEnv, ~ContextInput(), ~ContextResult(), ~contextTransform, ContextHookEnv{shared, replacedContext})
+    Agent.setTransformContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{contextHook})
+    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context, warming, stats, ToolHooks{afterTool, replacedAfterTool, beforeTool, replacedBeforeTool, finish, replacedFinish, contextHook, replacedContext}}, settingsRef, cwd, loadoutRef, models, scoped}
 
 # upstream AgentSession constructor: the session, its agent hooks and its
 # extension bindings.

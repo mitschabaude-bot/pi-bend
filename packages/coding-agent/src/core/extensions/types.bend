@@ -470,7 +470,7 @@ type ExtensionActions is Data:
 # `actions` are the session's, once bound; before that the action methods
 # fail (upstream's "not initialized" runtime).
 type ExtensionRuntimeState is Data:
-  ExtensionRuntimeState{extensions: List<&2, Extension>, pendingProviders: List<&2, PendingProvider>, providers: Maybe<&2, ProviderBinding>, nextId: Nat, actions: Maybe<&2, ExtensionActions>}
+  ExtensionRuntimeState{extensions: List<&2, Extension>, pendingProviders: List<&2, PendingProvider>, providers: Maybe<&2, ProviderBinding>, nextId: Nat, actions: Maybe<&2, ExtensionActions>, cwd: Maybe<&2, String>}
 
 def ExtensionRuntime() -> Data: R.Ref<ExtensionRuntimeState>
 
@@ -488,6 +488,7 @@ def ExtensionFactory() -> Type: ExtensionAPI -> IO(Result<&2, &2, String, Unit>)
 # consumed when it is loaded.
 type InlineExtension is Type:
   InlineExtension{name: String, factory: ExtensionFactory(), hidden: Bool}
+  BareExtension{factory: ExtensionFactory()}
 
 # upstream LoadExtensionsResult.errors
 type LoadError is Data:

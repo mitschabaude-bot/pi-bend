@@ -388,6 +388,22 @@ def resumeSession(-S: Type,+runtime: AgentSessionRuntime<S>,sessionPath: String,
     found : Maybe<&2,Snapshot> <- snapshot(S,runtime)
     resumeFrom(S,runtime,sessionPath,cwdOverride,found)
 
+# upstream switchSession() for resuming: session_before_switch ("resume", the
+# target file) runs first; a cancel leaves the current session in place.
+type CancellableResume is Data:
+  ResumeCancelled{}
+  ResumeAttempted{outcome: ResumeOutcome}
+
+def resumeAttempted(-S: Type, +runtime: AgentSessionRuntime<S>, sessionPath: String, cwdOverride: Maybe<&2, String>) -> IO(CancellableResume):
+  do IO<CancellableResume>:
+    outcome : ResumeOutcome <- resumeSession(S, runtime, sessionPath, cwdOverride)
+    return ResumeAttempted{outcome}
+
+def resumeSessionCancellable(-S: Type, +runtime: AgentSessionRuntime<S>, +sessionPath: String, cwdOverride: Maybe<&2, String>) -> IO(CancellableResume):
+  do IO<CancellableResume>:
+    cancelled : Bool <- switchCancelled(S, runtime, ExtensionTypes.SessionBeforeSwitchEvent{ExtensionTypes.SwitchResume{}, Some{sessionPath}})
+    Bool.pick(Unit -> IO(CancellableResume), cancelled, _ => IO.pure(CancellableResume, ResumeCancelled{}), _ => resumeAttempted(S, runtime, sessionPath, cwdOverride))(Unit{})
+
 type ImportOutcome is Data:
   Imported{path: String}
   ImportNeedsCwd{issue: SessionCwd.SessionCwdIssue}

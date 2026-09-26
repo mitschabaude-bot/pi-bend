@@ -43,7 +43,16 @@ note pointing here. Everything not listed here is in scope.
   through its Node addon; not needed for now (see Node native addons).
 - **JavaScript/TypeScript extensions** (AGENTS.md): extensions are native
   Bend; upstream's extension loading, bundling and Node SEA behaviour have no
-  counterpart.
+  counterpart (`9540-extension-loader-lazy`,
+  `extension-factory-cache`: jiti imports and the module cache).
+
+- **Windows-only behaviour** (`6596-taskkill-enoent`, `bash-close-hang-windows`,
+  `powershell-tool`, 2026-09-26): the coordinator excludes the Windows process
+  and PowerShell paths (taskkill, inherited Windows stdio handles, the
+  PowerShell tool); the port targets POSIX hosts.
+- **Node SEA extension loading** (`8237-node-sea-extension-loading`,
+  2026-09-26): it checks jiti and bundled virtual modules in a Node single
+  executable; native extensions are compiled Bend.
 
 ## Changed
 

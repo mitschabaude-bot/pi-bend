@@ -133,14 +133,22 @@ def main():
         {'event': 'session_before_switch', 'reason': 'resume', 'targetSessionFile': original},
         {'event': 'session_shutdown', 'reason': 'resume', 'targetSessionFile': original},
         {'event': 'session_start', 'reason': 'resume', 'previousSessionFile': second}], events
-    assert [e['cancelled'] for e in events if e['type'] == 'change'] == [False, False]
+    # the interactive resume (resumeSessionCancellable) runs the same resume flow
+    assert ext(between(events, ('current', 'switched'), ('current', 'resumed')), switch_names) == [
+        {'event': 'session_before_switch', 'reason': 'resume', 'targetSessionFile': second},
+        {'event': 'session_shutdown', 'reason': 'resume', 'targetSessionFile': second},
+        {'event': 'session_start', 'reason': 'resume', 'previousSessionFile': original}], events
+    assert current['resumed']['sessionFile'] == second
+    assert [e['cancelled'] for e in events if e['type'] == 'change'] == [False, False, False]
+    assert [e.get('outcome') for e in events if e['type'] == 'change' and e['label'] == 'resume'] == ['resumed']
     checks += 1
     # honors session_before_switch cancellation
     events = lifecycle('cancel_switch')
     current = {e['label']: e for e in events if e['type'] == 'current'}
-    assert [e['cancelled'] for e in events if e['type'] == 'change'] == [True]
-    assert current['new']['sessionFile'] == current['prompted']['sessionFile']
+    assert [e['cancelled'] for e in events if e['type'] == 'change'] == [True, True]
+    assert current['new']['sessionFile'] == current['prompted']['sessionFile'] == current['resumed']['sessionFile']
     assert ext(between(events, ('current', 'prompted'), ('current', 'new')), switch_names) == [{'event': 'session_before_switch', 'reason': 'new', 'targetSessionFile': None}]
+    assert ext(between(events, ('current', 'new'), ('current', 'resumed')), switch_names) == [{'event': 'session_before_switch', 'reason': 'resume', 'targetSessionFile': current['prompted']['sessionFile']}]
     checks += 1
     # runs beforeSessionInvalidate after session_shutdown and before rebindSession (the stale-context assertion is not ported:
     # native extension contexts are not invalidated after replacement)
@@ -163,6 +171,16 @@ def main():
     after = ext(between(events, ('current', 'forked'), ('phase', 'dispose')), ('session_before_fork',) + switch_names)
     assert after == [{'event': 'session_before_fork', 'entryId': entry_id, 'position': 'before'}, {'event': 'session_before_fork', 'entryId': 'missing-entry', 'position': 'at'}], after
     assert changes['fork_cancelled']['cancelled'] is True and changes['fork_at_cancelled']['cancelled'] is True
+    checks += 1
+    # 8724-in-memory-fork-active-tool: does not append the aborted turn to the replacement session
+    directory = work / 'fork-during-tool'; directory.mkdir()
+    events = run(command, 'fork_during_tool', str(directory), str(agent), cwd=directory)
+    fork = [e for e in events if e['type'] == 'change' and e['label'] == 'fork'][0]
+    states = {e['label']: e for e in events if e['type'] == 'branch_state'}
+    forked = [e for e in events if e['type'] == 'current' and e['label'] == 'forked'][0]
+    assert fork['cancelled'] is False and fork['selectedText'] == 'first prompt', fork
+    assert states['forked']['roles'] == ['system'] and forked['entries'] == 1 and forked['sessionFile'] is None, (states, forked)
+    assert states['next']['roles'] == ['system', 'system', 'user', 'assistant'], states['next']
     checks += 1
     print('agent-session-runtime: %d checks passed' % checks)
 
