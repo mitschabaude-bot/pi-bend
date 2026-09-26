@@ -2406,27 +2406,43 @@
     },
     {
       "source": "packages/coding-agent/test/clipboard-command.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2960f8f315759db8f25f92fa9f62c65380beabfc1cbe6a167fe2d7ce555c6892"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/clipboard-command.bend",
+        "tests/clipboard_image_check.py"
+      ],
+      "sha256": "2960f8f315759db8f25f92fa9f62c65380beabfc1cbe6a167fe2d7ce555c6892",
+      "notes": "The four upstream cases run through /bin/sh instead of node -e (binary stdout, empty success versus failure, a missing program, Unicode stdin, timeout, output limit); native one/four threads only, as the Bun lane has no process spawning. The event-loop tick count becomes a check that the command is stopped at its timeout."
     },
     {
       "source": "packages/coding-agent/test/clipboard-image-bmp-conversion.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6695d300c4ba9da679b80d3e8902ffac2dd8b494be491db60d92a4cff541209b"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/clipboard-image.bend",
+        "tests/clipboard_image_check.py"
+      ],
+      "sha256": "6695d300c4ba9da679b80d3e8902ffac2dd8b494be491db60d92a4cff541209b",
+      "notes": "Both platforms convert a 1x1 BMP from wl-paste or the native helper to PNG through image-convert.bend, on Bun and native one/four threads."
     },
     {
       "source": "packages/coding-agent/test/clipboard-image-native-errors.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d3b3a03e68441be765e49e644d8921f8fdde33e61dd2d44dead5920157e0bf07"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/clipboard-paste.bend",
+        "tests/clipboard_image_check.py"
+      ],
+      "sha256": "d3b3a03e68441be765e49e644d8921f8fdde33e61dd2d44dead5920157e0bf07",
+      "notes": "Runs against modes/interactive/clipboard-paste.bend (upstream InteractiveMode.handleClipboardPaste with an injected editor insert, render request and text reader), plus supplements for image and text pastes; Bun and native one/four threads."
     },
     {
       "source": "packages/coding-agent/test/clipboard-image.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "4625b5118a2e0ca50443be0fe5b554dd89b6259806711c399322068916965b80"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/clipboard-image.bend",
+        "tests/clipboard_image_check.py"
+      ],
+      "sha256": "4625b5118a2e0ca50443be0fe5b554dd89b6259806711c399322068916965b80",
+      "notes": "All 22 upstream cases (vitest test.each rows included) run on Bun and native one/four threads. Upstream mocks the clipboard command module and pi-tui's native helper; here they are readClipboardImageWith's injected Dependencies (commands, environment, optional NativeClipboard). The production binary has no native helper (upstream's \"returns null without a native helper\" case)."
     },
     {
       "source": "packages/coding-agent/test/clipboard.test.ts",

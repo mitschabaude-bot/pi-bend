@@ -723,7 +723,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/footer.bend": "d924bbd85b2a33b86ec77491b3f88014fe87ffac531779233f82cb77c4ce5828",
-        "packages/coding-agent/src/modes/interactive/run.bend": "8bd7ffad2a1e6cd9360411065ce96163544e1183994172a38ce27ead7ccafa80"
+        "packages/coding-agent/src/modes/interactive/run.bend": "4e159a3485317bac364fba350fd4b8364e7689ea1438652551093bf27c2c9a24"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/login-dialog.ts": {
@@ -884,7 +884,7 @@
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "272d9269ef5ed6e3c28627c9bb2eb8e1c7dc34c5b8fec7dd74ed6032417c3387",
-        "packages/coding-agent/src/modes/interactive/run.bend": "8bd7ffad2a1e6cd9360411065ce96163544e1183994172a38ce27ead7ccafa80",
+        "packages/coding-agent/src/modes/interactive/run.bend": "4e159a3485317bac364fba350fd4b8364e7689ea1438652551093bf27c2c9a24",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "91281c83b948bdb35106382375cfc14628d313a48d7676cd9a023b1bcadea32e",
         "packages/coding-agent/src/main.bend": "a85c83b4d81031f83951fe4f5c9608240f299a34132841c7824e54597913199e",
@@ -1004,7 +1004,7 @@
       "note": "The Bend editor component lives under components; complete source contract review is pending.",
       "source_sha256": "0e40ba454b74e2ce21dfc6d831c185e5fb5619b0987fa158be98ed98564e8716",
       "port_sha256": {
-        "packages/tui/src/components/editor-component.bend": "663f5c5cb3147e198a0a331234c58fdd3755f3b2b37ce5e63a421b5dae943eee"
+        "packages/tui/src/components/editor-component.bend": "32abcac3bf872bd4d3831d52aed685184428cf2add9e5d5cf0b00ae7e8a034b9"
       }
     },
     "packages/tui/src/layout-node.ts": {
@@ -1175,6 +1175,22 @@
       "source_sha256": "67400cdf9459bf2bb5539fe44f23770934166b6c576e9b3c036beaeb4be42984",
       "port_sha256": {
         "packages/coding-agent/src/cli/credential-print.bend": "768a5412db7730ed54101e7d7ec2230263ccffe0e76a1b397f8b2e482c5b52dd"
+      }
+    },
+    "packages/coding-agent/src/utils/clipboard-image.ts": {
+      "state": "ported",
+      "note": "Ported: wl-paste, xclip, WSL PowerShell and the native helper in upstream order, MIME selection, BMP conversion. The native helper is an injected interface; the binary has none.",
+      "source_sha256": "d0f228cbf7df4bd11bc0fd039c23049a8f2166b2e48a5df2e1a3e51723058904",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/clipboard-image.bend": "b4fa2ffa5778774223d53f126888164d0fc871d91084f3165f0a8b19e4c35f6e"
+      }
+    },
+    "packages/coding-agent/src/utils/clipboard-command.ts": {
+      "state": "ported",
+      "note": "Ported: stdout bytes, undefined on failure, input, timeout (3 s default) and output limit (50 MiB default).",
+      "source_sha256": "9ec41f5195b08929e697b3ec718f72e99852ab19f125aed330f23cf78d961d33",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/clipboard-command.bend": "fa5bbe43f005a7e9f60aee2f037f2792a91e27e5f559a26f21b86aab8933de3f"
       }
     }
   }

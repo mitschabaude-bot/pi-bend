@@ -64,11 +64,14 @@ def interruptKey(+host: Host,+data: String) -> IO(Unit):
 def handleInput(+host: Host,+data: String) -> IO(Unit):
   match host:
     case Host{editor,inner,+bindings,+keyboard,actions,onAction}:
-      Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"app.interrupt"),
+      # upstream checks the clipboard paste binding before every app key.
+      Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"app.clipboard.pasteImage"),
+        _ => run(Host{editor,inner,bindings,keyboard,actions,onAction},"app.clipboard.pasteImage"),
+        _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"app.interrupt"),
         _ => interruptKey(Host{editor,inner,bindings,keyboard,actions,onAction},data),
         _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"app.exit"),
           _ => exitKey(Host{editor,inner,bindings,keyboard,actions,onAction},data),
-          _ => otherKey(Host{editor,inner,bindings,keyboard,actions,onAction},data))(Unit{}))(Unit{})
+          _ => otherKey(Host{editor,inner,bindings,keyboard,actions,onAction},data))(Unit{}))(Unit{}))(Unit{})
 
 def receive(host: Host,data: String) -> IO(Unit): handleInput(host,data)
 # The wrapped editor keeps its id, rendering, mouse and focus callbacks.
