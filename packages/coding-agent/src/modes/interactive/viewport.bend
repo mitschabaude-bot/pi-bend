@@ -117,10 +117,10 @@ def dispose(view: View) -> IO(Unit):
 
 # upstream widgetContainerAbove holds a Spacer(1) when no widgets are set; it
 # keeps its line when the transcript overflows.
-def entries(document: Component.Component,editor: Component.Component,footer: Component.Component,fullscreen: Bool) -> Node.LayoutNode:
+def entries(document: Component.Component,editor: Component.Component,footer: Component.Component,+fullscreen: Bool) -> Node.LayoutNode:
   +scrollbar = Bool.pick(Scroll.ScrollViewScrollbar,fullscreen,Scroll.Auto{},Scroll.Hidden{})
   +scroll = Scroll.new(document,Scroll.ScrollViewOptions{Scroll.FollowEnd{},True{},Scroll.Chain{},scrollbar,1000n})
-  Node.Children{Node.child(Node.ScrollNode{scroll},Stack.sized(None{},1n,1n,0n,100000n),None{}),
+  Node.Children{Node.child(Node.ScrollNode{scroll},Stack.sized(Bool.pick(Maybe<&2,Nat>,fullscreen,Some{0n},None{}),1n,1n,Bool.pick(Nat,fullscreen,1n,0n),100000n),None{}),
     Node.Children{Node.child(Node.Spacer{1n},Stack.sized(None{},0n,0n,1n,1n),None{}),
       Node.Children{Node.child(Node.Leaf{editor},Stack.sized(None{},0n,0n,1n,100000n),None{}),
         Node.Children{Node.child(Node.Leaf{footer},Stack.sized(None{},0n,0n,1n,100000n),None{}),Node.Empty{}}}}}

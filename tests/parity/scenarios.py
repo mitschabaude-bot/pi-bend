@@ -24,6 +24,16 @@ RESOURCES = {
     "project/AGENTS.md": "# Project rules\n\nKeep answers short.\n",
 }
 
+EXTERNAL_EDITOR = """import pathlib, sys
+path = pathlib.Path(sys.argv[1])
+print("External editor ready", flush=True)
+action = input()
+if action == "fail":
+    path.write_text("discard this change\\n")
+    sys.exit(7)
+path.write_text("" if action == "clear" else path.read_text() + " " + action + "\\n")
+"""
+
 def typed(word):
     """Type a word one key at a time, timing each key until it is painted."""
     steps = []
@@ -661,6 +671,46 @@ SCENARIOS = [
                   ("wait", "Copied last agent message", "copied"), ("settle", 0.2), ("snap", "copied")],
     },
     {
+        "name": "external-editor", "args": MODEL,
+        "env": {"VISUAL": "/missing/visual", "EDITOR": "/missing/editor"},
+        "files": {"project/external-editor.py": EXTERNAL_EDITOR,
+                  "home/.pi/agent/settings.json": json.dumps({"externalEditor": "python3 external-editor.py"})},
+        "turns": [{"text": "First editor answer."}, {"text": "Second editor answer."}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.3),
+                  ("keys", "hello from"), ("key", "C-g"), ("wait", "External editor ready", "opened"), ("snap", "external"),
+                  ("keys", "editor"), ("key", "Enter"), ("wait", "hello from editor", "resumed"), ("settle", 0.3), ("snap", "edited"),
+                  ("key", "Enter"), ("wait", "First editor answer.", "first"), ("settle", 0.3),
+                  ("keys", "preserved draft"), ("key", "C-g"), ("wait", "External editor ready", "failed-open"),
+                  ("keys", "fail"), ("key", "Enter"), ("wait", READY, "failed-resume"), ("settle", 0.3), ("snap", "failed"),
+                  ("key", "C-g"), ("wait", "External editor ready", "clear-open"),
+                  ("keys", "clear"), ("key", "Enter"), ("wait", READY, "clear-resume"), ("settle", 0.3), ("snap", "empty"),
+                  ("keys", "second prompt"), ("key", "Enter"), ("wait", "Second editor answer.", "second"), ("settle", 0.3), ("snap", "answer")],
+    },
+    {
+        "name": "external-editor-env-key", "args": MODEL,
+        "env": {"VISUAL": "", "EDITOR": "python3 external-editor.py"},
+        "files": {"project/external-editor.py": EXTERNAL_EDITOR,
+                  "home/.pi/agent/keybindings.json": json.dumps({"app.editor.external": "ctrl+e"})},
+        "turns": [{"text": "Edited answer."}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.3),
+                  ("keys", "initial"), ("key", "C-e"), ("wait", "External editor ready", "opened"),
+                  ("keys", "changed"), ("key", "Enter"), ("wait", "initial changed", "resumed"), ("settle", 0.3), ("snap", "edited"),
+                  ("key", "Enter"), ("wait", "Edited answer.", "answer"), ("settle", 0.3), ("snap", "answer")],
+    },
+    {
+        "name": "external-editor-stream", "args": MODEL,
+        "env": {"VISUAL": "python3 external-editor.py", "EDITOR": "/missing/editor"},
+        "files": {"project/external-editor.py": EXTERNAL_EDITOR},
+        "turns": [{"text": "Streaming answer. " * 40 + "EDITOR-STREAM-DONE", "chunks": 100, "delay_ms": 20},
+                  {"text": "After editor answer."}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.3),
+                  ("keys", "first prompt"), ("key", "Enter"), ("wait", "Streaming answer", "streaming"),
+                  ("keys", "next"), ("key", "C-g"), ("wait", "External editor ready", "opened"),
+                  ("settle", 2.5), ("keys", "prompt"), ("key", "Enter"),
+                  ("wait", "EDITOR-STREAM-DONE", "resumed"), ("settle", 0.3), ("snap", "edited"),
+                  ("key", "Enter"), ("wait", "After editor answer.", "answer"), ("settle", 0.3), ("snap", "answer")],
+    },
+    {
         "name": "session-keys", "args": MODEL, "turns": [{"text": "First answer."}, {"text": "New answer."}],
         "files": {"home/.pi/agent/keybindings.json": json.dumps({"app.session.new": "ctrl+n", "app.session.tree": "ctrl+e", "app.session.fork": "ctrl+f", "app.session.resume": "ctrl+r"})},
         "steps": [("wait", READY, "startup"), ("settle", 0.3),
@@ -1019,3 +1069,7 @@ SCENARIOS = [
     {"name": "print-bare-two-authed", "process": True, "args": ["--model", "gpt-5", "-p", "hi"], "env": {"OPENROUTER_API_KEY": "sk-x", "AZURE_OPENAI_API_KEY": "sk-y"}, "steps": []},
     {"name": "print-no-context", "process": True, "args": MODEL + ["-nc", "-ns", "-p", "hi"], "files": RESOURCES, "turns": [{"text": "ok"}], "steps": []},
 ]
+
+# Exercise the same editor handoffs through the fullscreen terminal lifecycle.
+external_editor = next(case for case in SCENARIOS if case["name"] == "external-editor")
+SCENARIOS.append({**external_editor, "name": "external-editor-fullscreen", "args": MODEL + ["--tui-mode", "fullscreen"]})

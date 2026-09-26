@@ -508,17 +508,23 @@ def queryResult(closed: Result<&2,&2,Terminal.Error,Unit>,failure: Maybe<&2,Term
   match failure:
     case Some{error}: Fail{error}
     case None{}: completed(closed,state)
-def afterDocument(document: Tui.TuiBase & List<&2,String>,state: Alt.State,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,error: Maybe<&2,Error>,owed: Bool,ticks: Nat,width: Nat) -> Active & Screen.Stream:
+def afterDocument(document: Tui.TuiBase & List<&2,String>,state: Alt.State,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,error: Maybe<&2,Error>,owed: Bool,ticks: Nat,width: Nat,layout: Bool) -> Active & Screen.Stream:
   match document:
-    case (next,lines): (Active{Session{next,Fullscreen{state}},components,mounted,error,owed,ticks},Alt.leaveWithDocument(lines,width))
-def beforeStop(current: Active,+width: Nat) -> IO(Active & Screen.Stream):
+    case (next,lines): (Active{Session{next,Fullscreen{state}},components,mounted,error,owed,ticks},Bool.pick(List<&2,String> -> Nat -> Screen.Stream,layout,Alt.leaveWithLayoutDocument,Alt.leaveWithDocument)(lines,width))
+def stoppedDocument(layout: Bool,tui: Tui.TuiBase,width: Nat) -> IO(Tui.TuiBase & List<&2,String>):
+  match layout:
+    case True{}: Tui.renderLayoutDocument(tui,width)
+    case False{}: Tui.renderDocument(tui,width)
+def beforeStopWith(+layout: Bool,current: Active,+width: Nat) -> IO(Active & Screen.Stream):
   match current:
     case Active{Session{tui,Main{+state}},components,mounted,error,owed,ticks}:
       IO.pure(Active & Screen.Stream,(Active{Session{tui,Main{state}},components,mounted,error,owed,ticks},Screen.beforeTerminalStop(state,False{})))
     case Active{Session{tui,Fullscreen{state}},components,mounted,error,owed,ticks}:
       do IO<Active & Screen.Stream>:
-        document : Tui.TuiBase & List<&2,String> <- Tui.renderDocument(tui,width)
-        return afterDocument(document,state,components,mounted,error,owed,ticks,width)
+        document : Tui.TuiBase & List<&2,String> <- stoppedDocument(layout,tui,width)
+        return afterDocument(document,state,components,mounted,error,owed,ticks,width,layout)
+def beforeStop(current: Active,width: Nat) -> IO(Active & Screen.Stream):
+  beforeStopWith(False{},current,width)
 def isFullscreen(current: Active) -> IO(Active & Bool):
   match current:
     case Active{Session{_,Main{_}},_,_,_,_,_}: IO.pure(Active & Bool,(current,False{}))
@@ -529,7 +535,7 @@ def stoppedResult(cleanup: Result<&2,&2,Terminal.Error,Unit>,closed: Result<&2,&
     case Fail{error}: Fail{error}
 # The callback receives borrowed handles while the terminal is live. It may
 # await queries here; any forked query must finish before the stop signal.
-def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Owner<Active>,+handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,+requestRender: Callback.Callback<Unit,Unit>,preferences: Ref.Ref<Preferences>,+stopped: Deferred.Deferred<Unit>,+termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
+def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Owner<Active>,+handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,+requestRender: Callback.Callback<Unit,Unit>,preferences: Ref.Ref<Preferences>,+stopped: Deferred.Deferred<Unit>,+termux: Bool,finish: Active -> Nat -> IO(Active & Screen.Stream)) -> IO(Result<&2,&2,Terminal.Error,Active>):
   match pair:
     case (terminal,+terminalHandle):
       do IO<Result<&2,&2,Terminal.Error,Active>>:
@@ -550,8 +556,10 @@ def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Ow
         waitTicks(handle,1000n)
         Query.setRunning(queries,writer,False{})
         columns : U32 <- Terminal.getColumns(terminalHandle)
-        cleanup : Screen.Stream <- Serial.run(Active,Screen.Stream,handle,current => beforeStop(current,U32.to_nat(columns)))
+        cleanup : Screen.Stream <- Serial.run(Active,Screen.Stream,handle,current => finish(current,U32.to_nat(columns)))
         written : Result<&2,&2,Terminal.Error,Unit> <- writeEffects(terminalHandle,cleanup)
+        shown : Result<&2,&2,Terminal.Error,Unit> <- Terminal.showCursor(terminalHandle)
+        matchWrite(shown,stopped,failure)
         closed : Result<&2,&2,Terminal.Error,Unit> <- Terminal.stop(terminal)
         final : Active <- Serial.retire(Active,owner)
         failed : Maybe<&2,Terminal.Error> <- Deferred.peek(Terminal.Error,failure)
@@ -559,15 +567,15 @@ def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Ow
         Callback.dispose(String,Unit,writer)
         Deferred.dispose(Terminal.Error,failure)
         return stoppedResult(written,closed,failed,final)
-def awaitProcess(started: Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal>,owner: Serial.Owner<Active>,handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,requestRender: Callback.Callback<Unit,Unit>,preferences: Ref.Ref<Preferences>,+stopped: Deferred.Deferred<Unit>,termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
+def awaitProcess(started: Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal>,owner: Serial.Owner<Active>,handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,requestRender: Callback.Callback<Unit,Unit>,preferences: Ref.Ref<Preferences>,+stopped: Deferred.Deferred<Unit>,termux: Bool,finish: Active -> Nat -> IO(Active & Screen.Stream)) -> IO(Result<&2,&2,Terminal.Error,Active>):
   match started:
     case Fail{error}:
       do IO<Result<&2,&2,Terminal.Error,Active>>:
         old : Active <- Serial.retire(Active,owner)
         return Fail{error}
-    case Done{terminal}: runStarted(Terminal.borrow(terminal),owner,handle,ready,queries,onReady,onStopping,requestRender,preferences,stopped,termux)
+    case Done{terminal}: runStarted(Terminal.borrow(terminal),owner,handle,ready,queries,onReady,onStopping,requestRender,preferences,stopped,termux,finish)
 
-def runQueries(pair: Query.Owner & Query.Handle,owner: Serial.Owner<Active>,+state: Serial.Handle<Active>,+ready: Deferred.Deferred<Terminal.Handle>,+stopped: Deferred.Deferred<Unit>,+termux: Bool,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>) -> IO(Result<&2,&2,Terminal.Error,Active>):
+def runQueries(pair: Query.Owner & Query.Handle,owner: Serial.Owner<Active>,+state: Serial.Handle<Active>,+ready: Deferred.Deferred<Terminal.Handle>,+stopped: Deferred.Deferred<Unit>,+termux: Bool,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,finish: Active -> Nat -> IO(Active & Screen.Stream)) -> IO(Result<&2,&2,Terminal.Error,Active>):
   match pair:
     case (queries,+queryHandle):
       do IO<Result<&2,&2,Terminal.Error,Active>>:
@@ -577,7 +585,7 @@ def runQueries(pair: Query.Owner & Query.Handle,owner: Serial.Owner<Active>,+sta
         +settled : Callback.Callback<Unit,Unit> <- Callback.create(~EventSink,~Unit,~Unit,~onSettled,EventSink{state,ready,queryHandle,termux,preferences})
         +request : Callback.Callback<Unit,Unit> <- Callback.create(~EventSink,~Unit,~Unit,~onRequest,EventSink{state,ready,queryHandle,termux,preferences})
         started : Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal> <- Terminal.startProcess(input,resize,settled)
-        result : Result<&2,&2,Terminal.Error,Active> <- awaitProcess(started,owner,state,ready,queryHandle,onReady,onStopping,request,preferences,stopped,termux)
+        result : Result<&2,&2,Terminal.Error,Active> <- awaitProcess(started,owner,state,ready,queryHandle,onReady,onStopping,request,preferences,stopped,termux,finish)
         Callback.dispose(String,Unit,input)
         Callback.dispose(Unit,Unit,resize)
         Callback.dispose(Unit,Unit,settled)
@@ -586,22 +594,159 @@ def runQueries(pair: Query.Owner & Query.Handle,owner: Serial.Owner<Active>,+sta
         Deferred.dispose(Terminal.Handle,ready)
         Query.close(queries)
         return result
-def runOwner(pair: Serial.Owner<Active> & Serial.Handle<Active>,stopped: Deferred.Deferred<Unit>,+termux: Bool,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>) -> IO(Result<&2,&2,Terminal.Error,Active>):
+def runOwner(pair: Serial.Owner<Active> & Serial.Handle<Active>,stopped: Deferred.Deferred<Unit>,+termux: Bool,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,finish: Active -> Nat -> IO(Active & Screen.Stream)) -> IO(Result<&2,&2,Terminal.Error,Active>):
   match pair:
     case (owner,+state):
       do IO<Result<&2,&2,Terminal.Error,Active>>:
         +ready : Deferred.Deferred<Terminal.Handle> <- Deferred.new(Terminal.Handle)
         queries : Query.Owner <- Query.create()
-        runQueries(Query.borrow(queries),owner,state,ready,stopped,termux,onReady,onStopping)
+        runQueries(Query.borrow(queries),owner,state,ready,stopped,termux,onReady,onStopping,finish)
 def runProcessWithQueries(initial: Active,stopped: Deferred.Deferred<Unit>,termux: Bool,onReady: Callback.Callback<QueryReady,Unit>) -> IO(Result<&2,&2,Terminal.Error,Active>):
   do IO<Result<&2,&2,Terminal.Error,Active>>:
     owner : Serial.Owner<Active> <- Serial.create(Active,initial)
-    runOwner(Serial.borrow(Active,owner),stopped,termux,Some{onReady},None{})
+    runOwner(Serial.borrow(Active,owner),stopped,termux,Some{onReady},None{},beforeStop)
 def runProcessWithLifecycle(initial: Active,stopped: Deferred.Deferred<Unit>,termux: Bool,onReady: Callback.Callback<QueryReady,Unit>,onStopping: Callback.Callback<Unit,Unit>) -> IO(Result<&2,&2,Terminal.Error,Active>):
   do IO<Result<&2,&2,Terminal.Error,Active>>:
     owner : Serial.Owner<Active> <- Serial.create(Active,initial)
-    runOwner(Serial.borrow(Active,owner),stopped,termux,Some{onReady},Some{onStopping})
+    runOwner(Serial.borrow(Active,owner),stopped,termux,Some{onReady},Some{onStopping},beforeStop)
 def runProcess(initial: Active,stopped: Deferred.Deferred<Unit>,termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
   do IO<Result<&2,&2,Terminal.Error,Active>>:
     owner : Serial.Owner<Active> <- Serial.create(Active,initial)
-    runOwner(Serial.borrow(Active,owner),stopped,termux,None{},None{})
+    runOwner(Serial.borrow(Active,owner),stopped,termux,None{},None{},beforeStop)
+
+# A suspension is requested from an input callback, but executed by the outer
+# lifecycle only after that callback and every terminal worker have retired.
+# The request transfers its one-shot callback, which is disposed on every path.
+type SuspensionState is Data:
+  Paused{}
+  Running{stop: Deferred.Deferred<Unit>,operation: Maybe<&2,Callback.Callback<Unit,Unit>>}
+type SuspensionHandle is Data:
+  SuspensionHandle{state: Ref.Ref<SuspensionState>}
+
+def createSuspension() -> IO(SuspensionHandle):
+  do IO<SuspensionHandle>:
+    state : Ref.Ref<SuspensionState> <- Ref.new(SuspensionState,Paused{})
+    return SuspensionHandle{state}
+def disposeOperation(operation: Maybe<&2,Callback.Callback<Unit,Unit>>) -> IO(Unit):
+  match operation:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{callback}: Callback.dispose(Unit,Unit,callback)
+def suspensionOperation(current: SuspensionState) -> Maybe<&2,Callback.Callback<Unit,Unit>>:
+  match current:
+    case Running{_,operation}: operation
+    case Paused{}: None{}
+def disposeSuspension(handle: SuspensionHandle) -> IO(Unit):
+  match handle:
+    case SuspensionHandle{state}:
+      do IO<Unit>:
+        previous : SuspensionState <- Ref.dispose(SuspensionState,state)
+        disposeOperation(suspensionOperation(previous))
+def requestedSuspension(current: SuspensionState,operation: Callback.Callback<Unit,Unit>) -> SuspensionState & Maybe<&2,Deferred.Deferred<Unit>>:
+  match current:
+    case Running{+stop,None{}}: (Running{stop,Some{operation}},Some{stop})
+    case state: (state,None{})
+def wakeSuspension(wake: Maybe<&2,Deferred.Deferred<Unit>>,operation: Callback.Callback<Unit,Unit>) -> IO(Bool):
+  match wake:
+    case None{}:
+      do IO<Bool>:
+        Callback.dispose(Unit,Unit,operation)
+        return False{}
+    case Some{stop}:
+      do IO<Bool>:
+        settled : Bool <- Deferred.resolve(Unit,stop,Unit{})
+        return True{}
+def suspendWith(handle: SuspensionHandle,+operation: Callback.Callback<Unit,Unit>) -> IO(Bool):
+  match handle:
+    case SuspensionHandle{state}:
+      do IO<Bool>:
+        wake : Maybe<&2,Deferred.Deferred<Unit>> <- Ref.modify(SuspensionState,Maybe<&2,Deferred.Deferred<Unit>>,state,current => requestedSuspension(current,operation))
+        wakeSuspension(wake,operation)
+def pendingSuspension(current: SuspensionState) -> Bool:
+  match current:
+    case Running{_,Some{_}}: True{}
+    case _: False{}
+def isSuspending(handle: SuspensionHandle) -> IO(Bool):
+  match handle:
+    case SuspensionHandle{state}:
+      do IO<Bool>:
+        current : SuspensionState <- Ref.read(SuspensionState,state)
+        return pendingSuspension(current)
+def beforeSuspensionStop(handle: SuspensionHandle,current: Active,width: Nat) -> IO(Active & Screen.Stream):
+  do IO<Active & Screen.Stream>:
+    layout : Bool <- isSuspending(handle)
+    beforeStopWith(layout,current,width)
+def beginSuspensionRun(handle: SuspensionHandle,stop: Deferred.Deferred<Unit>) -> IO(Unit):
+  match handle:
+    case SuspensionHandle{state}: Ref.write(SuspensionState,state,Running{stop,None{}})
+def finishSuspensionRun(handle: SuspensionHandle) -> IO(Maybe<&2,Callback.Callback<Unit,Unit>>):
+  match handle:
+    case SuspensionHandle{state}:
+      do IO<Maybe<&2,Callback.Callback<Unit,Unit>>>:
+        previous : SuspensionState <- Ref.swap(SuspensionState,state,Paused{})
+        return suspensionOperation(previous)
+def forwardStopped(stop: Deferred.Deferred<Unit>,result: Maybe<&2,Unit>) -> IO(Unit):
+  match result:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{_}:
+      do IO<Unit>:
+        settled : Bool <- Deferred.resolve(Unit,stop,Unit{})
+        return Unit{}
+def forwardStop(stop: Deferred.Deferred<Unit>,ticket: Deferred.Ticket<Maybe<&2,Unit>>) -> IO(Unit):
+  do IO<Unit>:
+    result : Maybe<&2,Unit> <- Deferred.wait(Maybe<&2,Unit>,ticket)
+    forwardStopped(stop,result)
+def restartScreen(screen: ScreenState) -> ScreenState:
+  match screen:
+    case Main{state}: Main{Screen.resetRenderState(state)}
+    case Fullscreen{state}: Fullscreen{Alt.reset(state)}
+def restartScheduled(pair: Tui.TuiBase & List<&2,Tui.RenderEffect>,screen: ScreenState,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,error: Maybe<&2,Error>) -> Active:
+  match pair:
+    case (tui,_): Active{Session{tui,restartScreen(screen)},components,mounted,error,False{},0n}
+def restartActive(current: Active) -> Active:
+  match current:
+    case Active{Session{tui,screen},components,mounted,error,_,_}: restartScheduled(Tui.scheduleRender(tui,Tui.StartRendering{},0n),screen,components,mounted,error)
+
+# The external stop signal belongs to the application. Each terminal lease has
+# its own stop signal and a cancellable observation of the application signal.
+# Start and resume callbacks let applications keep one-time initialization out
+# of resume while rebinding callbacks that borrow the new terminal handles.
+def resumeProcess(next: Active -> IO(Result<&2,&2,Terminal.Error,Active>),current: Active,operation: Maybe<&2,Callback.Callback<Unit,Unit>>,ended: Maybe<&2,Unit>) -> IO(Result<&2,&2,Terminal.Error,Active>):
+  match operation ended:
+    case None{} _: IO.pure(Result<&2,&2,Terminal.Error,Active>,Done{current})
+    case operation Some{_}:
+      do IO<Result<&2,&2,Terminal.Error,Active>>:
+        disposeOperation(operation)
+        return Done{current}
+    case Some{+callback} None{}:
+      do IO<Result<&2,&2,Terminal.Error,Active>>:
+        Callback.call(Unit,Unit,callback,Unit{})
+        Callback.dispose(Unit,Unit,callback)
+        next(restartActive(current))
+def afterSuspension(next: Active -> IO(Result<&2,&2,Terminal.Error,Active>),result: Result<&2,&2,Terminal.Error,Active>,stopped: Deferred.Deferred<Unit>,operation: Maybe<&2,Callback.Callback<Unit,Unit>>) -> IO(Result<&2,&2,Terminal.Error,Active>):
+  match result:
+    case Fail{error}:
+      do IO<Result<&2,&2,Terminal.Error,Active>>:
+        disposeOperation(operation)
+        return Fail{error}
+    case Done{current}:
+      do IO<Result<&2,&2,Terminal.Error,Active>>:
+        ended : Maybe<&2,Unit> <- Deferred.peek(Unit,stopped)
+        resumeProcess(next,current,operation,ended)
+def observedSuspendable(next: Active -> IO(Result<&2,&2,Terminal.Error,Active>),observation: Deferred.Observation<Unit>,initial: Active,+stopped: Deferred.Deferred<Unit>,+suspension: SuspensionHandle,termux: Bool,ready: Callback.Callback<QueryReady,Unit>,stopping: Callback.Callback<Unit,Unit>,+local: Deferred.Deferred<Unit>) -> IO(Result<&2,&2,Terminal.Error,Active>):
+  match observation:
+    case Deferred.Observation{ticket,cancellation}:
+      do IO<Result<&2,&2,Terminal.Error,Active>>:
+        task : Chan(Unit) <- IO.fork(Unit,forwardStop(local,ticket))
+        owner : Serial.Owner<Active> <- Serial.create(Active,initial)
+        result : Result<&2,&2,Terminal.Error,Active> <- runOwner(Serial.borrow(Active,owner),local,termux,Some{ready},Some{stopping},current => width => beforeSuspensionStop(suspension,current,width))
+        operation : Maybe<&2,Callback.Callback<Unit,Unit>> <- finishSuspensionRun(suspension)
+        cancelled : Bool <- Deferred.cancel(Unit,cancellation)
+        joined : Unit <- IO.join(Unit,task)
+        Deferred.dispose(Unit,local)
+        afterSuspension(next,result,stopped,operation)
+@unsafe def runSuspendable(initial: Active,+stopped: Deferred.Deferred<Unit>,+suspension: SuspensionHandle,+termux: Bool,ready: Callback.Callback<QueryReady,Unit>,+resumed: Callback.Callback<QueryReady,Unit>,+stopping: Callback.Callback<Unit,Unit>) -> IO(Result<&2,&2,Terminal.Error,Active>):
+  do IO<Result<&2,&2,Terminal.Error,Active>>:
+    +local : Deferred.Deferred<Unit> <- Deferred.new(Unit)
+    beginSuspensionRun(suspension,local)
+    observation : Deferred.Observation<Unit> <- Deferred.observe(Unit,stopped)
+    observedSuspendable(next => runSuspendable(next,stopped,suspension,termux,resumed,resumed,stopping),observation,initial,stopped,suspension,termux,ready,stopping,local)

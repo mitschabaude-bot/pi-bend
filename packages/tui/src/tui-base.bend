@@ -428,6 +428,29 @@ def renderDocument(base: TuiBase,width: Nat) -> IO(TuiBase & List<&2,String>):
         result : C.Container & List<&2,String> <- C.renderContainer(root,width)
         return renderedDocument(result,focus,bindings,displayed,scheduler,show,clear,layout)
 
+# A stopped fullscreen layout uses each stack's natural allocation. Scroll
+# children render from their beginning, rather than their current viewport.
+# Keep the live layout unchanged so resuming preserves its scroll position.
+def documentNode(node: N.LayoutNode) -> N.LayoutNode:
+  match node:
+    case N.ScrollNode{Scroll.ScrollView{child,_,_,_,_,_,_,_,_,_,_,_,_,_}}: N.Leaf{child}
+    case N.Inline{child}: N.Inline{documentNode(child)}
+    case N.VStack{entries,gap}: N.VStack{documentNode(entries),gap}
+    case N.HStack{entries,gap,align}: N.HStack{documentNode(entries),gap,align}
+    case N.Entry{child,size,condition}: N.Entry{documentNode(child),size,condition}
+    case N.Children{first,rest}: N.Children{documentNode(first),documentNode(rest)}
+    case node: node
+def layoutDocument(frame: Tree.TreeFrame) -> List<&2,String>:
+  match frame:
+    case Tree.TreeFrame{_,Layout.LayoutFrame{_,_,_,lines}}: lines
+def renderLayoutDocument(+base: TuiBase,width: Nat) -> IO(TuiBase & List<&2,String>):
+  match base:
+    case TuiBase{_,_,_,_,_,_,_,None{}}: renderDocument(base,width)
+    case TuiBase{_,_,_,_,_,_,_,Some{node}}:
+      do IO<TuiBase & List<&2,String>>:
+        frame : Tree.TreeFrame <- Tree.renderInline(documentNode(node),width,4294967295n)
+        return (base,layoutDocument(frame))
+
 # Publish displayed hit bounds only after the terminal accepted the prepared frame.
 def commitFrame(value: PreparedFrame) -> TuiBase:
   match value:
