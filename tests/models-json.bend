@@ -12,6 +12,14 @@ import ../packages/coding-agent/src/core/auth-storage.bend as AuthStorage
 import ../packages/ai/src/models.bend as AiModels
 import ../packages/coding-agent/src/core/model-runtime.bend as Models
 import ../packages/coding-agent/src/core/model-config.bend as Config
+import ../packages/ai/src/providers/radius.bend as Radius
+import ../packages/runtime/src/fetch.bend as Fetch
+import ../packages/runtime/src/http-message.bend as H
+import ../packages/runtime/src/idna.bend as IDNA
+import ../packages/runtime/src/unicode-17-idna-mapping.bend as Mapping
+import ../packages/runtime/src/unicode-17-idna-properties.bend as Properties
+import ../packages/runtime/src/unicode-17-normalization.bend as Normalization
+import ../packages/runtime/src/url.bend as URL
 
 # Differential fixture for models.json support (model-config.ts,
 # provider-composer.ts, model-runtime.ts). Usage:
@@ -143,6 +151,14 @@ def storeOf(pair: AuthStorage.AuthStorageOwner & AuthStorage.AuthStorage) -> IO(
   match pair:
     case (_, storage): AuthStorage.store(storage)
 
+# Radius refreshes need an HTTP client; this fixture never refreshes over the
+# network, so every request is rejected.
+def offline(unused: Unit, input: Fetch.Input<Unit>) -> IO(Fetch.Result_(Unit)):
+  IO.pure(Fetch.Result_(Unit), Fail{Fetch.InvalidRequest{H.BufferedRequestHeaderError{H.InvalidName{}}}})
+
+def urlContext() -> URL.Context:
+  URL.Context{IDNA.Context{Mapping.table(), Normalization.tables(), Properties.table()}, IDNA.Options{IDNA.LabelOptions{False{}, False{}, True{}, IDNA.Nontransitional{}}, True{}, False{}}}
+
 def run(values: List<String>) -> IO(Unit):
   match values:
     case path <> references:
@@ -151,7 +167,8 @@ def run(values: List<String>) -> IO(Unit):
         store : Auth.CredentialStore <- storeOf(AuthStorage.borrow(owner))
         codex : Auth.OAuthAuth <- oauth("ChatGPT Plus/Pro (Codex Subscription)")
         anthropic : Auth.OAuthAuth <- oauth("Anthropic (Claude Pro/Max)")
-        +runtime : Models.ModelRuntime <- Models.createWithModelsPath(store, codex, Some{anthropic}, Some{path})
+        fetch : Fetch.Fetch(Unit) <- C.create(~Unit, ~(Fetch.Input<Unit>), ~(Fetch.Result_(Unit)), ~offline, Unit{})
+        +runtime : Models.ModelRuntime <- Models.createWithModelsPath(store, codex, Some{anthropic}, Radius.RadiusTransport{fetch, urlContext()}, Some{path})
         output : String <- report(runtime, references)
         IO.print(output)
         Models.dispose(runtime)

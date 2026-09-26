@@ -1,0 +1,12 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -2090,7 +2090,8 @@
+ function val_own(fl: File, v: Val, at: string | null = null,
+   held = false): string[] {
+   v.ws.forEach((w, j) => {
+-    const r = fl.brwl.get(w);
++    // a scalar read out of a borrowed box is a copy: its root stays lent
++    const r = v.lay.ks[j] === "box" ? fl.brwl.get(w) : undefined;
+     if (r !== undefined && at !== null) {
+       fl.lend.add(at + "<" + r);
+     } else if (r !== undefined

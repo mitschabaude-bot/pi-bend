@@ -5,6 +5,7 @@ import ../../../ai/src/auth/context.bend as Context
 import ../../../ai/src/auth/resolve.bend as Resolve
 import ../../../ai/src/models.bend as AiModels
 import ../../../ai/src/providers/all.bend as Builtin
+import ../../../ai/src/providers/radius.bend as Radius
 import ../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../../runtime/src/string.bend as Strings
 import ../../../runtime/src/glob.bend as Glob
@@ -26,8 +27,8 @@ import ../../../runtime/src/date.bend as Date
 # register native providers (registerNativeProvider) and dynamic providers
 # publish catalogs through refresh(). Not ported: models-store.json (catalogs
 # persist in an in-memory ModelsStore), reloading models.json on refresh,
-# models.json overlays on extension providers, config-form extension
-# providers (registerProvider(name, config)) and radius OAuth providers.
+# models.json overlays on extension providers and config-form extension
+# providers (registerProvider(name, config)).
 
 def Model() -> Data: Ai.Model<Ai.JsonValue>
 
@@ -77,12 +78,20 @@ def added(provider: Maybe<&2, AiModels.Provider>, composition: Composition) -> C
     case None{} composition: composition
     case Some{provider} Composition{providers, errors, retained}: Composition{provider <> providers, errors, retained}
 
+# upstream composeProvider forwards refreshModels to the base provider. Here
+# the base's publications replace the composed provider's catalog, so a
+# models.json overlay is not re-applied to a refreshed catalog.
+def baseRefresh(builtin: Maybe<&2, AiModels.Provider>) -> Maybe<&2, AiModels.RefreshModels()>:
+  match builtin:
+    case Some{AiModels.Provider{_, _, _, _, _, _, refresher}}: refresher
+    case None{}: None{}
+
 # A failed composition keeps the built-in provider untouched (or omits a
 # custom one) and records the error.
 def recomposed(+id: String, +builtin: Maybe<&2, AiModels.Provider>, result: Result<&2, &2, String, Composer.Composed>, composition: Composition) -> Composition:
   match result composition:
     case Fail{error} Composition{providers, errors, retained}: added(builtin, Composition{providers, ("Provider \"" ++ id ++ "\": " ++ error) <> errors, retained})
-    case Done{Composer.Composed{name, url, auth, models, owned}} Composition{providers, errors, retained}: Composition{AiModels.Provider{id, name, url, auth, models, AiModels.inheritedStreams(builtin), None{}} <> providers, errors, List.append(&2, Composer.Retained, owned, retained)}
+    case Done{Composer.Composed{name, url, auth, models, owned}} Composition{providers, errors, retained}: Composition{AiModels.Provider{id, name, url, auth, models, AiModels.inheritedStreams(builtin), baseRefresh(builtin)} <> providers, errors, List.append(&2, Composer.Retained, owned, retained)}
 
 def recomposeProvider(+id: String, +builtin: Maybe<&2, AiModels.Provider>, entry: Maybe<&2, Config.ModelsJsonProvider>, composition: Composition) -> IO(Composition):
   match entry:
@@ -290,10 +299,43 @@ def refreshAvailability(+runtime: ModelRuntime) -> IO(Unit):
     ids : List<&2, String> <- configuredIds(runtime, providers, providers)
     Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (withConfigured(catalog, ids), Unit{}))
 
+def withRadius(providers: List<&2, AiModels.Provider>, +provider: AiModels.Provider) -> List<&2, AiModels.Provider>:
+  match providers:
+    case Nil{}: [provider]
+    case +first <> +rest: Bool.pick(Unit -> List<&2, AiModels.Provider>, String.eq(providerId(first), providerId(provider)), _ => provider <> rest, _ => first <> withRadius(rest, provider))(Unit{})
+
+def withoutV1(+url: String) -> String:
+  Bool.pick(String, String.ends_with(url, "/v1/"), String.take(url, Nat.sub(String.length(url), 4n)), Bool.pick(String, String.ends_with(url, "/v1"), String.take(url, Nat.sub(String.length(url), 3n)), url))
+
+def radiusEntry(+id: String, entry: Maybe<&2, Config.ModelsJsonProvider>) -> Maybe<&2, Radius.RadiusProviderOptions>:
+  match entry:
+    case Some{Config.ModelsJsonProvider{name, Some{url}, _, _, Some{Config.RadiusOAuth{}}, _, _, _, _, _}}: Some{Radius.RadiusProviderOptions{Some{id}, Some{Maybe.default(&2, String, name, id)}, Some{withoutV1(url)}}}
+    case _: None{}
+
+def configuredRadius(builtins: List<&2, AiModels.Provider>, radius: Radius.RadiusTransport, options: Maybe<&2, Radius.RadiusProviderOptions>) -> IO(List<&2, AiModels.Provider>):
+  match options:
+    case None{}: IO.pure(List<&2, AiModels.Provider>, builtins)
+    case Some{selected}:
+      do IO<List<&2, AiModels.Provider>>:
+        provider : AiModels.Provider <- Radius.radiusProvider(selected, radius)
+        return withRadius(builtins, provider)
+
+# upstream configureRadiusProviders: a models.json provider with
+# `oauth: "radius"` and a baseUrl becomes a built-in Radius provider for that
+# gateway (the baseUrl without its /v1 suffix).
+def configureRadiusProviders(ids: List<&2, String>, +builtins: List<&2, AiModels.Provider>, +config: Config.ModelConfig, +radius: Radius.RadiusTransport) -> IO(List<&2, AiModels.Provider>):
+  match ids:
+    case Nil{}: IO.pure(List<&2, AiModels.Provider>, builtins)
+    case +id <> rest:
+      do IO<List<&2, AiModels.Provider>>:
+        next : List<&2, AiModels.Provider> <- configuredRadius(builtins, radius, radiusEntry(id, Config.getProvider(config, id)))
+        configureRadiusProviders(rest, next, config, radius)
+
 # The credential store is borrowed; the built-in providers are owned from here on.
-def createWithProviders(credentials: Auth.CredentialStore, +builtins: List<&2, AiModels.Provider>, modelsPath: Maybe<&2, String>) -> IO(ModelRuntime):
+def createWithProviders(credentials: Auth.CredentialStore, +defaults: List<&2, AiModels.Provider>, modelsPath: Maybe<&2, String>, radius: Radius.RadiusTransport) -> IO(ModelRuntime):
   do IO<ModelRuntime>:
     +config : Config.ModelConfig <- Config.load(modelsPath)
+    +builtins : List<&2, AiModels.Provider> <- configureRadiusProviders(Config.getProviderIds(config), defaults, config, radius)
     composition : Composition <- rebuildProviders(composedIds(builtins, config), builtins, config, Composition{Nil{}, Nil{}, Nil{}})
     context : Auth.AuthContext <- Context.defaultProviderAuthContext()
     catalog : Ref.Ref<Catalog> <- Ref.new(Catalog, emptyCatalog())
@@ -328,19 +370,16 @@ def defaultModelsPath() -> IO(Maybe<&2, String>):
     return locatedPath(path)
 
 # The credential store is borrowed; the OAuth handlers are owned from here on.
-def createWithModelsPath(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuthAuth>, modelsPath: Maybe<&2, String>) -> IO(ModelRuntime):
+def createWithModelsPath(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuthAuth>, +radius: Radius.RadiusTransport, modelsPath: Maybe<&2, String>) -> IO(ModelRuntime):
   do IO<ModelRuntime>:
-    builtins : List<&2, AiModels.Provider> <- Builtin.builtinProviders(codex, anthropicOAuth)
-    createWithProviders(credentials, builtins, modelsPath)
+    builtins : List<&2, AiModels.Provider> <- Builtin.builtinProviders(codex, anthropicOAuth, radius)
+    createWithProviders(credentials, builtins, modelsPath, radius)
 
 # Upstream's default models path: <agentDir>/models.json.
-def createWithAnthropic(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuthAuth>) -> IO(ModelRuntime):
+def createWithAnthropic(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuthAuth>, radius: Radius.RadiusTransport) -> IO(ModelRuntime):
   do IO<ModelRuntime>:
     modelsPath : Maybe<&2, String> <- defaultModelsPath()
-    createWithModelsPath(credentials, codex, anthropicOAuth, modelsPath)
-
-def create(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth) -> IO(ModelRuntime):
-  createWithAnthropic(credentials, codex, None{})
+    createWithModelsPath(credentials, codex, anthropicOAuth, radius, modelsPath)
 
 def disposeProviders(providers: List<&2, AiModels.Provider>) -> IO(Unit):
   match providers:

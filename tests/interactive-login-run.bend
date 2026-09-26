@@ -1,4 +1,5 @@
 import Base
+import ../packages/ai/src/providers/radius.bend as Radius
 import ./agent-session-runtime.bend as Fixture
 import ./agent-session.bend as Faux
 import ../packages/coding-agent/src/core/agent-session.bend as Session
@@ -42,7 +43,7 @@ def factoryTransport(+agentDir: String,request: Host.Request,storage: Storage.Au
       do IO<Result<&1,&1,String,Host.Created<Services()>>>:
         oauth : Auth.OAuthAuth <- Codex.openaiCodexOAuth(fetch,AgentRuntime.urlContext())
         anthropic : Auth.OAuthAuth <- Anthropic.anthropicOAuth(fetch,AgentRuntime.urlContext())
-        +models : Models.ModelRuntime <- Models.createWithAnthropic(store,oauth,Some{anthropic})
+        +models : Models.ModelRuntime <- Models.createWithAnthropic(store,oauth,Some{anthropic},Radius.RadiusTransport{fetch,AgentRuntime.urlContext()})
         +responses : Ref.Ref<List<&2,String>> <- Ref.new(List<&2,String>,"answer" <> "again" <> Nil{})
         +streams : Ref.Ref<List<&2,Faux.EventStream()>> <- Ref.new(List<&2,Faux.EventStream()>,Nil{})
         +gates : Ref.Ref<List<&2,Faux.Gate>> <- Ref.new(List<&2,Faux.Gate>,Nil{})

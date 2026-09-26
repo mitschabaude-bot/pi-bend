@@ -1,5 +1,6 @@
 import Base
 import ../../../ai/src/types.bend as Ai
+import ../../../ai/src/providers/radius.bend as Radius
 import ../../../ai/src/auth/types.bend as Auth
 import ../../../ai/src/auth/resolve.bend as Resolve
 import ../../../ai/src/auth/oauth/openai-codex.bend as CodexOAuth
@@ -60,6 +61,8 @@ import ./skills.bend as Skills
 import ./prompt-templates.bend as Templates
 import ./diagnostics.bend as Diagnostics
 import ./tools/index.bend as Tools
+import ./tools/read.bend as Read
+import ./tools/bash.bend as Bash
 import ../utils/tools-manager.bend as Manager
 import ./tools/file-mutation-queue.bend as Queue
 import ./extensions/context.bend as Ctx
@@ -324,12 +327,45 @@ def noResources() -> ResourceOptions: ResourceOptions{Nil{}, False{}, Nil{}, Fal
 # upstream createAgentSession's tool options: `tools` is the allowlist,
 # `noTools` the default suppression when there is none (all tools, or the
 # default built-ins only), `excludeTools` the denylist applied after both.
+# `builtins` configures the built-in tools. Upstream SDK callers get this
+# through `customTools` built with createBashToolDefinition(cwd, options) and
+# the like, which replace the built-ins of the same name; the port has no
+# custom tool definitions, so callers pass the same options for the built-ins
+# themselves. Settings still supply what upstream's _buildRuntime takes from
+# them (read autoResizeImages, bash commandPrefix and shellPath) where the
+# caller leaves it unset.
 type NoTools is Data:
   NoToolsAll{}
   NoToolsBuiltin{}
 type ToolSelection is Data:
-  ToolSelection{tools: Maybe<&2, List<&2, String>>, noTools: Maybe<&2, NoTools>, excludeTools: Maybe<&2, List<&2, String>>}
-def defaultToolSelection() -> ToolSelection: ToolSelection{None{}, None{}, None{}}
+  ToolSelection{tools: Maybe<&2, List<&2, String>>, noTools: Maybe<&2, NoTools>, excludeTools: Maybe<&2, List<&2, String>>, builtins: Maybe<&2, Tools.ToolsOptions>}
+def defaultToolSelection() -> ToolSelection: ToolSelection{None{}, None{}, None{}, None{}}
+
+def builtinsOf(selection: ToolSelection) -> Tools.ToolsOptions:
+  match selection:
+    case ToolSelection{_, _, _, builtins}: Maybe.default(&2, Tools.ToolsOptions, builtins, Tools.defaultOptions())
+
+def orSetting(-A: Data, value: Maybe<&2, A>, setting: Maybe<&2, A>) -> Maybe<&2, A>:
+  match value:
+    case Some{found}: Some{found}
+    case None{}: setting
+
+def readWithSettings(read: Maybe<&2, Read.ReadToolOptions>, autoResize: Bool) -> Read.ReadToolOptions:
+  match read:
+    case None{}: Read.ReadToolOptions{Some{autoResize}, None{}, None{}, None{}}
+    case Some{Read.ReadToolOptions{resize, profile, operations, processor}}: Read.ReadToolOptions{orSetting(Bool, resize, Some{autoResize}), profile, operations, processor}
+
+def bashWithSettings(bash: Maybe<&2, Bash.BashToolOptions>, prefix: Maybe<&2, String>, shellPath: Maybe<&2, String>) -> Bash.BashToolOptions:
+  match bash:
+    case None{}: Bash.BashToolOptions{None{}, prefix, shellPath, None{}, None{}}
+    case Some{Bash.BashToolOptions{operations, ownPrefix, ownShell, expose, hook}}: Bash.BashToolOptions{operations, orSetting(String, ownPrefix, prefix), orSetting(String, ownShell, shellPath), expose, hook}
+
+# upstream _buildRuntime: createAllToolDefinitions(cwd, {read: {autoResizeImages},
+# bash: {commandPrefix, shellPath}}) from the settings.
+def toolsOptionsFor(builtins: Tools.ToolsOptions, +settings: Settings.SettingsManager, paths: Paths.Environment) -> Tools.ToolsOptions:
+  match builtins:
+    case Tools.ToolsOptions{read, bash, edit, write, find, grep, ls}:
+      Tools.ToolsOptions{Some{readWithSettings(read, Settings.getImageAutoResize(settings))}, Some{bashWithSettings(bash, Settings.getShellCommandPrefix(settings), Result.default(&2, &2, Paths.Error, Maybe<&2, String>, Settings.getShellPath(paths, settings), None{}))}, edit, write, find, grep, ls}
 
 # The tool registry (the built-in tools that pass the allow- and denylists, in
 # upstream's registry order) and the initially active tool names.
@@ -343,13 +379,13 @@ def containsText(values: List<&2, String>, +name: String) -> Bool:
 
 def allowedOf(selection: ToolSelection) -> Maybe<&2, List<&2, String>>:
   match selection:
-    case ToolSelection{Some{names}, _, _}: Some{names}
-    case ToolSelection{None{}, Some{NoToolsAll{}}, _}: Some{Nil{}}
+    case ToolSelection{Some{names}, _, _, _}: Some{names}
+    case ToolSelection{None{}, Some{NoToolsAll{}}, _, _}: Some{Nil{}}
     case _: None{}
 
 def excludedOf(selection: ToolSelection) -> List<&2, String>:
   match selection:
-    case ToolSelection{_, _, excluded}: Maybe.default(&2, List<&2, String>, excluded, Nil{})
+    case ToolSelection{_, _, excluded, _}: Maybe.default(&2, List<&2, String>, excluded, Nil{})
 
 # upstream isAllowedTool
 def isAllowedTool(allowed: Maybe<&2, List<&2, String>>, excluded: List<&2, String>, +name: String) -> Bool:
@@ -359,9 +395,9 @@ def defaultActiveToolNames() -> List<&2, String>: ["read", "bash", "edit", "writ
 
 def initialRequested(selection: ToolSelection, configured: Maybe<&2, List<&2, String>>) -> List<&2, String>:
   match selection:
-    case ToolSelection{Some{names}, _, _}: names
-    case ToolSelection{None{}, Some{_}, _}: Nil{}
-    case ToolSelection{None{}, None{}, _}: Maybe.default(&2, List<&2, String>, configured, defaultActiveToolNames())
+    case ToolSelection{Some{names}, _, _, _}: names
+    case ToolSelection{None{}, Some{_}, _, _}: Nil{}
+    case ToolSelection{None{}, None{}, _, _}: Maybe.default(&2, List<&2, String>, configured, defaultActiveToolNames())
 
 def registryNames(names: List<&2, Tools.ToolName>, +allowed: Maybe<&2, List<&2, String>>, +excluded: List<&2, String>) -> List<&2, Tools.ToolName>:
   match names:
@@ -458,12 +494,10 @@ def snippets(names: List<&2, Tools.ToolName>, +record: R.Record<String>) -> R.Re
 
 # The options the built-in tools are created with; the prompt guidelines
 # follow them as upstream's tool definitions do.
-def toolsOptions() -> Tools.ToolsOptions: Tools.defaultOptions()
-
-def guidelines(names: List<&2, Tools.ToolName>, +record: R.Record<List<&2, String>>) -> R.Record<List<&2, String>>:
+def guidelines(names: List<&2, Tools.ToolName>, +builtins: Tools.ToolsOptions, +record: R.Record<List<&2, String>>) -> R.Record<List<&2, String>>:
   match names:
     case Nil{}: record
-    case +name <> rest: guidelines(rest, R.set(List<&2, String>, record, Tools.toolName(name), Tools.definitionGuidelines(name, toolsOptions())))
+    case +name <> rest: guidelines(rest, builtins, R.set(List<&2, String>, record, Tools.toolName(name), Tools.definitionGuidelines(name, builtins)))
 
 def toolNames(names: List<&2, Tools.ToolName>) -> List<&2, String>:
   match names:
@@ -478,8 +512,8 @@ def nonemptyAppend(parts: List<&2, String>) -> Maybe<&2, String>:
 # The system prompt options for the active tools (upstream _rebuildSystemPrompt).
 def promptOptionsFor(options: CreateOptions, +names: List<&2, Tools.ToolName>, contextList: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>) -> Prompt.BuildSystemPromptOptions:
   match options:
-    case CreateOptions{cwd, _, _, _, _, _, _, _, _, systemPrompt, appendSystemPrompt, _, _, _, _, _}:
-      Prompt.BuildSystemPromptOptions{systemPrompt, None{}, Some{toolNames(names)}, Some{snippets(names, R.new(String))}, Some{guidelines(names, R.new(List<&2, String>))}, None{}, nonemptyAppend(appendSystemPrompt), None{}, cwd, Some{contextList}, Some{skills}}
+    case CreateOptions{cwd, _, _, _, _, _, _, _, _, systemPrompt, appendSystemPrompt, selection, _, _, _, _}:
+      Prompt.BuildSystemPromptOptions{systemPrompt, None{}, Some{toolNames(names)}, Some{snippets(names, R.new(String))}, Some{guidelines(names, builtinsOf(selection), R.new(List<&2, String>))}, None{}, nonemptyAppend(appendSystemPrompt), None{}, cwd, Some{contextList}, Some{skills}}
 
 def promptOptions(options: CreateOptions, active: List<&2, String>, contextList: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>) -> Prompt.BuildSystemPromptOptions:
   promptOptionsFor(options, parsedNames(active), contextList, skills)
@@ -982,11 +1016,11 @@ def disposeBase(transport: Transport, storage: Storage.AuthStorageOwner, storage
     Storage.dispose(storage)
     disposeTransport(transport)
 
-def createToolList(names: List<&2, Tools.ToolName>, paths: Paths.Environment, cwd: String, agentDir: String, packageDir: String, fetch: Fetch.Fetch(Unit), context: Ctx.ContextSource(), borrowed: Queue.Owner & Queue.Queue) -> IO(Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>)):
+def createToolList(names: List<&2, Tools.ToolName>, builtins: Tools.ToolsOptions, paths: Paths.Environment, cwd: String, agentDir: String, packageDir: String, fetch: Fetch.Fetch(Unit), context: Ctx.ContextSource(), borrowed: Queue.Owner & Queue.Queue) -> IO(Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>)):
   match borrowed:
     case Tuple{queue, handle}:
       do IO<Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>)>:
-        owners : List<&1, Tools.ToolOwner> <- Tools.createTools(names, environment(paths, cwd, agentDir, packageDir, fetch, handle, context), toolsOptions())
+        owners : List<&1, Tools.ToolOwner> <- Tools.createTools(names, environment(paths, cwd, agentDir, packageDir, fetch, handle, context), builtins)
         return (queue, Tools.borrowTools(owners))
 
 def nameOfTool(tool: Tools.Tool()) -> String:
@@ -1018,13 +1052,13 @@ def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageSt
         result : Result<&2, &2, StreamFn.MissingDefault, Owner()> <- Agent.new(~Unit, ~Details(), ~Custom(), ~Error(), ~Unit, agentOptions(model, thinking, stream, keys, converter, seed, settings), registry, validator, Tools.emptyDetails())
         constructed(transport, storage, storageStore, credentials, credentialStore, models, queue, owners, stream, registry, validator, keys, converter, model, thinking, loadoutFrom(prepared, tools, extensions, source), result)
 
-def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, source: LoadoutSource, +extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
+def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, builtins: Tools.ToolsOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, +paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, source: LoadoutSource, +extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
   match transport prompt selected:
     case Transport{+authorizer, runtime, +fetch} Done{prompt} Done{+model}:
       do IO<Outcome(AgentRuntime)>:
         queue : Queue.Owner <- Queue.create()
         +context : Ctx.ContextSource() <- IO.pure(Ctx.ContextSource(), Some{ExtensionRunner.createContext(extensions)})
-        created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- createToolList(names, paths, cwd, agentDir, packageDir, fetch, context, Queue.borrow(queue))
+        created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- createToolList(names, toolsOptionsFor(builtins, settings, paths), paths, cwd, agentDir, packageDir, fetch, context, Queue.borrow(queue))
         +stream : Stream() <- createStream(authorizer, fetch, requestDefaults(settings), KeySource{models, apiKey})
         +registry : StreamFn.Registry(Unit, Details(), LoopConfig(), Error()) <- StreamFn.create(Unit, Details(), LoopConfig(), Error())
         +validator : Loop.Validator(Error()) <- Loop.createPlain(~Error(), ~validationError)
@@ -1046,7 +1080,7 @@ def registryOf(setup: ToolSetup) -> List<&2, Tools.ToolName>:
 
 def withModel(+options: CreateOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, +paths: Paths.Environment, prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
   match options:
-    case CreateOptions{cwd, agentDir, _, _, +packageDir, _, _, apiKey, thinking, _, _, _, _, seed, settings, _}: withModelFields(cwd, agentDir, packageDir, apiKey, thinking, seed, settings, registryOf(toolSetupOf(options)), transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected, LoadoutSource{paths, options, packageDir}, extensions)
+    case CreateOptions{cwd, agentDir, _, _, +packageDir, _, _, apiKey, thinking, _, _, +selection, _, seed, settings, _}: withModelFields(cwd, agentDir, packageDir, apiKey, thinking, seed, settings, registryOf(toolSetupOf(options)), builtinsOf(selection), transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected, LoadoutSource{paths, options, packageDir}, extensions)
 
 # A runtime API key changes the provider's availability (upstream
 # setRuntimeApiKey refreshes it).
@@ -1119,7 +1153,7 @@ def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, 
         +credentialStore : Auth.CredentialStore <- Runtime.store(credentials)
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch, urlContext())
         anthropicOAuth : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch, urlContext())
-        +models : Models.ModelRuntime <- Models.createWithAnthropic(credentialStore, oauth, Some{anthropicOAuth})
+        +models : Models.ModelRuntime <- Models.createWithAnthropic(credentialStore, oauth, Some{anthropicOAuth}, Radius.RadiusTransport{fetch, urlContext()})
         +extensions : Extensions <- loadExtensions(cwdOf(options), models)
         +resolution : Models.ResolveCliModelResult <- cliResolution(models, options, packageDir)
         reportResolution(resolution)

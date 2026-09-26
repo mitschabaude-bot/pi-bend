@@ -1673,15 +1673,23 @@
     },
     {
       "source": "packages/ai/test/radius-oauth.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "7e744c72d5b94e6a7d270665401824dd6f30cd871dc9a2e8df34895d9727c286"
+      "status": "ported",
+      "ports": [
+        "tests/radius.bend",
+        "tests/radius_check.py"
+      ],
+      "sha256": "7e744c72d5b94e6a7d270665401824dd6f30cd871dc9a2e8df34895d9727c286",
+      "notes": "All 3 cases against a loopback gateway instead of a stubbed fetch (form fields, request order and the device_code event asserted; the expiry is checked against a time window instead of fake timers), plus native cases for the full browser callback flow (state mismatch and missing code rejected, the code exchanged) and a callback error. Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/radius-provider.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "4b2d6baef41c603d1f750017bfbc6cf73488675b478e62d8d7c00597bfce8fed"
+      "status": "ported",
+      "ports": [
+        "tests/radius.bend",
+        "tests/radius_check.py"
+      ],
+      "sha256": "4b2d6baef41c603d1f750017bfbc6cf73488675b478e62d8d7c00597bfce8fed",
+      "notes": "All 4 cases. tests/radius_check.py runs tests/radius.bend against a loopback gateway; requests for https://radius.pi.dev are redirected there. Upstream refreshes through createModels().refresh; the port calls the provider's refreshModels with the same RefreshModelsContext (credential, stored entry, allowNetwork) and checks the published catalog. Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/reasoning-options.test.ts",
@@ -2051,7 +2059,8 @@
       "source": "packages/coding-agent/test/agent-session-dynamic-tools.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "d0e3053b05635eb80891962db05c24ae3eaaf26e0ab8b9cfc7f4f90ac212fd79"
+      "sha256": "d0e3053b05635eb80891962db05c24ae3eaaf26e0ab8b9cfc7f4f90ac212fd79",
+      "notes": "Pending: every case registers tools through an extension (pi.registerTool) on a session created by createAgentSession, which the port's native extensions do not yet expose to the tool registry. Related coverage: the default bash tool's PI_* guidance and its exposeSessionEnvironment opt-out in the runtime's system prompt (tests/runtime_context_check.py) and the bash tool's session environment with and without exposeSessionEnvironment (tests/bash-tool.bend)."
     },
     {
       "source": "packages/coding-agent/test/agent-session-retry.test.ts",
@@ -2973,9 +2982,13 @@
     },
     {
       "source": "packages/coding-agent/test/radius.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f4cfc14df90a8f3555d6e514e28fdf46cc1cdc967cf030c171a65996dd3c7f06"
+      "status": "ported",
+      "ports": [
+        "tests/radius.bend",
+        "tests/radius_check.py"
+      ],
+      "sha256": "f4cfc14df90a8f3555d6e514e28fdf46cc1cdc967cf030c171a65996dd3c7f06",
+      "notes": "All 6 cases through Models.createWithModelsPath and refresh (upstream ModelRuntime.create's refresh with allowModelNetwork) with in-memory credentials and models store; requests for https://radius.pi.dev and http://localhost:8788 are redirected to a loopback gateway, whose request log replaces the fetch spy. Bun/native1/native4."
     },
     {
       "source": "packages/coding-agent/test/remote-catalog-provider.test.ts",
@@ -4349,7 +4362,7 @@
         "tests/tool-prompt-contributions.bend"
       ],
       "sha256": "eff9fdb9335cdcac14d26b90b3caf353fc7cb4473d096e67c414555d85984403",
-      "notes": "The seven ported tools' rows of 'keeps the %s tool definition aligned with its contribution' (Tools.promptSnippet and Tools.definitionGuidelines, which the system prompt builder reads, against upstream's *ToolSystemPromptContribution constants from the pinned pi-mono) and the bash row of 'keeps %s session-environment guidance conditional' (the bash definition with exposeSessionEnvironment false has no guidelines; upstream's undefined is an empty list). Pending: the powershell rows (tool not ported). The runtime creates its tools with default options (agent-runtime toolsOptions); there is no caller-supplied tool option yet. bun test."
+      "notes": "The seven ported tools' rows of 'keeps the %s tool definition aligned with its contribution' (Tools.promptSnippet and Tools.definitionGuidelines, which the system prompt builder reads, against upstream's *ToolSystemPromptContribution constants from the pinned pi-mono) and the bash row of 'keeps %s session-environment guidance conditional' (the bash definition with exposeSessionEnvironment false has no guidelines; upstream's undefined is an empty list). Pending: the powershell rows (tool not ported). Runtime callers pass the built-ins' options in ToolSelection.builtins (the port's adaptation of upstream's customTools built with createBashToolDefinition); the runtime's prompt guidelines and created tools both follow them, with settings filling read autoResizeImages and bash commandPrefix/shellPath (tests/runtime_context_check.py, parity scenario print-tool-settings). bun test."
     },
     {
       "source": "packages/coding-agent/test/tools-manager.test.ts",

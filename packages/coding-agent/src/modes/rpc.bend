@@ -14,6 +14,8 @@ import ../core/extensions/runner.bend as ExtensionRunner
 import ../core/extensions/types.bend as ExtensionTypes
 import ../core/extensions/context.bend as Ctx
 import ../../../ai/src/utils/uuid.bend as Uuid
+import ../../../runtime/src/abort.bend as Abort
+import ../../../runtime/src/deferred.bend as Deferred
 import ../core/agent-session.bend as Session
 import ../core/bash-executor.bend as Bash
 import ../core/agent-runtime.bend as Runtime
@@ -255,22 +257,116 @@ def startedAt(current: Maybe<&2,Started>) -> IO(Maybe<&2,Started> & Unit):
       do IO<Maybe<&2,Started> & Unit>:
         signalOnce(started)
         return (Some{started},Unit{})
-def requestWith(env: UiEnv,+id: String,request: String -> Types.RpcExtensionUIRequest) -> IO(Types.RpcExtensionUIResponse):
-  match env:
-    case UiEnv{sink,dialogs,+starting}:
+def withDialogs(open: Bool,pair: List<&2,Dialog> & Maybe<&2,Dialog>) -> Dialogs & Maybe<&2,Dialog>:
+  match pair:
+    case (rest,found): (Dialogs{open,rest},found)
+def keptDialog(head: Dialog,pair: List<&2,Dialog> & Maybe<&2,Dialog>) -> List<&2,Dialog> & Maybe<&2,Dialog>:
+  match pair:
+    case (rest,found): (head <> rest,found)
+def dialogId(value: Dialog) -> String:
+  match value:
+    case Dialog{id,_}: id
+def dialogWithout(waiting: List<&2,Dialog>,+id: String) -> List<&2,Dialog> & Maybe<&2,Dialog>:
+  match waiting:
+    case Nil{}: (Nil{},None{})
+    case +head <> +rest: Bool.pick(List<&2,Dialog> & Maybe<&2,Dialog>,String.eq(dialogId(head),id),(rest,Some{head}),keptDialog(head,dialogWithout(rest,id)))
+def takeDialog(value: Dialogs,+id: String) -> Dialogs & Maybe<&2,Dialog>:
+  match value:
+    case Dialogs{open,waiting}: withDialogs(open,dialogWithout(waiting,id))
+def answerDialog(found: Maybe<&2,Dialog>,response: Types.RpcExtensionUIResponse) -> IO(Unit):
+  match found:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{Dialog{_,answer}}:
+      do IO<Unit>:
+        sent : Bool <- Chan.send(Types.RpcExtensionUIResponse,answer,response)
+        return Unit{}
+# Dismissing a dialog (its timeout or abort signal) answers it as cancelled,
+# unless its response came first.
+def dismiss(dialogs: Ref.Ref<Dialogs>,+id: String) -> IO(Unit):
+  do IO<Unit>:
+    found : Maybe<&2,Dialog> <- Ref.modify(Dialogs,Maybe<&2,Dialog>,dialogs,value => takeDialog(value,id))
+    answerDialog(found,Types.UICancelled{id})
+def dismissAfter(dialogs: Ref.Ref<Dialogs>,id: String,result: Timer & Bool) -> IO(Unit):
+  match result:
+    case (owner,elapsed):
+      do IO<Unit>:
+        Timer.close(owner)
+        Bool.pick(Unit -> IO(Unit),elapsed,_ => dismiss(dialogs,id),_ => IO.pure(Unit,Unit{}))(Unit{})
+def timeoutTask(dialogs: Ref.Ref<Dialogs>,id: String,owner: Timer) -> IO(Unit):
+  do IO<Unit>:
+    result : Timer & Bool <- Timer.wait(owner)
+    dismissAfter(dialogs,id,result)
+def armedTimeout(dialogs: Ref.Ref<Dialogs>,id: String,pair: Timer & TimerCancel) -> IO(Maybe<&2,TimerCancel>):
+  match pair:
+    case (owner,handle):
+      do IO<Maybe<&2,TimerCancel>>:
+        IO.spawn(Unit,timeoutTask(dialogs,id,owner))
+        return Some{handle}
+# upstream arms the timer only for a positive timeout (`if (opts?.timeout)`).
+def armTimeout(dialogs: Ref.Ref<Dialogs>,id: String,timeout: Maybe<&2,F64>) -> IO(Maybe<&2,TimerCancel>):
+  match timeout:
+    case Some{+ms}:
+      Bool.pick(Unit -> IO(Maybe<&2,TimerCancel>),F64.is_lt(U32.to_f64(0),ms),_ => IO.bind(Timer & TimerCancel,Maybe<&2,TimerCancel>,Timer.new(U32.max(1,F64.to_u32(F64.floor(ms)))),pair => armedTimeout(dialogs,id,pair)),_ => IO.pure(Maybe<&2,TimerCancel>,None{}))(Unit{})
+    case None{}: IO.pure(Maybe<&2,TimerCancel>,None{})
+def abortTask(dialogs: Ref.Ref<Dialogs>,id: String,ticket: Deferred.Ticket<Maybe<&2,Abort.AbortReason<Unit>>>) -> IO(Unit):
+  do IO<Unit>:
+    reason : Maybe<&2,Abort.AbortReason<Unit>> <- Deferred.wait(Maybe<&2,Abort.AbortReason<Unit>>,ticket)
+    Bool.pick(Unit -> IO(Unit),Maybe.is_some(&2,Abort.AbortReason<Unit>,reason),_ => dismiss(dialogs,id),_ => IO.pure(Unit,Unit{}))(Unit{})
+def watchedAbort(dialogs: Ref.Ref<Dialogs>,id: String,observation: Deferred.Observation<Abort.AbortReason<Unit>>) -> IO(Maybe<&2,Deferred.Cancellation<Abort.AbortReason<Unit>>>):
+  match observation:
+    case Deferred.Observation{ticket,cancellation}:
+      do IO<Maybe<&2,Deferred.Cancellation<Abort.AbortReason<Unit>>>>:
+        IO.spawn(Unit,abortTask(dialogs,id,ticket))
+        return Some{cancellation}
+def watchAbort(dialogs: Ref.Ref<Dialogs>,id: String,signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(Maybe<&2,Deferred.Cancellation<Abort.AbortReason<Unit>>>):
+  match signal:
+    case None{}: IO.pure(Maybe<&2,Deferred.Cancellation<Abort.AbortReason<Unit>>>,None{})
+    case Some{value}: IO.bind(Deferred.Observation<Abort.AbortReason<Unit>>,Maybe<&2,Deferred.Cancellation<Abort.AbortReason<Unit>>>,Abort.observe(Unit,value),observation => watchedAbort(dialogs,id,observation))
+def cancelTimeout(handle: Maybe<&2,TimerCancel>) -> IO(Unit):
+  match handle:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{value}: IO.bind(Bool,Unit,Timer.cancel(value),cancelled => IO.pure(Unit,Unit{}))
+def cancelWatch(cancellation: Maybe<&2,Deferred.Cancellation<Abort.AbortReason<Unit>>>) -> IO(Unit):
+  match cancellation:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{value}: IO.bind(Bool,Unit,Deferred.cancel(Abort.AbortReason<Unit>,value),removed => IO.pure(Unit,Unit{}))
+def requestWith(env: UiEnv,options: Ctx.DialogOptions,+id: String,request: String -> Types.RpcExtensionUIRequest) -> IO(Types.RpcExtensionUIResponse):
+  match env options:
+    case UiEnv{sink,+dialogs,+starting} Ctx.DialogOptions{signal,timeout}:
       do IO<Types.RpcExtensionUIResponse>:
         +answer : Chan(Types.RpcExtensionUIResponse) <- Chan.new(Types.RpcExtensionUIResponse,1)
         +accepted : Bool <- Ref.modify(Dialogs,Bool,dialogs,value => registered(Dialog{id,answer},value))
+        timer : Maybe<&2,TimerCancel> <- armTimeout(dialogs,id,timeout)
+        watch : Maybe<&2,Deferred.Cancellation<Abort.AbortReason<Unit>>> <- watchAbort(dialogs,id,signal)
         Bool.pick(Unit -> IO(Unit),accepted,_ => output(sink,Types.uiRequestValue(request(id))),_ => IO.pure(Unit,Unit{}))(Unit{})
         Ref.update(Maybe<&2,Started>,Unit,starting,current => startedAt(current))
-        awaitDialog(answer,id,accepted)
-def requestIdentified(env: UiEnv,request: String -> Types.RpcExtensionUIRequest,id: Result<&2,&2,Uuid.Error,String>) -> IO(Types.RpcExtensionUIResponse):
+        response : Types.RpcExtensionUIResponse <- awaitDialog(answer,id,accepted)
+        cancelTimeout(timer)
+        cancelWatch(watch)
+        return response
+def requestIdentified(env: UiEnv,options: Ctx.DialogOptions,request: String -> Types.RpcExtensionUIRequest,id: Result<&2,&2,Uuid.Error,String>) -> IO(Types.RpcExtensionUIResponse):
   match id:
-    case Done{value}: requestWith(env,value,request)
+    case Done{value}: requestWith(env,options,value,request)
     case Fail{_}: IO.pure(Types.RpcExtensionUIResponse,Types.UICancelled{""})
-# A dialog: an extension_ui_request with a fresh id, then its response.
-def dialog(env: UiEnv,request: String -> Types.RpcExtensionUIRequest) -> IO(Types.RpcExtensionUIResponse):
-  IO.bind(Result<&2,&2,Uuid.Error,String>,Types.RpcExtensionUIResponse,Uuid.randomUUID(),id => requestIdentified(env,request,id))
+def signalAborted(signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(Bool):
+  match signal:
+    case None{}: IO.pure(Bool,False{})
+    case Some{value}: Abort.aborted(Unit,value)
+def dialogUnlessAborted(env: UiEnv,+options: Ctx.DialogOptions,request: String -> Types.RpcExtensionUIRequest,aborted: Bool) -> IO(Types.RpcExtensionUIResponse):
+  match aborted:
+    case True{}: IO.pure(Types.RpcExtensionUIResponse,Types.UICancelled{""})
+    case False{}: IO.bind(Result<&2,&2,Uuid.Error,String>,Types.RpcExtensionUIResponse,Uuid.randomUUID(),id => requestIdentified(env,options,request,id))
+def signalOf(options: Ctx.DialogOptions) -> Maybe<&2,Abort.AbortSignal<Unit>>:
+  match options:
+    case Ctx.DialogOptions{signal,_}: signal
+def timeoutOf(options: Ctx.DialogOptions) -> Maybe<&2,F64>:
+  match options:
+    case Ctx.DialogOptions{_,timeout}: timeout
+# upstream createDialogPromise: an already aborted signal answers at once;
+# otherwise an extension_ui_request with a fresh id waits for its response,
+# its timeout or its signal.
+def dialog(env: UiEnv,+options: Ctx.DialogOptions,request: String -> Types.RpcExtensionUIRequest) -> IO(Types.RpcExtensionUIResponse):
+  IO.bind(Bool,Types.RpcExtensionUIResponse,signalAborted(signalOf(options)),aborted => dialogUnlessAborted(env,options,request,aborted))
 def notice(env: UiEnv,request: String -> Types.RpcExtensionUIRequest) -> IO(Unit):
   match env:
     case UiEnv{sink,_,_}:
@@ -287,19 +383,35 @@ def confirmedOf(response: Types.RpcExtensionUIResponse) -> Bool:
     case _: False{}
 def selectDialog(env: UiEnv,request: Ctx.SelectRequest) -> IO(Maybe<&2,String>):
   match request:
-    case Ctx.SelectRequest{title,options}: IO.bind(Types.RpcExtensionUIResponse,Maybe<&2,String>,dialog(env,id => Types.UISelect{id,title,options,None{}}),response => IO.pure(Maybe<&2,String>,chosenValue(response)))
+    case Ctx.SelectRequest{title,options,+dialogOptions}: IO.bind(Types.RpcExtensionUIResponse,Maybe<&2,String>,dialog(env,dialogOptions,id => Types.UISelect{id,title,options,timeoutOf(dialogOptions)}),response => IO.pure(Maybe<&2,String>,chosenValue(response)))
 def confirmDialog(env: UiEnv,request: Ctx.ConfirmRequest) -> IO(Bool):
   match request:
-    case Ctx.ConfirmRequest{title,message}: IO.bind(Types.RpcExtensionUIResponse,Bool,dialog(env,id => Types.UIConfirm{id,title,message,None{}}),response => IO.pure(Bool,confirmedOf(response)))
+    case Ctx.ConfirmRequest{title,message,+dialogOptions}: IO.bind(Types.RpcExtensionUIResponse,Bool,dialog(env,dialogOptions,id => Types.UIConfirm{id,title,message,timeoutOf(dialogOptions)}),response => IO.pure(Bool,confirmedOf(response)))
 def inputDialog(env: UiEnv,request: Ctx.InputRequest) -> IO(Maybe<&2,String>):
   match request:
-    case Ctx.InputRequest{title,placeholder}: IO.bind(Types.RpcExtensionUIResponse,Maybe<&2,String>,dialog(env,id => Types.UIInput{id,title,placeholder,None{}}),response => IO.pure(Maybe<&2,String>,chosenValue(response)))
+    case Ctx.InputRequest{title,placeholder,+dialogOptions}: IO.bind(Types.RpcExtensionUIResponse,Maybe<&2,String>,dialog(env,dialogOptions,id => Types.UIInput{id,title,placeholder,timeoutOf(dialogOptions)}),response => IO.pure(Maybe<&2,String>,chosenValue(response)))
 def notifyRequest(env: UiEnv,notification: Ctx.Notification) -> IO(Unit):
   match notification:
     case Ctx.Notification{message,kind}: notice(env,id => Types.UINotify{id,message,Some{Ctx.notifyTypeName(kind)}})
 def statusRequest(env: UiEnv,update: Ctx.StatusUpdate) -> IO(Unit):
   match update:
     case Ctx.StatusUpdate{key,text}: notice(env,id => Types.UISetStatus{id,key,text})
+# upstream editor(): a dialog without timeout or signal.
+def editorDialog(env: UiEnv,request: Ctx.EditorRequest) -> IO(Maybe<&2,String>):
+  match request:
+    case Ctx.EditorRequest{title,prefill}: IO.bind(Types.RpcExtensionUIResponse,Maybe<&2,String>,dialog(env,Ctx.dialogOptions(),id => Types.UIEditor{id,title,prefill}),response => IO.pure(Maybe<&2,String>,chosenValue(response)))
+# Only line widgets and their removal are sent; component factories need a
+# terminal, as upstream ignores them in RPC mode.
+def widgetRequest(env: UiEnv,update: Ctx.WidgetUpdate) -> IO(Unit):
+  match update:
+    case Ctx.WidgetUpdate{key,None{},placement}: notice(env,id => Types.UISetWidget{id,key,None{},Maybe.map(&2,Ctx.WidgetPlacement,String,Ctx.placementName,placement)})
+    case Ctx.WidgetUpdate{key,Some{Ctx.WidgetLines{lines}},placement}: notice(env,id => Types.UISetWidget{id,key,Some{lines},Maybe.map(&2,Ctx.WidgetPlacement,String,Ctx.placementName,placement)})
+    case Ctx.WidgetUpdate{_,Some{Ctx.WidgetComponent{_}},_}: IO.pure(Unit,Unit{})
+def titleRequest(env: UiEnv,title: String) -> IO(Unit): notice(env,id => Types.UISetTitle{id,title})
+# pasteToEditor falls back to setEditorText, as upstream's RPC context does.
+def editorTextRequest(env: UiEnv,text: String) -> IO(Unit): notice(env,id => Types.UISetEditorText{id,text})
+# The editor's text is the client's; a synchronous read answers "".
+def noEditorText(env: UiEnv,unit: Unit) -> IO(String): IO.pure(String,"")
 # Custom components need a terminal; RPC mode answers at once, as upstream.
 def noCustom(env: UiEnv,factory: Ctx.CustomFactory()) -> IO(Unit): IO.pure(Unit,Unit{})
 def extensionError(sink: Sink(),error: ExtensionTypes.ExtensionError) -> IO(Unit):
@@ -375,9 +487,15 @@ def createExtensions(+sink: Sink(),current: Ref.Ref<Session.AgentSession>,host: 
     notify : Callback.Callback<Ctx.Notification,Unit> <- Callback.create(~UiEnv,~Ctx.Notification,~Unit,~notifyRequest,env)
     status : Callback.Callback<Ctx.StatusUpdate,Unit> <- Callback.create(~UiEnv,~Ctx.StatusUpdate,~Unit,~statusRequest,env)
     custom : Callback.Callback<Ctx.CustomFactory(),Unit> <- Callback.create(~UiEnv,~Ctx.CustomFactory(),~Unit,~noCustom,env)
+    editor : Callback.Callback<Ctx.EditorRequest,Maybe<&2,String>> <- Callback.create(~UiEnv,~Ctx.EditorRequest,~Maybe<&2,String>,~editorDialog,env)
+    widget : Callback.Callback<Ctx.WidgetUpdate,Unit> <- Callback.create(~UiEnv,~Ctx.WidgetUpdate,~Unit,~widgetRequest,env)
+    title : Callback.Callback<String,Unit> <- Callback.create(~UiEnv,~String,~Unit,~titleRequest,env)
+    editorText : Callback.Callback<String,Unit> <- Callback.create(~UiEnv,~String,~Unit,~editorTextRequest,env)
+    paste : Callback.Callback<String,Unit> <- Callback.create(~UiEnv,~String,~Unit,~editorTextRequest,env)
+    current : Callback.Callback<Unit,String> <- Callback.create(~UiEnv,~Unit,~String,~noEditorText,env)
     errors : Callback.Callback<ExtensionTypes.ExtensionError,Unit> <- Callback.create(~Sink(),~ExtensionTypes.ExtensionError,~Unit,~extensionError,sink)
     bound : Ref.Ref<Maybe<&2,Bound>> <- Ref.new(Maybe<&2,Bound>,None{})
-    return Extensions{dialogs,Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom},errors,bound,starting,detached,actions}
+    return Extensions{dialogs,Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom,editor,widget,title,editorText,paste,current},errors,bound,starting,detached,actions}
 def bindRunner(extensions: Extensions,runner: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> IO(Unit):
   match extensions runner:
     case _ None{}: IO.pure(Unit,Unit{})
@@ -427,7 +545,7 @@ def closeDialogs(extensions: Extensions) -> IO(Unit):
         cancelDialogs(waiting)
 def disposeExtensions(extensions: Extensions) -> IO(Unit):
   match extensions:
-    case Extensions{dialogs,Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom},errors,bound,starting,detached,Ctx.ExtensionCommandContextActions{wait,opening,forking,navigating,switching,reloading}}:
+    case Extensions{dialogs,Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom,editor,widget,title,editorText,paste,current},errors,bound,starting,detached,Ctx.ExtensionCommandContextActions{wait,opening,forking,navigating,switching,reloading}}:
       do IO<Unit>:
         Callback.dispose(Ctx.SelectRequest,Maybe<&2,String>,select)
         Callback.dispose(Ctx.ConfirmRequest,Bool,confirm)
@@ -435,6 +553,12 @@ def disposeExtensions(extensions: Extensions) -> IO(Unit):
         Callback.dispose(Ctx.Notification,Unit,notify)
         Callback.dispose(Ctx.StatusUpdate,Unit,status)
         Callback.dispose(Ctx.CustomFactory(),Unit,custom)
+        Callback.dispose(Ctx.EditorRequest,Maybe<&2,String>,editor)
+        Callback.dispose(Ctx.WidgetUpdate,Unit,widget)
+        Callback.dispose(String,Unit,title)
+        Callback.dispose(String,Unit,editorText)
+        Callback.dispose(String,Unit,paste)
+        Callback.dispose(Unit,String,current)
         Callback.dispose(ExtensionTypes.ExtensionError,Unit,errors)
         Callback.dispose(Unit,Unit,wait)
         Callback.dispose(Ctx.NewSessionRequest,Ctx.SessionChange,opening)
@@ -446,29 +570,6 @@ def disposeExtensions(extensions: Extensions) -> IO(Unit):
         previous : Maybe<&2,Bound> <- Ref.dispose(Maybe<&2,Bound>,bound)
         line : Maybe<&2,Started> <- Ref.dispose(Maybe<&2,Started>,starting)
         tasks : List<&2,Chan(Unit)> <- Ref.dispose(List<&2,Chan(Unit)>,detached)
-        return Unit{}
-def withDialogs(open: Bool,pair: List<&2,Dialog> & Maybe<&2,Dialog>) -> Dialogs & Maybe<&2,Dialog>:
-  match pair:
-    case (rest,found): (Dialogs{open,rest},found)
-def keptDialog(head: Dialog,pair: List<&2,Dialog> & Maybe<&2,Dialog>) -> List<&2,Dialog> & Maybe<&2,Dialog>:
-  match pair:
-    case (rest,found): (head <> rest,found)
-def dialogId(value: Dialog) -> String:
-  match value:
-    case Dialog{id,_}: id
-def dialogWithout(waiting: List<&2,Dialog>,+id: String) -> List<&2,Dialog> & Maybe<&2,Dialog>:
-  match waiting:
-    case Nil{}: (Nil{},None{})
-    case +head <> +rest: Bool.pick(List<&2,Dialog> & Maybe<&2,Dialog>,String.eq(dialogId(head),id),(rest,Some{head}),keptDialog(head,dialogWithout(rest,id)))
-def takeDialog(value: Dialogs,+id: String) -> Dialogs & Maybe<&2,Dialog>:
-  match value:
-    case Dialogs{open,waiting}: withDialogs(open,dialogWithout(waiting,id))
-def answerDialog(found: Maybe<&2,Dialog>,response: Types.RpcExtensionUIResponse) -> IO(Unit):
-  match found:
-    case None{}: IO.pure(Unit,Unit{})
-    case Some{Dialog{_,answer}}:
-      do IO<Unit>:
-        sent : Bool <- Chan.send(Types.RpcExtensionUIResponse,answer,response)
         return Unit{}
 def answered(dialogs: Ref.Ref<Dialogs>,decoded: Types.Decoded(Types.RpcExtensionUIResponse)) -> IO(Unit):
   match decoded:

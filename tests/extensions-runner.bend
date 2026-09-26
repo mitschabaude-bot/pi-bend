@@ -233,6 +233,10 @@ def noInput(unit: Unit, request: Ctx.InputRequest) -> IO(Maybe<&2, String>): IO.
 def ignoredNotification(unit: Unit, notification: Ctx.Notification) -> IO(Unit): IO.pure(Unit, Unit{})
 def ignoredStatus(unit: Unit, update: Ctx.StatusUpdate) -> IO(Unit): IO.pure(Unit, Unit{})
 def ignoredCustom(unit: Unit, factory: Ctx.CustomFactory()) -> IO(Unit): IO.pure(Unit, Unit{})
+def noEditor(unit: Unit, request: Ctx.EditorRequest) -> IO(Maybe<&2, String>): IO.pure(Maybe<&2, String>, None{})
+def ignoredWidget(unit: Unit, update: Ctx.WidgetUpdate) -> IO(Unit): IO.pure(Unit, Unit{})
+def ignoredText(unit: Unit, text: String) -> IO(Unit): IO.pure(Unit, Unit{})
+def emptyEditor(unit: Unit, input: Unit) -> IO(String): IO.pure(String, "")
 
 def someUI() -> IO(Ctx.ExtensionUIContext):
   do IO<Ctx.ExtensionUIContext>:
@@ -242,7 +246,13 @@ def someUI() -> IO(Ctx.ExtensionUIContext):
     notify : C.Callback<Ctx.Notification, Unit> <- C.create(~Unit, ~Ctx.Notification, ~Unit, ~ignoredNotification, Unit{})
     status : C.Callback<Ctx.StatusUpdate, Unit> <- C.create(~Unit, ~Ctx.StatusUpdate, ~Unit, ~ignoredStatus, Unit{})
     custom : C.Callback<Ctx.CustomFactory(), Unit> <- C.create(~Unit, ~Ctx.CustomFactory(), ~Unit, ~ignoredCustom, Unit{})
-    return Ctx.ExtensionUIContext{select, confirm, input, notify, status, custom}
+    editor : C.Callback<Ctx.EditorRequest, Maybe<&2, String>> <- C.create(~Unit, ~Ctx.EditorRequest, ~Maybe<&2, String>, ~noEditor, Unit{})
+    widget : C.Callback<Ctx.WidgetUpdate, Unit> <- C.create(~Unit, ~Ctx.WidgetUpdate, ~Unit, ~ignoredWidget, Unit{})
+    title : C.Callback<String, Unit> <- C.create(~Unit, ~String, ~Unit, ~ignoredText, Unit{})
+    text : C.Callback<String, Unit> <- C.create(~Unit, ~String, ~Unit, ~ignoredText, Unit{})
+    paste : C.Callback<String, Unit> <- C.create(~Unit, ~String, ~Unit, ~ignoredText, Unit{})
+    current : C.Callback<Unit, String> <- C.create(~Unit, ~Unit, ~String, ~emptyEditor, Unit{})
+    return Ctx.ExtensionUIContext{select, confirm, input, notify, status, custom, editor, widget, title, text, paste, current}
 
 def exposesModeWithUI(mode: Ctx.ExtensionMode, +expected: String, +name: String) -> IO(Unit):
   do IO<Unit>:

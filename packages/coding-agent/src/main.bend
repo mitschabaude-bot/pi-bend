@@ -29,6 +29,7 @@ import ./utils/paths.bend as Paths
 import ./utils/tools-manager.bend as Manager
 import ../../agent/src/types.bend as T
 import ../../ai/src/types.bend as Ai
+import ../../ai/src/providers/radius.bend as Radius
 import ../../ai/src/auth/types.bend as Auth
 import ../../ai/src/auth/oauth/openai-codex.bend as CodexOAuth
 import ../../ai/src/auth/oauth/anthropic.bend as AnthropicOAuth
@@ -587,7 +588,7 @@ def modelsOf(runtime: Runtime.AgentRuntime) -> Runtime.AgentRuntime & Models.Mod
 def createOptions(parsed: Args.Args, cwd: String, agentDir: String, authPath: String, bundlePath: String, packageDir: String, seed: Runtime.SessionSeed, +settings: Settings.SettingsManager) -> Runtime.CreateOptions:
   match parsed:
     case Args.Args{provider, model, apiKey, systemPrompt, appendSystemPrompt, thinking, _, _, _, _, _, _, _, _, _, _, _, _, tools, excludeTools, noTools, noBuiltinTools, _, _, _, _, noSkills, skills, promptTemplates, noPromptTemplates, _, _, _, noContextFiles, _, _, _, _, _, _, _, _, _}:
-      Runtime.CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, Maybe.default(&2, List<&2, String>, appendSystemPrompt, Nil{}), Runtime.ToolSelection{tools, noToolsOf(noTools, noBuiltinTools), excludeTools}, Bool.not(Maybe.default(&2, Bool, noContextFiles, False{})), seed, settings, Runtime.ResourceOptions{Maybe.default(&2, List<&2, String>, skills, Nil{}), Maybe.default(&2, Bool, noSkills, False{}), Maybe.default(&2, List<&2, String>, promptTemplates, Nil{}), Maybe.default(&2, Bool, noPromptTemplates, False{})}}
+      Runtime.CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, Maybe.default(&2, List<&2, String>, appendSystemPrompt, Nil{}), Runtime.ToolSelection{tools, noToolsOf(noTools, noBuiltinTools), excludeTools, None{}}, Bool.not(Maybe.default(&2, Bool, noContextFiles, False{})), seed, settings, Runtime.ResourceOptions{Maybe.default(&2, List<&2, String>, skills, Nil{}), Maybe.default(&2, Bool, noSkills, False{}), Maybe.default(&2, List<&2, String>, promptTemplates, Nil{}), Maybe.default(&2, Bool, noPromptTemplates, False{})}}
 
 type ScopeFlags is Data: ScopeFlags{patterns: List<&2,String>,explicitModel: Bool,thinking: Maybe<&2,Ai.ModelThinkingLevel>}
 def scopeFlags(parsed: Args.Args,settings: Settings.SettingsManager) -> ScopeFlags:
@@ -1338,7 +1339,7 @@ def listWithStore(transport: Runtime.Transport,storage: AuthStorage.AuthStorageO
         +store : Auth.CredentialStore <- AuthStorage.store(view)
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch,Runtime.urlContext())
         anthropic : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch,Runtime.urlContext())
-        models : Models.ModelRuntime <- Models.createWithAnthropic(store,oauth,Some{anthropic})
+        models : Models.ModelRuntime <- Models.createWithAnthropic(store,oauth,Some{anthropic},Radius.RadiusTransport{fetch,Runtime.urlContext()})
         listed(models,store,storage,Runtime.Transport{authorizer,runtime,fetch},search)
 
 def listBorrowed(transport: Runtime.Transport,pair: AuthStorage.AuthStorageOwner & AuthStorage.AuthStorage,search: Maybe<&2,String>) -> IO(Unit):

@@ -314,7 +314,7 @@
       "source_sha256": "84f2799b0bf45fb01237c5c2c19641b0da5d1245670b208c05bacb5cff36b96f",
       "port_sha256": {
         "packages/ai/src/models.bend": "f4c90abd0a9b3c4908c9bcceab18e69a19e38ed78b9339dd0ef4f3ae488b73d4",
-        "packages/coding-agent/src/core/model-runtime.bend": "5ff88f4f6806ba7f055acc44522dfdbf39028ce3eed7efd29e5e7bc3f5919457"
+        "packages/coding-agent/src/core/model-runtime.bend": "5140351cb1123004bbfb13afe79082620adf7b029ff726174b5268854ea2d418"
       },
       "ports": [
         "packages/ai/src/models.bend",
@@ -486,7 +486,7 @@
       "note": "Reviewed login path: native login dispatches by provider and auth type, normalizes an absent signal with an owned controller, rejects pre-aborted requests, saves through the credential store and refreshes availability. Interactive API-key login uses this path; OAuth providers implement native login callbacks. Upstream per-provider credential-operation serialization, complete synchronizeCredentialState behavior and source-wide ModelRuntime coverage remain incomplete.",
       "source_sha256": "20c1dbfa1dd757a594cf0b4ab6e401fc6c6155484a3f490096bc5328e3c33c2c",
       "port_sha256": {
-        "packages/coding-agent/src/core/model-runtime.bend": "5ff88f4f6806ba7f055acc44522dfdbf39028ce3eed7efd29e5e7bc3f5919457"
+        "packages/coding-agent/src/core/model-runtime.bend": "5140351cb1123004bbfb13afe79082620adf7b029ff726174b5268854ea2d418"
       },
       "ports": [
         "packages/coding-agent/src/core/model-runtime.bend"
@@ -790,7 +790,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "4caf23b2983c31e002f15b4c4a8b8530dd0a067677d23a863bc0d47ecbef39db",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "91281c83b948bdb35106382375cfc14628d313a48d7676cd9a023b1bcadea32e",
-        "packages/coding-agent/src/main.bend": "3dbefc6db3127fbb6d532c0208f27ab2a172c601d852f50a106083bf7641f1bb",
+        "packages/coding-agent/src/main.bend": "e824412a93da00a10d83a44aa986638983fee4f7dc65074850aa3f1c04d58d46",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6"
       }
     },
@@ -834,13 +834,13 @@
     },
     "packages/coding-agent/src/modes/rpc/rpc-mode.ts": {
       "state": "partial",
-      "note": "All commands, JSONL framing, correlated errors, prompt/queue semantics, session replacement through the host, event streaming, per-line tasks (the reader waits for a line to finish or open a dialog, so extension handlers can ask the client), extension UI in rpc mode (select/confirm/input dialogs answered by extension_ui_response, notify/setStatus, extension_error records), and command-context actions through the host. Gaps: the prompt response precedes AgentSession's preflight (no preflightResult); editor/setWidget/setTitle/set_editor_text and dialog timeouts are absent from the native UI context; the shutdown handler is not bound; stdout backpressure and signal handling belong to main.bend. See tests/rpc.md.",
+      "note": "All commands, JSONL framing, correlated errors, prompt/queue semantics, session replacement through the host, event streaming, per-line tasks (the reader waits for a line to finish or open a dialog, so extension handlers can ask the client), the whole RPC extension UI context (select/confirm/input/editor dialogs with timeouts and abort signals, notify/setStatus/setWidget/setTitle/set_editor_text requests, extension_error records), and command-context actions through the host. Gaps: the prompt response precedes AgentSession's preflight (no preflightResult); the shutdown handler is not bound; stdout backpressure and signal handling belong to main.bend. See tests/rpc.md.",
       "ports": [
         "packages/coding-agent/src/modes/rpc.bend"
       ],
       "source_sha256": "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc",
       "port_sha256": {
-        "packages/coding-agent/src/modes/rpc.bend": "d9e5b0bd9d5ca8815ed049e946cd492ee3b67b61dfe776fd17072e93a62f8c74"
+        "packages/coding-agent/src/modes/rpc.bend": "b6111fdce0e73145c89d4ccc68b2f17c23d760d5cd7e33fbd02a111ced7a290b"
       }
     },
     "packages/coding-agent/src/modes/rpc/rpc-types.ts": {
@@ -963,6 +963,46 @@
       "source_sha256": "b05a9c1e8a88fd5c39937564160463d7d670df4bc2148b70a7325c601a96dee7",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/external-editor.bend": "77e7b7a09c8449af505b83496038c62de85ccad4a36b6569926a205e8ba11eaa"
+      }
+    },
+    "packages/ai/src/providers/radius-config.ts": {
+      "state": "ported",
+      "note": "DEFAULT_RADIUS_GATEWAY, normalizeRadiusGatewayUrl, the gateway config sanitization (isRadiusGatewayModel's checks, well-formed models kept), getRadiusCredentialConfig from an OAuth credential's gatewayConfig, getRadiusModelsFromConfig/getRadiusModels and loadRadiusGatewayConfig (GET /v1/config with the bearer key, truncated error bodies) over an injected fetch; tests/radius_check.py. Gateway models carry RadiusGatewayModel's declared members (upstream's spread would also copy undeclared ones, which nothing reads); an absent cost price reads as 0 where upstream computes NaN costs; a non-JSON 2xx body reports a native message.",
+      "source_sha256": "1f82a7db25753be09374792ae0a3cd63417739018fb69b3212ad8b3b9eb11c21",
+      "port_sha256": {
+        "packages/ai/src/providers/radius-config.bend": "afc2f1bbc3b8f9633f78f25d183b0b35a35f5ccbee1e44a2d81bf5508d545b5c"
+      }
+    },
+    "packages/ai/src/providers/radius.ts": {
+      "state": "ported",
+      "note": "radiusProvider: id/name/gateway options, the public catalog for the default gateway only, RADIUS_API_KEY and Radius OAuth auth, pi-messages streams, and refreshModels (restore the stored catalog, import a legacy credential catalog, then load the gateway config when the network is allowed, persisting it); providers/all.bend lists it in upstream order and model-runtime configureRadiusProviders builds models.json oauth-radius gateways. The OAuth and config HTTP client is injected (Radius.RadiusTransport). tests/radius_check.py runs radius-provider.test.ts and coding-agent radius.test.ts.",
+      "source_sha256": "18bb70120329026fe8277d66cacee69a4108a069f2de990396c8ef5c38730379",
+      "port_sha256": {
+        "packages/ai/src/providers/radius.bend": "60d29f63abdba4bad7e9abde499e449e2f882f0ca07ea9d206f85ca280dc464c"
+      }
+    },
+    "packages/ai/src/providers/radius.models.ts": {
+      "state": "ported",
+      "note": "Generated from pi-ai's radius.json by scripts/generate-model-catalog.py; the catalog's gateway listing fields (lab, enabled, providers) are outside the Model type and nothing reads them, so they are not carried.",
+      "source_sha256": "070228f3763de61e4d96b0a851c666a2908f0d9ecb99f5b9205f6b917556ec55",
+      "port_sha256": {
+        "packages/ai/src/providers/radius.models.bend": "40777f8a160a59a464faa7ec7528c2ceb9690404b093ad6a706c3341954c88f2"
+      }
+    },
+    "packages/ai/src/auth/oauth/radius.ts": {
+      "state": "ported",
+      "note": "createRadiusOAuth: the sign-in method select, device login (POST /v1/oauth/device, device_code event, polling the token endpoint with authorization_pending/slow_down/expired_token/access_denied), browser login (GET /v1/oauth discovery, PKCE with a random-UUID state, the callback server on 127.0.0.1:1456 with upstream's 404/state-mismatch/missing-code responses and error completion, progress and auth_url events, the code exchange), refresh through the gateway, OAuthResponseError messages and toAuth; tests/radius_check.py (the three upstream cases plus the full browser callback flow). Native differences: the success/error pages are plain HTML with upstream's messages (the styled oauth-page template is not ported); a token response missing access_token/refresh_token/expires_in is an error instead of a credential with undefined fields.",
+      "source_sha256": "a4c520d7ea0f605da1cb4499e8532c5e058cb9fda4d162bd347526bd66351801",
+      "port_sha256": {
+        "packages/ai/src/auth/oauth/radius.bend": "5f6accfc6256abbbd0399a14317707c5e9a6b42827db51f92426a2677dfc9cab"
+      }
+    },
+    "packages/ai/src/auth/oauth/device-code.ts": {
+      "state": "ported",
+      "note": "pollOAuthDeviceCodeFlow over a poll callback: the default and minimum intervals, the optional first wait, slow_down with the server's interval or +5 s, the expiry deadline with upstream's two timeout messages, and cancellation ('Login cancelled'); used by the Radius device login. abortableSleep is Timer.sleep under the signal.",
+      "source_sha256": "b402bbbf66d693ee7dd6c5e2c4e45544050722d5bfa3668b100df76284a4fb37",
+      "port_sha256": {
+        "packages/ai/src/auth/oauth/device-code.bend": "93c18b3d052142da6566a6b41d4efa9890d1c143787b26a384527f71f4bc9930"
       }
     }
   }
