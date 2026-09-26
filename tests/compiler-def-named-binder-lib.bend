@@ -8,3 +8,8 @@ def text(value: String) -> String: value
 def render(value: Wrapped) -> String:
   match value:
     case Wrapped{text}: text
+
+# The same with a copy-marked binder (+text), which parses through `+`.
+def twice(value: Wrapped) -> String:
+  match value:
+    case Wrapped{+text}: text ++ text
