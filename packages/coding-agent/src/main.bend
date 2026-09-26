@@ -936,10 +936,8 @@ def listInteractive(source: InteractiveSessionSource,_: Unit) -> IO(InteractiveR
         +cwd : String <- IO.pure(String,Sessions.getCwd(Unit,Tools.ToolDetails,V.Value,stored))
         +directory : String <- IO.pure(String,Sessions.getSessionDir(Unit,Tools.ToolDetails,V.Value,stored))
         +override : Maybe<&2,String> <- IO.pure(Maybe<&2,String>,sessionOverride(Sessions.usesDefaultSessionDir(Unit,Tools.ToolDetails,V.Value,stored,agentDir),directory))
-        +order : Sessions.FileOrder() <- Sessions.loadFileOrder(packageDir)
-        local : List<&2,S.SessionInfo> <- Sessions.list(cwd,override,agentDir,order)
-        all : List<&2,S.SessionInfo> <- Sessions.listAll(override,Path.join(agentDir,"sessions"),order)
-        return InteractiveRun.SessionChoices{local,all}
+        return InteractiveRun.SessionLoading{Picker.LoadContext{cwd,override,agentDir,Path.join(agentDir,"sessions"),packageDir}}
+
 def resumeInteractive(host: Host(),request: InteractiveRun.ResumeRequest) -> IO(SessionRuntime.ResumeOutcome):
   match request:
     case InteractiveRun.ResumeRequest{path,cwdOverride}: SessionRuntime.resumeSession(Services,host,path,cwdOverride)

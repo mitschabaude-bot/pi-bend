@@ -350,7 +350,7 @@ def observed(input: Observation,event: Session.AgentSessionEvent) -> IO(Unit):
   observeCopied(input,event)
 type ImportRequest is Data: ImportRequest{path: String,cwdOverride: Maybe<&2,String>}
 type ResumeRequest is Data: ResumeRequest{path: String,cwdOverride: Maybe<&2,String>}
-type SessionChoices is Data: SessionChoices{current: List<&2,Tree.SessionInfo>,all: List<&2,Tree.SessionInfo>}
+type SessionChoices is Data: SessionChoices{current: List<&2,Tree.SessionInfo>,all: List<&2,Tree.SessionInfo>} SessionLoading{context: SessionPicker.LoadContext}
 type ImportState is Data:
   ImportState{host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,backend: Maybe<&2,Callback.Callback<ImportRequest,SessionHost.ImportOutcome>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type ResumeState is Data:
@@ -610,12 +610,20 @@ def matchResumePicker(target: Maybe<&2,SessionPicker.Host>,current: List<&2,Tree
       do IO<Unit>:
         SessionPicker.openHost(host,current,all)
         Interactive.requestRender(redraw)
+def matchLoadingPicker(target: Maybe<&2,SessionPicker.Host>,context: SessionPicker.LoadContext) -> IO(Unit):
+  match target:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{host}: SessionPicker.openLoadingHost(host,context)
 def resumeOpen(state: ResumeState,choices: SessionChoices) -> IO(Unit):
   match state choices:
     case ResumeState{picker,_,_,_,_,redraw} SessionChoices{current,all}:
       do IO<Unit>:
         target : Maybe<&2,SessionPicker.Host> <- Ref.read(Maybe<&2,SessionPicker.Host>,picker)
         matchResumePicker(target,current,all,redraw)
+    case ResumeState{picker,_,_,_,_,_} SessionLoading{context}:
+      do IO<Unit>:
+        target : Maybe<&2,SessionPicker.Host> <- Ref.read(Maybe<&2,SessionPicker.Host>,picker)
+        matchLoadingPicker(target,context)
 def resumeRequested(+state: ResumeState) -> IO(Unit):
   match state:
     case ResumeState{_,_,None{},_,_,_}: resumeStatus(state,Interactive.CommandFailure{"Resume is unavailable"})
@@ -2719,7 +2727,7 @@ def runTrustHosted(borrowed: TrustPicker.Owner & TrustPicker.Host & Component.Co
         Ref.write(Maybe<&2,TrustPicker.Host>,trustSelectorRefOf(contextInteraction(context)),Some{host})
         current : Session.AgentSession <- Ref.read(Session.AgentSession,contextSession(context))
         ids : Uuid.Generator <- Session.idGenerator(current)
-        picker : SessionPicker.HostOwner <- SessionPicker.createHost(ids,component,contextBindings(context),contextTheme(context),words,resumeChosen,contextSession(context))
+        picker : SessionPicker.HostOwner <- SessionPicker.createHost(ids,component,contextBindings(context),contextTheme(context),words,resumeChosen,contextSession(context),redraw)
         result : Result<&2,&2,Error,Unit> <- runPickerHosted(SessionPicker.borrowHost(picker),settings,retained,tree,live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,treeChosen,modelChosen,resumeChosen)
         TrustPicker.disposeHost(trust)
         Callback.dispose(Trust.ProjectTrustOption,Unit,choice)

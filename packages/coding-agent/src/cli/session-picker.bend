@@ -46,7 +46,7 @@ type Action is Data:
   Cancel{} Confirm{} SwitchScope{} SwitchSort{} SwitchNamed{} TogglePath{} Delete{} DeleteAlias{} Rename{} MoveUp{} MoveDown{} PageUp{} PageDown{} Edit{data: String}
 type State is Data:
   State{current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,scope: Scope,query: SearchInput.Input,index: Nat,choice: Choice,controls: Controls}
-type Count is Data: Count{loaded: Nat,total: Nat}
+type Count is Data: Starting{} Count{loaded: Nat,total: Nat}
 type Loads is Data: Loads{current: Maybe<&2,Count>,all: Maybe<&2,Count>}
 type Input is Data:
   Input{state: Ref.Ref<State>,stop: Deferred.Deferred<Unit>,allRequested: Deferred.Deferred<Unit>,bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>}
@@ -355,7 +355,8 @@ def hintLines(deleting: Maybe<&2,String>,status: Maybe<&2,StatusMessage>,problem
 def countHint(count: Maybe<&2,Count>) -> Maybe<&2,String>:
   match count:
     case None{}: None{}
-    case Some{Count{loaded,+total}}: Some{Bool.pick(String,Nat.is_eq(total,0n),"Loading ...","Loading " ++ Nat.show(loaded) ++ "/" ++ Nat.show(total))}
+    case Some{Starting{}}: Some{"Loading ..."}
+    case Some{Count{loaded,total}}: Some{"Loading " ++ Nat.show(loaded) ++ "/" ++ Nat.show(total)}
 def loadingHint(scope: Scope,loads: Loads) -> Maybe<&2,String>:
   match scope loads:
     case Current{} Loads{current,_}: countHint(current)
@@ -647,7 +648,7 @@ def made(state: Ref.Ref<State>,loads: Ref.Ref<Loads>,words: Ref.Ref<Words.Source
 def create(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,+bindings: Bindings.KeybindingsManager,theme: Theme.Theme,words: Words.Source) -> IO(Owner):
   do IO<Owner>:
     +state : Ref.Ref<State> <- Ref.new(State,State{current,all,Current{},newQuery(),0n,Pending{},Controls{Threaded{},False{},False{},None{},None{},Nil{}}})
-    +loads : Ref.Ref<Loads> <- Ref.new(Loads,Loads{Some{Count{0n,0n}},Some{Count{0n,0n}}})
+    +loads : Ref.Ref<Loads> <- Ref.new(Loads,Loads{Some{Starting{}},Some{Starting{}}})
     +wordRef : Ref.Ref<Words.Source> <- Ref.new(Words.Source,words)
     +stop : Deferred.Deferred<Unit> <- Deferred.new(Unit)
     +allRequested : Deferred.Deferred<Unit> <- Deferred.new(Unit)
@@ -848,12 +849,149 @@ def selectSession(cwd: String,+sessionDir: Maybe<&2,String>,+agentDir: String,se
 
 # The same picker can occupy the interactive editor without starting a second
 # terminal process. Both entry points share filtering, ordering and keybindings.
+def sameFile(+path: String,+canonical: String) -> IO(Bool):
+  do IO<Bool>:
+    result : Result<&2,&2,FS.Error,String> <- FS.realpath(path)
+    return String.eq(Result.default(&2,&2,FS.Error,String,result,Path.normalize(path)),canonical)
+def activePaths(items: List<&2,Session.SessionInfo>,+canonical: String,+reversed: List<&2,String>) -> IO(List<&2,String>):
+  match items:
+    case Nil{}: IO.pure(List<&2,String>,reversed)
+    case info <> rest:
+      do IO<List<&2,String>>:
+        +path : String = infoPath(info)
+        same : Bool <- sameFile(path,canonical)
+        activePaths(rest,canonical,Bool.pick(List<&2,String>,same,path <> reversed,reversed))
+def protectedPaths(items: List<&2,Session.SessionInfo>,path: Maybe<&2,String>) -> IO(List<&2,String>):
+  match path:
+    case None{}: IO.pure(List<&2,String>,Nil{})
+    case Some{+file}:
+      do IO<List<&2,String>>:
+        canonical : Result<&2,&2,FS.Error,String> <- FS.realpath(file)
+        activePaths(items,Result.default(&2,&2,FS.Error,String,canonical,Path.normalize(file)),Nil{})
 type Modal is Data: Closed{} Open{state: State} Renaming{state: State,target: Session.SessionInfo,input: SearchInput.Input}
+type ModalProgress is Data:
+  ModalProgress{modal: Ref.Ref<Modal>,loads: Ref.Ref<Loads>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,scope: Scope,active: Maybe<&2,String>,touched: Ref.Ref<Bool>}
+type Loading is Data:
+  Loading{cancel: Abort.AbortController<Unit>,requested: Deferred.Deferred<Unit>,current: Chan(Unit),all: Chan(Unit),currentCallback: Callback.Callback<Persistence.ListProgress,Unit>,allCallback: Callback.Callback<Persistence.ListProgress,Unit>}
+type HostLoader is Data:
+  HostLoader{loads: Ref.Ref<Loads>,worker: Ref.Ref<Maybe<&2,Loading>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,touched: Ref.Ref<Bool>}
+def sameScope(left: Scope,right: Scope) -> Bool:
+  match left right: case Current{} Current{}: True{} case All{} All{}: True{} case _ _: False{}
+def revisedRows(state: State,scope: Scope,query: SearchInput.Input,index: Nat,choice: Choice,controls: Controls) -> State:
+  match state: case State{current,all,_,_,_,_,_}: State{current,all,scope,query,index,choice,controls}
+def mergedActive(previous: List<&2,String>,+next: List<&2,String>) -> List<&2,String>:
+  match previous:
+    case Nil{}: next
+    case +path <> rest: mergedActive(rest,Bool.pick(List<&2,String>,visited(next,path),next,path <> next))
+def loadedState(+state: State,+scope: Scope,+items: List<&2,Session.SessionInfo>,+active: List<&2,String>,+touched: Bool) -> State:
+  match state:
+    case State{_,_,+activeScope,+query,+index,+choice,Controls{+sort,+loadedNamed,+path,+deleting,+status,+previousActive}}:
+      +previous = List.get(&2,Session.SessionInfo,visible(state),index)
+      +updated = changedSessions(state,scope,items)
+      +nextActive = mergedActive(previousActive,active)
+      +position = Bool.pick(Unit -> Nat,sameScope(activeScope,scope),_ => Bool.pick(Unit -> Nat,touched,_ => retainedPrevious(previous,updated,index),_ => 0n)(Unit{}),_ => index)(Unit{})
+      revisedRows(updated,activeScope,query,position,choice,Controls{sort,loadedNamed,path,deleting,status,nextActive})
+def loadedModal(modal: Modal,+scope: Scope,+items: List<&2,Session.SessionInfo>,+active: List<&2,String>,+touched: Bool) -> Modal:
+  match modal:
+    case Closed{}: Closed{}
+    case Open{state}: Open{loadedState(state,scope,items,active,touched)}
+    case Renaming{state,target,input}: Renaming{loadedState(state,scope,items,active,touched),target,input}
+def modalRows(input: ModalProgress,items: Maybe<&2,List<&2,Session.SessionInfo>>) -> IO(Unit):
+  match input items:
+    case _ None{}: IO.pure(Unit,Unit{})
+    case ModalProgress{modal,_,_,+scope,path,touched} Some{+rows}:
+      do IO<Unit>:
+        +active : List<&2,String> <- protectedPaths(rows,path)
+        +selected : Bool <- Ref.read(Bool,touched)
+        Ref.modify(Modal,Unit,modal,old => (loadedModal(old,scope,rows,active,selected),Unit{}))
+def modalProgressCopied(+input: ModalProgress,update: Persistence.ListProgress) -> IO(Unit):
+  match input update:
+    case ModalProgress{_,loads,redraw,+scope,_,_} Persistence.ListProgress{loaded,total,items}:
+      do IO<Unit>:
+        modalRows(input,items)
+        Ref.modify(Loads,Unit,loads,old => (counted(old,scope,Some{Count{loaded,total}}),Unit{}))
+        requestProgress(redraw)
+def modalProgress(input: ModalProgress,update: Persistence.ListProgress) -> IO(Unit): modalProgressCopied(input,update)
+def modalCompleted(+input: ModalProgress,listing: Persistence.Listing()) -> IO(Unit):
+  match input listing:
+    case ModalProgress{_,loads,redraw,+scope,_,_} Done{items}:
+      do IO<Unit>:
+        modalRows(input,Some{items})
+        Ref.modify(Loads,Unit,loads,old => (counted(old,scope,None{}),Unit{}))
+        requestProgress(redraw)
+    case _ Fail{_}: IO.pure(Unit,Unit{})
+def modalList(+context: LoadContext,+signal: Abort.AbortSignal<Unit>,+input: ModalProgress,+callback: Callback.Callback<Persistence.ListProgress,Unit>,scope: Scope) -> IO(Unit):
+  match context scope:
+    case LoadContext{cwd,sessionDir,agentDir,_,assets} Current{}:
+      do IO<Unit>:
+        order : Persistence.FileOrder() <- Persistence.loadFileOrder(assets)
+        listing : Persistence.Listing() <- Persistence.listProgress(cwd,sessionDir,agentDir,order,signal,callback)
+        modalCompleted(input,listing)
+    case LoadContext{_,sessionDir,_,sessionsDir,assets} All{}:
+      do IO<Unit>:
+        order : Persistence.FileOrder() <- Persistence.loadFileOrder(assets)
+        listing : Persistence.Listing() <- Persistence.listAllProgress(sessionDir,sessionsDir,order,signal,callback)
+        modalCompleted(input,listing)
+def modalAll(context: LoadContext,+signal: Abort.AbortSignal<Unit>,request: Deferred.Deferred<Unit>,input: ModalProgress,callback: Callback.Callback<Persistence.ListProgress,Unit>) -> IO(Unit):
+  do IO<Unit>:
+    wake : Unit <- Deferred.result(Unit,request)
+    cancelled : Bool <- Abort.aborted(Unit,signal)
+    Bool.pick(Unit -> IO(Unit),cancelled,_ => IO.pure(Unit,Unit{}),_ => modalList(context,signal,input,callback,All{}))(Unit{})
+def stopLoading(value: Maybe<&2,Loading>) -> IO(Unit):
+  match value:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{Loading{+cancel,+requested,current,all,currentCallback,allCallback}}:
+      do IO<Unit>:
+        stopped : Bool <- Abort.abort(Unit,cancel,None{})
+        wake : Bool <- Deferred.resolve(Unit,requested,Unit{})
+        IO.join(Unit,current)
+        IO.join(Unit,all)
+        Callback.dispose(Persistence.ListProgress,Unit,currentCallback)
+        Callback.dispose(Persistence.ListProgress,Unit,allCallback)
+        Deferred.dispose(Unit,requested)
+        Abort.dispose(Unit,cancel)
+def stopHostLoading(loader: HostLoader) -> IO(Unit):
+  match loader:
+    case HostLoader{loads,worker,_,_}:
+      do IO<Unit>:
+        old : Maybe<&2,Loading> <- Ref.modify(Maybe<&2,Loading>,Maybe<&2,Loading>,worker,value => (None{},value))
+        stopLoading(old)
+        Ref.write(Loads,loads,Loads{None{},None{}})
+def requestLoadedAll(value: Maybe<&2,Loading>) -> IO(Unit):
+  match value:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{Loading{_,request,_,_,_,_}}:
+      do IO<Unit>:
+        requested : Bool <- Deferred.resolve(Unit,request,Unit{})
+        return Unit{}
+def enteredScope(current: Modal,+loads: Loads) -> Loads:
+  match current loads:
+    case Open{State{_,_,Current{},_,_,_,_}} Loads{count,_}:
+      counted(loads,Current{},Maybe.map(&2,Count,Count,_ => Starting{},count))
+    case Open{State{_,_,All{},_,_,_,_}} Loads{_,count}:
+      counted(loads,All{},Maybe.map(&2,Count,Count,_ => Starting{},count))
+    case _ _: loads
+def resetScopeProgress(modal: Ref.Ref<Modal>,loads: Ref.Ref<Loads>) -> IO(Unit):
+  do IO<Unit>:
+    +current : Modal <- Ref.read(Modal,modal)
+    Ref.modify(Loads,Unit,loads,old => (enteredScope(current,old),Unit{}))
+def resetEnteredScope(modal: Ref.Ref<Modal>,loader: HostLoader,selected: Action) -> IO(Unit):
+  match loader selected:
+    case HostLoader{loads,_,_,_} SwitchScope{}: resetScopeProgress(modal,loads)
+    case _ _: IO.pure(Unit,Unit{})
+def syncHostLoading(current: Modal,loader: HostLoader) -> IO(Unit):
+  match current loader:
+    case Closed{} _: stopHostLoading(loader)
+    case Open{State{_,_,All{},_,_,_,_}} HostLoader{_,worker,_,_}:
+      do IO<Unit>:
+        value : Maybe<&2,Loading> <- Ref.read(Maybe<&2,Loading>,worker)
+        requestLoadedAll(value)
+    case _ _: IO.pure(Unit,Unit{})
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,ids: Uuid.Generator,session: Ref.Ref<AgentSession.AgentSession>}
+  Host{modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,ids: Uuid.Generator,session: Ref.Ref<AgentSession.AgentSession>,loader: HostLoader}
 type HostOwner is Type:
   HostOwner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
-def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,+width: Nat) -> IO(List<&2,String>):
+def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,loads: Loads,+width: Nat) -> IO(List<&2,String>):
   match current:
     case Closed{}: Component.render(editor,width)
     case Open{state}:
@@ -861,7 +999,7 @@ def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindi
         now : F64 <- Date.now()
         home : Result<&2,&2,FS.Error,String> <- FS.homedir()
         currentTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        renderState(state,width,bindings,currentTheme,Loads{None{},None{}},now,Result.default(&2,&2,FS.Error,String,home,""),True{})
+        renderState(state,width,bindings,currentTheme,loads,now,Result.default(&2,&2,FS.Error,String,home,""),True{})
     case Renaming{_,_,input}:
       do IO<List<&2,String>>:
         +selected : Theme.Theme <- Ref.read(Theme.Theme,theme)
@@ -869,10 +1007,24 @@ def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindi
         return List.concat(&2,String,[["",Theme.fg(selected,"accent",rule(width)),""," " ++ Theme.bold("Rename Session"),""],renderedQuery(rendered),[""," " ++ Theme.fg(selected,"muted","enter to save · escape/ctrl+c to cancel"),"",Theme.fg(selected,"accent",rule(width))]])
 def drawModal(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
-    case Host{+modal,editor,bindings,theme,_,_,_,_}:
+    case Host{+modal,editor,bindings,theme,_,_,_,_,HostLoader{loads,_,_,_}}:
       do IO<List<&2,String>>:
         current : Modal <- Ref.read(Modal,modal)
-        drawModalCurrent(current,editor,bindings,theme,width)
+        loading : Loads <- Ref.read(Loads,loads)
+        drawModalCurrent(current,editor,bindings,theme,loading,width)
+# Query editing may yield while rows arrive. Apply the input to the newest
+# cached rows rather than restoring the snapshot read before the edit.
+def inputState(latest: State,+next: State) -> State:
+  match latest next:
+    case State{current,all,_,_,_,_,Controls{_,_,_,_,_,+active}} State{_,_,+scope,+query,+index,+choice,Controls{+sort,+loadedNamed,+path,+deleting,+status,_}}:
+      +updated = {State{current,all,scope,query,index,choice,Controls{sort,loadedNamed,path,deleting,status,active}}: State}
+      +previous = List.get(&2,Session.SessionInfo,visible(next),index)
+      revisedRows(updated,scope,query,retainedPrevious(previous,updated,index),choice,Controls{sort,loadedNamed,path,deleting,status,active})
+def inputModal(current: Modal,next: State) -> Modal:
+  match current:
+    case Closed{}: Closed{}
+    case Open{latest}: Open{inputState(latest,next)}
+    case Renaming{latest,_,_}: Open{inputState(latest,next)}
 def afterTransition(modal: Ref.Ref<Modal>,chosen: Callback.Callback<String,Unit>,next: State) -> IO(Unit):
   match next:
     case State{_,_,_,_,_,Chosen{path},_}:
@@ -880,7 +1032,9 @@ def afterTransition(modal: Ref.Ref<Modal>,chosen: Callback.Callback<String,Unit>
         Ref.write(Modal,modal,Closed{})
         Callback.call(String,Unit,chosen,path)
     case State{_,_,_,_,_,Cancelled{},_}: Ref.write(Modal,modal,Closed{})
-    case other: Ref.write(Modal,modal,Open{other})
+    case other:
+      +saved = {other: State}
+      Ref.modify(Modal,Unit,modal,current => (inputModal(current,saved),Unit{}))
 def modalTransitionPair(modal: Ref.Ref<Modal>,chosen: Callback.Callback<String,Unit>,pair: State & Bool) -> IO(Unit):
   match pair:
     case (next,_): afterTransition(modal,chosen,next)
@@ -962,31 +1116,48 @@ def receivedModalCurrent(ids: Uuid.Generator,current: Modal,modal: Ref.Ref<Modal
     case Closed{}: Component.handleInput(editor,data)
     case Open{state}: receivedModalOpen(modal,bindings,words,chosen,state,data)
     case Renaming{state,target,input}: renamedModal(ids,modal,state,target,input,words,bindings,data)
-def receivedModal(host: Host,data: String) -> IO(Unit):
+def touchesSelection(selected: Action) -> Bool:
+  match selected:
+    case MoveUp{}: True{} case MoveDown{}: True{} case PageUp{}: True{} case PageDown{}: True{} case Edit{_}: True{} case _: False{}
+def touchModal(current: Modal,loader: HostLoader,bindings: Bindings.KeybindingsManager,data: String) -> IO(Unit):
+  match current loader:
+    case Open{_} HostLoader{_,_,_,touched}:
+      +changed = touchesSelection(action(bindings,data))
+      Ref.modify(Bool,Unit,touched,old => (old || changed,Unit{}))
+    case _ _: IO.pure(Unit,Unit{})
+def receivedModalCopied(host: Host,+data: String) -> IO(Unit):
   match host:
-    case Host{+modal,editor,bindings,_,words,handler,ids,_}:
+    case Host{+modal,editor,+bindings,_,words,handler,ids,_,+loader}:
       do IO<Unit>:
-        current : Modal <- Ref.read(Modal,modal)
+        +current : Modal <- Ref.read(Modal,modal)
+        touchModal(current,loader,bindings,data)
         receivedModalCurrent(ids,current,modal,editor,bindings,words,handler,data)
+        resetEnteredScope(modal,loader,action(bindings,data))
+        next : Modal <- Ref.read(Modal,modal)
+        syncHostLoading(next,loader)
+def receivedModal(host: Host,data: String) -> IO(Unit): receivedModalCopied(host,data)
 def mouseCurrent(current: Modal,mouse: Maybe<&2,Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>>,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match current mouse:
     case Closed{} Some{callback}: Callback.call(Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,callback,event)
     case _ _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
 def modalMouse(host: Host,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match host:
-    case Host{+modal,Component.Component{_,_,_,mouse,_,_,_},_,_,_,_,_,_}:
+    case Host{+modal,Component.Component{_,_,_,mouse,_,_,_},_,_,_,_,_,_,_}:
       do IO<Maybe<&2,Component.MouseResponse>>:
         current : Modal <- Ref.read(Modal,modal)
         mouseCurrent(current,mouse,event)
 def modalInvalidate(host: Host,_: Unit) -> IO(Unit):
-  match host: case Host{_,editor,_,_,_,_,_,_}: Component.invalidate(editor)
+  match host: case Host{_,editor,_,_,_,_,_,_,_}: Component.invalidate(editor)
 def modalFocus(host: Host,value: Bool) -> IO(Unit):
-  match host: case Host{_,editor,_,_,_,_,_,_}: Component.setFocused(editor,value)
-def createHost(ids: Uuid.Generator,+editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Words.Source,chosen: Callback.Callback<String,Unit>,session: Ref.Ref<AgentSession.AgentSession>) -> IO(HostOwner):
+  match host: case Host{_,editor,_,_,_,_,_,_,_}: Component.setFocused(editor,value)
+def createHost(ids: Uuid.Generator,+editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Words.Source,chosen: Callback.Callback<String,Unit>,session: Ref.Ref<AgentSession.AgentSession>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(HostOwner):
   do IO<HostOwner>:
     modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
     wordRef : Ref.Ref<Words.Source> <- Ref.new(Words.Source,words)
-    +host : Host <- IO.pure(Host,Host{modal,editor,bindings,theme,wordRef,chosen,ids,session})
+    loads : Ref.Ref<Loads> <- Ref.new(Loads,Loads{None{},None{}})
+    worker : Ref.Ref<Maybe<&2,Loading>> <- Ref.new(Maybe<&2,Loading>,None{})
+    touched : Ref.Ref<Bool> <- Ref.new(Bool,False{})
+    +host : Host <- IO.pure(Host,Host{modal,editor,bindings,theme,wordRef,chosen,ids,session,HostLoader{loads,worker,redraw,touched}})
     +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~drawModal,host)
     +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receivedModal,host)
     +mouse : Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Host,~Ui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~modalMouse,host)
@@ -996,37 +1167,51 @@ def createHost(ids: Uuid.Generator,+editor: Component.Component,bindings: Bindin
     return HostOwner{host,component,render,input,mouse,invalidate,focus}
 def borrowHost(owner: HostOwner) -> HostOwner & Host & Component.Component:
   match owner: case HostOwner{+host,+component,render,input,mouse,invalidate,focus}: (HostOwner{host,component,render,input,mouse,invalidate,focus},host,component)
-def sameFile(+path: String,+canonical: String) -> IO(Bool):
-  do IO<Bool>:
-    result : Result<&2,&2,FS.Error,String> <- FS.realpath(path)
-    return String.eq(Result.default(&2,&2,FS.Error,String,result,Path.normalize(path)),canonical)
-def activePaths(items: List<&2,Session.SessionInfo>,+canonical: String,+reversed: List<&2,String>) -> IO(List<&2,String>):
-  match items:
-    case Nil{}: IO.pure(List<&2,String>,reversed)
-    case info <> rest:
-      do IO<List<&2,String>>:
-        +path : String = infoPath(info)
-        same : Bool <- sameFile(path,canonical)
-        activePaths(rest,canonical,Bool.pick(List<&2,String>,same,path <> reversed,reversed))
-def protectedPaths(items: List<&2,Session.SessionInfo>,path: Maybe<&2,String>) -> IO(List<&2,String>):
-  match path:
-    case None{}: IO.pure(List<&2,String>,Nil{})
-    case Some{+file}:
-      do IO<List<&2,String>>:
-        canonical : Result<&2,&2,FS.Error,String> <- FS.realpath(file)
-        activePaths(items,Result.default(&2,&2,FS.Error,String,canonical,Path.normalize(file)),Nil{})
+def resetTouched(loader: HostLoader) -> IO(Unit):
+  match loader: case HostLoader{_,_,_,touched}: Ref.write(Bool,touched,False{})
 def openHost(host: Host,+current: List<&2,Session.SessionInfo>,+all: List<&2,Session.SessionInfo>) -> IO(Unit):
   match host:
-    case Host{modal,_,_,_,_,_,_,session}:
+    case Host{modal,_,_,_,_,_,_,session,+loader}:
       do IO<Unit>:
+        stopHostLoading(loader)
+        resetTouched(loader)
         live : AgentSession.AgentSession <- Ref.read(AgentSession.AgentSession,session)
         stored : AgentSession.Session() <- AgentSession.sessionOf(live)
         active : List<&2,String> <- protectedPaths(List.append(&2,Session.SessionInfo,current,all),Persistence.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored))
         Ref.write(Modal,modal,Open{State{current,all,Current{},newQuery(),0n,Pending{},Controls{Threaded{},False{},False{},None{},None{},active}}})
+def openLoadingHost(+host: Host,+context: LoadContext) -> IO(Unit):
+  match host:
+    case Host{+modal,_,_,_,_,_,_,session,HostLoader{+loads,+worker,+redraw,+touched}}:
+      do IO<Unit>:
+        openHost(host,Nil{},Nil{})
+        live : AgentSession.AgentSession <- Ref.read(AgentSession.AgentSession,session)
+        stored : AgentSession.Session() <- AgentSession.sessionOf(live)
+        +path : Maybe<&2,String> = Persistence.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored)
+        Ref.write(Loads,loads,Loads{Some{Starting{}},Some{Starting{}}})
+        +current : ModalProgress = ModalProgress{modal,loads,redraw,Current{},path,touched}
+        +all : ModalProgress = ModalProgress{modal,loads,redraw,All{},path,touched}
+        +currentCallback : Callback.Callback<Persistence.ListProgress,Unit> <- Callback.create(~ModalProgress,~Persistence.ListProgress,~Unit,~modalProgress,current)
+        +allCallback : Callback.Callback<Persistence.ListProgress,Unit> <- Callback.create(~ModalProgress,~Persistence.ListProgress,~Unit,~modalProgress,all)
+        +cancel : Abort.AbortController<Unit> <- Abort.new(Unit)
+        +requested : Deferred.Deferred<Unit> <- Deferred.new(Unit)
+        currentWorker : Chan(Unit) <- IO.fork(Unit,modalList(context,Abort.signal(Unit,cancel),current,currentCallback,Current{}))
+        allWorker : Chan(Unit) <- IO.fork(Unit,modalAll(context,Abort.signal(Unit,cancel),requested,all,allCallback))
+        Ref.write(Maybe<&2,Loading>,worker,Some{Loading{cancel,requested,currentWorker,allWorker,currentCallback,allCallback}})
+        requestProgress(redraw)
+def disposeLoader(loader: HostLoader) -> IO(Unit):
+  match loader:
+    case HostLoader{loads,worker,_,touched}:
+      do IO<Unit>:
+        oldTouched : Bool <- Ref.dispose(Bool,touched)
+        oldLoads : Loads <- Ref.dispose(Loads,loads)
+        oldWorker : Maybe<&2,Loading> <- Ref.dispose(Maybe<&2,Loading>,worker)
+        return Unit{}
 def disposeHost(owner: HostOwner) -> IO(Unit):
   match owner:
-    case HostOwner{Host{modal,_,_,_,words,_,_,_},_,render,input,mouse,invalidate,focus}:
+    case HostOwner{Host{modal,_,_,_,words,_,_,_,+loader},_,render,input,mouse,invalidate,focus}:
       do IO<Unit>:
+        stopHostLoading(loader)
+        disposeLoader(loader)
         discarded : Modal <- Ref.dispose(Modal,modal)
         oldWords : Words.Source <- Ref.dispose(Words.Source,words)
         Callback.dispose(Nat,List<&2,String>,render)

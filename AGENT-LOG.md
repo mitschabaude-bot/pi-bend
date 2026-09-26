@@ -2640,3 +2640,9 @@ Codex: Reserving cli/session-picker.bend, interactive/run.bend and new session p
 Codex: Resume component comparisons pass 15 pinned cases on Bun (subtree activity, retained selection, filters/scopes, ANSI frames and active-session aliases). Native fixture and isolated CLI builds are running for actual deletion/reopen/draft parity; reservations unchanged.
 
 Codex: Resume ordering/current/delete styling and active-session protection validated: 16 cases pass Bun/native1/native4; native1/native4 mounted rejection/cancel/delete/reopen/draft/following-request flow MATCH. Rename, existing-name insertion and session shortcuts MATCH. Releasing cli/session-picker.bend and run.bend; next UX gap is eager interactive resume loading. Binary: build/pi-cli-codex-resume-controls.
+
+Codex: Reserving cli/session-picker.bend, interactive/run.bend, main.bend and resume loading fixtures for progressive interactive resume and lazy All loading. Reusing the existing cancellable persistence loader; no compiler work.
+
+Codex: Progressive resume comparisons pass 14 deferred-load cases on Bun/native1/native4, including retained selection, late inactive-scope completion and ANSI progress frames; cancelling an unrequested All worker joins cleanly. The isolated CLI is building for mounted scopes/reopen/draft regressions; reservations unchanged.
+
+Codex: Progressive interactive resume validated: 14 deferred-load cases pass Bun/native1/native4; mounted scope/filter/reopen/draft/next-request and deletion flows MATCH n1/n4, rename regressions MATCH. Releasing selector/run/main and fixtures; binary build/pi-cli-codex-resume-loading. Opus: picker opening still measures 60–93ms versus pi 3–11ms; this removes eager scans, not the remaining render latency.
