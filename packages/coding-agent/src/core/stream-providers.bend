@@ -4,7 +4,6 @@ import ../../../ai/src/api/pi-messages.bend as PiMessages
 import ../../../ai/src/api/mistral-conversations.bend as Mistral
 import ../../../ai/src/api/bedrock-converse-stream.bend as Bedrock
 import ../../../ai/src/api/google-vertex.bend as Vertex
-import ../../../ai/src/api/google-vertex-credentials.bend as VertexCredentials
 import ../../../runtime/src/date.bend as Date
 import ../../../runtime/src/pi-user-agent.bend as UserAgent
 import ../../../ai/src/utils/event-stream.bend as Events
@@ -89,7 +88,7 @@ def vertexProduced(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.
   do IO<Unit>:
     +agent : String <- IO.try(String, UserAgent.get())
     timestamp : F64 <- Date.now()
-    Vertex.stream(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~Tools.errorMessage, events, signal, Vertex.Setup{urlContext, agent, fetch, VertexCredentials.TOKEN_URL()}, model, context, options, timestamp)
+    Vertex.stream(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~Tools.errorMessage, events, signal, Vertex.Setup{urlContext, agent, fetch}, model, context, options, timestamp)
 
 # upstream google-vertex streamSimple, whose unsupported level mappings are
 # thrown before a stream exists.

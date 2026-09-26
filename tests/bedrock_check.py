@@ -523,10 +523,25 @@ class CredentialServer:
     def __init__(self, behaviour=None):
         self.requests = []
         behaviour = behaviour or {}
+        flaky = {"left": behaviour.get("flaky", 0)}
         outer = self
 
         class Handler(http.server.BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
+
+            def unavailable(self, xml):
+                """The first `flaky` service requests answer 503 (or the
+                case's throttling error)."""
+                if flaky["left"] <= 0:
+                    return False
+                flaky["left"] -= 1
+                code = behaviour.get("flaky_code", "ServiceUnavailable")
+                status = 400 if code == "Throttling" else 503
+                if xml:
+                    self.reply(status, f'<ErrorResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/"><Error><Type>Receiver</Type><Code>{code}</Code><Message>Try again</Message></Error><RequestId>sts-retry</RequestId></ErrorResponse>', "text/xml")
+                else:
+                    self.reply(status, json.dumps({"message": "Try again"}), "application/json")
+                return True
 
             def reply(self, status, body, kind="application/json"):
                 data = body.encode()
@@ -553,11 +568,15 @@ class CredentialServer:
                     return
                 if self.path == "/token":
                     outer.requests.append({"service": "sso-oidc", "body": json.loads(raw)})
+                    if self.unavailable(False):
+                        return
                     if behaviour.get("oidc_error"):
                         return self.reply(400, json.dumps({"error": "invalid_grant", "error_description": "Refresh token expired"}))
                     return self.reply(200, json.dumps({"accessToken": "refreshed-access", "expiresIn": 3600, "refreshToken": "rotated-refresh", "tokenType": "Bearer"}))
                 form = dict(urllib.parse.parse_qsl(raw))
                 outer.requests.append({"service": "sts", "form": {k: masked(v) for k, v in form.items()}, "scope": scope_of(headers), "token": headers.get("x-amz-security-token"), "type": headers.get("content-type")})
+                if self.unavailable(True):
+                    return
                 if behaviour.get("sts_error"):
                     return self.reply(403, '<ErrorResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/"><Error><Type>Sender</Type><Code>AccessDenied</Code><Message>User is not authorized to perform: sts:AssumeRole</Message></Error><RequestId>sts-err</RequestId></ErrorResponse>', "text/xml")
                 role = form.get("RoleArn", "").rsplit("/", 1)[-1].upper()
@@ -574,6 +593,8 @@ class CredentialServer:
                 path, _, query = self.path.partition("?")
                 if path == "/federation/credentials":
                     outer.requests.append({"service": "sso", "query": dict(urllib.parse.parse_qsl(query)), "bearer": headers.get("x-amz-sso_bearer_token")})
+                    if self.unavailable(False):
+                        return
                     return self.reply(200, json.dumps({"roleCredentials": {"accessKeyId": "ASIASSO", "secretAccessKey": "secret-sso", "sessionToken": "token-sso", "expiration": 4070908800000}}))
                 if path == "/ecs/credentials":
                     outer.requests.append({"service": "container", "authorization": headers.get("authorization")})
@@ -644,6 +665,10 @@ CHAIN_CASES = [
     ChainCase("keeps a still-valid sso-session token when its refresh fails", config=SSO_SESSION, env={"AWS_PROFILE": "dev"}, behaviour={"oidc_error": True}, sso=("corp", sso_token(iso_in(120), clientId="client-1", clientSecret="client-secret", refreshToken="refresh-1"))),
     ChainCase("rejects container credential hosts that are not loopback or HTTPS", env={"AWS_CONTAINER_CREDENTIALS_FULL_URI": "http://credentials.invalid/creds"}),
     ChainCase("continues after an IMDS token request is rejected", env={"AWS_EC2_METADATA_DISABLED": ""}, behaviour={"imds_token": 400}),
+    ChainCase("retries an STS request answered 503 under the standard retry strategy", config="[profile dev]\nrole_arn = arn:aws:iam::123456789012:role/dev\nsource_profile = base\n", credentials=STATIC, env={"AWS_PROFILE": "dev"}, behaviour={"flaky": 2}),
+    ChainCase("stops retrying STS after three attempts", config="[profile dev]\nrole_arn = arn:aws:iam::123456789012:role/dev\nsource_profile = base\n", credentials=STATIC, env={"AWS_PROFILE": "dev"}, behaviour={"flaky": 3}),
+    ChainCase("retries a throttled STS request", config="[profile dev]\nrole_arn = arn:aws:iam::123456789012:role/dev\nsource_profile = base\n", credentials=STATIC, env={"AWS_PROFILE": "dev"}, behaviour={"flaky": 1, "flaky_code": "Throttling"}),
+    ChainCase("retries an SSO request answered 503", config=SSO_SESSION, env={"AWS_PROFILE": "dev"}, sso=("corp", sso_token(iso_in(3600))), behaviour={"flaky": 1}),
     ChainCase("reports that no provider could load credentials"),
 ]
 

@@ -1,6 +1,5 @@
 import Base
 import ../src/api/google-vertex.bend as Vertex
-import ../src/api/google-vertex-credentials.bend as Credentials
 import ../src/api/google-generative-ai.bend as Google
 import ../src/api/google-shared.bend as Shared
 import ../src/providers/google-vertex.models.bend as Catalog
@@ -352,7 +351,34 @@ def agentText(value: Result<&1, &1, U32 & String, String>) -> String:
     case Fail{_}: "pi"
 
 def setupOf(agent: String, fetch: Fetch.Fetch(Unit), +spec: R.Record<V.Value>) -> Vertex.Setup<Unit>:
-  Vertex.Setup{urlContext(), agent, fetch, Maybe.default(&2, String, text(get(spec, "tokenUrl")), Credentials.TOKEN_URL())}
+  Vertex.Setup{urlContext(), agent, fetch}
+
+# Requests for Google's OAuth2, IAM Credentials, STS and Cloud Resource
+# Manager hosts go to the
+# case's loopback server (`googleBase`), as the oracle's fetch sends them.
+type Reroute is Data:
+  Reroute{inner: Fetch.Fetch(Unit), base: Maybe<&2, String>}
+
+def GOOGLE_HOSTS() -> List<&2, String>: ["https://oauth2.googleapis.com/", "https://iamcredentials.googleapis.com/", "https://sts.googleapis.com/", "https://cloudresourcemanager.googleapis.com/"]
+
+def reroutedText(hosts: List<&2, String>, +base: String, +address: String) -> Maybe<&2, String>:
+  match hosts:
+    case Nil{}: None{}
+    case +host <> rest: Bool.pick(Maybe<&2, String>, String.starts_with(address, host), Some{base ++ "/" ++ String.drop(address, String.length(host))}, reroutedText(rest, base, address))
+
+def parsedOr(url: URL.URL, parsed: Maybe<&2, Result<&2, &2, URL.Error, URL.URL>>) -> URL.URL:
+  match parsed:
+    case Some{Done{address}}: address
+    case _: url
+
+def reroutedUrl(base: Maybe<&2, String>, +url: URL.URL) -> URL.URL:
+  match base:
+    case None{}: url
+    case Some{+root}: parsedOr(url, Maybe.map(&2, String, Result<&2, &2, URL.Error, URL.URL>, text => URL.parse(urlContext(), text), reroutedText(GOOGLE_HOSTS(), root, URL.serialize(url, False{}))))
+
+def rerouted(route: Reroute, input: Fetch.Input<Unit>) -> IO(Fetch.Result_(Unit)):
+  match route input:
+    case Reroute{inner, base} Fetch.Input{url, method, headers, body, signal}: C.call(Fetch.Input<Unit>, Fetch.Result_(Unit), inner, Fetch.Input{reroutedUrl(base, url), method, headers, body, signal})
 
 def streamedIn(agent: String, fetch: Fetch.Fetch(Unit), +signal: Abort.AbortSignal<Unit>, +events: Stream(), +spec: R.Record<V.Value>, onPayload: Maybe<&2, T.PayloadCallback(J(), T.Model<J()>, Error())>, onResponse: Maybe<&2, T.ResponseCallback(T.Model<J()>, Error())>, kind: String, +options: R.Record<V.Value>, requestSignal: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Unit):
   match kind:
@@ -385,11 +411,13 @@ def borrowed(+spec: R.Record<V.Value>, pair: Fetch.Runtime & Fetch.Fetch(Unit)) 
         +payloadHook : T.PayloadCallback(J(), T.Model<J()>, Error()) <- C.create(~Bool, ~T.PayloadInput<J(), T.Model<J()>>, ~Result<&2, &2, Error(), Maybe<&2, J()>>, ~capture, Maybe.default(&2, Bool, flag(get(spec, "throwPayload")), False{}))
         +responseHook : T.ResponseCallback(T.Model<J()>, Error()) <- C.create(~Unit, ~T.ResponseInput<T.Model<J()>>, ~Result<&2, &2, Error(), Unit>, ~observe, Unit{})
         agentResult : Result<&1, &1, U32 & String, String> <- Agent.get()
-        streamed(agentText(agentResult), fetch, Abort.signal(Unit, controller), events, spec, hookWhen(T.PayloadCallback(J(), T.Model<J()>, Error()), flag(get(spec, "capture")), payloadHook), hookWhen(T.ResponseCallback(T.Model<J()>, Error()), flag(get(spec, "observe")), responseHook))
+        +routed : Fetch.Fetch(Unit) <- C.create(~Reroute, ~Fetch.Input<Unit>, ~Fetch.Result_(Unit), ~rerouted, Reroute{fetch, text(get(spec, "googleBase"))})
+        streamed(agentText(agentResult), routed, Abort.signal(Unit, controller), events, spec, hookWhen(T.PayloadCallback(J(), T.Model<J()>, Error()), flag(get(spec, "capture")), payloadHook), hookWhen(T.ResponseCallback(T.Model<J()>, Error()), flag(get(spec, "observe")), responseHook))
         report(events)
         C.dispose(T.PayloadInput<J(), T.Model<J()>>, Result<&2, &2, Error(), Maybe<&2, J()>>, payloadHook)
         C.dispose(T.ResponseInput<T.Model<J()>>, Result<&2, &2, Error(), Unit>, responseHook)
         Abort.dispose(Unit, controller)
+        C.dispose(Fetch.Input<Unit>, Fetch.Result_(Unit), routed)
         Fetch.retire(Unit, fetch)
         Fetch.dispose(owned)
 
