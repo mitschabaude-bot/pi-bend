@@ -3,11 +3,16 @@ import ./cli/args.bend as Args
 import ./cli/initial-message.bend as Initial
 import ./core/settings-diagnostics.bend as SettingsDiagnostics
 import ./cli/auth-login.bend as AuthLogin
+import ./cli/auth-command.bend as AuthCommand
+import ./cli/auth-check.bend as AuthCheck
+import ./cli/credential-print.bend as CredentialPrint
 import ./cli/file-processor.bend as Files
 import ./cli/list-models.bend as ModelList
 import ./cli/session-picker.bend as Picker
 import ./cli/startup-selector.bend as StartupSelector
 import ./config.bend as Config
+import ./migrations.bend as Migrations
+import ./core/keybindings.bend as AppKeys
 import ./core/agent-runtime.bend as Runtime
 import ./core/model-runtime.bend as Models
 import ./core/auth-storage.bend as AuthStorage
@@ -31,6 +36,8 @@ import ../../agent/src/types.bend as T
 import ../../ai/src/types.bend as Ai
 import ../../ai/src/providers/radius.bend as Radius
 import ../../ai/src/auth/types.bend as Auth
+import ../../ai/src/utils/json.bend as Render
+import ../../ai/src/utils/schema-json.bend as SchemaJson
 import ../../ai/src/auth/oauth/openai-codex.bend as CodexOAuth
 import ../../ai/src/auth/oauth/anthropic.bend as AnthropicOAuth
 import ../../ai/src/utils/thinking-levels.bend as Levels
@@ -1210,9 +1217,37 @@ def runLoaded(+parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage
         selection : Selected() <- createSessionManager(ids, flags, Paths.Environment{cwd, home, url}, cwd, sessionDir, agentDir, Path.join(agentDir, "sessions"), visual)
         runSelected(parsed, mode, initial, cwd, selection, flagName(flags), agentDir, located(authPath, Path.join(cwd, "auth.json")), envOr(bundle, "/etc/ssl/certs/ca-certificates.crt"), assets, startup, sessionDir, startupDiagnostics)
 
-def runConfigured(+parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage, +flags: SessionFlags, +cwd: String, +home: String, +url: URL.Context, agentDirLocated: Result<&2, &2, FS.Error, String>, authPath: Result<&2, &2, FS.Error, String>, bundle: Result<&1, &1, U32 & String, String>, packageDir: Result<&1, &1, U32 & String, String>, sessionEnv: Result<&1, &1, U32 & String, String>) -> IO(Unit):
+def envValue(value: Result<&1, &1, U32 & String, String>) -> Maybe<&2, String>:
+  match value:
+    case Done{SCon{c, cs}}: Some{SCon{c, cs}}
+    case _: None{}
+
+# The platform and WSL variables upstream's keybinding definitions consult.
+def keybindingsEnvironment() -> IO(AppKeys.Environment):
+  do IO<AppKeys.Environment>:
+    distro : Result<&1, &1, U32 & String, String> <- IO.get_env("WSL_DISTRO_NAME")
+    interop : Result<&1, &1, U32 & String, String> <- IO.get_env("WSL_INTEROP")
+    return AppKeys.Environment{"linux", envValue(distro), envValue(interop)}
+
+# Non-interactive modes keep stdout for their output (upstream takeOverStdout).
+def consoleFor(mode: AppMode) -> Migrations.Console:
+  match mode:
+    case Interactive{}: Migrations.Stdout{}
+    case _: Migrations.TakenOver{}
+
+def deprecations(mode: AppMode, migrated: Migrations.MigrationResult) -> IO(Unit):
+  match mode migrated:
+    case Interactive{} Migrations.MigrationResult{_, warnings}: Migrations.showDeprecationWarnings(Migrations.Stdout{}, warnings)
+    case _ _: IO.pure(Unit, Unit{})
+
+def runConfigured(+parsed: Args.Args, +mode: AppMode, initial: Initial.InitialMessage, +flags: SessionFlags, +cwd: String, +home: String, +url: URL.Context, agentDirLocated: Result<&2, &2, FS.Error, String>, authPath: Result<&2, &2, FS.Error, String>, bundle: Result<&1, &1, U32 & String, String>, packageDir: Result<&1, &1, U32 & String, String>, sessionEnv: Result<&1, &1, U32 & String, String>) -> IO(Unit):
   +agentDir = located(agentDirLocated, Path.join(cwd, ".pi"))
   do IO<Unit>:
+    # upstream runs migrations before loading settings; interactive mode then
+    # shows the deprecation warnings.
+    keys : AppKeys.Environment <- keybindingsEnvironment()
+    migrated : Migrations.MigrationResult <- Migrations.runMigrations(consoleFor(mode), agentDir, cwd, keys)
+    deprecations(mode, migrated)
     loaded : Settings.SettingsManager & Diagnostics() <- loadSettings(cwd, agentDir)
     runLoaded(parsed, mode, initial, flags, cwd, home, url, agentDir, authPath, bundle, packageDir, sessionEnv, loaded)
 
@@ -1425,11 +1460,239 @@ def shared(values: List<&1, String>) -> List<&2, String>:
     case Nil{}: Nil{}
     case value <> rest: value <> shared(rest)
 
+# Auth commands
+# -------------
+# upstream main runAuthCommand: `pi auth print-api-key | print-bearer-token |
+# check`. Errors go to stderr in red when it is a terminal; checks exit 0
+# ready, 1 not ready, 2 invalid. Credential printing has no overall 15 s
+# timeout signal here.
+
+def red(colour: Bool, +text: String) -> String: Bool.pick(String, colour, "\u{1b}[31m" ++ text ++ "\u{1b}[39m", text)
+def dimmed(colour: Bool, +text: String) -> String: Bool.pick(String, colour, "\u{1b}[2m" ++ text ++ "\u{1b}[22m", text)
+
+def authError(message: String, code: U32) -> IO(Unit):
+  do IO<Unit>:
+    colour : Bool <- IO.isTerminal(2)
+    IO.print_err(red(colour, "Error: " ++ message))
+    exitWith(code)
+
+def unknownAuthOption(+kind: AuthCommand.AuthCommandKind, +option: String) -> IO(Unit):
+  do IO<Unit>:
+    +colour : Bool <- IO.isTerminal(2)
+    IO.print_err(red(colour, "Unknown option --" ++ option ++ " for \"" ++ AuthCommand.getAuthCommandName(kind) ++ "\"."))
+    IO.print_err(dimmed(colour, "Use \"" ++ Config.appName() ++ " --help\" or \"" ++ AuthCommand.getAuthCommandUsage(kind) ++ "\"."))
+    exitWith(1)
+
+def authPackageDir() -> IO(String):
+  do IO<String>:
+    cwd : Result<&2,&2,FS.Error,String> <- FS.cwd()
+    configured : Result<&1,&1,U32 & String,String> <- IO.get_env("PI_BEND_PACKAGE_DIR")
+    resolvedPackageDir(Result.default(&2,&2,FS.Error,String,cwd,"."),configured)
+
+def printedCredential(result: Result<&2,&2,String,String>) -> IO(Unit):
+  match result:
+    case Done{credential}: IO.print(credential)
+    case Fail{message}: authError(message, 1)
+
+def printWith(transport: Runtime.Transport, store: Auth.CredentialStore, args: Args.Args, kind: AuthCommand.AuthCommandKind, minExpiryMs: Maybe<&2,Nat>) -> IO(Unit):
+  match transport:
+    case Runtime.Transport{authorizer,runtime,+fetch}:
+      do IO<Unit>:
+        oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch,Runtime.urlContext())
+        anthropic : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch,Runtime.urlContext())
+        +models : Models.ModelRuntime <- Models.createWithAnthropic(store,oauth,Some{anthropic},Radius.RadiusTransport{fetch,Runtime.urlContext()})
+        packageDir : String <- authPackageDir()
+        result : Result<&2,&2,String,String> <- CredentialPrint.resolveCredentialForPrint(args,models,packageDir,kind,minExpiryMs,None{})
+        Models.dispose(models)
+        Runtime.disposeTransport(Runtime.Transport{authorizer,runtime,fetch})
+        printedCredential(result)
+
+def printStorage(transport: Runtime.Transport, args: Args.Args, kind: AuthCommand.AuthCommandKind, minExpiryMs: Maybe<&2,Nat>, pair: AuthStorage.AuthStorageOwner & AuthStorage.AuthStorage) -> IO(Unit):
+  match pair:
+    case (owner, view):
+      do IO<Unit>:
+        store : Auth.CredentialStore <- AuthStorage.store(view)
+        printWith(transport, store, args, kind, minExpiryMs)
+        AuthStorage.dispose(owner)
+
+def withAuthTransport(transport: Runtime.Outcome(Runtime.Transport), authPath: Result<&2,&2,FS.Error,String>, action: Runtime.Transport -> String -> IO(Unit)) -> IO(Unit):
+  match transport authPath:
+    case Fail{error} _: authError(error, 1)
+    case Done{value} Fail{_}:
+      do IO<Unit>:
+        Runtime.disposeTransport(value)
+        authError("Could not locate the auth file", 1)
+    case Done{value} Done{path}: action(value, path)
+
+def authTransport(action: Runtime.Transport -> String -> IO(Unit)) -> IO(Unit):
+  do IO<Unit>:
+    authPath : Result<&2,&2,FS.Error,String> <- Config.getAuthPath()
+    bundle : Result<&1,&1,U32 & String,String> <- IO.get_env("SSL_CERT_FILE")
+    transport : Runtime.Outcome(Runtime.Transport) <- Runtime.createTransport(envOr(bundle,"/etc/ssl/certs/ca-certificates.crt"))
+    withAuthTransport(transport, authPath, action)
+
+def printOwned(transport: Runtime.Transport, path: String, args: Args.Args, kind: AuthCommand.AuthCommandKind, minExpiryMs: Maybe<&2,Nat>) -> IO(Unit):
+  do IO<Unit>:
+    owner : AuthStorage.AuthStorageOwner <- AuthStorage.create(path)
+    printStorage(transport, args, kind, minExpiryMs, AuthStorage.borrow(owner))
+
+def printCredential(args: Args.Args, kind: AuthCommand.AuthCommandKind, minExpiryMs: Maybe<&2,Nat>) -> IO(Unit):
+  authTransport(transport => path => printOwned(transport, path, args, kind, minExpiryMs))
+
+def optionalField(+name: String, value: Maybe<&2,String>) -> List<&2,Record.Property<V.Value>>:
+  match value:
+    case Some{text}: [Record.Property{name, V.Text{text}}]
+    case None{}: Nil{}
+
+# JSON.stringify({...result, credentials}): status, provider, then the
+# optional reason, authType and credentials.
+def checkJson(status: AuthCheck.AuthCheckStatus, provider: String, reason: Maybe<&2,AuthCheck.AuthCheckReason>, authType: Maybe<&2,Auth.CredentialType>, credential: Maybe<&2,String>) -> String:
+  Maybe.default(&2, String, Render.stringify(SchemaJson.toJson(V.ObjectValue{Record.Record{Record.Property{"status", V.Text{AuthCheck.statusName(status)}} <> Record.Property{"provider", V.Text{provider}} <> List.append(&2, Record.Property<V.Value>, optionalField("reason", Maybe.map(&2, AuthCheck.AuthCheckReason, String, AuthCheck.reasonName, reason)), List.append(&2, Record.Property<V.Value>, optionalField("authType", Maybe.map(&2, Auth.CredentialType, String, AuthCheck.typeName, authType)), optionalField("credentials", credential)))}})), "{}")
+
+def checkOutput(json: Bool, result: AuthCheck.AuthCheckResult, credential: Maybe<&2,String>) -> String:
+  match json result:
+    case False{} AuthCheck.AuthCheckResult{status, _, _, _}: Maybe.default(&2,String,credential,AuthCheck.statusName(status))
+    case True{} AuthCheck.AuthCheckResult{status, provider, reason, authType}: checkJson(status, provider, reason, authType, credential)
+
+def checkExit(result: AuthCheck.AuthCheckResult) -> U32:
+  match result:
+    case AuthCheck.AuthCheckResult{AuthCheck.Ready{}, _, _, _}: 0
+    case AuthCheck.AuthCheckResult{AuthCheck.NotReady{}, _, _, _}: 1
+    case AuthCheck.AuthCheckResult{AuthCheck.Invalid{}, _, _, _}: 2
+
+def reported(json: Bool, +result: AuthCheck.AuthCheckResult, credential: Maybe<&2,String>) -> IO(Unit):
+  do IO<Unit>:
+    IO.print(checkOutput(json, result, credential))
+    exitWith(checkExit(result))
+
+def credentialChecked(json: Bool, +provider: String, result: Result<&2,&2,String,Maybe<&2,String>>) -> IO(Unit):
+  match result:
+    case Done{Some{credential}}: reported(json, AuthCheck.AuthCheckResult{AuthCheck.Ready{}, provider, None{}, Some{Auth.ApiKeyType{}}}, Some{credential})
+    case Done{None{}}: reported(json, AuthCheck.AuthCheckResult{AuthCheck.NotReady{}, provider, Some{AuthCheck.CredentialNotAvailable{}}, None{}}, None{})
+    case Fail{_}: reported(json, AuthCheck.invalid(provider), None{})
+
+def readyCredential(json: Bool, ready: AuthCheck.AuthCheckResult, credential: Result<&2,&2,String,Maybe<&2,String>>) -> IO(Unit):
+  match ready credential:
+    case _ Done{Some{value}}: reported(json, ready, Some{value})
+    case AuthCheck.AuthCheckResult{_, provider, _, _} Done{None{}}: reported(json, AuthCheck.AuthCheckResult{AuthCheck.NotReady{}, provider, Some{AuthCheck.CredentialNotAvailable{}}, None{}}, None{})
+    case AuthCheck.AuthCheckResult{_, provider, _, _} Fail{_}: reported(json, AuthCheck.invalid(provider), None{})
+
+# A ready check prints the credential when asked for it.
+def checkedWith(+models: Models.ModelRuntime, store: Auth.CredentialStore, json: Bool, credentials: Bool, refresh: Bool, +fallback: String, result: Result<&2,&2,String,AuthCheck.AuthCheckResult>) -> IO(Unit):
+  match result credentials:
+    case Fail{_} _: reported(json, AuthCheck.invalid(fallback), None{})
+    case Done{AuthCheck.AuthCheckResult{AuthCheck.Ready{}, +provider, reason, authType}} True{}:
+      do IO<Unit>:
+        credential : Result<&2,&2,String,Maybe<&2,String>> <- AuthCheck.getProviderCredential(provider, models, store, refresh)
+        readyCredential(json, AuthCheck.AuthCheckResult{AuthCheck.Ready{}, provider, reason, authType}, credential)
+    case Done{value} _: reported(json, value, None{})
+
+def checkWith(transport: Runtime.Transport, +store: Auth.CredentialStore, args: Args.Args, json: Bool, credentials: Bool, +refresh: Bool, +fallback: String) -> IO(Unit):
+  match transport:
+    case Runtime.Transport{authorizer,runtime,+fetch}:
+      do IO<Unit>:
+        oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch,Runtime.urlContext())
+        anthropic : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch,Runtime.urlContext())
+        +models : Models.ModelRuntime <- AuthCheck.createAuthCheckModelRuntime(store,oauth,anthropic,Radius.RadiusTransport{fetch,Runtime.urlContext()})
+        packageDir : String <- authPackageDir()
+        result : Result<&2,&2,String,AuthCheck.AuthCheckResult> <- AuthCheck.checkProviderAuth(args,models,packageDir,refresh)
+        checkedWith(models, store, json, credentials, refresh, fallback, result)
+        Models.dispose(models)
+        Runtime.disposeTransport(Runtime.Transport{authorizer,runtime,fetch})
+
+def checkStorage(transport: Runtime.Transport, args: Args.Args, json: Bool, credentials: Bool, +fallback: String, pair: AuthStorage.AuthStorageOwner & AuthStorage.AuthStorage) -> IO(Unit):
+  match pair:
+    case (owner, view):
+      do IO<Unit>:
+        +store : Auth.CredentialStore <- AuthStorage.store(view)
+        checkWith(transport, store, args, json, credentials, True{}, fallback)
+        AuthStorage.dispose(owner)
+
+def readOnlyCheck(transport: Runtime.Transport, path: String, args: Args.Args, json: Bool, credentials: Bool, +fallback: String) -> IO(Unit):
+  do IO<Unit>:
+    +storage : AuthStorage.ReadOnlyAuthStorage <- AuthStorage.readOnly(path)
+    checkWith(transport, AuthStorage.readOnlyStore(storage), args, json, credentials, False{}, fallback)
+    AuthStorage.disposeReadOnly(storage)
+
+def writableCheck(transport: Runtime.Transport, path: String, args: Args.Args, json: Bool, credentials: Bool, +fallback: String) -> IO(Unit):
+  do IO<Unit>:
+    owner : AuthStorage.AuthStorageOwner <- AuthStorage.create(path)
+    checkStorage(transport, args, json, credentials, fallback, AuthStorage.borrow(owner))
+
+# --no-refresh reads auth.json without the ability to write it.
+def checkChosen(noRefresh: Bool, transport: Runtime.Transport, path: String, args: Args.Args, json: Bool, credentials: Bool, +fallback: String) -> IO(Unit):
+  match noRefresh:
+    case True{}: readOnlyCheck(transport, path, args, json, credentials, fallback)
+    case False{}: writableCheck(transport, path, args, json, credentials, fallback)
+
+def checkCredentials(args: Args.Args, json: Bool, credentials: Bool, noRefresh: Bool, +fallback: String) -> IO(Unit):
+  authTransport(transport => path => checkChosen(noRefresh, transport, path, args, json, credentials, fallback))
+
+def requestedName(value: AuthCommand.RequestedAuth) -> String:
+  match value:
+    case AuthCommand.RequestedAuth{Some{provider}, _}: provider
+    case AuthCommand.RequestedAuth{None{}, model}: Maybe.default(&2,String,model,"")
+
+def checkRequested(args: Args.Args, json: Bool, credentials: Bool, noRefresh: Bool, requested: Result<&2,&2,String,AuthCommand.RequestedAuth>) -> IO(Unit):
+  match requested:
+    case Fail{message}: authError(message, 2)
+    case Done{value}: checkCredentials(args, json, credentials, noRefresh, requestedName(value))
+
+def diagnosticMessages(diagnostics: List<&2,Args.Diagnostic>) -> List<&2,String>:
+  match diagnostics:
+    case Nil{}: Nil{}
+    case Args.Warning{message} <> rest: message <> diagnosticMessages(rest)
+    case Args.Error{message} <> rest: message <> diagnosticMessages(rest)
+
+def isCheckKind(kind: AuthCommand.AuthCommandKind) -> Bool:
+  match kind:
+    case AuthCommand.Check{}: True{}
+    case _: False{}
+
+def kindOfCommand(command: AuthCommand.AuthCommand) -> AuthCommand.AuthCommandKind:
+  match command:
+    case AuthCommand.AuthCommand{kind, _, _, _, _, _}: kind
+
+def runKind(+kind: AuthCommand.AuthCommandKind, +args: Args.Args, json: Bool, credentials: Bool, noRefresh: Bool, minExpiryMs: Maybe<&2,Nat>) -> IO(Unit):
+  match kind:
+    case AuthCommand.Check{}: checkRequested(args, json, credentials, noRefresh, AuthCommand.validateAuthCommandArgs(args, AuthCommand.Check{}))
+    case other: printCredential(args, other, minExpiryMs)
+
+def authRun(command: AuthCommand.AuthCommand, args: Args.Args) -> IO(Unit):
+  match command:
+    case AuthCommand.AuthCommand{kind, _, json, credentials, noRefresh, minExpiryMs}: runKind(kind, args, json, credentials, noRefresh, minExpiryMs)
+
+def authDiagnostics(+command: AuthCommand.AuthCommand, args: Args.Args, diagnostics: List<&2,String>) -> IO(Unit):
+  match diagnostics:
+    case Nil{}: authRun(command, args)
+    case messages: authError(String.join(messages, "\n"), Bool.pick(U32, isCheckKind(kindOfCommand(command)), 2, 1))
+
+def authArgs(+command: AuthCommand.AuthCommand, args: Args.Args, unknown: Maybe<&2,String>, diagnostics: List<&2,String>) -> IO(Unit):
+  match unknown:
+    case Some{option}: unknownAuthOption(kindOfCommand(command), option)
+    case None{}: authDiagnostics(command, args, diagnostics)
+
+def firstUnknownFlag(args: Args.Args) -> Maybe<&2,String>:
+  match args:
+    case Args.Args{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, unknownFlags, _}: AuthCommand.firstUnknown(Record.entries(Args.FlagValue, unknownFlags))
+
+def authCommandParsed(parsed: Result<&2,&2,String,Maybe<&2,AuthCommand.AuthCommand>>) -> IO(Unit):
+  match parsed:
+    case Fail{message}: authError(message, 1)
+    case Done{None{}}: IO.pure(Unit, Unit{})
+    case Done{Some{AuthCommand.AuthCommand{kind, +commandArgs, json, credentials, noRefresh, minExpiryMs}}}:
+      +args = Args.parseArgs(commandArgs)
+      authArgs(AuthCommand.AuthCommand{kind, commandArgs, json, credentials, noRefresh, minExpiryMs}, args, firstUnknownFlag(args), diagnosticMessages(diagnosticsOf(args)))
+
+def runAuthCommand(+values: List<&2, String>) -> IO(Unit):
+  Bool.pick(Unit -> IO(Unit), AuthCommand.isAuthCommandHelp(values), _ => AuthCommand.printAuthCommandHelp(), _ => authCommandParsed(AuthCommand.parseAuthCommand(values)))(Unit{})
+
 def runValues(values: List<&2, String>) -> IO(Unit):
   match values:
     case "auth" <> "login" <> Nil{}: AuthLogin.run()
     case "auth" <> "login" <> "--provider" <> "openai-codex" <> Nil{}: AuthLogin.run()
     case "auth" <> "login" <> _: fail("Usage: pi auth login [--provider openai-codex]")
+    case "auth" <> rest: runAuthCommand("auth" <> rest)
     case other: run(Args.parseArgs(other))
 
 # upstream cli/setup.ts setupCli and main's offline switch: variables the

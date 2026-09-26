@@ -2297,9 +2297,13 @@
     },
     {
       "source": "packages/coding-agent/test/auth-check.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d6b568e6e8d608f5e1f06a6f43aee20645cf4dcbfaa69158359249d44cbfa3b6"
+      "status": "ported",
+      "ports": [
+        "tests/auth-commands.bend",
+        "tests/auth_commands_check.py"
+      ],
+      "sha256": "d6b568e6e8d608f5e1f06a6f43aee20645cf4dcbfaa69158359249d44cbfa3b6",
+      "notes": "All nine cases pass on Bun and native one/four threads over the production model runtime (createAuthCheckModelRuntime) with in-memory or ReadOnlyAuthStorage credentials. Upstream replaces the registered Codex OAuth refresh with a spy; here the Codex OAuth handlers are an injected fixture that counts refreshes (refresh called once by default, never with refresh off). Results are typed AuthCheckResult values; AuthCommandError is the Fail message."
     },
     {
       "source": "packages/coding-agent/test/auth-storage.test.ts",
@@ -2482,9 +2486,15 @@
     },
     {
       "source": "packages/coding-agent/test/config-value-migration.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "c6813b0c9217ce396c7f5725b387d8c0cea80282181fd99fc361c52a3ca41a3b"
+      "status": "ported",
+      "ports": [
+        "tests/migrations.bend",
+        "tests/migrations_check.py",
+        "tests/migrations_reference.ts",
+        "tests/models-json.bend"
+      ],
+      "sha256": "c6813b0c9217ce396c7f5725b387d8c0cea80282181fd99fc361c52a3ca41a3b",
+      "notes": "All four cases (uppercase auth.json keys unchanged; malformed and blank models.json not thrown on and left unchanged, then reported by the model runtime as \"Failed to parse models.json\" with the file; uppercase models.json apiKey and header values unchanged and used literally for provider and model auth) pass on Bun and native one/four threads. Nothing is logged. The same check compares runMigrations (packages/coding-agent/src/migrations.bend) with the pinned upstream function on nine more fixtures: legacy oauth.json and settings apiKeys into auth.json (0600, oauth spread keeps a credential's own type), malformed legacy files, sessions saved in the agent root, managed binaries tools/ to bin/, commands/ to prompts/ with hooks/tools warnings, and keybindings.json renames; output and resulting trees (contents and modes) match."
     },
     {
       "source": "packages/coding-agent/test/config.test.ts",
@@ -2500,9 +2510,13 @@
     },
     {
       "source": "packages/coding-agent/test/credential-print.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "b10cf783bc6922913511e73384c44752c6e474aeade5647fea492afcf17a3c2a"
+      "status": "ported",
+      "ports": [
+        "tests/auth-commands.bend",
+        "tests/auth_commands_check.py"
+      ],
+      "sha256": "b10cf783bc6922913511e73384c44752c6e474aeade5647fea492afcf17a3c2a",
+      "notes": "All five cases pass. Four on Bun and native one/four threads (tests/auth-commands.bend): API key printing, a bearer token from an Authorization header, refreshing and persisting an expired OAuth token (fixture refresh called once, the store holds the fresh token), and command parsing/help/argument and credential-type errors. \"reports unknown auth options like package commands\" runs the built native CLI (tests/auth_commands_check.py --cli build/pi-cli): exit 1 with upstream's two stderr lines. Adaptation: Kimi Code's OAuth is not ported (ai package), so the header case registers kimi-coding with a fixture OAuth whose credentials become an `Authorization: Bearer` header, as upstream's does."
     },
     {
       "source": "packages/coding-agent/test/custom-editor-history-keybindings.test.ts",
@@ -4611,9 +4625,16 @@
     },
     {
       "source": "packages/coding-agent/test/tools-manager.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "09e7bdfba469506725a8df17f87bc461ce7dd4eeba7ad04ec3140c0b39e1e2d5"
+      "status": "partial",
+      "ports": [
+        "tests/tools-manager-latest.bend",
+        "tests/tools_manager_latest_check.py",
+        "tests/tools-manager.bend",
+        "tests/tools_manager_check.py",
+        "tests/tools-manager.md"
+      ],
+      "sha256": "09e7bdfba469506725a8df17f87bc461ce7dd4eeba7ad04ec3140c0b39e1e2d5",
+      "notes": "7 of 8 cases pass on Bun and native one/four threads (tests/tools-manager-latest.bend): all six getLatestVersion cases through a logging redirect fetch and a local server (release redirects with and without the v prefix, a relative Location, a redirect whose body is discarded, 404 without redirect, a redirect to /login; one manual-redirect request each with the pi-coding-agent user agent) and ensureTool's offline status callback. Adaptation: upstream checks response.bodyUsed; here the redirect body is released unread. Pending: \"surfaces the error cause chain when a download fails\" — the native fetch error has no cause chain, so the status reads \"Failed to download fd: fetch failed\" without the connect detail. Download, extraction and install scenarios are covered by tests/tools_manager_check.py (tests/tools-manager.md)."
     },
     {
       "source": "packages/coding-agent/test/tools.test.ts",

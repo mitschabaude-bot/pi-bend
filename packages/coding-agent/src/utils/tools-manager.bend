@@ -172,8 +172,8 @@ def redirectTarget(+context: URL.Context, repo: String, location: String) -> Out
 
 def latestFrom(context: URL.Context, +repo: String, code: U32, location: Maybe<&2,String>) -> Outcome(String):
   match location:
-    case None{}: Fail{"Failed to resolve latest " ++ repo ++ " release: HTTP " ++ U32.show(code) ++ " without redirect"}
-    case Some{value}: redirectTarget(context,repo,value)
+    case Some{SCon{c,cs}}: redirectTarget(context,repo,SCon{c,cs})
+    case _: Fail{"Failed to resolve latest " ++ repo ++ " release: HTTP " ++ U32.show(code) ++ " without redirect"}
 
 def redirectLocation(+code: U32, metadata: Response.Metadata) -> Maybe<&2,String>:
   Bool.pick(Maybe<&2,String>,U32.is_ge(code,300) && U32.is_lt(code,400),Result.default(&2,&2,Message.HeaderSyntaxError,Maybe<&2,String>,Message.get(Response.headers(metadata),"location"),None{}),None{})
