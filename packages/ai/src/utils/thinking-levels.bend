@@ -21,6 +21,18 @@ def name(level: T.ModelThinkingLevel) -> String:
     case T.Thinking{T.XHigh{}}: "xhigh"
     case T.Thinking{T.Max{}}: "max"
 
+# The inverse of name; any other text is not a thinking level.
+def fromName(value: String) -> Maybe<&2, T.ModelThinkingLevel>:
+  match value:
+    case "off": Some{T.Off{}}
+    case "minimal": Some{T.Thinking{T.Minimal{}}}
+    case "low": Some{T.Thinking{T.Low{}}}
+    case "medium": Some{T.Thinking{T.Medium{}}}
+    case "high": Some{T.Thinking{T.High{}}}
+    case "xhigh": Some{T.Thinking{T.XHigh{}}}
+    case "max": Some{T.Thinking{T.Max{}}}
+    case _: None{}
+
 def all() -> List<&2, T.ModelThinkingLevel>:
   T.Off{} <> T.Thinking{T.Minimal{}} <> T.Thinking{T.Low{}} <> T.Thinking{T.Medium{}} <> T.Thinking{T.High{}} <> T.Thinking{T.XHigh{}} <> T.Thinking{T.Max{}} <> Nil{}
 

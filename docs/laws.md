@@ -43,7 +43,7 @@ Current as of 2026-09-22. The gate is `python3 scripts/check-proofs.py`, which t
 | `laws/sse.bend` | 7 | `packages/runtime/src/sse.bend` |
 | `laws/string.bend` | 6 | `packages/runtime/src/string.bend` |
 | `laws/text.bend` | 5 | `packages/runtime/src/text.bend` |
-| `laws/thinking-levels.bend` | 7 | `packages/ai/src/utils/thinking-levels.bend` |
+| `laws/thinking-levels.bend` | 8 | `packages/ai/src/utils/thinking-levels.bend` |
 | `laws/timer.bend` | 5 | `packages/runtime/src/timer.bend` |
 | `laws/transcript.bend` | 14 | `packages/ai/src/utils/transcript.bend` |
 | `laws/transform-messages.bend` | 20 | `packages/ai/src/api/transform-messages.bend` |
@@ -53,7 +53,7 @@ Current as of 2026-09-22. The gate is `python3 scripts/check-proofs.py`, which t
 | `laws/uuid.bend` | 3 | `packages/ai/src/utils/uuid.bend` (UUIDv7 ordinary ids strictly ordered across followers and clock rollback) |
 | `laws/validation.bend` | 7 | `packages/ai/src/utils/validation.bend` |
 | `laws/x509.bend` | 1 | `packages/runtime/src/x509.bend` (trust anchors) |
-| **Total** | **512** | |
+| **Total** | **513** | |
 
 The sections below are the dated history of how this coverage was built; earlier sections keep the file names they used at the time.
 
@@ -347,7 +347,7 @@ Six laws in `laws/agent.bend` cover pi's `continue()` as the pure decision `cont
 
 ### Reasoning levels and thinking budgets (2026-09-22)
 
-`laws/simple-options.bend` (7): clamped reasoning never exceeds high, clamping is idempotent and keeps every level up to high (the two excluded levels are discharged by eliminating the contradictory hypothesis `False == True` through a type-valued motive, `Truth(_)`, into `Empty.absurd`); explicit thinking budgets are used per level, empty custom budgets equal the defaults, and fitting the budget never changes the response ceiling while a budget below the ceiling is kept verbatim. `laws/thinking-levels.bend` (7): non-reasoning models only offer off; an explicit null mapping disables and an explicit value enables any level; unmapped levels are supported exactly up to high; `closest` takes the first candidate at or above the request, skips lower candidates carrying them as the fallback, and returns the fallback without candidates. These correspond to the upstream token-budget tests ("clamps xhigh and max to the high budget", "sends the configured budget for the requested level") and the thinking-level selection used by the coding agent.
+`laws/simple-options.bend` (7): clamped reasoning never exceeds high, clamping is idempotent and keeps every level up to high (the two excluded levels are discharged by eliminating the contradictory hypothesis `False == True` through a type-valued motive, `Truth(_)`, into `Empty.absurd`); explicit thinking budgets are used per level, empty custom budgets equal the defaults, and fitting the budget never changes the response ceiling while a budget below the ceiling is kept verbatim. `laws/thinking-levels.bend` (7): non-reasoning models only offer off; an explicit null mapping disables and an explicit value enables any level; unmapped levels are supported exactly up to high; `closest` takes the first candidate at or above the request, skips lower candidates carrying them as the fallback, and returns the fallback without candidates; `fromName` inverts `name` for every level (the RPC and settings wire form). These correspond to the upstream token-budget tests ("clamps xhigh and max to the high budget", "sends the configured budget for the requested level") and the thinking-level selection used by the coding agent.
 
 ### Tool execution mode, batch termination and the beforeToolCall decision (2026-09-22)
 

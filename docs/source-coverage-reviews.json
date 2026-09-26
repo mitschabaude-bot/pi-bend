@@ -681,6 +681,47 @@
       "port_sha256": {
         "packages/ai/src/api/google-shared.bend": "1984735bfdfef01a52262523c27298c49ca0ea51421b9a2febd1e67bc420dc97"
       }
+    },
+    "packages/coding-agent/src/modes/rpc/rpc-client.ts": {
+      "state": "ported",
+      "note": "RpcClient with every command method, start/stop of the child (SIGTERM, SIGKILL after 1 s), request ids, 30 s request timeouts, exit/spawn/stdin failures rejecting pending requests, strict JSONL stdout with StringDecoder-style UTF-8, stderr collection/forwarding, event listeners, waitForIdle/collectEvents/promptAndWait and getData. Adaptations: cliPath is the agent executable (not `node cliPath`); the transport is the injectable `send` (withSend); results are typed, decoded per command; events are their JSON values (json-event's JsonAgentSessionEvent); a spawn failure fails start() instead of the later send; requests still pending at stop() fail with the exit error instead of their timeouts; listeners run on the stdout reader and must not wait for responses or unsubscribe themselves.",
+      "ports": [
+        "packages/coding-agent/src/modes/rpc-client.bend"
+      ],
+      "source_sha256": "6d1a586cfa38fd3be62d21feacfe9e700f6e88d4fc842adcc345130acd0d57ff",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/rpc-client.bend": "c68686c4a326b036aca16c199115b7621d5725008fce2dbadee902768d997237"
+      }
+    },
+    "packages/coding-agent/src/modes/rpc/rpc-types.ts": {
+      "state": "ported",
+      "note": "Typed RpcCommand (encoder), response envelope, RpcSessionState and RpcSlashCommand with encoders used by the endpoint and decoders used by RpcClient, plus wire codecs for bash results, cleared queues and the entry tree. Per-command response data stays JSON in the envelope and is decoded by each client method. Extension UI request/response types are not ported with the endpoint's extension UI.",
+      "ports": [
+        "packages/coding-agent/src/modes/rpc-types.bend"
+      ],
+      "source_sha256": "34057257456fd5f935587a0e9650fb5777738674e491a68fd037425703c45e26",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/rpc-types.bend": "4f598ad04bb6ec4f8e71a48aa84978228052bd40ad6b02ab5f742e630b3e126c"
+      }
+    },
+    "packages/coding-agent/src/modes/rpc/jsonl.ts": {
+      "state": "ported",
+      "note": "serializeJsonLine and the LF-only framing step of attachJsonlLineReader over decoded text; byte-compared with upstream in tests/rpc_protocol_check.py. Stream attachment and UTF-8 decoding belong to the callers (main.bend's stdin loop, RpcClient's stdout reader).",
+      "ports": [
+        "packages/coding-agent/src/modes/jsonl.bend"
+      ],
+      "source_sha256": "95723d349fcebad1f1da7ce103d02ba7d5e2c876b7d178d41d8b56beedbd93e0",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/jsonl.bend": "2365821a97684ac0e9b9a60a251d3974babf58e03090e4b2b0614f95fdae989f"
+      }
+    },
+    "packages/coding-agent/src/core/auth-guidance.ts": {
+      "state": "ported",
+      "note": "All four messages; callers pass the docs directory where upstream reads its package location (config.ts getDocsPath). Not yet used by AgentSession.prompt's preflight (see tests/rpc.md).",
+      "source_sha256": "8fbee7c272953bf881f22e9ce4b163bb0df9c091f63ee823dbfe32186991efe0",
+      "port_sha256": {
+        "packages/coding-agent/src/core/auth-guidance.bend": "dc2b5f649bf75101196be156d6a19e52aa00da717f66acf2df30b8c1f8e4689d"
+      }
     }
   }
 }

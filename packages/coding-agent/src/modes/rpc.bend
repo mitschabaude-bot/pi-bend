@@ -4,8 +4,6 @@ import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/ref.bend as Ref
 import ../../../runtime/src/callback.bend as Callback
 import ../../../runtime/src/schema-value.bend as V
-import ../../../ai/src/utils/json.bend as Json
-import ../../../ai/src/utils/schema-json.bend as SchemaJson
 import ../../../ai/src/utils/message-json.bend as MessageJson
 import ../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../../ai/src/utils/model-json.bend as ModelJson
@@ -27,6 +25,8 @@ import ../core/export-html/index.bend as Export
 import ../core/tools/index.bend as Tools
 import ../core/compaction/compaction.bend as Compaction
 import ./json-event.bend as Events
+import ./jsonl.bend as Jsonl
+import ./rpc-types.bend as Types
 import ../core/agent-session-runtime.bend as SessionRuntime
 import ../core/skills.bend as Skills
 import ../core/prompt-templates.bend as Templates
@@ -53,18 +53,15 @@ type Handle is Data:
 type Owner is Type:
   Owner{handle: Handle,worker: Chan(Unit)}
 
-def line(value: V.Value) -> String:
-  Maybe.default(&2,String,Json.stringify(SchemaJson.toJson(value)),"null") ++ "\n"
+def line(value: V.Value) -> String: Jsonl.serializeJsonLine(value)
 def output(sink: Sink(),value: V.Value) -> IO(Unit):
   Callback.call(String,Unit,sink,line(value))
-def response(id: Maybe<&2,String>,command: String,success: Bool,tail: List<&2,R.Property<V.Value>>) -> V.Value:
-  MessageJson.object(MessageJson.optionalText("id",id,MessageJson.field("type",MessageJson.text("response"),MessageJson.field("command",MessageJson.text(command),MessageJson.field("success",V.Boolean{success},tail)))))
 def ok(id: Maybe<&2,String>,command: String) -> V.Value:
-  response(id,command,True{},Nil{})
+  Types.responseValue(Types.RpcResponse{id,command,Types.RpcSuccess{None{}}})
 def data(id: Maybe<&2,String>,command: String,value: V.Value) -> V.Value:
-  response(id,command,True{},MessageJson.field("data",value,Nil{}))
+  Types.responseValue(Types.RpcResponse{id,command,Types.RpcSuccess{Some{value}}})
 def failure(id: Maybe<&2,String>,command: String,message: String) -> V.Value:
-  response(id,command,False{},MessageJson.field("error",MessageJson.text(message),Nil{}))
+  Types.responseValue(Types.RpcResponse{id,command,Types.RpcFailure{message}})
 def field(object: R.Record<V.Value>,name: String) -> Maybe<&2,V.Value>:
   R.get(V.Value,object,name)
 def optionalText(value: Maybe<&2,V.Value>) -> Result<&2,&2,String,Maybe<&2,String>>:
@@ -143,14 +140,10 @@ def observe(sink: Sink(),value: Session.AgentSessionEvent) -> IO(Unit): event(si
 
 # A prompt response is written before waking this worker. A prompt without a
 # streaming behavior is rejected while another is accepted, as upstream does.
-def bashValue(result: Bash.BashResult) -> V.Value:
-  match result:
-    case Bash.BashResult{content,exitCode,cancelled,truncated,fullOutputPath}:
-      MessageJson.object(MessageJson.field("output",V.Text{content},MessageJson.optional("exitCode",Maybe.map(&2,U32,V.Value,code => MessageJson.natural(U32.to_nat(code)),exitCode),MessageJson.field("cancelled",V.Boolean{cancelled},MessageJson.field("truncated",V.Boolean{truncated},MessageJson.optionalText("fullOutputPath",fullOutputPath,Nil{}))))))
 def bashReply(sink: Sink(),id: Maybe<&2,String>,result: Result<&2,&2,String,Bash.BashResult>) -> IO(Unit):
   match result:
     case Fail{reason}: output(sink,failure(id,"bash",reason))
-    case Done{value}: output(sink,data(id,"bash",bashValue(value)))
+    case Done{value}: output(sink,data(id,"bash",Types.bashResultValue(value)))
 def runBash(handle: Command,request: BashRequest) -> IO(Unit):
   match handle request:
     case Command{session,sink,_,_,_,_} BashRequest{+id,command,exclude}:
@@ -300,16 +293,6 @@ def setName(handle: Command,id: Maybe<&2,String>,value: Result<&2,&2,String,Stri
   match handle value:
     case Command{_,sink,_,_,_,_} Fail{error}: output(sink,failure(id,"set_session_name",error))
     case Command{session,sink,_,_,_,_} Done{name}: setCleanName(session,sink,id,String.trim(name))
-def thinking(level: String) -> Maybe<&2,Ai.ModelThinkingLevel>:
-  match level:
-    case "off": Some{Ai.Off{}}
-    case "minimal": Some{Ai.Thinking{Ai.Minimal{}}}
-    case "low": Some{Ai.Thinking{Ai.Low{}}}
-    case "medium": Some{Ai.Thinking{Ai.Medium{}}}
-    case "high": Some{Ai.Thinking{Ai.High{}}}
-    case "xhigh": Some{Ai.Thinking{Ai.XHigh{}}}
-    case "max": Some{Ai.Thinking{Ai.Max{}}}
-    case _: None{}
 def setChosenThinking(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,String>,level: String,chosen: Maybe<&2,Ai.ModelThinkingLevel>) -> IO(Unit):
   match chosen:
     case None{}: output(sink,failure(id,"set_thinking_level","Invalid thinking level: " ++ level))
@@ -321,7 +304,7 @@ def setChosenThinking(session: Session.AgentSession,sink: Sink(),id: Maybe<&2,St
 def setThinking(handle: Command,id: Maybe<&2,String>,value: Result<&2,&2,String,String>) -> IO(Unit):
   match handle value:
     case Command{_,sink,_,_,_,_} Fail{error}: output(sink,failure(id,"set_thinking_level",error))
-    case Command{session,sink,_,_,_,_} Done{+level}: setChosenThinking(session,sink,id,level,thinking(level))
+    case Command{session,sink,_,_,_,_} Done{+level}: setChosenThinking(session,sink,id,level,Levels.fromName(level))
 def reply(handle: Command,value: V.Value) -> IO(Unit):
   match handle:
     case Command{_,sink,_,_,_,_}: output(sink,value)
@@ -337,21 +320,11 @@ def currentMessages(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
       do IO<Unit>:
         messages : List<&2,Session.Message()> <- Session.messages(session)
         output(sink,data(id,"get_messages",MessageJson.object(MessageJson.field("messages",V.ArrayValue{messageValues(messages)},Nil{}))))
-def entryValue(entry: Session.Entry()) -> V.Value:
-  SessionJson.entry(~Unit,~Tools.ToolDetails,~V.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,entry)
 def entryValues(entries: List<&2,Session.Entry()>) -> List<&2,V.Value>:
   match entries:
     case Nil{}: Nil{}
-    case value <> rest: entryValue(value) <> entryValues(rest)
-def textValue(value: Maybe<&2,V.Value>) -> String:
-  match value:
-    case Some{V.Text{text}}: text
-    case _: ""
-def entryIdValue(value: V.Value) -> String:
-  match value:
-    case V.ObjectValue{fields}: textValue(R.get(V.Value,fields,"id"))
-    case _: ""
-def entryId(value: Session.Entry()) -> String: entryIdValue(entryValue(value))
+    case value <> rest: Types.entryValue(value) <> entryValues(rest)
+def entryId(value: Session.Entry()) -> String: S.entryId(Unit,Tools.ToolDetails,V.Value,value)
 def entriesAfter(entries: List<&2,Session.Entry()>,+since: String) -> Maybe<&2,List<&2,Session.Entry()>>:
   match entries:
     case Nil{}: None{}
@@ -376,28 +349,10 @@ def getEntries(handle: Command,id: Maybe<&2,String>,since: Result<&2,&2,String,M
       do IO<Unit>:
         +stored : Session.Session() <- Session.sessionOf(session)
         output(sink,entriesResponse(id,S.getLeafId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),selectedEntries(S.getEntries(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),since)))
-type TreeTask is Data:
-  RenderNode{value: S.SessionTreeNode<Unit,Tools.ToolDetails,V.Value>}
-  RenderNodes{values: List<&2,S.SessionTreeNode<Unit,Tools.ToolDetails,V.Value>>,built: List<&2,V.Value>}
-  AppendNode{remaining: List<&2,S.SessionTreeNode<Unit,Tools.ToolDetails,V.Value>>,built: List<&2,V.Value>}
-  CompleteNode{entry: V.Value,label: Maybe<&2,String>,labelTimestamp: Maybe<&2,String>}
-@unsafe def renderTree(tasks: List<&2,TreeTask>,completed: V.Value) -> V.Value:
-  match tasks:
-    case Nil{}: completed
-    case RenderNode{S.SessionTreeNode{entry,children,label,labelTimestamp}} <> rest:
-      renderTree(RenderNodes{children,Nil{}} <> CompleteNode{entryValue(entry),label,labelTimestamp} <> rest,completed)
-    case RenderNodes{Nil{},built} <> rest:
-      renderTree(rest,V.ArrayValue{List.reverse(&2,V.Value,built)})
-    case RenderNodes{head <> tail,built} <> rest:
-      renderTree(RenderNode{head} <> AppendNode{tail,built} <> rest,completed)
-    case AppendNode{remaining,built} <> rest:
-      renderTree(RenderNodes{remaining,completed <> built} <> rest,V.Null{})
-    case CompleteNode{entry,label,labelTimestamp} <> rest:
-      renderTree(rest,MessageJson.object(MessageJson.field("entry",entry,MessageJson.field("children",completed,MessageJson.optionalText("label",label,MessageJson.optionalText("labelTimestamp",labelTimestamp,Nil{}))))))
 def treeResponse(id: Maybe<&2,String>,leaf: Maybe<&2,String>,result: Result<&2,&2,S.Error,List<&2,S.SessionTreeNode<Unit,Tools.ToolDetails,V.Value>>>) -> V.Value:
   match result:
     case Fail{_}: failure(id,"get_tree","Session tree is invalid")
-    case Done{tree}: data(id,"get_tree",MessageJson.object(MessageJson.field("tree",renderTree(RenderNodes{tree,Nil{}} <> Nil{},V.Null{}),MessageJson.field("leafId",optionalValue(leaf),Nil{}))))
+    case Done{tree}: data(id,"get_tree",MessageJson.object(MessageJson.field("tree",Types.treeValue(tree),MessageJson.field("leafId",optionalValue(leaf),Nil{}))))
 def getTree(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
     case Command{session,sink,_,_,_,_}:
@@ -443,23 +398,13 @@ def lastText(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
     case Command{session,sink,_,_,_,_}:
       do IO<Unit>:
         last : Maybe<&2,String> <- Session.getLastAssistantText(session)
-        output(sink,data(id,"get_last_assistant_text",MessageJson.object(MessageJson.field("text",optionalValue(last),Nil{}))))
-type Cleared is Data: Cleared{steering: List<&2,String>,followUp: List<&2,String>}
-def clearState(current: Session.Shared) -> Session.Shared & Cleared:
-  match current:
-    case Session.Shared{stored,steering,followUp,listeners,active,last,retry,compaction, bash, pendingMessages, extensionsRef}:
-      (Session.Shared{stored,Nil{},Nil{},listeners,active,last,retry,compaction, bash, pendingMessages, extensionsRef},Cleared{steering,followUp})
-def clearedValue(value: Cleared) -> V.Value:
-  match value:
-    case Cleared{steering,followUp}: MessageJson.object(MessageJson.field("steering",V.ArrayValue{Events.texts(steering)},MessageJson.field("followUp",V.ArrayValue{Events.texts(followUp)},Nil{})))
+        output(sink,data(id,"get_last_assistant_text",MessageJson.object(MessageJson.optionalText("text",last,Nil{}))))
 def clearQueue(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
-    case Command{Session.AgentSession{agent,+shared,_,_,_,_,_,_},sink,_,_,_,_}:
+    case Command{session,sink,_,_,_,_}:
       do IO<Unit>:
-        Agent.clearAllQueues(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent)
-        removed : Cleared <- Ref.modify(Session.Shared,Cleared,shared,clearState)
-        Session.emitQueueUpdate(shared)
-        output(sink,data(id,"clear_queue",clearedValue(removed)))
+        removed : Session.QueuedMessages <- Session.clearQueue(session)
+        output(sink,data(id,"clear_queue",Types.clearedQueueValue(removed)))
 def mode(value: String) -> Maybe<&2,AgentTypes.QueueMode>:
   match value:
     case "all": Some{AgentTypes.All{}}
@@ -497,17 +442,11 @@ def cycleThinking(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
       do IO<Unit>:
         result : Result<&2,&2,String,Maybe<&2,Ai.ModelThinkingLevel>> <- Session.cycleThinkingLevel(session,Session.ModelMutationOptions{False{}})
         thinkingCycled(sink,id,result)
-def queueModeName(value: AgentTypes.QueueMode) -> String:
-  match value:
-    case AgentTypes.All{}: "all"
-    case AgentTypes.OneAtATime{}: "one-at-a-time"
 def pendingCount(value: Session.Shared) -> Nat:
   match value:
-    case Session.Shared{_,steering,followUp,_,_,_,_,_, _, pendingMessages, extensionsRef}: List.length(&2,String,steering) + List.length(&2,String,followUp)
-def modelValue(selected: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> V.Value:
-  Maybe.default(&2,V.Value,Maybe.map(&2,Ai.Model<Ai.JsonValue>,V.Value,ModelJson.model,selected),V.Null{})
-def stateValue(+stored: Session.Session(),+current: Session.AgentState(),shared: Session.Shared,streaming: Bool,compacting: Bool,steering: AgentTypes.QueueMode,followUp: AgentTypes.QueueMode,auto: Bool) -> V.Value:
-  MessageJson.object(MessageJson.field("model",modelValue(Session.stateModel(current)),MessageJson.field("thinkingLevel",V.Text{Levels.name(Session.stateThinking(current))},MessageJson.field("isStreaming",V.Boolean{streaming},MessageJson.field("isCompacting",V.Boolean{compacting},MessageJson.field("steeringMode",V.Text{queueModeName(steering)},MessageJson.field("followUpMode",V.Text{queueModeName(followUp)},MessageJson.optionalText("sessionFile",Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),MessageJson.field("sessionId",V.Text{S.getSessionId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored))},MessageJson.optionalText("sessionName",S.getSessionName(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),MessageJson.field("autoCompactionEnabled",V.Boolean{auto},MessageJson.field("messageCount",MessageJson.natural(List.length(&2,Session.Message(),Session.stateMessages(current))),MessageJson.field("pendingMessageCount",MessageJson.natural(pendingCount(shared)),Nil{})))))))))))))
+    case Session.Shared{_,steering,followUp,_,_,_,_,_, _, _, _}: List.length(&2,String,steering) + List.length(&2,String,followUp)
+def stateOf(+stored: Session.Session(),+current: Session.AgentState(),shared: Session.Shared,streaming: Bool,compacting: Bool,steering: AgentTypes.QueueMode,followUp: AgentTypes.QueueMode,auto: Bool) -> Types.RpcSessionState:
+  Types.RpcSessionState{Session.stateModel(current),Session.stateThinking(current),streaming,compacting,steering,followUp,Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored),S.getSessionId(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),S.getSessionName(Unit,Tools.ToolDetails,V.Value,Session.stateOf(stored)),auto,List.length(&2,Session.Message(),Session.stateMessages(current)),pendingCount(shared)}
 def sharedSnapshot(session: Session.AgentSession) -> IO(Session.Shared):
   match session:
     case Session.AgentSession{_,shared,_,_,_,_,_,_}: Ref.read(Session.Shared,shared)
@@ -524,7 +463,7 @@ def getState(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
         steering : AgentTypes.QueueMode <- Agent.getSteeringMode(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent)
         followUp : AgentTypes.QueueMode <- Agent.getFollowUpMode(Unit,Runtime.Details(),Runtime.Custom(),Runtime.Error(),Unit,agent)
         auto : Bool <- Session.getAutoCompactionEnabled(session)
-        output(sink,data(id,"get_state",stateValue(stored,current,shared,streaming,compacting,steering,followUp,auto)))
+        output(sink,data(id,"get_state",Types.sessionStateValue(stateOf(stored,current,shared,streaming,compacting,steering,followUp,auto))))
 def autoResult(sink: Sink(),id: Maybe<&2,String>,command: String,result: Result<&2,&2,String,Unit>) -> IO(Unit):
   output(sink,resultResponse(id,command,result))
 def setAutoCompaction(handle: Command,id: Maybe<&2,String>,enabled: Result<&2,&2,String,Bool>) -> IO(Unit):
@@ -693,27 +632,10 @@ def cloneCommand(handle: Command,host: Host,id: Maybe<&2,String>) -> IO(Unit):
 
 # get_commands: extension commands by invocation name, prompt templates, then
 # skills, each with its source metadata.
-def scopeName(scope: Skills.SourceScope) -> String:
-  match scope:
-    case Skills.User{}: "user"
-    case Skills.Project{}: "project"
-    case Skills.Temporary{}: "temporary"
-def originName(origin: Skills.SourceOrigin) -> String:
-  match origin:
-    case Skills.Package{}: "package"
-    case Skills.TopLevel{}: "top-level"
-def sourceInfoValue(info: Skills.SourceInfo) -> V.Value:
-  match info:
-    case Skills.SourceInfo{path,source,scope,origin,baseDir}:
-      MessageJson.object(MessageJson.field("path",V.Text{path},MessageJson.field("source",V.Text{source},MessageJson.field("scope",V.Text{scopeName(scope)},MessageJson.field("origin",V.Text{originName(origin)},MessageJson.optionalText("baseDir",baseDir,Nil{}))))))
-def commandValue(name: String,description: String,source: String,info: Skills.SourceInfo) -> V.Value:
-  MessageJson.object(MessageJson.field("name",V.Text{name},MessageJson.field("description",V.Text{description},MessageJson.field("source",V.Text{source},MessageJson.field("sourceInfo",sourceInfoValue(info),Nil{})))))
-def extensionCommandValue(name: String,description: Maybe<&2,String>,info: Skills.SourceInfo) -> V.Value:
-  MessageJson.object(MessageJson.field("name",V.Text{name},MessageJson.optionalText("description",description,MessageJson.field("source",V.Text{"extension"},MessageJson.field("sourceInfo",sourceInfoValue(info),Nil{})))))
 def extensionCommands(commands: List<&2,ExtensionTypes.ResolvedCommand>,rest: List<&2,V.Value>) -> List<&2,V.Value>:
   match commands:
     case Nil{}: rest
-    case ExtensionTypes.ResolvedCommand{_,invocation,info,description,_,_} <> others: extensionCommandValue(invocation,description,info) <> extensionCommands(others,rest)
+    case ExtensionTypes.ResolvedCommand{_,invocation,info,description,_,_} <> others: Types.slashCommandValue(Types.RpcSlashCommand{invocation,description,Types.ExtensionCommand{},info}) <> extensionCommands(others,rest)
 def registeredCommands(runner: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> IO(List<&2,ExtensionTypes.ResolvedCommand>):
   match runner:
     case None{}: IO.pure(List<&2,ExtensionTypes.ResolvedCommand>,Nil{})
@@ -721,11 +643,11 @@ def registeredCommands(runner: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> IO(
 def skillCommands(skills: List<&2,Skills.Skill>) -> List<&2,V.Value>:
   match skills:
     case Nil{}: Nil{}
-    case Skills.Skill{name,description,_,_,info,_} <> rest: commandValue("skill:" ++ name,description,"skill",info) <> skillCommands(rest)
+    case Skills.Skill{name,description,_,_,info,_} <> rest: Types.slashCommandValue(Types.RpcSlashCommand{"skill:" ++ name,Some{description},Types.SkillCommand{},info}) <> skillCommands(rest)
 def templateCommands(templates: List<&2,Templates.PromptTemplate>,skills: List<&2,Skills.Skill>) -> List<&2,V.Value>:
   match templates:
     case Nil{}: skillCommands(skills)
-    case Templates.PromptTemplate{name,description,_,_,info,_} <> rest: commandValue(name,description,"prompt",info) <> templateCommands(rest,skills)
+    case Templates.PromptTemplate{name,description,_,_,info,_} <> rest: Types.slashCommandValue(Types.RpcSlashCommand{name,Some{description},Types.PromptCommand{},info}) <> templateCommands(rest,skills)
 def getCommands(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
   match handle:
     case Command{+session,sink,_,_,_,_}:
@@ -789,19 +711,6 @@ def command(+handle: Handle,text: String) -> IO(Unit):
   do IO<Unit>:
     view : Command <- commandOf(handle)
     parsed(view,hostOf(handle),Decode.parse(text))
-def withoutCR(+value: String) -> String:
-  Bool.pick(String,String.ends_with(value,"\r"),String.take(value,String.length(value) - 1n),value)
-type Frame is Data: Frame{records: List<&2,String>,pending: String}
-def prependRecord(head: String,value: Frame) -> Frame:
-  match value:
-    case Frame{records,pending}: Frame{withoutCR(head) <> records,pending}
-def collect(parts: List<&2,String>) -> Frame:
-  match parts:
-    case Nil{}: Frame{Nil{},""}
-    case tail <> Nil{}: Frame{Nil{},tail}
-    case head <> rest: prependRecord(head,collect(rest))
-def frame(buffer: String,chunk: String) -> Frame:
-  collect(String.split(buffer ++ chunk,'\n'))
 def storeTail(handle: Handle,part: String) -> IO(Unit):
   match handle:
     case Handle{_,_,buffer,_,_,_,_,_}: Ref.write(String,buffer,part)
@@ -812,9 +721,9 @@ def processRecords(+handle: Handle,parts: List<&2,String>) -> IO(Unit):
       do IO<Unit>:
         command(handle,part)
         processRecords(handle,rest)
-def receivedFrame(+handle: Handle,value: Frame) -> IO(Unit):
+def receivedFrame(+handle: Handle,value: Jsonl.Frame) -> IO(Unit):
   match value:
-    case Frame{records,pending}:
+    case Jsonl.Frame{records,pending}:
       do IO<Unit>:
         storeTail(handle,pending)
         processRecords(handle,records)
@@ -823,14 +732,14 @@ def feed(+handle: Handle,chunk: String) -> IO(Unit):
     case Handle{_,_,+buffer,_,_,_,_,_}:
       do IO<Unit>:
         pending : String <- Ref.read(String,buffer)
-        receivedFrame(handle,frame(pending,chunk))
+        receivedFrame(handle,Jsonl.frame(pending,chunk))
 def finish(+handle: Handle) -> IO(Unit):
   match handle:
     case Handle{_,_,+buffer,_,_,_,_,_}:
       do IO<Unit>:
         +pending : String <- Ref.read(String,buffer)
         Ref.write(String,buffer,"")
-        Bool.pick(Unit -> IO(Unit),String.is_empty(pending),_ => IO.pure(Unit,Unit{}),_ => command(handle,withoutCR(pending)))(Unit{})
+        Bool.pick(Unit -> IO(Unit),String.is_empty(pending),_ => IO.pure(Unit,Unit{}),_ => command(handle,Jsonl.withoutCR(pending)))(Unit{})
 def stop(owner: Owner) -> IO(Unit):
   match owner:
     case Owner{Handle{+current,_,buffer,busy,jobs,_,_,+listener},+task}:

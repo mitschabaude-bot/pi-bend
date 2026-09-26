@@ -278,6 +278,23 @@ type Error is Data:
   WrongType{path: List<&2, Segment>, expected: String}
   InvalidValue{path: List<&2, Segment>, expected: String}
 
+def segmentText(segment: Segment) -> String:
+  match segment:
+    case Field{name}: "." ++ name
+    case Index{index}: "[" ++ Nat.show(index) ++ "]"
+
+def pathText(path: List<&2, Segment>) -> String:
+  match path:
+    case Nil{}: ""
+    case segment <> rest: segmentText(segment) ++ pathText(rest)
+
+# A readable account of a decoding error, its path in dotted/indexed form.
+def describe(error: Error) -> String:
+  match error:
+    case MissingField{path}: "missing " ++ pathText(path)
+    case WrongType{path, expected}: "expected " ++ expected ++ " at " ++ pathText(path)
+    case InvalidValue{path, expected}: "expected " ++ expected ++ " at " ++ pathText(path)
+
 def at(error: Error, segment: Segment) -> Error:
   match error:
     case MissingField{path}: MissingField{segment <> path}
