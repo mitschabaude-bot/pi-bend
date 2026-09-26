@@ -638,11 +638,11 @@
       "port_sha256": {}
     },
     "packages/ai/src/providers/amazon-bedrock.ts": {
-      "state": "partial",
-      "note": "The Amazon Bedrock provider with its catalog, listed first in providers/all.bend as upstream, and bedrockAuth.resolve (stored key, AWS_BEARER_TOKEN_BEDROCK, stored or ambient AWS_PROFILE, access keys, ECS task role, web identity token; abort checks around each lookup), tested in packages/ai/test/amazon-bedrock-auth.bend. Missing: bedrockAuth.login, whose method selection and notify event need the upstream AuthPrompt/AuthEvent interaction that LoginInteraction does not model yet.",
+      "state": "ported",
+      "note": "The Amazon Bedrock provider with its catalog, listed first in providers/all.bend as upstream; bedrockAuth.login (method select, secret bearer token, the credential-chain notice, profile name or the credential-chain confirmation, unknown-method rejection, abort checks) over the shared AuthPrompt/AuthEvent interaction, and bedrockAuth.resolve (stored key, AWS_BEARER_TOKEN_BEDROCK, stored or ambient AWS_PROFILE, access keys, ECS task role, web identity token; abort checks around each lookup), tested in packages/ai/test/amazon-bedrock-auth.bend.",
       "source_sha256": "e32611e8d2d4e71ee5d0ba426da60c0aecf42d1bc34ccc3d0d49ce877c621a8c",
       "port_sha256": {
-        "packages/ai/src/providers/amazon-bedrock.bend": "b4089f9b12e1c656a379d38fb024b68d8ffedb67f2cdec328a5b189b36d852db"
+        "packages/ai/src/providers/amazon-bedrock.bend": "cb22ebba05fa97114629c94ff5779e4c7de94530ce58bac1865a3847daf94135"
       }
     },
     "packages/ai/src/providers/amazon-bedrock.models.ts": {
@@ -742,6 +742,122 @@
         "packages/ai/src/models.bend",
         "packages/coding-agent/src/core/model-runtime.bend"
       ]
+    },
+    "packages/coding-agent/src/modes/rpc/rpc-client.ts": {
+      "state": "ported",
+      "note": "RpcClient with every command method, start/stop of the child (SIGTERM, SIGKILL after 1 s), request ids, 30 s request timeouts, exit/spawn/stdin failures rejecting pending requests, strict JSONL stdout with StringDecoder-style UTF-8, stderr collection/forwarding, event listeners, waitForIdle/collectEvents/promptAndWait and getData. Adaptations: cliPath is the agent executable (not `node cliPath`); the transport is the injectable `send` (withSend); results are typed, decoded per command; events are their JSON values (json-event's JsonAgentSessionEvent); a spawn failure fails start() instead of the later send; requests still pending at stop() fail with the exit error instead of their timeouts; listeners run on the stdout reader and must not wait for responses or unsubscribe themselves.",
+      "ports": [
+        "packages/coding-agent/src/modes/rpc-client.bend"
+      ],
+      "source_sha256": "6d1a586cfa38fd3be62d21feacfe9e700f6e88d4fc842adcc345130acd0d57ff",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/rpc-client.bend": "c68686c4a326b036aca16c199115b7621d5725008fce2dbadee902768d997237"
+      }
+    },
+    "packages/coding-agent/src/modes/rpc/rpc-types.ts": {
+      "state": "ported",
+      "note": "Typed RpcCommand (encoder), response envelope, RpcSessionState and RpcSlashCommand with encoders used by the endpoint and decoders used by RpcClient, plus wire codecs for bash results, cleared queues and the entry tree. Per-command response data stays JSON in the envelope and is decoded by each client method. Extension UI request/response types are not ported with the endpoint's extension UI.",
+      "ports": [
+        "packages/coding-agent/src/modes/rpc-types.bend"
+      ],
+      "source_sha256": "34057257456fd5f935587a0e9650fb5777738674e491a68fd037425703c45e26",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/rpc-types.bend": "4f598ad04bb6ec4f8e71a48aa84978228052bd40ad6b02ab5f742e630b3e126c"
+      }
+    },
+    "packages/coding-agent/src/modes/rpc/jsonl.ts": {
+      "state": "ported",
+      "note": "serializeJsonLine and the LF-only framing step of attachJsonlLineReader over decoded text; byte-compared with upstream in tests/rpc_protocol_check.py. Stream attachment and UTF-8 decoding belong to the callers (main.bend's stdin loop, RpcClient's stdout reader).",
+      "ports": [
+        "packages/coding-agent/src/modes/jsonl.bend"
+      ],
+      "source_sha256": "95723d349fcebad1f1da7ce103d02ba7d5e2c876b7d178d41d8b56beedbd93e0",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/jsonl.bend": "2365821a97684ac0e9b9a60a251d3974babf58e03090e4b2b0614f95fdae989f"
+      }
+    },
+    "packages/coding-agent/src/core/auth-guidance.ts": {
+      "state": "ported",
+      "note": "All four messages; callers pass the docs directory where upstream reads its package location (config.ts getDocsPath). Not yet used by AgentSession.prompt's preflight (see tests/rpc.md).",
+      "source_sha256": "8fbee7c272953bf881f22e9ce4b163bb0df9c091f63ee823dbfe32186991efe0",
+      "port_sha256": {
+        "packages/coding-agent/src/core/auth-guidance.bend": "dc2b5f649bf75101196be156d6a19e52aa00da717f66acf2df30b8c1f8e4689d"
+      }
+    },
+    "packages/ai/src/api/openrouter-images.ts": {
+      "state": "ported",
+      "note": "generateImages: the missing-key error, buildParams (sanitized text parts, data-URL image parts, stream false, modalities from the model's outputs), the OpenAI SDK client over openai-client.bend (bearer auth, model then option headers with nulls dropped, the request timeout), onPayload replacement, retryProviderRequest around one SDK attempt, onResponse after the body is read, responseId, parseUsage with cache reads/writes and per-million pricing, the first choice's text and data-URL images, and error/aborted results with the formatted provider error; tests/openrouter_images_check.py compares 14 cases with upstream images.ts driving the pinned OpenAI SDK. Native differences: the SDK identity headers (User-Agent, X-Stainless-*) come from the caller's Client.Defaults; the response body is read up to 64 MiB; a 2xx body that is not JSON reports a native message instead of the JavaScript SyntaxError text.",
+      "source_sha256": "c658f331cb2278e7accc925fa72eb3c3902d32d6ff37c4263b6bb6108888d440",
+      "port_sha256": {
+        "packages/ai/src/api/openrouter-images.bend": "e3533f167cf212373d9fc93333232790d2c4593feb26b0673205ba423c83cf5d"
+      }
+    },
+    "packages/ai/src/api/openrouter-images.lazy.ts": {
+      "state": "ported",
+      "note": "openrouterImagesApi: the ProviderImages value is a callback over the native transport (openrouter-images.bend openrouterImagesApi); there is no lazy module import, and a request without a signal runs under a local signal that never aborts.",
+      "ports": [
+        "packages/ai/src/api/openrouter-images.bend"
+      ],
+      "source_sha256": "04c18f8c065779c2f705850e593cee4e0d6207a4121473540a223fc83026a8f4",
+      "port_sha256": {
+        "packages/ai/src/api/openrouter-images.bend": "e3533f167cf212373d9fc93333232790d2c4593feb26b0673205ba423c83cf5d"
+      }
+    },
+    "packages/ai/src/image-models.generated.ts": {
+      "state": "ported",
+      "note": "Generated from the pinned image-models.generated.ts by scripts/generate-model-catalog.py --images; tests/openrouter_images_check.py compares all 55 models with it.",
+      "source_sha256": "1ce6e12ec4ce41f4ac69556ca1417464d235bf203d48194fc9a16535987014b1",
+      "port_sha256": {
+        "packages/ai/src/image-models.generated.bend": "b2610b9d6daa5070def3113bc37eedf09139c138666858a3434737face123a46"
+      }
+    },
+    "packages/ai/src/image-models.ts": {
+      "state": "ported",
+      "note": "getImageModel, getImageProviders and getImageModels over the generated catalog; an unknown provider or id has no model (upstream returns undefined).",
+      "source_sha256": "58f11488a6623fe8528153235f9216c249d70e146b0f99f8b22db8d88a49ae74",
+      "port_sha256": {
+        "packages/ai/src/image-models.bend": "49a5ec2d625ee09709227eea20b7f0f5dce384c5f94e18c10bc7dbf77b573c39"
+      }
+    },
+    "packages/ai/src/images-api-registry.ts": {
+      "state": "ported",
+      "note": "The registry is a value: registerImagesApiProvider returns the next registry (a repeated api replaces its entry in place, as Map.set), getImagesApiProvider looks one up, and generateWith is the registered function with upstream's mismatched-api rejection.",
+      "source_sha256": "604636b0a4b59d1798d79aad48a1dfdd96ee79e3f16b16cdc54dbd1b81c44ffe",
+      "port_sha256": {
+        "packages/ai/src/images-api-registry.bend": "b265ab0bb5de95563a56b32c48ae2b5c0d52820417de8b93db77b6e7cd97274c"
+      }
+    },
+    "packages/ai/src/images.ts": {
+      "state": "ported",
+      "note": "generateImages through the registered api provider; a missing provider is a failure with upstream's message. The registry is passed in instead of being filled by importing register-builtins.",
+      "source_sha256": "de83a96c1eb420cfb1b6f4e3ce8430f19b2312399d195fb786c76ebae4111dcf",
+      "port_sha256": {
+        "packages/ai/src/images.bend": "2ef6f38e1f4eda2a131c71429141772c2b9cfe88a4e1d6c899729a6b0910e723"
+      }
+    },
+    "packages/ai/src/images-models.ts": {
+      "state": "partial",
+      "note": "ImagesProvider/createImagesProvider (name defaulting to the id, last-known catalog, refreshModels with in-flight sharing: a call that waited for a concurrent refresh shares its outcome), and ImagesModels: set/delete/clear providers as value transitions (replacement keeps the position), getProviders/getProvider/getModels/getModel, refresh with model_source failures for one provider and best-effort concurrent refresh of all, getAuth through resolveProviderAuth, and generateImages with auth resolution and per-field option merging (unknown providers and auth rejections become error results). All six images-models.test.ts cases pass (packages/ai/test/images-models.bend). Missing: createImagesModels' defaults (InMemoryCredentialStore and defaultProviderAuthContext); callers pass the store and context.",
+      "source_sha256": "9a3a2bf47263e577925850b182d2b508d0bbf0e1437124b1240bff95b8deeb3a",
+      "port_sha256": {
+        "packages/ai/src/images-models.bend": "e51f0009e4078f5ed017ce437d6cc5c19b51eeada787dc9775a9b0bc54a82718"
+      }
+    },
+    "packages/ai/src/providers/images/register-builtins.ts": {
+      "state": "ported",
+      "note": "registerBuiltInImagesApiProviders registers the openrouter-images api into a registry value; the caller supplies the api callback. The lazy-load failure result has no counterpart because nothing is loaded lazily.",
+      "source_sha256": "8c8bd4e614b8b733c0a4232f7cc974bf38c5a4bb6b9615c732e3b794ff1d908f",
+      "port_sha256": {
+        "packages/ai/src/providers/images/register-builtins.bend": "6a346afd7031f2c5b23ff72bbeccd87698a4e65bc6bc332af21de3b5e943fe46"
+      }
+    },
+    "packages/ai/src/providers/openrouter-images.ts": {
+      "state": "partial",
+      "note": "The OpenRouter images provider with OPENROUTER_API_KEY auth and the generated catalog, registered by builtinImagesModels (providers/all.bend). Missing: the lazy OpenRouter OAuth, as for the chat provider.",
+      "source_sha256": "921e057fa1880412c29a849505ddd7dbe466996d78087c0c0628437ec2051880",
+      "port_sha256": {
+        "packages/ai/src/providers/openrouter-images.bend": "8f8546ed016e90a08042437cb4c808bb06c950e43f23c888a787157b5170f1d5"
+      }
     }
   }
 }

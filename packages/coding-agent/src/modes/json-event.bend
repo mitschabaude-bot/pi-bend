@@ -5,6 +5,7 @@ import ../../../ai/src/types.bend as Ai
 import ../../../ai/src/utils/message-json.bend as Json
 import ../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../../runtime/src/record.bend as R
+import ../../../runtime/src/json.bend as Decode
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/f64.bend as F
 import ../core/tools/index.bend as Tools
@@ -36,6 +37,10 @@ def message(value: Message()) -> V.Value:
   match value:
     case Agent.LlmMessage{value}: Json.message(~Unit, ~Tools.ToolDetails, ~unitDetails, ~Tools.detailsValue, value)
     case Agent.CustomMessage{value}: SessionJson.codingMessage(~V.Value, ~rawValue, value)
+
+# The inverse of message, reading details as a loaded session does.
+def decodeMessage(value: V.Value) -> Result<&2, &2, Decode.Error, Message()>:
+  SessionJson.decodeAgentMessage(~Unit, ~Tools.ToolDetails, ~V.Value, ~Session.readUnit, ~Session.readDetails, ~Session.readRaw, value)
 
 def messages(values: List<&2, Message()>) -> List<&2, V.Value>:
   match values:
@@ -139,6 +144,29 @@ def compactionResult(result: Compaction.CompactionResult) -> V.Value:
   match result:
     case Compaction.CompactionResult{summary, firstKeptEntryId, tokensBefore, estimatedTokensAfter, usage, details}:
       Json.object(Json.field("summary", Json.text(summary), Json.field("firstKeptEntryId", Json.text(firstKeptEntryId), Json.field("tokensBefore", V.Number{tokensBefore}, Json.optional("estimatedTokensAfter", Maybe.map(&2, F64, V.Value, after => V.Number{after}, estimatedTokensAfter), Json.optional("usage", Maybe.map(&2, Ai.Usage, V.Value, Json.usage, usage), Json.optional("details", Maybe.map(&2, Compaction.CompactionDetails, V.Value, compactionDetails, details), Nil{})))))))
+
+def compactionDetailsFields(+fields: R.Record<V.Value>) -> Result<&2, &2, Decode.Error, Compaction.CompactionDetails>:
+  do Result<&2, &2, Decode.Error, Compaction.CompactionDetails>:
+    readFiles : List<&2, String> <- Decode.required(List<&2, String>, fields, "readFiles", value => Decode.list(~String, ~Decode.string, value))
+    modifiedFiles : List<&2, String> <- Decode.required(List<&2, String>, fields, "modifiedFiles", value => Decode.list(~String, ~Decode.string, value))
+    return Compaction.CompactionDetails{readFiles, modifiedFiles}
+
+def decodeCompactionDetails(value: V.Value) -> Result<&2, &2, Decode.Error, Compaction.CompactionDetails>:
+  Result.bind(&2, &2, Decode.Error, R.Record<V.Value>, Compaction.CompactionDetails, Decode.object(value), fields => compactionDetailsFields(fields))
+
+def compactionResultFields(+fields: R.Record<V.Value>) -> Result<&2, &2, Decode.Error, Compaction.CompactionResult>:
+  do Result<&2, &2, Decode.Error, Compaction.CompactionResult>:
+    summary : String <- Decode.required(String, fields, "summary", Decode.string)
+    firstKeptEntryId : String <- Decode.required(String, fields, "firstKeptEntryId", Decode.string)
+    tokensBefore : F64 <- Decode.required(F64, fields, "tokensBefore", Decode.number)
+    estimatedTokensAfter : Maybe<&2, F64> <- Decode.optional(F64, fields, "estimatedTokensAfter", Decode.number)
+    usage : Maybe<&2, Ai.Usage> <- Decode.optional(Ai.Usage, fields, "usage", Json.decodeUsage)
+    details : Maybe<&2, Compaction.CompactionDetails> <- Decode.optional(Compaction.CompactionDetails, fields, "details", decodeCompactionDetails)
+    return Compaction.CompactionResult{summary, firstKeptEntryId, tokensBefore, estimatedTokensAfter, usage, details}
+
+# The inverse of compactionResult.
+def decodeCompactionResult(value: V.Value) -> Result<&2, &2, Decode.Error, Compaction.CompactionResult>:
+  Result.bind(&2, &2, Decode.Error, R.Record<V.Value>, Compaction.CompactionResult, Decode.object(value), fields => compactionResultFields(fields))
 
 def toSessionJsonEvent(event: Session.AgentSessionEvent) -> Result<&2, &2, String, V.Value>:
   match event:

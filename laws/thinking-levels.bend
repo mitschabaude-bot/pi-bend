@@ -41,3 +41,9 @@ law closest_without_candidates_is_the_fallback:
   for requested: U32
   for fallback: T.ModelThinkingLevel
   {Levels.closest(Nil{}, requested, fallback) == fallback : T.ModelThinkingLevel}
+
+# Level names are the wire form (RPC, settings): reading a level's name back
+# yields the level.
+law a_level_name_reads_back_as_the_level:
+  for level: T.ModelThinkingLevel
+  {Levels.fromName(Levels.name(level)) == Some{level} : Maybe<&2, T.ModelThinkingLevel>}

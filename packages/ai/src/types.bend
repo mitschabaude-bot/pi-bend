@@ -457,6 +457,14 @@ def ResponseCallback(-RequestModel: Data, -Error: Data) -> Data:
 type ProviderRequestOptions<-RequestModel: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Payload: Data, -Error: Data> is Data:
   ProviderRequestOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Payload, RequestModel, Error)>, onResponse: Maybe<&2, ResponseCallback(RequestModel, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, F64>, maxRetries: Maybe<&2, F64>, maxRetryDelayMs: Maybe<&2, F64>}
 
+# upstream ImagesOptions: the shared request options for image generation
+# (payloads are the JSON params) plus metadata.
+type ImagesOptions<-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data> is Data:
+  ImagesOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(JsonValue, ImagesModel<JsonValue>, Error)>, onResponse: Maybe<&2, ResponseCallback(ImagesModel<JsonValue>, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, F64>, maxRetries: Maybe<&2, F64>, maxRetryDelayMs: Maybe<&2, F64>, metadata: Maybe<&2, Record.Record<JsonValue>>}
+
+def emptyImagesOptions(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data) -> ImagesOptions<Signal, Telemetry, Fetch, Error>:
+  ImagesOptions{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+
 type StreamOptions<-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data> is Data:
   StreamOptions{signal: Maybe<&2, Signal>, telemetryContext: Maybe<&2, Telemetry>, apiKey: Maybe<&2, String>, fetch: Maybe<&2, Fetch>, env: Maybe<&2, ProviderEnv()>, onPayload: Maybe<&2, PayloadCallback(Value, Model<Value>, Error)>, onResponse: Maybe<&2, ResponseCallback(Model<Value>, Error)>, headers: Maybe<&2, ProviderHeaders()>, timeoutMs: Maybe<&2, F64>, maxRetries: Maybe<&2, F64>, maxRetryDelayMs: Maybe<&2, F64>, temperature: Maybe<&2, F64>, samplingParams: Maybe<&2, Record.Record<Value>>, maxTokens: Maybe<&2, F64>, transport: Maybe<&2, Transport>, cacheRetention: Maybe<&2, CacheRetention>, sessionId: Maybe<&2, String>, websocketConnectTimeoutMs: Maybe<&2, F64>, metadata: Maybe<&2, Record.Record<Value>>}
 

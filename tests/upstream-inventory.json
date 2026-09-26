@@ -1078,7 +1078,8 @@
       "source": "packages/ai/test/image-model-data.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "6232831b8b2759f4017ba5b6ece41a5537763f955d9c0b4c7130c0e9f7ee50a1"
+      "sha256": "6232831b8b2759f4017ba5b6ece41a5537763f955d9c0b4c7130c0e9f7ee50a1",
+      "notes": "Tests parseOpenRouterImageModels of upstream scripts/generate-image-models.ts, which fetches OpenRouter's live catalog; the port generates the image catalog from the pinned image-models.generated.ts instead (scripts/generate-model-catalog.py --images), whose 55 models tests/openrouter_images_check.py compares."
     },
     {
       "source": "packages/ai/test/image-tool-result.test.ts",
@@ -1088,15 +1089,20 @@
     },
     {
       "source": "packages/ai/test/images-models.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "81e706c209a74725ef75d4b15271975039dba4281a55b7ee9f7a9c39c18b8a4a"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/images-models.bend",
+        "tests/openrouter_images_check.py"
+      ],
+      "sha256": "81e706c209a74725ef75d4b15271975039dba4281a55b7ee9f7a9c39c18b8a4a",
+      "notes": "All 6 cases in packages/ai/test/images-models.bend (run by tests/openrouter_images_check.py; Bun/native1/native4). Adaptations: the collection is a value returned by each setProvider/deleteProvider; the credential store and auth context are passed explicitly (an empty store, upstream's default in-memory one); env equality is compared with sorted keys as toEqual ignores order; the two concurrent refreshes are forked tasks."
     },
     {
       "source": "packages/ai/test/images.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "d44702aa4d1b5186a833e7f4c844ee996c08d303a8d8dc79ed0d513960f27ff8"
+      "sha256": "d44702aa4d1b5186a833e7f4c844ee996c08d303a8d8dc79ed0d513960f27ff8",
+      "notes": "Live E2E image generation against OpenRouter (needs OPENROUTER_API_KEY); no external service is contacted."
     },
     {
       "source": "packages/ai/test/interleaved-thinking.test.ts",
@@ -1497,9 +1503,14 @@
     },
     {
       "source": "packages/ai/test/openrouter-images.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "83a507fb213f4b38340f22b9b9a89b5909685093e7535bdbff979d1858c7a79e"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/openrouter-images.bend",
+        "packages/ai/test/openrouter-images-oracle.ts",
+        "tests/openrouter_images_check.py"
+      ],
+      "sha256": "83a507fb213f4b38340f22b9b9a89b5909685093e7535bdbff979d1858c7a79e",
+      "notes": "All 3 cases, plus 11 further request/response cases (catalog model with an image input, cache pricing, data-URL filtering, missing key, HTTP error, missing/empty choices, header overlay, onPayload replacement, retry, unregistered api). tests/openrouter_images_check.py runs packages/ai/test/openrouter-images.bend through images.ts generateImages against a loopback server and compares payload, onResponse, result and received requests with upstream images.ts driving the pinned OpenAI SDK (openrouter-images-oracle.ts, Node); Bun/native1/native4. Adaptation: upstream's mock throws 'Request aborted' for an aborted signal; against the real SDK the aborted result carries the SDK's message, which the native result matches."
     },
     {
       "source": "packages/ai/test/openrouter-oauth.test.ts",
@@ -1586,7 +1597,7 @@
         "tests/bedrock_check.py"
       ],
       "sha256": "05398664e04241071153801789cc3017bad1b820c1926a91ac04dc9cdff785a6",
-      "notes": "Only the two Cloudflare cases are ported ('requires Cloudflare Workers AI account config and returns scoped env', 'requires Cloudflare AI Gateway account and gateway config and returns scoped env headers'), each with its missing-config and configured halves. Upstream resolves through createModels().getAuth with a fake auth context; the port calls the provider's ApiKeyAuth.resolve with the same context. Native cases cover the per-field credential/env merge, the source label, an empty stored key and abort checks. Bedrock (packages/ai/test/amazon-bedrock-auth.bend, run by tests/bedrock_check.py on Bun): 'reports bedrock as configured from ambient AWS credentials without an api key' (configured and unconfigured halves) and the resolve assertion of 'runs provider-owned Bedrock bearer token and AWS profile login flows' call bedrockAuth.resolve with the same fake context; its login half is pending until LoginInteraction models select prompts and notify events. Native cases cover the full credential-source order, empty values and abort checks. Every other case of the suite remains pending. Native lane not run."
+      "notes": "Only the two Cloudflare cases are ported ('requires Cloudflare Workers AI account config and returns scoped env', 'requires Cloudflare AI Gateway account and gateway config and returns scoped env headers'), each with its missing-config and configured halves. Upstream resolves through createModels().getAuth with a fake auth context; the port calls the provider's ApiKeyAuth.resolve with the same context. Native cases cover the per-field credential/env merge, the source label, an empty stored key and abort checks. Bedrock (packages/ai/test/amazon-bedrock-auth.bend, run by tests/bedrock_check.py on Bun): 'reports bedrock as configured from ambient AWS credentials without an api key' (configured and unconfigured halves) and 'runs provider-owned Bedrock bearer token and AWS profile login flows' (both login flows with scripted answers and the recorded info event, then the resolve assertion) call bedrockAuth.login/resolve with the same fake context. Native cases cover the full credential-source order, empty values and abort checks. Every other case of the suite remains pending. Native lane not run."
     },
     {
       "source": "packages/ai/test/qwen-token-plan-models.test.ts",
@@ -2914,21 +2925,33 @@
     },
     {
       "source": "packages/coding-agent/test/rpc-client-clear-queue.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "1c2d691ea48ffccc3d06a426721f6d869608de3ad9c208397ff5b6d33a369746"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/rpc-client.bend",
+        "tests/rpc_client_check.py"
+      ],
+      "sha256": "1c2d691ea48ffccc3d06a426721f6d869608de3ad9c208397ff5b6d33a369746",
+      "notes": "'sends the clear_queue RPC command' passes on Bun and native one/four threads (`rpc-client fake`). The client's transport is replaced with RpcClient.withSend as upstream assigns the private send; upstream's getData stub returns data as the real getData does for a success response, so the real one runs. The sent command and the typed ClearedQueue result are checked."
     },
     {
       "source": "packages/coding-agent/test/rpc-client-clone.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "4402c2a7b168016cd0d2fbb578843d27181a8b55353d56f607d293060aee8d6c"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/rpc-client.bend",
+        "tests/rpc_client_check.py"
+      ],
+      "sha256": "4402c2a7b168016cd0d2fbb578843d27181a8b55353d56f607d293060aee8d6c",
+      "notes": "'sends the clone RPC command' passes on Bun and native one/four threads, with the same withSend substitution as the clear-queue suite; the result is the typed Cancellable{cancelled}."
     },
     {
       "source": "packages/coding-agent/test/rpc-client-process-exit.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "7469f8683c0f227985e908cce021922e64ee85dcede7e49df6a1fe0e8cbc6cc8"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/rpc-client.bend",
+        "tests/rpc_client_check.py"
+      ],
+      "sha256": "7469f8683c0f227985e908cce021922e64ee85dcede7e49df6a1fe0e8cbc6cc8",
+      "notes": "'rejects an in-flight request when the child process exits' passes on native one/four threads (`rpc-client process <dir>`): the child is a shell script that reads one line of stdin and exits 43 (the client runs cliPath as an executable, not `node cliPath`), and getCommands fails with 'Agent process exited (code=43 signal=null)'. Bun has no process primitive."
     },
     {
       "source": "packages/coding-agent/test/rpc-jsonl.test.ts",
@@ -2944,15 +2967,23 @@
     },
     {
       "source": "packages/coding-agent/test/rpc-prompt-response-semantics.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d3c38618c3e0a2541a9211cfa0a616d3fb9936142663621bd3e48d627e10912d"
+      "status": "partial",
+      "ports": [
+        "tests/rpc-mode.bend",
+        "tests/rpc_mode_check.py"
+      ],
+      "sha256": "d3c38618c3e0a2541a9211cfa0a616d3fb9936142663621bd3e48d627e10912d",
+      "notes": "Three of four tests pass on Bun and native one/four threads: one success response on preflight success, one success response for a follow-up queued during streaming, and queued steering/follow-up returned and cleared with a single agent_start. Rpc.feed replaces the mocked line handler, a capturing sink replaces writeRawStdout, and the session is in memory over the faux provider; a faux gate holds the streaming response where upstream waits 100/500 ms. Pending: 'emits one failure response when prompt preflight rejects' \u2014 AgentSession.prompt has no auth preflight/preflightResult yet, so the RPC endpoint acknowledges the prompt before it fails (tests/rpc.md)."
     },
     {
       "source": "packages/coding-agent/test/rpc.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "28bb4f005cac1803df42abae071301824efe481598d25f1fabd0ce144203887f"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/rpc.bend",
+        "tests/rpc_client_cli_check.py"
+      ],
+      "sha256": "28bb4f005cac1803df42abae071301824efe481598d25f1fabd0ce144203887f",
+      "notes": "All 18 'RPC mode' tests run with upstream's assertions through RpcClient against the native CLI on one and four threads (tests/rpc_client_cli_check.py). Adaptation: upstream skips the suite without an Anthropic key and uses claude-sonnet-4-5; here the CLI's openai provider (gpt-5-mini) is pointed by models.json at tests/parity/fake_openai.py, whose replies follow each request (the echo test's reply is the value found in the request, so it still fails if bash output is missing from the LLM context). The check also runs the same patched suite under vitest with upstream's own RpcClient and installed pi 0.87.1 against that provider and requires equal outcomes: 16 pass on both; 'should handle manual compaction' and 'should retain pre-compaction entries in get_entries' fail on upstream itself and on the port with 'Nothing to compact (session too small)' (a one-exchange session is below keepRecentTokens), so they are reproduced, not satisfied."
     },
     {
       "source": "packages/coding-agent/test/runtime-credentials.test.ts",
@@ -3627,9 +3658,13 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5868-rpc-unknown-command-id.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "8d820e03ede2d75f422a26ff68c060e58c79e34d2e22a76fb6961c39448ad3c0"
+      "status": "ported",
+      "ports": [
+        "tests/rpc-mode.bend",
+        "tests/rpc_mode_check.py"
+      ],
+      "sha256": "8d820e03ede2d75f422a26ff68c060e58c79e34d2e22a76fb6961c39448ad3c0",
+      "notes": "'preserves the request id on unknown command errors' passes on Bun and native one/four threads: the exact response record {id:'test',type:'response',command:'foobar',success:false,error:'Unknown command: foobar'} is emitted. The listener-snapshot bookkeeping of upstream's harness has no counterpart (no process-wide listeners)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5943-session-start-notify.test.ts",
@@ -4178,7 +4213,7 @@
         "tests/thinking-level.bend"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '→ ✓ medium', then '  ✓ medium' and '→   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",

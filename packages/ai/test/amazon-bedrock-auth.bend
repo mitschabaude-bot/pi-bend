@@ -6,6 +6,7 @@ import ../../runtime/src/abort.bend as Abort
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/record.bend as R
 import ../src/models.bend as Models
+import ../../runtime/src/ref.bend as Ref
 
 # The Bedrock resolve cases of upstream providers.test.ts ("builtin
 # providers") plus native cases for the credential-source order of
@@ -14,8 +15,8 @@ import ../src/models.bend as Models
 # auth context; without a stored credential getAuth returns resolve's result,
 # so these cases call ApiKeyAuth.resolve with the same context. The login half
 # of "runs provider-owned Bedrock bearer token and AWS profile login flows"
-# needs select prompts and notify events, which LoginInteraction does not
-# model; only its resolve assertion is ported.
+# answers the prompts from a queue and records every prompt and event;
+# login results render as `key|env`.
 # Results render as `key|headers|env|source` (`-` for absent).
 
 def Env() -> Data: R.Record<String>
@@ -107,6 +108,84 @@ def stored(value: Maybe<&2, String>, env: Maybe<&2, T.ProviderEnv()>) -> Maybe<&
 
 def profileEnv(name: String) -> Maybe<&2, T.ProviderEnv()>: Some{R.Record{[var("AWS_PROFILE", name)]}}
 
+# Login
+# -----
+
+type Script is Data:
+  Script{answers: Ref.Ref<List<&2, String>>, log: Ref.Ref<List<&2, String>>}
+
+def optionIds(options: List<&2, Auth.AuthSelectOption>) -> List<&2, String>:
+  match options:
+    case Nil{}: Nil{}
+    case Auth.AuthSelectOption{id, label, _} <> rest: (id ++ "=" ++ label) <> optionIds(rest)
+
+def promptText(prompt: Auth.AuthPrompt) -> String:
+  match prompt:
+    case Auth.TextPrompt{message, _, _}: "text:" ++ message
+    case Auth.SecretPrompt{message, _, _}: "secret:" ++ message
+    case Auth.SelectPrompt{message, options, _}: "select:" ++ message ++ "[" ++ String.join(optionIds(options), ",") ++ "]"
+    case Auth.ManualCodePrompt{message, _, _}: "code:" ++ message
+
+def appended(+line: String, list: List<&2, String>) -> List<&2, String> & Unit: (List.append(&2, String, list, [line]), Unit{})
+
+def popped(list: List<&2, String>) -> List<&2, String> & Result<&2, &2, String, String>:
+  match list:
+    case Nil{}: (Nil{}, Fail{"no scripted answer"})
+    case next <> rest: (rest, Done{next})
+
+def answer(script: Script, prompt: Auth.AuthPrompt) -> IO(Result<&2, &2, String, String>):
+  match script:
+    case Script{answers, log}:
+      do IO<Result<&2, &2, String, String>>:
+        Ref.modify(List<&2, String>, Unit, log, list => appended(promptText(prompt), list))
+        Ref.modify(List<&2, String>, Result<&2, &2, String, String>, answers, popped)
+
+def optionalText(value: Maybe<&2, String>) -> String:
+  match value:
+    case Some{text}: text
+    case None{}: "-"
+
+def linkLabels(links: List<&2, Auth.AuthInfoLink>) -> List<&2, String>:
+  match links:
+    case Nil{}: Nil{}
+    case Auth.AuthInfoLink{_, label} <> rest: optionalText(label) <> linkLabels(rest)
+
+def eventText(event: Auth.AuthEvent) -> String:
+  match event:
+    case Auth.InfoEvent{_, links}: "info[" ++ String.join(linkLabels(links), ",") ++ "]"
+    case _: "other"
+
+def record(script: Script, event: Auth.AuthEvent) -> IO(Unit):
+  match script:
+    case Script{_, log}: Ref.modify(List<&2, String>, Unit, log, list => appended(eventText(event), list))
+
+def loginResult(result: Auth.LoginOutcome()) -> String:
+  match result:
+    case Fail{reason}: "error:" ++ reason
+    case Done{Auth.ApiKeyCredential{key, env}}: optional(key) ++ "|" ++ envText(env)
+    case Done{_}: "wrong credential type"
+
+def callLogin(auth: Auth.ApiKeyAuth, interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
+  match auth:
+    case Auth.ApiKeyAuth{_, Some{callback}, _}: C.call(Auth.ProviderAuthInteraction, Auth.LoginOutcome(), callback, interaction)
+    case _: IO.pure(Auth.LoginOutcome(), Fail{"login unavailable"})
+
+def loginText(answers: List<&2, String>, cancel: Bool) -> IO(String):
+  do IO<String>:
+    selected : Auth.ApiKeyAuth <- bedrock()
+    +queue : Ref.Ref<List<&2, String>> <- Ref.new(List<&2, String>, answers)
+    +log : Ref.Ref<List<&2, String>> <- Ref.new(List<&2, String>, Nil{})
+    +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    won : Bool <- Bool.pick(IO(Bool), cancel, Abort.abort(Unit, controller, None{}), IO.pure(Bool, False{}))
+    prompt : C.Callback<Auth.AuthPrompt, Result<&2, &2, String, String>> <- C.create(~Script, ~Auth.AuthPrompt, ~Result<&2, &2, String, String>, ~answer, Script{queue, log})
+    notify : C.Callback<Auth.AuthEvent, Unit> <- C.create(~Script, ~Auth.AuthEvent, ~Unit, ~record, Script{queue, log})
+    result : Auth.LoginOutcome() <- callLogin(selected, Auth.ProviderAuthInteraction{Abort.signal(Unit, controller), prompt, notify})
+    lines : List<&2, String> <- Ref.read(List<&2, String>, log)
+    Abort.dispose(Unit, controller)
+    return loginResult(result) ++ " / " ++ String.join(lines, " ; ")
+
+def selectLine() -> String: "select:Select Amazon Bedrock authentication method:[bearer-token=Bearer token,aws-profile=AWS profile,credential-chain=Existing AWS credential chain]"
+
 def main() -> IO(Unit):
   do IO<Unit>:
     expect("runs provider-owned Bedrock bearer token and AWS profile login flows (stored profile resolve)", resolvedText(bedrock(), vars(Nil{}), stored(None{}, profileEnv("work")), False{}), "-|-|AWS_PROFILE=work|stored credential")
@@ -124,3 +203,8 @@ def main() -> IO(Unit):
     expect("empty environment values do not count", resolvedText(bedrock(), vars([var("AWS_BEARER_TOKEN_BEDROCK", ""), var("AWS_PROFILE", "")]), None{}, False{}), "undefined")
     expect("an aborted signal stops an environment lookup", resolvedText(bedrock(), vars([var("AWS_PROFILE", "dev")]), None{}, True{}), "error:The operation was aborted")
     expect("a stored key needs no environment lookup under an aborted signal", resolvedText(bedrock(), vars(Nil{}), stored(Some{"token"}, None{}), True{}), "token|-|-|stored credential")
+    expect("runs provider-owned Bedrock bearer token and AWS profile login flows (bearer token)", loginText(["bearer-token", "bedrock-token"], False{}), "bedrock-token|- / " ++ selectLine() ++ " ; secret:Enter Amazon Bedrock bearer token")
+    expect("runs provider-owned Bedrock bearer token and AWS profile login flows (AWS profile)", loginText(["aws-profile", "work"], False{}), "-|AWS_PROFILE=work / " ++ selectLine() ++ " ; info[AWS credential provider chain] ; text:Enter AWS profile name")
+    expect("the credential-chain login stores an empty api key credential", loginText(["credential-chain", ""], False{}), "-|- / " ++ selectLine() ++ " ; info[AWS credential provider chain] ; text:Configure AWS credentials, then press Enter to continue")
+    expect("an unknown login method is rejected after the notice", loginText(["other"], False{}), "error:Unknown Amazon Bedrock auth method: other / " ++ selectLine() ++ " ; info[AWS credential provider chain]")
+    expect("an aborted login asks nothing", loginText(["bearer-token", "x"], True{}), "error:The operation was aborted / ")

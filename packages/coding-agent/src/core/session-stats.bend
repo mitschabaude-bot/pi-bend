@@ -4,6 +4,8 @@ import ../../../ai/src/utils/estimate.bend as Estimate
 import ../../../agent/src/types.bend as Agent
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/schema-value.bend as V
+import ../../../runtime/src/record.bend as R
+import ../../../runtime/src/json.bend as Decode
 import ../../../ai/src/utils/message-json.bend as Json
 import ./session-manager.bend as S
 import ./session-persistence.bend as Persistence
@@ -127,3 +129,48 @@ def value(stats: Stats) -> V.Value:
       +tail = Json.field("tokens",Json.object(tokenFields),Json.field("cost",V.Number{cost},Json.optional("contextUsage",Maybe.map(&2,ContextUsage,V.Value,contextValue,ctx),Nil{})))
       +counts = Json.field("userMessages",Json.natural(users),Json.field("assistantMessages",Json.natural(assistants),Json.field("toolCalls",Json.natural(calls),Json.field("toolResults",Json.natural(results),Json.field("totalMessages",Json.natural(messages),tail)))))
       Json.object(Json.optionalText("sessionFile",path,Json.field("sessionId",Json.text(id),counts)))
+
+# The inverse of value. The token total is derived, so it is not read back.
+def Decoded(-A: Data) -> Data: Result<&2,&2,Decode.Error,A>
+def naturalOf(result: Result<&2,&2,F.Error,Nat>) -> Decoded(Nat):
+  match result:
+    case Done{count}: Done{count}
+    case Fail{_}: Fail{Decode.InvalidValue{Nil{},"non-negative integer"}}
+def natural(value: V.Value) -> Decoded(Nat):
+  Result.bind(&2,&2,Decode.Error,F64,Nat,Decode.number(value),n => naturalOf(F.convert(n)))
+def nullableNumber(value: V.Value) -> Decoded(Maybe<&2,F64>):
+  match value:
+    case V.Null{}: Done{None{}}
+    case V.Number{n}: Done{Some{n}}
+    case _: Fail{Decode.WrongType{Nil{},"number or null"}}
+def contextFields(+fields: R.Record<V.Value>) -> Decoded(ContextUsage):
+  do Result<&2,&2,Decode.Error,ContextUsage>:
+    tokens : Maybe<&2,F64> <- Decode.required(Maybe<&2,F64>,fields,"tokens",nullableNumber)
+    window : F64 <- Decode.required(F64,fields,"contextWindow",Decode.number)
+    percent : Maybe<&2,F64> <- Decode.required(Maybe<&2,F64>,fields,"percent",nullableNumber)
+    return ContextUsage{tokens,window,percent}
+def decodeContext(value: V.Value) -> Decoded(ContextUsage):
+  Result.bind(&2,&2,Decode.Error,R.Record<V.Value>,ContextUsage,Decode.object(value),fields => contextFields(fields))
+def tokenFields(users: Nat,assistants: Nat,calls: Nat,results: Nat,messages: Nat,+fields: R.Record<V.Value>,cost: F64) -> Decoded(Totals):
+  do Result<&2,&2,Decode.Error,Totals>:
+    input : F64 <- Decode.required(F64,fields,"input",Decode.number)
+    output : F64 <- Decode.required(F64,fields,"output",Decode.number)
+    read : F64 <- Decode.required(F64,fields,"cacheRead",Decode.number)
+    write : F64 <- Decode.required(F64,fields,"cacheWrite",Decode.number)
+    return Totals{users,assistants,calls,results,messages,input,output,read,write,cost}
+def statsFields(+fields: R.Record<V.Value>) -> Decoded(Stats):
+  do Result<&2,&2,Decode.Error,Stats>:
+    path : Maybe<&2,String> <- Decode.optional(String,fields,"sessionFile",Decode.string)
+    id : String <- Decode.required(String,fields,"sessionId",Decode.string)
+    users : Nat <- Decode.required(Nat,fields,"userMessages",natural)
+    assistants : Nat <- Decode.required(Nat,fields,"assistantMessages",natural)
+    calls : Nat <- Decode.required(Nat,fields,"toolCalls",natural)
+    results : Nat <- Decode.required(Nat,fields,"toolResults",natural)
+    messages : Nat <- Decode.required(Nat,fields,"totalMessages",natural)
+    tokens : R.Record<V.Value> <- Decode.required(R.Record<V.Value>,fields,"tokens",Decode.object)
+    cost : F64 <- Decode.required(F64,fields,"cost",Decode.number)
+    totals : Totals <- Decode.located(Totals,tokenFields(users,assistants,calls,results,messages,tokens,cost),Decode.Field{"tokens"})
+    context : Maybe<&2,ContextUsage> <- Decode.optional(ContextUsage,fields,"contextUsage",decodeContext)
+    return Stats{path,id,totals,context}
+def decode(value: V.Value) -> Decoded(Stats):
+  Result.bind(&2,&2,Decode.Error,R.Record<V.Value>,Stats,Decode.object(value),fields => statsFields(fields))

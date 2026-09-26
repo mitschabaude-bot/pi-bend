@@ -8,10 +8,9 @@ import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/record.bend as R
 
 # upstream providers/amazon-bedrock.ts. Bedrock accepts a bearer token or the
-# AWS SDK's default credential chain; resolve reports which source is
-# configured without copying ambient AWS credentials. The login flow's
-# method selection and notice need select/notify prompts, which the port's
-# LoginInteraction does not offer yet, so no login is registered.
+# AWS SDK's default credential chain: login stores a token or a profile
+# choice, and resolve reports which source is configured without copying
+# ambient AWS credentials.
 
 def AuthOutcome() -> Data: Auth.AuthOutcome()
 
@@ -114,7 +113,88 @@ def resolveBedrock(unused: Unit, input: Auth.ResolveInput) -> IO(AuthOutcome()):
   match input:
     case Auth.ResolveInput{+context, +credential, +signal}: chain(storedKey(credential), context, credential, signal)
 
+# upstream bedrockAuth.login: a bearer token, an AWS profile name, or the
+# existing AWS credential chain.
+def bedrockMethods() -> List<&2, Auth.AuthSelectOption>:
+  [Auth.AuthSelectOption{"bearer-token", "Bearer token", None{}}, Auth.AuthSelectOption{"aws-profile", "AWS profile", None{}}, Auth.AuthSelectOption{"credential-chain", "Existing AWS credential chain", None{}}]
+
+def credentialInfo() -> Auth.AuthEvent:
+  Auth.InfoEvent{"Amazon Bedrock supports AWS profiles, IAM credentials, and role-based credentials.", [Auth.AuthInfoLink{"https://docs.aws.amazon.com/sdkref/latest/guide/standardized-credentials.html", Some{"AWS credential provider chain"}}]}
+
+def ask(interaction: Auth.ProviderAuthInteraction, question: Auth.AuthPrompt) -> IO(Result<&2, &2, String, String>):
+  match interaction:
+    case Auth.ProviderAuthInteraction{_, prompt, _}: C.call(Auth.AuthPrompt, Result<&2, &2, String, String>, prompt, question)
+
+def notified(interaction: Auth.ProviderAuthInteraction, event: Auth.AuthEvent) -> IO(Unit):
+  match interaction:
+    case Auth.ProviderAuthInteraction{_, _, notify}: C.call(Auth.AuthEvent, Unit, notify, event)
+
+def interactionAborted(interaction: Auth.ProviderAuthInteraction) -> IO(Bool):
+  match interaction:
+    case Auth.ProviderAuthInteraction{signal, _, _}: Abort.aborted(Unit, signal)
+
+def bearerCredential(answer: Result<&2, &2, String, String>) -> Auth.LoginOutcome():
+  match answer:
+    case Fail{reason}: Fail{reason}
+    case Done{key}: Done{Auth.ApiKeyCredential{Some{key}, None{}}}
+
+def profileCredential(answer: Result<&2, &2, String, String>) -> Auth.LoginOutcome():
+  match answer:
+    case Fail{reason}: Fail{reason}
+    case Done{name}: Done{Auth.ApiKeyCredential{None{}, Some{R.Record{[R.Property{"AWS_PROFILE", name}]}}}}
+
+def chainCredential(answer: Result<&2, &2, String, String>) -> Auth.LoginOutcome():
+  match answer:
+    case Fail{reason}: Fail{reason}
+    case Done{_}: Done{Auth.ApiKeyCredential{None{}, None{}}}
+
+def afterNotice(+interaction: Auth.ProviderAuthInteraction, +method: String) -> IO(Auth.LoginOutcome()):
+  match method:
+    case "aws-profile":
+      do IO<Auth.LoginOutcome()>:
+        name : Result<&2, &2, String, String> <- ask(interaction, Auth.TextPrompt{"Enter AWS profile name", None{}, None{}})
+        return profileCredential(name)
+    case "credential-chain":
+      do IO<Auth.LoginOutcome()>:
+        answer : Result<&2, &2, String, String> <- ask(interaction, Auth.TextPrompt{"Configure AWS credentials, then press Enter to continue", None{}, None{}})
+        return chainCredential(answer)
+    case _: IO.pure(Auth.LoginOutcome(), Fail{"Unknown Amazon Bedrock auth method: " ++ method})
+
+def methodChosen(+interaction: Auth.ProviderAuthInteraction, +method: String) -> IO(Auth.LoginOutcome()):
+  match method:
+    case "bearer-token":
+      do IO<Auth.LoginOutcome()>:
+        key : Result<&2, &2, String, String> <- ask(interaction, Auth.SecretPrompt{"Enter Amazon Bedrock bearer token", None{}, None{}})
+        return bearerCredential(key)
+    case _:
+      do IO<Auth.LoginOutcome()>:
+        notified(interaction, credentialInfo())
+        afterNotice(interaction, method)
+
+def selectedMethod(+interaction: Auth.ProviderAuthInteraction, answer: Result<&2, &2, String, String>, aborted: Bool) -> IO(Auth.LoginOutcome()):
+  match answer aborted:
+    case Fail{reason} _: IO.pure(Auth.LoginOutcome(), Fail{reason})
+    case _ True{}: IO.pure(Auth.LoginOutcome(), Fail{abortedError()})
+    case Done{method} False{}: methodChosen(interaction, method)
+
+def selectMethod(+interaction: Auth.ProviderAuthInteraction, aborted: Bool) -> IO(Auth.LoginOutcome()):
+  match aborted:
+    case True{}: IO.pure(Auth.LoginOutcome(), Fail{abortedError()})
+    case False{}:
+      do IO<Auth.LoginOutcome()>:
+        answer : Result<&2, &2, String, String> <- ask(interaction, Auth.SelectPrompt{"Select Amazon Bedrock authentication method:", bedrockMethods(), None{}})
+        after : Bool <- interactionAborted(interaction)
+        selectedMethod(interaction, answer, after)
+
+def loginRun(+interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
+  do IO<Auth.LoginOutcome()>:
+    before : Bool <- interactionAborted(interaction)
+    selectMethod(interaction, before)
+
+def loginBedrock(unused: Unit, interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()): loginRun(interaction)
+
 def amazonBedrockProvider() -> IO(Models.Provider):
   do IO<Models.Provider>:
     resolve : C.Callback<Auth.ResolveInput, AuthOutcome()> <- C.create(~Unit, ~Auth.ResolveInput, ~AuthOutcome(), ~resolveBedrock, Unit{})
-    return Models.Provider{"amazon-bedrock", "Amazon Bedrock", "", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"AWS credentials or bearer token", None{}, resolve}}, None{}}, Catalog.AMAZON_BEDROCK_MODELS(), Models.ApiStreams{}, None{}}
+    login : C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()> <- C.create(~Unit, ~Auth.ProviderAuthInteraction, ~(Auth.LoginOutcome()), ~loginBedrock, Unit{})
+    return Models.Provider{"amazon-bedrock", "Amazon Bedrock", "", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"AWS credentials or bearer token", Some{login}, resolve}}, None{}}, Catalog.AMAZON_BEDROCK_MODELS(), Models.ApiStreams{}, None{}}
