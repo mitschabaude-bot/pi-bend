@@ -787,10 +787,10 @@
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "272d9269ef5ed6e3c28627c9bb2eb8e1c7dc34c5b8fec7dd74ed6032417c3387",
-        "packages/coding-agent/src/modes/interactive/run.bend": "704f68c183f3e8821408137b4d3243cb3f746e225563a8e65b084b0e5537b41f",
+        "packages/coding-agent/src/modes/interactive/run.bend": "69f30b17c98f1b36bc08ee11af03c75478e29aaa797afedb12626da20aa557c9",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "5251961f780f6011fd173b198ccd6e4dd82ab65743f2df4463bc06f71a497075",
-        "packages/coding-agent/src/main.bend": "132b4b1314611d61d30b71ca674ccfe4d816fb65b414508b5ca7f5ea16ec5af8",
+        "packages/coding-agent/src/main.bend": "e824412a93da00a10d83a44aa986638983fee4f7dc65074850aa3f1c04d58d46",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6"
       }
     },
