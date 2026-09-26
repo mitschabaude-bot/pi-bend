@@ -14,6 +14,7 @@ import ../../../../runtime/src/posix-path.bend as Path
 import ../../../../runtime/src/record.bend as Record
 import ../../../../runtime/src/text.bend as Text
 import ../../../../runtime/src/ref.bend as Ref
+import ../../../../runtime/src/timer.bend as Timer
 import ../../../../runtime/src/abort.bend as Abort
 import ../../cli/auth-login.bend as AuthLogin
 import ../../cli/session-picker.bend as SessionPicker
@@ -57,6 +58,7 @@ import ../../config.bend as Config
 import ../../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../core/keybindings.bend as AppKeys
 import ./components/footer.bend as Footer
+import ./components/status-indicator.bend as Status
 import ./components/header.bend as Header
 import ./components/keybinding-hints.bend as Hints
 import ./components/session-selector.bend as Selector
@@ -153,67 +155,106 @@ def withName(state: Footer.State,name: Maybe<&2,String>) -> Footer.State:
 def footerEvent(state: Footer.State,event: Session.AgentSessionEvent) -> Footer.State & Bool:
   match event:
     case Session.AgentEvent{Agent.MessageEnd{Agent.LlmMessage{Ai.Assistant{message}}}}: (withAssistant(state,message),True{})
-    case Session.AgentSettled{}: (withStatus(state,Nil{}),True{})
-    case Session.AutoRetryStart{attempt,_,_,_}: (withStatus(state,Footer.Status{"retry","Retry " ++ Nat.show(attempt)} <> Nil{}),True{})
-    case Session.AutoRetryEnd{_,_,_}: (withStatus(state,Nil{}),True{})
-    case Session.CompactionStart{_}: (withStatus(state,Footer.Status{"compact","Compacting"} <> Nil{}),True{})
-    case Session.CompactionEnd{_,_,_,_,_}: (withStatus(state,Nil{}),True{})
     case Session.ThinkingLevelChanged{level}: (withThinking(state,level),True{})
     case Session.SessionInfoChanged{name}: (withName(state,name),True{})
     case _: (state,False{})
 type WorkingOwned is Type:
-  WorkingOwned{loader: Loader.Owner,redraw: Callback.Callback<Unit,Unit>}
+  WorkingOwned{indicator: Maybe<&1,Status.Owner>,appearance: Status.Appearance,redraw: Callback.Callback<Unit,Unit>,cancelKey: String}
 type Working is Data:
   Working{active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>}
+type StatusChange is Data:
+  ShowStatus{indicator: Status.Indicator}
+  ClearStatus{kind: Status.StatusIndicatorKind}
+  KeepStatus{}
 def workingActive(working: Working) -> Ref.Ref<Maybe<&2,Loader.Handle>>:
   match working: case Working{active,_}: active
 def workingRedraw(redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,_: Unit) -> IO(Unit):
   Interactive.requestRender(redraw)
-def workingRetained(pair: Loader.Owner & Loader.Handle,request: Callback.Callback<Unit,Unit>,active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,visible: Bool) -> IO(Unit):
+def compactionReason(reason: Session.CompactionReason) -> Status.CompactionStatusReason:
+  match reason:
+    case Session.Manual{}: Status.Manual{}
+    case Session.Threshold{}: Status.Threshold{}
+    case Session.Overflow{}: Status.Overflow{}
+def retryStatus(attempt: Nat,maxAttempts: Nat,delay: Result<&2,&2,Timer.Error,U32>,cancel: String) -> StatusChange:
+  match delay:
+    case Done{milliseconds}: ShowStatus{Status.RetryStatusIndicator{attempt,maxAttempts,U32.to_nat(milliseconds),cancel}}
+    case Fail{_}: ClearStatus{Status.Retry{}}
+def statusChange(event: Session.AgentSessionEvent,cancel: String) -> StatusChange:
+  match event:
+    case Session.AgentEvent{Agent.AgentStart{}}: ShowStatus{Status.WorkingStatusIndicator{"Working",None{}}}
+    case Session.AgentEvent{Agent.TurnStart{}}: ShowStatus{Status.WorkingStatusIndicator{"Working",None{}}}
+    case Session.AgentEvent{Agent.AgentEnd{_}}: ClearStatus{Status.Working{}}
+    case Session.AgentEnd{_,_}: ClearStatus{Status.Working{}}
+    case Session.AgentSettled{}: ClearStatus{Status.Working{}}
+    case Session.AutoRetryStart{attempt,maxAttempts,delay,_}: retryStatus(attempt,maxAttempts,Timer.milliseconds(delay),cancel)
+    case Session.AutoRetryEnd{_,_,_}: ClearStatus{Status.Retry{}}
+    case Session.CompactionStart{reason}: ShowStatus{Status.CompactionStatusIndicator{compactionReason(reason),cancel}}
+    case Session.CompactionEnd{_,_,_,_,_}: ClearStatus{Status.Compaction{}}
+    case Session.SummarizationRetryScheduled{attempt,maxAttempts,delay,_}: retryStatus(attempt,maxAttempts,Timer.milliseconds(delay),cancel)
+    case Session.SummarizationRetryAttemptStart{Session.BranchSummarySource{}}: ShowStatus{Status.BranchSummaryStatusIndicator{cancel}}
+    case Session.SummarizationRetryAttemptStart{Session.CompactionSource{reason}}: ShowStatus{Status.CompactionStatusIndicator{compactionReason(reason),cancel}}
+    case Session.SummarizationRetryFinished{}: ClearStatus{Status.Retry{}}
+    case _: KeepStatus{}
+def disposeStatus(indicator: Maybe<&1,Status.Owner>) -> IO(Unit):
+  match indicator: case None{}: IO.pure(Unit,Unit{}) case Some{owner}: Status.dispose(owner)
+def clearStatus(pair: Status.Owner & Status.Handle,kind: Status.StatusIndicatorKind) -> IO(Maybe<&1,Status.Owner>):
   match pair:
-    case (retained,handle):
+    case (owner,Status.Handle{active,_}):
+      Bool.pick(Status.Owner -> IO(Maybe<&1,Status.Owner>),Status.sameKind(active,kind),
+        retained => do IO<Maybe<&1,Status.Owner>>:
+          Status.dispose(retained)
+          return None{},
+        retained => IO.pure(Maybe<&1,Status.Owner>,Some{retained}))(owner)
+def changeStatus(previous: Maybe<&1,Status.Owner>,appearance: Status.Appearance,change: StatusChange) -> IO(Maybe<&1,Status.Owner>):
+  match change previous:
+    case KeepStatus{} retained: IO.pure(Maybe<&1,Status.Owner>,retained)
+    case ClearStatus{_} None{}: IO.pure(Maybe<&1,Status.Owner>,None{})
+    case ClearStatus{kind} Some{owner}: clearStatus(Status.borrow(owner),kind)
+    case ShowStatus{spec} retained:
+      do IO<Maybe<&1,Status.Owner>>:
+        disposeStatus(retained)
+        next : Status.Owner <- Status.create(spec,appearance)
+        return Some{next}
+def retainedStatus(indicator: Maybe<&1,Status.Owner>) -> Maybe<&1,Status.Owner> & Maybe<&2,Loader.Handle>:
+  match indicator:
+    case None{}: (None{},None{})
+    case Some{Status.Owner{+spec,appearance,Loader.Owner{resource,+handle,animation},colors,countdown,tick}}:
+      (Some{Status.Owner{spec,appearance,Loader.Owner{resource,handle,animation},colors,countdown,tick}},Some{handle})
+def workingRetained(pair: Maybe<&1,Status.Owner> & Maybe<&2,Loader.Handle>,appearance: Status.Appearance,request: Callback.Callback<Unit,Unit>,cancel: String,active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>) -> IO(Unit):
+  match pair:
+    case (indicator,handle):
       do IO<Unit>:
-        Ref.write(Maybe<&2,Loader.Handle>,active,Bool.pick(Maybe<&2,Loader.Handle>,visible,Some{handle},None{}))
-        Ref.write(Maybe<&1,WorkingOwned>,owned,Some{WorkingOwned{retained,request}})
-        Interactive.requestRender(redraw)
-def workingAnimation(loader: Loader.Owner,visible: Bool) -> IO(Loader.Owner):
-  match visible:
-    case True{}: Loader.start(loader)
-    case False{}: Loader.stop(loader)
-def workingResumed(previous: Maybe<&1,WorkingOwned>,active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+visible: Bool) -> IO(Unit):
+        Ref.write(Maybe<&2,Loader.Handle>,active,handle)
+        Ref.write(Maybe<&1,WorkingOwned>,owned,Some{WorkingOwned{indicator,appearance,request,cancel}})
+def statusChanged(change: StatusChange) -> Bool:
+  match change: case KeepStatus{}: False{} case _: True{}
+def workingChanged(previous: Maybe<&1,WorkingOwned>,active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,event: Session.AgentSessionEvent) -> IO(Unit):
   match previous:
     case None{}: IO.pure(Unit,Unit{})
-    case Some{WorkingOwned{loader,request}}:
+    case Some{WorkingOwned{indicator,+appearance,+request,+cancel}}:
       do IO<Unit>:
-        next : Loader.Owner <- workingAnimation(loader,visible)
-        workingRetained(Loader.borrow(next),request,active,owned,redraw,visible)
-def workingChanged(working: Working,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,visible: Bool) -> IO(Unit):
+        +change : StatusChange <- IO.pure(StatusChange,statusChange(event,cancel))
+        next : Maybe<&1,Status.Owner> <- changeStatus(indicator,appearance,change)
+        workingRetained(retainedStatus(next),appearance,request,cancel,active,owned)
+        Bool.pick(Unit -> IO(Unit),statusChanged(change),_ => Callback.call(Unit,Unit,request,Unit{}),_ => IO.pure(Unit,Unit{}))(Unit{})
+def workingEvent(working: Working,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,event: Session.AgentSessionEvent) -> IO(Unit):
   match working:
     case Working{active,+owned}:
       do IO<Unit>:
         previous : Maybe<&1,WorkingOwned> <- Ref.swap(Maybe<&1,WorkingOwned>,owned,None{})
-        workingResumed(previous,active,owned,redraw,visible)
-def workingEvent(working: Working,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,event: Session.AgentSessionEvent) -> IO(Unit):
-  match event:
-    case Session.AgentEvent{Agent.AgentStart{}}: workingChanged(working,redraw,True{})
-    case Session.AgentEvent{Agent.TurnStart{}}: workingChanged(working,redraw,True{})
-    case Session.AgentEvent{Agent.AgentEnd{_}}: workingChanged(working,redraw,False{})
-    case Session.AgentSettled{}: workingChanged(working,redraw,False{})
-    case _: IO.pure(Unit,Unit{})
-def setupWorking(working: Working,+paint: Callback.Callback<String,String>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
+        workingChanged(previous,active,owned,event)
+def setupWorking(working: Working,paint: Callback.Callback<String,String>,theme: Ref.Ref<Theme.Theme>,bindings: Keybindings.KeybindingsManager,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
   match working:
     case Working{_,owned}:
       do IO<Unit>:
         +request : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,~Unit,~Unit,~workingRedraw,redraw)
-        loader : Loader.Owner <- Loader.create("Working",None{},paint,paint,request)
-        stopped : Loader.Owner <- Loader.stop(loader)
-        Ref.write(Maybe<&1,WorkingOwned>,owned,Some{WorkingOwned{stopped,request}})
+        Ref.write(Maybe<&1,WorkingOwned>,owned,Some{WorkingOwned{None{},Status.Appearance{theme,Some{paint},request},request,Hints.keyText(bindings,"app.interrupt")}})
 def disposeWorkingOwned(oldOwner: Maybe<&1,WorkingOwned>) -> IO(Unit):
   match oldOwner:
     case None{}: IO.pure(Unit,Unit{})
-    case Some{WorkingOwned{loader,request}}:
+    case Some{WorkingOwned{indicator,_,request,_}}:
       do IO<Unit>:
-        Loader.dispose(loader)
+        disposeStatus(indicator)
         Callback.dispose(Unit,Unit,request)
 def disposeWorking(working: Working) -> IO(Unit):
   match working:
@@ -251,6 +292,11 @@ def structuralResult(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Call
         Interactive.requestRender(redraw)
 def structuralEntry(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,entry: Tree.SessionEntry<Unit,Tools.ToolDetails,Schema.Value>) -> IO(Unit):
   structuralResult(transcript,redraw,Tree.sessionEntryToContextMessages(Unit,Tools.ToolDetails,Schema.Value,entry))
+def statusNotice(transcript: Transcript.Handle,event: Session.AgentSessionEvent) -> IO(Unit):
+  match event:
+    case Session.AutoRetryEnd{False{},attempt,error}: Transcript.showError(transcript,"Retry failed after " ++ Nat.show(attempt) ++ " attempts: " ++ Text.orElse(error,"Unknown error"))
+    case Session.SummarizationRetryScheduled{_,_,_,message}: Transcript.showError(transcript,message)
+    case _: IO.pure(Unit,Unit{})
 def structuralNotice(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,event: Session.AgentSessionEvent) -> IO(Unit):
   match event:
     case Session.EntryAppended{Tree.Compaction{entry}}: structuralEntry(transcript,redraw,Tree.Compaction{entry})
@@ -263,6 +309,7 @@ def observeCopied(input: Observation,+event: Session.AgentSessionEvent) -> IO(Un
       do IO<Unit>:
         changed : Bool <- Ref.modify(Footer.State,Bool,footer,state => footerEvent(state,event))
         workingEvent(working,redraw,event)
+        statusNotice(transcript,event)
         usageNotice(transcript,redraw,session,event)
         structuralNotice(transcript,redraw,event)
         Interactive.onSessionEvent(Interactive.Events{transcript,redraw},event)
@@ -1752,14 +1799,24 @@ def keyControl(input: KeyInput,control: Controller.Control) -> IO(Unit):
       do IO<Unit>:
         result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitControl(queue,control)
         Interactive.submittedResult(failure,result)
+def abortCompaction(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    Session.abortCompaction(session)
+    Session.abortBranchSummary(session)
 def interrupted(+input: KeyInput,+text: String) -> IO(Unit):
   match input:
     case KeyInput{_,_,_,_,lastEscape,_,session,_,_,_,_}:
       do IO<Unit>:
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         bash : Bool <- Session.isBashRunning(live)
+        retry : Bool <- Session.isRetrying(live)
+        compact : Bool <- Session.isCompacting(live)
         active : Bool <- Session.isStreaming(live)
-        Bool.pick(Unit -> IO(Unit),bash,_ => Session.abortBash(live),_ => Bool.pick(Unit -> IO(Unit),active,_ => keyControl(input,Controller.Interrupt{text}),_ => Bool.pick(Unit -> IO(Unit),String.is_empty(Text.trim(text)),_ => idleEscape(input,lastEscape),_ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{}))(Unit{})
+        Bool.pick(Unit -> IO(Unit),bash,_ => Session.abortBash(live),
+          _ => Bool.pick(Unit -> IO(Unit),retry,_ => Session.abortRetry(live),
+            _ => Bool.pick(Unit -> IO(Unit),compact,_ => abortCompaction(live),
+              _ => Bool.pick(Unit -> IO(Unit),active,_ => keyControl(input,Controller.Interrupt{text}),
+                _ => Bool.pick(Unit -> IO(Unit),String.is_empty(Text.trim(text)),_ => idleEscape(input,lastEscape),_ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
 def doubleClear(previous: Maybe<&2,F64>,now: F64,stop: Deferred.Deferred<Unit>) -> IO(Unit):
   match previous:
     case Some{earlier}: Bool.pick(Unit -> IO(Unit),F64.is_lt(F.subtract(now,earlier),U32.to_f64(500)),_ => do IO<Unit>:
@@ -2463,7 +2520,7 @@ def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,chang
         +configured : Editor.Editor <- IO.pure(Editor.Editor,Editor.setCallbacks(configuredEditor,Editor.EditorCallbacks{Some{changed},Some{submitted},Some{requested}}))
         +rows : Ref.Ref<Nat> <- Ref.new(Nat,24n)
         +working : Working <- IO.pure(Working,workingOf(contextInteraction(context)))
-        setupWorking(working,paint,redraw)
+        setupWorking(working,paint,contextTheme(context),contextBindings(context),redraw)
         live : Live.Owner <- Live.createWithWorking(Component.ComponentId{2n},configured,words,contextBindings(context),Keys.defaults(),rows,workingActive(working))
         runLive(Live.borrow(live),words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context)
 def startController(pair: Controller.Controller & Controller.Handle,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,words: Words.Source,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):

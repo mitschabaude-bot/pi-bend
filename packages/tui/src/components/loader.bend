@@ -93,6 +93,11 @@ def invalidateLive(handle: Handle) -> IO(Unit):
 def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
   match handle:
     case Handle{resource}: Serial.run(Loader,List<&2,String>,resource,state => render(state,width))
+def getRenderedIndicator(handle: Handle) -> IO(String):
+  match handle:
+    case Handle{resource}: Serial.run(Loader,String,resource,+state => do IO<Loader & String>:
+      text : String <- renderedIndicator(state)
+      return (state,text))
 
 def animationInterval(handle: Handle) -> IO(U32):
   match handle:

@@ -3061,9 +3061,12 @@
     },
     {
       "source": "packages/coding-agent/test/status-indicator.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "56d8cc22aedc419e320a57efee985b4e1d32a854aafade47d7b1739d406efaf3"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/status-indicator.bend"
+      ],
+      "sha256": "56d8cc22aedc419e320a57efee985b4e1d32a854aafade47d7b1739d406efaf3",
+      "notes": "All five named contracts ported: idle rows, opt-in embedding, standalone/custom colors, compaction/summary/retry labels and widths, countdown ticks and no updates after disposal. Functional Editor.renderWithStatus and Live.createWithWorking replace mutable CustomEditor status options; real cancellable timers replace fake timers. Interactive phase wiring is checked separately by terminal parity scenarios."
     },
     {
       "source": "packages/coding-agent/test/stdout-cleanliness.test.ts",
@@ -3929,7 +3932,7 @@
         "tests/thinking-level.bend"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '→ ✓ medium', then '  ✓ medium' and '→   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",

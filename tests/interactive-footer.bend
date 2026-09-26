@@ -32,10 +32,6 @@ def hasStatus(state: Footer.State) -> Bool:
   match state:
     case Footer.State{_,_,_,Some{"demo"},_,"high",_,_,_,_,_,_,_,_,Footer.Status{"agent","Working"} <> Nil{}}: True{}
     case _: False{}
-def hasCleared(state: Footer.State) -> Bool:
-  match state:
-    case Footer.State{_,_,_,_,_,_,_,_,_,_,_,_,_,_,Nil{}}: True{}
-    case _: False{}
 def require(ok: Bool,reason: String) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit),ok,_ => IO.pure(Unit,Unit{}),_ => IO.die(Unit,1,reason))(Unit{})
 def main() -> IO(Unit):
@@ -46,8 +42,8 @@ def main() -> IO(Unit):
     require(hasUnknownContext(Run.withStats(state,totals(Stats.ContextUsage{None{},F.fromNat(1000n),None{}}))),"compaction should make context unknown without dropping billed totals")
     +named : Footer.State <- IO.pure(Footer.State,after(Run.footerEvent(state,Session.SessionInfoChanged{Some{"demo"}})))
     +thinking : Footer.State <- IO.pure(Footer.State,after(Run.footerEvent(named,Session.ThinkingLevelChanged{Ai.Thinking{Ai.High{}}})))
-    +working : Footer.State <- IO.pure(Footer.State,after(Run.footerEvent(thinking,Session.AgentEvent{Agent.AgentStart{}})))
+    +working : Footer.State <- IO.pure(Footer.State,after(Run.footerEvent(Run.withStatus(thinking,[Footer.Status{"agent","Working"}]),Session.AgentEvent{Agent.AgentStart{}})))
     require(hasStatus(working),"footer status/name/thinking")
     +done : Footer.State <- IO.pure(Footer.State,after(Run.footerEvent(working,Session.AgentSettled{})))
-    require(hasCleared(done),"footer status cleared")
+    require(hasStatus(done),"agent settlement preserves extension footer status")
     IO.print("interactive footer events passed")
