@@ -126,6 +126,35 @@ def testAuth(+host: Login.Host) -> IO(Unit):
     Abort.dispose(Unit,local)
     Abort.dispose(Unit,whole)
     Login.close(host)
+def selectedApi(selection: Maybe<&2,Login.ProviderSelection>) -> Bool:
+  match selection:
+    case Some{Login.ProviderSelection{"example",Auth.ApiKeyType{}}}: True{}
+    case _: False{}
+def testProviderSelector(+host: Login.Host) -> IO(Unit):
+  do IO<Unit>:
+    +choices : List<&2,Login.Choice> = [
+      Login.Choice{Login.AuthChoice{Login.ProviderSelection{"example",Auth.OAuthType{}}},"Example"," • unconfigured","Example example oauth Account"},
+      Login.Choice{Login.AuthChoice{Login.ProviderSelection{"example",Auth.ApiKeyType{}}},"Example"," ✓ configured","Example example api_key Token"}]
+    +answer : Deferred.Deferred<Maybe<&2,Login.ProviderSelection>> <- Login.openAuthMenu(host,Login.Provider{},"Select provider to configure:",choices,"")
+    rows : List<&2,String> <- Login.draw(host,80n)
+    +text : String = Utils.stripTerminalSequences(String.join(rows,"\n"))
+    check(String.contains(text,"[subscription]") && String.contains(text,"[API key]"),"mixed menus distinguish methods for the same provider")
+    send(host,["Token"])
+    filteredRows : List<&2,String> <- Login.draw(host,80n)
+    check(String.contains(Utils.stripTerminalSequences(String.join(filteredRows,"\n")),"[API key]"),"auth labels survive filtering to one method")
+    Login.receive(host,"\r")
+    selection : Maybe<&2,Login.ProviderSelection> <- Deferred.result(Maybe<&2,Login.ProviderSelection>,answer)
+    check(selectedApi(selection),"selection retains both provider identity and auth type")
+    Deferred.dispose(Maybe<&2,Login.ProviderSelection>,answer)
+    +cancelled : Deferred.Deferred<Maybe<&2,Login.ProviderSelection>> <- Login.openAuthMenu(host,Login.Provider{},"Select provider to configure:",choices,"missing")
+    emptyRows : List<&2,String> <- Login.draw(host,80n)
+    check(String.contains(Utils.stripTerminalSequences(String.join(emptyRows,"\n")),"No matching providers"),"unknown direct names remain searchable instead of rejecting the dialog")
+    handled : Bool <- Login.cancelSelector(host)
+    check(handled,"selector cancellation is handled without aborting a provider operation")
+    result : Maybe<&2,Login.ProviderSelection> <- Deferred.result(Maybe<&2,Login.ProviderSelection>,cancelled)
+    check(Maybe.is_none(&2,Login.ProviderSelection,result),"cancelled provider selections have no fabricated provider id")
+    Deferred.dispose(Maybe<&2,Login.ProviderSelection>,cancelled)
+    Login.close(host)
 def exercise(pair: Login.Owner & Login.Host & Component.Component,counter: Ref.Ref<Nat>) -> IO(Unit):
   match pair:
     case (owner,+host,_):
@@ -134,6 +163,7 @@ def exercise(pair: Login.Owner & Login.Host & Component.Component,counter: Ref.R
         testManual(host,counter)
         testWords(host)
         testAuth(host)
+        testProviderSelector(host)
         Login.dispose(owner)
 def main() -> IO(Unit):
   do IO<Unit>:
