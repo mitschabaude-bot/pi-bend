@@ -834,13 +834,13 @@
     },
     "packages/coding-agent/src/modes/rpc/rpc-mode.ts": {
       "state": "partial",
-      "note": "All commands, JSONL framing, correlated errors, prompt/queue semantics, session replacement through the host, event streaming, and extension UI (select/confirm/input dialogs answered by extension_ui_response, notify/setStatus, extension_error records) in rpc mode. Gaps: the prompt response precedes AgentSession's preflight (no preflightResult), so preflight failures are acknowledged as success; commands other than prompts run on the input reader, so an extension dialog opened from one would block; editor/setWidget/setTitle/set_editor_text and dialog timeouts are absent from the native UI context; command-context actions and the shutdown handler are not bound; stdout backpressure and signal handling belong to main.bend. See tests/rpc.md.",
+      "note": "All commands, JSONL framing, correlated errors, prompt/queue semantics, session replacement through the host, event streaming, per-line tasks (the reader waits for a line to finish or open a dialog, so extension handlers can ask the client), extension UI in rpc mode (select/confirm/input dialogs answered by extension_ui_response, notify/setStatus, extension_error records), and command-context actions through the host. Gaps: the prompt response precedes AgentSession's preflight (no preflightResult); editor/setWidget/setTitle/set_editor_text and dialog timeouts are absent from the native UI context; the shutdown handler is not bound; stdout backpressure and signal handling belong to main.bend. See tests/rpc.md.",
       "ports": [
         "packages/coding-agent/src/modes/rpc.bend"
       ],
       "source_sha256": "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc",
       "port_sha256": {
-        "packages/coding-agent/src/modes/rpc.bend": "592b86af63c6e13d7631df617e3eaed6d07e3c1c8d130075e63105059a9deb9a"
+        "packages/coding-agent/src/modes/rpc.bend": "d9e5b0bd9d5ca8815ed049e946cd492ee3b67b61dfe776fd17072e93a62f8c74"
       }
     },
     "packages/coding-agent/src/modes/rpc/rpc-types.ts": {
