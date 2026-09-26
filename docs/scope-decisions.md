@@ -23,6 +23,11 @@ note pointing here. Everything not listed here is in scope.
   release tracking, not the fork's.
 - **`/bug`** (2026-09-25): it reports to upstream pi's tracker; the hint that
   advertises it is excluded with it.
+- **First-time setup** (`first-time-setup`, 2026-09-26): upstream runs it only
+  with `PI_EXPERIMENTAL` and its main step is the analytics opt-in, so it
+  falls under the experimental stack and telemetry decisions.
+- **Bun sandbox environment restore** (`restore-sandbox-env`, 2026-09-26): it
+  works around a defect of Bun-compiled binaries; a native binary has none.
 - **JavaScript/TypeScript extensions** (AGENTS.md): extensions are native
   Bend; upstream's extension loading, bundling and Node SEA behaviour have no
   counterpart.

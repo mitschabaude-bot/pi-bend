@@ -513,15 +513,83 @@ def resolvedVisualColumn(value: Maybe<&2,LayoutLine>,column: Nat) -> Nat:
   match value:
     case None{}: column
     case Some{LayoutLine{text,_,start,_,_,_}}: utf16Length(takePrefix(text,column - start,""))
+# Moving down onto a later visual line of an atomic segment already visited
+# skips its remaining visual lines, as upstream's moveToVisualLine does. The
+# retry starts from the partially moved state (cursor on the target line,
+# sticky column updated, earlier snap origin kept), as upstream recurses
+# after assigning the cursor; there a column left of the source visual line
+# is negative, here it saturates at zero.
+def segmentAt(parts: List<&2,Segment>,+column: Nat) -> Nat:
+  match parts:
+    case Nil{}: column
+    case Segment{+text,+index,atomic} <> +rest: Bool.pick(Unit -> Nat,atomic && Nat.is_eq(index,column),_ => index + String.length(text),_ => segmentAt(rest,column))(Unit{})
+def pastContinuation(lines: List<&2,LayoutLine>,+index: Nat,+line: Nat,+end: Nat) -> Nat:
+  match lines:
+    case Nil{}: index
+    case LayoutLine{_,logical,start,_,_,_} <> rest: Bool.pick(Unit -> Nat,Nat.is_eq(logical,line) && Nat.is_lt(start,end),_ => pastContinuation(rest,index + 1n,line,end),_ => index)(Unit{})
+def intermediate(original: Editing,moved: Editing,+landed: Nat) -> Editing:
+  match original moved:
+    case Editing{_,_,_,_,_,snapped} Editing{EditorSnapshot{EditorState{lines,line,_},pastes,count},ring,_,stack,preferred,_}: Editing{EditorSnapshot{EditorState{lines,line,landed},pastes,count},ring,NoAction{},stack,preferred,snapped}
+def retryColumn(snapped: Maybe<&2,Nat>,+resolved: Nat,+lines: List<&2,String>,+line: Nat,+landed: Nat,source: Maybe<&2,LayoutLine>) -> Nat:
+  match snapped source:
+    case Some{_} _: resolved
+    case None{} Some{LayoutLine{_,logical,start,_,_,_}}: utf16Length(takePrefix(textAt(lines,line),landed,"")) - utf16Length(takePrefix(textAt(lines,logical),start,""))
+    case None{} None{}: resolved
+def originalSnap(value: Editing) -> Maybe<&2,Nat>:
+  match value:
+    case Editing{_,_,_,_,_,snapped}: snapped
+def continuationTarget(+map: List<&2,LayoutLine>,+target: Nat,+down: Bool,moved: Editing,landing: Maybe<&2,LayoutLine>) -> Maybe<&2,Nat>:
+  match moved landing:
+    case Editing{EditorSnapshot{EditorState{+lines,+line,+column},pastes,_},_,_,_,_,Some{_}} Some{LayoutLine{_,_,start,_,_,_}}:
+      +next = pastContinuation(List.drop(&2,LayoutLine,map,target + 1n),target + 1n,line,segmentAt(segmentWithMarkers(textAt(lines,line),pastes),column))
+      Bool.pick(Maybe<&2,Nat>,down && Nat.is_lt(column,start) && Nat.is_lt(next,List.length(&2,LayoutLine,map)),Some{next},None{})
+    case _ _: None{}
+def landedAt(value: Editing) -> Nat:
+  match value:
+    case Editing{EditorSnapshot{EditorState{_,_,column},_,_},_,_,_,_,snapped}: Maybe.default(&2,Nat,snapped,column)
+def landedLines(value: Editing) -> List<&2,String>:
+  match value:
+    case Editing{EditorSnapshot{EditorState{lines,_,_},_,_},_,_,_,_,_}: lines
+def landedLine(value: Editing) -> Nat:
+  match value:
+    case Editing{EditorSnapshot{EditorState{_,line,_},_,_},_,_,_,_,_}: line
+@unsafe
+def skipContinuation(+original: Editing,+moved: Editing,+map: List<&2,LayoutLine>,+current: Nat,+target: Nat,+resolved: Nat,+down: Bool,fuel: Nat,next: Maybe<&2,Nat>) -> Editing:
+  match fuel next:
+    case Succ{fuel} Some{+next}:
+      +landed = landedAt(moved)
+      +column = retryColumn(originalSnap(original),resolved,landedLines(moved),landedLine(moved),landed,layoutAt(map,current))
+      +retried = moveVisualTarget(intermediate(original,moved,landed),column,layoutAt(map,next),layoutAt(map,current))
+      skipContinuation(original,retried,map,current,next,resolved,down,fuel,continuationTarget(map,next,down,retried,layoutAt(map,next)))
+    case _ _: moved
 def moveVertical(+value: Editing,+width: Nat,+up: Bool,+count: Nat) -> Editing:
   match value:
-    case Editing{EditorSnapshot{EditorState{_,+line,+column},_,_},_,_,_,_,snapped}:
+    case Editing{EditorSnapshot{EditorState{_,+line,+column},_,_},_,_,_,_,+snapped}:
       +map = layoutText(value,width)
       +current = cursorLayoutIndex(map,0n)
       +target = Bool.pick(Nat,up,current - count,Nat.min(current + count,List.length(&2,LayoutLine,map) - 1n))
       +original = Maybe.default(&2,Nat,snapped,column)
       +source = findVisualLineAt(map,line,original,0n)
-      moveVisualTarget(value,resolvedVisualColumn(layoutAt(map,source),original),layoutAt(map,target),layoutAt(map,current))
+      +resolved = resolvedVisualColumn(layoutAt(map,source),original)
+      +moved = moveVisualTarget(value,resolved,layoutAt(map,target),layoutAt(map,current))
+      skipContinuation(value,moved,map,current,target,resolved,Bool.not(up),List.length(&2,LayoutLine,map),continuationTarget(map,target,Bool.not(up),moved,layoutAt(map,target)))
+
+# Right at the end of the last line cannot move, but records the cursor's
+# visual column as the sticky column for later vertical movement.
+def atPromptEnd(value: Editing) -> Bool:
+  match value:
+    case Editing{EditorSnapshot{EditorState{+lines,+line,column},_,_},_,_,_,_,_}: Nat.is_eq(line + 1n,List.length(&2,String,lines)) && Nat.is_ge(column,String.length(textAt(lines,line)))
+def withPreferred(value: Editing,preferred: Nat) -> Editing:
+  match value:
+    case Editing{snapshot,ring,action,stack,_,snapped}: Editing{snapshot,ring,action,stack,Some{preferred},snapped}
+def promptEndPreferred(+value: Editing,+width: Nat) -> Editing:
+  match value:
+    case Editing{EditorSnapshot{EditorState{_,_,column},_,_},_,_,_,_,_}:
+      +map = layoutText(value,width)
+      +found = layoutAt(map,cursorLayoutIndex(map,0n))
+      Bool.pick(Unit -> Editing,Maybe.is_none(&2,LayoutLine,found),_ => resetAction(value),_ => withPreferred(resetAction(value),resolvedVisualColumn(found,column)))(Unit{})
+def moveRight(+value: Editing,+width: Nat) -> Editing:
+  Bool.pick(Unit -> Editing,atPromptEnd(value),_ => promptEndPreferred(value,width),_ => moveHorizontal(value,False{}))(Unit{})
 
 def repeat(count: Nat,+char: Char,reversed: String) -> String:
   match count:
@@ -1365,7 +1433,7 @@ def executeCommand(~Context: Data,~segment: Context -> String -> Word.ResultOf(L
     case _ Up{}: arrowEditor(value,True{})
     case _ Down{}: arrowEditor(value,False{})
     case Editor{editing,_,_,_,_,_,_} Left{}: movedEditor(value,moveHorizontal(editing,True{}),True{})
-    case Editor{editing,_,_,_,_,_,_} Right{}: movedEditor(value,moveHorizontal(editing,False{}),True{})
+    case Editor{editing,_,Geometry{width,_,_,_},_,_,_,_} Right{}: movedEditor(value,moveRight(editing,width),True{})
     case Editor{editing,_,Geometry{width,_,_,_},_,_,_,_} PageUp{}: movedEditor(value,moveVertical(editing,width,True{},Nat.max(5n,terminalRows * 3n / 10n)),False{})
     case Editor{editing,_,Geometry{width,_,_,_},_,_,_,_} PageDown{}: movedEditor(value,moveVertical(editing,width,False{},Nat.max(5n,terminalRows * 3n / 10n)),False{})
     case _ JumpForward{}: IO.pure(ResultOf(Editor),Done{setJumpMode(value,Some{False{}})})

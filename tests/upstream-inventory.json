@@ -2797,15 +2797,17 @@
     },
     {
       "source": "packages/coding-agent/test/first-time-setup-fork.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "38ae7d0f1aeb002ddbe6d0f9f0820b4b09b7d25d0656bde664c88d36694eabfa"
+      "sha256": "38ae7d0f1aeb002ddbe6d0f9f0820b4b09b7d25d0656bde664c88d36694eabfa",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/first-time-setup.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "4d76184e78fba400d2bd7ba2d593d0fde6bc20a87c28d29cc11fec6fb338e035"
+      "sha256": "4d76184e78fba400d2bd7ba2d593d0fde6bc20a87c28d29cc11fec6fb338e035",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/footer-data-provider.test.ts",
@@ -3125,9 +3127,13 @@
     },
     {
       "source": "packages/coding-agent/test/models-store.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ad84fe3cf045af1ce4db057844bca181db0db59eaa8326664c607f6d9c3bf82f"
+      "status": "partial",
+      "ports": [
+        "tests/models-store.bend",
+        "tests/models_store_check.py"
+      ],
+      "sha256": "ad84fe3cf045af1ce4db057844bca181db0db59eaa8326664c607f6d9c3bf82f",
+      "notes": "Four of five cases pass on Bun and native one/four threads over packages/coding-agent/src/core/models-store.bend: catalogs persisted per provider without replacing others (write, fresh-store read, delete), an existing file's 0660 mode preserved, coalesced reloads (a shared read state serves unchanged-revision reads from its cache and reloads after the file changes; results asserted, not upstream's lock-call counts), and a write waiting for a held proper-lockfile lock cancelled after 10 ms without writing later. Pending: \"keeps a coalesced reload alive while another reader is still waiting\" (upstream mocks proper-lockfile.lock to hold the reload; native reads under one read state are serialized and a cancelled reader's reload is not kept for the next one), and the lock-count assertions of the coalescing case."
     },
     {
       "source": "packages/coding-agent/test/oauth-selector.test.ts",
@@ -3285,9 +3291,10 @@
     },
     {
       "source": "packages/coding-agent/test/restore-sandbox-env.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "14485f0f5f478475206f15ebd48191090c437f40b79ebfdf2d652d4681e71d02"
+      "sha256": "14485f0f5f478475206f15ebd48191090c437f40b79ebfdf2d652d4681e71d02",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/rpc-client-clear-queue.test.ts",
@@ -4978,13 +4985,13 @@
     },
     {
       "source": "packages/tui/test/autocomplete.test.ts",
-      "status": "needs-review",
+      "status": "ported",
       "ports": [
         "tests/autocomplete.bend",
         "tests/autocomplete_check.py"
       ],
       "sha256": "23d6aaa52acc11f9a36d667e6783ca2fb9041509aadacc127a9701768f93b40f",
-      "notes": "All 33 original test bodies (including the v0.87.1 CJK-punctuation cases) execute through the native provider on Bun/native one/four, supplemented by live-source calls and native-policy checks. Locale-default ordering remains pending; source item-set comparisons deliberately ignore ordering while original ranking assertions remain unchanged. Native scalar cursors and strict input/path adaptations are documented in tests/autocomplete.md. Generic editor-provider integration and Windows behavior remain pending."
+      "notes": "All 33 original test bodies (including the v0.87.1 CJK-punctuation cases, ported in 13f38a36) and the 3 autocomplete-skill-slash bodies execute through the native provider on Bun/native one/four, and every source call is compared exactly, in order, with the native provider using the production LocaleOrder (root collation). Native scalar cursors and strict input/path adaptations are documented in tests/autocomplete.md; the suite's single win32 branch does not run on Linux, as upstream. Editor-provider integration belongs to the editor suite."
     },
     {
       "source": "packages/tui/test/bug-regression-isimageline-startswith-bug.test.ts",
@@ -5001,19 +5008,29 @@
     },
     {
       "source": "packages/tui/test/editor-history-keybindings.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a055311e76a141062038a1a835fae1271108d29034fe0d0eec7521c6c79cb948"
+      "status": "ported",
+      "ports": [
+        "tests/tui_original.ts",
+        "tests/tui_bridge.ts",
+        "tests/tui-bridge.bend",
+        "tests/original_harness.ts"
+      ],
+      "sha256": "a055311e76a141062038a1a835fae1271108d29034fe0d0eec7521c6c79cb948",
+      "notes": "The pinned test body runs unchanged against the native Editor (tests/tui_original.ts through tests/tui-bridge.bend; setKeybindings forwards the user bindings) on Bun/native one/four. See tests/editor.md."
     },
     {
       "source": "packages/tui/test/editor.test.ts",
       "status": "partial",
       "ports": [
         "tests/editor-trigger.bend",
-        "tests/editor_trigger_check.py"
+        "tests/editor_trigger_check.py",
+        "tests/tui_original.ts",
+        "tests/tui_bridge.ts",
+        "tests/tui-bridge.bend",
+        "tests/original_harness.ts"
       ],
       "sha256": "b25d663eda552a486aa35965441b6fae056414b2b5750ddec96b69faec72bdd6",
-      "notes": "Only the symbol-trigger/debounce context of the CJK-punctuation cases is compared, against the pinned trigger and debounce patterns on random texts. The editor.test.ts bodies themselves are not yet executed."
+      "notes": "tests/tui_original.ts executes the pinned file itself against the native Editor through tests/tui-bridge.bend: 166 of 192 tests pass on Bun/native one/four with their original assertions (scalar-to-UTF-16 cursor conversion and paste-registry pre-segmentation documented in tests/editor.md). Pending by name: the 26 autocomplete tests (Autocomplete group, 'undoes autocomplete', 'does not trigger autocomplete during single-line paste'), which need asynchronous providers and mocked timers the synchronous bridge cannot drive; tests/editor-autocomplete.bend and tests/editor_trigger_check.py cover parts of that behaviour separately."
     },
     {
       "source": "packages/tui/test/fuzzy.test.ts",
@@ -5112,27 +5129,36 @@
     },
     {
       "source": "packages/tui/test/mouse-components.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2f24456f3d3a0cda99e6018e055f9522b64fa51d37315bd97b0cb6d2cb2a6e63"
+      "status": "partial",
+      "ports": [
+        "tests/tui_original.ts",
+        "tests/tui_bridge.ts",
+        "tests/tui-bridge.bend",
+        "tests/original_harness.ts"
+      ],
+      "sha256": "2f24456f3d3a0cda99e6018e055f9522b64fa51d37315bd97b0cb6d2cb2a6e63",
+      "notes": "tests/tui_original.ts runs the pinned file against native Input, SelectList and SettingsList through tests/tui-bridge.bend: 7 of 10 tests pass on Bun/native one/four. Pending by name: the three TuiAltScreen tests (delegating overlay focus, editor mouse positioning through alternate-screen dispatch, drag selection copy), which need alternate-screen dispatch through a virtual terminal. See tests/editor.md."
     },
     {
       "source": "packages/tui/test/native-clipboard-linux.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "22b36f35cd4427ebeecaa5edebcfe920a9800ccb8b48a9c822db5f85c8f373f8"
+      "sha256": "22b36f35cd4427ebeecaa5edebcfe920a9800ccb8b48a9c822db5f85c8f373f8",
+      "notes": "Not applicable to the native binary: the suite builds and drives upstream's C/libxcb Node addon (linux-platform-x11.node, its worker and allocation fixtures) under Xvfb. The Bend binary has no addon; clipboard image paste is ported through the upstream command path (wl-paste/xclip, packages/coding-agent/src/utils/clipboard-image.bend), which is upstream's behaviour when no native helper is available. A pure-Bend X11 reader would additionally need a Unix-domain socket primitive the runtime lacks."
     },
     {
       "source": "packages/tui/test/native-module-path.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "8f5f0eb78e719c1818d7b109e6745b706b76d70add323dce84a3e83df7917f75"
+      "sha256": "8f5f0eb78e719c1818d7b109e6745b706b76d70add323dce84a3e83df7917f75",
+      "notes": "Not applicable to the native binary: getNativeModuleCandidates resolves where a Node `.node` addon lives (installed pi-tui package, bundle chunk directory, next to the executable). The Bend binary loads no addons; its platform code is linked in, so there is no candidate path to resolve and nothing is ported. Kept pending rather than emulated."
     },
     {
       "source": "packages/tui/test/native-platform.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "d6ba0d7bbb3a367a4dc677798772fa9e4c4e37570151f10133a0fdc0b9c26189"
+      "sha256": "d6ba0d7bbb3a367a4dc677798772fa9e4c4e37570151f10133a0fdc0b9c26189",
+      "notes": "Not applicable to the native binary: the four tests check upstream's Node addons (ELF page alignment of the shipped linux-arm64 .node prebuild, the Windows/macOS helper object identity and clipboard round trip, and lazy require of the X11 addon keyed on DISPLAY/WAYLAND_DISPLAY). The Bend binary loads no addon; clipboard reads use commands (packages/coding-agent/src/utils/clipboard-image.bend, upstream's no-native-helper case) and Windows/macOS helpers are not ported."
     },
     {
       "source": "packages/tui/test/overlay-non-capturing.test.ts",
@@ -5188,7 +5214,8 @@
       "source": "packages/tui/test/regression-sigwinch-kill-eacces.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "3d0c18e07d973784433ba298fe8d228021b970fd0d772737c49a8be3040e7ce3"
+      "sha256": "3d0c18e07d973784433ba298fe8d228021b970fd0d772737c49a8be3040e7ce3",
+      "notes": "Not applicable to the native binary: refreshTerminalDimensions sends the process a SIGWINCH so Node re-reads its cached stdout columns/rows, guarding kill(2) EACCES/EPERM and skipping win32. The native terminal measures with TIOCGWINSZ when it acquires the terminal and after every SIGWINCH it receives (self-pipe; packages/tui/src/terminal.bend), so it never signals itself and has no kill call whose errors could be ignored."
     },
     {
       "source": "packages/tui/test/select-list.test.ts",

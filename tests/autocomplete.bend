@@ -5,6 +5,7 @@ import ../packages/runtime/src/utf8.bend as U
 import ../packages/runtime/src/string.bend as S
 import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/abort.bend as Abort
+import ../packages/runtime/src/collation.bend as Collation
 
 def encoded(value: String) -> String: B.encoded(U.encode(value),"")
 def natural(text: String) -> Nat: Maybe.default(&2,Nat,Nat.read(text),0n)
@@ -55,12 +56,24 @@ def commands(+mode: String,callback: C.Callback<String,A.ResultOf(Maybe<&2,List<
     A.Slash{A.SlashCommand{"compact",Some{"Compact context"},None{},None{}}} <>
     A.Item{A.AutocompleteItem{"clear","ignored label",Some{"Clear"}}} <> Nil{},
     Bool.pick(List<&2,A.Command>,S.equal(mode,"skills"),skillCommands(),Nil{}))
+# "locale" is the production order: the root collation, as localeCompare.
+def collated(loaded: Result<&2,&2,Collation.LoadError,Collation.Collator>) -> IO(A.SortPolicy):
+  match loaded:
+    case Done{collator}: IO.pure(A.SortPolicy,A.LocaleOrder{collator})
+    case Fail{_}: IO.die(A.SortPolicy,1,"collation data unavailable")
+def sortPolicy(+policy: String) -> IO(A.SortPolicy):
+  Bool.pick(Unit -> IO(A.SortPolicy),S.equal(policy,"locale"),
+    _ => do IO<A.SortPolicy>:
+      loaded : Result<&2,&2,Collation.LoadError,Collation.Collator> <- Collation.load("packages/runtime/data")
+      collated(loaded),
+    _ => IO.pure(A.SortPolicy,Bool.pick(A.SortPolicy,S.equal(policy,"folded"),A.FoldedScalarOrder{},A.ScalarOrder{})))(Unit{})
 def query(+mode: String,root: String,home: String,lines: String,line: Nat,column: Nat,force: String,recursive: String,policy: String) -> IO(Unit):
   do IO<Unit>:
+    order : A.SortPolicy <- sortPolicy(policy)
     +callback : C.Callback<String,A.ResultOf(Maybe<&2,List<&2,A.AutocompleteItem>>)> <- C.create(~Unit,~String,~A.ResultOf(Maybe<&2,List<&2,A.AutocompleteItem>>),~(unused => prefix => argumentCompletions(unused,prefix)),Unit{})
     +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
     ignored : Bool <- Bool.pick(Unit -> IO(Bool),S.equal(mode,"aborted"),_ => Abort.abort(Unit,controller,None{}),_ => IO.pure(Bool,False{}))(Unit{})
-    result : A.ResultOf(Maybe<&2,A.AutocompleteSuggestions>) <- A.getSuggestions(A.CombinedAutocompleteProvider{commands(mode,callback),root,home,Bool.pick(A.SortPolicy,S.equal(policy,"folded"),A.FoldedScalarOrder{},A.ScalarOrder{}),S.equal(recursive,"yes")},S.split(lines,'\n'),line,column,A.Options{Some{Abort.signal(Unit,controller)},S.equal(force,"yes")})
+    result : A.ResultOf(Maybe<&2,A.AutocompleteSuggestions>) <- A.getSuggestions(A.CombinedAutocompleteProvider{commands(mode,callback),root,home,order,S.equal(recursive,"yes")},S.split(lines,'\n'),line,column,A.Options{Some{Abort.signal(Unit,controller)},S.equal(force,"yes")})
     reportSuggestions(result)
     Abort.dispose(Unit,controller)
     C.dispose(String,A.ResultOf(Maybe<&2,List<&2,A.AutocompleteItem>>),callback)
