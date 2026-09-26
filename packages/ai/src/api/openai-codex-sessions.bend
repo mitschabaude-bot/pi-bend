@@ -336,3 +336,17 @@ def dispose(-Reason: Data, pool: Pool<Reason>) -> IO(Unit):
       do IO<Unit>:
         state : State<Reason> <- Ref.dispose(State<Reason>, reference)
         disposeState(Reason, state)
+
+# A failed dial has no connection to release, but must relinquish its reservation.
+def abandonedState(-Reason: Data, generation: Nat, result: List<&1, Slot<Reason>> & Bool) -> State<Reason> & Unit:
+  match result:
+    case (slots, _): (State{slots, generation}, Unit{})
+
+def abandonState(-Reason: Data, ticket: Reservation, state: State<Reason>) -> State<Reason> & Unit:
+  match state:
+    case State{slots, generation}: abandonedState(Reason, generation, removeReservation(Reason, ticket, Removal{slots, Nil{}, False{}}))
+
+def abandon(-Reason: Data, pool: Pool<Reason>, ticket: Maybe<&2, Reservation>) -> IO(Unit):
+  match pool ticket:
+    case _ None{}: IO.pure(Unit, Unit{})
+    case Pool{reference, _} Some{value}: Ref.modify(State<Reason>, Unit, reference, state => abandonState(Reason, value, state))

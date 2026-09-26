@@ -1,4 +1,5 @@
 import Base
+import ../../../ai/src/api/openai-codex-sessions.bend as CodexSessions
 import ../../../ai/src/types.bend as Ai
 import ../../../ai/src/providers/radius.bend as Radius
 import ../../../ai/src/auth/types.bend as Auth
@@ -117,7 +118,7 @@ def providerConfig(authorizer: C.Callback<URL.Host, TLSClient.Authorization>, ag
   Responses.Config{urlContext(), Client.Defaults{agent, R.new(String), None{}, None{}}, files(), httpOptions(), security(authorizer), 65536n, False{}}
 
 type Transport is Type:
-  Transport{authorizer: C.Callback<URL.Host, TLSClient.Authorization>, runtime: Fetch.Runtime, fetch: Fetch.Fetch(Unit)}
+  Transport{authorizer: C.Callback<URL.Host, TLSClient.Authorization>, runtime: Fetch.Runtime, fetch: Fetch.Fetch(Unit), codexSessions: CodexSessions.Pool<Unit>}
 
 def trustError(error: Trust.Error) -> String:
   match error:
@@ -127,9 +128,9 @@ def trustError(error: Trust.Error) -> String:
     case Trust.UnsupportedLabel{_}: "The certificate bundle holds an unsupported PEM block"
     case Trust.EmptyBundle{}: "The certificate bundle holds no certificates"
 
-def transportOf(authorizer: C.Callback<URL.Host, TLSClient.Authorization>, pair: Fetch.Runtime & Fetch.Fetch(Unit)) -> Outcome(Transport):
+def transportOf(codexSessions: CodexSessions.Pool<Unit>, authorizer: C.Callback<URL.Host, TLSClient.Authorization>, pair: Fetch.Runtime & Fetch.Fetch(Unit)) -> Outcome(Transport):
   match pair:
-    case Tuple{runtime, fetch}: Done{Transport{authorizer, runtime, fetch}}
+    case Tuple{runtime, fetch}: Done{Transport{authorizer, runtime, fetch, codexSessions}}
 
 def withRuntime(+authorizer: C.Callback<URL.Host, TLSClient.Authorization>, result: Result<&2, &1, Fetch.InitError, Fetch.Runtime>) -> IO(Outcome(Transport)):
   match result:
@@ -140,7 +141,8 @@ def withRuntime(+authorizer: C.Callback<URL.Host, TLSClient.Authorization>, resu
     case Done{runtime}:
       do IO<Outcome(Transport)>:
         pair : Fetch.Runtime & Fetch.Fetch(Unit) <- Fetch.callbackWithSecurity(~Unit, runtime, security(authorizer))
-        return transportOf(authorizer, pair)
+        codexSessions : CodexSessions.Pool<Unit> <- CodexSessions.create(Unit, CodexSessions.defaults())
+        return transportOf(codexSessions, authorizer, pair)
 
 def withBundle(bundle: Result<&2, &2, Trust.Error, List<&2, X509.Certificate>>) -> IO(Outcome(Transport)):
   match bundle:
@@ -159,8 +161,9 @@ def createTransport(bundlePath: String) -> IO(Outcome(Transport)):
 
 def disposeTransport(transport: Transport) -> IO(Unit):
   match transport:
-    case Transport{authorizer, runtime, fetch}:
+    case Transport{authorizer, runtime, fetch, codexSessions}:
       do IO<Unit>:
+        CodexSessions.dispose(Unit, codexSessions)
         Fetch.retire(Unit, fetch)
         Fetch.dispose(runtime)
         C.dispose(URL.Host, TLSClient.Authorization, authorizer)
@@ -200,7 +203,7 @@ type KeySource is Data:
   KeySource{models: Models.ModelRuntime, apiKey: Maybe<&2, String>}
 
 type ProviderStreams is Data:
-  ProviderStreams{responses: Responses.Config, fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource, googleToolCalls: Ref.Ref<Nat>}
+  ProviderStreams{responses: Responses.Config, fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource, googleToolCalls: Ref.Ref<Nat>, codexSessions: CodexSessions.Pool<Unit>}
 
 def selectedOptions(options: Maybe<&2, LoopConfig()>) -> Maybe<&2, Responses.SimpleStreamOptions(Unit, Unit, Error())>:
   Maybe.map(&2, LoopConfig(), Responses.SimpleStreamOptions(Unit, Unit, Error()), project, options)
@@ -216,7 +219,7 @@ def requestConfig(fetch: Fetch.Fetch(Unit), preset: RequestDefaults, config: Loo
   match config:
     case T.AgentLoopConfig{options, model, convert, transform, key, a, b, c, d, e, f, g, h}: T.AgentLoopConfig{withRequest(fetch, preset, options), model, convert, transform, key, a, b, c, d, e, f, g, h}
 
-def selectedProvider(responses: Responses.Config, fetch: Fetch.Fetch(Unit), googleToolCalls: Ref.Ref<Nat>, model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, +options: Maybe<&2, LoopConfig()>, api: Ai.ModelApi) -> IO(Providers.Output(Unit, Error())):
+def selectedProvider(codexSessions: CodexSessions.Pool<Unit>, responses: Responses.Config, fetch: Fetch.Fetch(Unit), googleToolCalls: Ref.Ref<Nat>, model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, +options: Maybe<&2, LoopConfig()>, api: Ai.ModelApi) -> IO(Providers.Output(Unit, Error())):
   match api:
     case Ai.AnthropicMessagesApi{}: Anthropic.open(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.GoogleGenerativeAiApi{}: Google.open(fetch, urlContext(), googleToolCalls, model, context, selectedOptions(options))
@@ -225,7 +228,7 @@ def selectedProvider(responses: Responses.Config, fetch: Fetch.Fetch(Unit), goog
     case Ai.MistralConversationsApi{}: StreamProviders.mistral(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.BedrockConverseStreamApi{}: StreamProviders.bedrock(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.GoogleVertexApi{}: StreamProviders.vertex(fetch, urlContext(), model, context, selectedOptions(options))
-    case _: Providers.openResponses(~LoopConfig(), ~Unit, ~Unit, ~Details(), ~Error(), ~project, ~render, ~failure, responses, T.StreamInput{model, context, options})
+    case _: Providers.openResponsesWithSessions(~LoopConfig(), ~Unit, ~Unit, ~Details(), ~Error(), ~project, ~render, ~failure, Some{codexSessions}, responses, T.StreamInput{model, context, options})
 
 # upstream ModelRuntime.prepareRequest: each request resolves its model's
 # auth; the request's own key and headers win over it, auth headers come
@@ -265,28 +268,28 @@ def streamedConfig(streams: AiModels.ProviderStreams, model: Models.Model(), con
 
 # The provider's stream then dispatches the model for the request's merged
 # provider env (upstream provider.stream after prepareRequest).
-def preparedRequest(responses: Responses.Config, fetch: Fetch.Fetch(Unit), +googleToolCalls: Ref.Ref<Nat>, +model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, +options: Maybe<&2, LoopConfig()>, +streams: AiModels.ProviderStreams, resolution: Resolve.Resolution()) -> IO(Providers.Output(Unit, Error())):
+def preparedRequest(codexSessions: CodexSessions.Pool<Unit>, responses: Responses.Config, fetch: Fetch.Fetch(Unit), +googleToolCalls: Ref.Ref<Nat>, +model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, +options: Maybe<&2, LoopConfig()>, +streams: AiModels.ProviderStreams, resolution: Resolve.Resolution()) -> IO(Providers.Output(Unit, Error())):
   match resolution:
     case Done{Some{Auth.AuthResult{Auth.ModelAuth{key, headers, +url}, +env, source}}}:
       +model = AiModels.streamModel(Ai.JsonValue, streams, withBaseUrl(model, url), mergedEnv(env, requestEnv(options)))
-      selectedProvider(responses, fetch, googleToolCalls, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => streamedConfig(streams, model, preparedConfig(Auth.AuthResult{Auth.ModelAuth{key, headers, url}, env, source}, value)), options), modelApi(model))
+      selectedProvider(codexSessions, responses, fetch, googleToolCalls, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => streamedConfig(streams, model, preparedConfig(Auth.AuthResult{Auth.ModelAuth{key, headers, url}, env, source}, value)), options), modelApi(model))
     case _:
       +model = AiModels.streamModel(Ai.JsonValue, streams, model, requestEnv(options))
-      selectedProvider(responses, fetch, googleToolCalls, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => streamedConfig(streams, model, value), options), modelApi(model))
+      selectedProvider(codexSessions, responses, fetch, googleToolCalls, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => streamedConfig(streams, model, value), options), modelApi(model))
 
 def openProvider(config: ProviderStreams, input: Providers.Input(LoopConfig(), Unit, Details())) -> IO(Providers.Output(Unit, Error())):
   match config input:
-    case ProviderStreams{responses, +fetch, defaults, KeySource{+models, apiKey}, calls} T.StreamInput{+model, context, options}:
+    case ProviderStreams{responses, +fetch, defaults, KeySource{+models, apiKey}, calls, codexSessions} T.StreamInput{+model, context, options}:
       do IO<Providers.Output(Unit, Error())>:
         resolution : Resolve.Resolution() <- Models.getModelAuth(models, model, Resolve.AuthResolutionOverrides{apiKey, None{}, None{}, None{}})
         streams : AiModels.ProviderStreams <- Models.getProviderStreams(models, Models.modelProvider(model))
-        preparedRequest(responses, fetch, calls, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => requestConfig(fetch, defaults, value), options), streams, resolution)
+        preparedRequest(codexSessions, responses, fetch, calls, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => requestConfig(fetch, defaults, value), options), streams, resolution)
 
-def createStream(authorizer: C.Callback<URL.Host, TLSClient.Authorization>, fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource) -> IO(Stream()):
+def createStream(codexSessions: CodexSessions.Pool<Unit>, authorizer: C.Callback<URL.Host, TLSClient.Authorization>, fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource) -> IO(Stream()):
   do IO<Stream()>:
     agent : String <- IO.try(String, UserAgent.get())
     calls : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
-    C.create(~ProviderStreams, ~Providers.Input(LoopConfig(), Unit, Details()), ~Providers.Output(Unit, Error()), ~openProvider, ProviderStreams{providerConfig(authorizer, agent), fetch, defaults, keys, calls})
+    C.create(~ProviderStreams, ~Providers.Input(LoopConfig(), Unit, Details()), ~Providers.Output(Unit, Error()), ~openProvider, ProviderStreams{providerConfig(authorizer, agent), fetch, defaults, keys, calls, codexSessions})
 
 # Request auth
 # ------------
@@ -1056,17 +1059,17 @@ def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageSt
 
 def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey: Maybe<&2, String>, requested: Maybe<&2, Ai.ModelThinkingLevel>, +seed: SessionSeed, +settings: Settings.SettingsManager, +names: List<&2, Tools.ToolName>, builtins: Tools.ToolsOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, +models: Models.ModelRuntime, +paths: Paths.Environment, +prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, source: LoadoutSource, +extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
   match transport prompt selected:
-    case Transport{+authorizer, runtime, +fetch} Done{prompt} Done{+model}:
+    case Transport{+authorizer, runtime, +fetch, +codexSessions} Done{prompt} Done{+model}:
       do IO<Outcome(AgentRuntime)>:
         queue : Queue.Owner <- Queue.create()
         +context : Ctx.ContextSource() <- IO.pure(Ctx.ContextSource(), Some{ExtensionRunner.createContext(extensions)})
         created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- createToolList(names, toolsOptionsFor(builtins, settings, paths), paths, cwd, agentDir, packageDir, fetch, context, Queue.borrow(queue))
-        +stream : Stream() <- createStream(authorizer, fetch, requestDefaults(settings), KeySource{models, apiKey})
+        +stream : Stream() <- createStream(codexSessions, authorizer, fetch, requestDefaults(settings), KeySource{models, apiKey})
         +registry : StreamFn.Registry(Unit, Details(), LoopConfig(), Error()) <- StreamFn.create(Unit, Details(), LoopConfig(), Error())
         +validator : Loop.Validator(Error()) <- Loop.createPlain(~Error(), ~validationError)
         +keys : C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>> <- C.create(~KeySource, ~String, ~Result<&2, &2, Error(), Maybe<&2, String>>, ~resolveKey, KeySource{models, apiKey})
         +converter : Converter() <- createConverter(Settings.getBlockImages(settings))
-        assembled(Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, created, stream, registry, validator, keys, converter, prompt, model, thinkingForSelection(requested, seed, settings, model), seed, settings, extensions, source)
+        assembled(Transport{authorizer, runtime, fetch, codexSessions}, storage, storageStore, credentials, credentialStore, models, created, stream, registry, validator, keys, converter, prompt, model, thinkingForSelection(requested, seed, settings, model), seed, settings, extensions, source)
     case transport Fail{error} _:
       do IO<Outcome(AgentRuntime)>:
         disposeBase(transport, storage, storageStore, credentials, credentialStore, models, extensions)
@@ -1148,7 +1151,7 @@ def loadExtensions(+cwd: String, +models: Models.ModelRuntime) -> IO(Extensions)
 
 def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, +paths: Paths.Environment, borrowed: Storage.AuthStorageOwner & Storage.AuthStorage) -> IO(Outcome(AgentRuntime)):
   match transport borrowed:
-    case Transport{+authorizer, runtime, +fetch} Tuple{storage, view}:
+    case Transport{+authorizer, runtime, +fetch, +codexSessions} Tuple{storage, view}:
       do IO<Outcome(AgentRuntime)>:
         +storageStore : Auth.CredentialStore <- Storage.store(view)
         +credentials : Runtime.RuntimeCredentials <- Runtime.create(storageStore)
@@ -1162,7 +1165,7 @@ def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, 
         +selected : Result<&2, &2, String, Maybe<&2, Models.Model()>> <- selectModel(models, options, resolution)
         applyKey(credentials, models, apiKey, selected)
         prompt : Result<&2, &2, String, Prepared> <- preparedFor(paths, options, packageDir)
-        withModel(withSuffixThinking(options, resolution), Transport{authorizer, runtime, fetch}, storage, storageStore, credentials, credentialStore, models, paths, failedWith(extensionFailure(extensions), prompt), selected, runnerOf(extensions))
+        withModel(withSuffixThinking(options, resolution), Transport{authorizer, runtime, fetch, codexSessions}, storage, storageStore, credentials, credentialStore, models, paths, failedWith(extensionFailure(extensions), prompt), selected, runnerOf(extensions))
 
 def withPathsFields(options: CreateOptions, authPath: String, packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, paths: Paths.Environment) -> IO(Outcome(AgentRuntime)):
   do IO<Outcome(AgentRuntime)>:
@@ -1198,8 +1201,8 @@ def agentOf(runtime: AgentRuntime) -> AgentRuntime & Owner():
     case AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, +agent, model, thinking, loadout}: (AgentRuntime{transport, storage, storageStore, credentials, credentialStore, models, queue, tools, stream, registry, validator, keys, converter, agent, model, thinking, loadout}, agent)
 def managedTools(runtime: AgentRuntime,agentDir: String) -> AgentRuntime & Manager.ToolsManager:
   match runtime:
-    case AgentRuntime{Transport{authorizer,network,+fetch},storage,storageStore,credentials,credentialStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout}:
-      (AgentRuntime{Transport{authorizer,network,fetch},storage,storageStore,credentials,credentialStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout},Manager.ToolsManager{Path.join(agentDir,"bin"),urlContext(),Some{fetch}})
+    case AgentRuntime{Transport{authorizer,network,+fetch,codexSessions},storage,storageStore,credentials,credentialStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout}:
+      (AgentRuntime{Transport{authorizer,network,fetch,codexSessions},storage,storageStore,credentials,credentialStore,models,queue,tools,stream,registry,validator,keys,converter,agent,model,thinking,loadout},Manager.ToolsManager{Path.join(agentDir,"bin"),urlContext(),Some{fetch}})
 
 def selectionOf(runtime: AgentRuntime) -> AgentRuntime & Selection:
   match runtime:

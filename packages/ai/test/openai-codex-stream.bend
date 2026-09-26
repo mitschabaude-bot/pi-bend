@@ -2,6 +2,7 @@ import Base
 import ../src/types.bend as T
 import ../src/api/openai-responses.bend as Responses
 import ../src/api/openai-codex-responses.bend as Codex
+import ../src/api/openai-codex-sessions.bend as Sessions
 import ../src/utils/event-stream.bend as Events
 import ../src/utils/message-json.bend as MessageJson
 import ../src/utils/schema-json.bend as Convert
@@ -222,12 +223,12 @@ def rendered(error: String) -> String: error
 
 def streamed(owner: Run()) -> Responses.SimpleRun(Unit, Unit, String): Done{owner}
 
-def started(entry: Maybe<&2, String>, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, Unit, Unit>, +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Responses.SimpleRun(Unit, Unit, String)):
+def started(pool: Sessions.Pool<Unit>, entry: Maybe<&2, String>, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, Unit, Unit>, +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Responses.SimpleRun(Unit, Unit, String)):
   match entry:
-    case Some{"simple"}: Codex.streamSimple(~Unit, ~Unit, ~Unit, ~Unit, ~String, ~rendered, RP.config(), model, context, Some{simpleOptions(options, signal)})
+    case Some{"simple"}: Codex.streamSimpleWithSessions(~Unit, ~Unit, ~Unit, ~Unit, ~String, ~rendered, Some{pool}, RP.config(), model, context, Some{simpleOptions(options, signal)})
     case _:
       do IO<Responses.SimpleRun(Unit, Unit, String)>:
-        owner : Run() <- Codex.stream(~Unit, ~Unit, ~Unit, ~Unit, ~String, ~rendered, RP.config(), model, context, streamOptions(options, signal))
+        owner : Run() <- Codex.streamWithSessions(~Unit, ~Unit, ~Unit, ~Unit, ~String, ~rendered, Some{pool}, RP.config(), model, context, streamOptions(options, signal))
         return streamed(owner)
 
 def label(event: StreamEvent()) -> String:
@@ -284,33 +285,36 @@ def outcome(result: Responses.SimpleRun(Unit, Unit, String), +controller: Abort.
     case Fail{cause}: IO.print("T " ++ Responses.describePreparation(cause))
     case Done{owner}: observed(Responses.borrow(Unit, Unit, String, owner), controller, trigger)
 
-def runCase(+base: String, +value: V.Value) -> IO(Unit):
+def runCase(pool: Sessions.Pool<Unit>, +base: String, +value: V.Value) -> IO(Unit):
   +options = Maybe.default(&2, V.Value, field(value, "options"), V.ObjectValue{R.new(V.Value)})
   do IO<Unit>:
     +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
-    result : Responses.SimpleRun(Unit, Unit, String) <- started(text(field(value, "entry")), model(base, Maybe.default(&2, V.Value, field(value, "model"), V.Null{})), context(value), options, Abort.signal(Unit, controller))
+    result : Responses.SimpleRun(Unit, Unit, String) <- started(pool, text(field(value, "entry")), model(base, Maybe.default(&2, V.Value, field(value, "model"), V.Null{})), context(value), options, Abort.signal(Unit, controller))
     outcome(result, controller, Maybe.default(&2, String, text(field(value, "abortOnEvent")), "(never)"))
+    cancelled : Bool <- Abort.abort(Unit, controller, None{})
     Abort.dispose(Unit, controller)
 
-def parsed(+base: String, value: Result<&2, &2, Decode.ParseError, V.Value>) -> IO(Unit):
+def parsed(pool: Sessions.Pool<Unit>, +base: String, value: Result<&2, &2, Decode.ParseError, V.Value>) -> IO(Unit):
   match value:
-    case Done{item}: runCase(base, item)
+    case Done{item}: runCase(pool, base, item)
     case Fail{_}: IO.die(Unit, 1, "invalid case")
 
-def cases(+base: String, values: List<String>) -> IO(Unit):
+def cases(+pool: Sessions.Pool<Unit>, +base: String, values: List<String>) -> IO(Unit):
   match values:
     case Nil{}: IO.pure(Unit, Unit{})
     case value <> rest:
       do IO<Unit>:
-        parsed(base, Decode.parse(Text.fromScalars(Text.parseNumbers(value))))
-        cases(base, rest)
+        parsed(pool, base, Decode.parse(Text.fromScalars(Text.parseNumbers(value))))
+        cases(pool, base, rest)
 
-def arguments(values: List<String>) -> IO(Unit):
+def arguments(pool: Sessions.Pool<Unit>, values: List<String>) -> IO(Unit):
   match values:
-    case base <> rest: cases(base, rest)
+    case base <> rest: cases(pool, base, rest)
     case Nil{}: IO.die(Unit, 1, "base URL required")
 
 def main() -> IO(Unit):
   do IO<Unit>:
     args : List<String> <- IO.args()
-    arguments(args)
+    +pool : Sessions.Pool<Unit> <- Sessions.create(Unit, Sessions.defaults())
+    arguments(pool, args)
+    Sessions.dispose(Unit, pool)

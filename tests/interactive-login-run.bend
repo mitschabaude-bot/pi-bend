@@ -39,7 +39,7 @@ def requireTransport(result: AgentRuntime.Outcome(AgentRuntime.Transport)) -> IO
     case Fail{message}: IO.die(AgentRuntime.Transport,1,message)
 def factoryTransport(+agentDir: String,request: Host.Request,storage: Storage.AuthStorageOwner,+store: Auth.CredentialStore,transport: AgentRuntime.Transport) -> IO(Result<&1,&1,String,Host.Created<Services()>>):
   match request transport:
-    case Host.Request{+cwd,+stored,_} AgentRuntime.Transport{authorizer,runtime,+fetch}:
+    case Host.Request{+cwd,+stored,_} AgentRuntime.Transport{authorizer,runtime,+fetch,codexSessions}:
       do IO<Result<&1,&1,String,Host.Created<Services()>>>:
         oauth : Auth.OAuthAuth <- Codex.openaiCodexOAuth(fetch,AgentRuntime.urlContext())
         anthropic : Auth.OAuthAuth <- Anthropic.anthropicOAuth(fetch,AgentRuntime.urlContext())
@@ -57,7 +57,7 @@ def factoryTransport(+agentDir: String,request: Host.Request,storage: Storage.Au
         +session : Session.AgentSession <- Session.create(agent,stored,Faux.settingsOf(loaded),cwd,AgentRuntime.Loadout{Record.new(String),Nil{},Nil{},Nil{},None{},Nil{},None{},Nil{}},models,Nil{})
         +listener : Session.Listener() <- Callback.create(~Unit,~Session.AgentSessionEvent,~Unit,~Faux.observe,Unit{})
         Session.subscribe(session,listener)
-        return Done{Host.Created{LoginServices{Faux.Fixture{session,listener,stream,validator,converter,registry,Faux.Faux{responses,streams,gates}},storage,store,AgentRuntime.Transport{authorizer,runtime,fetch}},session}}
+        return Done{Host.Created{LoginServices{Faux.Fixture{session,listener,stream,validator,converter,registry,Faux.Faux{responses,streams,gates}},storage,store,AgentRuntime.Transport{authorizer,runtime,fetch,codexSessions}},session}}
 def factoryStored(+agentDir: String,request: Host.Request,pair: Storage.AuthStorageOwner & Storage.AuthStorage) -> IO(Result<&1,&1,String,Host.Created<Services()>>):
   match pair:
     case (storage,view):
@@ -126,17 +126,17 @@ def loginOAuth(provider: String,+auth: Auth.OAuthAuth,interaction: Auth.AuthInte
         return Fail{"Fixture expects a login signal"}
 def loginTransport(+base: String,provider: String,interaction: Auth.AuthInteraction,transport: AgentRuntime.Transport) -> IO(AuthLogin.Outcome()):
   match transport provider:
-    case AgentRuntime.Transport{+authorizer,runtime,+fetch} "anthropic":
+    case AgentRuntime.Transport{+authorizer,runtime,+fetch,codexSessions} "anthropic":
       do IO<AuthLogin.Outcome()>:
         auth : Auth.OAuthAuth <- Anthropic.anthropicOAuthWithTokenURL(fetch,AgentRuntime.urlContext(),base ++ "/anthropic-token")
         result : AuthLogin.Outcome() <- loginOAuth("anthropic",auth,interaction)
-        AgentRuntime.disposeTransport(AgentRuntime.Transport{authorizer,runtime,fetch})
+        AgentRuntime.disposeTransport(AgentRuntime.Transport{authorizer,runtime,fetch,codexSessions})
         return result
-    case AgentRuntime.Transport{+authorizer,runtime,+fetch} provider:
+    case AgentRuntime.Transport{+authorizer,runtime,+fetch,codexSessions} provider:
       do IO<AuthLogin.Outcome()>:
         auth : Auth.OAuthAuth <- Codex.openaiCodexOAuthWithEndpoints(fetch,AgentRuntime.urlContext(),Codex.DeviceEndpoints{base ++ "/usercode",base ++ "/token",base ++ "/exchange",base ++ "/codex/device"})
         result : AuthLogin.Outcome() <- loginOAuth(provider,auth,interaction)
-        AgentRuntime.disposeTransport(AgentRuntime.Transport{authorizer,runtime,fetch})
+        AgentRuntime.disposeTransport(AgentRuntime.Transport{authorizer,runtime,fetch,codexSessions})
         return result
 def loginCopied(+base: String,request: Run.LoginRequest) -> IO(AuthLogin.Outcome()):
   match request:

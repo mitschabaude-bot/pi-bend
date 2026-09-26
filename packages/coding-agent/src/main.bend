@@ -1378,13 +1378,13 @@ def listed(+runtime: Models.ModelRuntime,store: Auth.CredentialStore,storage: Au
 
 def listWithStore(transport: Runtime.Transport,storage: AuthStorage.AuthStorageOwner,view: AuthStorage.AuthStorage,search: Maybe<&2,String>) -> IO(Unit):
   match transport:
-    case Runtime.Transport{+authorizer,runtime,+fetch}:
+    case Runtime.Transport{+authorizer,runtime,+fetch,codexSessions}:
       do IO<Unit>:
         +store : Auth.CredentialStore <- AuthStorage.store(view)
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch,Runtime.urlContext())
         anthropic : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch,Runtime.urlContext())
         models : Models.ModelRuntime <- Models.createWithAnthropic(store,oauth,Some{anthropic},Radius.RadiusTransport{fetch,Runtime.urlContext()})
-        listed(models,store,storage,Runtime.Transport{authorizer,runtime,fetch},search)
+        listed(models,store,storage,Runtime.Transport{authorizer,runtime,fetch,codexSessions},search)
 
 def listBorrowed(transport: Runtime.Transport,pair: AuthStorage.AuthStorageOwner & AuthStorage.AuthStorage,search: Maybe<&2,String>) -> IO(Unit):
   match pair:
@@ -1496,7 +1496,7 @@ def printedCredential(result: Result<&2,&2,String,String>) -> IO(Unit):
 
 def printWith(transport: Runtime.Transport, store: Auth.CredentialStore, args: Args.Args, kind: AuthCommand.AuthCommandKind, minExpiryMs: Maybe<&2,Nat>) -> IO(Unit):
   match transport:
-    case Runtime.Transport{authorizer,runtime,+fetch}:
+    case Runtime.Transport{authorizer,runtime,+fetch,codexSessions}:
       do IO<Unit>:
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch,Runtime.urlContext())
         anthropic : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch,Runtime.urlContext())
@@ -1504,7 +1504,7 @@ def printWith(transport: Runtime.Transport, store: Auth.CredentialStore, args: A
         packageDir : String <- authPackageDir()
         result : Result<&2,&2,String,String> <- CredentialPrint.resolveCredentialForPrint(args,models,packageDir,kind,minExpiryMs,None{})
         Models.dispose(models)
-        Runtime.disposeTransport(Runtime.Transport{authorizer,runtime,fetch})
+        Runtime.disposeTransport(Runtime.Transport{authorizer,runtime,fetch,codexSessions})
         printedCredential(result)
 
 def printStorage(transport: Runtime.Transport, args: Args.Args, kind: AuthCommand.AuthCommandKind, minExpiryMs: Maybe<&2,Nat>, pair: AuthStorage.AuthStorageOwner & AuthStorage.AuthStorage) -> IO(Unit):
@@ -1589,7 +1589,7 @@ def checkedWith(+models: Models.ModelRuntime, store: Auth.CredentialStore, json:
 
 def checkWith(transport: Runtime.Transport, +store: Auth.CredentialStore, args: Args.Args, json: Bool, credentials: Bool, +refresh: Bool, +fallback: String) -> IO(Unit):
   match transport:
-    case Runtime.Transport{authorizer,runtime,+fetch}:
+    case Runtime.Transport{authorizer,runtime,+fetch,codexSessions}:
       do IO<Unit>:
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch,Runtime.urlContext())
         anthropic : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch,Runtime.urlContext())
@@ -1598,7 +1598,7 @@ def checkWith(transport: Runtime.Transport, +store: Auth.CredentialStore, args: 
         result : Result<&2,&2,String,AuthCheck.AuthCheckResult> <- AuthCheck.checkProviderAuth(args,models,packageDir,refresh)
         checkedWith(models, store, json, credentials, refresh, fallback, result)
         Models.dispose(models)
-        Runtime.disposeTransport(Runtime.Transport{authorizer,runtime,fetch})
+        Runtime.disposeTransport(Runtime.Transport{authorizer,runtime,fetch,codexSessions})
 
 def checkStorage(transport: Runtime.Transport, args: Args.Args, json: Bool, credentials: Bool, +fallback: String, pair: AuthStorage.AuthStorageOwner & AuthStorage.AuthStorage) -> IO(Unit):
   match pair:

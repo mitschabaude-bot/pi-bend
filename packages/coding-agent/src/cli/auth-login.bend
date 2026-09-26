@@ -80,7 +80,7 @@ def started(+flow: Codex.Flow, +endpoints: Codex.DeviceEndpoints, store: Auth.Cr
 
 def loginStore(owner: Storage.AuthStorageOwner, view: Storage.AuthStorage, transport: Runtime.Transport, +endpoints: Codex.DeviceEndpoints, +signal: Abort.AbortSignal<Unit>, notice: Notice()) -> IO(Outcome()):
   match transport:
-    case Runtime.Transport{+authorizer, runtime, +network}:
+    case Runtime.Transport{+authorizer, runtime, +network,codexSessions}:
       do IO<Outcome()>:
         +store : Auth.CredentialStore <- Storage.store(view)
         +flow : Codex.Flow = Codex.Flow{network, Runtime.urlContext()}
@@ -88,7 +88,7 @@ def loginStore(owner: Storage.AuthStorageOwner, view: Storage.AuthStorage, trans
         outcome : Outcome() <- started(flow, endpoints, store, notice, device, signal)
         Auth.disposeStore(store)
         Storage.dispose(owner)
-        Runtime.disposeTransport(Runtime.Transport{authorizer, runtime, network})
+        Runtime.disposeTransport(Runtime.Transport{authorizer, runtime, network,codexSessions})
         return outcome
 
 def loginBorrowed(transport: Runtime.Transport, pair: Storage.AuthStorageOwner & Storage.AuthStorage, endpoints: Codex.DeviceEndpoints, signal: Abort.AbortSignal<Unit>, notice: Notice()) -> IO(Outcome()):

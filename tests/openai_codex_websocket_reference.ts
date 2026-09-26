@@ -33,16 +33,22 @@ function label(event: any): string {
 }
 
 const c = JSON.parse(await new Response(Bun.stdin.stream()).text());
-const controller = new AbortController();
-const events: string[] = [];
-const context = normalizeContext({systemPrompt: c.systemPrompt, messages: c.messages ?? [], tools: c.tools});
-const options = {...c.options, signal: controller.signal};
-const s = c.entry === "simple" ? streamSimple(modelOf(c), context, options) : stream(modelOf(c), context, options);
-for await (const event of s) {
-  const name = label(event);
-  events.push(name);
-  if (c.abortOnEvent === name) controller.abort();
+async function runCase(c: any) {
+  const controller = new AbortController();
+  const events: string[] = [];
+  const context = normalizeContext({systemPrompt: c.systemPrompt, messages: c.messages ?? [], tools: c.tools});
+  const options = {...c.options, signal: controller.signal};
+  const s = c.entry === "simple" ? streamSimple(modelOf(c), context, options) : stream(modelOf(c), context, options);
+  for await (const event of s) {
+    const name = label(event);
+    events.push(name);
+    if (c.abortOnEvent === name) controller.abort();
+  }
+  const message = await s.result();
+  controller.abort();
+  return {events, message};
 }
-const message = await s.result();
+const results = [];
+for (const item of c.cases ?? [c]) results.push(await runCase({...item, url: c.url}));
 closeOpenAICodexWebSocketSessions();
-await Bun.write(Bun.stdout, JSON.stringify({events, message}) + "\n");
+await Bun.write(Bun.stdout, JSON.stringify(c.cases ? results : results[0]) + "\n");

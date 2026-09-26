@@ -19,7 +19,7 @@ def stamp(label: String) -> IO(Unit):
 def go(transport: Runtime.Outcome(Runtime.Transport)) -> IO(Unit):
   match transport:
     case Fail{m}: IO.print(m)
-    case Done{Runtime.Transport{a,r,+fetch}}:
+    case Done{Runtime.Transport{a,r,+fetch,codexSessions}}:
       do IO<Unit>:
         stamp("transport")
         v : Tools.Outcome(String) <- Tools.getLatestVersion(fetch,Runtime.urlContext(),"BurntSushi/ripgrep")
@@ -28,7 +28,7 @@ def go(transport: Runtime.Outcome(Runtime.Transport)) -> IO(Unit):
         v2 : Tools.Outcome(String) <- Tools.getLatestVersion(fetch,Runtime.urlContext(),"sharkdp/fd")
         stamp("latest2")
         IO.print(shown(v2))
-        Runtime.disposeTransport(Runtime.Transport{a,r,fetch})
+        Runtime.disposeTransport(Runtime.Transport{a,r,fetch,codexSessions})
 
 def main() -> IO(Unit):
   do IO<Unit>:

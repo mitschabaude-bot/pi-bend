@@ -4,6 +4,7 @@ import ../../ai/src/types.bend as Ai
 import ../../ai/src/api/openai-responses.bend as Responses
 import ../../ai/src/api/azure-openai-responses.bend as Azure
 import ../../ai/src/api/openai-codex-responses.bend as Codex
+import ../../ai/src/api/openai-codex-sessions.bend as Sessions
 import ../../ai/src/utils/event-stream.bend as Stream
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/callback.bend as C
@@ -48,18 +49,24 @@ def apiOf(model: Ai.Model<Ai.JsonValue>) -> Ai.ModelApi:
 # The Responses APIs share one request preparation; Azure prepares its own
 # requests and Codex runs its own SSE request lifecycle. The OpenAI Responses
 # provider rejects any other API.
-def streamSimple(~Telemetry: Data, ~Diagnostics: Data, ~Details: Data, ~Error: Data, ~render: Error -> String, config: Responses.Config, api: Ai.ModelApi, model: Ai.Model<Ai.JsonValue>, context: Ai.TranscriptContext<V.Value, V.Value, Diagnostics, Details>, options: Maybe<&2, Responses.SimpleStreamOptions(Unit, Telemetry, Error)>) -> IO(Responses.SimpleRun(Unit, Diagnostics, Error)):
+def streamSimpleWithSessions(~Telemetry: Data, ~Diagnostics: Data, ~Details: Data, ~Error: Data, ~render: Error -> String, pool: Maybe<&2, Sessions.Pool<Unit>>, config: Responses.Config, api: Ai.ModelApi, model: Ai.Model<Ai.JsonValue>, context: Ai.TranscriptContext<V.Value, V.Value, Diagnostics, Details>, options: Maybe<&2, Responses.SimpleStreamOptions(Unit, Telemetry, Error)>) -> IO(Responses.SimpleRun(Unit, Diagnostics, Error)):
   match api:
     case Ai.AzureOpenAIResponsesApi{}: Azure.streamSimple(~Unit, ~Telemetry, ~Diagnostics, ~Details, ~Error, ~render, config, model, context, options)
-    case Ai.OpenAICodexResponsesApi{}: Codex.streamSimple(~Unit, ~Telemetry, ~Diagnostics, ~Details, ~Error, ~render, config, model, context, options)
+    case Ai.OpenAICodexResponsesApi{}: Codex.streamSimpleWithSessions(~Unit, ~Telemetry, ~Diagnostics, ~Details, ~Error, ~render, pool, config, model, context, options)
     case _: Responses.streamSimple(~Unit, ~Telemetry, ~Diagnostics, ~Details, ~Error, ~render, config, model, context, options)
 
-def openResponses(~Options: Data, ~Telemetry: Data, ~Diagnostics: Data, ~Details: Data, ~Error: Data, ~project: Options -> Responses.SimpleStreamOptions(Unit, Telemetry, Error), ~render: Error -> String, ~failure: Responses.Error<Unit, Error> -> Error, config: Responses.Config, input: Input(Options, Diagnostics, Details)) -> IO(Output(Diagnostics, Error)):
+def openResponsesWithSessions(~Options: Data, ~Telemetry: Data, ~Diagnostics: Data, ~Details: Data, ~Error: Data, ~project: Options -> Responses.SimpleStreamOptions(Unit, Telemetry, Error), ~render: Error -> String, ~failure: Responses.Error<Unit, Error> -> Error, pool: Maybe<&2, Sessions.Pool<Unit>>, config: Responses.Config, input: Input(Options, Diagnostics, Details)) -> IO(Output(Diagnostics, Error)):
   match input:
     case T.StreamInput{+model, context, options}:
       do IO<Output(Diagnostics, Error)>:
-        started : Responses.SimpleRun(Unit, Diagnostics, Error) <- streamSimple(~Telemetry, ~Diagnostics, ~Details, ~Error, ~render, config, apiOf(model), model, context, Maybe.map(&2, Options, Responses.SimpleStreamOptions(Unit, Telemetry, Error), project, options))
+        started : Responses.SimpleRun(Unit, Diagnostics, Error) <- streamSimpleWithSessions(~Telemetry, ~Diagnostics, ~Details, ~Error, ~render, pool, config, apiOf(model), model, context, Maybe.map(&2, Options, Responses.SimpleStreamOptions(Unit, Telemetry, Error), project, options))
         return leased(~Diagnostics, ~Error, ~failure, started)
+
+def streamSimple(~Telemetry: Data, ~Diagnostics: Data, ~Details: Data, ~Error: Data, ~render: Error -> String, config: Responses.Config, api: Ai.ModelApi, model: Ai.Model<Ai.JsonValue>, context: Ai.TranscriptContext<V.Value, V.Value, Diagnostics, Details>, options: Maybe<&2, Responses.SimpleStreamOptions(Unit, Telemetry, Error)>) -> IO(Responses.SimpleRun(Unit, Diagnostics, Error)):
+  streamSimpleWithSessions(~Telemetry, ~Diagnostics, ~Details, ~Error, ~render, None{}, config, api, model, context, options)
+
+def openResponses(~Options: Data, ~Telemetry: Data, ~Diagnostics: Data, ~Details: Data, ~Error: Data, ~project: Options -> Responses.SimpleStreamOptions(Unit, Telemetry, Error), ~render: Error -> String, ~failure: Responses.Error<Unit, Error> -> Error, config: Responses.Config, input: Input(Options, Diagnostics, Details)) -> IO(Output(Diagnostics, Error)):
+  openResponsesWithSessions(~Options, ~Telemetry, ~Diagnostics, ~Details, ~Error, ~project, ~render, ~failure, None{}, config, input)
 
 # Each call owns one run. The affine release captures that owner directly and
 # the loop executes it after its final read; no reaper or shared owner slot is

@@ -67,10 +67,10 @@ def ensure(manager: Tools.ToolsManager,+name: String) -> IO(Unit):
 def live(+binDir: String,+name: String,transport: Runtime.Outcome(Runtime.Transport)) -> IO(Unit):
   match transport:
     case Fail{message}: IO.print("error:" ++ encoded(message))
-    case Done{Runtime.Transport{authorizer,runtime,+fetch}}:
+    case Done{Runtime.Transport{authorizer,runtime,+fetch,codexSessions}}:
       do IO<Unit>:
         ensure(Tools.ToolsManager{binDir,Runtime.urlContext(),Some{fetch}},name)
-        Runtime.disposeTransport(Runtime.Transport{authorizer,runtime,fetch})
+        Runtime.disposeTransport(Runtime.Transport{authorizer,runtime,fetch,codexSessions})
 
 # management-http.test.ts: fetchWithRetry with a per-attempt timeout, or
 # with a caller signal aborted before the call. Prints the final status or
