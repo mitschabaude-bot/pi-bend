@@ -187,3 +187,5 @@ Validation with the patched compiler, all passing:
 
 `bend-segment-memory.patch` (2026-09-26, installed after `bend-compare-congruence.patch`, changes `comp.ts`): stale segments and spins are dropped after every fact round instead of after the last, and a finished unit's segment lines are joined into one string (BEND-053). CLI emission peak 17.6 → 15.6–16.4 GB, time unchanged within noise, C byte-identical. The compiler is then 11,465 lines.
 
+
+`bend-incremental-ids.patch` (2026-09-26, installed after `bend-segment-memory.patch`, changes `comp.ts`): unchanged code emits byte-identical C across builds (segments numbered within their definition, spins and static tables named by content, `BEND_IDS` keeps segment and constructor ids and the image layout), each definition goes to a fixed translation unit, and units read the shared tables as `extern`. With `scripts/build-incremental.sh`, a one-string edit recompiles 2 of 64 units: 146 s against 210 s for the ordinary build. See docs/incremental-build.md. The compiler is then 11,539 lines.

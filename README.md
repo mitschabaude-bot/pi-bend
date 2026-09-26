@@ -30,7 +30,7 @@ python3 scripts/check-proofs.py
 
 Build and run the modular CLI with an OpenAI API key already configured in the environment or pi authentication storage:
 
-A build takes about 3.5 minutes (2.3 minutes of Bend emission, about 80 seconds of Clang at `-O1` over one translation unit per core). Emission peaks at about 17.5 GB, because Bun sizes its heap to the machine's memory; on a smaller machine, `BUN_JSC_forceRAMSize=16000000000` lowers the peak to about 12.5 GB for about 3.5% more emission time. For correctness checks, `PI_BEND_OPT=-O0` makes Clang faster still; the binary runs 3-5x slower, so measure timings on `-O1` builds. Builds go one at a time through `flock /tmp/pi-bend-build.lock`.
+A cold build takes about 3.5 minutes (about 2.2 minutes of Bend emission, then Clang at `-O1`) and emission peaks at about 16 GB, because Bun sizes its heap to the machine's memory; on a smaller machine, `BUN_JSC_forceRAMSize=16000000000` lowers the peak for a few percent more emission time. `scripts/build-cli.sh` builds [incrementally](docs/incremental-build.md): it compiles only the translation units whose C changed, from an object cache shared by all worktrees, so a small edit rebuilds in about 2.5 minutes (`BEND_INCREMENTAL=0` for the ordinary build). For correctness checks, `PI_BEND_OPT=-O0` makes Clang faster still; the binary runs 3-5x slower, so measure timings on `-O1` builds. Builds go one at a time through `flock /tmp/pi-bend-build.lock`.
 
 ```sh
 sh scripts/build-cli.sh build/pi-cli
