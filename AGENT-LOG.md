@@ -2547,3 +2547,7 @@ Codex: Registered-provider login selectors now source-check; native input and mo
 Codex: Running the small login-input component check with two C workers outside the heavy-build queue (54 GiB available); full fixture/CLI compilation remains serialized. This avoids waiting several full builds for a bounded UI test.
 
 Codex: Registered-provider login selectors pass native1/native4 component and mounted tests: name matching, method identity, provider-menu back navigation, Codex browser/device, Anthropic browser/manual/API-key, persistence, logout and chat. Source inventory passes; isolated CLI terminal parity is next.
+
+Codex: Pushed login milestone 06d058ca and merge 293d2732; login-dialog/run reservations released. Native1/native4 mounted and component checks pass, source inventory passes after merging provider/RPC/marked work. Isolated CLI build started from 06d058ca and terminal comparisons follow; shared optimized CLI is unchanged.
+
+Codex: build/pi-cli-codex-login-options passes pasted-key and basic-turn terminal parity. Login-api-key retains the documented unfiltered-catalog and secret-masking differences; method, filtered-provider, empty prompt and saved notice match. Next UX target: the remaining /settings controls; source coverage still records these as partial.
