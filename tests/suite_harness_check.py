@@ -5,7 +5,7 @@ faux provider of tests/regressions.bend; each block below names the upstream
 file and test and applies its assertions to the printed session events and
 reports. Adaptations are documented in tests/suite-harness.md.
 """
-import argparse, json, tempfile
+import argparse, json, re, tempfile
 from pathlib import Path
 
 from regressions_check import Fixtures, of_type, last
@@ -454,6 +454,69 @@ def durable_length_checks(f):
     return checks
 
 
+def request_tools(context):
+    added = re.findall(r'tool\+:\{"name":"([A-Za-z_]+)"', context)
+    removed = set(re.findall(r'tool-:\{"name":"([A-Za-z_]+)"', context))
+    return [name for name in added if name not in removed]
+
+
+def context_checks(f):
+    """suite/regressions/9789-context-handler-system-messages.test.ts. Handlers return messages instead of
+    editing event.messages in place; the request's tools are its declared tool+ lines."""
+    checks = 0
+    settings = {'compaction': {'keepRecentTokens': 1}}
+
+    def final(events):
+        index = [e['type'] for e in events].index('final_prompt')
+        return events[:index], events[index:]
+
+    # keeps the prompt and tools when a handler slices from the compaction summary
+    events = run(f, 'context', 'slice', settings=settings)
+    before, after = final(events)
+    assert last(before, 'loadout')['roles'][:2] == ['system', 'compactionSummary'], last(before, 'loadout')
+    request = of_type(after, 'request')[0]
+    loadout = last(after, 'loadout')
+    assert 'system' not in of_type(after, 'context_seen')[-1]['roles']
+    assert request['roles'][0] == 'system' and request['roles'].count('system') == 1, request['roles']
+    assert request_tools(request['context']) == loadout['activeTools'], (request_tools(request['context']), loadout['activeTools'])
+    assert loadout['systemPrompt'] in request['context']
+    checks += 1
+    # applies in-place edits to event.messages without a return value (returned here)
+    events = run(f, 'context', 'inject')
+    request = of_type(events, 'request')[0]
+    assert request['roles'] == ['system', 'user', 'user'] and request_tools(request['context']) == last(events, 'loadout')['activeTools'], request['roles']
+    checks += 1
+    # keeps system messages a handler adds after the replayed head
+    events = run(f, 'context', 'system_add')
+    request = of_type(events, 'request')[0]
+    loadout = last(events, 'loadout')
+    assert request['roles'] == ['system', 'system', 'user'] and request_tools(request['context']) == loadout['activeTools'], request['roles']
+    assert loadout['systemPrompt'] in request['context'] and 'ephemeral reminder' in request['context']
+    checks += 1
+    # runs after context handlers on the restored transcript and sends its output verbatim
+    events = run(f, 'context', 'with_system', settings=settings)
+    before, after = final(events)
+    seen = of_type(after, 'with_system_seen')[-1]['roles']
+    assert seen[:2] == ['system', 'compactionSummary'], seen
+    active = last(after, 'loadout')['activeTools']
+    assert 'bash' in active and request_tools(of_type(after, 'request')[0]['context']) == [name for name in active if name != 'bash']
+    checks += 1
+    # reports a handler that drops the leading system message but honors its output
+    events = run(f, 'context', 'with_system_drop')
+    assert of_type(events, 'request')[0]['roles'] == ['user']
+    errors = ['%s: %s' % (e['event'], e['error']) for e in of_type(events, 'extension_error')]
+    assert len(errors) == 1 and errors[0].startswith('context_with_system: Handler removed the leading system message'), errors
+    checks += 1
+    return checks
+
+
+def fork_message_checks(f):
+    # AgentSession.getUserMessagesForForking (upstream agent-session.ts): user entries with text, in order
+    events = run(f, 'fork_messages')
+    assert [m['text'] for m in last(events, 'fork_messages')['messages']] == ['first', 'second'], events
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser()
     for name in RUNNERS:
@@ -463,7 +526,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-suite-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures) + boundary_checks(fixtures) + durable_length_checks(fixtures)
+    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures) + boundary_checks(fixtures) + durable_length_checks(fixtures) + context_checks(fixtures) + fork_message_checks(fixtures)
     print('suite-harness: %d upstream cases passed' % checks)
 
 

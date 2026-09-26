@@ -18,7 +18,7 @@ Tools are Bend callbacks: `echo` returns its `text` argument after a prefix; `wa
 - `test/branch-summarization.test.ts` runs in `tests/branch_summarization_check.py` (`generate` mode of `tests/branch-summarization.bend`).
 - `suite/agent-session-boundaries.test.ts`: the turn_end and agent_before_settle boundary cases scripted by `boundaryScenario` (handoff compaction, the three queue schedulings, verbatim replacement and unsent input through threshold compaction, pre-settlement custom message, pending agent_end context, deferred pre-settlement follow-up, invalid explicit continuation) and all of `durable length recovery` but `omits a recoverable projected replacement by its source entry ID`.
 - Extension regressions (inline extensions loaded into the harness's runner): #3982 (message_end replacement), #1717/#2113 (both tests), #5998, #8935, #6363 (all three tests), #3688 (session_before_tree cancel) and #9178's second test (a navigation waiting in session_before_tree).
-- `suite/lax-message-content.test.ts` (all six) and #2023.
+- `suite/lax-message-content.test.ts` (all six), #2023, and #9789 but its before_agent_start case.
 - `suite/agent-session-compaction-model-overrides.test.ts`: all tests but `captures model identity before awaiting summarization auth` (no native summarization-auth step to interleave a model change into).
 
 ## Adaptations
