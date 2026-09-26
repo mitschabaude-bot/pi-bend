@@ -1,5 +1,6 @@
 import Base
 import ../../../ai/src/types.bend as Ai
+import ../../../ai/src/providers/radius.bend as Radius
 import ../../../ai/src/auth/types.bend as Auth
 import ../../../ai/src/auth/resolve.bend as Resolve
 import ../../../ai/src/auth/oauth/openai-codex.bend as CodexOAuth
@@ -1152,7 +1153,7 @@ def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, 
         +credentialStore : Auth.CredentialStore <- Runtime.store(credentials)
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch, urlContext())
         anthropicOAuth : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch, urlContext())
-        +models : Models.ModelRuntime <- Models.createWithAnthropic(credentialStore, oauth, Some{anthropicOAuth})
+        +models : Models.ModelRuntime <- Models.createWithAnthropic(credentialStore, oauth, Some{anthropicOAuth}, Radius.RadiusTransport{fetch, urlContext()})
         +extensions : Extensions <- loadExtensions(cwdOf(options), models)
         +resolution : Models.ResolveCliModelResult <- cliResolution(models, options, packageDir)
         reportResolution(resolution)

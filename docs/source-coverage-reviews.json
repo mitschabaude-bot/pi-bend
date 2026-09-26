@@ -314,7 +314,7 @@
       "source_sha256": "84f2799b0bf45fb01237c5c2c19641b0da5d1245670b208c05bacb5cff36b96f",
       "port_sha256": {
         "packages/ai/src/models.bend": "f4c90abd0a9b3c4908c9bcceab18e69a19e38ed78b9339dd0ef4f3ae488b73d4",
-        "packages/coding-agent/src/core/model-runtime.bend": "5ff88f4f6806ba7f055acc44522dfdbf39028ce3eed7efd29e5e7bc3f5919457"
+        "packages/coding-agent/src/core/model-runtime.bend": "5140351cb1123004bbfb13afe79082620adf7b029ff726174b5268854ea2d418"
       },
       "ports": [
         "packages/ai/src/models.bend",
@@ -486,7 +486,7 @@
       "note": "Reviewed login path: native login dispatches by provider and auth type, normalizes an absent signal with an owned controller, rejects pre-aborted requests, saves through the credential store and refreshes availability. Interactive API-key login uses this path; OAuth providers implement native login callbacks. Upstream per-provider credential-operation serialization, complete synchronizeCredentialState behavior and source-wide ModelRuntime coverage remain incomplete.",
       "source_sha256": "20c1dbfa1dd757a594cf0b4ab6e401fc6c6155484a3f490096bc5328e3c33c2c",
       "port_sha256": {
-        "packages/coding-agent/src/core/model-runtime.bend": "5ff88f4f6806ba7f055acc44522dfdbf39028ce3eed7efd29e5e7bc3f5919457"
+        "packages/coding-agent/src/core/model-runtime.bend": "5140351cb1123004bbfb13afe79082620adf7b029ff726174b5268854ea2d418"
       },
       "ports": [
         "packages/coding-agent/src/core/model-runtime.bend"
@@ -783,14 +783,14 @@
         "packages/coding-agent/src/main.bend",
         "packages/coding-agent/src/modes/interactive/components/header.bend"
       ],
-      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native provider-directed API-key and OAuth login uses ModelRuntime.login, prompt/notify callbacks and shared cancellation. Registered providers supply menus and custom account-login labels; direct provider IDs/display names match without case sensitivity, and dual-method providers offer account/API-key selection. Codex offers browser/device authorization and Anthropic browser/manual authorization. Fullscreen startup, typing, viewport scrolling, and keyboard transcript search match focused terminal captures; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection, dynamic mode switching and broader commands remain partial. Exact /model matches use the cached scoped or available list; misses refresh the catalog with a 15-second abort deadline, retry exact matching, then open the filtered picker. The miss picker matches plain terminal frames; prefilled search cursor styling remains different. Interactive HTML export now uses the active theme palette and explicit export backgrounds. Resumed transcripts now render compaction and branch summaries, displayed custom messages, and skill invocations in sequence; live structural entries use the same path. The footer reads live auto-compaction state, so disabling it removes the auto marker immediately. User-theme resource notices match compact and expanded terminal captures, quiet startup and reload refresh; context sections retain their extra spacer. Prompt/extension listings, project/package theme sources and broader resource diagnostics remain incomplete. Working/retry/compaction statuses use native owned loaders and countdowns; retry countdown and Escape cancellation have terminal comparisons. Manual compaction completion rebuilds retained context and appends the summary chronologically; completion, Escape cancellation and the following model request match focused terminal comparisons. Initial branch-summary status and broader compaction queue/progress/cost-notice integration remain incomplete. API-key login now accepts all native AuthPrompt kinds, provider notifications and per-prompt cancellation. Pasted API-key prompt/save terminal captures and the basic request loop match pi. Broader provider catalog and secret-masking parity remain partial. Hardware-cursor and clear-on-shrink settings update the running TUI after successful persistence; cursor disabling hides immediately, and focused setting/persistence/editor terminal captures match pi. Copy and custom new/tree/fork/resume shortcuts route through the existing session commands without submitting the editor draft; new-session rebinding preserves it as upstream does. The fork picker queries Session.getUserMessagesForForking and uses a dedicated immutable user-message component; native1/native4 mounted checks verify prompt restoration and isolated fork history. Empty-text user messages are excluded and successful forks show the upstream status notice. Focused terminal comparisons match the empty state, picker rendering/navigation, restored draft, success notice and edited model request; copy and basic chat regressions match too. Tree selector layout and controls remain incomplete. Fullscreen selection copying and confirmation flashes, external-editor launch, terminal suspension and clipboard-image shortcuts remain incomplete.",
+      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native provider-directed API-key and OAuth login uses ModelRuntime.login, prompt/notify callbacks and shared cancellation. Registered providers supply menus and custom account-login labels; direct provider IDs/display names match without case sensitivity, and dual-method providers offer account/API-key selection. Codex offers browser/device authorization and Anthropic browser/manual authorization. Fullscreen startup, typing, viewport scrolling, and keyboard transcript search match focused terminal captures; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection, dynamic mode switching and broader commands remain partial. Exact /model matches use the cached scoped or available list; misses refresh the catalog with a 15-second abort deadline, retry exact matching, then open the filtered picker. The miss picker matches plain terminal frames; prefilled search cursor styling remains different. Interactive HTML export now uses the active theme palette and explicit export backgrounds. Resumed transcripts now render compaction and branch summaries, displayed custom messages, and skill invocations in sequence; live structural entries use the same path. The footer reads live auto-compaction state, so disabling it removes the auto marker immediately. User-theme resource notices match compact and expanded terminal captures, quiet startup and reload refresh; context sections retain their extra spacer. Prompt/extension listings, project/package theme sources and broader resource diagnostics remain incomplete. Working/retry/compaction statuses use native owned loaders and countdowns; retry countdown and Escape cancellation have terminal comparisons. Manual compaction completion rebuilds retained context and appends the summary chronologically; completion, Escape cancellation and the following model request match focused terminal comparisons. Initial branch-summary status and broader compaction queue/progress/cost-notice integration remain incomplete. API-key login now accepts all native AuthPrompt kinds, provider notifications and per-prompt cancellation. Pasted API-key prompt/save terminal captures and the basic request loop match pi. Broader provider catalog and secret-masking parity remain partial. Hardware-cursor and clear-on-shrink settings update the running TUI after successful persistence; cursor disabling hides immediately, and focused setting/persistence/editor terminal captures match pi. Copy and custom new/tree/fork/resume shortcuts route through the existing session commands without submitting the editor draft; new-session rebinding preserves it as upstream does. Tree/fork selector layout and controls remain incomplete. Fullscreen selection copying and confirmation flashes, external-editor launch, terminal suspension and clipboard-image shortcuts remain incomplete.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "272d9269ef5ed6e3c28627c9bb2eb8e1c7dc34c5b8fec7dd74ed6032417c3387",
-        "packages/coding-agent/src/modes/interactive/run.bend": "69f30b17c98f1b36bc08ee11af03c75478e29aaa797afedb12626da20aa557c9",
+        "packages/coding-agent/src/modes/interactive/run.bend": "704f68c183f3e8821408137b4d3243cb3f746e225563a8e65b084b0e5537b41f",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "5251961f780f6011fd173b198ccd6e4dd82ab65743f2df4463bc06f71a497075",
-        "packages/coding-agent/src/main.bend": "e49186ac0ab758c5d4b07473497621fc9550f196423910d55b03a08c7e9ea143",
+        "packages/coding-agent/src/main.bend": "132b4b1314611d61d30b71ca674ccfe4d816fb65b414508b5ca7f5ea16ec5af8",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6"
       }
     },
@@ -963,6 +963,46 @@
       "source_sha256": "b05a9c1e8a88fd5c39937564160463d7d670df4bc2148b70a7325c601a96dee7",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/external-editor.bend": "77e7b7a09c8449af505b83496038c62de85ccad4a36b6569926a205e8ba11eaa"
+      }
+    },
+    "packages/ai/src/providers/radius-config.ts": {
+      "state": "ported",
+      "note": "DEFAULT_RADIUS_GATEWAY, normalizeRadiusGatewayUrl, the gateway config sanitization (isRadiusGatewayModel's checks, well-formed models kept), getRadiusCredentialConfig from an OAuth credential's gatewayConfig, getRadiusModelsFromConfig/getRadiusModels and loadRadiusGatewayConfig (GET /v1/config with the bearer key, truncated error bodies) over an injected fetch; tests/radius_check.py. Gateway models carry RadiusGatewayModel's declared members (upstream's spread would also copy undeclared ones, which nothing reads); an absent cost price reads as 0 where upstream computes NaN costs; a non-JSON 2xx body reports a native message.",
+      "source_sha256": "1f82a7db25753be09374792ae0a3cd63417739018fb69b3212ad8b3b9eb11c21",
+      "port_sha256": {
+        "packages/ai/src/providers/radius-config.bend": "afc2f1bbc3b8f9633f78f25d183b0b35a35f5ccbee1e44a2d81bf5508d545b5c"
+      }
+    },
+    "packages/ai/src/providers/radius.ts": {
+      "state": "ported",
+      "note": "radiusProvider: id/name/gateway options, the public catalog for the default gateway only, RADIUS_API_KEY and Radius OAuth auth, pi-messages streams, and refreshModels (restore the stored catalog, import a legacy credential catalog, then load the gateway config when the network is allowed, persisting it); providers/all.bend lists it in upstream order and model-runtime configureRadiusProviders builds models.json oauth-radius gateways. The OAuth and config HTTP client is injected (Radius.RadiusTransport). tests/radius_check.py runs radius-provider.test.ts and coding-agent radius.test.ts.",
+      "source_sha256": "18bb70120329026fe8277d66cacee69a4108a069f2de990396c8ef5c38730379",
+      "port_sha256": {
+        "packages/ai/src/providers/radius.bend": "60d29f63abdba4bad7e9abde499e449e2f882f0ca07ea9d206f85ca280dc464c"
+      }
+    },
+    "packages/ai/src/providers/radius.models.ts": {
+      "state": "ported",
+      "note": "Generated from pi-ai's radius.json by scripts/generate-model-catalog.py; the catalog's gateway listing fields (lab, enabled, providers) are outside the Model type and nothing reads them, so they are not carried.",
+      "source_sha256": "070228f3763de61e4d96b0a851c666a2908f0d9ecb99f5b9205f6b917556ec55",
+      "port_sha256": {
+        "packages/ai/src/providers/radius.models.bend": "40777f8a160a59a464faa7ec7528c2ceb9690404b093ad6a706c3341954c88f2"
+      }
+    },
+    "packages/ai/src/auth/oauth/radius.ts": {
+      "state": "ported",
+      "note": "createRadiusOAuth: the sign-in method select, device login (POST /v1/oauth/device, device_code event, polling the token endpoint with authorization_pending/slow_down/expired_token/access_denied), browser login (GET /v1/oauth discovery, PKCE with a random-UUID state, the callback server on 127.0.0.1:1456 with upstream's 404/state-mismatch/missing-code responses and error completion, progress and auth_url events, the code exchange), refresh through the gateway, OAuthResponseError messages and toAuth; tests/radius_check.py (the three upstream cases plus the full browser callback flow). Native differences: the success/error pages are plain HTML with upstream's messages (the styled oauth-page template is not ported); a token response missing access_token/refresh_token/expires_in is an error instead of a credential with undefined fields.",
+      "source_sha256": "a4c520d7ea0f605da1cb4499e8532c5e058cb9fda4d162bd347526bd66351801",
+      "port_sha256": {
+        "packages/ai/src/auth/oauth/radius.bend": "5f6accfc6256abbbd0399a14317707c5e9a6b42827db51f92426a2677dfc9cab"
+      }
+    },
+    "packages/ai/src/auth/oauth/device-code.ts": {
+      "state": "ported",
+      "note": "pollOAuthDeviceCodeFlow over a poll callback: the default and minimum intervals, the optional first wait, slow_down with the server's interval or +5 s, the expiry deadline with upstream's two timeout messages, and cancellation ('Login cancelled'); used by the Radius device login. abortableSleep is Timer.sleep under the signal.",
+      "source_sha256": "b402bbbf66d693ee7dd6c5e2c4e45544050722d5bfa3668b100df76284a4fb37",
+      "port_sha256": {
+        "packages/ai/src/auth/oauth/device-code.bend": "93c18b3d052142da6566a6b41d4efa9890d1c143787b26a384527f71f4bc9930"
       }
     }
   }

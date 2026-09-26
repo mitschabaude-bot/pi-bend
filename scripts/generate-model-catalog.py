@@ -31,6 +31,7 @@ APIS = {
     'google-vertex': 'T.GoogleVertexApi{}',
     'mistral-conversations': 'T.MistralConversationsApi{}',
     'bedrock-converse-stream': 'T.BedrockConverseStreamApi{}',
+    'pi-messages': 'T.PiMessagesApi{}',
 }
 # Field order follows packages/ai/src/types.bend.
 RESPONSES_COMPAT = ['supportsDeveloperRole', 'supportsMidConvoSystemMessages', 'sessionAffinityFormat', 'supportsLongCacheRetention', 'supportsStrictMode', 'supportsOpenAIGrammarTools', 'supportsAdditionalTools', 'supportsToolSearch', 'supportsExplicitPromptCacheMode', 'supportsMaxOutputTokens']
@@ -248,7 +249,12 @@ def compat(api, value):
     constructor, renderers = COMPAT_RENDERERS[api]
     return constructor + '{' + fields(value, renderers, f'{api} compat', FOREIGN_COMPAT.get(api, ())) + '}'
 
+# Catalog metadata outside upstream's Model type that no code reads (radius
+# gateway listing fields); the typed Model has no place for them.
+UNTYPED_FIELDS = {'radius': {'lab', 'enabled', 'providers'}}
+
 def model(api, value):
+    value = {k: v for k, v in value.items() if k not in UNTYPED_FIELDS.get(value.get('provider'), ())}
     known = {'id', 'name', 'api', 'provider', 'baseUrl', 'reasoning', 'thinkingLevelMap', 'input', 'inputLimits', 'cost', 'promptCache', 'contextWindow', 'maxTokens', 'compat', 'headers'}
     unknown = set(value) - known
     if unknown:

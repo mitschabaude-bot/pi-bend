@@ -34,6 +34,7 @@ import ../images-models.bend as Images
 import ./qwen-token-plan.bend as QwenTokenPlan
 import ./qwen-token-plan-cn.bend as QwenTokenPlanCn
 import ./qwen-token-plan-individual.bend as QwenTokenPlanIndividual
+import ./radius.bend as Radius
 import ./together.bend as Together
 import ./vercel-ai-gateway.bend as VercelAIGateway
 import ./xai.bend as Xai
@@ -44,8 +45,8 @@ import ./xiaomi-token-plan-sgp.bend as XiaomiTokenPlanSgp
 import ./zai.bend as Zai
 import ./zai-coding-cn.bend as ZaiCodingCn
 
-# upstream builtinProviders(), in providers/all.ts order. Omitted: radius,
-# whose OAuth and dynamic catalog are not ported. OAuth handlers are created by the caller.
+# upstream builtinProviders(), in providers/all.ts order. OAuth handlers are
+# created by the caller; Radius creates its own over the given transport.
 # Each provider joins the list as soon as it is created: holding all of them
 # in separate binders exceeds the native backend's closure arity (BEND-010).
 def prepended(action: IO(Models.Provider), rest: List<&2, Models.Provider>) -> IO(List<&2, Models.Provider>):
@@ -53,7 +54,7 @@ def prepended(action: IO(Models.Provider), rest: List<&2, Models.Provider>) -> I
     provider : Models.Provider <- action
     return provider <> rest
 
-def builtinProviders(codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuthAuth>) -> IO(List<&2, Models.Provider>):
+def builtinProviders(codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuthAuth>, radius: Radius.RadiusTransport) -> IO(List<&2, Models.Provider>):
   do IO<List<&2, Models.Provider>>:
     providers : List<&2, Models.Provider> <- prepended(ZaiCodingCn.zaiCodingCnProvider(), Nil{})
     providers : List<&2, Models.Provider> <- prepended(Zai.zaiProvider(), providers)
@@ -64,6 +65,7 @@ def builtinProviders(codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuth
     providers : List<&2, Models.Provider> <- prepended(Xai.xaiProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(VercelAIGateway.vercelAIGatewayProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(Together.togetherProvider(), providers)
+    providers : List<&2, Models.Provider> <- prepended(Radius.radiusProvider(Radius.defaultOptions(), radius), providers)
     providers : List<&2, Models.Provider> <- prepended(QwenTokenPlanIndividual.qwenTokenPlanIndividualProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(QwenTokenPlanCn.qwenTokenPlanCnProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(QwenTokenPlan.qwenTokenPlanProvider(), providers)

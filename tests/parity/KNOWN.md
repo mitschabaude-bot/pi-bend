@@ -85,10 +85,9 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   (`packages/coding-agent/src/extensions/llama`). The port has no extension
   runtime yet, so `get_commands` lacks it.
 - **Built-in provider catalog** (`print-bare-unauthed`, `print-bare-two-authed`):
-  Bend registers 40 of pi 0.87.1's built-in providers, including both
-  Cloudflare providers, Mistral, Amazon Bedrock and Google Vertex; a bare `--model gpt-5` lists pi's four candidates and
-  `--list-models cloudflare` matches pi. Missing: radius (its OAuth and
-  dynamic catalog; its pi-messages API is ported). The native API-key `/login` flow now saves credentials for registered providers, including Cloudflare's key/account/gateway prompts. Bedrock resolves stored and ambient AWS credentials and its provider login (bearer token, AWS profile or credential chain) is ported; its `/login` terminal flow has not been compared with pi yet.
+  Bend registers all 41 of pi 0.87.1's built-in providers, including both
+  Cloudflare providers, Mistral, Amazon Bedrock, Google Vertex and Radius; a bare `--model gpt-5` lists pi's four candidates and
+  `--list-models cloudflare` matches pi. Radius (OAuth browser/device login, the dynamic catalog and models.json `oauth: "radius"` gateways) has not been compared in terminal captures yet. The native API-key `/login` flow now saves credentials for registered providers, including Cloudflare's key/account/gateway prompts. Bedrock resolves stored and ambient AWS credentials and its provider login (bearer token, AWS profile or credential chain) is ported; its `/login` terminal flow has not been compared with pi yet.
 - **API-key login presentation** (`login-api-key`): The method screen, filtered provider screen, empty API-key prompt and saved notice match pi's terminal captures, including ANSI styling. The unfiltered list differs because upstream includes providers whose native implementations are still missing. Bend masks secret entry while pi 0.87.1 echoes it. The native flow saves the same provider credential and returns to the editor.
 - **Fullscreen TUI mode** (`--tui-mode fullscreen`, setting `tuiMode`): alternate-screen startup, transcript scrolling, the jump indicator, and keyboard transcript search match focused terminal captures. Search mouse controls and full input editing, mouse selection, copy-on-select, fullscreen images, and remaining dock/cursor styling are still open.
 - **Fullscreen scroll styling** (`fullscreen-scroll`, `fullscreen-indicator-light-custom-key`): Home/End and the configured jump key reach the same content as pi. At the top, Bend resets the background around the scrollbar on a user-message row differently; in the light theme, scrollbar colors also differ. The indicator badge itself matches.
