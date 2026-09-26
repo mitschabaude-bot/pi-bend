@@ -1116,6 +1116,14 @@
       "port_sha256": {
         "packages/coding-agent/src/extensions/llama/client.bend": "cce8b69dc92076e2d69c2cb6b29d1f991c0220fe460b860286ac4ae8bc20d3d2"
       }
+    },
+    "packages/coding-agent/src/extensions/llama/provider.ts": {
+      "state": "partial",
+      "note": "Native provider/controller with model conversion, loaded/sleeping/autoload-preset selection, context-window fallback, image modalities, thinking map and OpenAI compatibility; URL+optional-key login validates the router catalog, and resolve preserves the configured endpoint/env/source. Refresh restores matching cached models, honors publish rejection/network/credential gates, discovers router autoload, queries loaded templates in parallel (sleeping/unloaded models are not woken), then publishes/persists the new catalog. Differential library checks cover catalog/autoload, loaded thinking support, configured auth resolution, login prompts and exact requests, refresh and disabled router autoload on Bun/native1/native4. Native setCatalog returns a replacement immutable controller; accepted refresh publications update the model runtime live catalog. Remaining validation/integration: cache-only startup, rejection/abort/failure paths, multiple parallel template requests, empty optional key/dormant auth, constructor callback wiring and built-in extension/UI registration. Provider-owned check and callable stream/streamSimple fields are absent from the shared native Provider/Auth types (ApiStreams marks dispatch); full public API fidelity remains partial.",
+      "source_sha256": "8e20963cf6f49148eab235c72c5a5316f248f9c60384947f7927416ce0fdbc8e",
+      "port_sha256": {
+        "packages/coding-agent/src/extensions/llama/provider.bend": "aaf12d17e968cac1b4062f653f2ce85082200433c69768398b64017a39a2ed14"
+      }
     }
   }
 }

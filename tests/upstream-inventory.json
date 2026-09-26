@@ -2983,10 +2983,13 @@
         "tests/llama_client_reference.ts",
         "tests/llama-client-stream.bend",
         "tests/llama_client_stream_check.py",
-        "tests/llama_client_stream_reference.ts"
+        "tests/llama_client_stream_reference.ts",
+        "tests/llama-provider.bend",
+        "tests/llama_provider_check.py",
+        "tests/llama_provider_reference.ts"
       ],
       "sha256": "458534294a1c7abd9f96293a2fe7a0add16b58a37eda94a1b20bf5f6c814d52b",
-      "notes": "Ported named cases: management/inference URL normalization; loads with SSE progress and waits for loaded catalog state; downloads with byte progress and returns refreshed catalog. Supplemental differential cases cover catalog failure with exit code, unavailable SSE fallback, cancellation and event connection cleanup on Bun/native1/native4; management request regressions cover auth, encoding, unload polling and server errors. Remaining cases (provider/command registration, catalog refresh/model conversion and Hugging Face) are pending."
+      "notes": "Covered on Bun/native1/native4: management/inference URL normalization; loaded/sleeping models with router metadata; loaded chat-template thinking support; unloaded presets enabled/disabled by router autoload; streamed load/download progress and terminal catalog results. Supplemental cases cover configured auth, URL+key login prompts/catalog validation, refresh requests, catalog failure, unavailable SSE fallback, cancellation and closed event connections. Pending named cases: native provider + /llama registration, cache-only startup persistence/restore, full dormant/optional-key login assertions and Hugging Face search/access. Constructor callback wiring and additional provider abort/rejection/failure cases remain unverified."
     },
     {
       "source": "packages/coding-agent/test/management-http.test.ts",
