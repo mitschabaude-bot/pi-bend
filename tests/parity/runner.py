@@ -31,7 +31,8 @@ WIDTH, HEIGHT = 100, 32
 PI_PACKAGE = str(Path(shutil.which("pi") or "pi").resolve().parents[2]) if shutil.which("pi") else "/nonexistent"
 # The system prompt names each CLI's package directory, whose length enters
 # token estimates. Both CLIs see their package through a link of equal length.
-LINKS = {"pi": "/tmp/pi-parity-pkg-u", "bend": "/tmp/pi-parity-pkg-b"}
+LINK_DIRECTORY = tempfile.TemporaryDirectory(prefix="pi-parity-pkg-")
+LINKS = {"pi": str(Path(LINK_DIRECTORY.name) / "u"), "bend": str(Path(LINK_DIRECTORY.name) / "b")}
 
 def package_links():
     for link, target in ((LINKS["pi"], PI_PACKAGE), (LINKS["bend"], str(ROOT))):
@@ -338,6 +339,7 @@ def main():
         slow = [key for key, ratio in scenario.get("within", {}).items()
                 if None in (timing[key]["pi"], timing[key]["bend"]) or timing[key]["bend"] > ratio * timing[key]["pi"]]
         mismatched += [f"slow:{key}" for key in slow]
+        mismatched += [f"timeout:{side}:{key}" for key, times in timing.items() for side, elapsed in times.items() if elapsed is None]
         status = "MATCH" if not mismatched else "DIFF " + ",".join(mismatched)
         failures += bool(mismatched)
         rendered = ", ".join(f"{k}: pi {fmt(v['pi'])} / bend {fmt(v['bend'])}" for k, v in timing.items())
