@@ -2557,23 +2557,23 @@ def startView(borrowed: View.View & Component.Component & View.Handle,styles: Ma
   match borrowed:
     case (view,_,viewHandle):
       startStyles(styles,view,viewHandle,session,initial,cwd,home,theme,words,setting,builtinDir,customDir,models,mode)
-def withHeader(styles: MarkdownTheme.Styles,quiet: Bool,+session: Session.AgentSession,cwd: String,home: Maybe<&2,String>) -> IO(View.View & MarkdownTheme.Styles):
+def withHeader(styles: MarkdownTheme.Styles,quiet: Bool,+session: Session.AgentSession,cwd: String,home: Maybe<&2,String>,themeDir: String) -> IO(View.View & MarkdownTheme.Styles):
   match styles:
     case MarkdownTheme.Styles{markdown,callbacks,+live,highlighter}:
       do IO<View.View & MarkdownTheme.Styles>:
         files : List<&2,Prompt.ContextFile> <- Session.getAgentsFiles(session)
         skills : List<&2,Skills.Skill> <- Session.getSkills(session)
-        view : View.View <- View.createWithHeader(Component.ComponentId{1n},live,quiet,cwd,home,files,skills)
+        view : View.View <- View.createWithHeader(Component.ComponentId{1n},live,quiet,cwd,home,files,skills,themeDir)
         return (view,MarkdownTheme.Styles{markdown,callbacks,live,highlighter})
 def prepared(pair: View.View & MarkdownTheme.Styles,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,theme: Theme.Theme,words: Words.Source,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (view,styles): startView(View.borrow(view),styles,session,initial,cwd,home,theme,words,setting,builtinDir,customDir,models,mode)
-def started(+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Source,setting: Maybe<&2,String>,+builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
+def started(+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Source,setting: Maybe<&2,String>,+builtinDir: String,+customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   do IO<Result<&2,&2,Error,Unit>>:
     highlighter : SyntaxHighlight.Highlighter <- SyntaxHighlight.create(Path.join(builtinDir,"../../../../../runtime/data/highlight"))
     styles : MarkdownTheme.Styles <- MarkdownTheme.create(theme,highlighter)
     +settings : Settings.SettingsManager <- Ref.read(Settings.SettingsManager,Session.settingsOf(session))
-    pair : View.View & MarkdownTheme.Styles <- withHeader(styles,Settings.getQuietStartup(settings),session,cwd,home)
+    pair : View.View & MarkdownTheme.Styles <- withHeader(styles,Settings.getQuietStartup(settings),session,cwd,home,customDir)
     prepared(pair,session,initial,cwd,home,theme,words,setting,builtinDir,customDir,models,mode)
 def themed(session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,words: Words.Source,loaded: Result<&2,&2,Theme.LoadError,Theme.Theme>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match loaded:

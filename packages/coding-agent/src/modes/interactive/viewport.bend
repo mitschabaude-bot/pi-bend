@@ -77,9 +77,9 @@ def create(id: Component.ComponentId) -> IO(View): created(id,None{},None{},None
 def withHeader(id: Component.ComponentId,pair: Header.Owner & Component.Component & Header.Handle) -> IO(View):
   match pair:
     case (owner,component,handle): created(id,Some{owner},Some{component},Some{handle})
-def createWithHeader(id: Component.ComponentId,theme: Ref.Ref<Theme.Theme>,quiet: Bool,cwd: String,home: Maybe<&2,String>,contexts: List<&2,Prompt.ContextFile>,skills: List<&2,Skills.Skill>) -> IO(View):
+def createWithHeader(id: Component.ComponentId,theme: Ref.Ref<Theme.Theme>,quiet: Bool,cwd: String,home: Maybe<&2,String>,contexts: List<&2,Prompt.ContextFile>,skills: List<&2,Skills.Skill>,themeDir: String) -> IO(View):
   do IO<View>:
-    header : Header.Owner <- Header.create(theme,quiet,cwd,home,contexts,skills)
+    header : Header.Owner <- Header.create(theme,quiet,cwd,home,contexts,skills,themeDir)
     withHeader(id,Header.borrow(header))
 def borrowedView(pair: Serial.Owner<Document> & Serial.Handle<Document>,header: Maybe<&1,Header.Owner>,+handle: Maybe<&2,Header.Handle>,+exit: Ref.Ref<Maybe<&2,Bool>>,+value: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>) -> View & Component.Component & Handle:
   match pair:

@@ -1,4 +1,8 @@
 import Base
+import ../packages/coding-agent/src/modes/interactive/components/header.bend as Header
+import ../packages/coding-agent/src/modes/interactive/theme/theme.bend as Theme
+import ../packages/coding-agent/src/modes/interactive/theme/color.bend as Color
+import ../packages/coding-agent/src/core/system-prompt.bend as Prompt
 import ../packages/coding-agent/src/modes/interactive/viewport.bend as View
 import ../packages/runtime/src/callback.bend as Callback
 import ../packages/tui/src/component.bend as Component
@@ -37,11 +41,11 @@ def runMounted(view: View.View,+handle: View.Handle,+base: Tui.TuiBase,message: 
         second : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,8n)
         filled : String <- frame(second)
         same(filled,"one|two|three|four||editor|footer")
-        # An overflowing transcript keeps the line above the editor: upstream's
-        # widgetContainerAbove is a plain Spacer(1) (parity scenario whats-new).
+        # Regular mode keeps every transcript row for terminal scrollback,
+        # including the widget spacer above the editor.
         overflow : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,4n)
         short : String <- frame(overflow)
-        same(short,"four||editor|footer")
+        same(short,"one|two|three|four||editor|footer")
         View.clear(handle)
         third : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,8n)
         cleared : String <- frame(third)
@@ -50,8 +54,23 @@ def runMounted(view: View.View,+handle: View.Handle,+base: Tui.TuiBase,message: 
 def runPair(pair: View.View & View.Handle & Tui.TuiBase,message: Component.Component) -> IO(Unit):
   match pair:
     case (view,handle,base): runMounted(view,handle,base,message)
+# upstream showLoadedResources inserts an extra spacer before Context only.
+def resourceSections(result: Result<&2,&2,Theme.LoadError,Theme.Theme>) -> IO(Unit):
+  match result:
+    case Fail{_}: IO.die(Unit,1,"cannot load resource-listing theme")
+    case Done{+theme}:
+      do IO<Unit>:
+        +themes : List<&2,Theme.ThemeInfo> <- IO.pure(List<&2,Theme.ThemeInfo>,[Theme.ThemeInfo{"bar","/home/user/.pi/agent/themes/foo.json"}])
+        onlyThemes : String <- Header.listedText(theme,Header.Loaded{Nil{},Nil{},themes,""},"/project",Some{"/home/user"},False{})
+        same(Utils.stripTerminalSequences(onlyThemes),"[Themes]\n  bar")
+        withContext : String <- Header.listedText(theme,Header.Loaded{[Prompt.ContextFile{"/project/AGENTS.md","rules"}],Nil{},themes,""},"/project",Some{"/home/user"},False{})
+        same(Utils.stripTerminalSequences(withContext),"\n[Context]\n  AGENTS.md\n\n[Themes]\n  bar")
+        expanded : String <- Header.listedText(theme,Header.Loaded{Nil{},Nil{},themes,""},"/project",Some{"/home/user"},True{})
+        same(Utils.stripTerminalSequences(expanded),"[Themes]\n  user\n    ~/.pi/agent/themes/foo.json")
 def main() -> IO(Unit):
   do IO<Unit>:
+    theme : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadFromPath("packages/coding-agent/src/modes/interactive/theme/dark.json",Color.TrueColor{})
+    resourceSections(theme)
     +none : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~ignore,Unit{})
     +onFocus : Callback.Callback<Bool,Unit> <- Callback.create(~Unit,~Bool,~Unit,~focus,Unit{})
     +messageRender : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~List<&2,String>,~Nat,~List<&2,String>,~lines,"one" <> "two" <> "three" <> "four" <> Nil{})
