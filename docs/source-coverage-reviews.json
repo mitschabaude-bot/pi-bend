@@ -71,12 +71,12 @@
     },
     "packages/ai/src/api/google-generative-ai.ts": {
       "state": "ported",
-      "note": "Ported as three modules: google-generative-ai.bend (GoogleOptions, streamSimple's option mapping with clamped levels, level-or-budget thinking config and getGoogleBudget, buildParams producing the SDK parameters, client headers, and the SDK's parameter-to-REST conversion with its field order); google-generative-ai-stream.bend (the SDK's processStreamResponse framing with its delimiters, in-band error chunks and incomplete-segment error, and the chunk fold: text/thinking block transitions, signatures, function calls with generated ids, responseId, usage and finish reasons); google-generative-ai-client.bend (streamSimple's missing-key and level-mapping errors fail before a stream exists, as upstream throws synchronously; the stream lifecycle: custom-fetch (accepting the process fetch handle, globalThis.fetch upstream) and API-key checks, onPayload replacement, the SDK model path and address, headers, retryProviderRequest with status-only failures, the body loop and the catch block). tests/google_generative_ai_check.py compares 560 captured params, wire requests and streamed messages/event sequences with pinned pi-mono and runs the ported suites; tests/google_client_loopback.py covers the HTTP path and the agent glue. Documented differences: x-goog-api-client carries the SDK label without the gl-node/<process.version> runtime label (there is no Node runtime); JSON.parse's engine-specific error text is replaced by the native parser's; event partials are snapshots. No live Gemini request has been verified. Generated tool-call ids use one counter shared by every stream of an agent runtime (a Ref in its provider configuration; the CLI process has one runtime), as upstream's module toolCallCounter; tests/ai-misc-suites.bend checks that a second stream continues the sequence.",
+      "note": "Ported as three modules: google-generative-ai.bend (GoogleOptions, streamSimple's option mapping with clamped levels, level-or-budget thinking config and getGoogleBudget, buildParams producing the SDK parameters, client headers, and the SDK's parameter-to-REST conversion with its field order); google-generative-ai-stream.bend (the SDK's processStreamResponse framing with its delimiters, in-band error chunks and incomplete-segment error, and the chunk fold: text/thinking block transitions, signatures, function calls with generated ids, responseId, usage and finish reasons); google-generative-ai-client.bend (streamSimple's missing-key and level-mapping errors fail before a stream exists, as upstream throws synchronously; the stream lifecycle: custom-fetch (accepting the process fetch handle, globalThis.fetch upstream) and API-key checks, onPayload replacement, the SDK model path and address, headers, retryProviderRequest with status-only failures, the body loop and the catch block). tests/google_generative_ai_check.py compares 560 captured params, wire requests and streamed messages/event sequences with pinned pi-mono and runs the ported suites; tests/google_client_loopback.py covers the HTTP path and the agent glue. Documented differences: x-goog-api-client carries the SDK label without the gl-node/<process.version> runtime label (there is no Node runtime); JSON.parse's engine-specific error text is replaced by the native parser's; event partials are snapshots. No live Gemini request has been verified. Generated tool-call ids use one counter shared by every stream of an agent runtime (a Ref in its provider configuration; the CLI process has one runtime), as upstream's module toolCallCounter; tests/ai-misc-suites.bend checks that a second stream continues the sequence. The SDK's tContents rejection of an empty contents list ('contents are required', before any request) is ported in prepareRequest (found by tests/live_replay_check.py).",
       "source_sha256": "c20f1a40875b2106b6d39d8b7837cd30a882c6a5fcf8c311ccc42a090e18e956",
       "port_sha256": {
         "packages/ai/src/api/google-generative-ai.bend": "8e5fddf0912e58a6af8a24da3425ddfd4970278f1dc8811557f1ac9d524e7d46",
         "packages/ai/src/api/google-generative-ai-stream.bend": "c2b0cfaa0166224b146dcdb9364856cef2517b0cd060e4bc3e74238443da30f3",
-        "packages/ai/src/api/google-generative-ai-client.bend": "bc0cbabc99b20a22638b0bf43d4d4611c2e534887bf86342a0ffc8e8e74161c4"
+        "packages/ai/src/api/google-generative-ai-client.bend": "66b9d756218e312975e2228e3f3ea884613febf16e9ecfc315ac250cb8b52670"
       },
       "ports": [
         "packages/ai/src/api/google-generative-ai.bend",
@@ -117,7 +117,7 @@
         "packages/ai/src/api/google-external-account.bend": "b8e61c7e91fd8e43376971b937ddc104a85a801256044678601fbe9bd654213a",
         "packages/ai/src/api/google-metadata.bend": "506f498584388fad9ea7a6f863767f932d43f7db5709fba03a44a5b07dc73219",
         "packages/ai/src/api/credential-http.bend": "9c037e48ffab2c42a8448d6ff2fdf615ed3d789fff1f9e6efb1da10faa33794a",
-        "packages/ai/src/api/google-generative-ai-client.bend": "bc0cbabc99b20a22638b0bf43d4d4611c2e534887bf86342a0ffc8e8e74161c4",
+        "packages/ai/src/api/google-generative-ai-client.bend": "66b9d756218e312975e2228e3f3ea884613febf16e9ecfc315ac250cb8b52670",
         "packages/ai/src/api/google-generative-ai-stream.bend": "c2b0cfaa0166224b146dcdb9364856cef2517b0cd060e4bc3e74238443da30f3"
       }
     },
@@ -1091,6 +1091,14 @@
       "source_sha256": "e2fdd18093dc69cb8fe82bb6bef674f20f8a5093d0d13fd1b7180f49dbe751fd",
       "port_sha256": {
         "packages/coding-agent/src/core/package-manager.bend": "ccc2c4e26dc9f5320c6dd1d9bd029b6b9c9c5c99f200d931570798781d8585ba"
+      }
+    },
+    "packages/ai/src/providers/faux.ts": {
+      "state": "partial",
+      "note": "createFauxCore ported as a FauxCore record with Ref state (queued responses, counters, per-session prompt cache); helpers, usage estimates over UTF-16 units (walked by scalar, surrogates only materialized at a mid-pair chunk boundary), random token-size chunking, pacing, abort and terminal errors match upstream (tests/faux_provider_check.py, 22/23 named plus differential). Not ported: deferred responses (fetchDeferred/cancelDeferred, the deferred stream option) and fauxProvider/createProvider wrapping, since the port dispatches provider APIs statically.",
+      "source_sha256": "dcf37d154680cef0fa5188efd4881450073c5342a9b56cc9e25cee9b9f1ccfcc",
+      "port_sha256": {
+        "packages/ai/src/providers/faux.bend": "018e195d8f364a8e0b90fa66acc86162680387149be57dedb355151cc6fe442d"
       }
     }
   }

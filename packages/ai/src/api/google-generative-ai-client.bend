@@ -116,10 +116,27 @@ def buildRequest(url: Result<&2, &2, URL.Error, URL.URL>, headers: Result<&2, &2
     case _ _ None{}: Fail{"Could not encode request payload as JSON"}
     case Done{location} Done{fields} Some{text}: Done{Client.Request{location, "post", fields, text, unbounded()}}
 
+# The SDK's tContents rejects an empty contents list while converting the
+# parameters, after the model and before the request is built.
+def nonEmptyContents(value: Maybe<&2, J()>) -> Bool:
+  match value:
+    case Some{T.JsonArray{Nil{}}}: False{}
+    case _: True{}
+
+def contentsGiven(params: J()) -> Bool:
+  match params:
+    case T.JsonObject{fields}: nonEmptyContents(R.get(J(), fields, "contents"))
+    case _: True{}
+
+def converted(context: URL.Context, +base: String, client: R.Record<String>, key: String, +params: J(), name: String, given: Bool) -> Result<&2, &2, String, Client.Request>:
+  match given:
+    case False{}: Fail{"contents are required"}
+    case True{}: buildRequest(URL.parse(context, address(base, name)), requestHeaders(client, key), JsonWire.stringify(Google.requestBody(params)))
+
 def prepared(context: URL.Context, +base: String, client: R.Record<String>, key: String, +params: J(), path: Result<&2, &2, String, String>) -> Result<&2, &2, String, Client.Request>:
   match path:
     case Fail{message}: Fail{message}
-    case Done{name}: buildRequest(URL.parse(context, address(base, name)), requestHeaders(client, key), JsonWire.stringify(Google.requestBody(params)))
+    case Done{name}: converted(context, base, client, key, params, name, contentsGiven(params))
 
 def prepareRequest(context: URL.Context, base: String, client: R.Record<String>, key: String, +params: J()) -> Result<&2, &2, String, Client.Request>:
   prepared(context, base, client, key, params, paramsModel(params))

@@ -568,9 +568,15 @@
     },
     {
       "source": "packages/ai/test/abort.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "603afe6d43a63196ead002d6508707ecf7e10e5e2cb6d6c86df1c30bc257bdf5"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "603afe6d43a63196ead002d6508707ecf7e10e5e2cb6d6c86df1c30bc257bdf5",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 31 of 41 pass; 5 KNOWN (abort during a pending body read: upstream reports the fetch AbortError, the port 'Request was aborted' on Anthropic-Messages and Codex paths; awaiting decision); pending: Bedrock, Mistral (5). Upstream's testAbortSignal returns before its post-loop assertions; the aborted streams are still compared."
     },
     {
       "source": "packages/ai/test/anthropic-adaptive-thinking-models.test.ts",
@@ -948,21 +954,39 @@
     },
     {
       "source": "packages/ai/test/context-overflow.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "3c02bec11a56c48b1ab1bba98b5ea79f5452ceb074f61528da77973bfdb15d85"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "3c02bec11a56c48b1ab1bba98b5ea79f5452ceb074f61528da77973bfdb15d85",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 30 of 35 pass on native (multi-megabyte prompts; not run on Bun); replies use each provider's documented overflow error (upstream utils/overflow.ts examples) and isContextOverflow is compared; pending: Bedrock, Mistral, local servers (5)."
     },
     {
       "source": "packages/ai/test/cross-provider-handoff.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a793fcacb5e9b7ab0beec89767fc39e96bd7014060a84bce0abc351c31c0069a"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "a793fcacb5e9b7ab0beec89767fc39e96bd7014060a84bce0abc351c31c0069a",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. Both tests pass with fixtures from the 31 provider/model pairs on replayed APIs; the Bedrock and Mistral pairs are left out, as upstream leaves out pairs without credentials."
     },
     {
       "source": "packages/ai/test/empty.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "c66ae1675dc794c189dd2573f1ff0b8dda24e84200f6ac73a9dd1deb2d6a45c3"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "c66ae1675dc794c189dd2573f1ff0b8dda24e84200f6ac73a9dd1deb2d6a45c3",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 112 of 120 pass (found and fixed: the Gemini SDK's 'contents are required' for an empty contents list); pending: Bedrock, Mistral (8)."
     },
     {
       "source": "packages/ai/test/env-api-keys.test.ts",
@@ -998,9 +1022,14 @@
     },
     {
       "source": "packages/ai/test/faux-provider.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "fea06efc607060cbad9885d7cc9bff5151f0a0510d3631e7bb8bbc7e547ab999"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/faux-provider.bend",
+        "tests/faux_provider_check.py",
+        "tests/faux_provider_reference.ts"
+      ],
+      "sha256": "fea06efc607060cbad9885d7cc9bff5151f0a0510d3631e7bb8bbc7e547ab999",
+      "notes": "22 of 23 upstream tests ported (tests/faux_provider_check.py, bun and native); usage estimates and mid-pair chunking also differential against upstream createFauxCore. Pending: 'unregisters the provider' needs upstream's dynamic api registry (registerApiProvider/unregisterApiProviders), which the port replaces with static provider dispatch; registerFauxProvider/deferred responses are not ported."
     },
     {
       "source": "packages/ai/test/fetch-option.test.ts",
@@ -1804,9 +1833,15 @@
     },
     {
       "source": "packages/ai/test/stream.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9b0f81e7aa6433bee0589345bf327d8c93c71e6c0ab1d901c9f6dc3aaa68bc42"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "9b0f81e7aa6433bee0589345bf327d8c93c71e6c0ab1d901c9f6dc3aaa68bc42",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 197 of 233 tests pass; pending: Bedrock, Mistral, Vertex, Codex WebSocket transport, local servers (36)."
     },
     {
       "source": "packages/ai/test/supports-xhigh.test.ts",
@@ -1854,9 +1889,15 @@
     },
     {
       "source": "packages/ai/test/tokens.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "512c3bd3ab7a6fb77056284350d751be6a57c57f1a709081b42e5aef4017f735"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "512c3bd3ab7a6fb77056284350d751be6a57c57f1a709081b42e5aef4017f735",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 17 of 31 pass; 8 KNOWN (abort-message difference as in abort.test.ts); pending: Bedrock, Mistral, 4 it.skip upstream."
     },
     {
       "source": "packages/ai/test/tool-call-id-normalization.test.ts",
@@ -1866,15 +1907,27 @@
     },
     {
       "source": "packages/ai/test/tool-call-without-result.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "3d00184e004453c2574a26b3657f280a9d9c7cba63afab8b5448156727909abf"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "3d00184e004453c2574a26b3657f280a9d9c7cba63afab8b5448156727909abf",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 28 of 30 pass (the server rejects unanswered tool calls as the providers do); pending: Bedrock, Mistral."
     },
     {
       "source": "packages/ai/test/total-tokens.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5c2cd0b7e3b73733ac12272de194ae00e9222e2cc74e0f79e9cd14a681068e7f"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "5c2cd0b7e3b73733ac12272de194ae00e9222e2cc74e0f79e9cd14a681068e7f",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 33 of 35 pass; pending: Bedrock, Mistral."
     },
     {
       "source": "packages/ai/test/transcript-tool-changes.test.ts",
@@ -1901,9 +1954,15 @@
     },
     {
       "source": "packages/ai/test/unicode-surrogate.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "89cf5a6e71e2c059ae3a22aa81d311433832c7b00f93da683504336605c6d518"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "89cf5a6e71e2c059ae3a22aa81d311433832c7b00f93da683504336605c6d518",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 84 of 90 pass (unpaired-surrogate rows on native only, carried through a marker since the strict JSON decoder rejects them); pending: Bedrock, Mistral (6)."
     },
     {
       "source": "packages/ai/test/uuid.test.ts",
