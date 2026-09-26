@@ -5201,14 +5201,14 @@
     },
     {
       "source": "packages/tui/test/regression-regional-indicator-width.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/visible-width.bend",
         "tests/ansi-layout.bend",
         "tests/ansi_layout_check.py"
       ],
       "sha256": "a057bc5b61cd287e2f2f554e878222ebace84a515e6cf67b87191eba5c91ae47",
-      "notes": "Native width observations and intermediate partial-flag wrapping now pass through pure Bend on all three backends; see tests/visible-width.md and tests/ansi-layout.md."
+      "notes": "Native width observations and intermediate partial-flag wrapping now pass through pure Bend on all three backends; see tests/visible-width.md and tests/ansi-layout.md. Every utils call these pure test bodies make is replayed natively with an exact result match (widths in tests/visible_width_check.py, normalization in tests/ansi_utils_check.py, wrapping/truncation in tests/ansi_layout_check.py), so the original assertions, which depend only on those results, hold natively. Checked on native one/four; on Bun the long-input scans of ansi_layout_check hit the BEND-019 recurrence recorded in docs/bend-issues.md."
     },
     {
       "source": "packages/tui/test/regression-sigwinch-kill-eacces.test.ts",
@@ -5256,13 +5256,15 @@
     },
     {
       "source": "packages/tui/test/tab-width.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/ansi-utils.bend",
         "tests/ansi-layout.bend",
-        "tests/ansi_layout_check.py"
+        "tests/ansi_layout_check.py",
+        "tests/tui-virtual-terminal.bend",
+        "tests/tui_virtual_terminal.ts"
       ],
-      "notes": "Native normalization, observed widths, slice helper widths and overlay segment widths are covered; input/editor/TUI component cases remain pending. See tests/ansi-layout.md.",
+      "notes": "All four tests: the slice-helper and overlay-segment widths replay in tests/ansi_layout_check.py and the control-sequence tab normalization in tests/ansi_utils_check.py; 'keeps tab-containing overlays on one physical terminal row' runs in tests/tui_virtual_terminal.ts (upstream VirtualTerminal viewport and a tab-free output) on Bun/native one/four.",
       "sha256": "59fff93aeecb3809f41f7bf68d88ef8ba9f0f38cd3a2db785a1f16a0ac114419"
     },
     {
@@ -5301,13 +5303,15 @@
     },
     {
       "source": "packages/tui/test/truncate-to-width.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
+        "tests/visible-width.bend",
+        "tests/visible_width_check.py",
         "tests/ansi-utils.bend",
         "tests/ansi-layout.bend",
         "tests/ansi_layout_check.py"
       ],
-      "notes": "Native normalization/width observations and all nine truncation cases are covered across tests/ansi-utils.md, tests/visible-width.md and tests/ansi-layout.md.",
+      "notes": "Native normalization/width observations and all nine truncation cases are covered across tests/ansi-utils.md, tests/visible-width.md and tests/ansi-layout.md. Every utils call these pure test bodies make is replayed natively with an exact result match (widths in tests/visible_width_check.py, normalization in tests/ansi_utils_check.py, wrapping/truncation in tests/ansi_layout_check.py), so the original assertions, which depend only on those results, hold natively. Checked on native one/four; on Bun the long-input scans of ansi_layout_check hit the BEND-019 recurrence recorded in docs/bend-issues.md.",
       "sha256": "fd75a99d47ff465d56a1f3ede16e37ca7d29aa910e2322881e824e6c2937b7b8"
     },
     {
@@ -5353,7 +5357,8 @@
         "tests/tui-virtual-terminal.bend",
         "tests/tui_virtual_terminal.ts"
       ],
-      "sha256": "ace909b9dfca424f4c0e08e348163ecb98e86513d55c3f4fef5028a715fb9896"
+      "sha256": "ace909b9dfca424f4c0e08e348163ecb98e86513d55c3f4fef5028a715fb9896",
+      "notes": "tests/tui_virtual_terminal.ts replays 25 of the 28 tests with their upstream names and assertions on Bun/native one/four (resize, shrink, differential rendering, Kitty image cleanup and reservation, bounded writes). Pending: 'renders keyboard input without waiting for a throttled frame' (tests/tui_process_check.py only shows that input draws immediately, not the preempted throttled frame or render count), 'writes redraw logs to the provided directory' and 'writes the crash dump to the OS temp directory\u2026': the native TUI has no logDirectory, PI_TUI_DEBUG_REDRAW log or crash dump; a too-wide line is recorded as InvalidFrame instead of stopping the terminal."
     },
     {
       "source": "packages/tui/test/tui-shrink.test.ts",
@@ -5376,13 +5381,13 @@
     },
     {
       "source": "packages/tui/test/wrap-ansi.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/visible-width.bend",
         "tests/ansi-layout.bend",
         "tests/ansi_layout_check.py"
       ],
-      "notes": "Native width observations and all 16 wrapping cases are covered across tests/visible-width.md and tests/ansi-layout.md; native layout results are compared exactly.",
+      "notes": "Native width observations and all 16 wrapping cases are covered across tests/visible-width.md and tests/ansi-layout.md; native layout results are compared exactly. Every utils call these pure test bodies make is replayed natively with an exact result match (widths in tests/visible_width_check.py, normalization in tests/ansi_utils_check.py, wrapping/truncation in tests/ansi_layout_check.py), so the original assertions, which depend only on those results, hold natively. Checked on native one/four; on Bun the long-input scans of ansi_layout_check hit the BEND-019 recurrence recorded in docs/bend-issues.md.",
       "sha256": "9c238d85ad676ca6d4e063caa8d44d493b0c220dd9aba9ea11a31d51c92d791d"
     }
   ]
