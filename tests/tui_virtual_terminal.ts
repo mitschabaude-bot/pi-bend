@@ -64,7 +64,8 @@ const encode = (o: Op): Op => {
 };
 
 // The Bun lane compiles the fixture to JavaScript once per run.
-let runner = process.env.TUI_RUNNER ? [path.resolve(ROOT, process.env.TUI_RUNNER)] : undefined;
+// TUI_RUNNER="path [args]", e.g. "build/tui-virtual-terminal --threads 4".
+let runner = process.env.TUI_RUNNER ? ((binary, ...args) => [path.resolve(ROOT, binary), ...args])(...process.env.TUI_RUNNER.split(" ")) : undefined;
 function fixture(): string[] {
 	if (runner) return runner;
 	const out = path.join(ROOT, "build/tui-virtual-terminal.js");
@@ -1530,6 +1531,19 @@ it("TUI bounded render output", "splits large differential updates without a ful
 	assert.ok(output.startsWith("\x1b[?2026h"));
 	assert.ok(output.endsWith("\x1b[?2026l"));
 	assert.ok(!output.includes("\x1b[2J"), "the update should stay on the differential render path");
+});
+
+// tab-width.test.ts: an overlay line with a tab stays on one physical row; the
+// terminal output never contains the tab. The base lines are padded to the
+// width, as upstream's FullViewportContent.
+it("tab width accounting", "keeps tab-containing overlays on one physical terminal row", async () => {
+	const base: Line[] = ["base 0", "base 1", "base 2"].map((prefix) => ({ prefix, fill: " ", less: prefix.length }));
+	let output = "";
+	await replay(16, 3, [{ op: "add", lines: base }, { op: "overlay", lines: ["\tX"], options: { width: 4, row: 1, col: 4 } }, RENDER(16, 3)], (_, terminal, report) => {
+		output += report.writes.join("");
+		assert.deepStrictEqual(terminal.getViewport(), ["base 0          ", "base   X        ", "base 2          "]);
+	});
+	assert.ok(!output.includes("\t"));
 });
 
 const only = process.argv[2];

@@ -20,6 +20,8 @@ import ../packages/coding-agent/src/core/session-persistence.bend as Sessions
 import ../packages/coding-agent/src/core/session-manager.bend as S
 import ../packages/coding-agent/src/core/system-prompt.bend as Prompt
 import ../packages/coding-agent/src/core/compaction/compaction.bend as Compaction
+import ../packages/coding-agent/src/core/compaction/plan.bend as Plan
+import ../packages/coding-agent/src/core/messages.bend as Messages
 import ../packages/coding-agent/src/core/settings-manager.bend as Settings
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
 import ../packages/coding-agent/src/core/model-runtime.bend as Models
@@ -29,7 +31,10 @@ import ./agent-session.bend as H
 import ../packages/coding-agent/src/utils/paths.bend as Paths
 import ../packages/ai/src/utils/uuid.bend as Uuid
 import ../packages/ai/src/utils/text.bend as AiText
+import ../packages/ai/src/utils/transcript.bend as Transcript
 import ../packages/coding-agent/src/core/extensions/types.bend as Ext
+import ../packages/coding-agent/src/core/extensions/loader.bend as Loader
+import ../packages/coding-agent/src/core/extensions/runner.bend as Runner
 
 # Scenarios for upstream's suite/regressions tests that need AgentSession
 # behavior beyond tests/agent-session.bend. The provider streams like
@@ -237,6 +242,21 @@ def systemSections(messages: List<&2, Ai.Message<V.Value, V.Value, Unit, Tools.T
     case Ai.System{Ai.SystemMessage{_, Some{sections}, _, _, _}} <> rest: ("{" ++ String.join(sectionJson(Rec.entries(Maybe<&2, String>, sections)), ",") ++ "}") <> systemSections(rest)
     case Ai.System{_} <> rest: "null" <> systemSections(rest)
     case _ <> rest: systemSections(rest)
+
+def toolNamesJson(tools: List<&2, Ai.Tool<V.Value>>) -> List<&2, String>:
+  match tools:
+    case Nil{}: Nil{}
+    case Ai.Tool{name, _, _, _} <> rest: Decode.quote(name) <> toolNamesJson(rest)
+
+# The tools and system prompt the request declares (upstream getCurrentTools
+# and getCurrentSystemPrompt over the request context).
+def requestTools(input: H.Input()) -> List<&2, String>:
+  match input:
+    case T.StreamInput{_, Ai.TranscriptContext{messages}, _}: toolNamesJson(Transcript.getCurrentTools(V.Value, V.Value, Unit, Tools.ToolDetails, messages))
+
+def requestSystemPrompt(input: H.Input()) -> String:
+  match input:
+    case T.StreamInput{_, Ai.TranscriptContext{messages}, _}: Transcript.getCurrentSystemPrompt(V.Value, V.Value, Unit, Tools.ToolDetails, messages)
 
 def requestSections(input: H.Input()) -> List<&2, String>:
   match input:
@@ -477,7 +497,7 @@ def providing(faux: Faux, +input: H.Input()) -> IO(H.Output()):
       +signal = signalOf(input)
       do IO<H.Output()>:
         R.write(Maybe<&2, Signal()>, signals, signal)
-        IO.print("{\"type\":\"request\",\"model\":" ++ Decode.quote(model) ++ ",\"apiKey\":" ++ H.maybeQuoted(apiKeyOf(input)) ++ ",\"lastUser\":" ++ H.maybeQuoted(lastUserOf(input)) ++ ",\"maxTokens\":" ++ maxTokensOf(input) ++ ",\"roles\":[" ++ String.join(requestRoles(input), ",") ++ "],\"systemSections\":[" ++ String.join(requestSections(input), ",") ++ "],\"context\":" ++ Decode.quote(serializeContext(input)) ++ "}")
+        IO.print("{\"type\":\"request\",\"model\":" ++ Decode.quote(model) ++ ",\"apiKey\":" ++ H.maybeQuoted(apiKeyOf(input)) ++ ",\"lastUser\":" ++ H.maybeQuoted(lastUserOf(input)) ++ ",\"maxTokens\":" ++ maxTokensOf(input) ++ ",\"roles\":[" ++ String.join(requestRoles(input), ",") ++ "],\"tools\":[" ++ String.join(requestTools(input), ",") ++ "],\"systemPrompt\":" ++ Decode.quote(requestSystemPrompt(input)) ++ ",\"systemSections\":[" ++ String.join(requestSections(input), ",") ++ "],\"context\":" ++ Decode.quote(serializeContext(input)) ++ "}")
         gate : Maybe<&2, H.Gate> <- R.modify(List<&2, Hold>, Maybe<&2, H.Gate>, gates, remaining => popHold(remaining))
         H.holdAt(gate)
         aborted : Bool <- isAborted(signal)
@@ -978,17 +998,66 @@ def noToolsNamed(text: String) -> Maybe<&2, Runtime.NoTools>:
 def toolOptions(+cwd: String, +agentDir: String, selection: Runtime.ToolSelection, +settings: Settings.SettingsManager) -> Runtime.CreateOptions:
   Runtime.CreateOptions{cwd, agentDir, "", "", "/pi", None{}, None{}, None{}, None{}, None{}, Nil{}, selection, False{}, Runtime.emptySeed(), settings, Runtime.ResourceOptions{Nil{}, True{}, Nil{}, True{}}}
 
-def toolLoadout(+source: Runtime.LoadoutSource, setup: Runtime.ToolSetup, +execute: Tools.Execute()) -> Runtime.Loadout:
+def toolLoadout(+source: Runtime.LoadoutSource, setup: Runtime.ToolSetup, +execute: Tools.Execute(), runner: Maybe<&2, Runner.ExtensionRunner>) -> Runtime.Loadout:
   match setup:
     case Runtime.ToolSetup{registry, active}:
       +tools = stubTools(registry, execute)
       +chosen = Runtime.activeTools(tools, active)
-      Runtime.Loadout{Result.default(&2, &2, String, Prompt.SystemPromptSections(), Runtime.sectionsForTools(source, Session.toolNamesOf(chosen), Nil{}, Nil{}), Rec.new(String)), chosen, Nil{}, Nil{}, None{}, Nil{}, Some{source}, tools}
+      Runtime.Loadout{Result.default(&2, &2, String, Prompt.SystemPromptSections(), Runtime.sectionsForTools(source, Session.toolNamesOf(chosen), Nil{}, Nil{}), Rec.new(String)), chosen, Nil{}, Nil{}, runner, Nil{}, Some{source}, tools}
 
-def infoNames(infos: List<&2, Session.ToolInfo>) -> List<&2, V.Value>:
+# 5109/2835's extension: session_start registers ask_question and
+# dynamic_tool.
+def extensionToolExecute(unit: Unit, call: Ext.ToolCallInput) -> IO(Tools.Output()): IO.pure(Tools.Output(), Fail{Tools.failure("not executed")})
+
+def registerTestTool(+api: Ext.ExtensionAPI, +name: String, +label: String, +description: String, +snippet: String) -> IO(Unit):
+  do IO<Unit>:
+    execute : Ext.ToolExecute() <- C.create(~Unit, ~Ext.ToolCallInput, ~Tools.Output(), ~extensionToolExecute, Unit{})
+    registered : Result<&2, &2, String, Unit> <- Loader.registerTool(api, Ext.ToolDefinition{name, label, description, Some{snippet}, Nil{}, Json.object(Json.field("type", Json.text("object"), Json.field("properties", Json.object(Nil{}), Nil{}))), None{}, execute})
+    return Unit{}
+
+# `ask`: also ask_question (5109 and 2835 register both; 3592 dynamic_tool only).
+type StartTools is Data:
+  StartTools{api: Ext.ExtensionAPI, ask: Bool}
+
+def registerBoth(+api: Ext.ExtensionAPI, ask: Bool) -> IO(Result<&2, &2, String, Maybe<&2, Unit>>):
+  do IO<Result<&2, &2, String, Maybe<&2, Unit>>>:
+    Bool.pick(Unit -> IO(Unit), ask, _ => registerTestTool(api, "ask_question", "Ask Question", "Ask a question", "Ask a question"), _ => IO.pure(Unit, Unit{}))(Unit{})
+    registerTestTool(api, "dynamic_tool", "Dynamic Tool", "Dynamic test tool", "Run dynamic test behavior")
+    return Done{None{}}
+
+def registerOnStart(env: StartTools, call: Ext.HandlerCall<Ext.SessionStartEvent>) -> IO(Result<&2, &2, String, Maybe<&2, Unit>>):
+  match env:
+    case StartTools{api, ask}: registerBoth(api, ask)
+
+def toolExtension(ask: Bool, static: Bool, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    Bool.pick(Unit -> IO(Unit), static, _ => registerTestTool(api, "static_tool", "Static Tool", "Statically registered extension tool", ""), _ => IO.pure(Unit, Unit{}))(Unit{})
+    handler : Ext.ExtensionHandler(Ext.SessionStartEvent, Unit) <- C.create(~StartTools, ~Ext.HandlerCall<Ext.SessionStartEvent>, ~Result<&2, &2, String, Maybe<&2, Unit>>, ~registerOnStart, StartTools{api, ask})
+    subscribed : Result<&2, &2, String, Loader.Unsubscribe> <- Loader.on(api, Ext.OnSessionStart{handler})
+    return Result.map(&2, &2, String, Loader.Unsubscribe, Unit, done => Unit{}, subscribed)
+
+def toolRunner(+extensions: String, +cwd: String) -> IO(Maybe<&2, Runner.ExtensionRunner>):
+  match extensions:
+    case "none": IO.pure(Maybe<&2, Runner.ExtensionRunner>, None{})
+    case other:
+      +ask = String.eq(other, "extensions")
+      +static = String.eq(other, "static")
+      do IO<Maybe<&2, Runner.ExtensionRunner>>:
+        +runtime : Ext.ExtensionRuntime() <- Loader.createExtensionRuntime()
+        errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, [Ext.InlineExtension{"tools", api => toolExtension(ask, static, api), False{}}])
+        models : Models.ModelRuntime <- ModelFixture.create(Nil{})
+        runner : Runner.ExtensionRunner <- Runner.create(runtime, cwd, models)
+        return Some{runner}
+
+def disposeToolRunner(runner: Maybe<&2, Runner.ExtensionRunner>) -> IO(Unit):
+  match runner:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{found}: Runner.dispose(found)
+
+def infoNames(infos: List<&2, Session.ToolInfo()>) -> List<&2, V.Value>:
   match infos:
     case Nil{}: Nil{}
-    case Session.ToolInfo{name, _, _} <> rest: V.Text{name} <> infoNames(rest)
+    case Ext.ToolInfo{name, _, _} <> rest: V.Text{name} <> infoNames(rest)
 
 def texts(values: List<&2, String>) -> List<&2, V.Value>:
   match values:
@@ -997,7 +1066,7 @@ def texts(values: List<&2, String>) -> List<&2, V.Value>:
 
 def reportTools(+label: String, +session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
-    all : List<&2, Session.ToolInfo> <- Session.getAllTools(session)
+    all : List<&2, Session.ToolInfo()> <- Session.getAllTools(session)
     active : List<&2, String> <- Session.getActiveToolNames(session)
     prompt : String <- Session.systemPrompt(session)
     H.printed(Done{Json.object(Json.field("type", Json.text(label), Json.field("all", V.ArrayValue{infoNames(all)}, Json.field("active", V.ArrayValue{texts(active)}, Json.field("systemPrompt", Json.text(prompt), Nil{})))))})
@@ -1010,24 +1079,27 @@ def activated(+session: Session.AgentSession, activate: Maybe<&2, List<&2, Strin
         Session.setActiveToolsByName(session, names)
         reportTools("activated", session)
 
-def toolsWith(+dir: String, +agentDir: String, selection: Runtime.ToolSelection, activate: Maybe<&2, List<&2, String>>, +settings: Settings.SettingsManager) -> IO(Unit):
+def toolsWith(+dir: String, +agentDir: String, selection: Runtime.ToolSelection, activate: Maybe<&2, List<&2, String>>, +settings: Settings.SettingsManager, extensions: String) -> IO(Unit):
   do IO<Unit>:
     +execute : Tools.Execute() <- C.create(~Unit, ~Tools.Input(), ~Tools.Output(), ~stubExecute, Unit{})
     +options : Runtime.CreateOptions = toolOptions(dir, agentDir, selection, settings)
-    +loadout : Runtime.Loadout = toolLoadout(Runtime.LoadoutSource{Paths.Environment{dir, agentDir, Runtime.urlContext()}, options, "/pi"}, Runtime.toolSetupOf(options), execute)
+    +runner : Maybe<&2, Runner.ExtensionRunner> <- toolRunner(extensions, dir)
+    +loadout : Runtime.Loadout = toolLoadout(Runtime.LoadoutSource{Paths.Environment{dir, agentDir, Runtime.urlContext()}, options, "/pi"}, Runtime.toolSetupOf(options), execute, runner)
     uuids : Uuid.Generator <- Uuid.generator()
     created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- H.requireSession(created)
     +value : Fixture <- fixtureLoaded(stored, dir, settings, loadout)
+    Session.bindExtensions(sessionOf(value), Ext.SessionStartEvent{Ext.StartupStart{}, None{}})
     reportTools("tools", sessionOf(value))
     activated(sessionOf(value), activate)
     teardown(value)
+    disposeToolRunner(runner)
     C.dispose(Tools.Input(), Tools.Output(), execute)
 
-def toolsScenario(+dir: String, +agentDir: String, +allow: String, +exclude: String, +noTools: String, +activate: String) -> IO(Unit):
+def toolsScenario(+dir: String, +agentDir: String, +allow: String, +exclude: String, +noTools: String, +activate: String, +extensions: String) -> IO(Unit):
   do IO<Unit>:
     loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(dir, agentDir, Settings.options())
-    toolsWith(dir, agentDir, Runtime.ToolSelection{optionalList(allow), noToolsNamed(noTools), optionalList(exclude), None{}}, optionalList(activate), H.settingsOf(loaded))
+    toolsWith(dir, agentDir, Runtime.ToolSelection{optionalList(allow), noToolsNamed(noTools), optionalList(exclude), None{}}, optionalList(activate), H.settingsOf(loaded), extensions)
 
 # 6324: navigation with a summary of the abandoned branch.
 def branchUsageCost(usage: Maybe<&2, Ai.Usage>) -> V.Value:
@@ -1207,6 +1279,70 @@ def treeDuringCompaction(+dir: String, agentDir: String) -> IO(Unit):
 
 def number(+text: String) -> Nat: Maybe.default(&2, Nat, Nat.read(text), 0n)
 
+# agent-session-auto-compaction-queue: _checkCompaction's decision for a
+# checked assistant message (upstream spies on _runAutoCompaction; here the
+# decision, Session.planCompaction, says whether compaction runs).
+def assistantMessage(text: String, stop: Ai.StopReason, errorMessage: Maybe<&2, String>, usage: Ai.Usage, +timestamp: F64) -> Ai.AssistantMessage<V.Value, Unit>:
+  Ai.AssistantMessage{textBlock(text), "openai-responses", "faux", "faux-model", None{}, None{}, None{}, None{}, usage, stop, None{}, errorMessage, None{}, None{}, timestamp}
+
+def totalUsage(+input: U32, +output: U32) -> Ai.Usage:
+  Ai.Usage{U32.to_f64(input), U32.to_f64(output), zero(), zero(), None{}, None{}, U32.to_f64(U32.add(input, output)), Ai.UsageCost{zero(), zero(), zero(), zero(), zero()}}
+
+def planName(plan: Plan.CompactionPlan) -> String:
+  match plan:
+    case Plan.NoCompaction{}: "none"
+    case Plan.ThresholdCompaction{}: "threshold"
+    case Plan.OverflowCompaction{True{}}: "overflow_retry"
+    case Plan.OverflowCompaction{False{}}: "overflow"
+    case Plan.RecoveryExhausted{_}: "exhausted"
+
+def noFacts() -> Session.Facts: Session.Facts{False{}, False{}, False{}, None{}}
+
+def planCase(+label: String, +settings: Compaction.CompactionSettings, +assistant: Ai.AssistantMessage<V.Value, Unit>, +boundary: Maybe<&2, F64>, messages: List<&2, Session.Message()>) -> IO(Unit):
+  IO.print("{\"type\":\"plan\",\"label\":" ++ Decode.quote(label) ++ ",\"plan\":\"" ++ planName(Session.planCompaction(settings, False{}, assistant, H.fauxModel(), boundary, messages, False{}, noFacts())) ++ "\"}")
+
+def compactionPlanScenario(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(dir, agentDir, Settings.options())
+    +settings : Compaction.CompactionSettings = Session.compactionSettingsFor(H.settingsOf(loaded), H.fauxModel())
+    +now : F64 <- Date.now()
+    # should ignore stale pre-compaction assistant usage on pre-prompt compaction checks
+    +stale : Ai.AssistantMessage<V.Value, Unit> = assistantMessage("large response before compaction", Ai.Stop{}, None{}, totalUsage(600000, 10000), before(now, 10000))
+    planCase("stale", settings, stale, Some{before(now, 5000)}, [userAt("before compaction", before(now, 11000)), T.LlmMessage{Ai.Assistant{stale}}, userAt("session recovery payload", now)])
+    # should trigger threshold compaction for error messages using last successful usage
+    +threshold : U32 = 111617
+    +successful : Ai.AssistantMessage<V.Value, Unit> = assistantMessage("large successful response", Ai.Stop{}, None{}, totalUsage(U32.sub(threshold, 10000), 10000), now)
+    +overloaded : Ai.AssistantMessage<V.Value, Unit> = assistantMessage("", Ai.Error{}, Some{"529 overloaded"}, totalUsage(0, 0), F.add(now, U32.to_f64(1000)))
+    planCase("error_after_success", settings, overloaded, None{}, [userAt("hello", before(now, 1000)), T.LlmMessage{Ai.Assistant{successful}}, userAt("another prompt", F.add(now, U32.to_f64(500))), T.LlmMessage{Ai.Assistant{overloaded}}])
+    # should not trigger threshold compaction for error messages when no prior usage exists
+    +alone : Ai.AssistantMessage<V.Value, Unit> = assistantMessage("", Ai.Error{}, Some{"529 overloaded"}, totalUsage(0, 0), now)
+    planCase("error_alone", settings, alone, None{}, [userAt("hello", before(now, 1000)), T.LlmMessage{Ai.Assistant{alone}}])
+    # should not trigger threshold compaction for error messages when only kept pre-compaction usage exists
+    +kept : Ai.AssistantMessage<V.Value, Unit> = assistantMessage("kept response from before compaction", Ai.Stop{}, None{}, totalUsage(180000, 10000), before(now, 10000))
+    +later : Ai.AssistantMessage<V.Value, Unit> = assistantMessage("", Ai.Error{}, Some{"529 overloaded"}, totalUsage(0, 0), now)
+    planCase("error_after_kept", settings, later, Some{before(now, 5000)}, [userAt("kept user msg", before(now, 11000)), T.LlmMessage{Ai.Assistant{kept}}, userAt("new prompt", before(now, 500)), T.LlmMessage{Ai.Assistant{later}}])
+
+# "should resume after threshold compaction when only agent-level queued
+# messages exist": a follow-up queued on the agent (not the session), then a
+# threshold compaction; it reports success and leaves continuing to the
+# post-run handling (upstream: agent.continue is not called).
+def queuedThresholdScenario(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +now : F64 <- Date.now()
+    +value : Fixture <- seededFixture(dir, agentDir, userAt("message to compact", before(now, 1000)) <> assistantAt("assistant response to compact", Ai.Stop{}, totalUsage(100, 0), before(now, 500)) <> Nil{}, Setup{Text{"compacted"} <> Nil{}, Nil{}, H.fauxModel()})
+    Agent.followUp(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, Session.agentOf(sessionOf(value)), T.CustomMessage{Messages.Custom{Messages.CustomMessage{"test", Ai.UserBlocks{[Ai.TextImageText{Ai.TextContent{"Queued custom", None{}}}]}, False{}, None{}, now}}})
+    pending : Nat <- Session.pendingMessageCount(sessionOf(value))
+    queued : Bool <- Agent.hasQueuedMessages(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, Session.agentOf(sessionOf(value)))
+    IO.print("{\"type\":\"queue\",\"pending\":" ++ Nat.show(pending) ++ ",\"agentQueued\":" ++ Bool.pick(String, queued, "true", "false") ++ "}")
+    settings : Settings.SettingsManager <- Session.getSettings(sessionOf(value))
+    compacted : Bool <- Session.runAutoCompaction(Session.agentOf(sessionOf(value)), Session.sharedOf(sessionOf(value)), settings, H.fauxModel(), Session.Threshold{}, False{})
+    IO.print("{\"type\":\"auto_compaction\",\"result\":" ++ Bool.pick(String, compacted, "true", "false") ++ "}")
+    IO.sleep(50)
+    streaming : Bool <- Session.isStreaming(sessionOf(value))
+    IO.print("{\"type\":\"streaming\",\"value\":" ++ Bool.pick(String, streaming, "true", "false") ++ "}")
+    reportRemaining(repliesOf(value))
+    teardown(value)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case "name" <> dir <> agentDir <> name <> Nil{}: withSession(dir, agentDir, Nil{}, session => named(name, session))
@@ -1219,7 +1355,10 @@ def run(args: List<String>) -> IO(Unit):
     case "compaction_prompt" <> dir <> agentDir <> Nil{}: promptDuringCompaction(dir, agentDir)
     case "tree_streaming" <> dir <> agentDir <> Nil{}: treeDuringStreaming(dir, agentDir)
     case "compact_during_response" <> dir <> agentDir <> Nil{}: compactDuringResponse(dir, agentDir)
-    case "tools" <> dir <> agentDir <> allow <> exclude <> noTools <> activate <> Nil{}: toolsScenario(dir, agentDir, allow, exclude, noTools, activate)
+    case "compaction_plan" <> dir <> agentDir <> Nil{}: compactionPlanScenario(dir, agentDir)
+    case "queued_threshold" <> dir <> agentDir <> Nil{}: queuedThresholdScenario(dir, agentDir)
+    case "tools" <> dir <> agentDir <> allow <> exclude <> noTools <> activate <> Nil{}: toolsScenario(dir, agentDir, allow, exclude, noTools, activate, "none")
+    case "tools" <> dir <> agentDir <> allow <> exclude <> noTools <> activate <> extensions <> Nil{}: toolsScenario(dir, agentDir, allow, exclude, noTools, activate, extensions)
     case "branch_summary" <> dir <> agentDir <> Nil{}: branchSummaryScenario(dir, agentDir)
     case "tree" <> dir <> agentDir <> prompts <> more <> target <> summarize <> custom <> hold <> Nil{}: treeScenario(dir, agentDir, prompts, more, target, summarize, custom, hold)
     case "tree_during_compaction" <> dir <> agentDir <> Nil{}: treeDuringCompaction(dir, agentDir)

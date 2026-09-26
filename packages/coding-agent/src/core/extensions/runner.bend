@@ -73,6 +73,22 @@ def extensions(runner: ExtensionRunner) -> IO(List<&2, T.Extension>):
     state : T.ExtensionRuntimeState <- R.read(T.ExtensionRuntimeState, runtimeOf(runner))
     return Loader.activeExtensions(Loader.extensionsOf(state))
 
+def registeredIn(+path: String, definitions: List<&2, T.ToolDefinition>) -> List<&2, T.RegisteredTool>:
+  match definitions:
+    case Nil{}: Nil{}
+    case definition <> rest: T.RegisteredTool{definition, path} <> registeredIn(path, rest)
+
+def registeredTools(extensions: List<&2, T.Extension>) -> List<&2, T.RegisteredTool>:
+  match extensions:
+    case Nil{}: Nil{}
+    case T.Extension{_, path, _, _, _, _, _, _, _, tools} <> rest: List.append(&2, T.RegisteredTool, registeredIn(path, tools), registeredTools(rest))
+
+# upstream getAllRegisteredTools: every loaded extension's tools, in load order.
+def getAllRegisteredTools(runner: ExtensionRunner) -> IO(List<&2, T.RegisteredTool>):
+  do IO<List<&2, T.RegisteredTool>>:
+    loaded : List<&2, T.Extension> <- extensions(runner)
+    return registeredTools(loaded)
+
 def pathsOf(extensions: List<&2, T.Extension>) -> List<&2, String>:
   match extensions:
     case Nil{}: Nil{}
@@ -191,7 +207,7 @@ def hasUI(runner: ExtensionRunner) -> IO(Bool): Ctx.hasUI(createContext(runner))
 def commandsOf(extensions: List<&2, T.Extension>) -> List<&2, T.RegisteredCommand>:
   match extensions:
     case Nil{}: Nil{}
-    case T.Extension{_, _, _, _, _, _, commands, _, _} <> rest: List.append(&2, T.RegisteredCommand, commands, commandsOf(rest))
+    case T.Extension{_, _, _, _, _, _, commands, _, _, _} <> rest: List.append(&2, T.RegisteredCommand, commands, commandsOf(rest))
 
 def counted(commands: List<&2, T.RegisteredCommand>, +counts: Rec.Record<Nat>) -> Rec.Record<Nat>:
   match commands:
@@ -285,7 +301,7 @@ def dispatchesOf(+path: String, handlers: List<&2, T.EventHandler>) -> List<&2, 
 def snapshotEventHandlers(extensions: List<&2, T.Extension>, +eventType: String) -> List<&2, Dispatch>:
   match extensions:
     case Nil{}: Nil{}
-    case T.Extension{_, path, _, _, _, handlers, _, _, _} <> rest: List.append(&2, Dispatch, dispatchesOf(path, subscribedTo(handlers, eventType)), snapshotEventHandlers(rest, eventType))
+    case T.Extension{_, path, _, _, _, handlers, _, _, _, _} <> rest: List.append(&2, Dispatch, dispatchesOf(path, subscribedTo(handlers, eventType)), snapshotEventHandlers(rest, eventType))
 
 def hasHandlers(runner: ExtensionRunner, eventType: String) -> IO(Bool):
   do IO<Bool>:

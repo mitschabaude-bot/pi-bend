@@ -2017,6 +2017,127 @@ def planSectionScenario(+dir: String, agentDir: String) -> IO(Unit):
     prompted(sessionOf(harness), "second")
     cleanup(harness)
 
+# Extension tools (#6162): `switch_tools` switches the active set to
+# `after_switch` when executed.
+type SwitchEnv is Data:
+  SwitchEnv{api: Ext.ExtensionAPI, kind: String}
+
+def switchExecute(env: SwitchEnv, call: Ext.ToolCallInput) -> IO(Tools.Output()):
+  match env:
+    case SwitchEnv{api, "switch"}:
+      do IO<Tools.Output()>:
+        switched : Result<&2, &2, String, Unit> <- Loader.setActiveTools(api, ["after_switch"])
+        return textResult("switched", Json.object(Nil{}))
+    case SwitchEnv{_, _}: IO.pure(Tools.Output(), textResult("after", Json.object(Nil{})))
+
+def switchTool(+api: Ext.ExtensionAPI, +name: String, +kind: String, +label: String, +description: String, +snippet: String) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    execute : Ext.ToolExecute() <- C.create(~SwitchEnv, ~Ext.ToolCallInput, ~Tools.Output(), ~switchExecute, SwitchEnv{api, kind})
+    Loader.registerTool(api, Ext.ToolDefinition{name, label, description, Some{snippet}, Nil{}, emptySchema(), None{}, execute})
+
+def registerSwitchTools(+api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    first : Result<&2, &2, String, Unit> <- switchTool(api, "switch_tools", "switch", "Switch Tools", "Switch the active extension tool set", "Switch to the next extension tool")
+    second : Result<&2, &2, String, Unit> <- switchTool(api, "after_switch", "after", "After Switch", "Tool that should be available after switching", "Run after the active tool set changes")
+    return both(first, second)
+
+def printSessionPrompt(found: Maybe<&2, Session.AgentSession>) -> IO(Unit):
+  match found:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{session}:
+      do IO<Unit>:
+        prompt : String <- Session.systemPrompt(session)
+        print("session_prompt", Json.field("prompt", Json.text(prompt), Nil{}))
+
+# A context handler that prints the session's system prompt when each
+# request is prepared.
+def sessionPromptAt(ref: R.Ref<Maybe<&2, Session.AgentSession>>, call: Ext.HandlerCall<Ext.ContextEvent>) -> IO(Handled(Ext.ContextEventResult)):
+  do IO<Handled(Ext.ContextEventResult)>:
+    found : Maybe<&2, Session.AgentSession> <- R.read(Maybe<&2, Session.AgentSession>, ref)
+    printSessionPrompt(found)
+    return Done{None{}}
+
+def overrideStart(env: Unit, call: Ext.HandlerCall<Ext.BeforeAgentStartEvent>) -> IO(Handled(Ext.BeforeAgentStartEventResult)):
+  match call:
+    case Ext.HandlerCall{Ext.BeforeAgentStartEvent{_, _, systemPrompt, _}, _}:
+      IO.pure(Handled(Ext.BeforeAgentStartEventResult), Done{Some{Ext.BeforeAgentStartEventResult{None{}, Some{systemPrompt ++ "\n\nkeep this run override"}, None{}}}})
+
+def switchFactory(ref: R.Ref<Maybe<&2, Session.AgentSession>>, kind: String, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    registered : Result<&2, &2, String, Unit> <- registerSwitchTools(api)
+    context : Ext.ExtensionHandler(Ext.ContextEvent, Ext.ContextEventResult) <- C.create(~R.Ref<Maybe<&2, Session.AgentSession>>, ~Ext.HandlerCall<Ext.ContextEvent>, ~Handled(Ext.ContextEventResult), ~sessionPromptAt, ref)
+    watched : Result<&2, &2, String, Unit> <- subscribe(api, Ext.OnContext{context})
+    start : Ext.ExtensionHandler(Ext.BeforeAgentStartEvent, Ext.BeforeAgentStartEventResult) <- C.create(~Unit, ~Ext.HandlerCall<Ext.BeforeAgentStartEvent>, ~Handled(Ext.BeforeAgentStartEventResult), ~overrideStart, Unit{})
+    overridden : Result<&2, &2, String, Unit> <- Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), String.eq(kind, "override"), _ => subscribe(api, Ext.OnBeforeAgentStart{start}), _ => IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}}))(Unit{})
+    return both(both(registered, watched), overridden)
+
+def textValues(names: List<&2, String>) -> List<&2, V.Value>:
+  match names:
+    case Nil{}: Nil{}
+    case name <> rest: Json.text(name) <> textValues(rest)
+
+def reportActiveTools(+label: String, +session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    names : List<&2, String> <- Session.getActiveToolNames(session)
+    print("active_tools", Json.field("label", Json.text(label), Json.field("names", V.ArrayValue{textValues(names)}, Nil{})))
+
+# #6162: extension tools switch the active set mid-run.
+def switchScenario(+dir: String, agentDir: String, +kind: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Call{"call_switch", "switch_tools", Json.object(Nil{}), "{}"}, Reg.Text{"done"}]), ref, [inline("switch", api => switchFactory(ref, kind, api))], noResources())
+    Session.setActiveToolsByName(sessionOf(harness), ["switch_tools"])
+    reportActiveTools("before", sessionOf(harness))
+    prompted(sessionOf(harness), "start")
+    reportActiveTools("after", sessionOf(harness))
+    cleanup(harness)
+
+# agent-session-dynamic-tools: a session_start handler registers a tool
+# (with a snippet and a guideline, or hidden without a snippet).
+type DynamicEnv is Data:
+  DynamicEnv{api: Ext.ExtensionAPI, hidden: Bool}
+
+def dynamicExecute(env: Unit, call: Ext.ToolCallInput) -> IO(Tools.Output()): IO.pure(Tools.Output(), textResult("ok", Json.object(Nil{})))
+
+def dynamicDefinition(hidden: Bool, execute: Ext.ToolExecute()) -> Ext.ToolDefinition:
+  match hidden:
+    case True{}: Ext.ToolDefinition{"hidden_tool", "Hidden Tool", "Description should not appear in available tools", None{}, Nil{}, emptySchema(), None{}, execute}
+    case False{}: Ext.ToolDefinition{"dynamic_tool", "Dynamic Tool", "Tool registered from session_start", Some{"Run dynamic test behavior"}, ["Use dynamic_tool when the user asks for dynamic behavior tests."], emptySchema(), None{}, execute}
+
+def registerOnStart(env: DynamicEnv, call: Ext.HandlerCall<Ext.SessionStartEvent>) -> IO(Handled(Unit)):
+  match env:
+    case DynamicEnv{api, hidden}:
+      do IO<Handled(Unit)>:
+        execute : Ext.ToolExecute() <- C.create(~Unit, ~Ext.ToolCallInput, ~Tools.Output(), ~dynamicExecute, Unit{})
+        registered : Result<&2, &2, String, Unit> <- Loader.registerTool(api, dynamicDefinition(hidden, execute))
+        return Done{None{}}
+
+def dynamicFactory(hidden: Bool, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    handler : Ext.ExtensionHandler(Ext.SessionStartEvent, Unit) <- C.create(~DynamicEnv, ~Ext.HandlerCall<Ext.SessionStartEvent>, ~Handled(Unit), ~registerOnStart, DynamicEnv{api, hidden})
+    subscribe(api, Ext.OnSessionStart{handler})
+
+def infoNamesOf(infos: List<&2, Session.ToolInfo()>) -> List<&2, V.Value>:
+  match infos:
+    case Nil{}: Nil{}
+    case Ext.ToolInfo{name, _, _} <> rest: Json.text(name) <> infoNamesOf(rest)
+
+def reportTools(+label: String, +session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    all : List<&2, Session.ToolInfo()> <- Session.getAllTools(session)
+    active : List<&2, String> <- Session.getActiveToolNames(session)
+    prompt : String <- Session.systemPrompt(session)
+    print("tools", Json.field("label", Json.text(label), Json.field("all", V.ArrayValue{infoNamesOf(all)}, Json.field("active", V.ArrayValue{textValues(active)}, Json.field("systemPrompt", Json.text(prompt), Nil{})))))
+
+def dynamicScenario(+dir: String, agentDir: String, hidden: Bool) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup(Nil{}), ref, [inline("dynamic", api => dynamicFactory(hidden, api))], noResources())
+    reportTools("before_bind", sessionOf(harness))
+    Session.bindExtensions(sessionOf(harness), Ext.SessionStartEvent{Ext.StartupStart{}, None{}})
+    reportTools("after_bind", sessionOf(harness))
+    cleanup(harness)
+
 def promptScenario(+dir: String, agentDir: String, +name: String) -> IO(Unit):
   match name:
     case "tool_turn": promptToolTurn(dir, agentDir)
@@ -2034,6 +2155,10 @@ def promptScenario(+dir: String, agentDir: String, +name: String) -> IO(Unit):
     case "input_transform": inputTransform(dir, agentDir)
     case "before_start_inject": beforeStartInject(dir, agentDir)
     case "plan_section": planSectionScenario(dir, agentDir)
+    case "switch_tools": switchScenario(dir, agentDir, "plain")
+    case "dynamic_tool": dynamicScenario(dir, agentDir, False{})
+    case "hidden_tool": dynamicScenario(dir, agentDir, True{})
+    case "switch_tools_override": switchScenario(dir, agentDir, "override")
     case _: IO.die(Unit, 1, "unknown prompt scenario")
 
 def run(args: List<String>) -> IO(Unit):

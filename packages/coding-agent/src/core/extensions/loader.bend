@@ -39,25 +39,25 @@ def inactiveMessage(path: String) -> String:
 
 def extensionId(extension: T.Extension) -> Nat:
   match extension:
-    case T.Extension{id, _, _, _, _, _, _, _, _}: id
+    case T.Extension{id, _, _, _, _, _, _, _, _, _}: id
 
 def extensionPath(extension: T.Extension) -> String:
   match extension:
-    case T.Extension{_, path, _, _, _, _, _, _, _}: path
+    case T.Extension{_, path, _, _, _, _, _, _, _, _}: path
 
 def isFailed(extension: T.Extension) -> Bool:
   match extension:
-    case T.Extension{_, _, _, _, _, _, _, T.Failed{}, _}: True{}
+    case T.Extension{_, _, _, _, _, _, _, T.Failed{}, _, _}: True{}
     case _: False{}
 
 def isLoading(extension: T.Extension) -> Bool:
   match extension:
-    case T.Extension{_, _, _, _, _, _, _, T.Loading{}, _}: True{}
+    case T.Extension{_, _, _, _, _, _, _, T.Loading{}, _, _}: True{}
     case _: False{}
 
 def isActive(extension: T.Extension) -> Bool:
   match extension:
-    case T.Extension{_, _, _, _, _, _, _, T.Active{}, _}: True{}
+    case T.Extension{_, _, _, _, _, _, _, T.Active{}, _, _}: True{}
     case _: False{}
 
 # upstream's extension list: extensions that loaded.
@@ -133,18 +133,32 @@ def setCommand(+commands: List<&2, T.RegisteredCommand>, +command: T.RegisteredC
 
 def withCommand(+name: String, options: T.CommandOptions, extension: T.Extension) -> T.Extension:
   match options extension:
-    case T.CommandOptions{description, completions, handler} T.Extension{id, path, resolved, hidden, +info, handlers, commands, state, changes}:
-      T.Extension{id, path, resolved, hidden, info, handlers, setCommand(commands, T.RegisteredCommand{name, info, description, completions, handler}), state, changes}
+    case T.CommandOptions{description, completions, handler} T.Extension{id, path, resolved, hidden, +info, handlers, commands, state, changes, tools}:
+      T.Extension{id, path, resolved, hidden, info, handlers, setCommand(commands, T.RegisteredCommand{name, info, description, completions, handler}), state, changes, tools}
 
 # upstream registerCommand(name, options): the command carries the
 # extension's source info.
 def registerCommand(api: T.ExtensionAPI, name: String, options: T.CommandOptions) -> IO(Result<&2, &2, String, Unit>):
   modifyExtension(api, extension => withCommand(name, options, extension))
 
+def toolNameOf(definition: T.ToolDefinition) -> String:
+  match definition:
+    case T.ToolDefinition{name, _, _, _, _, _, _, _}: name
+
+def definedTool(tools: List<&2, T.ToolDefinition>, +definition: T.ToolDefinition) -> List<&2, T.ToolDefinition>:
+  match tools:
+    case Nil{}: [definition]
+    case +existing <> +rest: Bool.pick(List<&2, T.ToolDefinition>, String.eq(toolNameOf(existing), toolNameOf(definition)), definition <> rest, existing <> definedTool(rest, definition))
+
+def withTool(definition: T.ToolDefinition, extension: T.Extension) -> T.Extension:
+  match extension:
+    case T.Extension{id, path, resolved, hidden, info, handlers, commands, state, changes, tools}:
+      T.Extension{id, path, resolved, hidden, info, handlers, commands, state, changes, definedTool(tools, definition)}
+
 def withSubscription(subscription: T.Subscription, extension: T.Extension) -> T.Extension:
   match extension:
-    case T.Extension{id, path, resolved, hidden, info, handlers, commands, state, changes}:
-      T.Extension{id, path, resolved, hidden, info, List.append(&2, T.Subscription, handlers, [subscription]), commands, state, changes}
+    case T.Extension{id, path, resolved, hidden, info, handlers, commands, state, changes, tools}:
+      T.Extension{id, path, resolved, hidden, info, List.append(&2, T.Subscription, handlers, [subscription]), commands, state, changes, tools}
 
 def subscriptionId(subscription: T.Subscription) -> Nat:
   match subscription:
@@ -159,8 +173,8 @@ def withoutSubscription(handlers: List<&2, T.Subscription>, +id: Nat) -> List<&2
 
 def unsubscribed(+id: Nat, extension: T.Extension) -> T.Extension:
   match extension:
-    case T.Extension{owner, path, resolved, hidden, info, handlers, commands, state, changes}:
-      T.Extension{owner, path, resolved, hidden, info, withoutSubscription(handlers, id), commands, state, changes}
+    case T.Extension{owner, path, resolved, hidden, info, handlers, commands, state, changes, tools}:
+      T.Extension{owner, path, resolved, hidden, info, withoutSubscription(handlers, id), commands, state, changes, tools}
 
 # What `on` returns: removing the handler it registered.
 type Unsubscribe is Data:
@@ -203,8 +217,8 @@ def unsubscribe(value: Unsubscribe) -> IO(Unit):
 
 def withChange(change: T.ProviderChange, extension: T.Extension) -> T.Extension:
   match extension:
-    case T.Extension{id, path, resolved, hidden, info, handlers, commands, state, changes}:
-      T.Extension{id, path, resolved, hidden, info, handlers, commands, state, List.append(&2, T.ProviderChange, changes, [change])}
+    case T.Extension{id, path, resolved, hidden, info, handlers, commands, state, changes, tools}:
+      T.Extension{id, path, resolved, hidden, info, handlers, commands, state, List.append(&2, T.ProviderChange, changes, [change]), tools}
 
 def providerIdOf(provider: AiModels.Provider) -> String:
   match provider:
@@ -298,11 +312,11 @@ def unregisterProvider(api: T.ExtensionAPI, name: String) -> IO(Result<&2, &2, S
 def added(+path: String, hidden: Bool, state: T.ExtensionRuntimeState) -> T.ExtensionRuntimeState & Nat:
   match state:
     case T.ExtensionRuntimeState{extensions, pending, models, +next, actions}:
-      (T.ExtensionRuntimeState{List.append(&2, T.Extension, extensions, [T.Extension{next, path, path, hidden, createSourceInfo(path), Nil{}, Nil{}, T.Loading{}, Nil{}}]), pending, models, Nat.add(next, 1n), actions}, next)
+      (T.ExtensionRuntimeState{List.append(&2, T.Extension, extensions, [T.Extension{next, path, path, hidden, createSourceInfo(path), Nil{}, Nil{}, T.Loading{}, Nil{}, Nil{}}]), pending, models, Nat.add(next, 1n), actions}, next)
 
 def withState(extension: T.Extension, state: T.LoadState) -> T.Extension & List<&2, T.ProviderChange>:
   match extension:
-    case T.Extension{id, path, resolved, hidden, info, handlers, commands, _, changes}: (T.Extension{id, path, resolved, hidden, info, handlers, commands, state, Nil{}}, changes)
+    case T.Extension{id, path, resolved, hidden, info, handlers, commands, _, changes, tools}: (T.Extension{id, path, resolved, hidden, info, handlers, commands, state, Nil{}, tools}, changes)
 
 def storedSettled(state: T.ExtensionRuntimeState, pair: T.Extension & List<&2, T.ProviderChange>) -> T.ExtensionRuntimeState & List<&2, T.ProviderChange>:
   match pair:
@@ -453,7 +467,7 @@ def withActionsOf(api: T.ExtensionAPI, act: T.ExtensionActions -> IO(Unit)) -> I
 
 def sendWith(actions: T.ExtensionActions, request: T.SendMessage) -> IO(Unit):
   match actions:
-    case T.ExtensionActions{send, _, _}: C.call(T.SendMessage, Unit, send, request)
+    case T.ExtensionActions{send, _, _, _}: C.call(T.SendMessage, Unit, send, request)
 
 # upstream pi.sendMessage(message, options).
 def sendMessage(api: T.ExtensionAPI, message: T.CustomMessageInput, options: T.SendMessageOptions) -> IO(Result<&2, &2, String, Unit>):
@@ -461,7 +475,7 @@ def sendMessage(api: T.ExtensionAPI, message: T.CustomMessageInput, options: T.S
 
 def sendUserWith(actions: T.ExtensionActions, request: T.SendUserMessage) -> IO(Unit):
   match actions:
-    case T.ExtensionActions{_, send, _}: C.call(T.SendUserMessage, Unit, send, request)
+    case T.ExtensionActions{_, send, _, _}: C.call(T.SendUserMessage, Unit, send, request)
 
 # upstream pi.sendUserMessage(content, options).
 def sendUserMessage(api: T.ExtensionAPI, content: Ai.UserContent, options: T.SendUserMessageOptions) -> IO(Result<&2, &2, String, Unit>):
@@ -470,7 +484,7 @@ def sendUserMessage(api: T.ExtensionAPI, content: Ai.UserContent, options: T.Sen
 def modelSetWith(found: Result<&2, &2, String, T.ExtensionActions>, model: Ai.Model<Ai.JsonValue>) -> IO(Result<&2, &2, String, Bool>):
   match found:
     case Fail{error}: IO.pure(Result<&2, &2, String, Bool>, Fail{error})
-    case Done{T.ExtensionActions{_, _, setter}}:
+    case Done{T.ExtensionActions{_, _, setter, _}}:
       do IO<Result<&2, &2, String, Bool>>:
         changed : Bool <- C.call(Ai.Model<Ai.JsonValue>, Bool, setter, model)
         return Done{changed}
@@ -483,3 +497,61 @@ def setModel(api: T.ExtensionAPI, model: Ai.Model<Ai.JsonValue>) -> IO(Result<&2
       do IO<Result<&2, &2, String, Bool>>:
         state : T.ExtensionRuntimeState <- R.read(T.ExtensionRuntimeState, runtime)
         modelSetWith(activeActions(state, id), model)
+
+def toolActionsWith(-A: Data, found: Result<&2, &2, String, T.ExtensionActions>, act: T.ToolActions -> IO(A)) -> IO(Result<&2, &2, String, A>):
+  match found:
+    case Fail{error}: IO.pure(Result<&2, &2, String, A>, Fail{error})
+    case Done{T.ExtensionActions{_, _, _, tools}}:
+      do IO<Result<&2, &2, String, A>>:
+        value : A <- act(tools)
+        return Done{value}
+
+def withToolActions(-A: Data, api: T.ExtensionAPI, act: T.ToolActions -> IO(A)) -> IO(Result<&2, &2, String, A>):
+  match api:
+    case T.ExtensionAPI{runtime, id}:
+      do IO<Result<&2, &2, String, A>>:
+        state : T.ExtensionRuntimeState <- R.read(T.ExtensionRuntimeState, runtime)
+        toolActionsWith(A, activeActions(state, id), act)
+
+def activeToolsWith(tools: T.ToolActions) -> IO(List<&2, String>):
+  match tools:
+    case T.ToolActions{get, _, _, _}: C.call(Unit, List<&2, String>, get, Unit{})
+
+def allToolsWith(tools: T.ToolActions) -> IO(List<&2, T.ToolInfo>):
+  match tools:
+    case T.ToolActions{_, all, _, _}: C.call(Unit, List<&2, T.ToolInfo>, all, Unit{})
+
+def activateWith(names: List<&2, String>, tools: T.ToolActions) -> IO(Unit):
+  match tools:
+    case T.ToolActions{_, _, set, _}: C.call(List<&2, String>, Unit, set, names)
+
+# upstream pi.getActiveTools / getAllTools / setActiveTools.
+def getActiveTools(api: T.ExtensionAPI) -> IO(Result<&2, &2, String, List<&2, String>>):
+  withToolActions(List<&2, String>, api, activeToolsWith)
+
+def getAllTools(api: T.ExtensionAPI) -> IO(Result<&2, &2, String, List<&2, T.ToolInfo>>):
+  withToolActions(List<&2, T.ToolInfo>, api, allToolsWith)
+
+def setActiveTools(api: T.ExtensionAPI, names: List<&2, String>) -> IO(Result<&2, &2, String, Unit>):
+  withToolActions(Unit, api, tools => activateWith(names, tools))
+
+def refreshWith(actions: Maybe<&2, T.ExtensionActions>) -> IO(Unit):
+  match actions:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{T.ExtensionActions{_, _, _, T.ToolActions{_, _, _, refresh}}}: C.call(Unit, Unit, refresh, Unit{})
+
+def refreshBound(runtime: T.ExtensionRuntime()) -> IO(Unit):
+  do IO<Unit>:
+    state : T.ExtensionRuntimeState <- R.read(T.ExtensionRuntimeState, runtime)
+    refreshWith(actionsIn(state))
+
+# upstream pi.registerTool: the definition replaces one of the same name;
+# once the session is bound its tool registry refreshes (during loading the
+# session picks the tools up when it binds).
+def registerTool(api: T.ExtensionAPI, definition: T.ToolDefinition) -> IO(Result<&2, &2, String, Unit>):
+  match api:
+    case T.ExtensionAPI{+runtime, id}:
+      do IO<Result<&2, &2, String, Unit>>:
+        result : Result<&2, &2, String, Unit> <- modifyExtension(T.ExtensionAPI{runtime, id}, extension => withTool(definition, extension))
+        refreshBound(runtime)
+        return result

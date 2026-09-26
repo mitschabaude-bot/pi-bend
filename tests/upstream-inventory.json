@@ -2174,9 +2174,15 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-auto-compaction-queue.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "c3dd09c31206891c764498d55606b044cea83767f7cefcac5f98ed0fdd70b0b4"
+      "status": "ported",
+      "ports": [
+        "tests/regressions.bend",
+        "tests/regressions_check.py",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "c3dd09c31206891c764498d55606b044cea83767f7cefcac5f98ed0fdd70b0b4",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "All six cases without private spies (auto_compaction_queue_checks): a threshold compaction with only an agent-level queued follow-up reports success and the agent does not continue (streaming stays false, no agent_start); 'should not compact repeatedly after overflow recovery already attempted' is the overflow scenario of tests/agent_session_check.py (one compaction, then the recovery-failed compaction_end); the stale-usage, error-after-success, error-alone and error-after-kept-usage cases assert the decision Session.planCompaction makes for the checked message (threshold or none), which is what upstream observes by spying on _runAutoCompaction. Upstream's Anthropic model becomes the faux model (128k window, default reserve), with the threshold usage computed from it as upstream computes it."
     },
     {
       "source": "packages/coding-agent/test/agent-session-branching.test.ts",
@@ -2222,10 +2228,14 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-dynamic-tools.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py"
+      ],
       "sha256": "d0e3053b05635eb80891962db05c24ae3eaaf26e0ab8b9cfc7f4f90ac212fd79",
-      "notes": "Pending: every case registers tools through an extension (pi.registerTool) on a session created by createAgentSession, which the port's native extensions do not yet expose to the tool registry. Related coverage: the default bash tool's PI_* guidance and its exposeSessionEnvironment opt-out in the runtime's system prompt (tests/runtime_context_check.py) and the bash tool's session environment with and without exposeSessionEnvironment (tests/bash-tool.bend)."
+      "notes": "'refreshes tool registry when tools are registered after initialization' (the guideline is checked in the system prompt; ToolInfo has no promptGuidelines or sourceInfo) and 'keeps custom tools active but omits them from available tools when promptSnippet is not provided' run in tests/suite_harness_check.py (session_start from Session.bindExtensions). Pending: 'exposes session state before custom bash spawn hooks' (built-in tool factories such as createBashTool are not exposed as extension tool definitions) and 'returns source metadata for SDK custom tools' (createAgentSession customTools and tool source metadata are not ported).",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend"
     },
     {
       "source": "packages/coding-agent/test/agent-session-retry.test.ts",
@@ -2374,7 +2384,8 @@
       "source": "packages/coding-agent/test/builtin-tool-strict-mode.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "e7b6c9145a3957a02f9eb22f04766ae46c33f938e060569439b6df925a5139f5"
+      "sha256": "e7b6c9145a3957a02f9eb22f04766ae46c33f938e060569439b6df925a5139f5",
+      "notes": "Pending: built-in tool definitions' constrained-sampling preference, wrapToolDefinition and re-registering built-in tools from an extension without strict sampling (built-in tools are not exposed as extension tool definitions)."
     },
     {
       "source": "packages/coding-agent/test/cache-stats.test.ts",
@@ -2560,9 +2571,14 @@
     },
     {
       "source": "packages/coding-agent/test/default-tools-setting.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "664e6bf07effdb3bce99dc368a44835da064f4430891f48174ed7cb0140c0b8e"
+      "status": "partial",
+      "ports": [
+        "tests/regressions.bend",
+        "tests/regressions_check.py"
+      ],
+      "sha256": "664e6bf07effdb3bce99dc368a44835da064f4430891f48174ed7cb0140c0b8e",
+      "implementation": "packages/coding-agent/src/core/agent-runtime.bend",
+      "notes": "Configured defaultTools as the initial built-in selection, extension tools (registered at load and from session_start) staying enabled, explicit tools/excludeTools/noTools precedence, and the service-based path (the same creation path natively) run on the runtime's tool resolution (tests/regressions_check.py). Pending: 'can select powershell instead of bash' (powershell is not ported); the SDK customTools part of 'keeps extension and SDK custom tools enabled' (customTools are not ported). The registry lacks powershell."
     },
     {
       "source": "packages/coding-agent/test/documentation.test.ts",
@@ -3871,14 +3887,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2835-tools-allowlist-filters-extension-tools.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/regressions_check.py",
         "tests/regressions.bend",
         "tests/regressions.md"
       ],
       "sha256": "399e5369a79209f30f15e530f940a61230b876bed587b8287eb58520b40b138b",
-      "notes": "Both cases for the built-in tools: an allowlist of read and dynamic_tool registers and activates only read and the prompt lists only '- read: Read file contents'; an empty allowlist registers nothing and the prompt's tools section is '(none)'. Pending: the extension tool dynamic_tool, which the native extension API cannot register. Bun and native (tests/regressions.bend, 1 and 4 threads)."
+      "notes": "Both cases with the extension tool: an allowlist of read and dynamic_tool registers and activates both, and the prompt lists read and dynamic_tool only; an empty allowlist registers nothing, including dynamic_tool, and the prompt's tools section is '(none)'. The extension registers dynamic_tool from session_start (Session.bindExtensions). Bun and native (tests/regressions.bend, 1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2860-replaced-session-context.test.ts",
@@ -3924,9 +3940,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3592-no-builtin-tools-keeps-extension-tools.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6357fd4fcd5c33ef20451c7edbf1a885388aa832dbc3a76f2c84eef43172db39"
+      "status": "partial",
+      "ports": [
+        "tests/regressions.bend",
+        "tests/regressions_check.py"
+      ],
+      "sha256": "6357fd4fcd5c33ef20451c7edbf1a885388aa832dbc3a76f2c84eef43172db39",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "The three cases on the runtime's tool resolution with an extension that registers dynamic_tool from session_start: with built-in defaults disabled only dynamic_tool is active and listed; noTools all registers nothing; without extensions noTools builtin starts with nothing active (the service-based path is the same creation path natively). Partial: the registry lacks powershell, which is not ported, so the first case's tool list has the other built-in tools."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3616-settings-inmemory-reload.test.ts",
@@ -3985,14 +4006,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5109-exclude-tools.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/regressions_check.py",
         "tests/regressions.bend",
         "tests/regressions.md"
       ],
       "sha256": "3fa0f1a92fd7fb8a5a72c64bdc4ce86959e98b1fdc9a5dfe046f02600f8dcef1",
-      "notes": "Both cases for the built-in tools: excluded read is neither registered nor active nor in the system prompt while bash, edit and write stay active; excluded names override the allowlist (only bash registered and active). Pending: the extension tools (ask_question, dynamic_tool registered from session_start), which the native extension API cannot register. Bun and native (tests/regressions.bend, 1 and 4 threads)."
+      "notes": "Both cases with the extension tools ask_question and dynamic_tool registered from session_start: excluded read and ask_question are neither registered, active nor in the prompt while bash, edit, write and dynamic_tool stay active and dynamic_tool is listed; excluded names override the allowlist (only bash). Bun and native (tests/regressions.bend, 1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5208-late-bash-output.test.ts",
@@ -4119,9 +4140,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6162-extension-active-tools-next-turn.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "8998c4abfe32e931a3b977cb586249b6501855fed762aea5aa283fe32c81d171"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py"
+      ],
+      "sha256": "8998c4abfe32e931a3b977cb586249b6501855fed762aea5aa283fe32c81d171",
+      "implementation": "packages/coding-agent/src/core/agent-session.bend",
+      "notes": "All three cases (extension_tool_checks): pi.setActiveTools from a tool's execute changes the next request's tools in the same run; the session's system prompt at each request (a context handler reads it) equals the provider's and changes with the tools; a before_agent_start override stays in both requests. Request tools and prompts are read from the request context (getCurrentTools/getCurrentSystemPrompt)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6260-inline-extension-naming.test.ts",
@@ -4623,7 +4649,7 @@
         "tests/thinking-level.bend"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '→ ✓ medium', then '  ✓ medium' and '→   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",
@@ -4669,7 +4695,7 @@
         "tests/tools-manager.md"
       ],
       "sha256": "09e7bdfba469506725a8df17f87bc461ce7dd4eeba7ad04ec3140c0b39e1e2d5",
-      "notes": "7 of 8 cases pass on Bun and native one/four threads (tests/tools-manager-latest.bend): all six getLatestVersion cases through a logging redirect fetch and a local server (release redirects with and without the v prefix, a relative Location, a redirect whose body is discarded, 404 without redirect, a redirect to /login; one manual-redirect request each with the pi-coding-agent user agent) and ensureTool's offline status callback. Adaptation: upstream checks response.bodyUsed; here the redirect body is released unread. Pending: \"surfaces the error cause chain when a download fails\" \u2014 the native fetch error has no cause chain, so the status reads \"Failed to download fd: fetch failed\" without the connect detail. Download, extraction and install scenarios are covered by tests/tools_manager_check.py (tests/tools-manager.md)."
+      "notes": "7 of 8 cases pass on Bun and native one/four threads (tests/tools-manager-latest.bend): all six getLatestVersion cases through a logging redirect fetch and a local server (release redirects with and without the v prefix, a relative Location, a redirect whose body is discarded, 404 without redirect, a redirect to /login; one manual-redirect request each with the pi-coding-agent user agent) and ensureTool's offline status callback. Adaptation: upstream checks response.bodyUsed; here the redirect body is released unread. Pending: \"surfaces the error cause chain when a download fails\" — the native fetch error has no cause chain, so the status reads \"Failed to download fd: fetch failed\" without the connect detail. Download, extraction and install scenarios are covered by tests/tools_manager_check.py (tests/tools-manager.md)."
     },
     {
       "source": "packages/coding-agent/test/tools.test.ts",
@@ -4769,7 +4795,7 @@
         "tests/loopback-fetch.bend"
       ],
       "sha256": "cba6b39e9767019aebe0277ab580cb603927258652afcb2b9967387f1e8d6aa7",
-      "notes": "9 of 10 cases pass on Bun and native one/four threads. Instead of stubbing the global fetch, the library's https://pi.dev request goes through a logging fetch (tests/loopback-fetch.bend) to a local server that answers, drops connections or fails per case; the request URL, User-Agent and accept headers and the request counts (3 with retry, 1 for automatic checks, 0 when PI_SKIP_VERSION_CHECK is set) are asserted. semver valid/compare come from packages/runtime/src/semver.bend (tests/semver_check.py: 1,363 pairs match node-semver 7.8.5, including JavaScript double rounding of huge numeric pre-release identifiers). Not ported: \"formats nested network error details\" \u2014 the native fetch error carries no errno codes, so formatVersionCheckError returns the management request's message."
+      "notes": "9 of 10 cases pass on Bun and native one/four threads. Instead of stubbing the global fetch, the library's https://pi.dev request goes through a logging fetch (tests/loopback-fetch.bend) to a local server that answers, drops connections or fails per case; the request URL, User-Agent and accept headers and the request counts (3 with retry, 1 for automatic checks, 0 when PI_SKIP_VERSION_CHECK is set) are asserted. semver valid/compare come from packages/runtime/src/semver.bend (tests/semver_check.py: 1,363 pairs match node-semver 7.8.5, including JavaScript double rounding of huge numeric pre-release identifiers). Not ported: \"formats nested network error details\" — the native fetch error carries no errno codes, so formatVersionCheckError returns the management request's message."
     },
     {
       "source": "packages/durable/test/memory-storage.test.ts",
@@ -5142,24 +5168,24 @@
     },
     {
       "source": "packages/tui/test/native-clipboard-linux.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
       "sha256": "22b36f35cd4427ebeecaa5edebcfe920a9800ccb8b48a9c822db5f85c8f373f8",
-      "notes": "Not applicable to the native binary: the suite builds and drives upstream's C/libxcb Node addon (linux-platform-x11.node, its worker and allocation fixtures) under Xvfb. The Bend binary has no addon; clipboard image paste is ported through the upstream command path (wl-paste/xclip, packages/coding-agent/src/utils/clipboard-image.bend), which is upstream's behaviour when no native helper is available. A pure-Bend X11 reader would additionally need a Unix-domain socket primitive the runtime lacks."
+      "notes": "Not applicable to a native binary: see docs/scope-decisions.md."
     },
     {
       "source": "packages/tui/test/native-module-path.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
       "sha256": "8f5f0eb78e719c1818d7b109e6745b706b76d70add323dce84a3e83df7917f75",
-      "notes": "Not applicable to the native binary: getNativeModuleCandidates resolves where a Node `.node` addon lives (installed pi-tui package, bundle chunk directory, next to the executable). The Bend binary loads no addons; its platform code is linked in, so there is no candidate path to resolve and nothing is ported. Kept pending rather than emulated."
+      "notes": "Not applicable to a native binary: see docs/scope-decisions.md."
     },
     {
       "source": "packages/tui/test/native-platform.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
       "sha256": "d6ba0d7bbb3a367a4dc677798772fa9e4c4e37570151f10133a0fdc0b9c26189",
-      "notes": "Not applicable to the native binary: the four tests check upstream's Node addons (ELF page alignment of the shipped linux-arm64 .node prebuild, the Windows/macOS helper object identity and clipboard round trip, and lazy require of the X11 addon keyed on DISPLAY/WAYLAND_DISPLAY). The Bend binary loads no addon; clipboard reads use commands (packages/coding-agent/src/utils/clipboard-image.bend, upstream's no-native-helper case) and Windows/macOS helpers are not ported."
+      "notes": "Not applicable to a native binary: see docs/scope-decisions.md."
     },
     {
       "source": "packages/tui/test/overlay-non-capturing.test.ts",
@@ -5202,21 +5228,21 @@
     },
     {
       "source": "packages/tui/test/regression-regional-indicator-width.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/visible-width.bend",
         "tests/ansi-layout.bend",
         "tests/ansi_layout_check.py"
       ],
       "sha256": "a057bc5b61cd287e2f2f554e878222ebace84a515e6cf67b87191eba5c91ae47",
-      "notes": "Native width observations and intermediate partial-flag wrapping now pass through pure Bend on all three backends; see tests/visible-width.md and tests/ansi-layout.md."
+      "notes": "Native width observations and intermediate partial-flag wrapping now pass through pure Bend on all three backends; see tests/visible-width.md and tests/ansi-layout.md. Every utils call these pure test bodies make is replayed natively with an exact result match (widths in tests/visible_width_check.py, normalization in tests/ansi_utils_check.py, wrapping/truncation in tests/ansi_layout_check.py), so the original assertions, which depend only on those results, hold natively. Checked on native one/four; on Bun the long-input scans of ansi_layout_check hit the BEND-019 recurrence recorded in docs/bend-issues.md."
     },
     {
       "source": "packages/tui/test/regression-sigwinch-kill-eacces.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
       "sha256": "3d0c18e07d973784433ba298fe8d228021b970fd0d772737c49a8be3040e7ce3",
-      "notes": "Not applicable to the native binary: refreshTerminalDimensions sends the process a SIGWINCH so Node re-reads its cached stdout columns/rows, guarding kill(2) EACCES/EPERM and skipping win32. The native terminal measures with TIOCGWINSZ when it acquires the terminal and after every SIGWINCH it receives (self-pipe; packages/tui/src/terminal.bend), so it never signals itself and has no kill call whose errors could be ignored."
+      "notes": "Not applicable to a native binary: see docs/scope-decisions.md."
     },
     {
       "source": "packages/tui/test/select-list.test.ts",
@@ -5257,22 +5283,26 @@
     },
     {
       "source": "packages/tui/test/tab-width.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/ansi-utils.bend",
         "tests/ansi-layout.bend",
-        "tests/ansi_layout_check.py"
+        "tests/ansi_layout_check.py",
+        "tests/tui-virtual-terminal.bend",
+        "tests/tui_virtual_terminal.ts"
       ],
-      "notes": "Native normalization, observed widths, slice helper widths and overlay segment widths are covered; input/editor/TUI component cases remain pending. See tests/ansi-layout.md.",
+      "notes": "All four tests: the slice-helper and overlay-segment widths replay in tests/ansi_layout_check.py and the control-sequence tab normalization in tests/ansi_utils_check.py; 'keeps tab-containing overlays on one physical terminal row' runs in tests/tui_virtual_terminal.ts (upstream VirtualTerminal viewport and a tab-free output) on Bun/native one/four.",
       "sha256": "59fff93aeecb3809f41f7bf68d88ef8ba9f0f38cd3a2db785a1f16a0ac114419"
     },
     {
       "source": "packages/tui/test/terminal-colors.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
-        "tests/terminal-colors.bend"
+        "tests/terminal-colors.bend",
+        "tests/tui-terminal-colors.bend",
+        "tests/tui_terminal_colors_check.py"
       ],
-      "notes": "All four original pure parser tests execute and replay against native Bend. 1,010 source comparisons, six documented strictness corrections and two long-input checks pass Bun/native one/four. The five TUI background-query lifecycle/dispatch tests remain pending. See tests/terminal-colors.md.",
+      "notes": "All four original pure parser tests execute and replay against native Bend (1,010 source comparisons, six documented strictness corrections, two long-input checks; Bun/native one/four). The five TUI.queryTerminalBackgroundColor tests run on the native TUI through a real PTY (tests/tui_terminal_colors_check.py, native one/four) with upstream's names and assertions, including input listeners. See tests/terminal-colors.md.",
       "sha256": "83299038dbb51f1496c2985f0d7f95c8e67c3e1d1be0f65dd1d214277d888566"
     },
     {
@@ -5302,13 +5332,15 @@
     },
     {
       "source": "packages/tui/test/truncate-to-width.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
+        "tests/visible-width.bend",
+        "tests/visible_width_check.py",
         "tests/ansi-utils.bend",
         "tests/ansi-layout.bend",
         "tests/ansi_layout_check.py"
       ],
-      "notes": "Native normalization/width observations and all nine truncation cases are covered across tests/ansi-utils.md, tests/visible-width.md and tests/ansi-layout.md.",
+      "notes": "Native normalization/width observations and all nine truncation cases are covered across tests/ansi-utils.md, tests/visible-width.md and tests/ansi-layout.md. Every utils call these pure test bodies make is replayed natively with an exact result match (widths in tests/visible_width_check.py, normalization in tests/ansi_utils_check.py, wrapping/truncation in tests/ansi_layout_check.py), so the original assertions, which depend only on those results, hold natively. Checked on native one/four; on Bun the long-input scans of ansi_layout_check hit the BEND-019 recurrence recorded in docs/bend-issues.md.",
       "sha256": "fd75a99d47ff465d56a1f3ede16e37ca7d29aa910e2322881e824e6c2937b7b8"
     },
     {
@@ -5334,9 +5366,13 @@
     },
     {
       "source": "packages/tui/test/tui-cell-size-input.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "156fc72cd71f7ad65a11b300baaf2a37a2e6bc2ec7498d66f52ac6a0e17ab2d8"
+      "status": "ported",
+      "ports": [
+        "tests/tui-cell-size.bend",
+        "tests/tui_cell_size_check.py"
+      ],
+      "sha256": "156fc72cd71f7ad65a11b300baaf2a37a2e6bc2ec7498d66f52ac6a0e17ab2d8",
+      "notes": "Both tests run on the native TUI through a real PTY in upstream's image-terminal environment (TERM_PROGRAM=ghostty) on native one/four: a bare Escape still reaches the focused component after the startup CSI 16 t query, and a cell size reply is consumed (10x20 cells) while later input is forwarded. The hosted runtime cannot acquire a terminal. See tests/terminal-colors.md."
     },
     {
       "source": "packages/tui/test/tui-overlay-style-leak.test.ts",
@@ -5354,7 +5390,8 @@
         "tests/tui-virtual-terminal.bend",
         "tests/tui_virtual_terminal.ts"
       ],
-      "sha256": "ace909b9dfca424f4c0e08e348163ecb98e86513d55c3f4fef5028a715fb9896"
+      "sha256": "ace909b9dfca424f4c0e08e348163ecb98e86513d55c3f4fef5028a715fb9896",
+      "notes": "tests/tui_virtual_terminal.ts replays 25 of the 28 tests with their upstream names and assertions on Bun/native one/four (resize, shrink, differential rendering, Kitty image cleanup and reservation, bounded writes). Pending: 'renders keyboard input without waiting for a throttled frame' (tests/tui_process_check.py only shows that input draws immediately, not the preempted throttled frame or render count), 'writes redraw logs to the provided directory' and 'writes the crash dump to the OS temp directory…': the native TUI has no logDirectory, PI_TUI_DEBUG_REDRAW log or crash dump; a too-wide line is recorded as InvalidFrame instead of stopping the terminal."
     },
     {
       "source": "packages/tui/test/tui-shrink.test.ts",
@@ -5377,13 +5414,13 @@
     },
     {
       "source": "packages/tui/test/wrap-ansi.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/visible-width.bend",
         "tests/ansi-layout.bend",
         "tests/ansi_layout_check.py"
       ],
-      "notes": "Native width observations and all 16 wrapping cases are covered across tests/visible-width.md and tests/ansi-layout.md; native layout results are compared exactly.",
+      "notes": "Native width observations and all 16 wrapping cases are covered across tests/visible-width.md and tests/ansi-layout.md; native layout results are compared exactly. Every utils call these pure test bodies make is replayed natively with an exact result match (widths in tests/visible_width_check.py, normalization in tests/ansi_utils_check.py, wrapping/truncation in tests/ansi_layout_check.py), so the original assertions, which depend only on those results, hold natively. Checked on native one/four; on Bun the long-input scans of ansi_layout_check hit the BEND-019 recurrence recorded in docs/bend-issues.md.",
       "sha256": "9c238d85ad676ca6d4e063caa8d44d493b0c220dd9aba9ea11a31d51c92d791d"
     }
   ]

@@ -613,6 +613,46 @@ def prompt_checks(f):
     return checks
 
 
+def extension_tool_checks(f):
+    """suite/regressions/6162-extension-active-tools-next-turn.test.ts and agent-session-dynamic-tools.test.ts."""
+    checks = 0
+    # 6162: applies pi.setActiveTools before the next provider request in the same run
+    events = run(f, 'prompt', 'switch_tools')
+    actives = {e['label']: e['names'] for e in of_type(events, 'active_tools')}
+    requests = of_type(events, 'request')
+    assert actives == {'before': ['switch_tools'], 'after': ['after_switch']}, actives
+    assert [sorted(r['tools']) for r in requests] == [['switch_tools'], ['after_switch']], [r['tools'] for r in requests]
+    checks += 1
+    # 6162: reports the refreshed system prompt during the run
+    prompts = [r['systemPrompt'] for r in requests]
+    assert len(prompts) == 2 and prompts[0] != prompts[1]
+    assert [e['prompt'] for e in of_type(events, 'session_prompt')] == prompts
+    checks += 1
+    # 6162: preserves before_agent_start system prompt overrides when tools change mid-run
+    events = run(f, 'prompt', 'switch_tools_override')
+    requests = of_type(events, 'request')
+    assert [sorted(r['tools']) for r in requests] == [['switch_tools'], ['after_switch']]
+    assert len(requests) == 2 and all('keep this run override' in r['systemPrompt'] for r in requests)
+    checks += 1
+    # dynamic tools: refreshes tool registry when tools are registered after initialization (promptGuidelines are
+    # checked through the system prompt; tool source metadata is not ported)
+    events = run(f, 'prompt', 'dynamic_tool')
+    tools = {e['label']: e for e in of_type(events, 'tools')}
+    assert 'dynamic_tool' not in tools['before_bind']['all']
+    after = tools['after_bind']
+    assert 'dynamic_tool' in after['all'] and 'dynamic_tool' in after['active']
+    assert '- dynamic_tool: Run dynamic test behavior' in after['systemPrompt']
+    assert '- Use dynamic_tool when the user asks for dynamic behavior tests.' in after['systemPrompt']
+    checks += 1
+    # dynamic tools: keeps custom tools active but omits them from available tools when promptSnippet is not provided
+    events = run(f, 'prompt', 'hidden_tool')
+    after = {e['label']: e for e in of_type(events, 'tools')}['after_bind']
+    assert 'hidden_tool' in after['all'] and 'hidden_tool' in after['active']
+    assert 'hidden_tool' not in after['systemPrompt'] and 'Description should not appear in available tools' not in after['systemPrompt']
+    checks += 1
+    return checks
+
+
 def only(events, kind):
     found = of_type(events, kind)
     assert len(found) == 1, (kind, found)
@@ -628,7 +668,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-suite-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures) + boundary_checks(fixtures) + durable_length_checks(fixtures) + context_checks(fixtures) + fork_message_checks(fixtures) + prompt_checks(fixtures)
+    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures) + boundary_checks(fixtures) + durable_length_checks(fixtures) + context_checks(fixtures) + fork_message_checks(fixtures) + prompt_checks(fixtures) + extension_tool_checks(fixtures)
     print('suite-harness: %d upstream cases passed' % checks)
 
 

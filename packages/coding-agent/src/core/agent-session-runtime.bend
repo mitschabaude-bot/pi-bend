@@ -75,7 +75,7 @@ def installed(-S: Type, +factory: Factory(S), +release: C.Callback<S, Unit>, +ag
         rebind : R.Ref<Maybe<&2, Rebind()>> <- R.new(Maybe<&2, Rebind()>, None{})
         retiring : R.Ref<Retiring<S>> <- R.new(Retiring<S>, NothingRetiring{})
         invalidate : R.Ref<Maybe<&2, C.Callback<Unit, Unit>>> <- R.new(Maybe<&2, C.Callback<Unit, Unit>>, None{})
-        emitOn(live, ExtensionTypes.SessionStart{startupEvent()})
+        Session.bindExtensions(live, startupEvent())
         return Done{AgentSessionRuntime{current, factory, release, agentDir, rebind, retiring, invalidate}}
 
 def createChecked(-S: Type, +factory: Factory(S), +release: C.Callback<S, Unit>, +agentDir: String, +directory: String, live: Session.Session(), checked: Result<&2, &2, String, Unit>) -> IO(Result<&2, &2, String, AgentSessionRuntime<S>>):
@@ -202,7 +202,7 @@ def applied(-S: Type, runtime: AgentSessionRuntime<S>, +directory: String, start
         R.modify(Current<S>, Unit, current, previous => (Active{services, live, directory}, Unit{}))
         rebind : Maybe<&2, Rebind()> <- R.read(Maybe<&2, Rebind()>, hook)
         rebound(rebind, live)
-        emitOn(live, ExtensionTypes.SessionStart{start})
+        Session.bindExtensions(live, start)
         return Done{Unit{}}
 
 def createNext(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String, next: Session.Session(), +start: ExtensionTypes.SessionStartEvent) -> IO(Result<&2, &2, String, Unit>):

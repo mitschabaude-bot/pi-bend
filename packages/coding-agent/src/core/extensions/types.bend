@@ -400,8 +400,28 @@ type ProviderChange is Data:
   RegisterProvider{provider: AiModels.Provider}
   UnregisterProvider{name: String}
 
+# upstream ToolDefinition (without the TUI renderers): the tool's model-facing
+# description and JSON-schema parameters, an optional snippet for the system
+# prompt's tool list and guideline bullets, and execute, which also receives
+# the extension context.
+type ToolCallInput is Data:
+  ToolCallInput{input: Tools.Input(), context: Ctx.ExtensionContext}
+
+def ToolExecute() -> Data: C.Callback<ToolCallInput, Tools.Output()>
+
+type ToolDefinition is Data:
+  ToolDefinition{name: String, label: String, description: String, promptSnippet: Maybe<&2, String>, promptGuidelines: List<&2, String>, parameters: V.Value, executionMode: Maybe<&2, Agent.ToolExecutionMode>, execute: ToolExecute()}
+
+# upstream RegisteredTool: a definition with the extension that registered it.
+type RegisteredTool is Data:
+  RegisteredTool{definition: ToolDefinition, extensionPath: String}
+
+# upstream ToolInfo (getAllTools) without source metadata.
+type ToolInfo is Data:
+  ToolInfo{name: String, description: String, parameters: V.Value}
+
 type Extension is Data:
-  Extension{id: Nat, path: String, resolvedPath: String, hidden: Bool, sourceInfo: Skills.SourceInfo, handlers: List<&2, Subscription>, commands: List<&2, RegisteredCommand>, state: LoadState, changes: List<&2, ProviderChange>}
+  Extension{id: Nat, path: String, resolvedPath: String, hidden: Bool, sourceInfo: Skills.SourceInfo, handlers: List<&2, Subscription>, commands: List<&2, RegisteredCommand>, state: LoadState, changes: List<&2, ProviderChange>, tools: List<&2, ToolDefinition>}
 
 type PendingProvider is Data:
   PendingProvider{provider: AiModels.Provider, extensionPath: String}
@@ -439,8 +459,13 @@ type SendUserMessageOptions is Data:
 type SendUserMessage is Data:
   SendUserMessage{content: Ai.UserContent, options: SendUserMessageOptions}
 
+# upstream getActiveTools, getAllTools, setActiveTools and refreshTools.
+type ToolActions is Data:
+  ToolActions{getActiveTools: C.Callback<Unit, List<&2, String>>, getAllTools: C.Callback<Unit, List<&2, ToolInfo>>, setActiveTools: C.Callback<List<&2, String>, Unit>, refreshTools: C.Callback<Unit, Unit>}
+
 type ExtensionActions is Data:
-  ExtensionActions{sendMessage: C.Callback<SendMessage, Unit>, sendUserMessage: C.Callback<SendUserMessage, Unit>, setModel: C.Callback<Ai.Model<Ai.JsonValue>, Bool>}
+  ExtensionActions{sendMessage: C.Callback<SendMessage, Unit>, sendUserMessage: C.Callback<SendUserMessage, Unit>, setModel: C.Callback<Ai.Model<Ai.JsonValue>, Bool>, tools: ToolActions}
+
 
 # `actions` are the session's, once bound; before that the action methods
 # fail (upstream's "not initialized" runtime).

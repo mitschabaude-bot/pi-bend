@@ -28,6 +28,12 @@ note pointing here. Everything not listed here is in scope.
   falls under the experimental stack and telemetry decisions.
 - **Bun sandbox environment restore** (`restore-sandbox-env`, 2026-09-26): it
   works around a defect of Bun-compiled binaries; a native binary has none.
+- **Node native addons** (`native-module-path`, `native-platform`,
+  `native-clipboard-linux`, 2026-09-26): upstream loads platform addons from
+  Node; a native binary loads none. Clipboard images come from clipboard
+  commands (`utils/clipboard-image.bend`). `regression-sigwinch-kill-eacces`
+  guards upstream's self-signalling resize path, which the native terminal
+  does not have (it reads the size on every resize signal).
 - **JavaScript/TypeScript extensions** (AGENTS.md): extensions are native
   Bend; upstream's extension loading, bundling and Node SEA behaviour have no
   counterpart.

@@ -282,21 +282,49 @@ def discovery_checks(f):
     return checks
 
 
+def auto_compaction_queue_checks(f):
+    """agent-session-auto-compaction-queue.test.ts without private spies: 'should not compact repeatedly after
+    overflow recovery already attempted' is the overflow scenario of tests/agent_session_check.py; the others check
+    the post-run decision (Session.planCompaction, upstream _checkCompaction's call of _runAutoCompaction) and the
+    threshold compaction's result."""
+    checks = 0
+    # should resume after threshold compaction when only agent-level queued messages exist
+    events = f.session('regressions', 'queued_threshold', settings={'compaction': {'keepRecentTokens': 1}})
+    assert last(events, 'queue') == {'type': 'queue', 'pending': 0, 'agentQueued': True}
+    assert last(events, 'auto_compaction')['result'] is True and last(events, 'compaction_end')['reason'] == 'threshold'
+    assert last(events, 'streaming')['value'] is False and not of_type(events, 'agent_start'), 'the agent does not continue'
+    checks += 1
+    plans = {e['label']: e['plan'] for e in of_type(f.session('regressions', 'compaction_plan'), 'plan')}
+    # should ignore stale pre-compaction assistant usage on pre-prompt compaction checks
+    assert plans['stale'] == 'none'
+    checks += 1
+    # should trigger threshold compaction for error messages using last successful usage
+    assert plans['error_after_success'] == 'threshold'
+    checks += 1
+    # should not trigger threshold compaction for error messages when no prior usage exists
+    assert plans['error_alone'] == 'none'
+    checks += 1
+    # should not trigger threshold compaction for error messages when only kept pre-compaction usage exists
+    assert plans['error_after_kept'] == 'none'
+    checks += 1
+    return checks
+
+
 def tool_checks(f):
-    """Tool allow- and denylists (5109, 2835) for the built-in tools; the extension tools
-    (ask_question, dynamic_tool) are not registered because the native extension API has no
-    registerTool, so they only appear as unknown names in the lists."""
+    """Tool allow- and denylists (5109, 2835): the built-in tools and an extension that registers
+    ask_question and dynamic_tool from session_start (bindExtensions)."""
     checks = 0
 
-    def tools(allow='-', exclude='-', no_tools='-', activate='-'):
-        events = f.session('regressions', 'tools', allow, exclude, no_tools, activate)
+    def tools(allow='-', exclude='-', no_tools='-', activate='-', extensions='extensions'):
+        events = f.session('regressions', 'tools', allow, exclude, no_tools, activate, extensions)
         return last(events, 'tools'), (of_type(events, 'activated') or [None])[-1]
 
     # 5109-exclude-tools: filters built-in and extension tools from available and active tools
     state, _ = tools(exclude='read,ask_question')
-    assert 'read' not in state['all'] and 'ask_question' not in state['all'] and 'bash' in state['all'], state['all']
-    assert sorted(state['active']) == ['bash', 'edit', 'write'], state['active']
+    assert 'read' not in state['all'] and 'ask_question' not in state['all'] and 'bash' in state['all'] and 'dynamic_tool' in state['all'], state['all']
+    assert sorted(state['active']) == ['bash', 'dynamic_tool', 'edit', 'write'], state['active']
     assert '- read:' not in state['systemPrompt'] and 'ask_question' not in state['systemPrompt']
+    assert '- dynamic_tool: Run dynamic test behavior' in state['systemPrompt']
     checks += 1
     # 5109-exclude-tools: lets excluded tools override the allowlist
     state, _ = tools(allow='read,bash,ask_question', exclude='read,ask_question')
@@ -305,21 +333,61 @@ def tool_checks(f):
     checks += 1
     # 2835-tools-allowlist-filters-extension-tools: allows only explicitly listed built-in and extension tools
     state, _ = tools(allow='read,dynamic_tool')
-    assert sorted(state['all']) == ['read'] and sorted(state['active']) == ['read'], state
+    assert sorted(state['all']) == ['dynamic_tool', 'read'] and sorted(state['active']) == ['dynamic_tool', 'read'], state
     prompt = state['systemPrompt']
-    assert '- read: Read file contents' in prompt and '- bash:' not in prompt and '- edit:' not in prompt
+    assert '- read: Read file contents' in prompt and '- dynamic_tool: Run dynamic test behavior' in prompt and '- bash:' not in prompt and '- edit:' not in prompt
     checks += 1
     # 2835-tools-allowlist-filters-extension-tools: disables all tools when the allowlist is empty
     state, _ = tools(allow='')
     assert state['all'] == [] and state['active'] == [] and '<tools>\n(none)\n' in state['systemPrompt'] and 'dynamic_tool' not in state['systemPrompt'], state
     checks += 1
+    # 3592-no-builtin-tools-keeps-extension-tools: keeps extension tools active when built-in defaults are disabled
+    # (powershell is not ported, so the registry has the other built-in tools)
+    state, _ = tools(no_tools='builtin', extensions='dynamic')
+    assert sorted(state['all']) == ['bash', 'dynamic_tool', 'edit', 'find', 'grep', 'ls', 'read', 'write'], state['all']
+    assert state['active'] == ['dynamic_tool'], state['active']
+    assert '- dynamic_tool: Run dynamic test behavior' in state['systemPrompt'] and '- read:' not in state['systemPrompt'] and '- bash:' not in state['systemPrompt']
+    checks += 1
+    # 3592: still disables all tools when noTools is all
+    state, _ = tools(no_tools='all', extensions='dynamic')
+    assert state['all'] == [] and state['active'] == [] and '<tools>\n(none)\n' in state['systemPrompt'], state
+    checks += 1
+    # 3592: propagates noTools through service-based session creation (one creation path natively)
+    state, _ = tools(no_tools='builtin', extensions='none')
+    assert state['active'] == [] and '<tools>\n(none)\n' in state['systemPrompt'] and '- read:' not in state['systemPrompt'], state
+    checks += 1
+    # default-tools-setting.test.ts (powershell is not ported; SDK customTools are not ported)
+    def configured(defaults, **options):
+        events = f.session('regressions', 'tools', options.get('allow', '-'), options.get('exclude', '-'), options.get('no_tools', '-'), '-', options.get('extensions', 'none'), settings={'defaultTools': defaults})
+        return last(events, 'tools')
+    builtins = ['bash', 'edit', 'find', 'grep', 'ls', 'read', 'write']
+    # uses the configured list as the initial built-in selection
+    state = configured(['grep', 'find'])
+    assert sorted(state['all']) == builtins and state['active'] == ['grep', 'find'], state
+    assert '- grep:' in state['systemPrompt'] and '- read:' not in state['systemPrompt']
+    checks += 1
+    # keeps extension and SDK custom tools enabled (extension tools only)
+    state = configured(['grep'], extensions='static')
+    assert sorted(state['active']) == ['dynamic_tool', 'grep', 'static_tool'], state['active']
+    assert {'read', 'dynamic_tool', 'static_tool'} <= set(state['all'])
+    checks += 1
+    # preserves explicit tool option precedence
+    assert configured(['grep'], allow='read')['active'] == ['read']
+    assert configured(['read', 'grep'], exclude='read')['active'] == ['grep']
+    state = configured(['read'], no_tools='all')
+    assert state['all'] == [] and state['active'] == []
+    checks += 1
+    # applies through service-based session creation (one creation path natively)
+    state = configured(['ls'])
+    assert sorted(state['all']) == builtins and state['active'] == ['ls'], state
+    checks += 1
     # setActiveToolsByName: registered tools in the given order, unknown names ignored, prompt rebuilt.
-    state, activated = tools(activate='bash,grep,nope')
+    state, activated = tools(activate='bash,grep,nope', extensions='none')
     assert state['active'] == ['read', 'bash', 'edit', 'write'] and state['all'] == ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'], state
     assert activated['active'] == ['bash', 'grep'] and '- grep:' in activated['systemPrompt'] and '- read:' not in activated['systemPrompt'], activated
     # --no-tools and --no-builtin-tools without an allowlist start with nothing active.
     for mode in ('all', 'builtin'):
-        state, _ = tools(no_tools=mode)
+        state, _ = tools(no_tools=mode, extensions='none')
         assert state['active'] == [] and state['all'] == ([] if mode == 'all' else ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls']), (mode, state)
     return checks
 
@@ -394,7 +462,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-regressions-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = retry_checks(fixtures) + json_stream_checks(fixtures) + session_name_checks(fixtures) + tree_checks(fixtures) + branch_summary_checks(fixtures) + compaction_checks(fixtures) + session_manager_checks(fixtures) + discovery_checks(fixtures) + tool_checks(fixtures) + cli_checks(fixtures) + settings_checks(fixtures)
+    checks = retry_checks(fixtures) + json_stream_checks(fixtures) + session_name_checks(fixtures) + tree_checks(fixtures) + branch_summary_checks(fixtures) + compaction_checks(fixtures) + session_manager_checks(fixtures) + discovery_checks(fixtures) + tool_checks(fixtures) + auto_compaction_queue_checks(fixtures) + cli_checks(fixtures) + settings_checks(fixtures)
     print('regressions: %d upstream cases passed' % checks)
 
 
