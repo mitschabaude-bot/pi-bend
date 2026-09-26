@@ -199,3 +199,5 @@ Validation: build `tests/process-inherited.bend` and `tests/external-editor.bend
 
 `bend-borrowed-scalars.patch` (2026-09-26, installed after `bend-id-width.patch`, changes `comp.ts`): a scalar read out of a borrowed parameter is a copy and no longer makes the parameter owned (BEND-054). Reading every scalar of a shared million-element list 100 times: 1.25 s → 0.26 s.
 
+`bend-import-binders.patch` (2026-09-26, installed after `bend-borrowed-scalars.patch`, changes `bend.ts`): a pattern or lambda binder named like a definition of its own module is a binder in an imported module too, as it is in an entry file (BEND-032). The CLI's C is byte-identical.
+

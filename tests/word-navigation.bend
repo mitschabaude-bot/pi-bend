@@ -24,6 +24,8 @@ def show(result: W.ResultOf(Nat)) -> String:
     case Fail{W.InvalidCursor{}}: "InvalidCursor"
     case Fail{W.InvalidSegments{}}: "InvalidSegments"
     case Fail{W.MissingWordEngine{language}}: "MissingWordEngine:" ++ language
+    case Fail{W.WordData{_}}: "WordData"
+    case Fail{W.WordDataPending{}}: "WordDataPending"
 def compared(legacy: W.ResultOf(Nat),checked: W.ResultOf(Nat)) -> String:
   match checked:
     case Fail{W.MissingWordEngine{language}}: "MissingWordEngine:" ++ language

@@ -40,21 +40,25 @@
     },
     "packages/ai/src/api/bedrock-converse-stream.ts": {
       "state": "partial",
-      "note": "stream/streamSimple: the client configuration pi builds (profile, region from ARN/AWS_REGION/profile/built-in endpoint, custom endpoints, static credentials, bearer token), message/tool/system conversion with cache points and document sanitization, adaptive and budget thinking fields, onPayload/onResponse, the restJson ConverseStream request with SigV4 (runtime/aws-sigv4.bend) or bearer auth and caller headers minus reserved ones, the event-stream response (runtime/aws-eventstream.bend with CRC-32), the stream fold (text, reasoning incl. redacted, tool calls, usage with 1h cache writes, stop reasons) and error formatting with bedrock_response_failure diagnostics; traces equal the pinned AWS SDK on a loopback server (tests/bedrock_check.py). Missing: the SDK credential chain beyond shared-file static keys and credential_process (SSO, role assumption, web identity, ECS/IMDS; reported as errors, bedrock-credentials.bend), SDK retries, and HTTP(S) proxy agents. Unknown content-block types and lone surrogates are not representable in the typed Bend transcript.",
+      "note": "stream/streamSimple: the client configuration pi builds (profile, region from ARN/AWS_REGION/profile/built-in endpoint, custom endpoints, static credentials, bearer token), message/tool/system conversion with cache points and document sanitization, adaptive and budget thinking fields, onPayload/onResponse, the restJson ConverseStream request with SigV4 (runtime/aws-sigv4.bend) or bearer auth and caller headers minus reserved ones, the event-stream response (runtime/aws-eventstream.bend with CRC-32), the stream fold (text, reasoning incl. redacted, tool calls, usage with 1h cache writes, stop reasons) and error formatting with bedrock_response_failure diagnostics; traces equal the pinned AWS SDK on a loopback server (tests/bedrock_check.py). Without configured credentials the SDK default chain resolves them as the pinned credential-provider-node does (bedrock-credentials.bend over bedrock-credential-services.bend): environment keys unless a profile is selected, shared-file profiles (static keys, STS AssumeRole through source_profile chains and credential_source Environment/EcsContainer/Ec2InstanceMetadata with cycle and MFA errors, AssumeRoleWithWebIdentity, credential_process, SSO with sso-session token refresh through SSO-OIDC and legacy start-URL caches), fromProcess, web identity from the environment, then container (fromHttp with token file and retries, fromContainerMetadata) or IMDS (v2 token, v1 fallback and its blocks); tests/bedrock_check.py compares 29 chain cases with the SDK against a loopback STS/SSO/OIDC/ECS/IMDS server. Missing: console login sessions (login_session), the SDK clients' retries on STS/SSO/OIDC/IMDS, the Bedrock request's SDK retries, and HTTP(S) proxy agents. Unknown content-block types and lone surrogates are not representable in the typed Bend transcript.",
       "ports": [
         "packages/ai/src/api/bedrock-converse-stream.bend",
         "packages/ai/src/api/bedrock-credentials.bend",
+        "packages/ai/src/api/bedrock-credential-services.bend",
         "packages/runtime/src/aws-sigv4.bend",
         "packages/runtime/src/aws-eventstream.bend",
-        "packages/runtime/src/crc32.bend"
+        "packages/runtime/src/crc32.bend",
+        "packages/runtime/src/sha1.bend"
       ],
       "source_sha256": "cd4b63f95787c9f775a96a19edf760bbf266987b51f9cc9f6ac0ecd34cffe047",
       "port_sha256": {
-        "packages/ai/src/api/bedrock-converse-stream.bend": "3639183c4f9141c1a20c96aaa513b756314009e4b93fecb7f2e1d67977f67e4a",
-        "packages/ai/src/api/bedrock-credentials.bend": "11fa1344617ae553e16cf8a6d4b3dc5eb864d352d97c82ef040090296efc8295",
+        "packages/ai/src/api/bedrock-converse-stream.bend": "a6f2bbb8e59f74c54104165d25e094ec018c7c738ba0d75b1dab6c807db3eff7",
+        "packages/ai/src/api/bedrock-credentials.bend": "13b292d89f2a0ea095cc1ace0fea8c434928637e8e1c1d753b62bb1bc31f0c82",
+        "packages/ai/src/api/bedrock-credential-services.bend": "eb355b030dd3d28db3c456c2dcb1c5abcd771ef117c42d1d5403ee82865fb899",
         "packages/runtime/src/aws-sigv4.bend": "caa2c23300ee3da72bc2b7a8f807bd6478b0e84cff75ea6534a630ccfe313e10",
         "packages/runtime/src/aws-eventstream.bend": "10407475f5491bdceffb014888626790a4b0dbade62c1538a1b36252b8e5569e",
-        "packages/runtime/src/crc32.bend": "f87ae9d406fe4180b39bc1fa5411d0bd38ddf40add1c28f7da404dbb5b52d5ba"
+        "packages/runtime/src/crc32.bend": "f87ae9d406fe4180b39bc1fa5411d0bd38ddf40add1c28f7da404dbb5b52d5ba",
+        "packages/runtime/src/sha1.bend": "968543b017aaa21db1549cd3914ce096bf9e3392377cbb6865bc5a7b96bdbcef"
       }
     },
     "packages/ai/src/api/cloudflare-ai-binding.ts": {
