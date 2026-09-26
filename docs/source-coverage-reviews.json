@@ -1108,6 +1108,14 @@
       "port_sha256": {
         "packages/coding-agent/src/extensions/index.bend": "44a695593349473334cbda0bce1c15a58622682bffc83ce94ee1833c112d860d"
       }
+    },
+    "packages/coding-agent/src/extensions/llama/client.ts": {
+      "state": "partial",
+      "note": "Native typed management client: normalizeLlamaServerUrl/llamaInferenceUrl, authenticated 15-second-deadline requests, list/reload, props with encoded model/autoload query, load/unload/download, and cancellable unloadAndWait polling. The loopback differential matches nine real requests against the pinned TypeScript client on Bun/native1/native4, including headers, JSON model escaping, server error messages and pre-cancellation. Malformed typed optional fields and unknown status values are rejected instead of preserving unchecked JSON. Not yet ported: watch, loadAndWait/downloadAndWait with SSE progress, LlamaModelEvent/LlamaProgress and formatBytes. No built-in provider or interactive integration is claimed.",
+      "source_sha256": "21dd9b4c662ba4329e1448f93859c6028471347495ca8bb23d3a5a799d03d709",
+      "port_sha256": {
+        "packages/coding-agent/src/extensions/llama/client.bend": "9883a143f53f86d861366d4d9026a342298ce6b399030b6952c33a19cb1c7b1c"
+      }
     }
   }
 }
