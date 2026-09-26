@@ -638,11 +638,11 @@
       "port_sha256": {}
     },
     "packages/ai/src/providers/amazon-bedrock.ts": {
-      "state": "partial",
-      "note": "The Amazon Bedrock provider with its catalog, listed first in providers/all.bend as upstream, and bedrockAuth.resolve (stored key, AWS_BEARER_TOKEN_BEDROCK, stored or ambient AWS_PROFILE, access keys, ECS task role, web identity token; abort checks around each lookup), tested in packages/ai/test/amazon-bedrock-auth.bend. Missing: bedrockAuth.login, whose method selection and notify event need the upstream AuthPrompt/AuthEvent interaction that LoginInteraction does not model yet.",
+      "state": "ported",
+      "note": "The Amazon Bedrock provider with its catalog, listed first in providers/all.bend as upstream; bedrockAuth.login (method select, secret bearer token, the credential-chain notice, profile name or the credential-chain confirmation, unknown-method rejection, abort checks) over the shared AuthPrompt/AuthEvent interaction, and bedrockAuth.resolve (stored key, AWS_BEARER_TOKEN_BEDROCK, stored or ambient AWS_PROFILE, access keys, ECS task role, web identity token; abort checks around each lookup), tested in packages/ai/test/amazon-bedrock-auth.bend.",
       "source_sha256": "e32611e8d2d4e71ee5d0ba426da60c0aecf42d1bc34ccc3d0d49ce877c621a8c",
       "port_sha256": {
-        "packages/ai/src/providers/amazon-bedrock.bend": "b4089f9b12e1c656a379d38fb024b68d8ffedb67f2cdec328a5b189b36d852db"
+        "packages/ai/src/providers/amazon-bedrock.bend": "cb22ebba05fa97114629c94ff5779e4c7de94530ce58bac1865a3847daf94135"
       }
     },
     "packages/ai/src/providers/amazon-bedrock.models.ts": {
