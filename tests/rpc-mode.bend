@@ -138,7 +138,7 @@ def started(+value: Endpoint) -> IO(Rpc.Owner & Rpc.Handle):
   match value:
     case Endpoint{fixture,_,sink}:
       do IO<Rpc.Owner & Rpc.Handle>:
-        host : Rpc.Host <- RpcHost.create()
+        host : Rpc.Host <- RpcHost.createWith(sink)
         Rpc.start(Faux.sessionOf(fixture),sink,None{},host)
 def linesOf(value: Endpoint) -> Ref.Ref<List<&2,String>>:
   match value:
@@ -485,6 +485,72 @@ def uiExtras(+cwd: String,+agentDir: String) -> IO(Unit):
     pair : Rpc.Owner & Rpc.Handle <- started(value)
     toured(value,pair)
 
+# upstream shutdownRequested: an extension's ctx.shutdown() ends the process
+# after the command's response, or at agent_settled when a run is under way
+# (the fixture host records SHUTDOWN instead of exiting).
+def quit(unit: Unit,call: ExtT.CommandCall) -> IO(Outcome()):
+  match call:
+    case ExtT.CommandCall{_,Ctx.ExtensionCommandContext{context}}:
+      do IO<Outcome()>:
+        Ctx.shutdown(context)
+        return Done{Unit{}}
+def quitter(api: ExtT.ExtensionAPI) -> IO(Outcome()):
+  do IO<Outcome()>:
+    handler : ExtT.CommandHandler() <- Callback.create(~Unit,~ExtT.CommandCall,~Outcome(),~quit,Unit{})
+    Loader.registerCommand(api,"quit",ExtT.CommandOptions{Some{"Quit"},None{},handler})
+def quitOnStart(unit: Unit,call: ExtT.HandlerCall<ExtT.AgentStartEvent>) -> IO(Result<&2,&2,String,Maybe<&2,Unit>>):
+  match call:
+    case ExtT.HandlerCall{_,context}:
+      do IO<Result<&2,&2,String,Maybe<&2,Unit>>>:
+        Ctx.shutdown(context)
+        return Done{None{}}
+def starterQuits(api: ExtT.ExtensionAPI) -> IO(Outcome()):
+  do IO<Outcome()>:
+    handler : ExtT.ExtensionHandler(ExtT.AgentStartEvent,Unit) <- Callback.create(~Unit,~ExtT.HandlerCall<ExtT.AgentStartEvent>,~Result<&2,&2,String,Maybe<&2,Unit>>,~quitOnStart,Unit{})
+    subscribed : Result<&2,&2,String,Loader.Unsubscribe> <- Loader.on(api,ExtT.OnAgentStart{handler})
+    return Result.map(&2,&2,String,Loader.Unsubscribe,Unit,unused => Unit{},subscribed)
+def loadoutOf(+cwd: String,name: String,factory: ExtT.ExtensionAPI -> IO(Outcome())) -> IO(Runtime.Loadout):
+  do IO<Runtime.Loadout>:
+    +runtime : ExtT.ExtensionRuntime() <- Loader.createExtensionRuntime()
+    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{name,factory,False{}}])
+    models : Models.ModelRuntime <- ModelFixture.create(Nil{})
+    runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
+    return Runtime.Loadout{R.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}}
+def indexOfLine(lines: List<&2,String>,+needle: String,+at: Nat) -> Nat:
+  match lines:
+    case Nil{}: 1000000n
+    case +line <> rest: Bool.pick(Nat,String.contains(line,needle),at,indexOfLine(rest,needle,at + 1n))
+def before(+lines: List<&2,String>,+first: String,+second: String) -> Bool:
+  +a = indexOfLine(lines,first,0n)
+  +b = indexOfLine(lines,second,0n)
+  Nat.is_lt(a,b) && Nat.is_lt(b,1000000n)
+def quitCommand(+value: Endpoint,pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
+  match pair:
+    case (owner,+handle):
+      do IO<Unit>:
+        send(handle,"{\"id\":\"q\",\"type\":\"prompt\",\"message\":\"/quit\"}")
+        lines : List<&2,String> <- waitFor(linesOf(value),Contains{"SHUTDOWN"},300n)
+        +captured : List<&2,String> <- cleanup(value,owner)
+        report("RPC shutdown > ctx.shutdown() in a command ends RPC mode after its response",before(captured,"\"id\":\"q\",\"type\":\"response\"","SHUTDOWN"))
+def quitAtSettled(+value: Endpoint,pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
+  match pair:
+    case (owner,+handle):
+      do IO<Unit>:
+        send(handle,"{\"id\":\"s\",\"type\":\"prompt\",\"message\":\"hello\"}")
+        lines : List<&2,String> <- waitFor(linesOf(value),Contains{"SHUTDOWN"},300n)
+        +captured : List<&2,String> <- cleanup(value,owner)
+        report("RPC shutdown > ctx.shutdown() during a run ends RPC mode at agent_settled",before(captured,"\"type\":\"agent_settled\"","SHUTDOWN"))
+def shutdownRequested(+cwd: String,+agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    commands : Runtime.Loadout <- loadoutOf(cwd,"quitter",api => quitter(api))
+    +first : Endpoint <- endpointWith(cwd,agentDir,True{},Nil{},commands)
+    one : Rpc.Owner & Rpc.Handle <- started(first)
+    quitCommand(first,one)
+    starts : Runtime.Loadout <- loadoutOf(cwd,"starter",api => starterQuits(api))
+    +second : Endpoint <- endpointWith(cwd,agentDir,True{},Nil{},starts)
+    two : Rpc.Owner & Rpc.Handle <- started(second)
+    quitAtSettled(second,two)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case +cwd <> +agentDir <> Nil{}:
@@ -498,6 +564,7 @@ def run(args: List<String>) -> IO(Unit):
         commandDialog(cwd,agentDir)
         commandActions(cwd,agentDir)
         uiExtras(cwd,agentDir)
+        shutdownRequested(cwd,agentDir)
     case _: IO.die(Unit,1,"usage: rpc-mode <cwd> <agentDir>")
 def main() -> IO(Unit):
   do IO<Unit>:

@@ -1023,10 +1023,19 @@ def rpcSwitchSession(host: Host(), path: String) -> IO(Result<&2,&2,String,Unit>
   SessionRuntime.switchSession(Services, host, path, None{})
 def rpcRebind(handle: Rpc.Handle, live: AgentSession.AgentSession) -> IO(Unit): Rpc.rebind(handle, live)
 
+# upstream shutdown(): the runtime is disposed (extensions see
+# session_shutdown) and the process exits with 0; output is written unbuffered.
+def rpcShutdown(host: Host(), _: Unit) -> IO(Unit):
+  do IO<Unit>:
+    SessionRuntime.dispose(Services, host)
+    IO.die(Unit, 0, "")
+
 def disposeRpcHost(rpcHost: Rpc.Host) -> IO(Unit):
   match rpcHost:
-    case Rpc.Host{opening, switching, forking}:
+    case Rpc.Host{opening, switching, forking, shutdown, requested}:
       do IO<Unit>:
+        Callback.dispose(Unit,Unit,shutdown)
+        wanted : Bool <- Ref.dispose(Bool,requested)
         Callback.dispose(Maybe<&2,String>,Result<&2,&2,String,Unit>,opening)
         Callback.dispose(String,Result<&2,&2,String,Unit>,switching)
         Callback.dispose(SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,forking)
@@ -1055,7 +1064,9 @@ def rpcSelected(live: AgentSession.AgentSession, assetsRoot: String, +host: Host
         opening : Callback.Callback<Maybe<&2,String>,Result<&2,&2,String,Unit>> <- Callback.create(~Host(),~Maybe<&2,String>,~Result<&2,&2,String,Unit>,~rpcNewSession,host)
         switching : Callback.Callback<String,Result<&2,&2,String,Unit>> <- Callback.create(~Host(),~String,~Result<&2,&2,String,Unit>,~rpcSwitchSession,host)
         forking : Callback.Callback<SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>> <- Callback.create(~Host(),~SessionRuntime.ForkRequest,~Result<&2,&2,String,Maybe<&2,String>>,~forkHosted,host)
-        +rpcHost : Rpc.Host = Rpc.Host{opening, switching, forking}
+        shutdown : Callback.Callback<Unit,Unit> <- Callback.create(~Host(),~Unit,~Unit,~rpcShutdown,host)
+        requested : Ref.Ref<Bool> <- Ref.new(Bool,False{})
+        +rpcHost : Rpc.Host = Rpc.Host{opening, switching, forking, shutdown, requested}
         endpoint : Rpc.Owner & Rpc.Handle <- Rpc.start(live,sink,Some{Path.join(assetsRoot,"packages/coding-agent/src/core/export-html")},rpcHost)
         result : Result<&2,&2,String,Unit> <- rpcServed(host, rpcHost, endpoint)
         Callback.dispose(String,Unit,sink)

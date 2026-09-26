@@ -36,6 +36,8 @@ NAMES = [
     "RPC extension UI > the editor dialog answers with the client's value",
     "RPC extension UI > a dialog timeout answers as cancelled",
     "RPC extension UI > an aborted signal answers without a request",
+    "RPC shutdown > ctx.shutdown() in a command ends RPC mode after its response",
+    "RPC shutdown > ctx.shutdown() during a run ends RPC mode at agent_settled",
 ]
 EXPECTED_FAILURES = set()
 
