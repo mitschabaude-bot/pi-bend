@@ -3290,9 +3290,15 @@
     },
     {
       "source": "packages/coding-agent/test/session-selector-path-delete.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "85351c5f1b8a76aea913059aae9f115e35bee5e8a2e31224ff3d13438e795810"
+      "status": "partial",
+      "ports": [
+        "tests/resume-selector.bend",
+        "tests/resume_selector_check.py",
+        "tests/resume_selector_reference.mts",
+        "tests/parity/scenarios.py"
+      ],
+      "sha256": "85351c5f1b8a76aea913059aae9f115e35bee5e8a2e31224ff3d13438e795810",
+      "notes": "Pinned component comparisons exercise Ctrl+Backspace query editing, Ctrl+D with a query, confirmation entry/cancellation and input interception, subtree activity ordering and active-session protection across path aliases. Async All load/race callback assertions and canonical parent links across aliases remain pending. Native1/native4 mounted terminal comparisons match active-session rejection, cancellation, actual deletion/reopen, preserved drafts and following requests. Confirmation callbacks and asynchronous loader/cancellation contracts still require direct assertions."
     },
     {
       "source": "packages/coding-agent/test/session-selector-rename.test.ts",
@@ -3302,7 +3308,7 @@
         "tests/parity/session_picker_input.py"
       ],
       "sha256": "065648e89d3898fa6a5ebfac26fb606cea21b1aa54b8f189afc1d504943f6791",
-      "notes": "Interactive /resume rename hint, prompt, saved name, existing-name insertion and reopening match pi in terminal parity; the standalone --resume picker still hides the hint and passes its input parity script. The isolated callback assertions are not yet ported as native tests. A selected-title ANSI reset differs."
+      "notes": "Interactive /resume rename hint, prompt, saved name, existing-name insertion and reopening match pi in terminal parity; the standalone --resume picker still hides the hint and passes its input parity script. The isolated callback assertions are not yet ported as native tests."
     },
     {
       "source": "packages/coding-agent/test/session-selector-search.test.ts",

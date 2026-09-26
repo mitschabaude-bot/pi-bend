@@ -1,4 +1,8 @@
 import Base
+import ../modes/interactive/components/keybinding-hints.bend as Hints
+import ../../../runtime/src/stable-sort.bend as StableSort
+import ../core/tools/index.bend as Tools
+import ../../../runtime/src/schema-value.bend as V
 import ../core/session-manager.bend as Session
 import ../core/session-persistence.bend as Persistence
 import ../core/agent-session.bend as AgentSession
@@ -36,7 +40,8 @@ import ../../../tui/src/terminal-image.bend as Image
 type Choice is Data: Pending{} Cancelled{} Chosen{path: String}
 type Scope is Data: Current{} All{}
 type Sort is Data: Threaded{} Recent{} Relevance{}
-type Controls is Data: Controls{sort: Sort,named: Bool,showPath: Bool,deleting: Maybe<&2,String>,status: Maybe<&2,String>}
+type StatusMessage is Data: Info{text: String} Error{text: String}
+type Controls is Data: Controls{sort: Sort,named: Bool,showPath: Bool,deleting: Maybe<&2,String>,status: Maybe<&2,StatusMessage>,active: List<&2,String>}
 type Action is Data:
   Cancel{} Confirm{} SwitchScope{} SwitchSort{} SwitchNamed{} TogglePath{} Delete{} DeleteAlias{} Rename{} MoveUp{} MoveDown{} PageUp{} PageDown{} Edit{data: String}
 type State is Data:
@@ -83,16 +88,6 @@ def hasPath(items: List<&2,Session.SessionInfo>,+path: String) -> Bool:
   match items:
     case Nil{}: False{}
     case info <> rest: Strings.equal(infoPath(info),path) || hasPath(rest,path)
-def rootParent(parent: Maybe<&2,String>,items: List<&2,Session.SessionInfo>) -> Bool:
-  match parent:
-    case None{}: True{}
-    case Some{path}: Bool.not(hasPath(items,path))
-def isRoot(info: Session.SessionInfo,items: List<&2,Session.SessionInfo>) -> Bool:
-  rootParent(parentPath(info),items)
-def roots(items: List<&2,Session.SessionInfo>,+all: List<&2,Session.SessionInfo>) -> List<&2,Session.SessionInfo>:
-  match items:
-    case Nil{}: Nil{}
-    case +info <> +rest: Bool.pick(Unit -> List<&2,Session.SessionInfo>,isRoot(info,all),_ => info <> roots(rest,all),_ => roots(rest,all))(Unit{})
 def matchesParent(found: Maybe<&2,String>,parent: String) -> Bool:
   match found: case None{}: False{} case Some{path}: Strings.equal(path,parent)
 def childOf(info: Session.SessionInfo,parent: String) -> Bool:
@@ -103,22 +98,51 @@ def children(items: List<&2,Session.SessionInfo>,+parent: String) -> List<&2,Ses
     case +info <> +rest: Bool.pick(Unit -> List<&2,Session.SessionInfo>,childOf(info,parent),_ => info <> children(rest,parent),_ => children(rest,parent))(Unit{})
 def visited(paths: List<&2,String>,+path: String) -> Bool:
   match paths: case Nil{}: False{} case first <> rest: Strings.equal(first,path) || visited(rest,path)
-def branch(fuel: Nat,items: List<&2,Session.SessionInfo>,+all: List<&2,Session.SessionInfo>,+seen: List<&2,String>) -> List<&2,Session.SessionInfo>:
-  match fuel items:
+type SessionTreeNode is Data:
+  SessionTreeNode{session: Session.SessionInfo,children: List<&2,SessionTreeNode>,latestActivity: F64}
+def newestNode(left: SessionTreeNode,right: SessionTreeNode) -> Bool:
+  match left right:
+    case SessionTreeNode{_,_,a} SessionTreeNode{_,_,b}: F64.is_ge(a,b)
+def nodeActivity(nodes: List<&2,SessionTreeNode>,latest: F64) -> F64:
+  match nodes:
+    case Nil{}: latest
+    case SessionTreeNode{_,_,stamp} <> rest: nodeActivity(rest,F64.max(latest,stamp))
+def indexedSessions(items: List<&2,Session.SessionInfo>,index: Map<&2,Maybe<&2,Session.SessionInfo>>) -> Map<&2,Maybe<&2,Session.SessionInfo>>:
+  match items:
+    case Nil{}: index
+    case +info <> rest: indexedSessions(rest,Map.set(&2,Maybe<&2,Session.SessionInfo>,index,infoPath(info),Some{info}))
+def mapValue(-A: Data,pair: Map<&2,A> & A) -> A:
+  match pair: case (_,value): value
+def indexedChildren(items: List<&2,Session.SessionInfo>,+index: Map<&2,List<&2,String>>) -> Map<&2,List<&2,String>>:
+  match items:
+    case Nil{}: index
+    case +info <> rest:
+      +next = Maybe.map(&2,String,Map<&2,List<&2,String>>,+parent => Map.set(&2,List<&2,String>,index,parent,infoPath(info) <> mapValue(List<&2,String>,Map.get(List<&2,String>,Nil{},index,parent))),parentPath(info))
+      indexedChildren(rest,Maybe.default(&2,Map<&2,List<&2,String>>,next,index))
+def rankedTree(fuel: Nat,paths: List<&2,String>,+index: Map<&2,Maybe<&2,Session.SessionInfo>>,+edges: Map<&2,List<&2,String>>) -> List<&2,SessionTreeNode>:
+  match fuel paths:
     case Zero{} _: Nil{}
     case _ Nil{}: Nil{}
-    case Succ{+left} +info <> +rest:
-      +path = infoPath(info)
-      Bool.pick(Unit -> List<&2,Session.SessionInfo>,visited(seen,path),_ => branch(left,rest,all,seen),
-        _ => List.append(&2,Session.SessionInfo,info <> branch(left,children(all,path),all,path <> seen),branch(left,rest,all,seen)))(Unit{})
-def unreached(items: List<&2,Session.SessionInfo>,+ordered: List<&2,Session.SessionInfo>) -> List<&2,Session.SessionInfo>:
+    case Succ{+left} +path <> rest:
+      +found = mapValue(Maybe<&2,Session.SessionInfo>,Map.get(Maybe<&2,Session.SessionInfo>,None{},index,path))
+      +children = StableSort.sort(~SessionTreeNode,~newestNode,rankedTree(left,List.reverse(&2,String,mapValue(List<&2,String>,Map.get(List<&2,String>,Nil{},edges,path))),index,edges))
+      +node = Maybe.map(&2,Session.SessionInfo,List<&2,SessionTreeNode>,+info => SessionTreeNode{info,children,nodeActivity(children,Persistence.infoModified(info))} <> Nil{},found)
+      List.append(&2,SessionTreeNode,Maybe.default(&2,List<&2,SessionTreeNode>,node,Nil{}),rankedTree(left,rest,index,edges))
+def rootPaths(items: List<&2,Session.SessionInfo>,+index: Map<&2,Maybe<&2,Session.SessionInfo>>) -> List<&2,String>:
   match items:
     case Nil{}: Nil{}
-    case +info <> +rest: Bool.pick(Unit -> List<&2,Session.SessionInfo>,hasPath(ordered,infoPath(info)),_ => unreached(rest,ordered),_ => info <> unreached(rest,ordered))(Unit{})
+    case +info <> +rest:
+      +parent = Maybe.bind(&2,String,Session.SessionInfo,parentPath(info),path => mapValue(Maybe<&2,Session.SessionInfo>,Map.get(Maybe<&2,Session.SessionInfo>,None{},index,path)))
+      Bool.pick(Unit -> List<&2,String>,Maybe.is_none(&2,Session.SessionInfo,parent),_ => infoPath(info) <> rootPaths(rest,index),_ => rootPaths(rest,index))(Unit{})
+@unsafe def flattenedTree(nodes: List<&2,SessionTreeNode>,reversed: List<&2,Session.SessionInfo>) -> List<&2,Session.SessionInfo>:
+  match nodes:
+    case Nil{}: reversed
+    case SessionTreeNode{info,children,_} <> rest: flattenedTree(rest,flattenedTree(children,info <> reversed))
 def threaded(+items: List<&2,Session.SessionInfo>) -> List<&2,Session.SessionInfo>:
-  +rootItems = roots(items,items)
-  +ordered = branch(List.length(&2,Session.SessionInfo,items) + 1n,rootItems,items,Nil{})
-  List.append(&2,Session.SessionInfo,ordered,unreached(items,ordered))
+  +index = indexedSessions(items,Map.new(&2,Maybe<&2,Session.SessionInfo>))
+  +edges = indexedChildren(items,Map.new(&2,List<&2,String>))
+  +tree = StableSort.sort(~SessionTreeNode,~newestNode,rankedTree(List.length(&2,Session.SessionInfo,items) + 1n,rootPaths(items,index),index,edges))
+  List.reverse(&2,Session.SessionInfo,flattenedTree(tree,Nil{}))
 def sortLabel(sort: Sort) -> String:
   match sort: case Threaded{}: "Threaded" case Recent{}: "Recent" case Relevance{}: "Fuzzy"
 def threadedMode(sort: Sort,query: String) -> Bool:
@@ -128,17 +152,19 @@ def threadedMode(sort: Sort,query: String) -> Bool:
 def nextSort(sort: Sort) -> Sort:
   match sort: case Threaded{}: Recent{} case Recent{}: Relevance{} case Relevance{}: Threaded{}
 def cycledSort(controls: Controls) -> Controls:
-  match controls: case Controls{sort,namedFilter,path,_,_}: Controls{nextSort(sort),namedFilter,path,None{},None{}}
+  match controls: case Controls{sort,namedFilter,path,_,status,active}: Controls{nextSort(sort),namedFilter,path,None{},status,active}
 def toggledNamed(controls: Controls) -> Controls:
-  match controls: case Controls{sort,namedFilter,path,_,_}: Controls{sort,Bool.not(namedFilter),path,None{},None{}}
+  match controls: case Controls{sort,namedFilter,path,_,status,active}: Controls{sort,Bool.not(namedFilter),path,None{},status,active}
 def toggledPath(controls: Controls) -> Controls:
-  match controls: case Controls{sort,namedFilter,path,_,_}: Controls{sort,namedFilter,Bool.not(path),None{},None{}}
+  match controls: case Controls{sort,namedFilter,path,_,status,active}: Controls{sort,namedFilter,Bool.not(path),None{},status,active}
 def confirming(controls: Controls,path: String) -> Controls:
-  match controls: case Controls{sort,namedFilter,showPath,_,_}: Controls{sort,namedFilter,showPath,Some{path},None{}}
+  match controls: case Controls{sort,namedFilter,showPath,_,status,active}: Controls{sort,namedFilter,showPath,Some{path},status,active}
 def cleared(controls: Controls) -> Controls:
-  match controls: case Controls{sort,namedFilter,showPath,_,_}: Controls{sort,namedFilter,showPath,None{},None{}}
-def withStatus(controls: Controls,message: String) -> Controls:
-  match controls: case Controls{sort,namedFilter,showPath,_,_}: Controls{sort,namedFilter,showPath,None{},Some{message}}
+  match controls: case Controls{sort,namedFilter,showPath,_,status,active}: Controls{sort,namedFilter,showPath,None{},status,active}
+def dismissed(controls: Controls) -> Controls:
+  match controls: case Controls{sort,namedFilter,showPath,_,_,active}: Controls{sort,namedFilter,showPath,None{},None{},active}
+def withStatus(controls: Controls,message: StatusMessage) -> Controls:
+  match controls: case Controls{sort,namedFilter,showPath,_,status,active}: Controls{sort,namedFilter,showPath,None{},Some{message},active}
 type SearchToken is Data: Word{text: String} Phrase{text: String}
 type Search is Data: Tokens{tokens: List<&2,SearchToken>,fuzzy: String} Pattern{regex: Regex.Regex} Invalid{message: String}
 def pushed(buffer: String,quoted: Bool,+tokens: List<&2,SearchToken>) -> List<&2,SearchToken>:
@@ -212,7 +238,7 @@ def arranged(+items: List<&2,Session.SessionInfo>,+query: String,+sort: Sort) ->
 
 def visible(state: State) -> List<&2,Session.SessionInfo>:
   match state:
-    case State{current,all,scope,query,_,_,Controls{sort,namedFilter,_,_,_}}:
+    case State{current,all,scope,query,_,_,Controls{sort,namedFilter,_,_,_,_}}:
       +items = scopeSessions(current,all,scope)
       arranged(namedOnly(items,namedFilter),queryText(query),sort)
 
@@ -235,11 +261,11 @@ def age(modified: F64,now: F64) -> String:
             _ => Bool.pick(String,U32.is_lt(minutes,525600),U32.show(U32.div(minutes,43200)) ++ "mo",U32.show(U32.div(minutes,525600)) ++ "y"))(Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
 def infoText(info: Session.SessionInfo) -> String:
   match info:
-    case Session.SessionInfo{_,_,_,name,_,_,_,_,first,_}: safeText(Maybe.default(&2,String,name,first))
+    case Session.SessionInfo{_,_,_,name,_,_,_,_,first,_}: String.trim(safeText(Maybe.default(&2,String,name,first)))
 def infoRight(info: Session.SessionInfo,all: Bool,showPath: Bool,now: F64,+home: String) -> String:
   match info:
-    case Session.SessionInfo{path,_,cwd,_,_,_,modified,count,_,_}:
-      Bool.pick(String,showPath,shortened(path,home) ++ " ","") ++ Bool.pick(String,all,shortened(cwd,home) ++ " ","") ++ Nat.show(count) ++ " " ++ age(modified,now)
+    case Session.SessionInfo{path,_,+cwd,_,_,_,modified,count,_,_}:
+      Bool.pick(String,showPath,shortened(path,home) ++ " ","") ++ Bool.pick(String,all && Bool.not(String.is_empty(cwd)),shortened(cwd,home) ++ " ","") ++ Nat.show(count) ++ " " ++ age(modified,now)
 
 def findPath(items: List<&2,Session.SessionInfo>,+path: String) -> Maybe<&2,Session.SessionInfo>:
   match items:
@@ -256,18 +282,14 @@ def lastInParent(parentPathValue: Maybe<&2,String>,info: Session.SessionInfo,ite
     case Some{parent}: Maybe.default(&2,Bool,Maybe.map(&2,String,Bool,path => Strings.equal(path,infoPath(info)),lastPath(children(items,parent))),True{})
 def isLast(+info: Session.SessionInfo,items: List<&2,Session.SessionInfo>) -> Bool:
   lastInParent(parentPath(info),info,items)
-def hasParent(value: Maybe<&2,String>) -> Bool: Maybe.is_some(&2,String,value)
+def hasVisibleParent(value: Maybe<&2,String>,items: List<&2,Session.SessionInfo>) -> Bool:
+  match value: case None{}: False{} case Some{path}: hasPath(items,path)
 def ancestorFlags(fuel: Nat,parent: Maybe<&2,String>,+items: List<&2,Session.SessionInfo>,+flags: List<&2,Bool>) -> List<&2,Bool>:
   match fuel parent:
     case Zero{} _: flags
     case _ None{}: flags
     case Succ{left} Some{path}:
-      Maybe.default(&2,List<&2,Bool>,Maybe.map(&2,Session.SessionInfo,List<&2,Bool>,+info => ancestorFlags(left,parentPath(info),items,(hasParent(parentPath(info)) && Bool.not(isLast(info,items))) <> flags),findPath(items,path)),flags)
-def rooted(fuel: Nat,parent: Maybe<&2,String>,+items: List<&2,Session.SessionInfo>) -> Bool:
-  match fuel parent:
-    case _ None{}: True{}
-    case Zero{} _: False{}
-    case Succ{left} Some{path}: Maybe.default(&2,Bool,Maybe.map(&2,Session.SessionInfo,Bool,info => rooted(left,parentPath(info),items),findPath(items,path)),False{})
+      Maybe.default(&2,List<&2,Bool>,Maybe.map(&2,Session.SessionInfo,List<&2,Bool>,+info => ancestorFlags(left,parentPath(info),items,(hasVisibleParent(parentPath(info),items) && Bool.not(isLast(info,items))) <> flags),findPath(items,path)),flags)
 def rails(flags: List<&2,Bool>) -> String:
   match flags:
     case Nil{}: ""
@@ -277,7 +299,7 @@ def prefixFor(parent: Maybe<&2,String>,info: Session.SessionInfo,+items: List<&2
   match parent:
     case None{}: ""
     case Some{+path}:
-      Bool.pick(Unit -> String,rooted(List.length(&2,Session.SessionInfo,items),Some{path},items),
+      Bool.pick(Unit -> String,hasPath(items,path),
         _ => rails(ancestorFlags(List.length(&2,Session.SessionInfo,items),Some{path},items,Nil{})) ++ Bool.pick(String,isLast(info,items),"└─ ","├─ "),
         _ => "")(Unit{})
 def treePrefix(+info: Session.SessionInfo,items: List<&2,Session.SessionInfo>) -> String:
@@ -285,53 +307,51 @@ def treePrefix(+info: Session.SessionInfo,items: List<&2,Session.SessionInfo>) -
 
 def selectedBackground(+theme: Theme.Theme,+line: String,selected: Bool) -> String:
   Bool.pick(String,selected,Result.default(&2,&2,Theme.Error,String,Theme.background(theme,"selectedBg",line),line),line)
-def label(+info: Session.SessionInfo,index: Nat,chosen: Nat,all: Bool,thread: Bool,showPath: Bool,items: List<&2,Session.SessionInfo>,+width: Nat,now: F64,home: String,+theme: Theme.Theme) -> String:
+def hasName(info: Session.SessionInfo) -> Bool:
+  match info:
+    case Session.SessionInfo{_,_,_,name,_,_,_,_,_,_}: Bool.not(String.is_empty(Maybe.default(&2,String,name,"")))
+def label(+info: Session.SessionInfo,index: Nat,chosen: Nat,all: Bool,thread: Bool,showPath: Bool,items: List<&2,Session.SessionInfo>,+width: Nat,now: F64,home: String,+theme: Theme.Theme,+deleting: Maybe<&2,String>,active: List<&2,String>) -> String:
   +prefix = Bool.pick(String,thread,treePrefix(info,items),"")
   +right = infoRight(info,all,showPath,now,home)
   +available = width - 2n - Utils.visibleWidth(prefix) - Utils.visibleWidth(right) - 2n
   +selected = Nat.is_eq(index,chosen)
   +title = Utils.truncateToWidth(infoText(info),Nat.max(10n,available),"…",False{})
-  +namedTitle = Bool.pick(String,named(info) && Bool.not(selected),Theme.fg(theme,"warning",title),title)
+  +confirming = matchesParent(deleting,infoPath(info))
+  +current = visited(active,infoPath(info))
+  +namedTitle = Bool.pick(String,confirming,Theme.fg(theme,"error",title),Bool.pick(String,current,Theme.fg(theme,"accent",title),Bool.pick(String,hasName(info),Theme.fg(theme,"warning",title),title)))
   +styledTitle = Bool.pick(String,selected,Theme.bold(namedTitle),namedTitle)
-  +left = Bool.pick(String,selected,Theme.fg(theme,"accent","› "),"  ") ++ Bool.pick(String,String.is_empty(prefix),"",Theme.fg(theme,"dim",prefix)) ++ styledTitle
-  +line = left ++ Utils.spaces(Nat.max(1n,width - Utils.visibleWidth(left) - Utils.visibleWidth(right)),"") ++ Theme.fg(theme,"dim",right)
-  Utils.truncateToWidth(selectedBackground(theme,line,selected),width,"…",False{})
+  +left = Bool.pick(String,selected,Theme.fg(theme,"accent","› "),"  ") ++ Theme.fg(theme,"dim",prefix) ++ styledTitle
+  +line = left ++ Utils.spaces(Nat.max(1n,width - Utils.visibleWidth(left) - Utils.visibleWidth(right)),"") ++ Theme.fg(theme,Bool.pick(String,confirming,"error","dim"),right)
+  Utils.truncateToWidth(selectedBackground(theme,line,selected),width,"...",False{})
 
-def listLines(items: List<&2,Session.SessionInfo>,+index: Nat,+chosen: Nat,+all: Bool,+thread: Bool,+showPath: Bool,+allItems: List<&2,Session.SessionInfo>,+width: Nat,+now: F64,+home: String,+theme: Theme.Theme,count: Nat,reversed: List<&2,String>) -> List<&2,String>:
+def listLines(items: List<&2,Session.SessionInfo>,+index: Nat,+chosen: Nat,+all: Bool,+thread: Bool,+showPath: Bool,+allItems: List<&2,Session.SessionInfo>,+width: Nat,+now: F64,+home: String,+theme: Theme.Theme,+deleting: Maybe<&2,String>,+active: List<&2,String>,count: Nat,reversed: List<&2,String>) -> List<&2,String>:
   match items count:
     case _ Zero{}: List.reverse(&2,String,reversed)
     case Nil{} _: List.reverse(&2,String,reversed)
-    case +info <> rest Succ{left}: listLines(rest,index + 1n,chosen,all,thread,showPath,allItems,width,now,home,theme,left,label(info,index,chosen,all,thread,showPath,allItems,width,now,home,theme) <> reversed)
+    case +info <> rest Succ{left}: listLines(rest,index + 1n,chosen,all,thread,showPath,allItems,width,now,home,theme,deleting,active,left,label(info,index,chosen,all,thread,showPath,allItems,width,now,home,theme,deleting,active) <> reversed)
 
 def windowStart(items: List<&2,Session.SessionInfo>,selected: Nat) -> Nat:
   Nat.min(selected - 5n,List.length(&2,Session.SessionInfo,items) - 10n)
-def formattedFirst(keys: List<&2,Keys.KeyId>,name: String) -> String:
-  match keys:
-    case Nil{}: name
-    case key <> _: Keys.formatKeyId(key)
-def firstKey(bindings: Bindings.KeybindingsManager,+name: String) -> String:
-  formattedFirst(Bindings.getKeys(bindings,name),name)
-def keyHint(+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,key: String,description: String) -> String:
-  Theme.fg(theme,"dim",firstKey(bindings,key)) ++ Theme.fg(theme,"muted"," " ++ description)
 def scopeHint(+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager) -> String:
-  keyHint(theme,bindings,"tui.input.tab","scope") ++ Theme.fg(theme,"muted"," · re:<pattern> regex · \"phrase\" exact")
+  Hints.keyHint(theme,bindings,"tui.input.tab","scope") ++ Theme.fg(theme,"muted"," · ") ++ Theme.fg(theme,"muted","re:<pattern> regex · \"phrase\" exact")
 def normalHint(+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,showPath: Bool,canRename: Bool) -> String:
   +separator = Theme.fg(theme,"muted"," · ")
-  keyHint(theme,bindings,"app.session.toggleSort","sort") ++ separator ++
-  keyHint(theme,bindings,"app.session.toggleNamedFilter","named") ++ separator ++
-  keyHint(theme,bindings,"app.session.delete","delete") ++ separator ++
-  keyHint(theme,bindings,"app.session.togglePath","path" ++ Bool.pick(String,showPath," (on)"," (off)")) ++
-  Bool.pick(String,canRename,separator ++ keyHint(theme,bindings,"app.session.rename","rename"),"")
-def deleteHint(+bindings: Bindings.KeybindingsManager) -> String:
-  firstKey(bindings,"tui.select.confirm") ++ " confirm · " ++ firstKey(bindings,"tui.select.cancel") ++ " cancel"
-def hintMessage(message: Maybe<&2,String>,+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,showPath: Bool,canRename: Bool) -> String & String:
+  Hints.keyHint(theme,bindings,"app.session.toggleSort","sort") ++ separator ++
+  Hints.keyHint(theme,bindings,"app.session.toggleNamedFilter","named") ++ separator ++
+  Hints.keyHint(theme,bindings,"app.session.delete","delete") ++ separator ++
+  Hints.keyHint(theme,bindings,"app.session.togglePath","path" ++ Bool.pick(String,showPath," (on)"," (off)")) ++
+  Bool.pick(String,canRename,separator ++ Hints.keyHint(theme,bindings,"app.session.rename","rename"),"")
+def deleteHint(+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager) -> String:
+  Hints.keyHint(theme,bindings,"tui.select.confirm","confirm") ++ " · " ++ Hints.keyHint(theme,bindings,"tui.select.cancel","cancel")
+def hintMessage(message: Maybe<&2,StatusMessage>,+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,showPath: Bool,canRename: Bool) -> String & String:
   match message:
-    case Some{value}: (Theme.fg(theme,"accent",value),"")
+    case Some{Info{value}}: (Theme.fg(theme,"accent",value),"")
+    case Some{Error{value}}: (Theme.fg(theme,"error",value),"")
     case None{}: (scopeHint(theme,bindings),normalHint(theme,bindings,showPath,canRename))
-def hintLines(deleting: Maybe<&2,String>,status: Maybe<&2,String>,problem: Maybe<&2,String>,theme: Theme.Theme,bindings: Bindings.KeybindingsManager,showPath: Bool,canRename: Bool) -> String & String:
+def hintLines(deleting: Maybe<&2,String>,status: Maybe<&2,StatusMessage>,problem: Maybe<&2,String>,+theme: Theme.Theme,bindings: Bindings.KeybindingsManager,showPath: Bool,canRename: Bool) -> String & String:
   match deleting:
-    case Some{_}: (Theme.fg(theme,"error","Delete session? " ++ deleteHint(bindings)),"")
-    case None{}: hintMessage(Maybe.or(&2,String,problem,status),theme,bindings,showPath,canRename)
+    case Some{_}: (Theme.fg(theme,"error","Delete session? " ++ deleteHint(theme,bindings)),"")
+    case None{}: hintMessage(Maybe.or(&2,StatusMessage,Maybe.map(&2,String,StatusMessage,text => Error{text},problem),status),theme,bindings,showPath,canRename)
 def countHint(count: Maybe<&2,Count>) -> Maybe<&2,String>:
   match count:
     case None{}: None{}
@@ -340,10 +360,12 @@ def loadingHint(scope: Scope,loads: Loads) -> Maybe<&2,String>:
   match scope loads:
     case Current{} Loads{current,_}: countHint(current)
     case All{} Loads{_,all}: countHint(all)
-def emptyRow(+all: Bool,namedFilter: Bool,+theme: Theme.Theme) -> List<&2,String>:
-  [Theme.fg(theme,"muted",Bool.pick(String,namedFilter,
-    Bool.pick(String,all,"  No named sessions found. Press Ctrl+N to show all.","  No named sessions in current folder. Press Ctrl+N to show all, or Tab to view all."),
-    Bool.pick(String,all,"  No sessions found","  No sessions in current folder. Press Tab to view all.")))]
+def emptyRow(+all: Bool,namedFilter: Bool,+theme: Theme.Theme,bindings: Bindings.KeybindingsManager,width: Nat) -> List<&2,String>:
+  +toggle = Hints.keyText(bindings,"app.session.toggleNamedFilter")
+  +message = Bool.pick(String,namedFilter,
+    Bool.pick(String,all,"  No named sessions found. Press " ++ toggle ++ " to show all.","  No named sessions in current folder. Press " ++ toggle ++ " to show all, or Tab to view all."),
+    Bool.pick(String,all,"  No sessions found","  No sessions in current folder. Press Tab to view all."))
+  [Theme.fg(theme,"muted",Utils.truncateToWidth(message,width,"…",False{}))]
 def rule(width: Nat) -> String:
   match width:
     case Zero{}: ""
@@ -369,9 +391,9 @@ def hintRows(hints: String & String,+width: Nat) -> List<&2,String>:
     case (first,second): [Utils.truncateToWidth(first,width,"…",False{}),Utils.truncateToWidth(second,width,"…",False{})]
 def renderedQuery(pair: SearchInput.Input & List<&2,String>) -> List<&2,String>:
   match pair: case (_,lines): lines
-def renderState(+state: State,+width: Nat,bindings: Bindings.KeybindingsManager,+theme: Theme.Theme,loads: Loads,now: F64,home: String,canRename: Bool) -> IO(List<&2,String>):
+def renderState(+state: State,+width: Nat,+bindings: Bindings.KeybindingsManager,+theme: Theme.Theme,loads: Loads,now: F64,home: String,canRename: Bool) -> IO(List<&2,String>):
   match state:
-    case State{_,_,scope,query,index,_,Controls{sort,namedFilter,showPath,deleting,status}}:
+    case State{_,_,scope,query,index,_,Controls{sort,namedFilter,showPath,+deleting,status,+active}}:
       +items = visible(state)
       +all = isAll(scope)
       +start = windowStart(items,index)
@@ -379,8 +401,8 @@ def renderState(+state: State,+width: Nat,bindings: Bindings.KeybindingsManager,
       +text = queryText(query)
       +thread = threadedMode(sort,text)
       +loading = loadingHint(scope,loads)
-      +body = Bool.pick(List<&2,String>,List.is_empty(&2,Session.SessionInfo,items),emptyRow(all,namedFilter,theme),
-        List.append(&2,String,listLines(List.drop(&2,Session.SessionInfo,items,start),start,index,all,thread,showPath,items,width,now,home,theme,10n,Nil{}),scrollLine(start,Nat.min(total - start,10n),total,index,theme)))
+      +body = Bool.pick(List<&2,String>,List.is_empty(&2,Session.SessionInfo,items),emptyRow(all,namedFilter,theme,bindings,width),
+        List.append(&2,String,listLines(List.drop(&2,Session.SessionInfo,items,start),start,index,all,thread,showPath,items,width,now,home,theme,deleting,active,10n,Nil{}),scrollLine(start,Nat.min(total - start,10n),total,index,theme)))
       do IO<List<&2,String>>:
         input : SearchInput.Input & List<&2,String> <- SearchInput.render(query,width)
         return List.concat(&2,String,[["",Theme.fg(theme,"accent",rule(width)),"",heading(scope,sort,namedFilter,loading,width,theme)],
@@ -433,21 +455,39 @@ def advanced(+index: Nat,count: Nat,down: Bool) -> Nat:
 def selected(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,scope: Scope,query: SearchInput.Input,index: Nat,choice: Choice,controls: Controls) -> State & Bool:
   match choice:
     case Pending{}: (revised(current,all,scope,query,index,Pending{},controls),False{})
-    case value: (revised(current,all,scope,query,index,value,controls),True{})
+    case value: (revised(current,all,scope,query,index,value,dismissed(controls)),True{})
+def deleteControls(+controls: Controls,+path: String) -> Controls:
+  match controls:
+    case Controls{_,_,_,_,_,active}: Bool.pick(Controls,visited(active,path),withStatus(controls,Error{"Cannot delete the currently active session"}),confirming(controls,path))
 def deletingSelected(+current: List<&2,Session.SessionInfo>,+all: List<&2,Session.SessionInfo>,+scope: Scope,+query: SearchInput.Input,+index: Nat,+controls: Controls) -> State & Bool:
   +items = visible(revised(current,all,scope,query,index,Pending{},controls))
-  +next = Maybe.default(&2,Controls,Maybe.map(&2,Session.SessionInfo,Controls,info => confirming(controls,infoPath(info)),List.get(&2,Session.SessionInfo,items,index)),controls)
+  +next = Maybe.default(&2,Controls,Maybe.map(&2,Session.SessionInfo,Controls,info => deleteControls(controls,infoPath(info)),List.get(&2,Session.SessionInfo,items,index)),controls)
   (revised(current,all,scope,query,index,Pending{},next),False{})
 
+def clamped(+state: State) -> State:
+  match state:
+    case State{current,all,scope,query,index,choice,controls}:
+      State{current,all,scope,query,Nat.min(index,List.length(&2,Session.SessionInfo,visible(state)) - 1n),choice,controls}
+def findIndex(items: List<&2,Session.SessionInfo>,+path: String,+index: Nat) -> Maybe<&2,Nat>:
+  match items:
+    case Nil{}: None{}
+    case info <> rest: Bool.pick(Maybe<&2,Nat>,Strings.equal(infoPath(info),path),Some{index},findIndex(rest,path,index + 1n))
+def switchedScope(+state: State) -> State:
+  match state:
+    case State{+current,+all,+scope,+query,+index,+choice,+controls}:
+      +previous = Maybe.map(&2,Session.SessionInfo,String,infoPath,List.get(&2,Session.SessionInfo,visible(state),index))
+      +next = {State{current,all,toggled(scope),query,0n,choice,controls}: State}
+      +position = Maybe.default(&2,Nat,Maybe.bind(&2,String,Nat,previous,path => findIndex(visible(next),path,0n)),0n)
+      State{current,all,toggled(scope),query,position,choice,controls}
 def pending(+current: List<&2,Session.SessionInfo>,+all: List<&2,Session.SessionInfo>,+scope: Scope,+query: SearchInput.Input,+index: Nat,+controls: Controls,action: Action) -> State & Bool:
   match action:
-    case Cancel{}: (revised(current,all,scope,query,index,Cancelled{},controls),True{})
+    case Cancel{}: (revised(current,all,scope,query,index,Cancelled{},dismissed(controls)),True{})
     case Confirm{}:
       +items = visible(revised(current,all,scope,query,index,Pending{},controls))
       selected(current,all,scope,query,index,chosen(items,index),controls)
-    case SwitchScope{}: (revised(current,all,toggled(scope),query,0n,Pending{},controls),False{})
-    case SwitchSort{}: (revised(current,all,scope,query,0n,Pending{},cycledSort(controls)),False{})
-    case SwitchNamed{}: (revised(current,all,scope,query,0n,Pending{},toggledNamed(controls)),False{})
+    case SwitchScope{}: (switchedScope(revised(current,all,scope,query,index,Pending{},controls)),False{})
+    case SwitchSort{}: (clamped(revised(current,all,scope,query,index,Pending{},cycledSort(controls))),False{})
+    case SwitchNamed{}: (clamped(revised(current,all,scope,query,index,Pending{},toggledNamed(controls))),False{})
     case TogglePath{}: (revised(current,all,scope,query,index,Pending{},toggledPath(controls)),False{})
     case Delete{}: deletingSelected(current,all,scope,query,index,controls)
     case DeleteAlias{}:
@@ -471,13 +511,13 @@ def duringConfirmation(current: List<&2,Session.SessionInfo>,all: List<&2,Sessio
     case _: (revised(current,all,scope,query,index,Pending{},controls),False{})
 def transition(state: State,data: String,bindings: Bindings.KeybindingsManager) -> State & Bool:
   match state:
-    case State{current,all,scope,query,index,Pending{},Controls{sort,namedFilter,showPath,Some{path},status}}:
-      duringConfirmation(current,all,scope,query,index,Controls{sort,namedFilter,showPath,Some{path},status},action(bindings,data))
+    case State{current,all,scope,query,index,Pending{},Controls{sort,namedFilter,showPath,Some{path},status,active}}:
+      duringConfirmation(current,all,scope,query,index,Controls{sort,namedFilter,showPath,Some{path},status,active},action(bindings,data))
     case State{current,all,scope,query,index,Pending{},controls}: pending(current,all,scope,query,index,cleared(controls),action(bindings,data))
     case state: (state,False{})
 def editable(state: State,selected: Action) -> Bool:
   match state selected:
-    case State{_,_,_,_,_,Pending{},Controls{_,_,_,Some{_},_}} _: False{}
+    case State{_,_,_,_,_,Pending{},Controls{_,_,_,Some{_},_,_}} _: False{}
     case State{_,_,_,_,_,Pending{},_} Edit{_}: True{}
     case State{_,_,_,query,_,Pending{},_} DeleteAlias{}: Bool.not(String.is_empty(queryText(query)))
     case _ _: False{}
@@ -545,7 +585,7 @@ def afterTrash(+path: String,completion: Child.Completed) -> IO(Result<&2,&2,Str
 def removeSession(+path: String) -> IO(Result<&2,&2,String,String>):
   do IO<Result<&2,&2,String,String>>:
     environment : List<String> <- IO.environment()
-    completion : Child.Completed <- Child.spawnSync("gio",["trash",path],"/",environment,Nil{})
+    completion : Child.Completed <- Child.spawnSync("trash",[path],"/",environment,Nil{})
     outcome : Result<&2,&2,String,String> <- afterTrash(path,completion)
     return outcome
 def removed(state: State,+path: String,result: Result<&2,&2,String,String>) -> State:
@@ -554,14 +594,14 @@ def removed(state: State,+path: String,result: Result<&2,&2,String,String>) -> S
       +newCurrent = withoutPath(current,path)
       +newAll = withoutPath(all,path)
       +remaining = visible(revised(newCurrent,newAll,scope,query,index,choice,controls))
-      revised(newCurrent,newAll,scope,query,Nat.min(index,List.length(&2,Session.SessionInfo,remaining) - 1n),choice,withStatus(controls,message))
+      revised(newCurrent,newAll,scope,query,Nat.min(index,List.length(&2,Session.SessionInfo,remaining) - 1n),choice,withStatus(controls,Info{message}))
     case State{current,all,scope,query,index,choice,controls} Fail{message}:
-      revised(current,all,scope,query,index,choice,withStatus(controls,message))
+      revised(current,all,scope,query,index,choice,withStatus(controls,Error{"Failed to delete: " ++ message}))
 def isConfirm(action: Action) -> Bool:
   match action: case Confirm{}: True{} case _: False{}
 def deleteFor(state: Ref.Ref<State>,value: State,data: String,bindings: Bindings.KeybindingsManager) -> IO(Bool):
   match value:
-    case State{_,_,_,_,_,Pending{},Controls{_,_,_,Some{+path},_}}:
+    case State{_,_,_,_,_,Pending{},Controls{_,_,_,Some{+path},_,_}}:
       Bool.pick(Unit -> IO(Bool),isConfirm(action(bindings,data)),_ => do IO<Bool>:
         result : Result<&2,&2,String,String> <- removeSession(path)
         next : Unit <- Ref.modify(State,Unit,state,current => (removed(current,path,result),Unit{}))
@@ -606,7 +646,7 @@ def made(state: Ref.Ref<State>,loads: Ref.Ref<Loads>,words: Ref.Ref<Words.Source
   Owner{state,loads,words,stop,allRequested,Component.Component{Component.ComponentId{1n},render,Some{input},None{},invalidate,Some{focus},False{}},render,input,invalidate,focus}
 def create(current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>,+bindings: Bindings.KeybindingsManager,theme: Theme.Theme,words: Words.Source) -> IO(Owner):
   do IO<Owner>:
-    +state : Ref.Ref<State> <- Ref.new(State,State{current,all,Current{},newQuery(),0n,Pending{},Controls{Threaded{},False{},False{},None{},None{}}})
+    +state : Ref.Ref<State> <- Ref.new(State,State{current,all,Current{},newQuery(),0n,Pending{},Controls{Threaded{},False{},False{},None{},None{},Nil{}}})
     +loads : Ref.Ref<Loads> <- Ref.new(Loads,Loads{Some{Count{0n,0n}},Some{Count{0n,0n}}})
     +wordRef : Ref.Ref<Words.Source> <- Ref.new(Words.Source,words)
     +stop : Deferred.Deferred<Unit> <- Deferred.new(Unit)
@@ -650,10 +690,6 @@ def contextAssets(context: LoadContext) -> String:
   match context: case LoadContext{_,_,_,_,assets}: assets
 type ProgressInput is Data:
   ProgressInput{state: Ref.Ref<State>,loads: Ref.Ref<Loads>,request: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,scope: Scope}
-def findIndex(items: List<&2,Session.SessionInfo>,+path: String,+index: Nat) -> Maybe<&2,Nat>:
-  match items:
-    case Nil{}: None{}
-    case info <> rest: Bool.pick(Maybe<&2,Nat>,Strings.equal(infoPath(info),path),Some{index},findIndex(rest,path,index + 1n))
 def retainedPrevious(previous: Maybe<&2,Session.SessionInfo>,+next: State,position: Nat) -> Nat:
   match previous:
     case None{}: 0n
@@ -814,7 +850,7 @@ def selectSession(cwd: String,+sessionDir: Maybe<&2,String>,+agentDir: String,se
 # terminal process. Both entry points share filtering, ordering and keybindings.
 type Modal is Data: Closed{} Open{state: State} Renaming{state: State,target: Session.SessionInfo,input: SearchInput.Input}
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,ids: Uuid.Generator}
+  Host{modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,ids: Uuid.Generator,session: Ref.Ref<AgentSession.AgentSession>}
 type HostOwner is Type:
   HostOwner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
 def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,+width: Nat) -> IO(List<&2,String>):
@@ -833,7 +869,7 @@ def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindi
         return List.concat(&2,String,[["",Theme.fg(selected,"accent",rule(width)),""," " ++ Theme.bold("Rename Session"),""],renderedQuery(rendered),[""," " ++ Theme.fg(selected,"muted","enter to save · escape/ctrl+c to cancel"),"",Theme.fg(selected,"accent",rule(width))]])
 def drawModal(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
-    case Host{+modal,editor,bindings,theme,_,_,_}:
+    case Host{+modal,editor,bindings,theme,_,_,_,_}:
       do IO<List<&2,String>>:
         current : Modal <- Ref.read(Modal,modal)
         drawModalCurrent(current,editor,bindings,theme,width)
@@ -915,7 +951,7 @@ def renamedModal(ids: Uuid.Generator,modal: Ref.Ref<Modal>,state: State,target: 
   renamedModalAction(ids,modal,state,target,input,words,bindings,data,action(bindings,data))
 def receivedModalOpenAction(modal: Ref.Ref<Modal>,+bindings: Bindings.KeybindingsManager,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,+state: State,+data: String,selected: Action) -> IO(Unit):
   match state selected:
-    case State{_,_,_,_,_,Pending{},Controls{_,_,_,Some{+path},_}} _:
+    case State{_,_,_,_,_,Pending{},Controls{_,_,_,Some{+path},_,_}} _:
       modalDeleteAction(modal,bindings,words,chosen,state,path,data,selected)
     case state Rename{}: beginRename(modal,state)
     case _ _: modalTransition(modal,bindings,words,chosen,state,data)
@@ -928,7 +964,7 @@ def receivedModalCurrent(ids: Uuid.Generator,current: Modal,modal: Ref.Ref<Modal
     case Renaming{state,target,input}: renamedModal(ids,modal,state,target,input,words,bindings,data)
 def receivedModal(host: Host,data: String) -> IO(Unit):
   match host:
-    case Host{+modal,editor,bindings,_,words,handler,ids}:
+    case Host{+modal,editor,bindings,_,words,handler,ids,_}:
       do IO<Unit>:
         current : Modal <- Ref.read(Modal,modal)
         receivedModalCurrent(ids,current,modal,editor,bindings,words,handler,data)
@@ -938,19 +974,19 @@ def mouseCurrent(current: Modal,mouse: Maybe<&2,Callback.Callback<Ui.TuiMouseEve
     case _ _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
 def modalMouse(host: Host,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match host:
-    case Host{+modal,Component.Component{_,_,_,mouse,_,_,_},_,_,_,_,_}:
+    case Host{+modal,Component.Component{_,_,_,mouse,_,_,_},_,_,_,_,_,_}:
       do IO<Maybe<&2,Component.MouseResponse>>:
         current : Modal <- Ref.read(Modal,modal)
         mouseCurrent(current,mouse,event)
 def modalInvalidate(host: Host,_: Unit) -> IO(Unit):
-  match host: case Host{_,editor,_,_,_,_,_}: Component.invalidate(editor)
+  match host: case Host{_,editor,_,_,_,_,_,_}: Component.invalidate(editor)
 def modalFocus(host: Host,value: Bool) -> IO(Unit):
-  match host: case Host{_,editor,_,_,_,_,_}: Component.setFocused(editor,value)
-def createHost(ids: Uuid.Generator,+editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Words.Source,chosen: Callback.Callback<String,Unit>) -> IO(HostOwner):
+  match host: case Host{_,editor,_,_,_,_,_,_}: Component.setFocused(editor,value)
+def createHost(ids: Uuid.Generator,+editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Words.Source,chosen: Callback.Callback<String,Unit>,session: Ref.Ref<AgentSession.AgentSession>) -> IO(HostOwner):
   do IO<HostOwner>:
     modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
     wordRef : Ref.Ref<Words.Source> <- Ref.new(Words.Source,words)
-    +host : Host <- IO.pure(Host,Host{modal,editor,bindings,theme,wordRef,chosen,ids})
+    +host : Host <- IO.pure(Host,Host{modal,editor,bindings,theme,wordRef,chosen,ids,session})
     +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~drawModal,host)
     +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receivedModal,host)
     +mouse : Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Host,~Ui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~modalMouse,host)
@@ -960,12 +996,36 @@ def createHost(ids: Uuid.Generator,+editor: Component.Component,bindings: Bindin
     return HostOwner{host,component,render,input,mouse,invalidate,focus}
 def borrowHost(owner: HostOwner) -> HostOwner & Host & Component.Component:
   match owner: case HostOwner{+host,+component,render,input,mouse,invalidate,focus}: (HostOwner{host,component,render,input,mouse,invalidate,focus},host,component)
-def openHost(host: Host,current: List<&2,Session.SessionInfo>,all: List<&2,Session.SessionInfo>) -> IO(Unit):
+def sameFile(+path: String,+canonical: String) -> IO(Bool):
+  do IO<Bool>:
+    result : Result<&2,&2,FS.Error,String> <- FS.realpath(path)
+    return String.eq(Result.default(&2,&2,FS.Error,String,result,Path.normalize(path)),canonical)
+def activePaths(items: List<&2,Session.SessionInfo>,+canonical: String,+reversed: List<&2,String>) -> IO(List<&2,String>):
+  match items:
+    case Nil{}: IO.pure(List<&2,String>,reversed)
+    case info <> rest:
+      do IO<List<&2,String>>:
+        +path : String = infoPath(info)
+        same : Bool <- sameFile(path,canonical)
+        activePaths(rest,canonical,Bool.pick(List<&2,String>,same,path <> reversed,reversed))
+def protectedPaths(items: List<&2,Session.SessionInfo>,path: Maybe<&2,String>) -> IO(List<&2,String>):
+  match path:
+    case None{}: IO.pure(List<&2,String>,Nil{})
+    case Some{+file}:
+      do IO<List<&2,String>>:
+        canonical : Result<&2,&2,FS.Error,String> <- FS.realpath(file)
+        activePaths(items,Result.default(&2,&2,FS.Error,String,canonical,Path.normalize(file)),Nil{})
+def openHost(host: Host,+current: List<&2,Session.SessionInfo>,+all: List<&2,Session.SessionInfo>) -> IO(Unit):
   match host:
-    case Host{modal,_,_,_,_,_,_}: Ref.write(Modal,modal,Open{State{current,all,Current{},newQuery(),0n,Pending{},Controls{Threaded{},False{},False{},None{},None{}}}})
+    case Host{modal,_,_,_,_,_,_,session}:
+      do IO<Unit>:
+        live : AgentSession.AgentSession <- Ref.read(AgentSession.AgentSession,session)
+        stored : AgentSession.Session() <- AgentSession.sessionOf(live)
+        active : List<&2,String> <- protectedPaths(List.append(&2,Session.SessionInfo,current,all),Persistence.getSessionFile(Unit,Tools.ToolDetails,V.Value,stored))
+        Ref.write(Modal,modal,Open{State{current,all,Current{},newQuery(),0n,Pending{},Controls{Threaded{},False{},False{},None{},None{},active}}})
 def disposeHost(owner: HostOwner) -> IO(Unit):
   match owner:
-    case HostOwner{Host{modal,_,_,_,words,_,_},_,render,input,mouse,invalidate,focus}:
+    case HostOwner{Host{modal,_,_,_,words,_,_,_},_,render,input,mouse,invalidate,focus}:
       do IO<Unit>:
         discarded : Modal <- Ref.dispose(Modal,modal)
         oldWords : Words.Source <- Ref.dispose(Words.Source,words)

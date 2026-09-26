@@ -2634,3 +2634,9 @@ Codex: Reserving tree-selector.bend and tree fixtures/parity cases for indexed t
 Codex: Tool descriptions pass 71 component cases on Bun/native1/native4, including hidden assistant lookup, ranges/paths/commands/custom args and full copying. The isolated CLI is building for mounted tool/draft/following-request parity; reservations unchanged.
 
 Codex: Tool descriptions validated: 71 cases pass Bun/native1/native4; native1/native4 mounted read/bash/filter/copy/draft/following-request flow MATCH. Releasing tree-selector and its fixtures/parity scenarios; binary build/pi-cli-codex-tree-tools.
+
+Codex: Reserving cli/session-picker.bend, interactive/run.bend and new session picker fixtures/parity cases. Reviewing resume ordering, selected-title rendering and active-session deletion before changing them.
+
+Codex: Resume component comparisons pass 15 pinned cases on Bun (subtree activity, retained selection, filters/scopes, ANSI frames and active-session aliases). Native fixture and isolated CLI builds are running for actual deletion/reopen/draft parity; reservations unchanged.
+
+Codex: Resume ordering/current/delete styling and active-session protection validated: 16 cases pass Bun/native1/native4; native1/native4 mounted rejection/cancel/delete/reopen/draft/following-request flow MATCH. Rename, existing-name insertion and session shortcuts MATCH. Releasing cli/session-picker.bend and run.bend; next UX gap is eager interactive resume loading. Binary: build/pi-cli-codex-resume-controls.

@@ -2719,7 +2719,7 @@ def runTrustHosted(borrowed: TrustPicker.Owner & TrustPicker.Host & Component.Co
         Ref.write(Maybe<&2,TrustPicker.Host>,trustSelectorRefOf(contextInteraction(context)),Some{host})
         current : Session.AgentSession <- Ref.read(Session.AgentSession,contextSession(context))
         ids : Uuid.Generator <- Session.idGenerator(current)
-        picker : SessionPicker.HostOwner <- SessionPicker.createHost(ids,component,contextBindings(context),contextTheme(context),words,resumeChosen)
+        picker : SessionPicker.HostOwner <- SessionPicker.createHost(ids,component,contextBindings(context),contextTheme(context),words,resumeChosen,contextSession(context))
         result : Result<&2,&2,Error,Unit> <- runPickerHosted(SessionPicker.borrowHost(picker),settings,retained,tree,live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,treeChosen,modelChosen,resumeChosen)
         TrustPicker.disposeHost(trust)
         Callback.dispose(Trust.ProjectTrustOption,Unit,choice)
