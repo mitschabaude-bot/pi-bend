@@ -417,15 +417,13 @@ def strip_times(value):
 def normalize(case, value):
     mode = case['mode']
     if mode == 'request':
-        if value is None:
-            return None
+        if value is None or 'thrown' in value:
+            return value
         headers = {k: v for k, v in value.get('headers', {}).items() if not k.startswith('x-stainless-')}
         body = json.loads(value['body']) if value.get('body') else None
         return {'url': value['url'], 'method': value['method'].lower(), 'headers': dict(sorted(headers.items())), 'body': json.dumps(body, separators=(',', ':'), ensure_ascii=False)}
     if mode == 'response':
         return strip_times(value)
-    if 'thrown' in value:
-        return {'error': value['thrown']}
     return json.dumps(value, separators=(',', ':'), ensure_ascii=False)
 
 

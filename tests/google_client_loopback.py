@@ -77,7 +77,7 @@ def invoke(command, base, output, code=0, mode=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--toolchain", default="/tmp/pi-bend-theme-controller/build/theme-toolchain/bend2/main.ts")
+    parser.add_argument("--toolchain", default=str(ROOT / "build/bend-native-toolchain/bend2/main.ts"))
     parser.add_argument("--backend", choices=("bun", "native", "all"), default="all")
     args = parser.parse_args()
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=UPSTREAM, text=True).strip()
@@ -86,7 +86,6 @@ def main():
     sources = {
         "client": ROOT / "packages/ai/test/google-generative-ai-client.bend",
         "provider": ROOT / "packages/coding-agent/test/google-provider-loopback.bend",
-        "signed": ROOT / "packages/ai/test/google-request-value.bend",
         "catalog": ROOT / "packages/ai/test/google-catalog.bend",
     }
     with tempfile.TemporaryDirectory(prefix="google-loopback-") as directory:
@@ -102,13 +101,6 @@ def main():
                 commands.extend([(kind, "native1", [str(output), "--threads", "1"]), (kind, "native4", [str(output), "--threads", "4"])])
 
         for kind, name, command in commands:
-            if kind == "signed":
-                for mode in ("signed", "strict", "strict-prefer", "legacy-image", "modern-image", "system-update"):
-                    result = subprocess.run([*command, mode], capture_output=True, text=True, timeout=30, check=True)
-                    assert json.loads(result.stdout) == oracle(mode), (mode, result.stdout)
-                result = subprocess.run([*command, "strict-unsupported"], capture_output=True, text=True, timeout=30, check=True)
-                assert result.stdout.strip() == "error: " + oracle("strict-unsupported")["error"]
-                print(f"{kind} {name}: signed replay, strict schema, unsupported mode, and image result routing match upstream")
             if kind == "catalog":
                 result = subprocess.run(command, capture_output=True, text=True, timeout=30, check=True)
                 expected = list(json.loads((UPSTREAM / "packages/ai/src/providers/data/google.json").read_text())["google-generative-ai"].values())
@@ -122,7 +114,7 @@ def main():
         try:
             Handler.response = b'data: {"responseId":"r1","candidates":[{"content":{"parts":[{"text":"Hi"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":1,"totalTokenCount":3}}\n\n'
             for kind, name, command in commands:
-                if kind in ("signed", "catalog"):
+                if kind == "catalog":
                     continue
                 expected = event_oracle(Handler.response, simple=kind == "provider")
                 invoke(command, base, expected + ("\nsuccess" if kind == "client" else ""))
@@ -141,7 +133,7 @@ def main():
             Handler.request_headers.clear()
             Handler.response = b'data: {"responseId":"thought-1","candidates":[{"content":{"parts":[{"text":"Why","thought":true,"thoughtSignature":"c2ln"},{"text":"Hello"}]},"finishReason":"STOP"}]}\n\n'
             for kind, name, command in commands:
-                if kind in ("signed", "catalog"):
+                if kind == "catalog":
                     continue
                 expected = event_oracle(Handler.response, simple=kind == "provider")
                 invoke(command, base, expected + ("\nsuccess" if kind == "client" else ""))
@@ -149,7 +141,7 @@ def main():
 
             Handler.response = b'data: {"candidates":[{"finishReason":"SAFETY"}]}\n\n'
             for kind, name, command in commands:
-                if kind in ("signed", "catalog"):
+                if kind == "catalog":
                     continue
                 invoke(command, base, event_oracle(Handler.response, simple=kind == "provider"), 1 if kind == "client" else 0)
                 print(f"{kind} {name}: terminal finish error passes")
@@ -157,7 +149,7 @@ def main():
             Handler.status = 429
             Handler.response = b'{"error":{"message":"rate limited"}}'
             for kind, name, command in commands:
-                if kind in ("signed", "catalog"):
+                if kind == "catalog":
                     continue
                 invoke(command, base, "error", 1 if kind == "client" else 0)
                 print(f"{kind} {name}: HTTP failure surfaces terminal error")

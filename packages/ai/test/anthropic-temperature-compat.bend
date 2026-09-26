@@ -10,7 +10,7 @@ def capture(model: T.Model<T.JsonValue>, temperature: U32) -> IO(Maybe<&2, T.Jso
   +selected = H.withBase(model, "http://127.0.0.1:9")
   +context = H.hello()
   do IO<Maybe<&2, T.JsonValue>>:
-    outcome : H.Outcome <- H.run(selected, context, H.fromSimple(selected, context, H.simple(Some{"fake-key"}, Some{F.fromU32(temperature)}, None{})), H.Capture{})
+    outcome : H.Outcome <- H.runSimple(selected, context, H.simple(Some{"fake-key"}, Some{F.fromU32(temperature)}, None{}), H.Capture{})
     return H.payloadOf(outcome)
 
 def omitted(model: T.Model<T.JsonValue>, temperature: U32, +name: String) -> IO(Unit):

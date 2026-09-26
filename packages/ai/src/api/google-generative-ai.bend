@@ -1,368 +1,324 @@
 import Base
 import ../types.bend as T
-import ../utils/schema-json.bend as Schema
-import ./constrained-sampling.bend as Constrained
+import ../models.bend as Models
 import ../utils/text.bend as Text
 import ../utils/transcript.bend as Transcript
 import ../utils/sanitize-unicode.bend as Unicode
+import ../utils/headers.bend as HeaderUtils
+import ./constrained-sampling.bend as Sampling
+import ./google-shared.bend as Shared
+import ./simple-options.bend as Simple
 import ../../../runtime/src/f64.bend as F
-import ../../../runtime/src/base64.bend as Base64
 import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
 
-# Google Generative AI request values. Transport details live in the client;
-# these are the JSON members accepted by streamGenerateContent.
+# The Google Generative AI request side (pi `google-generative-ai.ts`):
+# GoogleOptions, streamSimple's option mapping, buildParams (the SDK's
+# GenerateContentParameters that onPayload sees), createClient's headers,
+# and the @google/genai 2.21.0 conversion of those parameters into the
+# Gemini Developer API request.
 def J() -> Data: T.JsonValue
+
 def Fields() -> Data: R.Record<J()>
+
 def str(value: String) -> J(): T.JsonString{value}
-def obj(fields: Fields()) -> J(): T.JsonObject{fields}
+
+def num(value: F64) -> J(): T.JsonNumber{value}
+
+def obj(fields: List<&2, R.Property<J()>>) -> J(): T.JsonObject{R.Record{fields}}
+
 def field(name: String, value: J()) -> R.Property<J()>: R.Property{name, value}
-def add(fields: Fields(), name: String, value: J()) -> Fields(): R.set(J(), fields, name, value)
-def maybe(fields: Fields(), name: String, value: Maybe<&2, J()>) -> Fields():
-  match value:
-    case None{}: fields
-    case Some{item}: add(fields, name, item)
 
-# The public onPayload callback sees Google SDK GenerateContentParameters,
-# before the SDK separates config fields into HTTP wire members.
-def configFields(+fields: Fields(), generation: J()) -> Fields():
-  match generation:
-    case T.JsonObject{base}:
-      +a = maybe(base, "systemInstruction", R.get(J(), fields, "systemInstruction"))
-      +b = maybe(a, "tools", R.get(J(), fields, "tools"))
-      maybe(b, "toolConfig", R.get(J(), fields, "toolConfig"))
-    case _: R.new(J())
-
-def sdkParams(id: String, wire: J()) -> J():
-  match wire:
-    case T.JsonObject{+fields}:
-      +contents = Maybe.default(&2, J(), R.get(J(), fields, "contents"), T.JsonArray{Nil{}})
-      +generation = Maybe.default(&2, J(), R.get(J(), fields, "generationConfig"), obj(R.new(J())))
-      obj(R.Record{field("model", str(id)) <> field("contents", contents) <> field("config", obj(configFields(fields, generation))) <> Nil{}})
-    case _: wire
-
-def wireConfig(fields: Fields()) -> Fields():
-  R.remove(J(), R.remove(J(), R.remove(J(), fields, "systemInstruction"), "tools"), "toolConfig")
-
-def sdkWireFields(fields: Fields(), config: J()) -> Fields():
-  match config:
-    case T.JsonObject{+settings}:
-      +base = {R.Record{field("contents", Maybe.default(&2, J(), R.get(J(), fields, "contents"), T.JsonArray{Nil{}})) <> field("generationConfig", obj(wireConfig(settings))) <> Nil{}} : Fields()}
-      +a = maybe(base, "systemInstruction", R.get(J(), settings, "systemInstruction"))
-      +b = maybe(a, "tools", R.get(J(), settings, "tools"))
-      maybe(b, "toolConfig", R.get(J(), settings, "toolConfig"))
-    case _: R.Record{field("contents", Maybe.default(&2, J(), R.get(J(), fields, "contents"), T.JsonArray{Nil{}})) <> field("generationConfig", obj(R.new(J()))) <> Nil{}}
-
-def wireFromConfig(fields: Fields(), config: Maybe<&2, J()>) -> Maybe<&2, J()>:
-  match config:
-    case None{}: None{}
-    case Some{settings}: Some{obj(sdkWireFields(fields, settings))}
-
-def wireParams(params: J()) -> Maybe<&2, J()>:
-  match params:
-    case T.JsonObject{+fields}: wireFromConfig(fields, R.get(J(), fields, "config"))
-    case _: None{}
-
-type Thinking is Data:
-  NoThinking{}
-  DisabledThinking{level: Maybe<&2, String>}
-  BudgetThinking{tokens: F64}
-  LevelThinking{level: String}
-
-type ToolChoice is Data:
-  Auto{}
-  Any{}
-  NoneChoice{}
-
-type Options is Data:
-  Options{maxTokens: Maybe<&2, F64>, temperature: Maybe<&2, F64>, thinking: Thinking, toolChoice: Maybe<&2, ToolChoice>}
-
-def optionalNumber(value: Maybe<&2, F64>) -> Maybe<&2, J()>:
-  Maybe.map(&2, F64, J(), number => T.JsonNumber{number}, value)
-
-def userPart(part: T.TextImageContent) -> J():
-  match part:
-    case T.TextImageText{T.TextContent{text, _}}: obj(R.Record{field("text", str(Unicode.sanitizeSurrogates(text))) <> Nil{}})
-    case T.TextImageImage{T.ImageContent{data, mime}}: obj(R.Record{field("inlineData", obj(R.Record{field("mimeType", str(mime)) <> field("data", str(data)) <> Nil{}})) <> Nil{}})
-
-def userParts(items: List<&2, T.TextImageContent>) -> List<&2, J()>:
-  match items:
-    case Nil{}: Nil{}
-    case item <> rest: userPart(item) <> userParts(rest)
-
-def userContent(value: T.UserContent) -> List<&2, J()>:
-  match value:
-    case T.UserText{text}: obj(R.Record{field("text", str(Unicode.sanitizeSurrogates(text))) <> Nil{}}) <> Nil{}
-    case T.UserBlocks{items}: userParts(items)
-
-def content(role: String, parts: List<&2, J()>) -> J():
-  obj(R.Record{field("role", str(role)) <> field("parts", T.JsonArray{parts}) <> Nil{}})
-
-def signed(fields: Fields(), signature: Maybe<&2, String>) -> Fields():
-  maybe(fields, "thoughtSignature", Maybe.map(&2, String, J(), str, signature))
-
-def validated(value: String, result: Result<&2, &2, Base64.Error, List<&2, U32>>) -> Maybe<&2, String>:
-  match result:
-    case Done{_}: Some{value}
-    case Fail{_}: None{}
-
-def sameSignature(value: Maybe<&2, String>) -> Maybe<&2, String>:
-  match value:
-    case Some{SCon{+first, +rest}}: validated(SCon{first, rest}, Base64.decode(SCon{first, rest}))
-    case _: None{}
-
-def acceptedSignature(sameModel: Bool, value: Maybe<&2, String>) -> Maybe<&2, String>:
-  match sameModel:
-    case False{}: None{}
-    case True{}: sameSignature(value)
-
-def keep(text: String, signature: Maybe<&2, String>) -> Bool:
-  Bool.not(String.is_empty(String.trim(text))) || Maybe.is_some(&2, String, signature)
-
-def assistantPart(part: T.AssistantContent<V.Value>, +sameModel: Bool, +includeId: Bool) -> Maybe<&2, J()>:
-  match part:
-    case T.AssistantText{T.TextContent{+text, value}}:
-      +signature = acceptedSignature(sameModel, value)
-      Bool.pick(Maybe<&2, J()>, keep(text, signature), Some{obj(signed(R.Record{field("text", str(Unicode.sanitizeSurrogates(text))) <> Nil{}}, signature))}, None{})
-    case T.AssistantThinking{T.ThinkingContent{+text, value, _}}:
-      +signature = acceptedSignature(sameModel, value)
-      +plain = {R.Record{field("text", str(Unicode.sanitizeSurrogates(text))) <> Nil{}} : Fields()}
-      +fields = Bool.pick(Fields(), sameModel, add(plain, "thought", T.JsonBoolean{True{}}), plain)
-      Bool.pick(Maybe<&2, J()>, keep(text, signature), Some{obj(signed(fields, signature))}, None{})
-    case T.AssistantToolCall{T.ToolCall{id, name, args, signature, _}}:
-      +call = {R.Record{field("name", str(name)) <> field("args", Schema.toJson(args)) <> Nil{}} : Fields()}
-      +withId = Bool.pick(Fields(), includeId, add(call, "id", str(id)), call)
-      Some{obj(signed(R.Record{field("functionCall", obj(withId)) <> Nil{}}, acceptedSignature(sameModel, signature)))}
-
-def optionalCons(value: Maybe<&2, J()>, rest: List<&2, J()>) -> List<&2, J()>:
+def optionalField(name: String, value: Maybe<&2, J()>, rest: List<&2, R.Property<J()>>) -> List<&2, R.Property<J()>>:
   match value:
     case None{}: rest
-    case Some{item}: item <> rest
+    case Some{item}: field(name, item) <> rest
 
-def assistantParts(items: List<&2, T.AssistantContent<V.Value>>, +sameModel: Bool, +includeId: Bool) -> List<&2, J()>:
-  match items:
-    case Nil{}: Nil{}
-    case item <> rest: optionalCons(assistantPart(item, sameModel, includeId), assistantParts(rest, sameModel, includeId))
+def choiceName(value: T.ToolChoice) -> String:
+  match value:
+    case T.AutoTool{}: "auto"
+    case T.NoTool{}: "none"
 
-def modelId(model: T.Model<T.JsonValue>) -> String:
-  match model:
-    case T.Model{id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: id
+def budgetFor(id: String, level: T.ThinkingLevel) -> Maybe<&2, F64>:
+  match level:
+    case T.Minimal{}: Some{F.fromU32(Bool.pick(U32, String.contains(id, "2.5-flash-lite"), 512, 128))}
+    case T.Low{}: Some{F.fromU32(2048)}
+    case T.Medium{}: Some{F.fromU32(8192)}
+    case _: Some{F.fromU32(Bool.pick(U32, String.contains(id, "2.5-pro"), 32768, 24576))}
 
-def modelProvider(model: T.Model<T.JsonValue>) -> String:
-  match model:
-    case T.Model{_, _, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}: provider
+def modelBudget(+id: String, level: T.ThinkingLevel) -> F64:
+  Maybe.default(&2, F64, Bool.pick(Maybe<&2, F64>, String.contains(id, "2.5-pro") || String.contains(id, "2.5-flash"), budgetFor(id, level), None{}), F.negate(F.fromU32(1)))
 
-def supportsThinking(model: T.Model<T.JsonValue>) -> Bool:
-  match model:
-    case T.Model{_, _, _, _, _, enabled, _, _, _, _, _, _, _, _, _, _}: enabled
+def customBudget(level: T.ThinkingLevel, budgets: T.ThinkingBudgets) -> Maybe<&2, F64>:
+  match level budgets:
+    case T.Minimal{} T.ThinkingBudgets{value, _, _, _}: value
+    case T.Low{} T.ThinkingBudgets{_, value, _, _}: value
+    case T.Medium{} T.ThinkingBudgets{_, _, value, _}: value
+    case _ T.ThinkingBudgets{_, _, _, value}: value
 
-def sameAssistant(-G: Data, +message: T.AssistantMessage<V.Value, G>, +model: T.Model<T.JsonValue>) -> Bool:
-  String.eq(T.assistantModel(V.Value, G, message), modelId(model)) && String.eq(T.assistantProvider(V.Value, G, message), modelProvider(model))
+# upstream getGoogleBudget: a custom budget for the level, else the Gemini
+# 2.5 Pro/Flash/Flash-Lite defaults, else dynamic (-1).
+def getGoogleBudget(+model: T.Model<J()>, +level: T.ThinkingLevel, custom: Maybe<&2, T.ThinkingBudgets>) -> F64:
+  match custom:
+    case Some{budgets}: Maybe.default(&2, F64, customBudget(level, budgets), modelBudget(T.modelId(model), level))
+    case None{}: modelBudget(T.modelId(model), level)
 
-def supportsStrictId(+id: String) -> Bool:
-  String.starts_with(id, "gemini-3") || String.starts_with(id, "gemini-4") || String.starts_with(id, "gemini-live-3") || String.starts_with(id, "gemini-live-4")
+def simpleKey(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>) -> Maybe<&2, String>:
+  match options:
+    case None{}: None{}
+    case Some{T.SimpleStreamOptions{_, _, key, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}}: key
 
-def supportsStrictMode(model: T.Model<T.JsonValue>) -> Bool:
-  supportsStrictId(modelId(model))
-
-def requiresToolId(model: T.Model<T.JsonValue>) -> Bool:
-  +id = modelId(model)
-  String.starts_with(id, "claude-") || String.starts_with(id, "gpt-oss-") || supportsStrictId(id)
-
-def resultTexts(items: List<&2, T.TextImageContent>) -> List<&2, String>:
-  match items:
-    case Nil{}: Nil{}
-    case T.TextImageText{T.TextContent{text, _}} <> rest: text <> resultTexts(rest)
-    case _ <> rest: resultTexts(rest)
-
-def imageParts(items: List<&2, T.TextImageContent>) -> List<&2, J()>:
-  match items:
-    case Nil{}: Nil{}
-    case T.TextImageImage{T.ImageContent{data, mime}} <> rest:
-      obj(R.Record{field("inlineData", obj(R.Record{field("mimeType", str(mime)) <> field("data", str(data)) <> Nil{}})) <> Nil{}}) <> imageParts(rest)
-    case _ <> rest: imageParts(rest)
-
-def hasImageInput(inputs: List<&2, T.ModelInput>) -> Bool:
-  match inputs:
-    case Nil{}: False{}
-    case T.InputImage{} <> _: True{}
-    case _ <> rest: hasImageInput(rest)
-
-def supportedImages(model: T.Model<T.JsonValue>) -> Bool:
-  match model:
-    case T.Model{_, _, _, _, _, _, _, inputs, _, _, _, _, _, _, _, _}: hasImageInput(inputs)
-
-def multimodalResponse(model: T.Model<T.JsonValue>) -> Bool:
-  +id = modelId(model)
-  Bool.not(String.starts_with(id, "gemini-2") || String.starts_with(id, "gemini-live-2"))
-
-def responseText(items: List<&2, T.TextImageContent>, hasImages: Bool) -> String:
-  +value = String.join(resultTexts(items), "\n")
-  Bool.pick(String, Bool.not(String.is_empty(value)), value, Bool.pick(String, hasImages, "(see attached image)", ""))
-
-def imageResultParts(model: T.Model<T.JsonValue>, items: List<&2, T.TextImageContent>) -> List<&2, J()>:
-  Bool.pick(List<&2, J()>, supportedImages(model), imageParts(items), Nil{})
-
-def toolResult(-D: Data, result: T.ToolResultMessage<D>, includeId: Bool, +images: List<&2, J()>, multimodal: Bool) -> J():
+def maybeConfig(result: Result<&2, &2, String, J()>) -> Result<&2, &2, String, Maybe<&2, J()>>:
   match result:
-    case T.ToolResultMessage{id, name, +items, _, _, error, _}:
-      +value = responseText(items, Bool.not(List.is_empty(&2, J(), images)))
-      +response = {obj(R.Record{field(Bool.pick(String, error, "error", "output"), str(Unicode.sanitizeSurrogates(value))) <> Nil{}}) : J()}
-      +fields = {R.Record{field("name", str(name)) <> field("response", response) <> Nil{}} : Fields()}
-      +withId = Bool.pick(Fields(), includeId, add(fields, "id", str(id)), fields)
-      +withImages = Bool.pick(Fields(), multimodal && Bool.not(List.is_empty(&2, J(), images)), add(withId, "parts", T.JsonArray{images}), withId)
-      obj(R.Record{field("functionResponse", obj(withImages)) <> Nil{}})
+    case Fail{message}: Fail{message}
+    case Done{value}: Done{Some{value}}
 
-def syntheticImageTurn(images: List<&2, J()>) -> J():
-  content("user", obj(R.Record{field("text", str("Tool result image:")) <> Nil{}}) <> images)
+def nonemptyText(text: String) -> Maybe<&2, J()>:
+  match text:
+    case SNil{}: None{}
+    case value: Some{str(Unicode.sanitizeSurrogates(value))}
 
-def flush(reversed: List<&2, J()>, pending: List<&2, J()>) -> List<&2, J()>:
-  match pending:
-    case Nil{}: reversed
-    case values: content("user", values) <> reversed
+def instructionOf(value: Maybe<&2, T.SystemMessage<V.Value>>) -> Maybe<&2, J()>:
+  match value:
+    case None{}: None{}
+    case Some{message}: nonemptyText(Text.renderComplete(V.Value, message))
 
-def appendedImageResult(-D: Data, result: T.ToolResultMessage<D>, includeId: Bool, +images: List<&2, J()>, reversed: List<&2, J()>, pending: List<&2, J()>) -> List<&2, J()>:
-  syntheticImageTurn(images) <> flush(reversed, List.append(&2, J(), pending, toolResult(D, result, includeId, images, False{}) <> Nil{}))
+def systemInstruction(-G: Data, -D: Data, messages: List<&2, T.Message<V.Value, V.Value, G, D>>) -> Maybe<&2, J()>:
+  instructionOf(Transcript.getInitialSystemMessage(V.Value, V.Value, G, D, messages))
 
-def ordinaryResult(-D: Data, result: T.ToolResultMessage<D>, includeId: Bool, images: List<&2, J()>, multimodal: Bool, pending: List<&2, J()>) -> List<&2, J()>:
-  List.append(&2, J(), pending, toolResult(D, result, includeId, images, multimodal) <> Nil{})
+def modeConfig(value: Maybe<&2, String>) -> Maybe<&2, J()>:
+  match value:
+    case None{}: None{}
+    case Some{mode}: Some{obj(field("functionCallingConfig", obj(field("mode", str(mode)) <> Nil{})) <> Nil{})}
 
-def resultItems(-D: Data, result: T.ToolResultMessage<D>) -> List<&2, T.TextImageContent>:
-  match result:
-    case T.ToolResultMessage{_, _, items, _, _, _, _}: items
+type ToolFields is Data:
+  ToolFields{tools: Maybe<&2, J()>, toolConfig: Maybe<&2, J()>}
 
-def messages(-G: Data, -D: Data, +model: T.Model<T.JsonValue>, values: List<&2, T.Message<V.Value, V.Value, G, D>>, +reversed: List<&2, J()>, +pending: List<&2, J()>) -> List<&2, J()>:
-  match values:
-    case Nil{}: List.reverse(&2, J(), flush(reversed, pending))
-    case T.System{_} <> rest: messages(G, D, model, rest, flush(reversed, pending), Nil{})
-    case T.ToolResult{+result} <> rest:
-      +images = imageResultParts(model, resultItems(D, result))
-      +multimodal = multimodalResponse(model)
-      +legacyImage = Bool.not(multimodal) && Bool.not(List.is_empty(&2, J(), images))
-      +nextReversed = Bool.pick(List<&2, J()>, legacyImage, appendedImageResult(D, result, requiresToolId(model), images, reversed, pending), reversed)
-      +nextPending = Bool.pick(List<&2, J()>, legacyImage, Nil{}, ordinaryResult(D, result, requiresToolId(model), images, multimodal, pending))
-      messages(G, D, model, rest, nextReversed, nextPending)
-    case T.User{T.UserMessage{value, _}} <> rest:
-      +parts = userContent(value)
-      +next = Bool.pick(List<&2, J()>, List.is_empty(&2, J(), parts), flush(reversed, pending), content("user", parts) <> flush(reversed, pending))
-      messages(G, D, model, rest, next, Nil{})
-    case T.Assistant{+assistant} <> rest:
-      +parts = assistantParts(T.assistantContent(V.Value, G, assistant), sameAssistant(G, assistant, model), requiresToolId(model))
-      +next = Bool.pick(List<&2, J()>, List.is_empty(&2, J(), parts), flush(reversed, pending), content("model", parts) <> flush(reversed, pending))
-      messages(G, D, model, rest, next, Nil{})
+def toolFields(tools: Result<&2, &2, Sampling.Error, Maybe<&2, J()>>, mode: Result<&2, &2, Sampling.Error, Maybe<&2, String>>) -> Result<&2, &2, String, ToolFields>:
+  match tools mode:
+    case Fail{error} _: Fail{Sampling.errorMessage(error)}
+    case _ Fail{error}: Fail{Sampling.errorMessage(error)}
+    case Done{declared} Done{selected}: Done{ToolFields{declared, modeConfig(selected)}}
 
-def dropInitial(-G: Data, -D: Data, values: List<&2, T.Message<V.Value, V.Value, G, D>>) -> List<&2, T.Message<V.Value, V.Value, G, D>>:
-  match values:
-    case T.System{_} <> rest: rest
+def currentToolFields(+tools: List<&2, T.Tool<V.Value>>, choice: Maybe<&2, String>, +strict: Bool) -> Result<&2, &2, String, ToolFields>:
+  match tools:
+    case Nil{}: Done{ToolFields{None{}, None{}}}
+    case _: toolFields(Shared.convertTools(tools, False{}, strict), Shared.resolveGoogleFunctionCallingMode(tools, choice, strict))
+
+def contextMessages(-G: Data, -D: Data, context: T.TranscriptContext<V.Value, V.Value, G, D>) -> List<&2, T.Message<V.Value, V.Value, G, D>>:
+  match context:
+    case T.TranscriptContext{messages}: messages
+
+# createClient
+# ------------
+def modelHeaders(model: T.Model<J()>) -> Maybe<&2, R.Record<String>>:
+  match model:
+    case T.Model{_, _, _, _, _, _, _, _, _, _, _, _, _, _, headers, _}: headers
+
+# upstream createClient's httpOptions.headers: pi's User-Agent, the model's
+# headers, then the options' headers (null removes).
+def clientHeaders(agent: String, +model: T.Model<J()>, custom: Maybe<&2, T.ProviderHeaders()>) -> R.Record<String>:
+  Maybe.default(&2, R.Record<String>, HeaderUtils.providerHeadersToRecord(Some{HeaderUtils.overlay(HeaderUtils.overlayStrings(HeaderUtils.fromRecord(R.Record{R.Property{"User-Agent", agent} <> Nil{}}), modelHeaders(model)), custom)}), R.new(String))
+
+# SDK request conversion
+# ----------------------
+def J2() -> Data: Maybe<&2, J()>
+
+def get(fields: Fields(), name: String) -> Maybe<&2, J()>: R.get(J(), fields, name)
+
+def fieldsOf(value: J()) -> Fields():
+  match value:
+    case T.JsonObject{fields}: fields
+    case _: R.new(J())
+
+def picked(+fields: Fields(), names: List<&2, String>) -> List<&2, R.Property<J()>>:
+  match names:
+    case Nil{}: Nil{}
+    case +name <> rest: optionalField(name, get(fields, name), picked(fields, rest))
+
+def functionCall(value: J()) -> J(): obj(picked(fieldsOf(value), ["args", "id", "name"]))
+
+def blob(value: J()) -> J(): obj(picked(fieldsOf(value), ["data", "mimeType"]))
+
+def mldevPart(value: J()) -> J():
+  match value:
+    case T.JsonObject{+fields}: obj(List.concat(&2, R.Property<J()>, picked(fields, ["mediaResolution", "toolCall", "toolResponse", "audioTranscription", "codeExecutionResult", "executableCode", "fileData"]) <> optionalField("functionCall", Maybe.map(&2, J(), J(), functionCall, get(fields, "functionCall")), Nil{}) <> picked(fields, ["functionResponse"]) <> optionalField("inlineData", Maybe.map(&2, J(), J(), blob, get(fields, "inlineData")), Nil{}) <> picked(fields, ["text", "thought", "thoughtSignature", "videoMetadata", "partMetadata", "mediaProcessing"]) <> Nil{}))
     case other: other
 
-type ToolEntry is Data:
-  ToolEntry{declaration: J(), strict: Bool}
-
-type ToolList is Data:
-  ToolList{declarations: List<&2, J()>, strict: Bool}
-
-def isStrict(value: Maybe<&2, Bool>) -> Bool:
-  match value:
-    case Some{True{}}: True{}
-    case _: False{}
-
-def declared(name: String, description: String, strict: Bool, result: Result<&2, &2, Constrained.Error, V.Value>) -> Result<&2, &2, Constrained.Error, ToolEntry>:
-  match result:
-    case Fail{error}: Fail{error}
-    case Done{schema}:
-      Done{ToolEntry{obj(R.Record{field("name", str(name)) <> field("description", str(description)) <> field("parametersJsonSchema", Schema.toJson(schema)) <> Nil{}}), strict}}
-
-def selectedToolWith(+tool: T.Tool<V.Value>, +strict: Maybe<&2, Bool>) -> Result<&2, &2, Constrained.Error, ToolEntry>:
-  match tool:
-    case T.Tool{name, description, _, _}: declared(name, description, isStrict(strict), Constrained.getJsonSchemaToolParameters(tool, strict))
-
-def selectedTool(tool: T.Tool<V.Value>, result: Result<&2, &2, Constrained.Error, Maybe<&2, Bool>>) -> Result<&2, &2, Constrained.Error, ToolEntry>:
-  match result:
-    case Fail{error}: Fail{error}
-    case Done{strict}: selectedToolWith(tool, strict)
-
-def checkedTool(+tool: T.Tool<V.Value>, supportsStrict: Bool) -> Result<&2, &2, Constrained.Error, ToolEntry>:
-  selectedTool(tool, Constrained.resolveJsonSchemaStrictSampling(tool, supportsStrict))
-
-def prependTool(head: Result<&2, &2, Constrained.Error, ToolEntry>, tail: Result<&2, &2, Constrained.Error, ToolList>) -> Result<&2, &2, Constrained.Error, ToolList>:
-  match head tail:
-    case Fail{error} _: Fail{error}
-    case _ Fail{error}: Fail{error}
-    case Done{ToolEntry{item, strict}} Done{ToolList{items, later}}: Done{ToolList{item <> items, strict || later}}
-
-def tools(values: List<&2, T.Tool<V.Value>>, +supportsStrict: Bool) -> Result<&2, &2, Constrained.Error, ToolList>:
+def mldevParts(values: List<&2, J()>) -> List<&2, J()>:
   match values:
-    case Nil{}: Done{ToolList{Nil{}, False{}}}
-    case value <> rest: prependTool(checkedTool(value, supportsStrict), tools(rest, supportsStrict))
+    case Nil{}: Nil{}
+    case value <> rest: mldevPart(value) <> mldevParts(rest)
 
-def callingMode(choice: Maybe<&2, ToolChoice>, strict: Bool) -> Maybe<&2, String>:
-  match choice:
-    case Some{NoneChoice{}}: Some{"NONE"}
-    case Some{Any{}}: Some{"ANY"}
-    case Some{Auto{}}: Some{Bool.pick(String, strict, "VALIDATED", "AUTO")}
-    case None{}: Bool.pick(Maybe<&2, String>, strict, Some{"VALIDATED"}, None{})
-
-def callingConfig(value: Maybe<&2, String>) -> Maybe<&2, J()>:
+def partsOf(value: Maybe<&2, J()>) -> Maybe<&2, J()>:
   match value:
-    case None{}: None{}
-    case Some{selected}: Some{obj(R.Record{field("functionCallingConfig", obj(R.Record{field("mode", str(selected)) <> Nil{}})) <> Nil{}})}
+    case Some{T.JsonArray{values}}: Some{T.JsonArray{mldevParts(values)}}
+    case other: other
 
-def toolConfig(choice: Maybe<&2, ToolChoice>, hasTools: Bool, strict: Bool) -> Maybe<&2, J()>:
-  match hasTools:
-    case False{}: None{}
-    case True{}: callingConfig(callingMode(choice, strict))
+def mldevContent(value: J()) -> J():
+  match value:
+    case T.JsonObject{+fields}: obj(optionalField("parts", partsOf(get(fields, "parts")), optionalField("role", get(fields, "role"), Nil{})))
+    case other: other
 
-def toolDeclarations(values: List<&2, J()>) -> Maybe<&2, J()>:
+def mldevContents(values: List<&2, J()>) -> List<&2, J()>:
   match values:
-    case Nil{}: None{}
-    case list: Some{T.JsonArray{obj(R.Record{field("functionDeclarations", T.JsonArray{list}) <> Nil{}}) <> Nil{}}}
+    case Nil{}: Nil{}
+    case value <> rest: mldevContent(value) <> mldevContents(rest)
 
-def thinking(value: Thinking) -> Maybe<&2, J()>:
+# tContent: a string system instruction is one user text part.
+def instructionContent(value: J()) -> J():
   match value:
-    case NoThinking{}: None{}
-    case DisabledThinking{None{}}: Some{obj(R.Record{field("thinkingBudget", T.JsonNumber{F.fromU32(0)}) <> Nil{}})}
-    case DisabledThinking{Some{level}}: Some{obj(R.Record{field("thinkingLevel", str(level)) <> Nil{}})}
-    case BudgetThinking{tokens}: Some{obj(R.Record{field("includeThoughts", T.JsonBoolean{True{}}) <> field("thinkingBudget", T.JsonNumber{tokens}) <> Nil{}})}
-    case LevelThinking{level}: Some{obj(R.Record{field("includeThoughts", T.JsonBoolean{True{}}) <> field("thinkingLevel", str(level)) <> Nil{}})}
+    case T.JsonString{text}: obj(field("parts", T.JsonArray{obj(field("text", str(text)) <> Nil{}) <> Nil{}}) <> field("role", str("user")) <> Nil{})
+    case other: mldevContent(other)
 
-def systemFrom(value: Maybe<&2, T.SystemMessage<V.Value>>) -> Maybe<&2, J()>:
+def mldevTool(value: J()) -> J():
   match value:
-    case None{}: None{}
-    case Some{message}:
-      +value = Text.renderComplete(V.Value, message)
-      Bool.pick(Maybe<&2, J()>, String.is_empty(value), None{}, Some{obj(R.Record{field("parts", T.JsonArray{obj(R.Record{field("text", str(Unicode.sanitizeSurrogates(value))) <> Nil{}}) <> Nil{}}) <> field("role", str("user")) <> Nil{}})})
+    case T.JsonObject{+fields}: obj(picked(fields, ["googleMaps", "mcpServers", "codeExecution", "computerUse", "functionDeclarations", "googleSearch", "googleSearchRetrieval", "urlContext", "fileSearch"]))
+    case other: other
 
-def system(-G: Data, -D: Data, values: List<&2, T.Message<V.Value, V.Value, G, D>>) -> Maybe<&2, J()>:
-  systemFrom(Transcript.getInitialSystemMessage(V.Value, V.Value, G, D, values))
+def mldevTools(values: List<&2, J()>) -> List<&2, J()>:
+  match values:
+    case Nil{}: Nil{}
+    case value <> rest: mldevTool(value) <> mldevTools(rest)
 
-def config(-G: Data, -D: Data, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options, canThink: Bool) -> J():
-  match context options:
-    case T.TranscriptContext{values} Options{maximum, temperature, thought, choice}:
-      +currentTools = Transcript.getCurrentTools(V.Value, V.Value, G, D, values)
-      +fields = {R.Record{Nil{}} : Fields()}
-      +a = maybe(fields, "maxOutputTokens", optionalNumber(maximum))
-      +b = maybe(a, "temperature", optionalNumber(temperature))
-      obj(maybe(b, "thinkingConfig", Bool.pick(Maybe<&2, J()>, canThink, thinking(thought), None{})))
-
-def selectedChoice(value: Options) -> Maybe<&2, ToolChoice>:
+def toolsOf(value: Maybe<&2, J()>) -> Maybe<&2, J()>:
   match value:
-    case Options{_, _, _, choice}: choice
+    case Some{T.JsonArray{values}}: Some{T.JsonArray{mldevTools(values)}}
+    case other: other
 
-def withDeclaredTools(-G: Data, -D: Data, +model: T.Model<T.JsonValue>, +values: List<&2, T.Message<V.Value, V.Value, G, D>>, +options: Options, declaration: Result<&2, &2, Constrained.Error, ToolList>) -> Result<&2, &2, Constrained.Error, J()>:
-  match declaration:
-    case Fail{error}: Fail{error}
-    case Done{ToolList{+items, strict}}:
-      +base = {R.Record{field("contents", T.JsonArray{messages(G, D, model, dropInitial(G, D, values), Nil{}, Nil{})}) <> field("generationConfig", config(G, D, T.TranscriptContext{values}, options, supportsThinking(model))) <> Nil{}} : Fields()}
-      +a = maybe(base, "systemInstruction", system(G, D, values))
-      +b = maybe(a, "tools", toolDeclarations(items))
-      Done{obj(maybe(b, "toolConfig", toolConfig(selectedChoice(options), Bool.not(List.is_empty(&2, J(), items)), strict)))}
+def callingConfig(value: J()) -> J(): obj(picked(fieldsOf(value), ["allowedFunctionNames", "mode"]))
 
-def buildNormalized(-G: Data, -D: Data, +model: T.Model<T.JsonValue>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options) -> Result<&2, &2, Constrained.Error, J()>:
-  match context:
-    case T.TranscriptContext{+values}:
-      +currentTools = Transcript.getCurrentTools(V.Value, V.Value, G, D, values)
-      withDeclaredTools(G, D, model, values, options, tools(currentTools, supportsStrictMode(model)))
+def toolConfigOf(value: J()) -> J():
+  match value:
+    case T.JsonObject{+fields}: obj(optionalField("functionCallingConfig", Maybe.map(&2, J(), J(), callingConfig, get(fields, "functionCallingConfig")), picked(fields, ["retrievalConfig", "includeServerSideToolInvocations"])))
+    case other: other
 
-def buildParams(-G: Data, -D: Data, model: T.Model<T.JsonValue>, +context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options) -> Result<&2, &2, Constrained.Error, J()>:
-  buildNormalized(G, D, model, Transcript.collapseSystemMessages(V.Value, V.Value, G, D, context), options)
+def requestFields(+config: Fields()) -> List<&2, R.Property<J()>>:
+  List.concat(&2, R.Property<J()>, picked(config, ["serviceTier"]) <> optionalField("systemInstruction", Maybe.map(&2, J(), J(), instructionContent, get(config, "systemInstruction")), Nil{}) <> picked(config, ["safetySettings"]) <> optionalField("tools", toolsOf(get(config, "tools")), Nil{}) <> optionalField("toolConfig", Maybe.map(&2, J(), J(), toolConfigOf, get(config, "toolConfig")), Nil{}) <> picked(config, ["cachedContent"]) <> Nil{})
+
+def contentsOf(value: Maybe<&2, J()>) -> Maybe<&2, J()>:
+  match value:
+    case Some{T.JsonArray{values}}: Some{T.JsonArray{mldevContents(values)}}
+    case other: other
+
+def modelText(value: Maybe<&2, J()>) -> Maybe<&2, String>:
+  match value:
+    case Some{T.JsonString{id}}: Some{id}
+    case _: None{}
+
+def payloadModel(params: J()) -> Maybe<&2, String>:
+  match params:
+    case T.JsonObject{fields}: modelText(R.get(J(), fields, "model"))
+    case _: None{}
+
+# Options
+# -------
+# upstream GoogleOptions.thinking: budgetTokens -1 is dynamic, 0 disables.
+type GoogleThinking is Data:
+  GoogleThinking{enabled: Bool, budgetTokens: Maybe<&2, F64>, level: Maybe<&2, Shared.GoogleApiThinkingLevel>}
+
+# upstream GoogleOptions extends StreamOptions; toolChoice is "auto", "none"
+# or "any".
+type GoogleOptions<-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data> is Data:
+  GoogleOptions{base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, toolChoice: Maybe<&2, String>, thinking: Maybe<&2, GoogleThinking>}
+
+def disabled(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>) -> GoogleOptions<Signal, Telemetry, Fetch, Error>:
+  GoogleOptions{base, choice, Some{GoogleThinking{False{}, None{}, None{}}}}
+
+def enabledFor(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, levels: Bool, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>, +level: T.ThinkingLevel, budgets: Maybe<&2, T.ThinkingBudgets>) -> GoogleOptions<Signal, Telemetry, Fetch, Error>:
+  match levels:
+    case True{}: GoogleOptions{base, choice, Some{GoogleThinking{True{}, None{}, Some{Shared.toGoogleThinkingLevel(level)}}}}
+    case False{}: GoogleOptions{base, choice, Some{GoogleThinking{True{}, Some{getGoogleBudget(model, level, budgets)}, None{}}}}
+
+def enabledOptions(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>, +level: T.ThinkingLevel, budgets: Maybe<&2, T.ThinkingBudgets>) -> GoogleOptions<Signal, Telemetry, Fetch, Error>:
+  enabledFor(Signal, Telemetry, Fetch, Error, Shared.usesGoogleThinkingLevel(model), model, base, choice, level, budgets)
+
+def resolvedLevel(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>, budgets: Maybe<&2, T.ThinkingBudgets>, resolved: Result<&2, &2, String, T.ThinkingLevel>) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
+  match resolved:
+    case Fail{message}: Fail{message}
+    case Done{level}: Done{enabledOptions(Signal, Telemetry, Fetch, Error, model, base, choice, level, budgets)}
+
+def clamped(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>, budgets: Maybe<&2, T.ThinkingBudgets>, level: T.ModelThinkingLevel) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
+  match level:
+    case T.Off{}: Done{disabled(Signal, Telemetry, Fetch, Error, base, choice)}
+    case T.Thinking{selected}: resolvedLevel(Signal, Telemetry, Fetch, Error, model, base, choice, budgets, Shared.resolveGoogleThinkingLevel(model, selected))
+
+def simpleThinking(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>, reasoning: Maybe<&2, T.ThinkingLevel>, budgets: Maybe<&2, T.ThinkingBudgets>) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
+  match reasoning:
+    case None{}: Done{disabled(Signal, Telemetry, Fetch, Error, base, choice)}
+    case Some{level}: clamped(Signal, Telemetry, Fetch, Error, model, base, choice, budgets, Models.clampThinkingLevel(J(), model, T.Thinking{level}))
+
+def simpleWith(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
+  match options:
+    case None{}: simpleThinking(Signal, Telemetry, Fetch, Error, model, base, None{}, None{}, None{})
+    case Some{T.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, choice, reasoning, _, budgets}}:
+      simpleThinking(Signal, Telemetry, Fetch, Error, model, base, Maybe.map(&2, T.ToolChoice, String, choiceName, choice), reasoning, budgets)
+
+def keyedOptions(~G: Data, ~D: Data, ~Signal: Data, ~Telemetry: Data, ~Fetch: Data, ~Error: Data, +model: T.Model<J()>, context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>, key: Maybe<&2, String>) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
+  match key:
+    case Some{SCon{c, cs}}: simpleWith(Signal, Telemetry, Fetch, Error, model, Simple.buildBaseOptions(~G, ~D, ~J(), ~Signal, ~Telemetry, ~Fetch, ~Error, model, context, options, Some{SCon{c, cs}}), options)
+    case _: Fail{"No API key for provider: " ++ T.modelProvider(model)}
+
+# upstream streamSimple's GoogleOptions. A missing API key and an unsupported
+# level mapping are the errors upstream throws before a stream exists.
+# Without a reasoning level (or when it clamps to off) thinking is disabled;
+# level models get a thinkingLevel, the others a token budget.
+def streamSimpleOptions(~G: Data, ~D: Data, ~Signal: Data, ~Telemetry: Data, ~Fetch: Data, ~Error: Data, +model: T.Model<J()>, context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
+  keyedOptions(~G, ~D, ~Signal, ~Telemetry, ~Fetch, ~Error, model, context, options, simpleKey(Signal, Telemetry, Fetch, Error, options))
+
+def thinkingFor(+model: T.Model<J()>, thinking: Maybe<&2, GoogleThinking>, reasoning: Bool) -> Result<&2, &2, String, Maybe<&2, J()>>:
+  match thinking reasoning:
+    case Some{GoogleThinking{True{}, _, Some{level}}} True{}: Done{Some{obj(field("includeThoughts", T.JsonBoolean{True{}}) <> field("thinkingLevel", str(Shared.googleLevelName(level))) <> Nil{})}}
+    case Some{GoogleThinking{True{}, Some{tokens}, None{}}} True{}: Done{Some{obj(field("includeThoughts", T.JsonBoolean{True{}}) <> field("thinkingBudget", num(tokens)) <> Nil{})}}
+    case Some{GoogleThinking{True{}, None{}, None{}}} True{}: Done{Some{obj(field("includeThoughts", T.JsonBoolean{True{}}) <> Nil{})}}
+    case Some{GoogleThinking{False{}, _, _}} True{}: maybeConfig(Shared.getDisabledGoogleThinkingConfig(model))
+    case _ _: Done{None{}}
+
+# buildParams
+# -----------
+def thinkingConfig(+model: T.Model<J()>, thinking: Maybe<&2, GoogleThinking>) -> Result<&2, &2, String, Maybe<&2, J()>>:
+  thinkingFor(model, thinking, T.modelReasoning(model))
+
+def configFields(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, options: GoogleOptions<Signal, Telemetry, Fetch, Error>, system: Maybe<&2, J()>, tools: ToolFields, thinking: Maybe<&2, J()>) -> J():
+  match options tools:
+    case GoogleOptions{T.StreamOptions{_, _, _, _, _, _, _, _, _, _, _, temperature, _, maxTokens, _, _, _, _, _}, _, _} ToolFields{declared, config}:
+      obj(optionalField("temperature", Maybe.map(&2, F64, J(), num, temperature), optionalField("maxOutputTokens", Maybe.map(&2, F64, J(), num, maxTokens), optionalField("systemInstruction", system, optionalField("tools", declared, optionalField("toolConfig", config, optionalField("thinkingConfig", thinking, Nil{})))))))
+
+def optionsThinking(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, options: GoogleOptions<Signal, Telemetry, Fetch, Error>) -> Maybe<&2, GoogleThinking>:
+  match options:
+    case GoogleOptions{_, _, thinking}: thinking
+
+def optionsChoice(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, options: GoogleOptions<Signal, Telemetry, Fetch, Error>) -> Maybe<&2, String>:
+  match options:
+    case GoogleOptions{_, choice, _}: choice
+
+def assembled(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, contents: List<&2, J()>, options: GoogleOptions<Signal, Telemetry, Fetch, Error>, system: Maybe<&2, J()>, tools: Result<&2, &2, String, ToolFields>, thinking: Result<&2, &2, String, Maybe<&2, J()>>) -> Result<&2, &2, String, J()>:
+  match tools thinking:
+    case Fail{message} _: Fail{message}
+    case _ Fail{message}: Fail{message}
+    case Done{selected} Done{config}: Done{obj(field("model", str(T.modelId(model))) <> field("contents", T.JsonArray{contents}) <> field("config", configFields(Signal, Telemetry, Fetch, Error, options, system, selected, config)) <> Nil{})}
+
+# upstream buildParams over the collapsed transcript: SDK parameters
+# {model, contents, config}; the config's abort signal is the request's.
+def buildParams(~G: Data, ~D: Data, ~Signal: Data, ~Telemetry: Data, ~Fetch: Data, ~Error: Data, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: GoogleOptions<Signal, Telemetry, Fetch, Error>) -> IO(Result<&2, &2, String, J()>):
+  +messages = contextMessages(G, D, context)
+  +tools = Transcript.getCurrentTools(V.Value, V.Value, G, D, messages)
+  do IO<Result<&2, &2, String, J()>>:
+    contents : List<&2, J()> <- Shared.convertMessages(~G, ~D, model, context)
+    return assembled(Signal, Telemetry, Fetch, Error, model, contents, options, systemInstruction(G, D, messages), currentToolFields(tools, optionsChoice(Signal, Telemetry, Fetch, Error, options), Shared.supportsGoogleStrictToolSampling(T.modelId(model))), thinkingConfig(model, optionsThinking(Signal, Telemetry, Fetch, Error, options)))
+
+def generationFields() -> List<&2, String>:
+  ["temperature", "topP", "topK", "candidateCount", "maxOutputTokens", "stopSequences", "responseLogprobs", "logprobs", "presencePenalty", "frequencyPenalty", "seed", "responseMimeType", "responseSchema", "responseJsonSchema", "responseModalities", "mediaResolution", "speechConfig", "thinkingConfig", "audioTranscriptionConfig", "imageConfig", "enableEnhancedCivicAnswers"]
+
+def withConfig(contents: List<&2, R.Property<J()>>, config: Maybe<&2, J()>) -> J():
+  match config:
+    case None{}: obj(contents)
+    case Some{+selected}: obj(List.concat(&2, R.Property<J()>, contents <> requestFields(fieldsOf(selected)) <> (field("generationConfig", obj(picked(fieldsOf(selected), generationFields()))) <> Nil{}) <> Nil{}))
+
+# generateContentParametersToMldev: contents, the config's request-level
+# fields, then generationConfig. Fields outside this list are not sent, as the
+# SDK drops them.
+def requestBody(params: J()) -> J():
+  match params:
+    case T.JsonObject{+fields}: withConfig(optionalField("contents", contentsOf(get(fields, "contents")), Nil{}), get(fields, "config"))
+    case other: other

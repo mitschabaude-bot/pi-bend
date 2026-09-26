@@ -98,7 +98,7 @@ def emptySimple() -> Simple(): T.emptySimpleStreamOptions(J(), Abort.AbortSignal
 def simple(apiKey: Maybe<&2, String>, temperature: Maybe<&2, F64>, reasoning: Maybe<&2, T.ThinkingLevel>) -> Simple():
   T.SimpleStreamOptions{None{}, None{}, apiKey, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, temperature, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, reasoning, None{}, None{}}
 
-def fromSimple(+model: T.Model<J()>, +context: Context(), options: Simple()) -> Options():
+def fromSimple(+model: T.Model<J()>, +context: Context(), options: Simple()) -> Result<&2, &2, String, Options()>:
   Messages.streamSimpleOptions(~Diagnostics(), ~Unit, ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~String, ~Client.AnthropicClient(), model, context, Some{options})
 
 def streamOptions(apiKey: Maybe<&2, String>, retention: Maybe<&2, T.CacheRetention>, headers: Maybe<&2, T.ProviderHeaders()>) -> T.StreamOptions<J(), Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), String>:
@@ -381,6 +381,15 @@ def run(+model: T.Model<J()>, +context: Context(), options: Options(), +mode: Mo
     Abort.dispose(Unit, controller)
     return Outcome{message, captured, received, recorded, emitted}
 
+def simpleSelected(+model: T.Model<J()>, +context: Context(), selected: Result<&2, &2, String, Options()>, +mode: Mode) -> IO(Outcome):
+  match selected:
+    case Fail{message}: IO.die(Outcome, 1, "streamSimple threw: " ++ message)
+    case Done{options}: run(model, context, options, mode)
+
+# A streamSimple run whose options are expected to be accepted.
+def runSimple(+model: T.Model<J()>, +context: Context(), options: Simple(), +mode: Mode) -> IO(Outcome):
+  simpleSelected(model, context, fromSimple(model, context, options), mode)
+
 def textBlock(value: String) -> T.AssistantContent<V.Value>: T.AssistantText{T.TextContent{value, None{}}}
 
 # The first message with the given role in the captured payload.
@@ -475,3 +484,8 @@ def removed(name: String) -> R.Property<T.Nullable<String>>: R.Property{name, T.
 def eventsOf(outcome: Outcome) -> List<&2, Event()>:
   match outcome:
     case Outcome{_, _, _, _, events}: events
+
+def textOf2(value: Maybe<&2, J()>) -> Maybe<&2, String>:
+  match value:
+    case Some{T.JsonString{text}}: Some{text}
+    case _: None{}

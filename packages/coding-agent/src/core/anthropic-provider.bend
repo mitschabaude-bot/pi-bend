@@ -75,6 +75,12 @@ def openStream(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Mode
     task : Chan(Unit) <- IO.fork(Unit, producer(events, fetch, urlContext, model, context, options, timestamp))
     return Done{Agent.StreamLease{events, release(events, task)}}
 
-# upstream streamSimple.
+def selectedStream(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), selected: Result<&2, &2, String, Anthropic()>) -> IO(Output()):
+  match selected:
+    case Fail{message}: IO.pure(Output(), Fail{Tools.Failure{message}})
+    case Done{options}: openStream(fetch, urlContext, model, context, options)
+
+# upstream streamSimple, whose missing-auth error is thrown before a stream
+# exists.
 def open(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +context: Context(), options: Maybe<&2, Options()>) -> IO(Output()):
-  openStream(fetch, urlContext, model, context, Messages.streamSimpleOptions(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), ~Client.AnthropicClient(), model, context, Some{resolvedOptions(options)}))
+  selectedStream(fetch, urlContext, model, context, Messages.streamSimpleOptions(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), ~Client.AnthropicClient(), model, context, Some{resolvedOptions(options)}))

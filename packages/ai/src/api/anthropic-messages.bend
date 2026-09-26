@@ -962,11 +962,15 @@ def simpleOptionsWith(~G: Data, ~D: Data, ~Signal: Data, ~Telemetry: Data, ~Fetc
     case Some{T.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, choice, reasoning, _, budgets}}:
       simpleThinking(~G, ~D, ~Signal, ~Telemetry, ~Fetch, ~Error, ~Client, model, context, base, Maybe.map(&2, T.ToolChoice, AnthropicToolChoice, simpleChoice, choice), reasoning, budgets)
 
-# upstream streamSimple's AnthropicOptions: the shared base options and tool
-# choice; without a reasoning level thinking is disabled; forced-adaptive
-# models get an effort; others a budget fitted under the response ceiling.
-def streamSimpleOptions(~G: Data, ~D: Data, ~Signal: Data, ~Telemetry: Data, ~Fetch: Data, ~Error: Data, ~Client: Data, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>) -> AnthropicOptions<Signal, Telemetry, Fetch, Error, Client>:
-  simpleOptionsWith(~G, ~D, ~Signal, ~Telemetry, ~Fetch, ~Error, ~Client, model, context, Simple.buildBaseOptions(~G, ~D, ~J(), ~Signal, ~Telemetry, ~Fetch, ~Error, model, context, options, simpleKey(Signal, Telemetry, Fetch, Error, options)), options)
+def simpleHeaders(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>) -> Maybe<&2, T.ProviderHeaders()>:
+  match options:
+    case None{}: None{}
+    case Some{T.SimpleStreamOptions{_, _, _, _, _, _, _, headers, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}}: headers
+
+def authorizedOptions(~G: Data, ~D: Data, ~Signal: Data, ~Telemetry: Data, ~Fetch: Data, ~Error: Data, ~Client: Data, authorized: Bool, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>) -> Result<&2, &2, String, AnthropicOptions<Signal, Telemetry, Fetch, Error, Client>>:
+  match authorized:
+    case False{}: Fail{"No API key for provider: " ++ T.modelProvider(model)}
+    case True{}: Done{simpleOptionsWith(~G, ~D, ~Signal, ~Telemetry, ~Fetch, ~Error, ~Client, model, context, Simple.buildBaseOptions(~G, ~D, ~J(), ~Signal, ~Telemetry, ~Fetch, ~Error, model, context, options, simpleKey(Signal, Telemetry, Fetch, Error, options)), options)}
 
 # upstream mapStopReason; an unknown reason is an error message.
 type StopMapping is Data:
@@ -1051,6 +1055,14 @@ def hasRequestAuth(apiKey: Maybe<&2, String>, +headers: Maybe<&2, T.ProviderHead
   match apiKey:
     case Some{SCon{_, _}}: True{}
     case _: HeaderUtils.hasHeader(headers, "authorization") || HeaderUtils.hasHeader(headers, "x-api-key") || HeaderUtils.hasHeader(headers, "cf-aig-authorization")
+
+# upstream streamSimple's AnthropicOptions: missing auth fails before a stream
+# exists (upstream throws synchronously); otherwise the shared base options
+# and tool choice; without a reasoning level thinking is disabled;
+# forced-adaptive models get an effort; others a budget fitted under the
+# response ceiling.
+def streamSimpleOptions(~G: Data, ~D: Data, ~Signal: Data, ~Telemetry: Data, ~Fetch: Data, ~Error: Data, ~Client: Data, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>) -> Result<&2, &2, String, AnthropicOptions<Signal, Telemetry, Fetch, Error, Client>>:
+  authorizedOptions(~G, ~D, ~Signal, ~Telemetry, ~Fetch, ~Error, ~Client, hasRequestAuth(simpleKey(Signal, Telemetry, Fetch, Error, options), simpleHeaders(Signal, Telemetry, Fetch, Error, options)), model, context, options)
 
 def remember(duplicate: Bool, value: String, seen: List<&2, String>) -> List<&2, String>:
   match duplicate:

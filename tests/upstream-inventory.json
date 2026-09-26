@@ -959,57 +959,114 @@
     },
     {
       "source": "packages/ai/test/google-raw-stop-reason.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "627fb032217b789275b6b00d79c129cc32214224db8bcbb08014016f24b00af0"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/google-raw-stop-reason.bend",
+        "packages/ai/test/google-harness.bend",
+        "packages/ai/test/google-shared-support.bend",
+        "tests/google-suites.bend",
+        "tests/google_generative_ai_check.py"
+      ],
+      "sha256": "627fb032217b789275b6b00d79c129cc32214224db8bcbb08014016f24b00af0",
+      "notes": "The Google Generative AI rows pass on Bun and native 1/4 threads (tests/google_generative_ai_check.py); the Google Vertex rows and 'preserves raw Gemini finish reasons for Google Vertex errors' stay pending because the Vertex adapter is not ported."
     },
     {
       "source": "packages/ai/test/google-shared-convert-tools.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "238bf9aa3985bcec2cd6463fe84026144e687779700f4ddbb19310bb538baa64"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/google-shared-convert-tools.bend",
+        "packages/ai/test/google-harness.bend",
+        "packages/ai/test/google-shared-support.bend",
+        "tests/google-suites.bend",
+        "tests/google_generative_ai_check.py"
+      ],
+      "sha256": "238bf9aa3985bcec2cd6463fe84026144e687779700f4ddbb19310bb538baa64",
+      "notes": "All named tests pass on Bun and native 1/4 threads (tests/google_generative_ai_check.py); request/response behaviour is additionally checked by a 560-case differential against pinned pi-mono."
     },
     {
       "source": "packages/ai/test/google-shared-gemini3-unsigned-tool-call.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5f7d9c7588ea25919f0816f74a2bdc8326300ee2f3145865a99459e242bbd8f5"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/google-shared-gemini3-unsigned-tool-call.bend",
+        "packages/ai/test/google-harness.bend",
+        "packages/ai/test/google-shared-support.bend",
+        "tests/google-suites.bend",
+        "tests/google_generative_ai_check.py"
+      ],
+      "sha256": "5f7d9c7588ea25919f0816f74a2bdc8326300ee2f3145865a99459e242bbd8f5",
+      "notes": "All named tests pass on Bun and native 1/4 threads (tests/google_generative_ai_check.py); request/response behaviour is additionally checked by a 560-case differential against pinned pi-mono."
     },
     {
       "source": "packages/ai/test/google-shared-image-tool-result-routing.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "4b93e7a5b7723cd63162b77687f975b9b87d0da76b5ed2b55b88522252e72a32"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/google-shared-image-tool-result-routing.bend",
+        "packages/ai/test/google-harness.bend",
+        "packages/ai/test/google-shared-support.bend",
+        "tests/google-suites.bend",
+        "tests/google_generative_ai_check.py"
+      ],
+      "sha256": "4b93e7a5b7723cd63162b77687f975b9b87d0da76b5ed2b55b88522252e72a32",
+      "notes": "All named tests pass on Bun and native 1/4 threads (tests/google_generative_ai_check.py); request/response behaviour is additionally checked by a 560-case differential against pinned pi-mono."
     },
     {
       "source": "packages/ai/test/google-shared-retry.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "de24f8ea13e0a83f7913a2741902550f53bbbe5200dc9494af52c0a1fbb49a78"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/google-shared-retry.bend",
+        "packages/ai/test/google-harness.bend",
+        "packages/ai/test/google-shared-support.bend",
+        "tests/google-suites.bend",
+        "tests/google_generative_ai_check.py"
+      ],
+      "sha256": "de24f8ea13e0a83f7913a2741902550f53bbbe5200dc9494af52c0a1fbb49a78",
+      "notes": "All named tests pass on Bun and native 1/4 threads (tests/google_generative_ai_check.py); request/response behaviour is additionally checked by a 560-case differential against pinned pi-mono."
     },
     {
       "source": "packages/ai/test/google-shared-signed-empty-blocks.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "10247e1390ec36c323b2b36c170aa97bc5c1c98446f5c25819ed2bb82d7962c0"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/google-shared-signed-empty-blocks.bend",
+        "packages/ai/test/google-harness.bend",
+        "packages/ai/test/google-shared-support.bend",
+        "tests/google-suites.bend",
+        "tests/google_generative_ai_check.py"
+      ],
+      "sha256": "10247e1390ec36c323b2b36c170aa97bc5c1c98446f5c25819ed2bb82d7962c0",
+      "notes": "All named tests pass on Bun and native 1/4 threads (tests/google_generative_ai_check.py); request/response behaviour is additionally checked by a 560-case differential against pinned pi-mono."
     },
     {
       "source": "packages/ai/test/google-thinking-disable.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "dc899136ae7d5c367b846aa68fc693cbe20fe12a85dfd8b41ff97fb8e6f22b10"
+      "sha256": "dc899136ae7d5c367b846aa68fc693cbe20fe12a85dfd8b41ff97fb8e6f22b10",
+      "notes": "Every case is a live E2E request against Gemini (skipped without GEMINI_API_KEY); the request shapes it covers are compared in the Google differential (tests/google_generative_ai_check.py)."
     },
     {
       "source": "packages/ai/test/google-thinking-level-map.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "0a4912f8fa12fae18db5398f6f47d181d8ac853e801f0e64460b597660be955d"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/google-thinking-level-map.bend",
+        "packages/ai/test/google-harness.bend",
+        "packages/ai/test/google-shared-support.bend",
+        "tests/google-suites.bend",
+        "tests/google_generative_ai_check.py"
+      ],
+      "sha256": "0a4912f8fa12fae18db5398f6f47d181d8ac853e801f0e64460b597660be955d",
+      "notes": "The Google Generative AI half passes on Bun and native 1/4 threads (tests/google_generative_ai_check.py); the Google Vertex rows and the two Vertex-only tests stay pending because the Vertex adapter is not ported."
     },
     {
       "source": "packages/ai/test/google-thinking-signature.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "81d47d5851bb3b9fa8cfc879df0a26747dd2ffd7c7093d22ce8bac74fb241dc1"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/google-thinking-signature.bend",
+        "packages/ai/test/google-harness.bend",
+        "packages/ai/test/google-shared-support.bend",
+        "tests/google-suites.bend",
+        "tests/google_generative_ai_check.py"
+      ],
+      "sha256": "81d47d5851bb3b9fa8cfc879df0a26747dd2ffd7c7093d22ce8bac74fb241dc1",
+      "notes": "All named tests pass on Bun and native 1/4 threads (tests/google_generative_ai_check.py); request/response behaviour is additionally checked by a 560-case differential against pinned pi-mono."
     },
     {
       "source": "packages/ai/test/google-vertex-api-key-resolution.test.ts",
