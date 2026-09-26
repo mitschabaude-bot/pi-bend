@@ -33,6 +33,7 @@ import ../packages/coding-agent/src/core/session-stats.bend as Stats
 import ../packages/ai/src/utils/thinking-levels.bend as Levels
 import ./model-runtime-fixture.bend as ModelFixture
 import ../packages/coding-agent/src/core/prompt-templates.bend as Templates
+import ../packages/ai/src/utils/uuid.bend as Uuid
 
 # AgentSession scenarios over a faux provider that answers each request with
 # the next scripted text, as upstream's registerFauxProvider does. The
@@ -271,7 +272,8 @@ def sessionOf(value: Fixture) -> Session.AgentSession:
 # persist: a prompt on a persisted session writes the user and assistant entries.
 def persistScenario(+dir: String, +agentDir: String) -> IO(Unit):
   do IO<Unit>:
-    created : Sessions.Outcome(Session.Session()) <- Session.createSession(dir, Some{dir}, agentDir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.createSession(uuids, dir, Some{dir}, agentDir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixture(stored, dir, agentDir, "answer" <> Nil{}, Nil{})
     result : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "hello", Nil{}, None{})
@@ -283,7 +285,8 @@ def persistScenario(+dir: String, +agentDir: String) -> IO(Unit):
 # user message starts, and the run continues into it.
 def queueScenario(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
-    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixture(stored, dir, agentDir, "answer" <> "again" <> Nil{}, Nil{})
     Session.steer(sessionOf(value), "steered", Nil{})
@@ -323,7 +326,8 @@ def reportEntries(+session: Session.AgentSession) -> IO(Unit):
 # mutate: thinking level, model and name changes become entries and events.
 def mutateScenario(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
-    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixture(stored, dir, agentDir, Nil{}, Nil{})
     thinking : Result<&2, &2, String, Unit> <- Session.setThinkingLevel(sessionOf(value), Ai.Thinking{Ai.High{}}, Session.ModelMutationOptions{False{}})
@@ -385,7 +389,8 @@ def cycleThinking(+session: Session.AgentSession) -> IO(Unit):
 
 def modelsScenario(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
-    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixture(stored, dir, agentDir, Nil{}, Nil{})
     +session : Session.AgentSession = sessionOf(value)
@@ -436,7 +441,8 @@ def reportFinished(finished: Maybe<&1, Result<&2, &2, String, Unit>>) -> IO(Unit
 
 def busyScenario(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
-    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +started : Chan(Unit) <- Chan.new(Unit, 1)
     +release : Chan(Unit) <- Chan.new(Unit, 1)
@@ -528,7 +534,8 @@ def reportRetryAttempt(session: Session.AgentSession) -> IO(Unit):
 
 def abortedRetryScenario(+dir: String, agentDir: String, responses: String) -> IO(Unit):
   do IO<Unit>:
-    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixture(stored, dir, agentDir, String.split(responses, ';'), Nil{})
     +errors : R.Ref<Nat> <- R.new(Nat, 0n)
@@ -544,7 +551,8 @@ def abortedRetryScenario(+dir: String, agentDir: String, responses: String) -> I
 
 def retryScenario(+dir: String, agentDir: String, responses: String, +cancel: String) -> IO(Unit):
   do IO<Unit>:
-    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixture(stored, dir, agentDir, String.split(responses, ';'), Nil{})
     +started : Chan(Unit) <- Chan.new(Unit, 1)
@@ -601,7 +609,8 @@ def reportNavigation(result: Result<&2, &2, String, Session.Navigation>) -> IO(U
 
 def navigationScenario(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
-    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixture(stored, dir, agentDir, "a1" <> "a2" <> "branched" <> Nil{}, Nil{})
     first : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "one", Nil{}, None{})
@@ -743,7 +752,8 @@ def promptsOf(+prompts: String) -> List<&2, String>:
 
 def compactScenario(+dir: String, +agentDir: String, prompts: String, responses: String, action: String) -> IO(Unit):
   do IO<Unit>:
-    created : Sessions.Outcome(Session.Session()) <- Session.createSession(dir, Some{dir}, agentDir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.createSession(uuids, dir, Some{dir}, agentDir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixture(stored, dir, agentDir, String.split(responses, ';'), Nil{})
     +chosen : String = action
@@ -769,7 +779,8 @@ def strictModel() -> Ai.Model<Ai.JsonValue>: imageModel("strict", Some{Ai.ModelI
 
 def imagesScenario(+dir: String, agentDir: String, +image: String) -> IO(Unit):
   do IO<Unit>:
-    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixtureWithModel(stored, dir, agentDir, "wide done" <> "strict done" <> Nil{}, Nil{}, Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}, Nil{}}, Some{wideModel()}, ModelFixture.Source{"faux", "PI_FAUX_API_KEY", wideModel() <> strictModel() <> Nil{}} <> Nil{})
     first : Result<&2, &2, String, Unit> <- Session.prompt(sessionOf(value), "inspect", Ai.ImageContent{image, "image/png"} <> Nil{}, None{})
@@ -797,7 +808,8 @@ def screenshotModel(+mode: String) -> Ai.Model<Ai.JsonValue>:
 
 def toolImagesScenario(+dir: String, agentDir: String, +mode: String, image: String) -> IO(Unit):
   do IO<Unit>:
-    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +execute : C.Callback<Tools.Input(), Tools.Output()> <- C.create(~String, ~Tools.Input(), ~Tools.Output(), ~screenshot, image)
     +model : Ai.Model<Ai.JsonValue> = screenshotModel(mode)
@@ -931,7 +943,8 @@ def concurrentScenario(+session: Session.AgentSession) -> IO(Unit):
 
 def bashScenario(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
-    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixture(stored, dir, agentDir, Nil{}, Nil{})
     Session.recordBashResult(sessionOf(value), "echo hi", hiResult(), None{})
@@ -949,7 +962,8 @@ def bashScenario(+dir: String, agentDir: String) -> IO(Unit):
 # to settle, then precedes the next prompt.
 def bashDeferredScenario(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
-    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +started : Chan(Unit) <- Chan.new(Unit, 1)
     +release : Chan(Unit) <- Chan.new(Unit, 1)
@@ -985,7 +999,8 @@ def expandLoadout(+dir: String) -> Runtime.Loadout:
 
 def expandScenario(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
-    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(dir, Sessions.noOptions())
+    uuids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- requireSession(created)
     +value : Fixture <- fixtureWith(stored, dir, agentDir, "a1" <> "a2" <> "a3" <> "a4" <> "a5" <> Nil{}, Nil{}, expandLoadout(dir))
     Session.steer(sessionOf(value), "/greet queued", Nil{})

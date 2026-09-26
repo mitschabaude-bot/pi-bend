@@ -2066,11 +2066,6 @@ def trackingMissing(value: Maybe<&2,String>) -> Bool:
     case None{}: True{}
     case Some{""}: True{}
     case _: False{}
-def uuid4(bytes: List<&2,U32>) -> Maybe<&2,String>:
-  match bytes:
-    case a <> b <> c <> d <> e <> f <> g <> h <> i <> j <> k <> l <> m <> n <> o <> p <> Nil{}:
-      Some{Uuid.formatted(a <> b <> c <> d <> e <> f <> U32.or(64,U32.and(g,15)) <> h <> U32.or(128,U32.and(i,63)) <> j <> k <> l <> m <> n <> o <> p <> Nil{})}
-    case _: None{}
 def analyticsIdentity(id: Maybe<&2,String>,state: SettingsManager) -> Outcome(SettingsManager):
   match id:
     case None{}: Fail{StorageFailure{"Entropy source returned too few bytes"}}
@@ -2078,7 +2073,7 @@ def analyticsIdentity(id: Maybe<&2,String>,state: SettingsManager) -> Outcome(Se
 def analyticsEntropy(value: Result<&1,&1,U32 & String,List<&2,U32>>,state: SettingsManager) -> Outcome(SettingsManager):
   match value:
     case Fail{(_,message)}: Fail{StorageFailure{"Analytics identity entropy: " ++ message}}
-    case Done{bytes}: analyticsIdentity(uuid4(bytes),state)
+    case Done{bytes}: analyticsIdentity(Uuid.v4(bytes),state)
 def setEnableAnalytics(+enabled: Bool,+state: SettingsManager) -> IO(Outcome(SettingsManager)):
   Bool.pick(Unit -> IO(Outcome(SettingsManager)),enabled && trackingMissing(selectedTrackingId(get(getGlobalSettings(state),"trackingId"))),_ =>
     do IO<Outcome(SettingsManager)>:

@@ -55,7 +55,7 @@
       "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal; prompt images and tool-result images are normalized with the image setting and the current model's resize profile (f5c946480), without the before_agent_start and tool_result extension events. Full upstream session and extension integration behavior remains unverified. The skill-block parser used by restored transcripts is in core/skills.bend.",
       "source_sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7",
       "port_sha256": {
-        "packages/coding-agent/src/core/agent-session.bend": "9491dad5269412051d43275d438b8c6b87a8c91874223ca6495dab45f8af7f80",
+        "packages/coding-agent/src/core/agent-session.bend": "4a032cc1c6aa89275a2af940113acb93a5b342a471df4ba7c379282c24a4230f",
         "packages/coding-agent/src/core/skills.bend": "39c10b968daf609f60fe3c91154a63a7248c7cfd18173781eb776904dcfea236"
       },
       "ports": [
@@ -147,10 +147,10 @@
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "2df7941821123ecdc58b9e9b03f1b9c00c13f3f50ad7ed2a54dd79a77eae95d4",
-        "packages/coding-agent/src/modes/interactive/run.bend": "ae3721afba3ccff7ca67921b98bd98a071be927cc7e97fe86e2a0ed79252f6d9",
+        "packages/coding-agent/src/modes/interactive/run.bend": "77bedc539c2f977dacb54256f0a10c3090e9736faafe55de1e5335fe2a5c5be5",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c22354d3f1a7a080d3298e338943a2a49c3665589c41cda5308eea8903d0785",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "14557c415d7d4b0dd3c2d6921ce0f3dbd7b1717f23db27fdd8657b1e3d5eb547",
-        "packages/coding-agent/src/main.bend": "402a8c362d223d138f6710d0f849f5f3e9ffc4ae48e5f762484d42ebafcad13e"
+        "packages/coding-agent/src/main.bend": "e50dfd533cfd5f22680e9e164b1c618a5cade5552b12ff2a428a1849eb4afe42"
       }
     },
     "packages/tui/src/editor-component.ts": {
@@ -291,7 +291,7 @@
       ],
       "source_sha256": "8d8744ed7ba79d04fbc5e2fac16ef38083ba2d1e871d12a1a2460faa27e29f27",
       "port_sha256": {
-        "packages/coding-agent/src/cli/session-picker.bend": "e4cd4b1811b9b02c35b354328097285aa59a892a1b6d985d7ec74cce1ffd90c6"
+        "packages/coding-agent/src/cli/session-picker.bend": "91acd2e5dd20b35960319a0ace56bdd4cdbead4aedd95af23040339e5c48137a"
       }
     },
     "packages/tui/src/layout-node.ts": {
@@ -404,7 +404,7 @@
       "note": "Native session snapshot and browser assets are ported. Interactive HTML export uses the active resolved theme, including missing-configured-theme fallback, with light/dark palette checks. Custom tool HTML rendering and standalone/RPC theme parity remain unverified.",
       "source_sha256": "a82435411f3a49c65c2a81776c784552993d9ad3160eee2bbde3c49381899cf5",
       "port_sha256": {
-        "packages/coding-agent/src/core/export-html/index.bend": "b4c8a4177e89563f59a02e309318a317204ef60f48bae6047eb02dd31f9c3605"
+        "packages/coding-agent/src/core/export-html/index.bend": "06894b8163b4fe119ca23c270cb4a251c4be9914869644497d732e5a2c384c41"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/compaction-summary-message.ts": {
@@ -468,6 +468,14 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/messages.bend": "673d378b14754e8cf4e7b2c7cb130510b2d48d4bb949a5631eb0d8bf6ff9ea04"
+      }
+    },
+    "packages/ai/src/utils/uuid.ts": {
+      "state": "ported",
+      "note": "uuidv7 keeps upstream's process-wide monotonic sequence (seeded once from 40 random bits, 2^41-1 exhaustion), clamps ordinary clock rollback, preserves follower timestamps and rejects timestamps outside integers 0..2^48-1. The module state is an explicit State with a pure transition; a Generator owns it in a Ref. Bend has no module globals, so the process generator is created once by main (or by --export) and reaches session creation through the session value, AgentSession summaries and the session picker. Entropy failure is a Bend-only error result.",
+      "source_sha256": "234a48d4b999e69188fdfa49173ccfa7887d947e443ef206cc30219515105a1f",
+      "port_sha256": {
+        "packages/ai/src/utils/uuid.bend": "f673b6fc822bb998b1fc9ca9630b669a3795bf9e5265f2a6357d1d5161245061"
       }
     }
   }

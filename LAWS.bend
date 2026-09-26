@@ -44,3 +44,4 @@ import ./laws/tool-truncate.bend as ToolTruncate
 import ./laws/glob.bend as Glob
 import ./laws/compaction.bend as Compaction
 import ./laws/openai-completions.bend as OpenAICompletions
+import ./laws/uuid.bend as UUIDv7

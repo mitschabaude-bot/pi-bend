@@ -15,6 +15,7 @@ import ../packages/coding-agent/src/core/session-persistence.bend as Sessions
 import ../packages/coding-agent/src/core/settings-manager.bend as Settings
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
 import ../packages/coding-agent/src/modes/interactive/run.bend as Run
+import ../packages/ai/src/utils/uuid.bend as Uuid
 
 # A real mounted runner with an unused provider; the PTY drives only theme
 # queries, scheme notifications, rendering and /exit.
@@ -45,7 +46,8 @@ def run(args: List<String>) -> IO(Unit):
   match args:
     case assetsRoot <> +cwd <> +agentDir <> choice <> Nil{}:
       do IO<Unit>:
-        created : Sessions.Outcome(Session.Session()) <- Session.memorySession(cwd,Sessions.noOptions())
+        uuids : Uuid.Generator <- Uuid.generator()
+        created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids,cwd,Sessions.noOptions())
         +stored : Session.Session() <- requireSession(created)
         +stream : Runtime.Stream() <- Callback.create(~Unit,~Input(),~Output(),~unusedProvider,Unit{})
         +registry : StreamFn.Registry(Unit,Tools.ToolDetails,Runtime.LoopConfig(),Tools.ToolError) <- StreamFn.create(Unit,Tools.ToolDetails,Runtime.LoopConfig(),Tools.ToolError)

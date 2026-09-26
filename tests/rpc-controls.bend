@@ -6,6 +6,7 @@ import ../packages/coding-agent/src/modes/rpc.bend as Rpc
 import ./rpc-host-fixture.bend as RpcHost
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/callback.bend as Callback
+import ../packages/ai/src/utils/uuid.bend as Uuid
 
 def capture(lines: Ref.Ref<List<&2,String>>,line: String) -> IO(Unit):
   Ref.modify(List<&2,String>,Unit,lines,current => (List.append(&2,String,current,line <> Nil{}),Unit{}))
@@ -37,7 +38,8 @@ def run(args: List<String>) -> IO(Unit):
   match args:
     case +cwd <> +agentDir <> Nil{}:
       do IO<Unit>:
-        created : Stored.Outcome(Session.Session()) <- Session.createSession(cwd,Some{cwd},agentDir,Stored.noOptions())
+        uuids : Uuid.Generator <- Uuid.generator()
+        created : Stored.Outcome(Session.Session()) <- Session.createSession(uuids,cwd,Some{cwd},agentDir,Stored.noOptions())
         stored : Session.Session() <- Faux.requireSession(created)
         +fixture : Faux.Fixture <- Faux.fixture(stored,cwd,agentDir,"answer#42" <> Nil{},Nil{})
         +session : Session.AgentSession <- IO.pure(Session.AgentSession,Faux.sessionOf(fixture))

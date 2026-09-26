@@ -45,3 +45,4 @@ import ./proofs/tool-truncate.bend as ToolTruncate
 import ./proofs/glob.bend as Glob
 import ./proofs/compaction.bend as Compaction
 import ./proofs/openai-completions.bend as OpenAICompletions
+import ./proofs/uuid.bend as UUIDv7

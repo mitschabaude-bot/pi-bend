@@ -1528,9 +1528,12 @@
     },
     {
       "source": "packages/ai/test/uuid.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f08afe6d4d1343bf676709cf089172700806ce3ad4f8ccc35e3f033eaca11548"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/uuid.bend"
+      ],
+      "sha256": "f08afe6d4d1343bf676709cf089172700806ce3ad4f8ccc35e3f033eaca11548",
+      "notes": "All four named tests (nine cases with the it.each boundaries) pass on Bun and native one/four threads. The module-level generator state is an explicit Uuid.State threaded through the cases in file order; vi's fake clock and stubbed getRandomValues become the now and random-byte inputs of the pure Uuid.next. Timestamps are F64 as upstream numbers, so -1, 2^48, 1.5, NaN and Infinity are all rejected. Supplements: exact ids against pinned upstream uuidv7 for fixed random bytes, sequence exhaustion, and four concurrent callers of one process Generator. laws/uuid.bend proves the ordering of ordinary ids across followers and clock rollback for the pure transition."
     },
     {
       "source": "packages/ai/test/validation.test.ts",

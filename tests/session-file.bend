@@ -8,6 +8,7 @@ import ../packages/coding-agent/src/core/messages.bend as Messages
 import ../packages/coding-agent/src/core/session-manager.bend as S
 import ../packages/coding-agent/src/core/session-json.bend as SJ
 import ../packages/coding-agent/src/core/session-persistence.bend as P
+import ../packages/ai/src/utils/uuid.bend as Uuid
 import ../packages/runtime/src/filesystem.bend as FS
 import ../packages/runtime/src/utf8.bend as Utf8
 import ../packages/runtime/src/posix-path.bend as Path
@@ -34,7 +35,7 @@ def Entry() -> Data: S.SessionEntry<Unit, Unit, V.Value>
 def Outcome() -> Data: P.Outcome(Session())
 
 type World is Data:
-  World{session: Maybe<&2, Session()>, agentDir: String, cwd: String}
+  World{session: Maybe<&2, Session()>, agentDir: String, cwd: String, ids: Uuid.Generator}
 
 # Fields
 # ------
@@ -212,13 +213,13 @@ def assistantMessage(text: String, timestamp: F64) -> Agent.AgentMessage<Unit, U
 
 def replaced(world: World, outcome: Outcome()) -> World & V.Value:
   match world outcome:
-    case World{previous, agentDir, cwd} Fail{error}: (World{previous, agentDir, cwd}, errorLine(P.message(error)))
-    case World{_, agentDir, cwd} Done{+session}: (World{Some{session}, agentDir, cwd}, shape(session))
+    case World{previous, agentDir, cwd, +ids} Fail{error}: (World{previous, agentDir, cwd, ids}, errorLine(P.message(error)))
+    case World{_, agentDir, cwd, +ids} Done{+session}: (World{Some{session}, agentDir, cwd, ids}, shape(session))
 
 def replacedWithReturn(world: World, outcome: Outcome()) -> World & V.Value:
   match world outcome:
-    case World{previous, agentDir, cwd} Fail{error}: (World{previous, agentDir, cwd}, errorLine(P.message(error)))
-    case World{_, agentDir, cwd} Done{+session}: (World{Some{session}, agentDir, cwd}, withReturned(session, shape(session)))
+    case World{previous, agentDir, cwd, +ids} Fail{error}: (World{previous, agentDir, cwd, ids}, errorLine(P.message(error)))
+    case World{_, agentDir, cwd, +ids} Done{+session}: (World{Some{session}, agentDir, cwd, ids}, withReturned(session, shape(session)))
 
 # The operation files carry well-formed replacements.
 def replacementOf(found: Maybe<&2, V.Value>) -> Maybe<&2, S.ContextEditableContent>:
@@ -228,13 +229,13 @@ def replacementOf(found: Maybe<&2, V.Value>) -> Maybe<&2, S.ContextEditableConte
 
 def appended(world: World, outcome: P.Outcome(P.Appended<Unit, Unit, V.Value>), +timestamp: Maybe<&2, F64>) -> World & V.Value:
   match world outcome:
-    case World{previous, agentDir, cwd} Fail{error}: (World{previous, agentDir, cwd}, errorLine(P.message(error)))
-    case World{_, agentDir, cwd} Done{P.Appended{session, +id}}: (World{Some{session}, agentDir, cwd}, Json.object(Json.field("id", V.Text{id}, Json.optional("timestamp", Maybe.map(&2, F64, V.Value, time => V.Number{time}, timestamp), Nil{}))))
+    case World{previous, agentDir, cwd, +ids} Fail{error}: (World{previous, agentDir, cwd, ids}, errorLine(P.message(error)))
+    case World{_, agentDir, cwd, +ids} Done{P.Appended{session, +id}}: (World{Some{session}, agentDir, cwd, ids}, Json.object(Json.field("id", V.Text{id}, Json.optional("timestamp", Maybe.map(&2, F64, V.Value, time => V.Number{time}, timestamp), Nil{}))))
 
 def modified(world: World, outcome: Outcome()) -> World & V.Value:
   match world outcome:
-    case World{previous, agentDir, cwd} Fail{error}: (World{previous, agentDir, cwd}, errorLine(P.message(error)))
-    case World{_, agentDir, cwd} Done{+session}: (World{Some{session}, agentDir, cwd}, snapshot(session))
+    case World{previous, agentDir, cwd, +ids} Fail{error}: (World{previous, agentDir, cwd, ids}, errorLine(P.message(error)))
+    case World{_, agentDir, cwd, +ids} Done{+session}: (World{Some{session}, agentDir, cwd, ids}, snapshot(session))
 
 def options(+fields: R.Record<V.Value>) -> P.NewSessionOptions:
   P.NewSessionOptions{opt(fields, "id"), opt(fields, "parentSession")}
@@ -294,54 +295,54 @@ def sessionOp(+world: World, +fields: R.Record<V.Value>, +op: String, +session: 
 
 def withSession(world: World, fields: R.Record<V.Value>, op: String) -> IO(World & V.Value):
   match world:
-    case World{None{}, agentDir, cwd}: IO.pure(World & V.Value, (World{None{}, agentDir, cwd}, errorLine("no session")))
-    case World{Some{+session}, agentDir, cwd}: sessionOp(World{Some{session}, agentDir, cwd}, fields, op, session)
+    case World{None{}, agentDir, cwd, +ids}: IO.pure(World & V.Value, (World{None{}, agentDir, cwd, ids}, errorLine("no session")))
+    case World{Some{+session}, agentDir, cwd, +ids}: sessionOp(World{Some{session}, agentDir, cwd, ids}, fields, op, session)
 
 def step(world: World, +fields: R.Record<V.Value>, +op: String) -> IO(World & V.Value):
   match world op:
-    case World{previous, +agentDir, +cwd} "load":
+    case World{previous, +agentDir, +cwd, +ids} "load":
       do IO<World & V.Value>:
         entries : List<&2, S.FileEntry<Unit, Unit, V.Value>> <- P.loadEntriesFromFile(~Unit, ~Unit, ~V.Value, ~readUnit, ~readUnit, ~readSame, str(fields, "path"))
-        return (World{previous, agentDir, cwd}, Json.object(Json.field("entries", V.ArrayValue{fileEntryValues(entries)}, Nil{})))
-    case World{previous, +agentDir, +cwd} "open":
+        return (World{previous, agentDir, cwd, ids}, Json.object(Json.field("entries", V.ArrayValue{fileEntryValues(entries)}, Nil{})))
+    case World{previous, +agentDir, +cwd, +ids} "open":
       do IO<World & V.Value>:
-        outcome : Outcome() <- P.open(~Unit, ~Unit, ~V.Value, ~unitValue, ~unitValue, ~same, ~readUnit, ~readUnit, ~readSame, str(fields, "path"), opt(fields, "sessionDir"), opt(fields, "cwdOverride"), cwd)
-        return replaced(World{previous, agentDir, cwd}, outcome)
-    case World{previous, +agentDir, +cwd} "create":
+        outcome : Outcome() <- P.open(~Unit, ~Unit, ~V.Value, ~unitValue, ~unitValue, ~same, ~readUnit, ~readUnit, ~readSame, ids, str(fields, "path"), opt(fields, "sessionDir"), opt(fields, "cwdOverride"), cwd)
+        return replaced(World{previous, agentDir, cwd, ids}, outcome)
+    case World{previous, +agentDir, +cwd, +ids} "create":
       do IO<World & V.Value>:
-        outcome : Outcome() <- P.create(~Unit, ~Unit, ~V.Value, ~unitValue, ~unitValue, ~same, ~readUnit, ~readUnit, ~readSame, str(fields, "cwd"), opt(fields, "sessionDir"), agentDir, options(fields))
-        return replaced(World{previous, agentDir, cwd}, outcome)
-    case World{previous, +agentDir, +cwd} "inMemory":
+        outcome : Outcome() <- P.create(~Unit, ~Unit, ~V.Value, ~unitValue, ~unitValue, ~same, ~readUnit, ~readUnit, ~readSame, ids, str(fields, "cwd"), opt(fields, "sessionDir"), agentDir, options(fields))
+        return replaced(World{previous, agentDir, cwd, ids}, outcome)
+    case World{previous, +agentDir, +cwd, +ids} "inMemory":
       do IO<World & V.Value>:
-        outcome : Outcome() <- P.inMemory(~Unit, ~Unit, ~V.Value, ~unitValue, ~unitValue, ~same, ~readUnit, ~readUnit, ~readSame, Maybe.default(&2, String, opt(fields, "cwd"), cwd), options(fields), restoredEntries(valuesOf(value(fields, "entries"))))
-        return replaced(World{previous, agentDir, cwd}, outcome)
-    case World{previous, +agentDir, +cwd} "continueRecent":
+        outcome : Outcome() <- P.inMemory(~Unit, ~Unit, ~V.Value, ~unitValue, ~unitValue, ~same, ~readUnit, ~readUnit, ~readSame, ids, Maybe.default(&2, String, opt(fields, "cwd"), cwd), options(fields), restoredEntries(valuesOf(value(fields, "entries"))))
+        return replaced(World{previous, agentDir, cwd, ids}, outcome)
+    case World{previous, +agentDir, +cwd, +ids} "continueRecent":
       do IO<World & V.Value>:
-        outcome : Outcome() <- P.continueRecent(~Unit, ~Unit, ~V.Value, ~unitValue, ~unitValue, ~same, ~readUnit, ~readUnit, ~readSame, str(fields, "cwd"), opt(fields, "sessionDir"), agentDir)
-        return replaced(World{previous, agentDir, cwd}, outcome)
-    case World{previous, +agentDir, +cwd} "forkFrom":
+        outcome : Outcome() <- P.continueRecent(~Unit, ~Unit, ~V.Value, ~unitValue, ~unitValue, ~same, ~readUnit, ~readUnit, ~readSame, ids, str(fields, "cwd"), opt(fields, "sessionDir"), agentDir)
+        return replaced(World{previous, agentDir, cwd, ids}, outcome)
+    case World{previous, +agentDir, +cwd, +ids} "forkFrom":
       do IO<World & V.Value>:
-        outcome : Outcome() <- P.forkFrom(~Unit, ~Unit, ~V.Value, ~unitValue, ~unitValue, ~same, ~readUnit, ~readUnit, ~readSame, str(fields, "sourcePath"), str(fields, "targetCwd"), opt(fields, "sessionDir"), agentDir, options(fields))
-        return replaced(World{previous, agentDir, cwd}, outcome)
-    case World{previous, +agentDir, +cwd} "findMostRecent":
+        outcome : Outcome() <- P.forkFrom(~Unit, ~Unit, ~V.Value, ~unitValue, ~unitValue, ~same, ~readUnit, ~readUnit, ~readSame, ids, str(fields, "sourcePath"), str(fields, "targetCwd"), opt(fields, "sessionDir"), agentDir, options(fields))
+        return replaced(World{previous, agentDir, cwd, ids}, outcome)
+    case World{previous, +agentDir, +cwd, +ids} "findMostRecent":
       do IO<World & V.Value>:
         found : Maybe<&2, String> <- P.findMostRecentSession(str(fields, "dir"), opt(fields, "cwd"))
-        return (World{previous, agentDir, cwd}, Json.object(Json.field("path", nullable(found), Nil{})))
-    case World{previous, +agentDir, +cwd} "findById":
+        return (World{previous, agentDir, cwd, ids}, Json.object(Json.field("path", nullable(found), Nil{})))
+    case World{previous, +agentDir, +cwd, +ids} "findById":
       do IO<World & V.Value>:
         found : Maybe<&2, String> <- P.findById(str(fields, "cwd"), str(fields, "id"), opt(fields, "sessionDir"), agentDir)
-        return (World{previous, agentDir, cwd}, Json.object(Json.field("path", nullable(found), Nil{})))
-    case World{previous, +agentDir, +cwd} "list":
+        return (World{previous, agentDir, cwd, ids}, Json.object(Json.field("path", nullable(found), Nil{})))
+    case World{previous, +agentDir, +cwd, +ids} "list":
       do IO<World & V.Value>:
         order : P.FileOrder() <- orderOf(opt(fields, "packageDir"))
         infos : List<&2, S.SessionInfo> <- P.list(str(fields, "cwd"), opt(fields, "sessionDir"), agentDir, order)
-        return (World{previous, agentDir, cwd}, Json.object(Json.field("sessions", V.ArrayValue{infoValues(infos)}, Nil{})))
-    case World{previous, +agentDir, +cwd} "listAll":
+        return (World{previous, agentDir, cwd, ids}, Json.object(Json.field("sessions", V.ArrayValue{infoValues(infos)}, Nil{})))
+    case World{previous, +agentDir, +cwd, +ids} "listAll":
       do IO<World & V.Value>:
         order : P.FileOrder() <- orderOf(opt(fields, "packageDir"))
         infos : List<&2, S.SessionInfo> <- P.listAll(opt(fields, "sessionDir"), Path.join(agentDir, "sessions"), order)
-        return (World{previous, agentDir, cwd}, Json.object(Json.field("paths", V.ArrayValue{infoPaths(infos)}, Nil{})))
-    case World{previous, +agentDir, +cwd} "listAllCancelled":
+        return (World{previous, agentDir, cwd, ids}, Json.object(Json.field("paths", V.ArrayValue{infoPaths(infos)}, Nil{})))
+    case World{previous, +agentDir, +cwd, +ids} "listAllCancelled":
       do IO<World & V.Value>:
         order : P.FileOrder() <- orderOf(opt(fields, "packageDir"))
         +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
@@ -350,15 +351,15 @@ def step(world: World, +fields: R.Record<V.Value>, +op: String) -> IO(World & V.
         second : P.Listing() <- P.listAllObserved(None{}, Path.join(agentDir, "sessions"), None{}, P.Observer{Some{Abort.signal(Unit, controller)}, None{}})
         Callback.dispose(P.ListProgress, Unit, callback)
         Abort.dispose(Unit, controller)
-        return (World{previous, agentDir, cwd}, Json.object(Json.field("first", rejection(first), Json.field("second", rejection(second), Nil{}))))
-    case World{previous, +agentDir, +cwd} "migrate":
+        return (World{previous, agentDir, cwd, ids}, Json.object(Json.field("first", rejection(first), Json.field("second", rejection(second), Nil{}))))
+    case World{previous, +agentDir, +cwd, +ids} "migrate":
       do IO<World & V.Value>:
         migration : SJ.Migration <- SJ.migrated(Maybe.default(&2, List<&2, V.Value>, valuesOf(value(fields, "entries")), Nil{}))
-        return (World{previous, agentDir, cwd}, migratedValues(migration))
-    case World{previous, +agentDir, +cwd} "sleep":
+        return (World{previous, agentDir, cwd, ids}, migratedValues(migration))
+    case World{previous, +agentDir, +cwd, +ids} "sleep":
       do IO<World & V.Value>:
         IO.sleep(U32.from_nat(num(fields, "ms")))
-        return (World{previous, agentDir, cwd}, Json.object(Nil{}))
+        return (World{previous, agentDir, cwd, ids}, Json.object(Nil{}))
     case current other: withSession(current, fields, other)
 
 def perform(+world: World, parsed: Result<&2, &2, Decode.ParseError, V.Value>) -> IO(World & V.Value):
@@ -414,7 +415,8 @@ def start(args: List<String>) -> IO(Unit):
         agentDir : Result<&1, &1, U32 & String, String> <- IO.get_env("PI_CODING_AGENT_DIR")
         cwd : Result<&2, &2, FS.Error, String> <- FS.cwd()
         lines : List<&2, String> <- script(path)
-        operations(lines, World{None{}, Result.default(&1, &1, U32 & String, String, agentDir, "/tmp/pi-agent"), located(cwd)})
+        ids : Uuid.Generator <- Uuid.generator()
+        operations(lines, World{None{}, Result.default(&1, &1, U32 & String, String, agentDir, "/tmp/pi-agent"), located(cwd), ids})
     case _: IO.die(Unit, 1, "usage: session-file <operations.jsonl>")
 
 def main() -> IO(Unit):

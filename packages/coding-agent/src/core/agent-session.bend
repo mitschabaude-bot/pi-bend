@@ -82,20 +82,20 @@ def readUnit(value: V.Value) -> Result<&2, &2, Decode.Error, Unit>: Done{Unit{}}
 def readRaw(value: V.Value) -> Result<&2, &2, Decode.Error, V.Value>: Done{value}
 def readDetails(value: V.Value) -> Result<&2, &2, Decode.Error, Tools.ToolDetails>: Done{Tools.RawDetails{value}}
 
-def createSession(cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, options: Sessions.NewSessionOptions) -> IO(Sessions.Outcome(Session())):
-  Sessions.create(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, cwd, sessionDir, agentDir, options)
+def createSession(ids: Uuid.Generator, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, options: Sessions.NewSessionOptions) -> IO(Sessions.Outcome(Session())):
+  Sessions.create(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, ids, cwd, sessionDir, agentDir, options)
 
-def openSession(path: String, sessionDir: Maybe<&2, String>, cwd: String) -> IO(Sessions.Outcome(Session())):
-  Sessions.open(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, path, sessionDir, None{}, cwd)
+def openSession(ids: Uuid.Generator, path: String, sessionDir: Maybe<&2, String>, cwd: String) -> IO(Sessions.Outcome(Session())):
+  Sessions.open(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, ids, path, sessionDir, None{}, cwd)
 
-def continueSession(cwd: String, sessionDir: Maybe<&2, String>, agentDir: String) -> IO(Sessions.Outcome(Session())):
-  Sessions.continueRecent(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, cwd, sessionDir, agentDir)
+def continueSession(ids: Uuid.Generator, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String) -> IO(Sessions.Outcome(Session())):
+  Sessions.continueRecent(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, ids, cwd, sessionDir, agentDir)
 
-def memorySession(cwd: String, options: Sessions.NewSessionOptions) -> IO(Sessions.Outcome(Session())):
-  Sessions.inMemory(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, cwd, options, None{})
+def memorySession(ids: Uuid.Generator, cwd: String, options: Sessions.NewSessionOptions) -> IO(Sessions.Outcome(Session())):
+  Sessions.inMemory(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, ids, cwd, options, None{})
 
-def forkSession(source: String, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, options: Sessions.NewSessionOptions) -> IO(Sessions.Outcome(Session())):
-  Sessions.forkFrom(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, source, cwd, sessionDir, agentDir, options)
+def forkSession(ids: Uuid.Generator, source: String, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, options: Sessions.NewSessionOptions) -> IO(Sessions.Outcome(Session())):
+  Sessions.forkFrom(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, ~readUnit, ~readDetails, ~readRaw, ids, source, cwd, sessionDir, agentDir, options)
 
 def recordMessage(session: Session(), message: Message()) -> IO(Sessions.Outcome(Appended())):
   Sessions.appendMessage(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, session, message)
@@ -1130,6 +1130,12 @@ def sessionOf(session: AgentSession) -> IO(Session()):
         current : Shared <- R.read(Shared, shared)
         return sharedSession(current)
 
+# The process UUIDv7 generator shared by every session of this process.
+def idGenerator(session: AgentSession) -> IO(Uuid.Generator):
+  do IO<Uuid.Generator>:
+    current : Session() <- sessionOf(session)
+    return Sessions.getIdGenerator(Unit, Tools.ToolDetails, V.Value, current)
+
 def messages(session: AgentSession) -> IO(List<&2, Message()>):
   do IO<List<&2, Message()>>:
     current : AgentState() <- state(session)
@@ -1498,8 +1504,13 @@ def notifyRetry(env: RetryNotifier, notice: Retry.RetryNotice) -> IO(Unit):
     case RetryNotifier{shared, source} Retry.RetryAttemptStart{}: emit(shared, SummarizationRetryAttemptStart{source})
     case RetryNotifier{shared, _} Retry.RetryFinished{_, _, _}: emit(shared, SummarizationRetryFinished{})
 
-def requestIdOf(generated: Result<&2, &2, String, String>) -> String:
-  Result.default(&2, &2, String, String, generated, "compaction")
+def requestIdOf(generated: Result<&2, &2, Uuid.Error, String>) -> String:
+  Result.default(&2, &2, Uuid.Error, String, generated, "compaction")
+
+# Summaries get a fresh routing id from the process generator (upstream
+# completeSummarization's uuidv7()).
+def sessionIds(state: Shared) -> Uuid.Generator:
+  Sessions.getIdGenerator(Unit, Tools.ToolDetails, V.Value, sharedSession(state))
 
 # upstream _runDefaultCompaction: summarize with the agent's stream function,
 # the session's thinking level, the retry policy and retry notices.
@@ -1508,8 +1519,8 @@ def runDefaultCompaction(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +model
     stream : Runtime.Stream() <- Agent.getStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     config : Runtime.LoopConfig() <- Agent.getConfig(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    generated : Result<&2, &2, String, String> <- Uuid.generate()
-    state : Shared <- R.read(Shared, shared)
+    +state : Shared <- R.read(Shared, shared)
+    generated : Result<&2, &2, Uuid.Error, String> <- Uuid.uuidv7(sessionIds(state), None{})
     +summarizer : Compaction.Summarizer(Unit, Tools.ToolDetails) <- C.create(~SummarizerEnv, ~Compaction.SummaryRequest<Unit, Tools.ToolDetails>, ~Ai.AssistantMessage<V.Value, Unit>, ~summarizeWith, SummarizerEnv{stream, config, model, stateThinking(current), signal, requestIdOf(generated)})
     +callbacks : Retry.RetryCallbacks() <- C.create(~RetryNotifier, ~Retry.RetryNotice, ~Unit, ~notifyRetry, RetryNotifier{shared, CompactionSource{reason}})
     result : Result<&2, &2, String, Compaction.CompactionResult> <- Compaction.compact(~Unit, ~Tools.ToolDetails, ~V.Value, summarizer, preparation, model, customInstructions, Some{signal}, Some{policyOf(state)}, Some{callbacks})
@@ -2644,8 +2655,8 @@ def summarizeBranch(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +settings: 
         stream : Runtime.Stream() <- Agent.getStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         config : Runtime.LoopConfig() <- Agent.getConfig(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-        generated : Result<&2, &2, String, String> <- Uuid.generate()
-        state : Shared <- R.read(Shared, shared)
+        +state : Shared <- R.read(Shared, shared)
+        generated : Result<&2, &2, Uuid.Error, String> <- Uuid.uuidv7(sessionIds(state), None{})
         +summarizer : Compaction.Summarizer(Unit, Tools.ToolDetails) <- C.create(~SummarizerEnv, ~Compaction.SummaryRequest<Unit, Tools.ToolDetails>, ~Ai.AssistantMessage<V.Value, Unit>, ~summarizeWith, SummarizerEnv{stream, config, model, stateThinking(current), signal, requestIdOf(generated)})
         +callbacks : Retry.RetryCallbacks() <- C.create(~RetryNotifier, ~Retry.RetryNotice, ~Unit, ~notifyRetry, RetryNotifier{shared, BranchSummarySource{}})
         result : Result<&2, &2, String, BranchSummary.Summary> <- BranchSummary.generate(~Unit, ~Tools.ToolDetails, summarizer, entries, model, branchReserve(Settings.getBranchSummarySettings(settings)), signal, custom, Maybe.default(&2, Bool, replace, False{}), Some{policyOf(state)}, Some{callbacks})

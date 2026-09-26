@@ -44,6 +44,7 @@ import ../../runtime/src/string.bend as Strings
 import ../../runtime/src/record.bend as Record
 import ../../runtime/src/abort.bend as Abort
 import ../../runtime/src/case-map.bend as CaseMap
+import ../../ai/src/utils/uuid.bend as Uuid
 
 # The pi entry point: argument parsing, mode selection, session selection,
 # initial message assembly, runtime creation and exit behavior. Extensions
@@ -297,122 +298,122 @@ def promptConfirm(message: String) -> IO(Bool):
     bytes : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile("/dev/stdin")
     return affirmative(String.trim(firstLine(Maybe.default(&2, String, trimmed(bytes), ""))))
 
-def forkedIf(confirmed: Bool, path: String, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String) -> IO(Selected()):
+def forkedIf(ids: Uuid.Generator, confirmed: Bool, path: String, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String) -> IO(Selected()):
   match confirmed:
     case False{}: IO.pure(Selected(), Fail{Aborted{"Aborted."}})
     case True{}:
       do IO<Selected()>:
-        forked : Sessions.Outcome(Session()) <- AgentSession.forkSession(path, cwd, sessionDir, agentDir, Sessions.noOptions())
+        forked : Sessions.Outcome(Session()) <- AgentSession.forkSession(ids, path, cwd, sessionDir, agentDir, Sessions.noOptions())
         return selected(forked)
 
-def openResolved(resolved: Resolved, +cwd: String, +sessionDir: Maybe<&2, String>, agentDir: String) -> IO(Selected()):
+def openResolved(+ids: Uuid.Generator, resolved: Resolved, +cwd: String, +sessionDir: Maybe<&2, String>, agentDir: String) -> IO(Selected()):
   match resolved:
     case ResolvedPath{path}:
       do IO<Selected()>:
-        opened : Sessions.Outcome(Session()) <- AgentSession.openSession(path, sessionDir, cwd)
+        opened : Sessions.Outcome(Session()) <- AgentSession.openSession(ids, path, sessionDir, cwd)
         return selected(opened)
     case ResolvedLocal{path}:
       do IO<Selected()>:
-        opened : Sessions.Outcome(Session()) <- AgentSession.openSession(path, sessionDir, cwd)
+        opened : Sessions.Outcome(Session()) <- AgentSession.openSession(ids, path, sessionDir, cwd)
         return selected(opened)
     case ResolvedGlobal{path, other}:
       do IO<Selected()>:
         IO.print("Session found in different project: " ++ other)
         confirmed : Bool <- promptConfirm("Fork this session into current directory?")
-        forkedIf(confirmed, path, cwd, sessionDir, agentDir)
+        forkedIf(ids, confirmed, path, cwd, sessionDir, agentDir)
     case NotFound{arg}: IO.pure(Selected(), Fail{Failed{"No session found matching '" ++ arg ++ "'"}})
 
-def forkResolved(resolved: Resolved, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, +sessionId: Maybe<&2, String>) -> IO(Selected()):
+def forkResolved(ids: Uuid.Generator, resolved: Resolved, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, +sessionId: Maybe<&2, String>) -> IO(Selected()):
   match resolved:
     case NotFound{arg}: IO.pure(Selected(), Fail{Failed{"No session found matching '" ++ arg ++ "'"}})
     case ResolvedPath{path}:
       do IO<Selected()>:
-        forked : Sessions.Outcome(Session()) <- AgentSession.forkSession(path, cwd, sessionDir, agentDir, Sessions.NewSessionOptions{sessionId, None{}})
+        forked : Sessions.Outcome(Session()) <- AgentSession.forkSession(ids, path, cwd, sessionDir, agentDir, Sessions.NewSessionOptions{sessionId, None{}})
         return selected(forked)
     case ResolvedLocal{path}:
       do IO<Selected()>:
-        forked : Sessions.Outcome(Session()) <- AgentSession.forkSession(path, cwd, sessionDir, agentDir, Sessions.NewSessionOptions{sessionId, None{}})
+        forked : Sessions.Outcome(Session()) <- AgentSession.forkSession(ids, path, cwd, sessionDir, agentDir, Sessions.NewSessionOptions{sessionId, None{}})
         return selected(forked)
     case ResolvedGlobal{path, _}:
       do IO<Selected()>:
-        forked : Sessions.Outcome(Session()) <- AgentSession.forkSession(path, cwd, sessionDir, agentDir, Sessions.NewSessionOptions{sessionId, None{}})
+        forked : Sessions.Outcome(Session()) <- AgentSession.forkSession(ids, path, cwd, sessionDir, agentDir, Sessions.NewSessionOptions{sessionId, None{}})
         return selected(forked)
 
-def forkUnlessExisting(existing: Maybe<&2, String>, arg: String, environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, sessionsDir: String, +sessionId: Maybe<&2, String>, packageDir: String) -> IO(Selected()):
+def forkUnlessExisting(ids: Uuid.Generator, existing: Maybe<&2, String>, arg: String, environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, sessionsDir: String, +sessionId: Maybe<&2, String>, packageDir: String) -> IO(Selected()):
   match existing sessionId:
     case Some{_} Some{+id}: IO.pure(Selected(), Fail{Failed{"Session already exists with id '" ++ id ++ "'"}})
     case _ _:
       do IO<Selected()>:
         resolved : Resolved <- resolveSessionPath(arg, environment, cwd, sessionDir, agentDir, sessionsDir, packageDir)
-        forkResolved(resolved, cwd, sessionDir, agentDir, sessionId)
+        forkResolved(ids, resolved, cwd, sessionDir, agentDir, sessionId)
 
 def existingById(sessionId: Maybe<&2, String>, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String) -> IO(Maybe<&2, String>):
   match sessionId:
     case None{}: IO.pure(Maybe<&2, String>, None{})
     case Some{id}: Sessions.findById(cwd, id, sessionDir, agentDir)
 
-def openOrCreateById(existing: Maybe<&2, String>, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, sessionId: Maybe<&2, String>) -> IO(Selected()):
+def openOrCreateById(ids: Uuid.Generator, existing: Maybe<&2, String>, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, sessionId: Maybe<&2, String>) -> IO(Selected()):
   match existing sessionId:
     case Some{path} _:
       do IO<Selected()>:
-        opened : Sessions.Outcome(Session()) <- AgentSession.openSession(path, sessionDir, cwd)
+        opened : Sessions.Outcome(Session()) <- AgentSession.openSession(ids, path, sessionDir, cwd)
         return selected(opened)
     case None{} Some{+id}:
       do IO<Selected()>:
         IO.print_err("Warning: No project session found with id '" ++ id ++ "'; creating a new session with that id.")
-        created : Sessions.Outcome(Session()) <- AgentSession.createSession(cwd, sessionDir, agentDir, Sessions.NewSessionOptions{Some{id}, None{}})
+        created : Sessions.Outcome(Session()) <- AgentSession.createSession(ids, cwd, sessionDir, agentDir, Sessions.NewSessionOptions{Some{id}, None{}})
         return selected(created)
     case None{} None{}:
       do IO<Selected()>:
-        created : Sessions.Outcome(Session()) <- AgentSession.createSession(cwd, sessionDir, agentDir, Sessions.noOptions())
+        created : Sessions.Outcome(Session()) <- AgentSession.createSession(ids, cwd, sessionDir, agentDir, Sessions.noOptions())
         return selected(created)
 
-def picked(result: Picker.Outcome(),cwd: String,sessionDir: Maybe<&2,String>) -> IO(Selected()):
+def picked(ids: Uuid.Generator,result: Picker.Outcome(),cwd: String,sessionDir: Maybe<&2,String>) -> IO(Selected()):
   match result:
     case Fail{message}: IO.pure(Selected(),Fail{Failed{message}})
     case Done{None{}}: IO.pure(Selected(),Fail{Aborted{"No session selected"}})
     case Done{Some{path}}:
       do IO<Selected()>:
-        opened : Sessions.Outcome(Session()) <- AgentSession.openSession(path,sessionDir,cwd)
+        opened : Sessions.Outcome(Session()) <- AgentSession.openSession(ids,path,sessionDir,cwd)
         return selected(opened)
 
 # upstream createSessionManager: --no-session (and help/model listing) stay
 # in memory; --fork and --session resolve their argument; --continue takes
 # the latest session; --session-id reopens or names a new session.
-def selectSession(continue: Bool, +resume: Bool, +session: Maybe<&2, String>, +sessionId: Maybe<&2, String>, fork: Maybe<&2, String>, +environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, +sessionsDir: String, visual: Picker.Visual) -> IO(Selected()):
+def selectSession(+ids: Uuid.Generator, continue: Bool, +resume: Bool, +session: Maybe<&2, String>, +sessionId: Maybe<&2, String>, fork: Maybe<&2, String>, +environment: Paths.Environment, +cwd: String, +sessionDir: Maybe<&2, String>, +agentDir: String, +sessionsDir: String, visual: Picker.Visual) -> IO(Selected()):
   match continue resume session fork:
     case _ _ _ Some{arg}:
       do IO<Selected()>:
         existing : Maybe<&2, String> <- existingById(sessionId, cwd, sessionDir, agentDir)
-        forkUnlessExisting(existing, arg, environment, cwd, sessionDir, agentDir, sessionsDir, sessionId, Picker.assetsOf(visual))
+        forkUnlessExisting(ids, existing, arg, environment, cwd, sessionDir, agentDir, sessionsDir, sessionId, Picker.assetsOf(visual))
     case _ _ Some{arg} None{}:
       do IO<Selected()>:
         resolved : Resolved <- resolveSessionPath(arg, environment, cwd, sessionDir, agentDir, sessionsDir, Picker.assetsOf(visual))
-        openResolved(resolved, cwd, sessionDir, agentDir)
+        openResolved(ids, resolved, cwd, sessionDir, agentDir)
     case _ True{} None{} None{}:
       do IO<Selected()>:
         choice : Picker.Outcome() <- Picker.selectSession(cwd,sessionDir,agentDir,sessionsDir,visual)
-        picked(choice,cwd,sessionDir)
+        picked(ids,choice,cwd,sessionDir)
     case True{} False{} None{} None{}:
       do IO<Selected()>:
-        continued : Sessions.Outcome(Session()) <- AgentSession.continueSession(cwd, sessionDir, agentDir)
+        continued : Sessions.Outcome(Session()) <- AgentSession.continueSession(ids, cwd, sessionDir, agentDir)
         return selected(continued)
     case False{} False{} None{} None{}:
       do IO<Selected()>:
         existing : Maybe<&2, String> <- existingById(sessionId, cwd, sessionDir, agentDir)
-        openOrCreateById(existing, cwd, sessionDir, agentDir, sessionId)
+        openOrCreateById(ids, existing, cwd, sessionDir, agentDir, sessionId)
 
-def inMemoryOrSelected(ephemeral: Bool, continue: Bool, resume: Bool, session: Maybe<&2, String>, +sessionId: Maybe<&2, String>, fork: Maybe<&2, String>, environment: Paths.Environment, +cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String, visual: Picker.Visual) -> IO(Selected()):
+def inMemoryOrSelected(ids: Uuid.Generator, ephemeral: Bool, continue: Bool, resume: Bool, session: Maybe<&2, String>, +sessionId: Maybe<&2, String>, fork: Maybe<&2, String>, environment: Paths.Environment, +cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String, visual: Picker.Visual) -> IO(Selected()):
   match ephemeral:
     case True{}:
       do IO<Selected()>:
-        memory : Sessions.Outcome(Session()) <- AgentSession.memorySession(cwd, Sessions.NewSessionOptions{sessionId, None{}})
+        memory : Sessions.Outcome(Session()) <- AgentSession.memorySession(ids, cwd, Sessions.NewSessionOptions{sessionId, None{}})
         return selected(memory)
-    case False{}: selectSession(continue, resume, session, sessionId, fork, environment, cwd, sessionDir, agentDir, sessionsDir, visual)
+    case False{}: selectSession(ids, continue, resume, session, sessionId, fork, environment, cwd, sessionDir, agentDir, sessionsDir, visual)
 
-def createSessionManager(flags: SessionFlags, environment: Paths.Environment, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String, visual: Picker.Visual) -> IO(Selected()):
+def createSessionManager(ids: Uuid.Generator, flags: SessionFlags, environment: Paths.Environment, cwd: String, sessionDir: Maybe<&2, String>, agentDir: String, sessionsDir: String, visual: Picker.Visual) -> IO(Selected()):
   match flags:
-    case SessionFlags{continue, resume, help, listModels, _, noSession, session, sessionId, fork, _}: inMemoryOrSelected(noSession || help || listModels, continue, resume, session, sessionId, fork, environment, cwd, sessionDir, agentDir, sessionsDir, visual)
+    case SessionFlags{continue, resume, help, listModels, _, noSession, session, sessionId, fork, _}: inMemoryOrSelected(ids, noSession || help || listModels, continue, resume, session, sessionId, fork, environment, cwd, sessionDir, agentDir, sessionsDir, visual)
 
 def appendedSession(outcome: Sessions.Outcome(Appended())) -> Selected():
   match outcome:
@@ -1125,28 +1126,28 @@ def runChecked(parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage
 # upstream main: a stored session whose cwd no longer exists asks, in
 # interactive mode, whether to continue in the current cwd (Cancel exits);
 # other modes report MissingSessionCwdError.
-def continued(proceed: Bool, issue: SessionCwd.SessionCwdIssue, sessionDir: Maybe<&2, String>) -> IO(Selected()):
+def continued(ids: Uuid.Generator, proceed: Bool, issue: SessionCwd.SessionCwdIssue, sessionDir: Maybe<&2, String>) -> IO(Selected()):
   match proceed issue:
     case True{} SessionCwd.SessionCwdIssue{Some{file}, _, +fallback}:
       do IO<Selected()>:
-        opened : Sessions.Outcome(Session()) <- Sessions.open(~Unit, ~Tools.ToolDetails, ~V.Value, ~AgentSession.unitValue, ~Tools.detailsValue, ~AgentSession.rawValue, ~AgentSession.readUnit, ~AgentSession.readDetails, ~AgentSession.readRaw, file, sessionDir, Some{fallback}, fallback)
+        opened : Sessions.Outcome(Session()) <- Sessions.open(~Unit, ~Tools.ToolDetails, ~V.Value, ~AgentSession.unitValue, ~Tools.detailsValue, ~AgentSession.rawValue, ~AgentSession.readUnit, ~AgentSession.readDetails, ~AgentSession.readRaw, ids, file, sessionDir, Some{fallback}, fallback)
         return selected(opened)
     case _ _: IO.pure(Selected(), Fail{Aborted{""}})
 def chosen(choice: Maybe<&2, String>) -> Bool:
   match choice:
     case Some{"Continue"}: True{}
     case _: False{}
-def missingCwd(prompting: Bool, +issue: SessionCwd.SessionCwdIssue, sessionDir: Maybe<&2, String>, agentDir: String, assets: String, settings: Settings.SettingsManager) -> IO(Selected()):
+def missingCwd(ids: Uuid.Generator, prompting: Bool, +issue: SessionCwd.SessionCwdIssue, sessionDir: Maybe<&2, String>, agentDir: String, assets: String, settings: Settings.SettingsManager) -> IO(Selected()):
   match prompting:
     case False{}: IO.pure(Selected(), Fail{Failed{SessionCwd.formatMissingSessionCwdError(issue)}})
     case True{}:
       do IO<Selected()>:
         choice : Maybe<&2, String> <- StartupSelector.select(ProjectTrust.SelectRequest{SessionCwd.formatMissingSessionCwdPrompt(issue), ["Continue", "Cancel"]}, agentDir, assets, settings)
-        continued(chosen(choice), issue, sessionDir)
+        continued(ids, chosen(choice), issue, sessionDir)
 def cwdResolved(mode: AppMode, +session: Session(), issue: Maybe<&2, SessionCwd.SessionCwdIssue>, sessionDir: Maybe<&2, String>, agentDir: String, assets: String, settings: Settings.SettingsManager) -> IO(Selected()):
   match issue:
     case None{}: IO.pure(Selected(), Done{session})
-    case Some{found}: missingCwd(interactive(mode), found, sessionDir, agentDir, assets, settings)
+    case Some{found}: missingCwd(Sessions.getIdGenerator(Unit, Tools.ToolDetails, V.Value, session), interactive(mode), found, sessionDir, agentDir, assets, settings)
 
 def runSelected(parsed: Args.Args, +mode: AppMode, initial: Initial.InitialMessage, cwd: String, selection: Selected(), name: Maybe<&2, String>, +agentDir: String, authPath: String, bundlePath: String, +packageDir: String, startup: Settings.SettingsManager, sessionDir: Maybe<&2, String>, startupDiagnostics: Diagnostics()) -> IO(Unit):
   match selection:
@@ -1195,7 +1196,8 @@ def runLoaded(+parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage
         +assets : String <- resolvedPackageDir(cwd,packageDir)
         +visual : Picker.Visual <- IO.pure(Picker.Visual,Picker.Visual{selectedTheme(themeOverride(parsed),startup),assets,agentDir,home,pickerTrueColor(Settings.getTerminalCapabilityOverrides(startup))})
         +sessionDir : Maybe<&2, String> <- IO.pure(Maybe<&2, String>, sessionDirectory(flagSessionDir(flags), sessionEnv, home, cwd, Result.default(&2, &2, Paths.Error, Maybe<&2, String>, Settings.getSessionDir(Paths.Environment{cwd, home, url}, startup), None{})))
-        selection : Selected() <- createSessionManager(flags, Paths.Environment{cwd, home, url}, cwd, sessionDir, agentDir, Path.join(agentDir, "sessions"), visual)
+        +ids : Uuid.Generator <- Uuid.generator()
+        selection : Selected() <- createSessionManager(ids, flags, Paths.Environment{cwd, home, url}, cwd, sessionDir, agentDir, Path.join(agentDir, "sessions"), visual)
         runSelected(parsed, mode, initial, cwd, selection, flagName(flags), agentDir, located(authPath, Path.join(cwd, "auth.json")), envOr(bundle, "/etc/ssl/certs/ca-certificates.crt"), assets, startup, sessionDir, startupDiagnostics)
 
 def runConfigured(+parsed: Args.Args, mode: AppMode, initial: Initial.InitialMessage, +flags: SessionFlags, +cwd: String, +home: String, +url: URL.Context, agentDirLocated: Result<&2, &2, FS.Error, String>, authPath: Result<&2, &2, FS.Error, String>, bundle: Result<&1, &1, U32 & String, String>, packageDir: Result<&1, &1, U32 & String, String>, sessionEnv: Result<&1, &1, U32 & String, String>) -> IO(Unit):
@@ -1292,7 +1294,8 @@ def exportAssets(request: ExportRequest, loaded: Result<&2,&2,String,Export.Asse
     case _ Fail{message}: fail("Error: " ++ message)
     case ExportRequest{source,output} Done{assets}:
       do IO<Unit>:
-        result : Result<&2,&2,String,String> <- Export.exportFromFile(assets,source,output)
+        +ids : Uuid.Generator <- Uuid.generator()
+        result : Result<&2,&2,String,String> <- Export.exportFromFile(ids,assets,source,output)
         exported(result)
 
 def exportLocated(request: ExportRequest,cwd: String,configured: Result<&1,&1,U32 & String,String>) -> IO(Unit):

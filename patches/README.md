@@ -182,3 +182,8 @@ Validation with the patched compiler, all passing:
 `bend-book-caches.patch` (2026-09-25, installed after `bend-literal-folds.patch`): per-definition cache clearing keeps the two caches that depend only on the book (BEND-049). CLI emission about 140 s → 128 s, byte-identical C, slightly lower peak memory.
 
 `bend-match-binder-order.patch` (2026-09-25, installed after `bend-book-caches.patch`, changes `bend.ts`): a match column that destructures the next parameter is decided before earlier columns, so `match x setup` with a skipped then destructured `setup` compiles (BEND-050). The CLI's C is byte-identical.
+
+`bend-compare-congruence.patch` (2026-09-26, installed after `bend-match-binder-order.patch`, changes `bend.ts`): conversion first tries the same definition applied to convertible arguments before unfolding either side, so comparing stuck terms that mention a Nat constant of 65,536 or more no longer overflows the checker's stack (BEND-052). CLI checking slightly faster, C byte-identical. The compiler is then 11,453 lines.
+
+`bend-segment-memory.patch` (2026-09-26, installed after `bend-compare-congruence.patch`, changes `comp.ts`): stale segments and spins are dropped after every fact round instead of after the last, and a finished unit's segment lines are joined into one string (BEND-053). CLI emission peak 17.6 → 15.6–16.4 GB, time unchanged within noise, C byte-identical. The compiler is then 11,465 lines.
+

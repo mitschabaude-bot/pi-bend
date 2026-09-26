@@ -12,6 +12,7 @@ import ../../runtime/src/record.bend as R
 import ../../runtime/src/schema-value.bend as V
 import ../../runtime/src/string.bend as Set
 import ../../runtime/src/utf8.bend as Utf8
+import ../../ai/src/utils/uuid.bend as Uuid
 
 # The export must retain the typed session tree and encode hostile/Unicode text
 # as UTF-8 Base64 before it is inserted into the standalone HTML viewer.
@@ -77,14 +78,15 @@ def checkedAssets(assets: Export.Outcome(Export.Assets), manager: Result<&2, &2,
     case Done{+assets} Done{+manager} Done{_}:
       +data = Export.sessionDataOf(manager, (V.Null{}, V.ArrayValue{Nil{}}))
       +raw = Export.json(data)
-      +stored = {Persistence.Session{manager, "/tmp", "build", Some{Source()}, True{}, True{}} : Export.Session()}
       do IO<Unit>:
+        +uuids : Uuid.Generator <- Uuid.generator()
+        +stored : Export.Session() <- IO.pure(Export.Session(), Persistence.Session{manager, "/tmp", "build", Some{Source()}, True{}, True{}, uuids})
         assertion(String.contains(raw, "bash"), "tool call missing from typed export")
         assertion(String.contains(raw, "toolResult"), "tool result missing from typed export")
         assertion(String.contains(raw, "<script>alert(1)</script> & é"), "Unicode user message missing")
         result : Export.Outcome(String) <- Export.write(assets, stored, agentState(), None{})
         checkedWrite(result)
-        standalone : Export.Outcome(String) <- Export.exportFromFile(assets, Source(), Some{"build/export-html-from-file.html"})
+        standalone : Export.Outcome(String) <- Export.exportFromFile(uuids, assets, Source(), Some{"build/export-html-from-file.html"})
         checkedFromFile(standalone)
 
 def main() -> IO(Unit):
