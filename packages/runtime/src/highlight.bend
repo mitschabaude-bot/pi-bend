@@ -242,7 +242,7 @@ def numbered(rules: List<&2, Terminator>, +position: Nat, reversed: List<&2, Can
     case Nil{}: List.reverse(&2, Candidate, reversed)
     case rule <> rest: numbered(rest, position + 1n, Candidate{position, rule} <> reversed)
 def startAdmits(start: Re.Start, +code: U32) -> Bool:
-  match start: case Re.Start{nullable, _, ascii, _, _}: nullable || Re.asciiHas(ascii, code)
+  match start: case Re.Start{nullable, _, ascii, _, _, _}: nullable || Re.asciiHas(ascii, code)
 def candidateStart(candidate: Candidate) -> Re.Start:
   match candidate: case Candidate{_, Terminator{Rule{_, start}, _}}: start
 def admittingCode(candidates: List<&2, Candidate>, +code: U32, +reversed: List<&2, Candidate>) -> List<&2, Candidate>:
@@ -254,17 +254,18 @@ def asciiEntries(count: Nat, +code: U32, +candidates: List<&2, Candidate>, rever
     case Zero{}: List.reverse(&2, Table.Entry<List<&2, Candidate>>, reversed)
     case Succ{more}: asciiEntries(more, (code + 1 : U32), candidates, Table.Entry{code, admittingCode(candidates, code, Nil{})} <> reversed)
 def startWide(start: Re.Start) -> Bool:
-  match start: case Re.Start{nullable, _, _, wide, _}: nullable || wide
+  match start: case Re.Start{nullable, _, _, wide, _, _}: nullable || wide
 def admittingWide(candidates: List<&2, Candidate>, +reversed: List<&2, Candidate>) -> List<&2, Candidate>:
   match candidates:
     case Nil{}: List.reverse(&2, Candidate, reversed)
     case +candidate <> rest: admittingWide(rest, Bool.pick(List<&2, Candidate>, startWide(candidateStart(candidate)), candidate <> reversed, reversed))
-def startNullable(start: Re.Start) -> Bool:
-  match start: case Re.Start{nullable, _, _, _, _}: nullable
+# Whether a rule may match at the end of the input.
+def startEnds(start: Re.Start) -> Bool:
+  match start: case Re.Start{nullable, _, _, _, _, ends}: nullable || ends
 def admittingEnd(candidates: List<&2, Candidate>, +reversed: List<&2, Candidate>) -> List<&2, Candidate>:
   match candidates:
     case Nil{}: List.reverse(&2, Candidate, reversed)
-    case +candidate <> rest: admittingEnd(rest, Bool.pick(List<&2, Candidate>, startNullable(candidateStart(candidate)), candidate <> reversed, reversed))
+    case +candidate <> rest: admittingEnd(rest, Bool.pick(List<&2, Candidate>, startEnds(candidateStart(candidate)), candidate <> reversed, reversed))
 def dispatchOf(rules: List<&2, Terminator>) -> Scanner:
   +candidates = numbered(rules, 0n, Nil{})
   Dispatch{Table.fromSortedEntries(List<&2, Candidate>, asciiEntries(128n, 0, candidates, Nil{})), admittingWide(candidates, Nil{}), admittingEnd(candidates, Nil{})}
@@ -558,7 +559,7 @@ def preciseStart(precise: Bool, regex: Re.RegExp, start: Re.Start, cursor: Re.Cu
     case False{}: True{}
 # A `\b`-led pattern starting with a word scalar cannot start after one.
 def boundedOut(start: Re.Start, afterWord: Bool) -> Bool:
-  match start: case Re.Start{_, _, _, _, bounded}: bounded && afterWord
+  match start: case Re.Start{_, _, _, _, bounded, _}: bounded && afterWord
 def attemptCandidate(+from: Nat, +afterWord: Bool, precise: Bool, candidate: Candidate, input: List<&2, U32>, +cursor: Re.Cursor) -> Maybe<&2, Hit>:
   match candidate:
     case Candidate{+position, Terminator{Rule{+regex, +start}, kind}}:

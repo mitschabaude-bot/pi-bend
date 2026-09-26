@@ -530,6 +530,16 @@ def parsedDiagnostic(raw: String, value: Result<&2, &2, Parse.ParseError, V.Valu
 def decode(+raw: String) -> Diagnostic:
   parsedDiagnostic(raw, Parse.parse(raw))
 
+# The Anthropic SDK (same Stainless core) keeps the whole parsed body as its
+# error object instead of selecting `error`.
+def wholeDiagnostic(raw: String, value: Result<&2, &2, Parse.ParseError, V.Value>) -> Diagnostic:
+  match value:
+    case Fail{_}: TextDiagnostic{raw}
+    case Done{value}: JSONDiagnostic{Convert.toJson(value)}
+
+def decodeWhole(+raw: String) -> Diagnostic:
+  wholeDiagnostic(raw, Parse.parse(raw))
+
 # Empty/null messages fall back to the diagnostic. Other JSON messages are
 # serialized explicitly, including false and zero; no truthiness coercion.
 def jsonMessage(whole: T.JsonValue, message: Maybe<&2, T.JsonValue>) -> Maybe<&2, String>:
@@ -558,10 +568,13 @@ def constructed(-E: Data, +metadata: Metadata.Metadata, diagnostic: Diagnostic, 
 def create(-E: Data, metadata: Metadata.Metadata, +diagnostic: Diagnostic) -> Result<&2, &2, ConstructionError<E>, APIError>:
   constructed(E, metadata, diagnostic, detail(diagnostic))
 
-def fromResponse(-E: Data, value: StatusFailure<E>) -> Result<&2, &2, ConstructionError<E>, APIError>:
+def fromResponseWith(-E: Data, decoder: String -> Diagnostic, value: StatusFailure<E>) -> Result<&2, &2, ConstructionError<E>, APIError>:
   match value:
     case StatusFailure{metadata, Fail{cause}}: Fail{DiagnosticReadFailure{metadata, cause}}
-    case StatusFailure{metadata, Done{text}}: create(E, metadata, decode(text))
+    case StatusFailure{metadata, Done{text}}: create(E, metadata, decoder(text))
+
+def fromResponse(-E: Data, value: StatusFailure<E>) -> Result<&2, &2, ConstructionError<E>, APIError>:
+  fromResponseWith(E, raw => decode(raw), value)
 
 # The SDK puts plain text only in its message; exposing it again as a body
 # would change pi's truncation and message-preservation behavior.
@@ -651,9 +664,9 @@ def constructedFailure(-Reason: Data, result: Result<&2, &2, ConstructionError<R
     case Fail{cause}: diagnosticFailure(Reason, cause)
     case Done{APIError{+metadata, value, +message}}: retryFailure(AttemptError<Reason>, HTTPFailure{APIError{metadata, value, message}}, message, metadata)
 
-def accepted(-Reason: Data, result: Result<&2, &1, StatusFailure<ReadError(Reason)>, Response.Response<State(Reason)>>) -> Outcome(Reason):
+def accepted(-Reason: Data, decoder: String -> Diagnostic, result: Result<&2, &1, StatusFailure<ReadError(Reason)>, Response.Response<State(Reason)>>) -> Outcome(Reason):
   match result:
-    case Fail{cause}: Fail{constructedFailure(Reason, fromResponse(ReadError(Reason), cause))}
+    case Fail{cause}: Fail{constructedFailure(Reason, fromResponseWith(ReadError(Reason), decoder, cause))}
     case Done{response}: Done{response}
 
 def read(-Reason: Data, state: State(Reason)) -> IO(State(Reason) & Result<&2, &2, ReadError(Reason), Maybe<&2, Stream.StreamEvent>>):
@@ -664,13 +677,13 @@ def close(-Reason: Data, state: State(Reason)) -> IO(Result<&2, &2, ReadError(Re
 
 # Failed HTTP statuses consume and close their diagnostics before returning a
 # retryable value. Successful responses transfer without reading their bodies.
-def fetched(~Reason: Data, diagnosticLimit: Nat, result: Result<&2, &1, FetchError<Reason>, Response.Response<State(Reason)>>) -> IO(Outcome(Reason)):
+def fetched(~Reason: Data, decoder: String -> Diagnostic, diagnosticLimit: Nat, result: Result<&2, &1, FetchError<Reason>, Response.Response<State(Reason)>>) -> IO(Outcome(Reason)):
   match result:
     case Fail{cause}: IO.pure(Outcome(Reason), Fail{fetchFailure(Reason, cause)})
     case Done{response}:
       do IO<Outcome(Reason)>:
         result : Result<&2, &1, StatusFailure<ReadError(Reason)>, Response.Response<State(Reason)>> <- acceptWith(~(ReadError(Reason)), ~(State(Reason)), ~(read(Reason)), ~(close(Reason)), diagnosticLimit, response)
-        return accepted(Reason, result)
+        return accepted(Reason, decoder, result)
 
 def scoped(-Reason: Data, result: Result<&2, &1, Scope.FetchScopeError<Reason, Fetch.Error<Reason>>, Response.Response<State(Reason)>>) -> Result<&2, &1, FetchError<Reason>, Response.Response<State(Reason)>>:
   match result:
@@ -688,10 +701,13 @@ def dispatch(-Reason: Data, request: Request, parent: Abort.AbortSignal<Reason>,
 # Exactly one HTTP attempt under the request timeout: dispatch through the
 # borrowed fetch callback, then interpret the status. The caller's retry loop,
 # hooks and response streaming remain composable around it.
-def attempt(~Reason: Data, +request: Request, parent: Abort.AbortSignal<Reason>, fetch: Fetch.Fetch(Reason), diagnosticLimit: Nat) -> IO(Outcome(Reason)):
+def attemptWith(~Reason: Data, decoder: String -> Diagnostic, +request: Request, parent: Abort.AbortSignal<Reason>, fetch: Fetch.Fetch(Reason), diagnosticLimit: Nat) -> IO(Outcome(Reason)):
   do IO<Outcome(Reason)>:
     result : Result<&2, &1, FetchError<Reason>, Response.Response<State(Reason)>> <- dispatch(Reason, request, parent, fetch, timeout(request))
-    fetched(~Reason, diagnosticLimit, result)
+    fetched(~Reason, decoder, diagnosticLimit, result)
+
+def attempt(~Reason: Data, +request: Request, parent: Abort.AbortSignal<Reason>, fetch: Fetch.Fetch(Reason), diagnosticLimit: Nat) -> IO(Outcome(Reason)):
+  attemptWith(~Reason, raw => decode(raw), request, parent, fetch, diagnosticLimit)
 
 # The body is released when the caller cannot consume it, e.g. after a failed
 # response hook. The scope retires transport before parent-cancellation state.

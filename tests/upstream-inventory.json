@@ -510,21 +510,40 @@
     },
     {
       "source": "packages/ai/test/anthropic-auth-token.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "291161884454b74f99041df2a29eb65ef4ec78df8c4dc20222a4f0e48e5648a5"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/anthropic-auth-token.bend",
+        "packages/ai/test/anthropic-harness.bend",
+        "tests/anthropic-suites.bend",
+        "tests/anthropic_messages_check.py"
+      ],
+      "sha256": "291161884454b74f99041df2a29eb65ef4ec78df8c4dc20222a4f0e48e5648a5",
+      "notes": "7/10: ANTHROPIC_AUTH_TOKEN and ANTHROPIC_OAUTH_TOKEN resolution, header-owned auth without OAuth shaping, pi's User-Agent, User-Agent override and anthropic-beta replacement/suppression. The three createModels(...).streamSimple cases need the Models registry's auth-applying stream convenience, which is not ported (the app applies resolved auth in coding-agent agent-runtime)."
     },
     {
       "source": "packages/ai/test/anthropic-cache-write-1h-cost.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6fa0d93f2c475786aaf4c891dbdefd176cada6658b1fbb8ad71d3e221fa1f2fa"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/anthropic-cache-write-1h-cost.bend",
+        "packages/ai/test/anthropic-sse-bodies.bend",
+        "packages/ai/test/anthropic-harness.bend",
+        "tests/anthropic-suites.bend",
+        "tests/anthropic_messages_check.py"
+      ],
+      "sha256": "6fa0d93f2c475786aaf4c891dbdefd176cada6658b1fbb8ad71d3e221fa1f2fa",
+      "notes": "2/2 with toBeCloseTo(.., 10) tolerances."
     },
     {
       "source": "packages/ai/test/anthropic-eager-tool-input-compat.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "0cf2f3b070508cc194fd048d880dafd4573bf61ec73f123bbbb2473e33c72972"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/anthropic-eager-tool-input-compat.bend",
+        "packages/ai/test/anthropic-harness.bend",
+        "tests/anthropic-suites.bend",
+        "tests/anthropic_messages_check.py"
+      ],
+      "sha256": "0cf2f3b070508cc194fd048d880dafd4573bf61ec73f123bbbb2473e33c72972",
+      "notes": "4/4. upstream captures the request at a local HTTP server; natively a recording fetch observes the identical request headers and body (the HTTP path itself is covered by tests/anthropic_client_loopback.py)."
     },
     {
       "source": "packages/ai/test/anthropic-eager-tool-input-e2e.test.ts",
@@ -534,15 +553,27 @@
     },
     {
       "source": "packages/ai/test/anthropic-empty-thinking-signature-compat.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "275a94f7f03ae02d41fa24ea31d9f54cbb3c1e121e59d7fcae6af6acd5dff8fc"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/anthropic-empty-thinking-signature-compat.bend",
+        "packages/ai/test/anthropic-harness.bend",
+        "tests/anthropic-suites.bend",
+        "tests/anthropic_messages_check.py"
+      ],
+      "sha256": "275a94f7f03ae02d41fa24ea31d9f54cbb3c1e121e59d7fcae6af6acd5dff8fc",
+      "notes": "12/12 including the Fireworks and Kimi it.each rows."
     },
     {
       "source": "packages/ai/test/anthropic-force-adaptive-thinking.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "eb35967e76ef1232eb9d1acd4467f9b657dc821dbf5763447a0952c1d0b7ecfa"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/anthropic-force-adaptive-thinking.bend",
+        "packages/ai/test/anthropic-harness.bend",
+        "tests/anthropic-suites.bend",
+        "tests/anthropic_messages_check.py"
+      ],
+      "sha256": "eb35967e76ef1232eb9d1acd4467f9b657dc821dbf5763447a0952c1d0b7ecfa",
+      "notes": "8/8 including the Kimi it.each rows."
     },
     {
       "source": "packages/ai/test/anthropic-long-cache-retention-e2e.test.ts",
@@ -552,9 +583,16 @@
     },
     {
       "source": "packages/ai/test/anthropic-mid-conversation-effort.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "7644a450e607a035087e7345c30ce65aaf08d0cade96d59c81b60f6752dcbbe1"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/anthropic-mid-conversation-effort.bend",
+        "packages/ai/test/anthropic-sse-bodies.bend",
+        "packages/ai/test/anthropic-harness.bend",
+        "tests/anthropic-suites.bend",
+        "tests/anthropic_messages_check.py"
+      ],
+      "sha256": "7644a450e607a035087e7345c30ce65aaf08d0cade96d59c81b60f6752dcbbe1",
+      "notes": "11/11 including the effort it.each rows. The beta-header test's fetch returns an SSE body upstream; natively the injected client streams that body (stop result) and a recording fetch observes the same request's anthropic-beta header."
     },
     {
       "source": "packages/ai/test/anthropic-oauth.test.ts",
@@ -570,15 +608,28 @@
     },
     {
       "source": "packages/ai/test/anthropic-sse-parsing.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "c099f9a906669bfa98dd7bc34b3429d082909da0b6d01ccb4e15a61193ee49e7"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/anthropic-sse-parsing.bend",
+        "packages/ai/test/anthropic-sse-bodies.bend",
+        "packages/ai/test/anthropic-harness.bend",
+        "tests/anthropic-suites.bend",
+        "tests/anthropic_messages_check.py"
+      ],
+      "sha256": "c099f9a906669bfa98dd7bc34b3429d082909da0b6d01ccb4e15a61193ee49e7",
+      "notes": "13/13 named tests on Bun and native 1/4 threads through the real stream lifecycle with an injected client (tests/anthropic_messages_check.py); response fixtures in anthropic-sse-bodies.bend are generated as the suite writes them."
     },
     {
       "source": "packages/ai/test/anthropic-temperature-compat.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "68c99075b68609c1c4d306525bd142b58eab41f349847bcd531d99f75a5735e6"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/anthropic-temperature-compat.bend",
+        "packages/ai/test/anthropic-harness.bend",
+        "tests/anthropic-suites.bend",
+        "tests/anthropic_messages_check.py"
+      ],
+      "sha256": "68c99075b68609c1c4d306525bd142b58eab41f349847bcd531d99f75a5735e6",
+      "notes": "6/6; onPayload captures streamSimple's params."
     },
     {
       "source": "packages/ai/test/anthropic-thinking-binding-e2e.test.ts",
@@ -588,15 +639,22 @@
     },
     {
       "source": "packages/ai/test/anthropic-thinking-disable.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "dc9f94f9df2b2f57aabb47b33dbd94de7c6da776719ada066606a232ae6eabc8"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/anthropic-thinking-disable.bend",
+        "packages/ai/test/anthropic-harness.bend",
+        "tests/anthropic-suites.bend",
+        "tests/anthropic_messages_check.py"
+      ],
+      "sha256": "dc9f94f9df2b2f57aabb47b33dbd94de7c6da776719ada066606a232ae6eabc8",
+      "notes": "The payload suite (7/7) is ported; the E2E test (disables thinking for Claude reasoning models) needs ANTHROPIC_API_KEY and is not run."
     },
     {
       "source": "packages/ai/test/anthropic-tool-name-normalization.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "f603925db12079ff9849317214de2d51ec947df9de54e504ab910f8ac209b7df"
+      "sha256": "f603925db12079ff9849317214de2d51ec947df9de54e504ab910f8ac209b7df",
+      "notes": "E2E: needs Anthropic OAuth credentials. The Claude Code name mapping it exercises (toClaudeCodeName outbound, fromClaudeCodeName inbound) is compared with upstream in tests/anthropic_messages_check.py (oauth-tools payload and response cases)."
     },
     {
       "source": "packages/ai/test/assistant-message-frame.test.ts",
@@ -829,9 +887,15 @@
     },
     {
       "source": "packages/ai/test/github-copilot-anthropic.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "8ce02dfd3b28205d4d25cb614f042cdd19e84ea9109c0af6108869ae1d5ef73b"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/github-copilot-anthropic.bend",
+        "packages/ai/test/anthropic-harness.bend",
+        "tests/anthropic-suites.bend",
+        "tests/anthropic_messages_check.py"
+      ],
+      "sha256": "8ce02dfd3b28205d4d25cb614f042cdd19e84ea9109c0af6108869ae1d5ef73b",
+      "notes": "3/3. upstream mocks the SDK constructor; natively onPayload captures the params and a recording fetch the wire headers (Bearer auth, Copilot static and dynamic headers)."
     },
     {
       "source": "packages/ai/test/github-copilot-oauth.test.ts",
@@ -3208,9 +3272,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/1717-2113-agent-session-event-settlement.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "82d602aa0ecb76a5516f8f4e729ca5c65b673215b3d178b77e95944aaa7f37f4"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md"
+      ],
+      "sha256": "82d602aa0ecb76a5516f8f4e729ca5c65b673215b3d178b77e95944aaa7f37f4",
+      "notes": "Both tests: a message_end handler that yields 20 ms keeps the persisted branch system, user, assistant, toolResult, toolResult, assistant; a tool_call handler sees the branch system, user, assistant."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2023-queued-slash-command-followup.test.ts",
@@ -3324,9 +3393,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3982-message-end-cost-override.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6ab24cf7cac37f88ef18ad946f3ea32f35e5d6b70bd578d91d42a71ac54a6e8e"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md"
+      ],
+      "sha256": "6ab24cf7cac37f88ef18ad946f3ea32f35e5d6b70bd578d91d42a71ac54a6e8e",
+      "notes": "An inline extension's message_end handler replaces the assistant message with cost total 0.123; the agent state's assistant and the message_end event both carry it."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/4167-thinking-toggle-pending-tool-render.test.ts",
@@ -3441,9 +3515,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5998-blocked-tool-terminate.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "8560a8386290a19136f646f4afd169cc9c5dadc139b732ab3ec5852aee223273"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md"
+      ],
+      "sha256": "8560a8386290a19136f646f4afd169cc9c5dadc139b732ab3ec5852aee223273",
+      "notes": "A tool_call handler blocking with terminate: one scripted reply remains, 'should not run' never appears, tool_execution_end's result has terminate true and an error tool result exists."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6019-explicit-provider-retry-message.test.ts",
@@ -3490,9 +3569,15 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6363-agent-settled-event.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e35475a593becf602a424f3e511a07cfc9be27ac7eaf4aa025de2cc8aaaf185e"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md",
+        "packages/coding-agent/src/core/agent-session.bend"
+      ],
+      "sha256": "e35475a593becf602a424f3e511a07cfc9be27ac7eaf4aa025de2cc8aaaf185e",
+      "notes": "All three tests: one agent_settled after a retry (extension events agent_end, agent_end, agent_settled with ctx.isIdle true), settlement after a follow-up queued by an agent_end handler through pi.sendUserMessage, and an extension command's ctx.waitForIdle returning only after session-level settlement (AgentSession.waitForIdle now waits for the session to be idle, not only the agent)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6596-taskkill-enoent.test.ts",
@@ -3774,9 +3859,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8935-parallel-preflight-abort.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ec02410a0ed72f0ee4dee574da9dab55e7d3e77abea7102d07f650ca75a96536"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md"
+      ],
+      "sha256": "ec02410a0ed72f0ee4dee574da9dab55e7d3e77abea7102d07f650ca75a96536",
+      "notes": "Preflights first and second (ctx.abort at the second), no execution and no tool_result hook, two starts and two error ends with the same ids, tool results in start order reading 'Operation aborted'."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8964-extension-provider-streaming.test.ts",

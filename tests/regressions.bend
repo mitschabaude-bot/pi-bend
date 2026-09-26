@@ -46,6 +46,7 @@ type Reply is Data:
   Call{id: String, name: String, arguments: V.Value, json: String}
   Calls{calls: List<&2, Ai.ToolCall<V.Value>>}
   Interrupted{text: String, started: Chan(Unit)}
+  Failed{errorMessage: String}
 
 # Each request takes the next hold: Pass runs at once, Hold waits at a gate
 # (tests/agent-session.bend's Gate); requests after the listed holds pass.
@@ -206,6 +207,11 @@ def interruptedChunks(+stream: EventStream(), parts: List<&2, String>, +text: St
 def interruptedReply(+stream: EventStream(), +text: String, started: Chan(Unit), signal: Maybe<&2, Signal()>, +now: Stamp) -> IO(Unit):
   interruptedChunks(stream, chunks(text), text, started, signal, now)
 
+# An error reply: no content, stop reason error, the error message.
+def failedMessage(errorMessage: String, now: Stamp) -> Ai.AssistantMessage<V.Value, Unit>:
+  match now:
+    case Stamp{model, time}: Ai.AssistantMessage{Nil{}, "openai-responses", "faux", model, None{}, None{}, None{}, None{}, usageOf(zero()), Ai.Error{}, None{}, Some{errorMessage}, None{}, None{}, time}
+
 def answer(+stream: EventStream(), reply: Reply, +now: Stamp) -> IO(Unit):
   match reply:
     case Text{+text}:
@@ -246,6 +252,10 @@ def answer(+stream: EventStream(), reply: Reply, +now: Stamp) -> IO(Unit):
         callEvents(stream, calls, 0, partial)
         push(stream, Ai.StreamDone{Ai.DoneToolUse{}, replyMessage(callsBlock(calls), Ai.ToolUse{}, usage, now)})
     case Interrupted{_, _}: IO.pure(Unit, Unit{})
+    case Failed{+errorMessage}:
+      do IO<Unit>:
+        push(stream, Ai.Start{replyMessage(Nil{}, Ai.Pending{}, usageOf(zero()), now)})
+        push(stream, Ai.StreamError{Ai.ErrorError{}, failedMessage(errorMessage, now)})
 
 def abortedReply(+stream: EventStream(), +now: Stamp) -> IO(Unit):
   do IO<Unit>:
@@ -314,7 +324,9 @@ def contextOf(stored: Session.Session()) -> List<&2, Session.Message()>:
 type Setup is Data:
   Setup{replies: List<&2, Reply>, gates: List<&2, Hold>, model: Ai.Model<Ai.JsonValue>}
 
-def fixtureWithLoadout(+stored: Session.Session(), +cwd: String, +settings: Settings.SettingsManager, setup: Setup, +loadout: Runtime.Loadout) -> IO(Fixture):
+# The loadout is built over the session's model runtime (an extension
+# runner shares it).
+def fixtureBuilt(+stored: Session.Session(), +cwd: String, +settings: Settings.SettingsManager, setup: Setup, build: Models.ModelRuntime -> IO(Runtime.Loadout)) -> IO(Fixture):
   match setup:
     case Setup{replies, gates, +model}:
       do IO<Fixture>:
@@ -329,11 +341,15 @@ def fixtureWithLoadout(+stored: Session.Session(), +cwd: String, +settings: Sett
         created : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~Unit, ~Tools.ToolDetails, ~Runtime.Custom(), ~Tools.ToolError, ~Unit, H.options(stream, converter, Sessions.getSessionId(Unit, Tools.ToolDetails, V.Value, stored), Some{model}), registry, validator, Tools.emptyDetails())
         +agent : Runtime.Owner() <- H.requireAgent(created)
         Agent.replaceMessages(Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit, agent, contextOf(stored))
-        models : Models.ModelRuntime <- ModelFixture.create(ModelFixture.Source{"faux", "PI_FAUX_API_KEY", model <> Nil{}} <> Nil{})
+        +models : Models.ModelRuntime <- ModelFixture.create(ModelFixture.Source{"faux", "PI_FAUX_API_KEY", model <> Nil{}} <> Nil{})
+        loadout : Runtime.Loadout <- build(models)
         +session : Session.AgentSession <- Session.create(agent, stored, settings, cwd, loadout, models, Nil{})
         +listener : Session.Listener() <- C.create(~Unit, ~Session.AgentSessionEvent, ~Unit, ~observe, Unit{})
         Session.subscribe(session, listener)
         return Fixture{session, listener, stream, validator, converter, registry, Faux{replyRef, streams, gateRef, Ai.modelId(model), signalRef}}
+
+def fixtureWithLoadout(+stored: Session.Session(), +cwd: String, +settings: Settings.SettingsManager, setup: Setup, +loadout: Runtime.Loadout) -> IO(Fixture):
+  fixtureBuilt(stored, cwd, settings, setup, models => IO.pure(Runtime.Loadout, loadout))
 
 def fixtureWith(+stored: Session.Session(), +cwd: String, +settings: Settings.SettingsManager, setup: Setup) -> IO(Fixture):
   fixtureWithLoadout(stored, cwd, settings, setup, emptyLoadout())

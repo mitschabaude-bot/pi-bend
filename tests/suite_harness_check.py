@@ -102,6 +102,79 @@ def custom_message_ordering_checks(f):
     return checks
 
 
+def text_of(message):
+    content = message.get('content')
+    if isinstance(content, str):
+        return content
+    return '\n'.join(part['text'] for part in content or [] if part['type'] == 'text')
+
+
+def extension_event_checks(f):
+    """Regressions that need extension session events (message_end, tool_call, tool_result,
+    agent_end, agent_settled) and the ExtensionAPI's sendUserMessage."""
+    checks = 0
+    # 3982-message-end-cost-override: allows extensions to replace finalized assistant usage cost
+    events = run(f, 'message_end_cost')
+    assistant = next(m for m in messages(events) if m['role'] == 'assistant')
+    assert assistant['usage']['cost']['total'] == 0.123, assistant['usage']
+    ended = next(e for e in of_type(events, 'message_end') if e['message']['role'] == 'assistant')
+    assert ended['message']['usage']['cost']['total'] == 0.123, ended
+    checks += 1
+    # 1717-2113-agent-session-event-settlement: keeps persisted assistant/toolResult message order when
+    # extension message_end handlers yield
+    events = run(f, 'settled_order')
+    kinds = entry_kinds(last(events, 'branch')['entries'])
+    assert kinds == ['system', 'user', 'assistant', 'toolResult', 'toolResult', 'assistant'], kinds
+    first = kinds.index('toolResult')
+    assert first > 0 and kinds[first - 1] == 'assistant'
+    checks += 1
+    # 1717-2113-agent-session-event-settlement: runs tool_call handlers after the assistant tool-use message
+    # is settled in the session
+    events = run(f, 'tool_call_settled')
+    assert [entry_kinds(e['entries']) for e in of_type(events, 'roles_at_tool_call')] == [['system', 'user', 'assistant']], events
+    checks += 1
+    # 5998-blocked-tool-terminate: lets a tool_call handler terminate the run after blocking execution
+    events = run(f, 'blocked_terminate')
+    assert last(events, 'remaining')['count'] == 1
+    assert 'should not run' not in [text_of(m) for m in messages(events) if m['role'] == 'assistant']
+    assert of_type(events, 'tool_execution_end')[0]['result'].get('terminate') is True, of_type(events, 'tool_execution_end')
+    assert any(m['role'] == 'toolResult' and m['isError'] for m in messages(events))
+    checks += 1
+    # 8935-parallel-preflight-abort: does not start prepared tools after a later preflight aborts
+    events = run(f, 'preflight_abort')
+    assert [e['value'] for e in of_type(events, 'preflight')] == ['first', 'second']
+    assert of_type(events, 'executed') == [] and of_type(events, 'result_hook') == [], events
+    starts, ends = of_type(events, 'tool_execution_start'), of_type(events, 'tool_execution_end')
+    assert len(starts) == 2 and len(ends) == 2
+    assert {e['toolCallId'] for e in ends} == {e['toolCallId'] for e in starts}
+    assert all(e['isError'] for e in ends)
+    results = [m for m in messages(events) if m['role'] == 'toolResult']
+    assert [m['toolCallId'] for m in results] == [e['toolCallId'] for e in starts]
+    assert [text_of(m) for m in results] == ['Operation aborted', 'Operation aborted'], results
+    checks += 1
+    # 6363-agent-settled-event: emits one agent_settled event after automatic retry finishes
+    events = run(f, 'settled_retry', settings={'retry': {'enabled': True, 'maxRetries': 3, 'baseDelayMs': 1}})
+    assert [e['willRetry'] for e in of_type(events, 'agent_end')] == [True, False]
+    assert len(of_type(events, 'agent_settled')) == 1
+    extension = ['%s:%s' % (e['event'], str(e['idle']).lower()) if 'idle' in e else e['event'] for e in of_type(events, 'extension_event')]
+    assert extension == ['agent_end', 'agent_end', 'agent_settled:true'], extension
+    checks += 1
+    # 6363-agent-settled-event: settles only after follow-ups queued by agent_end handlers run
+    events = run(f, 'settled_follow_up')
+    assert [text_of(m) for m in messages(events) if m['role'] == 'user'] == ['hello', 'status follow-up']
+    assert len(of_type(events, 'agent_end')) == 2 and len(of_type(events, 'agent_settled')) == 1
+    assert [e['idle'] for e in of_type(events, 'extension_event')] == [True]
+    checks += 1
+    # 6363-agent-settled-event: extension command waitForIdle waits for session-level settlement
+    events = run(f, 'command_waits_for_idle')
+    kinds = [e['type'] for e in events]
+    assert kinds.index('released') < kinds.index('command_result'), kinds
+    assert [e['idle'] for e in of_type(events, 'command_result')] == [True]
+    assert len(of_type(events, 'agent_settled')) == 1 and [e['ok'] for e in of_type(events, 'prompted')] == [True, True]
+    checks += 1
+    return checks
+
+
 def main():
     parser = argparse.ArgumentParser()
     for name in RUNNERS:
@@ -111,7 +184,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-suite-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures)
+    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures)
     print('suite-harness: %d upstream cases passed' % checks)
 
 

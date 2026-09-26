@@ -42,3 +42,10 @@ Language-driven changes:
 - **Inline factories are functions.** `InlineExtension` is `Type`-kinded and consumed on load.
 
 Not yet ported: config-form `registerProvider(name, config)` and its validation, models.json overlays on extension providers, reloading models.json on refresh, `FileModelsStore` (models-store.json), stale-context invalidation, `withSession`/`setup` continuations, extension error listeners in the modes, re-running factories on `/reload`, and the interactive UI binding. The UI binding is left to the interactive mode.
+
+## Phase 2 progress
+
+Ported: `agent_start`, `agent_end`, `agent_settled`, `turn_start` (with the run's turn index), `message_start`/`message_update`/`message_end` and `tool_execution_*` reach extensions before the session's listeners (`AgentSession` `handleEvent`). `message_end` handlers may replace the finalized message with one of the same role (`emitMessageEnd`); the listeners, the session entry and the agent's context carry the replacement. `tool_call` handlers run in the agent's `beforeToolCall` (first block wins, a failing handler blocks the call) and `tool_result` handlers patch the result in `afterToolCall` before image normalization (`emitToolResult`). `pi.sendMessage` and `pi.sendUserMessage` are bound by the session (`ExtensionActions`); before binding they fail with upstream's "not initialized" message. Deliveries that queue or append happen at once; one that starts a turn runs on its own task, and failures become `<runtime>` extension errors.
+
+Pending: the `turn_end`/`agent_before_settle` boundaries (entry drafts, continuation), `session_*` events (`session_start`, `session_before_compact`/`tree`/`switch`/`fork`, `session_compact`, `session_shutdown`), `context`/`context_with_system`, `before_agent_start`, `input`, `user_bash`, provider request/response events, `model_select`/`thinking_level_select`, `appendEntry` and the other action methods, the `_isEmittingAgentSettled` deferral of prompts sent from `agent_settled` handlers, and upstream's in-place replacement of the original message in `turn_end`/`agent_end` payloads.
+

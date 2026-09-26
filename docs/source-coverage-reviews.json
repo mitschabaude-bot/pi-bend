@@ -10,12 +10,19 @@
       }
     },
     "packages/ai/src/api/anthropic-messages.ts": {
-      "state": "partial",
-      "note": "Registered and locally validated with OAuth refresh; no verified live Anthropic request yet.",
+      "state": "ported",
+      "note": "Ported as three modules: anthropic-messages.bend (AnthropicOptions, getAnthropicCompat, cache control with PI_CACHE_RETENTION, Claude Code tool naming, transformMessages with tool-call id normalization, convertMessages with held-back system messages, consecutive tool results and the last-message cache marker, convertTools with strict JSON-schema tools, native tool changes with the deferred placeholder, getBetaFeatures with header overrides, managed-effort markers, buildParams, streamSimple's option mapping, mapStopReason, createClient's auth and headers); anthropic-messages-stream.bend (iterateSseMessages' line decoder with its trailing flush, iterateAnthropicEvents' filtering, repair and parse errors, the event loop with fallback pricing, input transformation diagnostics and the checks after the loop); anthropic-messages-client.bend (the stream lifecycle: injected or created client, onPayload replacement forcing streaming, retryProviderRequest over the shared Stainless request port, onResponse, start, the body loop and the catch block). tests/anthropic_messages_check.py compares 1,692 captured params and wire requests and 21 streamed messages and event sequences with pinned pi-mono, key order included, and runs the ported suites; tests/anthropic_client_loopback.py covers the HTTP path. Approved differences: X-Stainless-* platform headers are not sent (the SDK defaults come from the caller and are empty in the app); streamSimple's missing-auth check reports an error event instead of throwing synchronously; options.client is a callback returning status, headers and a body chunk source, and its failures are messages that are not retried; JSON.parse's engine-specific error text is replaced by the native parser's; a failing body read reports undici's \"terminated\"; event partials are snapshots; an unclosed block does not leak the scratch index field; diagnostic details go through a caller-supplied encoder (the app's details are Unit). No live Anthropic request has been verified.",
       "source_sha256": "d4c34523a3c278b23b831352ec7fc9c9d091f9ffc07c37081e43b8f3dd3d3203",
       "port_sha256": {
-        "packages/ai/src/api/anthropic-messages.bend": "c121815368080408c43882d50b0d5a2af8662c0e31a6a9612437a60b8a3941d5"
-      }
+        "packages/ai/src/api/anthropic-messages.bend": "d0ac2c6f37eacef7f7b6a1217570c9e915c4e342966f10ed37266533c7ba537d",
+        "packages/ai/src/api/anthropic-messages-stream.bend": "e039587037466f33faf9ffbb296596fd18c0e6c6992fc4466dad9001fb58719f",
+        "packages/ai/src/api/anthropic-messages-client.bend": "e2eba6659b52cac6d27ccf0793cb234c035371c1c06ebad34c4ddd1b94f22dee"
+      },
+      "ports": [
+        "packages/ai/src/api/anthropic-messages.bend",
+        "packages/ai/src/api/anthropic-messages-stream.bend",
+        "packages/ai/src/api/anthropic-messages-client.bend"
+      ]
     },
     "packages/ai/src/api/openai-completions.ts": {
       "state": "ported",
@@ -52,10 +59,10 @@
     },
     "packages/coding-agent/src/core/agent-session.ts": {
       "state": "partial",
-      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal; prompt images and tool-result images are normalized with the image setting and the current model's resize profile (f5c946480), without the before_agent_start and tool_result extension events. sendCustomMessage (nextTurn, steer/followUp while streaming, deferral to turn_end without triggerTurn, triggerTurn runs) and sendUserMessage (expandPromptTemplates) are ported with the pending custom-message flushes at turn_end, run settlement and prompt. Extension event dispatch (message_end replacement, tool_call/tool_result, session_before_*, context, before_agent_start, boundaries) and _isEmittingAgentSettled deferral remain missing. The skill-block parser used by restored transcripts is in core/skills.bend.",
+      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal; prompt images and tool-result images are normalized with the image setting and the current model's resize profile (f5c946480). sendCustomMessage (nextTurn, steer/followUp while streaming, deferral to turn_end without triggerTurn, triggerTurn runs) and sendUserMessage (expandPromptTemplates) are ported with the pending custom-message flushes at turn_end, run settlement and prompt, and bound as the extension runtime's sendMessage/sendUserMessage actions. Extension events: agent/turn_start/message/tool_execution events reach extensions before listeners, message_end replacements are persisted and projected, tool_call and tool_result run in the agent's tool hooks, agent_settled precedes the public event; waitForIdle waits for session-level idleness (no run, compaction or branch summary). Missing: turn_end/agent_before_settle boundaries, session_* extension events, context, before_agent_start, input, user_bash, _isEmittingAgentSettled deferral, and replaced messages inside turn_end/agent_end payloads. The skill-block parser used by restored transcripts is in core/skills.bend.",
       "source_sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7",
       "port_sha256": {
-        "packages/coding-agent/src/core/agent-session.bend": "78028dc81d2e962e22bdefb96010e8b090b8fbb61ba2df11aad0edd89a05e33d",
+        "packages/coding-agent/src/core/agent-session.bend": "f00fb1c765029425cab81f754c42c794ec7b697b02ced1179e2081a549693437",
         "packages/coding-agent/src/core/skills.bend": "39c10b968daf609f60fe3c91154a63a7248c7cfd18173781eb776904dcfea236"
       },
       "ports": [
@@ -571,6 +578,38 @@
       "source_sha256": "949f1e72e32a0028beb855db2642f13783c8697c4be236e9061c241f1d698a51",
       "port_sha256": {
         "packages/ai/src/providers/mistral.models.bend": "96fc1ee0a28c53c957a0c70d9a1b1a3c585f6dd713c0e5218bd641ff62d30622"
+      }
+    },
+    "packages/ai/src/providers/anthropic.ts": {
+      "state": "partial",
+      "note": "anthropicApiKeyAuth is ported (stored key, ANTHROPIC_AUTH_TOKEN as a Bearer Authorization header, ANTHROPIC_OAUTH_TOKEN, ANTHROPIC_API_KEY; the login prompt is the shared env api-key login, which additionally rejects an empty key), with the catalog and the caller-created OAuth auth. The provider's api registration (anthropicMessagesApi) is not: Models.ApiStreams is empty and the app dispatches Anthropic streams in coding-agent agent-runtime.",
+      "source_sha256": "dda69449a53c84b8b0a17b28f80fba278988d85665557be2db0dc3b20557567a",
+      "port_sha256": {
+        "packages/ai/src/providers/anthropic.bend": "bfea0bb80ec3da8dbe5d8154a32fede237573bd701cc683e18821ed400f4da68"
+      }
+    },
+    "packages/coding-agent/src/core/extensions/loader.ts": {
+      "state": "partial",
+      "note": "Inline factories load into a runtime (loadExtensionFromFactory/loadExtensionFactories) with registerCommand, registerProvider/unregisterProvider (deferred while loading), on/unsubscribe, sendMessage and sendUserMessage (failing before the session binds them with upstream's not-initialized message). No file discovery or jiti loading (JS extensions are excluded; extensions are compiled Bend). Missing: registerTool/Shortcut/Flag/renderers, appendEntry, session name/label, active tools, model and thinking actions, events bus.",
+      "source_sha256": "ba9af64db7ff81df6c94193613f3447bf110497698eb118b379f32af12cff075",
+      "port_sha256": {
+        "packages/coding-agent/src/core/extensions/loader.bend": "a7f6cdbfc2ff0bc5d604f0c465126a6c60effc547139c252a6cbccf53c3d7c7c"
+      }
+    },
+    "packages/coding-agent/src/core/extensions/runner.ts": {
+      "state": "partial",
+      "note": "Native ExtensionRunner: bindCore/bindCommandContext/setUIContext, command resolution with invocation names, error listeners, snapshotEventHandlers, emit for events without results, emitMessageEnd (same-role replacement chain), emitToolCall (first block wins, failures propagate) and emitToolResult (patched fields). Missing: emitBoundary (turn_end/agent_before_settle drafts), session_before_* cancellation results, emitContext, emitBeforeAgentStart, emitInput, emitUserBash, provider request/header events, emitCacheWarmingDecision, emitResourcesDiscover, shortcuts, flags, renderers, tool registrations, invalidate/stale contexts.",
+      "source_sha256": "bf68eaf27a3e54f1cfc0982554e0598c050fd9a06c8e8b7d6cd2d8e3d8d5990c",
+      "port_sha256": {
+        "packages/coding-agent/src/core/extensions/runner.bend": "b7685553658d8355e5a33996f237ec1de0dc48ab50bfe4a4346cdb6bb1c4e770"
+      }
+    },
+    "packages/coding-agent/src/core/extensions/types.ts": {
+      "state": "partial",
+      "note": "Typed native events and results for agent_start/end/settled, turn_start, message_start/update/end, tool_execution_*, tool_call and tool_result, commands, InlineExtension, ExtensionError and the sendMessage/sendUserMessage actions. tool_call input is one JSON value, not upstream's per-tool narrowed variants. Missing: session_* events, boundaries (entry drafts, BoundaryContextPreview), context/context_with_system, before_agent_start, input, user_bash, model/thinking select, provider request/response, UI prompt events, tools/shortcuts/flags/renderer registration types.",
+      "source_sha256": "601261b3deee1d61f85c930efed2767d66fe6c8d9637e19f4f53135b5fecf4d1",
+      "port_sha256": {
+        "packages/coding-agent/src/core/extensions/types.bend": "8e8a0d9c1505947a69612a4208d389b7cb4d24aaf45ebd04f5887344a75f2510"
       }
     }
   }

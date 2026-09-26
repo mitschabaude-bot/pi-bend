@@ -1,5 +1,6 @@
 import Base
 import ../../../../ai/src/models.bend as AiModels
+import ../../../../ai/src/types.bend as Ai
 import ../../../../agent/src/types.bend as Agent
 import ../../../../runtime/src/callback.bend as C
 import ../../../../runtime/src/ref.bend as R
@@ -47,9 +48,55 @@ type ExtensionError is Data:
 # ------
 
 def AgentMessage() -> Data: Agent.AgentMessage<Unit, Tools.ToolDetails, Messages.CodingMessage<V.Value>>
+def ToolResult() -> Data: Agent.AgentToolResult<Tools.ToolDetails>
+
+type AgentStartEvent is Data:
+  AgentStartEvent{}
 
 type AgentEndEvent is Data:
   AgentEndEvent{messages: List<&2, AgentMessage()>}
+
+type AgentSettledEvent is Data:
+  AgentSettledEvent{}
+
+type TurnStartEvent is Data:
+  TurnStartEvent{turnIndex: Nat, timestamp: F64}
+
+type MessageStartEvent is Data:
+  MessageStartEvent{message: AgentMessage()}
+
+type MessageUpdateEvent is Data:
+  MessageUpdateEvent{message: AgentMessage(), assistantMessageEvent: Ai.AssistantMessageEvent<V.Value, Unit>}
+
+type MessageEndEvent is Data:
+  MessageEndEvent{message: AgentMessage()}
+
+# Replace the finalized message; the replacement keeps the original's role.
+type MessageEndEventResult is Data:
+  MessageEndEventResult{message: Maybe<&2, AgentMessage()>}
+
+type ToolExecutionStartEvent is Data:
+  ToolExecutionStartEvent{toolCallId: String, toolName: String, args: V.Value}
+
+type ToolExecutionUpdateEvent is Data:
+  ToolExecutionUpdateEvent{toolCallId: String, toolName: String, args: V.Value, partialResult: ToolResult()}
+
+type ToolExecutionEndEvent is Data:
+  ToolExecutionEndEvent{toolCallId: String, toolName: String, result: ToolResult(), isError: Bool}
+
+# upstream's per-tool ToolCallEvent variants narrow `input` by tool name; the
+# native event carries the validated arguments as JSON for every tool.
+type ToolCallEvent is Data:
+  ToolCallEvent{toolCallId: String, toolName: String, input: V.Value}
+
+type ToolCallEventResult is Data:
+  ToolCallEventResult{block: Maybe<&2, Bool>, reason: Maybe<&2, String>, terminate: Maybe<&2, Bool>}
+
+type ToolResultEvent is Data:
+  ToolResultEvent{toolCallId: String, toolName: String, input: V.Value, content: List<&2, Ai.TextImageContent>, details: Maybe<&2, Tools.ToolDetails>, isError: Bool, usage: Maybe<&2, Ai.Usage>}
+
+type ToolResultEventResult is Data:
+  ToolResultEventResult{content: Maybe<&2, List<&2, Ai.TextImageContent>>, details: Maybe<&2, Tools.ToolDetails>, isError: Maybe<&2, Bool>, usage: Maybe<&2, Ai.Usage>}
 
 type HandlerCall<-E: Data> is Data:
   HandlerCall{event: E, ctx: Ctx.ExtensionContext}
@@ -61,18 +108,58 @@ def ExtensionHandler(-E: Data, -R: Data) -> Data: C.Callback<HandlerCall<E>, Res
 # One constructor per event, carrying a handler typed by the event and its
 # result (upstream's `on` overloads). Later phases add the other events.
 type EventHandler is Data:
+  OnAgentStart{handler: ExtensionHandler(AgentStartEvent, Unit)}
   OnAgentEnd{handler: ExtensionHandler(AgentEndEvent, Unit)}
+  OnAgentSettled{handler: ExtensionHandler(AgentSettledEvent, Unit)}
+  OnTurnStart{handler: ExtensionHandler(TurnStartEvent, Unit)}
+  OnMessageStart{handler: ExtensionHandler(MessageStartEvent, Unit)}
+  OnMessageUpdate{handler: ExtensionHandler(MessageUpdateEvent, Unit)}
+  OnMessageEnd{handler: ExtensionHandler(MessageEndEvent, MessageEndEventResult)}
+  OnToolExecutionStart{handler: ExtensionHandler(ToolExecutionStartEvent, Unit)}
+  OnToolExecutionUpdate{handler: ExtensionHandler(ToolExecutionUpdateEvent, Unit)}
+  OnToolExecutionEnd{handler: ExtensionHandler(ToolExecutionEndEvent, Unit)}
+  OnToolCall{handler: ExtensionHandler(ToolCallEvent, ToolCallEventResult)}
+  OnToolResult{handler: ExtensionHandler(ToolResultEvent, ToolResultEventResult)}
 
+# Events dispatched without a result (upstream emit). Events with results
+# have their own emitters in the runner.
 type ExtensionEvent is Data:
+  AgentStart{event: AgentStartEvent}
   AgentEnd{event: AgentEndEvent}
+  AgentSettled{event: AgentSettledEvent}
+  TurnStart{event: TurnStartEvent}
+  MessageStart{event: MessageStartEvent}
+  MessageUpdate{event: MessageUpdateEvent}
+  ToolExecutionStart{event: ToolExecutionStartEvent}
+  ToolExecutionUpdate{event: ToolExecutionUpdateEvent}
+  ToolExecutionEnd{event: ToolExecutionEndEvent}
 
 def handlerEventType(handler: EventHandler) -> String:
   match handler:
+    case OnAgentStart{_}: "agent_start"
     case OnAgentEnd{_}: "agent_end"
+    case OnAgentSettled{_}: "agent_settled"
+    case OnTurnStart{_}: "turn_start"
+    case OnMessageStart{_}: "message_start"
+    case OnMessageUpdate{_}: "message_update"
+    case OnMessageEnd{_}: "message_end"
+    case OnToolExecutionStart{_}: "tool_execution_start"
+    case OnToolExecutionUpdate{_}: "tool_execution_update"
+    case OnToolExecutionEnd{_}: "tool_execution_end"
+    case OnToolCall{_}: "tool_call"
+    case OnToolResult{_}: "tool_result"
 
 def eventType(event: ExtensionEvent) -> String:
   match event:
+    case AgentStart{_}: "agent_start"
     case AgentEnd{_}: "agent_end"
+    case AgentSettled{_}: "agent_settled"
+    case TurnStart{_}: "turn_start"
+    case MessageStart{_}: "message_start"
+    case MessageUpdate{_}: "message_update"
+    case ToolExecutionStart{_}: "tool_execution_start"
+    case ToolExecutionUpdate{_}: "tool_execution_update"
+    case ToolExecutionEnd{_}: "tool_execution_end"
 
 # `on` returns the id its unsubscribe removes (upstream removes the handler
 # by function identity).
@@ -107,8 +194,43 @@ type ProviderBinding is Data:
 
 # Before registrations are bound, they queue (upstream
 # pendingNativeProviderRegistrations).
+# Session actions (upstream ExtensionActions)
+# -------------------------------------------
+# What pi.sendMessage and pi.sendUserMessage do once the session has bound
+# them (upstream bindCore's actions). Both deliver in the background; a
+# failure becomes an extension error of "<runtime>".
+
+# upstream sendMessage's message: Pick<CustomMessage, "customType" |
+# "content" | "display" | "details">.
+type CustomMessageInput is Data:
+  CustomMessageInput{customType: String, content: Ai.UserContent, display: Bool, details: Maybe<&2, V.Value>}
+
+type DeliverAs is Data:
+  DeliverSteer{}
+  DeliverFollowUp{}
+  DeliverNextTurn{}
+
+type SendMessageOptions is Data:
+  SendMessageOptions{triggerTurn: Maybe<&2, Bool>, deliverAs: Maybe<&2, DeliverAs>}
+
+type SendMessage is Data:
+  SendMessage{message: CustomMessageInput, options: SendMessageOptions}
+
+# upstream sendUserMessage's deliverAs: "steer" | "followUp".
+type UserDelivery is Data:
+  UserSteer{}
+  UserFollowUp{}
+
+type SendUserMessage is Data:
+  SendUserMessage{content: Ai.UserContent, deliverAs: Maybe<&2, UserDelivery>}
+
+type ExtensionActions is Data:
+  ExtensionActions{sendMessage: C.Callback<SendMessage, Unit>, sendUserMessage: C.Callback<SendUserMessage, Unit>}
+
+# `actions` are the session's, once bound; before that the action methods
+# fail (upstream's "not initialized" runtime).
 type ExtensionRuntimeState is Data:
-  ExtensionRuntimeState{extensions: List<&2, Extension>, pendingProviders: List<&2, PendingProvider>, providers: Maybe<&2, ProviderBinding>, nextId: Nat}
+  ExtensionRuntimeState{extensions: List<&2, Extension>, pendingProviders: List<&2, PendingProvider>, providers: Maybe<&2, ProviderBinding>, nextId: Nat, actions: Maybe<&2, ExtensionActions>}
 
 def ExtensionRuntime() -> Data: R.Ref<ExtensionRuntimeState>
 

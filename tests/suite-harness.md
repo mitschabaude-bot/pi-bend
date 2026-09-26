@@ -16,6 +16,7 @@ Tools are Bend callbacks: `echo` returns its `text` argument after a prefix; `wa
 - `suite/agent-session-bash-persistence.test.ts`: all eleven tests. Six run in `tests/agent_session_check.py` (`bash` and `bash_deferred` scenarios); `cancels running bash commands with abortBash`, `aborts all active bash executions`, `persists user, assistant, toolResult, and custom messages in order`, `does not emit message_end for bash execution messages` and `persists aborted assistant messages` run here.
 - `suite/regressions/8537-custom-message-tool-result-ordering.test.ts`: all three tests.
 - `test/branch-summarization.test.ts` runs in `tests/branch_summarization_check.py` (`generate` mode of `tests/branch-summarization.bend`).
+- Extension regressions (inline extensions loaded into the harness's runner): #3982 (message_end replacement), #1717/#2113 (both tests), #5998, #8935 and #6363 (all three tests).
 
 ## Adaptations
 
@@ -23,3 +24,7 @@ Tools are Bend callbacks: `echo` returns its `text` argument after a prefix; `wa
 - Waiting for `tool_execution_start` or `message_update` becomes a channel the operation or faux stream signals. `persists aborted assistant messages` streams the first chunk of the 20,000-character reply, then waits until the request's signal is aborted and ends the stream as aborted, as upstream's faux checks its signal between chunks.
 - `cancels running bash commands with abortBash`: upstream checks `isBashRunning` after one event-loop tick; here the check runs once the operation has been entered. The operation rejects with `aborted` once its signal is aborted, like upstream's.
 - Branch summarization's summarizer request carries only the transcript and the output cap (`SummaryRequest`), so it cannot set a tool choice; the session's summarizer options (`summaryOptions`) set none. The tool-choice half of `does not override tool choice for branch summaries` holds by construction; its 4096-token cap is checked.
+- Extension factories are Bend functions (`Ext.InlineExtension`), and handlers print what upstream's tests collect in arrays (`preflight`, `result_hook`, `extension_event`, `roles_at_tool_call`, `command_result`).
+- #6363's `extension command waitForIdle waits for session-level settlement`: the command context actions are Bend callbacks bound with `ExtensionRunner.bindCommandContext` (upstream `bindExtensions({ commandContextActions })`); "not finished before the tool is released" is the order of the `released` and `command_result` lines.
+- #8935: after the aborted batch the run ends with an aborted assistant message, which upstream's test does not assert on.
+
