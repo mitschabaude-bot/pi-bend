@@ -3298,20 +3298,26 @@
         "tests/parity/scenarios.py",
         "tests/resume-loading.bend",
         "tests/resume_loading_check.py",
-        "tests/resume_loading_reference.mts"
+        "tests/resume_loading_reference.mts",
+        "tests/resume-mutation.bend",
+        "tests/resume_mutation_check.py",
+        "tests/resume_mutation_reference.mts"
       ],
       "sha256": "85351c5f1b8a76aea913059aae9f115e35bee5e8a2e31224ff3d13438e795810",
-      "notes": "Pinned component comparisons exercise Ctrl+Backspace query editing, Ctrl+D with a query, confirmation entry/cancellation and input interception, subtree activity ordering and active-session protection across path aliases. Deferred native/original comparisons cover late All completion after switching back to Current, repeated switches while loading, partial rows, untouched/touched selection and full progress frames. The waiting All worker cancellation/join is exercised natively. Canonical parent links across aliases and explicit redundant-loader count assertions remain pending. Native1/native4 mounted terminal comparisons match active-session rejection, cancellation, actual deletion/reopen, preserved drafts and following requests. Confirmation callbacks, mutation-refresh loading and additional asynchronous callback assertions remain pending."
+      "notes": "Pinned component comparisons exercise Ctrl+Backspace query editing, Ctrl+D with a query, confirmation entry/cancellation and input interception, subtree activity ordering and active-session protection across path aliases. Deferred native/original comparisons cover late All completion after switching back to Current, repeated switches while loading, partial rows, untouched/touched selection and full progress frames. The waiting All worker cancellation/join is exercised natively. Canonical parent links across aliases and explicit redundant-loader count assertions remain pending. Native1/native4 mounted terminal comparisons match active-session rejection, cancellation, actual deletion/reopen, preserved drafts and following requests. Confirmation callbacks, additional asynchronous callback assertions remain pending. Real-file native/original comparisons exercise cache invalidation and lazy reloads after rename/delete, including switching to the other scope and back; Bun/native1/native4 pass. Mounted rename/delete scope-switch frames and following requests are checked in resume-mutations. Isolated confirmation/rename callback arguments and canonical parent aliases remain unverified."
     },
     {
       "source": "packages/coding-agent/test/session-selector-rename.test.ts",
       "status": "partial",
       "ports": [
         "tests/parity/scenarios.py",
-        "tests/parity/session_picker_input.py"
+        "tests/parity/session_picker_input.py",
+        "tests/resume-mutation.bend",
+        "tests/resume_mutation_check.py",
+        "tests/resume_mutation_reference.mts"
       ],
       "sha256": "065648e89d3898fa6a5ebfac26fb606cea21b1aa54b8f189afc1d504943f6791",
-      "notes": "Interactive /resume rename hint, prompt, saved name, existing-name insertion and reopening match pi in terminal parity; the standalone --resume picker still hides the hint and passes its input parity script. The isolated callback assertions are not yet ported as native tests."
+      "notes": "Interactive /resume rename hint, prompt, saved name, existing-name insertion and reopening match pi in terminal parity; the standalone --resume picker still hides the hint and passes its input parity script. The isolated callback assertions are not yet ported as native tests. Real-file native/original comparisons exercise cache invalidation and lazy reloads after rename/delete, including switching to the other scope and back; Bun/native1/native4 pass. Mounted rename/delete scope-switch frames and following requests are checked in resume-mutations. Isolated confirmation/rename callback arguments and canonical parent aliases remain unverified."
     },
     {
       "source": "packages/coding-agent/test/session-selector-search.test.ts",

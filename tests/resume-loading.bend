@@ -41,8 +41,8 @@ def input(current: Picker.Modal,modal: Ref.Ref<Picker.Modal>,bindings: Bindings.
   match current: case Picker.Open{state}: Picker.modalTransition(modal,bindings,words,chosen,state,data) case _: IO.die(Unit,1,"expected open picker")
 def operation(+value: V.Value,+modal: Ref.Ref<Picker.Modal>,+loads: Ref.Ref<Picker.Loads>,+touched: Ref.Ref<Bool>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,words: Ref.Ref<Words.Source>,+bindings: Bindings.KeybindingsManager,chosen: Callback.Callback<String,Unit>,kind: V.Value) -> IO(Unit):
   match kind:
-    case V.Text{"progress"}: Picker.modalProgress(Picker.ModalProgress{modal,loads,redraw,scope(field(value,"scope")),None{},touched},Persistence.ListProgress{count(field(value,"loaded")),count(field(value,"total")),Some{Fixture.infos(Fixture.array(Fixture.field(value,"items")))}})
-    case V.Text{"complete"}: Picker.modalCompleted(Picker.ModalProgress{modal,loads,redraw,scope(field(value,"scope")),None{},touched},Done{Fixture.infos(Fixture.array(Fixture.field(value,"items")))})
+    case V.Text{"progress"}: Picker.modalProgress(Picker.ModalProgress{modal,loads,redraw,scope(field(value,"scope")),None{},touched,Picker.Browse{}},Persistence.ListProgress{count(field(value,"loaded")),count(field(value,"total")),Some{Fixture.infos(Fixture.array(Fixture.field(value,"items")))}})
+    case V.Text{"complete"}: Picker.modalCompleted(Picker.ModalProgress{modal,loads,redraw,scope(field(value,"scope")),None{},touched,Picker.Browse{}},Done{Fixture.infos(Fixture.array(Fixture.field(value,"items")))})
     case V.Text{"key"}:
       do IO<Unit>:
         +data : String = Fixture.key(Maybe.default(&2,String,Fixture.maybeText(Fixture.field(value,"key")),""))
@@ -101,8 +101,10 @@ def stoppedLazyWorker(+root: String) -> IO(Unit):
     +cancel : Abort.AbortController<Unit> <- Abort.new(Unit)
     +requested : Deferred.Deferred<Unit> <- Deferred.new(Unit)
     current : Chan(Unit) <- IO.fork(Unit,IO.pure(Unit,Unit{}))
-    all : Chan(Unit) <- IO.fork(Unit,Picker.modalAll(Picker.LoadContext{root,Some{root},root,root,root},Abort.signal(Unit,cancel),requested,Picker.ModalProgress{modal,loads,redraw,Picker.All{},None{},touched},callback))
-    Picker.stopLoading(Some{Picker.Loading{cancel,requested,current,all,otherCallback,callback}})
+    +currentRequest : Deferred.Deferred<Unit> <- Deferred.new(Unit)
+    +context : Picker.LoadContext = Picker.LoadContext{root,Some{root},root,root,root}
+    all : Chan(Unit) <- IO.fork(Unit,Picker.modalRequested(context,Abort.signal(Unit,cancel),requested,Picker.ModalProgress{modal,loads,redraw,Picker.All{},None{},touched,Picker.Browse{}},callback,Picker.All{}))
+    Picker.stopLoading(Some{Picker.Loading{cancel,Picker.ScopeWorker{currentRequest,current,otherCallback},Picker.ScopeWorker{requested,all,callback},Picker.LoadSource{context,None{}}}})
     oldModal : Picker.Modal <- Ref.dispose(Picker.Modal,modal)
     oldLoads : Picker.Loads <- Ref.dispose(Picker.Loads,loads)
     oldTouched : Bool <- Ref.dispose(Bool,touched)
