@@ -14,6 +14,7 @@ import ./context.bend as Ctx
 import ../session-manager.bend as S
 import ../compaction/compaction.bend as Compaction
 import ../../../../runtime/src/abort.bend as Abort
+import ../system-prompt.bend as Prompt
 
 # upstream core/extensions/types.ts: registrations, events and the loaded
 # extension state. Extensions are Bend code linked into the binary; their
@@ -164,6 +165,25 @@ type ContextWithSystemEvent is Data:
 type ContextEventResult is Data:
   ContextEventResult{messages: Maybe<&2, List<&2, AgentMessage()>>}
 
+# upstream sendMessage's message: Pick<CustomMessage, "customType" |
+# "content" | "display" | "details">.
+type CustomMessageInput is Data:
+  CustomMessageInput{customType: String, content: Ai.UserContent, display: Bool, details: Maybe<&2, V.Value>}
+
+# upstream BeforeAgentStartEvent: the expanded prompt, its images, the
+# system prompt rendered from `systemPromptOptions` (with earlier handlers'
+# changes) and those options. Upstream handlers edit the options object in
+# place; here a handler returns the options it wants in its result, and later
+# handlers see them.
+type BeforeAgentStartEvent is Data:
+  BeforeAgentStartEvent{prompt: String, images: List<&2, Ai.ImageContent>, systemPrompt: String, systemPromptOptions: Prompt.NormalizedBuildSystemPromptOptions}
+
+# upstream BeforeAgentStartEventResult: a custom message for this prompt and
+# a complete system prompt replacing the rendered one for this run, plus the
+# edited options (see BeforeAgentStartEvent).
+type BeforeAgentStartEventResult is Data:
+  BeforeAgentStartEventResult{message: Maybe<&2, CustomMessageInput>, systemPrompt: Maybe<&2, String>, systemPromptOptions: Maybe<&2, Prompt.NormalizedBuildSystemPromptOptions>}
+
 # upstream sendUserMessage's deliverAs and an input's streamingBehavior:
 # "steer" | "followUp".
 type UserDelivery is Data:
@@ -248,6 +268,7 @@ type EventHandler is Data:
   OnContextWithSystem{handler: ExtensionHandler(ContextWithSystemEvent, ContextEventResult)}
   OnAgentBeforeSettle{handler: ExtensionHandler(AgentBeforeSettleEvent, BoundaryResult)}
   OnInput{handler: ExtensionHandler(InputEvent, InputEventResult)}
+  OnBeforeAgentStart{handler: ExtensionHandler(BeforeAgentStartEvent, BeforeAgentStartEventResult)}
 
 # Events dispatched without a result (upstream emit). Events with results
 # have their own emitters in the runner.
@@ -289,6 +310,7 @@ def handlerEventType(handler: EventHandler) -> String:
     case OnContextWithSystem{_}: "context_with_system"
     case OnAgentBeforeSettle{_}: "agent_before_settle"
     case OnInput{_}: "input"
+    case OnBeforeAgentStart{_}: "before_agent_start"
 
 def eventType(event: ExtensionEvent) -> String:
   match event:
@@ -344,11 +366,6 @@ type ProviderBinding is Data:
 # them (upstream bindCore's actions). Both deliver in the background; a
 # failure becomes an extension error of "<runtime>".
 
-# upstream sendMessage's message: Pick<CustomMessage, "customType" |
-# "content" | "display" | "details">.
-type CustomMessageInput is Data:
-  CustomMessageInput{customType: String, content: Ai.UserContent, display: Bool, details: Maybe<&2, V.Value>}
-
 type DeliverAs is Data:
   DeliverSteer{}
   DeliverFollowUp{}
@@ -369,7 +386,7 @@ type SendUserMessage is Data:
   SendUserMessage{content: Ai.UserContent, options: SendUserMessageOptions}
 
 type ExtensionActions is Data:
-  ExtensionActions{sendMessage: C.Callback<SendMessage, Unit>, sendUserMessage: C.Callback<SendUserMessage, Unit>}
+  ExtensionActions{sendMessage: C.Callback<SendMessage, Unit>, sendUserMessage: C.Callback<SendUserMessage, Unit>, setModel: C.Callback<Ai.Model<Ai.JsonValue>, Bool>}
 
 # `actions` are the session's, once bound; before that the action methods
 # fail (upstream's "not initialized" runtime).

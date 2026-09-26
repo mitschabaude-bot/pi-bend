@@ -223,6 +223,25 @@ def requestRoles(input: H.Input()) -> List<&2, String>:
   match input:
     case T.StreamInput{_, Ai.TranscriptContext{messages}, _}: rolesOf(messages)
 
+def sectionJson(fields: List<&2, Rec.Property<Maybe<&2, String>>>) -> List<&2, String>:
+  match fields:
+    case Nil{}: Nil{}
+    case Rec.Property{name, Some{value}} <> rest: (Decode.quote(name) ++ ":" ++ Decode.quote(value)) <> sectionJson(rest)
+    case Rec.Property{name, None{}} <> rest: (Decode.quote(name) ++ ":null") <> sectionJson(rest)
+
+# Each system message's sections (null without any), as upstream tests read
+# `request.messages[i].sections`.
+def systemSections(messages: List<&2, Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>>) -> List<&2, String>:
+  match messages:
+    case Nil{}: Nil{}
+    case Ai.System{Ai.SystemMessage{_, Some{sections}, _, _, _}} <> rest: ("{" ++ String.join(sectionJson(Rec.entries(Maybe<&2, String>, sections)), ",") ++ "}") <> systemSections(rest)
+    case Ai.System{_} <> rest: "null" <> systemSections(rest)
+    case _ <> rest: systemSections(rest)
+
+def requestSections(input: H.Input()) -> List<&2, String>:
+  match input:
+    case T.StreamInput{_, Ai.TranscriptContext{messages}, _}: systemSections(messages)
+
 def serializeContext(input: H.Input()) -> String:
   match input:
     case T.StreamInput{_, Ai.TranscriptContext{messages}, _}: String.join(messageTexts(messages), "\n\n")
@@ -458,7 +477,7 @@ def providing(faux: Faux, +input: H.Input()) -> IO(H.Output()):
       +signal = signalOf(input)
       do IO<H.Output()>:
         R.write(Maybe<&2, Signal()>, signals, signal)
-        IO.print("{\"type\":\"request\",\"model\":" ++ Decode.quote(model) ++ ",\"apiKey\":" ++ H.maybeQuoted(apiKeyOf(input)) ++ ",\"lastUser\":" ++ H.maybeQuoted(lastUserOf(input)) ++ ",\"maxTokens\":" ++ maxTokensOf(input) ++ ",\"roles\":[" ++ String.join(requestRoles(input), ",") ++ "],\"context\":" ++ Decode.quote(serializeContext(input)) ++ "}")
+        IO.print("{\"type\":\"request\",\"model\":" ++ Decode.quote(model) ++ ",\"apiKey\":" ++ H.maybeQuoted(apiKeyOf(input)) ++ ",\"lastUser\":" ++ H.maybeQuoted(lastUserOf(input)) ++ ",\"maxTokens\":" ++ maxTokensOf(input) ++ ",\"roles\":[" ++ String.join(requestRoles(input), ",") ++ "],\"systemSections\":[" ++ String.join(requestSections(input), ",") ++ "],\"context\":" ++ Decode.quote(serializeContext(input)) ++ "}")
         gate : Maybe<&2, H.Gate> <- R.modify(List<&2, Hold>, Maybe<&2, H.Gate>, gates, remaining => popHold(remaining))
         H.holdAt(gate)
         aborted : Bool <- isAborted(signal)

@@ -9,6 +9,8 @@ import argparse, json, re, tempfile
 from pathlib import Path
 
 from regressions_check import Fixtures, of_type, last
+from agent_session_check import png, image_size
+import base64
 
 RUNNERS = ['suite-harness']
 
@@ -581,10 +583,32 @@ def prompt_checks(f):
     events = run(f, 'prompt', 'input_streaming')
     assert [e['streamingBehavior'] for e in of_type(events, 'input')] == [None, 'followUp'], events
     checks += 1
+    # uses the model selected by before_agent_start for image normalization (#9631): a 1100 px wide PNG is
+    # normalized for the strict model the handler switched to (real image processing instead of the mock)
+    events = run(f, 'before_start_image', base64.b64encode(png(1100, 4)).decode())
+    assert last(events, 'set_model')['ok'] is True and last(events, 'model')['id'] == 'strict', events
+    users = [m for m in messages(events) if m['role'] == 'user']
+    images = [block for block in users[0]['content'] if block['type'] == 'image']
+    assert len(images) == 1 and image_size(images[0])[0] == 1000, [image_size(i) for i in images]
+    checks += 1
     # agent-session-model-extension: allows extension input handlers to transform or handle input
     events = run(f, 'prompt', 'input_transform')
     assert [e['lastUser'] for e in of_type(events, 'request')] == ['transformed:hello'], events
     assert roles(messages(events)).count('user') == 1, roles(messages(events))
+    checks += 1
+    # agent-session-model-extension: allows before_agent_start handlers to inject custom messages and modify the system prompt
+    events = run(f, 'prompt', 'before_start_inject')
+    request = only(events, 'request')
+    parts = request['context'].split('\n\n')
+    assert 'extra instructions' in request['context'].split('\n\nuser:')[0], request['context'][-300:]
+    assert 'user:injected' in parts, parts
+    assert any(m['role'] == 'custom' and m['customType'] == 'before-start' for m in messages(events))
+    checks += 1
+    # 9789: keeps mid-conversation system messages in place when a handler leaves the conversation unchanged
+    events = run(f, 'prompt', 'plan_section')
+    second = of_type(events, 'request')[1]
+    assert second['roles'].count('system') == 2, second['roles']
+    assert second['systemSections'][1] == {'plan_mode': '<plan_mode>\nPlan only.\n</plan_mode>'}, second['systemSections'][1]
     checks += 1
     return checks
 

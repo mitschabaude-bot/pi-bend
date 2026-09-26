@@ -3703,11 +3703,11 @@
       ],
       "sha256": "0b1a86e5b1beb1824867a05029a7e6cfd3ad31b8173e6eb13b94bf09ce934a52",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "'setModel saves the model to the session' (entry) and 'clamps thinking levels to model capabilities' (clamp) are the mutate scenario of tests/agent_session_check.py; 'throws when setModel is called without configured auth' is set_unavailable in the models scenario of tests/agent_session_check.py. 'allows extension input handlers to transform or handle input' is the input_transform prompt scenario of tests/suite_harness_check.py. model_select, cycling, per-model overrides, settings persistence and the other extension handlers remain pending. v0.87.1 diff reviewed (46c9de402..f07218c4d): the tool-result details check gained a JsonObject narrowing only."
+      "notes": "'setModel saves the model to the session' (entry) and 'clamps thinking levels to model capabilities' (clamp) are the mutate scenario of tests/agent_session_check.py; 'throws when setModel is called without configured auth' is set_unavailable in the models scenario of tests/agent_session_check.py. 'allows extension input handlers to transform or handle input' and 'allows before_agent_start handlers to inject custom messages and modify the system prompt' are the input_transform and before_start_inject prompt scenarios of tests/suite_harness_check.py (the forced prompt is the request's one leading system message). Pending: model_select, cycling, per-model overrides, settings persistence, tool_call/tool_result/context handler cases, bindExtensions lifecycle events, and 'allows extension commands to inspect live system prompt options' (ctx.getSystemPromptOptions is not ported; upstream's case asserts object identity across calls). v0.87.1 diff reviewed (46c9de402..f07218c4d): the tool-result details check gained a JsonObject narrowing only."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-prompt.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/agent-session.bend",
         "tests/agent_session_check.py",
@@ -3716,7 +3716,7 @@
       ],
       "sha256": "51130e6ca7339ff3a6d09cb244533a9c4a82b8251dc1a62b03f2870bb77ecced",
       "implementation": "packages/coding-agent/src/core/agent-session.bend",
-      "notes": "16 of 17 cases pass as upstream states them: 'prompts while idle' (persist), 'throws when prompted during streaming without a streamingBehavior' (busy) and the no-model/no-auth preflight errors ('preflight' scenario) in tests/agent_session_check.py; tool-call turns, parallel tool calls, image attachments, skill commands, prompt templates (prompt and sendUserMessage), extension commands (prompt and extension sendUserMessage), sendUserMessage while idle, input handlers idle/streaming and the manual-compaction rejection (a gated session_before_compact handler) in tests/suite_harness_check.py (prompt_checks). Adaptations: 'preserves image attachments' sends a real 1x1 PNG through the real image pipeline instead of mocking processImage. Partial: 'uses the model selected by before_agent_start for image normalization' switches the model with setModel because before_agent_start is not ported (images scenario of tests/agent_session_check.py)."
+      "notes": "All 17 cases: 'prompts while idle' (persist), 'throws when prompted during streaming without a streamingBehavior' (busy) and the no-model/no-auth preflight errors ('preflight' scenario) in tests/agent_session_check.py; tool-call turns, parallel tool calls, image attachments, skill commands, prompt templates (prompt and sendUserMessage), extension commands (prompt and extension sendUserMessage), sendUserMessage while idle, input handlers idle/streaming, the manual-compaction rejection (a gated session_before_compact handler) and 'uses the model selected by before_agent_start for image normalization' (the handler calls pi.setModel; before_start_image) in tests/suite_harness_check.py (prompt_checks). Adaptations: the image cases send real PNGs through the real image pipeline instead of mocking processImage; the before_agent_start case checks the stored image's width (1000 px, the strict model's cap) instead of the mock's call arguments."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-queue.test.ts",
@@ -4441,7 +4441,7 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9789-context-handler-system-messages.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/suite-harness.bend",
         "tests/suite_harness_check.py",
@@ -4449,7 +4449,7 @@
         "packages/coding-agent/src/core/extensions/runner.bend"
       ],
       "sha256": "c1a3b358edc5b5264a6d9b984874928cacb6043e14ec6ccf3ced3ca1a4975ff5",
-      "notes": "Five of six: slicing from the compaction summary keeps one leading system message with the active tools and the session's system prompt; an injected user message (returned rather than edited in place: native handlers cannot mutate event.messages); a handler-added system message after the replayed head; context_with_system after context handlers on the restored transcript, sent verbatim (bash removed from the request's tools); dropping the leading system message is reported and honored. Pending: 'keeps mid-conversation system messages in place when a handler leaves the conversation unchanged', which needs before_agent_start (not ported). Unchanged is structural equality of the returned messages (upstream compares object identity)."
+      "notes": "All six: slicing from the compaction summary keeps one leading system message with the active tools and the session's system prompt; an injected user message (returned rather than edited in place: native handlers cannot mutate event.messages); a handler-added system message after the replayed head; context_with_system after context handlers on the restored transcript, sent verbatim (bash removed from the request's tools); dropping the leading system message is reported and honored. 'keeps mid-conversation system messages in place when a handler leaves the conversation unchanged' is the plan_section prompt scenario: the second request has two system messages, the second with the plan_mode section a before_agent_start handler added (returned options: native handlers cannot edit event.systemPromptOptions in place). Unchanged is structural equality of the returned messages (upstream compares object identity)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/extension-factory-cache.test.ts",
