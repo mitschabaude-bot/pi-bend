@@ -12,6 +12,8 @@ import ../../../agent/src/agent.bend as Agent
 import ../../../agent/src/types.bend as AgentTypes
 import ../core/extensions/runner.bend as ExtensionRunner
 import ../core/extensions/types.bend as ExtensionTypes
+import ../core/extensions/context.bend as Ctx
+import ../../../ai/src/utils/uuid.bend as Uuid
 import ../core/agent-session.bend as Session
 import ../core/bash-executor.bend as Bash
 import ../core/agent-runtime.bend as Runtime
@@ -48,8 +50,19 @@ type Command is Data:
 # rebinds to the one it installs.
 type Host is Data:
   Host{newSession: Callback.Callback<Maybe<&2,String>,Result<&2,&2,String,Unit>>,switchSession: Callback.Callback<String,Result<&2,&2,String,Unit>>,fork: Callback.Callback<SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>>}
+# Extension UI over the protocol (upstream createExtensionUIContext): dialogs
+# wait for the extension_ui_response with their id; `open` becomes False when
+# the endpoint stops, after which dialogs answer as cancelled at once.
+type Dialog is Data: Dialog{id: String,answer: Chan(Types.RpcExtensionUIResponse)}
+type Dialogs is Data: Dialogs{open: Bool,waiting: List<&2,Dialog>}
+# `starting` is the prompt that has not yet reached its first awaited I/O:
+# opening a dialog is such a point, so the reader goes on to the response.
+type UiEnv is Data: UiEnv{sink: Sink(),dialogs: Ref.Ref<Dialogs>,starting: Ref.Ref<Maybe<&2,Started>>}
+type Bound is Data: Bound{runner: ExtensionRunner.ExtensionRunner,subscription: ExtensionRunner.ErrorSubscription}
+type Extensions is Data:
+  Extensions{dialogs: Ref.Ref<Dialogs>,ui: Ctx.ExtensionUIContext,errors: Callback.Callback<ExtensionTypes.ExtensionError,Unit>,bound: Ref.Ref<Maybe<&2,Bound>>,starting: Ref.Ref<Maybe<&2,Started>>}
 type Handle is Data:
-  Handle{current: Ref.Ref<Session.AgentSession>,sink: Sink(),buffer: Ref.Ref<String>,busy: Ref.Ref<Bool>,jobs: Chan(Work),assetsDir: Maybe<&2,String>,host: Host,listener: Session.Listener()}
+  Handle{current: Ref.Ref<Session.AgentSession>,sink: Sink(),buffer: Ref.Ref<String>,busy: Ref.Ref<Bool>,jobs: Chan(Work),assetsDir: Maybe<&2,String>,host: Host,listener: Session.Listener(),extensions: Extensions}
 type Owner is Type:
   Owner{handle: Handle,worker: Chan(Unit)}
 
@@ -170,35 +183,40 @@ def startedBy(started: Started,value: Session.AgentSessionEvent) -> IO(Unit):
   match value:
     case Session.AgentEvent{AgentTypes.MessageEnd{AgentTypes.LlmMessage{Ai.User{_}}}}: signalOnce(started)
     case _: IO.pure(Unit,Unit{})
-def runJob(handle: Command,request: Submission,+started: Started) -> IO(Unit):
+def runJob(handle: Command,request: Submission,+started: Started,+starting: Ref.Ref<Maybe<&2,Started>>) -> IO(Unit):
   match handle request:
     case Command{+session,_,_,busy,_,_} Submission{text,images,behavior}:
       do IO<Unit>:
+        Ref.write(Maybe<&2,Started>,starting,Some{started})
         +watch : Session.Listener() <- Callback.create(~Started,~Session.AgentSessionEvent,~Unit,~startedBy,started)
         Session.subscribe(session,watch)
         result : Result<&2,&2,String,Unit> <- Session.prompt(session,text,images,behavior)
         Session.unsubscribe(session,watch)
         Callback.dispose(Session.AgentSessionEvent,Unit,watch)
+        Ref.write(Maybe<&2,Started>,starting,None{})
         signalOnce(started)
         releaseStarted(started)
         Ref.write(Bool,busy,False{})
-def runWork(handle: Command,work: Work) -> IO(Unit):
+def runWork(handle: Command,work: Work,starting: Ref.Ref<Maybe<&2,Started>>) -> IO(Unit):
   match work:
-    case PromptWork{request,started}: runJob(handle,request,started)
+    case PromptWork{request,started}: runJob(handle,request,started,starting)
     case BashWork{request}: runBash(handle,request)
 def commandOf(handle: Handle) -> IO(Command):
   match handle:
-    case Handle{current,sink,buffer,busy,jobs,assetsDir,_,_}:
+    case Handle{current,sink,buffer,busy,jobs,assetsDir,_,_,_}:
       do IO<Command>:
         session : Session.AgentSession <- Ref.read(Session.AgentSession,current)
         return Command{session,sink,buffer,busy,jobs,assetsDir}
 def nextJob(handle: Handle) -> IO(Maybe<&1,Work>):
   match handle:
-    case Handle{_,_,_,_,jobs,_,_,_}: Chan.recv(Work,jobs)
+    case Handle{_,_,_,_,jobs,_,_,_,_}: Chan.recv(Work,jobs)
+def startingOf(handle: Handle) -> Ref.Ref<Maybe<&2,Started>>:
+  match handle:
+    case Handle{_,_,_,_,_,_,_,_,Extensions{_,_,_,_,starting}}: starting
 def runCurrent(+handle: Handle,work: Work) -> IO(Unit):
   do IO<Unit>:
     view : Command <- commandOf(handle)
-    runWork(view,work)
+    runWork(view,work,startingOf(handle))
 type Phase is Type: Check{} Received{request: Maybe<&1,Work>}
 @unsafe def worker(+handle: Handle,phase: Phase) -> IO(Unit):
   match phase:
@@ -211,15 +229,195 @@ type Phase is Type: Check{} Received{request: Maybe<&1,Work>}
       do IO<Unit>:
         runCurrent(handle,request)
         worker(handle,Check{})
+def registered(dialog: Dialog,value: Dialogs) -> Dialogs & Bool:
+  match value:
+    case Dialogs{True{},waiting}: (Dialogs{True{},List.append(&2,Dialog,waiting,[dialog])},True{})
+    case Dialogs{False{},waiting}: (Dialogs{False{},waiting},False{})
+def awaitDialog(+answer: Chan(Types.RpcExtensionUIResponse),+id: String,accepted: Bool) -> IO(Types.RpcExtensionUIResponse):
+  match accepted:
+    case False{}:
+      do IO<Types.RpcExtensionUIResponse>:
+        Chan.close(Types.RpcExtensionUIResponse,answer)
+        return Types.UICancelled{id}
+    case True{}:
+      do IO<Types.RpcExtensionUIResponse>:
+        received : Maybe<&1,Types.RpcExtensionUIResponse> <- Chan.recv(Types.RpcExtensionUIResponse,answer)
+        Chan.close(Types.RpcExtensionUIResponse,answer)
+        return Maybe.default(&1,Types.RpcExtensionUIResponse,received,Types.UICancelled{id})
+def startedAt(current: Maybe<&2,Started>) -> IO(Maybe<&2,Started> & Unit):
+  match current:
+    case None{}: IO.pure(Maybe<&2,Started> & Unit,(None{},Unit{}))
+    case Some{+started}:
+      do IO<Maybe<&2,Started> & Unit>:
+        signalOnce(started)
+        return (Some{started},Unit{})
+def requestWith(env: UiEnv,+id: String,request: String -> Types.RpcExtensionUIRequest) -> IO(Types.RpcExtensionUIResponse):
+  match env:
+    case UiEnv{sink,dialogs,+starting}:
+      do IO<Types.RpcExtensionUIResponse>:
+        +answer : Chan(Types.RpcExtensionUIResponse) <- Chan.new(Types.RpcExtensionUIResponse,1)
+        +accepted : Bool <- Ref.modify(Dialogs,Bool,dialogs,value => registered(Dialog{id,answer},value))
+        Bool.pick(Unit -> IO(Unit),accepted,_ => output(sink,Types.uiRequestValue(request(id))),_ => IO.pure(Unit,Unit{}))(Unit{})
+        Ref.update(Maybe<&2,Started>,Unit,starting,current => startedAt(current))
+        awaitDialog(answer,id,accepted)
+def requestIdentified(env: UiEnv,request: String -> Types.RpcExtensionUIRequest,id: Result<&2,&2,Uuid.Error,String>) -> IO(Types.RpcExtensionUIResponse):
+  match id:
+    case Done{value}: requestWith(env,value,request)
+    case Fail{_}: IO.pure(Types.RpcExtensionUIResponse,Types.UICancelled{""})
+# A dialog: an extension_ui_request with a fresh id, then its response.
+def dialog(env: UiEnv,request: String -> Types.RpcExtensionUIRequest) -> IO(Types.RpcExtensionUIResponse):
+  IO.bind(Result<&2,&2,Uuid.Error,String>,Types.RpcExtensionUIResponse,Uuid.randomUUID(),id => requestIdentified(env,request,id))
+def notice(env: UiEnv,request: String -> Types.RpcExtensionUIRequest) -> IO(Unit):
+  match env:
+    case UiEnv{sink,_,_}:
+      do IO<Unit>:
+        id : Result<&2,&2,Uuid.Error,String> <- Uuid.randomUUID()
+        output(sink,Types.uiRequestValue(request(Result.default(&2,&2,Uuid.Error,String,id,""))))
+def chosenValue(response: Types.RpcExtensionUIResponse) -> Maybe<&2,String>:
+  match response:
+    case Types.UIValue{_,value}: Some{value}
+    case _: None{}
+def confirmedOf(response: Types.RpcExtensionUIResponse) -> Bool:
+  match response:
+    case Types.UIConfirmed{_,confirmed}: confirmed
+    case _: False{}
+def selectDialog(env: UiEnv,request: Ctx.SelectRequest) -> IO(Maybe<&2,String>):
+  match request:
+    case Ctx.SelectRequest{title,options}: IO.bind(Types.RpcExtensionUIResponse,Maybe<&2,String>,dialog(env,id => Types.UISelect{id,title,options,None{}}),response => IO.pure(Maybe<&2,String>,chosenValue(response)))
+def confirmDialog(env: UiEnv,request: Ctx.ConfirmRequest) -> IO(Bool):
+  match request:
+    case Ctx.ConfirmRequest{title,message}: IO.bind(Types.RpcExtensionUIResponse,Bool,dialog(env,id => Types.UIConfirm{id,title,message,None{}}),response => IO.pure(Bool,confirmedOf(response)))
+def inputDialog(env: UiEnv,request: Ctx.InputRequest) -> IO(Maybe<&2,String>):
+  match request:
+    case Ctx.InputRequest{title,placeholder}: IO.bind(Types.RpcExtensionUIResponse,Maybe<&2,String>,dialog(env,id => Types.UIInput{id,title,placeholder,None{}}),response => IO.pure(Maybe<&2,String>,chosenValue(response)))
+def notifyRequest(env: UiEnv,notification: Ctx.Notification) -> IO(Unit):
+  match notification:
+    case Ctx.Notification{message,kind}: notice(env,id => Types.UINotify{id,message,Some{Ctx.notifyTypeName(kind)}})
+def statusRequest(env: UiEnv,update: Ctx.StatusUpdate) -> IO(Unit):
+  match update:
+    case Ctx.StatusUpdate{key,text}: notice(env,id => Types.UISetStatus{id,key,text})
+# Custom components need a terminal; RPC mode answers at once, as upstream.
+def noCustom(env: UiEnv,factory: Ctx.CustomFactory()) -> IO(Unit): IO.pure(Unit,Unit{})
+def extensionError(sink: Sink(),error: ExtensionTypes.ExtensionError) -> IO(Unit):
+  match error:
+    case ExtensionTypes.ExtensionError{extensionPath,trigger,message,_}:
+      output(sink,MessageJson.object(MessageJson.field("type",V.Text{"extension_error"},MessageJson.field("extensionPath",V.Text{extensionPath},MessageJson.field("event",V.Text{trigger},MessageJson.field("error",V.Text{message},Nil{}))))))
+def createExtensions(+sink: Sink()) -> IO(Extensions):
+  do IO<Extensions>:
+    +dialogs : Ref.Ref<Dialogs> <- Ref.new(Dialogs,Dialogs{True{},Nil{}})
+    +starting : Ref.Ref<Maybe<&2,Started>> <- Ref.new(Maybe<&2,Started>,None{})
+    +env : UiEnv = UiEnv{sink,dialogs,starting}
+    select : Callback.Callback<Ctx.SelectRequest,Maybe<&2,String>> <- Callback.create(~UiEnv,~Ctx.SelectRequest,~Maybe<&2,String>,~selectDialog,env)
+    confirm : Callback.Callback<Ctx.ConfirmRequest,Bool> <- Callback.create(~UiEnv,~Ctx.ConfirmRequest,~Bool,~confirmDialog,env)
+    input : Callback.Callback<Ctx.InputRequest,Maybe<&2,String>> <- Callback.create(~UiEnv,~Ctx.InputRequest,~Maybe<&2,String>,~inputDialog,env)
+    notify : Callback.Callback<Ctx.Notification,Unit> <- Callback.create(~UiEnv,~Ctx.Notification,~Unit,~notifyRequest,env)
+    status : Callback.Callback<Ctx.StatusUpdate,Unit> <- Callback.create(~UiEnv,~Ctx.StatusUpdate,~Unit,~statusRequest,env)
+    custom : Callback.Callback<Ctx.CustomFactory(),Unit> <- Callback.create(~UiEnv,~Ctx.CustomFactory(),~Unit,~noCustom,env)
+    errors : Callback.Callback<ExtensionTypes.ExtensionError,Unit> <- Callback.create(~Sink(),~ExtensionTypes.ExtensionError,~Unit,~extensionError,sink)
+    bound : Ref.Ref<Maybe<&2,Bound>> <- Ref.new(Maybe<&2,Bound>,None{})
+    return Extensions{dialogs,Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom},errors,bound,starting}
+def bindRunner(extensions: Extensions,runner: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> IO(Unit):
+  match extensions runner:
+    case _ None{}: IO.pure(Unit,Unit{})
+    case Extensions{_,ui,errors,bound,_} Some{+found}:
+      do IO<Unit>:
+        ExtensionRunner.setUIContext(found,Some{ui},Ctx.RpcMode{})
+        subscription : ExtensionRunner.ErrorSubscription <- ExtensionRunner.onError(found,errors)
+        Ref.write(Maybe<&2,Bound>,bound,Some{Bound{found,subscription}})
+# upstream rebindSession's bindExtensions: the session's extensions get the
+# RPC UI context in "rpc" mode, and their errors become extension_error records.
+def bindExtensions(+extensions: Extensions,session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    runner : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(session)
+    bindRunner(extensions,runner)
+def unbound(previous: Maybe<&2,Bound>) -> IO(Unit):
+  match previous:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{Bound{+runner,subscription}}:
+      do IO<Unit>:
+        ExtensionRunner.offError(runner,subscription)
+        ExtensionRunner.setUIContext(runner,None{},Ctx.PrintMode{})
+def unbindExtensions(extensions: Extensions) -> IO(Unit):
+  match extensions:
+    case Extensions{_,_,_,bound,_}:
+      do IO<Unit>:
+        previous : Maybe<&2,Bound> <- Ref.swap(Maybe<&2,Bound>,bound,None{})
+        unbound(previous)
+def cancelDialogs(dialogs: List<&2,Dialog>) -> IO(Unit):
+  match dialogs:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case Dialog{id,answer} <> rest:
+      do IO<Unit>:
+        sent : Bool <- Chan.send(Types.RpcExtensionUIResponse,answer,Types.UICancelled{id})
+        cancelDialogs(rest)
+def closed(value: Dialogs) -> Dialogs & List<&2,Dialog>:
+  match value:
+    case Dialogs{_,waiting}: (Dialogs{False{},Nil{}},waiting)
+# Stopping answers every open dialog as cancelled, so a prompt waiting in one
+# can finish.
+def closeDialogs(extensions: Extensions) -> IO(Unit):
+  match extensions:
+    case Extensions{dialogs,_,_,_,_}:
+      do IO<Unit>:
+        waiting : List<&2,Dialog> <- Ref.modify(Dialogs,List<&2,Dialog>,dialogs,closed)
+        cancelDialogs(waiting)
+def disposeExtensions(extensions: Extensions) -> IO(Unit):
+  match extensions:
+    case Extensions{dialogs,Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom},errors,bound,starting}:
+      do IO<Unit>:
+        Callback.dispose(Ctx.SelectRequest,Maybe<&2,String>,select)
+        Callback.dispose(Ctx.ConfirmRequest,Bool,confirm)
+        Callback.dispose(Ctx.InputRequest,Maybe<&2,String>,input)
+        Callback.dispose(Ctx.Notification,Unit,notify)
+        Callback.dispose(Ctx.StatusUpdate,Unit,status)
+        Callback.dispose(Ctx.CustomFactory(),Unit,custom)
+        Callback.dispose(ExtensionTypes.ExtensionError,Unit,errors)
+        left : Dialogs <- Ref.dispose(Dialogs,dialogs)
+        previous : Maybe<&2,Bound> <- Ref.dispose(Maybe<&2,Bound>,bound)
+        prompt : Maybe<&2,Started> <- Ref.dispose(Maybe<&2,Started>,starting)
+        return Unit{}
+def withDialogs(open: Bool,pair: List<&2,Dialog> & Maybe<&2,Dialog>) -> Dialogs & Maybe<&2,Dialog>:
+  match pair:
+    case (rest,found): (Dialogs{open,rest},found)
+def keptDialog(head: Dialog,pair: List<&2,Dialog> & Maybe<&2,Dialog>) -> List<&2,Dialog> & Maybe<&2,Dialog>:
+  match pair:
+    case (rest,found): (head <> rest,found)
+def dialogId(value: Dialog) -> String:
+  match value:
+    case Dialog{id,_}: id
+def dialogWithout(waiting: List<&2,Dialog>,+id: String) -> List<&2,Dialog> & Maybe<&2,Dialog>:
+  match waiting:
+    case Nil{}: (Nil{},None{})
+    case +head <> +rest: Bool.pick(List<&2,Dialog> & Maybe<&2,Dialog>,String.eq(dialogId(head),id),(rest,Some{head}),keptDialog(head,dialogWithout(rest,id)))
+def takeDialog(value: Dialogs,+id: String) -> Dialogs & Maybe<&2,Dialog>:
+  match value:
+    case Dialogs{open,waiting}: withDialogs(open,dialogWithout(waiting,id))
+def answerDialog(found: Maybe<&2,Dialog>,response: Types.RpcExtensionUIResponse) -> IO(Unit):
+  match found:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{Dialog{_,answer}}:
+      do IO<Unit>:
+        sent : Bool <- Chan.send(Types.RpcExtensionUIResponse,answer,response)
+        return Unit{}
+def answered(dialogs: Ref.Ref<Dialogs>,decoded: Types.Decoded(Types.RpcExtensionUIResponse)) -> IO(Unit):
+  match decoded:
+    case Fail{_}: IO.pure(Unit,Unit{})
+    case Done{+response}:
+      do IO<Unit>:
+        found : Maybe<&2,Dialog> <- Ref.modify(Dialogs,Maybe<&2,Dialog>,dialogs,value => takeDialog(value,Types.uiResponseId(response)))
+        answerDialog(found,response)
+
 def start(+session: Session.AgentSession,+sink: Sink(),assetsDir: Maybe<&2,String>,host: Host) -> IO(Owner & Handle):
   do IO<Owner & Handle>:
     +current : Ref.Ref<Session.AgentSession> <- Ref.new(Session.AgentSession,session)
     +buffer : Ref.Ref<String> <- Ref.new(String,"")
     +busy : Ref.Ref<Bool> <- Ref.new(Bool,False{})
     +jobs : Chan(Work) <- Chan.new(Work,64)
+    +extensions : Extensions <- createExtensions(sink)
+    bindExtensions(extensions,session)
     +listener : Session.Listener() <- Callback.create(~Sink(),~Session.AgentSessionEvent,~Unit,~observe,sink)
     Session.subscribe(session,listener)
-    +handle : Handle <- IO.pure(Handle,Handle{current,sink,buffer,busy,jobs,assetsDir,host,listener})
+    +handle : Handle <- IO.pure(Handle,Handle{current,sink,buffer,busy,jobs,assetsDir,host,listener,extensions})
     task : Chan(Unit) <- IO.fork(Unit,worker(handle,Check{}))
     return (Owner{handle,task},handle)
 
@@ -227,10 +425,12 @@ def start(+session: Session.AgentSession,+sink: Sink(),assetsDir: Maybe<&2,Strin
 # installed; the replaced session's listeners went with it.
 def rebind(handle: Handle,+session: Session.AgentSession) -> IO(Unit):
   match handle:
-    case Handle{current,_,_,busy,_,_,_,listener}:
+    case Handle{current,_,_,busy,_,_,_,listener,+extensions}:
       do IO<Unit>:
+        unbindExtensions(extensions)
         Ref.write(Session.AgentSession,current,session)
         Ref.write(Bool,busy,False{})
+        bindExtensions(extensions,session)
         Session.subscribe(session,listener)
 
 def acceptedPrompt(session: Session.AgentSession,sink: Sink(),busy: Ref.Ref<Bool>,jobs: Chan(Work),id: Maybe<&2,String>,text: String,images: List<&2,Ai.ImageContent>,active: Bool,behavior: Maybe<&2,Session.StreamingBehavior>) -> IO(Unit):
@@ -706,14 +906,33 @@ def parsed(handle: Command,host: Host,value: Result<&2,&2,Decode.ParseError,V.Va
     case Command{_,sink,_,_,_,_} Done{_}: output(sink,failure(None{},"parse","Invalid command: expected object"))
 def hostOf(handle: Handle) -> Host:
   match handle:
-    case Handle{_,_,_,_,_,_,host,_}: host
+    case Handle{_,_,_,_,_,_,host,_,_}: host
+def dialogsOf(handle: Handle) -> Ref.Ref<Dialogs>:
+  match handle:
+    case Handle{_,_,_,_,_,_,_,_,Extensions{dialogs,_,_,_,_}}: dialogs
+def textValue(value: Maybe<&2,V.Value>) -> String:
+  match value:
+    case Some{V.Text{text}}: text
+    case _: ""
+def isUIResponse(value: Result<&2,&2,Decode.ParseError,V.Value>) -> Bool:
+  match value:
+    case Done{V.ObjectValue{fields}}: String.eq(textValue(field(fields,"type")),"extension_ui_response")
+    case _: False{}
+def routed(+handle: Handle,+value: Result<&2,&2,Decode.ParseError,V.Value>,response: Bool) -> IO(Unit):
+  match response value:
+    case True{} Done{json}: answered(dialogsOf(handle),Types.decodeUIResponse(json))
+    case _ _:
+      do IO<Unit>:
+        view : Command <- commandOf(handle)
+        parsed(view,hostOf(handle),value)
+# An extension_ui_response answers the dialog with its id; anything else is a
+# command.
 def command(+handle: Handle,text: String) -> IO(Unit):
-  do IO<Unit>:
-    view : Command <- commandOf(handle)
-    parsed(view,hostOf(handle),Decode.parse(text))
+  +value = Decode.parse(text)
+  routed(handle,value,isUIResponse(value))
 def storeTail(handle: Handle,part: String) -> IO(Unit):
   match handle:
-    case Handle{_,_,buffer,_,_,_,_,_}: Ref.write(String,buffer,part)
+    case Handle{_,_,buffer,_,_,_,_,_,_}: Ref.write(String,buffer,part)
 def processRecords(+handle: Handle,parts: List<&2,String>) -> IO(Unit):
   match parts:
     case Nil{}: IO.pure(Unit,Unit{})
@@ -729,23 +948,24 @@ def receivedFrame(+handle: Handle,value: Jsonl.Frame) -> IO(Unit):
         processRecords(handle,records)
 def feed(+handle: Handle,chunk: String) -> IO(Unit):
   match handle:
-    case Handle{_,_,+buffer,_,_,_,_,_}:
+    case Handle{_,_,+buffer,_,_,_,_,_,_}:
       do IO<Unit>:
         pending : String <- Ref.read(String,buffer)
         receivedFrame(handle,Jsonl.frame(pending,chunk))
 def finish(+handle: Handle) -> IO(Unit):
   match handle:
-    case Handle{_,_,+buffer,_,_,_,_,_}:
+    case Handle{_,_,+buffer,_,_,_,_,_,_}:
       do IO<Unit>:
         +pending : String <- Ref.read(String,buffer)
         Ref.write(String,buffer,"")
         Bool.pick(Unit -> IO(Unit),String.is_empty(pending),_ => IO.pure(Unit,Unit{}),_ => command(handle,Jsonl.withoutCR(pending)))(Unit{})
 def stop(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{Handle{+current,_,buffer,busy,jobs,_,_,+listener},+task}:
+    case Owner{Handle{+current,_,buffer,busy,jobs,_,_,+listener,+extensions},+task}:
       do IO<Unit>:
         +session : Session.AgentSession <- Ref.read(Session.AgentSession,current)
         Session.abortBash(session)
+        closeDialogs(extensions)
         Chan.close(Work,jobs)
         completed : Maybe<&1,Unit> <- Chan.recv(Unit,task)
         Chan.close(Unit,task)
@@ -754,4 +974,5 @@ def stop(owner: Owner) -> IO(Unit):
         Callback.dispose(Session.AgentSessionEvent,Unit,listener)
         oldBuffer : String <- Ref.dispose(String,buffer)
         oldBusy : Bool <- Ref.dispose(Bool,busy)
-        return Unit{}
+        unbindExtensions(extensions)
+        disposeExtensions(extensions)

@@ -6,6 +6,12 @@ import ../packages/coding-agent/src/core/agent-runtime.bend as Runtime
 import ../packages/coding-agent/src/core/session-persistence.bend as Stored
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
 import ../packages/coding-agent/src/modes/rpc.bend as Rpc
+import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
+import ../packages/coding-agent/src/core/extensions/loader.bend as Loader
+import ../packages/coding-agent/src/core/extensions/runner.bend as Runner
+import ../packages/coding-agent/src/core/extensions/types.bend as ExtT
+import ./model-runtime-fixture.bend as ModelFixture
+import ../packages/coding-agent/src/core/model-runtime.bend as Models
 import ../packages/ai/src/types.bend as Ai
 import ../packages/ai/src/utils/uuid.bend as Uuid
 import ../packages/runtime/src/json.bend as Decode
@@ -74,6 +80,7 @@ def containsLine(lines: List<&2,String>,+expected: String) -> Bool:
 # vi.waitFor: poll the captured output until the condition holds, for at most
 # about two seconds.
 type Await is Data:
+  Contains{text: String}
   Responded{id: String}
   QueueCleared{}
   UnknownReplied{}
@@ -109,19 +116,21 @@ def requireSession(result: Stored.Outcome(Session.Session())) -> IO(Session.Sess
 def quiet(value: Faux.Fixture) -> IO(Unit):
   match value:
     case Faux.Fixture{session,listener,_,_,_,_,_}: Session.unsubscribe(session,listener)
-# createRuntimeHost: an in-memory session over the faux provider. withAuth
-# selects the faux model (whose key PI_FAUX_API_KEY is set); without it the
-# model is upstream's fake-provider model, which has no credentials.
-def endpoint(+cwd: String,+agentDir: String,withAuth: Bool,gates: List<&2,Faux.Gate>) -> IO(Endpoint):
+def endpointWith(+cwd: String,+agentDir: String,withAuth: Bool,gates: List<&2,Faux.Gate>,loadout: Runtime.Loadout) -> IO(Endpoint):
   do IO<Endpoint>:
     uuids : Uuid.Generator <- Uuid.generator()
     created : Stored.Outcome(Session.Session()) <- Stored.inMemory(~Unit,~Tools.ToolDetails,~V.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,~Session.readUnit,~Session.readDetails,~Session.readRaw,uuids,cwd,Stored.noOptions(),None{})
     stored : Session.Session() <- requireSession(created)
-    +fixture : Faux.Fixture <- Faux.fixtureWithModel(stored,cwd,agentDir,["done","done"],gates,emptyLoadout(),Some{Bool.pick(Ai.Model<Ai.JsonValue>,withAuth,Faux.fauxModel(),fakeModel())},Faux.fauxSources())
+    +fixture : Faux.Fixture <- Faux.fixtureWithModel(stored,cwd,agentDir,["done","done"],gates,loadout,Some{Bool.pick(Ai.Model<Ai.JsonValue>,withAuth,Faux.fauxModel(),fakeModel())},Faux.fauxSources())
     quiet(fixture)
     +lines : Ref.Ref<List<&2,String>> <- Ref.new(List<&2,String>,Nil{})
     sink : Callback.Callback<String,Unit> <- Callback.create(~Ref.Ref<List<&2,String>>,~String,~Unit,~capture,lines)
     return Endpoint{fixture,lines,sink}
+# createRuntimeHost: an in-memory session over the faux provider. withAuth
+# selects the faux model (whose key PI_FAUX_API_KEY is set); without it the
+# model is upstream's fake-provider model, which has no credentials.
+def endpoint(+cwd: String,+agentDir: String,withAuth: Bool,gates: List<&2,Faux.Gate>) -> IO(Endpoint):
+  endpointWith(cwd,agentDir,withAuth,gates,emptyLoadout())
 def started(+value: Endpoint) -> IO(Rpc.Owner & Rpc.Handle):
   match value:
     case Endpoint{fixture,_,sink}:
@@ -159,8 +168,13 @@ def clearedData(+lines: List<&2,String>) -> Bool:
   containsLine(lines,"{\"id\":\"clear\",\"type\":\"response\",\"command\":\"clear_queue\",\"success\":true,\"data\":{\"steering\":[\"Change direction\"],\"followUp\":[\"Summarize when finished\"]}}\n")
 def unknownReply(lines: List<&2,String>) -> Bool:
   containsLine(lines,"{\"id\":\"test\",\"type\":\"response\",\"command\":\"foobar\",\"success\":false,\"error\":\"Unknown command: foobar\"}\n")
+def anyContains(lines: List<&2,String>,+text: String) -> Bool:
+  match lines:
+    case Nil{}: False{}
+    case line <> rest: String.contains(line,text) || anyContains(rest,text)
 def holds(condition: Await,lines: List<&2,String>) -> Bool:
   match condition:
+    case Contains{text}: anyContains(lines,text)
     case Responded{id}: responded(id,lines)
     case QueueCleared{}: clearedData(lines)
     case UnknownReplied{}: unknownReply(lines)
@@ -260,6 +274,59 @@ def unknownCommand(+cwd: String,+agentDir: String) -> IO(Unit):
     pair : Rpc.Owner & Rpc.Handle <- started(value)
     unknown(value,pair)
 
+# RPC extension UI (native supplement; upstream has no suite for it)
+# ------------------------------------------------------------------
+# An extension command asks through ctx.ui.select and reports the answer
+# through ctx.ui.notify; both reach the client as extension_ui_request
+# records, and the select waits for the client's extension_ui_response.
+
+def Outcome() -> Data: Result<&2,&2,String,Unit>
+def pickedText(choice: Maybe<&2,String>) -> String: "picked " ++ Maybe.default(&2,String,choice,"none")
+def pick(unit: Unit,call: ExtT.CommandCall) -> IO(Outcome()):
+  match call:
+    case ExtT.CommandCall{_,Ctx.ExtensionCommandContext{+context}}:
+      do IO<Outcome()>:
+        choice : Maybe<&2,String> <- Ctx.select(context,"Pick one",["a","b"])
+        Ctx.notify(context,pickedText(choice),Ctx.InfoNotice{})
+        return Done{Unit{}}
+def picker(api: ExtT.ExtensionAPI) -> IO(Outcome()):
+  do IO<Outcome()>:
+    handler : ExtT.CommandHandler() <- Callback.create(~Unit,~ExtT.CommandCall,~Outcome(),~pick,Unit{})
+    Loader.registerCommand(api,"pick",ExtT.CommandOptions{Some{"Pick a letter"},None{},handler})
+def pickerLoadout(+cwd: String) -> IO(Runtime.Loadout):
+  do IO<Runtime.Loadout>:
+    +runtime : ExtT.ExtensionRuntime() <- Loader.createExtensionRuntime()
+    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"picker",api => picker(api),False{}}])
+    models : Models.ModelRuntime <- ModelFixture.create(Nil{})
+    runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
+    return Runtime.Loadout{R.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}}
+def requestIdIn(records: List<&2,V.Value>,+method: String) -> String:
+  match records:
+    case Nil{}: ""
+    case +record <> rest: Bool.pick(String,String.eq(textOf(record,"type"),"extension_ui_request") && String.eq(textOf(record,"method"),method),textOf(record,"id"),requestIdIn(rest,method))
+def requestId(lines: List<&2,String>,method: String) -> String: requestIdIn(parsedRecords(lines),method)
+def dialogAnswered(+value: Endpoint,pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
+  match pair:
+    case (owner,+handle):
+      do IO<Unit>:
+        send(handle,"{\"id\":\"p1\",\"type\":\"prompt\",\"message\":\"/pick\"}")
+        +asked : List<&2,String> <- waitFor(linesOf(value),Contains{"\"method\":\"select\""},300n)
+        +id : String = requestId(asked,"select")
+        send(handle,"{\"type\":\"extension_ui_response\",\"id\":\"" ++ id ++ "\",\"value\":\"b\"}")
+        notified : List<&2,String> <- waitFor(linesOf(value),Contains{"picked b"},300n)
+        clearLines(linesOf(value))
+        send(handle,"{\"id\":\"p2\",\"type\":\"prompt\",\"message\":\"/pick\"}")
+        again : List<&2,String> <- waitFor(linesOf(value),Contains{"\"method\":\"select\""},300n)
+        +captured : List<&2,String> <- cleanup(value,owner)
+        report("RPC extension UI > a select dialog is answered by its extension_ui_response",Bool.not(String.is_empty(id)) && anyContains(asked,"{\"type\":\"extension_ui_request\",\"id\":\"" ++ id ++ "\",\"method\":\"select\",\"title\":\"Pick one\",\"options\":[\"a\",\"b\"]}") && anyContains(notified,"\"method\":\"notify\",\"message\":\"picked b\",\"notifyType\":\"info\"}"))
+        report("RPC extension UI > stopping answers an open dialog as cancelled",anyContains(captured,"\"message\":\"picked none\""))
+def extensionDialog(+cwd: String,+agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    loadout : Runtime.Loadout <- pickerLoadout(cwd)
+    +value : Endpoint <- endpointWith(cwd,agentDir,True{},Nil{},loadout)
+    pair : Rpc.Owner & Rpc.Handle <- started(value)
+    dialogAnswered(value,pair)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case +cwd <> +agentDir <> Nil{}:
@@ -269,6 +336,7 @@ def run(args: List<String>) -> IO(Unit):
         queuedDuringStreaming(cwd,agentDir)
         clearsQueues(cwd,agentDir)
         unknownCommand(cwd,agentDir)
+        extensionDialog(cwd,agentDir)
     case _: IO.die(Unit,1,"usage: rpc-mode <cwd> <agentDir>")
 def main() -> IO(Unit):
   do IO<Unit>:

@@ -756,13 +756,13 @@
     },
     "packages/coding-agent/src/modes/rpc/rpc-types.ts": {
       "state": "ported",
-      "note": "Typed RpcCommand (encoder), response envelope, RpcSessionState and RpcSlashCommand with encoders used by the endpoint and decoders used by RpcClient, plus wire codecs for bash results, cleared queues and the entry tree. Per-command response data stays JSON in the envelope and is decoded by each client method. Extension UI request/response types are not ported with the endpoint's extension UI.",
+      "note": "Typed RpcCommand (encoder), response envelope, RpcSessionState, RpcSlashCommand, RpcExtensionUIRequest and RpcExtensionUIResponse, with encoders used by the endpoint and decoders used by RpcClient and the endpoint's extension UI, plus wire codecs for bash results, cleared queues and the entry tree. Per-command response data stays JSON in the envelope and is decoded by each client method.",
       "ports": [
         "packages/coding-agent/src/modes/rpc-types.bend"
       ],
       "source_sha256": "34057257456fd5f935587a0e9650fb5777738674e491a68fd037425703c45e26",
       "port_sha256": {
-        "packages/coding-agent/src/modes/rpc-types.bend": "4f598ad04bb6ec4f8e71a48aa84978228052bd40ad6b02ab5f742e630b3e126c"
+        "packages/coding-agent/src/modes/rpc-types.bend": "d324a0ac91ad81e1e7e332589f3b7241f471b9ebff7f2ea18e7fd5206f8d042a"
       }
     },
     "packages/coding-agent/src/modes/rpc/jsonl.ts": {
@@ -903,6 +903,17 @@
       "note": "Not ported pending a decision: the module adapts a Cloudflare Workers AI binding (env.AI) into a fetch function plus the CLOUDFLARE_GATEWAY_BINDING_AUTH_SENTINEL header value, which only exist inside a Workers runtime; the native CLI has no binding to wrap. A structural port (an AiBinding value with an optional fetch callback and the sentinel) is possible but has no native caller.",
       "source_sha256": "57f702b91453810241fd50a5629628fcc3d556e75909a37fae857d0a5d27d8fb",
       "port_sha256": {}
+    },
+    "packages/coding-agent/src/modes/rpc/rpc-mode.ts": {
+      "state": "partial",
+      "note": "All commands, JSONL framing, correlated errors, prompt/queue semantics, session replacement through the host, event streaming, and extension UI (select/confirm/input dialogs answered by extension_ui_response, notify/setStatus, extension_error records) in rpc mode. Gaps: the prompt response precedes AgentSession's preflight (no preflightResult), so preflight failures are acknowledged as success; commands other than prompts run on the input reader, so an extension dialog opened from one would block; editor/setWidget/setTitle/set_editor_text and dialog timeouts are absent from the native UI context; command-context actions and the shutdown handler are not bound; stdout backpressure and signal handling belong to main.bend. See tests/rpc.md.",
+      "ports": [
+        "packages/coding-agent/src/modes/rpc.bend"
+      ],
+      "source_sha256": "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/rpc.bend": "592b86af63c6e13d7631df617e3eaed6d07e3c1c8d130075e63105059a9deb9a"
+      }
     }
   }
 }
