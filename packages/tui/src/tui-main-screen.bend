@@ -36,10 +36,15 @@ def emit(buffer: Buffer,rest: Stream) -> Pull:
   match buffer:
     case Buffer{SNil{},_}: Again{rest,Buffer{"",0n}}
     case Buffer{reversed,_}: Yield{Some{Batch{Write{String.reverse(reversed)},rest}}}
+# A full buffer is written; otherwise the next operation adds to it (a
+# branch, so the buffer is reversed only when written).
+def filledUp(full: Bool,+reversed: String,+units: Nat,rest: List<&2,Operation>,+work: Nat) -> Pull:
+  match full:
+    case True{}: Yield{Some{Batch{Write{String.reverse(reversed)},Stream{rest,work - 1n}}}}
+    case False{}: Again{Stream{rest,work - 1n},Buffer{reversed,units}}
 def filled(value: Filled,+rest: List<&2,Operation>,+work: Nat) -> Pull:
   match value:
-    case Filled{Buffer{+reversed,+units},SNil{}}:
-      Bool.pick(Pull,Nat.is_eq(units,1048576n),Yield{Some{Batch{Write{String.reverse(reversed)},Stream{rest,work - 1n}}}},Again{Stream{rest,work - 1n},Buffer{reversed,units}})
+    case Filled{Buffer{+reversed,+units},SNil{}}: filledUp(Nat.is_eq(units,1048576n),reversed,units,rest,work)
     case Filled{buffer,text}: emit(buffer,Stream{Text{text} <> rest,work})
 def pullStep(value: Stream,buffer: Buffer) -> Pull:
   match value buffer:
