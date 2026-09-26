@@ -66,12 +66,16 @@ def blockOpened(opens: Bool,rules: Rules.Block,rule: Rules.BlockRule,+src: List<
   match opens:
     case True{}: exec(Rules.blockSearch(rules,rule),src)
     case False{}: None{}
-def blockExec(+rules: Rules.Block,+rule: Rules.BlockRule,+src: List<&2,U32>) -> Maybe<&2,Cap>: blockOpened(Rules.blockOpens(rules,rule,List.head(&2,U32,src)),rules,rule,src)
+# (`first`: the first scalar of `src`, which the lexer reads once for every
+# tokenizer it tries there.)
+def blockExecAt(+rules: Rules.Block,+rule: Rules.BlockRule,first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,Cap>: blockOpened(Rules.blockOpens(rules,rule,first),rules,rule,src)
+def blockExec(+rules: Rules.Block,+rule: Rules.BlockRule,+src: List<&2,U32>) -> Maybe<&2,Cap>: blockExecAt(rules,rule,List.head(&2,U32,src),src)
 def inlineOpened(opens: Bool,rules: Rules.Inline,rule: Rules.InlineRule,+src: List<&2,U32>) -> Maybe<&2,Cap>:
   match opens:
     case True{}: exec(Rules.inlineSearch(rules,rule),src)
     case False{}: None{}
-def inlineExec(+rules: Rules.Inline,+rule: Rules.InlineRule,+src: List<&2,U32>) -> Maybe<&2,Cap>: inlineOpened(Rules.inlineOpens(rules,rule,List.head(&2,U32,src)),rules,rule,src)
+def inlineExecAt(+rules: Rules.Inline,+rule: Rules.InlineRule,first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,Cap>: inlineOpened(Rules.inlineOpens(rules,rule,first),rules,rule,src)
+def inlineExec(+rules: Rules.Inline,+rule: Rules.InlineRule,+src: List<&2,U32>) -> Maybe<&2,Cap>: inlineExecAt(rules,rule,List.head(&2,U32,src),src)
 def flatSpan(value: Maybe<&2,Maybe<&2,Re.Span>>) -> Maybe<&2,Re.Span>:
   match value:
     case Some{span}: span
@@ -148,14 +152,14 @@ def spaceOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
   match found:
     case Some{+value}: Bool.pick(Unit -> Maybe<&2,T.Token<X>>,Nat.is_gt(matchEnd(value),0n),_ => Some{T.Space{capWhole(value)}},_ => None{})(Unit{})
     case None{}: None{}
-def space(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: spaceOf(X,blockExec(rules,Rules.BlockNewline{},src))
+def space(-X: Data,+rules: Rules.Block,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: spaceOf(X,blockExecAt(rules,Rules.BlockNewline{},first,src))
 
 def indentedCode(-X: Data,+raw: String) -> T.Token<X>: T.Code{raw,Some{"indented"},None{},H.codeRemoveIndent(raw)}
 def codeOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
   match found:
     case Some{value}: Some{indentedCode(X,H.trimTrailingBlankLines(capWhole(value)))}
     case None{}: None{}
-def code(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: codeOf(X,blockExec(rules,Rules.BlockCode{},src))
+def code(-X: Data,+rules: Rules.Block,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: codeOf(X,blockExecAt(rules,Rules.BlockCode{},first,src))
 
 # indentCodeCompensation: a fence indented by N whitespace characters takes
 # up to N of them off each line of its code.
@@ -181,7 +185,7 @@ def fencesOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
       +raw = capWhole(value)
       Some{T.Code{raw,None{},Some{H.unescapePunctuation(Text.trim(capText(value,2n)))},indentCodeCompensation(raw,capText(value,3n))}}
     case None{}: None{}
-def fences(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: fencesOf(X,blockExec(rules,Rules.BlockFences{},src))
+def fences(-X: Data,+rules: Rules.Block,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: fencesOf(X,blockExecAt(rules,Rules.BlockFences{},first,src))
 
 # Trailing #s go when a space precedes them (or nothing does).
 def closingHashes(+text: String) -> String:
@@ -191,20 +195,20 @@ def headingOf(found: Maybe<&2,Cap>) -> Maybe<&2,Titled>:
   match found:
     case Some{+value}: Some{Titled{H.rtrim(capWhole(value),'\n'),String.length(capText(value,1n)),closingHashes(Text.trim(capText(value,2n)))}}
     case None{}: None{}
-def heading(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Titled>: headingOf(blockExec(rules,Rules.BlockHeading{},src))
+def heading(+rules: Rules.Block,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,Titled>: headingOf(blockExecAt(rules,Rules.BlockHeading{},first,src))
 
 def hrOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
   match found:
     case Some{value}: Some{T.Hr{H.rtrim(capWhole(value),'\n')}}
     case None{}: None{}
-def hr(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: hrOf(X,blockExec(rules,Rules.BlockHr{},src))
+def hr(-X: Data,+rules: Rules.Block,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: hrOf(X,blockExecAt(rules,Rules.BlockHr{},first,src))
 
 # The blockquote's match; the lexer splits and lexes it.
 def blockquoteOf(found: Maybe<&2,Cap>) -> Maybe<&2,String>:
   match found:
     case Some{value}: Some{capWhole(value)}
     case None{}: None{}
-def blockquote(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,String>: blockquoteOf(blockExec(rules,Rules.BlockBlockquote{},src))
+def blockquote(+rules: Rules.Block,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,String>: blockquoteOf(blockExecAt(rules,Rules.BlockBlockquote{},first,src))
 
 def isPreTag(name: Maybe<&2,String>) -> Bool:
   match name:
@@ -216,7 +220,7 @@ def htmlOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
       +raw = H.trimTrailingBlankLines(capWhole(value))
       Some{T.HTML{raw,isPreTag(capGroup(value,1n)),raw,True{}}}
     case None{}: None{}
-def html(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: htmlOf(X,blockExec(rules,Rules.BlockHtml{},src))
+def html(-X: Data,+rules: Rules.Block,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: htmlOf(X,blockExecAt(rules,Rules.BlockHtml{},first,src))
 
 def hasLineTerminator(text: String) -> Bool:
   match text:
@@ -234,7 +238,7 @@ def definitionOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
   match found:
     case Some{+value}: Some{T.Def{H.rtrim(capWhole(value),'\n'),collapseSpace(CaseMap.lower(capText(value,1n))),H.unescapePunctuation(hrefBrackets(capText(value,2n))),definitionTitle(capGroup(value,3n))}}
     case None{}: None{}
-def definition(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: definitionOf(X,blockExec(rules,Rules.BlockDefinition{},src))
+def definition(-X: Data,+rules: Rules.Block,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: definitionOf(X,blockExecAt(rules,Rules.BlockDefinition{},first,src))
 
 # Tables: the lexer queues each cell's inline source.
 type TableDraft is Data: TableDraft{raw: String,align: List<&2,Maybe<&2,T.Align>>,header: List<&2,String>,rows: List<&2,List<&2,String>>}
@@ -296,7 +300,7 @@ def tableOf(found: Maybe<&2,Cap>) -> Maybe<&2,TableDraft>:
         _ => tableBuilt(H.rtrim(capWhole(value),'\n'),H.splitCells(capText(value,1n),None{}),Strings.split(alignChars(delimiter),'|'),tableRows(capGroup(value,3n))),
         _ => None{})(Unit{})
     case None{}: None{}
-def table(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,TableDraft>: tableOf(blockExec(rules,Rules.BlockTable{},src))
+def table(+rules: Rules.Block,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,TableDraft>: tableOf(blockExecAt(rules,Rules.BlockTable{},first,src))
 
 def lheadingOf(found: Maybe<&2,Cap>) -> Maybe<&2,Titled>:
   match found:
@@ -329,24 +333,24 @@ def underlineAhead(fuel: Nat,ahead: Ahead) -> Bool:
     case _ Ahead{1,_}: True{}
     case _ Ahead{2,_}: False{}
     case Succ{more} Ahead{_,rest}: underlineAhead(more,aheadOf(splitLine(rest)))
-def lheadingIf(ahead: Bool,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Titled>:
+def lheadingIf(ahead: Bool,+rules: Rules.Block,first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,Titled>:
   match ahead:
-    case True{}: lheadingOf(blockExec(rules,Rules.BlockLheading{},src))
+    case True{}: lheadingOf(blockExecAt(rules,Rules.BlockLheading{},first,src))
     case False{}: None{}
-def lheading(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Titled>: lheadingIf(underlineAhead(unbounded(),aheadOf(splitLine(src))),rules,src)
+def lheading(+rules: Rules.Block,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,Titled>: lheadingIf(underlineAhead(unbounded(),aheadOf(splitLine(src))),rules,first,src)
 
 def paragraphText(+text: String) -> String: Bool.pick(Unit -> String,H.endsWithChar(text,'\n'),_ => H.dropEnd(text,1n),_ => text)(Unit{})
 def paragraphOf(found: Maybe<&2,Cap>) -> Maybe<&2,Texted>:
   match found:
     case Some{+value}: Some{Texted{capWhole(value),paragraphText(capText(value,1n))}}
     case None{}: None{}
-def paragraph(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Texted>: paragraphOf(blockExec(rules,Rules.BlockParagraph{},src))
+def paragraph(+rules: Rules.Block,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,Texted>: paragraphOf(blockExecAt(rules,Rules.BlockParagraph{},first,src))
 
 def textOfFound(found: Maybe<&2,Cap>) -> Maybe<&2,Texted>:
   match found:
     case Some{+value}: Some{Texted{capWhole(value),capWhole(value)}}
     case None{}: None{}
-def blockText(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Texted>: textOfFound(blockExec(rules,Rules.BlockText{},src))
+def blockText(+rules: Rules.Block,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,Texted>: textOfFound(blockExecAt(rules,Rules.BlockText{},first,src))
 
 # Lists
 # -----
@@ -630,7 +634,7 @@ def listOf(+rules: Rules.Block,+src: List<&2,U32>,found: Maybe<&2,Cap>) -> Maybe
   match found:
     case Some{value}: listWith(rules,src,Text.trim(capText(value,1n)))
     case None{}: None{}
-def list(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,ListDraft>: listOf(rules,src,blockExec(rules,Rules.BlockList{},src))
+def list(+rules: Rules.Block,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,ListDraft>: listOf(rules,src,blockExecAt(rules,Rules.BlockList{},first,src))
 
 # Inline tokenizers
 # -----------------
@@ -639,7 +643,7 @@ def escapeOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
   match found:
     case Some{+value}: Some{T.Escape{capWhole(value),capText(value,1n)}}
     case None{}: None{}
-def escape(-X: Data,+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: escapeOf(X,inlineExec(rules,Rules.InlineEscape{},src))
+def escape(-X: Data,+rules: Rules.Inline,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: escapeOf(X,inlineExecAt(rules,Rules.InlineEscape{},first,src))
 
 # An inline tag's text; the lexer tracks the link and raw-block state it
 # opens or closes.
@@ -647,7 +651,7 @@ def wholeOf(found: Maybe<&2,Cap>) -> Maybe<&2,String>:
   match found:
     case Some{value}: Some{capWhole(value)}
     case None{}: None{}
-def tag(+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,String>: wholeOf(inlineExec(rules,Rules.InlineTag{},src))
+def tag(+rules: Rules.Inline,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,String>: wholeOf(inlineExecAt(rules,Rules.InlineTag{},first,src))
 def startsWithFolded(+text: String,+prefix: String) -> Bool: String.starts_with(Text.asciiLower(String.take(text,String.length(prefix))),prefix)
 def spaceFirst(text: String) -> Bool:
   match text:
@@ -689,7 +693,7 @@ def linkOf(found: Maybe<&2,Cap>) -> Maybe<&2,LinkMatch>:
         _ => Bool.pick(Unit -> Maybe<&2,LinkMatch>,angleClosed(trimmed),_ => Some{linkBuilt(capWhole(value),capText(value,1n),href,capGroup(value,3n))},_ => None{})(Unit{}),
         _ => linkCut(H.findClosingBracket(href),capWhole(value),capText(value,1n),href,capGroup(value,3n)))(Unit{})
     case None{}: None{}
-def link(+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,LinkMatch>: linkOf(inlineExec(rules,Rules.InlineLink{},src))
+def link(+rules: Rules.Inline,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,LinkMatch>: linkOf(inlineExecAt(rules,Rules.InlineLink{},first,src))
 
 # A reference that names no definition is its first character as text.
 type RefStep is Data:
@@ -713,13 +717,13 @@ def reflinkOf(links: List<&2,T.LinkDefinition>,found: Maybe<&2,Cap>) -> Maybe<&2
       +name = Bool.pick(String,truthy(capGroup(value,2n)),capText(value,2n),capText(value,1n))
       Some{refFound(definitionFor(links,CaseMap.lower(collapseSpace(name))),capWhole(value),capText(value,1n))}
     case None{}: None{}
-def orElse(first: Maybe<&2,Cap>,second: Maybe<&2,Cap>) -> Maybe<&2,Cap>:
-  match first:
-    case Some{value}: Some{value}
-    case None{}: second
 # reflink(src, links): `reflink` or else `nolink`.
-def reflink(+rules: Rules.Inline,links: List<&2,T.LinkDefinition>,+src: List<&2,U32>) -> Maybe<&2,RefStep>:
-  reflinkOf(links,orElse(inlineExec(rules,Rules.InlineReflink{},src),inlineExec(rules,Rules.InlineNolink{},src)))
+def nolinkUnless(found: Maybe<&2,Cap>,+rules: Rules.Inline,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,Cap>:
+  match found:
+    case Some{value}: Some{value}
+    case None{}: inlineExecAt(rules,Rules.InlineNolink{},first,src)
+def reflink(+rules: Rules.Inline,links: List<&2,T.LinkDefinition>,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,RefStep>:
+  reflinkOf(links,nolinkUnless(inlineExecAt(rules,Rules.InlineReflink{},first,src),rules,first,src))
 
 # other.outputLinkReplace, `/\\([\[\]])/g` → "$1".
 def bracketsScan(text: String,+pending: Bool,+reversed: String) -> String:
@@ -859,7 +863,7 @@ def maskingAdvanced(masking: Masking,+length: Nat) -> Masking:
     case Unmasked{source,links,offset}: Unmasked{source,links,offset + length}
     case Masked{codes}: Masked{drop(codes,length)}
 # Whether an emStrong opener may start `src`.
-def opensEmphasis(+rules: Rules.Inline,+src: List<&2,U32>) -> Bool: Rules.inlineOpens(rules,Rules.InlineEmStrongLDelim{},List.head(&2,U32,src))
+def opensEmphasis(+rules: Rules.Inline,first: Maybe<&2,U32>) -> Bool: Rules.inlineOpens(rules,Rules.InlineEmStrongLDelim{},first)
 # The masking with its source computed when `needed`.
 def maskingFor(+rules: Rules.Inline,needed: Bool,masking: Masking) -> Masking:
   match needed:
@@ -965,8 +969,8 @@ def emStrongOf(+rules: Rules.Inline,+src: List<&2,U32>,+masked: Masking,+previou
     case None{}: None{}
 # emStrong(src, maskedSrc, prevChar): an em or strong span, before its text
 # is lexed.
-def emStrong(+rules: Rules.Inline,+src: List<&2,U32>,+masked: Masking,+previous: Maybe<&2,U32>) -> Maybe<&2,Emphasis>:
-  emStrongOf(rules,src,masked,previous,inlineExec(rules,Rules.InlineEmStrongLDelim{},src))
+def emStrong(+rules: Rules.Inline,+first: Maybe<&2,U32>,+src: List<&2,U32>,+masked: Masking,+previous: Maybe<&2,U32>) -> Maybe<&2,Emphasis>:
+  emStrongOf(rules,src,masked,previous,inlineExecAt(rules,Rules.InlineEmStrongLDelim{},first,src))
 
 def delimited(value: Maybe<&2,Emphasis>) -> Maybe<&2,Delimited>:
   match value:
@@ -996,13 +1000,13 @@ def codespanOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
   match found:
     case Some{+value}: Some{T.Codespan{capWhole(value),codespanText(Strings.replaceAll(capText(value,2n),"\n"," "))}}
     case None{}: None{}
-def codespan(-X: Data,+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: codespanOf(X,inlineExec(rules,Rules.InlineCode{},src))
+def codespan(-X: Data,+rules: Rules.Inline,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: codespanOf(X,inlineExecAt(rules,Rules.InlineCode{},first,src))
 
 def brOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
   match found:
     case Some{value}: Some{T.Br{capWhole(value)}}
     case None{}: None{}
-def br(-X: Data,+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: brOf(X,inlineExec(rules,Rules.InlineBr{},src))
+def br(-X: Data,+rules: Rules.Inline,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: brOf(X,inlineExecAt(rules,Rules.InlineBr{},first,src))
 
 def isAt(value: Maybe<&2,String>) -> Bool:
   match value:
@@ -1015,7 +1019,7 @@ def autolinkOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
       +text = capText(value,1n)
       Some{autolinked(X,capWhole(value),text,Bool.pick(String,isAt(capGroup(value,2n)),"mailto:" ++ text,text))}
     case None{}: None{}
-def autolink(-X: Data,+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: autolinkOf(X,inlineExec(rules,Rules.InlineAutolink{},src))
+def autolink(-X: Data,+rules: Rules.Inline,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: autolinkOf(X,inlineExecAt(rules,Rules.InlineAutolink{},first,src))
 
 # `cap[0] = _backpedal.exec(cap[0])?.[0] ?? ""` until it no longer changes.
 def foundText(codes: List<&2,U32>,found: Re.Found) -> String:
@@ -1037,7 +1041,7 @@ def urlOf(-X: Data,+rules: Rules.Inline,found: Maybe<&2,Cap>) -> Maybe<&2,T.Toke
       Bool.pick(Unit -> Maybe<&2,T.Token<X>>,isAt(capGroup(value,2n)),_ => Some{autolinked(X,raw,raw,"mailto:" ++ raw)},
         _ => urlBacked(X,backpedaled(String.length(raw) + 1n,Rules.inlineSearch(rules,Rules.InlineBackpedal{}),raw,backpedalOnce(Rules.inlineSearch(rules,Rules.InlineBackpedal{}),raw)),String.eq(capText(value,1n),"www.")))(Unit{})
     case None{}: None{}
-def url(-X: Data,+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: urlOf(X,rules,inlineExec(rules,Rules.InlineUrl{},src))
+def url(-X: Data,+rules: Rules.Inline,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: urlOf(X,rules,inlineExecAt(rules,Rules.InlineUrl{},first,src))
 
 # The text run
 # ------------
@@ -1184,5 +1188,8 @@ def textOfLength(+src: List<&2,U32>,length: Maybe<&2,Nat>) -> Maybe<&2,String>:
     case Some{+count}: Some{slice(src,0n,count)}
     case None{}: None{}
 # The text run; the lexer merges it into a preceding text token.
-def inlineText(+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,String>:
-  Bool.pick(Unit -> Maybe<&2,String>,Rules.inlineBreaks(rules),_ => wholeOf(inlineExec(rules,Rules.InlineText{},src)),_ => textOfLength(src,textLength(src)))(Unit{})
+def textWith(breaks: Bool,+rules: Rules.Inline,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,String>:
+  match breaks:
+    case True{}: wholeOf(inlineExecAt(rules,Rules.InlineText{},first,src))
+    case False{}: textOfLength(src,textLength(src))
+def inlineText(+rules: Rules.Inline,+first: Maybe<&2,U32>,+src: List<&2,U32>) -> Maybe<&2,String>: textWith(Rules.inlineBreaks(rules),rules,first,src)

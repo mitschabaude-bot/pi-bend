@@ -184,21 +184,24 @@ type BlockMachine<-X: Data> is Data: BlockMachine{state: BlockState,frames: List
 def runBlock(-X: Data,+state: BlockState,+frames: List<&2,BlockFrame<X>>,+task: BlockTask<X>) -> BlockMachine<X>: BlockMachine{state,frames,RunBlock{task}}
 def giveBlock(-X: Data,+state: BlockState,+frames: List<&2,BlockFrame<X>>,+given: Given<X>) -> BlockMachine<X>: BlockMachine{state,frames,GiveBlock{given}}
 
-# One iteration of blockTokens: its position and surroundings.
-type Here<-X: Data> is Data: Here{src: List<&2,U32>,clipped: Bool,tokens: List<&2,T.Token<X>>,state: BlockState,frames: List<&2,BlockFrame<X>>}
+# One iteration of blockTokens: its position and surroundings, and the
+# source's first scalar, read once for the tokenizers tried there.
+type Here<-X: Data> is Data: Here{src: List<&2,U32>,clipped: Bool,tokens: List<&2,T.Token<X>>,state: BlockState,frames: List<&2,BlockFrame<X>>,first: Maybe<&2,U32>}
 def hereSrc(-X: Data,+here: Here<X>) -> List<&2,U32>:
-  match here: case Here{src,_,_,_,_}: src
+  match here: case Here{src,_,_,_,_,_}: src
+def hereFirst(-X: Data,+here: Here<X>) -> Maybe<&2,U32>:
+  match here: case Here{_,_,_,_,_,first}: first
 def hereState(-X: Data,+here: Here<X>) -> BlockState:
-  match here: case Here{_,_,_,state,_}: state
+  match here: case Here{_,_,_,state,_,_}: state
 # The iteration consumed `raw`, leaving `tokens` and `state`.
 def consumed(-X: Data,+here: Here<X>,+raw: String,+tokens: List<&2,T.Token<X>>,+state: BlockState) -> BlockMachine<X>:
-  match here: case Here{src,clipped,_,_,frames}: runBlock(X,state,frames,Blocks{Tk.drop(src,Tk.lengthOf(raw)),clipped,tokens})
+  match here: case Here{src,clipped,_,_,frames,_}: runBlock(X,state,frames,Blocks{Tk.drop(src,Tk.lengthOf(raw)),clipped,tokens})
 def pushed(-X: Data,+here: Here<X>,+token: T.Token<X>) -> BlockMachine<X>:
-  match here: case Here{src,clipped,tokens,state,frames}: runBlock(X,state,frames,Blocks{Tk.drop(src,Tk.lengthOf(T.rawOf(X,token))),clipped,token <> tokens})
+  match here: case Here{src,clipped,tokens,state,frames,_}: runBlock(X,state,frames,Blocks{Tk.drop(src,Tk.lengthOf(T.rawOf(X,token))),clipped,token <> tokens})
 # No tokenizer applies (upstream throws "Infinite loop on byte"): the tokens
 # so far.
 def stopped(-X: Data,+here: Here<X>) -> BlockMachine<X>:
-  match here: case Here{_,_,tokens,state,frames}: giveBlock(X,withTop(state,True{}),frames,GivenTokens{tokens})
+  match here: case Here{_,_,tokens,state,frames,_}: giveBlock(X,withTop(state,True{}),frames,GivenTokens{tokens})
 
 # blockTokens
 # -----------
@@ -210,19 +213,19 @@ def textMerged(-X: Data,+src: List<&2,U32>,+clipped: Bool,+tokens: List<&2,T.Tok
   runBlock(X,withQueue(state,lastSet(queueOf(state),lastText(X,tokens))),frames,Blocks{Tk.drop(src,Tk.lengthOf(raw)),clipped,tokens})
 def headed(-X: Data,+here: Here<X>,+raw: String,+depth: Nat,+text: String) -> BlockMachine<X>:
   match here:
-    case Here{src,clipped,tokens,+state,frames}:
+    case Here{src,clipped,tokens,+state,frames,_}:
       runBlock(X,enqueued(state,text),frames,Blocks{Tk.drop(src,Tk.lengthOf(raw)),clipped,T.Heading{raw,depth,text,[T.Queued{nextIndex(queueOf(state))}]} <> tokens})
 # The paragraph merges into a paragraph before it when the previous
 # paragraph was cut short at an extension's start.
 def paragraphFound(-X: Data,+here: Here<X>,+raw: String,+text: String,+clippedNext: Bool) -> BlockMachine<X>:
   match here:
-    case Here{+src,+clipped,+tokens,+state,+frames}:
+    case Here{+src,+clipped,+tokens,+state,+frames,_}:
       Bool.pick(Unit -> BlockMachine<X>,clipped && isParagraph(X,tokens),
         _ => textMerged(X,src,clippedNext,continuedLast(X,tokens,raw,text),state,frames,raw),
         _ => runBlock(X,enqueued(state,text),frames,Blocks{Tk.drop(src,Tk.lengthOf(raw)),clippedNext,T.Paragraph{raw,text,[T.Queued{nextIndex(queueOf(state))}]} <> tokens}))(Unit{})
 def textFound(-X: Data,+here: Here<X>,+raw: String,+text: String) -> BlockMachine<X>:
   match here:
-    case Here{+src,+clipped,+tokens,+state,+frames}:
+    case Here{+src,+clipped,+tokens,+state,+frames,_}:
       Bool.pick(Unit -> BlockMachine<X>,isText(X,tokens),
         _ => textMerged(X,src,clipped,continuedLast(X,tokens,raw,text),state,frames,raw),
         _ => runBlock(X,enqueued(state,text),frames,Blocks{Tk.drop(src,Tk.lengthOf(raw)),clipped,T.Text{raw,text,[T.Queued{nextIndex(queueOf(state))}],False{}} <> tokens}))(Unit{})
@@ -238,7 +241,7 @@ def cutClipped(+cut: Cut) -> Bool:
 def afterParagraph(-X: Data,+rules: Rules.Block,+here: Here<X>,+cut: Cut,+found: Maybe<&2,Tk.Texted>) -> BlockMachine<X>:
   match found:
     case Some{Tk.Texted{raw,text}}: paragraphFound(X,here,raw,text,cutClipped(cut))
-    case None{}: afterText(X,here,Tk.blockText(rules,hereSrc(X,here)))
+    case None{}: afterText(X,here,Tk.blockText(rules,hereFirst(X,here),hereSrc(X,here)))
 def cutSource(+start: Maybe<&2,Nat>,+src: List<&2,U32>) -> Cut:
   match start:
     case Some{+index}: Cut{Tk.take(src,index + 1n),Bool.not(List.is_empty(&2,U32,Tk.drop(src,index + 1n)))}
@@ -247,10 +250,10 @@ def cutCodes(+cut: Cut) -> List<&2,U32>:
   match cut: case Cut{codes,_}: codes
 def topParagraph(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>) -> BlockMachine<X>:
   +cut = cutSource(startBlock(X,ext)(Tk.drop(hereSrc(X,here),1n)),hereSrc(X,here))
-  afterParagraph(X,rules,here,cut,Tk.paragraph(rules,cutCodes(cut)))
+  afterParagraph(X,rules,here,cut,Tk.paragraph(rules,hereFirst(X,here),cutCodes(cut)))
 # Paragraphs only at the top level (`state.top`); text otherwise.
 def paragraphs(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>) -> BlockMachine<X>:
-  Bool.pick(Unit -> BlockMachine<X>,topOf(hereState(X,here)),_ => topParagraph(~X,~ext,rules,here),_ => afterText(X,here,Tk.blockText(rules,hereSrc(X,here))))(Unit{})
+  Bool.pick(Unit -> BlockMachine<X>,topOf(hereState(X,here)),_ => topParagraph(~X,~ext,rules,here),_ => afterText(X,here,Tk.blockText(rules,hereFirst(X,here),hereSrc(X,here))))(Unit{})
 def afterLheading(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>,+found: Maybe<&2,Tk.Titled>) -> BlockMachine<X>:
   match found:
     case Some{Tk.Titled{raw,depth,text}}: headed(X,here,raw,depth,text)
@@ -281,14 +284,14 @@ def repeated(+aligns: List<&2,Maybe<&2,T.Align>>,+count: Nat) -> List<&2,Maybe<&
     case Succ{more}: List.append(&2,Maybe<&2,T.Align>,aligns,repeated(aligns,more))
 def tableQueued(-X: Data,+here: Here<X>,+raw: String,+align: List<&2,Maybe<&2,T.Align>>,+header: List<&2,T.Token<X>>,+count: Nat,+rows: Cells<X>) -> BlockMachine<X>:
   match here rows:
-    case Here{src,clipped,tokens,_,frames} Cells{cells,state}: runBlock(X,state,frames,Blocks{Tk.drop(src,Tk.lengthOf(raw)),clipped,T.Table{raw,align,header,rowsOf(X,cells,count,Nil{})} <> tokens})
+    case Here{src,clipped,tokens,_,frames,_} Cells{cells,state}: runBlock(X,state,frames,Blocks{Tk.drop(src,Tk.lengthOf(raw)),clipped,T.Table{raw,align,header,rowsOf(X,cells,count,Nil{})} <> tokens})
 def tableRowsQueued(-X: Data,+here: Here<X>,+raw: String,+align: List<&2,Maybe<&2,T.Align>>,+rows: List<&2,List<&2,String>>,+header: Cells<X>) -> BlockMachine<X>:
   match header:
     case Cells{+cells,state}: tableQueued(X,here,raw,align,cells,List.length(&2,T.Token<X>,cells),cellsQueued(X,List.concat(&2,String,rows),repeated(align,List.length(&2,List<&2,String>,rows)),False{},state,Nil{}))
 def afterTable(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>,+found: Maybe<&2,Tk.TableDraft>) -> BlockMachine<X>:
   match found:
     case Some{Tk.TableDraft{raw,+align,header,rows}}: tableRowsQueued(X,here,raw,align,rows,cellsQueued(X,header,align,True{},hereState(X,here),Nil{}))
-    case None{}: afterLheading(~X,~ext,rules,here,Tk.lheading(rules,hereSrc(X,here)))
+    case None{}: afterLheading(~X,~ext,rules,here,Tk.lheading(rules,hereFirst(X,here),hereSrc(X,here)))
 
 def linked(-X: Data,+state: BlockState,+token: T.Token<X>) -> BlockState:
   match state token:
@@ -298,72 +301,72 @@ def linked(-X: Data,+state: BlockState,+token: T.Token<X>) -> BlockState:
 # definition of a label counts.
 def defined(-X: Data,+here: Here<X>,+token: T.Token<X>,+raw: String,+tag: String) -> BlockMachine<X>:
   match here:
-    case Here{+src,+clipped,+tokens,+state,+frames}:
+    case Here{+src,+clipped,+tokens,+state,+frames,_}:
       Bool.pick(Unit -> BlockMachine<X>,isParagraphOrText(X,tokens),_ => textMerged(X,src,clipped,continuedLast(X,tokens,raw,raw),state,frames,raw),
         _ => Bool.pick(Unit -> BlockMachine<X>,Tk.hasDefinition(linksOf(state),tag),_ => runBlock(X,state,frames,Blocks{Tk.drop(src,Tk.lengthOf(raw)),clipped,tokens}),
           _ => runBlock(X,linked(X,state,token),frames,Blocks{Tk.drop(src,Tk.lengthOf(raw)),clipped,token <> tokens}))(Unit{}))(Unit{})
 def afterDefinition(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>,+found: Maybe<&2,T.Token<X>>) -> BlockMachine<X>:
   match found:
     case Some{T.Def{raw,tag,href,title}}: defined(X,here,T.Def{raw,tag,href,title},raw,tag)
-    case _: afterTable(~X,~ext,rules,here,Tk.table(rules,hereSrc(X,here)))
+    case _: afterTable(~X,~ext,rules,here,Tk.table(rules,hereFirst(X,here),hereSrc(X,here)))
 def afterHtml(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>,+found: Maybe<&2,T.Token<X>>) -> BlockMachine<X>:
   match found:
     case Some{token}: pushed(X,here,token)
-    case None{}: afterDefinition(~X,~ext,rules,here,Tk.definition(X,rules,hereSrc(X,here)))
+    case None{}: afterDefinition(~X,~ext,rules,here,Tk.definition(X,rules,hereFirst(X,here),hereSrc(X,here)))
 def itemsOf(+draft: Tk.ListDraft) -> List<&2,Tk.ItemDraft>:
   match draft: case Tk.ListDraft{_,_,_,_,items}: items
 def listStarted(-X: Data,+here: Here<X>,+draft: Tk.ListDraft) -> BlockMachine<X>:
   match here:
-    case Here{src,clipped,tokens,state,frames}: runBlock(X,state,Pushed{src,clipped,tokens} <> frames,Items{draft,itemsOf(draft),Nil{}})
+    case Here{src,clipped,tokens,state,frames,_}: runBlock(X,state,Pushed{src,clipped,tokens} <> frames,Items{draft,itemsOf(draft),Nil{}})
 def afterList(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>,+found: Maybe<&2,Tk.ListDraft>) -> BlockMachine<X>:
   match found:
     case Some{draft}: listStarted(X,here,draft)
-    case None{}: afterHtml(~X,~ext,rules,here,Tk.html(X,rules,hereSrc(X,here)))
+    case None{}: afterHtml(~X,~ext,rules,here,Tk.html(X,rules,hereFirst(X,here),hereSrc(X,here)))
 def quoteStarted(-X: Data,+here: Here<X>,+raw: String) -> BlockMachine<X>:
   match here:
-    case Here{src,clipped,tokens,state,frames}: runBlock(X,state,Pushed{src,clipped,tokens} <> frames,Quote{H.linesOf(H.rtrim(raw,'\n')),"","",Nil{}})
+    case Here{src,clipped,tokens,state,frames,_}: runBlock(X,state,Pushed{src,clipped,tokens} <> frames,Quote{H.linesOf(H.rtrim(raw,'\n')),"","",Nil{}})
 def afterBlockquote(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>,+found: Maybe<&2,String>) -> BlockMachine<X>:
   match found:
     case Some{raw}: quoteStarted(X,here,raw)
-    case None{}: afterList(~X,~ext,rules,here,Tk.list(rules,hereSrc(X,here)))
+    case None{}: afterList(~X,~ext,rules,here,Tk.list(rules,hereFirst(X,here),hereSrc(X,here)))
 def afterHr(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>,+found: Maybe<&2,T.Token<X>>) -> BlockMachine<X>:
   match found:
     case Some{token}: pushed(X,here,token)
-    case None{}: afterBlockquote(~X,~ext,rules,here,Tk.blockquote(rules,hereSrc(X,here)))
+    case None{}: afterBlockquote(~X,~ext,rules,here,Tk.blockquote(rules,hereFirst(X,here),hereSrc(X,here)))
 def afterHeading(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>,+found: Maybe<&2,Tk.Titled>) -> BlockMachine<X>:
   match found:
     case Some{Tk.Titled{raw,depth,text}}: headed(X,here,raw,depth,text)
-    case None{}: afterHr(~X,~ext,rules,here,Tk.hr(X,rules,hereSrc(X,here)))
+    case None{}: afterHr(~X,~ext,rules,here,Tk.hr(X,rules,hereFirst(X,here),hereSrc(X,here)))
 def afterFences(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>,+found: Maybe<&2,T.Token<X>>) -> BlockMachine<X>:
   match found:
     case Some{token}: pushed(X,here,token)
-    case None{}: afterHeading(~X,~ext,rules,here,Tk.heading(rules,hereSrc(X,here)))
+    case None{}: afterHeading(~X,~ext,rules,here,Tk.heading(rules,hereFirst(X,here),hereSrc(X,here)))
 # Indented code cannot interrupt a paragraph: it continues one.
 def coded(-X: Data,+here: Here<X>,+token: T.Token<X>,+raw: String,+text: String) -> BlockMachine<X>:
   match here:
-    case Here{+src,+clipped,+tokens,+state,+frames}:
+    case Here{+src,+clipped,+tokens,+state,+frames,_}:
       Bool.pick(Unit -> BlockMachine<X>,isParagraphOrText(X,tokens),_ => textMerged(X,src,clipped,continuedLast(X,tokens,raw,text),state,frames,raw),
         _ => runBlock(X,state,frames,Blocks{Tk.drop(src,Tk.lengthOf(raw)),clipped,token <> tokens}))(Unit{})
 def afterCode(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>,+found: Maybe<&2,T.Token<X>>) -> BlockMachine<X>:
   match found:
     case Some{T.Code{raw,style,lang,text}}: coded(X,here,T.Code{raw,style,lang,text},raw,text)
-    case _: afterFences(~X,~ext,rules,here,Tk.fences(X,rules,hereSrc(X,here)))
+    case _: afterFences(~X,~ext,rules,here,Tk.fences(X,rules,hereFirst(X,here),hereSrc(X,here)))
 def spaceFound(-X: Data,+here: Here<X>,+raw: String) -> BlockMachine<X>:
   match here:
-    case Here{src,clipped,tokens,state,frames}: runBlock(X,state,frames,Blocks{Tk.drop(src,Tk.lengthOf(raw)),clipped,spaced(X,raw,tokens)})
+    case Here{src,clipped,tokens,state,frames,_}: runBlock(X,state,frames,Blocks{Tk.drop(src,Tk.lengthOf(raw)),clipped,spaced(X,raw,tokens)})
 def afterSpace(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>,+found: Maybe<&2,T.Token<X>>) -> BlockMachine<X>:
   match found:
     case Some{T.Space{raw}}: spaceFound(X,here,raw)
-    case _: afterCode(~X,~ext,rules,here,Tk.code(X,rules,hereSrc(X,here)))
+    case _: afterCode(~X,~ext,rules,here,Tk.code(X,rules,hereFirst(X,here),hereSrc(X,here)))
 # An extension token that consumes nothing would not advance.
 def afterExtension(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>,+found: Maybe<&2,T.Token<X>>) -> BlockMachine<X>:
   match found:
     case Some{+token}: Bool.pick(Unit -> BlockMachine<X>,String.is_empty(T.rawOf(X,token)),_ => stopped(X,here),_ => pushed(X,here,token))(Unit{})
-    case None{}: afterSpace(~X,~ext,rules,here,Tk.space(X,rules,hereSrc(X,here)))
+    case None{}: afterSpace(~X,~ext,rules,here,Tk.space(X,rules,hereFirst(X,here),hereSrc(X,here)))
 def blocksStep(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+here: Here<X>) -> BlockMachine<X>:
   match here:
-    case Here{Nil{},_,tokens,state,frames}: giveBlock(X,withTop(state,True{}),frames,GivenTokens{tokens})
-    case Here{+src,clipped,tokens,state,frames}: afterExtension(~X,~ext,rules,Here{src,clipped,tokens,state,frames},blockExtension(X,ext)(src))
+    case Here{Nil{},_,tokens,state,frames,_}: giveBlock(X,withTop(state,True{}),frames,GivenTokens{tokens})
+    case Here{+src,clipped,tokens,state,frames,+first}: afterExtension(~X,~ext,rules,Here{src,clipped,tokens,state,frames,first},blockExtension(X,ext)(src))
 
 # The blockquote tokenizer
 # ------------------------
@@ -390,12 +393,14 @@ def quoteStep(-X: Data,+state: BlockState,+frames: List<&2,BlockFrame<X>>,+lines
   match lines:
     case Nil{}: giveBlock(X,state,frames,GivenToken{quoteToken(X,raw,text,tokens)})
     case line <> rest: quoteChunked(X,state,frames,chunkOf(line <> rest,False{},Nil{}),raw,text,tokens)
+def quoteIn(+rules: Rules.Block,+codes: List<&2,U32>) -> Maybe<&2,String>: Tk.blockquote(rules,List.head(&2,U32,codes),codes)
+def listIn(+rules: Rules.Block,+codes: List<&2,U32>) -> Maybe<&2,Tk.ListDraft>: Tk.list(rules,List.head(&2,U32,codes),codes)
 def requotedWith(-X: Data,+state: BlockState,+frames: List<&2,BlockFrame<X>>,+found: Maybe<&2,String>) -> BlockMachine<X>:
   match found:
     case Some{raw}: runBlock(X,state,frames,Quote{H.linesOf(H.rtrim(raw,'\n')),"","",Nil{}})
     case None{}: giveBlock(X,state,frames,GivenNone{})
 def requoted(-X: Data,+rules: Rules.Block,+state: BlockState,+frames: List<&2,BlockFrame<X>>,+newText: String) -> BlockMachine<X>:
-  requotedWith(X,state,frames,Tk.blockquote(rules,Re.codes(newText)))
+  requotedWith(X,state,frames,quoteIn(rules,Re.codes(newText)))
 def relisted(-X: Data,+state: BlockState,+frames: List<&2,BlockFrame<X>>,+found: Maybe<&2,Tk.ListDraft>) -> BlockMachine<X>:
   match found:
     case Some{+draft}: runBlock(X,state,frames,Items{draft,itemsOf(draft),Nil{}})
@@ -411,7 +416,7 @@ def quoteContinued(-X: Data,+rules: Rules.Block,+state: BlockState,+frames: List
       requoted(X,rules,state,Requoted{raw ++ "\n" ++ continuation,text,T.Blockquote{oldRaw,oldText,inner},rest} <> frames,oldRaw ++ "\n" ++ H.quoteMarkersRemoved(continuation))
     case T.ListToken{oldRaw,ordered,start,loose,items} <> rest:
       +newText = oldRaw ++ "\n" ++ H.joinLines(remaining)
-      relisted(X,state,Relisted{raw,text,T.ListToken{oldRaw,ordered,start,loose,items},newText,rest} <> frames,Tk.list(rules,Re.codes(newText)))
+      relisted(X,state,Relisted{raw,text,T.ListToken{oldRaw,ordered,start,loose,items},newText,rest} <> frames,listIn(rules,Re.codes(newText)))
     case tokens: runBlock(X,state,frames,Quote{remaining,raw,text,tokens})
 
 # The list tokenizer
@@ -494,7 +499,7 @@ def itemsStep(-X: Data,+state: BlockState,+frames: List<&2,BlockFrame<X>>,+list:
 
 def executeBlock(~X: Data,~ext: Extensions<X>,+rules: Rules.Block,+state: BlockState,+frames: List<&2,BlockFrame<X>>,+task: BlockTask<X>) -> BlockMachine<X>:
   match task:
-    case Blocks{src,clipped,tokens}: blocksStep(~X,~ext,rules,Here{src,clipped,tokens,state,frames})
+    case Blocks{+src,clipped,tokens}: blocksStep(~X,~ext,rules,Here{src,clipped,tokens,state,frames,List.head(&2,U32,src)})
     case Quote{lines,raw,text,tokens}: quoteStep(X,state,frames,lines,raw,text,tokens)
     case Items{list,pending,done}: itemsStep(X,state,frames,list,pending,done)
 def givenTokens(-X: Data,+given: Given<X>) -> List<&2,T.Token<X>>:
@@ -604,19 +609,22 @@ def rawBlockOf(+state: InlineState) -> Bool:
 # order; links, emphasis and strikethrough push a frame and lex their text
 # as a new run.
 
-type At<-X: Data> is Data: At{state: InlineState,frames: List<&2,InlineFrame<X>>,run: Run<X>}
+# (`first`: the run's first scalar, read once for the tokenizers tried there.)
+type At<-X: Data> is Data: At{state: InlineState,frames: List<&2,InlineFrame<X>>,run: Run<X>,first: Maybe<&2,U32>}
 def pushedHere(-X: Data,+here: At<X>,+token: T.Token<X>) -> InlineMachine<X>:
-  match here: case At{state,frames,run}: pushedInline(X,state,frames,run,token)
+  match here: case At{state,frames,run,_}: pushedInline(X,state,frames,run,token)
 def stoppedHere(-X: Data,+here: At<X>) -> InlineMachine<X>:
-  match here: case At{state,frames,run}: stoppedInline(X,state,frames,run)
+  match here: case At{state,frames,run,_}: stoppedInline(X,state,frames,run)
 def hereRun(-X: Data,+here: At<X>) -> Run<X>:
-  match here: case At{_,_,run}: run
+  match here: case At{_,_,run,_}: run
+def atFirst(-X: Data,+here: At<X>) -> Maybe<&2,U32>:
+  match here: case At{_,_,_,first}: first
 def hereInline(-X: Data,+here: At<X>) -> InlineState:
-  match here: case At{state,_,_}: state
+  match here: case At{state,_,_,_}: state
 
 def textRan(-X: Data,+here: At<X>,+raw: String) -> InlineMachine<X>:
   match here:
-    case At{+state,frames,Run{src,masked,previous,_,tokens}}:
+    case At{+state,frames,Run{src,masked,previous,_,tokens},_}:
       +last = Maybe.default(&2,Char,H.lastChar(raw),'_')
       runInline(X,state,frames,Iterate{Run{Tk.drop(src,Tk.lengthOf(raw)),Tk.maskingAdvanced(masked,Tk.lengthOf(raw)),Bool.pick(Maybe<&2,U32>,Char.is_eq(last,'_'),previous,Some{Tk.previousOf(Char.to_u32(last))}),True{},textJoined(X,tokens,raw,rawBlockOf(state))}})
 def afterInlineText(-X: Data,+here: At<X>,+found: Maybe<&2,String>) -> InlineMachine<X>:
@@ -625,24 +633,24 @@ def afterInlineText(-X: Data,+here: At<X>,+found: Maybe<&2,String>) -> InlineMac
     case None{}: stoppedHere(X,here)
 def textStage(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+here: At<X>) -> InlineMachine<X>:
   +src = runSrc(X,hereRun(X,here))
-  afterInlineText(X,here,Tk.inlineText(rules,cutCodes(cutSource(startInline(X,ext)(Tk.drop(src,1n)),src))))
+  afterInlineText(X,here,Tk.inlineText(rules,atFirst(X,here),cutCodes(cutSource(startInline(X,ext)(Tk.drop(src,1n)),src))))
 def afterUrl(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+here: At<X>,+found: Maybe<&2,T.Token<X>>) -> InlineMachine<X>:
   match found:
     case Some{token}: pushedHere(X,here,token)
     case None{}: textStage(~X,~ext,rules,here)
 def urlStage(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+here: At<X>) -> InlineMachine<X>:
-  Bool.pick(Unit -> InlineMachine<X>,inLinkOf(hereInline(X,here)),_ => textStage(~X,~ext,rules,here),_ => afterUrl(~X,~ext,rules,here,Tk.url(X,rules,runSrc(X,hereRun(X,here)))))(Unit{})
+  Bool.pick(Unit -> InlineMachine<X>,inLinkOf(hereInline(X,here)),_ => textStage(~X,~ext,rules,here),_ => afterUrl(~X,~ext,rules,here,Tk.url(X,rules,atFirst(X,here),runSrc(X,hereRun(X,here)))))(Unit{})
 def afterAutolink(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+here: At<X>,+found: Maybe<&2,T.Token<X>>) -> InlineMachine<X>:
   match found:
     case Some{token}: pushedHere(X,here,token)
     case None{}: urlStage(~X,~ext,rules,here)
 def delOpened(-X: Data,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>,+span: Tk.Delimited) -> InlineMachine<X>:
   match here span:
-    case At{state,frames,run} Tk.Delimited{raw,+text}: runInline(X,state,DelText{run,Tk.Delimited{raw,text}} <> frames,Iterate{lexing(X,rules,links,text)})
+    case At{state,frames,run,_} Tk.Delimited{raw,+text}: runInline(X,state,DelText{run,Tk.Delimited{raw,text}} <> frames,Iterate{lexing(X,rules,links,text)})
 def afterDel(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>,+found: Maybe<&2,Tk.Delimited>) -> InlineMachine<X>:
   match found:
     case Some{span}: delOpened(X,rules,links,here,span)
-    case None{}: afterAutolink(~X,~ext,rules,here,Tk.autolink(X,rules,runSrc(X,hereRun(X,here))))
+    case None{}: afterAutolink(~X,~ext,rules,here,Tk.autolink(X,rules,atFirst(X,here),runSrc(X,hereRun(X,here))))
 def afterBr(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>,+found: Maybe<&2,T.Token<X>>) -> InlineMachine<X>:
   match found:
     case Some{token}: pushedHere(X,here,token)
@@ -650,40 +658,40 @@ def afterBr(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.
 def afterCodespan(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>,+found: Maybe<&2,T.Token<X>>) -> InlineMachine<X>:
   match found:
     case Some{token}: pushedHere(X,here,token)
-    case None{}: afterBr(~X,~ext,rules,links,here,Tk.br(X,rules,runSrc(X,hereRun(X,here))))
+    case None{}: afterBr(~X,~ext,rules,links,here,Tk.br(X,rules,atFirst(X,here),runSrc(X,hereRun(X,here))))
 def emphasisOpened(-X: Data,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>,+emphasis: Tk.Emphasis) -> InlineMachine<X>:
   match here emphasis:
-    case At{state,frames,run} Tk.Emphasis{strong,raw,+text}: runInline(X,state,EmphasisText{run,Tk.Emphasis{strong,raw,text}} <> frames,Iterate{lexing(X,rules,links,text)})
+    case At{state,frames,run,_} Tk.Emphasis{strong,raw,+text}: runInline(X,state,EmphasisText{run,Tk.Emphasis{strong,raw,text}} <> frames,Iterate{lexing(X,rules,links,text)})
 def afterEmStrong(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>,+found: Maybe<&2,Tk.Emphasis>) -> InlineMachine<X>:
   match found:
     case Some{emphasis}: emphasisOpened(X,rules,links,here,emphasis)
-    case None{}: afterCodespan(~X,~ext,rules,links,here,Tk.codespan(X,rules,runSrc(X,hereRun(X,here))))
+    case None{}: afterCodespan(~X,~ext,rules,links,here,Tk.codespan(X,rules,atFirst(X,here),runSrc(X,hereRun(X,here))))
 # Where an emphasis opener may start, the run keeps its masked source from
 # then on.
 def maskedHere(-X: Data,+rules: Rules.Inline,+here: At<X>) -> At<X>:
   match here:
-    case At{state,frames,Run{+src,masked,previous,keep,tokens}}: At{state,frames,Run{src,Tk.maskingFor(rules,Tk.opensEmphasis(rules,src),masked),previous,keep,tokens}}
+    case At{state,frames,Run{src,masked,previous,keep,tokens},+first}: At{state,frames,Run{src,Tk.maskingFor(rules,Tk.opensEmphasis(rules,first),masked),previous,keep,tokens},first}
 def emStrongAt(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>) -> InlineMachine<X>:
-  afterEmStrong(~X,~ext,rules,links,here,Tk.emStrong(rules,runSrc(X,hereRun(X,here)),runMasked(X,hereRun(X,here)),runPrevious(X,hereRun(X,here))))
+  afterEmStrong(~X,~ext,rules,links,here,Tk.emStrong(rules,atFirst(X,here),runSrc(X,hereRun(X,here)),runMasked(X,hereRun(X,here)),runPrevious(X,hereRun(X,here))))
 def emStrongStage(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>) -> InlineMachine<X>:
   emStrongAt(~X,~ext,rules,links,maskedHere(X,rules,here))
 # outputLink: the text is lexed as in a link (state.inLink) with no link
 # emitted yet.
 def linkOpened(-X: Data,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>,+link: Tk.LinkMatch,+fallback: Stage) -> InlineMachine<X>:
   match here link:
-    case At{InlineState{_,+rawBlock,emitted},frames,run} Tk.LinkMatch{raw,href,title,label,image}:
+    case At{InlineState{_,+rawBlock,emitted},frames,run,_} Tk.LinkMatch{raw,href,title,label,image}:
       +text = Tk.outputLinkText(label)
       runInline(X,InlineState{True{},rawBlock,False{}},LinkText{run,Tk.LinkMatch{raw,href,title,label,image},text,emitted,rawBlock,fallback} <> frames,Iterate{lexing(X,rules,links,text)})
 def textFromReference(-X: Data,+here: At<X>,+raw: String) -> InlineMachine<X>:
   match here:
-    case At{state,frames,Run{src,masked,previous,keep,tokens}}: runInline(X,state,frames,Iterate{Run{Tk.drop(src,Tk.lengthOf(raw)),Tk.maskingAdvanced(masked,Tk.lengthOf(raw)),previous,keep,textJoined(X,tokens,raw,False{})}})
+    case At{state,frames,Run{src,masked,previous,keep,tokens},_}: runInline(X,state,frames,Iterate{Run{Tk.drop(src,Tk.lengthOf(raw)),Tk.maskingAdvanced(masked,Tk.lengthOf(raw)),previous,keep,textJoined(X,tokens,raw,False{})}})
 def afterReflink(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>,+found: Maybe<&2,Tk.RefStep>) -> InlineMachine<X>:
   match found:
     case Some{Tk.RefText{raw}}: textFromReference(X,here,raw)
     case Some{Tk.RefLink{link}}: linkOpened(X,rules,links,here,link,FromEmStrong{})
     case None{}: emStrongStage(~X,~ext,rules,links,here)
 def reflinkStage(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>) -> InlineMachine<X>:
-  afterReflink(~X,~ext,rules,links,here,Tk.reflink(rules,links,runSrc(X,hereRun(X,here))))
+  afterReflink(~X,~ext,rules,links,here,Tk.reflink(rules,links,atFirst(X,here),runSrc(X,hereRun(X,here))))
 def afterLink(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>,+found: Maybe<&2,Tk.LinkMatch>) -> InlineMachine<X>:
   match found:
     case Some{link}: linkOpened(X,rules,links,here,link,FromReflink{})
@@ -697,30 +705,30 @@ def tagState(+state: InlineState,+raw: String) -> InlineState:
         Bool.pick(Unit -> Bool,Bool.not(rawBlock) && Tk.startPreScriptTag(raw),_ => True{},_ => Bool.pick(Unit -> Bool,rawBlock && Tk.endPreScriptTag(raw),_ => False{},_ => rawBlock)(Unit{}))(Unit{}),emitted}
 def tagged(-X: Data,+here: At<X>,+raw: String) -> InlineMachine<X>:
   match here:
-    case At{state,frames,run}:
+    case At{state,frames,run,_}:
       +next = tagState(state,raw)
       pushedInline(X,next,frames,run,T.Tag{raw,inLinkOf(next),rawBlockOf(next),raw,False{}})
 def afterTag(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>,+found: Maybe<&2,String>) -> InlineMachine<X>:
   match found:
     case Some{raw}: tagged(X,here,raw)
-    case None{}: afterLink(~X,~ext,rules,links,here,Tk.link(rules,runSrc(X,hereRun(X,here))))
+    case None{}: afterLink(~X,~ext,rules,links,here,Tk.link(rules,atFirst(X,here),runSrc(X,hereRun(X,here))))
 def afterEscape(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>,+found: Maybe<&2,T.Token<X>>) -> InlineMachine<X>:
   match found:
     case Some{token}: pushedHere(X,here,token)
-    case None{}: afterTag(~X,~ext,rules,links,here,Tk.tag(rules,runSrc(X,hereRun(X,here))))
+    case None{}: afterTag(~X,~ext,rules,links,here,Tk.tag(rules,atFirst(X,here),runSrc(X,hereRun(X,here))))
 def afterInlineExtension(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>,+found: Maybe<&2,T.Token<X>>) -> InlineMachine<X>:
   match found:
     case Some{+token}: Bool.pick(Unit -> InlineMachine<X>,String.is_empty(T.rawOf(X,token)),_ => stoppedHere(X,here),_ => pushedHere(X,here,token))(Unit{})
-    case None{}: afterEscape(~X,~ext,rules,links,here,Tk.escape(X,rules,runSrc(X,hereRun(X,here))))
+    case None{}: afterEscape(~X,~ext,rules,links,here,Tk.escape(X,rules,atFirst(X,here),runSrc(X,hereRun(X,here))))
 def iterate(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+state: InlineState,+frames: List<&2,InlineFrame<X>>,+run: Run<X>) -> InlineMachine<X>:
   match run:
     case Run{Nil{},_,_,_,tokens}: InlineMachine{state,frames,GiveInline{tokens}}
-    case Run{+src,masked,previous,+keep,tokens}: afterInlineExtension(~X,~ext,rules,links,At{state,frames,Run{src,masked,Bool.pick(Maybe<&2,U32>,keep,previous,None{}),False{},tokens}},inlineExtension(X,ext)(src))
+    case Run{+src,masked,previous,+keep,tokens}: afterInlineExtension(~X,~ext,rules,links,At{state,frames,Run{src,masked,Bool.pick(Maybe<&2,U32>,keep,previous,None{}),False{},tokens},List.head(&2,U32,src)},inlineExtension(X,ext)(src))
 def executeInline(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+state: InlineState,+frames: List<&2,InlineFrame<X>>,+task: InlineTask<X>) -> InlineMachine<X>:
   match task:
     case Iterate{run}: iterate(~X,~ext,rules,links,state,frames,run)
-    case Resume{FromReflink{},run}: reflinkStage(~X,~ext,rules,links,At{state,frames,run})
-    case Resume{FromEmStrong{},run}: emStrongStage(~X,~ext,rules,links,At{state,frames,run})
+    case Resume{FromReflink{},+run}: reflinkStage(~X,~ext,rules,links,At{state,frames,run,List.head(&2,U32,runSrc(X,run))})
+    case Resume{FromEmStrong{},+run}: emStrongStage(~X,~ext,rules,links,At{state,frames,run,List.head(&2,U32,runSrc(X,run))})
 # outputLink after its text: a link whose text holds a link is none (the
 # iteration continues with the next tokenizer).
 def linkLexed(-X: Data,+state: InlineState,+frames: List<&2,InlineFrame<X>>,+run: Run<X>,+link: Tk.LinkMatch,+text: String,+emitted: Bool,+rawBlock: Bool,+fallback: Stage,+tokens: List<&2,T.Token<X>>) -> InlineMachine<X>:
