@@ -900,7 +900,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "4e159a3485317bac364fba350fd4b8364e7689ea1438652551093bf27c2c9a24",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "91281c83b948bdb35106382375cfc14628d313a48d7676cd9a023b1bcadea32e",
-        "packages/coding-agent/src/main.bend": "6fd9c13ac3a2e36c8206185d80bbbb402a28ce5bb2587a47f1c0fd8ae07c1880",
+        "packages/coding-agent/src/main.bend": "53f39db17951a33a5c361bf278056876a1fe30ab1e9e63760af08e464712104e",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6"
       }
     },
@@ -950,7 +950,7 @@
       ],
       "source_sha256": "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc",
       "port_sha256": {
-        "packages/coding-agent/src/modes/rpc.bend": "88d428600ae6494af2be234c47ea36dbe9fba6dfdefcdb66f33a5e4d86da8703"
+        "packages/coding-agent/src/modes/rpc.bend": "3702998824e73db822eef9f4660aeaf5b89c89f8c86f066711fea0a81e13844a"
       }
     },
     "packages/coding-agent/src/modes/rpc/rpc-types.ts": {
