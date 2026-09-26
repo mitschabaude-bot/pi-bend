@@ -15,6 +15,7 @@ import ../packages/coding-agent/src/core/model-runtime.bend as Models
 import ../packages/ai/src/types.bend as Ai
 import ../packages/ai/src/utils/uuid.bend as Uuid
 import ../packages/runtime/src/json.bend as Decode
+import ../packages/runtime/src/filesystem.bend as FS
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/tui/src/component.bend as Component
 import ../packages/runtime/src/record.bend as R
@@ -367,6 +368,9 @@ def compactAsked(+value: Endpoint,pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
         report("RPC extension UI > a command's handler can open a dialog while input is still read",Bool.not(String.is_empty(id)) && anyContains(captured,"{\"id\":\"c\",\"type\":\"response\",\"command\":\"compact\",\"success\":false") && Bool.not(anyContains(captured,"\"type\":\"compaction\"")))
 def commandDialog(+cwd: String,+agentDir: String) -> IO(Unit):
   do IO<Unit>:
+    # A one-exchange session is below the default keepRecentTokens, and
+    # compact would stop before its handlers.
+    written : Result<&2,&2,FS.Error,Unit> <- FS.writeFile(FS.child(agentDir,"settings.json"),"{\"compaction\":{\"keepRecentTokens\":1}}")
     loadout : Runtime.Loadout <- askerLoadout(cwd)
     +value : Endpoint <- endpointWith(cwd,agentDir,True{},Nil{},loadout)
     pair : Rpc.Owner & Rpc.Handle <- started(value)
