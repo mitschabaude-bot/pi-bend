@@ -24,10 +24,13 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   over a local TLS server (P-256 certificates), Bend's first token now
   arrives before pi's (72-77 ms versus 110-115 ms in `stream-paced`). A long
   answer (10 KB of Markdown with 30 code blocks, 500 deltas) paced at 4 ms
-  per delta ends with pi's (last token 2.05-2.09 s versus pi's
-  2.07-2.11 s); flooded, it ends at 0.36-0.40 s versus pi's 0.16-0.19 s
-  (7 runs, 2026-09-25; before the frame work below 2.18-2.24 s and
-  0.42-0.46 s at the same base). TLS is no longer the cause: the same
+  per delta ends within the bound (last token 2.33-2.37 s versus pi's
+  2.07-2.09 s); flooded, it ends at 0.75-0.77 s versus pi's 0.17 s
+  (2026-09-26, with the marked renderer; the line-based renderer it
+  replaced ended at 2.05-2.09 s and 0.36-0.40 s). Each frame lexes the whole
+  message with the marked port, whose backtracking regular expressions walk
+  the shared input list (about 40 ms for 5 KB, most of it reference counting
+  on the list); pi's marked uses V8's compiled expressions. TLS is no longer the cause: the same
   flood over plain HTTP (a local copy of the scenario without `tls`) ended
   at 0.36-0.38 s versus pi's 0.13 s before the frame work, so TLS adds
   about 80 ms to Bend and 30-40 ms to pi. What remains is mostly copying
@@ -35,13 +38,8 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   that the agent and transcript still hold, so the whole text so far is
   copied (docs/bend-issues.md BEND-046); pi appends in O(1). Removing the
   copy needs either a runtime string concatenation node or a different
-  text type in streamed messages. Frames are now cheap. A full render of
-  the 10 KB answer still takes 32-36 ms natively against pi's 6 ms, but a
-  streaming frame reuses the finished lines of every unchanged Markdown
-  block from the previous frame (`Markdown.Memo`), so the 40 growing
-  frames of a benchmark take 3 ms each where they took about 17 ms, and pi
-  re-renders in 1-6 ms. Before, the runner's theme sync also rethemed, and
-  so re-rendered, every transcript entry on each render request. Until
+  text type in streamed messages. The runner's theme sync used to retheme,
+  and so re-render, every transcript entry on each render request. Until
   2026-09-25 the handshake took 350-390 ms and the flood 0.84-0.89 s:
   X25519 used lists of byte limbs (98 ms per scalar multiplication, twice
   per handshake; now sixteen 16-bit limbs in a record, 0.43 ms), AES
@@ -89,15 +87,6 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   `--list-models cloudflare` matches pi. Missing: bedrock, vertex, mistral
   and radius (APIs not ported). The native API-key `/login` flow now saves credentials for registered providers, including Cloudflare's key/account/gateway prompts; Bedrock remains unavailable because its provider is missing.
 - **API-key login presentation** (`login-api-key`): The method screen, filtered provider screen, empty API-key prompt and saved notice match pi's terminal captures, including ANSI styling. The unfiltered list differs because upstream includes providers whose native implementations are still missing. Bend masks secret entry while pi 0.87.1 echoes it. The native flow saves the same provider credential and returns to the editor.
-- **LaTeX in multi-line paragraphs and list items** (answers with math):
-  `packages/tui/src/latex.bend` and the Markdown `latex`/`latexBlock` tokens
-  match pi on 2,170 cases (`tests/latex_check.py`). The Bend Markdown
-  component still renders a paragraph line by line and has no list-item
-  continuation model, so a `$` closed on a later line of the same paragraph,
-  an unclosed delimiter while streaming (pi shows the rest of the paragraph
-  raw, Bend only the rest of the line) and display math inside a list item
-  (pi keeps the item indentation) differ; five such cases are tracked as
-  known divergences in the check.
 - **Fullscreen TUI mode** (`--tui-mode fullscreen`, setting `tuiMode`): alternate-screen startup, transcript scrolling, the jump indicator, and keyboard transcript search match focused terminal captures. Search mouse controls and full input editing, mouse selection, copy-on-select, fullscreen images, and remaining dock/cursor styling are still open.
 - **Fullscreen scroll styling** (`fullscreen-scroll`, `fullscreen-indicator-light-custom-key`): Home/End and the configured jump key reach the same content as pi. At the top, Bend resets the background around the scrollbar on a user-message row differently; in the light theme, scrollbar colors also differ. The indicator badge itself matches.
 - **Fullscreen exit styling** (`fullscreen-exit`, `fullscreen-turn-exit`): the final visible transcript, dock, and resume hint now match pi in both cases. Bend still paints the blank editor row with an inverse cursor; an untouched exit also uses the active-theme border color where pi uses its initial border color.

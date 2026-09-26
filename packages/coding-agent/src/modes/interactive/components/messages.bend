@@ -139,79 +139,65 @@ def hasTool(content: List<&2,Content>) -> Bool:
     case _ <> rest: hasTool(rest)
 def foregroundText(theme: Theme.Theme,key: String,source: String) -> IO(String):
   colorResult(Theme.foreground(theme,key,source))
-# Streaming draws a message again for every frame; each Markdown block keeps
-# its memo (`Markdown.Memo`) from the previous draw, matched by position and
-# kind. The owner drops the memos when the theme changes.
-type Slot is Data: Slot{thinking: Bool,memo: Markdown.Memo}
 type ThinkingRun is Data: ThinkingRun{index: Nat,start: Nat,end: Nat}
-type Drawn is Data: Drawn{lines: List<&2,String>,slots: List<&2,Slot>,runs: List<&2,ThinkingRun>}
-def slotMemo(previous: List<&2,Slot>,+thinking: Bool) -> Markdown.Memo:
-  match previous:
-    case Slot{+kind,memo} <> _: Bool.pick(Markdown.Memo,(kind && thinking) || (Bool.not(kind) && Bool.not(thinking)),memo,Markdown.emptyMemo())
-    case Nil{}: Markdown.emptyMemo()
-def laterSlots(previous: List<&2,Slot>) -> List<&2,Slot>:
-  match previous:
-    case _ <> rest: rest
-    case Nil{}: Nil{}
+type Drawn is Data: Drawn{lines: List<&2,String>,runs: List<&2,ThinkingRun>}
 def drawnLines(value: Drawn) -> List<&2,String>:
-  match value: case Drawn{lines,_,_}: lines
-def drawnSlots(value: Drawn) -> List<&2,Slot>:
-  match value: case Drawn{_,slots,_}: slots
+  match value: case Drawn{lines,_}: lines
 def drawnRuns(value: Drawn) -> List<&2,ThinkingRun>:
-  match value: case Drawn{_,_,runs}: runs
+  match value: case Drawn{_,runs}: runs
 def shiftRuns(runs: List<&2,ThinkingRun>,+offset: Nat) -> List<&2,ThinkingRun>:
   match runs:
     case Nil{}: Nil{}
     case ThinkingRun{index,start,end} <> rest: ThinkingRun{index,start + offset,end + offset} <> shiftRuns(rest,offset)
-def memoDrawn(+thinking: Bool,value: Markdown.Markdown & List<&2,String> & Markdown.Memo) -> Drawn:
-  match value: case (_,lines,memo): Drawn{lines,Slot{thinking,memo} <> Nil{},Nil{}}
-def markdownDrawn(source: String,pad: Nat,width: Nat,styles: Markdown.MarkdownTheme,style: Maybe<&2,Markdown.DefaultTextStyle>,+thinking: Bool,memo: Markdown.Memo) -> IO(Drawn):
+def renderedDrawn(value: Markdown.Markdown & List<&2,String>) -> Drawn:
+  match value: case (_,lines): Drawn{lines,Nil{}}
+def markdownDrawn(source: String,pad: Nat,width: Nat,styles: Markdown.MarkdownTheme,style: Maybe<&2,Markdown.DefaultTextStyle>) -> IO(Drawn):
   do IO<Drawn>:
-    rendered : Markdown.Markdown & List<&2,String> & Markdown.Memo <- Markdown.renderWithMemo(Markdown.new(source,pad,0n,styles,style,None{}),width,memo)
-    return memoDrawn(thinking,rendered)
+    rendered : Markdown.Markdown & List<&2,String> <- Markdown.render(Markdown.new(source,pad,0n,styles,style,None{}),width)
+    return renderedDrawn(rendered)
 def followedBy(+first: Drawn,+gap: List<&2,String>,+next: Drawn) -> Drawn:
   +offset = List.length(&2,String,drawnLines(first)) + List.length(&2,String,gap)
-  Drawn{List.append(&2,String,drawnLines(first),List.append(&2,String,gap,drawnLines(next))),List.append(&2,Slot,drawnSlots(first),drawnSlots(next)),List.append(&2,ThinkingRun,drawnRuns(first),shiftRuns(drawnRuns(next),offset))}
-def thought(text: String,hide: Bool,label: String,pad: Nat,width: Nat,theme: Theme.Theme,styles: Markdown.MarkdownTheme,previous: List<&2,Slot>,index: Nat) -> IO(Drawn):
+  Drawn{List.append(&2,String,drawnLines(first),List.append(&2,String,gap,drawnLines(next))),List.append(&2,ThinkingRun,drawnRuns(first),shiftRuns(drawnRuns(next),offset))}
+def thought(text: String,hide: Bool,label: String,pad: Nat,width: Nat,theme: Theme.Theme,styles: Markdown.MarkdownTheme,index: Nat) -> IO(Drawn):
   match hide:
     case True{}:
       do IO<Drawn>:
         colored : String <- foregroundText(theme,"thinkingText",label)
         +lines : List<&2,String> <- textLines("\u{1b}[3m" ++ colored ++ "\u{1b}[23m",pad,width)
-        return Drawn{lines,Slot{True{},Markdown.emptyMemo()} <> Nil{},ThinkingRun{index,0n,List.length(&2,String,lines)} <> Nil{}}
+        return Drawn{lines,ThinkingRun{index,0n,List.length(&2,String,lines)} <> Nil{}}
     case False{}:
       do IO<Drawn>:
         +fg : Callback.Callback<String,String> <- color(theme,"thinkingText",False{})
-        +drawn : Drawn <- markdownDrawn(text,pad,width,styles,Some{Markdown.DefaultTextStyle{Some{fg},None{},False{},True{},False{},False{}}},True{},slotMemo(previous,True{}))
+        +drawn : Drawn <- markdownDrawn(text,pad,width,styles,Some{Markdown.DefaultTextStyle{Some{fg},None{},False{},True{},False{},False{}}})
         Callback.dispose(String,String,fg)
-        return Drawn{drawnLines(drawn),drawnSlots(drawn),ThinkingRun{index,0n,List.length(&2,String,drawnLines(drawn))} <> Nil{}}
-@unsafe def contentLines(+content: List<&2,Content>,+pending: List<&2,String>,+hide: Bool,+label: String,+pad: Nat,+width: Nat,+theme: Theme.Theme,+styles: Markdown.MarkdownTheme,+previous: List<&2,Slot>,+overrides: List<&2,ThinkingOverride>,+runIndex: Nat) -> IO(Drawn):
+        return Drawn{drawnLines(drawn),ThinkingRun{index,0n,List.length(&2,String,drawnLines(drawn))} <> Nil{}}
+@unsafe def contentLines(+content: List<&2,Content>,+pending: List<&2,String>,+hide: Bool,+label: String,+pad: Nat,+width: Nat,+theme: Theme.Theme,+styles: Markdown.MarkdownTheme,+overrides: List<&2,ThinkingOverride>,+runIndex: Nat) -> IO(Drawn):
   match content pending:
-    case Nil{} Nil{}: IO.pure(Drawn,Drawn{Nil{},Nil{},Nil{}})
+    case Nil{} Nil{}: IO.pure(Drawn,Drawn{Nil{},Nil{}})
     case Nil{} _:
-      thought(String.join(List.reverse(&2,String,pending),"\n\n"),thinkingHidden(overrides,runIndex,hide),label,pad,width,theme,styles,previous,runIndex)
+      thought(String.join(List.reverse(&2,String,pending),"\n\n"),thinkingHidden(overrides,runIndex,hide),label,pad,width,theme,styles,runIndex)
     case ThinkingBlock{text} <> rest _:
       +clean = Text.trim(text)
-      contentLines(rest,Bool.pick(List<&2,String>,String.is_empty(clean),pending,clean <> pending),hide,label,pad,width,theme,styles,previous,overrides,runIndex)
+      contentLines(rest,Bool.pick(List<&2,String>,String.is_empty(clean),pending,clean <> pending),hide,label,pad,width,theme,styles,overrides,runIndex)
     case TextBlock{+text} <> rest Nil{}:
       Bool.pick(Unit -> IO(Drawn),Text.blank(text),
-        _ => contentLines(rest,Nil{},hide,label,pad,width,theme,styles,previous,overrides,runIndex),
+        _ => contentLines(rest,Nil{},hide,label,pad,width,theme,styles,overrides,runIndex),
         _ => do IO<Drawn>:
-          +block : Drawn <- markdownDrawn(Text.trim(text),pad,width,styles,None{},False{},slotMemo(previous,False{}))
-          +next : Drawn <- contentLines(rest,Nil{},hide,label,pad,width,theme,styles,laterSlots(previous),overrides,runIndex)
+          +block : Drawn <- markdownDrawn(Text.trim(text),pad,width,styles,None{})
+          +next : Drawn <- contentLines(rest,Nil{},hide,label,pad,width,theme,styles,overrides,runIndex)
           return followedBy(block,Nil{},next))(Unit{})
     case TextBlock{+text} <> rest _:
       Bool.pick(Unit -> IO(Drawn),Text.blank(text),
-        _ => contentLines(rest,pending,hide,label,pad,width,theme,styles,previous,overrides,runIndex),
+        _ => contentLines(rest,pending,hide,label,pad,width,theme,styles,overrides,runIndex),
         _ => do IO<Drawn>:
-          +block : Drawn <- thought(String.join(List.reverse(&2,String,pending),"\n\n"),thinkingHidden(overrides,runIndex,hide),label,pad,width,theme,styles,previous,runIndex)
-          +next : Drawn <- contentLines(TextBlock{text} <> rest,Nil{},hide,label,pad,width,theme,styles,laterSlots(previous),overrides,runIndex + 1n)
+          +block : Drawn <- thought(String.join(List.reverse(&2,String,pending),"\n\n"),thinkingHidden(overrides,runIndex,hide),label,pad,width,theme,styles,runIndex)
+          +next : Drawn <- contentLines(TextBlock{text} <> rest,Nil{},hide,label,pad,width,theme,styles,overrides,runIndex + 1n)
           return followedBy(block,"" <> Nil{},next))(Unit{})
-    case ToolCall{} <> rest Nil{}: contentLines(rest,Nil{},hide,label,pad,width,theme,styles,previous,overrides,runIndex)
+    case ToolCall{} <> rest Nil{}: contentLines(rest,Nil{},hide,label,pad,width,theme,styles,overrides,runIndex)
     case ToolCall{} <> +rest _:
       do IO<Drawn>:
-        +block : Drawn <- thought(String.join(List.reverse(&2,String,pending),"\n\n"),thinkingHidden(overrides,runIndex,hide),label,pad,width,theme,styles,previous,runIndex)
-        +next : Drawn <- contentLines(rest,Nil{},hide,label,pad,width,theme,styles,laterSlots(previous),overrides,runIndex + 1n)
+        +block : Drawn <- thought(String.join(List.reverse(&2,String,pending),"\n\n"),thinkingHidden(overrides,runIndex,hide),label,pad,width,theme,styles,runIndex)
+        +next : Drawn <- contentLines(rest,Nil{},hide,label,pad,width,theme,styles,overrides,runIndex + 1n)
         return followedBy(block,Bool.pick(List<&2,String>,anyVisible(rest),"" <> Nil{},Nil{}),next)
 def errorText(stop: Stop,+error: Maybe<&2,String>,tools: Bool) -> Maybe<&2,String>:
   match stop:
@@ -229,18 +215,18 @@ def withError(lines: List<&2,String>,error: Maybe<&2,String>,pad: Nat,width: Nat
         colored : String <- foregroundText(theme,"error",source)
         text : List<&2,String> <- textLines(colored,pad,width)
         return List.append(&2,String,lines,"" <> text)
-def renderAssistantDrawn(state: AssistantMessage,+width: Nat,previous: List<&2,Slot>) -> IO(Drawn):
+def renderAssistantDrawn(state: AssistantMessage,+width: Nat) -> IO(Drawn):
   match state:
     case AssistantMessage{+content,hide,label,+pad,_,stop,error,+theme,styles,overrides}:
       do IO<Drawn>:
-        +drawn : Drawn <- contentLines(content,Nil{},hide,label,pad,width,theme,styles,previous,overrides,0n)
+        +drawn : Drawn <- contentLines(content,Nil{},hide,label,pad,width,theme,styles,overrides,0n)
         +body : List<&2,String> <- IO.pure(List<&2,String>,drawnLines(drawn))
         +started : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,anyVisible(content),"" <> body,body))
         +complete : List<&2,String> <- withError(started,errorText(stop,error,hasTool(content)),pad,width,theme)
-        return Drawn{Bool.pick(List<&2,String>,hasTool(content),complete,zone(complete)),drawnSlots(drawn),shiftRuns(drawnRuns(drawn),Bool.pick(Nat,anyVisible(content),1n,0n))}
+        return Drawn{Bool.pick(List<&2,String>,hasTool(content),complete,zone(complete)),shiftRuns(drawnRuns(drawn),Bool.pick(Nat,anyVisible(content),1n,0n))}
 def renderAssistant(state: AssistantMessage,+width: Nat) -> IO(List<&2,String>):
   do IO<List<&2,String>>:
-    drawn : Drawn <- renderAssistantDrawn(state,width,Nil{})
+    drawn : Drawn <- renderAssistantDrawn(state,width)
     return drawnLines(drawn)
 
 type BashStatus is Data:
@@ -407,7 +393,7 @@ def retheme(body: Body,theme: Theme.Theme) -> Body:
 # renders again only after its body or the width changes. Every write bumps the
 # version, so lines rendered from an older body never serve a newer one.
 type Stamped is Data: Stamped{body: Body,version: Nat}
-type Rendered is Data: Rendered{version: Nat,width: Nat,lines: List<&2,String>,slots: List<&2,Slot>,runs: List<&2,ThinkingRun>}
+type Rendered is Data: Rendered{version: Nat,width: Nat,lines: List<&2,String>,runs: List<&2,ThinkingRun>}
 type Owner is Type:
   Owner{state: Ref.Ref<Stamped>,rendered: Ref.Ref<Maybe<&2,Rendered>>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
 type Handle is Data: Handle{state: Ref.Ref<Stamped>,rendered: Ref.Ref<Maybe<&2,Rendered>>}
@@ -534,27 +520,27 @@ def renderBody(body: Body,width: Nat) -> IO(List<&2,String>):
     case ChangelogBody{value,theme,styles}: renderChangelog(value,theme,styles,width)
     case SessionInfoBody{value,theme}: SessionInfo.render(value,theme,width)
     case HotkeysBody{markdown,theme,styles}: renderHotkeys(markdown,theme,styles,width)
-def drawnBody(body: Body,width: Nat,previous: List<&2,Slot>) -> IO(Drawn):
+def drawnBody(body: Body,width: Nat) -> IO(Drawn):
   match body:
-    case AssistantBody{value}: renderAssistantDrawn(value,width,previous)
+    case AssistantBody{value}: renderAssistantDrawn(value,width)
     case other:
       do IO<Drawn>:
         lines : List<&2,String> <- renderBody(other,width)
-        return Drawn{lines,Nil{},Nil{}}
-def renderStamped(current: Stamped,+width: Nat,rendered: Ref.Ref<Maybe<&2,Rendered>>,previous: List<&2,Slot>) -> IO(List<&2,String>):
+        return Drawn{lines,Nil{}}
+def renderStamped(current: Stamped,+width: Nat,rendered: Ref.Ref<Maybe<&2,Rendered>>) -> IO(List<&2,String>):
   match current:
     case Stamped{body,version}:
       do IO<List<&2,String>>:
-        +drawn : Drawn <- drawnBody(body,width,previous)
-        Ref.write(Maybe<&2,Rendered>,rendered,Some{Rendered{version,width,drawnLines(drawn),drawnSlots(drawn),drawnRuns(drawn)}})
+        +drawn : Drawn <- drawnBody(body,width)
+        Ref.write(Maybe<&2,Rendered>,rendered,Some{Rendered{version,width,drawnLines(drawn),drawnRuns(drawn)}})
         return drawnLines(drawn)
 def cachedLines(cached: Maybe<&2,Rendered>,current: Stamped,+width: Nat,rendered: Ref.Ref<Maybe<&2,Rendered>>) -> IO(List<&2,String>):
   match cached current:
-    case Some{Rendered{version,oldWidth,lines,slots,_}} Stamped{body,+now}:
+    case Some{Rendered{version,oldWidth,lines,_}} Stamped{body,+now}:
       Bool.pick(Unit -> IO(List<&2,String>),Nat.is_eq(version,now) && Nat.is_eq(oldWidth,width),
         _ => IO.pure(List<&2,String>,lines),
-        _ => renderStamped(Stamped{body,now},width,rendered,slots))(Unit{})
-    case None{} current: renderStamped(current,width,rendered,Nil{})
+        _ => renderStamped(Stamped{body,now},width,rendered))(Unit{})
+    case None{} current: renderStamped(current,width,rendered)
 def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
   match handle:
     case Handle{state,+rendered}:
@@ -602,7 +588,7 @@ def clickThinkingIndex(+state: Ref.Ref<Stamped>,+rendered: Ref.Ref<Maybe<&2,Rend
         return Some{Component.LocalResult{Tui.TuiMouseEventResult{True{},False{},False{},Some{True{}}}}}
 def clickThinkingCache(state: Ref.Ref<Stamped>,rendered: Ref.Ref<Maybe<&2,Rendered>>,row: Nat,cache: Maybe<&2,Rendered>) -> IO(Maybe<&2,Component.MouseResponse>):
   match cache:
-    case Some{Rendered{_,_,_,_,runs}}: clickThinkingIndex(state,rendered,runAt(runs,row))
+    case Some{Rendered{_,_,_,runs}}: clickThinkingIndex(state,rendered,runAt(runs,row))
     case None{}: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
 def clickThinkingRow(handle: Handle,row: Nat,width: Nat) -> IO(Maybe<&2,Component.MouseResponse>):
   match handle:
