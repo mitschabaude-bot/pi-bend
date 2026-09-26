@@ -3235,9 +3235,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-compaction-model-overrides.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "111d42f31f6fe4d2a792e28431b8b950f91f90d56fe5112d394dbeaf2e8b25fa"
+      "status": "partial",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md"
+      ],
+      "sha256": "111d42f31f6fe4d2a792e28431b8b950f91f90d56fe5112d394dbeaf2e8b25fa",
+      "notes": "Ported: the four it.each paths of 'uses model token settings for %s compaction and extension preparation' (manual, pre-prompt, post-run, overflow: one session_before_compact preparation with the faux/faux-1 override settings, the reason, firstKeptEntryId, one compaction_end with the supplied summary, all replies consumed), both paths of 'passes resolved budgets to built-in %s summarization' (summary request cap 1600, compaction entry firstKeptEntryId and summary), and 'uses the newly selected model without changing ordinary settings'. Pending: 'captures model identity before awaiting summarization auth' - the native summarizer has no summarization-auth step (upstream _getSummarizationRequestAuth) that a test could interleave a model change into."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-compaction.test.ts",
@@ -3443,9 +3448,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3688-tree-cancel-compacting.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "22b3ba0b21f63194979e1178f0d04b5c07977bb0fe1ed157db3ebd0743d0ca65"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md"
+      ],
+      "sha256": "22b3ba0b21f63194979e1178f0d04b5c07977bb0fe1ed157db3ebd0743d0ca65",
+      "notes": "A session_before_tree handler cancelling the navigation: the result is {cancelled: true}, isCompacting is false afterwards and the leaf is unchanged."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3982-message-end-cost-override.test.ts",
@@ -3948,14 +3958,16 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9178-tree-during-compaction.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/regressions_check.py",
         "tests/regressions.bend",
-        "tests/regressions.md"
+        "tests/regressions.md",
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py"
       ],
       "sha256": "21dee83475afbc7421e4c44594b51cd4f3666b68953fc91266de4ab0e305c482",
-      "notes": "'rejects navigation before the active leaf can change' passes with the manual compaction held at its summary request: navigation fails with the compaction message, the leaf is unchanged, the compaction entry follows the original leaf and the context keeps 'second assistant'. Pending: 'rejects a second navigation while the first is waiting', which waits in a session_before_tree extension handler. Bun and native (tests/regressions.bend, 1 and 4 threads)."
+      "notes": "'rejects navigation before the active leaf can change' in tests/regressions_check.py (the manual compaction held at its summary request instead of a session_before_compact handler); 'rejects a second navigation while the first is waiting' in tests/suite_harness_check.py with a session_before_tree handler waiting on a channel: the second navigation fails with upstream's message, the leaf stays until the first navigation completes at its target."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9340-9777-auto-compaction-cancellation.test.ts",
@@ -4098,7 +4110,7 @@
         "tests/thinking-level.bend"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '→ ✓ medium', then '  ✓ medium' and '→   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",

@@ -447,8 +447,8 @@ def lastText(handle: Command,id: Maybe<&2,String>) -> IO(Unit):
 type Cleared is Data: Cleared{steering: List<&2,String>,followUp: List<&2,String>}
 def clearState(current: Session.Shared) -> Session.Shared & Cleared:
   match current:
-    case Session.Shared{stored,steering,followUp,listeners,active,last,retry,compaction, bash, pendingMessages}:
-      (Session.Shared{stored,Nil{},Nil{},listeners,active,last,retry,compaction, bash, pendingMessages},Cleared{steering,followUp})
+    case Session.Shared{stored,steering,followUp,listeners,active,last,retry,compaction, bash, pendingMessages, extensionsRef}:
+      (Session.Shared{stored,Nil{},Nil{},listeners,active,last,retry,compaction, bash, pendingMessages, extensionsRef},Cleared{steering,followUp})
 def clearedValue(value: Cleared) -> V.Value:
   match value:
     case Cleared{steering,followUp}: MessageJson.object(MessageJson.field("steering",V.ArrayValue{Events.texts(steering)},MessageJson.field("followUp",V.ArrayValue{Events.texts(followUp)},Nil{})))
@@ -503,7 +503,7 @@ def queueModeName(value: AgentTypes.QueueMode) -> String:
     case AgentTypes.OneAtATime{}: "one-at-a-time"
 def pendingCount(value: Session.Shared) -> Nat:
   match value:
-    case Session.Shared{_,steering,followUp,_,_,_,_,_, _, pendingMessages}: List.length(&2,String,steering) + List.length(&2,String,followUp)
+    case Session.Shared{_,steering,followUp,_,_,_,_,_, _, pendingMessages, extensionsRef}: List.length(&2,String,steering) + List.length(&2,String,followUp)
 def modelValue(selected: Maybe<&2,Ai.Model<Ai.JsonValue>>) -> V.Value:
   Maybe.default(&2,V.Value,Maybe.map(&2,Ai.Model<Ai.JsonValue>,V.Value,ModelJson.model,selected),V.Null{})
 def stateValue(+stored: Session.Session(),+current: Session.AgentState(),shared: Session.Shared,streaming: Bool,compacting: Bool,steering: AgentTypes.QueueMode,followUp: AgentTypes.QueueMode,auto: Bool) -> V.Value:

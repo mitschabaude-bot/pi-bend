@@ -16,7 +16,8 @@ Tools are Bend callbacks: `echo` returns its `text` argument after a prefix; `wa
 - `suite/agent-session-bash-persistence.test.ts`: all eleven tests. Six run in `tests/agent_session_check.py` (`bash` and `bash_deferred` scenarios); `cancels running bash commands with abortBash`, `aborts all active bash executions`, `persists user, assistant, toolResult, and custom messages in order`, `does not emit message_end for bash execution messages` and `persists aborted assistant messages` run here.
 - `suite/regressions/8537-custom-message-tool-result-ordering.test.ts`: all three tests.
 - `test/branch-summarization.test.ts` runs in `tests/branch_summarization_check.py` (`generate` mode of `tests/branch-summarization.bend`).
-- Extension regressions (inline extensions loaded into the harness's runner): #3982 (message_end replacement), #1717/#2113 (both tests), #5998, #8935 and #6363 (all three tests).
+- Extension regressions (inline extensions loaded into the harness's runner): #3982 (message_end replacement), #1717/#2113 (both tests), #5998, #8935, #6363 (all three tests), #3688 (session_before_tree cancel) and #9178's second test (a navigation waiting in session_before_tree).
+- `suite/agent-session-compaction-model-overrides.test.ts`: all tests but `captures model identity before awaiting summarization auth` (no native summarization-auth step to interleave a model change into).
 
 ## Adaptations
 
@@ -27,4 +28,6 @@ Tools are Bend callbacks: `echo` returns its `text` argument after a prefix; `wa
 - Extension factories are Bend functions (`Ext.InlineExtension`), and handlers print what upstream's tests collect in arrays (`preflight`, `result_hook`, `extension_event`, `roles_at_tool_call`, `command_result`).
 - #6363's `extension command waitForIdle waits for session-level settlement`: the command context actions are Bend callbacks bound with `ExtensionRunner.bindCommandContext` (upstream `bindExtensions({ commandContextActions })`); "not finished before the tool is released" is the order of the `released` and `command_result` lines.
 - #8935: after the aborted batch the run ends with an aborted assistant message, which upstream's test does not assert on.
+- Upstream tests append to `harness.sessionManager` and then set `agent.state.messages = buildSessionContext().messages`; here the seed is stored before the session is created, or appended later with `AgentSession.appendSessionMessage` and loaded with `refreshSessionContext` (upstream `refreshContext()`).
+- The compaction-override scenarios print the recorded `session_before_compact` preparation (`preparation` lines), and the summary request's output cap with the request (`request` lines' `maxTokens`).
 
