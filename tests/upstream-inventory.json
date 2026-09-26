@@ -3076,7 +3076,7 @@
         "tests/rpc_mode_check.py"
       ],
       "sha256": "d3c38618c3e0a2541a9211cfa0a616d3fb9936142663621bd3e48d627e10912d",
-      "notes": "Three of four tests pass on Bun and native one/four threads: one success response on preflight success, one success response for a follow-up queued during streaming, and queued steering/follow-up returned and cleared with a single agent_start. Rpc.feed replaces the mocked line handler, a capturing sink replaces writeRawStdout, and the session is in memory over the faux provider; a faux gate holds the streaming response where upstream waits 100/500 ms. Pending: 'emits one failure response when prompt preflight rejects' — AgentSession.prompt has no auth preflight/preflightResult yet, so the RPC endpoint acknowledges the prompt before it fails (tests/rpc.md)."
+      "notes": "Three of four tests pass on Bun and native one/four threads: one success response on preflight success, one success response for a follow-up queued during streaming, and queued steering/follow-up returned and cleared with a single agent_start. Rpc.feed replaces the mocked line handler, a capturing sink replaces writeRawStdout, and the session is in memory over the faux provider; a faux gate holds the streaming response where upstream waits 100/500 ms. Pending: 'emits one failure response when prompt preflight rejects' \u2014 AgentSession.prompt has no auth preflight/preflightResult yet, so the RPC endpoint acknowledges the prompt before it fails (tests/rpc.md)."
     },
     {
       "source": "packages/coding-agent/test/rpc.test.ts",
@@ -4329,7 +4329,7 @@
         "tests/thinking-level.bend"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '→ ✓ medium', then '  ✓ medium' and '→   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",
@@ -4404,9 +4404,15 @@
     },
     {
       "source": "packages/coding-agent/test/tree-selector.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "352f03c2400bad730c05d5a427d4d7d2f08a102e67c4a7d1ebc97b6cac856734"
+      "status": "partial",
+      "ports": [
+        "tests/session-selector.bend",
+        "tests/tree-selector.bend",
+        "tests/tree_selector_check.py",
+        "tests/tree_selector_reference.mts"
+      ],
+      "sha256": "352f03c2400bad730c05d5a427d4d7d2f08a102e67c4a7d1ebc97b6cac856734",
+      "notes": "Native navigation smoke assertions and pinned component comparisons cover search/filter recovery, full copying, narrow help, metadata parent traversal, branch folding and ANSI frames. General assistant/structural-entry cases, labels/timestamps and the remaining named upstream assertions are pending; this suite remains partial."
     },
     {
       "source": "packages/coding-agent/test/trigger-compact-extension.test.ts",

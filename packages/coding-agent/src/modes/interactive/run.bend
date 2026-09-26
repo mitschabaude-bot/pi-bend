@@ -64,6 +64,7 @@ import ./components/status-indicator.bend as Status
 import ./components/header.bend as Header
 import ./components/keybinding-hints.bend as Hints
 import ./components/session-selector.bend as Selector
+import ./components/tree-selector.bend as TreePicker
 import ./components/user-message-selector.bend as UserPicker
 import ./components/model-selector.bend as ModelPicker
 import ./components/thinking-selector.bend as ThinkingPicker
@@ -626,25 +627,25 @@ def resumeObserved(input: CommandObservation) -> IO(Unit):
   match input: case CommandObservation{_,_,_,_,_,_,_,_,state,_,_,_,_,_,_,_,_}: resumeRequested(state)
 def selectorNotice(failure: Interactive.StatusSink,message: String) -> IO(Unit):
   Interactive.report(failure,Interactive.CommandNotice{message})
-def openTree(target: Maybe<&2,Selector.Host>,state: Selector.State) -> IO(Unit):
+def openTree(target: Maybe<&2,Selector.Host>,state: TreePicker.TreeList) -> IO(Unit):
   match target:
     case None{}: IO.pure(Unit,Unit{})
     case Some{host}: Selector.open(host,state)
-def openCandidate(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.StatusSink,+state: Selector.State,empty: String) -> IO(Unit):
-  Bool.pick(Unit -> IO(Unit),Selector.hasRows(state),_ => do IO<Unit>:
+def openCandidate(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.StatusSink,+state: TreePicker.TreeList,empty: String) -> IO(Unit):
+  Bool.pick(Unit -> IO(Unit),Bool.not(List.is_empty(&2,TreePicker.Row,TreePicker.allOf(state))),_ => do IO<Unit>:
     target : Maybe<&2,Selector.Host> <- Ref.read(Maybe<&2,Selector.Host>,selector)
     openTree(target,state),_ => selectorNotice(failure,empty))(Unit{})
-def selectorFilter(value: Settings.TreeFilterMode) -> Selector.Filter:
+def selectorFilter(value: Settings.TreeFilterMode) -> TreePicker.Filter:
   match value:
-    case Settings.DefaultFilter{}: Selector.Default{}
-    case Settings.NoTools{}: Selector.NoTools{}
-    case Settings.UserOnly{}: Selector.UserOnly{}
-    case Settings.LabeledOnly{}: Selector.LabeledOnly{}
-    case Settings.AllEntries{}: Selector.All{}
-def matchTree(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.StatusSink,result: Result<&2,&2,Tree.Error,List<&2,Selector.Node()>>,leaf: Maybe<&2,String>,filter: Selector.Filter) -> IO(Unit):
+    case Settings.DefaultFilter{}: TreePicker.Default{}
+    case Settings.NoTools{}: TreePicker.NoTools{}
+    case Settings.UserOnly{}: TreePicker.UserOnly{}
+    case Settings.LabeledOnly{}: TreePicker.LabeledOnly{}
+    case Settings.AllEntries{}: TreePicker.All{}
+def matchTree(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.StatusSink,result: Result<&2,&2,Tree.Error,List<&2,TreePicker.Node()>>,leaf: Maybe<&2,String>,filter: TreePicker.Filter) -> IO(Unit):
   match result:
     case Fail{_}: selectorNotice(failure,"Cannot load session tree")
-    case Done{nodes}: openCandidate(selector,failure,Selector.createWithFilter(nodes,leaf,24n,filter),"No entries in session")
+    case Done{nodes}: openCandidate(selector,failure,TreePicker.createWithFilter(nodes,leaf,24n,filter),"No entries in session")
 def forkItems(messages: List<&2,Session.ForkMessage>) -> List<&2,UserPicker.UserMessageItem>:
   match messages:
     case Nil{}: Nil{}
@@ -789,6 +790,22 @@ def copyText(transcript: Transcript.Handle,cwd: String,text: Maybe<&2,String>) -
       do IO<Unit>:
         result : Result<&2,&2,String,Unit> <- Clipboard.copy(value,cwd)
         copyResult(transcript,result)
+type TreeCopyInput is Data: TreeCopyInput{session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle}
+def treeCopyResult(transcript: Transcript.Handle,result: Result<&2,&2,String,Unit>) -> IO(Unit):
+  match result:
+    case Done{_}: Transcript.status(transcript,"Copied selected message to clipboard")
+    case Fail{message}: Transcript.showError(transcript,message)
+def treeCopyCwd(header: Tree.SessionHeader) -> String:
+  match header: case Tree.SessionHeader{_,_,_,cwd,_}: cwd
+def treeCopied(input: TreeCopyInput,text: Maybe<&2,String>) -> IO(Unit):
+  match input text:
+    case TreeCopyInput{_,transcript} None{}: Transcript.showError(transcript,"Selected entry has no text to copy")
+    case TreeCopyInput{session,transcript} Some{value}:
+      do IO<Unit>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        stored : Session.Session() <- Session.sessionOf(live)
+        result : Result<&2,&2,String,Unit> <- Clipboard.copy(value,treeCopyCwd(Tree.getHeader(Unit,Tools.ToolDetails,Schema.Value,Session.stateOf(stored))))
+        treeCopyResult(transcript,result)
 # upstream handleSessionCommand: session stats, cache waste and the per-model
 # cost breakdown over every stored entry.
 def sessionInfoOf(stats: Stats.Stats,+state: Tree.SessionManager<Unit,Tools.ToolDetails,Schema.Value>,models: Models.ModelRuntime,warming: SessionInfo.CacheWarmingInfo) -> SessionInfo.SessionInfo:
@@ -2747,7 +2764,8 @@ def withCustomEditor(borrowed: CustomEditor.Owner & Component.Component,live: Li
     case (custom,component):
       do IO<Result<&2,&2,Error,Unit>>:
         +chosen : Callback.Callback<Selector.Choice,Unit> <- Callback.create(~SelectInput,~Selector.Choice,~Unit,~chosenSelection,SelectInput{queue,contextStatus(context),redraw})
-        host : Selector.Owner <- Selector.createHost(component,contextTheme(context),contextBindings(context),Keys.defaults(),chosen)
+        +copied : Callback.Callback<Maybe<&2,String>,Unit> <- Callback.create(~TreeCopyInput,~Maybe<&2,String>,~Unit,~treeCopied,TreeCopyInput{contextSession(context),contextTranscript(context)})
+        host : Selector.Owner <- Selector.createHost(component,contextTheme(context),contextBindings(context),Keys.defaults(),chosen,Some{copied})
         result : Result<&2,&2,Error,Unit> <- runHosted(Selector.borrowHost(host),live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen)
         CustomEditor.dispose(custom)
         return result
