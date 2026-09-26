@@ -31,7 +31,7 @@ def scenario(threads, queued_key, queued_text, restore_key):
         process = subprocess.Popen(
             [str(BINARY), "--threads", str(threads), "--", str(ROOT), cwd, cwd + "/agent", "dark"],
             cwd=ROOT, stdin=slave, stdout=slave, stderr=subprocess.PIPE,
-            env={**os.environ, "TERM": "xterm-256color"},
+            env={**os.environ, "TERM": "xterm-256color", "PI_FAUX_API_KEY": "faux-key"},
         )
         output = bytearray()
 

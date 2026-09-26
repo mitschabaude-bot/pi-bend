@@ -34,11 +34,11 @@ def only(events, kind):
 def retry_events(events):
     return ['start:%d' % e['attempt'] if e['type'] == 'auto_retry_start' else 'end:%s' % str(e['success']).lower() for e in events if e['type'] in ('auto_retry_start', 'auto_retry_end')]
 
-def run(runner, threads, scenario, work):
+def run(runner, threads, scenario, work, *extra):
     project = work / scenario; project.mkdir()
     agent = work / (scenario + '-agent'); agent.mkdir()
     command = ['bun', runner] if runner.endswith('.js') else [runner, '--threads', threads, '--']
-    result = subprocess.run(command + [scenario, str(project), str(agent)], capture_output=True, text=True, timeout=300, cwd=ROOT, env=dict(os.environ, PI_FAUX_API_KEY='faux-key'))
+    result = subprocess.run(command + [scenario, str(project), str(agent), *extra], capture_output=True, text=True, timeout=300, cwd=ROOT, env=dict(os.environ, PI_FAUX_API_KEY='faux-key'))
     assert result.returncode == 0, (scenario, result.returncode, result.stderr[-2000:], result.stdout[-1000:])
     return [json.loads(line) for line in result.stdout.splitlines()]
 
@@ -66,7 +66,6 @@ def image_size(block):
 def image_checks(runner, threads, work):
     # uses the model selected by before_agent_start for image normalization (agent-session-prompt.test.ts, #9631):
     # a 1100 px wide image stays 1100 px under the default profile and shrinks to the strict model's 1000 px.
-    os.environ.setdefault('PI_FAUX_API_KEY', 'faux-key')  # both faux models need auth to be selectable
     events = run_configured(runner, threads, work, {}, 'images', base64.b64encode(png(1100, 4)).decode())
     assert [e['type'] for e in events if e['type'] in ('prompt_done', 'set_strict')] == ['prompt_done', 'set_strict', 'prompt_done'], events
     users = [m for m in only(events, 'messages')['messages'] if m['role'] == 'user']
@@ -295,6 +294,9 @@ def main():
     parser.add_argument('--runner', default='build/agent-session.js')
     parser.add_argument('--threads', default='1')
     args = parser.parse_args()
+    # The faux provider is authorized, as upstream's harness registers it with
+    # an API key; prompt() checks the selected model's auth before running.
+    os.environ['PI_FAUX_API_KEY'] = 'faux-key'
     runner = str(Path(args.runner).resolve())
     work = Path(tempfile.mkdtemp(prefix='pi-agent-session-'))
     checks = 0
@@ -369,6 +371,16 @@ def main():
     saved = json.loads((work / 'models-agent' / 'settings.json').read_text())
     assert (saved.get('defaultProvider'), saved.get('defaultModel'), saved.get('defaultThinkingLevel'), saved.get('hideThinkingBlock'), 'enabledModels' in saved) == ('faux', 'faux-model', 'medium', True, False), saved
     checks += 3
+    # agent-session-prompt: "throws when prompting without a model" and "throws when prompting without
+    # configured auth". The preflight rejects before anything is sent or recorded.
+    for kind, message in (('no_model', 'No model selected.'), ('no_auth', 'No API key found for other.')):
+        (work / kind).mkdir()
+        events = run(runner, args.threads, 'preflight', work / kind, kind)
+        outcome = only(events, 'prompt')
+        assert outcome['ok'] is False and outcome['error'].startswith(message + '\n\nUse /login to log into a provider via OAuth or API key. See:'), outcome
+        assert only(events, 'remaining')['count'] == 1 and only(events, 'session')['entries'] == 0, events
+        assert not [e for e in events if e['type'] in ('agent_start', 'message_start')], events
+        checks += 1
     # while the first request is held open, prompt() without a behavior is refused; steer/followUp queue and are delivered after the turn and after the run (agent-session-concurrent; agent-session-prompt; agent-session-queue)
     events = run(runner, args.threads, 'busy', work)
     streaming = [e['value'] for e in events if e['type'] == 'streaming']

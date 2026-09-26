@@ -14,6 +14,8 @@ import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/ref.bend as R
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/ai/src/utils/uuid.bend as Uuid
+import ../packages/ai/src/types.bend as Ai
+import ../packages/agent/src/types.bend as T
 
 # AgentSessionRuntime over the faux-provider fixture: each runtime the
 # factory creates is a fresh agent and AgentSession for the requested session
@@ -250,10 +252,113 @@ def inMemory(+dir: String, +agentDir: String) -> IO(Unit):
     C.dispose(Host.Request, Result<&1, &1, String, Host.Created<Services()>>, make)
     C.dispose(Services(), Unit, free)
 
+# agent-session-branching.test.ts over the faux provider (upstream runs it
+# live): prompts, the user messages offered for forking, then a fork before
+# the chosen one. The factory loads the stored context into the agent, as
+# createAgentSessionFromServices does.
+def branchFactory(agentDir: String, request: Host.Request) -> IO(Result<&1, &1, String, Host.Created<Services()>>):
+  match request:
+    case Host.Request{+cwd, +stored, _}:
+      do IO<Result<&1, &1, String, Host.Created<Services()>>>:
+        +fixture : Fx.Fixture <- Fx.fixture(stored, cwd, agentDir, "one" <> "two" <> "three" <> Nil{}, Nil{})
+        Session.refreshSessionContext(Fx.sessionOf(fixture))
+        return created(fixture)
+
+def forkValues(messages: List<&2, Session.ForkMessage>) -> List<&2, String>:
+  match messages:
+    case Nil{}: Nil{}
+    case Session.ForkMessage{entryId, text} <> rest: ("{\"entryId\":" ++ Decode.quote(entryId) ++ ",\"text\":" ++ Decode.quote(text) ++ "}") <> forkValues(rest)
+
+def roleNames(messages: List<&2, Session.Message()>) -> List<&2, String>:
+  match messages:
+    case Nil{}: Nil{}
+    case T.LlmMessage{Ai.System{_}} <> rest: "\"system\"" <> roleNames(rest)
+    case T.LlmMessage{Ai.User{_}} <> rest: "\"user\"" <> roleNames(rest)
+    case T.LlmMessage{Ai.Assistant{_}} <> rest: "\"assistant\"" <> roleNames(rest)
+    case T.LlmMessage{Ai.ToolResult{_}} <> rest: "\"toolResult\"" <> roleNames(rest)
+    case _ <> rest: "\"other\"" <> roleNames(rest)
+
+def reportBranchState(+label: String, live: Maybe<&2, Session.AgentSession>) -> IO(Unit):
+  match live:
+    case None{}: IO.print("{\"type\":\"branch_state\",\"label\":" ++ Decode.quote(label) ++ ",\"session\":null}")
+    case Some{+session}:
+      do IO<Unit>:
+        forking : List<&2, Session.ForkMessage> <- Session.getUserMessagesForForking(session)
+        current : List<&2, Session.Message()> <- Session.messages(session)
+        IO.print("{\"type\":\"branch_state\",\"label\":" ++ Decode.quote(label) ++ ",\"forking\":[" ++ String.join(forkValues(forking), ",") ++ "],\"roles\":[" ++ String.join(roleNames(current), ",") ++ "]}")
+
+def branchState(+label: String, runtime: Runtime()) -> IO(Unit):
+  do IO<Unit>:
+    live : Maybe<&2, Session.AgentSession> <- Host.session(Services(), runtime)
+    reportBranchState(label, live)
+
+def promptAll(+runtime: Runtime(), texts: List<&2, String>) -> IO(Unit):
+  match texts:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case +text <> rest:
+      do IO<Unit>:
+        promptCurrent("prompt", runtime, text)
+        promptAll(runtime, rest)
+
+def forkAtIndex(messages: List<&2, Session.ForkMessage>, index: Nat) -> String:
+  match messages index:
+    case Session.ForkMessage{entryId, _} <> _ 0n: entryId
+    case _ <> rest 1n+next: forkAtIndex(rest, next)
+    case Nil{} _: "missing"
+
+def forkChosen(+runtime: Runtime(), index: Nat, live: Maybe<&2, Session.AgentSession>) -> IO(Unit):
+  match live:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{+session}:
+      do IO<Unit>:
+        forking : List<&2, Session.ForkMessage> <- Session.getUserMessagesForForking(session)
+        result : Result<&2, &2, String, Maybe<&2, String>> <- Host.fork(Services(), runtime, forkAtIndex(forking, index), Host.ForkBefore{})
+        reportFork("fork", result)
+        reportCurrent("forked", runtime)
+        branchState("forked", runtime)
+
+def branchScenario(+runtime: Runtime(), texts: List<&2, String>, index: Nat) -> IO(Unit):
+  do IO<Unit>:
+    reportCurrent("initial", runtime)
+    promptAll(runtime, texts)
+    branchState("prompted", runtime)
+    live : Maybe<&2, Session.AgentSession> <- Host.session(Services(), runtime)
+    forkChosen(runtime, index, live)
+    Host.dispose(Services(), runtime)
+
+def branchStarted(texts: List<&2, String>, index: Nat, result: Result<&2, &2, String, Runtime()>) -> IO(Unit):
+  match result:
+    case Fail{error}: IO.die(Unit, 1, error)
+    case Done{runtime}: branchScenario(runtime, texts, index)
+
+def openedWith(uuids: Uuid.Generator, +dir: String, agentDir: String, memory: Bool) -> IO(Sessions.Outcome(Session.Session())):
+  match memory:
+    case True{}: Session.memorySession(uuids, dir, Sessions.noOptions())
+    case False{}: Session.createSession(uuids, dir, Some{dir}, agentDir, Sessions.noOptions())
+
+def branchOpened(+dir: String, agentDir: String, memory: Bool) -> IO(Sessions.Outcome(Session.Session())):
+  do IO<Sessions.Outcome(Session.Session())>:
+    uuids : Uuid.Generator <- Uuid.generator()
+    openedWith(uuids, dir, agentDir, memory)
+
+def branching(+dir: String, +agentDir: String, +kind: String) -> IO(Unit):
+  +memory = String.eq(kind, "memory")
+  +middle = String.eq(kind, "middle")
+  do IO<Unit>:
+    opened : Sessions.Outcome(Session.Session()) <- branchOpened(dir, agentDir, memory)
+    stored : Session.Session() <- Fx.requireSession(opened)
+    +make : Host.Factory(Services()) <- C.create(~String, ~Host.Request, ~Result<&1, &1, String, Host.Created<Services()>>, ~branchFactory, agentDir)
+    +free : C.Callback<Services(), Unit> <- C.create(~Unit, ~Services(), ~Unit, ~release, Unit{})
+    result : Result<&2, &2, String, Runtime()> <- Host.create(Services(), make, free, agentDir, dir, stored)
+    branchStarted(Bool.pick(List<&2, String>, middle, ["Say one", "Say two", "Say three"], [Bool.pick(String, memory, "Say hi", "Say hello")]), Bool.pick(Nat, middle, 1n, 0n), result)
+    C.dispose(Host.Request, Result<&1, &1, String, Host.Created<Services()>>, make)
+    C.dispose(Services(), Unit, free)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case "persisted" <> dir <> agentDir <> missing <> Nil{}: persisted(dir, agentDir, missing)
     case "memory" <> dir <> agentDir <> Nil{}: inMemory(dir, agentDir)
+    case "branching" <> dir <> agentDir <> kind <> Nil{}: branching(dir, agentDir, kind)
     case _: IO.die(Unit, 1, "usage: agent-session-runtime persisted <dir> <agentDir> <missing-cwd-session> | memory <dir> <agentDir>")
 
 def main() -> IO(Unit):

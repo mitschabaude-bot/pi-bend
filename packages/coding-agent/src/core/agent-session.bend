@@ -54,6 +54,8 @@ import ../config.bend as Config
 import ../utils/paths.bend as Paths
 import ../../../runtime/src/filesystem.bend as FS
 import ../../../ai/src/utils/transcript.bend as Transcript
+import ./auth-guidance.bend as AuthGuidance
+import ../../../runtime/src/posix-path.bend as PosixPath
 
 # The upstream AgentSession core: the owner of one Agent and its session
 # record. It subscribes to the agent, republishes agent events to its own
@@ -262,7 +264,7 @@ type Warming is Data:
 # `sessionActions` are pi.sendMessage and pi.sendUserMessage, bound once the
 # session exists.
 type ExtensionBinding is Data:
-  ExtensionBinding{actions: Ctx.ExtensionContextActions, providersChanged: C.Callback<Unit, Unit>, sessionActions: R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>>}
+  ExtensionBinding{actions: Ctx.ExtensionContextActions, providersChanged: C.Callback<Unit, Unit>, sessionActions: R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>>, shutdownHandler: R.Ref<Maybe<&2, C.Callback<Unit, Unit>>>}
 
 # The session's handles on the agent: its event subscription, the
 # next-turn, request and stream hooks that replaced the agent's own
@@ -1169,7 +1171,7 @@ def executeBash(+session: AgentSession, +command: String, onChunk: Maybe<&2, C.C
 # upstream _bindExtensionCore's context actions: the extension context reads
 # the session's model, scope, identity and activity when it is used.
 type ContextEnv is Data:
-  ContextEnv{agent: Runtime.Owner(), shared: R.Ref<Shared>, scoped: R.Ref<List<&2, Models.ScopedModel>>, settings: R.Ref<Settings.SettingsManager>}
+  ContextEnv{agent: Runtime.Owner(), shared: R.Ref<Shared>, scoped: R.Ref<List<&2, Models.ScopedModel>>, settings: R.Ref<Settings.SettingsManager>, shutdownHandler: R.Ref<Maybe<&2, C.Callback<Unit, Unit>>>}
 
 def queuedIn(state: Shared) -> Bool:
   match state:
@@ -1177,7 +1179,7 @@ def queuedIn(state: Shared) -> Bool:
 
 def sessionState(env: ContextEnv, unit: Unit) -> IO(Ctx.SessionState):
   match env:
-    case ContextEnv{+agent, shared, scoped, settings}:
+    case ContextEnv{+agent, shared, scoped, settings, _}:
       do IO<Ctx.SessionState>:
         +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +stored : Shared <- R.read(Shared, shared)
@@ -1191,7 +1193,7 @@ def sessionState(env: ContextEnv, unit: Unit) -> IO(Ctx.SessionState):
 # extension code (a tool, say) may call it from within the run.
 def contextAbort(env: ContextEnv, unit: Unit) -> IO(Unit):
   match env:
-    case ContextEnv{+agent, +shared, _, _}:
+    case ContextEnv{+agent, +shared, _, _, _}:
       do IO<Unit>:
         R.modify(Shared,Unit,shared,current => (requestRunAbort(current),Unit{}))
         abortSleeping(shared)
@@ -1199,9 +1201,19 @@ def contextAbort(env: ContextEnv, unit: Unit) -> IO(Unit):
         abortBranchSummaryOf(shared)
         Agent.abort(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
 
-# The mode binds shutdown (upstream bindExtensions); until then it does
-# nothing, as upstream's default shutdownHandler.
-def contextShutdown(env: ContextEnv, unit: Unit) -> IO(Unit): IO.pure(Unit, Unit{})
+# upstream ctx.shutdown(): the handler the mode bound (setShutdownHandler,
+# upstream bindExtensions' shutdownHandler); none does nothing.
+def shutdownWith(handler: Maybe<&2, C.Callback<Unit, Unit>>) -> IO(Unit):
+  match handler:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{bound}: C.call(Unit, Unit, bound, Unit{})
+
+def contextShutdown(env: ContextEnv, unit: Unit) -> IO(Unit):
+  match env:
+    case ContextEnv{_, _, _, _, handler}:
+      do IO<Unit>:
+        bound : Maybe<&2, C.Callback<Unit, Unit>> <- R.read(Maybe<&2, C.Callback<Unit, Unit>>, handler)
+        shutdownWith(bound)
 
 def createContextActions(+env: ContextEnv) -> IO(Ctx.ExtensionContextActions):
   do IO<Ctx.ExtensionContextActions>:
@@ -1237,12 +1249,12 @@ def refreshCurrentModel(env: ModelEnv, unit: Unit) -> IO(Unit):
 
 def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime) -> IO(ExtensionBinding):
   match env:
-    case ContextEnv{+agent, shared, scoped, settings}:
+    case ContextEnv{+agent, shared, scoped, settings, handler}:
       do IO<ExtensionBinding>:
-        actions : Ctx.ExtensionContextActions <- createContextActions(ContextEnv{agent, shared, scoped, settings})
+        actions : Ctx.ExtensionContextActions <- createContextActions(ContextEnv{agent, shared, scoped, settings, handler})
         changed : C.Callback<Unit, Unit> <- C.create(~ModelEnv, ~Unit, ~Unit, ~refreshCurrentModel, ModelEnv{agent, models})
         sessionActions : R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>> <- R.new(Maybe<&2, ExtensionTypes.ExtensionActions>, None{})
-        return ExtensionBinding{actions, changed, sessionActions}
+        return ExtensionBinding{actions, changed, sessionActions, handler}
 
 def disposeSessionActions(actions: Maybe<&2, ExtensionTypes.ExtensionActions>) -> IO(Unit):
   match actions:
@@ -1254,8 +1266,9 @@ def disposeSessionActions(actions: Maybe<&2, ExtensionTypes.ExtensionActions>) -
 
 def disposeExtensionBinding(binding: ExtensionBinding) -> IO(Unit):
   match binding:
-    case ExtensionBinding{Ctx.ExtensionContextActions{reader, aborter, stopper}, changed, sessionActions}:
+    case ExtensionBinding{Ctx.ExtensionContextActions{reader, aborter, stopper}, changed, sessionActions, handler}:
       do IO<Unit>:
+        dropped : Maybe<&2, C.Callback<Unit, Unit>> <- R.dispose(Maybe<&2, C.Callback<Unit, Unit>>, handler)
         C.dispose(Unit, Ctx.SessionState, reader)
         C.dispose(Unit, Unit, aborter)
         C.dispose(Unit, Unit, stopper)
@@ -1269,7 +1282,7 @@ def boundWith(+runner: ExtensionRunner.ExtensionRunner, binding: Maybe<&2, Exten
       do IO<Unit>:
         ExtensionLoader.bindActions(ExtensionRunner.runtimeOf(runner), None{})
         ExtensionRunner.bindCore(runner, None{}, None{})
-    case Some{ExtensionBinding{actions, changed, _}}: ExtensionRunner.bindCore(runner, Some{actions}, Some{changed})
+    case Some{ExtensionBinding{actions, changed, _, _}}: ExtensionRunner.bindCore(runner, Some{actions}, Some{changed})
 
 def bindContext(loadout: Runtime.Loadout, binding: Maybe<&2, ExtensionBinding>) -> IO(Unit):
   match loadout:
@@ -2753,7 +2766,8 @@ def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settin
     +replacedRequest : Maybe<&2, RequestHook()> <- Agent.getPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +request : RequestHook() <- C.create(~RequestEnv, ~RequestInput(), ~RequestResult(), ~requestHook, RequestEnv{agent, shared, replacedRequest})
     Agent.setPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{request})
-    +context : ExtensionBinding <- createExtensionBinding(ContextEnv{agent, shared, scoped, settingsRef}, models)
+    shutdownHandler : R.Ref<Maybe<&2, C.Callback<Unit, Unit>>> <- R.new(Maybe<&2, C.Callback<Unit, Unit>>, None{})
+    +context : ExtensionBinding <- createExtensionBinding(ContextEnv{agent, shared, scoped, settingsRef, shutdownHandler}, models)
     bindContext(loadout, Some{context})
     inner : Runtime.Stream() <- Agent.getStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     warming : Warming <- createWarming(agent, shared, settingsRef, inner)
@@ -2923,13 +2937,49 @@ def sendCustomMessage(+session: AgentSession, input: ExtensionTypes.CustomMessag
     state : Shared <- R.read(Shared, sharedOf(session))
     sendAt(session, customMessageAt(input, now), options, runActiveOf(state))
 
+# upstream PromptOptions. `source` is reported to input handlers;
+# `preflightResult` observes whether the prompt was accepted (run, queued, or
+# handled as a command or by an input handler) or rejected before any message
+# was sent.
+type PromptOptions is Data:
+  PromptOptions{expandPromptTemplates: Bool, images: List<&2, Ai.ImageContent>, streamingBehavior: Maybe<&2, StreamingBehavior>, source: ExtensionTypes.InputSource, preflightResult: Maybe<&2, C.Callback<Bool, Unit>>}
+
+# A prompt rejected by its preflight, or accepted with the result of what ran.
+type Prompted is Data:
+  Rejected{error: String}
+  Accepted{result: Result<&2, &2, String, Unit>}
+
+def reportPreflight(preflight: Maybe<&2, C.Callback<Bool, Unit>>, success: Bool) -> IO(Unit):
+  match preflight:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{observer}: C.call(Bool, Unit, observer, success)
+
+def accepted(preflight: Maybe<&2, C.Callback<Bool, Unit>>) -> IO(Prompted):
+  do IO<Prompted>:
+    reportPreflight(preflight, True{})
+    return Accepted{Done{Unit{}}}
+
+def promptOutcome(preflight: Maybe<&2, C.Callback<Bool, Unit>>, prompted: Prompted) -> IO(Result<&2, &2, String, Unit>):
+  match prompted:
+    case Rejected{error}:
+      do IO<Result<&2, &2, String, Unit>>:
+        reportPreflight(preflight, False{})
+        return Fail{error}
+    case Accepted{result}: IO.pure(Result<&2, &2, String, Unit>, result)
+
+def acceptedRun(preflight: Maybe<&2, C.Callback<Bool, Unit>>, run: IO(Result<&2, &2, String, Unit>)) -> IO(Prompted):
+  do IO<Prompted>:
+    reportPreflight(preflight, True{})
+    result : Result<&2, &2, String, Unit> <- run
+    return Accepted{result}
+
 # upstream prompt() and _runAgentPrompt: compaction is checked before
 # sending, the prompt and tool loadout are declared ahead of the user message,
-# and the agent runs until post-run handling settles.
-def runAgentPrompt(session: AgentSession, +text: String, images: List<&2, Ai.ImageContent>) -> IO(Result<&2, &2, String, Unit>):
+# the preflight passes, and the agent runs until post-run handling settles.
+def runAgentPrompt(session: AgentSession, +text: String, images: List<&2, Ai.ImageContent>, preflight: Maybe<&2, C.Callback<Bool, Unit>>) -> IO(Prompted):
   match session:
     case AgentSession{+agent, +shared, hooks, settingsRef, _, +loadoutRef, _, _}:
-      do IO<Result<&2, &2, String, Unit>>:
+      do IO<Prompted>:
         +settings : Settings.SettingsManager <- R.read(Settings.SettingsManager,settingsRef)
         loadout : Runtime.Loadout <- R.read(Runtime.Loadout, loadoutRef)
         compactBeforePrompt(agent, shared, settings)
@@ -2938,7 +2988,7 @@ def runAgentPrompt(session: AgentSession, +text: String, images: List<&2, Ai.Ima
         +user : Message() = normalizedUserMessage(text, normalizePromptImages(promptImageOptions(settings, stateModel(current)), images, NormalizedImages{Nil{}, Nil{}}), now)
         patch : Maybe<&2, Message()> <- prepareLoadout(agent, loadout, stateMessages(current), now)
         nextTurn : List<&2, Message()> <- R.modify(Shared, List<&2, Message()>, shared, takenNextTurn)
-        runMessages(agent, shared, hooks, settings, loadoutRef, withPatch(patch, user <> nextTurn))
+        acceptedRun(preflight, runMessages(agent, shared, hooks, settings, loadoutRef, withPatch(patch, user <> nextTurn)))
 
 def queued(state: Shared, behavior: StreamingBehavior, +text: String) -> Shared:
   match state behavior:
@@ -3028,11 +3078,71 @@ def queueExpanded(session: AgentSession, behavior: StreamingBehavior, text: Stri
         now : F64 <- Date.now()
         queueAt(agent, shared, behavior, text, images, now)
 
-# upstream _queueUserInput: queued input is expanded like a prompt.
-def queue(+session: AgentSession, behavior: StreamingBehavior, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit):
+# User input handlers (upstream _runInputHandlers)
+# ------------------------------------------------
+
+# The input after the extensions' input handlers.
+type ProcessedInput is Data:
+  ProcessedInput{text: String, images: List<&2, Ai.ImageContent>}
+
+def deliveryFor(behavior: StreamingBehavior) -> ExtensionTypes.UserDelivery:
+  match behavior:
+    case Steer{}: ExtensionTypes.UserSteer{}
+    case FollowUp{}: ExtensionTypes.UserFollowUp{}
+
+# upstream reports streamingBehavior to input handlers only while streaming.
+def reportedBehavior(streaming: Bool, behavior: Maybe<&2, StreamingBehavior>) -> Maybe<&2, ExtensionTypes.UserDelivery>:
+  match streaming:
+    case True{}: Maybe.map(&2, StreamingBehavior, ExtensionTypes.UserDelivery, deliveryFor, behavior)
+    case False{}: None{}
+
+def processedBy(+text: String, images: List<&2, Ai.ImageContent>, result: ExtensionTypes.InputEventResult) -> Maybe<&2, ProcessedInput>:
+  match result:
+    case ExtensionTypes.InputHandled{}: None{}
+    case ExtensionTypes.InputTransform{changed, replaced}: Some{ProcessedInput{changed, Maybe.default(&2, List<&2, Ai.ImageContent>, replaced, images)}}
+    case ExtensionTypes.InputContinue{}: Some{ProcessedInput{text, images}}
+
+def emittedInput(+runner: ExtensionRunner.ExtensionRunner, +text: String, +images: List<&2, Ai.ImageContent>, source: ExtensionTypes.InputSource, behavior: Maybe<&2, ExtensionTypes.UserDelivery>, handled: Bool) -> IO(Maybe<&2, ProcessedInput>):
+  match handled:
+    case False{}: IO.pure(Maybe<&2, ProcessedInput>, Some{ProcessedInput{text, images}})
+    case True{}:
+      do IO<Maybe<&2, ProcessedInput>>:
+        result : ExtensionTypes.InputEventResult <- ExtensionRunner.emitInput(runner, text, images, source, behavior)
+        return processedBy(text, images, result)
+
+def inputWith(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, +text: String, +images: List<&2, Ai.ImageContent>, source: ExtensionTypes.InputSource, behavior: Maybe<&2, ExtensionTypes.UserDelivery>) -> IO(Maybe<&2, ProcessedInput>):
+  match runner:
+    case None{}: IO.pure(Maybe<&2, ProcessedInput>, Some{ProcessedInput{text, images}})
+    case Some{+found}:
+      do IO<Maybe<&2, ProcessedInput>>:
+        handled : Bool <- ExtensionRunner.hasHandlers(found, "input")
+        emittedInput(found, text, images, source, behavior, handled)
+
+# upstream _runInputHandlers: None when a handler handled the input.
+def runInputHandlers(+session: AgentSession, +text: String, images: List<&2, Ai.ImageContent>, source: ExtensionTypes.InputSource, behavior: Maybe<&2, StreamingBehavior>) -> IO(Maybe<&2, ProcessedInput>):
+  do IO<Maybe<&2, ProcessedInput>>:
+    streaming : Bool <- isStreaming(session)
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    inputWith(runnerIn(loadout), text, images, source, reportedBehavior(streaming, behavior))
+
+def queueProcessed(+session: AgentSession, behavior: StreamingBehavior, processed: Maybe<&2, ProcessedInput>) -> IO(Unit):
+  match processed:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{ProcessedInput{text, images}}:
+      do IO<Unit>:
+        expanded : String <- expandInput(session, text)
+        queueExpanded(session, behavior, expanded, images)
+
+# upstream _queueUserInput: queued input passes the input handlers and is
+# expanded like a prompt. Upstream also refuses extension commands here;
+# steer and followUp do not report failures, so that check is not ported.
+def queueFrom(+session: AgentSession, +behavior: StreamingBehavior, text: String, images: List<&2, Ai.ImageContent>, source: ExtensionTypes.InputSource) -> IO(Unit):
   do IO<Unit>:
-    expanded : String <- expandInput(session, text)
-    queueExpanded(session, behavior, expanded, images)
+    processed : Maybe<&2, ProcessedInput> <- runInputHandlers(session, text, images, source, Some{behavior})
+    queueProcessed(session, behavior, processed)
+
+def queue(session: AgentSession, behavior: StreamingBehavior, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit):
+  queueFrom(session, behavior, text, images, ExtensionTypes.InteractiveSource{})
 
 def steer(session: AgentSession, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit): queue(session, Steer{}, text, images)
 def followUp(session: AgentSession, text: String, images: List<&2, Ai.ImageContent>) -> IO(Unit): queue(session, FollowUp{}, text, images)
@@ -3060,17 +3170,68 @@ def flushPending(session: AgentSession) -> IO(Unit):
         flushPendingBash(agent, shared)
         flushPendingCustom(agent, shared)
 
-def promptWhile(+session: AgentSession, streaming: Bool, +text: String, +images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>) -> IO(Result<&2, &2, String, Unit>):
+# upstream getDocsPath(): the docs directory of the package the session's
+# resources were loaded from. Sessions built without a runtime source have
+# no package directory; their guidance names a relative docs directory.
+def docsIn(loadout: Runtime.Loadout) -> String:
+  match loadout:
+    case Runtime.Loadout{_, _, _, _, _, _, Some{Runtime.LoadoutSource{_, _, packageDir}}, _}: PosixPath.join(packageDir, "docs")
+    case _: "docs"
+
+def docsPath(session: AgentSession) -> IO(String):
+  do IO<String>:
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    return docsIn(loadout)
+
+def modelsOf(session: AgentSession) -> Models.ModelRuntime:
+  match session:
+    case AgentSession{_, _, _, _, _, _, models, _}: models
+
+# upstream prompt(): the provider's auth is configured when the last
+# availability refresh found it or a fresh check does.
+def hasPromptAuth(+models: Models.ModelRuntime, +provider: String) -> IO(Bool):
+  do IO<Bool>:
+    configured : Bool <- Models.hasConfiguredAuth(models, provider)
+    Bool.pick(Unit -> IO(Bool), configured, _ => IO.pure(Bool, True{}), _ => Models.checkProviderAuth(models, provider))(Unit{})
+
+# Upstream's OAuth wording ("Authentication failed for ...") needs
+# isUsingOAuth, whose snapshot entry exists exactly when hasConfiguredAuth
+# holds; it cannot apply here, so an unconfigured provider has no API key.
+def promptAuthorized(+session: AgentSession, +text: String, images: List<&2, Ai.ImageContent>, preflight: Maybe<&2, C.Callback<Bool, Unit>>, +provider: String, configured: Bool) -> IO(Prompted):
+  match configured:
+    case True{}: runAgentPrompt(session, text, images, preflight)
+    case False{}:
+      do IO<Prompted>:
+        docs : String <- docsPath(session)
+        return Rejected{AuthGuidance.formatNoApiKeyFoundMessage(provider, docs)}
+
+def promptModel(+session: AgentSession, +text: String, images: List<&2, Ai.ImageContent>, preflight: Maybe<&2, C.Callback<Bool, Unit>>, selected: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> IO(Prompted):
+  match selected:
+    case None{}:
+      do IO<Prompted>:
+        docs : String <- docsPath(session)
+        return Rejected{AuthGuidance.formatNoModelSelectedMessage(docs)}
+    case Some{model}:
+      +provider = Ai.modelProvider(model)
+      do IO<Prompted>:
+        configured : Bool <- hasPromptAuth(modelsOf(session), provider)
+        promptAuthorized(session, text, images, preflight, provider, configured)
+
+# upstream prompt(): while streaming the input is queued by streamingBehavior;
+# otherwise pending bash and custom messages are flushed and the model and
+# its auth are checked before the prompt runs.
+def promptWhile(+session: AgentSession, streaming: Bool, +text: String, +images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>, preflight: Maybe<&2, C.Callback<Bool, Unit>>) -> IO(Prompted):
   match streaming behavior:
     case False{} _:
-      do IO<Result<&2, &2, String, Unit>>:
+      do IO<Prompted>:
         flushPending(session)
-        runAgentPrompt(session, text, images)
-    case True{} None{}: IO.pure(Result<&2, &2, String, Unit>, Fail{"Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message."})
+        current : AgentState() <- state(session)
+        promptModel(session, text, images, preflight, stateModel(current))
+    case True{} None{}: IO.pure(Prompted, Rejected{"Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message."})
     case True{} Some{chosen}:
-      do IO<Result<&2, &2, String, Unit>>:
+      do IO<Prompted>:
         queueExpanded(session, chosen, text, images)
-        return Done{Unit{}}
+        accepted(preflight)
 
 def manualIn(compaction: CompactionState) -> Bool:
   match compaction:
@@ -3088,18 +3249,11 @@ def expandIf(session: AgentSession, +text: String, expand: Bool) -> IO(String):
     case True{}: expandInput(session, text)
     case False{}: IO.pure(String, text)
 
-def promptSelected(+session: AgentSession, text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>, expand: Bool, selected: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> IO(Result<&2, &2, String, Unit>):
-  match selected:
-    case None{}: IO.pure(Result<&2, &2, String, Unit>, Fail{"No model selected. Use /login to add a provider, then /model to select a model."})
-    case Some{_}:
-      do IO<Result<&2, &2, String, Unit>>:
-        expanded : String <- expandIf(session, text, expand)
-        streaming : Bool <- isStreaming(session)
-        promptWhile(session, streaming, expanded, images, behavior)
-def promptExpanded(+session: AgentSession, text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>, expand: Bool) -> IO(Result<&2, &2, String, Unit>):
-  do IO<Result<&2, &2, String, Unit>>:
-    current : AgentState() <- state(session)
-    promptSelected(session, text, images, behavior, expand, stateModel(current))
+def promptExpanded(+session: AgentSession, text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>, expand: Bool, preflight: Maybe<&2, C.Callback<Bool, Unit>>) -> IO(Prompted):
+  do IO<Prompted>:
+    expanded : String <- expandIf(session, text, expand)
+    streaming : Bool <- isStreaming(session)
+    promptWhile(session, streaming, expanded, images, behavior, preflight)
 
 # Extension commands
 # ------------------
@@ -3170,32 +3324,55 @@ def executeSlash(+session: AgentSession, +text: String, slash: Bool) -> IO(Bool)
 def tryExecuteExtensionCommand(+session: AgentSession, +text: String) -> IO(Bool):
   executeSlash(session, text, String.starts_with(text, "/"))
 
-def promptUnlessCompacting(+session: AgentSession, text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>, expand: Bool) -> IO(Result<&2, &2, String, Unit>):
-  do IO<Result<&2, &2, String, Unit>>:
-    compacting : Bool <- manualCompacting(session)
-    Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), compacting,
-      _ => IO.pure(Result<&2, &2, String, Unit>, Fail{"Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry."}),
-      _ => promptExpanded(session, text, images, behavior, expand))(Unit{})
+def promptProcessed(+session: AgentSession, processed: Maybe<&2, ProcessedInput>, behavior: Maybe<&2, StreamingBehavior>, expand: Bool, preflight: Maybe<&2, C.Callback<Bool, Unit>>) -> IO(Prompted):
+  match processed:
+    case None{}: accepted(preflight)
+    case Some{ProcessedInput{text, images}}: promptExpanded(session, text, images, behavior, expand, preflight)
 
-def promptUnlessHandled(+session: AgentSession, text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>, expand: Bool, handled: Bool) -> IO(Result<&2, &2, String, Unit>):
+def promptInput(+session: AgentSession, +text: String, images: List<&2, Ai.ImageContent>, +behavior: Maybe<&2, StreamingBehavior>, source: ExtensionTypes.InputSource, expand: Bool, preflight: Maybe<&2, C.Callback<Bool, Unit>>) -> IO(Prompted):
+  do IO<Prompted>:
+    processed : Maybe<&2, ProcessedInput> <- runInputHandlers(session, text, images, source, behavior)
+    promptProcessed(session, processed, behavior, expand, preflight)
+
+def promptUnlessCompacting(+session: AgentSession, text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>, source: ExtensionTypes.InputSource, expand: Bool, preflight: Maybe<&2, C.Callback<Bool, Unit>>) -> IO(Prompted):
+  do IO<Prompted>:
+    compacting : Bool <- manualCompacting(session)
+    Bool.pick(Unit -> IO(Prompted), compacting,
+      _ => IO.pure(Prompted, Rejected{"Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry."}),
+      _ => promptInput(session, text, images, behavior, source, expand, preflight))(Unit{})
+
+def promptUnlessHandled(+session: AgentSession, text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>, source: ExtensionTypes.InputSource, expand: Bool, preflight: Maybe<&2, C.Callback<Bool, Unit>>, handled: Bool) -> IO(Prompted):
   match handled:
-    case True{}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
-    case False{}: promptUnlessCompacting(session, text, images, behavior, expand)
+    case True{}: accepted(preflight)
+    case False{}: promptUnlessCompacting(session, text, images, behavior, source, expand, preflight)
+
+def promptChecked(+session: AgentSession, +text: String, options: PromptOptions) -> IO(Prompted):
+  match options:
+    case PromptOptions{+expand, images, behavior, source, preflight}:
+      do IO<Prompted>:
+        handled : Bool <- Bool.pick(Unit -> IO(Bool), expand, _ => tryExecuteExtensionCommand(session, text), _ => IO.pure(Bool, False{}))(Unit{})
+        promptUnlessHandled(session, text, images, behavior, source, expand, preflight, handled)
+
+def preflightOf(options: PromptOptions) -> Maybe<&2, C.Callback<Bool, Unit>>:
+  match options:
+    case PromptOptions{_, _, _, _, preflight}: preflight
 
 # upstream prompt(): an extension command runs first, even while streaming or
 # compacting, and nothing is sent. Otherwise no prompt runs while a manual
-# compaction does; skill commands and prompt templates are expanded, then the
-# message runs or, while streaming, is queued by streamingBehavior. Input
-# handlers are not ported.
+# compaction does; input handlers may transform or handle the input; skill
+# commands and prompt templates are expanded, then the message is queued by
+# streamingBehavior while streaming, or runs once the model and its auth pass
+# the preflight. The preflight result is reported before anything runs; a
+# rejection is also the prompt's failure.
 # upstream PromptOptions.expandPromptTemplates: without it, extension commands,
 # skill commands and prompt templates are not expanded.
-def promptWith(+session: AgentSession, +text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>, +expand: Bool) -> IO(Result<&2, &2, String, Unit>):
+def promptWith(+session: AgentSession, +text: String, +options: PromptOptions) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
-    handled : Bool <- Bool.pick(Unit -> IO(Bool), expand, _ => tryExecuteExtensionCommand(session, text), _ => IO.pure(Bool, False{}))(Unit{})
-    promptUnlessHandled(session, text, images, behavior, expand, handled)
+    prompted : Prompted <- promptChecked(session, text, options)
+    promptOutcome(preflightOf(options), prompted)
 
 def prompt(+session: AgentSession, +text: String, images: List<&2, Ai.ImageContent>, behavior: Maybe<&2, StreamingBehavior>) -> IO(Result<&2, &2, String, Unit>):
-  promptWith(session, text, images, behavior, True{})
+  promptWith(session, text, PromptOptions{True{}, images, behavior, ExtensionTypes.InteractiveSource{}, None{}})
 
 def contentTexts(blocks: List<&2, Ai.TextImageContent>) -> List<&2, String>:
   match blocks:
@@ -3214,8 +3391,8 @@ def contentImages(blocks: List<&2, Ai.TextImageContent>) -> List<&2, Ai.ImageCon
 # templates are expanded only when asked.
 def sendUserMessage(+session: AgentSession, content: Ai.UserContent, deliverAs: Maybe<&2, StreamingBehavior>, expandPromptTemplates: Bool) -> IO(Result<&2, &2, String, Unit>):
   match content:
-    case Ai.UserText{text}: promptWith(session, text, Nil{}, deliverAs, expandPromptTemplates)
-    case Ai.UserBlocks{+blocks}: promptWith(session, String.join(contentTexts(blocks), "\n"), contentImages(blocks), deliverAs, expandPromptTemplates)
+    case Ai.UserText{text}: promptWith(session, text, PromptOptions{expandPromptTemplates, Nil{}, deliverAs, ExtensionTypes.ExtensionSource{}, None{}})
+    case Ai.UserBlocks{+blocks}: promptWith(session, String.join(contentTexts(blocks), "\n"), PromptOptions{expandPromptTemplates, contentImages(blocks), deliverAs, ExtensionTypes.ExtensionSource{}, None{}})
 
 # upstream bindCore's sendMessage and sendUserMessage: delivered without the
 # extension waiting for them. What queues or appends happens at once; a
@@ -3259,9 +3436,9 @@ def deliveryOf(deliverAs: Maybe<&2, ExtensionTypes.UserDelivery>) -> Maybe<&2, S
 
 def sendUserNow(+session: AgentSession, request: ExtensionTypes.SendUserMessage) -> IO(Unit):
   match request:
-    case ExtensionTypes.SendUserMessage{content, deliverAs}:
+    case ExtensionTypes.SendUserMessage{content, ExtensionTypes.SendUserMessageOptions{deliverAs, expand}}:
       do IO<Unit>:
-        result : Result<&2, &2, String, Unit> <- sendUserMessage(session, content, deliveryOf(deliverAs), False{})
+        result : Result<&2, &2, String, Unit> <- sendUserMessage(session, content, deliveryOf(deliverAs), Maybe.default(&2, Bool, expand, False{}))
         reported(session, "send_user_message", result)
 
 def sendUserMessageAction(+session: AgentSession, +request: ExtensionTypes.SendUserMessage) -> IO(Unit):
@@ -3275,7 +3452,13 @@ def sendUserMessageCallback(session: AgentSession, request: ExtensionTypes.SendU
 
 def sessionActionsOf(session: AgentSession) -> R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>>:
   match session:
-    case AgentSession{_, _, SessionHooks{_, _, _, _, _, _, ExtensionBinding{_, _, actions}, _, _, _}, _, _, _, _, _}: actions
+    case AgentSession{_, _, SessionHooks{_, _, _, _, _, _, ExtensionBinding{_, _, actions, _}, _, _, _}, _, _, _, _, _}: actions
+
+# upstream bindExtensions({ shutdownHandler }): what ctx.shutdown() does in
+# this mode. The mode keeps ownership of the callback.
+def setShutdownHandler(session: AgentSession, handler: C.Callback<Unit, Unit>) -> IO(Unit):
+  match session:
+    case AgentSession{_, _, SessionHooks{_, _, _, _, _, _, ExtensionBinding{_, _, _, bound}, _, _, _}, _, _, _, _, _}: R.write(Maybe<&2, C.Callback<Unit, Unit>>, bound, Some{handler})
 
 def bindActionsTo(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, actions: ExtensionTypes.ExtensionActions) -> IO(Unit):
   match runner:
