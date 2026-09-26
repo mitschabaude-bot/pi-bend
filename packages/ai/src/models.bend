@@ -6,18 +6,21 @@ import ./utils/cost.bend as Cost
 import ../../runtime/src/utf16.bend as U
 import ./auth/types.bend as Auth
 import ./providers/cloudflare-stream.bend as Cloudflare
+import ./providers/opencode-headers.bend as OpenCode
 import ./models-store.bend as Store
 import ../../runtime/src/abort.bend as Abort
 import ../../runtime/src/callback.bend as C
 import ../../runtime/src/date.bend as Date
 
 # upstream Provider.api, reduced to what differs between providers: requests
-# stream through the shared implementation of the model's api, and the
+# stream through the shared implementation of the model's api, the
 # Cloudflare providers first materialize endpoint placeholders for the APIs
-# they wrap (upstream cloudflareStreams).
+# they wrap (upstream cloudflareStreams), and the OpenCode providers add the
+# session routing header for theirs (upstream withOpenCodeSessionHeader).
 type ProviderStreams is Data:
   ApiStreams{}
   CloudflareStreams{apis: List<&2, T.ModelApi>}
+  OpenCodeStreams{apis: List<&2, T.ModelApi>}
 
 # Dynamic catalogs (upstream RefreshModelsContext and ModelsPublication)
 # -------------------------------------------------------------------------
@@ -66,8 +69,19 @@ def streamedWith(-SamplingValue: Data, wrapped: Bool, model: T.Model<SamplingVal
 # provider env.
 def streamModel(-SamplingValue: Data, streams: ProviderStreams, +model: T.Model<SamplingValue>, env: Maybe<&2, T.ProviderEnv()>) -> T.Model<SamplingValue>:
   match streams:
-    case ApiStreams{}: model
     case CloudflareStreams{apis}: streamedWith(SamplingValue, wraps(apis, Api.name(Api.modelApi(SamplingValue, model))), model, env)
+    case _: model
+
+def optionsWith(-Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, wrapped: Bool, options: T.SimpleStreamOptions<Value, Signal, Telemetry, Fetch, Error>) -> T.SimpleStreamOptions<Value, Signal, Telemetry, Fetch, Error>:
+  match wrapped:
+    case True{}: OpenCode.withSimpleSessionHeader(Value, Signal, Telemetry, Fetch, Error, options)
+    case False{}: options
+
+# The options a provider's streamSimple dispatches the model's api with.
+def streamSimpleOptions(-SamplingValue: Data, -Value: Data, -Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, streams: ProviderStreams, model: T.Model<SamplingValue>, options: T.SimpleStreamOptions<Value, Signal, Telemetry, Fetch, Error>) -> T.SimpleStreamOptions<Value, Signal, Telemetry, Fetch, Error>:
+  match streams:
+    case OpenCodeStreams{apis}: optionsWith(Value, Signal, Telemetry, Fetch, Error, wraps(apis, Api.name(Api.modelApi(SamplingValue, model))), options)
+    case _: options
 
 def usedBy(models: List<&2, T.Model<T.JsonValue>>, +api: String) -> Bool:
   match models:
@@ -88,6 +102,7 @@ def inheritedStreams(base: Maybe<&2, Provider>) -> ProviderStreams:
     case None{}: ApiStreams{}
     case Some{Provider{_, _, _, _, _, ApiStreams{}, _}}: ApiStreams{}
     case Some{Provider{_, _, _, _, models, CloudflareStreams{apis}, _}}: CloudflareStreams{usedApis(apis, models)}
+    case Some{Provider{_, _, _, _, models, OpenCodeStreams{apis}, _}}: OpenCodeStreams{usedApis(apis, models)}
 
 # Leaf utilities from models.ts. The Models registry and runtime
 # specialization remain pending; hasApi currently returns a boolean predicate.

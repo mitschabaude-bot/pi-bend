@@ -1,12 +1,20 @@
 {
   "revision": "f07218c4d4bbc12bef056a7058c3dd49dfe41abe",
   "reviews": {
-    "packages/ai/src/api/openai-responses.ts": {
+    "packages/agent/src/agent-loop.ts": {
       "state": "partial",
-      "note": "Native OpenAI/Codex request and stream path works; provider suites remain partial and some upstream request/header behavior differs.",
-      "source_sha256": "5d524184ea001a2717fd35b4562126043338d1ef3279f4e2ce192ae5592e8479",
+      "note": "All named agent-loop test cases are ported, but source-wide integration and higher-level Agent behavior are separate coverage questions.",
+      "source_sha256": "c3d99a5b0f24d1e7fde41cbeb2cd7a2f3559aa3e9c1df975abef21d7e0ecd189",
       "port_sha256": {
-        "packages/ai/src/api/openai-responses.bend": "cbe3854fc2861362a3e25603fa7885c89428ce44afa57f2928c688da89d04b7b"
+        "packages/agent/src/agent-loop.bend": "a01d86dcecbe9189bdd70e3861851449342dc1cd9d4219b7d853594c0cbd1248"
+      }
+    },
+    "packages/agent/src/agent.ts": {
+      "state": "partial",
+      "note": "Native agent loop runs model requests and tools; full Agent API and extension integration remain incomplete.",
+      "source_sha256": "fad42fdcea126f8b47f01876431def6f866ad72260b1e95d1a10e3acb0b6ddeb",
+      "port_sha256": {
+        "packages/agent/src/agent.bend": "33baf1abe7eb491aacf9dc6e039e61f093b07ad6a6642d58b21c18b90b1bd76b"
       }
     },
     "packages/ai/src/api/anthropic-messages.ts": {
@@ -23,6 +31,104 @@
         "packages/ai/src/api/anthropic-messages-stream.bend",
         "packages/ai/src/api/anthropic-messages-client.bend"
       ]
+    },
+    "packages/ai/src/api/bedrock-converse-stream.lazy.ts": {
+      "state": "excluded",
+      "note": "Lazy loading of the implementation module through a dynamic import is a JavaScript bundling concern; the Bend runtime dispatches models of this api to bedrock-converse-stream.bend directly (coding-agent agent-runtime selectedProvider).",
+      "source_sha256": "3ee8a1b2a2cd58927bee18ab5b4150401da810e9d5f4595822b3b10ded35de86",
+      "port_sha256": {}
+    },
+    "packages/ai/src/api/bedrock-converse-stream.ts": {
+      "state": "partial",
+      "note": "stream/streamSimple: the client configuration pi builds (profile, region from ARN/AWS_REGION/profile/built-in endpoint, custom endpoints, static credentials, bearer token), message/tool/system conversion with cache points and document sanitization, adaptive and budget thinking fields, onPayload/onResponse, the restJson ConverseStream request with SigV4 (runtime/aws-sigv4.bend) or bearer auth and caller headers minus reserved ones, the event-stream response (runtime/aws-eventstream.bend with CRC-32), the stream fold (text, reasoning incl. redacted, tool calls, usage with 1h cache writes, stop reasons) and error formatting with bedrock_response_failure diagnostics; traces equal the pinned AWS SDK on a loopback server (tests/bedrock_check.py). Missing: the SDK credential chain beyond shared-file static keys and credential_process (SSO, role assumption, web identity, ECS/IMDS; reported as errors, bedrock-credentials.bend), SDK retries, and HTTP(S) proxy agents. Unknown content-block types and lone surrogates are not representable in the typed Bend transcript.",
+      "ports": [
+        "packages/ai/src/api/bedrock-converse-stream.bend",
+        "packages/ai/src/api/bedrock-credentials.bend",
+        "packages/runtime/src/aws-sigv4.bend",
+        "packages/runtime/src/aws-eventstream.bend",
+        "packages/runtime/src/crc32.bend"
+      ],
+      "source_sha256": "cd4b63f95787c9f775a96a19edf760bbf266987b51f9cc9f6ac0ecd34cffe047",
+      "port_sha256": {
+        "packages/ai/src/api/bedrock-converse-stream.bend": "3639183c4f9141c1a20c96aaa513b756314009e4b93fecb7f2e1d67977f67e4a",
+        "packages/ai/src/api/bedrock-credentials.bend": "11fa1344617ae553e16cf8a6d4b3dc5eb864d352d97c82ef040090296efc8295",
+        "packages/runtime/src/aws-sigv4.bend": "caa2c23300ee3da72bc2b7a8f807bd6478b0e84cff75ea6534a630ccfe313e10",
+        "packages/runtime/src/aws-eventstream.bend": "10407475f5491bdceffb014888626790a4b0dbade62c1538a1b36252b8e5569e",
+        "packages/runtime/src/crc32.bend": "f87ae9d406fe4180b39bc1fa5411d0bd38ddf40add1c28f7da404dbb5b52d5ba"
+      }
+    },
+    "packages/ai/src/api/cloudflare-ai-binding.ts": {
+      "state": "missing",
+      "note": "Not ported pending a decision: the module adapts a Cloudflare Workers AI binding (env.AI) into a fetch function plus the CLOUDFLARE_GATEWAY_BINDING_AUTH_SENTINEL header value, which only exist inside a Workers runtime; the native CLI has no binding to wrap. A structural port (an AiBinding value with an optional fetch callback and the sentinel) is possible but has no native caller.",
+      "source_sha256": "57f702b91453810241fd50a5629628fcc3d556e75909a37fae857d0a5d27d8fb",
+      "port_sha256": {}
+    },
+    "packages/ai/src/api/google-generative-ai.ts": {
+      "state": "ported",
+      "note": "Ported as three modules: google-generative-ai.bend (GoogleOptions, streamSimple's option mapping with clamped levels, level-or-budget thinking config and getGoogleBudget, buildParams producing the SDK parameters, client headers, and the SDK's parameter-to-REST conversion with its field order); google-generative-ai-stream.bend (the SDK's processStreamResponse framing with its delimiters, in-band error chunks and incomplete-segment error, and the chunk fold: text/thinking block transitions, signatures, function calls with generated ids, responseId, usage and finish reasons); google-generative-ai-client.bend (streamSimple's missing-key and level-mapping errors fail before a stream exists, as upstream throws synchronously; the stream lifecycle: custom-fetch (accepting the process fetch handle, globalThis.fetch upstream) and API-key checks, onPayload replacement, the SDK model path and address, headers, retryProviderRequest with status-only failures, the body loop and the catch block). tests/google_generative_ai_check.py compares 560 captured params, wire requests and streamed messages/event sequences with pinned pi-mono and runs the ported suites; tests/google_client_loopback.py covers the HTTP path and the agent glue. Documented differences (the tool-call counter one is flagged for review with the user): x-goog-api-client carries the SDK label without the gl-node/<process.version> runtime label (there is no Node runtime); the generated tool-call id counter is per stream instead of module-global (upstream's `let toolCallCounter` at google-generative-ai.ts:57; ids stay unique within a response and Date.now() distinguishes streams unless two start in the same millisecond); JSON.parse's engine-specific error text is replaced by the native parser's; event partials are snapshots. No live Gemini request has been verified.",
+      "source_sha256": "c20f1a40875b2106b6d39d8b7837cd30a882c6a5fcf8c311ccc42a090e18e956",
+      "port_sha256": {
+        "packages/ai/src/api/google-generative-ai.bend": "8e5fddf0912e58a6af8a24da3425ddfd4970278f1dc8811557f1ac9d524e7d46",
+        "packages/ai/src/api/google-generative-ai-stream.bend": "786ea73d7b16f635095a24c049667395a971ce730fd2a696ca699184371fb243",
+        "packages/ai/src/api/google-generative-ai-client.bend": "ccdb93b09d1c0df48c921b53ede55e3a8bd4bcbfb0b2cd92c383474f1d55f616"
+      },
+      "ports": [
+        "packages/ai/src/api/google-generative-ai.bend",
+        "packages/ai/src/api/google-generative-ai-stream.bend",
+        "packages/ai/src/api/google-generative-ai-client.bend"
+      ]
+    },
+    "packages/ai/src/api/google-shared.ts": {
+      "state": "ported",
+      "note": "Ported to google-shared.bend: Google thinking levels and their resolution/validation messages, usesGoogleThinkingLevel, disabled thinking config, thought-signature retention and validation, Gemini version rules (tool call ids, multimodal function responses, strict tool sampling), convertMessages (transformMessages with id normalization, signed/unsigned replay, empty-block handling, consecutive function responses, legacy image turns), sanitizeForOpenApi, convertTools with strict schemas, mapToolChoice, resolveGoogleFunctionCallingMode and mapStopReason/mapStopReasonString. Covered by the ported google-shared-* suites and the Google differential in tests/google_generative_ai_check.py. The Vertex caller is not ported, so Vertex-only paths are exercised only through the shared functions.",
+      "source_sha256": "62500d190085d9725ab9dd547ff1ee37e1f47daecf047836700a48980d2ec113",
+      "port_sha256": {
+        "packages/ai/src/api/google-shared.bend": "1984735bfdfef01a52262523c27298c49ca0ea51421b9a2febd1e67bc420dc97"
+      }
+    },
+    "packages/ai/src/api/google-vertex.lazy.ts": {
+      "state": "excluded",
+      "note": "Lazy loading of the implementation module through a dynamic import is a JavaScript bundling concern; the Bend runtime dispatches models of this api to google-vertex.bend directly (coding-agent agent-runtime selectedProvider).",
+      "source_sha256": "891f0e07eaaa1bb1df97f0a2d8f067df6acbab50078242108d93b96a710c4712",
+      "port_sha256": {}
+    },
+    "packages/ai/src/api/google-vertex.ts": {
+      "state": "partial",
+      "note": "stream/streamSimple: the custom-fetch check, resolveApiKey (ADC markers and placeholders), the API key or ADC client with project/location from options and env, buildHttpOptions (custom base URL at collection scope, version detection, User-Agent and header overlay), buildParams shared with Google Generative AI, onPayload, the SDK's Vertex URL, headers and request conversion, retryGoogleRequest, and the shared stream loop with the api name and 'Google Vertex stream ended without a finish reason'; streamSimple without a key requirement and with Vertex's 2.5 Flash-Lite budgets. ADC: authorized_user and service_account credentials files (keyFilename, else the well-known gcloud file), the refresh-token exchange and gtoken's RS256 JWT bearer grant signed with runtime/rsa-sign.bend (google-vertex-credentials.bend). tests/google_vertex_check.py compares 17 streamed cases with upstream driving the pinned @google/genai and google-auth-library on a loopback server and asserts the 12 client-configuration cases. Missing: impersonated and external-account credentials, the Compute Engine metadata server, and gaxios' token-request retries.",
+      "ports": [
+        "packages/ai/src/api/google-vertex.bend",
+        "packages/ai/src/api/google-vertex-credentials.bend",
+        "packages/ai/src/api/google-generative-ai-client.bend",
+        "packages/ai/src/api/google-generative-ai-stream.bend"
+      ],
+      "source_sha256": "d0a53a2faaad20620800a1e95d2d2175d641011c4d6b00b0877d905c57f16ec1",
+      "port_sha256": {
+        "packages/ai/src/api/google-vertex.bend": "0ebdb23af0dce3514a9f10f49570cdb99a9ee16a853dd2aaa2de4ac4e8a5ec09",
+        "packages/ai/src/api/google-vertex-credentials.bend": "212fd2b5c048ecaf2cccd8fe8be0cabb7c299dc772c90acc1ac13882e440af2d",
+        "packages/ai/src/api/google-generative-ai-client.bend": "ccdb93b09d1c0df48c921b53ede55e3a8bd4bcbfb0b2cd92c383474f1d55f616",
+        "packages/ai/src/api/google-generative-ai-stream.bend": "786ea73d7b16f635095a24c049667395a971ce730fd2a696ca699184371fb243"
+      }
+    },
+    "packages/ai/src/api/mistral-conversations.lazy.ts": {
+      "state": "excluded",
+      "note": "Lazy loading of the implementation module through a dynamic import is a JavaScript bundling concern; the Bend runtime dispatches models of this api to mistral-conversations.bend directly (coding-agent agent-runtime selectedProvider).",
+      "source_sha256": "74267bc430c0c2562d166e4ae9d05966634e91b226bc564010b2b199db52dd86",
+      "port_sha256": {}
+    },
+    "packages/ai/src/api/mistral-conversations.ts": {
+      "state": "ported",
+      "note": "stream/streamSimple: transcript resolution, Mistral tool-call id normalization, SDK-style payload and wire renaming, pi User-Agent and header overrides with x-affinity, the request timeout over the whole exchange, onPayload/onResponse, Mistral SSE framing, the chunk fold (text/thinking/tool calls, cached-token usage, stop reasons) and error formatting, all checked against upstream traces (tests/mistral_check.py). Native adaptations: streamSimple's synchronous missing-key throw is a Fail result; reasoningEffort carries the mapped thinking value as a string; malformed JSON events and transport failures report native messages; upstream's partialArgs scratch member is not part of the typed tool call.",
+      "ports": [
+        "packages/ai/src/api/mistral-conversations.bend",
+        "packages/ai/src/api/provider-fetch.bend",
+        "packages/coding-agent/src/core/stream-providers.bend"
+      ],
+      "source_sha256": "b54b0998ff3e0f0ff0804ca62dbcc2061922c770d9ff8267096580907f21faf5",
+      "port_sha256": {
+        "packages/ai/src/api/mistral-conversations.bend": "87f9860ab53ae3c884656d205c8f771c48b7ad54dc01ce2438b0c8e07659a7b1",
+        "packages/ai/src/api/provider-fetch.bend": "4f11d6da5363ffae0c3d2214e163bd9eee6a4348039d4f37d4d652a62a248275",
+        "packages/coding-agent/src/core/stream-providers.bend": "7cd09373017335b4b1325505127e2015050a5f6158add77ce70732e08e7fc883"
+      }
     },
     "packages/ai/src/api/openai-completions.ts": {
       "state": "ported",
@@ -41,303 +147,6 @@
         "packages/coding-agent/src/core/openai-completions-provider.bend": "ed894c14c052abe1c6f3a0a90417cfc1ac45a2e7ae04873250991c8efd8f46a4"
       }
     },
-    "packages/agent/src/agent-loop.ts": {
-      "state": "partial",
-      "note": "All named agent-loop test cases are ported, but source-wide integration and higher-level Agent behavior are separate coverage questions.",
-      "source_sha256": "c3d99a5b0f24d1e7fde41cbeb2cd7a2f3559aa3e9c1df975abef21d7e0ecd189",
-      "port_sha256": {
-        "packages/agent/src/agent-loop.bend": "a01d86dcecbe9189bdd70e3861851449342dc1cd9d4219b7d853594c0cbd1248"
-      }
-    },
-    "packages/agent/src/agent.ts": {
-      "state": "partial",
-      "note": "Native agent loop runs model requests and tools; full Agent API and extension integration remain incomplete.",
-      "source_sha256": "fad42fdcea126f8b47f01876431def6f866ad72260b1e95d1a10e3acb0b6ddeb",
-      "port_sha256": {
-        "packages/agent/src/agent.bend": "33baf1abe7eb491aacf9dc6e039e61f093b07ad6a6642d58b21c18b90b1bd76b"
-      }
-    },
-    "packages/coding-agent/src/core/agent-session.ts": {
-      "state": "partial",
-      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal; prompt images and tool-result images are normalized with the image setting and the current model's resize profile (f5c946480). sendCustomMessage (nextTurn, steer/followUp while streaming, deferral to turn_end without triggerTurn, triggerTurn runs) and sendUserMessage (expandPromptTemplates) are ported with the pending custom-message flushes at turn_end, run settlement and prompt, and bound as the extension runtime's sendMessage/sendUserMessage actions. Extension events: agent/turn_start/message/tool_execution events reach extensions before listeners, message_end replacements are persisted and projected, tool_call and tool_result run in the agent's tool hooks, agent_settled precedes the public event; navigateTree runs session_before_tree (cancel, supplied summary, instruction and label overrides) under the branch-summary controller and emits session_tree; manual and automatic compaction run session_before_compact (cancel or supplied result), then session_compact or session_compact_failed; waitForIdle waits for session-level idleness (no run, compaction or branch summary). turn_end boundaries run from the agent's finishTurn (or the turn_end event for synthesized failures) and agent_before_settle before settlement, with drafts previewed, committed and announced after the context refresh; post-run handling continues for queued messages only after retry and compaction (no queue drain before retry). Missing: session_start/switch/fork/shutdown extension events, context, before_agent_start, input, user_bash, _isEmittingAgentSettled deferral, and replaced messages inside turn_end/agent_end payloads. The skill-block parser used by restored transcripts is in core/skills.bend.",
-      "source_sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7",
-      "port_sha256": {
-        "packages/coding-agent/src/core/agent-session.bend": "d5daa4b0e9bb38f7f3b09f16c67045fb2acb5a53a3529e9bbaa8ddeaebbb1007",
-        "packages/coding-agent/src/core/skills.bend": "39c10b968daf609f60fe3c91154a63a7248c7cfd18173781eb776904dcfea236"
-      },
-      "ports": [
-        "packages/coding-agent/src/core/agent-session.bend",
-        "packages/coding-agent/src/core/skills.bend"
-      ]
-    },
-    "packages/coding-agent/src/core/session-manager.ts": {
-      "state": "partial",
-      "note": "Session persistence, resume, tree and fork work; complete upstream session/recovery parity is not claimed.",
-      "source_sha256": "ded5d65112f8666f0e3ae71dab39a302607c29a000745a3d06e00c2103c8f257",
-      "port_sha256": {
-        "packages/coding-agent/src/core/session-manager.bend": "66905475905747fb9c53670f213967704ee46c3ed9020e2144a0ebbd9da56158"
-      }
-    },
-    "packages/coding-agent/src/core/tools/bash.ts": {
-      "state": "partial",
-      "note": "Native Bash execution and interactive streaming work; the tool now reads live session context, while output preview and exact terminal parity retain known gaps.",
-      "source_sha256": "3f43b6d80b460bd38334975bee2726b5438ee6e54bf52abdb6fc54400aad28d2",
-      "port_sha256": {
-        "packages/coding-agent/src/core/tools/bash.bend": "95bff0c54faa3dc7fbd493c9e3078559b415efdbe7d17c8e2b9c991f1d293b5c"
-      }
-    },
-    "packages/coding-agent/src/core/tools/read.ts": {
-      "state": "partial",
-      "note": "Native text and image reading with live model context are wired: the non-vision note and the context model's image resize profile (else the tool's own resizeOptions, v0.87.1) reach native image processing. Background image-worker scheduling and full upstream behavior remain open.",
-      "source_sha256": "297d26092979651091f44de8862a6fd55aaf59e7252f8fb8dd3d7cb3f9771518",
-      "port_sha256": {
-        "packages/coding-agent/src/core/tools/read.bend": "b0bb2888475e05a40aa6753783f9417a4bd50857f2a8836bf2c66f4da37cbf5f"
-      }
-    },
-    "packages/coding-agent/src/core/tools/edit.ts": {
-      "state": "partial",
-      "note": "Native edit execution works; complete upstream edit behavior is not established by the current source review.",
-      "source_sha256": "31a368c14cf5437ecac157765660001b16063302d9bd746303d6d1b1dcb5625d",
-      "port_sha256": {
-        "packages/coding-agent/src/core/tools/edit.bend": "f82d4e67996ca4a5b28166c2eb3d10b7bfff3b3411d0461090b6cea6d0f00563"
-      }
-    },
-    "packages/coding-agent/src/core/tools/write.ts": {
-      "state": "partial",
-      "note": "Native write execution works; complete upstream source contract has not been reviewed.",
-      "source_sha256": "2ee0a438c24cf83fefd733e349d55a21aa5b633c18934b2c80759fcf14b6f297",
-      "port_sha256": {
-        "packages/coding-agent/src/core/tools/write.bend": "19cc37cbebf64251265e9a812f411abba83a78a24f43aca83d5068d5f6cb6a29"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/components/settings-selector.ts": {
-      "state": "partial",
-      "note": "Native theme and per-model thinking submenus save and clear settings, with live preview or current-model thinking updates. Hardware-cursor and clear-on-shrink choices persist and update the running terminal; disabling the cursor hides it immediately. Live updates coalesce through the owned render scheduler, preserving independent preferences and avoiding serial-state re-entry from input callbacks. Native one/four-thread PTY tests cover visibility, coalescing, setter return order and terminal restoration; focused settings terminal captures match pi. Other settings controls, some ANSI styling and mouse behavior remain partial.",
-      "source_sha256": "8134b93329c9155bd017df5b6278e2d72b403c8ca1f22c26a81234659ab7e6ea",
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/settings-selector.bend": "25ced0bc6437e516f81a520e04471cea40565ca0f6af8e27907eb1b3c7310913",
-        "packages/coding-agent/src/modes/interactive/components/theme-selector.bend": "302bb406bb7ebf0d7844cba854b14bea8c193be907d1d1a8aef73d51c22f2bbf",
-        "packages/coding-agent/src/modes/interactive/components/model-thinking-selector.bend": "0d6bf4c4c89fa884f69d51a0f51938c8f5e14d9c9076e8004a23e152687d3a78"
-      },
-      "ports": [
-        "packages/coding-agent/src/modes/interactive/components/settings-selector.bend",
-        "packages/coding-agent/src/modes/interactive/components/theme-selector.bend",
-        "packages/coding-agent/src/modes/interactive/components/model-thinking-selector.bend"
-      ]
-    },
-    "packages/coding-agent/src/modes/interactive/components/thinking-selector.ts": {
-      "state": "partial",
-      "note": "The interactive picker matches upstream terminal frames for search, selection and save-as-default; mouse input and the full navigation/cancellation contract remain unverified.",
-      "source_sha256": "a8e562022d04ef4266191ba35a0417fced547666be6e6e97329aa3918b512e18",
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/thinking-selector.bend": "b2874a95ffd83ab8e7568c3a4613ac4c0e9b336a71229a6931dcc9e07cc55460"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/components/scoped-models-selector.ts": {
-      "state": "partial",
-      "note": "The native /scoped-models picker matches upstream selection, clear/enable/provider controls, save, close, and model cycling in terminal parity. Refresh cancellation, unavailable-pattern resolution, reorder/mouse interactions, and remaining ANSI/viewport details are not yet verified or matched.",
-      "source_sha256": "a8524d7ccfaf6fd6044a268a06d43f6eee7325b047057c73bb43fa0b1286c612",
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/scoped-models-selector.bend": "d344fc42dc581fb2f742a75485436f4c410213fe42279ac175e7967712d08902"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/interactive-mode.ts": {
-      "state": "partial",
-      "ports": [
-        "packages/coding-agent/src/modes/interactive/interactive-mode.bend",
-        "packages/coding-agent/src/modes/interactive/run.bend",
-        "packages/coding-agent/src/modes/interactive/commands.bend",
-        "packages/coding-agent/src/modes/interactive/viewport.bend",
-        "packages/coding-agent/src/main.bend",
-        "packages/coding-agent/src/modes/interactive/components/header.bend"
-      ],
-      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native provider-directed API-key and OAuth login uses ModelRuntime.login, prompt/notify callbacks and shared cancellation. Registered providers supply menus and custom account-login labels; direct provider IDs/display names match without case sensitivity, and dual-method providers offer account/API-key selection. Codex offers browser/device authorization and Anthropic browser/manual authorization. Fullscreen startup, typing, viewport scrolling, and keyboard transcript search match focused terminal captures; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection, dynamic mode switching and broader commands remain partial. Exact /model matches use the cached scoped or available list; misses refresh the catalog with a 15-second abort deadline, retry exact matching, then open the filtered picker. The miss picker matches plain terminal frames; prefilled search cursor styling remains different. Interactive HTML export now uses the active theme palette and explicit export backgrounds. Resumed transcripts now render compaction and branch summaries, displayed custom messages, and skill invocations in sequence; live structural entries use the same path. The footer reads live auto-compaction state, so disabling it removes the auto marker immediately. User-theme resource notices match compact and expanded terminal captures, quiet startup and reload refresh; context sections retain their extra spacer. Prompt/extension listings, project/package theme sources and broader resource diagnostics remain incomplete. Working/retry/compaction statuses use native owned loaders and countdowns; retry countdown and Escape cancellation have terminal comparisons. Manual compaction completion rebuilds retained context and appends the summary chronologically; completion, Escape cancellation and the following model request match focused terminal comparisons. Initial branch-summary status and broader compaction queue/progress/cost-notice integration remain incomplete. API-key login now accepts all native AuthPrompt kinds, provider notifications and per-prompt cancellation. Pasted API-key prompt/save terminal captures and the basic request loop match pi. Broader provider catalog and secret-masking parity remain partial. Hardware-cursor and clear-on-shrink settings update the running TUI after successful persistence; cursor disabling hides immediately, and focused setting/persistence/editor terminal captures match pi. Copy and custom new/tree/fork/resume shortcuts route through the existing session commands without submitting the editor draft; new-session rebinding preserves it as upstream does. The fork picker uses a dedicated immutable user-message component; native1/native4 mounted checks verify prompt restoration and isolated fork history. Empty-text user messages are excluded and successful forks show the upstream status notice. Tree selector layout and controls remain incomplete. Fullscreen selection copying and confirmation flashes, external-editor launch, terminal suspension and clipboard-image shortcuts remain incomplete.",
-      "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "272d9269ef5ed6e3c28627c9bb2eb8e1c7dc34c5b8fec7dd74ed6032417c3387",
-        "packages/coding-agent/src/modes/interactive/run.bend": "1b29a5c99e832ee535b321e49e39c2614ab1eb279822b886aa801d1e4339fb49",
-        "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
-        "packages/coding-agent/src/modes/interactive/viewport.bend": "5251961f780f6011fd173b198ccd6e4dd82ab65743f2df4463bc06f71a497075",
-        "packages/coding-agent/src/main.bend": "3dbefc6db3127fbb6d532c0208f27ab2a172c601d852f50a106083bf7641f1bb",
-        "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6"
-      }
-    },
-    "packages/tui/src/editor-component.ts": {
-      "state": "partial",
-      "ports": [
-        "packages/tui/src/components/editor-component.bend"
-      ],
-      "note": "The Bend editor component lives under components; complete source contract review is pending.",
-      "source_sha256": "0e40ba454b74e2ce21dfc6d831c185e5fb5619b0987fa158be98ed98564e8716",
-      "port_sha256": {
-        "packages/tui/src/components/editor-component.bend": "663f5c5cb3147e198a0a331234c58fdd3755f3b2b37ce5e63a421b5dae943eee"
-      }
-    },
-    "packages/tui/src/tui-alt-screen.ts": {
-      "state": "partial",
-      "note": "Native fullscreen startup, typing, scrolling, and keyboard transcript search match focused upstream terminal captures. Search opens with Ctrl+Shift+F, shows themed highlights and counts, navigates with Enter, and restores the screen on Escape; the index reuses unchanged content. Mouse search controls, full input editing, mouse selection, image placement, and the rest of the upstream suite remain open. Light-theme scrollbar colors, top-of-transcript background resets, and fullscreen exit cursor/border styling still differ.",
-      "source_sha256": "5f6032a07398b8df3f72d65c38dbed2e52649a25823a52946d6414ddb2f8a929",
-      "port_sha256": {
-        "packages/tui/src/tui-alt-screen.bend": "fc744cf11f805edc876e283d5bb308ecadfc95e505ced68536f850a34beef8f5",
-        "packages/tui/src/tui-base.bend": "30f0b8d62c944c64137631db5fd17ef30803ccc4603ea9e729c48bc18cb12842",
-        "packages/tui/src/tui-process.bend": "6d39bd17f75c13210681087f7b66416e024ce0e66416e36f58b0e345cddc23e5"
-      },
-      "ports": [
-        "packages/tui/src/tui-alt-screen.bend",
-        "packages/tui/src/tui-base.bend",
-        "packages/tui/src/tui-process.bend"
-      ]
-    },
-    "packages/tui/src/alt-screen-search.ts": {
-      "state": "partial",
-      "note": "The native immutable search index handles rendered-text normalization, cross-row and Unicode column mapping, non-overlapping matching and cache invalidation; the fullscreen keyboard search box and themed highlights match a focused upstream terminal capture. Mouse navigation, hover, full Input-component editing and the remaining upstream search assertions are open.",
-      "source_sha256": "7d339e83cf0f160847335dc9be0d1f1db2a0945c463c3d636c7b84ceb9665d40",
-      "port_sha256": {
-        "packages/tui/src/alt-screen-search.bend": "f50b2bacdea543fe16a4459b14844fcf70239b03402dd3d4e29f6126ee5db6d7"
-      }
-    },
-    "packages/ai/src/auth/credential-store.ts": {
-      "state": "missing",
-      "note": "The injectable CredentialStore interface and persistent auth.json store exist, but the public default InMemoryCredentialStore and its per-provider serialized modify/delete behavior do not.",
-      "source_sha256": "50ebde56b80b5862025e031719006ea303edd9aa80fec780fbc64319bb9e2847",
-      "port_sha256": {}
-    },
-    "packages/coding-agent/src/core/tools/path-utils.ts": {
-      "state": "partial",
-      "note": "Tool path expansion and resolution live in utils/paths.bend, and read-file fallback candidates live there too; the upstream path-utils test suite is still pending.",
-      "source_sha256": "ab6f420d2388a41366113c17a25e356867820b87b02a169d044cfcf83e1997d3",
-      "port_sha256": {
-        "packages/coding-agent/src/utils/paths.bend": "b67c1efdf251875fe71e8712c23c82a5d520e9eac1bd56675215a0e1ad81ab4c"
-      },
-      "ports": [
-        "packages/coding-agent/src/utils/paths.bend"
-      ]
-    },
-    "packages/coding-agent/src/core/tools/powershell.ts": {
-      "state": "missing",
-      "note": "The Windows PowerShell tool, UTF-8 setup and public tool factory are absent; the native tool registry has no powershell entry.",
-      "source_sha256": "56645690718f03e6c5a19b574a74e3f28f0d0df7563fb226eeee5c88576aefad",
-      "port_sha256": {}
-    },
-    "packages/tui/src/components/input.ts": {
-      "state": "ported",
-      "note": "The component behavior, including input, render, mouse and callback order, has source-replayed coverage for all 36 named tests plus native word-segmenter integration.",
-      "source_sha256": "416ceeb28f10b7146f6a284f276589797763b604d439574fbdc2a3ca52c00234",
-      "port_sha256": {
-        "packages/tui/src/components/input.bend": "8085e931a7b8b2b5c64a75b8115afc35cec8cc77751a8695e7f12fdead5f74fc"
-      }
-    },
-    "packages/tui/src/components/select-list.ts": {
-      "state": "ported",
-      "note": "The five named source tests and supplemental action traces cover filtering, rendering, keyboard, mouse and callback order for the native component.",
-      "source_sha256": "0fc369801e745eff15567d72829bf67887f5efec8bc6816aaf1ee65338618373",
-      "port_sha256": {
-        "packages/tui/src/components/select-list.bend": "699a7919326cd02e7488f8cfdabe14a4099389daa8f3fec4a75e3e77510d94cb"
-      }
-    },
-    "packages/tui/src/components/settings-list.ts": {
-      "state": "partial",
-      "note": "All named source tests and state traces pass, but Unicode fuzzy-search scoring is not established as source-equivalent and whole-terminal integration is separate.",
-      "source_sha256": "8d6b91d3c4aaaf11225854847d42ae6da852ef2646d54542c5b51a97dde15605",
-      "port_sha256": {
-        "packages/tui/src/components/settings-list.bend": "4b0c2e6acfc30eb78799796379dd5e53f659e0bdfc6ee048fc20b70e242db4f5"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/components/oauth-selector.ts": {
-      "state": "partial",
-      "note": "Login menus derive account and API-key options from registered providers, including API-key methods configured outside Pi. Options sort by native locale collation and search provider name, ID, auth type and method name. Mixed menus label auth types even after filtering; typed selections preserve both provider and method. The provider list uses an eight-row window, configured/source badges and alternate-auth warnings. Provider-menu Escape returns to the auth-type menu; direct unknown names open a mixed searchable menu. Native component tests exercise filtering, method identity and cancellation. Provider catalog completeness, cached auth-status ownership, logout-selector styling and mouse behavior remain partial.",
-      "source_sha256": "d4c92352cc8035e4092d9bd67e0250a2eab3124e13f15ac45433acfde92db53f",
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "f482fcdc4ba78a9fe5d63f04227a6f8d13bd3076c5aef5882bae3f9741108237"
-      },
-      "ports": [
-        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend"
-      ]
-    },
-    "packages/coding-agent/src/modes/interactive/components/show-images-selector.ts": {
-      "state": "missing",
-      "note": "The exported yes/no image-display selector is absent; showImages can be changed through the settings panel instead.",
-      "source_sha256": "6bea191c5442c0fa46c7fd54836de31df2042c8ed3aef3225b2a56a5fc1a65a9",
-      "port_sha256": {}
-    },
-    "packages/coding-agent/src/modes/interactive/components/theme-selector.ts": {
-      "state": "partial",
-      "note": "Native settings theme submenu previews, cancels, saves and configures automatic light/dark themes; a filename/content-name mismatch appears correctly in the menu. User-theme startup notices and filename/content-name differences match terminal captures. Standalone exported API, preview header redraw, remaining ANSI styling and mouse details are partial.",
-      "source_sha256": "267be3176c67bddb72f0f64a9c3561a256c758707afbeabe2ac68112c8e3b5f8",
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/theme-selector.bend": "302bb406bb7ebf0d7844cba854b14bea8c193be907d1d1a8aef73d51c22f2bbf"
-      }
-    },
-    "packages/coding-agent/src/core/tools/renderers/bash.ts": {
-      "state": "partial",
-      "note": "Width-aware five-visual-line tail previews, skipped-line counts and ordinary bash snapshots match upstream; the broader renderer contract is not yet fully validated.",
-      "source_sha256": "f04ab261d9f915f7b43a97ac679fb38d5646110855a886474593dc5d973f6764",
-      "port_sha256": {
-        "packages/coding-agent/src/core/tools/renderers/bash.bend": "b45d1aa09eaf1fed25a2d74228da2aa84003f609e2769f56268ca4ef6a54210d"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/theme/theme.ts": {
-      "state": "partial",
-      "note": "Built-in and custom theme loading, JSON-name discovery, sorted catalog and theme render equality are implemented; registered themes, reload and export behavior remain partial.",
-      "source_sha256": "c3bf2e3b72f6bb782f34de0535fcc1758b9b6ea7a0d2e7d6f17244fa55c3f31a",
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/theme/theme.bend": "76a42fe606b7ef048cd2fdd76f4c5a846dd4b1db0edfdb46582652411a4de7b8"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/theme/theme-controller.ts": {
-      "state": "partial",
-      "note": "Native controller applies and previews themes, restores cancelled previews and handles automatic mode; the full upstream reload and terminal-notification behavior remains partial.",
-      "source_sha256": "ad18b680f43a63c0d7a0da3e946d38e95a436d9fcf593f7268f7562f7c4be25e",
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/theme/theme-controller.bend": "2a152b15f56087b971d9bfef8bab2648344e343f79a366e1228235e7ce103bfe"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/components/session-selector.ts": {
-      "state": "partial",
-      "note": "The native /resume picker lists sessions and supports interactive rename, checked against terminal parity. The startup picker loads progressively from cancellable listings (a cancelled load leaves its rows). Selected-title ANSI styling differs; broader loading, sorting, deletion, mouse and cancellation behavior has not been fully reviewed.",
-      "ports": [
-        "packages/coding-agent/src/cli/session-picker.bend"
-      ],
-      "source_sha256": "8d8744ed7ba79d04fbc5e2fac16ef38083ba2d1e871d12a1a2460faa27e29f27",
-      "port_sha256": {
-        "packages/coding-agent/src/cli/session-picker.bend": "9a90ec301d44ce8a74e6e4d8989443f20fc1dcc74f0ea7a77af5d9af69eb2422"
-      }
-    },
-    "packages/tui/src/layout-node.ts": {
-      "state": "partial",
-      "note": "Native immutable layout nodes represent stack and scroll structure, including page, half-page, line, start, end and absolute-row movement of the primary viewport. The complete upstream layout contract is not yet validated.",
-      "source_sha256": "31dd68c9edafdc4f882bbb6c16f8deb1c514111020b647f0037b34d6b8c70a85",
-      "port_sha256": {
-        "packages/tui/src/layout-node.bend": "6f9be9b03b276758146322e3b7ea9d608996c7d45007dca8dc408d326c2c9d75"
-      },
-      "ports": [
-        "packages/tui/src/layout-node.bend"
-      ]
-    },
-    "packages/tui/src/components/scroll-view.ts": {
-      "state": "partial",
-      "note": "Follow-end, manual scrolling, scrollbars, and viewport state are implemented. Mouse-hover behavior, transient hide timing, configurable styles, and the full upstream suite remain open.",
-      "source_sha256": "76dfd9f8a88cabc064f0652b83f16a945fbc988c9fe7c0423a4cd796907ef77d",
-      "port_sha256": {
-        "packages/tui/src/components/scroll-view.bend": "0b6d7081ad10aabbe5f6e25ed4c7871b85ed38d10f45774be294c4a9ae6db95b",
-        "packages/tui/src/layout.bend": "dc7eafd16cf1c1c3a703eb237cddc1270a7cadfb398e942070284493442a02f8"
-      },
-      "ports": [
-        "packages/tui/src/components/scroll-view.bend",
-        "packages/tui/src/layout.bend"
-      ]
-    },
-    "packages/coding-agent/src/modes/interactive/chat-viewport.ts": {
-      "state": "partial",
-      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
-      "source_sha256": "24bbdd06a5e17d6c0631f7de51329eb7bb4ecd4a460dec7b3d593ff9e6219960",
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/viewport.bend": "5251961f780f6011fd173b198ccd6e4dd82ab65743f2df4463bc06f71a497075"
-      },
-      "ports": [
-        "packages/coding-agent/src/modes/interactive/viewport.bend"
-      ]
-    },
     "packages/ai/src/api/openai-prompt-cache.ts": {
       "state": "ported",
       "note": "clampOpenAIPromptCacheKey keeps 64 code points (surrogate pairs normalized first); exercised by the prompt-cache suite's clamping case through the Completions request.",
@@ -346,159 +155,38 @@
         "packages/ai/src/api/openai-prompt-cache.bend": "19e7d619d6a8453a8f3f153e74f6018f0dfc78539dfbe8f710fbb53d66188f63"
       }
     },
-    "packages/coding-agent/src/modes/interactive/components/model-selector.ts": {
+    "packages/ai/src/api/openai-responses.ts": {
       "state": "partial",
-      "note": "Native /model selector matches upstream scoped browsing, search, current-model marking, real catalog refresh status, and save-as-default including custom bindings in terminal parity. The All-tab filter matches text but has three ANSI row-reset differences. Multi-catalog refresh failure, timeout/cancellation, mouse behavior, and the full upstream suite remain open.",
-      "source_sha256": "92d70b9faffc9febf2ce0c519c7c086938bddfc5da9ad28d819f408d54e3637e",
+      "note": "Native OpenAI/Codex request and stream path works; provider suites remain partial and some upstream request/header behavior differs. The Codex endpoint (upstream openai-codex-responses.ts, not reviewed as its own module) now sends upstream's SSE headers: model and caller headers plus the fixed Codex headers, without the SDK client's session-affinity session_id; flex/priority requests echoed as 'default' are priced at the requested tier (resolveCodexServiceTier). tests/openai_codex_stream_check.py compares 16 named openai-codex-stream test instances with pinned pi-mono over a loopback server; its PENDING list records the Codex SSE layer that is not ported (parseSSE EOF flush and abort message, mapCodexEvents endTurn and early stop after response.incomplete, the SSE header timeout), and WebSocket transport and zstd request bodies are absent.",
+      "source_sha256": "5d524184ea001a2717fd35b4562126043338d1ef3279f4e2ce192ae5592e8479",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/model-selector.bend": "91e8d840a9fb80dd67fa8ce814ee2e2ab94e9e09703b48fea9bd14c6dcbee9b3"
-      },
-      "ports": [
-        "packages/coding-agent/src/modes/interactive/components/model-selector.bend"
-      ]
-    },
-    "packages/ai/src/auth/types.ts": {
-      "state": "partial",
-      "note": "Credential storage and provider auth resolution have native types. AuthPrompt covers text, secret, selection and manual code with optional per-prompt cancellation; AuthEvent covers info/links, authorization URLs, device codes and progress. AuthInteraction accepts an optional signal; ProviderAuthInteraction carries a required signal. OAuthAuth.login is required, and both API-key and OAuth callbacks use prompt/notify interactions. ApiKeyAuth.check and the remaining auth-context contract are incomplete.",
-      "source_sha256": "82e2209fd3291978afd7f77b10d81d8d411fd82d0e3ac52121cb41f735946ba5",
-      "port_sha256": {
-        "packages/ai/src/auth/types.bend": "d7c3bedafb8bb2c952fd2ecbe5628b7bb695f7db7d817a5ac6f36a5d43a69150"
+        "packages/ai/src/api/openai-responses.bend": "576684141096fc1f8d406017963fd10620b4a36f8ce341e2176f53106a8fce23"
       }
     },
-    "packages/ai/src/auth/helpers.ts": {
-      "state": "partial",
-      "note": "Standard API-key providers prompt through ProviderAuthInteraction with a SecretPrompt and resolve stored credentials before environment variables. Empty keys are rejected. Cloudflare auth regressions validate the migrated shared prompt contract on Bun/native1/native4. The lazy OAuth helper remains absent.",
-      "source_sha256": "2799858cc159794451870b86d2e2f50e2bd9453900f31b8ab50bb4ed8ca4a5fc",
-      "port_sha256": {
-        "packages/ai/src/auth/helpers.bend": "29d656bb4aade9e9ada37c918f49139b43036d5ac89cb7c53535688b3e637fa3"
-      }
-    },
-    "packages/ai/src/providers/cloudflare-auth.ts": {
-      "state": "partial",
-      "note": "Workers AI and AI Gateway resolve per-field stored and ambient values; native login prompts for key, account ID and optional gateway ID. Focused Bend tests exercise both login credential shapes and the existing resolver cases; broader model-runtime integration remains partial.",
-      "source_sha256": "d0532efb4f00126286d71dbce6fcb95e581cd9477467dc4bd20f1df1a466f03e",
-      "port_sha256": {
-        "packages/ai/src/providers/cloudflare-auth.bend": "bf8ecceac1f8cedeeea0b0b3092f687d5e9e15eda6fb6e1af1687e6d1262a22c"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/components/login-dialog.ts": {
-      "state": "partial",
-      "note": "Provider login uses native AuthPrompt/AuthEvent and shared TUI Input. Selection returns the option ID directly and restores preceding dialog content. Text, secret and manual-code prompts preserve notifications; authorization URLs and messages wrap with the TUI ANSI wrapper while retaining their full hyperlink targets. Submission keeps immutable displayed content and masks secrets while returning their raw value. Per-prompt cancellation races removable observations, joins its watchers and leaves the parent signal active. Input and browser-interaction fixtures exercise editing, notifications, selection, browser/manual arbitration and cancellation. Full mouse behavior and completion-page/UI parity remain unreviewed.",
-      "source_sha256": "37608848ca7b72707437aed9627a612eadf570c57a54b1c86972c3532918298c",
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "f482fcdc4ba78a9fe5d63f04227a6f8d13bd3076c5aef5882bae3f9741108237"
-      }
-    },
-    "packages/coding-agent/src/cli/initial-message.ts": {
+    "packages/ai/src/api/openrouter-images.lazy.ts": {
       "state": "ported",
-      "note": "buildInitialMessage: stdin content (when present), non-empty @file text and the first CLI message join into the initial prompt; the remaining messages are returned instead of shifted off parsed.messages. main.bend passes its result to print and interactive startup. tests/initial-message.bend ports initial-message.test.ts.",
-      "source_sha256": "b9df15ffa8769bf419c411cd152c8b807dd0bc2997b6ed3638c2f02376a9b43f",
+      "note": "openrouterImagesApi: the ProviderImages value is a callback over the native transport (openrouter-images.bend openrouterImagesApi); there is no lazy module import, and a request without a signal runs under a local signal that never aborts.",
+      "ports": [
+        "packages/ai/src/api/openrouter-images.bend"
+      ],
+      "source_sha256": "04c18f8c065779c2f705850e593cee4e0d6207a4121473540a223fc83026a8f4",
       "port_sha256": {
-        "packages/coding-agent/src/cli/initial-message.bend": "41596d9ca9991e0f70bd3296b4305d8228d6a3410e814ea65b86eac9a4d14cd3"
+        "packages/ai/src/api/openrouter-images.bend": "e3533f167cf212373d9fc93333232790d2c4593feb26b0673205ba423c83cf5d"
       }
     },
-    "packages/coding-agent/src/core/settings-diagnostics.ts": {
+    "packages/ai/src/api/openrouter-images.ts": {
       "state": "ported",
-      "note": "collectSettingsDiagnostics drains the manager's load errors into warnings with the file path, or the scope when storage has none, and returns the drained manager; deduplicateDiagnostics keeps the first of each type and message. AgentSessionRuntimeDiagnostic (agent-session-services.ts) lives here with `type` renamed `kind`. Error messages are the port's typed settings errors rendered as text. main.bend reports startup settings diagnostics through them. tests/settings-diagnostics.bend ports settings-diagnostics.test.ts.",
-      "source_sha256": "8ef3554ff841468a2493d9bab2754aa7a305471ea5754e54efccc363fe0dd0e1",
+      "note": "generateImages: the missing-key error, buildParams (sanitized text parts, data-URL image parts, stream false, modalities from the model's outputs), the OpenAI SDK client over openai-client.bend (bearer auth, model then option headers with nulls dropped, the request timeout), onPayload replacement, retryProviderRequest around one SDK attempt, onResponse after the body is read, responseId, parseUsage with cache reads/writes and per-million pricing, the first choice's text and data-URL images, and error/aborted results with the formatted provider error; tests/openrouter_images_check.py compares 14 cases with upstream images.ts driving the pinned OpenAI SDK. Native differences: the SDK identity headers (User-Agent, X-Stainless-*) come from the caller's Client.Defaults; the response body is read up to 64 MiB; a 2xx body that is not JSON reports a native message instead of the JavaScript SyntaxError text.",
+      "source_sha256": "c658f331cb2278e7accc925fa72eb3c3902d32d6ff37c4263b6bb6108888d440",
       "port_sha256": {
-        "packages/coding-agent/src/core/settings-diagnostics.bend": "405a62a513984a20e20f45366bcd966dc78090f082ca51e3ab31b59948a8e56c"
+        "packages/ai/src/api/openrouter-images.bend": "e3533f167cf212373d9fc93333232790d2c4593feb26b0673205ba423c83cf5d"
       }
     },
-    "packages/coding-agent/src/core/export-html/index.ts": {
-      "state": "partial",
-      "ports": [
-        "packages/coding-agent/src/core/export-html/index.bend"
-      ],
-      "note": "Native session snapshot and browser assets are ported. Interactive HTML export uses the active resolved theme, including missing-configured-theme fallback, with light/dark palette checks. Custom tool HTML rendering and standalone/RPC theme parity remain unverified.",
-      "source_sha256": "a82435411f3a49c65c2a81776c784552993d9ad3160eee2bbde3c49381899cf5",
-      "port_sha256": {
-        "packages/coding-agent/src/core/export-html/index.bend": "06894b8163b4fe119ca23c270cb4a251c4be9914869644497d732e5a2c384c41"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/components/compaction-summary-message.ts": {
-      "state": "partial",
-      "note": "Collapsed/expanded Markdown rendering, token count, theme and mouse toggle are present; broader terminal-frame parity remains unverified.",
-      "source_sha256": "90f5d197364755431678229959f233527e2b07076d2e7d8ffde83da09b77905a",
-      "ports": [
-        "packages/coding-agent/src/modes/interactive/components/messages.bend",
-        "packages/coding-agent/src/modes/interactive/transcript.bend"
-      ],
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "573442f49506ee1d94f657d529816caecbbf9aee003aa578b821da1c52c1e3a2",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "4e7e46c372cb2f71157383b841053b721af788d388eb6ca7883fb6848c957960"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/components/branch-summary-message.ts": {
-      "state": "partial",
-      "note": "Collapsed/expanded Markdown rendering, theme and mouse toggle are present; broader terminal-frame parity remains unverified.",
-      "source_sha256": "32525e00f5fd9c4e6706aeb77b0647d20d4fa2e35f6384a8b6d4d2fbcd0bb041",
-      "ports": [
-        "packages/coding-agent/src/modes/interactive/components/messages.bend",
-        "packages/coding-agent/src/modes/interactive/transcript.bend"
-      ],
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "573442f49506ee1d94f657d529816caecbbf9aee003aa578b821da1c52c1e3a2",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "4e7e46c372cb2f71157383b841053b721af788d388eb6ca7883fb6848c957960"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/components/skill-invocation-message.ts": {
-      "state": "partial",
-      "note": "Restored skill invocations are parsed into a collapsible card and separate user prompt; mouse toggle works. Broader terminal-frame parity remains unverified.",
-      "source_sha256": "7ec5c3e95413187aab7937740062cfa3c4dbac4754afbfa78810b6ad89ff0b27",
-      "ports": [
-        "packages/coding-agent/src/modes/interactive/components/messages.bend",
-        "packages/coding-agent/src/modes/interactive/transcript.bend"
-      ],
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "573442f49506ee1d94f657d529816caecbbf9aee003aa578b821da1c52c1e3a2",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "4e7e46c372cb2f71157383b841053b721af788d388eb6ca7883fb6848c957960"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/components/custom-message.ts": {
-      "state": "partial",
-      "note": "Displayed text messages use the default themed Markdown box and hidden messages are omitted. Extension-supplied custom renderers and output-pad changes are not yet ported.",
-      "source_sha256": "321af8afdff8da4924a7dbf5623b5637eb160ea7d73a70e6662d8125249bde9b",
-      "ports": [
-        "packages/coding-agent/src/modes/interactive/components/messages.bend",
-        "packages/coding-agent/src/modes/interactive/transcript.bend"
-      ],
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "573442f49506ee1d94f657d529816caecbbf9aee003aa578b821da1c52c1e3a2",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "4e7e46c372cb2f71157383b841053b721af788d388eb6ca7883fb6848c957960"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/components/assistant-message.ts": {
-      "state": "partial",
-      "note": "Assistant text/thinking rendering, stream updates, independent thinking-run clicks, global reset, mouse hit regions, output padding and stop errors are ported. Markdown extension transformers and their streaming/width context remain incomplete.",
-      "source_sha256": "f8a20228291816aec253d3f115fec5ba765807275bc14077780225117e5912cb",
-      "ports": [
-        "packages/coding-agent/src/modes/interactive/components/messages.bend"
-      ],
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "573442f49506ee1d94f657d529816caecbbf9aee003aa578b821da1c52c1e3a2"
-      }
-    },
-    "packages/ai/src/utils/uuid.ts": {
-      "state": "ported",
-      "note": "uuidv7 keeps upstream's process-wide monotonic sequence (seeded once from 40 random bits, 2^41-1 exhaustion), clamps ordinary clock rollback, preserves follower timestamps and rejects timestamps outside integers 0..2^48-1. The module state is an explicit State with a pure transition; a Generator owns it in a Ref. Bend has no module globals, so the process generator is created once by main (or by --export) and reaches session creation through the session value, AgentSession summaries and the session picker. Entropy failure is a Bend-only error result.",
-      "source_sha256": "234a48d4b999e69188fdfa49173ccfa7887d947e443ef206cc30219515105a1f",
-      "port_sha256": {
-        "packages/ai/src/utils/uuid.bend": "f673b6fc822bb998b1fc9ca9630b669a3795bf9e5265f2a6357d1d5161245061"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/components/footer.ts": {
-      "state": "partial",
-      "note": "Native footer renders session/model/thinking, usage, context and status data. Auto-compaction state is refreshed from the live session on render and its enabled marker matches the settings-toggle terminal scenario. Full source-wide callback, subscription and extension-status parity remains unverified. Run/retry/compaction lifecycle events preserve extension status data; their indicators render in the editor border.",
-      "source_sha256": "9e0f71e0f405a9f0fdae901de2778834649facd0f78a78b53c682179f8faf693",
-      "ports": [
-        "packages/coding-agent/src/modes/interactive/components/footer.bend",
-        "packages/coding-agent/src/modes/interactive/run.bend"
-      ],
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/footer.bend": "d924bbd85b2a33b86ec77491b3f88014fe87ffac531779233f82cb77c4ce5828",
-        "packages/coding-agent/src/modes/interactive/run.bend": "1b29a5c99e832ee535b321e49e39c2614ab1eb279822b886aa801d1e4339fb49"
-      }
+    "packages/ai/src/api/pi-messages.lazy.ts": {
+      "state": "excluded",
+      "note": "Lazy loading of the implementation module through a dynamic import is a JavaScript bundling concern; the Bend runtime dispatches models of this api to pi-messages.bend directly (coding-agent agent-runtime selectedProvider).",
+      "source_sha256": "620e55f1a498f70c8578deb6375f9433c6991c98f6c323465b1889c2f07a72d9",
+      "port_sha256": {}
     },
     "packages/ai/src/api/pi-messages.ts": {
       "state": "ported",
@@ -515,61 +203,178 @@
         "packages/coding-agent/src/core/stream-providers.bend": "7cd09373017335b4b1325505127e2015050a5f6158add77ce70732e08e7fc883"
       }
     },
-    "packages/ai/src/api/pi-messages.lazy.ts": {
-      "state": "excluded",
-      "note": "Lazy loading of the implementation module through a dynamic import is a JavaScript bundling concern; the Bend runtime dispatches models of this api to pi-messages.bend directly (coding-agent agent-runtime selectedProvider).",
-      "source_sha256": "620e55f1a498f70c8578deb6375f9433c6991c98f6c323465b1889c2f07a72d9",
+    "packages/ai/src/auth/credential-store.ts": {
+      "state": "missing",
+      "note": "The injectable CredentialStore interface and persistent auth.json store exist, but the public default InMemoryCredentialStore and its per-provider serialized modify/delete behavior do not.",
+      "source_sha256": "50ebde56b80b5862025e031719006ea303edd9aa80fec780fbc64319bb9e2847",
       "port_sha256": {}
     },
-    "packages/coding-agent/src/modes/interactive/components/status-indicator.ts": {
-      "state": "ported",
-      "note": "Native typed Working, Retry, Compaction and BranchSummary indicators preserve standalone/embedded rendering, theme colors, custom working color/frames, reason labels, kind, spinner rendering and retry countdown disposal. Owned resources and borrowed appearance callbacks replace class inheritance; IdleStatus is a pure two-row rendering function. Interactive callers are tracked separately.",
-      "source_sha256": "1deb7f7ce7d05e4ab6ea8f088f36aac6a64273dfda8c1d46483c98297777cd2d",
-      "ports": [
-        "packages/coding-agent/src/modes/interactive/components/status-indicator.bend"
-      ],
-      "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/status-indicator.bend": "9b9e8670acf35d27d058cf9e2b35807966284a891ef706d1002beb27f8a85e0e"
-      }
-    },
-    "packages/coding-agent/src/modes/interactive/components/countdown-timer.ts": {
+    "packages/ai/src/auth/helpers.ts": {
       "state": "partial",
-      "note": "Native timer rounds positive durations up to seconds, calls the initial tick, decrements every second, expires once and cancels/joins on disposal. Retry tick/disposal is exercised by the status suite. Zero duration completes immediately at zero instead of emitting a negative tick a second later; independent expiry/optional-redraw callback tests remain unported.",
-      "source_sha256": "6ade4aa41c2c2400bdb79d47701c95504be48e3ab9f2b1aee3836a888c2d1da9",
-      "ports": [
-        "packages/coding-agent/src/modes/interactive/components/countdown-timer.bend"
-      ],
+      "note": "Standard API-key providers prompt through ProviderAuthInteraction with a SecretPrompt and resolve stored credentials before environment variables. Empty keys are rejected. Cloudflare auth regressions validate the migrated shared prompt contract on Bun/native1/native4. The lazy OAuth helper remains absent.",
+      "source_sha256": "2799858cc159794451870b86d2e2f50e2bd9453900f31b8ab50bb4ed8ca4a5fc",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/countdown-timer.bend": "9c02df7baf5ef6931f74b96e7f277f8daccbbbb6dc28a5db8e4818a4cde96d9f"
+        "packages/ai/src/auth/helpers.bend": "29d656bb4aade9e9ada37c918f49139b43036d5ac89cb7c53535688b3e637fa3"
       }
     },
-    "packages/ai/src/api/mistral-conversations.ts": {
+    "packages/ai/src/auth/oauth/anthropic.ts": {
+      "state": "partial",
+      "note": "Native OAuthAuth.login uses PKCE, the upstream authorization URL, callback host override, browser/manual arbitration, progress notification and authorization-code exchange. Refresh retains the five-minute expiry margin and toAuth derives bearer auth. Native callback/manual fixtures check state rejection, cancellation, typed prompt failures and occupied-port fallback; the PKCE oracle checks generated challenges. Callback completion HTML is simplified; exact token-error classification/rendering and source-wide edge-case parity remain incomplete.",
+      "source_sha256": "8bf457ab5f0e7756898bff324d54d7ad9e4d4977c1053cb744791ac024945810",
+      "port_sha256": {
+        "packages/ai/src/auth/oauth/anthropic.bend": "535086d65c4f51e8e2eae7475341ffe0e3bb97347fe605f1d0514257e9d3c169",
+        "packages/ai/src/auth/oauth/browser.bend": "7a393a30ddb616aa8405185ba5acd07ef541df0200f50b90e0bf2a96da1fe4de"
+      },
+      "ports": [
+        "packages/ai/src/auth/oauth/anthropic.bend",
+        "packages/ai/src/auth/oauth/browser.bend"
+      ]
+    },
+    "packages/ai/src/auth/oauth/openai-codex.ts": {
+      "state": "partial",
+      "note": "Native OAuthAuth.login selects browser/device login. Browser authorization uses PKCE, independent 16-byte hex state, upstream URL fields, callback host override, state validation, manual-input fallback and token exchange with the browser redirect URI. Device login notifies the user code then polls/exchanges with the device redirect URI. Refresh and toAuth remain native. Browser/manual workers share typed first-settlement arbitration and are cancelled/joined before disposal. Callback completion HTML is simplified; exact token-error classification/rendering and source-wide edge-case parity remain incomplete.",
+      "source_sha256": "757c6cff2bc67d89df30ad175eead549519e1d3756397b5b4189460ac9dbcaba",
+      "port_sha256": {
+        "packages/ai/src/auth/oauth/openai-codex.bend": "bd8c582fb0c5e8fbf734ba47d9ee358633d1d1b5243f8bcd0ecfd6f36b4ea41a",
+        "packages/ai/src/auth/oauth/browser.bend": "7a393a30ddb616aa8405185ba5acd07ef541df0200f50b90e0bf2a96da1fe4de"
+      },
+      "ports": [
+        "packages/ai/src/auth/oauth/openai-codex.bend",
+        "packages/ai/src/auth/oauth/browser.bend"
+      ]
+    },
+    "packages/ai/src/auth/oauth/pkce.ts": {
       "state": "ported",
-      "note": "stream/streamSimple: transcript resolution, Mistral tool-call id normalization, SDK-style payload and wire renaming, pi User-Agent and header overrides with x-affinity, the request timeout over the whole exchange, onPayload/onResponse, Mistral SSE framing, the chunk fold (text/thinking/tool calls, cached-token usage, stop reasons) and error formatting, all checked against upstream traces (tests/mistral_check.py). Native adaptations: streamSimple's synchronous missing-key throw is a Fail result; reasoningEffort carries the mapped thinking value as a string; malformed JSON events and transport failures report native messages; upstream's partialArgs scratch member is not part of the typed tool call.",
-      "ports": [
-        "packages/ai/src/api/mistral-conversations.bend",
-        "packages/ai/src/api/provider-fetch.bend",
-        "packages/coding-agent/src/core/stream-providers.bend"
-      ],
-      "source_sha256": "b54b0998ff3e0f0ff0804ca62dbcc2061922c770d9ff8267096580907f21faf5",
+      "note": "Native generatePKCE reads 32 secure random bytes, base64url-encodes the verifier and SHA-256 challenge, and returns immutable PKCE fields. Failures are typed errors. tests/anthropic_oauth_start_check.py compares native one/four-thread authorization challenges with the Python SHA-256/base64 oracle; browser interaction tests exercise worker cleanup.",
+      "source_sha256": "33835111577490103dbb7509b7687db1643691d7b425845428f3cbeb873fe9cf",
       "port_sha256": {
-        "packages/ai/src/api/mistral-conversations.bend": "87f9860ab53ae3c884656d205c8f771c48b7ad54dc01ce2438b0c8e07659a7b1",
-        "packages/ai/src/api/provider-fetch.bend": "4f11d6da5363ffae0c3d2214e163bd9eee6a4348039d4f37d4d652a62a248275",
-        "packages/coding-agent/src/core/stream-providers.bend": "7cd09373017335b4b1325505127e2015050a5f6158add77ce70732e08e7fc883"
+        "packages/ai/src/auth/oauth/browser.bend": "7a393a30ddb616aa8405185ba5acd07ef541df0200f50b90e0bf2a96da1fe4de"
+      },
+      "ports": [
+        "packages/ai/src/auth/oauth/browser.bend"
+      ]
+    },
+    "packages/ai/src/auth/types.ts": {
+      "state": "partial",
+      "note": "Credential storage and provider auth resolution have native types. AuthPrompt covers text, secret, selection and manual code with optional per-prompt cancellation; AuthEvent covers info/links, authorization URLs, device codes and progress. AuthInteraction accepts an optional signal; ProviderAuthInteraction carries a required signal. OAuthAuth.login is required, and both API-key and OAuth callbacks use prompt/notify interactions. ApiKeyAuth.check and the remaining auth-context contract are incomplete.",
+      "source_sha256": "82e2209fd3291978afd7f77b10d81d8d411fd82d0e3ac52121cb41f735946ba5",
+      "port_sha256": {
+        "packages/ai/src/auth/types.bend": "d7c3bedafb8bb2c952fd2ecbe5628b7bb695f7db7d817a5ac6f36a5d43a69150"
       }
     },
-    "packages/ai/src/api/mistral-conversations.lazy.ts": {
+    "packages/ai/src/bedrock-provider.ts": {
       "state": "excluded",
-      "note": "Lazy loading of the implementation module through a dynamic import is a JavaScript bundling concern; the Bend runtime dispatches models of this api to mistral-conversations.bend directly (coding-agent agent-runtime selectedProvider).",
-      "source_sha256": "74267bc430c0c2562d166e4ae9d05966634e91b226bc564010b2b199db52dd86",
+      "note": "A package entry point that re-exports stream/streamSimple so Bun-compiled binaries can preload the Bedrock module (coding-agent bun/runtime-setup.ts); Bend modules import api/bedrock-converse-stream.bend directly.",
+      "source_sha256": "427a4e76812ea4ac42133e7f41e75df99e0edaff883659c96a0e4ec78f670f9f",
       "port_sha256": {}
     },
-    "packages/ai/src/providers/mistral.ts": {
+    "packages/ai/src/image-models.generated.ts": {
       "state": "ported",
-      "note": "The Mistral provider with its MISTRAL_API_KEY auth, base URL and catalog, listed in providers/all.bend in upstream order.",
-      "source_sha256": "dfcd087d7317d6a6cd1acf701547567435f5eaf0c1cc1d8eb89eed7e977c2fb3",
+      "note": "Generated from the pinned image-models.generated.ts by scripts/generate-model-catalog.py --images; tests/openrouter_images_check.py compares all 55 models with it.",
+      "source_sha256": "1ce6e12ec4ce41f4ac69556ca1417464d235bf203d48194fc9a16535987014b1",
       "port_sha256": {
-        "packages/ai/src/providers/mistral.bend": "2bf396a23f310232846185540478fcee84ffef48f60304ab93ed5e4720adf846"
+        "packages/ai/src/image-models.generated.bend": "b2610b9d6daa5070def3113bc37eedf09139c138666858a3434737face123a46"
+      }
+    },
+    "packages/ai/src/image-models.ts": {
+      "state": "ported",
+      "note": "getImageModel, getImageProviders and getImageModels over the generated catalog; an unknown provider or id has no model (upstream returns undefined).",
+      "source_sha256": "58f11488a6623fe8528153235f9216c249d70e146b0f99f8b22db8d88a49ae74",
+      "port_sha256": {
+        "packages/ai/src/image-models.bend": "49a5ec2d625ee09709227eea20b7f0f5dce384c5f94e18c10bc7dbf77b573c39"
+      }
+    },
+    "packages/ai/src/images-api-registry.ts": {
+      "state": "ported",
+      "note": "The registry is a value: registerImagesApiProvider returns the next registry (a repeated api replaces its entry in place, as Map.set), getImagesApiProvider looks one up, and generateWith is the registered function with upstream's mismatched-api rejection.",
+      "source_sha256": "604636b0a4b59d1798d79aad48a1dfdd96ee79e3f16b16cdc54dbd1b81c44ffe",
+      "port_sha256": {
+        "packages/ai/src/images-api-registry.bend": "b265ab0bb5de95563a56b32c48ae2b5c0d52820417de8b93db77b6e7cd97274c"
+      }
+    },
+    "packages/ai/src/images-models.ts": {
+      "state": "partial",
+      "note": "ImagesProvider/createImagesProvider (name defaulting to the id, last-known catalog, refreshModels with in-flight sharing: a call that waited for a concurrent refresh shares its outcome), and ImagesModels: set/delete/clear providers as value transitions (replacement keeps the position), getProviders/getProvider/getModels/getModel, refresh with model_source failures for one provider and best-effort concurrent refresh of all, getAuth through resolveProviderAuth, and generateImages with auth resolution and per-field option merging (unknown providers and auth rejections become error results). All six images-models.test.ts cases pass (packages/ai/test/images-models.bend). Missing: createImagesModels' defaults (InMemoryCredentialStore and defaultProviderAuthContext); callers pass the store and context.",
+      "source_sha256": "9a3a2bf47263e577925850b182d2b508d0bbf0e1437124b1240bff95b8deeb3a",
+      "port_sha256": {
+        "packages/ai/src/images-models.bend": "e51f0009e4078f5ed017ce437d6cc5c19b51eeada787dc9775a9b0bc54a82718"
+      }
+    },
+    "packages/ai/src/images.ts": {
+      "state": "ported",
+      "note": "generateImages through the registered api provider; a missing provider is a failure with upstream's message. The registry is passed in instead of being filled by importing register-builtins.",
+      "source_sha256": "de83a96c1eb420cfb1b6f4e3ce8430f19b2312399d195fb786c76ebae4111dcf",
+      "port_sha256": {
+        "packages/ai/src/images.bend": "2ef6f38e1f4eda2a131c71429141772c2b9cfe88a4e1d6c899729a6b0910e723"
+      }
+    },
+    "packages/ai/src/models.ts": {
+      "state": "partial",
+      "note": "Reviewed provider/publication types and collection/auth ownership. Provider, RefreshModelsContext and ModelsPublication have native representations and fetched-catalog helpers. The standalone Models/MutableModels collection is not exposed in pi-ai: much of its catalog, auth, refresh and request behavior currently lives in coding-agent ModelRuntime/agent-runtime. This layer must be separated into the AI library while keeping app configuration and credential-operation synchronization in ModelRuntime; public collection operations and API boundary parity remain incomplete. ProviderStreams also has OpenCodeStreams{apis} for upstream's withOpenCodeSessionHeader wrapper (opencode.ts/opencode-go.ts); streamSimpleOptions applies it, and inheritedStreams keeps it for models.json overlays.",
+      "source_sha256": "84f2799b0bf45fb01237c5c2c19641b0da5d1245670b208c05bacb5cff36b96f",
+      "port_sha256": {
+        "packages/ai/src/models.bend": "f4c90abd0a9b3c4908c9bcceab18e69a19e38ed78b9339dd0ef4f3ae488b73d4",
+        "packages/coding-agent/src/core/model-runtime.bend": "5ff88f4f6806ba7f055acc44522dfdbf39028ce3eed7efd29e5e7bc3f5919457"
+      },
+      "ports": [
+        "packages/ai/src/models.bend",
+        "packages/coding-agent/src/core/model-runtime.bend"
+      ]
+    },
+    "packages/ai/src/providers/amazon-bedrock.models.ts": {
+      "state": "ported",
+      "note": "Generated from pi-ai's amazon-bedrock data by scripts/generate-model-catalog.py; tests/model-catalog.bend dumps every model equal to the pinned data.",
+      "source_sha256": "9c9cbe9b1c977177454ed12dc48c521fdc88d257ee1b92bc3805aa77eaf9b982",
+      "port_sha256": {
+        "packages/ai/src/providers/amazon-bedrock.models.bend": "3b48ffedbfbc5895345c930f0882cd05aa084de6ff0c1ae519034413ec7d8f59"
+      }
+    },
+    "packages/ai/src/providers/amazon-bedrock.ts": {
+      "state": "ported",
+      "note": "The Amazon Bedrock provider with its catalog, listed first in providers/all.bend as upstream; bedrockAuth.login (method select, secret bearer token, the credential-chain notice, profile name or the credential-chain confirmation, unknown-method rejection, abort checks) over the shared AuthPrompt/AuthEvent interaction, and bedrockAuth.resolve (stored key, AWS_BEARER_TOKEN_BEDROCK, stored or ambient AWS_PROFILE, access keys, ECS task role, web identity token; abort checks around each lookup), tested in packages/ai/test/amazon-bedrock-auth.bend.",
+      "source_sha256": "e32611e8d2d4e71ee5d0ba426da60c0aecf42d1bc34ccc3d0d49ce877c621a8c",
+      "port_sha256": {
+        "packages/ai/src/providers/amazon-bedrock.bend": "cb22ebba05fa97114629c94ff5779e4c7de94530ce58bac1865a3847daf94135"
+      }
+    },
+    "packages/ai/src/providers/anthropic.ts": {
+      "state": "partial",
+      "note": "anthropicApiKeyAuth is ported (stored key, ANTHROPIC_AUTH_TOKEN as a Bearer Authorization header, ANTHROPIC_OAUTH_TOKEN, ANTHROPIC_API_KEY; the login prompt is the shared env api-key login, which additionally rejects an empty key), with the catalog and the caller-created OAuth auth. The provider's api registration (anthropicMessagesApi) is not: Models.ApiStreams is empty and the app dispatches Anthropic streams in coding-agent agent-runtime.",
+      "source_sha256": "dda69449a53c84b8b0a17b28f80fba278988d85665557be2db0dc3b20557567a",
+      "port_sha256": {
+        "packages/ai/src/providers/anthropic.bend": "bfea0bb80ec3da8dbe5d8154a32fede237573bd701cc683e18821ed400f4da68"
+      }
+    },
+    "packages/ai/src/providers/cloudflare-auth.ts": {
+      "state": "partial",
+      "note": "Workers AI and AI Gateway resolve per-field stored and ambient values; native login prompts for key, account ID and optional gateway ID. Focused Bend tests exercise both login credential shapes and the existing resolver cases; broader model-runtime integration remains partial.",
+      "source_sha256": "d0532efb4f00126286d71dbce6fcb95e581cd9477467dc4bd20f1df1a466f03e",
+      "port_sha256": {
+        "packages/ai/src/providers/cloudflare-auth.bend": "bf8ecceac1f8cedeeea0b0b3092f687d5e9e15eda6fb6e1af1687e6d1262a22c"
+      }
+    },
+    "packages/ai/src/providers/google-vertex.models.ts": {
+      "state": "ported",
+      "note": "Generated from pi-ai's google-vertex.json by scripts/generate-model-catalog.py; tests/model-catalog.bend dumps every model equal to the pinned data.",
+      "source_sha256": "964109cc69cadf77329846f4fb4baf6c86b00995f33a813230c5a9e54573e93e",
+      "port_sha256": {
+        "packages/ai/src/providers/google-vertex.models.bend": "dbb4cc57f186526c126d6937d244de2f6a5585fb8b4de1921966a0527895cfe9"
+      }
+    },
+    "packages/ai/src/providers/google-vertex.ts": {
+      "state": "ported",
+      "note": "The Google Vertex AI provider with its catalog, listed after google in providers/all.bend as upstream; vertexAuth.login (method select, API key, the ADC notice, project, location and service-account file) over the shared AuthPrompt/AuthEvent interaction, and vertexAuth.resolve (stored or GOOGLE_CLOUD_API_KEY key, else the ADC file plus project and location, with the ?? lookup order and abort checks), tested in packages/ai/test/google-vertex-auth.bend.",
+      "source_sha256": "5e321e6d5b80824752ca96e7c9aba8a3fccce722a1793a40d5341a0406ef4878",
+      "port_sha256": {
+        "packages/ai/src/providers/google-vertex.bend": "261c9cc8d338f56f22779cb2d74dfe58b822be34d445d89a6c99b86cd98e9770"
+      }
+    },
+    "packages/ai/src/providers/images/register-builtins.ts": {
+      "state": "ported",
+      "note": "registerBuiltInImagesApiProviders registers the openrouter-images api into a registry value; the caller supplies the api callback. The lazy-load failure result has no counterpart because nothing is loaded lazily.",
+      "source_sha256": "8c8bd4e614b8b733c0a4232f7cc974bf38c5a4bb6b9615c732e3b794ff1d908f",
+      "port_sha256": {
+        "packages/ai/src/providers/images/register-builtins.bend": "6a346afd7031f2c5b23ff72bbeccd87698a4e65bc6bc332af21de3b5e943fe46"
       }
     },
     "packages/ai/src/providers/mistral.models.ts": {
@@ -580,12 +385,76 @@
         "packages/ai/src/providers/mistral.models.bend": "96fc1ee0a28c53c957a0c70d9a1b1a3c585f6dd713c0e5218bd641ff62d30622"
       }
     },
-    "packages/ai/src/providers/anthropic.ts": {
-      "state": "partial",
-      "note": "anthropicApiKeyAuth is ported (stored key, ANTHROPIC_AUTH_TOKEN as a Bearer Authorization header, ANTHROPIC_OAUTH_TOKEN, ANTHROPIC_API_KEY; the login prompt is the shared env api-key login, which additionally rejects an empty key), with the catalog and the caller-created OAuth auth. The provider's api registration (anthropicMessagesApi) is not: Models.ApiStreams is empty and the app dispatches Anthropic streams in coding-agent agent-runtime.",
-      "source_sha256": "dda69449a53c84b8b0a17b28f80fba278988d85665557be2db0dc3b20557567a",
+    "packages/ai/src/providers/mistral.ts": {
+      "state": "ported",
+      "note": "The Mistral provider with its MISTRAL_API_KEY auth, base URL and catalog, listed in providers/all.bend in upstream order.",
+      "source_sha256": "dfcd087d7317d6a6cd1acf701547567435f5eaf0c1cc1d8eb89eed7e977c2fb3",
       "port_sha256": {
-        "packages/ai/src/providers/anthropic.bend": "bfea0bb80ec3da8dbe5d8154a32fede237573bd701cc683e18821ed400f4da68"
+        "packages/ai/src/providers/mistral.bend": "2bf396a23f310232846185540478fcee84ffef48f60304ab93ed5e4720adf846"
+      }
+    },
+    "packages/ai/src/providers/opencode-headers.ts": {
+      "state": "ported",
+      "note": "withSessionHeader for stream options and withSimpleSessionHeader for streamSimple options: a nonempty sessionId adds x-opencode-session after the caller's headers unless a caller header (even a null removal) already names it case-insensitively. The provider wrapper withOpenCodeSessionHeader is Models.OpenCodeStreams{apis} (the APIs each OpenCode provider wraps, as in opencode.ts/opencode-go.ts); agent-runtime applies Models.streamSimpleOptions after prepareRequest, as upstream's wrapper sees the merged request headers. models.json overlays inherit the wrapper for their base models' APIs (supportsBaseApi). Covered by packages/ai/test/opencode-provider-headers.bend.",
+      "source_sha256": "57a97177294665039f40a34cf421514ecd41527d5042f5185639557b6a7d80a1",
+      "port_sha256": {
+        "packages/ai/src/providers/opencode-headers.bend": "eebce9a70144af84d72b3ad06fd79f3e85b301c705e3e67e3b05284af084d875"
+      }
+    },
+    "packages/ai/src/providers/openrouter-images.ts": {
+      "state": "partial",
+      "note": "The OpenRouter images provider with OPENROUTER_API_KEY auth and the generated catalog, registered by builtinImagesModels (providers/all.bend). Missing: the lazy OpenRouter OAuth, as for the chat provider.",
+      "source_sha256": "921e057fa1880412c29a849505ddd7dbe466996d78087c0c0628437ec2051880",
+      "port_sha256": {
+        "packages/ai/src/providers/openrouter-images.bend": "8f8546ed016e90a08042437cb4c808bb06c950e43f23c888a787157b5170f1d5"
+      }
+    },
+    "packages/ai/src/utils/uuid.ts": {
+      "state": "ported",
+      "note": "uuidv7 keeps upstream's process-wide monotonic sequence (seeded once from 40 random bits, 2^41-1 exhaustion), clamps ordinary clock rollback, preserves follower timestamps and rejects timestamps outside integers 0..2^48-1. The module state is an explicit State with a pure transition; a Generator owns it in a Ref. Bend has no module globals, so the process generator is created once by main (or by --export) and reaches session creation through the session value, AgentSession summaries and the session picker. Entropy failure is a Bend-only error result.",
+      "source_sha256": "234a48d4b999e69188fdfa49173ccfa7887d947e443ef206cc30219515105a1f",
+      "port_sha256": {
+        "packages/ai/src/utils/uuid.bend": "f673b6fc822bb998b1fc9ca9630b669a3795bf9e5265f2a6357d1d5161245061"
+      }
+    },
+    "packages/coding-agent/src/cli/initial-message.ts": {
+      "state": "ported",
+      "note": "buildInitialMessage: stdin content (when present), non-empty @file text and the first CLI message join into the initial prompt; the remaining messages are returned instead of shifted off parsed.messages. main.bend passes its result to print and interactive startup. tests/initial-message.bend ports initial-message.test.ts.",
+      "source_sha256": "b9df15ffa8769bf419c411cd152c8b807dd0bc2997b6ed3638c2f02376a9b43f",
+      "port_sha256": {
+        "packages/coding-agent/src/cli/initial-message.bend": "41596d9ca9991e0f70bd3296b4305d8228d6a3410e814ea65b86eac9a4d14cd3"
+      }
+    },
+    "packages/coding-agent/src/core/agent-session.ts": {
+      "state": "partial",
+      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal; prompt images and tool-result images are normalized with the image setting and the current model's resize profile (f5c946480). sendCustomMessage (nextTurn, steer/followUp while streaming, deferral to turn_end without triggerTurn, triggerTurn runs) and sendUserMessage (expandPromptTemplates) are ported with the pending custom-message flushes at turn_end, run settlement and prompt, and bound as the extension runtime's sendMessage/sendUserMessage actions. Extension events: agent/turn_start/message/tool_execution events reach extensions before listeners, message_end replacements are persisted and projected, tool_call and tool_result run in the agent's tool hooks, agent_settled precedes the public event; navigateTree runs session_before_tree (cancel, supplied summary, instruction and label overrides) under the branch-summary controller and emits session_tree; manual and automatic compaction run session_before_compact (cancel or supplied result), then session_compact or session_compact_failed; waitForIdle waits for session-level idleness (no run, compaction or branch summary). turn_end boundaries run from the agent's finishTurn (or the turn_end event for synthesized failures) and agent_before_settle before settlement, with drafts previewed, committed and announced after the context refresh; post-run handling continues for queued messages only after retry and compaction (no queue drain before retry). Missing: session_start/switch/fork/shutdown extension events, context, before_agent_start, input, user_bash, _isEmittingAgentSettled deferral, and replaced messages inside turn_end/agent_end payloads. The skill-block parser used by restored transcripts is in core/skills.bend.",
+      "source_sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7",
+      "port_sha256": {
+        "packages/coding-agent/src/core/agent-session.bend": "d5daa4b0e9bb38f7f3b09f16c67045fb2acb5a53a3529e9bbaa8ddeaebbb1007",
+        "packages/coding-agent/src/core/skills.bend": "39c10b968daf609f60fe3c91154a63a7248c7cfd18173781eb776904dcfea236"
+      },
+      "ports": [
+        "packages/coding-agent/src/core/agent-session.bend",
+        "packages/coding-agent/src/core/skills.bend"
+      ]
+    },
+    "packages/coding-agent/src/core/auth-guidance.ts": {
+      "state": "ported",
+      "note": "All four messages; callers pass the docs directory where upstream reads its package location (config.ts getDocsPath). Not yet used by AgentSession.prompt's preflight (see tests/rpc.md).",
+      "source_sha256": "8fbee7c272953bf881f22e9ce4b163bb0df9c091f63ee823dbfe32186991efe0",
+      "port_sha256": {
+        "packages/coding-agent/src/core/auth-guidance.bend": "dc2b5f649bf75101196be156d6a19e52aa00da717f66acf2df30b8c1f8e4689d"
+      }
+    },
+    "packages/coding-agent/src/core/export-html/index.ts": {
+      "state": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/export-html/index.bend"
+      ],
+      "note": "Native session snapshot and browser assets are ported. Interactive HTML export uses the active resolved theme, including missing-configured-theme fallback, with light/dark palette checks. Custom tool HTML rendering and standalone/RPC theme parity remain unverified.",
+      "source_sha256": "a82435411f3a49c65c2a81776c784552993d9ad3160eee2bbde3c49381899cf5",
+      "port_sha256": {
+        "packages/coding-agent/src/core/export-html/index.bend": "06894b8163b4fe119ca23c270cb4a251c4be9914869644497d732e5a2c384c41"
       }
     },
     "packages/coding-agent/src/core/extensions/loader.ts": {
@@ -612,113 +481,6 @@
         "packages/coding-agent/src/core/extensions/types.bend": "b35b5c2bb5137ab3164567f63a485f79878fc0bc93b2c4bddb7ad3c27b38b43e"
       }
     },
-    "packages/ai/src/api/bedrock-converse-stream.ts": {
-      "state": "partial",
-      "note": "stream/streamSimple: the client configuration pi builds (profile, region from ARN/AWS_REGION/profile/built-in endpoint, custom endpoints, static credentials, bearer token), message/tool/system conversion with cache points and document sanitization, adaptive and budget thinking fields, onPayload/onResponse, the restJson ConverseStream request with SigV4 (runtime/aws-sigv4.bend) or bearer auth and caller headers minus reserved ones, the event-stream response (runtime/aws-eventstream.bend with CRC-32), the stream fold (text, reasoning incl. redacted, tool calls, usage with 1h cache writes, stop reasons) and error formatting with bedrock_response_failure diagnostics; traces equal the pinned AWS SDK on a loopback server (tests/bedrock_check.py). Missing: the SDK credential chain beyond shared-file static keys and credential_process (SSO, role assumption, web identity, ECS/IMDS; reported as errors, bedrock-credentials.bend), SDK retries, and HTTP(S) proxy agents. Unknown content-block types and lone surrogates are not representable in the typed Bend transcript.",
-      "ports": [
-        "packages/ai/src/api/bedrock-converse-stream.bend",
-        "packages/ai/src/api/bedrock-credentials.bend",
-        "packages/runtime/src/aws-sigv4.bend",
-        "packages/runtime/src/aws-eventstream.bend",
-        "packages/runtime/src/crc32.bend"
-      ],
-      "source_sha256": "cd4b63f95787c9f775a96a19edf760bbf266987b51f9cc9f6ac0ecd34cffe047",
-      "port_sha256": {
-        "packages/ai/src/api/bedrock-converse-stream.bend": "3639183c4f9141c1a20c96aaa513b756314009e4b93fecb7f2e1d67977f67e4a",
-        "packages/ai/src/api/bedrock-credentials.bend": "11fa1344617ae553e16cf8a6d4b3dc5eb864d352d97c82ef040090296efc8295",
-        "packages/runtime/src/aws-sigv4.bend": "caa2c23300ee3da72bc2b7a8f807bd6478b0e84cff75ea6534a630ccfe313e10",
-        "packages/runtime/src/aws-eventstream.bend": "10407475f5491bdceffb014888626790a4b0dbade62c1538a1b36252b8e5569e",
-        "packages/runtime/src/crc32.bend": "f87ae9d406fe4180b39bc1fa5411d0bd38ddf40add1c28f7da404dbb5b52d5ba"
-      }
-    },
-    "packages/ai/src/api/bedrock-converse-stream.lazy.ts": {
-      "state": "excluded",
-      "note": "Lazy loading of the implementation module through a dynamic import is a JavaScript bundling concern; the Bend runtime dispatches models of this api to bedrock-converse-stream.bend directly (coding-agent agent-runtime selectedProvider).",
-      "source_sha256": "3ee8a1b2a2cd58927bee18ab5b4150401da810e9d5f4595822b3b10ded35de86",
-      "port_sha256": {}
-    },
-    "packages/ai/src/providers/amazon-bedrock.ts": {
-      "state": "ported",
-      "note": "The Amazon Bedrock provider with its catalog, listed first in providers/all.bend as upstream; bedrockAuth.login (method select, secret bearer token, the credential-chain notice, profile name or the credential-chain confirmation, unknown-method rejection, abort checks) over the shared AuthPrompt/AuthEvent interaction, and bedrockAuth.resolve (stored key, AWS_BEARER_TOKEN_BEDROCK, stored or ambient AWS_PROFILE, access keys, ECS task role, web identity token; abort checks around each lookup), tested in packages/ai/test/amazon-bedrock-auth.bend.",
-      "source_sha256": "e32611e8d2d4e71ee5d0ba426da60c0aecf42d1bc34ccc3d0d49ce877c621a8c",
-      "port_sha256": {
-        "packages/ai/src/providers/amazon-bedrock.bend": "cb22ebba05fa97114629c94ff5779e4c7de94530ce58bac1865a3847daf94135"
-      }
-    },
-    "packages/ai/src/providers/amazon-bedrock.models.ts": {
-      "state": "ported",
-      "note": "Generated from pi-ai's amazon-bedrock data by scripts/generate-model-catalog.py; tests/model-catalog.bend dumps every model equal to the pinned data.",
-      "source_sha256": "9c9cbe9b1c977177454ed12dc48c521fdc88d257ee1b92bc3805aa77eaf9b982",
-      "port_sha256": {
-        "packages/ai/src/providers/amazon-bedrock.models.bend": "3b48ffedbfbc5895345c930f0882cd05aa084de6ff0c1ae519034413ec7d8f59"
-      }
-    },
-    "packages/ai/src/bedrock-provider.ts": {
-      "state": "excluded",
-      "note": "A package entry point that re-exports stream/streamSimple so Bun-compiled binaries can preload the Bedrock module (coding-agent bun/runtime-setup.ts); Bend modules import api/bedrock-converse-stream.bend directly.",
-      "source_sha256": "427a4e76812ea4ac42133e7f41e75df99e0edaff883659c96a0e4ec78f670f9f",
-      "port_sha256": {}
-    },
-    "packages/ai/src/api/google-generative-ai.ts": {
-      "state": "ported",
-      "note": "Ported as three modules: google-generative-ai.bend (GoogleOptions, streamSimple's option mapping with clamped levels, level-or-budget thinking config and getGoogleBudget, buildParams producing the SDK parameters, client headers, and the SDK's parameter-to-REST conversion with its field order); google-generative-ai-stream.bend (the SDK's processStreamResponse framing with its delimiters, in-band error chunks and incomplete-segment error, and the chunk fold: text/thinking block transitions, signatures, function calls with generated ids, responseId, usage and finish reasons); google-generative-ai-client.bend (streamSimple's missing-key and level-mapping errors fail before a stream exists, as upstream throws synchronously; the stream lifecycle: custom-fetch and API-key checks, onPayload replacement, the SDK model path and address, headers, retryProviderRequest with status-only failures, the body loop and the catch block). tests/google_generative_ai_check.py compares 560 captured params, wire requests and streamed messages/event sequences with pinned pi-mono and runs the ported suites; tests/google_client_loopback.py covers the HTTP path and the agent glue. Documented differences (the tool-call counter one is flagged for review with the user): x-goog-api-client carries the SDK label without the gl-node/<process.version> runtime label (there is no Node runtime); the generated tool-call id counter is per stream instead of module-global (upstream's `let toolCallCounter` at google-generative-ai.ts:57; ids stay unique within a response and Date.now() distinguishes streams unless two start in the same millisecond); JSON.parse's engine-specific error text is replaced by the native parser's; event partials are snapshots. No live Gemini request has been verified.",
-      "source_sha256": "c20f1a40875b2106b6d39d8b7837cd30a882c6a5fcf8c311ccc42a090e18e956",
-      "port_sha256": {
-        "packages/ai/src/api/google-generative-ai.bend": "8e5fddf0912e58a6af8a24da3425ddfd4970278f1dc8811557f1ac9d524e7d46",
-        "packages/ai/src/api/google-generative-ai-stream.bend": "786ea73d7b16f635095a24c049667395a971ce730fd2a696ca699184371fb243",
-        "packages/ai/src/api/google-generative-ai-client.bend": "eaaeead401f3172c802f3e76b871f6e69ab4cb3b4e1b87128923586621ecc19b"
-      },
-      "ports": [
-        "packages/ai/src/api/google-generative-ai.bend",
-        "packages/ai/src/api/google-generative-ai-stream.bend",
-        "packages/ai/src/api/google-generative-ai-client.bend"
-      ]
-    },
-    "packages/ai/src/api/google-shared.ts": {
-      "state": "ported",
-      "note": "Ported to google-shared.bend: Google thinking levels and their resolution/validation messages, usesGoogleThinkingLevel, disabled thinking config, thought-signature retention and validation, Gemini version rules (tool call ids, multimodal function responses, strict tool sampling), convertMessages (transformMessages with id normalization, signed/unsigned replay, empty-block handling, consecutive function responses, legacy image turns), sanitizeForOpenApi, convertTools with strict schemas, mapToolChoice, resolveGoogleFunctionCallingMode and mapStopReason/mapStopReasonString. Covered by the ported google-shared-* suites and the Google differential in tests/google_generative_ai_check.py. The Vertex caller is not ported, so Vertex-only paths are exercised only through the shared functions.",
-      "source_sha256": "62500d190085d9725ab9dd547ff1ee37e1f47daecf047836700a48980d2ec113",
-      "port_sha256": {
-        "packages/ai/src/api/google-shared.bend": "1984735bfdfef01a52262523c27298c49ca0ea51421b9a2febd1e67bc420dc97"
-      }
-    },
-    "packages/ai/src/auth/oauth/pkce.ts": {
-      "state": "ported",
-      "note": "Native generatePKCE reads 32 secure random bytes, base64url-encodes the verifier and SHA-256 challenge, and returns immutable PKCE fields. Failures are typed errors. tests/anthropic_oauth_start_check.py compares native one/four-thread authorization challenges with the Python SHA-256/base64 oracle; browser interaction tests exercise worker cleanup.",
-      "source_sha256": "33835111577490103dbb7509b7687db1643691d7b425845428f3cbeb873fe9cf",
-      "port_sha256": {
-        "packages/ai/src/auth/oauth/browser.bend": "7a393a30ddb616aa8405185ba5acd07ef541df0200f50b90e0bf2a96da1fe4de"
-      },
-      "ports": [
-        "packages/ai/src/auth/oauth/browser.bend"
-      ]
-    },
-    "packages/ai/src/auth/oauth/openai-codex.ts": {
-      "state": "partial",
-      "note": "Native OAuthAuth.login selects browser/device login. Browser authorization uses PKCE, independent 16-byte hex state, upstream URL fields, callback host override, state validation, manual-input fallback and token exchange with the browser redirect URI. Device login notifies the user code then polls/exchanges with the device redirect URI. Refresh and toAuth remain native. Browser/manual workers share typed first-settlement arbitration and are cancelled/joined before disposal. Callback completion HTML is simplified; exact token-error classification/rendering and source-wide edge-case parity remain incomplete.",
-      "source_sha256": "757c6cff2bc67d89df30ad175eead549519e1d3756397b5b4189460ac9dbcaba",
-      "port_sha256": {
-        "packages/ai/src/auth/oauth/openai-codex.bend": "bd8c582fb0c5e8fbf734ba47d9ee358633d1d1b5243f8bcd0ecfd6f36b4ea41a",
-        "packages/ai/src/auth/oauth/browser.bend": "7a393a30ddb616aa8405185ba5acd07ef541df0200f50b90e0bf2a96da1fe4de"
-      },
-      "ports": [
-        "packages/ai/src/auth/oauth/openai-codex.bend",
-        "packages/ai/src/auth/oauth/browser.bend"
-      ]
-    },
-    "packages/ai/src/auth/oauth/anthropic.ts": {
-      "state": "partial",
-      "note": "Native OAuthAuth.login uses PKCE, the upstream authorization URL, callback host override, browser/manual arbitration, progress notification and authorization-code exchange. Refresh retains the five-minute expiry margin and toAuth derives bearer auth. Native callback/manual fixtures check state rejection, cancellation, typed prompt failures and occupied-port fallback; the PKCE oracle checks generated challenges. Callback completion HTML is simplified; exact token-error classification/rendering and source-wide edge-case parity remain incomplete.",
-      "source_sha256": "8bf457ab5f0e7756898bff324d54d7ad9e4d4977c1053cb744791ac024945810",
-      "port_sha256": {
-        "packages/ai/src/auth/oauth/anthropic.bend": "535086d65c4f51e8e2eae7475341ffe0e3bb97347fe605f1d0514257e9d3c169",
-        "packages/ai/src/auth/oauth/browser.bend": "7a393a30ddb616aa8405185ba5acd07ef541df0200f50b90e0bf2a96da1fe4de"
-      },
-      "ports": [
-        "packages/ai/src/auth/oauth/anthropic.bend",
-        "packages/ai/src/auth/oauth/browser.bend"
-      ]
-    },
     "packages/coding-agent/src/core/model-runtime.ts": {
       "state": "partial",
       "note": "Reviewed login path: native login dispatches by provider and auth type, normalizes an absent signal with an owned controller, rejects pre-aborted requests, saves through the credential store and refreshes availability. Interactive API-key login uses this path; OAuth providers implement native login callbacks. Upstream per-provider credential-operation serialization, complete synchronizeCredentialState behavior and source-wide ModelRuntime coverage remain incomplete.",
@@ -730,202 +492,272 @@
         "packages/coding-agent/src/core/model-runtime.bend"
       ]
     },
-    "packages/ai/src/models.ts": {
+    "packages/coding-agent/src/core/session-manager.ts": {
       "state": "partial",
-      "note": "Reviewed provider/publication types and collection/auth ownership. Provider, RefreshModelsContext and ModelsPublication have native representations and fetched-catalog helpers. The standalone Models/MutableModels collection is not exposed in pi-ai: much of its catalog, auth, refresh and request behavior currently lives in coding-agent ModelRuntime/agent-runtime. This layer must be separated into the AI library while keeping app configuration and credential-operation synchronization in ModelRuntime; public collection operations and API boundary parity remain incomplete.",
-      "source_sha256": "84f2799b0bf45fb01237c5c2c19641b0da5d1245670b208c05bacb5cff36b96f",
+      "note": "Session persistence, resume, tree and fork work; complete upstream session/recovery parity is not claimed.",
+      "source_sha256": "ded5d65112f8666f0e3ae71dab39a302607c29a000745a3d06e00c2103c8f257",
       "port_sha256": {
-        "packages/ai/src/models.bend": "3815ddbe25e6b845185f21779af1de07f0b9900787a443e4a1616893b8b6ec83",
-        "packages/coding-agent/src/core/model-runtime.bend": "5ff88f4f6806ba7f055acc44522dfdbf39028ce3eed7efd29e5e7bc3f5919457"
+        "packages/coding-agent/src/core/session-manager.bend": "66905475905747fb9c53670f213967704ee46c3ed9020e2144a0ebbd9da56158"
+      }
+    },
+    "packages/coding-agent/src/core/settings-diagnostics.ts": {
+      "state": "ported",
+      "note": "collectSettingsDiagnostics drains the manager's load errors into warnings with the file path, or the scope when storage has none, and returns the drained manager; deduplicateDiagnostics keeps the first of each type and message. AgentSessionRuntimeDiagnostic (agent-session-services.ts) lives here with `type` renamed `kind`. Error messages are the port's typed settings errors rendered as text. main.bend reports startup settings diagnostics through them. tests/settings-diagnostics.bend ports settings-diagnostics.test.ts.",
+      "source_sha256": "8ef3554ff841468a2493d9bab2754aa7a305471ea5754e54efccc363fe0dd0e1",
+      "port_sha256": {
+        "packages/coding-agent/src/core/settings-diagnostics.bend": "405a62a513984a20e20f45366bcd966dc78090f082ca51e3ab31b59948a8e56c"
+      }
+    },
+    "packages/coding-agent/src/core/tools/bash.ts": {
+      "state": "partial",
+      "note": "Native Bash execution and interactive streaming work; the tool now reads live session context, while output preview and exact terminal parity retain known gaps.",
+      "source_sha256": "3f43b6d80b460bd38334975bee2726b5438ee6e54bf52abdb6fc54400aad28d2",
+      "port_sha256": {
+        "packages/coding-agent/src/core/tools/bash.bend": "95bff0c54faa3dc7fbd493c9e3078559b415efdbe7d17c8e2b9c991f1d293b5c"
+      }
+    },
+    "packages/coding-agent/src/core/tools/edit.ts": {
+      "state": "partial",
+      "note": "Native edit execution works; complete upstream edit behavior is not established by the current source review.",
+      "source_sha256": "31a368c14cf5437ecac157765660001b16063302d9bd746303d6d1b1dcb5625d",
+      "port_sha256": {
+        "packages/coding-agent/src/core/tools/edit.bend": "f82d4e67996ca4a5b28166c2eb3d10b7bfff3b3411d0461090b6cea6d0f00563"
+      }
+    },
+    "packages/coding-agent/src/core/tools/path-utils.ts": {
+      "state": "partial",
+      "note": "Tool path expansion and resolution live in utils/paths.bend, and read-file fallback candidates live there too; the upstream path-utils test suite is still pending.",
+      "source_sha256": "ab6f420d2388a41366113c17a25e356867820b87b02a169d044cfcf83e1997d3",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/paths.bend": "b67c1efdf251875fe71e8712c23c82a5d520e9eac1bd56675215a0e1ad81ab4c"
       },
       "ports": [
-        "packages/ai/src/models.bend",
-        "packages/coding-agent/src/core/model-runtime.bend"
+        "packages/coding-agent/src/utils/paths.bend"
       ]
     },
-    "packages/coding-agent/src/modes/rpc/rpc-client.ts": {
-      "state": "ported",
-      "note": "RpcClient with every command method, start/stop of the child (SIGTERM, SIGKILL after 1 s), request ids, 30 s request timeouts, exit/spawn/stdin failures rejecting pending requests, strict JSONL stdout with StringDecoder-style UTF-8, stderr collection/forwarding, event listeners, waitForIdle/collectEvents/promptAndWait and getData. Adaptations: cliPath is the agent executable (not `node cliPath`); the transport is the injectable `send` (withSend); results are typed, decoded per command; events are their JSON values (json-event's JsonAgentSessionEvent); a spawn failure fails start() instead of the later send; requests still pending at stop() fail with the exit error instead of their timeouts; listeners run on the stdout reader and must not wait for responses or unsubscribe themselves.",
-      "ports": [
-        "packages/coding-agent/src/modes/rpc-client.bend"
-      ],
-      "source_sha256": "6d1a586cfa38fd3be62d21feacfe9e700f6e88d4fc842adcc345130acd0d57ff",
-      "port_sha256": {
-        "packages/coding-agent/src/modes/rpc-client.bend": "c68686c4a326b036aca16c199115b7621d5725008fce2dbadee902768d997237"
-      }
-    },
-    "packages/coding-agent/src/modes/rpc/rpc-types.ts": {
-      "state": "ported",
-      "note": "Typed RpcCommand (encoder), response envelope, RpcSessionState, RpcSlashCommand, RpcExtensionUIRequest and RpcExtensionUIResponse, with encoders used by the endpoint and decoders used by RpcClient and the endpoint's extension UI, plus wire codecs for bash results, cleared queues and the entry tree. Per-command response data stays JSON in the envelope and is decoded by each client method.",
-      "ports": [
-        "packages/coding-agent/src/modes/rpc-types.bend"
-      ],
-      "source_sha256": "34057257456fd5f935587a0e9650fb5777738674e491a68fd037425703c45e26",
-      "port_sha256": {
-        "packages/coding-agent/src/modes/rpc-types.bend": "d324a0ac91ad81e1e7e332589f3b7241f471b9ebff7f2ea18e7fd5206f8d042a"
-      }
-    },
-    "packages/coding-agent/src/modes/rpc/jsonl.ts": {
-      "state": "ported",
-      "note": "serializeJsonLine and the LF-only framing step of attachJsonlLineReader over decoded text; byte-compared with upstream in tests/rpc_protocol_check.py. Stream attachment and UTF-8 decoding belong to the callers (main.bend's stdin loop, RpcClient's stdout reader).",
-      "ports": [
-        "packages/coding-agent/src/modes/jsonl.bend"
-      ],
-      "source_sha256": "95723d349fcebad1f1da7ce103d02ba7d5e2c876b7d178d41d8b56beedbd93e0",
-      "port_sha256": {
-        "packages/coding-agent/src/modes/jsonl.bend": "2365821a97684ac0e9b9a60a251d3974babf58e03090e4b2b0614f95fdae989f"
-      }
-    },
-    "packages/coding-agent/src/core/auth-guidance.ts": {
-      "state": "ported",
-      "note": "All four messages; callers pass the docs directory where upstream reads its package location (config.ts getDocsPath). Not yet used by AgentSession.prompt's preflight (see tests/rpc.md).",
-      "source_sha256": "8fbee7c272953bf881f22e9ce4b163bb0df9c091f63ee823dbfe32186991efe0",
-      "port_sha256": {
-        "packages/coding-agent/src/core/auth-guidance.bend": "dc2b5f649bf75101196be156d6a19e52aa00da717f66acf2df30b8c1f8e4689d"
-      }
-    },
-    "packages/ai/src/api/openrouter-images.ts": {
-      "state": "ported",
-      "note": "generateImages: the missing-key error, buildParams (sanitized text parts, data-URL image parts, stream false, modalities from the model's outputs), the OpenAI SDK client over openai-client.bend (bearer auth, model then option headers with nulls dropped, the request timeout), onPayload replacement, retryProviderRequest around one SDK attempt, onResponse after the body is read, responseId, parseUsage with cache reads/writes and per-million pricing, the first choice's text and data-URL images, and error/aborted results with the formatted provider error; tests/openrouter_images_check.py compares 14 cases with upstream images.ts driving the pinned OpenAI SDK. Native differences: the SDK identity headers (User-Agent, X-Stainless-*) come from the caller's Client.Defaults; the response body is read up to 64 MiB; a 2xx body that is not JSON reports a native message instead of the JavaScript SyntaxError text.",
-      "source_sha256": "c658f331cb2278e7accc925fa72eb3c3902d32d6ff37c4263b6bb6108888d440",
-      "port_sha256": {
-        "packages/ai/src/api/openrouter-images.bend": "e3533f167cf212373d9fc93333232790d2c4593feb26b0673205ba423c83cf5d"
-      }
-    },
-    "packages/ai/src/api/openrouter-images.lazy.ts": {
-      "state": "ported",
-      "note": "openrouterImagesApi: the ProviderImages value is a callback over the native transport (openrouter-images.bend openrouterImagesApi); there is no lazy module import, and a request without a signal runs under a local signal that never aborts.",
-      "ports": [
-        "packages/ai/src/api/openrouter-images.bend"
-      ],
-      "source_sha256": "04c18f8c065779c2f705850e593cee4e0d6207a4121473540a223fc83026a8f4",
-      "port_sha256": {
-        "packages/ai/src/api/openrouter-images.bend": "e3533f167cf212373d9fc93333232790d2c4593feb26b0673205ba423c83cf5d"
-      }
-    },
-    "packages/ai/src/image-models.generated.ts": {
-      "state": "ported",
-      "note": "Generated from the pinned image-models.generated.ts by scripts/generate-model-catalog.py --images; tests/openrouter_images_check.py compares all 55 models with it.",
-      "source_sha256": "1ce6e12ec4ce41f4ac69556ca1417464d235bf203d48194fc9a16535987014b1",
-      "port_sha256": {
-        "packages/ai/src/image-models.generated.bend": "b2610b9d6daa5070def3113bc37eedf09139c138666858a3434737face123a46"
-      }
-    },
-    "packages/ai/src/image-models.ts": {
-      "state": "ported",
-      "note": "getImageModel, getImageProviders and getImageModels over the generated catalog; an unknown provider or id has no model (upstream returns undefined).",
-      "source_sha256": "58f11488a6623fe8528153235f9216c249d70e146b0f99f8b22db8d88a49ae74",
-      "port_sha256": {
-        "packages/ai/src/image-models.bend": "49a5ec2d625ee09709227eea20b7f0f5dce384c5f94e18c10bc7dbf77b573c39"
-      }
-    },
-    "packages/ai/src/images-api-registry.ts": {
-      "state": "ported",
-      "note": "The registry is a value: registerImagesApiProvider returns the next registry (a repeated api replaces its entry in place, as Map.set), getImagesApiProvider looks one up, and generateWith is the registered function with upstream's mismatched-api rejection.",
-      "source_sha256": "604636b0a4b59d1798d79aad48a1dfdd96ee79e3f16b16cdc54dbd1b81c44ffe",
-      "port_sha256": {
-        "packages/ai/src/images-api-registry.bend": "b265ab0bb5de95563a56b32c48ae2b5c0d52820417de8b93db77b6e7cd97274c"
-      }
-    },
-    "packages/ai/src/images.ts": {
-      "state": "ported",
-      "note": "generateImages through the registered api provider; a missing provider is a failure with upstream's message. The registry is passed in instead of being filled by importing register-builtins.",
-      "source_sha256": "de83a96c1eb420cfb1b6f4e3ce8430f19b2312399d195fb786c76ebae4111dcf",
-      "port_sha256": {
-        "packages/ai/src/images.bend": "2ef6f38e1f4eda2a131c71429141772c2b9cfe88a4e1d6c899729a6b0910e723"
-      }
-    },
-    "packages/ai/src/images-models.ts": {
-      "state": "partial",
-      "note": "ImagesProvider/createImagesProvider (name defaulting to the id, last-known catalog, refreshModels with in-flight sharing: a call that waited for a concurrent refresh shares its outcome), and ImagesModels: set/delete/clear providers as value transitions (replacement keeps the position), getProviders/getProvider/getModels/getModel, refresh with model_source failures for one provider and best-effort concurrent refresh of all, getAuth through resolveProviderAuth, and generateImages with auth resolution and per-field option merging (unknown providers and auth rejections become error results). All six images-models.test.ts cases pass (packages/ai/test/images-models.bend). Missing: createImagesModels' defaults (InMemoryCredentialStore and defaultProviderAuthContext); callers pass the store and context.",
-      "source_sha256": "9a3a2bf47263e577925850b182d2b508d0bbf0e1437124b1240bff95b8deeb3a",
-      "port_sha256": {
-        "packages/ai/src/images-models.bend": "e51f0009e4078f5ed017ce437d6cc5c19b51eeada787dc9775a9b0bc54a82718"
-      }
-    },
-    "packages/ai/src/providers/images/register-builtins.ts": {
-      "state": "ported",
-      "note": "registerBuiltInImagesApiProviders registers the openrouter-images api into a registry value; the caller supplies the api callback. The lazy-load failure result has no counterpart because nothing is loaded lazily.",
-      "source_sha256": "8c8bd4e614b8b733c0a4232f7cc974bf38c5a4bb6b9615c732e3b794ff1d908f",
-      "port_sha256": {
-        "packages/ai/src/providers/images/register-builtins.bend": "6a346afd7031f2c5b23ff72bbeccd87698a4e65bc6bc332af21de3b5e943fe46"
-      }
-    },
-    "packages/ai/src/providers/openrouter-images.ts": {
-      "state": "partial",
-      "note": "The OpenRouter images provider with OPENROUTER_API_KEY auth and the generated catalog, registered by builtinImagesModels (providers/all.bend). Missing: the lazy OpenRouter OAuth, as for the chat provider.",
-      "source_sha256": "921e057fa1880412c29a849505ddd7dbe466996d78087c0c0628437ec2051880",
-      "port_sha256": {
-        "packages/ai/src/providers/openrouter-images.bend": "8f8546ed016e90a08042437cb4c808bb06c950e43f23c888a787157b5170f1d5"
-      }
-    },
-    "packages/ai/src/api/google-vertex.ts": {
-      "state": "partial",
-      "note": "stream/streamSimple: the custom-fetch check, resolveApiKey (ADC markers and placeholders), the API key or ADC client with project/location from options and env, buildHttpOptions (custom base URL at collection scope, version detection, User-Agent and header overlay), buildParams shared with Google Generative AI, onPayload, the SDK's Vertex URL, headers and request conversion, retryGoogleRequest, and the shared stream loop with the api name and 'Google Vertex stream ended without a finish reason'; streamSimple without a key requirement and with Vertex's 2.5 Flash-Lite budgets. ADC: authorized_user and service_account credentials files (keyFilename, else the well-known gcloud file), the refresh-token exchange and gtoken's RS256 JWT bearer grant signed with runtime/rsa-sign.bend (google-vertex-credentials.bend). tests/google_vertex_check.py compares 17 streamed cases with upstream driving the pinned @google/genai and google-auth-library on a loopback server and asserts the 12 client-configuration cases. Missing: impersonated and external-account credentials, the Compute Engine metadata server, and gaxios' token-request retries.",
-      "ports": [
-        "packages/ai/src/api/google-vertex.bend",
-        "packages/ai/src/api/google-vertex-credentials.bend",
-        "packages/ai/src/api/google-generative-ai-client.bend",
-        "packages/ai/src/api/google-generative-ai-stream.bend"
-      ],
-      "source_sha256": "d0a53a2faaad20620800a1e95d2d2175d641011c4d6b00b0877d905c57f16ec1",
-      "port_sha256": {
-        "packages/ai/src/api/google-vertex.bend": "0ebdb23af0dce3514a9f10f49570cdb99a9ee16a853dd2aaa2de4ac4e8a5ec09",
-        "packages/ai/src/api/google-vertex-credentials.bend": "212fd2b5c048ecaf2cccd8fe8be0cabb7c299dc772c90acc1ac13882e440af2d",
-        "packages/ai/src/api/google-generative-ai-client.bend": "eaaeead401f3172c802f3e76b871f6e69ab4cb3b4e1b87128923586621ecc19b",
-        "packages/ai/src/api/google-generative-ai-stream.bend": "786ea73d7b16f635095a24c049667395a971ce730fd2a696ca699184371fb243"
-      }
-    },
-    "packages/ai/src/api/google-vertex.lazy.ts": {
-      "state": "excluded",
-      "note": "Lazy loading of the implementation module through a dynamic import is a JavaScript bundling concern; the Bend runtime dispatches models of this api to google-vertex.bend directly (coding-agent agent-runtime selectedProvider).",
-      "source_sha256": "891f0e07eaaa1bb1df97f0a2d8f067df6acbab50078242108d93b96a710c4712",
-      "port_sha256": {}
-    },
-    "packages/ai/src/providers/google-vertex.ts": {
-      "state": "ported",
-      "note": "The Google Vertex AI provider with its catalog, listed after google in providers/all.bend as upstream; vertexAuth.login (method select, API key, the ADC notice, project, location and service-account file) over the shared AuthPrompt/AuthEvent interaction, and vertexAuth.resolve (stored or GOOGLE_CLOUD_API_KEY key, else the ADC file plus project and location, with the ?? lookup order and abort checks), tested in packages/ai/test/google-vertex-auth.bend.",
-      "source_sha256": "5e321e6d5b80824752ca96e7c9aba8a3fccce722a1793a40d5341a0406ef4878",
-      "port_sha256": {
-        "packages/ai/src/providers/google-vertex.bend": "261c9cc8d338f56f22779cb2d74dfe58b822be34d445d89a6c99b86cd98e9770"
-      }
-    },
-    "packages/ai/src/providers/google-vertex.models.ts": {
-      "state": "ported",
-      "note": "Generated from pi-ai's google-vertex.json by scripts/generate-model-catalog.py; tests/model-catalog.bend dumps every model equal to the pinned data.",
-      "source_sha256": "964109cc69cadf77329846f4fb4baf6c86b00995f33a813230c5a9e54573e93e",
-      "port_sha256": {
-        "packages/ai/src/providers/google-vertex.models.bend": "dbb4cc57f186526c126d6937d244de2f6a5585fb8b4de1921966a0527895cfe9"
-      }
-    },
-    "packages/ai/src/api/cloudflare-ai-binding.ts": {
+    "packages/coding-agent/src/core/tools/powershell.ts": {
       "state": "missing",
-      "note": "Not ported pending a decision: the module adapts a Cloudflare Workers AI binding (env.AI) into a fetch function plus the CLOUDFLARE_GATEWAY_BINDING_AUTH_SENTINEL header value, which only exist inside a Workers runtime; the native CLI has no binding to wrap. A structural port (an AiBinding value with an optional fetch callback and the sentinel) is possible but has no native caller.",
-      "source_sha256": "57f702b91453810241fd50a5629628fcc3d556e75909a37fae857d0a5d27d8fb",
+      "note": "The Windows PowerShell tool, UTF-8 setup and public tool factory are absent; the native tool registry has no powershell entry.",
+      "source_sha256": "56645690718f03e6c5a19b574a74e3f28f0d0df7563fb226eeee5c88576aefad",
       "port_sha256": {}
     },
-    "packages/coding-agent/src/modes/rpc/rpc-mode.ts": {
+    "packages/coding-agent/src/core/tools/read.ts": {
       "state": "partial",
-      "note": "All commands, JSONL framing, correlated errors, prompt/queue semantics, session replacement through the host, event streaming, and extension UI (select/confirm/input dialogs answered by extension_ui_response, notify/setStatus, extension_error records) in rpc mode. Gaps: the prompt response precedes AgentSession's preflight (no preflightResult), so preflight failures are acknowledged as success; commands other than prompts run on the input reader, so an extension dialog opened from one would block; editor/setWidget/setTitle/set_editor_text and dialog timeouts are absent from the native UI context; command-context actions and the shutdown handler are not bound; stdout backpressure and signal handling belong to main.bend. See tests/rpc.md.",
-      "ports": [
-        "packages/coding-agent/src/modes/rpc.bend"
-      ],
-      "source_sha256": "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc",
+      "note": "Native text and image reading with live model context are wired: the non-vision note and the context model's image resize profile (else the tool's own resizeOptions, v0.87.1) reach native image processing. Background image-worker scheduling and full upstream behavior remain open.",
+      "source_sha256": "297d26092979651091f44de8862a6fd55aaf59e7252f8fb8dd3d7cb3f9771518",
       "port_sha256": {
-        "packages/coding-agent/src/modes/rpc.bend": "592b86af63c6e13d7631df617e3eaed6d07e3c1c8d130075e63105059a9deb9a"
+        "packages/coding-agent/src/core/tools/read.bend": "b0bb2888475e05a40aa6753783f9417a4bd50857f2a8836bf2c66f4da37cbf5f"
       }
     },
-    "packages/tui/src/tui.ts": {
+    "packages/coding-agent/src/core/tools/renderers/bash.ts": {
       "state": "partial",
-      "ports": [
-        "packages/tui/src/tui-base.bend",
-        "packages/tui/src/tui-process.bend"
-      ],
-      "note": "Focused review of live terminal preferences: native immutable TuiBase state and the owned process apply hardware-cursor and clear-on-shrink updates through the render scheduler; cursor disabling hides immediately through the owned writer. Native one/four-thread PTY checks exercise live visibility, consecutive independent updates, setter return order and terminal restoration. The broader TUI public API, named getter/setter surface, overlay/focus contracts and complete scheduling/input behavior still require source-wide review; this finding does not establish full TUI parity.",
-      "source_sha256": "2ca47c56f4a4f24b8c6a4c9c9f2a06004bfc312d9dbcd0ac1921a2cae32bc675",
+      "note": "Width-aware five-visual-line tail previews, skipped-line counts and ordinary bash snapshots match upstream; the broader renderer contract is not yet fully validated.",
+      "source_sha256": "f04ab261d9f915f7b43a97ac679fb38d5646110855a886474593dc5d973f6764",
       "port_sha256": {
-        "packages/tui/src/tui-base.bend": "30f0b8d62c944c64137631db5fd17ef30803ccc4603ea9e729c48bc18cb12842",
-        "packages/tui/src/tui-process.bend": "6d39bd17f75c13210681087f7b66416e024ce0e66416e36f58b0e345cddc23e5"
+        "packages/coding-agent/src/core/tools/renderers/bash.bend": "b45d1aa09eaf1fed25a2d74228da2aa84003f609e2769f56268ca4ef6a54210d"
+      }
+    },
+    "packages/coding-agent/src/core/tools/write.ts": {
+      "state": "partial",
+      "note": "Native write execution works; complete upstream source contract has not been reviewed.",
+      "source_sha256": "2ee0a438c24cf83fefd733e349d55a21aa5b633c18934b2c80759fcf14b6f297",
+      "port_sha256": {
+        "packages/coding-agent/src/core/tools/write.bend": "19cc37cbebf64251265e9a812f411abba83a78a24f43aca83d5068d5f6cb6a29"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/chat-viewport.ts": {
+      "state": "partial",
+      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
+      "source_sha256": "24bbdd06a5e17d6c0631f7de51329eb7bb4ecd4a460dec7b3d593ff9e6219960",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/viewport.bend": "5251961f780f6011fd173b198ccd6e4dd82ab65743f2df4463bc06f71a497075"
+      },
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/viewport.bend"
+      ]
+    },
+    "packages/coding-agent/src/modes/interactive/components/assistant-message.ts": {
+      "state": "partial",
+      "note": "Assistant text/thinking rendering, stream updates, independent thinking-run clicks, global reset, mouse hit regions, output padding and stop errors are ported. Markdown extension transformers and their streaming/width context remain incomplete.",
+      "source_sha256": "f8a20228291816aec253d3f115fec5ba765807275bc14077780225117e5912cb",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/messages.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "573442f49506ee1d94f657d529816caecbbf9aee003aa578b821da1c52c1e3a2"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/branch-summary-message.ts": {
+      "state": "partial",
+      "note": "Collapsed/expanded Markdown rendering, theme and mouse toggle are present; broader terminal-frame parity remains unverified.",
+      "source_sha256": "32525e00f5fd9c4e6706aeb77b0647d20d4fa2e35f6384a8b6d4d2fbcd0bb041",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/messages.bend",
+        "packages/coding-agent/src/modes/interactive/transcript.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "573442f49506ee1d94f657d529816caecbbf9aee003aa578b821da1c52c1e3a2",
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "4e7e46c372cb2f71157383b841053b721af788d388eb6ca7883fb6848c957960"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/compaction-summary-message.ts": {
+      "state": "partial",
+      "note": "Collapsed/expanded Markdown rendering, token count, theme and mouse toggle are present; broader terminal-frame parity remains unverified.",
+      "source_sha256": "90f5d197364755431678229959f233527e2b07076d2e7d8ffde83da09b77905a",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/messages.bend",
+        "packages/coding-agent/src/modes/interactive/transcript.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "573442f49506ee1d94f657d529816caecbbf9aee003aa578b821da1c52c1e3a2",
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "4e7e46c372cb2f71157383b841053b721af788d388eb6ca7883fb6848c957960"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/countdown-timer.ts": {
+      "state": "partial",
+      "note": "Native timer rounds positive durations up to seconds, calls the initial tick, decrements every second, expires once and cancels/joins on disposal. Retry tick/disposal is exercised by the status suite. Zero duration completes immediately at zero instead of emitting a negative tick a second later; independent expiry/optional-redraw callback tests remain unported.",
+      "source_sha256": "6ade4aa41c2c2400bdb79d47701c95504be48e3ab9f2b1aee3836a888c2d1da9",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/countdown-timer.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/countdown-timer.bend": "9c02df7baf5ef6931f74b96e7f277f8daccbbbb6dc28a5db8e4818a4cde96d9f"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/custom-message.ts": {
+      "state": "partial",
+      "note": "Displayed text messages use the default themed Markdown box and hidden messages are omitted. Extension-supplied custom renderers and output-pad changes are not yet ported.",
+      "source_sha256": "321af8afdff8da4924a7dbf5623b5637eb160ea7d73a70e6662d8125249bde9b",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/messages.bend",
+        "packages/coding-agent/src/modes/interactive/transcript.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "573442f49506ee1d94f657d529816caecbbf9aee003aa578b821da1c52c1e3a2",
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "4e7e46c372cb2f71157383b841053b721af788d388eb6ca7883fb6848c957960"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/footer.ts": {
+      "state": "partial",
+      "note": "Native footer renders session/model/thinking, usage, context and status data. Auto-compaction state is refreshed from the live session on render and its enabled marker matches the settings-toggle terminal scenario. Full source-wide callback, subscription and extension-status parity remains unverified. Run/retry/compaction lifecycle events preserve extension status data; their indicators render in the editor border.",
+      "source_sha256": "9e0f71e0f405a9f0fdae901de2778834649facd0f78a78b53c682179f8faf693",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/footer.bend",
+        "packages/coding-agent/src/modes/interactive/run.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/footer.bend": "d924bbd85b2a33b86ec77491b3f88014fe87ffac531779233f82cb77c4ce5828",
+        "packages/coding-agent/src/modes/interactive/run.bend": "1b29a5c99e832ee535b321e49e39c2614ab1eb279822b886aa801d1e4339fb49"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/login-dialog.ts": {
+      "state": "partial",
+      "note": "Provider login uses native AuthPrompt/AuthEvent and shared TUI Input. Selection returns the option ID directly and restores preceding dialog content. Text, secret and manual-code prompts preserve notifications; authorization URLs and messages wrap with the TUI ANSI wrapper while retaining their full hyperlink targets. Submission keeps immutable displayed content and masks secrets while returning their raw value. Per-prompt cancellation races removable observations, joins its watchers and leaves the parent signal active. Input and browser-interaction fixtures exercise editing, notifications, selection, browser/manual arbitration and cancellation. Full mouse behavior and completion-page/UI parity remain unreviewed.",
+      "source_sha256": "37608848ca7b72707437aed9627a612eadf570c57a54b1c86972c3532918298c",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "f482fcdc4ba78a9fe5d63f04227a6f8d13bd3076c5aef5882bae3f9741108237"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/model-selector.ts": {
+      "state": "partial",
+      "note": "Native /model selector matches upstream scoped browsing, search, current-model marking, real catalog refresh status, and save-as-default including custom bindings in terminal parity. The All-tab filter matches text but has three ANSI row-reset differences. Multi-catalog refresh failure, timeout/cancellation, mouse behavior, and the full upstream suite remain open.",
+      "source_sha256": "92d70b9faffc9febf2ce0c519c7c086938bddfc5da9ad28d819f408d54e3637e",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/model-selector.bend": "91e8d840a9fb80dd67fa8ce814ee2e2ab94e9e09703b48fea9bd14c6dcbee9b3"
+      },
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/model-selector.bend"
+      ]
+    },
+    "packages/coding-agent/src/modes/interactive/components/oauth-selector.ts": {
+      "state": "partial",
+      "note": "Login menus derive account and API-key options from registered providers, including API-key methods configured outside Pi. Options sort by native locale collation and search provider name, ID, auth type and method name. Mixed menus label auth types even after filtering; typed selections preserve both provider and method. The provider list uses an eight-row window, configured/source badges and alternate-auth warnings. Provider-menu Escape returns to the auth-type menu; direct unknown names open a mixed searchable menu. Native component tests exercise filtering, method identity and cancellation. Provider catalog completeness, cached auth-status ownership, logout-selector styling and mouse behavior remain partial.",
+      "source_sha256": "d4c92352cc8035e4092d9bd67e0250a2eab3124e13f15ac45433acfde92db53f",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "f482fcdc4ba78a9fe5d63f04227a6f8d13bd3076c5aef5882bae3f9741108237"
+      },
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend"
+      ]
+    },
+    "packages/coding-agent/src/modes/interactive/components/scoped-models-selector.ts": {
+      "state": "partial",
+      "note": "The native /scoped-models picker matches upstream selection, clear/enable/provider controls, save, close, and model cycling in terminal parity. Refresh cancellation, unavailable-pattern resolution, reorder/mouse interactions, and remaining ANSI/viewport details are not yet verified or matched.",
+      "source_sha256": "a8524d7ccfaf6fd6044a268a06d43f6eee7325b047057c73bb43fa0b1286c612",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/scoped-models-selector.bend": "d344fc42dc581fb2f742a75485436f4c410213fe42279ac175e7967712d08902"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/session-selector.ts": {
+      "state": "partial",
+      "note": "The native /resume picker lists sessions and supports interactive rename, checked against terminal parity. The startup picker loads progressively from cancellable listings (a cancelled load leaves its rows). Selected-title ANSI styling differs; broader loading, sorting, deletion, mouse and cancellation behavior has not been fully reviewed.",
+      "ports": [
+        "packages/coding-agent/src/cli/session-picker.bend"
+      ],
+      "source_sha256": "8d8744ed7ba79d04fbc5e2fac16ef38083ba2d1e871d12a1a2460faa27e29f27",
+      "port_sha256": {
+        "packages/coding-agent/src/cli/session-picker.bend": "9a90ec301d44ce8a74e6e4d8989443f20fc1dcc74f0ea7a77af5d9af69eb2422"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/settings-selector.ts": {
+      "state": "partial",
+      "note": "Native theme and per-model thinking submenus save and clear settings, with live preview or current-model thinking updates. Hardware-cursor and clear-on-shrink choices persist and update the running terminal; disabling the cursor hides it immediately. Live updates coalesce through the owned render scheduler, preserving independent preferences and avoiding serial-state re-entry from input callbacks. Native one/four-thread PTY tests cover visibility, coalescing, setter return order and terminal restoration; focused settings terminal captures match pi. Other settings controls, some ANSI styling and mouse behavior remain partial.",
+      "source_sha256": "8134b93329c9155bd017df5b6278e2d72b403c8ca1f22c26a81234659ab7e6ea",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/settings-selector.bend": "25ced0bc6437e516f81a520e04471cea40565ca0f6af8e27907eb1b3c7310913",
+        "packages/coding-agent/src/modes/interactive/components/theme-selector.bend": "302bb406bb7ebf0d7844cba854b14bea8c193be907d1d1a8aef73d51c22f2bbf",
+        "packages/coding-agent/src/modes/interactive/components/model-thinking-selector.bend": "0d6bf4c4c89fa884f69d51a0f51938c8f5e14d9c9076e8004a23e152687d3a78"
+      },
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/settings-selector.bend",
+        "packages/coding-agent/src/modes/interactive/components/theme-selector.bend",
+        "packages/coding-agent/src/modes/interactive/components/model-thinking-selector.bend"
+      ]
+    },
+    "packages/coding-agent/src/modes/interactive/components/show-images-selector.ts": {
+      "state": "missing",
+      "note": "The exported yes/no image-display selector is absent; showImages can be changed through the settings panel instead.",
+      "source_sha256": "6bea191c5442c0fa46c7fd54836de31df2042c8ed3aef3225b2a56a5fc1a65a9",
+      "port_sha256": {}
+    },
+    "packages/coding-agent/src/modes/interactive/components/skill-invocation-message.ts": {
+      "state": "partial",
+      "note": "Restored skill invocations are parsed into a collapsible card and separate user prompt; mouse toggle works. Broader terminal-frame parity remains unverified.",
+      "source_sha256": "7ec5c3e95413187aab7937740062cfa3c4dbac4754afbfa78810b6ad89ff0b27",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/messages.bend",
+        "packages/coding-agent/src/modes/interactive/transcript.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "573442f49506ee1d94f657d529816caecbbf9aee003aa578b821da1c52c1e3a2",
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "4e7e46c372cb2f71157383b841053b721af788d388eb6ca7883fb6848c957960"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/status-indicator.ts": {
+      "state": "ported",
+      "note": "Native typed Working, Retry, Compaction and BranchSummary indicators preserve standalone/embedded rendering, theme colors, custom working color/frames, reason labels, kind, spinner rendering and retry countdown disposal. Owned resources and borrowed appearance callbacks replace class inheritance; IdleStatus is a pure two-row rendering function. Interactive callers are tracked separately.",
+      "source_sha256": "1deb7f7ce7d05e4ab6ea8f088f36aac6a64273dfda8c1d46483c98297777cd2d",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/status-indicator.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/status-indicator.bend": "9b9e8670acf35d27d058cf9e2b35807966284a891ef706d1002beb27f8a85e0e"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/theme-selector.ts": {
+      "state": "partial",
+      "note": "Native settings theme submenu previews, cancels, saves and configures automatic light/dark themes; a filename/content-name mismatch appears correctly in the menu. User-theme startup notices and filename/content-name differences match terminal captures. Standalone exported API, preview header redraw, remaining ANSI styling and mouse details are partial.",
+      "source_sha256": "267be3176c67bddb72f0f64a9c3561a256c758707afbeabe2ac68112c8e3b5f8",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/theme-selector.bend": "302bb406bb7ebf0d7844cba854b14bea8c193be907d1d1a8aef73d51c22f2bbf"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/thinking-selector.ts": {
+      "state": "partial",
+      "note": "The interactive picker matches upstream terminal frames for search, selection and save-as-default; mouse input and the full navigation/cancellation contract remain unverified.",
+      "source_sha256": "a8e562022d04ef4266191ba35a0417fced547666be6e6e97329aa3918b512e18",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/thinking-selector.bend": "b2874a95ffd83ab8e7568c3a4613ac4c0e9b336a71229a6931dcc9e07cc55460"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/user-message-selector.ts": {
@@ -939,6 +771,182 @@
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/user-message-selector.bend": "b61bafd3b049f4267ddb60bbe95936b166a557ef09a3468b6c10fdbf13e81212",
         "packages/coding-agent/src/modes/interactive/components/session-selector.bend": "8269bb5529bc0813ce077e24d58afebd947f859be447189c2f78d9dc0ecf9053"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/interactive-mode.ts": {
+      "state": "partial",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/interactive-mode.bend",
+        "packages/coding-agent/src/modes/interactive/run.bend",
+        "packages/coding-agent/src/modes/interactive/commands.bend",
+        "packages/coding-agent/src/modes/interactive/viewport.bend",
+        "packages/coding-agent/src/main.bend",
+        "packages/coding-agent/src/modes/interactive/components/header.bend"
+      ],
+      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native provider-directed API-key and OAuth login uses ModelRuntime.login, prompt/notify callbacks and shared cancellation. Registered providers supply menus and custom account-login labels; direct provider IDs/display names match without case sensitivity, and dual-method providers offer account/API-key selection. Codex offers browser/device authorization and Anthropic browser/manual authorization. Fullscreen startup, typing, viewport scrolling, and keyboard transcript search match focused terminal captures; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection, dynamic mode switching and broader commands remain partial. Exact /model matches use the cached scoped or available list; misses refresh the catalog with a 15-second abort deadline, retry exact matching, then open the filtered picker. The miss picker matches plain terminal frames; prefilled search cursor styling remains different. Interactive HTML export now uses the active theme palette and explicit export backgrounds. Resumed transcripts now render compaction and branch summaries, displayed custom messages, and skill invocations in sequence; live structural entries use the same path. The footer reads live auto-compaction state, so disabling it removes the auto marker immediately. User-theme resource notices match compact and expanded terminal captures, quiet startup and reload refresh; context sections retain their extra spacer. Prompt/extension listings, project/package theme sources and broader resource diagnostics remain incomplete. Working/retry/compaction statuses use native owned loaders and countdowns; retry countdown and Escape cancellation have terminal comparisons. Manual compaction completion rebuilds retained context and appends the summary chronologically; completion, Escape cancellation and the following model request match focused terminal comparisons. Initial branch-summary status and broader compaction queue/progress/cost-notice integration remain incomplete. API-key login now accepts all native AuthPrompt kinds, provider notifications and per-prompt cancellation. Pasted API-key prompt/save terminal captures and the basic request loop match pi. Broader provider catalog and secret-masking parity remain partial. Hardware-cursor and clear-on-shrink settings update the running TUI after successful persistence; cursor disabling hides immediately, and focused setting/persistence/editor terminal captures match pi. Copy and custom new/tree/fork/resume shortcuts route through the existing session commands without submitting the editor draft; new-session rebinding preserves it as upstream does. The fork picker uses a dedicated immutable user-message component; native1/native4 mounted checks verify prompt restoration and isolated fork history. Empty-text user messages are excluded and successful forks show the upstream status notice. Tree selector layout and controls remain incomplete. Fullscreen selection copying and confirmation flashes, external-editor launch, terminal suspension and clipboard-image shortcuts remain incomplete.",
+      "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "272d9269ef5ed6e3c28627c9bb2eb8e1c7dc34c5b8fec7dd74ed6032417c3387",
+        "packages/coding-agent/src/modes/interactive/run.bend": "1b29a5c99e832ee535b321e49e39c2614ab1eb279822b886aa801d1e4339fb49",
+        "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
+        "packages/coding-agent/src/modes/interactive/viewport.bend": "5251961f780f6011fd173b198ccd6e4dd82ab65743f2df4463bc06f71a497075",
+        "packages/coding-agent/src/main.bend": "3dbefc6db3127fbb6d532c0208f27ab2a172c601d852f50a106083bf7641f1bb",
+        "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/theme/theme-controller.ts": {
+      "state": "partial",
+      "note": "Native controller applies and previews themes, restores cancelled previews and handles automatic mode; the full upstream reload and terminal-notification behavior remains partial.",
+      "source_sha256": "ad18b680f43a63c0d7a0da3e946d38e95a436d9fcf593f7268f7562f7c4be25e",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/theme/theme-controller.bend": "2a152b15f56087b971d9bfef8bab2648344e343f79a366e1228235e7ce103bfe"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/theme/theme.ts": {
+      "state": "partial",
+      "note": "Built-in and custom theme loading, JSON-name discovery, sorted catalog and theme render equality are implemented; registered themes, reload and export behavior remain partial.",
+      "source_sha256": "c3bf2e3b72f6bb782f34de0535fcc1758b9b6ea7a0d2e7d6f17244fa55c3f31a",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/theme/theme.bend": "76a42fe606b7ef048cd2fdd76f4c5a846dd4b1db0edfdb46582652411a4de7b8"
+      }
+    },
+    "packages/coding-agent/src/modes/rpc/jsonl.ts": {
+      "state": "ported",
+      "note": "serializeJsonLine and the LF-only framing step of attachJsonlLineReader over decoded text; byte-compared with upstream in tests/rpc_protocol_check.py. Stream attachment and UTF-8 decoding belong to the callers (main.bend's stdin loop, RpcClient's stdout reader).",
+      "ports": [
+        "packages/coding-agent/src/modes/jsonl.bend"
+      ],
+      "source_sha256": "95723d349fcebad1f1da7ce103d02ba7d5e2c876b7d178d41d8b56beedbd93e0",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/jsonl.bend": "2365821a97684ac0e9b9a60a251d3974babf58e03090e4b2b0614f95fdae989f"
+      }
+    },
+    "packages/coding-agent/src/modes/rpc/rpc-client.ts": {
+      "state": "ported",
+      "note": "RpcClient with every command method, start/stop of the child (SIGTERM, SIGKILL after 1 s), request ids, 30 s request timeouts, exit/spawn/stdin failures rejecting pending requests, strict JSONL stdout with StringDecoder-style UTF-8, stderr collection/forwarding, event listeners, waitForIdle/collectEvents/promptAndWait and getData. Adaptations: cliPath is the agent executable (not `node cliPath`); the transport is the injectable `send` (withSend); results are typed, decoded per command; events are their JSON values (json-event's JsonAgentSessionEvent); a spawn failure fails start() instead of the later send; requests still pending at stop() fail with the exit error instead of their timeouts; listeners run on the stdout reader and must not wait for responses or unsubscribe themselves.",
+      "ports": [
+        "packages/coding-agent/src/modes/rpc-client.bend"
+      ],
+      "source_sha256": "6d1a586cfa38fd3be62d21feacfe9e700f6e88d4fc842adcc345130acd0d57ff",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/rpc-client.bend": "c68686c4a326b036aca16c199115b7621d5725008fce2dbadee902768d997237"
+      }
+    },
+    "packages/coding-agent/src/modes/rpc/rpc-mode.ts": {
+      "state": "partial",
+      "note": "All commands, JSONL framing, correlated errors, prompt/queue semantics, session replacement through the host, event streaming, and extension UI (select/confirm/input dialogs answered by extension_ui_response, notify/setStatus, extension_error records) in rpc mode. Gaps: the prompt response precedes AgentSession's preflight (no preflightResult), so preflight failures are acknowledged as success; commands other than prompts run on the input reader, so an extension dialog opened from one would block; editor/setWidget/setTitle/set_editor_text and dialog timeouts are absent from the native UI context; command-context actions and the shutdown handler are not bound; stdout backpressure and signal handling belong to main.bend. See tests/rpc.md.",
+      "ports": [
+        "packages/coding-agent/src/modes/rpc.bend"
+      ],
+      "source_sha256": "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/rpc.bend": "592b86af63c6e13d7631df617e3eaed6d07e3c1c8d130075e63105059a9deb9a"
+      }
+    },
+    "packages/coding-agent/src/modes/rpc/rpc-types.ts": {
+      "state": "ported",
+      "note": "Typed RpcCommand (encoder), response envelope, RpcSessionState, RpcSlashCommand, RpcExtensionUIRequest and RpcExtensionUIResponse, with encoders used by the endpoint and decoders used by RpcClient and the endpoint's extension UI, plus wire codecs for bash results, cleared queues and the entry tree. Per-command response data stays JSON in the envelope and is decoded by each client method.",
+      "ports": [
+        "packages/coding-agent/src/modes/rpc-types.bend"
+      ],
+      "source_sha256": "34057257456fd5f935587a0e9650fb5777738674e491a68fd037425703c45e26",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/rpc-types.bend": "d324a0ac91ad81e1e7e332589f3b7241f471b9ebff7f2ea18e7fd5206f8d042a"
+      }
+    },
+    "packages/tui/src/alt-screen-search.ts": {
+      "state": "partial",
+      "note": "The native immutable search index handles rendered-text normalization, cross-row and Unicode column mapping, non-overlapping matching and cache invalidation; the fullscreen keyboard search box and themed highlights match a focused upstream terminal capture. Mouse navigation, hover, full Input-component editing and the remaining upstream search assertions are open.",
+      "source_sha256": "7d339e83cf0f160847335dc9be0d1f1db2a0945c463c3d636c7b84ceb9665d40",
+      "port_sha256": {
+        "packages/tui/src/alt-screen-search.bend": "f50b2bacdea543fe16a4459b14844fcf70239b03402dd3d4e29f6126ee5db6d7"
+      }
+    },
+    "packages/tui/src/components/input.ts": {
+      "state": "ported",
+      "note": "The component behavior, including input, render, mouse and callback order, has source-replayed coverage for all 36 named tests plus native word-segmenter integration.",
+      "source_sha256": "416ceeb28f10b7146f6a284f276589797763b604d439574fbdc2a3ca52c00234",
+      "port_sha256": {
+        "packages/tui/src/components/input.bend": "8085e931a7b8b2b5c64a75b8115afc35cec8cc77751a8695e7f12fdead5f74fc"
+      }
+    },
+    "packages/tui/src/components/scroll-view.ts": {
+      "state": "partial",
+      "note": "Follow-end, manual scrolling, scrollbars, and viewport state are implemented. Mouse-hover behavior, transient hide timing, configurable styles, and the full upstream suite remain open.",
+      "source_sha256": "76dfd9f8a88cabc064f0652b83f16a945fbc988c9fe7c0423a4cd796907ef77d",
+      "port_sha256": {
+        "packages/tui/src/components/scroll-view.bend": "0b6d7081ad10aabbe5f6e25ed4c7871b85ed38d10f45774be294c4a9ae6db95b",
+        "packages/tui/src/layout.bend": "dc7eafd16cf1c1c3a703eb237cddc1270a7cadfb398e942070284493442a02f8"
+      },
+      "ports": [
+        "packages/tui/src/components/scroll-view.bend",
+        "packages/tui/src/layout.bend"
+      ]
+    },
+    "packages/tui/src/components/select-list.ts": {
+      "state": "ported",
+      "note": "The five named source tests and supplemental action traces cover filtering, rendering, keyboard, mouse and callback order for the native component.",
+      "source_sha256": "0fc369801e745eff15567d72829bf67887f5efec8bc6816aaf1ee65338618373",
+      "port_sha256": {
+        "packages/tui/src/components/select-list.bend": "699a7919326cd02e7488f8cfdabe14a4099389daa8f3fec4a75e3e77510d94cb"
+      }
+    },
+    "packages/tui/src/components/settings-list.ts": {
+      "state": "partial",
+      "note": "All named source tests and state traces pass, but Unicode fuzzy-search scoring is not established as source-equivalent and whole-terminal integration is separate.",
+      "source_sha256": "8d6b91d3c4aaaf11225854847d42ae6da852ef2646d54542c5b51a97dde15605",
+      "port_sha256": {
+        "packages/tui/src/components/settings-list.bend": "4b0c2e6acfc30eb78799796379dd5e53f659e0bdfc6ee048fc20b70e242db4f5"
+      }
+    },
+    "packages/tui/src/editor-component.ts": {
+      "state": "partial",
+      "ports": [
+        "packages/tui/src/components/editor-component.bend"
+      ],
+      "note": "The Bend editor component lives under components; complete source contract review is pending.",
+      "source_sha256": "0e40ba454b74e2ce21dfc6d831c185e5fb5619b0987fa158be98ed98564e8716",
+      "port_sha256": {
+        "packages/tui/src/components/editor-component.bend": "663f5c5cb3147e198a0a331234c58fdd3755f3b2b37ce5e63a421b5dae943eee"
+      }
+    },
+    "packages/tui/src/layout-node.ts": {
+      "state": "partial",
+      "note": "Native immutable layout nodes represent stack and scroll structure, including page, half-page, line, start, end and absolute-row movement of the primary viewport. The complete upstream layout contract is not yet validated.",
+      "source_sha256": "31dd68c9edafdc4f882bbb6c16f8deb1c514111020b647f0037b34d6b8c70a85",
+      "port_sha256": {
+        "packages/tui/src/layout-node.bend": "6f9be9b03b276758146322e3b7ea9d608996c7d45007dca8dc408d326c2c9d75"
+      },
+      "ports": [
+        "packages/tui/src/layout-node.bend"
+      ]
+    },
+    "packages/tui/src/tui-alt-screen.ts": {
+      "state": "partial",
+      "note": "Native fullscreen startup, typing, scrolling, and keyboard transcript search match focused upstream terminal captures. Search opens with Ctrl+Shift+F, shows themed highlights and counts, navigates with Enter, and restores the screen on Escape; the index reuses unchanged content. Mouse search controls, full input editing, mouse selection, image placement, and the rest of the upstream suite remain open. Light-theme scrollbar colors, top-of-transcript background resets, and fullscreen exit cursor/border styling still differ.",
+      "source_sha256": "5f6032a07398b8df3f72d65c38dbed2e52649a25823a52946d6414ddb2f8a929",
+      "port_sha256": {
+        "packages/tui/src/tui-alt-screen.bend": "fc744cf11f805edc876e283d5bb308ecadfc95e505ced68536f850a34beef8f5",
+        "packages/tui/src/tui-base.bend": "30f0b8d62c944c64137631db5fd17ef30803ccc4603ea9e729c48bc18cb12842",
+        "packages/tui/src/tui-process.bend": "6d39bd17f75c13210681087f7b66416e024ce0e66416e36f58b0e345cddc23e5"
+      },
+      "ports": [
+        "packages/tui/src/tui-alt-screen.bend",
+        "packages/tui/src/tui-base.bend",
+        "packages/tui/src/tui-process.bend"
+      ]
+    },
+    "packages/tui/src/tui.ts": {
+      "state": "partial",
+      "ports": [
+        "packages/tui/src/tui-base.bend",
+        "packages/tui/src/tui-process.bend"
+      ],
+      "note": "Focused review of live terminal preferences: native immutable TuiBase state and the owned process apply hardware-cursor and clear-on-shrink updates through the render scheduler; cursor disabling hides immediately through the owned writer. Native one/four-thread PTY checks exercise live visibility, consecutive independent updates, setter return order and terminal restoration. The broader TUI public API, named getter/setter surface, overlay/focus contracts and complete scheduling/input behavior still require source-wide review; this finding does not establish full TUI parity.",
+      "source_sha256": "2ca47c56f4a4f24b8c6a4c9c9f2a06004bfc312d9dbcd0ac1921a2cae32bc675",
+      "port_sha256": {
+        "packages/tui/src/tui-base.bend": "30f0b8d62c944c64137631db5fd17ef30803ccc4603ea9e729c48bc18cb12842",
+        "packages/tui/src/tui-process.bend": "6d39bd17f75c13210681087f7b66416e024ce0e66416e36f58b0e345cddc23e5"
       }
     }
   }

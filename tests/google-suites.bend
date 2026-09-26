@@ -7,6 +7,7 @@ import ../packages/ai/test/google-shared-signed-empty-blocks.bend as SignedEmpty
 import ../packages/ai/test/google-shared-retry.bend as Retry
 import ../packages/ai/test/google-thinking-level-map.bend as LevelMap
 import ../packages/ai/test/google-raw-stop-reason.bend as RawStopReason
+import ../packages/ai/test/google-fetch-option.bend as FetchOption
 
 # The ported upstream Google suites (tests/google_generative_ai_check.py).
 def main() -> IO(Unit):
@@ -19,3 +20,4 @@ def main() -> IO(Unit):
     Retry.run()
     LevelMap.run()
     RawStopReason.run()
+    FetchOption.run()

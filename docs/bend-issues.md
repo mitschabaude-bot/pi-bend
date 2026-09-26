@@ -184,6 +184,8 @@ A test runner composing the SSE JSON policy, schema-to-provider conversion and J
 
 The IDNA mapper later reproduced the same imported-pattern failure when a new global helper `replacement` collided with the existing `Data.Deviation{replacement}` binder. Renaming the helper to `mappedReplacement` allows integration; the reduced pattern reproducer above and its unresolved compiler diagnosis still apply. No new compiler patch was made. The live TUI preference update reproduced the same failure with `case TuiBase{...,frame,...}` in tui-process.bend, which also exports a `frame` helper: direct checking passed, importing the module failed. The local pattern now uses `displayed`; the existing reduced reproducer and diagnosis still apply.
 
+The ai suite ports (2026-09-26) hit the same imported-pattern failure three more times: test modules compiled on their own but failed once imported by a suites entry, because a helper def (`levels`, `headers`, `streams`) shared its name with a pattern binder in the same module (`/tmp` reduction: a module with `def value(x: U32) -> U32` and `case Box{value}: value` checks directly; importing it fails with `observed: lib.value`). The helpers were renamed (`openCodeStreams`, `headerRecord`, binder `budget`); no compiler change. BEND-012's pattern case remains open.
+
 A separate local-binding failure during the same integration was not a new compiler defect: the guide's `do` grammar specifies `x : A = v` for pure bindings. Adding the omitted type annotation to that binding was sufficient.
 
 ### BEND-001/BEND-016 follow-up: JSON wire decoder composition (2026-09-19)

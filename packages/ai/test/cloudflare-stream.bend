@@ -59,6 +59,7 @@ def apiNames(streams: Models.ProviderStreams) -> String:
   match streams:
     case Models.ApiStreams{}: "api"
     case Models.CloudflareStreams{apis}: String.join(names(apis), ",")
+    case Models.OpenCodeStreams{apis}: "opencode:" ++ String.join(names(apis), ",")
 
 def baseProvider(models: List<&2, T.Model<T.JsonValue>>, streams: Models.ProviderStreams) -> Maybe<&2, Models.Provider>:
   Some{Models.Provider{"cloudflare-ai-gateway", "Cloudflare AI Gateway", "", Auth.ProviderAuth{None{}, None{}}, models, streams, None{}}}

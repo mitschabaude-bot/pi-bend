@@ -820,9 +820,18 @@
     },
     {
       "source": "packages/ai/test/cache-retention.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5888d3d3b6236aca974ce3c60577ff9008fca21a4024c6f2ff159a6d52d529fa"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/cache-retention.bend",
+        "packages/ai/test/responses-payload.bend",
+        "tests/anthropic-suites.bend",
+        "tests/anthropic_messages_check.py",
+        "tests/openai-completions-request.bend",
+        "tests/openai_completions_request_check.py",
+        "tests/openai_completions_request_reference.ts"
+      ],
+      "sha256": "5888d3d3b6236aca974ce3c60577ff9008fca21a4024c6f2ff159a6d52d529fa",
+      "notes": "All non-E2E cases pass on Bun and native 1/4 threads: the Anthropic Messages and OpenAI Responses cases in packages/ai/test/cache-retention.bend (run with the Anthropic suites, tests/anthropic_messages_check.py) and the Chat Completions cases as named request cases in tests/openai_completions_request_check.py with bodies byte-identical to pinned pi-mono. PI_CACHE_RETENTION is supplied as the request's provider env, which getProviderEnvValue reads before process.env; the cerebras strict-tool fixture spells out strict: 'prefer' for upstream's untyped {type: 'json_schema'} (identical upstream behaviour). The four E2E cases (ANTHROPIC_API_KEY/OPENAI_API_KEY) are not run."
     },
     {
       "source": "packages/ai/test/cloudflare-ai-binding.test.ts",
@@ -918,9 +927,17 @@
     },
     {
       "source": "packages/ai/test/fetch-option.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "45baf2e0c0f26d5d961b7af69d91f838243ab8579a1505410ec07da2434f20d0"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/anthropic-fetch-option.bend",
+        "packages/ai/test/google-fetch-option.bend",
+        "packages/ai/test/anthropic-harness.bend",
+        "packages/ai/test/google-harness.bend",
+        "tests/anthropic-suites.bend",
+        "tests/google-suites.bend"
+      ],
+      "sha256": "45baf2e0c0f26d5d961b7af69d91f838243ab8579a1505410ec07da2434f20d0",
+      "notes": "Three of six tests pass on Bun and native 1/4 threads: the Anthropic case (packages/ai/test/anthropic-fetch-option.bend, tests/anthropic_messages_check.py) and both Google cases (packages/ai/test/google-fetch-option.bend, tests/google_generative_ai_check.py); the process fetch stands for globalThis.fetch and handle identity (C.same) decides which fetch is ambient. The rejection test's Vertex half waits for the Vertex adapter. Pending: the OpenAI-family adapters, Mistral/Codex/pi-messages, and image generation."
     },
     {
       "source": "packages/ai/test/fireworks-model-generation.test.ts",
@@ -1120,7 +1137,8 @@
       "source": "packages/ai/test/interleaved-thinking.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "4144ecf2389eaa13fd967c84112fdb4d61580cc8b2101ce6999baed231e84292"
+      "sha256": "4144ecf2389eaa13fd967c84112fdb4d61580cc8b2101ce6999baed231e84292",
+      "notes": "All four cases are live E2E requests (Bedrock and Anthropic credentials); no offline counterpart."
     },
     {
       "source": "packages/ai/test/kimi-coding-oauth.test.ts",
@@ -1157,7 +1175,8 @@
       "source": "packages/ai/test/message-types.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "b288469cca9b6a4b975aaf3c68dd71334d913f8d935222d4727df056b534652c"
+      "sha256": "b288469cca9b6a4b975aaf3c68dd71334d913f8d935222d4727df056b534652c",
+      "notes": "Both tests are TypeScript type-level assertions (expectTypeOf) that ToolResultMessage details are JSON-compatible; the port's details are a typed parameter serialized through an explicit encoder (message-json.bend), so no runtime or type-level counterpart has been written."
     },
     {
       "source": "packages/ai/test/meta-oauth.test.ts",
@@ -1269,9 +1288,15 @@
     },
     {
       "source": "packages/ai/test/openai-codex-stream.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "03e3277a307c6a02f21ee7238b51e4f38d74b7730e882c82547b178f050a827a"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/openai-codex-stream.bend",
+        "tests/openai_codex_stream_check.py",
+        "tests/openai_codex_stream_reference.ts",
+        "packages/ai/test/responses-payload.bend"
+      ],
+      "sha256": "03e3277a307c6a02f21ee7238b51e4f38d74b7730e882c82547b178f050a827a",
+      "notes": "16 of 36 test instances (SSE transport) pass on Bun and native 1/4 threads in tests/openai_codex_stream_check.py: the runner (packages/ai/test/openai-codex-stream.bend) streams from a loopback server, and each result is compared with pinned pi-mono under the same script (request body and Codex headers, event labels, final message) before the test's own assertions. Fixtures carry output_index 0 on item events (upstream keys a missing index as the JS Map key undefined; the native decoder requires the field the backend sends). Pending with reasons in the script's PENDING list (5): EOF-terminated final event, endTurn, stop after response.incomplete with an open body, the SSE header timeout message, and the abort message during a body read (upstream openai-codex-responses.ts parseSSE/mapCodexEvents is not ported). Not ported: the 11 WebSocket instances (no WebSocket transport), zstd request compression (upstream falls back to plain JSON when zstd is unavailable) and the 3 Codex SSE retry-delay/backoff instances (Codex runs the shared Responses retry)."
     },
     {
       "source": "packages/ai/test/openai-completions-cache-control-format.test.ts",
@@ -1467,9 +1492,14 @@
     },
     {
       "source": "packages/ai/test/openai-responses-partial-json-cleanup.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6c575f362fa83ca91d4d6d9e2e8eade06756dbf85c7ca698bf091df57ca03df6"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/openai-responses-partial-json-cleanup.bend",
+        "packages/ai/test/api/responses-stream.bend",
+        "tests/ai-misc-suites.bend"
+      ],
+      "sha256": "6c575f362fa83ca91d4d6d9e2e8eade06756dbf85c7ca698bf091df57ca03df6",
+      "notes": "The named test passes on Bun and native 1/4 threads through the public processResponsesStream (packages/ai/test/api/responses-stream.bend driver). The streaming scratch JSON lives in the stream state, not in T.ToolCall, so the absence of partialJson is checked on the observable JSON of the persisted block and the toolcall_end event; upstream's reference identity between the two is adapted to value equality."
     },
     {
       "source": "packages/ai/test/openai-responses-reasoning-replay-e2e.test.ts",
@@ -1494,9 +1524,13 @@
     },
     {
       "source": "packages/ai/test/opencode-provider-headers.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "77ef0553a77f1005d672847e56edead61b2235780ffbe6bbec97bdd5cc3b305f"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/opencode-provider-headers.bend",
+        "tests/ai-misc-suites.bend"
+      ],
+      "sha256": "77ef0553a77f1005d672847e56edead61b2235780ffbe6bbec97bdd5cc3b305f",
+      "notes": "All four upstream test instances pass (the it.each rows print their shared names); stream options go through withSessionHeader and streamSimple options through the provider wrapper Models.OpenCodeStreams. Native cases pin the wrapped APIs of both OpenCode providers, header order, empty session ids, unwrapped APIs and models.json inheritance."
     },
     {
       "source": "packages/ai/test/openrouter-cache-control-models.test.ts",
@@ -1532,9 +1566,14 @@
     },
     {
       "source": "packages/ai/test/openrouter-reasoning-options.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "50e5a4f4b5b30bf06d3819ae6911247022f7714b7bd8bbec158b808d84c29685"
+      "status": "partial",
+      "ports": [
+        "tests/openai-completions-request.bend",
+        "tests/openai_completions_request_check.py",
+        "tests/openai_completions_request_reference.ts"
+      ],
+      "sha256": "50e5a4f4b5b30bf06d3819ae6911247022f7714b7bd8bbec158b808d84c29685",
+      "notes": "The three 'OpenRouter mandatory reasoning payloads' tests pass as named request cases in tests/openai_completions_request_check.py (bodies byte-identical to pinned pi-mono) with the thinking-level map the script produces. The four getOpenRouterThinkingLevelMap tests stay pending: that function belongs to upstream's catalog-generation script, and the port takes the generated catalog from upstream data (scripts/generate-model-catalog.py)."
     },
     {
       "source": "packages/ai/test/overflow.test.ts",
@@ -1561,9 +1600,13 @@
     },
     {
       "source": "packages/ai/test/pre-generation-error.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "420756429c251d015dfe445bf90f5d0ba7065f26c87e2fa0b6777db861cf9b20"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/pre-generation-error.bend",
+        "tests/ai-misc-suites.bend"
+      ],
+      "sha256": "420756429c251d015dfe445bf90f5d0ba7065f26c87e2fa0b6777db861cf9b20",
+      "notes": "The single upstream test checks seven APIs. Anthropic Messages, Google Generative AI and Mistral Conversations match on Bun and native 1/4 threads (packages/ai/test/pre-generation-error.bend): their streamSimple option mapping fails with 'No API key for provider: test-provider' before a stream exists, and the agent glue returns that failure without opening a stream. Pending: Azure OpenAI Responses, OpenAI Codex Responses, OpenAI Completions and OpenAI Responses still report the missing key as a stream error event (in the CLI, agent-runtime resolves auth before dispatch, so this path is not reached there)."
     },
     {
       "source": "packages/ai/test/provider-error-body-passthrough.test.ts",
@@ -1573,9 +1616,14 @@
     },
     {
       "source": "packages/ai/test/provider-error-body-regression.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "3630f6093ae3bc6033d0ca4d879c7439540530823f578ce56c08754137bbd69a"
+      "status": "partial",
+      "ports": [
+        "tests/openai-completions-stream.bend",
+        "tests/openai_completions_stream_check.py",
+        "tests/openai_completions_stream_reference.ts"
+      ],
+      "sha256": "3630f6093ae3bc6033d0ca4d879c7439540530823f578ce56c08754137bbd69a",
+      "notes": "The two openai-completions tests pass on Bun and native 1/4 threads as named cases in tests/openai_completions_stream_check.py: a real 403 response carries the parsed body through the SDK error path (upstream mocks the SDK APIError) and the message matches pinned pi-mono. Pending: the openai-responses case (its 403 body formatting is compared with pi's normalization in tests/openai_http_error_check.py but not through the named streaming path) and the two Bedrock cases (Bedrock port)."
     },
     {
       "source": "packages/ai/test/provider-retry.test.ts",
@@ -1635,7 +1683,8 @@
       "source": "packages/ai/test/reasoning-options.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "54eb1cd0a26bfa457c0c4cde5f5a5c6d98068e46ce9945fca9118b4cdc3ed10b"
+      "sha256": "54eb1cd0a26bfa457c0c4cde5f5a5c6d98068e46ce9945fca9118b4cdc3ed10b",
+      "notes": "Tests getEffortThinkingLevelMap from upstream's catalog-generation script (scripts/models-dev-reasoning-options.ts); the port takes the generated catalog from upstream data (scripts/generate-model-catalog.py) and has no counterpart yet."
     },
     {
       "source": "packages/ai/test/responseid.test.ts",
@@ -1656,9 +1705,17 @@
     },
     {
       "source": "packages/ai/test/sampling-options.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "38d3f0411a39570d800abf32bea871ba863b66974c3321b4390cc3a26cff3f65"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/sampling-options.bend",
+        "tests/anthropic-suites.bend",
+        "tests/anthropic_messages_check.py",
+        "tests/openai-completions-request.bend",
+        "tests/openai_completions_request_check.py",
+        "tests/openai_completions_request_reference.ts"
+      ],
+      "sha256": "38d3f0411a39570d800abf32bea871ba863b66974c3321b4390cc3a26cff3f65",
+      "notes": "All six named tests pass on Bun and native 1/4 threads: the five Chat Completions cases are named request cases in tests/openai_completions_request_check.py (request bodies byte-identical to pinned pi-mono, then the upstream assertions); the Anthropic case runs with the Anthropic suites (tests/anthropic_messages_check.py)."
     },
     {
       "source": "packages/ai/test/stream.test.ts",
@@ -1735,9 +1792,17 @@
     },
     {
       "source": "packages/ai/test/transcript-tool-changes.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f80c1d7d9dab6c49f556ddec54afb00053c2b4703e563f9ce67e5d7254b7a2c4"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/transcript-tool-changes.bend",
+        "tests/anthropic-suites.bend",
+        "tests/anthropic_messages_check.py",
+        "tests/openai-completions-request.bend",
+        "tests/openai_completions_request_check.py",
+        "tests/openai_completions_request_reference.ts"
+      ],
+      "sha256": "f80c1d7d9dab6c49f556ddec54afb00053c2b4703e563f9ce67e5d7254b7a2c4",
+      "notes": "All eleven named tests pass on Bun and native 1/4 threads: the Anthropic Messages and OpenAI Responses cases capture streamSimple's payload in packages/ai/test/transcript-tool-changes.bend (run with the Anthropic suites, tests/anthropic_messages_check.py); the three Chat Completions cases are named request cases in tests/openai_completions_request_check.py with bodies byte-identical to pinned pi-mono."
     },
     {
       "source": "packages/ai/test/transform-messages-copilot-openai-to-anthropic.test.ts",

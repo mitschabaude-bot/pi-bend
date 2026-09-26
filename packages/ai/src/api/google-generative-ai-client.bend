@@ -399,15 +399,22 @@ def keyed(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, ~render
     aborted : Bool <- Abort.aborted(Reason, parent)
     built(~Reason, ~E, ~G, ~render, events, parent, setup, state, model, planFor(Reason, Telemetry, E, setup, model, key, base), payloadHook(Reason, Telemetry, E, base), params, aborted)
 
-def checkedKey(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, ~render: E -> String, +events: EventStream(G), +parent: Signal(Reason), +setup: Setup<Reason>, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Options(Reason, Telemetry, E), +state: Fold.State<G>, fetch: Maybe<&2, Fetch.Fetch(Reason)>, key: Maybe<&2, String>) -> IO(Unit):
-  match fetch key:
-    case Some{_} _: fail(~Reason, ~G, events, state, parent, "Custom fetch is not supported by the Google Generative AI adapter")
-    case None{} Some{SCon{c, cs}}: keyed(~Reason, ~Telemetry, ~E, ~G, ~D, ~render, events, parent, setup, model, context, options, state, SCon{c, cs})
-    case None{} _: fail(~Reason, ~G, events, state, parent, "No API key for provider: " ++ T.modelProvider(model))
+# upstream accepts `options.fetch` only when it is globalThis.fetch, the
+# SDK's own fetch; here that is the setup's process fetch handle.
+def ambientFetch(-Reason: Data, +setup: Setup<Reason>, fetch: Maybe<&2, Fetch.Fetch(Reason)>) -> Bool:
+  match fetch setup:
+    case None{} _: True{}
+    case Some{selected} Setup{_, _, ambient}: C.same(Fetch.Input<Reason>, Fetch.Result_(Reason), selected, ambient)
+
+def checkedKey(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, ~render: E -> String, +events: EventStream(G), +parent: Signal(Reason), +setup: Setup<Reason>, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Options(Reason, Telemetry, E), +state: Fold.State<G>, ambient: Bool, key: Maybe<&2, String>) -> IO(Unit):
+  match ambient key:
+    case False{} _: fail(~Reason, ~G, events, state, parent, "Custom fetch is not supported by the Google Generative AI adapter")
+    case True{} Some{SCon{c, cs}}: keyed(~Reason, ~Telemetry, ~E, ~G, ~D, ~render, events, parent, setup, model, context, options, state, SCon{c, cs})
+    case True{} _: fail(~Reason, ~G, events, state, parent, "No API key for provider: " ++ T.modelProvider(model))
 
 def baseChecks(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, ~render: E -> String, +events: EventStream(G), +parent: Signal(Reason), +setup: Setup<Reason>, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Options(Reason, Telemetry, E), +state: Fold.State<G>, base: T.StreamOptions<J(), Signal(Reason), Telemetry, Fetch.Fetch(Reason), E>) -> IO(Unit):
   match base:
-    case T.StreamOptions{_, _, key, fetch, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: checkedKey(~Reason, ~Telemetry, ~E, ~G, ~D, ~render, events, parent, setup, model, context, options, state, fetch, key)
+    case T.StreamOptions{_, _, key, fetch, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: checkedKey(~Reason, ~Telemetry, ~E, ~G, ~D, ~render, events, parent, setup, model, context, options, state, ambientFetch(Reason, setup, fetch), key)
 
 # upstream `stream`: the producer's work up to `stream.end()` over the
 # collapsed transcript. `parent` is the request's abort signal. A custom

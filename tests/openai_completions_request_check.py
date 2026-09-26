@@ -660,6 +660,189 @@ test(S, 'stores Xiaomi MiMo reasoning replay compat in built-in metadata', metad
 QWEN_PLANS = ('qwen-token-plan', 'qwen-token-plan-cn', 'qwen-token-plan-individual')
 test(S, 'stores Qwen Token Plan reasoning replay compat in built-in metadata', metadata([(provider, 'qwen3.7-max') for provider in QWEN_PLANS]), metadata_is([dict(compat=dict(thinkingFormat='qwen', requiresReasoningContentOnAssistantMessages=None, supportsDeveloperRole=False, supportsStore=False))] * 3))
 
+# sampling-options.test.ts (the Chat Completions cases; the Anthropic case
+# runs in tests/anthropic-suites.bend)
+# ----------------------------------------------------------------------
+
+S = 'sampling-options'
+SAMPLING = dict(api='openai-completions', provider='custom-provider', baseUrl='http://127.0.0.1:9/v1', id='custom-model', name='Custom Model', reasoning=False, input=['text'], cost=COST, contextWindow=128000, maxTokens=16384)
+
+
+def sampling_model(**overrides):
+    return definition({**SAMPLING, **overrides})
+
+
+def sampled(expected, missing=()):
+    def check(results):
+        params = body(results[0])
+        for key, value in expected.items():
+            equal(params.get(key), value)
+        for key in missing:
+            absent(params, key)
+    return check
+
+
+test(S, 'merges stream-option sampling params into the request body', simple(sampling_model(), [user('Hello')], dict(samplingParams=dict(top_p=0.95, top_k=0, min_p=0))), sampled(dict(top_p=0.95, top_k=0, min_p=0)))
+test(S, 'omits sampling params when neither options nor model set them', simple(sampling_model(), [user('Hello')]), sampled({}, ('temperature', 'top_p')))
+test(S, 'applies model-level sampling params', simple(sampling_model(samplingParams=dict(temperature=1, top_p=0.95)), [user('Hello')]), sampled(dict(temperature=1, top_p=0.95)))
+test(S, 'merges stream-option keys over model-level keys', simple(sampling_model(samplingParams=dict(top_p=0.95, min_p=0.05)), [user('Hello')], dict(samplingParams=dict(top_p=0.5))), sampled(dict(top_p=0.5, min_p=0.05)))
+test(S, 'overrides named request fields', simple(sampling_model(), [user('Hello')], dict(temperature=0, samplingParams=dict(temperature=1))), sampled(dict(temperature=1)))
+
+
+# openrouter-reasoning-options.test.ts, "OpenRouter mandatory reasoning
+# payloads" (the map is getOpenRouterThinkingLevelMap's result for
+# {mandatory: true, supported_efforts: ["max", "high", "low"]}; the script
+# itself is catalog generation, which the port takes from upstream's data)
+# ----------------------------------------------------------------------
+
+S = 'openrouter-reasoning-options'
+MANDATORY = dict(off=None, minimal=None, low='low', medium=None, high='high', xhigh=None, max='max')
+
+
+def openrouter_model(level_map=None):
+    fields = dict(api='openai-completions', provider='openrouter', baseUrl='https://example.invalid/v1', id='stealth/ox-alpha', name='Ox Alpha', reasoning=True, input=['text'], cost=COST, contextWindow=128000, maxTokens=4096, compat=dict(thinkingFormat='openrouter'))
+    if level_map is not None:
+        fields['thinkingLevelMap'] = level_map
+    return definition(fields)
+
+
+def reasoning_is(expected):
+    def check(results):
+        params = body(results[0])
+        if expected is None:
+            absent(params, 'reasoning')
+        else:
+            equal(params.get('reasoning', {}).get('effort'), expected)
+    return check
+
+
+test(S, 'omits reasoning when a background call does not request it', simple(openrouter_model(MANDATORY), [user('Hello', 0)]), reasoning_is(None))
+test(S, 'still sends an explicitly selected supported effort', simple(openrouter_model(MANDATORY), [user('Hello', 0)], dict(reasoning='low')), reasoning_is('low'))
+test(S, 'continues to explicitly disable reasoning for optional models', simple(openrouter_model(), [user('Hello', 0)]), reasoning_is('none'))
+
+
+# transcript-tool-changes.test.ts (the Chat Completions cases; the Anthropic
+# and Responses cases run in packages/ai/test/transcript-tool-changes.bend)
+# ----------------------------------------------------------------------
+
+S = 'transcript-tool-changes'
+EMPTY_OBJECT = {'type': 'object', 'properties': {}}
+
+
+def change_tool(name):
+    return dict(name=name, description=f'{name} tool', parameters=EMPTY_OBJECT)
+
+
+def system_message(content, timestamp, **extra):
+    return dict(role='system', content=content, timestamp=timestamp, **extra)
+
+
+TOOL_CHANGES = [
+    system_message('base prompt', 0, sections={'rules': '<rules>\nold rules\n</rules>', 'docs': '<docs>\nread docs\n</docs>'}, toolsAdded=[change_tool('base_tool')]),
+    user('before', 1),
+    system_message('updated guidance', 2, sections={'rules': '<rules>\nnew rules\n</rules>', 'docs': None}, toolsRemoved=[{'name': 'base_tool'}], toolsAdded=[change_tool('late_tool')]),
+]
+TOOL_ADDITIONS = [
+    system_message('base prompt', 0, toolsAdded=[change_tool('base_tool')]),
+    user('before', 1),
+    system_message('updated guidance', 2, toolsAdded=[change_tool('late_tool')]),
+]
+
+
+def changes_model(**fields):
+    return definition({**dict(baseUrl='http://127.0.0.1:9', reasoning=True, input=['text'], cost=COST, contextWindow=100000, maxTokens=1000, api='openai-completions'), **fields})
+
+
+def function_names(tools):
+    return [(value.get('function') or {}).get('name') for value in tools or []]
+
+
+def kimi_anchors(results):
+    params = body(results[0])
+    equal(function_names(params.get('tools')), ['base_tool'])
+    equal(function_names(next(message for message in params['messages'] if message.get('tools'))['tools']), ['late_tool'])
+    equal([message.get('content') for message in params['messages'] if message['role'] == 'system'], ['base prompt', None, 'updated guidance'])
+
+
+def kimi_inline(results):
+    params = body(results[0])
+    equal(function_names(params.get('tools')), ['base_tool', 'late_tool'])
+    assert not any('tools' in message for message in params['messages']), params['messages']
+    equal([message.get('content') for message in params['messages'] if message['role'] == 'system'], ['base prompt', 'updated guidance'])
+
+
+def compatible_fold(results):
+    params = body(results[0])
+    equal(function_names(params.get('tools')), ['late_tool'])
+    equal([message['role'] for message in params['messages']], ['system', 'user'])
+    equal(params['messages'][0].get('content'), 'base prompt\n\nupdated guidance\n\n<rules>\nnew rules\n</rules>')
+
+
+test(S, 'anchors Kimi additions in tool-bearing system messages', simple(changes_model(id='kimi-k3', name='Kimi K3', provider='moonshotai', compat=dict(supportsMidConvoSystemMessages=True, supportsMidConvoToolAdditions=True)), TOOL_ADDITIONS), kimi_anchors)
+test(S, 'keeps Kimi K2 system text inline without dynamic tool messages', simple(changes_model(id='kimi-k2.7-code', name='Kimi K2.7 Code', provider='moonshotai', compat=dict(supportsMidConvoSystemMessages=True)), TOOL_ADDITIONS), kimi_inline)
+test(S, 'folds OpenAI-compatible updates into the system prompt without native support', simple(changes_model(id='custom-model', name='Custom model', provider='custom-provider', reasoning=False), TOOL_CHANGES), compatible_fold)
+
+
+# cache-retention.test.ts (the Chat Completions cases; the Anthropic and
+# Responses cases run with the Anthropic suites, tests/anthropic_messages_check.py)
+# ----------------------------------------------------------------------
+
+S = 'cache-retention'
+CACHE_CONTEXT = dict(systemPrompt='You are a helpful assistant.')
+
+
+def cache_model(compat=None):
+    fields = dict(api='openai-completions', provider='test-openai-completions', baseUrl='https://my-proxy.example.com/v1', id='test-model', name='Test Model', reasoning=False, input=['text'], cost=COST, contextWindow=128000, maxTokens=4096)
+    if compat is not None:
+        fields['compat'] = compat
+    return definition(fields)
+
+
+def cache_fields(key, retention):
+    def check(results):
+        params = body(results[0])
+        for name, value in (('prompt_cache_key', key), ('prompt_cache_retention', retention)):
+            if value is None:
+                absent(params, name)
+            else:
+                equal(params.get(name), value)
+    return check
+
+
+def long_cache_unsupported(results):
+    cache_fields(None, None)(results)
+
+
+test(S, 'should set prompt_cache_retention for non-api.openai.com baseUrl by default', streamed(cache_model(), [user('Hello')], dict(cacheRetention='long', sessionId='session-completions'), **CACHE_CONTEXT), cache_fields('session-completions', '24h'))
+test(S, 'should omit prompt_cache_retention when supportsLongCacheRetention is false', streamed(cache_model(dict(supportsLongCacheRetention=False)), [user('Hello')], dict(cacheRetention='long', sessionId='session-completions-false'), **CACHE_CONTEXT), cache_fields(None, None))
+for provider, model_id in [('opencode', 'deepseek-v4-flash'), ('opencode', 'deepseek-v4-pro'), ('opencode', 'kimi-k2.5'), ('opencode', 'kimi-k2.6'), ('opencode', 'minimax-m2.7'), ('opencode-go', 'kimi-k2.6')]:
+    assert catalog(provider, model_id)['compat']['supportsLongCacheRetention'] is False, (provider, model_id)
+    test(S, f'should omit long cache retention for {provider}/{model_id}', streamed(from_catalog(provider, model_id), [user('Hello')], dict(cacheRetention='long', sessionId='session-opencode-long-cache-unsupported'), **CACHE_CONTEXT), long_cache_unsupported)
+
+# Upstream casts `constrainedSampling: {type: "json_schema"}` without `strict`
+# through `as any`; the typed port requires the field, and upstream treats the
+# missing value like "prefer" (it only tests for "require").
+STRICT_TOOLS = [
+    system_message('test', 0, toolsAdded=[
+        dict(name='t1', description='strict tool', parameters={'type': 'object', 'properties': {'x': {'type': 'string'}}, 'required': ['x']}, constrainedSampling={'type': 'json_schema', 'strict': 'prefer'}),
+        dict(name='t2', description='non-strict tool', parameters={'type': 'object', 'properties': {'y': {'type': 'string'}}, 'required': ['y']}),
+    ]),
+    user('hello', 1),
+]
+
+
+def no_strict(results):
+    tools = body(results[0]).get('tools')
+    assert tools, tools
+    for value in tools:
+        assert 'strict' not in value['function'], value
+
+
+for model_id in ['gpt-oss-120b', 'qwen-3.8-27b']:
+    assert 'supportsStrictMode' not in (catalog('cerebras', model_id).get('compat') or {}), model_id
+    test(S, f'should omit strict field on tools for cerebras/{model_id}', streamed(from_catalog('cerebras', model_id), STRICT_TOOLS, dict(sessionId='test')), no_strict)
+
+
 # Supplementary differential cases
 # --------------------------------
 # Generated inputs beyond the named cases, compared byte-for-byte with upstream.

@@ -557,6 +557,34 @@ for label, raw in RAW_VALUES:
     test(S, f'HTTP error with {label} metadata.raw', streamed(test_model(), [user('hi')], [dict(status=400, type='application/json', body=json.dumps({'error': error}))]), raw_suffix(JS_STRING.get(label)))
     test(S, f'in-stream error with {label} metadata.raw', streamed(test_model(), [user('hi')], [sse([chunk(dict(content='x')), dict(error=error)])]), raw_suffix(JS_STRING.get(label)))
 
+# provider-error-body-regression.test.ts, the openai-completions cases. The
+# suite mocks the SDK's APIError; here a real 403 carries the same parsed
+# body through the SDK error path (the Responses and Bedrock cases are
+# pending, see the inventory).
+S = 'provider-error-body-regression'
+ERROR_BODY_MODEL = model_of(dict(id='test-model', name='Test Model', provider='openrouter', reasoning=False, input=['text'], cost=COST, contextWindow=1000, maxTokens=100))
+
+
+def forbidden(error):
+    return [dict(status=403, type='application/json', body=json.dumps({'error': error}))]
+
+
+def surfaces_body(results):
+    value = message(results[0])
+    equal(value['stopReason'], 'error')
+    assert '403' in value['errorMessage'], value['errorMessage']
+    assert 'blocked by gateway WAF' in value['errorMessage'], value['errorMessage']
+    assert value['errorMessage'] != '403 status code (no body)', value['errorMessage']
+
+
+def raw_once(results):
+    text = message(results[0])['errorMessage']
+    assert text.count('upstream WAF blocked policy XYZ') == 1, text
+
+
+test(S, 'openai-completions (body-blind text) surfaces status + body', streamed(ERROR_BODY_MODEL, [user([dict(type='text', text='hi')], 0)], forbidden('blocked by gateway WAF'), systemPrompt='', tools=[]), surfaces_body)
+test(S, 'openai-completions does not double-print the OpenRouter metadata.raw extra', streamed(ERROR_BODY_MODEL, [user([dict(type='text', text='hi')], 0)], forbidden({'message': 'Provider returned error', 'code': 403, 'metadata': {'raw': 'upstream WAF blocked policy XYZ'}}), systemPrompt='', tools=[]), raw_once)
+
 S = 'native: mid-stream abort'
 
 

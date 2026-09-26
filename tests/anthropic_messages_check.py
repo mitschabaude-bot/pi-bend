@@ -42,13 +42,32 @@ NAMED = {
         'threads authContext ANTHROPIC_AUTH_TOKEN through request headers': 'needs the Models registry streamSimple (createModels/setProvider), not ported',
         'preserves OAuth request shaping for ANTHROPIC_OAUTH_TOKEN': 'needs the Models registry streamSimple (createModels/setProvider), not ported',
         'lets explicit request headers override ANTHROPIC_AUTH_TOKEN': 'needs the Models registry streamSimple (createModels/setProvider), not ported'}},
+    'sampling-options': {'skipped': {name: 'Chat Completions case: tests/openai_completions_request_check.py' for name in (
+        'merges stream-option sampling params into the request body', 'omits sampling params when neither options nor model set them',
+        'applies model-level sampling params', 'merges stream-option keys over model-level keys', 'overrides named request fields')}},
+    'transcript-tool-changes': {'skipped': {name: 'Chat Completions case: tests/openai_completions_request_check.py' for name in (
+        'anchors Kimi additions in tool-bearing system messages', 'keeps Kimi K2 system text inline without dynamic tool messages',
+        'folds OpenAI-compatible updates into the system prompt without native support')}},
+    'fetch-option': {'skipped': {
+        'passes fetch through streamSimple to OpenAI SDK adapters': 'not ported yet (OpenAI-family adapters)',
+        'uses fetch for Mistral, Codex SSE, and pi-messages HTTP requests': 'not ported yet',
+        'rejects custom fetch for Google adapters instead of silently bypassing it': 'Google case: tests/google_generative_ai_check.py',
+        'allows Google adapters to receive globalThis.fetch explicitly': 'Google case: tests/google_generative_ai_check.py',
+        'uses fetch for image generation': 'openrouter-images adapter (another port)'}},
+    'cache-retention': {
+        'each': {'does not enable cache warming from the documented TTL alone for %s': ['gpt-5.6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-6-astra', 'gpt-6-luna', 'gpt-6-sol'],
+                 'should use the supported long cache field for %s': ['gpt-4o-mini', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna']},
+        'skipped': {'should omit long cache retention for $provider/$id': 'Chat Completions case: tests/openai_completions_request_check.py',
+                    'should omit strict field on tools for cerebras/$id': 'Chat Completions case: tests/openai_completions_request_check.py'},
+        'skipped_last': {'should set prompt_cache_retention for non-api.openai.com baseUrl by default': 'Chat Completions case',
+                         'should omit prompt_cache_retention when supportsLongCacheRetention is false': 'Chat Completions case'}},
 }
 
 
 def upstream_names(suite, spec):
     source = (UPSTREAM / f'packages/ai/test/{suite}.test.ts').read_text()
     names = []
-    for match in re.finditer(r'\bit(?:\.each\([^)]*\]\s*(?:as const)?\))?\(\s*"((?:[^"\\]|\\.)*)"', source, re.S):
+    for match in re.finditer(r'\b(?:it|test)(?:\.each\([^)]*\]\s*(?:as const)?\))?\(\s*"((?:[^"\\]|\\.)*)"', source, re.S):
         name = match.group(1).replace('\\"', '"')
         if name in spec.get('each', {}):
             names += [name.replace('%s', value) for value in spec['each'][name]]
@@ -58,6 +77,10 @@ def upstream_names(suite, spec):
         assert name in source, (suite, name)
     for name in spec.get('skipped', {}):
         assert name in source, (suite, name)
+    # Names shared by two describe blocks: the last occurrence runs elsewhere.
+    for name in spec.get('skipped_last', {}):
+        assert names.count(name) == 2, (suite, name)
+        del names[len(names) - 1 - names[::-1].index(name)]
     return names
 
 

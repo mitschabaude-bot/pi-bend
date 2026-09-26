@@ -9,6 +9,10 @@ import ../packages/ai/test/anthropic-mid-conversation-effort.bend as MidConversa
 import ../packages/ai/test/anthropic-eager-tool-input-compat.bend as EagerToolInput
 import ../packages/ai/test/github-copilot-anthropic.bend as CopilotAnthropic
 import ../packages/ai/test/anthropic-auth-token.bend as AuthToken
+import ../packages/ai/test/sampling-options.bend as Sampling
+import ../packages/ai/test/transcript-tool-changes.bend as ToolChanges
+import ../packages/ai/test/anthropic-fetch-option.bend as FetchOption
+import ../packages/ai/test/cache-retention.bend as CacheRetention
 
 # The ported upstream Anthropic suites (tests/anthropic_messages_check.py).
 def main() -> IO(Unit):
@@ -23,3 +27,7 @@ def main() -> IO(Unit):
     EagerToolInput.run()
     CopilotAnthropic.run()
     AuthToken.run()
+    Sampling.run()
+    ToolChanges.run()
+    FetchOption.run()
+    CacheRetention.run()
