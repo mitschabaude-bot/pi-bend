@@ -5269,11 +5269,13 @@
     },
     {
       "source": "packages/tui/test/terminal-colors.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
-        "tests/terminal-colors.bend"
+        "tests/terminal-colors.bend",
+        "tests/tui-terminal-colors.bend",
+        "tests/tui_terminal_colors_check.py"
       ],
-      "notes": "All four original pure parser tests execute and replay against native Bend. 1,010 source comparisons, six documented strictness corrections and two long-input checks pass Bun/native one/four. The five TUI background-query lifecycle/dispatch tests remain pending. See tests/terminal-colors.md.",
+      "notes": "All four original pure parser tests execute and replay against native Bend (1,010 source comparisons, six documented strictness corrections, two long-input checks; Bun/native one/four). The five TUI.queryTerminalBackgroundColor tests run on the native TUI through a real PTY (tests/tui_terminal_colors_check.py, native one/four) with upstream's names and assertions, including input listeners. See tests/terminal-colors.md.",
       "sha256": "83299038dbb51f1496c2985f0d7f95c8e67c3e1d1be0f65dd1d214277d888566"
     },
     {
@@ -5337,9 +5339,13 @@
     },
     {
       "source": "packages/tui/test/tui-cell-size-input.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "156fc72cd71f7ad65a11b300baaf2a37a2e6bc2ec7498d66f52ac6a0e17ab2d8"
+      "status": "ported",
+      "ports": [
+        "tests/tui-cell-size.bend",
+        "tests/tui_cell_size_check.py"
+      ],
+      "sha256": "156fc72cd71f7ad65a11b300baaf2a37a2e6bc2ec7498d66f52ac6a0e17ab2d8",
+      "notes": "Both tests run on the native TUI through a real PTY in upstream's image-terminal environment (TERM_PROGRAM=ghostty) on native one/four: a bare Escape still reaches the focused component after the startup CSI 16 t query, and a cell size reply is consumed (10x20 cells) while later input is forwarded. The hosted runtime cannot acquire a terminal. See tests/terminal-colors.md."
     },
     {
       "source": "packages/tui/test/tui-overlay-style-leak.test.ts",

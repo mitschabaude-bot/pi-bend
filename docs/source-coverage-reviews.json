@@ -648,7 +648,7 @@
     },
     "packages/coding-agent/src/modes/interactive/chat-viewport.ts": {
       "state": "partial",
-      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Fullscreen transcript allocation uses upstream’s zero basis and one-row minimum; natural dock rendering during external-editor handoffs matches pi. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
+      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Fullscreen transcript allocation uses upstream\u2019s zero basis and one-row minimum; natural dock rendering during external-editor handoffs matches pi. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
       "source_sha256": "24bbdd06a5e17d6c0631f7de51329eb7bb4ecd4a460dec7b3d593ff9e6219960",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/viewport.bend": "91281c83b948bdb35106382375cfc14628d313a48d7676cd9a023b1bcadea32e"
@@ -1030,7 +1030,7 @@
       "port_sha256": {
         "packages/tui/src/tui-alt-screen.bend": "a4e12697fb0cc2f48c013ececce0c97923bea0856fd4066e010c28ec072ead05",
         "packages/tui/src/tui-base.bend": "f7e4a5f560ee5d8d514c3f7d53b58bb8a93404807872fc40d2e35786c386b89c",
-        "packages/tui/src/tui-process.bend": "40c7b94ca549e9b4fb67540337321dbc04280398400e720f0789911cdd3e3576"
+        "packages/tui/src/tui-process.bend": "29e152105760d93a8fab12d4949b9624359283b0544129764d95b1e46bc9108a"
       },
       "ports": [
         "packages/tui/src/tui-alt-screen.bend",
@@ -1042,13 +1042,15 @@
       "state": "partial",
       "ports": [
         "packages/tui/src/tui-base.bend",
-        "packages/tui/src/tui-process.bend"
+        "packages/tui/src/tui-process.bend",
+        "packages/tui/src/terminal-query.bend"
       ],
-      "note": "Focused review of live terminal preferences: native immutable TuiBase state and the owned process apply hardware-cursor and clear-on-shrink updates through the render scheduler; cursor disabling hides immediately through the owned writer. Native one/four-thread PTY checks exercise live visibility, consecutive independent updates, setter return order and terminal restoration. Scoped suspension now retires the terminal lease and its workers before invoking an external action, then reacquires it with separate initial/resume callbacks and retained component state. Native1/native4 PTY checks cover repeated successful, failed and empty editor handoffs, visible cursor and terminal settings; regular and fullscreen interactive captures and following model requests match upstream; regular captures also cover streaming during suspension. The broader TUI public API, named getter/setter surface, overlay/focus contracts and complete scheduling/input behavior still require source-wide review; this finding does not establish full TUI parity.",
+      "note": "Focused review of live terminal preferences: native immutable TuiBase state and the owned process apply hardware-cursor and clear-on-shrink updates through the render scheduler; cursor disabling hides immediately through the owned writer. Native one/four-thread PTY checks exercise live visibility, consecutive independent updates, setter return order and terminal restoration. Scoped suspension now retires the terminal lease and its workers before invoking an external action, then reacquires it with separate initial/resume callbacks and retained component state. Native1/native4 PTY checks cover repeated successful, failed and empty editor handoffs, visible cursor and terminal settings; regular and fullscreen interactive captures and following model requests match upstream; regular captures also cover streaming during suspension. The broader TUI public API, named getter/setter surface, overlay/focus contracts and complete scheduling/input behavior still require source-wide review; this finding does not establish full TUI parity. Terminal input now passes upstream handleTerminalInput's order: OSC 11/colour-scheme replies, input listeners (addInputListener/removeInputListener with TuiInputListenerResult consume/data; removal by returned id), the cell size reply (CSI 16 t queried at start when the environment supports images; valid replies set the cell dimensions, invalidate components and request a frame), then dispatch; checked by the terminal-colors and tui-cell-size-input suites through a PTY on native one/four.",
       "source_sha256": "2ca47c56f4a4f24b8c6a4c9c9f2a06004bfc312d9dbcd0ac1921a2cae32bc675",
       "port_sha256": {
         "packages/tui/src/tui-base.bend": "f7e4a5f560ee5d8d514c3f7d53b58bb8a93404807872fc40d2e35786c386b89c",
-        "packages/tui/src/tui-process.bend": "40c7b94ca549e9b4fb67540337321dbc04280398400e720f0789911cdd3e3576"
+        "packages/tui/src/tui-process.bend": "29e152105760d93a8fab12d4949b9624359283b0544129764d95b1e46bc9108a",
+        "packages/tui/src/terminal-query.bend": "03b83622a8ffde67658ca3121fdaa07f406d1d7ebce5339c9324029769205e78"
       }
     },
     "packages/coding-agent/src/utils/paths.ts": {

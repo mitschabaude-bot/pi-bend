@@ -7,6 +7,7 @@ import ./component.bend as Component
 import ./overlays.bend as O
 import ./terminal.bend as Terminal
 import ./terminal-query.bend as Query
+import ./terminal-image.bend as Image
 import ./tui-base.bend as Tui
 import ./layout-node.bend as Layout
 import ./keybindings.bend as Bindings
@@ -367,17 +368,6 @@ def settledOperation(current: Active,handle: Terminal.Handle,termux: Bool) -> IO
   match current:
     case Active{_,_,_,_,False{},_}: IO.pure(Active & Unit,(current,Unit{}))
     case current: drawNow(current,handle,termux)
-def dispatchInput(listener: EventSink,+data: String) -> IO(Unit):
-  match listener:
-    case EventSink{state,ready,queries,termux,_}:
-      do IO<Unit>:
-        consumed : Bool <- Query.consume(queries,data)
-        Bool.pick(Unit -> IO(Unit),consumed,
-          _ => IO.pure(Unit,Unit{}),
-          _ => do IO<Unit>:
-            handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
-            Serial.run(Active,Unit,state,current => inputOperation(current,data,handle,termux)))(Unit{})
-def onInput(listener: EventSink,data: String) -> IO(Unit): dispatchInput(listener,data)
 def onResize(listener: EventSink,value: Unit) -> IO(Unit):
   match listener:
     case EventSink{state,ready,_,termux,_}:
@@ -455,6 +445,58 @@ def requested(+listener: EventSink) -> IO(Unit):
     effects : List<&2,Tui.RenderEffect> <- scheduled(listener,Tui.RequestRender{False{}})
     queueTicks(listener,effects)
 def onRequest(listener: EventSink,value: Unit) -> IO(Unit): IO.spawn(Unit,requested(listener))
+
+# Input first passes the terminal reply consumers, as upstream
+# handleTerminalInput: OSC 11/colour-scheme replies, the registered input
+# listeners (which may consume or rewrite it), then a cell size reply,
+# which (when its size is valid) invalidates every component and requests a
+# frame so images re-render with the new dimensions.
+def invalidateAll(components: List<&2,Component.Component>) -> IO(Unit):
+  match components:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case component <> rest:
+      do IO<Unit>:
+        Component.invalidate(component)
+        invalidateAll(rest)
+def invalidated(current: Active) -> IO(Active & Unit):
+  match current:
+    case Active{session,+components,mounted,error,owed,ticks}:
+      do IO<Active & Unit>:
+        invalidateAll(components)
+        return (Active{session,components,mounted,error,owed,ticks},Unit{})
+def cellsConsumed(+listener: EventSink,updated: Bool) -> IO(Unit):
+  match listener:
+    case EventSink{state,_,_,_,_}:
+      Bool.pick(Unit -> IO(Unit),updated,
+        _ => do IO<Unit>:
+          Serial.run(Active,Unit,state,invalidated)
+          requested(listener),
+        _ => IO.pure(Unit,Unit{}))(Unit{})
+def dispatchCells(+listener: EventSink,+data: String,cells: Maybe<&2,Bool>) -> IO(Unit):
+  match cells listener:
+    case Some{updated} _: cellsConsumed(listener,updated)
+    case None{} EventSink{state,ready,_,termux,_}:
+      do IO<Unit>:
+        handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
+        Serial.run(Active,Unit,state,current => inputOperation(current,data,handle,termux))
+def dispatchRemaining(+listener: EventSink,queries: Query.Handle,remaining: Maybe<&2,String>) -> IO(Unit):
+  match remaining:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{+data}:
+      do IO<Unit>:
+        cells : Maybe<&2,Bool> <- Query.consumeCellSize(queries,data)
+        dispatchCells(listener,data,cells)
+def dispatchInput(+listener: EventSink,+data: String) -> IO(Unit):
+  match listener:
+    case EventSink{_,_,+queries,_,_}:
+      do IO<Unit>:
+        consumed : Bool <- Query.consume(queries,data)
+        Bool.pick(Unit -> IO(Unit),consumed,
+          _ => IO.pure(Unit,Unit{}),
+          _ => do IO<Unit>:
+            remaining : Maybe<&2,String> <- Query.interceptInput(queries,data)
+            dispatchRemaining(listener,queries,remaining))(Unit{})
+def onInput(listener: EventSink,data: String) -> IO(Unit): dispatchInput(listener,data)
 
 # The caller's stop signal is settled by its input/application callbacks. The
 # terminal and serialized TUI state remain owned here until all listeners stop.
@@ -535,6 +577,20 @@ def stoppedResult(cleanup: Result<&2,&2,Terminal.Error,Unit>,closed: Result<&2,&
     case Fail{error}: Fail{error}
 # The callback receives borrowed handles while the terminal is live. It may
 # await queries here; any forked query must finish before the stop signal.
+# upstream TuiBase.queryCellSize: ask for the cell size in pixels (CSI 16 t)
+# only when the terminal supports images, detected from the environment as
+# terminal-image's getCapabilities. The TUI holds no capability overrides, so
+# the application's terminal.images setting does not suppress the query.
+def imagesSupported(pair: Image.State & Image.TerminalCapabilities) -> Bool:
+  match pair:
+    case (_,Image.TerminalCapabilities{Image.NoImages{},_,_}): False{}
+    case _: True{}
+def queryCellSize(handle: Terminal.Handle) -> IO(Result<&2,&2,Terminal.Error,Unit>):
+  do IO<Result<&2,&2,Terminal.Error,Unit>>:
+    environment : Image.Environment <- Image.processEnvironment("linux","")
+    Bool.pick(Unit -> IO(Result<&2,&2,Terminal.Error,Unit>),imagesSupported(Image.getCapabilities(Image.create(),environment,False{})),
+      _ => Terminal.write(handle,"\u{1b}[16t"),
+      _ => IO.pure(Result<&2,&2,Terminal.Error,Unit>,Done{Unit{}}))(Unit{})
 def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Owner<Active>,+handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,+requestRender: Callback.Callback<Unit,Unit>,preferences: Ref.Ref<Preferences>,+stopped: Deferred.Deferred<Unit>,+termux: Bool,finish: Active -> Nat -> IO(Active & Screen.Stream)) -> IO(Result<&2,&2,Terminal.Error,Active>):
   match pair:
     case (terminal,+terminalHandle):
@@ -547,6 +603,8 @@ def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Ow
         fullscreen : Bool <- Serial.run(Active,Bool,handle,isFullscreen)
         entered : Result<&2,&2,Terminal.Error,Unit> <- Bool.pick(Unit -> IO(Result<&2,&2,Terminal.Error,Unit>),fullscreen,_ => Terminal.write(terminalHandle,Alt.enter()),_ => IO.pure(Result<&2,&2,Terminal.Error,Unit>,Done{Unit{}}))(Unit{})
         matchWrite(entered,stopped,failure)
+        cellQuery : Result<&2,&2,Terminal.Error,Unit> <- queryCellSize(terminalHandle)
+        matchWrite(cellQuery,stopped,failure)
         notifyReady(onReady,QueryReady{queries,terminalHandle,writer,requestRender,preference})
         initial : Unit <- Serial.run(Active,Unit,handle,current => resizeOperation(current,terminalHandle,termux))
         finished : Unit <- Deferred.result(Unit,stopped)
