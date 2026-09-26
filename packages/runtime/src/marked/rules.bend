@@ -211,72 +211,124 @@ type Rules is Data: Rules{block: Block,inline: Inline}
 def rulesWith(+breaks: Bool,+table: Edit) -> Rules:
   Rules{Block{searchOf(blockquote()),searchOf(edit(blockCodeRule(),"")),searchOf(definition()),searchOf(edit(fencesRule(),"")),searchOf(edit(headingRule(),"")),searchOf(edit(hrRule(),"")),searchOf(html()),searchOf(lheadingGfm()),searchOf(listRule()),searchOf(edit(newlineRule(),"")),searchOf(gfmParagraphWith(table)),searchOf(table),searchOf(edit(blockTextRule(),""))},
     Inline{searchOf(edit(backpedal(),"")),searchOf(autolink()),searchOf(blockSkip()),searchOf(Bool.pick(Unit -> Edit,breaks,_ => breaksBr(),_ => edit(brRule(),""))(Unit{})),searchOf(edit(inlineCodeRule(),"")),searchOf(delLDelim()),searchOf(delRDelim()),searchOf(emStrongLDelimGfm()),searchOf(emStrongRDelimAstGfm()),searchOf(emStrongRDelimUnd()),searchOf(edit(escapeRule(),"")),searchOf(link()),searchOf(nolink()),searchOf(reflink()),searchOf(reflinkSearch()),searchOf(tag()),searchOf(Bool.pick(Unit -> Edit,breaks,_ => breaksText(),_ => gfmText())(Unit{})),searchOf(url()),breaks}}
-
-# Block rules by name.
 def rules(+breaks: Bool) -> Rules: rulesWith(breaks,gfmTable())
-def blockBlockquote(value: Block) -> Search:
-  match value: case Block{found,_,_,_,_,_,_,_,_,_,_,_,_}: found
-def blockCode(value: Block) -> Search:
-  match value: case Block{_,found,_,_,_,_,_,_,_,_,_,_,_}: found
-def blockDefinition(value: Block) -> Search:
-  match value: case Block{_,_,found,_,_,_,_,_,_,_,_,_,_}: found
-def blockFences(value: Block) -> Search:
-  match value: case Block{_,_,_,found,_,_,_,_,_,_,_,_,_}: found
-def blockHeading(value: Block) -> Search:
-  match value: case Block{_,_,_,_,found,_,_,_,_,_,_,_,_}: found
-def blockHr(value: Block) -> Search:
-  match value: case Block{_,_,_,_,_,found,_,_,_,_,_,_,_}: found
-def blockHtml(value: Block) -> Search:
-  match value: case Block{_,_,_,_,_,_,found,_,_,_,_,_,_}: found
-def blockLheading(value: Block) -> Search:
-  match value: case Block{_,_,_,_,_,_,_,found,_,_,_,_,_}: found
-def blockList(value: Block) -> Search:
-  match value: case Block{_,_,_,_,_,_,_,_,found,_,_,_,_}: found
-def blockNewline(value: Block) -> Search:
-  match value: case Block{_,_,_,_,_,_,_,_,_,found,_,_,_}: found
-def blockParagraph(value: Block) -> Search:
-  match value: case Block{_,_,_,_,_,_,_,_,_,_,found,_,_}: found
-def blockTable(value: Block) -> Search:
-  match value: case Block{_,_,_,_,_,_,_,_,_,_,_,found,_}: found
-def blockText(value: Block) -> Search:
-  match value: case Block{_,_,_,_,_,_,_,_,_,_,_,_,found}: found
 
-# Inline rules by name.
-def inlineBackpedal(value: Inline) -> Search:
-  match value: case Inline{found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
-def inlineAutolink(value: Inline) -> Search:
-  match value: case Inline{_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
-def inlineBlockSkip(value: Inline) -> Search:
-  match value: case Inline{_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
-def inlineBr(value: Inline) -> Search:
-  match value: case Inline{_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
-def inlineCode(value: Inline) -> Search:
-  match value: case Inline{_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
-def inlineDelLDelim(value: Inline) -> Search:
-  match value: case Inline{_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
-def inlineDelRDelim(value: Inline) -> Search:
-  match value: case Inline{_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_}: found
-def inlineEmStrongLDelim(value: Inline) -> Search:
-  match value: case Inline{_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_}: found
-def inlineEmStrongRDelimAst(value: Inline) -> Search:
-  match value: case Inline{_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_}: found
-def inlineEmStrongRDelimUnd(value: Inline) -> Search:
-  match value: case Inline{_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_}: found
-def inlineEscape(value: Inline) -> Search:
-  match value: case Inline{_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_}: found
-def inlineLink(value: Inline) -> Search:
-  match value: case Inline{_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_}: found
-def inlineNolink(value: Inline) -> Search:
-  match value: case Inline{_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_}: found
-def inlineReflink(value: Inline) -> Search:
-  match value: case Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_}: found
-def inlineReflinkSearch(value: Inline) -> Search:
-  match value: case Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_}: found
-def inlineTag(value: Inline) -> Search:
-  match value: case Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_}: found
-def inlineText(value: Inline) -> Search:
-  match value: case Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_}: found
-def inlineUrl(value: Inline) -> Search:
-  match value: case Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_}: found
+# Rules by name
+# -------------
+# A tokenizer reads a rule where the start analysis allows a match at the
+# first scalar of its source (`blockOpens`, `inlineOpens`: the rules are read
+# in place), and only then takes its search out of the rules (`blockSearch`,
+# `inlineSearch`). Taking a rule copies it out of the record, which updates a
+# reference count per compiled rule the record holds (BEND-054).
+
+# Whether a match of `rule` may begin at the start of a source whose first
+# scalar is `first` (never false when one can).
+def opensWith(rule: Search,first: Maybe<&2,U32>) -> Bool:
+  match rule: case Search{Re.RegExp{_,flags,_,_,_},start}: Re.startsAt(start,flags,None{},first)
+
+type BlockRule is Data:
+  BlockBlockquote{}
+  BlockCode{}
+  BlockDefinition{}
+  BlockFences{}
+  BlockHeading{}
+  BlockHr{}
+  BlockHtml{}
+  BlockLheading{}
+  BlockList{}
+  BlockNewline{}
+  BlockParagraph{}
+  BlockTable{}
+  BlockText{}
+def blockSearch(value: Block,rule: BlockRule) -> Search:
+  match rule value:
+    case BlockBlockquote{} Block{found,_,_,_,_,_,_,_,_,_,_,_,_}: found
+    case BlockCode{} Block{_,found,_,_,_,_,_,_,_,_,_,_,_}: found
+    case BlockDefinition{} Block{_,_,found,_,_,_,_,_,_,_,_,_,_}: found
+    case BlockFences{} Block{_,_,_,found,_,_,_,_,_,_,_,_,_}: found
+    case BlockHeading{} Block{_,_,_,_,found,_,_,_,_,_,_,_,_}: found
+    case BlockHr{} Block{_,_,_,_,_,found,_,_,_,_,_,_,_}: found
+    case BlockHtml{} Block{_,_,_,_,_,_,found,_,_,_,_,_,_}: found
+    case BlockLheading{} Block{_,_,_,_,_,_,_,found,_,_,_,_,_}: found
+    case BlockList{} Block{_,_,_,_,_,_,_,_,found,_,_,_,_}: found
+    case BlockNewline{} Block{_,_,_,_,_,_,_,_,_,found,_,_,_}: found
+    case BlockParagraph{} Block{_,_,_,_,_,_,_,_,_,_,found,_,_}: found
+    case BlockTable{} Block{_,_,_,_,_,_,_,_,_,_,_,found,_}: found
+    case BlockText{} Block{_,_,_,_,_,_,_,_,_,_,_,_,found}: found
+def blockOpens(value: Block,rule: BlockRule,first: Maybe<&2,U32>) -> Bool:
+  match rule value:
+    case BlockBlockquote{} Block{found,_,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
+    case BlockCode{} Block{_,found,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
+    case BlockDefinition{} Block{_,_,found,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
+    case BlockFences{} Block{_,_,_,found,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
+    case BlockHeading{} Block{_,_,_,_,found,_,_,_,_,_,_,_,_}: opensWith(found,first)
+    case BlockHr{} Block{_,_,_,_,_,found,_,_,_,_,_,_,_}: opensWith(found,first)
+    case BlockHtml{} Block{_,_,_,_,_,_,found,_,_,_,_,_,_}: opensWith(found,first)
+    case BlockLheading{} Block{_,_,_,_,_,_,_,found,_,_,_,_,_}: opensWith(found,first)
+    case BlockList{} Block{_,_,_,_,_,_,_,_,found,_,_,_,_}: opensWith(found,first)
+    case BlockNewline{} Block{_,_,_,_,_,_,_,_,_,found,_,_,_}: opensWith(found,first)
+    case BlockParagraph{} Block{_,_,_,_,_,_,_,_,_,_,found,_,_}: opensWith(found,first)
+    case BlockTable{} Block{_,_,_,_,_,_,_,_,_,_,_,found,_}: opensWith(found,first)
+    case BlockText{} Block{_,_,_,_,_,_,_,_,_,_,_,_,found}: opensWith(found,first)
+
+type InlineRule is Data:
+  InlineBackpedal{}
+  InlineAutolink{}
+  InlineBlockSkip{}
+  InlineBr{}
+  InlineCode{}
+  InlineDelLDelim{}
+  InlineDelRDelim{}
+  InlineEmStrongLDelim{}
+  InlineEmStrongRDelimAst{}
+  InlineEmStrongRDelimUnd{}
+  InlineEscape{}
+  InlineLink{}
+  InlineNolink{}
+  InlineReflink{}
+  InlineReflinkSearch{}
+  InlineTag{}
+  InlineText{}
+  InlineUrl{}
+def inlineSearch(value: Inline,rule: InlineRule) -> Search:
+  match rule value:
+    case InlineBackpedal{} Inline{found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
+    case InlineAutolink{} Inline{_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
+    case InlineBlockSkip{} Inline{_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
+    case InlineBr{} Inline{_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
+    case InlineCode{} Inline{_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
+    case InlineDelLDelim{} Inline{_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
+    case InlineDelRDelim{} Inline{_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_}: found
+    case InlineEmStrongLDelim{} Inline{_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_}: found
+    case InlineEmStrongRDelimAst{} Inline{_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_}: found
+    case InlineEmStrongRDelimUnd{} Inline{_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_}: found
+    case InlineEscape{} Inline{_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_}: found
+    case InlineLink{} Inline{_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_}: found
+    case InlineNolink{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_}: found
+    case InlineReflink{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_}: found
+    case InlineReflinkSearch{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_}: found
+    case InlineTag{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_}: found
+    case InlineText{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_}: found
+    case InlineUrl{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_}: found
+def inlineOpens(value: Inline,rule: InlineRule,first: Maybe<&2,U32>) -> Bool:
+  match rule value:
+    case InlineBackpedal{} Inline{found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
+    case InlineAutolink{} Inline{_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
+    case InlineBlockSkip{} Inline{_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
+    case InlineBr{} Inline{_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
+    case InlineCode{} Inline{_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
+    case InlineDelLDelim{} Inline{_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
+    case InlineDelRDelim{} Inline{_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
+    case InlineEmStrongLDelim{} Inline{_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
+    case InlineEmStrongRDelimAst{} Inline{_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
+    case InlineEmStrongRDelimUnd{} Inline{_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
+    case InlineEscape{} Inline{_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_}: opensWith(found,first)
+    case InlineLink{} Inline{_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_}: opensWith(found,first)
+    case InlineNolink{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_}: opensWith(found,first)
+    case InlineReflink{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_}: opensWith(found,first)
+    case InlineReflinkSearch{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_}: opensWith(found,first)
+    case InlineTag{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_}: opensWith(found,first)
+    case InlineText{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_}: opensWith(found,first)
+    case InlineUrl{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_}: opensWith(found,first)
 def inlineBreaks(value: Inline) -> Bool:
   match value: case Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,breaks}: breaks

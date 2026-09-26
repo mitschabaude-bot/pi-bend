@@ -109,10 +109,10 @@ def endsWithSpace(+codes: List<&2,U32>) -> Bool: spaceCode(lastCode(codes))
 # A single dollar is no math before a digit (currency), after a space, as a
 # shell variable before a word, or around a code span.
 def dollarRejected(+inner: List<&2,U32>,+after: List<&2,U32>) -> Bool:
-  endsWithSpace(inner) || startsWithDigit(after) || (shellVariable(inner) && startsWithIdentifier(after)) || Marked.containsCode(inner,96)
+  endsWithSpace(inner) || startsWithDigit(after) || (shellVariable(inner) && startsWithIdentifier(after)) || Tokenizer.containsCode(inner,96)
 def inlineClosed(+source: List<&2,U32>,+opening: Nat,+closing: String,+index: Nat) -> Maybe<&2,T.Token<Latex>>:
   +inner = Tokenizer.take(Tokenizer.drop(source,opening),index - opening)
-  Bool.pick(Unit -> Maybe<&2,T.Token<Latex>>,List.is_empty(&2,U32,inner) || Marked.containsCode(inner,10),_ => None{},
+  Bool.pick(Unit -> Maybe<&2,T.Token<Latex>>,List.is_empty(&2,U32,inner) || Tokenizer.containsCode(inner,10),_ => None{},
     _ => Some{latexToken("latex",Tokenizer.textOf(Tokenizer.take(source,index + String.length(closing))),Tokenizer.textOf(inner),False{})})(Unit{})
 def inlineFound(+source: List<&2,U32>,+opening: Nat,+closing: String,+single: Bool,+backslash: Bool,+found: Maybe<&2,Nat>) -> Maybe<&2,T.Token<Latex>>:
   match found:
@@ -134,17 +134,28 @@ def inlineLatex(+source: List<&2,U32>) -> Maybe<&2,T.Token<Latex>>:
     _ => Bool.pick(Unit -> Maybe<&2,T.Token<Latex>>,startsWithText(source,"\\("),_ => inlineDelimited(source,2n,"\\)",False{},True{}),
     _ => Bool.pick(Unit -> Maybe<&2,T.Token<Latex>>,startsWithText(source,"\\["),_ => inlineDelimited(source,2n,"\\]",False{},True{}),
     _ => Bool.pick(Unit -> Maybe<&2,T.Token<Latex>>,startsWithText(source,"$") && Bool.not(startsWithSpaceAfter(source)),_ => inlineDelimited(source,1n,"$",True{},False{}),_ => None{})(Unit{}))(Unit{}))(Unit{}))(Unit{})
-# The latex extension's start: the first `$`, `\(` or `\[`.
-def inlineStartFrom(+codes: List<&2,U32>,+index: Nat) -> Maybe<&2,Nat>:
+# The latex extension's start: the first `$`, `\(` or `\[` (`opens`: one
+# starts at the head of `codes`).
+def inlineOpensAt(+codes: List<&2,U32>) -> Bool:
   match codes:
-    case Nil{}: None{}
-    case +code <> +rest:
-      Bool.pick(Unit -> Maybe<&2,Nat>,U32.is_eq(code,36) || (U32.is_eq(code,92) && (startsWithText(rest,"(") || startsWithText(rest,"["))),_ => Some{index},_ => inlineStartFrom(rest,index + 1n))(Unit{})
+    case 36 <> _: True{}
+    case 92 <> 40 <> _: True{}
+    case 92 <> 91 <> _: True{}
+    case _: False{}
+def inlineStartFrom(+codes: List<&2,U32>,+opens: Bool,+index: Nat) -> Maybe<&2,Nat>:
+  match opens codes:
+    case True{} _: Some{index}
+    case False{} Nil{}: None{}
+    case False{} _ <> rest: inlineStartFrom(rest,inlineOpensAt(rest),index + 1n)
 # tokenizeInlineLatex: `$$…$$`, `\(…\)`, `\[…\]` or `$…$` on one line; an
 # unclosed `\(`/`\[`, or unclosed dollars before math-like text, is pending
 # (the rest of the source, shown raw while streaming).
 def tokenizeInlineLatex(source: List<&2,U32>) -> Maybe<&2,T.Token<Latex>>: inlineLatex(source)
-def startInlineLatex(source: List<&2,U32>) -> Maybe<&2,Nat>: inlineStartFrom(source,0n)
+# `start`, after the scan that found it borrowed `codes` (their last use here
+# releases them, so the scan reads the shared list without taking its nodes).
+def released(start: Maybe<&2,Nat>,codes: List<&2,U32>) -> Maybe<&2,Nat>: start
+def inlineStart(+codes: List<&2,U32>) -> Maybe<&2,Nat>: released(inlineStartFrom(codes,inlineOpensAt(codes),0n),codes)
+def startInlineLatex(source: List<&2,U32>) -> Maybe<&2,Nat>: inlineStart(source)
 
 # ` {0,3}` then `opening`: the scalars after the opening.
 def afterIndent(codes: List<&2,U32>,+count: Nat) -> Maybe<&2,List<&2,U32>>:
@@ -210,15 +221,25 @@ def tokenizeBlockLatex(+source: List<&2,U32>) -> Maybe<&2,T.Token<Latex>>:
   orElse(closedBlock(source,openedBlock(source,"$$"),"$$"),orElse(closedBlock(source,openedBlock(source,"\\["),"\\]"),
     orElse(pendingBlock(source,openedBlock(source,"\\["),False{}),pendingBlock(source,openedBlock(source,"$$"),True{}))))
 def blockLatex(source: List<&2,U32>) -> Maybe<&2,T.Token<Latex>>: tokenizeBlockLatex(source)
+# ` {0,3}(?:\$\$|\\\[)` at the start of `codes` (`spaces`: how many more may
+# come first).
+def mathOpens(codes: List<&2,U32>,spaces: Nat) -> Bool:
+  match codes spaces:
+    case 36 <> 36 <> _ _: True{}
+    case 92 <> 91 <> _ _: True{}
+    case 32 <> rest Succ{more}: mathOpens(rest,more)
+    case _ _: False{}
 # The latexBlock extension's start, `/(?:^|\n) {0,3}(?:\$\$|\\\[)/`: the
-# first line opening display math.
-def blockStartFrom(+codes: List<&2,U32>,+lineStart: Bool,+index: Nat) -> Maybe<&2,Nat>:
-  match codes:
-    case Nil{}: None{}
-    case +code <> +rest:
-      Bool.pick(Unit -> Maybe<&2,Nat>,Bool.pick(Unit -> Bool,lineStart,_ => Maybe.is_some(&2,List<&2,U32>,openedBlock(code <> rest,"$$")) || Maybe.is_some(&2,List<&2,U32>,openedBlock(code <> rest,"\\[")),_ => False{})(Unit{}),_ => Some{index},
-        _ => blockStartFrom(rest,U32.is_eq(code,10),index + 1n))(Unit{})
-def startBlockLatex(source: List<&2,U32>) -> Maybe<&2,Nat>: blockStartFrom(source,True{},0n)
+# first line opening display math (`opens`: one opens at the head of
+# `codes`).
+def blockStartFrom(+codes: List<&2,U32>,+opens: Bool,+index: Nat) -> Maybe<&2,Nat>:
+  match opens codes:
+    case True{} _: Some{index}
+    case False{} Nil{}: None{}
+    case False{} 10 <> rest: blockStartFrom(rest,mathOpens(rest,3n),index + 1n)
+    case False{} _ <> rest: blockStartFrom(rest,False{},index + 1n)
+def blockStart(+codes: List<&2,U32>) -> Maybe<&2,Nat>: released(blockStartFrom(codes,mathOpens(codes,3n),0n),codes)
+def startBlockLatex(source: List<&2,U32>) -> Maybe<&2,Nat>: blockStart(source)
 
 # StrictStrikethroughTokenizer.del: only `~~`, by
 # `/^(~~)(?=[^\s~])((?:\\.|[^\\])*?(?:\\.|[^\s~\\]))\1(?=[^~]|$)/`.
@@ -244,7 +265,7 @@ def strictOpened(+src: List<&2,U32>,+after: List<&2,U32>) -> Maybe<&2,Tokenizer.
     case Nil{}: None{}
 def strictAt(+src: List<&2,U32>) -> Maybe<&2,Tokenizer.Delimited>:
   Bool.pick(Unit -> Maybe<&2,Tokenizer.Delimited>,startsWithText(src,"~~"),_ => strictOpened(src,Tokenizer.drop(src,2n)),_ => None{})(Unit{})
-def strictDel(rules: Rules.Inline,src: List<&2,U32>,masked: List<&2,U32>,previous: Maybe<&2,U32>) -> Maybe<&2,Tokenizer.Delimited>: strictAt(src)
+def strictDel(rules: Rules.Inline,src: List<&2,U32>,masked: Tokenizer.Masking,previous: Maybe<&2,U32>) -> Maybe<&2,Tokenizer.Delimited>: strictAt(src)
 
 def piExtensions() -> Marked.Extensions<Latex>: Marked.Extensions{blockLatex,startBlockLatex,tokenizeInlineLatex,startInlineLatex,strictDel}
 

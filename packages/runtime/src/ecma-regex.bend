@@ -23,6 +23,18 @@ type ClassItem is Data:
   # A General_Category class of unicode-17-category.bend (1 L, 2 N, 3 P, 4 S).
   Category{negated: Bool, category: U32}
 
+# ASCII sets as four 32-bit words for codes 0-31, 32-63, 64-95 and 96-127.
+type Ascii is Data: Ascii{w0: U32, w1: U32, w2: U32, w3: U32}
+
+# What a match of the rest of the pattern needs of the scalar after a
+# position that has one: nothing known, a scalar of a set (its ASCII members
+# and whether any from 128 up can be one), or, after a repeated single-scalar
+# atom, none that the atom accepts.
+type Follow is Data:
+  Anything{}
+  Scalars{ascii: Ascii, wide: Bool}
+  Disjoint{}
+
 type Node is Data:
   Empty{}
   Literal{code: U32}
@@ -36,9 +48,12 @@ type Node is Data:
   Backref{index: Nat}
   NamedBackref{name: String}
   DecimalEscape{digits: List<&2, U32>}
-  Alternation{options: List<&2, Node>}
+  # `starts`: what each option, then the rest of the pattern, needs next
+  # (see Continuations; empty until computed).
+  Alternation{options: List<&2, Node>, starts: List<&2, Follow>}
   Sequence{items: List<&2, Node>}
-  Repeat{body: Node, min: Nat, max: Maybe<&2, Nat>, greedy: Bool, firstGroup: Nat, groupCount: Nat}
+  # `follow`: what the rest of the pattern needs next (see Continuations).
+  Repeat{body: Node, min: Nat, max: Maybe<&2, Nat>, greedy: Bool, firstGroup: Nat, groupCount: Nat, follow: Follow}
 
 type Flags is Data: Flags{global: Bool, ignoreCase: Bool, multiline: Bool, dotAll: Bool, unicode: Bool, sticky: Bool}
 
@@ -324,7 +339,7 @@ def sequenceOf(terms: List<&2, Term>) -> Node: singleOr(termNodes(terms, Nil{}))
 def alternationOf(alternatives: List<&2, Node>, terms: List<&2, Term>) -> Node:
   match alternatives:
     case Nil{}: sequenceOf(terms)
-    case _: Alternation{List.reverse(&2, Node, sequenceOf(terms) <> alternatives)}
+    case _: Alternation{List.reverse(&2, Node, sequenceOf(terms) <> alternatives), Nil{}}
 def kindNode(kind: GroupKind, body: Node) -> Node:
   match kind:
     case RootGroup{}: body
@@ -390,7 +405,7 @@ def failed(message: String) -> ParseState: ParseFailed{SyntaxError{message}}
 def lastQuantified(frames: List<&2, Frame>, quantifier: Quantifier, +groups: Nat, +names: List<&2, NamedGroup>) -> ParseState:
   match frames quantifier:
     case Frame{kind, opened, alternatives, Term{node, +first, +count, True{}} <> terms} <> rest Quantifier{min, max, greedy, input}:
-      Parsing{input, Frame{kind, opened, alternatives, Term{Repeat{node, min, max, greedy, first, count}, first, count, False{}} <> terms} <> rest, groups, names}
+      Parsing{input, Frame{kind, opened, alternatives, Term{Repeat{node, min, max, greedy, first, count, Anything{}}, first, count, False{}} <> terms} <> rest, groups, names}
     case _ _: failed("Nothing to repeat")
 
 # A '{' that does not start a quantifier is a literal in Annex B mode.
@@ -581,40 +596,72 @@ def parsedFlags(input: List<&2, U32>, flags: Maybe<&2, Flags>) -> Maybe<&2, Flag
 def unicodeOf(flags: Flags) -> Bool:
   match flags: case Flags{_, _, _, _, unicode, _}: unicode
 
-def compiled(+source: String, flags: Flags, state: ParseState) -> Result<&2, &2, Error, RegExp>:
-  match state:
-    case Parsed{root, groups, names}: Done{RegExp{source, flags, root, groups, names}}
-    case ParseFailed{error}: Fail{error}
-    case Parsing{_, _, _, _}: Fail{SyntaxError{"Pattern too complex"}}
-
-def compileFlags(+source: String, flags: Maybe<&2, Flags>) -> Result<&2, &2, Error, RegExp>:
-  match flags:
-    case None{}: Fail{SyntaxError{"Invalid flags"}}
-    case Some{+valid}:
-      +input = codes(source)
-      compiled(source, valid, parseLoop(List.length(&2, U32, input) * 2n + 2n, Parsing{input, [Frame{RootGroup{}, 0n, Nil{}, Nil{}}], 0n, Nil{}}, unicodeOf(valid)))
-
-# new RegExp(source, flags)
-def compile(source: String, flags: String) -> Result<&2, &2, Error, RegExp>:
-  compileFlags(source, parsedFlags(codes(flags), Some{noFlags()}))
+# 2 to the power `bit`, for bits 0 to 31.
+def power(bit: U32) -> U32:
+  match bit:
+    case 0: 1
+    case 1: 2
+    case 2: 4
+    case 3: 8
+    case 4: 16
+    case 5: 32
+    case 6: 64
+    case 7: 128
+    case 8: 256
+    case 9: 512
+    case 10: 1024
+    case 11: 2048
+    case 12: 4096
+    case 13: 8192
+    case 14: 16384
+    case 15: 32768
+    case 16: 65536
+    case 17: 131072
+    case 18: 262144
+    case 19: 524288
+    case 20: 1048576
+    case 21: 2097152
+    case 22: 4194304
+    case 23: 8388608
+    case 24: 16777216
+    case 25: 33554432
+    case 26: 67108864
+    case 27: 134217728
+    case 28: 268435456
+    case 29: 536870912
+    case 30: 1073741824
+    case 31: 2147483648
+    case _: 0
+# Whether an ASCII set holds `code` (below 128).
+def asciiHas(set: Ascii, +code: U32) -> Bool:
+  match set:
+    case Ascii{a, b, c, d}:
+      +word = Bool.pick(U32, U32.is_lt(code, 64), Bool.pick(U32, U32.is_lt(code, 32), a, b), Bool.pick(U32, U32.is_lt(code, 96), c, d))
+      Bool.not(U32.is_eq(U32.and(word, power((code % 32 : U32))), 0))
 
 # Matching
 # --------
 
 type Span is Data: Span{start: Nat, end: Nat}
-# The input around the current position: `before` holds the preceding scalars
-# nearest first, so matching can step in both directions (lookbehind).
-type Cursor is Data: Cursor{before: List<&2, U32>, after: List<&2, U32>, index: Nat}
+# The input around the current position, oriented in the matching direction:
+# `ahead` holds the scalars still to read (forwards those after the position,
+# backwards, in a lookbehind, those before it, nearest first) and `passed`
+# the scalar on the other side, the one last stepped over. A step takes one
+# node of `ahead` and allocates nothing; a lookaround that turns the direction
+# rebuilds `ahead` from the subject.
+type Cursor is Data: Cursor{passed: Maybe<&2, U32>, ahead: List<&2, U32>, index: Nat}
 
 # Goals still to match; Iterate and AfterIteration follow ECMA-262
 # RepeatMatcher with the remaining `min`/`max`.
 type Goal is Data:
   RunNode{node: Node, forward: Bool}
   CloseGroup{group: Nat, start: Nat, forward: Bool}
-  Iterate{body: Node, min: Nat, max: Maybe<&2, Nat>, greedy: Bool, first: Nat, count: Nat, forward: Bool}
-  AfterIteration{body: Node, min: Nat, max: Maybe<&2, Nat>, greedy: Bool, first: Nat, count: Nat, start: Nat, forward: Bool}
-  GiveBack{remaining: Nat, forward: Bool}
-  TakeMore{node: Node, remaining: Maybe<&2, Nat>, forward: Bool}
+  Iterate{body: Node, min: Nat, max: Maybe<&2, Nat>, greedy: Bool, first: Nat, count: Nat, follow: Follow, forward: Bool}
+  AfterIteration{body: Node, min: Nat, max: Maybe<&2, Nat>, greedy: Bool, first: Nat, count: Nat, follow: Follow, start: Nat, forward: Bool}
+  # A greedy run of single scalars gives back `taken` (the last first) down
+  # to `remaining` of them; `passed` is the scalar before the run.
+  GiveBack{taken: List<&2, U32>, remaining: Nat, passed: Maybe<&2, U32>, follow: Follow, forward: Bool}
+  TakeMore{node: Node, remaining: Maybe<&2, Nat>, follow: Follow, forward: Bool}
   LookDone{}
 
 # Backtracking points. A Barrier delimits a lookaround: reaching LookDone
@@ -687,29 +734,29 @@ def nodeAccepts(node: Node, settings: Settings, +code: U32) -> Bool:
     case AnyChar{} Settings{_, _, dotAll, _, _, _}: dotAll || Bool.not(isLineTerminator(code))
     case CharClass{negated, items} Settings{ignoreCase, _, _, _, _, _}: Bool.xor(classHas(ignoreCase, items, code), negated)
     case _ _: False{}
-
+# The index one step on in the matching direction, and one step back.
+def toward(+index: Nat, forward: Bool) -> Nat:
+  match forward:
+    case True{}: index + 1n
+    case False{}: index - 1n
+def away(+index: Nat, forward: Bool) -> Nat:
+  match forward:
+    case True{}: index - 1n
+    case False{}: index + 1n
 def stepped(cursor: Cursor, forward: Bool) -> Maybe<&2, Cursor>:
-  match cursor forward:
-    case Cursor{before, code <> after, +index} True{}: Some{Cursor{code <> before, after, index + 1n}}
-    case Cursor{code <> before, after, +index} False{}: Some{Cursor{before, code <> after, index - 1n}}
-    case _ _: None{}
-def nextCode(cursor: Cursor, forward: Bool) -> Maybe<&2, U32>:
-  match cursor forward:
-    case Cursor{_, code <> _, _} True{}: Some{code}
-    case Cursor{code <> _, _, _} False{}: Some{code}
-    case _ _: None{}
+  match cursor:
+    case Cursor{_, code <> ahead, index}: Some{Cursor{Some{code}, ahead, toward(index, forward)}}
+    case Cursor{_, Nil{}, _}: None{}
 
 # One scalar in the matching direction.
-def consumed(accepted: Bool, next: Maybe<&2, Cursor>, goals: List<&2, Goal>, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
-  match accepted next:
-    case True{} Some{cursor}: Running{goals, cursor, captures, choices}
-    case _ _: backtrack(choices)
-def singleCode(code: Maybe<&2, U32>, node: Node, settings: Settings, cursor: Cursor, forward: Bool, goals: List<&2, Goal>, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
-  match code:
-    case None{}: backtrack(choices)
-    case Some{value}: consumed(nodeAccepts(node, settings, value), stepped(cursor, forward), goals, captures, choices)
-def single(node: Node, settings: Settings, +cursor: Cursor, +forward: Bool, goals: List<&2, Goal>, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
-  singleCode(nextCode(cursor, forward), node, settings, cursor, forward, goals, captures, choices)
+def consumed(accepted: Bool, cursor: Cursor, goals: List<&2, Goal>, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
+  match accepted:
+    case True{}: Running{goals, cursor, captures, choices}
+    case False{}: backtrack(choices)
+def single(node: Node, settings: Settings, cursor: Cursor, forward: Bool, goals: List<&2, Goal>, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
+  match cursor:
+    case Cursor{_, +code <> ahead, index}: consumed(nodeAccepts(node, settings, code), Cursor{Some{code}, ahead, toward(index, forward)}, goals, captures, choices)
+    case Cursor{_, Nil{}, _}: backtrack(choices)
 
 def isLineTerminatorAt(code: Maybe<&2, U32>) -> Bool:
   match code:
@@ -719,16 +766,21 @@ def isWordAt(code: Maybe<&2, U32>) -> Bool:
   match code:
     case Some{value}: isWordCode(value)
     case None{}: False{}
-def previousCode(cursor: Cursor) -> Maybe<&2, U32>:
-  match cursor: case Cursor{before, _, _}: List.head(&2, U32, before)
-def followingCode(cursor: Cursor) -> Maybe<&2, U32>:
-  match cursor: case Cursor{_, after, _}: List.head(&2, U32, after)
+# The scalars before and after the position, whichever the direction.
+def previousCode(cursor: Cursor, forward: Bool) -> Maybe<&2, U32>:
+  match cursor forward:
+    case Cursor{passed, _, _} True{}: passed
+    case Cursor{_, ahead, _} False{}: List.head(&2, U32, ahead)
+def followingCode(cursor: Cursor, forward: Bool) -> Maybe<&2, U32>:
+  match cursor forward:
+    case Cursor{_, ahead, _} True{}: List.head(&2, U32, ahead)
+    case Cursor{passed, _, _} False{}: passed
 
-def assertionHolds(node: Node, multiline: Bool, +cursor: Cursor) -> Bool:
+def assertionHolds(node: Node, multiline: Bool, +cursor: Cursor, +forward: Bool) -> Bool:
   match node:
-    case LineStart{}: Maybe.is_none(&2, U32, previousCode(cursor)) || (multiline && isLineTerminatorAt(previousCode(cursor)))
-    case LineEnd{}: Maybe.is_none(&2, U32, followingCode(cursor)) || (multiline && isLineTerminatorAt(followingCode(cursor)))
-    case WordBoundary{negated}: Bool.xor(Bool.xor(isWordAt(previousCode(cursor)), isWordAt(followingCode(cursor))), negated)
+    case LineStart{}: Maybe.is_none(&2, U32, previousCode(cursor, forward)) || (multiline && isLineTerminatorAt(previousCode(cursor, forward)))
+    case LineEnd{}: Maybe.is_none(&2, U32, followingCode(cursor, forward)) || (multiline && isLineTerminatorAt(followingCode(cursor, forward)))
+    case WordBoundary{negated}: Bool.xor(Bool.xor(isWordAt(previousCode(cursor, forward)), isWordAt(followingCode(cursor, forward))), negated)
     case _: False{}
 
 def checked(holds: Bool, cursor: Cursor, goals: List<&2, Goal>, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
@@ -741,6 +793,37 @@ def runAll(nodes: List<&2, Node>, +forward: Bool, rest: List<&2, Goal>) -> List<
     case Nil{}: rest
     case node <> more: RunNode{node, forward} <> runAll(more, forward, rest)
 
+# Lookarounds. A body of one scalar reads the neighbouring scalar; any other
+# body runs in the lookaround's direction, from a cursor turned to it.
+def reversedPrefix(input: List<&2, U32>, count: Nat, reversed: List<&2, U32>) -> List<&2, U32>:
+  match count input:
+    case Zero{} _: reversed
+    case Succ{_} Nil{}: reversed
+    case Succ{more} code <> rest: reversedPrefix(rest, more, code <> reversed)
+def inputOf(settings: Settings) -> List<&2, U32>:
+  match settings: case Settings{_, _, _, input, _, _}: input
+def turned(cursor: Cursor, forward: Bool, ahead: Bool, settings: Settings) -> Cursor:
+  match cursor forward ahead:
+    case Cursor{_, after, +index} True{} False{}: Cursor{List.head(&2, U32, after), reversedPrefix(inputOf(settings), index, Nil{}), index}
+    case Cursor{_, before, +index} False{} True{}: Cursor{List.head(&2, U32, before), List.drop(&2, U32, inputOf(settings), index), index}
+    case cursor _ _: cursor
+# `accepted`, the last use of `node` (so the test before it only reads the
+# node; see BEND-054).
+def acceptedBy(accepted: Bool, node: Node) -> Bool: accepted
+def neighbourAccepts(+node: Node, settings: Settings, code: Maybe<&2, U32>) -> Bool:
+  match code:
+    case Some{value}: acceptedBy(nodeAccepts(node, settings, value), node)
+    case None{}: False{}
+def neighbour(+cursor: Cursor, forward: Bool, ahead: Bool) -> Maybe<&2, U32>:
+  match ahead:
+    case True{}: followingCode(cursor, forward)
+    case False{}: previousCode(cursor, forward)
+def lookStep(+ahead: Bool, negated: Bool, body: Node, +forward: Bool, rest: List<&2, Goal>, +settings: Settings, +cursor: Cursor, +captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
+  match body:
+    case Literal{code}: checked(Bool.xor(neighbourAccepts(Literal{code}, settings, neighbour(cursor, forward, ahead)), negated), cursor, rest, captures, choices)
+    case AnyChar{}: checked(Bool.xor(neighbourAccepts(AnyChar{}, settings, neighbour(cursor, forward, ahead)), negated), cursor, rest, captures, choices)
+    case CharClass{inverted, items}: checked(Bool.xor(neighbourAccepts(CharClass{inverted, items}, settings, neighbour(cursor, forward, ahead)), negated), cursor, rest, captures, choices)
+    case body: Running{[RunNode{body, ahead}, LookDone{}], turned(cursor, forward, ahead, settings), captures, Barrier{negated, rest, cursor, captures} <> choices}
 
 def setCapture(captures: List<&2, Maybe<&2, Span>>, index: Nat, span: Span) -> List<&2, Maybe<&2, Span>>:
   match captures index:
@@ -748,14 +831,17 @@ def setCapture(captures: List<&2, Maybe<&2, Span>>, index: Nat, span: Span) -> L
     case _ <> rest Succ{Zero{}}: Some{span} <> rest
     case capture <> rest Succ{more}: capture <> setCapture(rest, more, span)
     case captures Zero{}: captures
-# Clears `count` captures from group `first` on (`position` numbers the head
-# of `captures`); the list after them is shared, not rebuilt.
-def clearCaptures(count: Nat, captures: List<&2, Maybe<&2, Span>>, +first: Nat, +position: Nat) -> List<&2, Maybe<&2, Span>>:
+# Clears `count` captures from group `first` on (group 1 heads `captures`);
+# the list after them is shared, not rebuilt.
+def clearedRun(count: Nat, captures: List<&2, Maybe<&2, Span>>) -> List<&2, Maybe<&2, Span>>:
   match count captures:
     case Zero{} kept: kept
     case _ Nil{}: Nil{}
-    case Succ{+more} capture <> +rest:
-      Bool.pick(Unit -> List<&2, Maybe<&2, Span>>, Nat.is_ge(position, first), _ => None{} <> clearCaptures(more, rest, first, position + 1n), _ => capture <> clearCaptures(Succ{more}, rest, first, position + 1n))(Unit{})
+    case Succ{more} _ <> rest: None{} <> clearedRun(more, rest)
+def clearCaptures(+count: Nat, +captures: List<&2, Maybe<&2, Span>>, +first: Nat) -> List<&2, Maybe<&2, Span>>:
+  match count:
+    case Zero{}: captures
+    case count: List.append(&2, Maybe<&2, Span>, List.take(&2, Maybe<&2, Span>, captures, first - 1n), clearedRun(count, List.drop(&2, Maybe<&2, Span>, captures, first - 1n)))
 def spanOf(+start: Nat, +index: Nat, forward: Bool) -> Span:
   match forward:
     case True{}: Span{start, index}
@@ -779,13 +865,22 @@ def prefixMatches(expected: List<&2, U32>, found: List<&2, U32>, +ignoreCase: Bo
     case _ Nil{}: False{}
     case +code <> rest +other <> more: sameChar(ignoreCase, code, other) && prefixMatches(rest, more, ignoreCase)
 def advanced(count: Nat, cursor: Cursor, +forward: Bool) -> Maybe<&2, Cursor>:
-  match count:
-    case Zero{}: Some{cursor}
-    case Succ{more}: Maybe.bind(&2, Cursor, Cursor, stepped(cursor, forward), next => advanced(more, next, forward))
-def textMatched(+expected: List<&2, U32>, +cursor: Cursor, ignoreCase: Bool, forward: Bool) -> Maybe<&2, Cursor>:
-  match cursor forward:
-    case Cursor{_, after, _} True{}: Bool.pick(Unit -> Maybe<&2, Cursor>, prefixMatches(expected, after, ignoreCase), _ => advanced(List.length(&2, U32, expected), cursor, True{}), _ => None{})(Unit{})
-    case Cursor{before, _, _} False{}: Bool.pick(Unit -> Maybe<&2, Cursor>, prefixMatches(List.reverse(&2, U32, expected), before, ignoreCase), _ => advanced(List.length(&2, U32, expected), cursor, False{}), _ => None{})(Unit{})
+  match count cursor:
+    case Zero{} cursor: Some{cursor}
+    case Succ{more} Cursor{_, code <> ahead, index}: advanced(more, Cursor{Some{code}, ahead, toward(index, forward)}, forward)
+    case Succ{_} Cursor{_, Nil{}, _}: None{}
+def aheadOf(cursor: Cursor) -> List<&2, U32>:
+  match cursor: case Cursor{_, ahead, _}: ahead
+def orientedText(+expected: List<&2, U32>, forward: Bool) -> List<&2, U32>:
+  match forward:
+    case True{}: expected
+    case False{}: List.reverse(&2, U32, expected)
+def textAdvanced(matched: Bool, count: Nat, cursor: Cursor, forward: Bool) -> Maybe<&2, Cursor>:
+  match matched:
+    case True{}: advanced(count, cursor, forward)
+    case False{}: None{}
+def textMatched(+expected: List<&2, U32>, +cursor: Cursor, ignoreCase: Bool, +forward: Bool) -> Maybe<&2, Cursor>:
+  textAdvanced(prefixMatches(orientedText(expected, forward), aheadOf(cursor), ignoreCase), List.length(&2, U32, expected), cursor, forward)
 
 def indexOf(cursor: Cursor) -> Nat:
   match cursor: case Cursor{_, _, index}: index
@@ -809,93 +904,196 @@ def multilineOf(settings: Settings) -> Bool:
 # Repetition of a single-scalar atom (no captures, never empty) takes its run
 # of scalars in one step, then yields them back one at a time when greedy
 # (GiveBack) or takes one more at a time when lazy (TakeMore): the choices
-# RepeatMatcher makes per iteration, in the same order.
-type Scanned is Data: Scanned{cursor: Cursor, count: Nat}
-def singleAccepts(code: Maybe<&2, U32>, node: Node, settings: Settings) -> Bool:
-  match code:
-    case None{}: False{}
-    case Some{value}: nodeAccepts(node, settings, value)
-def acceptedStep(node: Node, +settings: Settings, +cursor: Cursor, +forward: Bool) -> Maybe<&2, Cursor>:
-  Bool.pick(Unit -> Maybe<&2, Cursor>, singleAccepts(nextCode(cursor, forward), node, settings), _ => stepped(cursor, forward), _ => None{})(Unit{})
-def lessOne(max: Maybe<&2, Nat>) -> Maybe<&2, Nat>: Maybe.map(&2, Nat, Nat, value => value - 1n, max)
-def scanRun(fuel: Nat, +node: Node, +settings: Settings, +forward: Bool, cursor: Cursor, next: Maybe<&2, Cursor>, max: Maybe<&2, Nat>, count: Nat) -> Scanned:
-  match fuel next max:
-    case _ _ Some{Zero{}}: Scanned{cursor, count}
-    case Succ{more} Some{+onward} _: scanRun(more, node, settings, forward, onward, acceptedStep(node, settings, onward, forward), lessOne(max), count + 1n)
-    case _ _ _: Scanned{cursor, count}
-def givenBack(remaining: Nat, forward: Bool, rest: List<&2, Goal>, cursor: Cursor, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> List<&2, Choice>:
-  match remaining:
-    case Zero{}: choices
-    case more: Alternative{GiveBack{more, forward} <> rest, cursor, captures} <> choices
-def greedyRun(scanned: Scanned, +min: Nat, +forward: Bool, +rest: List<&2, Goal>, +captures: List<&2, Maybe<&2, Span>>, +choices: List<&2, Choice>) -> Machine:
-  match scanned:
-    case Scanned{+cursor, +count}: Bool.pick(Unit -> Machine, Nat.is_lt(count, min), _ => backtrack(choices), _ => Running{rest, cursor, captures, givenBack(count - min, forward, rest, cursor, captures, choices)})(Unit{})
-def lazyRun(scanned: Scanned, +min: Nat, max: Maybe<&2, Nat>, node: Node, forward: Bool, +rest: List<&2, Goal>, +captures: List<&2, Maybe<&2, Span>>, +choices: List<&2, Choice>) -> Machine:
-  match scanned:
-    case Scanned{+cursor, +count}: Bool.pick(Unit -> Machine, Nat.is_lt(count, min), _ => backtrack(choices), _ => Running{rest, cursor, captures, Alternative{TakeMore{node, Maybe.map(&2, Nat, Nat, value => value - min, max), forward} <> rest, cursor, captures} <> choices})(Unit{})
-def singleRepeat(+node: Node, +min: Nat, max: Maybe<&2, Nat>, greedy: Bool, +forward: Bool, +rest: List<&2, Goal>, +settings: Settings, +cursor: Cursor, +captures: List<&2, Maybe<&2, Span>>, +choices: List<&2, Choice>) -> Machine:
+# RepeatMatcher makes per iteration, in the same order. Positions where the
+# continuation cannot start (`follow`) are not tried: a greedy run the
+# continuation cannot start with keeps what it took, and a lazy one passes
+# over scalars the continuation cannot start with.
+def follows(follow: Follow, +code: U32) -> Bool:
+  match follow:
+    case Anything{}: True{}
+    case Scalars{ascii, wide}: Bool.pick(Bool, U32.is_lt(code, 128), asciiHas(ascii, code), wide)
+    case Disjoint{}: False{}
+def lessOne(max: Maybe<&2, Nat>) -> Maybe<&2, Nat>:
+  match max:
+    case Some{value}: Some{value - 1n}
+    case None{}: None{}
+def keeps(follow: Follow) -> Bool:
+  match follow:
+    case Disjoint{}: False{}
+    case _: True{}
+def kept(keep: Bool, +code: U32, taken: List<&2, U32>) -> List<&2, U32>:
+  match keep:
+    case True{}: code <> taken
+    case False{}: taken
+# The run from the scalar `code`, before `rest` (`accepts`: `node` accepts
+# `code`); with `keep`, the scalars taken, the last first. The scalar ahead is
+# a parameter, not read from the list, so the scan takes each node once.
+type Scanned is Data: Scanned{cursor: Cursor, count: Nat, taken: List<&2, U32>}
+def scanRun(rest: List<&2, U32>, +code: U32, accepts: Bool, +node: Node, +settings: Settings, +forward: Bool, +keep: Bool, max: Maybe<&2, Nat>, passed: Maybe<&2, U32>, +index: Nat, +count: Nat, taken: List<&2, U32>) -> Scanned:
+  match accepts max rest:
+    case True{} Some{Zero{}} rest: Scanned{Cursor{passed, code <> rest, index}, count, taken}
+    case False{} _ rest: Scanned{Cursor{passed, code <> rest, index}, count, taken}
+    case True{} max +next <> more: scanRun(more, next, nodeAccepts(node, settings, next), node, settings, forward, keep, lessOne(max), Some{code}, toward(index, forward), count + 1n, kept(keep, code, taken))
+    case True{} _ Nil{}: Scanned{Cursor{Some{code}, Nil{}, toward(index, forward)}, count + 1n, kept(keep, code, taken)}
+def scanFrom(+node: Node, +settings: Settings, +forward: Bool, +keep: Bool, max: Maybe<&2, Nat>, cursor: Cursor) -> Scanned:
+  match cursor:
+    case Cursor{passed, +code <> rest, index}: scanRun(rest, code, nodeAccepts(node, settings, code), node, settings, forward, keep, max, passed, index, 0n, Nil{})
+    case Cursor{passed, Nil{}, index}: Scanned{Cursor{passed, Nil{}, index}, 0n, Nil{}}
+# A lazy run's next position where the continuation can start, from the
+# scalar `code` before `rest`: `skip` says whether `node` accepts `code`, the
+# continuation cannot start with it and `max` allows another.
+type Skipped is Data: Skipped{cursor: Cursor, remaining: Maybe<&2, Nat>}
+def skippable(+code: U32, node: Node, settings: Settings, follow: Follow, max: Maybe<&2, Nat>) -> Bool:
+  match max:
+    case Some{Zero{}}: False{}
+    case _: nodeAccepts(node, settings, code) && Bool.not(follows(follow, code))
+def skipRun(rest: List<&2, U32>, +code: U32, skip: Bool, +node: Node, +settings: Settings, +follow: Follow, +forward: Bool, +max: Maybe<&2, Nat>, passed: Maybe<&2, U32>, +index: Nat) -> Skipped:
+  match skip rest:
+    case True{} +next <> more: skipRun(more, next, skippable(next, node, settings, follow, lessOne(max)), node, settings, follow, forward, lessOne(max), Some{code}, toward(index, forward))
+    case True{} Nil{}: Skipped{Cursor{Some{code}, Nil{}, toward(index, forward)}, lessOne(max)}
+    case False{} rest: Skipped{Cursor{passed, code <> rest, index}, max}
+def skipFrom(+node: Node, +settings: Settings, +follow: Follow, +forward: Bool, +max: Maybe<&2, Nat>, cursor: Cursor) -> Skipped:
+  match cursor:
+    case Cursor{passed, +code <> rest, index}: skipRun(rest, code, skippable(code, node, settings, follow, max), node, settings, follow, forward, max, passed, index)
+    case Cursor{passed, Nil{}, index}: Skipped{Cursor{passed, Nil{}, index}, max}
+def givenBack(remaining: Nat, taken: List<&2, U32>, passed: Maybe<&2, U32>, follow: Follow, forward: Bool, rest: List<&2, Goal>, cursor: Cursor, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> List<&2, Choice>:
+  match remaining follow:
+    case Zero{} _: choices
+    case _ Disjoint{}: choices
+    case more follow: Alternative{GiveBack{taken, more, passed, follow, forward} <> rest, cursor, captures} <> choices
+def greedyEnd(short: Bool, scanned: Scanned, +min: Nat, passed: Maybe<&2, U32>, follow: Follow, +forward: Bool, +rest: List<&2, Goal>, +captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
+  match short scanned:
+    case True{} _: backtrack(choices)
+    case False{} Scanned{+cursor, count, taken}: Running{rest, cursor, captures, givenBack(count - min, taken, passed, follow, forward, rest, cursor, captures, choices)}
+def countOf(scanned: Scanned) -> Nat:
+  match scanned: case Scanned{_, count, _}: count
+def greedyRun(+scanned: Scanned, +min: Nat, passed: Maybe<&2, U32>, follow: Follow, forward: Bool, rest: List<&2, Goal>, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
+  greedyEnd(Nat.is_lt(countOf(scanned), min), scanned, min, passed, follow, forward, rest, captures, choices)
+def lazyNext(skipped: Skipped, +node: Node, +follow: Follow, +forward: Bool, +rest: List<&2, Goal>, +captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
+  match skipped:
+    case Skipped{+cursor, remaining}: Running{rest, cursor, captures, Alternative{TakeMore{node, remaining, follow, forward} <> rest, cursor, captures} <> choices}
+def remainingAfter(max: Maybe<&2, Nat>, +min: Nat) -> Maybe<&2, Nat>:
+  match max:
+    case Some{value}: Some{value - min}
+    case None{}: None{}
+def lazyEnd(short: Bool, scanned: Scanned, +min: Nat, max: Maybe<&2, Nat>, +node: Node, +follow: Follow, +settings: Settings, +forward: Bool, rest: List<&2, Goal>, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
+  match short scanned:
+    case True{} _: backtrack(choices)
+    case False{} Scanned{cursor, _, _}: lazyNext(skipFrom(node, settings, follow, forward, remainingAfter(max, min), cursor), node, follow, forward, rest, captures, choices)
+def lazyRun(+scanned: Scanned, +min: Nat, max: Maybe<&2, Nat>, node: Node, follow: Follow, settings: Settings, forward: Bool, rest: List<&2, Goal>, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
+  lazyEnd(Nat.is_lt(countOf(scanned), min), scanned, min, max, node, follow, settings, forward, rest, captures, choices)
+def passedOf(cursor: Cursor) -> Maybe<&2, U32>:
+  match cursor: case Cursor{passed, _, _}: passed
+def singleRepeat(+node: Node, +min: Nat, max: Maybe<&2, Nat>, greedy: Bool, +follow: Follow, +forward: Bool, rest: List<&2, Goal>, +settings: Settings, +cursor: Cursor, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
   match greedy:
-    case True{}: greedyRun(scanRun(4294967295n, node, settings, forward, cursor, acceptedStep(node, settings, cursor, forward), max, 0n), min, forward, rest, captures, choices)
-    case False{}: lazyRun(scanRun(4294967295n, node, settings, forward, cursor, acceptedStep(node, settings, cursor, forward), Some{min}, 0n), min, max, node, forward, rest, captures, choices)
-def repeatStep(body: Node, +min: Nat, +max: Maybe<&2, Nat>, +greedy: Bool, first: Nat, count: Nat, +forward: Bool, +rest: List<&2, Goal>, +settings: Settings, +cursor: Cursor, +captures: List<&2, Maybe<&2, Span>>, +choices: List<&2, Choice>) -> Machine:
+    case True{}: greedyRun(scanFrom(node, settings, forward, keeps(follow), max, cursor), min, passedOf(cursor), follow, forward, rest, captures, choices)
+    case False{}: lazyRun(scanFrom(node, settings, forward, False{}, Some{min}, cursor), min, max, node, follow, settings, forward, rest, captures, choices)
+def repeatStep(body: Node, +min: Nat, +max: Maybe<&2, Nat>, +greedy: Bool, first: Nat, count: Nat, follow: Follow, +forward: Bool, +rest: List<&2, Goal>, +settings: Settings, +cursor: Cursor, +captures: List<&2, Maybe<&2, Span>>, +choices: List<&2, Choice>) -> Machine:
   match body:
-    case Literal{code}: singleRepeat(Literal{code}, min, max, greedy, forward, rest, settings, cursor, captures, choices)
-    case AnyChar{}: singleRepeat(AnyChar{}, min, max, greedy, forward, rest, settings, cursor, captures, choices)
-    case CharClass{negated, items}: singleRepeat(CharClass{negated, items}, min, max, greedy, forward, rest, settings, cursor, captures, choices)
-    case other: Running{Iterate{other, min, max, greedy, first, count, forward} <> rest, cursor, captures, choices}
-def givingBack(back: Maybe<&2, Cursor>, +remaining: Nat, +forward: Bool, +rest: List<&2, Goal>, +captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
-  match back:
+    case Literal{code}: singleRepeat(Literal{code}, min, max, greedy, follow, forward, rest, settings, cursor, captures, choices)
+    case AnyChar{}: singleRepeat(AnyChar{}, min, max, greedy, follow, forward, rest, settings, cursor, captures, choices)
+    case CharClass{negated, items}: singleRepeat(CharClass{negated, items}, min, max, greedy, follow, forward, rest, settings, cursor, captures, choices)
+    case other: Running{Iterate{other, min, max, greedy, first, count, follow, forward} <> rest, cursor, captures, choices}
+# The next position a greedy run gives back to where the continuation can
+# start: `viable` says whether the scalar given back next is one it can start
+# with.
+type Returned is Data: Returned{cursor: Cursor, taken: List<&2, U32>, remaining: Nat}
+def viableAt(taken: List<&2, U32>, follow: Follow) -> Bool:
+  match taken:
+    case code <> _: follows(follow, code)
+    case Nil{}: True{}
+def headOr(codes: List<&2, U32>, passed: Maybe<&2, U32>) -> Maybe<&2, U32>:
+  match codes:
+    case code <> _: Some{code}
+    case Nil{}: passed
+def unstepped(taken: List<&2, U32>, viable: Bool, remaining: Nat, passed: Maybe<&2, U32>, +follow: Follow, ahead: List<&2, U32>, +index: Nat, +forward: Bool) -> Maybe<&2, Returned>:
+  match viable remaining taken:
+    case _ Zero{} _: None{}
+    case _ _ Nil{}: None{}
+    case True{} Succ{more} +code <> +earlier: Some{Returned{Cursor{headOr(earlier, passed), code <> ahead, away(index, forward)}, earlier, more}}
+    case False{} Succ{more} +code <> +earlier: unstepped(earlier, viableAt(earlier, follow), more, passed, follow, code <> ahead, away(index, forward), forward)
+def givingBack(found: Maybe<&2, Returned>, passed: Maybe<&2, U32>, follow: Follow, +forward: Bool, +rest: List<&2, Goal>, +captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
+  match found:
     case None{}: backtrack(choices)
-    case Some{+cursor}: Running{rest, cursor, captures, givenBack(remaining - 1n, forward, rest, cursor, captures, choices)}
-def takingMore(remaining: Maybe<&2, Nat>, taken: Maybe<&2, Cursor>, +node: Node, +forward: Bool, +rest: List<&2, Goal>, +captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
-  match remaining taken:
+    case Some{Returned{+cursor, taken, remaining}}: Running{rest, cursor, captures, givenBack(remaining, taken, passed, follow, forward, rest, cursor, captures, choices)}
+def giveBackStep(+taken: List<&2, U32>, remaining: Nat, +passed: Maybe<&2, U32>, +follow: Follow, +forward: Bool, rest: List<&2, Goal>, cursor: Cursor, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
+  match cursor:
+    case Cursor{_, ahead, index}: givingBack(unstepped(taken, viableAt(taken, follow), remaining, passed, follow, ahead, index, forward), passed, follow, forward, rest, captures, choices)
+def takenMore(accepted: Bool, +remaining: Maybe<&2, Nat>, +node: Node, +follow: Follow, +settings: Settings, +forward: Bool, rest: List<&2, Goal>, cursor: Cursor, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
+  match accepted:
+    case True{}: lazyNext(skipFrom(node, settings, follow, forward, remaining, cursor), node, follow, forward, rest, captures, choices)
+    case False{}: backtrack(choices)
+def takingMore(remaining: Maybe<&2, Nat>, +node: Node, +follow: Follow, +settings: Settings, +forward: Bool, +rest: List<&2, Goal>, cursor: Cursor, +captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
+  match remaining cursor:
     case Some{Zero{}} _: backtrack(choices)
-    case _ None{}: backtrack(choices)
-    case _ Some{+cursor}: Running{rest, cursor, captures, Alternative{TakeMore{node, lessOne(remaining), forward} <> rest, cursor, captures} <> choices}
+    case _ Cursor{_, +code <> ahead, index}: takenMore(nodeAccepts(node, settings, code), lessOne(remaining), node, follow, settings, forward, rest, Cursor{Some{code}, ahead, toward(index, forward)}, captures, choices)
+    case _ Cursor{_, Nil{}, _}: backtrack(choices)
 
+# The options that can match before `next` (every one at the end).
+def keptIf(keep: Bool, option: Node, options: List<&2, Node>) -> List<&2, Node>:
+  match keep:
+    case True{}: option <> options
+    case False{}: options
+def viableOptions(options: List<&2, Node>, starts: List<&2, Follow>, next: Maybe<&2, U32>) -> List<&2, Node>:
+  match options starts next:
+    case Nil{} _ _: Nil{}
+    case options Nil{} _: options
+    case options _ None{}: options
+    case option <> more start <> others Some{+code}: keptIf(follows(start, code), option, viableOptions(more, others, Some{code}))
+def optionsStep(options: List<&2, Node>, +forward: Bool, +rest: List<&2, Goal>, +cursor: Cursor, +captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
+  match options:
+    case Nil{}: backtrack(choices)
+    case first <> more: Running{RunNode{first, forward} <> rest, cursor, captures, untried(more, forward, rest, cursor, captures, choices)}
 def nodeStep(node: Node, +forward: Bool, +rest: List<&2, Goal>, +settings: Settings, +cursor: Cursor, +captures: List<&2, Maybe<&2, Span>>, +choices: List<&2, Choice>) -> Machine:
   match node:
     case Empty{}: Running{rest, cursor, captures, choices}
     case Literal{code}: single(Literal{code}, settings, cursor, forward, rest, captures, choices)
     case AnyChar{}: single(AnyChar{}, settings, cursor, forward, rest, captures, choices)
     case CharClass{negated, +items}: single(CharClass{negated, items}, settings, cursor, forward, rest, captures, choices)
-    case LineStart{}: checked(assertionHolds(LineStart{}, multilineOf(settings), cursor), cursor, rest, captures, choices)
-    case LineEnd{}: checked(assertionHolds(LineEnd{}, multilineOf(settings), cursor), cursor, rest, captures, choices)
-    case WordBoundary{negated}: checked(assertionHolds(WordBoundary{negated}, False{}, cursor), cursor, rest, captures, choices)
+    case LineStart{}: checked(assertionHolds(LineStart{}, multilineOf(settings), cursor, forward), cursor, rest, captures, choices)
+    case LineEnd{}: checked(assertionHolds(LineEnd{}, multilineOf(settings), cursor, forward), cursor, rest, captures, choices)
+    case WordBoundary{negated}: checked(assertionHolds(WordBoundary{negated}, False{}, cursor, forward), cursor, rest, captures, choices)
     case Group{Some{index}, body}: Running{RunNode{body, forward} <> CloseGroup{index, indexOf(cursor), forward} <> rest, cursor, captures, choices}
     case Group{None{}, body}: Running{RunNode{body, forward} <> rest, cursor, captures, choices}
-    case Look{ahead, negated, body}: Running{[RunNode{body, ahead}, LookDone{}], cursor, captures, Barrier{negated, rest, cursor, captures} <> choices}
+    case Look{ahead, negated, body}: lookStep(ahead, negated, body, forward, rest, settings, cursor, captures, choices)
     case Backref{index}: backrefStep(captured(captures, index), settings, cursor, forward, rest, captures, choices)
-    case Alternation{Nil{}}: backtrack(choices)
-    case Alternation{first <> more}: Running{RunNode{first, forward} <> rest, cursor, captures, untried(more, forward, rest, cursor, captures, choices)}
+    case Alternation{options, starts}: optionsStep(viableOptions(options, starts, followingCode(cursor, forward)), forward, rest, cursor, captures, choices)
     case Sequence{+items}: Running{runAll(Bool.pick(List<&2, Node>, forward, items, List.reverse(&2, Node, items)), forward, rest), cursor, captures, choices}
-    case Repeat{body, min, max, greedy, first, count}: repeatStep(body, min, max, greedy, first, count, forward, rest, settings, cursor, captures, choices)
+    case Repeat{body, min, max, greedy, first, count, follow}: repeatStep(body, min, max, greedy, first, count, follow, forward, rest, settings, cursor, captures, choices)
     case DecimalEscape{digits}: Running{RunNode{decimalResolved(digits, groupsOf(settings)), forward} <> rest, cursor, captures, choices}
     case NamedBackref{+name}: Running{RunNode{namedResolved(namedIndex(namesOf(settings), name), name), forward} <> rest, cursor, captures, choices}
 
-def iterated(min: Nat, max: Maybe<&2, Nat>, greedy: Bool, iteration: List<&2, Goal>, cleared: List<&2, Maybe<&2, Span>>, rest: List<&2, Goal>, +cursor: Cursor, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
-  match min max greedy:
-    case _ Some{Zero{}} _: Running{rest, cursor, captures, choices}
-    case Succ{_} _ _: Running{iteration, cursor, cleared, choices}
-    case Zero{} _ True{}: Running{iteration, cursor, cleared, Alternative{rest, cursor, captures} <> choices}
-    case Zero{} _ False{}: Running{rest, cursor, captures, Alternative{iteration, cursor, cleared} <> choices}
-def iterateStep(+body: Node, +min: Nat, +max: Maybe<&2, Nat>, +greedy: Bool, +first: Nat, +count: Nat, +forward: Bool, +rest: List<&2, Goal>, +cursor: Cursor, +captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
-  iterated(min, max, greedy, RunNode{body, forward} <> AfterIteration{body, min, max, greedy, first, count, indexOf(cursor), forward} <> rest, clearCaptures(count, captures, first, 1n), rest, cursor, captures, choices)
+# `viable`: the continuation may start here (it is not tried where it cannot).
+def iterated(min: Nat, max: Maybe<&2, Nat>, greedy: Bool, viable: Bool, iteration: List<&2, Goal>, cleared: List<&2, Maybe<&2, Span>>, rest: List<&2, Goal>, +cursor: Cursor, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
+  match min max greedy viable:
+    case _ Some{Zero{}} _ _: Running{rest, cursor, captures, choices}
+    case Succ{_} _ _ _: Running{iteration, cursor, cleared, choices}
+    case Zero{} _ _ False{}: Running{iteration, cursor, cleared, choices}
+    case Zero{} _ True{} True{}: Running{iteration, cursor, cleared, Alternative{rest, cursor, captures} <> choices}
+    case Zero{} _ False{} True{}: Running{rest, cursor, captures, Alternative{iteration, cursor, cleared} <> choices}
+def followsNext(follow: Follow, next: Maybe<&2, U32>) -> Bool:
+  match next:
+    case Some{code}: follows(follow, code)
+    case None{}: True{}
+def iterateStep(+body: Node, +min: Nat, +max: Maybe<&2, Nat>, +greedy: Bool, +first: Nat, +count: Nat, +follow: Follow, +forward: Bool, +rest: List<&2, Goal>, +cursor: Cursor, +captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
+  iterated(min, max, greedy, followsNext(follow, followingCode(cursor, forward)), RunNode{body, forward} <> AfterIteration{body, min, max, greedy, first, count, follow, indexOf(cursor), forward} <> rest, clearCaptures(count, captures, first), rest, cursor, captures, choices)
 
 # An optional iteration (min 0) that consumed nothing ends the repetition.
-def afterStep(body: Node, +min: Nat, max: Maybe<&2, Nat>, greedy: Bool, first: Nat, count: Nat, +start: Nat, forward: Bool, rest: List<&2, Goal>, +cursor: Cursor, captures: List<&2, Maybe<&2, Span>>, +choices: List<&2, Choice>) -> Machine:
-  Bool.pick(Unit -> Machine, Nat.is_eq(min, 0n) && Nat.is_eq(indexOf(cursor), start),
-    _ => backtrack(choices),
-    _ => Running{Iterate{body, min - 1n, lessOne(max), greedy, first, count, forward} <> rest, cursor, captures, choices})(Unit{})
+def afterEnd(empty: Bool, body: Node, +min: Nat, max: Maybe<&2, Nat>, greedy: Bool, first: Nat, count: Nat, follow: Follow, forward: Bool, rest: List<&2, Goal>, cursor: Cursor, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
+  match empty:
+    case True{}: backtrack(choices)
+    case False{}: Running{Iterate{body, min - 1n, lessOne(max), greedy, first, count, follow, forward} <> rest, cursor, captures, choices}
+def afterStep(body: Node, +min: Nat, max: Maybe<&2, Nat>, greedy: Bool, first: Nat, count: Nat, follow: Follow, +start: Nat, forward: Bool, rest: List<&2, Goal>, +cursor: Cursor, captures: List<&2, Maybe<&2, Span>>, +choices: List<&2, Choice>) -> Machine:
+  afterEnd(Nat.is_eq(min, 0n) && Nat.is_eq(indexOf(cursor), start), body, min, max, greedy, first, count, follow, forward, rest, cursor, captures, choices)
 
 def goalStep(goal: Goal, rest: List<&2, Goal>, settings: Settings, +cursor: Cursor, captures: List<&2, Maybe<&2, Span>>, choices: List<&2, Choice>) -> Machine:
   match goal:
     case RunNode{node, forward}: nodeStep(node, forward, rest, settings, cursor, captures, choices)
     case CloseGroup{group, start, forward}: Running{rest, cursor, setCapture(captures, group, spanOf(start, indexOf(cursor), forward)), choices}
-    case Iterate{body, min, max, greedy, first, count, forward}: iterateStep(body, min, max, greedy, first, count, forward, rest, cursor, captures, choices)
-    case AfterIteration{body, min, max, greedy, first, count, start, forward}: afterStep(body, min, max, greedy, first, count, start, forward, rest, cursor, captures, choices)
-    case GiveBack{remaining, +forward}: givingBack(stepped(cursor, Bool.not(forward)), remaining, forward, rest, captures, choices)
-    case TakeMore{+node, remaining, +forward}: takingMore(remaining, acceptedStep(node, settings, cursor, forward), node, forward, rest, captures, choices)
+    case Iterate{body, min, max, greedy, first, count, follow, forward}: iterateStep(body, min, max, greedy, first, count, follow, forward, rest, cursor, captures, choices)
+    case AfterIteration{body, min, max, greedy, first, count, follow, start, forward}: afterStep(body, min, max, greedy, first, count, follow, start, forward, rest, cursor, captures, choices)
+    case GiveBack{taken, remaining, passed, follow, forward}: giveBackStep(taken, remaining, passed, follow, forward, rest, cursor, captures, choices)
+    case TakeMore{node, remaining, follow, forward}: takingMore(remaining, node, follow, settings, forward, rest, cursor, captures, choices)
     case LookDone{}: lookMatched(choices, captures)
 
 def machineStep(settings: Settings, machine: Machine) -> Machine:
@@ -933,31 +1131,39 @@ def found(result: Machine, start: Nat) -> Maybe<&2, Match>:
     case Succeeded{cursor, captures}: Some{Match{start, indexOf(cursor), captures}}
     case _: None{}
 
-# Leftmost match starting at `index` or later (only there when sticky);
-# `current` is the attempt at `index`.
-def searched(after: List<&2, U32>, +before: List<&2, U32>, +index: Nat, current: Maybe<&2, Match>, +root: Node, +groups: Nat, +settings: Settings, +sticky: Bool) -> Maybe<&2, Match>:
-  match after current:
-    case _ Some{value}: Some{value}
-    case Nil{} None{}: None{}
-    case +code <> +rest None{}:
-      Bool.pick(Unit -> Maybe<&2, Match>, sticky, _ => None{},
-        _ => searched(rest, code <> before, index + 1n, found(attempt(root, groups, settings, Cursor{code <> before, rest, index + 1n}), index + 1n), root, groups, settings, sticky))(Unit{})
-
 def settingsOf(flags: Flags, input: List<&2, U32>, groups: Nat, names: List<&2, NamedGroup>) -> Settings:
   match flags: case Flags{_, ignoreCase, multiline, dotAll, _, _}: Settings{ignoreCase, multiline, dotAll, input, groups, names}
 def stickyOf(flags: Flags) -> Bool:
   match flags: case Flags{_, _, _, _, _, sticky}: sticky
+
+# Leftmost match starting at the cursor or later (only there when sticky);
+# `current` is the attempt at the cursor.
+def searched(ahead: List<&2, U32>, current: Maybe<&2, Match>, +root: Node, +groups: Nat, +settings: Settings, +sticky: Bool, passed: Maybe<&2, U32>, +index: Nat) -> Maybe<&2, Match>:
+  match current sticky ahead:
+    case Some{value} _ _: Some{value}
+    case None{} True{} _: None{}
+    case None{} False{} Nil{}: None{}
+    case None{} False{} +code <> +rest: searched(rest, found(attempt(root, groups, settings, Cursor{Some{code}, rest, index + 1n}), index + 1n), root, groups, settings, sticky, Some{code}, index + 1n)
+def passedAt(all: List<&2, U32>, index: Nat) -> Maybe<&2, U32>:
+  match index:
+    case Zero{}: None{}
+    case Succ{previous}: List.get(&2, U32, all, previous)
+def execFrom(+all: List<&2, U32>, +lastIndex: Nat, +flags: Flags, +root: Node, +groups: Nat, names: List<&2, NamedGroup>) -> Maybe<&2, Match>:
+  +passed = passedAt(all, lastIndex)
+  +after = List.drop(&2, U32, all, lastIndex)
+  +settings = settingsOf(flags, all, groups, names)
+  searched(after, found(attempt(root, groups, settings, Cursor{passed, after, lastIndex}), lastIndex), root, groups, settings, stickyOf(flags), passed, lastIndex)
+def execWithin(within: Bool, +all: List<&2, U32>, +lastIndex: Nat, +flags: Flags, +root: Node, +groups: Nat, names: List<&2, NamedGroup>) -> Maybe<&2, Match>:
+  match within:
+    case True{}: execFrom(all, lastIndex, flags, root, groups, names)
+    case False{}: None{}
 
 # RegExpBuiltinExec from `lastIndex` (the caller applies g/y lastIndex updates).
 def exec(regex: RegExp, input: String, +lastIndex: Nat) -> Maybe<&2, Match>:
   match regex:
     case RegExp{_, +flags, +root, +groups, names}:
       +all = codes(input)
-      +before = List.reverse(&2, U32, List.take(&2, U32, all, lastIndex))
-      +after = List.drop(&2, U32, all, lastIndex)
-      +settings = settingsOf(flags, all, groups, names)
-      Bool.pick(Unit -> Maybe<&2, Match>, Nat.is_gt(lastIndex, List.length(&2, U32, all)), _ => None{},
-        _ => searched(after, before, lastIndex, found(attempt(root, groups, settings, Cursor{before, after, lastIndex}), lastIndex), root, groups, settings, stickyOf(flags)))(Unit{})
+      execWithin(Nat.is_le(lastIndex, List.length(&2, U32, all)), all, lastIndex, flags, root, groups, names)
 
 def test(regex: RegExp, input: String) -> Bool: Bool.not(Maybe.is_none(&2, Match, exec(regex, input, 0n)))
 
@@ -969,13 +1175,12 @@ def matchText(input: String, span: Span) -> String: fromCodes(slice(codes(input)
 # Callers that try many patterns over one input (a lexer) keep the input as
 # scalars and a Cursor, instead of re-splitting the string for every exec.
 
-def cursorAt(input: List<&2, U32>) -> Cursor: Cursor{Nil{}, input, 0n}
+def cursorAt(input: List<&2, U32>) -> Cursor: Cursor{None{}, input, 0n}
 def advance(cursor: Cursor) -> Maybe<&2, Cursor>: stepped(cursor, True{})
 def position(cursor: Cursor) -> Nat: indexOf(cursor)
-def following(cursor: Cursor) -> List<&2, U32>:
-  match cursor: case Cursor{_, after, _}: after
-def preceding(cursor: Cursor) -> Maybe<&2, U32>: previousCode(cursor)
-def nextScalar(cursor: Cursor) -> Maybe<&2, U32>: followingCode(cursor)
+def following(cursor: Cursor) -> List<&2, U32>: aheadOf(cursor)
+def preceding(cursor: Cursor) -> Maybe<&2, U32>: passedOf(cursor)
+def nextScalar(cursor: Cursor) -> Maybe<&2, U32>: List.head(&2, U32, aheadOf(cursor))
 
 # The sticky match of `regex` at `cursor`; `input` is the whole subject, whose
 # scalar indices the cursor and the result use.
@@ -988,43 +1193,6 @@ def ignoreCaseOf(flags: Flags) -> Bool:
   match flags: case Flags{_, value, _, _, _, _}: value
 def dotAllOf(flags: Flags) -> Bool:
   match flags: case Flags{_, _, _, value, _, _}: value
-# 2 to the power `bit`, for bits 0 to 31.
-def power(bit: U32) -> U32:
-  match bit:
-    case 0: 1
-    case 1: 2
-    case 2: 4
-    case 3: 8
-    case 4: 16
-    case 5: 32
-    case 6: 64
-    case 7: 128
-    case 8: 256
-    case 9: 512
-    case 10: 1024
-    case 11: 2048
-    case 12: 4096
-    case 13: 8192
-    case 14: 16384
-    case 15: 32768
-    case 16: 65536
-    case 17: 131072
-    case 18: 262144
-    case 19: 524288
-    case 20: 1048576
-    case 21: 2097152
-    case 22: 4194304
-    case 23: 8388608
-    case 24: 16777216
-    case 25: 33554432
-    case 26: 67108864
-    case 27: 134217728
-    case 28: 268435456
-    case 29: 536870912
-    case 30: 1073741824
-    case 31: 2147483648
-    case _: 0
-
 # Start analysis
 # --------------
 # The scalars a match can begin with, so a scanner can skip positions where a
@@ -1034,9 +1202,7 @@ def power(bit: U32) -> U32:
 # before a scalar some node of `firsts` accepts; `ascii` holds those below 128
 # and `wide` says whether any from 128 up can be one.
 
-# ASCII sets as four 32-bit words for codes 0-31, 32-63, 64-95 and 96-127.
-type Ascii is Data: Ascii{w0: U32, w1: U32, w2: U32, w3: U32}
-type Start is Data: Start{nullable: Bool, firsts: List<&2, Node>, ascii: Ascii, wide: Bool, bounded: Bool}
+type Start is Data: Start{nullable: Bool, firsts: List<&2, Node>, ascii: Ascii, wide: Bool, bounded: Bool, ends: Bool}
 
 def noAscii() -> Ascii: Ascii{0, 0, 0, 0}
 def allAscii() -> Ascii: Ascii{4294967295, 4294967295, 4294967295, 4294967295}
@@ -1116,64 +1282,78 @@ def asciiWithin(set: Ascii, outer: Ascii) -> Bool:
   match set outer:
     case Ascii{a, b, c, d} Ascii{e, f, g, h}: U32.is_eq(U32.and(a, U32.not(e)), 0) && U32.is_eq(U32.and(b, U32.not(f)), 0) && U32.is_eq(U32.and(c, U32.not(g)), 0) && U32.is_eq(U32.and(d, U32.not(h)), 0)
 # `\b` right before a word scalar means the preceding scalar is not one.
-def started(firsts: List<&2, Node>, bounded: Bool, found: Ascii & Bool) -> Start:
+def started(firsts: List<&2, Node>, bounded: Bool, ends: Bool, found: Ascii & Bool) -> Start:
   match found:
-    case (+set, +wide): Start{False{}, firsts, set, wide, bounded && Bool.not(wide) && asciiWithin(set, wordAscii())}
+    case (+set, +wide): Start{False{}, firsts, set, wide, bounded && Bool.not(wide) && asciiWithin(set, wordAscii()), ends}
 
 # Pending paths are node sequences still to be examined, each noting whether
 # it passed a `\b` since the match start; an exhausted path matched without
 # consuming. `bounded` holds while every first scalar follows a `\b`.
 type Path is Data: Path{nodes: List<&2, Node>, bounded: Bool}
-type Expansion is Data: Expansion{paths: List<&2, Path>, firsts: List<&2, Node>, bounded: Bool}
+type Expansion is Data: Expansion{paths: List<&2, Path>, firsts: List<&2, Node>, bounded: Bool, ends: Bool}
 def prefixed(options: List<&2, Node>, +rest: List<&2, Node>, +bounded: Bool, others: List<&2, Path>) -> List<&2, Path>:
   match options:
     case Nil{}: others
     case option <> more: Path{option <> rest, bounded} <> prefixed(more, rest, bounded, others)
-def expanded(node: Node, +rest: List<&2, Node>, +bounded: Bool, others: List<&2, Path>, firsts: List<&2, Node>, all: Bool) -> Expansion:
+def lineTerminators() -> Node: CharClass{False{}, [Range{10, 10}, Range{13, 13}, Range{8232, 8233}]}
+# `$` holds only before a line terminator (multiline) or at the end: a path
+# through it asks for a line terminator next or ends there (`ends`). In a
+# continuation (`follow`, where a scalar follows the position) the end is not
+# a case.
+def lineEndExpanded(+multiline: Bool, others: List<&2, Path>, firsts: List<&2, Node>, +all: Bool, +bounded: Bool) -> Expansion:
+  match multiline:
+    case True{}: Expansion{others, lineTerminators() <> firsts, all && bounded, True{}}
+    case False{}: Expansion{others, firsts, all, True{}}
+def expanded(node: Node, +rest: List<&2, Node>, +bounded: Bool, others: List<&2, Path>, firsts: List<&2, Node>, all: Bool, +ends: Bool, +multiline: Bool) -> Expansion:
   match node:
-    case Literal{code}: Expansion{others, Literal{code} <> firsts, all && bounded}
-    case AnyChar{}: Expansion{others, AnyChar{} <> firsts, all && bounded}
-    case CharClass{negated, items}: Expansion{others, CharClass{negated, items} <> firsts, all && bounded}
-    case WordBoundary{False{}}: Expansion{Path{rest, True{}} <> others, firsts, all}
-    case Group{_, body}: Expansion{Path{body <> rest, bounded} <> others, firsts, all}
-    case Alternation{options}: Expansion{prefixed(options, rest, bounded, others), firsts, all}
-    case Sequence{items}: Expansion{Path{List.append(&2, Node, items, rest), bounded} <> others, firsts, all}
-    case Repeat{body, Zero{}, _, _, _, _}: Expansion{Path{body <> rest, bounded} <> Path{rest, bounded} <> others, firsts, all}
-    case Repeat{body, _, _, _, _, _}: Expansion{Path{body <> rest, bounded} <> others, firsts, all}
-    case Backref{_}: Expansion{Path{Nil{}, bounded} <> others, firsts, all}
-    case NamedBackref{_}: Expansion{Path{Nil{}, bounded} <> others, firsts, all}
-    case DecimalEscape{_}: Expansion{Path{Nil{}, bounded} <> others, firsts, all}
-    case _: Expansion{Path{rest, bounded} <> others, firsts, all}
-def nullableStart() -> Start: Start{True{}, Nil{}, allAscii(), True{}, False{}}
+    case Literal{code}: Expansion{others, Literal{code} <> firsts, all && bounded, ends}
+    case AnyChar{}: Expansion{others, AnyChar{} <> firsts, all && bounded, ends}
+    case CharClass{negated, items}: Expansion{others, CharClass{negated, items} <> firsts, all && bounded, ends}
+    case WordBoundary{False{}}: Expansion{Path{rest, True{}} <> others, firsts, all, ends}
+    case LineEnd{}: lineEndExpanded(multiline, others, firsts, all, bounded)
+    case Group{_, body}: Expansion{Path{body <> rest, bounded} <> others, firsts, all, ends}
+    case Alternation{options, _}: Expansion{prefixed(options, rest, bounded, others), firsts, all, ends}
+    case Sequence{items}: Expansion{Path{List.append(&2, Node, items, rest), bounded} <> others, firsts, all, ends}
+    case Repeat{body, Zero{}, _, _, _, _, _}: Expansion{Path{body <> rest, bounded} <> Path{rest, bounded} <> others, firsts, all, ends}
+    case Repeat{body, _, _, _, _, _, _}: Expansion{Path{body <> rest, bounded} <> others, firsts, all, ends}
+    case Backref{_}: Expansion{Path{Nil{}, bounded} <> others, firsts, all, ends}
+    case NamedBackref{_}: Expansion{Path{Nil{}, bounded} <> others, firsts, all, ends}
+    case DecimalEscape{_}: Expansion{Path{Nil{}, bounded} <> others, firsts, all, ends}
+    case _: Expansion{Path{rest, bounded} <> others, firsts, all, ends}
+def nullableStart() -> Start: Start{True{}, Nil{}, allAscii(), True{}, False{}, True{}}
+def multilineFlag(flags: Flags) -> Bool:
+  match flags: case Flags{_, _, multiline, _, _, _}: multiline
 def startLoop(fuel: Nat, expansion: Expansion, +flags: Flags) -> Start:
   match fuel expansion:
-    case _ Expansion{Nil{}, +firsts, bounded}: started(firsts, bounded, firstsAscii(firsts, ignoreCaseOf(flags), dotAllOf(flags), (noAscii(), False{})))
+    case _ Expansion{Nil{}, +firsts, bounded, ends}: started(firsts, bounded, ends, firstsAscii(firsts, ignoreCaseOf(flags), dotAllOf(flags), (noAscii(), False{})))
     case Zero{} _: nullableStart()
-    case _ Expansion{Path{Nil{}, _} <> _, _, _}: nullableStart()
-    case Succ{more} Expansion{Path{node <> rest, bounded} <> others, firsts, all}: startLoop(more, expanded(node, rest, bounded, others, firsts, all), flags)
+    case _ Expansion{Path{Nil{}, _} <> _, _, _, _}: nullableStart()
+    case Succ{more} Expansion{Path{node <> rest, bounded} <> others, firsts, all, ends}: startLoop(more, expanded(node, rest, bounded, others, firsts, all, ends, multilineFlag(flags)), flags)
 def startOf(regex: RegExp) -> Start:
   match regex:
-    case RegExp{_, flags, root, _, _}: startLoop(4096n, Expansion{[Path{[root], False{}}], Nil{}, True{}}, flags)
+    case RegExp{_, flags, root, _, _}: startLoop(4096n, Expansion{[Path{[root], False{}}], Nil{}, True{}, False{}}, flags)
 
-def asciiHas(set: Ascii, +code: U32) -> Bool:
-  match set:
-    case Ascii{a, b, c, d}:
-      +word = Bool.pick(U32, U32.is_lt(code, 64), Bool.pick(U32, U32.is_lt(code, 32), a, b), Bool.pick(U32, U32.is_lt(code, 96), c, d))
-      Bool.not(U32.is_eq(U32.and(word, power((code % 32 : U32))), 0))
 def firstAccepts(firsts: List<&2, Node>, +settings: Settings, +code: U32) -> Bool:
   match firsts:
     case Nil{}: False{}
     case node <> rest: nodeAccepts(node, settings, code) || firstAccepts(rest, settings, code)
-def startsAt(start: Start, +flags: Flags, previous: Maybe<&2, U32>, next: Maybe<&2, U32>) -> Bool:
+def startsWide(wide: Bool, firsts: List<&2, Node>, flags: Flags, +code: U32) -> Bool:
+  match wide:
+    case True{}: firstAccepts(firsts, settingsOf(flags, Nil{}, 0n, Nil{}), code)
+    case False{}: False{}
+def startsScalar(ascii: Bool, set: Ascii, wide: Bool, bounded: Bool, firsts: List<&2, Node>, flags: Flags, previous: Maybe<&2, U32>, +code: U32) -> Bool:
+  match ascii:
+    case True{}: asciiHas(set, code) && Bool.not(bounded && isWordAt(previous))
+    case False{}: startsWide(wide, firsts, flags, code)
+def startsAt(start: Start, flags: Flags, previous: Maybe<&2, U32>, next: Maybe<&2, U32>) -> Bool:
   match start next:
-    case Start{True{}, _, _, _, _} _: True{}
-    case Start{False{}, _, _, _, _} None{}: False{}
-    case Start{False{}, firsts, ascii, wide, bounded} Some{+code}:
-      Bool.pick(Unit -> Bool, U32.is_lt(code, 128), _ => asciiHas(ascii, code) && Bool.not(bounded && isWordAt(previous)), _ => wide && firstAccepts(firsts, settingsOf(flags, Nil{}, 0n, Nil{}), code))(Unit{})
+    case Start{True{}, _, _, _, _, _} _: True{}
+    case Start{False{}, _, _, _, _, ends} None{}: ends
+    case Start{False{}, firsts, ascii, wide, bounded, _} Some{+code}: startsScalar(U32.is_lt(code, 128), ascii, wide, bounded, firsts, flags, previous, code)
 # Whether a match of `regex` may begin at `cursor` (never false when one does).
 def canStart(regex: RegExp, start: Start, +cursor: Cursor) -> Bool:
   match regex:
-    case RegExp{_, flags, _, _, _}: startsAt(start, flags, previousCode(cursor), followingCode(cursor))
+    case RegExp{_, flags, _, _, _}: startsAt(start, flags, passedOf(cursor), nextScalar(cursor))
 
 # A match with the cursor at its end, where a scan continues.
 type Found is Data: Found{result: Match, cursor: Cursor}
@@ -1181,20 +1361,121 @@ def foundAt(result: Machine, start: Nat) -> Maybe<&2, Found>:
   match result:
     case Succeeded{+cursor, captures}: Some{Found{Match{start, indexOf(cursor), captures}, cursor}}
     case _: None{}
-def attemptAt(+regex: RegExp, +start: Start, input: List<&2, U32>, +cursor: Cursor) -> Maybe<&2, Found>:
+def attemptIf(candidate: Bool, root: Node, +groups: Nat, flags: Flags, input: List<&2, U32>, names: List<&2, NamedGroup>, +cursor: Cursor) -> Maybe<&2, Found>:
+  match candidate:
+    case True{}: foundAt(attempt(root, groups, settingsOf(flags, input, groups, names), cursor), indexOf(cursor))
+    case False{}: None{}
+def attemptAt(regex: RegExp, start: Start, input: List<&2, U32>, +cursor: Cursor) -> Maybe<&2, Found>:
   match regex:
-    case RegExp{_, +flags, root, +groups, names}:
-      Bool.pick(Unit -> Maybe<&2, Found>, startsAt(start, flags, previousCode(cursor), followingCode(cursor)),
-        _ => foundAt(attempt(root, groups, settingsOf(flags, input, groups, names), cursor), indexOf(cursor)), _ => None{})(Unit{})
-def searchFrom(fuel: Nat, +regex: RegExp, +start: Start, +input: List<&2, U32>, +cursor: Cursor, attempt: Maybe<&2, Found>) -> Maybe<&2, Found>:
-  match fuel attempt:
-    case _ Some{result}: Some{result}
-    case Zero{} None{}: None{}
-    case Succ{more} None{}:
-      +next = Maybe.default(&2, Cursor, advance(cursor), cursor)
-      searchFrom(more, regex, start, input, next, attemptAt(regex, start, input, next))
+    case RegExp{_, +flags, root, groups, names}: attemptIf(startsAt(start, flags, passedOf(cursor), nextScalar(cursor)), root, groups, flags, input, names, cursor)
+# The first position from the one before `code` (then `rest`) where a match
+# may begin (`candidate`: there).
+def flagsOf(regex: RegExp) -> Flags:
+  match regex: case RegExp{_, flags, _, _, _}: flags
+def candidateFrom(rest: List<&2, U32>, +code: U32, candidate: Bool, +start: Start, +flags: Flags, passed: Maybe<&2, U32>, +index: Nat) -> Cursor:
+  match candidate rest:
+    case True{} rest: Cursor{passed, code <> rest, index}
+    case False{} +next <> more: candidateFrom(more, next, startsAt(start, flags, Some{code}, Some{next}), start, flags, Some{code}, index + 1n)
+    case False{} Nil{}: Cursor{Some{code}, Nil{}, index + 1n}
+# The first such position after `previous`, the scalar before `ahead`.
+def candidateAfter(ahead: List<&2, U32>, +previous: U32, +start: Start, +flags: Flags, +index: Nat) -> Cursor:
+  match ahead:
+    case +code <> rest: candidateFrom(rest, code, startsAt(start, flags, Some{previous}, Some{code}), start, flags, Some{previous}, index)
+    case Nil{}: Cursor{Some{previous}, Nil{}, index}
+def searchFrom(fuel: Nat, +regex: RegExp, +start: Start, +input: List<&2, U32>, attempt: Maybe<&2, Found>, cursor: Cursor) -> Maybe<&2, Found>:
+  match fuel attempt cursor:
+    case _ Some{result} _: Some{result}
+    case _ None{} Cursor{_, Nil{}, _}: None{}
+    case Zero{} None{} _: None{}
+    case Succ{more} None{} Cursor{_, code <> ahead, index}:
+      +next = candidateAfter(ahead, code, start, flagsOf(regex), index + 1n)
+      searchFrom(more, regex, start, input, attemptAt(regex, start, input, next), next)
 # The leftmost match of `regex` at `cursor` or after it (a global or
 # unanchored exec from the cursor's index), attempted only where the start
 # analysis `start` allows one; `input` is the whole subject.
 def search(+regex: RegExp, +start: Start, +input: List<&2, U32>, +cursor: Cursor) -> Maybe<&2, Found>:
-  searchFrom(List.length(&2, U32, following(cursor)), regex, start, input, cursor, attemptAt(regex, start, input, cursor))
+  searchFrom(4294967295n, regex, start, input, attemptAt(regex, start, input, cursor), cursor)
+
+# Continuations
+# -------------
+# Each repetition records what the rest of the pattern after it needs of the
+# next scalar (its `follow`), computed with the start analysis over that
+# rest. A repeated single-scalar atom whose scalars cannot start the rest is
+# `Disjoint`: no position its run could give back can match. Lookbehinds
+# match backwards; repetitions in them keep `Anything`.
+def asciiDisjoint(left: Ascii, right: Ascii) -> Bool:
+  match left right:
+    case Ascii{a, b, c, d} Ascii{e, f, g, h}: U32.is_eq(U32.or(U32.or(U32.and(a, e), U32.and(b, f)), U32.or(U32.and(c, g), U32.and(d, h))), 0)
+def disjointOr(accepted: Ascii & Bool, follow: Follow) -> Follow:
+  match accepted follow:
+    case (set, wide) Scalars{+ascii, +broad}: Bool.pick(Follow, asciiDisjoint(set, ascii) && Bool.not(wide && broad), Disjoint{}, Scalars{ascii, broad})
+    case _ follow: follow
+def singleFollow(body: Node, follow: Follow, +flags: Flags) -> Follow:
+  match body:
+    case Literal{code}: disjointOr(nodeAscii(Literal{code}, ignoreCaseOf(flags), dotAllOf(flags)), follow)
+    case AnyChar{}: disjointOr(nodeAscii(AnyChar{}, ignoreCaseOf(flags), dotAllOf(flags)), follow)
+    case CharClass{negated, items}: disjointOr(nodeAscii(CharClass{negated, items}, ignoreCaseOf(flags), dotAllOf(flags)), follow)
+    case _: follow
+def followOfStart(start: Start) -> Follow:
+  match start:
+    case Start{True{}, _, _, _, _, _}: Anything{}
+    case Start{False{}, _, ascii, wide, _, _}: Scalars{ascii, wide}
+def followOf(+backward: Bool, +body: Node, after: List<&2, Node>, +flags: Flags) -> Follow:
+  match backward:
+    case True{}: Anything{}
+    case False{}: singleFollow(body, followOfStart(startLoop(4096n, Expansion{[Path{after, False{}}], Nil{}, True{}, False{}}, flags)), flags)
+# What each option, then `after`, needs next.
+def optionFollows(options: List<&2, Node>, +after: List<&2, Node>, +flags: Flags) -> List<&2, Follow>:
+  match options:
+    case Nil{}: Nil{}
+    case option <> more: followOfStart(startLoop(4096n, Expansion{[Path{option <> after, False{}}], Nil{}, True{}, False{}}, flags)) <> optionFollows(more, after, flags)
+def optionStarts(backward: Bool, options: List<&2, Node>, after: List<&2, Node>, flags: Flags) -> List<&2, Follow>:
+  match backward:
+    case True{}: Nil{}
+    case False{}: optionFollows(options, after, flags)
+def firstNode(nodes: List<&2, Node>, fallback: Node) -> Node:
+  match nodes:
+    case node <> _: node
+    case Nil{}: fallback
+# `nodes` with their repetitions' follows: the items of a sequence
+# (`sequence`), each followed by the items after it, or alternatives, each
+# followed by `after` alone. `fuel` bounds the depth.
+def annotated(fuel: Nat, nodes: List<&2, Node>, +sequence: Bool, +after: List<&2, Node>, +backward: Bool, +flags: Flags) -> List<&2, Node>:
+  match fuel nodes:
+    case _ Nil{}: Nil{}
+    case Zero{} nodes: nodes
+    case Succ{+more} Group{index, +body} <> +rest:
+      Group{index, firstNode(annotated(more, [body], False{}, Bool.pick(List<&2, Node>, sequence, Sequence{rest} <> after, after), backward, flags), body)} <> annotated(more, rest, sequence, after, backward, flags)
+    case Succ{+more} Look{+ahead, negated, +body} <> rest:
+      Look{ahead, negated, firstNode(annotated(more, [body], False{}, Nil{}, Bool.not(ahead), flags), body)} <> annotated(more, rest, sequence, after, backward, flags)
+    case Succ{+more} Alternation{+options, _} <> +rest:
+      +next = Bool.pick(List<&2, Node>, sequence, Sequence{rest} <> after, after)
+      Alternation{annotated(more, options, False{}, next, backward, flags), optionStarts(backward, options, next, flags)} <> annotated(more, rest, sequence, after, backward, flags)
+    case Succ{+more} Sequence{items} <> +rest:
+      Sequence{annotated(more, items, True{}, Bool.pick(List<&2, Node>, sequence, Sequence{rest} <> after, after), backward, flags)} <> annotated(more, rest, sequence, after, backward, flags)
+    case Succ{+more} Repeat{+body, min, max, greedy, first, count, _} <> +rest:
+      +next = Bool.pick(List<&2, Node>, sequence, Sequence{rest} <> after, after)
+      Repeat{firstNode(annotated(more, [body], False{}, [Alternation{[Sequence{body <> next}, Sequence{next}], Nil{}}], backward, flags), body), min, max, greedy, first, count, followOf(backward, body, next, flags)} <> annotated(more, rest, sequence, after, backward, flags)
+    case Succ{+more} node <> rest: node <> annotated(more, rest, sequence, after, backward, flags)
+def withFollows(+root: Node, +source: String, +flags: Flags) -> Node:
+  firstNode(annotated(String.length(source) + 1n, [root], False{}, Nil{}, False{}, flags), root)
+
+# Compiling
+# ---------
+
+def compiled(+source: String, +flags: Flags, state: ParseState) -> Result<&2, &2, Error, RegExp>:
+  match state:
+    case Parsed{root, groups, names}: Done{RegExp{source, flags, withFollows(root, source, flags), groups, names}}
+    case ParseFailed{error}: Fail{error}
+    case Parsing{_, _, _, _}: Fail{SyntaxError{"Pattern too complex"}}
+
+def compileFlags(+source: String, flags: Maybe<&2, Flags>) -> Result<&2, &2, Error, RegExp>:
+  match flags:
+    case None{}: Fail{SyntaxError{"Invalid flags"}}
+    case Some{+valid}:
+      +input = codes(source)
+      compiled(source, valid, parseLoop(List.length(&2, U32, input) * 2n + 2n, Parsing{input, [Frame{RootGroup{}, 0n, Nil{}, Nil{}}], 0n, Nil{}}, unicodeOf(valid)))
+
+# new RegExp(source, flags)
+def compile(source: String, flags: String) -> Result<&2, &2, Error, RegExp>:
+  compileFlags(source, parsedFlags(codes(flags), Some{noFlags()}))

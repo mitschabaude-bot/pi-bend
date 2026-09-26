@@ -25,10 +25,12 @@ import ./tokenizer.bend as Tk
 # and text runs stop before it. `del` replaces the tokenizer's del method
 # (pi's StrictStrikethroughTokenizer); it returns the span, whose text the
 # lexer lexes. Language-driven: extension tokenizers get the source only
-# (upstream also passes the token list and a lexer they may call), and only
-# del can be overridden.
+# (upstream also passes the token list and a lexer they may call), only
+# del can be overridden, and del gets the masked source as a Tk.Masking,
+# computed by Tk.maskedCodes when read (upstream masks every inlineTokens
+# source eagerly; most never have a delimiter scanned).
 type Extensions<-X: Data> is Type:
-  Extensions{block: List<&2,U32> -> Maybe<&2,T.Token<X>>,startBlock: List<&2,U32> -> Maybe<&2,Nat>,inline: List<&2,U32> -> Maybe<&2,T.Token<X>>,startInline: List<&2,U32> -> Maybe<&2,Nat>,del: Rules.Inline -> List<&2,U32> -> List<&2,U32> -> Maybe<&2,U32> -> Maybe<&2,Tk.Delimited>}
+  Extensions{block: List<&2,U32> -> Maybe<&2,T.Token<X>>,startBlock: List<&2,U32> -> Maybe<&2,Nat>,inline: List<&2,U32> -> Maybe<&2,T.Token<X>>,startInline: List<&2,U32> -> Maybe<&2,Nat>,del: Rules.Inline -> List<&2,U32> -> Tk.Masking -> Maybe<&2,U32> -> Maybe<&2,Tk.Delimited>}
 def blockExtension(-X: Data,extensions: Extensions<X>) -> List<&2,U32> -> Maybe<&2,T.Token<X>>:
   match extensions: case Extensions{found,_,_,_,_}: found
 def startBlock(-X: Data,extensions: Extensions<X>) -> List<&2,U32> -> Maybe<&2,Nat>:
@@ -37,13 +39,13 @@ def inlineExtension(-X: Data,extensions: Extensions<X>) -> List<&2,U32> -> Maybe
   match extensions: case Extensions{_,_,found,_,_}: found
 def startInline(-X: Data,extensions: Extensions<X>) -> List<&2,U32> -> Maybe<&2,Nat>:
   match extensions: case Extensions{_,_,_,found,_}: found
-def delTokenizer(-X: Data,extensions: Extensions<X>) -> Rules.Inline -> List<&2,U32> -> List<&2,U32> -> Maybe<&2,U32> -> Maybe<&2,Tk.Delimited>:
+def delTokenizer(-X: Data,extensions: Extensions<X>) -> Rules.Inline -> List<&2,U32> -> Tk.Masking -> Maybe<&2,U32> -> Maybe<&2,Tk.Delimited>:
   match extensions: case Extensions{_,_,_,_,found}: found
 
 # No extensions: marked's own tokenizer.
 def noToken(-X: Data,src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: None{}
 def noStart(src: List<&2,U32>) -> Maybe<&2,Nat>: None{}
-def defaultDel(rules: Rules.Inline,src: List<&2,U32>,masked: List<&2,U32>,previous: Maybe<&2,U32>) -> Maybe<&2,Tk.Delimited>: Tk.del(rules,src,masked,previous)
+def defaultDel(rules: Rules.Inline,src: List<&2,U32>,masked: Tk.Masking,previous: Maybe<&2,U32>) -> Maybe<&2,Tk.Delimited>: Tk.del(rules,src,masked,previous)
 
 # The inline queue
 # ----------------
@@ -540,110 +542,13 @@ type BlockDone<-X: Data> is Data: BlockDone{tokens: List<&2,T.Token<X>>,state: B
     case BlockMachine{state,frame <> frames,GiveBlock{given}}: driveBlock(~X,~ext,rules,resumeBlock(X,rules,state,frames,frame,given))
     case BlockMachine{state,frames,RunBlock{task}}: driveBlock(~X,~ext,rules,executeBlock(~X,~ext,rules,state,frames,task))
 
-# Masking
-# -------
-# inlineTokens scans emphasis and strikethrough delimiters in a copy of the
-# source where reference links, escaped punctuation, links, code spans and
-# tags are masked, keeping every length.
-
-def searchOn(+search: Rules.Search,+input: List<&2,U32>,+cursor: Re.Cursor) -> Maybe<&2,Re.Found>:
-  match search: case Rules.Search{regex,start}: Re.search(regex,start,input,cursor)
-# All non-overlapping matches (String#matchAll).
-def matchesFrom(+fuel: Nat,+search: Rules.Search,+input: List<&2,U32>,+found: Maybe<&2,Re.Found>,+reversed: List<&2,Re.Match>) -> List<&2,Re.Match>:
-  match fuel found:
-    case _ None{}: List.reverse(&2,Re.Match,reversed)
-    case Zero{} _: List.reverse(&2,Re.Match,reversed)
-    case Succ{more} Some{Re.Found{Re.Match{+start,+end,captures},+cursor}}:
-      matchesFrom(more,search,input,searchOn(search,input,Bool.pick(Unit -> Re.Cursor,Nat.is_eq(start,end),_ => Maybe.default(&2,Re.Cursor,Re.advance(cursor),cursor),_ => cursor)(Unit{})),Re.Match{start,end,captures} <> reversed)
-def allMatches(+search: Rules.Search,+input: List<&2,U32>) -> List<&2,Re.Match>:
-  matchesFrom(List.length(&2,U32,input) + 1n,search,input,searchOn(search,input,Re.cursorAt(input)),Nil{})
-def matchStart(+found: Re.Match) -> Nat:
-  match found: case Re.Match{start,_,_}: start
-def matchCodes(+input: List<&2,U32>,+found: Re.Match) -> List<&2,U32>:
-  match found: case Re.Match{start,end,_}: Tk.take(Tk.drop(input,start),end - start)
-def containsCode(+codes: List<&2,U32>,+code: U32) -> Bool:
-  match codes:
-    case Nil{}: False{}
-    case +first <> rest: Bool.pick(Unit -> Bool,U32.is_eq(first,code),_ => True{},_ => containsCode(rest,code))(Unit{})
-def lastIndexFrom(+codes: List<&2,U32>,+code: U32,+index: Nat,+found: Nat) -> Nat:
-  match codes:
-    case Nil{}: found
-    case +first <> rest: lastIndexFrom(rest,code,index + 1n,Bool.pick(Nat,U32.is_eq(first,code),index,found))
-# `lastIndexOf("[")` in a match that contains one.
-def lastBracket(+codes: List<&2,U32>) -> Nat: lastIndexFrom(codes,91,0n,0n)
-def repeatA(+count: Nat,+codes: List<&2,U32>) -> List<&2,U32>:
-  match count:
-    case Zero{}: codes
-    case Succ{more}: repeatA(more,97 <> codes)
-# "[" + "a" repeated + "]" over `length` scalars.
-def bracketMask(+length: Nat) -> List<&2,U32>: 91 <> repeatA(length - 2n,[93])
-# Whether a link (not an image) sits among a text's links, code spans and
-# tags.
-def linkSpan(+rules: Rules.Inline,+text: List<&2,U32>,matches: List<&2,Re.Match>) -> Bool:
-  match matches:
-    case Nil{}: False{}
-    case +found <> rest:
-      Bool.pick(Unit -> Bool,Tk.test(Rules.inlineLink(rules),matchCodes(text,found)) && Bool.not(U32.is_eq(Maybe.default(&2,U32,List.get(&2,U32,text,matchStart(found) - 1n),0),33) && Nat.is_gt(matchStart(found),0n)),
-        _ => True{},_ => linkSpan(rules,text,rest))(Unit{})
-def keyOf(+codes: List<&2,U32>,+refStart: Nat) -> String: Tk.slice(codes,refStart + 1n,List.length(&2,U32,codes) - 1n)
-# linkInText's reference part: a reference to a definition whose text holds
-# no link is a link.
-@unsafe def linkInRefs(+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+text: List<&2,U32>,+matches: List<&2,Re.Match>) -> Bool:
-  match matches:
-    case Nil{}: False{}
-    case +found <> rest:
-      +codes = matchCodes(text,found)
-      +refStart = lastBracket(codes)
-      +inner = Tk.drop(Tk.take(codes,refStart - 1n),1n)
-      Bool.pick(Unit -> Bool,Tk.startsWith(codes,'!') || Bool.not(Tk.hasDefinition(links,keyOf(codes,refStart))),_ => linkInRefs(rules,links,text,rest),
-        _ => Bool.pick(Unit -> Bool,Nat.is_gt(refStart,1n) && containsCode(inner,91) && (linkSpan(rules,inner,allMatches(Rules.inlineBlockSkip(rules),inner)) || linkInRefs(rules,links,inner,allMatches(Rules.inlineReflinkSearch(rules),inner))),
-          _ => linkInRefs(rules,links,text,rest),_ => True{})(Unit{}))(Unit{})
-# linkInText(text): does this link text hold a link already?
-def linkInText(+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+text: List<&2,U32>) -> Bool:
-  containsCode(text,91) && (linkSpan(rules,text,allMatches(Rules.inlineBlockSkip(rules),text)) || linkInRefs(rules,links,text,allMatches(Rules.inlineReflinkSearch(rules),text)))
-def prependReversed(+codes: List<&2,U32>,+reversed: List<&2,U32>) -> List<&2,U32>:
-  match codes:
-    case Nil{}: reversed
-    case code <> rest: prependReversed(rest,code <> reversed)
-# Reference links to definitions are masked; a candidate whose text holds a
-# link keeps its text, with the references in it masked.
-@unsafe def maskedRefs(+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+input: List<&2,U32>,+matches: List<&2,Re.Match>,+position: Nat,+reversed: List<&2,U32>) -> List<&2,U32>:
-  match matches:
-    case Nil{}: List.reverse(&2,U32,prependReversed(Tk.drop(input,position),reversed))
-    case Re.Match{+start,+end,_} <> rest:
-      +codes = Tk.take(Tk.drop(input,start),end - start)
-      +length = end - start
-      +refStart = lastBracket(codes)
-      +text = Tk.drop(Tk.take(codes,refStart - 1n),1n)
-      +before = prependReversed(Tk.take(Tk.drop(input,position),start - position),reversed)
-      Bool.pick(Unit -> List<&2,U32>,Bool.not(Tk.hasDefinition(links,keyOf(codes,refStart))),_ => maskedRefs(rules,links,input,rest,end,prependReversed(codes,before)),
-        _ => Bool.pick(Unit -> List<&2,U32>,Nat.is_gt(refStart,1n) && Bool.not(Tk.startsWith(codes,'!')) && linkInText(rules,links,text),
-          _ => maskedRefs(rules,links,input,rest,end,prependReversed(93 <> repeatA(length - refStart - 2n,[93]),prependReversed(91 <> 93 <> Nil{},prependReversed(maskedRefs(rules,links,text,allMatches(Rules.inlineReflinkSearch(rules),text),0n,Nil{}),91 <> before)))),
-          _ => maskedRefs(rules,links,input,rest,end,prependReversed(bracketMask(length),before)))(Unit{}))(Unit{})
-# anyPunctuation, `/\\([\p{P}\p{S}])/gu` → "++".
-def punctuationMasked(+codes: List<&2,U32>,+pending: Bool,+reversed: List<&2,U32>) -> List<&2,U32>:
-  match codes:
-    case Nil{}: List.reverse(&2,U32,Bool.pick(List<&2,U32>,pending,92 <> reversed,reversed))
-    case +code <> +rest:
-      Bool.pick(Unit -> List<&2,U32>,pending,
-        _ => Bool.pick(Unit -> List<&2,U32>,H.isPunctuationOrSymbol(code),_ => punctuationMasked(rest,False{},43 <> 43 <> reversed),_ => punctuationMasked(rest,U32.is_eq(code,92),Bool.pick(List<&2,U32>,U32.is_eq(code,92),92 <> reversed,code <> 92 <> reversed)))(Unit{}),
-        _ => Bool.pick(Unit -> List<&2,U32>,U32.is_eq(code,92),_ => punctuationMasked(rest,True{},reversed),_ => punctuationMasked(rest,False{},code <> reversed))(Unit{}))(Unit{})
-def bracketsMasked(+input: List<&2,U32>,+matches: List<&2,Re.Match>,+position: Nat,+reversed: List<&2,U32>) -> List<&2,U32>:
-  match matches:
-    case Nil{}: List.reverse(&2,U32,prependReversed(Tk.drop(input,position),reversed))
-    case Re.Match{+start,+end,_} <> rest: bracketsMasked(input,rest,end,prependReversed(bracketMask(end - start),prependReversed(Tk.take(Tk.drop(input,position),start - position),reversed)))
-def blocksMasked(+rules: Rules.Inline,+input: List<&2,U32>) -> List<&2,U32>: bracketsMasked(input,allMatches(Rules.inlineBlockSkip(rules),input),0n,Nil{})
-def maskedSource(+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+src: List<&2,U32>) -> List<&2,U32>:
-  +references = Bool.pick(Unit -> List<&2,U32>,containsCode(src,91),_ => maskedRefs(rules,links,src,allMatches(Rules.inlineReflinkSearch(rules),src),0n,Nil{}),_ => src)(Unit{})
-  blocksMasked(rules,punctuationMasked(references,False{},Nil{}))
-
 # The inline machine
 # ------------------
 
 type InlineState is Data: InlineState{inLink: Bool,inRawBlock: Bool,linkEmitted: Bool}
 # An inlineTokens loop: remaining source and its masked copy, prevChar and
 # keepPrevChar, tokens newest first.
-type Run<-X: Data> is Data: Run{src: List<&2,U32>,masked: List<&2,U32>,previous: Maybe<&2,U32>,keep: Bool,tokens: List<&2,T.Token<X>>}
+type Run<-X: Data> is Data: Run{src: List<&2,U32>,masked: Tk.Masking,previous: Maybe<&2,U32>,keep: Bool,tokens: List<&2,T.Token<X>>}
 # The tokenizer an iteration continues with after an outputLink that
 # returned nothing.
 type Stage is Data:
@@ -666,10 +571,10 @@ def runInline(-X: Data,+state: InlineState,+frames: List<&2,InlineFrame<X>>,+tas
 # inlineTokens(text) as a new run.
 def lexing(-X: Data,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+text: String) -> Run<X>:
   +src = Re.codes(text)
-  Run{src,maskedSource(rules,links,src),None{},False{},Nil{}}
+  Run{src,Tk.Unmasked{src,links,0n},None{},False{},Nil{}}
 def runSrc(-X: Data,+run: Run<X>) -> List<&2,U32>:
   match run: case Run{src,_,_,_,_}: src
-def runMasked(-X: Data,+run: Run<X>) -> List<&2,U32>:
+def runMasked(-X: Data,+run: Run<X>) -> Tk.Masking:
   match run: case Run{_,masked,_,_,_}: masked
 def runPrevious(-X: Data,+run: Run<X>) -> Maybe<&2,U32>:
   match run: case Run{_,_,previous,_,_}: previous
@@ -677,7 +582,7 @@ def runTokens(-X: Data,+run: Run<X>) -> List<&2,T.Token<X>>:
   match run: case Run{_,_,_,_,tokens}: tokens
 # The run after a token of `length` scalars.
 def advanced(-X: Data,+run: Run<X>,+length: Nat,+tokens: List<&2,T.Token<X>>) -> Run<X>:
-  match run: case Run{src,masked,previous,keep,_}: Run{Tk.drop(src,length),Tk.drop(masked,length),previous,keep,tokens}
+  match run: case Run{src,masked,previous,keep,_}: Run{Tk.drop(src,length),Tk.maskingAdvanced(masked,length),previous,keep,tokens}
 def pushedInline(-X: Data,+state: InlineState,+frames: List<&2,InlineFrame<X>>,+run: Run<X>,+token: T.Token<X>) -> InlineMachine<X>:
   runInline(X,state,frames,Iterate{advanced(X,run,String.length(T.rawOf(X,token)),token <> runTokens(X,run))})
 def stoppedInline(-X: Data,+state: InlineState,+frames: List<&2,InlineFrame<X>>,+run: Run<X>) -> InlineMachine<X>:
@@ -713,7 +618,7 @@ def textRan(-X: Data,+here: At<X>,+raw: String) -> InlineMachine<X>:
   match here:
     case At{+state,frames,Run{src,masked,previous,_,tokens}}:
       +last = Maybe.default(&2,Char,H.lastChar(raw),'_')
-      runInline(X,state,frames,Iterate{Run{Tk.drop(src,String.length(raw)),Tk.drop(masked,String.length(raw)),Bool.pick(Maybe<&2,U32>,Char.is_eq(last,'_'),previous,Some{Tk.previousOf(Char.to_u32(last))}),True{},textJoined(X,tokens,raw,rawBlockOf(state))}})
+      runInline(X,state,frames,Iterate{Run{Tk.drop(src,String.length(raw)),Tk.maskingAdvanced(masked,String.length(raw)),Bool.pick(Maybe<&2,U32>,Char.is_eq(last,'_'),previous,Some{Tk.previousOf(Char.to_u32(last))}),True{},textJoined(X,tokens,raw,rawBlockOf(state))}})
 def afterInlineText(-X: Data,+here: At<X>,+found: Maybe<&2,String>) -> InlineMachine<X>:
   match found:
     case Some{raw}: textRan(X,here,raw)
@@ -753,8 +658,15 @@ def afterEmStrong(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List
   match found:
     case Some{emphasis}: emphasisOpened(X,rules,links,here,emphasis)
     case None{}: afterCodespan(~X,~ext,rules,links,here,Tk.codespan(X,rules,runSrc(X,hereRun(X,here))))
-def emStrongStage(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>) -> InlineMachine<X>:
+# Where an emphasis opener may start, the run keeps its masked source from
+# then on.
+def maskedHere(-X: Data,+rules: Rules.Inline,+here: At<X>) -> At<X>:
+  match here:
+    case At{state,frames,Run{+src,masked,previous,keep,tokens}}: At{state,frames,Run{src,Tk.maskingFor(rules,Tk.opensEmphasis(rules,src),masked),previous,keep,tokens}}
+def emStrongAt(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>) -> InlineMachine<X>:
   afterEmStrong(~X,~ext,rules,links,here,Tk.emStrong(rules,runSrc(X,hereRun(X,here)),runMasked(X,hereRun(X,here)),runPrevious(X,hereRun(X,here))))
+def emStrongStage(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>) -> InlineMachine<X>:
+  emStrongAt(~X,~ext,rules,links,maskedHere(X,rules,here))
 # outputLink: the text is lexed as in a link (state.inLink) with no link
 # emitted yet.
 def linkOpened(-X: Data,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>,+link: Tk.LinkMatch,+fallback: Stage) -> InlineMachine<X>:
@@ -764,7 +676,7 @@ def linkOpened(-X: Data,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+
       runInline(X,InlineState{True{},rawBlock,False{}},LinkText{run,Tk.LinkMatch{raw,href,title,label,image},text,emitted,rawBlock,fallback} <> frames,Iterate{lexing(X,rules,links,text)})
 def textFromReference(-X: Data,+here: At<X>,+raw: String) -> InlineMachine<X>:
   match here:
-    case At{state,frames,Run{src,masked,previous,keep,tokens}}: runInline(X,state,frames,Iterate{Run{Tk.drop(src,String.length(raw)),Tk.drop(masked,String.length(raw)),previous,keep,textJoined(X,tokens,raw,False{})}})
+    case At{state,frames,Run{src,masked,previous,keep,tokens}}: runInline(X,state,frames,Iterate{Run{Tk.drop(src,String.length(raw)),Tk.maskingAdvanced(masked,String.length(raw)),previous,keep,textJoined(X,tokens,raw,False{})}})
 def afterReflink(~X: Data,~ext: Extensions<X>,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+here: At<X>,+found: Maybe<&2,Tk.RefStep>) -> InlineMachine<X>:
   match found:
     case Some{Tk.RefText{raw}}: textFromReference(X,here,raw)

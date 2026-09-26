@@ -27,6 +27,10 @@ def drop(codes: List<&2,U32>,count: Nat) -> List<&2,U32>: List.drop(&2,U32,codes
 def textOf(codes: List<&2,U32>) -> String: Re.fromCodes(codes)
 # The text of scalars `start` to `end`.
 def slice(codes: List<&2,U32>,+start: Nat,end: Nat) -> String: Re.reversedText(takeReversed(drop(codes,start),end - start,Nil{}),SNil{})
+# Fuel for loops that consume at least one scalar per step: more steps than
+# any source in memory has scalars (counting the source instead costs a pass
+# over the rest of the document per block).
+def unbounded() -> Nat: 4294967295n
 def codesLength(codes: List<&2,U32>,+count: Nat) -> Nat:
   match codes:
     case Nil{}: count
@@ -50,6 +54,18 @@ def capFound(+src: List<&2,U32>,value: Maybe<&2,Re.Found>) -> Maybe<&2,Cap>:
 def exec(rule: Rules.Search,+src: List<&2,U32>) -> Maybe<&2,Cap>:
   match rule: case Rules.Search{regex,start}: capFound(src,Re.attemptAt(regex,start,src,Re.cursorAt(src)))
 def test(+rule: Rules.Search,+src: List<&2,U32>) -> Bool: Maybe.is_some(&2,Cap,exec(rule,src))
+# A rule of the grammar at the start of `src`, tried where its first scalar
+# may begin a match.
+def blockOpened(opens: Bool,rules: Rules.Block,rule: Rules.BlockRule,+src: List<&2,U32>) -> Maybe<&2,Cap>:
+  match opens:
+    case True{}: exec(Rules.blockSearch(rules,rule),src)
+    case False{}: None{}
+def blockExec(+rules: Rules.Block,+rule: Rules.BlockRule,+src: List<&2,U32>) -> Maybe<&2,Cap>: blockOpened(Rules.blockOpens(rules,rule,List.head(&2,U32,src)),rules,rule,src)
+def inlineOpened(opens: Bool,rules: Rules.Inline,rule: Rules.InlineRule,+src: List<&2,U32>) -> Maybe<&2,Cap>:
+  match opens:
+    case True{}: exec(Rules.inlineSearch(rules,rule),src)
+    case False{}: None{}
+def inlineExec(+rules: Rules.Inline,+rule: Rules.InlineRule,+src: List<&2,U32>) -> Maybe<&2,Cap>: inlineOpened(Rules.inlineOpens(rules,rule,List.head(&2,U32,src)),rules,rule,src)
 def flatSpan(value: Maybe<&2,Maybe<&2,Re.Span>>) -> Maybe<&2,Re.Span>:
   match value:
     case Some{span}: span
@@ -117,14 +133,14 @@ def spaceOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
   match found:
     case Some{+value}: Bool.pick(Unit -> Maybe<&2,T.Token<X>>,Nat.is_gt(matchEnd(value),0n),_ => Some{T.Space{capWhole(value)}},_ => None{})(Unit{})
     case None{}: None{}
-def space(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: spaceOf(X,exec(Rules.blockNewline(rules),src))
+def space(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: spaceOf(X,blockExec(rules,Rules.BlockNewline{},src))
 
 def indentedCode(-X: Data,+raw: String) -> T.Token<X>: T.Code{raw,Some{"indented"},None{},H.codeRemoveIndent(raw)}
 def codeOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
   match found:
     case Some{value}: Some{indentedCode(X,H.trimTrailingBlankLines(capWhole(value)))}
     case None{}: None{}
-def code(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: codeOf(X,exec(Rules.blockCode(rules),src))
+def code(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: codeOf(X,blockExec(rules,Rules.BlockCode{},src))
 
 # indentCodeCompensation: a fence indented by N whitespace characters takes
 # up to N of them off each line of its code.
@@ -150,7 +166,7 @@ def fencesOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
       +raw = capWhole(value)
       Some{T.Code{raw,None{},Some{H.unescapePunctuation(Text.trim(capText(value,2n)))},indentCodeCompensation(raw,capText(value,3n))}}
     case None{}: None{}
-def fences(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: fencesOf(X,exec(Rules.blockFences(rules),src))
+def fences(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: fencesOf(X,blockExec(rules,Rules.BlockFences{},src))
 
 # Trailing #s go when a space precedes them (or nothing does).
 def closingHashes(+text: String) -> String:
@@ -160,20 +176,20 @@ def headingOf(found: Maybe<&2,Cap>) -> Maybe<&2,Titled>:
   match found:
     case Some{+value}: Some{Titled{H.rtrim(capWhole(value),'\n'),String.length(capText(value,1n)),closingHashes(Text.trim(capText(value,2n)))}}
     case None{}: None{}
-def heading(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Titled>: headingOf(exec(Rules.blockHeading(rules),src))
+def heading(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Titled>: headingOf(blockExec(rules,Rules.BlockHeading{},src))
 
 def hrOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
   match found:
     case Some{value}: Some{T.Hr{H.rtrim(capWhole(value),'\n')}}
     case None{}: None{}
-def hr(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: hrOf(X,exec(Rules.blockHr(rules),src))
+def hr(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: hrOf(X,blockExec(rules,Rules.BlockHr{},src))
 
 # The blockquote's match; the lexer splits and lexes it.
 def blockquoteOf(found: Maybe<&2,Cap>) -> Maybe<&2,String>:
   match found:
     case Some{value}: Some{capWhole(value)}
     case None{}: None{}
-def blockquote(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,String>: blockquoteOf(exec(Rules.blockBlockquote(rules),src))
+def blockquote(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,String>: blockquoteOf(blockExec(rules,Rules.BlockBlockquote{},src))
 
 def isPreTag(name: Maybe<&2,String>) -> Bool:
   match name:
@@ -185,7 +201,7 @@ def htmlOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
       +raw = H.trimTrailingBlankLines(capWhole(value))
       Some{T.HTML{raw,isPreTag(capGroup(value,1n)),raw,True{}}}
     case None{}: None{}
-def html(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: htmlOf(X,exec(Rules.blockHtml(rules),src))
+def html(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: htmlOf(X,blockExec(rules,Rules.BlockHtml{},src))
 
 def hasLineTerminator(text: String) -> Bool:
   match text:
@@ -203,7 +219,7 @@ def definitionOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
   match found:
     case Some{+value}: Some{T.Def{H.rtrim(capWhole(value),'\n'),collapseSpace(CaseMap.lower(capText(value,1n))),H.unescapePunctuation(hrefBrackets(capText(value,2n))),definitionTitle(capGroup(value,3n))}}
     case None{}: None{}
-def definition(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: definitionOf(X,exec(Rules.blockDefinition(rules),src))
+def definition(-X: Data,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: definitionOf(X,blockExec(rules,Rules.BlockDefinition{},src))
 
 # Tables: the lexer queues each cell's inline source.
 type TableDraft is Data: TableDraft{raw: String,align: List<&2,Maybe<&2,T.Align>>,header: List<&2,String>,rows: List<&2,List<&2,String>>}
@@ -265,7 +281,7 @@ def tableOf(found: Maybe<&2,Cap>) -> Maybe<&2,TableDraft>:
         _ => tableBuilt(H.rtrim(capWhole(value),'\n'),H.splitCells(capText(value,1n),None{}),Strings.split(alignChars(delimiter),'|'),tableRows(capGroup(value,3n))),
         _ => None{})(Unit{})
     case None{}: None{}
-def table(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,TableDraft>: tableOf(exec(Rules.blockTable(rules),src))
+def table(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,TableDraft>: tableOf(blockExec(rules,Rules.BlockTable{},src))
 
 def lheadingOf(found: Maybe<&2,Cap>) -> Maybe<&2,Titled>:
   match found:
@@ -295,20 +311,20 @@ def underlineAhead(fuel: Nat,+codes: List<&2,U32>) -> Bool:
           _ => Bool.pick(Unit -> Bool,Text.blank(next) && hasNewlineAfter(rest,next),_ => False{},_ => underlineAhead(more,rest))(Unit{}))(Unit{}),
         _ => False{})(Unit{})
 def lheading(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Titled>:
-  Bool.pick(Unit -> Maybe<&2,Titled>,underlineAhead(codesLength(src,0n),src),_ => lheadingOf(exec(Rules.blockLheading(rules),src)),_ => None{})(Unit{})
+  Bool.pick(Unit -> Maybe<&2,Titled>,underlineAhead(unbounded(),src),_ => lheadingOf(blockExec(rules,Rules.BlockLheading{},src)),_ => None{})(Unit{})
 
 def paragraphText(+text: String) -> String: Bool.pick(Unit -> String,H.endsWithChar(text,'\n'),_ => H.dropEnd(text,1n),_ => text)(Unit{})
 def paragraphOf(found: Maybe<&2,Cap>) -> Maybe<&2,Texted>:
   match found:
     case Some{+value}: Some{Texted{capWhole(value),paragraphText(capText(value,1n))}}
     case None{}: None{}
-def paragraph(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Texted>: paragraphOf(exec(Rules.blockParagraph(rules),src))
+def paragraph(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Texted>: paragraphOf(blockExec(rules,Rules.BlockParagraph{},src))
 
 def textOfFound(found: Maybe<&2,Cap>) -> Maybe<&2,Texted>:
   match found:
     case Some{+value}: Some{Texted{capWhole(value),capWhole(value)}}
     case None{}: None{}
-def blockText(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Texted>: textOfFound(exec(Rules.blockText(rules),src))
+def blockText(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Texted>: textOfFound(blockExec(rules,Rules.BlockText{},src))
 
 # Lists
 # -----
@@ -470,7 +486,7 @@ def itemFrom(+raw: String,+marker: Nat,+line: String,+src: List<&2,U32>) -> Cont
   +first = opening(line,marker)
   Bool.pick(Unit -> Continued,Text.blank(line) && H.blankLine(nextLine),
     _ => Continued{Item{"\n" <> nextLine <> raw <> Nil{},openingContents(first) <> Nil{},line,True{}},drop(src,String.length(nextLine) + 1n)},
-    _ => itemLines(List.length(&2,U32,src) + 1n,Nat.min(3n,openingIndent(first) - 1n),openingIndent(first),Item{raw <> Nil{},openingContents(first) <> Nil{},line,Text.blank(line)},src))(Unit{})
+    _ => itemLines(unbounded(),Nat.min(3n,openingIndent(first) - 1n),openingIndent(first),Item{raw <> Nil{},openingContents(first) <> Nil{},line,Text.blank(line)},src))(Unit{})
 
 # One collected item and the source after it.
 type Step is Data: Step{raw: String,text: String,src: List<&2,U32>}
@@ -521,7 +537,7 @@ def stepOf(found: Maybe<&2,ItemStart>,+src: List<&2,U32>) -> Maybe<&2,Step>:
     case None{}: None{}
 # The item at `src`, unless there is no bullet or the line is a rule.
 def stepAt(+rules: Rules.Block,+bullet: Bullet,+src: List<&2,U32>) -> Maybe<&2,Step>:
-  Bool.pick(Unit -> Maybe<&2,Step>,test(Rules.blockHr(rules),src),_ => None{},_ => stepOf(itemStart(bullet,src),src))(Unit{})
+  Bool.pick(Unit -> Maybe<&2,Step>,Maybe.is_some(&2,Cap,blockExec(rules,Rules.BlockHr{},src)),_ => None{},_ => stepOf(itemStart(bullet,src),src))(Unit{})
 
 # Items (reversed), whether the list is loose and whether the previous item
 # ended with a blank line.
@@ -556,12 +572,12 @@ def lastScalar(+text: String) -> U32: Maybe.default(&2,U32,Maybe.map(&2,Char,U32
 def listWith(+rules: Rules.Block,+src: List<&2,U32>,+bull: String) -> Maybe<&2,ListDraft>:
   +ordered = Nat.is_gt(String.length(bull),1n)
   +bullet = Bool.pick(Bullet,ordered,Ordered{lastScalar(bull)},Unordered{lastScalar(bull)})
-  listFinished(itemsFrom(List.length(&2,U32,src) + 1n,rules,bullet,Collected{Nil{},False{},False{}},stepAt(rules,bullet,src)),ordered,Bool.pick(Maybe<&2,Nat>,ordered,Nat.read(H.dropEnd(bull,1n)),None{}))
+  listFinished(itemsFrom(unbounded(),rules,bullet,Collected{Nil{},False{},False{}},stepAt(rules,bullet,src)),ordered,Bool.pick(Maybe<&2,Nat>,ordered,Nat.read(H.dropEnd(bull,1n)),None{}))
 def listOf(+rules: Rules.Block,+src: List<&2,U32>,found: Maybe<&2,Cap>) -> Maybe<&2,ListDraft>:
   match found:
     case Some{value}: listWith(rules,src,Text.trim(capText(value,1n)))
     case None{}: None{}
-def list(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,ListDraft>: listOf(rules,src,exec(Rules.blockList(rules),src))
+def list(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,ListDraft>: listOf(rules,src,blockExec(rules,Rules.BlockList{},src))
 
 # Inline tokenizers
 # -----------------
@@ -570,7 +586,7 @@ def escapeOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
   match found:
     case Some{+value}: Some{T.Escape{capWhole(value),capText(value,1n)}}
     case None{}: None{}
-def escape(-X: Data,+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: escapeOf(X,exec(Rules.inlineEscape(rules),src))
+def escape(-X: Data,+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: escapeOf(X,inlineExec(rules,Rules.InlineEscape{},src))
 
 # An inline tag's text; the lexer tracks the link and raw-block state it
 # opens or closes.
@@ -578,7 +594,7 @@ def wholeOf(found: Maybe<&2,Cap>) -> Maybe<&2,String>:
   match found:
     case Some{value}: Some{capWhole(value)}
     case None{}: None{}
-def tag(+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,String>: wholeOf(exec(Rules.inlineTag(rules),src))
+def tag(+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,String>: wholeOf(inlineExec(rules,Rules.InlineTag{},src))
 def startsWithFolded(+text: String,+prefix: String) -> Bool: String.starts_with(Text.asciiLower(String.take(text,String.length(prefix))),prefix)
 def spaceFirst(text: String) -> Bool:
   match text:
@@ -620,7 +636,7 @@ def linkOf(found: Maybe<&2,Cap>) -> Maybe<&2,LinkMatch>:
         _ => Bool.pick(Unit -> Maybe<&2,LinkMatch>,angleClosed(trimmed),_ => Some{linkBuilt(capWhole(value),capText(value,1n),href,capGroup(value,3n))},_ => None{})(Unit{}),
         _ => linkCut(H.findClosingBracket(href),capWhole(value),capText(value,1n),href,capGroup(value,3n)))(Unit{})
     case None{}: None{}
-def link(+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,LinkMatch>: linkOf(exec(Rules.inlineLink(rules),src))
+def link(+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,LinkMatch>: linkOf(inlineExec(rules,Rules.InlineLink{},src))
 
 # A reference that names no definition is its first character as text.
 type RefStep is Data:
@@ -650,7 +666,7 @@ def orElse(first: Maybe<&2,Cap>,second: Maybe<&2,Cap>) -> Maybe<&2,Cap>:
     case None{}: second
 # reflink(src, links): `reflink` or else `nolink`.
 def reflink(+rules: Rules.Inline,links: List<&2,T.LinkDefinition>,+src: List<&2,U32>) -> Maybe<&2,RefStep>:
-  reflinkOf(links,orElse(exec(Rules.inlineReflink(rules),src),exec(Rules.inlineNolink(rules),src)))
+  reflinkOf(links,orElse(inlineExec(rules,Rules.InlineReflink{},src),inlineExec(rules,Rules.InlineNolink{},src)))
 
 # other.outputLinkReplace, `/\\([\[\]])/g` → "$1".
 def bracketsScan(text: String,+pending: Bool,+reversed: String) -> String:
@@ -662,6 +678,134 @@ def bracketsScan(text: String,+pending: Bool,+reversed: String) -> String:
           _ => bracketsScan(rest,Char.is_eq(char,'\\'),Bool.pick(String,Char.is_eq(char,'\\'),SCon{'\\',reversed},SCon{char,SCon{'\\',reversed}})))(Unit{}),
         _ => Bool.pick(Unit -> String,Char.is_eq(char,'\\'),_ => bracketsScan(rest,True{},reversed),_ => bracketsScan(rest,False{},SCon{char,reversed}))(Unit{}))(Unit{})
 def outputLinkText(text: String) -> String: bracketsScan(text,False{},"")
+
+# Masking
+# -------
+# inlineTokens scans emphasis and strikethrough delimiters in a copy of the
+# source where reference links, escaped punctuation, links, code spans and
+# tags are masked, keeping every length.
+
+def searchOn(+search: Rules.Search,+input: List<&2,U32>,+cursor: Re.Cursor) -> Maybe<&2,Re.Found>:
+  match search: case Rules.Search{regex,start}: Re.search(regex,start,input,cursor)
+# All non-overlapping matches (String#matchAll).
+def matchesFrom(+fuel: Nat,+search: Rules.Search,+input: List<&2,U32>,+found: Maybe<&2,Re.Found>,+reversed: List<&2,Re.Match>) -> List<&2,Re.Match>:
+  match fuel found:
+    case _ None{}: List.reverse(&2,Re.Match,reversed)
+    case Zero{} _: List.reverse(&2,Re.Match,reversed)
+    case Succ{more} Some{Re.Found{Re.Match{+start,+end,captures},+cursor}}:
+      matchesFrom(more,search,input,searchOn(search,input,Bool.pick(Unit -> Re.Cursor,Nat.is_eq(start,end),_ => Maybe.default(&2,Re.Cursor,Re.advance(cursor),cursor),_ => cursor)(Unit{})),Re.Match{start,end,captures} <> reversed)
+def allMatches(+search: Rules.Search,+input: List<&2,U32>) -> List<&2,Re.Match>:
+  matchesFrom(List.length(&2,U32,input) + 1n,search,input,searchOn(search,input,Re.cursorAt(input)),Nil{})
+def matchStart(+found: Re.Match) -> Nat:
+  match found: case Re.Match{start,_,_}: start
+def matchCodes(+input: List<&2,U32>,+found: Re.Match) -> List<&2,U32>:
+  match found: case Re.Match{start,end,_}: take(drop(input,start),end - start)
+def containsCode(+codes: List<&2,U32>,+scalar: U32) -> Bool:
+  match codes:
+    case Nil{}: False{}
+    case +first <> rest: Bool.pick(Unit -> Bool,U32.is_eq(first,scalar),_ => True{},_ => containsCode(rest,scalar))(Unit{})
+def lastIndexFrom(+codes: List<&2,U32>,+scalar: U32,+index: Nat,+found: Nat) -> Nat:
+  match codes:
+    case Nil{}: found
+    case +first <> rest: lastIndexFrom(rest,scalar,index + 1n,Bool.pick(Nat,U32.is_eq(first,scalar),index,found))
+# `lastIndexOf("[")` in a match that contains one.
+def lastBracket(+codes: List<&2,U32>) -> Nat: lastIndexFrom(codes,91,0n,0n)
+def repeatA(+count: Nat,+codes: List<&2,U32>) -> List<&2,U32>:
+  match count:
+    case Zero{}: codes
+    case Succ{more}: repeatA(more,97 <> codes)
+# "[" + "a" repeated + "]" over `length` scalars.
+def bracketMask(+length: Nat) -> List<&2,U32>: 91 <> repeatA(length - 2n,[93])
+# Whether a link (not an image) sits among a text's links, code spans and
+# tags.
+def linkSpan(+rules: Rules.Inline,+text: List<&2,U32>,matches: List<&2,Re.Match>) -> Bool:
+  match matches:
+    case Nil{}: False{}
+    case +found <> rest:
+      Bool.pick(Unit -> Bool,Maybe.is_some(&2,Cap,inlineExec(rules,Rules.InlineLink{},matchCodes(text,found))) && Bool.not(U32.is_eq(Maybe.default(&2,U32,List.get(&2,U32,text,matchStart(found) - 1n),0),33) && Nat.is_gt(matchStart(found),0n)),
+        _ => True{},_ => linkSpan(rules,text,rest))(Unit{})
+def keyOf(+codes: List<&2,U32>,+refStart: Nat) -> String: slice(codes,refStart + 1n,List.length(&2,U32,codes) - 1n)
+# linkInText's reference part: a reference to a definition whose text holds
+# no link is a link.
+@unsafe def linkInRefs(+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+text: List<&2,U32>,+matches: List<&2,Re.Match>) -> Bool:
+  match matches:
+    case Nil{}: False{}
+    case +found <> rest:
+      +codes = matchCodes(text,found)
+      +refStart = lastBracket(codes)
+      +inner = drop(take(codes,refStart - 1n),1n)
+      Bool.pick(Unit -> Bool,startsWith(codes,'!') || Bool.not(hasDefinition(links,keyOf(codes,refStart))),_ => linkInRefs(rules,links,text,rest),
+        _ => Bool.pick(Unit -> Bool,Nat.is_gt(refStart,1n) && containsCode(inner,91) && (linkSpan(rules,inner,allMatches(Rules.inlineSearch(rules,Rules.InlineBlockSkip{}),inner)) || linkInRefs(rules,links,inner,allMatches(Rules.inlineSearch(rules,Rules.InlineReflinkSearch{}),inner))),
+          _ => linkInRefs(rules,links,text,rest),_ => True{})(Unit{}))(Unit{})
+# linkInText(text): does this link text hold a link already?
+def linkInText(+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+text: List<&2,U32>) -> Bool:
+  containsCode(text,91) && (linkSpan(rules,text,allMatches(Rules.inlineSearch(rules,Rules.InlineBlockSkip{}),text)) || linkInRefs(rules,links,text,allMatches(Rules.inlineSearch(rules,Rules.InlineReflinkSearch{}),text)))
+def prependReversed(+codes: List<&2,U32>,+reversed: List<&2,U32>) -> List<&2,U32>:
+  match codes:
+    case Nil{}: reversed
+    case scalar <> rest: prependReversed(rest,scalar <> reversed)
+# Reference links to definitions are masked; a candidate whose text holds a
+# link keeps its text, with the references in it masked.
+@unsafe def maskedRefs(+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+input: List<&2,U32>,+matches: List<&2,Re.Match>,+position: Nat,+reversed: List<&2,U32>) -> List<&2,U32>:
+  match matches:
+    case Nil{}: List.reverse(&2,U32,prependReversed(drop(input,position),reversed))
+    case Re.Match{+start,+end,_} <> rest:
+      +codes = take(drop(input,start),end - start)
+      +length = end - start
+      +refStart = lastBracket(codes)
+      +text = drop(take(codes,refStart - 1n),1n)
+      +before = prependReversed(take(drop(input,position),start - position),reversed)
+      Bool.pick(Unit -> List<&2,U32>,Bool.not(hasDefinition(links,keyOf(codes,refStart))),_ => maskedRefs(rules,links,input,rest,end,prependReversed(codes,before)),
+        _ => Bool.pick(Unit -> List<&2,U32>,Nat.is_gt(refStart,1n) && Bool.not(startsWith(codes,'!')) && linkInText(rules,links,text),
+          _ => maskedRefs(rules,links,input,rest,end,prependReversed(93 <> repeatA(length - refStart - 2n,[93]),prependReversed(91 <> 93 <> Nil{},prependReversed(maskedRefs(rules,links,text,allMatches(Rules.inlineSearch(rules,Rules.InlineReflinkSearch{}),text),0n,Nil{}),91 <> before)))),
+          _ => maskedRefs(rules,links,input,rest,end,prependReversed(bracketMask(length),before)))(Unit{}))(Unit{})
+# anyPunctuation, `/\\([\p{P}\p{S}])/gu` → "++". `step` is 1 where such
+# an escape starts, 2 at its escaped character and 0 elsewhere.
+def escapeAt(codes: List<&2,U32>) -> Bool:
+  match codes:
+    case 92 <> +scalar <> _: H.isPunctuationOrSymbol(scalar)
+    case _: False{}
+def nextStep(+step: U32,rest: List<&2,U32>) -> U32:
+  match step:
+    case 1: 2
+    case _: Bool.pick(U32,escapeAt(rest),1,0)
+def punctuationMasked(codes: List<&2,U32>,+step: U32,+reversed: List<&2,U32>) -> List<&2,U32>:
+  match codes:
+    case Nil{}: List.reverse(&2,U32,reversed)
+    case +scalar <> +rest: punctuationMasked(rest,nextStep(step,rest),Bool.pick(U32,U32.is_eq(step,0),scalar,43) <> reversed)
+def bracketsMasked(+input: List<&2,U32>,+matches: List<&2,Re.Match>,+position: Nat,+reversed: List<&2,U32>) -> List<&2,U32>:
+  match matches:
+    case Nil{}: List.reverse(&2,U32,prependReversed(drop(input,position),reversed))
+    case Re.Match{+start,+end,_} <> rest: bracketsMasked(input,rest,end,prependReversed(bracketMask(end - start),prependReversed(take(drop(input,position),start - position),reversed)))
+def blocksMasked(+rules: Rules.Inline,+input: List<&2,U32>) -> List<&2,U32>: bracketsMasked(input,allMatches(Rules.inlineSearch(rules,Rules.InlineBlockSkip{}),input),0n,Nil{})
+def maskedSource(+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+src: List<&2,U32>) -> List<&2,U32>:
+  +references = Bool.pick(Unit -> List<&2,U32>,containsCode(src,91),_ => maskedRefs(rules,links,src,allMatches(Rules.inlineSearch(rules,Rules.InlineReflinkSearch{}),src),0n,Nil{}),_ => src)(Unit{})
+  blocksMasked(rules,punctuationMasked(references,Bool.pick(U32,escapeAt(references),1,0),Nil{}))
+
+# The masked source of an inlineTokens run, computed when a delimiter scan
+# first reads it (most runs have no emphasis or strikethrough to scan): until
+# then the run's source from its start, the reference definitions and how
+# far the run has advanced. Lengths are kept, so the masked source there is
+# the whole masked source without its first `offset` scalars.
+type Masking is Data:
+  Unmasked{source: List<&2,U32>,links: List<&2,T.LinkDefinition>,offset: Nat}
+  Masked{codes: List<&2,U32>}
+def maskedCodes(+rules: Rules.Inline,masking: Masking) -> List<&2,U32>:
+  match masking:
+    case Unmasked{source,links,offset}: drop(maskedSource(rules,links,source),offset)
+    case Masked{codes}: codes
+# The masking after a token of `length` scalars.
+def maskingAdvanced(masking: Masking,+length: Nat) -> Masking:
+  match masking:
+    case Unmasked{source,links,offset}: Unmasked{source,links,offset + length}
+    case Masked{codes}: Masked{drop(codes,length)}
+# Whether an emStrong opener may start `src`.
+def opensEmphasis(+rules: Rules.Inline,+src: List<&2,U32>) -> Bool: Rules.inlineOpens(rules,Rules.InlineEmStrongLDelim{},List.head(&2,U32,src))
+# The masking with its source computed when `needed`.
+def maskingFor(+rules: Rules.Inline,needed: Bool,masking: Masking) -> Masking:
+  match needed:
+    case True{}: Masked{maskedCodes(rules,masking)}
+    case False{}: masking
 
 # Emphasis and strikethrough
 # --------------------------
@@ -747,40 +891,40 @@ def scanFrom(+opener: Opener) -> Maybe<&2,Emphasis>:
   match opener:
     case Opener{_,+length,_,_,Rules.Search{regex,start},+input}: scanned(List.length(&2,U32,input) + 1n,opener,Scanning{length,0n,Re.search(regex,start,input,Re.cursorAt(input))})
 
-def emStrongOpened(+rules: Rules.Inline,+src: List<&2,U32>,+masked: List<&2,U32>,+previous: Maybe<&2,U32>,+value: Cap) -> Maybe<&2,Emphasis>:
+def emStrongOpened(+rules: Rules.Inline,+src: List<&2,U32>,+masked: Masking,+previous: Maybe<&2,U32>,+value: Cap) -> Maybe<&2,Emphasis>:
   +run = capWhole(value)
   +length = String.length(run) - 1n
   +asterisk = H.startsWithChar(run,'*')
   +next = truthy(capGroup(value,1n)) || truthy(capGroup(value,3n))
   Bool.pick(Unit -> Maybe<&2,Emphasis>,Bool.not(truthy(capGroup(value,1n)) || truthy(capGroup(value,2n)) || truthy(capGroup(value,3n)) || truthy(capGroup(value,4n))) || (truthy(capGroup(value,4n)) && alphaNumeric(previous)),_ => None{},
     _ => Bool.pick(Unit -> Maybe<&2,Emphasis>,Bool.not(next) || Maybe.is_none(&2,U32,previous) || punctuation(previous),
-      _ => scanFrom(Opener{src,length,Maybe.default(&2,Bool,Maybe.map(&2,U32,Bool,scalar => U32.is_eq(scalar,Bool.pick(U32,asterisk,42,95)),previous),False{}),False{},Bool.pick(Rules.Search,asterisk,Rules.inlineEmStrongRDelimAst(rules),Rules.inlineEmStrongRDelimUnd(rules)),drop(masked,length)}),
+      _ => scanFrom(Opener{src,length,Maybe.default(&2,Bool,Maybe.map(&2,U32,Bool,scalar => U32.is_eq(scalar,Bool.pick(U32,asterisk,42,95)),previous),False{}),False{},Rules.inlineSearch(rules,Bool.pick(Rules.InlineRule,asterisk,Rules.InlineEmStrongRDelimAst{},Rules.InlineEmStrongRDelimUnd{})),drop(maskedCodes(rules,masked),length)}),
       _ => None{})(Unit{}))(Unit{})
-def emStrongOf(+rules: Rules.Inline,+src: List<&2,U32>,+masked: List<&2,U32>,+previous: Maybe<&2,U32>,found: Maybe<&2,Cap>) -> Maybe<&2,Emphasis>:
+def emStrongOf(+rules: Rules.Inline,+src: List<&2,U32>,+masked: Masking,+previous: Maybe<&2,U32>,found: Maybe<&2,Cap>) -> Maybe<&2,Emphasis>:
   match found:
     case Some{value}: emStrongOpened(rules,src,masked,previous,value)
     case None{}: None{}
 # emStrong(src, maskedSrc, prevChar): an em or strong span, before its text
 # is lexed.
-def emStrong(+rules: Rules.Inline,+src: List<&2,U32>,+masked: List<&2,U32>,+previous: Maybe<&2,U32>) -> Maybe<&2,Emphasis>:
-  emStrongOf(rules,src,masked,previous,exec(Rules.inlineEmStrongLDelim(rules),src))
+def emStrong(+rules: Rules.Inline,+src: List<&2,U32>,+masked: Masking,+previous: Maybe<&2,U32>) -> Maybe<&2,Emphasis>:
+  emStrongOf(rules,src,masked,previous,inlineExec(rules,Rules.InlineEmStrongLDelim{},src))
 
 def delimited(value: Maybe<&2,Emphasis>) -> Maybe<&2,Delimited>:
   match value:
     case Some{Emphasis{_,raw,text}}: Some{Delimited{raw,text}}
     case None{}: None{}
-def delOpened(+rules: Rules.Inline,+src: List<&2,U32>,+masked: List<&2,U32>,+previous: Maybe<&2,U32>,+value: Cap) -> Maybe<&2,Delimited>:
+def delOpened(+rules: Rules.Inline,+src: List<&2,U32>,+masked: Masking,+previous: Maybe<&2,U32>,+value: Cap) -> Maybe<&2,Delimited>:
   +length = String.length(capWhole(value)) - 1n
   Bool.pick(Unit -> Maybe<&2,Delimited>,Bool.not(truthy(capGroup(value,1n))) || Maybe.is_none(&2,U32,previous) || punctuation(previous),
-    _ => delimited(scanFrom(Opener{src,length,False{},True{},Rules.inlineDelRDelim(rules),drop(masked,length)})),_ => None{})(Unit{})
-def delOf(+rules: Rules.Inline,+src: List<&2,U32>,+masked: List<&2,U32>,+previous: Maybe<&2,U32>,found: Maybe<&2,Cap>) -> Maybe<&2,Delimited>:
+    _ => delimited(scanFrom(Opener{src,length,False{},True{},Rules.inlineSearch(rules,Rules.InlineDelRDelim{}),drop(maskedCodes(rules,masked),length)})),_ => None{})(Unit{})
+def delOf(+rules: Rules.Inline,+src: List<&2,U32>,+masked: Masking,+previous: Maybe<&2,U32>,found: Maybe<&2,Cap>) -> Maybe<&2,Delimited>:
   match found:
     case Some{value}: delOpened(rules,src,masked,previous,value)
     case None{}: None{}
 # marked's del(src, maskedSrc, prevChar): a `~` or `~~` span before its text
 # is lexed.
-def del(+rules: Rules.Inline,+src: List<&2,U32>,+masked: List<&2,U32>,+previous: Maybe<&2,U32>) -> Maybe<&2,Delimited>:
-  delOf(rules,src,masked,previous,exec(Rules.inlineDelLDelim(rules),src))
+def del(+rules: Rules.Inline,+src: List<&2,U32>,+masked: Masking,+previous: Maybe<&2,U32>) -> Maybe<&2,Delimited>:
+  delOf(rules,src,masked,previous,inlineExec(rules,Rules.InlineDelLDelim{},src))
 
 # Other inline tokens
 # -------------------
@@ -793,13 +937,13 @@ def codespanOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
   match found:
     case Some{+value}: Some{T.Codespan{capWhole(value),codespanText(Strings.replaceAll(capText(value,2n),"\n"," "))}}
     case None{}: None{}
-def codespan(-X: Data,+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: codespanOf(X,exec(Rules.inlineCode(rules),src))
+def codespan(-X: Data,+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: codespanOf(X,inlineExec(rules,Rules.InlineCode{},src))
 
 def brOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
   match found:
     case Some{value}: Some{T.Br{capWhole(value)}}
     case None{}: None{}
-def br(-X: Data,+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: brOf(X,exec(Rules.inlineBr(rules),src))
+def br(-X: Data,+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: brOf(X,inlineExec(rules,Rules.InlineBr{},src))
 
 def isAt(value: Maybe<&2,String>) -> Bool:
   match value:
@@ -812,7 +956,7 @@ def autolinkOf(-X: Data,found: Maybe<&2,Cap>) -> Maybe<&2,T.Token<X>>:
       +text = capText(value,1n)
       Some{autolinked(X,capWhole(value),text,Bool.pick(String,isAt(capGroup(value,2n)),"mailto:" ++ text,text))}
     case None{}: None{}
-def autolink(-X: Data,+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: autolinkOf(X,exec(Rules.inlineAutolink(rules),src))
+def autolink(-X: Data,+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: autolinkOf(X,inlineExec(rules,Rules.InlineAutolink{},src))
 
 # `cap[0] = _backpedal.exec(cap[0])?.[0] ?? ""` until it no longer changes.
 def foundText(codes: List<&2,U32>,found: Re.Found) -> String:
@@ -832,9 +976,9 @@ def urlOf(-X: Data,+rules: Rules.Inline,found: Maybe<&2,Cap>) -> Maybe<&2,T.Toke
     case Some{+value}:
       +raw = capWhole(value)
       Bool.pick(Unit -> Maybe<&2,T.Token<X>>,isAt(capGroup(value,2n)),_ => Some{autolinked(X,raw,raw,"mailto:" ++ raw)},
-        _ => urlBacked(X,backpedaled(String.length(raw) + 1n,Rules.inlineBackpedal(rules),raw,backpedalOnce(Rules.inlineBackpedal(rules),raw)),String.eq(capText(value,1n),"www.")))(Unit{})
+        _ => urlBacked(X,backpedaled(String.length(raw) + 1n,Rules.inlineSearch(rules,Rules.InlineBackpedal{}),raw,backpedalOnce(Rules.inlineSearch(rules,Rules.InlineBackpedal{}),raw)),String.eq(capText(value,1n),"www.")))(Unit{})
     case None{}: None{}
-def url(-X: Data,+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: urlOf(X,rules,exec(Rules.inlineUrl(rules),src))
+def url(-X: Data,+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,T.Token<X>>: urlOf(X,rules,inlineExec(rules,Rules.InlineUrl{},src))
 
 # The text run
 # ------------
@@ -943,4 +1087,4 @@ def textOfLength(+src: List<&2,U32>,length: Maybe<&2,Nat>) -> Maybe<&2,String>:
     case None{}: None{}
 # The text run; the lexer merges it into a preceding text token.
 def inlineText(+rules: Rules.Inline,+src: List<&2,U32>) -> Maybe<&2,String>:
-  Bool.pick(Unit -> Maybe<&2,String>,Rules.inlineBreaks(rules),_ => wholeOf(exec(Rules.inlineText(rules),src)),_ => textOfLength(src,textLength(src)))(Unit{})
+  Bool.pick(Unit -> Maybe<&2,String>,Rules.inlineBreaks(rules),_ => wholeOf(inlineExec(rules,Rules.InlineText{},src)),_ => textOfLength(src,textLength(src)))(Unit{})
