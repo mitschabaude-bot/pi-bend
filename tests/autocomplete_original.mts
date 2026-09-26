@@ -54,12 +54,10 @@ class Native {
  constructor(commands=[],base=process.cwd(),fdPath=null){this.mode=commands.length?'skills':'files';if(commands.length)assert.deepEqual(commands,skillCommands);this.base=base;this.fd=fdPath;this.reference=new Reference(commands,base,fdPath)}
  async getSuggestions(lines,line,col,options){
   const expected=await this.reference.getSuggestions(lines,line,col,options);
-  const actual=invoke([this.mode,this.base,os.homedir(),lines.join('\n'),line,scalarColumn(lines[line]??'',col),options.force?'yes':'no',this.fd?'yes':'no','scalar']);
+  const actual=invoke([this.mode,this.base,os.homedir(),lines.join('\n'),line,scalarColumn(lines[line]??'',col),options.force?'yes':'no',this.fd?'yes':'no','locale']);
   if(activeName!=='includes scoped direct children when recursive @ matches are flooded'){
-   // Locale default is deliberately pending. Compare item membership/content;
-   // the actual original ranking assertions below still execute unchanged.
-   const comparable=v=>v&&({...v,items:[...v.items].sort((a,b)=>a.value<b.value?-1:a.value>b.value?1:0)});
-   assert.deepEqual(comparable(actual),comparable(expected),activeName);
+   // The production locale order (root collation) is compared exactly.
+   assert.deepEqual(actual,expected,activeName);
   }
   comparisons++;return actual;
  }
@@ -86,7 +84,7 @@ const commands=[{name:'model',description:'Choose model',argumentHint:'[name]',g
 const commandReference=new Reference(commands,'/var/tmp');
 for(const text of ['/','/c','/CM','/cl','/model ','/model alpha','/model a b','/missing arg','/compact arg','/clear arg']){
  const expected=await commandReference.getSuggestions([text],0,text.length,{signal:new AbortController().signal,force:false});
- const actual=invoke(['commands','/var/tmp',os.homedir(),text,0,text.length,'no','no','scalar']);
+ const actual=invoke(['commands','/var/tmp',os.homedir(),text,0,text.length,'no','no','locale']);
  assert.deepEqual(actual,expected,text);comparisons++;
 }
 const editing=[['/m',2,'model','model','/m'],['  /m suffix',4,'model','model','/m'],['@a tail',2,'@alpha.txt','alpha.txt','@a'],['@a',2,'@"a folder/"','a folder/','@a'],['"a" tail',2,'"a folder/"','a folder/','"a'],['abc ./a',7,'./alpha','alpha','./a']];

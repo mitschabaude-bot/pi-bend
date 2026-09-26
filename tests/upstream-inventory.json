@@ -4983,13 +4983,13 @@
     },
     {
       "source": "packages/tui/test/autocomplete.test.ts",
-      "status": "needs-review",
+      "status": "ported",
       "ports": [
         "tests/autocomplete.bend",
         "tests/autocomplete_check.py"
       ],
       "sha256": "23d6aaa52acc11f9a36d667e6783ca2fb9041509aadacc127a9701768f93b40f",
-      "notes": "All 33 original test bodies (including the v0.87.1 CJK-punctuation cases) execute through the native provider on Bun/native one/four, supplemented by live-source calls and native-policy checks. Locale-default ordering remains pending; source item-set comparisons deliberately ignore ordering while original ranking assertions remain unchanged. Native scalar cursors and strict input/path adaptations are documented in tests/autocomplete.md. Generic editor-provider integration and Windows behavior remain pending."
+      "notes": "All 33 original test bodies (including the v0.87.1 CJK-punctuation cases, ported in 13f38a36) and the 3 autocomplete-skill-slash bodies execute through the native provider on Bun/native one/four, and every source call is compared exactly, in order, with the native provider using the production LocaleOrder (root collation). Native scalar cursors and strict input/path adaptations are documented in tests/autocomplete.md; the suite's single win32 branch does not run on Linux, as upstream. Editor-provider integration belongs to the editor suite."
     },
     {
       "source": "packages/tui/test/bug-regression-isimageline-startswith-bug.test.ts",
