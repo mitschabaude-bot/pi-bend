@@ -1393,3 +1393,22 @@ Google Vertex Application Default Credentials of type `service_account` authenti
 A term word held a tag in bits 56–62 (7 bits, of which the seven tags use 3), a 16-bit id in bits 40–55 and a 40-bit location, under the reference-count bit 63. Segment ids travel in closures, tasks and stack frames, so nearly every segment needs one: in the CLI at 894f7048, 58,518 of 59,398 were referenced as data. A fresh id map for main at e5cf49ed held 65,114 segment ids, 422 below the limit, and agents were already hitting "an id over 65535" with the persistent incremental map (BEND-055).
 
 Fix (`patches/bend-id-width.patch`, +7 −7 lines of `comp.ts`): the tag moves to bits 60–62 and the id takes bits 40–59 (20 bits, 1,048,576 ids); `term_make`, `term_tag`, `term_aux`, the static image encoder and the id checks change, nothing else reads those bits (the drop cursor has its own encoding; task tails keep a 16-bit slot index, not an id). Evidence: the CLI at e5cf49ed builds with 65,114 segment and 6,108 constructor ids; full terminal parity against the previous run shows no regression (119 MATCH, the 26 DIFF scenarios are the previous ones plus the new `session-keys`); interactive messages 11/11 on Bun and native 1/4 with 1 and 8 units; the compiler regression programs print their expected results.
+
+## BEND-059 — A linearity error in one match case is reported against a wildcard of an earlier case (2026-09-26; confirmed diagnostic defect, not fixed)
+
+Found while wiring the Bedrock credential chain (`sendWith` in `bedrock-converse-stream.bend`). When a later `case` of a constructor match uses a plain (non-`+`) field binder twice, the checker reports `_ (consumed more than once)` at an earlier case whose pattern has `_` in that field, instead of naming the binder and its case. Reduced reproducer (installed toolchain, bend 2.0.7 with the project patches, 2026-09-26):
+
+```
+type Config is Data:
+  Config{a: Maybe<&2, String>, b: Maybe<&2, String>, c: Maybe<&2, String>}
+
+def pick(config: Config) -> IO(Unit):
+  match config:
+    case Config{_, _, Some{t}}: use(Some{t}, None{})
+    case Config{a, b, None{}}:
+      do IO<Unit>:
+        use(b, a)
+        use(a, None{})
+```
+
+(with `use` any `Maybe<&2, String> -> Maybe<&2, String> -> IO(Unit)`) reports `expected : _ / observed : _ (consumed more than once)` at `case Config{_, _, Some{t}}`. The program is wrong (`a` is used twice; `+a` or a helper def fixes it), so only the diagnostic is affected: the name and location point at the wrong case. Workaround in the port: the second case's body moved into its own def taking `+profile`. Regression check: compile the snippet; a fixed checker names `a` in the second case. Upstream status: not reported.
