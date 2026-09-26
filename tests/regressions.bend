@@ -33,8 +33,8 @@ import ../packages/ai/src/utils/uuid.bend as Uuid
 # upstream's registerFauxProvider: a start event, then each content block's
 # start/delta/end events with the text (or the tool call's JSON arguments)
 # split into chunks, then done. Adaptations: chunks are a fixed four tokens
-# (16 characters) instead of a random 3-5 tokens, and usage reports the
-# output estimate ceil(characters / 4) without upstream's prompt estimate.
+# (16 characters) instead of a random 3-5 tokens. Usage follows upstream's
+# withUsageEstimate (prompt and output estimates, with the prompt cache).
 # tests/regressions_check.py reads the printed JSON lines.
 
 def EventStream() -> Data: Stream.AssistantMessageEventStream(V.Value, Unit)
