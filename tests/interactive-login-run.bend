@@ -1,3 +1,4 @@
+import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
 import Base
 import ../packages/ai/src/providers/radius.bend as Radius
 import ./agent-session-runtime.bend as Fixture
@@ -95,10 +96,10 @@ def reboundCopied(binding: Binding,+live: Session.AgentSession) -> IO(Unit):
         observer : Maybe<&2,Callback.Callback<Session.AgentSession,Unit>> <- Ref.read(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,hook)
         notify(observer,live)
 def rebound(binding: Binding,live: Session.AgentSession) -> IO(Unit): reboundCopied(binding,live)
-def startNew(runtime: Runtime(),_: Unit) -> IO(Result<&2,&2,String,Unit>): Host.newSession(Services(),runtime,None{})
-def forkSession(runtime: Runtime(),request: Host.ForkRequest) -> IO(Result<&2,&2,String,Maybe<&2,String>>):
+def startNew(runtime: Runtime(),_: Unit) -> IO(Result<&2,&2,String,Ctx.SessionChange>): Host.newSessionCancellable(Services(),runtime,None{})
+def forkSession(runtime: Runtime(),request: Host.ForkRequest) -> IO(Result<&2,&2,String,Host.ForkOutcome>):
   match request:
-    case Host.ForkRequest{entryId,position}: Host.fork(Services(),runtime,entryId,position)
+    case Host.ForkRequest{entryId,position}: Host.forkCancellable(Services(),runtime,entryId,position)
 def importSession(runtime: Runtime(),request: Run.ImportRequest) -> IO(Host.ImportOutcome):
   match request:
     case Run.ImportRequest{path,cwdOverride}: Host.importFromJsonl(Services(),runtime,path,cwdOverride)
@@ -187,8 +188,8 @@ def run(args: List<String>) -> IO(Unit):
         +current : Ref.Ref<Session.AgentSession> <- Ref.new(Session.AgentSession,live)
         +hook : Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,None{})
         +rebinder : Callback.Callback<Session.AgentSession,Unit> <- Callback.create(~Binding,~Session.AgentSession,~Unit,~rebound,Binding{current,hook})
-        +new : Callback.Callback<Unit,Result<&2,&2,String,Unit>> <- Callback.create(~Runtime(),~Unit,~Result<&2,&2,String,Unit>,~startNew,runtime)
-        +forking : Callback.Callback<Host.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>> <- Callback.create(~Runtime(),~Host.ForkRequest,~Result<&2,&2,String,Maybe<&2,String>>,~forkSession,runtime)
+        +new : Callback.Callback<Unit,Result<&2,&2,String,Ctx.SessionChange>> <- Callback.create(~Runtime(),~Unit,~Result<&2,&2,String,Ctx.SessionChange>,~startNew,runtime)
+        +forking : Callback.Callback<Host.ForkRequest,Result<&2,&2,String,Host.ForkOutcome>> <- Callback.create(~Runtime(),~Host.ForkRequest,~Result<&2,&2,String,Host.ForkOutcome>,~forkSession,runtime)
         +login : Callback.Callback<Run.LoginRequest,AuthLogin.Outcome()> <- Callback.create(~String,~Run.LoginRequest,~AuthLogin.Outcome(),~login,base)
         +refresh : Callback.Callback<Unit,List<&2,Models.Model()>> <- Callback.create(~Models.ModelRuntime,~Unit,~List<&2,Models.Model()>,~models,Session.modelRuntime(live))
         +importer : Callback.Callback<Run.ImportRequest,Host.ImportOutcome> <- Callback.create(~Runtime(),~Run.ImportRequest,~Host.ImportOutcome,~importSession,runtime)
@@ -202,8 +203,8 @@ def run(args: List<String>) -> IO(Unit):
         Callback.dispose(Run.ImportRequest,Host.ImportOutcome,importer)
         Callback.dispose(Unit,Run.SessionChoices,sessions)
         Callback.dispose(Run.ResumeRequest,Host.ResumeOutcome,resume)
-        Callback.dispose(Unit,Result<&2,&2,String,Unit>,new)
-        Callback.dispose(Host.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,forking)
+        Callback.dispose(Unit,Result<&2,&2,String,Ctx.SessionChange>,new)
+        Callback.dispose(Host.ForkRequest,Result<&2,&2,String,Host.ForkOutcome>,forking)
         Callback.dispose(Session.AgentSession,Unit,rebinder)
         oldHook : Maybe<&2,Callback.Callback<Session.AgentSession,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,hook)
         old : Session.AgentSession <- Ref.dispose(Session.AgentSession,current)

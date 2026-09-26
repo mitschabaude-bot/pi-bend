@@ -914,8 +914,8 @@ def rebindInteractiveCopied(binding: InteractiveRebind,+live: AgentSession.Agent
         callInteractiveRebind(callback,live)
 def rebindInteractive(binding: InteractiveRebind,live: AgentSession.AgentSession) -> IO(Unit):
   rebindInteractiveCopied(binding,live)
-def newInteractive(host: Host(),_: Unit) -> IO(Result<&2,&2,String,Unit>):
-  SessionRuntime.newSession(Services,host,None{})
+def newInteractive(host: Host(),_: Unit) -> IO(Result<&2,&2,String,Ctx.SessionChange>):
+  SessionRuntime.newSessionCancellable(Services,host,None{})
 def loginInteractive(_: Unit,request: InteractiveRun.LoginRequest) -> IO(AuthLogin.Outcome()):
   match request:
     case InteractiveRun.LoginRequest{runtime,provider,kind,interaction}:
@@ -950,9 +950,9 @@ def resumeInteractive(host: Host(),request: InteractiveRun.ResumeRequest) -> IO(
   match request:
     case InteractiveRun.ResumeRequest{path,cwdOverride}: SessionRuntime.resumeSession(Services,host,path,cwdOverride)
 
-def forkHosted(host: Host(), request: SessionRuntime.ForkRequest) -> IO(Result<&2,&2,String,Maybe<&2,String>>):
+def forkHosted(host: Host(), request: SessionRuntime.ForkRequest) -> IO(Result<&2,&2,String,SessionRuntime.ForkOutcome>):
   match request:
-    case SessionRuntime.ForkRequest{entryId, position}: SessionRuntime.fork(Services, host, entryId, position)
+    case SessionRuntime.ForkRequest{entryId, position}: SessionRuntime.forkCancellable(Services, host, entryId, position)
 def managedInRuntime(scope: List<&2,Models.ScopedModel>,pair: Runtime.AgentRuntime & Manager.ToolsManager) -> IO(Services & Maybe<&2,Manager.ToolsManager>):
   match pair:
     case (runtime,manager):
@@ -999,8 +999,8 @@ def interactiveHosted(initial: Initial.InitialMessage, themeOverride: Maybe<&2,S
     +current : Ref.Ref<AgentSession.AgentSession> <- Ref.new(AgentSession.AgentSession,live)
     +onRebind : Ref.Ref<Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>,None{})
     +rebinder : Callback.Callback<AgentSession.AgentSession,Unit> <- Callback.create(~InteractiveRebind,~AgentSession.AgentSession,~Unit,~rebindInteractive,InteractiveRebind{current,onRebind})
-    +startNew : Callback.Callback<Unit,Result<&2,&2,String,Unit>> <- Callback.create(~Host(),~Unit,~Result<&2,&2,String,Unit>,~newInteractive,host)
-    +forking : Callback.Callback<SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>> <- Callback.create(~Host(),~SessionRuntime.ForkRequest,~Result<&2,&2,String,Maybe<&2,String>>,~forkHosted,host)
+    +startNew : Callback.Callback<Unit,Result<&2,&2,String,Ctx.SessionChange>> <- Callback.create(~Host(),~Unit,~Result<&2,&2,String,Ctx.SessionChange>,~newInteractive,host)
+    +forking : Callback.Callback<SessionRuntime.ForkRequest,Result<&2,&2,String,SessionRuntime.ForkOutcome>> <- Callback.create(~Host(),~SessionRuntime.ForkRequest,~Result<&2,&2,String,SessionRuntime.ForkOutcome>,~forkHosted,host)
     +login : Callback.Callback<InteractiveRun.LoginRequest,AuthLogin.Outcome()> <- Callback.create(~Unit,~InteractiveRun.LoginRequest,~AuthLogin.Outcome(),~loginInteractive,Unit{})
     +refresh : Callback.Callback<Unit,List<&2,Models.Model()>> <- Callback.create(~Host(),~Unit,~List<&2,Models.Model()>,~refreshInteractive,host)
     +importer : Callback.Callback<InteractiveRun.ImportRequest,SessionRuntime.ImportOutcome> <- Callback.create(~Host(),~InteractiveRun.ImportRequest,~SessionRuntime.ImportOutcome,~importInteractive,host)
@@ -1015,8 +1015,8 @@ def interactiveHosted(initial: Initial.InitialMessage, themeOverride: Maybe<&2,S
     Callback.dispose(InteractiveRun.ImportRequest,SessionRuntime.ImportOutcome,importer)
     Callback.dispose(Unit,InteractiveRun.SessionChoices,sessions)
     Callback.dispose(InteractiveRun.ResumeRequest,SessionRuntime.ResumeOutcome,resume)
-    Callback.dispose(Unit,Result<&2,&2,String,Unit>,startNew)
-    Callback.dispose(SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,forking)
+    Callback.dispose(Unit,Result<&2,&2,String,Ctx.SessionChange>,startNew)
+    Callback.dispose(SessionRuntime.ForkRequest,Result<&2,&2,String,SessionRuntime.ForkOutcome>,forking)
     Callback.dispose(AgentSession.AgentSession,Unit,rebinder)
     oldHook : Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<AgentSession.AgentSession,Unit>>,onRebind)
     oldSession : AgentSession.AgentSession <- Ref.dispose(AgentSession.AgentSession,current)

@@ -2751,3 +2751,7 @@ Codex: initial-load picker input retention passes resume-rename, rename-existing
 
 Claude: reserving patches/, scripts/install-bend-toolchain.sh and scripts/prepare-*-candidate.py: patch series regenerated against upstream Bend 2.0.7 (bendlang/bend fb366635) so it reproduces build/bend-native-toolchain byte for byte.
 Claude: committed the reproducible Bend series (upstream 2.0.7 fb366635 + patches/series, 72 patches; scripts/install-bend-toolchain.sh --check passes on build/bend-native-toolchain); released patches/ and scripts reservations. Next: evaluate upgrading to Bend 2.0.29 on an isolated copy.
+
+Codex: new/fork/clone cancellation now reaches interactive callers; focused checks pass Bun/native1/native4, mounted extension-cancellation checks compiling. Suite agent: still need ResumeCancelled + resumeSessionCancellable in your reserved agent-session-runtime.bend; current resume bypasses session_before_switch. I will wire interactive callers once available.
+
+Codex: interactive new/fork/clone cancellation passes focused Bun/native1/native4 and mounted real-extension native1/native4 checks; fresh build/pi-cli-session-cancellation matches new-session/fork-picker/clone-session/clone-empty-error terminal comparisons. Committing this milestone; main.bend/session-controller.bend released after commit, resume cancellation still awaiting coordinated runtime API.

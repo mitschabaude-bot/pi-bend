@@ -24,7 +24,7 @@ assert hashlib.sha256(SOURCE.read_bytes()).hexdigest() == "0af3d03d1af8bbe7672c7
 BINARY = Path(os.environ.get("PI_BEND_NEW_RUN", ROOT / "build/interactive-new-run")).resolve()
 
 
-def scenario(threads, shortcuts=False):
+def scenario(threads, shortcuts=False, cancelled=False):
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 120, 0, 0))
     original = termios.tcgetattr(slave)
@@ -37,9 +37,9 @@ def scenario(threads, shortcuts=False):
             "app.session.fork": "ctrl+f", "app.session.resume": "ctrl+r",
         }))
         process = subprocess.Popen(
-            [str(BINARY), "--threads", str(threads), "--", str(ROOT), place, str(cwd / "agent")],
+            [str(BINARY), "--threads", str(threads), "--"] + (["cancel"] if cancelled else []) + [str(ROOT), place, str(cwd / "agent")],
             cwd=cwd, stdin=slave, stdout=slave, stderr=subprocess.PIPE,
-            env={**os.environ, "TERM": "xterm-256color", "DISPLAY": "", "WAYLAND_DISPLAY": "", "TERMUX_VERSION": "", "PI_TUI_ESC_TIMEOUT": "10"},
+            env={**os.environ, "PI_FAUX_API_KEY": "faux-key", "TERM": "xterm-256color", "DISPLAY": "", "WAYLAND_DISPLAY": "", "TERMUX_VERSION": "", "PI_TUI_ESC_TIMEOUT": "10"},
         )
         output = bytearray()
 
@@ -62,6 +62,47 @@ def scenario(threads, shortcuts=False):
             before = len(output)
             os.write(master, b"before\r")
             until(b'"type":"turn_end"', before)
+            if cancelled:
+                initial_starts = output.count(b'"event":"session_start"')
+                first = list(cwd.glob("*.jsonl"))
+                assert len(first) == 1, first
+                before = len(output)
+                os.write(master, b"preserved draft\x0e")
+                until(b'"event":"session_before_switch"', before)
+                time.sleep(.2)
+                assert b"New session started" not in output[before:]
+                assert list(cwd.glob("*.jsonl")) == first
+                before = len(output)
+                os.write(master, b" after new\r")
+                until(b'"type":"turn_end"', before)
+                before = len(output)
+                if cancelled == "clone":
+                    os.write(master, b"/clone\r")
+                else:
+                    os.write(master, b"fork draft\x06")
+                    until(b"Fork from Message", before)
+                    os.write(master, b"\r")
+                until(b'"event":"session_before_fork"', before)
+                time.sleep(.2)
+                assert b"Forked to new session" not in output[before:] and b"Cloned to new session" not in output[before:]
+                assert list(cwd.glob("*.jsonl")) == first
+                assert b'"event":"session_shutdown"' not in output
+                before = len(output)
+                os.write(master, b"after clone\r" if cancelled == "clone" else b" after fork\r")
+                until(b'"type":"turn_end"', before)
+                os.write(master, b"/quit\r")
+                stderr = process.communicate(timeout=20)[1]
+                assert process.returncode == 0 and not stderr, stderr
+                assert termios.tcgetattr(slave) == original
+                entries = [json.loads(line) for line in first[0].read_text().splitlines()]
+                assert any("preserved draft after new" in json.dumps(e) for e in entries), entries
+                expected = "after clone" if cancelled == "clone" else "fork draft after fork"
+                assert any(expected in json.dumps(e) for e in entries), entries
+                assert output.count(b'"event":"session_before_switch"') == 1
+                assert output.count(b'"event":"session_before_fork"') == 1
+                assert output.count(b'"event":"session_start"') == initial_starts
+                print(f"native{threads}: extension-cancelled new/{cancelled} preserve session, draft and terminal")
+                return
             if shortcuts:
                 before = len(output)
                 os.write(master, b"draft kept during copy")
@@ -146,3 +187,5 @@ def scenario(threads, shortcuts=False):
 for threads in (1, 4):
     scenario(threads)
     scenario(threads, shortcuts=True)
+    scenario(threads, cancelled="fork")
+    scenario(threads, cancelled="clone")
