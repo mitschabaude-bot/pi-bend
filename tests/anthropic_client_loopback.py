@@ -64,7 +64,7 @@ def invoke(command, address, expected_code, expected_output):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--toolchain", default="/tmp/pi-bend-theme-controller/build/theme-toolchain/bend2/main.ts")
+    parser.add_argument("--toolchain", default=str(ROOT / "build/bend-native-toolchain/bend2/main.ts"))
     parser.add_argument("--backend", choices=("bun", "native", "all"), default="all")
     args = parser.parse_args()
     sources = {

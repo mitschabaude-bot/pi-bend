@@ -10,12 +10,19 @@
       }
     },
     "packages/ai/src/api/anthropic-messages.ts": {
-      "state": "partial",
-      "note": "Registered and locally validated with OAuth refresh; no verified live Anthropic request yet.",
+      "state": "ported",
+      "note": "Ported as three modules: anthropic-messages.bend (AnthropicOptions, getAnthropicCompat, cache control with PI_CACHE_RETENTION, Claude Code tool naming, transformMessages with tool-call id normalization, convertMessages with held-back system messages, consecutive tool results and the last-message cache marker, convertTools with strict JSON-schema tools, native tool changes with the deferred placeholder, getBetaFeatures with header overrides, managed-effort markers, buildParams, streamSimple's option mapping, mapStopReason, createClient's auth and headers); anthropic-messages-stream.bend (iterateSseMessages' line decoder with its trailing flush, iterateAnthropicEvents' filtering, repair and parse errors, the event loop with fallback pricing, input transformation diagnostics and the checks after the loop); anthropic-messages-client.bend (the stream lifecycle: injected or created client, onPayload replacement forcing streaming, retryProviderRequest over the shared Stainless request port, onResponse, start, the body loop and the catch block). tests/anthropic_messages_check.py compares 1,692 captured params and wire requests and 21 streamed messages and event sequences with pinned pi-mono, key order included, and runs the ported suites; tests/anthropic_client_loopback.py covers the HTTP path. Approved differences: X-Stainless-* platform headers are not sent (the SDK defaults come from the caller and are empty in the app); streamSimple's missing-auth check reports an error event instead of throwing synchronously; options.client is a callback returning status, headers and a body chunk source, and its failures are messages that are not retried; JSON.parse's engine-specific error text is replaced by the native parser's; a failing body read reports undici's \"terminated\"; event partials are snapshots; an unclosed block does not leak the scratch index field; diagnostic details go through a caller-supplied encoder (the app's details are Unit). No live Anthropic request has been verified.",
       "source_sha256": "d4c34523a3c278b23b831352ec7fc9c9d091f9ffc07c37081e43b8f3dd3d3203",
       "port_sha256": {
-        "packages/ai/src/api/anthropic-messages.bend": "c121815368080408c43882d50b0d5a2af8662c0e31a6a9612437a60b8a3941d5"
-      }
+        "packages/ai/src/api/anthropic-messages.bend": "d0ac2c6f37eacef7f7b6a1217570c9e915c4e342966f10ed37266533c7ba537d",
+        "packages/ai/src/api/anthropic-messages-stream.bend": "e039587037466f33faf9ffbb296596fd18c0e6c6992fc4466dad9001fb58719f",
+        "packages/ai/src/api/anthropic-messages-client.bend": "e2eba6659b52cac6d27ccf0793cb234c035371c1c06ebad34c4ddd1b94f22dee"
+      },
+      "ports": [
+        "packages/ai/src/api/anthropic-messages.bend",
+        "packages/ai/src/api/anthropic-messages-stream.bend",
+        "packages/ai/src/api/anthropic-messages-client.bend"
+      ]
     },
     "packages/ai/src/api/openai-completions.ts": {
       "state": "ported",
@@ -571,6 +578,14 @@
       "source_sha256": "949f1e72e32a0028beb855db2642f13783c8697c4be236e9061c241f1d698a51",
       "port_sha256": {
         "packages/ai/src/providers/mistral.models.bend": "96fc1ee0a28c53c957a0c70d9a1b1a3c585f6dd713c0e5218bd641ff62d30622"
+      }
+    },
+    "packages/ai/src/providers/anthropic.ts": {
+      "state": "partial",
+      "note": "anthropicApiKeyAuth is ported (stored key, ANTHROPIC_AUTH_TOKEN as a Bearer Authorization header, ANTHROPIC_OAUTH_TOKEN, ANTHROPIC_API_KEY; the login prompt is the shared env api-key login, which additionally rejects an empty key), with the catalog and the caller-created OAuth auth. The provider's api registration (anthropicMessagesApi) is not: Models.ApiStreams is empty and the app dispatches Anthropic streams in coding-agent agent-runtime.",
+      "source_sha256": "dda69449a53c84b8b0a17b28f80fba278988d85665557be2db0dc3b20557567a",
+      "port_sha256": {
+        "packages/ai/src/providers/anthropic.bend": "bfea0bb80ec3da8dbe5d8154a32fede237573bd701cc683e18821ed400f4da68"
       }
     }
   }
