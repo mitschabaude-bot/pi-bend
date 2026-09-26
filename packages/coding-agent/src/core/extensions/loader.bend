@@ -453,7 +453,7 @@ def withActionsOf(api: T.ExtensionAPI, act: T.ExtensionActions -> IO(Unit)) -> I
 
 def sendWith(actions: T.ExtensionActions, request: T.SendMessage) -> IO(Unit):
   match actions:
-    case T.ExtensionActions{send, _}: C.call(T.SendMessage, Unit, send, request)
+    case T.ExtensionActions{send, _, _}: C.call(T.SendMessage, Unit, send, request)
 
 # upstream pi.sendMessage(message, options).
 def sendMessage(api: T.ExtensionAPI, message: T.CustomMessageInput, options: T.SendMessageOptions) -> IO(Result<&2, &2, String, Unit>):
@@ -461,8 +461,25 @@ def sendMessage(api: T.ExtensionAPI, message: T.CustomMessageInput, options: T.S
 
 def sendUserWith(actions: T.ExtensionActions, request: T.SendUserMessage) -> IO(Unit):
   match actions:
-    case T.ExtensionActions{_, send}: C.call(T.SendUserMessage, Unit, send, request)
+    case T.ExtensionActions{_, send, _}: C.call(T.SendUserMessage, Unit, send, request)
 
 # upstream pi.sendUserMessage(content, options).
 def sendUserMessage(api: T.ExtensionAPI, content: Ai.UserContent, options: T.SendUserMessageOptions) -> IO(Result<&2, &2, String, Unit>):
   withActionsOf(api, actions => sendUserWith(actions, T.SendUserMessage{content, options}))
+
+def modelSetWith(found: Result<&2, &2, String, T.ExtensionActions>, model: Ai.Model<Ai.JsonValue>) -> IO(Result<&2, &2, String, Bool>):
+  match found:
+    case Fail{error}: IO.pure(Result<&2, &2, String, Bool>, Fail{error})
+    case Done{T.ExtensionActions{_, _, setter}}:
+      do IO<Result<&2, &2, String, Bool>>:
+        changed : Bool <- C.call(Ai.Model<Ai.JsonValue>, Bool, setter, model)
+        return Done{changed}
+
+# upstream pi.setModel(model): False when the model's provider has no
+# configured auth; otherwise the session switches to it.
+def setModel(api: T.ExtensionAPI, model: Ai.Model<Ai.JsonValue>) -> IO(Result<&2, &2, String, Bool>):
+  match api:
+    case T.ExtensionAPI{runtime, id}:
+      do IO<Result<&2, &2, String, Bool>>:
+        state : T.ExtensionRuntimeState <- R.read(T.ExtensionRuntimeState, runtime)
+        modelSetWith(activeActions(state, id), model)

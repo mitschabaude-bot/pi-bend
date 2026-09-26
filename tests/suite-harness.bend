@@ -34,6 +34,7 @@ import ../packages/runtime/src/date.bend as Date
 import ../packages/runtime/src/f64.bend as F
 import ./agent-session.bend as H
 import ./regressions.bend as Reg
+import ../packages/coding-agent/src/core/system-prompt.bend as Prompt
 import ../packages/coding-agent/src/core/skills.bend as Skills
 import ../packages/coding-agent/src/core/prompt-templates.bend as Templates
 import ../packages/runtime/src/filesystem.bend as FS
@@ -1545,6 +1546,7 @@ type ContextKind is Data:
   PrependSystem{}
   DropBashTool{}
   DropSystem{}
+  Unchanged{}
 
 def roleNames(messages: List<&2, Session.Message()>) -> List<&2, V.Value>:
   match messages:
@@ -1598,6 +1600,7 @@ def transformed(kind: ContextKind, +messages: List<&2, Session.Message()>) -> Li
     case PrependSystem{}: T.LlmMessage{Ai.System{Ai.SystemMessage{Ai.SystemText{"ephemeral reminder"}, None{}, None{}, None{}, Reg.zero()}}} <> messages
     case DropBashTool{}: dropBash(messages)
     case DropSystem{}: dropSystem(messages)
+    case Unchanged{}: messages
 
 def contextHandler(kind: ContextKind, call: Ext.HandlerCall<Ext.ContextEvent>) -> IO(Handled(Ext.ContextEventResult)):
   match call:
@@ -1933,6 +1936,87 @@ def inputTransform(+dir: String, agentDir: String) -> IO(Unit):
     reportFauxRemaining(harness)
     cleanup(harness)
 
+# before_agent_start handlers. `StartKind` picks the behavior:
+# SwitchModel switches to a model (pi.setModel), Inject adds a custom
+# message and forces the prompt, PlanSection adds a plan_mode section on the
+# second prompt.
+type StartKind is Data:
+  SwitchModel{model: Ai.Model<Ai.JsonValue>}
+  Inject{}
+  PlanSection{turns: R.Ref<Nat>}
+
+type StartEnv is Data:
+  StartEnv{api: Ext.ExtensionAPI, kind: StartKind}
+
+def switchModelNow(+api: Ext.ExtensionAPI, model: Ai.Model<Ai.JsonValue>) -> IO(Handled(Ext.BeforeAgentStartEventResult)):
+  do IO<Handled(Ext.BeforeAgentStartEventResult)>:
+    switched : Result<&2, &2, String, Bool> <- Loader.setModel(api, model)
+    print("set_model", Json.field("ok", Json.boolean(Result.default(&2, &2, String, Bool, switched, False{})), Nil{}))
+    return Done{None{}}
+
+def withPlanSection(options: Prompt.NormalizedBuildSystemPromptOptions) -> Prompt.NormalizedBuildSystemPromptOptions:
+  match options:
+    case Prompt.NormalizedBuildSystemPromptOptions{custom, forced, tools, snippets, rules, guidelines, append, sections, cwd, files, skills}:
+      Prompt.NormalizedBuildSystemPromptOptions{custom, forced, tools, snippets, rules, guidelines, append, Rec.set(String, sections, "plan_mode", "Plan only."), cwd, files, skills}
+
+def countedTurn(+count: Nat) -> Nat & Nat: (count + 1n, count + 1n)
+
+def planOnSecond(turns: R.Ref<Nat>, options: Prompt.NormalizedBuildSystemPromptOptions) -> IO(Handled(Ext.BeforeAgentStartEventResult)):
+  do IO<Handled(Ext.BeforeAgentStartEventResult)>:
+    turn : Nat <- R.modify(Nat, Nat, turns, count => countedTurn(count))
+    return Done{Bool.pick(Maybe<&2, Ext.BeforeAgentStartEventResult>, Nat.is_eq(turn, 2n), Some{Ext.BeforeAgentStartEventResult{None{}, None{}, Some{withPlanSection(options)}}}, None{})}
+
+def startHandler(env: StartEnv, call: Ext.HandlerCall<Ext.BeforeAgentStartEvent>) -> IO(Handled(Ext.BeforeAgentStartEventResult)):
+  match env call:
+    case StartEnv{api, SwitchModel{model}} _: switchModelNow(api, model)
+    case StartEnv{_, Inject{}} Ext.HandlerCall{Ext.BeforeAgentStartEvent{_, _, systemPrompt, _}, _}:
+      IO.pure(Handled(Ext.BeforeAgentStartEventResult), Done{Some{Ext.BeforeAgentStartEventResult{Some{Ext.CustomMessageInput{"before-start", Ai.UserText{"injected"}, True{}, Some{Json.object(Json.field("injected", Json.boolean(True{}), Nil{}))}}}, Some{systemPrompt ++ "\n\nextra instructions"}, None{}}}})
+    case StartEnv{_, PlanSection{turns}} Ext.HandlerCall{Ext.BeforeAgentStartEvent{_, _, _, options}, _}: planOnSecond(turns, options)
+
+def startFactory(kind: StartKind, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    handler : Ext.ExtensionHandler(Ext.BeforeAgentStartEvent, Ext.BeforeAgentStartEventResult) <- C.create(~StartEnv, ~Ext.HandlerCall<Ext.BeforeAgentStartEvent>, ~Handled(Ext.BeforeAgentStartEventResult), ~startHandler, StartEnv{api, kind})
+    subscribe(api, Ext.OnBeforeAgentStart{handler})
+
+def reportModel(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    current : Session.AgentState() <- Session.state(session)
+    print("model", Json.field("id", Json.text(Maybe.default(&2, String, Maybe.map(&2, Ai.Model<Ai.JsonValue>, String, Ai.modelId, Session.stateModel(current)), "")), Nil{}))
+
+# agent-session-prompt: "uses the model selected by before_agent_start for
+# image normalization" (a 1100 px wide PNG, the strict model's 1000 px cap).
+def beforeStartImage(+dir: String, agentDir: String, +image: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- createHarnessFull(dir, agentDir, Builtins{}, Reg.Setup{[Reg.Text{"done"}], Nil{}, H.wideModel()}, ref, [inline("switch", api => startFactory(SwitchModel{H.strictModel()}, api))], Nil{}, [H.strictModel()])
+    result : Result<&2, &2, String, Unit> <- Session.promptWith(sessionOf(harness), "inspect", Session.PromptOptions{True{}, [Ai.ImageContent{image, "image/png"}], None{}, Ext.InteractiveSource{}, None{}})
+    H.reportOutcome("prompted", result)
+    reportModel(sessionOf(harness))
+    H.reportMessages(sessionOf(harness))
+    cleanup(harness)
+
+# agent-session-model-extension: "allows before_agent_start handlers to
+# inject custom messages and modify the system prompt"
+def beforeStartInject(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"done"}]), ref, [inline("inject", api => startFactory(Inject{}, api))], noResources())
+    prompted(sessionOf(harness), "hello")
+    H.reportMessages(sessionOf(harness))
+    cleanup(harness)
+
+# #9789: "keeps mid-conversation system messages in place when a handler
+# leaves the conversation unchanged": before_agent_start adds a plan_mode
+# section on the second prompt; the context handler returns its messages.
+def planSectionScenario(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +turns : R.Ref<Nat> <- R.new(Nat, 0n)
+    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"one"}, Reg.Text{"two"}]), ref, [inline("plan", api => startFactory(PlanSection{turns}, api)), inline("context", api => contextFactory(Some{Unchanged{}}, None{}, api))])
+    prompted(sessionOf(harness), "first")
+    prompted(sessionOf(harness), "second")
+    cleanup(harness)
+
 def promptScenario(+dir: String, agentDir: String, +name: String) -> IO(Unit):
   match name:
     case "tool_turn": promptToolTurn(dir, agentDir)
@@ -1948,6 +2032,8 @@ def promptScenario(+dir: String, agentDir: String, +name: String) -> IO(Unit):
     case "input_idle": inputIdle(dir, agentDir)
     case "input_streaming": inputStreaming(dir, agentDir)
     case "input_transform": inputTransform(dir, agentDir)
+    case "before_start_inject": beforeStartInject(dir, agentDir)
+    case "plan_section": planSectionScenario(dir, agentDir)
     case _: IO.die(Unit, 1, "unknown prompt scenario")
 
 def run(args: List<String>) -> IO(Unit):
@@ -1978,6 +2064,7 @@ def run(args: List<String>) -> IO(Unit):
     case "context" <> dir <> agentDir <> name <> Nil{}: contextScenario(dir, agentDir, name)
     case "fork_messages" <> dir <> agentDir <> Nil{}: forkMessagesScenario(dir, agentDir)
     case "prompt" <> dir <> agentDir <> name <> Nil{}: promptScenario(dir, agentDir, name)
+    case "before_start_image" <> dir <> agentDir <> image <> Nil{}: beforeStartImage(dir, agentDir, image)
     case "compaction_override" <> dir <> agentDir <> path <> Nil{}: compactionOverride(dir, agentDir, path)
     case "compaction_budget" <> dir <> agentDir <> path <> Nil{}: compactionBudget(dir, agentDir, path)
     case "compaction_model_switch" <> dir <> agentDir <> Nil{}: compactionModelSwitch(dir, agentDir)

@@ -236,7 +236,11 @@ type BashState is Data:
 # (upstream _idleWaitPromise). `outcome` is how the last assistant turn ended
 # (upstream _lastActivityOutcome); `turnBoundary` records that the agent's
 # finishTurn already dispatched this turn's turn_end boundary.
-type RunState is Data: RunState{active: Bool,abortRequested: Bool,turnIndex: Nat,idleWaiters: List<&2, Chan(Unit)>,outcome: ExtensionTypes.AgentActivityOutcome,turnBoundary: Bool}
+# upstream _runSystemPromptOptions: the system-prompt options a run uses
+# after before_agent_start changed them, with the documentation paths they
+# render against. None: the loadout's prompt applies.
+type RunPrompt is Data: RunPrompt{options: Prompt.NormalizedBuildSystemPromptOptions, paths: Prompt.DocumentationPaths}
+type RunState is Data: RunState{active: Bool,abortRequested: Bool,turnIndex: Nat,idleWaiters: List<&2, Chan(Unit)>,outcome: ExtensionTypes.AgentActivityOutcome,turnBoundary: Bool,runPrompt: Maybe<&2, RunPrompt>}
 # Extension custom messages sent while the agent streams (upstream
 # _pendingCustomMessages), appended at the end of the turn, and those sent for
 # the next turn (upstream _pendingNextTurnMessages), which join the next prompt.
@@ -309,8 +313,8 @@ def withSession(state: Shared, session: Session()) -> Shared:
 
 def withRunActive(state: Shared, +active: Bool) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, RunState{_,requested,turn,waiters,activityOutcome,turnDispatched}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}:
-      Shared{session, steering, followUp, listeners, RunState{active,Bool.pick(Bool,active,False{},requested),turn,waiters,activityOutcome,turnDispatched}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}
+    case Shared{session, steering, followUp, listeners, RunState{_,requested,turn,waiters,activityOutcome,turnDispatched, runPromptState}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}:
+      Shared{session, steering, followUp, listeners, RunState{active,Bool.pick(Bool,active,False{},requested),turn,waiters,activityOutcome,turnDispatched, runPromptState}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}
 
 def deliver(listeners: List<&2, Listener()>, +event: AgentSessionEvent) -> IO(Unit):
   match listeners:
@@ -608,7 +612,7 @@ def retryableLast(found: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>, contextW
 
 def willRetryAfterAgentEnd(state: Shared, messages: List<&2, Message()>) -> Bool:
   match state:
-    case Shared{_, _, _, _, RunState{_,True{},_,_,activityOutcome,turnDispatched}, _, _, _, _, pendingMessages, extensionsRef}: False{}
+    case Shared{_, _, _, _, RunState{_,True{},_,_,activityOutcome,turnDispatched, runPromptState}, _, _, _, _, pendingMessages, extensionsRef}: False{}
     case Shared{_, _, _, _, _, _, RetryState{Retry.RetryPolicy{enabled, maxRetries, _, _}, attempt, contextWindow, _}, _, _, pendingMessages, extensionsRef}:
       Bool.and(enabled, Bool.and(Nat.is_lt(attempt, maxRetries), retryableLast(lastAssistantIn(messages, None{}), contextWindow)))
 
@@ -746,11 +750,11 @@ def emitToExtensions(shared: R.Ref<Shared>, event: ExtensionTypes.ExtensionEvent
 
 def turnIndexOf(state: Shared) -> Nat:
   match state:
-    case Shared{_, _, _, _, RunState{_, _, turn, _, activityOutcome, turnDispatched}, _, _, _, _, _, extensionsRef}: turn
+    case Shared{_, _, _, _, RunState{_, _, turn, _, activityOutcome, turnDispatched, runPromptState}, _, _, _, _, _, extensionsRef}: turn
 
 def withTurnIndex(state: Shared, +turn: Nat) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, RunState{active, requested, _, waiters, activityOutcome, turnDispatched}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}: Shared{session, steering, followUp, listeners, RunState{active, requested, turn, waiters, activityOutcome, turnDispatched}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}
+    case Shared{session, steering, followUp, listeners, RunState{active, requested, _, waiters, activityOutcome, turnDispatched, runPromptState}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}: Shared{session, steering, followUp, listeners, RunState{active, requested, turn, waiters, activityOutcome, turnDispatched, runPromptState}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}
 
 # agent_start restarts the turn count; each turn_end advances it.
 def turnStarted(+state: Shared, event: SessionEvent()) -> Shared:
@@ -898,14 +902,14 @@ def abortBranchSummaryOf(shared: R.Ref<Shared>) -> IO(Unit):
 
 def runActiveOf(value: Shared) -> Bool:
   match value:
-    case Shared{_, _, _, _, RunState{active,_,_,_,activityOutcome,turnDispatched}, _, _, _, _, pendingMessages, extensionsRef}: active
+    case Shared{_, _, _, _, RunState{active,_,_,_,activityOutcome,turnDispatched, runPromptState}, _, _, _, _, pendingMessages, extensionsRef}: active
 def abortRequestedOf(value: Shared) -> Bool:
   match value:
-    case Shared{_, _, _, _, RunState{_,requested,_,_,activityOutcome,turnDispatched}, _, _, _, _, pendingMessages, extensionsRef}: requested
+    case Shared{_, _, _, _, RunState{_,requested,_,_,activityOutcome,turnDispatched, runPromptState}, _, _, _, _, pendingMessages, extensionsRef}: requested
 def requestRunAbort(value: Shared) -> Shared:
   match value:
-    case Shared{session,steering,followUp,listeners,RunState{+active,requested,turn,waiters,activityOutcome,turnDispatched},lastAssistant,retry,compaction,bash,pendingMessages,extensionsRef}:
-      Shared{session,steering,followUp,listeners,RunState{active,active || requested,turn,waiters,activityOutcome,turnDispatched},lastAssistant,retry,compaction,bash,pendingMessages,extensionsRef}
+    case Shared{session,steering,followUp,listeners,RunState{+active,requested,turn,waiters,activityOutcome,turnDispatched, runPromptState},lastAssistant,retry,compaction,bash,pendingMessages,extensionsRef}:
+      Shared{session,steering,followUp,listeners,RunState{active,active || requested,turn,waiters,activityOutcome,turnDispatched, runPromptState},lastAssistant,retry,compaction,bash,pendingMessages,extensionsRef}
 
 def hasController(compaction: CompactionState) -> Bool:
   match compaction:
@@ -919,11 +923,11 @@ def idleIn(+state: Shared) -> Bool:
 
 def waitersOf(state: Shared) -> List<&2, Chan(Unit)>:
   match state:
-    case Shared{_, _, _, _, RunState{_, _, _, waiters, activityOutcome, turnDispatched}, _, _, _, _, _, extensionsRef}: waiters
+    case Shared{_, _, _, _, RunState{_, _, _, waiters, activityOutcome, turnDispatched, runPromptState}, _, _, _, _, _, extensionsRef}: waiters
 
 def withWaiters(state: Shared, waiters: List<&2, Chan(Unit)>) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, RunState{active, requested, turn, _, activityOutcome, turnDispatched}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}: Shared{session, steering, followUp, listeners, RunState{active, requested, turn, waiters, activityOutcome, turnDispatched}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}
+    case Shared{session, steering, followUp, listeners, RunState{active, requested, turn, _, activityOutcome, turnDispatched, runPromptState}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}: Shared{session, steering, followUp, listeners, RunState{active, requested, turn, waiters, activityOutcome, turnDispatched, runPromptState}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}
 
 # A waiter is registered only while the session is busy, atomically with
 # the check.
@@ -1259,10 +1263,11 @@ def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime) -> IO
 def disposeSessionActions(actions: Maybe<&2, ExtensionTypes.ExtensionActions>) -> IO(Unit):
   match actions:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{ExtensionTypes.ExtensionActions{send, sendUser}}:
+    case Some{ExtensionTypes.ExtensionActions{send, sendUser, switcher}}:
       do IO<Unit>:
         C.dispose(ExtensionTypes.SendMessage, Unit, send)
         C.dispose(ExtensionTypes.SendUserMessage, Unit, sendUser)
+        C.dispose(Ai.Model<Ai.JsonValue>, Bool, switcher)
 
 def disposeExtensionBinding(binding: ExtensionBinding) -> IO(Unit):
   match binding:
@@ -2014,6 +2019,85 @@ def prepareLoadout(agent: Runtime.Owner(), loadout: Runtime.Loadout, messages: L
         Agent.setTools(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, tools)
         return sectionPatch(Prompt.diffSystemPromptSections(sectionsOf(Transcript.getCurrentSystemMessage(V.Value, V.Value, Unit, Runtime.Details(), llmOnly(messages))), sections), now)
 
+def toolNamesOf(tools: List<&2, Tools.Tool()>) -> List<&2, String>:
+  match tools:
+    case Nil{}: Nil{}
+    case T.AgentTool{name, _, _, _, _, _, _, _, _} <> rest: name <> toolNamesOf(rest)
+
+# Run prompt (upstream _runSystemPromptOptions)
+# ---------------------------------------------
+
+def runPromptIn(state: Shared) -> Maybe<&2, RunPrompt>:
+  match state:
+    case Shared{_, _, _, _, RunState{_, _, _, _, _, _, runPromptState}, _, _, _, _, _, _}: runPromptState
+
+def withRunPrompt(state: Shared, runPrompt: Maybe<&2, RunPrompt>) -> Shared:
+  match state:
+    case Shared{session, steering, followUp, listeners, RunState{active, requested, turn, waiters, outcome, dispatched, _}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}: Shared{session, steering, followUp, listeners, RunState{active, requested, turn, waiters, outcome, dispatched, runPrompt}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}
+
+def setRunPrompt(shared: R.Ref<Shared>, runPrompt: Maybe<&2, RunPrompt>) -> IO(Unit):
+  R.modify(Shared, Unit, shared, state => (withRunPrompt(state, runPrompt), Unit{}))
+
+def withSelectedTools(options: Prompt.NormalizedBuildSystemPromptOptions, +names: List<&2, String>) -> Prompt.NormalizedBuildSystemPromptOptions:
+  match options:
+    case Prompt.NormalizedBuildSystemPromptOptions{custom, forced, _, snippets, rules, guidelines, append, sections, cwd, files, skills}:
+      Prompt.NormalizedBuildSystemPromptOptions{custom, forced, names, snippets, rules, guidelines, append, sections, cwd, files, skills}
+
+def selectedToolsOf(options: Prompt.NormalizedBuildSystemPromptOptions) -> List<&2, String>:
+  match options:
+    case Prompt.NormalizedBuildSystemPromptOptions{_, _, tools, _, _, _, _, _, _, _, _}: tools
+
+def forcedPromptOf(options: Prompt.NormalizedBuildSystemPromptOptions) -> Maybe<&2, String>:
+  match options:
+    case Prompt.NormalizedBuildSystemPromptOptions{_, forced, _, _, _, _, _, _, _, _, _}: forced
+
+def forcedOfRun(runPrompt: RunPrompt) -> Maybe<&2, String>:
+  match runPrompt:
+    case RunPrompt{options, _}: forcedPromptOf(options)
+
+def runSections(runPrompt: RunPrompt) -> Result<&2, &2, String, Prompt.SystemPromptSections()>:
+  match runPrompt:
+    case RunPrompt{options, paths}: Runtime.promptResult(Prompt.buildSystemPromptSections(paths, ExtensionRunner.buildOptionsOf(options)))
+
+# The patch that brings the transcript's system sections to `sections`.
+def sectionsPatchFor(sections: Prompt.SystemPromptSections(), messages: List<&2, Message()>, now: F64) -> Maybe<&2, Message()>:
+  sectionPatch(Prompt.diffSystemPromptSections(sectionsOf(Transcript.getCurrentSystemMessage(V.Value, V.Value, Unit, Runtime.Details(), llmOnly(messages))), sections), now)
+
+# upstream _baseSystemPromptOptions: the options the loadout's prompt is
+# built from (sessions without a runtime source have none).
+def basePrompt(loadout: Runtime.Loadout) -> Maybe<&2, RunPrompt>:
+  match loadout:
+    case Runtime.Loadout{_, tools, skills, _, _, files, Some{Runtime.LoadoutSource{_, options, packageDir}}, _}:
+      Some{RunPrompt{Prompt.normalizeBuildSystemPromptOptions(Runtime.promptOptions(options, toolNamesOf(tools), files, skills)), Runtime.documentationPaths(packageDir)}}
+    case _: None{}
+
+def containsName(names: List<&2, String>, +name: String) -> Bool:
+  match names:
+    case Nil{}: False{}
+    case first <> rest: String.eq(first, name) || containsName(rest, name)
+
+def toolNameOf(tool: Tools.Tool()) -> String:
+  match tool:
+    case T.AgentTool{name, _, _, _, _, _, _, _, _}: name
+
+def registeredTool(registry: List<&2, Tools.Tool()>, +name: String) -> Maybe<&2, Tools.Tool()>:
+  match registry:
+    case Nil{}: None{}
+    case +tool <> rest: Bool.pick(Maybe<&2, Tools.Tool()>, String.eq(toolNameOf(tool), name), Some{tool}, registeredTool(rest, name))
+
+def withFound(found: Maybe<&2, Tools.Tool()>, rest: List<&2, Tools.Tool()>) -> List<&2, Tools.Tool()>:
+  match found:
+    case None{}: rest
+    case Some{tool}: tool <> rest
+
+# upstream _preparePromptAndToolLoadout: the selected names, once each and
+# only those registered, in order.
+def selectedFrom(+registry: List<&2, Tools.Tool()>, names: List<&2, String>, +seen: List<&2, String>) -> List<&2, Tools.Tool()>:
+  match names:
+    case Nil{}: Nil{}
+    case +name <> +rest:
+      Bool.pick(Unit -> List<&2, Tools.Tool()>, containsName(seen, name), _ => selectedFrom(registry, rest, seen), _ => withFound(registeredTool(registry, name), selectedFrom(registry, rest, name <> seen)))(Unit{})
+
 def withPatch(patch: Maybe<&2, Message()>, messages: List<&2, Message()>) -> List<&2, Message()>:
   match patch:
     case None{}: messages
@@ -2117,12 +2201,42 @@ def refreshedUpdate(+context: Context(), +current: AgentState(), result: TurnRes
     case Done{None{}}: Done{Some{T.AgentLoopTurnUpdate{Some{withContextTools(context, stateTools(current))}, withPatchAfter(None{}, patch), stateModel(current), Some{stateThinking(current)}}}}
     case Done{Some{T.AgentLoopTurnUpdate{replaced, added, _, _}}}: Done{Some{T.AgentLoopTurnUpdate{Some{withContextTools(Maybe.default(&2, Context(), replaced, context), stateTools(current))}, withPatchAfter(added, patch), stateModel(current), Some{stateThinking(current)}}}}
 
+def patchFromSections(sections: Result<&2, &2, String, Prompt.SystemPromptSections()>, messages: List<&2, Message()>, now: F64) -> Maybe<&2, Message()>:
+  match sections:
+    case Done{built}: sectionsPatchFor(built, messages, now)
+    case Fail{_}: None{}
+
+def runTurnPatch(+runPrompt: RunPrompt, messages: List<&2, Message()>, now: F64) -> Maybe<&2, Message()>:
+  patchFromSections(runSections(runPrompt), messages, now)
+
+def runTurnLoadout(+shared: R.Ref<Shared>, +names: List<&2, String>, runPrompt: RunPrompt, messages: List<&2, Message()>, now: F64) -> IO(Maybe<&2, Message()>):
+  match runPrompt:
+    case RunPrompt{options, paths}:
+      do IO<Maybe<&2, Message()>>:
+        +next : RunPrompt = RunPrompt{withSelectedTools(options, names), paths}
+        setRunPrompt(shared, Some{next})
+        return runTurnPatch(next, messages, now)
+
+# upstream _installAgentNextTurnRefresh's loadout: during a run whose options
+# before_agent_start changed, the prompt is rendered from those options with
+# the agent's current tools; otherwise the loadout's prompt and tools apply.
+def turnLoadoutWith(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, loadout: Runtime.Loadout, messages: List<&2, Message()>, now: F64, current: AgentState(), runPrompt: Maybe<&2, RunPrompt>) -> IO(Maybe<&2, Message()>):
+  match runPrompt:
+    case Some{found}: runTurnLoadout(shared, toolNamesOf(stateTools(current)), found, messages, now)
+    case None{}: prepareLoadout(agent, loadout, messages, now)
+
+def turnLoadout(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, loadout: Runtime.Loadout, messages: List<&2, Message()>, now: F64) -> IO(Maybe<&2, Message()>):
+  do IO<Maybe<&2, Message()>>:
+    state : Shared <- R.read(Shared, shared)
+    current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    turnLoadoutWith(agent, shared, loadout, messages, now, current, runPromptIn(state))
+
 def refreshTurn(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: Settings.SettingsManager, previous: Maybe<&2, NextTurnHook()>, legacy: Maybe<&2, LegacyTurnHook()>, loadout: Runtime.Loadout, +turn: Turn(), signal: Maybe<&2, A.AbortSignal<Unit>>) -> IO(TurnResult()):
   do IO<TurnResult()>:
     +context : Context() <- compactBeforeNextResponse(agent, shared, settings, turnContext(turn))
     +result : TurnResult() <- previousUpdate(previous, legacy, withTurnContext(turn, context), signal)
     now : F64 <- Date.now()
-    patch : Maybe<&2, Message()> <- prepareLoadout(agent, loadout, contextMessagesIn(nextContext(context, result)), now)
+    patch : Maybe<&2, Message()> <- turnLoadout(agent, shared, loadout, contextMessagesIn(nextContext(context, result)), now)
     current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     return refreshedUpdate(context, current, result, patch)
 
@@ -2406,19 +2520,19 @@ def outcomeOf(stopReason: Ai.StopReason) -> ExtensionTypes.AgentActivityOutcome:
 
 def outcomeIn(state: Shared) -> ExtensionTypes.AgentActivityOutcome:
   match state:
-    case Shared{_, _, _, _, RunState{_, _, _, _, outcome, _}, _, _, _, _, _, _}: outcome
+    case Shared{_, _, _, _, RunState{_, _, _, _, outcome, _, runPromptState}, _, _, _, _, _, _}: outcome
 
 def turnBoundaryIn(state: Shared) -> Bool:
   match state:
-    case Shared{_, _, _, _, RunState{_, _, _, _, _, dispatched}, _, _, _, _, _, _}: dispatched
+    case Shared{_, _, _, _, RunState{_, _, _, _, _, dispatched, runPromptState}, _, _, _, _, _, _}: dispatched
 
 def withActivityOutcome(state: Shared, outcome: ExtensionTypes.AgentActivityOutcome) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, RunState{active, requested, turn, waiters, _, dispatched}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}: Shared{session, steering, followUp, listeners, RunState{active, requested, turn, waiters, outcome, dispatched}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}
+    case Shared{session, steering, followUp, listeners, RunState{active, requested, turn, waiters, _, dispatched, runPromptState}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}: Shared{session, steering, followUp, listeners, RunState{active, requested, turn, waiters, outcome, dispatched, runPromptState}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}
 
 def withTurnBoundary(state: Shared, dispatched: Bool) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, RunState{active, requested, turn, waiters, outcome, _}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}: Shared{session, steering, followUp, listeners, RunState{active, requested, turn, waiters, outcome, dispatched}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}
+    case Shared{session, steering, followUp, listeners, RunState{active, requested, turn, waiters, outcome, _, runPromptState}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}: Shared{session, steering, followUp, listeners, RunState{active, requested, turn, waiters, outcome, dispatched, runPromptState}, lastAssistant, retry, compaction, bash, pendingMessages, extensionsRef}
 
 def pendingCustomOf(state: Shared) -> List<&2, Message()>:
   match state:
@@ -2741,13 +2855,42 @@ def extensionContext(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, result:
     case Some{found} Done{given}: IO.bind(List<&2, Message()>, ContextResult(), ExtensionRunner.emitContext(found, given), transformed => IO.pure(ContextResult(), Done{transformed}))
     case _ other: IO.pure(ContextResult(), other)
 
+def withoutSystemMessages(messages: List<&2, Message()>) -> List<&2, Message()>:
+  match messages:
+    case Nil{}: Nil{}
+    case T.LlmMessage{Ai.System{_}} <> rest: withoutSystemMessages(rest)
+    case message <> rest: message <> withoutSystemMessages(rest)
+
+def forcedHead(+text: String, current: Maybe<&2, Ai.SystemMessage<V.Value>>, now: F64) -> Message():
+  match current:
+    case Some{Ai.SystemMessage{_, _, added, _, timestamp}}: T.LlmMessage{Ai.System{Ai.SystemMessage{Ai.SystemText{text}, None{}, added, None{}, timestamp}}}
+    case None{}: T.LlmMessage{Ai.System{Ai.SystemMessage{Ai.SystemText{text}, None{}, None{}, None{}, now}}}
+
+def projectForced(+text: String, +messages: List<&2, Message()>, now: F64) -> List<&2, Message()>:
+  forcedHead(text, Transcript.getCurrentSystemMessage(V.Value, V.Value, Unit, Runtime.Details(), llmOnly(messages)), now) <> withoutSystemMessages(messages)
+
+# upstream _installAgentForcedPromptProjection: a system prompt forced by
+# before_agent_start is sent as the request's one leading system message,
+# with the current tool additions, after the context handlers ran; the
+# transcript keeps its sections.
+def forcedProjection(forced: Maybe<&2, String>, result: ContextResult(), now: F64) -> ContextResult():
+  match forced result:
+    case Some{text} Done{messages}: Done{projectForced(text, messages, now)}
+    case _ other: other
+
+def forcedIn(state: Shared) -> Maybe<&2, String>:
+  Maybe.bind(&2, RunPrompt, String, runPromptIn(state), runPrompt => forcedOfRun(runPrompt))
+
 def contextTransform(env: ContextHookEnv, input: ContextInput()) -> IO(ContextResult()):
   match env:
-    case ContextHookEnv{shared, previous}:
+    case ContextHookEnv{+shared, previous}:
       do IO<ContextResult()>:
         result : ContextResult() <- previousContext(previous, input)
         runner : Maybe<&2, ExtensionRunner.ExtensionRunner> <- sharedRunner(shared)
-        extensionContext(runner, result)
+        transformed : ContextResult() <- extensionContext(runner, result)
+        state : Shared <- R.read(Shared, shared)
+        now : F64 <- Date.now()
+        return forcedProjection(forcedIn(state), transformed, now)
 
 def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
   do IO<AgentSession>:
@@ -2755,7 +2898,7 @@ def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settin
     initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +window : F64 = Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, stateModel(initial)), F.fromU32(0))
     +loadoutRef : R.Ref<Runtime.Loadout> <- R.new(Runtime.Loadout, loadout)
-    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, RunState{False{},False{},0n,Nil{},ExtensionTypes.OutcomeCompleted{},False{}}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, window, None{}}, CompactionState{False{}, None{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}, PendingMessages{Nil{}, Nil{}}, loadoutRef})
+    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, RunState{False{},False{},0n,Nil{},ExtensionTypes.OutcomeCompleted{},False{},None{}}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, window, None{}}, CompactionState{False{}, None{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}, PendingMessages{Nil{}, Nil{}}, loadoutRef})
     +settingsRef : R.Ref<Settings.SettingsManager> <- R.new(Settings.SettingsManager,settings)
     +handler : Agent.Handler(SessionEvent(), Runtime.Error()) <- C.create(~EventEnv, ~Agent.Input<SessionEvent()>, ~Loop.Emission<Runtime.Error()>, ~handleAgentEvent, EventEnv{agent, shared, loadoutRef})
     subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, handler)
@@ -2973,22 +3116,85 @@ def acceptedRun(preflight: Maybe<&2, C.Callback<Bool, Unit>>, run: IO(Result<&2,
     result : Result<&2, &2, String, Unit> <- run
     return Accepted{result}
 
+# upstream prompt()'s before_agent_start: the handlers' result with the
+# documentation paths their options render against.
+type AgentStart is Data:
+  AgentStart{result: ExtensionRunner.BeforeAgentStartCombinedResult, paths: Prompt.DocumentationPaths}
+
+def agentStart(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, +text: String, images: List<&2, Ai.ImageContent>, base: Maybe<&2, RunPrompt>) -> IO(Maybe<&2, AgentStart>):
+  match runner base:
+    case Some{found} Some{RunPrompt{options, +paths}}:
+      do IO<Maybe<&2, AgentStart>>:
+        result : ExtensionRunner.BeforeAgentStartCombinedResult <- ExtensionRunner.emitBeforeAgentStart(found, text, images, paths, options)
+        return Some{AgentStart{result, paths}}
+    case _ _: IO.pure(Maybe<&2, AgentStart>, None{})
+
+def startMessages(inputs: List<&2, ExtensionTypes.CustomMessageInput>, +now: F64) -> List<&2, Message()>:
+  match inputs:
+    case Nil{}: Nil{}
+    case input <> rest: customMessageAt(input, now) <> startMessages(rest, now)
+
+def startCustoms(start: Maybe<&2, AgentStart>, now: F64) -> List<&2, Message()>:
+  match start:
+    case Some{AgentStart{ExtensionRunner.BeforeAgentStartCombinedResult{messages, _, _}, _}}: startMessages(messages, now)
+    case None{}: Nil{}
+
+# The system-prompt patch ahead of the prompt and the run's options.
+type StartPrep is Data:
+  StartPrep{patch: Maybe<&2, Message()>, runPrompt: Maybe<&2, RunPrompt>}
+
+def runLoadout(agent: Runtime.Owner(), registry: List<&2, Tools.Tool()>, +runPrompt: RunPrompt, messages: List<&2, Message()>, now: F64, sections: Result<&2, &2, String, Prompt.SystemPromptSections()>) -> IO(Result<&2, &2, String, StartPrep>):
+  match sections runPrompt:
+    case Fail{error} _: IO.pure(Result<&2, &2, String, StartPrep>, Fail{error})
+    case Done{built} RunPrompt{options, paths}:
+      do IO<Result<&2, &2, String, StartPrep>>:
+        +tools : List<&2, Tools.Tool()> = selectedFrom(registry, selectedToolsOf(options), Nil{})
+        Agent.setTools(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, tools)
+        return Done{StartPrep{sectionsPatchFor(built, messages, now), Some{RunPrompt{withSelectedTools(options, toolNamesOf(tools)), paths}}}}
+
+# upstream _preparePromptAndToolLoadout(result.systemPromptOptions): options a
+# handler changed are rendered for this run and select its tools; unchanged,
+# the loadout's prompt and tools apply.
+def startLoadout(+agent: Runtime.Owner(), loadout: Runtime.Loadout, start: Maybe<&2, AgentStart>, messages: List<&2, Message()>, now: F64) -> IO(Result<&2, &2, String, StartPrep>):
+  match start loadout:
+    case Some{AgentStart{ExtensionRunner.BeforeAgentStartCombinedResult{_, options, True{}}, paths}} Runtime.Loadout{_, _, _, _, _, _, _, registry}:
+      do IO<Result<&2, &2, String, StartPrep>>:
+        +runPrompt : RunPrompt = RunPrompt{options, paths}
+        runLoadout(agent, registry, runPrompt, messages, now, runSections(runPrompt))
+    case _ _:
+      do IO<Result<&2, &2, String, StartPrep>>:
+        patch : Maybe<&2, Message()> <- prepareLoadout(agent, loadout, messages, now)
+        return Done{StartPrep{patch, None{}}}
+
+def runPrepared(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, hooks: SessionHooks, +settings: Settings.SettingsManager, loadoutRef: R.Ref<Runtime.Loadout>, preflight: Maybe<&2, C.Callback<Bool, Unit>>, +user: Message(), customs: List<&2, Message()>, prepared: Result<&2, &2, String, StartPrep>) -> IO(Prompted):
+  match prepared:
+    case Fail{error}: IO.pure(Prompted, Rejected{error})
+    case Done{StartPrep{patch, runPrompt}}:
+      do IO<Prompted>:
+        nextTurn : List<&2, Message()> <- R.modify(Shared, List<&2, Message()>, shared, takenNextTurn)
+        setRunPrompt(shared, runPrompt)
+        prompted : Prompted <- acceptedRun(preflight, runMessages(agent, shared, hooks, settings, loadoutRef, withPatch(patch, user <> List.append(&2, Message(), nextTurn, customs))))
+        setRunPrompt(shared, None{})
+        return prompted
+
 # upstream prompt() and _runAgentPrompt: compaction is checked before
-# sending, the prompt and tool loadout are declared ahead of the user message,
-# the preflight passes, and the agent runs until post-run handling settles.
-def runAgentPrompt(session: AgentSession, +text: String, images: List<&2, Ai.ImageContent>, preflight: Maybe<&2, C.Callback<Bool, Unit>>) -> IO(Prompted):
+# sending, before_agent_start handlers may add messages and change the
+# system prompt, the prompt and tool loadout are declared ahead of the user
+# message (images normalized for the model the handlers left selected), the
+# preflight passes, and the agent runs until post-run handling settles.
+def runAgentPrompt(session: AgentSession, +text: String, +images: List<&2, Ai.ImageContent>, preflight: Maybe<&2, C.Callback<Bool, Unit>>) -> IO(Prompted):
   match session:
     case AgentSession{+agent, +shared, hooks, settingsRef, _, +loadoutRef, _, _}:
       do IO<Prompted>:
         +settings : Settings.SettingsManager <- R.read(Settings.SettingsManager,settingsRef)
-        loadout : Runtime.Loadout <- R.read(Runtime.Loadout, loadoutRef)
+        +loadout : Runtime.Loadout <- R.read(Runtime.Loadout, loadoutRef)
         compactBeforePrompt(agent, shared, settings)
+        +start : Maybe<&2, AgentStart> <- agentStart(runnerIn(loadout), text, images, basePrompt(loadout))
         +current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
         +now : F64 <- Date.now()
         +user : Message() = normalizedUserMessage(text, normalizePromptImages(promptImageOptions(settings, stateModel(current)), images, NormalizedImages{Nil{}, Nil{}}), now)
-        patch : Maybe<&2, Message()> <- prepareLoadout(agent, loadout, stateMessages(current), now)
-        nextTurn : List<&2, Message()> <- R.modify(Shared, List<&2, Message()>, shared, takenNextTurn)
-        acceptedRun(preflight, runMessages(agent, shared, hooks, settings, loadoutRef, withPatch(patch, user <> nextTurn)))
+        prepared : Result<&2, &2, String, StartPrep> <- startLoadout(agent, loadout, start, stateMessages(current), now)
+        runPrepared(agent, shared, hooks, settings, loadoutRef, preflight, user, startCustoms(start, now), prepared)
 
 def queued(state: Shared, behavior: StreamingBehavior, +text: String) -> Shared:
   match state behavior:
@@ -3464,23 +3670,6 @@ def bindActionsTo(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, actions: E
   match runner:
     case None{}: IO.pure(Unit, Unit{})
     case Some{found}: ExtensionLoader.bindActions(ExtensionRunner.runtimeOf(found), Some{actions})
-
-# The session's actions for its extension runtime (upstream bindCore).
-def bindSessionActions(+session: AgentSession) -> IO(Unit):
-  do IO<Unit>:
-    +send : C.Callback<ExtensionTypes.SendMessage, Unit> <- C.create(~AgentSession, ~ExtensionTypes.SendMessage, ~Unit, ~sendMessageCallback, session)
-    +sendUser : C.Callback<ExtensionTypes.SendUserMessage, Unit> <- C.create(~AgentSession, ~ExtensionTypes.SendUserMessage, ~Unit, ~sendUserMessageCallback, session)
-    R.write(Maybe<&2, ExtensionTypes.ExtensionActions>, sessionActionsOf(session), Some{ExtensionTypes.ExtensionActions{send, sendUser}})
-    loadout : Runtime.Loadout <- loadoutOf(session)
-    bindActionsTo(runnerIn(loadout), ExtensionTypes.ExtensionActions{send, sendUser})
-
-# upstream AgentSession constructor: the session, its agent hooks and its
-# extension bindings.
-def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
-  do IO<AgentSession>:
-    +created : AgentSession <- createUnbound(agent, session, settings, cwd, loadout, models, scopedModels)
-    bindSessionActions(created)
-    return created
 
 def abortRetry(session: AgentSession) -> IO(Unit):
   match session:
@@ -4368,11 +4557,6 @@ def getAgentsFiles(session: AgentSession) -> IO(List<&2, Prompt.ContextFile>):
 # Tools
 # -----
 
-def toolNamesOf(tools: List<&2, Tools.Tool()>) -> List<&2, String>:
-  match tools:
-    case Nil{}: Nil{}
-    case T.AgentTool{name, _, _, _, _, _, _, _, _} <> rest: name <> toolNamesOf(rest)
-
 # upstream ToolInfo without source metadata.
 type ToolInfo is Data:
   ToolInfo{name: String, description: String, parameters: V.Value}
@@ -4554,3 +4738,30 @@ def getSettings(session: AgentSession) -> IO(Settings.SettingsManager):
 def changeSettings(session: AgentSession, change: Settings.SettingsManager -> Settings.Outcome(Settings.SettingsManager)) -> IO(Result<&2, &2, String, Unit>):
   match session:
     case AgentSession{_, _, _, settings, _, _, _, _}: updateSettings(settings, change)
+
+# upstream bindCore's setModel: False when the model's provider has no
+# configured auth; otherwise the session switches to it (session-only).
+def setModelAction(+session: AgentSession, +model: Ai.Model<Ai.JsonValue>) -> IO(Bool):
+  do IO<Bool>:
+    authorized : Bool <- Models.hasConfiguredAuth(modelRuntime(session), Models.modelProvider(model))
+    Bool.pick(Unit -> IO(Bool), authorized, _ => IO.bind(Result<&2, &2, String, Unit>, Bool, setModel(session, model, ModelMutationOptions{False{}}), _ => IO.pure(Bool, True{})), _ => IO.pure(Bool, False{}))(Unit{})
+
+def setModelCallback(session: AgentSession, model: Ai.Model<Ai.JsonValue>) -> IO(Bool): setModelAction(session, model)
+
+# The session's actions for its extension runtime (upstream bindCore).
+def bindSessionActions(+session: AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    +send : C.Callback<ExtensionTypes.SendMessage, Unit> <- C.create(~AgentSession, ~ExtensionTypes.SendMessage, ~Unit, ~sendMessageCallback, session)
+    +sendUser : C.Callback<ExtensionTypes.SendUserMessage, Unit> <- C.create(~AgentSession, ~ExtensionTypes.SendUserMessage, ~Unit, ~sendUserMessageCallback, session)
+    +switcher : C.Callback<Ai.Model<Ai.JsonValue>, Bool> <- C.create(~AgentSession, ~Ai.Model<Ai.JsonValue>, ~Bool, ~setModelCallback, session)
+    R.write(Maybe<&2, ExtensionTypes.ExtensionActions>, sessionActionsOf(session), Some{ExtensionTypes.ExtensionActions{send, sendUser, switcher}})
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    bindActionsTo(runnerIn(loadout), ExtensionTypes.ExtensionActions{send, sendUser, switcher})
+
+# upstream AgentSession constructor: the session, its agent hooks and its
+# extension bindings.
+def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
+  do IO<AgentSession>:
+    +created : AgentSession <- createUnbound(agent, session, settings, cwd, loadout, models, scopedModels)
+    bindSessionActions(created)
+    return created

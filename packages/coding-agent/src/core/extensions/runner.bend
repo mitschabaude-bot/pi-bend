@@ -9,6 +9,7 @@ import ./loader.bend as Loader
 import ./types.bend as T
 import ../../../../agent/src/types.bend as Agent
 import ../../../../ai/src/types.bend as Ai
+import ../system-prompt.bend as Prompt
 import ../../../../ai/src/utils/transcript.bend as Transcript
 import ../session-json.bend as SessionJson
 import ../../../../runtime/src/schema-value.bend as V
@@ -744,6 +745,70 @@ def withSystemHandlers(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>,
         next : List<&2, T.AgentMessage()> <- withSystemStep(runner, path, current, result)
         withSystemHandlers(runner, rest, next)
     case _ <> rest: withSystemHandlers(runner, rest, current)
+
+# Agent start (upstream emitBeforeAgentStart)
+# ------------------------------------------
+
+def buildOptionsOf(options: Prompt.NormalizedBuildSystemPromptOptions) -> Prompt.BuildSystemPromptOptions:
+  match options:
+    case Prompt.NormalizedBuildSystemPromptOptions{custom, forced, tools, snippets, rules, guidelines, append, sections, cwd, files, skills}:
+      Prompt.BuildSystemPromptOptions{custom, forced, Some{tools}, Some{snippets}, Some{rules}, Some{guidelines}, Some{append}, Some{sections}, cwd, Some{files}, Some{skills}}
+
+# The system prompt the options render (upstream buildSystemPrompt); options
+# with an invalid section name render nothing.
+def renderedPrompt(paths: Prompt.DocumentationPaths, options: Prompt.NormalizedBuildSystemPromptOptions) -> String:
+  Result.default(&2, &2, Prompt.Error, String, Prompt.buildSystemPrompt(paths, buildOptionsOf(options)), "")
+
+def withForced(options: Prompt.NormalizedBuildSystemPromptOptions, +text: String) -> Prompt.NormalizedBuildSystemPromptOptions:
+  match options:
+    case Prompt.NormalizedBuildSystemPromptOptions{custom, _, tools, snippets, rules, guidelines, append, sections, cwd, files, skills}:
+      Prompt.NormalizedBuildSystemPromptOptions{custom, Some{text}, tools, snippets, rules, guidelines, append, sections, cwd, files, skills}
+
+# What before_agent_start handlers produced: their messages in order, the
+# options for this run, and whether any handler changed the options.
+type BeforeAgentStartCombinedResult is Data:
+  BeforeAgentStartCombinedResult{messages: List<&2, T.CustomMessageInput>, systemPromptOptions: Prompt.NormalizedBuildSystemPromptOptions, changed: Bool}
+
+def appendMessage(messages: List<&2, T.CustomMessageInput>, message: Maybe<&2, T.CustomMessageInput>) -> List<&2, T.CustomMessageInput>:
+  match message:
+    case None{}: messages
+    case Some{found}: List.append(&2, T.CustomMessageInput, messages, found <> Nil{})
+
+def editedOptions(options: Prompt.NormalizedBuildSystemPromptOptions, edited: Maybe<&2, Prompt.NormalizedBuildSystemPromptOptions>, forced: Maybe<&2, String>) -> Prompt.NormalizedBuildSystemPromptOptions:
+  match edited forced:
+    case None{} None{}: options
+    case Some{replaced} None{}: replaced
+    case None{} Some{text}: withForced(options, text)
+    case Some{replaced} Some{text}: withForced(replaced, text)
+
+def beforeStartStep(+runner: ExtensionRunner, path: String, state: BeforeAgentStartCombinedResult, result: Result<&2, &2, String, Maybe<&2, T.BeforeAgentStartEventResult>>) -> IO(BeforeAgentStartCombinedResult):
+  match result state:
+    case Done{Some{T.BeforeAgentStartEventResult{message, +forced, +edited}}} BeforeAgentStartCombinedResult{messages, options, changed}:
+      IO.pure(BeforeAgentStartCombinedResult, BeforeAgentStartCombinedResult{appendMessage(messages, message), editedOptions(options, edited, forced), changed || Maybe.is_some(&2, String, forced) || Maybe.is_some(&2, Prompt.NormalizedBuildSystemPromptOptions, edited)})
+    case Done{None{}} _: IO.pure(BeforeAgentStartCombinedResult, state)
+    case Fail{error} _:
+      do IO<BeforeAgentStartCombinedResult>:
+        emitError(runner, T.ExtensionError{path, "before_agent_start", error, None{}})
+        return state
+
+def beforeStartHandlers(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>, +prompt: String, +images: List<&2, Ai.ImageContent>, +paths: Prompt.DocumentationPaths, +state: BeforeAgentStartCombinedResult) -> IO(BeforeAgentStartCombinedResult):
+  match dispatches state:
+    case Nil{} _: IO.pure(BeforeAgentStartCombinedResult, state)
+    case Dispatch{path, T.OnBeforeAgentStart{callback}} <> rest BeforeAgentStartCombinedResult{messages, +options, changed}:
+      do IO<BeforeAgentStartCombinedResult>:
+        result : Result<&2, &2, String, Maybe<&2, T.BeforeAgentStartEventResult>> <- C.call(T.HandlerCall<T.BeforeAgentStartEvent>, Result<&2, &2, String, Maybe<&2, T.BeforeAgentStartEventResult>>, callback, T.HandlerCall{T.BeforeAgentStartEvent{prompt, images, renderedPrompt(paths, options), options}, createContext(runner)})
+        next : BeforeAgentStartCombinedResult <- beforeStartStep(runner, path, BeforeAgentStartCombinedResult{messages, options, changed}, result)
+        beforeStartHandlers(runner, rest, prompt, images, paths, next)
+    case _ <> rest _: beforeStartHandlers(runner, rest, prompt, images, paths, state)
+
+# upstream emitBeforeAgentStart: handlers in order, each seeing the options
+# (and the prompt they render) as earlier handlers left them; messages
+# collect, a returned systemPrompt forces the prompt for this run, and a
+# failing handler is reported and skipped.
+def emitBeforeAgentStart(+runner: ExtensionRunner, +prompt: String, images: List<&2, Ai.ImageContent>, paths: Prompt.DocumentationPaths, options: Prompt.NormalizedBuildSystemPromptOptions) -> IO(BeforeAgentStartCombinedResult):
+  do IO<BeforeAgentStartCombinedResult>:
+    dispatches : List<&2, Dispatch> <- snapshot(runner, "before_agent_start")
+    beforeStartHandlers(runner, dispatches, prompt, images, paths, BeforeAgentStartCombinedResult{Nil{}, options, False{}})
 
 # User input (upstream emitInput)
 # -------------------------------
