@@ -1329,3 +1329,8 @@ Tried and rejected, same source and measurement:
 
 Round 2 re-emits 19,176 units, and 17,825 of them produce different C, so the late facts do change the code rather than dirtying units needlessly. Observation, not investigated: callers-first order reaches a different fixed point (34,229 ownership facts against 34,144), so the own, hot and stat facts of a unit's replaced output persist and the result depends on emission order. They are conservative, so this affects code quality, not correctness.
 
+Further measurements (2026-09-26, same source), no change adopted:
+- Checking: `term_wnf` has 7.4 s of the 26 s self time and `term_higher` 4.8 s. Recording a stuck unfolding's application as data nodes instead of a chain of closures checked in 24.7–29.8 s against 26.3–28.2 s (three alternating runs each), within this machine's noise.
+- The order-dependent facts: callers-first order ends with 85 more ownership facts than callees-first (34,229 against 34,144, 0.25%), so their effect on the C is negligible.
+- The 98.7 MB of segment C by statement shape: stores into new nodes' fields (plain or sealed) about 24%, stack slot loads and stores about 14%, copies between locals about 12%, node allocation 3%; the 30 commonest shapes cover 87%. The code is already at the level of individual stores, so shortening it textually would not reduce Clang's work; only emitting less code would.
+
