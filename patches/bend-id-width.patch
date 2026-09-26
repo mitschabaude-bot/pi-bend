@@ -1,0 +1,70 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -3256,14 +3256,18 @@
+ // image's layout between builds: a name keeps its number, and a gone one
+ // leaves a hole ("") until holes are a quarter, so that unchanged code
+ // compiles to the same C.
++// A term holds a tag (3 bits), an id (20 bits) and a location (40 bits),
++// under the reference-count bit.
++const ID_CAP = 1 << 20;
++
+ function ids_keep(kind: "cid" | "fid", ms: string[]): string[] {
+   if (process.env.BEND_IDS === undefined) {
+     return ms;
+   }
+   const want = new Set(ms);
+   const kept = (IDS[kind] ?? []).map((m) => want.delete(m) ? m : "");
+-  IDS[kind] = kept.filter((m) => m === "").length * 4 > kept.length ? ms
+-    : [...kept, ...want];
++  IDS[kind] = kept.filter((m) => m === "").length * 4 > kept.length
++    || kept.length + want.size > ID_CAP ? ms : [...kept, ...want];
+   return IDS[kind]!;
+ }
+ 
+@@ -3288,8 +3292,8 @@
+   for (const ms of [cids, fids]) {
+     const seen = new Set<string>();
+     const dup = [...ms, ...TABLES].find((m) => m !== "" && (seen.has(m) || !seen.add(m)));
+-    if (ms.length > 65536 || dup !== undefined) {
+-      die(dup === undefined ? "an id over 65535"
++    if (ms.length > ID_CAP || dup !== undefined) {
++      die(dup === undefined ? "an id over " + (ID_CAP - 1)
+         : "two names mangle to " + dup);
+     }
+     defs.push(...ms.flatMap((m, i) => m === "" ? [] : [`#define ${m} ${i}`]));
+@@ -3439,7 +3443,7 @@
+     }
+     if (m![3] !== undefined) rels.push(i);
+     // TAG_PAK is 1, TAG_CTR 2 (term_make)
+-    return `${BigInt(m![1] === "pak" ? 1 : 2) << 56n | cid << 40n
++    return `${BigInt(m![1] === "pak" ? 1 : 2) << 60n | cid << 40n
+       | BigInt(m![4])}ull`;
+   });
+   return [img, rels];
+@@ -4478,7 +4482,7 @@
+ // ====
+ 
+ #define term_make(tag, aux, loc) \
+-  (((u64)(tag) << 56) | ((u64)(aux) << 40) | (u64)(loc))
++  (((u64)(tag) << 60) | ((u64)(aux) << 40) | (u64)(loc))
+ 
+ #define term_ctr(cid, loc) term_make(TAG_CTR, cid, loc)
+ #define term_pak(cid, loc) term_make(TAG_PAK, cid, loc)
+@@ -4491,7 +4495,7 @@
+ }
+ 
+ INLINE u64 term_tag(Term t) {
+-  return (t >> 56) & 0x7f;
++  return (t >> 60) & 0x7;
+ }
+ 
+ INLINE bool term_rfc(Term t) {
+@@ -4499,7 +4503,7 @@
+ }
+ 
+ INLINE u64 term_aux(Term t) {
+-  return (t >> 40) & 0xFFFF;
++  return (t >> 40) & 0xFFFFF;
+ }
+ 
+ INLINE Loc term_loc(Term t) {
