@@ -2,6 +2,7 @@ import Base
 import ../src/types.bend as T
 import ../src/api/openai-client.bend as Client
 import ../src/api/openai-responses.bend as Responses
+import ../src/api/openai-codex-responses.bend as CodexApi
 import ../src/providers/openai-codex.models.bend as Codex
 import ../src/utils/transcript.bend as Transcript
 import ../../runtime/src/callback.bend as C
@@ -27,6 +28,12 @@ import ../../runtime/src/url.bend as URL
 # failing; the settled run returns it as its failure cause. No transport is
 # opened. The other max-thinking cases are in model-thinking.bend and
 # tests/model_catalog.test.ts.
+
+# streamSimple failed before a stream existed: the case expected a stream.
+def startedRun(-Reason: Data, -G: Data, -E: Data, result: Responses.SimpleRun(Reason, G, E)) -> IO(Responses.Run<Reason, G, E>):
+  match result:
+    case Done{owner}: IO.pure(Responses.Run<Reason, G, E>, owner)
+    case Fail{_}: IO.die(Responses.Run<Reason, G, E>, 1, "streamSimple failed before a stream existed")
 
 def Hook() -> Data: T.PayloadCallback(T.JsonValue, T.Model<T.JsonValue>, T.JsonValue)
 def Run() -> Type: Responses.Run<Unit, Unit, T.JsonValue>
@@ -74,7 +81,8 @@ def simpleOptions(hook: Hook()) -> Responses.SimpleStreamOptions(Unit, Unit, T.J
 def sendsMax(+model: T.Model<T.JsonValue>) -> IO(Unit):
   do IO<Unit>:
     +hook : Hook() <- C.create(~Unit, ~T.PayloadInput<T.JsonValue, T.Model<T.JsonValue>>, ~Result<&2, &2, T.JsonValue, Maybe<&2, T.JsonValue>>, ~capture, Unit{})
-    owner : Run() <- Responses.streamSimple(~Unit, ~Unit, ~Unit, ~Unit, ~T.JsonValue, ~rendered, config(), model, context(), Some{simpleOptions(hook)})
+    started : Responses.SimpleRun(Unit, Unit, T.JsonValue) <- CodexApi.streamSimple(~Unit, ~Unit, ~Unit, ~Unit, ~T.JsonValue, ~rendered, config(), model, context(), Some{simpleOptions(hook)})
+    owner : Run() <- startedRun(Unit, Unit, T.JsonValue, started)
     result : Responses.RunResult<Unit, Unit, T.JsonValue> <- Responses.dispose(Unit, Unit, T.JsonValue, owner)
     C.dispose(T.PayloadInput<T.JsonValue, T.Model<T.JsonValue>>, Result<&2, &2, T.JsonValue, Maybe<&2, T.JsonValue>>, hook)
     verdict("sends max to the Codex Responses API for " ++ T.modelId(model), captured(result))

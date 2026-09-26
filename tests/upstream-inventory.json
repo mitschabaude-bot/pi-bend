@@ -1300,7 +1300,7 @@
         "packages/ai/test/responses-payload.bend"
       ],
       "sha256": "03e3277a307c6a02f21ee7238b51e4f38d74b7730e882c82547b178f050a827a",
-      "notes": "16 of 36 test instances (SSE transport) pass on Bun and native 1/4 threads in tests/openai_codex_stream_check.py: the runner (packages/ai/test/openai-codex-stream.bend) streams from a loopback server, and each result is compared with pinned pi-mono under the same script (request body and Codex headers, event labels, final message) before the test's own assertions. Fixtures carry output_index 0 on item events (upstream keys a missing index as the JS Map key undefined; the native decoder requires the field the backend sends). Pending with reasons in the script's PENDING list (5): EOF-terminated final event, endTurn, stop after response.incomplete with an open body, the SSE header timeout message, and the abort message during a body read (upstream openai-codex-responses.ts parseSSE/mapCodexEvents is not ported). Not ported: the 11 WebSocket instances (no WebSocket transport), zstd request compression (upstream falls back to plain JSON when zstd is unavailable) and the 3 Codex SSE retry-delay/backoff instances (Codex runs the shared Responses retry)."
+      "notes": "24 of 36 test instances pass on Bun and native 1/4 threads in tests/openai_codex_stream_check.py through packages/ai/src/api/openai-codex-responses.bend: every SSE test, both retry-delay-limit rows and the exponential backoff. The runner streams from a loopback server; each result is compared with pinned pi-mono under the same script (request body, Codex headers, event labels, final message) before the test's own assertions. Adaptations: item events carry output_index 0 (upstream keys a missing index as the JS Map key undefined; the native decoder requires the field the backend sends); the header timeout runs at 500ms against a 3s delay instead of 10ms, since a real loopback request must be sent within the deadline; the backoff test measures the gaps between received requests instead of inspecting fake-timer setTimeout calls. Not ported: the 11 WebSocket instances (no WebSocket transport) and zstd request compression."
     },
     {
       "source": "packages/ai/test/openai-completions-cache-control-format.test.ts",
@@ -1604,13 +1604,13 @@
     },
     {
       "source": "packages/ai/test/pre-generation-error.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/ai/test/pre-generation-error.bend",
         "tests/ai-misc-suites.bend"
       ],
       "sha256": "420756429c251d015dfe445bf90f5d0ba7065f26c87e2fa0b6777db861cf9b20",
-      "notes": "The single upstream test checks seven APIs. Anthropic Messages, Google Generative AI and Mistral Conversations match on Bun and native 1/4 threads (packages/ai/test/pre-generation-error.bend): their streamSimple option mapping fails with 'No API key for provider: test-provider' before a stream exists, and the agent glue returns that failure without opening a stream. Pending: Azure OpenAI Responses, OpenAI Codex Responses, OpenAI Completions and OpenAI Responses still report the missing key as a stream error event (in the CLI, agent-runtime resolves auth before dispatch, so this path is not reached there)."
+      "notes": "The named test's seven APIs all fail before a stream exists with 'No API key for provider: test-provider' (packages/ai/test/pre-generation-error.bend, run in tests/ai-misc-suites.bend on Bun and native 1/4 threads). Upstream's synchronous throw is a returned error: the options mapping's Result for Anthropic, Google, Mistral and Chat Completions, and streamSimple's Result for OpenAI Responses, Codex and Azure; the agent glue returns the failure without opening a stream."
     },
     {
       "source": "packages/ai/test/provider-error-body-passthrough.test.ts",

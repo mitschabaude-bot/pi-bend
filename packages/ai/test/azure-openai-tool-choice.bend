@@ -26,6 +26,12 @@ import ../../runtime/src/url.bend as URL
 # the request body by failing: the hook's error is the payload itself, which
 # the settled run returns as its failure cause. No transport is opened.
 
+# streamSimple failed before a stream existed: the case expected a stream.
+def startedRun(-Reason: Data, -G: Data, -E: Data, result: Responses.SimpleRun(Reason, G, E)) -> IO(Responses.Run<Reason, G, E>):
+  match result:
+    case Done{owner}: IO.pure(Responses.Run<Reason, G, E>, owner)
+    case Fail{_}: IO.die(Responses.Run<Reason, G, E>, 1, "streamSimple failed before a stream existed")
+
 def Hook() -> Data: T.PayloadCallback(T.JsonValue, T.Model<T.JsonValue>, T.JsonValue)
 def Run() -> Type: Responses.Run<Unit, Unit, T.JsonValue>
 
@@ -89,5 +95,6 @@ def main() -> IO(Unit):
     specific : Run() <- Azure.stream(~Unit, ~Unit, ~Unit, ~Unit, ~T.JsonValue, ~rendered, config(), model(), context(), streamOptions(first))
     checked("forwards provider-specific tool choice while preserving tool definitions", "required", specific, first)
     +second : Hook() <- C.create(~Unit, ~T.PayloadInput<T.JsonValue, T.Model<T.JsonValue>>, ~Result<&2, &2, T.JsonValue, Maybe<&2, T.JsonValue>>, ~capture, Unit{})
-    neutral : Run() <- Azure.streamSimple(~Unit, ~Unit, ~Unit, ~Unit, ~T.JsonValue, ~rendered, config(), model(), context(), Some{simpleOptions(second)})
+    started : Responses.SimpleRun(Unit, Unit, T.JsonValue) <- Azure.streamSimple(~Unit, ~Unit, ~Unit, ~Unit, ~T.JsonValue, ~rendered, config(), model(), context(), Some{simpleOptions(second)})
+    neutral : Run() <- startedRun(Unit, Unit, T.JsonValue, started)
     checked("forwards provider-neutral tool choice from simple options", "none", neutral, second)

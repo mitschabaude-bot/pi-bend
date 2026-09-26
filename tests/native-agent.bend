@@ -21,6 +21,12 @@ import ../packages/runtime/src/x509.bend as X509
 import ./native-openai.bend as Native
 
 # An integration entry point for the real modular loop, not a second agent.
+# streamSimple failed before a stream existed: the case expected a stream.
+def startedRun(-Reason: Data, -G: Data, -E: Data, result: Responses.SimpleRun(Reason, G, E)) -> IO(Responses.Run<Reason, G, E>):
+  match result:
+    case Done{owner}: IO.pure(Responses.Run<Reason, G, E>, owner)
+    case Fail{_}: IO.die(Responses.Run<Reason, G, E>, 1, "streamSimple failed before a stream existed")
+
 def Signal() -> Data: Abort.AbortSignal<Unit>
 def Messages() -> Data: Loop.Messages(Unit, Unit, Unit)
 def Converted() -> Data: Result<&2, &2, String, List<&2, Ai.Message<V.Value, V.Value, Unit, Unit>>>
@@ -136,7 +142,8 @@ def openObserved(config: ObservedConfig,input: Providers.Input(Config(),Unit,Uni
   match config input:
     case ObservedConfig{config,enabled} T.StreamInput{model,context,options}:
       do IO<Providers.Output(Unit,String)>:
-        owner : Responses.Run<Unit,Unit,String> <- Responses.streamSimple(~Unit,~Unit,~Unit,~Unit,~String,~Native.identity,config,model,context,Maybe.map(&2,Config(),Responses.SimpleStreamOptions(Unit,Unit,String),project,options))
+        started : Responses.SimpleRun(Unit,Unit,String) <- Responses.streamSimple(~Unit,~Unit,~Unit,~Unit,~String,~Native.identity,config,model,context,Maybe.map(&2,Config(),Responses.SimpleStreamOptions(Unit,Unit,String),project,options))
+        owner : Responses.Run<Unit,Unit,String> <- startedRun(Unit,Unit,String,started)
         return observedLease(enabled,Responses.borrow(Unit,Unit,String,owner))
 
 # Missing environment variables are ordinary disabled settings in this host.

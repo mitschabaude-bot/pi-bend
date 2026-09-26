@@ -18,6 +18,7 @@ import ../../runtime/src/unicode-17-idna-mapping.bend as Mapping
 import ../../runtime/src/unicode-17-normalization.bend as Normalization
 import ../../runtime/src/unicode-17-idna-properties.bend as Properties
 import ../../runtime/src/f64.bend as F
+import ../../runtime/src/ref.bend as Ref
 import ../../runtime/src/schema-value.bend as V
 
 def urlContext() -> URL.Context:
@@ -79,7 +80,8 @@ def borrowed(base: String, pair: Fetch.Runtime & Fetch.Fetch(Unit)) -> IO(Unit):
       do IO<Unit>:
         +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
         +events : Events.AssistantMessageEventStream(V.Value, Unit) <- Events.createAssistantMessageEventStream(~V.Value, ~Unit)
-        Client.stream(~Unit, ~Unit, ~String, ~Unit, ~Unit, ~(message => message), events, Abort.signal(Unit, controller), Client.Setup{urlContext(), "pi-test", fetch}, selected, context(), options(), F.fromU32(1))
+        calls : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
+        Client.stream(~Unit, ~Unit, ~String, ~Unit, ~Unit, ~(message => message), events, Abort.signal(Unit, controller), Client.Setup{urlContext(), "pi-test", fetch, calls}, selected, context(), options(), F.fromU32(1))
         +cursor : Events.Iterator<T.AssistantMessageEvent<V.Value, Unit>, T.AssistantMessage<V.Value, Unit>> <- Events.iterator(T.AssistantMessageEvent<V.Value, Unit>, T.AssistantMessage<V.Value, Unit>, events)
         first : Events.Iteration<T.AssistantMessageEvent<V.Value, Unit>> <- Events.nextValue(T.AssistantMessageEvent<V.Value, Unit>, T.AssistantMessage<V.Value, Unit>, cursor)
         drain(first, cursor)

@@ -103,6 +103,14 @@ def released(output: Result<&2, &1, Tools.ToolError, Agent.StreamLease<Unit, Too
         result : Result<&2, &2, Tools.ToolError, Unit> <- release
         return Unit{}
 
+def disposedRun(started: Responses.SimpleRun(Unit, Unit, Tools.ToolError)) -> IO(Unit):
+  match started:
+    case Fail{_}: IO.pure(Unit, Unit{})
+    case Done{owner}:
+      do IO<Unit>:
+        result : Responses.RunResult<Unit, Unit, Tools.ToolError> <- Responses.dispose(Unit, Unit, Tools.ToolError, owner)
+        return Unit{}
+
 def dispatched(+agent: String, fetch: Fetch.Fetch(Unit), model: Ai.Model<Ai.JsonValue>, selected: Options(), api: Ai.ModelApi) -> IO(Unit):
   match api:
     case Ai.AnthropicMessagesApi{}:
@@ -115,9 +123,8 @@ def dispatched(+agent: String, fetch: Fetch.Fetch(Unit), model: Ai.Model<Ai.Json
         released(output)
     case _:
       do IO<Unit>:
-        owner : Responses.Run<Unit, Unit, Tools.ToolError> <- Providers.streamSimple(~Unit, ~Unit, ~Tools.ToolDetails, ~Tools.ToolError, ~Tools.errorMessage, config(agent), api, model, context(), Some{selected})
-        result : Responses.RunResult<Unit, Unit, Tools.ToolError> <- Responses.dispose(Unit, Unit, Tools.ToolError, owner)
-        return Unit{}
+        started : Responses.SimpleRun(Unit, Unit, Tools.ToolError) <- Providers.streamSimple(~Unit, ~Unit, ~Tools.ToolDetails, ~Tools.ToolError, ~Tools.errorMessage, config(agent), api, model, context(), Some{selected})
+        disposedRun(started)
 
 def apiOf(model: Ai.Model<Ai.JsonValue>) -> Ai.ModelApi:
   match model:

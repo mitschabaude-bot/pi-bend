@@ -294,8 +294,16 @@ def simpleOptions(-Reason: Data, -Telemetry: Data, -E: Data, base: Responses.Str
   match settings:
     case Responses.ResponsesSettings{effort, summary, _, choice}: AzureOpenAIResponsesOptions{base, effort, choice, summary, None{}, None{}, None{}, None{}}
 
-# streamSimple: base options with the model's defaults and context budget,
-# tool choice, and the reasoning level clamped to the model's support. A
-# missing API key fails the stream instead of throwing before it starts.
-def streamSimple(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Responses.Config, +model: T.Model<T.JsonValue>, +context: Responses.Context(G, D), +options: Maybe<&2, Responses.SimpleStreamOptions(Reason, Telemetry, E)>) -> IO(Responses.Run<Reason, G, E>):
-  stream(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, config, model, context, simpleOptions(Reason, Telemetry, E, Simple.buildBaseOptionsWith(~V.Value, ~V.Value, ~G, ~D, ~T.JsonValue, ~(Responses.Signal(Reason)), ~Telemetry, ~(Fetch.Fetch(Reason)), ~E, ~Convert.toJson, ~Convert.toJson, model, context, options, Responses.simpleApiKey(Reason, Telemetry, E, options)), Responses.simpleSettings(Reason, Telemetry, E, model, options)))
+def azureRun(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, auth: Result<&2, &2, Responses.PreparationError, Unit>, config: Responses.Config, +model: T.Model<T.JsonValue>, +context: Responses.Context(G, D), +options: Maybe<&2, Responses.SimpleStreamOptions(Reason, Telemetry, E)>) -> IO(Responses.SimpleRun(Reason, G, E)):
+  match auth:
+    case Fail{cause}: IO.pure(Responses.SimpleRun(Reason, G, E), Fail{cause})
+    case Done{_}:
+      do IO<Responses.SimpleRun(Reason, G, E)>:
+        owner : Responses.Run<Reason, G, E> <- stream(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, config, model, context, simpleOptions(Reason, Telemetry, E, Simple.buildBaseOptionsWith(~V.Value, ~V.Value, ~G, ~D, ~T.JsonValue, ~(Responses.Signal(Reason)), ~Telemetry, ~(Fetch.Fetch(Reason)), ~E, ~Convert.toJson, ~Convert.toJson, model, context, options, Responses.simpleApiKey(Reason, Telemetry, E, options)), Responses.simpleSettings(Reason, Telemetry, E, model, options)))
+        return Done{owner}
+
+# streamSimple: a missing API key fails before a stream exists (upstream
+# throws); otherwise base options with the model's defaults and context
+# budget, tool choice, and the reasoning level clamped to the model's support.
+def streamSimple(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Responses.Config, +model: T.Model<T.JsonValue>, +context: Responses.Context(G, D), +options: Maybe<&2, Responses.SimpleStreamOptions(Reason, Telemetry, E)>) -> IO(Responses.SimpleRun(Reason, G, E)):
+  azureRun(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, Responses.presentKey(T.modelProvider(model), Responses.simpleApiKey(Reason, Telemetry, E, options)), config, model, context, options)

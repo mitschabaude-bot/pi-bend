@@ -23,6 +23,7 @@ import ../../../runtime/src/http-response.bend as Source
 import ../../../runtime/src/http-response.bend as Scope
 import ../../../runtime/src/random.bend as Seed
 import ../../../runtime/src/record.bend as R
+import ../../../runtime/src/ref.bend as Ref
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/sse.bend as Body
 import ../../../runtime/src/url.bend as URL
@@ -42,7 +43,7 @@ def Options(-Reason: Data, -Telemetry: Data, -E: Data) -> Data: Google.GoogleOpt
 
 # The URL tables, pi's User-Agent and the process fetch the SDK uses.
 type Setup<-Reason: Data> is Data:
-  Setup{url: URL.Context, agent: String, fetch: Fetch.Fetch(Reason)}
+  Setup{url: URL.Context, agent: String, fetch: Fetch.Fetch(Reason), toolCallCounter: Ref.Ref<Nat>}
 
 def sdkLabel() -> String: "google-genai-sdk/2.21.0"
 
@@ -282,27 +283,47 @@ def endingWith(-E: Data, -G: Data, incomplete: Maybe<&2, String>, state: Fold.St
 def ending(-E: Data, -G: Data, framer: Fold.Framer, state: Fold.State<G>, aborted: Bool) -> Drive<E, G>:
   endingWith(E, G, Fold.finishFramer(framer), state, aborted)
 
+def framedCount(-E: Data, -G: Data, drive: Drive<E, G>, fallback: Nat) -> Nat:
+  match drive:
+    case Publish{Read{_, state}, _}: Fold.toolCallsOf(G, state)
+    case Publish{Thrown{state, _}, _}: Fold.toolCallsOf(G, state)
+    case Thrown{state, _}: Fold.toolCallsOf(G, state)
+    case _: fallback
+
+def countedFrame(-E: Data, -G: Data, state: Fold.State<G>, value: Fold.Framed, +now: F64, +calls: Nat) -> Nat & Drive<E, G>:
+  +next = framed(E, G, Fold.withToolCalls(G, state, calls), value, now)
+  (framedCount(E, G, next, calls), next)
+
+# With a shared counter the chunk step reads and advances it atomically, so
+# ids continue the process-wide sequence (upstream's module toolCallCounter);
+# without one the stream keeps its own count.
+def counted(-E: Data, -G: Data, counter: Maybe<&2, Ref.Ref<Nat>>, state: Fold.State<G>, value: Fold.Framed, +now: F64) -> IO(Drive<E, G>):
+  match counter:
+    case None{}: IO.pure(Drive<E, G>, framed(E, G, state, value, now))
+    case Some{shared}: Ref.modify(Nat, Drive<E, G>, shared, calls => countedFrame(E, G, state, value, now, calls))
+
 # The SDK reader: no abort check between reads (the fetch signal cancels a
 # pending read); each chunk's events are published as they are decoded.
-@unsafe def drive(~Reason: Data, ~E: Data, ~G: Data, ~describe: E -> String, +events: EventStream(G), +source: Body.Source<E>, +parent: Signal(Reason), current: Drive<E, G>) -> IO(Drive<E, G>):
+@unsafe def drive(~Reason: Data, ~E: Data, ~G: Data, ~describe: E -> String, +events: EventStream(G), +source: Body.Source<E>, +parent: Signal(Reason), +counter: Maybe<&2, Ref.Ref<Nat>>, current: Drive<E, G>) -> IO(Drive<E, G>):
   match current:
     case Read{framer, state}:
       do IO<Drive<E, G>>:
         result : Result<&2, &2, E, Maybe<&2, Body.Chunk>> <- Body.read(E, source)
-        drive(~Reason, ~E, ~G, ~describe, events, source, parent, Received{framer, state, result})
+        drive(~Reason, ~E, ~G, ~describe, events, source, parent, counter, Received{framer, state, result})
     case Received{_, state, Fail{cause}}: IO.pure(Drive<E, G>, Thrown{state, describe(cause)})
     case Received{framer, state, Done{None{}}}:
       do IO<Drive<E, G>>:
         aborted : Bool <- Abort.aborted(Reason, parent)
-        drive(~Reason, ~E, ~G, ~describe, events, source, parent, ending(E, G, framer, state, aborted))
+        drive(~Reason, ~E, ~G, ~describe, events, source, parent, counter, ending(E, G, framer, state, aborted))
     case Received{framer, state, Done{Some{chunk}}}:
       do IO<Drive<E, G>>:
         now : F64 <- Date.now()
-        drive(~Reason, ~E, ~G, ~describe, events, source, parent, framed(E, G, state, frameChunk(framer, chunk), now))
+        next : Drive<E, G> <- counted(E, G, counter, state, frameChunk(framer, chunk), now)
+        drive(~Reason, ~E, ~G, ~describe, events, source, parent, counter, next)
     case Publish{next, values}:
       do IO<Drive<E, G>>:
         publish(G, events, values)
-        drive(~Reason, ~E, ~G, ~describe, events, source, parent, next)
+        drive(~Reason, ~E, ~G, ~describe, events, source, parent, counter, next)
     case other: IO.pure(Drive<E, G>, other)
 
 def settled(~Reason: Data, ~E: Data, ~G: Data, +events: EventStream(G), +parent: Signal(Reason), drive: Drive<E, G>) -> IO(Unit):
@@ -311,50 +332,54 @@ def settled(~Reason: Data, ~E: Data, ~G: Data, +events: EventStream(G), +parent:
     case Thrown{state, message}: fail(~Reason, ~G, events, state, parent, message)
     case _: IO.pure(Unit, Unit{})
 
-def streamBody(~Reason: Data, ~E: Data, ~G: Data, ~describe: E -> String, +events: EventStream(G), source: Body.Source<E>, +parent: Signal(Reason), +state: Fold.State<G>) -> IO(Unit):
+def streamBody(~Reason: Data, ~E: Data, ~G: Data, ~describe: E -> String, +events: EventStream(G), source: Body.Source<E>, +parent: Signal(Reason), +state: Fold.State<G>, counter: Maybe<&2, Ref.Ref<Nat>>) -> IO(Unit):
   do IO<Unit>:
     publish(G, events, T.Start{Fold.stateMessage(G, state)} <> Nil{})
-    result : Drive<E, G> <- drive(~Reason, ~E, ~G, ~describe, events, source, parent, Read{Fold.createFramer(), state})
+    result : Drive<E, G> <- drive(~Reason, ~E, ~G, ~describe, events, source, parent, counter, Read{Fold.createFramer(), state})
     settled(~Reason, ~E, ~G, events, parent, result)
 
-def borrowedBody(~Reason: Data, ~G: Data, +events: EventStream(G), +parent: Signal(Reason), +state: Fold.State<G>, pair: Sse.Body(Reason) & Body.Source<Sse.ReadError<Sse.TransportError(Reason)>>) -> IO(Unit):
+def borrowedBody(~Reason: Data, ~G: Data, +events: EventStream(G), +parent: Signal(Reason), +state: Fold.State<G>, counter: Maybe<&2, Ref.Ref<Nat>>, pair: Sse.Body(Reason) & Body.Source<Sse.ReadError<Sse.TransportError(Reason)>>) -> IO(Unit):
   match pair:
     case (owner, source):
       do IO<Unit>:
-        streamBody(~Reason, ~(Sse.ReadError<Sse.TransportError(Reason)>), ~G, ~(describeRead(Reason)), events, source, parent, state)
+        streamBody(~Reason, ~(Sse.ReadError<Sse.TransportError(Reason)>), ~G, ~(describeRead(Reason)), events, source, parent, state, counter)
         closed : Result<&2, &2, Sse.ReadError<Sse.TransportError(Reason)>, Unit> <- Source.dispose(Client.State(Reason), Sse.ReadError<Sse.TransportError(Reason)>, owner)
         return Unit{}
 
-def httpBody(~Reason: Data, ~G: Data, +events: EventStream(G), +parent: Signal(Reason), +state: Fold.State<G>, response: Response.Response<Client.State(Reason)>) -> IO(Unit):
+def httpBody(~Reason: Data, ~G: Data, +events: EventStream(G), +parent: Signal(Reason), +state: Fold.State<G>, counter: Maybe<&2, Ref.Ref<Nat>>, response: Response.Response<Client.State(Reason)>) -> IO(Unit):
   match response:
     case Response.Response{_, body}:
       do IO<Unit>:
         owner : Sse.Body(Reason) <- Source.create(~(Client.ReadError(Reason)), ~(Client.State(Reason)), ~(Sse.ReadError<Sse.TransportError(Reason)>), ~(Sse.classify(Reason)), ~(Client.read(Reason)), ~(Client.close(Reason)), body)
-        borrowedBody(~Reason, ~G, events, parent, state, Source.borrow(Client.State(Reason), Sse.ReadError<Sse.TransportError(Reason)>, owner))
+        borrowedBody(~Reason, ~G, events, parent, state, counter, Source.borrow(Client.State(Reason), Sse.ReadError<Sse.TransportError(Reason)>, owner))
 
 # Entry
 # -----
-def acquiredResponse(~Reason: Data, ~G: Data, +events: EventStream(G), +parent: Signal(Reason), +state: Fold.State<G>, result: Acquired(Reason)) -> IO(Unit):
+def acquiredResponse(~Reason: Data, ~G: Data, +events: EventStream(G), +parent: Signal(Reason), +state: Fold.State<G>, counter: Maybe<&2, Ref.Ref<Nat>>, result: Acquired(Reason)) -> IO(Unit):
   match result:
     case Fail{message}: fail(~Reason, ~G, events, state, parent, message)
-    case Done{response}: httpBody(~Reason, ~G, events, parent, state, response)
+    case Done{response}: httpBody(~Reason, ~G, events, parent, state, counter, response)
 
-def sendRequest(~Reason: Data, ~G: Data, +events: EventStream(G), +parent: Signal(Reason), +state: Fold.State<G>, fetch: Fetch.Fetch(Reason), request: Result<&2, &2, String, Client.Request>, retry: Result<&2, &2, Retry.OptionsError, Retry.ProviderRetryOptions<Reason>>) -> IO(Unit):
+def sendRequestCounted(~Reason: Data, ~G: Data, +events: EventStream(G), +parent: Signal(Reason), +state: Fold.State<G>, fetch: Fetch.Fetch(Reason), request: Result<&2, &2, String, Client.Request>, retry: Result<&2, &2, Retry.OptionsError, Retry.ProviderRetryOptions<Reason>>, counter: Maybe<&2, Ref.Ref<Nat>>) -> IO(Unit):
   match request retry:
     case Fail{message} _: fail(~Reason, ~G, events, state, parent, message)
     case _ Fail{cause}: fail(~Reason, ~G, events, state, parent, describeRetryOptions(cause))
     case Done{value} Done{options}:
       do IO<Unit>:
         result : Acquired(Reason) <- acquire(~Reason, fetch, value, parent, options)
-        acquiredResponse(~Reason, ~G, events, parent, state, result)
+        acquiredResponse(~Reason, ~G, events, parent, state, counter, result)
+
+# The request and body loop with the stream's own tool-call count.
+def sendRequest(~Reason: Data, ~G: Data, +events: EventStream(G), +parent: Signal(Reason), +state: Fold.State<G>, fetch: Fetch.Fetch(Reason), request: Result<&2, &2, String, Client.Request>, retry: Result<&2, &2, Retry.OptionsError, Retry.ProviderRetryOptions<Reason>>) -> IO(Unit):
+  sendRequestCounted(~Reason, ~G, events, parent, state, fetch, request, retry, None{})
 
 type Plan<-Reason: Data> is Data:
   Plan{key: String, client: R.Record<String>, base: String, retries: Maybe<&2, F64>, delay: Maybe<&2, F64>}
 
 def send(~Reason: Data, ~G: Data, +events: EventStream(G), +parent: Signal(Reason), +setup: Setup<Reason>, +state: Fold.State<G>, plan: Plan<Reason>, +params: J()) -> IO(Unit):
   match setup plan:
-    case Setup{url, _, fetch} Plan{key, client, base, retries, delay}:
-      sendRequest(~Reason, ~G, events, parent, state, fetch, prepareRequest(url, base, client, key, params), Retry.resolve(Reason, retries, delay, Some{parent}))
+    case Setup{url, _, fetch, counter} Plan{key, client, base, retries, delay}:
+      sendRequestCounted(~Reason, ~G, events, parent, state, fetch, prepareRequest(url, base, client, key, params), Retry.resolve(Reason, retries, delay, Some{parent}), Some{counter})
 
 def payloaded(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, +events: EventStream(G), +parent: Signal(Reason), +setup: Setup<Reason>, +state: Fold.State<G>, plan: Plan<Reason>, original: J(), result: Result<&2, &2, E, Maybe<&2, J()>>) -> IO(Unit):
   match result:
@@ -386,7 +411,7 @@ def modelBaseUrl(model: T.Model<J()>) -> String:
 
 def planFor(-Reason: Data, -Telemetry: Data, -E: Data, +setup: Setup<Reason>, +model: T.Model<J()>, key: String, base: T.StreamOptions<J(), Signal(Reason), Telemetry, Fetch.Fetch(Reason), E>) -> Plan<Reason>:
   match base setup:
-    case T.StreamOptions{_, _, _, _, _, _, _, headers, _, retries, delay, _, _, _, _, _, _, _, _} Setup{_, agent, _}: Plan{key, Google.clientHeaders(agent, model, headers), modelBaseUrl(model), retries, delay}
+    case T.StreamOptions{_, _, _, _, _, _, _, headers, _, retries, delay, _, _, _, _, _, _, _, _} Setup{_, agent, _, _}: Plan{key, Google.clientHeaders(agent, model, headers), modelBaseUrl(model), retries, delay}
 
 def payloadHook(-Reason: Data, -Telemetry: Data, -E: Data, base: T.StreamOptions<J(), Signal(Reason), Telemetry, Fetch.Fetch(Reason), E>) -> Maybe<&2, T.PayloadCallback(J(), T.Model<J()>, E)>:
   match base:
@@ -404,7 +429,7 @@ def keyed(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, ~render
 def ambientFetch(-Reason: Data, +setup: Setup<Reason>, fetch: Maybe<&2, Fetch.Fetch(Reason)>) -> Bool:
   match fetch setup:
     case None{} _: True{}
-    case Some{selected} Setup{_, _, ambient}: C.same(Fetch.Input<Reason>, Fetch.Result_(Reason), selected, ambient)
+    case Some{selected} Setup{_, _, ambient, _}: C.same(Fetch.Input<Reason>, Fetch.Result_(Reason), selected, ambient)
 
 def checkedKey(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, ~render: E -> String, +events: EventStream(G), +parent: Signal(Reason), +setup: Setup<Reason>, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Options(Reason, Telemetry, E), +state: Fold.State<G>, ambient: Bool, key: Maybe<&2, String>) -> IO(Unit):
   match ambient key:

@@ -1295,7 +1295,42 @@ def simpleApiKey(-Reason: Data, -Telemetry: Data, -E: Data, options: Maybe<&2, S
     case None{}: None{}
     case Some{options}: T.apiKeyOption(T.JsonValue, Signal(Reason), Telemetry, Fetch.Fetch(Reason), E, options)
 
-# streamSimple: base options with the model's defaults and context budget,
-# tool choice, and the reasoning level clamped to the model's support.
-def streamSimple(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Config, +model: T.Model<T.JsonValue>, +context: Context(G, D), +options: Maybe<&2, SimpleStreamOptions(Reason, Telemetry, E)>) -> IO(Run<Reason, G, E>):
-  stream(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, config, model, context, fromStreamOptions(Reason, Telemetry, E, Simple.buildBaseOptionsWith(~V.Value, ~V.Value, ~G, ~D, ~T.JsonValue, ~(Signal(Reason)), ~Telemetry, ~(Fetch.Fetch(Reason)), ~E, ~Convert.toJson, ~Convert.toJson, model, context, options, simpleApiKey(Reason, Telemetry, E, options)), simpleSettings(Reason, Telemetry, E, model, options)))
+def simpleHeaders(-Reason: Data, -Telemetry: Data, -E: Data, options: Maybe<&2, SimpleStreamOptions(Reason, Telemetry, E)>) -> Maybe<&2, T.ProviderHeaders()>:
+  match options:
+    case None{}: None{}
+    case Some{T.SimpleStreamOptions{_, _, _, _, _, _, _, headers, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}}: headers
+
+def presentKey(provider: String, apiKey: Maybe<&2, String>) -> Result<&2, &2, PreparationError, Unit>:
+  match apiKey:
+    case Some{SCon{_, _}}: Done{Unit{}}
+    case _: Fail{MissingApiKey{provider}}
+
+def clientAuth(result: Result<&2, &2, String, String>) -> Result<&2, &2, PreparationError, Unit>:
+  match result:
+    case Done{_}: Done{Unit{}}
+    case Fail{provider}: Fail{MissingApiKey{provider}}
+
+# The auth check upstream's streamSimple throws before a stream exists:
+# openai-responses.ts getClientApiKey (a key, or an Authorization or
+# cf-aig-authorization header), and openai-codex-responses.ts's plain key.
+def simpleAuth(-Reason: Data, -Telemetry: Data, -E: Data, +model: T.Model<T.JsonValue>, +options: Maybe<&2, SimpleStreamOptions(Reason, Telemetry, E)>) -> Result<&2, &2, PreparationError, Unit>:
+  match model:
+    case T.Model{_, _, T.OpenAICodexResponsesApi{}, provider, _, _, _, _, _, _, _, _, _, _, _, _}: presentKey(provider, simpleApiKey(Reason, Telemetry, E, options))
+    case T.Model{_, _, _, provider, _, _, _, _, _, _, _, _, _, _, _, _}: clientAuth(getClientApiKey(provider, simpleApiKey(Reason, Telemetry, E, options), simpleHeaders(Reason, Telemetry, E, options)))
+
+def SimpleRun(-Reason: Data, -G: Data, -E: Data) -> Type: Result<&2, &1, PreparationError, Run<Reason, G, E>>
+
+def authorizedRun(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, auth: Result<&2, &2, PreparationError, Unit>, config: Config, +model: T.Model<T.JsonValue>, +context: Context(G, D), +options: Maybe<&2, SimpleStreamOptions(Reason, Telemetry, E)>) -> IO(SimpleRun(Reason, G, E)):
+  match auth:
+    case Fail{cause}: IO.pure(SimpleRun(Reason, G, E), Fail{cause})
+    case Done{_}:
+      do IO<SimpleRun(Reason, G, E)>:
+        owner : Run<Reason, G, E> <- stream(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, config, model, context, fromStreamOptions(Reason, Telemetry, E, Simple.buildBaseOptionsWith(~V.Value, ~V.Value, ~G, ~D, ~T.JsonValue, ~(Signal(Reason)), ~Telemetry, ~(Fetch.Fetch(Reason)), ~E, ~Convert.toJson, ~Convert.toJson, model, context, options, simpleApiKey(Reason, Telemetry, E, options)), simpleSettings(Reason, Telemetry, E, model, options)))
+        return Done{owner}
+
+# streamSimple: missing auth fails before a stream exists (upstream throws);
+# otherwise base options with the model's defaults and context budget, tool
+# choice, and the reasoning level clamped to the model's support.
+def streamSimple(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~render: E -> String, config: Config, +model: T.Model<T.JsonValue>, +context: Context(G, D), +options: Maybe<&2, SimpleStreamOptions(Reason, Telemetry, E)>) -> IO(SimpleRun(Reason, G, E)):
+  authorizedRun(~Reason, ~Telemetry, ~G, ~D, ~E, ~render, simpleAuth(Reason, Telemetry, E, model, options), config, model, context, options)
+

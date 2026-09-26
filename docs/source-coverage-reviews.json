@@ -69,12 +69,12 @@
     },
     "packages/ai/src/api/google-generative-ai.ts": {
       "state": "ported",
-      "note": "Ported as three modules: google-generative-ai.bend (GoogleOptions, streamSimple's option mapping with clamped levels, level-or-budget thinking config and getGoogleBudget, buildParams producing the SDK parameters, client headers, and the SDK's parameter-to-REST conversion with its field order); google-generative-ai-stream.bend (the SDK's processStreamResponse framing with its delimiters, in-band error chunks and incomplete-segment error, and the chunk fold: text/thinking block transitions, signatures, function calls with generated ids, responseId, usage and finish reasons); google-generative-ai-client.bend (streamSimple's missing-key and level-mapping errors fail before a stream exists, as upstream throws synchronously; the stream lifecycle: custom-fetch (accepting the process fetch handle, globalThis.fetch upstream) and API-key checks, onPayload replacement, the SDK model path and address, headers, retryProviderRequest with status-only failures, the body loop and the catch block). tests/google_generative_ai_check.py compares 560 captured params, wire requests and streamed messages/event sequences with pinned pi-mono and runs the ported suites; tests/google_client_loopback.py covers the HTTP path and the agent glue. Documented differences (the tool-call counter one is flagged for review with the user): x-goog-api-client carries the SDK label without the gl-node/<process.version> runtime label (there is no Node runtime); the generated tool-call id counter is per stream instead of module-global (upstream's `let toolCallCounter` at google-generative-ai.ts:57; ids stay unique within a response and Date.now() distinguishes streams unless two start in the same millisecond); JSON.parse's engine-specific error text is replaced by the native parser's; event partials are snapshots. No live Gemini request has been verified.",
+      "note": "Ported as three modules: google-generative-ai.bend (GoogleOptions, streamSimple's option mapping with clamped levels, level-or-budget thinking config and getGoogleBudget, buildParams producing the SDK parameters, client headers, and the SDK's parameter-to-REST conversion with its field order); google-generative-ai-stream.bend (the SDK's processStreamResponse framing with its delimiters, in-band error chunks and incomplete-segment error, and the chunk fold: text/thinking block transitions, signatures, function calls with generated ids, responseId, usage and finish reasons); google-generative-ai-client.bend (streamSimple's missing-key and level-mapping errors fail before a stream exists, as upstream throws synchronously; the stream lifecycle: custom-fetch (accepting the process fetch handle, globalThis.fetch upstream) and API-key checks, onPayload replacement, the SDK model path and address, headers, retryProviderRequest with status-only failures, the body loop and the catch block). tests/google_generative_ai_check.py compares 560 captured params, wire requests and streamed messages/event sequences with pinned pi-mono and runs the ported suites; tests/google_client_loopback.py covers the HTTP path and the agent glue. Documented differences: x-goog-api-client carries the SDK label without the gl-node/<process.version> runtime label (there is no Node runtime); JSON.parse's engine-specific error text is replaced by the native parser's; event partials are snapshots. No live Gemini request has been verified. Generated tool-call ids use one counter shared by every stream of an agent runtime (a Ref in its provider configuration; the CLI process has one runtime), as upstream's module toolCallCounter; tests/ai-misc-suites.bend checks that a second stream continues the sequence.",
       "source_sha256": "c20f1a40875b2106b6d39d8b7837cd30a882c6a5fcf8c311ccc42a090e18e956",
       "port_sha256": {
         "packages/ai/src/api/google-generative-ai.bend": "8e5fddf0912e58a6af8a24da3425ddfd4970278f1dc8811557f1ac9d524e7d46",
-        "packages/ai/src/api/google-generative-ai-stream.bend": "786ea73d7b16f635095a24c049667395a971ce730fd2a696ca699184371fb243",
-        "packages/ai/src/api/google-generative-ai-client.bend": "ccdb93b09d1c0df48c921b53ede55e3a8bd4bcbfb0b2cd92c383474f1d55f616"
+        "packages/ai/src/api/google-generative-ai-stream.bend": "c2b0cfaa0166224b146dcdb9364856cef2517b0cd060e4bc3e74238443da30f3",
+        "packages/ai/src/api/google-generative-ai-client.bend": "bc0cbabc99b20a22638b0bf43d4d4611c2e534887bf86342a0ffc8e8e74161c4"
       },
       "ports": [
         "packages/ai/src/api/google-generative-ai.bend",
@@ -109,8 +109,8 @@
       "port_sha256": {
         "packages/ai/src/api/google-vertex.bend": "0ebdb23af0dce3514a9f10f49570cdb99a9ee16a853dd2aaa2de4ac4e8a5ec09",
         "packages/ai/src/api/google-vertex-credentials.bend": "212fd2b5c048ecaf2cccd8fe8be0cabb7c299dc772c90acc1ac13882e440af2d",
-        "packages/ai/src/api/google-generative-ai-client.bend": "ccdb93b09d1c0df48c921b53ede55e3a8bd4bcbfb0b2cd92c383474f1d55f616",
-        "packages/ai/src/api/google-generative-ai-stream.bend": "786ea73d7b16f635095a24c049667395a971ce730fd2a696ca699184371fb243"
+        "packages/ai/src/api/google-generative-ai-client.bend": "bc0cbabc99b20a22638b0bf43d4d4611c2e534887bf86342a0ffc8e8e74161c4",
+        "packages/ai/src/api/google-generative-ai-stream.bend": "c2b0cfaa0166224b146dcdb9364856cef2517b0cd060e4bc3e74238443da30f3"
       }
     },
     "packages/ai/src/api/mistral-conversations.lazy.ts": {
@@ -136,7 +136,7 @@
     },
     "packages/ai/src/api/openai-completions.ts": {
       "state": "ported",
-      "note": "Request and stream sides ported. Request: ResolvedOpenAICompletionsCompat with detectCompat/getCompat; convertMessages (tool-call id normalization, thinking replay fields and reasoning_details, the four requires* flags, grammar tool calls, Kimi mid-conversation tools); convertTools with grammar custom tools; buildParams in upstream field order with every thinkingFormat, budgets, cache markers, routing and sampling overrides; createClient's headers including GitHub Copilot's dynamic headers. Stream: the chunk loop (text, thinking and tool-call blocks by wire index or id, custom grammar input, streamed reasoning_details, reasoning-field signatures with OpenCode Go's normalization, routed responseModel, parseChunkUsage), block endings and finish_reason checks with the supportsFinishReason: false fallback; the lifecycle over the shared SDK port (getClientApiKey, onPayload, retried request, onResponse, SDK SSE with in-chunk errors, abort as stopReason aborted, the catch block's message with OpenRouter metadata.raw appended as String(raw)). Byte-identical to upstream on the suites' named cases, native cases for Copilot headers, raw metadata kinds and mid-stream abort, 724 generated requests and 114 generated streams (tests/openai_completions_request_check.py, tests/openai_completions_stream_check.py).",
+      "note": "Request and stream sides ported. Request: ResolvedOpenAICompletionsCompat with detectCompat/getCompat; convertMessages (tool-call id normalization, thinking replay fields and reasoning_details, the four requires* flags, grammar tool calls, Kimi mid-conversation tools); convertTools with grammar custom tools; buildParams in upstream field order with every thinkingFormat, budgets, cache markers, routing and sampling overrides; createClient's headers including GitHub Copilot's dynamic headers. Stream: the chunk loop (text, thinking and tool-call blocks by wire index or id, custom grammar input, streamed reasoning_details, reasoning-field signatures with OpenCode Go's normalization, routed responseModel, parseChunkUsage), block endings and finish_reason checks with the supportsFinishReason: false fallback; the lifecycle over the shared SDK port (getClientApiKey, onPayload, retried request, onResponse, SDK SSE with in-chunk errors, abort as stopReason aborted, the catch block's message with OpenRouter metadata.raw appended as String(raw)). Byte-identical to upstream on the suites' named cases, native cases for Copilot headers, raw metadata kinds and mid-stream abort, 724 generated requests and 114 generated streams (tests/openai_completions_request_check.py, tests/openai_completions_stream_check.py). streamSimpleOptions returns getClientApiKey's missing-auth error before a stream exists, as upstream throws.",
       "source_sha256": "a682245959c697d4f7a5ac54152f2db189099561b304725c651d6dbee22fd752",
       "ports": [
         "packages/ai/src/api/openai-completions.bend",
@@ -145,10 +145,10 @@
         "packages/coding-agent/src/core/openai-completions-provider.bend"
       ],
       "port_sha256": {
-        "packages/ai/src/api/openai-completions.bend": "7ff3403a550df2582e44e1224df0bd81399ff1cff46447f7448217773f7943ef",
+        "packages/ai/src/api/openai-completions.bend": "6bd697b4bafbd69e3ac95f65e8f4b0d008689d494bc98b228cd579b15af2cdde",
         "packages/ai/src/api/openai-completions-client.bend": "3fe44fd8d5cff79e17d78905796d611aad35434c48926255d35f12037c1f54bf",
         "packages/ai/src/api/openai-completions-stream.bend": "87e923079f391b66ae1d5f3fc38859e9fae182fbdfe1a8a90e024c388f5d2417",
-        "packages/coding-agent/src/core/openai-completions-provider.bend": "ed894c14c052abe1c6f3a0a90417cfc1ac45a2e7ae04873250991c8efd8f46a4"
+        "packages/coding-agent/src/core/openai-completions-provider.bend": "db0710efc3d67c4fec6bacc4c16b3346c5bd6491f62c6b5ecd4bf0c3cb1df0f6"
       }
     },
     "packages/ai/src/api/openai-prompt-cache.ts": {
@@ -161,10 +161,10 @@
     },
     "packages/ai/src/api/openai-responses.ts": {
       "state": "partial",
-      "note": "Native OpenAI/Codex request and stream path works; provider suites remain partial and some upstream request/header behavior differs. The Codex endpoint (upstream openai-codex-responses.ts, not reviewed as its own module) now sends upstream's SSE headers: model and caller headers plus the fixed Codex headers, without the SDK client's session-affinity session_id; flex/priority requests echoed as 'default' are priced at the requested tier (resolveCodexServiceTier). tests/openai_codex_stream_check.py compares 16 named openai-codex-stream test instances with pinned pi-mono over a loopback server; its PENDING list records the Codex SSE layer that is not ported (parseSSE EOF flush and abort message, mapCodexEvents endTurn and early stop after response.incomplete, the SSE header timeout), and WebSocket transport and zstd request bodies are absent.",
+      "note": "Native OpenAI/Codex request and stream path works; provider suites remain partial and some upstream request/header behavior differs. The Codex endpoint (upstream openai-codex-responses.ts, not reviewed as its own module) now sends upstream's SSE headers: model and caller headers plus the fixed Codex headers, without the SDK client's session-affinity session_id; flex/priority requests echoed as 'default' are priced at the requested tier (resolveCodexServiceTier). Codex models run their own SSE lifecycle in openai-codex-responses.bend (see its review); preparation stays here. streamSimple returns the missing-auth error before a stream exists (upstream getClientApiKey throws; for Codex models the plain-key check of openai-codex-responses.ts streamSimple).",
       "source_sha256": "5d524184ea001a2717fd35b4562126043338d1ef3279f4e2ce192ae5592e8479",
       "port_sha256": {
-        "packages/ai/src/api/openai-responses.bend": "576684141096fc1f8d406017963fd10620b4a36f8ce341e2176f53106a8fce23"
+        "packages/ai/src/api/openai-responses.bend": "13eb3322eb5c82e3aa66fb97023ac775893bf2ad6effbc06c980ef7457458d5c"
       }
     },
     "packages/ai/src/api/openrouter-images.lazy.ts": {
@@ -571,7 +571,7 @@
     },
     "packages/coding-agent/src/modes/interactive/chat-viewport.ts": {
       "state": "partial",
-      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Fullscreen transcript allocation uses upstream\u2019s zero basis and one-row minimum; natural dock rendering during external-editor handoffs matches pi. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
+      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Fullscreen transcript allocation uses upstream’s zero basis and one-row minimum; natural dock rendering during external-editor handoffs matches pi. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
       "source_sha256": "24bbdd06a5e17d6c0631f7de51329eb7bb4ecd4a460dec7b3d593ff9e6219960",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/viewport.bend": "91281c83b948bdb35106382375cfc14628d313a48d7676cd9a023b1bcadea32e"
@@ -1020,6 +1020,14 @@
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/tree-selector.bend": "7c4de5b9c562a018759f2a23e7a831f0c9b7063eec04a97c74a422706f2dc4fe",
         "packages/coding-agent/src/modes/interactive/components/session-selector.bend": "3218b657b82db5654a3ee888c1e78126f4241244e7594991f8f3b04a16d10743"
+      }
+    },
+    "packages/ai/src/api/openai-codex-responses.ts": {
+      "state": "partial",
+      "note": "SSE transport ported to packages/ai/src/api/openai-codex-responses.bend: stream/streamSimple (missing key fails before a stream exists), the shared buildRequestBody through Responses.prepare with the Codex endpoint, onPayload, normalizeTimeoutMs, the fetch-with-retry loop (maxRetries default 0; isRetryableError with terminal usage-limit texts; retry-after-ms/retry-after seconds or HTTP date; validateRetryDelayMs; 1s exponential backoff; failures retried unless aborted, delay-exceeded or 'usage limit'), the header-only timeout message, onResponse, parseErrorResponse's friendly ChatGPT usage-limit message, parseSSE (\\n\\n frames, data lines, [DONE], EOF terminating the residual frame, 'Invalid Codex SSE JSON'), mapCodexEvents (Codex error events, response.failed, response.done/completed/incomplete normalized to response.completed with endTurn, stopping at the first terminal event) and resolveCodexServiceTier pricing over the shared processResponsesStream. The agent's provider seam dispatches openai-codex-responses models here. tests/openai_codex_stream_check.py compares 24 named test instances and 3 native error cases with pinned pi-mono over a loopback server. Not ported: the WebSocket transport (sessions, caching, fallback bookkeeping) and zstd request bodies (upstream sends plain JSON when zstd is unavailable). Documented differences: JSON.parse's engine error text is the native parser's; the fetch implementation's error message is 'fetch failed' (Node's).",
+      "source_sha256": "ea1860ea6f78d1ed4e935e86b5dcb149ccb1f03a12669ff8550cc7243ec6ddc8",
+      "port_sha256": {
+        "packages/ai/src/api/openai-codex-responses.bend": "03e037703d3e9f22287ff7f2250a55396594f7bdce7f761f78b25172e07f5c1f"
       }
     }
   }

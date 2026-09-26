@@ -21,6 +21,12 @@ import ../../runtime/src/url.bend as URL
 # The OpenAI Responses payload as onPayload receives it: the hook captures
 # the parameters and fails the request, as the upstream suites do. No
 # transport is opened.
+# streamSimple failed before a stream existed: the case expected a stream.
+def startedRun(-Reason: Data, -G: Data, -E: Data, result: Responses.SimpleRun(Reason, G, E)) -> IO(Responses.Run<Reason, G, E>):
+  match result:
+    case Done{owner}: IO.pure(Responses.Run<Reason, G, E>, owner)
+    case Fail{_}: IO.die(Responses.Run<Reason, G, E>, 1, "streamSimple failed before a stream existed")
+
 def J() -> Data: T.JsonValue
 
 def Hook() -> Data: T.PayloadCallback(J(), T.Model<J()>, J())
@@ -65,7 +71,8 @@ def streamHooked(options: Responses.OpenAIResponsesOptions<Unit, Unit, J()>, hoo
 def simplePayload(+model: T.Model<J()>, +context: Context(), options: Responses.SimpleStreamOptions(Unit, Unit, J())) -> IO(Maybe<&2, J()>):
   do IO<Maybe<&2, J()>>:
     +hook : Hook() <- newHook()
-    owner : Responses.Run<Unit, Unit, J()> <- Responses.streamSimple(~Unit, ~Unit, ~Unit, ~Unit, ~J(), ~rendered, config(), model, context, Some{simpleHooked(options, hook)})
+    started : Responses.SimpleRun(Unit, Unit, J()) <- Responses.streamSimple(~Unit, ~Unit, ~Unit, ~Unit, ~J(), ~rendered, config(), model, context, Some{simpleHooked(options, hook)})
+    owner : Responses.Run<Unit, Unit, J()> <- startedRun(Unit, Unit, J(), started)
     settled(owner, hook)
 
 # upstream `stream`'s payload.

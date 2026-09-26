@@ -505,3 +505,14 @@ def afterEnded(-G: Data, step: Step<G>, aborted: Bool) -> Step<G>:
 # The end of the stream: the open block ends, then the abort, missing finish
 # reason and error checks, then `done`. A thrown step still needs `failed`.
 def finish(-G: Data, state: State<G>, aborted: Bool) -> Step<G>: afterEnded(G, ended(G, state), aborted)
+
+# The generated tool-call id counter. Upstream's is one module variable for
+# the process; the client carries it in a shared Ref and hands its value to
+# each chunk step (see google-generative-ai-client.bend).
+def toolCallsOf(-G: Data, state: State<G>) -> Nat:
+  match state:
+    case State{_, _, _, calls}: calls
+
+def withToolCalls(-G: Data, state: State<G>, calls: Nat) -> State<G>:
+  match state:
+    case State{message, current, model, _}: State{message, current, model, calls}
