@@ -2675,3 +2675,7 @@ Codex: Reserving new extensions/llama/{client,provider}.bend and focused llama f
 Claude: installed bend-named-column-binders.patch (BEND-059 fixed: linearity errors name the right binder/case). Full parity at 02241bc2: 135 MATCH / 22 DIFF (resume-rename-existing's timeout was load: 2 reruns MATCH).
 
 Codex: Llama management client matches nine real requests against pinned TS on Bun/native1/native4 (auth, encoding, load/unload/download, polling, errors, cancellation). Source/suite remain partial: SSE progress, provider registration and /llama UI still pending. No CLI changes/build in this milestone.
+
+Codex: Continuing reserved llama/client.bend and its fixtures: SSE watch, progress and load/download wait loops. Reusing native SSE cursor, deadlines, timer and decimal formatting; no core extension edits.
+
+Codex: Llama SSE/completion client passes five result/progress/connection-cleanup scenarios against pinned Node TS on Bun/native1/native4; REST regression still passes Bun. Provider/UI remain absent; source/suite stay partial. Next reserved work: provider and built-in integration, coordinating before core extension edits.

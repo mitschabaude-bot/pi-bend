@@ -2980,10 +2980,13 @@
       "ports": [
         "tests/llama-client.bend",
         "tests/llama_client_check.py",
-        "tests/llama_client_reference.ts"
+        "tests/llama_client_reference.ts",
+        "tests/llama-client-stream.bend",
+        "tests/llama_client_stream_check.py",
+        "tests/llama_client_stream_reference.ts"
       ],
       "sha256": "458534294a1c7abd9f96293a2fe7a0add16b58a37eda94a1b20bf5f6c814d52b",
-      "notes": "The management/inference URL normalization case is ported. Supplemental real-router differential checks typed catalog/props, authenticated load/unload/download, unloadAndWait polling, server errors and pre-cancellation against the pinned TS client on Bun/native1/native4. Remaining upstream cases (provider/command registration, catalog refresh and model conversion, Hugging Face, streaming load/download progress) are pending."
+      "notes": "Ported named cases: management/inference URL normalization; loads with SSE progress and waits for loaded catalog state; downloads with byte progress and returns refreshed catalog. Supplemental differential cases cover catalog failure with exit code, unavailable SSE fallback, cancellation and event connection cleanup on Bun/native1/native4; management request regressions cover auth, encoding, unload polling and server errors. Remaining cases (provider/command registration, catalog refresh/model conversion and Hugging Face) are pending."
     },
     {
       "source": "packages/coding-agent/test/management-http.test.ts",

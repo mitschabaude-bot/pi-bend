@@ -1111,10 +1111,10 @@
     },
     "packages/coding-agent/src/extensions/llama/client.ts": {
       "state": "partial",
-      "note": "Native typed management client: normalizeLlamaServerUrl/llamaInferenceUrl, authenticated 15-second-deadline requests, list/reload, props with encoded model/autoload query, load/unload/download, and cancellable unloadAndWait polling. The loopback differential matches nine real requests against the pinned TypeScript client on Bun/native1/native4, including headers, JSON model escaping, server error messages and pre-cancellation. Malformed typed optional fields and unknown status values are rejected instead of preserving unchecked JSON. Not yet ported: watch, loadAndWait/downloadAndWait with SSE progress, LlamaModelEvent/LlamaProgress and formatBytes. No built-in provider or interactive integration is claimed.",
+      "note": "Native typed management client with normalized URLs, authenticated/deadline-bounded requests, list/reload, props, load/unload/download and unloadAndWait. watch uses the native SSE cursor over one owned response; loadAndWait/downloadAndWait share immutable operation state for event updates and catalog polling, forward caller cancellation, cancel/join watchers and retire callback/state before returning. Stage progress, combined file-byte progress and formatBytes use native JSON/SSE/decimal primitives. The two upstream streamed load/download cases plus catalog failure, unavailable SSE fallback and cancellation match result/progress on Bun/native1/native4; all event connections close. The nine management requests still match upstream on Bun. The streaming oracle uses Node, as pi does, because default AbortError messages differ in Bun. Remaining source-wide gaps: LlamaModelsResponse public type, arbitrary caller abort reasons, precise transport-error rendering and additional malformed/progress boundary coverage. Malformed typed optional fields/unknown catalog status values are rejected. Built-in provider/UI integration is still absent.",
       "source_sha256": "21dd9b4c662ba4329e1448f93859c6028471347495ca8bb23d3a5a799d03d709",
       "port_sha256": {
-        "packages/coding-agent/src/extensions/llama/client.bend": "9883a143f53f86d861366d4d9026a342298ce6b399030b6952c33a19cb1c7b1c"
+        "packages/coding-agent/src/extensions/llama/client.bend": "cce8b69dc92076e2d69c2cb6b29d1f991c0220fe460b860286ac4ae8bc20d3d2"
       }
     }
   }

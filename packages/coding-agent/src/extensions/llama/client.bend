@@ -1,6 +1,15 @@
 import Base
 import ../../../../runtime/src/abort.bend as Abort
 import ../../../../runtime/src/fetch.bend as Fetch
+import ../../../../runtime/src/callback.bend as C
+import ../../../../runtime/src/deadline.bend as Deadline
+import ../../../../runtime/src/deferred.bend as D
+import ../../../../runtime/src/f64.bend as F
+import ../../../../runtime/src/number-string.bend as Number
+import ../../../../runtime/src/http-response.bend as Response
+import ../../../../runtime/src/ref.bend as Ref
+import ../../../../runtime/src/sse.bend as SSE
+import ../../../../ai/src/api/provider-fetch.bend as Reader
 import ../../../../runtime/src/http-message.bend as Headers
 import ../../../../runtime/src/json.bend as Json
 import ../../../../runtime/src/record.bend as R
@@ -280,3 +289,465 @@ def unloadAndWait(+client: LlamaClient, +model: String, +signal: Abort.AbortSign
   do IO<Result<&2, &2, String, Unit>>:
     result : Result<&2, &2, String, Unit> <- unload(client, model, signal)
     unloadingStarted(client, model, signal, result)
+
+# Event payloads are open protocol data; catalogs and UI progress remain typed.
+type LlamaModelEvent is Data:
+  LlamaModelEvent{model: String, event: String, data: Maybe<&2, V.Value>}
+
+type LlamaProgress is Data:
+  LlamaProgress{message: String, ratio: Maybe<&2, F64>, detail: Maybe<&2, String>}
+
+type DownloadBytes is Data:
+  DownloadBytes{done: F64, total: F64}
+
+def textField(value: Maybe<&2, V.Value>) -> Maybe<&2, String>:
+  match value:
+    case Some{V.Text{item}}: Some{item}
+    case _: None{}
+
+def numberField(value: Maybe<&2, V.Value>) -> Maybe<&2, F64>:
+  match value:
+    case Some{V.Number{item}}: Some{item}
+    case _: None{}
+
+def objectField(value: Maybe<&2, V.Value>) -> Maybe<&2, R.Record<V.Value>>:
+  match value:
+    case Some{V.ObjectValue{item}}: Some{item}
+    case _: None{}
+
+def clamp(+ratio: F64) -> F64:
+  Bool.pick(F64, F64.is_lt(ratio, F.fromU32(0)), F.fromU32(0), Bool.pick(F64, F64.is_gt(ratio, F.fromU32(1)), F.fromU32(1), ratio))
+
+def textItems(values: List<&2, V.Value>) -> List<&2, String>:
+  match values:
+    case Nil{}: Nil{}
+    case V.Text{text} <> rest: text <> textItems(rest)
+    case _ <> rest: textItems(rest)
+
+def stageNames(value: Maybe<&2, V.Value>) -> List<&2, String>:
+  match value:
+    case Some{V.ArrayValue{items}}: textItems(items)
+    case _: Nil{}
+
+def stageIndex(stages: List<&2, String>, +stage: String, +index: Nat) -> Maybe<&2, Nat>:
+  match stages:
+    case Nil{}: None{}
+    case name <> rest:
+      Bool.pick(Unit -> Maybe<&2, Nat>, String.eq(name, stage), _ => Some{index}, _ => stageIndex(rest, stage, index + 1n))(Unit{})
+
+def combinedRatio(index: Maybe<&2, Nat>, count: Nat, +ratio: Maybe<&2, F64>) -> Maybe<&2, F64>:
+  match index:
+    case None{}: ratio
+    case Some{value}: Some{F.divide(F.add(F.fromNat(value), Maybe.default(&2, F64, ratio, F.fromU32(0))), F.fromNat(count))}
+
+def loadStage(stage: Maybe<&2, String>, +stages: List<&2, String>, ratio: Maybe<&2, F64>) -> LlamaProgress:
+  match stage:
+    case None{}: LlamaProgress{"Loading model", ratio, None{}}
+    case Some{+name}: LlamaProgress{"Loading " ++ String.join(String.split(name, '_'), " "), combinedRatio(stageIndex(stages, name, 0n), List.length(&2, String, stages), ratio), None{}}
+
+def parseLoadFields(+fields: R.Record<V.Value>) -> LlamaProgress:
+  +stage = textField(R.get(V.Value, fields, "current"))
+  loadStage(Maybe.or(&2, String, stage, textField(R.get(V.Value, fields, "stage"))), stageNames(R.get(V.Value, fields, "stages")), Maybe.map(&2, F64, F64, ratio => clamp(ratio), numberField(R.get(V.Value, fields, "value"))))
+
+def parseLoadObject(fields: Maybe<&2, R.Record<V.Value>>) -> Maybe<&2, LlamaProgress>:
+  match fields:
+    case Some{item}: Some{parseLoadFields(item)}
+    case None{}: None{}
+
+def parseLoadProgress(data: V.Value) -> Maybe<&2, LlamaProgress>:
+  match data:
+    case V.ObjectValue{fields}: parseLoadObject(objectField(R.get(V.Value, fields, "progress")))
+    case _: None{}
+
+def byteUnit(units: List<&2, String>, +bytes: F64) -> String:
+  match units:
+    case Nil{}: ""
+    case unit <> Nil{}: Maybe.default(&2, String, Number.formatFixed(bytes, Bool.pick(Nat, F64.is_ge(bytes, F.fromU32(10)), 1n, 2n)), "0") ++ " " ++ unit
+    case unit <> rest:
+      Bool.pick(Unit -> String, F64.is_ge(bytes, F.fromU32(1024)), _ => byteUnit(rest, F.divide(bytes, F.fromU32(1024))), _ => Maybe.default(&2, String, Number.formatFixed(bytes, Bool.pick(Nat, F64.is_ge(bytes, F.fromU32(10)), 1n, 2n)), "0") ++ " " ++ unit)(Unit{})
+
+def formatBytes(+bytes: F64) -> String:
+  Bool.pick(Unit -> String, F64.is_lt(bytes, F.fromU32(1024)), _ => F64.show(bytes) ++ " B", _ => byteUnit(["KiB", "MiB", "GiB", "TiB"], F.divide(bytes, F.fromU32(1024))))(Unit{})
+
+def addCounts(done: Maybe<&2, F64>, total: Maybe<&2, F64>, current: DownloadBytes) -> DownloadBytes:
+  match done total current:
+    case Some{a} Some{b} DownloadBytes{c, d}: DownloadBytes{F.add(a, c), F.add(b, d)}
+    case _ _ other: other
+
+def addFile(value: V.Value, current: DownloadBytes) -> DownloadBytes:
+  match value current:
+    case V.ObjectValue{+fields} DownloadBytes{done, total}:
+      addCounts(numberField(R.get(V.Value, fields, "done")), numberField(R.get(V.Value, fields, "total")), DownloadBytes{done, total})
+    case _ other: other
+
+def sumFiles(values: List<&2, R.Property<V.Value>>, current: DownloadBytes) -> DownloadBytes:
+  match values:
+    case Nil{}: current
+    case R.Property{_, value} <> rest: sumFiles(rest, addFile(value, current))
+
+def byteProgress(+done: F64, +total: F64) -> Maybe<&2, LlamaProgress>:
+  Bool.pick(Maybe<&2, LlamaProgress>, F64.is_gt(total, F.fromU32(0)), Some{LlamaProgress{"Downloading model", Some{F.divide(done, total)}, Some{formatBytes(done) ++ " / " ++ formatBytes(total)}}}, None{})
+
+def downloadTotals(value: DownloadBytes) -> Maybe<&2, LlamaProgress>:
+  match value:
+    case DownloadBytes{done, total}: byteProgress(done, total)
+
+def downloadFiles(fields: R.Record<V.Value>) -> Maybe<&2, LlamaProgress>:
+  downloadTotals(sumFiles(R.entries(V.Value, fields), DownloadBytes{F.fromU32(0), F.fromU32(0)}))
+
+def parseDownloadProgress(data: V.Value) -> Maybe<&2, LlamaProgress>:
+  match data:
+    case V.ObjectValue{+fields}: downloadFiles(Maybe.default(&2, R.Record<V.Value>, objectField(R.get(V.Value, fields, "progress")), fields))
+    case _: None{}
+
+def modelEvent(value: V.Value) -> Result<&2, &2, Json.Error, LlamaModelEvent>:
+  do Result<&2, &2, Json.Error, LlamaModelEvent>:
+    +fields : R.Record<V.Value> <- Json.object(value)
+    model : String <- Json.required(String, fields, "model", Json.string)
+    event : String <- Json.required(String, fields, "event", Json.string)
+    return LlamaModelEvent{model, event, R.get(V.Value, fields, "data")}
+
+def eventDecoded(value: Result<&2, &2, Json.Error, LlamaModelEvent>) -> Maybe<&2, LlamaModelEvent>:
+  match value:
+    case Fail{_}: None{}
+    case Done{item}: Some{item}
+
+# Catalog polling remains authoritative if a server sends unrelated or
+# malformed events. Each cursor has one reader; all exit paths release it.
+def eventJson(value: Result<&2, &2, Json.ParseError, V.Value>) -> Maybe<&2, LlamaModelEvent>:
+  match value:
+    case Fail{_}: None{}
+    case Done{item}: eventDecoded(modelEvent(item))
+
+def eventFrame(value: SSE.ServerSentEvent) -> Maybe<&2, LlamaModelEvent>:
+  match value:
+    case SSE.ServerSentEvent{_, data, _}: eventJson(Json.parse(data))
+
+def notifyEvent(callback: C.Callback<LlamaModelEvent, Unit>, value: Maybe<&2, LlamaModelEvent>) -> IO(Unit):
+  match value:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{event}: C.call(LlamaModelEvent, Unit, callback, event)
+
+@unsafe
+def watchNext(+onEvent: C.Callback<LlamaModelEvent, Unit>, next: SSE.Next<Reader.ReadError(Unit)>) -> IO(Result<&2, &2, String, Unit>):
+  match next:
+    case SSE.Next{_, Fail{_}}: IO.pure(Result<&2, &2, String, Unit>, Fail{"llama.cpp event stream failed"})
+    case SSE.Next{_, Done{None{}}}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+    case SSE.Next{cursor, Done{Some{frame}}}:
+      do IO<Result<&2, &2, String, Unit>>:
+        notifyEvent(onEvent, eventFrame(frame))
+        following : SSE.Next<Reader.ReadError(Unit)> <- SSE.nextReader(Reader.ReadError(Unit), cursor)
+        watchNext(onEvent, following)
+
+def watched(onEvent: C.Callback<LlamaModelEvent, Unit>, pair: Reader.Owner(Unit) & Reader.Source(Unit)) -> IO(Result<&2, &2, String, Unit>):
+  match pair:
+    case (owner, source):
+      do IO<Result<&2, &2, String, Unit>>:
+        first : SSE.Next<Reader.ReadError(Unit)> <- SSE.nextReader(Reader.ReadError(Unit), SSE.createReader(Reader.ReadError(Unit), source))
+        result : Result<&2, &2, String, Unit> <- watchNext(onEvent, first)
+        Reader.release(~Unit, owner)
+        return result
+
+def rejectedWatch(code: U32, pair: Reader.Owner(Unit) & Reader.Source(Unit)) -> IO(Result<&2, &2, String, Unit>):
+  match pair:
+    case (owner, _):
+      do IO<Result<&2, &2, String, Unit>>:
+        Reader.release(~Unit, owner)
+        return Fail{"llama.cpp SSE returned HTTP " ++ U32.show(code)}
+
+def watchStatus(+onEvent: C.Callback<LlamaModelEvent, Unit>, +code: U32, pair: Reader.Owner(Unit) & Reader.Source(Unit)) -> IO(Result<&2, &2, String, Unit>):
+  Bool.pick((Reader.Owner(Unit) & Reader.Source(Unit)) -> IO(Result<&2, &2, String, Unit>), U32.is_ge(code, 200) && U32.is_lt(code, 300), owned => watched(onEvent, owned), owned => rejectedWatch(code, owned))(pair)
+
+def watchResponse(onEvent: C.Callback<LlamaModelEvent, Unit>, response: Fetch.Result_(Unit)) -> IO(Result<&2, &2, String, Unit>):
+  match response:
+    case Fail{_}: IO.pure(Result<&2, &2, String, Unit>, Fail{"fetch failed"})
+    case Done{Response.Response{metadata, body}}:
+      do IO<Result<&2, &2, String, Unit>>:
+        pair : Reader.Owner(Unit) & Reader.Source(Unit) <- Reader.reader(~Unit, body)
+        watchStatus(onEvent, Response.metadataStatus(metadata), pair)
+
+def watchBorrowed(fetch: Fetch.Fetch(Unit), onEvent: C.Callback<LlamaModelEvent, Unit>, url: URL.URL, headers: Headers.Headers, pair: Deadline.Scope<Unit> & Fetch.Signal(Unit)) -> IO(Result<&2, &2, String, Unit>):
+  match pair:
+    case (scope, signal):
+      do IO<Result<&2, &2, String, Unit>>:
+        response : Fetch.Result_(Unit) <- C.call(Fetch.Input<Unit>, Fetch.Result_(Unit), fetch, Fetch.Input{url, "GET", headers, Headers.Absent{}, signal})
+        result : Result<&2, &2, String, Unit> <- watchResponse(onEvent, response)
+        closed : Maybe<&2, Abort.AbortReason<Deadline.Cause<Unit>>> <- Deadline.close(Unit, scope)
+        return result
+
+def watchAddress(client: LlamaClient, onEvent: C.Callback<LlamaModelEvent, Unit>, scope: Deadline.Scope<Unit>, url: Result<&2, &2, URL.Error, URL.URL>, headers: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>) -> IO(Result<&2, &2, String, Unit>):
+  match client url headers:
+    case LlamaClient{_, _, fetch, _} Done{address} Done{fields}:
+      watchBorrowed(fetch, onEvent, address, fields, Deadline.borrow(Unit, scope))
+    case _ _ _:
+      do IO<Result<&2, &2, String, Unit>>:
+        closed : Maybe<&2, Abort.AbortReason<Deadline.Cause<Unit>>> <- Deadline.close(Unit, scope)
+        return Fail{"Invalid event stream request"}
+
+def watch(+client: LlamaClient, onEvent: C.Callback<LlamaModelEvent, Unit>, signal: Abort.AbortSignal<Unit>) -> IO(Result<&2, &2, String, Unit>):
+  match client:
+    case LlamaClient{+url, key, _, +context}:
+      do IO<Result<&2, &2, String, Unit>>:
+        timed : Deadline.Scope<Unit> <- Deadline.create(Unit, HTTP.NO_TIMEOUT(), signal)
+        scope : Deadline.Scope<Unit> <- Deadline.disarm(Unit, timed)
+        watchAddress(client, onEvent, scope, URL.parse(context, url ++ "/models/sse"), Reader.headerList(authorization(key)))
+
+# One immutable operation state is shared between the catalog poller and its
+# event observer. The observer never publishes a catalog itself.
+type Operation is Data:
+  LoadingOperation{loaded: Bool, failure: Maybe<&2, String>}
+  DownloadOperation{finished: Bool, failure: Maybe<&2, String>, downloading: Bool, polls: Nat}
+
+type Observer is Data:
+  Observer{model: String, operation: Ref.Ref<Operation>, progress: C.Callback<LlamaProgress, Unit>}
+
+# The only owners are the forwarding task and the event task. Stop cancels
+# their observation and child signal, joins both, then disposes callback/state.
+type Watching is Type:
+  Watching{controller: Abort.AbortController<Unit>, link: D.Cancellation<Abort.AbortReason<Unit>>, forwarding: Chan(Unit), worker: Chan(Result<&2, &2, String, Unit>), callback: C.Callback<LlamaModelEvent, Unit>}
+
+
+type PollResult is Data:
+  LoadedResult{model: LlamaModelInfo}
+  DownloadedResult{models: List<&2, LlamaModelInfo>}
+
+
+type PollDecision is Data:
+  Complete{result: PollResult}
+  Refresh{}
+  Pending{sleep: U32, progress: Maybe<&2, LlamaProgress>}
+  Failed{message: String}
+
+def eventStatus(data: V.Value) -> Maybe<&2, String>:
+  match data:
+    case V.ObjectValue{fields}: textField(R.get(V.Value, fields, "status"))
+    case _: None{}
+
+def loadEvent(+loaded: Bool, +failure: Maybe<&2, String>, +data: V.Value) -> Operation & Maybe<&2, LlamaProgress>:
+  +status = eventStatus(data)
+  (LoadingOperation{loaded || String.eq(Maybe.default(&2, String, status, ""), "loaded"), Bool.pick(Maybe<&2, String>, String.eq(Maybe.default(&2, String, status, ""), "unloaded"), Some{"Model failed to load"}, failure)}, parseLoadProgress(data))
+
+def observedEvent(operation: Operation, event: String, +data: V.Value) -> Operation & Maybe<&2, LlamaProgress>:
+  match operation event:
+    case LoadingOperation{loaded, failure} "model_status": loadEvent(loaded, failure, data)
+    case LoadingOperation{loaded, failure} "status_change": loadEvent(loaded, failure, data)
+    case DownloadOperation{_, failure, downloading, polls} "download_finished": (DownloadOperation{True{}, failure, downloading, polls}, None{})
+    case DownloadOperation{finished, _, downloading, polls} "download_failed": (DownloadOperation{finished, Some{responseError(data, "Download failed")}, downloading, polls}, None{})
+    case DownloadOperation{finished, failure, _, polls} "download_progress": (DownloadOperation{finished, failure, True{}, polls}, parseDownloadProgress(data))
+    case other _: (other, None{})
+
+def modelObserved(operation: Operation, +model: String, event: LlamaModelEvent) -> Operation & Maybe<&2, LlamaProgress>:
+  match event:
+    case LlamaModelEvent{id, kind, data}:
+      Bool.pick(Operation -> (Operation & Maybe<&2, LlamaProgress>), String.eq(id, model), current => observedEvent(current, kind, Maybe.default(&2, V.Value, data, V.Null{})), current => (current, None{}))(operation)
+
+def reportProgress(callback: C.Callback<LlamaProgress, Unit>, progress: Maybe<&2, LlamaProgress>) -> IO(Unit):
+  match progress:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{value}: C.call(LlamaProgress, Unit, callback, value)
+
+def observeOperation(observer: Observer, event: LlamaModelEvent) -> IO(Unit):
+  match observer:
+    case Observer{model, operation, callback}:
+      do IO<Unit>:
+        progress : Maybe<&2, LlamaProgress> <- Ref.modify(Operation, Maybe<&2, LlamaProgress>, operation, current => modelObserved(current, model, event))
+        reportProgress(callback, progress)
+
+def forwardAbort(controller: Abort.AbortController<Unit>, reason: Maybe<&2, Abort.AbortReason<Unit>>) -> IO(Unit):
+  match reason:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{Abort.DefaultAbort{}}:
+      do IO<Unit>:
+        changed : Bool <- Abort.abort(Unit, controller, None{})
+        return Unit{}
+    case Some{Abort.Supplied{value}}:
+      do IO<Unit>:
+        changed : Bool <- Abort.abort(Unit, controller, Some{value})
+        return Unit{}
+
+def forwardParent(controller: Abort.AbortController<Unit>, ticket: D.Ticket<Maybe<&2, Abort.AbortReason<Unit>>>) -> IO(Unit):
+  do IO<Unit>:
+    reason : Maybe<&2, Abort.AbortReason<Unit>> <- D.wait(Maybe<&2, Abort.AbortReason<Unit>>, ticket)
+    forwardAbort(controller, reason)
+
+def startWatching(+client: LlamaClient, +observer: Observer, +controller: Abort.AbortController<Unit>, observation: D.Observation<Abort.AbortReason<Unit>>) -> IO(Watching):
+  match observation:
+    case D.Observation{ticket, cancellation}:
+      do IO<Watching>:
+        +callback : C.Callback<LlamaModelEvent, Unit> <- C.create(~Observer, ~LlamaModelEvent, ~Unit, ~observeOperation, observer)
+        parent : Chan(Unit) <- IO.fork(Unit, forwardParent(controller, ticket))
+        worker : Chan(Result<&2, &2, String, Unit>) <- IO.fork(Result<&2, &2, String, Unit>, watch(client, callback, Abort.signal(Unit, controller)))
+        return Watching{controller, cancellation, parent, worker, callback}
+
+def watchOperation(client: LlamaClient, observer: Observer, +signal: Abort.AbortSignal<Unit>) -> IO(Watching):
+  do IO<Watching>:
+    +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    parent : D.Observation<Abort.AbortReason<Unit>> <- Abort.observe(Unit, signal)
+    ready : Maybe<&2, Abort.AbortReason<Unit>> <- Abort.reason(Unit, signal)
+    forwardAbort(controller, ready)
+    startWatching(client, observer, controller, parent)
+
+def stopWatching(watching: Watching) -> IO(Unit):
+  match watching:
+    case Watching{+controller, link, parent, worker, callback}:
+      do IO<Unit>:
+        removed : Bool <- D.cancel(Abort.AbortReason<Unit>, link)
+        aborted : Bool <- Abort.abort(Unit, controller, None{})
+        IO.join(Unit, parent)
+        result : Result<&2, &2, String, Unit> <- IO.join(Result<&2, &2, String, Unit>, worker)
+        C.dispose(LlamaModelEvent, Unit, callback)
+        Abort.dispose(Unit, controller)
+        return Unit{}
+
+def findModel(models: List<&2, LlamaModelInfo>, +model: String) -> Maybe<&2, LlamaModelInfo>:
+  match models:
+    case Nil{}: None{}
+    case LlamaModelInfo{+id, aliases, status, arch, source, meta} <> rest:
+      Bool.pick(Unit -> Maybe<&2, LlamaModelInfo>, String.eq(id, model), _ => Some{LlamaModelInfo{id, aliases, status, arch, source, meta}}, _ => findModel(rest, model))(Unit{})
+
+def loadFailure(code: Maybe<&2, F64>, failure: Maybe<&2, String>) -> String:
+  match code:
+    case Some{value}: "Model exited with code " ++ F64.show(value)
+    case None{}: Maybe.default(&2, String, failure, "Model failed to load")
+
+def loadedModel(model: String) -> LlamaModelInfo:
+  LlamaModelInfo{model, None{}, Status{Loaded{}, None{}, None{}, None{}, None{}}, None{}, None{}, None{}}
+
+def loadedDecision(model: String, loaded: Bool, +failure: Maybe<&2, String>, entry: Maybe<&2, LlamaModelInfo>) -> PollDecision:
+  match entry:
+    case Some{LlamaModelInfo{id, aliases, Status{Loaded{}, args, failed, exit, progress}, arch, source, meta}}:
+      Complete{LoadedResult{LlamaModelInfo{id, aliases, Status{Loaded{}, args, failed, exit, progress}, arch, source, meta}}}
+    case None{}:
+      Bool.pick(PollDecision, loaded, Complete{LoadedResult{loadedModel(model)}}, Bool.pick(PollDecision, Maybe.is_none(&2, String, failure), Pending{250, None{}}, Failed{Maybe.default(&2, String, failure, "Model failed to load")}))
+    case Some{LlamaModelInfo{_, _, Status{_, _, failed, exit, _}, _, _, _}}:
+      Bool.pick(PollDecision, Maybe.default(&2, Bool, failed, False{}) || Bool.not(Maybe.is_none(&2, String, failure)), Failed{loadFailure(exit, failure)}, Pending{250, None{}})
+
+def fileTotals(values: List<&2, R.Property<FileProgress>>, done: F64, total: F64) -> DownloadBytes:
+  match values:
+    case Nil{}: DownloadBytes{done, total}
+    case R.Property{_, FileProgress{a, b}} <> rest: fileTotals(rest, F.add(done, a), F.add(total, b))
+
+def catalogProgress(files: Maybe<&2, R.Record<FileProgress>>) -> Maybe<&2, LlamaProgress>:
+  match files:
+    case None{}: None{}
+    case Some{fields}: downloadTotals(fileTotals(R.entries(FileProgress, fields), F.fromU32(0), F.fromU32(0)))
+
+def downloadDecision(finished: Bool, failure: Maybe<&2, String>, downloading: Bool, polls: Nat, entry: Maybe<&2, LlamaModelInfo>) -> PollDecision:
+  match failure entry:
+    case Some{error} _: Failed{error}
+    case None{} Some{LlamaModelInfo{_, _, Status{Downloading{}, _, _, _, files}, _, _, _}}: Pending{500, catalogProgress(files)}
+    case None{} Some{_}: Bool.pick(PollDecision, finished || downloading || Nat.is_ge(polls, 2n), Refresh{}, Pending{500, None{}})
+    case None{} None{}: Bool.pick(PollDecision, finished, Refresh{}, Pending{500, None{}})
+
+def isDownloading(entry: Maybe<&2, LlamaModelInfo>) -> Bool:
+  match entry:
+    case Some{LlamaModelInfo{_, _, Status{Downloading{}, _, _, _, _}, _, _, _}}: True{}
+    case _: False{}
+
+# Polling is bounded by caller cancellation and by server terminal state.
+# Responses are consumed before sleeping; event callbacks share only Ref data.
+def downloadPolled(+finished: Bool, +failure: Maybe<&2, String>, +downloading: Bool, +polls: Nat, +entry: Maybe<&2, LlamaModelInfo>) -> Operation & PollDecision:
+  (DownloadOperation{finished, failure, downloading || isDownloading(entry), polls}, downloadDecision(finished, failure, downloading, polls, entry))
+
+def polled(operation: Operation, +model: String, +models: List<&2, LlamaModelInfo>) -> Operation & PollDecision:
+  match operation:
+    case LoadingOperation{+loaded, +failure}: (LoadingOperation{loaded, failure}, loadedDecision(model, loaded, failure, findModel(models, model)))
+    case DownloadOperation{+finished, +failure, +downloading, +polls}:
+      downloadPolled(finished, failure, downloading, polls + 1n, findModel(models, model))
+
+def reportOperation(observer: Observer, progress: Maybe<&2, LlamaProgress>) -> IO(Unit):
+  match observer:
+    case Observer{_, _, callback}: reportProgress(callback, progress)
+
+def decidePoll(observer: Observer, models: Result<&2, &2, String, List<&2, LlamaModelInfo>>) -> IO(PollDecision):
+  match observer models:
+    case _ Fail{error}: IO.pure(PollDecision, Failed{error})
+    case Observer{model, operation, _} Done{items}: Ref.modify(Operation, PollDecision, operation, current => polled(current, model, items))
+
+def operationState(observer: Observer) -> IO(Operation):
+  match observer:
+    case Observer{_, operation, _}: Ref.read(Operation, operation)
+
+def allowedPoll(+client: LlamaClient, +observer: Observer, +signal: Abort.AbortSignal<Unit>, aborted: Bool, operation: Operation) -> IO(PollDecision):
+  match aborted operation:
+    case True{} _: IO.pure(PollDecision, Failed{"This operation was aborted"})
+    case False{} DownloadOperation{_, Some{failure}, _, _}: IO.pure(PollDecision, Failed{failure})
+    case _ _:
+      do IO<PollDecision>:
+        models : Result<&2, &2, String, List<&2, LlamaModelInfo>> <- list(client, False{}, signal)
+        decidePoll(observer, models)
+
+def readPoll(+client: LlamaClient, +observer: Observer, +signal: Abort.AbortSignal<Unit>) -> IO(PollDecision):
+  do IO<PollDecision>:
+    aborted : Bool <- Abort.aborted(Unit, signal)
+    operation : Operation <- operationState(observer)
+    allowedPoll(client, observer, signal, aborted, operation)
+
+@unsafe
+def pollOperation(+client: LlamaClient, +observer: Observer, +signal: Abort.AbortSignal<Unit>, decision: PollDecision) -> IO(Result<&2, &2, String, PollResult>):
+  match decision:
+    case Complete{result}: IO.pure(Result<&2, &2, String, PollResult>, Done{result})
+    case Failed{message}: IO.pure(Result<&2, &2, String, PollResult>, Fail{message})
+    case Refresh{}:
+      do IO<Result<&2, &2, String, PollResult>>:
+        models : Result<&2, &2, String, List<&2, LlamaModelInfo>> <- list(client, True{}, signal)
+        return Result.map(&2, &2, String, List<&2, LlamaModelInfo>, PollResult, items => DownloadedResult{items}, models)
+    case Pending{sleep, progress}:
+      do IO<Result<&2, &2, String, PollResult>>:
+        reportOperation(observer, progress)
+        pause : Result<&2, &2, Abort.AbortReason<Unit>, Unit> <- Timer.sleep(Unit, sleep, signal)
+        next : PollDecision <- readPoll(client, observer, signal)
+        pollOperation(client, observer, signal, next)
+
+def operationMessage(operation: Operation) -> String:
+  match operation:
+    case LoadingOperation{_, _}: "Loading model"
+    case DownloadOperation{_, _, _, _}: "Downloading model"
+
+def beginOperation(+client: LlamaClient, +observer: Observer, +signal: Abort.AbortSignal<Unit>, result: Result<&2, &2, String, Unit>) -> IO(Result<&2, &2, String, PollResult>):
+  match result:
+    case Fail{error}: IO.pure(Result<&2, &2, String, PollResult>, Fail{error})
+    case Done{_}:
+      do IO<Result<&2, &2, String, PollResult>>:
+        initial : Operation <- operationState(observer)
+        reportOperation(observer, Some{LlamaProgress{operationMessage(initial), None{}, None{}}})
+        decision : PollDecision <- readPoll(client, observer, signal)
+        pollOperation(client, observer, signal, decision)
+
+def issueOperation(+client: LlamaClient, +model: String, operation: Operation, +signal: Abort.AbortSignal<Unit>) -> IO(Result<&2, &2, String, Unit>):
+  match operation:
+    case LoadingOperation{_, _}: load(client, model, signal)
+    case DownloadOperation{_, _, _, _}: download(client, model, signal)
+
+def runOperation(+client: LlamaClient, +model: String, +operation: Operation, callback: C.Callback<LlamaProgress, Unit>, +signal: Abort.AbortSignal<Unit>) -> IO(Result<&2, &2, String, PollResult>):
+  do IO<Result<&2, &2, String, PollResult>>:
+    +state : Ref.Ref<Operation> <- Ref.new(Operation, operation)
+    +observer : Observer <- IO.pure(Observer, Observer{model, state, callback})
+    watcher : Watching <- watchOperation(client, observer, signal)
+    requested : Result<&2, &2, String, Unit> <- issueOperation(client, model, operation, signal)
+    result : Result<&2, &2, String, PollResult> <- beginOperation(client, observer, signal, requested)
+    stopWatching(watcher)
+    final : Operation <- Ref.dispose(Operation, state)
+    return result
+
+def loadResult(result: Result<&2, &2, String, PollResult>) -> Result<&2, &2, String, LlamaModelInfo>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{LoadedResult{model}}: Done{model}
+    case _: Fail{"Unexpected download result"}
+
+def downloadResult(result: Result<&2, &2, String, PollResult>) -> Result<&2, &2, String, List<&2, LlamaModelInfo>>:
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{DownloadedResult{models}}: Done{models}
+    case _: Fail{"Unexpected load result"}
+
+def loadAndWait(client: LlamaClient, model: String, progress: C.Callback<LlamaProgress, Unit>, signal: Abort.AbortSignal<Unit>) -> IO(Result<&2, &2, String, LlamaModelInfo>):
+  do IO<Result<&2, &2, String, LlamaModelInfo>>:
+    result : Result<&2, &2, String, PollResult> <- runOperation(client, model, LoadingOperation{False{}, None{}}, progress, signal)
+    return loadResult(result)
+
+def downloadAndWait(client: LlamaClient, model: String, progress: C.Callback<LlamaProgress, Unit>, signal: Abort.AbortSignal<Unit>) -> IO(Result<&2, &2, String, List<&2, LlamaModelInfo>>):
+  do IO<Result<&2, &2, String, List<&2, LlamaModelInfo>>>:
+    result : Result<&2, &2, String, PollResult> <- runOperation(client, model, DownloadOperation{False{}, None{}, False{}, 0n}, progress, signal)
+    return downloadResult(result)
