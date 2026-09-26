@@ -1,6 +1,7 @@
 import Base
 import ../models.bend as Models
 import ../auth/types.bend as Auth
+import ./amazon-bedrock.bend as AmazonBedrock
 import ./ant-ling.bend as AntLing
 import ./anthropic.bend as Anthropic
 import ./azure-openai-responses.bend as AzureOpenAIResponses
@@ -41,7 +42,7 @@ import ./zai.bend as Zai
 import ./zai-coding-cn.bend as ZaiCodingCn
 
 # upstream builtinProviders(), in providers/all.ts order. Omitted:
-# amazon-bedrock and google-vertex, whose APIs are not ported, and radius,
+# google-vertex, whose API is not ported, and radius,
 # whose OAuth and dynamic catalog are not. OAuth handlers are created by the caller.
 # Each provider joins the list as soon as it is created: holding all of them
 # in separate binders exceeds the native backend's closure arity (BEND-010).
@@ -90,4 +91,5 @@ def builtinProviders(codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuth
     providers : List<&2, Models.Provider> <- prepended(AzureOpenAIResponses.azureOpenAIResponsesProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(Anthropic.anthropicProvider(anthropicOAuth), providers)
     providers : List<&2, Models.Provider> <- prepended(AntLing.antLingProvider(), providers)
+    providers : List<&2, Models.Provider> <- prepended(AmazonBedrock.amazonBedrockProvider(), providers)
     return providers

@@ -5,7 +5,7 @@ import ../src/providers/google.models.bend as Models
 import ../src/types.bend as T
 import ../../runtime/src/abort.bend as Abort
 import ../../runtime/src/callback.bend as C
-import ../../runtime/src/deadline.bend as Deadline
+import ../src/utils/event-stream.bend as Events
 import ../../runtime/src/dns-resolver.bend as DNS
 import ../../runtime/src/connection-driver.bend as Connect
 import ../../runtime/src/fetch.bend as Fetch
@@ -49,38 +49,45 @@ def eventName(event: T.AssistantMessageEvent<V.Value, Unit>) -> String:
     case T.StreamError{_, _}: "error"
     case _: "other"
 
-def notify(unused: Unit, event: T.AssistantMessageEvent<V.Value, Unit>) -> IO(Unit): IO.print(eventName(event))
-
-def options() -> Messages.Options: Messages.Options{None{}, None{}, Messages.NoThinking{}, None{}}
+def options() -> Client.Options(Unit, Unit, String):
+  Messages.GoogleOptions{T.StreamOptions{None{}, None{}, Some{"test-google-key"}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}, None{}, None{}}
 
 def networkOptions() -> HTTP.Options:
   HTTP.Options{DNS.IPv4First{}, Connect.IPv4First{}, 10000, 16384, Response.Limits{8192n, 65536n, 100n, 8n, Headers.Limits{8192n, 8192n, 65536n, 100n}}}
 
-def checked(result: Result<&2, &2, Client.Error<Unit>, T.AssistantMessage<V.Value, Unit>>) -> IO(Unit):
-  match result:
-    case Done{_}: IO.print("success")
-    case Fail{_}: IO.die(Unit, 1, "request failed")
-
-def prepared(request: Result<&2, &2, Client.Error<Unit>, Client.Request>, fetch: Fetch.Fetch(Unit), signal: Fetch.Signal(Unit), callback: Client.Events(Unit), selected: T.Model<T.JsonValue>) -> IO(Unit):
-  match request:
-    case Fail{_}: IO.die(Unit, 1, "request preparation failed")
-    case Done{value}:
+@unsafe def drain(next: Events.Iteration<T.AssistantMessageEvent<V.Value, Unit>>, +cursor: Events.Iterator<T.AssistantMessageEvent<V.Value, Unit>, T.AssistantMessage<V.Value, Unit>>) -> IO(Unit):
+  match next:
+    case Events.Yield{event}:
       do IO<Unit>:
-        result : Result<&2, &2, Client.Error<Unit>, T.AssistantMessage<V.Value, Unit>> <- Client.run(~Unit, ~Unit, fetch, signal, callback, selected, value, F.fromU32(1))
-        checked(result)
+        IO.print(eventName(event))
+        following : Events.Iteration<T.AssistantMessageEvent<V.Value, Unit>> <- Events.nextValue(T.AssistantMessageEvent<V.Value, Unit>, T.AssistantMessage<V.Value, Unit>, cursor)
+        drain(following, cursor)
+    case Events.End{}: Events.disposeIterator(T.AssistantMessageEvent<V.Value, Unit>, T.AssistantMessage<V.Value, Unit>, cursor)
 
+def stopped(reason: T.StopReason) -> IO(Unit):
+  match reason:
+    case T.Stop{}: IO.print("success")
+    case _: IO.die(Unit, 1, "request failed")
+
+def checked(message: T.AssistantMessage<V.Value, Unit>) -> IO(Unit): stopped(T.assistantStopReason(V.Value, Unit, message))
+
+# upstream `stream` over native fetch: the printed events, then the outcome.
 def borrowed(base: String, pair: Fetch.Runtime & Fetch.Fetch(Unit)) -> IO(Unit):
   match pair:
     case (owned, +fetch):
       +selected = model(base)
       do IO<Unit>:
-        +controller : Abort.AbortController<Deadline.Cause<Unit>> <- Abort.new(Deadline.Cause<Unit>)
-        +events : Client.Events(Unit) <- C.create(~Unit, ~T.AssistantMessageEvent<V.Value, Unit>, ~Unit, ~notify, Unit{})
-        prepared(Client.prepare(Unit, Unit, Unit, urlContext(), selected, context(), options(), Some{"test-google-key"}, None{}), fetch, Abort.signal(Deadline.Cause<Unit>, controller), events, selected)
-        C.dispose(T.AssistantMessageEvent<V.Value, Unit>, Unit, events)
-        Abort.dispose(Deadline.Cause<Unit>, controller)
+        +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+        +events : Events.AssistantMessageEventStream(V.Value, Unit) <- Events.createAssistantMessageEventStream(~V.Value, ~Unit)
+        Client.stream(~Unit, ~Unit, ~String, ~Unit, ~Unit, ~(message => message), events, Abort.signal(Unit, controller), Client.Setup{urlContext(), "pi-test", fetch}, selected, context(), options(), F.fromU32(1))
+        +cursor : Events.Iterator<T.AssistantMessageEvent<V.Value, Unit>, T.AssistantMessage<V.Value, Unit>> <- Events.iterator(T.AssistantMessageEvent<V.Value, Unit>, T.AssistantMessage<V.Value, Unit>, events)
+        first : Events.Iteration<T.AssistantMessageEvent<V.Value, Unit>> <- Events.nextValue(T.AssistantMessageEvent<V.Value, Unit>, T.AssistantMessage<V.Value, Unit>, cursor)
+        drain(first, cursor)
+        message : T.AssistantMessage<V.Value, Unit> <- Events.resultValue(T.AssistantMessageEvent<V.Value, Unit>, T.AssistantMessage<V.Value, Unit>, events)
+        Abort.dispose(Unit, controller)
         Fetch.retire(Unit, fetch)
         Fetch.dispose(owned)
+        checked(message)
 
 def active(base: String, runtime: Fetch.Runtime) -> IO(Unit):
   do IO<Unit>:

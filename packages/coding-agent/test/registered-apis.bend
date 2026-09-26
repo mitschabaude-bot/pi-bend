@@ -24,3 +24,4 @@ def main() -> IO(Unit):
   do IO<Unit>:
     check("pi-messages")
     check("mistral-conversations")
+    check("bedrock-converse-stream")

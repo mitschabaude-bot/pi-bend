@@ -219,6 +219,7 @@ def selectedProvider(responses: Responses.Config, fetch: Fetch.Fetch(Unit), mode
     case Ai.OpenAICompletionsApi{}: Completions.open(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.PiMessagesApi{}: StreamProviders.piMessages(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.MistralConversationsApi{}: StreamProviders.mistral(fetch, urlContext(), model, context, selectedOptions(options))
+    case Ai.BedrockConverseStreamApi{}: StreamProviders.bedrock(fetch, urlContext(), model, context, selectedOptions(options))
     case _: Providers.openResponses(~LoopConfig(), ~Unit, ~Unit, ~Details(), ~Error(), ~project, ~render, ~failure, responses, T.StreamInput{model, context, options})
 
 # upstream ModelRuntime.prepareRequest: each request resolves its model's
@@ -732,6 +733,7 @@ def supportedApi(api: Ai.ModelApi, +model: Models.Model()) -> Result<&2, &2, Str
     case Ai.OpenAICompletionsApi{}: Done{Some{model}}
     case Ai.PiMessagesApi{}: Done{Some{model}}
     case Ai.MistralConversationsApi{}: Done{Some{model}}
+    case Ai.BedrockConverseStreamApi{}: Done{Some{model}}
     case _: Fail{"Model " ++ Models.reference(model) ++ " uses an API this port does not stream yet."}
 
 def supportedModel(+model: Models.Model()) -> Result<&2, &2, String, Maybe<&2, Models.Model()>>:

@@ -9,7 +9,7 @@ def capture(model: T.Model<T.JsonValue>, reasoning: Maybe<&2, T.ThinkingLevel>) 
   +selected = H.withBase(model, "http://127.0.0.1:9")
   +context = H.hello()
   do IO<Maybe<&2, T.JsonValue>>:
-    outcome : H.Outcome <- H.run(selected, context, H.fromSimple(selected, context, H.simple(Some{"fake-key"}, None{}, reasoning)), H.Capture{})
+    outcome : H.Outcome <- H.runSimple(selected, context, H.simple(Some{"fake-key"}, None{}, reasoning), H.Capture{})
     return H.payloadOf(outcome)
 
 def disabled(model: T.Model<T.JsonValue>, +name: String) -> IO(Unit):

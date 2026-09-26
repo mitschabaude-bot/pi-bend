@@ -175,6 +175,122 @@ def extension_event_checks(f):
     return checks
 
 
+def tree_cancel_checks(f):
+    # 3688-tree-cancel-compacting: clears branch summary state when session_before_tree cancels navigation
+    events = run(f, 'tree_cancel_compacting')
+    assert last(events, 'tree_navigation') == {'type': 'tree_navigation', 'cancelled': True}, events
+    assert last(events, 'compacting')['value'] is False
+    assert last(events, 'after')['leafId'] == last(events, 'before')['leafId']
+    # 9178-tree-during-compaction: rejects a second navigation while the first is waiting
+    # ('rejects navigation before the active leaf can change' is in tests/regressions_check.py)
+    events = run(f, 'tree_waiting')
+    original = last(events, 'original')['leafId']
+    assert last(events, 'tree_error')['error'] == 'Wait for the current compaction or tree navigation to finish before navigating the session tree.'
+    assert last(events, 'during')['leafId'] == original
+    assert last(events, 'final')['leafId'] == last(events, 'targets')['first']
+    return 2
+
+
+def override_settings(enabled, overrides, **compaction):
+    return {'compaction': dict(({'enabled': enabled} if enabled is not None else {}), **compaction, modelOverrides=overrides)}
+
+
+def compaction_override_checks(f):
+    """suite/agent-session-compaction-model-overrides.test.ts (regression coverage for #8133)."""
+    checks = 0
+    overrides = {'faux/faux-1': {'reserveTokens': 2000, 'keepRecentTokens': 150}}
+    # uses model token settings for %s compaction and extension preparation
+    for path in ['manual', 'pre-prompt', 'post-run', 'overflow']:
+        events = run(f, 'compaction_override', path, settings=override_settings(path != 'manual', overrides, reserveTokens=10, keepRecentTokens=20000))
+        preparations = of_type(events, 'preparation')
+        assert len(preparations) == 1, (path, preparations)
+        assert preparations[0]['settings'] == {'enabled': path != 'manual', 'reserveTokens': 2000, 'keepRecentTokens': 150}, (path, preparations)
+        assert preparations[0]['reason'] == {'manual': 'manual', 'overflow': 'overflow'}.get(path, 'threshold'), (path, preparations)
+        recent = last(events, 'seeded')['userIds'][-1]
+        if path in ('manual', 'pre-prompt'):
+            assert preparations[0]['firstKeptEntryId'] == recent, (path, preparations, recent)
+        ends = of_type(events, 'compaction_end')
+        assert len(ends) == 1 and ends[0]['aborted'] is False and ends[0]['willRetry'] == (path == 'overflow'), (path, ends)
+        assert ends[0]['result']['summary'] == 'compacted history'
+        assert last(events, 'remaining')['count'] == 0, path
+        checks += 1
+    # passes resolved budgets to built-in %s summarization
+    for path in ['manual', 'automatic']:
+        events = run(f, 'compaction_budget', path, settings=override_settings(None, overrides, reserveTokens=10))
+        assert [e['maxTokens'] for e in of_type(events, 'request')][:1] == [1600], (path, of_type(events, 'request'))
+        recent = last(events, 'seeded')['userIds'][-1]
+        compactions = last(events, 'compactions')['entries']
+        assert compactions and compactions[0] == {'summary': 'built-in summary', 'firstKeptEntryId': recent}, (path, compactions)
+        assert last(events, 'remaining')['count'] == 0
+        checks += 1
+    # uses the newly selected model without changing ordinary settings
+    events = run(f, 'compaction_model_switch', settings=override_settings(None, {'faux/big': {'reserveTokens': 8000, 'keepRecentTokens': 150}}, reserveTokens=10))
+    kinds = [e['type'] for e in events]
+    assert 'compaction_start' not in kinds[:kinds.index('small_done')], kinds
+    ends = of_type(events, 'compaction_end')
+    assert len(ends) == 1 and ends[0]['result']['summary'] == 'big model summary', ends
+    assert last(events, 'reserve')['reserveTokens'] == 10 and last(events, 'reserve_small')['reserveTokens'] == 10
+    checks += 1
+    return checks
+
+
+ENTRY = {'id': 'entry-1', 'parentId': None, 'timestamp': '2026-01-01T00:00:00.000Z'}
+USAGE = {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0, 'totalTokens': 0, 'cost': {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0, 'total': 0}}
+
+
+def entry_messages(f, entry):
+    return last(f.call('suite-harness', 'entry_messages', json.dumps(entry)), 'context_messages')['messages']
+
+
+def lax_content_checks(f):
+    """suite/lax-message-content.test.ts. The in-memory cases use the native value for missing content (an
+    empty list): Bend tool results, message_end replacements and custom messages always carry content."""
+    checks = 0
+    # normalizes tool results from untyped tools that omit content
+    events = run(f, 'lax_content', 'tool')
+    results = [m for m in messages(events) if m['role'] == 'toolResult']
+    assert len(results) == 1 and results[0]['content'] == [], results
+    assert last(events, 'remaining')['count'] == 0
+    checks += 1
+    # normalizes null content in message_end extension replacements
+    events = run(f, 'lax_content', 'message_end')
+    assistants = [m for m in messages(events) if m['role'] == 'assistant']
+    assert len(assistants) == 1 and assistants[0]['content'] == [], assistants
+    checks += 1
+    # normalizes null content in custom messages from extensions
+    events = run(f, 'lax_content', 'custom')
+    customs = [m for m in messages(events) if m['role'] == 'custom']
+    assert len(customs) == 1 and customs[0]['content'] == [], customs
+    checks += 1
+    # normalizes null or missing content when loading session message entries
+    bad = [{'role': 'user', 'content': None, 'timestamp': 1},
+           {'role': 'assistant', 'content': None, 'api': 'openai-completions', 'provider': 'openai', 'model': 'test-model', 'usage': USAGE, 'stopReason': 'stop', 'timestamp': 1},
+           {'role': 'toolResult', 'toolCallId': 'call_1', 'toolName': 'web_search', 'isError': False, 'timestamp': 1}]
+    for message in bad:
+        [loaded] = entry_messages(f, dict(ENTRY, type='message', message=message))
+        assert loaded['role'] == message['role'] and loaded['content'] == [], loaded
+    checks += 1
+    # normalizes null content when loading custom message entries
+    [loaded] = entry_messages(f, dict(ENTRY, type='custom_message', customType='test', content=None, display=False))
+    assert loaded['role'] == 'custom' and loaded['content'] == [], loaded
+    checks += 1
+    # keeps valid message content untouched when loading session entries
+    [loaded] = entry_messages(f, dict(ENTRY, type='message', message={'role': 'user', 'content': 'hello', 'timestamp': 1}))
+    assert loaded['role'] == 'user' and loaded['content'] == 'hello', loaded
+    checks += 1
+    return checks
+
+
+def queued_slash_checks(f):
+    # 2023-queued-slash-command-followup: treats extension-origin queued slash-command follow-ups as raw user
+    # text instead of dispatching the command
+    events = run(f, 'queued_slash_follow_up')
+    assert of_type(events, 'command_run') == [], events
+    assert [text_of(m) for m in messages(events) if m['role'] == 'user'] == ['start', '/testcmd queued']
+    assert 'queued follow-up handled by model' in [text_of(m) for m in messages(events) if m['role'] == 'assistant']
+    return 1
+
+
 def main():
     parser = argparse.ArgumentParser()
     for name in RUNNERS:
@@ -184,7 +300,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-suite-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures)
+    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures)
     print('suite-harness: %d upstream cases passed' % checks)
 
 

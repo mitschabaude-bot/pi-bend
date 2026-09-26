@@ -23,6 +23,10 @@ import ../packages/coding-agent/src/core/extensions/loader.bend as Loader
 import ../packages/coding-agent/src/core/extensions/runner.bend as Runner
 import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
 import ../packages/coding-agent/src/core/model-runtime.bend as Models
+import ../packages/coding-agent/src/core/compaction/compaction.bend as Compaction
+import ../packages/coding-agent/src/core/session-json.bend as SessionJson
+import ../packages/runtime/src/date.bend as Date
+import ../packages/runtime/src/f64.bend as F
 import ./agent-session.bend as H
 import ./regressions.bend as Reg
 
@@ -44,6 +48,7 @@ type ToolKind is Data:
   Throws{message: String}
   Records{}
   Gated{started: Chan(Unit), release: Chan(Unit)}
+  NoContent{}
 
 type ToolSpec is Data:
   ToolSpec{name: String, kind: ToolKind}
@@ -88,6 +93,7 @@ def executeTool(env: ToolEnv, input: Tools.Input()) -> IO(Tools.Output()):
         notified(found)
         return textResult("tool done", Json.object(Nil{}))
     case ToolEnv{_, Throws{message}} _: IO.pure(Tools.Output(), Fail{Tools.failure(message)})
+    case ToolEnv{_, NoContent{}} _: IO.pure(Tools.Output(), Done{T.AgentToolResult{Nil{}, Some{Tools.RawDetails{Json.object(Nil{})}}, None{}, None{}}})
     case ToolEnv{_, Gated{started, release}} _:
       do IO<Tools.Output()>:
         sent : Bool <- Chan.send(Unit, started, Unit{})
@@ -113,6 +119,7 @@ def schemaOf(kind: ToolKind) -> V.Value:
     case Throws{_}: textSchema()
     case Records{}: valueSchema()
     case Gated{_, _}: emptySchema()
+    case NoContent{}: emptySchema()
     case Notify{}: emptySchema()
 
 type Built is Data:
@@ -188,17 +195,24 @@ def builtExecutes(built: Built) -> List<&2, Tools.Execute()>:
 
 # upstream createHarness({ tools, extensionFactories }): `ref` receives the
 # session once it exists, for tools and handlers that act on it.
-def createHarnessWith(+dir: String, agentDir: String, specs: List<&2, ToolSpec>, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>) -> IO(Harness):
+# `seed` is appended to the session first (upstream tests append to
+# harness.sessionManager and load the agent from buildSessionContext());
+# `others` are further faux models (upstream `models`).
+def createHarnessFull(+dir: String, agentDir: String, specs: List<&2, ToolSpec>, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>, seed: List<&2, Session.Message()>, others: List<&2, Ai.Model<Ai.JsonValue>>) -> IO(Harness):
   do IO<Harness>:
     +runtime : Maybe<&2, Ext.ExtensionRuntime()> <- loadedRuntime(extensions)
     +built : Built <- buildTools(ref, specs)
     uuids : Uuid.Generator <- Uuid.generator()
     created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
-    stored : Session.Session() <- H.requireSession(created)
+    empty : Session.Session() <- H.requireSession(created)
+    stored : Session.Session() <- Reg.seeded(seed, empty)
     loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(dir, agentDir, Settings.options())
-    +value : Reg.Fixture <- Reg.fixtureBuilt(stored, dir, H.settingsOf(loaded), setup, models => extensionLoadout(runtime, dir, builtTools(built), models))
+    +value : Reg.Fixture <- Reg.fixtureModels(stored, dir, H.settingsOf(loaded), setup, others, models => extensionLoadout(runtime, dir, builtTools(built), models))
     R.write(Maybe<&2, Session.AgentSession>, ref, Some{Reg.sessionOf(value)})
     return Harness{value, ref, builtExecutes(built)}
+
+def createHarnessWith(+dir: String, agentDir: String, specs: List<&2, ToolSpec>, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>) -> IO(Harness):
+  createHarnessFull(dir, agentDir, specs, setup, ref, extensions, Nil{}, Nil{})
 
 def createHarness(+dir: String, agentDir: String, specs: List<&2, ToolSpec>, setup: Reg.Setup) -> IO(Harness):
   do IO<Harness>:
@@ -715,6 +729,317 @@ def commandWaitsForIdle(+dir: String, agentDir: String) -> IO(Unit):
     second : Maybe<&1, Unit> <- Chan.recv(Unit, commandDone)
     cleanup(harness)
 
+# #3688: session_before_tree cancels the navigation.
+def cancelTree(env: Unit, call: Ext.HandlerCall<Ext.SessionBeforeTreeEvent>) -> IO(Handled(Ext.SessionBeforeTreeResult)):
+  IO.pure(Handled(Ext.SessionBeforeTreeResult), Done{Some{Ext.SessionBeforeTreeResult{Some{True{}}, None{}, None{}, None{}, None{}}}})
+
+def cancelTreeFactory(api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    handler : Ext.ExtensionHandler(Ext.SessionBeforeTreeEvent, Ext.SessionBeforeTreeResult) <- C.create(~Unit, ~Ext.HandlerCall<Ext.SessionBeforeTreeEvent>, ~Handled(Ext.SessionBeforeTreeResult), ~cancelTree, Unit{})
+    subscribe(api, Ext.OnSessionBeforeTree{handler})
+
+def currentLeaf(+session: Session.AgentSession) -> IO(Maybe<&2, String>):
+  do IO<Maybe<&2, String>>:
+    +stored : Session.Session() <- Session.sessionOf(session)
+    return S.getLeafId(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored))
+
+def reportLeafValue(+label: String, +session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    leaf : Maybe<&2, String> <- currentLeaf(session)
+    IO.print("{\"type\":\"" ++ label ++ "\",\"leafId\":" ++ H.maybeQuoted(leaf) ++ "}")
+
+def firstEntryId(+session: Session.AgentSession) -> IO(String):
+  do IO<String>:
+    +stored : Session.Session() <- Session.sessionOf(session)
+    return Reg.firstUser(stored)
+
+def treeCancelCompacting(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- createHarnessFull(dir, agentDir, Nil{}, setup(Nil{}), ref, [inline("cancel-tree", cancelTreeFactory)], [Reg.userMsg("first"), Reg.assistantAt("reply", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero()), Reg.userMsg("second")], Nil{})
+    reportLeafValue("before", sessionOf(harness))
+    +target : String <- firstEntryId(sessionOf(harness))
+    result : Result<&2, &2, String, Session.TreeNavigation> <- Session.navigateTreeWith(sessionOf(harness), target, Session.noSummary())
+    Reg.reportTreeNavigation(result)
+    H.reportCompacting(sessionOf(harness))
+    reportLeafValue("after", sessionOf(harness))
+    cleanup(harness)
+
+# #9178: a navigation waits in session_before_tree while a second one runs.
+def waitingTree(env: H.Gate, call: Ext.HandlerCall<Ext.SessionBeforeTreeEvent>) -> IO(Handled(Ext.SessionBeforeTreeResult)):
+  do IO<Handled(Ext.SessionBeforeTreeResult)>:
+    H.holdAt(Some{env})
+    nothing(Ext.SessionBeforeTreeResult)
+
+def waitingTreeFactory(gate: H.Gate, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    handler : Ext.ExtensionHandler(Ext.SessionBeforeTreeEvent, Ext.SessionBeforeTreeResult) <- C.create(~H.Gate, ~Ext.HandlerCall<Ext.SessionBeforeTreeEvent>, ~Handled(Ext.SessionBeforeTreeResult), ~waitingTree, gate)
+    subscribe(api, Ext.OnSessionBeforeTree{handler})
+
+def navigateLater(session: Session.AgentSession, +targetId: String, done: Chan(Reg.Navigated)) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2, &2, String, Session.TreeNavigation> <- Session.navigateTreeWith(session, targetId, Session.noSummary())
+    sent : Bool <- Chan.send(Reg.Navigated, done, Reg.Navigated{result})
+    return Unit{}
+
+def assistantIdAt(+session: Session.AgentSession, +index: Nat) -> IO(String):
+  do IO<String>:
+    +stored : Session.Session() <- Session.sessionOf(session)
+    return Reg.targetIn(stored, "assistant:" ++ Nat.show(index))
+
+def treeWaiting(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +release : Chan(Unit) <- Chan.new(Unit, 1)
+    +done : Chan(Reg.Navigated) <- Chan.new(Reg.Navigated, 1)
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- createHarnessFull(dir, agentDir, Nil{}, setup(Nil{}), ref, [inline("waiting-tree", api => waitingTreeFactory(H.Gate{started, release}, api))], [Reg.userMsg("first user"), Reg.assistantAt("first assistant", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero()), Reg.userMsg("second user"), Reg.assistantAt("second assistant", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero())], Nil{})
+    reportLeafValue("original", sessionOf(harness))
+    +firstTarget : String <- assistantIdAt(sessionOf(harness), 1n)
+    +secondTarget : String <- firstEntryId(sessionOf(harness))
+    print("targets", Json.field("first", Json.text(firstTarget), Json.field("second", Json.text(secondTarget), Nil{})))
+    IO.spawn(Unit, navigateLater(sessionOf(harness), firstTarget, done))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    second : Result<&2, &2, String, Session.TreeNavigation> <- Session.navigateTreeWith(sessionOf(harness), secondTarget, Session.noSummary())
+    Reg.reportTreeNavigation(second)
+    reportLeafValue("during", sessionOf(harness))
+    sent : Bool <- Chan.send(Unit, release, Unit{})
+    first : Maybe<&1, Reg.Navigated> <- Chan.recv(Reg.Navigated, done)
+    Reg.reportNavigated(first)
+    reportLeafValue("final", sessionOf(harness))
+    cleanup(harness)
+
+# suite/agent-session-compaction-model-overrides.test.ts
+# ------------------------------------------------------
+# History of two 400-character exchanges whose assistant usage reports
+# `total` input tokens (upstream seedHistory).
+def padded(+label: String, +fill: String) -> String: label ++ String.repeat(fill, Nat.sub(400n, String.length(label)))
+
+def seededUsage(+total: U32) -> Ai.Usage:
+  Ai.Usage{U32.to_f64(total), Reg.zero(), Reg.zero(), Reg.zero(), None{}, None{}, U32.to_f64(total), Ai.UsageCost{Reg.zero(), Reg.zero(), Reg.zero(), Reg.zero(), Reg.zero()}}
+
+def seedHistory(+total: U32, +now: F64) -> List<&2, Session.Message()>:
+  [Reg.userAt(padded("old", "x"), Reg.before(now, 2000)), Reg.assistantAt(padded("old", "y"), Ai.Stop{}, seededUsage(total), Reg.before(now, 1000)), Reg.userAt(padded("recent", "x"), Reg.before(now, 2000)), Reg.assistantAt(padded("recent", "y"), Ai.Stop{}, seededUsage(total), Reg.before(now, 1000))]
+
+def reasonName(reason: Ext.CompactionReason) -> String:
+  match reason:
+    case Ext.ManualReason{}: "manual"
+    case Ext.ThresholdReason{}: "threshold"
+    case Ext.OverflowReason{}: "overflow"
+
+def preparationFields(preparation: Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>) -> List<&2, Rec.Property<V.Value>>:
+  match preparation:
+    case Compaction.CompactionPreparation{firstKept, _, _, _, _, _, _, Compaction.CompactionSettings{enabled, reserve, keep}}:
+      Json.field("firstKeptEntryId", Json.text(firstKept), Json.field("settings", Json.object(Json.field("enabled", V.Boolean{enabled}, Json.field("reserveTokens", V.Number{reserve}, Json.field("keepRecentTokens", V.Number{keep}, Nil{})))), Nil{}))
+
+def suppliedCompaction(preparation: Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>, +summary: String) -> Compaction.CompactionResult:
+  match preparation:
+    case Compaction.CompactionPreparation{firstKept, _, _, _, tokensBefore, _, _, _}: Compaction.CompactionResult{summary, firstKept, tokensBefore, None{}, None{}, None{}}
+
+# The handler records each preparation and supplies the compaction.
+def supplyCompaction(summary: String, call: Ext.HandlerCall<Ext.SessionBeforeCompactEvent>) -> IO(Handled(Ext.SessionBeforeCompactResult)):
+  match call:
+    case Ext.HandlerCall{Ext.SessionBeforeCompactEvent{+preparation, _, _, reason, _, _}, _}:
+      do IO<Handled(Ext.SessionBeforeCompactResult)>:
+        print("preparation", Json.field("reason", Json.text(reasonName(reason)), preparationFields(preparation)))
+        return Done{Some{Ext.SessionBeforeCompactResult{None{}, Some{suppliedCompaction(preparation, summary)}}}}
+
+def supplyFactory(summary: String, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    handler : Ext.ExtensionHandler(Ext.SessionBeforeCompactEvent, Ext.SessionBeforeCompactResult) <- C.create(~String, ~Ext.HandlerCall<Ext.SessionBeforeCompactEvent>, ~Handled(Ext.SessionBeforeCompactResult), ~supplyCompaction, summary)
+    subscribe(api, Ext.OnSessionBeforeCompact{handler})
+
+def reportSeeded(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    +stored : Session.Session() <- Session.sessionOf(session)
+    print("seeded", Json.field("userIds", V.ArrayValue{Reg.texts(H.userIds(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored))))}, Nil{}))
+
+def compactionShapes(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
+  match entries:
+    case Nil{}: Nil{}
+    case S.Compaction{S.CompactionEntry{_, summary, keep, _, _, _, _, _}} <> rest: Json.object(Json.field("summary", Json.text(summary), Json.field("firstKeptEntryId", Json.text(keep), Nil{}))) <> compactionShapes(rest)
+    case _ <> rest: compactionShapes(rest)
+
+def reportCompactions(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    +stored : Session.Session() <- Session.sessionOf(session)
+    print("compactions", Json.field("entries", V.ArrayValue{compactionShapes(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))}, Nil{}))
+
+def overrideReplies(+path: String) -> List<&2, Reg.Reply>:
+  match path:
+    case "manual": Nil{}
+    case "overflow": [Reg.Failed{"prompt is too long"}, Reg.Text{"recovered"}]
+    case "post-run": [Reg.Text{String.repeat("z", 8000n)}]
+    case _: [Reg.Text{"done"}]
+
+def compactOrPrompt(+path: String, +session: Session.AgentSession) -> IO(Unit):
+  match path:
+    case "manual":
+      do IO<Unit>:
+        result : Result<&2, &2, String, Compaction.CompactionResult> <- Session.compact(session, None{})
+        H.reportCompact(result)
+    case _: prompted(session, "continue")
+
+def compactionOverride(+dir: String, agentDir: String, +path: String) -> IO(Unit):
+  do IO<Unit>:
+    +now : F64 <- Date.now()
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- createHarnessFull(dir, agentDir, Nil{}, Reg.Setup{overrideReplies(path), Nil{}, Reg.sizedModel(4000, 16384)}, ref, [inline("supply", api => supplyFactory("compacted history", api))], seedHistory(Bool.pick(U32, String.eq(path, "pre-prompt"), 2500, 650), now), Nil{})
+    reportSeeded(sessionOf(harness))
+    compactOrPrompt(path, sessionOf(harness))
+    Reg.reportRemaining(Reg.repliesOf(harnessFixture(harness)))
+    cleanup(harness)
+
+# "passes resolved budgets to built-in %s summarization": no extension; the
+# summary request's output cap is printed with the request.
+def compactionBudget(+dir: String, agentDir: String, +path: String) -> IO(Unit):
+  do IO<Unit>:
+    +now : F64 <- Date.now()
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +replies : List<&2, Reg.Reply> = Bool.pick(List<&2, Reg.Reply>, String.eq(path, "manual"), [Reg.Text{"built-in summary"}], [Reg.Text{"built-in summary"}, Reg.Text{"done"}])
+    +harness : Harness <- createHarnessFull(dir, agentDir, Nil{}, Reg.Setup{replies, Nil{}, Reg.sizedModel(4000, 3000)}, ref, Nil{}, seedHistory(2500, now), Nil{})
+    reportSeeded(sessionOf(harness))
+    compactOrPrompt(Bool.pick(String, String.eq(path, "manual"), "manual", "prompt"), sessionOf(harness))
+    reportCompactions(sessionOf(harness))
+    Reg.reportRemaining(Reg.repliesOf(harnessFixture(harness)))
+    cleanup(harness)
+
+# "uses the newly selected model without changing ordinary settings".
+def reportReserve(+label: String, +session: Session.AgentSession, model: Maybe<&2, Settings.ModelIdentity>) -> IO(Unit):
+  do IO<Unit>:
+    manager : Settings.SettingsManager <- Session.getSettings(session)
+    print(label, Json.field("reserveTokens", V.Number{F.fromU64(Settings.getCompactionReserveTokens(manager, model))}, Nil{}))
+
+def switched(+session: Session.AgentSession, +model: Ai.Model<Ai.JsonValue>) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2, &2, String, Unit> <- Session.setModel(session, model, Session.ModelMutationOptions{True{}})
+    H.reportOutcome("set_model", result)
+
+def appendAll(+session: Session.AgentSession, messages: List<&2, Session.Message()>) -> IO(Unit):
+  match messages:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case message <> rest:
+      do IO<Unit>:
+        appended : Result<&2, &2, String, Unit> <- Session.appendSessionMessage(session, message)
+        appendAll(session, rest)
+
+def reseed(+session: Session.AgentSession, +now: F64) -> IO(Unit):
+  do IO<Unit>:
+    appendAll(session, seedHistory(2500, now))
+    Session.refreshSessionContext(session)
+
+def compactionModelSwitch(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +now : F64 <- Date.now()
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +small : Ai.Model<Ai.JsonValue> = Reg.namedModel("small", 4000, 16384)
+    +big : Ai.Model<Ai.JsonValue> = Reg.namedModel("big", 10000, 16384)
+    +harness : Harness <- createHarnessFull(dir, agentDir, Nil{}, Reg.Setup{[Reg.Text{"small response"}, Reg.Text{"big response"}], Nil{}, small}, ref, [inline("supply", api => supplyFactory("big model summary", api))], seedHistory(2500, now), [big])
+    prompted(sessionOf(harness), "continue on small")
+    print("small_done", Nil{})
+    reseed(sessionOf(harness), now)
+    switched(sessionOf(harness), big)
+    prompted(sessionOf(harness), "continue on big")
+    reportReserve("reserve", sessionOf(harness), None{})
+    switched(sessionOf(harness), small)
+    reportReserve("reserve_small", sessionOf(harness), Some{Settings.ModelIdentity{"faux", "small"}})
+    cleanup(harness)
+
+# suite/lax-message-content.test.ts: session entries with null or missing
+# content become context messages with empty content.
+def reportContextMessages(result: Result<&2, &2, S.Error, List<&2, Session.Message()>>) -> IO(Unit):
+  match result:
+    case Done{messages}: print("context_messages", Json.field("messages", V.ArrayValue{JsonEvent.messages(messages)}, Nil{}))
+    case Fail{_}: print("entry_invalid", Nil{})
+
+def reportContextOf(entry: Maybe<&2, S.FileEntry<Unit, Tools.ToolDetails, V.Value>>) -> IO(Unit):
+  match entry:
+    case Some{S.Entry{value}}: reportContextMessages(S.sessionEntryToContextMessages(Unit, Tools.ToolDetails, V.Value, value))
+    case _: print("entry_invalid", Nil{})
+
+def entryMessages(+line: String) -> IO(Unit):
+  reportContextOf(SessionJson.parseSessionEntryLine(~Unit, ~Tools.ToolDetails, ~V.Value, ~Session.readUnit, ~Session.readDetails, ~Session.readRaw, line))
+
+# The in-memory cases of lax-message-content with the native value for
+# "no content" (an empty list): a tool result without content, a message_end
+# replacement without content and a custom message without content.
+def withoutContent(message: Session.Message()) -> Maybe<&2, Session.Message()>:
+  match message:
+    case T.LlmMessage{Ai.Assistant{Ai.AssistantMessage{_, api, provider, model, a, b, c, d, usage, stop, e, f, g, h, time}}}: Some{T.LlmMessage{Ai.Assistant{Ai.AssistantMessage{Nil{}, api, provider, model, a, b, c, d, usage, stop, e, f, g, h, time}}}}
+    case _: None{}
+
+def emptyEnd(env: Unit, call: Ext.HandlerCall<Ext.MessageEndEvent>) -> IO(Handled(Ext.MessageEndEventResult)):
+  match call:
+    case Ext.HandlerCall{Ext.MessageEndEvent{message}, _}: IO.pure(Handled(Ext.MessageEndEventResult), Done{Some{Ext.MessageEndEventResult{withoutContent(message)}}})
+
+def emptyEndFactory(api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    handler : Ext.ExtensionHandler(Ext.MessageEndEvent, Ext.MessageEndEventResult) <- C.create(~Unit, ~Ext.HandlerCall<Ext.MessageEndEvent>, ~Handled(Ext.MessageEndEventResult), ~emptyEnd, Unit{})
+    subscribe(api, Ext.OnMessageEnd{handler})
+
+def laxContent(+dir: String, agentDir: String, +kind: String) -> IO(Unit):
+  match kind:
+    case "tool":
+      do IO<Unit>:
+        +harness : Harness <- createHarness(dir, agentDir, [ToolSpec{"web_search", NoContent{}}], setup([Reg.Call{"call_search", "web_search", Json.object(Nil{}), "{}"}, Reg.Text{"done"}]))
+        prompted(sessionOf(harness), "search something")
+        H.reportMessages(sessionOf(harness))
+        Reg.reportRemaining(Reg.repliesOf(harnessFixture(harness)))
+        cleanup(harness)
+    case "message_end":
+      do IO<Unit>:
+        +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+        +harness : Harness <- createHarnessWith(dir, agentDir, Nil{}, setup([Reg.Text{"hello"}]), ref, [inline("empty-end", emptyEndFactory)])
+        prompted(sessionOf(harness), "hi")
+        H.reportMessages(sessionOf(harness))
+        cleanup(harness)
+    case _:
+      do IO<Unit>:
+        +harness : Harness <- createHarness(dir, agentDir, Nil{}, setup(Nil{}))
+        sent : Result<&2, &2, String, Unit> <- Session.sendCustomMessage(sessionOf(harness), Ext.CustomMessageInput{"test", Ai.UserBlocks{Nil{}}, False{}, None{}}, Session.sendDefaults())
+        H.reportMessages(sessionOf(harness))
+        cleanup(harness)
+
+# #2023: a follow-up an extension queues with sendUserMessage is raw user
+# text, not an extension command.
+def recordCommand(env: Unit, call: Ext.CommandCall) -> IO(Result<&2, &2, String, Unit>):
+  match call:
+    case Ext.CommandCall{args, _}:
+      do IO<Result<&2, &2, String, Unit>>:
+        print("command_run", Json.field("args", Json.text(args), Nil{}))
+        return Done{Unit{}}
+
+def testCommandFactory(apiRef: R.Ref<Maybe<&2, Ext.ExtensionAPI>>, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    R.write(Maybe<&2, Ext.ExtensionAPI>, apiRef, Some{api})
+    handler : Ext.CommandHandler() <- C.create(~Unit, ~Ext.CommandCall, ~Result<&2, &2, String, Unit>, ~recordCommand, Unit{})
+    Loader.registerCommand(api, "testcmd", Ext.CommandOptions{Some{"Test command"}, None{}, handler})
+
+def sendFollowUp(found: Maybe<&2, Ext.ExtensionAPI>) -> IO(Unit):
+  match found:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{api}:
+      do IO<Unit>:
+        result : Result<&2, &2, String, Unit> <- Loader.sendUserMessage(api, Ai.UserText{"/testcmd queued"}, Some{Ext.UserFollowUp{}})
+        H.reportOutcome("sent", result)
+
+def queuedSlashFollowUp(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +apiRef : R.Ref<Maybe<&2, Ext.ExtensionAPI>> <- R.new(Maybe<&2, Ext.ExtensionAPI>, None{})
+    +toolStarted : Chan(Unit) <- Chan.new(Unit, 1)
+    +release : Chan(Unit) <- Chan.new(Unit, 1)
+    +done : Chan(Unit) <- Chan.new(Unit, 1)
+    +harness : Harness <- createHarnessWith(dir, agentDir, [ToolSpec{"wait", Gated{toolStarted, release}}], setup([Reg.Call{"call_wait", "wait", Json.object(Nil{}), "{}"}, Reg.Text{"first turn complete"}, Reg.Text{"queued follow-up handled by model"}]), ref, [inline("testcmd", api => testCommandFactory(apiRef, api))])
+    IO.spawn(Unit, promptInBackground(sessionOf(harness), "start", done))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, toolStarted)
+    found : Maybe<&2, Ext.ExtensionAPI> <- R.read(Maybe<&2, Ext.ExtensionAPI>, apiRef)
+    sendFollowUp(found)
+    sent : Bool <- Chan.send(Unit, release, Unit{})
+    finished : Maybe<&1, Unit> <- Chan.recv(Unit, done)
+    H.reportMessages(sessionOf(harness))
+    cleanup(harness)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case "custom_order" <> dir <> agentDir <> Nil{}: customOrder(dir, agentDir)
@@ -731,6 +1056,14 @@ def run(args: List<String>) -> IO(Unit):
     case "settled_retry" <> dir <> agentDir <> Nil{}: settledAfterRetry(dir, agentDir)
     case "settled_follow_up" <> dir <> agentDir <> Nil{}: settledAfterFollowUp(dir, agentDir)
     case "command_waits_for_idle" <> dir <> agentDir <> Nil{}: commandWaitsForIdle(dir, agentDir)
+    case "tree_cancel_compacting" <> dir <> agentDir <> Nil{}: treeCancelCompacting(dir, agentDir)
+    case "tree_waiting" <> dir <> agentDir <> Nil{}: treeWaiting(dir, agentDir)
+    case "entry_messages" <> line <> Nil{}: entryMessages(line)
+    case "lax_content" <> dir <> agentDir <> kind <> Nil{}: laxContent(dir, agentDir, kind)
+    case "queued_slash_follow_up" <> dir <> agentDir <> Nil{}: queuedSlashFollowUp(dir, agentDir)
+    case "compaction_override" <> dir <> agentDir <> path <> Nil{}: compactionOverride(dir, agentDir, path)
+    case "compaction_budget" <> dir <> agentDir <> path <> Nil{}: compactionBudget(dir, agentDir, path)
+    case "compaction_model_switch" <> dir <> agentDir <> Nil{}: compactionModelSwitch(dir, agentDir)
     case _: IO.die(Unit, 1, "usage: suite-harness <scenario> <dir> <agentDir> [arguments]")
 
 def main() -> IO(Unit):

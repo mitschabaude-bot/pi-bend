@@ -11,6 +11,9 @@ import ../model-runtime.bend as Models
 import ../skills.bend as Skills
 import ../tools/index.bend as Tools
 import ./context.bend as Ctx
+import ../session-manager.bend as S
+import ../compaction/compaction.bend as Compaction
+import ../../../../runtime/src/abort.bend as Abort
 
 # upstream core/extensions/types.ts: registrations, events and the loaded
 # extension state. Extensions are Bend code linked into the binary; their
@@ -71,6 +74,45 @@ type MessageUpdateEvent is Data:
 type MessageEndEvent is Data:
   MessageEndEvent{message: AgentMessage()}
 
+def SessionEntry() -> Data: S.SessionEntry<Unit, Tools.ToolDetails, V.Value>
+
+# Session events
+# --------------
+
+# upstream TreePreparation: what navigating to `targetId` abandons.
+type TreePreparation is Data:
+  TreePreparation{targetId: String, oldLeafId: Maybe<&2, String>, commonAncestorId: Maybe<&2, String>, entriesToSummarize: List<&2, SessionEntry()>, userWantsSummary: Bool, customInstructions: Maybe<&2, String>, replaceInstructions: Maybe<&2, Bool>, label: Maybe<&2, String>}
+
+type SessionBeforeTreeEvent is Data:
+  SessionBeforeTreeEvent{preparation: TreePreparation, signal: Abort.AbortSignal<Unit>}
+
+type BranchSummaryOverride is Data:
+  BranchSummaryOverride{summary: String, details: Maybe<&2, V.Value>, usage: Maybe<&2, Ai.Usage>}
+
+type SessionBeforeTreeResult is Data:
+  SessionBeforeTreeResult{cancel: Maybe<&2, Bool>, summary: Maybe<&2, BranchSummaryOverride>, customInstructions: Maybe<&2, String>, replaceInstructions: Maybe<&2, Bool>, label: Maybe<&2, String>}
+
+type SessionTreeEvent is Data:
+  SessionTreeEvent{newLeafId: Maybe<&2, String>, oldLeafId: Maybe<&2, String>, summaryEntry: Maybe<&2, SessionEntry()>, fromExtension: Maybe<&2, Bool>}
+
+# upstream "manual" | "threshold" | "overflow"
+type CompactionReason is Data:
+  ManualReason{}
+  ThresholdReason{}
+  OverflowReason{}
+
+type SessionBeforeCompactEvent is Data:
+  SessionBeforeCompactEvent{preparation: Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>, branchEntries: List<&2, SessionEntry()>, customInstructions: Maybe<&2, String>, reason: CompactionReason, willRetry: Bool, signal: Abort.AbortSignal<Unit>}
+
+type SessionBeforeCompactResult is Data:
+  SessionBeforeCompactResult{cancel: Maybe<&2, Bool>, compaction: Maybe<&2, Compaction.CompactionResult>}
+
+type SessionCompactEvent is Data:
+  SessionCompactEvent{compactionEntry: SessionEntry(), fromExtension: Bool, reason: CompactionReason, willRetry: Bool}
+
+type SessionCompactFailedEvent is Data:
+  SessionCompactFailedEvent{reason: CompactionReason, errorMessage: Maybe<&2, String>, aborted: Bool, willRetry: Bool, fromExtension: Bool}
+
 # Replace the finalized message; the replacement keeps the original's role.
 type MessageEndEventResult is Data:
   MessageEndEventResult{message: Maybe<&2, AgentMessage()>}
@@ -120,6 +162,11 @@ type EventHandler is Data:
   OnToolExecutionEnd{handler: ExtensionHandler(ToolExecutionEndEvent, Unit)}
   OnToolCall{handler: ExtensionHandler(ToolCallEvent, ToolCallEventResult)}
   OnToolResult{handler: ExtensionHandler(ToolResultEvent, ToolResultEventResult)}
+  OnSessionBeforeTree{handler: ExtensionHandler(SessionBeforeTreeEvent, SessionBeforeTreeResult)}
+  OnSessionTree{handler: ExtensionHandler(SessionTreeEvent, Unit)}
+  OnSessionBeforeCompact{handler: ExtensionHandler(SessionBeforeCompactEvent, SessionBeforeCompactResult)}
+  OnSessionCompact{handler: ExtensionHandler(SessionCompactEvent, Unit)}
+  OnSessionCompactFailed{handler: ExtensionHandler(SessionCompactFailedEvent, Unit)}
 
 # Events dispatched without a result (upstream emit). Events with results
 # have their own emitters in the runner.
@@ -133,6 +180,9 @@ type ExtensionEvent is Data:
   ToolExecutionStart{event: ToolExecutionStartEvent}
   ToolExecutionUpdate{event: ToolExecutionUpdateEvent}
   ToolExecutionEnd{event: ToolExecutionEndEvent}
+  SessionTree{event: SessionTreeEvent}
+  SessionCompact{event: SessionCompactEvent}
+  SessionCompactFailed{event: SessionCompactFailedEvent}
 
 def handlerEventType(handler: EventHandler) -> String:
   match handler:
@@ -148,6 +198,11 @@ def handlerEventType(handler: EventHandler) -> String:
     case OnToolExecutionEnd{_}: "tool_execution_end"
     case OnToolCall{_}: "tool_call"
     case OnToolResult{_}: "tool_result"
+    case OnSessionBeforeTree{_}: "session_before_tree"
+    case OnSessionTree{_}: "session_tree"
+    case OnSessionBeforeCompact{_}: "session_before_compact"
+    case OnSessionCompact{_}: "session_compact"
+    case OnSessionCompactFailed{_}: "session_compact_failed"
 
 def eventType(event: ExtensionEvent) -> String:
   match event:
@@ -160,6 +215,9 @@ def eventType(event: ExtensionEvent) -> String:
     case ToolExecutionStart{_}: "tool_execution_start"
     case ToolExecutionUpdate{_}: "tool_execution_update"
     case ToolExecutionEnd{_}: "tool_execution_end"
+    case SessionTree{_}: "session_tree"
+    case SessionCompact{_}: "session_compact"
+    case SessionCompactFailed{_}: "session_compact_failed"
 
 # `on` returns the id its unsubscribe removes (upstream removes the handler
 # by function identity).

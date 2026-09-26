@@ -700,69 +700,123 @@
     },
     {
       "source": "packages/ai/test/bedrock-cache-write-1h-cost.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "7d74179a7b6df7649d991883571f678b0466565158f9559555f4207768f573d8"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "7d74179a7b6df7649d991883571f678b0466565158f9559555f4207768f573d8",
+      "notes": "The case. tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-convert-messages.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6b2f1cbd68b20b0442a25de1c9380050347d02b64b64620905114eb666f9dbcf"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "6b2f1cbd68b20b0442a25de1c9380050347d02b64b64620905114eb666f9dbcf",
+      "notes": "Ported (7): 'gates native strict tool use by model capability' (strict and Nova halves), 'preserves empty property names in streamed tool arguments', 'replaces blank user string content with a placeholder', 'filters blank user text blocks when other content remains', 'replaces blank tool result content with a placeholder', 'removes empty property names only from replayed Bedrock input'. Not representable: the four unknown-content-block cases (the typed Bend transcript has no unknown block variants) and the two surrogate-sanitization cases (the Bend runtime's strings and JSON parser reject lone surrogates). tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-credentials.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "fc662838b0e0562546aa7a41fe16a80ee3be45104a120624e0ddbc9ffe4b042f"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "fc662838b0e0562546aa7a41fe16a80ee3be45104a120624e0ddbc9ffe4b042f",
+      "notes": "All 3 cases (the first as explicit and scoped halves) assert the client configuration upstream passes to BedrockRuntimeClient, rendered by the Bend runner's config mode. tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-custom-headers.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9ced72235859b78206d40a918223fb40f0d999241bc03ed4480a6c6cd3dad388"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "9ced72235859b78206d40a918223fb40f0d999241bc03ed4480a6c6cd3dad388",
+      "notes": "VC1, VC2, both VC3 cases and VC4 assert the headers the server receives, which is the build-step middleware's effect. Not representable: 'VC3 (structural guard): passes through unchanged when the request has no headers', which calls the SDK middleware function directly; the Bend request always carries headers. tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-endpoint-resolution.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "256644a52f42da4000520be9bb97f72bb996c2805650118e020d2d065d9c99aa"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "256644a52f42da4000520be9bb97f72bb996c2805650118e020d2d065d9c99aa",
+      "notes": "All 9 cases (the missing-region case as explicit/scoped/ambient halves) assert the client configuration (profile, region, endpoint, credentials, bearer token and authSchemePreference). tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-error-metadata.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "419813d91e53ec4365b88f47b16b1e11b284fe35e949bcd2bcf9e7f185413fcc"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "419813d91e53ec4365b88f47b16b1e11b284fe35e949bcd2bcf9e7f185413fcc",
+      "notes": "All 9 cases. Adaptations: upstream's mock throws a bare object for a modeled mid-stream exception, while the pinned SDK throws the modeled ThrottlingException, so 'reports only the request id for a modeled mid-stream exception' expects its errorCode too (the upstream implementation reports the same against the real SDK); the Unknown-placeholder case uses a JSON error body, since the non-JSON parse message is JavaScript-engine text; 'emits no diagnostic when the failure carries no provider metadata' drops the connection and runs without the differential. tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-models.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "adb580d3fd5fba8e916f540bdd6711bdc65a977714bc411115cf5fff6f008550"
+      "status": "partial",
+      "ports": [
+        "tests/model_catalog.test.ts",
+        "packages/ai/src/providers/amazon-bedrock.models.bend"
+      ],
+      "sha256": "adb580d3fd5fba8e916f540bdd6711bdc65a977714bc411115cf5fff6f008550",
+      "notes": "'should get all available Bedrock models' and 'exposes Claude Opus 5 through an inference profile only' run in tests/model_catalog.test.ts against the Bend catalog. Pending: the per-model live 'should make a simple request' cases, which need Bedrock credentials."
     },
     {
       "source": "packages/ai/test/bedrock-raw-stop-reason.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "1eabb8aab0f17119188b21ac81587670d4c28e5009e8e80059aa1f2fcc1fefea"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "1eabb8aab0f17119188b21ac81587670d4c28e5009e8e80059aa1f2fcc1fefea",
+      "notes": "Both cases. tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-redacted-reasoning.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f1f2e4d27c8f3cbf47da5712012d9a12c6580fbd93a69636d9744c7600aee896"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "f1f2e4d27c8f3cbf47da5712012d9a12c6580fbd93a69636d9744c7600aee896",
+      "notes": "All 6 cases; redacted payloads are compared as the base64 the SDK serializes. tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-response-headers.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "8436eacf232697682ecf4efcddf86e5dec216f9ea83fe5be728409adfdd82fa4"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "8436eacf232697682ecf4efcddf86e5dec216f9ea83fe5be728409adfdd82fa4",
+      "notes": "The case asserts the onResponse status and raw headers of the loopback response. tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-thinking-payload.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "bb409553d1f44c15fa8e4b2f9bdeb2a88ffc8fbd7fc5bc348329fdaef5f43003"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "bb409553d1f44c15fa8e4b2f9bdeb2a88ffc8fbd7fc5bc348329fdaef5f43003",
+      "notes": "All 12 payload cases through onPayload. Pending: 'Bedrock Claude max tokens E2E', which needs live Bedrock credentials. tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/cache-retention.test.ts",
@@ -905,57 +959,114 @@
     },
     {
       "source": "packages/ai/test/google-raw-stop-reason.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "627fb032217b789275b6b00d79c129cc32214224db8bcbb08014016f24b00af0"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/google-raw-stop-reason.bend",
+        "packages/ai/test/google-harness.bend",
+        "packages/ai/test/google-shared-support.bend",
+        "tests/google-suites.bend",
+        "tests/google_generative_ai_check.py"
+      ],
+      "sha256": "627fb032217b789275b6b00d79c129cc32214224db8bcbb08014016f24b00af0",
+      "notes": "The Google Generative AI rows pass on Bun and native 1/4 threads (tests/google_generative_ai_check.py); the Google Vertex rows and 'preserves raw Gemini finish reasons for Google Vertex errors' stay pending because the Vertex adapter is not ported."
     },
     {
       "source": "packages/ai/test/google-shared-convert-tools.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "238bf9aa3985bcec2cd6463fe84026144e687779700f4ddbb19310bb538baa64"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/google-shared-convert-tools.bend",
+        "packages/ai/test/google-harness.bend",
+        "packages/ai/test/google-shared-support.bend",
+        "tests/google-suites.bend",
+        "tests/google_generative_ai_check.py"
+      ],
+      "sha256": "238bf9aa3985bcec2cd6463fe84026144e687779700f4ddbb19310bb538baa64",
+      "notes": "All named tests pass on Bun and native 1/4 threads (tests/google_generative_ai_check.py); request/response behaviour is additionally checked by a 560-case differential against pinned pi-mono."
     },
     {
       "source": "packages/ai/test/google-shared-gemini3-unsigned-tool-call.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5f7d9c7588ea25919f0816f74a2bdc8326300ee2f3145865a99459e242bbd8f5"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/google-shared-gemini3-unsigned-tool-call.bend",
+        "packages/ai/test/google-harness.bend",
+        "packages/ai/test/google-shared-support.bend",
+        "tests/google-suites.bend",
+        "tests/google_generative_ai_check.py"
+      ],
+      "sha256": "5f7d9c7588ea25919f0816f74a2bdc8326300ee2f3145865a99459e242bbd8f5",
+      "notes": "All named tests pass on Bun and native 1/4 threads (tests/google_generative_ai_check.py); request/response behaviour is additionally checked by a 560-case differential against pinned pi-mono."
     },
     {
       "source": "packages/ai/test/google-shared-image-tool-result-routing.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "4b93e7a5b7723cd63162b77687f975b9b87d0da76b5ed2b55b88522252e72a32"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/google-shared-image-tool-result-routing.bend",
+        "packages/ai/test/google-harness.bend",
+        "packages/ai/test/google-shared-support.bend",
+        "tests/google-suites.bend",
+        "tests/google_generative_ai_check.py"
+      ],
+      "sha256": "4b93e7a5b7723cd63162b77687f975b9b87d0da76b5ed2b55b88522252e72a32",
+      "notes": "All named tests pass on Bun and native 1/4 threads (tests/google_generative_ai_check.py); request/response behaviour is additionally checked by a 560-case differential against pinned pi-mono."
     },
     {
       "source": "packages/ai/test/google-shared-retry.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "de24f8ea13e0a83f7913a2741902550f53bbbe5200dc9494af52c0a1fbb49a78"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/google-shared-retry.bend",
+        "packages/ai/test/google-harness.bend",
+        "packages/ai/test/google-shared-support.bend",
+        "tests/google-suites.bend",
+        "tests/google_generative_ai_check.py"
+      ],
+      "sha256": "de24f8ea13e0a83f7913a2741902550f53bbbe5200dc9494af52c0a1fbb49a78",
+      "notes": "All named tests pass on Bun and native 1/4 threads (tests/google_generative_ai_check.py); request/response behaviour is additionally checked by a 560-case differential against pinned pi-mono."
     },
     {
       "source": "packages/ai/test/google-shared-signed-empty-blocks.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "10247e1390ec36c323b2b36c170aa97bc5c1c98446f5c25819ed2bb82d7962c0"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/google-shared-signed-empty-blocks.bend",
+        "packages/ai/test/google-harness.bend",
+        "packages/ai/test/google-shared-support.bend",
+        "tests/google-suites.bend",
+        "tests/google_generative_ai_check.py"
+      ],
+      "sha256": "10247e1390ec36c323b2b36c170aa97bc5c1c98446f5c25819ed2bb82d7962c0",
+      "notes": "All named tests pass on Bun and native 1/4 threads (tests/google_generative_ai_check.py); request/response behaviour is additionally checked by a 560-case differential against pinned pi-mono."
     },
     {
       "source": "packages/ai/test/google-thinking-disable.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "dc899136ae7d5c367b846aa68fc693cbe20fe12a85dfd8b41ff97fb8e6f22b10"
+      "sha256": "dc899136ae7d5c367b846aa68fc693cbe20fe12a85dfd8b41ff97fb8e6f22b10",
+      "notes": "Every case is a live E2E request against Gemini (skipped without GEMINI_API_KEY); the request shapes it covers are compared in the Google differential (tests/google_generative_ai_check.py)."
     },
     {
       "source": "packages/ai/test/google-thinking-level-map.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "0a4912f8fa12fae18db5398f6f47d181d8ac853e801f0e64460b597660be955d"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/google-thinking-level-map.bend",
+        "packages/ai/test/google-harness.bend",
+        "packages/ai/test/google-shared-support.bend",
+        "tests/google-suites.bend",
+        "tests/google_generative_ai_check.py"
+      ],
+      "sha256": "0a4912f8fa12fae18db5398f6f47d181d8ac853e801f0e64460b597660be955d",
+      "notes": "The Google Generative AI half passes on Bun and native 1/4 threads (tests/google_generative_ai_check.py); the Google Vertex rows and the two Vertex-only tests stay pending because the Vertex adapter is not ported."
     },
     {
       "source": "packages/ai/test/google-thinking-signature.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "81d47d5851bb3b9fa8cfc879df0a26747dd2ffd7c7093d22ce8bac74fb241dc1"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/google-thinking-signature.bend",
+        "packages/ai/test/google-harness.bend",
+        "packages/ai/test/google-shared-support.bend",
+        "tests/google-suites.bend",
+        "tests/google_generative_ai_check.py"
+      ],
+      "sha256": "81d47d5851bb3b9fa8cfc879df0a26747dd2ffd7c7093d22ce8bac74fb241dc1",
+      "notes": "All named tests pass on Bun and native 1/4 threads (tests/google_generative_ai_check.py); request/response behaviour is additionally checked by a 560-case differential against pinned pi-mono."
     },
     {
       "source": "packages/ai/test/google-vertex-api-key-resolution.test.ts",
@@ -1470,10 +1581,12 @@
       "source": "packages/ai/test/providers.test.ts",
       "status": "partial",
       "ports": [
-        "packages/ai/test/cloudflare-auth.bend"
+        "packages/ai/test/cloudflare-auth.bend",
+        "packages/ai/test/amazon-bedrock-auth.bend",
+        "tests/bedrock_check.py"
       ],
       "sha256": "05398664e04241071153801789cc3017bad1b820c1926a91ac04dc9cdff785a6",
-      "notes": "Only the two Cloudflare cases are ported ('requires Cloudflare Workers AI account config and returns scoped env', 'requires Cloudflare AI Gateway account and gateway config and returns scoped env headers'), each with its missing-config and configured halves. Upstream resolves through createModels().getAuth with a fake auth context; the port calls the provider's ApiKeyAuth.resolve with the same context. Native cases cover the per-field credential/env merge, the source label, an empty stored key and abort checks. Every other case of the suite remains pending. Native lane not run."
+      "notes": "Only the two Cloudflare cases are ported ('requires Cloudflare Workers AI account config and returns scoped env', 'requires Cloudflare AI Gateway account and gateway config and returns scoped env headers'), each with its missing-config and configured halves. Upstream resolves through createModels().getAuth with a fake auth context; the port calls the provider's ApiKeyAuth.resolve with the same context. Native cases cover the per-field credential/env merge, the source label, an empty stored key and abort checks. Bedrock (packages/ai/test/amazon-bedrock-auth.bend, run by tests/bedrock_check.py on Bun): 'reports bedrock as configured from ambient AWS credentials without an api key' (configured and unconfigured halves) and the resolve assertion of 'runs provider-owned Bedrock bearer token and AWS profile login flows' call bedrockAuth.resolve with the same fake context; its login half is pending until LoginInteraction models select prompts and notify events. Native cases cover the full credential-source order, empty values and abort checks. Every other case of the suite remains pending. Native lane not run."
     },
     {
       "source": "packages/ai/test/qwen-token-plan-models.test.ts",
@@ -3179,9 +3292,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-compaction-model-overrides.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "111d42f31f6fe4d2a792e28431b8b950f91f90d56fe5112d394dbeaf2e8b25fa"
+      "status": "partial",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md"
+      ],
+      "sha256": "111d42f31f6fe4d2a792e28431b8b950f91f90d56fe5112d394dbeaf2e8b25fa",
+      "notes": "Ported: the four it.each paths of 'uses model token settings for %s compaction and extension preparation' (manual, pre-prompt, post-run, overflow: one session_before_compact preparation with the faux/faux-1 override settings, the reason, firstKeptEntryId, one compaction_end with the supplied summary, all replies consumed), both paths of 'passes resolved budgets to built-in %s summarization' (summary request cap 1600, compaction entry firstKeptEntryId and summary), and 'uses the newly selected model without changing ordinary settings'. Pending: 'captures model identity before awaiting summarization auth' - the native summarizer has no summarization-auth step (upstream _getSummarizationRequestAuth) that a test could interleave a model change into."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-compaction.test.ts",
@@ -3266,9 +3384,15 @@
     },
     {
       "source": "packages/coding-agent/test/suite/lax-message-content.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5ca581a592613b50c167adb877a9d509cfd88358ebb3adbe6064cd5df38e094b"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md",
+        "packages/coding-agent/src/core/session-json.bend"
+      ],
+      "sha256": "5ca581a592613b50c167adb877a9d509cfd88358ebb3adbe6064cd5df38e094b",
+      "notes": "All six tests. The three loading cases decode session entries with null or missing content (user, assistant, toolResult message entries and custom_message entries, the latter fixed in session-json.bend) into context messages with empty content, and keep valid content. The three in-memory cases run with the native value for missing content (an empty list): a tool returning no content (the follow-up turn consumes the result), a message_end replacement without content, and a custom message without content; Bend tool results, replacements and custom messages cannot omit the field, so upstream's null/undefined inputs have no native counterpart (tests/suite-harness.md)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/1717-2113-agent-session-event-settlement.test.ts",
@@ -3283,9 +3407,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2023-queued-slash-command-followup.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6a2d8d0992ed8065b4162d64e8c70019b02def0c20e51c3a1ea3544c42e17fc4"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md"
+      ],
+      "sha256": "6a2d8d0992ed8065b4162d64e8c70019b02def0c20e51c3a1ea3544c42e17fc4",
+      "notes": "An extension's pi.sendUserMessage('/testcmd queued', followUp) during a held tool run is queued as raw user text: the testcmd command never runs, user texts are start and '/testcmd queued', and the model answers the follow-up."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2753-reload-stale-resource-settings.test.ts",
@@ -3387,9 +3516,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3688-tree-cancel-compacting.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "22b3ba0b21f63194979e1178f0d04b5c07977bb0fe1ed157db3ebd0743d0ca65"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md"
+      ],
+      "sha256": "22b3ba0b21f63194979e1178f0d04b5c07977bb0fe1ed157db3ebd0743d0ca65",
+      "notes": "A session_before_tree handler cancelling the navigation: the result is {cancelled: true}, isCompacting is false afterwards and the leaf is unchanged."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3982-message-end-cost-override.test.ts",
@@ -3892,14 +4026,16 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9178-tree-during-compaction.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/regressions_check.py",
         "tests/regressions.bend",
-        "tests/regressions.md"
+        "tests/regressions.md",
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py"
       ],
       "sha256": "21dee83475afbc7421e4c44594b51cd4f3666b68953fc91266de4ab0e305c482",
-      "notes": "'rejects navigation before the active leaf can change' passes with the manual compaction held at its summary request: navigation fails with the compaction message, the leaf is unchanged, the compaction entry follows the original leaf and the context keeps 'second assistant'. Pending: 'rejects a second navigation while the first is waiting', which waits in a session_before_tree extension handler. Bun and native (tests/regressions.bend, 1 and 4 threads)."
+      "notes": "'rejects navigation before the active leaf can change' in tests/regressions_check.py (the manual compaction held at its summary request instead of a session_before_compact handler); 'rejects a second navigation while the first is waiting' in tests/suite_harness_check.py with a session_before_tree handler waiting on a channel: the second navigation fails with upstream's message, the leaf stays until the first navigation completes at its target."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9340-9777-auto-compaction-cancellation.test.ts",
@@ -4042,7 +4178,7 @@
         "tests/thinking-level.bend"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '→ ✓ medium', then '  ✓ medium' and '→   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",

@@ -310,6 +310,9 @@ def handled(handler: T.EventHandler, event: T.ExtensionEvent, ctx: Ctx.Extension
     case T.OnToolExecutionStart{callback} T.ToolExecutionStart{value}: called(T.ToolExecutionStartEvent, callback, value, ctx)
     case T.OnToolExecutionUpdate{callback} T.ToolExecutionUpdate{value}: called(T.ToolExecutionUpdateEvent, callback, value, ctx)
     case T.OnToolExecutionEnd{callback} T.ToolExecutionEnd{value}: called(T.ToolExecutionEndEvent, callback, value, ctx)
+    case T.OnSessionTree{callback} T.SessionTree{value}: called(T.SessionTreeEvent, callback, value, ctx)
+    case T.OnSessionCompact{callback} T.SessionCompact{value}: called(T.SessionCompactEvent, callback, value, ctx)
+    case T.OnSessionCompactFailed{callback} T.SessionCompactFailed{value}: called(T.SessionCompactFailedEvent, callback, value, ctx)
     case _ _: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
 
 def reported(+runner: ExtensionRunner, path: String, eventType: String, result: Result<&2, &2, String, Unit>) -> IO(Unit):
@@ -501,3 +504,67 @@ def emitToolResult(+runner: ExtensionRunner, event: T.ToolResultEvent) -> IO(May
     dispatches : List<&2, Dispatch> <- snapshot(runner, "tool_result")
     result : ResultPatch <- resultTools(runner, dispatches, ResultPatch{event, False{}})
     return patchResult(result)
+
+# session_before_* (upstream emit's SessionBeforeEvent results)
+# -------------------------------------------------------------
+# The last result a handler returned; a result with `cancel` stops dispatch.
+# A failing handler is reported and skipped.
+
+def treeCancels(result: Maybe<&2, T.SessionBeforeTreeResult>) -> Bool:
+  match result:
+    case Some{T.SessionBeforeTreeResult{Some{True{}}, _, _, _, _}}: True{}
+    case _: False{}
+
+def treeResultOf(+runner: ExtensionRunner, path: String, result: Result<&2, &2, String, Maybe<&2, T.SessionBeforeTreeResult>>, previous: Maybe<&2, T.SessionBeforeTreeResult>) -> IO(Maybe<&2, T.SessionBeforeTreeResult>):
+  match result:
+    case Fail{error}:
+      do IO<Maybe<&2, T.SessionBeforeTreeResult>>:
+        emitError(runner, T.ExtensionError{path, "session_before_tree", error, None{}})
+        return previous
+    case Done{None{}}: IO.pure(Maybe<&2, T.SessionBeforeTreeResult>, previous)
+    case Done{Some{found}}: IO.pure(Maybe<&2, T.SessionBeforeTreeResult>, Some{found})
+
+def beforeTree(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>, +event: T.SessionBeforeTreeEvent, result: Maybe<&2, T.SessionBeforeTreeResult>) -> IO(Maybe<&2, T.SessionBeforeTreeResult>):
+  match dispatches:
+    case Nil{}: IO.pure(Maybe<&2, T.SessionBeforeTreeResult>, result)
+    case Dispatch{path, T.OnSessionBeforeTree{callback}} <> rest:
+      do IO<Maybe<&2, T.SessionBeforeTreeResult>>:
+        called : Result<&2, &2, String, Maybe<&2, T.SessionBeforeTreeResult>> <- C.call(T.HandlerCall<T.SessionBeforeTreeEvent>, Result<&2, &2, String, Maybe<&2, T.SessionBeforeTreeResult>>, callback, T.HandlerCall{event, createContext(runner)})
+        +next : Maybe<&2, T.SessionBeforeTreeResult> <- treeResultOf(runner, path, called, result)
+        Bool.pick(Unit -> IO(Maybe<&2, T.SessionBeforeTreeResult>), treeCancels(next), _ => IO.pure(Maybe<&2, T.SessionBeforeTreeResult>, next), _ => beforeTree(runner, rest, event, next))(Unit{})
+    case _ <> rest: beforeTree(runner, rest, event, result)
+
+def emitSessionBeforeTree(+runner: ExtensionRunner, event: T.SessionBeforeTreeEvent) -> IO(Maybe<&2, T.SessionBeforeTreeResult>):
+  do IO<Maybe<&2, T.SessionBeforeTreeResult>>:
+    dispatches : List<&2, Dispatch> <- snapshot(runner, "session_before_tree")
+    beforeTree(runner, dispatches, event, None{})
+
+def compactCancels(result: Maybe<&2, T.SessionBeforeCompactResult>) -> Bool:
+  match result:
+    case Some{T.SessionBeforeCompactResult{Some{True{}}, _}}: True{}
+    case _: False{}
+
+def compactResultOf(+runner: ExtensionRunner, path: String, result: Result<&2, &2, String, Maybe<&2, T.SessionBeforeCompactResult>>, previous: Maybe<&2, T.SessionBeforeCompactResult>) -> IO(Maybe<&2, T.SessionBeforeCompactResult>):
+  match result:
+    case Fail{error}:
+      do IO<Maybe<&2, T.SessionBeforeCompactResult>>:
+        emitError(runner, T.ExtensionError{path, "session_before_compact", error, None{}})
+        return previous
+    case Done{None{}}: IO.pure(Maybe<&2, T.SessionBeforeCompactResult>, previous)
+    case Done{Some{found}}: IO.pure(Maybe<&2, T.SessionBeforeCompactResult>, Some{found})
+
+def beforeCompact(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>, +event: T.SessionBeforeCompactEvent, result: Maybe<&2, T.SessionBeforeCompactResult>) -> IO(Maybe<&2, T.SessionBeforeCompactResult>):
+  match dispatches:
+    case Nil{}: IO.pure(Maybe<&2, T.SessionBeforeCompactResult>, result)
+    case Dispatch{path, T.OnSessionBeforeCompact{callback}} <> rest:
+      do IO<Maybe<&2, T.SessionBeforeCompactResult>>:
+        called : Result<&2, &2, String, Maybe<&2, T.SessionBeforeCompactResult>> <- C.call(T.HandlerCall<T.SessionBeforeCompactEvent>, Result<&2, &2, String, Maybe<&2, T.SessionBeforeCompactResult>>, callback, T.HandlerCall{event, createContext(runner)})
+        +next : Maybe<&2, T.SessionBeforeCompactResult> <- compactResultOf(runner, path, called, result)
+        Bool.pick(Unit -> IO(Maybe<&2, T.SessionBeforeCompactResult>), compactCancels(next), _ => IO.pure(Maybe<&2, T.SessionBeforeCompactResult>, next), _ => beforeCompact(runner, rest, event, next))(Unit{})
+    case _ <> rest: beforeCompact(runner, rest, event, result)
+
+def emitSessionBeforeCompact(+runner: ExtensionRunner, event: T.SessionBeforeCompactEvent) -> IO(Maybe<&2, T.SessionBeforeCompactResult>):
+  do IO<Maybe<&2, T.SessionBeforeCompactResult>>:
+    dispatches : List<&2, Dispatch> <- snapshot(runner, "session_before_compact")
+    beforeCompact(runner, dispatches, event, None{})
+

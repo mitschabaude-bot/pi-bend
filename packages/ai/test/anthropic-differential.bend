@@ -291,12 +291,12 @@ def choice(value: Maybe<&2, V.Value>) -> Maybe<&2, Messages.AnthropicToolChoice>
 def direct(+value: V.Value) -> H.Options():
   Messages.AnthropicOptions{base(value), flag(field(value, "thinkingEnabled")), number(field(value, "thinkingBudgetTokens")), text(field(value, "effort")), display(text(field(value, "thinkingDisplay"))), flag(field(value, "interleavedThinking")), choice(field(value, "toolChoice")), None{}}
 
-def entryOptions(entry: Maybe<&2, String>, +model: T.Model<J()>, +context: H.Context(), +selected: V.Value) -> H.Options():
+def entryOptions(entry: Maybe<&2, String>, +model: T.Model<J()>, +context: H.Context(), +selected: V.Value) -> Result<&2, &2, String, H.Options()>:
   match entry:
     case Some{"simple"}: H.fromSimple(model, context, simple(selected))
-    case _: direct(selected)
+    case _: Done{direct(selected)}
 
-def optionsOf(+model: T.Model<J()>, +context: H.Context(), +value: V.Value) -> H.Options():
+def optionsOf(+model: T.Model<J()>, +context: H.Context(), +value: V.Value) -> Result<&2, &2, String, H.Options()>:
   entryOptions(text(field(value, "entry")), model, context, Maybe.default(&2, V.Value, field(value, "options"), V.ObjectValue{R.new(V.Value)}))
 
 # Results
@@ -370,13 +370,20 @@ def resultOf(mode: H.Mode, outcome: H.Outcome) -> J():
     case H.Send{}: request(H.requestOf(outcome))
     case _: response(outcome)
 
+# A streamSimple that throws before a stream exists reports `thrown`.
+def selectedCase(+model: T.Model<J()>, +context: H.Context(), selected: Result<&2, &2, String, H.Options()>, +mode: H.Mode) -> IO(Unit):
+  match selected:
+    case Fail{message}: IO.print("R " ++ Text.showText(jsonText(H.obj(H.prop("thrown", T.JsonString{message}) <> Nil{}))))
+    case Done{options}:
+      do IO<Unit>:
+        outcome : H.Outcome <- H.run(model, context, options, mode)
+        IO.print("R " ++ Text.showText(jsonText(resultOf(mode, outcome))))
+
 def runCase(+value: V.Value) -> IO(Unit):
   +model = modelOf(Maybe.default(&2, V.Value, field(value, "model"), V.Null{}))
   +context = contextOf(value)
   +mode = modeOf(value)
-  do IO<Unit>:
-    outcome : H.Outcome <- H.run(model, context, optionsOf(model, context, value), mode)
-    IO.print("R " ++ Text.showText(jsonText(resultOf(mode, outcome))))
+  selectedCase(model, context, optionsOf(model, context, value), mode)
 
 def parsed(value: Result<&2, &2, Decode.ParseError, V.Value>) -> IO(Unit):
   match value:

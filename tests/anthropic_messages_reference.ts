@@ -83,4 +83,4 @@ for (const c of input.cases) {
 		results.push({ thrown: String(error?.message ?? error) });
 	}
 }
-console.log(JSON.stringify(results));
+await Bun.write(Bun.stdout, JSON.stringify(results) + "\n");

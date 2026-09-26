@@ -191,14 +191,19 @@ def bashExecutionFields(+fields: R.Record<V.Value>) -> Decoded(Messages.BashExec
     excludeFromContext : Maybe<&2, Bool> <- Decode.optional(Bool, fields, "excludeFromContext", decodeBoolean)
     return Messages.BashExecutionMessage{command, output, exitCode, cancelled, truncated, fullOutputPath, timestamp, excludeFromContext}
 
+# Custom message content that is null or missing (untyped extensions, old or
+# hand-edited session files) decodes as empty, as upstream normalizes it at
+# ingestion (issues #6259, #6276; lax-message-content.test.ts).
+def laxContent(content: Maybe<&2, Ai.UserContent>) -> Ai.UserContent: Maybe.default(&2, Ai.UserContent, content, Ai.UserBlocks{Nil{}})
+
 def customMessageFields(~C: Data, ~custom: V.Value -> Decoded(C), +fields: R.Record<V.Value>) -> Decoded(Messages.CustomMessage<C>):
   do Result<&2, &2, Decode.Error, Messages.CustomMessage<C>>:
     customType : String <- tagged(fields, "customType")
-    content : Ai.UserContent <- Decode.required(Ai.UserContent, fields, "content", Json.decodeUserContent)
+    content : Maybe<&2, Ai.UserContent> <- Decode.optional(Ai.UserContent, fields, "content", Json.decodeUserContent)
     display : Bool <- Decode.required(Bool, fields, "display", decodeBoolean)
     details : Maybe<&2, C> <- Decode.optional(C, fields, "details", custom)
     timestamp : F64 <- Decode.required(F64, fields, "timestamp", Decode.number)
-    return Messages.CustomMessage{customType, content, display, details, timestamp}
+    return Messages.CustomMessage{customType, laxContent(content), display, details, timestamp}
 
 def branchSummaryFields(+fields: R.Record<V.Value>) -> Decoded(Messages.BranchSummaryMessage):
   do Result<&2, &2, Decode.Error, Messages.BranchSummaryMessage>:
@@ -316,10 +321,10 @@ def entryOf(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D), ~t
       do Result<&2, &2, Decode.Error, S.SessionEntry<D, T, C>>:
         base : S.SessionEntryBase <- baseFields(fields)
         customType : String <- tagged(fields, "customType")
-        content : Ai.UserContent <- Decode.required(Ai.UserContent, fields, "content", Json.decodeUserContent)
+        content : Maybe<&2, Ai.UserContent> <- Decode.optional(Ai.UserContent, fields, "content", Json.decodeUserContent)
         display : Bool <- Decode.required(Bool, fields, "display", decodeBoolean)
         details : Maybe<&2, C> <- Decode.optional(C, fields, "details", custom)
-        return S.CustomMessageEntry{base, customType, content, details, display}
+        return S.CustomMessageEntry{base, customType, laxContent(content), details, display}
     case "label":
       do Result<&2, &2, Decode.Error, S.SessionEntry<D, T, C>>:
         base : S.SessionEntryBase <- baseFields(fields)

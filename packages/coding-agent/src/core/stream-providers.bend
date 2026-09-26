@@ -2,6 +2,7 @@ import Base
 import ../../../ai/src/types.bend as Ai
 import ../../../ai/src/api/pi-messages.bend as PiMessages
 import ../../../ai/src/api/mistral-conversations.bend as Mistral
+import ../../../ai/src/api/bedrock-converse-stream.bend as Bedrock
 import ../../../ai/src/utils/event-stream.bend as Events
 import ../../../agent/src/types.bend as Agent
 import ../../../runtime/src/abort.bend as Abort
@@ -73,3 +74,7 @@ def mistralSelected(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai
 
 def mistral(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +context: Context(), +options: Maybe<&2, Options()>) -> IO(Output()):
   mistralSelected(fetch, urlContext, model, context, parentSignal(options), Mistral.streamSimpleOptions(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, context, options))
+
+# upstream bedrock-converse-stream streamSimple.
+def bedrock(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), +options: Maybe<&2, Options()>) -> IO(Output()):
+  lease(events => signal => Bedrock.streamSimple(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~Tools.errorMessage, ~noDetails, events, fetch, urlContext, signal, model, context, options), parentSignal(options))

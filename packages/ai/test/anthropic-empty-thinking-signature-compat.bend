@@ -14,7 +14,7 @@ def makeContext(content: List<&2, T.AssistantContent<V.Value>>, provider: String
 
 def capture(+model: T.Model<T.JsonValue>, +context: H.Context()) -> IO(Maybe<&2, T.JsonValue>):
   do IO<Maybe<&2, T.JsonValue>>:
-    outcome : H.Outcome <- H.run(model, context, H.fromSimple(model, context, H.simple(Some{"fake-key"}, None{}, None{})), H.Capture{})
+    outcome : H.Outcome <- H.runSimple(model, context, H.simple(Some{"fake-key"}, None{}, None{}), H.Capture{})
     return H.payloadOf(outcome)
 
 def assistantContent(model: T.Model<T.JsonValue>, context: H.Context(), +want: String, +name: String) -> IO(Unit):

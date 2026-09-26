@@ -11,10 +11,10 @@
     },
     "packages/ai/src/api/anthropic-messages.ts": {
       "state": "ported",
-      "note": "Ported as three modules: anthropic-messages.bend (AnthropicOptions, getAnthropicCompat, cache control with PI_CACHE_RETENTION, Claude Code tool naming, transformMessages with tool-call id normalization, convertMessages with held-back system messages, consecutive tool results and the last-message cache marker, convertTools with strict JSON-schema tools, native tool changes with the deferred placeholder, getBetaFeatures with header overrides, managed-effort markers, buildParams, streamSimple's option mapping, mapStopReason, createClient's auth and headers); anthropic-messages-stream.bend (iterateSseMessages' line decoder with its trailing flush, iterateAnthropicEvents' filtering, repair and parse errors, the event loop with fallback pricing, input transformation diagnostics and the checks after the loop); anthropic-messages-client.bend (the stream lifecycle: injected or created client, onPayload replacement forcing streaming, retryProviderRequest over the shared Stainless request port, onResponse, start, the body loop and the catch block). tests/anthropic_messages_check.py compares 1,692 captured params and wire requests and 21 streamed messages and event sequences with pinned pi-mono, key order included, and runs the ported suites; tests/anthropic_client_loopback.py covers the HTTP path. Approved differences: X-Stainless-* platform headers are not sent (the SDK defaults come from the caller and are empty in the app); streamSimple's missing-auth check reports an error event instead of throwing synchronously; options.client is a callback returning status, headers and a body chunk source, and its failures are messages that are not retried; JSON.parse's engine-specific error text is replaced by the native parser's; a failing body read reports undici's \"terminated\"; event partials are snapshots; an unclosed block does not leak the scratch index field; diagnostic details go through a caller-supplied encoder (the app's details are Unit). No live Anthropic request has been verified.",
+      "note": "Ported as three modules: anthropic-messages.bend (AnthropicOptions, getAnthropicCompat, cache control with PI_CACHE_RETENTION, Claude Code tool naming, transformMessages with tool-call id normalization, convertMessages with held-back system messages, consecutive tool results and the last-message cache marker, convertTools with strict JSON-schema tools, native tool changes with the deferred placeholder, getBetaFeatures with header overrides, managed-effort markers, buildParams, streamSimple's option mapping, mapStopReason, createClient's auth and headers; streamSimple's missing-auth error fails before a stream exists, as upstream throws synchronously); anthropic-messages-stream.bend (iterateSseMessages' line decoder with its trailing flush, iterateAnthropicEvents' filtering, repair and parse errors, the event loop with fallback pricing, input transformation diagnostics and the checks after the loop); anthropic-messages-client.bend (the stream lifecycle: injected or created client, onPayload replacement forcing streaming, retryProviderRequest over the shared Stainless request port, onResponse, start, the body loop and the catch block). tests/anthropic_messages_check.py compares 1,692 captured params and wire requests and 21 streamed messages and event sequences with pinned pi-mono, key order included, and runs the ported suites; tests/anthropic_client_loopback.py covers the HTTP path. Approved differences: X-Stainless-* platform headers are not sent (the SDK defaults come from the caller and are empty in the app); options.client is a callback returning status, headers and a body chunk source, and its failures are messages that are not retried; JSON.parse's engine-specific error text is replaced by the native parser's; a failing body read reports undici's \"terminated\"; event partials are snapshots; an unclosed block does not leak the scratch index field; diagnostic details go through a caller-supplied encoder (the app's details are Unit). No live Anthropic request has been verified.",
       "source_sha256": "d4c34523a3c278b23b831352ec7fc9c9d091f9ffc07c37081e43b8f3dd3d3203",
       "port_sha256": {
-        "packages/ai/src/api/anthropic-messages.bend": "d0ac2c6f37eacef7f7b6a1217570c9e915c4e342966f10ed37266533c7ba537d",
+        "packages/ai/src/api/anthropic-messages.bend": "9c82e71ede83dac2f0bb08ce04599390866ada04a325f27d27bad6d4c0cc43fe",
         "packages/ai/src/api/anthropic-messages-stream.bend": "e039587037466f33faf9ffbb296596fd18c0e6c6992fc4466dad9001fb58719f",
         "packages/ai/src/api/anthropic-messages-client.bend": "e2eba6659b52cac6d27ccf0793cb234c035371c1c06ebad34c4ddd1b94f22dee"
       },
@@ -59,10 +59,10 @@
     },
     "packages/coding-agent/src/core/agent-session.ts": {
       "state": "partial",
-      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal; prompt images and tool-result images are normalized with the image setting and the current model's resize profile (f5c946480). sendCustomMessage (nextTurn, steer/followUp while streaming, deferral to turn_end without triggerTurn, triggerTurn runs) and sendUserMessage (expandPromptTemplates) are ported with the pending custom-message flushes at turn_end, run settlement and prompt, and bound as the extension runtime's sendMessage/sendUserMessage actions. Extension events: agent/turn_start/message/tool_execution events reach extensions before listeners, message_end replacements are persisted and projected, tool_call and tool_result run in the agent's tool hooks, agent_settled precedes the public event; waitForIdle waits for session-level idleness (no run, compaction or branch summary). Missing: turn_end/agent_before_settle boundaries, session_* extension events, context, before_agent_start, input, user_bash, _isEmittingAgentSettled deferral, and replaced messages inside turn_end/agent_end payloads. The skill-block parser used by restored transcripts is in core/skills.bend.",
+      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal; prompt images and tool-result images are normalized with the image setting and the current model's resize profile (f5c946480). sendCustomMessage (nextTurn, steer/followUp while streaming, deferral to turn_end without triggerTurn, triggerTurn runs) and sendUserMessage (expandPromptTemplates) are ported with the pending custom-message flushes at turn_end, run settlement and prompt, and bound as the extension runtime's sendMessage/sendUserMessage actions. Extension events: agent/turn_start/message/tool_execution events reach extensions before listeners, message_end replacements are persisted and projected, tool_call and tool_result run in the agent's tool hooks, agent_settled precedes the public event; navigateTree runs session_before_tree (cancel, supplied summary, instruction and label overrides) under the branch-summary controller and emits session_tree; manual and automatic compaction run session_before_compact (cancel or supplied result), then session_compact or session_compact_failed; waitForIdle waits for session-level idleness (no run, compaction or branch summary). Missing: turn_end/agent_before_settle boundaries, session_start/switch/fork/shutdown extension events, context, before_agent_start, input, user_bash, _isEmittingAgentSettled deferral, and replaced messages inside turn_end/agent_end payloads. The skill-block parser used by restored transcripts is in core/skills.bend.",
       "source_sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7",
       "port_sha256": {
-        "packages/coding-agent/src/core/agent-session.bend": "f00fb1c765029425cab81f754c42c794ec7b697b02ced1179e2081a549693437",
+        "packages/coding-agent/src/core/agent-session.bend": "5a4a4269b448349ed5ebfe0a3d198d72cedd7e4d2fa0795ed4351ba5e545ec69",
         "packages/coding-agent/src/core/skills.bend": "39c10b968daf609f60fe3c91154a63a7248c7cfd18173781eb776904dcfea236"
       },
       "ports": [
@@ -512,7 +512,7 @@
       "port_sha256": {
         "packages/ai/src/api/pi-messages.bend": "b014bfe831a016688261bc1d18470838ca61366b4baa7647c28cc44a0452d6e7",
         "packages/ai/src/api/provider-fetch.bend": "4f11d6da5363ffae0c3d2214e163bd9eee6a4348039d4f37d4d652a62a248275",
-        "packages/coding-agent/src/core/stream-providers.bend": "981f7ebedf8a59f5bd49b08af80d113dab0dfe640ab2caebbdaad77946fa371e"
+        "packages/coding-agent/src/core/stream-providers.bend": "6fb2a2198af50b5463f92ddbdec9b193dace9012bb1c874939abbd3e0460d540"
       }
     },
     "packages/ai/src/api/pi-messages.lazy.ts": {
@@ -555,7 +555,7 @@
       "port_sha256": {
         "packages/ai/src/api/mistral-conversations.bend": "87f9860ab53ae3c884656d205c8f771c48b7ad54dc01ce2438b0c8e07659a7b1",
         "packages/ai/src/api/provider-fetch.bend": "4f11d6da5363ffae0c3d2214e163bd9eee6a4348039d4f37d4d652a62a248275",
-        "packages/coding-agent/src/core/stream-providers.bend": "981f7ebedf8a59f5bd49b08af80d113dab0dfe640ab2caebbdaad77946fa371e"
+        "packages/coding-agent/src/core/stream-providers.bend": "6fb2a2198af50b5463f92ddbdec9b193dace9012bb1c874939abbd3e0460d540"
       }
     },
     "packages/ai/src/api/mistral-conversations.lazy.ts": {
@@ -598,18 +598,88 @@
     },
     "packages/coding-agent/src/core/extensions/runner.ts": {
       "state": "partial",
-      "note": "Native ExtensionRunner: bindCore/bindCommandContext/setUIContext, command resolution with invocation names, error listeners, snapshotEventHandlers, emit for events without results, emitMessageEnd (same-role replacement chain), emitToolCall (first block wins, failures propagate) and emitToolResult (patched fields). Missing: emitBoundary (turn_end/agent_before_settle drafts), session_before_* cancellation results, emitContext, emitBeforeAgentStart, emitInput, emitUserBash, provider request/header events, emitCacheWarmingDecision, emitResourcesDiscover, shortcuts, flags, renderers, tool registrations, invalidate/stale contexts.",
+      "note": "Native ExtensionRunner: bindCore/bindCommandContext/setUIContext, command resolution with invocation names, error listeners, snapshotEventHandlers, emit for events without results, emitMessageEnd (same-role replacement chain), emitToolCall (first block wins, failures propagate), emitToolResult (patched fields), and the session_before_tree/session_before_compact results of emit (last result, cancel stops dispatch, failures reported). Missing: emitBoundary (turn_end/agent_before_settle drafts), session_before_switch/fork, emitContext, emitBeforeAgentStart, emitInput, emitUserBash, provider request/header events, emitCacheWarmingDecision, emitResourcesDiscover, shortcuts, flags, renderers, tool registrations, invalidate/stale contexts.",
       "source_sha256": "bf68eaf27a3e54f1cfc0982554e0598c050fd9a06c8e8b7d6cd2d8e3d8d5990c",
       "port_sha256": {
-        "packages/coding-agent/src/core/extensions/runner.bend": "b7685553658d8355e5a33996f237ec1de0dc48ab50bfe4a4346cdb6bb1c4e770"
+        "packages/coding-agent/src/core/extensions/runner.bend": "4dab00a1d0619f0d82e58d783abea6724aedef2392fc13f3de723fb0bca77f66"
       }
     },
     "packages/coding-agent/src/core/extensions/types.ts": {
       "state": "partial",
-      "note": "Typed native events and results for agent_start/end/settled, turn_start, message_start/update/end, tool_execution_*, tool_call and tool_result, commands, InlineExtension, ExtensionError and the sendMessage/sendUserMessage actions. tool_call input is one JSON value, not upstream's per-tool narrowed variants. Missing: session_* events, boundaries (entry drafts, BoundaryContextPreview), context/context_with_system, before_agent_start, input, user_bash, model/thinking select, provider request/response, UI prompt events, tools/shortcuts/flags/renderer registration types.",
+      "note": "Typed native events and results for agent_start/end/settled, turn_start, message_start/update/end, tool_execution_*, tool_call, tool_result, session_before_tree/session_tree (TreePreparation, summary and instruction overrides), session_before_compact/session_compact/session_compact_failed, commands, InlineExtension, ExtensionError and the sendMessage/sendUserMessage actions. tool_call input is one JSON value, not upstream's per-tool narrowed variants; compaction details are the typed read/modified file lists. Missing: session_start/switch/fork/shutdown/info events, boundaries (entry drafts, BoundaryContextPreview), context/context_with_system, before_agent_start, input, user_bash, model/thinking select, provider request/response, UI prompt events, tools/shortcuts/flags/renderer registration types.",
       "source_sha256": "601261b3deee1d61f85c930efed2767d66fe6c8d9637e19f4f53135b5fecf4d1",
       "port_sha256": {
-        "packages/coding-agent/src/core/extensions/types.bend": "8e8a0d9c1505947a69612a4208d389b7cb4d24aaf45ebd04f5887344a75f2510"
+        "packages/coding-agent/src/core/extensions/types.bend": "9d6deb8e726950f87bc5f217e4fdc8fb061750faad21a3da00db2fa3ebd69f21"
+      }
+    },
+    "packages/ai/src/api/bedrock-converse-stream.ts": {
+      "state": "partial",
+      "note": "stream/streamSimple: the client configuration pi builds (profile, region from ARN/AWS_REGION/profile/built-in endpoint, custom endpoints, static credentials, bearer token), message/tool/system conversion with cache points and document sanitization, adaptive and budget thinking fields, onPayload/onResponse, the restJson ConverseStream request with SigV4 (runtime/aws-sigv4.bend) or bearer auth and caller headers minus reserved ones, the event-stream response (runtime/aws-eventstream.bend with CRC-32), the stream fold (text, reasoning incl. redacted, tool calls, usage with 1h cache writes, stop reasons) and error formatting with bedrock_response_failure diagnostics; traces equal the pinned AWS SDK on a loopback server (tests/bedrock_check.py). Missing: the SDK credential chain beyond shared-file static keys and credential_process (SSO, role assumption, web identity, ECS/IMDS; reported as errors, bedrock-credentials.bend), SDK retries, and HTTP(S) proxy agents. Unknown content-block types and lone surrogates are not representable in the typed Bend transcript.",
+      "ports": [
+        "packages/ai/src/api/bedrock-converse-stream.bend",
+        "packages/ai/src/api/bedrock-credentials.bend",
+        "packages/runtime/src/aws-sigv4.bend",
+        "packages/runtime/src/aws-eventstream.bend",
+        "packages/runtime/src/crc32.bend"
+      ],
+      "source_sha256": "cd4b63f95787c9f775a96a19edf760bbf266987b51f9cc9f6ac0ecd34cffe047",
+      "port_sha256": {
+        "packages/ai/src/api/bedrock-converse-stream.bend": "3639183c4f9141c1a20c96aaa513b756314009e4b93fecb7f2e1d67977f67e4a",
+        "packages/ai/src/api/bedrock-credentials.bend": "11fa1344617ae553e16cf8a6d4b3dc5eb864d352d97c82ef040090296efc8295",
+        "packages/runtime/src/aws-sigv4.bend": "caa2c23300ee3da72bc2b7a8f807bd6478b0e84cff75ea6534a630ccfe313e10",
+        "packages/runtime/src/aws-eventstream.bend": "10407475f5491bdceffb014888626790a4b0dbade62c1538a1b36252b8e5569e",
+        "packages/runtime/src/crc32.bend": "f87ae9d406fe4180b39bc1fa5411d0bd38ddf40add1c28f7da404dbb5b52d5ba"
+      }
+    },
+    "packages/ai/src/api/bedrock-converse-stream.lazy.ts": {
+      "state": "excluded",
+      "note": "Lazy loading of the implementation module through a dynamic import is a JavaScript bundling concern; the Bend runtime dispatches models of this api to bedrock-converse-stream.bend directly (coding-agent agent-runtime selectedProvider).",
+      "source_sha256": "3ee8a1b2a2cd58927bee18ab5b4150401da810e9d5f4595822b3b10ded35de86",
+      "port_sha256": {}
+    },
+    "packages/ai/src/providers/amazon-bedrock.ts": {
+      "state": "partial",
+      "note": "The Amazon Bedrock provider with its catalog, listed first in providers/all.bend as upstream, and bedrockAuth.resolve (stored key, AWS_BEARER_TOKEN_BEDROCK, stored or ambient AWS_PROFILE, access keys, ECS task role, web identity token; abort checks around each lookup), tested in packages/ai/test/amazon-bedrock-auth.bend. Missing: bedrockAuth.login, whose method selection and notify event need the upstream AuthPrompt/AuthEvent interaction that LoginInteraction does not model yet.",
+      "source_sha256": "e32611e8d2d4e71ee5d0ba426da60c0aecf42d1bc34ccc3d0d49ce877c621a8c",
+      "port_sha256": {
+        "packages/ai/src/providers/amazon-bedrock.bend": "b4089f9b12e1c656a379d38fb024b68d8ffedb67f2cdec328a5b189b36d852db"
+      }
+    },
+    "packages/ai/src/providers/amazon-bedrock.models.ts": {
+      "state": "ported",
+      "note": "Generated from pi-ai's amazon-bedrock data by scripts/generate-model-catalog.py; tests/model-catalog.bend dumps every model equal to the pinned data.",
+      "source_sha256": "9c9cbe9b1c977177454ed12dc48c521fdc88d257ee1b92bc3805aa77eaf9b982",
+      "port_sha256": {
+        "packages/ai/src/providers/amazon-bedrock.models.bend": "3b48ffedbfbc5895345c930f0882cd05aa084de6ff0c1ae519034413ec7d8f59"
+      }
+    },
+    "packages/ai/src/bedrock-provider.ts": {
+      "state": "excluded",
+      "note": "A package entry point that re-exports stream/streamSimple so Bun-compiled binaries can preload the Bedrock module (coding-agent bun/runtime-setup.ts); Bend modules import api/bedrock-converse-stream.bend directly.",
+      "source_sha256": "427a4e76812ea4ac42133e7f41e75df99e0edaff883659c96a0e4ec78f670f9f",
+      "port_sha256": {}
+    },
+    "packages/ai/src/api/google-generative-ai.ts": {
+      "state": "ported",
+      "note": "Ported as three modules: google-generative-ai.bend (GoogleOptions, streamSimple's option mapping with clamped levels, level-or-budget thinking config and getGoogleBudget, buildParams producing the SDK parameters, client headers, and the SDK's parameter-to-REST conversion with its field order); google-generative-ai-stream.bend (the SDK's processStreamResponse framing with its delimiters, in-band error chunks and incomplete-segment error, and the chunk fold: text/thinking block transitions, signatures, function calls with generated ids, responseId, usage and finish reasons); google-generative-ai-client.bend (streamSimple's missing-key and level-mapping errors fail before a stream exists, as upstream throws synchronously; the stream lifecycle: custom-fetch and API-key checks, onPayload replacement, the SDK model path and address, headers, retryProviderRequest with status-only failures, the body loop and the catch block). tests/google_generative_ai_check.py compares 560 captured params, wire requests and streamed messages/event sequences with pinned pi-mono and runs the ported suites; tests/google_client_loopback.py covers the HTTP path and the agent glue. Documented differences (the tool-call counter one is flagged for review with the user): x-goog-api-client carries the SDK label without the gl-node/<process.version> runtime label (there is no Node runtime); the generated tool-call id counter is per stream instead of module-global (upstream's `let toolCallCounter` at google-generative-ai.ts:57; ids stay unique within a response and Date.now() distinguishes streams unless two start in the same millisecond); JSON.parse's engine-specific error text is replaced by the native parser's; event partials are snapshots. No live Gemini request has been verified.",
+      "source_sha256": "c20f1a40875b2106b6d39d8b7837cd30a882c6a5fcf8c311ccc42a090e18e956",
+      "port_sha256": {
+        "packages/ai/src/api/google-generative-ai.bend": "5036095bca4b9c918c3fa51e62d71cb88cea91e66b09851fdaca92093ce6fb95",
+        "packages/ai/src/api/google-generative-ai-stream.bend": "48155e15051f0be5a16833547938cae6eb6e61520dfc95b88cc7474d9e5984bc",
+        "packages/ai/src/api/google-generative-ai-client.bend": "eaaeead401f3172c802f3e76b871f6e69ab4cb3b4e1b87128923586621ecc19b"
+      },
+      "ports": [
+        "packages/ai/src/api/google-generative-ai.bend",
+        "packages/ai/src/api/google-generative-ai-stream.bend",
+        "packages/ai/src/api/google-generative-ai-client.bend"
+      ]
+    },
+    "packages/ai/src/api/google-shared.ts": {
+      "state": "ported",
+      "note": "Ported to google-shared.bend: Google thinking levels and their resolution/validation messages, usesGoogleThinkingLevel, disabled thinking config, thought-signature retention and validation, Gemini version rules (tool call ids, multimodal function responses, strict tool sampling), convertMessages (transformMessages with id normalization, signed/unsigned replay, empty-block handling, consecutive function responses, legacy image turns), sanitizeForOpenApi, convertTools with strict schemas, mapToolChoice, resolveGoogleFunctionCallingMode and mapStopReason/mapStopReasonString. Covered by the ported google-shared-* suites and the Google differential in tests/google_generative_ai_check.py. The Vertex caller is not ported, so Vertex-only paths are exercised only through the shared functions.",
+      "source_sha256": "62500d190085d9725ab9dd547ff1ee37e1f47daecf047836700a48980d2ec113",
+      "port_sha256": {
+        "packages/ai/src/api/google-shared.bend": "1984735bfdfef01a52262523c27298c49ca0ea51421b9a2febd1e67bc420dc97"
       }
     }
   }
