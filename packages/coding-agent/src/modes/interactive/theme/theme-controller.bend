@@ -39,13 +39,13 @@ def rgb(value: Maybe<&2,TerminalColors.RgbColor>) -> Maybe<&2,Color.Rgb>:
     case Some{TerminalColors.RgbColor{r,g,b}}: Some{Color.Rgb{U32.to_nat(r),U32.to_nat(g),U32.to_nat(b)}}
 def background(ready: Process.QueryReady,env: Maybe<&2,String>) -> IO(Detection.Detection):
   match ready:
-    case Process.QueryReady{queries,_,write,_}:
+    case Process.QueryReady{queries,_,write,_,_}:
       do IO<Detection.Detection>:
         response : Maybe<&2,TerminalColors.RgbColor> <- Query.colorQuery(queries,write,100)
         return Detection.detectTerminalBackgroundColor(rgb(response),env)
 def autoQueries(ready: Process.QueryReady,env: Maybe<&2,String>) -> IO(Detection.TerminalTheme):
   match ready:
-    case Process.QueryReady{+queries,_,+write,_}:
+    case Process.QueryReady{+queries,_,+write,_,_}:
       do IO<Detection.TerminalTheme>:
         schemeTask : Chan(Maybe<&2,TerminalColors.TerminalColorScheme>) <- IO.fork(Maybe<&2,TerminalColors.TerminalColorScheme>,Query.schemeQuery(queries,write,100))
         colorTask : Chan(Maybe<&2,TerminalColors.RgbColor>) <- IO.fork(Maybe<&2,TerminalColors.RgbColor>,Query.colorQuery(queries,write,100))
@@ -158,7 +158,7 @@ def startOwned(pair: Serial.Owner<Selection> & Serial.Handle<Selection>,+ready: 
   match pair:
     case (owner,+resource):
       match ready:
-        case Process.QueryReady{queries,_,write,requestRender}:
+        case Process.QueryReady{queries,_,write,requestRender,_}:
           do IO<Result<&2,&1,Theme.LoadError,Owner & Handle>>:
             +callback : Callback.Callback<TerminalColors.TerminalColorScheme,Unit> <- Callback.create(~Notification,~TerminalColors.TerminalColorScheme,~Unit,~notify,Notification{resource,requestRender,builtinDir,customDir,mode})
             id : Nat <- Query.onSchemeChange(queries,callback)
@@ -180,7 +180,7 @@ def start(+ready: Process.QueryReady,setting: Maybe<&2,String>,+env: Maybe<&2,St
 def committedSetting(previous: Selection,+next: Selection) -> Selection & Selection: (next,next)
 def commitReady(handle: Handle,next: Selection) -> IO(Result<&2,&2,Theme.LoadError,Selection>):
   match handle:
-    case Handle{resource,Process.QueryReady{queries,_,write,requestRender},_,_,_,_}:
+    case Handle{resource,Process.QueryReady{queries,_,write,requestRender,_},_,_,_,_}:
       do IO<Result<&2,&2,Theme.LoadError,Selection>>:
         +selected : Selection <- Serial.run(Selection,Selection,resource,previous => IO.pure(Selection & Selection,committedSetting(previous,next)))
         Query.setNotifications(queries,write,stateAuto(selected))
@@ -201,7 +201,7 @@ def previewState(state: Selection,theme: Theme.Theme) -> Selection & Unit:
     case Selection{setting,terminal,name,_,auto,persist,error}: (Selection{setting,terminal,name,theme,auto,persist,error},Unit{})
 def previewReady(handle: Handle,theme: Theme.Theme) -> IO(Result<&2,&2,Theme.LoadError,Unit>):
   match handle:
-    case Handle{resource,Process.QueryReady{_,_,_,render},_,_,_,_}:
+    case Handle{resource,Process.QueryReady{_,_,_,render,_},_,_,_,_}:
       do IO<Result<&2,&2,Theme.LoadError,Unit>>:
         result : Unit <- Serial.run(Selection,Unit,resource,state => IO.pure(Selection & Unit,previewState(state,theme)))
         Callback.call(Unit,Unit,render,Unit{})
@@ -220,7 +220,7 @@ def preview(+handle: Handle,name: String) -> IO(Result<&2,&2,Theme.LoadError,Uni
 # are still live. The caller finishes any in-flight terminal input first.
 def close(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{resource,id,callback,Process.QueryReady{+queries,_,+write,_}}:
+    case Owner{resource,id,callback,Process.QueryReady{+queries,_,+write,_,_}}:
       do IO<Unit>:
         Query.setNotifications(queries,write,False{})
         Query.offSchemeChange(queries,id)

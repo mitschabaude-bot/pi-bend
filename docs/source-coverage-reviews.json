@@ -112,10 +112,10 @@
     },
     "packages/coding-agent/src/modes/interactive/components/settings-selector.ts": {
       "state": "partial",
-      "note": "Native theme and per-model thinking submenus save and clear settings, with live preview or current-model thinking updates; other settings rows, some ANSI styling, and mouse behavior remain partial.",
+      "note": "Native theme and per-model thinking submenus save and clear settings, with live preview or current-model thinking updates. Hardware-cursor and clear-on-shrink choices persist and update the running terminal; disabling the cursor hides it immediately. Live updates coalesce through the owned render scheduler, preserving independent preferences and avoiding serial-state re-entry from input callbacks. Native one/four-thread PTY tests cover visibility, coalescing, setter return order and terminal restoration; focused settings terminal captures match pi. Other settings controls, some ANSI styling and mouse behavior remain partial.",
       "source_sha256": "8134b93329c9155bd017df5b6278e2d72b403c8ca1f22c26a81234659ab7e6ea",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/settings-selector.bend": "82c96f439d7a2448a4a0f9c40e5acfdf1d0f0b8949fa88a5343f259d58282969",
+        "packages/coding-agent/src/modes/interactive/components/settings-selector.bend": "25ced0bc6437e516f81a520e04471cea40565ca0f6af8e27907eb1b3c7310913",
         "packages/coding-agent/src/modes/interactive/components/theme-selector.bend": "302bb406bb7ebf0d7844cba854b14bea8c193be907d1d1a8aef73d51c22f2bbf",
         "packages/coding-agent/src/modes/interactive/components/model-thinking-selector.bend": "0d6bf4c4c89fa884f69d51a0f51938c8f5e14d9c9076e8004a23e152687d3a78"
       },
@@ -151,11 +151,11 @@
         "packages/coding-agent/src/main.bend",
         "packages/coding-agent/src/modes/interactive/components/header.bend"
       ],
-      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native provider-directed API-key and OAuth login uses ModelRuntime.login, prompt/notify callbacks and shared cancellation. Registered providers supply menus and custom account-login labels; direct provider IDs/display names match without case sensitivity, and dual-method providers offer account/API-key selection. Codex offers browser/device authorization and Anthropic browser/manual authorization. Fullscreen startup, typing, viewport scrolling, and keyboard transcript search match focused terminal captures; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection, dynamic mode switching and broader commands remain partial. Exact /model matches use the cached scoped or available list; misses refresh the catalog with a 15-second abort deadline, retry exact matching, then open the filtered picker. The miss picker matches plain terminal frames; prefilled search cursor styling remains different. Interactive HTML export now uses the active theme palette and explicit export backgrounds. Resumed transcripts now render compaction and branch summaries, displayed custom messages, and skill invocations in sequence; live structural entries use the same path. The footer reads live auto-compaction state, so disabling it removes the auto marker immediately. User-theme resource notices match compact and expanded terminal captures, quiet startup and reload refresh; context sections retain their extra spacer. Prompt/extension listings, project/package theme sources and broader resource diagnostics remain incomplete. Working/retry/compaction statuses use native owned loaders and countdowns; retry countdown and Escape cancellation have terminal comparisons. Manual compaction completion rebuilds retained context and appends the summary chronologically; completion, Escape cancellation and the following model request match focused terminal comparisons. Initial branch-summary status and broader compaction queue/progress/cost-notice integration remain incomplete. API-key login now accepts all native AuthPrompt kinds, provider notifications and per-prompt cancellation. Pasted API-key prompt/save terminal captures and the basic request loop match pi. Broader provider catalog and secret-masking parity remain partial.",
+      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native provider-directed API-key and OAuth login uses ModelRuntime.login, prompt/notify callbacks and shared cancellation. Registered providers supply menus and custom account-login labels; direct provider IDs/display names match without case sensitivity, and dual-method providers offer account/API-key selection. Codex offers browser/device authorization and Anthropic browser/manual authorization. Fullscreen startup, typing, viewport scrolling, and keyboard transcript search match focused terminal captures; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection, dynamic mode switching and broader commands remain partial. Exact /model matches use the cached scoped or available list; misses refresh the catalog with a 15-second abort deadline, retry exact matching, then open the filtered picker. The miss picker matches plain terminal frames; prefilled search cursor styling remains different. Interactive HTML export now uses the active theme palette and explicit export backgrounds. Resumed transcripts now render compaction and branch summaries, displayed custom messages, and skill invocations in sequence; live structural entries use the same path. The footer reads live auto-compaction state, so disabling it removes the auto marker immediately. User-theme resource notices match compact and expanded terminal captures, quiet startup and reload refresh; context sections retain their extra spacer. Prompt/extension listings, project/package theme sources and broader resource diagnostics remain incomplete. Working/retry/compaction statuses use native owned loaders and countdowns; retry countdown and Escape cancellation have terminal comparisons. Manual compaction completion rebuilds retained context and appends the summary chronologically; completion, Escape cancellation and the following model request match focused terminal comparisons. Initial branch-summary status and broader compaction queue/progress/cost-notice integration remain incomplete. API-key login now accepts all native AuthPrompt kinds, provider notifications and per-prompt cancellation. Pasted API-key prompt/save terminal captures and the basic request loop match pi. Broader provider catalog and secret-masking parity remain partial. Hardware-cursor and clear-on-shrink settings update the running TUI after successful persistence; cursor disabling hides immediately, and focused setting/persistence/editor terminal captures match pi.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "2df7941821123ecdc58b9e9b03f1b9c00c13f3f50ad7ed2a54dd79a77eae95d4",
-        "packages/coding-agent/src/modes/interactive/run.bend": "beb13ec2f951f356c8e286ac1f291e18d211043cf7866b5166a9773d9ff06883",
+        "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "272d9269ef5ed6e3c28627c9bb2eb8e1c7dc34c5b8fec7dd74ed6032417c3387",
+        "packages/coding-agent/src/modes/interactive/run.bend": "06c661d81c69991e7ac4660211cc723e83908fbec9e4f6cb469cd47f57ae79ea",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "5251961f780f6011fd173b198ccd6e4dd82ab65743f2df4463bc06f71a497075",
         "packages/coding-agent/src/main.bend": "3dbefc6db3127fbb6d532c0208f27ab2a172c601d852f50a106083bf7641f1bb",
@@ -180,7 +180,7 @@
       "port_sha256": {
         "packages/tui/src/tui-alt-screen.bend": "fc744cf11f805edc876e283d5bb308ecadfc95e505ced68536f850a34beef8f5",
         "packages/tui/src/tui-base.bend": "30f0b8d62c944c64137631db5fd17ef30803ccc4603ea9e729c48bc18cb12842",
-        "packages/tui/src/tui-process.bend": "56ab7564599bd37d6d9fbd79f22b75ef8b2b1b19e3fde05b46e9b2bf274839ce"
+        "packages/tui/src/tui-process.bend": "6d39bd17f75c13210681087f7b66416e024ce0e66416e36f58b0e345cddc23e5"
       },
       "ports": [
         "packages/tui/src/tui-alt-screen.bend",
@@ -289,7 +289,7 @@
       "note": "Native controller applies and previews themes, restores cancelled previews and handles automatic mode; the full upstream reload and terminal-notification behavior remains partial.",
       "source_sha256": "ad18b680f43a63c0d7a0da3e946d38e95a436d9fcf593f7268f7562f7c4be25e",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/theme/theme-controller.bend": "dc2e19e70f6153e6c3ac419724d260316c3e1ffc3c8668953ed2b3c5231443c9"
+        "packages/coding-agent/src/modes/interactive/theme/theme-controller.bend": "2a152b15f56087b971d9bfef8bab2648344e343f79a366e1228235e7ce103bfe"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/session-selector.ts": {
@@ -300,7 +300,7 @@
       ],
       "source_sha256": "8d8744ed7ba79d04fbc5e2fac16ef38083ba2d1e871d12a1a2460faa27e29f27",
       "port_sha256": {
-        "packages/coding-agent/src/cli/session-picker.bend": "91acd2e5dd20b35960319a0ace56bdd4cdbead4aedd95af23040339e5c48137a"
+        "packages/coding-agent/src/cli/session-picker.bend": "9a90ec301d44ce8a74e6e4d8989443f20fc1dcc74f0ea7a77af5d9af69eb2422"
       }
     },
     "packages/tui/src/layout-node.ts": {
@@ -497,7 +497,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/footer.bend": "d924bbd85b2a33b86ec77491b3f88014fe87ffac531779233f82cb77c4ce5828",
-        "packages/coding-agent/src/modes/interactive/run.bend": "beb13ec2f951f356c8e286ac1f291e18d211043cf7866b5166a9773d9ff06883"
+        "packages/coding-agent/src/modes/interactive/run.bend": "06c661d81c69991e7ac4660211cc723e83908fbec9e4f6cb469cd47f57ae79ea"
       }
     },
     "packages/ai/src/api/pi-messages.ts": {
@@ -913,6 +913,19 @@
       "source_sha256": "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc",
       "port_sha256": {
         "packages/coding-agent/src/modes/rpc.bend": "592b86af63c6e13d7631df617e3eaed6d07e3c1c8d130075e63105059a9deb9a"
+      }
+    },
+    "packages/tui/src/tui.ts": {
+      "state": "partial",
+      "ports": [
+        "packages/tui/src/tui-base.bend",
+        "packages/tui/src/tui-process.bend"
+      ],
+      "note": "Focused review of live terminal preferences: native immutable TuiBase state and the owned process apply hardware-cursor and clear-on-shrink updates through the render scheduler; cursor disabling hides immediately through the owned writer. Native one/four-thread PTY checks exercise live visibility, consecutive independent updates, setter return order and terminal restoration. The broader TUI public API, named getter/setter surface, overlay/focus contracts and complete scheduling/input behavior still require source-wide review; this finding does not establish full TUI parity.",
+      "source_sha256": "2ca47c56f4a4f24b8c6a4c9c9f2a06004bfc312d9dbcd0ac1921a2cae32bc675",
+      "port_sha256": {
+        "packages/tui/src/tui-base.bend": "30f0b8d62c944c64137631db5fd17ef30803ccc4603ea9e729c48bc18cb12842",
+        "packages/tui/src/tui-process.bend": "6d39bd17f75c13210681087f7b66416e024ce0e66416e36f58b0e345cddc23e5"
       }
     }
   }

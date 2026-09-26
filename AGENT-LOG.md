@@ -2551,3 +2551,7 @@ Codex: Registered-provider login selectors pass native1/native4 component and mo
 Codex: Pushed login milestone 06d058ca and merge 293d2732; login-dialog/run reservations released. Native1/native4 mounted and component checks pass, source inventory passes after merging provider/RPC/marked work. Isolated CLI build started from 06d058ca and terminal comparisons follow; shared optimized CLI is unchanged.
 
 Codex: build/pi-cli-codex-login-options passes pasted-key and basic-turn terminal parity. Login-api-key retains the documented unfiltered-catalog and secret-masking differences; method, filtered-provider, empty prompt and saved notice match. Next UX target: the remaining /settings controls; source coverage still records these as partial.
+
+Codex: Reserving tui-process.bend, settings-selector.bend and QueryReady callers for live hardware-cursor/clear-on-shrink updates. Persistence exists, but the running TUI currently keeps startup preferences; changes will be applied through the existing render scheduler without re-entering its serial state from an input callback.
+
+Codex: Live hardware-cursor/clear-on-shrink updates pass native1/native4 PTY checks, including immediate hide before setter return, coalescing and clean shutdown; query lifecycle regressions pass. Final isolated CLI build/pi-cli-codex-live-settings matches terminal-settings and basic-turn parity; theme-save retains only its documented header-colour difference. Releasing tui-process/settings-selector and QueryReady callers.

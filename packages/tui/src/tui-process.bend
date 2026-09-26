@@ -265,10 +265,39 @@ def input(+session: Session,registry: List<&2,Component.Component>,mounted: List
 # between a component callback and the frame it produces.
 type Active is Data:
   Active{session: Session,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,lastError: Maybe<&2,Error>,owed: Bool,ticks: Nat}
+type TerminalPreference is Data: HardwareCursor{enabled: Bool} ClearOnShrink{enabled: Bool}
+type Preferences is Data: Preferences{cursor: Maybe<&2,Bool>,clear: Maybe<&2,Bool>}
+def emptyPreferences() -> Preferences: Preferences{None{},None{}}
+def changedPreference(current: Preferences,change: TerminalPreference) -> Preferences & Unit:
+  match current change:
+    case Preferences{_,clear} HardwareCursor{value}: (Preferences{Some{value},clear},Unit{})
+    case Preferences{cursor,_} ClearOnShrink{value}: (Preferences{cursor,Some{value}},Unit{})
+def preferredTui(base: Tui.TuiBase,preferences: Preferences) -> Tui.TuiBase:
+  match base preferences:
+    case Tui.TuiBase{root,focus,bindings,displayed,scheduler,cursor,clear,node} Preferences{newCursor,newClear}:
+      Tui.TuiBase{root,focus,bindings,displayed,scheduler,Maybe.default(&2,Bool,newCursor,cursor),Maybe.default(&2,Bool,newClear,clear),node}
+def preferredActive(current: Active,preferences: Preferences) -> Active:
+  match current:
+    case Active{Session{tui,screen},components,mounted,error,owed,ticks}:
+      Active{Session{preferredTui(tui,preferences),screen},components,mounted,error,owed,ticks}
+type PreferenceSink is Data:
+  PreferenceSink{pending: Ref.Ref<Preferences>,request: Callback.Callback<Unit,Unit>,write: Callback.Callback<String,Unit>}
+def cursorPreference(write: Callback.Callback<String,Unit>,preference: TerminalPreference) -> IO(Unit):
+  match preference:
+    case HardwareCursor{False{}}: Callback.call(String,Unit,write,"\u{1b}[?25l")
+    case _: IO.pure(Unit,Unit{})
+def changePreference(context: PreferenceSink,change: TerminalPreference) -> IO(Unit):
+  match context:
+    case PreferenceSink{pending,request,write}:
+      do IO<Unit>:
+        +change : TerminalPreference = change
+        Ref.modify(Preferences,Unit,pending,current => changedPreference(current,change))
+        cursorPreference(write,change)
+        Callback.call(Unit,Unit,request,Unit{})
 type EventSink is Data:
-  EventSink{state: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,queries: Query.Handle,termux: Bool}
+  EventSink{state: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,queries: Query.Handle,termux: Bool,preferences: Ref.Ref<Preferences>}
 type QueryReady is Data:
-  QueryReady{queries: Query.Handle,terminal: Terminal.Handle,write: Callback.Callback<String,Unit>,requestRender: Callback.Callback<Unit,Unit>}
+  QueryReady{queries: Query.Handle,terminal: Terminal.Handle,write: Callback.Callback<String,Unit>,requestRender: Callback.Callback<Unit,Unit>,setTerminalPreference: Callback.Callback<TerminalPreference,Unit>}
 type QueryWriter is Data:
   QueryWriter{terminal: Terminal.Handle,stopped: Deferred.Deferred<Unit>,failure: Deferred.Deferred<Terminal.Error>}
 def active(session: Session,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>) -> Active:
@@ -340,7 +369,7 @@ def settledOperation(current: Active,handle: Terminal.Handle,termux: Bool) -> IO
     case current: drawNow(current,handle,termux)
 def dispatchInput(listener: EventSink,+data: String) -> IO(Unit):
   match listener:
-    case EventSink{state,ready,queries,termux}:
+    case EventSink{state,ready,queries,termux,_}:
       do IO<Unit>:
         consumed : Bool <- Query.consume(queries,data)
         Bool.pick(Unit -> IO(Unit),consumed,
@@ -351,13 +380,13 @@ def dispatchInput(listener: EventSink,+data: String) -> IO(Unit):
 def onInput(listener: EventSink,data: String) -> IO(Unit): dispatchInput(listener,data)
 def onResize(listener: EventSink,value: Unit) -> IO(Unit):
   match listener:
-    case EventSink{state,ready,_,termux}:
+    case EventSink{state,ready,_,termux,_}:
       do IO<Unit>:
         handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
         Serial.run(Active,Unit,state,current => resizeOperation(current,handle,termux))
 def onSettled(listener: EventSink,value: Unit) -> IO(Unit):
   match listener:
-    case EventSink{state,ready,_,termux}:
+    case EventSink{state,ready,_,termux,_}:
       do IO<Unit>:
         handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
         Serial.run(Active,Unit,state,current => settledOperation(current,handle,termux))
@@ -370,12 +399,16 @@ def slept(pair: Timer & TimerCancel) -> IO(Unit):
       do IO<Unit>:
         waited : Timer & Bool <- Timer.wait(owner)
         closedTimer(waited)
+def scheduledPreferences(+pending: Ref.Ref<Preferences>,event: Tui.RenderEvent,current: Active,handle: Terminal.Handle,termux: Bool) -> IO(Active & List<&2,Tui.RenderEffect>):
+  do IO<Active & List<&2,Tui.RenderEffect>>:
+    changes : Preferences <- Ref.swap(Preferences,pending,emptyPreferences())
+    scheduledOperation(event,preferredActive(current,changes),handle,termux)
 def scheduled(listener: EventSink,event: Tui.RenderEvent) -> IO(List<&2,Tui.RenderEffect>):
   match listener:
-    case EventSink{state,ready,_,termux}:
+    case EventSink{state,ready,_,termux,+preferences}:
       do IO<List<&2,Tui.RenderEffect>>:
         handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
-        Serial.run(Active,List<&2,Tui.RenderEffect>,state,current => scheduledOperation(event,current,handle,termux))
+        Serial.run(Active,List<&2,Tui.RenderEffect>,state,current => scheduledPreferences(preferences,event,current,handle,termux))
 # Like Node's setTimeout, a frame timer waits at least 1 ms: an expired Timer
 # completes at once, while a pending one fires only once no task is ready, so
 # events already received (upstream's queued microtasks) are handled first.
@@ -496,18 +529,19 @@ def stoppedResult(cleanup: Result<&2,&2,Terminal.Error,Unit>,closed: Result<&2,&
     case Fail{error}: Fail{error}
 # The callback receives borrowed handles while the terminal is live. It may
 # await queries here; any forked query must finish before the stop signal.
-def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Owner<Active>,+handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,requestRender: Callback.Callback<Unit,Unit>,+stopped: Deferred.Deferred<Unit>,+termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
+def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Owner<Active>,+handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,+requestRender: Callback.Callback<Unit,Unit>,preferences: Ref.Ref<Preferences>,+stopped: Deferred.Deferred<Unit>,+termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
   match pair:
     case (terminal,+terminalHandle):
       do IO<Result<&2,&2,Terminal.Error,Active>>:
         settled : Bool <- Deferred.resolve(Terminal.Handle,ready,terminalHandle)
         +failure : Deferred.Deferred<Terminal.Error> <- Deferred.new(Terminal.Error)
         +writer : Callback.Callback<String,Unit> <- Callback.create(~QueryWriter,~String,~Unit,~queryWrite,QueryWriter{terminalHandle,stopped,failure})
+        +preference : Callback.Callback<TerminalPreference,Unit> <- Callback.create(~PreferenceSink,~TerminalPreference,~Unit,~changePreference,PreferenceSink{preferences,requestRender,writer})
         Query.setRunning(queries,writer,True{})
         fullscreen : Bool <- Serial.run(Active,Bool,handle,isFullscreen)
         entered : Result<&2,&2,Terminal.Error,Unit> <- Bool.pick(Unit -> IO(Result<&2,&2,Terminal.Error,Unit>),fullscreen,_ => Terminal.write(terminalHandle,Alt.enter()),_ => IO.pure(Result<&2,&2,Terminal.Error,Unit>,Done{Unit{}}))(Unit{})
         matchWrite(entered,stopped,failure)
-        notifyReady(onReady,QueryReady{queries,terminalHandle,writer,requestRender})
+        notifyReady(onReady,QueryReady{queries,terminalHandle,writer,requestRender,preference})
         initial : Unit <- Serial.run(Active,Unit,handle,current => resizeOperation(current,terminalHandle,termux))
         finished : Unit <- Deferred.result(Unit,stopped)
         notifyStopping(onStopping)
@@ -521,30 +555,33 @@ def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Ow
         closed : Result<&2,&2,Terminal.Error,Unit> <- Terminal.stop(terminal)
         final : Active <- Serial.retire(Active,owner)
         failed : Maybe<&2,Terminal.Error> <- Deferred.peek(Terminal.Error,failure)
+        Callback.dispose(TerminalPreference,Unit,preference)
         Callback.dispose(String,Unit,writer)
         Deferred.dispose(Terminal.Error,failure)
         return stoppedResult(written,closed,failed,final)
-def awaitProcess(started: Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal>,owner: Serial.Owner<Active>,handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,requestRender: Callback.Callback<Unit,Unit>,+stopped: Deferred.Deferred<Unit>,termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
+def awaitProcess(started: Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal>,owner: Serial.Owner<Active>,handle: Serial.Handle<Active>,ready: Deferred.Deferred<Terminal.Handle>,+queries: Query.Handle,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>,requestRender: Callback.Callback<Unit,Unit>,preferences: Ref.Ref<Preferences>,+stopped: Deferred.Deferred<Unit>,termux: Bool) -> IO(Result<&2,&2,Terminal.Error,Active>):
   match started:
     case Fail{error}:
       do IO<Result<&2,&2,Terminal.Error,Active>>:
         old : Active <- Serial.retire(Active,owner)
         return Fail{error}
-    case Done{terminal}: runStarted(Terminal.borrow(terminal),owner,handle,ready,queries,onReady,onStopping,requestRender,stopped,termux)
+    case Done{terminal}: runStarted(Terminal.borrow(terminal),owner,handle,ready,queries,onReady,onStopping,requestRender,preferences,stopped,termux)
 
 def runQueries(pair: Query.Owner & Query.Handle,owner: Serial.Owner<Active>,+state: Serial.Handle<Active>,+ready: Deferred.Deferred<Terminal.Handle>,+stopped: Deferred.Deferred<Unit>,+termux: Bool,onReady: Maybe<&2,Callback.Callback<QueryReady,Unit>>,onStopping: Maybe<&2,Callback.Callback<Unit,Unit>>) -> IO(Result<&2,&2,Terminal.Error,Active>):
   match pair:
     case (queries,+queryHandle):
       do IO<Result<&2,&2,Terminal.Error,Active>>:
-        +input : Callback.Callback<String,Unit> <- Callback.create(~EventSink,~String,~Unit,~onInput,EventSink{state,ready,queryHandle,termux})
-        +resize : Callback.Callback<Unit,Unit> <- Callback.create(~EventSink,~Unit,~Unit,~onResize,EventSink{state,ready,queryHandle,termux})
-        +settled : Callback.Callback<Unit,Unit> <- Callback.create(~EventSink,~Unit,~Unit,~onSettled,EventSink{state,ready,queryHandle,termux})
-        +request : Callback.Callback<Unit,Unit> <- Callback.create(~EventSink,~Unit,~Unit,~onRequest,EventSink{state,ready,queryHandle,termux})
+        +preferences : Ref.Ref<Preferences> <- Ref.new(Preferences,emptyPreferences())
+        +input : Callback.Callback<String,Unit> <- Callback.create(~EventSink,~String,~Unit,~onInput,EventSink{state,ready,queryHandle,termux,preferences})
+        +resize : Callback.Callback<Unit,Unit> <- Callback.create(~EventSink,~Unit,~Unit,~onResize,EventSink{state,ready,queryHandle,termux,preferences})
+        +settled : Callback.Callback<Unit,Unit> <- Callback.create(~EventSink,~Unit,~Unit,~onSettled,EventSink{state,ready,queryHandle,termux,preferences})
+        +request : Callback.Callback<Unit,Unit> <- Callback.create(~EventSink,~Unit,~Unit,~onRequest,EventSink{state,ready,queryHandle,termux,preferences})
         started : Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal> <- Terminal.startProcess(input,resize,settled)
-        result : Result<&2,&2,Terminal.Error,Active> <- awaitProcess(started,owner,state,ready,queryHandle,onReady,onStopping,request,stopped,termux)
+        result : Result<&2,&2,Terminal.Error,Active> <- awaitProcess(started,owner,state,ready,queryHandle,onReady,onStopping,request,preferences,stopped,termux)
         Callback.dispose(String,Unit,input)
         Callback.dispose(Unit,Unit,resize)
         Callback.dispose(Unit,Unit,settled)
+        oldPreferences : Preferences <- Ref.dispose(Preferences,preferences)
         Callback.dispose(Unit,Unit,request)
         Deferred.dispose(Terminal.Handle,ready)
         Query.close(queries)

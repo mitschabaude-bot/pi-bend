@@ -2246,8 +2246,8 @@ def syncRender(live: ThemeLive,_: Unit) -> IO(Unit):
         Callback.call(Unit,Unit,requestRender,Unit{})
 def startInput(handle: ThemeController.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Interactive.StatusSink,render: Callback.Callback<Unit,Unit>) -> IO(Unit):
   match handle:
-    case ThemeController.Handle{_,Process.QueryReady{queries,terminal,write,_},_,_,_,_}:
-      Interactive.onReady(Interactive.Startup{redraw,queue,initial,failure},Process.QueryReady{queries,terminal,write,render})
+    case ThemeController.Handle{_,Process.QueryReady{queries,terminal,write,_,preference},_,_,_,_}:
+      Interactive.onReady(Interactive.Startup{redraw,queue,initial,failure},Process.QueryReady{queries,terminal,write,render,preference})
 type ManagedSink is Data:
   ManagedSink{transcript: Transcript.Handle,render: Callback.Callback<Unit,Unit>,started: Ref.Ref<Bool>}
 def managedWarning(kind: Manager.ToolStatusType) -> Bool:
@@ -2385,12 +2385,12 @@ def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & T
         return Unit{}
 def themeReady(startup: ThemeStartup,ready: Process.QueryReady) -> IO(Unit):
   match startup ready:
-    case ThemeStartup{redraw,queue,initial,failure,stopped,+selected,owned,error,+theme,+transcript,+session,+setting,+builtinDir,+customDir,+managed,+interaction,highlighter} Process.QueryReady{queries,terminal,write,requestRender}:
+    case ThemeStartup{redraw,queue,initial,failure,stopped,+selected,owned,error,+theme,+transcript,+session,+setting,+builtinDir,+customDir,+managed,+interaction,highlighter} Process.QueryReady{queries,terminal,write,requestRender,preference}:
       do IO<Unit>:
         +render : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeLive,~Unit,~Unit,~syncRender,ThemeLive{selected,theme,transcript,requestRender})
         detected : Result<&1,&1,U32 & String,String> <- IO.get_env("COLORFGBG")
         initialTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        result : Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle> <- ThemeController.start(Process.QueryReady{queries,terminal,write,render},setting,environmentValue(detected),builtinDir,customDir,Theme.colorMode(initialTheme))
+        result : Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle> <- ThemeController.start(Process.QueryReady{queries,terminal,write,render,preference},setting,environmentValue(detected),builtinDir,customDir,Theme.colorMode(initialTheme))
         readySelected(result,ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managed,interaction,highlighter},render)
 def closeTheme(current: Maybe<&1,ThemeOwned>) -> IO(Unit):
   match current:

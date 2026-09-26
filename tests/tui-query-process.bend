@@ -28,7 +28,7 @@ def scheme(value: Maybe<&2,Colors.TerminalColorScheme>) -> String:
     case Some{Colors.Light{}}: "light"
 def queryReady(redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,value: Process.QueryReady) -> IO(Unit):
   match value:
-    case Process.QueryReady{+queries,_,+write,+requestRender}:
+    case Process.QueryReady{+queries,_,+write,+requestRender,_}:
       do IO<Unit>:
         Ref.write(Maybe<&2,Callback.Callback<Unit,Unit>>,redraw,Some{requestRender})
         Query.setNotifications(queries,write,True{})

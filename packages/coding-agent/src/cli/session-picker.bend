@@ -702,7 +702,7 @@ def completedLoad(input: ProgressInput,sessions: List<&2,Session.SessionInfo>) -
         requestProgress(request)
 def readyRequest(request: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,event: Process.QueryReady) -> IO(Unit):
   match event:
-    case Process.QueryReady{_,_,_,redraw}: Ref.write(Maybe<&2,Callback.Callback<Unit,Unit>>,request,Some{redraw})
+    case Process.QueryReady{_,_,_,redraw,_}: Ref.write(Maybe<&2,Callback.Callback<Unit,Unit>>,request,Some{redraw})
 type Stopping is Data: Stopping{request: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cancel: Abort.AbortController<Unit>,allRequested: Deferred.Deferred<Unit>,currentDone: Deferred.Deferred<Unit>,allDone: Deferred.Deferred<Unit>}
 def stoppingRequest(context: Stopping,_: Unit) -> IO(Unit):
   match context:

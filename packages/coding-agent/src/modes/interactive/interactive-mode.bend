@@ -387,7 +387,7 @@ def queueInitial(+queue: Controller.Handle,+failure: StatusSink,initial: List<&2
         queueInitial(queue,failure,rest)
 def onReady(startup: Startup,ready: Process.QueryReady) -> IO(Unit):
   match startup ready:
-    case Startup{redraw,queue,initial,failure} Process.QueryReady{_,_,_,request}:
+    case Startup{redraw,queue,initial,failure} Process.QueryReady{_,_,_,request,_}:
       do IO<Unit>:
         Ref.write(Maybe<&2,Callback.Callback<Unit,Unit>>,redraw,Some{request})
         queueInitial(queue,failure,initial)

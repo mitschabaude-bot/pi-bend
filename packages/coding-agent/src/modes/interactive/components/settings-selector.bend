@@ -1,4 +1,5 @@
 import Base
+import ../../../../../tui/src/tui-process.bend as Process
 import ../../../../../agent/src/types.bend as Agent
 import ../../../../../ai/src/types.bend as Ai
 import ../../../../../runtime/src/json.bend as Json
@@ -22,8 +23,7 @@ import ./theme-selector.bend as ThemePicker
 import ./model-thinking-selector.bend as ModelThinkingPicker
 import ../../../core/model-runtime.bend as Models
 
-# The rows are real settings, in the same order and with the same choices as
-# pi's selector. A choice is decoded before it touches the persisted manager.
+# Choices are decoded before they touch the persisted settings manager.
 def item(id: String,label: String,description: String,current: String,values: List<&2,String>) -> ListUI.SettingItem:
   ListUI.SettingItem{id,label,Some{description},current,Some{values},None{}}
 def choices(first: String,second: String) -> List<&2,String>: first <> second <> Nil{}
@@ -271,17 +271,28 @@ def themeChanged(current: Maybe<&2,ThemeController.Handle>,value: String,transcr
       do IO<Unit>:
         result : Result<&2,&2,Theme.LoadError,ThemeController.Selection> <- ThemeController.setThemeSetting(handle,Some{value})
         themeResult(result,transcript)
-def themeEffect(id: String,value: String,controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,transcript: Transcript.Handle) -> IO(Unit):
+def terminalPreference(current: Maybe<&2,ThemeController.Handle>,preference: Process.TerminalPreference) -> IO(Unit):
+  match current:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{ThemeController.Handle{_,Process.QueryReady{_,_,_,_,setter},_,_,_,_}}:
+      Callback.call(Process.TerminalPreference,Unit,setter,preference)
+def terminalEffect(controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,preference: Process.TerminalPreference) -> IO(Unit):
+  do IO<Unit>:
+    current : Maybe<&2,ThemeController.Handle> <- Ref.read(Maybe<&2,ThemeController.Handle>,controller)
+    terminalPreference(current,preference)
+def controllerEffect(id: String,value: String,controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,transcript: Transcript.Handle) -> IO(Unit):
   match id:
     case "theme":
       do IO<Unit>:
         current : Maybe<&2,ThemeController.Handle> <- Ref.read(Maybe<&2,ThemeController.Handle>,controller)
         themeChanged(current,value,transcript)
+    case "show-hardware-cursor": terminalEffect(controller,Process.HardwareCursor{boolValue(value)})
+    case "clear-on-shrink": terminalEffect(controller,Process.ClearOnShrink{boolValue(value)})
     case _: IO.pure(Unit,Unit{})
-def themeAfter(result: Result<&2,&2,String,Unit>,id: String,value: String,controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,transcript: Transcript.Handle) -> IO(Unit):
+def controllerAfter(result: Result<&2,&2,String,Unit>,id: String,value: String,controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,transcript: Transcript.Handle) -> IO(Unit):
   match result:
     case Fail{_}: IO.pure(Unit,Unit{})
-    case Done{_}: themeEffect(id,value,controller,transcript)
+    case Done{_}: controllerEffect(id,value,controller,transcript)
 def changeSetting(context: ChangeContext,selection: ListUI.Change) -> IO(Unit):
   match context selection:
     case ChangeContext{session,+transcript,editor,controller} ListUI.Change{+id,+newValue}:
@@ -289,7 +300,7 @@ def changeSetting(context: ChangeContext,selection: ListUI.Change) -> IO(Unit):
         current : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         +result : Result<&2,&2,String,Unit> <- applied(id,newValue,current)
         liveEffect(id,newValue,transcript,editor,result)
-        themeAfter(result,id,newValue,controller,transcript)
+        controllerAfter(result,id,newValue,controller,transcript)
 def cancelPanel(context: CancelContext,_: Unit) -> IO(Unit):
   match context:
     case CancelContext{modal}: Ref.write(Modal,modal,Closed{})
