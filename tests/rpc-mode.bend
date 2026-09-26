@@ -15,6 +15,8 @@ import ../packages/coding-agent/src/core/model-runtime.bend as Models
 import ../packages/ai/src/types.bend as Ai
 import ../packages/ai/src/utils/uuid.bend as Uuid
 import ../packages/runtime/src/json.bend as Decode
+import ../packages/runtime/src/abort.bend as Abort
+import ../packages/tui/src/component.bend as Component
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/callback.bend as Callback
@@ -286,7 +288,7 @@ def pick(unit: Unit,call: ExtT.CommandCall) -> IO(Outcome()):
   match call:
     case ExtT.CommandCall{_,Ctx.ExtensionCommandContext{+context}}:
       do IO<Outcome()>:
-        choice : Maybe<&2,String> <- Ctx.select(context,"Pick one",["a","b"])
+        choice : Maybe<&2,String> <- Ctx.select(context,"Pick one",["a","b"],Ctx.dialogOptions())
         Ctx.notify(context,pickedText(choice),Ctx.InfoNotice{})
         return Done{Unit{}}
 def picker(api: ExtT.ExtensionAPI) -> IO(Outcome()):
@@ -336,7 +338,7 @@ def askBeforeCompact(unit: Unit,call: ExtT.HandlerCall<ExtT.SessionBeforeCompact
   match call:
     case ExtT.HandlerCall{_,+context}:
       do IO<Result<&2,&2,String,Maybe<&2,Compacting()>>>:
-        allowed : Bool <- Ctx.confirm(context,"Compact?","Summarize the conversation")
+        allowed : Bool <- Ctx.confirm(context,"Compact?","Summarize the conversation",Ctx.dialogOptions())
         return Done{Some{ExtT.SessionBeforeCompactResult{Some{Bool.not(allowed)},None{}}}}
 def asker(api: ExtT.ExtensionAPI) -> IO(Outcome()):
   do IO<Outcome()>:
@@ -415,6 +417,70 @@ def commandActions(+cwd: String,+agentDir: String) -> IO(Unit):
     pair : Rpc.Owner & Rpc.Handle <- started(value)
     freshAsked(value,pair)
 
+# The rest of the RPC UI context: editor dialog, widgets, title and editor
+# text requests; a confirm dismissed by its timeout and a select whose signal
+# was already aborted both answer as cancelled.
+# RPC mode never renders a widget component, so the factory must not run.
+def noWidget(unit: Unit,input: Unit) -> IO(Component.Component): IO.die(Component.Component,1,"RPC mode rendered a widget component")
+def shown(value: Maybe<&2,String>) -> String: Maybe.default(&2,String,value,"none")
+def uiTourWith(+context: Ctx.ExtensionContext) -> IO(Outcome()):
+  do IO<Outcome()>:
+    Ctx.setTitle(context,"RPC title")
+    Ctx.setWidget(context,"w",Some{Ctx.WidgetLines{["one","two"]}},Some{Ctx.BelowEditor{}})
+    +factory : Ctx.WidgetFactory() <- Callback.create(~Unit,~Unit,~Component.Component,~noWidget,Unit{})
+    Ctx.setWidget(context,"component",Some{Ctx.WidgetComponent{factory}},None{})
+    Ctx.setWidget(context,"w",None{},None{})
+    Ctx.setEditorText(context,"draft")
+    Ctx.pasteToEditor(context,"pasted")
+    current : String <- Ctx.getEditorText(context)
+    edited : Maybe<&2,String> <- Ctx.editor(context,"Edit",Some{"prefill"})
+    confirmed : Bool <- Ctx.confirm(context,"Quick?","Answer soon",Ctx.DialogOptions{None{},Some{U32.to_f64(50)}})
+    +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+    stopped : Bool <- Abort.abort(Unit,controller,None{})
+    skipped : Maybe<&2,String> <- Ctx.select(context,"Never shown",["x"],Ctx.DialogOptions{Some{Abort.signal(Unit,controller)},None{}})
+    Ctx.notify(context,"tour editor=" ++ shown(edited) ++ " text=[" ++ current ++ "] confirmed=" ++ Bool.pick(String,confirmed,"true","false") ++ " skipped=" ++ shown(skipped),Ctx.InfoNotice{})
+    Callback.dispose(Unit,Component.Component,factory)
+    Abort.dispose(Unit,controller)
+    return Done{Unit{}}
+def uiTour(unit: Unit,call: ExtT.CommandCall) -> IO(Outcome()):
+  match call:
+    case ExtT.CommandCall{_,command}: uiTourWith(contextOf(command))
+def touring(api: ExtT.ExtensionAPI) -> IO(Outcome()):
+  do IO<Outcome()>:
+    handler : ExtT.CommandHandler() <- Callback.create(~Unit,~ExtT.CommandCall,~Outcome(),~uiTour,Unit{})
+    Loader.registerCommand(api,"tour",ExtT.CommandOptions{Some{"Show the UI"},None{},handler})
+def tourLoadout(+cwd: String) -> IO(Runtime.Loadout):
+  do IO<Runtime.Loadout>:
+    +runtime : ExtT.ExtensionRuntime() <- Loader.createExtensionRuntime()
+    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"tour",api => touring(api),False{}}])
+    models : Models.ModelRuntime <- ModelFixture.create(Nil{})
+    runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
+    return Runtime.Loadout{R.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}}
+def countMethod(lines: List<&2,String>,+method: String) -> Nat:
+  match lines:
+    case Nil{}: 0n
+    case line <> rest: Bool.pick(Nat,String.contains(line,"\"method\":\"" ++ method ++ "\""),1n,0n) + countMethod(rest,method)
+def toured(+value: Endpoint,pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
+  match pair:
+    case (owner,+handle):
+      do IO<Unit>:
+        send(handle,"{\"id\":\"t\",\"type\":\"prompt\",\"message\":\"/tour\"}")
+        +asked : List<&2,String> <- waitFor(linesOf(value),Contains{"\"method\":\"editor\""},300n)
+        +id : String = requestId(asked,"editor")
+        send(handle,"{\"type\":\"extension_ui_response\",\"id\":\"" ++ id ++ "\",\"value\":\"edited\"}")
+        lines : List<&2,String> <- waitFor(linesOf(value),Contains{"tour editor="},300n)
+        +captured : List<&2,String> <- cleanup(value,owner)
+        report("RPC extension UI > title, widget and editor-text requests are sent as upstream's",anyContains(captured,"\"method\":\"setTitle\",\"title\":\"RPC title\"}") && anyContains(captured,"\"method\":\"setWidget\",\"widgetKey\":\"w\",\"widgetLines\":[\"one\",\"two\"],\"widgetPlacement\":\"belowEditor\"}") && anyContains(captured,"\"method\":\"setWidget\",\"widgetKey\":\"w\"}") && Nat.is_eq(countMethod(captured,"setWidget"),2n) && anyContains(captured,"\"method\":\"set_editor_text\",\"text\":\"draft\"}") && anyContains(captured,"\"method\":\"set_editor_text\",\"text\":\"pasted\"}"))
+        report("RPC extension UI > the editor dialog answers with the client's value",anyContains(captured,"\"method\":\"editor\",\"title\":\"Edit\",\"prefill\":\"prefill\"}") && anyContains(captured,"tour editor=edited text=[]"))
+        report("RPC extension UI > a dialog timeout answers as cancelled",anyContains(captured,"\"method\":\"confirm\",\"title\":\"Quick?\",\"message\":\"Answer soon\",\"timeout\":50}") && anyContains(captured,"confirmed=false"))
+        report("RPC extension UI > an aborted signal answers without a request",anyContains(captured,"skipped=none") && Bool.not(anyContains(captured,"Never shown")))
+def uiExtras(+cwd: String,+agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    loadout : Runtime.Loadout <- tourLoadout(cwd)
+    +value : Endpoint <- endpointWith(cwd,agentDir,True{},Nil{},loadout)
+    pair : Rpc.Owner & Rpc.Handle <- started(value)
+    toured(value,pair)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case +cwd <> +agentDir <> Nil{}:
@@ -427,6 +493,7 @@ def run(args: List<String>) -> IO(Unit):
         extensionDialog(cwd,agentDir)
         commandDialog(cwd,agentDir)
         commandActions(cwd,agentDir)
+        uiExtras(cwd,agentDir)
     case _: IO.die(Unit,1,"usage: rpc-mode <cwd> <agentDir>")
 def main() -> IO(Unit):
   do IO<Unit>:

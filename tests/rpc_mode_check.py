@@ -32,6 +32,10 @@ NAMES = [
     "RPC extension UI > stopping answers an open dialog as cancelled",
     "RPC extension UI > a command's handler can open a dialog while input is still read",
     "RPC extension UI > command-context actions go through the RPC host",
+    "RPC extension UI > title, widget and editor-text requests are sent as upstream's",
+    "RPC extension UI > the editor dialog answers with the client's value",
+    "RPC extension UI > a dialog timeout answers as cancelled",
+    "RPC extension UI > an aborted signal answers without a request",
 ]
 # Pending until AgentSession.prompt has upstream's preflight (tests/rpc.md).
 EXPECTED_FAILURES = {PREFLIGHT}
