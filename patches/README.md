@@ -37,7 +37,7 @@ Gregor capped the compiler proper (`bend.ts` + `comp.ts` + `main.ts`) at +20% ov
 | | bend.ts | comp.ts | main.ts | total |
 |---|---:|---:|---:|---:|
 | upstream 2.0.7 | 3,776 | 6,302 | 524 | 10,602 |
-| after `series` (2026-09-27) | 3,966 | 7,228 | 524 | 11,718 (+10.5%) |
+| after `series` (2026-09-27) | 4,007 | 7,228 | 524 | 11,759 (+10.9%) |
 
 `base.bend` grows from 2,831 to 3,390 lines. Those lines are effect declarations, and the budget doesn't count them.
 
@@ -87,6 +87,7 @@ Evidence, measurements and history live in [docs/bend-issues.md](../docs/bend-is
 | `bend-id-width` | 20-bit segment and constructor ids (BEND-058, BEND-055) |
 | `bend-borrowed-scalars` | Borrow lookup only for boxed fields (BEND-054) |
 | `bend-import-binders`, `bend-named-column-binders`, `bend-import-copy-binders` | Binders named like an imported def, including `+` binders; named column binders (BEND-032, BEND-059) |
+| `bend-conversion-identity` (last in `series`) | Conversion checks syntactic identity within a budget before normalizing; port of bendlang/bend PR #1075, replacing BEND-052's congruence step (BEND-061) |
 
 ### Effect primitives
 
@@ -119,4 +120,3 @@ Evidence, measurements and history live in [docs/bend-issues.md](../docs/bend-is
 
 `experimental/` holds candidates that are not in `series`: compiler-memory experiments that were rejected or superseded, and the IPv6 connect effect. See [experimental/README.md](experimental/README.md).
 
-`bend-conversion-identity.patch` (2026-09-27, installed after `bend-import-copy-binders.patch`, changes `bend.ts`): replaces the congruence step of `bend-compare-congruence.patch` with a port of [bendlang/bend PR #1075](https://github.com/bendlang/bend/pull/1075) (upstream issue #1071, the BEND-052 limitation). Before normalizing a comparison with a call on either side, conversion checks syntactic identity without unfolding, within 4,096 visits, and otherwise proceeds as before. The congruence step had no budget and walked shared arguments as a tree (BEND-061: `tests/compiler-conversion-shared.bend` did not finish in 300 s; now 0.16 s). The BEND-052 regression, the proof gate and checking the whole CLI pass, the CLI in the same time within shared-host noise (evidence in BEND-061). The PR's upstream `Lit` case has no 2.0.7 counterpart and is dropped. The compiler is then 11,759 lines.
