@@ -17,6 +17,16 @@ if (mode === "login") {
 } else if (mode === "resolve") {
   const result = await controller.provider.auth.apiKey.resolve({ ctx, credential: undefined, signal });
   console.log(result ? `auth|${result.auth.apiKey}|${result.auth.baseUrl}|${result.source}` : "none");
+} else if (mode === "cached") {
+  let stored: any;
+  await controller.provider.refreshModels({ credential, stored: undefined, allowNetwork: true, signal,
+    publish: async (p: any) => { if (p.persist) stored = structuredClone(p.persist); p.update?.(); return true; } });
+  for (const model of controller.provider.getModels()) console.log(JSON.stringify(model));
+  if (!stored?.models || typeof stored.checkedAt !== "number") throw new Error("catalog not persisted");
+  const second = createLlamaProvider();
+  await second.provider.refreshModels({ credential, stored, allowNetwork: false, signal,
+    publish: async (p: any) => { if (p.persist !== undefined) throw new Error("offline restore changed storage"); console.log("restored"); p.update?.(); return true; } });
+  for (const model of second.provider.getModels()) console.log(JSON.stringify(model));
 } else if (mode === "refresh" || mode === "thinking") {
   await controller.provider.refreshModels({ credential, stored: undefined, allowNetwork: true, signal,
     publish: async (p: any) => { p.update?.(); return true; } });

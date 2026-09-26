@@ -4,6 +4,8 @@ import ../packages/coding-agent/src/extensions/llama/provider.bend as Llama
 import ../packages/coding-agent/src/extensions/llama/client.bend as Client
 import ../packages/ai/src/auth/types.bend as Auth
 import ../packages/ai/src/models.bend as Models
+import ../packages/ai/src/models-store.bend as Store
+import ../packages/runtime/src/ref.bend as Ref
 import ../packages/ai/src/types.bend as T
 import ../packages/ai/src/utils/model-json.bend as ModelJson
 import ../packages/ai/src/utils/schema-json.bend as SchemaJson
@@ -59,11 +61,29 @@ def printCredential(value: Auth.Credential) -> IO(Unit):
     case Auth.ApiKeyCredential{key, env}: IO.print("credential|" ++ Maybe.default(&2, String, key, "-") ++ "|" ++ Maybe.default(&2, String, R.get(String, Maybe.default(&2, R.Record<String>, env, R.new(String)), "LLAMA_BASE_URL"), "-"))
     case _: IO.die(Unit, 1, "unexpected OAuth credential")
 
+def loginCallback(controller: Llama.LlamaProviderController) -> IO(C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()>):
+  match controller:
+    case Llama.LlamaProviderController{Models.Provider{_, _, _, Auth.ProviderAuth{Some{Auth.ApiKeyAuth{_, Some{callback}, _}}, _}, _, _, _}}: IO.pure(C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()>, callback)
+    case _: IO.die(C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()>, 1, "missing login")
+
+def resolveCallback(controller: Llama.LlamaProviderController) -> IO(C.Callback<Auth.ResolveInput, Auth.AuthOutcome()>):
+  match controller:
+    case Llama.LlamaProviderController{Models.Provider{_, _, _, Auth.ProviderAuth{Some{Auth.ApiKeyAuth{_, _, callback}}, _}, _, _, _}}: IO.pure(C.Callback<Auth.ResolveInput, Auth.AuthOutcome()>, callback)
+    case _: IO.die(C.Callback<Auth.ResolveInput, Auth.AuthOutcome()>, 1, "missing auth resolver")
+
+def refresher(controller: Llama.LlamaProviderController) -> IO(Models.RefreshModels()):
+  match controller:
+    case Llama.LlamaProviderController{Models.Provider{_, _, _, _, _, _, Some{callback}}}: IO.pure(Models.RefreshModels(), callback)
+    case _: IO.die(Models.RefreshModels(), 1, "missing refresh")
+
 def loginCase(transport: Llama.Transport, +base: String, +signal: Abort.AbortSignal<Unit>) -> IO(Unit):
   do IO<Unit>:
     +ask : C.Callback<Auth.AuthPrompt, Result<&2, &2, String, String>> <- C.create(~String, ~Auth.AuthPrompt, ~Result<&2, &2, String, String>, ~prompt, base)
     +event : C.Callback<Auth.AuthEvent, Unit> <- C.create(~Unit, ~Auth.AuthEvent, ~Unit, ~notify, Unit{})
-    result : Auth.LoginOutcome() <- Llama.login(transport, Auth.ProviderAuthInteraction{signal, ask, event})
+    +provider : Llama.LlamaProviderController <- Llama.createLlamaProvider(transport)
+    login : C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()> <- loginCallback(provider)
+    result : Auth.LoginOutcome() <- C.call(Auth.ProviderAuthInteraction, Auth.LoginOutcome(), login, Auth.ProviderAuthInteraction{signal, ask, event})
+    Llama.disposeLlamaProvider(provider)
     credential : Auth.Credential <- checked(Auth.Credential, result)
     printCredential(credential)
     C.dispose(Auth.AuthPrompt, Result<&2, &2, String, String>, ask)
@@ -80,9 +100,52 @@ def published(unused: Unit, publication: Models.ModelsPublication) -> IO(Bool):
 def refreshCase(transport: Llama.Transport, base: String, +signal: Abort.AbortSignal<Unit>) -> IO(Unit):
   do IO<Unit>:
     +callback : C.Callback<Models.ModelsPublication, Bool> <- C.create(~Unit, ~Models.ModelsPublication, ~Bool, ~published, Unit{})
-    value : Result<&2, &2, String, Unit> <- Llama.refresh(transport, Models.RefreshModelsContext{Some{Auth.ApiKeyCredential{Some{"local"}, Some{R.Record{[R.Property{"LLAMA_BASE_URL", base}]}}}}, None{}, callback, True{}, None{}, signal})
+    +provider : Llama.LlamaProviderController <- Llama.createLlamaProvider(transport)
+    refresh : Models.RefreshModels() <- refresher(provider)
+    value : Result<&2, &2, String, Unit> <- C.call(Models.RefreshModelsContext, Result<&2, &2, String, Unit>, refresh, Models.RefreshModelsContext{Some{Auth.ApiKeyCredential{Some{"local"}, Some{R.Record{[R.Property{"LLAMA_BASE_URL", base}]}}}}, None{}, callback, True{}, None{}, signal})
     checked(Unit, value)
+    Llama.disposeLlamaProvider(provider)
     C.dispose(Models.ModelsPublication, Bool, callback)
+
+def cachePublication(cache: Ref.Ref<Maybe<&2, Store.ModelsStoreEntry>>, publication: Models.ModelsPublication) -> IO(Bool):
+  match publication:
+    case Models.ModelsPublication{Models.StoreEntry{entry}, Some{models}}:
+      do IO<Bool>:
+        Ref.write(Maybe<&2, Store.ModelsStoreEntry>, cache, Some{entry})
+        printModels(models)
+        return True{}
+    case Models.ModelsPublication{Models.KeepStored{}, Some{models}}:
+      do IO<Bool>:
+        IO.print("restored")
+        printModels(models)
+        return True{}
+    case _: IO.pure(Bool, True{})
+
+def requireStored(value: Maybe<&2, Store.ModelsStoreEntry>) -> IO(Maybe<&2, Store.ModelsStoreEntry>):
+  match value:
+    case Some{Store.ModelsStoreEntry{models, modified, Some{time}, etag}}: IO.pure(Maybe<&2, Store.ModelsStoreEntry>, Some{Store.ModelsStoreEntry{models, modified, Some{time}, etag}})
+    case _: IO.die(Maybe<&2, Store.ModelsStoreEntry>, 1, "catalog not persisted")
+
+def cachedCase(+transport: Llama.Transport, +base: String, +signal: Abort.AbortSignal<Unit>) -> IO(Unit):
+  +credential = {Some{Auth.ApiKeyCredential{Some{"local"}, Some{R.Record{[R.Property{"LLAMA_BASE_URL", base}]}}}}: Maybe<&2, Auth.Credential>}
+  do IO<Unit>:
+    +cache : Ref.Ref<Maybe<&2, Store.ModelsStoreEntry>> <- Ref.new(Maybe<&2, Store.ModelsStoreEntry>, None{})
+    +callback : C.Callback<Models.ModelsPublication, Bool> <- C.create(~Ref.Ref<Maybe<&2, Store.ModelsStoreEntry>>, ~Models.ModelsPublication, ~Bool, ~cachePublication, cache)
+    +first : Llama.LlamaProviderController <- Llama.createLlamaProvider(transport)
+    firstRefresh : Models.RefreshModels() <- refresher(first)
+    online : Result<&2, &2, String, Unit> <- C.call(Models.RefreshModelsContext, Result<&2, &2, String, Unit>, firstRefresh, Models.RefreshModelsContext{credential, None{}, callback, True{}, None{}, signal})
+    checked(Unit, online)
+    Llama.disposeLlamaProvider(first)
+    saved : Maybe<&2, Store.ModelsStoreEntry> <- Ref.read(Maybe<&2, Store.ModelsStoreEntry>, cache)
+    stored : Maybe<&2, Store.ModelsStoreEntry> <- requireStored(saved)
+    +second : Llama.LlamaProviderController <- Llama.createLlamaProvider(transport)
+    secondRefresh : Models.RefreshModels() <- refresher(second)
+    offline : Result<&2, &2, String, Unit> <- C.call(Models.RefreshModelsContext, Result<&2, &2, String, Unit>, secondRefresh, Models.RefreshModelsContext{credential, stored, callback, False{}, None{}, signal})
+    checked(Unit, offline)
+    Llama.disposeLlamaProvider(second)
+    C.dispose(Models.ModelsPublication, Bool, callback)
+    unused : Maybe<&2, Store.ModelsStoreEntry> <- Ref.dispose(Maybe<&2, Store.ModelsStoreEntry>, cache)
+    return Unit{}
 
 def resolution(value: Auth.AuthOutcome()) -> IO(Unit):
   match value:
@@ -92,10 +155,14 @@ def resolution(value: Auth.AuthOutcome()) -> IO(Unit):
 
 def exercise(+transport: Llama.Transport, +base: String, mode: String, data: String, +env: Auth.AuthContext, +signal: Abort.AbortSignal<Unit>) -> IO(Unit):
   match mode:
+    case "cached": cachedCase(transport, base, signal)
     case "login": loginCase(transport, base, signal)
     case "resolve":
       do IO<Unit>:
-        result : Auth.AuthOutcome() <- Llama.resolve(transport, Auth.ResolveInput{env, None{}, signal})
+        +provider : Llama.LlamaProviderController <- Llama.createLlamaProvider(transport)
+        resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- resolveCallback(provider)
+        result : Auth.AuthOutcome() <- C.call(Auth.ResolveInput, Auth.AuthOutcome(), resolve, Auth.ResolveInput{env, None{}, signal})
+        Llama.disposeLlamaProvider(provider)
         resolution(result)
     case "refresh": refreshCase(transport, base, signal)
     case "thinking": refreshCase(transport, base, signal)

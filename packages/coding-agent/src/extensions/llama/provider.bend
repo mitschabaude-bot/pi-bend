@@ -340,3 +340,11 @@ def createLlamaProvider(+transport: Transport) -> IO(LlamaProviderController):
     resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~Transport, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~resolveCallback, transport)
     refresh : Models.RefreshModels() <- C.create(~Transport, ~Models.RefreshModelsContext, ~Result<&2, &2, String, Unit>, ~refreshCallback, transport)
     return LlamaProviderController{Models.Provider{LLAMA_PROVIDER_ID(), "llama.cpp", DEFAULT_LLAMA_SERVER_URL() ++ "/v1", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"llama.cpp server", Some{login}, resolve}}, None{}}, Nil{}, Models.ApiStreams{}, Some{refresh}}}
+
+# Retire the callbacks owned by this controller; its transport is borrowed.
+def disposeLlamaProvider(controller: LlamaProviderController) -> IO(Unit):
+  match controller:
+    case LlamaProviderController{Models.Provider{_, _, _, auth, _, _, refresh}}:
+      do IO<Unit>:
+        Auth.disposeProviderAuth(auth)
+        Auth.disposeMaybe(Models.RefreshModels(), refresh, callback => C.dispose(Models.RefreshModelsContext, Result<&2, &2, String, Unit>, callback))

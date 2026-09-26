@@ -80,7 +80,7 @@ def main():
         lanes.append(("bun", ["bun", "build/llama-provider.js"], os.environ.copy()))
     if args.backend in ("native", "all"):
         lanes.extend((f"native{n}", [str(ROOT / "build/llama-provider")], {**os.environ, "BEND_THREADS": str(n)}) for n in (1, 4))
-    for mode, variant in [(m, None) for m in ("catalog", "autoload", "thinking", "resolve", "login", "refresh")] + [("refresh", "noautoload")]:
+    for mode, variant in [(m, None) for m in ("catalog", "autoload", "thinking", "resolve", "login", "refresh", "cached")] + [("refresh", "noautoload")]:
         expected = run(["bun", "tests/llama_provider_reference.ts"], mode, variant=variant)
         for name, argv, env in lanes:
             actual = run(argv, mode, env, variant)
