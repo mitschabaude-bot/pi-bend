@@ -172,7 +172,7 @@ def headers(value: Maybe<&2, V.Value>) -> Maybe<&2, T.ProviderHeaders()>:
 
 def budgets(value: Maybe<&2, V.Value>) -> Maybe<&2, T.ThinkingBudgets>:
   match value:
-    case Some{+levels}: Some{T.ThinkingBudgets{number(field(levels, "minimal")), number(field(levels, "low")), number(field(levels, "medium")), number(field(levels, "high"))}}
+    case Some{+budget}: Some{T.ThinkingBudgets{number(field(budget, "minimal")), number(field(budget, "low")), number(field(budget, "medium")), number(field(budget, "high"))}}
     case None{}: None{}
 
 # Results

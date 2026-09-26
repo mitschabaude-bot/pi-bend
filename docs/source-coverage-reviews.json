@@ -3,10 +3,10 @@
   "reviews": {
     "packages/ai/src/api/openai-responses.ts": {
       "state": "partial",
-      "note": "Native OpenAI/Codex request and stream path works; provider suites remain partial and some upstream request/header behavior differs.",
+      "note": "Native OpenAI/Codex request and stream path works; provider suites remain partial and some upstream request/header behavior differs. The Codex endpoint (upstream openai-codex-responses.ts, not reviewed as its own module) now sends upstream's SSE headers: model and caller headers plus the fixed Codex headers, without the SDK client's session-affinity session_id; flex/priority requests echoed as 'default' are priced at the requested tier (resolveCodexServiceTier). tests/openai_codex_stream_check.py compares 16 named openai-codex-stream test instances with pinned pi-mono over a loopback server; its PENDING list records the Codex SSE layer that is not ported (parseSSE EOF flush and abort message, mapCodexEvents endTurn and early stop after response.incomplete, the SSE header timeout), and WebSocket transport and zstd request bodies are absent.",
       "source_sha256": "5d524184ea001a2717fd35b4562126043338d1ef3279f4e2ce192ae5592e8479",
       "port_sha256": {
-        "packages/ai/src/api/openai-responses.bend": "cbe3854fc2861362a3e25603fa7885c89428ce44afa57f2928c688da89d04b7b"
+        "packages/ai/src/api/openai-responses.bend": "576684141096fc1f8d406017963fd10620b4a36f8ce341e2176f53106a8fce23"
       }
     },
     "packages/ai/src/api/anthropic-messages.ts": {
@@ -661,12 +661,12 @@
     },
     "packages/ai/src/api/google-generative-ai.ts": {
       "state": "ported",
-      "note": "Ported as three modules: google-generative-ai.bend (GoogleOptions, streamSimple's option mapping with clamped levels, level-or-budget thinking config and getGoogleBudget, buildParams producing the SDK parameters, client headers, and the SDK's parameter-to-REST conversion with its field order); google-generative-ai-stream.bend (the SDK's processStreamResponse framing with its delimiters, in-band error chunks and incomplete-segment error, and the chunk fold: text/thinking block transitions, signatures, function calls with generated ids, responseId, usage and finish reasons); google-generative-ai-client.bend (streamSimple's missing-key and level-mapping errors fail before a stream exists, as upstream throws synchronously; the stream lifecycle: custom-fetch and API-key checks, onPayload replacement, the SDK model path and address, headers, retryProviderRequest with status-only failures, the body loop and the catch block). tests/google_generative_ai_check.py compares 560 captured params, wire requests and streamed messages/event sequences with pinned pi-mono and runs the ported suites; tests/google_client_loopback.py covers the HTTP path and the agent glue. Documented differences (the tool-call counter one is flagged for review with the user): x-goog-api-client carries the SDK label without the gl-node/<process.version> runtime label (there is no Node runtime); the generated tool-call id counter is per stream instead of module-global (upstream's `let toolCallCounter` at google-generative-ai.ts:57; ids stay unique within a response and Date.now() distinguishes streams unless two start in the same millisecond); JSON.parse's engine-specific error text is replaced by the native parser's; event partials are snapshots. No live Gemini request has been verified.",
+      "note": "Ported as three modules: google-generative-ai.bend (GoogleOptions, streamSimple's option mapping with clamped levels, level-or-budget thinking config and getGoogleBudget, buildParams producing the SDK parameters, client headers, and the SDK's parameter-to-REST conversion with its field order); google-generative-ai-stream.bend (the SDK's processStreamResponse framing with its delimiters, in-band error chunks and incomplete-segment error, and the chunk fold: text/thinking block transitions, signatures, function calls with generated ids, responseId, usage and finish reasons); google-generative-ai-client.bend (streamSimple's missing-key and level-mapping errors fail before a stream exists, as upstream throws synchronously; the stream lifecycle: custom-fetch (accepting the process fetch handle, globalThis.fetch upstream) and API-key checks, onPayload replacement, the SDK model path and address, headers, retryProviderRequest with status-only failures, the body loop and the catch block). tests/google_generative_ai_check.py compares 560 captured params, wire requests and streamed messages/event sequences with pinned pi-mono and runs the ported suites; tests/google_client_loopback.py covers the HTTP path and the agent glue. Documented differences (the tool-call counter one is flagged for review with the user): x-goog-api-client carries the SDK label without the gl-node/<process.version> runtime label (there is no Node runtime); the generated tool-call id counter is per stream instead of module-global (upstream's `let toolCallCounter` at google-generative-ai.ts:57; ids stay unique within a response and Date.now() distinguishes streams unless two start in the same millisecond); JSON.parse's engine-specific error text is replaced by the native parser's; event partials are snapshots. No live Gemini request has been verified.",
       "source_sha256": "c20f1a40875b2106b6d39d8b7837cd30a882c6a5fcf8c311ccc42a090e18e956",
       "port_sha256": {
         "packages/ai/src/api/google-generative-ai.bend": "8e5fddf0912e58a6af8a24da3425ddfd4970278f1dc8811557f1ac9d524e7d46",
         "packages/ai/src/api/google-generative-ai-stream.bend": "786ea73d7b16f635095a24c049667395a971ce730fd2a696ca699184371fb243",
-        "packages/ai/src/api/google-generative-ai-client.bend": "eaaeead401f3172c802f3e76b871f6e69ab4cb3b4e1b87128923586621ecc19b"
+        "packages/ai/src/api/google-generative-ai-client.bend": "ccdb93b09d1c0df48c921b53ede55e3a8bd4bcbfb0b2cd92c383474f1d55f616"
       },
       "ports": [
         "packages/ai/src/api/google-generative-ai.bend",
@@ -926,6 +926,14 @@
       "port_sha256": {
         "packages/tui/src/tui-base.bend": "30f0b8d62c944c64137631db5fd17ef30803ccc4603ea9e729c48bc18cb12842",
         "packages/tui/src/tui-process.bend": "6d39bd17f75c13210681087f7b66416e024ce0e66416e36f58b0e345cddc23e5"
+      }
+    },
+    "packages/ai/src/providers/opencode-headers.ts": {
+      "state": "ported",
+      "note": "withSessionHeader for stream options and withSimpleSessionHeader for streamSimple options: a nonempty sessionId adds x-opencode-session after the caller's headers unless a caller header (even a null removal) already names it case-insensitively. The provider wrapper withOpenCodeSessionHeader is Models.OpenCodeStreams{apis} (the APIs each OpenCode provider wraps, as in opencode.ts/opencode-go.ts); agent-runtime applies Models.streamSimpleOptions after prepareRequest, as upstream's wrapper sees the merged request headers. models.json overlays inherit the wrapper for their base models' APIs (supportsBaseApi). Covered by packages/ai/test/opencode-provider-headers.bend.",
+      "source_sha256": "57a97177294665039f40a34cf421514ecd41527d5042f5185639557b6a7d80a1",
+      "port_sha256": {
+        "packages/ai/src/providers/opencode-headers.bend": "eebce9a70144af84d72b3ad06fd79f3e85b301c705e3e67e3b05284af084d875"
       }
     }
   }

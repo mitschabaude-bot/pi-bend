@@ -581,13 +581,21 @@ def affinity(compat: ResolvedCompat) -> T.SessionAffinityFormat:
   match compat:
     case ResolvedCompat{_, _, format, _, _, _, _, _, _, _}: format
 
+# upstream buildBaseCodexHeaders: the Codex backend takes the model's headers
+# and the caller's (null removes), not the SDK client's defaults, Copilot
+# headers or session-affinity headers; prepareCodexRequest adds the fixed ones.
+def endpointHeaders(-P: Data, -A: Data, -G: Data, -D: Data, endpoint: Endpoint, agent: String, provider: String, modelHeaders: Maybe<&2, R.Record<String>>, context: T.TranscriptContext<P, A, G, D>, affinity: T.SessionAffinityFormat, sessionId: Maybe<&2, String>, optionsHeaders: Maybe<&2, T.ProviderHeaders()>) -> T.ProviderHeaders():
+  match endpoint:
+    case CodexEndpoint{}: ProviderHeaders.overlay(ProviderHeaders.overlayStrings(R.new(T.Nullable<String>), modelHeaders), optionsHeaders)
+    case _: clientHeaders(P, A, G, D, agent, provider, modelHeaders, context, affinity, sessionId, optionsHeaders)
+
 def preparedWith(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, model: T.Model<T.JsonValue>, context: Context(G, D), +options: OpenAIResponsesOptions<Reason, Telemetry, E>, agent: String, configuration: ModelSettings, +apiKey: String, +grammar: R.Record<String>) -> IO(Result<&2, &2, PreparationError, Prepared>):
   match configuration:
     case ModelSettings{+provider, +baseUrl, modelHeaders, +compat, +endpoint}:
       do IO<Result<&2, &2, PreparationError, Prepared>>:
         +retention : T.CacheRetention <- resolveCacheRetention(optionRetention(Reason, Telemetry, E, options), optionEnv(Reason, Telemetry, E, options))
         +resolved : Context(G, D) = Transcript.resolveTranscript(V.Value, V.Value, G, D, context, Some{midConversation(compat)})
-        merged : T.ProviderHeaders() = clientHeaders(V.Value, V.Value, G, D, agent, provider, modelHeaders, resolved, affinity(compat), cacheSessionId(retention, optionSession(Reason, Telemetry, E, options)), optionHeaders(Reason, Telemetry, E, options))
+        merged : T.ProviderHeaders() = endpointHeaders(V.Value, V.Value, G, D, endpoint, agent, provider, modelHeaders, resolved, affinity(compat), cacheSessionId(retention, optionSession(Reason, Telemetry, E, options)), optionHeaders(Reason, Telemetry, E, options))
         payload : Result<&2, &2, BuildError, T.JsonValue> <- buildParams(~Reason, ~Telemetry, ~E, ~G, ~D, model, resolved, options, compat, grammar, retention, endpoint)
         return finishedPreparation(apiKey, baseUrl, merged, compat, grammar, retention, endpoint, promptCacheKey(retention, optionSession(Reason, Telemetry, E, options)), codexAccount(endpoint, apiKey), payload)
 
@@ -1064,11 +1072,30 @@ def disposedSource(-Reason: Data, -G: Data, -E: Data, pair: Source<Reason, G> & 
         disposal : Result<&2, &2, Sse.CloseError<Reason>, Unit> <- Sse.dispose(Reason, body, cursor)
         return processed(Reason, G, E, result, disposal)
 
-def opened(~Reason: Data, ~G: Data, ~E: Data, model: T.Model<T.JsonValue>, options: Stream.OpenAIResponsesStreamOptions, output: T.AssistantMessage<V.Value, G>, events: Events.AssistantMessageEventStream(V.Value, G), pair: Sse.Body(Reason) & Sse.Cursor<Sse.TransportError(Reason)>) -> IO(Outcome<Reason, G, E>):
+# upstream resolveCodexServiceTier: the Codex backend echoes "default" for a
+# flex or priority request, which is then priced at the requested tier.
+def resolveCodexServiceTier(response: Maybe<&2, String>, requested: Maybe<&2, String>) -> Maybe<&2, String>:
+  match response requested:
+    case Some{"default"} Some{"flex"}: Some{"flex"}
+    case Some{"default"} Some{"priority"}: Some{"priority"}
+    case None{} _: requested
+    case _ _: response
+
+def codexModel(model: T.Model<T.JsonValue>) -> Bool:
+  match model:
+    case T.Model{_, _, T.OpenAICodexResponsesApi{}, _, _, _, _, _, _, _, _, _, _, _, _, _}: True{}
+    case _: False{}
+
+def processedBy(~Reason: Data, ~G: Data, codex: Bool, source: Source<Reason, G>, output: T.AssistantMessage<V.Value, G>, model: T.Model<T.JsonValue>, options: Stream.OpenAIResponsesStreamOptions) -> IO(Source<Reason, G> & Stream.RunResult<G, ReaderError(Reason)>):
+  match codex:
+    case True{}: Stream.processResponsesStream(~Source<Reason, G>, ~(ReaderError(Reason)), ~T.JsonValue, ~G, ~(sourceNext(~Reason, ~G)), ~(sourceClose(~Reason, ~G)), ~(sourceEmit(~Reason, ~G)), ~resolveCodexServiceTier, ~tierPricing, source, output, model, options)
+    case False{}: Stream.processResponsesStream(~Source<Reason, G>, ~(ReaderError(Reason)), ~T.JsonValue, ~G, ~(sourceNext(~Reason, ~G)), ~(sourceClose(~Reason, ~G)), ~(sourceEmit(~Reason, ~G)), ~Stream.resolveServiceTier, ~tierPricing, source, output, model, options)
+
+def opened(~Reason: Data, ~G: Data, ~E: Data, +model: T.Model<T.JsonValue>, options: Stream.OpenAIResponsesStreamOptions, output: T.AssistantMessage<V.Value, G>, events: Events.AssistantMessageEventStream(V.Value, G), pair: Sse.Body(Reason) & Sse.Cursor<Sse.TransportError(Reason)>) -> IO(Outcome<Reason, G, E>):
   match pair:
     case (body, cursor):
       do IO<Outcome<Reason, G, E>>:
-        result : Source<Reason, G> & Stream.RunResult<G, ReaderError(Reason)> <- Stream.processResponsesStream(~Source<Reason, G>, ~(ReaderError(Reason)), ~T.JsonValue, ~G, ~(sourceNext(~Reason, ~G)), ~(sourceClose(~Reason, ~G)), ~(sourceEmit(~Reason, ~G)), ~Stream.resolveServiceTier, ~tierPricing, Source{body, cursor, events}, output, model, options)
+        result : Source<Reason, G> & Stream.RunResult<G, ReaderError(Reason)> <- processedBy(~Reason, ~G, codexModel(model), Source{body, cursor, events}, output, model, options)
         disposedSource(Reason, G, E, result)
 
 # processResponsesStream over the acquired body, then release everything the

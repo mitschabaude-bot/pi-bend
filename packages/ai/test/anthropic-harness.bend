@@ -489,3 +489,36 @@ def textOf2(value: Maybe<&2, J()>) -> Maybe<&2, String>:
   match value:
     case Some{T.JsonString{text}}: Some{text}
     case _: None{}
+
+# fetch-option: streamSimple with a custom options.fetch while the setup's
+# process fetch (globalThis.fetch) must stay unused.
+type FetchOutcome is Data:
+  FetchOutcome{ambient: Maybe<&2, Fetch.Input<Unit>>, custom: Maybe<&2, Fetch.Input<Unit>>}
+
+def fetchOptions(fetch: Fetch.Fetch(Unit)) -> Simple():
+  T.SimpleStreamOptions{None{}, None{}, Some{"test-key"}, Some{fetch}, None{}, None{}, None{}, None{}, None{}, Some{F.fromU32(0)}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+
+def fetchSelected(+model: T.Model<J()>, +context: Context(), +ambient: Fetch.Fetch(Unit), selected: Result<&2, &2, String, Options()>) -> IO(Unit):
+  match selected:
+    case Fail{message}: fail("streamSimple threw: " ++ message)
+    case Done{options}:
+      do IO<Unit>:
+        +events : Events.AssistantMessageEventStream(V.Value, Diagnostics()) <- Events.createAssistantMessageEventStream(~V.Value, ~Diagnostics())
+        +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+        agent : String <- piUserAgent()
+        Client.stream(~Unit, ~Unit, ~String, ~Diagnostics(), ~transformations, ~Unit, ~(message => message), events, Abort.signal(Unit, controller), setup(ambient, agent), model, context, options, F.fromU32(1))
+        +cursor : Events.Iterator<Event(), Message()> <- Events.iterator(Event(), Message(), events)
+        first : Events.Iteration<Event()> <- Events.nextValue(Event(), Message(), cursor)
+        emitted : List<&2, Event()> <- collect(first, cursor, Nil{})
+        Abort.dispose(Unit, controller)
+
+def fetchRun(+model: T.Model<J()>, +context: Context()) -> IO(FetchOutcome):
+  do IO<FetchOutcome>:
+    +ambientSeen : Ref.Ref<Maybe<&2, Fetch.Input<Unit>>> <- Ref.new(Maybe<&2, Fetch.Input<Unit>>, None{})
+    +customSeen : Ref.Ref<Maybe<&2, Fetch.Input<Unit>>> <- Ref.new(Maybe<&2, Fetch.Input<Unit>>, None{})
+    +ambient : Fetch.Fetch(Unit) <- C.create(~Ref.Ref<Maybe<&2, Fetch.Input<Unit>>>, ~Fetch.Input<Unit>, ~Fetch.Result_(Unit), ~recordFetch, ambientSeen)
+    +custom : Fetch.Fetch(Unit) <- C.create(~Ref.Ref<Maybe<&2, Fetch.Input<Unit>>>, ~Fetch.Input<Unit>, ~Fetch.Result_(Unit), ~recordFetch, customSeen)
+    fetchSelected(model, context, ambient, fromSimple(model, context, fetchOptions(custom)))
+    ambientRequest : Maybe<&2, Fetch.Input<Unit>> <- Ref.read(Maybe<&2, Fetch.Input<Unit>>, ambientSeen)
+    customRequest : Maybe<&2, Fetch.Input<Unit>> <- Ref.read(Maybe<&2, Fetch.Input<Unit>>, customSeen)
+    return FetchOutcome{ambientRequest, customRequest}

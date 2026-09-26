@@ -48,6 +48,11 @@ NAMED = {
         'preserves MAX_TOKENS with a tool call as length for $name': ['Google Generative AI'],
         'maps STOP with a tool call to toolUse for $name': ['Google Generative AI']},
         'skipped': {'preserves raw Gemini finish reasons for Google Vertex errors': VERTEX}},
+    'fetch-option': {'skipped': {
+        'passes fetch through streamSimple to the Anthropic SDK': 'Anthropic case: tests/anthropic_messages_check.py',
+        'passes fetch through streamSimple to OpenAI SDK adapters': 'not ported yet (OpenAI-family adapters)',
+        'uses fetch for Mistral, Codex SSE, and pi-messages HTTP requests': 'not ported yet',
+        'uses fetch for image generation': 'openrouter-images adapter (another port)'}},
 }
 
 

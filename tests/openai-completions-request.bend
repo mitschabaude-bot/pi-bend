@@ -25,6 +25,7 @@ import ../packages/ai/src/providers/ant-ling.models.bend as Catalog17
 import ../packages/ai/src/providers/fireworks.models.bend as Catalog18
 import ../packages/ai/src/providers/baseten.models.bend as Catalog19
 import ../packages/ai/src/providers/cloudflare-ai-gateway.models.bend as Catalog20
+import ../packages/ai/src/providers/cerebras.models.bend as Catalog21
 import ../packages/ai/src/utils/message-json.bend as MessageJson
 import ../packages/ai/src/utils/schema-json.bend as Convert
 import ../packages/ai/src/utils/transcript.bend as Transcript
@@ -148,6 +149,7 @@ def catalogModels(+provider: String) -> List<&2, Ai.Model<Ai.JsonValue>>:
     case "fireworks": Catalog18.FIREWORKS_MODELS()
     case "baseten": Catalog19.BASETEN_MODELS()
     case "cloudflare-ai-gateway": Catalog20.CLOUDFLARE_AI_GATEWAY_MODELS()
+    case "cerebras": Catalog21.CEREBRAS_MODELS()
     case _: Nil{}
 
 def findModel(models: List<&2, Ai.Model<Ai.JsonValue>>, +id: String) -> Maybe<&2, Ai.Model<Ai.JsonValue>>:
