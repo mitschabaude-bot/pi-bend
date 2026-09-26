@@ -26,13 +26,14 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   over a local TLS server (P-256 certificates), Bend's first token now
   arrives before pi's (72-77 ms versus 110-115 ms in `stream-paced`). A long
   answer (10 KB of Markdown with 30 code blocks, 500 deltas) paced at 4 ms
-  per delta ends within the bound (last token 2.33-2.37 s versus pi's
-  2.07-2.09 s); flooded, it ends at 0.75-0.77 s versus pi's 0.17 s
-  (2026-09-26, with the marked renderer; the line-based renderer it
-  replaced ended at 2.05-2.09 s and 0.36-0.40 s). Each frame lexes the whole
-  message with the marked port, whose backtracking regular expressions walk
-  the shared input list (about 40 ms for 5 KB, most of it reference counting
-  on the list); pi's marked uses V8's compiled expressions. TLS is no longer the cause: the same
+  per delta ends within the bound (last token 2.29-2.63 s versus pi's
+  2.17-2.40 s); flooded, it ends at 0.62-0.81 s versus pi's 0.19-0.34 s
+  (2026-09-26, 1506c02e, three runs at load average 14-16; the build
+  before the marked speed work, 9e991662, ended the flood at 1.30-1.52 s
+  in the same runs). Each frame lexes the whole message with the marked
+  port; lexing 54 growing prefixes of this answer takes 0.5 s natively (2.7
+  s before the speed work; pi's V8-compiled marked is about 0.5 ms for
+  10 KB). TLS is no longer the cause: the same
   flood over plain HTTP (a local copy of the scenario without `tls`) ended
   at 0.36-0.38 s versus pi's 0.13 s before the frame work, so TLS adds
   about 80 ms to Bend and 30-40 ms to pi. What remains is mostly copying
