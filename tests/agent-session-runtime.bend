@@ -16,6 +16,13 @@ import ../packages/runtime/src/schema-value.bend as V
 import ../packages/ai/src/utils/uuid.bend as Uuid
 import ../packages/ai/src/types.bend as Ai
 import ../packages/agent/src/types.bend as T
+import ../packages/coding-agent/src/core/extensions/types.bend as Ext
+import ../packages/coding-agent/src/core/extensions/loader.bend as Loader
+import ../packages/coding-agent/src/core/extensions/runner.bend as Runner
+import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
+import ../packages/coding-agent/src/core/model-runtime.bend as Models
+import ../packages/runtime/src/record.bend as Rec
+import ./model-runtime-fixture.bend as ModelFixture
 
 # AgentSessionRuntime over the faux-provider fixture: each runtime the
 # factory creates is a fresh agent and AgentSession for the requested session
@@ -26,16 +33,18 @@ def Runtime() -> Data: Host.AgentSessionRuntime<Services()>
 
 def quotedOr(value: Maybe<&2, String>) -> String: Maybe.default(&2, String, Maybe.map(&2, String, String, Decode.quote, value), "null")
 
-def reasonName(reason: Host.StartReason) -> String:
+def reasonName(reason: Ext.SessionStartReason) -> String:
   match reason:
-    case Host.NewStart{}: "new"
-    case Host.ResumeStart{}: "resume"
-    case Host.ForkStart{}: "fork"
+    case Ext.StartupStart{}: "startup"
+    case Ext.ReloadStart{}: "reload"
+    case Ext.NewStart{}: "new"
+    case Ext.ResumeStart{}: "resume"
+    case Ext.ForkStart{}: "fork"
 
-def startText(start: Maybe<&2, Host.SessionStart>) -> String:
+def startText(start: Maybe<&2, Ext.SessionStartEvent>) -> String:
   match start:
     case None{}: "null"
-    case Some{Host.SessionStart{reason, previous}}: "{\"reason\":\"" ++ reasonName(reason) ++ "\",\"previousSessionFile\":" ++ quotedOr(previous) ++ "}"
+    case Some{Ext.SessionStartEvent{reason, previous}}: "{\"reason\":\"" ++ reasonName(reason) ++ "\",\"previousSessionFile\":" ++ quotedOr(previous) ++ "}"
 
 def created(+fixture: Fx.Fixture) -> Result<&1, &1, String, Host.Created<Services()>>: Done{Host.Created{fixture, Fx.sessionOf(fixture)}}
 
@@ -354,11 +363,202 @@ def branching(+dir: String, +agentDir: String, +kind: String) -> IO(Unit):
     C.dispose(Host.Request, Result<&1, &1, String, Host.Created<Services()>>, make)
     C.dispose(Services(), Unit, free)
 
+# agent-session-runtime-events.test.ts: every session the factory creates
+# loads one inline extension that prints the lifecycle events it sees
+# (`ext_event` lines). session_before_switch cancels when `cancelSwitch`;
+# session_before_fork cancels once each time `cancelFork` is set.
+type EventsEnv is Data:
+  EventsEnv{agentDir: String, cancelSwitch: Bool, cancelFork: R.Ref<Bool>, runners: R.Ref<List<&2, Runner.ExtensionRunner>>}
+
+def fileText(file: Maybe<&2, String>) -> String: quotedOr(file)
+
+def shutdownName(reason: Ext.SessionShutdownReason) -> String:
+  match reason:
+    case Ext.QuitShutdown{}: "quit"
+    case Ext.ReloadShutdown{}: "reload"
+    case Ext.NewShutdown{}: "new"
+    case Ext.ResumeShutdown{}: "resume"
+    case Ext.ForkShutdown{}: "fork"
+
+def switchName(reason: Ext.SessionSwitchReason) -> String:
+  match reason:
+    case Ext.SwitchNew{}: "new"
+    case Ext.SwitchResume{}: "resume"
+
+def positionName(position: Ctx.ForkPosition) -> String:
+  match position:
+    case Ctx.ForkBefore{}: "before"
+    case Ctx.ForkAt{}: "at"
+
+def onStart(env: Unit, call: Ext.HandlerCall<Ext.SessionStartEvent>) -> IO(Result<&2, &2, String, Maybe<&2, Unit>>):
+  match call:
+    case Ext.HandlerCall{Ext.SessionStartEvent{reason, previous}, _}:
+      do IO<Result<&2, &2, String, Maybe<&2, Unit>>>:
+        IO.print("{\"type\":\"ext_event\",\"event\":\"session_start\",\"reason\":\"" ++ reasonName(reason) ++ "\",\"previousSessionFile\":" ++ fileText(previous) ++ "}")
+        return Done{None{}}
+
+def onShutdown(env: Unit, call: Ext.HandlerCall<Ext.SessionShutdownEvent>) -> IO(Result<&2, &2, String, Maybe<&2, Unit>>):
+  match call:
+    case Ext.HandlerCall{Ext.SessionShutdownEvent{reason, target}, _}:
+      do IO<Result<&2, &2, String, Maybe<&2, Unit>>>:
+        IO.print("{\"type\":\"ext_event\",\"event\":\"session_shutdown\",\"reason\":\"" ++ shutdownName(reason) ++ "\",\"targetSessionFile\":" ++ fileText(target) ++ "}")
+        return Done{None{}}
+
+def onBeforeSwitch(cancel: Bool, call: Ext.HandlerCall<Ext.SessionBeforeSwitchEvent>) -> IO(Result<&2, &2, String, Maybe<&2, Ext.SessionBeforeSwitchResult>>):
+  match call:
+    case Ext.HandlerCall{Ext.SessionBeforeSwitchEvent{reason, target}, _}:
+      do IO<Result<&2, &2, String, Maybe<&2, Ext.SessionBeforeSwitchResult>>>:
+        IO.print("{\"type\":\"ext_event\",\"event\":\"session_before_switch\",\"reason\":\"" ++ switchName(reason) ++ "\",\"targetSessionFile\":" ++ fileText(target) ++ "}")
+        return Done{Bool.pick(Maybe<&2, Ext.SessionBeforeSwitchResult>, cancel, Some{Ext.SessionBeforeSwitchResult{Some{True{}}}}, None{})}
+
+def onBeforeFork(cancelNext: R.Ref<Bool>, call: Ext.HandlerCall<Ext.SessionBeforeForkEvent>) -> IO(Result<&2, &2, String, Maybe<&2, Ext.SessionBeforeForkResult>>):
+  match call:
+    case Ext.HandlerCall{Ext.SessionBeforeForkEvent{entryId, position}, _}:
+      do IO<Result<&2, &2, String, Maybe<&2, Ext.SessionBeforeForkResult>>>:
+        IO.print("{\"type\":\"ext_event\",\"event\":\"session_before_fork\",\"entryId\":" ++ Decode.quote(entryId) ++ ",\"position\":\"" ++ positionName(position) ++ "\"}")
+        cancel : Bool <- R.modify(Bool, Bool, cancelNext, value => (False{}, value))
+        return Done{Bool.pick(Maybe<&2, Ext.SessionBeforeForkResult>, cancel, Some{Ext.SessionBeforeForkResult{Some{True{}}, None{}}}, None{})}
+
+def subscribedAll(results: List<&2, Result<&2, &2, String, Loader.Unsubscribe>>) -> Result<&2, &2, String, Unit>:
+  match results:
+    case Nil{}: Done{Unit{}}
+    case Fail{error} <> _: Fail{error}
+    case Done{_} <> rest: subscribedAll(rest)
+
+def eventsFactory(env: EventsEnv, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  match env:
+    case EventsEnv{_, cancelSwitch, cancelFork, _}:
+      do IO<Result<&2, &2, String, Unit>>:
+        start : Ext.ExtensionHandler(Ext.SessionStartEvent, Unit) <- C.create(~Unit, ~Ext.HandlerCall<Ext.SessionStartEvent>, ~Result<&2, &2, String, Maybe<&2, Unit>>, ~onStart, Unit{})
+        shutdown : Ext.ExtensionHandler(Ext.SessionShutdownEvent, Unit) <- C.create(~Unit, ~Ext.HandlerCall<Ext.SessionShutdownEvent>, ~Result<&2, &2, String, Maybe<&2, Unit>>, ~onShutdown, Unit{})
+        switching : Ext.ExtensionHandler(Ext.SessionBeforeSwitchEvent, Ext.SessionBeforeSwitchResult) <- C.create(~Bool, ~Ext.HandlerCall<Ext.SessionBeforeSwitchEvent>, ~Result<&2, &2, String, Maybe<&2, Ext.SessionBeforeSwitchResult>>, ~onBeforeSwitch, cancelSwitch)
+        forking : Ext.ExtensionHandler(Ext.SessionBeforeForkEvent, Ext.SessionBeforeForkResult) <- C.create(~R.Ref<Bool>, ~Ext.HandlerCall<Ext.SessionBeforeForkEvent>, ~Result<&2, &2, String, Maybe<&2, Ext.SessionBeforeForkResult>>, ~onBeforeFork, cancelFork)
+        a : Result<&2, &2, String, Loader.Unsubscribe> <- Loader.on(api, Ext.OnSessionBeforeSwitch{switching})
+        b : Result<&2, &2, String, Loader.Unsubscribe> <- Loader.on(api, Ext.OnSessionShutdown{shutdown})
+        c : Result<&2, &2, String, Loader.Unsubscribe> <- Loader.on(api, Ext.OnSessionStart{start})
+        d : Result<&2, &2, String, Loader.Unsubscribe> <- Loader.on(api, Ext.OnSessionBeforeFork{forking})
+        return subscribedAll([a, b, c, d])
+
+def runnersOf(env: EventsEnv) -> R.Ref<List<&2, Runner.ExtensionRunner>>:
+  match env:
+    case EventsEnv{_, _, _, runners}: runners
+
+def disposeRunners(runners: List<&2, Runner.ExtensionRunner>) -> IO(Unit):
+  match runners:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case runner <> rest:
+      do IO<Unit>:
+        Runner.dispose(runner)
+        disposeRunners(rest)
+
+def eventsLoadout(+env: EventsEnv, +cwd: String) -> IO(Runtime.Loadout):
+  do IO<Runtime.Loadout>:
+    +runtime : Ext.ExtensionRuntime() <- Loader.createExtensionRuntime()
+    errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, [Ext.InlineExtension{"events", api => eventsFactory(env, api), False{}}])
+    models : Models.ModelRuntime <- ModelFixture.create(Fx.fauxSources())
+    +runner : Runner.ExtensionRunner <- Runner.create(runtime, cwd, models)
+    R.modify(List<&2, Runner.ExtensionRunner>, Unit, runnersOf(env), created => (runner <> created, Unit{}))
+    return Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, Some{runner}, Nil{}, None{}, Nil{}}
+
+def eventsFactoryCall(env: EventsEnv, request: Host.Request) -> IO(Result<&1, &1, String, Host.Created<Services()>>):
+  match env request:
+    case EventsEnv{+agentDir, cancelSwitch, cancelFork, runners} Host.Request{+cwd, +stored, _}:
+      do IO<Result<&1, &1, String, Host.Created<Services()>>>:
+        loadout : Runtime.Loadout <- eventsLoadout(EventsEnv{agentDir, cancelSwitch, cancelFork, runners}, cwd)
+        +fixture : Fx.Fixture <- Fx.fixtureWithModel(stored, cwd, agentDir, "one" <> "two" <> "three" <> Nil{}, Nil{}, loadout, Some{Fx.fauxModel()}, Fx.fauxSources())
+        return created(fixture)
+
+def phase(name: String, unit: Unit) -> IO(Unit): IO.print("{\"type\":\"phase\",\"name\":" ++ Decode.quote(name) ++ "}")
+def phaseRebind(env: Unit, session: Session.AgentSession) -> IO(Unit): phase("rebindSession", Unit{})
+
+def reportChange(+label: String, result: Result<&2, &2, String, Ctx.SessionChange>) -> IO(Unit):
+  match result:
+    case Done{Ctx.SessionChange{cancelled}}: IO.print("{\"type\":\"change\",\"label\":" ++ Decode.quote(label) ++ ",\"cancelled\":" ++ Bool.pick(String, cancelled, "true", "false") ++ "}")
+    case Fail{error}: IO.print("{\"type\":\"change\",\"label\":" ++ Decode.quote(label) ++ ",\"error\":" ++ Decode.quote(error) ++ "}")
+
+def reportForkOutcome(+label: String, result: Result<&2, &2, String, Host.ForkOutcome>) -> IO(Unit):
+  match result:
+    case Done{Host.ForkOutcome{cancelled, text}}: IO.print("{\"type\":\"change\",\"label\":" ++ Decode.quote(label) ++ ",\"cancelled\":" ++ Bool.pick(String, cancelled, "true", "false") ++ ",\"selectedText\":" ++ quotedOr(text) ++ "}")
+    case Fail{error}: IO.print("{\"type\":\"change\",\"label\":" ++ Decode.quote(label) ++ ",\"error\":" ++ Decode.quote(error) ++ "}")
+
+def switchBack(+runtime: Runtime(), file: Maybe<&2, String>) -> IO(Unit):
+  match file:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{path}:
+      do IO<Unit>:
+        result : Result<&2, &2, String, Ctx.SessionChange> <- Host.switchSessionCancellable(Services(), runtime, path, None{})
+        reportChange("switch", result)
+        reportCurrent("switched", runtime)
+
+def firstForkId(live: Maybe<&2, Session.AgentSession>) -> IO(String):
+  match live:
+    case None{}: IO.pure(String, "missing")
+    case Some{session}:
+      do IO<String>:
+        forking : List<&2, Session.ForkMessage> <- Session.getUserMessagesForForking(session)
+        return forkAtIndex(forking, 0n)
+
+def forkEvents(+runtime: Runtime(), +cancelFork: R.Ref<Bool>) -> IO(Unit):
+  do IO<Unit>:
+    live : Maybe<&2, Session.AgentSession> <- Host.session(Services(), runtime)
+    +entryId : String <- firstForkId(live)
+    IO.print("{\"type\":\"fork_entry\",\"entryId\":" ++ Decode.quote(entryId) ++ "}")
+    forked : Result<&2, &2, String, Host.ForkOutcome> <- Host.forkCancellable(Services(), runtime, entryId, Host.ForkBefore{})
+    reportForkOutcome("fork", forked)
+    reportCurrent("forked", runtime)
+    R.write(Bool, cancelFork, True{})
+    again : Result<&2, &2, String, Host.ForkOutcome> <- Host.forkCancellable(Services(), runtime, entryId, Host.ForkBefore{})
+    reportForkOutcome("fork_cancelled", again)
+    R.write(Bool, cancelFork, True{})
+    missing : Result<&2, &2, String, Host.ForkOutcome> <- Host.forkCancellable(Services(), runtime, "missing-entry", Host.ForkAt{})
+    reportForkOutcome("fork_at_cancelled", missing)
+
+def eventsScenario(+runtime: Runtime(), +kind: String, +cancelFork: R.Ref<Bool>) -> IO(Unit):
+  do IO<Unit>:
+    reportCurrent("initial", runtime)
+    IO.print("{\"type\":\"phase\",\"name\":\"prompt\"}")
+    promptCurrent("prompt", runtime, "hello")
+    reportCurrent("prompted", runtime)
+    +first : Maybe<&2, String> <- currentFile(runtime)
+    +invalidate : C.Callback<Unit, Unit> <- C.create(~String, ~Unit, ~Unit, ~phase, "beforeSessionInvalidate")
+    +rebinder : Host.Rebind() <- C.create(~Unit, ~Session.AgentSession, ~Unit, ~phaseRebind, Unit{})
+    Bool.pick(Unit -> IO(Unit), String.eq(kind, "invalidate"), _ => IO.bind(Unit, Unit, Host.setBeforeSessionInvalidate(Services(), runtime, Some{invalidate}), _ => Host.setRebindSession(Services(), runtime, Some{rebinder})), _ => IO.pure(Unit, Unit{}))(Unit{})
+    Bool.pick(Unit -> IO(Unit), String.eq(kind, "fork"), _ => forkEvents(runtime, cancelFork), _ => IO.bind(Result<&2, &2, String, Ctx.SessionChange>, Unit, Host.newSessionCancellable(Services(), runtime, None{}), result => IO.bind(Unit, Unit, reportChange("new", result), _ => reportCurrent("new", runtime))))(Unit{})
+    Bool.pick(Unit -> IO(Unit), String.eq(kind, "lifecycle"), _ => switchBack(runtime, first), _ => IO.pure(Unit, Unit{}))(Unit{})
+    Host.setBeforeSessionInvalidate(Services(), runtime, None{})
+    Host.setRebindSession(Services(), runtime, None{})
+    IO.print("{\"type\":\"phase\",\"name\":\"dispose\"}")
+    Host.dispose(Services(), runtime)
+    C.dispose(Unit, Unit, invalidate)
+    C.dispose(Session.AgentSession, Unit, rebinder)
+
+def eventsStarted(+kind: String, cancelFork: R.Ref<Bool>, result: Result<&2, &2, String, Runtime()>) -> IO(Unit):
+  match result:
+    case Fail{error}: IO.die(Unit, 1, error)
+    case Done{runtime}: eventsScenario(runtime, kind, cancelFork)
+
+def runtimeEvents(+dir: String, +agentDir: String, +kind: String) -> IO(Unit):
+  do IO<Unit>:
+    uuids : Uuid.Generator <- Uuid.generator()
+    opened : Sessions.Outcome(Session.Session()) <- Session.createSession(uuids, dir, Some{dir}, agentDir, Sessions.noOptions())
+    stored : Session.Session() <- Fx.requireSession(opened)
+    +cancelFork : R.Ref<Bool> <- R.new(Bool, False{})
+    +runners : R.Ref<List<&2, Runner.ExtensionRunner>> <- R.new(List<&2, Runner.ExtensionRunner>, Nil{})
+    +make : Host.Factory(Services()) <- C.create(~EventsEnv, ~Host.Request, ~Result<&1, &1, String, Host.Created<Services()>>, ~eventsFactoryCall, EventsEnv{agentDir, String.eq(kind, "cancel_switch"), cancelFork, runners})
+    +free : C.Callback<Services(), Unit> <- C.create(~Unit, ~Services(), ~Unit, ~release, Unit{})
+    result : Result<&2, &2, String, Runtime()> <- Host.create(Services(), make, free, agentDir, dir, stored)
+    eventsStarted(kind, cancelFork, result)
+    C.dispose(Host.Request, Result<&1, &1, String, Host.Created<Services()>>, make)
+    C.dispose(Services(), Unit, free)
+    created : List<&2, Runner.ExtensionRunner> <- R.dispose(List<&2, Runner.ExtensionRunner>, runners)
+    disposeRunners(created)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case "persisted" <> dir <> agentDir <> missing <> Nil{}: persisted(dir, agentDir, missing)
     case "memory" <> dir <> agentDir <> Nil{}: inMemory(dir, agentDir)
     case "branching" <> dir <> agentDir <> kind <> Nil{}: branching(dir, agentDir, kind)
+    case "events" <> dir <> agentDir <> kind <> Nil{}: runtimeEvents(dir, agentDir, kind)
     case _: IO.die(Unit, 1, "usage: agent-session-runtime persisted <dir> <agentDir> <missing-cwd-session> | memory <dir> <agentDir>")
 
 def main() -> IO(Unit):

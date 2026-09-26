@@ -506,6 +506,14 @@
         "packages/coding-agent/src/core/skills.bend"
       ]
     },
+    "packages/coding-agent/src/core/agent-session-runtime.ts": {
+      "state": "partial",
+      "note": "AgentSessionRuntime: create (session_start startup once installed), newSession, switchSession, resumeSession, importFromJsonl and fork (before a user message or at an entry; persisted sessions branch into a new file, in-memory ones in place), setRebindSession, setBeforeSessionInvalidate and dispose. Replacement emits session_before_switch/session_before_fork first (cancellable through the *Cancellable variants; newSession/switchSession/fork keep results without cancellation for hosts not yet reporting it), then teardown (abort, session_shutdown with the target file, the before-invalidate hook, dispose), the factory for the next session, rebind, and session_start (upstream: the mode's bindExtensions). Missing: withSession/setup continuations and ReplacedSessionContext, cancellation for resumeSession/importFromJsonl (their outcome types have no cancelled variant yet), stale extension contexts after replacement, diagnostics and modelFallbackMessage.",
+      "source_sha256": "ee66f90f4774ace21290fc6a0ed0fc2065376b57af4223371f1d1680b302036d",
+      "port_sha256": {
+        "packages/coding-agent/src/core/agent-session-runtime.bend": "fcaae1c3fa58fb36192434e3c439a8be65bda06b0e21772ac2ed2e44407a325b"
+      }
+    },
     "packages/coding-agent/src/core/auth-guidance.ts": {
       "state": "ported",
       "note": "All four messages; callers pass the docs directory where upstream reads its package location (config.ts getDocsPath). Not yet used by AgentSession.prompt's preflight (see tests/rpc.md).",
@@ -535,18 +543,18 @@
     },
     "packages/coding-agent/src/core/extensions/runner.ts": {
       "state": "partial",
-      "note": "Native ExtensionRunner: bindCore/bindCommandContext/setUIContext, command resolution with invocation names, error listeners, snapshotEventHandlers, emit for events without results, emitMessageEnd (same-role replacement chain), emitToolCall (first block wins, failures propagate), emitToolResult (patched fields), and the session_before_tree/session_before_compact results of emit (last result, cancel stops dispatch, failures reported). emitBoundary (turn_end/agent_before_settle: drafts and continuation carried between handlers, a preview rebuilt after each, invalid drafts reported). emitContext (context handlers on the conversation with system messages restored, then context_with_system; unchanged is structural equality). emitInput (each handler sees the input as the previous ones left it; handled stops dispatch; failures reported; transform when a handler transformed, not by array identity). emitBeforeAgentStart (messages collected, a returned systemPrompt forces the prompt, returned options replace the event's for later handlers since native handlers cannot edit them in place; systemPrompt is rendered for each handler). Missing: session_before_switch/fork, emitUserBash, provider request/header events, emitCacheWarmingDecision, emitResourcesDiscover, shortcuts, flags, renderers, tool registrations, invalidate/stale contexts.",
+      "note": "Native ExtensionRunner: bindCore/bindCommandContext/setUIContext, command resolution with invocation names, error listeners, snapshotEventHandlers, emit for events without results, emitMessageEnd (same-role replacement chain), emitToolCall (first block wins, failures propagate), emitToolResult (patched fields), and the session_before_tree/session_before_compact results of emit (last result, cancel stops dispatch, failures reported). emitBoundary (turn_end/agent_before_settle: drafts and continuation carried between handlers, a preview rebuilt after each, invalid drafts reported). emitContext (context handlers on the conversation with system messages restored, then context_with_system; unchanged is structural equality). emitInput (each handler sees the input as the previous ones left it; handled stops dispatch; failures reported; transform when a handler transformed, not by array identity). emitBeforeAgentStart (messages collected, a returned systemPrompt forces the prompt, returned options replace the event's for later handlers since native handlers cannot edit them in place; systemPrompt is rendered for each handler). emit for session_start/session_shutdown and the cancelling session_before_switch/session_before_fork dispatch (stops at the first cancel). Missing: emitUserBash, provider request/header events, emitCacheWarmingDecision, emitResourcesDiscover, shortcuts, flags, renderers, tool registrations, invalidate/stale contexts.",
       "source_sha256": "bf68eaf27a3e54f1cfc0982554e0598c050fd9a06c8e8b7d6cd2d8e3d8d5990c",
       "port_sha256": {
-        "packages/coding-agent/src/core/extensions/runner.bend": "3d420cb6035fcb401b84ff6f37b213edc23ffa75041381cf09ec06730b535606"
+        "packages/coding-agent/src/core/extensions/runner.bend": "604729f9c41abb30aef2291301ac61fcb441e1b48361717f4270a9eb75a14bd8"
       }
     },
     "packages/coding-agent/src/core/extensions/types.ts": {
       "state": "partial",
-      "note": "Typed native events and results for agent_start/end/settled, turn_start, message_start/update/end, tool_execution_*, tool_call, tool_result, session_before_tree/session_tree (TreePreparation, summary and instruction overrides), session_before_compact/session_compact/session_compact_failed, turn_end/agent_before_settle boundaries (SessionBoundaryDraft, BoundaryContextPreview, BoundaryResult, AgentActivityOutcome), commands, InlineExtension, ExtensionError and the sendMessage/sendUserMessage actions. tool_call input is one JSON value, not upstream's per-tool narrowed variants; compaction details are the typed read/modified file lists. context/context_with_system (results carry messages; no in-place edits). input (InputEvent/InputSource/InputEventResult; no images is an empty list) and sendUserMessage's options (deliverAs, expandPromptTemplates). before_agent_start (BeforeAgentStartEvent/Result; the result also carries edited options) and the setModel action. Missing: session_start/switch/fork/shutdown/info events, user_bash, model/thinking select, provider request/response, UI prompt events, tools/shortcuts/flags/renderer registration types.",
+      "note": "Typed native events and results for agent_start/end/settled, turn_start, message_start/update/end, tool_execution_*, tool_call, tool_result, session_before_tree/session_tree (TreePreparation, summary and instruction overrides), session_before_compact/session_compact/session_compact_failed, turn_end/agent_before_settle boundaries (SessionBoundaryDraft, BoundaryContextPreview, BoundaryResult, AgentActivityOutcome), commands, InlineExtension, ExtensionError and the sendMessage/sendUserMessage actions. tool_call input is one JSON value, not upstream's per-tool narrowed variants; compaction details are the typed read/modified file lists. context/context_with_system (results carry messages; no in-place edits). input (InputEvent/InputSource/InputEventResult; no images is an empty list) and sendUserMessage's options (deliverAs, expandPromptTemplates). before_agent_start (BeforeAgentStartEvent/Result; the result also carries edited options) and the setModel action. session_start, session_before_switch, session_before_fork (with Ctx.ForkPosition) and session_shutdown with their results. Missing: session_info events, user_bash, model/thinking select, provider request/response, UI prompt events, tools/shortcuts/flags/renderer registration types.",
       "source_sha256": "601261b3deee1d61f85c930efed2767d66fe6c8d9637e19f4f53135b5fecf4d1",
       "port_sha256": {
-        "packages/coding-agent/src/core/extensions/types.bend": "08957635f9436dbd6842dfc0e9b7a42c012f1daf255eba2f40afd7cc90345fcf"
+        "packages/coding-agent/src/core/extensions/types.bend": "38b3fe4541165ead0d4e9e2f980e8bff1c19bd94251c106367bafaf5df91d71f"
       }
     },
     "packages/coding-agent/src/core/model-runtime.ts": {
@@ -879,7 +887,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "8bd7ffad2a1e6cd9360411065ce96163544e1183994172a38ce27ead7ccafa80",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "91281c83b948bdb35106382375cfc14628d313a48d7676cd9a023b1bcadea32e",
-        "packages/coding-agent/src/main.bend": "5a6f640c9e63c180dce764b5dcfbde92100033f2677376e5b78c7cde2bf0c811",
+        "packages/coding-agent/src/main.bend": "0f4fc3a3e046dcb4e0567764693412002e204f2e0cc7a3ae5f1bd09954e2ea5d",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6"
       }
     },

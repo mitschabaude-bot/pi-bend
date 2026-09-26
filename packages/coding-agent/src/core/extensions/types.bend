@@ -170,6 +170,48 @@ type ContextEventResult is Data:
 type CustomMessageInput is Data:
   CustomMessageInput{customType: String, content: Ai.UserContent, display: Bool, details: Maybe<&2, V.Value>}
 
+# Session lifecycle (upstream SessionStartEvent, SessionBeforeSwitchEvent,
+# SessionBeforeForkEvent, SessionShutdownEvent)
+# ------------------------------------------------------------------------
+
+type SessionStartReason is Data:
+  StartupStart{}
+  ReloadStart{}
+  NewStart{}
+  ResumeStart{}
+  ForkStart{}
+
+# `previousSessionFile`: the session active before, for new, resume and fork.
+type SessionStartEvent is Data:
+  SessionStartEvent{reason: SessionStartReason, previousSessionFile: Maybe<&2, String>}
+
+type SessionSwitchReason is Data:
+  SwitchNew{}
+  SwitchResume{}
+
+type SessionBeforeSwitchEvent is Data:
+  SessionBeforeSwitchEvent{reason: SessionSwitchReason, targetSessionFile: Maybe<&2, String>}
+
+type SessionBeforeSwitchResult is Data:
+  SessionBeforeSwitchResult{cancel: Maybe<&2, Bool>}
+
+type SessionBeforeForkEvent is Data:
+  SessionBeforeForkEvent{entryId: String, position: Ctx.ForkPosition}
+
+type SessionBeforeForkResult is Data:
+  SessionBeforeForkResult{cancel: Maybe<&2, Bool>, skipConversationRestore: Maybe<&2, Bool>}
+
+type SessionShutdownReason is Data:
+  QuitShutdown{}
+  ReloadShutdown{}
+  NewShutdown{}
+  ResumeShutdown{}
+  ForkShutdown{}
+
+# `targetSessionFile`: the replacing session's file, when there is one.
+type SessionShutdownEvent is Data:
+  SessionShutdownEvent{reason: SessionShutdownReason, targetSessionFile: Maybe<&2, String>}
+
 # upstream BeforeAgentStartEvent: the expanded prompt, its images, the
 # system prompt rendered from `systemPromptOptions` (with earlier handlers'
 # changes) and those options. Upstream handlers edit the options object in
@@ -269,6 +311,10 @@ type EventHandler is Data:
   OnAgentBeforeSettle{handler: ExtensionHandler(AgentBeforeSettleEvent, BoundaryResult)}
   OnInput{handler: ExtensionHandler(InputEvent, InputEventResult)}
   OnBeforeAgentStart{handler: ExtensionHandler(BeforeAgentStartEvent, BeforeAgentStartEventResult)}
+  OnSessionStart{handler: ExtensionHandler(SessionStartEvent, Unit)}
+  OnSessionBeforeSwitch{handler: ExtensionHandler(SessionBeforeSwitchEvent, SessionBeforeSwitchResult)}
+  OnSessionBeforeFork{handler: ExtensionHandler(SessionBeforeForkEvent, SessionBeforeForkResult)}
+  OnSessionShutdown{handler: ExtensionHandler(SessionShutdownEvent, Unit)}
 
 # Events dispatched without a result (upstream emit). Events with results
 # have their own emitters in the runner.
@@ -285,6 +331,8 @@ type ExtensionEvent is Data:
   SessionTree{event: SessionTreeEvent}
   SessionCompact{event: SessionCompactEvent}
   SessionCompactFailed{event: SessionCompactFailedEvent}
+  SessionStart{event: SessionStartEvent}
+  SessionShutdown{event: SessionShutdownEvent}
 
 def handlerEventType(handler: EventHandler) -> String:
   match handler:
@@ -311,6 +359,10 @@ def handlerEventType(handler: EventHandler) -> String:
     case OnAgentBeforeSettle{_}: "agent_before_settle"
     case OnInput{_}: "input"
     case OnBeforeAgentStart{_}: "before_agent_start"
+    case OnSessionStart{_}: "session_start"
+    case OnSessionBeforeSwitch{_}: "session_before_switch"
+    case OnSessionBeforeFork{_}: "session_before_fork"
+    case OnSessionShutdown{_}: "session_shutdown"
 
 def eventType(event: ExtensionEvent) -> String:
   match event:
@@ -326,6 +378,8 @@ def eventType(event: ExtensionEvent) -> String:
     case SessionTree{_}: "session_tree"
     case SessionCompact{_}: "session_compact"
     case SessionCompactFailed{_}: "session_compact_failed"
+    case SessionStart{_}: "session_start"
+    case SessionShutdown{_}: "session_shutdown"
 
 # `on` returns the id its unsubscribe removes (upstream removes the handler
 # by function identity).

@@ -11,27 +11,25 @@ import ../../../runtime/src/filesystem.bend as FS
 import ../../../runtime/src/posix-path.bend as Path
 import ../../../runtime/src/utf8.bend as Utf8
 import ../../../ai/src/utils/uuid.bend as Uuid
+import ./extensions/types.bend as ExtensionTypes
+import ./extensions/runner.bend as ExtensionRunner
+import ./extensions/context.bend as Ctx
 
 # upstream AgentSessionRuntime: owns the current AgentSession and the services
 # it was created with. Replacing the session tears the current one down first
 # (abort, then dispose), creates the next one through the factory the initial
 # runtime was created with, and then calls the host's rebind hook so its mode
-# follows the new session. Extension events (session_before_switch,
-# session_shutdown, session_start) are not ported; replacement is never
-# cancelled.
+# follows the new session. Extensions see session_before_switch or
+# session_before_fork first (and may cancel), session_shutdown on the
+# outgoing session, and session_start on the new one once the host rebound.
 
-type StartReason is Data:
-  NewStart{}
-  ResumeStart{}
-  ForkStart{}
-
-type SessionStart is Data:
-  SessionStart{reason: StartReason, previousSessionFile: Maybe<&2, String>}
+# How a replacing session started (upstream sessionStartEvent).
+def SessionStart() -> Data: ExtensionTypes.SessionStartEvent
 
 # What the factory creates a runtime for: the target cwd, its session and how
 # the session started (None for the initial runtime).
 type Request is Data:
-  Request{cwd: String, session: Session.Session(), start: Maybe<&2, SessionStart>}
+  Request{cwd: String, session: Session.Session(), start: Maybe<&2, ExtensionTypes.SessionStartEvent>}
 
 type Created<-S: Type> is Type:
   Created{services: S, session: Session.AgentSession}
@@ -51,17 +49,34 @@ type Retiring<-S: Type> is Type:
   NothingRetiring{}
 
 type AgentSessionRuntime<-S: Type> is Data:
-  AgentSessionRuntime{current: R.Ref<Current<S>>, factory: Factory(S), release: C.Callback<S, Unit>, agentDir: String, rebind: R.Ref<Maybe<&2, Rebind()>>, retiring: R.Ref<Retiring<S>>}
+  AgentSessionRuntime{current: R.Ref<Current<S>>, factory: Factory(S), release: C.Callback<S, Unit>, agentDir: String, rebind: R.Ref<Maybe<&2, Rebind()>>, retiring: R.Ref<Retiring<S>>, invalidate: R.Ref<Maybe<&2, C.Callback<Unit, Unit>>>}
+
+# Extension events of a session, through its runner (none without one).
+def emitWith(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, event: ExtensionTypes.ExtensionEvent) -> IO(Unit):
+  match runner:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{found}: ExtensionRunner.emit(found, event)
+
+def emitOn(live: Session.AgentSession, event: ExtensionTypes.ExtensionEvent) -> IO(Unit):
+  do IO<Unit>:
+    runner : Maybe<&2, ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(live)
+    emitWith(runner, event)
+
+# upstream bindExtensions' session_start: the initial session starts with
+# reason "startup".
+def startupEvent() -> ExtensionTypes.SessionStartEvent: ExtensionTypes.SessionStartEvent{ExtensionTypes.StartupStart{}, None{}}
 
 def installed(-S: Type, +factory: Factory(S), +release: C.Callback<S, Unit>, +agentDir: String, +directory: String, result: Result<&1, &1, String, Created<S>>) -> IO(Result<&2, &2, String, AgentSessionRuntime<S>>):
   match result:
     case Fail{error}: IO.pure(Result<&2, &2, String, AgentSessionRuntime<S>>, Fail{error})
-    case Done{Created{services, live}}:
+    case Done{Created{services, +live}}:
       do IO<Result<&2, &2, String, AgentSessionRuntime<S>>>:
         current : R.Ref<Current<S>> <- R.new(Current<S>, Active{services, live, directory})
         rebind : R.Ref<Maybe<&2, Rebind()>> <- R.new(Maybe<&2, Rebind()>, None{})
         retiring : R.Ref<Retiring<S>> <- R.new(Retiring<S>, NothingRetiring{})
-        return Done{AgentSessionRuntime{current, factory, release, agentDir, rebind, retiring}}
+        invalidate : R.Ref<Maybe<&2, C.Callback<Unit, Unit>>> <- R.new(Maybe<&2, C.Callback<Unit, Unit>>, None{})
+        emitOn(live, ExtensionTypes.SessionStart{startupEvent()})
+        return Done{AgentSessionRuntime{current, factory, release, agentDir, rebind, retiring, invalidate}}
 
 def createChecked(-S: Type, +factory: Factory(S), +release: C.Callback<S, Unit>, +agentDir: String, +directory: String, live: Session.Session(), checked: Result<&2, &2, String, Unit>) -> IO(Result<&2, &2, String, AgentSessionRuntime<S>>):
   match checked:
@@ -86,7 +101,7 @@ def sessionIn(-S: Type, current: Current<S>) -> Current<S> & Maybe<&2, Session.A
 # The current session; None only after a failed replacement or dispose.
 def session(-S: Type, runtime: AgentSessionRuntime<S>) -> IO(Maybe<&2, Session.AgentSession>):
   match runtime:
-    case AgentSessionRuntime{current, _, _, _, _, _}: R.modify(Current<S>, Maybe<&2, Session.AgentSession>, current, value => sessionIn(S, value))
+    case AgentSessionRuntime{current, _, _, _, _, _, _}: R.modify(Current<S>, Maybe<&2, Session.AgentSession>, current, value => sessionIn(S, value))
 
 def cwdIn(-S: Type, current: Current<S>) -> Current<S> & Maybe<&2, String>:
   match current:
@@ -95,7 +110,7 @@ def cwdIn(-S: Type, current: Current<S>) -> Current<S> & Maybe<&2, String>:
 
 def cwd(-S: Type, runtime: AgentSessionRuntime<S>) -> IO(Maybe<&2, String>):
   match runtime:
-    case AgentSessionRuntime{current, _, _, _, _, _}: R.modify(Current<S>, Maybe<&2, String>, current, value => cwdIn(S, value))
+    case AgentSessionRuntime{current, _, _, _, _, _, _}: R.modify(Current<S>, Maybe<&2, String>, current, value => cwdIn(S, value))
 
 def restored(-S: Type, -A: Type, current: R.Ref<Current<S>>, +live: Session.AgentSession, +directory: String, pair: S & A) -> IO(A):
   match pair:
@@ -116,7 +131,7 @@ def servicesAction(-S: Type, -A: Type, current: R.Ref<Current<S>>, action: S -> 
 # catalog) without releasing them.
 def withServices(-S: Type, -A: Type, runtime: AgentSessionRuntime<S>, action: S -> IO(S & A), fallback: A) -> IO(A):
   match runtime:
-    case AgentSessionRuntime{+current, _, _, _, _, _}:
+    case AgentSessionRuntime{+current, _, _, _, _, _, _}:
       do IO<A>:
         taken : Current<S> <- R.modify(Current<S>, Current<S>, current, value => (Released{}, value))
         servicesAction(S, A, current, action, fallback, taken)
@@ -125,7 +140,18 @@ def withServices(-S: Type, -A: Type, runtime: AgentSessionRuntime<S>, action: S 
 # replacement.
 def setRebindSession(-S: Type, runtime: AgentSessionRuntime<S>, rebind: Maybe<&2, Rebind()>) -> IO(Unit):
   match runtime:
-    case AgentSessionRuntime{_, _, _, _, hook, _}: R.modify(Maybe<&2, Rebind()>, Unit, hook, previous => (rebind, Unit{}))
+    case AgentSessionRuntime{_, _, _, _, hook, _, _}: R.modify(Maybe<&2, Rebind()>, Unit, hook, previous => (rebind, Unit{}))
+
+# upstream setBeforeSessionInvalidate: runs after session_shutdown handlers
+# and before the outgoing session is disposed.
+def setBeforeSessionInvalidate(-S: Type, runtime: AgentSessionRuntime<S>, hook: Maybe<&2, C.Callback<Unit, Unit>>) -> IO(Unit):
+  match runtime:
+    case AgentSessionRuntime{_, _, _, _, _, _, invalidate}: R.write(Maybe<&2, C.Callback<Unit, Unit>>, invalidate, hook)
+
+def invalidated(hook: Maybe<&2, C.Callback<Unit, Unit>>) -> IO(Unit):
+  match hook:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{callback}: C.call(Unit, Unit, callback, Unit{})
 
 def finishRetiring(-S: Type, release: C.Callback<S, Unit>, retired: Retiring<S>) -> IO(Unit):
   match retired:
@@ -135,12 +161,15 @@ def finishRetiring(-S: Type, release: C.Callback<S, Unit>, retired: Retiring<S>)
         Session.retire(live)
         C.call(S, Unit, release, services)
 
-def released(-S: Type, +release: C.Callback<S, Unit>, retiring: R.Ref<Retiring<S>>, taken: Current<S>) -> IO(Maybe<&2, Session.Session()>):
+def released(-S: Type, +release: C.Callback<S, Unit>, retiring: R.Ref<Retiring<S>>, invalidate: R.Ref<Maybe<&2, C.Callback<Unit, Unit>>>, shutdown: ExtensionTypes.SessionShutdownEvent, taken: Current<S>) -> IO(Maybe<&2, Session.Session()>):
   match taken:
     case Released{}: IO.pure(Maybe<&2, Session.Session()>, None{})
     case Active{services, +live, _}:
       do IO<Maybe<&2, Session.Session()>>:
         Session.abort(live)
+        emitOn(live, ExtensionTypes.SessionShutdown{shutdown})
+        hook : Maybe<&2, C.Callback<Unit, Unit>> <- R.read(Maybe<&2, C.Callback<Unit, Unit>>, invalidate)
+        invalidated(hook)
         outgoing : Session.Session() <- Session.sessionOf(live)
         Session.shutdown(live)
         previous : Retiring<S> <- R.modify(Retiring<S>, Retiring<S>, retiring, value => (Retiring{services, live}, value))
@@ -148,41 +177,55 @@ def released(-S: Type, +release: C.Callback<S, Unit>, retiring: R.Ref<Retiring<S
         return Some{outgoing}
 
 # upstream teardownCurrent: settle an active response so the aborted turn is
-# persisted to the outgoing session, then dispose it and its services. The
+# persisted to the outgoing session, emit session_shutdown, run the
+# before-invalidate hook, then dispose the session and its services. The
 # outgoing session record is returned.
-def teardownCurrent(-S: Type, runtime: AgentSessionRuntime<S>) -> IO(Maybe<&2, Session.Session()>):
+def teardownCurrent(-S: Type, runtime: AgentSessionRuntime<S>, shutdown: ExtensionTypes.SessionShutdownEvent) -> IO(Maybe<&2, Session.Session()>):
   match runtime:
-    case AgentSessionRuntime{current, _, release, _, _, retiring}:
+    case AgentSessionRuntime{current, _, release, _, _, retiring, invalidate}:
       do IO<Maybe<&2, Session.Session()>>:
         taken : Current<S> <- R.modify(Current<S>, Current<S>, current, value => (Released{}, value))
-        released(S, release, retiring, taken)
+        released(S, release, retiring, invalidate, shutdown, taken)
 
 def rebound(hook: Maybe<&2, Rebind()>, live: Session.AgentSession) -> IO(Unit):
   match hook:
     case None{}: IO.pure(Unit, Unit{})
     case Some{callback}: C.call(Session.AgentSession, Unit, callback, live)
 
-def applied(-S: Type, runtime: AgentSessionRuntime<S>, +directory: String, result: Result<&1, &1, String, Created<S>>) -> IO(Result<&2, &2, String, Unit>):
+# The new session starts once the host rebound to it (upstream: the mode's
+# bindExtensions after rebindSession).
+def applied(-S: Type, runtime: AgentSessionRuntime<S>, +directory: String, start: ExtensionTypes.SessionStartEvent, result: Result<&1, &1, String, Created<S>>) -> IO(Result<&2, &2, String, Unit>):
   match runtime result:
     case _ Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{error})
-    case AgentSessionRuntime{current, _, _, _, hook, _} Done{Created{services, +live}}:
+    case AgentSessionRuntime{current, _, _, _, hook, _, _} Done{Created{services, +live}}:
       do IO<Result<&2, &2, String, Unit>>:
         R.modify(Current<S>, Unit, current, previous => (Active{services, live, directory}, Unit{}))
         rebind : Maybe<&2, Rebind()> <- R.read(Maybe<&2, Rebind()>, hook)
         rebound(rebind, live)
+        emitOn(live, ExtensionTypes.SessionStart{start})
         return Done{Unit{}}
 
-def createNext(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String, next: Session.Session(), start: SessionStart) -> IO(Result<&2, &2, String, Unit>):
+def createNext(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String, next: Session.Session(), +start: ExtensionTypes.SessionStartEvent) -> IO(Result<&2, &2, String, Unit>):
   match runtime:
-    case AgentSessionRuntime{_, factory, _, _, _, _}:
+    case AgentSessionRuntime{_, factory, _, _, _, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
         result : Result<&1, &1, String, Created<S>> <- C.call(Request, Result<&1, &1, String, Created<S>>, factory, Request{directory, next, Some{start}})
-        applied(S, runtime, directory, result)
+        applied(S, runtime, directory, start, result)
 
-# Tear down, create the runtime for the next session and rebind.
-def replaced(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String, next: Session.Session(), start: SessionStart) -> IO(Result<&2, &2, String, Unit>):
+# The shutdown reason of a replacement with the given start.
+def shutdownReason(start: ExtensionTypes.SessionStartEvent) -> ExtensionTypes.SessionShutdownReason:
+  match start:
+    case ExtensionTypes.SessionStartEvent{ExtensionTypes.NewStart{}, _}: ExtensionTypes.NewShutdown{}
+    case ExtensionTypes.SessionStartEvent{ExtensionTypes.ResumeStart{}, _}: ExtensionTypes.ResumeShutdown{}
+    case ExtensionTypes.SessionStartEvent{ExtensionTypes.ForkStart{}, _}: ExtensionTypes.ForkShutdown{}
+    case ExtensionTypes.SessionStartEvent{ExtensionTypes.ReloadStart{}, _}: ExtensionTypes.ReloadShutdown{}
+    case ExtensionTypes.SessionStartEvent{ExtensionTypes.StartupStart{}, _}: ExtensionTypes.QuitShutdown{}
+
+# Tear down (session_shutdown names the next session's file), create the
+# runtime for the next session and rebind.
+def replaced(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String, +next: Session.Session(), +start: ExtensionTypes.SessionStartEvent) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
-    outgoing : Maybe<&2, Session.Session()> <- teardownCurrent(S, runtime)
+    outgoing : Maybe<&2, Session.Session()> <- teardownCurrent(S, runtime, ExtensionTypes.SessionShutdownEvent{shutdownReason(start), Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, next)})
     createNext(S, runtime, directory, next, start)
 
 type Snapshot is Data:
@@ -212,7 +255,7 @@ def createdNext(ids: Uuid.Generator, +directory: String, persisted: Bool, sessio
     case True{}: Session.createSession(ids, directory, Some{sessionDir}, agentDir, options)
     case False{}: Session.memorySession(ids, directory, options)
 
-def replacedWith(-S: Type, runtime: AgentSessionRuntime<S>, +directory: String, start: SessionStart, next: Sessions.Outcome(Session.Session())) -> IO(Result<&2, &2, String, Unit>):
+def replacedWith(-S: Type, runtime: AgentSessionRuntime<S>, +directory: String, start: ExtensionTypes.SessionStartEvent, next: Sessions.Outcome(Session.Session())) -> IO(Result<&2, &2, String, Unit>):
   match next:
     case Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{Sessions.message(error)})
     case Done{live}: replaced(S, runtime, directory, live, start)
@@ -220,10 +263,10 @@ def replacedWith(-S: Type, runtime: AgentSessionRuntime<S>, +directory: String, 
 def newFrom(-S: Type, +runtime: AgentSessionRuntime<S>, parentSession: Maybe<&2, String>, found: Maybe<&2, Snapshot>) -> IO(Result<&2, &2, String, Unit>):
   match runtime found:
     case _ None{}: IO.pure(Result<&2, &2, String, Unit>, Fail{noSession()})
-    case AgentSessionRuntime{_, _, _, agentDir, _, _} Some{Snapshot{+directory, +stored}}:
+    case AgentSessionRuntime{_, _, _, agentDir, _, _, _} Some{Snapshot{+directory, +stored}}:
       do IO<Result<&2, &2, String, Unit>>:
         next : Sessions.Outcome(Session.Session()) <- createdNext(idsOf(stored), directory, Sessions.isPersisted(Unit, Tools.ToolDetails, V.Value, stored), Sessions.getSessionDir(Unit, Tools.ToolDetails, V.Value, stored), agentDir, Sessions.NewSessionOptions{None{}, parentSession})
-        replacedWith(S, runtime, directory, SessionStart{NewStart{}, Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, stored)}, next)
+        replacedWith(S, runtime, directory, ExtensionTypes.SessionStartEvent{ExtensionTypes.NewStart{}, Sessions.getSessionFile(Unit, Tools.ToolDetails, V.Value, stored)}, next)
 
 # upstream newSession: a new session in the current cwd, persisted in the
 # current session cwd unless the current session is in memory.
@@ -235,7 +278,7 @@ def newSession(-S: Type, +runtime: AgentSessionRuntime<S>, parentSession: Maybe<
 def switchChecked(-S: Type, runtime: AgentSessionRuntime<S>, previous: Maybe<&2, String>, +next: Session.Session(), checked: Result<&2, &2, String, Unit>) -> IO(Result<&2, &2, String, Unit>):
   match checked:
     case Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{error})
-    case Done{_}: replaced(S, runtime, Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, next), next, SessionStart{ResumeStart{}, previous})
+    case Done{_}: replaced(S, runtime, Sessions.getCwd(Unit, Tools.ToolDetails, V.Value, next), next, ExtensionTypes.SessionStartEvent{ExtensionTypes.ResumeStart{}, previous})
 
 def switchOpened(-S: Type, +runtime: AgentSessionRuntime<S>, previous: Maybe<&2, String>, fallbackCwd: String, opened: Sessions.Outcome(Session.Session())) -> IO(Result<&2, &2, String, Unit>):
   match opened:
@@ -259,6 +302,58 @@ def switchSession(-S: Type, +runtime: AgentSessionRuntime<S>, sessionPath: Strin
     found : Maybe<&2, Snapshot> <- snapshot(S, runtime)
     switchFrom(S, runtime, sessionPath, cwdOverride, found)
 
+# Cancellable replacement (upstream `{ cancelled }` results)
+# ---------------------------------------------------------
+# session_before_switch or session_before_fork handlers of the current
+# session may cancel; nothing is torn down then. newSession, switchSession
+# and fork keep their earlier results for hosts that do not report
+# cancellation yet: a cancelled replacement reads as done without a change.
+
+def runnerOfLive(live: Maybe<&2, Session.AgentSession>) -> IO(Maybe<&2, ExtensionRunner.ExtensionRunner>):
+  match live:
+    case None{}: IO.pure(Maybe<&2, ExtensionRunner.ExtensionRunner>, None{})
+    case Some{found}: Session.extensionRunner(found)
+
+def switchCancelledWith(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, event: ExtensionTypes.SessionBeforeSwitchEvent) -> IO(Bool):
+  match runner:
+    case None{}: IO.pure(Bool, False{})
+    case Some{found}: ExtensionRunner.emitSessionBeforeSwitch(found, event)
+
+def switchCancelled(-S: Type, runtime: AgentSessionRuntime<S>, event: ExtensionTypes.SessionBeforeSwitchEvent) -> IO(Bool):
+  do IO<Bool>:
+    live : Maybe<&2, Session.AgentSession> <- session(S, runtime)
+    runner : Maybe<&2, ExtensionRunner.ExtensionRunner> <- runnerOfLive(live)
+    switchCancelledWith(runner, event)
+
+def forkCancelledWith(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, event: ExtensionTypes.SessionBeforeForkEvent) -> IO(Bool):
+  match runner:
+    case None{}: IO.pure(Bool, False{})
+    case Some{found}: ExtensionRunner.emitSessionBeforeFork(found, event)
+
+def forkCancelled(-S: Type, runtime: AgentSessionRuntime<S>, event: ExtensionTypes.SessionBeforeForkEvent) -> IO(Bool):
+  do IO<Bool>:
+    live : Maybe<&2, Session.AgentSession> <- session(S, runtime)
+    runner : Maybe<&2, ExtensionRunner.ExtensionRunner> <- runnerOfLive(live)
+    forkCancelledWith(runner, event)
+
+def changed(result: Result<&2, &2, String, Unit>) -> Result<&2, &2, String, Ctx.SessionChange>:
+  Result.map(&2, &2, String, Unit, Ctx.SessionChange, done => Ctx.notCancelled(), result)
+
+def cancelledChange() -> Result<&2, &2, String, Ctx.SessionChange>: Done{Ctx.SessionChange{True{}}}
+
+# upstream newSession(): session_before_switch ("new") first.
+def newSessionCancellable(-S: Type, +runtime: AgentSessionRuntime<S>, parentSession: Maybe<&2, String>) -> IO(Result<&2, &2, String, Ctx.SessionChange>):
+  do IO<Result<&2, &2, String, Ctx.SessionChange>>:
+    cancelled : Bool <- switchCancelled(S, runtime, ExtensionTypes.SessionBeforeSwitchEvent{ExtensionTypes.SwitchNew{}, None{}})
+    Bool.pick(Unit -> IO(Result<&2, &2, String, Ctx.SessionChange>), cancelled, _ => IO.pure(Result<&2, &2, String, Ctx.SessionChange>, cancelledChange()), _ => IO.bind(Result<&2, &2, String, Unit>, Result<&2, &2, String, Ctx.SessionChange>, newSession(S, runtime, parentSession), result => IO.pure(Result<&2, &2, String, Ctx.SessionChange>, changed(result))))(Unit{})
+
+# upstream switchSession(): session_before_switch ("resume", the target file)
+# first.
+def switchSessionCancellable(-S: Type, +runtime: AgentSessionRuntime<S>, +sessionPath: String, cwdOverride: Maybe<&2, String>) -> IO(Result<&2, &2, String, Ctx.SessionChange>):
+  do IO<Result<&2, &2, String, Ctx.SessionChange>>:
+    cancelled : Bool <- switchCancelled(S, runtime, ExtensionTypes.SessionBeforeSwitchEvent{ExtensionTypes.SwitchResume{}, Some{sessionPath}})
+    Bool.pick(Unit -> IO(Result<&2, &2, String, Ctx.SessionChange>), cancelled, _ => IO.pure(Result<&2, &2, String, Ctx.SessionChange>, cancelledChange()), _ => IO.bind(Result<&2, &2, String, Unit>, Result<&2, &2, String, Ctx.SessionChange>, switchSession(S, runtime, sessionPath, cwdOverride), result => IO.pure(Result<&2, &2, String, Ctx.SessionChange>, changed(result))))(Unit{})
+
 type ResumeOutcome is Data:
   Resumed{}
   ResumeNeedsCwd{issue: SessionCwd.SessionCwdIssue}
@@ -272,7 +367,7 @@ def resumeChecked(-S: Type,runtime: AgentSessionRuntime<S>,previous: Maybe<&2,St
     case Some{found}: IO.pure(ResumeOutcome,ResumeNeedsCwd{found})
     case None{}:
       do IO<ResumeOutcome>:
-        result : Result<&2,&2,String,Unit> <- replaced(S,runtime,Sessions.getCwd(Unit,Tools.ToolDetails,V.Value,next),next,SessionStart{ResumeStart{},previous})
+        result : Result<&2,&2,String,Unit> <- replaced(S,runtime,Sessions.getCwd(Unit,Tools.ToolDetails,V.Value,next),next,ExtensionTypes.SessionStartEvent{ExtensionTypes.ResumeStart{},previous})
         matchResumeResult(result)
 def resumeOpened(-S: Type,runtime: AgentSessionRuntime<S>,previous: Maybe<&2,String>,fallbackCwd: String,opened: Sessions.Outcome(Session.Session())) -> IO(ResumeOutcome):
   match opened:
@@ -382,7 +477,7 @@ def importFromJsonl(-S: Type,runtime: AgentSessionRuntime<S>,+inputPath: String,
 
 def agentDirOf(-S: Type, runtime: AgentSessionRuntime<S>) -> String:
   match runtime:
-    case AgentSessionRuntime{_, _, _, agentDir, _, _}: agentDir
+    case AgentSessionRuntime{_, _, _, agentDir, _, _, _}: agentDir
 
 type ForkPosition is Data:
   ForkBefore{}
@@ -418,7 +513,7 @@ def forked(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String, previ
     case Fail{error}: IO.pure(Result<&2, &2, String, Maybe<&2, String>>, Fail{Sessions.message(error)})
     case Done{branch}:
       do IO<Result<&2, &2, String, Maybe<&2, String>>>:
-        result : Result<&2, &2, String, Unit> <- replaced(S, runtime, directory, branch, SessionStart{ForkStart{}, previous})
+        result : Result<&2, &2, String, Unit> <- replaced(S, runtime, directory, branch, ExtensionTypes.SessionStartEvent{ExtensionTypes.ForkStart{}, previous})
         return selected(text, result)
 
 def fileExists(path: String) -> IO(Bool):
@@ -456,7 +551,7 @@ def forkedAfterTeardown(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: 
     case Fail{error}: IO.pure(Result<&2, &2, String, Maybe<&2, String>>, Fail{Sessions.message(error)})
     case Done{branch}:
       do IO<Result<&2, &2, String, Maybe<&2, String>>>:
-        result : Result<&2, &2, String, Unit> <- createNext(S, runtime, directory, branch, SessionStart{ForkStart{}, previous})
+        result : Result<&2, &2, String, Unit> <- createNext(S, runtime, directory, branch, ExtensionTypes.SessionStartEvent{ExtensionTypes.ForkStart{}, previous})
         return selected(text, result)
 
 def forkOutgoing(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String, leaf: Maybe<&2, String>, text: Maybe<&2, String>, outgoing: Maybe<&2, Session.Session()>) -> IO(Result<&2, &2, String, Maybe<&2, String>>):
@@ -470,7 +565,7 @@ def forkOutgoing(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String,
 # An in-memory session forks from its state after teardown.
 def forkInMemory(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String, leaf: Maybe<&2, String>, text: Maybe<&2, String>) -> IO(Result<&2, &2, String, Maybe<&2, String>>):
   do IO<Result<&2, &2, String, Maybe<&2, String>>>:
-    outgoing : Maybe<&2, Session.Session()> <- teardownCurrent(S, runtime)
+    outgoing : Maybe<&2, Session.Session()> <- teardownCurrent(S, runtime, ExtensionTypes.SessionShutdownEvent{ExtensionTypes.ForkShutdown{}, None{}})
     forkOutgoing(S, runtime, directory, leaf, text, outgoing)
 
 def forkTargeted(-S: Type, +runtime: AgentSessionRuntime<S>, +directory: String, +stored: Session.Session(), target: Result<&2, &2, String, ForkTarget>) -> IO(Result<&2, &2, String, Maybe<&2, String>>):
@@ -494,21 +589,44 @@ def fork(-S: Type, +runtime: AgentSessionRuntime<S>, entryId: String, position: 
     found : Maybe<&2, Snapshot> <- snapshot(S, runtime)
     forkFrom(S, runtime, entryId, position, found)
 
-def disposed(-S: Type, release: C.Callback<S, Unit>, taken: Current<S>) -> IO(Unit):
+# upstream fork()'s result: cancelled by session_before_fork, or the
+# selected user text (before a user message).
+type ForkOutcome is Data:
+  ForkOutcome{cancelled: Bool, selectedText: Maybe<&2, String>}
+
+def ctxPosition(position: ForkPosition) -> Ctx.ForkPosition:
+  match position:
+    case ForkBefore{}: Ctx.ForkBefore{}
+    case ForkAt{}: Ctx.ForkAt{}
+
+def forkChanged(result: Result<&2, &2, String, Maybe<&2, String>>) -> Result<&2, &2, String, ForkOutcome>:
+  Result.map(&2, &2, String, Maybe<&2, String>, ForkOutcome, text => ForkOutcome{False{}, text}, result)
+
+# upstream fork(): session_before_fork (entry and position) first.
+def forkCancellable(-S: Type, +runtime: AgentSessionRuntime<S>, +entryId: String, +position: ForkPosition) -> IO(Result<&2, &2, String, ForkOutcome>):
+  do IO<Result<&2, &2, String, ForkOutcome>>:
+    cancelled : Bool <- forkCancelled(S, runtime, ExtensionTypes.SessionBeforeForkEvent{entryId, ctxPosition(position)})
+    Bool.pick(Unit -> IO(Result<&2, &2, String, ForkOutcome>), cancelled, _ => IO.pure(Result<&2, &2, String, ForkOutcome>, Done{ForkOutcome{True{}, None{}}}), _ => IO.bind(Result<&2, &2, String, Maybe<&2, String>>, Result<&2, &2, String, ForkOutcome>, fork(S, runtime, entryId, position), result => IO.pure(Result<&2, &2, String, ForkOutcome>, forkChanged(result))))(Unit{})
+
+def disposed(-S: Type, release: C.Callback<S, Unit>, hook: Maybe<&2, C.Callback<Unit, Unit>>, taken: Current<S>) -> IO(Unit):
   match taken:
     case Released{}: IO.pure(Unit, Unit{})
-    case Active{services, live, _}:
+    case Active{services, +live, _}:
       do IO<Unit>:
+        emitOn(live, ExtensionTypes.SessionShutdown{ExtensionTypes.SessionShutdownEvent{ExtensionTypes.QuitShutdown{}, None{}}})
+        invalidated(hook)
         Session.dispose(live)
         C.call(S, Unit, release, services)
 
-# upstream dispose: the session and its services end with the host.
+# upstream dispose: session_shutdown (quit), the before-invalidate hook, then
+# the session and its services end with the host.
 def dispose(-S: Type, runtime: AgentSessionRuntime<S>) -> IO(Unit):
   match runtime:
-    case AgentSessionRuntime{current, _, +release, _, hook, retiring}:
+    case AgentSessionRuntime{current, _, +release, _, hook, retiring, invalidate}:
       do IO<Unit>:
+        before : Maybe<&2, C.Callback<Unit, Unit>> <- R.dispose(Maybe<&2, C.Callback<Unit, Unit>>, invalidate)
         last : Current<S> <- R.dispose(Current<S>, current)
-        disposed(S, release, last)
+        disposed(S, release, before, last)
         retired : Retiring<S> <- R.dispose(Retiring<S>, retiring)
         finishRetiring(S, release, retired)
         rebind : Maybe<&2, Rebind()> <- R.dispose(Maybe<&2, Rebind()>, hook)
