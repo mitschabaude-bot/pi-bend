@@ -150,7 +150,12 @@ def inlineStartFrom(+codes: List<&2,U32>,+opens: Bool,+index: Nat) -> Maybe<&2,N
 # tokenizeInlineLatex: `$$…$$`, `\(…\)`, `\[…\]` or `$…$` on one line; an
 # unclosed `\(`/`\[`, or unclosed dollars before math-like text, is pending
 # (the rest of the source, shown raw while streaming).
-def tokenizeInlineLatex(source: List<&2,U32>) -> Maybe<&2,T.Token<Latex>>: inlineLatex(source)
+def inlineLatexIf(opens: Bool,+source: List<&2,U32>) -> Maybe<&2,T.Token<Latex>>:
+  match opens:
+    case True{}: inlineLatex(source)
+    case False{}: None{}
+def inlineLatexAt(+source: List<&2,U32>) -> Maybe<&2,T.Token<Latex>>: inlineLatexIf(inlineOpensAt(source),source)
+def tokenizeInlineLatex(source: List<&2,U32>) -> Maybe<&2,T.Token<Latex>>: inlineLatexAt(source)
 # `start`, after the scan that found it borrowed `codes` (their last use here
 # releases them, so the scan reads the shared list without taking its nodes).
 def released(start: Maybe<&2,Nat>,codes: List<&2,U32>) -> Maybe<&2,Nat>: start
@@ -220,7 +225,6 @@ def orElse(+first: Maybe<&2,T.Token<Latex>>,+second: Maybe<&2,T.Token<Latex>>) -
 def tokenizeBlockLatex(+source: List<&2,U32>) -> Maybe<&2,T.Token<Latex>>:
   orElse(closedBlock(source,openedBlock(source,"$$"),"$$"),orElse(closedBlock(source,openedBlock(source,"\\["),"\\]"),
     orElse(pendingBlock(source,openedBlock(source,"\\["),False{}),pendingBlock(source,openedBlock(source,"$$"),True{}))))
-def blockLatex(source: List<&2,U32>) -> Maybe<&2,T.Token<Latex>>: tokenizeBlockLatex(source)
 # ` {0,3}(?:\$\$|\\\[)` at the start of `codes` (`spaces`: how many more may
 # come first).
 def mathOpens(codes: List<&2,U32>,spaces: Nat) -> Bool:
@@ -229,6 +233,12 @@ def mathOpens(codes: List<&2,U32>,spaces: Nat) -> Bool:
     case 92 <> 91 <> _ _: True{}
     case 32 <> rest Succ{more}: mathOpens(rest,more)
     case _ _: False{}
+def blockLatexIf(opens: Bool,+source: List<&2,U32>) -> Maybe<&2,T.Token<Latex>>:
+  match opens:
+    case True{}: tokenizeBlockLatex(source)
+    case False{}: None{}
+def blockLatexAt(+source: List<&2,U32>) -> Maybe<&2,T.Token<Latex>>: blockLatexIf(mathOpens(source,3n),source)
+def blockLatex(source: List<&2,U32>) -> Maybe<&2,T.Token<Latex>>: blockLatexAt(source)
 # The latexBlock extension's start, `/(?:^|\n) {0,3}(?:\$\$|\\\[)/`: the
 # first line opening display math (`opens`: one opens at the head of
 # `codes`).

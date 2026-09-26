@@ -3,6 +3,10 @@ import ../../../ai/src/types.bend as Ai
 import ../../../ai/src/api/pi-messages.bend as PiMessages
 import ../../../ai/src/api/mistral-conversations.bend as Mistral
 import ../../../ai/src/api/bedrock-converse-stream.bend as Bedrock
+import ../../../ai/src/api/google-vertex.bend as Vertex
+import ../../../ai/src/api/google-vertex-credentials.bend as VertexCredentials
+import ../../../runtime/src/date.bend as Date
+import ../../../runtime/src/pi-user-agent.bend as UserAgent
 import ../../../ai/src/utils/event-stream.bend as Events
 import ../../../agent/src/types.bend as Agent
 import ../../../runtime/src/abort.bend as Abort
@@ -78,3 +82,21 @@ def mistral(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<
 # upstream bedrock-converse-stream streamSimple.
 def bedrock(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), +options: Maybe<&2, Options()>) -> IO(Output()):
   lease(events => signal => Bedrock.streamSimple(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~Tools.errorMessage, ~noDetails, events, fetch, urlContext, signal, model, context, options), parentSignal(options))
+
+def VertexOptions() -> Data: Vertex.Options(Unit, Unit, Error())
+
+def vertexProduced(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), options: VertexOptions(), +events: Stream(), +signal: Abort.AbortSignal<Unit>) -> IO(Unit):
+  do IO<Unit>:
+    +agent : String <- IO.try(String, UserAgent.get())
+    timestamp : F64 <- Date.now()
+    Vertex.stream(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~Tools.errorMessage, events, signal, Vertex.Setup{urlContext, agent, fetch, VertexCredentials.TOKEN_URL()}, model, context, options, timestamp)
+
+# upstream google-vertex streamSimple, whose unsupported level mappings are
+# thrown before a stream exists.
+def vertexSelected(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), parent: Maybe<&2, Abort.AbortSignal<Unit>>, selected: Result<&2, &2, String, VertexOptions()>) -> IO(Output()):
+  match selected:
+    case Fail{message}: IO.pure(Output(), Fail{Tools.Failure{message}})
+    case Done{options}: lease(events => signal => vertexProduced(fetch, urlContext, model, context, options, events, signal), parent)
+
+def vertex(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +context: Context(), +options: Maybe<&2, Options()>) -> IO(Output()):
+  vertexSelected(fetch, urlContext, model, context, parentSignal(options), Vertex.streamSimpleOptions(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, context, options))

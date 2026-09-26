@@ -204,13 +204,32 @@ def compiled(rule: Edit) -> Re.RegExp:
 def searched(+regex: Re.RegExp) -> Search: Search{regex,Re.startOf(regex)}
 def searchOf(rule: Edit) -> Search: searched(compiled(rule))
 
-type Block is Data: Block{blockquote: Search,code: Search,definition: Search,fences: Search,heading: Search,hr: Search,html: Search,lheading: Search,list: Search,newline: Search,paragraph: Search,table: Search,text: Search}
-type Inline is Data: Inline{backpedal: Search,autolink: Search,blockSkip: Search,br: Search,code: Search,delLDelim: Search,delRDelim: Search,emStrongLDelim: Search,emStrongRDelimAst: Search,emStrongRDelimUnd: Search,escape: Search,link: Search,nolink: Search,reflink: Search,reflinkSearch: Search,tag: Search,text: Search,url: Search,breaks: Bool}
+# A lexer's rules, in the order of BlockRule and InlineRule below, as a
+# balanced tree: taking one rule out takes the nodes on its path, not a
+# record of all of them (BEND-054).
+type Rulebook is Data:
+  RuleLeaf{search: Search}
+  RuleFork{low: Rulebook,high: Rulebook}
+def twoTo(power: Nat) -> Nat:
+  match power:
+    case Zero{}: 1n
+    case Succ{less}: 2n * twoTo(less)
+def firstSearch(searches: List<&2,Search>) -> Search:
+  match searches:
+    case search <> _: search
+    case Nil{}: searched(never())
+# The first 2^depth searches (the missing ones never match).
+def bookOf(depth: Nat,+searches: List<&2,Search>) -> Rulebook:
+  match depth:
+    case Zero{}: RuleLeaf{firstSearch(searches)}
+    case Succ{+less}: RuleFork{bookOf(less,List.take(&2,Search,searches,twoTo(less))),bookOf(less,List.drop(&2,Search,searches,twoTo(less)))}
+type Block is Data: Block{book: Rulebook}
+type Inline is Data: Inline{book: Rulebook,breaks: Bool}
 type Rules is Data: Rules{block: Block,inline: Inline}
 # The rules for marked's default options, with `breaks` or without.
 def rulesWith(+breaks: Bool,+table: Edit) -> Rules:
-  Rules{Block{searchOf(blockquote()),searchOf(edit(blockCodeRule(),"")),searchOf(definition()),searchOf(edit(fencesRule(),"")),searchOf(edit(headingRule(),"")),searchOf(edit(hrRule(),"")),searchOf(html()),searchOf(lheadingGfm()),searchOf(listRule()),searchOf(edit(newlineRule(),"")),searchOf(gfmParagraphWith(table)),searchOf(table),searchOf(edit(blockTextRule(),""))},
-    Inline{searchOf(edit(backpedal(),"")),searchOf(autolink()),searchOf(blockSkip()),searchOf(Bool.pick(Unit -> Edit,breaks,_ => breaksBr(),_ => edit(brRule(),""))(Unit{})),searchOf(edit(inlineCodeRule(),"")),searchOf(delLDelim()),searchOf(delRDelim()),searchOf(emStrongLDelimGfm()),searchOf(emStrongRDelimAstGfm()),searchOf(emStrongRDelimUnd()),searchOf(edit(escapeRule(),"")),searchOf(link()),searchOf(nolink()),searchOf(reflink()),searchOf(reflinkSearch()),searchOf(tag()),searchOf(Bool.pick(Unit -> Edit,breaks,_ => breaksText(),_ => gfmText())(Unit{})),searchOf(url()),breaks}}
+  Rules{Block{bookOf(4n,[searchOf(blockquote()),searchOf(edit(blockCodeRule(),"")),searchOf(definition()),searchOf(edit(fencesRule(),"")),searchOf(edit(headingRule(),"")),searchOf(edit(hrRule(),"")),searchOf(html()),searchOf(lheadingGfm()),searchOf(listRule()),searchOf(edit(newlineRule(),"")),searchOf(gfmParagraphWith(table)),searchOf(table),searchOf(edit(blockTextRule(),""))])},
+    Inline{bookOf(5n,[searchOf(edit(backpedal(),"")),searchOf(autolink()),searchOf(blockSkip()),searchOf(Bool.pick(Unit -> Edit,breaks,_ => breaksBr(),_ => edit(brRule(),""))(Unit{})),searchOf(edit(inlineCodeRule(),"")),searchOf(delLDelim()),searchOf(delRDelim()),searchOf(emStrongLDelimGfm()),searchOf(emStrongRDelimAstGfm()),searchOf(emStrongRDelimUnd()),searchOf(edit(escapeRule(),"")),searchOf(link()),searchOf(nolink()),searchOf(reflink()),searchOf(reflinkSearch()),searchOf(tag()),searchOf(Bool.pick(Unit -> Edit,breaks,_ => breaksText(),_ => gfmText())(Unit{})),searchOf(url())]),breaks}}
 def rules(+breaks: Bool) -> Rules: rulesWith(breaks,gfmTable())
 
 # Rules by name
@@ -218,8 +237,7 @@ def rules(+breaks: Bool) -> Rules: rulesWith(breaks,gfmTable())
 # A tokenizer reads a rule where the start analysis allows a match at the
 # first scalar of its source (`blockOpens`, `inlineOpens`: the rules are read
 # in place), and only then takes its search out of the rules (`blockSearch`,
-# `inlineSearch`). Taking a rule copies it out of the record, which updates a
-# reference count per compiled rule the record holds (BEND-054).
+# `inlineSearch`), which takes the tree's nodes on its path (BEND-054).
 
 # Whether a match of `rule` may begin at the start of a source whose first
 # scalar is `first` (never false when one can).
@@ -240,36 +258,21 @@ type BlockRule is Data:
   BlockParagraph{}
   BlockTable{}
   BlockText{}
-def blockSearch(value: Block,rule: BlockRule) -> Search:
-  match rule value:
-    case BlockBlockquote{} Block{found,_,_,_,_,_,_,_,_,_,_,_,_}: found
-    case BlockCode{} Block{_,found,_,_,_,_,_,_,_,_,_,_,_}: found
-    case BlockDefinition{} Block{_,_,found,_,_,_,_,_,_,_,_,_,_}: found
-    case BlockFences{} Block{_,_,_,found,_,_,_,_,_,_,_,_,_}: found
-    case BlockHeading{} Block{_,_,_,_,found,_,_,_,_,_,_,_,_}: found
-    case BlockHr{} Block{_,_,_,_,_,found,_,_,_,_,_,_,_}: found
-    case BlockHtml{} Block{_,_,_,_,_,_,found,_,_,_,_,_,_}: found
-    case BlockLheading{} Block{_,_,_,_,_,_,_,found,_,_,_,_,_}: found
-    case BlockList{} Block{_,_,_,_,_,_,_,_,found,_,_,_,_}: found
-    case BlockNewline{} Block{_,_,_,_,_,_,_,_,_,found,_,_,_}: found
-    case BlockParagraph{} Block{_,_,_,_,_,_,_,_,_,_,found,_,_}: found
-    case BlockTable{} Block{_,_,_,_,_,_,_,_,_,_,_,found,_}: found
-    case BlockText{} Block{_,_,_,_,_,_,_,_,_,_,_,_,found}: found
-def blockOpens(value: Block,rule: BlockRule,first: Maybe<&2,U32>) -> Bool:
-  match rule value:
-    case BlockBlockquote{} Block{found,_,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
-    case BlockCode{} Block{_,found,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
-    case BlockDefinition{} Block{_,_,found,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
-    case BlockFences{} Block{_,_,_,found,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
-    case BlockHeading{} Block{_,_,_,_,found,_,_,_,_,_,_,_,_}: opensWith(found,first)
-    case BlockHr{} Block{_,_,_,_,_,found,_,_,_,_,_,_,_}: opensWith(found,first)
-    case BlockHtml{} Block{_,_,_,_,_,_,found,_,_,_,_,_,_}: opensWith(found,first)
-    case BlockLheading{} Block{_,_,_,_,_,_,_,found,_,_,_,_,_}: opensWith(found,first)
-    case BlockList{} Block{_,_,_,_,_,_,_,_,found,_,_,_,_}: opensWith(found,first)
-    case BlockNewline{} Block{_,_,_,_,_,_,_,_,_,found,_,_,_}: opensWith(found,first)
-    case BlockParagraph{} Block{_,_,_,_,_,_,_,_,_,_,found,_,_}: opensWith(found,first)
-    case BlockTable{} Block{_,_,_,_,_,_,_,_,_,_,_,found,_}: opensWith(found,first)
-    case BlockText{} Block{_,_,_,_,_,_,_,_,_,_,_,_,found}: opensWith(found,first)
+def blockIndex(rule: BlockRule) -> Nat:
+  match rule:
+    case BlockBlockquote{}: 0n
+    case BlockCode{}: 1n
+    case BlockDefinition{}: 2n
+    case BlockFences{}: 3n
+    case BlockHeading{}: 4n
+    case BlockHr{}: 5n
+    case BlockHtml{}: 6n
+    case BlockLheading{}: 7n
+    case BlockList{}: 8n
+    case BlockNewline{}: 9n
+    case BlockParagraph{}: 10n
+    case BlockTable{}: 11n
+    case BlockText{}: 12n
 
 type InlineRule is Data:
   InlineBackpedal{}
@@ -290,45 +293,50 @@ type InlineRule is Data:
   InlineTag{}
   InlineText{}
   InlineUrl{}
+def inlineIndex(rule: InlineRule) -> Nat:
+  match rule:
+    case InlineBackpedal{}: 0n
+    case InlineAutolink{}: 1n
+    case InlineBlockSkip{}: 2n
+    case InlineBr{}: 3n
+    case InlineCode{}: 4n
+    case InlineDelLDelim{}: 5n
+    case InlineDelRDelim{}: 6n
+    case InlineEmStrongLDelim{}: 7n
+    case InlineEmStrongRDelimAst{}: 8n
+    case InlineEmStrongRDelimUnd{}: 9n
+    case InlineEscape{}: 10n
+    case InlineLink{}: 11n
+    case InlineNolink{}: 12n
+    case InlineReflink{}: 13n
+    case InlineReflinkSearch{}: 14n
+    case InlineTag{}: 15n
+    case InlineText{}: 16n
+    case InlineUrl{}: 17n
+
+# The search at `index` of a tree of depth `depth` (`half`: 2^(depth-1),
+# `low`: the index is in the low half).
+def bookSearch(depth: Nat,book: Rulebook,+index: Nat,+half: Nat,low: Bool) -> Search:
+  match depth book low:
+    case _ RuleLeaf{search} _: search
+    case Succ{less} RuleFork{found,_} True{}: bookSearch(less,found,index,Nat.div(half,2n),Nat.is_lt(index,Nat.div(half,2n)))
+    case Succ{less} RuleFork{_,found} False{}: bookSearch(less,found,index - half,Nat.div(half,2n),Nat.is_lt(index - half,Nat.div(half,2n)))
+    case Zero{} RuleFork{_,_} _: searched(never())
+def bookOpens(depth: Nat,book: Rulebook,+index: Nat,+half: Nat,low: Bool,first: Maybe<&2,U32>) -> Bool:
+  match depth book low:
+    case _ RuleLeaf{search} _: opensWith(search,first)
+    case Succ{less} RuleFork{found,_} True{}: bookOpens(less,found,index,Nat.div(half,2n),Nat.is_lt(index,Nat.div(half,2n)),first)
+    case Succ{less} RuleFork{_,found} False{}: bookOpens(less,found,index - half,Nat.div(half,2n),Nat.is_lt(index - half,Nat.div(half,2n)),first)
+    case Zero{} RuleFork{_,_} _: False{}
+def bookAt(depth: Nat,book: Rulebook,+index: Nat,+half: Nat) -> Search: bookSearch(depth,book,index,half,Nat.is_lt(index,half))
+def bookOpensAt(depth: Nat,book: Rulebook,+index: Nat,+half: Nat,first: Maybe<&2,U32>) -> Bool: bookOpens(depth,book,index,half,Nat.is_lt(index,half),first)
+def blockSearch(value: Block,rule: BlockRule) -> Search:
+  match value: case Block{book}: bookAt(4n,book,blockIndex(rule),8n)
+def blockOpens(value: Block,rule: BlockRule,first: Maybe<&2,U32>) -> Bool:
+  match value: case Block{book}: bookOpensAt(4n,book,blockIndex(rule),8n,first)
 def inlineSearch(value: Inline,rule: InlineRule) -> Search:
-  match rule value:
-    case InlineBackpedal{} Inline{found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
-    case InlineAutolink{} Inline{_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
-    case InlineBlockSkip{} Inline{_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
-    case InlineBr{} Inline{_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
-    case InlineCode{} Inline{_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
-    case InlineDelLDelim{} Inline{_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_}: found
-    case InlineDelRDelim{} Inline{_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_}: found
-    case InlineEmStrongLDelim{} Inline{_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_}: found
-    case InlineEmStrongRDelimAst{} Inline{_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_}: found
-    case InlineEmStrongRDelimUnd{} Inline{_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_}: found
-    case InlineEscape{} Inline{_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_}: found
-    case InlineLink{} Inline{_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_}: found
-    case InlineNolink{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_}: found
-    case InlineReflink{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_}: found
-    case InlineReflinkSearch{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_}: found
-    case InlineTag{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_}: found
-    case InlineText{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_}: found
-    case InlineUrl{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_}: found
+  match value: case Inline{book,_}: bookAt(5n,book,inlineIndex(rule),16n)
 def inlineOpens(value: Inline,rule: InlineRule,first: Maybe<&2,U32>) -> Bool:
-  match rule value:
-    case InlineBackpedal{} Inline{found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
-    case InlineAutolink{} Inline{_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
-    case InlineBlockSkip{} Inline{_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
-    case InlineBr{} Inline{_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
-    case InlineCode{} Inline{_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
-    case InlineDelLDelim{} Inline{_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
-    case InlineDelRDelim{} Inline{_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
-    case InlineEmStrongLDelim{} Inline{_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
-    case InlineEmStrongRDelimAst{} Inline{_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
-    case InlineEmStrongRDelimUnd{} Inline{_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_,_}: opensWith(found,first)
-    case InlineEscape{} Inline{_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_,_}: opensWith(found,first)
-    case InlineLink{} Inline{_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_,_}: opensWith(found,first)
-    case InlineNolink{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_,_}: opensWith(found,first)
-    case InlineReflink{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_,_}: opensWith(found,first)
-    case InlineReflinkSearch{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_,_}: opensWith(found,first)
-    case InlineTag{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_,_}: opensWith(found,first)
-    case InlineText{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_,_}: opensWith(found,first)
-    case InlineUrl{} Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,found,_}: opensWith(found,first)
+  match value: case Inline{book,_}: bookOpensAt(5n,book,inlineIndex(rule),16n,first)
 def inlineBreaks(value: Inline) -> Bool:
-  match value: case Inline{_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,breaks}: breaks
+  match value: case Inline{_,breaks}: breaks

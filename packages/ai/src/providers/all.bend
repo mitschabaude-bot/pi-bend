@@ -13,6 +13,7 @@ import ./deepseek.bend as Deepseek
 import ./fireworks.bend as Fireworks
 import ./github-copilot.bend as GithubCopilot
 import ./google.bend as Google
+import ./google-vertex.bend as GoogleVertex
 import ./groq.bend as Groq
 import ./huggingface.bend as Huggingface
 import ./kimi-coding.bend as KimiCoding
@@ -43,9 +44,8 @@ import ./xiaomi-token-plan-sgp.bend as XiaomiTokenPlanSgp
 import ./zai.bend as Zai
 import ./zai-coding-cn.bend as ZaiCodingCn
 
-# upstream builtinProviders(), in providers/all.ts order. Omitted:
-# google-vertex, whose API is not ported, and radius,
-# whose OAuth and dynamic catalog are not. OAuth handlers are created by the caller.
+# upstream builtinProviders(), in providers/all.ts order. Omitted: radius,
+# whose OAuth and dynamic catalog are not ported. OAuth handlers are created by the caller.
 # Each provider joins the list as soon as it is created: holding all of them
 # in separate binders exceeds the native backend's closure arity (BEND-010).
 def prepended(action: IO(Models.Provider), rest: List<&2, Models.Provider>) -> IO(List<&2, Models.Provider>):
@@ -82,6 +82,7 @@ def builtinProviders(codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuth
     providers : List<&2, Models.Provider> <- prepended(KimiCoding.kimiCodingProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(Huggingface.huggingfaceProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(Groq.groqProvider(), providers)
+    providers : List<&2, Models.Provider> <- prepended(GoogleVertex.googleVertexProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(Google.googleProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(GithubCopilot.githubCopilotProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(Fireworks.fireworksProvider(), providers)

@@ -31,6 +31,12 @@ def slice(codes: List<&2,U32>,+start: Nat,end: Nat) -> String: Re.reversedText(t
 # any source in memory has scalars (counting the source instead costs a pass
 # over the rest of the document per block).
 def unbounded() -> Nat: 4294967295n
+# A text's length in scalars (the lexer's `raw.length`).
+def lengthFrom(text: String,+count: Nat) -> Nat:
+  match text:
+    case SNil{}: count
+    case SCon{_,rest}: lengthFrom(rest,count + 1n)
+def lengthOf(text: String) -> Nat: lengthFrom(text,0n)
 def codesLength(codes: List<&2,U32>,+count: Nat) -> Nat:
   match codes:
     case Nil{}: count
@@ -101,6 +107,15 @@ def lineReversed(codes: List<&2,U32>,+reversed: List<&2,U32>) -> List<&2,U32>:
     case +scalar <> rest: Bool.pick(Unit -> List<&2,U32>,U32.is_eq(scalar,10),_ => reversed,_ => lineReversed(rest,scalar <> reversed))(Unit{})
 def firstLine(codes: List<&2,U32>) -> String: Re.reversedText(lineReversed(codes,Nil{}),SNil{})
 def firstTextLine(text: String) -> String: firstLine(Re.codes(text))
+# The first line of a source, the source after it and whether a newline ended
+# the line (one pass).
+type Split is Data: Split{line: String,rest: List<&2,U32>,newline: Bool}
+def splitReversed(codes: List<&2,U32>,+reversed: List<&2,U32>) -> Split:
+  match codes:
+    case Nil{}: Split{Re.reversedText(reversed,SNil{}),Nil{},False{}}
+    case 10 <> rest: Split{Re.reversedText(reversed,SNil{}),rest,True{}}
+    case +scalar <> rest: splitReversed(rest,scalar <> reversed)
+def splitLine(codes: List<&2,U32>) -> Split: splitReversed(codes,Nil{})
 # The index of the first character other than a space (`search(/[^ ]/)`).
 def nonSpaceFrom(text: String,+index: Nat) -> Maybe<&2,Nat>:
   match text:
@@ -296,22 +311,29 @@ def underlineRunOf(+text: String,+char: Char) -> Bool:
 def underlineLine(+line: String) -> Bool:
   +text = H.dropWhileChar(line,' ')
   Nat.is_le(String.length(line) - String.length(text),3n) && (underlineRunOf(text,'=') || underlineRunOf(text,'-'))
-# `codes` starts a line of the paragraph; is there a next line, and is it an
-# underline, or a blank line that stops the paragraph?
-def hasNewlineAfter(+codes: List<&2,U32>,+line: String) -> Bool: Bool.not(List.is_empty(&2,U32,drop(codes,String.length(line))))
-def underlineAhead(fuel: Nat,+codes: List<&2,U32>) -> Bool:
-  match fuel:
-    case Zero{}: False{}
-    case Succ{more}:
-      +line = firstLine(codes)
-      +rest = drop(codes,String.length(line) + 1n)
-      +next = firstLine(rest)
-      Bool.pick(Unit -> Bool,hasNewlineAfter(codes,line),
-        _ => Bool.pick(Unit -> Bool,underlineLine(next),_ => True{},
-          _ => Bool.pick(Unit -> Bool,Text.blank(next) && hasNewlineAfter(rest,next),_ => False{},_ => underlineAhead(more,rest))(Unit{}))(Unit{}),
-        _ => False{})(Unit{})
-def lheading(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Titled>:
-  Bool.pick(Unit -> Maybe<&2,Titled>,underlineAhead(unbounded(),src),_ => lheadingOf(blockExec(rules,Rules.BlockLheading{},src)),_ => None{})(Unit{})
+# A line of the paragraph was read (`split`) and a newline ended it; is the
+# next line an underline (1), a blank line that stops the paragraph (2), or
+# neither (0)?
+type Ahead is Data: Ahead{verdict: U32,rest: List<&2,U32>}
+def nextVerdict(+next: Split) -> U32:
+  match next:
+    case Split{+line,_,+newline}: Bool.pick(U32,underlineLine(line),1,Bool.pick(U32,Text.blank(line) && newline,2,0))
+def aheadOf(split: Split) -> Ahead:
+  match split:
+    case Split{_,+rest,True{}}: Ahead{nextVerdict(splitLine(rest)),rest}
+    case Split{_,_,False{}}: Ahead{2,Nil{}}
+# `codes` starts a line of the paragraph (`ahead`: what follows that line).
+def underlineAhead(fuel: Nat,ahead: Ahead) -> Bool:
+  match fuel ahead:
+    case Zero{} _: False{}
+    case _ Ahead{1,_}: True{}
+    case _ Ahead{2,_}: False{}
+    case Succ{more} Ahead{_,rest}: underlineAhead(more,aheadOf(splitLine(rest)))
+def lheadingIf(ahead: Bool,+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Titled>:
+  match ahead:
+    case True{}: lheadingOf(blockExec(rules,Rules.BlockLheading{},src))
+    case False{}: None{}
+def lheading(+rules: Rules.Block,+src: List<&2,U32>) -> Maybe<&2,Titled>: lheadingIf(underlineAhead(unbounded(),aheadOf(splitLine(src))),rules,src)
 
 def paragraphText(+text: String) -> String: Bool.pick(Unit -> String,H.endsWithChar(text,'\n'),_ => H.dropEnd(text,1n),_ => text)(Unit{})
 def paragraphOf(found: Maybe<&2,Cap>) -> Maybe<&2,Texted>:
@@ -336,9 +358,11 @@ type ListDraft is Data: ListDraft{raw: String,ordered: Bool,start: Maybe<&2,Nat>
 
 # The rest of a line after leading spaces, when there are at most `limit`
 # of them (` {0,n}`).
-def indented(+line: String,+limit: Nat) -> Maybe<&2,String>:
-  +rest = H.dropWhileChar(line,' ')
-  Bool.pick(Unit -> Maybe<&2,String>,Nat.is_le(String.length(line) - String.length(rest),limit),_ => Some{rest},_ => None{})(Unit{})
+def indented(line: String,limit: Nat) -> Maybe<&2,String>:
+  match line limit:
+    case SCon{' ',rest} Succ{more}: indented(rest,more)
+    case SCon{' ',_} Zero{}: None{}
+    case line _: Some{line}
 def restStarts(rest: Maybe<&2,String>,+prefix: String) -> Bool:
   match rest:
     case Some{text}: String.starts_with(text,prefix)
@@ -446,28 +470,49 @@ type Item is Data: Item{raw: List<&2,String>,contents: List<&2,String>,line: Str
 type Continued is Data: Continued{item: Item,src: List<&2,U32>}
 # Whether a line that is not indented enough ends the item; otherwise it
 # continues the item's paragraph.
+# (`rest`: the line after at most `limit` spaces.)
+def interrupts(+rest: Maybe<&2,String>) -> Bool: restStarts(rest,"```") || restStarts(rest,"~~~") || restStarts(rest,"#") || ruleAfter(rest)
 def unindentedEnds(+limit: Nat,item: Item) -> Bool:
   match item:
-    case Item{_,_,+line,blank}:
-      blank || atLeast(nonSpace(tabsExpanded(line)),4n) || fencesBegin(limit,line) || headingBegin(limit,line) || hrBegin(limit,line)
-def lineEnds(+limit: Nat,+line: String) -> Bool:
-  fencesBegin(limit,line) || headingBegin(limit,line) || htmlBegin(limit,line) || blockquoteBegin(limit,line) || nextBullet(limit,line) || hrBegin(limit,line)
+    case Item{_,_,+line,blank}: blank || atLeast(nonSpace(tabsExpanded(line)),4n) || interrupts(indented(line,limit))
+def endsAfter(+rest: Maybe<&2,String>) -> Bool: interrupts(rest) || htmlOpening(rest) || restStarts(rest,">") || bulletAfter(rest)
+def lineEnds(+limit: Nat,+line: String) -> Bool: endsAfter(indented(line,limit))
 def appended(item: Item,+rawLine: String,+withoutTabs: String,+indent: Nat,content: String) -> Item:
   match item:
     case Item{raw,contents,_,_}: Item{"\n" <> rawLine <> raw,content <> "\n" <> contents,String.drop(withoutTabs,indent),Text.blank(rawLine)}
-# The item's following lines.
-def itemLines(fuel: Nat,+limit: Nat,+indent: Nat,+item: Item,+src: List<&2,U32>) -> Continued:
-  match fuel:
-    case Zero{}: Continued{item,src}
-    case Succ{+more}:
-      +rawLine = firstLine(src)
-      +withoutTabs = tabsExpanded(rawLine)
-      +next = drop(src,String.length(rawLine) + 1n)
-      Bool.pick(Unit -> Continued,List.is_empty(&2,U32,src) || lineEnds(limit,rawLine),_ => Continued{item,src},
-        _ => Bool.pick(Unit -> Continued,atLeast(nonSpace(withoutTabs),indent) || Text.blank(rawLine),
-          _ => itemLines(more,limit,indent,appended(item,rawLine,withoutTabs,indent,String.drop(withoutTabs,indent)),next),
-          _ => Bool.pick(Unit -> Continued,unindentedEnds(limit,item),_ => Continued{item,src},
-            _ => itemLines(more,limit,indent,appended(item,rawLine,withoutTabs,indent,rawLine),next))(Unit{}))(Unit{}))(Unit{})
+# The item's next line: where the item ends, or the line (as read, with tabs
+# expanded, and as it joins the item's content) and the source after it.
+type LineStep is Data:
+  ItemEnds{}
+  ItemLine{rawLine: String,withoutTabs: String,content: String,next: List<&2,U32>}
+def lineKept(ends: Bool,+rawLine: String,+withoutTabs: String,+content: String,next: List<&2,U32>) -> LineStep:
+  match ends:
+    case True{}: ItemEnds{}
+    case False{}: ItemLine{rawLine,withoutTabs,content,next}
+# An indented or blank line continues the item; another continues its
+# paragraph unless the item's last line was blank or starts a block.
+def lineIndented(indented: Bool,+limit: Nat,+indent: Nat,item: Item,+rawLine: String,+withoutTabs: String,next: List<&2,U32>) -> LineStep:
+  match indented:
+    case True{}: ItemLine{rawLine,withoutTabs,String.drop(withoutTabs,indent),next}
+    case False{}: lineKept(unindentedEnds(limit,item),rawLine,withoutTabs,rawLine,next)
+def lineRead(ends: Bool,+limit: Nat,+indent: Nat,item: Item,+rawLine: String,+withoutTabs: String,next: List<&2,U32>) -> LineStep:
+  match ends:
+    case True{}: ItemEnds{}
+    case False{}: lineIndented(atLeast(nonSpace(withoutTabs),indent) || Text.blank(rawLine),limit,indent,item,rawLine,withoutTabs,next)
+def lineSplit(+limit: Nat,+indent: Nat,item: Item,split: Split) -> LineStep:
+  match split: case Split{+rawLine,next,_}: lineRead(lineEnds(limit,rawLine),limit,indent,item,rawLine,tabsExpanded(rawLine),next)
+def lineStep(+limit: Nat,+indent: Nat,item: Item,src: List<&2,U32>) -> LineStep:
+  match src:
+    case Nil{}: ItemEnds{}
+    case src: lineSplit(limit,indent,item,splitLine(src))
+# The item's following lines (`step`: the next one).
+def itemLines(fuel: Nat,step: LineStep,+limit: Nat,+indent: Nat,+item: Item,src: List<&2,U32>) -> Continued:
+  match fuel step:
+    case Zero{} _: Continued{item,src}
+    case _ ItemEnds{}: Continued{item,src}
+    case Succ{more} ItemLine{rawLine,withoutTabs,content,+next}:
+      +grown = appended(item,rawLine,withoutTabs,indent,content)
+      itemLines(more,lineStep(limit,indent,grown,next),limit,indent,grown,next)
 
 # An item's first line: the column its content starts at and that content.
 type Opening is Data: Opening{indent: Nat,contents: String}
@@ -481,12 +526,16 @@ def openingContents(value: Opening) -> String:
   match value: case Opening{_,contents}: contents
 # One item from its bullet line (`raw`, the marker's width and the line after
 # it): the item and the source after it.
+def itemsFirst(+limit: Nat,+indent: Nat,+item: Item,+src: List<&2,U32>) -> Continued: itemLines(unbounded(),lineStep(limit,indent,item,src),limit,indent,item,src)
+def itemOpened(blank: Bool,+raw: String,+line: String,+first: Opening,split: Split,+src: List<&2,U32>) -> Continued:
+  match blank split:
+    case True{} Split{nextLine,rest,_}: Continued{Item{"\n" <> nextLine <> raw <> Nil{},openingContents(first) <> Nil{},line,True{}},rest}
+    case False{} _: itemsFirst(Nat.min(3n,openingIndent(first) - 1n),openingIndent(first),Item{raw <> Nil{},openingContents(first) <> Nil{},line,Text.blank(line)},src)
+def splitBlank(+split: Split) -> Bool:
+  match split: case Split{line,_,_}: H.blankLine(line)
 def itemFrom(+raw: String,+marker: Nat,+line: String,+src: List<&2,U32>) -> Continued:
-  +nextLine = firstLine(src)
-  +first = opening(line,marker)
-  Bool.pick(Unit -> Continued,Text.blank(line) && H.blankLine(nextLine),
-    _ => Continued{Item{"\n" <> nextLine <> raw <> Nil{},openingContents(first) <> Nil{},line,True{}},drop(src,String.length(nextLine) + 1n)},
-    _ => itemLines(unbounded(),Nat.min(3n,openingIndent(first) - 1n),openingIndent(first),Item{raw <> Nil{},openingContents(first) <> Nil{},line,Text.blank(line)},src))(Unit{})
+  +next = splitLine(src)
+  itemOpened(Text.blank(line) && splitBlank(next),raw,line,opening(line,marker),next,src)
 
 # One collected item and the source after it.
 type Step is Data: Step{raw: String,text: String,src: List<&2,U32>}
@@ -510,12 +559,16 @@ def bulletLength(bullet: Bullet,+codes: List<&2,U32>) -> Maybe<&2,Nat>:
     case Ordered{+delimiter}:
       +digits = digitRun(codes,0n)
       Bool.pick(Maybe<&2,Nat>,Nat.is_ge(digits,1n) && Nat.is_le(digits,9n) && U32.is_eq(Maybe.default(&2,U32,List.get(&2,U32,codes,digits),0),delimiter),Some{digits + 1n},None{})
+def lineWithNewline(split: Split) -> String:
+  match split:
+    case Split{line,_,True{}}: line ++ "\n"
+    case Split{line,_,False{}}: line
 # `(?:[\t ][^\n]*)?(?:\n|$)` after the bullet.
 def bulletRest(+codes: List<&2,U32>) -> Maybe<&2,String>:
   match codes:
     case Nil{}: Some{""}
     case +scalar <> rest:
-      Bool.pick(Unit -> Maybe<&2,String>,U32.is_eq(scalar,9) || U32.is_eq(scalar,32),_ => Some{firstLine(codes) ++ Bool.pick(String,List.is_empty(&2,U32,drop(codes,String.length(firstLine(codes)))),"","\n")},
+      Bool.pick(Unit -> Maybe<&2,String>,U32.is_eq(scalar,9) || U32.is_eq(scalar,32),_ => Some{lineWithNewline(splitLine(codes))},
         _ => Bool.pick(Maybe<&2,String>,U32.is_eq(scalar,10),Some{"\n"},None{}))(Unit{})
 def itemStarted(+indent: Nat,length: Maybe<&2,Nat>,+after: List<&2,U32>) -> Maybe<&2,ItemStart>:
   match length:
@@ -778,8 +831,14 @@ def bracketsMasked(+input: List<&2,U32>,+matches: List<&2,Re.Match>,+position: N
     case Nil{}: List.reverse(&2,U32,prependReversed(drop(input,position),reversed))
     case Re.Match{+start,+end,_} <> rest: bracketsMasked(input,rest,end,prependReversed(bracketMask(end - start),prependReversed(take(drop(input,position),start - position),reversed)))
 def blocksMasked(+rules: Rules.Inline,+input: List<&2,U32>) -> List<&2,U32>: bracketsMasked(input,allMatches(Rules.inlineSearch(rules,Rules.InlineBlockSkip{}),input),0n,Nil{})
+# Reference links are masked only when the document defines some (as
+# upstream, which searches for them only then).
+def referencesMasked(search: Bool,+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+src: List<&2,U32>) -> List<&2,U32>:
+  match search:
+    case True{}: maskedRefs(rules,links,src,allMatches(Rules.inlineSearch(rules,Rules.InlineReflinkSearch{}),src),0n,Nil{})
+    case False{}: src
 def maskedSource(+rules: Rules.Inline,+links: List<&2,T.LinkDefinition>,+src: List<&2,U32>) -> List<&2,U32>:
-  +references = Bool.pick(Unit -> List<&2,U32>,containsCode(src,91),_ => maskedRefs(rules,links,src,allMatches(Rules.inlineSearch(rules,Rules.InlineReflinkSearch{}),src),0n,Nil{}),_ => src)(Unit{})
+  +references = referencesMasked(Bool.not(List.is_empty(&2,T.LinkDefinition,links)) && containsCode(src,91),rules,links,src)
   blocksMasked(rules,punctuationMasked(references,Bool.pick(U32,escapeAt(references),1,0),Nil{}))
 
 # The masked source of an inlineTokens run, computed when a delimiter scan
@@ -1018,63 +1077,102 @@ def emailPunctuation(scalar: U32) -> Bool:
     case _: False{}
 def isEmailCode(+scalar: U32) -> Bool:
   (U32.is_ge(scalar,97) && U32.is_le(scalar,122)) || (U32.is_ge(scalar,65) && U32.is_le(scalar,90)) || (U32.is_ge(scalar,48) && U32.is_le(scalar,57)) || emailPunctuation(scalar)
-# `(?=EMAIL+@)`
-def emailAhead(codes: List<&2,U32>,+count: Nat) -> Bool:
+# `(?=EMAIL+@)` (`email`: the next scalar is an EMAIL one; `count` of them read).
+def headEmail(codes: List<&2,U32>) -> Bool:
   match codes:
+    case +scalar <> _: isEmailCode(scalar)
     case Nil{}: False{}
-    case +scalar <> rest: Bool.pick(Unit -> Bool,isEmailCode(scalar),_ => emailAhead(rest,count + 1n),_ => U32.is_eq(scalar,64) && Nat.is_gt(count,0n))(Unit{})
+def emailAhead(codes: List<&2,U32>,email: Bool,+count: Nat) -> Bool:
+  match email codes:
+    case True{} _ <> +rest: emailAhead(rest,headEmail(rest),count + 1n)
+    case False{} 64 <> _: Nat.is_gt(count,0n)
+    case _ _: False{}
 # `(?= {2,}\n)`
 def breakAhead(codes: List<&2,U32>,+count: Nat) -> Bool:
   match codes:
-    case Nil{}: False{}
-    case +scalar <> rest: Bool.pick(Unit -> Bool,U32.is_eq(scalar,32),_ => breakAhead(rest,count + 1n),_ => U32.is_eq(scalar,10) && Nat.is_ge(count,2n))(Unit{})
-def lowered(+scalar: U32) -> U32: Bool.pick(U32,U32.is_ge(scalar,65) && U32.is_le(scalar,90),(scalar + 32 : U32),scalar)
-def foldedPrefix(codes: List<&2,U32>,prefix: String) -> Bool:
-  match codes prefix:
-    case _ SNil{}: True{}
-    case Nil{} _: False{}
-    case scalar <> rest SCon{Chr{expected},more}: Bool.pick(Unit -> Bool,U32.is_eq(lowered(scalar),expected),_ => foldedPrefix(rest,more),_ => False{})(Unit{})
-def plainPrefix(codes: List<&2,U32>,prefix: String) -> Bool:
-  match codes prefix:
-    case _ SNil{}: True{}
-    case Nil{} _: False{}
-    case scalar <> rest SCon{Chr{expected},more}: Bool.pick(Unit -> Bool,U32.is_eq(scalar,expected),_ => plainPrefix(rest,more),_ => False{})(Unit{})
-# `[\\<!\[`*~_]`
-def stopCharacter(scalar: U32) -> Bool:
-  match scalar:
-    case 92: True{}
-    case 60: True{}
-    case 33: True{}
-    case 91: True{}
-    case 96: True{}
-    case 42: True{}
-    case 126: True{}
-    case 95: True{}
+    case 32 <> rest: breakAhead(rest,count + 1n)
+    case 10 <> _: Nat.is_ge(count,2n)
     case _: False{}
-# STOP at the start of `codes`.
-def stopAhead(+codes: List<&2,U32>) -> Bool:
+# STOP at the start of `codes`: `[\\<!\[`*~_]`, "http" and "ftp://" in either
+# case, or "www." (read as patterns, so the source is not taken).
+def pAhead(codes: List<&2,U32>) -> Bool:
   match codes:
-    case Nil{}: False{}
-    case +scalar <> _: stopCharacter(scalar) || foldedPrefix(codes,"http") || foldedPrefix(codes,"ftp://") || plainPrefix(codes,"www.")
+    case 112 <> _: True{}
+    case 80 <> _: True{}
+    case _: False{}
+def tpAhead(codes: List<&2,U32>) -> Bool:
+  match codes:
+    case 116 <> rest: pAhead(rest)
+    case 84 <> rest: pAhead(rest)
+    case _: False{}
+def ttpAhead(codes: List<&2,U32>) -> Bool:
+  match codes:
+    case 116 <> rest: tpAhead(rest)
+    case 84 <> rest: tpAhead(rest)
+    case _: False{}
+def slashesAhead(codes: List<&2,U32>) -> Bool:
+  match codes:
+    case 58 <> 47 <> 47 <> _: True{}
+    case _: False{}
+def ftpAhead(codes: List<&2,U32>) -> Bool:
+  match codes:
+    case 116 <> 112 <> rest: slashesAhead(rest)
+    case 116 <> 80 <> rest: slashesAhead(rest)
+    case 84 <> 112 <> rest: slashesAhead(rest)
+    case 84 <> 80 <> rest: slashesAhead(rest)
+    case _: False{}
+def stopAhead(codes: List<&2,U32>) -> Bool:
+  match codes:
+    case 92 <> _: True{}
+    case 60 <> _: True{}
+    case 33 <> _: True{}
+    case 91 <> _: True{}
+    case 96 <> _: True{}
+    case 42 <> _: True{}
+    case 126 <> _: True{}
+    case 95 <> _: True{}
+    case 104 <> rest: ttpAhead(rest)
+    case 72 <> rest: ttpAhead(rest)
+    case 102 <> rest: ftpAhead(rest)
+    case 70 <> rest: ftpAhead(rest)
+    case 119 <> 119 <> 119 <> 46 <> _: True{}
+    case _: False{}
 # `[^ ](?= {2,}\n)` and `[^EMAIL](?=EMAIL+@)` at a character.
-def breakAfter(+scalar: U32,+rest: List<&2,U32>) -> Bool: Bool.pick(Unit -> Bool,U32.is_eq(scalar,32),_ => False{},_ => breakAhead(rest,0n))(Unit{})
-def emailAfter(+scalar: U32,+rest: List<&2,U32>) -> Bool: Bool.pick(Unit -> Bool,isEmailCode(scalar),_ => False{},_ => emailAhead(rest,0n))(Unit{})
+def breakAfter(+scalar: U32,rest: List<&2,U32>) -> Bool: Bool.not(U32.is_eq(scalar,32)) && breakAhead(rest,0n)
+def emailAfterIf(email: Bool,+rest: List<&2,U32>) -> Bool:
+  match email:
+    case True{}: False{}
+    case False{}: emailAhead(rest,headEmail(rest),0n)
+def emailAfter(+scalar: U32,+rest: List<&2,U32>) -> Bool: emailAfterIf(isEmailCode(scalar),rest)
 # `[\s\S]*?(?:(?=STOP|$)|[^ ](?= {2,}\n)|[^EMAIL](?=EMAIL+@))`: the length
-# of the lazy run and the alternative's character.
-def textRun(codes: List<&2,U32>,+length: Nat) -> Nat:
+# of the lazy run and the alternative's character. `action` is what the run
+# does at the next scalar: 1 stop before it, 2 take it and stop, 0 take it
+# and go on.
+def afterAction(stop: Bool,+scalar: U32,+rest: List<&2,U32>) -> U32:
+  match stop:
+    case True{}: 1
+    case False{}: Bool.pick(U32,breakAfter(scalar,rest) || emailAfter(scalar,rest),2,0)
+def textAction(+codes: List<&2,U32>) -> U32:
   match codes:
-    case Nil{}: length
-    case +scalar <> +rest:
-      Bool.pick(Unit -> Nat,stopAhead(scalar <> rest),_ => length,
-        _ => Bool.pick(Unit -> Nat,breakAfter(scalar,rest) || emailAfter(scalar,rest),_ => length + 1n,
-          _ => textRun(rest,length + 1n))(Unit{}))(Unit{})
+    case Nil{}: 1
+    case +scalar <> +rest: afterAction(stopAhead(codes),scalar,rest)
+def textRun(codes: List<&2,U32>,action: U32,+length: Nat) -> Nat:
+  match action codes:
+    case 1 _: length
+    case 2 _: length + 1n
+    case _ Nil{}: length
+    case _ _ <> +rest: textRun(rest,textAction(rest),length + 1n)
 def runOf(codes: List<&2,U32>,+scalar: U32,+count: Nat) -> Nat:
   match codes:
     case +next <> rest: Bool.pick(Unit -> Nat,U32.is_eq(next,scalar),_ => runOf(rest,scalar,count + 1n),_ => count)(Unit{})
     case Nil{}: count
 # `(`+|~+|[^`~])` then the rest.
+def textAfterIf(stop: Bool,+first: Nat,+rest: List<&2,U32>) -> Nat:
+  match stop:
+    case True{}: first
+    case False{}: first + textRun(rest,textAction(rest),0n)
 def textAfter(+first: Nat,+rest: List<&2,U32>) -> Nat:
-  Bool.pick(Unit -> Nat,startsWith(rest,'`') || startsWith(rest,'~') || breakAhead(rest,0n) || emailAhead(rest,0n),_ => first,_ => first + textRun(rest,0n))(Unit{})
+  textAfterIf(startsWith(rest,'`') || startsWith(rest,'~') || breakAhead(rest,0n) || emailAhead(rest,headEmail(rest),0n),first,rest)
 def textLength(+src: List<&2,U32>) -> Maybe<&2,Nat>:
   match src:
     case Nil{}: None{}

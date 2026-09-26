@@ -512,7 +512,7 @@
       "port_sha256": {
         "packages/ai/src/api/pi-messages.bend": "b014bfe831a016688261bc1d18470838ca61366b4baa7647c28cc44a0452d6e7",
         "packages/ai/src/api/provider-fetch.bend": "4f11d6da5363ffae0c3d2214e163bd9eee6a4348039d4f37d4d652a62a248275",
-        "packages/coding-agent/src/core/stream-providers.bend": "6fb2a2198af50b5463f92ddbdec9b193dace9012bb1c874939abbd3e0460d540"
+        "packages/coding-agent/src/core/stream-providers.bend": "7cd09373017335b4b1325505127e2015050a5f6158add77ce70732e08e7fc883"
       }
     },
     "packages/ai/src/api/pi-messages.lazy.ts": {
@@ -555,7 +555,7 @@
       "port_sha256": {
         "packages/ai/src/api/mistral-conversations.bend": "87f9860ab53ae3c884656d205c8f771c48b7ad54dc01ce2438b0c8e07659a7b1",
         "packages/ai/src/api/provider-fetch.bend": "4f11d6da5363ffae0c3d2214e163bd9eee6a4348039d4f37d4d652a62a248275",
-        "packages/coding-agent/src/core/stream-providers.bend": "6fb2a2198af50b5463f92ddbdec9b193dace9012bb1c874939abbd3e0460d540"
+        "packages/coding-agent/src/core/stream-providers.bend": "7cd09373017335b4b1325505127e2015050a5f6158add77ce70732e08e7fc883"
       }
     },
     "packages/ai/src/api/mistral-conversations.lazy.ts": {
@@ -664,8 +664,8 @@
       "note": "Ported as three modules: google-generative-ai.bend (GoogleOptions, streamSimple's option mapping with clamped levels, level-or-budget thinking config and getGoogleBudget, buildParams producing the SDK parameters, client headers, and the SDK's parameter-to-REST conversion with its field order); google-generative-ai-stream.bend (the SDK's processStreamResponse framing with its delimiters, in-band error chunks and incomplete-segment error, and the chunk fold: text/thinking block transitions, signatures, function calls with generated ids, responseId, usage and finish reasons); google-generative-ai-client.bend (streamSimple's missing-key and level-mapping errors fail before a stream exists, as upstream throws synchronously; the stream lifecycle: custom-fetch and API-key checks, onPayload replacement, the SDK model path and address, headers, retryProviderRequest with status-only failures, the body loop and the catch block). tests/google_generative_ai_check.py compares 560 captured params, wire requests and streamed messages/event sequences with pinned pi-mono and runs the ported suites; tests/google_client_loopback.py covers the HTTP path and the agent glue. Documented differences (the tool-call counter one is flagged for review with the user): x-goog-api-client carries the SDK label without the gl-node/<process.version> runtime label (there is no Node runtime); the generated tool-call id counter is per stream instead of module-global (upstream's `let toolCallCounter` at google-generative-ai.ts:57; ids stay unique within a response and Date.now() distinguishes streams unless two start in the same millisecond); JSON.parse's engine-specific error text is replaced by the native parser's; event partials are snapshots. No live Gemini request has been verified.",
       "source_sha256": "c20f1a40875b2106b6d39d8b7837cd30a882c6a5fcf8c311ccc42a090e18e956",
       "port_sha256": {
-        "packages/ai/src/api/google-generative-ai.bend": "5036095bca4b9c918c3fa51e62d71cb88cea91e66b09851fdaca92093ce6fb95",
-        "packages/ai/src/api/google-generative-ai-stream.bend": "48155e15051f0be5a16833547938cae6eb6e61520dfc95b88cc7474d9e5984bc",
+        "packages/ai/src/api/google-generative-ai.bend": "8e5fddf0912e58a6af8a24da3425ddfd4970278f1dc8811557f1ac9d524e7d46",
+        "packages/ai/src/api/google-generative-ai-stream.bend": "786ea73d7b16f635095a24c049667395a971ce730fd2a696ca699184371fb243",
         "packages/ai/src/api/google-generative-ai-client.bend": "eaaeead401f3172c802f3e76b871f6e69ab4cb3b4e1b87128923586621ecc19b"
       },
       "ports": [
@@ -756,13 +756,13 @@
     },
     "packages/coding-agent/src/modes/rpc/rpc-types.ts": {
       "state": "ported",
-      "note": "Typed RpcCommand (encoder), response envelope, RpcSessionState and RpcSlashCommand with encoders used by the endpoint and decoders used by RpcClient, plus wire codecs for bash results, cleared queues and the entry tree. Per-command response data stays JSON in the envelope and is decoded by each client method. Extension UI request/response types are not ported with the endpoint's extension UI.",
+      "note": "Typed RpcCommand (encoder), response envelope, RpcSessionState, RpcSlashCommand, RpcExtensionUIRequest and RpcExtensionUIResponse, with encoders used by the endpoint and decoders used by RpcClient and the endpoint's extension UI, plus wire codecs for bash results, cleared queues and the entry tree. Per-command response data stays JSON in the envelope and is decoded by each client method.",
       "ports": [
         "packages/coding-agent/src/modes/rpc-types.bend"
       ],
       "source_sha256": "34057257456fd5f935587a0e9650fb5777738674e491a68fd037425703c45e26",
       "port_sha256": {
-        "packages/coding-agent/src/modes/rpc-types.bend": "4f598ad04bb6ec4f8e71a48aa84978228052bd40ad6b02ab5f742e630b3e126c"
+        "packages/coding-agent/src/modes/rpc-types.bend": "d324a0ac91ad81e1e7e332589f3b7241f471b9ebff7f2ea18e7fd5206f8d042a"
       }
     },
     "packages/coding-agent/src/modes/rpc/jsonl.ts": {
@@ -857,6 +857,62 @@
       "source_sha256": "921e057fa1880412c29a849505ddd7dbe466996d78087c0c0628437ec2051880",
       "port_sha256": {
         "packages/ai/src/providers/openrouter-images.bend": "8f8546ed016e90a08042437cb4c808bb06c950e43f23c888a787157b5170f1d5"
+      }
+    },
+    "packages/ai/src/api/google-vertex.ts": {
+      "state": "partial",
+      "note": "stream/streamSimple: the custom-fetch check, resolveApiKey (ADC markers and placeholders), the API key or ADC client with project/location from options and env, buildHttpOptions (custom base URL at collection scope, version detection, User-Agent and header overlay), buildParams shared with Google Generative AI, onPayload, the SDK's Vertex URL, headers and request conversion, retryGoogleRequest, and the shared stream loop with the api name and 'Google Vertex stream ended without a finish reason'; streamSimple without a key requirement and with Vertex's 2.5 Flash-Lite budgets. ADC: authorized_user credentials files (keyFilename, else the well-known gcloud file) and the refresh-token exchange (google-vertex-credentials.bend). tests/google_vertex_check.py compares 15 streamed cases with upstream driving the pinned @google/genai and google-auth-library on a loopback server and asserts the 12 client-configuration cases. Missing: service-account, impersonated and external-account credentials (service accounts need RS256 signing, which the runtime lacks), the Compute Engine metadata server, and gaxios' token-request retries.",
+      "ports": [
+        "packages/ai/src/api/google-vertex.bend",
+        "packages/ai/src/api/google-vertex-credentials.bend",
+        "packages/ai/src/api/google-generative-ai-client.bend",
+        "packages/ai/src/api/google-generative-ai-stream.bend"
+      ],
+      "source_sha256": "d0a53a2faaad20620800a1e95d2d2175d641011c4d6b00b0877d905c57f16ec1",
+      "port_sha256": {
+        "packages/ai/src/api/google-vertex.bend": "0ebdb23af0dce3514a9f10f49570cdb99a9ee16a853dd2aaa2de4ac4e8a5ec09",
+        "packages/ai/src/api/google-vertex-credentials.bend": "f5eb406223e827951c683961e1101de5f2b6331fbe8f9f95bc9c9b37a38a43e9",
+        "packages/ai/src/api/google-generative-ai-client.bend": "eaaeead401f3172c802f3e76b871f6e69ab4cb3b4e1b87128923586621ecc19b",
+        "packages/ai/src/api/google-generative-ai-stream.bend": "786ea73d7b16f635095a24c049667395a971ce730fd2a696ca699184371fb243"
+      }
+    },
+    "packages/ai/src/api/google-vertex.lazy.ts": {
+      "state": "excluded",
+      "note": "Lazy loading of the implementation module through a dynamic import is a JavaScript bundling concern; the Bend runtime dispatches models of this api to google-vertex.bend directly (coding-agent agent-runtime selectedProvider).",
+      "source_sha256": "891f0e07eaaa1bb1df97f0a2d8f067df6acbab50078242108d93b96a710c4712",
+      "port_sha256": {}
+    },
+    "packages/ai/src/providers/google-vertex.ts": {
+      "state": "ported",
+      "note": "The Google Vertex AI provider with its catalog, listed after google in providers/all.bend as upstream; vertexAuth.login (method select, API key, the ADC notice, project, location and service-account file) over the shared AuthPrompt/AuthEvent interaction, and vertexAuth.resolve (stored or GOOGLE_CLOUD_API_KEY key, else the ADC file plus project and location, with the ?? lookup order and abort checks), tested in packages/ai/test/google-vertex-auth.bend.",
+      "source_sha256": "5e321e6d5b80824752ca96e7c9aba8a3fccce722a1793a40d5341a0406ef4878",
+      "port_sha256": {
+        "packages/ai/src/providers/google-vertex.bend": "261c9cc8d338f56f22779cb2d74dfe58b822be34d445d89a6c99b86cd98e9770"
+      }
+    },
+    "packages/ai/src/providers/google-vertex.models.ts": {
+      "state": "ported",
+      "note": "Generated from pi-ai's google-vertex.json by scripts/generate-model-catalog.py; tests/model-catalog.bend dumps every model equal to the pinned data.",
+      "source_sha256": "964109cc69cadf77329846f4fb4baf6c86b00995f33a813230c5a9e54573e93e",
+      "port_sha256": {
+        "packages/ai/src/providers/google-vertex.models.bend": "dbb4cc57f186526c126d6937d244de2f6a5585fb8b4de1921966a0527895cfe9"
+      }
+    },
+    "packages/ai/src/api/cloudflare-ai-binding.ts": {
+      "state": "missing",
+      "note": "Not ported pending a decision: the module adapts a Cloudflare Workers AI binding (env.AI) into a fetch function plus the CLOUDFLARE_GATEWAY_BINDING_AUTH_SENTINEL header value, which only exist inside a Workers runtime; the native CLI has no binding to wrap. A structural port (an AiBinding value with an optional fetch callback and the sentinel) is possible but has no native caller.",
+      "source_sha256": "57f702b91453810241fd50a5629628fcc3d556e75909a37fae857d0a5d27d8fb",
+      "port_sha256": {}
+    },
+    "packages/coding-agent/src/modes/rpc/rpc-mode.ts": {
+      "state": "partial",
+      "note": "All commands, JSONL framing, correlated errors, prompt/queue semantics, session replacement through the host, event streaming, and extension UI (select/confirm/input dialogs answered by extension_ui_response, notify/setStatus, extension_error records) in rpc mode. Gaps: the prompt response precedes AgentSession's preflight (no preflightResult), so preflight failures are acknowledged as success; commands other than prompts run on the input reader, so an extension dialog opened from one would block; editor/setWidget/setTitle/set_editor_text and dialog timeouts are absent from the native UI context; command-context actions and the shutdown handler are not bound; stdout backpressure and signal handling belong to main.bend. See tests/rpc.md.",
+      "ports": [
+        "packages/coding-agent/src/modes/rpc.bend"
+      ],
+      "source_sha256": "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/rpc.bend": "592b86af63c6e13d7631df617e3eaed6d07e3c1c8d130075e63105059a9deb9a"
       }
     }
   }

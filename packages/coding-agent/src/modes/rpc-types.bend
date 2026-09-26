@@ -390,3 +390,61 @@ def treeNodeFields(+fields: R.Record<V.Value>,children: List<&2,TreeNode()>) -> 
         return node <> others
 def decodeTree(value: V.Value) -> Decoded(List<&2,TreeNode()>):
   Result.bind(&2,&2,Decode.Error,List<&2,V.Value>,List<&2,TreeNode()>,Decode.array(value),values => decodeNodes(values,0n))
+
+# Extension UI (stdout requests, stdin responses)
+# -----------------------------------------------
+# upstream RpcExtensionUIRequest: dialogs wait for a response with their id;
+# the other methods are fire and forget.
+type RpcExtensionUIRequest is Data:
+  UISelect{id: String,title: String,options: List<&2,String>,timeout: Maybe<&2,F64>}
+  UIConfirm{id: String,title: String,message: String,timeout: Maybe<&2,F64>}
+  UIInput{id: String,title: String,placeholder: Maybe<&2,String>,timeout: Maybe<&2,F64>}
+  UIEditor{id: String,title: String,prefill: Maybe<&2,String>}
+  UINotify{id: String,message: String,notifyType: Maybe<&2,String>}
+  UISetStatus{id: String,statusKey: String,statusText: Maybe<&2,String>}
+  UISetWidget{id: String,widgetKey: String,widgetLines: Maybe<&2,List<&2,String>>,widgetPlacement: Maybe<&2,String>}
+  UISetTitle{id: String,title: String}
+  UISetEditorText{id: String,text: String}
+
+def uiRequest(id: String,method: String,rest: List<&2,R.Property<V.Value>>) -> V.Value:
+  Json.object(Json.field("type",V.Text{"extension_ui_request"},Json.field("id",V.Text{id},Json.field("method",V.Text{method},rest))))
+def uiRequestValue(request: RpcExtensionUIRequest) -> V.Value:
+  match request:
+    case UISelect{id,title,options,timeout}: uiRequest(id,"select",Json.field("title",V.Text{title},Json.field("options",V.ArrayValue{texts(options)},Json.optionalNumber("timeout",timeout,Nil{}))))
+    case UIConfirm{id,title,message,timeout}: uiRequest(id,"confirm",Json.field("title",V.Text{title},Json.field("message",V.Text{message},Json.optionalNumber("timeout",timeout,Nil{}))))
+    case UIInput{id,title,placeholder,timeout}: uiRequest(id,"input",Json.field("title",V.Text{title},Json.optionalText("placeholder",placeholder,Json.optionalNumber("timeout",timeout,Nil{}))))
+    case UIEditor{id,title,prefill}: uiRequest(id,"editor",Json.field("title",V.Text{title},Json.optionalText("prefill",prefill,Nil{})))
+    case UINotify{id,message,kind}: uiRequest(id,"notify",Json.field("message",V.Text{message},Json.optionalText("notifyType",kind,Nil{})))
+    case UISetStatus{id,key,text}: uiRequest(id,"setStatus",Json.field("statusKey",V.Text{key},Json.optionalText("statusText",text,Nil{})))
+    case UISetWidget{id,key,lines,placement}: uiRequest(id,"setWidget",Json.field("widgetKey",V.Text{key},Json.optional("widgetLines",Maybe.map(&2,List<&2,String>,V.Value,values => V.ArrayValue{texts(values)},lines),Json.optionalText("widgetPlacement",placement,Nil{}))))
+    case UISetTitle{id,title}: uiRequest(id,"setTitle",Json.field("title",V.Text{title},Nil{}))
+    case UISetEditorText{id,text}: uiRequest(id,"set_editor_text",Json.field("text",V.Text{text},Nil{}))
+
+# upstream RpcExtensionUIResponse
+type RpcExtensionUIResponse is Data:
+  UIValue{id: String,value: String}
+  UIConfirmed{id: String,confirmed: Bool}
+  UICancelled{id: String}
+
+def uiResponseId(response: RpcExtensionUIResponse) -> String:
+  match response:
+    case UIValue{id,_}: id
+    case UIConfirmed{id,_}: id
+    case UICancelled{id}: id
+# A response carries `cancelled: true`, a `value` or `confirmed`, tried in
+# that order as upstream's dialogs test them.
+def uiResponseOf(id: String,cancelled: Maybe<&2,Bool>,value: Maybe<&2,String>,confirmed: Maybe<&2,Bool>) -> Decoded(RpcExtensionUIResponse):
+  match cancelled value confirmed:
+    case Some{True{}} _ _: Done{UICancelled{id}}
+    case _ Some{text} _: Done{UIValue{id,text}}
+    case _ None{} Some{flag}: Done{UIConfirmed{id,flag}}
+    case _ None{} None{}: Fail{Decode.InvalidValue{Nil{},"extension UI response"}}
+def uiResponseFields(+fields: R.Record<V.Value>) -> Decoded(RpcExtensionUIResponse):
+  do Result<&2,&2,Decode.Error,RpcExtensionUIResponse>:
+    id : String <- Decode.required(String,fields,"id",Decode.string)
+    cancelled : Maybe<&2,Bool> <- Decode.optional(Bool,fields,"cancelled",decodeBoolean)
+    value : Maybe<&2,String> <- Decode.optional(String,fields,"value",Decode.string)
+    confirmed : Maybe<&2,Bool> <- Decode.optional(Bool,fields,"confirmed",decodeBoolean)
+    uiResponseOf(id,cancelled,value,confirmed)
+def decodeUIResponse(value: V.Value) -> Decoded(RpcExtensionUIResponse):
+  Result.bind(&2,&2,Decode.Error,R.Record<V.Value>,RpcExtensionUIResponse,Decode.object(value),fields => uiResponseFields(fields))

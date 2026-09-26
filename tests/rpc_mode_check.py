@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """upstream rpc-prompt-response-semantics.test.ts and
-suite/regressions/5868-rpc-unknown-command-id.test.ts on tests/rpc-mode.bend.
+suite/regressions/5868-rpc-unknown-command-id.test.ts on tests/rpc-mode.bend,
+plus a native supplement for extension UI requests and responses.
 
 Build: bun build/bend-process-files/bend2/main.ts tests/rpc-mode.bend -o build/rpc-mode.js
        sh scripts/build-pure.sh tests/rpc-mode.bend build/rpc-mode-native
@@ -26,6 +27,9 @@ NAMES = [
     "RPC prompt response semantics > emits one success response when prompt is queued during streaming",
     "RPC prompt response semantics > returns and clears queued steering and follow-up messages",
     "RPC unknown command responses (#5868) > preserves the request id on unknown command errors",
+    # Native supplement: extension UI over the protocol (no upstream suite).
+    "RPC extension UI > a select dialog is answered by its extension_ui_response",
+    "RPC extension UI > stopping answers an open dialog as cancelled",
 ]
 # Pending until AgentSession.prompt has upstream's preflight (tests/rpc.md).
 EXPECTED_FAILURES = {PREFLIGHT}
