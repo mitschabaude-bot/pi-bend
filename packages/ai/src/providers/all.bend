@@ -18,6 +18,7 @@ import ./kimi-coding.bend as KimiCoding
 import ./meta.bend as Meta
 import ./minimax.bend as Minimax
 import ./minimax-cn.bend as MinimaxCn
+import ./mistral.bend as Mistral
 import ./moonshotai.bend as Moonshotai
 import ./moonshotai-cn.bend as MoonshotaiCn
 import ./nvidia.bend as Nvidia
@@ -40,8 +41,8 @@ import ./zai.bend as Zai
 import ./zai-coding-cn.bend as ZaiCodingCn
 
 # upstream builtinProviders(), in providers/all.ts order. Omitted:
-# amazon-bedrock, google-vertex, mistral and radius, whose APIs are not
-# ported. OAuth handlers are created by the caller.
+# amazon-bedrock and google-vertex, whose APIs are not ported, and radius,
+# whose OAuth and dynamic catalog are not. OAuth handlers are created by the caller.
 # Each provider joins the list as soon as it is created: holding all of them
 # in separate binders exceeds the native backend's closure arity (BEND-010).
 def prepended(action: IO(Models.Provider), rest: List<&2, Models.Provider>) -> IO(List<&2, Models.Provider>):
@@ -71,6 +72,7 @@ def builtinProviders(codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuth
     providers : List<&2, Models.Provider> <- prepended(Nvidia.nvidiaProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(MoonshotaiCn.moonshotaiCnProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(Moonshotai.moonshotaiProvider(), providers)
+    providers : List<&2, Models.Provider> <- prepended(Mistral.mistralProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(MinimaxCn.minimaxCnProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(Minimax.minimaxProvider(), providers)
     providers : List<&2, Models.Provider> <- prepended(Meta.metaProvider(), providers)

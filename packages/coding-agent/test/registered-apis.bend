@@ -23,3 +23,4 @@ def check(+name: String) -> IO(Unit):
 def main() -> IO(Unit):
   do IO<Unit>:
     check("pi-messages")
+    check("mistral-conversations")

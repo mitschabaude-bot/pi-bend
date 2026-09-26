@@ -505,7 +505,7 @@
       "port_sha256": {
         "packages/ai/src/api/pi-messages.bend": "b014bfe831a016688261bc1d18470838ca61366b4baa7647c28cc44a0452d6e7",
         "packages/ai/src/api/provider-fetch.bend": "4f11d6da5363ffae0c3d2214e163bd9eee6a4348039d4f37d4d652a62a248275",
-        "packages/coding-agent/src/core/stream-providers.bend": "90e7f61da0fcead9bfc243cf10b0087ad22a856d33c7661825573f966408cca4"
+        "packages/coding-agent/src/core/stream-providers.bend": "981f7ebedf8a59f5bd49b08af80d113dab0dfe640ab2caebbdaad77946fa371e"
       }
     },
     "packages/ai/src/api/pi-messages.lazy.ts": {
@@ -534,6 +534,43 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/countdown-timer.bend": "9c02df7baf5ef6931f74b96e7f277f8daccbbbb6dc28a5db8e4818a4cde96d9f"
+      }
+    },
+    "packages/ai/src/api/mistral-conversations.ts": {
+      "state": "ported",
+      "note": "stream/streamSimple: transcript resolution, Mistral tool-call id normalization, SDK-style payload and wire renaming, pi User-Agent and header overrides with x-affinity, the request timeout over the whole exchange, onPayload/onResponse, Mistral SSE framing, the chunk fold (text/thinking/tool calls, cached-token usage, stop reasons) and error formatting, all checked against upstream traces (tests/mistral_check.py). Native adaptations: streamSimple's synchronous missing-key throw is a Fail result; reasoningEffort carries the mapped thinking value as a string; malformed JSON events and transport failures report native messages; upstream's partialArgs scratch member is not part of the typed tool call.",
+      "ports": [
+        "packages/ai/src/api/mistral-conversations.bend",
+        "packages/ai/src/api/provider-fetch.bend",
+        "packages/coding-agent/src/core/stream-providers.bend"
+      ],
+      "source_sha256": "b54b0998ff3e0f0ff0804ca62dbcc2061922c770d9ff8267096580907f21faf5",
+      "port_sha256": {
+        "packages/ai/src/api/mistral-conversations.bend": "87f9860ab53ae3c884656d205c8f771c48b7ad54dc01ce2438b0c8e07659a7b1",
+        "packages/ai/src/api/provider-fetch.bend": "4f11d6da5363ffae0c3d2214e163bd9eee6a4348039d4f37d4d652a62a248275",
+        "packages/coding-agent/src/core/stream-providers.bend": "981f7ebedf8a59f5bd49b08af80d113dab0dfe640ab2caebbdaad77946fa371e"
+      }
+    },
+    "packages/ai/src/api/mistral-conversations.lazy.ts": {
+      "state": "excluded",
+      "note": "Lazy loading of the implementation module through a dynamic import is a JavaScript bundling concern; the Bend runtime dispatches models of this api to mistral-conversations.bend directly (coding-agent agent-runtime selectedProvider).",
+      "source_sha256": "74267bc430c0c2562d166e4ae9d05966634e91b226bc564010b2b199db52dd86",
+      "port_sha256": {}
+    },
+    "packages/ai/src/providers/mistral.ts": {
+      "state": "ported",
+      "note": "The Mistral provider with its MISTRAL_API_KEY auth, base URL and catalog, listed in providers/all.bend in upstream order.",
+      "source_sha256": "dfcd087d7317d6a6cd1acf701547567435f5eaf0c1cc1d8eb89eed7e977c2fb3",
+      "port_sha256": {
+        "packages/ai/src/providers/mistral.bend": "2bf396a23f310232846185540478fcee84ffef48f60304ab93ed5e4720adf846"
+      }
+    },
+    "packages/ai/src/providers/mistral.models.ts": {
+      "state": "ported",
+      "note": "Generated from pi-ai's mistral.json by scripts/generate-model-catalog.py; tests/model-catalog.bend dumps all 33 models equal to the pinned data.",
+      "source_sha256": "949f1e72e32a0028beb855db2642f13783c8697c4be236e9061c241f1d698a51",
+      "port_sha256": {
+        "packages/ai/src/providers/mistral.models.bend": "96fc1ee0a28c53c957a0c70d9a1b1a3c585f6dd713c0e5218bd641ff62d30622"
       }
     }
   }

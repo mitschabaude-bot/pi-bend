@@ -1,6 +1,7 @@
 import Base
 import ../../../ai/src/types.bend as Ai
 import ../../../ai/src/api/pi-messages.bend as PiMessages
+import ../../../ai/src/api/mistral-conversations.bend as Mistral
 import ../../../ai/src/utils/event-stream.bend as Events
 import ../../../agent/src/types.bend as Agent
 import ../../../runtime/src/abort.bend as Abort
@@ -60,3 +61,15 @@ def lease(produce: Producer(), parent: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO
 # upstream pi-messages streamSimple.
 def piMessages(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), +options: Maybe<&2, Options()>) -> IO(Output()):
   lease(events => signal => PiMessages.streamSimple(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~Tools.errorMessage, ~noDetails, ~unitDetails, ~Tools.detailsValue, events, fetch, urlContext, signal, model, context, options, None{}), parentSignal(options))
+
+def MistralOptions() -> Data: Mistral.Options(Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error())
+
+# upstream mistral-conversations streamSimple, whose missing-key error is
+# thrown before a stream exists.
+def mistralSelected(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), parent: Maybe<&2, Abort.AbortSignal<Unit>>, selected: Result<&2, &2, String, MistralOptions()>) -> IO(Output()):
+  match selected:
+    case Fail{message}: IO.pure(Output(), Fail{Tools.Failure{message}})
+    case Done{options}: lease(events => signal => Mistral.stream(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~Tools.errorMessage, events, fetch, urlContext, signal, model, context, options), parent)
+
+def mistral(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +context: Context(), +options: Maybe<&2, Options()>) -> IO(Output()):
+  mistralSelected(fetch, urlContext, model, context, parentSignal(options), Mistral.streamSimpleOptions(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, context, options))

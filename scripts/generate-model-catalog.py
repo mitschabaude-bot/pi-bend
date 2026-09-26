@@ -23,6 +23,9 @@ APIS = {
     'azure-openai-responses': 'T.AzureOpenAIResponsesApi{}',
     'anthropic-messages': 'T.AnthropicMessagesApi{}',
     'google-generative-ai': 'T.GoogleGenerativeAiApi{}',
+    'google-vertex': 'T.GoogleVertexApi{}',
+    'mistral-conversations': 'T.MistralConversationsApi{}',
+    'bedrock-converse-stream': 'T.BedrockConverseStreamApi{}',
 }
 # Field order follows packages/ai/src/types.bend.
 RESPONSES_COMPAT = ['supportsDeveloperRole', 'supportsMidConvoSystemMessages', 'sessionAffinityFormat', 'supportsLongCacheRetention', 'supportsStrictMode', 'supportsOpenAIGrammarTools', 'supportsAdditionalTools', 'supportsToolSearch', 'supportsExplicitPromptCacheMode', 'supportsMaxOutputTokens']
@@ -222,6 +225,8 @@ COMPAT_RENDERERS = {
         'allowedFallbackModels': lambda v: ordered([fallback_model(m) for m in v]),
     }),
 }
+COMPAT_RENDERERS['bedrock-converse-stream'] = ('T.BedrockCompat', {'supportsStrictMode': boolean})
+COMPAT_RENDERERS['mistral-conversations'] = ('T.MistralConversationsCompat', {'supportsMidConvoSystemMessages': boolean})
 COMPAT_RENDERERS['openai-codex-responses'] = COMPAT_RENDERERS['openai-responses']
 COMPAT_RENDERERS['azure-openai-responses'] = COMPAT_RENDERERS['openai-responses']
 

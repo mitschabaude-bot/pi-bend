@@ -974,27 +974,47 @@
     },
     {
       "source": "packages/ai/test/mistral-http-transport.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "84e4809fa5b4caadb4fd429ba6f69134ee149a8532383aae8e3a23df05e888cc"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/mistral.bend",
+        "packages/ai/test/mistral-oracle.ts",
+        "tests/mistral_check.py"
+      ],
+      "sha256": "84e4809fa5b4caadb4fd429ba6f69134ee149a8532383aae8e3a23df05e888cc",
+      "notes": "All eight cases. Case names and assertions are upstream's; the checker (tests/mistral_check.py) runs packages/ai/test/mistral.bend on Bun and native one/four threads against a loopback server answering as the upstream fetch stubs do, and compares payloads, onResponse values, every event and the final message with upstream mistral-conversations.ts (Node) against the same server. Adaptations: requests go to the loopback base URL, so the request-URL assertion checks the path /v1/chat/completions; the 5 ms timeout case ignores whether the deadline struck before the response head (only then is start pushed)."
     },
     {
       "source": "packages/ai/test/mistral-raw-stop-reason.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "74d6b01a34b58cd472fe7712f99b383a7c1f6337b7244249ab316f8f1777a030"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/mistral.bend",
+        "packages/ai/test/mistral-oracle.ts",
+        "tests/mistral_check.py"
+      ],
+      "sha256": "74d6b01a34b58cd472fe7712f99b383a7c1f6337b7244249ab316f8f1777a030",
+      "notes": "All three cases. Case names and assertions are upstream's; the checker (tests/mistral_check.py) runs packages/ai/test/mistral.bend on Bun and native one/four threads against a loopback server answering as the upstream fetch stubs do, and compares payloads, onResponse values, every event and the final message with upstream mistral-conversations.ts (Node) against the same server. Adaptations: requests go to the loopback base URL, so the request-URL assertion checks the path /v1/chat/completions; the 5 ms timeout case ignores whether the deadline struck before the response head (only then is start pushed)."
     },
     {
       "source": "packages/ai/test/mistral-reasoning-mode.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "82c283a911382bf5f5389f130986a002df76f2d5f1e156a8520d51ab06fad292"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/mistral.bend",
+        "packages/ai/test/mistral-oracle.ts",
+        "tests/mistral_check.py"
+      ],
+      "sha256": "82c283a911382bf5f5389f130986a002df76f2d5f1e156a8520d51ab06fad292",
+      "notes": "All twelve cases, including both describe.each Medium aliases; the capture goes through streamSimple's onPayload before the request to 127.0.0.1:9 fails. Case names and assertions are upstream's; the checker (tests/mistral_check.py) runs packages/ai/test/mistral.bend on Bun and native one/four threads against a loopback server answering as the upstream fetch stubs do, and compares payloads, onResponse values, every event and the final message with upstream mistral-conversations.ts (Node) against the same server. Adaptations: requests go to the loopback base URL, so the request-URL assertion checks the path /v1/chat/completions; the 5 ms timeout case ignores whether the deadline struck before the response head (only then is start pushed)."
     },
     {
       "source": "packages/ai/test/mistral-tool-schema.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9e913e9c49c2a9a2d1cfd4dc8d137a154e005b9291d06489e52136b92e5db24e"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/mistral.bend",
+        "packages/ai/test/mistral-oracle.ts",
+        "tests/mistral_check.py"
+      ],
+      "sha256": "9e913e9c49c2a9a2d1cfd4dc8d137a154e005b9291d06489e52136b92e5db24e",
+      "notes": "The one case, through stream with the strict-required tool (upstream complete routes to the same stream); TypeBox symbol keys have no native counterpart, so the check is the strict flag, the plain nested parameters and the non-validation error. Case names and assertions are upstream's; the checker (tests/mistral_check.py) runs packages/ai/test/mistral.bend on Bun and native one/four threads against a loopback server answering as the upstream fetch stubs do, and compares payloads, onResponse values, every event and the final message with upstream mistral-conversations.ts (Node) against the same server. Adaptations: requests go to the loopback base URL, so the request-URL assertion checks the path /v1/chat/completions; the 5 ms timeout case ignores whether the deadline struck before the response head (only then is start pushed)."
     },
     {
       "source": "packages/ai/test/model-catalog-types.test.ts",
