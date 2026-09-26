@@ -893,9 +893,13 @@
     },
     {
       "source": "packages/ai/test/env-api-keys.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2c45db2fa2cc09996f22ae8d0e576d04f4b542ce353f87bb9b29f73238e3ff44"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/env-api-keys.bend",
+        "tests/env_api_keys_check.py"
+      ],
+      "sha256": "2c45db2fa2cc09996f22ae8d0e576d04f4b542ce353f87bb9b29f73238e3ff44",
+      "notes": "All seven named tests pass on Bun and native 1/4 threads (tests/env_api_keys_check.py). Upstream mutates process.env; each case passes its variables as the provider env, which getProviderEnvValue reads first, and the check removes provider credentials from the process environment (the program refuses to run otherwise). A 410-case differential of findEnvKeys/getEnvApiKey over every upstream provider accompanies it."
     },
     {
       "source": "packages/ai/test/error-body.test.ts",

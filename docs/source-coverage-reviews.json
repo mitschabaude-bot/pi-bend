@@ -948,6 +948,14 @@
         "packages/tui/src/tui-base.bend": "30f0b8d62c944c64137631db5fd17ef30803ccc4603ea9e729c48bc18cb12842",
         "packages/tui/src/tui-process.bend": "6d39bd17f75c13210681087f7b66416e024ce0e66416e36f58b0e345cddc23e5"
       }
+    },
+    "packages/ai/src/env-api-keys.ts": {
+      "state": "ported",
+      "note": "Ported to packages/ai/src/env-api-keys.bend: getApiKeyEnvVars (the provider table, Copilot's COPILOT_GITHUB_TOKEN and Anthropic's AUTH/OAUTH/API order), findEnvKeys, getEnvApiKey (skipping ANTHROPIC_AUTH_TOKEN, ambient Vertex ADC and Bedrock credentials as '<authenticated>') over getProviderEnvValue. tests/env_api_keys_check.py runs the named suite and compares 410 provider/environment cases with pinned pi-mono. Documented difference: upstream memoizes the default gcloud ADC file check in a module variable; the port checks the file on each call. The CLI resolves keys through the providers' auth helpers, so this module is not on its request path.",
+      "source_sha256": "c19591b8ba8451ed34de143162abd36fbd746b62dc406d3fb360e1cb05fd6370",
+      "port_sha256": {
+        "packages/ai/src/env-api-keys.bend": "fc9cc3764ff0d2de12ec2f40a748725aaee5c71c879635e3ffc7e2865921f04d"
+      }
     }
   }
 }
