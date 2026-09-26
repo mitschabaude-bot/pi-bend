@@ -28,6 +28,7 @@ import ./agent-runtime.bend as Runtime
 import ./extensions/context.bend as Ctx
 import ./extensions/runner.bend as ExtensionRunner
 import ./extensions/types.bend as ExtensionTypes
+import ./extensions/loader.bend as ExtensionLoader
 import ./model-runtime.bend as Models
 import ./messages.bend as Messages
 import ./skills.bend as Skills
@@ -227,7 +228,11 @@ type RunningBash is Data:
   RunningBash{ticket: Nat, controller: A.AbortController<Unit>}
 type BashState is Data:
   BashState{running: List<&2, RunningBash>, next: Nat, pending: List<&2, Message()>}
-type RunState is Data: RunState{active: Bool,abortRequested: Bool}
+# `turnIndex` counts the turns of the current agent run for extension
+# turn events (upstream _turnIndex).
+# `idleWaiters` are waitForIdle calls waiting for the session to be idle
+# (upstream _idleWaitPromise).
+type RunState is Data: RunState{active: Bool,abortRequested: Bool,turnIndex: Nat,idleWaiters: List<&2, Chan(Unit)>}
 # Extension custom messages sent while the agent streams (upstream
 # _pendingCustomMessages), appended at the end of the turn, and those sent for
 # the next turn (upstream _pendingNextTurnMessages), which join the next prompt.
@@ -252,8 +257,10 @@ type Warming is Data:
 # What the session binds its extension runner to (upstream
 # _bindExtensionCore): the context actions, and the refresh of the current
 # model after an extension changed a provider.
+# `sessionActions` are pi.sendMessage and pi.sendUserMessage, bound once the
+# session exists.
 type ExtensionBinding is Data:
-  ExtensionBinding{actions: Ctx.ExtensionContextActions, providersChanged: C.Callback<Unit, Unit>}
+  ExtensionBinding{actions: Ctx.ExtensionContextActions, providersChanged: C.Callback<Unit, Unit>, sessionActions: R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>>}
 
 # The session's handles on the agent: its event subscription, the
 # next-turn, request and stream hooks that replaced the agent's own
@@ -268,10 +275,15 @@ type StatsMemo is Data: StatsMemo{key: StatsKey, stats: Result<&2, &2, S.Error, 
 def AfterToolInput() -> Data: T.ToolHookInput<T.AfterToolCallContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>
 def AfterToolResult() -> Data: Result<&2, &2, Runtime.Error(), Maybe<&2, T.AfterToolCallResult<Runtime.Details()>>>
 def AfterToolHook() -> Data: C.Callback<T.ToolHookInput<T.AfterToolCallContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>, Result<&2, &2, Runtime.Error(), Maybe<&2, T.AfterToolCallResult<Runtime.Details()>>>>
-type ToolResultHooks is Data: ToolResultHooks{hook: AfterToolHook(), replaced: Maybe<&2, AfterToolHook()>}
+def BeforeToolInput() -> Data: T.ToolHookInput<T.BeforeToolCallContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>
+def BeforeToolResult() -> Data: Result<&2, &2, Runtime.Error(), T.BeforeToolCallUpdate<T.AgentContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>>
+def BeforeToolHook() -> Data: C.Callback<BeforeToolInput(), BeforeToolResult()>
+# upstream _installAgentToolHooks: the hooks the session installed on the
+# agent and those they replaced (restored on dispose).
+type ToolHooks is Data: ToolHooks{hook: AfterToolHook(), replaced: Maybe<&2, AfterToolHook()>, before: BeforeToolHook(), replacedBefore: Maybe<&2, BeforeToolHook()>}
 
 type SessionHooks is Data:
-  SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>, request: T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()), replacedRequest: Maybe<&2, T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>, context: ExtensionBinding, warming: Warming, stats: R.Ref<Maybe<&2, StatsMemo>>, toolResults: ToolResultHooks}
+  SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>, request: T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()), replacedRequest: Maybe<&2, T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>, context: ExtensionBinding, warming: Warming, stats: R.Ref<Maybe<&2, StatsMemo>>, toolResults: ToolHooks}
 
 type AgentSession is Data:
   AgentSession{agent: Runtime.Owner(), shared: R.Ref<Shared>, hooks: SessionHooks, settings: R.Ref<Settings.SettingsManager>, cwd: String, loadout: R.Ref<Runtime.Loadout>, models: Models.ModelRuntime, scoped: R.Ref<List<&2, Models.ScopedModel>>}
@@ -286,8 +298,8 @@ def withSession(state: Shared, session: Session()) -> Shared:
 
 def withRunActive(state: Shared, +active: Bool) -> Shared:
   match state:
-    case Shared{session, steering, followUp, listeners, RunState{_,requested}, lastAssistant, retry, compaction, bash, pendingMessages}:
-      Shared{session, steering, followUp, listeners, RunState{active,Bool.pick(Bool,active,False{},requested)}, lastAssistant, retry, compaction, bash, pendingMessages}
+    case Shared{session, steering, followUp, listeners, RunState{_,requested,turn,waiters}, lastAssistant, retry, compaction, bash, pendingMessages}:
+      Shared{session, steering, followUp, listeners, RunState{active,Bool.pick(Bool,active,False{},requested),turn,waiters}, lastAssistant, retry, compaction, bash, pendingMessages}
 
 def deliver(listeners: List<&2, Listener()>, +event: AgentSessionEvent) -> IO(Unit):
   match listeners:
@@ -585,7 +597,7 @@ def retryableLast(found: Maybe<&2, Ai.AssistantMessage<V.Value, Unit>>, contextW
 
 def willRetryAfterAgentEnd(state: Shared, messages: List<&2, Message()>) -> Bool:
   match state:
-    case Shared{_, _, _, _, RunState{_,True{}}, _, _, _, _, pendingMessages}: False{}
+    case Shared{_, _, _, _, RunState{_,True{},_,_}, _, _, _, _, pendingMessages}: False{}
     case Shared{_, _, _, _, _, _, RetryState{Retry.RetryPolicy{enabled, maxRetries, _, _}, attempt, contextWindow, _}, _, _, pendingMessages}:
       Bool.and(enabled, Bool.and(Nat.is_lt(attempt, maxRetries), retryableLast(lastAssistantIn(messages, None{}), contextWindow)))
 
@@ -679,24 +691,105 @@ def flushPendingCustom(+agent: Runtime.Owner(), +shared: R.Ref<Shared>) -> IO(Un
     pending : List<&2, Message()> <- R.modify(Shared, List<&2, Message()>, shared, takenCustom)
     appendCustomMessages(agent, shared, pending)
 
-# upstream sendCustomMessage's message: Pick<CustomMessage, "customType" |
-# "content" | "display" | "details">.
-type CustomMessageInput is Data:
-  CustomMessageInput{customType: String, content: Ai.UserContent, display: Bool, details: Maybe<&2, V.Value>}
+def sendDefaults() -> ExtensionTypes.SendMessageOptions: ExtensionTypes.SendMessageOptions{None{}, None{}}
 
-type DeliverAs is Data:
-  DeliverSteer{}
-  DeliverFollowUp{}
-  DeliverNextTurn{}
-
-type SendMessageOptions is Data:
-  SendMessageOptions{triggerTurn: Maybe<&2, Bool>, deliverAs: Maybe<&2, DeliverAs>}
-
-def sendDefaults() -> SendMessageOptions: SendMessageOptions{None{}, None{}}
-
-def customMessageAt(input: CustomMessageInput, now: F64) -> Message():
+def customMessageAt(input: ExtensionTypes.CustomMessageInput, now: F64) -> Message():
   match input:
-    case CustomMessageInput{customType, content, display, details}: T.CustomMessage{Messages.Custom{Messages.CustomMessage{customType, content, display, details, now}}}
+    case ExtensionTypes.CustomMessageInput{customType, content, display, details}: T.CustomMessage{Messages.Custom{Messages.CustomMessage{customType, content, display, details, now}}}
+
+# Extension events
+# ----------------
+# upstream _emitExtensionEvent: agent events reach the extensions before the
+# session's listeners. message_end handlers may replace the finalized
+# message; the listeners, the session entry and the agent's context then
+# carry the replacement (upstream replaces the message object in place).
+# turn_end reaches extensions through the boundary dispatch, not ported.
+
+def runnerIn(loadout: Runtime.Loadout) -> Maybe<&2, ExtensionRunner.ExtensionRunner>:
+  match loadout:
+    case Runtime.Loadout{_, _, _, _, runner, _, _, _}: runner
+
+def currentRunner(loadout: R.Ref<Runtime.Loadout>) -> IO(Maybe<&2, ExtensionRunner.ExtensionRunner>):
+  do IO<Maybe<&2, ExtensionRunner.ExtensionRunner>>:
+    current : Runtime.Loadout <- R.read(Runtime.Loadout, loadout)
+    return runnerIn(current)
+
+def turnIndexOf(state: Shared) -> Nat:
+  match state:
+    case Shared{_, _, _, _, RunState{_, _, turn, _}, _, _, _, _, _}: turn
+
+def withTurnIndex(state: Shared, +turn: Nat) -> Shared:
+  match state:
+    case Shared{session, steering, followUp, listeners, RunState{active, requested, _, waiters}, lastAssistant, retry, compaction, bash, pendingMessages}: Shared{session, steering, followUp, listeners, RunState{active, requested, turn, waiters}, lastAssistant, retry, compaction, bash, pendingMessages}
+
+# agent_start restarts the turn count; each turn_end advances it.
+def turnStarted(+state: Shared, event: SessionEvent()) -> Shared:
+  match event:
+    case T.AgentStart{}: withTurnIndex(state, 0n)
+    case _: state
+
+def turnEnded(+state: Shared, event: SessionEvent()) -> Shared:
+  match event:
+    case T.TurnEnd{_, _}: withTurnIndex(state, Nat.add(turnIndexOf(state), 1n))
+    case _: state
+
+def extensionEventOf(event: SessionEvent(), +turnIndex: Nat, +now: F64) -> Maybe<&2, ExtensionTypes.ExtensionEvent>:
+  match event:
+    case T.AgentStart{}: Some{ExtensionTypes.AgentStart{ExtensionTypes.AgentStartEvent{}}}
+    case T.AgentEnd{messages}: Some{ExtensionTypes.AgentEnd{ExtensionTypes.AgentEndEvent{messages}}}
+    case T.TurnStart{}: Some{ExtensionTypes.TurnStart{ExtensionTypes.TurnStartEvent{turnIndex, now}}}
+    case T.MessageStart{message}: Some{ExtensionTypes.MessageStart{ExtensionTypes.MessageStartEvent{message}}}
+    case T.MessageUpdate{message, update}: Some{ExtensionTypes.MessageUpdate{ExtensionTypes.MessageUpdateEvent{message, update}}}
+    case T.ToolExecutionStart{id, name, args}: Some{ExtensionTypes.ToolExecutionStart{ExtensionTypes.ToolExecutionStartEvent{id, name, args}}}
+    case T.ToolExecutionUpdate{id, name, args, partial}: Some{ExtensionTypes.ToolExecutionUpdate{ExtensionTypes.ToolExecutionUpdateEvent{id, name, args, partial}}}
+    case T.ToolExecutionEnd{id, name, result, isError}: Some{ExtensionTypes.ToolExecutionEnd{ExtensionTypes.ToolExecutionEndEvent{id, name, result, isError}}}
+    case _: None{}
+
+def emitExtension(+runner: ExtensionRunner.ExtensionRunner, event: Maybe<&2, ExtensionTypes.ExtensionEvent>) -> IO(Unit):
+  match event:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{value}: ExtensionRunner.emit(runner, value)
+
+type Dispatched is Data:
+  Dispatched{event: SessionEvent(), replaced: Bool}
+
+def endedWith(+event: SessionEvent(), replacement: Maybe<&2, Message()>) -> Dispatched:
+  match replacement:
+    case Some{message}: Dispatched{T.MessageEnd{message}, True{}}
+    case None{}: Dispatched{event, False{}}
+
+def dispatchWith(+runner: ExtensionRunner.ExtensionRunner, shared: R.Ref<Shared>, +event: SessionEvent()) -> IO(Dispatched):
+  match event:
+    case T.MessageEnd{+message}:
+      do IO<Dispatched>:
+        replacement : Maybe<&2, Message()> <- ExtensionRunner.emitMessageEnd(runner, ExtensionTypes.MessageEndEvent{message})
+        return endedWith(T.MessageEnd{message}, replacement)
+    case other:
+      do IO<Dispatched>:
+        state : Shared <- R.read(Shared, shared)
+        now : F64 <- Date.now()
+        emitExtension(runner, extensionEventOf(other, turnIndexOf(state), now))
+        return Dispatched{other, False{}}
+
+def dispatchExtension(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, shared: R.Ref<Shared>, +event: SessionEvent()) -> IO(Dispatched):
+  match runner:
+    case None{}: IO.pure(Dispatched, Dispatched{event, False{}})
+    case Some{found}: dispatchWith(found, shared, event)
+
+def dispatchedEvent(value: Dispatched) -> SessionEvent():
+  match value:
+    case Dispatched{event, _}: event
+
+def dispatchedReplaced(value: Dispatched) -> Bool:
+  match value:
+    case Dispatched{_, replaced}: replaced
+
+# The agent's context already holds the original message; a replacement
+# enters it from the session's projection.
+def refreshIfReplaced(agent: Runtime.Owner(), shared: R.Ref<Shared>, replaced: Bool) -> IO(Unit):
+  match replaced:
+    case True{}: refreshContext(agent, shared)
+    case False{}: IO.pure(Unit, Unit{})
 
 # A turn ends after its assistant message and every tool result were
 # appended: custom messages sent meanwhile are appended now, so none lands
@@ -707,25 +800,32 @@ def flushAtTurnEnd(agent: Runtime.Owner(), shared: R.Ref<Shared>, event: Session
     case _: IO.pure(Unit, Unit{})
 
 type EventEnv is Data:
-  EventEnv{agent: Runtime.Owner(), shared: R.Ref<Shared>}
+  EventEnv{agent: Runtime.Owner(), shared: R.Ref<Shared>, loadout: R.Ref<Runtime.Loadout>}
 
-# The agent's event handler: queue bookkeeping, listeners, then persistence.
-def handleEvent(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, input: Agent.Input<SessionEvent()>) -> IO(Loop.Emission<Runtime.Error()>):
+# The agent's event handler: queue bookkeeping, extensions, listeners, then
+# persistence.
+def handleEvent(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, loadout: R.Ref<Runtime.Loadout>, input: Agent.Input<SessionEvent()>) -> IO(Loop.Emission<Runtime.Error()>):
   match input:
     case Agent.Input{+event, _}:
       do IO<Loop.Emission<Runtime.Error()>>:
         trimQueues(shared, startedText(event))
+        runner : Maybe<&2, ExtensionRunner.ExtensionRunner> <- currentRunner(loadout)
+        R.modify(Shared, Unit, shared, current => (turnStarted(current, event), Unit{}))
+        +dispatched : Dispatched <- dispatchExtension(runner, shared, event)
+        +final : SessionEvent() = dispatchedEvent(dispatched)
         state : Shared <- R.read(Shared, shared)
-        emit(shared, sessionEventIn(state, event))
-        persist(shared, event)
-        settleRetry(shared, event)
-        flushAtTurnEnd(agent, shared, event)
+        emit(shared, sessionEventIn(state, final))
+        persist(shared, final)
+        refreshIfReplaced(agent, shared, dispatchedReplaced(dispatched))
+        settleRetry(shared, final)
+        R.modify(Shared, Unit, shared, current => (turnEnded(current, final), Unit{}))
+        flushAtTurnEnd(agent, shared, final)
         return ready()
 
 # Callback bodies cannot copy their environment; the copy happens inside.
 def handleAgentEvent(env: EventEnv, input: Agent.Input<SessionEvent()>) -> IO(Loop.Emission<Runtime.Error()>):
   match env:
-    case EventEnv{agent, shared}: handleEvent(agent, shared, input)
+    case EventEnv{agent, shared, loadout}: handleEvent(agent, shared, loadout, input)
 
 # Lifecycle
 # ---------
@@ -804,14 +904,54 @@ def abortBranchSummaryOf(shared: R.Ref<Shared>) -> IO(Unit):
 
 def runActiveOf(value: Shared) -> Bool:
   match value:
-    case Shared{_, _, _, _, RunState{active,_}, _, _, _, _, pendingMessages}: active
+    case Shared{_, _, _, _, RunState{active,_,_,_}, _, _, _, _, pendingMessages}: active
 def abortRequestedOf(value: Shared) -> Bool:
   match value:
-    case Shared{_, _, _, _, RunState{_,requested}, _, _, _, _, pendingMessages}: requested
+    case Shared{_, _, _, _, RunState{_,requested,_,_}, _, _, _, _, pendingMessages}: requested
 def requestRunAbort(value: Shared) -> Shared:
   match value:
-    case Shared{session,steering,followUp,listeners,RunState{+active,requested},lastAssistant,retry,compaction,bash,pendingMessages}:
-      Shared{session,steering,followUp,listeners,RunState{active,active || requested},lastAssistant,retry,compaction,bash,pendingMessages}
+    case Shared{session,steering,followUp,listeners,RunState{+active,requested,turn,waiters},lastAssistant,retry,compaction,bash,pendingMessages}:
+      Shared{session,steering,followUp,listeners,RunState{active,active || requested,turn,waiters},lastAssistant,retry,compaction,bash,pendingMessages}
+
+def hasController(compaction: CompactionState) -> Bool:
+  match compaction:
+    case CompactionState{_, manual, auto, branch}: Bool.or(Bool.or(Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, manual)), Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, auto))), Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, branch)))
+
+# Idle waiting
+# ------------
+# upstream isIdle: no agent run and no compaction or branch summary.
+def idleIn(+state: Shared) -> Bool:
+  Bool.and(Bool.not(runActiveOf(state)), Bool.not(hasController(compactionOf(state))))
+
+def waitersOf(state: Shared) -> List<&2, Chan(Unit)>:
+  match state:
+    case Shared{_, _, _, _, RunState{_, _, _, waiters}, _, _, _, _, _}: waiters
+
+def withWaiters(state: Shared, waiters: List<&2, Chan(Unit)>) -> Shared:
+  match state:
+    case Shared{session, steering, followUp, listeners, RunState{active, requested, turn, _}, lastAssistant, retry, compaction, bash, pendingMessages}: Shared{session, steering, followUp, listeners, RunState{active, requested, turn, waiters}, lastAssistant, retry, compaction, bash, pendingMessages}
+
+# A waiter is registered only while the session is busy, atomically with
+# the check.
+def registerWaiter(+state: Shared, +waiter: Chan(Unit)) -> Shared & Bool:
+  Bool.pick(Shared & Bool, idleIn(state), (state, False{}), (withWaiters(state, waiter <> waitersOf(state)), True{}))
+
+def takeWaitersIfIdle(+state: Shared) -> Shared & List<&2, Chan(Unit)>:
+  Bool.pick(Shared & List<&2, Chan(Unit)>, idleIn(state), (withWaiters(state, Nil{}), waitersOf(state)), (state, Nil{}))
+
+def wake(waiters: List<&2, Chan(Unit)>) -> IO(Unit):
+  match waiters:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case waiter <> rest:
+      do IO<Unit>:
+        sent : Bool <- Chan.send(Unit, waiter, Unit{})
+        wake(rest)
+
+# upstream _resolveIdleWaitIfIdle.
+def resolveIdleWait(shared: R.Ref<Shared>) -> IO(Unit):
+  do IO<Unit>:
+    waiters : List<&2, Chan(Unit)> <- R.modify(Shared, List<&2, Chan(Unit)>, shared, current => takeWaitersIfIdle(current))
+    wake(waiters)
 
 # User bash
 # ---------
@@ -1109,21 +1249,35 @@ def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime) -> IO
       do IO<ExtensionBinding>:
         actions : Ctx.ExtensionContextActions <- createContextActions(ContextEnv{agent, shared, scoped, settings})
         changed : C.Callback<Unit, Unit> <- C.create(~ModelEnv, ~Unit, ~Unit, ~refreshCurrentModel, ModelEnv{agent, models})
-        return ExtensionBinding{actions, changed}
+        sessionActions : R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>> <- R.new(Maybe<&2, ExtensionTypes.ExtensionActions>, None{})
+        return ExtensionBinding{actions, changed, sessionActions}
+
+def disposeSessionActions(actions: Maybe<&2, ExtensionTypes.ExtensionActions>) -> IO(Unit):
+  match actions:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{ExtensionTypes.ExtensionActions{send, sendUser}}:
+      do IO<Unit>:
+        C.dispose(ExtensionTypes.SendMessage, Unit, send)
+        C.dispose(ExtensionTypes.SendUserMessage, Unit, sendUser)
 
 def disposeExtensionBinding(binding: ExtensionBinding) -> IO(Unit):
   match binding:
-    case ExtensionBinding{Ctx.ExtensionContextActions{reader, aborter, stopper}, changed}:
+    case ExtensionBinding{Ctx.ExtensionContextActions{reader, aborter, stopper}, changed, sessionActions}:
       do IO<Unit>:
         C.dispose(Unit, Ctx.SessionState, reader)
         C.dispose(Unit, Unit, aborter)
         C.dispose(Unit, Unit, stopper)
         C.dispose(Unit, Unit, changed)
+        bound : Maybe<&2, ExtensionTypes.ExtensionActions> <- R.dispose(Maybe<&2, ExtensionTypes.ExtensionActions>, sessionActions)
+        disposeSessionActions(bound)
 
-def boundWith(runner: ExtensionRunner.ExtensionRunner, binding: Maybe<&2, ExtensionBinding>) -> IO(Unit):
+def boundWith(+runner: ExtensionRunner.ExtensionRunner, binding: Maybe<&2, ExtensionBinding>) -> IO(Unit):
   match binding:
-    case None{}: ExtensionRunner.bindCore(runner, None{}, None{})
-    case Some{ExtensionBinding{actions, changed}}: ExtensionRunner.bindCore(runner, Some{actions}, Some{changed})
+    case None{}:
+      do IO<Unit>:
+        ExtensionLoader.bindActions(ExtensionRunner.runtimeOf(runner), None{})
+        ExtensionRunner.bindCore(runner, None{}, None{})
+    case Some{ExtensionBinding{actions, changed, _}}: ExtensionRunner.bindCore(runner, Some{actions}, Some{changed})
 
 def bindContext(loadout: Runtime.Loadout, binding: Maybe<&2, ExtensionBinding>) -> IO(Unit):
   match loadout:
@@ -1173,7 +1327,7 @@ def shutdown(session: AgentSession) -> IO(Unit):
 
 def retire(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{+agent, shared, SessionHooks{_, handler, nextTurn, replaced, request, replacedRequest, context, _, stats, ToolResultHooks{afterTool, replacedAfterTool}}, settings, _, loadout, _, _}:
+    case AgentSession{+agent, shared, SessionHooks{_, handler, nextTurn, replaced, request, replacedRequest, context, _, stats, ToolHooks{afterTool, replacedAfterTool, beforeTool, replacedBeforeTool}}, settings, _, loadout, _, _}:
       do IO<Unit>:
         C.dispose(Agent.Input<SessionEvent()>, Loop.Emission<Runtime.Error()>, handler)
         Agent.setPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replaced)
@@ -1181,6 +1335,8 @@ def retire(session: AgentSession) -> IO(Unit):
         Agent.setPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedRequest)
         Agent.setAfterToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedAfterTool)
         C.dispose(AfterToolInput(), AfterToolResult(), afterTool)
+        Agent.setBeforeToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedBeforeTool)
+        C.dispose(BeforeToolInput(), BeforeToolResult(), beforeTool)
         C.dispose(T.ToolHookInput<T.PrepareRequestContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>, Result<&2, &2, Runtime.Error(), Maybe<&2, T.AgentRequestUpdate<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>>, request)
         current : Runtime.Loadout <- R.dispose(Runtime.Loadout, loadout)
         bindContext(current, None{})
@@ -1668,6 +1824,7 @@ def autoCompactPrepared(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +model:
         result : Result<&2, &2, String, Compaction.CompactionResult> <- Bool.pick(Unit -> IO(Result<&2, &2, String, Compaction.CompactionResult>), cancelledAtStart, _ => IO.pure(Result<&2, &2, String, Compaction.CompactionResult>, Fail{"Compaction cancelled"}), _ => runDefaultCompaction(agent, shared, model, prepared, None{}, A.signal(Unit, controller), reason))(Unit{})
         aborted : Bool <- A.aborted(Unit, A.signal(Unit, controller))
         R.modify(Shared, Unit, shared, current => (setAutoController(current, None{}), Unit{}))
+        resolveIdleWait(shared)
         A.dispose(Unit, controller)
         finishAuto(agent, shared, reason, willRetry, aborted, result)
 
@@ -1970,7 +2127,7 @@ def requestHook(env: RequestEnv, input: RequestInput()) -> IO(RequestResult()):
 # handlers, not ported), so images such a hook injects are normalized too.
 
 type AfterToolEnv is Data:
-  AfterToolEnv{agent: Runtime.Owner(), settings: R.Ref<Settings.SettingsManager>, previous: Maybe<&2, AfterToolHook()>}
+  AfterToolEnv{agent: Runtime.Owner(), settings: R.Ref<Settings.SettingsManager>, previous: Maybe<&2, AfterToolHook()>, loadout: R.Ref<Runtime.Loadout>}
 
 def previousAfterTool(previous: Maybe<&2, AfterToolHook()>, +input: AfterToolInput()) -> IO(AfterToolResult()):
   match previous:
@@ -2004,15 +2161,64 @@ def toolCallResult(context: T.AfterToolCallContext<Unit, Runtime.Details(), Runt
   match context:
     case T.AfterToolCallContext{_, _, _, result, _, _}: result
 
+# upstream emitToolResult through the extension runner: the result as the
+# tool_result handlers patched it.
+def extensionToolResult(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, context: T.AfterToolCallContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>) -> IO(Maybe<&2, ExtensionTypes.ToolResultEventResult>):
+  match runner context:
+    case None{} _: IO.pure(Maybe<&2, ExtensionTypes.ToolResultEventResult>, None{})
+    case Some{found} T.AfterToolCallContext{_, Ai.ToolCall{id, name, _, _, _}, args, T.AgentToolResult{content, details, usage, _}, isError, _}:
+      ExtensionRunner.emitToolResult(found, ExtensionTypes.ToolResultEvent{id, name, args, content, details, isError, usage})
+
+# The extension patch applies over the result of a hook the agent had.
+def combinedToolResult(hooked: AfterToolResult(), patch: Maybe<&2, ExtensionTypes.ToolResultEventResult>) -> AfterToolResult():
+  match hooked patch:
+    case Fail{error} _: Fail{error}
+    case Done{found} None{}: Done{found}
+    case Done{None{}} Some{ExtensionTypes.ToolResultEventResult{content, details, isError, usage}}: Done{Some{T.AfterToolCallResult{content, details, isError, usage, None{}}}}
+    case Done{Some{T.AfterToolCallResult{oldContent, oldDetails, oldIsError, oldUsage, terminate}}} Some{ExtensionTypes.ToolResultEventResult{content, details, isError, usage}}: Done{Some{T.AfterToolCallResult{Maybe.or(&2, List<&2, Ai.TextImageContent>, content, oldContent), Maybe.or(&2, Runtime.Details(), details, oldDetails), Maybe.or(&2, Bool, isError, oldIsError), Maybe.or(&2, Ai.Usage, usage, oldUsage), terminate}}}
+
 def afterToolHook(env: AfterToolEnv, input: AfterToolInput()) -> IO(AfterToolResult()):
   match env input:
-    case AfterToolEnv{+agent, settingsRef, previous} T.ToolHookInput{+context, signal}:
+    case AfterToolEnv{+agent, settingsRef, previous, loadout} T.ToolHookInput{+context, signal}:
       do IO<AfterToolResult()>:
         hooked : AfterToolResult() <- previousAfterTool(previous, T.ToolHookInput{context, signal})
+        runner : Maybe<&2, ExtensionRunner.ExtensionRunner> <- currentRunner(loadout)
+        patch : Maybe<&2, ExtensionTypes.ToolResultEventResult> <- extensionToolResult(runner, context)
         +result : T.AgentToolResult<Runtime.Details()> = toolCallResult(context)
         settings : Settings.SettingsManager <- R.read(Settings.SettingsManager, settingsRef)
         current : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-        return normalizedToolResult(resultContent(result), toolImageOptions(settings, stateModel(current)), hooked)
+        return normalizedToolResult(resultContent(result), toolImageOptions(settings, stateModel(current)), combinedToolResult(hooked, patch))
+
+# upstream beforeToolCall: tool_call handlers may block a call (with a
+# reason, and a hint to stop after the batch); a failing handler blocks it
+# with its error.
+type BeforeToolEnv is Data:
+  BeforeToolEnv{loadout: R.Ref<Runtime.Loadout>}
+
+def blockResult(found: Maybe<&2, ExtensionTypes.ToolCallEventResult>) -> Maybe<&2, T.BeforeToolCallResult>:
+  match found:
+    case None{}: None{}
+    case Some{ExtensionTypes.ToolCallEventResult{block, reason, terminate}}: Some{T.BeforeToolCallResult{block, reason, terminate}}
+
+def toolCallDecision(+args: V.Value, +context: Context(), result: Result<&2, &2, String, Maybe<&2, ExtensionTypes.ToolCallEventResult>>) -> BeforeToolResult():
+  match result:
+    case Fail{message}: Fail{Tools.Failure{message}}
+    case Done{found}: Done{T.BeforeToolCallUpdate{args, context, blockResult(found)}}
+
+def beforeToolFor(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, input: BeforeToolInput()) -> IO(BeforeToolResult()):
+  match runner input:
+    case None{} T.ToolHookInput{T.BeforeToolCallContext{_, _, args, context}, _}: IO.pure(BeforeToolResult(), Done{T.BeforeToolCallUpdate{args, context, None{}}})
+    case Some{found} T.ToolHookInput{T.BeforeToolCallContext{_, Ai.ToolCall{id, name, _, _, _}, +args, +context}, _}:
+      do IO<BeforeToolResult()>:
+        result : Result<&2, &2, String, Maybe<&2, ExtensionTypes.ToolCallEventResult>> <- ExtensionRunner.emitToolCall(found, ExtensionTypes.ToolCallEvent{id, name, args})
+        return toolCallDecision(args, context, result)
+
+def beforeToolHook(env: BeforeToolEnv, input: BeforeToolInput()) -> IO(BeforeToolResult()):
+  match env:
+    case BeforeToolEnv{loadout}:
+      do IO<BeforeToolResult()>:
+        runner : Maybe<&2, ExtensionRunner.ExtensionRunner> <- currentRunner(loadout)
+        beforeToolFor(runner, input)
 
 # Cache warming
 # -------------
@@ -2125,18 +2331,18 @@ def createWarming(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, settings: R.R
     Agent.setStreamFunction(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, stream)
     return Warming{warmer, stream, inner, replay, append, branch, mode, context, decide, warmed}
 
-def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
+def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
   do IO<AgentSession>:
     +scoped : R.Ref<List<&2, Models.ScopedModel>> <- R.new(List<&2, Models.ScopedModel>, scopedModels)
     initial : AgentState() <- Agent.state(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +window : F64 = Maybe.default(&2, F64, Maybe.map(&2, Ai.Model<Ai.JsonValue>, F64, Ai.modelContextWindow, stateModel(initial)), F.fromU32(0))
-    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, RunState{False{},False{}}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, window, None{}}, CompactionState{False{}, None{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}, PendingMessages{Nil{}, Nil{}}})
+    +shared : R.Ref<Shared> <- R.new(Shared, Shared{session, Nil{}, Nil{}, Nil{}, RunState{False{},False{},0n,Nil{}}, None{}, RetryState{retryPolicy(Settings.getRetrySettings(settings)), 0n, window, None{}}, CompactionState{False{}, None{}, None{}, None{}}, BashState{Nil{}, 0n, Nil{}}, PendingMessages{Nil{}, Nil{}}})
     +settingsRef : R.Ref<Settings.SettingsManager> <- R.new(Settings.SettingsManager,settings)
-    +handler : Agent.Handler(SessionEvent(), Runtime.Error()) <- C.create(~EventEnv, ~Agent.Input<SessionEvent()>, ~Loop.Emission<Runtime.Error()>, ~handleAgentEvent, EventEnv{agent, shared})
+    +loadoutRef : R.Ref<Runtime.Loadout> <- R.new(Runtime.Loadout, loadout)
+    +handler : Agent.Handler(SessionEvent(), Runtime.Error()) <- C.create(~EventEnv, ~Agent.Input<SessionEvent()>, ~Loop.Emission<Runtime.Error()>, ~handleAgentEvent, EventEnv{agent, shared, loadoutRef})
     subscription : Agent.Subscription<SessionEvent(), Runtime.Error()> <- Agent.subscribe(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, handler)
     +replaced : Maybe<&2, NextTurnHook()> <- Agent.getPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     legacy : Maybe<&2, LegacyTurnHook()> <- Agent.getPrepareNextTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +loadoutRef : R.Ref<Runtime.Loadout> <- R.new(Runtime.Loadout, loadout)
     +nextTurn : NextTurnHook() <- C.create(~NextTurnEnv, ~T.ToolHookInput<Turn()>, ~TurnResult(), ~nextTurnHook, NextTurnEnv{agent, shared, settingsRef, replaced, legacy, loadoutRef})
     Agent.setPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{nextTurn})
     +replacedRequest : Maybe<&2, RequestHook()> <- Agent.getPrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
@@ -2148,9 +2354,12 @@ def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.Sett
     warming : Warming <- createWarming(agent, shared, settingsRef, inner)
     stats : R.Ref<Maybe<&2, StatsMemo>> <- R.new(Maybe<&2, StatsMemo>, None{})
     +replacedAfterTool : Maybe<&2, AfterToolHook()> <- Agent.getAfterToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
-    +afterTool : AfterToolHook() <- C.create(~AfterToolEnv, ~AfterToolInput(), ~AfterToolResult(), ~afterToolHook, AfterToolEnv{agent, settingsRef, replacedAfterTool})
+    +afterTool : AfterToolHook() <- C.create(~AfterToolEnv, ~AfterToolInput(), ~AfterToolResult(), ~afterToolHook, AfterToolEnv{agent, settingsRef, replacedAfterTool, loadoutRef})
     Agent.setAfterToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{afterTool})
-    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context, warming, stats, ToolResultHooks{afterTool, replacedAfterTool}}, settingsRef, cwd, loadoutRef, models, scoped}
+    +replacedBeforeTool : Maybe<&2, BeforeToolHook()> <- Agent.getBeforeToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +beforeTool : BeforeToolHook() <- C.create(~BeforeToolEnv, ~BeforeToolInput(), ~BeforeToolResult(), ~beforeToolHook, BeforeToolEnv{loadoutRef})
+    Agent.setBeforeToolCall(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{beforeTool})
+    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context, warming, stats, ToolHooks{afterTool, replacedAfterTool, beforeTool, replacedBeforeTool}}, settingsRef, cwd, loadoutRef, models, scoped}
 
 # A final error after retries reports the failure and resets the counter.
 def failedRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason, finalError: Maybe<&2, String>) -> IO(Unit):
@@ -2222,7 +2431,12 @@ def runUntilSettled(fuel: Nat, +agent: Runtime.Owner(), +shared: R.Ref<Shared>, 
 # upstream _runAgentPrompt: run the messages and continue while post-run
 # handling asks for it; then what waited for the run (bash results, custom
 # messages) is appended before agent_settled.
-def runMessages(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, hooks: SessionHooks, +settings: Settings.SettingsManager, messages: List<&2, Message()>) -> IO(Result<&2, &2, String, Unit>):
+def emitSettled(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>) -> IO(Unit):
+  match runner:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{found}: ExtensionRunner.emit(found, ExtensionTypes.AgentSettled{ExtensionTypes.AgentSettledEvent{}})
+
+def runMessages(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, hooks: SessionHooks, +settings: Settings.SettingsManager, loadout: R.Ref<Runtime.Loadout>, messages: List<&2, Message()>) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
     setRunActive(shared, True{})
     result : Result<&2, &2, Agent.AgentError<Runtime.Error()>, Unit> <- Agent.prompt(~Unit, ~Runtime.Details(), ~Runtime.Custom(), ~Runtime.Error(), ~Unit, ~Runtime.render, ~Runtime.fromString, ~Runtime.declarationError, agent, Agent.Messages{messages})
@@ -2232,15 +2446,18 @@ def runMessages(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, hooks: SessionH
     flushPendingBash(agent, shared)
     flushPendingCustom(agent, shared)
     Warmer.onAgentSettled(warmerOf(hooks))
+    runner : Maybe<&2, ExtensionRunner.ExtensionRunner> <- currentRunner(loadout)
+    emitSettled(runner)
     emit(shared, AgentSettled{})
+    resolveIdleWait(shared)
     return outcome
 
 def sendIdle(+session: AgentSession, +message: Message(), triggerTurn: Maybe<&2, Bool>) -> IO(Result<&2, &2, String, Unit>):
   match session triggerTurn:
-    case AgentSession{+agent, +shared, hooks, settingsRef, _, _, _, _} Some{True{}}:
+    case AgentSession{+agent, +shared, hooks, settingsRef, _, loadoutRef, _, _} Some{True{}}:
       do IO<Result<&2, &2, String, Unit>>:
         settings : Settings.SettingsManager <- R.read(Settings.SettingsManager, settingsRef)
-        runMessages(agent, shared, hooks, settings, message <> Nil{})
+        runMessages(agent, shared, hooks, settings, loadoutRef, message <> Nil{})
     case AgentSession{+agent, +shared, _, _, _, _, _, _} _:
       do IO<Result<&2, &2, String, Unit>>:
         appendCustomMessage(agent, shared, message)
@@ -2248,34 +2465,34 @@ def sendIdle(+session: AgentSession, +message: Message(), triggerTurn: Maybe<&2,
 
 # While streaming a message that triggers a turn joins the agent's queue;
 # one that does not waits for the end of the turn.
-def sendStreaming(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +message: Message(), options: SendMessageOptions) -> IO(Result<&2, &2, String, Unit>):
+def sendStreaming(agent: Runtime.Owner(), +shared: R.Ref<Shared>, +message: Message(), options: ExtensionTypes.SendMessageOptions) -> IO(Result<&2, &2, String, Unit>):
   match options:
-    case SendMessageOptions{Some{False{}}, _}:
+    case ExtensionTypes.SendMessageOptions{Some{False{}}, _}:
       do IO<Result<&2, &2, String, Unit>>:
         R.modify(Shared, Unit, shared, current => (deferredCustom(current, message), Unit{}))
         return Done{Unit{}}
-    case SendMessageOptions{_, Some{DeliverFollowUp{}}}:
+    case ExtensionTypes.SendMessageOptions{_, Some{ExtensionTypes.DeliverFollowUp{}}}:
       do IO<Result<&2, &2, String, Unit>>:
         Agent.followUp(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, message)
         return Done{Unit{}}
-    case SendMessageOptions{_, _}:
+    case ExtensionTypes.SendMessageOptions{_, _}:
       do IO<Result<&2, &2, String, Unit>>:
         Agent.steer(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, message)
         return Done{Unit{}}
 
-def sendAt(+session: AgentSession, +message: Message(), options: SendMessageOptions, streaming: Bool) -> IO(Result<&2, &2, String, Unit>):
+def sendAt(+session: AgentSession, +message: Message(), options: ExtensionTypes.SendMessageOptions, streaming: Bool) -> IO(Result<&2, &2, String, Unit>):
   match options streaming:
-    case SendMessageOptions{_, Some{DeliverNextTurn{}}} _:
+    case ExtensionTypes.SendMessageOptions{_, Some{ExtensionTypes.DeliverNextTurn{}}} _:
       do IO<Result<&2, &2, String, Unit>>:
         R.modify(Shared, Unit, sharedOf(session), current => (forNextTurn(current, message), Unit{}))
         return Done{Unit{}}
-    case SendMessageOptions{triggerTurn, deliverAs} True{}: sendStreaming(agentOf(session), sharedOf(session), message, SendMessageOptions{triggerTurn, deliverAs})
-    case SendMessageOptions{triggerTurn, _} False{}: sendIdle(session, message, triggerTurn)
+    case ExtensionTypes.SendMessageOptions{triggerTurn, deliverAs} True{}: sendStreaming(agentOf(session), sharedOf(session), message, ExtensionTypes.SendMessageOptions{triggerTurn, deliverAs})
+    case ExtensionTypes.SendMessageOptions{triggerTurn, _} False{}: sendIdle(session, message, triggerTurn)
 
 # upstream sendCustomMessage: for the next turn; while streaming, queued to
 # steer or follow up (or appended after the turn without triggerTurn); when
 # idle, run as a turn with triggerTurn or appended at once.
-def sendCustomMessage(+session: AgentSession, input: CustomMessageInput, options: SendMessageOptions) -> IO(Result<&2, &2, String, Unit>):
+def sendCustomMessage(+session: AgentSession, input: ExtensionTypes.CustomMessageInput, options: ExtensionTypes.SendMessageOptions) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
     now : F64 <- Date.now()
     state : Shared <- R.read(Shared, sharedOf(session))
@@ -2286,7 +2503,7 @@ def sendCustomMessage(+session: AgentSession, input: CustomMessageInput, options
 # and the agent runs until post-run handling settles.
 def runAgentPrompt(session: AgentSession, +text: String, images: List<&2, Ai.ImageContent>) -> IO(Result<&2, &2, String, Unit>):
   match session:
-    case AgentSession{+agent, +shared, hooks, settingsRef, _, loadoutRef, _, _}:
+    case AgentSession{+agent, +shared, hooks, settingsRef, _, +loadoutRef, _, _}:
       do IO<Result<&2, &2, String, Unit>>:
         +settings : Settings.SettingsManager <- R.read(Settings.SettingsManager,settingsRef)
         loadout : Runtime.Loadout <- R.read(Runtime.Loadout, loadoutRef)
@@ -2296,7 +2513,7 @@ def runAgentPrompt(session: AgentSession, +text: String, images: List<&2, Ai.Ima
         +user : Message() = normalizedUserMessage(text, normalizePromptImages(promptImageOptions(settings, stateModel(current)), images, NormalizedImages{Nil{}, Nil{}}), now)
         patch : Maybe<&2, Message()> <- prepareLoadout(agent, loadout, stateMessages(current), now)
         nextTurn : List<&2, Message()> <- R.modify(Shared, List<&2, Message()>, shared, takenNextTurn)
-        runMessages(agent, shared, hooks, settings, withPatch(patch, user <> nextTurn))
+        runMessages(agent, shared, hooks, settings, loadoutRef, withPatch(patch, user <> nextTurn))
 
 def queued(state: Shared, behavior: StreamingBehavior, +text: String) -> Shared:
   match state behavior:
@@ -2575,6 +2792,88 @@ def sendUserMessage(+session: AgentSession, content: Ai.UserContent, deliverAs: 
     case Ai.UserText{text}: promptWith(session, text, Nil{}, deliverAs, expandPromptTemplates)
     case Ai.UserBlocks{+blocks}: promptWith(session, String.join(contentTexts(blocks), "\n"), contentImages(blocks), deliverAs, expandPromptTemplates)
 
+# upstream bindCore's sendMessage and sendUserMessage: delivered without the
+# extension waiting for them. What queues or appends happens at once; a
+# message that starts a turn runs on its own task. A failure is reported as
+# an extension error of "<runtime>".
+def reportActionFailure(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, +event: String, result: Result<&2, &2, String, Unit>) -> IO(Unit):
+  match runner result:
+    case Some{found} Fail{error}: ExtensionRunner.emitError(found, ExtensionTypes.ExtensionError{"<runtime>", event, error, None{}})
+    case _ _: IO.pure(Unit, Unit{})
+
+def reported(+session: AgentSession, +event: String, result: Result<&2, &2, String, Unit>) -> IO(Unit):
+  do IO<Unit>:
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    reportActionFailure(runnerIn(loadout), event, result)
+
+def sendMessageNow(+session: AgentSession, request: ExtensionTypes.SendMessage) -> IO(Unit):
+  match request:
+    case ExtensionTypes.SendMessage{message, options}:
+      do IO<Unit>:
+        result : Result<&2, &2, String, Unit> <- sendCustomMessage(session, message, options)
+        reported(session, "send_message", result)
+
+def startsTurn(options: ExtensionTypes.SendMessageOptions) -> Bool:
+  match options:
+    case ExtensionTypes.SendMessageOptions{_, Some{ExtensionTypes.DeliverNextTurn{}}}: False{}
+    case ExtensionTypes.SendMessageOptions{Some{True{}}, _}: True{}
+    case _: False{}
+
+def sendMessageAction(+session: AgentSession, +request: ExtensionTypes.SendMessage) -> IO(Unit):
+  match request:
+    case ExtensionTypes.SendMessage{+message, +options}:
+      do IO<Unit>:
+        streaming : Bool <- isStreaming(session)
+        Bool.pick(Unit -> IO(Unit), Bool.and(Bool.not(streaming), startsTurn(options)), _ => IO.spawn(Unit, sendMessageNow(session, ExtensionTypes.SendMessage{message, options})), _ => sendMessageNow(session, ExtensionTypes.SendMessage{message, options}))(Unit{})
+
+def deliveryOf(deliverAs: Maybe<&2, ExtensionTypes.UserDelivery>) -> Maybe<&2, StreamingBehavior>:
+  match deliverAs:
+    case None{}: None{}
+    case Some{ExtensionTypes.UserSteer{}}: Some{Steer{}}
+    case Some{ExtensionTypes.UserFollowUp{}}: Some{FollowUp{}}
+
+def sendUserNow(+session: AgentSession, request: ExtensionTypes.SendUserMessage) -> IO(Unit):
+  match request:
+    case ExtensionTypes.SendUserMessage{content, deliverAs}:
+      do IO<Unit>:
+        result : Result<&2, &2, String, Unit> <- sendUserMessage(session, content, deliveryOf(deliverAs), False{})
+        reported(session, "send_user_message", result)
+
+def sendUserMessageAction(+session: AgentSession, +request: ExtensionTypes.SendUserMessage) -> IO(Unit):
+  do IO<Unit>:
+    streaming : Bool <- isStreaming(session)
+    Bool.pick(Unit -> IO(Unit), streaming, _ => sendUserNow(session, request), _ => IO.spawn(Unit, sendUserNow(session, request)))(Unit{})
+
+# Callback bodies cannot copy their environment; the copy happens inside.
+def sendMessageCallback(session: AgentSession, request: ExtensionTypes.SendMessage) -> IO(Unit): sendMessageAction(session, request)
+def sendUserMessageCallback(session: AgentSession, request: ExtensionTypes.SendUserMessage) -> IO(Unit): sendUserMessageAction(session, request)
+
+def sessionActionsOf(session: AgentSession) -> R.Ref<Maybe<&2, ExtensionTypes.ExtensionActions>>:
+  match session:
+    case AgentSession{_, _, SessionHooks{_, _, _, _, _, _, ExtensionBinding{_, _, actions}, _, _, _}, _, _, _, _, _}: actions
+
+def bindActionsTo(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, actions: ExtensionTypes.ExtensionActions) -> IO(Unit):
+  match runner:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{found}: ExtensionLoader.bindActions(ExtensionRunner.runtimeOf(found), Some{actions})
+
+# The session's actions for its extension runtime (upstream bindCore).
+def bindSessionActions(+session: AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    +send : C.Callback<ExtensionTypes.SendMessage, Unit> <- C.create(~AgentSession, ~ExtensionTypes.SendMessage, ~Unit, ~sendMessageCallback, session)
+    +sendUser : C.Callback<ExtensionTypes.SendUserMessage, Unit> <- C.create(~AgentSession, ~ExtensionTypes.SendUserMessage, ~Unit, ~sendUserMessageCallback, session)
+    R.write(Maybe<&2, ExtensionTypes.ExtensionActions>, sessionActionsOf(session), Some{ExtensionTypes.ExtensionActions{send, sendUser}})
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    bindActionsTo(runnerIn(loadout), ExtensionTypes.ExtensionActions{send, sendUser})
+
+# upstream AgentSession constructor: the session, its agent hooks and its
+# extension bindings.
+def create(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
+  do IO<AgentSession>:
+    +created : AgentSession <- createUnbound(agent, session, settings, cwd, loadout, models, scopedModels)
+    bindSessionActions(created)
+    return created
+
 def abortRetry(session: AgentSession) -> IO(Unit):
   match session:
     case AgentSession{_, shared, _, _, _, _, _, _}: abortSleeping(shared)
@@ -2602,16 +2901,33 @@ def abortCompaction(session: AgentSession) -> IO(Unit):
   match session:
     case AgentSession{_, shared, _, _, _, _, _, _}: abortCompactions(shared)
 
-def hasController(compaction: CompactionState) -> Bool:
-  match compaction:
-    case CompactionState{_, manual, auto, branch}: Bool.or(Bool.or(Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, manual)), Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, auto))), Bool.not(Maybe.is_none(&2, A.AbortController<Unit>, branch)))
-
 def isCompacting(session: AgentSession) -> IO(Bool):
   match session:
     case AgentSession{_, shared, _, _, _, _, _, _}:
       do IO<Bool>:
         state : Shared <- R.read(Shared, shared)
         return hasController(compactionOf(state))
+
+def isIdle(session: AgentSession) -> IO(Bool):
+  do IO<Bool>:
+    state : Shared <- R.read(Shared, sharedOf(session))
+    return idleIn(state)
+
+def awaitWaiter(+waiter: Chan(Unit), registered: Bool) -> IO(Unit):
+  match registered:
+    case False{}: Chan.close(Unit, waiter)
+    case True{}:
+      do IO<Unit>:
+        woken : Maybe<&1, Unit> <- Chan.recv(Unit, waiter)
+        Chan.close(Unit, waiter)
+
+# upstream waitForIdle: returns once no run, compaction or branch summary is
+# active.
+def waitForIdle(session: AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    +waiter : Chan(Unit) <- Chan.new(Unit, 1)
+    registered : Bool <- R.modify(Shared, Bool, sharedOf(session), current => registerWaiter(current, waiter))
+    awaitWaiter(waiter, registered)
 
 # The part of upstream abort() that runs before it first awaits (what an
 # unawaited `void session.abort()` does at once): mark an active run as
@@ -2686,11 +3002,10 @@ def compact(session: AgentSession, customInstructions: Maybe<&2, String>) -> IO(
         result : Result<&2, &2, String, Compaction.CompactionResult> <- manualFor(agent, shared, settings, customInstructions, A.signal(Unit, controller), entries, stateModel(current))
         +aborted : Bool <- A.aborted(Unit, A.signal(Unit, controller))
         R.modify(Shared, Unit, shared, current => (setManualController(current, None{}), Unit{}))
+        resolveIdleWait(shared)
         A.dispose(Unit, controller)
         finishManual(agent, shared, aborted, compactionOutcome(aborted, result))
 
-def waitForIdle(session: AgentSession) -> IO(Unit):
-  Agent.waitForIdle(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agentOf(session))
 
 # Tree navigation keeps the session file and its full append-only history.
 # Selecting an editable user message positions the leaf at its parent and
@@ -2853,6 +3168,7 @@ def summarizedNavigation(+agent: Runtime.Owner(), +shared: R.Ref<Shared>, +setti
     result : Result<&2, &2, String, BranchSummary.Summary> <- summarizeBranch(agent, shared, settings, model, entries, options, A.signal(Unit, controller))
     aborted : Bool <- A.aborted(Unit, A.signal(Unit, controller))
     R.modify(Shared, Unit, shared, previous => (setBranchController(previous, None{}), Unit{}))
+    resolveIdleWait(shared)
     A.dispose(Unit, controller)
     summarized(agent, shared, current, target, targetId, oldLeafId, labelOf(options), aborted, result)
 

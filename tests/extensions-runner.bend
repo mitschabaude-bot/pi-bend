@@ -26,7 +26,7 @@ import ./model-runtime-fixture.bend as Fixture
 # command context, event subscriptions, error listeners), plus the RPC
 # get_commands entries and autocomplete conflicts of extension commands.
 # Extensions are inline factories instead of files discovered on disk; the
-# event cases use agent_end, the one event dispatched so far.
+# event cases use agent_end (session events are covered by tests/suite-harness.bend).
 
 def check(ok: Bool, +name: String) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit), ok, _ => IO.print("ok " ++ name), _ => IO.die(Unit, 1, "FAIL " ++ name))(Unit{})
@@ -279,7 +279,7 @@ def capturing(slot: R.Ref<Maybe<&2, T.ExtensionAPI>>) -> T.InlineExtension:
 
 def pendingOf(state: T.ExtensionRuntimeState) -> Nat:
   match state:
-    case T.ExtensionRuntimeState{_, pending, _, _}: List.length(&2, T.PendingProvider, pending)
+    case T.ExtensionRuntimeState{_, pending, _, _, actions}: List.length(&2, T.PendingProvider, pending)
 
 def pendingCount(runtime: T.ExtensionRuntime()) -> IO(Nat):
   do IO<Nat>:
@@ -709,7 +709,7 @@ def pendingNames(pending: List<&2, T.PendingProvider>) -> List<&2, String>:
 
 def pendingNamesOf(state: T.ExtensionRuntimeState) -> String:
   match state:
-    case T.ExtensionRuntimeState{_, pending, _, _}: joined(pendingNames(pending))
+    case T.ExtensionRuntimeState{_, pending, _, _, actions}: joined(pendingNames(pending))
 
 def pendingText(runtime: T.ExtensionRuntime()) -> IO(String):
   do IO<String>:

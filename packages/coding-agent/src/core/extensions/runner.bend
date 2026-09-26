@@ -7,6 +7,11 @@ import ../model-runtime.bend as Models
 import ./context.bend as Ctx
 import ./loader.bend as Loader
 import ./types.bend as T
+import ../../../../agent/src/types.bend as Agent
+import ../../../../ai/src/types.bend as Ai
+import ../../../../runtime/src/schema-value.bend as V
+import ../messages.bend as Messages
+import ../tools/index.bend as Tools
 
 # upstream core/extensions/runner.ts: the loaded extensions of one runtime,
 # what they are bound to (session, command actions, UI and mode), command
@@ -284,12 +289,28 @@ def hasHandlers(runner: ExtensionRunner, eventType: String) -> IO(Bool):
     loaded : List<&2, T.Extension> <- extensions(runner)
     return Bool.not(List.is_empty(&2, Dispatch, snapshotEventHandlers(loaded, eventType)))
 
+def ignored(result: Result<&2, &2, String, Maybe<&2, Unit>>) -> Result<&2, &2, String, Unit>:
+  Result.map(&2, &2, String, Maybe<&2, Unit>, Unit, _ => Unit{}, result)
+
+def called(-E: Data, callback: T.ExtensionHandler(E, Unit), event: E, ctx: Ctx.ExtensionContext) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    result : Result<&2, &2, String, Maybe<&2, Unit>> <- C.call(T.HandlerCall<E>, Result<&2, &2, String, Maybe<&2, Unit>>, callback, T.HandlerCall{event, ctx})
+    return ignored(result)
+
+# The snapshot holds only handlers of the event's type; another pairing
+# cannot occur.
 def handled(handler: T.EventHandler, event: T.ExtensionEvent, ctx: Ctx.ExtensionContext) -> IO(Result<&2, &2, String, Unit>):
   match handler event:
-    case T.OnAgentEnd{callback} T.AgentEnd{value}:
-      do IO<Result<&2, &2, String, Unit>>:
-        result : Result<&2, &2, String, Maybe<&2, Unit>> <- C.call(T.HandlerCall<T.AgentEndEvent>, Result<&2, &2, String, Maybe<&2, Unit>>, callback, T.HandlerCall{value, ctx})
-        return Result.map(&2, &2, String, Maybe<&2, Unit>, Unit, _ => Unit{}, result)
+    case T.OnAgentStart{callback} T.AgentStart{value}: called(T.AgentStartEvent, callback, value, ctx)
+    case T.OnAgentEnd{callback} T.AgentEnd{value}: called(T.AgentEndEvent, callback, value, ctx)
+    case T.OnAgentSettled{callback} T.AgentSettled{value}: called(T.AgentSettledEvent, callback, value, ctx)
+    case T.OnTurnStart{callback} T.TurnStart{value}: called(T.TurnStartEvent, callback, value, ctx)
+    case T.OnMessageStart{callback} T.MessageStart{value}: called(T.MessageStartEvent, callback, value, ctx)
+    case T.OnMessageUpdate{callback} T.MessageUpdate{value}: called(T.MessageUpdateEvent, callback, value, ctx)
+    case T.OnToolExecutionStart{callback} T.ToolExecutionStart{value}: called(T.ToolExecutionStartEvent, callback, value, ctx)
+    case T.OnToolExecutionUpdate{callback} T.ToolExecutionUpdate{value}: called(T.ToolExecutionUpdateEvent, callback, value, ctx)
+    case T.OnToolExecutionEnd{callback} T.ToolExecutionEnd{value}: called(T.ToolExecutionEndEvent, callback, value, ctx)
+    case _ _: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
 
 def reported(+runner: ExtensionRunner, path: String, eventType: String, result: Result<&2, &2, String, Unit>) -> IO(Unit):
   match result:
@@ -312,3 +333,171 @@ def emit(+runner: ExtensionRunner, +event: T.ExtensionEvent) -> IO(Unit):
   do IO<Unit>:
     loaded : List<&2, T.Extension> <- extensions(runner)
     dispatchAll(runner, snapshotEventHandlers(loaded, T.eventType(event)), event)
+
+def snapshot(runner: ExtensionRunner, +eventType: String) -> IO(List<&2, Dispatch>):
+  do IO<List<&2, Dispatch>>:
+    loaded : List<&2, T.Extension> <- extensions(runner)
+    return snapshotEventHandlers(loaded, eventType)
+
+# message_end
+# -----------
+
+def roleOf(message: T.AgentMessage()) -> String:
+  match message:
+    case Agent.LlmMessage{Ai.System{_}}: "system"
+    case Agent.LlmMessage{Ai.User{_}}: "user"
+    case Agent.LlmMessage{Ai.Assistant{_}}: "assistant"
+    case Agent.LlmMessage{Ai.ToolResult{_}}: "toolResult"
+    case Agent.CustomMessage{Messages.BashExecution{_}}: "bashExecution"
+    case Agent.CustomMessage{Messages.Custom{_}}: "custom"
+    case Agent.CustomMessage{Messages.BranchSummary{_}}: "branchSummary"
+    case Agent.CustomMessage{Messages.CompactionSummary{_}}: "compactionSummary"
+
+type Replacing is Data:
+  Replacing{message: T.AgentMessage(), modified: Bool}
+
+def replacedBy(+runner: ExtensionRunner, path: String, +current: T.AgentMessage(), result: Result<&2, &2, String, Maybe<&2, T.MessageEndEventResult>>) -> IO(Replacing):
+  match result:
+    case Fail{error}:
+      do IO<Replacing>:
+        emitError(runner, T.ExtensionError{path, "message_end", error, None{}})
+        return Replacing{current, False{}}
+    case Done{Some{T.MessageEndEventResult{Some{+replacement}}}}:
+      Bool.pick(Unit -> IO(Replacing), String.eq(roleOf(replacement), roleOf(current)), _ => IO.pure(Replacing, Replacing{replacement, True{}}), _ => IO.bind(Unit, Replacing, emitError(runner, T.ExtensionError{path, "message_end", "message_end handlers must return a message with the same role", None{}}), _ => IO.pure(Replacing, Replacing{current, False{}})))(Unit{})
+    case Done{_}: IO.pure(Replacing, Replacing{current, False{}})
+
+def replacingMessage(value: Replacing) -> T.AgentMessage():
+  match value:
+    case Replacing{message, _}: message
+
+def replacingChanged(value: Replacing) -> Bool:
+  match value:
+    case Replacing{_, changed}: changed
+
+def endMessages(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>, +current: T.AgentMessage(), +modified: Bool) -> IO(Replacing):
+  match dispatches:
+    case Nil{}: IO.pure(Replacing, Replacing{current, modified})
+    case Dispatch{path, T.OnMessageEnd{callback}} <> rest:
+      do IO<Replacing>:
+        result : Result<&2, &2, String, Maybe<&2, T.MessageEndEventResult>> <- C.call(T.HandlerCall<T.MessageEndEvent>, Result<&2, &2, String, Maybe<&2, T.MessageEndEventResult>>, callback, T.HandlerCall{T.MessageEndEvent{current}, createContext(runner)})
+        +next : Replacing <- replacedBy(runner, path, current, result)
+        endMessages(runner, rest, replacingMessage(next), modified || replacingChanged(next))
+    case _ <> rest: endMessages(runner, rest, current, modified)
+
+def replacementOf(result: Replacing) -> Maybe<&2, T.AgentMessage()>:
+  match result:
+    case Replacing{message, True{}}: Some{message}
+    case Replacing{_, False{}}: None{}
+
+# upstream emitMessageEnd: each handler sees the message as replaced so far;
+# a replacement with another role is reported and ignored. The replacement,
+# when any handler made one.
+def emitMessageEnd(+runner: ExtensionRunner, event: T.MessageEndEvent) -> IO(Maybe<&2, T.AgentMessage()>):
+  match event:
+    case T.MessageEndEvent{message}:
+      do IO<Maybe<&2, T.AgentMessage()>>:
+        dispatches : List<&2, Dispatch> <- snapshot(runner, "message_end")
+        result : Replacing <- endMessages(runner, dispatches, message, False{})
+        return replacementOf(result)
+
+# tool_call
+# ---------
+
+def blocks(result: Maybe<&2, T.ToolCallEventResult>) -> Bool:
+  match result:
+    case Some{T.ToolCallEventResult{Some{True{}}, _, _}}: True{}
+    case _: False{}
+
+def latestResult(found: Maybe<&2, T.ToolCallEventResult>, previous: Maybe<&2, T.ToolCallEventResult>) -> Maybe<&2, T.ToolCallEventResult>:
+  match found:
+    case Some{value}: Some{value}
+    case None{}: previous
+
+def callFailed(called: Result<&2, &2, String, Maybe<&2, T.ToolCallEventResult>>) -> Bool:
+  match called:
+    case Fail{_}: True{}
+    case Done{_}: False{}
+
+def callFound(called: Result<&2, &2, String, Maybe<&2, T.ToolCallEventResult>>) -> Maybe<&2, T.ToolCallEventResult>:
+  match called:
+    case Fail{_}: None{}
+    case Done{found}: found
+
+def callTools(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>, +event: T.ToolCallEvent, +result: Maybe<&2, T.ToolCallEventResult>) -> IO(Result<&2, &2, String, Maybe<&2, T.ToolCallEventResult>>):
+  match dispatches:
+    case Nil{}: IO.pure(Result<&2, &2, String, Maybe<&2, T.ToolCallEventResult>>, Done{result})
+    case Dispatch{_, T.OnToolCall{callback}} <> rest:
+      do IO<Result<&2, &2, String, Maybe<&2, T.ToolCallEventResult>>>:
+        +called : Result<&2, &2, String, Maybe<&2, T.ToolCallEventResult>> <- C.call(T.HandlerCall<T.ToolCallEvent>, Result<&2, &2, String, Maybe<&2, T.ToolCallEventResult>>, callback, T.HandlerCall{event, createContext(runner)})
+        +latest : Maybe<&2, T.ToolCallEventResult> = latestResult(callFound(called), result)
+        Bool.pick(Unit -> IO(Result<&2, &2, String, Maybe<&2, T.ToolCallEventResult>>), callFailed(called) || blocks(callFound(called)), _ => IO.pure(Result<&2, &2, String, Maybe<&2, T.ToolCallEventResult>>, Bool.pick(Result<&2, &2, String, Maybe<&2, T.ToolCallEventResult>>, callFailed(called), called, Done{latest})), _ => callTools(runner, rest, event, latest))(Unit{})
+    case _ <> rest: callTools(runner, rest, event, result)
+
+# upstream emitToolCall: the first blocking result wins; otherwise the last
+# result. A failing handler is not caught: its message blocks the call.
+def emitToolCall(+runner: ExtensionRunner, event: T.ToolCallEvent) -> IO(Result<&2, &2, String, Maybe<&2, T.ToolCallEventResult>>):
+  do IO<Result<&2, &2, String, Maybe<&2, T.ToolCallEventResult>>>:
+    dispatches : List<&2, Dispatch> <- snapshot(runner, "tool_call")
+    callTools(runner, dispatches, event, None{})
+
+# tool_result
+# -----------
+
+type ResultPatch is Data:
+  ResultPatch{event: T.ToolResultEvent, modified: Bool}
+
+def orKeep(-A: Data, found: Maybe<&2, A>, current: A) -> A:
+  match found:
+    case Some{value}: value
+    case None{}: current
+
+def orKeepMaybe(-A: Data, found: Maybe<&2, A>, current: Maybe<&2, A>) -> Maybe<&2, A>:
+  match found:
+    case Some{value}: Some{value}
+    case None{}: current
+
+def anySet(result: T.ToolResultEventResult) -> Bool:
+  match result:
+    case T.ToolResultEventResult{content, details, isError, usage}: Bool.not(Maybe.is_none(&2, List<&2, Ai.TextImageContent>, content)) || Bool.not(Maybe.is_none(&2, Tools.ToolDetails, details)) || Bool.not(Maybe.is_none(&2, Bool, isError)) || Bool.not(Maybe.is_none(&2, Ai.Usage, usage))
+
+def patched(event: T.ToolResultEvent, +result: T.ToolResultEventResult) -> T.ToolResultEvent:
+  match event result:
+    case T.ToolResultEvent{id, name, input, content, details, isError, usage} T.ToolResultEventResult{newContent, newDetails, newIsError, newUsage}:
+      T.ToolResultEvent{id, name, input, orKeep(List<&2, Ai.TextImageContent>, newContent, content), orKeepMaybe(Tools.ToolDetails, newDetails, details), orKeep(Bool, newIsError, isError), orKeepMaybe(Ai.Usage, newUsage, usage)}
+
+def patchedBy(+runner: ExtensionRunner, path: String, +patch: ResultPatch, result: Result<&2, &2, String, Maybe<&2, T.ToolResultEventResult>>) -> IO(ResultPatch):
+  match patch result:
+    case _ Fail{error}:
+      do IO<ResultPatch>:
+        emitError(runner, T.ExtensionError{path, "tool_result", error, None{}})
+        return patch
+    case ResultPatch{event, modified} Done{Some{+found}}: IO.pure(ResultPatch, ResultPatch{patched(event, found), modified || anySet(found)})
+    case _ Done{None{}}: IO.pure(ResultPatch, patch)
+
+def eventOfPatch(patch: ResultPatch) -> T.ToolResultEvent:
+  match patch:
+    case ResultPatch{event, _}: event
+
+def resultTools(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>, +patch: ResultPatch) -> IO(ResultPatch):
+  match dispatches:
+    case Nil{}: IO.pure(ResultPatch, patch)
+    case Dispatch{path, T.OnToolResult{callback}} <> rest:
+      do IO<ResultPatch>:
+        result : Result<&2, &2, String, Maybe<&2, T.ToolResultEventResult>> <- C.call(T.HandlerCall<T.ToolResultEvent>, Result<&2, &2, String, Maybe<&2, T.ToolResultEventResult>>, callback, T.HandlerCall{eventOfPatch(patch), createContext(runner)})
+        next : ResultPatch <- patchedBy(runner, path, patch, result)
+        resultTools(runner, rest, next)
+    case _ <> rest: resultTools(runner, rest, patch)
+
+def patchResult(patch: ResultPatch) -> Maybe<&2, T.ToolResultEventResult>:
+  match patch:
+    case ResultPatch{T.ToolResultEvent{_, _, _, content, details, isError, usage}, True{}}: Some{T.ToolResultEventResult{Some{content}, details, Some{isError}, usage}}
+    case ResultPatch{_, False{}}: None{}
+
+# upstream emitToolResult: handlers see the result as patched so far; a
+# failing handler is reported and skipped. The patched fields, when any
+# handler set one.
+def emitToolResult(+runner: ExtensionRunner, event: T.ToolResultEvent) -> IO(Maybe<&2, T.ToolResultEventResult>):
+  do IO<Maybe<&2, T.ToolResultEventResult>>:
+    dispatches : List<&2, Dispatch> <- snapshot(runner, "tool_result")
+    result : ResultPatch <- resultTools(runner, dispatches, ResultPatch{event, False{}})
+    return patchResult(result)

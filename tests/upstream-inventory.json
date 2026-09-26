@@ -3272,9 +3272,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/1717-2113-agent-session-event-settlement.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "82d602aa0ecb76a5516f8f4e729ca5c65b673215b3d178b77e95944aaa7f37f4"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md"
+      ],
+      "sha256": "82d602aa0ecb76a5516f8f4e729ca5c65b673215b3d178b77e95944aaa7f37f4",
+      "notes": "Both tests: a message_end handler that yields 20 ms keeps the persisted branch system, user, assistant, toolResult, toolResult, assistant; a tool_call handler sees the branch system, user, assistant."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2023-queued-slash-command-followup.test.ts",
@@ -3388,9 +3393,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3982-message-end-cost-override.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6ab24cf7cac37f88ef18ad946f3ea32f35e5d6b70bd578d91d42a71ac54a6e8e"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md"
+      ],
+      "sha256": "6ab24cf7cac37f88ef18ad946f3ea32f35e5d6b70bd578d91d42a71ac54a6e8e",
+      "notes": "An inline extension's message_end handler replaces the assistant message with cost total 0.123; the agent state's assistant and the message_end event both carry it."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/4167-thinking-toggle-pending-tool-render.test.ts",
@@ -3505,9 +3515,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/5998-blocked-tool-terminate.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "8560a8386290a19136f646f4afd169cc9c5dadc139b732ab3ec5852aee223273"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md"
+      ],
+      "sha256": "8560a8386290a19136f646f4afd169cc9c5dadc139b732ab3ec5852aee223273",
+      "notes": "A tool_call handler blocking with terminate: one scripted reply remains, 'should not run' never appears, tool_execution_end's result has terminate true and an error tool result exists."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6019-explicit-provider-retry-message.test.ts",
@@ -3554,9 +3569,15 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6363-agent-settled-event.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e35475a593becf602a424f3e511a07cfc9be27ac7eaf4aa025de2cc8aaaf185e"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md",
+        "packages/coding-agent/src/core/agent-session.bend"
+      ],
+      "sha256": "e35475a593becf602a424f3e511a07cfc9be27ac7eaf4aa025de2cc8aaaf185e",
+      "notes": "All three tests: one agent_settled after a retry (extension events agent_end, agent_end, agent_settled with ctx.isIdle true), settlement after a follow-up queued by an agent_end handler through pi.sendUserMessage, and an extension command's ctx.waitForIdle returning only after session-level settlement (AgentSession.waitForIdle now waits for the session to be idle, not only the agent)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6596-taskkill-enoent.test.ts",
@@ -3838,9 +3859,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8935-parallel-preflight-abort.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ec02410a0ed72f0ee4dee574da9dab55e7d3e77abea7102d07f650ca75a96536"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md"
+      ],
+      "sha256": "ec02410a0ed72f0ee4dee574da9dab55e7d3e77abea7102d07f650ca75a96536",
+      "notes": "Preflights first and second (ctx.abort at the second), no execution and no tool_result hook, two starts and two error ends with the same ids, tool results in start order reading 'Operation aborted'."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8964-extension-provider-streaming.test.ts",
