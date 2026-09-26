@@ -1394,7 +1394,7 @@ A term word held a tag in bits 56–62 (7 bits, of which the seven tags use 3), 
 
 Fix (`patches/bend-id-width.patch`, +7 −7 lines of `comp.ts`): the tag moves to bits 60–62 and the id takes bits 40–59 (20 bits, 1,048,576 ids); `term_make`, `term_tag`, `term_aux`, the static image encoder and the id checks change, nothing else reads those bits (the drop cursor has its own encoding; task tails keep a 16-bit slot index, not an id). Evidence: the CLI at e5cf49ed builds with 65,114 segment and 6,108 constructor ids; full terminal parity against the previous run shows no regression (119 MATCH, the 26 DIFF scenarios are the previous ones plus the new `session-keys`); interactive messages 11/11 on Bun and native 1/4 with 1 and 8 units; the compiler regression programs print their expected results.
 
-## BEND-059 — A linearity error in one match case is reported against a wildcard of an earlier case (2026-09-26; confirmed diagnostic defect, not fixed)
+## BEND-059 — A linearity error in one match case is reported against a wildcard of an earlier case (2026-09-26; diagnostic defect, fixed)
 
 Found while wiring the Bedrock credential chain (`sendWith` in `bedrock-converse-stream.bend`). When a later `case` of a constructor match uses a plain (non-`+`) field binder twice, the checker reports `_ (consumed more than once)` at an earlier case whose pattern has `_` in that field, instead of naming the binder and its case. Reduced reproducer (installed toolchain, bend 2.0.7 with the project patches, 2026-09-26):
 
@@ -1412,6 +1412,8 @@ def pick(config: Config) -> IO(Unit):
 ```
 
 (with `use` any `Maybe<&2, String> -> Maybe<&2, String> -> IO(Unit)`) reports `expected : _ / observed : _ (consumed more than once)` at `case Config{_, _, Some{t}}`. The program is wrong (`a` is used twice; `+a` or a helper def fixes it), so only the diagnostic is affected: the name and location point at the wrong case. Workaround in the port: the second case's body moved into its own def taking `+profile`. Regression check: compile the snippet; a fixed checker names `a` in the second case. Upstream status: not reported.
+
+Cause and fix (2026-09-26, compiler owner). `match_flatten` gives each field of a constructor column one binder, taken from the first row's pattern for that constructor; later rows are substituted onto it. When that row has `_` in the field, the shared binder is the wildcard, so a linearity error in a later row names `_` at the first row. `patches/bend-named-column-binders.patch` (+7 −1 lines of `bend.ts`) takes the binder from the first row that names the field, falling back as before. Every row is still substituted onto the one binder, so only names change: the CLI's C differs in 836 lines, all local variable names (identical after normalising generated names), the proof gate passes and interactive messages match on Bun and native 1/4. The reproducer now reports `a (consumed more than once)` at `case Config{a, b, None{}}`.
 
 ## BEND-060 — Bun lane does not finish provider requests with 100K+ character prompts (performance hypothesis)
 

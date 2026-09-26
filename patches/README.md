@@ -203,3 +203,5 @@ Validation: build `tests/process-inherited.bend` and `tests/external-editor.bend
 
 `bend-js-explicit-stack.patch` (2026-09-26): installed in the shared toolchain, after `bend-import-binders.patch`. It had only been installed in the old CLI worktree's toolchain, so the Bun lane still overflowed on deep non-tail self-recursion (`tests/compiler-js-*.bend`). Regenerated against the current `comp.ts`: `js_def` now records `start`, the line where the function opens, which the rewrite needs and which a predecessor change used to provide. `tests/js_explicit_stack.py` passes, the five other `compiler-js-*` reproducers print their results on Bun, and interactive messages and markdown.test.ts (81/81) match on the Bun lane. The C backend is unchanged. The compiler is then 11,707 lines.
 
+`bend-named-column-binders.patch` (2026-09-26, installed after `bend-js-explicit-stack.patch`, changes `bend.ts`): a flattened match column's binder takes its name from the first row that names the field, so linearity errors name the binder and its case instead of an earlier wildcard (BEND-059). Only generated local names change.
+
