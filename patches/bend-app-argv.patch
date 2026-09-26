@@ -1,6 +1,6 @@
 --- a/comp.ts
 +++ b/comp.ts
-@@ -6358,11 +6358,23 @@
+@@ -6509,11 +6509,23 @@
  // Main
  // ====
  
@@ -25,7 +25,7 @@
    for (int i = 1; i < argc; i += 1) {
      const char* a = argv[i];
      const char* v = i + 1 < argc ? argv[i + 1] : NULL;
-@@ -6403,6 +6415,7 @@
+@@ -6554,6 +6566,7 @@
        io_argv[io_argc++] = argv[i];
      }
    }

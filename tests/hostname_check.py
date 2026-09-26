@@ -79,6 +79,6 @@ for fixture in ['tests/hostname-control.bend','tests/static-sum-layout.bend']:
     medians={label:{key:statistics.median(row[label][key] for row in samples) for key in ['seconds','peak_rss_kib']} for label in ['base','candidate']}
     controls.append(dict(fixture=fixture,emission_sha256=digests,pairs=samples,medians=medians))
     print(fixture+': identical C/JS; 20 paired compile measurements complete',flush=True)
-paths=['patches/experimental/hostname/base.bend','patches/experimental/hostname/get_hostname.c','patches/experimental/hostname/get_hostname.js','scripts/prepare-hostname-candidate.py','tests/hostname.bend','tests/hostname-effect-shim.c','tests/hostname-control.bend','tests/hostname_check.py']
+paths=['patches/bend-hostname.patch','tests/hostname.bend','tests/hostname-effect-shim.c','tests/hostname-control.bend','tests/hostname_check.py']
 r=dict(scope=__doc__,checks=checks,compile_controls=controls,sha256={name:hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in paths},compiler_sha256={label:{name:hashlib.sha256((compiler/name).read_bytes()).hexdigest() for name in ['base.bend','comp.ts','bend.ts','main.ts']} for label,compiler in [('base',BASE),('candidate',CANDIDATE)]},builds={suffix:json.loads((ROOT/f'build/hostname-{suffix}-build.json').read_text()) for suffix in ['c','js']})
 (ROOT/'build/hostname-result.json').write_text(json.dumps(r,indent=2)+'\n')

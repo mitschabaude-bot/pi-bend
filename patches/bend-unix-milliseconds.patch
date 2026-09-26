@@ -1,19 +1,19 @@
---- a/bend2/base.bend
-+++ b/bend2/base.bend
-@@ -214,6 +214,11 @@
- def IO.sleep(ms: U32) -> IO(Unit):
+--- a/base.bend
++++ b/base.bend
+@@ -219,6 +219,11 @@
    import "./effs/sleep.c"
    import "./effs/sleep.js"
-+
+ 
 +# Signed Unix epoch milliseconds as a two's-complement high/low word pair.
 +def IO.unixMilliseconds() -> IO(U32 & U32):
 +  import "./effs/unix_milliseconds.c"
 +  import "./effs/unix_milliseconds.js"
- 
++
  def IO.now() -> IO(Nat):
    import "./effs/now.c"
+   import "./effs/now.js"
 --- /dev/null
-+++ b/bend2/effs/unix_milliseconds.c
++++ b/effs/unix_milliseconds.c
 @@ -0,0 +1,14 @@
 +// OS wall-clock boundary only; signed conversion and policy live in Bend.
 +Term io_unixmilliseconds_run(Env e, Term* f, IoWork* w) {
@@ -30,7 +30,7 @@
 +  io_eff(CID_IO_UNIXMILLISECONDS, io_unixmilliseconds_run, 0);
 +}
 --- /dev/null
-+++ b/bend2/effs/unix_milliseconds.js
++++ b/effs/unix_milliseconds.js
 @@ -0,0 +1,5 @@
 +// Separate compiler-backend implementation; native programs never invoke JS.
 +function io_unixmilliseconds() {

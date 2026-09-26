@@ -12,7 +12,7 @@
  
  // A fact set: a read is remembered per unit, and a new fact dirties every
  // unit that read it, so only those units are emitted again.
-@@ -1885,7 +1890,7 @@
+@@ -1896,7 +1901,7 @@
  }
  
  function seg_name(fl: File, stem: string): string {
@@ -21,8 +21,8 @@
  }
  
  // Opens `name`: takes `live` (per `frame`, else in r0..), then `ks` words.
-@@ -2479,14 +2484,16 @@
-   seg.fid = name;
+@@ -2499,14 +2504,16 @@
+   seg.frame = null; // a spin is a C function: every word an argument
    const dst = val_new(seg.ret.ks.map(() => name_local(fl, "v")), seg.ret);
    emit_body(fl, tld.h as HTerm, tld.T, ers, vals, dst);
 -  fl.spins.push([name, fl.emit ? [`${seg.lines.length < SPIN_FAR ? "INLINE" : "FAR"} Term ${name}(Env e, THR Term* o${
@@ -40,7 +40,7 @@
    UNIT = outer.unit;
    delete (outer as { unit?: Bend.Name }).unit;
    Object.assign(fl, outer);
-@@ -3096,11 +3103,11 @@
+@@ -3129,11 +3136,11 @@
  // their callers hold them) and the facts it gave are dropped first.
  function compile_unit(fl: File, k: Bend.Name, tld: Def): void {
    const unit = unit_of(fl, k);
@@ -57,7 +57,7 @@
    // own, hot and stat only grow; lend is what the current outputs lend.
    fl.lend.forget(k);
    unit.segs = [];
-@@ -3247,6 +3254,7 @@
+@@ -3280,6 +3287,7 @@
    // produced under the final facts.
    BRWS.clear();
    DIRTY.clear();
@@ -65,7 +65,7 @@
    SPIN_NEXT = 0;
    const fl = file_new(cb, "Term");
    for (const k of SRCS.keys()) {
-@@ -3275,6 +3283,8 @@
+@@ -3308,6 +3316,8 @@
      if (todo.size > 256) Bun.gc(true);
    }
    const ta = performance.now();

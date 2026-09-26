@@ -1,0 +1,27 @@
+--- a/base.bend
++++ b/base.bend
+@@ -3101,3 +3101,8 @@
+ def Entropy.bytes(count: U32) -> IO(Result<&1, &1, U32 & String, List<&2, U32>>):
+   import "./effs/entropy_bytes.c"
+   import "./effs/entropy_bytes.js"
++
++# Keep the platform errno representation outside pure Bend network policy.
++def Socket.isConnectionRefused(code: U32) -> IO(Bool):
++  import "./effs/socket_is_connection_refused.c"
++  import "./effs/socket_is_connection_refused.js"
+--- /dev/null
++++ b/effs/socket_is_connection_refused.c
+@@ -0,0 +1,7 @@
++Term socket_is_connection_refused_run(Env e, Term* f, IoWork* w) {
++  return term_pak(f[0] == ECONNREFUSED ? CID_TRUE : CID_FALSE, 0);
++}
++
++static void __attribute__((constructor)) socket_is_connection_refused_use(void) {
++  io_eff(CID_SOCKET_ISCONNECTIONREFUSED, socket_is_connection_refused_run, 0);
++}
+--- /dev/null
++++ b/effs/socket_is_connection_refused.js
+@@ -0,0 +1,3 @@
++function socket_isconnectionrefused(code) {
++  return code === (io_sys().mac ? 61 : 111);
++}

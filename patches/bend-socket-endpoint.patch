@@ -1,0 +1,93 @@
+--- a/base.bend
++++ b/base.bend
+@@ -3060,6 +3060,16 @@
+   import "./effs/connect.c"
+   import "./effs/connect.js"
+ 
++# Numeric getsockname/getpeername. side=0 selects local, side=1 selects peer;
++# other selectors fail with EINVAL. The affine socket is returned on all paths.
++# Value: family (4/6), four address words, port, scope. IPv4 uses the first word
++# and zeroes the rest. Address words/port are host integers in network order;
++# scope is the native interface index. No address parsing or DNS occurs here.
++def Socket.endpoint(socket: Socket, side: U32) ->
++  IO(Socket & Result<&1, &1, U32 & String, U32 & U32 & U32 & U32 & U32 & U32 & U32>):
++  import "./effs/socket_endpoint.c"
++  import "./effs/socket_endpoint.js"
++
+ # Owned timer and independently copyable cancellation capability.
+ # Wait returns the owner with True for expiry or False for cancellation.
+ # Cancellation wins until completion is committed by the IO loop. Close
+--- /dev/null
++++ b/effs/socket_endpoint.c
+@@ -0,0 +1,36 @@
++// Endpoint observation neither closes nor duplicates the socket descriptor.
++Term socket_endpoint_run(Env e, Term* f, IoWork* w) {
++  int fd = (int)io_hand_v(f[0]);
++  u32 side = (u32)f[1];
++  if (side > 1) return io_tup(e, io_hand(fd), io_fail(e, EINVAL, NULL));
++  struct sockaddr_storage address;
++  memset(&address, 0, sizeof(address));
++  socklen_t length = sizeof(address);
++  int status = side == 0
++    ? getsockname(fd, (struct sockaddr*)&address, &length)
++    : getpeername(fd, (struct sockaddr*)&address, &length);
++  if (status < 0) return io_tup(e, io_hand(fd), io_fail(e, errno, NULL));
++  u32 family, a = 0, b = 0, c = 0, d = 0, port, scope = 0;
++  if (address.ss_family == AF_INET && length >= sizeof(struct sockaddr_in)) {
++    struct sockaddr_in at;
++    memcpy(&at, &address, sizeof(at));
++    family = 4; a = ntohl(at.sin_addr.s_addr); port = ntohs(at.sin_port);
++  } else if (address.ss_family == AF_INET6 && length >= sizeof(struct sockaddr_in6)) {
++    struct sockaddr_in6 at;
++    memcpy(&at, &address, sizeof(at));
++    uint32_t words[4];
++    memcpy(words, &at.sin6_addr, sizeof(words));
++    family = 6; a = ntohl(words[0]); b = ntohl(words[1]);
++    c = ntohl(words[2]); d = ntohl(words[3]);
++    port = ntohs(at.sin6_port); scope = at.sin6_scope_id;
++  } else {
++    return io_tup(e, io_hand(fd), io_fail(e, EAFNOSUPPORT, NULL));
++  }
++  return io_tup(e, io_hand(fd), io_done(e, io_tup(e, family,
++    io_tup(e, a, io_tup(e, b, io_tup(e, c, io_tup(e, d,
++      io_tup(e, port, scope))))))));
++}
++
++static void __attribute__((constructor)) socket_endpoint_use(void) {
++  io_eff(CID_SOCKET_ENDPOINT, socket_endpoint_run, 0);
++}
+--- /dev/null
++++ b/effs/socket_endpoint.js
+@@ -0,0 +1,32 @@
++// Bind only when the new effect runs; existing IO paths are unchanged.
++function socket_endpoint(socket, side) {
++  if (side > 1) return io_tup(socket, io_fail(22));
++  const sys = io_sys();
++  if (globalThis.BEND_SOCKET_ENDPOINT === undefined) {
++    const ffi = require("bun:ffi");
++    globalThis.BEND_SOCKET_ENDPOINT = ffi.dlopen(sys.mac ? "libSystem.dylib" : "libc.so.6", {
++      getsockname: { args: ["i32", "ptr", "ptr"], returns: "i32" },
++      getpeername: { args: ["i32", "ptr", "ptr"], returns: "i32" }
++    });
++  }
++  const address = new Uint8Array(128);
++  const length = new Uint32Array([address.length]);
++  const call = globalThis.BEND_SOCKET_ENDPOINT.symbols[side === 0 ? "getsockname" : "getpeername"];
++  if (call(socket, sys.ptr(address), sys.ptr(length)) < 0) {
++    return io_tup(socket, io_fail(sys.errno()));
++  }
++  const view = new DataView(address.buffer);
++  const little = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
++  const family = sys.mac ? address[1] : view.getUint16(0, little);
++  const unsupported = () => io_tup(socket, io_fail(sys.mac ? 47 : 97));
++  if (family === 2 && length[0] >= 16) {
++    return io_tup(socket, io_done(io_tup(4, view.getUint32(4, false), 0, 0, 0,
++      view.getUint16(2, false), 0)));
++  }
++  if (family === (sys.mac ? 30 : 10) && length[0] >= 28) {
++    return io_tup(socket, io_done(io_tup(6, view.getUint32(8, false),
++      view.getUint32(12, false), view.getUint32(16, false), view.getUint32(20, false),
++      view.getUint16(2, false), view.getUint32(24, little))));
++  }
++  return unsupported();
++}

@@ -87,6 +87,6 @@ for label,command in [('native 1',['build/dns-tcp-query','--threads','1']),('nat
             assert run.returncode==0 and not run.stderr and run.stdout.splitlines()==['connect:expiry','expiry','PASS DNS TCP query'],(label,number,run)
             rows.append(dict(backend=label,family=number,mode='pending-connect-deadline',seconds=time.monotonic()-started))
     print(label+': DNS TCP deadline query PASS',flush=True)
-paths=['packages/runtime/src/dns-transport.bend','packages/runtime/src/deadline.bend','tests/dns-tcp-query.bend','tests/dns_tcp_query_check.py','scripts/prepare-timer-candidate.py','build/dns-tcp-query','build/dns-tcp-query.js']
+paths=['packages/runtime/src/dns-transport.bend','packages/runtime/src/deadline.bend','tests/dns-tcp-query.bend','tests/dns_tcp_query_check.py','patches/bend-timer.patch','build/dns-tcp-query','build/dns-tcp-query.js']
 report={'scope':__doc__,'cases':rows,'sha256':{p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},'candidate_sha256':{p:hashlib.sha256((candidate/p).read_bytes()).hexdigest() for p in ['base.bend','comp.ts','effs/timer.c','effs/timer.js']}}
 (ROOT/'build/dns-tcp-query-result.json').write_text(json.dumps(report,indent=2)+'\n')

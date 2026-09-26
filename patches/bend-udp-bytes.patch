@@ -1,0 +1,683 @@
+--- a/base.bend
++++ b/base.bend
+@@ -3116,3 +3116,73 @@
+ def IO.interface_index(name: String) -> IO(Result<&1, &1, U32 & String, U32>):
+   import "./effs/interface_index.c"
+   import "./effs/interface_index.js"
++
++# Consume one datagram. max is 0..65535; larger limits fail with EINVAL
++# without consuming a packet. Return numeric peer, truncation, and raw bytes.
++# Empty datagrams are successful empty lists, never EOF. Socket stays owned.
++def UDP.recv_bytes(socket: Socket, max: U32) ->
++  IO(Socket & Result<&1, &1, U32 & String, (U32 & U32 & U32 & U32 & U32 & U32 & U32) & Bool & List<&2, U32>>):
++  import "./effs/udp_recv_bytes.c"
++  import "./effs/udp_recv_bytes.js"
++
++# Bind a wildcard datagram socket for exactly family 4 or 6. IPv6 is v6-only.
++# port=0 requests an ephemeral port; ports above 65535 fail with EINVAL.
++def UDP.bind_family(family: U32, port: U32) -> IO(Result<&1, &1, U32 & String, Socket>):
++  import "./effs/udp_bind_family.c"
++  import "./effs/udp_bind_family.js"
++
++# Send one raw datagram to a numeric endpoint. Destination port is 1..65535.
++# IPv4 requires b/c/d/scope=0. Validate all bytes before calling sendto.
++def UDP.send_bytes(socket: Socket, family: U32, a: U32, b: U32, c: U32, d: U32, port: U32, scope: U32, bytes: List<&2, U32>) ->
++  IO(Socket & Result<&1, &1, U32 & String, Unit>):
++  import "./effs/udp_send_bytes.c"
++  import "./effs/udp_send_bytes.js"
++
++# One-shot owned receive and independently copyable cancellation capability.
++# wait consumes the operation, returning its socket and None on cancellation.
++# Some contains the ordinary packet/error result. release returns an unstarted
++# operation's socket. Completion retires the capability; stale cancels are false.
++law UDPRead:
++  Type
++law UDPReadCancel:
++  Data
++
++def UDPRead.new(socket: Socket, max: U32) -> IO(UDPRead & UDPReadCancel):
++  import "./effs/udp_recv_bytes.c"
++  import "./effs/udp_recv_bytes.js"
++def UDPRead.wait(read: UDPRead) -> IO(Socket & Maybe<&1, Result<&1, &1, U32 & String, (U32 & U32 & U32 & U32 & U32 & U32 & U32) & Bool & List<&2, U32>>>):
++  import "./effs/udp_recv_bytes.c"
++  import "./effs/udp_recv_bytes.js"
++def UDPRead.cancel(handle: UDPReadCancel) -> IO(Bool):
++  import "./effs/udp_recv_bytes.c"
++  import "./effs/udp_recv_bytes.js"
++def UDPRead.release(read: UDPRead) -> IO(Socket):
++  import "./effs/udp_recv_bytes.c"
++  import "./effs/udp_recv_bytes.js"
++
++# Owned one-shot send. new validates/buffers without transmitting. wait consumes
++# the operation and returns the socket with None for cancellation or Some result.
++# release discards an unstarted send. Retired cancellation handles return False.
++law UDPWrite:
++  Type
++law UDPWriteCancel:
++  Data
++
++def UDPWrite.new(socket: Socket, family: U32, a: U32, b: U32, c: U32, d: U32, port: U32, scope: U32, bytes: List<&2, U32>) -> IO(UDPWrite & UDPWriteCancel):
++  import "./effs/udp_send_bytes.c"
++  import "./effs/udp_send_bytes.js"
++def UDPWrite.wait(write: UDPWrite) -> IO(Socket & Maybe<&1, Result<&1, &1, U32 & String, Unit>>):
++  import "./effs/udp_send_bytes.c"
++  import "./effs/udp_send_bytes.js"
++def UDPWrite.cancel(handle: UDPWriteCancel) -> IO(Bool):
++  import "./effs/udp_send_bytes.c"
++  import "./effs/udp_send_bytes.js"
++def UDPWrite.release(write: UDPWrite) -> IO(Socket):
++  import "./effs/udp_send_bytes.c"
++  import "./effs/udp_send_bytes.js"
++
++# Associate an existing UDP socket with a numeric peer; return ownership on
++# success/error. No hostname lookup, handshake, socket duplication or closure.
++def UDP.connect_peer(socket: Socket, family: U32, a: U32, b: U32, c: U32, d: U32, port: U32, scope: U32) -> IO(Socket & Result<&1, &1, U32 & String, Unit>):
++  import "./effs/udp_connect_peer.c"
++  import "./effs/udp_connect_peer.js"
+--- /dev/null
++++ b/effs/udp_bind_family.c
+@@ -0,0 +1,31 @@
++Term udp_bind_family_run(Env e, Term* f, IoWork* w) {
++  u32 family = f[0], port = f[1];
++  if ((family != 4 && family != 6) || port > 65535)
++    return io_fail(e, EINVAL, NULL);
++  int fd = socket(family == 4 ? AF_INET : AF_INET6, SOCK_DGRAM, 0);
++  if (fd < 0) return io_fail(e, errno, NULL);
++  int status;
++  if (family == 4) {
++    struct sockaddr_in at = {0};
++    at.sin_family = AF_INET; at.sin_port = htons(port);
++    status = bind(fd, (struct sockaddr*)&at, sizeof(at));
++  } else {
++    int one = 1;
++    status = setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &one, sizeof(one));
++    if (status == 0) {
++      struct sockaddr_in6 at = {0};
++      at.sin6_family = AF_INET6; at.sin6_port = htons(port);
++      status = bind(fd, (struct sockaddr*)&at, sizeof(at));
++    }
++  }
++  if (status < 0 || fcntl(fd, F_SETFD, FD_CLOEXEC) < 0 ||
++      fcntl(fd, F_SETFL, O_NONBLOCK) < 0) {
++    int code = errno;
++    close(fd);
++    return io_fail(e, code, NULL);
++  }
++  return io_done(e, io_hand(fd));
++}
++static void __attribute__((constructor)) udp_bind_family_use(void) {
++  io_eff(CID_UDP_BIND_FAMILY, udp_bind_family_run, 0);
++}
+--- /dev/null
++++ b/effs/udp_bind_family.js
+@@ -0,0 +1,22 @@
++function udp_bind_family(family, port) {
++  if ((family !== 4 && family !== 6) || port > 65535) return io_fail(22);
++  const sys = io_sys();
++  const af = family === 4 ? 2 : (sys.mac ? 30 : 10);
++  const fd = sys.socket(af, 2, 0);
++  if (fd < 0) return io_fail(sys.errno());
++  const fail = () => { const code = sys.errno(); sys.close(fd); return io_fail(code); };
++  const at = new Uint8Array(family === 4 ? 16 : 28);
++  const view = new DataView(at.buffer);
++  const little = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
++  if (sys.mac) { at[0] = at.length; at[1] = af; }
++  else view.setUint16(0, af, little);
++  view.setUint16(2, port, false);
++  if (family === 6) {
++    const one = new Int32Array([1]);
++    if (sys.setsockopt(fd, 41, sys.mac ? 27 : 26, sys.ptr(one), 4) < 0) return fail();
++  }
++  if (sys.bind(fd, sys.ptr(at), at.length) < 0 ||
++      sys.fcntl(fd, 2, 1) < 0 ||
++      sys.fcntl(fd, 4, sys.mac ? 4 : 0x800) < 0) return fail();
++  return io_done(fd);
++}
+--- /dev/null
++++ b/effs/udp_connect_peer.c
+@@ -0,0 +1,26 @@
++// Associate an existing datagram socket with a numeric peer. UDP has no
++// connection handshake; getsockname can then report the selected local route.
++Term udp_connect_peer_run(Env e, Term* f, IoWork* w) {
++  int fd=(int)io_hand_v(f[0]);
++  u32 family=f[1],port=f[6],scope=f[7];
++  if((family!=4 && family!=6) || port==0 || port>65535 ||
++     (family==4 && (f[3] || f[4] || f[5] || scope)))
++    return io_tup(e,io_hand(fd),io_fail(e,EINVAL,NULL));
++  struct sockaddr_storage storage={0};
++  socklen_t length;
++  if(family==4) {
++    struct sockaddr_in* at=(struct sockaddr_in*)&storage;
++    at->sin_family=AF_INET; at->sin_port=htons(port);
++    at->sin_addr.s_addr=htonl(f[2]); length=sizeof(*at);
++  } else {
++    struct sockaddr_in6* at=(struct sockaddr_in6*)&storage;
++    at->sin6_family=AF_INET6; at->sin6_port=htons(port); at->sin6_scope_id=scope;
++    uint32_t words[4]={htonl(f[2]),htonl(f[3]),htonl(f[4]),htonl(f[5])};
++    memcpy(&at->sin6_addr,words,sizeof(words)); length=sizeof(*at);
++  }
++  int result=connect(fd,(struct sockaddr*)&storage,length);
++  return io_tup(e,io_hand(fd),result<0 ? io_fail(e,errno,NULL) : io_done(e,term_pak(CID_UNIT,0)));
++}
++static void __attribute__((constructor)) udp_connect_peer_use(void) {
++  io_eff(CID_UDP_CONNECT_PEER,udp_connect_peer_run,0);
++}
+--- /dev/null
++++ b/effs/udp_connect_peer.js
+@@ -0,0 +1,19 @@
++function udp_connect_peer(socket,family,a,b,c,d,port,scope) {
++  if((family!==4 && family!==6) || port===0 || port>65535 ||
++      (family===4 && (b!==0 || c!==0 || d!==0 || scope!==0)))
++    return io_tup(socket,io_fail(22));
++  const sys=io_sys();
++  const at=new Uint8Array(family===4?16:28);
++  const view=new DataView(at.buffer);
++  const little=new Uint8Array(new Uint16Array([1]).buffer)[0]===1;
++  const af=family===4?2:(sys.mac?30:10);
++  if(sys.mac){at[0]=at.length;at[1]=af;}else view.setUint16(0,af,little);
++  view.setUint16(2,port,false);
++  if(family===4)view.setUint32(4,a,false);
++  else {
++    [a,b,c,d].forEach((word,i)=>view.setUint32(8+4*i,word,false));
++    view.setUint32(24,scope,little);
++  }
++  const result=sys.connect(socket,sys.ptr(at),at.length);
++  return io_tup(socket,result<0?io_fail(sys.errno()):io_done({$:"Unit"}));
++}
+--- /dev/null
++++ b/effs/udp_recv_bytes.c
+@@ -0,0 +1,152 @@
++// Reading one extra byte detects truncation without platform MSG_TRUNC rules.
++static Term udp_packet(Env e, IoWork* w) {
++  int fd = (int)w->hand;
++  struct sockaddr_storage address;
++  memset(&address, 0, sizeof(address));
++  socklen_t length = sizeof(address);
++  u64 received = io_sys_end(w, recvfrom(fd, w->data, (size_t)w->made + 1, 0,
++    (struct sockaddr*)&address, &length));
++  if (w->code == EAGAIN) return IO_PARK;
++  if (w->code) {
++    free(w->data);
++    return io_fail(e, w->code, NULL);
++  }
++  u32 family, a = 0, b = 0, c = 0, d = 0, port, scope = 0;
++  if (address.ss_family == AF_INET && length >= sizeof(struct sockaddr_in)) {
++    struct sockaddr_in at;
++    memcpy(&at, &address, sizeof(at));
++    family = 4; a = ntohl(at.sin_addr.s_addr); port = ntohs(at.sin_port);
++  } else if (address.ss_family == AF_INET6 && length >= sizeof(struct sockaddr_in6)) {
++    struct sockaddr_in6 at;
++    memcpy(&at, &address, sizeof(at));
++    uint32_t words[4];
++    memcpy(words, &at.sin6_addr, sizeof(words));
++    family = 6; a = ntohl(words[0]); b = ntohl(words[1]);
++    c = ntohl(words[2]); d = ntohl(words[3]);
++    port = ntohs(at.sin6_port); scope = at.sin6_scope_id;
++  } else {
++    free(w->data);
++    return io_fail(e, EAFNOSUPPORT, NULL);
++  }
++  Term peer = io_tup(e, family, io_tup(e, a, io_tup(e, b, io_tup(e, c,
++    io_tup(e, d, io_tup(e, port, scope))))));
++  u64 size = received > w->made ? w->made : received;
++  Term bytes = term_pak(CID_NIL, 0);
++  for (u64 i = size; i > 0; --i)
++    bytes = io_node(e, CID_CON, ((uint8_t*)w->data)[i-1], bytes, IO_HOTS & 16);
++  Term truncated = term_pak(received > w->made ? CID_TRUE : CID_FALSE, 0);
++  free(w->data);
++  return io_done(e, io_tup(e, peer, io_tup(e, truncated, bytes)));
++}
++
++#ifdef CID_UDP_RECV_BYTES
++static Term udp_recv_bytes_more(Env e, IoWork* w) {
++  Term result = udp_packet(e, w);
++  return result == IO_PARK ? io_wait_on(w, (int)w->hand, POLLIN, udp_recv_bytes_more)
++    : io_tup(e, io_hand(w->hand), result);
++}
++Term udp_recv_bytes_run(Env e, Term* f, IoWork* w) {
++  w->hand = (intptr_t)io_hand_v(f[0]);
++  if (f[1] > 65535) return io_tup(e, io_hand(w->hand), io_fail(e, EINVAL, NULL));
++  w->made = f[1];
++  w->data = io_mem(malloc((size_t)w->made + 1));
++  return udp_recv_bytes_more(e, w);
++}
++
++static void __attribute__((constructor)) udp_recv_bytes_use(void) {
++  io_eff(CID_UDP_RECV_BYTES, udp_recv_bytes_run, IO_READ);
++}
++
++#endif
++
++#if defined(CID_UDPREAD_NEW) || defined(CID_UDPREAD_WAIT) || defined(CID_UDPREAD_CANCEL) || defined(CID_UDPREAD_RELEASE)
++// All row and queue operations run on the existing IO loop thread.
++typedef struct { u32 gen, next, live, cancelled, maximum; int fd; IoAct* waiter; } UDPReadRow;
++static UDPReadRow* udp_read_rows;
++static u32 udp_read_len, udp_read_idle = ~0u;
++static UDPReadRow* udp_read_at(Term handle) {
++  u64 id = io_hand_v(handle);
++  u32 index = (u32)id & 0xFFFFFF;
++  UDPReadRow* row = index < udp_read_len ? &udp_read_rows[index] : NULL;
++  return row && row->live && row->gen == (u32)(id >> 24) ? row : NULL;
++}
++static Term udp_read_retire(UDPReadRow* row) {
++  Term socket = io_hand(row->fd);
++  row->live = 0; row->waiter = NULL;
++  if (row->gen != 0xFFFFFFFFu) {
++    row->next = udp_read_idle;
++    udp_read_idle = (u32)(row - udp_read_rows);
++  }
++  return socket;
++}
++#ifdef CID_UDPREAD_NEW
++Term udpread_new_run(Env e, Term* f, IoWork* w) {
++  u32 index = udp_read_idle;
++  if (index != ~0u) udp_read_idle = udp_read_rows[index].next;
++  else {
++    if (udp_read_len == (1u << 24)) err_fail("too many UDP reads");
++    if ((udp_read_len & (udp_read_len-1)) == 0)
++      udp_read_rows = io_mem(realloc(udp_read_rows, (udp_read_len ? 2*udp_read_len : 1)*sizeof(UDPReadRow)));
++    index = udp_read_len++; udp_read_rows[index].gen = 0;
++  }
++  UDPReadRow* row = &udp_read_rows[index];
++  row->gen++; row->live = 1; row->cancelled = 0; row->waiter = NULL;
++  row->fd = (int)io_hand_v(f[0]); row->maximum = f[1];
++  Term handle = io_hand(((u64)row->gen << 24) | index);
++  return io_tup(e, handle, handle);
++}
++static void __attribute__((constructor)) udpread_new_use(void) { io_eff(CID_UDPREAD_NEW, udpread_new_run, 0); }
++#endif
++#ifdef CID_UDPREAD_WAIT
++static Term udp_read_more(Env e, IoWork* w) {
++  UDPReadRow* row = udp_read_at((Term)w->size);
++  if (!row) err_fail("invalid UDP read");
++  Term result = udp_packet(e, w);
++  if (result == IO_PARK) {
++    row->waiter = (IoAct*)w;
++    return io_wait_on(w, row->fd, POLLIN, udp_read_more);
++  }
++  return io_tup(e, udp_read_retire(row), io_box(e, CID_SOME, result, IO_HOTS & 32));
++}
++Term udpread_wait_run(Env e, Term* f, IoWork* w) {
++  UDPReadRow* row = udp_read_at(f[0]);
++  if (!row || row->waiter) err_fail("invalid UDP read owner");
++  if (row->cancelled) return io_tup(e, udp_read_retire(row), term_pak(CID_NONE, 0));
++  if (row->maximum > 65535)
++    return io_tup(e, udp_read_retire(row), io_box(e, CID_SOME, io_fail(e, EINVAL, NULL), IO_HOTS & 32));
++  w->size = f[0]; w->hand = row->fd; w->made = row->maximum;
++  w->data = io_mem(malloc((size_t)w->made + 1));
++  return udp_read_more(e, w);
++}
++static void __attribute__((constructor)) udpread_wait_use(void) { io_eff(CID_UDPREAD_WAIT, udpread_wait_run, 0); }
++#endif
++#ifdef CID_UDPREAD_CANCEL
++Term udpread_cancel_run(Env e, Term* f, IoWork* w) {
++  UDPReadRow* row = udp_read_at(f[0]);
++  if (!row || row->cancelled) return term_pak(CID_FALSE, 0);
++  row->cancelled = 1;
++  IoAct* activation = row->waiter;
++  if (activation) {
++    IoAct* previous = NULL; IoAct* current = io_park.head;
++    while (current && current != activation) { previous = current; current = current->next; }
++    if (!current) err_fail("UDP read was not parked");
++    if (previous) previous->next = activation->next; else io_park.head = activation->next;
++    if (io_park.last == activation) io_park.last = previous;
++    free(activation->work.data);
++    activation->time = 0;
++    activation->item = io_tup(e, udp_read_retire(row), term_pak(CID_NONE, 0));
++    io_push(&io_runs, activation);
++  }
++  return term_pak(CID_TRUE, 0);
++}
++static void __attribute__((constructor)) udpread_cancel_use(void) { io_eff(CID_UDPREAD_CANCEL, udpread_cancel_run, 0); }
++#endif
++#ifdef CID_UDPREAD_RELEASE
++Term udpread_release_run(Env e, Term* f, IoWork* w) {
++  UDPReadRow* row = udp_read_at(f[0]);
++  if (!row || row->waiter) err_fail("invalid UDP read release");
++  return udp_read_retire(row);
++}
++static void __attribute__((constructor)) udpread_release_use(void) { io_eff(CID_UDPREAD_RELEASE, udpread_release_run, 0); }
++#endif
++#endif
+--- /dev/null
++++ b/effs/udp_recv_bytes.js
+@@ -0,0 +1,85 @@
++function udp_packet_start(socket, max, complete, park) {
++  if (max > 65535) return complete(io_fail(22));
++  const sys = io_sys();
++  const data = new Uint8Array(Number(max) + 1);
++  const address = new Uint8Array(128);
++  const length = new Uint32Array([128]);
++  const go = () => {
++    length[0] = address.length;
++    const n = Number(sys.recvfrom(socket, sys.ptr(data), data.length, 0,
++      sys.ptr(address), sys.ptr(length)));
++    if (n < 0) {
++      const code = sys.errno();
++      if (code === (sys.mac ? 35 : 11)) {
++        park(go);
++        return undefined;
++      }
++      return complete(io_fail(code));
++    }
++    const view = new DataView(address.buffer);
++    const little = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
++    const family = sys.mac ? address[1] : view.getUint16(0, little);
++    let peer;
++    if (family === 2 && length[0] >= 16) {
++      peer = io_tup(4, view.getUint32(4, false), 0, 0, 0, view.getUint16(2, false), 0);
++    } else if (family === (sys.mac ? 30 : 10) && length[0] >= 28) {
++      peer = io_tup(6, view.getUint32(8, false), view.getUint32(12, false),
++        view.getUint32(16, false), view.getUint32(20, false),
++        view.getUint16(2, false), view.getUint32(24, little));
++    } else return complete(io_fail(sys.mac ? 47 : 97));
++    let bytes = { $: "Nil" };
++    for (let i = Math.min(n, Number(max)); i > 0; --i)
++      bytes = { $: "Con", head: data[i-1], tail: bytes };
++    return complete(io_done(io_tup(peer, n > max, bytes)));
++  };
++  return go();
++}
++function udp_recv_bytes_need() { return { read: true }; }
++
++function udp_recv_bytes(socket, max, k) {
++  return udp_packet_start(socket, max, result => io_tup(socket, result),
++    go => io_park_on(socket, false, k, go));
++}
++function udpread_new(socket, max) {
++  const row = {socket, max, state: 0, waiter: null};
++  return io_tup(row, row);
++}
++function udpread_wait(row, k) {
++  if (row.state === 3 || row.waiter !== null) throw Error("invalid UDP read owner");
++  if (row.state === 2) {
++    row.state = 3;
++    return io_tup(row.socket, {$: "None"});
++  }
++  return udp_packet_start(row.socket, row.max, result => {
++    row.waiter = null; row.state = 3;
++    return io_tup(row.socket, {$: "Some", value: result});
++  }, more => {
++    const wait = {fd: row.socket, out: false, k, more: () => {
++      if (row.state === 2) {
++        row.waiter = null; row.state = 3;
++        return io_tup(row.socket, {$: "None"});
++      }
++      return more();
++    }};
++    row.waiter = wait;
++    globalThis.BEND_IO.waits.push(wait);
++  });
++}
++function udpread_cancel(row) {
++  if (row.state !== 0) return false;
++  if (row.waiter !== null) {
++    const io = globalThis.BEND_IO;
++    const index = io.waits.indexOf(row.waiter);
++    if (index < 0) { row.state = 2; return true; }
++    const wait = row.waiter;
++    io.waits.splice(index, 1);
++    row.waiter = null; row.state = 3;
++    io_push(wait.k, io_tup(row.socket, {$: "None"}), false);
++  } else row.state = 2;
++  return true;
++}
++function udpread_release(row) {
++  if (row.state === 3 || row.waiter !== null) throw Error("invalid UDP read release");
++  row.state = 3;
++  return row.socket;
++}
+--- /dev/null
++++ b/effs/udp_send_bytes.c
+@@ -0,0 +1,162 @@
++static Term udp_send_packet(Env e, IoWork* w) {
++  int fd = (int)w->hand;
++  if (!w->code) {
++    ssize_t n = sendto(fd, w->data, w->size, 0,
++      (struct sockaddr*)w->text, (socklen_t)w->made);
++    io_sys_end(w, n);
++    if (w->code == EAGAIN) {
++      w->code = 0;
++      return IO_PARK;
++    }
++    if (!w->code && (u64)n != w->size) w->code = EIO;
++  }
++  Term result = w->code ? io_fail(e, w->code, NULL)
++    : io_done(e, term_pak(CID_UNIT, 0));
++  free(w->text); free(w->data);
++  return result;
++}
++
++static void udp_send_prepare(Env e, Term* f, IoWork* w) {
++  w->hand = (intptr_t)io_hand_v(f[0]);
++  w->code = 0; w->size = 0; w->made = 0;
++  w->text = io_mem(calloc(1, sizeof(struct sockaddr_storage)));
++  u32 family = f[1], port = f[6], scope = f[7];
++  if ((family != 4 && family != 6) || port == 0 || port > 65535 ||
++      (family == 4 && (f[3] || f[4] || f[5] || scope))) w->code = EINVAL;
++  if (family == 4) {
++    struct sockaddr_in* at = (struct sockaddr_in*)w->text;
++    at->sin_family = AF_INET; at->sin_port = htons(port);
++    at->sin_addr.s_addr = htonl(f[2]); w->made = sizeof(*at);
++  } else if (family == 6) {
++    struct sockaddr_in6* at = (struct sockaddr_in6*)w->text;
++    at->sin6_family = AF_INET6; at->sin6_port = htons(port);
++    at->sin6_scope_id = scope;
++    uint32_t words[4] = {htonl(f[2]), htonl(f[3]), htonl(f[4]), htonl(f[5])};
++    memcpy(&at->sin6_addr, words, sizeof(words)); w->made = sizeof(*at);
++  }
++  u64 capacity = 64;
++  w->data = io_mem(malloc(capacity));
++  Term xs = f[8];
++  while (term_aux(xs) == CID_CON) {
++    Term fields[2];
++    spare_free(e, cls_fit(2), ctr_take(e, xs, 2, fields));
++    if (fields[0] > 255) w->code = EINVAL;
++    if (!w->code && w->size == 65535) w->code = EMSGSIZE;
++    if (!w->code) {
++      if (w->size == capacity) {
++        capacity *= 2;
++        w->data = io_mem(realloc(w->data, capacity));
++      }
++      w->data[w->size++] = (char)fields[0];
++    }
++    xs = fields[1];
++  }
++}
++#ifdef CID_UDP_SEND_BYTES
++static Term udp_send_bytes_more(Env e, IoWork* w) {
++  Term result = udp_send_packet(e, w);
++  return result == IO_PARK ? io_wait_on(w, (int)w->hand, POLLOUT, udp_send_bytes_more)
++    : io_tup(e, io_hand(w->hand), result);
++}
++Term udp_send_bytes_run(Env e, Term* f, IoWork* w) {
++  udp_send_prepare(e, f, w);
++  return udp_send_bytes_more(e, w);
++}
++static void __attribute__((constructor)) udp_send_bytes_use(void) {
++  io_eff(CID_UDP_SEND_BYTES, udp_send_bytes_run, 0);
++}
++
++#endif
++
++#if defined(CID_UDPWRITE_NEW) || defined(CID_UDPWRITE_WAIT) || defined(CID_UDPWRITE_CANCEL) || defined(CID_UDPWRITE_RELEASE)
++typedef struct { u32 gen, next, live, cancelled; IoWork payload; IoAct* waiter; } UDPWriteRow;
++static UDPWriteRow* udp_write_rows;
++static u32 udp_write_len, udp_write_idle = ~0u;
++static UDPWriteRow* udp_write_at(Term handle) {
++  u64 id = io_hand_v(handle); u32 index = (u32)id & 0xFFFFFF;
++  UDPWriteRow* row = index < udp_write_len ? &udp_write_rows[index] : NULL;
++  return row && row->live && row->gen == (u32)(id >> 24) ? row : NULL;
++}
++static Term udp_write_retire(UDPWriteRow* row) {
++  Term socket = io_hand(row->payload.hand);
++  row->live = 0; row->waiter = NULL; row->payload.text = NULL; row->payload.data = NULL;
++  if (row->gen != 0xFFFFFFFFu) { row->next = udp_write_idle; udp_write_idle = (u32)(row-udp_write_rows); }
++  return socket;
++}
++#ifdef CID_UDPWRITE_NEW
++Term udpwrite_new_run(Env e, Term* f, IoWork* w) {
++  u32 index = udp_write_idle;
++  if (index != ~0u) udp_write_idle = udp_write_rows[index].next;
++  else {
++    if (udp_write_len == (1u << 24)) err_fail("too many UDP writes");
++    if ((udp_write_len & (udp_write_len-1)) == 0)
++      udp_write_rows = io_mem(realloc(udp_write_rows, (udp_write_len ? 2*udp_write_len : 1)*sizeof(UDPWriteRow)));
++    index = udp_write_len++; udp_write_rows[index].gen = 0;
++  }
++  UDPWriteRow* row = &udp_write_rows[index];
++  row->gen++; row->live=1; row->cancelled=0; row->waiter=NULL;
++  memset(&row->payload, 0, sizeof(row->payload));
++  udp_send_prepare(e, f, &row->payload);
++  Term handle = io_hand(((u64)row->gen << 24) | index);
++  // Only owned writes need the extra handle storage; plain sends are unchanged.
++  row->payload.text = io_mem(realloc(row->payload.text, sizeof(struct sockaddr_storage)+sizeof(Term)));
++  memcpy(row->payload.text+sizeof(struct sockaddr_storage), &handle, sizeof(handle));
++  return io_tup(e, handle, handle);
++}
++static void __attribute__((constructor)) udpwrite_new_use(void) { io_eff(CID_UDPWRITE_NEW, udpwrite_new_run, 0); }
++#endif
++#ifdef CID_UDPWRITE_WAIT
++static Term udp_write_more(Env e, IoWork* w) {
++  Term handle; memcpy(&handle, w->text+sizeof(struct sockaddr_storage), sizeof(handle));
++  UDPWriteRow* row = udp_write_at(handle);
++  if (!row) err_fail("invalid UDP write");
++  Term result = udp_send_packet(e, w);
++  if (result == IO_PARK) {
++    row->waiter = (IoAct*)w;
++    return io_wait_on(w, (int)w->hand, POLLOUT, udp_write_more);
++  }
++  return io_tup(e, udp_write_retire(row), io_box(e, CID_SOME, result, IO_HOTS & 32));
++}
++Term udpwrite_wait_run(Env e, Term* f, IoWork* w) {
++  UDPWriteRow* row = udp_write_at(f[0]);
++  if (!row || row->waiter) err_fail("invalid UDP write owner");
++  if (row->cancelled) {
++    free(row->payload.text); free(row->payload.data);
++    return io_tup(e, udp_write_retire(row), term_pak(CID_NONE,0));
++  }
++  *w = row->payload;
++  return udp_write_more(e, w);
++}
++static void __attribute__((constructor)) udpwrite_wait_use(void) { io_eff(CID_UDPWRITE_WAIT, udpwrite_wait_run, 0); }
++#endif
++#ifdef CID_UDPWRITE_CANCEL
++Term udpwrite_cancel_run(Env e, Term* f, IoWork* w) {
++  UDPWriteRow* row = udp_write_at(f[0]);
++  if (!row || row->cancelled) return term_pak(CID_FALSE,0);
++  row->cancelled=1;
++  IoAct* activation=row->waiter;
++  if (activation) {
++    IoAct* previous=NULL; IoAct* current=io_park.head;
++    while(current && current!=activation) { previous=current; current=current->next; }
++    if(!current) err_fail("UDP write was not parked");
++    if(previous) previous->next=activation->next; else io_park.head=activation->next;
++    if(io_park.last==activation) io_park.last=previous;
++    free(activation->work.text); free(activation->work.data);
++    activation->time=0;
++    activation->item=io_tup(e,udp_write_retire(row),term_pak(CID_NONE,0));
++    io_push(&io_runs,activation);
++  }
++  return term_pak(CID_TRUE,0);
++}
++static void __attribute__((constructor)) udpwrite_cancel_use(void) { io_eff(CID_UDPWRITE_CANCEL,udpwrite_cancel_run,0); }
++#endif
++#ifdef CID_UDPWRITE_RELEASE
++Term udpwrite_release_run(Env e, Term* f, IoWork* w) {
++  UDPWriteRow* row=udp_write_at(f[0]);
++  if(!row || row->waiter) err_fail("invalid UDP write release");
++  free(row->payload.text); free(row->payload.data);
++  return udp_write_retire(row);
++}
++static void __attribute__((constructor)) udpwrite_release_use(void) { io_eff(CID_UDPWRITE_RELEASE,udpwrite_release_run,0); }
++#endif
++#endif
+--- /dev/null
++++ b/effs/udp_send_bytes.js
+@@ -0,0 +1,86 @@
++function udp_send_prepare(socket, family, a, b, c, d, port, scope, data) {
++  const sys = io_sys();
++  let error = ((family !== 4 && family !== 6) || port === 0 || port > 65535 ||
++    (family === 4 && (b !== 0 || c !== 0 || d !== 0 || scope !== 0))) ? 22 : 0;
++  const values = [];
++  for (let xs = data; xs.$ === "Con"; xs = xs.tail) {
++    if (xs.head > 255) error = 22;
++    if (!error && values.length === 65535) error = sys.mac ? 40 : 90;
++    if (!error) values.push(xs.head);
++  }
++  if (error) return {socket, error};
++  const at = new Uint8Array(family === 4 ? 16 : 28);
++  const view = new DataView(at.buffer);
++  const little = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
++  const af = family === 4 ? 2 : (sys.mac ? 30 : 10);
++  if (sys.mac) { at[0] = at.length; at[1] = af; }
++  else view.setUint16(0, af, little);
++  view.setUint16(2, port, false);
++  if (family === 4) view.setUint32(4, a, false);
++  else {
++    [a,b,c,d].forEach((word, i) => view.setUint32(8+4*i, word, false));
++    view.setUint32(24, scope, little);
++  }
++  const bytes = new Uint8Array(Math.max(1, values.length));
++  bytes.set(values);
++  return {socket, error: 0, bytes, length: values.length, at};
++}
++function udp_send_start(prepared, complete, park) {
++  const {socket, error, bytes, length, at} = prepared;
++  if (error) return complete(io_fail(error));
++  const sys = io_sys();
++  const go = () => {
++    const n = Number(sys.sendto(socket, sys.ptr(bytes), length, 0, sys.ptr(at), at.length));
++    if (n < 0) {
++      const code = sys.errno();
++      if (code === (sys.mac ? 35 : 11)) {
++        park(go);
++        return undefined;
++      }
++      return complete(io_fail(code));
++    }
++    return complete(n === length ? io_done({ $: "Unit" }) : io_fail(5));
++  };
++  return go();
++}
++
++function udp_send_bytes(socket, family, a, b, c, d, port, scope, data, k) {
++  return udp_send_start(udp_send_prepare(socket,family,a,b,c,d,port,scope,data),
++    result => io_tup(socket,result), go => io_park_on(socket,true,k,go));
++}
++function udpwrite_new(socket,family,a,b,c,d,port,scope,data) {
++  const row={socket,state:0,waiter:null,prepared:udp_send_prepare(socket,family,a,b,c,d,port,scope,data)};
++  return io_tup(row,row);
++}
++function udpwrite_wait(row,k) {
++  if(row.state===3 || row.waiter!==null) throw Error("invalid UDP write owner");
++  if(row.state===2) { row.state=3; row.prepared=null; return io_tup(row.socket,{$:"None"}); }
++  return udp_send_start(row.prepared,result=>{
++    row.waiter=null; row.prepared=null; row.state=3;
++    return io_tup(row.socket,{$:"Some",value:result});
++  },more=>{
++    const wait={fd:row.socket,out:true,k,more:()=>{
++      if(row.state===2) {
++        row.waiter=null; row.prepared=null; row.state=3;
++        return io_tup(row.socket,{$:"None"});
++      }
++      return more();
++    }}; row.waiter=wait;
++    globalThis.BEND_IO.waits.push(wait);
++  });
++}
++function udpwrite_cancel(row) {
++  if(row.state!==0) return false;
++  if(row.waiter!==null) {
++    const io=globalThis.BEND_IO,index=io.waits.indexOf(row.waiter);
++    if(index<0) { row.state=2; return true; }
++    const wait=row.waiter; io.waits.splice(index,1);
++    row.waiter=null; row.prepared=null; row.state=3;
++    io_push(wait.k,io_tup(row.socket,{$:"None"}),false);
++  } else row.state=2;
++  return true;
++}
++function udpwrite_release(row) {
++  if(row.state===3 || row.waiter!==null) throw Error("invalid UDP write release");
++  row.state=3; row.prepared=null; return row.socket;
++}

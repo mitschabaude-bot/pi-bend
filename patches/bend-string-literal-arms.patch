@@ -170,7 +170,7 @@
      arms.push([m.k, m.h]);
      lits.push(m.w);
      cur = m.m;
-@@ -2663,11 +2665,12 @@
+@@ -2682,11 +2684,12 @@
          return null;
        }
        const { arms, end, lits } = mat_arms(w);
@@ -186,7 +186,7 @@
          : arms.findIndex(([k]) => k === c.k);
        const arm = at < 0 ? undefined : arms[at];
        if (arm === undefined && Bend.term_strip(end).$ === "Efq") {
-@@ -2976,6 +2979,14 @@
+@@ -2995,6 +2998,14 @@
    return id;
  }
  
@@ -201,7 +201,7 @@
  function emit_nat(x: HTerm): Chain {
    const ls: Chain = [];
    for (let m = x, n = 0; ; n++) {
-@@ -3018,7 +3029,10 @@
+@@ -3037,7 +3048,10 @@
        n === null ? [] : [val_new([`(${sw} - ${n})`], lay)]])
      : arms.map(([k, h], i): Level => {
        if (lit) {
@@ -213,7 +213,7 @@
        }
        if (adt.k === "Array") {
          const el = lay_of(fl.book, adt.x[0]);
-@@ -3479,7 +3493,7 @@
+@@ -3498,7 +3512,7 @@
      const { arms, end, lits } = mat_arms(x);
      const total = Bend.book_adt(fl.book, adt, Bend.Emp()).c.length;
      if (lits[0] !== undefined) {
@@ -222,7 +222,7 @@
          () => js_func(fl, h, null, rest)), () => js_func(fl, end, null, [s, ...rest])]);
      }
      if (adt.k === "IO.OP") {
-@@ -3683,6 +3697,7 @@
+@@ -3853,6 +3867,7 @@
  #define INLINE  inline
  #define OUTLINE static
  #define CONSTV  constant
@@ -230,7 +230,7 @@
  #define DEVICE  1
  #define CLZ(x)  clz(x)
  #define A32(p)  ((DEV atomic_uint*)(p))
-@@ -3700,6 +3715,7 @@
+@@ -3870,6 +3885,7 @@
  #define THR
  #define INLINE  static inline
  #define CONSTV  static const
@@ -238,7 +238,7 @@
  
  #define g32_ini(p)    a32_store(p, 0)
  #define g32_add(p, v) a32_add(p, v)
-@@ -4490,6 +4506,21 @@
+@@ -4660,6 +4676,21 @@
    return x;
  }
  

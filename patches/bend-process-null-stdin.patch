@@ -1,6 +1,6 @@
---- a/bend2/base.bend
-+++ b/bend2/base.bend
-@@ -3215,6 +3215,11 @@
+--- a/base.bend
++++ b/base.bend
+@@ -3253,6 +3253,11 @@
    import "./effs/process.c"
    import "./effs/process.js"
  
@@ -12,8 +12,8 @@
  def Process.wait(owner: Process) -> IO(Process & Result<&1,&1,U32 & String,ProcessStatus>):
    import "./effs/process.c"
    import "./effs/process.js"
---- a/bend2/effs/process.c
-+++ b/bend2/effs/process.c
+--- a/effs/process.c
++++ b/effs/process.c
 @@ -41,10 +41,10 @@
    }
  }
@@ -74,23 +74,24 @@
    for (int i=0; i<6; i++) s->pipes[i]=-1;
    u64 path_length=0,cwd_length=0;
    s->path=io_cstr(e,fields[0],&path_length);
-@@ -138,7 +143,14 @@
+@@ -138,8 +143,15 @@
    s->env=process_strings(e,fields[3],NULL,true,&work->code);
    return work->code ? process_spawn_pack(e,work) : io_work(work,process_spawn_call,process_spawn_pack);
  }
 +#ifdef CID_PROCESS_SPAWN
 +Term process_spawn_run(Env e, Term* f, IoWork* w) { return process_spawn_start(e,f,w,true); }
  static void __attribute__((constructor)) process_spawn_use(void) { io_eff(CID_PROCESS_SPAWN,process_spawn_run,0); }
-+#endif
+ #endif
 +#ifdef CID_PROCESS_SPAWN_NULL_STDIN
 +Term process_spawn_null_stdin_run(Env e, Term* f, IoWork* w) { return process_spawn_start(e,f,w,false); }
 +static void __attribute__((constructor)) process_spawn_null_stdin_use(void) { io_eff(CID_PROCESS_SPAWN_NULL_STDIN,process_spawn_null_stdin_run,0); }
 +#endif
- #endif
++#endif
  
  #if defined(CID_PROCESS_WAIT) || defined(CID_PROCESS_CLOSE_CHECKED)
---- a/bend2/effs/process.js
-+++ b/bend2/effs/process.js
+ static void process_wait_call(IoWork* work) {
+--- a/effs/process.js
++++ b/effs/process.js
 @@ -1,5 +1,6 @@
  // Native POSIX implementation first; no weaker PID-lifetime approximation.
  function process_spawn(path, argv, cwd, environment) { return io_fail(38); }

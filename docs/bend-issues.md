@@ -252,7 +252,7 @@ Binding the zone token and checking it with `String.eq(zone, "GMT")` retains the
 
 ## BEND-020 — Reclassified as timer implementation work
 
-The missing cancellable timer is expected library development, not a Bend defect or external blocker. Its design, lifecycle observations, implementation and validation now live in [the timer implementation record](../patches/experimental/timer/README.md). Historical raw measurements retain their paths so existing references remain valid. Actual defects or performance cliffs discovered while building it belong in this log.
+The missing cancellable timer is expected library development, not a Bend defect or external blocker. Its design, lifecycle observations, implementation and validation now live in [the timer implementation record](bend-effects/timer.md). Historical raw measurements retain their paths so existing references remain valid. Actual defects or performance cliffs discovered while building it belong in this log.
 
 ### BEND-012/BEND-017 recurrences during socket integration
 

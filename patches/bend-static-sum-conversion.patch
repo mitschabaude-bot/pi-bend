@@ -1,6 +1,6 @@
---- a/bend2/comp.ts
-+++ b/bend2/comp.ts
-@@ -1789,6 +1789,20 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -1842,6 +1842,20 @@
    if (lay.arms === null || v.lay.arms === null) {
      die("a layout mismatch");
    }

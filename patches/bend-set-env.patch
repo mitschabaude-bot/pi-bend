@@ -14,7 +14,7 @@
  def IO.args() -> IO(List<String>):
    import "./effs/args.c"
    import "./effs/args.js"
---- a/effs/set_env.c
+--- /dev/null
 +++ b/effs/set_env.c
 @@ -0,0 +1,18 @@
 +Term io_set_env_run(Env e, Term* f, IoWork* w) {
@@ -35,7 +35,7 @@
 +static void __attribute__((constructor)) io_set_env_use(void) {
 +  io_eff(CID_IO_SET_ENV, io_set_env_run, 0);
 +}
---- a/effs/set_env.js
+--- /dev/null
 +++ b/effs/set_env.js
 @@ -0,0 +1,5 @@
 +function io_set_env(name, value) {

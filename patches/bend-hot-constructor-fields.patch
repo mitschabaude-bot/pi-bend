@@ -1,6 +1,6 @@
---- a/bend2/comp.ts
-+++ b/bend2/comp.ts
-@@ -2286,6 +2286,9 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -2262,6 +2262,9 @@
  
  function emit_ctr(fl: File, x: Of<"Ctr">, ty: HTerm | null): Val {
    const [adt, u] = ctr_adt(fl, x, ty);

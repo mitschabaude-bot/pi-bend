@@ -1,0 +1,63 @@
+--- a/base.bend
++++ b/base.bend
+@@ -3111,3 +3111,8 @@
+ def IO.get_hostname() -> IO(Result<&1, &1, U32 & String, String>):
+   import "./effs/get_hostname.c"
+   import "./effs/get_hostname.js"
++
++# Resolve an OS interface name; zero is returned as a typed failure.
++def IO.interface_index(name: String) -> IO(Result<&1, &1, U32 & String, U32>):
++  import "./effs/interface_index.c"
++  import "./effs/interface_index.js"
+--- /dev/null
++++ b/effs/interface_index.c
+@@ -0,0 +1,18 @@
++#include <net/if.h>
++
++Term io_interface_index_run(Env e, Term* f, IoWork* w) {
++  uint64_t size = 0;
++  char* name = io_cstr(e, f[0], &size);
++  uint32_t index = 0, code = EINVAL;
++  if (!io_nul(name, size)) {
++    errno = 0;
++    index = if_nametoindex(name);
++    code = index == 0 ? (errno != 0 ? errno : EIO) : 0;
++  }
++  free(name);
++  return code != 0 ? io_fail(e, code, NULL) : io_done(e, index);
++}
++
++static void __attribute__((constructor)) io_interface_index_use(void) {
++  io_eff(CID_IO_INTERFACE_INDEX, io_interface_index_run, 0);
++}
+--- /dev/null
++++ b/effs/interface_index.js
+@@ -0,0 +1,28 @@
++let io_interface_index_library;
++function io_interface_index(name) {
++  if (name.includes("\0")) return io_fail(22);
++  if (process.platform !== "linux") return io_fail(38);
++  try {
++    // Resolve only the OS primitive. Address/scope policy stays in Bend.
++    const ffi = require("bun:ffi");
++    if (!io_interface_index_library) {
++      io_interface_index_library = ffi.dlopen("libc.so.6", {
++        if_nametoindex: { args: ["ptr"], returns: "u32" },
++        __errno_location: { args: [], returns: "ptr" },
++      });
++    }
++    const symbols = io_interface_index_library.symbols;
++    const bytes = Buffer.from(name + "\0");
++    const pointer = ffi.ptr(bytes);
++    const errnoPointer = symbols.__errno_location();
++    const errnoValue = new Int32Array(ffi.toArrayBuffer(errnoPointer, 0, 4));
++    errnoValue[0] = 0;
++    // No allocation or async boundary between the call and errno read.
++    const index = symbols.if_nametoindex(pointer);
++    const code = index === 0 ? errnoValue[0] : 0;
++    return index === 0 ? io_fail(code || 5) : io_done(index);
++  } catch (error) {
++    const code = error.errno ?? error.info?.errno;
++    return io_fail(Number.isInteger(code) && code !== 0 ? Math.abs(code) : 5);
++  }
++}

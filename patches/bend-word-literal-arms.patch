@@ -1,5 +1,5 @@
---- a/bend.ts	2026-09-21 23:03:36.190113386 +0200
-+++ b/bend.ts	2026-09-22 12:08:45.421468775 +0200
+--- a/bend.ts
++++ b/bend.ts
 @@ -284,7 +284,7 @@
    | { $: "App"; f: TermOf<B>; x: TermOf<B> }                                       // f(x)
    | { $: "ADT"; k: Name; x: TermOf<B>[]; r: Name[] }                               // A<x0,x1,...>
@@ -153,8 +153,8 @@
            const tel = tele_fill(book, ctr.T, a_wnf.x, ctx, lhs.def, tm.s);
            function term_check_mat_goal(cur: HTerm, n: number, xs: HTerm[]): HTerm {
              if (n === 0) {
---- a/comp.ts	2026-09-22 09:41:56.560461136 +0200
-+++ b/comp.ts	2026-09-22 12:52:44.409183782 +0200
+--- a/comp.ts
++++ b/comp.ts
 @@ -1140,14 +1140,17 @@
      && quant_live((ty_all(book, ty) ?? die("an untyped binder")).q));
  }

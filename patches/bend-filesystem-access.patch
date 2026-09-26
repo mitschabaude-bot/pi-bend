@@ -1,9 +1,10 @@
---- a/bend2/base.bend
-+++ b/bend2/base.bend
-@@ -3066,3 +3066,13 @@
- def Directory.home_bytes() -> IO(Result<&1, &1, U32 & String, List<&2, U32>>):
-   import "./effs/directory_home_bytes.c"
-   import "./effs/directory_home_bytes.js"
+--- a/base.bend
++++ b/base.bend
+@@ -3186,3 +3186,14 @@
+ def UDP.connect_peer(socket: Socket, family: U32, a: U32, b: U32, c: U32, d: U32, port: U32, scope: U32) -> IO(Socket & Result<&1, &1, U32 & String, Unit>):
+   import "./effs/udp_connect_peer.c"
+   import "./effs/udp_connect_peer.js"
++
 +
 +# POSIX access modes: existence=0, execute=1, write=2, read=4 (bitwise combined).
 +def File.access(path: String, mode: U32) -> IO(Result<&1, &1, U32 & String, Unit>):
@@ -15,7 +16,7 @@
 +  import "./effs/system_error_name.c"
 +  import "./effs/system_error_name.js"
 --- /dev/null
-+++ b/bend2/effs/file_access.c
++++ b/effs/file_access.c
 @@ -0,0 +1,23 @@
 +static void file_access_call(IoWork* w) {
 +  io_sys_end(w, access(w->data, (int)w->word));
@@ -41,7 +42,7 @@
 +  io_eff(CID_FILE_ACCESS, file_access_run, 0);
 +}
 --- /dev/null
-+++ b/bend2/effs/file_access.js
++++ b/effs/file_access.js
 @@ -0,0 +1,11 @@
 +function file_access(path, mode) {
 +  const bytes = io_bytes(path);
@@ -55,7 +56,7 @@
 +  }
 +}
 --- /dev/null
-+++ b/bend2/effs/system_error_name.c
++++ b/effs/system_error_name.c
 @@ -0,0 +1,17 @@
 +#include <limits.h>
 +
@@ -75,7 +76,7 @@
 +  io_eff(CID_SYSTEM_ERROR_NAME, system_error_name_run, 0);
 +}
 --- /dev/null
-+++ b/bend2/effs/system_error_name.js
++++ b/effs/system_error_name.js
 @@ -0,0 +1,9 @@
 +function system_error_name(code) {
 +  if (code === 0 || code > 0x7fffffff) return {$: "None"};

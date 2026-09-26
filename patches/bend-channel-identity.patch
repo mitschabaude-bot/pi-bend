@@ -1,22 +1,22 @@
---- a/bend2/base.bend
-+++ b/bend2/base.bend
-@@ -107,6 +107,13 @@
- law Chan:
+--- a/base.bend
++++ b/base.bend
+@@ -108,6 +108,13 @@
    for -A: Type
    Data
-+
+ 
 +# Identity of opaque handles, without observing or consuming channel contents.
 +law Chan.same:
 +  for -A: Type
 +  for left: Chan(A)
 +  for right: Chan(A)
 +  Bool
- 
++
  type IO.OP<-R: Type> is Type:
    Emit{value: R}
---- a/bend2/comp.ts
-+++ b/bend2/comp.ts
-@@ -172,6 +172,8 @@
+   Halt{code: U32, message: String}
+--- a/comp.ts
++++ b/comp.ts
+@@ -173,6 +173,8 @@
  const CMPS = "is_eq:==:=== is_ne:!=:!== is_lt:< is_le:<= is_gt:> is_ge:>=";
  
  const OPERATIONS: Record<string, Intr> = Object.setPrototypeOf({

@@ -32,5 +32,5 @@ for extension in ['c', 'js']:
     print('Unrelated TCP fixture: identical ' + extension.upper() + ' emission PASS', flush=True)
 
 import hashlib,json
-paths=['tests/socket-refused-classifier.bend','tests/socket_refused_classifier_check.py','patches/experimental/socket-refused/base.bend','patches/experimental/socket-refused/socket_is_connection_refused.c','patches/experimental/socket-refused/socket_is_connection_refused.js']
+paths=['tests/socket-refused-classifier.bend','tests/socket_refused_classifier_check.py','patches/bend-socket-refused.patch']
 (ROOT/'build/socket-refused-result.json').write_text(json.dumps(dict(codes=codes,backends=['native 1','native 4','Bun'],expected=expected,unchanged_emission=['C','JS'],sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths}),indent=2)+'\n')

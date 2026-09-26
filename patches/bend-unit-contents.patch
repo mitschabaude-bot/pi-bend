@@ -53,7 +53,7 @@
        fl.spins.map((s) => s[1].split("\n")[0].replace(/ \{$/, ";")).join("\n"),
        ...fl.spins.map((s) => s[1])]],
      ["Segments", [compile_segs(fl)]],
-@@ -4816,10 +4834,21 @@
+@@ -4967,10 +4985,21 @@
  
  typedef Reply (PRESERVE(preserve_none) *WlFn)(WL_SIG);
  #define WL_X(F) WL_FN WL_##F(WL_SIG);

@@ -1,6 +1,6 @@
---- a/bend2/base.bend
-+++ b/bend2/base.bend
-@@ -3292,3 +3292,19 @@
+--- a/base.bend
++++ b/base.bend
+@@ -3242,3 +3242,19 @@
  def File.kind(path: String) -> IO(Result<&1, &1, U32 & String, U32>):
    import "./effs/file_kind.c"
    import "./effs/file_kind.js"
@@ -21,7 +21,7 @@
 +  import "./effs/file_set_times_milliseconds.c"
 +  import "./effs/file_set_times_milliseconds.js"
 --- /dev/null
-+++ b/bend2/effs/directory_create.c
++++ b/effs/directory_create.c
 @@ -0,0 +1,12 @@
 +#include <sys/stat.h>
 +static void directory_create_call(IoWork* w) { io_sys_end(w, mkdir(w->data, 0777)); }
@@ -36,7 +36,7 @@
 +}
 +static void __attribute__((constructor)) directory_create_use(void) { io_eff(CID_DIRECTORY_CREATE,directory_create_run,0); }
 --- /dev/null
-+++ b/bend2/effs/directory_create.js
++++ b/effs/directory_create.js
 @@ -0,0 +1,6 @@
 +function directory_create(path) {
 +  const bytes=io_bytes(path);
@@ -45,7 +45,7 @@
 +  catch(error) { return io_fail(Math.abs(error.errno ?? 5)); }
 +}
 --- /dev/null
-+++ b/bend2/effs/directory_remove.c
++++ b/effs/directory_remove.c
 @@ -0,0 +1,12 @@
 +#include <sys/stat.h>
 +static void directory_remove_call(IoWork* w) { io_sys_end(w, rmdir(w->data)); }
@@ -60,7 +60,7 @@
 +}
 +static void __attribute__((constructor)) directory_remove_use(void) { io_eff(CID_DIRECTORY_REMOVE,directory_remove_run,0); }
 --- /dev/null
-+++ b/bend2/effs/directory_remove.js
++++ b/effs/directory_remove.js
 @@ -0,0 +1,6 @@
 +function directory_remove(path) {
 +  const bytes=io_bytes(path);
@@ -69,7 +69,7 @@
 +  catch(error) { return io_fail(Math.abs(error.errno ?? 5)); }
 +}
 --- /dev/null
-+++ b/bend2/effs/file_modified_time.c
++++ b/effs/file_modified_time.c
 @@ -0,0 +1,24 @@
 +#include <sys/stat.h>
 +static void file_modified_time_call(IoWork* w) {
@@ -96,7 +96,7 @@
 +}
 +static void __attribute__((constructor)) file_modified_time_use(void) { io_eff(CID_FILE_MODIFIED_TIME,file_modified_time_run,0); }
 --- /dev/null
-+++ b/bend2/effs/file_modified_time.js
++++ b/effs/file_modified_time.js
 @@ -0,0 +1,10 @@
 +function file_modified_time(path) {
 +  const bytes=io_bytes(path);
@@ -109,7 +109,7 @@
 +  } catch(error) { return io_fail(Math.abs(error.errno ?? 5)); }
 +}
 --- /dev/null
-+++ b/bend2/effs/file_set_times_milliseconds.c
++++ b/effs/file_set_times_milliseconds.c
 @@ -0,0 +1,23 @@
 +#include <sys/stat.h>
 +static void file_set_times_milliseconds_call(IoWork* w) {
@@ -135,7 +135,7 @@
 +}
 +static void __attribute__((constructor)) file_set_times_milliseconds_use(void) { io_eff(CID_FILE_SET_TIMES_MILLISECONDS,file_set_times_milliseconds_run,0); }
 --- /dev/null
-+++ b/bend2/effs/file_set_times_milliseconds.js
++++ b/effs/file_set_times_milliseconds.js
 @@ -0,0 +1,8 @@
 +function file_set_times_milliseconds(path,high,low) {
 +  const bytes=io_bytes(path);

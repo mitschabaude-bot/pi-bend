@@ -1,7 +1,6 @@
-diff -ruN a/bend2/base.bend b/bend2/base.bend
---- a/bend2/base.bend
-+++ b/bend2/base.bend
-@@ -3308,6 +3308,20 @@
+--- a/base.bend
++++ b/base.bend
+@@ -3324,6 +3324,20 @@
  def Directory.create(path: String) -> IO(Result<&1,&1,U32 & String,Unit>):
    import "./effs/directory_create.c"
    import "./effs/directory_create.js"
@@ -22,9 +21,8 @@ diff -ruN a/bend2/base.bend b/bend2/base.bend
  def Directory.remove(path: String) -> IO(Result<&1,&1,U32 & String,Unit>):
    import "./effs/directory_remove.c"
    import "./effs/directory_remove.js"
-diff -ruN a/bend2/effs/process.c b/bend2/effs/process.c
---- a/bend2/effs/process.c
-+++ b/bend2/effs/process.c
+--- a/effs/process.c
++++ b/effs/process.c
 @@ -5,7 +5,7 @@
  extern char** environ;
  
@@ -250,9 +248,8 @@ diff -ruN a/bend2/effs/process.c b/bend2/effs/process.c
 +}
 +static void __attribute__((constructor)) terminal_dimensions_use(void) { io_eff(CID_TERMINAL_DIMENSIONS,terminal_dimensions_run,0); }
 +#endif
-diff -ruN a/bend2/effs/process.js b/bend2/effs/process.js
---- a/bend2/effs/process.js
-+++ b/bend2/effs/process.js
+--- a/effs/process.js
++++ b/effs/process.js
 @@ -12,3 +12,6 @@
    return Object.entries(process.env).reduceRight((tail, [key,value]) =>
      ({$: 'Con', head: key + '=' + value, tail}), {$: 'Nil'});

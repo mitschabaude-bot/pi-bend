@@ -350,7 +350,7 @@
  #endif`, ...compile_spins(fl, named)]],
      ["Segments", [segs]],
      ["Requests", [fl.reqs]],
-@@ -4069,7 +4143,7 @@
+@@ -4220,7 +4294,7 @@
  #define RING_OFF (ALC_OFF + CUBE * 2 * ALC_WORDS)
  #define STAK_OFF (RING_OFF + CUBE * RING_WORDS)
  #define STAT_OFF (STAK_OFF + CUBE * STAK_LEN)
@@ -359,7 +359,7 @@
  
  // Globals
  // =======
-@@ -5767,8 +5841,8 @@
+@@ -5918,8 +5992,8 @@
      cuCtxSynchronize();
    }
  #endif

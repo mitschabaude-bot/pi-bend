@@ -1,6 +1,6 @@
---- a/bend2/base.bend
-+++ b/bend2/base.bend
-@@ -3276,3 +3276,14 @@
+--- a/base.bend
++++ b/base.bend
+@@ -3231,3 +3231,14 @@
  def File.is_file(path: String) -> IO(Result<&1, &1, U32 & String, Bool>):
    import "./effs/file_is_file.c"
    import "./effs/file_is_file.js"
@@ -16,7 +16,7 @@
 +  import "./effs/file_kind.c"
 +  import "./effs/file_kind.js"
 --- /dev/null
-+++ b/bend2/effs/directory_read_bytes.c
++++ b/effs/directory_read_bytes.c
 @@ -0,0 +1,78 @@
 +#include <dirent.h>
 +#include <sys/stat.h>
@@ -97,7 +97,7 @@
 +  io_eff(CID_DIRECTORY_READ_BYTES, directory_read_bytes_run, 0);
 +}
 --- /dev/null
-+++ b/bend2/effs/directory_read_bytes.js
++++ b/effs/directory_read_bytes.js
 @@ -0,0 +1,32 @@
 +function directory_read_bytes(path) {
 +  const bytes = io_bytes(path);
@@ -132,7 +132,7 @@
 +  return io_done(result);
 +}
 --- /dev/null
-+++ b/bend2/effs/file_kind.c
++++ b/effs/file_kind.c
 @@ -0,0 +1,25 @@
 +#include <sys/stat.h>
 +
@@ -160,7 +160,7 @@
 +  io_eff(CID_FILE_KIND, file_kind_run, 0);
 +}
 --- /dev/null
-+++ b/bend2/effs/file_kind.js
++++ b/effs/file_kind.js
 @@ -0,0 +1,10 @@
 +function file_kind(path) {
 +  const bytes = io_bytes(path);

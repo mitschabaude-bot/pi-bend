@@ -1,5 +1,5 @@
---- a/bend2/effs/process.c
-+++ b/bend2/effs/process.c
+--- a/effs/process.c
++++ b/effs/process.c
 @@ -144,11 +144,15 @@
    return work->code ? process_spawn_pack(e,work) : io_work(work,process_spawn_call,process_spawn_pack);
  }

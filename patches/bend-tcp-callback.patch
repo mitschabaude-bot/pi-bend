@@ -1,6 +1,6 @@
 --- a/base.bend
 +++ b/base.bend
-@@ -311,10 +311,19 @@
+@@ -278,11 +278,20 @@
    import "./effs/tcp_listen.c"
    import "./effs/tcp_listen.js"
  
@@ -12,15 +12,49 @@
    IO(Listener & Result<&1, &1, U32 & String, Socket>):
    import "./effs/tcp_accept.c"
    import "./effs/tcp_accept.js"
-+
+ 
 +def TCP.accept_try(listener: Listener) ->
 +  IO(Listener & Result<&1, &1, U32 & String, Socket>):
 +  import "./effs/tcp_accept_try.c"
 +  import "./effs/tcp_accept_try.js"
- 
++
  def TCP.connect(host: String, port: U32) ->
    IO(Result<&1, &1, U32 & String, Socket>):
---- a/effs/tcp_listen_host.c
+   import "./effs/tcp_connect.c"
+--- /dev/null
++++ b/effs/tcp_accept_try.c
+@@ -0,0 +1,16 @@
++// One nonblocking accept attempt; EAGAIN is returned so the owner can cancel.
++Term tcp_accept_try_run(Env e, Term* f, IoWork* w) {
++  int listener = (int)io_hand_v(f[0]);
++  int socket = accept(listener, NULL, NULL);
++  if (socket >= 0 && fcntl(socket, F_SETFL, fcntl(socket, F_GETFL) | O_NONBLOCK) < 0) {
++    close(socket);
++    socket = -1;
++  }
++  io_sys_end(w, socket);
++  Term outcome = w->code ? io_fail(e, w->code, NULL) : io_done(e, io_hand(socket));
++  return io_tup(e, io_hand(listener), outcome);
++}
++
++static void __attribute__((constructor)) tcp_accept_try_use(void) {
++  io_eff(CID_TCP_ACCEPT_TRY, tcp_accept_try_run, 0);
++}
+--- /dev/null
++++ b/effs/tcp_accept_try.js
+@@ -0,0 +1,11 @@
++function tcp_accept_try(listener) {
++  const sys = io_sys();
++  const fd = sys.accept(listener, null, null);
++  if (fd < 0) return io_tup(listener, io_fail(sys.errno()));
++  if (sys.fcntl(fd, 4, sys.fcntl(fd, 3, 0) | (sys.mac ? 4 : 0x800)) < 0) {
++    const code = sys.errno();
++    sys.close(fd);
++    return io_tup(listener, io_fail(code));
++  }
++  return io_tup(listener, io_done(fd));
++}
+--- /dev/null
 +++ b/effs/tcp_listen_host.c
 @@ -0,0 +1,25 @@
 +// A caller-specified IPv4 bind address. OAuth uses 127.0.0.1, never INADDR_ANY.
@@ -48,7 +82,7 @@
 +static void __attribute__((constructor)) tcp_listen_host_use(void) {
 +  io_eff(CID_TCP_LISTEN_HOST, tcp_listen_host_run, 0);
 +}
---- a/effs/tcp_listen_host.js
+--- /dev/null
 +++ b/effs/tcp_listen_host.js
 @@ -0,0 +1,16 @@
 +function tcp_listen_host(host, port) {
@@ -66,37 +100,4 @@
 +    return io_fail(code);
 +  }
 +  return io_done(fd);
-+}
---- a/effs/tcp_accept_try.c
-+++ b/effs/tcp_accept_try.c
-@@ -0,0 +1,16 @@
-+// One nonblocking accept attempt; EAGAIN is returned so the owner can cancel.
-+Term tcp_accept_try_run(Env e, Term* f, IoWork* w) {
-+  int listener = (int)io_hand_v(f[0]);
-+  int socket = accept(listener, NULL, NULL);
-+  if (socket >= 0 && fcntl(socket, F_SETFL, fcntl(socket, F_GETFL) | O_NONBLOCK) < 0) {
-+    close(socket);
-+    socket = -1;
-+  }
-+  io_sys_end(w, socket);
-+  Term outcome = w->code ? io_fail(e, w->code, NULL) : io_done(e, io_hand(socket));
-+  return io_tup(e, io_hand(listener), outcome);
-+}
-+
-+static void __attribute__((constructor)) tcp_accept_try_use(void) {
-+  io_eff(CID_TCP_ACCEPT_TRY, tcp_accept_try_run, 0);
-+}
---- a/effs/tcp_accept_try.js
-+++ b/effs/tcp_accept_try.js
-@@ -0,0 +1,11 @@
-+function tcp_accept_try(listener) {
-+  const sys = io_sys();
-+  const fd = sys.accept(listener, null, null);
-+  if (fd < 0) return io_tup(listener, io_fail(sys.errno()));
-+  if (sys.fcntl(fd, 4, sys.fcntl(fd, 3, 0) | (sys.mac ? 4 : 0x800)) < 0) {
-+    const code = sys.errno();
-+    sys.close(fd);
-+    return io_tup(listener, io_fail(code));
-+  }
-+  return io_tup(listener, io_done(fd));
 +}

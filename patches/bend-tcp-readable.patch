@@ -1,6 +1,6 @@
---- a/bend2/base.bend
-+++ b/bend2/base.bend
-@@ -3010,6 +3010,13 @@
+--- a/base.bend
++++ b/base.bend
+@@ -3026,6 +3026,13 @@
    import "./effs/tcp_shutdown.c"
    import "./effs/tcp_shutdown.js"
  
@@ -15,7 +15,7 @@
  def Socket.isConnectionReset(code: U32) -> IO(Bool):
    import "./effs/socket_is_connection_reset.c"
 --- /dev/null
-+++ b/bend2/effs/tcp_readable.c
++++ b/effs/tcp_readable.c
 @@ -0,0 +1,15 @@
 +Term tcp_readable_run(Env e, Term* f, IoWork* w) {
 +  int fd = (int)io_hand_v(f[0]);
@@ -33,7 +33,7 @@
 +  io_eff(CID_TCP_READABLE, tcp_readable_run, 0);
 +}
 --- /dev/null
-+++ b/bend2/effs/tcp_readable.js
++++ b/effs/tcp_readable.js
 @@ -0,0 +1,14 @@
 +// struct pollfd { int fd; short events; short revents; } with POLLIN = 1.
 +function tcp_readable(socket) {

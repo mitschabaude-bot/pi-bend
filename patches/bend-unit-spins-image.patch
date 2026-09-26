@@ -105,7 +105,7 @@
      ["Requests", [fl.reqs]],
    ];
    if (fills.some(([, parts]) => /\bundefined\b/.test(parts.join("\n")))) {
-@@ -5677,6 +5722,9 @@
+@@ -5828,6 +5873,9 @@
    }
  #endif
    memcpy(H + STAT_OFF, STAT_IMG, STAT_LEN * sizeof(u64));

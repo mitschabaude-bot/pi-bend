@@ -1,6 +1,6 @@
---- a/comp.ts	2026-09-24 16:35:02.790215293 +0200
-+++ b/comp.ts	2026-09-24 16:35:02.804215374 +0200
-@@ -6358,6 +6358,12 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -6509,6 +6509,12 @@
  // Main
  // ====
  
@@ -13,7 +13,7 @@
  // BEND_THREADS sets the default worker count. An application built with
  // -DBEND_APP_ARGV owns its whole command line: the runtime reads no flags.
  static long env_threads(void) {
-@@ -6420,7 +6426,7 @@
+@@ -6571,7 +6577,7 @@
    if (gpu == 1 && BANGS != 0 && !dev) {
      cli_fail("--gpu on, but this binary found no GPU device", NULL);
    }

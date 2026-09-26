@@ -16,7 +16,7 @@
    };
    table("FID_ARITY_T", entries.map((s) => s.params.length), entries.map((s) => s.fid));
    // A segment may fork when it, or one it reaches, does.
-@@ -3783,17 +3785,20 @@
+@@ -3934,17 +3936,20 @@
  #ifdef __METAL_VERSION__
  typedef ulong u64;
  typedef uint  u32;
@@ -37,7 +37,7 @@
  typedef uint8_t  u8;
  typedef float    f32;
  #endif
-@@ -4379,9 +4384,17 @@
+@@ -4530,9 +4535,17 @@
            n   = ar;
            cls = cls_fit(tag == TAG_TSK ? ar + 2 : ar);
          }

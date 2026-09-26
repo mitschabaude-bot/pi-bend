@@ -1,6 +1,6 @@
---- a/bend2/base.bend
-+++ b/bend2/base.bend
-@@ -3198,3 +3198,13 @@
+--- a/base.bend
++++ b/base.bend
+@@ -3210,3 +3210,13 @@
  def System.error_name(code: U32) -> IO(Maybe<&2, String>):
    import "./effs/system_error_name.c"
    import "./effs/system_error_name.js"
@@ -14,20 +14,20 @@
 +def File.write_bytes(file: File, data: List<&2, U32>) -> IO(File & Result<&1, &1, U32 & String, Unit>):
 +  import "./effs/file_write_bytes.c"
 +  import "./effs/file_write_bytes.js"
---- a/bend2/effs/file_open_mode.c
-+++ b/bend2/effs/file_open_mode.c
-@@ -4,6 +4,9 @@
- static int file_open_mode_flags(const char* mode) {
+--- a/effs/file_open_mode.c
++++ b/effs/file_open_mode.c
+@@ -5,6 +5,9 @@
    if (strcmp(mode, "r") == 0) {
      return O_RDONLY;
-+  }
+   }
 +  if (strcmp(mode, "wx") == 0) {
 +    return O_WRONLY | O_CREAT | O_EXCL;
-   }
++  }
    if (strcmp(mode, "w") == 0) {
      return O_WRONLY | O_CREAT | O_TRUNC;
---- a/bend2/effs/file_open_mode.js
-+++ b/bend2/effs/file_open_mode.js
+   }
+--- a/effs/file_open_mode.js
++++ b/effs/file_open_mode.js
 @@ -6,7 +6,7 @@
    if (name.includes(0)) {
      return io_fail(process.platform === "darwin" ? 92 : 84);
@@ -38,7 +38,7 @@
    }
    try {
 --- /dev/null
-+++ b/bend2/effs/file_size_bytes.c
++++ b/effs/file_size_bytes.c
 @@ -0,0 +1,29 @@
 +#include <sys/stat.h>
 +
@@ -70,7 +70,7 @@
 +  io_eff(CID_FILE_SIZE_BYTES, file_size_bytes_run, 0);
 +}
 --- /dev/null
-+++ b/bend2/effs/file_size_bytes.js
++++ b/effs/file_size_bytes.js
 @@ -0,0 +1,11 @@
 +function file_size_bytes(path) {
 +  const bytes = io_bytes(path);
@@ -84,7 +84,7 @@
 +  }
 +}
 --- /dev/null
-+++ b/bend2/effs/file_write_bytes.c
++++ b/effs/file_write_bytes.c
 @@ -0,0 +1,49 @@
 +static void file_write_bytes_call(IoWork* w) {
 +  u64 at = 0;
@@ -136,7 +136,7 @@
 +  io_eff(CID_FILE_WRITE_BYTES, file_write_bytes_run, 0);
 +}
 --- /dev/null
-+++ b/bend2/effs/file_write_bytes.js
++++ b/effs/file_write_bytes.js
 @@ -0,0 +1,20 @@
 +function file_write_bytes(file, data) {
 +  const bytes = [];

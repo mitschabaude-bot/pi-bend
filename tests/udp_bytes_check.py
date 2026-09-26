@@ -31,6 +31,6 @@ for backend,cmd in [('native 1',['build/udp-bytes','--threads','1']),('native 4'
                 finally:
                     if p.poll() is None:p.kill();p.wait()
     print(f'{backend}: {len(cases)*2} binary UDP cases PASS',flush=True)
-paths=['tests/udp-bytes.bend','tests/udp_bytes_check.py','scripts/prepare-udp-candidate.py']+[str(p.relative_to(ROOT)) for p in (ROOT/'patches/experimental/udp-bytes').glob('*')]
+paths=['tests/udp-bytes.bend','tests/udp_bytes_check.py','patches/bend-udp-bytes.patch']
 r=dict(scope=__doc__,runs=rows,sha256={p:hashlib.sha256((ROOT/p).read_bytes()).hexdigest() for p in paths},builds={s:json.loads((ROOT/f'build/udp-bytes-{s}-build.json').read_text()) for s in ['c','js']})
 (ROOT/'build/udp-bytes-result.json').write_text(json.dumps(r,indent=2)+'\n')

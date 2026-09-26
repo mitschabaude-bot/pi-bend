@@ -1,0 +1,36 @@
+--- a/base.bend
++++ b/base.bend
+@@ -3106,3 +3106,8 @@
+ def Socket.isConnectionRefused(code: U32) -> IO(Bool):
+   import "./effs/socket_is_connection_refused.c"
+   import "./effs/socket_is_connection_refused.js"
++
++# Operating-system hostname, independent of shell environment variables.
++def IO.get_hostname() -> IO(Result<&1, &1, U32 & String, String>):
++  import "./effs/get_hostname.c"
++  import "./effs/get_hostname.js"
+--- /dev/null
++++ b/effs/get_hostname.c
+@@ -0,0 +1,11 @@
++#include <sys/utsname.h>
++
++Term io_get_hostname_run(Env e, Term* f, IoWork* w) {
++  struct utsname value;
++  if (uname(&value) != 0) return io_fail(e, errno, NULL);
++  return io_done(e, io_str(e, value.nodename, strlen(value.nodename)));
++}
++
++static void __attribute__((constructor)) io_get_hostname_use(void) {
++  io_eff(CID_IO_GET_HOSTNAME, io_get_hostname_run, 0);
++}
+--- /dev/null
++++ b/effs/get_hostname.js
+@@ -0,0 +1,8 @@
++function io_get_hostname() {
++  try {
++    return io_done(require("node:os").hostname());
++  } catch (error) {
++    const code = error.errno ?? error.info?.errno;
++    return io_fail(Number.isInteger(code) && code !== 0 ? Math.abs(code) : 5);
++  }
++}

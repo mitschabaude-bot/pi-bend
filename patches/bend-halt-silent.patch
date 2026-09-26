@@ -1,6 +1,6 @@
---- a/bend2/comp.ts
-+++ b/bend2/comp.ts
-@@ -5798,12 +5807,15 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -5798,12 +5798,15 @@
    return buf;
  }
  
@@ -19,7 +19,7 @@
    free(text);
  }
  
-@@ -6565,6 +6577,7 @@
+@@ -6565,6 +6568,7 @@
  }
  
  function io_errs(message) {

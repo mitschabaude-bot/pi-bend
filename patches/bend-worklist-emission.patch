@@ -1,5 +1,5 @@
---- a/comp.ts	2026-09-22 14:18:56.390060265 +0200
-+++ b/comp.ts	2026-09-22 14:43:30.382227885 +0200
+--- a/comp.ts
++++ b/comp.ts
 @@ -60,18 +60,58 @@
  
  type Src = { refs: Set<Bend.Name>; deps: Set<Bend.Name>; flat: boolean };

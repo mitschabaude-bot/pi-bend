@@ -1,6 +1,6 @@
---- a/bend2/comp.ts
-+++ b/bend2/comp.ts
-@@ -2895,7 +2895,10 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -2964,7 +2964,10 @@
  // ==
  
  function js_sat(k: Bend.Name): string {

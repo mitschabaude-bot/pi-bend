@@ -1,7 +1,7 @@
 """Isolated socket-control candidate: parked IO, competing cancels, fd retirement.
 
 Instrumentation and small socket buffers are test-only. The installed compiler
-is never modified. Pass the directory from prepare-socket-candidate.py.
+is never modified. Pass a toolchain directory built by scripts/install-bend-toolchain.sh.
 """
 import concurrent.futures
 import os

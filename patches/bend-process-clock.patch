@@ -1,10 +1,9 @@
---- a/bend2/base.bend
-+++ b/bend2/base.bend
-@@ -223,6 +223,17 @@
- def IO.unixMilliseconds() -> IO(U32 & U32):
+--- a/base.bend
++++ b/base.bend
+@@ -224,6 +224,17 @@
    import "./effs/unix_milliseconds.c"
    import "./effs/unix_milliseconds.js"
-+
+ 
 +# Local civil time under the host TZ, with one-based month/day and seconds 0..60.
 +# Years outside U32 fail with EOVERFLOW; no path/string formatting in this effect.
 +type LocalTime is Data:
@@ -15,22 +14,12 @@
 +def Process.id() -> IO(U32):
 +  import "./effs/process_id.c"
 +  import "./effs/process_id.js"
- 
- # Whether a file descriptor (0 stdin, 1 stdout, 2 stderr) is a terminal.
- def IO.isTerminal(descriptor: U32) -> IO(Bool):
++
+ def IO.now() -> IO(Nat):
+   import "./effs/now.c"
+   import "./effs/now.js"
 --- /dev/null
-+++ b/bend2/effs/process_id.c
-@@ -0,0 +1,4 @@
-+Term process_id_run(Env e, Term* f, IoWork* w) {
-+  return (u32)getpid();
-+}
-+static void __attribute__((constructor)) process_id_use(void) { io_eff(CID_PROCESS_ID,process_id_run,0); }
---- /dev/null
-+++ b/bend2/effs/process_id.js
-@@ -0,0 +1 @@
-+function process_id() { return process.pid; }
---- /dev/null
-+++ b/bend2/effs/clock_local_time.c
++++ b/effs/clock_local_time.c
 @@ -0,0 +1,27 @@
 +#include <time.h>
 +static void clock_localtime_call(IoWork* w) {
@@ -60,10 +49,21 @@
 +}
 +static void __attribute__((constructor)) clock_localtime_use(void) { io_eff(CID_CLOCK_LOCALTIME,clock_localtime_run,0); }
 --- /dev/null
-+++ b/bend2/effs/clock_local_time.js
++++ b/effs/clock_local_time.js
 @@ -0,0 +1,5 @@
 +function clock_localtime() {
 +  const now=new Date(), year=now.getFullYear();
 +  if (!Number.isFinite(now.getTime()) || year<0 || year>0xffffffff) return io_fail(75);
 +  return io_done({$: 'LocalTime',year,month:now.getMonth()+1,day:now.getDate(),hour:now.getHours(),minute:now.getMinutes(),second:now.getSeconds()});
 +}
+--- /dev/null
++++ b/effs/process_id.c
+@@ -0,0 +1,4 @@
++Term process_id_run(Env e, Term* f, IoWork* w) {
++  return (u32)getpid();
++}
++static void __attribute__((constructor)) process_id_use(void) { io_eff(CID_PROCESS_ID,process_id_run,0); }
+--- /dev/null
++++ b/effs/process_id.js
+@@ -0,0 +1 @@
++function process_id() { return process.pid; }
