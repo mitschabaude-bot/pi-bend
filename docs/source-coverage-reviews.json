@@ -40,11 +40,12 @@
     },
     "packages/ai/src/api/bedrock-converse-stream.ts": {
       "state": "partial",
-      "note": "stream/streamSimple: the client configuration pi builds (profile, region from ARN/AWS_REGION/profile/built-in endpoint, custom endpoints, static credentials, bearer token), message/tool/system conversion with cache points and document sanitization, adaptive and budget thinking fields, onPayload/onResponse, the restJson ConverseStream request with SigV4 (runtime/aws-sigv4.bend) or bearer auth and caller headers minus reserved ones, the event-stream response (runtime/aws-eventstream.bend with CRC-32), the stream fold (text, reasoning incl. redacted, tool calls, usage with 1h cache writes, stop reasons) and error formatting with bedrock_response_failure diagnostics; traces equal the pinned AWS SDK on a loopback server (tests/bedrock_check.py). Without configured credentials the SDK default chain resolves them as the pinned credential-provider-node does (bedrock-credentials.bend over bedrock-credential-services.bend): environment keys unless a profile is selected, shared-file profiles (static keys, STS AssumeRole through source_profile chains and credential_source Environment/EcsContainer/Ec2InstanceMetadata with cycle and MFA errors, AssumeRoleWithWebIdentity, credential_process, SSO with sso-session token refresh through SSO-OIDC and legacy start-URL caches), fromProcess, web identity from the environment, then container (fromHttp with token file and retries, fromContainerMetadata) or IMDS (v2 token, v1 fallback and its blocks); tests/bedrock_check.py compares 29 chain cases with the SDK against a loopback STS/SSO/OIDC/ECS/IMDS server. Missing: console login sessions (login_session), the SDK clients' retries on STS/SSO/OIDC/IMDS, the Bedrock request's SDK retries, and HTTP(S) proxy agents. Unknown content-block types and lone surrogates are not representable in the typed Bend transcript.",
+      "note": "stream/streamSimple: the client configuration pi builds (profile, region from ARN/AWS_REGION/profile/built-in endpoint, custom endpoints, static credentials, bearer token), message/tool/system conversion with cache points and document sanitization, adaptive and budget thinking fields, onPayload/onResponse, the restJson ConverseStream request with SigV4 (runtime/aws-sigv4.bend) or bearer auth and caller headers minus reserved ones, the event-stream response (runtime/aws-eventstream.bend with CRC-32), the stream fold (text, reasoning incl. redacted, tool calls, usage with 1h cache writes, stop reasons) and error formatting with bedrock_response_failure diagnostics; traces equal the pinned AWS SDK on a loopback server (tests/bedrock_check.py). Without configured credentials the SDK default chain resolves them as the pinned credential-provider-node does (bedrock-credentials.bend over bedrock-credential-services.bend): environment keys unless a profile is selected, shared-file profiles (static keys, STS AssumeRole through source_profile chains and credential_source Environment/EcsContainer/Ec2InstanceMetadata with cycle and MFA errors, AssumeRoleWithWebIdentity, credential_process, SSO with sso-session token refresh through SSO-OIDC and legacy start-URL caches), fromProcess, web identity from the environment, then container (fromHttp with token file and retries, fromContainerMetadata) or IMDS (v2 token, v1 fallback and its blocks); tests/bedrock_check.py compares 33 chain cases (including the SDK standard retry strategy on STS and SSO) with the SDK against a loopback STS/SSO/OIDC/ECS/IMDS server. Missing: console login sessions (login_session), the Bedrock ConverseStream request's own SDK retries, and HTTP(S) proxy agents. Unknown content-block types and lone surrogates are not representable in the typed Bend transcript.",
       "ports": [
         "packages/ai/src/api/bedrock-converse-stream.bend",
         "packages/ai/src/api/bedrock-credentials.bend",
         "packages/ai/src/api/bedrock-credential-services.bend",
+        "packages/ai/src/api/credential-http.bend",
         "packages/runtime/src/aws-sigv4.bend",
         "packages/runtime/src/aws-eventstream.bend",
         "packages/runtime/src/crc32.bend",
@@ -52,9 +53,10 @@
       ],
       "source_sha256": "cd4b63f95787c9f775a96a19edf760bbf266987b51f9cc9f6ac0ecd34cffe047",
       "port_sha256": {
-        "packages/ai/src/api/bedrock-converse-stream.bend": "a6f2bbb8e59f74c54104165d25e094ec018c7c738ba0d75b1dab6c807db3eff7",
-        "packages/ai/src/api/bedrock-credentials.bend": "13b292d89f2a0ea095cc1ace0fea8c434928637e8e1c1d753b62bb1bc31f0c82",
-        "packages/ai/src/api/bedrock-credential-services.bend": "eb355b030dd3d28db3c456c2dcb1c5abcd771ef117c42d1d5403ee82865fb899",
+        "packages/ai/src/api/bedrock-converse-stream.bend": "9a4951f4913de4724474884bcda9dfd119766ff7e63a0eff53f738515571c978",
+        "packages/ai/src/api/bedrock-credentials.bend": "e812424f78f1622475bd0ed2904d17e26e9ffa30db0e7ae45b5c5f1c5585d68d",
+        "packages/ai/src/api/bedrock-credential-services.bend": "bd006da1c25e1d9f06f60ca4c358a0b84e6666435c897ab16613333858e86a42",
+        "packages/ai/src/api/credential-http.bend": "9c037e48ffab2c42a8448d6ff2fdf615ed3d789fff1f9e6efb1da10faa33794a",
         "packages/runtime/src/aws-sigv4.bend": "caa2c23300ee3da72bc2b7a8f807bd6478b0e84cff75ea6534a630ccfe313e10",
         "packages/runtime/src/aws-eventstream.bend": "10407475f5491bdceffb014888626790a4b0dbade62c1538a1b36252b8e5569e",
         "packages/runtime/src/crc32.bend": "f87ae9d406fe4180b39bc1fa5411d0bd38ddf40add1c28f7da404dbb5b52d5ba",
@@ -69,12 +71,12 @@
     },
     "packages/ai/src/api/google-generative-ai.ts": {
       "state": "ported",
-      "note": "Ported as three modules: google-generative-ai.bend (GoogleOptions, streamSimple's option mapping with clamped levels, level-or-budget thinking config and getGoogleBudget, buildParams producing the SDK parameters, client headers, and the SDK's parameter-to-REST conversion with its field order); google-generative-ai-stream.bend (the SDK's processStreamResponse framing with its delimiters, in-band error chunks and incomplete-segment error, and the chunk fold: text/thinking block transitions, signatures, function calls with generated ids, responseId, usage and finish reasons); google-generative-ai-client.bend (streamSimple's missing-key and level-mapping errors fail before a stream exists, as upstream throws synchronously; the stream lifecycle: custom-fetch (accepting the process fetch handle, globalThis.fetch upstream) and API-key checks, onPayload replacement, the SDK model path and address, headers, retryProviderRequest with status-only failures, the body loop and the catch block). tests/google_generative_ai_check.py compares 560 captured params, wire requests and streamed messages/event sequences with pinned pi-mono and runs the ported suites; tests/google_client_loopback.py covers the HTTP path and the agent glue. Documented differences: x-goog-api-client carries the SDK label without the gl-node/<process.version> runtime label (there is no Node runtime); JSON.parse's engine-specific error text is replaced by the native parser's; event partials are snapshots. No live Gemini request has been verified. Generated tool-call ids use one counter shared by every stream of an agent runtime (a Ref in its provider configuration; the CLI process has one runtime), as upstream's module toolCallCounter; tests/ai-misc-suites.bend checks that a second stream continues the sequence.",
+      "note": "Ported as three modules: google-generative-ai.bend (GoogleOptions, streamSimple's option mapping with clamped levels, level-or-budget thinking config and getGoogleBudget, buildParams producing the SDK parameters, client headers, and the SDK's parameter-to-REST conversion with its field order); google-generative-ai-stream.bend (the SDK's processStreamResponse framing with its delimiters, in-band error chunks and incomplete-segment error, and the chunk fold: text/thinking block transitions, signatures, function calls with generated ids, responseId, usage and finish reasons); google-generative-ai-client.bend (streamSimple's missing-key and level-mapping errors fail before a stream exists, as upstream throws synchronously; the stream lifecycle: custom-fetch (accepting the process fetch handle, globalThis.fetch upstream) and API-key checks, onPayload replacement, the SDK model path and address, headers, retryProviderRequest with status-only failures, the body loop and the catch block). tests/google_generative_ai_check.py compares 560 captured params, wire requests and streamed messages/event sequences with pinned pi-mono and runs the ported suites; tests/google_client_loopback.py covers the HTTP path and the agent glue. Documented differences: x-goog-api-client carries the SDK label without the gl-node/<process.version> runtime label (there is no Node runtime); JSON.parse's engine-specific error text is replaced by the native parser's; event partials are snapshots. No live Gemini request has been verified. Generated tool-call ids use one counter shared by every stream of an agent runtime (a Ref in its provider configuration; the CLI process has one runtime), as upstream's module toolCallCounter; tests/ai-misc-suites.bend checks that a second stream continues the sequence. The SDK's tContents rejection of an empty contents list ('contents are required', before any request) is ported in prepareRequest (found by tests/live_replay_check.py).",
       "source_sha256": "c20f1a40875b2106b6d39d8b7837cd30a882c6a5fcf8c311ccc42a090e18e956",
       "port_sha256": {
         "packages/ai/src/api/google-generative-ai.bend": "8e5fddf0912e58a6af8a24da3425ddfd4970278f1dc8811557f1ac9d524e7d46",
         "packages/ai/src/api/google-generative-ai-stream.bend": "c2b0cfaa0166224b146dcdb9364856cef2517b0cd060e4bc3e74238443da30f3",
-        "packages/ai/src/api/google-generative-ai-client.bend": "bc0cbabc99b20a22638b0bf43d4d4611c2e534887bf86342a0ffc8e8e74161c4"
+        "packages/ai/src/api/google-generative-ai-client.bend": "66b9d756218e312975e2228e3f3ea884613febf16e9ecfc315ac250cb8b52670"
       },
       "ports": [
         "packages/ai/src/api/google-generative-ai.bend",
@@ -98,18 +100,24 @@
     },
     "packages/ai/src/api/google-vertex.ts": {
       "state": "partial",
-      "note": "stream/streamSimple: the custom-fetch check, resolveApiKey (ADC markers and placeholders), the API key or ADC client with project/location from options and env, buildHttpOptions (custom base URL at collection scope, version detection, User-Agent and header overlay), buildParams shared with Google Generative AI, onPayload, the SDK's Vertex URL, headers and request conversion, retryGoogleRequest, and the shared stream loop with the api name and 'Google Vertex stream ended without a finish reason'; streamSimple without a key requirement and with Vertex's 2.5 Flash-Lite budgets. ADC: authorized_user and service_account credentials files (keyFilename, else the well-known gcloud file), the refresh-token exchange and gtoken's RS256 JWT bearer grant signed with runtime/rsa-sign.bend (google-vertex-credentials.bend). tests/google_vertex_check.py compares 17 streamed cases with upstream driving the pinned @google/genai and google-auth-library on a loopback server and asserts the 12 client-configuration cases. Missing: impersonated and external-account credentials, the Compute Engine metadata server, and gaxios' token-request retries.",
+      "note": "stream/streamSimple: the custom-fetch check, resolveApiKey (ADC markers and placeholders), the API key or ADC client with project/location from options and env, buildHttpOptions (custom base URL at collection scope, version detection, User-Agent and header overlay), buildParams shared with Google Generative AI, onPayload, the SDK's Vertex URL, headers and request conversion, retryGoogleRequest, and the shared stream loop with the api name and 'Google Vertex stream ended without a finish reason'; streamSimple without a key requirement and with Vertex's 2.5 Flash-Lite budgets. ADC as google-auth-library 10.6.2 resolves it (google-vertex-credentials.bend): the keyFilename (with fromStreamAsync's fallback to a JSON JWT key file), else the well-known gcloud file, else the Compute Engine metadata server (gcp-metadata residency probe, METADATA_SERVER_DETECTION, ping, token; google-metadata.bend); authorized_user refresh, gtoken's RS256 JWT grant (runtime/rsa-sign.bend), impersonated_service_account (generateAccessToken with the source credentials and its error formats), external_account (file, URL, AWS SigV4 GetCallerIdentity and executable subject tokens, the STS token exchange with client authentication and workforce options, service account impersonation) and external_account_authorized_user (google-external-account.bend); GOOGLE_CLOUD_QUOTA_PROJECT; project discovery on the ADC path (environment, gcloud config-helper, metadata project-id, an external account's Cloud Resource Manager lookup); gaxios' retry policy for auth and metadata requests (credential-http.bend). tests/google_vertex_check.py compares 17 streamed cases and 32 credential cases with upstream driving the pinned @google/genai and google-auth-library on loopback servers and asserts the 12 client-configuration cases. Differences: certificate (mTLS) subject tokens are refused (no client certificates in the TLS client); PEM keyFilename fallbacks are refused (no client email to sign with); where upstream's fallback JWT lacks scopes only because fromJSON did not mutate the shared options object, upstream signs a self-signed JWT without a key ('key must be a string, a buffer or an object') and the port reports gtoken's 'private_key and client_email are required.'; the x-goog-api-client value omits gl-node/<version>; METADATA_SERVER_DETECTION's unexpected-error warning is not printed; the metadata ping tries the link-local address, then the DNS name, in sequence rather than racing them; OAuth2Client's re-authorization retry on 401/403 (only for tokens without expiry) is not reproduced.",
       "ports": [
         "packages/ai/src/api/google-vertex.bend",
         "packages/ai/src/api/google-vertex-credentials.bend",
+        "packages/ai/src/api/google-external-account.bend",
+        "packages/ai/src/api/google-metadata.bend",
+        "packages/ai/src/api/credential-http.bend",
         "packages/ai/src/api/google-generative-ai-client.bend",
         "packages/ai/src/api/google-generative-ai-stream.bend"
       ],
       "source_sha256": "d0a53a2faaad20620800a1e95d2d2175d641011c4d6b00b0877d905c57f16ec1",
       "port_sha256": {
-        "packages/ai/src/api/google-vertex.bend": "0ebdb23af0dce3514a9f10f49570cdb99a9ee16a853dd2aaa2de4ac4e8a5ec09",
-        "packages/ai/src/api/google-vertex-credentials.bend": "212fd2b5c048ecaf2cccd8fe8be0cabb7c299dc772c90acc1ac13882e440af2d",
-        "packages/ai/src/api/google-generative-ai-client.bend": "bc0cbabc99b20a22638b0bf43d4d4611c2e534887bf86342a0ffc8e8e74161c4",
+        "packages/ai/src/api/google-vertex.bend": "cd1fe8e618b52b872f30ea200dfc70d2409f02cb34548457dec788d5c805f780",
+        "packages/ai/src/api/google-vertex-credentials.bend": "8abc7e7edbfdcbfdd85935801e381a6ed3d9d89fe5c98b873d0eba637e4bd94d",
+        "packages/ai/src/api/google-external-account.bend": "b8e61c7e91fd8e43376971b937ddc104a85a801256044678601fbe9bd654213a",
+        "packages/ai/src/api/google-metadata.bend": "506f498584388fad9ea7a6f863767f932d43f7db5709fba03a44a5b07dc73219",
+        "packages/ai/src/api/credential-http.bend": "9c037e48ffab2c42a8448d6ff2fdf615ed3d789fff1f9e6efb1da10faa33794a",
+        "packages/ai/src/api/google-generative-ai-client.bend": "66b9d756218e312975e2228e3f3ea884613febf16e9ecfc315ac250cb8b52670",
         "packages/ai/src/api/google-generative-ai-stream.bend": "c2b0cfaa0166224b146dcdb9364856cef2517b0cd060e4bc3e74238443da30f3"
       }
     },
@@ -585,15 +593,15 @@
       }
     },
     "packages/coding-agent/src/core/tools/path-utils.ts": {
-      "state": "partial",
-      "note": "Tool path expansion and resolution live in utils/paths.bend, and read-file fallback candidates live there too; the upstream path-utils test suite is still pending.",
-      "source_sha256": "ab6f420d2388a41366113c17a25e356867820b87b02a169d044cfcf83e1997d3",
-      "port_sha256": {
-        "packages/coding-agent/src/utils/paths.bend": "b67c1efdf251875fe71e8712c23c82a5d520e9eac1bd56675215a0e1ad81ab4c"
-      },
+      "state": "ported",
+      "note": "expandPath, resolveToCwd and resolveReadPath (existing path, then AM/PM, NFD, curly-quote and NFD+curly variants) live in utils/paths.bend; the whole upstream path-utils suite passes (tests/paths.bend). resolveReadPathAsync is the same IO function; pathExists is FS.accessible.",
       "ports": [
         "packages/coding-agent/src/utils/paths.bend"
-      ]
+      ],
+      "source_sha256": "ab6f420d2388a41366113c17a25e356867820b87b02a169d044cfcf83e1997d3",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/paths.bend": "8a101a9aa33dd2a52f3241e71361642e8253b461b77bcdfa1b91d6b0faff64a6"
+      }
     },
     "packages/coding-agent/src/core/tools/powershell.ts": {
       "state": "missing",
@@ -627,7 +635,7 @@
     },
     "packages/coding-agent/src/modes/interactive/chat-viewport.ts": {
       "state": "partial",
-      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Fullscreen transcript allocation uses upstream\u2019s zero basis and one-row minimum; natural dock rendering during external-editor handoffs matches pi. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
+      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Fullscreen transcript allocation uses upstream’s zero basis and one-row minimum; natural dock rendering during external-editor handoffs matches pi. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
       "source_sha256": "24bbdd06a5e17d6c0631f7de51329eb7bb4ecd4a460dec7b3d593ff9e6219960",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/viewport.bend": "91281c83b948bdb35106382375cfc14628d313a48d7676cd9a023b1bcadea32e"
@@ -1028,6 +1036,69 @@
       "port_sha256": {
         "packages/tui/src/tui-base.bend": "f7e4a5f560ee5d8d514c3f7d53b58bb8a93404807872fc40d2e35786c386b89c",
         "packages/tui/src/tui-process.bend": "40c7b94ca549e9b4fb67540337321dbc04280398400e720f0789911cdd3e3576"
+      }
+    },
+    "packages/coding-agent/src/utils/paths.ts": {
+      "state": "partial",
+      "note": "canonicalizePath, isLocalPath, normalizeWindowsShellPath, normalizePath, resolvePath (explicit Environment for cwd/home), getCwdRelativePath and formatPathRelativeToCwdOrAbsolute are ported and tested (tests/paths.bend, tests/coding-paths.bend). Gaps: getFileRevision stamps size and modification time only (no device, inode or change time primitive), and markPathIgnoredByCloudSync (setfattr/xattr cloud-sync exclusion) is not ported.",
+      "ports": [
+        "packages/coding-agent/src/utils/paths.bend"
+      ],
+      "source_sha256": "a687cdb54b82216673fea5be1210c48e64ffa8398d64cfabf2bd7dba5c9d4210",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/paths.bend": "8a101a9aa33dd2a52f3241e71361642e8253b461b77bcdfa1b91d6b0faff64a6"
+      }
+    },
+    "packages/coding-agent/src/utils/git.ts": {
+      "state": "ported",
+      "note": "parseGitUrl with splitRef, generic scp/URL/host-path parsing, unsafe install-path rejection and hosted-git-info candidates; matches the pinned implementation on the upstream suite and 714 differential sources (tests/git_url_check.py).",
+      "ports": [
+        "packages/coding-agent/src/utils/git.bend"
+      ],
+      "source_sha256": "bff4590aefa988ba625026769ac5ad02f02558d59bd7d566f4728e1ee4da1da9",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/git.bend": "1e7a3f9fdf2317e6d45cda4380f14cd5ebead669d236136d07273655d4898bb5"
+      }
+    },
+    "packages/coding-agent/src/utils/pi-user-agent.ts": {
+      "state": "ported",
+      "note": "getPiUserAgent formats pi/<version> (<platform>; <runtime>; <arch>) from the system identity; the runtime token is bend/2.0.7 rather than Bun's or Node's version.",
+      "ports": [
+        "packages/coding-agent/src/utils/pi-user-agent.bend"
+      ],
+      "source_sha256": "cd2329beb4b18fd99f5180d603fd1371c8f50441d4688f7d75918a051e565c26",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/pi-user-agent.bend": "c81a896b94046d712c4c82072c1513ed64e1e1e178bc92358c2949d761ef5158"
+      }
+    },
+    "packages/coding-agent/src/utils/version-check.ts": {
+      "state": "partial",
+      "note": "LATEST_VERSION_URL request with the pi user agent and accept header, PI_OFFLINE and PI_SKIP_VERSION_CHECK, retry options, response parsing (trimmed version, packageName and note), comparePackageVersions/isNewerPackageVersion and checkForNewPiVersion are ported and tested over a loopback fetch. formatVersionCheckError cannot add errno codes (the native fetch error has none). No caller in the interactive mode uses it yet.",
+      "ports": [
+        "packages/coding-agent/src/utils/version-check.bend"
+      ],
+      "source_sha256": "23279d94eae94dc19b1221c58a7993677327a47a8b6e37c9c1e4201f3adcf983",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/version-check.bend": "febd9ca70940b5ec25ed3d4f4dcb6534dfb1c561f57cb1cd7e23652361e080f0"
+      }
+    },
+    "packages/coding-agent/src/core/package-manager.ts": {
+      "state": "partial",
+      "note": "Ported: resolve for local settings entries and auto-discovered skills, prompts and themes (patterns, overrides, ignore files, precedence, canonical dedupe); parseSource/parseNpmSpec/isExactNpmVersion, getPackageIdentity, addSourceToSettings/removeSourceFromSettings with settings normalization, getBaseDirForScope with the project-trust check, resolveManagedPath, getExtensionTempFolder, getTemporaryDir, getGitInstallPath and getManagedNpmInstallPath. Missing: package sources in resolve (install on missing, manifests, package filters, dedupePackages), extensions, install/remove/update through npm and git, update checks, legacy global npm paths, progress events, listConfiguredPackages and getInstalledPath; NpmSource has no `range` until semver ranges are ported.",
+      "ports": [
+        "packages/coding-agent/src/core/package-manager.bend"
+      ],
+      "source_sha256": "e2fdd18093dc69cb8fe82bb6bef674f20f8a5093d0d13fd1b7180f49dbe751fd",
+      "port_sha256": {
+        "packages/coding-agent/src/core/package-manager.bend": "ccc2c4e26dc9f5320c6dd1d9bd029b6b9c9c5c99f200d931570798781d8585ba"
+      }
+    },
+    "packages/ai/src/providers/faux.ts": {
+      "state": "partial",
+      "note": "createFauxCore ported as a FauxCore record with Ref state (queued responses, counters, per-session prompt cache); helpers, usage estimates over UTF-16 units (walked by scalar, surrogates only materialized at a mid-pair chunk boundary), random token-size chunking, pacing, abort and terminal errors match upstream (tests/faux_provider_check.py, 22/23 named plus differential). Not ported: deferred responses (fetchDeferred/cancelDeferred, the deferred stream option) and fauxProvider/createProvider wrapping, since the port dispatches provider APIs statically.",
+      "source_sha256": "dcf37d154680cef0fa5188efd4881450073c5342a9b56cc9e25cee9b9f1ccfcc",
+      "port_sha256": {
+        "packages/ai/src/providers/faux.bend": "018e195d8f364a8e0b90fa66acc86162680387149be57dedb355151cc6fe442d"
       }
     }
   }

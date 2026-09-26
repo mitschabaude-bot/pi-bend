@@ -349,19 +349,289 @@ def run_case(command, item, directory, compare):
     env.update({"HOME": str(home), "GOOGLE_APPLICATION_CREDENTIALS": str(credentials), **item["env"]})
     server = Server(item["body"], item["status"], item["token_status"])
     with server as base:
-        spec = {**filled(item["spec"], base, None), "tokenUrl": base + "/token"}
+        spec = {**filled(item["spec"], base, None), "googleBase": base}
         lines = run(command, spec, env)
     item["check"](lines, server.requests)
     if compare and item["differential"]:
         reference_server = Server(item["body"], item["status"], item["token_status"])
         with reference_server as base:
-            reference = oracle({**filled(item["spec"], base, None), "tokenUrl": base + "/token"}, env)
+            reference = oracle({**filled(item["spec"], base, None), "googleBase": base}, env)
         item["check"](reference, reference_server.requests)
         native, upstream = trace(lines, server.requests), trace(reference, reference_server.requests)
         if native != upstream:
             import difflib
             diff = "\n".join(difflib.unified_diff(json.dumps(upstream, indent=1).splitlines(), json.dumps(native, indent=1).splitlines(), "upstream", "native", lineterm="", n=2))
             raise AssertionError(item["name"] + "\n" + diff[:6000])
+
+
+# --- Application Default Credentials beyond authorized_user/service_account --
+# No upstream suite covers them (upstream mocks the client); each case below
+# resolves credentials from a credentials file, the environment and a
+# loopback server standing in for Google's OAuth2, IAM Credentials and STS
+# hosts, the subject-token and AWS metadata endpoints and the Compute Engine
+# metadata server, then compares the requests those services saw, the Vertex
+# request's authorization headers and the final message with upstream
+# driving the pinned google-auth-library against its own copy of the setup.
+
+import hashlib
+import hmac
+import shutil
+
+FUTURE = "2099-01-01T00:00:00Z"
+ACCOUNT = "target@project.iam.gserviceaccount.com"
+
+
+def aws_checked(token):
+    """The AWS subject token with its SigV4 signature verified and the
+    date and signature elided."""
+    request = json.loads(urllib.parse.unquote(token))
+    headers = {h["key"]: h["value"] for h in request["headers"]}
+    url = urllib.parse.urlsplit(request["url"])
+    credential = re.search(r"Credential=([^/]+)/(\d+)/([^/]+)/([^/]+)/aws4_request, SignedHeaders=([^,]+), Signature=(\w+)", headers["authorization"])
+    access, stamp, region, service, signed, signature = credential.groups()
+    secret = {"AKIDAWS": "secret-aws", "AKIDENVAWS": "secret-env-aws"}[access]
+    canonical = "\n".join([request["method"], url.path or "/", url.query] + [f"{name}:{headers[name]}" for name in signed.split(";")] + ["", signed, hashlib.sha256(b"").hexdigest()])
+    scope = f"{stamp}/{region}/{service}/aws4_request"
+    to_sign = "\n".join(["AWS4-HMAC-SHA256", headers["x-amz-date"], scope, hashlib.sha256(canonical.encode()).hexdigest()])
+    key = ("AWS4" + secret).encode()
+    for part in (stamp, region, service, "aws4_request"):
+        key = hmac.new(key, part.encode(), hashlib.sha256).digest()
+    assert hmac.new(key, to_sign.encode(), hashlib.sha256).hexdigest() == signature, (request, canonical)
+    return {"url": request["url"], "method": request["method"], "headerOrder": [h["key"] for h in request["headers"]],
+            "headers": {k: ("<date>" if k == "x-amz-date" else re.sub(r"/\d{8}/", "/<stamp>/", re.sub(r"Signature=\w+", "Signature=<sig>", v))) for k, v in headers.items()}}
+
+
+class AuthServer:
+    """Google's auth hosts, subject-token sources, AWS and GCE metadata and
+    the Vertex endpoint, on one port."""
+
+    def __init__(self, behaviour=None):
+        self.requests = []
+        behaviour = behaviour or {}
+        flaky = {"left": behaviour.get("flaky", 0)}
+        outer = self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def unavailable(self):
+                """The first `flaky` auth requests answer 503."""
+                if flaky["left"] > 0:
+                    flaky["left"] -= 1
+                    self.reply(503, json.dumps({"error": {"code": 503, "message": "Backend unavailable", "status": "UNAVAILABLE"}}))
+                    return True
+                return False
+
+            def reply(self, status, body, kind="application/json", extra=None):
+                data = body.encode()
+                self.send_response(status)
+                self.send_header("content-type", kind)
+                for name, value in (extra or {}).items():
+                    self.send_header(name, value)
+                self.send_header("content-length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def pick(self, *names):
+                headers = {k.lower(): v for k, v in self.headers.items()}
+                picked = {name: re.sub(r"^gl-node/\S+ ?", "", headers[name]) if name == "x-goog-api-client" else headers[name] for name in names if name in headers}
+                return {k: v for k, v in picked.items() if v != ""}
+
+            def do_POST(self):
+                raw = self.rfile.read(int(self.headers.get("content-length", "0"))).decode()
+                path = self.path
+                if path.startswith("/v1/publishers/"):
+                    outer.requests.append({"service": "vertex", "headers": self.pick("authorization", "x-goog-user-project")})
+                    return self.reply(200, TEXT, "text/event-stream")
+                if path == "/token":
+                    form = urllib.parse.parse_qs(raw)
+                    outer.requests.append({"service": "oauth2", "grant": form["grant_type"][0]})
+                    if self.unavailable():
+                        return
+                    if behaviour.get("token_error"):
+                        return self.reply(400, json.dumps({"error": "invalid_grant", "error_description": "Bad Request"}))
+                    token = "ya29.sa" if "assertion" in form else "ya29.user"
+                    return self.reply(200, json.dumps({"access_token": token, "expires_in": 3599, "token_type": "Bearer"}))
+                if ":generateAccessToken" in path:
+                    outer.requests.append({"service": "iamcredentials", "path": path, "headers": self.pick("authorization", "x-goog-user-project", "content-type"), "body": json.loads(raw)})
+                    if behaviour.get("iam_error"):
+                        return self.reply(403, json.dumps({"error": {"code": 403, "message": "Permission 'iam.serviceAccounts.getAccessToken' denied", "status": "PERMISSION_DENIED"}}))
+                    return self.reply(200, json.dumps({"accessToken": "ya29.impersonated", "expireTime": FUTURE}))
+                if path in ("/v1/token", "/v1/oauthtoken"):
+                    form = {k: v[0] for k, v in urllib.parse.parse_qs(raw).items()}
+                    if form.get("subject_token", "").startswith("%7B"):
+                        form["subject_token"] = aws_checked(form["subject_token"])
+                    outer.requests.append({"service": "sts" + path, "headers": self.pick("authorization", "content-type", "x-goog-api-client"), "form": form})
+                    if self.unavailable():
+                        return
+                    if behaviour.get("sts_error"):
+                        return self.reply(400, json.dumps({"error": "invalid_grant", "error_description": "The subject token is invalid"}))
+                    token = "ya29.sts" if path == "/v1/token" else "ya29.external-user"
+                    return self.reply(200, json.dumps({"access_token": token, "issued_token_type": "urn:ietf:params:oauth:token-type:access_token", "token_type": "Bearer", "expires_in": 3600}))
+                return self.reply(404, "{}")
+
+            def do_PUT(self):
+                outer.requests.append({"service": "aws-metadata", "method": "PUT", "path": self.path, "headers": self.pick("x-aws-ec2-metadata-token-ttl-seconds")})
+                return self.reply(200, "aws-session-token", "text/plain")
+
+            def do_GET(self):
+                path = self.path
+                if path.startswith("/v1/projects/") and "cloudresourcemanager" not in path:
+                    outer.requests.append({"service": "cloudresourcemanager", "path": path, "headers": self.pick("authorization", "x-goog-user-project")})
+                    return self.reply(200, json.dumps({"projectNumber": "123456", "projectId": "resolved-project"}))
+                if path.startswith("/computeMetadata/"):
+                    outer.requests.append({"service": "gce-metadata", "path": path, "headers": self.pick("metadata-flavor")})
+                    flavor = {} if behaviour.get("no_flavor") else {"Metadata-Flavor": "Google"}
+                    if path == "/computeMetadata/v1/instance":
+                        return self.reply(200, "", "text/plain", flavor)
+                    if path == "/computeMetadata/v1/project/project-id":
+                        return self.reply(200, "gce-project", "text/plain", flavor) if item_gce(behaviour) else self.reply(404, "Not Found", "text/plain", flavor)
+                    if behaviour.get("gce_error"):
+                        return self.reply(403, "Forbidden", "text/plain", flavor)
+                    return self.reply(200, json.dumps({"access_token": "ya29.compute", "expires_in": 3599, "token_type": "Bearer"}), "application/json", flavor)
+                if path.startswith("/subject"):
+                    outer.requests.append({"service": "subject", "path": path, "headers": self.pick("x-subject")})
+                    return self.reply(200, json.dumps({"id_token": "url-json-token"}) if path == "/subject-json" else "url-text-token", "application/json" if path == "/subject-json" else "text/plain")
+                if path.startswith("/latest/"):
+                    outer.requests.append({"service": "aws-metadata", "method": "GET", "path": path, "headers": self.pick("x-aws-ec2-metadata-token")})
+                    if path == "/latest/meta-data/placement/availability-zone":
+                        return self.reply(200, "us-east-1b", "text/plain")
+                    if path == "/latest/meta-data/iam/security-credentials":
+                        return self.reply(200, "aws-role", "text/plain")
+                    if path == "/latest/meta-data/iam/security-credentials/aws-role":
+                        return self.reply(200, json.dumps({"AccessKeyId": "AKIDAWS", "SecretAccessKey": "secret-aws", "Token": "token-aws"}))
+                return self.reply(404, "{}")
+
+            def log_message(self, *_):
+                pass
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.server.daemon_threads = True
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.server.server_port}"
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+
+USER = {"type": "authorized_user", "client_id": "client-id.apps.googleusercontent.com", "client_secret": "client-secret", "refresh_token": "refresh-token", "quota_project_id": "source-quota"}
+IMPERSONATION = "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/" + ACCOUNT + ":generateAccessToken"
+POOL = "//iam.googleapis.com/projects/123456/locations/global/workloadIdentityPools/pool/providers/provider"
+WORKFORCE = "//iam.googleapis.com/locations/global/workforcePools/pool/providers/provider"
+JWT_TYPE = "urn:ietf:params:oauth:token-type:jwt"
+
+
+def external(source, **extra):
+    return {"type": "external_account", "audience": POOL, "subject_token_type": JWT_TYPE, "token_url": "https://sts.googleapis.com/v1/token", "credential_source": source, **extra}
+
+
+def item_gce(behaviour):
+    return behaviour.get("gce", False)
+
+
+# `diverges`: the native error message where upstream's differs through a
+# JavaScript aliasing accident (see google-vertex-credentials.bend: a key
+# file that does not construct a client falls back to a JWT key file; whether
+# that JWT has scopes depends on fromJSON having mutated the shared options
+# object, and without scopes upstream signs a self-signed JWT with no key).
+class AdcCase:
+    def __init__(self, name, credentials=None, well_known=None, env=None, behaviour=None, files=None, spawns=False, gce=False, diverges=None):
+        self.name, self.credentials, self.well_known, self.env = name, credentials, well_known, env or {}
+        self.behaviour, self.files, self.spawns, self.gce, self.diverges = dict(behaviour or {}, gce=gce), files or {}, spawns, gce, diverges
+
+
+EXEC_SCRIPT = "#!/bin/sh\nprintf '{\"version\":1,\"success\":true,\"token_type\":\"urn:ietf:params:oauth:token-type:jwt\",\"id_token\":\"exec-%s-%s\",\"expiration_time\":4102444800}' \"$GOOGLE_EXTERNAL_ACCOUNT_INTERACTIVE\" \"$GOOGLE_EXTERNAL_ACCOUNT_TOKEN_TYPE\"\n"
+ADC_CASES = [
+    AdcCase("impersonates a service account with authorized_user source credentials", {"type": "impersonated_service_account", "service_account_impersonation_url": IMPERSONATION, "delegates": ["delegate@project.iam.gserviceaccount.com"], "quota_project_id": "impersonated-quota", "source_credentials": USER}),
+    AdcCase("impersonates a service account with service_account source credentials", {"type": "impersonated_service_account", "service_account_impersonation_url": IMPERSONATION, "lifetime": 1200, "source_credentials": "{service_account}"}),
+    AdcCase("reports a denied impersonation", {"type": "impersonated_service_account", "service_account_impersonation_url": IMPERSONATION, "source_credentials": USER}, behaviour={"iam_error": True}),
+    AdcCase("reports a failed source token refresh for impersonation", {"type": "impersonated_service_account", "service_account_impersonation_url": IMPERSONATION, "source_credentials": USER}, behaviour={"token_error": True}),
+    AdcCase("rejects impersonated credentials without a target principal", {"type": "impersonated_service_account", "service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts", "source_credentials": USER}, diverges=("key must be a string, a buffer or an object", "private_key and client_email are required.")),
+    AdcCase("rejects impersonated credentials without source credentials", {"type": "impersonated_service_account", "service_account_impersonation_url": IMPERSONATION}, diverges=("key must be a string, a buffer or an object", "private_key and client_email are required.")),
+    AdcCase("exchanges a text subject token file at STS", external({"file": "{dir}/subject.txt"}), files={"subject.txt": "file-text-token"}),
+    AdcCase("exchanges a JSON subject token file with client authentication", external({"file": "{dir}/subject.json", "format": {"type": "json", "subject_token_field_name": "id_token"}}, client_id="sts-client", client_secret="sts-secret", quota_project_id="external-quota"), files={"subject.json": json.dumps({"id_token": "file-json-token"})}),
+    AdcCase("sends the workforce pool user project as an STS option", external({"file": "{dir}/subject.txt"}, audience=WORKFORCE, workforce_pool_user_project="workforce-project", subject_token_type="urn:ietf:params:oauth:token-type:id_token"), files={"subject.txt": "workforce-token"}),
+    AdcCase("reads a URL subject token and impersonates a service account", external({"url": "{base}/subject-json", "headers": {"x-subject": "yes"}, "format": {"type": "json", "subject_token_field_name": "id_token"}}, service_account_impersonation_url="{base}/v1/projects/-/serviceAccounts/" + ACCOUNT + ":generateAccessToken", service_account_impersonation={"token_lifetime_seconds": 600})),
+    AdcCase("reads a text URL subject token", external({"url": "{base}/subject-text"})),
+    AdcCase("reports a missing subject token file", external({"file": "{dir}/missing.txt"})),
+    AdcCase("reports a rejected token exchange", external({"file": "{dir}/subject.txt"}), files={"subject.txt": "file-text-token"}, behaviour={"sts_error": True}),
+    AdcCase("rejects an invalid credential_source format", external({"file": "{dir}/subject.txt", "format": {"type": "xml"}}), diverges=("key must be a string, a buffer or an object", "private_key and client_email are required.")),
+    AdcCase("signs an AWS GetCallerIdentity request with instance metadata credentials", external({"environment_id": "aws1", "region_url": "{base}/latest/meta-data/placement/availability-zone", "url": "{base}/latest/meta-data/iam/security-credentials", "imdsv2_session_token_url": "{base}/latest/api/token", "regional_cred_verification_url": "https://sts.{region}.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15"}, subject_token_type="urn:ietf:params:aws:token-type:aws4_request")),
+    AdcCase("signs an AWS GetCallerIdentity request with environment credentials", external({"environment_id": "aws1", "region_url": "{base}/latest/meta-data/placement/availability-zone", "url": "{base}/latest/meta-data/iam/security-credentials", "regional_cred_verification_url": "{base}/{region}/verify?Action=GetCallerIdentity&Version=2011-06-15"}, subject_token_type="urn:ietf:params:aws:token-type:aws4_request"), env={"AWS_REGION": "eu-west-1", "AWS_ACCESS_KEY_ID": "AKIDENVAWS", "AWS_SECRET_ACCESS_KEY": "secret-env-aws"}),
+    AdcCase("rejects an unsupported AWS environment version", external({"environment_id": "aws2", "regional_cred_verification_url": "https://sts.{region}.amazonaws.com"}), diverges=("key must be a string, a buffer or an object", "private_key and client_email are required.")),
+    AdcCase("runs an allowed executable for the subject token", external({"executable": {"command": "{dir}/exec.sh --flag", "timeout_millis": 5000}}), files={"exec.sh": EXEC_SCRIPT}, env={"GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES": "1"}, spawns=True),
+    AdcCase("refuses executables unless explicitly allowed", external({"executable": {"command": "{dir}/exec.sh"}}), files={"exec.sh": EXEC_SCRIPT}),
+    AdcCase("refreshes external_account_authorized_user credentials", {"type": "external_account_authorized_user", "audience": WORKFORCE, "client_id": "ext-client", "client_secret": "ext-secret", "refresh_token": "ext-refresh", "token_url": "https://sts.googleapis.com/v1/oauthtoken", "quota_project_id": "ext-quota"}),
+    AdcCase("reads unknown credential types as service accounts", {"type": "mystery"}),
+    AdcCase("uses the Compute Engine metadata server without ADC files", gce=True),
+    AdcCase("reports a forbidden Compute Engine token", gce=True, behaviour={"gce_error": True}),
+    AdcCase("treats a metadata server without Metadata-Flavor as absent", gce=True, behaviour={"no_flavor": True}),
+    AdcCase("retries a token refresh answered 503 under gaxios' policy", {"type": "impersonated_service_account", "service_account_impersonation_url": IMPERSONATION, "source_credentials": USER}, behaviour={"flaky": 2}),
+    AdcCase("gives up on a token refresh after three retries", {"type": "impersonated_service_account", "service_account_impersonation_url": IMPERSONATION, "source_credentials": USER}, behaviour={"flaky": 5}),
+    AdcCase("retries a token exchange answered 503", external({"file": "{dir}/subject.txt"}), files={"subject.txt": "file-text-token"}, behaviour={"flaky": 1}),
+    AdcCase("reports no ADC when metadata detection is off"),
+    AdcCase("rejects an unknown METADATA_SERVER_DETECTION value", env={"METADATA_SERVER_DETECTION": "sometimes"}),
+    AdcCase("applies GOOGLE_CLOUD_QUOTA_PROJECT to well-known credentials", well_known=USER, env={"GOOGLE_CLOUD_QUOTA_PROJECT": "override-quota"}),
+    AdcCase("skips project discovery when the environment names a project", well_known=USER, env={"GOOGLE_CLOUD_PROJECT": "env-project"}),
+    AdcCase("looks up a well-known external account's project with its token", well_known=external({"file": "{dir}/subject.txt"}, quota_project_id="external-quota"), files={"subject.txt": "file-text-token"}),
+]
+
+
+def adc_fill(value, base, root, sa):
+    if isinstance(value, dict):
+        return {k: adc_fill(v, base, root, sa) for k, v in value.items()}
+    if isinstance(value, list):
+        return [adc_fill(v, base, root, sa) for v in value]
+    if value == "{service_account}":
+        return sa
+    if isinstance(value, str):
+        return value.replace("{base}", base).replace("{dir}", str(root))
+    return value
+
+
+def adc_run(command, item, directory):
+    server = AuthServer(item.behaviour)
+    root = pathlib.Path(directory)
+    if root.exists():
+        shutil.rmtree(root)
+    (root / "home").mkdir(parents=True)
+    sa = service_account(str(root.parent))
+    for name, text in item.files.items():
+        (root / name).write_text(text)
+        if name.endswith(".sh"):
+            (root / name).chmod(0o755)
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("GOOGLE_", "GCLOUD", "AWS_", "GCE_", "METADATA_"))}
+    env.update({"HOME": str(root / "home")})
+    env["GCE_METADATA_HOST"] = server.url.removeprefix("http://")
+    if not item.gce:
+        env["METADATA_SERVER_DETECTION"] = "none"
+    if item.credentials is not None:
+        (root / "adc.json").write_text(json.dumps(adc_fill(item.credentials, server.url, root, sa)))
+        env["GOOGLE_APPLICATION_CREDENTIALS"] = str(root / "adc.json")
+    if item.well_known is not None:
+        (root / "home/.config/gcloud").mkdir(parents=True)
+        (root / "home/.config/gcloud/application_default_credentials.json").write_text(json.dumps(adc_fill(item.well_known, server.url, root, sa)))
+    env.update({k: adc_fill(v, server.url, root, sa) for k, v in item.env.items()})
+    spec = {**adc_stream(), "model": {"baseUrl": server.url}, "googleBase": server.url}
+    try:
+        lines = run(command, spec, env) if command else oracle(spec, env)
+    finally:
+        server.close()
+    result = message(lines)
+    requests = json.loads(json.dumps(server.requests).replace(server.url, "{base}").replace(server.url.removeprefix("http://"), "{host}").replace(str(root), "{dir}"))
+    return {"requests": requests, "stopReason": result["stopReason"], "errorMessage": result.get("errorMessage", "").replace(server.url, "{base}").replace(str(root), "{dir}")}
+
+
+def adc_check(command, item, directory):
+    native = adc_run(command, item, pathlib.Path(directory) / "adc-native")
+    upstream = adc_run(None, item, pathlib.Path(directory) / "adc-oracle")
+    if item.diverges:
+        expect(upstream["errorMessage"] == item.diverges[0] and native["errorMessage"] == item.diverges[1], (upstream, native))
+        native, upstream = dict(native, errorMessage=None), dict(upstream, errorMessage=None)
+    if native != upstream:
+        import difflib
+        raise AssertionError(item.name + "\n" + "\n".join(difflib.unified_diff(json.dumps(upstream, indent=1).splitlines(), json.dumps(native, indent=1).splitlines(), "upstream", "native", lineterm="", n=2)))
 
 
 def main():
@@ -386,6 +656,14 @@ def main():
                     continue
                 run_case(command, item, directory, compare=True)
                 print(f"PASS {backend}: {item['suite']}: {item['name']}")
+            for item in ADC_CASES:
+                if args.only and args.only not in item.name:
+                    continue
+                if item.spawns and backend == "bun":
+                    # The JavaScript lane has no process spawning; native runs it.
+                    continue
+                adc_check(command, item, directory)
+                print(f"PASS {backend}: application default credentials: {item.name}")
         # providers/google-vertex.ts auth and the agent runtime's registration
         # (JavaScript lane).
         for source, label in ((AUTH, "google-vertex auth"), (REGISTERED, "agent runtime")):

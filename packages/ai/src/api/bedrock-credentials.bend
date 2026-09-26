@@ -1,6 +1,7 @@
 import Base
 import ../utils/provider-env.bend as Env
 import ./bedrock-credential-services.bend as Services
+import ./credential-http.bend as Http
 import ../../../runtime/src/date.bend as Date
 import ../../../runtime/src/sha1.bend as Sha1
 import ../../../runtime/src/url.bend as URL
@@ -242,9 +243,9 @@ def serviceStop(result: Result<&2, &2, Services.ServiceError, SigV4.Credentials>
 # What the chain reads besides the files: the HTTP client, the Bedrock
 # client's region (the STS "parent" region) and the explicit profile.
 type Chain<-Reason: Data> is Data:
-  Chain{transport: Services.Transport<Reason>, region: Maybe<&2, String>, profile: Maybe<&2, String>}
+  Chain{transport: Http.Transport<Reason>, region: Maybe<&2, String>, profile: Maybe<&2, String>}
 
-def transportOf(~Reason: Data, chain: Chain<Reason>) -> Services.Transport<Reason>:
+def transportOf(~Reason: Data, chain: Chain<Reason>) -> Http.Transport<Reason>:
   match chain:
     case Chain{transport, _, _}: transport
 
@@ -442,7 +443,7 @@ def tokenFrom(file: Maybe<&2, String>, token: Maybe<&2, String>) -> IO(Authoriza
     case _ Some{SCon{+c, +cs}}: IO.pure(Authorization, validated(SCon{c, cs}))
     case _ _: IO.pure(Authorization, Authorized{None{}})
 
-def attemptWith(~Reason: Data, +transport: Services.Transport<Reason>, +url: String, authorization: Authorization) -> IO(Step):
+def attemptWith(~Reason: Data, +transport: Http.Transport<Reason>, +url: String, authorization: Authorization) -> IO(Step):
   match authorization:
     case Unauthorized{step}: IO.pure(Step, step)
     case Authorized{token}:
@@ -450,7 +451,7 @@ def attemptWith(~Reason: Data, +transport: Services.Transport<Reason>, +url: Str
         result : Result<&2, &2, String, SigV4.Credentials> <- Services.containerRequest(~Reason, transport, url, token)
         return stepOf(result)
 
-def containerAttempt(~Reason: Data, +transport: Services.Transport<Reason>, +url: String) -> IO(Step):
+def containerAttempt(~Reason: Data, +transport: Http.Transport<Reason>, +url: String) -> IO(Step):
   do IO<Step>:
     file : Maybe<&2, String> <- env("AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE")
     token : Maybe<&2, String> <- env("AWS_CONTAINER_AUTHORIZATION_TOKEN")
@@ -464,12 +465,12 @@ def resolvedStep(step: Step) -> Bool:
 
 # fromHttp's retryWrapper: up to three retries one second apart, whatever
 # the failure.
-@unsafe def containerAttempts(~Reason: Data, +transport: Services.Transport<Reason>, +url: String, +left: Nat) -> IO(Step):
+@unsafe def containerAttempts(~Reason: Data, +transport: Http.Transport<Reason>, +url: String, +left: Nat) -> IO(Step):
   do IO<Step>:
     +step : Step <- containerAttempt(~Reason, transport, url)
     Bool.pick(Unit -> IO(Step), Nat.is_eq(left, 0n) || resolvedStep(step), _ => IO.pure(Step, step), _ =>
       do IO<Step>:
-        slept : Result<&2, &2, Abort.AbortReason<Reason>, Unit> <- Timer.sleep(Reason, 1000, Services.signalOf(~Reason, transport))
+        slept : Result<&2, &2, Abort.AbortReason<Reason>, Unit> <- Timer.sleep(Reason, 1000, Http.signalOf(Reason, transport))
         containerAttempts(~Reason, transport, url, Nat.sub(left, 1n)))(Unit{})
 
 # fromHttp checks its URL when it is created, so a rejected URL fails the
@@ -484,7 +485,7 @@ def urlChecked(+parsed: Result<&2, &2, URL.Error, URL.URL>) -> Maybe<&2, Step>:
     case Fail{_}: Some{Stop{"Invalid URL"}}
     case Done{address}: Bool.pick(Maybe<&2, Step>, acceptedUrl(schemeOf(Done{address}), Maybe.default(&2, String, hostOfUrl(Done{address}), "")), None{}, Some{Next{URL_NOT_ACCEPTED()}})
 
-def httpWith(~Reason: Data, +transport: Services.Transport<Reason>, +host: String, rejected: Maybe<&2, Step>) -> IO(HttpLink):
+def httpWith(~Reason: Data, +transport: Http.Transport<Reason>, +host: String, rejected: Maybe<&2, Step>) -> IO(HttpLink):
   match rejected:
     case Some{step}: IO.pure(HttpLink, NotCreated{step})
     case None{}:
@@ -492,11 +493,11 @@ def httpWith(~Reason: Data, +transport: Services.Transport<Reason>, +host: Strin
         step : Step <- containerAttempts(~Reason, transport, host, 3n)
         return Created{step}
 
-def fromHttp(~Reason: Data, +transport: Services.Transport<Reason>, relative: Maybe<&2, String>, full: Maybe<&2, String>) -> IO(HttpLink):
+def fromHttp(~Reason: Data, +transport: Http.Transport<Reason>, relative: Maybe<&2, String>, full: Maybe<&2, String>) -> IO(HttpLink):
   +host = Maybe.default(&2, String, Maybe.or(&2, String, Maybe.map(&2, String, String, path => ECS_HOST() ++ path, nonempty(relative)), nonempty(full)), "")
-  httpWith(~Reason, transport, host, urlChecked(URL.parse(Services.contextOf(~Reason, transport), host)))
+  httpWith(~Reason, transport, host, urlChecked(URL.parse(Http.contextOf(Reason, transport), host)))
 
-def containerMetadata(~Reason: Data, +transport: Services.Transport<Reason>, relative: Maybe<&2, String>, full: Maybe<&2, String>) -> IO(Step):
+def containerMetadata(~Reason: Data, +transport: Http.Transport<Reason>, relative: Maybe<&2, String>, full: Maybe<&2, String>) -> IO(Step):
   match relative full:
     case Some{path} _:
       do IO<Step>:
@@ -504,7 +505,7 @@ def containerMetadata(~Reason: Data, +transport: Services.Transport<Reason>, rel
         result : Result<&2, &2, String, SigV4.Credentials> <- Services.containerRequest(~Reason, transport, ECS_HOST() ++ path, token)
         return stepOf(result)
     case None{} Some{+uri}:
-      +parsed = URL.parse(Services.contextOf(~Reason, transport), uri)
+      +parsed = URL.parse(Http.contextOf(Reason, transport), uri)
       +host = Maybe.default(&2, String, hostOfUrl(parsed), "")
       Bool.pick(Unit -> IO(Step), String.eq(host, "localhost") || String.eq(host, "127.0.0.1"), _ =>
         do IO<Step>:
@@ -515,15 +516,15 @@ def containerMetadata(~Reason: Data, +transport: Services.Transport<Reason>, rel
 
 # fromContainerMetadata: the relative URI on the ECS host, or a full URI on a
 # Greengrass host.
-def fromContainerMetadata(~Reason: Data, +transport: Services.Transport<Reason>, relative: Maybe<&2, String>, full: Maybe<&2, String>) -> IO(Step): containerMetadata(~Reason, transport, nonempty(relative), nonempty(full))
+def fromContainerMetadata(~Reason: Data, +transport: Http.Transport<Reason>, relative: Maybe<&2, String>, full: Maybe<&2, String>) -> IO(Step): containerMetadata(~Reason, transport, nonempty(relative), nonempty(full))
 
-def afterHttp(~Reason: Data, +transport: Services.Transport<Reason>, relative: Maybe<&2, String>, full: Maybe<&2, String>, first: HttpLink) -> IO(Step):
+def afterHttp(~Reason: Data, +transport: Http.Transport<Reason>, relative: Maybe<&2, String>, full: Maybe<&2, String>, first: HttpLink) -> IO(Step):
   match first:
     case Created{Next{_}}: fromContainerMetadata(~Reason, transport, relative, full)
     case Created{other}: IO.pure(Step, other)
     case NotCreated{step}: IO.pure(Step, step)
 
-def containerChain(~Reason: Data, +transport: Services.Transport<Reason>) -> IO(Step):
+def containerChain(~Reason: Data, +transport: Http.Transport<Reason>) -> IO(Step):
   do IO<Step>:
     +relative : Maybe<&2, String> <- env("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI")
     +full : Maybe<&2, String> <- env("AWS_CONTAINER_CREDENTIALS_FULL_URI")
@@ -546,9 +547,9 @@ def disabledValue(value: Maybe<&2, String>) -> Bool:
     case Some{+text}: Bool.not(String.is_empty(text)) && Bool.not(String.eq(text, "false"))
     case None{}: False{}
 
-def imdsFailure(error: Services.HttpError) -> String:
+def imdsFailure(error: Http.Failure) -> String:
   match error:
-    case Services.TimedOut{}: "TimeoutError from instance metadata service"
+    case Http.TimedOut{}: "TimeoutError from instance metadata service"
     case _: "Unable to connect to instance metadata service"
 
 def imdsBody(response: Services.Imds) -> Result<&2, &2, String, String>:
@@ -571,7 +572,7 @@ def imdsCredentialsOf(body: Result<&2, &2, String, String>) -> Step:
     case Fail{message}: Next{message}
     case Done{+text}: imdsParsed(Services.imdsCredentials(text))
 
-def imdsProfileRead(~Reason: Data, +transport: Services.Transport<Reason>, +endpoint: String, token: Maybe<&2, String>, profile: Result<&2, &2, String, String>) -> IO(Step):
+def imdsProfileRead(~Reason: Data, +transport: Http.Transport<Reason>, +endpoint: String, token: Maybe<&2, String>, profile: Result<&2, &2, String, String>) -> IO(Step):
   match profile:
     case Fail{message}: IO.pure(Step, Next{message})
     case Done{+name}:
@@ -579,7 +580,7 @@ def imdsProfileRead(~Reason: Data, +transport: Services.Transport<Reason>, +endp
         response : Services.Imds <- Services.imdsRequest(~Reason, transport, "GET", endpoint ++ "/latest/meta-data/iam/security-credentials/" ++ String.trim(name), tokenFields(token))
         return imdsCredentialsOf(imdsBody(response))
 
-def imdsCredentialsWith(~Reason: Data, +transport: Services.Transport<Reason>, +endpoint: String, +token: Maybe<&2, String>) -> IO(Step):
+def imdsCredentialsWith(~Reason: Data, +transport: Http.Transport<Reason>, +endpoint: String, +token: Maybe<&2, String>) -> IO(Step):
   do IO<Step>:
     profile : Services.Imds <- Services.imdsRequest(~Reason, transport, "GET", endpoint ++ "/latest/meta-data/iam/security-credentials/", tokenFields(token))
     imdsProfileRead(~Reason, transport, endpoint, token, imdsBody(profile))
@@ -588,18 +589,18 @@ def v1Causes(profileBlocked: Bool, envBlocked: Bool) -> String:
   String.join(List.concat(&2, String, [Bool.pick(List<&2, String>, profileBlocked, ["config file profile (ec2_metadata_v1_disabled)"], Nil{}), Bool.pick(List<&2, String>, envBlocked, ["process environment variable (AWS_EC2_METADATA_V1_DISABLED)"], Nil{})]), ", ")
 
 # The v1 fallback (no token), unless blocked by configuration.
-def imdsV1(~Reason: Data, +transport: Services.Transport<Reason>, +endpoint: String, +envValue: Maybe<&2, String>, profileValue: Maybe<&2, String>) -> IO(Step):
+def imdsV1(~Reason: Data, +transport: Http.Transport<Reason>, +endpoint: String, +envValue: Maybe<&2, String>, profileValue: Maybe<&2, String>) -> IO(Step):
   +envBlocked = disabledValue(envValue)
   +profileBlocked = Bool.pick(Bool, Maybe.is_some(&2, String, envValue), False{}, disabledValue(profileValue))
   Bool.pick(Unit -> IO(Step), envBlocked || profileBlocked, _ => IO.pure(Step, Next{"AWS EC2 Metadata v1 fallback has been blocked by AWS SDK configuration in the following: [" ++ v1Causes(profileBlocked, envBlocked) ++ "]."}), _ => imdsCredentialsWith(~Reason, transport, endpoint, None{}))(Unit{})
 
-def afterToken(~Reason: Data, +transport: Services.Transport<Reason>, +endpoint: String, envValue: Maybe<&2, String>, profileValue: Maybe<&2, String>, response: Services.Imds) -> IO(Step):
+def afterToken(~Reason: Data, +transport: Http.Transport<Reason>, +endpoint: String, envValue: Maybe<&2, String>, profileValue: Maybe<&2, String>, response: Services.Imds) -> IO(Step):
   match response:
     case Services.ImdsText{+status, body}:
       Bool.pick(Unit -> IO(Step), U32.is_ge(status, 200) && U32.is_lt(status, 300), _ => imdsCredentialsWith(~Reason, transport, endpoint, Some{body}), _ => Bool.pick(Unit -> IO(Step), U32.is_eq(status, 400), _ => IO.pure(Step, Next{"EC2 Metadata token request returned error"}), _ => imdsV1(~Reason, transport, endpoint, envValue, profileValue))(Unit{}))(Unit{})
     case Services.ImdsFailed{_}: imdsV1(~Reason, transport, endpoint, envValue, profileValue)
 
-def imdsAt(~Reason: Data, +transport: Services.Transport<Reason>, endpoint: Result<&2, &2, String, String>, values: R.Record<String>) -> IO(Step):
+def imdsAt(~Reason: Data, +transport: Http.Transport<Reason>, endpoint: Result<&2, &2, String, String>, values: R.Record<String>) -> IO(Step):
   match endpoint:
     case Fail{message}: IO.pure(Step, Stop{message})
     case Done{+base}:
@@ -608,14 +609,14 @@ def imdsAt(~Reason: Data, +transport: Services.Transport<Reason>, endpoint: Resu
         token : Services.Imds <- Services.imdsRequest(~Reason, transport, "PUT", base ++ "/latest/api/token", [SigV4.Field{"x-aws-ec2-metadata-token-ttl-seconds", "21600"}])
         afterToken(~Reason, transport, base, envValue, get(values, "ec2_metadata_v1_disabled"), token)
 
-def fromInstanceMetadata(~Reason: Data, +transport: Services.Transport<Reason>, +values: R.Record<String>) -> IO(Step):
+def fromInstanceMetadata(~Reason: Data, +transport: Http.Transport<Reason>, +values: R.Record<String>) -> IO(Step):
   do IO<Step>:
     explicit : Maybe<&2, String> <- env("AWS_EC2_METADATA_SERVICE_ENDPOINT")
     mode : Maybe<&2, String> <- env("AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE")
     imdsAt(~Reason, transport, imdsEndpoint(explicit, get(values, "ec2_metadata_service_endpoint"), Maybe.or(&2, String, nonempty(mode), get(values, "ec2_metadata_service_endpoint_mode"))), values)
 
 # remoteProvider: container credentials, else IMDS unless disabled.
-def remoteProvider(~Reason: Data, +transport: Services.Transport<Reason>, values: R.Record<String>) -> IO(Step):
+def remoteProvider(~Reason: Data, +transport: Http.Transport<Reason>, values: R.Record<String>) -> IO(Step):
   do IO<Step>:
     relative : Maybe<&2, String> <- env("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI")
     full : Maybe<&2, String> <- env("AWS_CONTAINER_CREDENTIALS_FULL_URI")

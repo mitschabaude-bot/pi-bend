@@ -16,7 +16,7 @@ import ../utils/transcript.bend as Transcript
 import ./constrained-sampling.bend as Sampling
 import ./provider-fetch.bend as Http
 import ./bedrock-credentials.bend as Credentials
-import ./bedrock-credential-services.bend as Services
+import ./credential-http.bend as CredentialHttp
 import ./simple-options.bend as Simple
 import ./transform-messages.bend as Transform
 import ../../../runtime/src/abort.bend as Abort
@@ -1731,7 +1731,7 @@ def chained(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, ~details: J
     case Some{+value}:
       do IO<Unit>:
         controller : Abort.AbortController<Reason> <- Abort.new(Reason)
-        resolved : Result<&2, &2, String, SigV4.Credentials> <- Credentials.resolveCredentials(~Reason, Credentials.Chain{Services.Transport{setupFetch(Reason, E, setup), setupContext(Reason, E, setup), Abort.signal(Reason, controller)}, Some{value}, profile})
+        resolved : Result<&2, &2, String, SigV4.Credentials> <- Credentials.resolveCredentials(~Reason, Credentials.Chain{CredentialHttp.Transport{setupFetch(Reason, E, setup), setupContext(Reason, E, setup), Abort.signal(Reason, controller)}, Some{value}, profile})
         withAuth(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, setup, payload, signedWith(resolved))
 
 def fromChain(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, +state: State<G>, +setup: Setup<Reason, E>, +payload: J(), +profile: Maybe<&2, String>) -> IO(Unit):

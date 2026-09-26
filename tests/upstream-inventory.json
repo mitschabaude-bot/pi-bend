@@ -3,9 +3,10 @@
   "suites": [
     {
       "source": "packages/agent/docs/mobile-handoff/01-harness/01-delta/delta.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "48702e106941d6b1f7e363d96fe24cbe66afce7386c71fc47b27ab21c0496cdb"
+      "sha256": "48702e106941d6b1f7e363d96fe24cbe66afce7386c71fc47b27ab21c0496cdb",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/agent-loop.test.ts",
@@ -48,423 +49,493 @@
     },
     {
       "source": "packages/agent/test/harness/adaptive-publisher.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "3f3445db166ad1aecaeda921edc4bb80f59723277cb9c98565d7f9dc926300f2"
+      "sha256": "3f3445db166ad1aecaeda921edc4bb80f59723277cb9c98565d7f9dc926300f2",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/branch-summarization.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "eb75b427ebac0495ea73e23486a3477bba8f43fa36e032102ac3410bfc9ed57b"
+      "sha256": "eb75b427ebac0495ea73e23486a3477bba8f43fa36e032102ac3410bfc9ed57b",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/branch.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "41e9115025b7ed5ae5d981dcfaf11cd08814c71c568cf29bd7858c38f817cef9"
+      "sha256": "41e9115025b7ed5ae5d981dcfaf11cd08814c71c568cf29bd7858c38f817cef9",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/compaction.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "b4a2de2dad43aacc240572fc6e03a4418af3213c3a2601feb9dcdba350235327"
+      "sha256": "b4a2de2dad43aacc240572fc6e03a4418af3213c3a2601feb9dcdba350235327",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/context.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "5427e1e7d6d88e0408d89872cd55d92a5314fc9d5eb74c1e483e7b2f347764b3"
+      "sha256": "5427e1e7d6d88e0408d89872cd55d92a5314fc9d5eb74c1e483e7b2f347764b3",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/execution-assistant.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "4bd98542ba8d8db9459797f92296403afbd350505fee525c78fa0ddb45bb9c30"
+      "sha256": "4bd98542ba8d8db9459797f92296403afbd350505fee525c78fa0ddb45bb9c30",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/execution-primitives.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "9ff5270a348cf87a91beda6e165b0199f113b21faac00e6f6a97d525c9948458"
+      "sha256": "9ff5270a348cf87a91beda6e165b0199f113b21faac00e6f6a97d525c9948458",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/execution-tools.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "7eccabe1a14e65570b854555cbd794c6febd0ef9ba4e1637a4be995343d03518"
+      "sha256": "7eccabe1a14e65570b854555cbd794c6febd0ef9ba4e1637a4be995343d03518",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/gating-storage.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "bee5e99bc2dd4d61735925253678e78b36bf930cc938f0dc63fe418da6574efe"
+      "sha256": "bee5e99bc2dd4d61735925253678e78b36bf930cc938f0dc63fe418da6574efe",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/instrumented-storage.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "78e20ff7eee3b659f1a4b5a6f288eed7a63df2910019c8b031e624bd002494e5"
+      "sha256": "78e20ff7eee3b659f1a4b5a6f288eed7a63df2910019c8b031e624bd002494e5",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/jsonl-io.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "ac3b91882c523af0b75351919478945ab05a44f9367007285685a1c5ef40c307"
+      "sha256": "ac3b91882c523af0b75351919478945ab05a44f9367007285685a1c5ef40c307",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/jsonl-session-repo-conformance.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "0a101f2acfc9fa88db27b7d5fc46c2f11ece77fdfb0ed7fcadf5cff53f8eeaca"
+      "sha256": "0a101f2acfc9fa88db27b7d5fc46c2f11ece77fdfb0ed7fcadf5cff53f8eeaca",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/jsonl-session-repo.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "27698d0c98cce1dd638d0ba3a91e5c49e3451a181bdf4852fa0fe8e9d3cf0a34"
+      "sha256": "27698d0c98cce1dd638d0ba3a91e5c49e3451a181bdf4852fa0fe8e9d3cf0a34",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/jsonl-storage-conformance.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "dfe326d2602e98b82c581a07fed26e1be0ce1f8a09cc70055973e7c840562e50"
+      "sha256": "dfe326d2602e98b82c581a07fed26e1be0ce1f8a09cc70055973e7c840562e50",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/jsonl-storage.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "9973756a587ae5041351a4694cb03ceb638694c3feae1308684b4990f4738911"
+      "sha256": "9973756a587ae5041351a4694cb03ceb638694c3feae1308684b4990f4738911",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/jsonl-v3-migration.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "f1b741b1183fce63a1fe38e7a48d695892d8b7672a9cb448ced646d4fa4ee615"
+      "sha256": "f1b741b1183fce63a1fe38e7a48d695892d8b7672a9cb448ced646d4fa4ee615",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/jsonl-v3-stream.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "8e1cd7a00197f18e0f8ec334bc073f25ee9e0305ed1a89f7c22d8ca2c2498587"
+      "sha256": "8e1cd7a00197f18e0f8ec334bc073f25ee9e0305ed1a89f7c22d8ca2c2498587",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/memory-conformance.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "97d3e1025b9a2b0cb69df5d5046c6a41018301a1235962709ad45bf4b8aeb101"
+      "sha256": "97d3e1025b9a2b0cb69df5d5046c6a41018301a1235962709ad45bf4b8aeb101",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/memory-session-repo.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "d524dd300ed4d01fa58bdefbf5057911ef18aa46e7467b7db7814bded813b8a0"
+      "sha256": "d524dd300ed4d01fa58bdefbf5057911ef18aa46e7467b7db7814bded813b8a0",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/memory-storage.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "714971ecb1e3c4e5f39bbbbf6b0d0a477f79e459ad69a11ad4005e3c59dcb708"
+      "sha256": "714971ecb1e3c4e5f39bbbbf6b0d0a477f79e459ad69a11ad4005e3c59dcb708",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/mutation-line.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "977bdd68684c8ffc81866c279b1fcaea4c0dc53aa81c841ac2ac9c5ff94b9a25"
+      "sha256": "977bdd68684c8ffc81866c279b1fcaea4c0dc53aa81c841ac2ac9c5ff94b9a25",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/nodejs-env.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "867e9d41715773e99d9e06d2fbbbd2b2fc924469f02de1b944f099a3a02e6d36"
+      "sha256": "867e9d41715773e99d9e06d2fbbbd2b2fc924469f02de1b944f099a3a02e6d36",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/output-capture.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "47fa1c86d271f1048c38f14c81112a9d13c72f6ac6ee0ffade32fb5640615c63"
+      "sha256": "47fa1c86d271f1048c38f14c81112a9d13c72f6ac6ee0ffade32fb5640615c63",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/atomicity.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "f767bd807bfbb81781b1fea01efc5f60e826436344f52ba258464e7c3c6595fe"
+      "sha256": "f767bd807bfbb81781b1fea01efc5f60e826436344f52ba258464e7c3c6595fe",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/authority.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "e60bd4630302baa0bbed343e59f0a9a2f3bec5d2dbb7a878a27026baf118d69a"
+      "sha256": "e60bd4630302baa0bbed343e59f0a9a2f3bec5d2dbb7a878a27026baf118d69a",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/busy.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "371e4dbb449fa6c17039e8ea1a80af4ff8253555964c68b6536deb22cdfa3bab"
+      "sha256": "371e4dbb449fa6c17039e8ea1a80af4ff8253555964c68b6536deb22cdfa3bab",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/chord.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "991c65a39563368c80ee1b85fad427cb5871fd2615d288ad727431099f43ae01"
+      "sha256": "991c65a39563368c80ee1b85fad427cb5871fd2615d288ad727431099f43ae01",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/hardening.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "8007a8a6a911b617818439768ac7a021f0d626830e8363ccca8fc05158dccdf5"
+      "sha256": "8007a8a6a911b617818439768ac7a021f0d626830e8363ccca8fc05158dccdf5",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/kinds.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "1ae2b1d727390fb12d0c7e8c28113fa838ee5d221a8f80ce0870688690201398"
+      "sha256": "1ae2b1d727390fb12d0c7e8c28113fa838ee5d221a8f80ce0870688690201398",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/membrane.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "8cd3dafe9b4daf88abcc389fce9e24e22e12132405e7c614f487b75574ffc81e"
+      "sha256": "8cd3dafe9b4daf88abcc389fce9e24e22e12132405e7c614f487b75574ffc81e",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/reads.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "c8056aaf95213b059ae258c64a00092179263bd678e0f23900ec9913fb12d8f1"
+      "sha256": "c8056aaf95213b059ae258c64a00092179263bd678e0f23900ec9913fb12d8f1",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/recovery.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "1c6de9ada1e6674612b5ecbca8c56154cc625bc348393914e255df4ee7c06647"
+      "sha256": "1c6de9ada1e6674612b5ecbca8c56154cc625bc348393914e255df4ee7c06647",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/retention.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "dc19ffe7ffeb9dcc01387826f444619a6ac7e5ff64c1182d2c959d09974c3dd4"
+      "sha256": "dc19ffe7ffeb9dcc01387826f444619a6ac7e5ff64c1182d2c959d09974c3dd4",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/spec-context-capabilities.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "babb0b531c310d004c0241160e3afdb947d6216470b8f76238bb775a0efe0740"
+      "sha256": "babb0b531c310d004c0241160e3afdb947d6216470b8f76238bb775a0efe0740",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/spec-plugins-lifecycle.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "89e0b2b786c6ca88055b3eac1a7b15deb285f81c628b6826036c30e5ed54db5b"
+      "sha256": "89e0b2b786c6ca88055b3eac1a7b15deb285f81c628b6826036c30e5ed54db5b",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/spec-scheduler-process.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "62747e35cdf0a7cb17bab7ba96b4a4d91c6f3ccbdac549a107b09c490ab6ed7d"
+      "sha256": "62747e35cdf0a7cb17bab7ba96b4a4d91c6f3ccbdac549a107b09c490ab6ed7d",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/spec-storage-history.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "5e92fdfd13d1a1ecf906fc07435d2cf80d5243860e4bad8923085423dd8f505a"
+      "sha256": "5e92fdfd13d1a1ecf906fc07435d2cf80d5243860e4bad8923085423dd8f505a",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/spec-transactions.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "7de147e80e1a69b1255262ab12eb6db5e102d8c1898e3bcdadf4070d0b5987e4"
+      "sha256": "7de147e80e1a69b1255262ab12eb6db5e102d8c1898e3bcdadf4070d0b5987e4",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/spec-view-events.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "17acb4e09d19a5bcc9beee4c706472daf75fa4cca285dde9ff4a91485c328ef6"
+      "sha256": "17acb4e09d19a5bcc9beee4c706472daf75fa4cca285dde9ff4a91485c328ef6",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/subagent.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "2b4b5513abe8d1a3f9849f6ec4864722a5532225d8633492b31361ef1ccde7ca"
+      "sha256": "2b4b5513abe8d1a3f9849f6ec4864722a5532225d8633492b31361ef1ccde7ca",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/tool-bounds.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "383d9d9c536691929f1e85696ab64b1cf4ff5c36683894e71247654bf96c9cc3"
+      "sha256": "383d9d9c536691929f1e85696ab64b1cf4ff5c36683894e71247654bf96c9cc3",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/turn.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "dedc1ae7ea45f68422794e8cd2483ca4fd8c5e13dfff43dc4d086b0b2b3bf485"
+      "sha256": "dedc1ae7ea45f68422794e8cd2483ca4fd8c5e13dfff43dc4d086b0b2b3bf485",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/view.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "f7830f576325040463362bbe6bf8197635c5e6dac632362649603c5860a6e4b9"
+      "sha256": "f7830f576325040463362bbe6bf8197635c5e6dac632362649603c5860a6e4b9",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/waiters.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "906e4b2d797f507a601c5ab36937523dc2f32281884ad2d374204c004f60de5f"
+      "sha256": "906e4b2d797f507a601c5ab36937523dc2f32281884ad2d374204c004f60de5f",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/pico3/watch.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "8ba160c792ab80afd336e24eb111717368ee3e5bad4671ce9f9571d2133ddb7b"
+      "sha256": "8ba160c792ab80afd336e24eb111717368ee3e5bad4671ce9f9571d2133ddb7b",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/prompt-templates.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "2c50931e2a0b1b63800ecb9ee5ca56245363086a18b47c90491e70055da2a511"
+      "sha256": "2c50931e2a0b1b63800ecb9ee5ca56245363086a18b47c90491e70055da2a511",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/resource-formatting.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "7bc3d164339f2642327a576a905389e12b7081bec77e4315712c9f7576115a15"
+      "sha256": "7bc3d164339f2642327a576a905389e12b7081bec77e4315712c9f7576115a15",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/runtime/accept.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "b8c048d94d2a14ec571d1541ceba09f75f52e776cb9fd537a9a46d1558bdf5e0"
+      "sha256": "b8c048d94d2a14ec571d1541ceba09f75f52e776cb9fd537a9a46d1558bdf5e0",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/runtime/drive-generation.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "8488a23fb967e7d6ac071aba47f43895b7811c2139d4870a993c4342f384c160"
+      "sha256": "8488a23fb967e7d6ac071aba47f43895b7811c2139d4870a993c4342f384c160",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/runtime/drive-public.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "bc85c1c5739a325a6191d2e20d636f1c4ece48287c412edbbadc04f6ef851407"
+      "sha256": "bc85c1c5739a325a6191d2e20d636f1c4ece48287c412edbbadc04f6ef851407",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/runtime/drive-reconcile.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "934db9b6b1aaac0df2b179ad8dd93a668fc3eacf9002b24be38b7d7043a05fdf"
+      "sha256": "934db9b6b1aaac0df2b179ad8dd93a668fc3eacf9002b24be38b7d7043a05fdf",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/runtime/drive-retry-deferred.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "338623fe07d76cbfcbee4b8b456cdb07d58e7c90c12931e7e859116aadca6df7"
+      "sha256": "338623fe07d76cbfcbee4b8b456cdb07d58e7c90c12931e7e859116aadca6df7",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/runtime/drive-retry.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "c8668ca1c8407e476903e7f5018860393d360584c80e8083fe0857ffd95f0008"
+      "sha256": "c8668ca1c8407e476903e7f5018860393d360584c80e8083fe0857ffd95f0008",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/runtime/drive-structural.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "3e96860d693c851237127542ce01ce45fe9738475753706e6893d5c98f5a6483"
+      "sha256": "3e96860d693c851237127542ce01ce45fe9738475753706e6893d5c98f5a6483",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/runtime/drive-terminal.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "c17232d631fa0dd3c7d33c90f12b64dbd16e88568d1a7899d0d0143e65a8eef7"
+      "sha256": "c17232d631fa0dd3c7d33c90f12b64dbd16e88568d1a7899d0d0143e65a8eef7",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/runtime/drive-tools.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "5a6dcdd3662154d574aaa87e1865eb161c860a2ead466c7515f68499b86c03de"
+      "sha256": "5a6dcdd3662154d574aaa87e1865eb161c860a2ead466c7515f68499b86c03de",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/runtime/harness.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "8263c060f9a7abe9f4268845dd0e70e40d19b694424419311e9c5f6979eb8859"
+      "sha256": "8263c060f9a7abe9f4268845dd0e70e40d19b694424419311e9c5f6979eb8859",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/runtime/lane.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "0e7917e702fda10c0db4828d210afbfd889bebc546af8969da94b37f464b82e7"
+      "sha256": "0e7917e702fda10c0db4828d210afbfd889bebc546af8969da94b37f464b82e7",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/runtime/progress.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "9bf14cd1e9448b4a84d3976f67d20672e9bede4f109bde19cf257e5ef165376e"
+      "sha256": "9bf14cd1e9448b4a84d3976f67d20672e9bede4f109bde19cf257e5ef165376e",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/runtime/reducer.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "0eb2480917d258f8b9cdd8f6b1ae1b8702ce50890cadc52af8f6ae0f9305c8fa"
+      "sha256": "0eb2480917d258f8b9cdd8f6b1ae1b8702ce50890cadc52af8f6ae0f9305c8fa",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/runtime/restore.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "3cc76f7337251bbb2638d06bd71c0b97aa7321c993ddc5926a607cddaa93042d"
+      "sha256": "3cc76f7337251bbb2638d06bd71c0b97aa7321c993ddc5926a607cddaa93042d",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/runtime/watch.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "2d03c4e3d1727b16df2ac2e9be9c0fdd9058da01915d1da5ad990cdd0cc92cd7"
+      "sha256": "2d03c4e3d1727b16df2ac2e9be9c0fdd9058da01915d1da5ad990cdd0cc92cd7",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/session-context.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "aff48e6111beb43aebc75ae30cc7886095f97aba4475c7a0e47799a70c313eed"
+      "sha256": "aff48e6111beb43aebc75ae30cc7886095f97aba4475c7a0e47799a70c313eed",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/session-create-branch.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "d83f0b2bd962a3a76f07f635b16d53cd143a78c050233ce090f3ee04eacdcca8"
+      "sha256": "d83f0b2bd962a3a76f07f635b16d53cd143a78c050233ce090f3ee04eacdcca8",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/skills.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "b806d12690e989a986c49bd6ff05f123e990195136c90f6c4576e9945641e799"
+      "sha256": "b806d12690e989a986c49bd6ff05f123e990195136c90f6c4576e9945641e799",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/storage-backed-session.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "291bc67769ceb6f5f9ade4db59053243db68d5a5e35b8a007b091a9530519c53"
+      "sha256": "291bc67769ceb6f5f9ade4db59053243db68d5a5e35b8a007b091a9530519c53",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/system-prompt.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "40dafee3aedf176cd02c19c932fbc16442e016a5b29b254d7c76bd0197db3c5f"
+      "sha256": "40dafee3aedf176cd02c19c932fbc16442e016a5b29b254d7c76bd0197db3c5f",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/telemetry.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "6fce0e26e28c9cf3693b63a602a30f72022d99e8c089d91cdd9466795b6fa4e9"
+      "sha256": "6fce0e26e28c9cf3693b63a602a30f72022d99e8c089d91cdd9466795b6fa4e9",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/text-line-reader.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "1bf5e00f4fd4ce6c2c7b4fa64ce1a427cf0aafe66714e8638254a60fbac5c514"
+      "sha256": "1bf5e00f4fd4ce6c2c7b4fa64ce1a427cf0aafe66714e8638254a60fbac5c514",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/tools.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "46bb70115b774389979fbc1cd2811a509da2734082536f0386ffb103cac98003"
+      "sha256": "46bb70115b774389979fbc1cd2811a509da2734082536f0386ffb103cac98003",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/truncate.test.ts",
@@ -477,15 +548,17 @@
     },
     {
       "source": "packages/agent/test/harness/types.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "4b75559c18a77f15bfea9e78f355a7591c62c791b68325a086f86b14b0b5ef84"
+      "sha256": "4b75559c18a77f15bfea9e78f355a7591c62c791b68325a086f86b14b0b5ef84",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/harness/values.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "a0ec82ccd3531c634e1dd07e13eb7ebd2951942c269302fbb85134221ee43f7d"
+      "sha256": "a0ec82ccd3531c634e1dd07e13eb7ebd2951942c269302fbb85134221ee43f7d",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/agent/test/proxy.test.ts",
@@ -495,9 +568,15 @@
     },
     {
       "source": "packages/ai/test/abort.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "603afe6d43a63196ead002d6508707ecf7e10e5e2cb6d6c86df1c30bc257bdf5"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "603afe6d43a63196ead002d6508707ecf7e10e5e2cb6d6c86df1c30bc257bdf5",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 31 of 41 pass; 5 KNOWN (abort during a pending body read: upstream reports the fetch AbortError, the port 'Request was aborted' on Anthropic-Messages and Codex paths; awaiting decision); pending: Bedrock, Mistral (5). Upstream's testAbortSignal returns before its post-loop assertions; the aborted streams are still compared."
     },
     {
       "source": "packages/ai/test/anthropic-adaptive-thinking-models.test.ts",
@@ -835,10 +914,10 @@
     },
     {
       "source": "packages/ai/test/cloudflare-ai-binding.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
       "sha256": "292fc7320f1867259abaaf39f1b2d48208dffb8ce5299b02a9abbfddc083c9d8",
-      "notes": "Pending a decision: api/cloudflare-ai-binding.ts wraps a Cloudflare Workers AI binding (env.AI), which exists only inside a Workers runtime (see docs/source-coverage-reviews.json)."
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/ai/test/cloudflare-stream.test.ts",
@@ -875,21 +954,39 @@
     },
     {
       "source": "packages/ai/test/context-overflow.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "3c02bec11a56c48b1ab1bba98b5ea79f5452ceb074f61528da77973bfdb15d85"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "3c02bec11a56c48b1ab1bba98b5ea79f5452ceb074f61528da77973bfdb15d85",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 30 of 35 pass on native (multi-megabyte prompts; not run on Bun); replies use each provider's documented overflow error (upstream utils/overflow.ts examples) and isContextOverflow is compared; pending: Bedrock, Mistral, local servers (5)."
     },
     {
       "source": "packages/ai/test/cross-provider-handoff.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a793fcacb5e9b7ab0beec89767fc39e96bd7014060a84bce0abc351c31c0069a"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "a793fcacb5e9b7ab0beec89767fc39e96bd7014060a84bce0abc351c31c0069a",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. Both tests pass with fixtures from the 31 provider/model pairs on replayed APIs; the Bedrock and Mistral pairs are left out, as upstream leaves out pairs without credentials."
     },
     {
       "source": "packages/ai/test/empty.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "c66ae1675dc794c189dd2573f1ff0b8dda24e84200f6ac73a9dd1deb2d6a45c3"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "c66ae1675dc794c189dd2573f1ff0b8dda24e84200f6ac73a9dd1deb2d6a45c3",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 112 of 120 pass (found and fixed: the Gemini SDK's 'contents are required' for an empty contents list); pending: Bedrock, Mistral (8)."
     },
     {
       "source": "packages/ai/test/env-api-keys.test.ts",
@@ -925,9 +1022,14 @@
     },
     {
       "source": "packages/ai/test/faux-provider.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "fea06efc607060cbad9885d7cc9bff5151f0a0510d3631e7bb8bbc7e547ab999"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/faux-provider.bend",
+        "tests/faux_provider_check.py",
+        "tests/faux_provider_reference.ts"
+      ],
+      "sha256": "fea06efc607060cbad9885d7cc9bff5151f0a0510d3631e7bb8bbc7e547ab999",
+      "notes": "22 of 23 upstream tests ported (tests/faux_provider_check.py, bun and native); usage estimates and mid-pair chunking also differential against upstream createFauxCore. Pending: 'unregisters the provider' needs upstream's dynamic api registry (registerApiProvider/unregisterApiProviders), which the port replaces with static provider dispatch; registerFauxProvider/deferred responses are not ported."
     },
     {
       "source": "packages/ai/test/fetch-option.test.ts",
@@ -1731,9 +1833,15 @@
     },
     {
       "source": "packages/ai/test/stream.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9b0f81e7aa6433bee0589345bf327d8c93c71e6c0ab1d901c9f6dc3aaa68bc42"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "9b0f81e7aa6433bee0589345bf327d8c93c71e6c0ab1d901c9f6dc3aaa68bc42",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 197 of 233 tests pass; pending: Bedrock, Mistral, Vertex, Codex WebSocket transport, local servers (36)."
     },
     {
       "source": "packages/ai/test/supports-xhigh.test.ts",
@@ -1757,9 +1865,10 @@
     },
     {
       "source": "packages/ai/test/telemetry-options.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "88e206ffc963c4c84b9c77c4fcacf3b4ba1bdceff1fd05ef5d36c0d3a622ecb3"
+      "sha256": "88e206ffc963c4c84b9c77c4fcacf3b4ba1bdceff1fd05ef5d36c0d3a622ecb3",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/ai/test/text.test.ts",
@@ -1780,9 +1889,15 @@
     },
     {
       "source": "packages/ai/test/tokens.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "512c3bd3ab7a6fb77056284350d751be6a57c57f1a709081b42e5aef4017f735"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "512c3bd3ab7a6fb77056284350d751be6a57c57f1a709081b42e5aef4017f735",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 17 of 31 pass; 8 KNOWN (abort-message difference as in abort.test.ts); pending: Bedrock, Mistral, 4 it.skip upstream."
     },
     {
       "source": "packages/ai/test/tool-call-id-normalization.test.ts",
@@ -1792,15 +1907,27 @@
     },
     {
       "source": "packages/ai/test/tool-call-without-result.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "3d00184e004453c2574a26b3657f280a9d9c7cba63afab8b5448156727909abf"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "3d00184e004453c2574a26b3657f280a9d9c7cba63afab8b5448156727909abf",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 28 of 30 pass (the server rejects unanswered tool calls as the providers do); pending: Bedrock, Mistral."
     },
     {
       "source": "packages/ai/test/total-tokens.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5c2cd0b7e3b73733ac12272de194ae00e9222e2cc74e0f79e9cd14a681068e7f"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "5c2cd0b7e3b73733ac12272de194ae00e9222e2cc74e0f79e9cd14a681068e7f",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 33 of 35 pass; pending: Bedrock, Mistral."
     },
     {
       "source": "packages/ai/test/transcript-tool-changes.test.ts",
@@ -1827,9 +1954,15 @@
     },
     {
       "source": "packages/ai/test/unicode-surrogate.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "89cf5a6e71e2c059ae3a22aa81d311433832c7b00f93da683504336605c6d518"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "89cf5a6e71e2c059ae3a22aa81d311433832c7b00f93da683504336605c6d518",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 84 of 90 pass (unpaired-surrogate rows on native only, carried through a marker since the strict JSON decoder rejects them); pending: Bedrock, Mistral (6)."
     },
     {
       "source": "packages/ai/test/uuid.test.ts",
@@ -1900,117 +2033,136 @@
     },
     {
       "source": "packages/chord/test/boundary.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "f719de5ff76358a6b2171b14f8c2f368c0057dfb860f87dcd37eda4baaece1f1"
+      "sha256": "f719de5ff76358a6b2171b14f8c2f368c0057dfb860f87dcd37eda4baaece1f1",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/chord/test/bundle.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "ed78ec76495b6ced68ab5437b670fdd2b52bd30ca6cbbf463bb452335c610e0e"
+      "sha256": "ed78ec76495b6ced68ab5437b670fdd2b52bd30ca6cbbf463bb452335c610e0e",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/chord/test/context.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "8270a710fe003103141f1a72c01af0655a8863233f8cba3b96a041443e9cfe82"
+      "sha256": "8270a710fe003103141f1a72c01af0655a8863233f8cba3b96a041443e9cfe82",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/chord/test/delta-clone.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "0ca90da58d5516239f729d3215e4b7af13e025f152b2e0c5b00f09ef79764683"
+      "sha256": "0ca90da58d5516239f729d3215e4b7af13e025f152b2e0c5b00f09ef79764683",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/chord/test/delta-retention.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "eef13e41464c7713ba9420ef0d9ea896fe00bf2869b015da0d12660110caa96f"
+      "sha256": "eef13e41464c7713ba9420ef0d9ea896fe00bf2869b015da0d12660110caa96f",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/chord/test/delta.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "94bf8e1b881cbf14e0e94c88a3f52cafe3baf19869822863c13ebeff73d1d5db"
+      "sha256": "94bf8e1b881cbf14e0e94c88a3f52cafe3baf19869822863c13ebeff73d1d5db",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/chord/test/facet-loader.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "ed4291b5e3f2c06bdeccaa18fd592227d2f926aa0f80f895ef78502eb392db12"
+      "sha256": "ed4291b5e3f2c06bdeccaa18fd592227d2f926aa0f80f895ef78502eb392db12",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/chord/test/facets.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "4a4b278991587a07e887d28ce0b60b943d98e189e6906b58fe7ce3a28baaf775"
+      "sha256": "4a4b278991587a07e887d28ce0b60b943d98e189e6906b58fe7ce3a28baaf775",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/chord/test/json.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "b9445861f55e89a5881c48af9225f6174303faafa7fd3edc223bb171ac0f907a"
+      "sha256": "b9445861f55e89a5881c48af9225f6174303faafa7fd3edc223bb171ac0f907a",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/chord/test/service-wire.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "fdcddf841cc596ef90972f6243f2b0ce005c7b4a7bafd77eeb717f5e169dfceb"
+      "sha256": "fdcddf841cc596ef90972f6243f2b0ce005c7b4a7bafd77eeb717f5e169dfceb",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/chord/test/services.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "a8634093c3692fd539921b176280a7c1c160e264549355c4c93fd0eb1ebde391"
+      "sha256": "a8634093c3692fd539921b176280a7c1c160e264549355c4c93fd0eb1ebde391",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/chord/test/state-diff.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "21b816da09a635cad0b6e8bacc0d6c12996367ab583870c41eda9ecf94cb230b"
+      "sha256": "21b816da09a635cad0b6e8bacc0d6c12996367ab583870c41eda9ecf94cb230b",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/chord/test/state-draft.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "19fb87ca894a2b8762170f0197cdfb50c30c4fd691f3a8f0697b3f127d2837f4"
+      "sha256": "19fb87ca894a2b8762170f0197cdfb50c30c4fd691f3a8f0697b3f127d2837f4",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/chord/test/state-fuzz.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "358466f871ed6525120edd33a21e34d7453ba76e16aacac54ac6373c52aa1997"
+      "sha256": "358466f871ed6525120edd33a21e34d7453ba76e16aacac54ac6373c52aa1997",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/chord/test/state-value.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "49e4ba9d52ad10b487288a6ded06be00e178c0d6fb1ee7f350544d3b28221992"
+      "sha256": "49e4ba9d52ad10b487288a6ded06be00e178c0d6fb1ee7f350544d3b28221992",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/chord/test/state.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "390db7aaa39fd6a0ae6de9fe4ce962588687dcf51b38c7b324c3ab6678721834"
+      "sha256": "390db7aaa39fd6a0ae6de9fe4ce962588687dcf51b38c7b324c3ab6678721834",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/client/test/client.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "308b1bb3d0b6f498d7671865e09b83cf8f942fec357e75f04eef12bba4afc694"
+      "sha256": "308b1bb3d0b6f498d7671865e09b83cf8f942fec357e75f04eef12bba4afc694",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/client/test/unix-transport.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "486b007138c9f264be61f0013fc0c1650f265760a04f0ede4c464520fb31c62a"
+      "sha256": "486b007138c9f264be61f0013fc0c1650f265760a04f0ede4c464520fb31c62a",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/client/test/unix.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "82d6969098bed9ad9b6197e3e9d2ff003cbd72691826579281f055503edb7c3b"
+      "sha256": "82d6969098bed9ad9b6197e3e9d2ff003cbd72691826579281f055503edb7c3b",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/agent-session-auto-compaction-queue.test.ts",
@@ -2196,9 +2348,10 @@
     },
     {
       "source": "packages/coding-agent/test/bug-report.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "a94efa535af1bf50dc5ee948bc65d9578fbe1bdcc4400489727d6bde241eba91"
+      "sha256": "a94efa535af1bf50dc5ee948bc65d9578fbe1bdcc4400489727d6bde241eba91",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/builtin-tool-strict-mode.test.ts",
@@ -2393,111 +2546,129 @@
     },
     {
       "source": "packages/coding-agent/test/experimental-agent-controller.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "7c7ffd0e16d4a39bb9ecd427fd761f11127520abaed536a3dd0037be458991f0"
+      "sha256": "7c7ffd0e16d4a39bb9ecd427fd761f11127520abaed536a3dd0037be458991f0",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental-cli-command.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "e59a1a141740cd623973610adc4eb89e2f71d0ef0153d943acf08dadf52e5474"
+      "sha256": "e59a1a141740cd623973610adc4eb89e2f71d0ef0153d943acf08dadf52e5474",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental-cli-entry.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "a0cb7edfee2b918fa349d23ff9084b8f02c97d681641b805a03f5dc953e0bbdd"
+      "sha256": "a0cb7edfee2b918fa349d23ff9084b8f02c97d681641b805a03f5dc953e0bbdd",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental-cli-resolution.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "8b7dc5b13dd351837aac7c8da97f6e4dfecea6769d338905a99b1fb87292ff57"
+      "sha256": "8b7dc5b13dd351837aac7c8da97f6e4dfecea6769d338905a99b1fb87292ff57",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental-client-tui.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "f71d860e274b55e1d574ec8412e2c88820de5a59e2e5b863ccad890777a7f412"
+      "sha256": "f71d860e274b55e1d574ec8412e2c88820de5a59e2e5b863ccad890777a7f412",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental-internal-process.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "278bac53861ae1e9aed7f14224ee03ef68ee7dfb8a1ba50d072cbf8f0babc3ab"
+      "sha256": "278bac53861ae1e9aed7f14224ee03ef68ee7dfb8a1ba50d072cbf8f0babc3ab",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental-plugin-reload.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "3427ab256d0a95d08849f1712d7dc34ba54d9d7a1ddb2d2c3d9722b9e66f9470"
+      "sha256": "3427ab256d0a95d08849f1712d7dc34ba54d9d7a1ddb2d2c3d9722b9e66f9470",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental-presentation-facets.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "0b69f0b3fcabb712bc5b1780c0947896eb470e978642ddb9da94a17affa0f9e4"
+      "sha256": "0b69f0b3fcabb712bc5b1780c0947896eb470e978642ddb9da94a17affa0f9e4",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental-radius-relay.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "65f9bb077ad542cc13c92591b4bb5bc0c9d3780c319d5e3dd7e0c510ff9e0127"
+      "sha256": "65f9bb077ad542cc13c92591b4bb5bc0c9d3780c319d5e3dd7e0c510ff9e0127",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental-remote-runtime.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "e664b23a8922a073b32379cc8cd28abfe6c6bbeb961dc572315130a6d19ddaee"
+      "sha256": "e664b23a8922a073b32379cc8cd28abfe6c6bbeb961dc572315130a6d19ddaee",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental-server-lifecycle.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "067918d38cd8bffa5c396a7e33eaea2bf8356083c5719f0bfe81d6eec1cad14d"
+      "sha256": "067918d38cd8bffa5c396a7e33eaea2bf8356083c5719f0bfe81d6eec1cad14d",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental-server-profile.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "0a72f8d800dedd03bf626b3c68e3dc3042bd22cc5e631d816b806d5b7548745b"
+      "sha256": "0a72f8d800dedd03bf626b3c68e3dc3042bd22cc5e631d816b806d5b7548745b",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental-session-directory.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "582992d8f7b7086e95aacdbe3fdd6c7775f221a5a9e298f19edc3a1725c27eb1"
+      "sha256": "582992d8f7b7086e95aacdbe3fdd6c7775f221a5a9e298f19edc3a1725c27eb1",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental-session-worker-lifecycle.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "04fad274bd8d1df8dc5fe1b9460a93b2144d3027bbd5ea8b6f3921a8d7ca4de2"
+      "sha256": "04fad274bd8d1df8dc5fe1b9460a93b2144d3027bbd5ea8b6f3921a8d7ca4de2",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental-session-worker-manager.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "ffe285dbbe20badd0fe33bc779318d5f26d6ab5cfc444109a7c5ff6bf62774c1"
+      "sha256": "ffe285dbbe20badd0fe33bc779318d5f26d6ab5cfc444109a7c5ff6bf62774c1",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental-slash-commands.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "fa080acd3c44b603e44fbab7bdd5cd793488a7a08d500271caba98a9751dafc2"
+      "sha256": "fa080acd3c44b603e44fbab7bdd5cd793488a7a08d500271caba98a9751dafc2",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental-transcript-provider.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "ee999eea36971117293feccd8d018cb00c60fe46cdfb4d568fedff85bd207e32"
+      "sha256": "ee999eea36971117293feccd8d018cb00c60fe46cdfb4d568fedff85bd207e32",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/experimental.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "4abd9d1a639085e0aa7607239494e5f0de8fa07d7ee6b322bbcc199c276bc7c2"
+      "sha256": "4abd9d1a639085e0aa7607239494e5f0de8fa07d7ee6b322bbcc199c276bc7c2",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/export-html-skill-block.test.ts",
@@ -2631,9 +2802,14 @@
     },
     {
       "source": "packages/coding-agent/test/git-ssh-url.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2f502b173e2bf6c6e4d52b4f0bf3da74ebf63f6d9a2b1155ad9b8677ce058d5b"
+      "status": "ported",
+      "ports": [
+        "tests/git-ssh-url.bend",
+        "tests/git_url_check.py",
+        "tests/git_url_reference.ts"
+      ],
+      "sha256": "2f502b173e2bf6c6e4d52b4f0bf3da74ebf63f6d9a2b1155ad9b8677ce058d5b",
+      "notes": "All 10 cases pass on Bun and native one/four threads. utils/git.bend ports parseGitUrl over a pure-Bend port of hosted-git-info 9.0.3's fromUrl (packages/runtime/src/hosted-git-info.bend) and the WHATWG URL parser. A differential check compares 714 sources (hosted, scp, protocol and shorthand forms, refs, credentials, encodings, unsafe paths, generated combinations; 336 accepted) with the pinned upstream parseGitUrl: all match, including hosted-git-info's \"null\" user for Gist paths and \"undefined\" committish for a bare /tree URL."
     },
     {
       "source": "packages/coding-agent/test/git-update.test.ts",
@@ -2715,9 +2891,10 @@
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-bug-report-hint.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "6f8a040919a1d6fb3ac9eb4341287f19bf34aaa69339f578458f4d7e9145b612"
+      "sha256": "6f8a040919a1d6fb3ac9eb4341287f19bf34aaa69339f578458f4d7e9145b612",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-clone-command.test.ts",
@@ -2919,33 +3096,56 @@
     },
     {
       "source": "packages/coding-agent/test/package-manager-ssh.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "963d17222f4b23acdf67598de2aea4126ef1eebb488b8ceac276aa552fdf7a3a"
+      "status": "ported",
+      "ports": [
+        "tests/package-sources.bend",
+        "tests/package_sources_check.py"
+      ],
+      "sha256": "963d17222f4b23acdf67598de2aea4126ef1eebb488b8ceac276aa552fdf7a3a",
+      "notes": "All 8 cases (protocol URLs, git: shorthands with and without ref, local fallback without git:, identity normalization) pass on Bun and native one/four threads. The upstream tests call the private parseSource/getPackageIdentity through `as any`; here they are package-manager.bend functions over the manager state (PM.Context with an in-memory SettingsManager)."
     },
     {
       "source": "packages/coding-agent/test/package-manager.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ca17de96e051959a93d8c294a037f04f5cb6a6fd6618553457e5da7d09d563f7"
+      "status": "partial",
+      "ports": [
+        "tests/package-manager.bend",
+        "tests/package_manager_check.py",
+        "tests/package-manager.md",
+        "tests/package-sources.bend",
+        "tests/package_sources_check.py"
+      ],
+      "sha256": "ca17de96e051959a93d8c294a037f04f5cb6a6fd6618553457e5da7d09d563f7",
+      "notes": "Ported (Bun and native one/four threads), tests/package-sources.bend: source parsing (\"should parse package source types from docs examples\", \"should never parse dot-relative paths as git\"), git install paths (traversal refused for user, project and temporary scopes), temporary install paths (node_modules/left-pad under <agentDir>/tmp/extensions, created 0700), all six settings source normalization cases (local sources relative to the scope base, removal by equivalent path, same-ref add unchanged, ref replacement keeping package filters) and all 12 HTTPS git URL parsing cases. Resolution of local settings/auto-discovered skills, prompts and themes is covered differentially by tests/package_manager_check.py. Pending: package installs, removal and updates (npm/git commands, progress events, npmCommand), package resource collection (manifests, filters, force-include/exclude inside packages, extension discovery), package deduplication in resolve, offline/update checks; the npm `range` field needs semver ranges."
     },
     {
       "source": "packages/coding-agent/test/path-utils.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "08bb88574596a43e2364ee3b2655e071593822417ef8937693744174e9615f3e"
+      "status": "ported",
+      "ports": [
+        "tests/paths.bend",
+        "tests/paths_check.py"
+      ],
+      "sha256": "08bb88574596a43e2364ee3b2655e071593822417ef8937693744174e9615f3e",
+      "notes": "All 15 cases (expandPath, resolveToCwd, and resolveReadPath with NFD, curly-quote, combined and AM/PM screenshot variants) pass on Bun and native one/four threads against files the Python check creates. path-utils lives in utils/paths.bend (expandPath, resolveToCwd, resolveReadPath). The NFD case also asserts the exact decomposed name, which is the only way the file can be found on Linux."
     },
     {
       "source": "packages/coding-agent/test/paths.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "c12c0fa1d77a05fc150986ce2ab6a132d2c56f86fbcd82b2b59b75922f0b9dac"
+      "status": "ported",
+      "ports": [
+        "tests/paths.bend",
+        "tests/paths_check.py"
+      ],
+      "sha256": "c12c0fa1d77a05fc150986ce2ab6a132d2c56f86fbcd82b2b59b75922f0b9dac",
+      "notes": "All POSIX cases pass on Bun and native one/four threads: canonicalizePath (regular file, file and directory symlinks, missing target and dangling link fall back to the raw path), getCwdRelativePath (dot-prefixed names kept, parent traversal rejected), resolvePath (only ~ and ~/ expand, relative and file-URL bases, file URLs with escaped spaces, invalid file URL is an error, literal percent sequences in POSIX paths), normalizeWindowsShellPath (drive conversions and unchanged forms) and isLocalPath. The fixture tree is created by the Python check; the environment's home stands in for os.homedir(). The two Windows cases (\"does not treat Windows file URL pathname strings as native paths\", which returns early off win32, and the runIf(win32) \"is applied by normal path handling on Windows\") are not applicable to this POSIX port; normalizeWindowsShellPath itself is ported and covered by the two portable cases."
     },
     {
       "source": "packages/coding-agent/test/pi-user-agent.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d90ac6970564ba4f4a67759795ec6153e153a1135c036873a1b8656cd8e34a2a"
+      "status": "ported",
+      "ports": [
+        "tests/version-check.bend",
+        "tests/version_check_check.py"
+      ],
+      "sha256": "d90ac6970564ba4f4a67759795ec6153e153a1135c036873a1b8656cd8e34a2a",
+      "notes": "The single case passes on Bun and native one/four threads: getPiUserAgent(\"1.2.3\") is exactly pi/1.2.3 (<platform>; <runtime>; <arch>) with Node's platform and architecture names for the machine (from the system identity), which also satisfies upstream's shape regex. Adaptation: the runtime token is this native build's bend/2.0.7 instead of bun/<version> or node/<version>."
     },
     {
       "source": "packages/coding-agent/test/plan-mode-extension.test.ts",
@@ -4358,7 +4558,7 @@
         "tests/thinking-level.bend"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '→ ✓ medium', then '  ✓ medium' and '→   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",
@@ -4490,183 +4690,217 @@
     },
     {
       "source": "packages/coding-agent/test/version-check.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "cba6b39e9767019aebe0277ab580cb603927258652afcb2b9967387f1e8d6aa7"
+      "status": "partial",
+      "ports": [
+        "tests/version-check.bend",
+        "tests/version_check_check.py",
+        "tests/loopback-fetch.bend"
+      ],
+      "sha256": "cba6b39e9767019aebe0277ab580cb603927258652afcb2b9967387f1e8d6aa7",
+      "notes": "9 of 10 cases pass on Bun and native one/four threads. Instead of stubbing the global fetch, the library's https://pi.dev request goes through a logging fetch (tests/loopback-fetch.bend) to a local server that answers, drops connections or fails per case; the request URL, User-Agent and accept headers and the request counts (3 with retry, 1 for automatic checks, 0 when PI_SKIP_VERSION_CHECK is set) are asserted. semver valid/compare come from packages/runtime/src/semver.bend (tests/semver_check.py: 1,363 pairs match node-semver 7.8.5, including JavaScript double rounding of huge numeric pre-release identifiers). Not ported: \"formats nested network error details\" — the native fetch error carries no errno codes, so formatVersionCheckError returns the management request's message."
     },
     {
       "source": "packages/durable/test/memory-storage.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "25a5d84468fb69bcd9dfc092fc50d6ee361a9e73e3bb3c74b907781abba194cf"
+      "sha256": "25a5d84468fb69bcd9dfc092fc50d6ee361a9e73e3bb3c74b907781abba194cf",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/durable/test/sqlite-facade.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "7dfe16f998186ba27887bac1d808b07fc93cd7c1ac58746ba51fc0605fab60cc"
+      "sha256": "7dfe16f998186ba27887bac1d808b07fc93cd7c1ac58746ba51fc0605fab60cc",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/durable/test/sqlite-migrations.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "648721a7a8a136b540f9de5af01d03ab0d961a32c906218dfd8c56e4d7694c9d"
+      "sha256": "648721a7a8a136b540f9de5af01d03ab0d961a32c906218dfd8c56e4d7694c9d",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/durable/test/sqlite-storage.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "71d106a39c5133e3f2a6444254dc09d77660390b9b37effcd4d798915c911cbe"
+      "sha256": "71d106a39c5133e3f2a6444254dc09d77660390b9b37effcd4d798915c911cbe",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/durable/test/storage-runtime-boundary.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "e99845fe934919e2c6cdd67572766a17f1dd0d69f4f7296f88c3a0ed021c45c6"
+      "sha256": "e99845fe934919e2c6cdd67572766a17f1dd0d69f4f7296f88c3a0ed021c45c6",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/durable/test/types.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "611f7d8c463b85e0571eed1f62865f2b15e5a5717b01989d7d8bbc7c7f888ba1"
+      "sha256": "611f7d8c463b85e0571eed1f62865f2b15e5a5717b01989d7d8bbc7c7f888ba1",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/evals/test/acme-server.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "291b985f0befcdd374b881a12fc9c9348528ab0400917e2ed24e206cbd99b281"
+      "sha256": "291b985f0befcdd374b881a12fc9c9348528ab0400917e2ed24e206cbd99b281",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/evals/test/comparison.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "984d0fb718753a92816017164e826890c10362a866610b5d51191fdd5478bccf"
+      "sha256": "984d0fb718753a92816017164e826890c10362a866610b5d51191fdd5478bccf",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/evals/test/configured-runtime.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "d10c6926c950dfbc5b8274eddbd65e25a6a287d2b5717fa03f2eaaee916d3ea1"
+      "sha256": "d10c6926c950dfbc5b8274eddbd65e25a6a287d2b5717fa03f2eaaee916d3ea1",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/evals/test/harness.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "4fe189beb13f735c832ad48921d3b28538a26d74af689f3099fc89dc2c926cf9"
+      "sha256": "4fe189beb13f735c832ad48921d3b28538a26d74af689f3099fc89dc2c926cf9",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/evals/test/plan.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "ceeae4e17200f20d9082e006ed05660b07e2acd6f669224328dba77e3632437c"
+      "sha256": "ceeae4e17200f20d9082e006ed05660b07e2acd6f669224328dba77e3632437c",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/evals/test/report.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "93dbf65f76e3e2ccaeaa23d47377625af83bf4a9552383e509f01ac2e6cfd20d"
+      "sha256": "93dbf65f76e3e2ccaeaa23d47377625af83bf4a9552383e509f01ac2e6cfd20d",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/protocol/test/cbor/cbor.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "9e1edc0e0eb3b88a8e8df03fb9e29e57c68f285a77052165e21c0a363a7152c9"
+      "sha256": "9e1edc0e0eb3b88a8e8df03fb9e29e57c68f285a77052165e21c0a363a7152c9",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/protocol/test/framing.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "bd7a5f205ad8349123e2505fbaba526532bfca0060da8b9655044ec0e1770071"
+      "sha256": "bd7a5f205ad8349123e2505fbaba526532bfca0060da8b9655044ec0e1770071",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/protocol/test/protocol.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "b0205487bee8361a77bcceb71e3e7ca74dfa480b4c57cb8c7adb5e0ce49e4c92"
+      "sha256": "b0205487bee8361a77bcceb71e3e7ca74dfa480b4c57cb8c7adb5e0ce49e4c92",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/server/test/conformance.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "849af98dab82de8be93e62ebfd67abdce4395781d928e0d51e5d5de5192d1174"
+      "sha256": "849af98dab82de8be93e62ebfd67abdce4395781d928e0d51e5d5de5192d1174",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/server/test/listener.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "4cb835caa4f3d59e33dbcac31490e2d333b6741322a5f324a996a280a5bf1890"
+      "sha256": "4cb835caa4f3d59e33dbcac31490e2d333b6741322a5f324a996a280a5bf1890",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/server/test/protocol.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "33157c44d161baf8c4a838df7c5d852bbfdecb1b62da8cd7abc0a680cbbbac48"
+      "sha256": "33157c44d161baf8c4a838df7c5d852bbfdecb1b62da8cd7abc0a680cbbbac48",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/server/test/server.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "468f0cf48a78449123b87a6c66ba5a6c18a6efb4fa0d678364611cf7dc5fdcfd"
+      "sha256": "468f0cf48a78449123b87a6c66ba5a6c18a6efb4fa0d678364611cf7dc5fdcfd",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/server/test/unix-connection.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "93f52cbf853ea97ab39de6b5b2b16bef65e3850bb110854aeaa5967628851da3"
+      "sha256": "93f52cbf853ea97ab39de6b5b2b16bef65e3850bb110854aeaa5967628851da3",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/server/test/unix.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "86ca4b6d7ffc3d3e2c4eff60eaf260cc1a56aea995d46a09a9edf1a2e9f73eaf"
+      "sha256": "86ca4b6d7ffc3d3e2c4eff60eaf260cc1a56aea995d46a09a9edf1a2e9f73eaf",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/session-backends/sqlite-node/test/adapter.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "f2606eccbd2c1e51dc353fb5acfbe90a8fa9e42fb28e00d06b7c45c0ff79f0fc"
+      "sha256": "f2606eccbd2c1e51dc353fb5acfbe90a8fa9e42fb28e00d06b7c45c0ff79f0fc",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/session-backends/sqlite-node/test/repo-conformance.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "b984439e07fbd75aaffff4b29c6e931c37fe45c77461dadf8792b0e08f37c00c"
+      "sha256": "b984439e07fbd75aaffff4b29c6e931c37fe45c77461dadf8792b0e08f37c00c",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/session-backends/sqlite-node/test/repo.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "3e46e07bc1446207274cb47ebea85c861ae94740479e97ce30cae6299e0f59e2"
+      "sha256": "3e46e07bc1446207274cb47ebea85c861ae94740479e97ce30cae6299e0f59e2",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/session-backends/sqlite-node/test/sql.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "984ac5eb881adc015a6a26653f8a5102c53698b647279fc47e21a7c859650d7a"
+      "sha256": "984ac5eb881adc015a6a26653f8a5102c53698b647279fc47e21a7c859650d7a",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/session-backends/sqlite-node/test/storage-conformance.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "1e928afa13e0991f007c97869813c398b298e933dcd564e72287c8a026b21d45"
+      "sha256": "1e928afa13e0991f007c97869813c398b298e933dcd564e72287c8a026b21d45",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/session-backends/sqlite-node/test/storage.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "cdf48a8a833edd49023422e429362a887f6dc92aa0958ea573738cfe280734ab"
+      "sha256": "cdf48a8a833edd49023422e429362a887f6dc92aa0958ea573738cfe280734ab",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/telemetry/test/conformance.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "3ce5c7ec47fbd4055bae5cf54764bc989d4bc2543b4ba1842f3fc848bafaa6ca"
+      "sha256": "3ce5c7ec47fbd4055bae5cf54764bc989d4bc2543b4ba1842f3fc848bafaa6ca",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/telemetry/test/telemetry.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "663e7d3b42332dccffc96c3b79c599918a67bd67dd8ae3f3d951ac12f21c1dad"
+      "sha256": "663e7d3b42332dccffc96c3b79c599918a67bd67dd8ae3f3d951ac12f21c1dad",
+      "notes": "Out of scope: see docs/scope-decisions.md."
     },
     {
       "source": "packages/tui/test/autocomplete-skill-slash.test.ts",

@@ -160,3 +160,131 @@ def getFileRevision(+path: String) -> IO(Maybe<&2,String>):
     size : Result<&1,&1,U32 & String,U32 & U32> <- File.size_bytes(path)
     modified : Result<&1,&1,U32 & String,U32 & U32 & U32> <- File.modified_time(path)
     return revisionOf(size,modified)
+
+# upstream canonicalizePath: the real path, following symlinks; the raw path
+# when resolution fails (a missing target or a dangling link).
+def canonicalized(+path: String, real: Result<&2,&2,FS.Error,String>) -> String:
+  match real:
+    case Done{found}: found
+    case Fail{_}: path
+
+def canonicalizePath(+path: String) -> IO(String):
+  do IO<String>:
+    real : Result<&2,&2,FS.Error,String> <- FS.realpath(path)
+    return canonicalized(path, real)
+
+# upstream isLocalPath: not a package source (npm:, git:, github:) or a remote
+# URL; bare names, relative paths and file: URLs are local.
+def isLocalPath(value: String) -> Bool:
+  +trimmed = Text.trim(value)
+  Bool.not(String.starts_with(trimmed, "npm:") || String.starts_with(trimmed, "git:") || String.starts_with(trimmed, "github:") || String.starts_with(trimmed, "http:") || String.starts_with(trimmed, "https:") || String.starts_with(trimmed, "ssh:"))
+
+# upstream normalizeWindowsShellPath: Git Bash, MSYS, Cygwin and WSL drive
+# paths (/c/x, /cygdrive/c/x, /mnt/c/x) to C:\x; other forms unchanged. It is
+# a pure conversion; upstream applies it in normalizePath only on Windows, so
+# the POSIX path pipeline above never calls it.
+def asciiLetter(+code: U32) -> Bool:
+  (U32.is_ge(code, 65) && U32.is_le(code, 90)) || (U32.is_ge(code, 97) && U32.is_le(code, 122))
+
+def lineTerminator(+code: U32) -> Bool:
+  U32.is_eq(code, 10) || U32.is_eq(code, 13) || U32.is_eq(code, 8232) || U32.is_eq(code, 8233)
+
+def singleLine(text: String) -> Bool:
+  match text:
+    case SNil{}: True{}
+    case SCon{Chr{+code}, rest}: Bool.not(lineTerminator(code)) && singleLine(rest)
+
+def backslashes(text: String, reversed: String) -> String:
+  match text:
+    case SNil{}: String.reverse(reversed)
+    case SCon{'/', rest}: backslashes(rest, SCon{'\\', reversed})
+    case SCon{char, rest}: backslashes(rest, SCon{char, reversed})
+
+def upperLetter(+code: U32) -> Char:
+  Chr{Bool.pick(U32, U32.is_ge(code, 97), (code - 32 : U32), code)}
+
+def driveOf(+code: U32, suffix: String) -> String:
+  SCon{upperLetter(code), SCon{':', SCon{'\\', backslashes(suffix, "")}}}
+
+# The drive letter and optional "/rest" after an optional mount prefix.
+def drivePath(text: String) -> Maybe<&2, String>:
+  match text:
+    case SCon{Chr{+code}, SNil{}}: Bool.pick(Maybe<&2, String>, asciiLetter(code), Some{driveOf(code, "")}, None{})
+    case SCon{Chr{+code}, SCon{'/', +rest}}: Bool.pick(Maybe<&2, String>, asciiLetter(code) && singleLine(rest), Some{driveOf(code, rest)}, None{})
+    case _: None{}
+
+def withoutMount(text: String) -> Maybe<&2, String>:
+  match text:
+    case SCon{'m', SCon{'n', SCon{'t', SCon{'/', rest}}}}: Some{rest}
+    case SCon{'c', SCon{'y', SCon{'g', SCon{'d', SCon{'r', SCon{'i', SCon{'v', SCon{'e', SCon{'/', rest}}}}}}}}}: Some{rest}
+    case _: None{}
+
+# The regex backtracks: a mount prefix that leaves no drive path retries the
+# whole text as one.
+def mountFirst(+text: String) -> Maybe<&2, String>:
+  Maybe.or(&2, String, Maybe.bind(&2, String, String, withoutMount(text), drivePath), drivePath(text))
+
+def windowsPath(+filePath: String, converted: Maybe<&2, String>) -> String:
+  match converted:
+    case Some{path}: path
+    case None{}: filePath
+
+def unixDrivePath(+rest: String) -> Maybe<&2, String>:
+  Bool.pick(Maybe<&2, String>, String.contains(rest, "\\"), None{}, mountFirst(rest))
+
+def shellDrivePath(text: String) -> Maybe<&2, String>:
+  match text:
+    case SCon{'/', SCon{'/', _}}: None{}
+    case SCon{'/', rest}: unixDrivePath(rest)
+    case _: None{}
+
+def normalizeWindowsShellPath(+filePath: String) -> String:
+  windowsPath(filePath, shellDrivePath(filePath))
+
+# upstream getCwdRelativePath: the path relative to cwd when it lies inside
+# (itself is "."), otherwise None. Both are resolved first, cwd against the
+# process working directory.
+def insideCwd(+relative: String) -> Maybe<&2, String>:
+  +inside = String.eq(relative, "") || (Bool.not(String.eq(relative, "..")) && Bool.not(String.starts_with(relative, "../")) && Bool.not(Path.isAbsolute(relative)))
+  Bool.pick(Maybe<&2, String>, inside, Some{Bool.pick(String, String.eq(relative, ""), ".", relative)}, None{})
+
+def relativeInside(+resolvedCwd: String, path: Result<&2, &2, Error, String>) -> Result<&2, &2, Error, Maybe<&2, String>>:
+  Result.map(&2, &2, Error, String, Maybe<&2, String>, resolvedPath => insideCwd(Path.relative(resolvedCwd, resolvedPath)), path)
+
+def relativeFrom(+environment: Environment, filePath: String, cwd: Result<&2, &2, Error, String>) -> Result<&2, &2, Error, Maybe<&2, String>>:
+  match cwd:
+    case Fail{error}: Fail{error}
+    case Done{+resolvedCwd}: relativeInside(resolvedCwd, resolvePath(environment, filePath, resolvedCwd, defaults()))
+
+def getCwdRelativePath(+environment: Environment, filePath: String, cwd: String) -> Result<&2, &2, Error, Maybe<&2, String>>:
+  match environment:
+    case Environment{processCwd, _, _}:
+      relativeFrom(environment, filePath, resolvePath(environment, cwd, processCwd, defaults()))
+
+# upstream formatPathRelativeToCwdOrAbsolute: the cwd-relative path when it is
+# inside cwd, otherwise the absolute path (POSIX separators already).
+def relativeOrAbsolute(+environment: Environment, +cwd: String, absolute: Result<&2, &2, Error, String>) -> Result<&2, &2, Error, String>:
+  match absolute:
+    case Fail{error}: Fail{error}
+    case Done{+absolutePath}: Result.map(&2, &2, Error, Maybe<&2, String>, String, relative => Maybe.default(&2, String, relative, absolutePath), getCwdRelativePath(environment, absolutePath, cwd))
+
+def formatPathRelativeToCwdOrAbsolute(+environment: Environment, filePath: String, +cwd: String) -> Result<&2, &2, Error, String>:
+  relativeOrAbsolute(environment, cwd, resolvePath(environment, filePath, cwd, defaults()))
+
+# upstream core/tools/path-utils expandPath: normalizePath with Unicode space
+# normalization and a stripped @ prefix (tool path input).
+def expandPath(environment: Environment, filePath: String) -> Result<&2, &2, Error, String>:
+  normalizePath(environment, filePath, toolOptions())
+
+# upstream core/tools/path-utils resolveReadPath: resolveToCwd, then the first
+# existing macOS spelling variant (resolvedReadPath above).
+def readPathOf(+environment: Environment, resolved: Result<&2, &2, Error, String>) -> IO(Result<&2, &2, Error, String>):
+  match resolved:
+    case Fail{error}: IO.pure(Result<&2, &2, Error, String>, Fail{error})
+    case Done{path}:
+      do IO<Result<&2, &2, Error, String>>:
+        found : String <- resolvedReadPath(environment, path)
+        return Done{found}
+
+def resolveReadPath(+environment: Environment, filePath: String, cwd: String) -> IO(Result<&2, &2, Error, String>):
+  readPathOf(environment, resolveToCwd(environment, filePath, cwd))

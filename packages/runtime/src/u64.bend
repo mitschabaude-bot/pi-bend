@@ -73,18 +73,38 @@ def shiftRightOne(a: U64) -> U64:
     case U64{+ah, al}: U64{U32.shr(ah), U32.or(U32.shr(al), U32.shln(ah, 31n))}
 
 # Shifts by 64 or more produce zero. Rotations reduce the count modulo 64.
-def shiftLeftBits(count: Nat, a: U64) -> U64:
-  match count:
-    case 0n: a
-    case 1n+n: shiftLeftBits(n, shiftLeftOne(a))
+# A shift moves whole words: a count below 32 (never 0 here) splits across
+# the limbs, 32 to 63 moves one limb, and C leaves shifts by 32 undefined.
+def shiftLeftSplit(+ah: U32, +al: U32, +count: Nat) -> U64:
+  U64{U32.or(U32.shln(ah, count), U32.shrn(al, Nat.sub(32n, count))), U32.shln(al, count)}
+def shiftRightSplit(+ah: U32, +al: U32, +count: Nat) -> U64:
+  U64{U32.shrn(ah, count), U32.or(U32.shrn(al, count), U32.shln(ah, Nat.sub(32n, count)))}
+def shiftLeftWide(+al: U32, +count: Nat, +inRange: Bool) -> U64:
+  match inRange:
+    case True{}: U64{U32.shln(al, Nat.sub(count, 32n)), 0}
+    case False{}: zero()
+def shiftRightWide(+ah: U32, +count: Nat, +inRange: Bool) -> U64:
+  match inRange:
+    case True{}: U64{0, U32.shrn(ah, Nat.sub(count, 32n))}
+    case False{}: zero()
+def shiftLeftBy(+ah: U32, +al: U32, +count: Nat, +small: Bool) -> U64:
+  match small:
+    case True{}: shiftLeftSplit(ah, al, count)
+    case False{}: shiftLeftWide(al, count, Nat.is_lt(count, 64n))
+def shiftRightBy(+ah: U32, +al: U32, +count: Nat, +small: Bool) -> U64:
+  match small:
+    case True{}: shiftRightSplit(ah, al, count)
+    case False{}: shiftRightWide(ah, count, Nat.is_lt(count, 64n))
 
-def shiftRightBits(count: Nat, a: U64) -> U64:
-  match count:
-    case 0n: a
-    case 1n+n: shiftRightBits(n, shiftRightOne(a))
+def shiftLeft(a: U64, +count: Nat) -> U64:
+  match a count:
+    case U64{ah, al} 0n: U64{ah, al}
+    case U64{ah, al} 1n+n: shiftLeftBy(ah, al, 1n + n, Nat.is_lt(n, 31n))
 
-def shiftLeft(a: U64, count: Nat) -> U64: shiftLeftBits(count, a)
-def shiftRight(a: U64, count: Nat) -> U64: shiftRightBits(count, a)
+def shiftRight(a: U64, +count: Nat) -> U64:
+  match a count:
+    case U64{ah, al} 0n: U64{ah, al}
+    case U64{ah, al} 1n+n: shiftRightBy(ah, al, 1n + n, Nat.is_lt(n, 31n))
 
 def rotateRight(+a: U64, count: Nat) -> U64:
   +n = Nat.mod(count, 64n)
@@ -94,16 +114,8 @@ def rotateLeft(+a: U64, count: Nat) -> U64:
   +n = Nat.mod(count, 64n)
   bitOr(shiftLeft(a, n), shiftRight(a, Nat.sub(64n, n)))
 
-# Exact 32 x 32 -> 64 product. Every intermediate fits in one U32.
-def multiplyWords(+a: U32, +b: U32) -> U64:
-  +a0 = U32.and(a, 65535)
-  +a1 = U32.shrn(a, 16n)
-  +b0 = U32.and(b, 65535)
-  +b1 = U32.shrn(b, 16n)
-  +p0 = (a0 * b0 : U32)
-  +p1 = (a1 * b0 + U32.shrn(p0, 16n) : U32)
-  +p2 = (a0 * b1 + U32.and(p1, 65535) : U32)
-  U64{(a1 * b1 + U32.shrn(p1, 16n) + U32.shrn(p2, 16n) : U32), U32.or(U32.shln(p2, 16n), U32.and(p0, 65535))}
+# Exact 32 x 32 -> 64 product: the high word is the U32.mul_hi primitive.
+def multiplyWords(+a: U32, +b: U32) -> U64: U64{U32.mul_hi(a, b), (a * b : U32)}
 
 def multiply(a: U64, b: U64) -> U64:
   match a b:

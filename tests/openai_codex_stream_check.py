@@ -193,7 +193,13 @@ case('uses exponential backoff across repeated SSE retries without retry headers
 
 
 # Native cases: parseErrorResponse's messages, which the CLI shows for Codex.
-RESETS_AT = int(time.time()) + 90 * 60 + 30
+# resets_at is filled in when a response is served (and when the reference
+# runs), so the "~90 min" holds however long the native build takes.
+RESETS_AT = 4102444800
+
+
+def fresh(text):
+    return text.replace(str(RESETS_AT), str(int(time.time()) + 90 * 60 + 30))
 case('native: usage limit reached reports the friendly ChatGPT message', [json_failure(429, {'code': 'usage_limit_reached', 'plan_type': 'PLUS', 'resets_at': RESETS_AT, 'message': 'The usage limit has been reached'})],
      check=lambda r: expect(r['message'].get('errorMessage') == 'You have hit your ChatGPT usage limit (plus plan). Try again in ~90 min.', r['message']))
 case('native: a non-retryable status reports the error message', [json_failure(400, {'type': 'invalid_request_error', 'message': 'Unsupported parameter'})], dict(maxRetries=2),
@@ -233,7 +239,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             for delay, text in current.get('chunks', []):
                 if delay:
                     time.sleep(delay / 1000)
-                encoded = text.encode()
+                encoded = fresh(text).encode()
                 self.wfile.write(f'{len(encoded):x}\r\n'.encode() + encoded + b'\r\n')
                 self.wfile.flush()
             if current.get('keepOpen'):
@@ -256,7 +262,7 @@ def encode(value):
 
 
 def reference(cases):
-    result = subprocess.run(['bun', 'tests/openai_codex_stream_reference.ts'], cwd=ROOT, input=json.dumps({'cases': cases}), capture_output=True, text=True, env={**os.environ, 'PI_MONO_ROOT': str(UPSTREAM)}, timeout=600)
+    result = subprocess.run(['bun', 'tests/openai_codex_stream_reference.ts'], cwd=ROOT, input=fresh(json.dumps({'cases': cases})), capture_output=True, text=True, env={**os.environ, 'PI_MONO_ROOT': str(UPSTREAM)}, timeout=600)
     assert result.returncode == 0, result.stderr[-3000:]
     return json.loads(result.stdout)
 

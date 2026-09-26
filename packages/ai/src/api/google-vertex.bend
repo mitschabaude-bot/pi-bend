@@ -415,28 +415,28 @@ def prepareRequest(context: URL.Context, config: ClientConfig, auth: List<&2, R.
 # The URL tables, pi's User-Agent, the process fetch the SDK uses, and the
 # OAuth2 token endpoint for ADC.
 type Setup<-Reason: Data> is Data:
-  Setup{url: URL.Context, agent: String, fetch: Fetch.Fetch(Reason), tokenUrl: String}
+  Setup{url: URL.Context, agent: String, fetch: Fetch.Fetch(Reason)}
 
 def sendWith(~Reason: Data, ~G: Data, +events: EventStream(G), +parent: Signal(Reason), +setup: Setup<Reason>, +state: Fold.State<G>, config: ClientConfig, retries: Maybe<&2, F64>, delay: Maybe<&2, F64>, +params: J(), auth: Result<&2, &2, String, List<&2, R.Property<String>>>) -> IO(Unit):
   match setup auth:
     case _ Fail{message}: GoogleClient.fail(~Reason, ~G, events, state, parent, message)
-    case Setup{url, _, fetch, _} Done{headers}: GoogleClient.sendRequest(~Reason, ~G, events, parent, state, fetch, prepareRequest(url, config, headers, params), Retry.resolve(Reason, retries, delay, Some{parent}))
+    case Setup{url, _, fetch} Done{headers}: GoogleClient.sendRequest(~Reason, ~G, events, parent, state, fetch, prepareRequest(url, config, headers, params), Retry.resolve(Reason, retries, delay, Some{parent}))
 
 def apiKeyHeaders(config: ClientConfig) -> Maybe<&2, List<&2, R.Property<String>>>:
   match config:
     case ApiKeyClient{key, _, _}: Some{[R.Property{"x-goog-api-key", key}]}
     case _: None{}
 
-def adcHeaders(~Reason: Data, fetch: Fetch.Fetch(Reason), url: URL.Context, +parent: Signal(Reason), tokenUrl: String, file: Maybe<&2, String>) -> IO(Result<&2, &2, String, List<&2, R.Property<String>>>):
-  Credentials.requestHeaders(~Reason, fetch, url, parent, tokenUrl, file)
+def adcHeaders(~Reason: Data, fetch: Fetch.Fetch(Reason), url: URL.Context, +parent: Signal(Reason), file: Maybe<&2, String>) -> IO(Result<&2, &2, String, List<&2, R.Property<String>>>):
+  Credentials.requestHeaders(~Reason, fetch, url, parent, file)
 
 def authorizedWith(~Reason: Data, ~G: Data, +events: EventStream(G), +parent: Signal(Reason), +setup: Setup<Reason>, +state: Fold.State<G>, +config: ClientConfig, retries: Maybe<&2, F64>, delay: Maybe<&2, F64>, +params: J(), keyHeaders: Maybe<&2, List<&2, R.Property<String>>>) -> IO(Unit):
   match keyHeaders setup:
     case Some{headers} _: sendWith(~Reason, ~G, events, parent, setup, state, config, retries, delay, params, Done{headers})
-    case None{} Setup{url, agent, fetch, tokenUrl}:
+    case None{} Setup{url, agent, fetch}:
       do IO<Unit>:
-        headers : Result<&2, &2, String, List<&2, R.Property<String>>> <- adcHeaders(~Reason, fetch, url, parent, tokenUrl, keyFile(config))
-        sendWith(~Reason, ~G, events, parent, Setup{url, agent, fetch, tokenUrl}, state, config, retries, delay, params, headers)
+        headers : Result<&2, &2, String, List<&2, R.Property<String>>> <- adcHeaders(~Reason, fetch, url, parent, keyFile(config))
+        sendWith(~Reason, ~G, events, parent, Setup{url, agent, fetch}, state, config, retries, delay, params, headers)
 
 # The API key header, or the ADC headers (one token request per client, as
 # a new GoogleAuth client is created for each stream).
@@ -485,7 +485,7 @@ def configured(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, ~r
 
 def setupAgent(-Reason: Data, setup: Setup<Reason>) -> String:
   match setup:
-    case Setup{_, agent, _, _}: agent
+    case Setup{_, agent, _}: agent
 
 def fetchChecked(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, ~render: E -> String, +events: EventStream(G), +parent: Signal(Reason), +setup: Setup<Reason>, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Options(Reason, Telemetry, E), +state: Fold.State<G>) -> IO(Unit):
   match options:

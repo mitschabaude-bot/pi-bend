@@ -6,4 +6,6 @@
 
 Build: `bun build/bend-native-toolchain/bend2/main.ts tests/package-manager.bend -o build/package-manager.js`, `BEND_TUS=4 sh scripts/build-pure.sh tests/package-manager.bend build/package-manager`, then `python3 tests/package_manager_check.py [--runner build/package-manager --threads N]`.
 
-Not ported: package sources (settings `packages`: npm, git and local package directories, their manifests and filters), and extensions.
+Package source management is ported separately and checked by `tests/package-sources.bend` (`tests/package_sources_check.py`, upstream `package-manager-ssh.test.ts` and the source-parsing, install-path, settings-normalization and HTTPS-URL blocks of `package-manager.test.ts`): `parseSource` (npm specs, local paths, git URLs through `utils/git.bend` and the hosted-git-info port), `getPackageIdentity`, `addSourceToSettings`/`removeSourceFromSettings` and the managed git, npm and temporary install locations.
+
+Not ported: resolving package sources (settings `packages`: installing missing ones, npm, git and local package directories, their manifests and filters), installing, removing and updating packages, and extensions.

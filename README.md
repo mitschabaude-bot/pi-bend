@@ -47,7 +47,7 @@ The CLI owns its whole command line, as pi does; `BEND_THREADS=N` sets the nativ
 
 Credentials and private sessions must stay outside the repository.
 
-Generic contracts and machine-checked proofs live in [LAWS.bend](LAWS.bend) and [PROOF.bend](PROOF.bend). Differential, integration, concurrency and performance checks complement those proofs. The [source-hashed upstream inventory](tests/upstream-inventory.json) records each suite as pending, partial or ported; successful demonstrations and test counts do not imply complete parity.
+Generic contracts and machine-checked proofs live in [LAWS.bend](LAWS.bend) and [PROOF.bend](PROOF.bend). Differential, integration, concurrency and performance checks complement those proofs. [Scope decisions](docs/scope-decisions.md) record what the port leaves out or changes. The [source-hashed upstream inventory](tests/upstream-inventory.json) records each suite as pending, partial or ported; successful demonstrations and test counts do not imply complete parity.
 
 The [reviewed upstream source coverage](docs/source-coverage.md) records known implementation gaps; the test inventory records upstream assertion coverage. `python3 scripts/test-inventory.py` checks both records against the pinned source tree.
 

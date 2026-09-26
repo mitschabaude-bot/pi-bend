@@ -3,16 +3,22 @@
 // and google-auth-library for one case of packages/ai/test/google-vertex.bend
 // and prints the same JSON lines. Run with Node (pi's runtime).
 //
-// google-auth-library sends its token request through gaxios, which uses a
+// google-auth-library sends its requests through gaxios, which uses a
 // browser's `window.fetch` when one exists; the oracle provides one that sends
-// requests for the Google token endpoint to the case's loopback token URL.
+// requests for Google's OAuth2, IAM Credentials, STS and Cloud Resource
+// Manager hosts to the case's
+// loopback server (`googleBase`).
 const root = process.env.PI_MONO!;
 const spec = JSON.parse(process.argv[2]);
-if (spec.tokenUrl) {
+if (spec.googleBase) {
 	const realFetch = globalThis.fetch;
+	const hosts = ["https://oauth2.googleapis.com/", "https://iamcredentials.googleapis.com/", "https://sts.googleapis.com/", "https://cloudresourcemanager.googleapis.com/"];
 	(globalThis as any).window = {
-		fetch: (url: any, init: any) =>
-			realFetch(String(url) === "https://oauth2.googleapis.com/token" ? spec.tokenUrl : url, init),
+		fetch: (url: any, init: any) => {
+			const text = String(url);
+			const host = hosts.find((prefix) => text.startsWith(prefix));
+			return realFetch(host ? `${spec.googleBase}/${text.slice(host.length)}` : url, init);
+		},
 	};
 }
 const { stream, streamSimple } = await import(`${root}/packages/ai/src/api/google-vertex.ts`);

@@ -1412,3 +1412,9 @@ def pick(config: Config) -> IO(Unit):
 ```
 
 (with `use` any `Maybe<&2, String> -> Maybe<&2, String> -> IO(Unit)`) reports `expected : _ / observed : _ (consumed more than once)` at `case Config{_, _, Some{t}}`. The program is wrong (`a` is used twice; `+a` or a helper def fixes it), so only the diagnostic is affected: the name and location point at the wrong case. Workaround in the port: the second case's body moved into its own def taking `+profile`. Regression check: compile the snippet; a fixed checker names `a` in the second case. Upstream status: not reported.
+
+## BEND-060 — Bun lane does not finish provider requests with 100K+ character prompts (performance hypothesis)
+
+Status: observed performance cliff; cause not isolated. Found 2026-09-26 by `tests/live_replay_check.py` (pinned pi-mono f07218c4d).
+
+On the Bun (JS) backend, `packages/coding-agent/test/live-replay.bend` completed OpenAI Chat Completions and Anthropic requests with 20,000-character system prompts, but a 100,000-character prompt did not finish within 10 minutes; the context-overflow suite's prompts (0.8–6.4 million characters) therefore run only natively, where all 30 rows complete on one and four threads. Before the JS explicit-stack patch the same inputs first failed with `memory fault (machine stack overflow?)` at 6,000 characters in the test helper `runtime/test/utf8-runner.bend` (`parseNumbers`/`fromScalars`, non-tail recursion); the executor now reads its case from a file instead. Hypothesis to check: a super-linear string operation on the request path (JSON escaping, UTF-8 encoding or body chunking) that the native runtime hides. Regression command: `python3 tests/live_replay_check.py --only context-overflow` (Bun rows report SKIP).
