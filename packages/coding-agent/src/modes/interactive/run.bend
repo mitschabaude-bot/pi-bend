@@ -2417,13 +2417,13 @@ def runLoginHosted(borrowed: LoginDialog.Owner & LoginDialog.Host & Component.Co
         setLoginHost(contextLogin(context),None{})
         LoginDialog.dispose(retained)
         return outcome
-def runPickerHosted(borrowed: SessionPicker.HostOwner & SessionPicker.Host & Component.Component,settings: SettingsPicker.Owner,retained: ModelPicker.Owner,tree: Selector.Owner,live: Live.Owner,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,treeChosen: Callback.Callback<Selector.Choice,Unit>,modelChosen: Callback.Callback<ModelPicker.Choice,Unit>,resumeChosen: Callback.Callback<String,Unit>) -> IO(Result<&2,&2,Error,Unit>):
+def runPickerHosted(borrowed: SessionPicker.HostOwner & SessionPicker.Host & Component.Component,settings: SettingsPicker.Owner,retained: ModelPicker.Owner,tree: Selector.Owner,live: Live.Owner,words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,treeChosen: Callback.Callback<Selector.Choice,Unit>,modelChosen: Callback.Callback<ModelPicker.Choice,Unit>,resumeChosen: Callback.Callback<String,Unit>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (picker,pickerHost,component):
       do IO<Result<&2,&2,Error,Unit>>:
         Ref.write(Maybe<&2,SessionPicker.Host>,resumePickerRef(contextResume(context)),Some{pickerHost})
         +cancel : Callback.Callback<Unit,Unit> <- Callback.create(~LoginState,~Unit,~Unit,~cancelLogin,contextLogin(context))
-        dialog : LoginDialog.Owner <- LoginDialog.create(component,contextTheme(context),contextBindings(context),Keys.defaults(),cancel)
+        dialog : LoginDialog.Owner <- LoginDialog.create(component,contextTheme(context),words,contextBindings(context),Keys.defaults(),cancel)
         outcome : View.View & Result<&2,&2,Error,Unit> <- runLoginHosted(LoginDialog.borrow(dialog),view,foot,stopped,redraw,queue,controller,initial,context)
         Callback.dispose(Unit,Unit,cancel)
         Ref.write(Maybe<&2,SessionPicker.Host>,resumePickerRef(contextResume(context)),None{})
@@ -2439,7 +2439,7 @@ def runPickerHosted(borrowed: SessionPicker.HostOwner & SessionPicker.Host & Com
         Callback.dispose(ModelPicker.Choice,Unit,modelChosen)
         Callback.dispose(Selector.Choice,Unit,treeChosen)
         finish(outcome,transcript,live,foot,submitted,keys,paint,styles,rows,redraw,stopped,contextInteraction(context),contextSession(context),contextBinding(context),contextLogin(context))
-def runTrustHosted(borrowed: TrustPicker.Owner & TrustPicker.Host & Component.Component,choice: Callback.Callback<Trust.ProjectTrustOption,Unit>,settings: SettingsPicker.Owner,retained: ModelPicker.Owner,tree: Selector.Owner,live: Live.Owner,words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,treeChosen: Callback.Callback<Selector.Choice,Unit>,modelChosen: Callback.Callback<ModelPicker.Choice,Unit>,+resumeChosen: Callback.Callback<String,Unit>) -> IO(Result<&2,&2,Error,Unit>):
+def runTrustHosted(borrowed: TrustPicker.Owner & TrustPicker.Host & Component.Component,choice: Callback.Callback<Trust.ProjectTrustOption,Unit>,settings: SettingsPicker.Owner,retained: ModelPicker.Owner,tree: Selector.Owner,live: Live.Owner,+words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,treeChosen: Callback.Callback<Selector.Choice,Unit>,modelChosen: Callback.Callback<ModelPicker.Choice,Unit>,+resumeChosen: Callback.Callback<String,Unit>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (trust,host,component):
       do IO<Result<&2,&2,Error,Unit>>:
@@ -2447,7 +2447,7 @@ def runTrustHosted(borrowed: TrustPicker.Owner & TrustPicker.Host & Component.Co
         current : Session.AgentSession <- Ref.read(Session.AgentSession,contextSession(context))
         ids : Uuid.Generator <- Session.idGenerator(current)
         picker : SessionPicker.HostOwner <- SessionPicker.createHost(ids,component,contextBindings(context),contextTheme(context),words,resumeChosen)
-        result : Result<&2,&2,Error,Unit> <- runPickerHosted(SessionPicker.borrowHost(picker),settings,retained,tree,live,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,treeChosen,modelChosen,resumeChosen)
+        result : Result<&2,&2,Error,Unit> <- runPickerHosted(SessionPicker.borrowHost(picker),settings,retained,tree,live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,treeChosen,modelChosen,resumeChosen)
         TrustPicker.disposeHost(trust)
         Callback.dispose(Trust.ProjectTrustOption,Unit,choice)
         return result

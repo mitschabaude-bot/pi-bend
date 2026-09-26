@@ -50,7 +50,8 @@ class Handler(BaseHTTPRequestHandler):
             assert request["grant_type"] == "authorization_code"
             assert request["code"] == "anthropic_test"
             assert request["state"] == request["code_verifier"]
-            status, data = 200, {"access_token": "anthropic_access", "refresh_token": "anthropic_refresh", "expires_in": 3600}
+            access_token = "anthropic_access_manual" if [item[1] for item in Handler.seen].count("/anthropic-token") == 2 else "anthropic_access"
+            status, data = 200, {"access_token": access_token, "refresh_token": "anthropic_refresh", "expires_in": 3600}
         else:
             status, data = 404, {"error": "bad path"}
         wire = json.dumps(data).encode()
@@ -97,13 +98,16 @@ def scenario(threads):
                 until(b"Login cancelled", before)
                 before = len(output)
                 os.write(master, b"/login\r")
-                until(b"Choose a provider", before)
-                os.write(master, b"1")
+                until(b"Select authentication method", before)
+                os.write(master, b"\r")
+                until(b"Select provider to configure", before)
+                os.write(master, b"\r")
                 until(b"ABCD-EFGH", before)
                 until(b"Logged in to OpenAI Codex. Selected gpt-5.5", before)
                 before = len(output)
                 os.write(master, b"/model\r")
-                until(b"openai-codex/gpt", before)
+                until(b"gpt-5.5", before)
+                until(b"[openai-codex]", before)
                 saved = json.loads((agent_dir / "auth.json").read_text())["openai-codex"]
                 assert saved["access"] == access and saved["refresh"] == "refresh_test"
                 assert [item[1] for item in Handler.seen].count("/usercode") == 2
@@ -115,8 +119,10 @@ def scenario(threads):
                 until(b"answer", at)
                 at = len(output)
                 os.write(master, b"/login\r")
-                until(b"Choose a provider", at)
-                os.write(master, b"2")
+                until(b"Select authentication method", at)
+                os.write(master, b"\r")
+                until(b"Select provider to configure", at)
+                os.write(master, b"\x1b[B\r")
                 until(b"Paste authorization code", at)
                 links = re.findall(rb"\x1b\]8;;(https://claude\.ai/oauth/authorize\?[^\x07]*)\x07", output[at:])
                 assert links, bytes(output[at:][-1800:])
@@ -141,13 +147,23 @@ def scenario(threads):
                     at = len(output)
                     os.write(master, b"/login anthropic\r")
                     until(b"Paste authorization code", at)
-                    os.write(master, b"anthropic_test\r")
-                    until(b"Logged in to Anthropic", at)
+                    os.write(master, b"\x1b[200~anthropic_test\x1b[201~\r")
+                    # The repeated success notice can remain unchanged on screen;
+                    # distinguish this exchange by its newly stored access token.
+                    deadline = time.monotonic() + 20
+                    while time.monotonic() < deadline:
+                        credentials = json.loads((agent_dir / "auth.json").read_text())
+                        if credentials.get("anthropic", {}).get("access") == "anthropic_access_manual":
+                            break
+                        if select.select([master], [], [], .05)[0]:
+                            output.extend(os.read(master, 65536))
+                    assert credentials.get("anthropic", {}).get("access") == "anthropic_access_manual"
                 at = len(output)
                 os.write(master, b"/model\r")
-                until(b"anthropic/claude", at)
+                until(b"claude", at)
+                until(b"[anthropic]", at)
                 anthropic = json.loads((agent_dir / "auth.json").read_text())["anthropic"]
-                assert anthropic["access"] == "anthropic_access" and anthropic["refresh"] == "anthropic_refresh"
+                assert anthropic["access"] == "anthropic_access_manual" and anthropic["refresh"] == "anthropic_refresh"
                 assert [item[1] for item in Handler.seen].count("/anthropic-token") == 2
                 os.write(master, b"\x1b")
                 time.sleep(.3)
@@ -181,8 +197,9 @@ def scenario(threads):
                 os.write(master, b"/login missing-provider\r")
                 until(b"Unknown login provider: missing-provider", at)
                 at = len(output)
-                os.write(master, b"/help\r")
-                until(b"Commands: /model [search]", at)
+                os.write(master, b"/hotkeys\r")
+                until(b"Move by word", at)
+                until(b"Run bash command", at)
                 os.write(master, b"/quit\r")
                 stderr = process.communicate(timeout=20)[1]
                 assert process.returncode == 0, (threads, stderr.decode(errors="replace"))

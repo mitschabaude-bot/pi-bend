@@ -561,6 +561,18 @@ SCENARIOS = [
                   ("wait", "No matching models", "picker"), ("settle", 0.2), ("snap", "picker")],
     },
     {
+        "name": "login-key-paste", "args": MODEL, "env": FD_PATH,
+        "steps": [("wait", READY, "startup"), ("settle", 0.5),
+                  ("keys", "/login"), ("key", "Enter"), ("settle", 0.2),
+                  ("key", "Down"), ("key", "Enter"), ("settle", 0.2),
+                  ("keys", "OpenAI"), ("settle", 0.2), ("key", "Enter"),
+                  ("wait", "Enter OpenAI API key", "prompt"), ("snap", "prompt"),
+                  ("keys", "\x1b[200~sk-"), ("keys", "parity\n"), ("keys", "new\x1b[201~"),
+                  ("key", "Left"), ("key", "Left"), ("key", "BSpace"), ("key", "End"), ("keys", "!"),
+                  ("key", "Enter"), ("wait", "Saved API key for OpenAI", "saved"),
+                  ("settle", 0.3), ("snap", "saved")],
+    },
+    {
         "name": "login-api-key",
         "args": MODEL,
         "env": FD_PATH,

@@ -11,14 +11,74 @@ import ../packages/coding-agent/src/modes/interactive/session-controller.bend as
 import ../packages/coding-agent/src/cli/auth-login.bend as AuthLogin
 import ../packages/coding-agent/src/core/model-runtime.bend as Models
 import ../packages/ai/src/auth/oauth/openai-codex.bend as Codex
-import ../packages/ai/src/providers/openai-codex.models.bend as CodexModels
-import ../packages/ai/src/providers/anthropic.models.bend as AnthropicModels
 import ../packages/runtime/src/callback.bend as Callback
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/schema-value.bend as Schema
 import ../packages/ai/src/utils/uuid.bend as Uuid
 
-def Services() -> Type: Fixture.Services()
+import ../packages/agent/src/agent.bend as Agent
+import ../packages/agent/src/agent-loop.bend as Loop
+import ../packages/agent/src/stream-fn.bend as StreamFn
+import ../packages/ai/src/auth/types.bend as Auth
+import ../packages/ai/src/auth/oauth/anthropic.bend as Anthropic
+import ../packages/coding-agent/src/core/agent-runtime.bend as AgentRuntime
+import ../packages/coding-agent/src/core/auth-storage.bend as Storage
+import ../packages/coding-agent/src/core/settings-manager.bend as Settings
+import ../packages/runtime/src/record.bend as Record
+
+# Native auth storage and model availability, with deterministic model responses.
+# The session borrows its model runtime; these services own its auth and transport.
+type LoginServices is Type:
+  LoginServices{fixture: Faux.Fixture,storage: Storage.AuthStorageOwner,store: Auth.CredentialStore,transport: AgentRuntime.Transport}
+def Services() -> Type: LoginServices
+
+def requireTransport(result: AgentRuntime.Outcome(AgentRuntime.Transport)) -> IO(AgentRuntime.Transport):
+  match result:
+    case Done{transport}: IO.pure(AgentRuntime.Transport,transport)
+    case Fail{message}: IO.die(AgentRuntime.Transport,1,message)
+def factoryTransport(+agentDir: String,request: Host.Request,storage: Storage.AuthStorageOwner,+store: Auth.CredentialStore,transport: AgentRuntime.Transport) -> IO(Result<&1,&1,String,Host.Created<Services()>>):
+  match request transport:
+    case Host.Request{+cwd,+stored,_} AgentRuntime.Transport{authorizer,runtime,+fetch}:
+      do IO<Result<&1,&1,String,Host.Created<Services()>>>:
+        oauth : Auth.OAuthAuth <- Codex.openaiCodexOAuth(fetch,AgentRuntime.urlContext())
+        anthropic : Auth.OAuthAuth <- Anthropic.anthropicOAuth(fetch,AgentRuntime.urlContext())
+        +models : Models.ModelRuntime <- Models.createWithAnthropic(store,oauth,Some{anthropic})
+        +responses : Ref.Ref<List<&2,String>> <- Ref.new(List<&2,String>,"answer" <> "again" <> Nil{})
+        +streams : Ref.Ref<List<&2,Faux.EventStream()>> <- Ref.new(List<&2,Faux.EventStream()>,Nil{})
+        +gates : Ref.Ref<List<&2,Faux.Gate>> <- Ref.new(List<&2,Faux.Gate>,Nil{})
+        +stream : AgentRuntime.Stream() <- Callback.create(~Faux.Faux,~Faux.Input(),~Faux.Output(),~Faux.provider,Faux.Faux{responses,streams,gates})
+        +registry : StreamFn.Registry(Unit,Tools.ToolDetails,AgentRuntime.LoopConfig(),Tools.ToolError) <- StreamFn.create(Unit,Tools.ToolDetails,AgentRuntime.LoopConfig(),Tools.ToolError)
+        +validator : Loop.Validator(Tools.ToolError) <- Loop.createPlain(~Tools.ToolError,~AgentRuntime.validationError)
+        +converter : AgentRuntime.Converter() <- AgentRuntime.createConverter(False{})
+        created : Result<&2,&2,StreamFn.MissingDefault,AgentRuntime.Owner()> <- Agent.new(~Unit,~Tools.ToolDetails,~AgentRuntime.Custom(),~Tools.ToolError,~Unit,Faux.options(stream,converter,Sessions.getSessionId(Unit,Tools.ToolDetails,Schema.Value,stored),None{}),registry,validator,Tools.emptyDetails())
+        +agent : AgentRuntime.Owner() <- Faux.requireAgent(created)
+        loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(cwd,agentDir,Settings.options())
+        +session : Session.AgentSession <- Session.create(agent,stored,Faux.settingsOf(loaded),cwd,AgentRuntime.Loadout{Record.new(String),Nil{},Nil{},Nil{},None{},Nil{},None{},Nil{}},models,Nil{})
+        +listener : Session.Listener() <- Callback.create(~Unit,~Session.AgentSessionEvent,~Unit,~Faux.observe,Unit{})
+        Session.subscribe(session,listener)
+        return Done{Host.Created{LoginServices{Faux.Fixture{session,listener,stream,validator,converter,registry,Faux.Faux{responses,streams,gates}},storage,store,AgentRuntime.Transport{authorizer,runtime,fetch}},session}}
+def factoryStored(+agentDir: String,request: Host.Request,pair: Storage.AuthStorageOwner & Storage.AuthStorage) -> IO(Result<&1,&1,String,Host.Created<Services()>>):
+  match pair:
+    case (storage,view):
+      do IO<Result<&1,&1,String,Host.Created<Services()>>>:
+        store : Auth.CredentialStore <- Storage.store(view)
+        connected : AgentRuntime.Outcome(AgentRuntime.Transport) <- AgentRuntime.createTransport("/etc/ssl/certs/ca-certificates.crt")
+        transport : AgentRuntime.Transport <- requireTransport(connected)
+        factoryTransport(agentDir,request,storage,store,transport)
+def factory(agentDir: String,request: Host.Request) -> IO(Result<&1,&1,String,Host.Created<Services()>>):
+  do IO<Result<&1,&1,String,Host.Created<Services()>>>:
+    +directory : String = agentDir
+    storage : Storage.AuthStorageOwner <- Storage.create(directory ++ "/auth.json")
+    factoryStored(directory,request,Storage.borrow(storage))
+def release(_: Unit,services: Services()) -> IO(Unit):
+  match services:
+    case LoginServices{+fixture,storage,store,transport}:
+      do IO<Unit>:
+        Models.dispose(Session.modelRuntime(Faux.sessionOf(fixture)))
+        Fixture.release(Unit{},fixture)
+        Auth.disposeStore(store)
+        Storage.dispose(storage)
+        AgentRuntime.disposeTransport(transport)
 def Runtime() -> Data: Host.AgentSessionRuntime<Services()>
 type Binding is Data:
   Binding{current: Ref.Ref<Session.AgentSession>,hook: Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>}
@@ -59,7 +119,11 @@ def loginCopied(+base: String,request: Run.LoginRequest) -> IO(AuthLogin.Outcome
         case "anthropic": AuthLogin.authenticateAnthropicWithTokenURL(base ++ "/anthropic-token",AuthLogin.BrowserInteraction{signal,manual,manualDone})
         case _: AuthLogin.authenticate(Codex.DeviceEndpoints{base ++ "/usercode",base ++ "/token",base ++ "/exchange",base ++ "/codex/device"},signal,notice)
 def login(base: String,request: Run.LoginRequest) -> IO(AuthLogin.Outcome()): loginCopied(base,request)
-def models(_: Unit,_: Unit) -> IO(List<&2,Models.Model()>): IO.pure(List<&2,Models.Model()>,Faux.fauxModel() <> List.append(&2,Models.Model(),CodexModels.OPENAI_CODEX_MODELS(),AnthropicModels.ANTHROPIC_MODELS()))
+def models(runtime: Models.ModelRuntime,_: Unit) -> IO(List<&2,Models.Model()>):
+  do IO<List<&2,Models.Model()>>:
+    +current : Models.ModelRuntime = runtime
+    Models.refreshAvailability(current)
+    Models.getAvailable(current)
 def requireSession(result: Sessions.Outcome(Session.Session())) -> IO(Session.Session()):
   match result:
     case Done{session}: IO.pure(Session.Session(),session)
@@ -83,8 +147,8 @@ def run(args: List<String>) -> IO(Unit):
         uuids : Uuid.Generator <- Uuid.generator()
         created : Sessions.Outcome(Session.Session()) <- Session.createSession(uuids,cwd,Some{cwd},agentDir,Sessions.noOptions())
         stored : Session.Session() <- requireSession(created)
-        +factory : Host.Factory(Services()) <- Callback.create(~String,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~Fixture.factoryNoModel,agentDir)
-        +release : Callback.Callback<Services(),Unit> <- Callback.create(~Unit,~Services(),~Unit,~Fixture.release,Unit{})
+        +factory : Host.Factory(Services()) <- Callback.create(~String,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~factory,agentDir)
+        +release : Callback.Callback<Services(),Unit> <- Callback.create(~Unit,~Services(),~Unit,~release,Unit{})
         hosted : Result<&2,&2,String,Runtime()> <- Host.create(Services(),factory,release,agentDir,cwd,stored)
         +runtime : Runtime() <- requireHost(hosted)
         currentSession : Maybe<&2,Session.AgentSession> <- Host.session(Services(),runtime)
@@ -95,12 +159,12 @@ def run(args: List<String>) -> IO(Unit):
         +new : Callback.Callback<Unit,Result<&2,&2,String,Unit>> <- Callback.create(~Runtime(),~Unit,~Result<&2,&2,String,Unit>,~startNew,runtime)
         +forking : Callback.Callback<Host.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>> <- Callback.create(~Runtime(),~Host.ForkRequest,~Result<&2,&2,String,Maybe<&2,String>>,~forkSession,runtime)
         +login : Callback.Callback<Run.LoginRequest,AuthLogin.Outcome()> <- Callback.create(~String,~Run.LoginRequest,~AuthLogin.Outcome(),~login,base)
-        +refresh : Callback.Callback<Unit,List<&2,Models.Model()>> <- Callback.create(~Unit,~Unit,~List<&2,Models.Model()>,~models,Unit{})
+        +refresh : Callback.Callback<Unit,List<&2,Models.Model()>> <- Callback.create(~Models.ModelRuntime,~Unit,~List<&2,Models.Model()>,~models,Session.modelRuntime(live))
         +importer : Callback.Callback<Run.ImportRequest,Host.ImportOutcome> <- Callback.create(~Runtime(),~Run.ImportRequest,~Host.ImportOutcome,~importSession,runtime)
         +sessions : Callback.Callback<Unit,Run.SessionChoices> <- Callback.create(~Listings,~Unit,~Run.SessionChoices,~listSessions,Listings{cwd,agentDir})
         +resume : Callback.Callback<Run.ResumeRequest,Host.ResumeOutcome> <- Callback.create(~Runtime(),~Run.ResumeRequest,~Host.ResumeOutcome,~resumeSession,runtime)
         Host.setRebindSession(Services(),runtime,Some{rebinder})
-        result : Result<&2,&2,Run.Error,Unit> <- Run.runBound(live,Run.Binding{current,Controller.Replacement{new,forking},hook,login,refresh,importer,sessions,resume,None{},False{}},Nil{},cwd,None{},agentDir,assetsRoot,None{},Nil{})
+        result : Result<&2,&2,Run.Error,Unit> <- Run.runBound(live,Run.Binding{current,Controller.Replacement{new,forking},hook,login,refresh,importer,sessions,resume,None{},False{},None{}},Nil{},cwd,None{},agentDir,assetsRoot,None{},Nil{})
         Host.setRebindSession(Services(),runtime,None{})
         Callback.dispose(Run.LoginRequest,AuthLogin.Outcome(),login)
         Callback.dispose(Unit,List<&2,Models.Model()>,refresh)

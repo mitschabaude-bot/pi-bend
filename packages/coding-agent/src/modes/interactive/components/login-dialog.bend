@@ -2,6 +2,9 @@ import Base
 import ../../../../../runtime/src/callback.bend as Callback
 import ../../../../../runtime/src/deferred.bend as Deferred
 import ../../../../../runtime/src/ref.bend as Ref
+import ../../../../../runtime/src/word-segmenter.bend as Words
+import ../../../../../tui/src/word-navigation.bend as Word
+import ../../../../../tui/src/components/input.bend as Input
 import ../../../../../tui/src/component.bend as Component
 import ../../../../../tui/src/keybindings.bend as Bindings
 import ../../../../../tui/src/keys.bend as Keys
@@ -15,9 +18,11 @@ import ./keybinding-hints.bend as Hints
 # Esc calls the flow's abort controller; closing restores the original editor.
 type Choice is Data: Choice{id: String,label: String,description: String,search: String}
 type Menu is Data: Method{} Provider{} Generic{}
-type State is Data: Closed{} Choosing{menu: Menu,title: String,all: List<&2,Choice>,visible: List<&2,Choice>,selected: Nat,query: String} Waiting{} Device{url: String,code: String} Manual{url: String,input: String} Prompt{title: String,message: String,secret: Bool,input: String} Info{title: String,message: String}
+type State is Data: Closed{} Choosing{menu: Menu,title: String,all: List<&2,Choice>,visible: List<&2,Choice>,selected: Nat,query: String} Waiting{} Device{url: String,code: String} Manual{url: String,input: Input.Input} Prompt{title: String,message: String,secret: Bool,input: Input.Input} Info{title: String,message: String}
+type InputSubmission is Data:
+  InputSubmission{state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Deferred.Deferred<String>>>}
 type Host is Data:
-  Host{state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Deferred.Deferred<String>>>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,cancel: Callback.Callback<Unit,Unit>}
+  Host{state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Deferred.Deferred<String>>>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,cancel: Callback.Callback<Unit,Unit>,words: Ref.Ref<Words.Source>,submit: Callback.Callback<String,Unit>}
 type Owner is Type:
   Owner{host: Host,component: Component.Component,renderCallback: Callback.Callback<Nat,List<&2,String>>,inputCallback: Callback.Callback<String,Unit>,mouseCallback: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>,invalidateCallback: Callback.Callback<Unit,Unit>,focusCallback: Callback.Callback<Bool,Unit>}
 
@@ -95,11 +100,10 @@ def choosingMenu(menu: Menu,theme: Theme.Theme,+width: Nat,title: String,visible
     case Provider{}: clipLines(providerMenu(theme,width,visible,selected,query),width)
     case Generic{}: choosing(theme,width,title,visible,selected,query)
 def manual(+theme: Theme.Theme,+width: Nat,+url: String,+input: String) -> List<&2,String>:
-  linkedFrame(theme,width," Login to Anthropic",url,paint(theme,"dim"," Ctrl+click to open") <> "" <> paint(theme,"dim"," Complete login in your browser; paste the redirect URL if it is on another machine.") <> paint(theme,"warning"," Paste authorization code or redirect URL:") <> clipped(" " ++ input,width) <> "" <> paint(theme,"dim"," Enter to submit · Esc to cancel") <> Nil{})
-def promptFrame(+theme: Theme.Theme,+width: Nat,title: String,message: String,secret: Bool,+input: String,+bindings: Bindings.KeybindingsManager) -> List<&2,String>:
-  +visible = Bool.pick(String,secret,String.repeat("•",String.length(input)),input)
+  linkedFrame(theme,width," Login to Anthropic",url,paint(theme,"dim"," Ctrl+click to open") <> "" <> paint(theme,"dim"," Complete login in your browser; paste the redirect URL if it is on another machine.") <> paint(theme,"warning"," Paste authorization code or redirect URL:") <> input <> "" <> paint(theme,"dim"," Enter to submit · Esc to cancel") <> Nil{})
+def promptFrame(+theme: Theme.Theme,+width: Nat,title: String,message: String,input: String,+bindings: Bindings.KeybindingsManager) -> List<&2,String>:
   clipLines(selectorBorder(theme,width) <> selectorTitle(theme,title) <> "" <> (" " ++ paint(theme,"text",message)) <>
-    ("> " ++ visible ++ "\u{1b}[7m \u{1b}[0m") <>
+    input <>
     (" (" ++ Hints.keyHint(theme,bindings,"tui.select.cancel","to cancel,") ++ " " ++ Hints.keyHint(theme,bindings,"tui.select.confirm","to submit") ++ ")") <>
     selectorBorder(theme,width) <> Nil{},width)
 def infoFrame(+theme: Theme.Theme,+width: Nat,title: String,message: String,+bindings: Bindings.KeybindingsManager) -> List<&2,String>:
@@ -108,18 +112,30 @@ def infoFrame(+theme: Theme.Theme,+width: Nat,title: String,message: String,+bin
     selectorBorder(theme,width) <> Nil{},width)
 def device(+theme: Theme.Theme,+width: Nat,+url: String,code: String) -> List<&2,String>:
   linkedFrame(theme,width," Login to OpenAI Codex",url,paint(theme,"dim"," Ctrl+click to open") <> "" <> paint(theme,"warning"," Enter code: " ++ code) <> "" <> paint(theme,"dim"," Waiting for authentication...") <> " (Esc to cancel)" <> Nil{})
-def drawCurrent(state: State,editor: Component.Component,theme: Theme.Theme,width: Nat,+bindings: Bindings.KeybindingsManager) -> IO(List<&2,String>):
+def masked(input: Input.Input,secret: Bool) -> Input.Input:
+  match input:
+    case Input.Input{Input.Editing{+value,cursor,ring,action,undo},options,start,focused,paste,pasting,submit,escape}:
+      Input.Input{Input.Editing{Bool.pick(String,secret,String.repeat("•",String.length(value)),value),cursor,ring,action,undo},options,start,focused,paste,pasting,submit,escape}
+def inputLine(pair: Input.Input & List<&2,String>) -> String:
+  match pair: case (_,lines): Maybe.default(&2,String,List.head(&2,String,lines),"")
+def drawCurrent(state: State,editor: Component.Component,theme: Theme.Theme,+width: Nat,+bindings: Bindings.KeybindingsManager) -> IO(List<&2,String>):
   match state:
     case Closed{}: Component.render(editor,width)
     case Choosing{menu,title,_,visible,selected,query}: IO.pure(List<&2,String>,choosingMenu(menu,theme,width,title,visible,selected,query,bindings))
     case Waiting{}: IO.pure(List<&2,String>,waiting(theme,width))
     case Device{url,code}: IO.pure(List<&2,String>,device(theme,width,url,code))
-    case Manual{url,input}: IO.pure(List<&2,String>,manual(theme,width,url,input))
-    case Prompt{title,message,secret,input}: IO.pure(List<&2,String>,promptFrame(theme,width,title,message,secret,input,bindings))
+    case Manual{url,input}:
+      do IO<List<&2,String>>:
+        pair : Input.Input & List<&2,String> <- Input.render(input,width)
+        return manual(theme,width,url,inputLine(pair))
+    case Prompt{title,message,secret,input}:
+      do IO<List<&2,String>>:
+        pair : Input.Input & List<&2,String> <- Input.render(masked(input,secret),width)
+        return promptFrame(theme,width,title,message,inputLine(pair),bindings)
     case Info{title,message}: IO.pure(List<&2,String>,infoFrame(theme,width,title,message,bindings))
 def draw(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
-    case Host{state,_,editor,theme,bindings,_,_}:
+    case Host{state,_,editor,theme,bindings,_,_,_,_}:
       do IO<List<&2,String>>:
         current : State <- Ref.read(State,state)
         colors : Theme.Theme <- Ref.read(Theme.Theme,theme)
@@ -148,14 +164,26 @@ def printable(text: String) -> Bool:
   match text:
     case SNil{}: False{}
     case SCon{Chr{code},rest}: U32.is_ge(code,32) && printableTail(rest)
-def inputManual(+state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Deferred.Deferred<String>>>,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+url: String,+input: String,+data: String) -> IO(Unit):
-  Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.confirm"),_ => do IO<Unit>:
-    Ref.write(State,state,Waiting{})
-    settle(reply,input),_ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.editor.deleteCharBackward"),_ => Ref.write(State,state,Manual{url,withoutLast(input)}),_ => Bool.pick(Unit -> IO(Unit),printable(data),_ => Ref.write(State,state,Manual{url,input ++ data}),_ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{}))(Unit{})
-def inputPrompt(+state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Deferred.Deferred<String>>>,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+title: String,+message: String,+secret: Bool,+input: String,+data: String) -> IO(Unit):
-  Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.confirm"),_ => do IO<Unit>:
-    Ref.write(State,state,Waiting{})
-    settle(reply,input),_ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.editor.deleteCharBackward"),_ => Ref.write(State,state,Prompt{title,message,secret,withoutLast(input)}),_ => Bool.pick(Unit -> IO(Unit),printable(data),_ => Ref.write(State,state,Prompt{title,message,secret,input ++ data}),_ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{}))(Unit{})
+def submitInput(context: InputSubmission,value: String) -> IO(Unit):
+  match context:
+    case InputSubmission{state,reply}:
+      do IO<Unit>:
+        Ref.write(State,state,Waiting{})
+        settle(reply,value)
+def nonAtomic(_: Words.Source,_: String) -> Bool: False{}
+def editedInput(current: State,result: Word.ResultOf(Input.Input)) -> State & Unit:
+  match current result:
+    case Manual{url,_} Done{input}: (Manual{url,input},Unit{})
+    case Prompt{title,message,secret,_} Done{input}: (Prompt{title,message,secret,input},Unit{})
+    case previous _: (previous,Unit{})
+def inputPrompt(+state: Ref.Ref<State>,+words: Ref.Ref<Words.Source>,+input: Input.Input,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,data: String) -> IO(Unit):
+  do IO<Unit>:
+    previous : Words.Source <- Ref.read(Words.Source,words)
+    +source : Words.Source <- Words.readyFor(previous,Input.getValue(input))
+    Ref.write(Words.Source,words,source)
+    result : Word.ResultOf(Input.Input) <- Input.handleInput(~Words.Source,~Word.sourceSegments,~nonAtomic,source,input,bindings,keyboard,data)
+    # A submit/cancel callback may already have changed the phase.
+    Ref.modify(State,Unit,state,current => editedInput(current,result))
 def choiceId(choice: Maybe<&2,Choice>) -> Maybe<&2,String>:
   match choice:
     case None{}: None{}
@@ -195,15 +223,15 @@ def menuInput(+state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Deferred.Deferred<S
           _ => Bool.pick(Unit -> IO(Unit),printable(data) && searchable(menu),
             _ => menuChanged(state,menu,title,all,0n,query ++ data),
             _ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
-def receiveCurrent(current: State,+state: Ref.Ref<State>,+reply: Ref.Ref<Maybe<&2,Deferred.Deferred<String>>>,editor: Component.Component,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+cancel: Callback.Callback<Unit,Unit>,+data: String) -> IO(Unit):
+def receiveCurrent(current: State,+state: Ref.Ref<State>,+reply: Ref.Ref<Maybe<&2,Deferred.Deferred<String>>>,editor: Component.Component,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+cancel: Callback.Callback<Unit,Unit>,words: Ref.Ref<Words.Source>,+data: String) -> IO(Unit):
   match current:
     case Closed{}: Component.handleInput(editor,data)
     case Choosing{menu,title,all,visible,selected,query}:
       Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => Callback.call(Unit,Unit,cancel,Unit{}),_ => menuInput(state,reply,bindings,keyboard,menu,title,all,visible,selected,query,data))(Unit{})
     case Manual{url,input}:
-      Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => Callback.call(Unit,Unit,cancel,Unit{}),_ => inputManual(state,reply,bindings,keyboard,url,input,data))(Unit{})
+      inputPrompt(state,words,input,bindings,keyboard,data)
     case Prompt{title,message,secret,input}:
-      Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => Callback.call(Unit,Unit,cancel,Unit{}),_ => inputPrompt(state,reply,bindings,keyboard,title,message,secret,input,data))(Unit{})
+      inputPrompt(state,words,input,bindings,keyboard,data)
     case Info{_,_}:
       Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => settle(reply,""),_ => IO.pure(Unit,Unit{}))(Unit{})
     case _:
@@ -213,10 +241,10 @@ def receiveCurrent(current: State,+state: Ref.Ref<State>,+reply: Ref.Ref<Maybe<&
         Callback.call(Unit,Unit,cancel,Unit{}),_ => IO.pure(Unit,Unit{}))(Unit{})
 def receive(host: Host,data: String) -> IO(Unit):
   match host:
-    case Host{+state,reply,editor,_,bindings,keyboard,cancel}:
+    case Host{+state,reply,editor,_,bindings,keyboard,cancel,words,_}:
       do IO<Unit>:
         current : State <- Ref.read(State,state)
-        receiveCurrent(current,state,reply,editor,bindings,keyboard,cancel,data)
+        receiveCurrent(current,state,reply,editor,bindings,keyboard,cancel,words,data)
 def editorMouse(editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match editor:
     case Component.Component{_,_,_,Some{callback},_,_,_}: Callback.call(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,callback,event)
@@ -227,19 +255,21 @@ def mouseCurrent(current: State,editor: Component.Component,event: Tui.TuiMouseE
     case _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
 def mouse(host: Host,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match host:
-    case Host{state,_,editor,_,_,_,_}:
+    case Host{state,_,editor,_,_,_,_,_,_}:
       do IO<Maybe<&2,Component.MouseResponse>>:
         current : State <- Ref.read(State,state)
         mouseCurrent(current,editor,event)
 def invalidate(host: Host,_: Unit) -> IO(Unit):
-  match host: case Host{_,_,editor,_,_,_,_}: Component.invalidate(editor)
+  match host: case Host{_,_,editor,_,_,_,_,_,_}: Component.invalidate(editor)
 def focus(host: Host,value: Bool) -> IO(Unit):
-  match host: case Host{_,_,editor,_,_,_,_}: Component.setFocused(editor,value)
-def create(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,cancel: Callback.Callback<Unit,Unit>) -> IO(Owner):
+  match host: case Host{_,_,editor,_,_,_,_,_,_}: Component.setFocused(editor,value)
+def create(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Words.Source,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,cancel: Callback.Callback<Unit,Unit>) -> IO(Owner):
   do IO<Owner>:
-    state : Ref.Ref<State> <- Ref.new(State,Closed{})
-    reply : Ref.Ref<Maybe<&2,Deferred.Deferred<String>>> <- Ref.new(Maybe<&2,Deferred.Deferred<String>>,None{})
-    +host : Host <- IO.pure(Host,Host{state,reply,editor,theme,bindings,keyboard,cancel})
+    +state : Ref.Ref<State> <- Ref.new(State,Closed{})
+    +reply : Ref.Ref<Maybe<&2,Deferred.Deferred<String>>> <- Ref.new(Maybe<&2,Deferred.Deferred<String>>,None{})
+    wordSource : Ref.Ref<Words.Source> <- Ref.new(Words.Source,words)
+    +submit : Callback.Callback<String,Unit> <- Callback.create(~InputSubmission,~String,~Unit,~submitInput,InputSubmission{state,reply})
+    +host : Host <- IO.pure(Host,Host{state,reply,editor,theme,bindings,keyboard,cancel,wordSource,submit})
     +renderCallback : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~draw,host)
     +inputCallback : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receive,host)
     +mouseCallback : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Host,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~mouse,host)
@@ -252,7 +282,7 @@ def borrow(owner: Owner) -> Owner & Host & Component.Component:
     case Owner{+host,+component,renderCallback,inputCallback,mouseCallback,invalidateCallback,focusCallback}: (Owner{host,component,renderCallback,inputCallback,mouseCallback,invalidateCallback,focusCallback},host,component)
 def openMenu(host: Host,menu: Menu,title: String,+choices: List<&2,Choice>) -> IO(Deferred.Deferred<String>):
   match host:
-    case Host{state,reply,editor,_,_,_,_}:
+    case Host{state,reply,editor,_,_,_,_,_,_}:
       do IO<Deferred.Deferred<String>>:
         +choice : Deferred.Deferred<String> <- Deferred.new(String)
         Ref.write(Maybe<&2,Deferred.Deferred<String>>,reply,Some{choice})
@@ -269,25 +299,25 @@ def openApiKeys(host: Host,choices: List<&2,Choice>) -> IO(Deferred.Deferred<Str
   openMenu(host,Provider{},"Select provider to configure:",choices)
 def openDirect(host: Host) -> IO(Unit):
   match host:
-    case Host{state,_,editor,_,_,_,_}:
+    case Host{state,_,editor,_,_,_,_,_,_}:
       do IO<Unit>:
         Component.setFocused(editor,False{})
         Ref.write(State,state,Waiting{})
 def showManual(host: Host,url: String,answer: Deferred.Deferred<String>) -> IO(Unit):
   match host:
-    case Host{state,reply,_,_,_,_,_}:
+    case Host{state,reply,_,_,_,_,cancel,_,submit}:
       do IO<Unit>:
         Ref.write(Maybe<&2,Deferred.Deferred<String>>,reply,Some{answer})
-        Ref.write(State,state,Manual{url,""})
+        Ref.write(State,state,Manual{url,Input.setCallbacks(Input.setFocused(Input.new(None{}),True{}),Some{submit},Some{cancel})})
 def showPrompt(host: Host,title: String,message: String,secret: Bool,answer: Deferred.Deferred<String>) -> IO(Unit):
   match host:
-    case Host{state,reply,_,_,_,_,_}:
+    case Host{state,reply,_,_,_,_,cancel,_,submit}:
       do IO<Unit>:
         Ref.write(Maybe<&2,Deferred.Deferred<String>>,reply,Some{answer})
-        Ref.write(State,state,Prompt{title,message,secret,""})
+        Ref.write(State,state,Prompt{title,message,secret,Input.setCallbacks(Input.setFocused(Input.new(None{}),True{}),Some{submit},Some{cancel})})
 def openInfo(host: Host,title: String,message: String) -> IO(Deferred.Deferred<String>):
   match host:
-    case Host{state,reply,editor,_,_,_,_}:
+    case Host{state,reply,editor,_,_,_,_,_,_}:
       do IO<Deferred.Deferred<String>>:
         +closed : Deferred.Deferred<String> <- Deferred.new(String)
         Ref.write(Maybe<&2,Deferred.Deferred<String>>,reply,Some{closed})
@@ -300,7 +330,7 @@ def waitingAfterManual(current: State) -> State & Unit:
     case _: (Waiting{},Unit{})
 def stopManual(host: Host) -> IO(Unit):
   match host:
-    case Host{state,reply,_,_,_,_,_}:
+    case Host{state,reply,_,_,_,_,_,_,_}:
       do IO<Unit>:
         settle(reply,"")
         Ref.modify(State,Unit,state,waitingAfterManual)
@@ -309,19 +339,21 @@ def withCode(current: State,url: String,code: String) -> State & Unit:
     case Waiting{}: (Device{url,code},Unit{})
     case _: (current,Unit{})
 def showCode(host: Host,url: String,code: String) -> IO(Unit):
-  match host: case Host{state,_,_,_,_,_,_}: Ref.modify(State,Unit,state,current => withCode(current,url,code))
+  match host: case Host{state,_,_,_,_,_,_,_,_}: Ref.modify(State,Unit,state,current => withCode(current,url,code))
 def close(host: Host) -> IO(Unit):
   match host:
-    case Host{state,reply,editor,_,_,_,_}:
+    case Host{state,reply,editor,_,_,_,_,_,_}:
       do IO<Unit>:
         settle(reply,"")
         Ref.write(State,state,Closed{})
         Component.setFocused(editor,True{})
 def dispose(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{Host{state,reply,_,_,_,_,_},_,renderCallback,inputCallback,mouseCallback,invalidateCallback,focusCallback}:
+    case Owner{Host{state,reply,_,_,_,_,_,words,submit},_,renderCallback,inputCallback,mouseCallback,invalidateCallback,focusCallback}:
       do IO<Unit>:
         old : State <- Ref.dispose(State,state)
+        unused : Words.Source <- Ref.dispose(Words.Source,words)
+        Callback.dispose(String,Unit,submit)
         pending : Maybe<&2,Deferred.Deferred<String>> <- Ref.dispose(Maybe<&2,Deferred.Deferred<String>>,reply)
         Callback.dispose(Nat,List<&2,String>,renderCallback)
         Callback.dispose(String,Unit,inputCallback)

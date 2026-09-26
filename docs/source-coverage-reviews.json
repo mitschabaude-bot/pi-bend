@@ -144,11 +144,11 @@
         "packages/coding-agent/src/main.bend",
         "packages/coding-agent/src/modes/interactive/components/header.bend"
       ],
-      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native API-key login saves credentials and refreshes model availability; method, filtered-provider and empty prompt text match terminal captures, while the unfiltered provider catalog and secret masking differ. Fullscreen startup, typing, viewport scrolling, and keyboard transcript search match focused terminal captures; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection, dynamic mode switching and broader commands remain partial. Exact /model matches use the cached scoped or available list; misses refresh the catalog with a 15-second abort deadline, retry exact matching, then open the filtered picker. The miss picker matches plain terminal frames; prefilled search cursor styling remains different. Interactive HTML export now uses the active theme palette and explicit export backgrounds. Resumed transcripts now render compaction and branch summaries, displayed custom messages, and skill invocations in sequence; live structural entries use the same path. The footer reads live auto-compaction state, so disabling it removes the auto marker immediately. User-theme resource notices match compact and expanded terminal captures, quiet startup and reload refresh; context sections retain their extra spacer. Prompt/extension listings, project/package theme sources and broader resource diagnostics remain incomplete. Working/retry/compaction statuses use native owned loaders and countdowns; retry countdown and Escape cancellation have terminal comparisons. Manual compaction completion rebuilds retained context and appends the summary chronologically; completion, Escape cancellation and the following model request match focused terminal comparisons. Initial branch-summary status and broader compaction queue/progress/cost-notice integration remain incomplete.",
+      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native API-key login saves credentials and refreshes model availability; method, filtered-provider and empty prompt text match terminal captures, while the unfiltered provider catalog and secret masking differ. Fullscreen startup, typing, viewport scrolling, and keyboard transcript search match focused terminal captures; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection, dynamic mode switching and broader commands remain partial. Exact /model matches use the cached scoped or available list; misses refresh the catalog with a 15-second abort deadline, retry exact matching, then open the filtered picker. The miss picker matches plain terminal frames; prefilled search cursor styling remains different. Interactive HTML export now uses the active theme palette and explicit export backgrounds. Resumed transcripts now render compaction and branch summaries, displayed custom messages, and skill invocations in sequence; live structural entries use the same path. The footer reads live auto-compaction state, so disabling it removes the auto marker immediately. User-theme resource notices match compact and expanded terminal captures, quiet startup and reload refresh; context sections retain their extra spacer. Prompt/extension listings, project/package theme sources and broader resource diagnostics remain incomplete. Working/retry/compaction statuses use native owned loaders and countdowns; retry countdown and Escape cancellation have terminal comparisons. Manual compaction completion rebuilds retained context and appends the summary chronologically; completion, Escape cancellation and the following model request match focused terminal comparisons. Initial branch-summary status and broader compaction queue/progress/cost-notice integration remain incomplete. Login prompts now use shared TUI Input rather than raw string editing; pasted API-key terminal captures match. OpenAI browser-method selection, generic OAuth interactions and direct-provider resolution parity remain incomplete.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "2df7941821123ecdc58b9e9b03f1b9c00c13f3f50ad7ed2a54dd79a77eae95d4",
-        "packages/coding-agent/src/modes/interactive/run.bend": "5d9d6c8335b238aaea1f7e6f56f262ab4ef368d3baec42c38661eca790bc2d85",
+        "packages/coding-agent/src/modes/interactive/run.bend": "f4e1070ab8415a847a92d95f5fd520b8e5886b221c8fc331841215e4803090c9",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "5251961f780f6011fd173b198ccd6e4dd82ab65743f2df4463bc06f71a497075",
         "packages/coding-agent/src/main.bend": "e50dfd533cfd5f22680e9e164b1c618a5cade5552b12ff2a428a1849eb4afe42",
@@ -241,7 +241,7 @@
       "note": "Native login offers account and API-key methods, configured-status badges, searchable choices, an eight-row provider window and native key prompts. Method and filtered-provider text match upstream terminal captures. Full provider coverage, OAuth provider options and mouse behavior remain partial.",
       "source_sha256": "d4c92352cc8035e4092d9bd67e0250a2eab3124e13f15ac45433acfde92db53f",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "0c737271d450ee75f0801a4ad03168b129dad23650ceae8cf63f239e51122a05"
+        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "433293b19d954ea9d5da76dd572e04237521fd50fd495c456896e635417902d1"
       },
       "ports": [
         "packages/coding-agent/src/modes/interactive/components/login-dialog.bend"
@@ -376,10 +376,10 @@
     },
     "packages/coding-agent/src/modes/interactive/components/login-dialog.ts": {
       "state": "partial",
-      "note": "Native OAuth and API-key prompts work, including cancellation. The API-key prompt title and empty-input layout match upstream; Bend deliberately masks entered secrets. Provider-owned info screens render, while links, progress and remaining OAuth details are partial.",
+      "note": "Native OAuth and API-key prompts use the shared TUI Input for bracketed paste, cursor and word editing, submission and cancellation. Secret prompts retain the raw submitted value while masking the displayed value. Split paste, narrow rendering, cursor/word editing and submission phase transitions are checked in tests/login-dialog-input.bend; pasted API-key terminal frames match pi. Provider-owned info screens and Anthropic authorization links render; full OAuth prompt/event APIs, OpenAI browser-method selection, progress and remaining provider details are partial.",
       "source_sha256": "37608848ca7b72707437aed9627a612eadf570c57a54b1c86972c3532918298c",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "0c737271d450ee75f0801a4ad03168b129dad23650ceae8cf63f239e51122a05"
+        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "433293b19d954ea9d5da76dd572e04237521fd50fd495c456896e635417902d1"
       }
     },
     "packages/coding-agent/src/cli/initial-message.ts": {
@@ -490,7 +490,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/footer.bend": "d924bbd85b2a33b86ec77491b3f88014fe87ffac531779233f82cb77c4ce5828",
-        "packages/coding-agent/src/modes/interactive/run.bend": "5d9d6c8335b238aaea1f7e6f56f262ab4ef368d3baec42c38661eca790bc2d85"
+        "packages/coding-agent/src/modes/interactive/run.bend": "f4e1070ab8415a847a92d95f5fd520b8e5886b221c8fc331841215e4803090c9"
       }
     },
     "packages/ai/src/api/pi-messages.ts": {
