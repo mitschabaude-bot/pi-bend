@@ -149,6 +149,21 @@ type BoundaryBase is Data:
   TurnEndBase{turnIndex: Nat, message: AgentMessage(), toolResults: List<&2, Ai.ToolResultMessage<Tools.ToolDetails>>, messageEntryId: String, toolResultEntryIds: List<&2, String>, outcome: AgentActivityOutcome}
   BeforeSettleBase{outcome: AgentActivityOutcome}
 
+# Request context (upstream context and context_with_system)
+# ----------------------------------------------------------
+# `context` handlers see the conversation without system messages; Pi keeps
+# the prompt and tool state. `context_with_system` handlers see the whole
+# transcript. A result without messages leaves them unchanged (handlers
+# cannot edit event.messages in place).
+type ContextEvent is Data:
+  ContextEvent{messages: List<&2, AgentMessage()>}
+
+type ContextWithSystemEvent is Data:
+  ContextWithSystemEvent{messages: List<&2, AgentMessage()>}
+
+type ContextEventResult is Data:
+  ContextEventResult{messages: Maybe<&2, List<&2, AgentMessage()>>}
+
 # Replace the finalized message; the replacement keeps the original's role.
 type MessageEndEventResult is Data:
   MessageEndEventResult{message: Maybe<&2, AgentMessage()>}
@@ -204,6 +219,8 @@ type EventHandler is Data:
   OnSessionCompact{handler: ExtensionHandler(SessionCompactEvent, Unit)}
   OnSessionCompactFailed{handler: ExtensionHandler(SessionCompactFailedEvent, Unit)}
   OnTurnEnd{handler: ExtensionHandler(TurnEndEvent, BoundaryResult)}
+  OnContext{handler: ExtensionHandler(ContextEvent, ContextEventResult)}
+  OnContextWithSystem{handler: ExtensionHandler(ContextWithSystemEvent, ContextEventResult)}
   OnAgentBeforeSettle{handler: ExtensionHandler(AgentBeforeSettleEvent, BoundaryResult)}
 
 # Events dispatched without a result (upstream emit). Events with results
@@ -242,6 +259,8 @@ def handlerEventType(handler: EventHandler) -> String:
     case OnSessionCompact{_}: "session_compact"
     case OnSessionCompactFailed{_}: "session_compact_failed"
     case OnTurnEnd{_}: "turn_end"
+    case OnContext{_}: "context"
+    case OnContextWithSystem{_}: "context_with_system"
     case OnAgentBeforeSettle{_}: "agent_before_settle"
 
 def eventType(event: ExtensionEvent) -> String:

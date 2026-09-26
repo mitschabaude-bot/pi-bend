@@ -286,7 +286,10 @@ def FinishTurnResult() -> Data: Result<&2, &2, Runtime.Error(), Maybe<&2, T.Agen
 # upstream _installAgentToolHooks and _installAgentBoundaryHooks: the hooks
 # the session installed on the agent and those they replaced (restored on
 # dispose).
-type ToolHooks is Data: ToolHooks{hook: AfterToolHook(), replaced: Maybe<&2, AfterToolHook()>, before: BeforeToolHook(), replacedBefore: Maybe<&2, BeforeToolHook()>, finish: FinishTurnHook(), replacedFinish: Maybe<&2, FinishTurnHook()>}
+def ContextInput() -> Data: T.TransformContextInput<List<&2, Message()>>
+def ContextResult() -> Data: Result<&2, &2, Runtime.Error(), List<&2, Message()>>
+def ContextHook() -> Data: C.Callback<ContextInput(), ContextResult()>
+type ToolHooks is Data: ToolHooks{hook: AfterToolHook(), replaced: Maybe<&2, AfterToolHook()>, before: BeforeToolHook(), replacedBefore: Maybe<&2, BeforeToolHook()>, finish: FinishTurnHook(), replacedFinish: Maybe<&2, FinishTurnHook()>, context: ContextHook(), replacedContext: Maybe<&2, ContextHook()>}
 
 type SessionHooks is Data:
   SessionHooks{subscription: Agent.Subscription<SessionEvent(), Runtime.Error()>, handler: Agent.Handler(SessionEvent(), Runtime.Error()), nextTurn: NextTurnHook(), replaced: Maybe<&2, NextTurnHook()>, request: T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()), replacedRequest: Maybe<&2, T.PrepareRequest(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error())>, context: ExtensionBinding, warming: Warming, stats: R.Ref<Maybe<&2, StatsMemo>>, toolResults: ToolHooks}
@@ -1316,7 +1319,7 @@ def shutdown(session: AgentSession) -> IO(Unit):
 
 def retire(session: AgentSession) -> IO(Unit):
   match session:
-    case AgentSession{+agent, shared, SessionHooks{_, handler, nextTurn, replaced, request, replacedRequest, context, _, stats, ToolHooks{afterTool, replacedAfterTool, beforeTool, replacedBeforeTool, finish, replacedFinish}}, settings, _, loadout, _, _}:
+    case AgentSession{+agent, shared, SessionHooks{_, handler, nextTurn, replaced, request, replacedRequest, context, _, stats, ToolHooks{afterTool, replacedAfterTool, beforeTool, replacedBeforeTool, finish, replacedFinish, contextHook, replacedContext}}, settings, _, loadout, _, _}:
       do IO<Unit>:
         C.dispose(Agent.Input<SessionEvent()>, Loop.Emission<Runtime.Error()>, handler)
         Agent.setPrepareNextTurnWithContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replaced)
@@ -1328,6 +1331,8 @@ def retire(session: AgentSession) -> IO(Unit):
         C.dispose(BeforeToolInput(), BeforeToolResult(), beforeTool)
         Agent.setFinishTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedFinish)
         C.dispose(FinishTurnInput(), FinishTurnResult(), finish)
+        Agent.setTransformContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, replacedContext)
+        C.dispose(ContextInput(), ContextResult(), contextHook)
         C.dispose(T.ToolHookInput<T.PrepareRequestContext<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>, Result<&2, &2, Runtime.Error(), Maybe<&2, T.AgentRequestUpdate<Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error()>>>, request)
         current : Runtime.Loadout <- R.dispose(Runtime.Loadout, loadout)
         bindContext(current, None{})
@@ -2706,6 +2711,31 @@ def handleAgentEvent(env: EventEnv, input: Agent.Input<SessionEvent()>) -> IO(Lo
   match env:
     case EventEnv{agent, shared, loadout}: handleEvent(agent, shared, loadout, input)
 
+# The request context through the extensions' context and
+# context_with_system handlers (upstream's transformContext wiring, which
+# createAgentSession and the test harness install), after a transform the
+# agent already had.
+type ContextHookEnv is Data:
+  ContextHookEnv{shared: R.Ref<Shared>, previous: Maybe<&2, ContextHook()>}
+
+def previousContext(previous: Maybe<&2, ContextHook()>, input: ContextInput()) -> IO(ContextResult()):
+  match previous input:
+    case None{} T.TransformContextInput{given, _}: IO.pure(ContextResult(), Done{given})
+    case Some{hook} other: C.call(ContextInput(), ContextResult(), hook, other)
+
+def extensionContext(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>, result: ContextResult()) -> IO(ContextResult()):
+  match runner result:
+    case Some{found} Done{given}: IO.bind(List<&2, Message()>, ContextResult(), ExtensionRunner.emitContext(found, given), transformed => IO.pure(ContextResult(), Done{transformed}))
+    case _ other: IO.pure(ContextResult(), other)
+
+def contextTransform(env: ContextHookEnv, input: ContextInput()) -> IO(ContextResult()):
+  match env:
+    case ContextHookEnv{shared, previous}:
+      do IO<ContextResult()>:
+        result : ContextResult() <- previousContext(previous, input)
+        runner : Maybe<&2, ExtensionRunner.ExtensionRunner> <- sharedRunner(shared)
+        extensionContext(runner, result)
+
 def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settings.SettingsManager, +cwd: String, +loadout: Runtime.Loadout, +models: Models.ModelRuntime, scopedModels: List<&2, Models.ScopedModel>) -> IO(AgentSession):
   do IO<AgentSession>:
     +scoped : R.Ref<List<&2, Models.ScopedModel>> <- R.new(List<&2, Models.ScopedModel>, scopedModels)
@@ -2737,7 +2767,10 @@ def createUnbound(+agent: Runtime.Owner(), session: Session(), +settings: Settin
     +replacedFinish : Maybe<&2, FinishTurnHook()> <- Agent.getFinishTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
     +finish : FinishTurnHook() <- C.create(~FinishTurnEnv, ~FinishTurnInput(), ~FinishTurnResult(), ~finishTurnHook, FinishTurnEnv{agent, shared, replacedFinish})
     Agent.setFinishTurn(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{finish})
-    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context, warming, stats, ToolHooks{afterTool, replacedAfterTool, beforeTool, replacedBeforeTool, finish, replacedFinish}}, settingsRef, cwd, loadoutRef, models, scoped}
+    +replacedContext : Maybe<&2, ContextHook()> <- Agent.getTransformContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent)
+    +contextHook : ContextHook() <- C.create(~ContextHookEnv, ~ContextInput(), ~ContextResult(), ~contextTransform, ContextHookEnv{shared, replacedContext})
+    Agent.setTransformContext(Unit, Runtime.Details(), Runtime.Custom(), Runtime.Error(), Unit, agent, Some{contextHook})
+    return AgentSession{agent, shared, SessionHooks{subscription, handler, nextTurn, replaced, request, replacedRequest, context, warming, stats, ToolHooks{afterTool, replacedAfterTool, beforeTool, replacedBeforeTool, finish, replacedFinish, contextHook, replacedContext}}, settingsRef, cwd, loadoutRef, models, scoped}
 
 # A final error after retries reports the failure and resets the counter.
 def failedRetry(+shared: R.Ref<Shared>, stopReason: Ai.StopReason, finalError: Maybe<&2, String>) -> IO(Unit):
@@ -3695,6 +3728,25 @@ def navigateTree(+session: AgentSession, +targetId: String) -> IO(Result<&2, &2,
   do IO<Result<&2, &2, String, Navigation>>:
     result : TreeResult() <- navigateTreeWith(session, targetId, noSummary())
     return plainNavigation(result)
+
+# upstream getUserMessagesForForking: every user message entry with text,
+# in session order.
+type ForkMessage is Data:
+  ForkMessage{entryId: String, text: String}
+
+def forkMessages(entries: List<&2, Entry()>) -> List<&2, ForkMessage>:
+  match entries:
+    case Nil{}: Nil{}
+    case S.SessionMessageEntry{S.SessionEntryBase{id, _, _}, T.LlmMessage{Ai.User{Ai.UserMessage{content, _}}}} <> rest:
+      +text = userContentText(content)
+      +tail = forkMessages(rest)
+      Bool.pick(List<&2, ForkMessage>, String.is_empty(text), tail, ForkMessage{id, text} <> tail)
+    case _ <> rest: forkMessages(rest)
+
+def getUserMessagesForForking(session: AgentSession) -> IO(List<&2, ForkMessage>):
+  do IO<List<&2, ForkMessage>>:
+    stored : Session() <- sessionOf(session)
+    return forkMessages(S.getEntries(Unit, Tools.ToolDetails, V.Value, stateOf(stored)))
 
 def forkText(text: Maybe<&2, String>, parent: Maybe<&2, String>) -> Maybe<&2, Navigation>:
   match text:

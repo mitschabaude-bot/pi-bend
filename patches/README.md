@@ -189,3 +189,6 @@ Validation with the patched compiler, all passing:
 
 
 `bend-incremental-ids.patch` (2026-09-26, installed after `bend-segment-memory.patch`, changes `comp.ts`): unchanged code emits byte-identical C across builds (segments numbered within their definition, spins and static tables named by content, `BEND_IDS` keeps segment and constructor ids and the image layout), each definition goes to a fixed translation unit, and units read the shared tables as `extern`. With `scripts/build-incremental.sh`, a one-string edit recompiles 2 of 64 units: 146 s against 210 s for the ordinary build. See docs/incremental-build.md. The compiler is then 11,539 lines.
+
+`bend-id-width.patch` (2026-09-26, installed after `bend-incremental-ids.patch`, changes `comp.ts`): segment and constructor ids widen from 16 to 20 bits (the tag keeps 3 bits), and the incremental id map compacts before it would exceed the range (BEND-055, BEND-058). The CLI needed 65,114 of the former 65,536 ids.
+

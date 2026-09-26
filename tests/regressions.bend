@@ -206,6 +206,22 @@ def messageTexts(messages: List<&2, Ai.Message<V.Value, V.Value, Unit, Tools.Too
     case Nil{}: Nil{}
     case message <> rest: messageText(message) <> messageTexts(rest)
 
+def roleName(message: Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>) -> String:
+  match message:
+    case Ai.System{_}: "\"system\""
+    case Ai.User{_}: "\"user\""
+    case Ai.Assistant{_}: "\"assistant\""
+    case Ai.ToolResult{_}: "\"toolResult\""
+
+def rolesOf(messages: List<&2, Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>>) -> List<&2, String>:
+  match messages:
+    case Nil{}: Nil{}
+    case message <> rest: roleName(message) <> rolesOf(rest)
+
+def requestRoles(input: H.Input()) -> List<&2, String>:
+  match input:
+    case T.StreamInput{_, Ai.TranscriptContext{messages}, _}: rolesOf(messages)
+
 def serializeContext(input: H.Input()) -> String:
   match input:
     case T.StreamInput{_, Ai.TranscriptContext{messages}, _}: String.join(messageTexts(messages), "\n\n")
@@ -441,7 +457,7 @@ def providing(faux: Faux, +input: H.Input()) -> IO(H.Output()):
       +signal = signalOf(input)
       do IO<H.Output()>:
         R.write(Maybe<&2, Signal()>, signals, signal)
-        IO.print("{\"type\":\"request\",\"model\":" ++ Decode.quote(model) ++ ",\"apiKey\":" ++ H.maybeQuoted(apiKeyOf(input)) ++ ",\"lastUser\":" ++ H.maybeQuoted(lastUserOf(input)) ++ ",\"maxTokens\":" ++ maxTokensOf(input) ++ ",\"context\":" ++ Decode.quote(serializeContext(input)) ++ "}")
+        IO.print("{\"type\":\"request\",\"model\":" ++ Decode.quote(model) ++ ",\"apiKey\":" ++ H.maybeQuoted(apiKeyOf(input)) ++ ",\"lastUser\":" ++ H.maybeQuoted(lastUserOf(input)) ++ ",\"maxTokens\":" ++ maxTokensOf(input) ++ ",\"roles\":[" ++ String.join(requestRoles(input), ",") ++ "],\"context\":" ++ Decode.quote(serializeContext(input)) ++ "}")
         gate : Maybe<&2, H.Gate> <- R.modify(List<&2, Hold>, Maybe<&2, H.Gate>, gates, remaining => popHold(remaining))
         H.holdAt(gate)
         aborted : Bool <- isAborted(signal)

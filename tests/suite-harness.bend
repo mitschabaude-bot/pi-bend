@@ -28,6 +28,7 @@ import ../packages/coding-agent/src/core/session-stats.bend as Stats
 import ../packages/coding-agent/src/core/tools/file-mutation-queue.bend as Queue
 import ../packages/coding-agent/src/utils/tools-manager.bend as Manager
 import ../packages/coding-agent/src/core/compaction/compaction.bend as Compaction
+import ../packages/coding-agent/src/core/messages.bend as Messages
 import ../packages/coding-agent/src/core/session-json.bend as SessionJson
 import ../packages/runtime/src/date.bend as Date
 import ../packages/runtime/src/f64.bend as F
@@ -336,7 +337,10 @@ def roleOf(message: Session.Message()) -> String:
     case T.LlmMessage{Ai.User{_}}: "user"
     case T.LlmMessage{Ai.Assistant{_}}: "assistant"
     case T.LlmMessage{Ai.ToolResult{_}}: "toolResult"
-    case T.CustomMessage{_}: "custom"
+    case T.CustomMessage{Messages.CompactionSummary{_}}: "compactionSummary"
+    case T.CustomMessage{Messages.BranchSummary{_}}: "branchSummary"
+    case T.CustomMessage{Messages.BashExecution{_}}: "bashExecution"
+    case T.CustomMessage{Messages.Custom{_}}: "custom"
 
 def entryShape(entry: S.SessionEntry<Unit, Tools.ToolDetails, V.Value>) -> V.Value:
   match entry:
@@ -1511,6 +1515,176 @@ def boundaryScenario(+dir: String, agentDir: String, +name: String, +argument: S
     case "edited_usage": boundaryRun(dir, agentDir, Builtins{}, Reg.Setup{[Reg.Text{"done"}], Nil{}, Reg.sizedModel(5000, 100)}, BoundaryScript{Some{Action{True{}, None{}, Nil{}, OmitUser{}, None{}}}, None{}, Nil{}, None{}, None{}, Some{5101}}, Nil{}, "large input that is later omitted")
     case _: IO.die(Unit, 1, "unknown boundary scenario")
 
+# suite/regressions/9789-context-handler-system-messages.test.ts
+# ------------------------------------------------------------
+type ContextKind is Data:
+  SliceFromSummary{}
+  PrependUser{}
+  PrependSystem{}
+  DropBashTool{}
+  DropSystem{}
+
+def roleNames(messages: List<&2, Session.Message()>) -> List<&2, V.Value>:
+  match messages:
+    case Nil{}: Nil{}
+    case message <> rest: Json.text(roleOf(message)) <> roleNames(rest)
+
+def isSummary(message: Session.Message()) -> Bool:
+  match message:
+    case T.CustomMessage{Messages.CompactionSummary{_}}: True{}
+    case _: False{}
+
+# JavaScript's slice(findIndex(...)): without a summary the index is -1, so
+# the slice is the last message.
+def lastOnly(messages: List<&2, Session.Message()>) -> List<&2, Session.Message()>:
+  match messages:
+    case Nil{}: Nil{}
+    case message <> Nil{}: [message]
+    case _ <> rest: lastOnly(rest)
+
+def summarySlice(messages: List<&2, Session.Message()>) -> Maybe<&2, List<&2, Session.Message()>>:
+  match messages:
+    case Nil{}: None{}
+    case +message <> +rest: Bool.pick(Maybe<&2, List<&2, Session.Message()>>, isSummary(message), Some{message <> rest}, summarySlice(rest))
+
+def fromSummary(+messages: List<&2, Session.Message()>) -> List<&2, Session.Message()>:
+  Maybe.default(&2, List<&2, Session.Message()>, summarySlice(messages), lastOnly(messages))
+
+def withoutTool(tools: List<&2, Ai.Tool<V.Value>>, +name: String) -> List<&2, Ai.Tool<V.Value>>:
+  match tools:
+    case Nil{}: Nil{}
+    case Ai.Tool{+toolName, description, parameters, sampling} <> rest:
+      +tail = withoutTool(rest, name)
+      Bool.pick(List<&2, Ai.Tool<V.Value>>, String.eq(toolName, name), tail, Ai.Tool{toolName, description, parameters, sampling} <> tail)
+
+def dropBash(messages: List<&2, Session.Message()>) -> List<&2, Session.Message()>:
+  match messages:
+    case Nil{}: Nil{}
+    case T.LlmMessage{Ai.System{Ai.SystemMessage{content, sections, Some{added}, removed, time}}} <> rest: T.LlmMessage{Ai.System{Ai.SystemMessage{content, sections, Some{withoutTool(added, "bash")}, removed, time}}} <> dropBash(rest)
+    case message <> rest: message <> dropBash(rest)
+
+def dropSystem(messages: List<&2, Session.Message()>) -> List<&2, Session.Message()>:
+  match messages:
+    case Nil{}: Nil{}
+    case T.LlmMessage{Ai.System{_}} <> rest: dropSystem(rest)
+    case message <> rest: message <> dropSystem(rest)
+
+def transformed(kind: ContextKind, +messages: List<&2, Session.Message()>) -> List<&2, Session.Message()>:
+  match kind:
+    case SliceFromSummary{}: fromSummary(messages)
+    case PrependUser{}: T.LlmMessage{Ai.User{Ai.UserMessage{Ai.UserBlocks{[Ai.TextImageText{Ai.TextContent{"injected", None{}}}]}, Reg.zero()}}} <> messages
+    case PrependSystem{}: T.LlmMessage{Ai.System{Ai.SystemMessage{Ai.SystemText{"ephemeral reminder"}, None{}, None{}, None{}, Reg.zero()}}} <> messages
+    case DropBashTool{}: dropBash(messages)
+    case DropSystem{}: dropSystem(messages)
+
+def contextHandler(kind: ContextKind, call: Ext.HandlerCall<Ext.ContextEvent>) -> IO(Handled(Ext.ContextEventResult)):
+  match call:
+    case Ext.HandlerCall{Ext.ContextEvent{+messages}, _}:
+      do IO<Handled(Ext.ContextEventResult)>:
+        print("context_seen", Json.field("roles", V.ArrayValue{roleNames(messages)}, Nil{}))
+        return Done{Some{Ext.ContextEventResult{Some{transformed(kind, messages)}}}}
+
+def withSystemHandler(kind: ContextKind, call: Ext.HandlerCall<Ext.ContextWithSystemEvent>) -> IO(Handled(Ext.ContextEventResult)):
+  match call:
+    case Ext.HandlerCall{Ext.ContextWithSystemEvent{+messages}, _}:
+      do IO<Handled(Ext.ContextEventResult)>:
+        print("with_system_seen", Json.field("roles", V.ArrayValue{roleNames(messages)}, Nil{}))
+        return Done{Some{Ext.ContextEventResult{Some{transformed(kind, messages)}}}}
+
+def subscribeContext(+api: Ext.ExtensionAPI, kind: Maybe<&2, ContextKind>, plain: Bool) -> IO(Result<&2, &2, String, Unit>):
+  match kind:
+    case None{}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+    case Some{+chosen}:
+      Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), plain,
+        _ => IO.bind(Ext.ExtensionHandler(Ext.ContextEvent, Ext.ContextEventResult), Result<&2, &2, String, Unit>, C.create(~ContextKind, ~Ext.HandlerCall<Ext.ContextEvent>, ~Handled(Ext.ContextEventResult), ~contextHandler, chosen), handler => subscribe(api, Ext.OnContext{handler})),
+        _ => IO.bind(Ext.ExtensionHandler(Ext.ContextWithSystemEvent, Ext.ContextEventResult), Result<&2, &2, String, Unit>, C.create(~ContextKind, ~Ext.HandlerCall<Ext.ContextWithSystemEvent>, ~Handled(Ext.ContextEventResult), ~withSystemHandler, chosen), handler => subscribe(api, Ext.OnContextWithSystem{handler})))(Unit{})
+
+def contextFactoryWith(context: Maybe<&2, ContextKind>, withSystem: Maybe<&2, ContextKind>, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    first : Result<&2, &2, String, Unit> <- subscribeContext(api, withSystem, False{})
+    second : Result<&2, &2, String, Unit> <- subscribeContext(api, context, True{})
+    return both(first, second)
+
+def contextFactory(context: Maybe<&2, ContextKind>, withSystem: Maybe<&2, ContextKind>, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>): contextFactoryWith(context, withSystem, api)
+
+def printError(env: Unit, error: Ext.ExtensionError) -> IO(Unit):
+  match error:
+    case Ext.ExtensionError{_, event, text, _}: print("extension_error", Json.field("event", Json.text(event), Json.field("error", Json.text(text), Nil{})))
+
+def listenErrors(runner: Maybe<&2, Runner.ExtensionRunner>) -> IO(Unit):
+  match runner:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{found}:
+      do IO<Unit>:
+        listener : C.Callback<Ext.ExtensionError, Unit> <- C.create(~Unit, ~Ext.ExtensionError, ~Unit, ~printError, Unit{})
+        subscription : Runner.ErrorSubscription <- Runner.onError(found, listener)
+        return Unit{}
+
+def reportLoadout(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    active : List<&2, String> <- Session.getActiveToolNames(session)
+    prompt : String <- Session.systemPrompt(session)
+    current : List<&2, Session.Message()> <- Session.messages(session)
+    print("loadout", Json.field("activeTools", V.ArrayValue{Reg.texts(active)}, Json.field("systemPrompt", Json.text(prompt), Json.field("roles", V.ArrayValue{roleNames(current)}, Nil{}))))
+
+def compactSession(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    prompted(session, "first")
+    prompted(session, "second")
+    result : Result<&2, &2, String, Compaction.CompactionResult> <- Session.compact(session, None{})
+    H.reportCompact(result)
+    reportLoadout(session)
+
+def contextKindOf(+name: String) -> Maybe<&2, ContextKind>:
+  match name:
+    case "slice": Some{SliceFromSummary{}}
+    case "inject": Some{PrependUser{}}
+    case "system_add": Some{PrependSystem{}}
+    case "with_system": Some{SliceFromSummary{}}
+    case _: None{}
+
+def withSystemKindOf(+name: String) -> Maybe<&2, ContextKind>:
+  match name:
+    case "with_system": Some{DropBashTool{}}
+    case "with_system_drop": Some{DropSystem{}}
+    case _: None{}
+
+def contextExtensions(compacting: Bool, context: Maybe<&2, ContextKind>, withSystem: Maybe<&2, ContextKind>) -> List<&1, Ext.InlineExtension>:
+  match compacting:
+    case True{}: [inline("compact-via-hook", api => supplyFactory("extension summary", api)), inline("context", api => contextFactory(context, withSystem, api))]
+    case False{}: [inline("context", api => contextFactory(context, withSystem, api))]
+
+def contextScenario(+dir: String, agentDir: String, +name: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +compacting : Bool = Bool.or(String.eq(name, "slice"), String.eq(name, "with_system"))
+    +context : Maybe<&2, ContextKind> = contextKindOf(name)
+    +withSystem : Maybe<&2, ContextKind> = withSystemKindOf(name)
+    +replies : List<&2, Reg.Reply> = Bool.pick(List<&2, Reg.Reply>, compacting, [Reg.Text{"one"}, Reg.Text{"two"}, Reg.Text{"after compaction"}], [Reg.Text{"done"}])
+    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup(replies), ref, contextExtensions(compacting, context, withSystem))
+    runner : Maybe<&2, Runner.ExtensionRunner> <- Session.extensionRunner(sessionOf(harness))
+    listenErrors(runner)
+    Bool.pick(Unit -> IO(Unit), compacting, _ => compactSession(sessionOf(harness)), _ => IO.pure(Unit, Unit{}))(Unit{})
+    print("final_prompt", Nil{})
+    prompted(sessionOf(harness), Bool.pick(String, compacting, "third", "hello"))
+    reportLoadout(sessionOf(harness))
+    cleanup(harness)
+
+# AgentSession.getUserMessagesForForking over a seeded session.
+def forkShapes(messages: List<&2, Session.ForkMessage>) -> List<&2, V.Value>:
+  match messages:
+    case Nil{}: Nil{}
+    case Session.ForkMessage{id, text} <> rest: Json.object(Json.field("entryId", Json.text(id), Json.field("text", Json.text(text), Nil{}))) <> forkShapes(rest)
+
+def forkMessagesScenario(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- createHarnessFull(dir, agentDir, Builtins{}, setup(Nil{}), ref, Nil{}, [Reg.userMsg("first"), Reg.assistantAt("reply", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero()), Reg.userMsg(""), Reg.userMsg("second")], Nil{})
+    found : List<&2, Session.ForkMessage> <- Session.getUserMessagesForForking(sessionOf(harness))
+    reportSessionEntries(sessionOf(harness))
+    print("fork_messages", Json.field("messages", V.ArrayValue{forkShapes(found)}, Nil{}))
+    cleanup(harness)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case "custom_order" <> dir <> agentDir <> Nil{}: customOrder(dir, agentDir)
@@ -1536,6 +1710,8 @@ def run(args: List<String>) -> IO(Unit):
     case "settle_abort" <> dir <> agentDir <> Nil{}: settleAbort(dir, agentDir)
     case "refresh_notifications" <> dir <> agentDir <> Nil{}: refreshNotifications(dir, agentDir)
     case "retained_usage" <> dir <> agentDir <> Nil{}: retainedUsage(dir, agentDir)
+    case "context" <> dir <> agentDir <> name <> Nil{}: contextScenario(dir, agentDir, name)
+    case "fork_messages" <> dir <> agentDir <> Nil{}: forkMessagesScenario(dir, agentDir)
     case "compaction_override" <> dir <> agentDir <> path <> Nil{}: compactionOverride(dir, agentDir, path)
     case "compaction_budget" <> dir <> agentDir <> path <> Nil{}: compactionBudget(dir, agentDir, path)
     case "compaction_model_switch" <> dir <> agentDir <> Nil{}: compactionModelSwitch(dir, agentDir)

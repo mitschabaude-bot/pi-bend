@@ -9,6 +9,8 @@ import ./loader.bend as Loader
 import ./types.bend as T
 import ../../../../agent/src/types.bend as Agent
 import ../../../../ai/src/types.bend as Ai
+import ../../../../ai/src/utils/transcript.bend as Transcript
+import ../session-json.bend as SessionJson
 import ../../../../runtime/src/schema-value.bend as V
 import ../messages.bend as Messages
 import ../tools/index.bend as Tools
@@ -646,3 +648,109 @@ def emitBoundary(+runner: ExtensionRunner, +base: T.BoundaryBase, +build: Bounda
     dispatches : List<&2, Dispatch> <- snapshot(runner, boundaryType(base))
     final : BoundaryState <- boundaryDispatches(runner, dispatches, base, build, BoundaryState{Nil{}, False{}, initial, True{}})
     return boundaryResult(final)
+
+# Request context (upstream emitContext)
+# --------------------------------------
+
+def isSystemMessage(message: T.AgentMessage()) -> Bool:
+  match message:
+    case Agent.LlmMessage{Ai.System{_}}: True{}
+    case _: False{}
+
+def withoutSystem(messages: List<&2, T.AgentMessage()>) -> List<&2, T.AgentMessage()>:
+  match messages:
+    case Nil{}: Nil{}
+    case +message <> rest:
+      +tail = withoutSystem(rest)
+      Bool.pick(List<&2, T.AgentMessage()>, isSystemMessage(message), tail, message <> tail)
+
+def llmOf(messages: List<&2, T.AgentMessage()>) -> List<&2, Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>>:
+  match messages:
+    case Nil{}: Nil{}
+    case Agent.LlmMessage{value} <> rest: value <> llmOf(rest)
+    case _ <> rest: llmOf(rest)
+
+# upstream restoreSystemMessages: an unchanged conversation keeps every
+# system message in place; a changed one gets the replayed prompt and tool
+# state as one leading system message. Unchanged is structural equality
+# (upstream compares the message objects).
+def unitJson(value: Unit) -> V.Value: V.Null{}
+def rawJson(value: V.Value) -> V.Value: value
+
+def messageText(+message: T.AgentMessage()) -> String:
+  SessionJson.line(SessionJson.agentMessage(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitJson, ~Tools.detailsValue, ~rawJson, message))
+
+def sameMessages(left: List<&2, T.AgentMessage()>, right: List<&2, T.AgentMessage()>) -> Bool:
+  match left right:
+    case Nil{} Nil{}: True{}
+    case +a <> restLeft +b <> restRight: Bool.and(String.eq(messageText(a), messageText(b)), sameMessages(restLeft, restRight))
+    case _ _: False{}
+
+def withHead(head: Maybe<&2, Ai.SystemMessage<V.Value>>, +returned: List<&2, T.AgentMessage()>) -> List<&2, T.AgentMessage()>:
+  match head:
+    case Some{system}: Agent.LlmMessage{Ai.System{system}} <> returned
+    case None{}: returned
+
+def restoreSystem(+current: List<&2, T.AgentMessage()>, same: Bool, +returned: List<&2, T.AgentMessage()>) -> List<&2, T.AgentMessage()>:
+  match same:
+    case True{}: current
+    case False{}: withHead(Transcript.getCurrentSystemMessage(V.Value, V.Value, Unit, Tools.ToolDetails, llmOf(current)), returned)
+
+def contextStep(+runner: ExtensionRunner, path: String, +current: List<&2, T.AgentMessage()>, +visible: List<&2, T.AgentMessage()>, result: Result<&2, &2, String, Maybe<&2, T.ContextEventResult>>) -> IO(List<&2, T.AgentMessage()>):
+  match result:
+    case Fail{error}:
+      do IO<List<&2, T.AgentMessage()>>:
+        emitError(runner, T.ExtensionError{path, "context", error, None{}})
+        return current
+    case Done{Some{T.ContextEventResult{Some{+returned}}}}: IO.pure(List<&2, T.AgentMessage()>, restoreSystem(current, sameMessages(returned, visible), returned))
+    case Done{_}: IO.pure(List<&2, T.AgentMessage()>, current)
+
+def contextHandlers(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>, +current: List<&2, T.AgentMessage()>) -> IO(List<&2, T.AgentMessage()>):
+  match dispatches:
+    case Nil{}: IO.pure(List<&2, T.AgentMessage()>, current)
+    case Dispatch{path, T.OnContext{callback}} <> rest:
+      +visible = withoutSystem(current)
+      do IO<List<&2, T.AgentMessage()>>:
+        result : Result<&2, &2, String, Maybe<&2, T.ContextEventResult>> <- C.call(T.HandlerCall<T.ContextEvent>, Result<&2, &2, String, Maybe<&2, T.ContextEventResult>>, callback, T.HandlerCall{T.ContextEvent{visible}, createContext(runner)})
+        next : List<&2, T.AgentMessage()> <- contextStep(runner, path, current, visible, result)
+        contextHandlers(runner, rest, next)
+    case _ <> rest: contextHandlers(runner, rest, current)
+
+def leadingSystem(messages: List<&2, T.AgentMessage()>) -> Bool:
+  match messages:
+    case message <> _: isSystemMessage(message)
+    case Nil{}: False{}
+
+def systemDropped() -> String: "Handler removed the leading system message; the request has no prompt or initial tool declarations. Keep it at index 0 or replace a dropped prefix with getCurrentSystemMessage()."
+
+def withSystemStep(+runner: ExtensionRunner, path: String, +current: List<&2, T.AgentMessage()>, result: Result<&2, &2, String, Maybe<&2, T.ContextEventResult>>) -> IO(List<&2, T.AgentMessage()>):
+  match result:
+    case Fail{error}:
+      do IO<List<&2, T.AgentMessage()>>:
+        emitError(runner, T.ExtensionError{path, "context_with_system", error, None{}})
+        return current
+    case Done{Some{T.ContextEventResult{Some{+returned}}}}:
+      do IO<List<&2, T.AgentMessage()>>:
+        Bool.pick(Unit -> IO(Unit), Bool.and(leadingSystem(current), Bool.not(leadingSystem(returned))), _ => emitError(runner, T.ExtensionError{path, "context_with_system", systemDropped(), None{}}), _ => IO.pure(Unit, Unit{}))(Unit{})
+        return returned
+    case Done{_}: IO.pure(List<&2, T.AgentMessage()>, current)
+
+def withSystemHandlers(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>, +current: List<&2, T.AgentMessage()>) -> IO(List<&2, T.AgentMessage()>):
+  match dispatches:
+    case Nil{}: IO.pure(List<&2, T.AgentMessage()>, current)
+    case Dispatch{path, T.OnContextWithSystem{callback}} <> rest:
+      do IO<List<&2, T.AgentMessage()>>:
+        result : Result<&2, &2, String, Maybe<&2, T.ContextEventResult>> <- C.call(T.HandlerCall<T.ContextWithSystemEvent>, Result<&2, &2, String, Maybe<&2, T.ContextEventResult>>, callback, T.HandlerCall{T.ContextWithSystemEvent{current}, createContext(runner)})
+        next : List<&2, T.AgentMessage()> <- withSystemStep(runner, path, current, result)
+        withSystemHandlers(runner, rest, next)
+    case _ <> rest: withSystemHandlers(runner, rest, current)
+
+# upstream emitContext: context handlers first, then context_with_system
+# handlers on the restored transcript.
+def emitContext(+runner: ExtensionRunner, messages: List<&2, T.AgentMessage()>) -> IO(List<&2, T.AgentMessage()>):
+  do IO<List<&2, T.AgentMessage()>>:
+    contexts : List<&2, Dispatch> <- snapshot(runner, "context")
+    restored : List<&2, T.AgentMessage()> <- contextHandlers(runner, contexts, messages)
+    withSystem : List<&2, Dispatch> <- snapshot(runner, "context_with_system")
+    withSystemHandlers(runner, withSystem, restored)
+
