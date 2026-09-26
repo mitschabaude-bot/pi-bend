@@ -1,0 +1,33 @@
+--- a/bend.ts
++++ b/bend.ts
+@@ -1771,7 +1771,18 @@
+ // Patt
+ // ----
+ 
+-export function parse_bind(p: Parse, t: LTerm): PVar {
++// In an imported module a plain name that is also one of the module's defs
++// parses as a reference to it (parse_var); in binder position it is a new
++// name, as it is in an entry file.
++function parse_binder(p: Parse, t: LTerm): LTerm {
++  const k = t.$ === "Ref" && p.ns !== "" && t.k.startsWith(p.ns + ".")
++    ? t.k.slice(p.ns.length + 1) : null;
++  return k !== null && !k.includes(".") && book_ctr(p.book, t.k) === null
++    ? Var(k, p.sc.frs++, t.s) : t;
++}
++
++export function parse_bind(p: Parse, u: LTerm): PVar {
++  const t = parse_binder(p, u);
+   if (t.$ !== "Var") {
+     parse_fail(p, "a lambda binder (one name: k => body)");
+   }
+@@ -1782,8 +1793,9 @@
+   return x;
+ }
+ 
+-export function parse_patt(p: Parse, t: LTerm): Patt {
++export function parse_patt(p: Parse, u: LTerm): Patt {
+   const book = p.book;
++  const t = parse_binder(p, u);
+   const lit  = t.$ === "App" ? nat_from_term(t) : null;
+   if (lit !== null) {
+     let q: Patt = { $: "PCtr", k: "Zero", x: [], s: t.s };
