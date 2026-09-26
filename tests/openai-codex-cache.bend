@@ -1,5 +1,5 @@
 import Base
-import ../packages/ai/src/api/openai-codex-responses.bend as Codex
+import ../packages/ai/src/api/openai-codex-sessions.bend as Codex
 import ../packages/ai/src/utils/json.bend as Wire
 import ../packages/ai/src/utils/schema-json.bend as Schema
 import ../packages/runtime/src/json.bend as JSON
