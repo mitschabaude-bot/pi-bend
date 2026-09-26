@@ -1642,3 +1642,66 @@ def prefixedResolve(context: Context, +base: URL, prefix: InputPrefix) -> Result
 # explicit in the same Context as absolute parsing; no host-language URL code.
 def parseResolve(context: Context, base: URL, input: String) -> Result<&2, &2, ResolveError, URL>:
   prefixedResolve(context, base, inputPrefix(prepareInput(input)))
+
+
+# WHATWG URL getters for the components a caller reads from a parsed URL
+# (Node's url.protocol, .hostname, .pathname, .hash, .href).
+def protocol(value: URL) -> String:
+  match value:
+    case URL{scheme, _, _, _, _, _, _, _}: serializeScheme(scheme) ++ ":"
+
+def usernameOf(value: URL) -> String:
+  match value:
+    case URL{_, username, _, _, _, _, _, _}: username
+
+def passwordOf(value: URL) -> String:
+  match value:
+    case URL{_, _, password, _, _, _, _, _}: password
+
+def hostname(value: URL) -> String:
+  match value:
+    case URL{_, _, _, Some{host}, _, _, _, _}: serializeHost(host)
+    case _: ""
+
+def pathname(value: URL) -> String:
+  match value:
+    case URL{_, _, _, _, _, recordPath, _, _}: serializePath(recordPath)
+
+def hash(value: URL) -> String:
+  match value:
+    case URL{_, _, _, _, _, _, _, Some{SNil{}}}: ""
+    case URL{_, _, _, _, _, _, _, Some{fragment}}: "#" ++ fragment
+    case _: ""
+
+def href(value: URL) -> String: serialize(value, False{})
+
+# The pathname setter: the path state with a state override, where '?' and
+# '#' are path code points (percent-encoded) rather than delimiters, and tab
+# and newline are removed as in every basic URL parse. An opaque path is
+# unchanged.
+def setterInput(text: String, reversed: String) -> String:
+  match text:
+    case SNil{}: String.reverse(reversed)
+    case SCon{'\t', rest}: setterInput(rest, reversed)
+    case SCon{'\n', rest}: setterInput(rest, reversed)
+    case SCon{'\r', rest}: setterInput(rest, reversed)
+    case SCon{'?', rest}: setterInput(rest, SCon{'F', SCon{'3', SCon{'%', reversed}}})
+    case SCon{'#', rest}: setterInput(rest, SCon{'3', SCon{'2', SCon{'%', reversed}}})
+    case SCon{char, rest}: setterInput(rest, SCon{char, reversed})
+
+def segmentsOf(parsed: PathParsed) -> List<&2, String>:
+  match parsed:
+    case PathParsed{segments, _, _}: segments
+
+def setterSegments(special: Bool, file: Bool, hostless: Bool, text: String) -> List<&2, String>:
+  match special text:
+    case True{} other: segmentsOf(startSpecial(other, file, Nil{}))
+    case False{} SNil{}: Bool.pick(List<&2, String>, hostless, "" <> Nil{}, Nil{})
+    case False{} SCon{'/', rest}: segmentsOf(scanPath(rest, False{}, False{}, "", Nil{}))
+    case False{} other: segmentsOf(scanPath(other, False{}, False{}, "", Nil{}))
+
+def setPathname(value: URL, text: String) -> URL:
+  match value:
+    case URL{scheme, username, password, host, port, RecordOpaque{opaquePath}, query, fragment}: URL{scheme, username, password, host, port, RecordOpaque{opaquePath}, query, fragment}
+    case URL{+scheme, username, password, +host, port, Hierarchical{_}, query, fragment}:
+      URL{scheme, username, password, host, port, Hierarchical{setterSegments(isSpecialScheme(scheme), isFilePath(scheme), Maybe.is_none(&2, Host, host), setterInput(text, ""))}, query, fragment}

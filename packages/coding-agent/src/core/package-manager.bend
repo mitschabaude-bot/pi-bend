@@ -7,6 +7,13 @@ import ../../../runtime/src/ignore.bend as Ignore
 import ../../../runtime/src/posix-path.bend as Path
 import ../../../runtime/src/stable-sort.bend as Sort
 import ../../../runtime/src/minimatch.bend as Minimatch
+import ../utils/git.bend as Git
+import ./settings-diagnostics.bend as Diagnostics
+import ../../../runtime/src/semver.bend as Semver
+import ../../../runtime/src/text.bend as Text
+import ../../../runtime/src/url.bend as URL
+import ../../../runtime/src/sha256.bend as Sha256
+import ../../../runtime/src/utf8.bend as Utf8
 
 # upstream PackageManager.resolve for local resources: the skills, prompt
 # templates and themes named by the global and project settings (plain paths
@@ -718,3 +725,316 @@ def enabledPaths(resources: List<&2, ResolvedResource>) -> List<&2, String>:
     case Nil{}: Nil{}
     case ResolvedResource{path, True{}, _} <> rest: path <> enabledPaths(rest)
     case _ <> rest: enabledPaths(rest)
+
+# Package sources
+# ---------------
+# upstream parseSource, getPackageIdentity, settings source normalization
+# and install locations. Installing, updating and resolving package contents
+# (npm and git commands, manifests, filters) are not ported yet.
+
+# upstream NpmSource (without `range`, which needs semver ranges), GitSource
+# and LocalSource.
+type ParsedSource is Data:
+  NpmSource{spec: String, name: String, version: Maybe<&2, String>, pinned: Bool}
+  GitRepo{git: Git.GitSource}
+  LocalSource{path: String}
+
+# upstream SourceScope (the metadata `Scope` is its non-temporary part).
+type SourceScope is Data:
+  UserSource{}
+  ProjectSource{}
+  TemporarySource{}
+
+type NpmSpec is Data:
+  NpmSpec{name: String, version: Maybe<&2, String>}
+
+def lineTerminator(+code: U32) -> Bool:
+  U32.is_eq(code, 10) || U32.is_eq(code, 13) || U32.is_eq(code, 8232) || U32.is_eq(code, 8233)
+
+def singleLine(text: String) -> Bool:
+  match text:
+    case SNil{}: True{}
+    case SCon{Chr{+code}, rest}: Bool.not(lineTerminator(code)) && singleLine(rest)
+
+def specParts(+spec: String, +lead: String, text: String, +reversed: String) -> NpmSpec:
+  match text:
+    case SNil{}: Bool.pick(NpmSpec, String.is_empty(reversed), NpmSpec{spec, None{}}, NpmSpec{lead ++ String.reverse(reversed), None{}})
+    case SCon{'@', +version}: Bool.pick(NpmSpec, Bool.not(String.is_empty(reversed)) && Bool.not(String.is_empty(version)) && singleLine(version), NpmSpec{lead ++ String.reverse(reversed), Some{version}}, NpmSpec{spec, None{}})
+    case SCon{char, rest}: specParts(spec, lead, rest, SCon{char, reversed})
+
+# /^(@?[^@]+(?:\/[^@]+)?)(?:@(.+))?$/: the name up to the first @ after an
+# optional scope @, then a non-empty single-line version; else the whole spec.
+def parseNpmSpec(+spec: String) -> NpmSpec:
+  match spec:
+    case SCon{'@', rest}: specParts(spec, "@", rest, "")
+    case other: specParts(spec, "", other, "")
+
+# upstream isExactNpmVersion: semver's valid(version ?? "").
+def isExactNpmVersion(version: Maybe<&2, String>) -> Bool: Maybe.is_some(&2, String, Semver.valid(Maybe.default(&2, String, version, "")))
+
+def npmSource(+spec: String, parsed: NpmSpec) -> ParsedSource:
+  match parsed:
+    case NpmSpec{name, +version}: NpmSource{spec, name, version, isExactNpmVersion(version)}
+
+def gitOrLocal(+source: String, parsed: Maybe<&2, Git.GitSource>) -> ParsedSource:
+  match parsed:
+    case Some{git}: GitRepo{git}
+    case None{}: LocalSource{source}
+
+def urlContextOf(context: Context) -> URL.Context:
+  match context:
+    case Context{Paths.Environment{_, _, url}, _, _, _, _}: url
+
+# upstream parseSource: npm:, then a local path, then a git URL, else local.
+def parseSource(+context: Context, +source: String) -> ParsedSource:
+  Bool.pick(Unit -> ParsedSource, String.starts_with(source, "npm:"),
+    _ => npmSource(Text.trim(String.drop(source, 4n)), parseNpmSpec(Text.trim(String.drop(source, 4n)))),
+    _ => Bool.pick(Unit -> ParsedSource, Paths.isLocalPath(source), _ => LocalSource{source}, _ => gitOrLocal(source, Git.parseGitUrl(urlContextOf(context), source)))(Unit{}))(Unit{})
+
+def PROJECT_UNTRUSTED() -> String: "Project is not trusted; refusing to access project package storage"
+
+# upstream getBaseDirForScope: the project's .pi (trusted only), the agent
+# directory, or the working directory for temporary sources.
+def baseDirForScope(+context: Context, scope: SourceScope) -> Result<&2, &2, String, String>:
+  match scope:
+    case ProjectSource{}: Bool.pick(Result<&2, &2, String, String>, trusted(context), Done{projectBase(context)}, Fail{PROJECT_UNTRUSTED()})
+    case UserSource{}: Done{globalBase(context)}
+    case TemporarySource{}: Done{cwdOf(context)}
+
+# upstream resolvePathFromBase: trimmed, with ~ as the home directory.
+def resolvePathFromBase(+context: Context, +input: String, baseDir: String) -> String:
+  Result.default(&2, &2, Paths.Error, String, Paths.resolvePath(environmentOf(context), input, baseDir, Paths.PathInputOptions{True{}, True{}, Some{homeOf(context)}, False{}, False{}}), input)
+
+def resolveSourcePath(+context: Context, input: String) -> String: resolvePathFromBase(context, input, cwdOf(context))
+
+def npmIdentity(parsed: ParsedSource) -> Maybe<&2, String>:
+  match parsed:
+    case NpmSource{_, name, _, _}: Some{"npm:" ++ name}
+    case GitRepo{Git.GitSource{_, host, path, _, _}}: Some{"git:" ++ host ++ "/" ++ path}
+    case LocalSource{_}: None{}
+
+def localPathOf(parsed: ParsedSource) -> String:
+  match parsed:
+    case LocalSource{path}: path
+    case _: ""
+
+def localKey(+context: Context, +parsed: ParsedSource, base: Result<&2, &2, String, String>) -> Result<&2, &2, String, String>:
+  Result.map(&2, &2, String, String, String, baseDir => "local:" ++ resolvePathFromBase(context, localPathOf(parsed), baseDir), base)
+
+# upstream getPackageIdentity: npm:<name>, git:<host>/<path>, or the local
+# path resolved against the scope's base (the working directory without one).
+def identityOf(+context: Context, +parsed: ParsedSource, remote: Maybe<&2, String>, scope: Maybe<&2, SourceScope>) -> Result<&2, &2, String, String>:
+  match remote scope:
+    case Some{identity} _: Done{identity}
+    case None{} Some{given}: localKey(context, parsed, baseDirForScope(context, given))
+    case None{} None{}: Done{"local:" ++ resolveSourcePath(context, localPathOf(parsed))}
+
+def getPackageIdentity(+context: Context, +source: String, scope: Maybe<&2, SourceScope>) -> Result<&2, &2, String, String>:
+  +parsed = parseSource(context, source)
+  identityOf(context, parsed, npmIdentity(parsed), scope)
+
+def inputKey(+context: Context, +source: String) -> String:
+  Result.default(&2, &2, String, String, getPackageIdentity(context, source, None{}), "")
+
+def sourceString(pkg: Settings.PackageSource) -> String:
+  match pkg:
+    case Settings.PackageName{source}: source
+    case Settings.FilteredPackage{source, _, _}: source
+
+def withSource(pkg: Settings.PackageSource, source: String) -> Settings.PackageSource:
+  match pkg:
+    case Settings.PackageName{_}: Settings.PackageName{source}
+    case Settings.FilteredPackage{_, filter, unknown}: Settings.FilteredPackage{source, filter, unknown}
+
+# upstream packageSourcesMatch: the settings entry keyed in its scope, the
+# input keyed from the working directory.
+def sourcesMatch(+context: Context, +scope: SourceScope, existing: Settings.PackageSource, +inputKey: String) -> Result<&2, &2, String, Bool>:
+  Result.map(&2, &2, String, String, Bool, key => String.eq(key, inputKey), getPackageIdentity(context, sourceString(existing), Some{scope}))
+
+def nonEmptyOr(text: String, +fallback: String) -> String:
+  match text:
+    case SNil{}: fallback
+    case other: other
+
+# upstream normalizePackageSourceForSettings: a local path relative to the
+# scope's base directory ("." for the base itself); other sources unchanged.
+def normalizeLocal(+context: Context, +path: String, base: Result<&2, &2, String, String>) -> Result<&2, &2, String, String>:
+  Result.map(&2, &2, String, String, String, baseDir => nonEmptyOr(Path.relative(baseDir, resolveSourcePath(context, path)), "."), base)
+
+def normalizedParsed(+context: Context, +source: String, +scope: SourceScope, parsed: ParsedSource) -> Result<&2, &2, String, String>:
+  match parsed:
+    case LocalSource{path}: normalizeLocal(context, path, baseDirForScope(context, scope))
+    case _: Done{source}
+
+def normalizePackageSourceForSettings(+context: Context, +source: String, +scope: SourceScope) -> Result<&2, &2, String, String>:
+  normalizedParsed(context, source, scope, parseSource(context, source))
+
+def scopeOf(local: Bool) -> SourceScope: Bool.pick(SourceScope, local, ProjectSource{}, UserSource{})
+
+def settingsFor(context: Context, scope: SourceScope) -> Settings.Settings:
+  match context scope:
+    case Context{_, settings, _, _, _} ProjectSource{}: Settings.getProjectSettings(settings)
+    case Context{_, settings, _, _, _} _: Settings.getGlobalSettings(settings)
+
+def packagesIn(settings: Settings.Settings) -> List<&2, Settings.PackageSource>:
+  Maybe.default(&2, List<&2, Settings.PackageSource>, Settings.selectedPackages(Settings.get(settings, "packages")), Nil{})
+
+def settingsError(error: Settings.Error) -> String: Diagnostics.settingsErrorText(error)
+
+def withSettings(context: Context, result: Result<&2, &2, Settings.Error, Settings.SettingsManager>) -> Result<&2, &2, String, Context>:
+  match context result:
+    case _ Fail{error}: Fail{settingsError(error)}
+    case Context{environment, _, cwd, agentDir, home} Done{settings}: Done{Context{environment, settings, cwd, agentDir, home}}
+
+def storedPackages(+context: Context, scope: SourceScope, packages: List<&2, Settings.PackageSource>) -> Result<&2, &2, String, Context>:
+  match context scope:
+    case Context{_, settings, _, _, _} ProjectSource{}: withSettings(context, Settings.setProjectPackages(packages, settings))
+    case Context{_, settings, _, _, _} _: withSettings(context, Settings.setPackages(packages, settings))
+
+# The settings after an add or remove, and whether they changed.
+type SettingsChange is Data:
+  SettingsChange{changed: Bool, context: Context}
+
+def unchanged(context: Context) -> Result<&2, &2, String, SettingsChange>: Done{SettingsChange{False{}, context}}
+
+def changedWith(result: Result<&2, &2, String, Context>) -> Result<&2, &2, String, SettingsChange>:
+  Result.map(&2, &2, String, Context, SettingsChange, next => SettingsChange{True{}, next}, result)
+
+type Located is Data:
+  Located{index: Maybe<&2, Nat>, failure: Maybe<&2, String>}
+
+def matchResults(+context: Context, +scope: SourceScope, packages: List<&2, Settings.PackageSource>, +inputKey: String) -> List<&2, Result<&2, &2, String, Bool>>:
+  match packages:
+    case Nil{}: Nil{}
+    case pkg <> rest: sourcesMatch(context, scope, pkg, inputKey) <> matchResults(context, scope, rest, inputKey)
+
+# The first matching entry; a scope failure (an untrusted project) stops.
+def located(results: List<&2, Result<&2, &2, String, Bool>>, +index: Nat) -> Located:
+  match results:
+    case Nil{}: Located{None{}, None{}}
+    case Fail{message} <> _: Located{None{}, Some{message}}
+    case Done{True{}} <> _: Located{Some{index}, None{}}
+    case Done{False{}} <> rest: located(rest, 1n+index)
+
+def replacedAt(packages: List<&2, Settings.PackageSource>, index: Nat, +source: String) -> List<&2, Settings.PackageSource>:
+  match packages index:
+    case Nil{} _: Nil{}
+    case pkg <> rest 0n: withSource(pkg, source) <> rest
+    case pkg <> rest 1n+previous: pkg <> replacedAt(rest, previous, source)
+
+def sourceAt(packages: List<&2, Settings.PackageSource>, index: Nat) -> String:
+  match packages index:
+    case Nil{} _: ""
+    case pkg <> _ 0n: sourceString(pkg)
+    case _ <> rest 1n+previous: sourceAt(rest, previous)
+
+def addNormalized(+context: Context, +scope: SourceScope, +packages: List<&2, Settings.PackageSource>, +normalized: String, found: Located) -> Result<&2, &2, String, SettingsChange>:
+  match found:
+    case Located{_, Some{message}}: Fail{message}
+    case Located{Some{+index}, None{}}: Bool.pick(Unit -> Result<&2, &2, String, SettingsChange>, String.eq(sourceAt(packages, index), normalized), _ => unchanged(context), _ => changedWith(storedPackages(context, scope, replacedAt(packages, index, normalized))))(Unit{})
+    case Located{None{}, None{}}: changedWith(storedPackages(context, scope, List.append(&2, Settings.PackageSource, packages, [Settings.PackageName{normalized}])))
+
+def addWith(+context: Context, +source: String, +scope: SourceScope, normalized: Result<&2, &2, String, String>) -> Result<&2, &2, String, SettingsChange>:
+  match normalized:
+    case Fail{message}: Fail{message}
+    case Done{+value}:
+      +packages = packagesIn(settingsFor(context, scope))
+      addNormalized(context, scope, packages, value, located(matchResults(context, scope, packages, inputKey(context, source)), 0n))
+
+# upstream addSourceToSettings: add the normalized source to the user's (or,
+# with local, the project's) packages, or replace the ref of the entry for
+# the same package, keeping its filters. Unchanged when it is already there.
+def addSourceToSettings(+context: Context, +source: String, +local: Bool) -> Result<&2, &2, String, SettingsChange>:
+  addWith(context, source, scopeOf(local), normalizePackageSourceForSettings(context, source, scopeOf(local)))
+
+def kept(results: List<&2, Result<&2, &2, String, Bool>>, packages: List<&2, Settings.PackageSource>) -> Result<&2, &2, String, List<&2, Settings.PackageSource>>:
+  match results packages:
+    case Fail{message} <> _ _: Fail{message}
+    case Done{True{}} <> rest _ <> more: kept(rest, more)
+    case Done{False{}} <> rest pkg <> more: Result.map(&2, &2, String, List<&2, Settings.PackageSource>, List<&2, Settings.PackageSource>, tail => pkg <> tail, kept(rest, more))
+    case _ _: Done{Nil{}}
+
+def removedFrom(+context: Context, +scope: SourceScope, +before: Nat, remaining: Result<&2, &2, String, List<&2, Settings.PackageSource>>) -> Result<&2, &2, String, SettingsChange>:
+  match remaining:
+    case Fail{message}: Fail{message}
+    case Done{+packages}: Bool.pick(Unit -> Result<&2, &2, String, SettingsChange>, Nat.is_eq(List.length(&2, Settings.PackageSource, packages), before), _ => unchanged(context), _ => changedWith(storedPackages(context, scope, packages)))(Unit{})
+
+# upstream removeSourceFromSettings: drop every entry for the same package.
+def removeSourceFromSettings(+context: Context, +source: String, local: Bool) -> Result<&2, &2, String, SettingsChange>:
+  +scope = scopeOf(local)
+  +packages = packagesIn(settingsFor(context, scope))
+  removedFrom(context, scope, List.length(&2, Settings.PackageSource, packages), kept(matchResults(context, scope, packages, inputKey(context, source)), packages))
+
+# Install locations
+# -----------------
+
+# upstream resolveManagedPath: root/parts resolved as Node's path.resolve,
+# refused when it leaves the root.
+def resolvedParts(parts: List<&2, String>, +base: String) -> String:
+  match parts:
+    case Nil{}: base
+    case part <> rest: resolvedParts(rest, Maybe.default(&2, String, Path.resolve(base, part), base))
+
+def withTrailingSlash(+path: String) -> String: Bool.pick(String, String.ends_with(path, "/"), path, path ++ "/")
+
+def resolveManagedPath(+root: String, parts: List<&2, String>) -> Result<&2, &2, String, String>:
+  +resolvedRoot = Path.normalize(root)
+  +resolvedPath = resolvedParts(parts, resolvedRoot)
+  Bool.pick(Result<&2, &2, String, String>, String.eq(resolvedPath, resolvedRoot) || String.starts_with(resolvedPath, withTrailingSlash(resolvedRoot)), Done{resolvedPath}, Fail{"Refusing to use path outside package install root: " ++ resolvedPath})
+
+# upstream getExtensionTempFolder: <agentDir>/tmp/extensions, created with
+# mode 0700.
+def getExtensionTempFolder(+agentDir: String) -> IO(String):
+  +folder = Path.join(agentDir, "tmp/extensions")
+  do IO<String>:
+    made : Result<&2, &2, FS.Error, Unit> <- FS.mkdir(folder)
+    moded : Result<&2, &2, FS.Error, Unit> <- FS.chmod(folder, 448)
+    return folder
+
+def hexDigit(+nibble: U32) -> Char: Chr{Bool.pick(U32, U32.is_lt(nibble, 10), (48 + nibble : U32), (87 + nibble : U32))}
+
+def hexBytes(bytes: List<&2, U32>) -> String:
+  match bytes:
+    case Nil{}: ""
+    case +byte <> rest: SCon{hexDigit((byte >> 4n : U32)), SCon{hexDigit((byte .&. 15 : U32)), hexBytes(rest)}}
+
+def digestHex(result: Result<&2, &2, Sha256.Error, Sha256.Digest>) -> String:
+  match result:
+    case Done{digest}: hexBytes(Sha256.toBytes(digest))
+    case Fail{_}: ""
+
+# upstream getTemporaryDir: the prefix folder under the temporary extension
+# folder, then the first 8 hex digits of sha256("<prefix>-<suffix>").
+def temporaryUnder(+prefix: String, +suffix: String, root: Result<&2, &2, String, String>) -> Result<&2, &2, String, String>:
+  Result.bind(&2, &2, String, String, String, root, base => resolveManagedPath(base, [String.take(digestHex(Sha256.digest(Utf8.encode(prefix ++ "-" ++ suffix))), 8n), suffix]))
+
+def getTemporaryDir(+context: Context, +prefix: String, +suffix: String) -> IO(Result<&2, &2, String, String>):
+  do IO<Result<&2, &2, String, String>>:
+    folder : String <- getExtensionTempFolder(globalBase(context))
+    return temporaryUnder(prefix, suffix, resolveManagedPath(folder, [prefix]))
+
+def gitInstallRoot(+context: Context, scope: SourceScope) -> Result<&2, &2, String, String>:
+  match scope:
+    case ProjectSource{}: Bool.pick(Result<&2, &2, String, String>, trusted(context), Done{Path.join(projectBase(context), "git")}, Fail{PROJECT_UNTRUSTED()})
+    case _: Done{Path.join(globalBase(context), "git")}
+
+# upstream getGitInstallPath: <root>/<host>/<path> under the scope's git
+# root, or a temporary folder.
+def getGitInstallPath(+context: Context, source: Git.GitSource, scope: SourceScope) -> IO(Result<&2, &2, String, String>):
+  match source scope:
+    case Git.GitSource{_, +host, path, _, _} TemporarySource{}: getTemporaryDir(context, "git-" ++ host, path)
+    case Git.GitSource{_, host, path, _, _} _: IO.pure(Result<&2, &2, String, String>, Result.bind(&2, &2, String, String, String, gitInstallRoot(context, scope), root => resolveManagedPath(root, [host, path])))
+
+def npmPackageUnder(+name: String, root: Result<&2, &2, String, String>) -> Result<&2, &2, String, String>:
+  Result.map(&2, &2, String, String, String, base => Path.join(Path.join(base, "node_modules"), name), root)
+
+# upstream getManagedNpmInstallPath: node_modules/<name> under the scope's
+# npm root, or under a temporary folder.
+def getManagedNpmInstallPath(+context: Context, +name: String, scope: SourceScope) -> IO(Result<&2, &2, String, String>):
+  match scope:
+    case TemporarySource{}:
+      do IO<Result<&2, &2, String, String>>:
+        root : Result<&2, &2, String, String> <- getTemporaryDir(context, "npm", "")
+        return npmPackageUnder(name, root)
+    case ProjectSource{}: IO.pure(Result<&2, &2, String, String>, npmPackageUnder(name, Bool.pick(Result<&2, &2, String, String>, trusted(context), Done{Path.join(projectBase(context), "npm")}, Fail{PROJECT_UNTRUSTED()})))
+    case UserSource{}: IO.pure(Result<&2, &2, String, String>, npmPackageUnder(name, Done{Path.join(globalBase(context), "npm")}))

@@ -585,15 +585,15 @@
       }
     },
     "packages/coding-agent/src/core/tools/path-utils.ts": {
-      "state": "partial",
-      "note": "Tool path expansion and resolution live in utils/paths.bend, and read-file fallback candidates live there too; the upstream path-utils test suite is still pending.",
-      "source_sha256": "ab6f420d2388a41366113c17a25e356867820b87b02a169d044cfcf83e1997d3",
-      "port_sha256": {
-        "packages/coding-agent/src/utils/paths.bend": "b67c1efdf251875fe71e8712c23c82a5d520e9eac1bd56675215a0e1ad81ab4c"
-      },
+      "state": "ported",
+      "note": "expandPath, resolveToCwd and resolveReadPath (existing path, then AM/PM, NFD, curly-quote and NFD+curly variants) live in utils/paths.bend; the whole upstream path-utils suite passes (tests/paths.bend). resolveReadPathAsync is the same IO function; pathExists is FS.accessible.",
       "ports": [
         "packages/coding-agent/src/utils/paths.bend"
-      ]
+      ],
+      "source_sha256": "ab6f420d2388a41366113c17a25e356867820b87b02a169d044cfcf83e1997d3",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/paths.bend": "8a101a9aa33dd2a52f3241e71361642e8253b461b77bcdfa1b91d6b0faff64a6"
+      }
     },
     "packages/coding-agent/src/core/tools/powershell.ts": {
       "state": "missing",
@@ -627,7 +627,7 @@
     },
     "packages/coding-agent/src/modes/interactive/chat-viewport.ts": {
       "state": "partial",
-      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Fullscreen transcript allocation uses upstream\u2019s zero basis and one-row minimum; natural dock rendering during external-editor handoffs matches pi. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
+      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Fullscreen transcript allocation uses upstream’s zero basis and one-row minimum; natural dock rendering during external-editor handoffs matches pi. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
       "source_sha256": "24bbdd06a5e17d6c0631f7de51329eb7bb4ecd4a460dec7b3d593ff9e6219960",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/viewport.bend": "91281c83b948bdb35106382375cfc14628d313a48d7676cd9a023b1bcadea32e"
@@ -1028,6 +1028,61 @@
       "port_sha256": {
         "packages/tui/src/tui-base.bend": "f7e4a5f560ee5d8d514c3f7d53b58bb8a93404807872fc40d2e35786c386b89c",
         "packages/tui/src/tui-process.bend": "40c7b94ca549e9b4fb67540337321dbc04280398400e720f0789911cdd3e3576"
+      }
+    },
+    "packages/coding-agent/src/utils/paths.ts": {
+      "state": "partial",
+      "note": "canonicalizePath, isLocalPath, normalizeWindowsShellPath, normalizePath, resolvePath (explicit Environment for cwd/home), getCwdRelativePath and formatPathRelativeToCwdOrAbsolute are ported and tested (tests/paths.bend, tests/coding-paths.bend). Gaps: getFileRevision stamps size and modification time only (no device, inode or change time primitive), and markPathIgnoredByCloudSync (setfattr/xattr cloud-sync exclusion) is not ported.",
+      "ports": [
+        "packages/coding-agent/src/utils/paths.bend"
+      ],
+      "source_sha256": "a687cdb54b82216673fea5be1210c48e64ffa8398d64cfabf2bd7dba5c9d4210",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/paths.bend": "8a101a9aa33dd2a52f3241e71361642e8253b461b77bcdfa1b91d6b0faff64a6"
+      }
+    },
+    "packages/coding-agent/src/utils/git.ts": {
+      "state": "ported",
+      "note": "parseGitUrl with splitRef, generic scp/URL/host-path parsing, unsafe install-path rejection and hosted-git-info candidates; matches the pinned implementation on the upstream suite and 714 differential sources (tests/git_url_check.py).",
+      "ports": [
+        "packages/coding-agent/src/utils/git.bend"
+      ],
+      "source_sha256": "bff4590aefa988ba625026769ac5ad02f02558d59bd7d566f4728e1ee4da1da9",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/git.bend": "1e7a3f9fdf2317e6d45cda4380f14cd5ebead669d236136d07273655d4898bb5"
+      }
+    },
+    "packages/coding-agent/src/utils/pi-user-agent.ts": {
+      "state": "ported",
+      "note": "getPiUserAgent formats pi/<version> (<platform>; <runtime>; <arch>) from the system identity; the runtime token is bend/2.0.7 rather than Bun's or Node's version.",
+      "ports": [
+        "packages/coding-agent/src/utils/pi-user-agent.bend"
+      ],
+      "source_sha256": "cd2329beb4b18fd99f5180d603fd1371c8f50441d4688f7d75918a051e565c26",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/pi-user-agent.bend": "c81a896b94046d712c4c82072c1513ed64e1e1e178bc92358c2949d761ef5158"
+      }
+    },
+    "packages/coding-agent/src/utils/version-check.ts": {
+      "state": "partial",
+      "note": "LATEST_VERSION_URL request with the pi user agent and accept header, PI_OFFLINE and PI_SKIP_VERSION_CHECK, retry options, response parsing (trimmed version, packageName and note), comparePackageVersions/isNewerPackageVersion and checkForNewPiVersion are ported and tested over a loopback fetch. formatVersionCheckError cannot add errno codes (the native fetch error has none). No caller in the interactive mode uses it yet.",
+      "ports": [
+        "packages/coding-agent/src/utils/version-check.bend"
+      ],
+      "source_sha256": "23279d94eae94dc19b1221c58a7993677327a47a8b6e37c9c1e4201f3adcf983",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/version-check.bend": "febd9ca70940b5ec25ed3d4f4dcb6534dfb1c561f57cb1cd7e23652361e080f0"
+      }
+    },
+    "packages/coding-agent/src/core/package-manager.ts": {
+      "state": "partial",
+      "note": "Ported: resolve for local settings entries and auto-discovered skills, prompts and themes (patterns, overrides, ignore files, precedence, canonical dedupe); parseSource/parseNpmSpec/isExactNpmVersion, getPackageIdentity, addSourceToSettings/removeSourceFromSettings with settings normalization, getBaseDirForScope with the project-trust check, resolveManagedPath, getExtensionTempFolder, getTemporaryDir, getGitInstallPath and getManagedNpmInstallPath. Missing: package sources in resolve (install on missing, manifests, package filters, dedupePackages), extensions, install/remove/update through npm and git, update checks, legacy global npm paths, progress events, listConfiguredPackages and getInstalledPath; NpmSource has no `range` until semver ranges are ported.",
+      "ports": [
+        "packages/coding-agent/src/core/package-manager.bend"
+      ],
+      "source_sha256": "e2fdd18093dc69cb8fe82bb6bef674f20f8a5093d0d13fd1b7180f49dbe751fd",
+      "port_sha256": {
+        "packages/coding-agent/src/core/package-manager.bend": "ccc2c4e26dc9f5320c6dd1d9bd029b6b9c9c5c99f200d931570798781d8585ba"
       }
     }
   }

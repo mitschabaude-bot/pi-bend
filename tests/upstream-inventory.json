@@ -2743,9 +2743,14 @@
     },
     {
       "source": "packages/coding-agent/test/git-ssh-url.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "2f502b173e2bf6c6e4d52b4f0bf3da74ebf63f6d9a2b1155ad9b8677ce058d5b"
+      "status": "ported",
+      "ports": [
+        "tests/git-ssh-url.bend",
+        "tests/git_url_check.py",
+        "tests/git_url_reference.ts"
+      ],
+      "sha256": "2f502b173e2bf6c6e4d52b4f0bf3da74ebf63f6d9a2b1155ad9b8677ce058d5b",
+      "notes": "All 10 cases pass on Bun and native one/four threads. utils/git.bend ports parseGitUrl over a pure-Bend port of hosted-git-info 9.0.3's fromUrl (packages/runtime/src/hosted-git-info.bend) and the WHATWG URL parser. A differential check compares 714 sources (hosted, scp, protocol and shorthand forms, refs, credentials, encodings, unsafe paths, generated combinations; 336 accepted) with the pinned upstream parseGitUrl: all match, including hosted-git-info's \"null\" user for Gist paths and \"undefined\" committish for a bare /tree URL."
     },
     {
       "source": "packages/coding-agent/test/git-update.test.ts",
@@ -3032,33 +3037,56 @@
     },
     {
       "source": "packages/coding-agent/test/package-manager-ssh.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "963d17222f4b23acdf67598de2aea4126ef1eebb488b8ceac276aa552fdf7a3a"
+      "status": "ported",
+      "ports": [
+        "tests/package-sources.bend",
+        "tests/package_sources_check.py"
+      ],
+      "sha256": "963d17222f4b23acdf67598de2aea4126ef1eebb488b8ceac276aa552fdf7a3a",
+      "notes": "All 8 cases (protocol URLs, git: shorthands with and without ref, local fallback without git:, identity normalization) pass on Bun and native one/four threads. The upstream tests call the private parseSource/getPackageIdentity through `as any`; here they are package-manager.bend functions over the manager state (PM.Context with an in-memory SettingsManager)."
     },
     {
       "source": "packages/coding-agent/test/package-manager.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ca17de96e051959a93d8c294a037f04f5cb6a6fd6618553457e5da7d09d563f7"
+      "status": "partial",
+      "ports": [
+        "tests/package-manager.bend",
+        "tests/package_manager_check.py",
+        "tests/package-manager.md",
+        "tests/package-sources.bend",
+        "tests/package_sources_check.py"
+      ],
+      "sha256": "ca17de96e051959a93d8c294a037f04f5cb6a6fd6618553457e5da7d09d563f7",
+      "notes": "Ported (Bun and native one/four threads), tests/package-sources.bend: source parsing (\"should parse package source types from docs examples\", \"should never parse dot-relative paths as git\"), git install paths (traversal refused for user, project and temporary scopes), temporary install paths (node_modules/left-pad under <agentDir>/tmp/extensions, created 0700), all six settings source normalization cases (local sources relative to the scope base, removal by equivalent path, same-ref add unchanged, ref replacement keeping package filters) and all 12 HTTPS git URL parsing cases. Resolution of local settings/auto-discovered skills, prompts and themes is covered differentially by tests/package_manager_check.py. Pending: package installs, removal and updates (npm/git commands, progress events, npmCommand), package resource collection (manifests, filters, force-include/exclude inside packages, extension discovery), package deduplication in resolve, offline/update checks; the npm `range` field needs semver ranges."
     },
     {
       "source": "packages/coding-agent/test/path-utils.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "08bb88574596a43e2364ee3b2655e071593822417ef8937693744174e9615f3e"
+      "status": "ported",
+      "ports": [
+        "tests/paths.bend",
+        "tests/paths_check.py"
+      ],
+      "sha256": "08bb88574596a43e2364ee3b2655e071593822417ef8937693744174e9615f3e",
+      "notes": "All 15 cases (expandPath, resolveToCwd, and resolveReadPath with NFD, curly-quote, combined and AM/PM screenshot variants) pass on Bun and native one/four threads against files the Python check creates. path-utils lives in utils/paths.bend (expandPath, resolveToCwd, resolveReadPath). The NFD case also asserts the exact decomposed name, which is the only way the file can be found on Linux."
     },
     {
       "source": "packages/coding-agent/test/paths.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "c12c0fa1d77a05fc150986ce2ab6a132d2c56f86fbcd82b2b59b75922f0b9dac"
+      "status": "ported",
+      "ports": [
+        "tests/paths.bend",
+        "tests/paths_check.py"
+      ],
+      "sha256": "c12c0fa1d77a05fc150986ce2ab6a132d2c56f86fbcd82b2b59b75922f0b9dac",
+      "notes": "All POSIX cases pass on Bun and native one/four threads: canonicalizePath (regular file, file and directory symlinks, missing target and dangling link fall back to the raw path), getCwdRelativePath (dot-prefixed names kept, parent traversal rejected), resolvePath (only ~ and ~/ expand, relative and file-URL bases, file URLs with escaped spaces, invalid file URL is an error, literal percent sequences in POSIX paths), normalizeWindowsShellPath (drive conversions and unchanged forms) and isLocalPath. The fixture tree is created by the Python check; the environment's home stands in for os.homedir(). The two Windows cases (\"does not treat Windows file URL pathname strings as native paths\", which returns early off win32, and the runIf(win32) \"is applied by normal path handling on Windows\") are not applicable to this POSIX port; normalizeWindowsShellPath itself is ported and covered by the two portable cases."
     },
     {
       "source": "packages/coding-agent/test/pi-user-agent.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d90ac6970564ba4f4a67759795ec6153e153a1135c036873a1b8656cd8e34a2a"
+      "status": "ported",
+      "ports": [
+        "tests/version-check.bend",
+        "tests/version_check_check.py"
+      ],
+      "sha256": "d90ac6970564ba4f4a67759795ec6153e153a1135c036873a1b8656cd8e34a2a",
+      "notes": "The single case passes on Bun and native one/four threads: getPiUserAgent(\"1.2.3\") is exactly pi/1.2.3 (<platform>; <runtime>; <arch>) with Node's platform and architecture names for the machine (from the system identity), which also satisfies upstream's shape regex. Adaptation: the runtime token is this native build's bend/2.0.7 instead of bun/<version> or node/<version>."
     },
     {
       "source": "packages/coding-agent/test/plan-mode-extension.test.ts",
@@ -4597,9 +4625,14 @@
     },
     {
       "source": "packages/coding-agent/test/version-check.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "cba6b39e9767019aebe0277ab580cb603927258652afcb2b9967387f1e8d6aa7"
+      "status": "partial",
+      "ports": [
+        "tests/version-check.bend",
+        "tests/version_check_check.py",
+        "tests/loopback-fetch.bend"
+      ],
+      "sha256": "cba6b39e9767019aebe0277ab580cb603927258652afcb2b9967387f1e8d6aa7",
+      "notes": "9 of 10 cases pass on Bun and native one/four threads. Instead of stubbing the global fetch, the library's https://pi.dev request goes through a logging fetch (tests/loopback-fetch.bend) to a local server that answers, drops connections or fails per case; the request URL, User-Agent and accept headers and the request counts (3 with retry, 1 for automatic checks, 0 when PI_SKIP_VERSION_CHECK is set) are asserted. semver valid/compare come from packages/runtime/src/semver.bend (tests/semver_check.py: 1,363 pairs match node-semver 7.8.5, including JavaScript double rounding of huge numeric pre-release identifiers). Not ported: \"formats nested network error details\" — the native fetch error carries no errno codes, so formatVersionCheckError returns the management request's message."
     },
     {
       "source": "packages/durable/test/memory-storage.test.ts",
