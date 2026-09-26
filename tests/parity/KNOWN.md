@@ -103,5 +103,3 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
   (the loop has then polled the steering queue) or the prompt's end. When a
   prompt first compacts, pi reads the next command during the compaction
   request instead; Bend still waits for the user message.
-
-- **Completed manual compaction** (`compaction-status`): the active “Compacting context” border matches pi, but completion currently shows “Session compacted” instead of rebuilding the transcript with the compaction summary. The completion snapshots remain different.

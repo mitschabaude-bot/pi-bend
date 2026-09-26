@@ -292,6 +292,32 @@ def structuralResult(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Call
         Interactive.requestRender(redraw)
 def structuralEntry(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,entry: Tree.SessionEntry<Unit,Tools.ToolDetails,Schema.Value>) -> IO(Unit):
   structuralResult(transcript,redraw,Tree.sessionEntryToContextMessages(Unit,Tools.ToolDetails,Schema.Value,entry))
+def seedContextEntries(entries: List<&2,Session.Entry()>,+transcript: Transcript.Handle,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
+  match entries:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case entry <> rest:
+      do IO<Unit>:
+        structuralEntry(transcript,redraw,entry)
+        seedContextEntries(rest,transcript,redraw)
+def compactedTranscript(result: Result<&2,&2,Tree.Error,List<&2,Session.Entry()>>,+transcript: Transcript.Handle,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
+  match result:
+    case Done{Tree.Compaction{entry} <> retained}:
+      do IO<Unit>:
+        Transcript.clear(transcript)
+        seedContextEntries(retained,transcript,redraw)
+        structuralEntry(transcript,redraw,Tree.Compaction{entry})
+    case _: Transcript.showError(transcript,"Completed compaction is missing from the session context")
+def compactionNotice(+transcript: Transcript.Handle,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>,event: Session.AgentSessionEvent) -> IO(Unit):
+  match event:
+    case Session.CompactionEnd{_,Some{_},False{},_,_}:
+      do IO<Unit>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        current : Session.Session() <- Session.sessionOf(live)
+        compactedTranscript(Tree.sessionContextEntries(Unit,Tools.ToolDetails,Schema.Value,Persistence.stateOf(Unit,Tools.ToolDetails,Schema.Value,current)),transcript,redraw)
+    case Session.CompactionEnd{Session.Manual{},_,True{},_,_}: Transcript.showError(transcript,"Compaction cancelled")
+    case Session.CompactionEnd{_,_,True{},_,_}: Transcript.status(transcript,"Auto-compaction cancelled")
+    case Session.CompactionEnd{_,_,_,_,Some{message}}: Transcript.showError(transcript,message)
+    case _: IO.pure(Unit,Unit{})
 def statusNotice(transcript: Transcript.Handle,event: Session.AgentSessionEvent) -> IO(Unit):
   match event:
     case Session.AutoRetryEnd{False{},attempt,error}: Transcript.showError(transcript,"Retry failed after " ++ Nat.show(attempt) ++ " attempts: " ++ Text.orElse(error,"Unknown error"))
@@ -305,11 +331,12 @@ def structuralNotice(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Call
     case _: IO.pure(Unit,Unit{})
 def observeCopied(input: Observation,+event: Session.AgentSessionEvent) -> IO(Unit):
   match input:
-    case Observation{+transcript,+redraw,footer,working,session}:
+    case Observation{+transcript,+redraw,footer,working,+session}:
       do IO<Unit>:
         changed : Bool <- Ref.modify(Footer.State,Bool,footer,state => footerEvent(state,event))
         workingEvent(working,redraw,event)
         statusNotice(transcript,event)
+        compactionNotice(transcript,redraw,session,event)
         usageNotice(transcript,redraw,session,event)
         structuralNotice(transcript,redraw,event)
         Interactive.onSessionEvent(Interactive.Events{transcript,redraw},event)

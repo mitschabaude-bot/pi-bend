@@ -32,6 +32,7 @@ type Action is Data:
   OpenTrust{}
   NewSessionStarted{}
   ClonedSession{}
+  CompactionFinished{}
   ShowChangelog{}
   ShowSessionInfo{}
   ShowHotkeys{}
@@ -188,14 +189,11 @@ def showModel(+session: Session.AgentSession,models: List<&2,Models.Model()>,req
       do IO<Action>:
         scoped : List<&2,Models.ScopedModel> <- Session.getScopedModels(session)
         matchedModel(session,query,exactModel(modelsInScope(models,scoped),query))
-def compacted(result: Result<&2,&2,String,Compaction.CompactionResult>) -> Action:
-  match result:
-    case Done{_}: Notice{"Session compacted"}
-    case Fail{reason}: CommandError{reason}
 def compact(session: Session.AgentSession,instructions: Maybe<&2,String>) -> IO(Action):
   do IO<Action>:
+    # Session events report the result and rebuild the transcript.
     result : Result<&2,&2,String,Compaction.CompactionResult> <- Session.compact(session,instructions)
-    return compacted(result)
+    return CompactionFinished{}
 def currentName(session: Session.AgentSession) -> IO(Maybe<&2,String>):
   do IO<Maybe<&2,String>>:
     stored : Session.Session() <- Session.sessionOf(session)

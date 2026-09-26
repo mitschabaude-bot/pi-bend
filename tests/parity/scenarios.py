@@ -394,11 +394,21 @@ SCENARIOS = [
     {
         "name": "compaction-status", "args": MODEL,
         "files": {"home/.pi/agent/settings.json": json.dumps({"compaction": {"enabled": False, "keepRecentTokens": 32, "reserveTokens": 1024}})},
-        "turns": [{"text": "A longer conversation. " * 120 + "END-OF-TURN"}, {"text": "A compact summary of the conversation.", "chunks": 20, "delay_ms": 100}],
+        "turns": [{"text": "A longer conversation. " * 120 + "END-OF-TURN"}, {"text": "A compact summary of the conversation.", "chunks": 20, "delay_ms": 100}, {"text": "AFTER-COMPACTION"}],
         "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "hi"), ("key", "Enter"),
                   ("wait", "END-OF-TURN", "answered"), ("settle", 0.5), ("keys", "/compact"), ("key", "Enter"),
                   ("wait", "Compacting context", "compacting"), ("snap", "compacting"),
-                  ("settle", 3.0), ("snap", "compacted")],
+                  ("settle", 3.0), ("snap", "compacted"), ("keys", "continue"), ("key", "Enter"),
+                  ("wait", "AFTER-COMPACTION", "continued"), ("settle", 0.5), ("snap", "continued")],
+    },
+    {
+        "name": "compaction-cancel", "args": MODEL,
+        "files": {"home/.pi/agent/settings.json": json.dumps({"compaction": {"enabled": False, "keepRecentTokens": 32, "reserveTokens": 1024}})},
+        "turns": [{"text": "A longer conversation. " * 120 + "END-OF-TURN"}, {"text": "A compact summary of the conversation.", "chunks": 20, "delay_ms": 100}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "hi"), ("key", "Enter"),
+                  ("wait", "END-OF-TURN", "answered"), ("settle", 0.5), ("keys", "/compact"), ("key", "Enter"),
+                  ("wait", "Compacting context", "compacting"), ("key", "Escape"),
+                  ("wait", "Compaction cancelled", "cancelled"), ("settle", 0.5), ("snap", "cancelled")],
     },
     {
         "name": "retry-status", "args": MODEL,
