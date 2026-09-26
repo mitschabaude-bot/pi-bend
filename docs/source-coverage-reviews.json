@@ -139,7 +139,7 @@
       "port_sha256": {
         "packages/ai/src/api/mistral-conversations.bend": "87f9860ab53ae3c884656d205c8f771c48b7ad54dc01ce2438b0c8e07659a7b1",
         "packages/ai/src/api/provider-fetch.bend": "4f11d6da5363ffae0c3d2214e163bd9eee6a4348039d4f37d4d652a62a248275",
-        "packages/coding-agent/src/core/stream-providers.bend": "7cd09373017335b4b1325505127e2015050a5f6158add77ce70732e08e7fc883"
+        "packages/coding-agent/src/core/stream-providers.bend": "28555108d117c8cdf1d802989ccf2b3ba371312ef9c48a0679feac09af5d112d"
       }
     },
     "packages/ai/src/api/openai-codex-responses.ts": {
@@ -220,7 +220,7 @@
       "port_sha256": {
         "packages/ai/src/api/pi-messages.bend": "b014bfe831a016688261bc1d18470838ca61366b4baa7647c28cc44a0452d6e7",
         "packages/ai/src/api/provider-fetch.bend": "4f11d6da5363ffae0c3d2214e163bd9eee6a4348039d4f37d4d652a62a248275",
-        "packages/coding-agent/src/core/stream-providers.bend": "7cd09373017335b4b1325505127e2015050a5f6158add77ce70732e08e7fc883"
+        "packages/coding-agent/src/core/stream-providers.bend": "28555108d117c8cdf1d802989ccf2b3ba371312ef9c48a0679feac09af5d112d"
       }
     },
     "packages/ai/src/auth/credential-store.ts": {
@@ -635,7 +635,7 @@
     },
     "packages/coding-agent/src/modes/interactive/chat-viewport.ts": {
       "state": "partial",
-      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Fullscreen transcript allocation uses upstream’s zero basis and one-row minimum; natural dock rendering during external-editor handoffs matches pi. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
+      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Fullscreen transcript allocation uses upstream\u2019s zero basis and one-row minimum; natural dock rendering during external-editor handoffs matches pi. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
       "source_sha256": "24bbdd06a5e17d6c0631f7de51329eb7bb4ecd4a460dec7b3d593ff9e6219960",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/viewport.bend": "91281c83b948bdb35106382375cfc14628d313a48d7676cd9a023b1bcadea32e"
