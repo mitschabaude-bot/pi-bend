@@ -790,22 +790,33 @@ def copyText(transcript: Transcript.Handle,cwd: String,text: Maybe<&2,String>) -
       do IO<Unit>:
         result : Result<&2,&2,String,Unit> <- Clipboard.copy(value,cwd)
         copyResult(transcript,result)
-type TreeCopyInput is Data: TreeCopyInput{session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle}
+type TreeActionInput is Data: TreeActionInput{session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle}
 def treeCopyResult(transcript: Transcript.Handle,result: Result<&2,&2,String,Unit>) -> IO(Unit):
   match result:
     case Done{_}: Transcript.status(transcript,"Copied selected message to clipboard")
     case Fail{message}: Transcript.showError(transcript,message)
 def treeCopyCwd(header: Tree.SessionHeader) -> String:
   match header: case Tree.SessionHeader{_,_,_,cwd,_}: cwd
-def treeCopied(input: TreeCopyInput,text: Maybe<&2,String>) -> IO(Unit):
-  match input text:
-    case TreeCopyInput{_,transcript} None{}: Transcript.showError(transcript,"Selected entry has no text to copy")
-    case TreeCopyInput{session,transcript} Some{value}:
+def treeLabelResult(transcript: Transcript.Handle,result: Result<&2,&2,String,Unit>) -> IO(Unit):
+  match result:
+    case Done{_}: IO.pure(Unit,Unit{})
+    case Fail{message}: Transcript.showError(transcript,message)
+def treeAction(input: TreeActionInput,action: TreePicker.Action) -> IO(Unit):
+  match input action:
+    case TreeActionInput{_,transcript} TreePicker.Copied{None{}}: Transcript.showError(transcript,"Selected entry has no text to copy")
+    case TreeActionInput{session,transcript} TreePicker.Copied{Some{value}}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         stored : Session.Session() <- Session.sessionOf(live)
         result : Result<&2,&2,String,Unit> <- Clipboard.copy(value,treeCopyCwd(Tree.getHeader(Unit,Tools.ToolDetails,Schema.Value,Session.stateOf(stored))))
         treeCopyResult(transcript,result)
+    case TreeActionInput{session,transcript} TreePicker.LabelChanged{id,label}:
+      do IO<Unit>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        result : Result<&2,&2,String,Unit> <- Session.appendLabelChange(live,id,label)
+        treeLabelResult(transcript,result)
+    case TreeActionInput{_,transcript} TreePicker.InputError{_}: Transcript.showError(transcript,"Cannot edit label: word segmentation failed")
+    case _ _: IO.pure(Unit,Unit{})
 # upstream handleSessionCommand: session stats, cache waste and the per-model
 # cost breakdown over every stored entry.
 def sessionInfoOf(stats: Stats.Stats,+state: Tree.SessionManager<Unit,Tools.ToolDetails,Schema.Value>,models: Models.ModelRuntime,warming: SessionInfo.CacheWarmingInfo) -> SessionInfo.SessionInfo:
@@ -2759,13 +2770,13 @@ def runHosted(borrowed: Selector.Owner & Selector.Host & Component.Component,liv
         +scopeChosen : Callback.Callback<ScopePicker.Action,Unit> <- Callback.create(~ScopeInput,~ScopePicker.Action,~Unit,~scopeAction,ScopeInput{contextSession(context),contextModels(context),contextStatus(context),redraw})
         host : ScopePicker.Owner <- ScopePicker.createHost(component,contextTheme(context),words,contextBindings(context),Keys.defaults(),scopeChosen)
         runScopeHosted(ScopePicker.borrowHost(host),tree,treeHandle,live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen,scopeChosen)
-def withCustomEditor(borrowed: CustomEditor.Owner & Component.Component,live: Live.Owner,words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
+def withCustomEditor(borrowed: CustomEditor.Owner & Component.Component,live: Live.Owner,+words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (custom,component):
       do IO<Result<&2,&2,Error,Unit>>:
         +chosen : Callback.Callback<Selector.Choice,Unit> <- Callback.create(~SelectInput,~Selector.Choice,~Unit,~chosenSelection,SelectInput{queue,contextStatus(context),redraw})
-        +copied : Callback.Callback<Maybe<&2,String>,Unit> <- Callback.create(~TreeCopyInput,~Maybe<&2,String>,~Unit,~treeCopied,TreeCopyInput{contextSession(context),contextTranscript(context)})
-        host : Selector.Owner <- Selector.createHost(component,contextTheme(context),contextBindings(context),Keys.defaults(),chosen,Some{copied})
+        +treeEvents : Callback.Callback<TreePicker.Action,Unit> <- Callback.create(~TreeActionInput,~TreePicker.Action,~Unit,~treeAction,TreeActionInput{contextSession(context),contextTranscript(context)})
+        host : Selector.Owner <- Selector.createHost(component,contextTheme(context),contextBindings(context),Keys.defaults(),words,chosen,Some{treeEvents})
         result : Result<&2,&2,Error,Unit> <- runHosted(Selector.borrowHost(host),live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen)
         CustomEditor.dispose(custom)
         return result

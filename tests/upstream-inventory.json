@@ -4412,7 +4412,7 @@
         "tests/tree_selector_reference.mts"
       ],
       "sha256": "352f03c2400bad730c05d5a427d4d7d2f08a102e67c4a7d1ebc97b6cac856734",
-      "notes": "Native navigation smoke assertions and pinned component comparisons cover search/filter recovery, full copying, narrow help, metadata parent traversal, branch folding and ANSI frames. General assistant/structural-entry cases, labels/timestamps and the remaining named upstream assertions are pending; this suite remains partial."
+      "notes": "Native navigation smoke assertions and pinned component comparisons cover search/filter recovery, full copying, narrow help, metadata parent traversal, branch folding and ANSI frames. General assistant/structural-entry cases, label timestamps and the remaining named upstream assertions are pending; this suite remains partial. Additional component comparisons cover label save/remove/cancel, paste and native word editing."
     },
     {
       "source": "packages/coding-agent/test/trigger-compact-extension.test.ts",

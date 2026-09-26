@@ -17,8 +17,12 @@ for shape in ("chain", "roots", "star", "hidden", "hidden-star"):
 cases.append(dict(shape="hidden", width=100, initial="m2", actions=ACTIONS, texts=["first", "second", "branch"]))
 cases.append(dict(shape="chain", width=400, initial="0", actions=["copy"], texts=["line\none " + "a" * 250]))
 cases.append(dict(shape="star", width=7, initial="2", actions=["copy", "missing", "escape", "copy"], texts=["line\none", "  ", "a" * 250]))
+for shape in ("chain", "star", "hidden-star"):
+    for width in (30, 100):
+        cases.append(dict(shape=shape, width=width, initial="2", texts=["first", "second", "third"], actions=["label", "  work  ", "enter", "label", "end", "!", "escape", "label", "end", "kill-start", "enter", "label", "paste-start", "pasted\n label", "paste-end", "enter", "up", "label", "parent", "enter", "down", "labeled", "copy", "default"]))
+cases.append(dict(shape="chain", width=30, initial="0", texts=["one"], actions=["label", "hello world", "word-left", "kill-word", "yank", "end", "enter", "label", "home", "word-right", "backspace", "enter"]))
 expected = json.loads(subprocess.check_output(["bun", "tests/tree_selector_reference.mts"], input=json.dumps(cases), text=True, cwd=ROOT))
-lanes = [("bun", ["bun", "build/tree-selector.js"]) ] if os.environ.get("PI_BEND_TREE_BUN") else [(f"native{n}", [str(BINARY), "--threads", str(n), "--"]) for n in (1, 4)]
+lanes = [("bun", ["bun", os.environ.get("PI_BEND_TREE_BUN_BINARY", "build/tree-selector.js")]) ] if os.environ.get("PI_BEND_TREE_BUN") else [(f"native{n}", [str(BINARY), "--threads", str(n), "--"]) for n in (1, 4)]
 for lane, command in lanes:
     for index, (case, wanted) in enumerate(zip(cases, expected, strict=True)):
         result = subprocess.run(command + [str(ROOT), str(case["width"]), case["initial"], ",".join(case["actions"]), case["shape"], *case["texts"]], cwd=ROOT, capture_output=True, text=True, check=True, timeout=20)

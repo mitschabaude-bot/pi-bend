@@ -4154,6 +4154,10 @@ def setSessionName(session: AgentSession, +name: String) -> IO(Result<&2, &2, St
         emit(shared, SessionInfoChanged{sessionName(state)})
         return result
 
+# Functional access to the session manager's persistent label mutation.
+def appendLabelChange(session: AgentSession,+entryId: String,+label: Maybe<&2,String>) -> IO(Result<&2,&2,String,Unit>):
+  recorded(sharedOf(session),target => Sessions.appendLabelChange(~Unit,~Tools.ToolDetails,~V.Value,~unitValue,~Tools.detailsValue,~rawValue,target,entryId,label))
+
 # upstream session.promptTemplates and resourceLoader.getSkills(): the
 # resources this session was loaded (or last reloaded) with.
 def templatesOf(loadout: Runtime.Loadout) -> List<&2, Templates.PromptTemplate>:

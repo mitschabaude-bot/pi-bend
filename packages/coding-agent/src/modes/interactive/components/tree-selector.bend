@@ -12,6 +12,11 @@ import ../../../../../tui/src/components/text.bend as TuiText
 import ../../../core/session-manager.bend as Tree
 import ../../../core/tools/index.bend as Tools
 import ../theme/theme.bend as Theme
+import ../../../../../tui/src/components/input.bend as Input
+import ../../../../../tui/src/word-navigation.bend as Word
+import ../../../../../runtime/src/word-segmenter.bend as Segmenter
+import ../../../../../runtime/src/date.bend as Date
+import ./keybinding-hints.bend as Hints
 
 # The selector keeps the session graph, rather than flattening it to an
 # unrelated menu. Its visible rows retain branch connectors and the active
@@ -20,7 +25,7 @@ def Entry() -> Data: Tree.SessionEntry<Unit,Tools.ToolDetails,V.Value>
 def Node() -> Data: Tree.SessionTreeNode<Unit,Tools.ToolDetails,V.Value>
 
 type Filter is Data: Default{} NoTools{} UserOnly{} LabeledOnly{} All{}
-type Action is Data: Continue{} Cancel{} Chosen{id: String} Copied{text: Maybe<&2,String>}
+type Action is Data: Continue{} Cancel{} Chosen{id: String} Copied{text: Maybe<&2,String>} EditLabel{id: String,label: Maybe<&2,String>} LabelChanged{id: String,label: Maybe<&2,String>} InputError{cause: Word.Error}
 type Row is Data:
   Row{node: Node(),prefix: String,connector: String,active: Bool}
 type Graph is Data:
@@ -505,6 +510,7 @@ type TreeKey is Data:
   FilterKey{filter: Filter,toggle: Bool}
   CycleKey{backward: Bool}
   BackspaceKey{}
+  LabelKey{}
   SearchKey{}
 type BoundKey is Data: BoundKey{action: String,key: TreeKey}
 def treeBindings() -> List<&2,BoundKey>:
@@ -516,12 +522,18 @@ def treeBindings() -> List<&2,BoundKey>:
    BoundKey{"app.tree.filter.default",FilterKey{Default{},False{}}},BoundKey{"app.tree.filter.noTools",FilterKey{NoTools{},True{}}},
    BoundKey{"app.tree.filter.userOnly",FilterKey{UserOnly{},True{}}},BoundKey{"app.tree.filter.labeledOnly",FilterKey{LabeledOnly{},True{}}},
    BoundKey{"app.tree.filter.all",FilterKey{All{},True{}}},BoundKey{"app.tree.filter.cycleBackward",CycleKey{True{}}},
-   BoundKey{"app.tree.filter.cycleForward",CycleKey{False{}}},BoundKey{"tui.editor.deleteCharBackward",BackspaceKey{}}]
+   BoundKey{"app.tree.filter.cycleForward",CycleKey{False{}}},BoundKey{"tui.editor.deleteCharBackward",BackspaceKey{}},BoundKey{"app.tree.editLabel",LabelKey{}}]
 def matchedKey(options: List<&2,BoundKey>,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> TreeKey:
   match options:
     case Nil{}: SearchKey{}
     case BoundKey{action,+key} <> +rest:
       Bool.pick(Unit -> TreeKey,Bindings.matches(bindings,keyboard,data,action),_ => key,_ => matchedKey(rest,bindings,keyboard,data))(Unit{})
+def rowLabel(row: Row) -> Maybe<&2,String>:
+  match row: case Row{Tree.SessionTreeNode{_,_,label,_},_,_,_}: label
+def labelAction(row: Maybe<&2,Row>) -> Action:
+  match row:
+    case None{}: Continue{}
+    case Some{+value}: EditLabel{rowId(value),rowLabel(value)}
 def keyTransition(+state: TreeList,key: TreeKey,+data: String) -> TreeList & Action:
   match key:
     case MoveKey{up}: (move(state,up),Continue{})
@@ -533,6 +545,7 @@ def keyTransition(+state: TreeList,key: TreeKey,+data: String) -> TreeList & Act
     case FilterKey{filter,toggle}: (withFilter(state,filter,toggle),Continue{})
     case CycleKey{backward}: (withFilter(state,Bool.pick(Filter,backward,previousFilter(filterOf(state)),nextFilter(filterOf(state))),False{}),Continue{})
     case BackspaceKey{}: (withSearch(state,withoutLast(searchOf(state))),Continue{})
+    case LabelKey{}: (state,labelAction(selectedRow(state)))
     case SearchKey{}: Bool.pick(TreeList & Action,printable(data),(withSearch(state,searchOf(state) ++ data),Continue{}),(state,Continue{}))
 def input(state: TreeList,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> TreeList & Action:
   keyTransition(state,matchedKey(treeBindings(),bindings,keyboard,data),data)
@@ -720,23 +733,113 @@ def paintHelp(lines: List<&2,String>,+theme: Theme.Theme) -> List<&2,String>:
     case Nil{}: Nil{}
     case line <> rest: paint(theme,"muted",line) <> paintHelp(rest,theme)
 
-type TreeSelectorComponent is Data: TreeSelectorComponent{treeList: TreeList}
+type LabelInput is Data: LabelInput{entryId: String,input: Input.Input}
+type TreeSelectorComponent is Data:
+  TreeSelectorComponent{treeList: TreeList,labelInput: Maybe<&2,LabelInput>,focused: Bool}
+def fromList(list: TreeList) -> TreeSelectorComponent: TreeSelectorComponent{list,None{},False{}}
 def getTreeList(component: TreeSelectorComponent) -> TreeList:
-  match component: case TreeSelectorComponent{list}: list
+  match component: case TreeSelectorComponent{list,_,_}: list
 def rowNode(row: Row) -> Node():
   match row: case Row{node,_,_,_}: node
 def getSelectedNode(list: TreeList) -> Maybe<&2,Node()>:
   Maybe.map(&2,Row,Node(),rowNode,selectedRow(list))
 def getSearchQuery(list: TreeList) -> String: searchOf(list)
-def rendered(component: TreeSelectorComponent,+theme: Theme.Theme,+width: Nat,bindings: Bindings.KeybindingsManager,title: TuiText.Text & List<&2,String>) -> List<&2,String>:
-  match title:
-    case (_,heading):
-      +list = getTreeList(component)
-      +query = searchOf(list)
+def focusedLabel(value: Maybe<&2,LabelInput>,focused: Bool) -> Maybe<&2,LabelInput>:
+  match value:
+    case None{}: None{}
+    case Some{LabelInput{id,input}}: Some{LabelInput{id,Input.setFocused(input,focused)}}
+def setFocused(component: TreeSelectorComponent,+focused: Bool) -> TreeSelectorComponent:
+  match component: case TreeSelectorComponent{list,label,_}: TreeSelectorComponent{list,focusedLabel(label,focused),focused}
+def begunLabel(component: TreeSelectorComponent,id: String,label: Maybe<&2,String>) -> TreeSelectorComponent:
+  match component:
+    case TreeSelectorComponent{list,_,+focused}: TreeSelectorComponent{list,Some{LabelInput{id,Input.setFocused(Input.setValue(Input.new(None{}),Maybe.default(&2,String,label,"")),focused)}},focused}
+def transitioned(component: TreeSelectorComponent,pair: TreeList & Action) -> TreeSelectorComponent & Action:
+  match component pair:
+    case TreeSelectorComponent{_,label,focused} Tuple{list,EditLabel{id,text}}: (begunLabel(TreeSelectorComponent{list,label,focused},id,text),Continue{})
+    case TreeSelectorComponent{_,label,focused} Tuple{list,action}: (TreeSelectorComponent{list,label,focused},action)
+
+# Update the immutable tree once, then reuse its nodes in the existing view.
+# Label edits do not change filter membership until the next filter/search action.
+def rootNodes(rows: List<&2,Row>) -> List<&2,Node()>:
+  match rows:
+    case Nil{}: Nil{}
+    case +row <> +rest: Bool.pick(Unit -> List<&2,Node()>,Maybe.is_none(&2,String,rowParent(row)),_ => rowNode(row) <> rootNodes(rest),_ => rootNodes(rest))(Unit{})
+@unsafe def labelledNodes(nodes: List<&2,Node()>,+id: String,+label: Maybe<&2,String>,+stamp: Maybe<&2,String>) -> List<&2,Node()>:
+  match nodes:
+    case Nil{}: Nil{}
+    case Tree.SessionTreeNode{+entry,children,current,time} <> rest:
+      +changed = String.eq(Tree.baseId(Tree.entryBase(Unit,Tools.ToolDetails,V.Value,entry)),id)
+      Tree.SessionTreeNode{entry,labelledNodes(children,id,label,stamp),Bool.pick(Maybe<&2,String>,changed,label,current),Bool.pick(Maybe<&2,String>,changed,stamp,time)} <> labelledNodes(rest,id,label,stamp)
+def labelledView(rows: List<&2,Row>,+entries: Map<&2,Maybe<&2,Row>>) -> List<&2,Row>:
+  match rows:
+    case Nil{}: Nil{}
+    case Row{+node,prefix,connector,active} <> rest:
+      +updated = Maybe.default(&2,Node(),Maybe.map(&2,Row,Node(),rowNode,lookupValue(Maybe<&2,Row>,Map.get(Maybe<&2,Row>,None{},entries,nodeId(node)))),node)
+      Row{updated,prefix,connector,active} <> labelledView(rest,entries)
+def updateNodeLabel(list: TreeList,+id: String,+label: Maybe<&2,String>,timestamp: String) -> TreeList:
+  match list:
+    case TreeList{all,+visible,index,filter,search,+leaf,folded,height,remembered,_}:
+      +next = allRows(labelledNodes(rootNodes(all),id,label,Bool.pick(Maybe<&2,String>,Maybe.is_some(&2,String,label),Some{timestamp},None{})),leaf)
+      +view = labelledView(visible,indexedRows(next,Map.new(&2,Maybe<&2,Row>)))
+      TreeList{next,view,index,filter,search,leaf,folded,height,remembered,buildGraph(next,view)}
+def savedLabel(component: TreeSelectorComponent,+id: String,+label: Maybe<&2,String>,timestamp: String) -> TreeSelectorComponent & Action:
+  match component:
+    case TreeSelectorComponent{list,_,focused}: (TreeSelectorComponent{updateNodeLabel(list,id,label,timestamp),None{},focused},LabelChanged{id,label})
+def saveLabel(component: TreeSelectorComponent,id: String,text: String) -> IO(TreeSelectorComponent & Action):
+  do IO<TreeSelectorComponent & Action>:
+    now : F64 <- Date.now()
+    return savedLabel(component,id,nonemptyCopy(Some{Text.trim(text)}),Maybe.default(&2,String,Date.formatIso(now),""))
+def withoutLabelInput(component: TreeSelectorComponent) -> TreeSelectorComponent:
+  match component: case TreeSelectorComponent{list,_,focused}: TreeSelectorComponent{list,None{},focused}
+def needsWords(command: Input.Command) -> Bool:
+  match command:
+    case Input.WordLeft{}: True{}
+    case Input.WordRight{}: True{}
+    case Input.KillWordBackward{}: True{}
+    case Input.KillWordForward{}: True{}
+    case _: False{}
+def wordText(component: TreeSelectorComponent,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,data: String) -> Maybe<&2,String>:
+  match component:
+    case TreeSelectorComponent{_,Some{LabelInput{_,editor}},_}: Bool.pick(Maybe<&2,String>,needsWords(Input.command(Input.bindings(),bindings,keyboard,data)),Some{Input.getValue(editor)},None{})
+    case _: None{}
+def nonAtomic(_: Segmenter.Source,_: String) -> Bool: False{}
+def editedLabel(component: TreeSelectorComponent,id: String,result: Word.ResultOf(Input.Input)) -> TreeSelectorComponent & Action:
+  match component result:
+    case TreeSelectorComponent{list,_,focused} Done{input}: (TreeSelectorComponent{list,Some{LabelInput{id,input}},focused},Continue{})
+    case _ Fail{error}: (component,InputError{error})
+def handleInput(+component: TreeSelectorComponent,source: Segmenter.Source,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> IO(TreeSelectorComponent & Action):
+  match component:
+    case TreeSelectorComponent{list,None{},_}: IO.pure(TreeSelectorComponent & Action,transitioned(component,input(list,bindings,keyboard,data)))
+    case TreeSelectorComponent{_,Some{LabelInput{+id,+editor}},_}:
+      Bool.pick(Unit -> IO(TreeSelectorComponent & Action),Bindings.matches(bindings,keyboard,data,"tui.select.confirm"),_ => saveLabel(component,id,Input.getValue(editor)),
+        _ => Bool.pick(Unit -> IO(TreeSelectorComponent & Action),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => IO.pure(TreeSelectorComponent & Action,(withoutLabelInput(component),Continue{})),
+          _ => do IO<TreeSelectorComponent & Action>:
+            result : Word.ResultOf(Input.Input) <- Input.handleInput(~Segmenter.Source,~Word.sourceSegments,~nonAtomic,source,editor,bindings,keyboard,data)
+            return editedLabel(component,id,result))(Unit{}))(Unit{})
+
+def labelLines(lines: List<&2,String>,+width: Nat) -> List<&2,String>:
+  match lines: case Nil{}: Nil{} case line <> rest: Utils.truncateToWidth("  " ++ line,width,"...",False{}) <> labelLines(rest,width)
+def labelRendered(component: TreeSelectorComponent,id: String,+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,+width: Nat,pair: Input.Input & List<&2,String>) -> TreeSelectorComponent & List<&2,String>:
+  match component pair:
+    case TreeSelectorComponent{list,_,focused} Tuple{input,lines}:
+      (TreeSelectorComponent{list,Some{LabelInput{id,input}},focused},
+       Utils.truncateToWidth("  " ++ paint(theme,"muted","Label (empty to remove):"),width,"...",False{}) <> List.append(&2,String,labelLines(lines,width),[Utils.truncateToWidth("  " ++ Hints.keyHint(theme,bindings,"tui.select.confirm","save") ++ "  " ++ Hints.keyHint(theme,bindings,"tui.select.cancel","cancel"),width,"...",False{})]))
+def renderContent(+component: TreeSelectorComponent,theme: Theme.Theme,+width: Nat,bindings: Bindings.KeybindingsManager) -> IO(TreeSelectorComponent & List<&2,String>):
+  match component:
+    case TreeSelectorComponent{list,None{},_}: IO.pure(TreeSelectorComponent & List<&2,String>,(component,renderList(list,theme,width)))
+    case TreeSelectorComponent{_,Some{LabelInput{+id,input}},_}:
+      do IO<TreeSelectorComponent & List<&2,String>>:
+        rendered : Input.Input & List<&2,String> <- Input.render(input,width - 2n)
+        return labelRendered(component,id,theme,bindings,width,rendered)
+def framed(component: TreeSelectorComponent & List<&2,String>,+theme: Theme.Theme,+width: Nat,bindings: Bindings.KeybindingsManager,title: TuiText.Text & List<&2,String>) -> TreeSelectorComponent & List<&2,String>:
+  match component title:
+    case Tuple{+next,content} Tuple{_,heading}:
+      +query = searchOf(getTreeList(next))
       +border = paint(theme,"border",String.repeat("─",Nat.max(1n,width)))
       +search = Utils.truncateToWidth("  " ++ paint(theme,"muted","Type to search:") ++ Bool.pick(String,String.is_empty(query),""," " ++ paint(theme,"accent",query)),width,"...",False{})
-      List.append(&2,String,"" <> border <> heading,List.append(&2,String,paintHelp(helpRows(helpItems(bindings),Nat.max(1n,width),"",Nil{}),theme),search <> border <> "" <> List.append(&2,String,renderList(list,theme,width),"" <> border <> Nil{})))
-def render(component: TreeSelectorComponent,+theme: Theme.Theme,+width: Nat,bindings: Bindings.KeybindingsManager) -> IO(List<&2,String>):
-  do IO<List<&2,String>>:
+      (next,List.append(&2,String,"" <> border <> heading,List.append(&2,String,paintHelp(helpRows(helpItems(bindings),Nat.max(1n,width),"",Nil{}),theme),search <> border <> "" <> List.append(&2,String,content,"" <> border <> Nil{}))))
+def render(component: TreeSelectorComponent,+theme: Theme.Theme,+width: Nat,+bindings: Bindings.KeybindingsManager) -> IO(TreeSelectorComponent & List<&2,String>):
+  do IO<TreeSelectorComponent & List<&2,String>>:
     title : TuiText.Text & List<&2,String> <- TuiText.render(TuiText.new(Theme.bold("  Session Tree"),Some{1n},Some{0n},None{}),width)
-    return rendered(component,theme,width,bindings,title)
+    content : TreeSelectorComponent & List<&2,String> <- renderContent(component,theme,width,bindings)
+    return framed(content,theme,width,bindings,title)

@@ -7,7 +7,7 @@ const { setKeybindings } = await import(UPSTREAM + "/packages/tui/src/keybinding
 const { KeybindingsManager } = await import(UPSTREAM + "/packages/coding-agent/src/core/keybindings.ts");
 setKeybindings(new KeybindingsManager());
 initTheme("dark");
-const keys = { up: "\x1b[A", down: "\x1b[B", enter: "\r", escape: "\x1b", left: "\x1b[D", right: "\x1b[C", fold: "\x1b[1;5D", unfold: "\x1b[1;5C", all: "\x01", default: "\x04", "no-tools": "\x14", user: "\x15", labeled: "\x0c", cycle: "\x0f", copy: "\x18", backspace: "\x7f" };
+const keys = { up: "\x1b[A", down: "\x1b[B", enter: "\r", escape: "\x1b", left: "\x1b[D", right: "\x1b[C", fold: "\x1b[1;5D", unfold: "\x1b[1;5C", all: "\x01", default: "\x04", "no-tools": "\x14", user: "\x15", labeled: "\x0c", cycle: "\x0f", copy: "\x18", backspace: "\x7f", label: "L", "word-left": "\x1b[1;5D", "word-right": "\x1b[1;5C", "kill-word": "\x17", home: "\x01", end: "\x05", "kill-start": "\x15", "kill-end": "\x0b", yank: "\x19", "paste-start": "\x1b[200~", "paste-end": "\x1b[201~" };
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
 const output = JSON.parse(input).map(c => {
@@ -21,10 +21,11 @@ const output = JSON.parse(input).map(c => {
     return [{ entry, children }, ...(shape === "roots" ? nodes(index + 1, parentId, shape) : [])];
   }
   let action = "continue";
-  const component = new TreeSelectorComponent(nodes(), c.initial || null, 24, id => { action = "chosen:" + id; }, () => { action = "cancel"; });
+  const component = new TreeSelectorComponent(nodes(), c.initial || null, 24, id => { action = "chosen:" + id; }, () => { action = "cancel"; }, (id, label) => { action = "labeled:" + id + ":" + (label ?? "<none>"); });
+  component.focused = true;
   component.onCopy = text => { action = "copied:" + (text ?? "<none>"); };
   const list = component.getTreeList();
-  const snapshot = () => ({ selected: list.getSelectedNode()?.entry.id ?? null, action, lines: component.render(c.width) });
+  const snapshot = () => ({ selected: list.getSelectedNode()?.entry.id ?? null, label: list.getSelectedNode()?.label ?? null, action, lines: component.render(c.width) });
   const result = [snapshot()];
   for (const name of c.actions) {
     action = "continue";

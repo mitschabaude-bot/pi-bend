@@ -1,4 +1,5 @@
 import Base
+import ../packages/runtime/src/word-segmenter.bend as Segmenter
 import ../packages/agent/src/types.bend as Agent
 import ../packages/ai/src/types.bend as Ai
 import ../packages/runtime/src/f64.bend as F
@@ -37,17 +38,29 @@ def actionText(action: Picker.Action) -> String:
     case Picker.Cancel{}: "cancel"
     case Picker.Copied{text}: "copied:" ++ Maybe.default(&2,String,text,"<none>")
     case Picker.Chosen{id}: "chosen:" ++ id
+    case Picker.LabelChanged{id,label}: "labeled:" ++ id ++ ":" ++ Maybe.default(&2,String,label,"<none>")
+    case Picker.EditLabel{_,_}: "unexpected-edit-action"
+    case Picker.InputError{_}: "input-error"
 def textValues(lines: List<&2,String>) -> List<&2,V.Value>:
   match lines:
     case Nil{}: Nil{}
     case text <> rest: V.Text{text} <> textValues(rest)
-def emit(component: Picker.TreeSelectorComponent,action: Picker.Action,+theme: Theme.Theme,width: Nat,+bindings: Bindings.KeybindingsManager) -> IO(Unit):
-  do IO<Unit>:
-    +copy : Picker.TreeSelectorComponent = component
-    lines : List<&2,String> <- Picker.render(copy,theme,width,bindings)
-    selected : V.Value = Maybe.default(&2,V.Value,Maybe.map(&2,String,V.Value,text => V.Text{text},Picker.selectedId(Picker.getTreeList(copy))),V.Null{})
-    value : V.Value = V.ObjectValue{R.Record{[R.Property{"selected",selected},R.Property{"action",V.Text{actionText(action)}},R.Property{"lines",V.ArrayValue{textValues(lines)}}]}}
-    IO.print(Maybe.default(&2,String,Json.stringify(S.toJson(value)),"null"))
+def selectedLabel(node: Maybe<&2,Picker.Node()>) -> V.Value:
+  match node:
+    case Some{Tree.SessionTreeNode{_,_,Some{text},_}}: V.Text{text}
+    case _: V.Null{}
+def emitRendered(pair: Picker.TreeSelectorComponent & List<&2,String>,action: Picker.Action) -> IO(Picker.TreeSelectorComponent):
+  match pair:
+    case (+component,lines):
+      do IO<Picker.TreeSelectorComponent>:
+        selected : V.Value = Maybe.default(&2,V.Value,Maybe.map(&2,String,V.Value,text => V.Text{text},Picker.selectedId(Picker.getTreeList(component))),V.Null{})
+        value : V.Value = V.ObjectValue{R.Record{[R.Property{"selected",selected},R.Property{"label",selectedLabel(Picker.getSelectedNode(Picker.getTreeList(component)))},R.Property{"action",V.Text{actionText(action)}},R.Property{"lines",V.ArrayValue{textValues(lines)}}]}}
+        IO.print(Maybe.default(&2,String,Json.stringify(S.toJson(value)),"null"))
+        return component
+def emit(component: Picker.TreeSelectorComponent,action: Picker.Action,theme: Theme.Theme,width: Nat,bindings: Bindings.KeybindingsManager) -> IO(Picker.TreeSelectorComponent):
+  do IO<Picker.TreeSelectorComponent>:
+    pair : Picker.TreeSelectorComponent & List<&2,String> <- Picker.render(component,theme,width,bindings)
+    emitRendered(pair,action)
 def key(name: String) -> String:
   match name:
     case "up": "\u{1b}[A"
@@ -66,35 +79,47 @@ def key(name: String) -> String:
     case "cycle": "\u{f}"
     case "copy": "\u{18}"
     case "backspace": "\u{7f}"
+    case "label": "L"
+    case "word-left": "\u{1b}[1;5D"
+    case "word-right": "\u{1b}[1;5C"
+    case "kill-word": "\u{17}"
+    case "home": "\u{1}"
+    case "end": "\u{5}"
+    case "kill-start": "\u{15}"
+    case "kill-end": "\u{b}"
+    case "yank": "\u{19}"
+    case "paste-start": "\u{1b}[200~"
+    case "paste-end": "\u{1b}[201~"
     case _: name
-def emitted(pair: Picker.TreeList & Picker.Action,+theme: Theme.Theme,width: Nat,bindings: Bindings.KeybindingsManager) -> IO(Picker.TreeList):
-  match pair:
-    case Tuple{+list,action}:
-      do IO<Picker.TreeList>:
-        emit(Picker.TreeSelectorComponent{list},action,theme,width,bindings)
-        return list
-def steps(actions: List<&2,String>,+list: Picker.TreeList,+theme: Theme.Theme,+width: Nat,+bindings: Bindings.KeybindingsManager) -> IO(Unit):
+def emitted(pair: Picker.TreeSelectorComponent & Picker.Action,theme: Theme.Theme,width: Nat,bindings: Bindings.KeybindingsManager) -> IO(Picker.TreeSelectorComponent):
+  match pair: case (component,action): emit(component,action,theme,width,bindings)
+def prepared(source: Segmenter.Source,text: Maybe<&2,String>) -> IO(Segmenter.Source):
+  match text: case None{}: IO.pure(Segmenter.Source,source) case Some{value}: Segmenter.readyFor(source,value)
+def steps(actions: List<&2,String>,+component: Picker.TreeSelectorComponent,+source: Segmenter.Source,+theme: Theme.Theme,+width: Nat,+bindings: Bindings.KeybindingsManager) -> IO(Unit):
   match actions:
     case Nil{}: IO.pure(Unit,Unit{})
     case action <> rest:
       do IO<Unit>:
-        updated : Picker.TreeList <- emitted(Picker.input(list,bindings,Keys.defaults(),key(action)),theme,width,bindings)
-        steps(rest,updated,theme,width,bindings)
-def runTheme(result: Result<&2,&2,Theme.LoadError,Theme.Theme>,+width: Nat,+initial: String,+actions: String,shape: String,texts: List<String>) -> IO(Unit):
+        +data : String = key(action)
+        +ready : Segmenter.Source <- prepared(source,Picker.wordText(component,bindings,Keys.defaults(),data))
+        pair : Picker.TreeSelectorComponent & Picker.Action <- Picker.handleInput(component,ready,bindings,Keys.defaults(),data)
+        updated : Picker.TreeSelectorComponent <- emitted(pair,theme,width,bindings)
+        steps(rest,updated,ready,theme,width,bindings)
+def runTheme(result: Result<&2,&2,Theme.LoadError,Theme.Theme>,+width: Nat,+initial: String,+actions: String,shape: String,texts: List<String>,root: String) -> IO(Unit):
   match result:
     case Fail{_}: IO.die(Unit,1,"cannot load selector theme")
     case Done{+theme}:
       do IO<Unit>:
-        +component : Picker.TreeSelectorComponent = Picker.TreeSelectorComponent{Picker.create(nodes(sharedTexts(texts),0n,None{},shape),Bool.pick(Maybe<&2,String>,String.is_empty(initial),None{},Some{initial}),24n)}
+        +component : Picker.TreeSelectorComponent = Picker.setFocused(Picker.fromList(Picker.create(nodes(sharedTexts(texts),0n,None{},shape),Bool.pick(Maybe<&2,String>,String.is_empty(initial),None{},Some{initial}),24n)),True{})
         +bindings : Bindings.KeybindingsManager = Bindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),R.new(List<&2,Keys.KeyId>))
-        emit(component,Picker.Continue{},theme,width,bindings)
-        steps(Bool.pick(List<&2,String>,String.is_empty(actions),Nil{},String.split(actions,',')),Picker.getTreeList(component),theme,width,bindings)
+        shown : Picker.TreeSelectorComponent <- emit(component,Picker.Continue{},theme,width,bindings)
+        steps(Bool.pick(List<&2,String>,String.is_empty(actions),Nil{},String.split(actions,',')),shown,Segmenter.Pending{root ++ "/packages/runtime/data"},theme,width,bindings)
 def run(args: List<String>) -> IO(Unit):
   match args:
-    case root <> width <> initial <> actions <> shape <> texts:
+    case +root <> width <> initial <> actions <> shape <> texts:
       do IO<Unit>:
         theme : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadFromPath(root ++ "/packages/coding-agent/src/modes/interactive/theme/dark.json",Color.TrueColor{})
-        runTheme(theme,Maybe.default(&2,Nat,Nat.read(width),80n),initial,actions,shape,texts)
+        runTheme(theme,Maybe.default(&2,Nat,Nat.read(width),80n),initial,actions,shape,texts,root)
     case _: IO.die(Unit,1,"expected root width initial actions texts...")
 def main() -> IO(Unit):
   do IO<Unit>:
