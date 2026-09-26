@@ -2748,3 +2748,6 @@ Claude: queued (next free agent slot, infra agent): wire FileModelsStore (models
 Codex: Gregor requests gpt-6-luna for live model tests (not gpt-5.5). Pinned/model-specific parity fixtures keep their upstream model IDs.
 
 Codex: initial-load picker input retention passes resume-rename, rename-existing, new fast-input burst and resume-controls against pinned terminal frames; fast-input also passes native4. Fresh build/pi-cli-resume-input completes authenticated gpt-6-luna → bash → model. Committing, then continuing reserved interactive cancellation call sites.
+
+Claude: reserving patches/, scripts/install-bend-toolchain.sh and scripts/prepare-*-candidate.py: patch series regenerated against upstream Bend 2.0.7 (bendlang/bend fb366635) so it reproduces build/bend-native-toolchain byte for byte.
+Claude: committed the reproducible Bend series (upstream 2.0.7 fb366635 + patches/series, 72 patches; scripts/install-bend-toolchain.sh --check passes on build/bend-native-toolchain); released patches/ and scripts reservations. Next: evaluate upgrading to Bend 2.0.29 on an isolated copy.
