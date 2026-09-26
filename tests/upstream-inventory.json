@@ -2976,7 +2976,7 @@
     },
     {
       "source": "packages/coding-agent/test/llama-extension.test.ts",
-      "status": "partial",
+      "status": "excluded",
       "ports": [
         "tests/llama-client.bend",
         "tests/llama_client_check.py",
@@ -2989,7 +2989,7 @@
         "tests/llama_provider_reference.ts"
       ],
       "sha256": "458534294a1c7abd9f96293a2fe7a0add16b58a37eda94a1b20bf5f6c814d52b",
-      "notes": "Covered on Bun/native1/native4: management/inference URL normalization; loaded/sleeping models with router metadata; loaded chat-template thinking support; unloaded presets enabled/disabled by router autoload; streamed load/download progress and terminal catalog results; cache-only startup restores a catalog persisted by a previous provider without additional requests. Supplemental cases cover configured auth, URL+key login prompts/catalog validation, refresh requests, catalog failure, unavailable SSE fallback, cancellation and closed event connections. Pending named cases: native provider + /llama registration, full dormant/optional-key login assertions and Hugging Face search/access. Constructor login/resolve/refresh callbacks are exercised and disposed. Additional provider abort/rejection/failure cases remain unverified."
+      "notes": "llama.cpp support excluded by Gregor on 2026-09-26; see docs/scope-decisions.md. Previously committed management, streaming and provider fixtures remain available, but this suite is no longer part of port completion."
     },
     {
       "source": "packages/coding-agent/test/management-http.test.ts",

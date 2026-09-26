@@ -2,6 +2,8 @@
 
 The user requires a close port of pi-mono's modular libraries, internal main types, public APIs and behavior, including terminal UI and dependencies. A working CLI or matching a few visible behaviors does not satisfy the task. Extensions are native Bend; JavaScript/TypeScript extension compatibility is excluded. Preserve pi’s programming concepts and meaningful behavior using idiomatic, functional Bend, not JavaScript runtime semantics. Do not recreate prototypes, property descriptors, reflective object operations, sparse JS arrays, JS key enumeration, or incidental reference identity. Use immutable values and explicit state transitions; retain effectful synchronization only where concurrency requires it. If a meaningful upstream behavior must change, identify its source/test and discuss it with the user before choosing the change.
 
+Scope exceptions and approved changes are recorded in `docs/scope-decisions.md`.
+
 Reference: sibling `../pi-mono`, pinned by `tests/upstream-inventory.json` and `docs/source-coverage-reviews.json`. Preserve the upstream package/module boundaries under `packages/`. Preserve public type, field, function and event names where Bend permits them. Document language-driven changes individually; do not collapse typed models into generic JSON, flatten library layers into the CLI, omit hooks, or replace injectable interfaces with hard-coded implementations.
 
 Complex dependencies must be implemented in pure Bend, without C or JavaScript glue. Add missing primitives to Bend where necessary. Test-only host-language oracles may validate Bend results, but must not supply production behavior. The CLI and its supporting libraries live under `packages/`.

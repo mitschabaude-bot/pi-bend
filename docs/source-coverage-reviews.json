@@ -635,7 +635,7 @@
     },
     "packages/coding-agent/src/modes/interactive/chat-viewport.ts": {
       "state": "partial",
-      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Fullscreen transcript allocation uses upstream’s zero basis and one-row minimum; natural dock rendering during external-editor handoffs matches pi. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
+      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Fullscreen transcript allocation uses upstream\u2019s zero basis and one-row minimum; natural dock rendering during external-editor handoffs matches pi. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
       "source_sha256": "24bbdd06a5e17d6c0631f7de51329eb7bb4ecd4a460dec7b3d593ff9e6219960",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/viewport.bend": "91281c83b948bdb35106382375cfc14628d313a48d7676cd9a023b1bcadea32e"
@@ -1102,24 +1102,24 @@
       }
     },
     "packages/coding-agent/src/extensions/index.ts": {
-      "state": "partial",
-      "note": "The native builtInExtensions API exists but returns an empty list. Upstream registers the hidden llama.cpp extension before user extensions; its provider, /login llama.cpp and /llama model-management flow are missing. This omission also removes llama.cpp from the unfiltered API-key login menu (40 entries versus upstream 41).",
+      "state": "excluded",
+      "note": "Excluded: its only built-in is llama.cpp, which Gregor removed from scope on 2026-09-26 (docs/scope-decisions.md). The native built-in list intentionally remains empty.",
       "source_sha256": "29c9dc5de4ec9c895223e8991ff02871f8eb67702435abed64a2b412430b4d7c",
       "port_sha256": {
         "packages/coding-agent/src/extensions/index.bend": "44a695593349473334cbda0bce1c15a58622682bffc83ce94ee1833c112d860d"
       }
     },
     "packages/coding-agent/src/extensions/llama/client.ts": {
-      "state": "partial",
-      "note": "Native typed management client with normalized URLs, authenticated/deadline-bounded requests, list/reload, props, load/unload/download and unloadAndWait. watch uses the native SSE cursor over one owned response; loadAndWait/downloadAndWait share immutable operation state for event updates and catalog polling, forward caller cancellation, cancel/join watchers and retire callback/state before returning. Stage progress, combined file-byte progress and formatBytes use native JSON/SSE/decimal primitives. The two upstream streamed load/download cases plus catalog failure, unavailable SSE fallback and cancellation match result/progress on Bun/native1/native4; all event connections close. The nine management requests still match upstream on Bun. The streaming oracle uses Node, as pi does, because default AbortError messages differ in Bun. Remaining source-wide gaps: LlamaModelsResponse public type, arbitrary caller abort reasons, precise transport-error rendering and additional malformed/progress boundary coverage. Malformed typed optional fields/unknown catalog status values are rejected. Built-in provider/UI integration is still absent.",
+      "state": "excluded",
+      "note": "Excluded by Gregor on 2026-09-26 (docs/scope-decisions.md). The previously committed native management/SSE client and differential fixtures remain; no llama integration is required.",
       "source_sha256": "21dd9b4c662ba4329e1448f93859c6028471347495ca8bb23d3a5a799d03d709",
       "port_sha256": {
         "packages/coding-agent/src/extensions/llama/client.bend": "cce8b69dc92076e2d69c2cb6b29d1f991c0220fe460b860286ac4ae8bc20d3d2"
       }
     },
     "packages/coding-agent/src/extensions/llama/provider.ts": {
-      "state": "partial",
-      "note": "Native provider/controller with model conversion, loaded/sleeping/autoload-preset selection, context-window fallback, image modalities, thinking map and OpenAI compatibility; URL+optional-key login validates the router catalog, and resolve preserves the configured endpoint/env/source. Refresh restores matching cached models, honors publish rejection/network/credential gates, discovers router autoload, queries loaded templates in parallel (sleeping/unloaded models are not woken), then publishes/persists the new catalog. Differential library checks cover catalog/autoload, loaded thinking support, configured auth resolution, login prompts and exact requests, refresh and disabled router autoload on Bun/native1/native4. Login/resolve/refresh tests invoke constructor-registered callbacks and dispose the controller; an online refresh persists its typed catalog and checkedAt, then a fresh controller restores the same models offline without further requests or rewriting storage. Native setCatalog returns a replacement immutable controller; accepted refresh publications update the model runtime live catalog. Remaining validation/integration: rejection/abort/failure paths, multiple parallel template requests, empty optional key/dormant auth, built-in extension/UI registration. Provider-owned check and callable stream/streamSimple fields are absent from the shared native Provider/Auth types (ApiStreams marks dispatch); full public API fidelity remains partial.",
+      "state": "excluded",
+      "note": "Excluded by Gregor on 2026-09-26 (docs/scope-decisions.md). The previously committed native auth/catalog provider and differential fixtures remain; no built-in registration or /llama UI is required.",
       "source_sha256": "8e20963cf6f49148eab235c72c5a5316f248f9c60384947f7927416ce0fdbc8e",
       "port_sha256": {
         "packages/coding-agent/src/extensions/llama/provider.bend": "4b8308d0f263d1c8250b483c61ad073b5b32fa569e1f851c0b04075f66a8f218"
