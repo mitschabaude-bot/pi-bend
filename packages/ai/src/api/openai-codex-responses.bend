@@ -30,6 +30,9 @@ import ../../../runtime/src/sse.bend as Body
 import ../../../runtime/src/text.bend as Space
 import ../../../runtime/src/timer.bend as Timer
 import ../../../runtime/src/utf8.bend as UTF8
+import ../../../runtime/src/url.bend as URL
+import ../../../runtime/src/websocket.bend as WS
+import ../../../runtime/src/websocket-client.bend as Socket
 
 # pi-mono packages/ai/src/api/openai-codex-responses.ts over SSE: the Codex
 # backend's own request lifecycle around the shared Responses preparation
@@ -41,9 +44,10 @@ import ../../../runtime/src/utf8.bend as UTF8
 # mapCodexEvents (Codex error events, endTurn, and stopping at the first
 # terminal response while the body may stay open).
 #
-# Not ported: the WebSocket transport (transport "sse" is the only one; other
-# transports use SSE, which upstream falls back to) and zstd request bodies
-# (upstream sends plain JSON when zstd is unavailable).
+# Native WebSocket requests use the shared event processor, with cancellation,
+# connect/idle deadlines and pre-start SSE fallback. Session connection caching,
+# continuation/reconnect retries and transport diagnostics remain pending.
+# zstd request bodies remain absent (upstream permits plain JSON).
 def J() -> Data: T.JsonValue
 
 def Signal(-Reason: Data) -> Data: Abort.AbortSignal<Reason>
@@ -804,6 +808,128 @@ def streamBody(~Reason: Data, ~G: Data, ~E: Data, +model: T.Model<J()>, options:
         owner : Sse.Body(Reason) <- Source.create(~(Client.ReadError(Reason)), ~(Client.State(Reason)), ~(ReadE(Reason)), ~(Sse.classify(Reason)), ~(Client.read(Reason)), ~(Client.close(Reason)), body)
         borrowedBody(~Reason, ~G, ~E, model, options, output, events, parent, Source.borrow(Client.State(Reason), ReadE(Reason), owner))
 
+# WebSocket messages use the same Codex mapping and Responses fold as SSE.
+# The connection is affine; no shared callbacks conceal its ownership.
+type WebSocketError is Data:
+  TransportFailure{message: String}
+  ProtocolFailure{message: String}
+
+type WebSocketSource<-Reason: Data, -G: Data> is Type:
+  WebSocketSource{connection: Socket.Connection<Deadline.Cause<Reason>>, controller: Abort.AbortController<Deadline.Cause<Reason>>, parent: Signal(Reason), idle: Maybe<&2, U32>, events: EventStream(G), initial: T.AssistantMessage<V.Value, G>, started: Bool, ended: Bool, turn: Maybe<&2, Bool>}
+
+def WebSocketStep(-Reason: Data, -G: Data) -> Type: WebSocketSource<Reason, G> & Result<&2, &2, WebSocketError, Maybe<&2, Stream.ResponseStreamEvent>>
+
+type WebSocketPhase<-Reason: Data, -G: Data> is Type:
+  SocketReading{source: WebSocketSource<Reason, G>}
+  SocketMapping{source: WebSocketSource<Reason, G>, mapped: Mapped}
+  SocketReceived{source: WebSocketSource<Reason, G>, result: Result<&2, &2, String, WS.Message>}
+
+def webSocketMapped(result: Result<&2, &2, Parse.ParseError, V.Value>) -> Mapped:
+  match result:
+    case Done{value}: mapValue(value)
+    case Fail{cause}: Thrown{"Invalid Codex WebSocket JSON: " ++ parseErrorText(cause)}
+
+def socketFailure(-Reason: Data, -G: Data, source: WebSocketSource<Reason, G>, error: WebSocketError) -> IO(WebSocketStep(Reason, G)):
+  IO.pure(WebSocketStep(Reason, G), (source, Fail{error}))
+
+def socketStarted(-G: Data, events: EventStream(G), initial: T.AssistantMessage<V.Value, G>, started: Bool) -> IO(Unit):
+  match started:
+    case True{}: IO.pure(Unit, Unit{})
+    case False{}: Events.push(T.AssistantMessageEvent<V.Value, G>, T.AssistantMessage<V.Value, G>, events, T.Start{initial})
+
+def socketYield(-Reason: Data, -G: Data, source: WebSocketSource<Reason, G>, event: Stream.ResponseStreamEvent, ended: Bool, turn: Maybe<&2, Bool>) -> IO(WebSocketStep(Reason, G)):
+  match source:
+    case WebSocketSource{connection, controller, parent, idle, +events, +initial, started, _, previous}:
+      do IO<WebSocketStep(Reason, G)>:
+        socketStarted(G, events, initial, started)
+        return (WebSocketSource{connection, controller, parent, idle, events, initial, True{}, ended, mergedTurn(turn, previous)}, Done{Some{event}})
+
+def socketReadOutcome(-Reason: Data, milliseconds: U32, reason: Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>>, pair: Socket.Connection<Deadline.Cause<Reason>> & Result<&2, &2, String, WS.Message>) -> Socket.Connection<Deadline.Cause<Reason>> & Result<&2, &2, String, WS.Message>:
+  match pair reason:
+    case (connection, result) None{}: (connection, result)
+    case (connection, _) Some{Abort.Supplied{Deadline.Expired{}}}: (connection, Fail{"WebSocket idle timeout after " ++ U32.show(milliseconds) ++ "ms"})
+    case (connection, _) _: (connection, Fail{aborted()})
+
+def timedSocketWait(~Reason: Data, connection: Socket.Connection<Deadline.Cause<Reason>>, +controller: Abort.AbortController<Deadline.Cause<Reason>>, milliseconds: U32, timer: Timer & TimerCancel) -> IO(Socket.Connection<Deadline.Cause<Reason>> & Result<&2, &2, String, WS.Message>):
+  match timer:
+    case (owner, handle):
+      do IO<Socket.Connection<Deadline.Cause<Reason>> & Result<&2, &2, String, WS.Message>>:
+        worker : Chan(Unit) <- IO.fork(Unit, Deadline.watchTimer(Reason, controller, owner))
+        pair : Socket.Connection<Deadline.Cause<Reason>> & Result<&2, &2, String, WS.Message> <- Socket.recv(~(Deadline.Cause<Reason>), connection)
+        cancelled : Bool <- Timer.cancel(handle)
+        IO.join(Unit, worker)
+        reason : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Abort.reason(Deadline.Cause<Reason>, Abort.signal(Deadline.Cause<Reason>, controller))
+        return socketReadOutcome(Reason, milliseconds, reason, pair)
+
+def timedSocketRead(~Reason: Data, connection: Socket.Connection<Deadline.Cause<Reason>>, controller: Abort.AbortController<Deadline.Cause<Reason>>, timeout: Maybe<&2, U32>) -> IO(Socket.Connection<Deadline.Cause<Reason>> & Result<&2, &2, String, WS.Message>):
+  match timeout:
+    case None{}: Socket.recv(~(Deadline.Cause<Reason>), connection)
+    case Some{0}: Socket.recv(~(Deadline.Cause<Reason>), connection)
+    case Some{+milliseconds}:
+      do IO<Socket.Connection<Deadline.Cause<Reason>> & Result<&2, &2, String, WS.Message>>:
+        timer : Timer & TimerCancel <- Timer.new(milliseconds)
+        timedSocketWait(~Reason, connection, controller, milliseconds, timer)
+
+def socketReadPhase(-Reason: Data, -G: Data, controller: Abort.AbortController<Deadline.Cause<Reason>>, parent: Signal(Reason), idle: Maybe<&2, U32>, events: EventStream(G), initial: T.AssistantMessage<V.Value, G>, started: Bool, turn: Maybe<&2, Bool>, pair: Socket.Connection<Deadline.Cause<Reason>> & Result<&2, &2, String, WS.Message>) -> WebSocketPhase<Reason, G>:
+  match pair:
+    case (connection, result): SocketReceived{WebSocketSource{connection, controller, parent, idle, events, initial, started, False{}, turn}, result}
+
+def socketPonged(-Reason: Data, -G: Data, controller: Abort.AbortController<Deadline.Cause<Reason>>, parent: Signal(Reason), idle: Maybe<&2, U32>, events: EventStream(G), initial: T.AssistantMessage<V.Value, G>, started: Bool, turn: Maybe<&2, Bool>, pair: Socket.Connection<Deadline.Cause<Reason>> & Result<&2, &2, String, Unit>) -> WebSocketPhase<Reason, G>:
+  match pair:
+    case (connection, Done{_}): SocketReading{WebSocketSource{connection, controller, parent, idle, events, initial, started, False{}, turn}}
+    case (connection, Fail{message}): SocketReceived{WebSocketSource{connection, controller, parent, idle, events, initial, started, False{}, turn}, Fail{message}}
+
+def binarySocketPayload(value: Result<&2, &2, UTF8.Error, String>) -> Mapped:
+  match value:
+    case Fail{_}: Thrown{"Invalid Codex WebSocket UTF-8"}
+    case Done{payload}: webSocketMapped(Parse.parse(payload))
+
+@unsafe
+def socketAdvance(~Reason: Data, ~G: Data, phase: WebSocketPhase<Reason, G>) -> IO(WebSocketStep(Reason, G)):
+  match phase:
+    case SocketReading{WebSocketSource{connection, controller, parent, idle, events, initial, started, True{}, turn}}:
+      IO.pure(WebSocketStep(Reason, G), (WebSocketSource{connection, controller, parent, idle, events, initial, started, True{}, turn}, Done{None{}}))
+    case SocketReading{WebSocketSource{connection, +controller, +parent, +idle, events, initial, started, False{}, turn}}:
+      do IO<WebSocketStep(Reason, G)>:
+        pair : Socket.Connection<Deadline.Cause<Reason>> & Result<&2, &2, String, WS.Message> <- timedSocketRead(~Reason, connection, controller, idle)
+        socketAdvance(~Reason, ~G, socketReadPhase(Reason, G, controller, parent, idle, events, initial, started, turn, pair))
+    case SocketMapping{source, Skip{}}: socketAdvance(~Reason, ~G, SocketReading{source})
+    case SocketMapping{source, Thrown{message}}: socketFailure(Reason, G, source, ProtocolFailure{message})
+    case SocketMapping{source, Pass{event}}: socketYield(Reason, G, source, event, False{}, None{})
+    case SocketMapping{source, Final{event, turn}}: socketYield(Reason, G, source, event, True{}, turn)
+    case SocketReceived{source, Fail{message}}: socketFailure(Reason, G, source, TransportFailure{message})
+    case SocketReceived{source, Done{WS.TextMessage{SNil{}}}}: socketAdvance(~Reason, ~G, SocketReading{source})
+    case SocketReceived{source, Done{WS.TextMessage{payload}}}: socketAdvance(~Reason, ~G, SocketMapping{source, webSocketMapped(Parse.parse(payload))})
+    case SocketReceived{source, Done{WS.BinaryMessage{bytes}}}: socketAdvance(~Reason, ~G, SocketMapping{source, binarySocketPayload(UTF8.decodeStrict(bytes))})
+    case SocketReceived{WebSocketSource{connection, controller, parent, idle, events, initial, started, ended, turn}, Done{WS.Ping{bytes}}}:
+      do IO<WebSocketStep(Reason, G)>:
+        pair : Socket.Connection<Deadline.Cause<Reason>> & Result<&2, &2, String, Unit> <- Socket.sendPong(~(Deadline.Cause<Reason>), connection, bytes)
+        socketAdvance(~Reason, ~G, socketPonged(Reason, G, controller, parent, idle, events, initial, started, turn, pair))
+    case SocketReceived{source, Done{WS.Pong{_}}}: socketAdvance(~Reason, ~G, SocketReading{source})
+    case SocketReceived{source, Done{WS.CloseMessage{_, +reason}}}: socketFailure(Reason, G, source, TransportFailure{"WebSocket stream closed before response.completed" ++ Bool.pick(String, String.is_empty(reason), "", ": " ++ reason)})
+
+def socketChecked(~Reason: Data, ~G: Data, source: WebSocketSource<Reason, G>, cancelled: Bool) -> IO(WebSocketStep(Reason, G)):
+  match cancelled:
+    case True{}: socketFailure(Reason, G, source, TransportFailure{aborted()})
+    case False{}: socketAdvance(~Reason, ~G, SocketReading{source})
+
+def socketNext(~Reason: Data, ~G: Data, source: WebSocketSource<Reason, G>) -> IO(WebSocketStep(Reason, G)):
+  match source:
+    case WebSocketSource{connection, controller, +parent, idle, events, initial, started, ended, turn}:
+      do IO<WebSocketStep(Reason, G)>:
+        cancelled : Bool <- Abort.aborted(Reason, parent)
+        socketChecked(~Reason, ~G, WebSocketSource{connection, controller, parent, idle, events, initial, started, ended, turn}, cancelled)
+
+def socketClose(-Reason: Data, -G: Data, source: WebSocketSource<Reason, G>) -> IO(WebSocketSource<Reason, G> & Result<&2, &2, WebSocketError, Unit>):
+  IO.pure(WebSocketSource<Reason, G> & Result<&2, &2, WebSocketError, Unit>, (source, Done{Unit{}}))
+
+def socketEmit(-Reason: Data, -G: Data, source: WebSocketSource<Reason, G>, event: T.AssistantMessageEvent<V.Value, G>) -> IO(WebSocketSource<Reason, G> & Result<&2, &2, WebSocketError, Unit>):
+  match source:
+    case WebSocketSource{connection, controller, parent, idle, +events, initial, started, ended, turn}:
+      do IO<WebSocketSource<Reason, G> & Result<&2, &2, WebSocketError, Unit>>:
+        Events.push(T.AssistantMessageEvent<V.Value, G>, T.AssistantMessage<V.Value, G>, events, event)
+        return (WebSocketSource{connection, controller, parent, idle, events, initial, started, ended, turn}, Done{Unit{}})
+
 # The request
 # -----------
 def failureOutcome(-Reason: Data, -G: Data, -E: Data, output: T.AssistantMessage<V.Value, G>, failure: Failure<E>) -> Responses.Outcome<Reason, G, E>:
@@ -863,23 +989,157 @@ def retriesOf(value: Maybe<&2, F64>) -> Nat:
     case None{}: DEFAULT_MAX_RETRIES()
     case Some{count}: U32.to_nat(sleepMilliseconds(Timer.milliseconds(count)))
 
-def timed(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, config: Responses.Config, +model: T.Model<J()>, hook: Maybe<&2, T.ResponseCallback(T.Model<J()>, E)>, retries: Maybe<&2, F64>, delay: Maybe<&2, F64>, processing: Stream.OpenAIResponsesStreamOptions, custom: Maybe<&2, Fetch.Fetch(Reason)>, output: T.AssistantMessage<V.Value, G>, events: EventStream(G), +parent: Signal(Reason), request: IO(Result<&2, &2, Client.RequestError, Client.Request>), timeout: Result<&2, &2, String, Maybe<&2, U32>>) -> IO(Responses.Outcome<Reason, G, E>):
+def codexWire(config: Responses.Config, apiKey: String, accountId: String, headers: T.ProviderHeaders(), sessionId: Maybe<&2, String>, baseUrl: String, body: J()) -> IO(Result<&2, &2, Client.RequestError, Client.Request>):
+  match config:
+    case Responses.Config{url, defaults, _, _, _, _, _}: IO.pure(Result<&2, &2, Client.RequestError, Client.Request>, Client.prepareCodexRequest(url, defaults, apiKey, accountId, headers, sessionId, baseUrl, None{}, body))
+
+# WebSocket acquisition and fallback share the immutable prepared HTTP request.
+# SSE receives the original headers/body, unaffected by the upgrade overlays.
+type WebSocketAttempt<-Reason: Data, -G: Data, -E: Data> is Data:
+  WebSocketAttempt{outcome: Responses.Outcome<Reason, G, E>, fallback: Bool}
+
+def socketErrorMessage(error: WebSocketError) -> String:
+  match error:
+    case TransportFailure{message}: message
+    case ProtocolFailure{message}: message
+
+def socketCanFallback(started: Bool, error: Maybe<&2, Stream.Error<WebSocketError>>) -> Bool:
+  match started error:
+    case False{} Some{Stream.ReadFailure{TransportFailure{_}}}: True{}
+    case _ _: False{}
+
+def socketProcessingMessage(error: Stream.Error<WebSocketError>) -> String:
+  match error:
+    case Stream.ReadFailure{cause}: socketErrorMessage(cause)
+    case Stream.EmitFailure{cause}: socketErrorMessage(cause)
+    case Stream.ContentFailure{cause}: Sampling.errorMessage(cause)
+    case Stream.TerminalFailure{cause}: Stream.terminalMessage(cause)
+
+def socketFinished(-Reason: Data, -G: Data, -E: Data, pair: WebSocketSource<Reason, G> & Stream.RunResult<G, WebSocketError>) -> IO(WebSocketAttempt<Reason, G, E>):
+  match pair:
+    case (WebSocketSource{connection, _, _, _, _, _, started, _, turn}, Stream.RunResult{output, +error}):
+      do IO<WebSocketAttempt<Reason, G, E>>:
+        Socket.dispose(Deadline.Cause<Reason>, connection)
+        return WebSocketAttempt{Responses.Outcome{withEndTurn(G, output, turn), Maybe.map(&2, Stream.Error<WebSocketError>, Responses.Error<Reason, E>, cause => Responses.OutputFailure{socketProcessingMessage(cause)}, error), None{}}, socketCanFallback(started, error)}
+
+def socketSent(~Reason: Data, ~G: Data, ~E: Data, model: T.Model<J()>, processing: Stream.OpenAIResponsesStreamOptions, +output: T.AssistantMessage<V.Value, G>, events: EventStream(G), parent: Signal(Reason), controller: Abort.AbortController<Deadline.Cause<Reason>>, idle: Maybe<&2, U32>, pair: Socket.Connection<Deadline.Cause<Reason>> & Result<&2, &2, String, Unit>) -> IO(WebSocketAttempt<Reason, G, E>):
+  match pair:
+    case (connection, Fail{message}):
+      do IO<WebSocketAttempt<Reason, G, E>>:
+        Socket.dispose(Deadline.Cause<Reason>, connection)
+        return WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}}, True{}}
+    case (connection, Done{_}):
+      do IO<WebSocketAttempt<Reason, G, E>>:
+        pair : WebSocketSource<Reason, G> & Stream.RunResult<G, WebSocketError> <- Stream.processResponsesStream(~WebSocketSource<Reason, G>, ~WebSocketError, ~J(), ~G, ~(socketNext(~Reason, ~G)), ~(socketClose(Reason, G)), ~(socketEmit(Reason, G)), ~Responses.resolveCodexServiceTier, ~Responses.tierPricing, WebSocketSource{connection, controller, parent, idle, events, output, False{}, False{}, None{}}, output, model, processing)
+        socketFinished(Reason, G, E, pair)
+
+def socketWithScope(~Reason: Data, ~G: Data, ~E: Data, model: T.Model<J()>, processing: Stream.OpenAIResponsesStreamOptions, output: T.AssistantMessage<V.Value, G>, events: EventStream(G), parent: Signal(Reason), scope: Deadline.Scope<Reason>, idle: Maybe<&2, U32>, sent: Socket.Connection<Deadline.Cause<Reason>> & Result<&2, &2, String, Unit>) -> IO(WebSocketAttempt<Reason, G, E>):
+  match scope:
+    case Deadline.Scope{+controller, lifetime}:
+      do IO<WebSocketAttempt<Reason, G, E>>:
+        outcome : WebSocketAttempt<Reason, G, E> <- socketSent(~Reason, ~G, ~E, model, processing, output, events, parent, controller, idle, sent)
+        ignored : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, Deadline.Scope{controller, lifetime})
+        return outcome
+
+def socketConnected(~Reason: Data, ~G: Data, ~E: Data, model: T.Model<J()>, processing: Stream.OpenAIResponsesStreamOptions, output: T.AssistantMessage<V.Value, G>, events: EventStream(G), parent: Signal(Reason), scope: Deadline.Scope<Reason>, idle: Maybe<&2, U32>, body: Result<&2, &2, String, String>, result: Result<&2, &1, String, Socket.Connection<Deadline.Cause<Reason>>>) -> IO(WebSocketAttempt<Reason, G, E>):
+  match result body:
+    case Fail{message} _:
+      do IO<WebSocketAttempt<Reason, G, E>>:
+        ignored : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
+        return WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}}, True{}}
+    case Done{connection} Fail{message}:
+      do IO<WebSocketAttempt<Reason, G, E>>:
+        Socket.dispose(Deadline.Cause<Reason>, connection)
+        ignored : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
+        return WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}}, False{}}
+    case Done{connection} Done{text}:
+      do IO<WebSocketAttempt<Reason, G, E>>:
+        following : Deadline.Scope<Reason> <- Deadline.disarm(Reason, scope)
+        sent : Socket.Connection<Deadline.Cause<Reason>> & Result<&2, &2, String, Unit> <- Socket.sendText(~(Deadline.Cause<Reason>), connection, text)
+        socketWithScope(~Reason, ~G, ~E, model, processing, output, events, parent, following, idle, sent)
+
+def socketDeadline(-Reason: Data, parent: Signal(Reason), timeout: Maybe<&2, U32>) -> IO(Deadline.Scope<Reason>):
+  match timeout:
+    case Some{0}: Deadline.follow(Reason, parent)
+    case Some{milliseconds}: Deadline.create(Reason, milliseconds, parent)
+    case None{}: Deadline.create(Reason, 15000, parent)
+
+def webSocketAddress(value: String) -> String:
+  match value:
+    case SCon{'h', SCon{'t', SCon{'t', SCon{'p', SCon{':', rest}}}}}: "ws:" ++ rest
+    case SCon{'h', SCon{'t', SCon{'t', SCon{'p', SCon{'s', SCon{':', rest}}}}}}: "wss:" ++ rest
+    case other: other
+
+def responseCreateParsed(result: Result<&2, &2, Parse.ParseError, V.Value>) -> Result<&2, &2, String, String>:
+  match result:
+    case Done{V.ObjectValue{+fields}}:
+      +kind = Maybe.default(&2, V.Value, R.get(V.Value, fields, "type"), V.Text{"response.create"})
+      Done{Maybe.default(&2, String, Wire.stringify(Schema.toJson(V.ObjectValue{R.set(V.Value, fields, "type", kind)})), "")}
+    case _: Fail{"Codex WebSocket request must be a JSON object"}
+
+def responseCreate(body: String) -> Result<&2, &2, String, String>: responseCreateParsed(Parse.parse(body))
+
+def socketOpen(~Reason: Data, ~G: Data, ~E: Data, +model: T.Model<J()>, processing: Stream.OpenAIResponsesStreamOptions, output: T.AssistantMessage<V.Value, G>, events: EventStream(G), parent: Signal(Reason), idle: Maybe<&2, U32>, runtime: Fetch.Runtime, config: Socket.Config, url: String, headers: H.Headers, body: String, pair: Deadline.Scope<Reason> & Abort.AbortSignal<Deadline.Cause<Reason>>) -> IO(WebSocketAttempt<Reason, G, E>):
+  match pair:
+    case (scope, signal):
+      do IO<WebSocketAttempt<Reason, G, E>>:
+        connected : Result<&2, &1, String, Socket.Connection<Deadline.Cause<Reason>>> <- Socket.connect(~(Deadline.Cause<Reason>), config, url, headers, signal)
+        attempt : WebSocketAttempt<Reason, G, E> <- socketConnected(~Reason, ~G, ~E, model, processing, output, events, parent, scope, idle, responseCreate(body), connected)
+        Fetch.dispose(runtime)
+        return attempt
+
+def socketBorrowed(~Reason: Data, ~G: Data, ~E: Data, +model: T.Model<J()>, processing: Stream.OpenAIResponsesStreamOptions, output: T.AssistantMessage<V.Value, G>, events: EventStream(G), +parent: Signal(Reason), timeout: Maybe<&2, U32>, idle: Maybe<&2, U32>, request: Client.Request, pair: Fetch.Runtime & Socket.Config) -> IO(WebSocketAttempt<Reason, G, E>):
+  match request pair:
+    case Client.Request{url, _, +headers, body, _} Tuple{runtime, config}:
+      do IO<WebSocketAttempt<Reason, G, E>>:
+        scope : Deadline.Scope<Reason> <- socketDeadline(Reason, parent, timeout)
+        socketOpen(~Reason, ~G, ~E, model, processing, output, events, parent, idle, runtime, config, webSocketAddress(URL.serialize(url, True{})), Result.default(&2, &2, H.HeaderSyntaxError, H.Headers, H.delete(headers, "OpenAI-Beta"), headers), body, Deadline.borrow(Reason, scope))
+
+def socketRuntime(~Reason: Data, ~G: Data, ~E: Data, config: Responses.Config, model: T.Model<J()>, processing: Stream.OpenAIResponsesStreamOptions, output: T.AssistantMessage<V.Value, G>, events: EventStream(G), parent: Signal(Reason), timeout: Maybe<&2, U32>, idle: Maybe<&2, U32>, request: Client.Request, runtime: Result<&2, &1, Fetch.InitError, Fetch.Runtime>) -> IO(WebSocketAttempt<Reason, G, E>):
+  match config runtime:
+    case _ Fail{_}: IO.pure(WebSocketAttempt<Reason, G, E>, WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{"WebSocket resolver initialization failed"}}, None{}}, True{}})
+    case Responses.Config{url, _, _, _, security, _, _} Done{runtime}: socketBorrowed(~Reason, ~G, ~E, model, processing, output, events, parent, timeout, idle, request, Socket.borrow(runtime, security, url))
+
+def socketFallback(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, config: Responses.Config, model: T.Model<J()>, plan: Plan<Reason, E>, custom: Maybe<&2, Fetch.Fetch(Reason)>, original: T.AssistantMessage<V.Value, G>, events: EventStream(G), parent: Signal(Reason), request: Client.Request, attempt: WebSocketAttempt<Reason, G, E>, cancelled: Bool) -> IO(Responses.Outcome<Reason, G, E>):
+  match cancelled attempt:
+    case True{} WebSocketAttempt{Responses.Outcome{partial, _, _}, _}: IO.pure(Responses.Outcome<Reason, G, E>, Responses.Outcome{partial, Some{Responses.RequestAborted{}}, None{}})
+    case False{} WebSocketAttempt{_, True{}}: requested(~Reason, ~G, ~E, ~render, config, model, plan, custom, original, events, parent, Done{request})
+    case False{} WebSocketAttempt{outcome, False{}}: IO.pure(Responses.Outcome<Reason, G, E>, outcome)
+
+def usesWebSocket(transport: Maybe<&2, T.Transport>) -> Bool:
+  match transport:
+    case Some{T.Sse{}}: False{}
+    case _: True{}
+
+def selectedSocket(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, +configuration: Responses.Config, +model: T.Model<J()>, +selection: Plan<Reason, E>, custom: Maybe<&2, Fetch.Fetch(Reason)>, +output: T.AssistantMessage<V.Value, G>, +events: EventStream(G), +parent: Signal(Reason), +wire: Client.Request, deadline: Maybe<&2, U32>) -> IO(Responses.Outcome<Reason, G, E>):
+  match configuration selection:
+    case Responses.Config{url, defaults, +files, +options, security, limit, synthesize} Plan{hook, idle, retries, delay, processing}:
+      do IO<Responses.Outcome<Reason, G, E>>:
+        runtime : Result<&2, &1, Fetch.InitError, Fetch.Runtime> <- Fetch.create(files, options)
+        attempt : WebSocketAttempt<Reason, G, E> <- socketRuntime(~Reason, ~G, ~E, configuration, model, processing, output, events, parent, deadline, idle, wire, runtime)
+        cancelled : Bool <- Abort.aborted(Reason, parent)
+        socketFallback(~Reason, ~G, ~E, ~render, configuration, model, selection, custom, output, events, parent, wire, attempt, cancelled)
+
+def selectedTransport(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, +configuration: Responses.Config, +model: T.Model<J()>, +selection: Plan<Reason, E>, +custom: Maybe<&2, Fetch.Fetch(Reason)>, +output: T.AssistantMessage<V.Value, G>, +events: EventStream(G), +parent: Signal(Reason), trySocket: Bool, connectDeadline: Result<&2, &2, String, Maybe<&2, U32>>, wireResult: Result<&2, &2, Client.RequestError, Client.Request>) -> IO(Responses.Outcome<Reason, G, E>):
+  match trySocket wireResult connectDeadline:
+    case False{} wire _: requested(~Reason, ~G, ~E, ~render, configuration, model, selection, custom, output, events, parent, wire)
+    case True{} Fail{cause} _: IO.pure(Responses.Outcome<Reason, G, E>, Responses.Outcome{output, Some{Responses.RequestRejected{cause}}, None{}})
+    case True{} _ Fail{message}: IO.pure(Responses.Outcome<Reason, G, E>, Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}})
+    case True{} Done{+wire} Done{deadline}: selectedSocket(~Reason, ~G, ~E, ~render, configuration, model, selection, custom, output, events, parent, wire, deadline)
+
+def timed(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, +config: Responses.Config, +model: T.Model<J()>, hook: Maybe<&2, T.ResponseCallback(T.Model<J()>, E)>, retries: Maybe<&2, F64>, delay: Maybe<&2, F64>, processing: Stream.OpenAIResponsesStreamOptions, custom: Maybe<&2, Fetch.Fetch(Reason)>, output: T.AssistantMessage<V.Value, G>, events: EventStream(G), +parent: Signal(Reason), request: IO(Result<&2, &2, Client.RequestError, Client.Request>), timeout: Result<&2, &2, String, Maybe<&2, U32>>, transport: Maybe<&2, T.Transport>, connectTimeout: Maybe<&2, F64>) -> IO(Responses.Outcome<Reason, G, E>):
   match timeout:
     case Fail{message}: IO.pure(Responses.Outcome<Reason, G, E>, Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}})
     case Done{deadline}:
       do IO<Responses.Outcome<Reason, G, E>>:
         wire : Result<&2, &2, Client.RequestError, Client.Request> <- request
-        requested(~Reason, ~G, ~E, ~render, config, model, Plan{hook, deadline, retriesOf(retries), delay, processing}, custom, output, events, parent, wire)
-
-def codexWire(config: Responses.Config, apiKey: String, accountId: String, headers: T.ProviderHeaders(), sessionId: Maybe<&2, String>, baseUrl: String, body: J()) -> IO(Result<&2, &2, Client.RequestError, Client.Request>):
-  match config:
-    case Responses.Config{url, defaults, _, _, _, _, _}: IO.pure(Result<&2, &2, Client.RequestError, Client.Request>, Client.prepareCodexRequest(url, defaults, apiKey, accountId, headers, sessionId, baseUrl, None{}, body))
+        selectedTransport(~Reason, ~G, ~E, ~render, config, model, Plan{hook, deadline, retriesOf(retries), delay, processing}, custom, output, events, parent, usesWebSocket(transport), normalizeTimeoutMs(connectTimeout), wire)
 
 def payloaded(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, ~render: E -> String, +config: Responses.Config, +model: T.Model<J()>, options: Responses.StreamOptions(Reason, Telemetry, E), request: Responses.ProviderRequest, output: T.AssistantMessage<V.Value, G>, events: EventStream(G), +parent: Signal(Reason), chosen: Result<&2, &2, E, J()>) -> IO(Responses.Outcome<Reason, G, E>):
   match options request chosen:
     case _ _ Fail{cause}: IO.pure(Responses.Outcome<Reason, G, E>, Responses.Outcome{output, Some{Responses.HookFailure{cause}}, None{}})
-    case T.StreamOptions{_, _, _, custom, _, _, hook, _, timeout, retries, delay, _, _, _, _, _, _, _, _} Responses.ProviderRequest{apiKey, baseUrl, headers, _, Responses.CodexTarget{accountId, sessionId}, processing} Done{body}:
-      timed(~Reason, ~G, ~E, ~render, config, model, hook, retries, delay, processing, custom, output, events, parent, codexWire(config, apiKey, accountId, headers, sessionId, baseUrl, body), normalizeTimeoutMs(timeout))
+    case T.StreamOptions{_, _, _, custom, _, _, hook, _, timeout, retries, delay, _, _, _, transport, _, _, ws, _} Responses.ProviderRequest{apiKey, baseUrl, headers, _, Responses.CodexTarget{accountId, sessionId}, processing} Done{body}:
+      timed(~Reason, ~G, ~E, ~render, config, model, hook, retries, delay, processing, custom, output, events, parent, codexWire(config, apiKey, accountId, headers, sessionId, baseUrl, body), normalizeTimeoutMs(timeout), transport, ws)
     case _ _ Done{_}: IO.pure(Responses.Outcome<Reason, G, E>, Responses.Outcome{output, Some{Responses.PreparationFailure{Responses.UnsupportedApi{T.OpenAIResponsesApi{}}}}, None{}})
 
 def codexRequest(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, ~render: E -> String, config: Responses.Config, +model: T.Model<J()>, +options: Responses.StreamOptions(Reason, Telemetry, E), output: T.AssistantMessage<V.Value, G>, events: EventStream(G), +parent: Signal(Reason), ready: Result<&2, &2, Responses.PreparationError, Responses.ProviderRequest>) -> IO(Responses.Outcome<Reason, G, E>):

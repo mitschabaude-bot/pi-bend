@@ -75,6 +75,25 @@ def checked(-Reason: Data, milliseconds: U32, parent: Abort.AbortSignal<Reason>,
         timer : Timer & TimerCancel <- Timer.new(milliseconds)
         observing(Reason, controller, observation, timer)
 
+# Forward parent cancellation without an expiry timer.
+def watchFollowing(-Reason: Data, controller: Abort.AbortController<Cause<Reason>>, ticket: Deferred.Ticket<Maybe<&2, Abort.AbortReason<Reason>>>) -> IO(Unit):
+  do IO<Unit>:
+    reason : Maybe<&2, Abort.AbortReason<Reason>> <- Deferred.wait(Maybe<&2, Abort.AbortReason<Reason>>, ticket)
+    inherited(Reason, controller, reason)
+
+def following(-Reason: Data, +controller: Abort.AbortController<Cause<Reason>>, observation: Deferred.Observation<Abort.AbortReason<Reason>>) -> IO(Scope<Reason>):
+  match observation:
+    case Deferred.Observation{ticket, cancellation}:
+      do IO<Scope<Reason>>:
+        task : Chan(Unit) <- IO.fork(Unit, watchFollowing(Reason, controller, ticket))
+        return Scope{controller, Some{Following{cancellation, task}}}
+
+def follow(-Reason: Data, parent: Abort.AbortSignal<Reason>) -> IO(Scope<Reason>):
+  do IO<Scope<Reason>>:
+    controller : Abort.AbortController<Cause<Reason>> <- Abort.new(Cause<Reason>)
+    observation : Deferred.Observation<Abort.AbortReason<Reason>> <- Abort.observe(Reason, parent)
+    following(Reason, controller, observation)
+
 # The deadline begins at Timer.new and uses literal milliseconds, including
 # zero. A parent already aborted at the initial check wins without any timer.
 # Otherwise parent forwarding and expiry compete through first-settlement.
