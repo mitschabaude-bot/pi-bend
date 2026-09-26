@@ -1192,6 +1192,17 @@
       "port_sha256": {
         "packages/coding-agent/src/utils/clipboard-command.bend": "fa5bbe43f005a7e9f60aee2f037f2792a91e27e5f559a26f21b86aab8933de3f"
       }
+    },
+    "packages/coding-agent/src/core/remote-catalog-provider.ts": {
+      "state": "partial",
+      "note": "withRemoteCatalog, parseCatalog (array, {models}, keyed object; entries decoded as models.json model definitions with the provider id), remoteModels, the refresh TTL, If-None-Match revalidation, 304/404/501/error handling and publication are ported and tested (tests/remote-catalog.bend). Last-Modified is parsed as an HTTP date (strict native date parsing). Not yet wired into ModelRuntime creation: with only the in-memory models store (FileModelsStore is not ported) every start would re-request all built-in catalogs, so the wrapping waits for persisted catalogs.",
+      "ports": [
+        "packages/coding-agent/src/core/remote-catalog-provider.bend"
+      ],
+      "source_sha256": "72c74d4d41954deabc9b1b52c9274e76a95f8148b732400f9225ff529aacb915",
+      "port_sha256": {
+        "packages/coding-agent/src/core/remote-catalog-provider.bend": "f5528a24980e1617a4e52cbaff87ae11f6dbea5d1ea014c96466bfdade9023a4"
+      }
     }
   }
 }
