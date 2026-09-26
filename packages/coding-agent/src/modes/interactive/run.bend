@@ -64,6 +64,7 @@ import ./components/status-indicator.bend as Status
 import ./components/header.bend as Header
 import ./components/keybinding-hints.bend as Hints
 import ./components/session-selector.bend as Selector
+import ./components/user-message-selector.bend as UserPicker
 import ./components/model-selector.bend as ModelPicker
 import ./components/thinking-selector.bend as ThinkingPicker
 import ./components/scoped-models-selector.bend as ScopePicker
@@ -642,11 +643,30 @@ def selectorFilter(value: Settings.TreeFilterMode) -> Selector.Filter:
 def matchTree(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.StatusSink,result: Result<&2,&2,Tree.Error,List<&2,Selector.Node()>>,leaf: Maybe<&2,String>,filter: Selector.Filter) -> IO(Unit):
   match result:
     case Fail{_}: selectorNotice(failure,"Cannot load session tree")
-    case Done{nodes}: openCandidate(selector,failure,Selector.createWithFilter(nodes,leaf,Selector.TreeMode{},24n,filter),"No entries in session")
+    case Done{nodes}: openCandidate(selector,failure,Selector.createWithFilter(nodes,leaf,24n,filter),"No entries in session")
+def forkItems(entries: List<&2,Selector.Entry()>) -> List<&2,UserPicker.UserMessageItem>:
+  match entries:
+    case Nil{}: Nil{}
+    case Tree.SessionMessageEntry{Tree.SessionEntryBase{id,_,timestamp},Agent.LlmMessage{Ai.User{Ai.UserMessage{content,_}}}} <> rest:
+      +text = Selector.contentText(content)
+      +tail = forkItems(rest)
+      Bool.pick(List<&2,UserPicker.UserMessageItem>,String.is_empty(text),tail,UserPicker.UserMessageItem{id,text,Some{timestamp}} <> tail)
+    case _ <> rest: forkItems(rest)
+def openForkTarget(target: Maybe<&2,Selector.Host>,component: UserPicker.UserMessageSelectorComponent) -> IO(Unit):
+  match target:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{host}: Selector.openFork(host,component)
+def openForkPicker(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.StatusSink,items: List<&2,UserPicker.UserMessageItem>) -> IO(Unit):
+  match items:
+    case Nil{}: selectorNotice(failure,"No messages to fork from")
+    case item <> rest:
+      do IO<Unit>:
+        target : Maybe<&2,Selector.Host> <- Ref.read(Maybe<&2,Selector.Host>,selector)
+        openForkTarget(target,UserPicker.new(item <> rest,None{}))
 def selectorFromState(mode: Selector.Mode,+state: Session.State(),filter: Selector.Filter,selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.StatusSink) -> IO(Unit):
   match mode:
     case Selector.TreeMode{}: matchTree(selector,failure,Tree.getTree(Unit,Tools.ToolDetails,Schema.Value,state),Tree.getLeafId(Unit,Tools.ToolDetails,Schema.Value,state),filter)
-    case Selector.ForkMode{}: openCandidate(selector,failure,Selector.createFork(Tree.getEntries(Unit,Tools.ToolDetails,Schema.Value,state),24n),"No user messages found")
+    case Selector.ForkMode{}: openForkPicker(selector,failure,forkItems(Tree.getEntries(Unit,Tools.ToolDetails,Schema.Value,state)))
 def openSessionSelector(mode: Selector.Mode,session: Ref.Ref<Session.AgentSession>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
   do IO<Unit>:
     +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
@@ -1796,10 +1816,16 @@ def failedSelection(sink: SelectionSink,message: String) -> IO(Unit):
     case SelectionSink{_,_,_,_,failure,redraw,_,_}:
       do IO<Unit>:
         Interactive.report(failure,Interactive.PromptFailure{message})
+def forkSelectionNotice(sink: SelectionSink) -> IO(Unit):
+  match sink: case SelectionSink{_,_,_,_,failure,_,_,_}: selectorNotice(failure,"Forked to new session")
 def selectionResult(sink: SelectionSink,result: Controller.SelectionResult) -> IO(Unit):
   match result:
     case Controller.Navigated{navigation}: refreshSelection(sink,Controller.Navigated{navigation})
-    case Controller.Forked{text}: refreshSelection(sink,Controller.Forked{text})
+    case Controller.Forked{text}:
+      +target = {sink: SelectionSink}
+      do IO<Unit>:
+        refreshSelection(target,Controller.Forked{text})
+        forkSelectionNotice(target)
     case Controller.SelectionFailed{message}: failedSelection(sink,message)
 type SelectInput is Data: SelectInput{queue: Controller.Handle,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type ScopeInput is Data:

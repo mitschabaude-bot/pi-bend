@@ -13,9 +13,9 @@ import ../../../../../tui/src/keys.bend as Keys
 import ../../../../../tui/src/utils.bend as Utils
 import ../../../core/agent-session.bend as Session
 import ../../../core/session-manager.bend as Tree
-import ../../../core/session-persistence.bend as Persistence
 import ../../../core/tools/index.bend as Tools
 import ../theme/theme.bend as Theme
+import ./user-message-selector.bend as UserPicker
 
 # The selector keeps the session graph, rather than flattening it to an
 # unrelated menu. Its visible rows retain branch connectors and the active
@@ -29,7 +29,7 @@ type Action is Data: Continue{} Cancel{} Chosen{id: String}
 type Row is Data:
   Row{id: String,parent: Maybe<&2,String>,label: Maybe<&2,String>,text: String,prefix: String,connector: String,active: Bool,user: Bool,tool: Bool,bookkeeping: Bool,usage: Bool}
 type State is Data:
-  State{mode: Mode,all: List<&2,Row>,visible: List<&2,Row>,selected: Nat,filter: Filter,search: String,leaf: Maybe<&2,String>,folded: List<&2,String>,height: Nat}
+  State{all: List<&2,Row>,visible: List<&2,Row>,selected: Nat,filter: Filter,search: String,leaf: Maybe<&2,String>,folded: List<&2,String>,height: Nat}
 
 def contentText(content: Ai.UserContent) -> String:
   match content:
@@ -130,25 +130,24 @@ def everyToken(tokens: List<&2,String>,+haystack: String) -> Bool:
 def matchesSearch(text: String,label: Maybe<&2,String>,search: String) -> Bool:
   +haystack = CaseMap.lower(text ++ " " ++ Maybe.default(&2,String,label,""))
   everyToken(String.split(CaseMap.lower(spaceSeparated(search,"")),' '),haystack)
-def shown(row: Row,mode: Mode,filter: Filter,search: String) -> Bool:
-  match row mode filter:
-    case Row{_,_,label,text,_,_,_,user,tool,bookkeeping,_} ForkMode{} _: user && matchesSearch(text,label,search)
-    case Row{_,_,label,text,_,_,_,user,tool,bookkeeping,_} TreeMode{} Default{}: Bool.not(bookkeeping) && matchesSearch(text,label,search)
-    case Row{_,_,label,text,_,_,_,user,tool,bookkeeping,_} TreeMode{} NoTools{}: Bool.not(bookkeeping || tool) && matchesSearch(text,label,search)
-    case Row{_,_,label,text,_,_,_,user,tool,bookkeeping,_} TreeMode{} UserOnly{}: user && matchesSearch(text,label,search)
-    case Row{_,_,Some{label},text,_,_,_,_,_,_,_} TreeMode{} LabeledOnly{}: matchesSearch(text,Some{label},search)
-    case _ TreeMode{} LabeledOnly{}: False{}
-    case Row{_,_,label,text,_,_,_,_,_,_,_} TreeMode{} All{}: matchesSearch(text,label,search)
+def shown(row: Row,filter: Filter,search: String) -> Bool:
+  match row filter:
+    case Row{_,_,label,text,_,_,_,user,tool,bookkeeping,_} Default{}: Bool.not(bookkeeping) && matchesSearch(text,label,search)
+    case Row{_,_,label,text,_,_,_,user,tool,bookkeeping,_} NoTools{}: Bool.not(bookkeeping || tool) && matchesSearch(text,label,search)
+    case Row{_,_,label,text,_,_,_,user,tool,bookkeeping,_} UserOnly{}: user && matchesSearch(text,label,search)
+    case Row{_,_,Some{label},text,_,_,_,_,_,_,_} LabeledOnly{}: matchesSearch(text,Some{label},search)
+    case _ LabeledOnly{}: False{}
+    case Row{_,_,label,text,_,_,_,_,_,_,_} All{}: matchesSearch(text,label,search)
 def usageRow(row: Row) -> Bool:
   match row: case Row{_,_,_,_,_,_,_,_,_,_,usage}: usage
-def passes(+row: Row,mode: Mode,filter: Filter,search: String) -> Bool:
-  Bool.not(usageRow(row)) && shown(row,mode,filter,search)
-def filtered(rows: List<&2,Row>,+mode: Mode,+filter: Filter,+search: String) -> List<&2,Row>:
+def passes(+row: Row,filter: Filter,search: String) -> Bool:
+  Bool.not(usageRow(row)) && shown(row,filter,search)
+def filtered(rows: List<&2,Row>,+filter: Filter,+search: String) -> List<&2,Row>:
   match rows:
     case Nil{}: Nil{}
     case +row <> rest:
-      +tail = filtered(rest,mode,filter,search)
-      Bool.pick(List<&2,Row>,passes(row,mode,filter,search),row <> tail,tail)
+      +tail = filtered(rest,filter,search)
+      Bool.pick(List<&2,Row>,passes(row,filter,search),row <> tail,tail)
 def indexOf(rows: List<&2,Row>,+id: String,+index: Nat) -> Maybe<&2,Nat>:
   match rows:
     case Nil{}: None{}
@@ -169,32 +168,22 @@ def parentOf(rows: List<&2,Row>,+id: String) -> Maybe<&2,String>:
     case Some{+id} Succ{remaining}:
       +found = indexOf(visible,id,0n)
       Bool.pick(Unit -> Nat,Maybe.is_some(&2,Nat,found),_ => Maybe.default(&2,Nat,found,0n),_ => initialNear(all,visible,parentOf(all,id),remaining))(Unit{})
-def createWithFilter(nodes: List<&2,Node()>,+leaf: Maybe<&2,String>,+mode: Mode,height: Nat,+filter: Filter) -> State:
+def createWithFilter(nodes: List<&2,Node()>,+leaf: Maybe<&2,String>,height: Nat,+filter: Filter) -> State:
   +all = allRows(nodes,leaf)
-  +visible = filtered(all,mode,filter,"")
-  State{mode,all,visible,initialNear(all,visible,leaf,List.length(&2,Row,all)),filter,"",leaf,Nil{},Nat.max(5n,height / 2n)}
-def create(nodes: List<&2,Node()>,leaf: Maybe<&2,String>,mode: Mode,height: Nat) -> State:
-  createWithFilter(nodes,leaf,mode,height,Default{})
+  +visible = filtered(all,filter,"")
+  State{all,visible,initialNear(all,visible,leaf,List.length(&2,Row,all)),filter,"",leaf,Nil{},Nat.max(5n,height / 2n)}
+def create(nodes: List<&2,Node()>,leaf: Maybe<&2,String>,height: Nat) -> State:
+  createWithFilter(nodes,leaf,height,Default{})
 
-def forkRows(entries: List<&2,Entry()>) -> List<&2,Row>:
-  match entries:
-    case Nil{}: Nil{}
-    case +entry <> rest:
-      +tail = forkRows(rest)
-      Bool.pick(List<&2,Row>,isUser(entry),rowOf(Tree.SessionTreeNode{entry,Nil{},None{},None{}},"","",False{}) <> tail,tail)
-def createFork(entries: List<&2,Entry()>,height: Nat) -> State:
-  +all = forkRows(entries)
-  +visible = filtered(all,ForkMode{},Default{},"")
-  State{ForkMode{},all,visible,List.length(&2,Row,visible) - 1n,Default{},"",None{},Nil{},Nat.min(10n,Nat.max(5n,height / 2n))}
 def hasRows(state: State) -> Bool:
-  match state: case State{_,_,visible,_,_,_,_,_,_}: Bool.not(List.is_empty(&2,Row,visible))
+  match state: case State{_,visible,_,_,_,_,_,_}: Bool.not(List.is_empty(&2,Row,visible))
 def at(rows: List<&2,Row>,index: Nat) -> Maybe<&2,Row>:
   match rows index:
     case row <> _ Zero{}: Some{row}
     case _ <> rest Succ{remaining}: at(rest,remaining)
     case Nil{} _: None{}
 def selectedRow(state: State) -> Maybe<&2,Row>:
-  match state: case State{_,_,visible,index,_,_,_,_,_}: at(visible,index)
+  match state: case State{_,visible,index,_,_,_,_,_}: at(visible,index)
 def selectedId(state: State) -> Maybe<&2,String>:
   Maybe.map(&2,Row,String,row => rowId(row),selectedRow(state))
 def containsId(ids: List<&2,String>,+id: String) -> Bool:
@@ -207,12 +196,12 @@ def containsId(ids: List<&2,String>,+id: String) -> Bool:
     case _ Zero{}: False{}
     case Some{+id} Succ{remaining}:
       Bool.pick(Unit -> Bool,containsId(folded,id),_ => True{},_ => hiddenBy(rows,folded,parentOf(rows,id),remaining))(Unit{})
-def filterVisible(+all: List<&2,Row>,rows: List<&2,Row>,+mode: Mode,+filter: Filter,+search: String,+folded: List<&2,String>) -> List<&2,Row>:
+def filterVisible(+all: List<&2,Row>,rows: List<&2,Row>,+filter: Filter,+search: String,+folded: List<&2,String>) -> List<&2,Row>:
   match rows:
     case Nil{}: Nil{}
     case +row <> rest:
-      +tail = filterVisible(all,rest,mode,filter,search,folded)
-      Bool.pick(List<&2,Row>,passes(row,mode,filter,search) && Bool.not(hiddenBy(all,folded,rowParent(row),List.length(&2,Row,all))),row <> tail,tail)
+      +tail = filterVisible(all,rest,filter,search,folded)
+      Bool.pick(List<&2,Row>,passes(row,filter,search) && Bool.not(hiddenBy(all,folded,rowParent(row),List.length(&2,Row,all))),row <> tail,tail)
 @unsafe def nearest(+rows: List<&2,Row>,+visible: List<&2,Row>,id: Maybe<&2,String>,fuel: Nat) -> Nat:
   match id fuel:
     case None{} _: List.length(&2,Row,visible) - 1n
@@ -222,28 +211,28 @@ def filterVisible(+all: List<&2,Row>,rows: List<&2,Row>,+mode: Mode,+filter: Fil
       Bool.pick(Unit -> Nat,Maybe.is_some(&2,Nat,found),_ => Maybe.default(&2,Nat,found,0n),_ => nearest(rows,visible,parentOf(rows,value),remaining))(Unit{})
 def refresh(state: State,+filter: Filter,+search: String,+folded: List<&2,String>) -> State:
   match state:
-    case State{+mode,+all,+previous,index,_,_,+leaf,_,height}:
+    case State{+all,+previous,index,_,_,+leaf,_,height}:
       +selected = Maybe.map(&2,Row,String,row => rowId(row),at(previous,index))
-      +visible = filterVisible(all,all,mode,filter,search,folded)
-      State{mode,all,visible,nearest(all,visible,selected,List.length(&2,Row,all)),filter,search,leaf,folded,height}
+      +visible = filterVisible(all,all,filter,search,folded)
+      State{all,visible,nearest(all,visible,selected,List.length(&2,Row,all)),filter,search,leaf,folded,height}
 def move(state: State,up: Bool) -> State:
   match state:
-    case State{mode,all,+visible,+index,filter,search,leaf,folded,height}:
+    case State{all,+visible,+index,filter,search,leaf,folded,height}:
       +count = List.length(&2,Row,visible)
       +next = Bool.pick(Nat,up,Bool.pick(Nat,Nat.is_eq(index,0n),count - 1n,index - 1n),Bool.pick(Nat,Nat.is_eq(index,count - 1n),0n,index + 1n))
-      State{mode,all,visible,Bool.pick(Nat,Nat.is_eq(count,0n),0n,next),filter,search,leaf,folded,height}
+      State{all,visible,Bool.pick(Nat,Nat.is_eq(count,0n),0n,next),filter,search,leaf,folded,height}
 def page(state: State,up: Bool) -> State:
   match state:
-    case State{mode,all,+visible,+index,filter,search,leaf,folded,+height}:
+    case State{all,+visible,+index,filter,search,leaf,folded,+height}:
       +count = List.length(&2,Row,visible)
       +next = Bool.pick(Nat,up,index - height,Nat.min(count - 1n,index + height))
-      State{mode,all,visible,Bool.pick(Nat,Nat.is_eq(count,0n),0n,next),filter,search,leaf,folded,height}
+      State{all,visible,Bool.pick(Nat,Nat.is_eq(count,0n),0n,next),filter,search,leaf,folded,height}
 def filterOf(state: State) -> Filter:
-  match state: case State{_,_,_,_,filter,_,_,_,_}: filter
+  match state: case State{_,_,_,filter,_,_,_,_}: filter
 def searchOf(state: State) -> String:
-  match state: case State{_,_,_,_,_,search,_,_,_}: search
+  match state: case State{_,_,_,_,search,_,_,_}: search
 def foldedOf(state: State) -> List<&2,String>:
-  match state: case State{_,_,_,_,_,_,_,folded,_}: folded
+  match state: case State{_,_,_,_,_,_,folded,_}: folded
 def equalFilter(left: Filter,right: Filter) -> Bool:
   match left right:
     case Default{} Default{}: True{}
@@ -340,13 +329,13 @@ def foldable(+all: List<&2,Row>,+rows: List<&2,Row>,id: String,+parent: Maybe<&2
   Nat.is_gt(childCount(all,rows,id),0n) && Bool.pick(Bool,Maybe.is_none(&2,String,parent),True{},Nat.is_gt(childCount(all,rows,Maybe.default(&2,String,parent,"")),1n))
 def setIndex(state: State,index: Nat) -> State:
   match state:
-    case State{mode,all,visible,_,filter,search,leaf,folded,height}: State{mode,all,visible,index,filter,search,leaf,folded,height}
+    case State{all,visible,_,filter,search,leaf,folded,height}: State{all,visible,index,filter,search,leaf,folded,height}
 def visibleOf(state: State) -> List<&2,Row>:
-  match state: case State{_,_,visible,_,_,_,_,_,_}: visible
+  match state: case State{_,visible,_,_,_,_,_,_}: visible
 def allOf(state: State) -> List<&2,Row>:
-  match state: case State{_,all,_,_,_,_,_,_,_}: all
+  match state: case State{all,_,_,_,_,_,_,_}: all
 def indexOfState(state: State) -> Nat:
-  match state: case State{_,_,_,index,_,_,_,_,_}: index
+  match state: case State{_,_,index,_,_,_,_,_}: index
 def selectedFold(+state: State,+row: Row,collapse: Bool) -> State:
   +visible = visibleOf(state)
   +all = allOf(state)
@@ -384,18 +373,9 @@ def pageInput(+state: State,+bindings: Bindings.KeybindingsManager,+keyboard: Ke
 def foldInput(+state: State,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> State & Action:
   Bool.pick(Unit -> State & Action,Bindings.matches(bindings,keyboard,data,"app.tree.foldOrUp"),_ => (fold(state,True{}),Continue{}),
     _ => Bool.pick(Unit -> State & Action,Bindings.matches(bindings,keyboard,data,"app.tree.unfoldOrDown"),_ => (fold(state,False{}),Continue{}),_ => pageInput(state,bindings,keyboard,data))(Unit{}))(Unit{})
-def forkInput(+state: State,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> State & Action:
-  Bool.pick(Unit -> State & Action,Bindings.matches(bindings,keyboard,data,"tui.select.confirm"),_ => (state,Maybe.default(&2,Action,Maybe.map(&2,String,Action,id => Chosen{id},selectedId(state)),Continue{})),
-    _ => Bool.pick(Unit -> State & Action,Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => (state,Cancel{}),_ => (state,Continue{}))(Unit{}))(Unit{})
-def modeOf(state: State) -> Mode:
-  match state: case State{mode,_,_,_,_,_,_,_,_}: mode
-def modeInput(state: State,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,data: String,mode: Mode) -> State & Action:
-  match mode:
-    case ForkMode{}: forkInput(state,bindings,keyboard,data)
-    case TreeMode{}: foldInput(state,bindings,keyboard,data)
 def input(+state: State,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> State & Action:
   Bool.pick(Unit -> State & Action,Bindings.matches(bindings,keyboard,data,"tui.select.up"),_ => (move(state,True{}),Continue{}),
-    _ => Bool.pick(Unit -> State & Action,Bindings.matches(bindings,keyboard,data,"tui.select.down"),_ => (move(state,False{}),Continue{}),_ => modeInput(state,bindings,keyboard,data,modeOf(state)))(Unit{}))(Unit{})
+    _ => Bool.pick(Unit -> State & Action,Bindings.matches(bindings,keyboard,data,"tui.select.down"),_ => (move(state,False{}),Continue{}),_ => foldInput(state,bindings,keyboard,data))(Unit{}))(Unit{})
 
 def paint(theme: Theme.Theme,key: String,+value: String) -> String:
   Result.default(&2,&2,Theme.Error,String,Theme.foreground(theme,key,value),value)
@@ -406,8 +386,6 @@ def flattenText(text: String,+reversed: String) -> String:
     case SNil{}: Text.trim(String.reverse(reversed))
     case SCon{+char,rest}: flattenText(rest,Bool.pick(String,Char.is_eq(char,'\n') || Char.is_eq(char,'\t'),SCon{' ',reversed},SCon{char,reversed}))
 def singleLine(text: String) -> String: flattenText(text,"")
-def isFork(mode: Mode) -> Bool:
-  match mode: case ForkMode{}: True{} case TreeMode{}: False{}
 def filterStatus(filter: Filter) -> String:
   match filter:
     case Default{}: ""
@@ -415,7 +393,7 @@ def filterStatus(filter: Filter) -> String:
     case UserOnly{}: " [user]"
     case LabeledOnly{}: " [labeled]"
     case All{}: " [all]"
-def line(row: Row,+selected: Bool,folded: List<&2,String>,mode: Mode,+theme: Theme.Theme,width: Nat) -> String:
+def line(row: Row,+selected: Bool,folded: List<&2,String>,+theme: Theme.Theme,width: Nat) -> String:
   match row:
     case Row{+id,_,label,text,prefix,connector,active,user,_,_,_}:
       +gutter = Bool.pick(String,selected,paint(theme,"accent","› "),"  ")
@@ -424,46 +402,30 @@ def line(row: Row,+selected: Bool,folded: List<&2,String>,mode: Mode,+theme: The
       +name = Maybe.default(&2,String,Maybe.map(&2,String,String,value => paint(theme,"warning","[" ++ value ++ "] "),label),"")
       +role = Bool.pick(String,user,"accent","success")
       +raw = gutter ++ paint(theme,"dim",prefix ++ connector) ++ foldMarker ++ path ++ name ++ paint(theme,role,singleLine(text))
-      +styled = Bool.pick(String,selected && Bool.not(isFork(mode)),shade(theme,"selectedBg",raw),raw)
+      +styled = Bool.pick(String,selected,shade(theme,"selectedBg",raw),raw)
       Utils.truncateToWidth(styled,width,"",False{})
-def visibleLines(rows: List<&2,Row>,+start: Nat,+count: Nat,+index: Nat,+selected: Nat,+folded: List<&2,String>,+mode: Mode,+theme: Theme.Theme,+width: Nat) -> List<&2,String>:
+def visibleLines(rows: List<&2,Row>,+start: Nat,+count: Nat,+index: Nat,+selected: Nat,+folded: List<&2,String>,+theme: Theme.Theme,+width: Nat) -> List<&2,String>:
   match rows:
     case Nil{}: Nil{}
     case row <> +rest:
       Bool.pick(Unit -> List<&2,String>,Nat.is_ge(index,start + count),_ => Nil{},
         _ => Bool.pick(Unit -> List<&2,String>,Nat.is_lt(index,start),
-          _ => visibleLines(rest,start,count,index + 1n,selected,folded,mode,theme,width),
-          _ => line(row,Nat.is_eq(index,selected),folded,mode,theme,width) <> visibleLines(rest,start,count,index + 1n,selected,folded,mode,theme,width))(Unit{}))(Unit{})
-def title(mode: Mode) -> String:
-  match mode:
-    case TreeMode{}: "  Session Tree"
-    case ForkMode{}: "  Fork from Message"
-def searchLine(mode: Mode,+search: String,+theme: Theme.Theme) -> String:
-  match mode:
-    case ForkMode{}: paint(theme,"muted","  Select a user message to copy the active path into a new session")
-    case TreeMode{}: paint(theme,"muted","  Type to search:") ++ Bool.pick(String,String.is_empty(search),""," " ++ paint(theme,"accent",search))
-def helpLine(mode: Mode,+theme: Theme.Theme) -> String:
-  match mode:
-    case ForkMode{}: paint(theme,"muted","  ↑/↓ select • Enter confirm • Esc cancel")
-    case TreeMode{}: paint(theme,"muted","  ↑/↓ select · PgUp/PgDn page · Ctrl+←/→ fold · Ctrl+O filter · Enter select · Esc cancel")
-def emptyLine(mode: Mode,+theme: Theme.Theme) -> String:
-  match mode:
-    case ForkMode{}: paint(theme,"muted","  No user messages found")
-    case TreeMode{}: paint(theme,"muted","  No entries found")
-def rowsOrEmpty(+visible: List<&2,Row>,start: Nat,height: Nat,index: Nat,folded: List<&2,String>,+mode: Mode,+theme: Theme.Theme,width: Nat) -> List<&2,String>:
-  Bool.pick(List<&2,String>,List.is_empty(&2,Row,visible),emptyLine(mode,theme) <> Nil{},visibleLines(visible,start,height,0n,index,folded,mode,theme,width))
+          _ => visibleLines(rest,start,count,index + 1n,selected,folded,theme,width),
+          _ => line(row,Nat.is_eq(index,selected),folded,theme,width) <> visibleLines(rest,start,count,index + 1n,selected,folded,theme,width))(Unit{}))(Unit{})
+def rowsOrEmpty(+visible: List<&2,Row>,start: Nat,height: Nat,index: Nat,folded: List<&2,String>,+theme: Theme.Theme,width: Nat) -> List<&2,String>:
+  Bool.pick(List<&2,String>,List.is_empty(&2,Row,visible),paint(theme,"muted","  No entries found") <> Nil{},visibleLines(visible,start,height,0n,index,folded,theme,width))
 def render(state: State,+theme: Theme.Theme,+width: Nat) -> List<&2,String>:
   match state:
-    case State{+mode,_,+visible,+index,filter,search,_,folded,+height}:
+    case State{_,+visible,+index,filter,+search,_,folded,+height}:
       +count = List.length(&2,Row,visible)
       +start = Nat.min(index - height / 2n,count - Nat.min(count,height))
       +position = Bool.pick(Nat,Nat.is_eq(count,0n),0n,index + 1n)
-      "" <> paint(theme,"accent",title(mode)) <> helpLine(mode,theme) <> searchLine(mode,search,theme) <> paint(theme,"dim",Utils.spaces(width,"")) <> List.append(&2,String,rowsOrEmpty(visible,start,height,index,folded,mode,theme,width),paint(theme,"muted","  (" ++ Nat.show(position) ++ "/" ++ Nat.show(count) ++ ")" ++ filterStatus(filter)) <> Nil{})
+      "" <> paint(theme,"accent","  Session Tree") <> paint(theme,"muted","  ↑/↓ select · PgUp/PgDn page · Ctrl+←/→ fold · Ctrl+O filter · Enter select · Esc cancel") <> (paint(theme,"muted","  Type to search:") ++ Bool.pick(String,String.is_empty(search),""," " ++ paint(theme,"accent",search))) <> paint(theme,"dim",Utils.spaces(width,"")) <> List.append(&2,String,rowsOrEmpty(visible,start,height,index,folded,theme,width),paint(theme,"muted","  (" ++ Nat.show(position) ++ "/" ++ Nat.show(count) ++ ")" ++ filterStatus(filter)) <> Nil{})
 
 # A selector temporarily occupies the editor's stable component ID. The live
 # editor remains mounted and resumes its own input and focus on dismissal.
 
-type Modal is Data: Closed{} Open{state: State}
+type Modal is Data: Closed{} Open{state: State} ForkOpen{component: UserPicker.UserMessageSelectorComponent}
 type Choice is Data: Choice{mode: Mode,id: String}
 type Host is Data:
   Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,chosen: Callback.Callback<Choice,Unit>}
@@ -477,6 +439,10 @@ def drawCurrent(current: Modal,editor: Component.Component,theme: Ref.Ref<Theme.
       do IO<List<&2,String>>:
         chosen : Theme.Theme <- Ref.read(Theme.Theme,theme)
         return render(state,chosen,width)
+    case ForkOpen{component}:
+      do IO<List<&2,String>>:
+        chosen : Theme.Theme <- Ref.read(Theme.Theme,theme)
+        UserPicker.render(component,chosen,width)
 def draw(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
     case Host{modal,editor,theme,_,_,_}:
@@ -490,11 +456,20 @@ def receiveOpen(modal: Ref.Ref<Modal>,chosen: Callback.Callback<Choice,Unit>,pai
     case (next,Chosen{id}):
       do IO<Unit>:
         Ref.write(Modal,modal,Closed{})
-        Callback.call(Choice,Unit,chosen,Choice{modeOf(next),id})
+        Callback.call(Choice,Unit,chosen,Choice{TreeMode{},id})
+def receiveFork(modal: Ref.Ref<Modal>,chosen: Callback.Callback<Choice,Unit>,pair: UserPicker.UserMessageList & UserPicker.Action) -> IO(Unit):
+  match pair:
+    case (next,UserPicker.Continue{}): Ref.write(Modal,modal,ForkOpen{UserPicker.UserMessageSelectorComponent{next}})
+    case (_,UserPicker.Cancel{}): Ref.write(Modal,modal,Closed{})
+    case (_,UserPicker.Chosen{id}):
+      do IO<Unit>:
+        Ref.write(Modal,modal,Closed{})
+        Callback.call(Choice,Unit,chosen,Choice{ForkMode{},id})
 def receiveCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,chosen: Callback.Callback<Choice,Unit>,data: String) -> IO(Unit):
   match current:
     case Closed{}: Component.handleInput(editor,data)
     case Open{state}: receiveOpen(modal,chosen,input(state,bindings,keyboard,data))
+    case ForkOpen{component}: receiveFork(modal,chosen,UserPicker.handleInput(UserPicker.getMessageList(component),bindings,keyboard,data))
 def receive(host: Host,data: String) -> IO(Unit):
   match host:
     case Host{+modal,editor,_,bindings,keyboard,chosen}:
@@ -508,7 +483,7 @@ def editorMouse(editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Mayb
 def mouseCurrent(current: Modal,editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match current:
     case Closed{}: editorMouse(editor,event)
-    case Open{_}: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
+    case _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
 def hostMouse(host: Host,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match host:
     case Host{modal,editor,_,_,_,_}:
@@ -536,6 +511,8 @@ def borrowHost(owner: Owner) -> Owner & Host & Component.Component:
     case Owner{+host,+component,renderCallback,inputCallback,mouseCallback,invalidateCallback,focusCallback}: (Owner{host,component,renderCallback,inputCallback,mouseCallback,invalidateCallback,focusCallback},host,component)
 def open(host: Host,state: State) -> IO(Unit):
   match host: case Host{modal,_,_,_,_,_}: Ref.write(Modal,modal,Open{state})
+def openFork(host: Host,component: UserPicker.UserMessageSelectorComponent) -> IO(Unit):
+  match host: case Host{modal,_,_,_,_,_}: Ref.write(Modal,modal,ForkOpen{component})
 def close(host: Host) -> IO(Unit):
   match host: case Host{modal,_,_,_,_,_}: Ref.write(Modal,modal,Closed{})
 def disposeHost(owner: Owner) -> IO(Unit):

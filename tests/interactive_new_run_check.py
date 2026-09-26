@@ -95,6 +95,15 @@ def scenario(threads, shortcuts=False):
             os.write(master, b'/export "nested/conversation copy.jsonl"\r')
             until(b"Session exported to: " + os.fsencode(jsonl), before)
             assert any("before" in line for line in jsonl.read_text().splitlines())
+            if shortcuts:
+                before = len(output)
+                os.write(master, b"\x06")
+                until(b"Fork from Message", before)
+                os.write(master, b"\r")
+                until(b"Forked to new session", before)
+                before = len(output)
+                os.write(master, b" forked\r")
+                until(b'"type":"turn_end"', before)
             before = len(output)
             os.write(master, b"preserved draft\x0e" if shortcuts else b"/new\r")
             until(b"New session started", before)
@@ -107,10 +116,11 @@ def scenario(threads, shortcuts=False):
             assert termios.tcgetattr(slave) == original, threads
             assert not stderr, (threads, stderr.decode(errors="replace"))
             paths = re.findall(rb'\{"type":"factory","cwd":"[^"]+","sessionFile":"([^"]+)"', output)
-            assert len(paths) == 2 and len(set(paths)) == 2, (threads, paths, bytes(output[:1200]))
+            expected_sessions = 3 if shortcuts else 2
+            assert len(paths) == expected_sessions and len(set(paths)) == expected_sessions, (threads, paths, bytes(output[:1200]))
             assert output.count(b'"reason":"new"') == 1, (threads, bytes(output[:1500]))
             files = list(cwd.glob("*.jsonl"))
-            assert len(files) == 2 and {os.fsencode(file) for file in files} == {paths[0], paths[-1]}, (threads, files, paths)
+            assert len(files) == expected_sessions and {os.fsencode(file) for file in files} == set(paths), (threads, files, paths)
             histories = {os.fsencode(file): [json.loads(line) for line in file.read_text().splitlines()] for file in files}
             exported = [json.loads(line) for line in jsonl.read_text().splitlines()]
             assert exported[0]["id"] == histories[paths[0]][0]["id"]
@@ -120,6 +130,8 @@ def scenario(threads, shortcuts=False):
             assert all("hello" not in json.dumps(entry) for entry in histories[paths[0]]), (threads, histories)
             assert all("draft kept during copy" not in json.dumps(entry) for history in histories.values() for entry in history), (threads, histories)
             if shortcuts:
+                assert any("before forked" in json.dumps(entry) for entry in histories[paths[1]]), (threads, histories)
+                assert all("before forked" not in json.dumps(entry) for entry in histories[paths[0]]), (threads, histories)
                 assert any("preserved drafthello" in json.dumps(entry) for entry in histories[paths[-1]]), (threads, histories)
                 assert all("preserved draft" not in json.dumps(entry) for entry in histories[paths[0]]), (threads, histories)
         finally:
