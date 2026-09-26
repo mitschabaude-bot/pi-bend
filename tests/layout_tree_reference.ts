@@ -39,3 +39,13 @@ report("horizontal", new VStack([
   {component: new ScrollView(staticText("one\ntwo\nthree")), basis: 0, grow: 1},
   staticText("dock"),
 ]), 10, 3);
+
+// Regular mode renders the whole document, regardless of terminal height.
+const inline = (root: Component) => {
+  const heights = root instanceof VStack ? root.children.map(child => child.render(10).length).join(",") : "";
+  const lines = root.render(10).map(line => stripTerminalSequences(line).trimEnd()).join("|");
+  console.log(`horizontal:${heights}:[${lines}]`);
+};
+inline(new VStack([new ScrollView(staticText("one\ntwo\nthree")), staticText("dock")]));
+inline(new VStack([staticText("body"), staticText("dock")]));
+inline(staticText("one\ntwo\nthree"));

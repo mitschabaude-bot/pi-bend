@@ -300,6 +300,8 @@ def inlineFrame(result: Result,width: Nat,height: Nat) -> TreeFrame:
     case Single{Item{N.VStack{entries,gap},box,lines,_,_,_},_}:
       TreeFrame{N.Inline{N.VStack{entries,gap}},L.LayoutFrame{box,width,height,lines}}
     case result: wrappedFrame(treeFrame(result,width,height))
+# Regular mode is an unbounded document: the main-screen renderer scrolls
+# overflow into terminal history. Only fullscreen allocates viewport height.
 def renderInline(node: N.LayoutNode,width: Nat,height: Nat) -> IO(TreeFrame):
   match node:
     case N.VStack{entries,+gap}:
@@ -310,9 +312,8 @@ def renderInline(node: N.LayoutNode,width: Nat,height: Nat) -> IO(TreeFrame):
         +measured : Result <- run(entries,Measure{safeWidth,view},Nil{})
         +items : List<&2,Item> <- IO.pure(List<&2,Item>,resultItems(measured))
         +natural : List<&2,Nat> <- IO.pure(List<&2,Nat>,S.allocateStackSizes(options(items),naturalHeights(items),None{},gap))
-        +contentHeight : Nat <- IO.pure(Nat,Nat.min(safeHeight,Nat.max(1n,total(natural) + gapTotal(items,gap))))
-        +allocated : List<&2,Nat> <- IO.pure(List<&2,Nat>,S.allocateStackSizes(options(items),naturalHeights(items),Some{contentHeight},gap))
-        +placed : Result <- run(resultEntries(measured),PlaceV{0n,0n,safeWidth,allocated,gap,L.rect(0n,0n,safeWidth,contentHeight),view},resultCache(measured))
+        +contentHeight : Nat <- IO.pure(Nat,Nat.max(1n,total(natural) + gapTotal(items,gap)))
+        +placed : Result <- run(resultEntries(measured),PlaceV{0n,0n,safeWidth,natural,gap,L.rect(0n,0n,safeWidth,contentHeight),view},resultCache(measured))
         return inlineFrame(stackPlaced(S.Vertical{},resultEntries(placed),resultItems(placed),gap,S.Stretch{},0n,0n,safeWidth,contentHeight,L.rect(0n,0n,safeWidth,contentHeight),resultCache(placed)),safeWidth,contentHeight)
     case +node:
       +safeWidth = Nat.max(1n,width)
@@ -320,7 +321,7 @@ def renderInline(node: N.LayoutNode,width: Nat,height: Nat) -> IO(TreeFrame):
       +view = viewport(safeWidth,safeHeight)
       do IO<TreeFrame>:
         +measured : Result <- run(node,Measure{safeWidth,view},Nil{})
-        +contentHeight : Nat <- IO.pure(Nat,Nat.min(safeHeight,Nat.max(1n,maybeHeight(resultItem(measured)))))
+        +contentHeight : Nat <- IO.pure(Nat,Nat.max(1n,maybeHeight(resultItem(measured))))
         result : Result <- run(node,Place{0n,0n,safeWidth,contentHeight,L.rect(0n,0n,safeWidth,contentHeight),view},resultCache(measured))
         return inlineFrame(result,safeWidth,contentHeight)
 def renderTreeFrame(node: N.LayoutNode,width: Nat,height: Nat) -> IO(TreeFrame):
