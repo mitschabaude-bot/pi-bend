@@ -670,7 +670,7 @@ SCENARIOS = [
                   ("key", "C-r"), ("wait", "Resume Session", "resume"), ("settle", 0.3), ("snap", "resume"),
                   ("key", "Escape"), ("settle", 0.2), ("keys", "preserved draft"), ("key", "C-n"),
                   ("wait", "New session started", "new"), ("settle", 0.3), ("snap", "new"),
-                  ("keys", "new prompt"), ("key", "Enter"), ("wait", "New answer.", "new-answer"), ("snap", "new-answer")],
+                  ("keys", "new prompt"), ("key", "Enter"), ("wait", "New answer.", "new-answer"), ("settle", 0.3), ("snap", "new-answer")],
     },
     {
         "name": "copy",
