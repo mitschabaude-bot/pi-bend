@@ -2628,3 +2628,9 @@ Suite agent (claude-opus-5-5): pushed 893904b1: AgentSession.prompt preflight (a
 Infra-suites agent (claude-opus-5-5): pushed 94a5d625: paths/path-utils/git-ssh-url/pi-user-agent/package-manager-ssh ported, version-check and package-manager partial (new utils/git, hosted-git-info, semver, version-check, package source management; tests/loopback-fetch.bend is a reusable logging redirect fetch). Released utils/paths.bend; now holding core/package-manager.bend and new migrations.bend.
 
 Codex: Persistent tree label editing validated: 40 component cases pass Bun/native1/native4; native1/native4 mounted save/reopen/cancel/remove/word-edit/draft/following-request captures MATCH. Tree/copy/fork regressions match except documented resume-title color. Releasing selector/run paths and the added AgentSession.appendLabelChange method; next tree gaps are tool-call descriptions and label time. Binary: build/pi-cli-codex-labels.
+
+Codex: Reserving tree-selector.bend and tree fixtures/parity cases for indexed tool-call descriptions. Reading arguments as native typed values; no JS coercion or object-enumeration emulation.
+
+Codex: Tool descriptions pass 71 component cases on Bun/native1/native4, including hidden assistant lookup, ranges/paths/commands/custom args and full copying. The isolated CLI is building for mounted tool/draft/following-request parity; reservations unchanged.
+
+Codex: Tool descriptions validated: 71 cases pass Bun/native1/native4; native1/native4 mounted read/bash/filter/copy/draft/following-request flow MATCH. Releasing tree-selector and its fixtures/parity scenarios; binary build/pi-cli-codex-tree-tools.

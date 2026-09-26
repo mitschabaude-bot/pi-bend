@@ -17,6 +17,10 @@ import ../../../../../tui/src/word-navigation.bend as Word
 import ../../../../../runtime/src/word-segmenter.bend as Segmenter
 import ../../../../../runtime/src/date.bend as Date
 import ./keybinding-hints.bend as Hints
+import ../../../../../runtime/src/record.bend as R
+import ../../../../../runtime/src/f64.bend as F
+import ../../../../../ai/src/utils/json.bend as Json
+import ../../../../../ai/src/utils/schema-json.bend as SchemaJson
 
 # The selector keeps the session graph, rather than flattening it to an
 # unrelated menu. Its visible rows retain branch connectors and the active
@@ -28,8 +32,9 @@ type Filter is Data: Default{} NoTools{} UserOnly{} LabeledOnly{} All{}
 type Action is Data: Continue{} Cancel{} Chosen{id: String} Copied{text: Maybe<&2,String>} EditLabel{id: String,label: Maybe<&2,String>} LabelChanged{id: String,label: Maybe<&2,String>} InputError{cause: Word.Error}
 type Row is Data:
   Row{node: Node(),prefix: String,connector: String,active: Bool}
+type ToolCallInfo is Data: ToolCallInfo{name: String,arguments: V.Value}
 type Graph is Data:
-  Graph{entries: Map<&2,Maybe<&2,Row>>,indices: Map<&2,Maybe<&2,Nat>>,parents: Map<&2,Maybe<&2,String>>,children: Map<&2,List<&2,String>>,roots: List<&2,String>}
+  Graph{entries: Map<&2,Maybe<&2,Row>>,indices: Map<&2,Maybe<&2,Nat>>,parents: Map<&2,Maybe<&2,String>>,children: Map<&2,List<&2,String>>,roots: List<&2,String>,calls: Map<&2,Maybe<&2,ToolCallInfo>>}
 type TreeList is Data:
   TreeList{all: List<&2,Row>,visible: List<&2,Row>,selected: Nat,filter: Filter,search: String,leaf: Maybe<&2,String>,folded: List<&2,String>,height: Nat,lastSelectedId: Maybe<&2,String>,graph: Graph}
 
@@ -245,27 +250,40 @@ def nearestParent(fuel: Nat,+entries: Map<&2,Maybe<&2,Row>>,+indices: Map<&2,May
       Bool.pick(Unit -> Maybe<&2,String>,Maybe.is_some(&2,Nat,present),_ => Some{id},_ => nearestParent(remaining,entries,indices,indexedParent(entries,id)))(Unit{})
 def addedEdge(graph: Graph,parent: Maybe<&2,String>,+id: String) -> Graph:
   match graph parent:
-    case Graph{entries,indices,parents,children,roots} None{}:
-      Graph{entries,indices,Map.set(&2,Maybe<&2,String>,parents,id,None{}),children,id <> roots}
-    case Graph{entries,indices,parents,+children,roots} Some{+ancestor}:
+    case Graph{entries,indices,parents,children,roots,calls} None{}:
+      Graph{entries,indices,Map.set(&2,Maybe<&2,String>,parents,id,None{}),children,id <> roots,calls}
+    case Graph{entries,indices,parents,+children,roots,calls} Some{+ancestor}:
       +siblings = lookupValue(List<&2,String>,Map.get(List<&2,String>,Nil{},children,ancestor))
-      Graph{entries,indices,Map.set(&2,Maybe<&2,String>,parents,id,Some{ancestor}),Map.set(&2,List<&2,String>,children,ancestor,id <> siblings),roots}
+      Graph{entries,indices,Map.set(&2,Maybe<&2,String>,parents,id,Some{ancestor}),Map.set(&2,List<&2,String>,children,ancestor,id <> siblings),roots,calls}
 def edges(rows: List<&2,Row>,+entries: Map<&2,Maybe<&2,Row>>,+indices: Map<&2,Maybe<&2,Nat>>,+count: Nat,graph: Graph) -> Graph:
   match rows:
     case Nil{}: graph
     case +row <> rest: edges(rest,entries,indices,count,addedEdge(graph,nearestParent(count,entries,indices,rowParent(row)),rowId(row)))
+def indexedCalls(blocks: List<&2,Ai.AssistantContent<V.Value>>,index: Map<&2,Maybe<&2,ToolCallInfo>>) -> Map<&2,Maybe<&2,ToolCallInfo>>:
+  match blocks:
+    case Nil{}: index
+    case Ai.AssistantToolCall{Ai.ToolCall{id,name,arguments,_,_}} <> rest: indexedCalls(rest,Map.set(&2,Maybe<&2,ToolCallInfo>,index,id,Some{ToolCallInfo{name,arguments}}))
+    case _ <> rest: indexedCalls(rest,index)
+def callsIn(entry: Entry(),index: Map<&2,Maybe<&2,ToolCallInfo>>) -> Map<&2,Maybe<&2,ToolCallInfo>>:
+  match entry:
+    case Tree.SessionMessageEntry{_,Agent.LlmMessage{Ai.Assistant{message}}}: indexedCalls(Ai.assistantContent(V.Value,Unit,message),index)
+    case _: index
+def toolCalls(rows: List<&2,Row>,index: Map<&2,Maybe<&2,ToolCallInfo>>) -> Map<&2,Maybe<&2,ToolCallInfo>>:
+  match rows:
+    case Nil{}: index
+    case row <> rest: toolCalls(rest,callsIn(rowEntry(row),index))
 def buildGraph(+all: List<&2,Row>,+visible: List<&2,Row>) -> Graph:
   +entries = indexedRows(all,Map.new(&2,Maybe<&2,Row>))
   +indices = indexedPositions(visible,0n,Map.new(&2,Maybe<&2,Nat>))
-  edges(visible,entries,indices,List.length(&2,Row,all),Graph{entries,indices,Map.new(&2,Maybe<&2,String>),Map.new(&2,List<&2,String>),Nil{}})
+  edges(visible,entries,indices,List.length(&2,Row,all),Graph{entries,indices,Map.new(&2,Maybe<&2,String>),Map.new(&2,List<&2,String>),Nil{},toolCalls(all,Map.new(&2,Maybe<&2,ToolCallInfo>))})
 def graphParent(graph: Graph,id: String) -> Maybe<&2,String>:
-  match graph: case Graph{_,_,parents,_,_}: lookupValue(Maybe<&2,String>,Map.get(Maybe<&2,String>,None{},parents,id))
+  match graph: case Graph{_,_,parents,_,_,_}: lookupValue(Maybe<&2,String>,Map.get(Maybe<&2,String>,None{},parents,id))
 def graphChildren(graph: Graph,id: String) -> List<&2,String>:
-  match graph: case Graph{_,_,_,children,_}: List.reverse(&2,String,lookupValue(List<&2,String>,Map.get(List<&2,String>,Nil{},children,id)))
+  match graph: case Graph{_,_,_,children,_,_}: List.reverse(&2,String,lookupValue(List<&2,String>,Map.get(List<&2,String>,Nil{},children,id)))
 def graphIndex(graph: Graph,id: String,fallback: Nat) -> Nat:
-  match graph: case Graph{_,indices,_,_,_}: Maybe.default(&2,Nat,lookupValue(Maybe<&2,Nat>,Map.get(Maybe<&2,Nat>,None{},indices,id)),fallback)
+  match graph: case Graph{_,indices,_,_,_,_}: Maybe.default(&2,Nat,lookupValue(Maybe<&2,Nat>,Map.get(Maybe<&2,Nat>,None{},indices,id)),fallback)
 def graphRow(graph: Graph,id: String) -> Maybe<&2,Row>:
-  match graph: case Graph{entries,_,_,_,_}: lookupValue(Maybe<&2,Row>,Map.get(Maybe<&2,Row>,None{},entries,id))
+  match graph: case Graph{entries,_,_,_,_,_}: lookupValue(Maybe<&2,Row>,Map.get(Maybe<&2,Row>,None{},entries,id))
 
 def gutterAt(gutters: List<&2,Maybe<&2,Bool>>,level: Nat) -> Maybe<&2,Bool>:
   Maybe.default(&2,Maybe<&2,Bool>,List.get(&2,Maybe<&2,Bool>,gutters,level),None{})
@@ -309,7 +327,7 @@ def prependVisual(value: Maybe<&2,Row>,prefix: String,connector: String,reversed
       visualRows(VisualTask{children,nextIndent,branching,nextGutters,False{}} <> VisualTask{siblings,indent,branched,gutters,virtual} <> rest,graph,multipleRoots,prependVisual(row,prefix,connector,reversed))
 def recalculate(+graph: Graph) -> List<&2,Row>:
   match graph:
-    case Graph{_,_,_,_,+roots}:
+    case Graph{_,_,_,_,+roots,_}:
       +ordered = List.reverse(&2,String,roots)
       +multiple = Nat.is_gt(List.length(&2,String,ordered),1n)
       visualRows([VisualTask{ordered,Bool.pick(Nat,multiple,1n,0n),multiple,Nil{},multiple}],graph,multiple,Nil{})
@@ -573,19 +591,53 @@ def assistantDisplay(+assistant: Ai.AssistantMessage<V.Value,Unit>,+theme: Theme
     _ => Bool.pick(Unit -> String,aborted,_ => paint(theme,"muted","(aborted)"),
       _ => Bool.pick(Unit -> String,Maybe.is_some(&2,String,error),_ => paint(theme,"error",firstChars(singleLine(Maybe.default(&2,String,error,"")),80n)),_ => paint(theme,"muted","(no content)"))(Unit{}))(Unit{}),
     _ => text)(Unit{})
-def messageDisplay(message: Agent.AgentMessage<Unit,Tools.ToolDetails,Messages.CodingMessage<V.Value>>,+theme: Theme.Theme) -> String:
+def argument(arguments: V.Value,key: String) -> Maybe<&2,V.Value>:
+  match arguments: case V.ObjectValue{fields}: R.get(V.Value,fields,key) case _: None{}
+def textArgument(value: Maybe<&2,V.Value>,fallback: String) -> String:
+  match value: case Some{V.Text{+text}}: Bool.pick(String,String.is_empty(text),fallback,text) case _: fallback
+def numberArgument(value: Maybe<&2,V.Value>) -> Maybe<&2,F64>:
+  match value: case Some{V.Number{number}}: Some{number} case _: None{}
+def shortenedPath(+path: String,+home: String) -> String:
+  Bool.pick(String,Bool.not(String.is_empty(home)) && String.starts_with(path,home),"~" ++ String.drop(path,String.length(home)),path)
+def pathArgument(+arguments: V.Value,home: String) -> String:
+  shortenedPath(textArgument(argument(arguments,"path"),textArgument(argument(arguments,"file_path"),"")),home)
+def readRange(path: String,+offset: Maybe<&2,F64>,+limit: Maybe<&2,F64>) -> String:
+  +start = Maybe.default(&2,F64,offset,F.fromU32(1))
+  +first = Maybe.default(&2,String,F.toDecimal(start),"")
+  +last = Maybe.map(&2,F64,String,size => Maybe.default(&2,String,F.toDecimal(F.subtract(F.add(start,size),F.fromU32(1))),""),limit)
+  path ++ Bool.pick(String,Maybe.is_some(&2,F64,offset) || Maybe.is_some(&2,F64,limit),":" ++ first ++ Maybe.default(&2,String,Maybe.map(&2,String,String,value => "-" ++ value,last),""),"")
+def formattedToolCall(call: ToolCallInfo,+home: String) -> String:
+  match call:
+    case ToolCallInfo{"read",+arguments}: "[read: " ++ readRange(pathArgument(arguments,home),numberArgument(argument(arguments,"offset")),numberArgument(argument(arguments,"limit"))) ++ "]"
+    case ToolCallInfo{"write",+arguments}: "[write: " ++ pathArgument(arguments,home) ++ "]"
+    case ToolCallInfo{"edit",+arguments}: "[edit: " ++ pathArgument(arguments,home) ++ "]"
+    case ToolCallInfo{"bash",+arguments}:
+      +command = textArgument(argument(arguments,"command"),"")
+      "[bash: " ++ firstChars(singleLine(command),50n) ++ Bool.pick(String,Nat.is_gt(String.length(command),50n),"...","") ++ "]"
+    case ToolCallInfo{"grep",+arguments}: "[grep: /" ++ textArgument(argument(arguments,"pattern"),"") ++ "/ in " ++ shortenedPath(textArgument(argument(arguments,"path"),"."),home) ++ "]"
+    case ToolCallInfo{"find",+arguments}: "[find: " ++ textArgument(argument(arguments,"pattern"),"") ++ " in " ++ shortenedPath(textArgument(argument(arguments,"path"),"."),home) ++ "]"
+    case ToolCallInfo{"ls",+arguments}: "[ls: " ++ shortenedPath(textArgument(argument(arguments,"path"),"."),home) ++ "]"
+    case ToolCallInfo{name,arguments}:
+      +json = Maybe.default(&2,String,Json.stringify(SchemaJson.toJson(arguments)),"")
+      "[" ++ name ++ ": " ++ firstChars(json,40n) ++ Bool.pick(String,Nat.is_gt(String.length(json),40n),"...","") ++ "]"
+def toolFound(call: Maybe<&2,ToolCallInfo>,name: String,home: String) -> String:
+  match call: case None{}: "[" ++ name ++ "]" case Some{value}: formattedToolCall(value,home)
+def toolDescription(graph: Graph,id: String,name: String,home: String) -> String:
+  match graph:
+    case Graph{_,_,_,_,_,calls}: toolFound(lookupValue(Maybe<&2,ToolCallInfo>,Map.get(Maybe<&2,ToolCallInfo>,None{},calls,id)),name,home)
+def messageDisplay(message: Agent.AgentMessage<Unit,Tools.ToolDetails,Messages.CodingMessage<V.Value>>,+theme: Theme.Theme,graph: Graph,home: String) -> String:
   match message:
     case Agent.LlmMessage{Ai.User{Ai.UserMessage{content,_}}}: paint(theme,"accent","user: ") ++ singleLine(firstChars(contentText(content),200n))
     case Agent.LlmMessage{Ai.Assistant{assistant}}: assistantDisplay(assistant,theme)
-    case Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{_,name,_,_,_,_,_}}}: paint(theme,"muted","[" ++ name ++ "]")
+    case Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{id,name,_,_,_,_,_}}}: paint(theme,"muted",toolDescription(graph,id,name,home))
     case Agent.LlmMessage{Ai.System{_}}: paint(theme,"dim","[system]")
     case Agent.CustomMessage{Messages.BashExecution{Messages.BashExecutionMessage{command,_,_,_,_,_,_,_}}}: paint(theme,"dim","[bash]: " ++ singleLine(command))
     case Agent.CustomMessage{Messages.Custom{Messages.CustomMessage{kind,_,_,_,_}}}: paint(theme,"dim","[" ++ kind ++ "]")
     case Agent.CustomMessage{Messages.BranchSummary{_}}: paint(theme,"dim","[branchSummary]")
     case Agent.CustomMessage{Messages.CompactionSummary{_}}: paint(theme,"dim","[compactionSummary]")
-def entryDisplay(entry: Entry(),+theme: Theme.Theme) -> String:
+def entryDisplay(entry: Entry(),+theme: Theme.Theme,graph: Graph,home: String) -> String:
   match entry:
-    case Tree.SessionMessageEntry{_,message}: messageDisplay(message,theme)
+    case Tree.SessionMessageEntry{_,message}: messageDisplay(message,theme,graph,home)
     case Tree.CustomMessageEntry{_,kind,content,_,_}: paint(theme,"customMessageLabel","[" ++ kind ++ "]: ") ++ singleLine(contentText(content))
     case Tree.Compaction{Tree.CompactionEntry{_,_,_,tokens,_,_,_,_}}: paint(theme,"borderAccent","[compaction: " ++ Nat.show((tokens + 500n) / 1000n) ++ "k tokens]")
     case Tree.BranchSummaryEntry{_,_,summary,_,_,_}: paint(theme,"warning","[branch summary]: ") ++ singleLine(summary)
@@ -608,7 +660,7 @@ def filterStatus(filter: Filter) -> String:
 # Keep the selection gutter fixed while panning deep branches into view.
 type ViewportRow is Data:
   ViewportRow{gutter: String,body: String,anchor: Nat,bodyWidth: Nat,selected: Bool}
-def renderedRow(+row: Row,+selected: Bool,+folded: List<&2,String>,+theme: Theme.Theme,graph: Graph) -> ViewportRow:
+def renderedRow(+row: Row,+selected: Bool,+folded: List<&2,String>,+theme: Theme.Theme,+graph: Graph,home: String) -> ViewportRow:
   match row:
     case Row{Tree.SessionTreeNode{entry,_,label,_},prefix,+connector,active}:
       +id = rowId(row)
@@ -619,18 +671,18 @@ def renderedRow(+row: Row,+selected: Bool,+folded: List<&2,String>,+theme: Theme
       +path = Bool.pick(String,active,paint(theme,"accent","• "),"")
       +labelText = Maybe.default(&2,String,Maybe.map(&2,String,String,value => paint(theme,"warning","[" ++ value ++ "] "),label),"")
       +prefixPart = paint(theme,"dim",prefix ++ branch) ++ foldMarker ++ path
-      +content = entryDisplay(entry,theme)
+      +content = entryDisplay(entry,theme,graph,home)
       +body = prefixPart ++ labelText ++ Bool.pick(String,selected,Theme.bold(content),content)
       +gutter = Bool.pick(String,selected,paint(theme,"accent","› "),"  ")
       ViewportRow{Bool.pick(String,selected,shade(theme,"selectedBg",gutter),gutter),Bool.pick(String,selected,shade(theme,"selectedBg",body),body),Utils.visibleWidth(prefixPart),Utils.visibleWidth(body),selected}
-def windowRows(rows: List<&2,Row>,+start: Nat,+count: Nat,+index: Nat,+selected: Nat,+folded: List<&2,String>,+theme: Theme.Theme,+graph: Graph) -> List<&2,ViewportRow>:
+def windowRows(rows: List<&2,Row>,+start: Nat,+count: Nat,+index: Nat,+selected: Nat,+folded: List<&2,String>,+theme: Theme.Theme,+graph: Graph,+home: String) -> List<&2,ViewportRow>:
   match rows:
     case Nil{}: Nil{}
     case row <> +rest:
       Bool.pick(Unit -> List<&2,ViewportRow>,Nat.is_ge(index,start + count),_ => Nil{},
         _ => Bool.pick(Unit -> List<&2,ViewportRow>,Nat.is_lt(index,start),
-          _ => windowRows(rest,start,count,index + 1n,selected,folded,theme,graph),
-          _ => renderedRow(row,Nat.is_eq(index,selected),folded,theme,graph) <> windowRows(rest,start,count,index + 1n,selected,folded,theme,graph))(Unit{}))(Unit{})
+          _ => windowRows(rest,start,count,index + 1n,selected,folded,theme,graph,home),
+          _ => renderedRow(row,Nat.is_eq(index,selected),folded,theme,graph,home) <> windowRows(rest,start,count,index + 1n,selected,folded,theme,graph,home))(Unit{}))(Unit{})
 def maxBodyWidth(rows: List<&2,ViewportRow>,maximum: Nat) -> Nat:
   match rows:
     case Nil{}: maximum
@@ -653,14 +705,14 @@ def horizontalViewport(+rows: List<&2,ViewportRow>,+width: Nat) -> List<&2,Strin
   +context = Nat.min(12n,Nat.max(2n,viewport / 4n))
   +scroll = Bool.pick(Nat,Nat.is_gt(anchor,viewport - content),Nat.min(maximum,anchor - context),0n)
   pannedRows(rows,scroll,width)
-def renderList(state: TreeList,+theme: Theme.Theme,+width: Nat) -> List<&2,String>:
+def renderList(state: TreeList,+theme: Theme.Theme,+width: Nat,+home: String) -> List<&2,String>:
   match state:
     case TreeList{+all,+visible,+index,filter,_,_,folded,+height,_,+graph}:
       +count = List.length(&2,Row,visible)
       +start = Nat.min(index - height / 2n,count - height)
       +position = Bool.pick(Nat,Nat.is_eq(count,0n),0n,index + 1n)
       +rows = Bool.pick(Unit -> List<&2,String>,List.is_empty(&2,Row,visible),_ => Utils.truncateToWidth(paint(theme,"muted","  No entries found"),width,"...",False{}) <> Nil{},
-        _ => horizontalViewport(windowRows(visible,start,height,0n,index,folded,theme,graph),width))(Unit{})
+        _ => horizontalViewport(windowRows(visible,start,height,0n,index,folded,theme,graph,home),width))(Unit{})
       List.append(&2,String,rows,Utils.truncateToWidth(paint(theme,"muted","  (" ++ Nat.show(position) ++ "/" ++ Nat.show(count) ++ ")" ++ filterStatus(filter)),width,"...",False{}) <> Nil{})
 
 type KeyParts is Data: KeyParts{prefix: String,suffix: String}
@@ -824,9 +876,9 @@ def labelRendered(component: TreeSelectorComponent,id: String,+theme: Theme.Them
     case TreeSelectorComponent{list,_,focused} Tuple{input,lines}:
       (TreeSelectorComponent{list,Some{LabelInput{id,input}},focused},
        Utils.truncateToWidth("  " ++ paint(theme,"muted","Label (empty to remove):"),width,"...",False{}) <> List.append(&2,String,labelLines(lines,width),[Utils.truncateToWidth("  " ++ Hints.keyHint(theme,bindings,"tui.select.confirm","save") ++ "  " ++ Hints.keyHint(theme,bindings,"tui.select.cancel","cancel"),width,"...",False{})]))
-def renderContent(+component: TreeSelectorComponent,theme: Theme.Theme,+width: Nat,bindings: Bindings.KeybindingsManager) -> IO(TreeSelectorComponent & List<&2,String>):
+def renderContent(+component: TreeSelectorComponent,theme: Theme.Theme,+width: Nat,bindings: Bindings.KeybindingsManager,home: String) -> IO(TreeSelectorComponent & List<&2,String>):
   match component:
-    case TreeSelectorComponent{list,None{},_}: IO.pure(TreeSelectorComponent & List<&2,String>,(component,renderList(list,theme,width)))
+    case TreeSelectorComponent{list,None{},_}: IO.pure(TreeSelectorComponent & List<&2,String>,(component,renderList(list,theme,width,home)))
     case TreeSelectorComponent{_,Some{LabelInput{+id,input}},_}:
       do IO<TreeSelectorComponent & List<&2,String>>:
         rendered : Input.Input & List<&2,String> <- Input.render(input,width - 2n)
@@ -838,8 +890,14 @@ def framed(component: TreeSelectorComponent & List<&2,String>,+theme: Theme.Them
       +border = paint(theme,"border",String.repeat("─",Nat.max(1n,width)))
       +search = Utils.truncateToWidth("  " ++ paint(theme,"muted","Type to search:") ++ Bool.pick(String,String.is_empty(query),""," " ++ paint(theme,"accent",query)),width,"...",False{})
       (next,List.append(&2,String,"" <> border <> heading,List.append(&2,String,paintHelp(helpRows(helpItems(bindings),Nat.max(1n,width),"",Nil{}),theme),search <> border <> "" <> List.append(&2,String,content,"" <> border <> Nil{}))))
+def envText(value: Result<&1,&1,U32 & String,String>) -> String:
+  match value: case Done{text}: text case Fail{_}: ""
+def preferredHome(+home: String,profile: String) -> String:
+  Bool.pick(String,String.is_empty(home),profile,home)
 def render(component: TreeSelectorComponent,+theme: Theme.Theme,+width: Nat,+bindings: Bindings.KeybindingsManager) -> IO(TreeSelectorComponent & List<&2,String>):
   do IO<TreeSelectorComponent & List<&2,String>>:
     title : TuiText.Text & List<&2,String> <- TuiText.render(TuiText.new(Theme.bold("  Session Tree"),Some{1n},Some{0n},None{}),width)
-    content : TreeSelectorComponent & List<&2,String> <- renderContent(component,theme,width,bindings)
+    home : Result<&1,&1,U32 & String,String> <- IO.get_env("HOME")
+    profile : Result<&1,&1,U32 & String,String> <- IO.get_env("USERPROFILE")
+    content : TreeSelectorComponent & List<&2,String> <- renderContent(component,theme,width,bindings,preferredHome(envText(home),envText(profile)))
     return framed(content,theme,width,bindings,title)

@@ -20,8 +20,14 @@ const output = JSON.parse(input).map(c => {
     if (hidden) children = [{ entry: {type: "model_change", id: "m" + id, parentId: id, timestamp: entry.timestamp, provider: "test", modelId: "test-model"}, children }];
     return [{ entry, children }, ...(shape === "roots" ? nodes(index + 1, parentId, shape) : [])];
   }
+  function toolNodes() {
+    const [name, args, result] = c.texts;
+    const base = (id, parentId, message) => ({ type: "message", id, parentId, timestamp: "2025-01-01T00:00:00Z", message });
+    const usage = { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0} };
+    return [{entry: base("0", null, {role: "user", content: "tool request", timestamp: 1}), children: [{entry: base("1", "0", {role: "assistant", content: [{type: "toolCall", id: c.shape === "missing-tool" ? "other" : "call", name, arguments: JSON.parse(args)}], api: "openai-responses", provider: "openai", model: "test-model", usage, stopReason: "toolUse", timestamp: 1}), children: [{entry: base("2", "1", {role: "toolResult", toolCallId: "call", toolName: name, content: [{type: "text", text: result}], isError: false, timestamp: 1}), children: []}]}]}];
+  }
   let action = "continue";
-  const component = new TreeSelectorComponent(nodes(), c.initial || null, 24, id => { action = "chosen:" + id; }, () => { action = "cancel"; }, (id, label) => { action = "labeled:" + id + ":" + (label ?? "<none>"); });
+  const component = new TreeSelectorComponent(c.shape.endsWith("tool") ? toolNodes() : nodes(), c.initial || null, 24, id => { action = "chosen:" + id; }, () => { action = "cancel"; }, (id, label) => { action = "labeled:" + id + ":" + (label ?? "<none>"); });
   component.focused = true;
   component.onCopy = text => { action = "copied:" + (text ?? "<none>"); };
   const list = component.getTreeList();

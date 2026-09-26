@@ -20,7 +20,7 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
 
 ## Open (to fix)
 
-- **Session selector remaining controls** (`session-keys`): tree frames now match the focused terminal comparison; the native component preserves filtering, branch navigation and full-message copying. Label timestamps and tool-call argument descriptions remain pending. Label save/remove/cancel, reopening, word navigation, preserved drafts and following requests match the focused terminal comparison. Resume plain text matches, but the selected title resets its foreground colour.
+- **Session selector remaining controls** (`session-keys`): tree frames now match the focused terminal comparison; the native component preserves filtering, branch navigation and full-message copying. Label timestamps remain pending. Label save/remove/cancel, reopening, word navigation, preserved drafts and following requests match the focused terminal comparison. Resume plain text matches, but the selected title resets its foreground colour.
 
 - **Streaming throughput and TLS handshake** (`stream-paced`, `stream-flood`):
   over a local TLS server (P-256 certificates), Bend's first token now

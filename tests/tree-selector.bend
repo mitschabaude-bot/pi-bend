@@ -1,4 +1,5 @@
 import Base
+import ../packages/runtime/src/json.bend as Parse
 import ../packages/runtime/src/word-segmenter.bend as Segmenter
 import ../packages/agent/src/types.bend as Agent
 import ../packages/ai/src/types.bend as Ai
@@ -32,6 +33,21 @@ def nodes(texts: List<&2,String>,+index: Nat,+parent: Maybe<&2,String>,+shape: S
       +children = Bool.pick(Unit -> List<&2,Picker.Node()>,String.eq(shape,"roots"),_ => Nil{},_ => nodes(rest,index + 1n,Some{parentId},Bool.pick(String,String.eq(shape,"star") || String.eq(shape,"hidden-star"),"roots",shape)))(Unit{})
       +siblings = Bool.pick(Unit -> List<&2,Picker.Node()>,String.eq(shape,"roots"),_ => nodes(rest,index + 1n,parent,shape),_ => Nil{})(Unit{})
       Tree.SessionTreeNode{value,Bool.pick(List<&2,Picker.Node()>,hidden,metadata(index,children) <> Nil{},children),None{},None{}} <> siblings
+def toolNodes(+name: String,arguments: V.Value,result: String,+missing: Bool) -> List<&2,Picker.Node()>:
+  +usage = {Ai.Usage{F.fromU32(1),F.fromU32(1),F.fromU32(0),F.fromU32(0),None{},None{},F.fromU32(2),Ai.UsageCost{F.fromU32(0),F.fromU32(0),F.fromU32(0),F.fromU32(0),F.fromU32(0)}}: Ai.Usage}
+  +call = {Ai.ToolCall{Bool.pick(String,missing,"other","call"),name,arguments,None{},None{}}: Ai.ToolCall<V.Value>}
+  +assistant = {Tree.SessionMessageEntry{Tree.SessionEntryBase{"1",Some{"0"},"2025-01-01T00:00:00Z"},Agent.LlmMessage{Ai.Assistant{Ai.AssistantMessage{[Ai.AssistantToolCall{call}],"openai-responses","openai","test-model",None{},None{},None{},None{},usage,Ai.ToolUse{},None{},None{},None{},None{},F.fromU32(1)}}}}: Picker.Entry()}
+  +output = {Tree.SessionMessageEntry{Tree.SessionEntryBase{"2",Some{"1"},"2025-01-01T00:00:00Z"},Agent.LlmMessage{Ai.ToolResult{Ai.ToolResultMessage{"call",name,[Ai.TextImageText{Ai.TextContent{result,None{}}}],None{},None{},False{},F.fromU32(1)}}}}: Picker.Entry()}
+  [Tree.SessionTreeNode{entry(0n,None{},"tool request"),[Tree.SessionTreeNode{assistant,[Tree.SessionTreeNode{output,Nil{},None{},None{}}],None{},None{}}],None{},None{}}]
+def parsedNodes(result: Result<&2,&2,Parse.ParseError,V.Value>,name: String,text: String,missing: Bool) -> IO(List<&2,Picker.Node()>):
+  match result:
+    case Fail{_}: IO.die(List<&2,Picker.Node()>,1,"invalid tool arguments")
+    case Done{arguments}: IO.pure(List<&2,Picker.Node()>,toolNodes(name,arguments,text,missing))
+def fixtureNodes(shape: String,texts: List<String>) -> IO(List<&2,Picker.Node()>):
+  match shape texts:
+    case "tool" name <> arguments <> result <> Nil{}: parsedNodes(Parse.parse(arguments),name,result,False{})
+    case "missing-tool" name <> arguments <> result <> Nil{}: parsedNodes(Parse.parse(arguments),name,result,True{})
+    case _ _: IO.pure(List<&2,Picker.Node()>,nodes(sharedTexts(texts),0n,None{},shape))
 def actionText(action: Picker.Action) -> String:
   match action:
     case Picker.Continue{}: "continue"
@@ -110,7 +126,8 @@ def runTheme(result: Result<&2,&2,Theme.LoadError,Theme.Theme>,+width: Nat,+init
     case Fail{_}: IO.die(Unit,1,"cannot load selector theme")
     case Done{+theme}:
       do IO<Unit>:
-        +component : Picker.TreeSelectorComponent = Picker.setFocused(Picker.fromList(Picker.create(nodes(sharedTexts(texts),0n,None{},shape),Bool.pick(Maybe<&2,String>,String.is_empty(initial),None{},Some{initial}),24n)),True{})
+        +tree : List<&2,Picker.Node()> <- fixtureNodes(shape,texts)
+        +component : Picker.TreeSelectorComponent = Picker.setFocused(Picker.fromList(Picker.create(tree,Bool.pick(Maybe<&2,String>,String.is_empty(initial),None{},Some{initial}),24n)),True{})
         +bindings : Bindings.KeybindingsManager = Bindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),R.new(List<&2,Keys.KeyId>))
         shown : Picker.TreeSelectorComponent <- emit(component,Picker.Continue{},theme,width,bindings)
         steps(Bool.pick(List<&2,String>,String.is_empty(actions),Nil{},String.split(actions,',')),shown,Segmenter.Pending{root ++ "/packages/runtime/data"},theme,width,bindings)

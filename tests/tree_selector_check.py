@@ -21,6 +21,27 @@ for shape in ("chain", "star", "hidden-star"):
     for width in (30, 100):
         cases.append(dict(shape=shape, width=width, initial="2", texts=["first", "second", "third"], actions=["label", "  work  ", "enter", "label", "end", "!", "escape", "label", "end", "kill-start", "enter", "label", "paste-start", "pasted\n label", "paste-end", "enter", "up", "label", "parent", "enter", "down", "labeled", "copy", "default"]))
 cases.append(dict(shape="chain", width=30, initial="0", texts=["one"], actions=["label", "hello world", "word-left", "kill-word", "yank", "end", "enter", "label", "home", "word-right", "backspace", "enter"]))
+tools = [
+    ("read", {"path": "/home/agent/code/pi-bend/README.md"}),
+    ("read", {"file_path": "notes.txt", "offset": 4}),
+    ("read", {"path": "notes.txt", "limit": 7}),
+    ("read", {"path": "notes.txt", "offset": 4, "limit": 7}),
+    ("write", {"path": "new.bend", "content": "hello"}),
+    ("edit", {"path": "/home/agent/code/pi-bend/file.bend", "oldText": "old", "newText": "new"}),
+    ("bash", {"command": "  printf hello\n\tpwd  "}),
+    ("bash", {"command": "echo " + "x" * 60}),
+    ("grep", {"pattern": "TODO"}),
+    ("grep", {"pattern": "def main", "path": "/home/agent/code/pi-bend"}),
+    ("find", {"pattern": "*.bend", "path": "packages"}),
+    ("ls", {}),
+    ("ls", {"path": "/home/agent/code"}),
+    ("custom", {"enabled": True, "values": [1, "hello", None]}),
+    ("custom", {"description": "a" * 80}),
+]
+for name, args in tools:
+    for width in (30, 100):
+        cases.append(dict(shape="tool", width=width, initial="2", texts=[name, json.dumps(args, ensure_ascii=False), "result\ncomplete"], actions=["copy", "all", "up", "default", "no-tools", "default", "user", "default", "up", "down", "enter"]))
+cases.append(dict(shape="missing-tool", width=100, initial="2", texts=["custom", "{}", "result"], actions=["all", "copy"]))
 expected = json.loads(subprocess.check_output(["bun", "tests/tree_selector_reference.mts"], input=json.dumps(cases), text=True, cwd=ROOT))
 lanes = [("bun", ["bun", os.environ.get("PI_BEND_TREE_BUN_BINARY", "build/tree-selector.js")]) ] if os.environ.get("PI_BEND_TREE_BUN") else [(f"native{n}", [str(BINARY), "--threads", str(n), "--"]) for n in (1, 4)]
 for lane, command in lanes:
