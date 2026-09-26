@@ -3123,9 +3123,13 @@
     },
     {
       "source": "packages/coding-agent/test/models-store.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ad84fe3cf045af1ce4db057844bca181db0db59eaa8326664c607f6d9c3bf82f"
+      "status": "partial",
+      "ports": [
+        "tests/models-store.bend",
+        "tests/models_store_check.py"
+      ],
+      "sha256": "ad84fe3cf045af1ce4db057844bca181db0db59eaa8326664c607f6d9c3bf82f",
+      "notes": "Four of five cases pass on Bun and native one/four threads over packages/coding-agent/src/core/models-store.bend: catalogs persisted per provider without replacing others (write, fresh-store read, delete), an existing file's 0660 mode preserved, coalesced reloads (a shared read state serves unchanged-revision reads from its cache and reloads after the file changes; results asserted, not upstream's lock-call counts), and a write waiting for a held proper-lockfile lock cancelled after 10 ms without writing later. Pending: \"keeps a coalesced reload alive while another reader is still waiting\" (upstream mocks proper-lockfile.lock to hold the reload; native reads under one read state are serialized and a cancelled reader's reload is not kept for the next one), and the lock-count assertions of the coalescing case."
     },
     {
       "source": "packages/coding-agent/test/oauth-selector.test.ts",
@@ -4613,7 +4617,7 @@
         "tests/thinking-level.bend"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '→ ✓ medium', then '  ✓ medium' and '→   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",
@@ -4659,7 +4663,7 @@
         "tests/tools-manager.md"
       ],
       "sha256": "09e7bdfba469506725a8df17f87bc461ce7dd4eeba7ad04ec3140c0b39e1e2d5",
-      "notes": "7 of 8 cases pass on Bun and native one/four threads (tests/tools-manager-latest.bend): all six getLatestVersion cases through a logging redirect fetch and a local server (release redirects with and without the v prefix, a relative Location, a redirect whose body is discarded, 404 without redirect, a redirect to /login; one manual-redirect request each with the pi-coding-agent user agent) and ensureTool's offline status callback. Adaptation: upstream checks response.bodyUsed; here the redirect body is released unread. Pending: \"surfaces the error cause chain when a download fails\" \u2014 the native fetch error has no cause chain, so the status reads \"Failed to download fd: fetch failed\" without the connect detail. Download, extraction and install scenarios are covered by tests/tools_manager_check.py (tests/tools-manager.md)."
+      "notes": "7 of 8 cases pass on Bun and native one/four threads (tests/tools-manager-latest.bend): all six getLatestVersion cases through a logging redirect fetch and a local server (release redirects with and without the v prefix, a relative Location, a redirect whose body is discarded, 404 without redirect, a redirect to /login; one manual-redirect request each with the pi-coding-agent user agent) and ensureTool's offline status callback. Adaptation: upstream checks response.bodyUsed; here the redirect body is released unread. Pending: \"surfaces the error cause chain when a download fails\" — the native fetch error has no cause chain, so the status reads \"Failed to download fd: fetch failed\" without the connect detail. Download, extraction and install scenarios are covered by tests/tools_manager_check.py (tests/tools-manager.md)."
     },
     {
       "source": "packages/coding-agent/test/tools.test.ts",
@@ -4759,7 +4763,7 @@
         "tests/loopback-fetch.bend"
       ],
       "sha256": "cba6b39e9767019aebe0277ab580cb603927258652afcb2b9967387f1e8d6aa7",
-      "notes": "9 of 10 cases pass on Bun and native one/four threads. Instead of stubbing the global fetch, the library's https://pi.dev request goes through a logging fetch (tests/loopback-fetch.bend) to a local server that answers, drops connections or fails per case; the request URL, User-Agent and accept headers and the request counts (3 with retry, 1 for automatic checks, 0 when PI_SKIP_VERSION_CHECK is set) are asserted. semver valid/compare come from packages/runtime/src/semver.bend (tests/semver_check.py: 1,363 pairs match node-semver 7.8.5, including JavaScript double rounding of huge numeric pre-release identifiers). Not ported: \"formats nested network error details\" \u2014 the native fetch error carries no errno codes, so formatVersionCheckError returns the management request's message."
+      "notes": "9 of 10 cases pass on Bun and native one/four threads. Instead of stubbing the global fetch, the library's https://pi.dev request goes through a logging fetch (tests/loopback-fetch.bend) to a local server that answers, drops connections or fails per case; the request URL, User-Agent and accept headers and the request counts (3 with retry, 1 for automatic checks, 0 when PI_SKIP_VERSION_CHECK is set) are asserted. semver valid/compare come from packages/runtime/src/semver.bend (tests/semver_check.py: 1,363 pairs match node-semver 7.8.5, including JavaScript double rounding of huge numeric pre-release identifiers). Not ported: \"formats nested network error details\" — the native fetch error carries no errno codes, so formatVersionCheckError returns the management request's message."
     },
     {
       "source": "packages/durable/test/memory-storage.test.ts",

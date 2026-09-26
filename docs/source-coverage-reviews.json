@@ -643,7 +643,7 @@
     },
     "packages/coding-agent/src/modes/interactive/chat-viewport.ts": {
       "state": "partial",
-      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Fullscreen transcript allocation uses upstream\u2019s zero basis and one-row minimum; natural dock rendering during external-editor handoffs matches pi. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
+      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Fullscreen transcript allocation uses upstream’s zero basis and one-row minimum; natural dock rendering during external-editor handoffs matches pi. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
       "source_sha256": "24bbdd06a5e17d6c0631f7de51329eb7bb4ecd4a460dec7b3d593ff9e6219960",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/viewport.bend": "91281c83b948bdb35106382375cfc14628d313a48d7676cd9a023b1bcadea32e"
@@ -1202,6 +1202,17 @@
       "source_sha256": "72c74d4d41954deabc9b1b52c9274e76a95f8148b732400f9225ff529aacb915",
       "port_sha256": {
         "packages/coding-agent/src/core/remote-catalog-provider.bend": "f5528a24980e1617a4e52cbaff87ae11f6dbea5d1ea014c96466bfdade9023a4"
+      }
+    },
+    "packages/coding-agent/src/core/models-store.ts": {
+      "state": "partial",
+      "note": "FileModelsStore is ported (core/models-store.bend): read/write/delete under auth.json's lock protocol (parent directory, empty-object file, 30 s cancellable lock, lease check before writing, 0600 for new files), raw JSON kept for other providers and entries decoded to typed models, revision-based reuse of the last load with the read state shared explicitly. Gaps: the file revision is read after the lock is released rather than inside it; a cancelled reader's in-flight reload is not kept alive for other waiting readers; InMemoryCodingAgentModelsStore is the ai package's in-memory store; ModelRuntime creation still uses the in-memory store (its read-state lifetime is not wired yet), so catalogs are not yet persisted across runs.",
+      "ports": [
+        "packages/coding-agent/src/core/models-store.bend"
+      ],
+      "source_sha256": "9a93afb3ad9123e59cb61606e77d431b38bbeb3063afc0e2974341109f23db02",
+      "port_sha256": {
+        "packages/coding-agent/src/core/models-store.bend": "4eb1d115a3045c395ead8923aca02cb77e83f136370eef115e4e17bc9eacc51b"
       }
     }
   }
