@@ -16,6 +16,7 @@ import ../utils/transcript.bend as Transcript
 import ./constrained-sampling.bend as Sampling
 import ./provider-fetch.bend as Http
 import ./bedrock-credentials.bend as Credentials
+import ./bedrock-credential-services.bend as Services
 import ./simple-options.bend as Simple
 import ./transform-messages.bend as Transform
 import ../../../runtime/src/abort.bend as Abort
@@ -1708,19 +1709,41 @@ def withAuth(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, ~details: 
     case Fail{message}: failed(~Reason, ~G, ~details, events, parent, state, PlainFailure{message}, None{})
     case Done{value}: withRegion(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, setup, value, payload, regionOf(setupConfig(Reason, E, setup)))
 
+def clientRegion(configured: Maybe<&2, String>, profile: Maybe<&2, String>) -> IO(Maybe<&2, String>):
+  match configured:
+    case Some{region}: IO.pure(Maybe<&2, String>, Some{region})
+    case None{}: Credentials.resolveRegion(profile)
+
+def setupFetch(-Reason: Data, -E: Data, setup: Setup<Reason, E>) -> Fetch.Fetch(Reason):
+  match setup:
+    case Setup{_, _, _, fetch, _}: fetch
+
 def signedWith(result: Result<&2, &2, String, SigV4.Credentials>) -> Result<&2, &2, String, Auth>:
   match result:
     case Fail{message}: Fail{message}
     case Done{credentials}: Done{SignedAuth{credentials}}
 
+# The endpoint (and so the region) resolves before the request is signed; the
+# chain's own requests are not tied to the caller's abort signal.
+def chained(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, +state: State<G>, +setup: Setup<Reason, E>, +payload: J(), profile: Maybe<&2, String>, region: Maybe<&2, String>) -> IO(Unit):
+  match region:
+    case None{}: failed(~Reason, ~G, ~details, events, parent, state, PlainFailure{"Region is missing"}, None{})
+    case Some{+value}:
+      do IO<Unit>:
+        controller : Abort.AbortController<Reason> <- Abort.new(Reason)
+        resolved : Result<&2, &2, String, SigV4.Credentials> <- Credentials.resolveCredentials(~Reason, Credentials.Chain{Services.Transport{setupFetch(Reason, E, setup), setupContext(Reason, E, setup), Abort.signal(Reason, controller)}, Some{value}, profile})
+        withAuth(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, setup, payload, signedWith(resolved))
+
+def fromChain(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, +state: State<G>, +setup: Setup<Reason, E>, +payload: J(), +profile: Maybe<&2, String>) -> IO(Unit):
+  do IO<Unit>:
+    region : Maybe<&2, String> <- clientRegion(regionOf(setupConfig(Reason, E, setup)), profile)
+    chained(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, setup, payload, profile, region)
+
 def sendWith(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, +state: State<G>, +setup: Setup<Reason, E>, +payload: J(), config: ClientConfig) -> IO(Unit):
   match config:
     case ClientConfig{_, _, _, _, Some{token}}: withAuth(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, setup, payload, Done{BearerAuth{token}})
     case ClientConfig{_, _, _, Some{credentials}, None{}}: withAuth(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, setup, payload, Done{SignedAuth{credentials}})
-    case ClientConfig{profile, _, _, None{}, None{}}:
-      do IO<Unit>:
-        resolved : Result<&2, &2, String, SigV4.Credentials> <- Credentials.resolveCredentials(profile)
-        withAuth(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, setup, payload, signedWith(resolved))
+    case ClientConfig{profile, _, _, None{}, None{}}: fromChain(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, setup, payload, profile)
 
 # Bearer token, configured credentials, then the SDK's default chain.
 def send(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, +state: State<G>, +setup: Setup<Reason, E>, +payload: J()) -> IO(Unit):

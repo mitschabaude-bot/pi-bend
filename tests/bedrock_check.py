@@ -106,7 +106,8 @@ class Server:
         self.server.server_close()
 
 
-BASE_ENV = {k: v for k, v in os.environ.items() if not k.startswith("AWS_") and k not in ("PI_CACHE_RETENTION",)}
+# Instance metadata stays off unless a case serves it on loopback.
+BASE_ENV = dict({k: v for k, v in os.environ.items() if not k.startswith("AWS_") and k not in ("PI_CACHE_RETENTION",)}, AWS_EC2_METADATA_DISABLED="true")
 KEYS = {"AWS_ACCESS_KEY_ID": "AKIDEXAMPLE", "AWS_SECRET_ACCESS_KEY": "secretexample", "AWS_REGION": "us-west-2", "AWS_BEDROCK_FORCE_HTTP1": "1"}
 
 
@@ -484,6 +485,211 @@ stream_case("bedrock-custom-headers", "VC3: registers no middleware when headers
 stream_case("bedrock-custom-headers", "VC4: streamSimpleBedrock forwards headers end-to-end (regression guard)", sent_header("x-custom", "v"), OK_FRAMES, spec={"mode": "simple", "options": {"headers": {"x-custom": "v"}}})
 
 
+# --- The default credential chain -----------------------------------------
+# No upstream suite covers it (upstream leaves it to the AWS SDK), so each case
+# resolves credentials from shared files and environment variables against a
+# loopback server standing in for STS, SSO, SSO-OIDC, the container
+# credentials endpoint and the instance metadata service, then compares the
+# requests those services saw, the credentials the Bedrock request was signed
+# with, the SSO token cache and the final message with upstream driving the
+# pinned AWS SDK chain against its own copy of the same setup.
+
+import hashlib
+import re
+import shutil
+import urllib.parse
+
+FUTURE = "2099-01-01T00:00:00Z"
+
+
+def xml_credentials(action, key):
+    return (f'<{action}Response xmlns="https://sts.amazonaws.com/doc/2011-06-15/"><{action}Result><Credentials>'
+            f"<AccessKeyId>ASIA{key}</AccessKeyId><SecretAccessKey>secret-{key}</SecretAccessKey><SessionToken>token-{key}</SessionToken>"
+            f"<Expiration>{FUTURE}</Expiration></Credentials></{action}Result><ResponseMetadata><RequestId>sts-1</RequestId></ResponseMetadata></{action}Response>")
+
+
+def scope_of(headers):
+    match = re.search(r"Credential=([^/]+)/\d+/([^/]+)/([^/]+)/", headers.get("authorization", ""))
+    return {"access": match.group(1), "region": match.group(2), "service": match.group(3)} if match else None
+
+
+def masked(text):
+    return re.sub(r"aws-sdk-js-(session-)?\d+", r"aws-sdk-js-\1<now>", text)
+
+
+class CredentialServer:
+    """Bedrock ConverseStream plus the credential services, on one port."""
+
+    def __init__(self, behaviour=None):
+        self.requests = []
+        behaviour = behaviour or {}
+        outer = self
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def reply(self, status, body, kind="application/json"):
+                data = body.encode()
+                self.send_response(status)
+                self.send_header("content-type", kind)
+                self.send_header("content-length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def headers_(self):
+                return {k.lower(): v for k, v in self.headers.items()}
+
+            def do_POST(self):
+                raw = self.rfile.read(int(self.headers.get("content-length", "0"))).decode()
+                headers = self.headers_()
+                if self.path.startswith("/model/"):
+                    outer.requests.append({"service": "bedrock", "scope": scope_of(headers), "token": headers.get("x-amz-security-token")})
+                    data = b"".join(OK_FRAMES)
+                    self.send_response(200)
+                    self.send_header("content-type", "application/vnd.amazon.eventstream")
+                    self.send_header("content-length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+                if self.path == "/token":
+                    outer.requests.append({"service": "sso-oidc", "body": json.loads(raw)})
+                    if behaviour.get("oidc_error"):
+                        return self.reply(400, json.dumps({"error": "invalid_grant", "error_description": "Refresh token expired"}))
+                    return self.reply(200, json.dumps({"accessToken": "refreshed-access", "expiresIn": 3600, "refreshToken": "rotated-refresh", "tokenType": "Bearer"}))
+                form = dict(urllib.parse.parse_qsl(raw))
+                outer.requests.append({"service": "sts", "form": {k: masked(v) for k, v in form.items()}, "scope": scope_of(headers), "token": headers.get("x-amz-security-token"), "type": headers.get("content-type")})
+                if behaviour.get("sts_error"):
+                    return self.reply(403, '<ErrorResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/"><Error><Type>Sender</Type><Code>AccessDenied</Code><Message>User is not authorized to perform: sts:AssumeRole</Message></Error><RequestId>sts-err</RequestId></ErrorResponse>', "text/xml")
+                role = form.get("RoleArn", "").rsplit("/", 1)[-1].upper()
+                return self.reply(200, xml_credentials(form.get("Action"), role), "text/xml")
+
+            def do_PUT(self):
+                headers = self.headers_()
+                outer.requests.append({"service": "imds", "method": "PUT", "path": self.path, "ttl": headers.get("x-aws-ec2-metadata-token-ttl-seconds")})
+                status = behaviour.get("imds_token", 200)
+                return self.reply(status, "imds-v2-token" if status == 200 else "", "text/plain")
+
+            def do_GET(self):
+                headers = self.headers_()
+                path, _, query = self.path.partition("?")
+                if path == "/federation/credentials":
+                    outer.requests.append({"service": "sso", "query": dict(urllib.parse.parse_qsl(query)), "bearer": headers.get("x-amz-sso_bearer_token")})
+                    return self.reply(200, json.dumps({"roleCredentials": {"accessKeyId": "ASIASSO", "secretAccessKey": "secret-sso", "sessionToken": "token-sso", "expiration": 4070908800000}}))
+                if path == "/ecs/credentials":
+                    outer.requests.append({"service": "container", "authorization": headers.get("authorization")})
+                    return self.reply(200, json.dumps({"AccessKeyId": "ASIAECS", "SecretAccessKey": "secret-ecs", "Token": "token-ecs", "Expiration": FUTURE}))
+                outer.requests.append({"service": "imds", "method": "GET", "path": path, "token": headers.get("x-aws-ec2-metadata-token")})
+                if path == "/latest/meta-data/iam/security-credentials/":
+                    return self.reply(200, "imds-role", "text/plain")
+                if path == "/latest/meta-data/iam/security-credentials/imds-role":
+                    return self.reply(200, json.dumps({"Code": "Success", "LastUpdated": "2026-01-01T00:00:00Z", "Type": "AWS-HMAC", "AccessKeyId": "ASIAIMDS", "SecretAccessKey": "secret-imds", "Token": "token-imds", "Expiration": FUTURE}))
+                return self.reply(404, "")
+
+            def log_message(self, *_):
+                pass
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.server.daemon_threads = True
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.server.server_port}"
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+
+class ChainCase:
+    def __init__(self, name, config="", credentials="", env=None, options=None, behaviour=None, sso=None, files=None, check=None, spawns=False):
+        self.name, self.config, self.credentials, self.env, self.spawns = name, config, credentials, env or {}, spawns
+        self.options, self.behaviour, self.sso, self.files, self.check = options or {}, behaviour, sso, files or {}, check
+
+
+def sso_token(expires, **extra):
+    return dict({"accessToken": "cached-access", "expiresAt": expires, "region": "us-east-1", "startUrl": "https://example.awsapps.com/start"}, **extra)
+
+
+def iso_in(seconds):
+    import datetime
+    return (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+STATIC = "[base]\naws_access_key_id = AKIDBASE\naws_secret_access_key = secret-base\n"
+SSO_SESSION = "[profile dev]\nsso_session = corp\nsso_account_id = 111122223333\nsso_role_name = Developer\n\n[sso-session corp]\nsso_region = us-east-1\nsso_start_url = https://example.awsapps.com/start\n"
+CHAIN_CASES = [
+    ChainCase("assumes a role from a source_profile with static keys", config="[profile dev]\nrole_arn = arn:aws:iam::123456789012:role/dev\nsource_profile = base\nrole_session_name = pi-session\nexternal_id = ext-1\nduration_seconds = 900\n", credentials=STATIC, env={"AWS_PROFILE": "dev"}),
+    ChainCase("chains role assumptions through source profiles with the outermost role region", config="[profile outer]\nrole_arn = arn:aws:iam::123456789012:role/outer\nsource_profile = middle\nregion = eu-west-1\n\n[profile middle]\nrole_arn = arn:aws:iam::123456789012:role/middle\nsource_profile = base\nregion = ap-south-1\n", credentials=STATIC, env={"AWS_PROFILE": "outer"}),
+    ChainCase("assumes a role from environment credentials through credential_source", config="[profile dev]\nrole_arn = arn:aws:iam::123456789012:role/env\ncredential_source = Environment\n", env={"AWS_ACCESS_KEY_ID": "AKIDENV", "AWS_SECRET_ACCESS_KEY": "secret-env"}, options={"profile": "dev"}),
+    ChainCase("assumes a role from instance metadata through credential_source", config="[profile dev]\nrole_arn = arn:aws:iam::123456789012:role/ec2\ncredential_source = Ec2InstanceMetadata\n", env={"AWS_PROFILE": "dev", "AWS_EC2_METADATA_DISABLED": ""}),
+    ChainCase("reports an unsupported credential_source and continues the chain", config="[profile dev]\nrole_arn = arn:aws:iam::123456789012:role/x\ncredential_source = Nowhere\n", env={"AWS_PROFILE": "dev"}),
+    ChainCase("detects source_profile cycles", config="[profile a]\nrole_arn = arn:aws:iam::123456789012:role/a\nsource_profile = b\n\n[profile b]\nrole_arn = arn:aws:iam::123456789012:role/b\nsource_profile = a\n", env={"AWS_PROFILE": "a"}),
+    ChainCase("fails a role that requires an MFA code", config="[profile dev]\nrole_arn = arn:aws:iam::123456789012:role/mfa\nsource_profile = base\nmfa_serial = arn:aws:iam::123456789012:mfa/user\n", credentials=STATIC, env={"AWS_PROFILE": "dev"}),
+    ChainCase("stops the chain on an STS error", config="[profile dev]\nrole_arn = arn:aws:iam::123456789012:role/denied\nsource_profile = base\n", credentials=STATIC, env={"AWS_PROFILE": "dev"}, behaviour={"sts_error": True}),
+    ChainCase("assumes a role with a web identity token from the environment", files={"token": "web-token-1"}, env={"AWS_WEB_IDENTITY_TOKEN_FILE": "{dir}/token", "AWS_ROLE_ARN": "arn:aws:iam::123456789012:role/web", "AWS_ROLE_SESSION_NAME": "web-session"}),
+    ChainCase("assumes a role with a web identity token from a profile", config="[profile dev]\nrole_arn = arn:aws:iam::123456789012:role/webprofile\nweb_identity_token_file = {dir}/token\n", files={"token": "web-token-2"}, env={"AWS_PROFILE": "dev"}),
+    ChainCase("resolves SSO credentials from a cached sso-session token", config=SSO_SESSION, env={"AWS_PROFILE": "dev"}, sso=("corp", sso_token(iso_in(3600)))),
+    ChainCase("refreshes an sso-session token that expires within five minutes", config=SSO_SESSION, env={"AWS_PROFILE": "dev"}, sso=("corp", sso_token(iso_in(120), clientId="client-1", clientSecret="client-secret", refreshToken="refresh-1", registrationExpiresAt=iso_in(86400)))),
+    ChainCase("reports a missing sso-session token", config=SSO_SESSION, env={"AWS_PROFILE": "dev"}),
+    ChainCase("resolves legacy SSO profiles from the start URL cache", config="[profile dev]\nsso_start_url = https://legacy.awsapps.com/start\nsso_region = us-east-1\nsso_account_id = 111122223333\nsso_role_name = Legacy\n", env={"AWS_PROFILE": "dev"}, sso=("https://legacy.awsapps.com/start", sso_token(iso_in(3600)))),
+    ChainCase("reports an expired legacy SSO token", config="[profile dev]\nsso_start_url = https://legacy.awsapps.com/start\nsso_region = us-east-1\nsso_account_id = 111122223333\nsso_role_name = Legacy\n", env={"AWS_PROFILE": "dev"}, sso=("https://legacy.awsapps.com/start", sso_token("2020-01-01T00:00:00Z"))),
+    ChainCase("rejects an incomplete SSO profile", config="[profile dev]\nsso_start_url = https://legacy.awsapps.com/start\nsso_region = us-east-1\n", env={"AWS_PROFILE": "dev"}),
+    ChainCase("reads container credentials from a full URI with an authorization token", env={"AWS_CONTAINER_CREDENTIALS_FULL_URI": "{url}/ecs/credentials", "AWS_CONTAINER_AUTHORIZATION_TOKEN": "container-token"}),
+    ChainCase("prefers the container authorization token file over the token variable", files={"ecs-token": "file-token"}, env={"AWS_CONTAINER_CREDENTIALS_FULL_URI": "{url}/ecs/credentials", "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE": "{dir}/ecs-token", "AWS_CONTAINER_AUTHORIZATION_TOKEN": "env-token"}),
+    ChainCase("stops after retrying a missing container authorization token file", env={"AWS_CONTAINER_CREDENTIALS_FULL_URI": "{url}/ecs/credentials", "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE": "{dir}/missing-token"}),
+    ChainCase("reads instance metadata credentials with an IMDSv2 token", env={"AWS_EC2_METADATA_DISABLED": ""}),
+    ChainCase("falls back to IMDSv1 when the token request is forbidden", env={"AWS_EC2_METADATA_DISABLED": ""}, behaviour={"imds_token": 403}),
+    ChainCase("reports a blocked IMDSv1 fallback", env={"AWS_EC2_METADATA_DISABLED": "", "AWS_EC2_METADATA_V1_DISABLED": "true"}, behaviour={"imds_token": 403}),
+    ChainCase("uses a visited source profile's static keys before its own role", config="[profile dev]\nrole_arn = arn:aws:iam::123456789012:role/dev\nsource_profile = base\n", credentials=STATIC + "role_arn = arn:aws:iam::123456789012:role/ignored\nsource_profile = dev\naws_session_token = base-session\n", env={"AWS_PROFILE": "dev"}),
+    ChainCase("assumes a role from container credentials through credential_source", config="[profile dev]\nrole_arn = arn:aws:iam::123456789012:role/ecs\ncredential_source = EcsContainer\n", env={"AWS_PROFILE": "dev", "AWS_CONTAINER_CREDENTIALS_FULL_URI": "{url}/ecs/credentials"}),
+    ChainCase("runs credential_process for a profile", config="[profile dev]\ncredential_process = printf '{\"Version\":1,\"AccessKeyId\":\"AKIDPROC\",\"SecretAccessKey\":\"secret-proc\",\"SessionToken\":\"token-proc\"}'\n", env={"AWS_PROFILE": "dev"}, spawns=True),
+    ChainCase("keeps a still-valid sso-session token when its refresh fails", config=SSO_SESSION, env={"AWS_PROFILE": "dev"}, behaviour={"oidc_error": True}, sso=("corp", sso_token(iso_in(120), clientId="client-1", clientSecret="client-secret", refreshToken="refresh-1"))),
+    ChainCase("rejects container credential hosts that are not loopback or HTTPS", env={"AWS_CONTAINER_CREDENTIALS_FULL_URI": "http://credentials.invalid/creds"}),
+    ChainCase("continues after an IMDS token request is rejected", env={"AWS_EC2_METADATA_DISABLED": ""}, behaviour={"imds_token": 400}),
+    ChainCase("reports that no provider could load credentials"),
+]
+
+
+def chain_run(command, item, directory):
+    """One run on a fresh copy of the case's files and a fresh server."""
+    server = CredentialServer(item.behaviour)
+    root = pathlib.Path(directory)
+    if root.exists():
+        shutil.rmtree(root)
+    (root / "home").mkdir(parents=True)
+    fill = lambda text: text.replace("{dir}", str(root)).replace("{url}", server.url)
+    (root / "config").write_text(fill(item.config))
+    (root / "credentials").write_text(fill(item.credentials))
+    for name, text in item.files.items():
+        (root / name).write_text(text)
+    cache = None
+    if item.sso:
+        key, token = item.sso
+        cache = root / "home/.aws/sso/cache" / (hashlib.sha1(key.encode()).hexdigest() + ".json")
+        cache.parent.mkdir(parents=True)
+        cache.write_text(json.dumps(token, indent=2))
+    env = dict(BASE_ENV, HOME=str(root / "home"), AWS_CONFIG_FILE=str(root / "config"), AWS_SHARED_CREDENTIALS_FILE=str(root / "credentials"), AWS_REGION="us-west-2", AWS_BEDROCK_FORCE_HTTP1="1",
+               AWS_ENDPOINT_URL_STS=server.url, AWS_ENDPOINT_URL_SSO=server.url, AWS_ENDPOINT_URL_SSO_OIDC=server.url, AWS_EC2_METADATA_SERVICE_ENDPOINT=server.url)
+    env.update({k: fill(v) for k, v in item.env.items()})
+    env = {k: v for k, v in env.items() if v != ""}
+    spec = {"model": {"catalog": "us.anthropic.claude-opus-4-8", "baseUrl": server.url}, "context": hello(), "options": dict({"cacheRetention": "none"}, **item.options)}
+    try:
+        lines = run(command, spec, env) if command else oracle(spec, env)
+    finally:
+        server.close()
+    result = message(lines)
+    saved = json.loads(cache.read_text()) if cache and cache.exists() else None
+    if saved and saved.get("expiresAt") != item.sso[1]["expiresAt"]:
+        saved["expiresAt"] = "<refreshed>"
+    return {"requests": server.requests, "stopReason": result["stopReason"], "errorMessage": masked(result.get("errorMessage", "")).replace(str(root), "{dir}"), "cache": saved}
+
+
+def chain_check(command, backend, item, directory):
+    native = chain_run(command, item, pathlib.Path(directory) / "chain-native")
+    upstream = chain_run(None, item, pathlib.Path(directory) / "chain-oracle")
+    assert native == upstream, (item.name, json.dumps(native, indent=1), json.dumps(upstream, indent=1))
+    if item.check:
+        item.check(native)
+
+
 # --- Runner ----------------------------------------------------------------
 
 def run_case(command, backend, item, compare):
@@ -527,6 +733,14 @@ def main():
                     continue
                 run_case(command, backend, item, compare=True)
                 print(f"PASS {backend}: {item.suite}: {item.name}")
+            for item in CHAIN_CASES:
+                if args.only and args.only not in item.name:
+                    continue
+                if item.spawns and backend == "bun":
+                    # The JavaScript lane has no process spawning; native runs it.
+                    continue
+                chain_check(command, backend, item, directory)
+                print(f"PASS {backend}: credential chain: {item.name}")
         # The agent runtime streams bedrock-converse-stream models through
         # this API (JavaScript lane; it compiles the whole runtime).
         output = pathlib.Path(directory) / "registered-apis.js"
