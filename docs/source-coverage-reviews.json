@@ -861,7 +861,7 @@
     },
     "packages/ai/src/api/google-vertex.ts": {
       "state": "partial",
-      "note": "stream/streamSimple: the custom-fetch check, resolveApiKey (ADC markers and placeholders), the API key or ADC client with project/location from options and env, buildHttpOptions (custom base URL at collection scope, version detection, User-Agent and header overlay), buildParams shared with Google Generative AI, onPayload, the SDK's Vertex URL, headers and request conversion, retryGoogleRequest, and the shared stream loop with the api name and 'Google Vertex stream ended without a finish reason'; streamSimple without a key requirement and with Vertex's 2.5 Flash-Lite budgets. ADC: authorized_user credentials files (keyFilename, else the well-known gcloud file) and the refresh-token exchange (google-vertex-credentials.bend). tests/google_vertex_check.py compares 15 streamed cases with upstream driving the pinned @google/genai and google-auth-library on a loopback server and asserts the 12 client-configuration cases. Missing: service-account, impersonated and external-account credentials (service accounts need RS256 signing, which the runtime lacks), the Compute Engine metadata server, and gaxios' token-request retries.",
+      "note": "stream/streamSimple: the custom-fetch check, resolveApiKey (ADC markers and placeholders), the API key or ADC client with project/location from options and env, buildHttpOptions (custom base URL at collection scope, version detection, User-Agent and header overlay), buildParams shared with Google Generative AI, onPayload, the SDK's Vertex URL, headers and request conversion, retryGoogleRequest, and the shared stream loop with the api name and 'Google Vertex stream ended without a finish reason'; streamSimple without a key requirement and with Vertex's 2.5 Flash-Lite budgets. ADC: authorized_user and service_account credentials files (keyFilename, else the well-known gcloud file), the refresh-token exchange and gtoken's RS256 JWT bearer grant signed with runtime/rsa-sign.bend (google-vertex-credentials.bend). tests/google_vertex_check.py compares 17 streamed cases with upstream driving the pinned @google/genai and google-auth-library on a loopback server and asserts the 12 client-configuration cases. Missing: impersonated and external-account credentials, the Compute Engine metadata server, and gaxios' token-request retries.",
       "ports": [
         "packages/ai/src/api/google-vertex.bend",
         "packages/ai/src/api/google-vertex-credentials.bend",
@@ -871,7 +871,7 @@
       "source_sha256": "d0a53a2faaad20620800a1e95d2d2175d641011c4d6b00b0877d905c57f16ec1",
       "port_sha256": {
         "packages/ai/src/api/google-vertex.bend": "0ebdb23af0dce3514a9f10f49570cdb99a9ee16a853dd2aaa2de4ac4e8a5ec09",
-        "packages/ai/src/api/google-vertex-credentials.bend": "f5eb406223e827951c683961e1101de5f2b6331fbe8f9f95bc9c9b37a38a43e9",
+        "packages/ai/src/api/google-vertex-credentials.bend": "212fd2b5c048ecaf2cccd8fe8be0cabb7c299dc772c90acc1ac13882e440af2d",
         "packages/ai/src/api/google-generative-ai-client.bend": "eaaeead401f3172c802f3e76b871f6e69ab4cb3b4e1b87128923586621ecc19b",
         "packages/ai/src/api/google-generative-ai-stream.bend": "786ea73d7b16f635095a24c049667395a971ce730fd2a696ca699184371fb243"
       }

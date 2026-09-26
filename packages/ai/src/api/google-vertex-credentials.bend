@@ -14,13 +14,19 @@ import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/url.bend as URL
 import ../../../runtime/src/utf8.bend as Utf8
+import ../../../runtime/src/base64.bend as Base64
+import ../../../runtime/src/date.bend as Date
+import ../../../runtime/src/f64.bend as F
+import ../../../runtime/src/rsa-sign.bend as Sign
+import ../utils/json.bend as JsonWire
 
 # The part of google-auth-library 10.6.2's Application Default Credentials
 # that @google/genai uses for Vertex AI without an API key: the credentials
 # file (pi's GOOGLE_APPLICATION_CREDENTIALS keyFilename, else the
-# well-known gcloud file), an "authorized_user" refresh-token exchange at the
-# OAuth2 token endpoint, and the request headers it yields. Service accounts,
-# impersonation, external accounts and the Compute Engine metadata server are
+# well-known gcloud file), the token exchange at the OAuth2 token endpoint
+# for "authorized_user" (refresh token) and "service_account" (an RS256
+# JWT bearer assertion) credentials, and the request headers it yields.
+# Impersonation, external accounts and the Compute Engine metadata server are
 # not provided; a credentials file of those types reports that, and without a
 # file the library's "no ADC found" error is reported.
 
@@ -28,8 +34,11 @@ def NO_ADC_FOUND() -> String: "Could not load the default credentials. Browse to
 
 def TOKEN_URL() -> String: "https://oauth2.googleapis.com/token"
 
-type AuthorizedUser is Data:
+# The credentials of an ADC file: an authorized_user refresh token, or a
+# service account's key (google-auth-library's UserRefreshClient and JWT).
+type AdcCredentials is Data:
   AuthorizedUser{clientId: String, clientSecret: String, refreshToken: String, quotaProjectId: Maybe<&2, String>}
+  ServiceAccount{clientEmail: String, privateKey: String, quotaProjectId: Maybe<&2, String>}
 
 # Credentials files
 # -----------------
@@ -47,15 +56,25 @@ def text(value: Maybe<&2, V.Value>) -> Maybe<&2, String>:
 
 def missing(name: String) -> String: "The incoming JSON object does not contain a " ++ name ++ " field"
 
-def userFrom(id: Maybe<&2, String>, secret: Maybe<&2, String>, token: Maybe<&2, String>, quota: Maybe<&2, String>) -> Result<&2, &2, String, AuthorizedUser>:
+def userFrom(id: Maybe<&2, String>, secret: Maybe<&2, String>, token: Maybe<&2, String>, quota: Maybe<&2, String>) -> Result<&2, &2, String, AdcCredentials>:
   match id secret token:
     case None{} _ _: Fail{missing("client_id")}
     case _ None{} _: Fail{missing("client_secret")}
     case _ _ None{}: Fail{missing("refresh_token")}
     case Some{a} Some{b} Some{c}: Done{AuthorizedUser{a, b, c, quota}}
 
+def accountFrom(email: Maybe<&2, String>, key: Maybe<&2, String>, quota: Maybe<&2, String>) -> Result<&2, &2, String, AdcCredentials>:
+  match email key:
+    case None{} _: Fail{missing("client_email")}
+    case _ None{}: Fail{missing("private_key")}
+    case Some{a} Some{b}: Done{ServiceAccount{a, b, quota}}
+
+# JWT.fromJSON's checks, in order.
+def serviceAccount(+json: V.Value) -> Result<&2, &2, String, AdcCredentials>:
+  accountFrom(text(field(json, "client_email")), text(field(json, "private_key")), text(field(json, "quota_project_id")))
+
 # UserRefreshClient.fromJSON's checks, in order.
-def authorizedUser(+json: V.Value) -> Result<&2, &2, String, AuthorizedUser>:
+def authorizedUser(+json: V.Value) -> Result<&2, &2, String, AdcCredentials>:
   userFrom(text(field(json, "client_id")), text(field(json, "client_secret")), text(field(json, "refresh_token")), text(field(json, "quota_project_id")))
 
 def typeName(value: Maybe<&2, V.Value>) -> String:
@@ -64,26 +83,26 @@ def typeName(value: Maybe<&2, V.Value>) -> String:
     case _: ""
 
 # GoogleAuth.fromJSON: the credential type decides the client.
-def typedCredentials(+kind: String, json: V.Value) -> Result<&2, &2, String, AuthorizedUser>:
+def typedCredentials(+kind: String, json: V.Value) -> Result<&2, &2, String, AdcCredentials>:
   match kind:
     case "authorized_user": authorizedUser(json)
-    case "service_account": Fail{"Service account credentials are not supported natively: the RS256-signed token assertion needs RSA signing"}
+    case "service_account": serviceAccount(json)
     case "impersonated_service_account": Fail{"Impersonated service account credentials are not supported natively"}
     case "external_account": Fail{"External account credentials are not supported natively"}
     case "external_account_authorized_user": Fail{"External account authorized user credentials are not supported natively"}
     case _: Fail{"Credentials of type \"" ++ kind ++ "\" are not supported natively"}
 
-def parsedFile(result: Result<&2, &2, Decode.ParseError, V.Value>) -> Result<&2, &2, String, AuthorizedUser>:
+def parsedFile(result: Result<&2, &2, Decode.ParseError, V.Value>) -> Result<&2, &2, String, AdcCredentials>:
   match result:
     case Fail{_}: Fail{"The credentials file is not valid JSON"}
     case Done{+json}: typedCredentials(typeName(field(json, "type")), json)
 
-def decodedFile(value: Result<&2, &2, Utf8.Error, String>) -> Result<&2, &2, String, AuthorizedUser>:
+def decodedFile(value: Result<&2, &2, Utf8.Error, String>) -> Result<&2, &2, String, AdcCredentials>:
   match value:
     case Fail{_}: Fail{"The credentials file is not valid UTF-8"}
     case Done{content}: parsedFile(Decode.parse(content))
 
-def fileText(bytes: List<&2, U32>) -> Result<&2, &2, String, AuthorizedUser>: decodedFile(Utf8.decodeStrict(bytes))
+def fileText(bytes: List<&2, U32>) -> Result<&2, &2, String, AdcCredentials>: decodedFile(Utf8.decodeStrict(bytes))
 
 # fs.createReadStream's error for the key file.
 def readFailure(error: FS.Error, path: String) -> String:
@@ -92,49 +111,99 @@ def readFailure(error: FS.Error, path: String) -> String:
     case FS.System{_, message}: message ++ ", open '" ++ path ++ "'"
     case _: "Could not read '" ++ path ++ "'"
 
-def readResult(path: String, result: Result<&2, &2, FS.Error, List<&2, U32>>) -> Result<&2, &2, String, AuthorizedUser>:
+def readResult(path: String, result: Result<&2, &2, FS.Error, List<&2, U32>>) -> Result<&2, &2, String, AdcCredentials>:
   match result:
     case Fail{error}: Fail{readFailure(error, path)}
     case Done{bytes}: fileText(bytes)
 
-def readCredentials(+path: String) -> IO(Result<&2, &2, String, AuthorizedUser>):
-  do IO<Result<&2, &2, String, AuthorizedUser>>:
+def readCredentials(+path: String) -> IO(Result<&2, &2, String, AdcCredentials>):
+  do IO<Result<&2, &2, String, AdcCredentials>>:
     result : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile(path)
     return readResult(path, result)
 
-def wellKnownResult(result: Result<&2, &2, FS.Error, List<&2, U32>>) -> Result<&2, &2, String, AuthorizedUser>:
+def wellKnownResult(result: Result<&2, &2, FS.Error, List<&2, U32>>) -> Result<&2, &2, String, AdcCredentials>:
   match result:
     case Fail{_}: Fail{NO_ADC_FOUND()}
     case Done{bytes}: fileText(bytes)
 
-def wellKnown(home: Maybe<&2, String>) -> IO(Result<&2, &2, String, AuthorizedUser>):
+def wellKnown(home: Maybe<&2, String>) -> IO(Result<&2, &2, String, AdcCredentials>):
   match home:
     case Some{SCon{c, cs}}:
-      do IO<Result<&2, &2, String, AuthorizedUser>>:
+      do IO<Result<&2, &2, String, AdcCredentials>>:
         result : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile(SCon{c, cs} ++ "/.config/gcloud/application_default_credentials.json")
         return wellKnownResult(result)
-    case _: IO.pure(Result<&2, &2, String, AuthorizedUser>, Fail{NO_ADC_FOUND()})
+    case _: IO.pure(Result<&2, &2, String, AdcCredentials>, Fail{NO_ADC_FOUND()})
 
 # The credentials the Vertex client authenticates with: the keyFilename pi
 # passes (GOOGLE_APPLICATION_CREDENTIALS from the provider env or process),
 # else $HOME/.config/gcloud/application_default_credentials.json. Relative
 # key files resolve against the working directory as path.resolve does.
-def loadCredentials(keyFilename: Maybe<&2, String>) -> IO(Result<&2, &2, String, AuthorizedUser>):
+def loadCredentials(keyFilename: Maybe<&2, String>) -> IO(Result<&2, &2, String, AdcCredentials>):
   match keyFilename:
     case Some{SCon{c, cs}}: readCredentials(SCon{c, cs})
     case _:
-      do IO<Result<&2, &2, String, AuthorizedUser>>:
+      do IO<Result<&2, &2, String, AdcCredentials>>:
         home : Maybe<&2, String> <- Env.getProviderEnvValue("HOME", None{})
         wellKnown(home)
 
 # Token exchange
 # --------------
 
-# refreshTokenNoCache's form: refresh_token, client_id, client_secret,
-# grant_type.
-def tokenForm(user: AuthorizedUser) -> String:
+def SCOPE() -> String: "https://www.googleapis.com/auth/cloud-platform"
+
+def JWT_GRANT() -> String: "urn:ietf:params:oauth:grant-type:jwt-bearer"
+
+def base64Url(text: String) -> String:
+  match text:
+    case SNil{}: SNil{}
+    case SCon{'+', rest}: SCon{'-', base64Url(rest)}
+    case SCon{'/', rest}: SCon{'_', base64Url(rest)}
+    case SCon{'=', _}: SNil{}
+    case SCon{c, rest}: SCon{c, base64Url(rest)}
+
+def encodedText(value: Result<&2, &2, Base64.Error, String>) -> String:
+  match value:
+    case Done{encoded}: base64Url(encoded)
+    case Fail{_}: ""
+
+def encodedSegment(bytes: List<&2, U32>) -> String: encodedText(Base64.encode(bytes))
+
+def jsonSegment(value: T.JsonValue) -> String: encodedSegment(Utf8.encode(Maybe.default(&2, String, JsonWire.stringify(value), "{}")))
+
+def num(value: F64) -> T.JsonValue: T.JsonNumber{value}
+
+def str(value: String) -> T.JsonValue: T.JsonString{value}
+
+# gtoken's claims: iss, scope, aud, exp, iat (seconds).
+def claims(email: String, +iat: F64) -> T.JsonValue:
+  T.JsonObject{R.Record{[R.Property{"iss", str(email)}, R.Property{"scope", str(SCOPE())}, R.Property{"aud", str(TOKEN_URL())}, R.Property{"exp", num(F.add(iat, F.fromU32(3600)))}, R.Property{"iat", num(iat)}]}}
+
+def signedAssertion(+unsigned: String, signature: Result<&2, &2, Sign.Error, List<&2, U32>>) -> Result<&2, &2, String, String>:
+  match signature:
+    case Fail{_}: Fail{"The service account private key could not sign the token assertion"}
+    case Done{bytes}: Done{unsigned ++ "." ++ encodedSegment(bytes)}
+
+def assertionWith(+unsigned: String, key: Result<&2, &2, Sign.Error, Sign.PrivateKey>) -> Result<&2, &2, String, String>:
+  match key:
+    case Fail{_}: Fail{"The service account private_key is not a supported RSA private key"}
+    case Done{privateKey}: signedAssertion(unsigned, Sign.signPkcs1Sha256(privateKey, Utf8.encode(unsigned)))
+
+# jws.sign({ header: { alg: "RS256" }, payload, secret }).
+def assertion(email: String, privateKey: String, iat: F64) -> Result<&2, &2, String, String>:
+  assertionWith(jsonSegment(T.JsonObject{R.Record{[R.Property{"alg", str("RS256")}]}}) ++ "." ++ jsonSegment(claims(email, iat)), Sign.parsePrivateKeyPem(privateKey))
+
+def jwtForm(+token: Result<&2, &2, String, String>) -> Result<&2, &2, String, String>:
+  match token:
+    case Fail{message}: Fail{message}
+    case Done{value}: Done{URL.serializeSearchParams([URL.Entry{"grant_type", JWT_GRANT()}, URL.Entry{"assertion", value}])}
+
+# The token request body: refreshTokenNoCache's form (refresh_token,
+# client_id, client_secret, grant_type), or gtoken's JWT bearer grant with
+# the assertion signed at `now` (milliseconds).
+def tokenForm(user: AdcCredentials, now: F64) -> Result<&2, &2, String, String>:
   match user:
-    case AuthorizedUser{id, secret, token, _}: URL.serializeSearchParams([URL.Entry{"refresh_token", token}, URL.Entry{"client_id", id}, URL.Entry{"client_secret", secret}, URL.Entry{"grant_type", "refresh_token"}])
+    case AuthorizedUser{id, secret, token, _}: Done{URL.serializeSearchParams([URL.Entry{"refresh_token", token}, URL.Entry{"client_id", id}, URL.Entry{"client_secret", secret}, URL.Entry{"grant_type", "refresh_token"}])}
+    case ServiceAccount{email, key, _}: jwtForm(assertion(email, key, F.truncate(F.divide(now, F.fromU32(1000)))))
 
 def tokenHeaders() -> Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>:
   Http.headerList([R.Property{"Content-Type", "application/x-www-form-urlencoded;charset=UTF-8"}])
@@ -147,9 +216,22 @@ def errorField(value: Maybe<&2, V.Value>, status: U32) -> String:
     case Some{V.ObjectValue{fields}}: Maybe.default(&2, String, text(R.get(V.Value, fields, "message")), "Request failed with status code " ++ U32.show(status))
     case _: "Request failed with status code " ++ U32.show(status)
 
-def failureText(status: U32, body: Result<&2, &2, Decode.ParseError, V.Value>) -> String:
+def describedField(value: Maybe<&2, V.Value>) -> String:
+  match value:
+    case Some{V.Text{description}}: description
+    case _: "undefined"
+
+# gtoken rewrites the message to `${error}: ${error_description}`.
+def gtokenWith(fallback: String, error: Maybe<&2, V.Value>, description: Maybe<&2, V.Value>) -> String:
+  match error:
+    case Some{V.Text{SCon{c, cs}}}: SCon{c, cs} ++ ": " ++ describedField(description)
+    case _: fallback
+
+def gtokenText(fallback: String, +json: V.Value) -> String: gtokenWith(fallback, field(json, "error"), field(json, "error_description"))
+
+def failureText(jwt: Bool, +status: U32, body: Result<&2, &2, Decode.ParseError, V.Value>) -> String:
   match body:
-    case Done{json}: errorField(field(json, "error"), status)
+    case Done{+json}: Bool.pick(String, jwt, gtokenText(errorField(field(json, "error"), status), json), errorField(field(json, "error"), status))
     case Fail{_}: "Request failed with status code " ++ U32.show(status)
 
 type Token is Data:
@@ -165,48 +247,61 @@ def tokenOf(body: Result<&2, &2, Decode.ParseError, V.Value>) -> Result<&2, &2, 
     case Done{+json}: accessToken(text(field(json, "access_token")), Maybe.default(&2, String, text(field(json, "token_type")), "Bearer"))
     case Fail{_}: Fail{"The token response is not valid JSON"}
 
-def tokenBody(-Reason: Data, +status: U32, text: Result<&2, &2, Response.TextError<Http.ExchangeError(Reason)>, String>, ok: Bool) -> Result<&2, &2, String, Token>:
+def tokenBody(-Reason: Data, jwt: Bool, +status: U32, text: Result<&2, &2, Response.TextError<Http.ExchangeError(Reason)>, String>, ok: Bool) -> Result<&2, &2, String, Token>:
   match text ok:
     case Fail{_} _: Fail{"Could not read the token response"}
     case Done{+body} True{}: tokenOf(Decode.parse(body))
-    case Done{+body} False{}: Fail{failureText(status, Decode.parse(body))}
+    case Done{+body} False{}: Fail{failureText(jwt, status, Decode.parse(body))}
 
-def tokenResponse(~Reason: Data, response: Fetch.Result_(Reason), aborted: Bool) -> IO(Result<&2, &2, String, Token>):
+def tokenResponse(~Reason: Data, jwt: Bool, response: Fetch.Result_(Reason), aborted: Bool) -> IO(Result<&2, &2, String, Token>):
   match response aborted:
     case Fail{_} True{}: IO.pure(Result<&2, &2, String, Token>, Fail{"This operation was aborted"})
     case Fail{_} False{}: IO.pure(Result<&2, &2, String, Token>, Fail{"fetch failed"})
     case Done{Response.Response{+metadata, body}} _:
       do IO<Result<&2, &2, String, Token>>:
         text : Result<&2, &2, Response.TextError<Http.ExchangeError(Reason)>, String> <- Http.responseText(~Reason, 1048576n, body)
-        return tokenBody(Reason, Response.metadataStatus(metadata), text, Response.ok(metadata))
+        return tokenBody(Reason, jwt, Response.metadataStatus(metadata), text, Response.ok(metadata))
 
-def exchanged(~Reason: Data, fetch: Fetch.Fetch(Reason), +parent: Abort.AbortSignal<Reason>, request: Http.Request, pair: Deadline.Scope<Reason> & Fetch.Signal(Reason)) -> IO(Result<&2, &2, String, Token>):
+def exchanged(~Reason: Data, jwt: Bool, fetch: Fetch.Fetch(Reason), +parent: Abort.AbortSignal<Reason>, request: Http.Request, pair: Deadline.Scope<Reason> & Fetch.Signal(Reason)) -> IO(Result<&2, &2, String, Token>):
   match pair:
     case (scope, signal):
       do IO<Result<&2, &2, String, Token>>:
         response : Fetch.Result_(Reason) <- Http.post(~Reason, fetch, signal, request)
         aborted : Bool <- Abort.aborted(Reason, parent)
-        result : Result<&2, &2, String, Token> <- tokenResponse(~Reason, response, aborted)
+        result : Result<&2, &2, String, Token> <- tokenResponse(~Reason, jwt, response, aborted)
         closed : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
         return result
 
-def requested(~Reason: Data, fetch: Fetch.Fetch(Reason), +parent: Abort.AbortSignal<Reason>, url: Result<&2, &2, URL.Error, URL.URL>, headers: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>, body: String) -> IO(Result<&2, &2, String, Token>):
+def requested(~Reason: Data, jwt: Bool, fetch: Fetch.Fetch(Reason), +parent: Abort.AbortSignal<Reason>, url: Result<&2, &2, URL.Error, URL.URL>, headers: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>, body: String) -> IO(Result<&2, &2, String, Token>):
   match url headers:
     case Fail{_} _: IO.pure(Result<&2, &2, String, Token>, Fail{"Invalid token URL"})
     case _ Fail{_}: IO.pure(Result<&2, &2, String, Token>, Fail{"Invalid header"})
     case Done{address} Done{fields}:
       do IO<Result<&2, &2, String, Token>>:
         scope : Deadline.Scope<Reason> <- Deadline.create(Reason, 4294967295, parent)
-        exchanged(~Reason, fetch, parent, Http.Request{address, fields, body}, Deadline.borrow(Reason, scope))
+        exchanged(~Reason, jwt, fetch, parent, Http.Request{address, fields, body}, Deadline.borrow(Reason, scope))
+
+def isJwt(user: AdcCredentials) -> Bool:
+  match user:
+    case ServiceAccount{_, _, _}: True{}
+    case _: False{}
+
+def formed(~Reason: Data, jwt: Bool, fetch: Fetch.Fetch(Reason), urlContext: URL.Context, +parent: Abort.AbortSignal<Reason>, tokenUrl: String, form: Result<&2, &2, String, String>) -> IO(Result<&2, &2, String, Token>):
+  match form:
+    case Fail{message}: IO.pure(Result<&2, &2, String, Token>, Fail{message})
+    case Done{body}: requested(~Reason, jwt, fetch, parent, URL.parse(urlContext, tokenUrl), tokenHeaders(), body)
 
 # UserRefreshClient.refreshTokenNoCache against `tokenUrl` (TOKEN_URL in
 # production). gaxios' retries of the token request are not reproduced.
-def refreshAccessToken(~Reason: Data, fetch: Fetch.Fetch(Reason), urlContext: URL.Context, +parent: Abort.AbortSignal<Reason>, tokenUrl: String, user: AuthorizedUser) -> IO(Result<&2, &2, String, Token>):
-  requested(~Reason, fetch, parent, URL.parse(urlContext, tokenUrl), tokenHeaders(), tokenForm(user))
+def refreshAccessToken(~Reason: Data, fetch: Fetch.Fetch(Reason), urlContext: URL.Context, +parent: Abort.AbortSignal<Reason>, tokenUrl: String, +user: AdcCredentials) -> IO(Result<&2, &2, String, Token>):
+  do IO<Result<&2, &2, String, Token>>:
+    now : F64 <- Date.now()
+    formed(~Reason, isJwt(user), fetch, urlContext, parent, tokenUrl, tokenForm(user, now))
 
-def quotaProject(user: AuthorizedUser) -> Maybe<&2, String>:
+def quotaProject(user: AdcCredentials) -> Maybe<&2, String>:
   match user:
     case AuthorizedUser{_, _, _, quota}: quota
+    case ServiceAccount{_, _, quota}: quota
 
 # getRequestHeaders: `authorization: <token_type> <access_token>` and the
 # credentials' quota project as x-goog-user-project.
@@ -215,12 +310,12 @@ def authHeaders(token: Token, quota: Maybe<&2, String>) -> List<&2, R.Property<S
     case Token{access, kind} Some{project}: [R.Property{"x-goog-user-project", project}, R.Property{"authorization", kind ++ " " ++ access}]
     case Token{access, kind} None{}: [R.Property{"authorization", kind ++ " " ++ access}]
 
-def headersFor(user: AuthorizedUser, token: Result<&2, &2, String, Token>) -> Result<&2, &2, String, List<&2, R.Property<String>>>:
+def headersFor(user: AdcCredentials, token: Result<&2, &2, String, Token>) -> Result<&2, &2, String, List<&2, R.Property<String>>>:
   match token:
     case Fail{message}: Fail{message}
     case Done{value}: Done{authHeaders(value, quotaProject(user))}
 
-def loaded(~Reason: Data, fetch: Fetch.Fetch(Reason), urlContext: URL.Context, +parent: Abort.AbortSignal<Reason>, tokenUrl: String, credentials: Result<&2, &2, String, AuthorizedUser>) -> IO(Result<&2, &2, String, List<&2, R.Property<String>>>):
+def loaded(~Reason: Data, fetch: Fetch.Fetch(Reason), urlContext: URL.Context, +parent: Abort.AbortSignal<Reason>, tokenUrl: String, credentials: Result<&2, &2, String, AdcCredentials>) -> IO(Result<&2, &2, String, List<&2, R.Property<String>>>):
   match credentials:
     case Fail{message}: IO.pure(Result<&2, &2, String, List<&2, R.Property<String>>>, Fail{message})
     case Done{+user}:
@@ -231,5 +326,5 @@ def loaded(~Reason: Data, fetch: Fetch.Fetch(Reason), urlContext: URL.Context, +
 # The ADC request headers for one Vertex client.
 def requestHeaders(~Reason: Data, fetch: Fetch.Fetch(Reason), urlContext: URL.Context, +parent: Abort.AbortSignal<Reason>, tokenUrl: String, keyFilename: Maybe<&2, String>) -> IO(Result<&2, &2, String, List<&2, R.Property<String>>>):
   do IO<Result<&2, &2, String, List<&2, R.Property<String>>>>:
-    credentials : Result<&2, &2, String, AuthorizedUser> <- loadCredentials(keyFilename)
+    credentials : Result<&2, &2, String, AdcCredentials> <- loadCredentials(keyFilename)
     loaded(~Reason, fetch, urlContext, parent, tokenUrl, credentials)

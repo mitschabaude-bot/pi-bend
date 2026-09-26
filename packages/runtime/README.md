@@ -14,7 +14,7 @@ Effects and ownership: `ref`, `deferred`, `callback`, `serial-resource`, `concur
 
 Network: `url` (WHATWG URL, search params, form decoding, numeric hosts), `numeric-host`, `ipv6-scope`, `ipv6-connect`, `network-interface`, `socket` (endpoints, abortable stream and datagram IO, writers, interrupts), `datagram-peer`, `hosts`, `dns-message`, `resolver-config`, `dns-transport`, `dns-resolver`, `connection-driver` (address selection and fallback), `http-message` (headers, request heads, status lines, bodies, dates, URL projection), `http-response` (response readers, body sources, abort classification), `sse`, `http-exchange` (cleartext and TLS exchanges over a socket), `fetch`.
 
-Cryptography and TLS: `sha256`, `sha512`, `hmac-sha256`, `hkdf-sha256`, `aes128`, `aes128-gcm`, `x25519`, `prime-field`, `modular`, `ecdsa`, `rsa-sha256`, `x509`, `tls-trust`, `tls13-kdf`, `tls13-record`, `tls13-handshake`, `tls13-client`, `tls-socket`. AWS: `crc32`, `aws-eventstream` (event-stream message framing), `aws-sigv4` (Signature Version 4 request signing).
+Cryptography and TLS: `sha256`, `sha512`, `hmac-sha256`, `hkdf-sha256`, `aes128`, `aes128-gcm`, `x25519`, `prime-field`, `modular`, `ecdsa`, `rsa-sha256`, `rsa-sign` (PKCS#8/PKCS#1 private keys, RS256 signing), `x509`, `tls-trust`, `tls13-kdf`, `tls13-record`, `tls13-handshake`, `tls13-client`, `tls-socket`. AWS: `crc32`, `aws-eventstream` (event-stream message framing), `aws-sigv4` (Signature Version 4 request signing).
 
 ## History
 

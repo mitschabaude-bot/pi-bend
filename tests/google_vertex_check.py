@@ -24,6 +24,8 @@ import re
 import subprocess
 import tempfile
 import threading
+import base64
+import urllib.parse
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "packages/ai/test/google-vertex.bend"
@@ -132,13 +134,37 @@ def payloads(lines):
     return [{**p, "config": {k: v for k, v in p.get("config", {}).items() if k != "abortSignal"}} if isinstance(p, dict) else p for p in lines["payload"]]
 
 
+def unb64(segment):
+    return base64.urlsafe_b64decode(segment + "=" * (-len(segment) % 4))
+
+
+VERIFIED = {}
+
+
+def token_body(body):
+    """The JWT bearer grant with the assertion's times checked and elided and
+    its RS256 signature verified with the service account's public key."""
+    form = urllib.parse.parse_qs(body)
+    if "assertion" not in form:
+        return body
+    header, payload, signature = form["assertion"][0].split(".")
+    claims = json.loads(unb64(payload))
+    assert claims["exp"] - claims["iat"] == 3600, claims
+    message = (header + "." + payload).encode()
+    with tempfile.NamedTemporaryFile() as data, tempfile.NamedTemporaryFile() as sig:
+        data.write(message); data.flush(); sig.write(unb64(signature)); sig.flush()
+        check = subprocess.run(["openssl", "dgst", "-sha256", "-verify", VERIFIED["public"], "-signature", sig.name, data.name], capture_output=True, text=True)
+    assert check.returncode == 0, check
+    return {"grant_type": form["grant_type"], "header": json.loads(unb64(header)), "claims": {**claims, "iat": "<now>", "exp": "<now+3600>"}, "headerText": unb64(header).decode(), "claimOrder": list(claims)}
+
+
 def trace(lines, requests):
     return {
         "payload": payloads(lines),
         "events": [normalized(e) for e in lines["event"]],
         "result": [normalized(r) for r in lines["result"]],
         "thrown": lines["thrown"],
-        "requests": [{"path": r["path"], "body": r["body"], "headers": {k: r["headers"].get(k) for k in COMPARED_HEADERS if not (k == "user-agent" and r["path"] == "/token")}} for r in requests],
+        "requests": [{"path": r["path"], "body": token_body(r["body"]) if r["path"] == "/token" else r["body"], "headers": {k: r["headers"].get(k) for k in COMPARED_HEADERS if not (k == "user-agent" and r["path"] == "/token")}} for r in requests],
     }
 
 
@@ -285,6 +311,15 @@ case("native", "streamSimple over ADC", {**adc_stream({"context": TOOLS}), "mode
 case("native", "an HTTP error status is the error message", {"model": {"baseUrl": "{base}"}, "context": HELLO, "options": {"apiKey": KEY}}, lambda lines, _: expect(message(lines)["stopReason"] == "error" and "Invalid argument" in message(lines)["errorMessage"], lines),
      body=json.dumps({"error": {"code": 400, "message": "Invalid argument", "status": "INVALID_ARGUMENT"}}), status=400)
 case("native", "a rejected token refresh is the error message", adc_stream(), lambda lines, _: expect(message(lines)["stopReason"] == "error" and message(lines)["errorMessage"] == "invalid_grant", lines), token_status=400)
+def sa_request(lines, requests):
+    m = message(lines)
+    expect(m["stopReason"] == "toolUse", m)
+    expect([r["path"] for r in requests][0] == "/token" and "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer" in requests[0]["body"], requests)
+    expect(requests[1]["headers"].get("authorization") == "Bearer ya29.test-token" and requests[1]["headers"].get("x-goog-user-project") == "sa-quota", requests)
+
+
+case("native", "a service account signs an RS256 JWT bearer assertion", adc_stream({"context": TOOLS, "serviceAccount": True}), sa_request, body=TEXT)
+case("native", "a rejected service account assertion is gtoken's error message", adc_stream({"serviceAccount": True}), lambda lines, _: expect(message(lines)["errorMessage"] == "invalid_grant: Bad Request", lines), token_status=400)
 case("native", "a stream without a finish reason names Google Vertex", {"model": {"baseUrl": "{base}"}, "context": HELLO, "options": {"apiKey": KEY}}, lambda lines, _: expect(message(lines)["errorMessage"] == "Google Vertex stream ended without a finish reason", lines), body=sse({"candidates": [{"content": {"parts": [{"text": "a"}], "role": "model"}}]}))
 
 
@@ -296,9 +331,18 @@ def filled(value, base, token):
     return base if value == "{base}" else value
 
 
+def service_account(directory):
+    key = pathlib.Path(directory) / "sa.pem"
+    if not key.exists():
+        subprocess.run(["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048", "-out", str(key)], check=True, capture_output=True)
+        subprocess.run(["openssl", "pkey", "-in", str(key), "-pubout", "-out", str(key) + ".pub"], check=True, capture_output=True)
+    VERIFIED["public"] = str(key) + ".pub"
+    return {"type": "service_account", "project_id": "sa-project", "private_key_id": "key-id", "private_key": key.read_text(), "client_email": "vertex@sa-project.iam.gserviceaccount.com", "client_id": "1234", "token_uri": "https://oauth2.googleapis.com/token", "quota_project_id": "sa-quota"}
+
+
 def run_case(command, item, directory, compare):
     credentials = pathlib.Path(directory) / "adc.json"
-    credentials.write_text(json.dumps(ADC_FILE))
+    credentials.write_text(json.dumps(service_account(directory) if item["spec"].get("serviceAccount") else ADC_FILE))
     home = pathlib.Path(directory) / "home"
     home.mkdir(exist_ok=True)
     env = {k: v for k, v in os.environ.items() if not k.startswith("GOOGLE_") and not k.startswith("GCLOUD")}
