@@ -7,7 +7,7 @@ note pointing here. Everything not listed here is in scope.
 
 ## Excluded
 
-- **llama.cpp support** (2026-09-26). Gregor explicitly excludes the built-in llama provider, `/login llama.cpp`, `/llama` model management and its Hugging Face download integration. The already committed native client/provider libraries and their tests may remain, but completing or integrating them is outside the port scope. Codex WebSocket support takes priority.
+- **llama.cpp support** (2026-09-26). Gregor explicitly excludes the built-in llama provider, `/login llama.cpp`, `/llama` model management and its Hugging Face download integration. The already committed native client/provider libraries and their tests may remain, but completing or integrating them is outside the port scope.
 - **Experimental server stack** (2026-09-26). Upstream's experimental
   services are only reachable with `PI_EXPERIMENTAL=1`: the agent harness
   (`packages/agent/src/harness`, including `pico3`), `chord`, `client`,
