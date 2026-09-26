@@ -43,6 +43,8 @@ def project_directory(sessions: Path, cwd: Path) -> Path:
 def run(binary: Path, cwd: Path, agent: Path, sessions: Path, threads: int, keys: list[bytes], extra_env: dict[str, str] | None = None) -> str:
     master, slave = pty.openpty()
     environment = os.environ.copy()
+    # The driver finds themes and collation data under the package root.
+    environment.setdefault("PI_BEND_PACKAGE_DIR", str(Path(__file__).resolve().parents[3]))
     environment.update(extra_env or {})
     process = subprocess.Popen(
         [str(binary), "--threads", str(threads), str(cwd), str(agent), str(sessions)],
@@ -112,7 +114,7 @@ def main() -> None:
         assert "Recent" in output and "PICKER CANCEL" in output, output
 
         output = run(binary, local, agent, sessions, 1, [b"\x10", b"\x1b"])
-        assert "Path on" in output and str(parent)[:30] in output, output
+        assert "path (on)" in output and str(parent)[:30] in output, output
 
         output = run(binary, local, agent, sessions, 4, [b'"Named alpha"', b"\r"])
         assert "PICKER SELECT " + str(parent) in output, output
@@ -124,7 +126,7 @@ def main() -> None:
         assert "Invalid regex" in output and "PICKER CANCEL" in output, output
 
         output = run(binary, local, agent, sessions, 4, [b"\x04", b"\x1b", b"\r"])
-        assert "Trash this session?" in output and parent.exists(), output
+        assert "Delete session?" in output and parent.exists(), output
 
         fake_bin = root / "bin"
         fake_bin.mkdir()
@@ -144,9 +146,9 @@ def main() -> None:
 
         (agent / "keybindings.json").write_text('{"app.session.togglePath":"ctrl+g"}')
         output = run(binary, local, agent, sessions, 4, [b"\x07", b"\x1b"])
-        assert "Path on" in output and "PICKER CANCEL" in output, output
+        assert "path (on)" in output and "PICKER CANCEL" in output, output
         output = run(binary, local, agent, sessions, 1, [b"\x10", b"\x1b"])
-        assert "Path on" not in output and "PICKER CANCEL" in output, output
+        assert "path (on)" not in output and "PICKER CANCEL" in output, output
 
     print("PASS native picker PTY (threads 1 and 4)")
 

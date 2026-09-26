@@ -43,6 +43,8 @@ def error(value: Word.Error) -> String:
     case Word.MissingWordEngine{language}: "MissingWordEngine:" ++ language
     case Word.InvalidSegments{}: "InvalidSegments"
     case Word.InvalidCursor{}: "InvalidCursor"
+    case Word.WordData{_}: "WordData"
+    case Word.WordDataPending{}: "WordDataPending"
 def received(state: I.Input,value: Word.ResultOf(I.Input)) -> I.Input & String:
   match value:
     case Done{+next}: (next,shown(next))
