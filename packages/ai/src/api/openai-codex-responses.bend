@@ -808,6 +808,56 @@ def streamBody(~Reason: Data, ~G: Data, ~E: Data, +model: T.Model<J()>, options:
         owner : Sse.Body(Reason) <- Source.create(~(Client.ReadError(Reason)), ~(Client.State(Reason)), ~(ReadE(Reason)), ~(Sse.classify(Reason)), ~(Client.read(Reason)), ~(Client.close(Reason)), body)
         borrowedBody(~Reason, ~G, ~E, model, options, output, events, parent, Source.borrow(Client.State(Reason), ReadE(Reason), owner))
 
+# Continuation is a value owned by its session connection. A failed prefix or
+# changed request configuration invalidates it and sends the full context.
+type CachedWebSocketContinuationState is Data:
+  CachedWebSocketContinuationState{lastRequestBody: R.Record<V.Value>, lastResponseId: String, lastResponseItems: List<&2, V.Value>}
+type CachedWebSocketRequest is Data:
+  CachedWebSocketRequest{body: R.Record<V.Value>, continuation: Maybe<&2, CachedWebSocketContinuationState>}
+
+def requestBodyWithoutInput(body: R.Record<V.Value>) -> R.Record<V.Value>:
+  R.remove(V.Value, R.remove(V.Value, body, "input"), "previous_response_id")
+
+def responseInput(value: Maybe<&2, V.Value>) -> Maybe<&2, List<&2, V.Value>>:
+  match value:
+    case None{}: Some{Nil{}}
+    case Some{V.ArrayValue{items}}: Some{items}
+    case _: None{}
+
+def requestBodiesMatchExceptInput(left: R.Record<V.Value>, right: R.Record<V.Value>) -> Bool:
+  V.equal(V.ObjectValue{requestBodyWithoutInput(left)}, V.ObjectValue{requestBodyWithoutInput(right)})
+
+# Remove the baseline only if the entire prefix matches, preserving the
+# current input's suffix and array order. An empty delta is valid.
+def cachedInputSuffix(current: List<&2, V.Value>, baseline: List<&2, V.Value>, matched: Bool) -> Maybe<&2, List<&2, V.Value>>:
+  match matched current baseline:
+    case False{} _ _: None{}
+    case True{} remaining Nil{}: Some{remaining}
+    case True{} Nil{} _ <> _: None{}
+    case True{} first <> rest expected <> tail: cachedInputSuffix(rest, tail, V.equal(first, expected))
+
+def cachedInputFields(current: Maybe<&2, List<&2, V.Value>>, previous: Maybe<&2, List<&2, V.Value>>, response: List<&2, V.Value>, matched: Bool) -> Maybe<&2, List<&2, V.Value>>:
+  match current previous:
+    case Some{input} Some{baseline}: cachedInputSuffix(input, List.append(&2, V.Value, baseline, response), matched)
+    case _ _: None{}
+
+def getCachedWebSocketInputDelta(+body: R.Record<V.Value>, continuation: CachedWebSocketContinuationState) -> Maybe<&2, List<&2, V.Value>>:
+  match continuation:
+    case CachedWebSocketContinuationState{+previous, _, items}:
+      cachedInputFields(responseInput(R.get(V.Value, body, "input")), responseInput(R.get(V.Value, previous, "input")), items, requestBodiesMatchExceptInput(body, previous))
+
+def cachedWebSocketBody(+body: R.Record<V.Value>, continuation: CachedWebSocketContinuationState, delta: Maybe<&2, List<&2, V.Value>>) -> CachedWebSocketRequest:
+  match continuation delta:
+    case CachedWebSocketContinuationState{_, SNil{}, _} _: CachedWebSocketRequest{body, None{}}
+    case _ None{}: CachedWebSocketRequest{body, None{}}
+    case CachedWebSocketContinuationState{previous, +id, items} Some{input}:
+      CachedWebSocketRequest{R.set(V.Value, R.set(V.Value, body, "previous_response_id", V.Text{id}), "input", V.ArrayValue{input}), Some{CachedWebSocketContinuationState{previous, id, items}}}
+
+def buildCachedWebSocketRequestBody(+body: R.Record<V.Value>, continuation: Maybe<&2, CachedWebSocketContinuationState>) -> CachedWebSocketRequest:
+  match continuation:
+    case None{}: CachedWebSocketRequest{body, None{}}
+    case Some{+value}: cachedWebSocketBody(body, value, getCachedWebSocketInputDelta(body, value))
+
 # WebSocket messages use the same Codex mapping and Responses fold as SSE.
 # The connection is affine; no shared callbacks conceal its ownership.
 type WebSocketError is Data:
