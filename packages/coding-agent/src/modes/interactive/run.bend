@@ -644,14 +644,10 @@ def matchTree(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.St
   match result:
     case Fail{_}: selectorNotice(failure,"Cannot load session tree")
     case Done{nodes}: openCandidate(selector,failure,Selector.createWithFilter(nodes,leaf,24n,filter),"No entries in session")
-def forkItems(entries: List<&2,Selector.Entry()>) -> List<&2,UserPicker.UserMessageItem>:
-  match entries:
+def forkItems(messages: List<&2,Session.ForkMessage>) -> List<&2,UserPicker.UserMessageItem>:
+  match messages:
     case Nil{}: Nil{}
-    case Tree.SessionMessageEntry{Tree.SessionEntryBase{id,_,timestamp},Agent.LlmMessage{Ai.User{Ai.UserMessage{content,_}}}} <> rest:
-      +text = Selector.contentText(content)
-      +tail = forkItems(rest)
-      Bool.pick(List<&2,UserPicker.UserMessageItem>,String.is_empty(text),tail,UserPicker.UserMessageItem{id,text,Some{timestamp}} <> tail)
-    case _ <> rest: forkItems(rest)
+    case Session.ForkMessage{id,text} <> rest: UserPicker.UserMessageItem{id,text,None{}} <> forkItems(rest)
 def openForkTarget(target: Maybe<&2,Selector.Host>,component: UserPicker.UserMessageSelectorComponent) -> IO(Unit):
   match target:
     case None{}: IO.pure(Unit,Unit{})
@@ -663,18 +659,22 @@ def openForkPicker(selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interacti
       do IO<Unit>:
         target : Maybe<&2,Selector.Host> <- Ref.read(Maybe<&2,Selector.Host>,selector)
         openForkTarget(target,UserPicker.new(item <> rest,None{}))
-def selectorFromState(mode: Selector.Mode,+state: Session.State(),filter: Selector.Filter,selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.StatusSink) -> IO(Unit):
-  match mode:
-    case Selector.TreeMode{}: matchTree(selector,failure,Tree.getTree(Unit,Tools.ToolDetails,Schema.Value,state),Tree.getLeafId(Unit,Tools.ToolDetails,Schema.Value,state),filter)
-    case Selector.ForkMode{}: openForkPicker(selector,failure,forkItems(Tree.getEntries(Unit,Tools.ToolDetails,Schema.Value,state)))
 def openSessionSelector(mode: Selector.Mode,session: Ref.Ref<Session.AgentSession>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
-  do IO<Unit>:
-    +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
-    current : Session.Session() <- Session.sessionOf(live)
-    settings : Settings.SettingsManager <- Session.getSettings(live)
-    filter : Settings.TreeFilterMode = Settings.getTreeFilterMode(settings)
-    selectorFromState(mode,Session.stateOf(current),selectorFilter(filter),selector,failure)
-    Interactive.requestRender(redraw)
+  match mode:
+    case Selector.TreeMode{}:
+      do IO<Unit>:
+        +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        current : Session.Session() <- Session.sessionOf(live)
+        settings : Settings.SettingsManager <- Session.getSettings(live)
+        +state : Session.State() = Session.stateOf(current)
+        matchTree(selector,failure,Tree.getTree(Unit,Tools.ToolDetails,Schema.Value,state),Tree.getLeafId(Unit,Tools.ToolDetails,Schema.Value,state),selectorFilter(Settings.getTreeFilterMode(settings)))
+        Interactive.requestRender(redraw)
+    case Selector.ForkMode{}:
+      do IO<Unit>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        messages : List<&2,Session.ForkMessage> <- Session.getUserMessagesForForking(live)
+        openForkPicker(selector,failure,forkItems(messages))
+        Interactive.requestRender(redraw)
 def treeObserved(input: CommandObservation,mode: Selector.Mode) -> IO(Unit):
   match input:
     case CommandObservation{_,session,_,failure,redraw,_,_,_,_,selector,_,_,_,_,_,_,_}: openSessionSelector(mode,session,selector,failure,redraw)
