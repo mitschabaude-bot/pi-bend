@@ -54,11 +54,13 @@ def apiKeyPath(provider: String,credential: Auth.LoginOutcome(),signal: Abort.Ab
       do IO<Outcome()>:
         owner : Storage.AuthStorageOwner <- Storage.create(value)
         saveApiKey(provider,credential,signal,Storage.borrow(owner))
-def authenticateApiKey(provider: String,login: C.Callback<Auth.LoginInteraction,Auth.LoginOutcome()>,+signal: Abort.AbortSignal<Unit>,prompt: C.Callback<Auth.LoginPrompt,Result<&2,&2,String,String>>) -> IO(Outcome()):
-  do IO<Outcome()>:
-    credential : Auth.LoginOutcome() <- C.call(Auth.LoginInteraction,Auth.LoginOutcome(),login,Auth.LoginInteraction{signal,prompt})
-    path : Result<&2,&2,FS.Error,String> <- Config.getAuthPath()
-    apiKeyPath(provider,credential,signal,path)
+def authenticateApiKey(provider: String,login: C.Callback<Auth.ProviderAuthInteraction,Auth.LoginOutcome()>,+interaction: Auth.ProviderAuthInteraction) -> IO(Outcome()):
+  match interaction:
+    case Auth.ProviderAuthInteraction{signal,_,_}:
+      do IO<Outcome()>:
+        credential : Auth.LoginOutcome() <- C.call(Auth.ProviderAuthInteraction,Auth.LoginOutcome(),login,interaction)
+        path : Result<&2,&2,FS.Error,String> <- Config.getAuthPath()
+        apiKeyPath(provider,credential,signal,path)
 
 def exchanged(store: Auth.CredentialStore, result: Result<&2, &2, String, Auth.Credential>, signal: Abort.AbortSignal<Unit>) -> IO(Outcome()):
   match result:

@@ -116,15 +116,37 @@ type ResolveInput is Data:
 
 def AuthOutcome() -> Data: Result<&2, &2, String, Maybe<&2, AuthResult>>
 
-# API-key login asks the host for one or more values. The host controls how
-# secrets are displayed; providers decide which values belong in a credential.
-type LoginPrompt is Data: LoginPrompt{message: String, secret: Bool}
-type LoginInteraction is Data: LoginInteraction{signal: Abort.AbortSignal<Unit>, prompt: C.Callback<LoginPrompt, Result<&2, &2, String, String>>}
+# Hosts own presentation and cancellation; providers describe the interaction.
+type AuthSelectOption is Data:
+  AuthSelectOption{id: String, label: String, description: Maybe<&2, String>}
+type AuthPrompt is Data:
+  TextPrompt{message: String, placeholder: Maybe<&2, String>, signal: Signal()}
+  SecretPrompt{message: String, placeholder: Maybe<&2, String>, signal: Signal()}
+  SelectPrompt{message: String, options: List<&2, AuthSelectOption>, signal: Signal()}
+  ManualCodePrompt{message: String, placeholder: Maybe<&2, String>, signal: Signal()}
+def promptSignal(prompt: AuthPrompt) -> Signal():
+  match prompt:
+    case TextPrompt{_,_,signal}: signal
+    case SecretPrompt{_,_,signal}: signal
+    case SelectPrompt{_,_,signal}: signal
+    case ManualCodePrompt{_,_,signal}: signal
+
+type AuthInfoLink is Data:
+  AuthInfoLink{url: String, label: Maybe<&2, String>}
+type AuthEvent is Data:
+  InfoEvent{message: String, links: List<&2, AuthInfoLink>}
+  AuthUrlEvent{url: String, instructions: Maybe<&2, String>}
+  DeviceCodeEvent{userCode: String, verificationUri: String, intervalSeconds: Maybe<&2, F64>, expiresInSeconds: Maybe<&2, F64>}
+  ProgressEvent{message: String}
+type AuthInteraction is Data:
+  AuthInteraction{signal: Signal(), prompt: C.Callback<AuthPrompt, Result<&2, &2, String, String>>, notify: C.Callback<AuthEvent, Unit>}
+type ProviderAuthInteraction is Data:
+  ProviderAuthInteraction{signal: Abort.AbortSignal<Unit>, prompt: C.Callback<AuthPrompt, Result<&2, &2, String, String>>, notify: C.Callback<AuthEvent, Unit>}
 def LoginOutcome() -> Data: Result<&2, &2, String, Credential>
 
 # Resolution is provider-scoped; endpoint preparation follows auth resolution.
 type ApiKeyAuth is Data:
-  ApiKeyAuth{name: String, login: Maybe<&2, C.Callback<LoginInteraction, LoginOutcome()>>, resolve: C.Callback<ResolveInput, AuthOutcome()>}
+  ApiKeyAuth{name: String, login: Maybe<&2, C.Callback<ProviderAuthInteraction, LoginOutcome()>>, resolve: C.Callback<ResolveInput, AuthOutcome()>}
 
 type RefreshInput is Data:
   RefreshInput{credential: Credential, signal: Abort.AbortSignal<Unit>}
@@ -136,10 +158,10 @@ type OAuthAuth is Data:
 type ProviderAuth is Data:
   ProviderAuth{apiKey: Maybe<&2, ApiKeyAuth>, oauth: Maybe<&2, OAuthAuth>}
 
-def disposeLogin(value: Maybe<&2,C.Callback<LoginInteraction, LoginOutcome()>>) -> IO(Unit):
+def disposeLogin(value: Maybe<&2,C.Callback<ProviderAuthInteraction, LoginOutcome()>>) -> IO(Unit):
   match value:
     case None{}: IO.pure(Unit,Unit{})
-    case Some{callback}: C.dispose(LoginInteraction, LoginOutcome(), callback)
+    case Some{callback}: C.dispose(ProviderAuthInteraction, LoginOutcome(), callback)
 def disposeApiKeyAuth(auth: ApiKeyAuth) -> IO(Unit):
   match auth:
     case ApiKeyAuth{_, login, resolve}:

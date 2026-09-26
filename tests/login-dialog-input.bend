@@ -1,4 +1,6 @@
 import Base
+import ../packages/ai/src/auth/types.bend as Auth
+import ../packages/runtime/src/abort.bend as Abort
 import ../packages/coding-agent/src/modes/interactive/components/login-dialog.bend as Login
 import ../packages/coding-agent/src/modes/interactive/theme/theme.bend as Theme
 import ../packages/coding-agent/src/modes/interactive/theme/color.bend as Color
@@ -79,6 +81,51 @@ def testWords(+host: Login.Host) -> IO(Unit):
     check(String.eq(value(restored),"one two"),"yank restores the deleted word")
     Login.close(host)
     Deferred.dispose(String,answer)
+def doneText(result: Result<&2,&2,String,String>) -> String:
+  match result:
+    case Done{text}: text
+    case Fail{message}: "error:" ++ message
+def testAuth(+host: Login.Host) -> IO(Unit):
+  do IO<Unit>:
+    +whole : Abort.AbortController<Unit> <- Abort.new(Unit)
+    Login.openDirect(host)
+    Login.notify(host,"Login to Example",Auth.AuthUrlEvent{"https://example.test/authorize?state=keep",Some{"Continue in your browser"}})
+    +manualAnswer : Deferred.Deferred<String> <- Deferred.new(String)
+    Login.showAuthPrompt(host,"Login to Example",Auth.ManualCodePrompt{"Paste the redirect URL",None{},None{}},manualAnswer)
+    +rows : List<&2,String> <- Login.draw(host,24n)
+    check(String.contains(String.join(rows,"\n"),"\u{1b}]8;;https://example.test/authorize?state=keep\u{7}"),"manual prompts preserve the full authorization hyperlink")
+    send(host,["\u{1b}[200~http://localhost/callback?code=done\u{1b}[201~","\r"])
+    submitted : Result<&2,&2,String,String> <- Login.awaitAuthAnswer(manualAnswer,Abort.signal(Unit,whole),None{})
+    check(String.eq(doneText(submitted),"http://localhost/callback?code=done"),"generic manual-code prompts return pasted input")
+    Login.finishAuthPrompt(host,None{})
+    Deferred.dispose(String,manualAnswer)
+    +previous : Login.State <- Login.authState(host)
+    +selection : Deferred.Deferred<String> <- Deferred.new(String)
+    Login.showAuthPrompt(host,"Login to Example",Auth.SelectPrompt{"Choose login method",[Auth.AuthSelectOption{"browser","Browser",None{}},Auth.AuthSelectOption{"device_code","Headless",None{}}],None{}},selection)
+    send(host,["\u{1b}[B","\r"])
+    chosen : Result<&2,&2,String,String> <- Login.awaitAuthAnswer(selection,Abort.signal(Unit,whole),None{})
+    check(String.eq(doneText(chosen),"device_code"),"selection returns the option id rather than its label")
+    Login.finishAuthPrompt(host,Some{previous})
+    Deferred.dispose(String,selection)
+    Login.notify(host,"Login to Example",Auth.InfoEvent{"Account selected",[Auth.AuthInfoLink{"https://example.test/account",Some{"Account"}}]})
+    Login.notify(host,"Login to Example",Auth.ProgressEvent{"Exchanging code"})
+    +displayed : List<&2,String> <- Login.draw(host,100n)
+    +text : String = String.join(displayed,"\n")
+    check(String.contains(text,"https://example.test/authorize?state=keep") && String.contains(text,"Account selected") && String.contains(text,"Exchanging code"),"selection restoration and notifications retain the preceding login content")
+    +local : Abort.AbortController<Unit> <- Abort.new(Unit)
+    +pending : Deferred.Deferred<String> <- Deferred.new(String)
+    Login.showAuthPrompt(host,"Login to Example",Auth.TextPrompt{"Temporary prompt",Some{"Account name"},Some{Abort.signal(Unit,local)}},pending)
+    worker : Chan(Result<&2,&2,String,String>) <- IO.fork(Result<&2,&2,String,String>,Login.awaitAuthAnswer(pending,Abort.signal(Unit,whole),Some{Abort.signal(Unit,local)}))
+    won : Bool <- Abort.abort(Unit,local,None{})
+    rejected : Result<&2,&2,String,String> <- IO.join(Result<&2,&2,String,String>,worker)
+    check(String.eq(doneText(rejected),"error:Login cancelled"),"per-prompt cancellation rejects its pending input")
+    unchanged : Bool <- Abort.aborted(Unit,Abort.signal(Unit,whole))
+    check(Bool.not(unchanged),"per-prompt cancellation does not abort the provider login")
+    Login.finishAuthPrompt(host,None{})
+    Deferred.dispose(String,pending)
+    Abort.dispose(Unit,local)
+    Abort.dispose(Unit,whole)
+    Login.close(host)
 def exercise(pair: Login.Owner & Login.Host & Component.Component,counter: Ref.Ref<Nat>) -> IO(Unit):
   match pair:
     case (owner,+host,_):
@@ -86,6 +133,7 @@ def exercise(pair: Login.Owner & Login.Host & Component.Component,counter: Ref.R
         testPrompt(host)
         testManual(host,counter)
         testWords(host)
+        testAuth(host)
         Login.dispose(owner)
 def main() -> IO(Unit):
   do IO<Unit>:

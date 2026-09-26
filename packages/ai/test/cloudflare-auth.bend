@@ -95,28 +95,31 @@ def storedCredential(value: Maybe<&2, String>, env: List<&2, R.Property<String>>
 def workers() -> IO(Auth.ApiKeyAuth): Cloudflare.cloudflareWorkersAIAuth()
 def gatewayAuth() -> IO(Auth.ApiKeyAuth): Cloudflare.cloudflareAIGatewayAuth()
 
-def promptAnswer(_: Unit,prompt: Auth.LoginPrompt) -> IO(Result<&2,&2,String,String>):
+def promptAnswer(_: Unit,prompt: Auth.AuthPrompt) -> IO(Result<&2,&2,String,String>):
   match prompt:
-    case Auth.LoginPrompt{"Enter Cloudflare API key",True{}}: IO.pure(Result<&2,&2,String,String>,Done{"cf-key"})
-    case Auth.LoginPrompt{"Enter Cloudflare account ID",False{}}: IO.pure(Result<&2,&2,String,String>,Done{"account-id"})
-    case Auth.LoginPrompt{"Enter Cloudflare AI Gateway ID",False{}}: IO.pure(Result<&2,&2,String,String>,Done{"gateway-id"})
+    case Auth.SecretPrompt{"Enter Cloudflare API key",_,_}: IO.pure(Result<&2,&2,String,String>,Done{"cf-key"})
+    case Auth.TextPrompt{"Enter Cloudflare account ID",_,_}: IO.pure(Result<&2,&2,String,String>,Done{"account-id"})
+    case Auth.TextPrompt{"Enter Cloudflare AI Gateway ID",_,_}: IO.pure(Result<&2,&2,String,String>,Done{"gateway-id"})
     case _: IO.pure(Result<&2,&2,String,String>,Fail{"unexpected prompt"})
 def credentialText(result: Auth.LoginOutcome()) -> String:
   match result:
     case Fail{reason}: "error:" ++ reason
     case Done{Auth.ApiKeyCredential{key,env}}: optional(key) ++ "|" ++ envText(env)
     case Done{_}: "wrong credential type"
-def callLogin(auth: Auth.ApiKeyAuth,interaction: Auth.LoginInteraction) -> IO(Auth.LoginOutcome()):
+def callLogin(auth: Auth.ApiKeyAuth,interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
   match auth:
-    case Auth.ApiKeyAuth{_,Some{callback},_}: C.call(Auth.LoginInteraction,Auth.LoginOutcome(),callback,interaction)
+    case Auth.ApiKeyAuth{_,Some{callback},_}: C.call(Auth.ProviderAuthInteraction,Auth.LoginOutcome(),callback,interaction)
     case _: IO.pure(Auth.LoginOutcome(),Fail{"login unavailable"})
+def ignoreNotification(_: Unit,_: Auth.AuthEvent) -> IO(Unit): IO.pure(Unit,Unit{})
 def loginText(auth: IO(Auth.ApiKeyAuth)) -> IO(String):
   do IO<String>:
     selected : Auth.ApiKeyAuth <- auth
     +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
-    +prompt : C.Callback<Auth.LoginPrompt,Result<&2,&2,String,String>> <- C.create(~Unit,~Auth.LoginPrompt,~Result<&2,&2,String,String>,~promptAnswer,Unit{})
-    result : Auth.LoginOutcome() <- callLogin(selected,Auth.LoginInteraction{Abort.signal(Unit,controller),prompt})
-    C.dispose(Auth.LoginPrompt,Result<&2,&2,String,String>,prompt)
+    +prompt : C.Callback<Auth.AuthPrompt,Result<&2,&2,String,String>> <- C.create(~Unit,~Auth.AuthPrompt,~Result<&2,&2,String,String>,~promptAnswer,Unit{})
+    +notify : C.Callback<Auth.AuthEvent,Unit> <- C.create(~Unit,~Auth.AuthEvent,~Unit,~ignoreNotification,Unit{})
+    result : Auth.LoginOutcome() <- callLogin(selected,Auth.ProviderAuthInteraction{Abort.signal(Unit,controller),prompt,notify})
+    C.dispose(Auth.AuthEvent,Unit,notify)
+    C.dispose(Auth.AuthPrompt,Result<&2,&2,String,String>,prompt)
     Abort.dispose(Unit,controller)
     return credentialText(result)
 

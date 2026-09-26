@@ -647,17 +647,17 @@ def loginDefaultResult(value: Result<&2,&2,String,String>) -> Auth.LoginOutcome(
     case Fail{reason}: Fail{reason}
     case Done{SNil{}}: Fail{"API key cannot be empty"}
     case Done{key}: Done{Auth.ApiKeyCredential{Some{key},None{}}}
-def loginDefault(interaction: Auth.LoginInteraction) -> IO(Auth.LoginOutcome()):
+def loginDefault(interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
   match interaction:
-    case Auth.LoginInteraction{_,prompt}:
+    case Auth.ProviderAuthInteraction{_,prompt,_}:
       do IO<Auth.LoginOutcome()>:
-        value : Result<&2,&2,String,String> <- C.call(Auth.LoginPrompt,Result<&2,&2,String,String>,prompt,Auth.LoginPrompt{"Enter API key",True{}})
+        value : Result<&2,&2,String,String> <- C.call(Auth.AuthPrompt,Result<&2,&2,String,String>,prompt,Auth.SecretPrompt{"Enter API key",None{},None{}})
         return loginDefaultResult(value)
-def loginInherited(inherited: Maybe<&2,Auth.ApiKeyAuth>,interaction: Auth.LoginInteraction) -> IO(Auth.LoginOutcome()):
+def loginInherited(inherited: Maybe<&2,Auth.ApiKeyAuth>,interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
   match inherited:
-    case Some{Auth.ApiKeyAuth{_,Some{callback},_}}: C.call(Auth.LoginInteraction,Auth.LoginOutcome(),callback,interaction)
+    case Some{Auth.ApiKeyAuth{_,Some{callback},_}}: C.call(Auth.ProviderAuthInteraction,Auth.LoginOutcome(),callback,interaction)
     case _: loginDefault(interaction)
-def loginConfigured(config: KeyConfig,interaction: Auth.LoginInteraction) -> IO(Auth.LoginOutcome()):
+def loginConfigured(config: KeyConfig,interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
   match config:
     case KeyConfig{_,inherited,_,_,_}: loginInherited(inherited,interaction)
 
@@ -748,7 +748,7 @@ def wrappedKey(+config: KeyConfig) -> IO(Composition<Auth.ApiKeyAuth>):
     case KeyConfig{_, +inherited, _, _, _}:
       do IO<Composition<Auth.ApiKeyAuth>>:
         resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~KeyConfig, ~Auth.ResolveInput, ~(Auth.AuthOutcome()), ~resolveConfigured, config)
-        login : C.Callback<Auth.LoginInteraction,Auth.LoginOutcome()> <- C.create(~KeyConfig,~Auth.LoginInteraction,~(Auth.LoginOutcome()),~loginConfigured,config)
+        login : C.Callback<Auth.ProviderAuthInteraction,Auth.LoginOutcome()> <- C.create(~KeyConfig,~Auth.ProviderAuthInteraction,~(Auth.LoginOutcome()),~loginConfigured,config)
         return Composition{Some{Auth.ApiKeyAuth{inheritedName(inherited), Some{login}, resolve}}, retainedKey(inherited)}
 
 def configuredHeaders(config: Config.ModelsJsonProvider) -> Maybe<&2, R.Record<String>>:

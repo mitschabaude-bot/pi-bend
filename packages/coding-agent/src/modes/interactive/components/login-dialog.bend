@@ -1,4 +1,6 @@
 import Base
+import ../../../../../runtime/src/abort.bend as Abort
+import ../../../../../ai/src/auth/types.bend as Auth
 import ../../../../../runtime/src/callback.bend as Callback
 import ../../../../../runtime/src/deferred.bend as Deferred
 import ../../../../../runtime/src/ref.bend as Ref
@@ -17,8 +19,14 @@ import ./keybinding-hints.bend as Hints
 # Replaces the editor while the native device flow waits for authorization.
 # Esc calls the flow's abort controller; closing restores the original editor.
 type Choice is Data: Choice{id: String,label: String,description: String,search: String}
-type Menu is Data: Method{} Provider{} Generic{}
-type State is Data: Closed{} Choosing{menu: Menu,title: String,all: List<&2,Choice>,visible: List<&2,Choice>,selected: Nat,query: String} Waiting{} Device{url: String,code: String} Manual{url: String,input: Input.Input} Prompt{title: String,message: String,secret: Bool,input: Input.Input} Info{title: String,message: String}
+type Menu is Data: Method{} Provider{} Generic{} AuthSelect{}
+type AuthLine is Data:
+  Blank{}
+  Text{style: String, text: String}
+  Link{style: String, url: String, label: String}
+  Entered{}
+  Hint{manual: Bool}
+type State is Data: Closed{} Choosing{menu: Menu,title: String,all: List<&2,Choice>,visible: List<&2,Choice>,selected: Nat,query: String} Waiting{} Device{url: String,code: String} Manual{url: String,input: Input.Input} Prompt{title: String,message: String,secret: Bool,input: Input.Input} Info{title: String,message: String} AuthDialog{title: String,content: List<&2,AuthLine>,input: Input.Input,secret: Bool,active: Bool}
 type InputSubmission is Data:
   InputSubmission{state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Deferred.Deferred<String>>>}
 type Host is Data:
@@ -77,8 +85,8 @@ def selectorTitle(theme: Theme.Theme,title: String) -> String:
   " " ++ paint(theme,"accent",Theme.bold(title))
 def selectorBorder(theme: Theme.Theme,width: Nat) -> String:
   paint(theme,"border",bar(width))
-def methodMenu(+theme: Theme.Theme,+width: Nat,choices: List<&2,Choice>,selected: Nat,+bindings: Bindings.KeybindingsManager) -> List<&2,String>:
-  selectorBorder(theme,width) <> "" <> selectorTitle(theme,"Select authentication method:") <> "" <>
+def methodMenu(+theme: Theme.Theme,+width: Nat,title: String,choices: List<&2,Choice>,selected: Nat,+bindings: Bindings.KeybindingsManager) -> List<&2,String>:
+  selectorBorder(theme,width) <> "" <> selectorTitle(theme,title) <> "" <>
     List.append(&2,String,selectorRows(choices,0n,selected,theme),
       "" <> (" " ++ Hints.rawKeyHint(theme,"↑↓","navigate") ++ "  " ++ Hints.keyHint(theme,bindings,"tui.select.confirm","select") ++ "  " ++ Hints.keyHint(theme,bindings,"tui.select.cancel","cancel")) <> "" <> selectorBorder(theme,width) <> Nil{})
 def providerMenu(+theme: Theme.Theme,+width: Nat,+visible: List<&2,Choice>,+selected: Nat,query: String) -> List<&2,String>:
@@ -96,9 +104,10 @@ def choosing(+theme: Theme.Theme,+width: Nat,title: String,+visible: List<&2,Cho
   frame(theme,width,title,(paint(theme,"muted"," Search: ") ++ paint(theme,"accent",query)) <> List.append(&2,String,body,"" <> paint(theme,"dim"," ↑/↓ select · Enter confirm · Esc cancel") <> Nil{}))
 def choosingMenu(menu: Menu,theme: Theme.Theme,+width: Nat,title: String,visible: List<&2,Choice>,selected: Nat,query: String,bindings: Bindings.KeybindingsManager) -> List<&2,String>:
   match menu:
-    case Method{}: clipLines(methodMenu(theme,width,visible,selected,bindings),width)
+    case Method{}: clipLines(methodMenu(theme,width,title,visible,selected,bindings),width)
     case Provider{}: clipLines(providerMenu(theme,width,visible,selected,query),width)
     case Generic{}: choosing(theme,width,title,visible,selected,query)
+    case AuthSelect{}: clipLines(methodMenu(theme,width,title,visible,selected,bindings),width)
 def manual(+theme: Theme.Theme,+width: Nat,+url: String,+input: String) -> List<&2,String>:
   linkedFrame(theme,width," Login to Anthropic",url,paint(theme,"dim"," Ctrl+click to open") <> "" <> paint(theme,"dim"," Complete login in your browser; paste the redirect URL if it is on another machine.") <> paint(theme,"warning"," Paste authorization code or redirect URL:") <> input <> "" <> paint(theme,"dim"," Enter to submit · Esc to cancel") <> Nil{})
 def promptFrame(+theme: Theme.Theme,+width: Nat,title: String,message: String,input: String,+bindings: Bindings.KeybindingsManager) -> List<&2,String>:
@@ -118,6 +127,18 @@ def masked(input: Input.Input,secret: Bool) -> Input.Input:
       Input.Input{Input.Editing{Bool.pick(String,secret,String.repeat("•",String.length(value)),value),cursor,ring,action,undo},options,start,focused,paste,pasting,submit,escape}
 def inputLine(pair: Input.Input & List<&2,String>) -> String:
   match pair: case (_,lines): Maybe.default(&2,String,List.head(&2,String,lines),"")
+def authLines(lines: List<&2,AuthLine>,+theme: Theme.Theme,+width: Nat,+input: String,+bindings: Bindings.KeybindingsManager) -> List<&2,String>:
+  match lines:
+    case Nil{}: Nil{}
+    case Blank{} <> rest: "" <> authLines(rest,theme,width,input,bindings)
+    case Text{style,text} <> rest: (" " ++ paint(theme,style,text)) <> authLines(rest,theme,width,input,bindings)
+    case Link{style,+url,label} <> rest:
+      paint(theme,style," \u{1b}]8;;" ++ url ++ "\u{7}" ++ clipped(label,width - 1n) ++ "\u{1b}]8;;\u{7}") <> authLines(rest,theme,width,input,bindings)
+    case Entered{} <> rest: input <> authLines(rest,theme,width,input,bindings)
+    case Hint{+isManual} <> rest:
+      (" (" ++ Hints.keyHint(theme,bindings,"tui.select.cancel",Bool.pick(String,isManual,"to cancel","to cancel,")) ++ Bool.pick(String,isManual,""," " ++ Hints.keyHint(theme,bindings,"tui.select.confirm","to submit")) ++ ")") <> authLines(rest,theme,width,input,bindings)
+def authFrame(+theme: Theme.Theme,+width: Nat,title: String,content: List<&2,AuthLine>,input: String,bindings: Bindings.KeybindingsManager) -> List<&2,String>:
+  clipLines(selectorBorder(theme,width) <> selectorTitle(theme,title) <> List.append(&2,String,authLines(content,theme,width,input,bindings),selectorBorder(theme,width) <> Nil{}),width)
 def drawCurrent(state: State,editor: Component.Component,theme: Theme.Theme,+width: Nat,+bindings: Bindings.KeybindingsManager) -> IO(List<&2,String>):
   match state:
     case Closed{}: Component.render(editor,width)
@@ -132,6 +153,10 @@ def drawCurrent(state: State,editor: Component.Component,theme: Theme.Theme,+wid
       do IO<List<&2,String>>:
         pair : Input.Input & List<&2,String> <- Input.render(masked(input,secret),width)
         return promptFrame(theme,width,title,message,inputLine(pair),bindings)
+    case AuthDialog{title,content,input,secret,_}:
+      do IO<List<&2,String>>:
+        pair : Input.Input & List<&2,String> <- Input.render(masked(input,secret),width)
+        return authFrame(theme,width,title,content,inputLine(pair),bindings)
     case Info{title,message}: IO.pure(List<&2,String>,infoFrame(theme,width,title,message,bindings))
 def draw(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
@@ -164,17 +189,29 @@ def printable(text: String) -> Bool:
   match text:
     case SNil{}: False{}
     case SCon{Chr{code},rest}: U32.is_ge(code,32) && printableTail(rest)
+def submittedLines(lines: List<&2,AuthLine>,+value: String) -> List<&2,AuthLine>:
+  match lines:
+    case Nil{}: Nil{}
+    case Entered{} <> rest: Text{"text","> " ++ value} <> submittedLines(rest,value)
+    case line <> rest: line <> submittedLines(rest,value)
+def submittedState(current: State,+value: String) -> State & Unit:
+  match current:
+    case AuthDialog{title,content,input,+secret,_}:
+      (AuthDialog{title,submittedLines(content,Bool.pick(String,secret,String.repeat("•",String.length(value)),value)),input,secret,False{}},Unit{})
+    case _: (Waiting{},Unit{})
 def submitInput(context: InputSubmission,value: String) -> IO(Unit):
   match context:
     case InputSubmission{state,reply}:
       do IO<Unit>:
-        Ref.write(State,state,Waiting{})
-        settle(reply,value)
+        +submitted : String = value
+        Ref.modify(State,Unit,state,current => submittedState(current,submitted))
+        settle(reply,submitted)
 def nonAtomic(_: Words.Source,_: String) -> Bool: False{}
 def editedInput(current: State,result: Word.ResultOf(Input.Input)) -> State & Unit:
   match current result:
     case Manual{url,_} Done{input}: (Manual{url,input},Unit{})
     case Prompt{title,message,secret,_} Done{input}: (Prompt{title,message,secret,input},Unit{})
+    case AuthDialog{title,content,_,secret,True{}} Done{input}: (AuthDialog{title,content,input,secret,True{}},Unit{})
     case previous _: (previous,Unit{})
 def inputPrompt(+state: Ref.Ref<State>,+words: Ref.Ref<Words.Source>,+input: Input.Input,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,data: String) -> IO(Unit):
   do IO<Unit>:
@@ -206,6 +243,7 @@ def moveChoice(state: Ref.Ref<State>,menu: Menu,title: String,all: List<&2,Choic
 def searchable(menu: Menu) -> Bool:
   match menu:
     case Method{}: False{}
+    case AuthSelect{}: False{}
     case _: True{}
 def methodKey(menu: Menu,data: String,key: String) -> Bool:
   match menu:
@@ -231,6 +269,8 @@ def receiveCurrent(current: State,+state: Ref.Ref<State>,+reply: Ref.Ref<Maybe<&
     case Manual{url,input}:
       inputPrompt(state,words,input,bindings,keyboard,data)
     case Prompt{title,message,secret,input}:
+      inputPrompt(state,words,input,bindings,keyboard,data)
+    case AuthDialog{_,_,input,_,True{}}:
       inputPrompt(state,words,input,bindings,keyboard,data)
     case Info{_,_}:
       Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => settle(reply,""),_ => IO.pure(Unit,Unit{}))(Unit{})
@@ -303,6 +343,163 @@ def openDirect(host: Host) -> IO(Unit):
       do IO<Unit>:
         Component.setFocused(editor,False{})
         Ref.write(State,state,Waiting{})
+def authContent(current: State,title: String) -> State:
+  match current:
+    case AuthDialog{_,_,_,_,_}: current
+    case _: AuthDialog{title,Nil{},Input.new(None{}),False{},False{}}
+def infoLinks(links: List<&2,Auth.AuthInfoLink>) -> List<&2,AuthLine>:
+  match links:
+    case Nil{}: Nil{}
+    case Auth.AuthInfoLink{+url,label} <> rest:
+      Link{"accent",url,Maybe.default(&2,String,Maybe.map(&2,String,String,text => text ++ ": " ++ url,label),url)} <> infoLinks(rest)
+def authorizationLines(+url: String,instructions: Maybe<&2,String>) -> List<&2,AuthLine>:
+  Blank{} <> Link{"accent",url,url} <> Link{"dim",url,"Ctrl+click to open"} <>
+    Maybe.default(&2,List<&2,AuthLine>,Maybe.map(&2,String,List<&2,AuthLine>,text => Blank{} <> Text{"warning",text} <> Nil{},instructions),Nil{})
+def notifiedContent(current: State,event: Auth.AuthEvent) -> State & Unit:
+  match current event:
+    case AuthDialog{title,_,input,secret,active} Auth.AuthUrlEvent{url,instructions}:
+      (AuthDialog{title,authorizationLines(url,instructions),input,secret,active},Unit{})
+    case AuthDialog{title,_,input,_,_} Auth.DeviceCodeEvent{code,url,_,_}:
+      (AuthDialog{title,List.append(&2,AuthLine,authorizationLines(url,None{}),[Blank{},Text{"warning","Enter code: " ++ code},Blank{},Text{"dim","Waiting for authentication..."},Hint{True{}}]),input,False{},False{}},Unit{})
+    case AuthDialog{title,content,input,secret,active} Auth.InfoEvent{message,links}:
+      (AuthDialog{title,List.append(&2,AuthLine,content,Blank{} <> Text{"text",message} <> infoLinks(links)),input,secret,active},Unit{})
+    case AuthDialog{title,content,input,secret,active} Auth.ProgressEvent{message}:
+      (AuthDialog{title,List.append(&2,AuthLine,content,Text{"dim",message} <> Nil{}),input,secret,active},Unit{})
+    case _ _: (current,Unit{})
+def notified(current: State,title: String,event: Auth.AuthEvent) -> State & Unit:
+  match current:
+    case Closed{}: (Closed{},Unit{})
+    case _: notifiedContent(authContent(current,title),event)
+def notify(host: Host,title: String,event: Auth.AuthEvent) -> IO(Unit):
+  match host:
+    case Host{state,_,_,_,_,_,_,_,_}: Ref.modify(State,Unit,state,current => notified(current,title,event))
+def authOptions(options: List<&2,Auth.AuthSelectOption>) -> List<&2,Choice>:
+  match options:
+    case Nil{}: Nil{}
+    case Auth.AuthSelectOption{id,+label,description} <> rest:
+      Choice{id,label,"",label} <> authOptions(rest)
+def promptedContent(current: State,title: String,message: String,placeholder: Maybe<&2,String>,secret: Bool,+isManual: Bool,cancel: Callback.Callback<Unit,Unit>,submit: Callback.Callback<String,Unit>) -> State:
+  match current:
+    case AuthDialog{title,content,_,_,_}:
+      +example = Maybe.default(&2,List<&2,AuthLine>,Maybe.map(&2,String,List<&2,AuthLine>,text => Text{"dim","e.g., " ++ text} <> Nil{},placeholder),Nil{})
+      AuthDialog{title,List.append(&2,AuthLine,content,Blank{} <> Text{Bool.pick(String,isManual,"dim","text"),message} <> List.append(&2,AuthLine,example,[Entered{},Hint{isManual}])),Input.setCallbacks(Input.setFocused(Input.new(None{}),True{}),Some{submit},Some{cancel}),secret,True{}}
+    case other: other
+def prompted(current: State,+title: String,message: String,placeholder: Maybe<&2,String>,secret: Bool,+isManual: Bool,cancel: Callback.Callback<Unit,Unit>,submit: Callback.Callback<String,Unit>) -> State:
+  promptedContent(authContent(current,title),title,message,placeholder,secret,isManual,cancel,submit)
+def showAuthContent(+state: Ref.Ref<State>,+title: String,prompt: Auth.AuthPrompt,+cancel: Callback.Callback<Unit,Unit>,+submit: Callback.Callback<String,Unit>) -> IO(Unit):
+  match prompt:
+    case Auth.SelectPrompt{message,options,_}:
+      +choices = authOptions(options)
+      Ref.write(State,state,Choosing{AuthSelect{},message,choices,choices,0n,""})
+    case Auth.TextPrompt{message,placeholder,_}: Ref.modify(State,Unit,state,current => (prompted(current,title,message,placeholder,False{},False{},cancel,submit),Unit{}))
+    case Auth.SecretPrompt{message,placeholder,_}: Ref.modify(State,Unit,state,current => (prompted(current,title,message,placeholder,True{},False{},cancel,submit),Unit{}))
+    case Auth.ManualCodePrompt{message,_,_}: Ref.modify(State,Unit,state,current => (prompted(current,title,message,None{},False{},True{},cancel,submit),Unit{}))
+def showAuthPrompt(host: Host,title: String,prompt: Auth.AuthPrompt,+answer: Deferred.Deferred<String>) -> IO(Unit):
+  match host:
+    case Host{state,reply,editor,_,_,_,cancel,_,submit}:
+      do IO<Unit>:
+        Ref.write(Maybe<&2,Deferred.Deferred<String>>,reply,Some{answer})
+        Component.setFocused(editor,False{})
+        showAuthContent(state,title,prompt,cancel,submit)
+def authState(host: Host) -> IO(State):
+  match host: case Host{state,_,_,_,_,_,_,_,_}: Ref.read(State,state)
+def promptFinished(current: State,previous: Maybe<&2,State>) -> State & Unit:
+  match current previous:
+    case Closed{} _: (Closed{},Unit{})
+    case _ Some{prior}: (prior,Unit{})
+    case AuthDialog{title,content,input,secret,_} _: (AuthDialog{title,content,input,secret,False{}},Unit{})
+    case other _: (other,Unit{})
+def finishAuthPrompt(host: Host,previous: Maybe<&2,State>) -> IO(Unit):
+  match host:
+    case Host{state,reply,_,_,_,_,_,_,_}:
+      do IO<Unit>:
+        unused : Maybe<&2,Deferred.Deferred<String>> <- Ref.swap(Maybe<&2,Deferred.Deferred<String>>,reply,None{})
+        Ref.modify(State,Unit,state,current => promptFinished(current,previous))
+# Each observer owns one removable wait. The completion is first-settlement
+# arbitration, so a later abort cannot override an already submitted value.
+type PromptWatch is Type:
+  InputWatch{cancel: Deferred.Cancellation<String>,worker: Chan(Unit)}
+  AbortWatch{cancel: Deferred.Cancellation<Abort.AbortReason<Unit>>,worker: Chan(Unit)}
+def settleCompletion(completion: Deferred.Deferred<Result<&2,&2,String,String>>,value: Maybe<&2,Result<&2,&2,String,String>>) -> IO(Unit):
+  match value:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{result}:
+      do IO<Unit>:
+        won : Bool <- Deferred.resolve(Result<&2,&2,String,String>,completion,result)
+        return Unit{}
+def completeInput(ticket: Deferred.Ticket<Maybe<&2,String>>,completion: Deferred.Deferred<Result<&2,&2,String,String>>) -> IO(Unit):
+  do IO<Unit>:
+    value : Maybe<&2,String> <- Deferred.wait(Maybe<&2,String>,ticket)
+    settleCompletion(completion,Maybe.map(&2,String,Result<&2,&2,String,String>,text => Done{text},value))
+def completeAbort(ticket: Deferred.Ticket<Maybe<&2,Abort.AbortReason<Unit>>>,completion: Deferred.Deferred<Result<&2,&2,String,String>>) -> IO(Unit):
+  do IO<Unit>:
+    reason : Maybe<&2,Abort.AbortReason<Unit>> <- Deferred.wait(Maybe<&2,Abort.AbortReason<Unit>>,ticket)
+    settleCompletion(completion,Maybe.map(&2,Abort.AbortReason<Unit>,Result<&2,&2,String,String>,_ => Fail{"Login cancelled"},reason))
+type PromptRegistration is Type:
+  InputRegistration{observation: Deferred.Observation<String>}
+  AbortRegistration{observation: Deferred.Observation<Abort.AbortReason<Unit>>}
+def watchRegistered(registration: PromptRegistration,completion: Deferred.Deferred<Result<&2,&2,String,String>>) -> IO(PromptWatch):
+  match registration:
+    case InputRegistration{Deferred.Observation{ticket,cancel}}:
+      do IO<PromptWatch>:
+        worker : Chan(Unit) <- IO.fork(Unit,completeInput(ticket,completion))
+        return InputWatch{cancel,worker}
+    case AbortRegistration{Deferred.Observation{ticket,cancel}}:
+      do IO<PromptWatch>:
+        worker : Chan(Unit) <- IO.fork(Unit,completeAbort(ticket,completion))
+        return AbortWatch{cancel,worker}
+def watchInput(completion: Deferred.Deferred<Result<&2,&2,String,String>>,answer: Deferred.Deferred<String>) -> IO(PromptWatch):
+  do IO<PromptWatch>:
+    observation : Deferred.Observation<String> <- Deferred.observe(String,answer)
+    watchRegistered(InputRegistration{observation},completion)
+def watchAbort(completion: Deferred.Deferred<Result<&2,&2,String,String>>,signal: Abort.AbortSignal<Unit>) -> IO(PromptWatch):
+  do IO<PromptWatch>:
+    observation : Deferred.Observation<Abort.AbortReason<Unit>> <- Abort.observe(Unit,signal)
+    watchRegistered(AbortRegistration{observation},completion)
+def stopWatch(watch: PromptWatch) -> IO(Unit):
+  match watch:
+    case InputWatch{cancel,worker}:
+      do IO<Unit>:
+        removed : Bool <- Deferred.cancel(String,cancel)
+        IO.join(Unit,worker)
+    case AbortWatch{cancel,worker}:
+      do IO<Unit>:
+        removed : Bool <- Deferred.cancel(Abort.AbortReason<Unit>,cancel)
+        IO.join(Unit,worker)
+def optionalWatch(completion: Deferred.Deferred<Result<&2,&2,String,String>>,signal: Auth.Signal()) -> IO(Maybe<&1,PromptWatch>):
+  match signal:
+    case None{}: IO.pure(Maybe<&1,PromptWatch>,None{})
+    case Some{signal}:
+      do IO<Maybe<&1,PromptWatch>>:
+        watcher : PromptWatch <- watchAbort(completion,signal)
+        return Some{watcher}
+def stopOptional(watch: Maybe<&1,PromptWatch>) -> IO(Unit):
+  match watch:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{watcher}: stopWatch(watcher)
+def awaitAuthActive(answer: Deferred.Deferred<String>,parent: Abort.AbortSignal<Unit>,signal: Auth.Signal()) -> IO(Result<&2,&2,String,String>):
+  do IO<Result<&2,&2,String,String>>:
+    +completion : Deferred.Deferred<Result<&2,&2,String,String>> <- Deferred.new(Result<&2,&2,String,String>)
+    input : PromptWatch <- watchInput(completion,answer)
+    whole : PromptWatch <- watchAbort(completion,parent)
+    prompt : Maybe<&1,PromptWatch> <- optionalWatch(completion,signal)
+    result : Result<&2,&2,String,String> <- Deferred.result(Result<&2,&2,String,String>,completion)
+    stopWatch(input)
+    stopWatch(whole)
+    stopOptional(prompt)
+    Deferred.dispose(Result<&2,&2,String,String>,completion)
+    return result
+def promptAborted(signal: Auth.Signal()) -> IO(Bool):
+  match signal:
+    case None{}: IO.pure(Bool,False{})
+    case Some{signal}: Abort.aborted(Unit,signal)
+def awaitAuthAnswer(+answer: Deferred.Deferred<String>,+parent: Abort.AbortSignal<Unit>,+signal: Auth.Signal()) -> IO(Result<&2,&2,String,String>):
+  do IO<Result<&2,&2,String,String>>:
+    whole : Bool <- Abort.aborted(Unit,parent)
+    prompt : Bool <- promptAborted(signal)
+    Bool.pick(Unit -> IO(Result<&2,&2,String,String>),whole || prompt,
+      _ => IO.pure(Result<&2,&2,String,String>,Fail{"Login cancelled"}),
+      _ => awaitAuthActive(answer,parent,signal))(Unit{})
 def showManual(host: Host,url: String,answer: Deferred.Deferred<String>) -> IO(Unit):
   match host:
     case Host{state,reply,_,_,_,_,cancel,_,submit}:
