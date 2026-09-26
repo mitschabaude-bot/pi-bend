@@ -732,10 +732,10 @@
     },
     "packages/ai/src/models.ts": {
       "state": "partial",
-      "note": "Reviewed provider/publication types and collection/auth ownership. Provider, RefreshModelsContext and ModelsPublication have native representations and fetched-catalog helpers. The standalone Models/MutableModels collection is not exposed in pi-ai: much of its catalog, auth, refresh and request behavior currently lives in coding-agent ModelRuntime/agent-runtime. This layer must be separated into the AI library while keeping app configuration and credential-operation synchronization in ModelRuntime; public collection operations and API boundary parity remain incomplete.",
+      "note": "Reviewed provider/publication types and collection/auth ownership. Provider, RefreshModelsContext and ModelsPublication have native representations and fetched-catalog helpers. The standalone Models/MutableModels collection is not exposed in pi-ai: much of its catalog, auth, refresh and request behavior currently lives in coding-agent ModelRuntime/agent-runtime. This layer must be separated into the AI library while keeping app configuration and credential-operation synchronization in ModelRuntime; public collection operations and API boundary parity remain incomplete. ProviderStreams also has OpenCodeStreams{apis} for upstream's withOpenCodeSessionHeader wrapper (opencode.ts/opencode-go.ts); streamSimpleOptions applies it, and inheritedStreams keeps it for models.json overlays.",
       "source_sha256": "84f2799b0bf45fb01237c5c2c19641b0da5d1245670b208c05bacb5cff36b96f",
       "port_sha256": {
-        "packages/ai/src/models.bend": "3815ddbe25e6b845185f21779af1de07f0b9900787a443e4a1616893b8b6ec83",
+        "packages/ai/src/models.bend": "f4c90abd0a9b3c4908c9bcceab18e69a19e38ed78b9339dd0ef4f3ae488b73d4",
         "packages/coding-agent/src/core/model-runtime.bend": "5ff88f4f6806ba7f055acc44522dfdbf39028ce3eed7efd29e5e7bc3f5919457"
       },
       "ports": [
@@ -872,7 +872,7 @@
       "port_sha256": {
         "packages/ai/src/api/google-vertex.bend": "0ebdb23af0dce3514a9f10f49570cdb99a9ee16a853dd2aaa2de4ac4e8a5ec09",
         "packages/ai/src/api/google-vertex-credentials.bend": "212fd2b5c048ecaf2cccd8fe8be0cabb7c299dc772c90acc1ac13882e440af2d",
-        "packages/ai/src/api/google-generative-ai-client.bend": "eaaeead401f3172c802f3e76b871f6e69ab4cb3b4e1b87128923586621ecc19b",
+        "packages/ai/src/api/google-generative-ai-client.bend": "ccdb93b09d1c0df48c921b53ede55e3a8bd4bcbfb0b2cd92c383474f1d55f616",
         "packages/ai/src/api/google-generative-ai-stream.bend": "786ea73d7b16f635095a24c049667395a971ce730fd2a696ca699184371fb243"
       }
     },
