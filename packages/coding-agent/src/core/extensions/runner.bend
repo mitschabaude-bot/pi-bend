@@ -316,6 +316,8 @@ def handled(handler: T.EventHandler, event: T.ExtensionEvent, ctx: Ctx.Extension
     case T.OnSessionTree{callback} T.SessionTree{value}: called(T.SessionTreeEvent, callback, value, ctx)
     case T.OnSessionCompact{callback} T.SessionCompact{value}: called(T.SessionCompactEvent, callback, value, ctx)
     case T.OnSessionCompactFailed{callback} T.SessionCompactFailed{value}: called(T.SessionCompactFailedEvent, callback, value, ctx)
+    case T.OnSessionStart{callback} T.SessionStart{value}: called(T.SessionStartEvent, callback, value, ctx)
+    case T.OnSessionShutdown{callback} T.SessionShutdown{value}: called(T.SessionShutdownEvent, callback, value, ctx)
     case _ _: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
 
 def reported(+runner: ExtensionRunner, path: String, eventType: String, result: Result<&2, &2, String, Unit>) -> IO(Unit):
@@ -541,6 +543,57 @@ def emitSessionBeforeTree(+runner: ExtensionRunner, event: T.SessionBeforeTreeEv
   do IO<Maybe<&2, T.SessionBeforeTreeResult>>:
     dispatches : List<&2, Dispatch> <- snapshot(runner, "session_before_tree")
     beforeTree(runner, dispatches, event, None{})
+
+# Session switch and fork (upstream emit for session_before_switch and
+# session_before_fork): handlers run in order until one cancels; a failing
+# handler is reported and skipped. True when cancelled.
+def switchCancelledBy(+runner: ExtensionRunner, path: String, result: Result<&2, &2, String, Maybe<&2, T.SessionBeforeSwitchResult>>) -> IO(Bool):
+  match result:
+    case Done{Some{T.SessionBeforeSwitchResult{Some{True{}}}}}: IO.pure(Bool, True{})
+    case Done{_}: IO.pure(Bool, False{})
+    case Fail{error}:
+      do IO<Bool>:
+        emitError(runner, T.ExtensionError{path, "session_before_switch", error, None{}})
+        return False{}
+
+def beforeSwitch(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>, +event: T.SessionBeforeSwitchEvent) -> IO(Bool):
+  match dispatches:
+    case Nil{}: IO.pure(Bool, False{})
+    case Dispatch{path, T.OnSessionBeforeSwitch{callback}} <> rest:
+      do IO<Bool>:
+        result : Result<&2, &2, String, Maybe<&2, T.SessionBeforeSwitchResult>> <- C.call(T.HandlerCall<T.SessionBeforeSwitchEvent>, Result<&2, &2, String, Maybe<&2, T.SessionBeforeSwitchResult>>, callback, T.HandlerCall{event, createContext(runner)})
+        cancelled : Bool <- switchCancelledBy(runner, path, result)
+        Bool.pick(Unit -> IO(Bool), cancelled, _ => IO.pure(Bool, True{}), _ => beforeSwitch(runner, rest, event))(Unit{})
+    case _ <> rest: beforeSwitch(runner, rest, event)
+
+def emitSessionBeforeSwitch(+runner: ExtensionRunner, event: T.SessionBeforeSwitchEvent) -> IO(Bool):
+  do IO<Bool>:
+    dispatches : List<&2, Dispatch> <- snapshot(runner, "session_before_switch")
+    beforeSwitch(runner, dispatches, event)
+
+def forkCancelledBy(+runner: ExtensionRunner, path: String, result: Result<&2, &2, String, Maybe<&2, T.SessionBeforeForkResult>>) -> IO(Bool):
+  match result:
+    case Done{Some{T.SessionBeforeForkResult{Some{True{}}, _}}}: IO.pure(Bool, True{})
+    case Done{_}: IO.pure(Bool, False{})
+    case Fail{error}:
+      do IO<Bool>:
+        emitError(runner, T.ExtensionError{path, "session_before_fork", error, None{}})
+        return False{}
+
+def beforeFork(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>, +event: T.SessionBeforeForkEvent) -> IO(Bool):
+  match dispatches:
+    case Nil{}: IO.pure(Bool, False{})
+    case Dispatch{path, T.OnSessionBeforeFork{callback}} <> rest:
+      do IO<Bool>:
+        result : Result<&2, &2, String, Maybe<&2, T.SessionBeforeForkResult>> <- C.call(T.HandlerCall<T.SessionBeforeForkEvent>, Result<&2, &2, String, Maybe<&2, T.SessionBeforeForkResult>>, callback, T.HandlerCall{event, createContext(runner)})
+        cancelled : Bool <- forkCancelledBy(runner, path, result)
+        Bool.pick(Unit -> IO(Bool), cancelled, _ => IO.pure(Bool, True{}), _ => beforeFork(runner, rest, event))(Unit{})
+    case _ <> rest: beforeFork(runner, rest, event)
+
+def emitSessionBeforeFork(+runner: ExtensionRunner, event: T.SessionBeforeForkEvent) -> IO(Bool):
+  do IO<Bool>:
+    dispatches : List<&2, Dispatch> <- snapshot(runner, "session_before_fork")
+    beforeFork(runner, dispatches, event)
 
 def compactCancels(result: Maybe<&2, T.SessionBeforeCompactResult>) -> Bool:
   match result:

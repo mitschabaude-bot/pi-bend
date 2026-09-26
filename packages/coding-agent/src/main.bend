@@ -694,7 +694,7 @@ type StartupSelect is Data: StartupSelect{agentDir: String,assetsRoot: String,se
 def selectedTrust(context: StartupSelect,request: ProjectTrust.SelectRequest) -> IO(Maybe<&2,String>):
   match context:
     case StartupSelect{agentDir,assetsRoot,settings}: StartupSelector.select(request,agentDir,assetsRoot,settings)
-def initialRequest(start: Maybe<&2,SessionRuntime.SessionStart>) -> Bool:
+def initialRequest(start: Maybe<&2,SessionRuntime.SessionStart()>) -> Bool:
   match start:
     case None{}: True{}
     case Some{_}: False{}

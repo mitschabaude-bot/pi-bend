@@ -107,6 +107,63 @@ def main():
     assert fork['ok'] and fork['selectedText'] == 'Say two'
     assert states['forked']['roles'] == ['user', 'assistant'], states['forked']
     checks += 1
+    # agent-session-runtime-events.test.ts: session lifecycle events of an inline extension loaded into every session
+    def lifecycle(kind):
+        directory = work / ('events-' + kind); directory.mkdir()
+        events = run(command, 'events', str(directory), str(agent), kind, cwd=directory)
+        kept = [e for e in events if e['type'] in ('ext_event', 'change', 'current', 'phase')]
+        return kept
+    def ext(events, names):
+        return [{k: v for k, v in e.items() if k != 'type'} for e in events if e['type'] == 'ext_event' and e['event'] in names]
+    def between(events, start, end):
+        labels = [(e['type'], e.get('label', e.get('name'))) for e in events]
+        return events[labels.index(start) + 1:labels.index(end)]
+    switch_names = ('session_before_switch', 'session_shutdown', 'session_start')
+    # emits session_before_switch and session_start for new and resume flows
+    events = lifecycle('lifecycle')
+    current = {e['label']: e for e in events if e['type'] == 'current'}
+    original, second = current['prompted']['sessionFile'], current['new']['sessionFile']
+    assert ext(events[:events.index(current['initial'])], switch_names) == [{'event': 'session_start', 'reason': 'startup', 'previousSessionFile': None}]
+    assert original and second and original != second
+    assert ext(between(events, ('current', 'prompted'), ('current', 'new')), switch_names) == [
+        {'event': 'session_before_switch', 'reason': 'new', 'targetSessionFile': None},
+        {'event': 'session_shutdown', 'reason': 'new', 'targetSessionFile': second},
+        {'event': 'session_start', 'reason': 'new', 'previousSessionFile': original}], events
+    assert ext(between(events, ('current', 'new'), ('current', 'switched')), switch_names) == [
+        {'event': 'session_before_switch', 'reason': 'resume', 'targetSessionFile': original},
+        {'event': 'session_shutdown', 'reason': 'resume', 'targetSessionFile': original},
+        {'event': 'session_start', 'reason': 'resume', 'previousSessionFile': second}], events
+    assert [e['cancelled'] for e in events if e['type'] == 'change'] == [False, False]
+    checks += 1
+    # honors session_before_switch cancellation
+    events = lifecycle('cancel_switch')
+    current = {e['label']: e for e in events if e['type'] == 'current'}
+    assert [e['cancelled'] for e in events if e['type'] == 'change'] == [True]
+    assert current['new']['sessionFile'] == current['prompted']['sessionFile']
+    assert ext(between(events, ('current', 'prompted'), ('current', 'new')), switch_names) == [{'event': 'session_before_switch', 'reason': 'new', 'targetSessionFile': None}]
+    checks += 1
+    # runs beforeSessionInvalidate after session_shutdown and before rebindSession (the stale-context assertion is not ported:
+    # native extension contexts are not invalidated after replacement)
+    events = lifecycle('invalidate')
+    phases = [('session_shutdown' if e['type'] == 'ext_event' else e['name']) for e in between(events, ('current', 'prompted'), ('current', 'new')) if (e['type'] == 'ext_event' and e['event'] == 'session_shutdown') or (e['type'] == 'phase')]
+    assert phases == ['session_shutdown', 'beforeSessionInvalidate', 'rebindSession'], phases
+    checks += 1
+    # emits session_before_fork and session_start and honors cancellation
+    events = lifecycle('fork')
+    current = {e['label']: e for e in events if e['type'] == 'current'}
+    changes = {e['label']: e for e in events if e['type'] == 'change'}
+    forked_file, previous = current['forked']['sessionFile'], current['prompted']['sessionFile']
+    fork_events = ext(between(events, ('current', 'prompted'), ('current', 'forked')), ('session_before_fork',) + switch_names)
+    entry_id = fork_events[0]['entryId']
+    assert changes['fork']['cancelled'] is False and changes['fork']['selectedText'] == 'hello'
+    assert fork_events == [
+        {'event': 'session_before_fork', 'entryId': entry_id, 'position': 'before'},
+        {'event': 'session_shutdown', 'reason': 'fork', 'targetSessionFile': forked_file},
+        {'event': 'session_start', 'reason': 'fork', 'previousSessionFile': previous}], fork_events
+    after = ext(between(events, ('current', 'forked'), ('phase', 'dispose')), ('session_before_fork',) + switch_names)
+    assert after == [{'event': 'session_before_fork', 'entryId': entry_id, 'position': 'before'}, {'event': 'session_before_fork', 'entryId': 'missing-entry', 'position': 'at'}], after
+    assert changes['fork_cancelled']['cancelled'] is True and changes['fork_at_cancelled']['cancelled'] is True
+    checks += 1
     print('agent-session-runtime: %d checks passed' % checks)
 
 main()

@@ -2232,9 +2232,14 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-runtime-events.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "96f8d2678b03949a60ffc5ac82f9d992b0cda3832c2c9c1073d8ae28e3a8817b"
+      "status": "partial",
+      "ports": [
+        "tests/agent-session-runtime.bend",
+        "tests/agent_session_runtime_check.py"
+      ],
+      "sha256": "96f8d2678b03949a60ffc5ac82f9d992b0cda3832c2c9c1073d8ae28e3a8817b",
+      "implementation": "packages/coding-agent/src/core/agent-session-runtime.bend",
+      "notes": "Over the faux provider with an inline extension loaded into every session the factory creates: 'emits session_before_switch and session_start for new and resume flows', 'honors session_before_switch cancellation' and 'emits session_before_fork and session_start and honors cancellation' as upstream (events and their fields in order; cancellation through newSessionCancellable/switchSessionCancellable/forkCancellable). 'runs beforeSessionInvalidate after session_shutdown and before rebindSession' checks the phase order; its stale-context assertion (the old runner's createContext throws after replacement) is not ported: native extension contexts are not invalidated. session_start is emitted by the runtime after rebinding (upstream: the mode's bindExtensions), so no explicit bindExtensions call is needed."
     },
     {
       "source": "packages/coding-agent/test/agent-session-stats.test.ts",
@@ -4569,7 +4574,7 @@
         "tests/thinking-level.bend"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '→ ✓ medium', then '  ✓ medium' and '→   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",
@@ -4708,7 +4713,7 @@
         "tests/loopback-fetch.bend"
       ],
       "sha256": "cba6b39e9767019aebe0277ab580cb603927258652afcb2b9967387f1e8d6aa7",
-      "notes": "9 of 10 cases pass on Bun and native one/four threads. Instead of stubbing the global fetch, the library's https://pi.dev request goes through a logging fetch (tests/loopback-fetch.bend) to a local server that answers, drops connections or fails per case; the request URL, User-Agent and accept headers and the request counts (3 with retry, 1 for automatic checks, 0 when PI_SKIP_VERSION_CHECK is set) are asserted. semver valid/compare come from packages/runtime/src/semver.bend (tests/semver_check.py: 1,363 pairs match node-semver 7.8.5, including JavaScript double rounding of huge numeric pre-release identifiers). Not ported: \"formats nested network error details\" \u2014 the native fetch error carries no errno codes, so formatVersionCheckError returns the management request's message."
+      "notes": "9 of 10 cases pass on Bun and native one/four threads. Instead of stubbing the global fetch, the library's https://pi.dev request goes through a logging fetch (tests/loopback-fetch.bend) to a local server that answers, drops connections or fails per case; the request URL, User-Agent and accept headers and the request counts (3 with retry, 1 for automatic checks, 0 when PI_SKIP_VERSION_CHECK is set) are asserted. semver valid/compare come from packages/runtime/src/semver.bend (tests/semver_check.py: 1,363 pairs match node-semver 7.8.5, including JavaScript double rounding of huge numeric pre-release identifiers). Not ported: \"formats nested network error details\" — the native fetch error carries no errno codes, so formatVersionCheckError returns the management request's message."
     },
     {
       "source": "packages/durable/test/memory-storage.test.ts",
