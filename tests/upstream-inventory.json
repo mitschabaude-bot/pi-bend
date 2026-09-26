@@ -43,9 +43,14 @@
     },
     {
       "source": "packages/agent/test/e2e.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "186286d01bd377797e15452da264cb55902462199ee0d10bfa5ff191292810a9"
+      "status": "ported",
+      "ports": [
+        "packages/agent/test/e2e.bend",
+        "packages/agent/test/utils/calculate.bend",
+        "tests/agent_e2e_check.py"
+      ],
+      "sha256": "186286d01bd377797e15452da264cb55902462199ee0d10bfa5ff191292810a9",
+      "notes": "All 10 named upstream cases (v0.87.1) pass on Bun and native one/four threads with exact upstream names and order checked by tests/agent_e2e_check.py. The Agent, its loop, native plain-schema validation and the faux provider are the production code paths; upstream registers the faux provider in pi-ai's api registry and passes streamSimple, while the port has no process-wide api registry, so each test's streamFn streams from its FauxCore directly (the Agent's request options minus the native fetch). test/utils/calculate.ts is ported as utils/calculate.bend: upstream evaluates the expression as JavaScript; the port evaluates the arithmetic subset (decimal literals, prefix +/-, + - * / %, parentheses) with JS number semantics and spelling, and rejects anything else with its own syntax-error messages. toThrow(message) becomes a typed ClaimFailed message containing the upstream text; setTimeout(abort, 30) is a forked 30 ms sleep."
     },
     {
       "source": "packages/agent/test/harness/adaptive-publisher.test.ts",
@@ -562,9 +567,14 @@
     },
     {
       "source": "packages/agent/test/proxy.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d38ade78d744fa0dc22a6167a60a54ceb202ff0ba44be18bdf49b3a01388ca73"
+      "status": "ported",
+      "ports": [
+        "packages/agent/test/proxy.bend",
+        "packages/agent/test/proxy-oracle.ts",
+        "tests/agent_proxy_check.py"
+      ],
+      "sha256": "d38ade78d744fa0dc22a6167a60a54ceb202ff0ba44be18bdf49b3a01388ca73",
+      "notes": "All 3 named upstream cases (v0.87.1) pass on Bun and native one/four threads (tests/agent_proxy_check.py). Upstream stubs the global fetch with a Response; the port's native fetch reads a loopback server answering POST /api/stream with the same body, and every case also compares the full event trace, result, warnings and request (URL, auth header, JSON body) with upstream proxy.ts reading the same server. Seven supplementary differential cases cover text/thinking deltas and signatures split across chunks inside UTF-8 sequences, terminal error events, non-data/CRLF/empty lines, unknown event types, stray toolcall_end, mismatched deltas and both HTTP error-message forms. Upstream's transient partialJson member of streaming tool calls is dropped from its trace (the port keeps it beside the message)."
     },
     {
       "source": "packages/ai/test/abort.test.ts",
