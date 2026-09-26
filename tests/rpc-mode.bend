@@ -327,6 +327,94 @@ def extensionDialog(+cwd: String,+agentDir: String) -> IO(Unit):
     pair : Rpc.Owner & Rpc.Handle <- started(value)
     dialogAnswered(value,pair)
 
+# A command whose extension handler opens a dialog: compact runs the
+# session_before_compact handler, which asks through ctx.ui.confirm. Input
+# must still be read, or the dialog's response never arrives (the endpoint
+# used to run each command on its input reader and hung here).
+def Compacting() -> Data: ExtT.SessionBeforeCompactResult
+def askBeforeCompact(unit: Unit,call: ExtT.HandlerCall<ExtT.SessionBeforeCompactEvent>) -> IO(Result<&2,&2,String,Maybe<&2,Compacting()>>):
+  match call:
+    case ExtT.HandlerCall{_,+context}:
+      do IO<Result<&2,&2,String,Maybe<&2,Compacting()>>>:
+        allowed : Bool <- Ctx.confirm(context,"Compact?","Summarize the conversation")
+        return Done{Some{ExtT.SessionBeforeCompactResult{Some{Bool.not(allowed)},None{}}}}
+def asker(api: ExtT.ExtensionAPI) -> IO(Outcome()):
+  do IO<Outcome()>:
+    handler : ExtT.ExtensionHandler(ExtT.SessionBeforeCompactEvent,Compacting()) <- Callback.create(~Unit,~ExtT.HandlerCall<ExtT.SessionBeforeCompactEvent>,~Result<&2,&2,String,Maybe<&2,Compacting()>>,~askBeforeCompact,Unit{})
+    subscribed : Result<&2,&2,String,Loader.Unsubscribe> <- Loader.on(api,ExtT.OnSessionBeforeCompact{handler})
+    return Result.map(&2,&2,String,Loader.Unsubscribe,Unit,unused => Unit{},subscribed)
+def askerLoadout(+cwd: String) -> IO(Runtime.Loadout):
+  do IO<Runtime.Loadout>:
+    +runtime : ExtT.ExtensionRuntime() <- Loader.createExtensionRuntime()
+    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"asker",api => asker(api),False{}}])
+    models : Models.ModelRuntime <- ModelFixture.create(Nil{})
+    runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
+    return Runtime.Loadout{R.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}}
+def compactAsked(+value: Endpoint,pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
+  match pair:
+    case (owner,+handle):
+      do IO<Unit>:
+        send(handle,"{\"id\":\"p\",\"type\":\"prompt\",\"message\":\"hello\"}")
+        settled : List<&2,String> <- waitFor(linesOf(value),Contains{"\"type\":\"agent_settled\""},300n)
+        send(handle,"{\"id\":\"c\",\"type\":\"compact\"}")
+        +asked : List<&2,String> <- waitFor(linesOf(value),Contains{"\"method\":\"confirm\""},300n)
+        +id : String = requestId(asked,"confirm")
+        send(handle,"{\"type\":\"extension_ui_response\",\"id\":\"" ++ id ++ "\",\"confirmed\":false}")
+        answered : List<&2,String> <- waitFor(linesOf(value),Contains{"\"id\":\"c\",\"type\":\"response\""},300n)
+        +captured : List<&2,String> <- cleanup(value,owner)
+        report("RPC extension UI > a command's handler can open a dialog while input is still read",Bool.not(String.is_empty(id)) && anyContains(captured,"{\"id\":\"c\",\"type\":\"response\",\"command\":\"compact\",\"success\":false") && Bool.not(anyContains(captured,"\"type\":\"compaction\"")))
+def commandDialog(+cwd: String,+agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    loadout : Runtime.Loadout <- askerLoadout(cwd)
+    +value : Endpoint <- endpointWith(cwd,agentDir,True{},Nil{},loadout)
+    pair : Rpc.Owner & Rpc.Handle <- started(value)
+    compactAsked(value,pair)
+
+# Command-context actions reach the RPC host: this fixture's host refuses
+# session replacement, which the command sees as cancelled (unbound, the
+# context would answer "not cancelled").
+def changeText(change: Ctx.SessionChange) -> String:
+  match change:
+    case Ctx.SessionChange{True{}}: "new session cancelled"
+    case Ctx.SessionChange{False{}}: "new session created"
+def contextOf(command: Ctx.ExtensionCommandContext) -> Ctx.ExtensionContext:
+  match command:
+    case Ctx.ExtensionCommandContext{context}: context
+def freshWith(+command: Ctx.ExtensionCommandContext) -> IO(Outcome()):
+  do IO<Outcome()>:
+    Ctx.waitForIdle(command)
+    change : Ctx.SessionChange <- Ctx.newSession(command,Ctx.NewSessionRequest{None{}})
+    Ctx.notify(contextOf(command),changeText(change),Ctx.InfoNotice{})
+    return Done{Unit{}}
+def fresh(unit: Unit,call: ExtT.CommandCall) -> IO(Outcome()):
+  match call:
+    case ExtT.CommandCall{_,command}: freshWith(command)
+def freshener(api: ExtT.ExtensionAPI) -> IO(Outcome()):
+  do IO<Outcome()>:
+    handler : ExtT.CommandHandler() <- Callback.create(~Unit,~ExtT.CommandCall,~Outcome(),~fresh,Unit{})
+    Loader.registerCommand(api,"fresh",ExtT.CommandOptions{Some{"Start over"},None{},handler})
+def freshLoadout(+cwd: String) -> IO(Runtime.Loadout):
+  do IO<Runtime.Loadout>:
+    +runtime : ExtT.ExtensionRuntime() <- Loader.createExtensionRuntime()
+    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"freshener",api => freshener(api),False{}}])
+    models : Models.ModelRuntime <- ModelFixture.create(Nil{})
+    runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
+    return Runtime.Loadout{R.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}}
+def freshAsked(+value: Endpoint,pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
+  match pair:
+    case (owner,handle):
+      do IO<Unit>:
+        send(handle,"{\"id\":\"f\",\"type\":\"prompt\",\"message\":\"/fresh\"}")
+        lines : List<&2,String> <- waitFor(linesOf(value),Contains{"new session"},300n)
+        captured : List<&2,String> <- cleanup(value,owner)
+        report("RPC extension UI > command-context actions go through the RPC host",anyContains(captured,"\"message\":\"new session cancelled\""))
+def commandActions(+cwd: String,+agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    loadout : Runtime.Loadout <- freshLoadout(cwd)
+    +value : Endpoint <- endpointWith(cwd,agentDir,True{},Nil{},loadout)
+    pair : Rpc.Owner & Rpc.Handle <- started(value)
+    freshAsked(value,pair)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case +cwd <> +agentDir <> Nil{}:
@@ -337,6 +425,8 @@ def run(args: List<String>) -> IO(Unit):
         clearsQueues(cwd,agentDir)
         unknownCommand(cwd,agentDir)
         extensionDialog(cwd,agentDir)
+        commandDialog(cwd,agentDir)
+        commandActions(cwd,agentDir)
     case _: IO.die(Unit,1,"usage: rpc-mode <cwd> <agentDir>")
 def main() -> IO(Unit):
   do IO<Unit>:

@@ -30,6 +30,8 @@ NAMES = [
     # Native supplement: extension UI over the protocol (no upstream suite).
     "RPC extension UI > a select dialog is answered by its extension_ui_response",
     "RPC extension UI > stopping answers an open dialog as cancelled",
+    "RPC extension UI > a command's handler can open a dialog while input is still read",
+    "RPC extension UI > command-context actions go through the RPC host",
 ]
 # Pending until AgentSession.prompt has upstream's preflight (tests/rpc.md).
 EXPECTED_FAILURES = {PREFLIGHT}
@@ -40,6 +42,8 @@ def check(label, command, threads=None):
         cwd, agent = Path(temporary, "cwd"), Path(temporary, "agent")
         cwd.mkdir()
         agent.mkdir()
+        # compact must reach its session_before_compact handler.
+        (agent / "settings.json").write_text('{"compaction":{"keepRecentTokens":1}}')
         env = dict(os.environ, PI_FAUX_API_KEY="faux-key")
         if threads:
             env["BEND_THREADS"] = threads

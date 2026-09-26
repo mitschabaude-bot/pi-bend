@@ -41,7 +41,10 @@ type BashRequest is Data: BashRequest{id: Maybe<&2,String>,command: String,exclu
 # Upstream handles the next command only when the prompt reaches its first
 # awaited I/O: its user message is out and the loop has polled the steering
 # queue. `Started` lets the reader wait for that point (or the prompt's end).
-type Started is Data: Started{signal: Chan(Unit),sent: Ref.Ref<Bool>}
+# A signal carries False at that point and True when the work has finished;
+# the waiter takes the first and closes the channel, so later signals are
+# dropped.
+type Started is Data: Started{signal: Chan(Bool)}
 type Work is Data: PromptWork{request: Submission,started: Started} BashWork{request: BashRequest}
 # One command's view of the endpoint, over the session current when it runs.
 type Command is Data:
@@ -55,12 +58,12 @@ type Host is Data:
 # the endpoint stops, after which dialogs answer as cancelled at once.
 type Dialog is Data: Dialog{id: String,answer: Chan(Types.RpcExtensionUIResponse)}
 type Dialogs is Data: Dialogs{open: Bool,waiting: List<&2,Dialog>}
-# `starting` is the prompt that has not yet reached its first awaited I/O:
-# opening a dialog is such a point, so the reader goes on to the response.
+# `starting` is the input line the reader waits for. Opening a dialog is an
+# awaited point, so the reader goes on and can read the dialog's response.
 type UiEnv is Data: UiEnv{sink: Sink(),dialogs: Ref.Ref<Dialogs>,starting: Ref.Ref<Maybe<&2,Started>>}
 type Bound is Data: Bound{runner: ExtensionRunner.ExtensionRunner,subscription: ExtensionRunner.ErrorSubscription}
 type Extensions is Data:
-  Extensions{dialogs: Ref.Ref<Dialogs>,ui: Ctx.ExtensionUIContext,errors: Callback.Callback<ExtensionTypes.ExtensionError,Unit>,bound: Ref.Ref<Maybe<&2,Bound>>,starting: Ref.Ref<Maybe<&2,Started>>}
+  Extensions{dialogs: Ref.Ref<Dialogs>,ui: Ctx.ExtensionUIContext,errors: Callback.Callback<ExtensionTypes.ExtensionError,Unit>,bound: Ref.Ref<Maybe<&2,Bound>>,starting: Ref.Ref<Maybe<&2,Started>>,detached: Ref.Ref<List<&2,Chan(Unit)>>,actions: Ctx.ExtensionCommandContextActions}
 type Handle is Data:
   Handle{current: Ref.Ref<Session.AgentSession>,sink: Sink(),buffer: Ref.Ref<String>,busy: Ref.Ref<Bool>,jobs: Chan(Work),assetsDir: Maybe<&2,String>,host: Host,listener: Session.Listener(),extensions: Extensions}
 type Owner is Type:
@@ -163,43 +166,44 @@ def runBash(handle: Command,request: BashRequest) -> IO(Unit):
       do IO<Unit>:
         result : Result<&2,&2,String,Bash.BashResult> <- Session.executeBash(session,command,None{},Session.BashOptions{exclude,id,None{}})
         bashReply(sink,id,result)
-def sendSignal(signal: Chan(Unit)) -> IO(Unit):
-  do IO<Unit>:
-    delivered : Bool <- Chan.send(Unit,signal,Unit{})
-    return Unit{}
-def releaseStarted(started: Started) -> IO(Unit):
+def newStarted() -> IO(Started):
+  do IO<Started>:
+    signal : Chan(Bool) <- Chan.new(Bool,64)
+    return Started{signal}
+def signalled(started: Started,done: Bool) -> IO(Unit):
   match started:
-    case Started{_,sent}:
+    case Started{signal}:
       do IO<Unit>:
-        flag : Bool <- Ref.dispose(Bool,sent)
+        delivered : Bool <- Chan.send(Bool,signal,done)
         return Unit{}
-def signalOnce(started: Started) -> IO(Unit):
+def signalOnce(started: Started) -> IO(Unit): signalled(started,False{})
+def finished(started: Started) -> IO(Unit): signalled(started,True{})
+# The first signal: True when the work finished, False at its awaited point.
+def awaitStarted(started: Started) -> IO(Bool):
   match started:
-    case Started{signal,sent}:
-      do IO<Unit>:
-        previous : Bool <- Ref.swap(Bool,sent,True{})
-        Bool.pick(Unit -> IO(Unit),previous,_ => IO.pure(Unit,Unit{}),_ => sendSignal(signal))(Unit{})
+    case Started{+signal}:
+      do IO<Bool>:
+        first : Maybe<&1,Bool> <- Chan.recv(Bool,signal)
+        Chan.close(Bool,signal)
+        return Maybe.default(&1,Bool,first,True{})
 def startedBy(started: Started,value: Session.AgentSessionEvent) -> IO(Unit):
   match value:
     case Session.AgentEvent{AgentTypes.MessageEnd{AgentTypes.LlmMessage{Ai.User{_}}}}: signalOnce(started)
     case _: IO.pure(Unit,Unit{})
-def runJob(handle: Command,request: Submission,+started: Started,+starting: Ref.Ref<Maybe<&2,Started>>) -> IO(Unit):
+def runJob(handle: Command,request: Submission,+started: Started) -> IO(Unit):
   match handle request:
     case Command{+session,_,_,busy,_,_} Submission{text,images,behavior}:
       do IO<Unit>:
-        Ref.write(Maybe<&2,Started>,starting,Some{started})
         +watch : Session.Listener() <- Callback.create(~Started,~Session.AgentSessionEvent,~Unit,~startedBy,started)
         Session.subscribe(session,watch)
         result : Result<&2,&2,String,Unit> <- Session.prompt(session,text,images,behavior)
         Session.unsubscribe(session,watch)
         Callback.dispose(Session.AgentSessionEvent,Unit,watch)
-        Ref.write(Maybe<&2,Started>,starting,None{})
-        signalOnce(started)
-        releaseStarted(started)
+        finished(started)
         Ref.write(Bool,busy,False{})
-def runWork(handle: Command,work: Work,starting: Ref.Ref<Maybe<&2,Started>>) -> IO(Unit):
+def runWork(handle: Command,work: Work) -> IO(Unit):
   match work:
-    case PromptWork{request,started}: runJob(handle,request,started,starting)
+    case PromptWork{request,started}: runJob(handle,request,started)
     case BashWork{request}: runBash(handle,request)
 def commandOf(handle: Handle) -> IO(Command):
   match handle:
@@ -212,11 +216,11 @@ def nextJob(handle: Handle) -> IO(Maybe<&1,Work>):
     case Handle{_,_,_,_,jobs,_,_,_,_}: Chan.recv(Work,jobs)
 def startingOf(handle: Handle) -> Ref.Ref<Maybe<&2,Started>>:
   match handle:
-    case Handle{_,_,_,_,_,_,_,_,Extensions{_,_,_,_,starting}}: starting
+    case Handle{_,_,_,_,_,_,_,_,Extensions{_,_,_,_,starting,_,_}}: starting
 def runCurrent(+handle: Handle,work: Work) -> IO(Unit):
   do IO<Unit>:
     view : Command <- commandOf(handle)
-    runWork(view,work,startingOf(handle))
+    runWork(view,work)
 type Phase is Type: Check{} Received{request: Maybe<&1,Work>}
 @unsafe def worker(+handle: Handle,phase: Phase) -> IO(Unit):
   match phase:
@@ -302,10 +306,68 @@ def extensionError(sink: Sink(),error: ExtensionTypes.ExtensionError) -> IO(Unit
   match error:
     case ExtensionTypes.ExtensionError{extensionPath,trigger,message,_}:
       output(sink,MessageJson.object(MessageJson.field("type",V.Text{"extension_error"},MessageJson.field("extensionPath",V.Text{extensionPath},MessageJson.field("event",V.Text{trigger},MessageJson.field("error",V.Text{message},Nil{}))))))
-def createExtensions(+sink: Sink()) -> IO(Extensions):
+# upstream rebindSession's commandContextActions: session control for
+# extension commands, through the host like the RPC commands. A host failure
+# leaves the session in place; the context can only report that as cancelled.
+type ActionEnv is Data: ActionEnv{current: Ref.Ref<Session.AgentSession>,host: Host}
+def changed(result: Result<&2,&2,String,Unit>) -> Ctx.SessionChange:
+  match result:
+    case Done{_}: Ctx.SessionChange{False{}}
+    case Fail{_}: Ctx.SessionChange{True{}}
+def forkChanged(result: Result<&2,&2,String,Maybe<&2,String>>) -> Ctx.SessionChange:
+  match result:
+    case Done{_}: Ctx.SessionChange{False{}}
+    case Fail{_}: Ctx.SessionChange{True{}}
+def navigated(result: Session.TreeResult()) -> Ctx.SessionChange:
+  match result:
+    case Done{Session.TreeNavigationCancelled{}}: Ctx.SessionChange{True{}}
+    case Done{_}: Ctx.SessionChange{False{}}
+    case Fail{_}: Ctx.SessionChange{True{}}
+def currentOf(env: ActionEnv) -> IO(Session.AgentSession):
+  match env:
+    case ActionEnv{current,_}: Ref.read(Session.AgentSession,current)
+def actionWait(env: ActionEnv,unit: Unit) -> IO(Unit):
+  IO.bind(Session.AgentSession,Unit,currentOf(env),session => Session.waitForIdle(session))
+def actionNew(env: ActionEnv,request: Ctx.NewSessionRequest) -> IO(Ctx.SessionChange):
+  match env request:
+    case ActionEnv{_,Host{opening,_,_}} Ctx.NewSessionRequest{parent}:
+      IO.bind(Result<&2,&2,String,Unit>,Ctx.SessionChange,Callback.call(Maybe<&2,String>,Result<&2,&2,String,Unit>,opening,parent),result => IO.pure(Ctx.SessionChange,changed(result)))
+def forkPosition(position: Maybe<&2,Ctx.ForkPosition>) -> SessionRuntime.ForkPosition:
+  match position:
+    case Some{Ctx.ForkAt{}}: SessionRuntime.ForkAt{}
+    case _: SessionRuntime.ForkBefore{}
+def actionFork(env: ActionEnv,request: Ctx.ForkRequest) -> IO(Ctx.SessionChange):
+  match env request:
+    case ActionEnv{_,Host{_,_,forking}} Ctx.ForkRequest{entryId,position}:
+      IO.bind(Result<&2,&2,String,Maybe<&2,String>>,Ctx.SessionChange,Callback.call(SessionRuntime.ForkRequest,Result<&2,&2,String,Maybe<&2,String>>,forking,SessionRuntime.ForkRequest{entryId,forkPosition(position)}),result => IO.pure(Ctx.SessionChange,forkChanged(result)))
+def navigateOn(session: Session.AgentSession,request: Ctx.NavigateTreeRequest) -> IO(Ctx.SessionChange):
+  match request:
+    case Ctx.NavigateTreeRequest{targetId,summarize,custom,replace,label}:
+      IO.bind(Session.TreeResult(),Ctx.SessionChange,Session.navigateTreeWith(session,targetId,Session.NavigateTreeOptions{Maybe.default(&2,Bool,summarize,False{}),custom,replace,label}),result => IO.pure(Ctx.SessionChange,navigated(result)))
+def actionNavigate(env: ActionEnv,request: Ctx.NavigateTreeRequest) -> IO(Ctx.SessionChange):
+  IO.bind(Session.AgentSession,Ctx.SessionChange,currentOf(env),session => navigateOn(session,request))
+def actionSwitch(env: ActionEnv,request: Ctx.SwitchSessionRequest) -> IO(Ctx.SessionChange):
+  match env request:
+    case ActionEnv{_,Host{_,switching,_}} Ctx.SwitchSessionRequest{path}:
+      IO.bind(Result<&2,&2,String,Unit>,Ctx.SessionChange,Callback.call(String,Result<&2,&2,String,Unit>,switching,path),result => IO.pure(Ctx.SessionChange,changed(result)))
+def reloaded(result: Result<&2,&2,String,Unit>) -> IO(Unit): IO.pure(Unit,Unit{})
+def actionReload(env: ActionEnv,unit: Unit) -> IO(Unit):
+  IO.bind(Session.AgentSession,Unit,currentOf(env),session => IO.bind(Result<&2,&2,String,Unit>,Unit,Session.reload(session),reloaded))
+def createActions(+env: ActionEnv) -> IO(Ctx.ExtensionCommandContextActions):
+  do IO<Ctx.ExtensionCommandContextActions>:
+    wait : Callback.Callback<Unit,Unit> <- Callback.create(~ActionEnv,~Unit,~Unit,~actionWait,env)
+    opening : Callback.Callback<Ctx.NewSessionRequest,Ctx.SessionChange> <- Callback.create(~ActionEnv,~Ctx.NewSessionRequest,~Ctx.SessionChange,~actionNew,env)
+    forking : Callback.Callback<Ctx.ForkRequest,Ctx.SessionChange> <- Callback.create(~ActionEnv,~Ctx.ForkRequest,~Ctx.SessionChange,~actionFork,env)
+    navigating : Callback.Callback<Ctx.NavigateTreeRequest,Ctx.SessionChange> <- Callback.create(~ActionEnv,~Ctx.NavigateTreeRequest,~Ctx.SessionChange,~actionNavigate,env)
+    switching : Callback.Callback<Ctx.SwitchSessionRequest,Ctx.SessionChange> <- Callback.create(~ActionEnv,~Ctx.SwitchSessionRequest,~Ctx.SessionChange,~actionSwitch,env)
+    reloading : Callback.Callback<Unit,Unit> <- Callback.create(~ActionEnv,~Unit,~Unit,~actionReload,env)
+    return Ctx.ExtensionCommandContextActions{wait,opening,forking,navigating,switching,reloading}
+def createExtensions(+sink: Sink(),current: Ref.Ref<Session.AgentSession>,host: Host) -> IO(Extensions):
   do IO<Extensions>:
     +dialogs : Ref.Ref<Dialogs> <- Ref.new(Dialogs,Dialogs{True{},Nil{}})
     +starting : Ref.Ref<Maybe<&2,Started>> <- Ref.new(Maybe<&2,Started>,None{})
+    detached : Ref.Ref<List<&2,Chan(Unit)>> <- Ref.new(List<&2,Chan(Unit)>,Nil{})
+    actions : Ctx.ExtensionCommandContextActions <- createActions(ActionEnv{current,host})
     +env : UiEnv = UiEnv{sink,dialogs,starting}
     select : Callback.Callback<Ctx.SelectRequest,Maybe<&2,String>> <- Callback.create(~UiEnv,~Ctx.SelectRequest,~Maybe<&2,String>,~selectDialog,env)
     confirm : Callback.Callback<Ctx.ConfirmRequest,Bool> <- Callback.create(~UiEnv,~Ctx.ConfirmRequest,~Bool,~confirmDialog,env)
@@ -315,13 +377,14 @@ def createExtensions(+sink: Sink()) -> IO(Extensions):
     custom : Callback.Callback<Ctx.CustomFactory(),Unit> <- Callback.create(~UiEnv,~Ctx.CustomFactory(),~Unit,~noCustom,env)
     errors : Callback.Callback<ExtensionTypes.ExtensionError,Unit> <- Callback.create(~Sink(),~ExtensionTypes.ExtensionError,~Unit,~extensionError,sink)
     bound : Ref.Ref<Maybe<&2,Bound>> <- Ref.new(Maybe<&2,Bound>,None{})
-    return Extensions{dialogs,Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom},errors,bound,starting}
+    return Extensions{dialogs,Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom},errors,bound,starting,detached,actions}
 def bindRunner(extensions: Extensions,runner: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> IO(Unit):
   match extensions runner:
     case _ None{}: IO.pure(Unit,Unit{})
-    case Extensions{_,ui,errors,bound,_} Some{+found}:
+    case Extensions{_,ui,errors,bound,_,_,actions} Some{+found}:
       do IO<Unit>:
         ExtensionRunner.setUIContext(found,Some{ui},Ctx.RpcMode{})
+        ExtensionRunner.bindCommandContext(found,Some{actions})
         subscription : ExtensionRunner.ErrorSubscription <- ExtensionRunner.onError(found,errors)
         Ref.write(Maybe<&2,Bound>,bound,Some{Bound{found,subscription}})
 # upstream rebindSession's bindExtensions: the session's extensions get the
@@ -336,10 +399,11 @@ def unbound(previous: Maybe<&2,Bound>) -> IO(Unit):
     case Some{Bound{+runner,subscription}}:
       do IO<Unit>:
         ExtensionRunner.offError(runner,subscription)
+        ExtensionRunner.bindCommandContext(runner,None{})
         ExtensionRunner.setUIContext(runner,None{},Ctx.PrintMode{})
 def unbindExtensions(extensions: Extensions) -> IO(Unit):
   match extensions:
-    case Extensions{_,_,_,bound,_}:
+    case Extensions{_,_,_,bound,_,_,_}:
       do IO<Unit>:
         previous : Maybe<&2,Bound> <- Ref.swap(Maybe<&2,Bound>,bound,None{})
         unbound(previous)
@@ -357,13 +421,13 @@ def closed(value: Dialogs) -> Dialogs & List<&2,Dialog>:
 # can finish.
 def closeDialogs(extensions: Extensions) -> IO(Unit):
   match extensions:
-    case Extensions{dialogs,_,_,_,_}:
+    case Extensions{dialogs,_,_,_,_,_,_}:
       do IO<Unit>:
         waiting : List<&2,Dialog> <- Ref.modify(Dialogs,List<&2,Dialog>,dialogs,closed)
         cancelDialogs(waiting)
 def disposeExtensions(extensions: Extensions) -> IO(Unit):
   match extensions:
-    case Extensions{dialogs,Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom},errors,bound,starting}:
+    case Extensions{dialogs,Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom},errors,bound,starting,detached,Ctx.ExtensionCommandContextActions{wait,opening,forking,navigating,switching,reloading}}:
       do IO<Unit>:
         Callback.dispose(Ctx.SelectRequest,Maybe<&2,String>,select)
         Callback.dispose(Ctx.ConfirmRequest,Bool,confirm)
@@ -372,9 +436,16 @@ def disposeExtensions(extensions: Extensions) -> IO(Unit):
         Callback.dispose(Ctx.StatusUpdate,Unit,status)
         Callback.dispose(Ctx.CustomFactory(),Unit,custom)
         Callback.dispose(ExtensionTypes.ExtensionError,Unit,errors)
+        Callback.dispose(Unit,Unit,wait)
+        Callback.dispose(Ctx.NewSessionRequest,Ctx.SessionChange,opening)
+        Callback.dispose(Ctx.ForkRequest,Ctx.SessionChange,forking)
+        Callback.dispose(Ctx.NavigateTreeRequest,Ctx.SessionChange,navigating)
+        Callback.dispose(Ctx.SwitchSessionRequest,Ctx.SessionChange,switching)
+        Callback.dispose(Unit,Unit,reloading)
         left : Dialogs <- Ref.dispose(Dialogs,dialogs)
         previous : Maybe<&2,Bound> <- Ref.dispose(Maybe<&2,Bound>,bound)
-        prompt : Maybe<&2,Started> <- Ref.dispose(Maybe<&2,Started>,starting)
+        line : Maybe<&2,Started> <- Ref.dispose(Maybe<&2,Started>,starting)
+        tasks : List<&2,Chan(Unit)> <- Ref.dispose(List<&2,Chan(Unit)>,detached)
         return Unit{}
 def withDialogs(open: Bool,pair: List<&2,Dialog> & Maybe<&2,Dialog>) -> Dialogs & Maybe<&2,Dialog>:
   match pair:
@@ -407,13 +478,13 @@ def answered(dialogs: Ref.Ref<Dialogs>,decoded: Types.Decoded(Types.RpcExtension
         found : Maybe<&2,Dialog> <- Ref.modify(Dialogs,Maybe<&2,Dialog>,dialogs,value => takeDialog(value,Types.uiResponseId(response)))
         answerDialog(found,response)
 
-def start(+session: Session.AgentSession,+sink: Sink(),assetsDir: Maybe<&2,String>,host: Host) -> IO(Owner & Handle):
+def start(+session: Session.AgentSession,+sink: Sink(),assetsDir: Maybe<&2,String>,+host: Host) -> IO(Owner & Handle):
   do IO<Owner & Handle>:
     +current : Ref.Ref<Session.AgentSession> <- Ref.new(Session.AgentSession,session)
     +buffer : Ref.Ref<String> <- Ref.new(String,"")
     +busy : Ref.Ref<Bool> <- Ref.new(Bool,False{})
     +jobs : Chan(Work) <- Chan.new(Work,64)
-    +extensions : Extensions <- createExtensions(sink)
+    +extensions : Extensions <- createExtensions(sink,current,host)
     bindExtensions(extensions,session)
     +listener : Session.Listener() <- Callback.create(~Sink(),~Session.AgentSessionEvent,~Unit,~observe,sink)
     Session.subscribe(session,listener)
@@ -446,12 +517,11 @@ def acceptedPrompt(session: Session.AgentSession,sink: Sink(),busy: Ref.Ref<Bool
         output(sink,ok(id,"prompt"))
     case False{} _:
       do IO<Unit>:
-        +signal : Chan(Unit) <- Chan.new(Unit,1)
-        sent : Ref.Ref<Bool> <- Ref.new(Bool,False{})
+        +started : Started <- newStarted()
         Ref.write(Bool,busy,True{})
         output(sink,ok(id,"prompt"))
-        accepted : Bool <- Chan.send(Work,jobs,PromptWork{Submission{text,images,behavior},Started{signal,sent}})
-        ready : Maybe<&1,Unit> <- Chan.recv(Unit,signal)
+        accepted : Bool <- Chan.send(Work,jobs,PromptWork{Submission{text,images,behavior},started})
+        ready : Bool <- awaitStarted(started)
         return Unit{}
 
 def promptChecked(handle: Command,id: Maybe<&2,String>,message: Result<&2,&2,String,String>,images: Result<&2,&2,String,List<&2,Ai.ImageContent>>,behavior: Result<&2,&2,String,Maybe<&2,Session.StreamingBehavior>>) -> IO(Unit):
@@ -909,7 +979,7 @@ def hostOf(handle: Handle) -> Host:
     case Handle{_,_,_,_,_,_,host,_,_}: host
 def dialogsOf(handle: Handle) -> Ref.Ref<Dialogs>:
   match handle:
-    case Handle{_,_,_,_,_,_,_,_,Extensions{dialogs,_,_,_,_}}: dialogs
+    case Handle{_,_,_,_,_,_,_,_,Extensions{dialogs,_,_,_,_,_,_}}: dialogs
 def textValue(value: Maybe<&2,V.Value>) -> String:
   match value:
     case Some{V.Text{text}}: text
@@ -918,15 +988,47 @@ def isUIResponse(value: Result<&2,&2,Decode.ParseError,V.Value>) -> Bool:
   match value:
     case Done{V.ObjectValue{fields}}: String.eq(textValue(field(fields,"type")),"extension_ui_response")
     case _: False{}
+def runLine(+handle: Handle,value: Result<&2,&2,Decode.ParseError,V.Value>,line: Started) -> IO(Unit):
+  do IO<Unit>:
+    view : Command <- commandOf(handle)
+    parsed(view,hostOf(handle),value)
+    finished(line)
+def detachedOf(handle: Handle) -> Ref.Ref<List<&2,Chan(Unit)>>:
+  match handle:
+    case Handle{_,_,_,_,_,_,_,_,Extensions{_,_,_,_,_,detached,_}}: detached
+# A finished line's task is joined at once; one that stopped at a dialog goes
+# on concurrently, as upstream's handlers do, and stop joins it.
+def settleLine(handle: Handle,task: Chan(Unit),done: Bool) -> IO(Unit):
+  match done:
+    case True{}: IO.join(Unit,task)
+    case False{}: Ref.modify(List<&2,Chan(Unit)>,Unit,detachedOf(handle),tasks => (task <> tasks,Unit{}))
+def joinAll(tasks: List<&2,Chan(Unit)>) -> IO(Unit):
+  match tasks:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case task <> rest:
+      do IO<Unit>:
+        IO.join(Unit,task)
+        joinAll(rest)
+def joinDetached(extensions: Extensions) -> IO(Unit):
+  match extensions:
+    case Extensions{_,_,_,_,_,detached,_}:
+      do IO<Unit>:
+        tasks : List<&2,Chan(Unit)> <- Ref.swap(List<&2,Chan(Unit)>,detached,Nil{})
+        joinAll(tasks)
 def routed(+handle: Handle,+value: Result<&2,&2,Decode.ParseError,V.Value>,response: Bool) -> IO(Unit):
   match response value:
     case True{} Done{json}: answered(dialogsOf(handle),Types.decodeUIResponse(json))
     case _ _:
       do IO<Unit>:
-        view : Command <- commandOf(handle)
-        parsed(view,hostOf(handle),value)
-# An extension_ui_response answers the dialog with its id; anything else is a
-# command.
+        +line : Started <- newStarted()
+        Ref.write(Maybe<&2,Started>,startingOf(handle),Some{line})
+        task : Chan(Unit) <- IO.fork(Unit,runLine(handle,value,line))
+        done : Bool <- awaitStarted(line)
+        settleLine(handle,task,done)
+# An extension_ui_response answers the dialog with its id on the reader. Any
+# other line runs as its own task (upstream handles each line without waiting
+# for the previous one); the reader waits until it finishes or opens a
+# dialog, so responses keep their order while no handler can block input.
 def command(+handle: Handle,text: String) -> IO(Unit):
   +value = Decode.parse(text)
   routed(handle,value,isUIResponse(value))
@@ -966,6 +1068,7 @@ def stop(owner: Owner) -> IO(Unit):
         +session : Session.AgentSession <- Ref.read(Session.AgentSession,current)
         Session.abortBash(session)
         closeDialogs(extensions)
+        joinDetached(extensions)
         Chan.close(Work,jobs)
         completed : Maybe<&1,Unit> <- Chan.recv(Unit,task)
         Chan.close(Unit,task)
