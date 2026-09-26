@@ -831,7 +831,7 @@
         "tests/openai_completions_request_reference.ts"
       ],
       "sha256": "5888d3d3b6236aca974ce3c60577ff9008fca21a4024c6f2ff159a6d52d529fa",
-      "notes": "All non-E2E cases pass on Bun (native pending the batch run): the Anthropic Messages and OpenAI Responses cases in packages/ai/test/cache-retention.bend (run with the Anthropic suites, tests/anthropic_messages_check.py) and the Chat Completions cases as named request cases in tests/openai_completions_request_check.py with bodies byte-identical to pinned pi-mono. PI_CACHE_RETENTION is supplied as the request's provider env, which getProviderEnvValue reads before process.env; the cerebras strict-tool fixture spells out strict: 'prefer' for upstream's untyped {type: 'json_schema'} (identical upstream behaviour). The four E2E cases (ANTHROPIC_API_KEY/OPENAI_API_KEY) are not run."
+      "notes": "All non-E2E cases pass on Bun and native 1/4 threads: the Anthropic Messages and OpenAI Responses cases in packages/ai/test/cache-retention.bend (run with the Anthropic suites, tests/anthropic_messages_check.py) and the Chat Completions cases as named request cases in tests/openai_completions_request_check.py with bodies byte-identical to pinned pi-mono. PI_CACHE_RETENTION is supplied as the request's provider env, which getProviderEnvValue reads before process.env; the cerebras strict-tool fixture spells out strict: 'prefer' for upstream's untyped {type: 'json_schema'} (identical upstream behaviour). The four E2E cases (ANTHROPIC_API_KEY/OPENAI_API_KEY) are not run."
     },
     {
       "source": "packages/ai/test/cloudflare-ai-binding.test.ts",
