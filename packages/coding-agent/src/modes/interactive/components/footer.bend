@@ -14,6 +14,10 @@ type State is Data:
   State{cwd: String,home: Maybe<&2,String>,branch: Maybe<&2,String>,sessionName: Maybe<&2,String>,model: Maybe<&2,Model>,thinkingLevel: String,totals: Usage,latestAssistant: Maybe<&2,Usage>,contextPercent: Maybe<&2,F64>,contextWindow: Maybe<&2,Nat>,providerCount: Nat,subscription: Bool,autoCompact: Bool,experimental: Bool,statuses: List<&2,Status>}
 
 def emptyUsage() -> Usage: Usage{0n,0n,0n,0n,F.fromU32(0)}
+def setAutoCompactEnabled(state: State,enabled: Bool) -> State:
+  match state:
+    case State{cwd,home,branch,name,model,thinking,usage,latest,percent,window,providers,subscription,_,experimental,statuses}:
+      State{cwd,home,branch,name,model,thinking,usage,latest,percent,window,providers,subscription,enabled,experimental,statuses}
 def addUsage(left: Usage,right: Usage) -> Usage:
   match left right:
     case Usage{a,b,c,d,e} Usage{f,g,h,i,j}: Usage{a + f,b + g,c + h,d + i,F.add(e,j)}

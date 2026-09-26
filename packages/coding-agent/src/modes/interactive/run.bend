@@ -992,7 +992,8 @@ def footerLinesCopied(paint: FooterPaint,+width: Nat) -> IO(List<&2,String>):
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         stats : Result<&2,&2,Tree.Error,Stats.Stats> <- Session.getSessionStats(live)
         agentState : Session.AgentState() <- Session.state(live)
-        Footer.render(statsState(withChosen(current,agentState),stats),selected,width)
+        autoCompact : Bool <- Session.getAutoCompactionEnabled(live)
+        Footer.render(Footer.setAutoCompactEnabled(statsState(withChosen(current,agentState),stats),autoCompact),selected,width)
 def footerLines(paint: FooterPaint,width: Nat) -> IO(List<&2,String>):
   footerLinesCopied(paint,width)
 def ignore(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})

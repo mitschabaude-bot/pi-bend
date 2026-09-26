@@ -39,6 +39,10 @@ def step(state: Screen.State,lines: List<&2,String>,width: Nat,height: Nat,optio
   stepResult(Screen.checkedPlan(state,Screen.Frame{Tui.applyLineResets(lines),None{},width,height},options))
 def stepCursor(state: Screen.State,lines: List<&2,String>,width: Nat,height: Nat,row: Nat,col: Nat,show: Bool) -> IO(Screen.State):
   stepResult(Screen.checkedPlan(state,Screen.Frame{Tui.applyLineResets(lines),Some{Tui.CursorPosition{row,col}},width,height},Screen.Options{False{},False{},False{},show,False{}}))
+def numbered(count: Nat,+index: Nat) -> List<&2,String>:
+  match count:
+    case Zero{}: Nil{}
+    case Succ{rest}: Nat.show(index) <> numbered(rest,index + 1n)
 def main() -> IO(Unit):
   do IO<Unit>:
     s1 : Screen.State <- step(Screen.initial(),"a" <> "b" <> Nil{},20n,5n,Screen.defaultOptions())
@@ -67,4 +71,8 @@ def main() -> IO(Unit):
     _ : Screen.State <- step(middle4,"0" <> "Y" <> "2" <> "3" <> "4" <> "5" <> "6" <> Nil{},20n,3n,Screen.defaultOptions())
     ids1 : Screen.State <- step(Screen.initial(),"\u{1b}_Gi=1;abc\u{1b}\\" <> "\u{1b}_Gi=2;def\u{1b}\\" <> Nil{},20n,5n,Screen.defaultOptions())
     _ : Screen.State <- step(ids1,"plain" <> Nil{},21n,5n,Screen.defaultOptions())
+    picker1 : Screen.State <- stepCursor(Screen.initial(),numbered(16n,0n),100n,32n,12n,2n,False{})
+    picker2 : Screen.State <- stepCursor(picker1,numbered(32n,0n),100n,32n,12n,2n,False{})
+    picker3 : Screen.State <- stepCursor(picker2,List.append(&2,String,numbered(13n,0n),"filtered" <> numbered(13n,14n)),100n,32n,12n,2n,False{})
+    _ : Screen.State <- stepCursor(picker3,numbered(16n,0n),100n,32n,12n,2n,False{})
     IO.pure(Unit,Unit{})
