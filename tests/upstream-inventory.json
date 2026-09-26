@@ -3331,9 +3331,16 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-boundaries.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "7c8af99ccea292b31a84443ee0b8a570c4d50714c6333ac6c66cf8219580d58f"
+      "status": "partial",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md",
+        "packages/coding-agent/src/core/agent-session.bend",
+        "packages/coding-agent/src/core/extensions/runner.bend"
+      ],
+      "sha256": "7c8af99ccea292b31a84443ee0b8a570c4d50714c6333ac6c66cf8219580d58f",
+      "notes": "Ported through scripted turn_end/agent_before_settle handlers (tests/suite-harness.md): the retain-none handoff compaction with one explicit continuation, the three queue schedulings around a handoff, verbatim replacement and unsent input through threshold compaction, canonical context refreshed before entry notifications, continuation from a pre-settlement custom message, pending agent_end context, the deferred pre-settlement follow-up, invalid explicit continuation, both boundary-edited usage cases, retained pre-compaction usage, custom context sent during pre-settlement, system-only drafts leaving queued input, drafts committed when aborted during the hook, and every durable length recovery case but one. Pending: 'defers runs started by agent_settled handlers until every settled handler completes' (the _isEmittingAgentSettled deferral is not ported), 'dispatches actionable turn_end for synthetic run failures' (needs a failing prepareRequest injected after session creation), 'does not trigger threshold compaction from post-edit usage captured before a later compaction' (spies the private _checkCompaction) and 'omits a recoverable projected replacement by its source entry ID'."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-compaction-model-overrides.test.ts",

@@ -113,6 +113,42 @@ type SessionCompactEvent is Data:
 type SessionCompactFailedEvent is Data:
   SessionCompactFailedEvent{reason: CompactionReason, errorMessage: Maybe<&2, String>, aborted: Bool, willRetry: Bool, fromExtension: Bool}
 
+# Boundaries (turn_end, agent_before_settle)
+# ------------------------------------------
+# upstream BoundaryState: handlers see the entry drafts earlier handlers
+# returned, whether one asked to continue, and a preview of the context
+# those drafts would produce; they may replace the drafts and the decision.
+
+type AgentActivityOutcome is Data:
+  OutcomeCompleted{}
+  OutcomeAborted{}
+  OutcomeError{}
+
+# upstream SessionBoundaryDraft. A compaction draft without a first kept
+# entry keeps nothing before it.
+type SessionBoundaryDraft is Data:
+  CustomEntryDraft{customType: String, data: Maybe<&2, V.Value>}
+  CustomMessageEntryDraft{customType: String, content: Ai.UserContent, display: Bool, details: Maybe<&2, V.Value>}
+  ContextEditEntryDraft{targetId: String, replacement: Maybe<&2, S.ContextEditableContent>}
+  CompactionEntryDraft{summary: String, firstKeptEntryId: Maybe<&2, String>, details: Maybe<&2, V.Value>, usage: Maybe<&2, Ai.Usage>}
+
+type BoundaryContextPreview is Data:
+  BoundaryContextPreview{contextEntries: List<&2, S.ProjectedSessionEntry<Unit, Tools.ToolDetails, V.Value>>, contextMessages: List<&2, AgentMessage()>, llmMessages: List<&2, Ai.Message<V.Value, V.Value, Unit, Tools.ToolDetails>>, pendingMessages: List<&2, AgentMessage()>, canContinue: Bool}
+
+type BoundaryResult is Data:
+  BoundaryResult{entries: Maybe<&2, List<&2, SessionBoundaryDraft>>, continue: Maybe<&2, Bool>}
+
+type TurnEndEvent is Data:
+  TurnEndEvent{turnIndex: Nat, message: AgentMessage(), toolResults: List<&2, Ai.ToolResultMessage<Tools.ToolDetails>>, messageEntryId: String, toolResultEntryIds: List<&2, String>, entries: List<&2, SessionBoundaryDraft>, continue: Bool, context: BoundaryContextPreview, outcome: AgentActivityOutcome}
+
+type AgentBeforeSettleEvent is Data:
+  AgentBeforeSettleEvent{entries: List<&2, SessionBoundaryDraft>, continue: Bool, context: BoundaryContextPreview, outcome: AgentActivityOutcome}
+
+# What a boundary dispatch starts from (upstream BoundaryBaseEvent).
+type BoundaryBase is Data:
+  TurnEndBase{turnIndex: Nat, message: AgentMessage(), toolResults: List<&2, Ai.ToolResultMessage<Tools.ToolDetails>>, messageEntryId: String, toolResultEntryIds: List<&2, String>, outcome: AgentActivityOutcome}
+  BeforeSettleBase{outcome: AgentActivityOutcome}
+
 # Replace the finalized message; the replacement keeps the original's role.
 type MessageEndEventResult is Data:
   MessageEndEventResult{message: Maybe<&2, AgentMessage()>}
@@ -167,6 +203,8 @@ type EventHandler is Data:
   OnSessionBeforeCompact{handler: ExtensionHandler(SessionBeforeCompactEvent, SessionBeforeCompactResult)}
   OnSessionCompact{handler: ExtensionHandler(SessionCompactEvent, Unit)}
   OnSessionCompactFailed{handler: ExtensionHandler(SessionCompactFailedEvent, Unit)}
+  OnTurnEnd{handler: ExtensionHandler(TurnEndEvent, BoundaryResult)}
+  OnAgentBeforeSettle{handler: ExtensionHandler(AgentBeforeSettleEvent, BoundaryResult)}
 
 # Events dispatched without a result (upstream emit). Events with results
 # have their own emitters in the runner.
@@ -203,6 +241,8 @@ def handlerEventType(handler: EventHandler) -> String:
     case OnSessionBeforeCompact{_}: "session_before_compact"
     case OnSessionCompact{_}: "session_compact"
     case OnSessionCompactFailed{_}: "session_compact_failed"
+    case OnTurnEnd{_}: "turn_end"
+    case OnAgentBeforeSettle{_}: "agent_before_settle"
 
 def eventType(event: ExtensionEvent) -> String:
   match event:

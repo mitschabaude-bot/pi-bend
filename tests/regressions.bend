@@ -49,6 +49,8 @@ type Reply is Data:
   Calls{calls: List<&2, Ai.ToolCall<V.Value>>}
   Interrupted{text: String, started: Chan(Unit)}
   Failed{errorMessage: String}
+  FailedText{text: String, errorMessage: String}
+  Stopped{reply: Reply}
 
 # Each request takes the next hold: Pass runs at once, Hold waits at a gate
 # (tests/agent-session.bend's Gate); requests after the listed holds pass.
@@ -338,15 +340,20 @@ def interruptedReply(+stream: EventStream(), +text: String, started: Chan(Unit),
   interruptedChunks(stream, chunks(text), text, started, signal, now)
 
 # An error reply: no content, stop reason error, the error message.
-def failedWith(errorMessage: String, usage: Ai.Usage, now: Stamp) -> Ai.AssistantMessage<V.Value, Unit>:
+def failedWith(errorMessage: String, usage: Ai.Usage, content: List<&2, Ai.AssistantContent<V.Value>>, now: Stamp) -> Ai.AssistantMessage<V.Value, Unit>:
   match now:
-    case Stamp{model, time, _}: Ai.AssistantMessage{Nil{}, "openai-responses", "faux", model, None{}, None{}, None{}, None{}, usage, Ai.Error{}, None{}, Some{errorMessage}, None{}, None{}, time}
+    case Stamp{model, time, _}: Ai.AssistantMessage{content, "openai-responses", "faux", model, None{}, None{}, None{}, None{}, usage, Ai.Error{}, None{}, Some{errorMessage}, None{}, None{}, time}
 
 def failedMessage(errorMessage: String, +now: Stamp) -> Ai.AssistantMessage<V.Value, Unit>:
   +usage = usageAt(now, zero())
-  failedWith(errorMessage, usage, now)
+  failedWith(errorMessage, usage, Nil{}, now)
 
-def answer(+stream: EventStream(), reply: Reply, +now: Stamp) -> IO(Unit):
+# `length` ends the reply at the length limit (upstream
+# fauxAssistantMessage(..., { stopReason: "length" })).
+def doneReason(length: Bool, reason: Ai.DoneReason) -> Ai.DoneReason: Bool.pick(Ai.DoneReason, length, Ai.DoneLength{}, reason)
+def stopReasonFor(length: Bool, stop: Ai.StopReason) -> Ai.StopReason: Bool.pick(Ai.StopReason, length, Ai.Length{}, stop)
+
+def answerStop(+stream: EventStream(), reply: Reply, +now: Stamp, +length: Bool) -> IO(Unit):
   match reply:
     case Text{+text}:
       +usage = usageAt(now, estimate(text))
@@ -355,7 +362,7 @@ def answer(+stream: EventStream(), reply: Reply, +now: Stamp) -> IO(Unit):
         push(stream, Ai.TextStart{zero(), replyMessage(textBlock(""), Ai.Pending{}, usage, now)})
         textDeltas(stream, chunks(text), "", usage, now)
         push(stream, Ai.TextEnd{zero(), text, replyMessage(textBlock(text), Ai.Pending{}, usage, now)})
-        push(stream, Ai.StreamDone{Ai.DoneStop{}, replyMessage(textBlock(text), Ai.Stop{}, usage, now)})
+        push(stream, Ai.StreamDone{doneReason(length, Ai.DoneStop{}), replyMessage(textBlock(text), stopReasonFor(length, Ai.Stop{}), usage, now)})
     case Costed{+text}:
       +usage = costedUsage()
       do IO<Unit>:
@@ -377,7 +384,7 @@ def answer(+stream: EventStream(), reply: Reply, +now: Stamp) -> IO(Unit):
         push(stream, Ai.ToolcallStart{zero(), started})
         callDeltas(stream, chunks(json), started)
         push(stream, Ai.ToolcallEnd{zero(), Ai.ToolCall{id, name, arguments, None{}, None{}}, replyMessage(callBlock(id, name, arguments), Ai.Pending{}, usage, now)})
-        push(stream, Ai.StreamDone{Ai.DoneToolUse{}, replyMessage(callBlock(id, name, arguments), Ai.ToolUse{}, usage, now)})
+        push(stream, Ai.StreamDone{doneReason(length, Ai.DoneToolUse{}), replyMessage(callBlock(id, name, arguments), stopReasonFor(length, Ai.ToolUse{}), usage, now)})
     case Calls{+calls}:
       +usage = usageAt(now, estimate(callsText(calls)))
       +partial = replyMessage(callsBlock(calls), Ai.Pending{}, usage, now)
@@ -390,6 +397,14 @@ def answer(+stream: EventStream(), reply: Reply, +now: Stamp) -> IO(Unit):
       do IO<Unit>:
         push(stream, Ai.Start{replyMessage(Nil{}, Ai.Pending{}, usageOf(zero()), now)})
         push(stream, Ai.StreamError{Ai.ErrorError{}, failedMessage(errorMessage, now)})
+    case FailedText{+text, errorMessage}:
+      +usage = usageAt(now, estimate(text))
+      do IO<Unit>:
+        push(stream, Ai.Start{replyMessage(Nil{}, Ai.Pending{}, usage, now)})
+        push(stream, Ai.StreamError{Ai.ErrorError{}, failedWith(errorMessage, usage, textBlock(text), now)})
+    case Stopped{inner}: answerStop(stream, inner, now, True{})
+
+def answer(+stream: EventStream(), reply: Reply, +now: Stamp) -> IO(Unit): answerStop(stream, reply, now, False{})
 
 def abortedReply(+stream: EventStream(), +now: Stamp) -> IO(Unit):
   do IO<Unit>:
@@ -426,7 +441,7 @@ def providing(faux: Faux, +input: H.Input()) -> IO(H.Output()):
       +signal = signalOf(input)
       do IO<H.Output()>:
         R.write(Maybe<&2, Signal()>, signals, signal)
-        IO.print("{\"type\":\"request\",\"model\":" ++ Decode.quote(model) ++ ",\"apiKey\":" ++ H.maybeQuoted(apiKeyOf(input)) ++ ",\"lastUser\":" ++ H.maybeQuoted(lastUserOf(input)) ++ ",\"maxTokens\":" ++ maxTokensOf(input) ++ "}")
+        IO.print("{\"type\":\"request\",\"model\":" ++ Decode.quote(model) ++ ",\"apiKey\":" ++ H.maybeQuoted(apiKeyOf(input)) ++ ",\"lastUser\":" ++ H.maybeQuoted(lastUserOf(input)) ++ ",\"maxTokens\":" ++ maxTokensOf(input) ++ ",\"context\":" ++ Decode.quote(serializeContext(input)) ++ "}")
         gate : Maybe<&2, H.Gate> <- R.modify(List<&2, Hold>, Maybe<&2, H.Gate>, gates, remaining => popHold(remaining))
         H.holdAt(gate)
         aborted : Bool <- isAborted(signal)
@@ -473,6 +488,11 @@ type Setup is Data:
 
 # The loadout is built over the session's model runtime (an extension
 # runner shares it).
+# upstream's harness Agent has no session id, so the faux's prompt cache
+# never applies (withUsageEstimate's cache branch needs one).
+def harnessOptions(stream: Runtime.Stream(), converter: Runtime.Converter(), selected: Maybe<&2, Ai.Model<Ai.JsonValue>>) -> Agent.AgentOptions<Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit>:
+  Agent.AgentOptions{Some{Agent.AgentInitialState{Some{""}, selected, Some{Ai.Off{}}, Some{Nil{}}, None{}}}, Some{converter}, None{}, Some{stream}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+
 # `others` are further faux models the model runtime lists after the
 # setup's (upstream registerFauxProvider({ models })).
 def fixtureModels(+stored: Session.Session(), +cwd: String, +settings: Settings.SettingsManager, setup: Setup, others: List<&2, Ai.Model<Ai.JsonValue>>, build: Models.ModelRuntime -> IO(Runtime.Loadout)) -> IO(Fixture):
@@ -488,7 +508,7 @@ def fixtureModels(+stored: Session.Session(), +cwd: String, +settings: Settings.
         +registry : StreamFn.Registry(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError) <- StreamFn.create(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError)
         +validator : Loop.Validator(Tools.ToolError) <- Loop.createPlain(~Tools.ToolError, ~Runtime.validationError)
         +converter : Runtime.Converter() <- Runtime.createConverter(False{})
-        created : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~Unit, ~Tools.ToolDetails, ~Runtime.Custom(), ~Tools.ToolError, ~Unit, H.options(stream, converter, Sessions.getSessionId(Unit, Tools.ToolDetails, V.Value, stored), Some{model}), registry, validator, Tools.emptyDetails())
+        created : Result<&2, &2, StreamFn.MissingDefault, Runtime.Owner()> <- Agent.new(~Unit, ~Tools.ToolDetails, ~Runtime.Custom(), ~Tools.ToolError, ~Unit, harnessOptions(stream, converter, Some{model}), registry, validator, Tools.emptyDetails())
         +agent : Runtime.Owner() <- H.requireAgent(created)
         Agent.replaceMessages(Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit, agent, contextOf(stored))
         +models : Models.ModelRuntime <- ModelFixture.create(ModelFixture.Source{"faux", "PI_FAUX_API_KEY", model <> others} <> Nil{})

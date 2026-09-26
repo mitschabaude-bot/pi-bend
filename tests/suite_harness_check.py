@@ -291,6 +291,169 @@ def queued_slash_checks(f):
     return 1
 
 
+def requests(events):
+    return [e['context'] for e in of_type(events, 'request')]
+
+
+def boundary(f, name, argument='-', settings=None):
+    return run(f, 'boundary', name, argument, settings=settings)
+
+
+def entries_of(events):
+    return last(events, 'session_entries')['entries']
+
+
+COMPACT_RECENT = {'compaction': {'enabled': True, 'keepRecentTokens': 1, 'reserveTokens': 0}}
+
+
+def boundary_checks(f):
+    """suite/agent-session-boundaries.test.ts (see tests/suite-harness.md for the cases not ported).
+    `requests[i]` upstream is the i-th request of a response factory; here it is the serialized context of the
+    request after the first."""
+    checks = 0
+    # commits a retain-none turn_end compaction and explicitly continues once
+    events = boundary(f, 'handoff')
+    compactions = [e for e in entries_of(events) if 'summary' in e]
+    assert len(compactions) == 1 and compactions[0]['summary'] == 'exact handoff' and compactions[0]['firstKeptEntryId'] == compactions[0]['id'], compactions
+    later = requests(events)[1:]
+    assert len(later) == 1 and 'exact handoff' in later[0] and 'discarded prompt' not in later[0] and 'discarded response' not in later[0], later
+    assert len(of_type(events, 'boundary')) == 2 and len(of_type(events, 'agent_settled')) == 1
+    checks += 1
+    # preserves %s queue scheduling around a turn_end handoff
+    for kind in ['steering', 'follow-up', 'both']:
+        events = boundary(f, 'queue', kind)
+        later = requests(events)[1:]
+        assert 'exact handoff' in later[0], (kind, later)
+        if kind == 'steering':
+            assert len(requests(events)) == 2 and 'queued steering' in later[0] and 'queued follow-up' not in later[0], (kind, later)
+        elif kind == 'follow-up':
+            assert len(requests(events)) == 2 and 'queued follow-up' in later[0], (kind, later)
+        else:
+            assert len(requests(events)) == 3 and 'queued steering' in later[0] and 'queued follow-up' not in later[0] and 'queued follow-up' in later[1], (kind, later)
+        checks += 1
+    # keeps a boundary replacement verbatim through threshold compaction
+    events = boundary(f, 'replacement', settings=COMPACT_RECENT)
+    assert of_type(events, 'compaction_start'), events
+    later = requests(events)[1:]
+    assert len(later) == 1 and 'EXACT-REPLACEMENT-INSTRUCTION' in later[0], len(later)
+    checks += 1
+    # keeps boundary input verbatim through threshold compaction when metadata follows it
+    events = boundary(f, 'unsent', settings=COMPACT_RECENT)
+    assert of_type(events, 'compaction_start'), events
+    later = requests(events)[1:]
+    assert len(later) == 1 and 'EXACT-UNSENT-INSTRUCTION' in later[0], len(later)
+    checks += 1
+    # continues from an agent_before_settle custom message before final settlement
+    events = boundary(f, 'settle_custom')
+    assert 'continue now' in requests(events)[1]
+    assert {'customMessage': 'test-continuation', 'display': False} in entries_of(events)
+    assert len(of_type(events, 'agent_start')) == 2 and len(of_type(events, 'agent_settled')) == 1
+    checks += 1
+    # persists custom context queued by agent_end before pre-settlement continuation
+    events = boundary(f, 'settle_pending')
+    first = of_type(events, 'boundary')[0]
+    assert 'queued after agent end' in json.dumps(first['pendingMessages']) and 'queued after agent end' not in json.dumps(first['contextMessages']), first
+    assert 'queued after agent end' in requests(events)[1]
+    assert {'customMessage': 'agent-end-context', 'display': False} in entries_of(events)
+    checks += 1
+    # keeps a pre-settlement follow-up deferred until the explicit continuation would stop
+    events = boundary(f, 'settle_follow_up')
+    later = requests(events)[1:]
+    assert len(requests(events)) == 3 and 'boundary context' in later[0] and 'queued follow-up' not in later[0] and 'queued follow-up' in later[1], later
+    checks += 1
+    # refreshes canonical context before publishing boundary entry notifications
+    events = run(f, 'refresh_notifications')
+    snapshots = of_type(events, 'append_snapshot')
+    assert len(snapshots) == 2 and all('committed context' in json.dumps(e['messages']) for e in snapshots), snapshots
+    checks += 1
+    # persists custom context sent during pre-settlement before continuing
+    events = boundary(f, 'settle_persist')
+    assert len(requests(events)) == 2 and 'persist before continue' in requests(events)[1]
+    assert {'customMessage': 'pending-boundary', 'display': False} in entries_of(events)
+    checks += 1
+    # does not consume queued input when pre-settlement drafts leave system-only context
+    events = boundary(f, 'settle_system_only')
+    assert len(requests(events)) == 1 and last(events, 'pending')['count'] == 1, events
+    checks += 1
+    # commits pre-settlement drafts but suppresses continuation when aborted during the hook
+    events = run(f, 'settle_abort')
+    assert len(requests(events)) == 1 and {'custom': 'committed-after-abort'} in entries_of(events)
+    assert len(of_type(events, 'agent_settled')) == 1
+    checks += 1
+    # does not compact from usage belonging to a boundary-omitted assistant
+    events = boundary(f, 'omitted_usage', settings={'compaction': {'enabled': True, 'keepRecentTokens': 1, 'reserveTokens': 300}})
+    assert of_type(events, 'compaction_start') == [] and last(events, 'context_usage')['tokens'] < 2000, last(events, 'context_usage')
+    checks += 1
+    # does not trigger successful-response overflow from usage captured before a boundary edit
+    events = boundary(f, 'edited_usage', settings=COMPACT_RECENT)
+    assert of_type(events, 'compaction_start') == [] and last(events, 'context_usage')['tokens'] < 2000, last(events, 'context_usage')
+    checks += 1
+    # does not treat retained pre-compaction assistant usage as post-compaction usage
+    assert last(run(f, 'retained_usage'), 'context_usage')['tokens'] is None
+    checks += 1
+    # does not let an invalid explicit continuation suppress natural tool continuation
+    events = boundary(f, 'invalid_continue')
+    assert len(requests(events)) == 2 and last(events, 'remaining')['count'] == 0
+    checks += 1
+    return checks
+
+
+def durable_length_checks(f):
+    """The durable length recovery block of suite/agent-session-boundaries.test.ts."""
+    checks = 0
+    # keeps truncated tool attempts in context for the natural next turn
+    events = boundary(f, 'length_tool')
+    assert of_type(events, 'executed') == [] and len(requests(events)) == 2
+    assert 'may be truncated' in requests(events)[1]
+    assert not [e for e in entries_of(events) if 'contextEdit' in e]
+    checks += 1
+    # resets length recovery after a successful intermediate assistant turn
+    events = boundary(f, 'length_reset', settings={'compaction': {'keepRecentTokens': 1, 'reserveTokens': 0}})
+    lengths = [e['assistant'] for e in entries_of(events) if e.get('length')]
+    omitted = [e['contextEdit'] for e in entries_of(events) if 'contextEdit' in e]
+    assert len(lengths) == 2 and set(lengths) <= set(omitted) and len(requests(events)) == 3, (lengths, omitted)
+    checks += 1
+    # gives a distinct queued follow-up its own length-recovery budget
+    events = boundary(f, 'length_budget', settings={'compaction': {'keepRecentTokens': 1, 'reserveTokens': 0}})
+    lengths = [e['assistant'] for e in entries_of(events) if e.get('length')]
+    omitted = [e['contextEdit'] for e in entries_of(events) if 'contextEdit' in e]
+    assert len(lengths) == 2 and set(lengths) <= set(omitted) and len(requests(events)) == 4, (lengths, omitted)
+    checks += 1
+    # finishes retry bookkeeping when a retry receives a nonretryable error
+    events = boundary(f, 'retry_nonretryable', settings={'retry': {'enabled': True, 'maxRetries': 2, 'baseDelayMs': 1}})
+    assert len(requests(events)) == 2
+    assert {'type': 'auto_retry_end', 'success': False, 'attempt': 1, 'finalError': 'invalid_api_key'} in of_type(events, 'auto_retry_end'), of_type(events, 'auto_retry_end')
+    checks += 1
+    # recovers an explicit overflow error after a retained boundary replacement
+    events = boundary(f, 'overflow_replacement', settings=COMPACT_RECENT)
+    assert len(requests(events)) == 2
+    overflow = of_type(events, 'boundary')[0]['messageEntryId']
+    edits = [e for e in entries_of(events) if e.get('contextEdit') == overflow]
+    assert edits and edits[-1]['omitted'] is True, edits
+    checks += 1
+    # keeps follow-up work behind an automatic error retry
+    events = boundary(f, 'error_follow_up', settings={'retry': {'enabled': True, 'maxRetries': 2, 'baseDelayMs': 1}})
+    later = requests(events)[1:]
+    assert len(requests(events)) == 3 and 'queued follow-up' not in later[0] and 'queued follow-up' in later[1], later
+    lifecycle = [e['type'] for e in events if e['type'] in ('agent_end', 'auto_retry_start')]
+    assert lifecycle[:2] == ['agent_end', 'auto_retry_start'], lifecycle
+    checks += 1
+    # marks the exhausted retry run as final
+    events = boundary(f, 'retry_exhausted', settings={'retry': {'enabled': True, 'maxRetries': 1, 'baseDelayMs': 1}})
+    assert [e['willRetry'] for e in of_type(events, 'agent_end')] == [True, False]
+    assert any(e['success'] is False and e['attempt'] == 1 for e in of_type(events, 'auto_retry_end'))
+    checks += 1
+    # keeps omissions and does not retry when recovery compaction fails
+    events = boundary(f, 'recovery_failed', settings={'compaction': {'keepRecentTokens': 1, 'reserveTokens': 0}, 'retry': {'enabled': False, 'maxRetries': 0, 'baseDelayMs': 1}})
+    entries = entries_of(events)
+    assert [e for e in entries if 'contextEdit' in e] and not [e for e in entries if 'summary' in e]
+    assert any(e.get('text') == 'partial response' for e in entries)
+    assert 'partial response' not in json.dumps(last(events, 'session_entries')['projected'])
+    assert len(requests(events)) == 2
+    checks += 1
+    return checks
+
+
 def main():
     parser = argparse.ArgumentParser()
     for name in RUNNERS:
@@ -300,7 +463,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-suite-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures)
+    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures) + boundary_checks(fixtures) + durable_length_checks(fixtures)
     print('suite-harness: %d upstream cases passed' % checks)
 
 

@@ -568,3 +568,81 @@ def emitSessionBeforeCompact(+runner: ExtensionRunner, event: T.SessionBeforeCom
     dispatches : List<&2, Dispatch> <- snapshot(runner, "session_before_compact")
     beforeCompact(runner, dispatches, event, None{})
 
+
+# Boundaries (upstream emitBoundary)
+# ----------------------------------
+# Each turn_end or agent_before_settle handler sees the drafts and decision
+# so far with a preview of the context they produce; after each handler the
+# preview is rebuilt. Drafts the preview rejects are reported and make the
+# result invalid (no drafts, no continuation).
+
+type BoundaryDispatchResult is Data:
+  BoundaryDispatchResult{entries: List<&2, T.SessionBoundaryDraft>, continue: Bool, context: T.BoundaryContextPreview, valid: Bool}
+
+def BoundaryPreview() -> Data: C.Callback<List<&2, T.SessionBoundaryDraft>, Result<&2, &2, String, T.BoundaryContextPreview>>
+
+def boundaryType(base: T.BoundaryBase) -> String:
+  match base:
+    case T.TurnEndBase{_, _, _, _, _, _}: "turn_end"
+    case T.BeforeSettleBase{_}: "agent_before_settle"
+
+def callBoundary(handler: T.EventHandler, base: T.BoundaryBase, entries: List<&2, T.SessionBoundaryDraft>, continued: Bool, context: T.BoundaryContextPreview, ctx: Ctx.ExtensionContext) -> IO(Result<&2, &2, String, Maybe<&2, T.BoundaryResult>>):
+  match handler base:
+    case T.OnTurnEnd{callback} T.TurnEndBase{turnIndex, message, toolResults, messageEntryId, toolResultEntryIds, outcome}: C.call(T.HandlerCall<T.TurnEndEvent>, Result<&2, &2, String, Maybe<&2, T.BoundaryResult>>, callback, T.HandlerCall{T.TurnEndEvent{turnIndex, message, toolResults, messageEntryId, toolResultEntryIds, entries, continued, context, outcome}, ctx})
+    case T.OnAgentBeforeSettle{callback} T.BeforeSettleBase{outcome}: C.call(T.HandlerCall<T.AgentBeforeSettleEvent>, Result<&2, &2, String, Maybe<&2, T.BoundaryResult>>, callback, T.HandlerCall{T.AgentBeforeSettleEvent{entries, continued, context, outcome}, ctx})
+    case _ _: IO.pure(Result<&2, &2, String, Maybe<&2, T.BoundaryResult>>, Done{None{}})
+
+type BoundaryState is Data:
+  BoundaryState{entries: List<&2, T.SessionBoundaryDraft>, continue: Bool, context: T.BoundaryContextPreview, valid: Bool}
+
+def draftsAfter(result: Result<&2, &2, String, Maybe<&2, T.BoundaryResult>>, previous: List<&2, T.SessionBoundaryDraft>) -> List<&2, T.SessionBoundaryDraft>:
+  match result:
+    case Done{Some{T.BoundaryResult{Some{entries}, _}}}: entries
+    case _: previous
+
+def continueAfter(result: Result<&2, &2, String, Maybe<&2, T.BoundaryResult>>, previous: Bool) -> Bool:
+  match result:
+    case Done{Some{T.BoundaryResult{_, Some{value}}}}: value
+    case _: previous
+
+def handlerFailed(+runner: ExtensionRunner, path: String, eventType: String, result: Result<&2, &2, String, Maybe<&2, T.BoundaryResult>>) -> IO(Unit):
+  match result:
+    case Fail{error}: emitError(runner, T.ExtensionError{path, eventType, error, None{}})
+    case Done{_}: IO.pure(Unit, Unit{})
+
+def previewed(+runner: ExtensionRunner, path: String, eventType: String, +entries: List<&2, T.SessionBoundaryDraft>, continued: Bool, previous: T.BoundaryContextPreview, built: Result<&2, &2, String, T.BoundaryContextPreview>) -> IO(BoundaryState):
+  match built:
+    case Done{context}: IO.pure(BoundaryState, BoundaryState{entries, continued, context, True{}})
+    case Fail{error}:
+      do IO<BoundaryState>:
+        emitError(runner, T.ExtensionError{path, eventType, "Invalid boundary entries: " ++ error, None{}})
+        return BoundaryState{entries, continued, previous, False{}}
+
+def boundaryStep(+runner: ExtensionRunner, +path: String, +handler: T.EventHandler, +base: T.BoundaryBase, +build: BoundaryPreview(), state: BoundaryState) -> IO(BoundaryState):
+  match state:
+    case BoundaryState{+entries, +continued, +context, _}:
+      do IO<BoundaryState>:
+        +result : Result<&2, &2, String, Maybe<&2, T.BoundaryResult>> <- callBoundary(handler, base, entries, continued, context, createContext(runner))
+        handlerFailed(runner, path, boundaryType(base), result)
+        +drafts : List<&2, T.SessionBoundaryDraft> = draftsAfter(result, entries)
+        built : Result<&2, &2, String, T.BoundaryContextPreview> <- C.call(List<&2, T.SessionBoundaryDraft>, Result<&2, &2, String, T.BoundaryContextPreview>, build, drafts)
+        previewed(runner, path, boundaryType(base), drafts, continueAfter(result, continued), context, built)
+
+def boundaryDispatches(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>, +base: T.BoundaryBase, +build: BoundaryPreview(), state: BoundaryState) -> IO(BoundaryState):
+  match dispatches:
+    case Nil{}: IO.pure(BoundaryState, state)
+    case Dispatch{path, handler} <> rest:
+      do IO<BoundaryState>:
+        next : BoundaryState <- boundaryStep(runner, path, handler, base, build, state)
+        boundaryDispatches(runner, rest, base, build, next)
+
+def boundaryResult(state: BoundaryState) -> BoundaryDispatchResult:
+  match state:
+    case BoundaryState{entries, continued, context, True{}}: BoundaryDispatchResult{entries, continued, context, True{}}
+    case BoundaryState{_, _, context, False{}}: BoundaryDispatchResult{Nil{}, False{}, context, False{}}
+
+def emitBoundary(+runner: ExtensionRunner, +base: T.BoundaryBase, +build: BoundaryPreview(), initial: T.BoundaryContextPreview) -> IO(BoundaryDispatchResult):
+  do IO<BoundaryDispatchResult>:
+    dispatches : List<&2, Dispatch> <- snapshot(runner, boundaryType(base))
+    final : BoundaryState <- boundaryDispatches(runner, dispatches, base, build, BoundaryState{Nil{}, False{}, initial, True{}})
+    return boundaryResult(final)
