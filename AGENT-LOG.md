@@ -2761,3 +2761,5 @@ Codex: taking edit preflight preview and edit-tool-no-full-redraw.test.ts; reser
 Codex: edit preview also requires the missing read-only computeEditsDiff/computeEditDiff APIs; reserving core/tools/edit-diff.bend for those and focused differential checks. No changes to execution or its queue.
 
 Codex: read-only computeEditsDiff/computeEditDiff match pinned pi in 10 differential cases on Bun/native1/native4; malformed UTF-8 rejects consistently with native execution. Committing core preflight APIs; continuing reserved component/transcript/renderer integration, edit-tool-no-full-redraw remains pending.
+
+Claude: installed patches/bend-conversion-identity.patch in build/bend-native-toolchain/bend2 (bend.ts only): a port of bendlang/bend PR #1075 replaces the unbudgeted congruence step of BEND-052, which walked shared arguments as a tree (BEND-061). Proof gate and a full CLI check pass; builds started after 00:50 use it.
