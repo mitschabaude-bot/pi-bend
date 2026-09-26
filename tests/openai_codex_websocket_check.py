@@ -71,7 +71,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if server.mode == 'close-before':
                 conn.sendall(frame(8, b'\x03\xe8'))
                 return
+            ordinal = len(server.requests)
+            code = None
+            after = False
+            if server.mode in ('limit-once', 'limit-always', 'limit-after'):
+                if ordinal == 1 or server.mode == 'limit-always':
+                    code = 'websocket_connection_limit_reached'
+                    after = server.mode == 'limit-after'
+            if server.mode in ('context-once', 'context-after') and ordinal == 1:
+                code = 'previous_response_not_found'
+                after = server.mode == 'context-after'
+            if server.mode == 'mixed-retries' and ordinal <= 2:
+                code = 'previous_response_not_found' if ordinal == 1 else 'websocket_connection_limit_reached'
+            failure = {'type': 'error', 'code': code, 'message': 'fixture recovery'}
             values = events(server.text, server.mode == 'tool')
+            if code:
+                values = [*values[:3], failure] if after else [failure]
             if server.mode == 'invalid':
                 conn.sendall(frame(1, b'{broken'))
             elif server.mode == 'api-error':
@@ -178,7 +193,8 @@ def run(command, mode, reference=False):
             worker.join()
         server.server_close()
         assert not server.errors, (mode, server.errors)
-        assert len(server.upgrades) == 1, (mode, server.upgrades)
+        expected = 3 if mode == 'mixed-retries' else 2 if mode in ('limit-once', 'limit-always', 'context-once', 'context-after') else 1
+        assert len(server.upgrades) == expected, (mode, server.upgrades)
         output['requests'] = server.requests
         output['http_requests'] = server.http_requests
         return output
@@ -195,17 +211,21 @@ def main():
     parser.add_argument('--prefix', default='build/openai-codex-stream-ws')
     parser.add_argument('--backends', nargs='+', choices=['bun', 'native-1', 'native-4'], default=['bun'])
     args = parser.parse_args()
-    for mode in ('complete', 'simple', 'auto', 'cached-first', 'connect-disabled', 'idle-disabled', 'fragmented', 'binary', 'tool', 'api-error', 'invalid', 'close-before', 'close-after', 'abort', 'idle', 'connect-timeout'):
+    for mode in ('limit-once', 'limit-always', 'context-once', 'context-after', 'mixed-retries', 'limit-after', 'complete', 'simple', 'auto', 'cached-first', 'connect-disabled', 'idle-disabled', 'fragmented', 'binary', 'tool', 'api-error', 'invalid', 'close-before', 'close-after', 'abort', 'idle', 'connect-timeout'):
         want = run(['bun', 'tests/openai_codex_websocket_reference.ts'], mode, True)
         for backend in args.backends:
             command = ['bun', args.prefix + '.js'] if backend == 'bun' else [args.prefix, '--threads', backend[-1]]
             got = run(command, mode)
-            if mode in ('complete', 'simple', 'auto', 'cached-first', 'connect-disabled', 'idle-disabled', 'fragmented', 'binary', 'tool', 'api-error', 'abort'):
+            if mode in ('complete', 'simple', 'auto', 'cached-first', 'connect-disabled', 'idle-disabled', 'fragmented', 'binary', 'tool', 'api-error', 'abort', 'limit-once', 'context-once', 'context-after', 'mixed-retries', 'limit-after'):
                 assert comparable(got) == comparable(want), (backend, mode, comparable(got), comparable(want))
                 print(f'{backend}: {mode} request/events/final message MATCH')
             else:
                 # Diagnostic/error detail parity is tracked as pending; assert
                 # the substantive stream and transport behavior independently.
+                if mode == 'limit-always':
+                    expected = comparable(want)
+                    expected['message'].pop('diagnostics', None)
+                    assert comparable(got) == expected, (backend, mode, got, expected)
                 assert got['events'] == want['events'], (backend, mode, got, want)
                 assert got['requests'] == want['requests'], (backend, mode, got, want)
                 assert got['http_requests'] == want['http_requests'], (backend, mode, got, want)

@@ -35,6 +35,15 @@ class ReusableHandler(Handler):
                 self.server.requests.append(request)
                 self.server.identities.append(identity)
                 ordinal = len(self.server.requests)
+                if self.server.mode in ('sticky-before', 'sticky-isolation', 'sticky-after') and ordinal == 1:
+                    if self.server.mode == 'sticky-after':
+                        for value in events()[:3]:
+                            conn.sendall(frame(1, json.dumps(value).encode()))
+                    conn.sendall(frame(8, b'\x03\xe8'))
+                    return
+                if self.server.mode == 'cached-missing' and ordinal == 2:
+                    conn.sendall(frame(1, json.dumps({'type': 'error', 'code': 'previous_response_not_found', 'message': 'fixture recovery'}).encode()))
+                    continue
                 for value in events(tool=self.server.tool):
                     if value.get('item', {}).get('type') == 'message':
                         value['item']['id'] = f'msg_{ordinal}'
@@ -63,7 +72,8 @@ def native_results(stdout):
 
 def run(command, mode, reference=False, previous=None, following=None):
     with Server(('127.0.0.1', 0), ReusableHandler) as server:
-        server.upgrades, server.requests, server.identities, server.errors = [], [], [], []
+        server.upgrades, server.requests, server.identities, server.errors, server.http_requests = [], [], [], [], []
+        server.mode = mode
         server.tool = mode in ('seed-tool', 'cached-tool')
         worker = threading.Thread(target=server.serve_forever)
         worker.start()
@@ -101,6 +111,10 @@ def run(command, mode, reference=False, previous=None, following=None):
             # Handshake affinity IDs clamp to 64 characters, but pool keys do not.
             cases[0]['options']['sessionId'] = 's' * 64 + 'first'
             cases[1]['options']['sessionId'] = 's' * 64 + 'second'
+        if mode == 'sticky-isolation':
+            other = copy.deepcopy(cases[1])
+            other['options']['sessionId'] = 'isolated'
+            cases.append(other)
         try:
             if reference:
                 result = subprocess.run(command, cwd=ROOT, input=json.dumps({'url': url, 'cases': cases}), text=True, capture_output=True, timeout=15)
@@ -117,8 +131,24 @@ def run(command, mode, reference=False, previous=None, following=None):
         assert not server.errors, server.errors
         assert len(output) == len(cases), output
         expected = [0, 1] if mode in ('uncached', 'session-isolation') else [0] * len(cases)
+        if mode == 'cached-missing':
+            expected = [0, 0, 1]
+            assert 'previous_response_id' in server.requests[1]
+            assert 'previous_response_id' not in server.requests[2]
+            assert len(server.requests[2]['input']) == 2
+        if mode.startswith('sticky-'):
+            expected = [0, 1] if mode == 'sticky-isolation' else [0]
+            assert len(server.http_requests) == (1 if mode == 'sticky-after' else 2), (mode, server.http_requests)
         assert server.identities == expected, (mode, server.identities)
-        return [comparable(item) for item in output], server.requests
+        normalized = [comparable(item) for item in output]
+        if mode.startswith('sticky-'):
+            for item in normalized:
+                item['message'].pop('diagnostics', None)
+                # Close-frame diagnostic wording is tracked separately.
+                if item['message']['stopReason'] == 'error':
+                    assert item['message']['errorMessage']
+                    item['message'].pop('errorMessage')
+        return normalized, server.requests, server.http_requests
 
 
 def main():
@@ -131,12 +161,12 @@ def main():
     previous, following = initial[0]['message'], initial[1]['message']
     previous_tool = run(reference, 'seed-tool', True)[0][0]['message']
     modes = ('reuse', 'uncached', 'session-isolation', 'cached-empty', 'cached-user',
-             'auto-user', 'unset-user', 'cached-configuration', 'cached-prefix', 'cached-tool', 'cached-chain')
+             'auto-user', 'unset-user', 'cached-configuration', 'cached-prefix', 'cached-tool', 'cached-chain', 'cached-missing', 'sticky-before', 'sticky-after', 'sticky-isolation')
     for mode in modes:
         prior = previous_tool if mode == 'cached-tool' else previous
         want = run(reference, mode, True, prior, following)
-        second = want[1][1]
-        delta = mode in ('cached-empty', 'cached-user', 'auto-user', 'cached-tool', 'cached-chain')
+        second = want[1][1] if len(want[1]) > 1 else {}
+        delta = mode in ('cached-empty', 'cached-user', 'auto-user', 'cached-tool', 'cached-chain', 'cached-missing')
         assert ('previous_response_id' in second) == delta, (mode, second)
         if delta:
             assert second['previous_response_id'] == 'resp_1', second

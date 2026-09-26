@@ -28,6 +28,7 @@ import ../../../runtime/src/http-response.bend as Scope
 import ../../../runtime/src/json.bend as Parse
 import ../../../runtime/src/number-string.bend as NumberString
 import ../../../runtime/src/record.bend as R
+import ../../../runtime/src/ref.bend as Ref
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/sse.bend as Body
 import ../../../runtime/src/text.bend as Space
@@ -56,7 +57,42 @@ def J() -> Data: T.JsonValue
 
 def Signal(-Reason: Data) -> Data: Abort.AbortSignal<Reason>
 
-def EventStream(-G: Data) -> Data: Events.AssistantMessageEventStream(V.Value, G)
+# Attempts share one start announcement, while consumers retain the ordinary
+# public event stream. The producer owns and retires this small run-local gate.
+type RunEvents<-G: Data> is Data:
+  RunEvents{stream: Events.AssistantMessageEventStream(V.Value, G), announced: Ref.Ref<Bool>}
+
+def EventStream(-G: Data) -> Data: RunEvents<G>
+
+def startWasAnnounced(value: Bool) -> Bool & Bool: (True{}, value)
+
+def emitStart(-G: Data, stream: Events.AssistantMessageEventStream(V.Value, G), output: T.AssistantMessage<V.Value, G>, already: Bool) -> IO(Unit):
+  match already:
+    case True{}: IO.pure(Unit, Unit{})
+    case False{}: Events.push(T.AssistantMessageEvent<V.Value, G>, T.AssistantMessage<V.Value, G>, stream, T.Start{output})
+
+def pushStart(-G: Data, events: EventStream(G), output: T.AssistantMessage<V.Value, G>) -> IO(Unit):
+  match events:
+    case RunEvents{stream, announced}:
+      do IO<Unit>:
+        already : Bool <- Ref.modify(Bool, Bool, announced, startWasAnnounced)
+        emitStart(G, stream, output, already)
+
+def pushOther(-G: Data, events: EventStream(G), event: T.AssistantMessageEvent<V.Value, G>) -> IO(Unit):
+  match events:
+    case RunEvents{stream, _}: Events.push(T.AssistantMessageEvent<V.Value, G>, T.AssistantMessage<V.Value, G>, stream, event)
+
+def pushEvent(-G: Data, events: EventStream(G), event: T.AssistantMessageEvent<V.Value, G>) -> IO(Unit):
+  match event:
+    case T.Start{output}: pushStart(G, events, output)
+    case event: pushOther(G, events, event)
+
+def releaseEvents(-G: Data, events: EventStream(G)) -> IO(Events.AssistantMessageEventStream(V.Value, G)):
+  match events:
+    case RunEvents{stream, announced}:
+      do IO<Events.AssistantMessageEventStream(V.Value, G)>:
+        wasAnnounced : Bool <- Ref.dispose(Bool, announced)
+        return stream
 
 def DEFAULT_MAX_RETRIES() -> Nat: 0n
 
@@ -132,6 +168,7 @@ type Mapped is Data:
   Pass{event: Stream.ResponseStreamEvent}
   Final{event: Stream.ResponseStreamEvent, endTurn: Maybe<&2, Bool>}
   Thrown{message: String}
+  ApiThrown{message: String, code: Maybe<&2, String>}
 
 def textValue(value: Maybe<&2, V.Value>) -> Maybe<&2, String>:
   match value:
@@ -257,8 +294,8 @@ def terminal(+fields: R.Record<V.Value>) -> Mapped:
 
 def byType(+kind: String, +fields: R.Record<V.Value>) -> Mapped:
   match kind:
-    case "error": Thrown{codexError(V.ObjectValue{fields})}
-    case "response.failed": Thrown{failedResponse(V.ObjectValue{fields})}
+    case "error": ApiThrown{codexError(V.ObjectValue{fields}), Maybe.or(&2, String, textValue(R.get(V.Value, fields, "code")), textValue(fieldOf(R.get(V.Value, fields, "error"), "code")))}
+    case "response.failed": ApiThrown{failedResponse(V.ObjectValue{fields}), textValue(fieldOf(fieldOf(R.get(V.Value, fields, "response"), "error"), "code"))}
     case "response.done": terminal(fields)
     case "response.completed": terminal(fields)
     case "response.incomplete": terminal(fields)
@@ -375,6 +412,7 @@ def mappedPhase(-Reason: Data, -E: Data, -G: Data, source: CodexSource<Reason, E
     case Pass{event}: Yielded{source, Done{Some{event}}}
     case Final{event, turn}: Yielded{withQueue(Reason, E, G, source, Nil{}, True{}, turn), Done{Some{event}}}
     case Thrown{message}: Yielded{source, Fail{message}}
+    case ApiThrown{message, _}: Yielded{source, Fail{message}}
 
 def receivedPhase(~E: Data, ~describe: E -> String, -Reason: Data, -G: Data, +source: CodexSource<Reason, E, G>, after: Bool, result: Result<&2, &2, E, Maybe<&2, Body.Chunk>>) -> Phase<Reason, E, G>:
   match after result:
@@ -411,7 +449,7 @@ def emitEvent(-Reason: Data, -E: Data, -G: Data, source: CodexSource<Reason, E, 
   match source:
     case CodexSource{body, framer, queue, done, turn, parent, +events}:
       do IO<CodexSource<Reason, E, G> & Result<&2, &2, String, Unit>>:
-        Events.push(T.AssistantMessageEvent<V.Value, G>, T.AssistantMessage<V.Value, G>, events, event)
+        pushEvent(G, events, event)
         return (CodexSource{body, framer, queue, done, turn, parent, events}, Done{Unit{}})
 
 def describeBodyRead(-Reason: Data, error: Sse.ReadError<Sse.TransportError(Reason)>) -> String:
@@ -817,6 +855,7 @@ def streamBody(~Reason: Data, ~G: Data, ~E: Data, +model: T.Model<J()>, options:
 type WebSocketError is Data:
   TransportFailure{message: String}
   ProtocolFailure{message: String}
+  ApiFailure{message: String, code: Maybe<&2, String>}
 
 type WebSocketSource<-Reason: Data, -G: Data> is Type:
   WebSocketSource{connection: Socket.Connection<Deadline.Cause<Reason>>, controller: Abort.AbortController<Deadline.Cause<Reason>>, parent: Signal(Reason), idle: Maybe<&2, U32>, events: EventStream(G), initial: T.AssistantMessage<V.Value, G>, started: Bool, ended: Bool, turn: Maybe<&2, Bool>}
@@ -839,7 +878,7 @@ def socketFailure(-Reason: Data, -G: Data, source: WebSocketSource<Reason, G>, e
 def socketStarted(-G: Data, events: EventStream(G), initial: T.AssistantMessage<V.Value, G>, started: Bool) -> IO(Unit):
   match started:
     case True{}: IO.pure(Unit, Unit{})
-    case False{}: Events.push(T.AssistantMessageEvent<V.Value, G>, T.AssistantMessage<V.Value, G>, events, T.Start{initial})
+    case False{}: pushStart(G, events, initial)
 
 def socketYield(-Reason: Data, -G: Data, source: WebSocketSource<Reason, G>, event: Stream.ResponseStreamEvent, ended: Bool, turn: Maybe<&2, Bool>) -> IO(WebSocketStep(Reason, G)):
   match source:
@@ -898,6 +937,7 @@ def socketAdvance(~Reason: Data, ~G: Data, phase: WebSocketPhase<Reason, G>) -> 
         pair : Socket.Connection<Deadline.Cause<Reason>> & Result<&2, &2, String, WS.Message> <- timedSocketRead(~Reason, connection, controller, idle)
         socketAdvance(~Reason, ~G, socketReadPhase(Reason, G, controller, parent, idle, events, initial, started, turn, pair))
     case SocketMapping{source, Skip{}}: socketAdvance(~Reason, ~G, SocketReading{source})
+    case SocketMapping{source, ApiThrown{message, code}}: socketFailure(Reason, G, source, ApiFailure{message, code})
     case SocketMapping{source, Thrown{message}}: socketFailure(Reason, G, source, ProtocolFailure{message})
     case SocketMapping{source, Pass{event}}: socketYield(Reason, G, source, event, False{}, None{})
     case SocketMapping{source, Final{event, turn}}: socketYield(Reason, G, source, event, True{}, turn)
@@ -931,7 +971,7 @@ def socketEmit(-Reason: Data, -G: Data, source: WebSocketSource<Reason, G>, even
   match source:
     case WebSocketSource{connection, controller, parent, idle, +events, initial, started, ended, turn}:
       do IO<WebSocketSource<Reason, G> & Result<&2, &2, WebSocketError, Unit>>:
-        Events.push(T.AssistantMessageEvent<V.Value, G>, T.AssistantMessage<V.Value, G>, events, event)
+        pushEvent(G, events, event)
         return (WebSocketSource{connection, controller, parent, idle, events, initial, started, ended, turn}, Done{Unit{}})
 
 # The request
@@ -948,7 +988,7 @@ def acquiredBody(~Reason: Data, ~G: Data, ~E: Data, +model: T.Model<J()>, option
     case Fail{failure}: IO.pure(Responses.Outcome<Reason, G, E>, failureOutcome(Reason, G, E, output, failure))
     case Done{response}:
       do IO<Responses.Outcome<Reason, G, E>>:
-        Events.push(T.AssistantMessageEvent<V.Value, G>, T.AssistantMessage<V.Value, G>, events, T.Start{output})
+        pushStart(G, events, output)
         streamBody(~Reason, ~G, ~E, model, options, output, events, parent, response)
 
 type Plan<-Reason: Data, -E: Data> is Data:
@@ -999,18 +1039,36 @@ def codexWire(config: Responses.Config, apiKey: String, accountId: String, heade
 
 # WebSocket acquisition and fallback share the immutable prepared HTTP request.
 # SSE receives the original headers/body, unaffected by the upgrade overlays.
+type Recovery is Data:
+  NoRecovery{}
+  RetryConnection{}
+  RetryContext{}
+
 type WebSocketAttempt<-Reason: Data, -G: Data, -E: Data> is Data:
-  WebSocketAttempt{outcome: Responses.Outcome<Reason, G, E>, fallback: Bool}
+  WebSocketAttempt{outcome: Responses.Outcome<Reason, G, E>, fallback: Bool, recovery: Recovery, transportFailure: Bool}
 
 def socketErrorMessage(error: WebSocketError) -> String:
   match error:
     case TransportFailure{message}: message
     case ProtocolFailure{message}: message
+    case ApiFailure{message, _}: message
 
 def socketCanFallback(started: Bool, error: Maybe<&2, Stream.Error<WebSocketError>>) -> Bool:
   match started error:
     case False{} Some{Stream.ReadFailure{TransportFailure{_}}}: True{}
+    case False{} Some{Stream.ReadFailure{ApiFailure{_, Some{"websocket_connection_limit_reached"}}}}: True{}
     case _ _: False{}
+
+def socketRecovery(started: Bool, error: Maybe<&2, Stream.Error<WebSocketError>>) -> Recovery:
+  match started error:
+    case False{} Some{Stream.ReadFailure{ApiFailure{_, Some{"websocket_connection_limit_reached"}}}}: RetryConnection{}
+    case _ Some{Stream.ReadFailure{ApiFailure{_, Some{"previous_response_not_found"}}}}: RetryContext{}
+    case _ _: NoRecovery{}
+
+def isSocketTransportFailure(error: Maybe<&2, Stream.Error<WebSocketError>>) -> Bool:
+  match error:
+    case Some{Stream.ReadFailure{TransportFailure{_}}}: True{}
+    case _: False{}
 
 def socketProcessingMessage(error: Stream.Error<WebSocketError>) -> String:
   match error:
@@ -1030,14 +1088,15 @@ def isNoStreamError(error: Maybe<&2, Stream.Error<WebSocketError>>) -> Bool:
 def socketFinished(-Reason: Data, -G: Data, -E: Data, pair: WebSocketSource<Reason, G> & Stream.RunResult<G, WebSocketError>) -> IO(SocketResult<Reason, G, E>):
   match pair:
     case (WebSocketSource{connection, _, _, _, _, _, started, _, turn}, Stream.RunResult{output, +error}):
+      +began = {started : Bool}
       do IO<SocketResult<Reason, G, E>>:
-        return SocketResult{connection, WebSocketAttempt{Responses.Outcome{withEndTurn(G, output, turn), Maybe.map(&2, Stream.Error<WebSocketError>, Responses.Error<Reason, E>, cause => Responses.OutputFailure{socketProcessingMessage(cause)}, error), None{}}, socketCanFallback(started, error)}, isNoStreamError(error)}
+        return SocketResult{connection, WebSocketAttempt{Responses.Outcome{withEndTurn(G, output, turn), Maybe.map(&2, Stream.Error<WebSocketError>, Responses.Error<Reason, E>, cause => Responses.OutputFailure{socketProcessingMessage(cause)}, error), None{}}, socketCanFallback(began, error), socketRecovery(began, error), isSocketTransportFailure(error)}, isNoStreamError(error)}
 
 def socketSent(~Reason: Data, ~G: Data, ~E: Data, model: T.Model<J()>, processing: Stream.OpenAIResponsesStreamOptions, +output: T.AssistantMessage<V.Value, G>, events: EventStream(G), parent: Signal(Reason), controller: Abort.AbortController<Deadline.Cause<Reason>>, idle: Maybe<&2, U32>, pair: Socket.Connection<Deadline.Cause<Reason>> & Result<&2, &2, String, Unit>) -> IO(SocketResult<Reason, G, E>):
   match pair:
     case (connection, Fail{message}):
       do IO<SocketResult<Reason, G, E>>:
-        return SocketResult{connection, WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}}, True{}}, False{}}
+        return SocketResult{connection, WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}}, True{}, NoRecovery{}, True{}}, False{}}
     case (connection, Done{_}):
       do IO<SocketResult<Reason, G, E>>:
         pair : WebSocketSource<Reason, G> & Stream.RunResult<G, WebSocketError> <- Stream.processResponsesStream(~WebSocketSource<Reason, G>, ~WebSocketError, ~J(), ~G, ~(socketNext(~Reason, ~G)), ~(socketClose(Reason, G)), ~(socketEmit(Reason, G)), ~Responses.resolveCodexServiceTier, ~Responses.tierPricing, WebSocketSource{connection, controller, parent, idle, events, output, False{}, False{}, None{}}, output, model, processing)
@@ -1064,12 +1123,12 @@ def socketConnected(~Reason: Data, ~G: Data, ~E: Data, model: T.Model<J()>, proc
     case Fail{message} _:
       do IO<WebSocketAttempt<Reason, G, E>>:
         ignored : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
-        return WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}}, True{}}
+        return WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}}, True{}, NoRecovery{}, True{}}
     case Done{connection} Fail{message}:
       do IO<WebSocketAttempt<Reason, G, E>>:
         Socket.dispose(Deadline.Cause<Reason>, connection)
         ignored : Maybe<&2, Abort.AbortReason<Deadline.Cause<Reason>>> <- Deadline.close(Reason, scope)
-        return WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}}, False{}}
+        return WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}}, False{}, NoRecovery{}, False{}}
     case Done{connection} Done{text}:
       do IO<WebSocketAttempt<Reason, G, E>>:
         following : Deadline.Scope<Reason> <- Deadline.disarm(Reason, scope)
@@ -1120,14 +1179,14 @@ def socketBorrowed(~Reason: Data, ~G: Data, ~E: Data, +model: T.Model<J()>, proc
 
 def socketRuntime(~Reason: Data, ~G: Data, ~E: Data, config: Responses.Config, model: T.Model<J()>, processing: Stream.OpenAIResponsesStreamOptions, output: T.AssistantMessage<V.Value, G>, events: EventStream(G), parent: Signal(Reason), timeout: Maybe<&2, U32>, idle: Maybe<&2, U32>, request: Client.Request, runtime: Result<&2, &1, Fetch.InitError, Fetch.Runtime>) -> IO(WebSocketAttempt<Reason, G, E>):
   match config runtime:
-    case _ Fail{_}: IO.pure(WebSocketAttempt<Reason, G, E>, WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{"WebSocket resolver initialization failed"}}, None{}}, True{}})
+    case _ Fail{_}: IO.pure(WebSocketAttempt<Reason, G, E>, WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{"WebSocket resolver initialization failed"}}, None{}}, True{}, NoRecovery{}, True{}})
     case Responses.Config{url, _, _, _, security, _, _} Done{runtime}: socketBorrowed(~Reason, ~G, ~E, model, processing, output, events, parent, timeout, idle, request, Socket.borrow(runtime, security, url))
 
 def socketFallback(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, config: Responses.Config, model: T.Model<J()>, plan: Plan<Reason, E>, custom: Maybe<&2, Fetch.Fetch(Reason)>, original: T.AssistantMessage<V.Value, G>, events: EventStream(G), parent: Signal(Reason), request: Client.Request, attempt: WebSocketAttempt<Reason, G, E>, cancelled: Bool) -> IO(Responses.Outcome<Reason, G, E>):
   match cancelled attempt:
-    case True{} WebSocketAttempt{Responses.Outcome{partial, _, _}, _}: IO.pure(Responses.Outcome<Reason, G, E>, Responses.Outcome{partial, Some{Responses.RequestAborted{}}, None{}})
-    case False{} WebSocketAttempt{_, True{}}: requested(~Reason, ~G, ~E, ~render, config, model, plan, custom, original, events, parent, Done{request})
-    case False{} WebSocketAttempt{outcome, False{}}: IO.pure(Responses.Outcome<Reason, G, E>, outcome)
+    case True{} WebSocketAttempt{Responses.Outcome{partial, _, _}, _, _, _}: IO.pure(Responses.Outcome<Reason, G, E>, Responses.Outcome{partial, Some{Responses.RequestAborted{}}, None{}})
+    case False{} WebSocketAttempt{_, True{}, _, _}: requested(~Reason, ~G, ~E, ~render, config, model, plan, custom, original, events, parent, Done{request})
+    case False{} WebSocketAttempt{outcome, False{}, _, _}: IO.pure(Responses.Outcome<Reason, G, E>, outcome)
 
 def usesWebSocket(transport: Maybe<&2, T.Transport>) -> Bool:
   match transport:
@@ -1189,7 +1248,7 @@ def continuationForOutput(~G: Data, model: T.Model<J()>, body: R.Record<V.Value>
 
 def savedContinuation(~Reason: Data, ~G: Data, ~E: Data, model: T.Model<J()>, processing: Stream.OpenAIResponsesStreamOptions, request: CachedInput, previous: Maybe<&2, Sessions.CachedWebSocketContinuationState>, active: Bool, attempt: WebSocketAttempt<Reason, G, E>) -> IO(Result<&2, &2, String, Maybe<&2, Sessions.CachedWebSocketContinuationState>>):
   match processing request active attempt:
-    case Stream.OpenAIResponsesStreamOptions{_, grammar} CachedInput{body, True{}} True{} WebSocketAttempt{Responses.Outcome{+output, _, _}, _}:
+    case Stream.OpenAIResponsesStreamOptions{_, grammar} CachedInput{body, True{}} True{} WebSocketAttempt{Responses.Outcome{+output, _, _}, _, _, _}:
       continuationForOutput(~G, model, body, grammar, output, previous, outputResponseId(G, output))
     case _ _ _ _: IO.pure(Result<&2, &2, String, Maybe<&2, Sessions.CachedWebSocketContinuationState>>, Done{previous})
 
@@ -1200,11 +1259,11 @@ def releasedContinuation(-Reason: Data, -G: Data, -E: Data, pool: Sessions.Pool<
         now : F64 <- Date.now()
         Sessions.release(Reason, pool, ticket, Sessions.Entry{connection, controller, runtime, created, expires, state}, keep, now)
         return attempt
-    case Fail{message} WebSocketAttempt{Responses.Outcome{output, _, _}, _}:
+    case Fail{message} WebSocketAttempt{Responses.Outcome{output, _, _}, _, _, _}:
       do IO<WebSocketAttempt<Reason, G, E>>:
         now : F64 <- Date.now()
         Sessions.release(Reason, pool, ticket, Sessions.Entry{connection, controller, runtime, created, expires, None{}}, False{}, now)
-        return WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}}, False{}}
+        return WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}}, False{}, NoRecovery{}, False{}}
 
 def pooledReleased(~Reason: Data, ~G: Data, ~E: Data, model: T.Model<J()>, processing: Stream.OpenAIResponsesStreamOptions, request: CachedInput, pool: Sessions.Pool<Reason>, ticket: Maybe<&2, Sessions.Reservation>, controller: Abort.AbortController<Deadline.Cause<Reason>>, runtime: Fetch.Runtime, created: F64, expires: F64, continuation: Maybe<&2, Sessions.CachedWebSocketContinuationState>, result: SocketResult<Reason, G, E>, cancelled: Bool) -> IO(WebSocketAttempt<Reason, G, E>):
   match result:
@@ -1247,7 +1306,7 @@ def pooledConnected(~Reason: Data, ~G: Data, ~E: Data, model: T.Model<J()>, proc
         Sessions.abandon(Reason, pool, ticket)
         Abort.dispose(Deadline.Cause<Reason>, controller)
         Fetch.dispose(runtime)
-        return WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}}, True{}}
+        return WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}}, True{}, NoRecovery{}, True{}}
     case Done{connection}:
       do IO<WebSocketAttempt<Reason, G, E>>:
         following : Deadline.Scope<Reason> <- Deadline.disarm(Reason, scope)
@@ -1276,7 +1335,7 @@ def pooledInitialized(~Reason: Data, ~G: Data, ~E: Data, configuration: Response
     case _ _ Fail{_}:
       do IO<WebSocketAttempt<Reason, G, E>>:
         Sessions.abandon(Reason, pool, ticket)
-        return WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{"WebSocket resolver initialization failed"}}, None{}}, True{}}
+        return WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{"WebSocket resolver initialization failed"}}, None{}}, True{}, NoRecovery{}, True{}}
     case Responses.Config{urlContext, _, _, _, security, _, _} Client.Request{url, _, +headers, _, _} Done{runtime}:
       pooledBorrowed(~Reason, ~G, ~E, model, processing, output, events, parent, timeout, idle, pool, ticket, url, headers, cachedRequest, Socket.borrow(runtime, security, urlContext))
 
@@ -1294,7 +1353,7 @@ def pooledCheckout(~Reason: Data, ~G: Data, ~E: Data, +configuration: Responses.
 def pooledBody(~Reason: Data, ~G: Data, ~E: Data, configuration: Responses.Config, model: T.Model<J()>, processing: Stream.OpenAIResponsesStreamOptions, output: T.AssistantMessage<V.Value, G>, events: EventStream(G), parent: Signal(Reason), timeout: Maybe<&2, U32>, idle: Maybe<&2, U32>, request: Client.Request, cache: SessionSocket<Reason>, body: Result<&2, &2, String, R.Record<V.Value>>) -> IO(WebSocketAttempt<Reason, G, E>):
   match body cache:
     case Fail{message} _:
-      IO.pure(WebSocketAttempt<Reason, G, E>, WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}}, False{}})
+      IO.pure(WebSocketAttempt<Reason, G, E>, WebSocketAttempt{Responses.Outcome{output, Some{Responses.OutputFailure{message}}, None{}}, False{}, NoRecovery{}, False{}})
     case Done{fields} SessionSocket{+pool, session, account, enabled}:
       do IO<WebSocketAttempt<Reason, G, E>>:
         now : F64 <- Date.now()
@@ -1314,11 +1373,89 @@ def socketAttempt(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, pool:
         attempt : WebSocketAttempt<Reason, G, E> <- socketRuntime(~Reason, ~G, ~E, configuration, model, processing, output, events, parent, deadline, idle, wire, runtime)
         return attempt
 
-def selectedSocket(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, pool: Maybe<&2, SessionSocket<Reason>>, +configuration: Responses.Config, +model: T.Model<J()>, +selection: Plan<Reason, E>, +custom: Maybe<&2, Fetch.Fetch(Reason)>, +output: T.AssistantMessage<V.Value, G>, +events: EventStream(G), +parent: Signal(Reason), +wire: Client.Request, deadline: Maybe<&2, U32>) -> IO(Responses.Outcome<Reason, G, E>):
+type RecoveryBudget is Data:
+  RecoveryBudget{connectionRetried: Bool, contextRetried: Bool}
+
+def spendRecovery(budget: RecoveryBudget, recovery: Recovery) -> Maybe<&2, RecoveryBudget>:
+  match budget recovery:
+    case RecoveryBudget{False{}, context} RetryConnection{}: Some{RecoveryBudget{True{}, context}}
+    case RecoveryBudget{connection, False{}} RetryContext{}: Some{RecoveryBudget{connection, True{}}}
+    case _ _: None{}
+
+type SocketLoopInput<-Reason: Data, -G: Data, -E: Data> is Data:
+  SocketLoopInput{pool: Maybe<&2, SessionSocket<Reason>>, configuration: Responses.Config, model: T.Model<J()>, plan: Plan<Reason, E>, custom: Maybe<&2, Fetch.Fetch(Reason)>, events: EventStream(G), parent: Signal(Reason), wire: Client.Request, deadline: Maybe<&2, U32>}
+
+def sessionUsesSse(-Reason: Data, pool: Maybe<&2, SessionSocket<Reason>>) -> IO(Bool):
+  match pool:
+    case None{}: IO.pure(Bool, False{})
+    case Some{SessionSocket{owner, session, _, _}}: Sessions.usesSse(Reason, owner, session)
+
+def rememberTransport(-Reason: Data, pool: Maybe<&2, SessionSocket<Reason>>, failed: Bool) -> IO(Unit):
+  match pool failed:
+    case Some{SessionSocket{owner, session, _, _}} True{}: Sessions.rememberSse(Reason, owner, session)
+    case _ _: IO.pure(Unit, Unit{})
+
+def socketRetryBudget(-Reason: Data, -G: Data, -E: Data, budget: RecoveryBudget, attempt: WebSocketAttempt<Reason, G, E>, cancelled: Bool) -> Maybe<&2, RecoveryBudget>:
+  match attempt cancelled:
+    case WebSocketAttempt{_, _, recovery, _} False{}: spendRecovery(budget, recovery)
+    case _ True{}: None{}
+
+def outcomeOutput(-Reason: Data, -G: Data, -E: Data, outcome: Responses.Outcome<Reason, G, E>) -> T.AssistantMessage<V.Value, G>:
+  match outcome:
+    case Responses.Outcome{output, _, _}: output
+
+def loopAttempt(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, input: SocketLoopInput<Reason, G, E>, output: T.AssistantMessage<V.Value, G>) -> IO(WebSocketAttempt<Reason, G, E>):
+  match input:
+    case SocketLoopInput{pool, config, model, plan, custom, events, parent, wire, deadline}: socketAttempt(~Reason, ~G, ~E, ~render, pool, config, model, plan, custom, output, events, parent, wire, deadline)
+
+def loopParent(-Reason: Data, -G: Data, -E: Data, input: SocketLoopInput<Reason, G, E>) -> Signal(Reason):
+  match input:
+    case SocketLoopInput{_, _, _, _, _, _, parent, _, _}: parent
+
+type SocketLoopPhase<-Reason: Data, -G: Data, -E: Data> is Data:
+  SocketTrying{output: T.AssistantMessage<V.Value, G>}
+  SocketRetrying{budget: RecoveryBudget, output: T.AssistantMessage<V.Value, G>}
+  SocketSettling{attempt: WebSocketAttempt<Reason, G, E>, cancelled: Bool}
+
+def recoveryPhase(-Reason: Data, -G: Data, -E: Data, attempt: WebSocketAttempt<Reason, G, E>, cancelled: Bool, next: Maybe<&2, RecoveryBudget>) -> SocketLoopPhase<Reason, G, E>:
+  match attempt cancelled next:
+    case WebSocketAttempt{Responses.Outcome{output, _, _}, _, _, _} False{} Some{budget}: SocketRetrying{budget, output}
+    case attempt cancelled _: SocketSettling{attempt, cancelled}
+
+def socketSettled(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, input: SocketLoopInput<Reason, G, E>, attempt: WebSocketAttempt<Reason, G, E>, cancelled: Bool) -> IO(Responses.Outcome<Reason, G, E>):
+  match input attempt cancelled:
+    case _ WebSocketAttempt{Responses.Outcome{partial, _, _}, _, _, _} True{}:
+      IO.pure(Responses.Outcome<Reason, G, E>, Responses.Outcome{partial, Some{Responses.RequestAborted{}}, None{}})
+    case SocketLoopInput{pool, config, model, plan, custom, events, parent, wire, _} WebSocketAttempt{outcome, maySse, recovery, failed} False{}:
+      +result = {outcome: Responses.Outcome<Reason, G, E>}
+      +fallback = {maySse: Bool}
+      +transportFailed = {failed: Bool}
+      do IO<Responses.Outcome<Reason, G, E>>:
+        rememberTransport(Reason, pool, fallback || transportFailed)
+        socketFallback(~Reason, ~G, ~E, ~render, config, model, plan, custom, outcomeOutput(Reason, G, E, result), events, parent, wire, WebSocketAttempt{result, fallback, recovery, transportFailed}, False{})
+
+# Two independent flags permit at most one retry of each recoverable failure.
+@unsafe
+def socketLoop(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, +input: SocketLoopInput<Reason, G, E>, +budget: RecoveryBudget, phase: SocketLoopPhase<Reason, G, E>) -> IO(Responses.Outcome<Reason, G, E>):
+  match phase:
+    case SocketTrying{output}:
+      do IO<Responses.Outcome<Reason, G, E>>:
+        +attempt : WebSocketAttempt<Reason, G, E> <- loopAttempt(~Reason, ~G, ~E, ~render, input, output)
+        +cancelled : Bool <- Abort.aborted(Reason, loopParent(Reason, G, E, input))
+        socketLoop(~Reason, ~G, ~E, ~render, input, budget, recoveryPhase(Reason, G, E, attempt, cancelled, socketRetryBudget(Reason, G, E, budget, attempt, cancelled)))
+    case SocketRetrying{next, output}: socketLoop(~Reason, ~G, ~E, ~render, input, next, SocketTrying{output})
+    case SocketSettling{attempt, cancelled}: socketSettled(~Reason, ~G, ~E, ~render, input, attempt, cancelled)
+
+def socketEnabled(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, input: SocketLoopInput<Reason, G, E>, output: T.AssistantMessage<V.Value, G>, disabled: Bool) -> IO(Responses.Outcome<Reason, G, E>):
+  match input disabled:
+    case SocketLoopInput{_, config, model, plan, custom, events, parent, wire, _} True{}:
+      requested(~Reason, ~G, ~E, ~render, config, model, plan, custom, output, events, parent, Done{wire})
+    case input False{}: socketLoop(~Reason, ~G, ~E, ~render, input, RecoveryBudget{False{}, False{}}, SocketTrying{output})
+
+def selectedSocket(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, +pool: Maybe<&2, SessionSocket<Reason>>, configuration: Responses.Config, model: T.Model<J()>, selection: Plan<Reason, E>, custom: Maybe<&2, Fetch.Fetch(Reason)>, output: T.AssistantMessage<V.Value, G>, events: EventStream(G), parent: Signal(Reason), wire: Client.Request, deadline: Maybe<&2, U32>) -> IO(Responses.Outcome<Reason, G, E>):
   do IO<Responses.Outcome<Reason, G, E>>:
-    attempt : WebSocketAttempt<Reason, G, E> <- socketAttempt(~Reason, ~G, ~E, ~render, pool, configuration, model, selection, custom, output, events, parent, wire, deadline)
-    cancelled : Bool <- Abort.aborted(Reason, parent)
-    socketFallback(~Reason, ~G, ~E, ~render, configuration, model, selection, custom, output, events, parent, wire, attempt, cancelled)
+    disabled : Bool <- sessionUsesSse(Reason, pool)
+    socketEnabled(~Reason, ~G, ~E, ~render, SocketLoopInput{pool, configuration, model, selection, custom, events, parent, wire, deadline}, output, disabled)
 
 def selectedTransport(~Reason: Data, ~G: Data, ~E: Data, ~render: E -> String, pool: Maybe<&2, SessionSocket<Reason>>, +configuration: Responses.Config, +model: T.Model<J()>, +selection: Plan<Reason, E>, +custom: Maybe<&2, Fetch.Fetch(Reason)>, +output: T.AssistantMessage<V.Value, G>, +events: EventStream(G), +parent: Signal(Reason), trySocket: Bool, connectDeadline: Result<&2, &2, String, Maybe<&2, U32>>, wireResult: Result<&2, &2, Client.RequestError, Client.Request>) -> IO(Responses.Outcome<Reason, G, E>):
   match trySocket wireResult connectDeadline:
@@ -1357,7 +1494,8 @@ def produceWith(~Reason: Data, ~Telemetry: Data, ~G: Data, ~E: Data, ~render: E 
         ready : Result<&2, &2, Responses.PreparationError, Responses.ProviderRequest> <- preparation
         outcome : Responses.Outcome<Reason, G, E> <- codexRequest(~Reason, ~Telemetry, ~G, ~E, ~render, pool, config, model, options, Responses.initialMessage(G, model, timestamp), events, parent, ready)
         cancelled : Bool <- Abort.aborted(Reason, parent)
-        Responses.settled(~Reason, ~G, ~E, ~render, events, Responses.errorProvider(model), owner, IO.pure(Unit, Unit{}), cancelled, outcome)
+        stream : Events.AssistantMessageEventStream(V.Value, G) <- releaseEvents(G, events)
+        Responses.settled(~Reason, ~G, ~E, ~render, stream, Responses.errorProvider(model), owner, IO.pure(Unit, Unit{}), cancelled, outcome)
 
 # Entry points
 # ------------
@@ -1367,9 +1505,10 @@ def startStream(~Reason: Data, ~Telemetry: Data, ~G: Data, ~D: Data, ~E: Data, ~
     case T.StreamOptions{requestedSignal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay, temperature, sampling, maxTokens, transport, cache, session, ws, metadata}:
       do IO<Responses.Run<Reason, G, E>>:
         signal : Responses.SignalOwner<Reason> <- Responses.selectSignal(Reason, requestedSignal)
-        +events : EventStream(G) <- Events.createAssistantMessageEventStream(~V.Value, ~G)
+        +events : Events.AssistantMessageEventStream(V.Value, G) <- Events.createAssistantMessageEventStream(~V.Value, ~G)
+        announced : Ref.Ref<Bool> <- Ref.new(Bool, False{})
         timestamp : F64 <- Date.now()
-        task : Chan(Responses.RunResult<Reason, G, E>) <- IO.fork(Responses.RunResult<Reason, G, E>, produceWith(~Reason, ~Telemetry, ~G, ~E, ~render, pool, config, model, T.StreamOptions{requestedSignal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay, temperature, sampling, maxTokens, transport, cache, session, ws, metadata}, events, timestamp, Responses.responsesPreparation(~Reason, ~Telemetry, ~G, ~D, ~E, config, model, context, options), Responses.ownedSignal(Reason, signal)))
+        task : Chan(Responses.RunResult<Reason, G, E>) <- IO.fork(Responses.RunResult<Reason, G, E>, produceWith(~Reason, ~Telemetry, ~G, ~E, ~render, pool, config, model, T.StreamOptions{requestedSignal, telemetry, key, fetch, env, payload, response, headers, timeout, retries, delay, temperature, sampling, maxTokens, transport, cache, session, ws, metadata}, RunEvents{events, announced}, timestamp, Responses.responsesPreparation(~Reason, ~Telemetry, ~G, ~D, ~E, config, model, context, options), Responses.ownedSignal(Reason, signal)))
         return Responses.Running{events, task}
 
 # Borrow the session owner until the returned run is disposed. Callers close

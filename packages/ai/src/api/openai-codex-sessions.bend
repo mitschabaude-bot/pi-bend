@@ -76,7 +76,7 @@ type Slot<-Reason: Data> is Type:
   Busy{reservation: Reservation, controller: Maybe<&2, Abort.AbortController<Deadline.Cause<Reason>>>}
 
 type State<-Reason: Data> is Type:
-  State{slots: List<&1, Slot<Reason>>, nextGeneration: Nat}
+  State{slots: List<&1, Slot<Reason>>, nextGeneration: Nat, sseFallback: List<&2, String>}
 
 type Pool<-Reason: Data> is Data:
   Pool{state: Ref.Ref<State<Reason>>, policy: Policy}
@@ -129,16 +129,16 @@ def selectAll(-Reason: Data, slots: List<&1, Slot<Reason>>, +session: String, +a
     case Nil{}: selection
     case first <> rest: selectAll(Reason, rest, session, account, now, policy, selectSlot(Reason, first, session, account, now, policy, selection))
 
-def selected(-Reason: Data, +session: String, +account: String, +generation: Nat, selection: Selection<Reason>) -> State<Reason> & (Checkout<Reason> & List<&1, Entry<Reason>>):
+def selected(-Reason: Data, +session: String, +account: String, +generation: Nat, fallback: List<&2, String>, selection: Selection<Reason>) -> State<Reason> & (Checkout<Reason> & List<&1, Entry<Reason>>):
   match selection:
-    case Selection{remaining, expired, Some{found}}: (State{List.reverse(&1, Slot<Reason>, remaining), generation}, (found, expired))
+    case Selection{remaining, expired, Some{found}}: (State{List.reverse(&1, Slot<Reason>, remaining), generation, fallback}, (found, expired))
     case Selection{remaining, expired, None{}}:
       +ticket = {Reservation{session, account, generation} : Reservation}
-      (State{Busy{ticket, None{}} <> List.reverse(&1, Slot<Reason>, remaining), generation + 1n}, (Fresh{Some{ticket}}, expired))
+      (State{Busy{ticket, None{}} <> List.reverse(&1, Slot<Reason>, remaining), generation + 1n, fallback}, (Fresh{Some{ticket}}, expired))
 
 def takeState(-Reason: Data, +session: String, +account: String, now: F64, policy: Policy, state: State<Reason>) -> State<Reason> & (Checkout<Reason> & List<&1, Entry<Reason>>):
   match state:
-    case State{slots, generation}: selected(Reason, session, account, generation, selectAll(Reason, slots, session, account, now, policy, Selection{Nil{}, Nil{}, None{}}))
+    case State{slots, generation, fallback}: selected(Reason, session, account, generation, fallback, selectAll(Reason, slots, session, account, now, policy, Selection{Nil{}, Nil{}, None{}}))
 
 def disposeEntry(-Reason: Data, entry: Entry<Reason>) -> IO(Unit):
   match entry:
@@ -188,14 +188,14 @@ def removeReservation(-Reason: Data, +wanted: Reservation, removal: Removal<Reas
     case Removal{Busy{+ticket, controller} <> rest, reversed, found}: removeReservation(Reason, wanted, removeBusy(Reason, rest, reversed, found, ticket, controller, sameReservation(ticket, wanted)))
     case Removal{first <> rest, reversed, found}: removeReservation(Reason, wanted, Removal{rest, first <> reversed, found})
 
-def putSelected(-Reason: Data, generation: Nat, +ticket: Reservation, entry: Entry<Reason>, keep: Bool, pair: List<&1, Slot<Reason>> & Bool) -> State<Reason> & Maybe<&1, Entry<Reason>>:
+def putSelected(-Reason: Data, generation: Nat, fallback: List<&2, String>, +ticket: Reservation, entry: Entry<Reason>, keep: Bool, pair: List<&1, Slot<Reason>> & Bool) -> State<Reason> & Maybe<&1, Entry<Reason>>:
   match keep pair:
-    case True{} Tuple{slots, True{}}: (State{Idle{ticket, entry} <> slots, generation}, None{})
-    case _ Tuple{slots, _}: (State{slots, generation}, Some{entry})
+    case True{} Tuple{slots, True{}}: (State{Idle{ticket, entry} <> slots, generation, fallback}, None{})
+    case _ Tuple{slots, _}: (State{slots, generation, fallback}, Some{entry})
 
 def putState(-Reason: Data, +ticket: Reservation, entry: Entry<Reason>, keep: Bool, state: State<Reason>) -> State<Reason> & Maybe<&1, Entry<Reason>>:
   match state:
-    case State{slots, generation}: putSelected(Reason, generation, ticket, entry, keep, removeReservation(Reason, ticket, Removal{slots, Nil{}, False{}}))
+    case State{slots, generation, fallback}: putSelected(Reason, generation, fallback, ticket, entry, keep, removeReservation(Reason, ticket, Removal{slots, Nil{}, False{}}))
 
 def disposeMaybeEntry(-Reason: Data, entry: Maybe<&1, Entry<Reason>>) -> IO(Unit):
   match entry:
@@ -230,13 +230,13 @@ def trackSlots(-Reason: Data, slots: List<&1, Slot<Reason>>, +wanted: Reservatio
       trackedResult(Reason, trackedBusy(Reason, ticket, Some{controller}, previous, matched), matched, trackSlots(Reason, rest, wanted, controller))
     case value <> rest: trackedResult(Reason, value, False{}, trackSlots(Reason, rest, wanted, controller))
 
-def trackedState(-Reason: Data, generation: Nat, result: List<&1, Slot<Reason>> & Bool) -> State<Reason> & Bool:
+def trackedState(-Reason: Data, generation: Nat, fallback: List<&2, String>, result: List<&1, Slot<Reason>> & Bool) -> State<Reason> & Bool:
   match result:
-    case (slots, found): (State{slots, generation}, found)
+    case (slots, found): (State{slots, generation, fallback}, found)
 
 def trackState(-Reason: Data, wanted: Reservation, controller: Abort.AbortController<Deadline.Cause<Reason>>, state: State<Reason>) -> State<Reason> & Bool:
   match state:
-    case State{slots, generation}: trackedState(Reason, generation, trackSlots(Reason, slots, wanted, controller))
+    case State{slots, generation, fallback}: trackedState(Reason, generation, fallback, trackSlots(Reason, slots, wanted, controller))
 
 def tracked(-Reason: Data, controller: Abort.AbortController<Deadline.Cause<Reason>>, found: Bool) -> IO(Unit):
   match found:
@@ -281,13 +281,23 @@ def clearSlots(-Reason: Data, slots: List<&1, Slot<Reason>>, +session: Maybe<&2,
     case Nil{}: state
     case first <> rest: clearSlots(Reason, rest, session, clearSlot(Reason, first, session, state))
 
-def clearedState(-Reason: Data, generation: Nat, cleared: Cleared<Reason>) -> State<Reason> & (List<&1, Entry<Reason>> & List<&2, Abort.AbortController<Deadline.Cause<Reason>>>):
+def clearedState(-Reason: Data, generation: Nat, fallback: List<&2, String>, cleared: Cleared<Reason>) -> State<Reason> & (List<&1, Entry<Reason>> & List<&2, Abort.AbortController<Deadline.Cause<Reason>>>):
   match cleared:
-    case Cleared{remaining, entries, controllers}: (State{List.reverse(&1, Slot<Reason>, remaining), generation}, (entries, controllers))
+    case Cleared{remaining, entries, controllers}: (State{List.reverse(&1, Slot<Reason>, remaining), generation, fallback}, (entries, controllers))
 
-def clearState(-Reason: Data, session: Maybe<&2, String>, state: State<Reason>) -> State<Reason> & (List<&1, Entry<Reason>> & List<&2, Abort.AbortController<Deadline.Cause<Reason>>>):
+def retainFallbackSession(+id: String, sessions: List<&2, String>, +kept: List<&2, String>) -> List<&2, String>:
+  match sessions:
+    case Nil{}: List.reverse(&2, String, kept)
+    case +first <> rest: retainFallbackSession(id, rest, Bool.pick(List<&2, String>, String.eq(first, id), kept, first <> kept))
+
+def retainedFallback(session: Maybe<&2, String>, sessions: List<&2, String>) -> List<&2, String>:
+  match session:
+    case None{}: Nil{}
+    case Some{id}: retainFallbackSession(id, sessions, Nil{})
+
+def clearState(-Reason: Data, +session: Maybe<&2, String>, state: State<Reason>) -> State<Reason> & (List<&1, Entry<Reason>> & List<&2, Abort.AbortController<Deadline.Cause<Reason>>>):
   match state:
-    case State{slots, generation}: clearedState(Reason, generation, clearSlots(Reason, slots, session, Cleared{Nil{}, Nil{}, Nil{}}))
+    case State{slots, generation, fallback}: clearedState(Reason, generation, retainedFallback(session, fallback), clearSlots(Reason, slots, session, Cleared{Nil{}, Nil{}, Nil{}}))
 
 def abortControllers(-Reason: Data, controllers: List<&2, Abort.AbortController<Deadline.Cause<Reason>>>) -> IO(Unit):
   match controllers:
@@ -313,7 +323,7 @@ def clear(-Reason: Data, pool: Pool<Reason>, session: Maybe<&2, String>) -> IO(U
 
 def create(-Reason: Data, policy: Policy) -> IO(Pool<Reason>):
   do IO<Pool<Reason>>:
-    reference : Ref.Ref<State<Reason>> <- Ref.new(State<Reason>, State{Nil{}, 0n})
+    reference : Ref.Ref<State<Reason>> <- Ref.new(State<Reason>, State{Nil{}, 0n, Nil{}})
     return Pool{reference, policy}
 
 def disposeSlots(-Reason: Data, slots: List<&1, Slot<Reason>>) -> IO(Unit):
@@ -327,7 +337,7 @@ def disposeSlots(-Reason: Data, slots: List<&1, Slot<Reason>>) -> IO(Unit):
 
 def disposeState(-Reason: Data, state: State<Reason>) -> IO(Unit):
   match state:
-    case State{slots, _}: disposeSlots(Reason, slots)
+    case State{slots, _, _}: disposeSlots(Reason, slots)
 
 # Borrowers finish their requests before retiring the pool, as for native fetch.
 def dispose(-Reason: Data, pool: Pool<Reason>) -> IO(Unit):
@@ -338,15 +348,37 @@ def dispose(-Reason: Data, pool: Pool<Reason>) -> IO(Unit):
         disposeState(Reason, state)
 
 # A failed dial has no connection to release, but must relinquish its reservation.
-def abandonedState(-Reason: Data, generation: Nat, result: List<&1, Slot<Reason>> & Bool) -> State<Reason> & Unit:
+def abandonedState(-Reason: Data, generation: Nat, fallback: List<&2, String>, result: List<&1, Slot<Reason>> & Bool) -> State<Reason> & Unit:
   match result:
-    case (slots, _): (State{slots, generation}, Unit{})
+    case (slots, _): (State{slots, generation, fallback}, Unit{})
 
 def abandonState(-Reason: Data, ticket: Reservation, state: State<Reason>) -> State<Reason> & Unit:
   match state:
-    case State{slots, generation}: abandonedState(Reason, generation, removeReservation(Reason, ticket, Removal{slots, Nil{}, False{}}))
+    case State{slots, generation, fallback}: abandonedState(Reason, generation, fallback, removeReservation(Reason, ticket, Removal{slots, Nil{}, False{}}))
 
 def abandon(-Reason: Data, pool: Pool<Reason>, ticket: Maybe<&2, Reservation>) -> IO(Unit):
   match pool ticket:
     case _ None{}: IO.pure(Unit, Unit{})
     case Pool{reference, _} Some{value}: Ref.modify(State<Reason>, Unit, reference, state => abandonState(Reason, value, state))
+
+# Transport failures disable WebSocket for later requests in this session.
+def hasFallback(sessions: List<&2, String>, +session: String) -> Bool:
+  match sessions:
+    case Nil{}: False{}
+    case first <> rest: String.eq(first, session) || hasFallback(rest, session)
+
+def fallbackState(-Reason: Data, session: String, state: State<Reason>) -> State<Reason> & Bool:
+  match state:
+    case State{slots, generation, +fallback}: (State{slots, generation, fallback}, hasFallback(fallback, session))
+
+def usesSse(-Reason: Data, pool: Pool<Reason>, session: String) -> IO(Bool):
+  match pool:
+    case Pool{reference, _}: Ref.modify(State<Reason>, Bool, reference, state => fallbackState(Reason, session, state))
+
+def rememberState(-Reason: Data, +session: String, state: State<Reason>) -> State<Reason> & Unit:
+  match state:
+    case State{slots, generation, +fallback}: (State{slots, generation, Bool.pick(List<&2, String>, hasFallback(fallback, session), fallback, session <> fallback)}, Unit{})
+
+def rememberSse(-Reason: Data, pool: Pool<Reason>, session: String) -> IO(Unit):
+  match pool:
+    case Pool{reference, _}: Ref.modify(State<Reason>, Unit, reference, state => rememberState(Reason, session, state))
