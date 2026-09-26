@@ -20,6 +20,8 @@ entries (`KNOWN_HEADERS`, `ALIASED_EVENTS`) so a run reports only the rest.
 
 ## Open (to fix)
 
+- **Session selector layout and controls** (`session-keys`): tree and fork use the native shared selector, whose borders, help text, row labels and position counter differ from pi. The tree also labels a system message as `[message]`. Resume plain text matches, but the selected title resets its foreground colour. These selectors need a closer port of upstream rendering and controls.
+
 - **Streaming throughput and TLS handshake** (`stream-paced`, `stream-flood`):
   over a local TLS server (P-256 certificates), Bend's first token now
   arrives before pi's (72-77 ms versus 110-115 ms in `stream-paced`). A long

@@ -2085,6 +2085,12 @@ def selectModel(input: KeyInput) -> IO(Unit):
       do IO<Unit>:
         changed : Bool <- Interactive.commandResult(sink,Commands.OpenModelPicker{None{}})
         return Unit{}
+def commandKey(input: KeyInput,command: Commands.Command) -> IO(Unit):
+  match input:
+    case KeyInput{queue,_,failure,_,_,_,_,_,_,_,_}:
+      do IO<Unit>:
+        result : Result<&2,&2,Controller.SubmitError,Unit> <- Controller.submitCommand(queue,command)
+        Interactive.submittedResult(failure,result)
 # upstream clearEditor and handleFollowUp: the editor is emptied after the key.
 def emptied(editor: Live.Handle) -> IO(Unit): Live.setText(editor,"")
 def interruptKey(input: KeyInput,editor: Live.Handle) -> IO(Unit):
@@ -2107,7 +2113,7 @@ def dequeueKey(input: KeyInput,editor: Live.Handle) -> IO(Unit):
 # upstream setupKeyHandlers: the app actions the editor intercepts, in
 # registration order.
 def APP_ACTIONS() -> List<&2,String>:
-  ["app.interrupt","app.clear","app.exit","app.thinking.cycle","app.model.cycleForward","app.model.cycleBackward","app.model.select","app.tools.expand","app.thinking.toggle","app.message.followUp","app.message.dequeue"]
+  ["app.interrupt","app.clear","app.exit","app.thinking.cycle","app.model.cycleForward","app.model.cycleBackward","app.model.select","app.tools.expand","app.thinking.toggle","app.message.copy","app.message.followUp","app.message.dequeue","app.session.new","app.session.tree","app.session.fork","app.session.resume"]
 def keyAction(input: KeyInput,action: CustomEditor.AppAction) -> IO(Unit):
   match action:
     case CustomEditor.AppAction{"app.interrupt",editor}: interruptKey(input,editor)
@@ -2119,8 +2125,13 @@ def keyAction(input: KeyInput,action: CustomEditor.AppAction) -> IO(Unit):
     case CustomEditor.AppAction{"app.model.select",_}: selectModel(input)
     case CustomEditor.AppAction{"app.tools.expand",_}: expandOutput(input)
     case CustomEditor.AppAction{"app.thinking.toggle",_}: toggleThinking(input)
+    case CustomEditor.AppAction{"app.message.copy",_}: commandKey(input,Commands.Copy{})
     case CustomEditor.AppAction{"app.message.followUp",editor}: followUpKey(input,editor)
     case CustomEditor.AppAction{"app.message.dequeue",editor}: dequeueKey(input,editor)
+    case CustomEditor.AppAction{"app.session.new",_}: commandKey(input,Commands.NewSession{})
+    case CustomEditor.AppAction{"app.session.tree",_}: commandKey(input,Commands.Tree{})
+    case CustomEditor.AppAction{"app.session.fork",_}: commandKey(input,Commands.Fork{})
+    case CustomEditor.AppAction{"app.session.resume",_}: commandKey(input,Commands.Resume{})
     case _: IO.pure(Unit,Unit{})
 def changedEditor(target: Maybe<&2,Live.Handle>,value: String,count: Nat) -> IO(Unit):
   match target:
@@ -2135,10 +2146,10 @@ def controlResult(sink: ControlSink,result: Controller.ControlResult) -> IO(Unit
         message : String <- IO.pure(String,Bool.pick(String,Nat.is_eq(total,0n),"No queued messages to restore","Restored " ++ Nat.show(total) ++ Bool.pick(String,Nat.is_eq(total,1n)," queued message"," queued messages") ++ " to editor"))
         Interactive.report(failure,Interactive.CommandNotice{message})
 type RebindSink is Data:
-  RebindSink{listener: Session.Listener(),transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footerRef: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>}
+  RebindSink{listener: Session.Listener(),transcript: Transcript.Handle,footerRef: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>}
 def reboundCopied(sink: RebindSink,+session: Session.AgentSession) -> IO(Unit):
   match sink:
-    case RebindSink{listener,+transcript,editor,footerRef,failure,redraw,cwd,home}:
+    case RebindSink{listener,+transcript,footerRef,failure,redraw,cwd,home}:
       do IO<Unit>:
         Session.subscribe(session,listener)
         +messages : List<&2,Session.Message()> <- Session.messages(session)
@@ -2148,8 +2159,6 @@ def reboundCopied(sink: RebindSink,+session: Session.AgentSession) -> IO(Unit):
         Transcript.seedSession(transcript,messages)
         state : Session.AgentState() <- Session.state(session)
         Ref.write(Footer.State,footerRef,initialFooter(state,messages,cwd,home,Settings.getCompactionEnabled(settings)))
-        target : Maybe<&2,Live.Handle> <- Ref.read(Maybe<&2,Live.Handle>,editor)
-        setSelectedDraft(target,"")
         Interactive.requestRender(redraw)
 def rebound(sink: RebindSink,session: Session.AgentSession) -> IO(Unit):
   reboundCopied(sink,session)
@@ -2157,7 +2166,7 @@ def bindRebound(binding: Binding,listener: Session.Listener(),transcript: Transc
   match binding:
     case Binding{_,_,hook,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
-        callback : Callback.Callback<Session.AgentSession,Unit> <- Callback.create(~RebindSink,~Session.AgentSession,~Unit,~rebound,RebindSink{listener,transcript,editor,footer,failure,redraw,cwd,home})
+        callback : Callback.Callback<Session.AgentSession,Unit> <- Callback.create(~RebindSink,~Session.AgentSession,~Unit,~rebound,RebindSink{listener,transcript,footer,failure,redraw,cwd,home})
         Ref.write(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,hook,Some{callback})
 def bindOptional(mode: Maybe<&2,Binding>,listener: Session.Listener(),transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>) -> IO(Unit):
   match mode:
