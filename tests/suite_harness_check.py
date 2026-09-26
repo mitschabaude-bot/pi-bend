@@ -234,6 +234,63 @@ def compaction_override_checks(f):
     return checks
 
 
+ENTRY = {'id': 'entry-1', 'parentId': None, 'timestamp': '2026-01-01T00:00:00.000Z'}
+USAGE = {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0, 'totalTokens': 0, 'cost': {'input': 0, 'output': 0, 'cacheRead': 0, 'cacheWrite': 0, 'total': 0}}
+
+
+def entry_messages(f, entry):
+    return last(f.call('suite-harness', 'entry_messages', json.dumps(entry)), 'context_messages')['messages']
+
+
+def lax_content_checks(f):
+    """suite/lax-message-content.test.ts. The in-memory cases use the native value for missing content (an
+    empty list): Bend tool results, message_end replacements and custom messages always carry content."""
+    checks = 0
+    # normalizes tool results from untyped tools that omit content
+    events = run(f, 'lax_content', 'tool')
+    results = [m for m in messages(events) if m['role'] == 'toolResult']
+    assert len(results) == 1 and results[0]['content'] == [], results
+    assert last(events, 'remaining')['count'] == 0
+    checks += 1
+    # normalizes null content in message_end extension replacements
+    events = run(f, 'lax_content', 'message_end')
+    assistants = [m for m in messages(events) if m['role'] == 'assistant']
+    assert len(assistants) == 1 and assistants[0]['content'] == [], assistants
+    checks += 1
+    # normalizes null content in custom messages from extensions
+    events = run(f, 'lax_content', 'custom')
+    customs = [m for m in messages(events) if m['role'] == 'custom']
+    assert len(customs) == 1 and customs[0]['content'] == [], customs
+    checks += 1
+    # normalizes null or missing content when loading session message entries
+    bad = [{'role': 'user', 'content': None, 'timestamp': 1},
+           {'role': 'assistant', 'content': None, 'api': 'openai-completions', 'provider': 'openai', 'model': 'test-model', 'usage': USAGE, 'stopReason': 'stop', 'timestamp': 1},
+           {'role': 'toolResult', 'toolCallId': 'call_1', 'toolName': 'web_search', 'isError': False, 'timestamp': 1}]
+    for message in bad:
+        [loaded] = entry_messages(f, dict(ENTRY, type='message', message=message))
+        assert loaded['role'] == message['role'] and loaded['content'] == [], loaded
+    checks += 1
+    # normalizes null content when loading custom message entries
+    [loaded] = entry_messages(f, dict(ENTRY, type='custom_message', customType='test', content=None, display=False))
+    assert loaded['role'] == 'custom' and loaded['content'] == [], loaded
+    checks += 1
+    # keeps valid message content untouched when loading session entries
+    [loaded] = entry_messages(f, dict(ENTRY, type='message', message={'role': 'user', 'content': 'hello', 'timestamp': 1}))
+    assert loaded['role'] == 'user' and loaded['content'] == 'hello', loaded
+    checks += 1
+    return checks
+
+
+def queued_slash_checks(f):
+    # 2023-queued-slash-command-followup: treats extension-origin queued slash-command follow-ups as raw user
+    # text instead of dispatching the command
+    events = run(f, 'queued_slash_follow_up')
+    assert of_type(events, 'command_run') == [], events
+    assert [text_of(m) for m in messages(events) if m['role'] == 'user'] == ['start', '/testcmd queued']
+    assert 'queued follow-up handled by model' in [text_of(m) for m in messages(events) if m['role'] == 'assistant']
+    return 1
+
+
 def main():
     parser = argparse.ArgumentParser()
     for name in RUNNERS:
@@ -243,7 +300,7 @@ def main():
     runners = {name: str(Path(getattr(args, name.replace('-', '_'))).resolve()) for name in RUNNERS}
     work = Path(tempfile.mkdtemp(prefix='pi-suite-'))
     fixtures = Fixtures(runners, args.threads, work)
-    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures)
+    checks = bash_persistence_checks(fixtures) + custom_message_ordering_checks(fixtures) + extension_event_checks(fixtures) + tree_cancel_checks(fixtures) + compaction_override_checks(fixtures) + lax_content_checks(fixtures) + queued_slash_checks(fixtures)
     print('suite-harness: %d upstream cases passed' % checks)
 
 

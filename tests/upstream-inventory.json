@@ -3327,9 +3327,15 @@
     },
     {
       "source": "packages/coding-agent/test/suite/lax-message-content.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5ca581a592613b50c167adb877a9d509cfd88358ebb3adbe6064cd5df38e094b"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md",
+        "packages/coding-agent/src/core/session-json.bend"
+      ],
+      "sha256": "5ca581a592613b50c167adb877a9d509cfd88358ebb3adbe6064cd5df38e094b",
+      "notes": "All six tests. The three loading cases decode session entries with null or missing content (user, assistant, toolResult message entries and custom_message entries, the latter fixed in session-json.bend) into context messages with empty content, and keep valid content. The three in-memory cases run with the native value for missing content (an empty list): a tool returning no content (the follow-up turn consumes the result), a message_end replacement without content, and a custom message without content; Bend tool results, replacements and custom messages cannot omit the field, so upstream's null/undefined inputs have no native counterpart (tests/suite-harness.md)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/1717-2113-agent-session-event-settlement.test.ts",
@@ -3344,9 +3350,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2023-queued-slash-command-followup.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6a2d8d0992ed8065b4162d64e8c70019b02def0c20e51c3a1ea3544c42e17fc4"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md"
+      ],
+      "sha256": "6a2d8d0992ed8065b4162d64e8c70019b02def0c20e51c3a1ea3544c42e17fc4",
+      "notes": "An extension's pi.sendUserMessage('/testcmd queued', followUp) during a held tool run is queued as raw user text: the testcmd command never runs, user texts are start and '/testcmd queued', and the model answers the follow-up."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/2753-reload-stale-resource-settings.test.ts",

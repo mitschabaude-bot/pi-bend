@@ -17,6 +17,7 @@ Tools are Bend callbacks: `echo` returns its `text` argument after a prefix; `wa
 - `suite/regressions/8537-custom-message-tool-result-ordering.test.ts`: all three tests.
 - `test/branch-summarization.test.ts` runs in `tests/branch_summarization_check.py` (`generate` mode of `tests/branch-summarization.bend`).
 - Extension regressions (inline extensions loaded into the harness's runner): #3982 (message_end replacement), #1717/#2113 (both tests), #5998, #8935, #6363 (all three tests), #3688 (session_before_tree cancel) and #9178's second test (a navigation waiting in session_before_tree).
+- `suite/lax-message-content.test.ts` (all six) and #2023.
 - `suite/agent-session-compaction-model-overrides.test.ts`: all tests but `captures model identity before awaiting summarization auth` (no native summarization-auth step to interleave a model change into).
 
 ## Adaptations
@@ -30,4 +31,5 @@ Tools are Bend callbacks: `echo` returns its `text` argument after a prefix; `wa
 - #8935: after the aborted batch the run ends with an aborted assistant message, which upstream's test does not assert on.
 - Upstream tests append to `harness.sessionManager` and then set `agent.state.messages = buildSessionContext().messages`; here the seed is stored before the session is created, or appended later with `AgentSession.appendSessionMessage` and loaded with `refreshSessionContext` (upstream `refreshContext()`).
 - The compaction-override scenarios print the recorded `session_before_compact` preparation (`preparation` lines), and the summary request's output cap with the request (`request` lines' `maxTokens`).
+- lax-message-content: the session-entry cases decode JSON lines (`entry_messages`). The in-memory cases use an empty content list, since a Bend tool result, `message_end` replacement or custom message cannot omit its content; they check that the empty content reaches agent state and the next turn.
 

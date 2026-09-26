@@ -24,6 +24,7 @@ import ../packages/coding-agent/src/core/extensions/runner.bend as Runner
 import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
 import ../packages/coding-agent/src/core/model-runtime.bend as Models
 import ../packages/coding-agent/src/core/compaction/compaction.bend as Compaction
+import ../packages/coding-agent/src/core/session-json.bend as SessionJson
 import ../packages/runtime/src/date.bend as Date
 import ../packages/runtime/src/f64.bend as F
 import ./agent-session.bend as H
@@ -47,6 +48,7 @@ type ToolKind is Data:
   Throws{message: String}
   Records{}
   Gated{started: Chan(Unit), release: Chan(Unit)}
+  NoContent{}
 
 type ToolSpec is Data:
   ToolSpec{name: String, kind: ToolKind}
@@ -91,6 +93,7 @@ def executeTool(env: ToolEnv, input: Tools.Input()) -> IO(Tools.Output()):
         notified(found)
         return textResult("tool done", Json.object(Nil{}))
     case ToolEnv{_, Throws{message}} _: IO.pure(Tools.Output(), Fail{Tools.failure(message)})
+    case ToolEnv{_, NoContent{}} _: IO.pure(Tools.Output(), Done{T.AgentToolResult{Nil{}, Some{Tools.RawDetails{Json.object(Nil{})}}, None{}, None{}}})
     case ToolEnv{_, Gated{started, release}} _:
       do IO<Tools.Output()>:
         sent : Bool <- Chan.send(Unit, started, Unit{})
@@ -116,6 +119,7 @@ def schemaOf(kind: ToolKind) -> V.Value:
     case Throws{_}: textSchema()
     case Records{}: valueSchema()
     case Gated{_, _}: emptySchema()
+    case NoContent{}: emptySchema()
     case Notify{}: emptySchema()
 
 type Built is Data:
@@ -941,6 +945,101 @@ def compactionModelSwitch(+dir: String, agentDir: String) -> IO(Unit):
     reportReserve("reserve_small", sessionOf(harness), Some{Settings.ModelIdentity{"faux", "small"}})
     cleanup(harness)
 
+# suite/lax-message-content.test.ts: session entries with null or missing
+# content become context messages with empty content.
+def reportContextMessages(result: Result<&2, &2, S.Error, List<&2, Session.Message()>>) -> IO(Unit):
+  match result:
+    case Done{messages}: print("context_messages", Json.field("messages", V.ArrayValue{JsonEvent.messages(messages)}, Nil{}))
+    case Fail{_}: print("entry_invalid", Nil{})
+
+def reportContextOf(entry: Maybe<&2, S.FileEntry<Unit, Tools.ToolDetails, V.Value>>) -> IO(Unit):
+  match entry:
+    case Some{S.Entry{value}}: reportContextMessages(S.sessionEntryToContextMessages(Unit, Tools.ToolDetails, V.Value, value))
+    case _: print("entry_invalid", Nil{})
+
+def entryMessages(+line: String) -> IO(Unit):
+  reportContextOf(SessionJson.parseSessionEntryLine(~Unit, ~Tools.ToolDetails, ~V.Value, ~Session.readUnit, ~Session.readDetails, ~Session.readRaw, line))
+
+# The in-memory cases of lax-message-content with the native value for
+# "no content" (an empty list): a tool result without content, a message_end
+# replacement without content and a custom message without content.
+def withoutContent(message: Session.Message()) -> Maybe<&2, Session.Message()>:
+  match message:
+    case T.LlmMessage{Ai.Assistant{Ai.AssistantMessage{_, api, provider, model, a, b, c, d, usage, stop, e, f, g, h, time}}}: Some{T.LlmMessage{Ai.Assistant{Ai.AssistantMessage{Nil{}, api, provider, model, a, b, c, d, usage, stop, e, f, g, h, time}}}}
+    case _: None{}
+
+def emptyEnd(env: Unit, call: Ext.HandlerCall<Ext.MessageEndEvent>) -> IO(Handled(Ext.MessageEndEventResult)):
+  match call:
+    case Ext.HandlerCall{Ext.MessageEndEvent{message}, _}: IO.pure(Handled(Ext.MessageEndEventResult), Done{Some{Ext.MessageEndEventResult{withoutContent(message)}}})
+
+def emptyEndFactory(api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    handler : Ext.ExtensionHandler(Ext.MessageEndEvent, Ext.MessageEndEventResult) <- C.create(~Unit, ~Ext.HandlerCall<Ext.MessageEndEvent>, ~Handled(Ext.MessageEndEventResult), ~emptyEnd, Unit{})
+    subscribe(api, Ext.OnMessageEnd{handler})
+
+def laxContent(+dir: String, agentDir: String, +kind: String) -> IO(Unit):
+  match kind:
+    case "tool":
+      do IO<Unit>:
+        +harness : Harness <- createHarness(dir, agentDir, [ToolSpec{"web_search", NoContent{}}], setup([Reg.Call{"call_search", "web_search", Json.object(Nil{}), "{}"}, Reg.Text{"done"}]))
+        prompted(sessionOf(harness), "search something")
+        H.reportMessages(sessionOf(harness))
+        Reg.reportRemaining(Reg.repliesOf(harnessFixture(harness)))
+        cleanup(harness)
+    case "message_end":
+      do IO<Unit>:
+        +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+        +harness : Harness <- createHarnessWith(dir, agentDir, Nil{}, setup([Reg.Text{"hello"}]), ref, [inline("empty-end", emptyEndFactory)])
+        prompted(sessionOf(harness), "hi")
+        H.reportMessages(sessionOf(harness))
+        cleanup(harness)
+    case _:
+      do IO<Unit>:
+        +harness : Harness <- createHarness(dir, agentDir, Nil{}, setup(Nil{}))
+        sent : Result<&2, &2, String, Unit> <- Session.sendCustomMessage(sessionOf(harness), Ext.CustomMessageInput{"test", Ai.UserBlocks{Nil{}}, False{}, None{}}, Session.sendDefaults())
+        H.reportMessages(sessionOf(harness))
+        cleanup(harness)
+
+# #2023: a follow-up an extension queues with sendUserMessage is raw user
+# text, not an extension command.
+def recordCommand(env: Unit, call: Ext.CommandCall) -> IO(Result<&2, &2, String, Unit>):
+  match call:
+    case Ext.CommandCall{args, _}:
+      do IO<Result<&2, &2, String, Unit>>:
+        print("command_run", Json.field("args", Json.text(args), Nil{}))
+        return Done{Unit{}}
+
+def testCommandFactory(apiRef: R.Ref<Maybe<&2, Ext.ExtensionAPI>>, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    R.write(Maybe<&2, Ext.ExtensionAPI>, apiRef, Some{api})
+    handler : Ext.CommandHandler() <- C.create(~Unit, ~Ext.CommandCall, ~Result<&2, &2, String, Unit>, ~recordCommand, Unit{})
+    Loader.registerCommand(api, "testcmd", Ext.CommandOptions{Some{"Test command"}, None{}, handler})
+
+def sendFollowUp(found: Maybe<&2, Ext.ExtensionAPI>) -> IO(Unit):
+  match found:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{api}:
+      do IO<Unit>:
+        result : Result<&2, &2, String, Unit> <- Loader.sendUserMessage(api, Ai.UserText{"/testcmd queued"}, Some{Ext.UserFollowUp{}})
+        H.reportOutcome("sent", result)
+
+def queuedSlashFollowUp(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +apiRef : R.Ref<Maybe<&2, Ext.ExtensionAPI>> <- R.new(Maybe<&2, Ext.ExtensionAPI>, None{})
+    +toolStarted : Chan(Unit) <- Chan.new(Unit, 1)
+    +release : Chan(Unit) <- Chan.new(Unit, 1)
+    +done : Chan(Unit) <- Chan.new(Unit, 1)
+    +harness : Harness <- createHarnessWith(dir, agentDir, [ToolSpec{"wait", Gated{toolStarted, release}}], setup([Reg.Call{"call_wait", "wait", Json.object(Nil{}), "{}"}, Reg.Text{"first turn complete"}, Reg.Text{"queued follow-up handled by model"}]), ref, [inline("testcmd", api => testCommandFactory(apiRef, api))])
+    IO.spawn(Unit, promptInBackground(sessionOf(harness), "start", done))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, toolStarted)
+    found : Maybe<&2, Ext.ExtensionAPI> <- R.read(Maybe<&2, Ext.ExtensionAPI>, apiRef)
+    sendFollowUp(found)
+    sent : Bool <- Chan.send(Unit, release, Unit{})
+    finished : Maybe<&1, Unit> <- Chan.recv(Unit, done)
+    H.reportMessages(sessionOf(harness))
+    cleanup(harness)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case "custom_order" <> dir <> agentDir <> Nil{}: customOrder(dir, agentDir)
@@ -959,6 +1058,9 @@ def run(args: List<String>) -> IO(Unit):
     case "command_waits_for_idle" <> dir <> agentDir <> Nil{}: commandWaitsForIdle(dir, agentDir)
     case "tree_cancel_compacting" <> dir <> agentDir <> Nil{}: treeCancelCompacting(dir, agentDir)
     case "tree_waiting" <> dir <> agentDir <> Nil{}: treeWaiting(dir, agentDir)
+    case "entry_messages" <> line <> Nil{}: entryMessages(line)
+    case "lax_content" <> dir <> agentDir <> kind <> Nil{}: laxContent(dir, agentDir, kind)
+    case "queued_slash_follow_up" <> dir <> agentDir <> Nil{}: queuedSlashFollowUp(dir, agentDir)
     case "compaction_override" <> dir <> agentDir <> path <> Nil{}: compactionOverride(dir, agentDir, path)
     case "compaction_budget" <> dir <> agentDir <> path <> Nil{}: compactionBudget(dir, agentDir, path)
     case "compaction_model_switch" <> dir <> agentDir <> Nil{}: compactionModelSwitch(dir, agentDir)
