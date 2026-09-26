@@ -14,7 +14,11 @@ def isSpaceOrTab(+char: Char) -> Bool: Char.is_eq(char,' ') || Char.is_eq(char,'
 # JavaScript's `\s`.
 def isSpace(+char: Char) -> Bool: Re.isSpaceCode(Char.to_u32(char))
 def isLineTerminator(+char: Char) -> Bool: Re.isLineTerminator(Char.to_u32(char))
-def lastChar(text: String) -> Maybe<&2,Char>: String.get(String.reverse(text),0n)
+def lastFrom(text: String,last: Maybe<&2,Char>) -> Maybe<&2,Char>:
+  match text:
+    case SNil{}: last
+    case SCon{char,rest}: lastFrom(rest,Some{char})
+def lastChar(text: String) -> Maybe<&2,Char>: lastFrom(text,None{})
 def endsWithChar(text: String,char: Char) -> Bool: String.ends_with(text,SCon{char,SNil{}})
 def startsWithChar(text: String,+char: Char) -> Bool:
   match text:
