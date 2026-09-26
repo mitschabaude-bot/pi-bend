@@ -512,7 +512,7 @@
       "port_sha256": {
         "packages/ai/src/api/pi-messages.bend": "b014bfe831a016688261bc1d18470838ca61366b4baa7647c28cc44a0452d6e7",
         "packages/ai/src/api/provider-fetch.bend": "4f11d6da5363ffae0c3d2214e163bd9eee6a4348039d4f37d4d652a62a248275",
-        "packages/coding-agent/src/core/stream-providers.bend": "981f7ebedf8a59f5bd49b08af80d113dab0dfe640ab2caebbdaad77946fa371e"
+        "packages/coding-agent/src/core/stream-providers.bend": "6fb2a2198af50b5463f92ddbdec9b193dace9012bb1c874939abbd3e0460d540"
       }
     },
     "packages/ai/src/api/pi-messages.lazy.ts": {
@@ -555,7 +555,7 @@
       "port_sha256": {
         "packages/ai/src/api/mistral-conversations.bend": "87f9860ab53ae3c884656d205c8f771c48b7ad54dc01ce2438b0c8e07659a7b1",
         "packages/ai/src/api/provider-fetch.bend": "4f11d6da5363ffae0c3d2214e163bd9eee6a4348039d4f37d4d652a62a248275",
-        "packages/coding-agent/src/core/stream-providers.bend": "981f7ebedf8a59f5bd49b08af80d113dab0dfe640ab2caebbdaad77946fa371e"
+        "packages/coding-agent/src/core/stream-providers.bend": "6fb2a2198af50b5463f92ddbdec9b193dace9012bb1c874939abbd3e0460d540"
       }
     },
     "packages/ai/src/api/mistral-conversations.lazy.ts": {
@@ -611,6 +611,53 @@
       "port_sha256": {
         "packages/coding-agent/src/core/extensions/types.bend": "8e8a0d9c1505947a69612a4208d389b7cb4d24aaf45ebd04f5887344a75f2510"
       }
+    },
+    "packages/ai/src/api/bedrock-converse-stream.ts": {
+      "state": "partial",
+      "note": "stream/streamSimple: the client configuration pi builds (profile, region from ARN/AWS_REGION/profile/built-in endpoint, custom endpoints, static credentials, bearer token), message/tool/system conversion with cache points and document sanitization, adaptive and budget thinking fields, onPayload/onResponse, the restJson ConverseStream request with SigV4 (runtime/aws-sigv4.bend) or bearer auth and caller headers minus reserved ones, the event-stream response (runtime/aws-eventstream.bend with CRC-32), the stream fold (text, reasoning incl. redacted, tool calls, usage with 1h cache writes, stop reasons) and error formatting with bedrock_response_failure diagnostics; traces equal the pinned AWS SDK on a loopback server (tests/bedrock_check.py). Missing: the SDK credential chain beyond shared-file static keys and credential_process (SSO, role assumption, web identity, ECS/IMDS; reported as errors, bedrock-credentials.bend), SDK retries, and HTTP(S) proxy agents. Unknown content-block types and lone surrogates are not representable in the typed Bend transcript.",
+      "ports": [
+        "packages/ai/src/api/bedrock-converse-stream.bend",
+        "packages/ai/src/api/bedrock-credentials.bend",
+        "packages/runtime/src/aws-sigv4.bend",
+        "packages/runtime/src/aws-eventstream.bend",
+        "packages/runtime/src/crc32.bend"
+      ],
+      "source_sha256": "cd4b63f95787c9f775a96a19edf760bbf266987b51f9cc9f6ac0ecd34cffe047",
+      "port_sha256": {
+        "packages/ai/src/api/bedrock-converse-stream.bend": "3639183c4f9141c1a20c96aaa513b756314009e4b93fecb7f2e1d67977f67e4a",
+        "packages/ai/src/api/bedrock-credentials.bend": "11fa1344617ae553e16cf8a6d4b3dc5eb864d352d97c82ef040090296efc8295",
+        "packages/runtime/src/aws-sigv4.bend": "caa2c23300ee3da72bc2b7a8f807bd6478b0e84cff75ea6534a630ccfe313e10",
+        "packages/runtime/src/aws-eventstream.bend": "10407475f5491bdceffb014888626790a4b0dbade62c1538a1b36252b8e5569e",
+        "packages/runtime/src/crc32.bend": "f87ae9d406fe4180b39bc1fa5411d0bd38ddf40add1c28f7da404dbb5b52d5ba"
+      }
+    },
+    "packages/ai/src/api/bedrock-converse-stream.lazy.ts": {
+      "state": "excluded",
+      "note": "Lazy loading of the implementation module through a dynamic import is a JavaScript bundling concern; the Bend runtime dispatches models of this api to bedrock-converse-stream.bend directly (coding-agent agent-runtime selectedProvider).",
+      "source_sha256": "3ee8a1b2a2cd58927bee18ab5b4150401da810e9d5f4595822b3b10ded35de86",
+      "port_sha256": {}
+    },
+    "packages/ai/src/providers/amazon-bedrock.ts": {
+      "state": "partial",
+      "note": "The Amazon Bedrock provider with its catalog, listed first in providers/all.bend as upstream, and bedrockAuth.resolve (stored key, AWS_BEARER_TOKEN_BEDROCK, stored or ambient AWS_PROFILE, access keys, ECS task role, web identity token; abort checks around each lookup), tested in packages/ai/test/amazon-bedrock-auth.bend. Missing: bedrockAuth.login, whose method selection and notify event need the upstream AuthPrompt/AuthEvent interaction that LoginInteraction does not model yet.",
+      "source_sha256": "e32611e8d2d4e71ee5d0ba426da60c0aecf42d1bc34ccc3d0d49ce877c621a8c",
+      "port_sha256": {
+        "packages/ai/src/providers/amazon-bedrock.bend": "b4089f9b12e1c656a379d38fb024b68d8ffedb67f2cdec328a5b189b36d852db"
+      }
+    },
+    "packages/ai/src/providers/amazon-bedrock.models.ts": {
+      "state": "ported",
+      "note": "Generated from pi-ai's amazon-bedrock data by scripts/generate-model-catalog.py; tests/model-catalog.bend dumps every model equal to the pinned data.",
+      "source_sha256": "9c9cbe9b1c977177454ed12dc48c521fdc88d257ee1b92bc3805aa77eaf9b982",
+      "port_sha256": {
+        "packages/ai/src/providers/amazon-bedrock.models.bend": "3b48ffedbfbc5895345c930f0882cd05aa084de6ff0c1ae519034413ec7d8f59"
+      }
+    },
+    "packages/ai/src/bedrock-provider.ts": {
+      "state": "excluded",
+      "note": "A package entry point that re-exports stream/streamSimple so Bun-compiled binaries can preload the Bedrock module (coding-agent bun/runtime-setup.ts); Bend modules import api/bedrock-converse-stream.bend directly.",
+      "source_sha256": "427a4e76812ea4ac42133e7f41e75df99e0edaff883659c96a0e4ec78f670f9f",
+      "port_sha256": {}
     }
   }
 }

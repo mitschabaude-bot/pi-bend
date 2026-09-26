@@ -700,69 +700,123 @@
     },
     {
       "source": "packages/ai/test/bedrock-cache-write-1h-cost.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "7d74179a7b6df7649d991883571f678b0466565158f9559555f4207768f573d8"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "7d74179a7b6df7649d991883571f678b0466565158f9559555f4207768f573d8",
+      "notes": "The case. tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-convert-messages.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6b2f1cbd68b20b0442a25de1c9380050347d02b64b64620905114eb666f9dbcf"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "6b2f1cbd68b20b0442a25de1c9380050347d02b64b64620905114eb666f9dbcf",
+      "notes": "Ported (7): 'gates native strict tool use by model capability' (strict and Nova halves), 'preserves empty property names in streamed tool arguments', 'replaces blank user string content with a placeholder', 'filters blank user text blocks when other content remains', 'replaces blank tool result content with a placeholder', 'removes empty property names only from replayed Bedrock input'. Not representable: the four unknown-content-block cases (the typed Bend transcript has no unknown block variants) and the two surrogate-sanitization cases (the Bend runtime's strings and JSON parser reject lone surrogates). tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-credentials.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "fc662838b0e0562546aa7a41fe16a80ee3be45104a120624e0ddbc9ffe4b042f"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "fc662838b0e0562546aa7a41fe16a80ee3be45104a120624e0ddbc9ffe4b042f",
+      "notes": "All 3 cases (the first as explicit and scoped halves) assert the client configuration upstream passes to BedrockRuntimeClient, rendered by the Bend runner's config mode. tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-custom-headers.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9ced72235859b78206d40a918223fb40f0d999241bc03ed4480a6c6cd3dad388"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "9ced72235859b78206d40a918223fb40f0d999241bc03ed4480a6c6cd3dad388",
+      "notes": "VC1, VC2, both VC3 cases and VC4 assert the headers the server receives, which is the build-step middleware's effect. Not representable: 'VC3 (structural guard): passes through unchanged when the request has no headers', which calls the SDK middleware function directly; the Bend request always carries headers. tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-endpoint-resolution.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "256644a52f42da4000520be9bb97f72bb996c2805650118e020d2d065d9c99aa"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "256644a52f42da4000520be9bb97f72bb996c2805650118e020d2d065d9c99aa",
+      "notes": "All 9 cases (the missing-region case as explicit/scoped/ambient halves) assert the client configuration (profile, region, endpoint, credentials, bearer token and authSchemePreference). tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-error-metadata.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "419813d91e53ec4365b88f47b16b1e11b284fe35e949bcd2bcf9e7f185413fcc"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "419813d91e53ec4365b88f47b16b1e11b284fe35e949bcd2bcf9e7f185413fcc",
+      "notes": "All 9 cases. Adaptations: upstream's mock throws a bare object for a modeled mid-stream exception, while the pinned SDK throws the modeled ThrottlingException, so 'reports only the request id for a modeled mid-stream exception' expects its errorCode too (the upstream implementation reports the same against the real SDK); the Unknown-placeholder case uses a JSON error body, since the non-JSON parse message is JavaScript-engine text; 'emits no diagnostic when the failure carries no provider metadata' drops the connection and runs without the differential. tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-models.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "adb580d3fd5fba8e916f540bdd6711bdc65a977714bc411115cf5fff6f008550"
+      "status": "partial",
+      "ports": [
+        "tests/model_catalog.test.ts",
+        "packages/ai/src/providers/amazon-bedrock.models.bend"
+      ],
+      "sha256": "adb580d3fd5fba8e916f540bdd6711bdc65a977714bc411115cf5fff6f008550",
+      "notes": "'should get all available Bedrock models' and 'exposes Claude Opus 5 through an inference profile only' run in tests/model_catalog.test.ts against the Bend catalog. Pending: the per-model live 'should make a simple request' cases, which need Bedrock credentials."
     },
     {
       "source": "packages/ai/test/bedrock-raw-stop-reason.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "1eabb8aab0f17119188b21ac81587670d4c28e5009e8e80059aa1f2fcc1fefea"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "1eabb8aab0f17119188b21ac81587670d4c28e5009e8e80059aa1f2fcc1fefea",
+      "notes": "Both cases. tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-redacted-reasoning.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f1f2e4d27c8f3cbf47da5712012d9a12c6580fbd93a69636d9744c7600aee896"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "f1f2e4d27c8f3cbf47da5712012d9a12c6580fbd93a69636d9744c7600aee896",
+      "notes": "All 6 cases; redacted payloads are compared as the base64 the SDK serializes. tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-response-headers.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "8436eacf232697682ecf4efcddf86e5dec216f9ea83fe5be728409adfdd82fa4"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "8436eacf232697682ecf4efcddf86e5dec216f9ea83fe5be728409adfdd82fa4",
+      "notes": "The case asserts the onResponse status and raw headers of the loopback response. tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/bedrock-thinking-payload.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "bb409553d1f44c15fa8e4b2f9bdeb2a88ffc8fbd7fc5bc348329fdaef5f43003"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/bedrock.bend",
+        "packages/ai/test/bedrock-oracle.ts",
+        "tests/bedrock_check.py"
+      ],
+      "sha256": "bb409553d1f44c15fa8e4b2f9bdeb2a88ffc8fbd7fc5bc348329fdaef5f43003",
+      "notes": "All 12 payload cases through onPayload. Pending: 'Bedrock Claude max tokens E2E', which needs live Bedrock credentials. tests/bedrock_check.py runs packages/ai/test/bedrock.bend against a loopback Bedrock server (Python event-stream framer) and compares each trace with upstream bedrock-converse-stream.ts driving the pinned AWS SDK (bedrock-oracle.ts, Node) on the same server; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/cache-retention.test.ts",
@@ -1470,10 +1524,12 @@
       "source": "packages/ai/test/providers.test.ts",
       "status": "partial",
       "ports": [
-        "packages/ai/test/cloudflare-auth.bend"
+        "packages/ai/test/cloudflare-auth.bend",
+        "packages/ai/test/amazon-bedrock-auth.bend",
+        "tests/bedrock_check.py"
       ],
       "sha256": "05398664e04241071153801789cc3017bad1b820c1926a91ac04dc9cdff785a6",
-      "notes": "Only the two Cloudflare cases are ported ('requires Cloudflare Workers AI account config and returns scoped env', 'requires Cloudflare AI Gateway account and gateway config and returns scoped env headers'), each with its missing-config and configured halves. Upstream resolves through createModels().getAuth with a fake auth context; the port calls the provider's ApiKeyAuth.resolve with the same context. Native cases cover the per-field credential/env merge, the source label, an empty stored key and abort checks. Every other case of the suite remains pending. Native lane not run."
+      "notes": "Only the two Cloudflare cases are ported ('requires Cloudflare Workers AI account config and returns scoped env', 'requires Cloudflare AI Gateway account and gateway config and returns scoped env headers'), each with its missing-config and configured halves. Upstream resolves through createModels().getAuth with a fake auth context; the port calls the provider's ApiKeyAuth.resolve with the same context. Native cases cover the per-field credential/env merge, the source label, an empty stored key and abort checks. Bedrock (packages/ai/test/amazon-bedrock-auth.bend, run by tests/bedrock_check.py on Bun): 'reports bedrock as configured from ambient AWS credentials without an api key' (configured and unconfigured halves) and the resolve assertion of 'runs provider-owned Bedrock bearer token and AWS profile login flows' call bedrockAuth.resolve with the same fake context; its login half is pending until LoginInteraction models select prompts and notify events. Native cases cover the full credential-source order, empty values and abort checks. Every other case of the suite remains pending. Native lane not run."
     },
     {
       "source": "packages/ai/test/qwen-token-plan-models.test.ts",
