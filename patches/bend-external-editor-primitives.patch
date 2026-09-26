@@ -1,0 +1,114 @@
+--- a/bend2/base.bend
++++ b/bend2/base.bend
+@@ -3378,3 +3378,13 @@
+ def IO.system_identity() -> IO(Result<&1, &1, U32 & String, String & String & String>):
+   import "./effs/system_identity.c"
+   import "./effs/system_identity.js"
++
++# Keep the parent's foreground terminal and stdio; caller owns wait/reaping.
++def Process.spawn_inherit(path: String, argv: List<String>, cwd: String, environment: List<String>) -> IO(Result<&1,&1,U32 & String,Process>):
++  import "./effs/process.c"
++  import "./effs/process.js"
++
++# Atomically create a private directory from a template ending in XXXXXX.
++def Directory.mkdtemp(template: String) -> IO(Result<&1,&1,U32 & String,String>):
++  import "./effs/directory_mkdtemp.c"
++  import "./effs/directory_mkdtemp.js"
+--- a/bend2/effs/process.c
++++ b/bend2/effs/process.c
+@@ -41,7 +41,7 @@
+   }
+ }
+ 
+-#if defined(CID_PROCESS_SPAWN) || defined(CID_PROCESS_SPAWN_NULL_STDIN)
++#if defined(CID_PROCESS_SPAWN) || defined(CID_PROCESS_SPAWN_NULL_STDIN) || defined(CID_PROCESS_SPAWN_INHERIT)
+ typedef struct {
+   char* path; char* cwd; char** argv; char** env;
+   pid_t pid; int pipes[6]; bool input;
+@@ -66,6 +66,7 @@
+   strings[size] = NULL;
+   return strings;
+ }
++#if defined(CID_PROCESS_SPAWN) || defined(CID_PROCESS_SPAWN_NULL_STDIN)
+ static void process_spawn_call(IoWork* work) {
+   ProcessSpawn* s = (ProcessSpawn*)work->data;
+   posix_spawn_file_actions_t actions;
+@@ -154,6 +155,48 @@
+   return process_spawn_start(e,f,w,false);
+ }
+ static void __attribute__((constructor)) process_spawn_null_stdin_use(void) { io_eff(CID_PROCESS_SPAWN_NULL_STDIN,process_spawn_null_stdin_run,0); }
++#endif
++#endif
++
++#ifdef CID_PROCESS_SPAWN_INHERIT
++static void process_inherit_call(IoWork* work) {
++  ProcessSpawn* s=(ProcessSpawn*)work->data;
++  posix_spawn_file_actions_t actions;
++  posix_spawnattr_t attributes;
++  int error=posix_spawn_file_actions_init(&actions);
++  if (error) { work->code=error; return; }
++  error=posix_spawnattr_init(&attributes);
++  if (error) { posix_spawn_file_actions_destroy(&actions); work->code=error; return; }
++  error=posix_spawn_file_actions_addchdir_np(&actions,s->cwd);
++  if (!error) error=posix_spawn_file_actions_addclosefrom_np(&actions,3);
++  sigset_t defaults, mask;
++  sigfillset(&defaults); sigemptyset(&mask);
++  if (!error) error=posix_spawnattr_setsigdefault(&attributes,&defaults);
++  if (!error) error=posix_spawnattr_setsigmask(&attributes,&mask);
++  if (!error) error=posix_spawnattr_setflags(&attributes,POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK);
++  if (!error) error=posix_spawn(&s->pid,s->path,&actions,&attributes,s->argv,s->env);
++  posix_spawnattr_destroy(&attributes);
++  posix_spawn_file_actions_destroy(&actions);
++  work->code=error;
++}
++static Term process_inherit_pack(Env e, IoWork* work) {
++  ProcessSpawn* s=(ProcessSpawn*)work->data;
++  Term result=work->code ? io_fail(e,work->code,NULL) : io_done(e,process_resource(0,s->pid));
++  free(s->path); free(s->cwd); process_strings_free(s->argv); process_strings_free(s->env); free(s);
++  return result;
++}
++Term process_spawn_inherit_run(Env e, Term* f, IoWork* w) {
++  ProcessSpawn* s=io_mem(calloc(1,sizeof(ProcessSpawn)));
++  w->data=(char*)s; w->code=0;
++  u64 path_length=0,cwd_length=0;
++  s->path=io_cstr(e,f[0],&path_length);
++  s->cwd=io_cstr(e,f[2],&cwd_length);
++  if (io_nul(s->path,path_length) || io_nul(s->cwd,cwd_length)) w->code=EILSEQ;
++  s->argv=process_strings(e,f[1],s->path,false,&w->code);
++  s->env=process_strings(e,f[3],NULL,true,&w->code);
++  return w->code ? process_inherit_pack(e,w) : io_work(w,process_inherit_call,process_inherit_pack);
++}
++static void __attribute__((constructor)) process_spawn_inherit_use(void) { io_eff(CID_PROCESS_SPAWN_INHERIT,process_spawn_inherit_run,0); }
+ #endif
+ #endif
+ 
+--- a/bend2/effs/process.js
++++ b/bend2/effs/process.js
+@@ -15,3 +15,5 @@
+ function terminal_acquire(input, output) { return io_fail(38); }
+ function terminal_restore(lease) { throw Error('native Linux Terminal required'); }
+ function terminal_dimensions(output) { return io_fail(38); }
++
++function process_spawn_inherit(path, argv, cwd, environment) { return io_fail(38); }
+--- /dev/null
++++ b/bend2/effs/directory_mkdtemp.c
+@@ -0,0 +1,15 @@
++#include <stdlib.h>
++static void directory_mkdtemp_call(IoWork* w) {
++  if (!mkdtemp(w->data)) w->code=errno;
++}
++static Term directory_mkdtemp_pack(Env e, IoWork* w) {
++  Term result=w->code ? io_fail(e,w->code,NULL) : io_done(e,io_str(e,w->data,strlen(w->data)));
++  free(w->data);
++  return result;
++}
++Term directory_mkdtemp_run(Env e, Term* f, IoWork* w) {
++  w->data=io_cstr(e,f[0],&w->size);
++  w->code=io_nul(w->data,w->size) ? EILSEQ : 0;
++  return w->code ? directory_mkdtemp_pack(e,w) : io_work(w,directory_mkdtemp_call,directory_mkdtemp_pack);
++}
++static void __attribute__((constructor)) directory_mkdtemp_use(void) { io_eff(CID_DIRECTORY_MKDTEMP,directory_mkdtemp_run,0); }
+--- /dev/null
++++ b/bend2/effs/directory_mkdtemp.js
+@@ -0,0 +1 @@
++function directory_mkdtemp(template) { return io_fail(38); }

@@ -2541,9 +2541,16 @@
     },
     {
       "source": "packages/coding-agent/test/external-editor.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "7d3b01cd6f9962710d0ce1a3c6910627142b5fefd506232e72c511ec143e3713"
+      "status": "ported",
+      "ports": [
+        "tests/external-editor.bend",
+        "tests/external_editor_check.py",
+        "tests/external_editor_reference.mts",
+        "tests/process-inherited.bend"
+      ],
+      "sha256": "7d3b01cd6f9962710d0ce1a3c6910627142b5fefd506232e72c511ec143e3713",
+      "implementation": "packages/coding-agent/src/modes/interactive/external-editor.bend",
+      "notes": "All three upstream contracts pass native1/native4: edits a prompt inside a private temporary directory; keeps the original content when the editor exits unsuccessfully; returns empty content when the editor clears the prompt. The host harness checks capture/file privacy and cleanup, with actual upstream editInExternalEditor as a test-only oracle. Additional checks cover BOM, single-final-LF removal, multiline/Unicode text, signalled/missing editors and inherited foreground PTY input/output. The helper is native POSIX; wiring Ctrl+g with terminal suspension/resume is separately pending in interactive-mode. Filesystem/encoding failures return Failed; malformed UTF-8 is rejected rather than replaced."
     },
     {
       "source": "packages/coding-agent/test/file-mutation-queue.test.ts",

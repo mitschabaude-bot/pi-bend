@@ -956,6 +956,14 @@
       "port_sha256": {
         "packages/ai/src/env-api-keys.bend": "fc9cc3764ff0d2de12ec2f40a748725aaee5c71c879635e3ffc7e2865921f04d"
       }
+    },
+    "packages/coding-agent/src/modes/interactive/external-editor.ts": {
+      "state": "ported",
+      "note": "Native POSIX helper preserves the command arguments, launching notice, private pi-editor temporary directory/prompt.md, exit-code gating, leading-BOM/single-final-newline normalization and cleanup. Native1/native4 syscall/foreground-PTY checks and actual upstream helper comparisons cover successful, failed and empty edits. Filesystem/encoding failures return Failed; malformed UTF-8 is rejected rather than replaced, following the agreed strict-input policy. JS execution is unsupported for these native process effects. Interactive Ctrl+g and terminal suspension/resume are tracked separately in interactive-mode.",
+      "source_sha256": "b05a9c1e8a88fd5c39937564160463d7d670df4bc2148b70a7325c601a96dee7",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/external-editor.bend": "77e7b7a09c8449af505b83496038c62de85ccad4a36b6569926a205e8ba11eaa"
+      }
     }
   }
 }
