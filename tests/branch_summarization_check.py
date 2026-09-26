@@ -30,3 +30,28 @@ for label, command in (
     actual = subprocess.check_output(command, cwd=ROOT, text=True).strip()
     assert actual == expected, (label, actual, expected)
     print(f"{label}: {actual}")
+
+# test/branch-summarization.test.ts: generateBranchSummary over one abandoned user entry. The summarizer
+# request carries only the transcript and the output cap, so it cannot override the tool choice; the
+# session's summarizer (AgentSession summaryOptions) sets none.
+import json
+CASES = (
+    # does not override tool choice for branch summaries (the cap is 4096)
+    (("text", "8192"), {"caps": [4096], "error": None}),
+    # clamps the branch summary output cap to the model limit
+    (("text", "1024"), {"caps": [1024], "error": None}),
+    # rejects tool calls from branch summaries
+    (("tool", "8192"), {"caps": [4096], "error": "Branch summarization attempted to call a tool"}),
+    # rejects length-limited branch summaries
+    (("length", "8192"), {"caps": [4096], "error": "Branch summarization failed: generation hit the token cap and the summary is incomplete"}),
+)
+for label, command in (
+    ("Bun", ["bun", str(ROOT / "build/branch-summarization.js")]),
+    ("native1", [str(ROOT / "build/branch-summarization-native"), "--threads", "1"]),
+    ("native4", [str(ROOT / "build/branch-summarization-native"), "--threads", "4"]),
+):
+    for arguments, expected_result in CASES:
+        prefix = command if label == "Bun" else command + ["--"]
+        actual = json.loads(subprocess.check_output(prefix + ["generate", *arguments], cwd=ROOT, text=True))
+        assert actual == expected_result, (label, arguments, actual)
+    print(f"{label}: generateBranchSummary {len(CASES)} cases")

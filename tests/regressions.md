@@ -9,7 +9,7 @@ python3 tests/regressions_check.py            # Bun lane
 python3 tests/regressions_check.py --regressions build/regressions ...   # a native runner per fixture
 ```
 
-`tests/regressions.bend` builds an `AgentSession` over a faux provider that streams like upstream's `registerFauxProvider`: a `start` event, then each block's start/delta/end events, with the text or the tool call's JSON arguments split into chunks, then `done`. Each request takes the next hold: it passes or waits at a gate (as in `tests/agent-session.bend`). The provider keeps the last request's abort signal, and a request whose signal is aborted when it proceeds ends as aborted, as upstream's faux does. Seed messages are stored in the session and loaded into the agent, as the harness's `agent.state.messages = buildSessionContext().messages`.
+`tests/regressions.bend` builds an `AgentSession` over a faux provider that streams like upstream's `registerFauxProvider`: a `start` event, then each block's start/delta/end events, with the text or the tool call's JSON arguments split into chunks, then `done`. Each request takes the next hold: it passes or waits at a gate (as in `tests/agent-session.bend`). The provider keeps the last request's abort signal, and a request whose signal is aborted when it proceeds ends as aborted, as upstream's faux does. Seed messages are stored in the session and loaded into the agent, as the harness's `agent.state.messages = buildSessionContext().messages`. Two replies serve `tests/suite-harness.bend` (see `tests/suite-harness.md`): `Calls` answers with several tool calls in one message, and `Interrupted` streams its first chunk from its own task and then waits for the request's abort.
 
 ## Adaptations
 

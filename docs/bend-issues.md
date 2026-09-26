@@ -343,6 +343,8 @@ The installed compiler and Clang built the typed URL serializer fixture in 19.84
 
 The existing BEND-012 imported-pattern collision also appeared when `url-serialize` defined `path` and used `path` as a URL record pattern binder. Renaming that binder to `urlPath` resolved the application build; the existing reduced compiler reproducer and unresolved diagnosis still apply.
 
+BEND-012's imported-pattern collision recurred on 2026-09-26 when `tests/suite-harness.bend` imported `tests/regressions.bend`: its helper `message` collided with `case message <> rest` binders and its local `reply` binder with a `reply` helper. A five-line reduction (a global `item` and `case item <> rest` in an imported module) fails the same way while the module compiles standalone. The helper became `replyMessage` and the binder `answerText`; the compiler is unchanged and the reduced reproducer `tests/compiler-pattern-shadow.bend` still applies.
+
 
 BEND-022 also recurred in the URL scheme-prefix scanner: a literal colon character pattern followed by `SCon{Chr{+code}, rest}` fails inference on the refined numeric term. The scanner now detects the colon by numeric equality and carries the boundary flag to its next tail call, leaving the duplicated scalar unrefined. The existing character/U32 reduced fixtures remain applicable; no compiler patch was made. The completed input/prefix suite verifies the resulting behavior on native one/four threads and Bun.
 

@@ -1874,9 +1874,14 @@
     },
     {
       "source": "packages/coding-agent/test/branch-summarization.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "cc31878be3c160ca4a8b9490143d4adfdadf022dbcae9d4916b047c96b4a8f3d"
+      "status": "ported",
+      "ports": [
+        "tests/branch-summarization.bend",
+        "tests/branch_summarization_check.py",
+        "tests/suite-harness.md"
+      ],
+      "sha256": "cc31878be3c160ca4a8b9490143d4adfdadf022dbcae9d4916b047c96b4a8f3d",
+      "notes": "All four tests through generateBranchSummary (Branch.generate) with a scripted summarizer: 4096 cap, clamp to the model's 1024, tool-call and length-stop rejections with upstream's messages. The summarizer request has no tool-choice field, so the tool-choice half holds by construction (tests/suite-harness.md)."
     },
     {
       "source": "packages/coding-agent/test/branch-summary-extensions.test.ts",
@@ -3068,9 +3073,16 @@
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-bash-persistence.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "12681289bbd11e254a85930156bf1cad17d12debe64c60d0f4445a44c2c9ac76"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md",
+        "tests/agent-session.bend",
+        "tests/agent_session_check.py"
+      ],
+      "sha256": "12681289bbd11e254a85930156bf1cad17d12debe64c60d0f4445a44c2c9ac76",
+      "notes": "All eleven tests. Six (records immediately while idle, defers while streaming and flushes before the next prompt, executes and records, keeps newer execution tracked, custom operations, streamed output) are the bash scenarios of tests/agent_session_check.py; abortBash cancellation, aborting all active executions, user/assistant/toolResult/custom persistence order (AgentSession.sendCustomMessage), no message_end for bash messages and the persisted aborted assistant run in tests/suite_harness_check.py. Adaptations in tests/suite-harness.md (channels instead of event-loop ticks; the faux stream waits for the abort after its first chunk)."
     },
     {
       "source": "packages/coding-agent/test/suite/agent-session-boundaries.test.ts",
@@ -3712,9 +3724,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8537-custom-message-tool-result-ordering.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "5e8efab4a1961584a375ae9177e490ea491b268dc94552f3fa344d1b4e806b46"
+      "status": "ported",
+      "ports": [
+        "tests/suite-harness.bend",
+        "tests/suite_harness_check.py",
+        "tests/suite-harness.md"
+      ],
+      "sha256": "5e8efab4a1961584a375ae9177e490ea491b268dc94552f3fa344d1b4e806b46",
+      "notes": "All three tests: a tool that calls sendCustomMessage (triggerTurn false) while it runs gets its message appended at turn_end, after the tool result, in agent state, session branch entries and message_start events, and the LLM history keeps every tool result after its call across a second prompt."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8611-thinking-toggle-pending-bash-output.test.ts",
@@ -3912,7 +3929,7 @@
         "tests/thinking-level.bend"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '→ ✓ medium', then '  ✓ medium' and '→   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",

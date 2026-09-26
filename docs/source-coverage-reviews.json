@@ -52,10 +52,10 @@
     },
     "packages/coding-agent/src/core/agent-session.ts": {
       "state": "partial",
-      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal; prompt images and tool-result images are normalized with the image setting and the current model's resize profile (f5c946480), without the before_agent_start and tool_result extension events. Full upstream session and extension integration behavior remains unverified. The skill-block parser used by restored transcripts is in core/skills.bend.",
+      "note": "Native sessions run, and extension context binding, commands and provider refresh are now present; v0.87.1 compaction cancellation (de2de549b) is ported except the summarization-auth abort signal; prompt images and tool-result images are normalized with the image setting and the current model's resize profile (f5c946480), without the before_agent_start and tool_result extension events. sendCustomMessage (nextTurn, steer/followUp while streaming, deferral to turn_end without triggerTurn, triggerTurn runs) and sendUserMessage (expandPromptTemplates) are ported with the pending custom-message flushes at turn_end, run settlement and prompt. Extension event dispatch (message_end replacement, tool_call/tool_result, session_before_*, context, before_agent_start, boundaries) and _isEmittingAgentSettled deferral remain missing. The skill-block parser used by restored transcripts is in core/skills.bend.",
       "source_sha256": "e5c020bced4ada5c5e116cbd160f66e111016fc717ae30d79994a45527e7f3d7",
       "port_sha256": {
-        "packages/coding-agent/src/core/agent-session.bend": "4a032cc1c6aa89275a2af940113acb93a5b342a471df4ba7c379282c24a4230f",
+        "packages/coding-agent/src/core/agent-session.bend": "78028dc81d2e962e22bdefb96010e8b090b8fbb61ba2df11aad0edd89a05e33d",
         "packages/coding-agent/src/core/skills.bend": "39c10b968daf609f60fe3c91154a63a7248c7cfd18173781eb776904dcfea236"
       },
       "ports": [

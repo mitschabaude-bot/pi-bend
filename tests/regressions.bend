@@ -44,6 +44,8 @@ type Reply is Data:
   Plain{text: String}
   Costed{text: String}
   Call{id: String, name: String, arguments: V.Value, json: String}
+  Calls{calls: List<&2, Ai.ToolCall<V.Value>>}
+  Interrupted{text: String, started: Chan(Unit)}
 
 # Each request takes the next hold: Pass runs at once, Hold waits at a gate
 # (tests/agent-session.bend's Gate); requests after the listed holds pass.
@@ -112,7 +114,7 @@ type Stamp is Data:
 def costedUsage() -> Ai.Usage:
   Ai.Usage{U32.to_f64(1), U32.to_f64(1), zero(), zero(), None{}, None{}, U32.to_f64(2), Ai.UsageCost{zero(), zero(), zero(), zero(), F64.div(U32.to_f64(1), U32.to_f64(4))}}
 
-def message(content: List<&2, Ai.AssistantContent<V.Value>>, stop: Ai.StopReason, usage: Ai.Usage, now: Stamp) -> Ai.AssistantMessage<V.Value, Unit>:
+def replyMessage(content: List<&2, Ai.AssistantContent<V.Value>>, stop: Ai.StopReason, usage: Ai.Usage, now: Stamp) -> Ai.AssistantMessage<V.Value, Unit>:
   match now:
     case Stamp{model, time}: Ai.AssistantMessage{content, "openai-responses", "faux", model, None{}, None{}, None{}, None{}, usage, stop, None{}, None{}, None{}, None{}, time}
 
@@ -141,7 +143,7 @@ def textDeltas(+stream: EventStream(), parts: List<&2, String>, +sofar: String, 
     case +part <> rest:
       +next = sofar ++ part
       do IO<Unit>:
-        push(stream, Ai.TextDelta{zero(), part, message(textBlock(next), Ai.Pending{}, usage, now)})
+        push(stream, Ai.TextDelta{zero(), part, replyMessage(textBlock(next), Ai.Pending{}, usage, now)})
         textDeltas(stream, rest, next, usage, now)
 
 def callDeltas(+stream: EventStream(), parts: List<&2, String>, +partial: Ai.AssistantMessage<V.Value, Unit>) -> IO(Unit):
@@ -152,43 +154,110 @@ def callDeltas(+stream: EventStream(), parts: List<&2, String>, +partial: Ai.Ass
         push(stream, Ai.ToolcallDelta{zero(), part, partial})
         callDeltas(stream, rest, partial)
 
+def callsBlock(calls: List<&2, Ai.ToolCall<V.Value>>) -> List<&2, Ai.AssistantContent<V.Value>>:
+  match calls:
+    case Nil{}: Nil{}
+    case call <> rest: Ai.AssistantToolCall{call} <> callsBlock(rest)
+
+# Several tool calls in one reply, each announced by its start and end.
+def callEvents(+stream: EventStream(), calls: List<&2, Ai.ToolCall<V.Value>>, +index: U32, +partial: Ai.AssistantMessage<V.Value, Unit>) -> IO(Unit):
+  match calls:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case call <> rest:
+      do IO<Unit>:
+        push(stream, Ai.ToolcallStart{U32.to_f64(index), partial})
+        push(stream, Ai.ToolcallEnd{U32.to_f64(index), call, partial})
+        callEvents(stream, rest, U32.add(index, 1), partial)
+
+def waitAborted(fuel: Nat, +signal: Maybe<&2, Signal()>) -> IO(Bool):
+  match fuel:
+    case 0n: IO.pure(Bool, False{})
+    case 1n+rest:
+      do IO<Bool>:
+        aborted : Bool <- isAborted(signal)
+        Bool.pick(Unit -> IO(Bool), aborted, _ => IO.pure(Bool, True{}), _ => IO.bind(Unit, Bool, IO.sleep(1), _ => waitAborted(rest, signal)))(Unit{})
+
+def interruptedRest(+stream: EventStream(), parts: List<&2, String>, +first: String, +text: String, +now: Stamp, aborted: Bool) -> IO(Unit):
+  match aborted:
+    case True{}: push(stream, Ai.StreamError{Ai.ErrorAborted{}, replyMessage(textBlock(first), Ai.Aborted{}, usageOf(estimate(text)), now)})
+    case False{}:
+      +usage = usageOf(estimate(text))
+      do IO<Unit>:
+        textDeltas(stream, parts, first, usage, now)
+        push(stream, Ai.TextEnd{zero(), text, replyMessage(textBlock(text), Ai.Pending{}, usage, now)})
+        push(stream, Ai.StreamDone{Ai.DoneStop{}, replyMessage(textBlock(text), Ai.Stop{}, usage, now)})
+
+# A long reply whose stream, after its first chunk, waits (up to five
+# seconds) for the request to be aborted and then ends as aborted, as
+# upstream's faux stream checks its signal between chunks.
+def interruptedChunks(+stream: EventStream(), parts: List<&2, String>, +text: String, started: Chan(Unit), signal: Maybe<&2, Signal()>, +now: Stamp) -> IO(Unit):
+  match parts:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case +first <> rest:
+      +usage = usageOf(estimate(text))
+      do IO<Unit>:
+        push(stream, Ai.Start{replyMessage(Nil{}, Ai.Pending{}, usage, now)})
+        push(stream, Ai.TextStart{zero(), replyMessage(textBlock(""), Ai.Pending{}, usage, now)})
+        push(stream, Ai.TextDelta{zero(), first, replyMessage(textBlock(first), Ai.Pending{}, usage, now)})
+        sent : Bool <- Chan.send(Unit, started, Unit{})
+        aborted : Bool <- waitAborted(5000n, signal)
+        interruptedRest(stream, rest, first, text, now, aborted)
+
+def interruptedReply(+stream: EventStream(), +text: String, started: Chan(Unit), signal: Maybe<&2, Signal()>, +now: Stamp) -> IO(Unit):
+  interruptedChunks(stream, chunks(text), text, started, signal, now)
+
 def answer(+stream: EventStream(), reply: Reply, +now: Stamp) -> IO(Unit):
   match reply:
     case Text{+text}:
       +usage = usageOf(estimate(text))
       do IO<Unit>:
-        push(stream, Ai.Start{message(Nil{}, Ai.Pending{}, usage, now)})
-        push(stream, Ai.TextStart{zero(), message(textBlock(""), Ai.Pending{}, usage, now)})
+        push(stream, Ai.Start{replyMessage(Nil{}, Ai.Pending{}, usage, now)})
+        push(stream, Ai.TextStart{zero(), replyMessage(textBlock(""), Ai.Pending{}, usage, now)})
         textDeltas(stream, chunks(text), "", usage, now)
-        push(stream, Ai.TextEnd{zero(), text, message(textBlock(text), Ai.Pending{}, usage, now)})
-        push(stream, Ai.StreamDone{Ai.DoneStop{}, message(textBlock(text), Ai.Stop{}, usage, now)})
+        push(stream, Ai.TextEnd{zero(), text, replyMessage(textBlock(text), Ai.Pending{}, usage, now)})
+        push(stream, Ai.StreamDone{Ai.DoneStop{}, replyMessage(textBlock(text), Ai.Stop{}, usage, now)})
     case Costed{+text}:
       +usage = costedUsage()
       do IO<Unit>:
-        push(stream, Ai.Start{message(Nil{}, Ai.Pending{}, usage, now)})
-        push(stream, Ai.StreamDone{Ai.DoneStop{}, message(textBlock(text), Ai.Stop{}, usage, now)})
+        push(stream, Ai.Start{replyMessage(Nil{}, Ai.Pending{}, usage, now)})
+        push(stream, Ai.StreamDone{Ai.DoneStop{}, replyMessage(textBlock(text), Ai.Stop{}, usage, now)})
     case Plain{+text}:
       +usage = usageOf(zero())
       do IO<Unit>:
-        push(stream, Ai.Start{message(Nil{}, Ai.Pending{}, usage, now)})
-        push(stream, Ai.TextStart{zero(), message(textBlock(""), Ai.Pending{}, usage, now)})
+        push(stream, Ai.Start{replyMessage(Nil{}, Ai.Pending{}, usage, now)})
+        push(stream, Ai.TextStart{zero(), replyMessage(textBlock(""), Ai.Pending{}, usage, now)})
         textDeltas(stream, chunks(text), "", usage, now)
-        push(stream, Ai.TextEnd{zero(), text, message(textBlock(text), Ai.Pending{}, usage, now)})
-        push(stream, Ai.StreamDone{Ai.DoneStop{}, message(textBlock(text), Ai.Stop{}, usage, now)})
+        push(stream, Ai.TextEnd{zero(), text, replyMessage(textBlock(text), Ai.Pending{}, usage, now)})
+        push(stream, Ai.StreamDone{Ai.DoneStop{}, replyMessage(textBlock(text), Ai.Stop{}, usage, now)})
     case Call{+id, +name, +arguments, +json}:
       +usage = usageOf(estimate(json))
-      +started = message(callBlock(id, name, V.ObjectValue{Rec.new(V.Value)}), Ai.Pending{}, usage, now)
+      +started = replyMessage(callBlock(id, name, V.ObjectValue{Rec.new(V.Value)}), Ai.Pending{}, usage, now)
       do IO<Unit>:
-        push(stream, Ai.Start{message(Nil{}, Ai.Pending{}, usage, now)})
+        push(stream, Ai.Start{replyMessage(Nil{}, Ai.Pending{}, usage, now)})
         push(stream, Ai.ToolcallStart{zero(), started})
         callDeltas(stream, chunks(json), started)
-        push(stream, Ai.ToolcallEnd{zero(), Ai.ToolCall{id, name, arguments, None{}, None{}}, message(callBlock(id, name, arguments), Ai.Pending{}, usage, now)})
-        push(stream, Ai.StreamDone{Ai.DoneToolUse{}, message(callBlock(id, name, arguments), Ai.ToolUse{}, usage, now)})
+        push(stream, Ai.ToolcallEnd{zero(), Ai.ToolCall{id, name, arguments, None{}, None{}}, replyMessage(callBlock(id, name, arguments), Ai.Pending{}, usage, now)})
+        push(stream, Ai.StreamDone{Ai.DoneToolUse{}, replyMessage(callBlock(id, name, arguments), Ai.ToolUse{}, usage, now)})
+    case Calls{+calls}:
+      +usage = usageOf(zero())
+      +partial = replyMessage(callsBlock(calls), Ai.Pending{}, usage, now)
+      do IO<Unit>:
+        push(stream, Ai.Start{replyMessage(Nil{}, Ai.Pending{}, usage, now)})
+        callEvents(stream, calls, 0, partial)
+        push(stream, Ai.StreamDone{Ai.DoneToolUse{}, replyMessage(callsBlock(calls), Ai.ToolUse{}, usage, now)})
+    case Interrupted{_, _}: IO.pure(Unit, Unit{})
 
 def abortedReply(+stream: EventStream(), +now: Stamp) -> IO(Unit):
   do IO<Unit>:
-    push(stream, Ai.Start{message(Nil{}, Ai.Pending{}, usageOf(zero()), now)})
-    push(stream, Ai.StreamError{Ai.ErrorAborted{}, message(Nil{}, Ai.Aborted{}, usageOf(zero()), now)})
+    push(stream, Ai.Start{replyMessage(Nil{}, Ai.Pending{}, usageOf(zero()), now)})
+    push(stream, Ai.StreamError{Ai.ErrorAborted{}, replyMessage(Nil{}, Ai.Aborted{}, usageOf(zero()), now)})
+
+# An interrupted reply streams from its own task, so the loop reads it while
+# it waits for the abort.
+def answerAsync(+stream: EventStream(), reply: Reply, +now: Stamp, signal: Maybe<&2, Signal()>) -> IO(Unit):
+  match reply:
+    case Interrupted{text, started}: IO.spawn(Unit, interruptedReply(stream, text, started, signal, now))
+    case other: answer(stream, other, now)
 
 def popReply(replies: List<&2, Reply>) -> List<&2, Reply> & Reply:
   match replies:
@@ -210,7 +279,7 @@ def providing(faux: Faux, +input: H.Input()) -> IO(H.Output()):
         +now : F64 <- Date.now()
         +stream : EventStream() <- Stream.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, EventStream()>, Unit, streams, old => (stream <> old, Unit{}))
-        Bool.pick(Unit -> IO(Unit), aborted, _ => abortedReply(stream, Stamp{model, now}), _ => answer(stream, reply, Stamp{model, now}))(Unit{})
+        Bool.pick(Unit -> IO(Unit), aborted, _ => abortedReply(stream, Stamp{model, now}), _ => answerAsync(stream, reply, Stamp{model, now}, signal))(Unit{})
         return Done{T.borrowedStream(Unit, Tools.ToolError, stream)}
 
 def provider(faux: Faux, input: H.Input()) -> IO(H.Output()): providing(faux, input)
@@ -891,7 +960,7 @@ def number(+text: String) -> Nat: Maybe.default(&2, Nat, Nat.read(text), 0n)
 def run(args: List<String>) -> IO(Unit):
   match args:
     case "name" <> dir <> agentDir <> name <> Nil{}: withSession(dir, agentDir, Nil{}, session => named(name, session))
-    case "prompt" <> dir <> agentDir <> text <> reply <> Nil{}: withSession(dir, agentDir, Text{reply} <> Nil{}, session => promptWith(text, session))
+    case "prompt" <> dir <> agentDir <> text <> answerText <> Nil{}: withSession(dir, agentDir, Text{answerText} <> Nil{}, session => promptWith(text, session))
     case "stream" <> dir <> agentDir <> count <> Nil{}: withSession(dir, agentDir, Text{repeated(number(count))} <> Nil{}, session => promptWith("respond", session))
     case "toolcall" <> dir <> agentDir <> Nil{}: withSession(dir, agentDir, writeCall() <> Text{"done"} <> Nil{}, session => promptWith("write a file", session))
     case "fork_label" <> Nil{}: reportFork(forkedAtLabel())
