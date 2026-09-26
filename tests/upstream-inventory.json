@@ -3249,9 +3249,13 @@
     },
     {
       "source": "packages/coding-agent/test/remote-catalog-provider.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "865f1fc88157ce16c5e409971ed2e386f74d7c56d0e96f8108e3c58dbf7fc93f"
+      "status": "ported",
+      "ports": [
+        "tests/remote-catalog.bend",
+        "tests/remote_catalog_check.py"
+      ],
+      "sha256": "865f1fc88157ce16c5e409971ed2e386f74d7c56d0e96f8108e3c58dbf7fc93f",
+      "notes": "All seven cases pass on Bun and native one/four threads. The provider's https://pi.dev requests go through a logging redirect fetch to a local server that plays each case's response sequence (upstream mocks global fetch): keyed catalogs with the pi/<version> user agent, the 4-hour TTL and forced refresh (two requests for three refreshes); newer-of-generated-and-remote by Last-Modified; If-None-Match revalidation keeping the overlay on 304; a stale etag dropped on 501; etag and overlay kept after 429s (retried by fetchWithRetry, then the error); two concurrent forced refreshes through the model runtime where the stalled older answer is not published; and 501 as an unavailable (empty) overlay. refreshProvider publishes like upstream's helper (persist to an in-memory store; the published models are the provider's catalog)."
     },
     {
       "source": "packages/coding-agent/test/resolve-config-value.test.ts",
