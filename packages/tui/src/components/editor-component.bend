@@ -155,6 +155,16 @@ def setTextState(state: State,value: String) -> IO(State & Unit):
 def setText(handle: Handle,value: String) -> IO(Unit):
   match handle:
     case Handle{resource}: Serial.run(State,Unit,resource,state => setTextState(state,value))
+def insertState(state: State,value: String) -> IO(State & Unit):
+  match state:
+    case State{editor,words,bindings,keyboard,rows,error}:
+      do IO<State & Unit>:
+        next : Editor.Editor <- Editor.insertTextAtCursor(editor,value)
+        return (State{next,words,bindings,keyboard,rows,error},Unit{})
+# upstream Editor.insertTextAtCursor on the live editor (clipboard paste).
+def insertTextAtCursor(handle: Handle,value: String) -> IO(Unit):
+  match handle:
+    case Handle{resource}: Serial.run(State,Unit,resource,state => insertState(state,value))
 
 def paddingState(state: State,padding: Nat) -> IO(State & Unit):
   match state:

@@ -18,6 +18,7 @@ import ../../../runtime/src/file-lock.bend as Lock
 import ../../../runtime/src/random.bend as Random
 import ../../../runtime/src/date.bend as Date
 import ../utils/paths.bend as Paths
+import ../../../runtime/src/ref.bend as Ref
 
 # CredentialStore implementation backed by auth.json. Provider auth
 # orchestration belongs to the model runtime and pi-ai auth resolution.
@@ -642,3 +643,104 @@ def readStoredCredential(providerId: String, path: String) -> IO(Maybe<&2, Auth.
   do IO<Maybe<&2, Auth.Credential>>:
     result : Outcome(AuthStorageData()) <- loadData(FileBackend{path, None{}})
     return Maybe.bind(&2, AuthStorageData(), Auth.Credential, storedOrNone(result), data => R.get(Auth.Credential, data, providerId))
+
+# ReadOnlyAuthStorage
+# -------------------
+# upstream ReadOnlyAuthStorage: reads auth.json without locking and never
+# creates or writes it (a missing file is empty). The first valid read is kept;
+# an invalid file fails every operation. Stored keys resolve like the file
+# storage's, except command values, which are returned unresolved.
+
+type ReadOnlyState is Data:
+  ReadOnlyState{path: String, resolver: ConfigValue.Resolver, cache: Ref.Ref<Maybe<&2, AuthStorageData()>>}
+
+def remembered(cache: Ref.Ref<Maybe<&2, AuthStorageData()>>, result: Outcome(AuthStorageData())) -> IO(Outcome(AuthStorageData())):
+  match result:
+    case Done{+data}:
+      do IO<Outcome(AuthStorageData())>:
+        Ref.write(Maybe<&2, AuthStorageData()>, cache, Some{data})
+        return Done{data}
+    case Fail{error}: IO.pure(Outcome(AuthStorageData()), Fail{error})
+
+def cachedOr(state: ReadOnlyState, cached: Maybe<&2, AuthStorageData()>) -> IO(Outcome(AuthStorageData())):
+  match state cached:
+    case _ Some{data}: IO.pure(Outcome(AuthStorageData()), Done{data})
+    case ReadOnlyState{path, _, cache} None{}:
+      do IO<Outcome(AuthStorageData())>:
+        loadedData : Outcome(AuthStorageData()) <- loadData(FileBackend{path, None{}})
+        remembered(cache, loadedData)
+
+def readOnlyLoad(+state: ReadOnlyState, signal: Auth.Signal()) -> IO(Outcome(AuthStorageData())):
+  match state:
+    case ReadOnlyState{_, _, cache}:
+      do IO<Outcome(AuthStorageData())>:
+        cancelled : Bool <- aborted(signal)
+        cached : Maybe<&2, AuthStorageData()> <- Ref.read(Maybe<&2, AuthStorageData()>, cache)
+        Bool.pick(Unit -> IO(Outcome(AuthStorageData())), cancelled, _ => IO.pure(Outcome(AuthStorageData()), Fail{abortedError()}), _ => cachedOr(state, cached))(Unit{})
+
+def readOnlyCredential(resolver: ConfigValue.Resolver, credential: Auth.Credential) -> IO(Auth.Credential):
+  match credential:
+    case Auth.ApiKeyCredential{Some{+key}, +env}: Bool.pick(Unit -> IO(Auth.Credential), ConfigValue.isCommandConfigValue(key), _ => IO.pure(Auth.Credential, Auth.ApiKeyCredential{Some{key}, env}), _ => resolveCredential(resolver, Auth.ApiKeyCredential{Some{key}, env}))(Unit{})
+    case other: IO.pure(Auth.Credential, other)
+
+def readOnlyEntry(resolver: ConfigValue.Resolver, entry: Maybe<&2, Auth.Credential>) -> IO(Outcome(Maybe<&2, Auth.Credential>)):
+  match entry:
+    case None{}: IO.pure(Outcome(Maybe<&2, Auth.Credential>), Done{None{}})
+    case Some{credential}:
+      do IO<Outcome(Maybe<&2, Auth.Credential>)>:
+        resolved : Auth.Credential <- readOnlyCredential(resolver, credential)
+        return Done{Some{resolved}}
+
+def readOnlyFound(resolver: ConfigValue.Resolver, +providerId: String, data: Outcome(AuthStorageData())) -> IO(Outcome(Maybe<&2, Auth.Credential>)):
+  match data:
+    case Fail{error}: IO.pure(Outcome(Maybe<&2, Auth.Credential>), Fail{error})
+    case Done{found}: readOnlyEntry(resolver, R.get(Auth.Credential, found, providerId))
+
+def readOnlyReadWith(+state: ReadOnlyState, request: Auth.Request) -> IO(Outcome(Maybe<&2, Auth.Credential>)):
+  match state request:
+    case ReadOnlyState{_, resolver, _} Auth.Request{providerId, signal}:
+      do IO<Outcome(Maybe<&2, Auth.Credential>)>:
+        data : Outcome(AuthStorageData()) <- readOnlyLoad(state, signal)
+        readOnlyFound(resolver, providerId, data)
+
+def readOnlyListWith(+state: ReadOnlyState, signal: Auth.Signal()) -> IO(Outcome(List<&2, Auth.CredentialInfo>)):
+  do IO<Outcome(List<&2, Auth.CredentialInfo>)>:
+    data : Outcome(AuthStorageData()) <- readOnlyLoad(state, signal)
+    return Result.map(&2, &2, String, AuthStorageData(), List<&2, Auth.CredentialInfo>, found => infos(R.entries(Auth.Credential, found)), data)
+
+# Callback bodies take their environment affinely; the helpers copy it.
+def readOnlyRead(state: ReadOnlyState, request: Auth.Request) -> IO(Outcome(Maybe<&2, Auth.Credential>)): readOnlyReadWith(state, request)
+def readOnlyList(state: ReadOnlyState, signal: Auth.Signal()) -> IO(Outcome(List<&2, Auth.CredentialInfo>)): readOnlyListWith(state, signal)
+
+def READ_ONLY_ERROR() -> String: "Read-only credential storage cannot modify auth.json"
+
+def readOnlyModify(state: ReadOnlyState, request: Auth.Modify) -> IO(Outcome(Maybe<&2, Auth.Credential>)):
+  IO.pure(Outcome(Maybe<&2, Auth.Credential>), Fail{READ_ONLY_ERROR()})
+
+def readOnlyDelete(state: ReadOnlyState, request: Auth.Request) -> IO(Outcome(Unit)):
+  IO.pure(Outcome(Unit), Fail{READ_ONLY_ERROR()})
+
+type ReadOnlyAuthStorage is Data:
+  ReadOnlyAuthStorage{state: ReadOnlyState, store: Auth.CredentialStore}
+
+def readOnly(+path: String) -> IO(ReadOnlyAuthStorage):
+  do IO<ReadOnlyAuthStorage>:
+    resolver : ConfigValue.Resolver <- ConfigValue.newResolver()
+    cache : Ref.Ref<Maybe<&2, AuthStorageData()>> <- Ref.new(Maybe<&2, AuthStorageData()>, None{})
+    +state : ReadOnlyState <- IO.pure(ReadOnlyState, ReadOnlyState{path, resolver, cache})
+    reader : C.Callback<Auth.Request, Outcome(Maybe<&2, Auth.Credential>)> <- C.create(~ReadOnlyState, ~Auth.Request, ~(Outcome(Maybe<&2, Auth.Credential>)), ~readOnlyRead, state)
+    lister : C.Callback<Auth.Signal(), Outcome(List<&2, Auth.CredentialInfo>)> <- C.create(~ReadOnlyState, ~(Auth.Signal()), ~(Outcome(List<&2, Auth.CredentialInfo>)), ~readOnlyList, state)
+    modifier : C.Callback<Auth.Modify, Outcome(Maybe<&2, Auth.Credential>)> <- C.create(~ReadOnlyState, ~Auth.Modify, ~(Outcome(Maybe<&2, Auth.Credential>)), ~readOnlyModify, state)
+    deleter : C.Callback<Auth.Request, Outcome(Unit)> <- C.create(~ReadOnlyState, ~Auth.Request, ~(Outcome(Unit)), ~readOnlyDelete, state)
+    return ReadOnlyAuthStorage{state, Auth.CredentialStore{reader, lister, modifier, deleter}}
+
+def readOnlyStore(storage: ReadOnlyAuthStorage) -> Auth.CredentialStore:
+  match storage:
+    case ReadOnlyAuthStorage{_, store}: store
+
+def disposeReadOnly(storage: ReadOnlyAuthStorage) -> IO(Unit):
+  match storage:
+    case ReadOnlyAuthStorage{ReadOnlyState{_, resolver, cache}, _}:
+      do IO<Unit>:
+        last : Maybe<&2, AuthStorageData()> <- Ref.dispose(Maybe<&2, AuthStorageData()>, cache)
+        ConfigValue.disposeResolver(resolver)

@@ -278,6 +278,52 @@ def checkProviderAuth(+runtime: ModelRuntime, +id: String) -> IO(Bool):
     providers : List<&2, AiModels.Provider> <- getProviders(runtime)
     checkAmong(runtime, id, providers)
 
+# upstream AuthCheck: how a provider's auth is configured (and where from).
+type AuthCheck is Data:
+  AuthCheck{source: Maybe<&2, String>, kind: Auth.CredentialType}
+
+def checkOf(resolution: Resolve.Resolution()) -> Result<&2, &2, String, Maybe<&2, AuthCheck>>:
+  match resolution:
+    case Fail{error}: Fail{Resolve.errorMessage(error)}
+    case Done{None{}}: Done{None{}}
+    case Done{Some{Auth.AuthResult{_, _, source}}}: Done{Some{AuthCheck{source, Auth.ApiKeyType{}}}}
+
+def resolvedCheck(+runtime: ModelRuntime, +id: String) -> IO(Result<&2, &2, String, Maybe<&2, AuthCheck>>):
+  do IO<Result<&2, &2, String, Maybe<&2, AuthCheck>>>:
+    resolution : Resolve.Resolution() <- getAuth(runtime, id, Resolve.noOverrides())
+    return checkOf(resolution)
+
+def configuredCheck(+runtime: ModelRuntime, +id: String, key: Maybe<&2, String>) -> IO(Result<&2, &2, String, Maybe<&2, AuthCheck>>):
+  match key:
+    case None{}: resolvedCheck(runtime, id)
+    case Some{configured}:
+      do IO<Result<&2, &2, String, Maybe<&2, AuthCheck>>>:
+        ready : Bool <- Composer.checkConfiguredApiKey(configured, contextOf(runtime))
+        return Done{Bool.pick(Maybe<&2, AuthCheck>, ready, Some{AuthCheck{None{}, Auth.ApiKeyType{}}}, None{})}
+
+def storedCheck(+runtime: ModelRuntime, +id: String, provider: Maybe<&2, AiModels.Provider>, stored: Auth.StoreResult(Maybe<&2, Auth.Credential>)) -> IO(Result<&2, &2, String, Maybe<&2, AuthCheck>>):
+  match stored:
+    case Fail{_}: IO.pure(Result<&2, &2, String, Maybe<&2, AuthCheck>>, Fail{"Credential store read failed for " ++ id})
+    case Done{Some{Auth.OAuthCredential{_, _, _, _}}}: IO.pure(Result<&2, &2, String, Maybe<&2, AuthCheck>>, Done{Bool.pick(Maybe<&2, AuthCheck>, supportsOAuth(provider), Some{AuthCheck{Some{"OAuth"}, Auth.OAuthType{}}}, None{})})
+    case Done{None{}}: configuredCheck(runtime, id, configuredKey(Config.getProvider(getModelConfig(runtime), id)))
+    case Done{Some{_}}: resolvedCheck(runtime, id)
+
+def checkKnown(+runtime: ModelRuntime, +id: String, provider: Maybe<&2, AiModels.Provider>) -> IO(Result<&2, &2, String, Maybe<&2, AuthCheck>>):
+  match provider:
+    case None{}: IO.pure(Result<&2, &2, String, Maybe<&2, AuthCheck>>, Done{None{}})
+    case Some{found}:
+      do IO<Result<&2, &2, String, Maybe<&2, AuthCheck>>>:
+        stored : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(credentialsOf(runtime), id, None{})
+        storedCheck(runtime, id, Some{found}, stored)
+
+# upstream ModelRuntime.checkAuth: how the provider is configured, without
+# refreshing OAuth; nothing for an unknown or unconfigured provider, and an
+# error when the credential store cannot be read.
+def checkAuth(+runtime: ModelRuntime, +id: String) -> IO(Result<&2, &2, String, Maybe<&2, AuthCheck>>):
+  do IO<Result<&2, &2, String, Maybe<&2, AuthCheck>>>:
+    provider : Maybe<&2, AiModels.Provider> <- getProvider(runtime, id)
+    checkKnown(runtime, id, provider)
+
 def configuredIds(+runtime: ModelRuntime, +all: List<&2, AiModels.Provider>, providers: List<&2, AiModels.Provider>) -> IO(List<&2, String>):
   match providers:
     case Nil{}: IO.pure(List<&2, String>, Nil{})

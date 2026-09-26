@@ -1,6 +1,6 @@
 # tools-manager and management HTTP
 
-`coding-agent/src/utils/tools-manager.bend` ports upstream's `tools-manager.ts`, and `utils/management-http.bend` ports its `fetchWithRetry`. Upstream has no test file for the tools manager; `management-http.test.ts` is partly ported here (below), and the rest are native checks.
+`coding-agent/src/utils/tools-manager.bend` ports upstream's `tools-manager.ts`, and `utils/management-http.bend` ports its `fetchWithRetry`. Upstream's `tools-manager.test.ts` is ported by `tests/tools-manager-latest.bend` (`tests/tools_manager_latest_check.py`: getLatestVersion's redirect cases and ensureTool's offline status); `management-http.test.ts` is partly ported here (below), and the rest are native checks.
 
 - **Lookup.** `getToolPath` checks the bin directory first, then the system names on PATH (`fd`/`fdfind`, `rg`). A candidate counts only if it can be started with `--version`, as in upstream's `commandExists`.
 - **ensureTool.** `PI_OFFLINE` values `1`, `true` or `yes` (case-insensitive) skip the download with upstream's warning. Otherwise it reports "… not found. Downloading…" and then "… installed to …" or "Failed to download …: …" through the optional status callback.

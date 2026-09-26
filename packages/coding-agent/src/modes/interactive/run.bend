@@ -38,7 +38,6 @@ import ../../../../tui/src/terminal.bend as Terminal
 import ../../../../tui/src/utils.bend as Utils
 import ../../core/agent-runtime.bend as Runtime
 import ../../core/agent-session.bend as Session
-import ../../../../ai/src/utils/uuid.bend as Uuid
 import ../../core/trust-manager.bend as Trust
 import ../../core/agent-session-runtime.bend as SessionHost
 import ../../core/bash-executor.bend as BashExec
@@ -55,6 +54,9 @@ import ../../utils/tools-manager.bend as Manager
 import ../../core/settings-manager.bend as Settings
 import ../../core/model-runtime.bend as Models
 import ../../utils/clipboard.bend as Clipboard
+import ../../utils/clipboard-image.bend as ClipboardImage
+import ./clipboard-paste.bend as ClipboardPaste
+import ../../../../ai/src/utils/uuid.bend as Uuid
 import ../../utils/changelog.bend as Changelog
 import ../../config.bend as Config
 import ../../../../ai/src/utils/thinking-levels.bend as Levels
@@ -2201,6 +2203,44 @@ def openExternalEditor(input: KeyInput,+editor: Live.Handle) -> IO(Unit):
         operation : Callback.Callback<Unit,Unit> <- Callback.create(~ExternalEditorInvocation,~Unit,~Unit,~invokeExternalEditor,ExternalEditorInvocation{editor,command,content})
         accepted : Bool <- Process.suspendWith(suspension,operation)
         return Unit{}
+def sessionCwd(session: Session.AgentSession) -> String:
+  match session:
+    case Session.AgentSession{_,_,_,_,cwd,_,_,_}: cwd
+# The pasteImage key (Ctrl+V): clipboard-paste.bend is upstream's
+# handleClipboardPaste over this editor, the redraw request and the process
+# clipboard. It runs apart from input, as upstream's is async.
+def insertLive(editor: Live.Handle,text: String) -> IO(Unit): Live.insertTextAtCursor(editor,text)
+def requestedRedraw(target: Maybe<&2,Callback.Callback<Unit,Unit>>) -> IO(Unit):
+  match target:
+    case Some{request}: Callback.call(Unit,Unit,request,Unit{})
+    case None{}: IO.pure(Unit,Unit{})
+def redrawRequested(redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,_: Unit) -> IO(Unit):
+  do IO<Unit>:
+    target : Maybe<&2,Callback.Callback<Unit,Unit>> <- Ref.read(Maybe<&2,Callback.Callback<Unit,Unit>>,redraw)
+    requestedRedraw(target)
+def clipboardText(cwd: String,_: Unit) -> IO(Maybe<&2,String>): Clipboard.read(cwd)
+def disposePasteTarget(target: ClipboardPaste.PasteTarget) -> IO(Unit):
+  match target:
+    case ClipboardPaste.PasteTarget{insert,requestRender,readText}:
+      do IO<Unit>:
+        Callback.dispose(String,Unit,insert)
+        Callback.dispose(Unit,Unit,requestRender)
+        Callback.dispose(Unit,Maybe<&2,String>,readText)
+def pasteClipboard(input: KeyInput,editor: Live.Handle) -> IO(Unit):
+  match input:
+    case KeyInput{_,_,_,_,_,_,session,redraw,_,_,_,_}:
+      do IO<Unit>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        +cwd : String <- IO.pure(String,sessionCwd(live))
+        insert : Callback.Callback<String,Unit> <- Callback.create(~Live.Handle,~String,~Unit,~insertLive,editor)
+        requestRender : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,~Unit,~Unit,~redrawRequested,redraw)
+        readText : Callback.Callback<Unit,Maybe<&2,String>> <- Callback.create(~String,~Unit,~Maybe<&2,String>,~clipboardText,cwd)
+        +target : ClipboardPaste.PasteTarget <- IO.pure(ClipboardPaste.PasteTarget,ClipboardPaste.PasteTarget{insert,requestRender,readText})
+        +deps : ClipboardImage.Dependencies <- ClipboardImage.processDependencies(cwd)
+        ClipboardPaste.handleClipboardPaste(target,deps,"linux")
+        ClipboardImage.disposeDependencies(deps)
+        disposePasteTarget(target)
+def pasteKey(input: KeyInput,editor: Live.Handle) -> IO(Unit): IO.spawn(Unit,pasteClipboard(input,editor))
 # upstream setupKeyHandlers: the app actions the editor intercepts, in
 # registration order.
 def APP_ACTIONS() -> List<&2,String>:
@@ -2224,6 +2264,7 @@ def keyAction(input: KeyInput,action: CustomEditor.AppAction) -> IO(Unit):
     case CustomEditor.AppAction{"app.session.tree",_}: commandKey(input,Commands.Tree{})
     case CustomEditor.AppAction{"app.session.fork",_}: commandKey(input,Commands.Fork{})
     case CustomEditor.AppAction{"app.session.resume",_}: commandKey(input,Commands.Resume{})
+    case CustomEditor.AppAction{"app.clipboard.pasteImage",editor}: pasteKey(input,editor)
     case _: IO.pure(Unit,Unit{})
 def changedEditor(target: Maybe<&2,Live.Handle>,value: String,count: Nat) -> IO(Unit):
   match target:
@@ -2427,9 +2468,6 @@ def startupChangelog(transcript: Transcript.Handle,session: Ref.Ref<Session.Agen
     +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
     messages : List<&2,Session.Message()> <- Session.messages(live)
     changelogFor(transcript,live,Bool.not(List.is_empty(&2,Session.Message(),messages)),builtinDir)
-def sessionCwd(session: Session.AgentSession) -> String:
-  match session:
-    case Session.AgentSession{_,_,_,_,cwd,_,_,_}: cwd
 def startupProjectTrustWarning(transcript: Transcript.Handle,session: Ref.Ref<Session.AgentSession>) -> IO(Unit):
   do IO<Unit>:
     +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
