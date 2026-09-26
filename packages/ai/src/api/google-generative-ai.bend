@@ -39,15 +39,17 @@ def choiceName(value: T.ToolChoice) -> String:
     case T.AutoTool{}: "auto"
     case T.NoTool{}: "none"
 
-def budgetFor(id: String, level: T.ThinkingLevel) -> Maybe<&2, F64>:
+# `lite`: Google Generative AI gives Gemini 2.5 Flash-Lite its own minimal
+# budget; Google Vertex budgets it as 2.5 Flash.
+def budgetFor(id: String, level: T.ThinkingLevel, lite: Bool) -> Maybe<&2, F64>:
   match level:
-    case T.Minimal{}: Some{F.fromU32(Bool.pick(U32, String.contains(id, "2.5-flash-lite"), 512, 128))}
+    case T.Minimal{}: Some{F.fromU32(Bool.pick(U32, lite && String.contains(id, "2.5-flash-lite"), 512, 128))}
     case T.Low{}: Some{F.fromU32(2048)}
     case T.Medium{}: Some{F.fromU32(8192)}
     case _: Some{F.fromU32(Bool.pick(U32, String.contains(id, "2.5-pro"), 32768, 24576))}
 
-def modelBudget(+id: String, level: T.ThinkingLevel) -> F64:
-  Maybe.default(&2, F64, Bool.pick(Maybe<&2, F64>, String.contains(id, "2.5-pro") || String.contains(id, "2.5-flash"), budgetFor(id, level), None{}), F.negate(F.fromU32(1)))
+def modelBudget(+id: String, level: T.ThinkingLevel, lite: Bool) -> F64:
+  Maybe.default(&2, F64, Bool.pick(Maybe<&2, F64>, String.contains(id, "2.5-pro") || String.contains(id, "2.5-flash"), budgetFor(id, level, lite), None{}), F.negate(F.fromU32(1)))
 
 def customBudget(level: T.ThinkingLevel, budgets: T.ThinkingBudgets) -> Maybe<&2, F64>:
   match level budgets:
@@ -58,10 +60,10 @@ def customBudget(level: T.ThinkingLevel, budgets: T.ThinkingBudgets) -> Maybe<&2
 
 # upstream getGoogleBudget: a custom budget for the level, else the Gemini
 # 2.5 Pro/Flash/Flash-Lite defaults, else dynamic (-1).
-def getGoogleBudget(+model: T.Model<J()>, +level: T.ThinkingLevel, custom: Maybe<&2, T.ThinkingBudgets>) -> F64:
+def getGoogleBudget(+model: T.Model<J()>, +level: T.ThinkingLevel, custom: Maybe<&2, T.ThinkingBudgets>, lite: Bool) -> F64:
   match custom:
-    case Some{budgets}: Maybe.default(&2, F64, customBudget(level, budgets), modelBudget(T.modelId(model), level))
-    case None{}: modelBudget(T.modelId(model), level)
+    case Some{budgets}: Maybe.default(&2, F64, customBudget(level, budgets), modelBudget(T.modelId(model), level, lite))
+    case None{}: modelBudget(T.modelId(model), level, lite)
 
 def simpleKey(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>) -> Maybe<&2, String>:
   match options:
@@ -225,38 +227,38 @@ type GoogleOptions<-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data> 
 def disabled(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>) -> GoogleOptions<Signal, Telemetry, Fetch, Error>:
   GoogleOptions{base, choice, Some{GoogleThinking{False{}, None{}, None{}}}}
 
-def enabledFor(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, levels: Bool, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>, +level: T.ThinkingLevel, budgets: Maybe<&2, T.ThinkingBudgets>) -> GoogleOptions<Signal, Telemetry, Fetch, Error>:
+def enabledFor(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, levels: Bool, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>, +level: T.ThinkingLevel, budgets: Maybe<&2, T.ThinkingBudgets>, lite: Bool) -> GoogleOptions<Signal, Telemetry, Fetch, Error>:
   match levels:
     case True{}: GoogleOptions{base, choice, Some{GoogleThinking{True{}, None{}, Some{Shared.toGoogleThinkingLevel(level)}}}}
-    case False{}: GoogleOptions{base, choice, Some{GoogleThinking{True{}, Some{getGoogleBudget(model, level, budgets)}, None{}}}}
+    case False{}: GoogleOptions{base, choice, Some{GoogleThinking{True{}, Some{getGoogleBudget(model, level, budgets, lite)}, None{}}}}
 
-def enabledOptions(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>, +level: T.ThinkingLevel, budgets: Maybe<&2, T.ThinkingBudgets>) -> GoogleOptions<Signal, Telemetry, Fetch, Error>:
-  enabledFor(Signal, Telemetry, Fetch, Error, Shared.usesGoogleThinkingLevel(model), model, base, choice, level, budgets)
+def enabledOptions(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>, +level: T.ThinkingLevel, budgets: Maybe<&2, T.ThinkingBudgets>, lite: Bool) -> GoogleOptions<Signal, Telemetry, Fetch, Error>:
+  enabledFor(Signal, Telemetry, Fetch, Error, Shared.usesGoogleThinkingLevel(model), model, base, choice, level, budgets, lite)
 
-def resolvedLevel(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>, budgets: Maybe<&2, T.ThinkingBudgets>, resolved: Result<&2, &2, String, T.ThinkingLevel>) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
+def resolvedLevel(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>, budgets: Maybe<&2, T.ThinkingBudgets>, lite: Bool, resolved: Result<&2, &2, String, T.ThinkingLevel>) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
   match resolved:
     case Fail{message}: Fail{message}
-    case Done{level}: Done{enabledOptions(Signal, Telemetry, Fetch, Error, model, base, choice, level, budgets)}
+    case Done{level}: Done{enabledOptions(Signal, Telemetry, Fetch, Error, model, base, choice, level, budgets, lite)}
 
-def clamped(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>, budgets: Maybe<&2, T.ThinkingBudgets>, level: T.ModelThinkingLevel) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
+def clamped(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>, budgets: Maybe<&2, T.ThinkingBudgets>, lite: Bool, level: T.ModelThinkingLevel) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
   match level:
     case T.Off{}: Done{disabled(Signal, Telemetry, Fetch, Error, base, choice)}
-    case T.Thinking{selected}: resolvedLevel(Signal, Telemetry, Fetch, Error, model, base, choice, budgets, Shared.resolveGoogleThinkingLevel(model, selected))
+    case T.Thinking{selected}: resolvedLevel(Signal, Telemetry, Fetch, Error, model, base, choice, budgets, lite, Shared.resolveGoogleThinkingLevel(model, selected))
 
-def simpleThinking(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>, reasoning: Maybe<&2, T.ThinkingLevel>, budgets: Maybe<&2, T.ThinkingBudgets>) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
+def simpleThinking(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, choice: Maybe<&2, String>, reasoning: Maybe<&2, T.ThinkingLevel>, budgets: Maybe<&2, T.ThinkingBudgets>, lite: Bool) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
   match reasoning:
     case None{}: Done{disabled(Signal, Telemetry, Fetch, Error, base, choice)}
-    case Some{level}: clamped(Signal, Telemetry, Fetch, Error, model, base, choice, budgets, Models.clampThinkingLevel(J(), model, T.Thinking{level}))
+    case Some{level}: clamped(Signal, Telemetry, Fetch, Error, model, base, choice, budgets, lite, Models.clampThinkingLevel(J(), model, T.Thinking{level}))
 
-def simpleWith(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
+def simpleWith(-Signal: Data, -Telemetry: Data, -Fetch: Data, -Error: Data, +model: T.Model<J()>, base: T.StreamOptions<J(), Signal, Telemetry, Fetch, Error>, options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>, lite: Bool) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
   match options:
-    case None{}: simpleThinking(Signal, Telemetry, Fetch, Error, model, base, None{}, None{}, None{})
+    case None{}: simpleThinking(Signal, Telemetry, Fetch, Error, model, base, None{}, None{}, None{}, lite)
     case Some{T.SimpleStreamOptions{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, choice, reasoning, _, budgets}}:
-      simpleThinking(Signal, Telemetry, Fetch, Error, model, base, Maybe.map(&2, T.ToolChoice, String, choiceName, choice), reasoning, budgets)
+      simpleThinking(Signal, Telemetry, Fetch, Error, model, base, Maybe.map(&2, T.ToolChoice, String, choiceName, choice), reasoning, budgets, lite)
 
 def keyedOptions(~G: Data, ~D: Data, ~Signal: Data, ~Telemetry: Data, ~Fetch: Data, ~Error: Data, +model: T.Model<J()>, context: T.TranscriptContext<V.Value, V.Value, G, D>, +options: Maybe<&2, T.SimpleStreamOptions<J(), Signal, Telemetry, Fetch, Error>>, key: Maybe<&2, String>) -> Result<&2, &2, String, GoogleOptions<Signal, Telemetry, Fetch, Error>>:
   match key:
-    case Some{SCon{c, cs}}: simpleWith(Signal, Telemetry, Fetch, Error, model, Simple.buildBaseOptions(~G, ~D, ~J(), ~Signal, ~Telemetry, ~Fetch, ~Error, model, context, options, Some{SCon{c, cs}}), options)
+    case Some{SCon{c, cs}}: simpleWith(Signal, Telemetry, Fetch, Error, model, Simple.buildBaseOptions(~G, ~D, ~J(), ~Signal, ~Telemetry, ~Fetch, ~Error, model, context, options, Some{SCon{c, cs}}), options, True{})
     case _: Fail{"No API key for provider: " ++ T.modelProvider(model)}
 
 # upstream streamSimple's GoogleOptions. A missing API key and an unsupported

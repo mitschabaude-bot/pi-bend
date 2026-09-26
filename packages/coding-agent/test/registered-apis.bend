@@ -25,3 +25,4 @@ def main() -> IO(Unit):
     check("pi-messages")
     check("mistral-conversations")
     check("bedrock-converse-stream")
+    check("google-vertex")

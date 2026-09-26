@@ -828,7 +828,8 @@
       "source": "packages/ai/test/cloudflare-ai-binding.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "292fc7320f1867259abaaf39f1b2d48208dffb8ce5299b02a9abbfddc083c9d8"
+      "sha256": "292fc7320f1867259abaaf39f1b2d48208dffb8ce5299b02a9abbfddc083c9d8",
+      "notes": "Pending a decision: api/cloudflare-ai-binding.ts wraps a Cloudflare Workers AI binding (env.AI), which exists only inside a Workers runtime (see docs/source-coverage-reviews.json)."
     },
     {
       "source": "packages/ai/test/cloudflare-stream.test.ts",
@@ -959,16 +960,19 @@
     },
     {
       "source": "packages/ai/test/google-raw-stop-reason.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/ai/test/google-raw-stop-reason.bend",
         "packages/ai/test/google-harness.bend",
         "packages/ai/test/google-shared-support.bend",
         "tests/google-suites.bend",
-        "tests/google_generative_ai_check.py"
+        "tests/google_generative_ai_check.py",
+        "packages/ai/test/google-vertex.bend",
+        "packages/ai/test/google-vertex-oracle.ts",
+        "tests/google_vertex_check.py"
       ],
       "sha256": "627fb032217b789275b6b00d79c129cc32214224db8bcbb08014016f24b00af0",
-      "notes": "The Google Generative AI rows pass on Bun and native 1/4 threads (tests/google_generative_ai_check.py); the Google Vertex rows and 'preserves raw Gemini finish reasons for Google Vertex errors' stay pending because the Vertex adapter is not ported."
+      "notes": "The Google Generative AI rows pass on Bun and native 1/4 threads (tests/google_generative_ai_check.py). The Google Vertex rows ('preserves raw Gemini finish reasons for Google Vertex errors', 'preserves MAX_TOKENS with a tool call as length for Google Vertex', 'maps STOP with a tool call to toolUse for Google Vertex') run in tests/google_vertex_check.py with ADC against a loopback server, compared with upstream google-vertex.ts driving the pinned @google/genai and google-auth-library; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/google-shared-convert-tools.test.ts",
@@ -1044,16 +1048,19 @@
     },
     {
       "source": "packages/ai/test/google-thinking-level-map.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/ai/test/google-thinking-level-map.bend",
         "packages/ai/test/google-harness.bend",
         "packages/ai/test/google-shared-support.bend",
         "tests/google-suites.bend",
-        "tests/google_generative_ai_check.py"
+        "tests/google_generative_ai_check.py",
+        "packages/ai/test/google-vertex.bend",
+        "packages/ai/test/google-vertex-oracle.ts",
+        "tests/google_vertex_check.py"
       ],
       "sha256": "0a4912f8fa12fae18db5398f6f47d181d8ac853e801f0e64460b597660be955d",
-      "notes": "The Google Generative AI half passes on Bun and native 1/4 threads (tests/google_generative_ai_check.py); the Google Vertex rows and the two Vertex-only tests stay pending because the Vertex adapter is not ported."
+      "notes": "The Google Generative AI half passes on Bun and native 1/4 threads (tests/google_generative_ai_check.py). The Google Vertex rows and the two Vertex-only tests ('maps Google Vertex extended levels', 'uses mapped Google Vertex levels for token budgets') capture the streamSimple payload in tests/google_vertex_check.py and compare it with upstream google-vertex.ts; Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/google-thinking-signature.test.ts",
@@ -1070,9 +1077,14 @@
     },
     {
       "source": "packages/ai/test/google-vertex-api-key-resolution.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9edb3abe54cd4e6cf0a179b722bfa7400bbdec9cd03577aa7a2fd5264a5278ca"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/google-vertex.bend",
+        "packages/ai/test/google-vertex-oracle.ts",
+        "tests/google_vertex_check.py"
+      ],
+      "sha256": "9edb3abe54cd4e6cf0a179b722bfa7400bbdec9cd03577aa7a2fd5264a5278ca",
+      "notes": "All 9 cases assert the GoogleGenAI constructor options the native client computes (google-vertex.bend clientConfig, printed by the runner's config mode) where upstream mocks the constructor, plus native cases for env-provided project/location and the missing project/location errors; the streamed request those options produce is compared with upstream's SDK in the loopback cases of tests/google_vertex_check.py. Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/image-model-data.test.ts",
@@ -1592,12 +1604,14 @@
       "source": "packages/ai/test/providers.test.ts",
       "status": "partial",
       "ports": [
-        "packages/ai/test/cloudflare-auth.bend",
         "packages/ai/test/amazon-bedrock-auth.bend",
-        "tests/bedrock_check.py"
+        "packages/ai/test/cloudflare-auth.bend",
+        "packages/ai/test/google-vertex-auth.bend",
+        "tests/bedrock_check.py",
+        "tests/google_vertex_check.py"
       ],
       "sha256": "05398664e04241071153801789cc3017bad1b820c1926a91ac04dc9cdff785a6",
-      "notes": "Only the two Cloudflare cases are ported ('requires Cloudflare Workers AI account config and returns scoped env', 'requires Cloudflare AI Gateway account and gateway config and returns scoped env headers'), each with its missing-config and configured halves. Upstream resolves through createModels().getAuth with a fake auth context; the port calls the provider's ApiKeyAuth.resolve with the same context. Native cases cover the per-field credential/env merge, the source label, an empty stored key and abort checks. Bedrock (packages/ai/test/amazon-bedrock-auth.bend, run by tests/bedrock_check.py on Bun): 'reports bedrock as configured from ambient AWS credentials without an api key' (configured and unconfigured halves) and 'runs provider-owned Bedrock bearer token and AWS profile login flows' (both login flows with scripted answers and the recorded info event, then the resolve assertion) call bedrockAuth.login/resolve with the same fake context. Native cases cover the full credential-source order, empty values and abort checks. Every other case of the suite remains pending. Native lane not run."
+      "notes": "Only the two Cloudflare cases are ported ('requires Cloudflare Workers AI account config and returns scoped env', 'requires Cloudflare AI Gateway account and gateway config and returns scoped env headers'), each with its missing-config and configured halves. Upstream resolves through createModels().getAuth with a fake auth context; the port calls the provider's ApiKeyAuth.resolve with the same context. Native cases cover the per-field credential/env merge, the source label, an empty stored key and abort checks. Bedrock (packages/ai/test/amazon-bedrock-auth.bend, run by tests/bedrock_check.py on Bun): 'reports bedrock as configured from ambient AWS credentials without an api key' (configured and unconfigured halves) and 'runs provider-owned Bedrock bearer token and AWS profile login flows' (both login flows with scripted answers and the recorded info event, then the resolve assertion) call bedrockAuth.login/resolve with the same fake context. Native cases cover the full credential-source order, empty values and abort checks. Vertex (packages/ai/test/google-vertex-auth.bend, run by tests/google_vertex_check.py on Bun): 'runs provider-owned Vertex API key and ADC login flows' and 'resolves vertex via ADC file plus project and location' (its three halves), with the fake context's file list, plus native cases for the lookup order, the credentials-file variable and abort checks. Every other case of the suite remains pending. Native lane not run."
     },
     {
       "source": "packages/ai/test/qwen-token-plan-models.test.ts",

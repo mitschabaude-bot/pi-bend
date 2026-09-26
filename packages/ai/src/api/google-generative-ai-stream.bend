@@ -99,8 +99,19 @@ def statusOf(value: V.Value) -> String:
     case V.ObjectValue{fields}: statusText(R.get(V.Value, fields, "status"))
     case _: "undefined"
 
-def create(-G: Data, +model: T.Model<T.JsonValue>, timestamp: F64) -> State<G>:
-  State{T.AssistantMessage{Nil{}, "google-generative-ai", T.modelProvider(model), T.modelId(model), None{}, None{}, None{}, None{}, emptyUsage(), T.Pending{}, None{}, None{}, None{}, None{}, timestamp}, None{}, model, 0n}
+# The output message names the adapter's api: "google-generative-ai" or
+# "google-vertex" (upstream google-vertex.ts shares this loop).
+def createFor(-G: Data, api: String, +model: T.Model<T.JsonValue>, timestamp: F64) -> State<G>:
+  State{T.AssistantMessage{Nil{}, api, T.modelProvider(model), T.modelId(model), None{}, None{}, None{}, None{}, emptyUsage(), T.Pending{}, None{}, None{}, None{}, None{}, timestamp}, None{}, model, 0n}
+
+def create(-G: Data, +model: T.Model<T.JsonValue>, timestamp: F64) -> State<G>: createFor(G, "google-generative-ai", model, timestamp)
+
+def messageApi(-G: Data, message: T.AssistantMessage<V.Value, G>) -> String:
+  match message:
+    case T.AssistantMessage{_, api, _, _, _, _, _, _, _, _, _, _, _, _, _}: api
+
+def endedWithoutReason(-G: Data, message: T.AssistantMessage<V.Value, G>) -> String:
+  Bool.pick(String, String.eq(messageApi(G, message), "google-vertex"), "Google Vertex stream ended without a finish reason", "Google stream ended without a finish reason")
 
 def stateMessage(-G: Data, state: State<G>) -> T.AssistantMessage<V.Value, G>:
   match state:
@@ -479,7 +490,7 @@ def doneWith(-G: Data, state: State<G>, +message: T.AssistantMessage<V.Value, G>
     case T.Stop{}: Step{state, T.StreamDone{T.DoneStop{}, message} <> Nil{}, None{}}
     case T.Length{}: Step{state, T.StreamDone{T.DoneLength{}, message} <> Nil{}, None{}}
     case T.ToolUse{}: Step{state, T.StreamDone{T.DoneToolUse{}, message} <> Nil{}, None{}}
-    case T.Pending{}: Step{state, Nil{}, Some{"Google stream ended without a finish reason"}}
+    case T.Pending{}: Step{state, Nil{}, Some{endedWithoutReason(G, message)}}
     case _: Step{state, Nil{}, Some{providerStopped(rawOf(G, message))}}
 
 def checked(-G: Data, state: State<G>, aborted: Bool) -> Step<G>:
