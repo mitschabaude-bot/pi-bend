@@ -23,6 +23,10 @@ import ../packages/coding-agent/src/core/extensions/loader.bend as Loader
 import ../packages/coding-agent/src/core/extensions/runner.bend as Runner
 import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
 import ../packages/coding-agent/src/core/model-runtime.bend as Models
+import ../packages/coding-agent/src/utils/paths.bend as Paths
+import ../packages/coding-agent/src/core/session-stats.bend as Stats
+import ../packages/coding-agent/src/core/tools/file-mutation-queue.bend as Queue
+import ../packages/coding-agent/src/utils/tools-manager.bend as Manager
 import ../packages/coding-agent/src/core/compaction/compaction.bend as Compaction
 import ../packages/coding-agent/src/core/session-json.bend as SessionJson
 import ../packages/runtime/src/date.bend as Date
@@ -149,23 +153,43 @@ def disposeExecutes(executes: List<&2, Tools.Execute()>) -> IO(Unit):
 # Harness
 # -------
 
+# upstream createHarness({ tools }): without `tools` the session has pi's
+# built-in tools (read, bash, edit, write); with them, exactly those.
+type Tooling is Data:
+  Builtins{}
+  Scripted{specs: List<&2, ToolSpec>}
+
+# The built-in tools are owned by a task holding their owners and file
+# mutation queue until the harness releases them (`release`, then `done`).
+type BuiltinsHandle is Data:
+  BuiltinsHandle{release: Chan(Unit), done: Chan(Unit)}
+
+type BuiltinSet is Data:
+  BuiltinSet{handle: Maybe<&2, BuiltinsHandle>, tools: List<&2, Tools.Tool()>}
+
 type Harness is Data:
-  Harness{fixture: Reg.Fixture, session: R.Ref<Maybe<&2, Session.AgentSession>>, executes: List<&2, Tools.Execute()>}
+  Harness{fixture: Reg.Fixture, session: R.Ref<Maybe<&2, Session.AgentSession>>, executes: List<&2, Tools.Execute()>, builtins: Maybe<&2, BuiltinsHandle>}
 
-def promptSections() -> Rec.Record<String>: Rec.set(String, Rec.new(String), "base", "You are the suite harness assistant.")
+# upstream's test resource loader has no system prompt override, so the
+# session builds pi's default system prompt for the active tools.
+def promptSections(+source: Runtime.LoadoutSource, tools: List<&2, Tools.Tool()>) -> Rec.Record<String>:
+  Result.default(&2, &2, String, Rec.Record<String>, Runtime.sectionsForTools(source, Session.toolNamesOf(tools), Nil{}, Nil{}), Rec.new(String))
 
-def harnessLoadout(+tools: List<&2, Tools.Tool()>, runner: Maybe<&2, Runner.ExtensionRunner>) -> Runtime.Loadout:
-  Runtime.Loadout{promptSections(), tools, Nil{}, Nil{}, runner, Nil{}, None{}, tools}
+def harnessLoadout(+source: Runtime.LoadoutSource, +tools: List<&2, Tools.Tool()>, runner: Maybe<&2, Runner.ExtensionRunner>) -> Runtime.Loadout:
+  Runtime.Loadout{promptSections(source, tools), tools, Nil{}, Nil{}, runner, Nil{}, Some{source}, tools}
+
+def loadoutSource(+dir: String, +agentDir: String, +settings: Settings.SettingsManager) -> Runtime.LoadoutSource:
+  Runtime.LoadoutSource{Paths.Environment{dir, agentDir, Runtime.urlContext()}, Reg.toolOptions(dir, agentDir, Runtime.defaultToolSelection(), settings), "/pi"}
 
 # upstream createTestExtensionsResult: the inline extensions load into a
 # runtime whose runner shares the session's model runtime.
-def extensionLoadout(runtime: Maybe<&2, Ext.ExtensionRuntime()>, +cwd: String, +tools: List<&2, Tools.Tool()>, models: Models.ModelRuntime) -> IO(Runtime.Loadout):
+def extensionLoadout(runtime: Maybe<&2, Ext.ExtensionRuntime()>, +source: Runtime.LoadoutSource, +cwd: String, +tools: List<&2, Tools.Tool()>, models: Models.ModelRuntime) -> IO(Runtime.Loadout):
   match runtime:
-    case None{}: IO.pure(Runtime.Loadout, harnessLoadout(tools, None{}))
+    case None{}: IO.pure(Runtime.Loadout, harnessLoadout(source, tools, None{}))
     case Some{loaded}:
       do IO<Runtime.Loadout>:
         runner : Runner.ExtensionRunner <- Runner.create(loaded, cwd, models)
-        return harnessLoadout(tools, Some{runner})
+        return harnessLoadout(source, tools, Some{runner})
 
 def loadErrorLines(errors: List<&2, Ext.LoadError>) -> IO(Unit):
   match errors:
@@ -198,34 +222,92 @@ def builtExecutes(built: Built) -> List<&2, Tools.Execute()>:
 # `seed` is appended to the session first (upstream tests append to
 # harness.sessionManager and load the agent from buildSessionContext());
 # `others` are further faux models (upstream `models`).
-def createHarnessFull(+dir: String, agentDir: String, specs: List<&2, ToolSpec>, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>, seed: List<&2, Session.Message()>, others: List<&2, Ai.Model<Ai.JsonValue>>) -> IO(Harness):
+def holdBuiltins(queue: Queue.Owner, owners: List<&1, Tools.ToolOwner>, release: Chan(Unit), done: Chan(Unit)) -> IO(Unit):
+  do IO<Unit>:
+    released : Maybe<&1, Unit> <- Chan.recv(Unit, release)
+    Tools.disposeTools(owners)
+    Queue.dispose(queue)
+    sent : Bool <- Chan.send(Unit, done, Unit{})
+    return Unit{}
+
+def heldTools(queue: Queue.Owner, pair: List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) -> IO(BuiltinSet):
+  match pair:
+    case Tuple{owners, tools}:
+      do IO<BuiltinSet>:
+        +release : Chan(Unit) <- Chan.new(Unit, 1)
+        +done : Chan(Unit) <- Chan.new(Unit, 1)
+        IO.spawn(Unit, holdBuiltins(queue, owners, release, done))
+        return BuiltinSet{Some{BuiltinsHandle{release, done}}, tools}
+
+def createdBuiltins(+dir: String, +agentDir: String, pair: Queue.Owner & Queue.Queue) -> IO(BuiltinSet):
+  match pair:
+    case Tuple{queue, handle}:
+      do IO<BuiltinSet>:
+        owners : List<&1, Tools.ToolOwner> <- Tools.createTools(Tools.allToolNames(), Tools.Environment{Paths.Environment{dir, agentDir, Runtime.urlContext()}, dir, Manager.ToolsManager{agentDir ++ "/bin", Runtime.urlContext(), None{}}, handle, "", None{}}, Tools.defaultOptions())
+        heldTools(queue, Tools.borrowTools(owners))
+
+def builtinsFor(+dir: String, +agentDir: String, tooling: Tooling) -> IO(BuiltinSet):
+  match tooling:
+    case Scripted{_}: IO.pure(BuiltinSet, BuiltinSet{None{}, Nil{}})
+    case Builtins{}:
+      do IO<BuiltinSet>:
+        queue : Queue.Owner <- Queue.create()
+        createdBuiltins(dir, agentDir, Queue.borrow(queue))
+
+def specsOf(tooling: Tooling) -> List<&2, ToolSpec>:
+  match tooling:
+    case Builtins{}: Nil{}
+    case Scripted{specs}: specs
+
+def disposeBuiltins(builtins: Maybe<&2, BuiltinsHandle>) -> IO(Unit):
+  match builtins:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{BuiltinsHandle{+release, +done}}:
+      do IO<Unit>:
+        sent : Bool <- Chan.send(Unit, release, Unit{})
+        finished : Maybe<&1, Unit> <- Chan.recv(Unit, done)
+        Chan.close(Unit, release)
+        Chan.close(Unit, done)
+
+def splitTools(split: BuiltinSet) -> List<&2, Tools.Tool()>:
+  match split:
+    case BuiltinSet{_, tools}: tools
+
+def splitOwners(split: BuiltinSet) -> Maybe<&2, BuiltinsHandle>:
+  match split:
+    case BuiltinSet{handle, _}: handle
+
+def createHarnessFull(+dir: String, +agentDir: String, +tooling: Tooling, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>, seed: List<&2, Session.Message()>, others: List<&2, Ai.Model<Ai.JsonValue>>) -> IO(Harness):
   do IO<Harness>:
     +runtime : Maybe<&2, Ext.ExtensionRuntime()> <- loadedRuntime(extensions)
-    +built : Built <- buildTools(ref, specs)
+    +built : Built <- buildTools(ref, specsOf(tooling))
+    +split : BuiltinSet <- builtinsFor(dir, agentDir, tooling)
     uuids : Uuid.Generator <- Uuid.generator()
     created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     empty : Session.Session() <- H.requireSession(created)
     stored : Session.Session() <- Reg.seeded(seed, empty)
     loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(dir, agentDir, Settings.options())
-    +value : Reg.Fixture <- Reg.fixtureModels(stored, dir, H.settingsOf(loaded), setup, others, models => extensionLoadout(runtime, dir, builtTools(built), models))
+    +settings : Settings.SettingsManager = H.settingsOf(loaded)
+    +source : Runtime.LoadoutSource = loadoutSource(dir, agentDir, settings)
+    +value : Reg.Fixture <- Reg.fixtureModels(stored, dir, settings, setup, others, models => extensionLoadout(runtime, source, dir, List.append(&2, Tools.Tool(), splitTools(split), builtTools(built)), models))
     R.write(Maybe<&2, Session.AgentSession>, ref, Some{Reg.sessionOf(value)})
-    return Harness{value, ref, builtExecutes(built)}
+    return Harness{value, ref, builtExecutes(built), splitOwners(split)}
 
-def createHarnessWith(+dir: String, agentDir: String, specs: List<&2, ToolSpec>, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>) -> IO(Harness):
-  createHarnessFull(dir, agentDir, specs, setup, ref, extensions, Nil{}, Nil{})
+def createHarnessWith(+dir: String, agentDir: String, tooling: Tooling, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>) -> IO(Harness):
+  createHarnessFull(dir, agentDir, tooling, setup, ref, extensions, Nil{}, Nil{})
 
-def createHarness(+dir: String, agentDir: String, specs: List<&2, ToolSpec>, setup: Reg.Setup) -> IO(Harness):
+def createHarness(+dir: String, agentDir: String, tooling: Tooling, setup: Reg.Setup) -> IO(Harness):
   do IO<Harness>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    createHarnessWith(dir, agentDir, specs, setup, ref, Nil{})
+    createHarnessWith(dir, agentDir, tooling, setup, ref, Nil{})
 
 def harnessFixture(harness: Harness) -> Reg.Fixture:
   match harness:
-    case Harness{fixture, _, _}: fixture
+    case Harness{fixture, _, _, _}: fixture
 
 def sessionOf(harness: Harness) -> Session.AgentSession:
   match harness:
-    case Harness{fixture, _, _}: Reg.sessionOf(fixture)
+    case Harness{fixture, _, _, _}: Reg.sessionOf(fixture)
 
 def disposeRunner(runner: Maybe<&2, Runner.ExtensionRunner>) -> IO(Unit):
   match runner:
@@ -234,13 +316,14 @@ def disposeRunner(runner: Maybe<&2, Runner.ExtensionRunner>) -> IO(Unit):
 
 def cleanup(harness: Harness) -> IO(Unit):
   match harness:
-    case Harness{+fixture, ref, executes}:
+    case Harness{+fixture, ref, executes, builtins}:
       do IO<Unit>:
         found : Maybe<&2, Session.AgentSession> <- R.dispose(Maybe<&2, Session.AgentSession>, ref)
         runner : Maybe<&2, Runner.ExtensionRunner> <- Session.extensionRunner(Reg.sessionOf(fixture))
         Reg.teardown(fixture)
         disposeRunner(runner)
         disposeExecutes(executes)
+        disposeBuiltins(builtins)
 
 # Reports
 # -------
@@ -294,7 +377,7 @@ def setup(replies: List<&2, Reg.Reply>) -> Reg.Setup: Reg.Setup{replies, Nil{}, 
 # "persists user, assistant, toolResult, and custom messages in order"
 def customOrder(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
-    +harness : Harness <- createHarness(dir, agentDir, [ToolSpec{"echo", Echo{"echo:"}}], setup([echoCall("call_echo", "hello"), Reg.Text{"done"}]))
+    +harness : Harness <- createHarness(dir, agentDir, Scripted{[ToolSpec{"echo", Echo{"echo:"}}]}, setup([echoCall("call_echo", "hello"), Reg.Text{"done"}]))
     sent : Result<&2, &2, String, Unit> <- Session.sendCustomMessage(sessionOf(harness), Ext.CustomMessageInput{"note", Ai.UserText{"hello"}, True{}, Some{Json.object(Json.field("a", V.Number{U32.to_f64(1)}, Nil{}))}}, Session.sendDefaults())
     H.reportOutcome("sent", sent)
     prompted(sessionOf(harness), "start")
@@ -305,7 +388,7 @@ def customOrder(+dir: String, agentDir: String) -> IO(Unit):
 # "does not emit message_end for bash execution messages"
 def bashRecorded(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
-    +harness : Harness <- createHarness(dir, agentDir, Nil{}, setup(Nil{}))
+    +harness : Harness <- createHarness(dir, agentDir, Builtins{}, setup(Nil{}))
     IO.print("{\"type\":\"recording\"}")
     Session.recordBashResult(sessionOf(harness), "echo hi", H.hiResult(), None{})
     IO.print("{\"type\":\"recorded\"}")
@@ -340,7 +423,7 @@ def bashInBackground(session: Session.AgentSession, operations: Bash.BashOperati
 
 def bashAbort(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
-    +harness : Harness <- createHarness(dir, agentDir, Nil{}, setup(Nil{}))
+    +harness : Harness <- createHarness(dir, agentDir, Builtins{}, setup(Nil{}))
     +entered : Chan(Unit) <- Chan.new(Unit, 1)
     +done : Chan(H.BashOutcome()) <- Chan.new(H.BashOutcome(), 1)
     exec : C.Callback<Bash.BashExecutionInput, ExecResult()> <- C.create(~Chan(Unit), ~Bash.BashExecutionInput, ~ExecResult(), ~rejectOnAbort, entered)
@@ -361,7 +444,7 @@ def bashAbort(+dir: String, agentDir: String) -> IO(Unit):
 # runs before either finishes.
 def bashAbortAll(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
-    +harness : Harness <- createHarness(dir, agentDir, Nil{}, setup(Nil{}))
+    +harness : Harness <- createHarness(dir, agentDir, Builtins{}, setup(Nil{}))
     +entered1 : Chan(Unit) <- Chan.new(Unit, 1)
     +release1 : Chan(Unit) <- Chan.new(Unit, 1)
     +entered2 : Chan(Unit) <- Chan.new(Unit, 1)
@@ -398,7 +481,7 @@ def abortedAssistant(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +started : Chan(Unit) <- Chan.new(Unit, 1)
     +done : Chan(Result<&2, &2, String, Unit>) <- Chan.new(Result<&2, &2, String, Unit>, 1)
-    +harness : Harness <- createHarness(dir, agentDir, Nil{}, setup([Reg.Interrupted{Reg.repeated(20000n), started}]))
+    +harness : Harness <- createHarness(dir, agentDir, Builtins{}, setup([Reg.Interrupted{Reg.repeated(20000n), started}]))
     IO.spawn(Unit, Reg.promptLater(sessionOf(harness), "hi", done))
     began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
     Session.abort(sessionOf(harness))
@@ -414,7 +497,7 @@ def abortedAssistant(+dir: String, agentDir: String) -> IO(Unit):
 # The wait tool sends a custom message (triggerTurn: false) while it runs.
 def customDuringTool(+dir: String, agentDir: String, +second: String) -> IO(Unit):
   do IO<Unit>:
-    +harness : Harness <- createHarness(dir, agentDir, [ToolSpec{"wait", Notify{}}], setup([Reg.Call{"call_wait", "wait", Json.object(Nil{}), "{}"}, Reg.Text{"done"}, Reg.Text{"second turn"}]))
+    +harness : Harness <- createHarness(dir, agentDir, Scripted{[ToolSpec{"wait", Notify{}}]}, setup([Reg.Call{"call_wait", "wait", Json.object(Nil{}), "{}"}, Reg.Text{"done"}, Reg.Text{"second turn"}]))
     prompted(sessionOf(harness), "hi")
     H.reportMessages(sessionOf(harness))
     reportBranch(sessionOf(harness))
@@ -473,7 +556,7 @@ def costFactory(api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
 def messageEndCost(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessWith(dir, agentDir, Nil{}, setup([Reg.Text{"hello"}]), ref, [inline("cost", costFactory)])
+    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"hello"}]), ref, [inline("cost", costFactory)])
     prompted(sessionOf(harness), "hi")
     H.reportMessages(sessionOf(harness))
     cleanup(harness)
@@ -501,7 +584,7 @@ def echoCalls(texts: List<&2, String>, +index: Nat) -> List<&2, Ai.ToolCall<V.Va
 def settledOrder(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessWith(dir, agentDir, [ToolSpec{"echo", Echo{""}}], setup([Reg.Calls{echoCalls(["one", "two"], 1n)}, Reg.Text{"done"}]), ref, [inline("slow-end", slowEndFactory)])
+    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"echo", Echo{""}}]}, setup([Reg.Calls{echoCalls(["one", "two"], 1n)}, Reg.Text{"done"}]), ref, [inline("slow-end", slowEndFactory)])
     prompted(sessionOf(harness), "run tools")
     reportBranch(sessionOf(harness))
     cleanup(harness)
@@ -530,7 +613,7 @@ def rolesFactory(ref: R.Ref<Maybe<&2, Session.AgentSession>>, api: Ext.Extension
 def toolCallSettled(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessWith(dir, agentDir, [ToolSpec{"echo", Echo{""}}], setup([echoCall("call_echo", "hello"), Reg.Text{"done"}]), ref, [inline("roles", api => rolesFactory(ref, api))])
+    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"echo", Echo{""}}]}, setup([echoCall("call_echo", "hello"), Reg.Text{"done"}]), ref, [inline("roles", api => rolesFactory(ref, api))])
     prompted(sessionOf(harness), "run tool")
     cleanup(harness)
 
@@ -546,7 +629,7 @@ def blockFactory(api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
 def blockedTerminate(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessWith(dir, agentDir, [ToolSpec{"echo", Throws{"tool should have been blocked"}}], setup([echoCall("call_echo", "hello"), Reg.Text{"should not run"}]), ref, [inline("terminate", blockFactory)])
+    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"echo", Throws{"tool should have been blocked"}}]}, setup([echoCall("call_echo", "hello"), Reg.Text{"should not run"}]), ref, [inline("terminate", blockFactory)])
     prompted(sessionOf(harness), "hi")
     Reg.reportRemaining(Reg.repliesOf(harnessFixture(harness)))
     H.reportMessages(sessionOf(harness))
@@ -586,7 +669,7 @@ def writeCall(+id: String, +value: String) -> Ai.ToolCall<V.Value>:
 def preflightAbort(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessWith(dir, agentDir, [ToolSpec{"external_write", Records{}}], setup([Reg.Calls{[writeCall("call_first", "first"), writeCall("call_second", "second")]}]), ref, [inline("preflight", preflightFactory)])
+    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"external_write", Records{}}]}, setup([Reg.Calls{[writeCall("call_first", "first"), writeCall("call_second", "second")]}]), ref, [inline("preflight", preflightFactory)])
     prompted(sessionOf(harness), "run both writes")
     H.reportMessages(sessionOf(harness))
     cleanup(harness)
@@ -641,14 +724,14 @@ def followUpFactory(api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>): 
 def settledAfterRetry(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessWith(dir, agentDir, Nil{}, setup([Reg.Failed{"overloaded_error"}, Reg.Text{"recovered"}]), ref, [inline("settled", settledFactory)])
+    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Failed{"overloaded_error"}, Reg.Text{"recovered"}]), ref, [inline("settled", settledFactory)])
     prompted(sessionOf(harness), "test")
     cleanup(harness)
 
 def settledAfterFollowUp(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessWith(dir, agentDir, Nil{}, setup([Reg.Text{"first"}, Reg.Text{"second"}]), ref, [inline("follow-up", followUpFactory)])
+    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"first"}, Reg.Text{"second"}]), ref, [inline("follow-up", followUpFactory)])
     prompted(sessionOf(harness), "hello")
     H.reportMessages(sessionOf(harness))
     cleanup(harness)
@@ -714,7 +797,7 @@ def commandWaitsForIdle(+dir: String, agentDir: String) -> IO(Unit):
     +commandStarted : Chan(Unit) <- Chan.new(Unit, 1)
     +promptDone : Chan(Unit) <- Chan.new(Unit, 1)
     +commandDone : Chan(Unit) <- Chan.new(Unit, 1)
-    +harness : Harness <- createHarnessWith(dir, agentDir, [ToolSpec{"wait", Gated{toolStarted, release}}], setup([Reg.Call{"call_wait", "wait", Json.object(Nil{}), "{}"}, Reg.Text{"done"}]), ref, [inline("after-idle", api => afterIdleFactory(commandStarted, api))])
+    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"wait", Gated{toolStarted, release}}]}, setup([Reg.Call{"call_wait", "wait", Json.object(Nil{}), "{}"}, Reg.Text{"done"}]), ref, [inline("after-idle", api => afterIdleFactory(commandStarted, api))])
     actions : Ctx.ExtensionCommandContextActions <- commandActions(ref)
     runner : Maybe<&2, Runner.ExtensionRunner> <- Session.extensionRunner(sessionOf(harness))
     bindCommands(runner, actions)
@@ -756,7 +839,7 @@ def firstEntryId(+session: Session.AgentSession) -> IO(String):
 def treeCancelCompacting(+dir: String, agentDir: String) -> IO(Unit):
   do IO<Unit>:
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessFull(dir, agentDir, Nil{}, setup(Nil{}), ref, [inline("cancel-tree", cancelTreeFactory)], [Reg.userMsg("first"), Reg.assistantAt("reply", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero()), Reg.userMsg("second")], Nil{})
+    +harness : Harness <- createHarnessFull(dir, agentDir, Builtins{}, setup(Nil{}), ref, [inline("cancel-tree", cancelTreeFactory)], [Reg.userMsg("first"), Reg.assistantAt("reply", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero()), Reg.userMsg("second")], Nil{})
     reportLeafValue("before", sessionOf(harness))
     +target : String <- firstEntryId(sessionOf(harness))
     result : Result<&2, &2, String, Session.TreeNavigation> <- Session.navigateTreeWith(sessionOf(harness), target, Session.noSummary())
@@ -793,7 +876,7 @@ def treeWaiting(+dir: String, agentDir: String) -> IO(Unit):
     +release : Chan(Unit) <- Chan.new(Unit, 1)
     +done : Chan(Reg.Navigated) <- Chan.new(Reg.Navigated, 1)
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessFull(dir, agentDir, Nil{}, setup(Nil{}), ref, [inline("waiting-tree", api => waitingTreeFactory(H.Gate{started, release}, api))], [Reg.userMsg("first user"), Reg.assistantAt("first assistant", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero()), Reg.userMsg("second user"), Reg.assistantAt("second assistant", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero())], Nil{})
+    +harness : Harness <- createHarnessFull(dir, agentDir, Builtins{}, setup(Nil{}), ref, [inline("waiting-tree", api => waitingTreeFactory(H.Gate{started, release}, api))], [Reg.userMsg("first user"), Reg.assistantAt("first assistant", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero()), Reg.userMsg("second user"), Reg.assistantAt("second assistant", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero())], Nil{})
     reportLeafValue("original", sessionOf(harness))
     +firstTarget : String <- assistantIdAt(sessionOf(harness), 1n)
     +secondTarget : String <- firstEntryId(sessionOf(harness))
@@ -884,7 +967,7 @@ def compactionOverride(+dir: String, agentDir: String, +path: String) -> IO(Unit
   do IO<Unit>:
     +now : F64 <- Date.now()
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-    +harness : Harness <- createHarnessFull(dir, agentDir, Nil{}, Reg.Setup{overrideReplies(path), Nil{}, Reg.sizedModel(4000, 16384)}, ref, [inline("supply", api => supplyFactory("compacted history", api))], seedHistory(Bool.pick(U32, String.eq(path, "pre-prompt"), 2500, 650), now), Nil{})
+    +harness : Harness <- createHarnessFull(dir, agentDir, Scripted{Nil{}}, Reg.Setup{overrideReplies(path), Nil{}, Reg.sizedModel(4000, 16384)}, ref, [inline("supply", api => supplyFactory("compacted history", api))], seedHistory(Bool.pick(U32, String.eq(path, "pre-prompt"), 2500, 650), now), Nil{})
     reportSeeded(sessionOf(harness))
     compactOrPrompt(path, sessionOf(harness))
     Reg.reportRemaining(Reg.repliesOf(harnessFixture(harness)))
@@ -897,7 +980,7 @@ def compactionBudget(+dir: String, agentDir: String, +path: String) -> IO(Unit):
     +now : F64 <- Date.now()
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
     +replies : List<&2, Reg.Reply> = Bool.pick(List<&2, Reg.Reply>, String.eq(path, "manual"), [Reg.Text{"built-in summary"}], [Reg.Text{"built-in summary"}, Reg.Text{"done"}])
-    +harness : Harness <- createHarnessFull(dir, agentDir, Nil{}, Reg.Setup{replies, Nil{}, Reg.sizedModel(4000, 3000)}, ref, Nil{}, seedHistory(2500, now), Nil{})
+    +harness : Harness <- createHarnessFull(dir, agentDir, Scripted{Nil{}}, Reg.Setup{replies, Nil{}, Reg.sizedModel(4000, 3000)}, ref, Nil{}, seedHistory(2500, now), Nil{})
     reportSeeded(sessionOf(harness))
     compactOrPrompt(Bool.pick(String, String.eq(path, "manual"), "manual", "prompt"), sessionOf(harness))
     reportCompactions(sessionOf(harness))
@@ -934,7 +1017,7 @@ def compactionModelSwitch(+dir: String, agentDir: String) -> IO(Unit):
     +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
     +small : Ai.Model<Ai.JsonValue> = Reg.namedModel("small", 4000, 16384)
     +big : Ai.Model<Ai.JsonValue> = Reg.namedModel("big", 10000, 16384)
-    +harness : Harness <- createHarnessFull(dir, agentDir, Nil{}, Reg.Setup{[Reg.Text{"small response"}, Reg.Text{"big response"}], Nil{}, small}, ref, [inline("supply", api => supplyFactory("big model summary", api))], seedHistory(2500, now), [big])
+    +harness : Harness <- createHarnessFull(dir, agentDir, Scripted{Nil{}}, Reg.Setup{[Reg.Text{"small response"}, Reg.Text{"big response"}], Nil{}, small}, ref, [inline("supply", api => supplyFactory("big model summary", api))], seedHistory(2500, now), [big])
     prompted(sessionOf(harness), "continue on small")
     print("small_done", Nil{})
     reseed(sessionOf(harness), now)
@@ -981,7 +1064,7 @@ def laxContent(+dir: String, agentDir: String, +kind: String) -> IO(Unit):
   match kind:
     case "tool":
       do IO<Unit>:
-        +harness : Harness <- createHarness(dir, agentDir, [ToolSpec{"web_search", NoContent{}}], setup([Reg.Call{"call_search", "web_search", Json.object(Nil{}), "{}"}, Reg.Text{"done"}]))
+        +harness : Harness <- createHarness(dir, agentDir, Scripted{[ToolSpec{"web_search", NoContent{}}]}, setup([Reg.Call{"call_search", "web_search", Json.object(Nil{}), "{}"}, Reg.Text{"done"}]))
         prompted(sessionOf(harness), "search something")
         H.reportMessages(sessionOf(harness))
         Reg.reportRemaining(Reg.repliesOf(harnessFixture(harness)))
@@ -989,13 +1072,13 @@ def laxContent(+dir: String, agentDir: String, +kind: String) -> IO(Unit):
     case "message_end":
       do IO<Unit>:
         +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
-        +harness : Harness <- createHarnessWith(dir, agentDir, Nil{}, setup([Reg.Text{"hello"}]), ref, [inline("empty-end", emptyEndFactory)])
+        +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"hello"}]), ref, [inline("empty-end", emptyEndFactory)])
         prompted(sessionOf(harness), "hi")
         H.reportMessages(sessionOf(harness))
         cleanup(harness)
     case _:
       do IO<Unit>:
-        +harness : Harness <- createHarness(dir, agentDir, Nil{}, setup(Nil{}))
+        +harness : Harness <- createHarness(dir, agentDir, Builtins{}, setup(Nil{}))
         sent : Result<&2, &2, String, Unit> <- Session.sendCustomMessage(sessionOf(harness), Ext.CustomMessageInput{"test", Ai.UserBlocks{Nil{}}, False{}, None{}}, Session.sendDefaults())
         H.reportMessages(sessionOf(harness))
         cleanup(harness)
@@ -1030,7 +1113,7 @@ def queuedSlashFollowUp(+dir: String, agentDir: String) -> IO(Unit):
     +toolStarted : Chan(Unit) <- Chan.new(Unit, 1)
     +release : Chan(Unit) <- Chan.new(Unit, 1)
     +done : Chan(Unit) <- Chan.new(Unit, 1)
-    +harness : Harness <- createHarnessWith(dir, agentDir, [ToolSpec{"wait", Gated{toolStarted, release}}], setup([Reg.Call{"call_wait", "wait", Json.object(Nil{}), "{}"}, Reg.Text{"first turn complete"}, Reg.Text{"queued follow-up handled by model"}]), ref, [inline("testcmd", api => testCommandFactory(apiRef, api))])
+    +harness : Harness <- createHarnessWith(dir, agentDir, Scripted{[ToolSpec{"wait", Gated{toolStarted, release}}]}, setup([Reg.Call{"call_wait", "wait", Json.object(Nil{}), "{}"}, Reg.Text{"first turn complete"}, Reg.Text{"queued follow-up handled by model"}]), ref, [inline("testcmd", api => testCommandFactory(apiRef, api))])
     IO.spawn(Unit, promptInBackground(sessionOf(harness), "start", done))
     began : Maybe<&1, Unit> <- Chan.recv(Unit, toolStarted)
     found : Maybe<&2, Ext.ExtensionAPI> <- R.read(Maybe<&2, Ext.ExtensionAPI>, apiRef)
@@ -1039,6 +1122,394 @@ def queuedSlashFollowUp(+dir: String, agentDir: String) -> IO(Unit):
     finished : Maybe<&1, Unit> <- Chan.recv(Unit, done)
     H.reportMessages(sessionOf(harness))
     cleanup(harness)
+
+# suite/agent-session-boundaries.test.ts
+# --------------------------------------
+# A scripted boundary handler: optionally only for one outcome and only
+# once, it sends messages through the ExtensionAPI and returns drafts and a
+# continuation decision. Each call prints the event (`boundary` lines).
+type Send is Data:
+  SendUser{text: String, delivery: Ext.UserDelivery}
+  SendCustom{customType: String, text: String, triggerTurn: Bool}
+
+type Drafts is Data:
+  Literal{drafts: List<&2, Ext.SessionBoundaryDraft>}
+  ReplaceUser{instruction: String}
+  OmitTurn{}
+  ReplaceMessage{text: String}
+  OmitAll{}
+  OmitUser{}
+  OmitMessage{}
+  NoDrafts{}
+
+type Action is Data:
+  Action{once: Bool, onlyOutcome: Maybe<&2, String>, sends: List<&2, Send>, drafts: Drafts, continue: Maybe<&2, Bool>}
+
+type ActionEnv is Data:
+  ActionEnv{api: Ext.ExtensionAPI, fired: R.Ref<Bool>, action: Action, session: R.Ref<Maybe<&2, Session.AgentSession>>}
+
+def outcomeName(outcome: Ext.AgentActivityOutcome) -> String:
+  match outcome:
+    case Ext.OutcomeCompleted{}: "completed"
+    case Ext.OutcomeAborted{}: "aborted"
+    case Ext.OutcomeError{}: "error"
+
+def sendAll(+api: Ext.ExtensionAPI, sends: List<&2, Send>) -> IO(Unit):
+  match sends:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case SendUser{text, delivery} <> rest:
+      do IO<Unit>:
+        sent : Result<&2, &2, String, Unit> <- Loader.sendUserMessage(api, Ai.UserText{text}, Some{delivery})
+        sendAll(api, rest)
+    case SendCustom{customType, text, triggerTurn} <> rest:
+      do IO<Unit>:
+        sent : Result<&2, &2, String, Unit> <- Loader.sendMessage(api, Ext.CustomMessageInput{customType, Ai.UserText{text}, False{}, None{}}, Ext.SendMessageOptions{Some{triggerTurn}, None{}})
+        sendAll(api, rest)
+
+def lastUserId(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>, found: String) -> String:
+  match entries:
+    case Nil{}: found
+    case S.SessionMessageEntry{S.SessionEntryBase{id, _, _}, T.LlmMessage{Ai.User{_}}} <> rest: lastUserId(rest, id)
+    case _ <> rest: lastUserId(rest, found)
+
+def branchUserId(found: Maybe<&2, Session.AgentSession>) -> IO(String):
+  match found:
+    case None{}: IO.pure(String, "missing-user")
+    case Some{session}:
+      do IO<String>:
+        +stored : Session.Session() <- Session.sessionOf(session)
+        return lastUserId(Result.default(&2, &2, S.Error, List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>, S.getBranch(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored), S.Latest{}), Nil{}), "missing-user")
+
+def messageIds(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, String>:
+  match entries:
+    case Nil{}: Nil{}
+    case S.SessionMessageEntry{S.SessionEntryBase{id, _, _}, T.LlmMessage{Ai.User{_}}} <> rest: id <> messageIds(rest)
+    case S.SessionMessageEntry{S.SessionEntryBase{id, _, _}, T.LlmMessage{Ai.Assistant{_}}} <> rest: id <> messageIds(rest)
+    case S.SessionMessageEntry{S.SessionEntryBase{id, _, _}, T.LlmMessage{Ai.ToolResult{_}}} <> rest: id <> messageIds(rest)
+    case _ <> rest: messageIds(rest)
+
+def branchMessageIds(found: Maybe<&2, Session.AgentSession>) -> IO(List<&2, String>):
+  match found:
+    case None{}: IO.pure(List<&2, String>, Nil{})
+    case Some{session}:
+      do IO<List<&2, String>>:
+        +stored : Session.Session() <- Session.sessionOf(session)
+        return messageIds(Result.default(&2, &2, S.Error, List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>, S.getBranch(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored), S.Latest{}), Nil{}))
+
+def omitted(+ids: List<&2, String>) -> List<&2, Ext.SessionBoundaryDraft>:
+  match ids:
+    case Nil{}: Nil{}
+    case id <> rest: Ext.ContextEditEntryDraft{id, None{}} <> omitted(rest)
+
+def bookkeeping() -> Ext.SessionBoundaryDraft: Ext.CustomEntryDraft{"bookkeeping", Some{Json.object(Json.field("source", Json.text("test"), Nil{}))}}
+
+def draftsFor(+drafts: Drafts, sessionRef: R.Ref<Maybe<&2, Session.AgentSession>>, +messageEntryId: String, +toolResultIds: List<&2, String>) -> IO(Maybe<&2, List<&2, Ext.SessionBoundaryDraft>>):
+  match drafts:
+    case Literal{list}: IO.pure(Maybe<&2, List<&2, Ext.SessionBoundaryDraft>>, Some{list})
+    case ReplaceUser{instruction}:
+      do IO<Maybe<&2, List<&2, Ext.SessionBoundaryDraft>>>:
+        found : Maybe<&2, Session.AgentSession> <- R.read(Maybe<&2, Session.AgentSession>, sessionRef)
+        userId : String <- branchUserId(found)
+        return Some{[Ext.ContextEditEntryDraft{userId, Some{S.ContentText{instruction}}}, Ext.ContextEditEntryDraft{messageEntryId, None{}}, bookkeeping()]}
+    case OmitTurn{}:
+      do IO<Maybe<&2, List<&2, Ext.SessionBoundaryDraft>>>:
+        found : Maybe<&2, Session.AgentSession> <- R.read(Maybe<&2, Session.AgentSession>, sessionRef)
+        userId : String <- branchUserId(found)
+        return Some{omitted(userId <> messageEntryId <> toolResultIds)}
+    case ReplaceMessage{text}: IO.pure(Maybe<&2, List<&2, Ext.SessionBoundaryDraft>>, Some{[Ext.ContextEditEntryDraft{messageEntryId, Some{S.ContentText{text}}}]})
+    case OmitMessage{}: IO.pure(Maybe<&2, List<&2, Ext.SessionBoundaryDraft>>, Some{[Ext.ContextEditEntryDraft{messageEntryId, None{}}]})
+    case OmitUser{}:
+      do IO<Maybe<&2, List<&2, Ext.SessionBoundaryDraft>>>:
+        found : Maybe<&2, Session.AgentSession> <- R.read(Maybe<&2, Session.AgentSession>, sessionRef)
+        userId : String <- branchUserId(found)
+        return Some{[Ext.ContextEditEntryDraft{userId, None{}}]}
+    case OmitAll{}:
+      do IO<Maybe<&2, List<&2, Ext.SessionBoundaryDraft>>>:
+        found : Maybe<&2, Session.AgentSession> <- R.read(Maybe<&2, Session.AgentSession>, sessionRef)
+        ids : List<&2, String> <- branchMessageIds(found)
+        return Some{omitted(ids)}
+    case NoDrafts{}: IO.pure(Maybe<&2, List<&2, Ext.SessionBoundaryDraft>>, None{})
+
+def outcomeMatches(only: Maybe<&2, String>, +outcome: String) -> Bool:
+  match only:
+    case None{}: True{}
+    case Some{wanted}: String.eq(wanted, outcome)
+
+def previewTexts(preview: Ext.BoundaryContextPreview) -> List<&2, Rec.Property<V.Value>>:
+  match preview:
+    case Ext.BoundaryContextPreview{_, contextMessages, _, pending, canContinue}: Json.field("contextMessages", V.ArrayValue{JsonEvent.messages(contextMessages)}, Json.field("pendingMessages", V.ArrayValue{JsonEvent.messages(pending)}, Json.field("canContinue", V.Boolean{canContinue}, Nil{})))
+
+def acted(env: ActionEnv, +event: String, +messageEntryId: String, +toolResultIds: List<&2, String>, +outcome: Ext.AgentActivityOutcome, context: Ext.BoundaryContextPreview) -> IO(Handled(Ext.BoundaryResult)):
+  match env:
+    case ActionEnv{+api, +fired, Action{+once, +only, +sends, +drafts, +continued}, +sessionRef}:
+      do IO<Handled(Ext.BoundaryResult)>:
+        print("boundary", Json.field("event", Json.text(event), Json.field("messageEntryId", Json.text(messageEntryId), Json.field("outcome", Json.text(outcomeName(outcome)), previewTexts(context)))))
+        already : Bool <- R.read(Bool, fired)
+        Bool.pick(Unit -> IO(Handled(Ext.BoundaryResult)), Bool.or(Bool.and(once, already), Bool.not(outcomeMatches(only, outcomeName(outcome)))),
+          _ => nothing(Ext.BoundaryResult),
+          _ => do IO<Handled(Ext.BoundaryResult)>:
+            R.write(Bool, fired, True{})
+            sendAll(api, sends)
+            list : Maybe<&2, List<&2, Ext.SessionBoundaryDraft>> <- draftsFor(drafts, sessionRef, messageEntryId, toolResultIds)
+            return Done{Some{Ext.BoundaryResult{list, continued}}})(Unit{})
+
+def turnEndAction(env: ActionEnv, call: Ext.HandlerCall<Ext.TurnEndEvent>) -> IO(Handled(Ext.BoundaryResult)):
+  match call:
+    case Ext.HandlerCall{Ext.TurnEndEvent{_, _, _, messageEntryId, toolResultIds, _, _, context, outcome}, _}: acted(env, "turn_end", messageEntryId, toolResultIds, outcome, context)
+
+def settleAction(env: ActionEnv, call: Ext.HandlerCall<Ext.AgentBeforeSettleEvent>) -> IO(Handled(Ext.BoundaryResult)):
+  match call:
+    case Ext.HandlerCall{Ext.AgentBeforeSettleEvent{_, _, context, outcome}, _}: acted(env, "agent_before_settle", "", Nil{}, outcome, context)
+
+# An agent_end handler that sends once (upstream sendMessage/sendUserMessage
+# from agent_end).
+type EndEnv is Data:
+  EndEnv{api: Ext.ExtensionAPI, fired: R.Ref<Bool>, sends: List<&2, Send>, afterText: Maybe<&2, String>}
+
+def endTexts(messages: List<&2, Session.Message()>) -> List<&2, String>:
+  match messages:
+    case Nil{}: Nil{}
+    case T.LlmMessage{Ai.Assistant{Ai.AssistantMessage{content, _, _, _, _, _, _, _, _, _, _, _, _, _, _}}} <> rest: Session.assistantText(content) <> endTexts(rest)
+    case _ <> rest: endTexts(rest)
+
+def containsText(texts: List<&2, String>, +wanted: String) -> Bool:
+  match texts:
+    case Nil{}: False{}
+    case text <> rest: Bool.or(String.eq(text, wanted), containsText(rest, wanted))
+
+def endAction(env: EndEnv, call: Ext.HandlerCall<Ext.AgentEndEvent>) -> IO(Handled(Unit)):
+  match env call:
+    case EndEnv{+api, +fired, +sends, +after} Ext.HandlerCall{Ext.AgentEndEvent{+messages}, _}:
+      do IO<Handled(Unit)>:
+        already : Bool <- R.read(Bool, fired)
+        +wanted : Bool = Bool.and(Bool.not(already), Maybe.default(&2, Bool, Maybe.map(&2, String, Bool, text => containsText(endTexts(messages), text), after), True{}))
+        Bool.pick(Unit -> IO(Unit), wanted, _ => IO.bind(Unit, Unit, R.write(Bool, fired, True{}), _ => sendAll(api, sends)), _ => IO.pure(Unit, Unit{}))(Unit{})
+        nothing(Unit)
+
+# `usage` replaces each assistant message's input and total tokens at
+# message_end (output 1).
+type BoundaryScript is Data:
+  BoundaryScript{turnEnd: Maybe<&2, Action>, beforeSettle: Maybe<&2, Action>, agentEnd: List<&2, Send>, agentEndAfter: Maybe<&2, String>, compaction: Maybe<&2, String>, usage: Maybe<&2, U32>}
+
+def subscribeAction(+api: Ext.ExtensionAPI, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, turnEnd: Bool, +action: Maybe<&2, Action>) -> IO(Result<&2, &2, String, Unit>):
+  match action:
+    case None{}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+    case Some{+chosen}:
+      do IO<Result<&2, &2, String, Unit>>:
+        +fired : R.Ref<Bool> <- R.new(Bool, False{})
+        Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), turnEnd,
+          _ => IO.bind(Ext.ExtensionHandler(Ext.TurnEndEvent, Ext.BoundaryResult), Result<&2, &2, String, Unit>, C.create(~ActionEnv, ~Ext.HandlerCall<Ext.TurnEndEvent>, ~Handled(Ext.BoundaryResult), ~turnEndAction, ActionEnv{api, fired, chosen, ref}), handler => subscribe(api, Ext.OnTurnEnd{handler})),
+          _ => IO.bind(Ext.ExtensionHandler(Ext.AgentBeforeSettleEvent, Ext.BoundaryResult), Result<&2, &2, String, Unit>, C.create(~ActionEnv, ~Ext.HandlerCall<Ext.AgentBeforeSettleEvent>, ~Handled(Ext.BoundaryResult), ~settleAction, ActionEnv{api, fired, chosen, ref}), handler => subscribe(api, Ext.OnAgentBeforeSettle{handler})))(Unit{})
+
+def subscribeEnd(+api: Ext.ExtensionAPI, sends: List<&2, Send>, after: Maybe<&2, String>) -> IO(Result<&2, &2, String, Unit>):
+  match sends:
+    case Nil{}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+    case more:
+      do IO<Result<&2, &2, String, Unit>>:
+        fired : R.Ref<Bool> <- R.new(Bool, False{})
+        handler : Ext.ExtensionHandler(Ext.AgentEndEvent, Unit) <- C.create(~EndEnv, ~Ext.HandlerCall<Ext.AgentEndEvent>, ~Handled(Unit), ~endAction, EndEnv{api, fired, more, after})
+        subscribe(api, Ext.OnAgentEnd{handler})
+
+def usageOverride(+total: U32, usage: Ai.Usage) -> Ai.Usage:
+  match usage:
+    case Ai.Usage{_, _, cacheRead, cacheWrite, a, b, _, cost}: Ai.Usage{U32.to_f64(U32.sub(total, 1)), U32.to_f64(1), cacheRead, cacheWrite, a, b, U32.to_f64(total), cost}
+
+def withUsage(+total: U32, message: Session.Message()) -> Maybe<&2, Session.Message()>:
+  match message:
+    case T.LlmMessage{Ai.Assistant{Ai.AssistantMessage{content, api, provider, model, a, b, c, d, usage, stop, e, f, g, h, time}}}: Some{T.LlmMessage{Ai.Assistant{Ai.AssistantMessage{content, api, provider, model, a, b, c, d, usageOverride(total, usage), stop, e, f, g, h, time}}}}
+    case _: None{}
+
+def usageEnd(total: U32, call: Ext.HandlerCall<Ext.MessageEndEvent>) -> IO(Handled(Ext.MessageEndEventResult)):
+  match call:
+    case Ext.HandlerCall{Ext.MessageEndEvent{message}, _}: IO.pure(Handled(Ext.MessageEndEventResult), Done{Some{Ext.MessageEndEventResult{withUsage(total, message)}}})
+
+def subscribeUsage(+api: Ext.ExtensionAPI, usage: Maybe<&2, U32>) -> IO(Result<&2, &2, String, Unit>):
+  match usage:
+    case None{}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+    case Some{total}:
+      do IO<Result<&2, &2, String, Unit>>:
+        handler : Ext.ExtensionHandler(Ext.MessageEndEvent, Ext.MessageEndEventResult) <- C.create(~U32, ~Ext.HandlerCall<Ext.MessageEndEvent>, ~Handled(Ext.MessageEndEventResult), ~usageEnd, total)
+        subscribe(api, Ext.OnMessageEnd{handler})
+
+def subscribeCompaction(+api: Ext.ExtensionAPI, summary: Maybe<&2, String>) -> IO(Result<&2, &2, String, Unit>):
+  match summary:
+    case None{}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+    case Some{text}: supplyFactory(text, api)
+
+def scriptFactoryWith(+ref: R.Ref<Maybe<&2, Session.AgentSession>>, script: BoundaryScript, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  match script:
+    case BoundaryScript{turnEnd, beforeSettle, agentEnd, after, compaction, usage}:
+      do IO<Result<&2, &2, String, Unit>>:
+        zeroth : Result<&2, &2, String, Unit> <- subscribeUsage(api, usage)
+        first : Result<&2, &2, String, Unit> <- subscribeAction(api, ref, True{}, turnEnd)
+        second : Result<&2, &2, String, Unit> <- subscribeAction(api, ref, False{}, beforeSettle)
+        third : Result<&2, &2, String, Unit> <- subscribeEnd(api, agentEnd, after)
+        fourth : Result<&2, &2, String, Unit> <- subscribeCompaction(api, compaction)
+        return both(zeroth, both(first, both(second, both(third, fourth))))
+
+def scriptFactory(ref: R.Ref<Maybe<&2, Session.AgentSession>>, script: BoundaryScript, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>): scriptFactoryWith(ref, script, api)
+
+def noScript() -> BoundaryScript: BoundaryScript{None{}, None{}, Nil{}, None{}, None{}, None{}}
+
+def withTurnEnd(action: Action) -> BoundaryScript: BoundaryScript{Some{action}, None{}, Nil{}, None{}, None{}, None{}}
+
+def withSettle(action: Action) -> BoundaryScript: BoundaryScript{None{}, Some{action}, Nil{}, None{}, None{}, None{}}
+
+def handoff() -> Ext.SessionBoundaryDraft: Ext.CompactionEntryDraft{"exact handoff", None{}, Some{Json.object(Json.field("source", Json.text("test"), Nil{}))}, None{}}
+
+def compactionIdShapes(entries: List<&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>>) -> List<&2, V.Value>:
+  match entries:
+    case Nil{}: Nil{}
+    case S.Compaction{S.CompactionEntry{S.SessionEntryBase{id, _, _}, summary, keep, _, _, _, _, _}} <> rest: Json.object(Json.field("id", Json.text(id), Json.field("summary", Json.text(summary), Json.field("firstKeptEntryId", Json.text(keep), Nil{})))) <> compactionIdShapes(rest)
+    case S.CustomEntry{_, customType, _} <> rest: Json.object(Json.field("custom", Json.text(customType), Nil{})) <> compactionIdShapes(rest)
+    case S.CustomMessageEntry{_, customType, _, _, display} <> rest: Json.object(Json.field("customMessage", Json.text(customType), Json.field("display", V.Boolean{display}, Nil{}))) <> compactionIdShapes(rest)
+    case S.ContextEditEntry{_, target, replacement} <> rest: Json.object(Json.field("contextEdit", Json.text(target), Json.field("omitted", V.Boolean{Maybe.is_none(&2, S.ContextEditableContent, replacement)}, Nil{}))) <> compactionIdShapes(rest)
+    case S.SessionMessageEntry{S.SessionEntryBase{id, _, _}, T.LlmMessage{Ai.Assistant{Ai.AssistantMessage{content, _, _, _, _, _, _, _, _, stop, _, _, _, _, _}}}} <> rest: Json.object(Json.field("assistant", Json.text(id), Json.field("text", Json.text(Session.assistantText(content)), Json.field("length", V.Boolean{Session.isLengthStop(stop)}, Nil{})))) <> compactionIdShapes(rest)
+    case _ <> rest: compactionIdShapes(rest)
+
+def reportSessionEntries(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    +stored : Session.Session() <- Session.sessionOf(session)
+    print("session_entries", Json.field("entries", V.ArrayValue{compactionIdShapes(S.getEntries(Unit, Tools.ToolDetails, V.Value, Sessions.stateOf(Unit, Tools.ToolDetails, V.Value, stored)))}, Json.field("projected", V.ArrayValue{JsonEvent.messages(Session.sessionMessages(stored))}, Nil{})))
+
+def usageValue(result: Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>>) -> V.Value:
+  match result:
+    case Done{Some{Stats.ContextUsage{Some{tokens}, _, _}}}: V.Number{tokens}
+    case _: V.Null{}
+
+def reportUsage(+session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    usage : Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>> <- Session.getContextUsage(session)
+    print("context_usage", Json.field("tokens", usageValue(usage), Nil{}))
+
+# A boundary scenario: the scripted extension, tools, replies, a model and
+# a seed, then one prompt and the session's entries.
+def boundaryRun(+dir: String, agentDir: String, tooling: Tooling, setupValue: Reg.Setup, script: BoundaryScript, seed: List<&2, Session.Message()>, +text: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- createHarnessFull(dir, agentDir, tooling, setupValue, ref, [inline("boundary", api => scriptFactory(ref, script, api))], seed, Nil{})
+    prompted(sessionOf(harness), text)
+    reportSessionEntries(sessionOf(harness))
+    Reg.reportRemaining(Reg.repliesOf(harnessFixture(harness)))
+    reportUsage(sessionOf(harness))
+    count : Nat <- Session.pendingMessageCount(sessionOf(harness))
+    print("pending", Json.field("count", V.Number{U32.to_f64(U32.from_nat(count))}, Nil{}))
+    cleanup(harness)
+
+def queueSends(+kind: String) -> List<&2, Send>:
+  match kind:
+    case "steering": [SendUser{"queued steering", Ext.UserSteer{}}]
+    case "follow-up": [SendUser{"queued follow-up", Ext.UserFollowUp{}}]
+    case _: [SendUser{"queued steering", Ext.UserSteer{}}, SendUser{"queued follow-up", Ext.UserFollowUp{}}]
+
+# "commits pre-settlement drafts but suppresses continuation when aborted
+# during the hook": the agent_before_settle handler waits on a gate.
+def gatedSettle(env: H.Gate, call: Ext.HandlerCall<Ext.AgentBeforeSettleEvent>) -> IO(Handled(Ext.BoundaryResult)):
+  do IO<Handled(Ext.BoundaryResult)>:
+    H.holdAt(Some{env})
+    return Done{Some{Ext.BoundaryResult{Some{[Ext.CustomEntryDraft{"committed-after-abort", Some{V.Boolean{True{}}}}]}, Some{True{}}}}}
+
+def gatedSettleFactory(gate: H.Gate, api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    handler : Ext.ExtensionHandler(Ext.AgentBeforeSettleEvent, Ext.BoundaryResult) <- C.create(~H.Gate, ~Ext.HandlerCall<Ext.AgentBeforeSettleEvent>, ~Handled(Ext.BoundaryResult), ~gatedSettle, gate)
+    subscribe(api, Ext.OnAgentBeforeSettle{handler})
+
+def abortLater(session: Session.AgentSession, done: Chan(Unit)) -> IO(Unit):
+  do IO<Unit>:
+    Session.abort(session)
+    sent : Bool <- Chan.send(Unit, done, Unit{})
+    return Unit{}
+
+def settleAbort(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +release : Chan(Unit) <- Chan.new(Unit, 1)
+    +prompted : Chan(Unit) <- Chan.new(Unit, 1)
+    +aborted : Chan(Unit) <- Chan.new(Unit, 1)
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"first"}, Reg.Text{"must not run"}]), ref, [inline("gated-settle", api => gatedSettleFactory(H.Gate{started, release}, api))])
+    IO.spawn(Unit, promptInBackground(sessionOf(harness), "start", prompted))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    IO.spawn(Unit, abortLater(sessionOf(harness), aborted))
+    IO.sleep(5)
+    sent : Bool <- Chan.send(Unit, release, Unit{})
+    first : Maybe<&1, Unit> <- Chan.recv(Unit, prompted)
+    second : Maybe<&1, Unit> <- Chan.recv(Unit, aborted)
+    reportSessionEntries(sessionOf(harness))
+    Reg.reportRemaining(Reg.repliesOf(harnessFixture(harness)))
+    cleanup(harness)
+
+# "refreshes canonical context before publishing boundary entry
+# notifications": a listener snapshots the session's messages at each
+# entry_appended event.
+def snapshotMessages(found: Maybe<&2, Session.AgentSession>) -> IO(Unit):
+  match found:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{session}:
+      do IO<Unit>:
+        current : List<&2, Session.Message()> <- Session.messages(session)
+        print("append_snapshot", Json.field("messages", V.ArrayValue{JsonEvent.messages(current)}, Nil{}))
+
+def snapshotOnAppend(env: R.Ref<Maybe<&2, Session.AgentSession>>, event: Session.AgentSessionEvent) -> IO(Unit):
+  match event:
+    case Session.EntryAppended{_}:
+      do IO<Unit>:
+        found : Maybe<&2, Session.AgentSession> <- R.read(Maybe<&2, Session.AgentSession>, env)
+        snapshotMessages(found)
+    case _: IO.pure(Unit, Unit{})
+
+def refreshNotifications(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- createHarnessWith(dir, agentDir, Builtins{}, setup([Reg.Text{"done"}]), ref, [inline("boundary", api => scriptFactory(ref, withTurnEnd(Action{True{}, None{}, Nil{}, Literal{[Ext.CustomEntryDraft{"metadata", Some{V.Boolean{True{}}}}, Ext.CustomMessageEntryDraft{"visible-context", Ai.UserText{"committed context"}, True{}, None{}}]}, None{}}), api))])
+    +listener : Session.Listener() <- C.create(~R.Ref<Maybe<&2, Session.AgentSession>>, ~Session.AgentSessionEvent, ~Unit, ~snapshotOnAppend, ref)
+    Session.subscribe(sessionOf(harness), listener)
+    prompted(sessionOf(harness), "start")
+    Session.unsubscribe(sessionOf(harness), listener)
+    C.dispose(Session.AgentSessionEvent, Unit, listener)
+    cleanup(harness)
+
+# "does not treat retained pre-compaction assistant usage as
+# post-compaction usage": a compaction that keeps the assistant carrying
+# the usage.
+def compactKeeping(+session: Session.AgentSession, kept: Result<&2, &2, String, String>) -> IO(Result<&2, &2, String, String>):
+  match kept:
+    case Fail{error}: IO.pure(Result<&2, &2, String, String>, Fail{error})
+    case Done{+id}: Session.appendSessionEntry(session, target => Sessions.appendCompaction(~Unit, ~Tools.ToolDetails, ~V.Value, ~Session.unitValue, ~Tools.detailsValue, ~Session.rawValue, target, "summary", Some{id}, 10001n, None{}, None{}, None{}))
+
+def retainedUsage(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +harness : Harness <- createHarness(dir, agentDir, Builtins{}, setup(Nil{}))
+    +retained : Session.Message() = Reg.assistantAt("retained", Ai.Stop{}, seededUsage(10001), Reg.zero())
+    appended : Result<&2, &2, String, String> <- Session.appendSessionEntry(sessionOf(harness), target => Session.recordMessage(target, retained))
+    compacted : Result<&2, &2, String, String> <- compactKeeping(sessionOf(harness), appended)
+    Session.refreshSessionContext(sessionOf(harness))
+    reportUsage(sessionOf(harness))
+    cleanup(harness)
+
+def boundaryScenario(+dir: String, agentDir: String, +name: String, +argument: String) -> IO(Unit):
+  match name:
+    case "handoff": boundaryRun(dir, agentDir, Builtins{}, setup([Reg.Text{"discarded response"}, Reg.Text{"continued from handoff"}]), withTurnEnd(Action{True{}, None{}, Nil{}, Literal{[handoff()]}, Some{True{}}}), Nil{}, "discarded prompt")
+    case "queue": boundaryRun(dir, agentDir, Builtins{}, setup([Reg.Text{"first"}, Reg.Text{"second"}, Reg.Text{"third"}]), withTurnEnd(Action{True{}, None{}, queueSends(argument), Literal{[Ext.CompactionEntryDraft{"exact handoff", None{}, None{}, None{}}]}, Some{True{}}}), Nil{}, "start")
+    case "replacement": boundaryRun(dir, agentDir, Builtins{}, Reg.Setup{[Reg.Text{"answered original input"}, Reg.Text{"answered replacement"}], Nil{}, Reg.sizedModel(2000, 100)}, BoundaryScript{Some{Action{True{}, None{}, Nil{}, ReplaceUser{String.repeat("EXACT-REPLACEMENT-INSTRUCTION ", 100n)}, Some{True{}}}}, None{}, Nil{}, None{}, Some{"older history summary"}, None{}}, [Reg.userMsg("older input"), Reg.assistantAt("older answer", Ai.Stop{}, Reg.usageOf(Reg.zero()), Reg.zero())], "original input")
+    case "unsent": boundaryRun(dir, agentDir, Builtins{}, Reg.Setup{[Reg.Text{"first"}, Reg.Text{"second"}], Nil{}, Reg.sizedModel(2000, 100)}, BoundaryScript{Some{Action{True{}, None{}, Nil{}, Literal{[Ext.CustomMessageEntryDraft{"next-work", Ai.UserText{String.repeat("EXACT-UNSENT-INSTRUCTION ", 100n)}, False{}, None{}}, bookkeeping()]}, Some{True{}}}}, None{}, Nil{}, None{}, Some{"older history summary"}, None{}}, Nil{}, String.repeat("old input ", 500n))
+    case "settle_custom": boundaryRun(dir, agentDir, Builtins{}, setup([Reg.Text{"first"}, Reg.Text{"second"}]), withSettle(Action{True{}, None{}, Nil{}, Literal{[Ext.CustomMessageEntryDraft{"test-continuation", Ai.UserText{"continue now"}, False{}, None{}}]}, Some{True{}}}), Nil{}, "start")
+    case "settle_pending": boundaryRun(dir, agentDir, Builtins{}, setup([Reg.Text{"first"}, Reg.Text{"second"}]), BoundaryScript{None{}, Some{Action{True{}, None{}, Nil{}, NoDrafts{}, Some{True{}}}}, [SendCustom{"agent-end-context", "queued after agent end", False{}}], None{}, None{}, None{}}, Nil{}, "start")
+    case "settle_follow_up": boundaryRun(dir, agentDir, Builtins{}, setup([Reg.Text{"first"}, Reg.Text{"second"}, Reg.Text{"follow-up response"}]), withSettle(Action{True{}, None{}, [SendUser{"queued follow-up", Ext.UserFollowUp{}}], Literal{[Ext.CustomMessageEntryDraft{"boundary", Ai.UserText{"boundary context"}, False{}, None{}}]}, Some{True{}}}), Nil{}, "start")
+    case "invalid_continue": boundaryRun(dir, agentDir, Scripted{[ToolSpec{"noop", Echo{"done"}}]}, setup([Reg.Call{"call_noop", "noop", Json.object(Nil{}), "{}"}, Reg.Text{"must not run"}]), withTurnEnd(Action{False{}, None{}, Nil{}, OmitTurn{}, Some{True{}}}), Nil{}, "start")
+    case "error_follow_up": boundaryRun(dir, agentDir, Builtins{}, setup([Reg.Failed{"overloaded_error"}, Reg.Text{"retry recovered"}, Reg.Text{"follow-up completed"}]), withTurnEnd(Action{True{}, Some{"error"}, [SendUser{"queued follow-up", Ext.UserFollowUp{}}], NoDrafts{}, None{}}), Nil{}, "start")
+    case "overflow_replacement": boundaryRun(dir, agentDir, Builtins{}, Reg.Setup{[Reg.FailedText{"retained error", "prompt is too long"}, Reg.Text{"recovered"}], Nil{}, Reg.sizedModel(1000, 100)}, BoundaryScript{Some{Action{True{}, Some{"error"}, Nil{}, ReplaceMessage{"retained error"}, None{}}}, None{}, Nil{}, None{}, Some{"recovered overflow"}, None{}}, Nil{}, String.repeat("x", 5000n))
+    case "length_budget": boundaryRun(dir, agentDir, Builtins{}, Reg.Setup{[Reg.Stopped{Reg.Text{"first partial"}}, Reg.Text{"first recovered"}, Reg.Stopped{Reg.Text{"follow-up partial"}}, Reg.Text{"follow-up recovered"}], Nil{}, Reg.sizedModel(1000, 100)}, BoundaryScript{None{}, None{}, [SendUser{"distinct follow-up", Ext.UserFollowUp{}}], Some{"first recovered"}, Some{"recovered input"}, None{}}, Nil{}, String.repeat("x", 5000n))
+    case "length_reset": boundaryRun(dir, agentDir, Scripted{[ToolSpec{"noop", Echo{"done"}}]}, Reg.Setup{[Reg.Stopped{Reg.Text{"first partial"}}, Reg.Call{"call_noop", "noop", Json.object(Nil{}), "{}"}, Reg.Stopped{Reg.Text{"second partial"}}, Reg.Text{"completed second recovery"}], Nil{}, Reg.sizedModel(1000, 100)}, BoundaryScript{None{}, None{}, Nil{}, None{}, Some{"recovered input"}, None{}}, Nil{}, String.repeat("x", 5000n))
+    case "length_tool": boundaryRun(dir, agentDir, Scripted{[ToolSpec{"unsafe_truncated_tool", Records{}}]}, setup([Reg.Stopped{Reg.Call{"call_unsafe", "unsafe_truncated_tool", Json.object(Json.field("value", Json.text("partial"), Nil{})), "{\"value\":\"partial\"}"}}, Reg.Text{"completed natural continuation"}]), noScript(), Nil{}, "start")
+    case "retry_nonretryable": boundaryRun(dir, agentDir, Builtins{}, setup([Reg.Failed{"overloaded_error"}, Reg.Failed{"invalid_api_key"}]), noScript(), Nil{}, "start")
+    case "retry_exhausted": boundaryRun(dir, agentDir, Builtins{}, setup([Reg.Failed{"overloaded_error"}, Reg.Failed{"overloaded_error"}]), noScript(), Nil{}, "start")
+    case "recovery_failed": boundaryRun(dir, agentDir, Builtins{}, Reg.Setup{[Reg.Stopped{Reg.Text{"partial response"}}, Reg.FailedText{"summary failed", "summary failed"}, Reg.Text{"must not retry"}], Nil{}, Reg.sizedModel(1000, 100)}, noScript(), Nil{}, String.repeat("x", 5000n))
+    case "settle_persist": boundaryRun(dir, agentDir, Builtins{}, setup([Reg.Text{"first"}, Reg.Text{"second"}]), withSettle(Action{True{}, None{}, [SendCustom{"pending-boundary", "persist before continue", False{}}], NoDrafts{}, Some{True{}}}), Nil{}, "start")
+    case "settle_system_only": boundaryRun(dir, agentDir, Builtins{}, setup([Reg.Text{"first"}, Reg.Text{"must not run"}]), withSettle(Action{True{}, None{}, [SendUser{"still queued", Ext.UserFollowUp{}}], OmitAll{}, Some{True{}}}), Nil{}, "start")
+    case "omitted_usage": boundaryRun(dir, agentDir, Builtins{}, Reg.Setup{[Reg.Text{"short response"}], Nil{}, Reg.sizedModel(10000, 100)}, BoundaryScript{Some{Action{True{}, None{}, Nil{}, OmitMessage{}, None{}}}, None{}, Nil{}, None{}, None{}, Some{9801}}, Nil{}, "small prompt")
+    case "edited_usage": boundaryRun(dir, agentDir, Builtins{}, Reg.Setup{[Reg.Text{"done"}], Nil{}, Reg.sizedModel(5000, 100)}, BoundaryScript{Some{Action{True{}, None{}, Nil{}, OmitUser{}, None{}}}, None{}, Nil{}, None{}, None{}, Some{5101}}, Nil{}, "large input that is later omitted")
+    case _: IO.die(Unit, 1, "unknown boundary scenario")
 
 def run(args: List<String>) -> IO(Unit):
   match args:
@@ -1061,6 +1532,10 @@ def run(args: List<String>) -> IO(Unit):
     case "entry_messages" <> line <> Nil{}: entryMessages(line)
     case "lax_content" <> dir <> agentDir <> kind <> Nil{}: laxContent(dir, agentDir, kind)
     case "queued_slash_follow_up" <> dir <> agentDir <> Nil{}: queuedSlashFollowUp(dir, agentDir)
+    case "boundary" <> dir <> agentDir <> name <> argument <> Nil{}: boundaryScenario(dir, agentDir, name, argument)
+    case "settle_abort" <> dir <> agentDir <> Nil{}: settleAbort(dir, agentDir)
+    case "refresh_notifications" <> dir <> agentDir <> Nil{}: refreshNotifications(dir, agentDir)
+    case "retained_usage" <> dir <> agentDir <> Nil{}: retainedUsage(dir, agentDir)
     case "compaction_override" <> dir <> agentDir <> path <> Nil{}: compactionOverride(dir, agentDir, path)
     case "compaction_budget" <> dir <> agentDir <> path <> Nil{}: compactionBudget(dir, agentDir, path)
     case "compaction_model_switch" <> dir <> agentDir <> Nil{}: compactionModelSwitch(dir, agentDir)

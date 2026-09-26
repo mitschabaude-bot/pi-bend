@@ -40,7 +40,7 @@ def execute(pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
         Rpc.feed(handle,"{\"id\":\"export-missing\",\"type\":\"export_html\"}\n")
         Rpc.feed(handle,"{\"id\":\"tree\",\"type\":\"get_tree\"}\n")
         Rpc.feed(handle,"{\"id\":\"forks\",\"type\":\"get_fork_messages\"}\n")
-        Rpc.feed(handle,"{\"id\":\"p\",\"type\":\"prompt\",\"message\":\"hello\",\"images\":[{\"type\":\"image\",\"data\":\"AA==\",\"mimeType\":\"image/png\"}]}\n")
+        Rpc.feed(handle,"{\"id\":\"p\",\"type\":\"prompt\",\"message\":\"hello\",\"images\":[{\"type\":\"image\",\"data\":\"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=\",\"mimeType\":\"image/png\"}]}\n")
         Rpc.feed(handle,"{\"id\":\"u\",\"type\":\"unknown\"}\n")
         Rpc.feed(handle,"{\"id\":\"bad\",\"type\":\"prompt\",\"message\":17}\n")
         Rpc.feed(handle,"{\"id\":\"image-bad\",\"type\":\"steer\",\"message\":\"x\",\"images\":[{\"type\":\"image\",\"data\":3,\"mimeType\":\"image/png\"}]}\n")
