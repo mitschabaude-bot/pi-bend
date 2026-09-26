@@ -59,7 +59,11 @@ for (const [name,args] of Object.entries({read:{path:'notes.txt'},bash:{command:
  out(name+'-pending',component);
  component.updateResult({content:[{type:'text',text:'one\ntwo\nthree'}],isError:false},true);out(name+'-partial',component);
  component.updateResult({content:[{type:'text',text:'one\ntwo\nthree'}],isError:false},false);out(name+'-final',component);
- component.updateResult({content:[{type:'text',text:'bad input'}],isError:true},false);out(name+'-error',component);
+ // Use a fresh failed execution: upstream write's cached Container-to-Text cast
+ // throws after a successful result and falls back to a different foreground.
+ // Native immutable renderer state follows the error renderer, not that JS cast.
+ const failed=new ToolExecutionComponent(name,name+'-failed',args,{},builtins[name],ui,process.cwd());
+ failed.updateResult({content:[{type:'text',text:'bad input'}],isError:true},false);out(name+'-error',failed);
 }
 const range=new ToolExecutionComponent('read','range',{path:'notes.txt',offset:4,limit:2},{},readRenderers,ui,process.cwd());
 out('read-range',range,80);range.updateResult({content:[{type:'text',text:'one\ntwo'}],isError:false},false);range.setExpanded(true);out('read-expanded',range,80);

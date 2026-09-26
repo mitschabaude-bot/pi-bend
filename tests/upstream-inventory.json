@@ -2613,9 +2613,14 @@
     },
     {
       "source": "packages/coding-agent/test/edit-tool-no-full-redraw.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "7ba2d75282846b177e31e9e1d1dafd34c62b92cf93426883bebd3f9291e73bd6"
+      "status": "ported",
+      "ports": [
+        "tests/edit-tool-no-full-redraw.bend",
+        "tests/edit_tool_no_full_redraw_check.py"
+      ],
+      "sha256": "7ba2d75282846b177e31e9e1d1dafd34c62b92cf93426883bebd3f9291e73bd6",
+      "implementation": "packages/coding-agent/src/core/tools/renderers/edit.bend",
+      "notes": "All three named contracts pass on Bun/native1/native4: large preflight diffs stay in the call box and identical settlement emits no full redraw; saved details reconstruct previews after source deletion without complete args or preflight; invalid edits display a preflight error without a diff. Native Screen plans expose redraw count/reason/writes rather than JS component internals. Supplementary controlled A→B→A reads prove stale completions cannot publish and disposal joins owned work; preflight does not mutate files."
     },
     {
       "source": "packages/coding-agent/test/experimental-agent-controller.test.ts",
@@ -4672,10 +4677,11 @@
         "packages/coding-agent/src/modes/interactive/components/tool-execution.bend",
         "tests/tool-execution.bend",
         "tests/tool_execution_reference.ts",
-        "tests/tool_execution_check.py"
+        "tests/tool_execution_check.py",
+        "tests/tool_execution_cells.ts"
       ],
       "sha256": "84f8301e4effa29bc10f0db865b7e9b8a6e798da9160986a5ff9e2ff785de1c9",
-      "notes": "39 source-hash-pinned raw ANSI snapshots cover generic/custom tool displays plus read/bash/edit/write pending/partial/final/error frames, read range/expansion, bash tail preview and write content preview/expansion on Bun/native1/native4. Syntax highlighting, edit diff/details, visual wrapping, durations, images, mouse expansion and the full named suite remain pending; see tests/tool-execution.md."
+      "notes": "39 source-hash-pinned terminal-cell/style comparisons cover generic/custom tool displays plus read/bash/edit/write pending/partial/final/error frames, read range/expansion, bash tail preview and write content preview/expansion on Bun/native1/native4. Edit preflight and saved diff/details are covered separately by edit-tool-no-full-redraw. Syntax highlighting, broader visual wrapping, durations, images, mouse expansion and the full named suite remain pending; see tests/tool-execution.md. Failed builtin executions use a fresh upstream component to avoid its incidental cached Container/Text cast failure after a successful result."
     },
     {
       "source": "packages/coding-agent/test/tool-result-images.test.ts",

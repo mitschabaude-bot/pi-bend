@@ -5,6 +5,8 @@ import ../../../../../runtime/src/schema-value.bend as Value
 import ../render-utils.bend as Render
 import ../index.bend as Tools
 import ../edit.bend as Edit
+import ../edit-diff.bend as Edits
+import ../diff.bend as Diff
 import ../../../../../runtime/src/callback.bend as Callback
 import ../../../../../tui/src/components/box.bend as Box
 import ../../../../../tui/src/components/text.bend as TuiText
@@ -128,8 +130,39 @@ def display(call: String,+result: String,hasResult: Bool,error: Bool,theme: Them
         displayError(header,result,width)
     case False{}:
       paintBox(call ++ Bool.pick(String,String.is_empty(result),"","\n\n" ++ result),theme,hasResult,False{},width)
-def render(args: Value.Value,output: String,details: Maybe<&2,Tools.ToolDetails>,hasResult: Bool,+error: Bool,+theme: Theme.Theme,width: Nat) -> IO(List<&2,String>):
+# Once available, the preview stays in the call region. Settling an identical
+# result changes its status without moving the diff into a second region.
+def settledPreview(details: Maybe<&2,Tools.ToolDetails>,error: Bool,previous: Maybe<&2,Edits.Preview()>) -> Maybe<&2,Edits.Preview()>:
+  match details error:
+    case Some{Tools.EditDetails{Edit.EditToolDetails{diff,_,line}}} False{}: Some{Done{Diff.DiffResult{diff,line}}}
+    case _ _: previous
+def previewText(preview: Maybe<&2,Edits.Preview()>,theme: Theme.Theme) -> IO(String):
+  match preview:
+    case None{}: IO.pure(String,"")
+    case Some{Fail{message}}: Messages.foregroundText(theme,"error",message)
+    case Some{Done{Diff.DiffResult{diff,_}}}: renderDiff(diff,theme)
+def previewFailed(preview: Maybe<&2,Edits.Preview()>,fallback: Bool) -> Bool:
+  match preview:
+    case Some{Fail{_}}: True{}
+    case Some{Done{_}}: False{}
+    case None{}: fallback
+def errorRemainder(preview: Maybe<&2,Edits.Preview()>,+output: String,error: Bool) -> String:
+  match preview:
+    case Some{Fail{message}}: Bool.pick(String,error && Bool.not(String.eq(message,output)),output,"")
+    case _: Bool.pick(String,error,output,"")
+def renderRemainder(header: List<&2,String>,text: String,theme: Theme.Theme,width: Nat) -> IO(List<&2,String>):
+  match text:
+    case "": IO.pure(List<&2,String>,header)
+    case value:
+      do IO<List<&2,String>>:
+        colored : String <- Messages.foregroundText(theme,"error",value)
+        displayError(header,colored,width)
+def renderWithPreview(args: Value.Value,output: String,details: Maybe<&2,Tools.ToolDetails>,previous: Maybe<&2,Edits.Preview()>,+error: Bool,+theme: Theme.Theme,+width: Nat) -> IO(List<&2,String>):
   do IO<List<&2,String>>:
     call : String <- renderCall(args,theme)
-    result : String <- renderResult(output,details,error,theme)
-    display(call,result,hasResult,error,theme,width)
+    +preview : Maybe<&2,Edits.Preview()> = settledPreview(details,error,previous)
+    +text : String <- previewText(preview,theme)
+    header : List<&2,String> <- paintBox(call ++ Bool.pick(String,String.is_empty(text),"","\n\n" ++ text),theme,Maybe.is_some(&2,Edits.Preview(),preview),previewFailed(preview,error),width)
+    renderRemainder(header,errorRemainder(preview,output,error),theme,width)
+def render(args: Value.Value,output: String,details: Maybe<&2,Tools.ToolDetails>,hasResult: Bool,error: Bool,theme: Theme.Theme,width: Nat) -> IO(List<&2,String>):
+  renderWithPreview(args,output,details,None{},error,theme,width)
