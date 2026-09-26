@@ -802,10 +802,10 @@ def toAuthConfigured(config: OAuthConfig, credential: Auth.Credential) -> IO(Res
 
 def wrappedOAuth(providerId: String, oauth: Auth.OAuthAuth, rawHeaders: Maybe<&2, R.Record<String>>, authHeader: Bool) -> IO(Composition<Auth.OAuthAuth>):
   match oauth:
-    case Auth.OAuthAuth{name, subscription, label, refresh, +toAuth}:
+    case Auth.OAuthAuth{name, subscription, label, login, refresh, +toAuth}:
       do IO<Composition<Auth.OAuthAuth>>:
         wrapped : C.Callback<Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>> <- C.create(~OAuthConfig, ~Auth.Credential, ~Result<&2, &2, String, Auth.ModelAuth>, ~toAuthConfigured, OAuthConfig{providerId, toAuth, rawHeaders, authHeader})
-        return Composition{Some{Auth.OAuthAuth{name, subscription, label, refresh, wrapped}}, RetainedToAuth{toAuth} <> Nil{}}
+        return Composition{Some{Auth.OAuthAuth{name, subscription, label, login, refresh, wrapped}}, RetainedToAuth{toAuth} <> Nil{}}
 
 # The base OAuth method with configured headers applied to its request auth;
 # unchanged when nothing is configured.

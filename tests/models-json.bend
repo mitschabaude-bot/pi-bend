@@ -129,11 +129,15 @@ def unusedToAuth(unused: Unit, credential: Auth.Credential) -> IO(Result<&2, &2,
   IO.pure(Result<&2, &2, String, Auth.ModelAuth>, Fail{"unused"})
 
 # The OAuth handlers are never invoked: availability reads stored credentials only.
+def unusedLogin(_: Unit,interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
+  IO.pure(Auth.LoginOutcome(),Fail{"Login not configured in this fixture"})
+
 def oauth(name: String) -> IO(Auth.OAuthAuth):
   do IO<Auth.OAuthAuth>:
+    login : C.Callback<Auth.ProviderAuthInteraction,Auth.LoginOutcome()> <- C.create(~Unit,~Auth.ProviderAuthInteraction,~Auth.LoginOutcome(),~unusedLogin,Unit{})
     refresh : C.Callback<Auth.RefreshInput, Result<&2, &2, String, Auth.Credential>> <- C.create(~Unit, ~Auth.RefreshInput, ~Result<&2, &2, String, Auth.Credential>, ~unusedRefresh, Unit{})
     toAuth : C.Callback<Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>> <- C.create(~Unit, ~Auth.Credential, ~Result<&2, &2, String, Auth.ModelAuth>, ~unusedToAuth, Unit{})
-    return Auth.OAuthAuth{name, True{}, None{}, refresh, toAuth}
+    return Auth.OAuthAuth{name, True{}, None{}, login, refresh, toAuth}
 
 def storeOf(pair: AuthStorage.AuthStorageOwner & AuthStorage.AuthStorage) -> IO(Auth.CredentialStore):
   match pair:

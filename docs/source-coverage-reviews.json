@@ -151,14 +151,14 @@
         "packages/coding-agent/src/main.bend",
         "packages/coding-agent/src/modes/interactive/components/header.bend"
       ],
-      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native API-key login saves credentials and refreshes model availability; method, filtered-provider and empty prompt text match terminal captures, while the unfiltered provider catalog and secret masking differ. Fullscreen startup, typing, viewport scrolling, and keyboard transcript search match focused terminal captures; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection, dynamic mode switching and broader commands remain partial. Exact /model matches use the cached scoped or available list; misses refresh the catalog with a 15-second abort deadline, retry exact matching, then open the filtered picker. The miss picker matches plain terminal frames; prefilled search cursor styling remains different. Interactive HTML export now uses the active theme palette and explicit export backgrounds. Resumed transcripts now render compaction and branch summaries, displayed custom messages, and skill invocations in sequence; live structural entries use the same path. The footer reads live auto-compaction state, so disabling it removes the auto marker immediately. User-theme resource notices match compact and expanded terminal captures, quiet startup and reload refresh; context sections retain their extra spacer. Prompt/extension listings, project/package theme sources and broader resource diagnostics remain incomplete. Working/retry/compaction statuses use native owned loaders and countdowns; retry countdown and Escape cancellation have terminal comparisons. Manual compaction completion rebuilds retained context and appends the summary chronologically; completion, Escape cancellation and the following model request match focused terminal comparisons. Initial branch-summary status and broader compaction queue/progress/cost-notice integration remain incomplete. API-key login now accepts all native AuthPrompt kinds, provider notifications and per-prompt cancellation. The generic OAuth login backend, OpenAI browser-method selection and direct-provider resolution parity remain incomplete; pasted API-key prompt/save terminal captures and the basic request loop match pi; the existing full-provider-list and secret-masking differences remain.",
+      "note": "Interactive theme, thinking, scoped-model and model selection flows work. Native provider-directed API-key and OAuth login uses ModelRuntime.login, prompt/notify callbacks and shared cancellation. Codex offers browser/device methods and Anthropic uses browser/manual authorization; method, filtered-provider and empty prompt text match terminal captures, while the unfiltered provider catalog and secret masking differ. Fullscreen startup, typing, viewport scrolling, and keyboard transcript search match focused terminal captures; regular Ctrl+D exit and persisted-session resume hint match. Resumed-session tool warnings precede restored messages, though startup remains slower. Fullscreen exit text and spacing match upstream on untouched and completed-turn sessions; cursor/border styling, mouse selection, dynamic mode switching and broader commands remain partial. Exact /model matches use the cached scoped or available list; misses refresh the catalog with a 15-second abort deadline, retry exact matching, then open the filtered picker. The miss picker matches plain terminal frames; prefilled search cursor styling remains different. Interactive HTML export now uses the active theme palette and explicit export backgrounds. Resumed transcripts now render compaction and branch summaries, displayed custom messages, and skill invocations in sequence; live structural entries use the same path. The footer reads live auto-compaction state, so disabling it removes the auto marker immediately. User-theme resource notices match compact and expanded terminal captures, quiet startup and reload refresh; context sections retain their extra spacer. Prompt/extension listings, project/package theme sources and broader resource diagnostics remain incomplete. Working/retry/compaction statuses use native owned loaders and countdowns; retry countdown and Escape cancellation have terminal comparisons. Manual compaction completion rebuilds retained context and appends the summary chronologically; completion, Escape cancellation and the following model request match focused terminal comparisons. Initial branch-summary status and broader compaction queue/progress/cost-notice integration remain incomplete. API-key login now accepts all native AuthPrompt kinds, provider notifications and per-prompt cancellation. The generic OAuth login backend, OpenAI browser-method selection and direct-provider resolution parity remain incomplete; pasted API-key prompt/save terminal captures and the basic request loop match pi; the existing full-provider-list and secret-masking differences remain.",
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "2df7941821123ecdc58b9e9b03f1b9c00c13f3f50ad7ed2a54dd79a77eae95d4",
-        "packages/coding-agent/src/modes/interactive/run.bend": "47ba92430920511b3d49f398a3e66bdd32db30b76b023baf062b27e9ff237027",
+        "packages/coding-agent/src/modes/interactive/run.bend": "58e0f7d178f6b0df2d783eea6c3d7c5f9fb32c69cc5d529627bd858524d71f29",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "5251961f780f6011fd173b198ccd6e4dd82ab65743f2df4463bc06f71a497075",
-        "packages/coding-agent/src/main.bend": "e50dfd533cfd5f22680e9e164b1c618a5cade5552b12ff2a428a1849eb4afe42",
+        "packages/coding-agent/src/main.bend": "3dbefc6db3127fbb6d532c0208f27ab2a172c601d852f50a106083bf7641f1bb",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6"
       }
     },
@@ -248,7 +248,7 @@
       "note": "Native login offers account and API-key methods, configured-status badges, searchable choices, an eight-row provider window and native key prompts. Method and filtered-provider text match upstream terminal captures. Full provider coverage, OAuth provider options and mouse behavior remain partial.",
       "source_sha256": "d4c92352cc8035e4092d9bd67e0250a2eab3124e13f15ac45433acfde92db53f",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "71c57e91e8e43bf1b8502abf58ac504b597dbf3d71c5f13d9aa51bc0a42f7964"
+        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "a852827bbb501e5fb2b55da4a566af2ac11b5cef3ecbb56cef194f8ef30f4e9c"
       },
       "ports": [
         "packages/coding-agent/src/modes/interactive/components/login-dialog.bend"
@@ -359,10 +359,10 @@
     },
     "packages/ai/src/auth/types.ts": {
       "state": "partial",
-      "note": "Credential storage and provider auth resolution have native types. AuthPrompt covers text, secret, selection and manual code with optional per-prompt cancellation; AuthEvent covers info/links, authorization URLs, device codes and progress. AuthInteraction and ProviderAuthInteraction expose prompt and notify callbacks; API-key login uses the normalized provider interaction. OAuthAuth.login, ApiKeyAuth.check, optional-signal normalization and the remaining auth-context contract are incomplete.",
+      "note": "Credential storage and provider auth resolution have native types. AuthPrompt covers text, secret, selection and manual code with optional per-prompt cancellation; AuthEvent covers info/links, authorization URLs, device codes and progress. AuthInteraction accepts an optional signal; ProviderAuthInteraction carries a required signal. OAuthAuth.login is required, and both API-key and OAuth callbacks use prompt/notify interactions. ApiKeyAuth.check and the remaining auth-context contract are incomplete.",
       "source_sha256": "82e2209fd3291978afd7f77b10d81d8d411fd82d0e3ac52121cb41f735946ba5",
       "port_sha256": {
-        "packages/ai/src/auth/types.bend": "88d4205444eaf7777da36f7dafe3cb7a61f7ff40807ff6ac00e18bd33cf9841e"
+        "packages/ai/src/auth/types.bend": "d7c3bedafb8bb2c952fd2ecbe5628b7bb695f7db7d817a5ac6f36a5d43a69150"
       }
     },
     "packages/ai/src/auth/helpers.ts": {
@@ -383,10 +383,10 @@
     },
     "packages/coding-agent/src/modes/interactive/components/login-dialog.ts": {
       "state": "partial",
-      "note": "API-key/provider prompts use native AuthPrompt and AuthEvent with shared TUI Input. Selection returns the selected option ID directly and restores preceding dialog content; text, secret and manual-code prompts preserve notifications and authorization links. Submission retains immutable displayed content; secrets remain masked while returning their raw value. Per-prompt cancellation races the answer with removable abort observations, joins all watchers and leaves the login signal active. tests/login-dialog-input.bend checks input editing, masking, links, notifications, selection/restoration and cancellation on Bun/native1/native4. OAuth providers still use the legacy backend; OAuthAuth.login, Codex browser/device method selection and opening the browser remain incomplete. Pasted API-key prompt/save terminal captures match pi; the existing unfiltered provider catalog and intentional secret-masking differences remain. Long text/link wrapping, browser opening and broader selector behavior remain partial.",
+      "note": "Provider login uses native AuthPrompt/AuthEvent and shared TUI Input. Selection returns the option ID directly and restores preceding dialog content. Text, secret and manual-code prompts preserve notifications; authorization URLs and messages wrap with the TUI ANSI wrapper while retaining their full hyperlink targets. Submission keeps immutable displayed content and masks secrets while returning their raw value. Per-prompt cancellation races removable observations, joins its watchers and leaves the parent signal active. Input and browser-interaction fixtures exercise editing, notifications, selection, browser/manual arbitration and cancellation. Full mouse behavior and completion-page/UI parity remain unreviewed.",
       "source_sha256": "37608848ca7b72707437aed9627a612eadf570c57a54b1c86972c3532918298c",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "71c57e91e8e43bf1b8502abf58ac504b597dbf3d71c5f13d9aa51bc0a42f7964"
+        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "a852827bbb501e5fb2b55da4a566af2ac11b5cef3ecbb56cef194f8ef30f4e9c"
       }
     },
     "packages/coding-agent/src/cli/initial-message.ts": {
@@ -497,7 +497,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/footer.bend": "d924bbd85b2a33b86ec77491b3f88014fe87ffac531779233f82cb77c4ce5828",
-        "packages/coding-agent/src/modes/interactive/run.bend": "47ba92430920511b3d49f398a3e66bdd32db30b76b023baf062b27e9ff237027"
+        "packages/coding-agent/src/modes/interactive/run.bend": "58e0f7d178f6b0df2d783eea6c3d7c5f9fb32c69cc5d529627bd858524d71f29"
       }
     },
     "packages/ai/src/api/pi-messages.ts": {
@@ -681,6 +681,67 @@
       "port_sha256": {
         "packages/ai/src/api/google-shared.bend": "1984735bfdfef01a52262523c27298c49ca0ea51421b9a2febd1e67bc420dc97"
       }
+    },
+    "packages/ai/src/auth/oauth/pkce.ts": {
+      "state": "ported",
+      "note": "Native generatePKCE reads 32 secure random bytes, base64url-encodes the verifier and SHA-256 challenge, and returns immutable PKCE fields. Failures are typed errors. tests/anthropic_oauth_start_check.py compares native one/four-thread authorization challenges with the Python SHA-256/base64 oracle; browser interaction tests exercise worker cleanup.",
+      "source_sha256": "33835111577490103dbb7509b7687db1643691d7b425845428f3cbeb873fe9cf",
+      "port_sha256": {
+        "packages/ai/src/auth/oauth/browser.bend": "7a393a30ddb616aa8405185ba5acd07ef541df0200f50b90e0bf2a96da1fe4de"
+      },
+      "ports": [
+        "packages/ai/src/auth/oauth/browser.bend"
+      ]
+    },
+    "packages/ai/src/auth/oauth/openai-codex.ts": {
+      "state": "partial",
+      "note": "Native OAuthAuth.login selects browser/device login. Browser authorization uses PKCE, independent 16-byte hex state, upstream URL fields, callback host override, state validation, manual-input fallback and token exchange with the browser redirect URI. Device login notifies the user code then polls/exchanges with the device redirect URI. Refresh and toAuth remain native. Browser/manual workers share typed first-settlement arbitration and are cancelled/joined before disposal. Callback completion HTML is simplified; exact token-error classification/rendering and source-wide edge-case parity remain incomplete.",
+      "source_sha256": "757c6cff2bc67d89df30ad175eead549519e1d3756397b5b4189460ac9dbcaba",
+      "port_sha256": {
+        "packages/ai/src/auth/oauth/openai-codex.bend": "bd8c582fb0c5e8fbf734ba47d9ee358633d1d1b5243f8bcd0ecfd6f36b4ea41a",
+        "packages/ai/src/auth/oauth/browser.bend": "7a393a30ddb616aa8405185ba5acd07ef541df0200f50b90e0bf2a96da1fe4de"
+      },
+      "ports": [
+        "packages/ai/src/auth/oauth/openai-codex.bend",
+        "packages/ai/src/auth/oauth/browser.bend"
+      ]
+    },
+    "packages/ai/src/auth/oauth/anthropic.ts": {
+      "state": "partial",
+      "note": "Native OAuthAuth.login uses PKCE, the upstream authorization URL, callback host override, browser/manual arbitration, progress notification and authorization-code exchange. Refresh retains the five-minute expiry margin and toAuth derives bearer auth. Native callback/manual fixtures check state rejection, cancellation, typed prompt failures and occupied-port fallback; the PKCE oracle checks generated challenges. Callback completion HTML is simplified; exact token-error classification/rendering and source-wide edge-case parity remain incomplete.",
+      "source_sha256": "8bf457ab5f0e7756898bff324d54d7ad9e4d4977c1053cb744791ac024945810",
+      "port_sha256": {
+        "packages/ai/src/auth/oauth/anthropic.bend": "535086d65c4f51e8e2eae7475341ffe0e3bb97347fe605f1d0514257e9d3c169",
+        "packages/ai/src/auth/oauth/browser.bend": "7a393a30ddb616aa8405185ba5acd07ef541df0200f50b90e0bf2a96da1fe4de"
+      },
+      "ports": [
+        "packages/ai/src/auth/oauth/anthropic.bend",
+        "packages/ai/src/auth/oauth/browser.bend"
+      ]
+    },
+    "packages/coding-agent/src/core/model-runtime.ts": {
+      "state": "partial",
+      "note": "Reviewed login path: native login dispatches by provider and auth type, normalizes an absent signal with an owned controller, rejects pre-aborted requests, saves through the credential store and refreshes availability. Interactive API-key login uses this path; OAuth providers implement native login callbacks. Upstream per-provider credential-operation serialization, complete synchronizeCredentialState behavior and source-wide ModelRuntime coverage remain incomplete.",
+      "source_sha256": "20c1dbfa1dd757a594cf0b4ab6e401fc6c6155484a3f490096bc5328e3c33c2c",
+      "port_sha256": {
+        "packages/coding-agent/src/core/model-runtime.bend": "5ff88f4f6806ba7f055acc44522dfdbf39028ce3eed7efd29e5e7bc3f5919457"
+      },
+      "ports": [
+        "packages/coding-agent/src/core/model-runtime.bend"
+      ]
+    },
+    "packages/ai/src/models.ts": {
+      "state": "partial",
+      "note": "Reviewed provider/publication types and collection/auth ownership. Provider, RefreshModelsContext and ModelsPublication have native representations and fetched-catalog helpers. The standalone Models/MutableModels collection is not exposed in pi-ai: much of its catalog, auth, refresh and request behavior currently lives in coding-agent ModelRuntime/agent-runtime. This layer must be separated into the AI library while keeping app configuration and credential-operation synchronization in ModelRuntime; public collection operations and API boundary parity remain incomplete.",
+      "source_sha256": "84f2799b0bf45fb01237c5c2c19641b0da5d1245670b208c05bacb5cff36b96f",
+      "port_sha256": {
+        "packages/ai/src/models.bend": "3815ddbe25e6b845185f21779af1de07f0b9900787a443e4a1616893b8b6ec83",
+        "packages/coding-agent/src/core/model-runtime.bend": "5ff88f4f6806ba7f055acc44522dfdbf39028ce3eed7efd29e5e7bc3f5919457"
+      },
+      "ports": [
+        "packages/ai/src/models.bend",
+        "packages/coding-agent/src/core/model-runtime.bend"
+      ]
     }
   }
 }

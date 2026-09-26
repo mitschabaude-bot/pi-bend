@@ -1132,23 +1132,12 @@ type Interaction is Data:
   Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,modelSelector: Ref.Ref<Maybe<&2,ModelPicker.Host>>,thinkingSelector: Ref.Ref<Maybe<&2,ThinkingPicker.Host>>,scopedSelector: Ref.Ref<Maybe<&2,ScopePicker.Host>>,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,trust: Ref.Ref<Maybe<&2,TrustPicker.Host>>,header: Maybe<&2,Header.Handle>,bashActivity: Ref.Ref<BashActivity>,working: Working,autocomplete: AutocompleteSlot}
 type ThemeStartup is Data:
   ThemeStartup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Interactive.StatusSink,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>,theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,session: Ref.Ref<Session.AgentSession>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,managed: Maybe<&2,Manager.ToolsManager>,interaction: Interaction,highlighter: SyntaxHighlight.Highlighter}
-type LoginRequest is Data: LoginRequest{provider: String,signal: Abort.AbortSignal<Unit>,notice: AuthLogin.Notice(),manual: Callback.Callback<AuthLogin.ManualPrompt,Unit>,manualDone: Callback.Callback<Unit,Unit>}
+type LoginRequest is Data: LoginRequest{runtime: Models.ModelRuntime,provider: String,kind: Auth.CredentialType,interaction: Auth.AuthInteraction}
 type Binding is Data:
   Binding{current: Ref.Ref<Session.AgentSession>,replacement: Controller.Replacement,onRebind: Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>,login: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,refreshModels: Callback.Callback<Unit,List<&2,Models.Model()>>,importer: Callback.Callback<ImportRequest,SessionHost.ImportOutcome>,sessions: Callback.Callback<Unit,SessionChoices>,resume: Callback.Callback<ResumeRequest,SessionHost.ResumeOutcome>,managed: Maybe<&2,Manager.ToolsManager>,autoTrustOnReload: Bool,tuiMode: Maybe<&2,Settings.TuiMode>}
 type LoginState is Data:
   LoginState{host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,abort: Ref.Ref<Maybe<&2,Abort.AbortController<Unit>>>,backend: Maybe<&2,Callback.Callback<LoginRequest,AuthLogin.Outcome()>>,refresh: Maybe<&2,Callback.Callback<Unit,List<&2,Models.Model()>>>,models: Ref.Ref<List<&2,Models.Model()>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>}
 type ApiPromptState is Data: ApiPromptState{login: LoginState,providerName: String,signal: Abort.AbortSignal<Unit>}
-def showLoginCode(target: Maybe<&2,LoginDialog.Host>,url: String,code: String) -> IO(Unit):
-  match target:
-    case None{}: IO.pure(Unit,Unit{})
-    case Some{dialog}: LoginDialog.showCode(dialog,url,code)
-def loginNotice(state: LoginState,prompt: AuthLogin.DevicePrompt) -> IO(Unit):
-  match state prompt:
-    case LoginState{host,_,_,_,_,_,redraw,_} AuthLogin.DevicePrompt{url,code}:
-      do IO<Unit>:
-        target : Maybe<&2,LoginDialog.Host> <- Ref.read(Maybe<&2,LoginDialog.Host>,host)
-        showLoginCode(target,url,code)
-        Interactive.requestRender(redraw)
 def closeLoginDialog(target: Maybe<&2,LoginDialog.Host>) -> IO(Unit):
   match target:
     case None{}: IO.pure(Unit,Unit{})
@@ -1219,32 +1208,6 @@ def loginFinished(state: LoginState,provider: String,apiKey: Bool,result: AuthLo
         closeLoginDialog(target)
         loginOutcome(provider,apiKey,result,cancelled,refresh,models,failure,session)
         Interactive.requestRender(redraw)
-def manualLoginDialog(target: Maybe<&2,LoginDialog.Host>,prompt: AuthLogin.ManualPrompt,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
-  match target prompt:
-    case None{} _: IO.pure(Unit,Unit{})
-    case Some{dialog} AuthLogin.ManualPrompt{url,answer}:
-      do IO<Unit>:
-        LoginDialog.showManual(dialog,url,answer)
-        Interactive.requestRender(redraw)
-def manualLogin(state: LoginState,prompt: AuthLogin.ManualPrompt) -> IO(Unit):
-  match state:
-    case LoginState{host,_,_,_,_,_,redraw,_}:
-      do IO<Unit>:
-        target : Maybe<&2,LoginDialog.Host> <- Ref.read(Maybe<&2,LoginDialog.Host>,host)
-        manualLoginDialog(target,prompt,redraw)
-def endManualDialog(target: Maybe<&2,LoginDialog.Host>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
-  match target:
-    case None{}: IO.pure(Unit,Unit{})
-    case Some{dialog}:
-      do IO<Unit>:
-        LoginDialog.stopManual(dialog)
-        Interactive.requestRender(redraw)
-def endManual(state: LoginState,_: Unit) -> IO(Unit):
-  match state:
-    case LoginState{host,_,_,_,_,_,redraw,_}:
-      do IO<Unit>:
-        target : Maybe<&2,LoginDialog.Host> <- Ref.read(Maybe<&2,LoginDialog.Host>,host)
-        endManualDialog(target,redraw)
 def loginAbort(state: LoginState) -> Ref.Ref<Maybe<&2,Abort.AbortController<Unit>>>:
   match state: case LoginState{_,abort,_,_,_,_,_,_}: abort
 def promptRestore(prompt: Auth.AuthPrompt,previous: LoginDialog.State) -> Maybe<&2,LoginDialog.State>:
@@ -1321,38 +1284,44 @@ def apiKeyProviderName(state: LoginState,+provider: String) -> IO(String):
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         found : Maybe<&2,AiModels.Provider> <- Models.getProvider(Session.modelRuntime(live),provider)
         return loginProviderName(found,providerName(provider))
-def selectedApiKey(+state: LoginState,+provider: String,login: Callback.Callback<Auth.ProviderAuthInteraction,Auth.LoginOutcome()>,+controller: Abort.AbortController<Unit>) -> IO(Unit):
-  do IO<Unit>:
-    +name : String <- apiKeyProviderName(state,provider)
-    +prompt : Callback.Callback<Auth.AuthPrompt,Result<&2,&2,String,String>> <- Callback.create(~ApiPromptState,~Auth.AuthPrompt,~Result<&2,&2,String,String>,~apiPrompt,ApiPromptState{state,name,Abort.signal(Unit,controller)})
-    +notify : Callback.Callback<Auth.AuthEvent,Unit> <- Callback.create(~ApiPromptState,~Auth.AuthEvent,~Unit,~apiNotify,ApiPromptState{state,name,Abort.signal(Unit,controller)})
-    result : AuthLogin.Outcome() <- AuthLogin.authenticateApiKey(provider,login,Auth.ProviderAuthInteraction{Abort.signal(Unit,controller),prompt,notify})
-    Callback.dispose(Auth.AuthEvent,Unit,notify)
-    Callback.dispose(Auth.AuthPrompt,Result<&2,&2,String,String>,prompt)
-    old : Maybe<&2,Abort.AbortController<Unit>> <- Ref.swap(Maybe<&2,Abort.AbortController<Unit>>,loginAbort(state),None{})
-    cancelled : Bool <- Abort.aborted(Unit,Abort.signal(Unit,controller))
-    Abort.dispose(Unit,controller)
-    loginFinished(state,provider,True{},result,cancelled)
-def selectedLogin(+state: LoginState,+provider: String,authenticate: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,+controller: Abort.AbortController<Unit>) -> IO(Unit):
+def loginRequestOutcome(result: Auth.LoginOutcome()) -> AuthLogin.Outcome():
+  match result:
+    case Fail{error}: Fail{error}
+    case Done{_}: Done{Unit{}}
+def runProviderLogin(backend: Maybe<&2,Callback.Callback<LoginRequest,AuthLogin.Outcome()>>,request: LoginRequest) -> IO(AuthLogin.Outcome()):
+  match backend request:
+    case Some{callback} request: Callback.call(LoginRequest,AuthLogin.Outcome(),callback,request)
+    case None{} LoginRequest{runtime,provider,kind,interaction}:
+      do IO<AuthLogin.Outcome()>:
+        result : Auth.LoginOutcome() <- Models.login(runtime,provider,kind,interaction)
+        return loginRequestOutcome(result)
+def isApiKey(kind: Auth.CredentialType) -> Bool:
+  match kind:
+    case Auth.ApiKeyType{}: True{}
+    case Auth.OAuthType{}: False{}
+def selectedProvider(+state: LoginState,+provider: String,+kind: Auth.CredentialType,+controller: Abort.AbortController<Unit>) -> IO(Unit):
+  match state:
+    case LoginState{_,_,backend,_,_,_,_,session}:
+      do IO<Unit>:
+        +name : String <- apiKeyProviderName(state,provider)
+        +prompt : Callback.Callback<Auth.AuthPrompt,Result<&2,&2,String,String>> <- Callback.create(~ApiPromptState,~Auth.AuthPrompt,~Result<&2,&2,String,String>,~apiPrompt,ApiPromptState{state,name,Abort.signal(Unit,controller)})
+        +notify : Callback.Callback<Auth.AuthEvent,Unit> <- Callback.create(~ApiPromptState,~Auth.AuthEvent,~Unit,~apiNotify,ApiPromptState{state,name,Abort.signal(Unit,controller)})
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        result : AuthLogin.Outcome() <- runProviderLogin(backend,LoginRequest{Session.modelRuntime(live),provider,kind,Auth.AuthInteraction{Some{Abort.signal(Unit,controller)},prompt,notify}})
+        Callback.dispose(Auth.AuthEvent,Unit,notify)
+        Callback.dispose(Auth.AuthPrompt,Result<&2,&2,String,String>,prompt)
+        old : Maybe<&2,Abort.AbortController<Unit>> <- Ref.swap(Maybe<&2,Abort.AbortController<Unit>>,loginAbort(state),None{})
+        cancelled : Bool <- Abort.aborted(Unit,Abort.signal(Unit,controller))
+        Abort.dispose(Unit,controller)
+        loginFinished(state,provider,isApiKey(kind),result,cancelled)
+def selectedLogin(+state: LoginState,provider: String,+controller: Abort.AbortController<Unit>) -> IO(Unit):
   match provider:
     case "":
       do IO<Unit>:
         old : Maybe<&2,Abort.AbortController<Unit>> <- Ref.swap(Maybe<&2,Abort.AbortController<Unit>>,loginAbort(state),None{})
         Abort.dispose(Unit,controller)
         loginFinished(state,"",False{},Done{Unit{}},True{})
-    case +chosen:
-      do IO<Unit>:
-        +notice : AuthLogin.Notice() <- Callback.create(~LoginState,~AuthLogin.DevicePrompt,~Unit,~loginNotice,state)
-        +manual : Callback.Callback<AuthLogin.ManualPrompt,Unit> <- Callback.create(~LoginState,~AuthLogin.ManualPrompt,~Unit,~manualLogin,state)
-        +manualDone : Callback.Callback<Unit,Unit> <- Callback.create(~LoginState,~Unit,~Unit,~endManual,state)
-        result : AuthLogin.Outcome() <- Callback.call(LoginRequest,AuthLogin.Outcome(),authenticate,LoginRequest{chosen,Abort.signal(Unit,controller),notice,manual,manualDone})
-        Callback.dispose(AuthLogin.DevicePrompt,Unit,notice)
-        Callback.dispose(AuthLogin.ManualPrompt,Unit,manual)
-        Callback.dispose(Unit,Unit,manualDone)
-        old : Maybe<&2,Abort.AbortController<Unit>> <- Ref.swap(Maybe<&2,Abort.AbortController<Unit>>,loginAbort(state),None{})
-        cancelled : Bool <- Abort.aborted(Unit,Abort.signal(Unit,controller))
-        Abort.dispose(Unit,controller)
-        loginFinished(state,chosen,False{},result,cancelled)
+    case chosen: selectedProvider(state,chosen,Auth.OAuthType{},controller)
 def storedKind(infos: List<&2,Auth.CredentialInfo>,+id: String) -> Maybe<&2,Auth.CredentialType>:
   match infos:
     case Nil{}: None{}
@@ -1448,7 +1417,7 @@ def selectedAmbient(+state: LoginState,provider: String,method: String,controlle
         ambientDialog(state,provider,method,controller,redraw,target)
 def selectedKeyMethod(state: LoginState,provider: String,controller: Abort.AbortController<Unit>,method: Maybe<&2,Auth.ApiKeyAuth>) -> IO(Unit):
   match method:
-    case Some{Auth.ApiKeyAuth{_,Some{login},_}}: selectedApiKey(state,provider,login,controller)
+    case Some{Auth.ApiKeyAuth{_,Some{_},_}}: selectedProvider(state,provider,Auth.ApiKeyType{},controller)
     case Some{Auth.ApiKeyAuth{name,None{},_}}: selectedAmbient(state,provider,name,controller)
     case None{}: cancelChosen(state,controller)
 def apiSelected(+state: LoginState,+provider: String,controller: Abort.AbortController<Unit>) -> IO(Unit):
@@ -1466,7 +1435,7 @@ def selectedMethod(+state: LoginState,dialog: LoginDialog.Host,authenticate: Cal
         redrawLogin(state)
         provider : String <- Deferred.result(String,pending)
         Deferred.dispose(String,pending)
-        selectedLogin(state,provider,authenticate,controller)
+        selectedLogin(state,provider,controller)
     case "api_key":
       do IO<Unit>:
         choices : List<&2,LoginDialog.Choice> <- availableKeyChoices(state)
@@ -1475,7 +1444,7 @@ def selectedMethod(+state: LoginState,dialog: LoginDialog.Host,authenticate: Cal
         provider : String <- Deferred.result(String,pending)
         Deferred.dispose(String,pending)
         apiSelected(state,provider,controller)
-    case _: selectedLogin(state,"",authenticate,controller)
+    case _: selectedLogin(state,"",controller)
 def activeLogin(+state: LoginState,+dialog: LoginDialog.Host,authenticate: Callback.Callback<LoginRequest,AuthLogin.Outcome()>) -> IO(Unit):
   match state:
     case LoginState{_,abort,_,_,_,_,redraw,_}:
@@ -1498,9 +1467,9 @@ def canonicalProvider(normalized: String) -> Maybe<&2,String>:
 def directProvider(requested: String) -> Maybe<&2,String>: canonicalProvider(String.to_lower(Text.trim(requested)))
 def directMethod(state: LoginState,provider: String,authenticate: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,controller: Abort.AbortController<Unit>,method: Maybe<&2,Callback.Callback<Auth.ProviderAuthInteraction,Auth.LoginOutcome()>>) -> IO(Unit):
   match provider method:
-    case "anthropic" _: selectedLogin(state,"anthropic",authenticate,controller)
-    case provider Some{login}: selectedApiKey(state,provider,login,controller)
-    case provider None{}: selectedLogin(state,provider,authenticate,controller)
+    case "anthropic" _: selectedLogin(state,"anthropic",controller)
+    case provider Some{_}: selectedProvider(state,provider,Auth.ApiKeyType{},controller)
+    case provider None{}: selectedLogin(state,provider,controller)
 def directLogin(+state: LoginState,dialog: LoginDialog.Host,authenticate: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,+provider: String) -> IO(Unit):
   match state:
     case LoginState{_,abort,_,_,_,_,redraw,_}:

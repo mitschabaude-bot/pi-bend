@@ -1446,3 +1446,63 @@ def getRegisteredProviderIds(runtime: ModelRuntime) -> IO(List<&2, String>):
   do IO<List<&2, String>>:
     catalog : Catalog <- readCatalog(runtime)
     return nativeIdsOf(catalog)
+
+# Provider-directed login. The interaction borrows its callbacks and optional
+# signal; the runtime owns credential persistence and availability updates.
+def loginMethod(auth: Auth.ProviderAuth, kind: Auth.CredentialType) -> Maybe<&2,C.Callback<Auth.ProviderAuthInteraction,Auth.LoginOutcome()>>:
+  match auth kind:
+    case Auth.ProviderAuth{_,Some{Auth.OAuthAuth{_,_,_,login,_,_}}} Auth.OAuthType{}: Some{login}
+    case Auth.ProviderAuth{Some{Auth.ApiKeyAuth{_,login,_}},_} Auth.ApiKeyType{}: login
+    case _ _: None{}
+def loginReplacement(credential: Auth.Credential,old: Maybe<&2,Auth.Credential>) -> IO(Auth.StoreResult(Maybe<&2,Auth.Credential>)):
+  IO.pure(Auth.StoreResult(Maybe<&2,Auth.Credential>),Done{Some{credential}})
+def loginStored(+runtime: ModelRuntime,id: String,credential: Auth.Credential,stored: Auth.StoreResult(Maybe<&2,Auth.Credential>)) -> IO(Auth.LoginOutcome()):
+  match stored:
+    case Fail{error}: IO.pure(Auth.LoginOutcome(),Fail{"Could not save credentials: " ++ error})
+    case Done{_}:
+      do IO<Auth.LoginOutcome()>:
+        refreshProviderAvailability(runtime,id)
+        return Done{credential}
+def loginCredential(+runtime: ModelRuntime,+id: String,result: Auth.LoginOutcome(),signal: Abort.AbortSignal<Unit>) -> IO(Auth.LoginOutcome()):
+  match result:
+    case Fail{error}: IO.pure(Auth.LoginOutcome(),Fail{error})
+    case Done{+credential}:
+      do IO<Auth.LoginOutcome()>:
+        +update : Auth.Modification() <- C.create(~Auth.Credential,~Maybe<&2,Auth.Credential>,~Auth.StoreResult(Maybe<&2,Auth.Credential>),~loginReplacement,credential)
+        stored : Auth.StoreResult(Maybe<&2,Auth.Credential>) <- Auth.modify(credentialsOf(runtime),id,update,Some{signal})
+        C.dispose(Maybe<&2,Auth.Credential>,Auth.StoreResult(Maybe<&2,Auth.Credential>),update)
+        loginStored(runtime,id,credential,stored)
+def loginSupported(+runtime: ModelRuntime,+id: String,method: Maybe<&2,C.Callback<Auth.ProviderAuthInteraction,Auth.LoginOutcome()>>,interaction: Auth.ProviderAuthInteraction,name: String,kind: Auth.CredentialType) -> IO(Auth.LoginOutcome()):
+  match method interaction:
+    case None{} _: IO.pure(Auth.LoginOutcome(),Fail{name ++ " does not support " ++ Auth.typeName(kind) ++ " login"})
+    case Some{callback} Auth.ProviderAuthInteraction{+signal,prompt,notify}:
+      do IO<Auth.LoginOutcome()>:
+        result : Auth.LoginOutcome() <- C.call(Auth.ProviderAuthInteraction,Auth.LoginOutcome(),callback,Auth.ProviderAuthInteraction{signal,prompt,notify})
+        loginCredential(runtime,id,result,signal)
+def loginProvider(runtime: ModelRuntime,id: String,provider: Maybe<&2,AiModels.Provider>,+kind: Auth.CredentialType,interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
+  match provider:
+    case None{}: IO.pure(Auth.LoginOutcome(),Fail{"Unknown provider: " ++ id})
+    case Some{AiModels.Provider{_,name,_,auth,_,_,_}}:
+      loginSupported(runtime,id,loginMethod(auth,kind),interaction,name,kind)
+def loginUnlessAborted(+runtime: ModelRuntime,+id: String,kind: Auth.CredentialType,interaction: Auth.ProviderAuthInteraction,aborted: Bool) -> IO(Auth.LoginOutcome()):
+  match aborted:
+    case True{}: IO.pure(Auth.LoginOutcome(),Fail{"Login cancelled"})
+    case False{}:
+      do IO<Auth.LoginOutcome()>:
+        provider : Maybe<&2,AiModels.Provider> <- getProvider(runtime,id)
+        loginProvider(runtime,id,provider,kind,interaction)
+def loginSignalled(runtime: ModelRuntime,id: String,kind: Auth.CredentialType,+interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
+  match interaction:
+    case Auth.ProviderAuthInteraction{signal,_,_}:
+      do IO<Auth.LoginOutcome()>:
+        aborted : Bool <- Abort.aborted(Unit,signal)
+        loginUnlessAborted(runtime,id,kind,interaction,aborted)
+def login(runtime: ModelRuntime,id: String,kind: Auth.CredentialType,interaction: Auth.AuthInteraction) -> IO(Auth.LoginOutcome()):
+  match interaction:
+    case Auth.AuthInteraction{Some{signal},prompt,notify}: loginSignalled(runtime,id,kind,Auth.ProviderAuthInteraction{signal,prompt,notify})
+    case Auth.AuthInteraction{None{},prompt,notify}:
+      do IO<Auth.LoginOutcome()>:
+        +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+        result : Auth.LoginOutcome() <- loginSignalled(runtime,id,kind,Auth.ProviderAuthInteraction{Abort.signal(Unit,controller),prompt,notify})
+        Abort.dispose(Unit,controller)
+        return result

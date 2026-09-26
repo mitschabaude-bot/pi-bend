@@ -151,9 +151,9 @@ type ApiKeyAuth is Data:
 type RefreshInput is Data:
   RefreshInput{credential: Credential, signal: Abort.AbortSignal<Unit>}
 
-# OAuth auth: refresh rotates a stored credential; toAuth derives request auth.
+# OAuth auth: login obtains a credential; refresh rotates a stored credential; toAuth derives request auth.
 type OAuthAuth is Data:
-  OAuthAuth{name: String, isSubscription: Bool, loginLabel: Maybe<&2, String>, refresh: C.Callback<RefreshInput, Result<&2, &2, String, Credential>>, toAuth: C.Callback<Credential, Result<&2, &2, String, ModelAuth>>}
+  OAuthAuth{name: String, isSubscription: Bool, loginLabel: Maybe<&2, String>, login: C.Callback<ProviderAuthInteraction, LoginOutcome()>, refresh: C.Callback<RefreshInput, Result<&2, &2, String, Credential>>, toAuth: C.Callback<Credential, Result<&2, &2, String, ModelAuth>>}
 
 type ProviderAuth is Data:
   ProviderAuth{apiKey: Maybe<&2, ApiKeyAuth>, oauth: Maybe<&2, OAuthAuth>}
@@ -171,8 +171,9 @@ def disposeApiKeyAuth(auth: ApiKeyAuth) -> IO(Unit):
 
 def disposeOAuthAuth(auth: OAuthAuth) -> IO(Unit):
   match auth:
-    case OAuthAuth{_, _, _, refresh, toAuth}:
+    case OAuthAuth{_, _, _, login, refresh, toAuth}:
       do IO<Unit>:
+        C.dispose(ProviderAuthInteraction, LoginOutcome(), login)
         C.dispose(RefreshInput, Result<&2, &2, String, Credential>, refresh)
         C.dispose(Credential, Result<&2, &2, String, ModelAuth>, toAuth)
 

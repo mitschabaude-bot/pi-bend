@@ -69,11 +69,15 @@ def accessKey(unit: Unit, credential: Auth.Credential) -> IO(Result<&2, &2, Stri
     case Auth.OAuthCredential{_, access, _, _}: IO.pure(Result<&2, &2, String, Auth.ModelAuth>, Done{Auth.ModelAuth{Some{access}, None{}, None{}}})
     case _: IO.pure(Result<&2, &2, String, Auth.ModelAuth>, Fail{"not oauth"})
 
+def unusedLogin(_: Unit,interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
+  IO.pure(Auth.LoginOutcome(),Fail{"Login not configured in this fixture"})
+
 def testOAuth() -> IO(Auth.ProviderAuth):
   do IO<Auth.ProviderAuth>:
+    login : C.Callback<Auth.ProviderAuthInteraction,Auth.LoginOutcome()> <- C.create(~Unit,~Auth.ProviderAuthInteraction,~Auth.LoginOutcome(),~unusedLogin,Unit{})
     refresh : C.Callback<Auth.RefreshInput, Result<&2, &2, String, Auth.Credential>> <- C.create(~Unit, ~Auth.RefreshInput, ~Result<&2, &2, String, Auth.Credential>, ~rotated, Unit{})
     toAuth : C.Callback<Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>> <- C.create(~Unit, ~Auth.Credential, ~Result<&2, &2, String, Auth.ModelAuth>, ~accessKey, Unit{})
-    return Auth.ProviderAuth{None{}, Some{Auth.OAuthAuth{"Test OAuth", False{}, None{}, refresh, toAuth}}}
+    return Auth.ProviderAuth{None{}, Some{Auth.OAuthAuth{"Test OAuth", False{}, None{}, login, refresh, toAuth}}}
 
 # Refresh behaviors
 # -----------------

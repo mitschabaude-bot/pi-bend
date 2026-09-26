@@ -127,13 +127,22 @@ def masked(input: Input.Input,secret: Bool) -> Input.Input:
       Input.Input{Input.Editing{Bool.pick(String,secret,String.repeat("•",String.length(value)),value),cursor,ring,action,undo},options,start,focused,paste,pasting,submit,escape}
 def inputLine(pair: Input.Input & List<&2,String>) -> String:
   match pair: case (_,lines): Maybe.default(&2,String,List.head(&2,String,lines),"")
+def authTextRows(lines: List<&2,String>,+margin: String,+width: Nat) -> List<&2,String>:
+  match lines:
+    case Nil{}: Nil{}
+    case line <> rest:
+      +padded = margin ++ line ++ margin
+      Utils.padResult(padded,Utils.visibleWidth(padded),width,True{}) <> authTextRows(rest,margin,width)
+def authText(text: String,+width: Nat) -> List<&2,String>:
+  +padding = Nat.min(1n,(width - 1n) / 2n)
+  authTextRows(Utils.wrapTextWithAnsi(Utils.normalizeTerminalOutput(text),Nat.max(1n,width - padding * 2n)),Utils.spaces(padding,""),width)
 def authLines(lines: List<&2,AuthLine>,+theme: Theme.Theme,+width: Nat,+input: String,+bindings: Bindings.KeybindingsManager) -> List<&2,String>:
   match lines:
     case Nil{}: Nil{}
     case Blank{} <> rest: "" <> authLines(rest,theme,width,input,bindings)
-    case Text{style,text} <> rest: (" " ++ paint(theme,style,text)) <> authLines(rest,theme,width,input,bindings)
+    case Text{style,text} <> rest: List.append(&2,String,authText(paint(theme,style,text),width),authLines(rest,theme,width,input,bindings))
     case Link{style,+url,label} <> rest:
-      paint(theme,style," \u{1b}]8;;" ++ url ++ "\u{7}" ++ clipped(label,width - 1n) ++ "\u{1b}]8;;\u{7}") <> authLines(rest,theme,width,input,bindings)
+      List.append(&2,String,authText(paint(theme,style,"\u{1b}]8;;" ++ url ++ "\u{7}" ++ label ++ "\u{1b}]8;;\u{7}"),width),authLines(rest,theme,width,input,bindings))
     case Entered{} <> rest: input <> authLines(rest,theme,width,input,bindings)
     case Hint{+isManual} <> rest:
       (" (" ++ Hints.keyHint(theme,bindings,"tui.select.cancel",Bool.pick(String,isManual,"to cancel","to cancel,")) ++ Bool.pick(String,isManual,""," " ++ Hints.keyHint(theme,bindings,"tui.select.confirm","to submit")) ++ ")") <> authLines(rest,theme,width,input,bindings)

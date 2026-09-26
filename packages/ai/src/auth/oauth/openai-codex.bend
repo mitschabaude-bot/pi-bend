@@ -1,4 +1,5 @@
 import Base
+import ./browser.bend as Browser
 import ../types.bend as Auth
 import ../../types.bend as T
 import ../../api/openai-client.bend as Client
@@ -20,8 +21,8 @@ import ../../../../runtime/src/parse-float.bend as Number
 import ../../../../runtime/src/date.bend as Date
 import ../../../../runtime/src/timer.bend as Timer
 
-# OpenAI Codex (ChatGPT OAuth): device login, token refresh and request auth
-# through the native HTTPS client. Browser callback login remains separate.
+# OpenAI Codex (ChatGPT OAuth): browser/device login, refresh and request auth
+# through the native HTTPS client.
 
 def CLIENT_ID() -> String: "app_EMoamEEZ73f0CkXaXp7hrann"
 def TOKEN_URL() -> String: "https://auth.openai.com/oauth/token"
@@ -331,10 +332,12 @@ def pollDevice(flow: Flow, endpoints: DeviceEndpoints, +device: DeviceCode, sign
         now : F64 <- Date.now()
         pollLoop(flow, endpoint, device, signal, F.add(now, F.fromU32(900000)), U32.max(1000, (interval * 1000 : U32)), False{})
 
-def exchangeBody(code: AuthorizationCode) -> String:
+def exchangeBodyAt(code: AuthorizationCode, redirectUri: String) -> String:
   match code:
     case AuthorizationCode{code, verifier}:
-      URL.toString(URL.append(URL.append(URL.append(URL.append(URL.append(URL.new(), "grant_type", "authorization_code"), "client_id", CLIENT_ID()), "code", code), "code_verifier", verifier), "redirect_uri", DEVICE_REDIRECT_URI()))
+      URL.toString(URL.append(URL.append(URL.append(URL.append(URL.append(URL.new(), "grant_type", "authorization_code"), "client_id", CLIENT_ID()), "code", code), "code_verifier", verifier), "redirect_uri", redirectUri))
+
+def exchangeBody(code: AuthorizationCode) -> String: exchangeBodyAt(code,DEVICE_REDIRECT_URI())
 
 def exchangeStatus(now: F64, status: U32, +body: String, successful: Bool) -> Result<&2, &2, String, Auth.Credential>:
   match successful:
@@ -354,6 +357,89 @@ def exchangeDevice(flow: Flow, endpoints: DeviceEndpoints, code: AuthorizationCo
         now : F64 <- Date.now()
         return exchanged(now, response)
 
+def REDIRECT_URI() -> String: "http://localhost:1455/auth/callback"
+def AUTHORIZE_URL() -> String: "https://auth.openai.com/oauth/authorize"
+type Authorization is Data: Authorization{url: String, verifier: String, state: String}
+def hexDigit(+value: U32) -> Char:
+  Bool.pick(Char,U32.is_lt(value,10),Chr{(48 + value : U32)},Chr{(87 + value : U32)})
+def stateHex(bytes: List<&2,U32>) -> String:
+  match bytes:
+    case Nil{}: ""
+    case +byte <> rest: SCon{hexDigit(U32.shrn(byte,4n)),SCon{hexDigit(U32.and(byte,15)),stateHex(rest)}}
+def authorizationUrl(challenge: String,state: String) -> String:
+  AUTHORIZE_URL() ++ "?" ++ URL.toString(URL.fromEntries([URL.Entry{"response_type","code"},URL.Entry{"client_id",CLIENT_ID()},URL.Entry{"redirect_uri",REDIRECT_URI()},URL.Entry{"scope","openid profile email offline_access"},URL.Entry{"code_challenge",challenge},URL.Entry{"code_challenge_method","S256"},URL.Entry{"state",state},URL.Entry{"id_token_add_organizations","true"},URL.Entry{"codex_cli_simplified_flow","true"},URL.Entry{"originator","pi"}]))
+def browserAuthorization(pkce: Result<&2,&2,String,Browser.PKCE>,random: Result<&2,&2,String,List<&2,U32>>) -> Result<&2,&2,String,Authorization>:
+  match pkce random:
+    case Fail{error} _: Fail{error}
+    case _ Fail{error}: Fail{error}
+    case Done{Browser.PKCE{verifier,challenge}} Done{bytes}:
+      +state = stateHex(bytes)
+      Done{Authorization{authorizationUrl(challenge,state),verifier,state}}
+def beginAuthorization() -> IO(Result<&2,&2,String,Authorization>):
+  do IO<Result<&2,&2,String,Authorization>>:
+    pkce : Result<&2,&2,String,Browser.PKCE> <- Browser.generatePKCE()
+    bytes : Result<&2,&2,String,List<&2,U32>> <- Browser.randomBytes(16)
+    return browserAuthorization(pkce,bytes)
+def exchangeBrowser(flow: Flow,endpoint: String,code: AuthorizationCode,signal: Abort.AbortSignal<Unit>) -> IO(Auth.LoginOutcome()):
+  match flow:
+    case Flow{fetch,context}:
+      do IO<Auth.LoginOutcome()>:
+        response : Result<&2,&2,String,HttpText> <- post(fetch,context,endpoint,"application/x-www-form-urlencoded",exchangeBodyAt(code,REDIRECT_URI()),signal)
+        now : F64 <- Date.now()
+        return exchanged(now,response)
+def browserCode(flow: Flow,endpoint: String,code: Browser.CodeResult(),verifier: String,signal: Abort.AbortSignal<Unit>) -> IO(Auth.LoginOutcome()):
+  match code:
+    case Fail{message}: IO.pure(Auth.LoginOutcome(),Fail{message})
+    case Done{value}: exchangeBrowser(flow,endpoint,AuthorizationCode{value,verifier},signal)
+def browserStarted(flow: Flow,endpoint: String,started: Result<&2,&2,String,Authorization>,+interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
+  match started interaction:
+    case Fail{message} _: IO.pure(Auth.LoginOutcome(),Fail{message})
+    case Done{Authorization{url,verifier,state}} Auth.ProviderAuthInteraction{signal,_,_}:
+      do IO<Auth.LoginOutcome()>:
+        listener : Result<&1,&1,U32 & String,Listener> <- Browser.listenCallback(1455)
+        code : Browser.CodeResult() <- Browser.promptCode(Browser.CallbackConfig{REDIRECT_URI(),"/auth/callback",state},listener,interaction,url,"Complete login in your browser, or paste the authorization code / redirect URL here:","A browser window should open. Complete login to finish.")
+        browserCode(flow,endpoint,code,verifier,signal)
+def deviceAuthorized(flow: Flow,endpoints: DeviceEndpoints,result: Result<&2,&2,String,AuthorizationCode>,signal: Abort.AbortSignal<Unit>) -> IO(Auth.LoginOutcome()):
+  match result:
+    case Fail{message}: IO.pure(Auth.LoginOutcome(),Fail{message})
+    case Done{code}: exchangeDevice(flow,endpoints,code,signal)
+def deviceIntervalSeconds(device: DeviceCode) -> F64:
+  match device:
+    case DeviceCode{_,_,interval,_}: F.fromU32(interval)
+def deviceStarted(+flow: Flow,+endpoints: DeviceEndpoints,result: Result<&2,&2,String,DeviceCode>,interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
+  match result interaction:
+    case Fail{message} _: IO.pure(Auth.LoginOutcome(),Fail{message})
+    case Done{+device} Auth.ProviderAuthInteraction{+signal,_,notify}:
+      do IO<Auth.LoginOutcome()>:
+        C.call(Auth.AuthEvent,Unit,notify,Auth.DeviceCodeEvent{deviceUserCode(device),deviceVerificationUri(device),Some{deviceIntervalSeconds(device)},Some{F.fromU32(900)}})
+        code : Result<&2,&2,String,AuthorizationCode> <- pollDevice(flow,endpoints,device,signal)
+        deviceAuthorized(flow,endpoints,code,signal)
+def exchangeEndpoint(endpoints: DeviceEndpoints) -> String:
+  match endpoints:
+    case DeviceEndpoints{_,_,endpoint,_}: endpoint
+def selectedLogin(+flow: Flow,+endpoints: DeviceEndpoints,+interaction: Auth.ProviderAuthInteraction,method: Browser.CodeResult()) -> IO(Auth.LoginOutcome()):
+  match method interaction:
+    case Fail{message} _: IO.pure(Auth.LoginOutcome(),Fail{message})
+    case Done{"browser"} _:
+      do IO<Auth.LoginOutcome()>:
+        authorization : Result<&2,&2,String,Authorization> <- beginAuthorization()
+        browserStarted(flow,exchangeEndpoint(endpoints),authorization,interaction)
+    case Done{"device_code"} Auth.ProviderAuthInteraction{signal,_,_}:
+      do IO<Auth.LoginOutcome()>:
+        device : Result<&2,&2,String,DeviceCode> <- startDevice(flow,endpoints,signal)
+        deviceStarted(flow,endpoints,device,interaction)
+    case Done{other} _: IO.pure(Auth.LoginOutcome(),Fail{"Unknown OpenAI Codex login method: " ++ other})
+type LoginFlow is Data: LoginFlow{flow: Flow, endpoints: DeviceEndpoints}
+def loginCopied(context: LoginFlow,+interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
+  match context interaction:
+    case LoginFlow{flow,endpoints} Auth.ProviderAuthInteraction{_,prompt,_}:
+      do IO<Auth.LoginOutcome()>:
+        method : Browser.CodeResult() <- C.call(Auth.AuthPrompt,Browser.CodeResult(),prompt,Auth.SelectPrompt{"Select OpenAI Codex login method:",[Auth.AuthSelectOption{"browser","Browser login (default)",None{}},Auth.AuthSelectOption{"device_code","Device code login (headless)",None{}}],None{}})
+        selectedLogin(flow,endpoints,interaction,method)
+
+def login(flow: LoginFlow,interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
+  loginCopied(flow,interaction)
+
 def refresh(flow: Flow, input: Auth.RefreshInput) -> IO(Result<&2, &2, String, Auth.Credential>):
   match input:
     case Auth.RefreshInput{Auth.OAuthCredential{refreshToken, _, _, _}, signal}:
@@ -369,8 +455,12 @@ def toAuth(unused: Unit, credential: Auth.Credential) -> IO(Result<&2, &2, Strin
     case _: IO.pure(Result<&2, &2, String, Auth.ModelAuth>, Fail{"OpenAI Codex auth requires an OAuth credential"})
 
 # The fetch callback is borrowed: retire the OAuthAuth before the fetch runtime.
-def openaiCodexOAuth(fetch: Fetch.Fetch(Unit), url: URL.Context) -> IO(Auth.OAuthAuth):
+def openaiCodexOAuthWithEndpoints(+fetch: Fetch.Fetch(Unit), +url: URL.Context, endpoints: DeviceEndpoints) -> IO(Auth.OAuthAuth):
   do IO<Auth.OAuthAuth>:
+    authenticate : C.Callback<Auth.ProviderAuthInteraction,Auth.LoginOutcome()> <- C.create(~LoginFlow,~Auth.ProviderAuthInteraction,~Auth.LoginOutcome(),~login,LoginFlow{Flow{fetch,url},endpoints})
     refresher : C.Callback<Auth.RefreshInput, Result<&2, &2, String, Auth.Credential>> <- C.create(~Flow, ~Auth.RefreshInput, ~Result<&2, &2, String, Auth.Credential>, ~refresh, Flow{fetch, url})
     deriver : C.Callback<Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>> <- C.create(~Unit, ~Auth.Credential, ~Result<&2, &2, String, Auth.ModelAuth>, ~toAuth, Unit{})
-    return Auth.OAuthAuth{"OpenAI (ChatGPT Plus/Pro)", True{}, None{}, refresher, deriver}
+    return Auth.OAuthAuth{"OpenAI (ChatGPT Plus/Pro)", True{}, None{}, authenticate, refresher, deriver}
+
+def openaiCodexOAuth(fetch: Fetch.Fetch(Unit),url: URL.Context) -> IO(Auth.OAuthAuth):
+  openaiCodexOAuthWithEndpoints(fetch,url,deviceEndpoints())

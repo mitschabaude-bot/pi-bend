@@ -133,7 +133,7 @@ def refreshCurrent(refresh: Refresh, current: Maybe<&2, Auth.Credential>) -> IO(
   match refresh current:
     case _ None{}: IO.pure(Auth.StoreResult(Maybe<&2, Auth.Credential>), Done{None{}})
     case _ Some{Auth.ApiKeyCredential{_, _}}: IO.pure(Auth.StoreResult(Maybe<&2, Auth.Credential>), Done{None{}})
-    case Refresh{providerId, Auth.OAuthAuth{_, _, _, refresh, _}, minimum, signal, failed} Some{+credential}:
+    case Refresh{providerId, Auth.OAuthAuth{_, _, _, _, refresh, _}, minimum, signal, failed} Some{+credential}:
       do IO<Auth.StoreResult(Maybe<&2, Auth.Credential>)>:
         now : F64 <- Date.now()
         refreshUnlessFresh(providerId, refresh, signal, failed, credential, expiresSoon(now, minimum, credential))
@@ -145,7 +145,7 @@ def toAuthOutcome(providerId: String, result: Result<&2, &2, String, Auth.ModelA
 
 def deriveAuth(providerId: String, oauth: Auth.OAuthAuth, credential: Auth.Credential) -> IO(Resolution()):
   match oauth:
-    case Auth.OAuthAuth{_, _, _, _, toAuth}:
+    case Auth.OAuthAuth{_, _, _, _, _, toAuth}:
       do IO<Resolution()>:
         result : Result<&2, &2, String, Auth.ModelAuth> <- C.call(Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>, toAuth, credential)
         return toAuthOutcome(providerId, result)

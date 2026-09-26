@@ -112,12 +112,42 @@ def listSessions(source: Listings,_: Unit) -> IO(Run.SessionChoices):
         current : List<&2,Tree.SessionInfo> <- Sessions.list(cwd,Some{cwd},agentDir,None{})
         all : List<&2,Tree.SessionInfo> <- Sessions.listAll(Some{cwd},cwd,None{})
         return Run.SessionChoices{current,all}
+def loginOAuth(provider: String,+auth: Auth.OAuthAuth,interaction: Auth.AuthInteraction) -> IO(AuthLogin.Outcome()):
+  match auth interaction:
+    case Auth.OAuthAuth{_,_,_,callback,_,_} Auth.AuthInteraction{Some{signal},prompt,notify}:
+      do IO<AuthLogin.Outcome()>:
+        result : AuthLogin.Outcome() <- AuthLogin.authenticateProvider(provider,callback,Auth.ProviderAuthInteraction{signal,prompt,notify})
+        Auth.disposeOAuthAuth(auth)
+        return result
+    case auth _:
+      do IO<AuthLogin.Outcome()>:
+        Auth.disposeOAuthAuth(auth)
+        return Fail{"Fixture expects a login signal"}
+def loginTransport(+base: String,provider: String,interaction: Auth.AuthInteraction,transport: AgentRuntime.Transport) -> IO(AuthLogin.Outcome()):
+  match transport provider:
+    case AgentRuntime.Transport{+authorizer,runtime,+fetch} "anthropic":
+      do IO<AuthLogin.Outcome()>:
+        auth : Auth.OAuthAuth <- Anthropic.anthropicOAuthWithTokenURL(fetch,AgentRuntime.urlContext(),base ++ "/anthropic-token")
+        result : AuthLogin.Outcome() <- loginOAuth("anthropic",auth,interaction)
+        AgentRuntime.disposeTransport(AgentRuntime.Transport{authorizer,runtime,fetch})
+        return result
+    case AgentRuntime.Transport{+authorizer,runtime,+fetch} provider:
+      do IO<AuthLogin.Outcome()>:
+        auth : Auth.OAuthAuth <- Codex.openaiCodexOAuthWithEndpoints(fetch,AgentRuntime.urlContext(),Codex.DeviceEndpoints{base ++ "/usercode",base ++ "/token",base ++ "/exchange",base ++ "/codex/device"})
+        result : AuthLogin.Outcome() <- loginOAuth(provider,auth,interaction)
+        AgentRuntime.disposeTransport(AgentRuntime.Transport{authorizer,runtime,fetch})
+        return result
 def loginCopied(+base: String,request: Run.LoginRequest) -> IO(AuthLogin.Outcome()):
   match request:
-    case Run.LoginRequest{provider,signal,notice,manual,manualDone}:
-      match provider:
-        case "anthropic": AuthLogin.authenticateAnthropicWithTokenURL(base ++ "/anthropic-token",AuthLogin.BrowserInteraction{signal,manual,manualDone})
-        case _: AuthLogin.authenticate(Codex.DeviceEndpoints{base ++ "/usercode",base ++ "/token",base ++ "/exchange",base ++ "/codex/device"},signal,notice)
+    case Run.LoginRequest{runtime,provider,Auth.ApiKeyType{},interaction}:
+      do IO<AuthLogin.Outcome()>:
+        result : Auth.LoginOutcome() <- Models.login(runtime,provider,Auth.ApiKeyType{},interaction)
+        return Run.loginRequestOutcome(result)
+    case Run.LoginRequest{_,provider,Auth.OAuthType{},interaction}:
+      do IO<AuthLogin.Outcome()>:
+        transport : AgentRuntime.Outcome(AgentRuntime.Transport) <- AgentRuntime.createTransport("/etc/ssl/certs/ca-certificates.crt")
+        ready : AgentRuntime.Transport <- requireTransport(transport)
+        loginTransport(base,provider,interaction,ready)
 def login(base: String,request: Run.LoginRequest) -> IO(AuthLogin.Outcome()): loginCopied(base,request)
 def models(runtime: Models.ModelRuntime,_: Unit) -> IO(List<&2,Models.Model()>):
   do IO<List<&2,Models.Model()>>:

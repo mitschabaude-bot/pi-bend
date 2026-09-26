@@ -25,7 +25,7 @@ def authOkay(value: Result<&2, &2, String, Auth.ModelAuth>) -> Bool:
 
 def refreshed(auth: Auth.OAuthAuth, result: Result<&2, &2, String, Auth.Credential>) -> IO(Unit):
   match auth result:
-    case Auth.OAuthAuth{_, _, _, _, derive} Done{+credential}:
+    case Auth.OAuthAuth{_, _, _, _, _, derive} Done{+credential}:
       do IO<Unit>:
         now : F64 <- Date.now()
         derived : Result<&2, &2, String, Auth.ModelAuth> <- C.call(Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>, derive, credential)
@@ -34,7 +34,7 @@ def refreshed(auth: Auth.OAuthAuth, result: Result<&2, &2, String, Auth.Credenti
 
 def invoke(+auth: Auth.OAuthAuth, signal: Abort.AbortSignal<Unit>) -> IO(Unit):
   match auth:
-    case Auth.OAuthAuth{_, _, _, +refresh, _}:
+    case Auth.OAuthAuth{_, _, _, _, +refresh, _}:
       do IO<Unit>:
         result : Result<&2, &2, String, Auth.Credential> <- C.call(Auth.RefreshInput, Result<&2, &2, String, Auth.Credential>, refresh, Auth.RefreshInput{original(), signal})
         refreshed(auth, result)

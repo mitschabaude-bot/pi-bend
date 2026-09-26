@@ -1,14 +1,14 @@
 import Base
-import ../packages/ai/src/auth/oauth/anthropic.bend as OAuth
+import ../packages/ai/src/auth/oauth/browser.bend as OAuth
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deferred.bend as Deferred
 
-def manual(answer: Deferred.Deferred<String>) -> IO(Unit):
+def manual(answer: Deferred.Deferred<OAuth.CodeResult()>) -> IO(Unit):
   do IO<Unit>:
     IO.sleep(100)
-    settled : Bool <- Deferred.resolve(String,answer,"manual")
+    settled : Bool <- Deferred.resolve(OAuth.CodeResult(),answer,Done{"manual"})
     return Unit{}
-def cancelMode(mode: String,answer: Deferred.Deferred<String>) -> IO(Maybe<&1,Chan(Unit)>):
+def cancelMode(mode: String,answer: Deferred.Deferred<OAuth.CodeResult()>) -> IO(Maybe<&1,Chan(Unit)>):
   match mode:
     case "manual":
       do IO<Maybe<&1,Chan(Unit)>>:
@@ -19,18 +19,22 @@ def joinManual(task: Maybe<&1,Chan(Unit)>) -> IO(Unit):
   match task:
     case None{}: IO.pure(Unit,Unit{})
     case Some{work}: IO.join(Unit,work)
+def printResult(result: OAuth.CodeResult()) -> IO(Unit):
+  match result:
+    case Done{value}: IO.print(value)
+    case Fail{error}: IO.die(Unit,1,error)
 def run(listener: Listener,mode: String) -> IO(Unit):
   do IO<Unit>:
-    +answer : Deferred.Deferred<String> <- Deferred.new(String)
+    +answer : Deferred.Deferred<OAuth.CodeResult()> <- Deferred.new(OAuth.CodeResult())
     +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
-    worker : Chan(Unit) <- IO.fork(Unit,OAuth.callbackRun(OAuth.Listening{listener},answer,"state_test",Abort.signal(Unit,controller)))
+    worker : Chan(Unit) <- IO.fork(Unit,OAuth.callbackRun(OAuth.Listening{listener},answer,OAuth.CallbackConfig{"http://localhost:53692/callback","/callback","state_test"},Abort.signal(Unit,controller)))
     cancel : Maybe<&1,Chan(Unit)> <- cancelMode(mode,answer)
-    result : String <- Deferred.result(String,answer)
+    result : OAuth.CodeResult() <- Deferred.result(OAuth.CodeResult(),answer)
     IO.join(Unit,worker)
     joinManual(cancel)
-    Deferred.dispose(String,answer)
+    Deferred.dispose(OAuth.CodeResult(),answer)
     Abort.dispose(Unit,controller)
-    IO.print(result)
+    printResult(result)
 def started(result: Result<&1,&1,U32 & String,Listener>,mode: String) -> IO(Unit):
   match result:
     case Fail{_}: IO.die(Unit,1,"could not bind callback")
@@ -43,5 +47,5 @@ def main() -> IO(Unit):
   do IO<Unit>:
     args : List<String> <- IO.args()
     mode : String <- IO.pure(String,modeOf(args))
-    listener : Result<&1,&1,U32 & String,Listener> <- OAuth.listenCallback()
+    listener : Result<&1,&1,U32 & String,Listener> <- OAuth.listenCallback(53692)
     started(listener,mode)
