@@ -1409,30 +1409,38 @@ def listReady(transport: Runtime.Outcome(Runtime.Transport),authPath: Result<&2,
         fail("Could not locate the auth file")
     case Done{transport} Done{path}: listWithTransport(transport,path,search)
 
-def listModels(search: Maybe<&2,String>) -> IO(Unit):
-  do IO<Unit>:
-    authPath : Result<&2,&2,FS.Error,String> <- Config.getAuthPath()
-    bundle : Result<&1,&1,U32 & String,String> <- IO.get_env("SSL_CERT_FILE")
-    transport : Runtime.Outcome(Runtime.Transport) <- Runtime.createTransport(envOr(bundle,"/etc/ssl/certs/ca-certificates.crt"))
-    listReady(transport,authPath,search)
-
 # upstream main reports the startup settings diagnostics before --help and
 # --list-models output.
-def reportLoaded(loaded: Settings.SettingsManager & Diagnostics()) -> IO(Unit):
+def reportLoaded(loaded: Settings.SettingsManager & Diagnostics()) -> IO(Maybe<&2,Settings.SettingsManager>):
   match loaded:
-    case Tuple{_, diagnostics}: reportStartup(diagnostics, Nil{})
-def startupSettingsIn(cwd: Result<&2,&2,FS.Error,String>, agentDir: Result<&2,&2,FS.Error,String>) -> IO(Unit):
+    case Tuple{manager, diagnostics}:
+      do IO<Maybe<&2,Settings.SettingsManager>>:
+        reportStartup(diagnostics, Nil{})
+        return Some{manager}
+def startupSettingsIn(cwd: Result<&2,&2,FS.Error,String>, agentDir: Result<&2,&2,FS.Error,String>) -> IO(Maybe<&2,Settings.SettingsManager>):
   match cwd:
-    case Fail{_}: IO.pure(Unit,Unit{})
+    case Fail{_}: IO.pure(Maybe<&2,Settings.SettingsManager>,None{})
     case Done{+path}:
-      do IO<Unit>:
+      do IO<Maybe<&2,Settings.SettingsManager>>:
         loaded : Settings.SettingsManager & Diagnostics() <- loadSettings(path, located(agentDir, Path.join(path, ".pi")))
         reportLoaded(loaded)
-def reportStartupSettings() -> IO(Unit):
-  do IO<Unit>:
+def loadStartupSettings() -> IO(Maybe<&2,Settings.SettingsManager>):
+  do IO<Maybe<&2,Settings.SettingsManager>>:
     cwd : Result<&2,&2,FS.Error,String> <- FS.cwd()
     agentDir : Result<&2,&2,FS.Error,String> <- Config.getAgentDir()
     startupSettingsIn(cwd, agentDir)
+def reportStartupSettings() -> IO(Unit):
+  do IO<Unit>:
+    settings : Maybe<&2,Settings.SettingsManager> <- loadStartupSettings()
+    return Unit{}
+
+def listModels(search: Maybe<&2,String>) -> IO(Unit):
+  do IO<Unit>:
+    settings : Maybe<&2,Settings.SettingsManager> <- loadStartupSettings()
+    authPath : Result<&2,&2,FS.Error,String> <- Config.getAuthPath()
+    bundle : Result<&1,&1,U32 & String,String> <- IO.get_env("SSL_CERT_FILE")
+    transport : Runtime.Outcome(Runtime.Transport) <- Runtime.createTransportWith(envOr(bundle,"/etc/ssl/certs/ca-certificates.crt"),Maybe.bind(&2,Settings.SettingsManager,String,settings,Runtime.globalHttpProxy))
+    listReady(transport,authPath,search)
 
 def dispatchExport(+parsed: Args.Args,request: Maybe<&2,ExportRequest>,+stdinTty: Bool,stdoutTty: Bool) -> IO(Unit):
   match request:
@@ -1441,7 +1449,7 @@ def dispatchExport(+parsed: Args.Args,request: Maybe<&2,ExportRequest>,+stdinTty
 
 def dispatchList(+parsed: Args.Args,search: Maybe<&2,Maybe<&2,String>>,stdinTty: Bool,stdoutTty: Bool) -> IO(Unit):
   match search:
-    case Some{pattern}: IO.bind(Unit, Unit, reportStartupSettings(), _ => listModels(pattern))
+    case Some{pattern}: listModels(pattern)
     case None{}: dispatchExport(parsed,exportRequest(parsed),stdinTty,stdoutTty)
 
 def dispatch(+parsed: Args.Args, help: Bool, version: Bool, invalid: Bool, +stdinTty: Bool, stdoutTty: Bool, flagError: Maybe<&2, String>) -> IO(Unit):

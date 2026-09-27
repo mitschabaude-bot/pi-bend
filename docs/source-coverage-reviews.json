@@ -901,7 +901,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "26a6aaaebfb78a4c92e9a61a6d97e23c1851032d3dd964906b5ac2bbe155b218",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "91281c83b948bdb35106382375cfc14628d313a48d7676cd9a023b1bcadea32e",
-        "packages/coding-agent/src/main.bend": "e752f71ebf33de9c845829e5a3e3acfe2b155e405c5c8d78f88855d11bb3f28a",
+        "packages/coding-agent/src/main.bend": "c1115b09092f2785d2c2acf7b33ef1043850e6768f0817686799b470d650d23b",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6",
         "packages/coding-agent/src/modes/interactive/session-controller.bend": "b4e10888c6c3752f76bcb81a889607e9fb231edfb129edd4fbdbf11bc18190c8"
       }
@@ -1442,19 +1442,21 @@
     },
     "packages/coding-agent/src/core/http-dispatcher.ts": {
       "state": "partial",
-      "note": "applyHttpProxySettings and the proxy half of configureHttpDispatcher (undici EnvHttpProxyAgent with proxyTunnel) are packages/runtime/src/http-proxy.bend: Proxy.fromEnvironmentWith computes the configuration from http_proxy/HTTP_PROXY, https_proxy/HTTPS_PROXY, no_proxy/NO_PROXY and the trimmed httpProxy setting, and Fetch.createWithProxy tunnels every proxied origin with CONNECT (proxy credentials, the undici request head, TLS inside the tunnel). core/http-dispatcher.bend holds the connection options with DEFAULT_AUTO_SELECT_FAMILY_ATTEMPT_TIMEOUT_MS (2 s per non-final address attempt); agent-runtime's transport is created with them and with the global httpProxy setting (createTransportWith); main's other transports (auth login, model listing) use the environment's proxies only. The idle timeout is a per-request option (agent-runtime requestDefaults), not a dispatcher option. Missing: parseHttpIdleTimeoutMs/formatHttpIdleTimeoutMs/HTTP_IDLE_TIMEOUT_CHOICES are not reviewed here; https:// and SOCKS proxies are rejected.",
+      "note": "applyHttpProxySettings and the proxy half of configureHttpDispatcher (undici EnvHttpProxyAgent with proxyTunnel) are packages/runtime/src/http-proxy.bend: Proxy.fromEnvironmentWith computes the configuration from http_proxy/HTTP_PROXY, https_proxy/HTTPS_PROXY, no_proxy/NO_PROXY and the trimmed httpProxy setting, and Fetch.createWithProxy tunnels every proxied origin with CONNECT (proxy credentials, the undici request head, TLS inside the tunnel). core/http-dispatcher.bend holds the connection options with DEFAULT_AUTO_SELECT_FAMILY_ATTEMPT_TIMEOUT_MS (2 s per non-final address attempt); agent-runtime's transport is created with them and with the global httpProxy setting (createTransportWith); main's model-listing transport also receives the global setting from the existing startup settings load; auth subcommands remain environment-only, matching their execution before upstream's bootstrap. Native1/native4 CLI checks cover global/project isolation, explicit environment precedence and normal model-list output. Unsupported proxy protocols are rejected at native transport creation; undici defers that validation until a request uses the proxy. The idle timeout is a per-request option (agent-runtime requestDefaults), not a dispatcher option. Missing: parseHttpIdleTimeoutMs/formatHttpIdleTimeoutMs/HTTP_IDLE_TIMEOUT_CHOICES are not reviewed here; https:// and SOCKS proxies are rejected.",
       "ports": [
         "packages/coding-agent/src/core/http-dispatcher.bend",
         "packages/runtime/src/http-proxy.bend",
         "packages/runtime/src/fetch.bend",
-        "packages/coding-agent/src/core/agent-runtime.bend"
+        "packages/coding-agent/src/core/agent-runtime.bend",
+        "packages/coding-agent/src/main.bend"
       ],
       "source_sha256": "d64922c476d11b90555b8f23cab92ce1f4f83174cb750c125a96d8d4374744e2",
       "port_sha256": {
         "packages/coding-agent/src/core/http-dispatcher.bend": "ebdef30af7fff2fd0f4529bced421f752bc290f3b92698f5a173e29b90b9e6f8",
         "packages/runtime/src/http-proxy.bend": "419b0ead8c7f0b14547c03dc1c66b0d90189456b8676a345983f095a7da4f083",
         "packages/runtime/src/fetch.bend": "f189fd01e044448ed351dba66d522fe6570839dfd7aec83672df622515af09f6",
-        "packages/coding-agent/src/core/agent-runtime.bend": "af9020ceab46e8aeaccbfb3894ba3621d1478fe5a8436395057be7039e4a8cb3"
+        "packages/coding-agent/src/core/agent-runtime.bend": "af9020ceab46e8aeaccbfb3894ba3621d1478fe5a8436395057be7039e4a8cb3",
+        "packages/coding-agent/src/main.bend": "c1115b09092f2785d2c2acf7b33ef1043850e6768f0817686799b470d650d23b"
       }
     },
     "packages/coding-agent/src/core/crash-log.ts": {
