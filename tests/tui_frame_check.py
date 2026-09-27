@@ -49,6 +49,9 @@ assert corrections==4,corrections
 # Cached preparation must equal a fresh reset for every prior value, including
 # unprepared, mismatched and normalized rows and different line counts.
 cache_texts=texts+[E+'_Gpayload'+E+'\\',E+']1337;File=payload'+E+'\\']
+for prefix in [E+'_G',E+']1337;File=']:
+ for lead in ['plain',E+'[31mred'+E+'[0m']:
+  cache_texts.append(lead+prefix+'payload\tกำ'+E+'\\')
 old_frames=run(oracle,[dict(op='reset',lines=[text]) for text in cache_texts])
 reuse=[]
 for text in cache_texts:

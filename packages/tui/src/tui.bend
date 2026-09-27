@@ -203,7 +203,7 @@ def resetLines(lines: List<&2,String>,reversed: List<&2,String>) -> List<&2,Stri
       resetLines(rest,resetLine(line,Image.isImageLine(line)) <> reversed)
 def applyLineResets(lines: List<&2,String>) -> List<&2,String>: resetLines(lines,Nil{})
 # A committed non-image line is normalized source followed by segmentReset.
-# Reject normalization-sensitive scalars during the comparison.
+# Reject images and normalization-sensitive scalars during the comparison.
 # The literal suffix keeps this observer a borrowed read.
 def matchesReset(source: String,previous: String,same: Bool) -> Bool:
   match source previous same:
@@ -212,21 +212,18 @@ def matchesReset(source: String,previous: String,same: Bool) -> Bool:
     case SCon{'\t',_} _ True{}: False{}
     case SCon{Chr{3635},_} _ True{}: False{}
     case SCon{Chr{3763},_} _ True{}: False{}
+    case SCon{Chr{27},+restA} SCon{b,restB} True{}: matchesReset(restA,restB,Char.is_eq(Chr{27},b) && Bool.not(Image.imagePrefix(restA)))
     case SCon{a,restA} SCon{b,restB} True{}: matchesReset(restA,restB,Char.is_eq(a,b))
     case _ _ True{}: False{}
-def preparedLine(source: String,previous: String,same: Bool) -> String:
+def reuseLine(+source: String,previous: String,same: Bool) -> String:
   match same:
     case True{}: previous
-    case False{}: resetLine(source,False{})
-def reuseLine(+source: String,+previous: String,image: Bool) -> String:
-  match image:
-    case True{}: source
-    case False{}: preparedLine(source,previous,matchesReset(source,previous,True{}))
+    case False{}: resetLine(source,Image.isImageLine(source))
 def resetLinesFrom(lines: List<&2,String>,previous: List<&2,String>,reversed: List<&2,String>) -> List<&2,String>:
   match lines previous:
     case Nil{} _: List.reverse(&2,String,reversed)
-    case +line <> rest old <> more:
-      resetLinesFrom(rest,more,reuseLine(line,old,Image.isImageLine(line)) <> reversed)
+    case +line <> rest +old <> more:
+      resetLinesFrom(rest,more,reuseLine(line,old,matchesReset(line,old,True{})) <> reversed)
     case lines Nil{}: List.append(&2,String,List.reverse(&2,String,reversed),applyLineResets(lines))
 def applyLineResetsFrom(lines: List<&2,String>,previous: List<&2,String>) -> List<&2,String>:
   resetLinesFrom(lines,previous,Nil{})
