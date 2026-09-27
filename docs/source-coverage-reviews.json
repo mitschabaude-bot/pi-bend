@@ -751,7 +751,7 @@
       "note": "Provider login uses native AuthPrompt/AuthEvent and shared TUI Input. Selection returns the option ID directly and restores preceding dialog content. Text, secret and manual-code prompts preserve notifications; authorization URLs and messages wrap with the TUI ANSI wrapper while retaining their full hyperlink targets. Submission keeps immutable displayed content and masks secrets while returning their raw value. Per-prompt cancellation races removable observations, joins its watchers and leaves the parent signal active. Input and browser-interaction fixtures exercise editing, notifications, selection, browser/manual arbitration and cancellation. Full mouse behavior and completion-page/UI parity remain unreviewed.",
       "source_sha256": "37608848ca7b72707437aed9627a612eadf570c57a54b1c86972c3532918298c",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "f482fcdc4ba78a9fe5d63f04227a6f8d13bd3076c5aef5882bae3f9741108237"
+        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "926e0ce834e91810a9929b91f2a976805066d74f092a03cdf398e24be08b7ce4"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/model-selector.ts": {
@@ -767,10 +767,10 @@
     },
     "packages/coding-agent/src/modes/interactive/components/oauth-selector.ts": {
       "state": "partial",
-      "note": "Login menus derive account and API-key options from registered providers, including API-key methods configured outside Pi. Options sort by native locale collation and search provider name, ID, auth type and method name. Mixed menus label auth types even after filtering; typed selections preserve both provider and method. The provider list uses an eight-row window, configured/source badges and alternate-auth warnings. Provider-menu Escape returns to the auth-type menu; direct unknown names open a mixed searchable menu. Native component tests exercise filtering, method identity and cancellation. Provider catalog completeness, cached auth-status ownership, logout-selector styling and mouse behavior remain partial.",
+      "note": "Login menus derive account/API-key options from registered providers and sort by native collation. Shared Input provides provider search, grapheme/cursor editing, word deletion/yank/undo, paste, focus and mouse cursor placement; TruncatedText provides source-faithful narrow rows. Mixed menus retain auth labels after filtering and typed selections retain provider/method identity. Pinned component comparisons cover the eight-row window, configured/source badges, alternate-auth warnings, filtering and empty login/logout rendering on native one/four threads. Mounted fullscreen provider edits, mouse placement and API-key login match terminal frames on native one/four threads; existing cancellation and split-paste flows also match. Supplementary-character fuzzy scoring intentionally uses native Unicode scalar positions (tests/fuzzy.md); it can reorder providers compared with pi UTF-16 scoring. Provider projection/catalog completeness, cached auth-status ownership, integrated logout flow, resize-before-mouse and remaining component API coverage remain partial.",
       "source_sha256": "d4c92352cc8035e4092d9bd67e0250a2eab3124e13f15ac45433acfde92db53f",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "f482fcdc4ba78a9fe5d63f04227a6f8d13bd3076c5aef5882bae3f9741108237"
+        "packages/coding-agent/src/modes/interactive/components/login-dialog.bend": "926e0ce834e91810a9929b91f2a976805066d74f092a03cdf398e24be08b7ce4"
       },
       "ports": [
         "packages/coding-agent/src/modes/interactive/components/login-dialog.bend"

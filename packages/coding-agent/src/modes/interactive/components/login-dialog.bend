@@ -7,6 +7,7 @@ import ../../../../../runtime/src/ref.bend as Ref
 import ../../../../../runtime/src/word-segmenter.bend as Words
 import ../../../../../tui/src/word-navigation.bend as Word
 import ../../../../../tui/src/components/input.bend as Input
+import ../../../../../tui/src/components/truncated-text.bend as Truncated
 import ../../../../../tui/src/component.bend as Component
 import ../../../../../tui/src/keybindings.bend as Bindings
 import ../../../../../tui/src/keys.bend as Keys
@@ -33,7 +34,7 @@ type AuthLine is Data:
   Link{style: String, url: String, label: String}
   Entered{}
   Hint{manual: Bool}
-type State is Data: Closed{} Choosing{menu: Menu,title: String,all: List<&2,Choice>,visible: List<&2,Choice>,selected: Nat,query: String} Waiting{} Device{url: String,code: String} Manual{url: String,input: Input.Input} Prompt{title: String,message: String,secret: Bool,input: Input.Input} Info{title: String,message: String} AuthDialog{title: String,content: List<&2,AuthLine>,input: Input.Input,secret: Bool,active: Bool}
+type State is Data: Closed{} Choosing{menu: Menu,title: String,all: List<&2,Choice>,visible: List<&2,Choice>,selected: Nat,query: Input.Input} Waiting{} Device{url: String,code: String} Manual{url: String,input: Input.Input} Prompt{title: String,message: String,secret: Bool,input: Input.Input} Info{title: String,message: String} AuthDialog{title: String,content: List<&2,AuthLine>,input: Input.Input,secret: Bool,active: Bool}
 type InputSubmission is Data:
   InputSubmission{state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Pending>>}
 type Host is Data:
@@ -110,24 +111,36 @@ def methodMenu(+theme: Theme.Theme,+width: Nat,title: String,choices: List<&2,Ch
   selectorBorder(theme,width) <> "" <> selectorTitle(theme,title) <> "" <>
     List.append(&2,String,selectorRows(choices,0n,selected,theme,False{}),
       "" <> (" " ++ Hints.rawKeyHint(theme,"↑↓","navigate") ++ "  " ++ Hints.keyHint(theme,bindings,"tui.select.confirm","select") ++ "  " ++ Hints.keyHint(theme,bindings,"tui.select.cancel","cancel")) <> "" <> selectorBorder(theme,width) <> Nil{})
-def providerMenu(+theme: Theme.Theme,+width: Nat,+visible: List<&2,Choice>,+selected: Nat,query: String,labels: Bool,empty: Bool) -> List<&2,String>:
+def providerRow(choice: Choice,index: Nat,selected: Nat,+theme: Theme.Theme,labels: Bool) -> String:
+  match choice:
+    case Choice{target,+label,description,_}:
+      +chosen = Nat.is_eq(index,selected)
+      +name = Bool.pick(String,chosen,paint(theme,"accent","→ ") ++ paint(theme,"accent",label),"  " ++ paint(theme,"text",label))
+      name ++ Bool.pick(String,labels,paint(theme,"muted"," [" ++ authTypeLabel(target) ++ "]"),"") ++ selectorStatus(theme,description)
+def truncated(text: String,width: Nat) -> List<&2,String>:
+  Truncated.render(Truncated.new(text,Some{1n},Some{0n}),width)
+def providerRows(choices: List<&2,Choice>,+index: Nat,+selected: Nat,+theme: Theme.Theme,+labels: Bool,+width: Nat) -> List<&2,String>:
+  match choices:
+    case Nil{}: Nil{}
+    case choice <> rest: List.append(&2,String,truncated(providerRow(choice,index,selected,theme,labels),width),providerRows(rest,index + 1n,selected,theme,labels,width))
+def providerMenu(+theme: Theme.Theme,+width: Nat,+title: String,+visible: List<&2,Choice>,+selected: Nat,search: List<&2,String>,labels: Bool,empty: Bool) -> List<&2,String>:
   +count = List.length(&2,Choice,visible)
   +start = Nat.min(selected - 4n,count - Nat.min(count,8n))
   +shown = List.take(&2,Choice,List.drop(&2,Choice,visible,start),8n)
-  +rows = Bool.pick(List<&2,String>,Nat.is_eq(count,0n),paint(theme,"muted",Bool.pick(String,empty,"  No providers available","  No matching providers")) <> Nil{},selectorRows(shown,start,selected,theme,labels))
-  +paging = Bool.pick(List<&2,String>,Nat.is_gt(count,8n),(" " ++ paint(theme,"muted","  (" ++ Nat.show(selected + 1n) ++ "/" ++ Nat.show(count) ++ ")")) <> Nil{},Nil{})
-  selectorBorder(theme,width) <> "" <> selectorTitle(theme,"Select provider to configure:") <> "" <>
-    ("> " ++ query ++ "\u{1b}[7m \u{1b}[0m") <> "" <> List.append(&2,String,rows,List.append(&2,String,paging,"" <> selectorBorder(theme,width) <> Nil{}))
+  +emptyMessage = Bool.pick(String,String.eq(title,"Select provider to logout:"),"No providers logged in. Use /login first.","No providers available")
+  +rows = Bool.pick(List<&2,String>,Nat.is_eq(count,0n),truncated(paint(theme,"muted","  " ++ Bool.pick(String,empty,emptyMessage,"No matching providers")),width),providerRows(shown,start,selected,theme,labels,width))
+  +paging = Bool.pick(List<&2,String>,Nat.is_gt(count,8n),truncated(paint(theme,"muted","  (" ++ Nat.show(selected + 1n) ++ "/" ++ Nat.show(count) ++ ")"),width),Nil{})
+  List.concat(&2,String,[[selectorBorder(theme,width),""],truncated(paint(theme,"accent",Theme.bold(title)),width),[""],search,[""],rows,paging,["",selectorBorder(theme,width)]])
 def choosing(+theme: Theme.Theme,+width: Nat,title: String,+visible: List<&2,Choice>,+selected: Nat,query: String) -> List<&2,String>:
   +count = List.length(&2,Choice,visible)
   +start = Nat.min(selected - 5n,count - Nat.min(count,10n))
   +body = Bool.pick(List<&2,String>,Nat.is_eq(count,0n),paint(theme,"muted","  No matching credentials") <> Nil{},choiceRows(List.take(&2,Choice,List.drop(&2,Choice,visible,start),10n),start,selected,width,theme))
   frame(theme,width,title,(paint(theme,"muted"," Search: ") ++ paint(theme,"accent",query)) <> List.append(&2,String,body,"" <> paint(theme,"dim"," ↑/↓ select · Enter confirm · Esc cancel") <> Nil{}))
-def choosingMenu(menu: Menu,theme: Theme.Theme,+width: Nat,title: String,visible: List<&2,Choice>,selected: Nat,query: String,bindings: Bindings.KeybindingsManager,+all: List<&2,Choice>) -> List<&2,String>:
+def choosingMenu(menu: Menu,theme: Theme.Theme,+width: Nat,title: String,visible: List<&2,Choice>,selected: Nat,query: Input.Input,bindings: Bindings.KeybindingsManager,+all: List<&2,Choice>) -> List<&2,String>:
   match menu:
     case Method{}: clipLines(methodMenu(theme,width,title,visible,selected,bindings),width)
-    case Provider{}: clipLines(providerMenu(theme,width,visible,selected,query,mixedAuthTypes(all),List.is_empty(&2,Choice,all)),width)
-    case Generic{}: choosing(theme,width,title,visible,selected,query)
+    case Provider{}: providerMenu(theme,width,title,visible,selected,["> " ++ Input.getValue(query)],mixedAuthTypes(all),List.is_empty(&2,Choice,all))
+    case Generic{}: choosing(theme,width,title,visible,selected,Input.getValue(query))
     case AuthSelect{}: clipLines(methodMenu(theme,width,title,visible,selected,bindings),width)
 def manual(+theme: Theme.Theme,+width: Nat,+url: String,+input: String) -> List<&2,String>:
   linkedFrame(theme,width," Login to Anthropic",url,paint(theme,"dim"," Ctrl+click to open") <> "" <> paint(theme,"dim"," Complete login in your browser; paste the redirect URL if it is on another machine.") <> paint(theme,"warning"," Paste authorization code or redirect URL:") <> input <> "" <> paint(theme,"dim"," Enter to submit · Esc to cancel") <> Nil{})
@@ -169,9 +182,27 @@ def authLines(lines: List<&2,AuthLine>,+theme: Theme.Theme,+width: Nat,+input: S
       (" (" ++ Hints.keyHint(theme,bindings,"tui.select.cancel",Bool.pick(String,isManual,"to cancel","to cancel,")) ++ Bool.pick(String,isManual,""," " ++ Hints.keyHint(theme,bindings,"tui.select.confirm","to submit")) ++ ")") <> authLines(rest,theme,width,input,bindings)
 def authFrame(+theme: Theme.Theme,+width: Nat,title: String,content: List<&2,AuthLine>,input: String,bindings: Bindings.KeybindingsManager) -> List<&2,String>:
   clipLines(selectorBorder(theme,width) <> selectorTitle(theme,title) <> List.append(&2,String,authLines(content,theme,width,input,bindings),selectorBorder(theme,width) <> Nil{}),width)
-def drawCurrent(state: State,editor: Component.Component,theme: Theme.Theme,+width: Nat,+bindings: Bindings.KeybindingsManager) -> IO(List<&2,String>):
+def providerRendered(current: State,pair: Input.Input & List<&2,String>,theme: Theme.Theme,width: Nat) -> State & List<&2,String>:
+  match current pair:
+    case Choosing{menu,+title,+all,+visible,+selected,_} Tuple{search,lines}:
+      (Choosing{menu,title,all,visible,selected,search},providerMenu(theme,width,title,visible,selected,lines,mixedAuthTypes(all),List.is_empty(&2,Choice,all)))
+    case current _: (current,Nil{})
+def renderProvider(+current: State,theme: Theme.Theme,+width: Nat) -> IO(State & List<&2,String>):
+  match current:
+    case Choosing{_,_,_,_,_,query}:
+      do IO<State & List<&2,String>>:
+        pair : Input.Input & List<&2,String> <- Input.render(query,width)
+        return providerRendered(current,pair,theme,width)
+    case current: IO.pure(State & List<&2,String>,(current,Nil{}))
+def providerLines(pair: State & List<&2,String>) -> List<&2,String>:
+  match pair: case (_,lines): lines
+def drawCurrent(+state: State,editor: Component.Component,theme: Theme.Theme,+width: Nat,+bindings: Bindings.KeybindingsManager) -> IO(List<&2,String>):
   match state:
     case Closed{}: Component.render(editor,width)
+    case Choosing{Provider{},_,_,_,_,_}:
+      do IO<List<&2,String>>:
+        pair : State & List<&2,String> <- renderProvider(state,theme,width)
+        return providerLines(pair)
     case Choosing{menu,title,all,visible,selected,query}: IO.pure(List<&2,String>,choosingMenu(menu,theme,width,title,visible,selected,query,bindings,all))
     case Waiting{}: IO.pure(List<&2,String>,waiting(theme,width))
     case Device{url,code}: IO.pure(List<&2,String>,device(theme,width,url,code))
@@ -188,13 +219,26 @@ def drawCurrent(state: State,editor: Component.Component,theme: Theme.Theme,+wid
         pair : Input.Input & List<&2,String> <- Input.render(masked(input,secret),width)
         return authFrame(theme,width,title,content,inputLine(pair),bindings)
     case Info{title,message}: IO.pure(List<&2,String>,infoFrame(theme,width,title,message,bindings))
+def providerStored(state: Ref.Ref<State>,pair: State & List<&2,String>) -> IO(List<&2,String>):
+  match pair:
+    case (current,lines):
+      do IO<List<&2,String>>:
+        Ref.write(State,state,current)
+        return lines
+def drawStored(+current: State,state: Ref.Ref<State>,editor: Component.Component,theme: Theme.Theme,width: Nat,bindings: Bindings.KeybindingsManager) -> IO(List<&2,String>):
+  match current:
+    case Choosing{Provider{},_,_,_,_,_}:
+      do IO<List<&2,String>>:
+        pair : State & List<&2,String> <- renderProvider(current,theme,width)
+        providerStored(state,pair)
+    case current: drawCurrent(current,editor,theme,width,bindings)
 def draw(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
-    case Host{state,_,editor,theme,bindings,_,_,_,_}:
+    case Host{+state,_,editor,theme,bindings,_,_,_,_}:
       do IO<List<&2,String>>:
         current : State <- Ref.read(State,state)
         colors : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        drawCurrent(current,editor,colors,width,bindings)
+        drawStored(current,state,editor,colors,width,bindings)
 def resolveReply(current: Maybe<&2,Pending>,value: Target) -> IO(Unit):
   match current value:
     case None{} _: IO.pure(Unit,Unit{})
@@ -228,19 +272,6 @@ def cancelPending(reply: Ref.Ref<Maybe<&2,Pending>>) -> IO(Unit):
   do IO<Unit>:
     current : Maybe<&2,Pending> <- Ref.swap(Maybe<&2,Pending>,reply,None{})
     cancelReply(current)
-def dropReversed(reversed: String) -> String:
-  match reversed:
-    case SNil{}: ""
-    case SCon{_,rest}: String.reverse(rest)
-def withoutLast(text: String) -> String: dropReversed(String.reverse(text))
-def printableTail(text: String) -> Bool:
-  match text:
-    case SNil{}: True{}
-    case SCon{Chr{code},rest}: U32.is_ge(code,32) && printableTail(rest)
-def printable(text: String) -> Bool:
-  match text:
-    case SNil{}: False{}
-    case SCon{Chr{code},rest}: U32.is_ge(code,32) && printableTail(rest)
 def submittedLines(lines: List<&2,AuthLine>,+value: String) -> List<&2,AuthLine>:
   match lines:
     case Nil{}: Nil{}
@@ -264,6 +295,9 @@ def editedInput(current: State,result: Word.ResultOf(Input.Input)) -> State & Un
     case Manual{url,_} Done{input}: (Manual{url,input},Unit{})
     case Prompt{title,message,secret,_} Done{input}: (Prompt{title,message,secret,input},Unit{})
     case AuthDialog{title,content,_,secret,True{}} Done{input}: (AuthDialog{title,content,input,secret,True{}},Unit{})
+    case Choosing{menu,+title,+all,_,selected,_} Done{+input}:
+      +visible = filtered(all,Input.getValue(input))
+      (Choosing{menu,title,all,visible,Nat.min(selected,List.length(&2,Choice,visible) - 1n),input},Unit{})
     case previous _: (previous,Unit{})
 def inputPrompt(+state: Ref.Ref<State>,+words: Ref.Ref<Words.Source>,+input: Input.Input,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,data: String) -> IO(Unit):
   do IO<Unit>:
@@ -286,9 +320,9 @@ def selectedChoice(state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Pending>>,choic
         settleTarget(reply,id)
 def chooseIndex(state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Pending>>,choices: List<&2,Choice>,index: Nat) -> IO(Unit):
   selectedChoice(state,reply,choiceId(List.get(&2,Choice,choices,index)))
-def menuChanged(state: Ref.Ref<State>,menu: Menu,title: String,+all: List<&2,Choice>,selected: Nat,+query: String) -> IO(Unit):
-  Ref.write(State,state,Choosing{menu,title,all,filtered(all,query),selected,query})
-def moveChoice(state: Ref.Ref<State>,menu: Menu,title: String,all: List<&2,Choice>,visible: List<&2,Choice>,+selected: Nat,query: String,up: Bool) -> IO(Unit):
+def menuChanged(state: Ref.Ref<State>,menu: Menu,title: String,+all: List<&2,Choice>,selected: Nat,+query: Input.Input) -> IO(Unit):
+  Ref.write(State,state,Choosing{menu,title,all,filtered(all,Input.getValue(query)),selected,query})
+def moveChoice(state: Ref.Ref<State>,menu: Menu,title: String,all: List<&2,Choice>,visible: List<&2,Choice>,+selected: Nat,query: Input.Input,up: Bool) -> IO(Unit):
   +count = List.length(&2,Choice,visible)
   +next = Bool.pick(Nat,up,selected - 1n,Nat.min(selected + 1n,count - 1n))
   menuChanged(state,menu,title,all,Bool.pick(Nat,Nat.is_eq(count,0n),0n,next),query)
@@ -301,23 +335,22 @@ def methodKey(menu: Menu,data: String,key: String) -> Bool:
   match menu:
     case Method{}: String.eq(data,key)
     case _: False{}
-def menuInput(+state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Pending>>,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+menu: Menu,+title: String,+all: List<&2,Choice>,+visible: List<&2,Choice>,+selected: Nat,+query: String,+data: String) -> IO(Unit):
+def menuInput(+state: Ref.Ref<State>,reply: Ref.Ref<Maybe<&2,Pending>>,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+menu: Menu,+title: String,+all: List<&2,Choice>,+visible: List<&2,Choice>,+selected: Nat,+query: Input.Input,+data: String,+words: Ref.Ref<Words.Source>) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.up") || methodKey(menu,data,"k"),
     _ => moveChoice(state,menu,title,all,visible,selected,query,True{}),
     _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.down") || methodKey(menu,data,"j"),
       _ => moveChoice(state,menu,title,all,visible,selected,query,False{}),
       _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.confirm"),
         _ => chooseIndex(state,reply,visible,selected),
-        _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.editor.deleteCharBackward"),
-          _ => menuChanged(state,menu,title,all,0n,withoutLast(query)),
-          _ => Bool.pick(Unit -> IO(Unit),printable(data) && searchable(menu),
-            _ => menuChanged(state,menu,title,all,0n,query ++ data),
-            _ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
-def receiveCurrent(current: State,+state: Ref.Ref<State>,+reply: Ref.Ref<Maybe<&2,Pending>>,editor: Component.Component,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+cancel: Callback.Callback<Unit,Unit>,words: Ref.Ref<Words.Source>,+data: String) -> IO(Unit):
+        _ => Bool.pick(Unit -> IO(Unit),searchable(menu),
+          _ => inputPrompt(state,words,query,bindings,keyboard,data),
+          _ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
+
+def receiveCurrent(current: State,+state: Ref.Ref<State>,+reply: Ref.Ref<Maybe<&2,Pending>>,editor: Component.Component,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+cancel: Callback.Callback<Unit,Unit>,+words: Ref.Ref<Words.Source>,+data: String) -> IO(Unit):
   match current:
     case Closed{}: Component.handleInput(editor,data)
     case Choosing{menu,title,all,visible,selected,query}:
-      Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => Callback.call(Unit,Unit,cancel,Unit{}),_ => menuInput(state,reply,bindings,keyboard,menu,title,all,visible,selected,query,data))(Unit{})
+      Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => Callback.call(Unit,Unit,cancel,Unit{}),_ => menuInput(state,reply,bindings,keyboard,menu,title,all,visible,selected,query,data,words))(Unit{})
     case Manual{url,input}:
       inputPrompt(state,words,input,bindings,keyboard,data)
     case Prompt{title,message,secret,input}:
@@ -341,20 +374,46 @@ def editorMouse(editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Mayb
   match editor:
     case Component.Component{_,_,_,Some{callback},_,_,_}: Callback.call(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,callback,event)
     case _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
-def mouseCurrent(current: State,editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+def providerMouseEdited(current: State,pair: Input.Input & Maybe<&2,Tui.TuiMouseEventResult>) -> State & Maybe<&2,Component.MouseResponse>:
+  match current pair:
+    case Choosing{menu,title,all,visible,selected,_} Tuple{query,response}:
+      (Choosing{menu,title,all,visible,selected,query},Maybe.map(&2,Tui.TuiMouseEventResult,Component.MouseResponse,value => Component.LocalResult{value},response))
+    case current _: (current,None{})
+def providerMouse(+current: State,event: Tui.TuiMouseEvent) -> State & Maybe<&2,Component.MouseResponse>:
+  match current event:
+    case Choosing{Provider{},_,_,_,_,query} Tui.TuiMouseEvent{kind,button,x,Tui.Forward{+y},sx,sy,width,height,shift,alt,ctrl,wheel,count}:
+      Bool.pick(State & Maybe<&2,Component.MouseResponse>,Nat.is_eq(y,4n) && Nat.is_lt(y,height),providerMouseEdited(current,Input.handleMouse(query,Tui.TuiMouseEvent{kind,button,x,Tui.Forward{0n},sx,sy,width,1n,shift,alt,ctrl,wheel,count})),(current,None{}))
+    case current _: (current,None{})
+def mouseStored(state: Ref.Ref<State>,pair: State & Maybe<&2,Component.MouseResponse>) -> IO(Maybe<&2,Component.MouseResponse>):
+  match pair:
+    case (current,response):
+      do IO<Maybe<&2,Component.MouseResponse>>:
+        Ref.write(State,state,current)
+        return response
+def mouseCurrent(+current: State,state: Ref.Ref<State>,editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match current:
     case Closed{}: editorMouse(editor,event)
+    case Choosing{Provider{},_,_,_,_,_}: mouseStored(state,providerMouse(current,event))
     case _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
 def mouse(host: Host,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match host:
-    case Host{state,_,editor,_,_,_,_,_,_}:
+    case Host{+state,_,editor,_,_,_,_,_,_}:
       do IO<Maybe<&2,Component.MouseResponse>>:
         current : State <- Ref.read(State,state)
-        mouseCurrent(current,editor,event)
+        mouseCurrent(current,state,editor,event)
 def invalidate(host: Host,_: Unit) -> IO(Unit):
   match host: case Host{_,_,editor,_,_,_,_,_,_}: Component.invalidate(editor)
+def focusedState(current: State,value: Bool) -> State & Unit:
+  match current:
+    case Choosing{menu,title,all,visible,selected,query}: (Choosing{menu,title,all,visible,selected,Input.setFocused(query,value)},Unit{})
+    case current: (current,Unit{})
 def focus(host: Host,value: Bool) -> IO(Unit):
-  match host: case Host{_,_,editor,_,_,_,_,_,_}: Component.setFocused(editor,value)
+  match host:
+    case Host{state,_,editor,_,_,_,_,_,_}:
+      do IO<Unit>:
+        +focused : Bool = value
+        Component.setFocused(editor,focused)
+        Ref.modify(State,Unit,state,current => focusedState(current,focused))
 def create(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Words.Source,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,cancel: Callback.Callback<Unit,Unit>) -> IO(Owner):
   do IO<Owner>:
     +state : Ref.Ref<State> <- Ref.new(State,Closed{})
@@ -379,7 +438,7 @@ def openMenu(host: Host,menu: Menu,title: String,+choices: List<&2,Choice>) -> I
         +choice : Deferred.Deferred<String> <- Deferred.new(String)
         Ref.write(Maybe<&2,Pending>,reply,Some{TextReply{choice}})
         Component.setFocused(editor,False{})
-        Ref.write(State,state,Choosing{menu,title,choices,choices,0n,""})
+        Ref.write(State,state,Choosing{menu,title,choices,choices,0n,Input.setFocused(Input.new(None{}),True{})})
         return choice
 def openChoices(host: Host,title: String,choices: List<&2,Choice>) -> IO(Deferred.Deferred<String>):
   openMenu(host,Generic{},title,choices)
@@ -392,7 +451,7 @@ def openAuthMenu(host: Host,menu: Menu,title: String,+choices: List<&2,Choice>,+
         +answer : Deferred.Deferred<Maybe<&2,ProviderSelection>> <- Deferred.new(Maybe<&2,ProviderSelection>)
         Ref.write(Maybe<&2,Pending>,reply,Some{ProviderReply{answer}})
         Component.setFocused(editor,False{})
-        Ref.write(State,state,Choosing{menu,title,choices,filtered(choices,query),0n,query})
+        Ref.write(State,state,Choosing{menu,title,choices,filtered(choices,query),0n,Input.setFocused(Input.setValue(Input.new(None{}),query),True{})})
         return answer
 def openDirect(host: Host) -> IO(Unit):
   match host:
@@ -453,7 +512,7 @@ def showAuthContent(+state: Ref.Ref<State>,+title: String,prompt: Auth.AuthPromp
   match prompt:
     case Auth.SelectPrompt{message,options,_}:
       +choices = authOptions(options)
-      Ref.write(State,state,Choosing{AuthSelect{},message,choices,choices,0n,""})
+      Ref.write(State,state,Choosing{AuthSelect{},message,choices,choices,0n,Input.new(None{})})
     case Auth.TextPrompt{message,placeholder,_}: Ref.modify(State,Unit,state,current => (prompted(current,title,message,placeholder,False{},False{},cancel,submit),Unit{}))
     case Auth.SecretPrompt{message,placeholder,_}: Ref.modify(State,Unit,state,current => (prompted(current,title,message,placeholder,True{},False{},cancel,submit),Unit{}))
     case Auth.ManualCodePrompt{message,_,_}: Ref.modify(State,Unit,state,current => (prompted(current,title,message,None{},False{},True{},cancel,submit),Unit{}))

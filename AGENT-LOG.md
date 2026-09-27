@@ -2945,3 +2945,9 @@ Codex: reserving model-selector.bend and its differential checks, plus the run.b
 Codex: model picker component traces pass 49 sequences on native1/native4. Reserving model-thinking-selector.bend and the settings-selector.bend factory call as well: the shared picker now owns native Input state, so its settings caller must pass the existing word-source ref and await input edits.
 
 Codex: model picker shared Input/Text and locale/default ordering pass 49 pinned component sequences and mounted editing/mouse/default saves on native1/native4. All-filter ANSI, custom save, per-model thinking and cache-miss scenarios match; build/pi-cli-model-picker is tested. Refresh lifecycle/scoped metadata and focus/resize remain partial; first cache-miss picker appeared in 137ms versus pi 26ms in this sample.
+
+Codex: 323382cf is published via merge 41bd262b; merged-tree freshness passes. Releasing model/settings picker and run.bend paths; tested CLI build/pi-cli-model-picker. SDK edits are untouched and local main still needs publication merges after SDK reconciliation; next UX review is the login/provider picker.
+
+Codex: reserving login-dialog.bend for provider search Input editing, hardware cursor and mouse placement, plus faithful truncated provider rows. Provider/auth identity and owned prompt flows remain intact; SDK/provider runtime files stay free.
+
+Codex: provider search now uses native Input and TruncatedText, matching 44 pinned editing/focus/mouse/status/width traces on native1/native4. Mounted fullscreen provider search/API-key login and existing cancellation/split-paste flows match; tested CLI build/pi-cli-login-picker. Unicode fuzzy scoring retains its documented scalar adaptation; provider projection/catalog and integrated logout remain partial.
