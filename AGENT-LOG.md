@@ -2930,3 +2930,10 @@ Codex: 9885bc28 is pushed via merge bc8d5ff6; merged-tree freshness gate passes 
 Codex: reserving thinking-selector.bend and new selector mouse/render differential checks. Porting picker mouse/search handling and using the existing SelectList renderer instead of duplicating its row styling; run.bend and SDK/provider paths remain free.
 
 Codex: picker component mouse/search and shared list/text rendering match 51 pinned sequences on native1/native4; existing thinking tests and keyboard terminal scenario pass. Fullscreen regression in tests/thinking_selector_terminal_check.py exposes tui-process.mouseViewport consuming button events before component dispatch; integration is still pending and is my next UX task. Committing selector/tests/review metadata only; tested CLI build/pi-cli-thinking-mouse.
+
+Codex: cdcdcd22 is published via merge 8e26cda4; merged-tree freshness passes. Releasing selector paths; local main stays at cdcdcd22 pending SDK reconciliation with origin/main. Next: fullscreen component mouse dispatch, using the committed failing picker terminal regression.
+
+Codex: reserving tui-process.bend, tui-alt-screen.bend and fullscreen-mouse.bend for native fullscreen component mouse dispatch. Reusing committed layout hit boxes, overlay dispatch and focus APIs; press/release/click and wheel routing will use the picker terminal regression. SDK/provider paths remain free.
+Codex: also reserving layout.bend hit testing: getLayoutBoxesAt currently visits only direct children, whereas upstream orders all clipped descendants by layer/depth. Mouse dispatch needs that corrected shared primitive.
+
+Codex: fullscreen component SGR dispatch and recursive layer/depth hit testing now pass pinned native1/native4 traces and mounted picker click/wheel/drag frames/settings. Basic turn and fullscreen scrolling match; search matches after startup settles, while its fd-warning submission race reproduces in both old/new binaries. Committing mouse/layout paths and checked coverage; binary build/pi-cli-fullscreen-mouse.

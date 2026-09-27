@@ -1,4 +1,5 @@
 import Base
+import ../../runtime/src/stable-sort.bend as Sort
 import ./component.bend as C
 import ./tui.bend as T
 import ./terminal-image.bend as Image
@@ -162,17 +163,24 @@ def renderLayoutFrame(+stack: S.Stack,width: Nat,height: Nat) -> IO(LayoutFrame)
         +safeHeight : Nat <- IO.pure(Nat,Nat.max(1n,height))
         visible : List<&2,S.StackEntry> <- S.visibleStackEntries(entries,S.LayoutViewport{safeWidth,safeHeight})
         renderVisible(stack,safeWidth,safeHeight,visible)
-def childHits(children: List<&2,LayoutBox>,+x: Nat,+y: Nat) -> List<&2,LayoutBox>:
-  match children:
-    case Nil{}: Nil{}
-    case LayoutBox{component,bounds,+clip,children,lines,offset,layer} <> +rest:
-      Bool.pick(Unit -> List<&2,LayoutBox>,within(clip,x,y),_ => LayoutBox{component,bounds,clip,children,lines,offset,layer} <> childHits(rest,x,y),_ => childHits(rest,x,y))(Unit{})
-def boxesAt(box: LayoutBox,+x: Nat,+y: Nat) -> List<&2,LayoutBox>:
-  match box:
-    case LayoutBox{component,bounds,+clip,+children,lines,offset,layer}:
-      Bool.pick(Unit -> List<&2,LayoutBox>,within(clip,x,y),_ => List.append(&2,LayoutBox,childHits(children,x,y),LayoutBox{component,bounds,clip,children,lines,offset,layer} <> Nil{}),_ => Nil{})(Unit{})
+type HitBox is Data: HitBox{box: LayoutBox,depth: Nat,layer: Nat}
+type HitWork is Data: HitWork{box: LayoutBox,depth: Nat}
+def childWork(children: List<&2,LayoutBox>,+depth: Nat) -> List<&2,HitWork>:
+  match children: case Nil{}: Nil{} case child <> rest: HitWork{child,depth} <> childWork(rest,depth)
+@unsafe def collectHits(pending: List<&2,HitWork>,+x: Nat,+y: Nat,+reversed: List<&2,HitBox>) -> List<&2,HitBox>:
+  match pending:
+    case Nil{}: List.reverse(&2,HitBox,reversed)
+    case HitWork{LayoutBox{component,bounds,+clip,+children,lines,offset,+layer},+depth} <> +rest:
+      Bool.pick(Unit -> List<&2,HitBox>,within(clip,x,y),
+        _ => collectHits(List.append(&2,HitWork,childWork(children,depth + 1n),rest),x,y,HitBox{LayoutBox{component,bounds,clip,children,lines,offset,layer},depth,layer} <> reversed),
+        _ => collectHits(rest,x,y,reversed))(Unit{})
+def hitBefore(left: HitBox,right: HitBox) -> Bool:
+  match left right:
+    case HitBox{_,a,+la} HitBox{_,b,+lb}: Nat.is_lt(lb,la) || (Nat.is_eq(la,lb) && Nat.is_le(b,a))
+def hitBoxes(hits: List<&2,HitBox>) -> List<&2,LayoutBox>:
+  match hits: case Nil{}: Nil{} case HitBox{box,_,_} <> rest: box <> hitBoxes(rest)
 def getLayoutBoxesAt(frame: LayoutFrame,x: Nat,y: Nat) -> List<&2,LayoutBox>:
-  match frame: case LayoutFrame{root,_,_,_}: boxesAt(root,x,y)
+  match frame: case LayoutFrame{root,_,_,_}: hitBoxes(Sort.sort(~HitBox,~hitBefore,collectHits([HitWork{root,0n}],x,y,Nil{})))
 
 # ScrollView owns state across frames; the returned value is the next immutable
 # state to retain.  lineOffset records the scroll translation of its child.

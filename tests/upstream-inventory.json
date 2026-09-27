@@ -4922,10 +4922,11 @@
       "ports": [
         "tests/thinking-level.bend",
         "tests/thinking-selector.bend",
-        "tests/thinking_selector_check.py"
+        "tests/thinking_selector_check.py",
+        "tests/thinking_selector_terminal_check.py"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads). Additional pinned component comparisons cover 51 sequences across six widths (keyboard, search cursor, default filtering and mouse) on native one/four threads; the optional default now has an explicit None representation. The original two source cases still pass. Fullscreen mouse integration is separately pending because the terminal process consumes button input without component dispatch."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads). Additional pinned component comparisons cover 51 sequences across six widths (keyboard, search cursor, default filtering and mouse) on native one/four threads; the optional default now has an explicit None representation. The original two source cases still pass. Fullscreen click, wheel and drag picker integration now matches source terminal frames and persisted settings on native one/four."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",
@@ -5412,10 +5413,12 @@
         "tests/layout-tree.bend",
         "tests/layout_tree_check.py",
         "tests/tui-layout.bend",
-        "tests/tui_layout_check.py"
+        "tests/tui_layout_check.py",
+        "tests/fullscreen-mouse.bend",
+        "tests/fullscreen_mouse_check.py"
       ],
       "sha256": "7f2c34277e65a32b80a5bc559b1551ac9b1b5eb51afd9011a3cac01c920fd0fb",
-      "notes": "Direct stack sizing/rendering, nested minimum sizing, HStack allocation, ScrollView inside VStack, ScrollView state/follow, direct viewport scrollbar glyph geometry, default scrollbar ANSI/background preservation with intersected wide characters and hyperlink/bold isolation, and TuiBase commit/scroll/resize frames have source-pinned comparisons; see tests/stack.md and tests/scroll-layout.md. Custom scrollbar style callbacks, Kitty cropping, nested ScrollView content, huge sparse content, arbitrary tree caching/invalidation and the full source suite remain pending."
+      "notes": "Direct stack sizing/rendering, nested minimum sizing, HStack allocation, ScrollView inside VStack, ScrollView state/follow, direct viewport scrollbar glyph geometry, default scrollbar ANSI/background preservation with intersected wide characters and hyperlink/bold isolation, and TuiBase commit/scroll/resize frames have source-pinned comparisons; see tests/stack.md and tests/scroll-layout.md. Custom scrollbar style callbacks, Kitty cropping, nested ScrollView content, huge sparse content, arbitrary tree caching/invalidation and the full source suite remain pending. Pinned hit-map comparisons cover nested descendants, overlapping layers and excluded coordinates with native one/four."
     },
     {
       "source": "packages/tui/test/markdown.test.ts",
@@ -5641,10 +5644,14 @@
       "status": "partial",
       "ports": [
         "tests/tui-alt-search.bend",
-        "tests/parity/scenarios.py"
+        "tests/parity/scenarios.py",
+        "tests/fullscreen-mouse.bend",
+        "tests/fullscreen_mouse_check.py",
+        "tests/fullscreen_mouse_reference.mts",
+        "tests/thinking_selector_terminal_check.py"
       ],
       "sha256": "1c3e5210d61e0bbf322a218fc77efe90469ce741aeb718589ddb4c497089edd7",
-      "notes": "The search corpus, Unicode column mapping, cache, box rendering and visible highlights have native checks; fullscreen-search exercises keyboard navigation and closing against the upstream terminal. The rest of the fullscreen suite, including mouse navigation and selection, remains open."
+      "notes": "The search corpus, Unicode column mapping, cache, box rendering and visible highlights have native checks; fullscreen-search exercises keyboard navigation and closing against the upstream terminal. Native one/four pinned component traces exercise the contracts of \"focuses and captures drag gestures for mouse-aware components\", \"reports consecutive click counts to component-owned controls\" and component-first wheel dispatch; fullscreen picker click/wheel/drag terminal frames and settings match pi. This is partial coverage: document selection/copy, focus loss, scrollbar pointer controls, viewport bubbling and broader overlay/focus resolution remain open."
     },
     {
       "source": "packages/tui/test/tui-cell-size-input.test.ts",
