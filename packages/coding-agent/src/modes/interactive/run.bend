@@ -181,16 +181,19 @@ def footerEvent(state: Footer.State,event: Session.AgentSessionEvent) -> Footer.
     case _: (state,False{})
 type WorkingOwned is Type:
   WorkingOwned{indicator: Maybe<&1,Status.Owner>,appearance: Status.Appearance,redraw: Callback.Callback<Unit,Unit>,cancelKey: String}
+type StartupState is Data: StartupState{initialized: Bool,draft: Maybe<&2,String>}
 type Working is Data:
-  Working{active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>}
+  Working{active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>,ready: Ref.Ref<StartupState>}
 type StatusChange is Data:
   ShowStatus{indicator: Status.Indicator}
   ClearStatus{kind: Status.StatusIndicatorKind}
   KeepStatus{}
 def workingActive(working: Working) -> Ref.Ref<Maybe<&2,Loader.Handle>>:
-  match working: case Working{active,_,_}: active
+  match working: case Working{active,_,_,_}: active
 def workingTerminal(working: Working) -> Ref.Ref<Maybe<&2,Terminal.Handle>>:
-  match working: case Working{_,_,terminal}: terminal
+  match working: case Working{_,_,terminal,_}: terminal
+def workingReady(working: Working) -> Ref.Ref<StartupState>:
+  match working: case Working{_,_,_,ready}: ready
 def sessionTitle(name: Maybe<&2,String>,cwd: String) -> String:
   match name:
     case None{}: Config.appTitle() ++ " - " ++ Path.basename(cwd)
@@ -315,13 +318,13 @@ def workingChanged(previous: Maybe<&1,WorkingOwned>,active: Ref.Ref<Maybe<&2,Loa
         Bool.pick(Unit -> IO(Unit),statusChanged(change),_ => Callback.call(Unit,Unit,request,Unit{}),_ => IO.pure(Unit,Unit{}))(Unit{})
 def workingEvent(working: Working,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,event: Session.AgentSessionEvent) -> IO(Unit):
   match working:
-    case Working{active,+owned,_}:
+    case Working{active,+owned,_,_}:
       do IO<Unit>:
         previous : Maybe<&1,WorkingOwned> <- Ref.swap(Maybe<&1,WorkingOwned>,owned,None{})
         workingChanged(previous,active,owned,event)
 def setupWorking(working: Working,paint: Callback.Callback<String,String>,theme: Ref.Ref<Theme.Theme>,bindings: Keybindings.KeybindingsManager,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
   match working:
-    case Working{_,owned,_}:
+    case Working{_,owned,_,_}:
       do IO<Unit>:
         +request : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,~Unit,~Unit,~workingRedraw,redraw)
         Ref.write(Maybe<&1,WorkingOwned>,owned,Some{WorkingOwned{None{},Status.Appearance{theme,Some{paint},request},request,Hints.keyText(bindings,"app.interrupt")}})
@@ -334,8 +337,9 @@ def disposeWorkingOwned(oldOwner: Maybe<&1,WorkingOwned>) -> IO(Unit):
         Callback.dispose(Unit,Unit,request)
 def disposeWorking(working: Working) -> IO(Unit):
   match working:
-    case Working{active,owned,terminal}:
+    case Working{active,owned,terminal,ready}:
       do IO<Unit>:
+        oldStartup : StartupState <- Ref.dispose(StartupState,ready)
         oldTerminal : Maybe<&2,Terminal.Handle> <- Ref.dispose(Maybe<&2,Terminal.Handle>,terminal)
         oldActive : Maybe<&2,Loader.Handle> <- Ref.dispose(Maybe<&2,Loader.Handle>,active)
         oldOwner : Maybe<&1,WorkingOwned> <- Ref.dispose(Maybe<&1,WorkingOwned>,owned)
@@ -2596,7 +2600,17 @@ def connectSettingsTheme(interaction: Interaction,handle: ThemeController.Handle
       do IO<Unit>:
         current : Maybe<&2,SettingsPicker.Host> <- Ref.read(Maybe<&2,SettingsPicker.Host>,settings)
         installSettingsTheme(current,handle)
-def initializeApplication(first: Bool,managed: Maybe<&2,Manager.ToolsManager>,+transcript: Transcript.Handle,+session: Ref.Ref<Session.AgentSession>,interaction: Interaction,builtinDir: String,highlighter: SyntaxHighlight.Highlighter,+render: Callback.Callback<Unit,Unit>) -> IO(Unit):
+def enableStartup(state: StartupState) -> StartupState & Unit:
+  match state: case StartupState{_,draft}: (StartupState{True{},draft},Unit{})
+def acceptStartupSubmission(state: StartupState,text: String) -> StartupState & Bool:
+  match state:
+    case StartupState{True{},draft}: (StartupState{True{},draft},True{})
+    case StartupState{False{},_}: (StartupState{False{},Some{text}},False{})
+def takeStartupDraft(state: StartupState) -> StartupState & Maybe<&2,String>:
+  match state: case StartupState{initialized,draft}: (StartupState{initialized,None{}},draft)
+def startupInitialized(state: StartupState) -> Bool:
+  match state: case StartupState{initialized,_}: initialized
+def initializeApplication(first: Bool,managed: Maybe<&2,Manager.ToolsManager>,+transcript: Transcript.Handle,+session: Ref.Ref<Session.AgentSession>,+interaction: Interaction,builtinDir: String,highlighter: SyntaxHighlight.Highlighter,+render: Callback.Callback<Unit,Unit>) -> IO(Unit):
   match first:
     case False{}: IO.pure(Unit,Unit{})
     case True{}:
@@ -2608,6 +2622,7 @@ def initializeApplication(first: Bool,managed: Maybe<&2,Manager.ToolsManager>,+t
         startAutocomplete(interaction,session,files)
         startupProjectTrustWarning(transcript,session)
         startupChangelog(transcript,session,builtinDir)
+        Ref.modify(StartupState,Unit,workingReady(workingOf(interaction)),enableStartup)
         # upstream init: once startup is rendered, register the remaining
         # highlight.js languages, then invalidate and render again.
         SyntaxHighlight.loadAllHighlightLanguages(highlighter)
@@ -2933,13 +2948,41 @@ def withCustomEditor(borrowed: CustomEditor.Owner & Component.Component,live: Li
         result : Result<&2,&2,Error,Unit> <- runHosted(Selector.borrowHost(host),live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen)
         CustomEditor.dispose(custom)
         return result
+def startupHost(host: CustomEditor.Host,initialized: Bool) -> CustomEditor.Host:
+  match initialized host:
+    case True{} host: host
+    case False{} CustomEditor.Host{editor,inner,bindings,keyboard,_,onAction}:
+      CustomEditor.Host{editor,inner,bindings,keyboard,"app.clear" <> "app.exit" <> Nil{},onAction}
+def restoreStartupDraft(editor: Live.Handle,draft: Maybe<&2,String>) -> IO(Unit):
+  match draft:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{text}: Live.setText(editor,text)
+type StartupInput is Data:
+  StartupInput{host: CustomEditor.Host,ready: Ref.Ref<StartupState>}
+def startupInput(input: StartupInput,data: String) -> IO(Unit):
+  match input:
+    case StartupInput{CustomEditor.Host{+editor,inner,+bindings,+keyboard,actions,onAction},+ready}:
+      do IO<Unit>:
+        +shared : String = data
+        +state : StartupState <- Ref.read(StartupState,ready)
+        Bool.pick(Unit -> IO(Unit),Bool.not(startupInitialized(state)) && Keybindings.matches(bindings,keyboard,shared,"app.clipboard.pasteImage"),
+          _ => IO.pure(Unit,Unit{}),
+          _ => CustomEditor.handleInput(startupHost(CustomEditor.Host{editor,inner,bindings,keyboard,actions,onAction},startupInitialized(state)),shared))(Unit{})
+        draft : Maybe<&2,String> <- Ref.modify(StartupState,Maybe<&2,String>,ready,takeStartupDraft)
+        restoreStartupDraft(editor,draft)
+def startupEditor(host: CustomEditor.Host,ready: Ref.Ref<StartupState>) -> IO(CustomEditor.Owner):
+  match host:
+    case CustomEditor.Host{editor,+inner,bindings,keyboard,actions,onAction}:
+      do IO<CustomEditor.Owner>:
+        +input : Callback.Callback<String,Unit> <- Callback.create(~StartupInput,~String,~Unit,~startupInput,StartupInput{CustomEditor.Host{editor,inner,bindings,keyboard,actions,onAction},ready})
+        return CustomEditor.Owner{CustomEditor.wrapped(inner,input),input}
 def runLive(borrowed: Live.Owner & Component.Component & Live.Handle,words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,+keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (live,editorComponent,handle):
       do IO<Result<&2,&2,Error,Unit>>:
         +editor : Live.Handle <- IO.pure(Live.Handle,handle)
         recordEditor(contextInteraction(context),editor)
-        custom : CustomEditor.Owner <- CustomEditor.create(CustomEditor.Host{editor,editorComponent,contextBindings(context),Keys.defaults(),APP_ACTIONS(),keys})
+        custom : CustomEditor.Owner <- startupEditor(CustomEditor.Host{editor,editorComponent,contextBindings(context),Keys.defaults(),APP_ACTIONS(),keys},workingReady(workingOf(contextInteraction(context))))
         withCustomEditor(CustomEditor.borrow(custom),live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context)
 def smallCount(value: W.U64) -> Nat:
   match value: case W.U64{_,low}: U32.to_nat(low)
@@ -2978,24 +3021,31 @@ def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,chang
         live : Live.Owner <- Live.createWithWorking(Component.ComponentId{2n},configured,words,contextBindings(context),Keys.defaults(),rows,workingActive(working))
         runLive(Live.borrow(live),words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context)
 type SubmissionInput is Data:
-  SubmissionInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Interactive.StatusSink,session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle}
+  SubmissionInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Interactive.StatusSink,session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle,startup: Ref.Ref<StartupState>}
 def submitCommandWithPending(input: SubmissionInput,command: Commands.Command) -> IO(Unit):
   match input command:
-    case SubmissionInput{queue,stop,failure,session,transcript} Commands.Send{message}:
+    case SubmissionInput{queue,stop,failure,session,transcript,_} Commands.Send{message}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         streaming : Bool <- Session.isStreaming(live)
         Bool.pick(Unit -> IO(Unit),streaming,_ => IO.pure(Unit,Unit{}),_ => Transcript.flushPending(transcript))(Unit{})
         Interactive.act(queue,stop,failure,Commands.Send{message})
-    case SubmissionInput{queue,stop,failure,_,_} command: Interactive.act(queue,stop,failure,command)
+    case SubmissionInput{queue,stop,failure,_,_,_} command: Interactive.act(queue,stop,failure,command)
 def submitWithPending(input: SubmissionInput,text: String) -> IO(Unit):
-  +shared = text
-  Bool.pick(Unit -> IO(Unit),String.is_empty(Text.trim(shared)),_ => IO.pure(Unit,Unit{}),_ => submitCommandWithPending(input,Commands.parse(shared)))(Unit{})
+  match input:
+    case SubmissionInput{queue,stop,failure,session,+transcript,+startup}:
+      do IO<Unit>:
+        +shared : String = text
+        accepted : Bool <- Ref.modify(StartupState,Bool,startup,state => acceptStartupSubmission(state,shared))
+        Bool.pick(Unit -> IO(Unit),accepted,
+          _ => Bool.pick(Unit -> IO(Unit),String.is_empty(Text.trim(shared)),_ => IO.pure(Unit,Unit{}),_ => submitCommandWithPending(SubmissionInput{queue,stop,failure,session,transcript,startup},Commands.parse(shared)))(Unit{}),
+          _ => Transcript.status(transcript,"Startup is still in progress"))(Unit{})
+
 def startController(pair: Controller.Controller & Controller.Handle,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,words: Words.Source,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (controller,+queue):
       do IO<Result<&2,&2,Error,Unit>>:
-        submitted : Callback.Callback<String,Unit> <- Callback.create(~SubmissionInput,~String,~Unit,~submitWithPending,SubmissionInput{queue,stopped,contextStatus(context),contextSession(context),contextTranscript(context)})
+        submitted : Callback.Callback<String,Unit> <- Callback.create(~SubmissionInput,~String,~Unit,~submitWithPending,SubmissionInput{queue,stopped,contextStatus(context),contextSession(context),contextTranscript(context),workingReady(workingOf(contextInteraction(context)))})
         +paint : Callback.Callback<String,String> <- editorTheme(contextTheme(context))
         +muted : Callback.Callback<String,String> <- MarkdownTheme.color(contextTheme(context),"muted")
         +bash : Ref.Ref<Bool> <- Ref.new(Bool,False{})
@@ -3065,7 +3115,8 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +workingActiveRef : Ref.Ref<Maybe<&2,Loader.Handle>> <- Ref.new(Maybe<&2,Loader.Handle>,None{})
         +workingOwnerRef : Ref.Ref<Maybe<&1,WorkingOwned>> <- Ref.new(Maybe<&1,WorkingOwned>,None{})
         +workingTerminalRef : Ref.Ref<Maybe<&2,Terminal.Handle>> <- Ref.new(Maybe<&2,Terminal.Handle>,None{})
-        +working : Working <- IO.pure(Working,Working{workingActiveRef,workingOwnerRef,workingTerminalRef})
+        +workingReadyRef : Ref.Ref<StartupState> <- Ref.new(StartupState,StartupState{False{},None{}})
+        +working : Working <- IO.pure(Working,Working{workingActiveRef,workingOwnerRef,workingTerminalRef,workingReadyRef})
         +stopped : Deferred.Deferred<Unit> <- Deferred.new(Unit)
         +listener : Callback.Callback<Session.AgentSessionEvent,Unit> <- Callback.create(~Observation,~Session.AgentSessionEvent,~Unit,~observed,Observation{transcriptHandle,redraw,footerState(foot),working,current})
         failureObserver : Callback.Callback<Controller.PromptFailure,Unit> <- Callback.create(~WorkerFailure,~Controller.PromptFailure,~Unit,~promptFailed,WorkerFailure{status,redraw})

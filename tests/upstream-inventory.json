@@ -3184,9 +3184,12 @@
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-startup-input.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "83b8e742a842893e8af364d7da754f672332335f33e5bd03857ea794aa325664"
+      "status": "partial",
+      "ports": [
+        "tests/startup_input_check.py"
+      ],
+      "sha256": "83b8e742a842893e8af364d7da754f672332335f33e5bd03857ea794aa325664",
+      "notes": "The prompt-restoration/feedback contract runs through a native PTY while managed-tool validation is delayed; one/four threads verify no premature or automatic prompt, version persistence and a single later submission. Queued normal input before callback installation and getUserInput queue consumption remain pending."
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-status.test.ts",
