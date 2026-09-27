@@ -39,7 +39,11 @@ NAMES = [
     "RPC shutdown > ctx.shutdown() in a command ends RPC mode after its response",
     "RPC shutdown > ctx.shutdown() during a run ends RPC mode at agent_settled",
     "RPC session changes > new_session, switch_session and fork report an extension's cancel",
+    "RPC user_bash failure handling (#9068) > fails the request without executing bash when a handler throws",
+    "RPC user_bash failure handling (#9068) > executes bash normally when a handler returns undefined",
 ]
+# Running a command needs a process primitive, which the Bun lane lacks.
+NATIVE_ONLY = {"RPC user_bash failure handling (#9068) > executes bash normally when a handler returns undefined"}
 EXPECTED_FAILURES = set()
 
 
@@ -54,11 +58,13 @@ def check(label, command, threads=None):
         if threads:
             env["BEND_THREADS"] = threads
         result = subprocess.run(command + [str(cwd), str(agent)], cwd=ROOT, env=env, capture_output=True, text=True, timeout=300)
-    outcomes = {line.split(" ", 1)[1]: line.startswith("PASS ") for line in result.stdout.splitlines() if line.startswith(("PASS ", "FAIL "))}
+    outcomes = {line.split(" ", 1)[1]: line.split(" ", 1)[0] for line in result.stdout.splitlines() if line.startswith(("PASS ", "FAIL ", "SKIP "))}
     assert result.returncode == 0 and list(outcomes) == NAMES, (label, result.stdout, result.stderr[-2000:])
-    failed = {name for name, passed in outcomes.items() if not passed}
+    skipped = {name for name, verdict in outcomes.items() if verdict == "SKIP"}
+    assert skipped == (NATIVE_ONLY if label == "Bun" else set()), (label, skipped)
+    failed = {name for name, verdict in outcomes.items() if verdict == "FAIL"}
     assert failed == EXPECTED_FAILURES, (label, failed)
-    print(f"{label}: {len(NAMES) - len(failed)} pass" + "".join(f"; still failing: {name}" for name in sorted(failed)))
+    print(f"{label}: {len(NAMES) - len(failed) - len(skipped)} pass" + "".join(f"; still failing: {name}" for name in sorted(failed)))
 
 
 check("Bun", ["bun", "build/rpc-mode.js"])

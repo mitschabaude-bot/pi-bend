@@ -44,7 +44,8 @@ note pointing here. Everything not listed here is in scope.
 - **JavaScript/TypeScript extensions** (AGENTS.md): extensions are native
   Bend; upstream's extension loading, bundling and Node SEA behaviour have no
   counterpart (`9540-extension-loader-lazy`,
-  `extension-factory-cache`: jiti imports and the module cache).
+  `extension-factory-cache`: jiti imports and the module cache;
+  `extensions-discovery`: .ts/.js file and package discovery).
 
 - **Windows-only behaviour** (`6596-taskkill-enoent`, `bash-close-hang-windows`,
   `powershell-tool`, 2026-09-26): the coordinator excludes the Windows process

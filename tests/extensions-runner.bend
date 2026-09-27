@@ -20,6 +20,8 @@ import ../packages/coding-agent/src/core/extensions/types.bend as T
 import ../packages/coding-agent/src/modes/interactive/interactive-mode.bend as Interactive
 import ../packages/coding-agent/src/modes/rpc.bend as Rpc
 import ./model-runtime-fixture.bend as Fixture
+import ../packages/coding-agent/src/core/tools/bash.bend as Bash
+import ../packages/coding-agent/src/core/bash-executor.bend as BashExec
 
 # upstream test/extensions-runner.test.ts, the cases phase 1 of the native
 # extension runtime covers (commands, context, provider registration,
@@ -296,7 +298,7 @@ def capturing(slot: R.Ref<Maybe<&2, T.ExtensionAPI>>) -> T.InlineExtension:
 
 def pendingOf(state: T.ExtensionRuntimeState) -> Nat:
   match state:
-    case T.ExtensionRuntimeState{_, pending, _, _, actions, runtimeCwd}: List.length(&2, T.PendingProvider, pending)
+    case T.ExtensionRuntimeState{_, pending, _, _, actions, runtimeCwd, flagValues}: List.length(&2, T.PendingProvider, pending)
 
 def pendingCount(runtime: T.ExtensionRuntime()) -> IO(Nat):
   do IO<Nat>:
@@ -716,9 +718,8 @@ def autocompleteSkipsBuiltinNames() -> IO(Unit):
     same(joined(slashNames(Interactive.extensionCommands(commands, Interactive.builtinNames(Slash.BUILTIN_SLASH_COMMANDS())))) ++ " | " ++ String.join(diagnosticMessages(Interactive.getBuiltInCommandConflictDiagnostics(commands)), " / "), "llama=[t] Manage llama.cpp | Extension command '/model' conflicts with built-in interactive command. Skipping in autocomplete. @<inline:one> / Extension command '/tree' conflicts with built-in interactive command. Available as '/tree:1'. @<inline:three> / Extension command '/tree' conflicts with built-in interactive command. Available as '/tree:2'. @<inline:four>", "autocomplete lists extension commands and reports built-in conflicts")
 
 # suite/regressions/8423-extension-factory-failure.test.ts. Adaptations:
-# registerFlag/getFlag and the event bus are not ported, so the failed API's
-# late call is registerProvider and the event-bus assertion stays pending;
-# upstream's config-form registerProvider(name, config) is a Provider value.
+# the event bus is not ported, so its assertion stays pending; upstream's
+# config-form registerProvider(name, config) is a Provider value.
 def pendingNames(pending: List<&2, T.PendingProvider>) -> List<&2, String>:
   match pending:
     case Nil{}: Nil{}
@@ -726,7 +727,7 @@ def pendingNames(pending: List<&2, T.PendingProvider>) -> List<&2, String>:
 
 def pendingNamesOf(state: T.ExtensionRuntimeState) -> String:
   match state:
-    case T.ExtensionRuntimeState{_, pending, _, _, actions, runtimeCwd}: joined(pendingNames(pending))
+    case T.ExtensionRuntimeState{_, pending, _, _, actions, runtimeCwd, flagValues}: joined(pendingNames(pending))
 
 def pendingText(runtime: T.ExtensionRuntime()) -> IO(String):
   do IO<String>:
@@ -738,9 +739,21 @@ def registeringProvider(+id: String, api: T.ExtensionAPI) -> IO(Outcome()):
     provider : AiModels.Provider <- keyedProvider(id, Nil{})
     Loader.registerProvider(api, provider)
 
-def failingAfterChanges(slot: R.Ref<Maybe<&2, T.ExtensionAPI>>, +api: T.ExtensionAPI) -> IO(Outcome()):
+def booleanFlag(+value: Bool) -> T.FlagOptions: T.FlagOptions{None{}, T.BooleanFlag{}, Some{T.FlagBoolean{value}}}
+
+def shownFlag(value: Result<&2, &2, String, Maybe<&2, T.FlagValue>>) -> String:
+  match value:
+    case Fail{error}: error
+    case Done{None{}}: "undefined"
+    case Done{Some{T.FlagBoolean{flag}}}: Bool.pick(String, flag, "true", "false")
+    case Done{Some{T.FlagString{text}}}: text
+
+def failingAfterChanges(slot: R.Ref<Maybe<&2, T.ExtensionAPI>>, flagSeen: R.Ref<String>, +api: T.ExtensionAPI) -> IO(Outcome()):
   do IO<Outcome()>:
     R.write(Maybe<&2, T.ExtensionAPI>, slot, Some{api})
+    flagged : Outcome() <- Loader.registerFlag(api, "failed-flag", booleanFlag(True{}))
+    during : Result<&2, &2, String, Maybe<&2, T.FlagValue>> <- Loader.getFlag(api, "failed-flag")
+    R.write(String, flagSeen, shownFlag(during))
     removed : Outcome() <- Loader.unregisterProvider(api, "working-provider")
     registered : Outcome() <- registeringProvider("failed-provider", api)
     return Fail{"factory failed"}
@@ -748,18 +761,127 @@ def failingAfterChanges(slot: R.Ref<Maybe<&2, T.ExtensionAPI>>, +api: T.Extensio
 def lateRegistration(found: Maybe<&2, T.ExtensionAPI>) -> IO(Outcome()):
   match found:
     case None{}: IO.pure(Outcome(), Fail{"the failing factory did not run"})
-    case Some{api}: registeringProvider("late-provider", api)
+    case Some{api}: Loader.registerFlag(api, "late-flag", booleanFlag(True{}))
+
+def settingNames(settings: List<&2, T.FlagSetting>) -> List<&2, String>:
+  match settings:
+    case Nil{}: Nil{}
+    case T.FlagSetting{name, _} <> rest: name <> settingNames(rest)
+
+def flagValueNames(runtime: T.ExtensionRuntime()) -> IO(String):
+  do IO<String>:
+    state : T.ExtensionRuntimeState <- R.read(T.ExtensionRuntimeState, runtime)
+    return joined(settingNames(Loader.flagValuesOf(state)))
 
 def discardsRuntimeChangesOfAFailedFactory() -> IO(Unit):
   do IO<Unit>:
     +runtime : T.ExtensionRuntime() <- Loader.createExtensionRuntime()
     working : Outcome() <- Loader.loadExtensionFromFactory(runtime, api => registeringProvider("working-provider", api), "<working>", False{})
     +slot : R.Ref<Maybe<&2, T.ExtensionAPI>> <- R.new(Maybe<&2, T.ExtensionAPI>, None{})
-    failed : Outcome() <- Loader.loadExtensionFromFactory(runtime, api => failingAfterChanges(slot, api), "<failing>", False{})
+    +flagSeen : R.Ref<String> <- R.new(String, "not read")
+    failed : Outcome() <- Loader.loadExtensionFromFactory(runtime, api => failingAfterChanges(slot, flagSeen, api), "<failing>", False{})
     names : String <- pendingText(runtime)
+    values : String <- flagValueNames(runtime)
+    during : String <- R.dispose(String, flagSeen)
     captured : Maybe<&2, T.ExtensionAPI> <- R.dispose(Maybe<&2, T.ExtensionAPI>, slot)
     late : Outcome() <- lateRegistration(captured)
-    same(shownOutcome(failed) ++ " | " ++ names ++ " | " ++ shownOutcome(late), "factory failed | working-provider | Extension \"<failing>\" failed to load and its API is no longer active.", "discards runtime changes and disables the failed API")
+    same(shownOutcome(failed) ++ " | " ++ during ++ " | [" ++ values ++ "] | " ++ names ++ " | " ++ shownOutcome(late), "factory failed | true | [] | working-provider | Extension \"<failing>\" failed to load and its API is no longer active.", "discards runtime changes and disables the failed API")
+
+# user_bash (extensions-runner.test.ts). A native handler result is either
+# operations or a replacing result by construction, so upstream's six
+# "fails closed when a user_bash handler returns ..." cases (malformed
+# objects) have no native counterpart.
+def routingFails(unit: Unit, call: T.HandlerCall<T.UserBashEvent>) -> IO(Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>):
+  IO.pure(Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>, Fail{"Routing failed"})
+
+def exitZero(unit: Unit, input: Bash.BashExecutionInput) -> IO(Result<&2, &2, Bash.OperationError, Maybe<&2, U32>>):
+  IO.pure(Result<&2, &2, Bash.OperationError, Maybe<&2, U32>>, Done{Some{0}})
+
+def overrides(unit: Unit, call: T.HandlerCall<T.UserBashEvent>) -> IO(Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>):
+  match call:
+    case T.HandlerCall{T.UserBashEvent{"operations", _, _}, _}:
+      do IO<Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>>:
+        exec : C.Callback<Bash.BashExecutionInput, Result<&2, &2, Bash.OperationError, Maybe<&2, U32>>> <- C.create(~Unit, ~Bash.BashExecutionInput, ~Result<&2, &2, Bash.OperationError, Maybe<&2, U32>>, ~exitZero, Unit{})
+        return Done{Some{T.UserBashOperations{Bash.BashOperations{exec}}}}
+    case _: IO.pure(Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>, Done{Some{T.UserBashResult{BashExec.BashResult{"handled", Some{0}, False{}, False{}, None{}}}}})
+
+def userBashExtension(+name: String, handler: C.Callback<T.HandlerCall<T.UserBashEvent>, Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>>, api: T.ExtensionAPI) -> IO(Outcome()):
+  do IO<Outcome()>:
+    subscribed : Result<&2, &2, String, Loader.Unsubscribe> <- Loader.on(api, T.OnUserBash{handler})
+    return Result.map(&2, &2, String, Loader.Unsubscribe, Unit, done => Unit{}, subscribed)
+
+def shownUserBash(outcome: Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>) -> String:
+  match outcome:
+    case Fail{error}: "rejects " ++ error
+    case Done{None{}}: "undefined"
+    case Done{Some{T.UserBashOperations{_}}}: "operations"
+    case Done{Some{T.UserBashResult{BashExec.BashResult{output, Some{code}, cancelled, truncated, _}}}}: "result " ++ output ++ " " ++ U32.show(code) ++ " " ++ Bool.show(cancelled) ++ " " ++ Bool.show(truncated)
+    case Done{Some{T.UserBashResult{_}}}: "result without exit code"
+
+def userBashEvent(+command: String) -> T.UserBashEvent: T.UserBashEvent{command, False{}, "/tmp/pi-runner-test"}
+
+def failsClosedWhenAUserBashHandlerThrows() -> IO(Unit):
+  do IO<Unit>:
+    handler : C.Callback<T.HandlerCall<T.UserBashEvent>, Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>> <- C.create(~Unit, ~T.HandlerCall<T.UserBashEvent>, ~Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>, ~routingFails, Unit{})
+    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"throws", api => userBashExtension("throws", handler, api), False{}}])
+    +errors : R.Ref<List<&2, T.ExtensionError>> <- R.new(List<&2, T.ExtensionError>, Nil{})
+    listener : C.Callback<T.ExtensionError, Unit> <- C.create(~R.Ref<List<&2, T.ExtensionError>>, ~T.ExtensionError, ~Unit, ~recordError, errors)
+    subscription : Runner.ErrorSubscription <- Runner.onError(runner, listener)
+    outcome : Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>> <- Runner.emitUserBash(runner, userBashEvent("pwd"))
+    reported : List<&2, T.ExtensionError> <- R.read(List<&2, T.ExtensionError>, errors)
+    same(shownUserBash(outcome) ++ " | " ++ shownExtensionErrors(reported), "rejects Routing failed | <inline:throws> user_bash Routing failed", "fails closed when a user_bash handler throws")
+
+def acceptsValidUserBashOverrides() -> IO(Unit):
+  do IO<Unit>:
+    handler : C.Callback<T.HandlerCall<T.UserBashEvent>, Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>> <- C.create(~Unit, ~T.HandlerCall<T.UserBashEvent>, ~Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>, ~overrides, Unit{})
+    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"valid-results", api => userBashExtension("valid-results", handler, api), False{}}])
+    operations : Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>> <- Runner.emitUserBash(runner, userBashEvent("operations"))
+    result : Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>> <- Runner.emitUserBash(runner, userBashEvent("result"))
+    same(shownUserBash(operations) ++ " | " ++ shownUserBash(result), "operations | result handled 0 False False", "accepts valid user_bash operations and result overrides")
+
+# flags (extensions-runner.test.ts; upstream writes .ts files, and its first
+# and last cases pass options without a type, which natively is required)
+def registeringFlag(+name: String, options: T.FlagOptions, api: T.ExtensionAPI) -> IO(Outcome()): Loader.registerFlag(api, name, options)
+
+def flagDescriptions(flags: List<&2, T.ExtensionFlag>) -> List<&2, String>:
+  match flags:
+    case Nil{}: Nil{}
+    case T.ExtensionFlag{name, _, description, _, _} <> rest: (name ++ "=" ++ Maybe.default(&2, String, description, "-")) <> flagDescriptions(rest)
+
+def shownSettings(settings: List<&2, T.FlagSetting>) -> List<&2, String>:
+  match settings:
+    case Nil{}: Nil{}
+    case T.FlagSetting{name, value} <> rest: (name ++ "=" ++ shownFlag(Done{Some{value}})) <> shownSettings(rest)
+
+def collectsFlagsFromExtensions() -> IO(Unit):
+  do IO<Unit>:
+    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"with-flag", api => registeringFlag("my-flag", T.FlagOptions{Some{"My flag"}, T.BooleanFlag{}, None{}}, api), False{}}])
+    flags : List<&2, T.ExtensionFlag> <- Runner.getFlags(runner)
+    same(joined(flagDescriptions(flags)), "my-flag=My flag", "collects flags from extensions")
+
+def keepsFirstFlagWithTheSameName() -> IO(Unit):
+  do IO<Unit>:
+    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"a-first", api => registeringFlag("shared-flag", T.FlagOptions{Some{"first"}, T.BooleanFlag{}, Some{T.FlagBoolean{True{}}}}, api), False{}}, T.InlineExtension{"b-second", api => registeringFlag("shared-flag", T.FlagOptions{Some{"second"}, T.BooleanFlag{}, Some{T.FlagBoolean{False{}}}}, api), False{}}])
+    flags : List<&2, T.ExtensionFlag> <- Runner.getFlags(runner)
+    values : List<&2, T.FlagSetting> <- Runner.getFlagValues(runner)
+    same(joined(flagDescriptions(flags)) ++ " | " ++ joined(shownSettings(values)), "shared-flag=first | shared-flag=true", "keeps first flag when two extensions register the same name")
+
+def rejectsMistypedFlagDefaults() -> IO(Unit):
+  do IO<Unit>:
+    +runtime : T.ExtensionRuntime() <- Loader.createExtensionRuntime()
+    errors : List<&2, T.LoadError> <- Loader.loadExtensionFactories(runtime, [T.InlineExtension{"bad-flag-default", api => registeringFlag("safe-mode", T.FlagOptions{None{}, T.BooleanFlag{}, Some{T.FlagString{"false"}}}, api), False{}}])
+    values : String <- flagValueNames(runtime)
+    models : Models.ModelRuntime <- emptyModels()
+    +runner : Runner.ExtensionRunner <- Runner.create(runtime, "/tmp/pi-runner-test", models)
+    loadedExtensions : List<&2, T.Extension> <- Runner.extensions(runner)
+    same(Nat.show(List.length(&2, T.Extension, loadedExtensions)) ++ " | " ++ shownErrors(errors) ++ " | [" ++ values ++ "]", "0 | <inline:bad-flag-default>: Invalid default for flag \"safe-mode\": expected boolean, got string | []", "rejects default values that do not match the flag type")
+
+def canSetFlagValues() -> IO(Unit):
+  do IO<Unit>:
+    +runner : Runner.ExtensionRunner <- loaded([T.InlineExtension{"flag", api => registeringFlag("test-flag", T.FlagOptions{Some{"Test flag"}, T.BooleanFlag{}, None{}}, api), False{}}])
+    Runner.setFlagValue(runner, "--test-flag", T.FlagBoolean{True{}})
+    values : List<&2, T.FlagSetting> <- Runner.getFlagValues(runner)
+    same(joined(shownSettings(values)), "--test-flag=true", "can set flag values")
 
 def signalled(gate: Chan(Unit)) -> IO(Unit):
   do IO<Unit>:
@@ -829,4 +951,10 @@ def main() -> IO(Unit):
     rpcCommandsListExtensionCommands()
     autocompleteSkipsBuiltinNames()
     discardsRuntimeChangesOfAFailedFactory()
+    collectsFlagsFromExtensions()
+    keepsFirstFlagWithTheSameName()
+    rejectsMistypedFlagDefaults()
+    canSetFlagValues()
+    failsClosedWhenAUserBashHandlerThrows()
+    acceptsValidUserBashOverrides()
     keepsAConcurrentlyLoadedProvider()

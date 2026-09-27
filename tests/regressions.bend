@@ -1359,7 +1359,7 @@ def namingCase(+kind: String) -> List<&1, Ext.InlineExtension>:
 def extensionShapes(extensions: List<&2, Ext.Extension>) -> List<&2, String>:
   match extensions:
     case Nil{}: Nil{}
-    case Ext.Extension{_, path, _, hidden, _, _, _, _, _, _} <> rest: ("{\"path\":" ++ Decode.quote(path) ++ ",\"hidden\":" ++ Bool.pick(String, hidden, "true", "false") ++ "}") <> extensionShapes(rest)
+    case Ext.Extension{_, path, _, hidden, _, _, _, _, _, _, _} <> rest: ("{\"path\":" ++ Decode.quote(path) ++ ",\"hidden\":" ++ Bool.pick(String, hidden, "true", "false") ++ "}") <> extensionShapes(rest)
 
 def inlineNamingScenario(+kind: String) -> IO(Unit):
   do IO<Unit>:
@@ -1508,6 +1508,7 @@ def noToolNames(unit: Unit, request: Unit) -> IO(List<&2, String>): IO.pure(List
 def noToolInfos(unit: Unit, request: Unit) -> IO(List<&2, Ext.ToolInfo>): IO.pure(List<&2, Ext.ToolInfo>, Nil{})
 def ignoreNames(unit: Unit, names: List<&2, String>) -> IO(Unit): IO.pure(Unit, Unit{})
 def ignoreUnit(unit: Unit, request: Unit) -> IO(Unit): IO.pure(Unit, Unit{})
+def ignoreEntry(unit: Unit, request: Ext.AppendEntry) -> IO(Unit): IO.pure(Unit, Unit{})
 
 def recordingActions() -> IO(Ext.ExtensionActions):
   do IO<Ext.ExtensionActions>:
@@ -1518,7 +1519,8 @@ def recordingActions() -> IO(Ext.ExtensionActions):
     all : C.Callback<Unit, List<&2, Ext.ToolInfo>> <- C.create(~Unit, ~Unit, ~List<&2, Ext.ToolInfo>, ~noToolInfos, Unit{})
     set : C.Callback<List<&2, String>, Unit> <- C.create(~Unit, ~List<&2, String>, ~Unit, ~ignoreNames, Unit{})
     refresh : C.Callback<Unit, Unit> <- C.create(~Unit, ~Unit, ~Unit, ~ignoreUnit, Unit{})
-    return Ext.ExtensionActions{send, user, model, Ext.ToolActions{active, all, set, refresh}}
+    appender : C.Callback<Ext.AppendEntry, Unit> <- C.create(~Unit, ~Ext.AppendEntry, ~Unit, ~ignoreEntry, Unit{})
+    return Ext.ExtensionActions{send, user, model, Ext.ToolActions{active, all, set, refresh}, appender}
 
 def gitMergeScenario(+cwd: String) -> IO(Unit):
   do IO<Unit>:

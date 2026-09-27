@@ -22,6 +22,7 @@ import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/callback.bend as Callback
 import ../packages/runtime/src/schema-value.bend as V
+import ../packages/runtime/src/child-process.bend as Child
 
 # upstream rpc-prompt-response-semantics.test.ts and
 # suite/regressions/5868-rpc-unknown-command-id.test.ts. Both drive runRpcMode
@@ -574,6 +575,65 @@ def sessionChangesCancelled(+cwd: String,+agentDir: String) -> IO(Unit):
     +value : Endpoint <- endpoint(cwd,agentDir,True{},Nil{})
     pair : Rpc.Owner & Rpc.Handle <- cancellingStarted(value)
     cancelling(value,pair)
+# suite/regressions/9068-user-bash-fail-closed.test.ts, RPC part. A bash
+# request writes a marker file; upstream spies on session.executeBash
+# instead. Native handler results are operations or a result by
+# construction, so the "empty result" case has no counterpart. Running the
+# command needs a process primitive, which the Bun lane lacks: there the
+# executing case reports SKIP.
+def routingFailed(unit: Unit,call: ExtT.HandlerCall<ExtT.UserBashEvent>) -> IO(Result<&2,&2,String,Maybe<&2,ExtT.UserBashEventResult>>):
+  IO.pure(Result<&2,&2,String,Maybe<&2,ExtT.UserBashEventResult>>,Fail{"Routing failed"})
+def passedThrough(unit: Unit,call: ExtT.HandlerCall<ExtT.UserBashEvent>) -> IO(Result<&2,&2,String,Maybe<&2,ExtT.UserBashEventResult>>):
+  IO.pure(Result<&2,&2,String,Maybe<&2,ExtT.UserBashEventResult>>,Done{None{}})
+def userBashFactory(throws: Bool,api: ExtT.ExtensionAPI) -> IO(Outcome()):
+  do IO<Outcome()>:
+    handler : ExtT.ExtensionHandler(ExtT.UserBashEvent,ExtT.UserBashEventResult) <- Bool.pick(Unit -> IO(ExtT.ExtensionHandler(ExtT.UserBashEvent,ExtT.UserBashEventResult)),throws,_ => Callback.create(~Unit,~ExtT.HandlerCall<ExtT.UserBashEvent>,~Result<&2,&2,String,Maybe<&2,ExtT.UserBashEventResult>>,~routingFailed,Unit{}),_ => Callback.create(~Unit,~ExtT.HandlerCall<ExtT.UserBashEvent>,~Result<&2,&2,String,Maybe<&2,ExtT.UserBashEventResult>>,~passedThrough,Unit{}))(Unit{})
+    subscribed : Result<&2,&2,String,Loader.Unsubscribe> <- Loader.on(api,ExtT.OnUserBash{handler})
+    return Result.map(&2,&2,String,Loader.Unsubscribe,Unit,done => Unit{},subscribed)
+def userBashLoadout(+cwd: String,throws: Bool) -> IO(Runtime.Loadout):
+  do IO<Runtime.Loadout>:
+    +runtime : ExtT.ExtensionRuntime() <- Loader.createExtensionRuntime()
+    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"user-bash",api => userBashFactory(throws,api),False{}}])
+    models : Models.ModelRuntime <- ModelFixture.create(Nil{})
+    runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
+    return Runtime.Loadout{R.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}}
+def markerWritten(read: Result<&2,&2,FS.Error,List<&2,U32>>) -> Bool:
+  match read:
+    case Done{_}: True{}
+    case Fail{_}: False{}
+def canSpawn(completed: Child.Completed) -> Bool:
+  match completed:
+    case Child.Completed{Done{_},_,_}: True{}
+    case _: False{}
+def thrownReport(+captured: List<&2,String>,written: Bool) -> IO(Unit):
+  report("RPC user_bash failure handling (#9068) > fails the request without executing bash when a handler throws",anyContains(captured,"{\"id\":\"bash-request\",\"type\":\"response\",\"command\":\"bash\",\"success\":false,\"error\":\"Routing failed\"}") && anyContains(captured,"\"type\":\"extension_error\",\"extensionPath\":\"<inline:user-bash>\",\"event\":\"user_bash\",\"error\":\"Routing failed\"") && Bool.not(written))
+def executedReport(+captured: List<&2,String>,written: Bool,spawning: Bool) -> IO(Unit):
+  match spawning:
+    case False{}: IO.print("SKIP RPC user_bash failure handling (#9068) > executes bash normally when a handler returns undefined")
+    case True{}: report("RPC user_bash failure handling (#9068) > executes bash normally when a handler returns undefined",anyContains(captured,"{\"id\":\"bash-request\",\"type\":\"response\",\"command\":\"bash\",\"success\":true") && written && Bool.not(anyContains(captured,"extension_error")))
+def userBashReported(+captured: List<&2,String>,written: Bool,throws: Bool,spawning: Bool) -> IO(Unit):
+  match throws:
+    case True{}: thrownReport(captured,written)
+    case False{}: executedReport(captured,written,spawning)
+def bashRequested(+value: Endpoint,pair: Rpc.Owner & Rpc.Handle,+marker: String,+throws: Bool,spawning: Bool) -> IO(Unit):
+  match pair:
+    case (owner,+handle):
+      do IO<Unit>:
+        send(handle,"{\"id\":\"bash-request\",\"type\":\"bash\",\"command\":" ++ Decode.quote("touch " ++ marker) ++ "}")
+        lines : List<&2,String> <- waitFor(linesOf(value),Contains{"\"id\":\"bash-request\""},500n)
+        +captured : List<&2,String> <- cleanup(value,owner)
+        read : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile(marker)
+        +written : Bool = markerWritten(read)
+        userBashReported(captured,written,throws,spawning)
+def userBashCase(+cwd: String,+agentDir: String,+throws: Bool) -> IO(Unit):
+  do IO<Unit>:
+    environment : List<String> <- IO.environment()
+    probe : Child.Completed <- Child.spawnSync("true",Nil{},cwd,environment,Nil{})
+    loadout : Runtime.Loadout <- userBashLoadout(cwd,throws)
+    +value : Endpoint <- endpointWith(cwd,agentDir,True{},Nil{},loadout)
+    pair : Rpc.Owner & Rpc.Handle <- started(value)
+    bashRequested(value,pair,FS.child(cwd,Bool.pick(String,throws,"bash-ran-throws","bash-ran-undefined")),throws,canSpawn(probe))
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case +cwd <> +agentDir <> Nil{}:
@@ -589,6 +649,8 @@ def run(args: List<String>) -> IO(Unit):
         uiExtras(cwd,agentDir)
         shutdownRequested(cwd,agentDir)
         sessionChangesCancelled(cwd,agentDir)
+        userBashCase(cwd,agentDir,True{})
+        userBashCase(cwd,agentDir,False{})
     case _: IO.die(Unit,1,"usage: rpc-mode <cwd> <agentDir>")
 def main() -> IO(Unit):
   do IO<Unit>:
