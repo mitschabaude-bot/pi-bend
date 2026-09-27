@@ -1334,3 +1334,21 @@ SCENARIOS.append({
               ("title", "named-title", "π - After editing - project"),
               ("key", "C-d"), ("wait", r"shell\$", "exit")],
 })
+
+# Per-model settings use the same editable Input and fresh stepped pages as pi.
+for fullscreen in (False, True):
+    SCENARIOS.append({
+        "name": "settings-model-thinking-search" + ("-fullscreen" if fullscreen else ""),
+        "args": MODEL + (["--tui-mode", "fullscreen"] if fullscreen else []),
+        "steps": [("wait", READY, "startup"), ("settle", 0.5),
+                  ("keys", "/settings"), ("key", "Enter"), ("wait", "Auto-compact", "panel"),
+                  ("keys", "Default thinking level per model"), ("key", "Enter"),
+                  ("settle", 0.2), ("keys", "gpt-5"), ("key", "Home"), ("key", "Right"),
+                  ("key", "Delete"), ("settle", 0.2), ("snap", "edited-search"),
+                  ("key", "C-a"), ("key", "C-k"), ("keys", "gpt-5"),
+                  ("key", "Enter"), ("settle", 0.2), ("snap", "levels"),
+                  ("key", "Escape"), ("settle", 0.2), ("snap", "models-back"),
+                  ("key", "Enter"), ("key", "Down"), ("key", "Down"), ("key", "Enter"),
+                  ("settle", 0.2), ("snap", "models-after-save"),
+                  ("key", "Escape"), ("settle", 0.2), ("snap", "saved")],
+    })

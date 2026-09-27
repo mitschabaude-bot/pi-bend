@@ -797,12 +797,12 @@
     },
     "packages/coding-agent/src/modes/interactive/components/settings-selector.ts": {
       "state": "partial",
-      "note": "Native theme and per-model thinking submenus save and clear settings, with live preview or current-model thinking updates. Hardware-cursor and clear-on-shrink choices persist and update the running terminal; disabling the cursor hides it immediately. Live updates coalesce through the owned render scheduler, preserving independent preferences and avoiding serial-state re-entry from input callbacks. Native one/four-thread PTY tests cover visibility, coalescing, setter return order and terminal restoration; focused settings terminal captures match pi. Fullscreen scrollbar auto/always/hidden choices persist and update the running viewport; source-pinned native one/four terminal checks cover startup settings, all live transitions, immediate scrolling after a change and regular-mode isolation. Other settings controls, some ANSI styling and mouse behavior remain partial.",
+      "note": "Native theme and per-model thinking submenus save and clear settings, with live preview or current-model thinking updates. Hardware-cursor and clear-on-shrink choices persist and update the running terminal; disabling the cursor hides it immediately. Live updates coalesce through the owned render scheduler, preserving independent preferences and avoiding serial-state re-entry from input callbacks. Native one/four-thread PTY tests cover visibility, coalescing, setter return order and terminal restoration; focused settings terminal captures match pi. Fullscreen scrollbar auto/always/hidden choices persist and update the running viewport; source-pinned native one/four terminal checks cover startup settings, all live transitions, immediate scrolling after a change and regular-mode isolation. Other settings controls, some ANSI styling and mouse behavior remain partial. The per-model menu now uses the source reusable SteppedSubmenu: search edits and label/override filtering, current/default/provider ordering, fresh pages on back, completion before loop rebuild, and override save/clear remain explicit native transitions. Shared Input/SelectList/Text frames and callbacks are compared with pinned pi by settings_submenu_check.py and stepped_submenu_check.py; mounted keyboard editing, back/re-entry and save/reset match in regular and fullscreen modes. The marked-override scenario retains the pre-existing extra scrollback row before the header.",
       "source_sha256": "8134b93329c9155bd017df5b6278e2d72b403c8ca1f22c26a81234659ab7e6ea",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/settings-selector.bend": "cbe5ac2499e6cafda135ad61b18d35fd48233c167ca162a03a2159674125f313",
         "packages/coding-agent/src/modes/interactive/components/theme-selector.bend": "302bb406bb7ebf0d7844cba854b14bea8c193be907d1d1a8aef73d51c22f2bbf",
-        "packages/coding-agent/src/modes/interactive/components/model-thinking-selector.bend": "144353eae38e1cf99c57a46135d5f241133d4cf0d7c1f6f86fada90028c1a361"
+        "packages/coding-agent/src/modes/interactive/components/model-thinking-selector.bend": "c48afa1974306954c9df3cb0ddb3cc343fc904f042065448dcedb72249ffe95b"
       },
       "ports": [
         "packages/coding-agent/src/modes/interactive/components/settings-selector.bend",
@@ -1530,6 +1530,14 @@
       "source_sha256": "4facaa61c9c781748dd000eb5d2ec0a75289986d1a6e11ce13971ca5653dc252",
       "port_sha256": {
         "packages/coding-agent/examples/extensions/subagent/index.bend": "36a5d55be9813c8d9cc248be056c2b10b17d8ad6b31d8b78c9899be3d00b67dd"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/settings-submenu.ts": {
+      "state": "partial",
+      "note": "SelectSubmenu and SteppedSubmenu have native immutable state, borrowed callbacks, dynamic context-dependent builders, preselection, searchable Input, SelectList layout and wrapped Text rendering. Pinned comparisons cover 34 single-step and 64 multi-step sequences on native one/four threads, including back navigation with fresh search, callback completion/cancel order, loop context reset and updated options after completion. Invalid step initialization returns typed errors instead of unchecked source indexing. Remaining: inherited SelectSubmenu mouse routing, direct single-step callback lifetime/notification checks, and broader public API review. SteppedSubmenu ignores mouse as the pinned source does.",
+      "source_sha256": "3fcce39ae104343e20a564fb06db52e7553759b0636a4252de5ae6adb03ad5ac",
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/settings-submenu.bend": "d30cd20f227dcc59ac984bc19925837f73dbc2370e2217bf2b6e7bd99fbb2312"
       }
     }
   }

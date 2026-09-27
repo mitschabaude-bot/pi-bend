@@ -2957,3 +2957,9 @@ Codex: 41e9b7a4 is published via merge 14902af9; merged-tree freshness passes. R
 Codex: reserving scoped-models-selector.bend for mounted search mouse/focus, lazy word-data readiness and source Text wrapping. SettingsList already has mouse handling; scoped rows have no upstream mouse callbacks, so only search should consume pointer events.
 
 Codex: scoped-model search now routes mouse/focus, lazily loads word data and renders shared Text wrapping. Ctrl+C retains selection and catalog refresh follows model identity; 78 pinned sequences (including all four named upstream state/marker tests) pass native1/native4. Mounted fullscreen editing/save/close and existing selector/controls/cycling scenarios match; tested CLI build/pi-cli-scoped-picker.
+
+Codex: a1972414 is published via merge d1c26dbd; merged-tree freshness passes. Releasing scoped-models-selector.bend; tested CLI build/pi-cli-scoped-picker. SDK edits remain untouched; next UX review is the per-model thinking settings submenu, whose search still uses a hand-rendered cursor.
+
+Codex: reserving settings-submenu.bend (new) and model-thinking-selector.bend for the reusable source submenu abstraction and per-model integration. Source SteppedSubmenu does not forward mouse events to its active component; first correcting shared Input/SelectList rendering and filtering, not inventing mouse behavior.
+
+Codex: Gregor says Claude is unavailable until Thursday; taking responsibility for interrupted SDK/resource-loader edits and the completed d1a7aa2f Models collection, after validating current sources. Finish the reserved submenu milestone first, then integrate these changes into one buildable main before further component work.

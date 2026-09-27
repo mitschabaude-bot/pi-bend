@@ -1,132 +1,38 @@
 import Base
-import ../../../../../runtime/src/word-segmenter.bend as Words
-import ../../../../../tui/src/components/input.bend as Input
 import ../../../../../ai/src/types.bend as Ai
 import ../../../../../ai/src/utils/thinking-levels.bend as Levels
-import ../../../../../runtime/src/callback.bend as Callback
+import ../../../../../runtime/src/callback.bend as C
+import ../../../../../runtime/src/collation.bend as Collation
 import ../../../../../runtime/src/record.bend as Record
 import ../../../../../runtime/src/ref.bend as Ref
+import ../../../../../runtime/src/word-segmenter.bend as Words
 import ../../../../../tui/src/component.bend as Component
+import ../../../../../tui/src/components/input.bend as Input
+import ../../../../../tui/src/components/select-list.bend as Select
+import ../../../../../tui/src/components/settings-list.bend as SettingsList
 import ../../../../../tui/src/keybindings.bend as Bindings
 import ../../../../../tui/src/keys.bend as Keys
-import ../../../../../tui/src/utils.bend as Utils
-import ../../../../../tui/src/components/settings-list.bend as SettingsList
 import ../../../core/agent-session.bend as Session
 import ../../../core/model-runtime.bend as Models
 import ../../../core/settings-manager.bend as Settings
 import ../theme/theme.bend as Theme
 import ../transcript.bend as Transcript
 import ./model-selector.bend as ModelPicker
+import ./settings-submenu.bend as Submenu
 import ./thinking-selector.bend as ThinkingPicker
 
-# A model choice followed by one of that model's supported levels. Saving a
-# level returns to the model list so more than one override can be configured.
-type Stage is Data:
-  Models{list: ModelPicker.State}
-  Levels{list: ModelPicker.State,model: Models.Model(),options: List<&2,Ai.ModelThinkingLevel>,selected: Nat,override: Maybe<&2,Ai.ModelThinkingLevel>}
-type Modal is Data: Closed{} Open{stage: Stage,done: SettingsList.SubmenuDone}
+# The settings-specific choices use the same reusable stepped submenu as pi.
+type Modal is Data: Closed{} Open{submenu: Submenu.SteppedSubmenu,done: SettingsList.SubmenuDone}
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,transcript: Transcript.Handle,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,words: Ref.Ref<Words.Source>}
-type Factory is Data: Factory{host: Host,component: Component.Component}
+  Host{modal: Ref.Ref<Modal>,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,transcript: Transcript.Handle,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,words: Ref.Ref<Words.Source>,listTheme: Select.SelectListTheme,collator: Ref.Ref<Maybe<&2,Collation.Collator>>}
+type Factory is Data:
+  Factory{host: Host,component: Component.Component,steps: List<&2,Submenu.SteppedSubmenuStep>,complete: C.Callback<Submenu.Context(),Unit>,cancel: C.Callback<Unit,Unit>}
 type Owner is Data:
-  Owner{host: Host,component: Component.Component,renderCallback: Callback.Callback<Nat,List<&2,String>>,inputCallback: Callback.Callback<String,Unit>,invalidateCallback: Callback.Callback<Unit,Unit>,factoryCallback: Callback.Callback<SettingsList.SubmenuRequest,Component.Component>}
+  Owner{host: Host,component: Component.Component,renderCallback: C.Callback<Nat,List<&2,String>>,inputCallback: C.Callback<String,Unit>,invalidateCallback: C.Callback<Unit,Unit>,factoryCallback: C.Callback<SettingsList.SubmenuRequest,Component.Component>,themeOwner: Submenu.ThemeOwner,modelOptions: C.Callback<Submenu.Context(),List<&2,Select.SelectItem>>,levelOptions: C.Callback<Submenu.Context(),List<&2,Select.SelectItem>>,levelTitle: C.Callback<Submenu.Context(),String>,modelPreselect: C.Callback<Submenu.Context(),Maybe<&2,String>>,levelPreselect: C.Callback<Submenu.Context(),Maybe<&2,String>>,complete: C.Callback<Submenu.Context(),Unit>,cancel: C.Callback<Unit,Unit>}
 
-def paint(theme: Theme.Theme,key: String,+text: String) -> String:
-  Result.default(&2,&2,Theme.Error,String,Theme.foreground(theme,key,text),text)
 def summary(settings: Settings.SettingsManager) -> String:
   +count = List.length(&2,Record.Property<Ai.ModelThinkingLevel>,Record.entries(Ai.ModelThinkingLevel,Settings.getAllModelThinkingLevels(settings)))
   Bool.pick(String,Nat.is_eq(count,0n),"none",Nat.show(count) ++ " configured")
-def overrideText(level: Maybe<&2,Ai.ModelThinkingLevel>) -> String:
-  match level:
-    case None{}: ""
-    case Some{value}: Levels.name(value)
-def modelRow(+model: Models.Model(),+selected: Bool,+theme: Theme.Theme,width: Nat,overrides: Record.Record<Ai.ModelThinkingLevel>) -> String:
-  +id = Models.modelId(model)
-  +provider = "[" ++ Models.modelProvider(model) ++ "]"
-  +label = id ++ " " ++ provider
-  +override = overrideText(Record.get(Ai.ModelThinkingLevel,overrides,Models.reference(model)))
-  +padding = Bool.pick(String,String.is_empty(override),"",String.drop(Utils.truncateToWidth(label,30n,"",True{}),String.length(label)) ++ override)
-  +prefix = Bool.pick(String,selected,paint(theme,"accent","→ " ++ id ++ " "),"  " ++ id ++ " ")
-  Utils.truncateToWidth(prefix ++ paint(theme,"muted",provider) ++ padding,width,"",False{})
-def modelRows(items: List<&2,Models.Model()>,skip: Nat,remaining: Nat,+index: Nat,+selected: Nat,+theme: Theme.Theme,+width: Nat,+overrides: Record.Record<Ai.ModelThinkingLevel>) -> List<&2,String>:
-  match items skip remaining:
-    case _ _ Zero{}: Nil{}
-    case Nil{} _ _: Nil{}
-    case _ <> rest Succ{skip} _: modelRows(rest,skip,remaining,index + 1n,selected,theme,width,overrides)
-    case model <> rest Zero{} Succ{remaining}: modelRow(model,Nat.is_eq(index,selected),theme,width,overrides) <> modelRows(rest,0n,remaining,index + 1n,selected,theme,width,overrides)
-def renderModels(list: ModelPicker.State,+theme: Theme.Theme,width: Nat,settings: Settings.SettingsManager) -> List<&2,String>:
-  match list:
-    case ModelPicker.State{_,_,+visible,+index,query,_,_,_,_,_}:
-      +count = List.length(&2,Models.Model(),visible)
-      +start = Nat.min(index - 5n,count - Nat.min(count,10n))
-      +body = Bool.pick(List<&2,String>,Nat.is_eq(count,0n),"  No matching models" <> Nil{},modelRows(visible,start,10n,0n,index,theme,width,Settings.getAllModelThinkingLevels(settings)))
-      paint(theme,"accent",Theme.bold("Per-Model Thinking Level")) <> "" <>
-      paint(theme,"muted","Step 1/2 · Select a model to configure") <> "" <>
-      ("> " ++ Input.getValue(query) ++ "\u{1b}[7m \u{1b}[0m") <> "" <>
-      List.append(&2,String,body,paint(theme,"muted","  (" ++ Nat.show(Bool.pick(Nat,Nat.is_eq(count,0n),0n,index + 1n)) ++ "/" ++ Nat.show(count) ++ ")") <> "" <>
-        paint(theme,"dim","  Type to filter · Enter to select · Esc to go back") <> Nil{})
-def sameLevel(left: Ai.ModelThinkingLevel,right: Ai.ModelThinkingLevel) -> Bool:
-  U32.is_eq(Levels.rank(left),Levels.rank(right))
-def levelIndex(options: List<&2,Ai.ModelThinkingLevel>,current: Maybe<&2,Ai.ModelThinkingLevel>,+index: Nat) -> Nat:
-  match options current:
-    case Nil{} _: 0n
-    case _ None{}: 0n
-    case value <> rest Some{+level}: Bool.pick(Unit -> Nat,sameLevel(value,level),_ => index,_ => levelIndex(rest,Some{level},index + 1n))(Unit{})
-def sameOverride(level: Ai.ModelThinkingLevel,current: Maybe<&2,Ai.ModelThinkingLevel>) -> Bool:
-  match current:
-    case None{}: False{}
-    case Some{active}: sameLevel(level,active)
-def levelRow(+level: Ai.ModelThinkingLevel,+override: Maybe<&2,Ai.ModelThinkingLevel>,+selected: Bool,+theme: Theme.Theme,width: Nat,column: Nat) -> String:
-  +current = Bool.pick(Bool,Maybe.is_some(&2,Ai.ModelThinkingLevel,override),sameOverride(level,override),False{})
-  +name = Levels.name(level)
-  +label = Bool.pick(String,current,"✓ ","  ") ++ name
-  +detail = String.drop(Utils.truncateToWidth(name,column,"",True{}),String.length(name)) ++ ThinkingPicker.description(level)
-  +prefix = Bool.pick(String,selected,"→ ","  ") ++ label
-  Utils.truncateToWidth(Bool.pick(String,selected,paint(theme,"accent",prefix ++ detail),prefix ++ paint(theme,"muted",detail)),width,"",False{})
-def levelRows(options: List<&2,Ai.ModelThinkingLevel>,+override: Maybe<&2,Ai.ModelThinkingLevel>,+index: Nat,+selected: Nat,+theme: Theme.Theme,+width: Nat,+column: Nat) -> List<&2,String>:
-  match options:
-    case Nil{}: Nil{}
-    case level <> rest: levelRow(level,override,Nat.is_eq(index,selected),theme,width,column) <> levelRows(rest,override,index + 1n,selected,theme,width,column)
-def clearRow(+selected: Bool,+theme: Theme.Theme,settings: Settings.SettingsManager) -> String:
-  +prefix = Bool.pick(String,selected,"→ ","  ") ++ "  (clear override)"
-  +detail = "  Revert to global default (" ++ Levels.name(Maybe.default(&2,Ai.ModelThinkingLevel,Settings.getDefaultThinkingLevel(settings),Ai.Thinking{Ai.Medium{}})) ++ ")"
-  Bool.pick(String,selected,paint(theme,"accent",prefix ++ detail),prefix ++ paint(theme,"muted",detail))
-def clearRows(override: Maybe<&2,Ai.ModelThinkingLevel>,selected: Nat,count: Nat,theme: Theme.Theme,settings: Settings.SettingsManager) -> List<&2,String>:
-  match override:
-    case None{}: Nil{}
-    case Some{_}: clearRow(Nat.is_eq(selected,count),theme,settings) <> Nil{}
-def renderLevels(+model: Models.Model(),+options: List<&2,Ai.ModelThinkingLevel>,+selected: Nat,+override: Maybe<&2,Ai.ModelThinkingLevel>,+theme: Theme.Theme,width: Nat,settings: Settings.SettingsManager) -> List<&2,String>:
-  +title = "Thinking Level for " ++ Models.modelId(model) ++ " [" ++ Models.modelProvider(model) ++ "]"
-  +column = Bool.pick(Nat,Maybe.is_some(&2,Ai.ModelThinkingLevel,override),18n,10n)
-  +rows = List.append(&2,String,levelRows(options,override,0n,selected,theme,width,column),clearRows(override,selected,List.length(&2,Ai.ModelThinkingLevel,options),theme,settings))
-  paint(theme,"accent",Theme.bold(title)) <> "" <>
-  paint(theme,"muted","Step 2/2 · Select default thinking level for this model") <> "" <>
-  List.append(&2,String,rows,"" <> paint(theme,"dim","  Enter to select · Esc to go back") <> Nil{})
-def renderStage(stage: Stage,theme: Theme.Theme,width: Nat,settings: Settings.SettingsManager) -> List<&2,String>:
-  match stage:
-    case Models{list}: renderModels(list,theme,width,settings)
-    case Levels{_,model,options,index,override}: renderLevels(model,options,index,override,theme,width,settings)
-def renderCurrent(current: Modal,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,width: Nat) -> IO(List<&2,String>):
-  match current:
-    case Closed{}: IO.pure(List<&2,String>,Nil{})
-    case Open{stage,_}:
-      do IO<List<&2,String>>:
-        selected : Theme.Theme <- Ref.read(Theme.Theme,theme)
-        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
-        settings : Settings.SettingsManager <- Session.getSettings(live)
-        return renderStage(stage,selected,width,settings)
-def draw(host: Host,width: Nat) -> IO(List<&2,String>):
-  match host:
-    case Host{modal,theme,session,_,_,_,_,_}:
-      do IO<List<&2,String>>:
-        current : Modal <- Ref.read(Modal,modal)
-        renderCurrent(current,theme,session,width)
-
-def moveIndex(+index: Nat,+count: Nat,up: Bool) -> Nat:
-  Bool.pick(Nat,Nat.is_eq(count,0n),0n,
-    Bool.pick(Nat,up,Bool.pick(Nat,Nat.is_eq(index,0n),count - 1n,index - 1n),Bool.pick(Nat,Nat.is_eq(index,count - 1n),0n,index + 1n)))
-def selectedLevel(options: List<&2,Ai.ModelThinkingLevel>,index: Nat) -> Maybe<&2,Ai.ModelThinkingLevel>:
-  List.get(&2,Ai.ModelThinkingLevel,options,index)
 def currentModel(model: Models.Model(),current: Maybe<&2,Models.Model()>) -> Bool:
   match current:
     case None{}: False{}
@@ -157,103 +63,211 @@ def changeLevel(+model: Models.Model(),+choice: Maybe<&2,Ai.ModelThinkingLevel>,
 def supported(model: Models.Model()) -> List<&2,Ai.ModelThinkingLevel>:
   match model:
     case Ai.Model{_,_,_,_,_,reasoning,mapping,_,_,_,_,_,_,_,_,_}: Levels.available(reasoning,mapping)
-def saved(result: Result<&2,&2,String,Unit>,modal: Ref.Ref<Modal>,list: ModelPicker.State,done: SettingsList.SubmenuDone,transcript: Transcript.Handle) -> IO(Unit):
+def defaultReference(provider: Maybe<&2,String>,id: Maybe<&2,String>) -> Maybe<&2,String>:
+  match provider id: case Some{provider} Some{id}: Some{provider ++ "/" ++ id} case _ _: None{}
+def defaultModel(+settings: Settings.SettingsManager) -> Maybe<&2,String>:
+  defaultReference(Settings.getDefaultProvider(settings),Settings.getDefaultModel(settings))
+def findModel(models: List<&2,Models.Model()>,+key: String) -> Maybe<&2,Models.Model()>:
+  match models:
+    case Nil{}: None{}
+    case +model <> rest: Bool.pick(Unit -> Maybe<&2,Models.Model()>,String.eq(Models.reference(model),key),_ => Some{model},_ => findModel(rest,key))(Unit{})
+def contextModel(context: Submenu.Context(),models: List<&2,Models.Model()>) -> Maybe<&2,Models.Model()>:
+  Maybe.bind(&2,String,Models.Model(),Record.get(String,context,"model"),key => findModel(models,key))
+def modelItems(models: List<&2,Models.Model()>,+settings: Settings.SettingsManager,+theme: Theme.Theme) -> List<&2,Select.SelectItem>:
+  match models:
+    case Nil{}: Nil{}
+    case +model <> rest:
+      Select.SelectItem{Models.reference(model),Models.modelId(model) ++ " " ++ Submenu.paint(theme,"muted","[" ++ Models.modelProvider(model) ++ "]"),Maybe.map(&2,Ai.ModelThinkingLevel,String,level => Levels.name(level),Settings.getModelThinkingLevel(Models.modelProvider(model),Models.modelId(model),settings))} <> modelItems(rest,settings,theme)
+def sortedItems(result: Result<&2,&2,Collation.LoadError,Collation.Collator>,cache: Ref.Ref<Maybe<&2,Collation.Collator>>,models: List<&2,Models.Model()>,current: Maybe<&2,Models.Model()>,+settings: Settings.SettingsManager,theme: Theme.Theme) -> IO(List<&2,Select.SelectItem>):
   match result:
-    case Done{_}: Ref.write(Modal,modal,Open{Models{list},done})
-    case Fail{message}: Transcript.showError(transcript,message)
-def chooseLevel(host: Host,list: ModelPicker.State,model: Models.Model(),options: List<&2,Ai.ModelThinkingLevel>,index: Nat,done: SettingsList.SubmenuDone) -> IO(Unit):
+    case Fail{_}: IO.die(List<&2,Select.SelectItem>,1,"cannot load model ordering data")
+    case Done{+collator}:
+      do IO<List<&2,Select.SelectItem>>:
+        Ref.write(Maybe<&2,Collation.Collator>,cache,Some{collator})
+        +items : List<&2,Select.SelectItem> = modelItems(ModelPicker.sortedModels(models,collator,current,defaultModel(settings)),settings,theme)
+        return Bool.pick(List<&2,Select.SelectItem>,List.is_empty(&2,Select.SelectItem,items),[Select.SelectItem{"__none__","No models available",Some{"Log in to a provider or configure an API key first"}}],items)
+def modelOptions(host: Host,_: Submenu.Context()) -> IO(List<&2,Select.SelectItem>):
   match host:
-    case Host{modal,_,session,_,transcript,_,_,_}:
+    case Host{_,theme,+session,models,_,_,_,words,_,+collator}:
+      do IO<List<&2,Select.SelectItem>>:
+        +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        settings : Settings.SettingsManager <- Session.getSettings(live)
+        state : Session.AgentState() <- Session.state(live)
+        colors : Theme.Theme <- Ref.read(Theme.Theme,theme)
+        available : List<&2,Models.Model()> <- Ref.read(List<&2,Models.Model()>,models)
+        stored : Maybe<&2,Collation.Collator> <- Ref.read(Maybe<&2,Collation.Collator>,collator)
+        ready : Result<&2,&2,Collation.LoadError,Collation.Collator> <- ModelPicker.cachedCollator(stored,words)
+        sortedItems(ready,collator,available,Session.stateModel(state),settings,colors)
+def levelItems(options: List<&2,Ai.ModelThinkingLevel>,+active: Maybe<&2,Ai.ModelThinkingLevel>) -> List<&2,Select.SelectItem>:
+  match options:
+    case Nil{}: Nil{}
+    case +level <> rest:
+      +name = Levels.name(level)
+      Select.SelectItem{name,Bool.pick(String,Maybe.is_some(&2,Ai.ModelThinkingLevel,active) && String.eq(name,Maybe.default(&2,String,Maybe.map(&2,Ai.ModelThinkingLevel,String,item => Levels.name(item),active),"")),"✓ ","  ") ++ name,Some{ThinkingPicker.description(level)}} <> levelItems(rest,active)
+def optionsFor(found: Maybe<&2,Models.Model()>,+settings: Settings.SettingsManager) -> List<&2,Select.SelectItem>:
+  match found:
+    case None{}: Nil{}
+    case Some{+model}:
+      +override = Settings.getModelThinkingLevel(Models.modelProvider(model),Models.modelId(model),settings)
+      List.append(&2,Select.SelectItem,levelItems(supported(model),override),Bool.pick(List<&2,Select.SelectItem>,Maybe.is_some(&2,Ai.ModelThinkingLevel,override),[Select.SelectItem{"__clear__","  (clear override)",Some{"Revert to global default (" ++ Levels.name(effectiveLevel(None{},settings)) ++ ")"}}],Nil{}))
+def levelOptions(host: Host,context: Submenu.Context()) -> IO(List<&2,Select.SelectItem>):
+  match host:
+    case Host{_,_,session,models,_,_,_,_,_,_}:
+      do IO<List<&2,Select.SelectItem>>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        settings : Settings.SettingsManager <- Session.getSettings(live)
+        available : List<&2,Models.Model()> <- Ref.read(List<&2,Models.Model()>,models)
+        return optionsFor(contextModel(context,available),settings)
+def modelLabel(+model: Models.Model()) -> String: Models.modelId(model) ++ " [" ++ Models.modelProvider(model) ++ "]"
+def levelTitle(host: Host,context: Submenu.Context()) -> IO(String):
+  match host:
+    case Host{_,_,_,models,_,_,_,_,_,_}:
+      do IO<String>:
+        +context : Submenu.Context() = context
+        available : List<&2,Models.Model()> <- Ref.read(List<&2,Models.Model()>,models)
+        return "Thinking Level for " ++ Maybe.default(&2,String,Maybe.map(&2,Models.Model(),String,model => modelLabel(model),contextModel(context,available)),Maybe.default(&2,String,Record.get(String,context,"model"),""))
+def preferred(current: Maybe<&2,String>,fallback: Maybe<&2,String>) -> Maybe<&2,String>:
+  match current: case Some{value}: Some{value} case None{}: fallback
+def modelPreselect(host: Host,_: Submenu.Context()) -> IO(Maybe<&2,String>):
+  match host:
+    case Host{_,_,session,_,_,_,_,_,_,_}:
+      do IO<Maybe<&2,String>>:
+        ++live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        settings : Settings.SettingsManager <- Session.getSettings(live)
+        state : Session.AgentState() <- Session.state(live)
+        return preferred(Maybe.map(&2,Models.Model(),String,model => Models.reference(model),Session.stateModel(state)),defaultModel(settings))
+def levelPreselect(host: Host,context: Submenu.Context()) -> IO(Maybe<&2,String>):
+  match host:
+    case Host{_,_,session,_,_,_,_,_,_,_}:
+      do IO<Maybe<&2,String>>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        settings : Settings.SettingsManager <- Session.getSettings(live)
+        return Maybe.bind(&2,String,String,Record.get(String,context,"model"),key => Maybe.map(&2,Ai.ModelThinkingLevel,String,level => Levels.name(level),Record.get(Ai.ModelThinkingLevel,Settings.getAllModelThinkingLevels(settings),key)))
+def report(result: Result<&2,&2,String,Unit>,transcript: Transcript.Handle) -> IO(Unit):
+  match result: case Done{_}: IO.pure(Unit,Unit{}) case Fail{message}: Transcript.showError(transcript,message)
+def persistChoice(found: Maybe<&2,Models.Model()>,choice: Maybe<&2,String>,session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle) -> IO(Unit):
+  match found choice:
+    case Some{model} Some{value}:
       do IO<Unit>:
         current : Session.AgentSession <- Ref.read(Session.AgentSession,session)
-        result : Result<&2,&2,String,Unit> <- changeLevel(model,selectedLevel(options,index),current)
-        saved(result,modal,list,done,transcript)
-def showLevel(host: Host,list: ModelPicker.State,+model: Models.Model(),done: SettingsList.SubmenuDone) -> IO(Unit):
+        result : Result<&2,&2,String,Unit> <- changeLevel(model,Levels.fromName(value),current)
+        report(result,transcript)
+    case _ _: IO.pure(Unit,Unit{})
+def completed(host: Host,context: Submenu.Context()) -> IO(Unit):
   match host:
-    case Host{modal,_,session,_,_,_,_,_}:
+    case Host{_,_,session,models,transcript,_,_,_,_,_}:
       do IO<Unit>:
-        current : Session.AgentSession <- Ref.read(Session.AgentSession,session)
-        settings : Settings.SettingsManager <- Session.getSettings(current)
-        +options : List<&2,Ai.ModelThinkingLevel> <- IO.pure(List<&2,Ai.ModelThinkingLevel>,supported(model))
-        +override : Maybe<&2,Ai.ModelThinkingLevel> <- IO.pure(Maybe<&2,Ai.ModelThinkingLevel>,Settings.getModelThinkingLevel(Models.modelProvider(model),Models.modelId(model),settings))
-        Ref.write(Modal,modal,Open{Levels{list,model,options,levelIndex(options,override,0n),override},done})
-def finish(host: Host,done: SettingsList.SubmenuDone) -> IO(Unit):
-  match host:
-    case Host{modal,_,session,_,_,_,_,_}:
-      do IO<Unit>:
-        current : Session.AgentSession <- Ref.read(Session.AgentSession,session)
-        settings : Settings.SettingsManager <- Session.getSettings(current)
-        Ref.write(Modal,modal,Closed{})
-        SettingsList.complete(done,Some{summary(settings)},None{})
-def writeStage(host: Host,stage: Stage,done: SettingsList.SubmenuDone) -> IO(Unit):
-  match host: case Host{modal,_,_,_,_,_,_,_}: Ref.write(Modal,modal,Open{stage,done})
-def modelAction(host: Host,done: SettingsList.SubmenuDone,pair: ModelPicker.State & ModelPicker.Action) -> IO(Unit):
-  match pair:
-    case (list,ModelPicker.Continue{}): writeStage(host,Models{list},done)
-    case (list,ModelPicker.Cancel{}): finish(host,done)
-    case (list,ModelPicker.Chosen{model,_}): showLevel(host,list,model,done)
-def levelInput(+host: Host,+list: ModelPicker.State,+model: Models.Model(),+options: List<&2,Ai.ModelThinkingLevel>,+index: Nat,+override: Maybe<&2,Ai.ModelThinkingLevel>,+done: SettingsList.SubmenuDone,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> IO(Unit):
-  +count = List.length(&2,Ai.ModelThinkingLevel,options) + Bool.pick(Nat,Maybe.is_some(&2,Ai.ModelThinkingLevel,override),1n,0n)
-  Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.up"),_ => writeStage(host,Levels{list,model,options,moveIndex(index,count,True{}),override},done),
-    _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.down"),_ => writeStage(host,Levels{list,model,options,moveIndex(index,count,False{}),override},done),
-      _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.confirm"),_ => chooseLevel(host,list,model,options,index,done),
-        _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => writeStage(host,Models{list},done),_ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
-def modelInput(+host: Host,+list: ModelPicker.State,done: SettingsList.SubmenuDone,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> IO(Unit):
-  match host:
-    case Host{_,_,_,_,_,_,_,+words}:
-      do IO<Unit>:
-        stored : Words.Source <- Ref.read(Words.Source,words)
-        +source : Words.Source <- ModelPicker.wordsFor(ModelPicker.needsWords(Input.command(Input.bindings(),bindings,keyboard,data)),stored,ModelPicker.queryOf(list))
-        Ref.write(Words.Source,words,source)
-        pair : ModelPicker.State & ModelPicker.Action <- ModelPicker.input(list,source,bindings,keyboard,data)
-        modelAction(host,done,pair)
-def inputStage(host: Host,stage: Stage,done: SettingsList.SubmenuDone,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,data: String) -> IO(Unit):
-  match stage:
-    case Models{list}: modelInput(host,list,done,bindings,keyboard,data)
-    case Levels{list,model,options,index,override}: levelInput(host,list,model,options,index,override,done,bindings,keyboard,data)
-def inputCurrent(current: Modal,host: Host,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,data: String) -> IO(Unit):
+        +context : Submenu.Context() = context
+        available : List<&2,Models.Model()> <- Ref.read(List<&2,Models.Model()>,models)
+        persistChoice(contextModel(context,available),Record.get(String,context,"level"),session,transcript)
+def cancelledCurrent(current: Modal,modal: Ref.Ref<Modal>,session: Ref.Ref<Session.AgentSession>) -> IO(Unit):
   match current:
     case Closed{}: IO.pure(Unit,Unit{})
-    case Open{stage,done}: inputStage(host,stage,done,bindings,keyboard,data)
-def receive(host: Host,data: String) -> IO(Unit):
+    case Open{_,done}:
+      do IO<Unit>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        settings : Settings.SettingsManager <- Session.getSettings(live)
+        Ref.write(Modal,modal,Closed{})
+        SettingsList.complete(done,Some{summary(settings)},None{})
+def cancelled(host: Host,_: Unit) -> IO(Unit):
   match host:
-    case Host{+modal,theme,session,models,transcript,+bindings,+keyboard,words}:
+    case Host{+modal,_,session,_,_,_,_,_,_,_}:
       do IO<Unit>:
         current : Modal <- Ref.read(Modal,modal)
-        inputCurrent(current,Host{modal,theme,session,models,transcript,bindings,keyboard,words},bindings,keyboard,data)
-def invalidated(_: Host,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
-def opened(host: Host,request: SettingsList.SubmenuRequest) -> IO(Unit):
-  match host request:
-    case Host{modal,_,session,models,_,_,_,_} SettingsList.SubmenuRequest{_,done}:
+        cancelledCurrent(current,modal,session)
+def stored(current: Modal,next: Submenu.SteppedSubmenu) -> Modal & Unit:
+  match current: case Closed{}: (Closed{},Unit{}) case Open{_,done}: (Open{next,done},Unit{})
+def drawn(pair: Submenu.SteppedSubmenu & List<&2,String>,modal: Ref.Ref<Modal>) -> IO(List<&2,String>):
+  match pair:
+    case (next,lines):
+      do IO<List<&2,String>>:
+        Ref.modify(Modal,Unit,modal,current => stored(current,next))
+        return lines
+def drawCurrent(current: Modal,modal: Ref.Ref<Modal>,theme: Ref.Ref<Theme.Theme>,width: Nat) -> IO(List<&2,String>):
+  match current:
+    case Closed{}: IO.pure(List<&2,String>,Nil{})
+    case Open{submenu,_}:
+      do IO<List<&2,String>>:
+        colors : Theme.Theme <- Ref.read(Theme.Theme,theme)
+        pair : Submenu.SteppedSubmenu & List<&2,String> <- Submenu.renderStepped(submenu,colors,width)
+        drawn(pair,modal)
+def draw(host: Host,width: Nat) -> IO(List<&2,String>):
+  match host:
+    case Host{+modal,theme,_,_,_,_,_,_,_,_}:
+      do IO<List<&2,String>>:
+        current : Modal <- Ref.read(Modal,modal)
+        drawCurrent(current,modal,theme,width)
+def inputCurrent(current: Modal,modal: Ref.Ref<Modal>,+words: Ref.Ref<Words.Source>,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> IO(Unit):
+  match current:
+    case Closed{}: IO.pure(Unit,Unit{})
+    case Open{+submenu,_}:
       do IO<Unit>:
-        current : Session.AgentSession <- Ref.read(Session.AgentSession,session)
-        agent : Session.AgentState() <- Session.state(current)
-        available : List<&2,Models.Model()> <- Ref.read(List<&2,Models.Model()>,models)
-        Ref.write(Modal,modal,Open{Models{ModelPicker.create(available,Session.stateModel(agent),"",20n)},done})
-def factory(context: Factory,request: SettingsList.SubmenuRequest) -> IO(Component.Component):
-  match context:
-    case Factory{host,component}:
+        previous : Words.Source <- Ref.read(Words.Source,words)
+        +source : Words.Source <- ModelPicker.wordsFor(ModelPicker.needsWords(Input.command(Input.bindings(),bindings,keyboard,data)),previous,Submenu.query(Submenu.active(submenu)))
+        Ref.write(Words.Source,words,source)
+        next : Submenu.SteppedSubmenu <- Submenu.handleSteppedInput(submenu,source,bindings,keyboard,data)
+        Ref.modify(Modal,Unit,modal,current => stored(current,next))
+def receive(host: Host,data: String) -> IO(Unit):
+  match host:
+    case Host{+modal,_,_,_,_,bindings,keyboard,words,_,_}:
+      do IO<Unit>:
+        current : Modal <- Ref.read(Modal,modal)
+        inputCurrent(current,modal,words,bindings,keyboard,data)
+def invalidated(host: Host,_: Unit) -> IO(Unit):
+  match host: case Host{modal,_,_,_,_,_,_,_,_,_}: Ref.modify(Modal,Unit,modal,current => (current,Unit{}))
+def begun(result: Result<&2,&2,Submenu.BuildError,Submenu.SteppedSubmenu>,modal: Ref.Ref<Modal>,done: SettingsList.SubmenuDone) -> IO(Unit):
+  match result:
+    case Done{submenu}: Ref.write(Modal,modal,Open{submenu,done})
+    case Fail{_}: IO.die(Unit,1,"invalid per-model thinking submenu")
+def factory(environment: Factory,request: SettingsList.SubmenuRequest) -> IO(Component.Component):
+  match environment request:
+    case Factory{Host{modal,_,_,_,_,_,_,_,listTheme,_},component,steps,complete,cancel} SettingsList.SubmenuRequest{_,done}:
       do IO<Component.Component>:
-        opened(host,request)
+        created : Result<&2,&2,Submenu.BuildError,Submenu.SteppedSubmenu> <- Submenu.stepped(steps,listTheme,complete,cancel,Submenu.SteppedSubmenuOptions{0n,Record.new(String),True{}})
+        begun(created,modal,done)
         return component
-def createHost(parent: Component.Component,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,transcript: Transcript.Handle,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,words: Ref.Ref<Words.Source>) -> IO(Owner):
+def configured(pair: Submenu.ThemeOwner & Select.SelectListTheme,parent: Component.Component,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,transcript: Transcript.Handle,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,words: Ref.Ref<Words.Source>) -> IO(Owner):
+  match pair:
+    case (themeOwner,listTheme):
+      do IO<Owner>:
+        modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
+        collator : Ref.Ref<Maybe<&2,Collation.Collator>> <- Ref.new(Maybe<&2,Collation.Collator>,None{})
+        +host : Host = Host{modal,theme,session,models,transcript,bindings,keyboard,words,listTheme,collator}
+        +renderCallback : C.Callback<Nat,List<&2,String>> <- C.create(~Host,~Nat,~List<&2,String>,~draw,host)
+        +inputCallback : C.Callback<String,Unit> <- C.create(~Host,~String,~Unit,~receive,host)
+        +invalidateCallback : C.Callback<Unit,Unit> <- C.create(~Host,~Unit,~Unit,~invalidated,host)
+        +modelOptions : C.Callback<Submenu.Context(),List<&2,Select.SelectItem>> <- C.create(~Host,~Submenu.Context(),~List<&2,Select.SelectItem>,~modelOptions,host)
+        +levelOptions : C.Callback<Submenu.Context(),List<&2,Select.SelectItem>> <- C.create(~Host,~Submenu.Context(),~List<&2,Select.SelectItem>,~levelOptions,host)
+        +levelTitle : C.Callback<Submenu.Context(),String> <- C.create(~Host,~Submenu.Context(),~String,~levelTitle,host)
+        +modelPreselect : C.Callback<Submenu.Context(),Maybe<&2,String>> <- C.create(~Host,~Submenu.Context(),~Maybe<&2,String>,~modelPreselect,host)
+        +levelPreselect : C.Callback<Submenu.Context(),Maybe<&2,String>> <- C.create(~Host,~Submenu.Context(),~Maybe<&2,String>,~levelPreselect,host)
+        +complete : C.Callback<Submenu.Context(),Unit> <- C.create(~Host,~Submenu.Context(),~Unit,~completed,host)
+        +cancel : C.Callback<Unit,Unit> <- C.create(~Host,~Unit,~Unit,~cancelled,host)
+        +component : Component.Component = Component.Component{Component.id(parent),renderCallback,Some{inputCallback},None{},invalidateCallback,None{},False{}}
+        steps : List<&2,Submenu.SteppedSubmenuStep> = [Submenu.SteppedSubmenuStep{"model",Submenu.Literal{"Per-Model Thinking Level"},Submenu.Literal{"Select a model to configure"},modelOptions,Some{modelPreselect},True{},Some{Select.SelectListLayoutOptions{Some{12n},Some{46n},None{}}}},Submenu.SteppedSubmenuStep{"level",Submenu.Dynamic{levelTitle},Submenu.Literal{"Select default thinking level for this model"},levelOptions,Some{levelPreselect},False{},None{}}]
+        +factoryCallback : C.Callback<SettingsList.SubmenuRequest,Component.Component> <- C.create(~Factory,~SettingsList.SubmenuRequest,~Component.Component,~factory,Factory{host,component,steps,complete,cancel})
+        return Owner{host,component,renderCallback,inputCallback,invalidateCallback,factoryCallback,themeOwner,modelOptions,levelOptions,levelTitle,modelPreselect,levelPreselect,complete,cancel}
+def createHost(parent: Component.Component,+theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,transcript: Transcript.Handle,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,words: Ref.Ref<Words.Source>) -> IO(Owner):
   do IO<Owner>:
-    modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
-    +host : Host <- IO.pure(Host,Host{modal,theme,session,models,transcript,bindings,keyboard,words})
-    +renderCallback : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~draw,host)
-    +inputCallback : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receive,host)
-    +invalidateCallback : Callback.Callback<Unit,Unit> <- Callback.create(~Host,~Unit,~Unit,~invalidated,host)
-    +component : Component.Component <- IO.pure(Component.Component,Component.Component{Component.id(parent),renderCallback,Some{inputCallback},None{},invalidateCallback,None{},False{}})
-    +factoryCallback : Callback.Callback<SettingsList.SubmenuRequest,Component.Component> <- Callback.create(~Factory,~SettingsList.SubmenuRequest,~Component.Component,~factory,Factory{host,component})
-    return Owner{host,component,renderCallback,inputCallback,invalidateCallback,factoryCallback}
-def factoryOf(owner: Owner) -> Callback.Callback<SettingsList.SubmenuRequest,Component.Component>:
-  match owner: case Owner{_,_,_,_,_,factoryCallback}: factoryCallback
+    owner : Submenu.ThemeOwner <- Submenu.createTheme(theme)
+    configured(Submenu.theme(owner),parent,theme,session,models,transcript,bindings,keyboard,words)
+def factoryOf(owner: Owner) -> C.Callback<SettingsList.SubmenuRequest,Component.Component>:
+  match owner: case Owner{_,_,_,_,_,factory,_,_,_,_,_,_,_,_}: factory
 def disposeHost(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{Host{modal,_,_,_,_,_,_,_},_,renderCallback,inputCallback,invalidateCallback,factoryCallback}:
+    case Owner{Host{modal,_,_,_,_,_,_,_,_,collator},_,render,input,invalidate,factory,themeOwner,modelOptions,levelOptions,levelTitle,modelPreselect,levelPreselect,complete,cancel}:
       do IO<Unit>:
-        old : Modal <- Ref.dispose(Modal,modal)
-        Callback.dispose(Nat,List<&2,String>,renderCallback)
-        Callback.dispose(String,Unit,inputCallback)
-        Callback.dispose(Unit,Unit,invalidateCallback)
-        Callback.dispose(SettingsList.SubmenuRequest,Component.Component,factoryCallback)
+        discarded : Modal <- Ref.dispose(Modal,modal)
+        unused : Maybe<&2,Collation.Collator> <- Ref.dispose(Maybe<&2,Collation.Collator>,collator)
+        C.dispose(Nat,List<&2,String>,render)
+        C.dispose(String,Unit,input)
+        C.dispose(Unit,Unit,invalidate)
+        C.dispose(SettingsList.SubmenuRequest,Component.Component,factory)
+        C.dispose(Submenu.Context(),List<&2,Select.SelectItem>,modelOptions)
+        C.dispose(Submenu.Context(),List<&2,Select.SelectItem>,levelOptions)
+        C.dispose(Submenu.Context(),String,levelTitle)
+        C.dispose(Submenu.Context(),Maybe<&2,String>,modelPreselect)
+        C.dispose(Submenu.Context(),Maybe<&2,String>,levelPreselect)
+        C.dispose(Submenu.Context(),Unit,complete)
+        C.dispose(Unit,Unit,cancel)
+        Submenu.disposeTheme(themeOwner)
