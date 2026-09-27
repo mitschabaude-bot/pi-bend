@@ -9,6 +9,7 @@ import ../../ai/src/api/openai-completions.bend as Chat
 import ../../ai/src/api/mistral-conversations.bend as Mistral
 import ../../ai/src/api/bedrock-converse-stream.bend as Bedrock
 import ../../ai/src/api/google-vertex.bend as Vertex
+import ../../ai/src/api/google-shared.bend as Shared
 import ../../ai/src/utils/event-stream.bend as Events
 import ../../ai/src/utils/message-json.bend as MessageJson
 import ../../ai/src/utils/schema-json.bend as Convert
@@ -90,7 +91,8 @@ import ../../runtime/src/utf8.bend as Utf8
 # the case as JSON (comma-separated code points):
 #   {run, provider, model, api?, entry: "stream" | "simple", context,
 #    options: {apiKey?, transport?, reasoning?, thinkingEnabled?, thinkingBudgetTokens?, effort?,
-#    thinking?: {enabled, budgetTokens?}, reasoningEffort?},
+#    thinking?: {enabled, budgetTokens?, level?}, reasoningEffort?,
+#    project?, location? (Vertex), interleavedThinking?, requestMetadata? (Bedrock)},
 #    abortAfterChars?, abortBefore?, overflow?}
 # `options` may also carry Vertex's `project` and `location`; `googleBase`
 # routes requests for Google's OAuth2 host (Vertex ADC token refresh) to the
@@ -283,6 +285,7 @@ def catalogModel(+key: String) -> Maybe<&2, Model()>:
     case "minimax/MiniMax-M2.7": Some{CatalogMinimax.model_MiniMax_M2_7()}
     case "minimax-cn/MiniMax-M2.7": Some{CatalogMinimaxCn.model_MiniMax_M2_7()}
     case "mistral/devstral-medium-latest": Some{CatalogMistral.model_devstral_medium_latest()}
+    case "mistral/mistral-small-2603": Some{CatalogMistral.model_mistral_small_2603()}
     case "mistral/pixtral-12b": Some{CatalogMistral.model_pixtral_12b()}
     case "nvidia/nvidia/nemotron-3-super-120b-a12b": Some{CatalogNvidia.model_nvidia_nemotron_3_super_120b_a12b()}
     case "openai/gpt-4o": Some{CatalogOpenai.model_gpt_4o()}
@@ -589,9 +592,19 @@ def baseOptions(+options: V.Value, signal: Abort.AbortSignal<Unit>, fetch: Maybe
 def simpleOptions(+options: V.Value, signal: Abort.AbortSignal<Unit>, fetch: Maybe<&2, Fetch.Fetch(Unit)>) -> Simple():
   Ai.SimpleStreamOptions{Some{signal}, None{}, text(field(options, "apiKey")), fetch, None{}, None{}, None{}, headersOf(field(options, "headers")), None{}, None{}, None{}, number(field(options, "temperature")), None{}, number(field(options, "maxTokens")), transportOf(text(field(options, "transport"))), retentionOf(text(field(options, "cacheRetention"))), text(field(options, "sessionId")), None{}, None{}, None{}, levelOf(text(field(options, "reasoning"))), None{}, None{}}
 
+# @google/genai's ThinkingLevel names.
+def googleLevel(value: Maybe<&2, String>) -> Maybe<&2, Shared.GoogleApiThinkingLevel>:
+  match value:
+    case Some{"MINIMAL"}: Some{Shared.MinimalLevel{}}
+    case Some{"LOW"}: Some{Shared.LowLevel{}}
+    case Some{"MEDIUM"}: Some{Shared.MediumLevel{}}
+    case Some{"HIGH"}: Some{Shared.HighLevel{}}
+    case Some{"THINKING_LEVEL_UNSPECIFIED"}: Some{Shared.ThinkingLevelUnspecified{}}
+    case _: None{}
+
 def googleThinking(value: Maybe<&2, V.Value>) -> Maybe<&2, Gemini.GoogleThinking>:
   match value:
-    case Some{+thinking}: Some{Gemini.GoogleThinking{Maybe.default(&2, Bool, flag(field(thinking, "enabled")), False{}), number(field(thinking, "budgetTokens")), None{}}}
+    case Some{+thinking}: Some{Gemini.GoogleThinking{Maybe.default(&2, Bool, flag(field(thinking, "enabled")), False{}), number(field(thinking, "budgetTokens")), googleLevel(text(field(thinking, "level")))}}
     case None{}: None{}
 
 def responsesOptions(+options: V.Value, signal: Abort.AbortSignal<Unit>, fetch: Fetch.Fetch(Unit)) -> Responses.OpenAIResponsesOptions<Unit, Unit, Error()>:
@@ -617,14 +630,30 @@ def configFor(agent: String) -> Responses.Config: withAgent(agent, RP.config())
 def vertexOptions(+options: V.Value, signal: Abort.AbortSignal<Unit>) -> StreamProviders.VertexOptions():
   Vertex.GoogleVertexOptions{Gemini.GoogleOptions{baseOptions(options, signal, None{}), None{}, googleThinking(field(options, "thinking"))}, text(field(options, "project")), text(field(options, "location"))}
 
-# upstream bedrock-converse-stream stream() with the base options.
+def textProperties(values: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<String>>:
+  match values:
+    case Nil{}: Nil{}
+    case R.Property{name, V.Text{item}} <> rest: R.Property{name, item} <> textProperties(rest)
+    case _ <> rest: textProperties(rest)
+
+def textRecord(value: Maybe<&2, V.Value>) -> Maybe<&2, R.Record<String>>:
+  match value:
+    case Some{V.ObjectValue{R.Record{values}}}: Some{R.Record{textProperties(values)}}
+    case _: None{}
+
+# Bedrock's own options: reasoning, interleavedThinking and requestMetadata
+# besides the base options.
+def bedrockOptions(+options: V.Value, signal: Abort.AbortSignal<Unit>, fetch: Fetch.Fetch(Unit)) -> Bedrock.Options(Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()):
+  Bedrock.BedrockOptions{baseOptions(options, signal, Some{fetch}), None{}, None{}, None{}, levelOf(text(field(options, "reasoning"))), None{}, flag(field(options, "interleavedThinking")), None{}, textRecord(field(options, "requestMetadata")), None{}}
+
+# upstream bedrock-converse-stream stream() with the case's options.
 def bedrockStream(+fetch: Fetch.Fetch(Unit), +model: Model(), +context: Context(), +options: V.Value, +signal: Abort.AbortSignal<Unit>) -> IO(Output()):
-  StreamProviders.lease(events => inner => Bedrock.stream(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~render, ~StreamProviders.noDetails, events, fetch, TestClient.urlContext(), inner, model, context, Bedrock.withBase(Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error(), baseOptions(options, signal, Some{fetch}))), Some{signal})
+  StreamProviders.lease(events => inner => Bedrock.stream(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~render, ~StreamProviders.noDetails, events, fetch, TestClient.urlContext(), inner, model, context, bedrockOptions(options, signal, fetch)), Some{signal})
 
 # upstream stream(): the provider's own options.
 def opened(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api: Ai.ModelApi, +model: Model(), +context: Context(), +options: V.Value, +signal: Abort.AbortSignal<Unit>) -> IO(Output()):
   match api:
-    case Ai.MistralConversationsApi{}: StreamProviders.mistralSelected(fetch, TestClient.urlContext(), model, context, Some{signal}, Done{Mistral.MistralOptions{baseOptions(options, signal, Some{fetch}), None{}, None{}, None{}}})
+    case Ai.MistralConversationsApi{}: StreamProviders.mistralSelected(fetch, TestClient.urlContext(), model, context, Some{signal}, Done{Mistral.MistralOptions{baseOptions(options, signal, Some{fetch}), None{}, None{}, text(field(options, "reasoningEffort"))}})
     case Ai.BedrockConverseStreamApi{}: bedrockStream(fetch, model, context, options, signal)
     case Ai.GoogleVertexApi{}: StreamProviders.vertexSelected(fetch, TestClient.urlContext(), model, context, Some{signal}, Done{vertexOptions(options, signal)})
     case Ai.AnthropicMessagesApi{}: Anthropic.openStream(fetch, TestClient.urlContext(), model, context, Messages.AnthropicOptions{baseOptions(options, signal, Some{fetch}), flag(field(options, "thinkingEnabled")), number(field(options, "thinkingBudgetTokens")), text(field(options, "effort")), None{}, None{}, None{}, None{}})

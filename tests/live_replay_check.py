@@ -14,14 +14,13 @@ upstream assertions hold for both executors, both sent the same requests
 (path and JSON body), and both produced the same events and final messages.
 
 The rows are read from the pinned test files: every `it` whose model uses
-one of those APIs is run with the options its test passes. The rows of
-image-tool-result, responseid, interleaved-thinking and google-thinking-disable
-also run on Mistral (mistral-conversations), Amazon Bedrock
-(bedrock-converse-stream, SigV4 with IAM keys from the environment) and Google
-Vertex (google-vertex, with an API key or with Application Default Credentials
-from an authorized_user file whose token refresh the server answers); those
-APIs' rows of the other suites, the Codex WebSocket transport, local servers
-and upstream `it.skip` stay pending; `--pending` lists them with the reason.
+one of those APIs is run with the options its test passes, as are the rows
+on Mistral (mistral-conversations), Amazon Bedrock (bedrock-converse-stream,
+SigV4 with IAM keys from the environment) and Google Vertex (google-vertex,
+with an API key or with Application Default Credentials from an
+authorized_user file whose token refresh the server answers). Rows on the
+Codex WebSocket transport, local servers and upstream `it.skip` stay pending;
+`--pending` lists them with the reason.
 
 Adaptations, documented per suite in tests/upstream-inventory.json:
 - A replayed model answers from a script, so assertions about what a real
@@ -100,9 +99,6 @@ VERTEX_PROJECT, VERTEX_LOCATION = 'replay-project', 'us-central1'
 
 API_TAG = {'anthropic-messages': 'anthropic', 'google-generative-ai': 'google', 'openai-completions': 'completions', 'openai-responses': 'responses', 'azure-openai-responses': 'azure', 'openai-codex-responses': 'codex',
            'mistral-conversations': 'mistral', 'bedrock-converse-stream': 'bedrock', 'google-vertex': 'vertex'}
-# The APIs every suite replays; the others only for the suites listed.
-BASE_APIS = {'anthropic-messages', 'google-generative-ai', 'openai-completions', 'openai-responses', 'azure-openai-responses', 'openai-codex-responses'}
-EXTRA_API_SUITES = {'image-tool-result.test.ts', 'responseid.test.ts', 'interleaved-thinking.test.ts', 'google-thinking-disable.test.ts'}
 
 # Upstream catalog metadata, filled by catalog_metadata().
 META = {}
@@ -134,7 +130,9 @@ class Model:
         self.provider, self.id, self.override = provider, id, override
         self.api = override or meta['api']
         self.reasoning, self.input, self.cost_input, self.context_window = meta['reasoning'], meta['input'], meta['cost'], meta['contextWindow']
-        self.key = key or KEYS.get(provider, f'replay-{provider}-key')
+        # An explicit empty key stays (the suite passes it); None takes the
+        # environment's.
+        self.key = key if key is not None else KEYS.get(provider, f'replay-{provider}-key')
 
     @property
     def tag(self):
@@ -209,6 +207,9 @@ def overflow_reply(model, api):
         'openrouter': f"This endpoint's maximum context length is {window} tokens. However, you requested about {window + 10000} tokens.",
         'vercel-ai-gateway': f'The input token count ({window + 10000}) exceeds the maximum number of tokens allowed ({window}).',
         'google': f'The input token count ({window + 10000}) exceeds the maximum number of tokens allowed ({window}).',
+        'google-vertex': f'The input token count ({window + 10000}) exceeds the maximum number of tokens allowed ({window}).',
+        'amazon-bedrock': 'Input is too long for requested model.',
+        'mistral': f'Prompt contains {window + 10000} tokens and 0 draft tokens, too large for model with {window} maximum context length',
     }.get(provider)
     if message is None and provider.startswith('qwen'):
         message = f'Range of input length should be [1, {window}]'
@@ -261,7 +262,7 @@ def script(scenario, api, index, body):
         early, _ = early_usage(model, 30, 1)
         return Reply(text(('Stanza of the forest, river and sky. ' * 30)[:1000]), chunk=50, hang=True, usage=early)
     if kind == 'total':
-        if api == 'anthropic':
+        if api in ('anthropic', 'bedrock'):
             first, second = usage(input=50, output=1, cache_write=1150), usage(input=60, output=1, cache_read=1150)
         else:
             first, second = usage(input=1200, output=1), usage(input=60, output=1, cache_read=1150)
@@ -309,6 +310,12 @@ def script(scenario, api, index, body):
         return Reply(text('hi'))
     if kind == 'raw':
         return Reply([], raw=SCENARIO_RAW[scenario])
+    if kind == 'abortthen':
+        return Reply(text('2 + 2 = 4.'))
+    if kind == 'bedrockpayload':
+        if body.get('toolConfig'):
+            return Reply(thinking(api, 'I will add 15 and 27 with the tool.') + [tool(api, 1, 'math_operation', {'a': 15, 'b': 27, 'operation': 'add'})], stop='tool')
+        return Reply(text('Hi!'))
     if kind == 'zen':
         return Reply(text('Hello!'))
     raise AssertionError(kind)
@@ -501,6 +508,17 @@ def testImmediateAbort(ex, model, run, options=None):
     context = {'messages': [user('Hello')]}
     response = ex(case(model, run, context, options, abortBefore=True))['message']
     expect(response['stopReason'] == 'aborted', response['stopReason'])
+
+
+def testAbortThenNewMessage(ex, model, run, options=None):
+    context = {'messages': [user('Hello, how are you?')]}
+    aborted = ex(case(model, run, context, options, abortBefore=True))['message']
+    expect(aborted['stopReason'] == 'aborted', aborted['stopReason'])
+    expect(len(aborted['content']) == 0, aborted['content'])
+    context['messages'] += [aborted, user('What is 2 + 2?')]
+    follow = ex(case(model, run, context, options))['message']
+    expect(follow['stopReason'] == 'stop', follow)
+    expect(len(follow['content']) > 0, follow)
 
 
 def testTokensOnAbort(ex, model, run, options=None):
@@ -722,6 +740,7 @@ class Handoff:
             messages = generateContext(ex, pair, self.run('handoffgen', n, pair, ex))
             if messages and len(messages) >= 4:
                 contexts[label] = messages
+        TOOL_CALL_IDS[ex.name] = {block['id'] for messages in contexts.values() for message in messages if message['role'] == 'assistant' for block in message['content'] if block['type'] == 'toolCall'}
         expect(len(contexts) >= 2, contexts.keys())
 
     def targets(self, ex, model, run, options=None):
@@ -739,7 +758,7 @@ class Handoff:
 
 FUNCTIONS = {
     'basicTextGeneration': basicTextGeneration, 'handleToolCall': handleToolCall, 'handleStreaming': handleStreaming, 'handleThinking': handleThinking, 'handleImage': handleImage, 'multiTurn': multiTurn,
-    'testAbortSignal': testAbortSignal, 'testImmediateAbort': testImmediateAbort, 'testTokensOnAbort': testTokensOnAbort,
+    'testAbortSignal': testAbortSignal, 'testImmediateAbort': testImmediateAbort, 'testAbortThenNewMessage': testAbortThenNewMessage, 'testTokensOnAbort': testTokensOnAbort,
     'testEmptyMessage': testEmptyMessage, 'testEmptyStringMessage': testEmptyStringMessage, 'testWhitespaceOnlyMessage': testWhitespaceOnlyMessage, 'testEmptyAssistantMessage': testEmptyAssistantMessage,
     'testEmojiInToolResults': testEmojiInToolResults, 'testRealWorldLinkedInData': testRealWorldLinkedInData, 'testUnpairedHighSurrogate': testUnpairedHighSurrogate,
     'testToolCallWithoutResult': testToolCallWithoutResult,
@@ -835,6 +854,38 @@ def interleaved(reasoning):
         expect(second['stopReason'] == 'stop', second.get('errorMessage'))
         expect(any(b['type'] == 'thinking' for b in second['content']) and any(b['type'] == 'text' for b in second['content']), second)
     return test
+
+
+# stream.test.ts's inline Bedrock tests: onPayload's payload is the body the
+# server received.
+SONNET_45 = ('amazon-bedrock', 'global.anthropic.claude-sonnet-4-5-20250929-v1:0')
+
+
+def bedrockPayload(model_ids, context, options, check):
+    def test(ex, model, run, _options=None):
+        target = Model(*model_ids)
+        response = ex(case(target, run, context, options))['message']
+        expect(response['stopReason'] != 'error', f"Error: {response.get('errorMessage')}")
+        requests = ex.server.requests.get(run, [])
+        expect(requests, 'no payload')
+        check(json.loads(requests[-1]['raw']))
+    return test
+
+
+def adaptive(payload):
+    fields = payload.get('additionalModelRequestFields') or {}
+    expect(fields.get('thinking') == {'type': 'adaptive', 'display': 'summarized'}, fields)
+    expect(fields.get('output_config') == {'effort': 'max'}, fields)
+    expect('anthropic_beta' not in fields, fields)
+
+
+BEDROCK_INLINE = 'stream.test.ts > Generate E2E Tests > Amazon Bedrock Provider (claude-opus-4-6 interleaved thinking)'
+SAY_HI = {'messages': [user('Say hi.')]}
+INLINE = {
+    f'{BEDROCK_INLINE} > should use adaptive thinking without anthropic_beta': (bedrockPayload(('amazon-bedrock', 'global.anthropic.claude-opus-4-6-v1'), {'systemPrompt': 'You are a helpful assistant that uses tools when asked.', 'messages': [user('Think first, then calculate 15 + 27 using the math_operation tool.')], 'tools': [CALCULATOR]}, {'reasoning': 'xhigh', 'interleavedThinking': True}, adaptive), ('amazon-bedrock', 'global.anthropic.claude-opus-4-6-v1')),
+    f'{BEDROCK_INLINE} > should pass requestMetadata to the SDK payload': (bedrockPayload(SONNET_45, SAY_HI, {'requestMetadata': {'app': 'pi-test', 'env': 'ci'}}, lambda p: expect(p.get('requestMetadata') == {'app': 'pi-test', 'env': 'ci'}, p.get('requestMetadata'))), SONNET_45),
+    f'{BEDROCK_INLINE} > should omit requestMetadata from payload when not provided': (bedrockPayload(SONNET_45, SAY_HI, {}, lambda p: expect('requestMetadata' not in p, p)), SONNET_45),
+}
 
 
 # google-thinking-disable.test.ts
@@ -1315,7 +1366,7 @@ def custom_tests():
 # its model (getModel, with the suites' `api` override) and the options its
 # test function receives. Rows on other APIs, transports or local servers stay
 # pending with the reason.
-KINDS = {'testAbortSignal': 'abort', 'testImmediateAbort': 'immediate', 'testTokensOnAbort': 'tokens', 'testEmptyAssistantMessage': 'emptyassistant', 'basicTextGeneration': 'basic', 'handleToolCall': 'tool', 'handleStreaming': 'streaming', 'handleThinking': 'thinking', 'handleImage': 'image', 'multiTurn': 'multiturn', 'testToolCallWithoutResult': 'toolnores', 'testContextOverflow': 'overflow', 'testTotalTokensWithCache': 'total',
+KINDS = {'testAbortSignal': 'abort', 'testImmediateAbort': 'immediate', 'testAbortThenNewMessage': 'abortthen', 'testTokensOnAbort': 'tokens', 'testEmptyAssistantMessage': 'emptyassistant', 'basicTextGeneration': 'basic', 'handleToolCall': 'tool', 'handleStreaming': 'streaming', 'handleThinking': 'thinking', 'handleImage': 'image', 'multiTurn': 'multiturn', 'testToolCallWithoutResult': 'toolnores', 'testContextOverflow': 'overflow', 'testTotalTokensWithCache': 'total',
          'handleToolWithImageResult': 'imagetool', 'handleToolWithTextAndImageResult': 'imagetool', 'verifyToolResultImagesStayInFunctionCallOutput': 'imagetool', 'expectResponseId': 'rid', 'assertSecondToolCallWithInterleavedThinking': 'interleaved', 'expectThinkingDisabledE2E': 'thinkingoff'}
 SUITES = {
     'stream.test.ts': ('Generate E2E Tests', ['basicTextGeneration', 'handleToolCall', 'handleStreaming', 'handleThinking', 'handleImage', 'multiTurn']),
@@ -1379,11 +1430,15 @@ def parse_options(expression, provider):
     expression = re.sub(r'\s+', ' ', expression or '').strip()
     if expression in ('', 'azureOptions', '{}'):
         return {}, None
-    if expression in ('vertexOptions', 'wsOptions') or 'vertexOptions' in expression or 'wsOptions' in expression:
-        return None, 'Vertex/WebSocket options (other API or transport)'
-    if re.fullmatch(r'\w+', expression):
-        return None, f'unresolved options object {expression}'
+    if expression == 'wsOptions' or 'wsOptions' in expression:
+        return None, 'Codex WebSocket transport'
     options = {}
+    if 'vertexOptions' in expression:
+        # stream.test.ts/responseid.test.ts: `{ project, location }` from the environment.
+        options.update(project=VERTEX_PROJECT, location=VERTEX_LOCATION)
+        expression = expression.replace('...vertexOptions', '').replace('vertexOptions', '')
+    elif re.fullmatch(r'\w+', expression):
+        return None, f'unresolved options object {expression}'
     key = re.search(r'apiKey: ([^,}]+)', expression) or re.fullmatch(r'([\w.!"-]+)', expression)
     if key:
         value = key.group(1).strip().rstrip('!')
@@ -1397,16 +1452,16 @@ def parse_options(expression, provider):
         found = re.search(name + r': "([a-z]+)"', expression)
         if found:
             options[name] = found.group(1)
-    if 'reasoning' in options:
-        return None, 'streamSimple reasoning option (Bedrock)'
+    if 'reasoning' in options and provider != 'amazon-bedrock':
+        return None, 'reasoning option on a non-Bedrock stream'
     if 'thinkingEnabled: true' in expression:
         options['thinkingEnabled'] = True
     budget = re.search(r'thinkingBudgetTokens: (\d+)', expression)
     if budget:
         options['thinkingBudgetTokens'] = int(budget.group(1))
-    thinking = re.search(r'thinking: \{ enabled: true(?:, budgetTokens: (\d+))? \}', expression)
+    thinking = re.search(r'thinking: \{ enabled: true(?:, budgetTokens: (\d+))?(?:, level: ThinkingLevel\.([A-Z]+))? \}', expression)
     if thinking:
-        options['thinking'] = {'enabled': True, **({'budgetTokens': int(thinking.group(1))} if thinking.group(1) else {})}
+        options['thinking'] = {'enabled': True, **({'budgetTokens': int(thinking.group(1))} if thinking.group(1) else {}), **({'level': thinking.group(2)} if thinking.group(2) else {})}
     return options, None
 
 
@@ -1414,11 +1469,13 @@ def plan(row):
     """(function, model, options) for a replayed row, or (None, reason)."""
     if row['skipped']:
         return None, 'it.skip upstream'
+    if row['name'] in INLINE:
+        function, ids = INLINE[row['name']]
+        return function, Model(*ids), {}
     ids = row_model(row)
     if ids is None:
         return None, 'local server (Ollama/LM Studio/llama.cpp)'
-    replayed = API_TAG.keys() if row['file'] in EXTRA_API_SUITES else BASE_APIS
-    if tuple(ids) not in META or (row['api'] or META[tuple(ids)]['api']) not in replayed:
+    if tuple(ids) not in META or (row['api'] or META[tuple(ids)]['api']) not in API_TAG:
         return None, f'{ids[0]}/{ids[1]} uses an API this check does not replay'
     if len(row['calls']) != 1:
         return None, 'no single suite function call'
@@ -1431,9 +1488,6 @@ def plan(row):
             expression = declared.group(1)
     if function in ('assertSecondToolCallWithInterleavedThinking', 'expectThinkingDisabledE2E'):
         options, reason = ({}, None)
-    elif expression.strip() == 'vertexOptions' and row['file'] in EXTRA_API_SUITES:
-        # responseid's `{ project: vertexProject, location: vertexLocation }`.
-        options, reason = ({'project': VERTEX_PROJECT, 'location': VERTEX_LOCATION}, None)
     else:
         options, reason = parse_options(expression, ids[0])
     if reason:
@@ -1444,8 +1498,6 @@ def plan(row):
         return overflow(row, model), model, {}
     if function == 'testTotalTokensWithCache':
         return totalTokens('hasCache' in row['body']), model, options
-    if function == 'testAbortThenNewMessage':
-        return None, 'Bedrock only'
     if function == 'assertSecondToolCallWithInterleavedThinking':
         return interleaved(expression.strip().strip('"')), model, {}
     if function == 'expectThinkingDisabledE2E':
@@ -1459,7 +1511,7 @@ def handoff_pairs():
     block = block[:block.index('];')]
     pairs = []
     for provider, id, label, api, env in re.findall(r'\{\s*provider: "([^"]+)",\s*model: "([^"]+)",\s*label: "([^"]+)"(?:,\s*apiOverride: "([^"]+)")?(?:,\s*upstreamApiKeyEnv: "([^"]+)")?,?\s*\}', block):
-        if (provider, id) in META and (api or META[(provider, id)]['api']) in BASE_APIS:
+        if (provider, id) in META and (api or META[(provider, id)]['api']) in API_TAG:
             headers = {'Authorization': f'Bearer replay-{env.lower()}'} if env else None
             pairs.append((label, (Model(provider, id, api or None), headers)))
     return pairs
@@ -1504,7 +1556,17 @@ RUNTIME_ABORT = {'The operation was aborted.': 'This operation was aborted'}
 KNOWN = [
     (('anthropic-messages', 'openai-codex-responses'), '$.message.errorMessage', 'This operation was aborted', 'Request was aborted',
      'abort during a pending body read: upstream surfaces the fetch AbortError; the port reports "Request was aborted" (upstream\'s text for an abort seen between reads, and what the mocked-fetch openai-codex-stream test asserts)'),
+    (('bedrock-converse-stream',), '$.message.errorMessage', 'Request was aborted', 'Request aborted',
+     'abort during a pending event-stream read: pinned pi-mono\'s text depends on the runtime (Bun ends the SDK stream and reports "Request was aborted"; Node reports the socket\'s "aborted"); the port reports "Request aborted", the AbortError text of the SDK\'s NodeHttpHandler'),
 ]
+
+# Rows whose upstream assertion fails against pinned pi-mono itself: both
+# executors must fail it identically (and agree on requests and outputs);
+# they are reported as UPSTREAM, not PASS.
+UPSTREAM_FAILS = {
+    'stream.test.ts > Generate E2E Tests > Amazon Bedrock Provider (claude-opus-4-6 interleaved thinking) > should use adaptive thinking without anthropic_beta':
+        'the test expects output_config.effort "max" for reasoning "xhigh", but the pinned catalog maps only "max" for claude-opus-4-6 (thinkingLevelMap {max: "max"}), so pinned pi-mono sends "high"',
+}
 
 
 def runtime_normalized(output):
@@ -1514,14 +1576,78 @@ def runtime_normalized(output):
     return output
 
 
+# The CLI types assistant diagnostics' details as Unit (agent-session.bend's
+# session codecs), so the port's messages carry details null where pinned
+# pi-mono keeps the provider's (Bedrock's status, errorCode and requestId).
+DETAILS_REASON = "the CLI's assistant messages carry no diagnostic details (agent-session.bend's Unit details); pinned pi-mono keeps the provider's diagnostics details (tests/bedrock_check.py compares them at the API module)"
+
+
+def without_details(message):
+    return {**message, 'diagnostics': [{**item, 'details': None} for item in message['diagnostics']]}
+
+
 def known_difference(api, want, have):
+    reasons = []
+    wanted, had = want.get('message') or {}, have.get('message') or {}
     for apis, path, upstream, port, reason in KNOWN:
-        if api in apis and (want.get('message') or {}).get('errorMessage') == upstream and (have.get('message') or {}).get('errorMessage') == port:
-            return reason, {**have, 'message': {**have['message'], 'errorMessage': upstream}}
-    return None, have
+        if api in apis and wanted.get('errorMessage') == upstream and had.get('errorMessage') == port:
+            reasons.append(reason)
+            have = {**have, 'message': {**had, 'errorMessage': upstream}}
+            had = have['message']
+    if wanted.get('diagnostics') and had.get('diagnostics') and any(item.get('details') is not None for item in wanted['diagnostics']) and all(item.get('details') is None for item in had['diagnostics']):
+        if normalized({**want, 'message': without_details(wanted)}) == normalized(have):
+            reasons.append(DETAILS_REASON)
+            have = {**have, 'message': {**had, 'diagnostics': [{**item, 'details': upstream['details']} for item, upstream in zip(had['diagnostics'], wanted['diagnostics'])]}}
+    return ('; '.join(reasons) or None), have
 
 
-def request_view(request):
+# The tool call ids each executor's handoff fixtures produced.
+TOOL_CALL_IDS = {}
+
+
+def short_hash(text):
+    """upstream utils/hash.ts shortHash (over UTF-16 code units)."""
+    imul = lambda a, b: (a * b) & 0xFFFFFFFF
+    h1, h2 = 0xdeadbeef, 0x41c6ce57
+    units = text.encode('utf-16-le')
+    for i in range(0, len(units), 2):
+        ch = units[i] | units[i + 1] << 8
+        h1, h2 = imul(h1 ^ ch, 2654435761), imul(h2 ^ ch, 1597334677)
+    h1 = imul(h1 ^ (h1 >> 16), 2246822507) ^ imul(h2 ^ (h2 >> 13), 3266489909)
+    h2 = imul(h2 ^ (h2 >> 16), 2246822507) ^ imul(h1 ^ (h1 >> 13), 3266489909)
+
+    def base36(n):
+        digits = ''
+        while True:
+            n, r = divmod(n, 36)
+            digits = '0123456789abcdefghijklmnopqrstuvwxyz'[r] + digits
+            if not n:
+                return digits
+    return base36(h2) + base36(h1)
+
+
+def mistral_id(source):
+    """upstream deriveMistralToolCallId(source, 0)."""
+    stripped = re.sub(r'[^a-zA-Z0-9]', '', source)
+    return stripped if len(stripped) == 9 else re.sub(r'[^a-zA-Z0-9]', '', short_hash(stripped or source))[:9]
+
+
+def mistral_sources(body, executor):
+    """Mistral requests carry tool call ids hashed from the source ids, some
+    of which embed the executor's clock (Gemini's generated ids). Each id
+    that is exactly the hash of one of this executor's own source ids
+    becomes that source (with the clock normalized), so both executors
+    compare equal only if each derived its ids as upstream does."""
+    known = {mistral_id(source): f"<mistral-id of {TIMESTAMP.sub('<ms>', source)}>" for source in TOOL_CALL_IDS.get(executor, ())}
+    for message in body.get('messages', []):
+        for call in message.get('tool_calls') or []:
+            call['id'] = known.get(call.get('id'), call.get('id'))
+        if message.get('role') == 'tool':
+            message['tool_call_id'] = known.get(message.get('tool_call_id'), message.get('tool_call_id'))
+    return body
+
+
+def request_view(request, run=''):
     try:
         body = json.loads(request['raw'])
     except ValueError:
@@ -1529,6 +1655,9 @@ def request_view(request):
         if request['path'].endswith('/token'):
             # An OAuth2 form body: its fields, in any order.
             body = sorted(urllib.parse.parse_qsl(body))
+    _, api, executor = (run.split('~') + ['', '', ''])[:3]
+    if api == 'mistral' and isinstance(body, dict):
+        body = mistral_sources(body, executor)
     return dict(path=TIMESTAMP.sub('<ms>', request['path']), body=normalized(body))
 
 
@@ -1536,8 +1665,8 @@ def differences(server, reference, port, runs, api, known):
     found = []
     port.compared = sum(len(server.requests.get(f'{run}~{port.name}', [])) for run in runs)
     for run in runs:
-        want = [request_view(r) for r in server.requests.get(f'{run}~{reference.name}', [])]
-        have = [request_view(r) for r in server.requests.get(f'{run}~{port.name}', [])]
+        want = [request_view(r, f'{run}~{reference.name}') for r in server.requests.get(f'{run}~{reference.name}', [])]
+        have = [request_view(r, f'{run}~{port.name}') for r in server.requests.get(f'{run}~{port.name}', [])]
         if want != have:
             found.append(f'requests of {run} differ at {first_difference(want, have)}')
     for want, have in zip(reference.outputs, port.outputs):
@@ -1618,6 +1747,8 @@ def run_test(index, name, function, model, options, kind, server, backends, comm
         runs = sorted({key.rsplit('~', 1)[0] for key in list(server.requests) if key.endswith('~upstream') and (own_run(key.split('~')[0], run) or (kind.startswith('handoff') and key.startswith(kind + '.h')))})
         problems += [f'{backend}: {item}' for item in differences(server, reference, port, runs, model.api, known)]
         compared.append(f'{backend} {port.compared}')
+    if name in UPSTREAM_FAILS and problems and problems[0].startswith('upstream: ') and all(problem.split(': ', 1)[1] == problems[0].split(': ', 1)[1] for problem in problems) and len(problems) == 1 + len(backends):
+        return 'UPSTREAM', [f'UPSTREAM {name}: {UPSTREAM_FAILS[name]}']
     if problems:
         return 'FAIL', [f'FAIL {name}'] + [f'  {problem[:3000]}' for problem in problems[:6]]
     if all(item.startswith('bun skipped') for item in compared):
@@ -1645,7 +1776,8 @@ def main():
         if planned[0] is None:
             pending.append((row['name'], planned[1]))
         else:
-            tests.append((row['name'],) + planned + (KINDS.get(row['calls'][0][0]) or ('unicode' if row['file'].startswith('unicode') else 'empty'),))
+            kind = 'bedrockpayload' if row['name'] in INLINE else KINDS.get(row['calls'][0][0]) or ('unicode' if row['file'].startswith('unicode') else 'empty')
+            tests.append((row['name'],) + planned + (kind,))
     tests += custom_tests()
     handoff = Handoff(handoff_pairs())
     top = 'cross-provider-handoff.test.ts > Cross-Provider Handoff'
@@ -1680,7 +1812,7 @@ def main():
         for status, lines in outcomes:
             counts[status] = counts.get(status, 0) + 1
             print('\n'.join(lines))
-    print(f"{counts.get('PASS', 0)} passed, {counts.get('KNOWN', 0)} known differences, {counts.get('SKIP', 0)} skipped on every backend run, {counts.get('FAIL', 0)} failed; {len(pending)} upstream tests pending (--pending lists them)")
+    print(f"{counts.get('PASS', 0)} passed, {counts.get('KNOWN', 0)} known differences, {counts.get('UPSTREAM', 0)} failing against pinned pi-mono itself (both executors agree), {counts.get('SKIP', 0)} skipped on every backend run, {counts.get('FAIL', 0)} failed; {len(pending)} upstream tests pending (--pending lists them)")
     sys.exit(1 if counts.get('FAIL') else 0)
 
 
