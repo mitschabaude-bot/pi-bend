@@ -1,5 +1,6 @@
 import Base
 import ../../../../../tui/src/tui-process.bend as Process
+import ../../../../../tui/src/components/scroll-view.bend as Scroll
 import ../../../../../agent/src/types.bend as Agent
 import ../../../../../ai/src/types.bend as Ai
 import ../../../../../runtime/src/json.bend as Json
@@ -80,6 +81,11 @@ def modeNames(modes: List<&2,Settings.CacheWarmingMode>) -> List<&2,String>:
   match modes:
     case Nil{}: Nil{}
     case mode <> rest: Settings.cacheWarmingModeName(mode) <> modeNames(rest)
+def scrollbar(value: Settings.ScrollViewScrollbar) -> String:
+  match value:
+    case Settings.ScrollAuto{}: "auto"
+    case Settings.ScrollAlways{}: "always"
+    case Settings.ScrollHidden{}: "hidden"
 def rows(+settings: Settings.SettingsManager,currentTheme: String,submenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>,modelSubmenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>) -> List<&2,ListUI.SettingItem>:
   boolean("autocompact","Auto-compact","Automatically compact context when it gets too large",Settings.getCompactionEnabled(settings)) <>
   boolean("auto-resize-images","Auto-resize images","Resize large images to 2000x2000 max for better model compatibility",Settings.getImageAutoResize(settings)) <>
@@ -105,6 +111,7 @@ def rows(+settings: Settings.SettingsManager,currentTheme: String,submenu: Callb
   item("double-escape-action","Double-escape action","Action when pressing Escape twice with empty editor",escape(Settings.getDoubleEscapeAction(settings)),"tree" <> "fork" <> "none" <> Nil{}) <>
   item("tree-filter-mode","Tree filter mode","Default filter when opening /tree",treeFilter(Settings.getTreeFilterMode(settings)),"default" <> "no-tools" <> "user-only" <> "labeled-only" <> "all" <> Nil{}) <>
   modelThinkingRow(ModelThinkingPicker.summary(settings),modelSubmenu) <>
+  item("fullscreen-scrollbar","Fullscreen scrollbar","Scrollbar behavior in fullscreen mode; has no effect in regular mode",scrollbar(Settings.getFullscreenScrollbar(settings)),"auto" <> "always" <> "hidden" <> Nil{}) <>
   themeRow(currentTheme,submenu) <>
   Nil{}
 
@@ -127,6 +134,9 @@ def change(id: String,value: String,settings: Settings.SettingsManager) -> Setti
     case "autocomplete-max-visible" "10": Settings.setAutocompleteMaxVisible(W.U64{0,10},settings)
     case "autocomplete-max-visible" "15": Settings.setAutocompleteMaxVisible(W.U64{0,15},settings)
     case "autocomplete-max-visible" "20": Settings.setAutocompleteMaxVisible(W.U64{0,20},settings)
+    case "fullscreen-scrollbar" "auto": Settings.setFullscreenScrollbar(Settings.ScrollAuto{},settings)
+    case "fullscreen-scrollbar" "always": Settings.setFullscreenScrollbar(Settings.ScrollAlways{},settings)
+    case "fullscreen-scrollbar" "hidden": Settings.setFullscreenScrollbar(Settings.ScrollHidden{},settings)
     case "clear-on-shrink" "true": Settings.setClearOnShrink(True{},settings)
     case "clear-on-shrink" "false": Settings.setClearOnShrink(False{},settings)
     case "steering-mode" "all": Settings.setSteeringMode(Agent.All{},settings)
@@ -280,6 +290,12 @@ def terminalEffect(controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,prefere
   do IO<Unit>:
     current : Maybe<&2,ThemeController.Handle> <- Ref.read(Maybe<&2,ThemeController.Handle>,controller)
     terminalPreference(current,preference)
+def scrollbarEffect(controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,value: String) -> IO(Unit):
+  match value:
+    case "auto": terminalEffect(controller,Process.FullscreenScrollbar{Scroll.Auto{}})
+    case "always": terminalEffect(controller,Process.FullscreenScrollbar{Scroll.Always{}})
+    case "hidden": terminalEffect(controller,Process.FullscreenScrollbar{Scroll.Hidden{}})
+    case _: IO.pure(Unit,Unit{})
 def controllerEffect(id: String,value: String,controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,transcript: Transcript.Handle) -> IO(Unit):
   match id:
     case "theme":
@@ -287,6 +303,7 @@ def controllerEffect(id: String,value: String,controller: Ref.Ref<Maybe<&2,Theme
         current : Maybe<&2,ThemeController.Handle> <- Ref.read(Maybe<&2,ThemeController.Handle>,controller)
         themeChanged(current,value,transcript)
     case "show-hardware-cursor": terminalEffect(controller,Process.HardwareCursor{boolValue(value)})
+    case "fullscreen-scrollbar": scrollbarEffect(controller,value)
     case "clear-on-shrink": terminalEffect(controller,Process.ClearOnShrink{boolValue(value)})
     case _: IO.pure(Unit,Unit{})
 def controllerAfter(result: Result<&2,&2,String,Unit>,id: String,value: String,controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,transcript: Transcript.Handle) -> IO(Unit):

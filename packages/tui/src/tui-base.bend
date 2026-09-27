@@ -282,6 +282,14 @@ def setTerminalPreferences(base: TuiBase,showHardwareCursor: Bool,clearOnShrink:
       TuiBase{root,focus,bindings,displayed,scheduler,showHardwareCursor,clearOnShrink,layout}
 def layoutRoot(base: TuiBase) -> Maybe<&2,N.LayoutNode>:
   match base: case TuiBase{_,_,_,_,_,_,_,node}: node
+def primaryScrollbarRoot(root: Maybe<&2,N.LayoutNode>,+mode: Scroll.ScrollViewScrollbar,+now: Nat) -> Maybe<&2,N.LayoutNode>:
+  match root:
+    case Some{node}: Some{N.setPrimaryScrollbar(node,mode,now)}
+    case None{}: None{}
+def setPrimaryScrollbar(base: TuiBase,mode: Scroll.ScrollViewScrollbar,now: Nat) -> TuiBase:
+  match base:
+    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout}:
+      TuiBase{root,focus,bindings,displayed,scheduler,show,clear,primaryScrollbarRoot(layout,mode,now)}
 def indicatorRow(base: TuiBase) -> Maybe<&2,Nat>:
   match base:
     case TuiBase{_,_,_,_,_,_,_,Some{layout}}: N.indicatorRow(layout)

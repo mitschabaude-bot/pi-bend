@@ -4,6 +4,7 @@ import ../../runtime/src/deferred.bend as Deferred
 import ../../runtime/src/ref.bend as Ref
 import ../../runtime/src/serial-resource.bend as Serial
 import ./component.bend as Component
+import ./components/scroll-view.bend as Scroll
 import ./overlays.bend as O
 import ./terminal.bend as Terminal
 import ./terminal-query.bend as Query
@@ -266,21 +267,30 @@ def input(+session: Session,registry: List<&2,Component.Component>,mounted: List
 # between a component callback and the frame it produces.
 type Active is Data:
   Active{session: Session,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,lastError: Maybe<&2,Error>,owed: Bool,ticks: Nat}
-type TerminalPreference is Data: HardwareCursor{enabled: Bool} ClearOnShrink{enabled: Bool}
-type Preferences is Data: Preferences{cursor: Maybe<&2,Bool>,clear: Maybe<&2,Bool>}
-def emptyPreferences() -> Preferences: Preferences{None{},None{}}
+type TerminalPreference is Data: HardwareCursor{enabled: Bool} ClearOnShrink{enabled: Bool} FullscreenScrollbar{mode: Scroll.ScrollViewScrollbar}
+type Preferences is Data: Preferences{cursor: Maybe<&2,Bool>,clear: Maybe<&2,Bool>,scrollbar: Maybe<&2,Scroll.ScrollViewScrollbar>}
+def emptyPreferences() -> Preferences: Preferences{None{},None{},None{}}
 def changedPreference(current: Preferences,change: TerminalPreference) -> Preferences & Unit:
   match current change:
-    case Preferences{_,clear} HardwareCursor{value}: (Preferences{Some{value},clear},Unit{})
-    case Preferences{cursor,_} ClearOnShrink{value}: (Preferences{cursor,Some{value}},Unit{})
+    case Preferences{_,clear,bar} HardwareCursor{value}: (Preferences{Some{value},clear,bar},Unit{})
+    case Preferences{cursor,_,bar} ClearOnShrink{value}: (Preferences{cursor,Some{value},bar},Unit{})
+    case Preferences{cursor,clear,_} FullscreenScrollbar{value}: (Preferences{cursor,clear,Some{value}},Unit{})
+def screenPreferences(screen: ScreenState,preferences: Preferences) -> Preferences:
+  match screen preferences:
+    case Main{_} Preferences{cursor,clear,_}: Preferences{cursor,clear,None{}}
+    case Fullscreen{_} preferences: preferences
+def preferredScrollbar(base: Tui.TuiBase,mode: Maybe<&2,Scroll.ScrollViewScrollbar>) -> Tui.TuiBase:
+  match mode:
+    case None{}: base
+    case Some{mode}: Tui.setPrimaryScrollbar(base,mode,0n)
 def preferredTui(base: Tui.TuiBase,preferences: Preferences) -> Tui.TuiBase:
   match base preferences:
-    case Tui.TuiBase{root,focus,bindings,displayed,scheduler,cursor,clear,node} Preferences{newCursor,newClear}:
-      Tui.TuiBase{root,focus,bindings,displayed,scheduler,Maybe.default(&2,Bool,newCursor,cursor),Maybe.default(&2,Bool,newClear,clear),node}
+    case Tui.TuiBase{root,focus,bindings,displayed,scheduler,cursor,clear,node} Preferences{newCursor,newClear,scrollbar}:
+      preferredScrollbar(Tui.TuiBase{root,focus,bindings,displayed,scheduler,Maybe.default(&2,Bool,newCursor,cursor),Maybe.default(&2,Bool,newClear,clear),node},scrollbar)
 def preferredActive(current: Active,preferences: Preferences) -> Active:
   match current:
-    case Active{Session{tui,screen},components,mounted,error,owed,ticks}:
-      Active{Session{preferredTui(tui,preferences),screen},components,mounted,error,owed,ticks}
+    case Active{Session{tui,+screen},components,mounted,error,owed,ticks}:
+      Active{Session{preferredTui(tui,screenPreferences(screen,preferences)),screen},components,mounted,error,owed,ticks}
 type PreferenceSink is Data:
   PreferenceSink{pending: Ref.Ref<Preferences>,request: Callback.Callback<Unit,Unit>,write: Callback.Callback<String,Unit>}
 def cursorPreference(write: Callback.Callback<String,Unit>,preference: TerminalPreference) -> IO(Unit):
@@ -475,10 +485,14 @@ def cellsConsumed(+listener: EventSink,updated: Bool) -> IO(Unit):
 def dispatchCells(+listener: EventSink,+data: String,cells: Maybe<&2,Bool>) -> IO(Unit):
   match cells listener:
     case Some{updated} _: cellsConsumed(listener,updated)
-    case None{} EventSink{state,ready,_,termux,_}:
+    case None{} EventSink{state,ready,_,termux,+preferences}:
       do IO<Unit>:
         handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
-        Serial.run(Active,Unit,state,current => inputOperation(current,data,handle,termux))
+        # A setting changed by the previous key must affect this key, even if
+        # its coalesced frame has not run yet (for example hidden -> auto).
+        Serial.run(Active,Unit,state,current => do IO<Active & Unit>:
+          changes : Preferences <- Ref.swap(Preferences,preferences,emptyPreferences())
+          inputOperation(preferredActive(current,changes),data,handle,termux))
 def dispatchRemaining(+listener: EventSink,queries: Query.Handle,remaining: Maybe<&2,String>) -> IO(Unit):
   match remaining:
     case None{}: IO.pure(Unit,Unit{})

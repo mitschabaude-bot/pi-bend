@@ -84,6 +84,18 @@ def scrollPrimary(node: LayoutNode,+motion: ScrollMotion,+now: Nat) -> ScrollRes
     case Children{first,rest}: childrenResult(scrollPrimary(first,motion,now),scrollPrimary(rest,motion,now))
     case node: noScroll(node)
 
+def changedScrollbar(change: Scroll.Transition) -> Scroll.ScrollView:
+  match change: case Scroll.Transition{view,_}: view
+def setPrimaryScrollbar(node: LayoutNode,+mode: Scroll.ScrollViewScrollbar,+now: Nat) -> LayoutNode:
+  match node:
+    case ScrollNode{+view}: ScrollNode{Bool.pick(Unit -> Scroll.ScrollView,Scroll.isPrimary(view),_ => changedScrollbar(Scroll.setScrollbar(view,mode,now)),_ => view)(Unit{})}
+    case Inline{nested}: Inline{setPrimaryScrollbar(nested,mode,now)}
+    case VStack{entries,gap}: VStack{setPrimaryScrollbar(entries,mode,now),gap}
+    case HStack{entries,gap,align}: HStack{setPrimaryScrollbar(entries,mode,now),gap,align}
+    case Entry{nested,size,visible}: Entry{setPrimaryScrollbar(nested,mode,now),size,visible}
+    case Children{first,rest}: Children{setPrimaryScrollbar(first,mode,now),setPrimaryScrollbar(rest,mode,now)}
+    case node: node
+
 # A manually scrolled follow-end viewport offers a jump-back cue at its last
 # visible row. The primary viewport is unique in the interactive layout.
 def scrollIndicator(view: Scroll.ScrollView) -> Maybe<&2,Nat>:

@@ -105,6 +105,7 @@ import ./commands.bend as Commands
 import ./session-controller.bend as Controller
 import ./transcript.bend as Transcript
 import ./viewport.bend as View
+import ../../../../tui/src/components/scroll-view.bend as Scroll
 
 type Error is Data:
   ThemeData{cause: Theme.LoadError}
@@ -2640,7 +2641,12 @@ def processThemeResult(result: Result<&2,&2,Terminal.Error,Process.Active>,failu
   match failure:
     case None{}: processResult(result)
     case Some{cause}: Fail{ThemeData{cause}}
-def configuredTui(base: Tui.TuiBase,session: Ref.Ref<Session.AgentSession>) -> IO(Tui.TuiBase):
+def configuredScrollbar(value: Settings.ScrollViewScrollbar) -> Scroll.ScrollViewScrollbar:
+  match value:
+    case Settings.ScrollAuto{}: Scroll.Auto{}
+    case Settings.ScrollAlways{}: Scroll.Always{}
+    case Settings.ScrollHidden{}: Scroll.Hidden{}
+def configuredTui(base: Tui.TuiBase,session: Ref.Ref<Session.AgentSession>,screen: Process.ScreenState) -> IO(Tui.TuiBase):
   do IO<Tui.TuiBase>:
     live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
     +settings : Settings.SettingsManager <- Session.getSettings(live)
@@ -2649,7 +2655,7 @@ def configuredTui(base: Tui.TuiBase,session: Ref.Ref<Session.AgentSession>) -> I
     hardwareFallback : Bool <- IO.pure(Bool,String.eq(Maybe.default(&2,String,environmentValue(hardwareEnv),""),"1"))
     clearFallback : Bool <- IO.pure(Bool,String.eq(Maybe.default(&2,String,environmentValue(clearEnv),""),"1"))
     show : Bool <- IO.pure(Bool,Maybe.default(&2,Bool,Settings.selectedShowHardwareCursor(Settings.get(Settings.effective(settings),"showHardwareCursor")),hardwareFallback))
-    return Tui.setTerminalPreferences(base,show,Settings.resolvedClearOnShrink(Settings.terminalOptions(settings),clearFallback))
+    return Process.preferredTui(base,Process.screenPreferences(screen,Process.Preferences{Some{show},Some{Settings.resolvedClearOnShrink(Settings.terminalOptions(settings),clearFallback)},Some{configuredScrollbar(Settings.getFullscreenScrollbar(settings))}}))
 type IndicatorStyle is Data: IndicatorStyle{theme: Ref.Ref<Theme.Theme>,bindings: Keybindings.KeybindingsManager}
 def styledIndicator(+current: Theme.Theme,bindings: Keybindings.KeybindingsManager) -> String:
   +shortcut = Hints.keyDisplayText(bindings,"tui.altScreen.bottom")
@@ -2693,7 +2699,7 @@ def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),
         +stopping : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeStopping,~Unit,~Unit,~themeStopping,ThemeStopping{redraw,selected,owned,viewHandle,screen,contextSession(context),terminalControl(contextInteraction(context))})
         +ids : List<&2,Component.ComponentId> <- IO.pure(List<&2,Component.ComponentId>,Component.ComponentId{1n} <> Component.ComponentId{2n} <> Component.ComponentId{3n} <> Nil{})
         +components : List<&2,Component.Component> <- IO.pure(List<&2,Component.Component>,document <> editorComponent <> footerComponent(foot) <> Nil{})
-        configured : Tui.TuiBase <- configuredTui(base,contextSession(context))
+        configured : Tui.TuiBase <- configuredTui(base,contextSession(context),screen)
         outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runSuspendable(Process.active(Process.Session{configured,screen},components,ids),stopped,terminalControl(contextInteraction(context)),False{},ready,resumed,stopping)
         Callback.dispose(Process.QueryReady,Unit,ready)
         Callback.dispose(Process.QueryReady,Unit,resumed)

@@ -118,7 +118,41 @@ def pending_bash_scroll():
     return scenario
 
 
+def configured_scrollbar(mode):
+    return {"name": "fullscreen-scrollbar-" + mode, "args": MODEL + ["--tui-mode", "fullscreen"],
+            "files": {"home/.pi/agent/settings.json": json.dumps({"fullscreenScrollbar": mode})},
+            "turns": [{"text": STREAM_ANSWER}],
+            "steps": [("wait", READY, "startup"), ("settle", 0.3), ("snap", "startup"),
+                      ("keys", "history"), ("key", "Enter"), ("wait", "END-OF-STREAM", "answer"), ("settle", 0.3),
+                      ("key", "PageUp"), ("settle", 0.2), ("snap", "scrolled"),
+                      ("key", "End"), ("settle", 0.2), ("snap", "end")]}
+
 SCENARIOS = [
+    configured_scrollbar("always"),
+    configured_scrollbar("hidden"),
+    {
+        "name": "settings-fullscreen-scrollbar", "args": MODEL + ["--tui-mode", "fullscreen"],
+        "turns": [{"text": STREAM_ANSWER}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.3),
+                  ("keys", "history"), ("key", "Enter"), ("wait", "END-OF-STREAM", "answer"), ("settle", 0.3),
+                  ("keys", "/settings"), ("key", "Enter"), ("settle", 0.3),
+                  ("keys", "fullscreen scrollbar"), ("settle", 0.2), ("snap", "auto"),
+                  ("key", "Enter"), ("settle", 0.2), ("snap", "always-menu"),
+                  ("key", "Escape"), ("settle", 0.2), ("snap", "always"),
+                  ("keys", "/settings"), ("key", "Enter"), ("settle", 0.3),
+                  ("keys", "fullscreen scrollbar"), ("key", "Enter"), ("settle", 0.2),
+                  ("key", "Escape"), ("key", "PageUp"), ("settle", 0.2), ("snap", "hidden"),
+                  ("keys", "/settings"), ("key", "Enter"), ("settle", 0.3),
+                  ("keys", "fullscreen scrollbar"), ("settle", 0.2), ("snap", "hidden-saved"),
+                  ("key", "Enter"), ("key", "Escape"), ("key", "PageUp"), ("settle", 0.2), ("snap", "auto-scrolled")],
+    },
+    {
+        "name": "settings-regular-scrollbar", "args": MODEL,
+        "steps": [("wait", READY, "startup"), ("settle", 0.3),
+                  ("keys", "/settings"), ("key", "Enter"), ("settle", 0.3),
+                  ("keys", "fullscreen scrollbar"), ("key", "Enter"), ("settle", 0.2), ("snap", "always-saved"),
+                  ("key", "Escape"), ("settle", 0.2), ("snap", "regular")],
+    },
     {
         "name": "fullscreen-startup",
         "args": MODEL + ["--tui-mode", "fullscreen"],

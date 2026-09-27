@@ -8,6 +8,7 @@ import ../packages/tui/src/tui.bend as Marker
 import ../packages/tui/src/tui-base.bend as Tui
 import ../packages/tui/src/tui-main-screen.bend as Screen
 import ../packages/tui/src/tui-process.bend as Process
+import ../packages/tui/src/components/scroll-view.bend as Scroll
 
 type Context is Data:
   Context{stop: Deferred.Deferred<Unit>,setter: Ref.Ref<Maybe<&2,Callback.Callback<Process.TerminalPreference,Unit>>>,write: Ref.Ref<Maybe<&2,Callback.Callback<String,Unit>>>}
@@ -27,6 +28,7 @@ def changed(callback: Maybe<&2,Callback.Callback<Process.TerminalPreference,Unit
       do IO<Unit>:
         Callback.call(Process.TerminalPreference,Unit,setter,Process.HardwareCursor{True{}})
         Callback.call(Process.TerminalPreference,Unit,setter,Process.ClearOnShrink{True{}})
+        Callback.call(Process.TerminalPreference,Unit,setter,Process.FullscreenScrollbar{Scroll.Always{}})
         IO.print_err("changed")
     case Some{setter} "c": Callback.call(Process.TerminalPreference,Unit,setter,Process.ClearOnShrink{False{}})
     case Some{setter} "h": Callback.call(Process.TerminalPreference,Unit,setter,Process.HardwareCursor{False{}})
