@@ -76,6 +76,20 @@ switch (mode) {
 				...hooks,
 			});
 		break;
+	case "e2e-basic":
+	case "e2e-text":
+	case "e2e-input": {
+		const text = {
+			"e2e-basic": "Generate a simple red circle on a plain white background. No text.",
+			"e2e-text": "Generate a red circle and include a brief description of the image.",
+			"e2e-input": "Create a variation of this image with a blue background.",
+		}[mode];
+		const { readFileSync } = await import("node:fs");
+		const input: any[] = [{ type: "text", text }];
+		if (mode === "e2e-input") input.push({ type: "image", data: readFileSync(`${process.env.PI_MONO}/packages/ai/test/data/red-circle.png`).toString("base64"), mimeType: "image/png" });
+		run = () => generateImages({ ...getImageModel("openrouter", "google/gemini-2.5-flash-image"), baseUrl }, { input }, { apiKey: "test", ...hooks });
+		break;
+	}
 	case "usage":
 		run = () => generateImages(priced(), dog, { apiKey: "test" });
 		break;
@@ -117,8 +131,10 @@ switch (mode) {
 }
 try {
 	const result = (await run()) as Record<string, unknown>;
+	const timestamp = result.timestamp as number;
 	delete result.timestamp;
 	console.log(`result ${JSON.stringify(result)}`);
+	console.log(`timestamp ${timestamp > 0 ? "positive" : "nonpositive"}`);
 } catch (error) {
 	console.log(`thrown ${(error as Error).message}`);
 }

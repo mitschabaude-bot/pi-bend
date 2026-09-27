@@ -6,6 +6,8 @@ import ../../../../runtime/src/ref.bend as R
 import ../model-runtime.bend as Models
 import ../skills.bend as Skills
 import ./types.bend as T
+import ../../../../runtime/src/child-process.bend as Child
+import ../../../../runtime/src/utf8.bend as Utf8
 
 # The part of upstream core/extensions/loader.ts that remains without a
 # module loader: the shared extension runtime (createExtensionRuntime), the
@@ -15,7 +17,7 @@ import ./types.bend as T
 # transition of the runtime's immutable ExtensionRuntimeState.
 
 def createExtensionRuntime() -> IO(T.ExtensionRuntime()):
-  R.new(T.ExtensionRuntimeState, T.ExtensionRuntimeState{Nil{}, Nil{}, None{}, 0n, None{}})
+  R.new(T.ExtensionRuntimeState, T.ExtensionRuntimeState{Nil{}, Nil{}, None{}, 0n, None{}, None{}})
 
 def firstSegment(parts: List<&2, String>) -> String:
   match parts:
@@ -80,11 +82,11 @@ def replaceExtension(extensions: List<&2, T.Extension>, +extension: T.Extension)
 
 def extensionsOf(state: T.ExtensionRuntimeState) -> List<&2, T.Extension>:
   match state:
-    case T.ExtensionRuntimeState{extensions, _, _, _, actions}: extensions
+    case T.ExtensionRuntimeState{extensions, _, _, _, actions, runtimeCwd}: extensions
 
 def withExtension(state: T.ExtensionRuntimeState, +extension: T.Extension) -> T.ExtensionRuntimeState:
   match state:
-    case T.ExtensionRuntimeState{extensions, pending, models, next, actions}: T.ExtensionRuntimeState{replaceExtension(extensions, extension), pending, models, next, actions}
+    case T.ExtensionRuntimeState{extensions, pending, models, next, actions, runtimeCwd}: T.ExtensionRuntimeState{replaceExtension(extensions, extension), pending, models, next, actions, runtimeCwd}
 
 def missingMessage(id: Nat) -> String: "Extension runtime has no extension " ++ Nat.show(id)
 
@@ -187,8 +189,8 @@ def subscribedResult(+next: Nat, pair: T.ExtensionRuntimeState & Result<&2, &2, 
 
 def subscribed(+id: Nat, handler: T.EventHandler, state: T.ExtensionRuntimeState) -> T.ExtensionRuntimeState & Result<&2, &2, String, Nat>:
   match state:
-    case T.ExtensionRuntimeState{extensions, pending, models, +next, actions}:
-      subscribedResult(next, updateExtension(id, extension => withSubscription(T.Subscription{next, handler}, extension), T.ExtensionRuntimeState{extensions, pending, models, Nat.add(next, 1n), actions}))
+    case T.ExtensionRuntimeState{extensions, pending, models, +next, actions, runtimeCwd}:
+      subscribedResult(next, updateExtension(id, extension => withSubscription(T.Subscription{next, handler}, extension), T.ExtensionRuntimeState{extensions, pending, models, Nat.add(next, 1n), actions, runtimeCwd}))
 
 def unsubscribeOf(+api: T.ExtensionAPI, result: Result<&2, &2, String, Nat>) -> Result<&2, &2, String, Unsubscribe>:
   match result:
@@ -243,10 +245,10 @@ type Effect is Data:
 # an unregistration drops the queued ones (upstream createExtensionRuntime).
 def appliedChange(change: T.ProviderChange, +path: String, state: T.ExtensionRuntimeState) -> T.ExtensionRuntimeState & Effect:
   match change state:
-    case T.RegisterProvider{provider} T.ExtensionRuntimeState{extensions, pending, None{}, next, actions}: (T.ExtensionRuntimeState{extensions, List.append(&2, T.PendingProvider, pending, [T.PendingProvider{provider, path}]), None{}, next, actions}, NoEffect{})
-    case T.UnregisterProvider{name} T.ExtensionRuntimeState{extensions, pending, None{}, next, actions}: (T.ExtensionRuntimeState{extensions, withoutPending(pending, name), None{}, next, actions}, NoEffect{})
-    case T.RegisterProvider{provider} T.ExtensionRuntimeState{extensions, pending, Some{+binding}, next, actions}: (T.ExtensionRuntimeState{extensions, pending, Some{binding}, next, actions}, RegisterNow{binding, provider})
-    case T.UnregisterProvider{name} T.ExtensionRuntimeState{extensions, pending, Some{+binding}, next, actions}: (T.ExtensionRuntimeState{extensions, pending, Some{binding}, next, actions}, UnregisterNow{binding, name})
+    case T.RegisterProvider{provider} T.ExtensionRuntimeState{extensions, pending, None{}, next, actions, runtimeCwd}: (T.ExtensionRuntimeState{extensions, List.append(&2, T.PendingProvider, pending, [T.PendingProvider{provider, path}]), None{}, next, actions, runtimeCwd}, NoEffect{})
+    case T.UnregisterProvider{name} T.ExtensionRuntimeState{extensions, pending, None{}, next, actions, runtimeCwd}: (T.ExtensionRuntimeState{extensions, withoutPending(pending, name), None{}, next, actions, runtimeCwd}, NoEffect{})
+    case T.RegisterProvider{provider} T.ExtensionRuntimeState{extensions, pending, Some{+binding}, next, actions, runtimeCwd}: (T.ExtensionRuntimeState{extensions, pending, Some{binding}, next, actions, runtimeCwd}, RegisterNow{binding, provider})
+    case T.UnregisterProvider{name} T.ExtensionRuntimeState{extensions, pending, Some{+binding}, next, actions, runtimeCwd}: (T.ExtensionRuntimeState{extensions, pending, Some{binding}, next, actions, runtimeCwd}, UnregisterNow{binding, name})
 
 def notifyChanged(changed: Maybe<&2, C.Callback<Unit, Unit>>) -> IO(Unit):
   match changed:
@@ -311,8 +313,8 @@ def unregisterProvider(api: T.ExtensionAPI, name: String) -> IO(Result<&2, &2, S
 
 def added(+path: String, hidden: Bool, state: T.ExtensionRuntimeState) -> T.ExtensionRuntimeState & Nat:
   match state:
-    case T.ExtensionRuntimeState{extensions, pending, models, +next, actions}:
-      (T.ExtensionRuntimeState{List.append(&2, T.Extension, extensions, [T.Extension{next, path, path, hidden, createSourceInfo(path), Nil{}, Nil{}, T.Loading{}, Nil{}, Nil{}}]), pending, models, Nat.add(next, 1n), actions}, next)
+    case T.ExtensionRuntimeState{extensions, pending, models, +next, actions, runtimeCwd}:
+      (T.ExtensionRuntimeState{List.append(&2, T.Extension, extensions, [T.Extension{next, path, path, hidden, createSourceInfo(path), Nil{}, Nil{}, T.Loading{}, Nil{}, Nil{}}]), pending, models, Nat.add(next, 1n), actions, runtimeCwd}, next)
 
 def withState(extension: T.Extension, state: T.LoadState) -> T.Extension & List<&2, T.ProviderChange>:
   match extension:
@@ -365,24 +367,34 @@ def loadError(+path: String, result: Result<&2, &2, String, Unit>, rest: List<&2
     case Done{_}: rest
     case Fail{error}: T.LoadError{path, error} <> rest
 
-# upstream DefaultResourceLoader.loadExtensionFactories: each named factory
-# loads as `<inline:name>` in order; failures become load errors.
-def loadExtensionFactories(+runtime: T.ExtensionRuntime(), extensions: List<&1, T.InlineExtension>) -> IO(List<&2, T.LoadError>):
+# upstream DefaultResourceLoader.loadExtensionFactories: a named factory
+# loads as `<inline:name>`, a bare one as `<inline:N>` (its 1-based
+# position), in order; failures become load errors.
+def loadFactoriesFrom(+runtime: T.ExtensionRuntime(), extensions: List<&1, T.InlineExtension>, +position: Nat) -> IO(List<&2, T.LoadError>):
   match extensions:
     case Nil{}: IO.pure(List<&2, T.LoadError>, Nil{})
     case T.InlineExtension{name, factory, hidden} <> rest:
       +path = "<inline:" ++ name ++ ">"
       do IO<List<&2, T.LoadError>>:
         result : Result<&2, &2, String, Unit> <- loadExtensionFromFactory(runtime, factory, path, hidden)
-        others : List<&2, T.LoadError> <- loadExtensionFactories(runtime, rest)
+        others : List<&2, T.LoadError> <- loadFactoriesFrom(runtime, rest, position + 1n)
         return loadError(path, result, others)
+    case T.BareExtension{factory} <> rest:
+      +path = "<inline:" ++ Nat.show(position) ++ ">"
+      do IO<List<&2, T.LoadError>>:
+        result : Result<&2, &2, String, Unit> <- loadExtensionFromFactory(runtime, factory, path, False{})
+        others : List<&2, T.LoadError> <- loadFactoriesFrom(runtime, rest, position + 1n)
+        return loadError(path, result, others)
+
+def loadExtensionFactories(+runtime: T.ExtensionRuntime(), extensions: List<&1, T.InlineExtension>) -> IO(List<&2, T.LoadError>):
+  loadFactoriesFrom(runtime, extensions, 1n)
 
 # Binding to the model runtime (upstream agent-session-services)
 # -------------------------------------------------------------
 
 def taken(state: T.ExtensionRuntimeState, binding: T.ProviderBinding) -> T.ExtensionRuntimeState & List<&2, T.PendingProvider>:
   match state:
-    case T.ExtensionRuntimeState{extensions, pending, _, next, actions}: (T.ExtensionRuntimeState{extensions, Nil{}, Some{binding}, next, actions}, pending)
+    case T.ExtensionRuntimeState{extensions, pending, _, next, actions, runtimeCwd}: (T.ExtensionRuntimeState{extensions, Nil{}, Some{binding}, next, actions, runtimeCwd}, pending)
 
 def providerError(path: String, result: Result<&2, &2, String, Unit>, others: List<&2, T.ExtensionError>) -> List<&2, T.ExtensionError>:
   match result:
@@ -400,7 +412,7 @@ def registeredPending(+models: Models.ModelRuntime, pending: List<&2, T.PendingP
 
 def bindingOf(state: T.ExtensionRuntimeState) -> Maybe<&2, T.ProviderBinding>:
   match state:
-    case T.ExtensionRuntimeState{_, _, binding, _, actions}: binding
+    case T.ExtensionRuntimeState{_, _, binding, _, actions, runtimeCwd}: binding
 
 def changedOf(binding: Maybe<&2, T.ProviderBinding>) -> Maybe<&2, C.Callback<Unit, Unit>>:
   match binding:
@@ -429,7 +441,7 @@ def notInitialized() -> String: "Extension runtime not initialized. Action metho
 
 def withActions(state: T.ExtensionRuntimeState, actions: Maybe<&2, T.ExtensionActions>) -> T.ExtensionRuntimeState & Unit:
   match state:
-    case T.ExtensionRuntimeState{extensions, pending, models, next, _}: (T.ExtensionRuntimeState{extensions, pending, models, next, actions}, Unit{})
+    case T.ExtensionRuntimeState{extensions, pending, models, next, _, runtimeCwd}: (T.ExtensionRuntimeState{extensions, pending, models, next, actions, runtimeCwd}, Unit{})
 
 # upstream bindCore's actions; None unbinds them before the session disposes
 # its callbacks.
@@ -438,7 +450,7 @@ def bindActions(runtime: T.ExtensionRuntime(), actions: Maybe<&2, T.ExtensionAct
 
 def actionsIn(state: T.ExtensionRuntimeState) -> Maybe<&2, T.ExtensionActions>:
   match state:
-    case T.ExtensionRuntimeState{_, _, _, _, actions}: actions
+    case T.ExtensionRuntimeState{_, _, _, _, actions, runtimeCwd}: actions
 
 # The extension must be active and the actions bound.
 def checkedActions(found: Result<&2, &2, String, T.Extension>, actions: Maybe<&2, T.ExtensionActions>) -> Result<&2, &2, String, T.ExtensionActions>:
@@ -555,3 +567,49 @@ def registerTool(api: T.ExtensionAPI, definition: T.ToolDefinition) -> IO(Result
         result : Result<&2, &2, String, Unit> <- modifyExtension(T.ExtensionAPI{runtime, id}, extension => withTool(definition, extension))
         refreshBound(runtime)
         return result
+
+# The directory extension commands run in (upstream loader cwd), set when a
+# runner is created for a session.
+def withCwd(+cwd: String, state: T.ExtensionRuntimeState) -> T.ExtensionRuntimeState & Unit:
+  match state:
+    case T.ExtensionRuntimeState{extensions, pending, models, next, actions, _}: (T.ExtensionRuntimeState{extensions, pending, models, next, actions, Some{cwd}}, Unit{})
+
+def setCwd(runtime: T.ExtensionRuntime(), +cwd: String) -> IO(Unit):
+  R.modify(T.ExtensionRuntimeState, Unit, runtime, state => withCwd(cwd, state))
+
+def cwdOf(state: T.ExtensionRuntimeState) -> String:
+  match state:
+    case T.ExtensionRuntimeState{_, _, _, _, _, runtimeCwd}: Maybe.default(&2, String, runtimeCwd, ".")
+
+# upstream ExecOptions: the directory (its timeout and abort signal are not
+# ported yet).
+type ExecOptions is Data:
+  ExecOptions{cwd: Maybe<&2, String>}
+
+def noExecOptions() -> ExecOptions: ExecOptions{None{}}
+
+# upstream ExecResult.
+type ExecResult is Data:
+  ExecResult{stdout: String, stderr: String, code: U32, killed: Bool}
+
+def execResult(completed: Child.Completed) -> ExecResult:
+  match completed:
+    case Child.Completed{Done{code}, out, err}: ExecResult{Utf8.decodeBuffer(out), Utf8.decodeBuffer(err), code, False{}}
+    case Child.Completed{Fail{Child.ExecutionTimedOut{}}, out, err}: ExecResult{Utf8.decodeBuffer(out), Utf8.decodeBuffer(err), 0, True{}}
+    case Child.Completed{Fail{Child.ExecutionAborted{}}, out, err}: ExecResult{Utf8.decodeBuffer(out), Utf8.decodeBuffer(err), 0, True{}}
+    case Child.Completed{Fail{_}, out, err}: ExecResult{Utf8.decodeBuffer(out), Utf8.decodeBuffer(err), 1, False{}}
+
+def execIn(+command: String, args: List<String>, +cwd: String) -> IO(ExecResult):
+  do IO<ExecResult>:
+    environment : List<String> <- IO.environment()
+    completed : Child.Completed <- Child.spawnSync(command, args, cwd, environment, Nil{})
+    return execResult(completed)
+
+# upstream pi.exec (execCommand): the command without a shell, in the given
+# cwd or the extensions' one; a failure to run it exits with code 1.
+def exec(api: T.ExtensionAPI, +command: String, args: List<String>, options: ExecOptions) -> IO(ExecResult):
+  match api options:
+    case T.ExtensionAPI{runtime, _} ExecOptions{cwd}:
+      do IO<ExecResult>:
+        state : T.ExtensionRuntimeState <- R.read(T.ExtensionRuntimeState, runtime)
+        execIn(command, args, Maybe.default(&2, String, cwd, cwdOf(state)))

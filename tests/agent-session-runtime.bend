@@ -12,6 +12,7 @@ import ../packages/coding-agent/src/core/tools/index.bend as Tools
 import ../packages/runtime/src/json.bend as Decode
 import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/ref.bend as R
+import ../packages/runtime/src/abort.bend as A
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/ai/src/utils/uuid.bend as Uuid
 import ../packages/ai/src/types.bend as Ai
@@ -490,6 +491,27 @@ def switchBack(+runtime: Runtime(), file: Maybe<&2, String>) -> IO(Unit):
         reportChange("switch", result)
         reportCurrent("switched", runtime)
 
+def resumeText(outcome: Host.ResumeOutcome) -> String:
+  match outcome:
+    case Host.Resumed{}: "resumed"
+    case Host.ResumeNeedsCwd{_}: "needs_cwd"
+    case Host.ResumeFailed{message}: "failed: " ++ message
+
+def reportResume(result: Host.CancellableResume) -> IO(Unit):
+  match result:
+    case Host.ResumeCancelled{}: IO.print("{\"type\":\"change\",\"label\":\"resume\",\"cancelled\":true}")
+    case Host.ResumeAttempted{outcome}: IO.print("{\"type\":\"change\",\"label\":\"resume\",\"cancelled\":false,\"outcome\":" ++ Decode.quote(resumeText(outcome)) ++ "}")
+
+# The interactive resume (resumeSessionCancellable).
+def resumeBack(+runtime: Runtime(), file: Maybe<&2, String>) -> IO(Unit):
+  match file:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{path}:
+      do IO<Unit>:
+        result : Host.CancellableResume <- Host.resumeSessionCancellable(Services(), runtime, path, None{})
+        reportResume(result)
+        reportCurrent("resumed", runtime)
+
 def firstForkId(live: Maybe<&2, Session.AgentSession>) -> IO(String):
   match live:
     case None{}: IO.pure(String, "missing")
@@ -524,7 +546,9 @@ def eventsScenario(+runtime: Runtime(), +kind: String, +cancelFork: R.Ref<Bool>)
     +rebinder : Host.Rebind() <- C.create(~Unit, ~Session.AgentSession, ~Unit, ~phaseRebind, Unit{})
     Bool.pick(Unit -> IO(Unit), String.eq(kind, "invalidate"), _ => IO.bind(Unit, Unit, Host.setBeforeSessionInvalidate(Services(), runtime, Some{invalidate}), _ => Host.setRebindSession(Services(), runtime, Some{rebinder})), _ => IO.pure(Unit, Unit{}))(Unit{})
     Bool.pick(Unit -> IO(Unit), String.eq(kind, "fork"), _ => forkEvents(runtime, cancelFork), _ => IO.bind(Result<&2, &2, String, Ctx.SessionChange>, Unit, Host.newSessionCancellable(Services(), runtime, None{}), result => IO.bind(Unit, Unit, reportChange("new", result), _ => reportCurrent("new", runtime))))(Unit{})
-    Bool.pick(Unit -> IO(Unit), String.eq(kind, "lifecycle"), _ => switchBack(runtime, first), _ => IO.pure(Unit, Unit{}))(Unit{})
+    +second : Maybe<&2, String> <- currentFile(runtime)
+    Bool.pick(Unit -> IO(Unit), String.eq(kind, "lifecycle"), _ => IO.bind(Unit, Unit, switchBack(runtime, first), _ => resumeBack(runtime, second)), _ => IO.pure(Unit, Unit{}))(Unit{})
+    Bool.pick(Unit -> IO(Unit), String.eq(kind, "cancel_switch"), _ => resumeBack(runtime, first), _ => IO.pure(Unit, Unit{}))(Unit{})
     Host.setBeforeSessionInvalidate(Services(), runtime, None{})
     Host.setRebindSession(Services(), runtime, None{})
     IO.print("{\"type\":\"phase\",\"name\":\"dispose\"}")
@@ -553,12 +577,101 @@ def runtimeEvents(+dir: String, +agentDir: String, +kind: String) -> IO(Unit):
     created : List<&2, Runner.ExtensionRunner> <- R.dispose(List<&2, Runner.ExtensionRunner>, runners)
     disposeRunners(created)
 
+# suite/regressions/8724-in-memory-fork-active-tool.test.ts: the first
+# session has a tool that waits until its call is aborted; later sessions
+# have no tools (upstream noTools "all").
+def untilAborted(fuel: Nat, signal: Maybe<&2, A.AbortSignal<Unit>>) -> IO(Unit):
+  match fuel signal:
+    case 0n _: IO.pure(Unit, Unit{})
+    case _ None{}: IO.pure(Unit, Unit{})
+    case 1n+rest Some{+found}:
+      do IO<Unit>:
+        stopped : Bool <- A.aborted(Unit, found)
+        Bool.pick(Unit -> IO(Unit), stopped, _ => IO.pure(Unit, Unit{}), _ => IO.bind(Unit, Unit, IO.sleep(5), _ => untilAborted(rest, Some{found})))(Unit{})
+
+def blockExecute(started: Chan(Unit), input: Tools.Input()) -> IO(Tools.Output()):
+  match input:
+    case T.ToolExecutionInput{_, _, signal, _}:
+      do IO<Tools.Output()>:
+        sent : Bool <- Chan.send(Unit, started, Unit{})
+        untilAborted(4000n, signal)
+        return Done{T.AgentToolResult{Ai.TextImageText{Ai.TextContent{"tool aborted", None{}}} <> Nil{}, None{}, None{}, None{}}}
+
+def blockTool(execute: C.Callback<Tools.Input(), Tools.Output()>) -> Tools.Tool():
+  T.AgentTool{"block", "Wait until aborted", V.ObjectValue{Rec.Record{Rec.Property{"type", V.Text{"object"}} <> Nil{}}}, None{}, "Block", None{}, execute, None{}, None{}}
+
+type BlockEnv is Data:
+  BlockEnv{agentDir: String, execute: C.Callback<Tools.Input(), Tools.Output()>}
+
+def blockLoadout(first: Bool, +execute: C.Callback<Tools.Input(), Tools.Output()>) -> Runtime.Loadout:
+  match first:
+    case True{}: Runtime.Loadout{Rec.new(String), blockTool(execute) <> Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}, blockTool(execute) <> Nil{}}
+    case False{}: Runtime.Loadout{Rec.new(String), Nil{}, Nil{}, Nil{}, None{}, Nil{}, None{}, Nil{}}
+
+def blockReplies(first: Bool) -> List<&2, String>:
+  match first:
+    case True{}: "first response" <> "@block" <> "unused after abort" <> Nil{}
+    case False{}: "next response" <> Nil{}
+
+def blockFactory(env: BlockEnv, request: Host.Request) -> IO(Result<&1, &1, String, Host.Created<Services()>>):
+  match env request:
+    case BlockEnv{agentDir, execute} Host.Request{+cwd, +stored, start}:
+      +first = Maybe.is_none(&2, Ext.SessionStartEvent, start)
+      do IO<Result<&1, &1, String, Host.Created<Services()>>>:
+        +fixture : Fx.Fixture <- Fx.fixtureWithModel(stored, cwd, agentDir, blockReplies(first), Nil{}, blockLoadout(first, execute), Some{Fx.fauxModel()}, Fx.fauxSources())
+        Session.refreshSessionContext(Fx.sessionOf(fixture))
+        return created(fixture)
+
+def promptInto(runtime: Runtime(), +text: String, done: Chan(Unit)) -> IO(Unit):
+  do IO<Unit>:
+    promptCurrent("blocking_prompt", runtime, text)
+    sent : Bool <- Chan.send(Unit, done, Unit{})
+    return Unit{}
+
+def forkDuringTool(+runtime: Runtime(), +started: Chan(Unit), +done: Chan(Unit)) -> IO(Unit):
+  do IO<Unit>:
+    promptCurrent("first_prompt", runtime, "first prompt")
+    live : Maybe<&2, Session.AgentSession> <- Host.session(Services(), runtime)
+    +entryId : String <- firstForkId(live)
+    IO.spawn(Unit, promptInto(runtime, "start blocking tool", done))
+    began : Maybe<&1, Unit> <- Chan.recv(Unit, started)
+    forked : Result<&2, &2, String, Host.ForkOutcome> <- Host.forkCancellable(Services(), runtime, entryId, Host.ForkBefore{})
+    reportForkOutcome("fork", forked)
+    finished : Maybe<&1, Unit> <- Chan.recv(Unit, done)
+    branchState("forked", runtime)
+    reportCurrent("forked", runtime)
+    promptCurrent("next_prompt", runtime, "next prompt")
+    branchState("next", runtime)
+    Host.dispose(Services(), runtime)
+
+def forkStarted(+started: Chan(Unit), +done: Chan(Unit), result: Result<&2, &2, String, Runtime()>) -> IO(Unit):
+  match result:
+    case Fail{error}: IO.die(Unit, 1, error)
+    case Done{runtime}: forkDuringTool(runtime, started, done)
+
+def inMemoryForkDuringTool(+dir: String, +agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    uuids : Uuid.Generator <- Uuid.generator()
+    opened : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
+    stored : Session.Session() <- Fx.requireSession(opened)
+    +started : Chan(Unit) <- Chan.new(Unit, 1)
+    +done : Chan(Unit) <- Chan.new(Unit, 1)
+    +execute : C.Callback<Tools.Input(), Tools.Output()> <- C.create(~Chan(Unit), ~Tools.Input(), ~Tools.Output(), ~blockExecute, started)
+    +make : Host.Factory(Services()) <- C.create(~BlockEnv, ~Host.Request, ~Result<&1, &1, String, Host.Created<Services()>>, ~blockFactory, BlockEnv{agentDir, execute})
+    +free : C.Callback<Services(), Unit> <- C.create(~Unit, ~Services(), ~Unit, ~release, Unit{})
+    result : Result<&2, &2, String, Runtime()> <- Host.create(Services(), make, free, agentDir, dir, stored)
+    forkStarted(started, done, result)
+    C.dispose(Host.Request, Result<&1, &1, String, Host.Created<Services()>>, make)
+    C.dispose(Services(), Unit, free)
+    C.dispose(Tools.Input(), Tools.Output(), execute)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case "persisted" <> dir <> agentDir <> missing <> Nil{}: persisted(dir, agentDir, missing)
     case "memory" <> dir <> agentDir <> Nil{}: inMemory(dir, agentDir)
     case "branching" <> dir <> agentDir <> kind <> Nil{}: branching(dir, agentDir, kind)
     case "events" <> dir <> agentDir <> kind <> Nil{}: runtimeEvents(dir, agentDir, kind)
+    case "fork_during_tool" <> dir <> agentDir <> Nil{}: inMemoryForkDuringTool(dir, agentDir)
     case _: IO.die(Unit, 1, "usage: agent-session-runtime persisted <dir> <agentDir> <missing-cwd-session> | memory <dir> <agentDir>")
 
 def main() -> IO(Unit):

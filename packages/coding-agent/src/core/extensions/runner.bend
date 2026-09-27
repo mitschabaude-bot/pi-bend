@@ -31,10 +31,11 @@ type ExtensionRunner is Data:
   ExtensionRunner{runtime: T.ExtensionRuntime(), cwd: String, models: Models.ModelRuntime, bindings: R.Ref<Ctx.Bindings>, listeners: R.Ref<Listeners>}
 
 # The runner owns the extension runtime from here on.
-def create(runtime: T.ExtensionRuntime(), cwd: String, models: Models.ModelRuntime) -> IO(ExtensionRunner):
+def create(+runtime: T.ExtensionRuntime(), +cwd: String, models: Models.ModelRuntime) -> IO(ExtensionRunner):
   do IO<ExtensionRunner>:
     bindings : R.Ref<Ctx.Bindings> <- R.new(Ctx.Bindings, Ctx.unbound())
     listeners : R.Ref<Listeners> <- R.new(Listeners, Listeners{0n, Nil{}})
+    Loader.setCwd(runtime, cwd)
     return ExtensionRunner{runtime, cwd, models, bindings, listeners}
 
 # Whoever bound callbacks or listeners unbinds and disposes them; the

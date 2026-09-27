@@ -42,7 +42,8 @@ class Reply:
     """One scripted model turn: blocks are ('thinking', text, signature),
     ('text', text) or ('tool', id, name, arguments JSON text)."""
 
-    def __init__(self, blocks, stop='stop', usage=None, hang=False, chunk=None, error=None, status=400):
+    def __init__(self, blocks, stop='stop', usage=None, hang=False, chunk=None, error=None, status=400, raw=None):
+        self.raw = raw
         self.blocks = blocks
         self.status = status
         self.stop = stop
@@ -196,7 +197,7 @@ def responses(reply, model):
             output.append(done)
             yield event('response.output_item.done', {'output_index': index, 'item': done})
         else:
-            item = {'id': f'fc_{index}', 'type': 'function_call', 'status': 'in_progress', 'call_id': block[1], 'name': block[2], 'arguments': ''}
+            item = {'id': block[4] if len(block) > 4 else f'fc_{index}', 'type': 'function_call', 'status': 'in_progress', 'call_id': block[1], 'name': block[2], 'arguments': ''}
             yield event('response.output_item.added', {'output_index': index, 'item': item})
             for part in pieces(block[3], None):
                 yield event('response.function_call_arguments.delta', {'item_id': item['id'], 'output_index': index, 'delta': part})
@@ -260,6 +261,32 @@ def orphan_calls(api, body):
     return missing
 
 
+ID_CHARS = re.compile(r'^[A-Za-z0-9_-]*$')
+
+
+def invalid_ids(api, body):
+    """Tool call ids a provider rejects: Chat Completions ids longer than 40
+    characters, Responses call_id/item ids longer than 64 or outside
+    [A-Za-z0-9_-] (the limits upstream's normalizers target)."""
+    found = []
+    if api == 'completions':
+        for message in body.get('messages', []):
+            for call in message.get('tool_calls') or []:
+                if len(call.get('id', '')) > 40:
+                    found.append(call['id'])
+            if message.get('role') == 'tool' and len(message.get('tool_call_id', '')) > 40:
+                found.append(message['tool_call_id'])
+    elif api in ('responses', 'azure', 'codex'):
+        for item in body.get('input', []):
+            if not isinstance(item, dict):
+                continue
+            for key in ('call_id', 'id'):
+                value = item.get(key)
+                if item.get('type') in ('function_call', 'function_call_output') and isinstance(value, str) and (len(value) > 64 or not ID_CHARS.match(value)):
+                    found.append(value)
+    return found
+
+
 def rejection(api, raw):
     text = raw.decode('utf-8', errors='replace')
     if LONE_SURROGATE.search(text):
@@ -268,6 +295,9 @@ def rejection(api, raw):
         body = json.loads(raw)
     except ValueError:
         return error_body(api, 'The request body is not valid JSON')
+    invalid = invalid_ids(api, body)
+    if invalid:
+        return error_body(api, f"Invalid 'call_id': string too long or contains invalid characters: {invalid[0][:80]}", 'invalid_value')
     missing = orphan_calls(api, body)
     if missing:
         if api == 'anthropic':
@@ -321,7 +351,7 @@ class Server:
                 self.end_headers()
                 model = json.loads(raw).get('model') or 'replay-model'
                 try:
-                    for part in ENCODERS[api](reply, model):
+                    for part in ([reply.raw.encode()] if reply.raw is not None else ENCODERS[api](reply, model)):
                         self.wfile.write(part)
                         self.wfile.flush()
                     if reply.hang:

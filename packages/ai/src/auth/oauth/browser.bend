@@ -9,6 +9,7 @@ import ../../../../runtime/src/string.bend as Strings
 import ../../../../runtime/src/text.bend as Text
 import ../../../../runtime/src/url.bend as URL
 import ../../../../runtime/src/utf8.bend as Utf8
+import ../../../../runtime/src/hosts.bend as Hosts
 
 # Shared native browser authorization: secure PKCE, state validation and a
 # callback/manual-input race. Workers own their sockets and are joined before
@@ -293,7 +294,26 @@ def callbackHost(value: Result<&1,&1,U32 & String,String>) -> String:
   match value:
     case Done{SCon{first,rest}}: SCon{first,rest}
     case _: "127.0.0.1"
+
+# The IPv4 address a callback host binds: an address stays itself, a name
+# (PI_OAUTH_CALLBACK_HOST=localhost) is looked up in /etc/hosts as Node's
+# listen() looks it up; the listener binds IPv4 only.
+def boundAddress(host: String, entries: List<&2, Hosts.Entry<Hosts.Address>>) -> String:
+  match entries:
+    case Hosts.Entry{Hosts.V4{address}, _, _} <> _: URL.serializeIpv4(address)
+    case _: host
+
+def hostsAddress(+host: String, entries: Result<&2, &2, Hosts.LoadError<Utf8.Error>, List<&2, Hosts.Entry<Hosts.Address>>>) -> String:
+  match entries:
+    case Done{found}: boundAddress(host, Hosts.lookupFamily(Hosts.IPv4Only{}, host, found))
+    case Fail{_}: host
+
+def listenOn(+host: String, port: U32) -> IO(Result<&1,&1,U32 & String,Listener>):
+  do IO<Result<&1,&1,U32 & String,Listener>>:
+    entries : Result<&2, &2, Hosts.LoadError<Utf8.Error>, List<&2, Hosts.Entry<Hosts.Address>>> <- Hosts.read("/etc/hosts", 4096, 1048576n)
+    TCP.listen_host(hostsAddress(host, entries), port)
+
 def listenCallback(port: U32) -> IO(Result<&1,&1,U32 & String,Listener>):
   do IO<Result<&1,&1,U32 & String,Listener>>:
     host : Result<&1,&1,U32 & String,String> <- IO.get_env("PI_OAUTH_CALLBACK_HOST")
-    TCP.listen_host(callbackHost(host),port)
+    listenOn(callbackHost(host),port)

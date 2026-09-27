@@ -161,12 +161,19 @@ def stateOf(env: StateEnv, unit: Unit) -> IO(Ctx.SessionState):
 
 def nothing(unit: Unit, input: Unit) -> IO(Unit): IO.pure(Unit, Unit{})
 
+def noUsage(unit: Unit, input: Unit) -> IO(Maybe<&2, Ctx.ContextUsage>): IO.pure(Maybe<&2, Ctx.ContextUsage>, None{})
+def ignoreCompact(unit: Unit, options: Ctx.CompactOptions) -> IO(Unit): Ctx.disposeCompactOptions(options)
+def noPrompt(unit: Unit, input: Unit) -> IO(String): IO.pure(String, "")
+
 def contextActions(env: StateEnv) -> IO(Ctx.ExtensionContextActions):
   do IO<Ctx.ExtensionContextActions>:
     state : C.Callback<Unit, Ctx.SessionState> <- C.create(~StateEnv, ~Unit, ~Ctx.SessionState, ~stateOf, env)
     abort : C.Callback<Unit, Unit> <- C.create(~Unit, ~Unit, ~Unit, ~nothing, Unit{})
     shutdown : C.Callback<Unit, Unit> <- C.create(~Unit, ~Unit, ~Unit, ~nothing, Unit{})
-    return Ctx.ExtensionContextActions{state, abort, shutdown}
+    usage : C.Callback<Unit, Maybe<&2, Ctx.ContextUsage>> <- C.create(~Unit, ~Unit, ~Maybe<&2, Ctx.ContextUsage>, ~noUsage, Unit{})
+    compact : C.Callback<Ctx.CompactOptions, Unit> <- C.create(~Unit, ~Ctx.CompactOptions, ~Unit, ~ignoreCompact, Unit{})
+    prompt : C.Callback<Unit, String> <- C.create(~Unit, ~Unit, ~String, ~noPrompt, Unit{})
+    return Ctx.ExtensionContextActions{state, abort, shutdown, usage, compact, prompt}
 
 def scopedIds(items: List<&2, Models.ScopedModel>) -> String:
   match items:
@@ -289,7 +296,7 @@ def capturing(slot: R.Ref<Maybe<&2, T.ExtensionAPI>>) -> T.InlineExtension:
 
 def pendingOf(state: T.ExtensionRuntimeState) -> Nat:
   match state:
-    case T.ExtensionRuntimeState{_, pending, _, _, actions}: List.length(&2, T.PendingProvider, pending)
+    case T.ExtensionRuntimeState{_, pending, _, _, actions, runtimeCwd}: List.length(&2, T.PendingProvider, pending)
 
 def pendingCount(runtime: T.ExtensionRuntime()) -> IO(Nat):
   do IO<Nat>:
@@ -719,7 +726,7 @@ def pendingNames(pending: List<&2, T.PendingProvider>) -> List<&2, String>:
 
 def pendingNamesOf(state: T.ExtensionRuntimeState) -> String:
   match state:
-    case T.ExtensionRuntimeState{_, pending, _, _, actions}: joined(pendingNames(pending))
+    case T.ExtensionRuntimeState{_, pending, _, _, actions, runtimeCwd}: joined(pendingNames(pending))
 
 def pendingText(runtime: T.ExtensionRuntime()) -> IO(String):
   do IO<String>:

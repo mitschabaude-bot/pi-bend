@@ -38,6 +38,7 @@ import ../packages/coding-agent/src/core/system-prompt.bend as Prompt
 import ../packages/coding-agent/src/core/skills.bend as Skills
 import ../packages/coding-agent/src/core/prompt-templates.bend as Templates
 import ../packages/runtime/src/filesystem.bend as FS
+import ../packages/coding-agent/examples/extensions/trigger-compact.bend as TriggerCompact
 
 # The port of upstream test/suite/harness.ts (createHarness): an AgentSession
 # over tests/regressions.bend's faux provider, an in-memory session, the
@@ -192,12 +193,14 @@ def promptSections(+source: Runtime.LoadoutSource, tools: List<&2, Tools.Tool()>
 # templates its resource loader provides.
 type Resources is Data:
   Resources{skills: List<&2, Skills.Skill>, templates: List<&2, Templates.PromptTemplate>}
+  DiscoveredPrompts{}
 
 def noResources() -> Resources: Resources{Nil{}, Nil{}}
 
 def harnessLoadout(+source: Runtime.LoadoutSource, +tools: List<&2, Tools.Tool()>, runner: Maybe<&2, Runner.ExtensionRunner>, resources: Resources) -> Runtime.Loadout:
   match resources:
     case Resources{skills, templates}: Runtime.Loadout{promptSections(source, tools), tools, skills, templates, runner, Nil{}, Some{source}, tools}
+    case DiscoveredPrompts{}: Runtime.Loadout{promptSections(source, tools), tools, Nil{}, Nil{}, runner, Nil{}, Some{source}, tools}
 
 def loadoutSource(+dir: String, +agentDir: String, +settings: Settings.SettingsManager) -> Runtime.LoadoutSource:
   Runtime.LoadoutSource{Paths.Environment{dir, agentDir, Runtime.urlContext()}, Reg.toolOptions(dir, agentDir, Runtime.defaultToolSelection(), settings), "/pi"}
@@ -298,7 +301,15 @@ def splitOwners(split: BuiltinSet) -> Maybe<&2, BuiltinsHandle>:
   match split:
     case BuiltinSet{handle, _}: handle
 
-def createHarnessResources(+dir: String, +agentDir: String, +tooling: Tooling, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>, seed: List<&2, Session.Message()>, others: List<&2, Ai.Model<Ai.JsonValue>>, resources: Resources) -> IO(Harness):
+# DiscoveredPrompts: prompt templates are discovered (upstream's resource
+# loader without noPromptTemplates); skills stay off.
+def withDiscovery(resources: Resources, +source: Runtime.LoadoutSource) -> Runtime.LoadoutSource:
+  match resources source:
+    case DiscoveredPrompts{} Runtime.LoadoutSource{environment, Runtime.CreateOptions{cwd, agentDir, auth, bundle, packageDir, provider, model, apiKey, thinking, systemPrompt, append, selection, contextFiles, seed, settings, Runtime.ResourceOptions{skillPaths, noSkills, promptPaths, _}}, root}:
+      Runtime.LoadoutSource{environment, Runtime.CreateOptions{cwd, agentDir, auth, bundle, packageDir, provider, model, apiKey, thinking, systemPrompt, append, selection, contextFiles, seed, settings, Runtime.ResourceOptions{skillPaths, noSkills, promptPaths, False{}}}, root}
+    case _ other: other
+
+def createHarnessResources(+dir: String, +agentDir: String, +tooling: Tooling, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>, seed: List<&2, Session.Message()>, others: List<&2, Ai.Model<Ai.JsonValue>>, +resources: Resources) -> IO(Harness):
   do IO<Harness>:
     +runtime : Maybe<&2, Ext.ExtensionRuntime()> <- loadedRuntime(extensions)
     +built : Built <- buildTools(ref, specsOf(tooling))
@@ -309,7 +320,7 @@ def createHarnessResources(+dir: String, +agentDir: String, +tooling: Tooling, s
     stored : Session.Session() <- Reg.seeded(seed, empty)
     loaded : Settings.FileSettingsStorage & Settings.SettingsManager <- Settings.create(dir, agentDir, Settings.options())
     +settings : Settings.SettingsManager = H.settingsOf(loaded)
-    +source : Runtime.LoadoutSource = loadoutSource(dir, agentDir, settings)
+    +source : Runtime.LoadoutSource = withDiscovery(resources, loadoutSource(dir, agentDir, settings))
     +value : Reg.Fixture <- Reg.fixtureModels(stored, dir, settings, setup, others, models => extensionLoadout(runtime, source, dir, List.append(&2, Tools.Tool(), splitTools(split), builtTools(built)), resources, models))
     R.write(Maybe<&2, Session.AgentSession>, ref, Some{Reg.sessionOf(value)})
     return Harness{value, ref, builtExecutes(built), splitOwners(split)}
@@ -2138,6 +2149,225 @@ def dynamicScenario(+dir: String, agentDir: String, hidden: Bool) -> IO(Unit):
     reportTools("after_bind", sessionOf(harness))
     cleanup(harness)
 
+# #2753: reload applies prompt settings changed after startup. The harness
+# builds its loadout without discovery, so a first reload loads the
+# discovered templates as startup does.
+def templateNames(templates: List<&2, Templates.PromptTemplate>) -> List<&2, V.Value>:
+  match templates:
+    case Nil{}: Nil{}
+    case Templates.PromptTemplate{name, _, _, _, _, _} <> rest: Json.text(name) <> templateNames(rest)
+
+def reportTemplates(+label: String, +session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    templates : List<&2, Templates.PromptTemplate> <- Session.promptTemplates(session)
+    print("templates", Json.field("label", Json.text(label), Json.field("names", V.ArrayValue{templateNames(templates)}, Nil{})))
+
+def reloadSettingsScenario(+dir: String, +agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    written : Result<&2, &2, FS.Error, Unit> <- FS.writeFile(agentDir ++ "/prompts/test.md", "Echo test prompt\n")
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup(Nil{}), ref, Nil{}, DiscoveredPrompts{})
+    first : Result<&2, &2, String, Unit> <- Session.reload(sessionOf(harness))
+    H.reportOutcome("reload", first)
+    reportTemplates("startup", sessionOf(harness))
+    changed : Result<&2, &2, FS.Error, Unit> <- FS.writeFile(agentDir ++ "/settings.json", "{\n  \"prompts\": [\n    \"-prompts/test.md\"\n  ]\n}\n")
+    second : Result<&2, &2, String, Unit> <- Session.reload(sessionOf(harness))
+    H.reportOutcome("reload", second)
+    reportTemplates("reloaded", sessionOf(harness))
+    cleanup(harness)
+
+# compaction-extensions.test.ts over the faux provider (upstream runs it
+# live): an extension records session_before_compact (its preparation and
+# branch) and session_compact, and cancels, supplies a compaction (with the
+# preparation's or its own tokensBefore) or throws.
+type CompactMode is Data:
+  CompactMode{label: String, mode: String}
+
+def compactEntryFields(entry: S.SessionEntry<Unit, Tools.ToolDetails, V.Value>) -> List<&2, Rec.Property<V.Value>>:
+  match entry:
+    case S.Compaction{S.CompactionEntry{_, summary, _, tokens, _, _, _, _}}: Json.field("entryType", Json.text("compaction"), Json.field("summary", Json.text(summary), Json.field("tokensBefore", V.Number{U32.to_f64(U32.from_nat(tokens))}, Nil{})))
+    case _: Json.field("entryType", Json.text("other"), Nil{})
+
+def preparationShape(preparation: Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>, branch: Nat) -> List<&2, Rec.Property<V.Value>>:
+  match preparation:
+    case Compaction.CompactionPreparation{firstKept, summarize, prefix, split, tokens, _, _, _}:
+      Json.field("firstKeptEntryId", Json.text(firstKept), Json.field("messagesToSummarize", V.Number{U32.to_f64(U32.from_nat(List.length(&2, Session.Message(), summarize)))}, Json.field("turnPrefixMessages", V.Number{U32.to_f64(U32.from_nat(List.length(&2, Session.Message(), prefix)))}, Json.field("isSplitTurn", V.Boolean{split}, Json.field("tokensBefore", V.Number{tokens}, Json.field("branchEntries", V.Number{U32.to_f64(U32.from_nat(branch))}, Nil{}))))))
+
+def withTokens(result: Compaction.CompactionResult, +tokens: F64) -> Compaction.CompactionResult:
+  match result:
+    case Compaction.CompactionResult{summary, kept, _, after, usage, details}: Compaction.CompactionResult{summary, kept, tokens, after, usage, details}
+
+def beforeCompactReply(+mode: String, preparation: Compaction.CompactionPreparation<Unit, Tools.ToolDetails, V.Value>) -> Handled(Ext.SessionBeforeCompactResult):
+  match mode:
+    case "cancel": Done{Some{Ext.SessionBeforeCompactResult{Some{True{}}, None{}}}}
+    case "supply": Done{Some{Ext.SessionBeforeCompactResult{None{}, Some{suppliedCompaction(preparation, "Custom summary from extension")}}}}
+    case "supply999": Done{Some{Ext.SessionBeforeCompactResult{None{}, Some{withTokens(suppliedCompaction(preparation, "Custom summary with modified values"), U32.to_f64(999))}}}}
+    case "throw": Fail{"Extension intentionally throws"}
+    case _: Done{None{}}
+
+def beforeCompactRecorded(env: CompactMode, call: Ext.HandlerCall<Ext.SessionBeforeCompactEvent>) -> IO(Handled(Ext.SessionBeforeCompactResult)):
+  match env call:
+    case CompactMode{label, mode} Ext.HandlerCall{Ext.SessionBeforeCompactEvent{+preparation, branch, _, _, _, _}, _}:
+      do IO<Handled(Ext.SessionBeforeCompactResult)>:
+        print("before_compact", Json.field("extension", Json.text(label), preparationShape(preparation, List.length(&2, S.SessionEntry<Unit, Tools.ToolDetails, V.Value>, branch))))
+        return beforeCompactReply(mode, preparation)
+
+def compactRecorded(label: String, call: Ext.HandlerCall<Ext.SessionCompactEvent>) -> IO(Handled(Unit)):
+  match call:
+    case Ext.HandlerCall{Ext.SessionCompactEvent{entry, fromExtension, _, _}, _}:
+      do IO<Handled(Unit)>:
+        print("compact", Json.field("extension", Json.text(label), Json.field("fromExtension", V.Boolean{fromExtension}, compactEntryFields(entry))))
+        return Done{None{}}
+
+def compactFactory(+label: String, mode: String, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    before : Ext.ExtensionHandler(Ext.SessionBeforeCompactEvent, Ext.SessionBeforeCompactResult) <- C.create(~CompactMode, ~Ext.HandlerCall<Ext.SessionBeforeCompactEvent>, ~Handled(Ext.SessionBeforeCompactResult), ~beforeCompactRecorded, CompactMode{label, mode})
+    after : Ext.ExtensionHandler(Ext.SessionCompactEvent, Unit) <- C.create(~String, ~Ext.HandlerCall<Ext.SessionCompactEvent>, ~Handled(Unit), ~compactRecorded, label)
+    first : Result<&2, &2, String, Unit> <- subscribe(api, Ext.OnSessionBeforeCompact{before})
+    second : Result<&2, &2, String, Unit> <- subscribe(api, Ext.OnSessionCompact{after})
+    return both(first, second)
+
+def compactExtensions(+mode: String) -> List<&1, Ext.InlineExtension>:
+  match mode:
+    case "ordered": [inline("extension1", api => compactFactory("extension1", "none", api)), inline("extension2", api => compactFactory("extension2", "none", api))]
+    case other: [inline("test-extension", api => compactFactory("test-extension", other, api))]
+
+def compactionExtensionsScenario(+dir: String, agentDir: String, +mode: String, +prompts: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"4"}, Reg.Text{"6"}, Reg.Text{"history summary"}, Reg.Text{"prefix summary"}]), ref, compactExtensions(mode), noResources())
+    prompted(sessionOf(harness), "What is 2+2? Reply with just the number.")
+    Bool.pick(Unit -> IO(Unit), String.eq(prompts, "two"), _ => prompted(sessionOf(harness), "What is 3+3? Reply with just the number."), _ => IO.pure(Unit, Unit{}))(Unit{})
+    result : Result<&2, &2, String, Compaction.CompactionResult> <- Session.compact(sessionOf(harness), None{})
+    H.reportCompact(result)
+    reportEntries("entries", sessionOf(harness))
+    cleanup(harness)
+
+# trigger-compact-extension.test.ts: the example in a session whose turns
+# report 110k, 120k, 95k and 105k context tokens (message_end usage); only the
+# last turn crosses the threshold and compacts through ctx.compact.
+def assistantMessage(message: Session.Message()) -> Bool: Maybe.is_some(&2, Session.Message(), withUsage(0, message))
+
+def usageApplied(totals: R.Ref<List<&2, U32>>, remaining: List<&2, U32>, message: Session.Message()) -> IO(Handled(Ext.MessageEndEventResult)):
+  match remaining:
+    case Nil{}: IO.pure(Handled(Ext.MessageEndEventResult), Done{None{}})
+    case total <> rest:
+      do IO<Handled(Ext.MessageEndEventResult)>:
+        R.write(List<&2, U32>, totals, rest)
+        return Done{Some{Ext.MessageEndEventResult{withUsage(total, message)}}}
+
+# Each assistant message takes the next total.
+def usageStep(totals: R.Ref<List<&2, U32>>, remaining: List<&2, U32>, +message: Session.Message()) -> IO(Handled(Ext.MessageEndEventResult)):
+  Bool.pick(Unit -> IO(Handled(Ext.MessageEndEventResult)), assistantMessage(message), _ => usageApplied(totals, remaining, message), _ => IO.pure(Handled(Ext.MessageEndEventResult), Done{None{}}))(Unit{})
+
+def nextUsageWith(+totals: R.Ref<List<&2, U32>>, call: Ext.HandlerCall<Ext.MessageEndEvent>) -> IO(Handled(Ext.MessageEndEventResult)):
+  match call:
+    case Ext.HandlerCall{Ext.MessageEndEvent{message}, _}:
+      do IO<Handled(Ext.MessageEndEventResult)>:
+        remaining : List<&2, U32> <- R.read(List<&2, U32>, totals)
+        usageStep(totals, remaining, message)
+
+def nextUsage(totals: R.Ref<List<&2, U32>>, call: Ext.HandlerCall<Ext.MessageEndEvent>) -> IO(Handled(Ext.MessageEndEventResult)): nextUsageWith(totals, call)
+
+def usageTokensJson(usage: Maybe<&2, Ctx.ContextUsage>) -> V.Value:
+  match usage:
+    case Some{Ctx.ContextUsage{Some{tokens}, _, _}}: V.Number{tokens}
+    case _: V.Null{}
+
+def turnUsage(unit: Unit, call: Ext.HandlerCall<Ext.TurnEndEvent>) -> IO(Handled(Ext.BoundaryResult)):
+  match call:
+    case Ext.HandlerCall{_, ctx}:
+      do IO<Handled(Ext.BoundaryResult)>:
+        usage : Maybe<&2, Ctx.ContextUsage> <- Ctx.getContextUsage(ctx)
+        print("turn_usage", Json.field("tokens", usageTokensJson(usage), Nil{}))
+        return Done{None{}}
+
+def compactSeen(done: Chan(Unit), call: Ext.HandlerCall<Ext.SessionCompactEvent>) -> IO(Handled(Unit)):
+  match call:
+    case Ext.HandlerCall{Ext.SessionCompactEvent{entry, fromExtension, _, _}, _}:
+      do IO<Handled(Unit)>:
+        print("compact", Json.field("fromExtension", V.Boolean{fromExtension}, compactEntryFields(entry)))
+        sent : Bool <- Chan.send(Unit, done, Unit{})
+        return Done{None{}}
+
+def compactFailedSeen(done: Chan(Unit), call: Ext.HandlerCall<Ext.SessionCompactFailedEvent>) -> IO(Handled(Unit)):
+  match call:
+    case Ext.HandlerCall{Ext.SessionCompactFailedEvent{_, message, _, _, _}, _}:
+      do IO<Handled(Unit)>:
+        print("compact_failed", Json.field("errorMessage", Maybe.default(&2, V.Value, Maybe.map(&2, String, V.Value, Json.text, message), V.Null{}), Nil{}))
+        sent : Bool <- Chan.send(Unit, done, Unit{})
+        return Done{None{}}
+
+def usageObserver(totals: R.Ref<List<&2, U32>>, +done: Chan(Unit), +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    ending : Ext.ExtensionHandler(Ext.MessageEndEvent, Ext.MessageEndEventResult) <- C.create(~R.Ref<List<&2, U32>>, ~Ext.HandlerCall<Ext.MessageEndEvent>, ~Handled(Ext.MessageEndEventResult), ~nextUsage, totals)
+    turns : Ext.ExtensionHandler(Ext.TurnEndEvent, Ext.BoundaryResult) <- C.create(~Unit, ~Ext.HandlerCall<Ext.TurnEndEvent>, ~Handled(Ext.BoundaryResult), ~turnUsage, Unit{})
+    compacted : Ext.ExtensionHandler(Ext.SessionCompactEvent, Unit) <- C.create(~Chan(Unit), ~Ext.HandlerCall<Ext.SessionCompactEvent>, ~Handled(Unit), ~compactSeen, done)
+    failed : Ext.ExtensionHandler(Ext.SessionCompactFailedEvent, Unit) <- C.create(~Chan(Unit), ~Ext.HandlerCall<Ext.SessionCompactFailedEvent>, ~Handled(Unit), ~compactFailedSeen, done)
+    first : Result<&2, &2, String, Unit> <- subscribe(api, Ext.OnMessageEnd{ending})
+    second : Result<&2, &2, String, Unit> <- subscribe(api, Ext.OnTurnEnd{turns})
+    third : Result<&2, &2, String, Unit> <- subscribe(api, Ext.OnSessionCompact{compacted})
+    fourth : Result<&2, &2, String, Unit> <- subscribe(api, Ext.OnSessionCompactFailed{failed})
+    return both(first, both(second, both(third, fourth)))
+
+def triggerCompactScenario(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +totals : R.Ref<List<&2, U32>> <- R.new(List<&2, U32>, [110000, 120000, 95000, 105000])
+    +done : Chan(Unit) <- Chan.new(Unit, 1)
+    +harness : Harness <- resourceHarness(dir, agentDir, setup([Reg.Text{"one"}, Reg.Text{"two"}, Reg.Text{"three"}, Reg.Text{"four"}, Reg.Text{"compacted summary"}, Reg.Text{"turn prefix"}]), ref, [inline("trigger-compact", TriggerCompact.triggerCompact), inline("observer", api => usageObserver(totals, done, api))], noResources())
+    prompted(sessionOf(harness), "first")
+    prompted(sessionOf(harness), "second")
+    prompted(sessionOf(harness), "third")
+    print("prompts_done", Nil{})
+    prompted(sessionOf(harness), "fourth")
+    compacted : Maybe<&1, Unit> <- Chan.recv(Unit, done)
+    Session.waitForIdle(sessionOf(harness))
+    reportEntries("entries", sessionOf(harness))
+    cleanup(harness)
+
+# branch-summary-extensions.test.ts: session_before_tree supplies the
+# summary with usage; the entry and the session totals carry it.
+def tenths(+count: U32) -> F64: F.divide(U32.to_f64(count), U32.to_f64(10))
+
+def extensionSummaryUsage() -> Ai.Usage:
+  Ai.Usage{U32.to_f64(10), U32.to_f64(20), U32.to_f64(30), U32.to_f64(40), None{}, None{}, U32.to_f64(100), Ai.UsageCost{tenths(1), tenths(2), tenths(3), tenths(4), U32.to_f64(1)}}
+
+def supplySummary(env: Unit, call: Ext.HandlerCall<Ext.SessionBeforeTreeEvent>) -> IO(Handled(Ext.SessionBeforeTreeResult)):
+  IO.pure(Handled(Ext.SessionBeforeTreeResult), Done{Some{Ext.SessionBeforeTreeResult{None{}, Some{Ext.BranchSummaryOverride{"Summary provided by extension", None{}, Some{extensionSummaryUsage()}}}, None{}, None{}, None{}}}})
+
+def summaryFactory(api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    handler : Ext.ExtensionHandler(Ext.SessionBeforeTreeEvent, Ext.SessionBeforeTreeResult) <- C.create(~Unit, ~Ext.HandlerCall<Ext.SessionBeforeTreeEvent>, ~Handled(Ext.SessionBeforeTreeResult), ~supplySummary, Unit{})
+    subscribe(api, Ext.OnSessionBeforeTree{handler})
+
+def usageJson(usage: Maybe<&2, Ai.Usage>) -> V.Value:
+  match usage:
+    case None{}: V.Null{}
+    case Some{Ai.Usage{input, output, read, write, _, _, total, Ai.UsageCost{ci, co, cr, cw, ct}}}: Json.object(Json.field("input", V.Number{input}, Json.field("output", V.Number{output}, Json.field("cacheRead", V.Number{read}, Json.field("cacheWrite", V.Number{write}, Json.field("totalTokens", V.Number{total}, Json.field("cost", Json.object(Json.field("input", V.Number{ci}, Json.field("output", V.Number{co}, Json.field("cacheRead", V.Number{cr}, Json.field("cacheWrite", V.Number{cw}, Json.field("total", V.Number{ct}, Nil{})))))), Nil{})))))))
+
+def summaryEntryJson(result: Result<&2, &2, String, Session.TreeNavigation>) -> V.Value:
+  match result:
+    case Done{Session.TreeNavigated{_, _, Some{S.BranchSummaryEntry{S.SessionEntryBase{_, parent, _}, fromId, summary, _, usage, fromHook}}}}:
+      Json.object(Json.field("type", Json.text("branch_summary"), Json.field("parentId", Maybe.default(&2, V.Value, Maybe.map(&2, String, V.Value, Json.text, parent), V.Null{}), Json.field("fromId", Json.text(fromId), Json.field("fromHook", Maybe.default(&2, V.Value, Maybe.map(&2, Bool, V.Value, flag => V.Boolean{flag}, fromHook), V.Null{}), Json.field("summary", Json.text(summary), Json.field("usage", usageJson(usage), Nil{})))))))
+    case _: V.Null{}
+
+def totalsJson(stats: Result<&2, &2, S.Error, Stats.Stats>) -> V.Value:
+  match stats:
+    case Done{Stats.Stats{_, _, Stats.Totals{_, _, _, _, _, input, output, read, write, cost}, _}}: Json.object(Json.field("input", V.Number{input}, Json.field("output", V.Number{output}, Json.field("cacheRead", V.Number{read}, Json.field("cacheWrite", V.Number{write}, Json.field("cost", V.Number{cost}, Nil{}))))))
+    case Fail{_}: V.Null{}
+
+def branchSummaryExtensionScenario(+dir: String, agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +ref : R.Ref<Maybe<&2, Session.AgentSession>> <- R.new(Maybe<&2, Session.AgentSession>, None{})
+    +harness : Harness <- createHarnessFull(dir, agentDir, Builtins{}, setup(Nil{}), ref, [inline("summary", summaryFactory)], [Reg.userMsg("first branch"), Reg.assistantAt("first reply", Ai.Stop{}, Reg.totalUsage(1, 1), Reg.zero()), Reg.userMsg("abandoned branch work"), Reg.assistantAt("abandoned reply", Ai.Stop{}, Reg.totalUsage(1, 1), Reg.zero())], Nil{})
+    +target : String <- firstEntryId(sessionOf(harness))
+    source : Maybe<&2, String> <- currentLeaf(sessionOf(harness))
+    result : Result<&2, &2, String, Session.TreeNavigation> <- Session.navigateTreeWith(sessionOf(harness), target, Session.NavigateTreeOptions{True{}, None{}, None{}, None{}})
+    stats : Result<&2, &2, S.Error, Stats.Stats> <- Session.getSessionStats(sessionOf(harness))
+    print("summary_entry", Json.field("sourceId", Maybe.default(&2, V.Value, Maybe.map(&2, String, V.Value, Json.text, source), V.Null{}), Json.field("entry", summaryEntryJson(result), Json.field("totals", totalsJson(stats), Nil{}))))
+    cleanup(harness)
+
 def promptScenario(+dir: String, agentDir: String, +name: String) -> IO(Unit):
   match name:
     case "tool_turn": promptToolTurn(dir, agentDir)
@@ -2189,6 +2419,10 @@ def run(args: List<String>) -> IO(Unit):
     case "context" <> dir <> agentDir <> name <> Nil{}: contextScenario(dir, agentDir, name)
     case "fork_messages" <> dir <> agentDir <> Nil{}: forkMessagesScenario(dir, agentDir)
     case "prompt" <> dir <> agentDir <> name <> Nil{}: promptScenario(dir, agentDir, name)
+    case "branch_summary_extension" <> dir <> agentDir <> Nil{}: branchSummaryExtensionScenario(dir, agentDir)
+    case "compaction_extensions" <> dir <> agentDir <> mode <> prompts <> Nil{}: compactionExtensionsScenario(dir, agentDir, mode, prompts)
+    case "trigger_compact" <> dir <> agentDir <> Nil{}: triggerCompactScenario(dir, agentDir)
+    case "reload_settings" <> dir <> agentDir <> Nil{}: reloadSettingsScenario(dir, agentDir)
     case "before_start_image" <> dir <> agentDir <> image <> Nil{}: beforeStartImage(dir, agentDir, image)
     case "compaction_override" <> dir <> agentDir <> path <> Nil{}: compactionOverride(dir, agentDir, path)
     case "compaction_budget" <> dir <> agentDir <> path <> Nil{}: compactionBudget(dir, agentDir, path)

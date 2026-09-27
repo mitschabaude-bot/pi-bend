@@ -27,6 +27,8 @@ import ../packages/coding-agent/src/core/tools/index.bend as Tools
 import ../packages/coding-agent/src/core/model-runtime.bend as Models
 import ../packages/coding-agent/src/modes/json-event.bend as JsonEvent
 import ./model-runtime-fixture.bend as ModelFixture
+import ../packages/coding-agent/examples/extensions/input-transform-streaming.bend as InputTransformStreaming
+import ../packages/coding-agent/examples/extensions/git-merge-and-resolve.bend as GitMergeAndResolve
 import ./agent-session.bend as H
 import ../packages/coding-agent/src/utils/paths.bend as Paths
 import ../packages/ai/src/utils/uuid.bend as Uuid
@@ -1343,6 +1345,193 @@ def queuedThresholdScenario(+dir: String, agentDir: String) -> IO(Unit):
     reportRemaining(repliesOf(value))
     teardown(value)
 
+# 6260-inline-extension-naming: bare factories load as <inline:N>, named
+# ones as <inline:name> (hidden kept).
+def noopExtension(api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>): IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
+
+def namingCase(+kind: String) -> List<&1, Ext.InlineExtension>:
+  match kind:
+    case "bare": [Ext.BareExtension{noopExtension}, Ext.BareExtension{noopExtension}]
+    case "named": [Ext.InlineExtension{"my-provider", noopExtension, False{}}, Ext.InlineExtension{"my-commands", noopExtension, False{}}]
+    case "hidden": [Ext.InlineExtension{"built-in", noopExtension, True{}}]
+    case _: [Ext.BareExtension{noopExtension}, Ext.InlineExtension{"named-ext", noopExtension, False{}}, Ext.BareExtension{noopExtension}]
+
+def extensionShapes(extensions: List<&2, Ext.Extension>) -> List<&2, String>:
+  match extensions:
+    case Nil{}: Nil{}
+    case Ext.Extension{_, path, _, hidden, _, _, _, _, _, _} <> rest: ("{\"path\":" ++ Decode.quote(path) ++ ",\"hidden\":" ++ Bool.pick(String, hidden, "true", "false") ++ "}") <> extensionShapes(rest)
+
+def inlineNamingScenario(+kind: String) -> IO(Unit):
+  do IO<Unit>:
+    +runtime : Ext.ExtensionRuntime() <- Loader.createExtensionRuntime()
+    errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, namingCase(kind))
+    state : Ext.ExtensionRuntimeState <- R.read(Ext.ExtensionRuntimeState, runtime)
+    IO.print("{\"type\":\"extensions\",\"extensions\":[" ++ String.join(extensionShapes(Loader.extensionsOf(state)), ",") ++ "]}")
+
+# extensions-input-event.test.ts on ExtensionRunner.emitInput: each inline
+# extension subscribes one input handler of the given kind; handlers that
+# record print what upstream stores in globalThis.testVar.
+def deliveryText(behavior: Maybe<&2, Ext.UserDelivery>) -> String:
+  match behavior:
+    case None{}: "null"
+    case Some{Ext.UserSteer{}}: "\"steer\""
+    case Some{Ext.UserFollowUp{}}: "\"followUp\""
+
+def sourceText(source: Ext.InputSource) -> String:
+  match source:
+    case Ext.InteractiveSource{}: "interactive"
+    case Ext.RpcSource{}: "rpc"
+    case Ext.ExtensionSource{}: "extension"
+
+def image(+data: String, +mime: String) -> Ai.ImageContent: Ai.ImageContent{data, mime}
+
+def inputReply(kind: String, +text: String, source: Ext.InputSource, behavior: Maybe<&2, Ext.UserDelivery>) -> IO(Result<&2, &2, String, Maybe<&2, Ext.InputEventResult>>):
+      match kind:
+        case "undefined": IO.pure(Result<&2, &2, String, Maybe<&2, Ext.InputEventResult>>, Done{None{}})
+        case "continue": IO.pure(Result<&2, &2, String, Maybe<&2, Ext.InputEventResult>>, Done{Some{Ext.InputContinue{}}})
+        case "prefix": IO.pure(Result<&2, &2, String, Maybe<&2, Ext.InputEventResult>>, Done{Some{Ext.InputTransform{"T:" ++ text, None{}}}})
+        case "replace": IO.pure(Result<&2, &2, String, Maybe<&2, Ext.InputEventResult>>, Done{Some{Ext.InputTransform{"X", Some{[image("new", "image/jpeg")]}}}})
+        case "append1": IO.pure(Result<&2, &2, String, Maybe<&2, Ext.InputEventResult>>, Done{Some{Ext.InputTransform{text ++ "[1]", None{}}}})
+        case "append2": IO.pure(Result<&2, &2, String, Maybe<&2, Ext.InputEventResult>>, Done{Some{Ext.InputTransform{text ++ "[2]", None{}}}})
+        case "handled": IO.pure(Result<&2, &2, String, Maybe<&2, Ext.InputEventResult>>, Done{Some{Ext.InputHandled{}}})
+        case "throw": IO.pure(Result<&2, &2, String, Maybe<&2, Ext.InputEventResult>>, Fail{"boom"})
+        case "source":
+          do IO<Result<&2, &2, String, Maybe<&2, Ext.InputEventResult>>>:
+            IO.print("{\"type\":\"seen\",\"source\":\"" ++ sourceText(source) ++ "\"}")
+            return Done{Some{Ext.InputContinue{}}}
+        case "behavior":
+          do IO<Result<&2, &2, String, Maybe<&2, Ext.InputEventResult>>>:
+            IO.print("{\"type\":\"seen\",\"streamingBehavior\":" ++ deliveryText(behavior) ++ "}")
+            return Done{Some{Ext.InputContinue{}}}
+        case _:
+          do IO<Result<&2, &2, String, Maybe<&2, Ext.InputEventResult>>>:
+            IO.print("{\"type\":\"seen\",\"handler\":\"record\"}")
+            return Done{None{}}
+
+def inputHandler(kind: String, call: Ext.HandlerCall<Ext.InputEvent>) -> IO(Result<&2, &2, String, Maybe<&2, Ext.InputEventResult>>):
+  match call:
+    case Ext.HandlerCall{Ext.InputEvent{text, _, source, behavior}, _}: inputReply(kind, text, source, behavior)
+
+def inputExtension(kind: String, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    handler : Ext.ExtensionHandler(Ext.InputEvent, Ext.InputEventResult) <- C.create(~String, ~Ext.HandlerCall<Ext.InputEvent>, ~Result<&2, &2, String, Maybe<&2, Ext.InputEventResult>>, ~inputHandler, kind)
+    subscribed : Result<&2, &2, String, Loader.Unsubscribe> <- Loader.on(api, Ext.OnInput{handler})
+    return Result.map(&2, &2, String, Loader.Unsubscribe, Unit, done => Unit{}, subscribed)
+
+def inputExtensions(kinds: List<String>) -> List<&1, Ext.InlineExtension>:
+  match kinds:
+    case Nil{}: Nil{}
+    case kind <> rest: Ext.BareExtension{api => inputExtension(kind, api)} <> inputExtensions(rest)
+
+def imagesJson(images: List<&2, Ai.ImageContent>) -> List<&2, String>:
+  match images:
+    case Nil{}: Nil{}
+    case Ai.ImageContent{data, mime} <> rest: ("{\"type\":\"image\",\"data\":" ++ Decode.quote(data) ++ ",\"mimeType\":" ++ Decode.quote(mime) ++ "}") <> imagesJson(rest)
+
+def inputResultJson(result: Ext.InputEventResult) -> String:
+  match result:
+    case Ext.InputContinue{}: "{\"action\":\"continue\"}"
+    case Ext.InputHandled{}: "{\"action\":\"handled\"}"
+    case Ext.InputTransform{text, images}: "{\"action\":\"transform\",\"text\":" ++ Decode.quote(text) ++ ",\"images\":[" ++ String.join(imagesJson(Maybe.default(&2, List<&2, Ai.ImageContent>, images, Nil{})), ",") ++ "]}"
+
+def printError(env: Unit, error: Ext.ExtensionError) -> IO(Unit):
+  match error:
+    case Ext.ExtensionError{_, event, message, _}: IO.print("{\"type\":\"extension_error\",\"event\":" ++ Decode.quote(event) ++ ",\"error\":" ++ Decode.quote(message) ++ "}")
+
+def emitted(+runner: Runner.ExtensionRunner, +text: String, images: List<&2, Ai.ImageContent>, source: Ext.InputSource, behavior: Maybe<&2, Ext.UserDelivery>) -> IO(Unit):
+  do IO<Unit>:
+    result : Ext.InputEventResult <- Runner.emitInput(runner, text, images, source, behavior)
+    IO.print("{\"type\":\"input_result\",\"result\":" ++ inputResultJson(result) ++ "}")
+
+def emitMode(+runner: Runner.ExtensionRunner, mode: String) -> IO(Unit):
+  match mode:
+    case "sources":
+      do IO<Unit>:
+        emitted(runner, "x", Nil{}, Ext.InteractiveSource{}, None{})
+        emitted(runner, "x", Nil{}, Ext.RpcSource{}, None{})
+        emitted(runner, "x", Nil{}, Ext.ExtensionSource{}, None{})
+        Runner.dispose(runner)
+    case "behaviors":
+      do IO<Unit>:
+        emitted(runner, "x", Nil{}, Ext.InteractiveSource{}, Some{Ext.UserSteer{}})
+        emitted(runner, "x", Nil{}, Ext.InteractiveSource{}, Some{Ext.UserFollowUp{}})
+        emitted(runner, "x", Nil{}, Ext.InteractiveSource{}, None{})
+        Runner.dispose(runner)
+    case "image":
+      do IO<Unit>:
+        emitted(runner, "hi", [image("orig", "image/png")], Ext.InteractiveSource{}, None{})
+        Runner.dispose(runner)
+    case _:
+      do IO<Unit>:
+        emitted(runner, mode, Nil{}, Ext.InteractiveSource{}, None{})
+        Runner.dispose(runner)
+
+def inputEventScenario(+cwd: String, +mode: String, kinds: List<String>) -> IO(Unit):
+  do IO<Unit>:
+    +runtime : Ext.ExtensionRuntime() <- Loader.createExtensionRuntime()
+    errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, inputExtensions(kinds))
+    models : Models.ModelRuntime <- ModelFixture.create(Nil{})
+    +runner : Runner.ExtensionRunner <- Runner.create(runtime, cwd, models)
+    listener : C.Callback<Ext.ExtensionError, Unit> <- C.create(~Unit, ~Ext.ExtensionError, ~Unit, ~printError, Unit{})
+    subscription : Runner.ErrorSubscription <- Runner.onError(runner, listener)
+    has : Bool <- Runner.hasHandlers(runner, "input")
+    IO.print("{\"type\":\"has_handlers\",\"value\":" ++ Bool.pick(String, has, "true", "false") ++ "}")
+    emitMode(runner, mode)
+
+# input-transform-streaming-example.test.ts: the example in <cwd> (a git
+# repository with changes, a clean one, or not a repository).
+def behaviorNamed(+name: String) -> Maybe<&2, Ext.UserDelivery>:
+  match name:
+    case "steer": Some{Ext.UserSteer{}}
+    case "followUp": Some{Ext.UserFollowUp{}}
+    case _: None{}
+
+def exampleInputScenario(+cwd: String, +text: String, +behavior: String) -> IO(Unit):
+  do IO<Unit>:
+    +runtime : Ext.ExtensionRuntime() <- Loader.createExtensionRuntime()
+    errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, [Ext.BareExtension{InputTransformStreaming.inputTransformStreaming}])
+    models : Models.ModelRuntime <- ModelFixture.create(Nil{})
+    +runner : Runner.ExtensionRunner <- Runner.create(runtime, cwd, models)
+    emitted(runner, text, Nil{}, Ext.InteractiveSource{}, behaviorNamed(behavior))
+    Runner.dispose(runner)
+
+# git-merge-and-resolve-extension.test.ts: the example in <cwd>; the session
+# actions record pi.sendUserMessage (upstream mocks it).
+def recordUserMessage(unit: Unit, request: Ext.SendUserMessage) -> IO(Unit):
+  match request:
+    case Ext.SendUserMessage{content, Ext.SendUserMessageOptions{deliverAs, _}}:
+      IO.print("{\"type\":\"sent_user\",\"text\":" ++ Decode.quote(userContentText(content)) ++ ",\"deliverAs\":" ++ deliveryText(deliverAs) ++ "}")
+
+def ignoreMessage(unit: Unit, request: Ext.SendMessage) -> IO(Unit): IO.pure(Unit, Unit{})
+def refuseModel(unit: Unit, model: Ai.Model<Ai.JsonValue>) -> IO(Bool): IO.pure(Bool, False{})
+def noToolNames(unit: Unit, request: Unit) -> IO(List<&2, String>): IO.pure(List<&2, String>, Nil{})
+def noToolInfos(unit: Unit, request: Unit) -> IO(List<&2, Ext.ToolInfo>): IO.pure(List<&2, Ext.ToolInfo>, Nil{})
+def ignoreNames(unit: Unit, names: List<&2, String>) -> IO(Unit): IO.pure(Unit, Unit{})
+def ignoreUnit(unit: Unit, request: Unit) -> IO(Unit): IO.pure(Unit, Unit{})
+
+def recordingActions() -> IO(Ext.ExtensionActions):
+  do IO<Ext.ExtensionActions>:
+    send : C.Callback<Ext.SendMessage, Unit> <- C.create(~Unit, ~Ext.SendMessage, ~Unit, ~ignoreMessage, Unit{})
+    user : C.Callback<Ext.SendUserMessage, Unit> <- C.create(~Unit, ~Ext.SendUserMessage, ~Unit, ~recordUserMessage, Unit{})
+    model : C.Callback<Ai.Model<Ai.JsonValue>, Bool> <- C.create(~Unit, ~Ai.Model<Ai.JsonValue>, ~Bool, ~refuseModel, Unit{})
+    active : C.Callback<Unit, List<&2, String>> <- C.create(~Unit, ~Unit, ~List<&2, String>, ~noToolNames, Unit{})
+    all : C.Callback<Unit, List<&2, Ext.ToolInfo>> <- C.create(~Unit, ~Unit, ~List<&2, Ext.ToolInfo>, ~noToolInfos, Unit{})
+    set : C.Callback<List<&2, String>, Unit> <- C.create(~Unit, ~List<&2, String>, ~Unit, ~ignoreNames, Unit{})
+    refresh : C.Callback<Unit, Unit> <- C.create(~Unit, ~Unit, ~Unit, ~ignoreUnit, Unit{})
+    return Ext.ExtensionActions{send, user, model, Ext.ToolActions{active, all, set, refresh}}
+
+def gitMergeScenario(+cwd: String) -> IO(Unit):
+  do IO<Unit>:
+    +runtime : Ext.ExtensionRuntime() <- Loader.createExtensionRuntime()
+    errors : List<&2, Ext.LoadError> <- Loader.loadExtensionFactories(runtime, [Ext.BareExtension{GitMergeAndResolve.gitMergeAndResolve}])
+    actions : Ext.ExtensionActions <- recordingActions()
+    Loader.bindActions(runtime, Some{actions})
+    models : Models.ModelRuntime <- ModelFixture.create(Nil{})
+    +runner : Runner.ExtensionRunner <- Runner.create(runtime, cwd, models)
+    Runner.emit(runner, Ext.AgentEnd{Ext.AgentEndEvent{Nil{}}})
+    IO.print("{\"type\":\"agent_end_done\"}")
+    Runner.dispose(runner)
+
 def run(args: List<String>) -> IO(Unit):
   match args:
     case "name" <> dir <> agentDir <> name <> Nil{}: withSession(dir, agentDir, Nil{}, session => named(name, session))
@@ -1356,6 +1545,10 @@ def run(args: List<String>) -> IO(Unit):
     case "tree_streaming" <> dir <> agentDir <> Nil{}: treeDuringStreaming(dir, agentDir)
     case "compact_during_response" <> dir <> agentDir <> Nil{}: compactDuringResponse(dir, agentDir)
     case "compaction_plan" <> dir <> agentDir <> Nil{}: compactionPlanScenario(dir, agentDir)
+    case "input_transform_streaming" <> cwd <> text <> behavior <> Nil{}: exampleInputScenario(cwd, text, behavior)
+    case "git_merge_and_resolve" <> cwd <> Nil{}: gitMergeScenario(cwd)
+    case "input_event" <> cwd <> mode <> kinds: inputEventScenario(cwd, mode, kinds)
+    case "inline_naming" <> kind <> Nil{}: inlineNamingScenario(kind)
     case "queued_threshold" <> dir <> agentDir <> Nil{}: queuedThresholdScenario(dir, agentDir)
     case "tools" <> dir <> agentDir <> allow <> exclude <> noTools <> activate <> Nil{}: toolsScenario(dir, agentDir, allow, exclude, noTools, activate, "none")
     case "tools" <> dir <> agentDir <> allow <> exclude <> noTools <> activate <> extensions <> Nil{}: toolsScenario(dir, agentDir, allow, exclude, noTools, activate, extensions)

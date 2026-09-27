@@ -5,6 +5,7 @@ import ../../../../runtime/src/callback.bend as C
 import ../../../../runtime/src/ref.bend as R
 import ../../../../tui/src/component.bend as Component
 import ../model-runtime.bend as Models
+import ../compaction/compaction.bend as Compaction
 
 # upstream ExtensionContext and ExtensionCommandContext (core/extensions/
 # types.ts). The context is a handle on its runner: like upstream's getters,
@@ -105,8 +106,19 @@ type ExtensionUIContext is Data:
 type SessionState is Data:
   SessionState{model: Maybe<&2, Ai.Model<Ai.JsonValue>>, scopedModels: List<&2, Models.ScopedModel>, thinkingLevel: Ai.ModelThinkingLevel, sessionId: String, sessionFile: Maybe<&2, String>, idle: Bool, projectTrusted: Bool, pendingMessages: Bool, signal: Maybe<&2, Abort.AbortSignal<Unit>>}
 
+# upstream ContextUsage: tokens are unknown right after a compaction.
+type ContextUsage is Data:
+  ContextUsage{tokens: Maybe<&2, F64>, contextWindow: F64, percent: Maybe<&2, F64>}
+
+# upstream CompactOptions. The session takes the callbacks: it calls one of
+# them when the compaction settles and then disposes both.
+type CompactOptions is Data:
+  CompactOptions{customInstructions: Maybe<&2, String>, onComplete: Maybe<&2, C.Callback<Compaction.CompactionResult, Unit>>, onError: Maybe<&2, C.Callback<String, Unit>>}
+
+def compactOptions() -> CompactOptions: CompactOptions{None{}, None{}, None{}}
+
 type ExtensionContextActions is Data:
-  ExtensionContextActions{state: C.Callback<Unit, SessionState>, abort: C.Callback<Unit, Unit>, shutdown: C.Callback<Unit, Unit>}
+  ExtensionContextActions{state: C.Callback<Unit, SessionState>, abort: C.Callback<Unit, Unit>, shutdown: C.Callback<Unit, Unit>, getContextUsage: C.Callback<Unit, Maybe<&2, ContextUsage>>, compact: C.Callback<CompactOptions, Unit>, getSystemPrompt: C.Callback<Unit, String>}
 
 # Session control for commands (upstream ExtensionCommandContextActions).
 # The `withSession` and `setup` continuations are not ported.
@@ -195,7 +207,7 @@ def unboundState() -> SessionState:
 def stateFrom(session: Maybe<&2, ExtensionContextActions>) -> IO(SessionState):
   match session:
     case None{}: IO.pure(SessionState, unboundState())
-    case Some{ExtensionContextActions{state, _, _}}: C.call(Unit, SessionState, state, Unit{})
+    case Some{ExtensionContextActions{state, _, _, _, _, _}}: C.call(Unit, SessionState, state, Unit{})
 
 def stateModel(state: SessionState) -> Maybe<&2, Ai.Model<Ai.JsonValue>>:
   match state:
@@ -269,7 +281,7 @@ def signal(context: ExtensionContext) -> IO(Maybe<&2, Abort.AbortSignal<Unit>>):
 def abortWith(session: Maybe<&2, ExtensionContextActions>) -> IO(Unit):
   match session:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{ExtensionContextActions{_, callback, _}}: C.call(Unit, Unit, callback, Unit{})
+    case Some{ExtensionContextActions{_, callback, _, _, _, _}}: C.call(Unit, Unit, callback, Unit{})
 
 def abort(context: ExtensionContext) -> IO(Unit):
   do IO<Unit>:
@@ -279,12 +291,63 @@ def abort(context: ExtensionContext) -> IO(Unit):
 def shutdownWith(session: Maybe<&2, ExtensionContextActions>) -> IO(Unit):
   match session:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{ExtensionContextActions{_, _, callback}}: C.call(Unit, Unit, callback, Unit{})
+    case Some{ExtensionContextActions{_, _, callback, _, _, _}}: C.call(Unit, Unit, callback, Unit{})
 
 def shutdown(context: ExtensionContext) -> IO(Unit):
   do IO<Unit>:
     bindings : Bindings <- bindingsOf(context)
     shutdownWith(sessionOf(bindings))
+
+def contextUsageWith(session: Maybe<&2, ExtensionContextActions>) -> IO(Maybe<&2, ContextUsage>):
+  match session:
+    case None{}: IO.pure(Maybe<&2, ContextUsage>, None{})
+    case Some{ExtensionContextActions{_, _, _, callback, _, _}}: C.call(Unit, Maybe<&2, ContextUsage>, callback, Unit{})
+
+# upstream ctx.getContextUsage(): None before a session binds the runner.
+def getContextUsage(context: ExtensionContext) -> IO(Maybe<&2, ContextUsage>):
+  do IO<Maybe<&2, ContextUsage>>:
+    bindings : Bindings <- bindingsOf(context)
+    contextUsageWith(sessionOf(bindings))
+
+def disposeOnComplete(callback: Maybe<&2, C.Callback<Compaction.CompactionResult, Unit>>) -> IO(Unit):
+  match callback:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{found}: C.dispose(Compaction.CompactionResult, Unit, found)
+
+def disposeOnError(callback: Maybe<&2, C.Callback<String, Unit>>) -> IO(Unit):
+  match callback:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{found}: C.dispose(String, Unit, found)
+
+def disposeCompactOptions(options: CompactOptions) -> IO(Unit):
+  match options:
+    case CompactOptions{_, complete, failed}:
+      do IO<Unit>:
+        disposeOnComplete(complete)
+        disposeOnError(failed)
+
+def compactWith(session: Maybe<&2, ExtensionContextActions>, options: CompactOptions) -> IO(Unit):
+  match session:
+    case None{}: disposeCompactOptions(options)
+    case Some{ExtensionContextActions{_, _, _, _, callback, _}}: C.call(CompactOptions, Unit, callback, options)
+
+# upstream ctx.compact(options): starts a manual compaction without waiting
+# for it; before a session binds the runner nothing happens.
+def compact(context: ExtensionContext, options: CompactOptions) -> IO(Unit):
+  do IO<Unit>:
+    bindings : Bindings <- bindingsOf(context)
+    compactWith(sessionOf(bindings), options)
+
+def systemPromptWith(session: Maybe<&2, ExtensionContextActions>) -> IO(String):
+  match session:
+    case None{}: IO.pure(String, "")
+    case Some{ExtensionContextActions{_, _, _, _, _, callback}}: C.call(Unit, String, callback, Unit{})
+
+# upstream ctx.getSystemPrompt(): the effective system prompt, "" unbound.
+def getSystemPrompt(context: ExtensionContext) -> IO(String):
+  do IO<String>:
+    bindings : Bindings <- bindingsOf(context)
+    systemPromptWith(sessionOf(bindings))
 
 # UI accessors; without a UI they answer as upstream's noOpUIContext.
 
@@ -495,7 +558,7 @@ def viewOf(+directory: String, state: SessionState) -> ContextView:
 def viewFrom(+directory: String, session: Maybe<&2, ExtensionContextActions>) -> IO(Maybe<&2, ContextView>):
   match session:
     case None{}: IO.pure(Maybe<&2, ContextView>, None{})
-    case Some{ExtensionContextActions{state, _, _}}:
+    case Some{ExtensionContextActions{state, _, _, _, _, _}}:
       do IO<Maybe<&2, ContextView>>:
         snapshot : SessionState <- C.call(Unit, SessionState, state, Unit{})
         return Some{viewOf(directory, snapshot)}

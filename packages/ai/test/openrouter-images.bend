@@ -28,7 +28,8 @@ import ../../runtime/src/url.bend as URL
 # tests/openrouter_images_check.py: `openrouter-images <case> <baseUrl>`
 # generates once through images.ts's generateImages (the built-in images api
 # registry) and prints the payload onPayload saw, the onResponse value and
-# the result (without its timestamp) as JSON lines. The checker asserts the
+# the result (without its timestamp, then whether that is positive) as JSON
+# lines. The checker asserts the
 # upstream expectations and compares with upstream images.ts driving the
 # pinned OpenAI SDK against the same server (openrouter-images-oracle.ts).
 
@@ -91,6 +92,29 @@ def catalogModel(baseUrl: String) -> Model(): withBase(Catalog.getImageModel("op
 def prompt(text: String) -> T.ImagesContext: T.ImagesContext{[T.TextImageText{T.TextContent{text, None{}}}]}
 
 def dog() -> T.ImagesContext: prompt("Generate a dog")
+
+# images.test.ts: its red-circle.png fixture.
+def redCircle() -> String:
+  "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" ++
+  "dlfVAAAAAElFTkSuQmCC"
+
+def variation() -> T.ImagesContext: T.ImagesContext{[T.TextImageText{T.TextContent{"Create a variation of this image with a blue background.", None{}}}, T.TextImageImage{T.ImageContent{redCircle(), "image/png"}}]}
 
 def withImage() -> T.ImagesContext: T.ImagesContext{[T.TextImageText{T.TextContent{"Make it blue", None{}}}, T.TextImageImage{T.ImageContent{"aGVsbG8=", "image/png"}}]}
 
@@ -173,10 +197,17 @@ def resultJson(value: T.AssistantImages) -> J():
     case T.AssistantImages{api, provider, model, output, responseId, usage, stop, error, _}:
       T.JsonObject{R.Record{List.concat(&2, R.Property<J()>, [[prop("api", jstr(api)), prop("provider", jstr(provider)), prop("model", jstr(model)), prop("output", T.JsonArray{contentList(output)}), prop("stopReason", jstr(stopName(stop)))], optional("responseId", Maybe.map(&2, String, J(), jstr, responseId)), optional("usage", Maybe.map(&2, T.Usage, J(), usageJson, usage)), optional("errorMessage", Maybe.map(&2, String, J(), jstr, error))])}}
 
+def timestampOf(value: T.AssistantImages) -> F64:
+  match value:
+    case T.AssistantImages{_, _, _, _, _, _, _, _, timestamp}: timestamp
+
 def reported(result: Result<&2, &2, String, T.AssistantImages>) -> IO(Unit):
   match result:
     case Fail{message}: IO.print("thrown " ++ message)
-    case Done{value}: IO.print("result " ++ jsonText(resultJson(value)))
+    case Done{+value}:
+      do IO<Unit>:
+        IO.print("result " ++ jsonText(resultJson(value)))
+        IO.print("timestamp " ++ Bool.pick(String, F.isGreater(F.compare(timestampOf(value), F.fromU32(0))), "positive", "nonpositive"))
 
 # Cases
 # -----
@@ -222,6 +253,9 @@ def selected(api: ImagesModels.ProviderImages(Error()), +mode: String, baseUrl: 
     case "abort": aborted(api, flux(baseUrl))
     case "flux": generated(api, flux(baseUrl), dog(), keyed("test"))
     case "catalog": hooked(api, catalogModel(baseUrl), withImage(), Some{"test"}, None{}, None{})
+    case "e2e-basic": hooked(api, catalogModel(baseUrl), prompt("Generate a simple red circle on a plain white background. No text."), Some{"test"}, None{}, None{})
+    case "e2e-text": hooked(api, catalogModel(baseUrl), prompt("Generate a red circle and include a brief description of the image."), Some{"test"}, None{}, None{})
+    case "e2e-input": hooked(api, catalogModel(baseUrl), variation(), Some{"test"}, None{}, None{})
     case "usage": generated(api, priced(baseUrl), dog(), keyed("test"))
     case "no-key": generated(api, flux(baseUrl), dog(), options(None{}, None{}, None{}, None{}, None{}, None{}))
     case "headers": hooked(api, geminiImage(baseUrl), dog(), Some{"test"}, Some{headerOverrides()}, None{})
