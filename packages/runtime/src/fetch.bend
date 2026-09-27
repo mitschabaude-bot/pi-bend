@@ -34,6 +34,7 @@ import ./hosts.bend as Hosts
 import ./hosts.bend as File
 import ./utf8.bend as UTF8
 import ./random.bend as Index
+import ./http-proxy.bend as Proxy
 
 # Native HTTP/1.1 fetch over the pure DNS resolver and plain/TLS socket exchange.
 # A request acquires final response headers and leaves the body unread; the
@@ -76,29 +77,35 @@ type InitError is Data:
 # A hosts-file failure only affects named resolution; numeric addresses never
 # consult that source, so it is retained as a per-lookup error, not an init error.
 # Each fetch callback's keep-alive pool is closed with the runtime.
+# Requests go through the runtime's HTTP proxies (http-proxy.bend); a runtime
+# from `create` has none.
 type Runtime is Type:
-  Runtime{resolver: Resolver.Owner, hosts: HostsResult(), options: HTTP.Options, pools: List<&2, C.Callback<Unit, Unit>>}
+  Runtime{resolver: Resolver.Owner, hosts: HostsResult(), options: HTTP.Options, proxies: Proxy.Config, pools: List<&2, C.Callback<Unit, Unit>>}
 
-def created(hosts: HostsResult(), options: HTTP.Options, result: Result<&2, &1, Index.Error, Resolver.Owner>) -> Result<&2, &1, InitError, Runtime>:
+def created(hosts: HostsResult(), options: HTTP.Options, proxies: Proxy.Config, result: Result<&2, &1, Index.Error, Resolver.Owner>) -> Result<&2, &1, InitError, Runtime>:
   match result:
     case Fail{cause}: Fail{EntropyFailure{cause}}
-    case Done{resolver}: Done{Runtime{resolver, hosts, options, Nil{}}}
+    case Done{resolver}: Done{Runtime{resolver, hosts, options, proxies, Nil{}}}
 
-def configured(files: Files, options: HTTP.Options, result: Result<&2, &2, System.SystemConfigError<UTF8.Error>, System.SystemConfigPrepared>) -> IO(Result<&2, &1, InitError, Runtime>):
+def configured(files: Files, options: HTTP.Options, proxies: Proxy.Config, result: Result<&2, &2, System.SystemConfigError<UTF8.Error>, System.SystemConfigPrepared>) -> IO(Result<&2, &1, InitError, Runtime>):
   match files result:
     case _ Fail{cause}: IO.pure(Result<&2, &1, InitError, Runtime>, Fail{ConfigurationFailure{cause}})
     case Files{_, path, chunkSize, byteLimit, _, _} Done{System.SystemConfigPrepared{_, _, config}}:
       do IO<Result<&2, &1, InitError, Runtime>>:
         hosts : HostsResult() <- HostsFile.read(path, chunkSize, byteLimit)
         resolver : Result<&2, &1, Index.Error, Resolver.Owner> <- Resolver.create(config)
-        return created(hosts, options, resolver)
+        return created(hosts, options, proxies, resolver)
 
-def create(+files: Files, options: HTTP.Options) -> IO(Result<&2, &1, InitError, Runtime>):
+# A runtime whose requests use the given proxies (undici's EnvHttpProxyAgent,
+# as the coding agent installs it).
+def createWithProxy(+files: Files, options: HTTP.Options, proxies: Proxy.Config) -> IO(Result<&2, &1, InitError, Runtime>):
   match files:
     case Files{path, _, chunkSize, byteLimit, milliseconds, maximum}:
       do IO<Result<&2, &1, InitError, Runtime>>:
         settings : Result<&2, &2, System.SystemConfigError<UTF8.Error>, System.SystemConfigPrepared> <- System.loadWith(~UTF8.Error, ~UTF8.decodeStrict, path, chunkSize, byteLimit, milliseconds, maximum)
-        configured(files, options, settings)
+        configured(files, options, proxies, settings)
+
+def create(+files: Files, options: HTTP.Options) -> IO(Result<&2, &1, InitError, Runtime>): createWithProxy(files, options, Proxy.none())
 
 def closePools(pools: List<&2, C.Callback<Unit, Unit>>) -> IO(Unit):
   match pools:
@@ -113,7 +120,7 @@ def closePools(pools: List<&2, C.Callback<Unit, Unit>>) -> IO(Unit):
 # here, before the resolver.
 def dispose(runtime: Runtime) -> IO(Unit):
   match runtime:
-    case Runtime{resolver, _, _, pools}:
+    case Runtime{resolver, _, _, _, pools}:
       do IO<Unit>:
         closePools(pools)
         Resolver.close(resolver)
@@ -122,7 +129,7 @@ def dispose(runtime: Runtime) -> IO(Unit):
 # --------
 
 type Context<-Reason: Data> is Data:
-  Context{resolver: Resolver.Resolver, hosts: HostsResult(), options: HTTP.Options, security: HTTP.Security, pool: HTTP.Pool<Deadline.Cause<Reason>>}
+  Context{resolver: Resolver.Resolver, hosts: HostsResult(), options: HTTP.Options, proxies: Proxy.Config, security: HTTP.Security, pool: HTTP.Pool<Deadline.Cause<Reason>>}
 
 def headed(-Reason: Data, resolution: Connect.Resolution(Deadline.Cause<Reason>, SourceError()), attempts: List<&2, Driver.Entry<Deadline.Cause<Reason>>>, result: Result<&2, &1, Progress.ResponseProgressError<Exchange.ReadError<Deadline.Cause<Reason>>>, Response.Response<Transport(Reason)>>) -> Result_(Reason):
   match result:
@@ -152,9 +159,9 @@ def reported(~Reason: Data, report: HTTP.Report<Deadline.Cause<Reason>, SourceEr
 def prepared(~Reason: Data, context: Context<Reason>, signal: Signal(Reason), request: Result<&2, &2, Request.URLRequestError, Request.URLPrepared>) -> IO(Result_(Reason)):
   match context request:
     case _ Fail{cause}: IO.pure(Result_(Reason), Fail{InvalidRequest{cause}})
-    case Context{resolver, hosts, options, security, pool} Done{request}:
+    case Context{resolver, hosts, options, proxies, security, pool} Done{request}:
       do IO<Result_(Reason)>:
-        report : HTTP.Report<Deadline.Cause<Reason>, SourceError()> <- HTTP.startPooled(~Deadline.Cause<Reason>, ~(SourceError()), pool, security, resolver, signal, hosts, options, request)
+        report : HTTP.Report<Deadline.Cause<Reason>, SourceError()> <- HTTP.startPooled(~Deadline.Cause<Reason>, ~(SourceError()), pool, proxies, security, resolver, signal, hosts, options, request)
         reported(~Reason, report)
 
 def invoke(~Reason: Data, context: Context<Reason>, input: Input<Reason>) -> IO(Result_(Reason)):
@@ -163,25 +170,25 @@ def invoke(~Reason: Data, context: Context<Reason>, input: Input<Reason>) -> IO(
 
 def closePool(-Reason: Data, pool: HTTP.Pool<Deadline.Cause<Reason>>, unused: Unit) -> IO(Unit): HTTP.disposePool(Deadline.Cause<Reason>, pool)
 
-def borrowed(~Reason: Data, security: HTTP.Security, +hosts: HostsResult(), +options: HTTP.Options, pools: List<&2, C.Callback<Unit, Unit>>, pair: Resolver.Owner & Resolver.Resolver) -> IO(Runtime & Fetch(Reason)):
+def borrowed(~Reason: Data, security: HTTP.Security, +hosts: HostsResult(), +options: HTTP.Options, +proxies: Proxy.Config, pools: List<&2, C.Callback<Unit, Unit>>, pair: Resolver.Owner & Resolver.Resolver) -> IO(Runtime & Fetch(Reason)):
   match pair:
     case Tuple{owner, resolver}:
       do IO<Runtime & Fetch(Reason)>:
         +pool : HTTP.Pool<Deadline.Cause<Reason>> <- HTTP.newPool(Deadline.Cause<Reason>)
         closer : C.Callback<Unit, Unit> <- C.create(~HTTP.Pool<Deadline.Cause<Reason>>, ~Unit, ~Unit, ~closePool(Reason), pool)
-        fetch : Fetch(Reason) <- C.create(~Context<Reason>, ~Input<Reason>, ~(Result_(Reason)), ~(invoke(~Reason)), Context{resolver, hosts, options, security, pool})
-        return (Runtime{owner, hosts, options, closer <> pools}, fetch)
+        fetch : Fetch(Reason) <- C.create(~Context<Reason>, ~Input<Reason>, ~(Result_(Reason)), ~(invoke(~Reason)), Context{resolver, hosts, options, proxies, security, pool})
+        return (Runtime{owner, hosts, options, proxies, closer <> pools}, fetch)
 
 # The callback borrows the runtime's resolver: retire it before the runtime.
 def callback(~Reason: Data, runtime: Runtime) -> IO(Runtime & Fetch(Reason)):
   match runtime:
-    case Runtime{resolver, hosts, options, pools}: borrowed(~Reason, HTTP.NoTLS{}, hosts, options, pools, Resolver.borrow(resolver))
+    case Runtime{resolver, hosts, options, proxies, pools}: borrowed(~Reason, HTTP.NoTLS{}, hosts, options, proxies, pools, Resolver.borrow(resolver))
 
 # The fetch callback borrows the supplied authorizer factory as well as the
 # resolver. Retire fetch callbacks before disposing either owner.
 def callbackWithSecurity(~Reason: Data, runtime: Runtime, security: HTTP.Security) -> IO(Runtime & Fetch(Reason)):
   match runtime:
-    case Runtime{resolver, hosts, options, pools}: borrowed(~Reason, security, hosts, options, pools, Resolver.borrow(resolver))
+    case Runtime{resolver, hosts, options, proxies, pools}: borrowed(~Reason, security, hosts, options, proxies, pools, Resolver.borrow(resolver))
 
 def retire(-Reason: Data, fetch: Fetch(Reason)) -> IO(Unit):
   C.dispose(Input<Reason>, Result_(Reason), fetch)
@@ -276,6 +283,8 @@ def exchangeCategory(-Reason: Data, error: HTTP.ResolvedExchangeError<Deadline.C
     case HTTP.ResolvedExchangeFailure{Exchange.TLSStartFailure{TLS.Network{cause}}}: socket(Reason, cause)
     case HTTP.ResolvedExchangeFailure{Exchange.WriteFailure{cause, None{}}}: socket(Reason, cause)
     case HTTP.ResolvedExchangeFailure{Exchange.SourceFailure{cause}}: source(Reason, cause)
+    case HTTP.ResolvedExchangeFailure{Exchange.TunnelFailure{Proxy.TunnelSocket{cause}}}: socket(Reason, cause)
+    case HTTP.ResolvedExchangeFailure{Exchange.TunnelFailure{_}}: Connection{}
     case HTTP.ResolvedExchangeFailure{_}: NonRetryable{}
 
 def classify(-Reason: Data, error: Error<Reason>) -> Category:

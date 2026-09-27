@@ -3069,9 +3069,14 @@
     },
     {
       "source": "packages/coding-agent/test/http-dispatcher.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f378869e565c336d556ce75ceebf6eab10baccf3f58ef21260f07ca6abb5606a"
+      "status": "partial",
+      "ports": [
+        "tests/http-proxy.bend",
+        "tests/http_proxy_check.py",
+        "tests/http_proxy_reference.mts"
+      ],
+      "sha256": "f378869e565c336d556ce75ceebf6eab10baccf3f58ef21260f07ca6abb5606a",
+      "notes": "tests/http_proxy_check.py runs the native fetch through a loopback CONNECT proxy against pinned configureHttpDispatcher/applyHttpProxySettings (Node, undici) with the same environment and httpProxy setting; results and CONNECT requests must agree (Bun, native1, native4). The three 'http proxy settings' tests are observed through the effective proxies (the port computes the configuration from the environment and the setting instead of writing HTTP_PROXY/HTTPS_PROXY), and 'tunnels proxied HTTP origins' runs as named; nine further cases cover HTTPS inside the tunnel, fallback to HTTP_PROXY, lowercase precedence, NO_PROXY hosts and ports, proxy credentials and a refused tunnel. Pending: the coding agent's runtime is not yet created with these proxies (agent-runtime.bend), and 'allows two seconds for HTTPS connection attempts' (the agent's attempt timeout is 10000 ms, upstream's autoSelectFamilyAttemptTimeout 2000). The native pool reuses an idle tunnel where undici opens a second one for back-to-back requests. https:// proxy URLs (TLS to the proxy) are rejected natively."
     },
     {
       "source": "packages/coding-agent/test/image-process.test.ts",

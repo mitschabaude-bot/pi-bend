@@ -17,6 +17,7 @@ import ./ref.bend as R
 import ./clock.bend as Clock
 import ./f64.bend as F
 import ./text.bend as Text
+import ./http-proxy.bend as Proxy
 
 type Plan is Data:
   Numeric{address: Connect.Address}
@@ -566,6 +567,7 @@ type StartError<-Reason: Data> is Data:
   SocketFailure{error: Connect.Error<Reason>}
   WriteFailure{error: Connect.Error<Reason>, cleanup: Maybe<&2, Connect.InterruptError>}
   SourceFailure{error: SocketSourceError<Reason>}
+  TunnelFailure{error: Proxy.TunnelError<Reason>}
 
 type ReadError<-Reason: Data> is Data:
   ResponseFailure{error: Response.ReadError<SocketSourceError<Reason>>}
@@ -804,6 +806,7 @@ type Security is Data:
 type Protocol is Data:
   Cleartext{}
   Encrypted{host: Host.Host, authorize: C.Callback<Host.Host, TLSClient.Authorization>, options: TLS.Options}
+  Tunneled{connect: List<&2, U32>, target: Protocol}
 
 def serverName(host: Host.Host) -> Maybe<&2, String>:
   match host:
@@ -830,6 +833,24 @@ def adoptedTLS(~Reason: Data, +host: Host.Host, authorize: C.Callback<Host.Host,
         initial : Result<&2, &1, TLS.Error<Reason>, TLS.Connection<Reason>> <- TLS.start(Reason, owner, serverName(host), authorization, options)
         openedTLS(~Reason, request, maximum, limits, keep, initial)
 
+# Through a proxy: the CONNECT tunnel, then the target protocol over it.
+def overTunnel(~Reason: Data, target: Protocol, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, keep: Maybe<&2, Keep<Reason>>, result: Proxy.TunnelResult(Reason)) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+  match result target:
+    case (owner, Fail{error}) _:
+      do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
+        closed : Result<&2, &2, Connect.InterruptError, Unit> <- Connect.close(Reason, owner)
+        return Fail{TunnelFailure{error}}
+    case (owner, Done{_}) Encrypted{host, authorize, options}: adoptedTLS(~Reason, host, authorize, options, request, maximum, limits, keep, Done{owner})
+    case (owner, Done{_}) _: connectedSocketExchange(~Reason, request, maximum, limits, keep, Done{owner})
+
+def tunnelAdopted(~Reason: Data, connect: List<&2, U32>, target: Protocol, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, keep: Maybe<&2, Keep<Reason>>, adoption: Result<&2, &1, Connect.Error<Reason>, Connect.Owner<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
+  match adoption:
+    case Fail{error}: IO.pure(Result<&2, &1, StartError<Reason>, Exchange<Reason>>, Fail{SocketFailure{error}})
+    case Done{owner}:
+      do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
+        result : Proxy.TunnelResult(Reason) <- Proxy.tunnel(Reason, owner, connect)
+        overTunnel(~Reason, target, request, maximum, limits, keep, result)
+
 def startProtocol(~Reason: Data, selected: Protocol, socket: Socket, signal: Abort.AbortSignal<Reason>, request: Request.BufferedRequestPrepared, maximum: U32, limits: Response.Limits, keep: Maybe<&2, Keep<Reason>>) -> IO(Result<&2, &1, StartError<Reason>, Exchange<Reason>>):
   match selected:
     case Cleartext{}: startSocketExchangeKept(~Reason, socket, signal, request, maximum, limits, keep)
@@ -837,6 +858,10 @@ def startProtocol(~Reason: Data, selected: Protocol, socket: Socket, signal: Abo
       do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
         adoption : Result<&2, &1, Connect.Error<Reason>, Connect.Owner<Reason>> <- Connect.create(Reason, socket, signal)
         adoptedTLS(~Reason, host, authorize, options, request, maximum, limits, keep, adoption)
+    case Tunneled{connect, target}:
+      do IO<Result<&2, &1, StartError<Reason>, Exchange<Reason>>>:
+        adoption : Result<&2, &1, Connect.Error<Reason>, Connect.Owner<Reason>> <- Connect.create(Reason, socket, signal)
+        tunnelAdopted(~Reason, connect, target, request, maximum, limits, keep, adoption)
 
 # Socket adoption consumes the socket on all paths and rechecks the retained
 # signal. Only then create the verifier, so time-dependent policy is fresh
@@ -1037,18 +1062,40 @@ def settledReport(-Reason: Data, -SourceError: Data, keep: Keep<Reason>, report:
         retireKeep(Reason, keep)
         return other
 
-def fresh(~Reason: Data, ~SourceError: Data, pool: Pool<Reason>, origin: Origin, security: Security, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, request: Request.URLPrepared) -> IO(Report<Reason, SourceError>):
+# The route to an origin: directly, or to its proxy with a CONNECT tunnel
+# (undici's EnvHttpProxyAgent with proxyTunnel).
+type Route is Data:
+  Route{host: Host.Host, port: U32, protocol: Result<&2, &2, Request.ExchangePlanError, Protocol>}
+
+def tunneled(connect: List<&2, U32>, selected: Result<&2, &2, Request.ExchangePlanError, Protocol>) -> Result<&2, &2, Request.ExchangePlanError, Protocol>:
+  match selected:
+    case Fail{error}: Fail{error}
+    case Done{target}: Done{Tunneled{connect, target}}
+
+def routeVia(proxy: Maybe<&2, Proxy.Proxy>, +host: Host.Host, +port: U32, +secure: Bool, selected: Result<&2, &2, Request.ExchangePlanError, Protocol>) -> Route:
+  match proxy:
+    case None{}: Route{host, port, selected}
+    case Some{Proxy.Proxy{+proxyHost, +proxyPort, credentials}}: Route{proxyHost, proxyPort, tunneled(Proxy.connectRequest(Proxy.Proxy{proxyHost, proxyPort, credentials}, host, port, secure), selected)}
+
+def routeOf(proxies: Proxy.Config, security: Security, +transport: Request.Transport, +host: Host.Host, +port: U32) -> Route:
+  routeVia(Proxy.proxyFor(proxies, isTLS(transport), host, port), host, port, isTLS(transport), protocol(security, transport, host))
+
+def routed(~Reason: Data, ~SourceError: Data, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, keep: Keep<Reason>, prepared: Request.BufferedRequestPrepared, route: Route) -> IO(Report<Reason, SourceError>):
+  match options route:
+    case Options{priority, preference, duration, +maximum, limits} Route{host, port, selected}: configuredRoute(~Reason, ~SourceError, resolver, signal, hosts, Options{priority, preference, duration, maximum, limits}, Some{keep}, routedPlan(host, port, prepared, maximum), selected)
+
+def fresh(~Reason: Data, ~SourceError: Data, pool: Pool<Reason>, origin: Origin, proxies: Proxy.Config, security: Security, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, request: Request.URLPrepared) -> IO(Report<Reason, SourceError>):
   match options request:
     case Options{priority, preference, duration, +maximum, limits} Request.URLPrepared{Request.Endpoint{transport, +host, port, _, _}, +prepared}:
       do IO<Report<Reason, SourceError>>:
         +controller : Abort.AbortController<Reason> <- Abort.new(Reason)
         +keep : Keep<Reason> <- keepFor(Reason, pool, origin, controller, signal, preparedMethod(prepared))
-        report : Report<Reason, SourceError> <- configuredRoute(~Reason, ~SourceError, resolver, Abort.signal(Reason, controller), hosts, Options{priority, preference, duration, maximum, limits}, Some{keep}, routedPlan(host, port, prepared, maximum), protocol(security, transport, host))
+        report : Report<Reason, SourceError> <- routed(~Reason, ~SourceError, resolver, Abort.signal(Reason, controller), hosts, Options{priority, preference, duration, maximum, limits}, keep, prepared, routeOf(proxies, security, transport, host, port))
         settledReport(Reason, SourceError, keep, report)
 
-def startFrom(~Reason: Data, ~SourceError: Data, pool: Pool<Reason>, origin: Origin, security: Security, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, request: Request.URLPrepared, idle: Maybe<&1, Idle<Reason>>) -> IO(Report<Reason, SourceError>):
+def startFrom(~Reason: Data, ~SourceError: Data, pool: Pool<Reason>, origin: Origin, proxies: Proxy.Config, security: Security, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, request: Request.URLPrepared, idle: Maybe<&1, Idle<Reason>>) -> IO(Report<Reason, SourceError>):
   match idle:
-    case None{}: fresh(~Reason, ~SourceError, pool, origin, security, resolver, signal, hosts, options, request)
+    case None{}: fresh(~Reason, ~SourceError, pool, origin, proxies, security, resolver, signal, hosts, options, request)
     case Some{Idle{_, parked, controller, _}}: reuse(~Reason, ~SourceError, pool, origin, parked, controller, signal, options, request)
 
 # undici's Agent: reuse the oldest idle connection to the origin unless it
@@ -1056,10 +1103,10 @@ def startFrom(~Reason: Data, ~SourceError: Data, pool: Pool<Reason>, origin: Ori
 # connection runs under its own controller; the request's signal is linked
 # to it until the response is released, and a completed persistent response
 # parks the connection again.
-def startPooled(~Reason: Data, ~SourceError: Data, +pool: Pool<Reason>, security: Security, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, +request: Request.URLPrepared) -> IO(Report<Reason, SourceError>):
+def startPooled(~Reason: Data, ~SourceError: Data, +pool: Pool<Reason>, proxies: Proxy.Config, security: Security, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, +request: Request.URLPrepared) -> IO(Report<Reason, SourceError>):
   match request:
     case Request.URLPrepared{Request.Endpoint{transport, +host, port, _, _}, _}:
       +origin = originOf(transport, host, port)
       do IO<Report<Reason, SourceError>>:
         idle : Maybe<&1, Idle<Reason>> <- takeIdle(Reason, pool, origin)
-        startFrom(~Reason, ~SourceError, pool, origin, security, resolver, signal, hosts, options, request, idle)
+        startFrom(~Reason, ~SourceError, pool, origin, proxies, security, resolver, signal, hosts, options, request, idle)

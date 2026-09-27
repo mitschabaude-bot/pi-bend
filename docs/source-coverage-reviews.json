@@ -1439,6 +1439,19 @@
       "port_sha256": {
         "packages/ai/src/utils/assistant-message-frame.bend": "db1633224080bf924c312f0cbb55757e7cb872cdd8041b1bad80fe687b2422ad"
       }
+    },
+    "packages/coding-agent/src/core/http-dispatcher.ts": {
+      "state": "partial",
+      "note": "applyHttpProxySettings and the proxy half of configureHttpDispatcher (undici EnvHttpProxyAgent with proxyTunnel) are packages/runtime/src/http-proxy.bend: Proxy.fromEnvironmentWith computes the configuration from http_proxy/HTTP_PROXY, https_proxy/HTTPS_PROXY, no_proxy/NO_PROXY and the trimmed httpProxy setting, and Fetch.createWithProxy tunnels every proxied origin with CONNECT (proxy credentials, the undici request head, TLS inside the tunnel). Missing: the coding agent's runtime is not created with it yet; the idle/headers timeouts and the 2 s connection-attempt timeout are not taken from here (the agent uses 10000 ms); parseHttpIdleTimeoutMs/formatHttpIdleTimeoutMs/HTTP_IDLE_TIMEOUT_CHOICES are not reviewed here; https:// and SOCKS proxies are rejected.",
+      "source_sha256": "d64922c476d11b90555b8f23cab92ce1f4f83174cb750c125a96d8d4374744e2",
+      "port_sha256": {
+        "packages/runtime/src/http-proxy.bend": "419b0ead8c7f0b14547c03dc1c66b0d90189456b8676a345983f095a7da4f083",
+        "packages/runtime/src/fetch.bend": "f189fd01e044448ed351dba66d522fe6570839dfd7aec83672df622515af09f6"
+      },
+      "ports": [
+        "packages/runtime/src/http-proxy.bend",
+        "packages/runtime/src/fetch.bend"
+      ]
     }
   }
 }

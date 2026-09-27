@@ -7,6 +7,7 @@ import ./connection-driver.bend as Driver
 import ./dns-resolver.bend as DNS
 import ./fetch.bend as Fetch
 import ./http-exchange.bend as HTTP
+import ./http-proxy.bend as Proxy
 import ./http-message.bend as H
 import ./socket.bend as Net
 import ./tls-socket.bend as TLS
@@ -25,13 +26,13 @@ type Wire<-Reason: Data> is Type:
 type Connection<-Reason: Data> is Type:
   Connection{wire: Wire<Reason>, decoder: WS.Decoder, pending: List<&2, U32>, readSize: U32}
 
-def withResolver(+hosts: Fetch.HostsResult(), +options: HTTP.Options, pools: List<&2, C.Callback<Unit, Unit>>, security: HTTP.Security, url: URL.Context, pair: DNS.Owner & DNS.Resolver) -> Fetch.Runtime & Config:
+def withResolver(+hosts: Fetch.HostsResult(), +options: HTTP.Options, proxies: Proxy.Config, pools: List<&2, C.Callback<Unit, Unit>>, security: HTTP.Security, url: URL.Context, pair: DNS.Owner & DNS.Resolver) -> Fetch.Runtime & Config:
   match pair:
-    case (owner, resolver): (Fetch.Runtime{owner, hosts, options, pools}, Config{resolver, hosts, options, security, url})
+    case (owner, resolver): (Fetch.Runtime{owner, hosts, options, proxies, pools}, Config{resolver, hosts, options, security, url})
 
 def borrow(runtime: Fetch.Runtime, security: HTTP.Security, url: URL.Context) -> Fetch.Runtime & Config:
   match runtime:
-    case Fetch.Runtime{owner, hosts, options, pools}: withResolver(hosts, options, pools, security, url, DNS.borrow(owner))
+    case Fetch.Runtime{owner, hosts, options, proxies, pools}: withResolver(hosts, options, proxies, pools, security, url, DNS.borrow(owner))
 
 def closeWire(-Reason: Data, wire: Wire<Reason>) -> IO(Unit):
   match wire:
@@ -156,6 +157,11 @@ def adopted(-Reason: Data, protocol: HTTP.Protocol, key: String, size: U32, requ
         authorization : TLSClient.Authorization <- C.call(URL.Host, TLSClient.Authorization, authorize, host)
         initial : Result<&2, &1, TLS.Error<Reason>, TLS.Connection<Reason>> <- TLS.start(Reason, owner, HTTP.serverName(host), authorization, options)
         handshaking(Reason, key, size, request, initial)
+    # HTTP.protocol never selects a proxy tunnel for WebSockets.
+    case Done{owner} HTTP.Tunneled{_, _}:
+      do IO<Result<&2, &1, String, Connection<Reason>>>:
+        closed : Result<&2, &2, Net.InterruptError, Unit> <- Net.close(Reason, owner)
+        return Fail{"WebSocket proxy tunnels are not supported"}
 
 def opened(~Reason: Data, signal: Abort.AbortSignal<Reason>, protocol: HTTP.Protocol, key: String, size: U32, request: H.BufferedRequestPrepared, report: Driver.PlanReport<HTTP.Resolution(Reason, Fetch.SourceError()), Reason, Socket>) -> IO(Result<&2, &1, String, Connection<Reason>>):
   match report:
