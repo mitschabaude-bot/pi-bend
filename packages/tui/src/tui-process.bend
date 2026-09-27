@@ -1,4 +1,5 @@
 import Base
+import ./fullscreen-mouse.bend as Mouse
 import ../../runtime/src/callback.bend as Callback
 import ../../runtime/src/deferred.bend as Deferred
 import ../../runtime/src/ref.bend as Ref
@@ -66,9 +67,11 @@ def finished(result: Result<&2,&2,Terminal.Error,Unit>,old: Session,prepared: Tu
     case Done{_} _: Drawn{Session{Tui.commitFrame(prepared),Main{next}}}
     case Fail{error} Session{tui,Main{screen}}: Rejected{Session{tui,Main{Screen.resetRenderState(screen)}},Output{error}}
     case Fail{error} Session{tui,Fullscreen{screen}}: Rejected{Session{tui,Fullscreen{Alt.reset(screen)}},Output{error}}
-def finishedAlt(result: Result<&2,&2,Terminal.Error,Unit>,old: Session,prepared: Tui.PreparedFrame,next: Alt.State) -> Draw:
+def retainedLayout(screen: Alt.State,prepared: Tui.PreparedFrame) -> Alt.State:
+  match prepared: case Tui.PreparedFrame{_,_,_,_,layout}: Alt.withLayout(screen,layout)
+def finishedAlt(result: Result<&2,&2,Terminal.Error,Unit>,old: Session,+prepared: Tui.PreparedFrame,next: Alt.State) -> Draw:
   match result old:
-    case Done{_} _: Drawn{Session{Tui.commitFrame(prepared),Fullscreen{next}}}
+    case Done{_} _: Drawn{Session{Tui.commitFrame(prepared),Fullscreen{retainedLayout(next,prepared)}}}
     case Fail{error} Session{tui,screen}: Rejected{Session{tui,screen},Output{error}}
 def executePlan(result: Result<&2,&2,Screen.RenderError,Screen.Plan>,old: Session,prepared: Tui.PreparedFrame,handle: Terminal.Handle) -> IO(Draw):
   match result:
@@ -250,10 +253,33 @@ def searchedOrViewport(found: Maybe<&2,Input>,bindings: Bindings.KeybindingsMana
   match found:
     case Some{value}: IO.pure(Input,value)
     case None{}: fullscreenAction(viewportAction(bindings,data),tui,screen,registry,mounted,data,handle,termux)
-def fullscreenInput(+tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,+data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
+def keyboardFullscreen(+tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,+data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
   do IO<Input>:
     +bindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,Alt.bindings(screen))
     searchedOrViewport(searchAction(tui,screen,bindings,data),bindings,tui,screen,registry,mounted,data,handle,termux)
+def mouseFallback(delta: Maybe<&2,T.Offset>,tui: Tui.TuiBase,next: Alt.State) -> IO(Input):
+  match delta:
+    case Some{delta}: viewportScrolled(tui,next,Layout.ScrollLines{delta})
+    case None{}: IO.pure(Input,Input{Drawn{Session{tui,Fullscreen{next}}},True{},False{}})
+def mouseOutcome(outcome: Mouse.Outcome,+screen: Alt.State,raw: Mouse.Raw) -> IO(Input):
+  match outcome:
+    case Mouse.Outcome{state,tui,_,_,Some{error}}: IO.pure(Input,Input{Rejected{Session{tui,Fullscreen{Alt.withMouse(screen,state)}},Owner{error}},True{},False{}})
+    case Mouse.Outcome{state,tui,True{},render,None{}}: IO.pure(Input,Input{Drawn{Session{tui,Fullscreen{Alt.withMouse(screen,state)}}},True{},render})
+    case Mouse.Outcome{state,tui,False{},_,None{}}:
+      +next = Alt.withMouse(screen,state)
+      mouseFallback(Mouse.wheel(raw),tui,next)
+def mouseSized(pair: Nat & Nat,+tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,+raw: Mouse.Raw) -> IO(Input):
+  match pair:
+    case (width,height):
+      do IO<Input>:
+        outcome : Mouse.Outcome <- Mouse.dispatch(Alt.mouse(screen),tui,Alt.layout(screen),registry,mounted,raw,width,height)
+        mouseOutcome(outcome,screen,raw)
+def mouseOrInput(raw: Maybe<&2,Mouse.Raw>,+tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
+  match raw:
+    case Some{raw}: mouseSized(Alt.dimensions(screen),tui,screen,registry,mounted,raw)
+    case None{}: keyboardFullscreen(tui,screen,registry,mounted,data,handle,termux)
+def fullscreenInput(+tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,+data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
+  mouseOrInput(Mouse.parse(data),tui,screen,registry,mounted,data,handle,termux)
 def input(+session: Session,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
   match session:
     case Session{tui,Fullscreen{screen}}: fullscreenInput(tui,screen,registry,mounted,data,handle,termux)

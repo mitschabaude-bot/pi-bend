@@ -850,7 +850,7 @@
     },
     "packages/coding-agent/src/modes/interactive/components/thinking-selector.ts": {
       "state": "partial",
-      "note": "Native picker uses the shared SelectList and Text components for upstream layout, wrapping and styles. Source-pinned differential checks cover keyboard navigation, confirmation/cancellation, default-description filtering, empty/no-match lists, mouse press/click selection, wheel movement and search-cursor handling across six widths on native one/four threads. Optional default levels are explicit. Focus propagation, resize-before-mouse dispatch and standalone public list access remain unverified. The keyboard terminal flow matches pi, but the fullscreen mouse integration regression remains failing: tui-process.mouseViewport consumes button events without dispatching to components.",
+      "note": "Native picker uses the shared SelectList and Text components for upstream layout, wrapping and styles. Source-pinned differential checks cover keyboard navigation, confirmation/cancellation, default-description filtering, empty/no-match lists, mouse press/click selection, wheel movement and search-cursor handling across six widths on native one/four threads. Optional default levels are explicit. Focus propagation, resize-before-mouse dispatch and standalone public list access remain unverified. Keyboard terminal flow matches pi. Fullscreen click selection, wheel navigation, drag suppression, modal closure and save-as-default frames/settings also match pi on native one/four through the terminal process.",
       "source_sha256": "a8e562022d04ef4266191ba35a0417fced547666be6e6e97329aa3918b512e18",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/thinking-selector.bend": "edc010d69002f406b00083493be5dd69abe9ce0ded9f5b69c47edacc35b3cfff"
@@ -995,7 +995,7 @@
       "source_sha256": "76dfd9f8a88cabc064f0652b83f16a945fbc988c9fe7c0423a4cd796907ef77d",
       "port_sha256": {
         "packages/tui/src/components/scroll-view.bend": "0b6d7081ad10aabbe5f6e25ed4c7871b85ed38d10f45774be294c4a9ae6db95b",
-        "packages/tui/src/layout.bend": "0cbbfaac2d9b85db07a81cc18ed3a82eae89e1dfc965f0ac4e2de6f72fa722d1"
+        "packages/tui/src/layout.bend": "abbae131973c280bf29fd8381c8f1f711f5e20fefb9408c60f6caa5494dca013"
       },
       "ports": [
         "packages/tui/src/components/scroll-view.bend",
@@ -1042,17 +1042,19 @@
     },
     "packages/tui/src/tui-alt-screen.ts": {
       "state": "partial",
-      "note": "Native fullscreen startup, typing, scrolling, and keyboard transcript search match focused upstream terminal captures. Search opens with Ctrl+Shift+F, shows themed highlights and counts, navigates with Enter, and restores the screen on Escape; the index reuses unchanged content. Mouse search controls, full input editing, mouse selection, image placement, and the rest of the upstream suite remain open. Light-theme scrollbar colors, top-of-transcript background resets, and fullscreen exit cursor/border styling still differ. Scoped external-editor handoffs render the natural layout document, retain the live scroll state and restore the alternate screen; editor-open, restored drafts and following requests match fullscreen terminal comparisons.",
+      "note": "Native fullscreen startup, typing, scrolling, and keyboard transcript search match focused upstream terminal captures. Search opens with Ctrl+Shift+F, shows themed highlights and counts, navigates with Enter, and restores the screen on Escape; the index reuses unchanged content. Mouse search controls, full input editing, mouse selection, image placement, and the rest of the upstream suite remain open. Light-theme scrollbar colors, top-of-transcript background resets, and fullscreen exit cursor/border styling still differ. Scoped external-editor handoffs render the natural layout document, retain the live scroll state and restore the alternate screen; editor-open, restored drafts and following requests match fullscreen terminal comparisons. Native SGR component dispatch retains the last committed layout, checks overlays before layout boxes, applies focus and capture, delivers signed local coordinates, suppresses clicks after movement and cycles component click counts. Pinned managed-component traces and fullscreen thinking picker click/wheel/drag frames and saved settings match native one/four. Unhandled text selection, focus-loss gesture reset, nested viewport wheel bubbling, scrollbar mouse controls and full overlay/focus resolution remain incomplete. The fullscreen-search terminal scenario submits at the fd warning before native startup readiness; both the preceding and mouse-dispatch binaries retain that early draft instead of requesting a model. With startup settled, search frames and requests match pi; the readiness timing gap is separate from mouse dispatch.",
       "source_sha256": "5f6032a07398b8df3f72d65c38dbed2e52649a25823a52946d6414ddb2f8a929",
       "port_sha256": {
-        "packages/tui/src/tui-alt-screen.bend": "a4e12697fb0cc2f48c013ececce0c97923bea0856fd4066e010c28ec072ead05",
+        "packages/tui/src/tui-alt-screen.bend": "3d6519901eb667700aa73edc5fa7ed76dc0f32fbd8b01a33a8709ece5f825676",
         "packages/tui/src/tui-base.bend": "0588a5b9d0eb3d9b7d30d2165355897fc85807a756ed6da3fa05099dc713334f",
-        "packages/tui/src/tui-process.bend": "0c4c443ea17279422ad53f2ce9efb1bb22ee7f07daa1b213d1404245b39cd76d"
+        "packages/tui/src/tui-process.bend": "4cadb06a078ae8a2c2068caf2703a526df7ce52cd2b956cb34ab11b25c80fab4",
+        "packages/tui/src/fullscreen-mouse.bend": "ea387f92958bc0cb7c9f96006dff5f14b29ba189a8e01dd47d95c909d5034c23"
       },
       "ports": [
         "packages/tui/src/tui-alt-screen.bend",
         "packages/tui/src/tui-base.bend",
-        "packages/tui/src/tui-process.bend"
+        "packages/tui/src/tui-process.bend",
+        "packages/tui/src/fullscreen-mouse.bend"
       ]
     },
     "packages/tui/src/tui.ts": {
@@ -1062,11 +1064,11 @@
         "packages/tui/src/tui-process.bend",
         "packages/tui/src/terminal-query.bend"
       ],
-      "note": "Focused review of live terminal preferences: native immutable TuiBase state and the owned process apply hardware-cursor and clear-on-shrink updates through the render scheduler; cursor disabling hides immediately through the owned writer. Native one/four-thread PTY checks exercise live visibility, consecutive independent updates, setter return order and terminal restoration. Scoped suspension now retires the terminal lease and its workers before invoking an external action, then reacquires it with separate initial/resume callbacks and retained component state. Native1/native4 PTY checks cover repeated successful, failed and empty editor handoffs, visible cursor and terminal settings; regular and fullscreen interactive captures and following model requests match upstream; regular captures also cover streaming during suspension. The broader TUI public API, named getter/setter surface, overlay/focus contracts and complete scheduling/input behavior still require source-wide review; this finding does not establish full TUI parity. Terminal input now passes upstream handleTerminalInput's order: OSC 11/colour-scheme replies, input listeners (addInputListener/removeInputListener with TuiInputListenerResult consume/data; removal by returned id), the cell size reply (CSI 16 t queried at start when the environment supports images; valid replies set the cell dimensions, invalidate components and request a frame), then dispatch; checked by the terminal-colors and tui-cell-size-input suites through a PTY on native one/four. Fullscreen scrollbar updates coalesce independently of cursor/clear preferences and apply before the next input as well as scheduled frames, so immediate scrolling uses the selected mode. Regular-mode processing discards the fullscreen-only effect; native one/four PTY and terminal comparisons validate the behavior.",
+      "note": "Focused review of live terminal preferences: native immutable TuiBase state and the owned process apply hardware-cursor and clear-on-shrink updates through the render scheduler; cursor disabling hides immediately through the owned writer. Native one/four-thread PTY checks exercise live visibility, consecutive independent updates, setter return order and terminal restoration. Scoped suspension now retires the terminal lease and its workers before invoking an external action, then reacquires it with separate initial/resume callbacks and retained component state. Native1/native4 PTY checks cover repeated successful, failed and empty editor handoffs, visible cursor and terminal settings; regular and fullscreen interactive captures and following model requests match upstream; regular captures also cover streaming during suspension. The broader TUI public API, named getter/setter surface, overlay/focus contracts and complete scheduling/input behavior still require source-wide review; this finding does not establish full TUI parity. Terminal input now passes upstream handleTerminalInput's order: OSC 11/colour-scheme replies, input listeners (addInputListener/removeInputListener with TuiInputListenerResult consume/data; removal by returned id), the cell size reply (CSI 16 t queried at start when the environment supports images; valid replies set the cell dimensions, invalidate components and request a frame), then dispatch; checked by the terminal-colors and tui-cell-size-input suites through a PTY on native one/four. Fullscreen scrollbar updates coalesce independently of cursor/clear preferences and apply before the next input as well as scheduled frames, so immediate scrolling uses the selected mode. Regular-mode processing discards the fullscreen-only effect; native one/four PTY and terminal comparisons validate the behavior. Fullscreen component input now dispatches SGR gestures against the committed hit map; typed focus errors propagate to the owned process. The main-screen path is unchanged.",
       "source_sha256": "2ca47c56f4a4f24b8c6a4c9c9f2a06004bfc312d9dbcd0ac1921a2cae32bc675",
       "port_sha256": {
         "packages/tui/src/tui-base.bend": "0588a5b9d0eb3d9b7d30d2165355897fc85807a756ed6da3fa05099dc713334f",
-        "packages/tui/src/tui-process.bend": "0c4c443ea17279422ad53f2ce9efb1bb22ee7f07daa1b213d1404245b39cd76d",
+        "packages/tui/src/tui-process.bend": "4cadb06a078ae8a2c2068caf2703a526df7ce52cd2b956cb34ab11b25c80fab4",
         "packages/tui/src/terminal-query.bend": "03b83622a8ffde67658ca3121fdaa07f406d1d7ebce5339c9324029769205e78"
       }
     },
@@ -1490,10 +1492,10 @@
     },
     "packages/tui/src/layout.ts": {
       "state": "partial",
-      "note": "Immutable boxes and recursive tree rendering represent source layout without cyclic parent references. Scrollbar cells now match source ANSI/background and wide-character behavior; overflowing pending-Bash terminal frames match text/colors on native one/four. Custom scrollbar style callbacks, image cropping and the full source suite remain incomplete. getLayoutBoxesAt still lacks recursive layer/depth ordering; getScrollViewBox/getScrollViewsAt and includeHiddenAuto geometry lookup are missing.",
+      "note": "Immutable boxes and recursive tree rendering represent source layout without cyclic parent references. Scrollbar cells now match source ANSI/background and wide-character behavior; overflowing pending-Bash terminal frames match text/colors on native one/four. Custom scrollbar style callbacks, image cropping and the full source suite remain incomplete. getLayoutBoxesAt now orders all clipped descendants by layer/depth, with pinned nested/overlapping hit-map comparisons on native one/four. getScrollViewBox/getScrollViewsAt and includeHiddenAuto geometry lookup are missing.",
       "source_sha256": "7530a8eaa30f44fef82e8b7020b5068ba89d34884463c6cb526073b20fcdeef0",
       "port_sha256": {
-        "packages/tui/src/layout.bend": "0cbbfaac2d9b85db07a81cc18ed3a82eae89e1dfc965f0ac4e2de6f72fa722d1",
+        "packages/tui/src/layout.bend": "abbae131973c280bf29fd8381c8f1f711f5e20fefb9408c60f6caa5494dca013",
         "packages/tui/src/layout-tree.bend": "96e8eb98061c9f9c44069ad2cded5558c219fcb1d715ded93b3c8654561da762",
         "packages/tui/src/layout-node.bend": "11945ca2e5945343ef3952a50835df06b0d65e6be8a9e1e6f663809057c94a91"
       },
