@@ -28,6 +28,7 @@ import fake_openai  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 WIDTH, HEIGHT = 100, 32
+HISTORY_LIMIT = 50000
 PI_PACKAGE = str(Path(shutil.which("pi") or "pi").resolve().parents[2]) if shutil.which("pi") else "/nonexistent"
 # The system prompt names each CLI's package directory, whose length enters
 # token estimates. Both CLIs see their package through a link of equal length.
@@ -59,7 +60,10 @@ class Terminal:
         # A prompt marker after exit shows where the shell prompt would land.
         command = f"cd {shlex.quote(str(cwd))} && env -i {assignments} {' '.join(shlex.quote(a) for a in argv)}; printf \'shell$ \'; sleep 3600"
         tmux("kill-session", "-t", name, check=False)
-        tmux("new-session", "-d", "-s", name, "-x", str(WIDTH), "-y", str(HEIGHT), command)
+        # Set capacity before pane creation: the resumed fixture exceeds tmux's
+        # default 2,000-row history, which otherwise hides early render defects.
+        tmux("set-option", "-g", "history-limit", str(HISTORY_LIMIT), ";",
+             "new-session", "-d", "-s", name, "-x", str(WIDTH), "-y", str(HEIGHT), command)
         self.last_input = time.monotonic()
 
     def screen(self, ansi=False, history=False):
