@@ -62,8 +62,10 @@ class Terminal:
         tmux("new-session", "-d", "-s", name, "-x", str(WIDTH), "-y", str(HEIGHT), command)
         self.last_input = time.monotonic()
 
-    def screen(self, ansi=False):
+    def screen(self, ansi=False, history=False):
         args = ["capture-pane", "-p", "-t", self.name]
+        if history:
+            args.extend(["-S", "-"])
         if ansi:
             args.insert(2, "-e")
         return tmux(*args)
@@ -285,14 +287,14 @@ def run_side(label, argv, scenario, keep):
                         raise AssertionError(f"Expected title {step[2]!r}, got {title!r}")
                     time.sleep(.05)
                 snaps[step[1]] = title
-            elif kind == "snap":
+            elif kind in ("snap", "snap-history"):
                 if step[1] == "working":
                     snaps[step[1]] = working_screen(terminal.screen(), root)
                 else:
-                    snaps[step[1]] = normalise(terminal.screen(), root)
+                    snaps[step[1]] = normalise(terminal.screen(history=kind == "snap-history"), root)
                     # tmux re-encodes each cell's attributes, so equal
                     # captures mean equal colours and styles on screen.
-                    snaps[step[1] + ".color"] = normalise(terminal.screen(ansi=True), root)
+                    snaps[step[1] + ".color"] = normalise(terminal.screen(ansi=True, history=kind == "snap-history"), root)
     finally:
         terminal.close()
         server.shutdown()
@@ -347,9 +349,9 @@ def main():
                 (directory / "requests.diff").write_text("\n".join(diff) + "\n")
         timing = {key: {"pi": upstream["timings"].get(key), "bend": native["timings"].get(key)} for key in upstream["timings"]}
         (directory / "timings.json").write_text(json.dumps(timing, indent=1) + "\n")
-        # A scenario may bound Bend's time for a step relative to pi's: {step: ratio}.
-        slow = [key for key, ratio in scenario.get("within", {}).items()
-                if None in (timing[key]["pi"], timing[key]["bend"]) or timing[key]["bend"] > ratio * timing[key]["pi"]]
+        # Relative budgets may have a small absolute floor for PTY polling noise.
+        slow = [key for key, bound in scenario.get("within", {}).items()
+                if None in (timing[key]["pi"], timing[key]["bend"]) or timing[key]["bend"] > latency_budget(bound, timing[key]["pi"])]
         mismatched += [f"slow:{key}" for key in slow]
         mismatched += [f"timeout:{side}:{key}" for key, times in timing.items() for side, elapsed in times.items() if elapsed is None]
         status = "MATCH" if not mismatched else "DIFF " + ",".join(mismatched)
@@ -357,6 +359,11 @@ def main():
         rendered = ", ".join(f"{k}: pi {fmt(v['pi'])} / bend {fmt(v['bend'])}" for k, v in timing.items())
         print(f"{scenario['name']:<24} {status}  {rendered}")
     return 1 if failures else 0
+
+def latency_budget(bound, reference):
+    if isinstance(bound, dict):
+        return max(bound["ratio"] * reference, bound.get("floor_ms", 0) / 1000)
+    return bound * reference
 
 def fmt(value):
     return "timeout" if value is None else f"{value * 1000:.0f}ms"

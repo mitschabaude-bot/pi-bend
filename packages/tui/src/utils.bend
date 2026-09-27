@@ -87,7 +87,18 @@ def renderTokens(items: List<&2,Token>,+strip: Bool,reversed: String) -> String:
     case Nil{}: reverseInto(reversed,"")
     case item <> rest: renderTokens(rest,strip,renderToken(item,strip,reversed))
 def stripTerminalSequences(text: String) -> String: renderTokens(tokens(text),True{},"")
-def normalizeTerminalOutput(text: String) -> String: renderTokens(tokens(text),False{},"")
+# Ordinary lines need no rewriting. Preserve their immutable storage rather
+# than tokenizing and rebuilding the whole transcript on every editor redraw.
+def needsNormalization(text: String) -> Bool:
+  match text:
+    case SNil{}: False{}
+    case SCon{'\t',_}: True{}
+    case SCon{Chr{3635},_}: True{}
+    case SCon{Chr{3763},_}: True{}
+    case SCon{_,rest}: needsNormalization(rest)
+def normalizeTerminalOutput(+text: String) -> String:
+  Bool.pick(Unit -> String,needsNormalization(text),
+    _ => renderTokens(tokens(text),False{},""),_ => text)(Unit{})
 
 # Style state is immutable; SGR reset leaves an OSC-8 link open.
 type Osc8Terminator is Data: Bell{} StringTerminator{}

@@ -5,6 +5,7 @@ Paths in `files` are relative to the scenario root (home/, project/). Steps:
   ("wait", regex[, label])  record input→screen latency under `label`
   ("settle"[, seconds])     wait for a quiet screen   ("snap", name)
   ("write", path, text)     change a file under the scenario root
+  ("snap-history", name)    capture terminal scrollback as well as visible rows
   ("title", name[, expected])  capture or await the terminal tab title
 """
 import sys; sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[2] / "tests"))
@@ -439,6 +440,7 @@ SCENARIOS = [
     {
         "name": "typing",
         "args": MODEL,
+        "within": {f"key{index}": {"ratio": 2, "floor_ms": 20} for index in range(1, 7)},
         "steps": [("wait", READY, "startup"), ("settle", 0.5), *typed("parity"), ("settle", 0.3), ("snap", "typed")],
     },
     {
@@ -485,8 +487,9 @@ SCENARIOS = [
     {
         "name": "large-session-typing",
         "args": MODEL + ["--session", "large.jsonl"],
+        "within": {"startup": 2, **{f"key{index}": 2 for index in range(1, 7)}},
         "files": {"project/large.jsonl": open(str(UPSTREAM / 'packages/coding-agent/test/fixtures/large-session.jsonl')).read()},
-        "steps": [("wait", "Continue", "prompt"), ("key", "Enter"), ("wait", READY, "startup"), ("settle", 1.0), *typed("typing"), ("settle", 0.3), ("snap", "typed")],
+        "steps": [("wait", "Continue", "prompt"), ("key", "Enter"), ("wait", READY, "startup"), ("settle", 1.0), *typed("typing"), ("settle", 0.3), ("snap", "typed"), ("snap-history", "history")],
     },
     # A stored session whose cwd is gone: interactive mode asks (upstream
     # promptForMissingSessionCwd); Cancel exits quietly.
@@ -566,6 +569,7 @@ SCENARIOS = [
     {
         "name": "code-answer",
         "args": MODEL,
+        "within": {f"key{index}": {"ratio": 2, "floor_ms": 20} for index in range(1, 5)},
         "turns": [{"text": CODE_ANSWER}],
         "steps": [("wait", READY, "startup"), ("settle", 0.5), ("keys", "code"), ("key", "Enter"),
                   ("wait", "END-OF-CODE", "answer"), ("settle", 0.5), ("snap", "answer"), *typed("more"), ("settle", 0.3), ("snap", "typed")],

@@ -1509,10 +1509,10 @@
     },
     "packages/tui/src/utils.ts": {
       "state": "partial",
-      "note": "Reviewed the cell-range/background-tracker/slicing path. getGraphemeCellRange is a functional Unicode/ANSI scan and matches 1,224 column lookups on native one/four; scrollbar integration also covers wide-cell replacement, bold, RGB background and hyperlink isolation. The native public getOsc8LinkAtColumn, isWhitespaceChar and isPunctuationChar helpers remain missing; the rest of this module needs a complete API review.",
+      "note": "Reviewed the cell-range/background-tracker/slicing path. getGraphemeCellRange is a functional Unicode/ANSI scan and matches 1,224 column lookups on native one/four; scrollbar integration also covers wide-cell replacement, bold, RGB background and hyperlink isolation. The native public getOsc8LinkAtColumn, isWhitespaceChar and isPunctuationChar helpers remain missing; the rest of this module needs a complete API review. Terminal normalization retains ordinary immutable strings when no tab or Thai/Lao AM vowel needs rewriting; the ANSI/style differential covers normalization, controls and long inputs.",
       "source_sha256": "8cda2d53e2361ac5aaf6d7345b2fee058c8df5743eae4e4e90c89a7072c026c3",
       "port_sha256": {
-        "packages/tui/src/utils.bend": "1ef6fe6c006a63bc5266491fd2b2be806c2567ccba98e018e5a0bad0aa4c683f"
+        "packages/tui/src/utils.bend": "78a1ff9b5e2ab5127849e9580cd0a5d80cf3c810f42f7f604a63f6b41eb33045"
       },
       "ports": [
         "packages/tui/src/utils.bend"
