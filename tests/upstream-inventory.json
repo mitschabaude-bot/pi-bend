@@ -3365,9 +3365,16 @@
     },
     {
       "source": "packages/coding-agent/test/oauth-selector.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d147cfa4fe88abdd663ae8abe6a56a40bdfb9a31128adcb16baf038cc1dbf250"
+      "status": "partial",
+      "ports": [
+        "tests/provider-selector-input.bend",
+        "tests/provider_selector_input_check.py",
+        "tests/provider_selector_reference.mts",
+        "tests/provider_selector_terminal_check.py",
+        "tests/login-dialog-input.bend"
+      ],
+      "sha256": "d147cfa4fe88abdd663ae8abe6a56a40bdfb9a31128adcb16baf038cc1dbf250",
+      "notes": "The five named rendering assertions for unconfigured, alternate OAuth, environment key, models.json key and models.json command auth are included in pinned component ANSI snapshots. Editing, filtering, focus, mouse and windowing traces run on native one/four threads. The provider-owned projection assertion is not yet ported as a direct native public-API test. Supplementary label fuzzy scoring follows native scalars (fuzzy.md), so component equality cases use BMP labels; supplementary search text still tests Input graphemes and scalar cursor offsets."
     },
     {
       "source": "packages/coding-agent/test/package-command-paths.test.ts",
