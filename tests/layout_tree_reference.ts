@@ -67,3 +67,15 @@ for (const text of [
   const frame = renderLayoutFrame(staticText(text), 80, 1, () => {});
   console.log(`zones:[${frame.lines.map(line => Array.from(line, char => char.codePointAt(0)).join(",")).join("|")}]`);
 }
+
+// Full-width vertical regions: clipping, padding, gaps and natural overflow.
+for (const text of ["", "plain", "\x1b[31mred\x1b[0m", "\x1b]133;A\x07first", "\x1b]133;B\x1b\\first", "\x1b]133;C\x07\x1b]133;A\x07first", "before\x1b]133;A\x07first", "\x1b]133;D\x07first", "\x1b_Gi=1;payload\x1b\\", "😀 日本 é"]) {
+  const a = staticText(text + "\nsecond"), b = staticText(text + "\nsecond");
+  for (const [root, height] of [
+    [new VStack([{ component: a, basis: 1, shrink: 0 }, { component: b, basis: 3, shrink: 0 }], { gap: 1 }), 5],
+    [new VStack([a, b], { gap: 1 }), 5],
+  ] as const) {
+    const frame = renderLayoutFrame(root, 80, height, () => {});
+    console.log(`zones:[${frame.lines.map(line => Array.from(line, char => char.codePointAt(0)).join(",")).join("|")}]`);
+  }
+}

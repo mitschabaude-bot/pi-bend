@@ -56,6 +56,20 @@ def zoneCases(values: List<&2,String>,+invalidator: Callback.Callback<Unit,Unit>
         zoneReport(frame)
         Callback.dispose(Nat,List<&2,String>,renderer)
         zoneCases(rest,invalidator)
+def fullWidthCases(values: List<&2,String>,+invalidator: Callback.Callback<Unit,Unit>) -> IO(Unit):
+  match values:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case +text <> rest:
+      do IO<Unit>:
+        +renderer : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~List<&2,String>,~Nat,~List<&2,String>,~draw,text <> "second" <> Nil{})
+        +leaf : N.LayoutNode = N.Leaf{component(201n,renderer,invalidator)}
+        +other : N.LayoutNode = N.Leaf{component(202n,renderer,invalidator)}
+        clipped : T.TreeFrame <- T.renderTreeFrame(N.VStack{two(N.child(leaf,S.sized(Some{1n},0n,0n,0n,10n),None{}),N.child(other,S.sized(Some{3n},0n,0n,0n,10n),None{})),1n},80n,5n)
+        zoneReport(clipped)
+        natural : T.TreeFrame <- T.renderTreeFrame(N.Inline{N.VStack{two(leaf,other),1n}},80n,1n)
+        zoneReport(natural)
+        Callback.dispose(Nat,List<&2,String>,renderer)
+        fullWidthCases(rest,invalidator)
 def main() -> IO(Unit):
   do IO<Unit>:
     +invalidator : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~ignore,Unit{})
@@ -108,6 +122,8 @@ def main() -> IO(Unit):
       "\u{1b}]133;A\u{1b}Xtext", "\u{1b}]133;A",
       "before\u{1b}]133;A\u{7}text", "\u{1b}]133;A\u{7}",
       "\u{1b}]133;A\u{7}😀 日本 é"],invalidator)
+    # Full-width vertical regions preserve clipping, gap rows, zones and ANSI.
+    fullWidthCases(["", "plain", "\u{1b}[31mred\u{1b}[0m", "\u{1b}]133;A\u{7}first", "\u{1b}]133;B\u{1b}\\first", "\u{1b}]133;C\u{7}\u{1b}]133;A\u{7}first", "before\u{1b}]133;A\u{7}first", "\u{1b}]133;D\u{7}first", "\u{1b}_Gi=1;payload\u{1b}\\", "😀 日本 é"],invalidator)
     Callback.dispose(Nat,List<&2,String>,bodyDraw)
     Callback.dispose(Nat,List<&2,String>,topDraw)
     Callback.dispose(Nat,List<&2,String>,selectorDraw)
