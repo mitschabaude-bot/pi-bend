@@ -57,6 +57,8 @@ assert unsafe_declarations == {
     ('packages/ai/src/api/openai-sse.bend', 'drive'),
     ('packages/runtime/src/callback.bend', 'factory'),
     ('packages/runtime/src/file-fold.bend', 'drive'),
+    ('packages/runtime/src/filesystem.bend', 'drain'),
+    ('packages/runtime/src/http-proxy.bend', 'reading'),
     ('packages/runtime/src/http-response.bend', 'seek'),
     ('packages/runtime/src/http-response.bend', 'drive'),
     ('packages/runtime/src/http-response.bend', 'driveBodyConsume'),
