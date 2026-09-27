@@ -3051,3 +3051,13 @@ Codex: full-capacity capture passes unchanged-binary comparisons for all five mo
 Codex: bd929e2a is pushed. Startup cleanup now uses the owned shutdown transaction to render an empty frame before terminal release; native build is running, and missing-cwd Cancel now captures complete history too. Aborted tool labels come from transcript.toolFailure, distinct from assistant-message error text; leaving that follow-up separate.
 
 Codex: clear-before-stop removes exactly the 15 selector rows on native one/four, preserving all 7,641 transcript rows/colors; Cancel preserves pre-existing output and acceptance/decline outcomes match upstream. Five required render scenarios, generic proofs and inventory checked: typing bounds pass this run, startup/flood/history gates remain open, and existing prompt ANSI differences match the unchanged baseline. Landing and releasing startup-selector.bend; aborted tool replay labels are next.
+
+Codex: reserving transcript.bend, interactive-mode.bend, run.bend and interactive-transcript fixture. Fix aborted tool replay labels while supplying live retry context explicitly, preserving stored assistant errors and immutable model messages.
+
+Codex: replay/live failure cases pass on Bun, including retained partial content and stored assistant errors; native fixture is building. Retry lookup is conditional on aborted message completion, avoiding added session reads during token streaming.
+
+Codex: native one/four transcript fixture passes all existing checks plus failure replay/live retry cases. Full CLI build is running; a new retry-abort terminal scenario will verify the session retry count before landing, followed by all five speed scenarios and exact history-delta checks.
+
+Codex: retry-abort confirms the live retry label but reveals an existing Escape/dequeue conflation: abort prints the explicit dequeue status. Also reserving session-controller.bend to carry whether queue restoration should announce, retaining explicit dequeue notices and silent Escape restoration.
+
+Codex: native one/four retry-abort, empty dequeue and retry cancellation match upstream frames/colors/requests; full history differs from the baseline only at the two corrected tool labels, retaining all 7,641 rows. Transcript fixtures, proofs, inventory and five required scenarios checked; alternating typing medians remain 18.9→18.6 / 26.6→26.7 ms, flood varies, and startup/flood/remaining diff-history gates stay open. Landing and releasing the transcript/controller paths.

@@ -536,6 +536,19 @@ SCENARIOS = [
                   ("settle", 3.5), ("snap", "cancelled")],
     },
     {
+        "name": "retry-abort", "args": MODEL,
+        "files": {"home/.pi/agent/settings.json": json.dumps({"retry": {"enabled": True, "maxRetries": 2, "baseDelayMs": 10, "provider": {"maxRetries": 0}}})},
+        "turns": [{"status": 500}, {"text": "RETRY-PARTIAL " + "Streaming retry answer. " * 150, "chunks": 100, "delay_ms": 200}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "hi"), ("key", "Enter"),
+                  ("wait", "RETRY-PARTIAL", "partial"), ("key", "Escape"),
+                  ("wait", "Aborted after 1 retry attempt", "aborted"), ("settle", 0.3), ("snap", "aborted")],
+    },
+    {
+        "name": "dequeue-empty", "args": MODEL,
+        "steps": [("wait", READY, "startup"), ("settle", 0.3), ("key", "M-Up"),
+                  ("wait", "No queued messages to restore", "restored"), ("settle", 0.3), ("snap", "restored")],
+    },
+    {
         "name": "basic-turn",
         "args": MODEL,
         "turns": [{"text": ANSWER, "chunks": 40, "delay_ms": 10, "usage": {"input": 1200, "output": 150}}],

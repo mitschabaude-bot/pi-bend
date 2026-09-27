@@ -342,10 +342,21 @@ def finalizeCalls(content: List<&2,Ai.AssistantContent<Schema.Value>>,+tools: To
         finalizeTool(findTool(tools,id),failure)
         finalizeCalls(rest,tools,failure)
     case _ <> rest: finalizeCalls(rest,tools,failure)
-def toolFailure(reason: Ai.StopReason,message: Maybe<&2,String>) -> Maybe<&2,String>:
+def abortLabel(attempt: Nat) -> String:
+  match attempt:
+    case Zero{}: "Operation aborted"
+    case Succ{+rest}: "Aborted after " ++ Nat.show(Succ{rest}) ++ " retry attempt" ++ Bool.pick(String,Nat.is_eq(rest,0n),"","s")
+def completedAssistant(-D: Data,message: Ai.AssistantMessage<Schema.Value,D>,liveRetry: Maybe<&2,Nat>,streaming: Bool) -> Ai.AssistantMessage<Schema.Value,D>:
+  match message liveRetry streaming:
+    case Ai.AssistantMessage{content,api,provider,model,responseModel,responseId,thinking,diagnostics,usage,Ai.Aborted{},deferred,_,raw,endTurn,timestamp} Some{attempt} False{}:
+      Ai.AssistantMessage{content,api,provider,model,responseModel,responseId,thinking,diagnostics,usage,Ai.Aborted{},deferred,Some{abortLabel(attempt)},raw,endTurn,timestamp}
+    case _ _ _: message
+def toolFailure(reason: Ai.StopReason,message: Maybe<&2,String>,liveRetry: Maybe<&2,Nat>) -> Maybe<&2,String>:
   match reason:
-    case Ai.Error{}: Some{Maybe.default(&2,String,message,"Error")}
-    case Ai.Aborted{}: Some{Maybe.default(&2,String,message,"Error")}
+    case Ai.Error{}:
+      +text = {Maybe.default(&2,String,message,"Error"): String}
+      Some{Bool.pick(String,String.is_empty(text),"Error",text)}
+    case Ai.Aborted{}: Some{abortLabel(Maybe.default(&2,Nat,liveRetry,0n))}
     case _: None{}
 def finalizedCalls(pair: State & Bool,content: List<&2,Ai.AssistantContent<Schema.Value>>,failure: Maybe<&2,String>) -> IO(State & Bool):
   match pair:
@@ -357,12 +368,12 @@ def finishedMessageCalls(pair: State & Bool,content: List<&2,Ai.AssistantContent
   match streaming:
     case True{}: IO.pure(State & Bool,pair)
     case False{}: finalizedCalls(pair,content,failure)
-def mountedMessageCalls(-D: Data,state: State,+message: Ai.AssistantMessage<Schema.Value,D>,streaming: Bool) -> IO(State & Bool):
+def mountedMessageCalls(-D: Data,state: State,+message: Ai.AssistantMessage<Schema.Value,D>,streaming: Bool,liveRetry: Maybe<&2,Nat>) -> IO(State & Bool):
   do IO<State & Bool>:
     +content : List<&2,Ai.AssistantContent<Schema.Value>> = Ai.assistantContent(Schema.Value,D,message)
     pair : State & Bool <- mountCalls(content,state)
-    finishedMessageCalls(pair,content,toolFailure(Ai.assistantStopReason(Schema.Value,D,message),Ai.assistantErrorMessage(Schema.Value,D,message)),streaming)
-def assistantUpdate(-D: Data,state: State,+message: Ai.AssistantMessage<Schema.Value,D>,+streaming: Bool) -> IO(State & Bool):
+    finishedMessageCalls(pair,content,toolFailure(Ai.assistantStopReason(Schema.Value,D,message),Ai.assistantErrorMessage(Schema.Value,D,message),liveRetry),streaming)
+def assistantUpdate(-D: Data,state: State,+message: Ai.AssistantMessage<Schema.Value,D>,+streaming: Bool,+liveRetry: Maybe<&2,Nat>) -> IO(State & Bool):
   match state:
     case State{entries,tools,active,id,view,theme,styles,expanded,hidden,pad}:
       match active:
@@ -370,8 +381,8 @@ def assistantUpdate(-D: Data,state: State,+message: Ai.AssistantMessage<Schema.V
         case Some{+handle}:
           do IO<State & Bool>:
             body : Messages.Body <- Messages.current(handle)
-            Messages.set(handle,updated(Schema.Value,D,body,message,streaming))
-            mountedMessageCalls(D,State{entries,tools,Bool.pick(Maybe<&2,Messages.Handle>,streaming,Some{handle},None{}),id,view,theme,styles,expanded,hidden,pad},message,streaming)
+            Messages.set(handle,updated(Schema.Value,D,body,completedAssistant(D,message,liveRetry,streaming),streaming))
+            mountedMessageCalls(D,State{entries,tools,Bool.pick(Maybe<&2,Messages.Handle>,streaming,Some{handle},None{}),id,view,theme,styles,expanded,hidden,pad},message,streaming,liveRetry)
 def blocksText(blocks: List<&2,Ai.TextImageContent>) -> String:
   match blocks:
     case Nil{}: ""
@@ -402,9 +413,9 @@ def userMessage(-G: Data,-C: Data,state: State,message: Agent.AgentMessage<G,Too
     case Agent.LlmMessage{Ai.Assistant{assistant}}: assistantStart(G,state,assistant)
     case Agent.LlmMessage{Ai.ToolResult{result}}: historicalTool(state,result)
     case _: IO.pure(State & Bool,(state,False{}))
-def updateMessage(-G: Data,-C: Data,state: State,message: Agent.AgentMessage<G,Tools.ToolDetails,C>,streaming: Bool) -> IO(State & Bool):
+def updateMessage(-G: Data,-C: Data,state: State,message: Agent.AgentMessage<G,Tools.ToolDetails,C>,streaming: Bool,liveRetry: Maybe<&2,Nat>) -> IO(State & Bool):
   match message:
-    case Agent.LlmMessage{Ai.Assistant{assistant}}: assistantUpdate(G,state,assistant,streaming)
+    case Agent.LlmMessage{Ai.Assistant{assistant}}: assistantUpdate(G,state,assistant,streaming,liveRetry)
     case _: IO.pure(State & Bool,(state,False{}))
 def beginFound(state: State,args: Schema.Value,found: Maybe<&2,Tool.Handle>) -> IO(State & Bool):
   match found:
@@ -455,18 +466,21 @@ def finishedTool(state: State,id: String,result: Agent.AgentToolResult<Tools.Too
   match state:
     case State{entries,+tools,active,next,view,theme,styles,expanded,hidden,pad}:
       finishedFound(State{entries,tools,active,next,view,theme,styles,expanded,hidden,pad},result,error,findTool(tools,id))
-def transition(-G: Data,-C: Data,state: State,event: Agent.AgentEvent<G,Tools.ToolDetails,C,Agent.AgentToolResult<Tools.ToolDetails>,Agent.AgentToolResult<Tools.ToolDetails>>) -> IO(State & Bool):
+def transition(-G: Data,-C: Data,state: State,+liveRetry: Maybe<&2,Nat>,event: Agent.AgentEvent<G,Tools.ToolDetails,C,Agent.AgentToolResult<Tools.ToolDetails>,Agent.AgentToolResult<Tools.ToolDetails>>) -> IO(State & Bool):
   match event:
     case Agent.MessageStart{message}: userMessage(G,C,state,message)
-    case Agent.MessageUpdate{message,_}: updateMessage(G,C,state,message,True{})
-    case Agent.MessageEnd{message}: updateMessage(G,C,state,message,False{})
+    case Agent.MessageUpdate{message,_}: updateMessage(G,C,state,message,True{},liveRetry)
+    case Agent.MessageEnd{message}: updateMessage(G,C,state,message,False{},liveRetry)
     case Agent.ToolExecutionStart{id,name,args}: startedTool(state,id,name,args)
     case Agent.ToolExecutionUpdate{id,name,args,result}: partialTool(state,id,name,args,result)
     case Agent.ToolExecutionEnd{id,_,result,error}: finishedTool(state,id,result,error)
     case _: IO.pure(State & Bool,(state,False{}))
-def accept(-G: Data,-C: Data,handle: Handle,event: Agent.AgentEvent<G,Tools.ToolDetails,C,Agent.AgentToolResult<Tools.ToolDetails>,Agent.AgentToolResult<Tools.ToolDetails>>) -> IO(Bool):
+def acceptWithRetry(-G: Data,-C: Data,handle: Handle,liveRetry: Maybe<&2,Nat>,event: Agent.AgentEvent<G,Tools.ToolDetails,C,Agent.AgentToolResult<Tools.ToolDetails>,Agent.AgentToolResult<Tools.ToolDetails>>) -> IO(Bool):
   match handle:
-    case Handle{resource,_}: Serial.run(State,Bool,resource,state => transition(G,C,state,event))
+    case Handle{resource,_}: Serial.run(State,Bool,resource,state => transition(G,C,state,liveRetry,event))
+# None replays stored messages; Some carries the live session retry context.
+def accept(-G: Data,-C: Data,handle: Handle,event: Agent.AgentEvent<G,Tools.ToolDetails,C,Agent.AgentToolResult<Tools.ToolDetails>,Agent.AgentToolResult<Tools.ToolDetails>>) -> IO(Bool):
+  acceptWithRetry(G,C,handle,None{},event)
 def seed(-G: Data,-C: Data,+handle: Handle,messages: List<&2,Agent.AgentMessage<G,Tools.ToolDetails,C>>) -> IO(Unit):
   match messages:
     case Nil{}: IO.pure(Unit,Unit{})

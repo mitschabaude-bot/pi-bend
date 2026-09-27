@@ -20,7 +20,7 @@ type Control is Data:
   Interrupt{draft: String}
   Dequeue{draft: String}
 type ControlResult is Data:
-  ControlResult{text: String,count: Nat}
+  ControlResult{text: String,count: Nat,announce: Bool}
 type Selection is Data: Navigate{id: String} Fork{id: String}
 type SelectionResult is Data: Navigated{navigation: Session.Navigation} Forked{text: Maybe<&2,String>} SelectionFailed{message: String}
 # upstream runtimeHost: starting and forking sessions replace the session.
@@ -261,11 +261,11 @@ def notifyControl(observer: Maybe<&2,Callback.Callback<ControlResult,Unit>>,resu
   match observer:
     case None{}: IO.pure(Unit,Unit{})
     case Some{callback}: Callback.call(ControlResult,Unit,callback,result)
-def clearControl(+session: Session.AgentSession,observer: Maybe<&2,Callback.Callback<ControlResult,Unit>>,draft: String,abort: Bool) -> IO(Result<&2,&2,String,Unit>):
+def clearControl(+session: Session.AgentSession,observer: Maybe<&2,Callback.Callback<ControlResult,Unit>>,draft: String,+abort: Bool) -> IO(Result<&2,&2,String,Unit>):
   do IO<Result<&2,&2,String,Unit>>:
     queuedMessages : Session.QueuedMessages <- Session.clearQueue(session)
     +texts : List<&2,String> <- IO.pure(List<&2,String>,joinedTexts(queuedMessages))
-    notifyControl(observer,ControlResult{restoredText(texts,draft),List.length(&2,String,texts)})
+    notifyControl(observer,ControlResult{restoredText(texts,draft),List.length(&2,String,texts),Bool.not(abort)})
     Bool.pick(Unit -> IO(Unit),abort,_ => Session.abort(session),_ => IO.pure(Unit,Unit{}))(Unit{})
     return Done{Unit{}}
 def interruptControl(session: Session.AgentSession,observer: Maybe<&2,Callback.Callback<ControlResult,Unit>>,run: PromptRun,draft: String) -> IO(Result<&2,&2,String,Unit>):

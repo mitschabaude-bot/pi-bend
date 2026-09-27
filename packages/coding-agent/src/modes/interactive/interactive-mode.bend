@@ -36,7 +36,7 @@ import ./transcript.bend as Transcript
 # Model work runs in SessionController's worker. These callbacks only publish
 # immutable event snapshots and ask the TUI process for another frame.
 type Events is Data:
-  Events{transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+  Events{transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,retryAttempt: Nat}
 type SubmissionFailure is Data:
   QueueFailure{cause: Controller.SubmitError}
   PromptFailure{message: String}
@@ -71,9 +71,9 @@ def requestRender(redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO
     renderRequested(callback)
 def observed(events: Events,event: Session.SessionEvent()) -> IO(Unit):
   match events:
-    case Events{transcript,redraw}:
+    case Events{transcript,redraw,retryAttempt}:
       do IO<Unit>:
-        changed : Bool <- Transcript.accept(Unit,Runtime.Custom(),transcript,event)
+        changed : Bool <- Transcript.acceptWithRetry(Unit,Runtime.Custom(),transcript,Some{retryAttempt},event)
         Bool.pick(Unit -> IO(Unit),changed,_ => requestRender(redraw),_ => IO.pure(Unit,Unit{}))(Unit{})
 def onSessionEvent(events: Events,event: Session.AgentSessionEvent) -> IO(Unit):
   match event:

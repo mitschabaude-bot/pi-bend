@@ -410,6 +410,13 @@ def structuralNotice(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Call
     case Session.EntryAppended{Tree.BranchSummaryEntry{base,fromId,summary,details,usageValue,fromHook}}: structuralEntry(transcript,redraw,Tree.BranchSummaryEntry{base,fromId,summary,details,usageValue,fromHook})
     case Session.EntryAppended{Tree.CustomMessageEntry{base,kind,content,details,display}}: structuralEntry(transcript,redraw,Tree.CustomMessageEntry{base,kind,content,details,display})
     case _: IO.pure(Unit,Unit{})
+def retryForEvent(session: Ref.Ref<Session.AgentSession>,event: Session.AgentSessionEvent) -> IO(Nat):
+  match event:
+    case Session.AgentEvent{Agent.MessageEnd{Agent.LlmMessage{Ai.Assistant{Ai.AssistantMessage{_,_,_,_,_,_,_,_,_,Ai.Aborted{},_,_,_,_,_}}}}}:
+      do IO<Nat>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        Session.retryAttempt(live)
+    case _: IO.pure(Nat,0n)
 def observeCopied(input: Observation,+event: Session.AgentSessionEvent) -> IO(Unit):
   match input:
     case Observation{+transcript,+redraw,footer,+working,+session}:
@@ -422,7 +429,8 @@ def observeCopied(input: Observation,+event: Session.AgentSessionEvent) -> IO(Un
         compactionNotice(transcript,redraw,session,event)
         usageNotice(transcript,redraw,session,event)
         structuralNotice(transcript,redraw,event)
-        Interactive.onSessionEvent(Interactive.Events{transcript,redraw},event)
+        attempt : Nat <- retryForEvent(session,event)
+        Interactive.onSessionEvent(Interactive.Events{transcript,redraw,attempt},event)
         Bool.pick(Unit -> IO(Unit),changed,_ => Interactive.requestRender(redraw),_ => IO.pure(Unit,Unit{}))(Unit{})
 def observed(input: Observation,event: Session.AgentSessionEvent) -> IO(Unit):
   observeCopied(input,event)
@@ -2373,12 +2381,12 @@ def changedEditor(target: Maybe<&2,Live.Handle>,value: String,count: Nat) -> IO(
     case Some{handle}: Bool.pick(Unit -> IO(Unit),Nat.is_gt(count,0n),_ => Live.setText(handle,value),_ => IO.pure(Unit,Unit{}))(Unit{})
 def controlResult(sink: ControlSink,result: Controller.ControlResult) -> IO(Unit):
   match sink result:
-    case ControlSink{editor,failure,redraw} Controller.ControlResult{text,+total}:
+    case ControlSink{editor,failure,redraw} Controller.ControlResult{text,+total,announce}:
       do IO<Unit>:
         target : Maybe<&2,Live.Handle> <- Ref.read(Maybe<&2,Live.Handle>,editor)
         changedEditor(target,text,total)
         message : String <- IO.pure(String,Bool.pick(String,Nat.is_eq(total,0n),"No queued messages to restore","Restored " ++ Nat.show(total) ++ Bool.pick(String,Nat.is_eq(total,1n)," queued message"," queued messages") ++ " to editor"))
-        Interactive.report(failure,Interactive.CommandNotice{message})
+        Bool.pick(Unit -> IO(Unit),announce,_ => Interactive.report(failure,Interactive.CommandNotice{message}),_ => Interactive.requestRender(redraw))(Unit{})
 type RebindSink is Data:
   RebindSink{listener: Session.Listener(),transcript: Transcript.Handle,footerRef: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>,working: Working}
 def reboundCopied(sink: RebindSink,+session: Session.AgentSession) -> IO(Unit):

@@ -106,6 +106,29 @@ def pendingBash(+handle: Transcript.Handle,+document: Component.Component,+view:
     count : Nat <- mountedCount(view)
     cleared : List<&2,String> <- Component.render(document,80n)
     check(Nat.is_eq(count,0n) && String.is_empty(clean(cleared)),"clearing transcript retained pending Bash")
+def failedMessage(message: Ai.AssistantMessage<Value.Value,Value.Value>,stop: Ai.StopReason,error: Maybe<&2,String>) -> Ai.AssistantMessage<Value.Value,Value.Value>:
+  match message:
+    case Ai.AssistantMessage{content,api,provider,model,responseModel,responseId,thinking,diagnostics,usage,_,deferred,_,raw,endTurn,timestamp}:
+      Ai.AssistantMessage{content,api,provider,model,responseModel,responseId,thinking,diagnostics,usage,stop,deferred,error,raw,endTurn,timestamp}
+def failureCase(+handle: Transcript.Handle,document: Component.Component,+message: Ai.AssistantMessage<Value.Value,Value.Value>,retry: Maybe<&2,Nat>,expected: String,+forbidden: String) -> IO(Unit):
+  do IO<Unit>:
+    Transcript.clear(handle)
+    begun : Bool <- Transcript.accept(Value.Value,Unit,handle,started(message))
+    settled : Bool <- Transcript.acceptWithRetry(Value.Value,Unit,handle,retry,ended(message))
+    +rows : List<&2,String> <- Component.render(document,80n)
+    check(begun && settled && contains(clean(rows),"partial") && contains(clean(rows),expected),"failed message lost partial content or its failure label")
+    check(String.is_empty(forbidden) || Bool.not(contains(clean(rows),forbidden)),"failed message rendered stale provider failure text")
+def failureReplay(+handle: Transcript.Handle,+document: Component.Component) -> IO(Unit):
+  do IO<Unit>:
+    failureCase(handle,document,failedMessage(withTools("partial"),Ai.Aborted{},Some{"custom transport abort"}),None{},"Operation aborted","custom transport abort")
+    failureCase(handle,document,failedMessage(withTools("partial"),Ai.Aborted{},None{}),None{},"Operation aborted","")
+    failureCase(handle,document,failedMessage(withTools("partial"),Ai.Aborted{},Some{"custom transport abort"}),Some{0n},"Operation aborted","custom transport abort")
+    failureCase(handle,document,failedMessage(withTools("partial"),Ai.Aborted{},Some{"custom transport abort"}),Some{1n},"Aborted after 1 retry attempt","custom transport abort")
+    failureCase(handle,document,failedMessage(withTools("partial"),Ai.Aborted{},Some{"custom transport abort"}),Some{3n},"Aborted after 3 retry attempts","custom transport abort")
+    failureCase(handle,document,failedMessage(withTools("partial"),Ai.Error{},Some{"custom provider failure"}),None{},"custom provider failure","Operation aborted")
+    failureCase(handle,document,failedMessage(withTools("partial"),Ai.Error{},Some{""}),None{},"Error","")
+    failureCase(handle,document,failedMessage(assistant("partial"),Ai.Aborted{},Some{"custom transport abort"}),None{},"custom transport abort","Operation aborted")
+    failureCase(handle,document,failedMessage(assistant("partial"),Ai.Aborted{},Some{"custom transport abort"}),Some{2n},"Aborted after 2 retry attempts","custom transport abort")
 def runEvents(pair: Transcript.Owner & Transcript.Handle,view: View.View,+document: Component.Component,+viewHandle: View.Handle,styles: Styles.Styles) -> IO(Unit):
   match pair:
     case (transcript,+handle):
@@ -240,6 +263,7 @@ def runEvents(pair: Transcript.Owner & Transcript.Handle,view: View.View,+docume
         +replacedStatus : List<&2,String> <- Component.render(document,80n)
         afterStatus : Nat <- mountedCount(viewHandle)
         check(contains(clean(replacedStatus),"Thinking blocks: hidden") && Bool.not(contains(clean(replacedStatus),"Tool output: expanded")) && Nat.is_eq(afterStatus,beforeStatus + 1n),"consecutive status did not replace the previous line")
+        failureReplay(handle,document)
         Transcript.dispose(transcript)
         View.dispose(view)
         Styles.dispose(styles)
