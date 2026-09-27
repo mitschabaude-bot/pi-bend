@@ -40,6 +40,7 @@ def frame(value: Tui.CursorFrame,reset: Bool) -> V.Value:
 def query(method: String,+value: V.Value) -> V.Value:
   match method:
     case "reset": shown(Tui.applyLineResets(lines(get(value,"lines"))),Nil{})
+    case "reuse": shown(Tui.applyLineResetsFrom(lines(get(value,"lines")),lines(get(value,"previous"))),Nil{})
     case "frame": frame(Tui.extractCursorPosition(lines(get(value,"lines")),number(get(value,"height"))),True{})
     case _: frame(Tui.extractCursorPosition(lines(get(value,"lines")),number(get(value,"height"))),False{})
 def queries(items: List<&2,V.Value>,reversed: List<&2,V.Value>) -> V.Value:

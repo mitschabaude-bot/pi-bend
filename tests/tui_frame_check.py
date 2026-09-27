@@ -46,6 +46,17 @@ for case,want in zip(cases,expected):
   if want['cursor']['col']!=0:corrections+=1
   want['cursor']['col']=0
 assert corrections==4,corrections
+# Cached preparation must equal a fresh reset for every prior value, including
+# unprepared, mismatched and normalized rows and different line counts.
+cache_texts=texts+[E+'_Gpayload'+E+'\\',E+']1337;File=payload'+E+'\\']
+old_frames=run(oracle,[dict(op='reset',lines=[text]) for text in cache_texts])
+reuse=[]
+for text in cache_texts:
+ for previous in [[],[text],[text+reset],['wrong'+reset],*old_frames]:
+  reuse.append(dict(op='reuse',lines=[text],previous=previous))
+reuse += [dict(op='reuse',lines=['a','b','c'],previous=old) for old in [[],['a'+reset],['a'+reset,'b'+reset,'c'+reset,'extra'+reset]]]
+reuse_expected=[]
+for start in range(0,len(reuse),30):reuse_expected.extend(run(oracle,[dict(op='reset',lines=v['lines']) for v in reuse[start:start+30]]))
 for backend in a.backends:
  command=['bun',str(a.prefix)+'.js'] if backend=='bun' else [str(a.prefix),'--threads',backend[-1]]
  for start in range(0,len(cases),30):
@@ -55,3 +66,10 @@ for backend in a.backends:
     Path('/tmp/tui-frame-failure.json').write_text(json.dumps(dict(index=start+offset,case=cases[start+offset],actual=got,expected=want),ensure_ascii=False,indent=2))
     raise AssertionError((backend,start+offset,'/tmp/tui-frame-failure.json'))
  print(f'{backend}: {len(original["names"])} relevant original normalization tests ({len(original["calls"])} frame traces) and {len(extra)-corrections} exact cursor/reset/image/viewport comparisons and {corrections} approved scanner corrections passed',flush=True)
+
+for backend in a.backends:
+ command=['bun',str(a.prefix)+'.js'] if backend=='bun' else [str(a.prefix),'--threads',backend[-1]]
+ for start in range(0,len(reuse),30):
+  got=run(command,reuse[start:start+30]);want=reuse_expected[start:start+30]
+  assert got==want,(backend,start,[(v,w,g) for v,w,g in zip(reuse[start:start+30],want,got) if w!=g])
+ print(f'{backend}: {len(reuse)} cached/fresh normalization comparisons pass')

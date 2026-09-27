@@ -385,10 +385,12 @@ def focusedEntry(focus: Maybe<&2,C.ComponentId>,entry: Maybe<&2,O.Entry>) -> Boo
 def isOverlayFocused(base: TuiBase,handle: O.OverlayHandle) -> Bool:
   match base:
     case TuiBase{_,O.State{entries,focus,_,_,_},_,_,_,_,_,_}: focusedEntry(focus,O.find(entries,handle))
+def displayedLines(frame: Frame) -> List<&2,String>:
+  match frame: case Frame{lines,_}: lines
 def cursorPrepared(base: TuiBase,container: C.Container,bounds: List<&2,OverlayBounds>,result: T.CursorFrame,layoutFrame: Maybe<&2,Layout.LayoutFrame>) -> PreparedFrame:
   match base result:
-    case TuiBase{_,focus,bindings,displayed,scheduler,show,clear,layout} T.CursorFrame{lines,cursor}:
-      +lines = T.applyLineResets(lines)
+    case TuiBase{_,focus,bindings,+displayed,scheduler,show,clear,layout} T.CursorFrame{lines,cursor}:
+      +lines = T.applyLineResetsFrom(lines,displayedLines(displayed))
       PreparedFrame{TuiBase{container,focus,bindings,displayed,scheduler,show,clear,layout},Frame{lines,bounds},lines,cursor,layoutFrame}
 def prepared(base: TuiBase,container: C.Container,frame: Frame,height: Nat,layoutFrame: Maybe<&2,Layout.LayoutFrame>) -> PreparedFrame:
   match frame:
