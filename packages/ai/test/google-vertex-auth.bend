@@ -73,7 +73,7 @@ def rendered(outcome: Auth.AuthOutcome()) -> String:
 
 def resolveWith(auth: Auth.ApiKeyAuth, context: Auth.AuthContext, credential: Maybe<&2, Auth.Credential>, signal: Abort.AbortSignal<Unit>) -> IO(Auth.AuthOutcome()):
   match auth:
-    case Auth.ApiKeyAuth{_, _, resolve}: C.call(Auth.ResolveInput, Auth.AuthOutcome(), resolve, Auth.ResolveInput{context, credential, signal})
+    case Auth.ApiKeyAuth{_, _, resolve, _}: C.call(Auth.ResolveInput, Auth.AuthOutcome(), resolve, Auth.ResolveInput{context, credential, signal})
 
 def resolvedText(auth: IO(Auth.ApiKeyAuth), env: Env(), credential: Maybe<&2, Auth.Credential>, cancel: Bool) -> IO(String):
   do IO<String>:
@@ -92,7 +92,7 @@ def expect(+name: String, actual: IO(String), +expected: String) -> IO(Unit):
 
 def apiKeyAuth(provider: Models.Provider) -> IO(Auth.ApiKeyAuth):
   match provider:
-    case Models.Provider{_, _, _, Auth.ProviderAuth{Some{auth}, _}, _, _, _}: IO.pure(Auth.ApiKeyAuth, auth)
+    case Models.Provider{_, _, _, Auth.ProviderAuth{Some{auth}, _}, _, _, _, _}: IO.pure(Auth.ApiKeyAuth, auth)
     case _: IO.die(Auth.ApiKeyAuth, 1, "amazon-bedrock has no api key auth")
 
 def vertex() -> IO(Auth.ApiKeyAuth):
@@ -168,7 +168,7 @@ def loginResult(result: Auth.LoginOutcome()) -> String:
 
 def callLogin(auth: Auth.ApiKeyAuth, interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
   match auth:
-    case Auth.ApiKeyAuth{_, Some{callback}, _}: C.call(Auth.ProviderAuthInteraction, Auth.LoginOutcome(), callback, interaction)
+    case Auth.ApiKeyAuth{_, Some{callback}, _, _}: C.call(Auth.ProviderAuthInteraction, Auth.LoginOutcome(), callback, interaction)
     case _: IO.pure(Auth.LoginOutcome(), Fail{"login unavailable"})
 
 def loginText(answers: List<&2, String>, cancel: Bool) -> IO(String):

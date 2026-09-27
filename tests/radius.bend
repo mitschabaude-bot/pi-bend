@@ -164,15 +164,15 @@ def contains(+text: String, part: String) -> Bool: String.contains(text, part)
 
 def providerModels(provider: AiModels.Provider) -> List<&2, Model()>:
   match provider:
-    case AiModels.Provider{_, _, _, _, models, _, _}: models
+    case AiModels.Provider{_, _, _, _, models, _, _, _}: models
 
 def providerRefresh(provider: AiModels.Provider) -> Maybe<&2, AiModels.RefreshModels()>:
   match provider:
-    case AiModels.Provider{_, _, _, _, _, _, refresher}: refresher
+    case AiModels.Provider{_, _, _, _, _, _, refresher, _}: refresher
 
 def providerName(provider: Maybe<&2, AiModels.Provider>) -> String:
   match provider:
-    case Some{AiModels.Provider{_, name, _, _, _, _, _}}: name
+    case Some{AiModels.Provider{_, name, _, _, _, _, _, _}}: name
     case None{}: "undefined"
 
 # ai radius-provider.test.ts

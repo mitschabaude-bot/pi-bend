@@ -301,7 +301,7 @@ def keyResolved(unit: Unit, input: Auth.ResolveInput) -> IO(Auth.AuthOutcome()):
 def keyedProvider(+id: String, models: List<&2, Models.Model()>) -> IO(AiModels.Provider):
   do IO<AiModels.Provider>:
     resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~Unit, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~keyResolved, Unit{})
-    return AiModels.Provider{id, id, "https://provider.test/v1", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Test", None{}, resolve}}, None{}}, models, AiModels.ApiStreams{}, None{}}
+    return AiModels.Provider{id, id, "https://provider.test/v1", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Test", None{}, resolve, None{}}}, None{}}, models, AiModels.ApiStreams{}, None{}, None{}}
 
 def capture(slot: R.Ref<Maybe<&2, T.ExtensionAPI>>, api: T.ExtensionAPI) -> IO(Outcome()):
   do IO<Outcome()>:

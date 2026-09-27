@@ -9,4 +9,4 @@ import ./openrouter.models.bend as Catalog
 def openrouterProvider(oauth: Maybe<&2, Auth.OAuthAuth>) -> IO(Models.Provider):
   do IO<Models.Provider>:
     apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("OpenRouter API key", ["OPENROUTER_API_KEY"])
-    return Models.Provider{"openrouter", "OpenRouter", "https://openrouter.ai/api/v1", Auth.ProviderAuth{Some{apiKey}, oauth}, Catalog.OPENROUTER_MODELS(), Models.ApiStreams{}, None{}}
+    return Models.Provider{"openrouter", "OpenRouter", "https://openrouter.ai/api/v1", Auth.ProviderAuth{Some{apiKey}, oauth}, Catalog.OPENROUTER_MODELS(), Models.ApiStreams{}, None{}, None{}}

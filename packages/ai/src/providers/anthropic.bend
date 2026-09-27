@@ -55,10 +55,10 @@ def resolveAnthropic(unused: Unit, input: Auth.ResolveInput) -> IO(Auth.AuthOutc
 
 def withResolve(generic: Auth.ApiKeyAuth, resolve: C.Callback<Auth.ResolveInput, Auth.AuthOutcome()>) -> IO(Auth.ApiKeyAuth):
   match generic:
-    case Auth.ApiKeyAuth{name, login, previous}:
+    case Auth.ApiKeyAuth{name, login, previous, _}:
       do IO<Auth.ApiKeyAuth>:
         C.dispose(Auth.ResolveInput, Auth.AuthOutcome(), previous)
-        return Auth.ApiKeyAuth{name, login, resolve}
+        return Auth.ApiKeyAuth{name, login, resolve, None{}}
 
 # Login prompts for the key like the standard env api-key auth.
 def anthropicApiKeyAuth() -> IO(Auth.ApiKeyAuth):
@@ -70,4 +70,4 @@ def anthropicApiKeyAuth() -> IO(Auth.ApiKeyAuth):
 def anthropicProvider(oauth: Maybe<&2, Auth.OAuthAuth>) -> IO(Models.Provider):
   do IO<Models.Provider>:
     apiKey : Auth.ApiKeyAuth <- anthropicApiKeyAuth()
-    return Models.Provider{"anthropic", "Anthropic", "https://api.anthropic.com", Auth.ProviderAuth{Some{apiKey}, oauth}, Catalog.ANTHROPIC_MODELS(), Models.ApiStreams{}, None{}}
+    return Models.Provider{"anthropic", "Anthropic", "https://api.anthropic.com", Auth.ProviderAuth{Some{apiKey}, oauth}, Catalog.ANTHROPIC_MODELS(), Models.ApiStreams{}, None{}, None{}}

@@ -225,7 +225,7 @@ def withChange(change: T.ProviderChange, extension: T.Extension) -> T.Extension:
 
 def providerIdOf(provider: AiModels.Provider) -> String:
   match provider:
-    case AiModels.Provider{id, _, _, _, _, _, _}: id
+    case AiModels.Provider{id, _, _, _, _, _, _, _}: id
 
 def withoutPending(pending: List<&2, T.PendingProvider>, +name: String) -> List<&2, T.PendingProvider>:
   match pending:

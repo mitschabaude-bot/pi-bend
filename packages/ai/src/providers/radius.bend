@@ -170,4 +170,4 @@ def radiusProvider(options: RadiusProviderOptions, transport: RadiusTransport) -
         apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("Radius API key", ["RADIUS_API_KEY"])
         oauth : Auth.OAuthAuth <- RadiusOAuth.createRadiusOAuth(pname, selected, fetch, url)
         refresher : Models.RefreshModels() <- C.create(~Refresh, ~Models.RefreshModelsContext, ~Result<&2, &2, String, Unit>, ~refreshModels, Refresh{pid, selected, baseline, RadiusTransport{fetch, url}})
-        return Models.Provider{pid, pname, "", Auth.ProviderAuth{Some{apiKey}, Some{oauth}}, baseline, Models.ApiStreams{}, Some{refresher}}
+        return Models.Provider{pid, pname, "", Auth.ProviderAuth{Some{apiKey}, Some{oauth}}, baseline, Models.ApiStreams{}, Some{refresher}, None{}}

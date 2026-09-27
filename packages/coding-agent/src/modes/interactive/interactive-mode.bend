@@ -462,7 +462,7 @@ def providerEntries(+id: String,+name: String,auth: Auth.ProviderAuth,+rest: Lis
 def providerOptions(providers: List<&2,AiModels.Provider>) -> List<&2,AuthSelectorProvider>:
   match providers:
     case Nil{}: Nil{}
-    case AiModels.Provider{id,name,_,auth,_,_,_} <> rest: providerEntries(id,name,auth,providerOptions(rest))
+    case AiModels.Provider{id,name,_,auth,_,_,_,_} <> rest: providerEntries(id,name,auth,providerOptions(rest))
 def notAfter(order: Cmp) -> Bool:
   match order:
     case GT{}: False{}

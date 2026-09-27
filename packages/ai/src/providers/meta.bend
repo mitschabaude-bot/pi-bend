@@ -9,4 +9,4 @@ import ./meta.models.bend as Catalog
 def metaProvider(oauth: Maybe<&2, Auth.OAuthAuth>) -> IO(Models.Provider):
   do IO<Models.Provider>:
     apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("Meta Model API key", ["META_API_KEY"])
-    return Models.Provider{"meta", "Meta", "https://api.meta.ai/v1", Auth.ProviderAuth{Some{apiKey}, oauth}, Catalog.META_MODELS(), Models.ApiStreams{}, None{}}
+    return Models.Provider{"meta", "Meta", "https://api.meta.ai/v1", Auth.ProviderAuth{Some{apiKey}, oauth}, Catalog.META_MODELS(), Models.ApiStreams{}, None{}, None{}}

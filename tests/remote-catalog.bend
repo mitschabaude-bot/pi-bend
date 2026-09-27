@@ -38,7 +38,7 @@ def model(+id: String) -> T.Model<T.JsonValue>:
 def testProvider(+inner: Fetch.Fetch(Unit), local: Maybe<&2, F64>) -> IO(AiModels.Provider):
   do IO<AiModels.Provider>:
     apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("Test", ["TEST_PROVIDER_KEY"])
-    Remote.withRemoteCatalog(AiModels.Provider{"test-provider", "Test", "https://example.test/v1", Auth.ProviderAuth{Some{apiKey}, None{}}, [model("static")], AiModels.ApiStreams{}, None{}}, Remote.RemoteCatalogTransport{inner, Loop.urlContext()}, "https://pi.dev", local)
+    Remote.withRemoteCatalog(AiModels.Provider{"test-provider", "Test", "https://example.test/v1", Auth.ProviderAuth{Some{apiKey}, None{}}, [model("static")], AiModels.ApiStreams{}, None{}, None{}}, Remote.RemoteCatalogTransport{inner, Loop.urlContext()}, "https://pi.dev", local)
 
 # The provider's current catalog, as its getModels() would answer.
 def Catalog() -> Data: Ref.Ref<List<&2, T.Model<T.JsonValue>>>
@@ -73,7 +73,7 @@ def publish(publisher: Publisher, publication: AiModels.ModelsPublication) -> IO
 
 def refreshCallback(provider: AiModels.Provider) -> Maybe<&2, AiModels.RefreshModels()>:
   match provider:
-    case AiModels.Provider{_, _, _, _, _, _, refresh}: refresh
+    case AiModels.Provider{_, _, _, _, _, _, refresh, _}: refresh
 
 def storedEntry(result: Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>)) -> Maybe<&2, Store.ModelsStoreEntry>:
   match result:

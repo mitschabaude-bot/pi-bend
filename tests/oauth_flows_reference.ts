@@ -49,6 +49,36 @@ try {
 		emit("C", await oauth.refresh(spec.credential, controller.signal));
 	} else if (spec.action === "toAuth") {
 		emit("A", await oauth.toAuth(spec.credential));
+	} else if (spec.action === "available") {
+		// github-copilot-oauth.test.ts: the refreshed credential in an
+		// InMemoryCredentialStore, then Models.getAvailable("github-copilot").
+		const { InMemoryCredentialStore } = await import(`${UPSTREAM}/packages/ai/src/auth/credential-store.ts`);
+		const { createModels } = await import(`${UPSTREAM}/packages/ai/src/models.ts`);
+		const { githubCopilotProvider } = await import(`${UPSTREAM}/packages/ai/src/providers/github-copilot.ts`);
+		const store = new InMemoryCredentialStore();
+		await store.modify("github-copilot", async () => ({ ...spec.credential, type: "oauth" }));
+		const models = createModels({ credentials: store });
+		models.setProvider(githubCopilotProvider());
+		emit("V", (await models.getAvailable("github-copilot")).map((model: any) => model.id));
+	} else if (spec.action === "modelsLogin") {
+		const { InMemoryCredentialStore } = await import(`${UPSTREAM}/packages/ai/src/auth/credential-store.ts`);
+		const { createModels } = await import(`${UPSTREAM}/packages/ai/src/models.ts`);
+		const { githubCopilotProvider } = await import(`${UPSTREAM}/packages/ai/src/providers/github-copilot.ts`);
+		const store = new InMemoryCredentialStore();
+		const models = createModels({ credentials: store });
+		models.setProvider(githubCopilotProvider());
+		const credential = await models.login("github-copilot", "oauth", {
+			signal: controller.signal,
+			prompt: async (prompt: any) => {
+				const { signal: _signal, ...shown } = prompt;
+				emit("P", shown);
+				if (answers.length === 0) throw new Error("Unexpected prompt");
+				return answers.shift()!;
+			},
+			notify: (event: any) => emit("N", event),
+		});
+		emit("C", credential);
+		emit("T", (await store.read("github-copilot")) ?? null);
 	} else {
 		const credential = await oauth.login({
 			signal: controller.signal,

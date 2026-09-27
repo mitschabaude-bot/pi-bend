@@ -95,12 +95,12 @@ def refreshed(+provider: String, kind: Auth.CredentialType, resolution: Resolve.
     case Done{None{}}: notReady(provider, CredentialsNotConfigured{})
     case Fail{_}: invalid(provider)
 
-def checked(+runtime: Models.ModelRuntime, +provider: String, refresh: Bool, check: Result<&2, &2, String, Maybe<&2, Models.AuthCheck>>) -> IO(AuthCheckResult):
+def checked(+runtime: Models.ModelRuntime, +provider: String, refresh: Bool, check: Result<&2, &2, String, Maybe<&2, Auth.AuthCheck>>) -> IO(AuthCheckResult):
   match check refresh:
     case Fail{_} _: IO.pure(AuthCheckResult, invalid(provider))
     case Done{None{}} _: IO.pure(AuthCheckResult, notReady(provider, CredentialsNotConfigured{}))
-    case Done{Some{Models.AuthCheck{_, kind}}} False{}: IO.pure(AuthCheckResult, AuthCheckResult{Ready{}, provider, None{}, Some{kind}})
-    case Done{Some{Models.AuthCheck{_, kind}}} True{}:
+    case Done{Some{Auth.AuthCheck{_, kind}}} False{}: IO.pure(AuthCheckResult, AuthCheckResult{Ready{}, provider, None{}, Some{kind}})
+    case Done{Some{Auth.AuthCheck{_, kind}}} True{}:
       do IO<AuthCheckResult>:
         resolution : Resolve.Resolution() <- Models.getAuth(runtime, provider, Resolve.noOverrides())
         return refreshed(provider, kind, resolution)
@@ -110,7 +110,7 @@ def known(+runtime: Models.ModelRuntime, +provider: String, refresh: Bool, found
     case None{}: IO.pure(AuthCheckResult, notReady(provider, ProviderNotFound{}))
     case Some{_}:
       do IO<AuthCheckResult>:
-        check : Result<&2, &2, String, Maybe<&2, Models.AuthCheck>> <- Models.checkAuth(runtime, provider)
+        check : Result<&2, &2, String, Maybe<&2, Auth.AuthCheck>> <- Models.checkAuth(runtime, provider)
         checked(runtime, provider, refresh, check)
 
 def withProvider(+runtime: Models.ModelRuntime, refresh: Bool, provider: Result<&2, &2, String, String>) -> IO(Result<&2, &2, String, AuthCheckResult>):
