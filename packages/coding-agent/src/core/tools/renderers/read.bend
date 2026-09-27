@@ -79,6 +79,15 @@ def displayed(highlighted: Maybe<&2,List<&2,String>>,shown: List<&2,String>,+the
   match highlighted:
     case Some{_}: IO.pure(List<&2,String>,shown)
     case None{}: colored(shown,theme,Nil{})
+def expandHint(+theme: Theme.Theme,remaining: Nat) -> IO(String):
+  match remaining:
+    case Zero{}: IO.pure(String,"")
+    case count:
+      do IO<String>:
+        start : String <- Messages.foregroundText(theme,"muted","\n... (" ++ Nat.show(count) ++ " more lines,")
+        key : String <- Messages.foregroundText(theme,"dim",Messages.expandKeys())
+        end : String <- Messages.foregroundText(theme,"muted"," to expand)")
+        return start ++ " " ++ key ++ end
 def renderResult(+args: Value.Value,highlight: Maybe<&2,C.Callback<Markdown.HighlightInput,List<&2,String>>>,+output: String,details: Maybe<&2,Tools.ToolDetails>,expanded: Bool,isError: Bool,+theme: Theme.Theme) -> IO(String):
   match expanded isError:
     case False{} False{}: IO.pure(String,"")
@@ -88,5 +97,6 @@ def renderResult(+args: Value.Value,highlight: Maybe<&2,C.Callback<Markdown.High
         +lines : List<&2,String> <- IO.pure(List<&2,String>,sourceLines(highlighted,output))
         +shown : List<&2,String> <- IO.pure(List<&2,String>,Bool.pick(List<&2,String>,expanded,lines,List.take(&2,String,lines,10n)))
         rendered : List<&2,String> <- displayed(highlighted,shown,theme)
+        hint : String <- expandHint(theme,List.length(&2,String,lines) - List.length(&2,String,shown))
         truncated : String <- warning(theme,notice(details))
-        return "\n\n" ++ String.join(rendered,"\n") ++ truncated
+        return "\n\n" ++ String.join(rendered,"\n") ++ hint ++ truncated

@@ -67,6 +67,9 @@ for (const [name,args] of Object.entries({read:{path:'notes.txt'},bash:{command:
 }
 const range=new ToolExecutionComponent('read','range',{path:'notes.txt',offset:4,limit:2},{},readRenderers,ui,process.cwd());
 out('read-range',range,80);range.updateResult({content:[{type:'text',text:'one\ntwo'}],isError:false},false);range.setExpanded(true);out('read-expanded',range,80);
+const readFailure=new ToolExecutionComponent('read','read-long',{path:'notes.txt'},{},readRenderers,ui,process.cwd());
+readFailure.updateResult({content:[{type:'text',text:Array.from({length:15},(_,i)=>`line-${i+1}`).join('\n')+'\n\n'}],isError:true},false);
+out('read-error-preview',readFailure,80);out('read-error-narrow',readFailure);readFailure.setExpanded(true);out('read-error-expanded',readFailure,80);
 const longBash=new ToolExecutionComponent('bash','long',{command:'seq 7'},{},builtins.bash,ui,process.cwd());
 longBash.updateResult({content:[{type:'text',text:Array.from({length:7},(_,i)=>`line-${i+1}`).join('\n')}],isError:false},false);out('bash-preview',longBash,80);
 const longWrite=new ToolExecutionComponent('write','long',{path:'notes.txt',content:Array.from({length:12},(_,i)=>`line-${i+1}`).join('\n')},{},writeRenderers,ui,process.cwd());

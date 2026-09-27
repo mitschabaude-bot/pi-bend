@@ -15,6 +15,7 @@ parser.add_argument('--native-runner', default='build/tool-execution')
 args = parser.parse_args()
 bun_command = ['bun', args.bun_runner] if args.bun_runner else ['bun', 'build/bend-native-toolchain/bend2/main.ts', 'tests/tool-execution.bend']
 expected = subprocess.check_output(['bun', 'tests/tool_execution_reference.ts'], cwd=root, env=env)
+frame_count = len(expected.decode().rstrip('\n').split('\n'))
 for backend, command in [
     ('Bun', bun_command),
     ('native-1', [args.native_runner, '--threads', '1']),
@@ -23,4 +24,4 @@ for backend, command in [
     actual = subprocess.check_output(command, cwd=root, env=env)
     if actual != expected:
         subprocess.run(["bun", "tests/tool_execution_cells.ts"], cwd=root, env=env, input=json.dumps([expected.decode(), actual.decode()]).encode(), check=True)
-    print(f'{backend}: 39 tool execution display snapshots match upstream cells and styles')
+    print(f'{backend}: {frame_count} tool execution display snapshots match upstream cells and styles')
