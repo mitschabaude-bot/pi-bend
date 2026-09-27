@@ -8,6 +8,7 @@ import ../../../../runtime/src/schema-value.bend as V
 import ../../../../tui/src/autocomplete.bend as AC
 import ../messages.bend as Messages
 import ../model-runtime.bend as Models
+import ../provider-composer.bend as Composer
 import ../skills.bend as Skills
 import ../tools/index.bend as Tools
 import ./context.bend as Ctx
@@ -409,10 +410,18 @@ type LoadState is Data:
   Active{}
   Failed{}
 
+# upstream registerProvider's two forms: a native pi-ai provider (with its
+# own streamSimple, when it has one; otherwise its models stream by api), or
+# a config layered over the provider of that name (ProviderConfigInput).
+# Bend has no overloading, so the form is a constructor.
+type ProviderRegistration is Data:
+  NativeRegistration{provider: AiModels.Provider, stream: Maybe<&2, Composer.ProviderStream()>}
+  ConfigRegistration{name: String, config: Composer.ProviderConfigInput}
+
 # Provider changes an extension makes while it loads apply when it has loaded
 # (upstream applyRuntimeChange).
 type ProviderChange is Data:
-  RegisterProvider{provider: AiModels.Provider}
+  RegisterProvider{registration: ProviderRegistration}
   UnregisterProvider{name: String}
 
 # upstream ToolDefinition (without the TUI renderers): the tool's model-facing
@@ -476,7 +485,7 @@ type Extension is Data:
   Extension{id: Nat, path: String, resolvedPath: String, hidden: Bool, sourceInfo: Skills.SourceInfo, handlers: List<&2, Subscription>, commands: List<&2, RegisteredCommand>, state: LoadState, changes: List<&2, ProviderChange>, tools: List<&2, ToolDefinition>, extras: ExtensionExtras}
 
 type PendingProvider is Data:
-  PendingProvider{provider: AiModels.Provider, extensionPath: String}
+  PendingProvider{registration: ProviderRegistration, extensionPath: String}
 
 # Where provider registrations go once they are bound (upstream bindCore's
 # providerActions): the model runtime, and what to do after a provider

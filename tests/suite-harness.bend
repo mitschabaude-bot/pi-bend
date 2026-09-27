@@ -203,7 +203,7 @@ def harnessLoadout(+source: Runtime.LoadoutSource, +tools: List<&2, Tools.Tool()
     case DiscoveredPrompts{}: Runtime.Loadout{promptSections(source, tools), tools, Nil{}, Nil{}, runner, Nil{}, Some{source}, tools}
 
 def loadoutSource(+dir: String, +agentDir: String, +settings: Settings.SettingsManager) -> Runtime.LoadoutSource:
-  Runtime.LoadoutSource{Paths.Environment{dir, agentDir, Runtime.urlContext()}, Reg.toolOptions(dir, agentDir, Runtime.defaultToolSelection(), settings), "/pi"}
+  Runtime.LoadoutSource{Paths.Environment{dir, agentDir, Runtime.urlContext()}, Reg.toolOptions(dir, agentDir, Runtime.defaultToolSelection(), settings), "/pi", None{}}
 
 # upstream createTestExtensionsResult: the inline extensions load into a
 # runtime whose runner shares the session's model runtime.
@@ -305,8 +305,8 @@ def splitOwners(split: BuiltinSet) -> Maybe<&2, BuiltinsHandle>:
 # loader without noPromptTemplates); skills stay off.
 def withDiscovery(resources: Resources, +source: Runtime.LoadoutSource) -> Runtime.LoadoutSource:
   match resources source:
-    case DiscoveredPrompts{} Runtime.LoadoutSource{environment, Runtime.CreateOptions{cwd, agentDir, auth, bundle, packageDir, provider, model, apiKey, thinking, systemPrompt, append, selection, contextFiles, seed, settings, Runtime.ResourceOptions{skillPaths, noSkills, promptPaths, _}}, root}:
-      Runtime.LoadoutSource{environment, Runtime.CreateOptions{cwd, agentDir, auth, bundle, packageDir, provider, model, apiKey, thinking, systemPrompt, append, selection, contextFiles, seed, settings, Runtime.ResourceOptions{skillPaths, noSkills, promptPaths, False{}}}, root}
+    case DiscoveredPrompts{} Runtime.LoadoutSource{environment, Runtime.CreateOptions{cwd, agentDir, auth, bundle, packageDir, provider, model, apiKey, thinking, systemPrompt, append, selection, contextFiles, seed, settings, Runtime.ResourceOptions{skillPaths, noSkills, promptPaths, _}}, root, loader}:
+      Runtime.LoadoutSource{environment, Runtime.CreateOptions{cwd, agentDir, auth, bundle, packageDir, provider, model, apiKey, thinking, systemPrompt, append, selection, contextFiles, seed, settings, Runtime.ResourceOptions{skillPaths, noSkills, promptPaths, False{}}}, root, loader}
     case _ other: other
 
 def createHarnessResources(+dir: String, +agentDir: String, +tooling: Tooling, setup: Reg.Setup, +ref: R.Ref<Maybe<&2, Session.AgentSession>>, extensions: List<&1, Ext.InlineExtension>, seed: List<&2, Session.Message()>, others: List<&2, Ai.Model<Ai.JsonValue>>, +resources: Resources) -> IO(Harness):

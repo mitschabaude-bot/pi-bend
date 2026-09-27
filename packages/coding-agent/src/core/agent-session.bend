@@ -25,6 +25,7 @@ import ../../../runtime/src/record.bend as Rec
 import ../../../runtime/src/schema-value.bend as V
 import ../../../runtime/src/json.bend as Decode
 import ./agent-runtime.bend as Runtime
+import ./resource-loader.bend as Resources
 import ./extensions/context.bend as Ctx
 import ./extensions/runner.bend as ExtensionRunner
 import ./extensions/types.bend as ExtensionTypes
@@ -2081,7 +2082,7 @@ def sectionsPatchFor(sections: Prompt.SystemPromptSections(), messages: List<&2,
 # built from (sessions without a runtime source have none).
 def basePrompt(loadout: Runtime.Loadout, prompts: Runtime.ToolPrompts) -> Maybe<&2, RunPrompt>:
   match loadout:
-    case Runtime.Loadout{_, tools, skills, _, _, files, Some{Runtime.LoadoutSource{_, options, packageDir}}, _}:
+    case Runtime.Loadout{_, tools, skills, _, _, files, Some{Runtime.LoadoutSource{_, options, packageDir, _}}, _}:
       Some{RunPrompt{Prompt.normalizeBuildSystemPromptOptions(Runtime.promptOptionsWith(options, toolNamesOf(tools), files, skills, prompts)), Runtime.documentationPaths(packageDir)}}
     case _: None{}
 
@@ -3407,9 +3408,21 @@ def flushPending(session: AgentSession) -> IO(Unit):
 # upstream getDocsPath(): the docs directory of the package the session's
 # resources were loaded from. Sessions built without a runtime source have
 # no package directory; their guidance names a relative docs directory.
+def loaderIn(loadout: Runtime.Loadout) -> Maybe<&2, Resources.ResourceLoader>:
+  match loadout:
+    case Runtime.Loadout{_, _, _, _, _, _, Some{Runtime.LoadoutSource{_, _, _, loader}}, _}: loader
+    case _: None{}
+
+# upstream session.resourceLoader: the ResourceLoader a createAgentSession
+# session takes its resources from (CLI sessions have none).
+def resourceLoader(session: AgentSession) -> IO(Maybe<&2, Resources.ResourceLoader>):
+  do IO<Maybe<&2, Resources.ResourceLoader>>:
+    loadout : Runtime.Loadout <- loadoutOf(session)
+    return loaderIn(loadout)
+
 def docsIn(loadout: Runtime.Loadout) -> String:
   match loadout:
-    case Runtime.Loadout{_, _, _, _, _, _, Some{Runtime.LoadoutSource{_, _, packageDir}}, _}: PosixPath.join(packageDir, "docs")
+    case Runtime.Loadout{_, _, _, _, _, _, Some{Runtime.LoadoutSource{_, _, packageDir, _}}, _}: PosixPath.join(packageDir, "docs")
     case _: "docs"
 
 def docsPath(session: AgentSession) -> IO(String):
@@ -4728,7 +4741,7 @@ def newNames(names: List<&2, String>, +previous: List<&2, String>) -> List<&2, S
 
 def selectionIn(loadout: Runtime.Loadout) -> Runtime.ToolSelection:
   match loadout:
-    case Runtime.Loadout{_, _, _, _, _, _, Some{Runtime.LoadoutSource{_, Runtime.CreateOptions{_, _, _, _, _, _, _, _, _, _, _, selection, _, _, _, _}, _}}, _}: selection
+    case Runtime.Loadout{_, _, _, _, _, _, Some{Runtime.LoadoutSource{_, Runtime.CreateOptions{_, _, _, _, _, _, _, _, _, _, _, selection, _, _, _, _}, _, _}}, _}: selection
     case _: Runtime.defaultToolSelection()
 
 # The names to activate after a refresh: the active tools that stay allowed,

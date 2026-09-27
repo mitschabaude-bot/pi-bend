@@ -25,16 +25,21 @@ for threads, theme in ((1, None), (4, None), (1, "light"), (4, "light")):
     process = subprocess.Popen(
         args,
         stdin=slave, stdout=slave, stderr=subprocess.PIPE, cwd=PROJECT.name,
-        env={**os.environ, "TERM": "xterm-256color"},
+        env={**os.environ, "TERM": "xterm-256color", "COLORTERM": "truecolor", "PI_OFFLINE": "1", "PI_CODING_AGENT_DIR": str(Path(PROJECT.name) / "agent")},
     )
     output = bytearray()
     try:
         deadline = time.monotonic() + 30
         expected = b"\x1b[38;2;90;128;128m" if theme == "light" else None
-        while (not output if expected is None else expected not in output) and time.monotonic() < deadline:
+        # A first frame is drawn before startup finishes. Wait for the startup
+        # frames to settle before submitting /quit (early submission deliberately
+        # retains the draft; startup_input_check.py covers that contract).
+        last_output = time.monotonic()
+        while time.monotonic() < deadline and (not output or (expected is not None and expected not in output) or time.monotonic() - last_output < 0.5):
             if select.select([master], [], [], 0.2)[0]:
                 try:
                     output.extend(os.read(master, 65536))
+                    last_output = time.monotonic()
                 except OSError as error:
                     if error.errno != errno.EIO:
                         raise

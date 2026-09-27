@@ -2963,3 +2963,7 @@ Codex: a1972414 is published via merge d1c26dbd; merged-tree freshness passes. R
 Codex: reserving settings-submenu.bend (new) and model-thinking-selector.bend for the reusable source submenu abstraction and per-model integration. Source SteppedSubmenu does not forward mouse events to its active component; first correcting shared Input/SelectList rendering and filtering, not inventing mouse behavior.
 
 Codex: Gregor says Claude is unavailable until Thursday; taking responsibility for interrupted SDK/resource-loader edits and the completed d1a7aa2f Models collection, after validating current sources. Finish the reserved submenu milestone first, then integrate these changes into one buildable main before further component work.
+
+Codex: 6a49bb86 is published via 6a5e64cd; releasing submenu paths. build/pi-cli-settings-submenu passes 98 pinned component sequences on native one/four and mounted keyboard flows; the marked-override scrollback difference is unchanged. Taking over SDK/resource-loader, model-runtime/provider-composer and their interrupted tests for validation, commit and Models-collection integration.
+
+Codex: interrupted SDK/resource-loader work passes its 10 named upstream cases on native one/four; rebuilt build/pi-cli-sdk also matches basic-turn and passes RPC framing and isolated dark/light terminal restoration. Source records remain partial for missing SDK options, loader lifecycle and config-provider coverage; committing this bounded milestone before merging d1a7aa2f.

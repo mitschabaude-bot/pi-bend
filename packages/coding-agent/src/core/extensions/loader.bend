@@ -4,6 +4,7 @@ import ../../../../ai/src/types.bend as Ai
 import ../../../../runtime/src/callback.bend as C
 import ../../../../runtime/src/ref.bend as R
 import ../model-runtime.bend as Models
+import ../provider-composer.bend as Composer
 import ../skills.bend as Skills
 import ./types.bend as T
 import ../../../../runtime/src/child-process.bend as Child
@@ -227,18 +228,24 @@ def providerIdOf(provider: AiModels.Provider) -> String:
   match provider:
     case AiModels.Provider{id, _, _, _, _, _, _}: id
 
+# The provider id a registration is for.
+def registrationId(registration: T.ProviderRegistration) -> String:
+  match registration:
+    case T.NativeRegistration{provider, _}: providerIdOf(provider)
+    case T.ConfigRegistration{name, _}: name
+
 def withoutPending(pending: List<&2, T.PendingProvider>, +name: String) -> List<&2, T.PendingProvider>:
   match pending:
     case Nil{}: Nil{}
-    case T.PendingProvider{+provider, path} <> rest:
+    case T.PendingProvider{+registration, path} <> rest:
       +tail = withoutPending(rest, name)
-      Bool.pick(List<&2, T.PendingProvider>, String.eq(providerIdOf(provider), name), tail, T.PendingProvider{provider, path} <> tail)
+      Bool.pick(List<&2, T.PendingProvider>, String.eq(registrationId(registration), name), tail, T.PendingProvider{registration, path} <> tail)
 
 # How a provider change takes effect in the current runtime state.
 type Effect is Data:
   NoEffect{}
   Deferred{}
-  RegisterNow{binding: T.ProviderBinding, provider: AiModels.Provider}
+  RegisterNow{binding: T.ProviderBinding, registration: T.ProviderRegistration}
   UnregisterNow{binding: T.ProviderBinding, name: String}
   Rejected{error: String}
 
@@ -246,9 +253,9 @@ type Effect is Data:
 # an unregistration drops the queued ones (upstream createExtensionRuntime).
 def appliedChange(change: T.ProviderChange, +path: String, state: T.ExtensionRuntimeState) -> T.ExtensionRuntimeState & Effect:
   match change state:
-    case T.RegisterProvider{provider} T.ExtensionRuntimeState{extensions, pending, None{}, next, actions, runtimeCwd, flagValues}: (T.ExtensionRuntimeState{extensions, List.append(&2, T.PendingProvider, pending, [T.PendingProvider{provider, path}]), None{}, next, actions, runtimeCwd, flagValues}, NoEffect{})
+    case T.RegisterProvider{registration} T.ExtensionRuntimeState{extensions, pending, None{}, next, actions, runtimeCwd, flagValues}: (T.ExtensionRuntimeState{extensions, List.append(&2, T.PendingProvider, pending, [T.PendingProvider{registration, path}]), None{}, next, actions, runtimeCwd, flagValues}, NoEffect{})
     case T.UnregisterProvider{name} T.ExtensionRuntimeState{extensions, pending, None{}, next, actions, runtimeCwd, flagValues}: (T.ExtensionRuntimeState{extensions, withoutPending(pending, name), None{}, next, actions, runtimeCwd, flagValues}, NoEffect{})
-    case T.RegisterProvider{provider} T.ExtensionRuntimeState{extensions, pending, Some{+binding}, next, actions, runtimeCwd, flagValues}: (T.ExtensionRuntimeState{extensions, pending, Some{binding}, next, actions, runtimeCwd, flagValues}, RegisterNow{binding, provider})
+    case T.RegisterProvider{registration} T.ExtensionRuntimeState{extensions, pending, Some{+binding}, next, actions, runtimeCwd, flagValues}: (T.ExtensionRuntimeState{extensions, pending, Some{binding}, next, actions, runtimeCwd, flagValues}, RegisterNow{binding, registration})
     case T.UnregisterProvider{name} T.ExtensionRuntimeState{extensions, pending, Some{+binding}, next, actions, runtimeCwd, flagValues}: (T.ExtensionRuntimeState{extensions, pending, Some{binding}, next, actions, runtimeCwd, flagValues}, UnregisterNow{binding, name})
 
 def notifyChanged(changed: Maybe<&2, C.Callback<Unit, Unit>>) -> IO(Unit):
@@ -256,11 +263,18 @@ def notifyChanged(changed: Maybe<&2, C.Callback<Unit, Unit>>) -> IO(Unit):
     case None{}: IO.pure(Unit, Unit{})
     case Some{callback}: C.call(Unit, Unit, callback, Unit{})
 
-def registeredWith(binding: T.ProviderBinding, provider: AiModels.Provider) -> IO(Result<&2, &2, String, Unit>):
+# upstream ModelRuntime.registerNativeProvider or registerProvider(name,
+# config), by the registration's form.
+def registerWith(+models: Models.ModelRuntime, registration: T.ProviderRegistration) -> IO(Result<&2, &2, String, Unit>):
+  match registration:
+    case T.NativeRegistration{provider, stream}: Models.registerNativeProviderStream(models, provider, stream)
+    case T.ConfigRegistration{name, config}: Models.registerProvider(models, name, config)
+
+def registeredWith(binding: T.ProviderBinding, registration: T.ProviderRegistration) -> IO(Result<&2, &2, String, Unit>):
   match binding:
     case T.ProviderBinding{models, changed}:
       do IO<Result<&2, &2, String, Unit>>:
-        result : Result<&2, &2, String, Unit> <- Models.registerNativeProvider(models, provider)
+        result : Result<&2, &2, String, Unit> <- registerWith(models, registration)
         notifyChanged(changed)
         return result
 
@@ -277,7 +291,7 @@ def performed(effect: Effect) -> IO(Result<&2, &2, String, Unit>):
     case NoEffect{}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
     case Deferred{}: IO.pure(Result<&2, &2, String, Unit>, Done{Unit{}})
     case Rejected{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{error})
-    case RegisterNow{binding, provider}: registeredWith(binding, provider)
+    case RegisterNow{binding, registration}: registeredWith(binding, registration)
     case UnregisterNow{binding, name}: unregisteredWith(binding, name)
 
 def deferredOr(loading: Bool, change: T.ProviderChange, +state: T.ExtensionRuntimeState, +extension: T.Extension) -> T.ExtensionRuntimeState & Effect:
@@ -304,7 +318,17 @@ def applyChange(api: T.ExtensionAPI, change: T.ProviderChange) -> IO(Result<&2, 
 # waits for it to finish; then it queues until the model runtime is bound,
 # and afterwards takes effect immediately.
 def registerProvider(api: T.ExtensionAPI, provider: AiModels.Provider) -> IO(Result<&2, &2, String, Unit>):
-  applyChange(api, T.RegisterProvider{provider})
+  applyChange(api, T.RegisterProvider{T.NativeRegistration{provider, None{}}})
+
+# A native provider with its own streamSimple (upstream Provider.streamSimple).
+def registerStreamingProvider(api: T.ExtensionAPI, provider: AiModels.Provider, stream: Composer.ProviderStream()) -> IO(Result<&2, &2, String, Unit>):
+  applyChange(api, T.RegisterProvider{T.NativeRegistration{provider, Some{stream}}})
+
+# upstream registerProvider(name, config): the config layers over the
+# built-in or models.json provider of that name (a base URL override, API
+# key, headers, streamSimple for its api, replacement models).
+def registerProviderConfig(api: T.ExtensionAPI, name: String, config: Composer.ProviderConfigInput) -> IO(Result<&2, &2, String, Unit>):
+  applyChange(api, T.RegisterProvider{T.ConfigRegistration{name, config}})
 
 def unregisterProvider(api: T.ExtensionAPI, name: String) -> IO(Result<&2, &2, String, Unit>):
   applyChange(api, T.UnregisterProvider{name})
@@ -573,9 +597,9 @@ def providerError(path: String, result: Result<&2, &2, String, Unit>, others: Li
 def registeredPending(+models: Models.ModelRuntime, pending: List<&2, T.PendingProvider>) -> IO(List<&2, T.ExtensionError>):
   match pending:
     case Nil{}: IO.pure(List<&2, T.ExtensionError>, Nil{})
-    case T.PendingProvider{provider, path} <> rest:
+    case T.PendingProvider{registration, path} <> rest:
       do IO<List<&2, T.ExtensionError>>:
-        result : Result<&2, &2, String, Unit> <- Models.registerNativeProvider(models, provider)
+        result : Result<&2, &2, String, Unit> <- registerWith(models, registration)
         others : List<&2, T.ExtensionError> <- registeredPending(models, rest)
         return providerError(path, result, others)
 

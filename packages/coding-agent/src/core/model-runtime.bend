@@ -24,6 +24,13 @@ import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/date.bend as Date
+import ../../../runtime/src/schema-value.bend as V
+import ../../../agent/src/types.bend as AgentTypes
+import ../../../ai/src/utils/event-stream.bend as Events
+import ../../../ai/src/utils/transcript.bend as Transcript
+import ../../../ai/src/utils/model-api.bend as ModelApi
+import ./tools/index.bend as Tools
+import ../../../runtime/src/fetch.bend as Fetch
 
 # The provider catalog with auth resolution: pi-ai's Models collection and the
 # coding agent's ModelRuntime. Built-in providers are composed with their
@@ -60,8 +67,25 @@ def StoreState() -> Data: Ref.Ref<Maybe<&1, Files.FileModelsReadState>>
 # `builtins` are the built-in ids among them. `retained` owns the built-in
 # auth parts that composed providers wrap. Extension providers are owned by
 # the extensions that registered them.
+# Extension providers' own parts: each registration's config (for
+# re-registration merges), its streamSimple, and the auth callbacks its
+# composition created (the base provider owns the rest); and the stream the
+# built-in apis dispatch through (upstream's api registry over the global
+# fetch), installed by whoever owns the transport.
+type OwnedAuth is Data:
+  OwnedApiKey{auth: Auth.ApiKeyAuth}
+  OwnedToAuth{toAuth: C.Callback<Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>>}
+
+type ExtensionEntry is Data:
+  ExtensionEntry{id: String, config: Maybe<&2, Composer.ProviderConfigInput>, stream: Maybe<&2, Composer.ProviderStream()>, owned: List<&2, OwnedAuth>}
+
+type ExtensionState is Data:
+  ExtensionState{entries: List<&2, ExtensionEntry>, apiStreams: Maybe<&2, Composer.ProviderStream()>}
+
+def emptyExtensions() -> ExtensionState: ExtensionState{Nil{}, None{}}
+
 type ModelRuntime is Data:
-  ModelRuntime{providers: List<&2, AiModels.Provider>, builtins: List<&2, String>, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, compositionErrors: List<&2, String>, retained: List<&2, Composer.Retained>, catalog: Ref.Ref<Catalog>, store: Store.ModelsStore, storeState: StoreState()}
+  ModelRuntime{providers: List<&2, AiModels.Provider>, builtins: List<&2, String>, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, compositionErrors: List<&2, String>, retained: List<&2, Composer.Retained>, catalog: Ref.Ref<Catalog>, store: Store.ModelsStore, storeState: StoreState(), extensions: Ref.Ref<ExtensionState>}
 
 # Composition (recomposeProvider/rebuildProviders)
 # -----------------------------------------------
@@ -145,9 +169,9 @@ def rebuildProviders(ids: List<&2, String>, +builtins: List<&2, AiModels.Provide
         next : Composition <- recomposeProvider(id, findProvider(builtins, id), Config.getProvider(config, id), composition)
         rebuildProviders(rest, builtins, config, next)
 
-def assembled(composition: Composition, builtins: List<&2, String>, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, catalog: Ref.Ref<Catalog>, store: Store.ModelsStore, storeState: StoreState()) -> ModelRuntime:
+def assembled(composition: Composition, builtins: List<&2, String>, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, catalog: Ref.Ref<Catalog>, store: Store.ModelsStore, storeState: StoreState(), extensions: Ref.Ref<ExtensionState>) -> ModelRuntime:
   match composition:
-    case Composition{providers, errors, retained}: ModelRuntime{List.reverse(&2, AiModels.Provider, providers), builtins, credentials, context, config, List.reverse(&2, String, errors), retained, catalog, store, storeState}
+    case Composition{providers, errors, retained}: ModelRuntime{List.reverse(&2, AiModels.Provider, providers), builtins, credentials, context, config, List.reverse(&2, String, errors), retained, catalog, store, storeState, extensions}
 
 def supportsOAuth(provider: Maybe<&2, AiModels.Provider>) -> Bool:
   match provider:
@@ -166,19 +190,19 @@ def providerRef(provider: AiModels.Provider) -> Resolve.ProviderRef:
 
 def credentialsOf(runtime: ModelRuntime) -> Auth.CredentialStore:
   match runtime:
-    case ModelRuntime{_, _, credentials, _, _, _, _, _, _, _}: credentials
+    case ModelRuntime{_, _, credentials, _, _, _, _, _, _, _, _}: credentials
 
 def contextOf(runtime: ModelRuntime) -> Auth.AuthContext:
   match runtime:
-    case ModelRuntime{_, _, _, context, _, _, _, _, _, _}: context
+    case ModelRuntime{_, _, _, context, _, _, _, _, _, _, _}: context
 
 def catalogRef(runtime: ModelRuntime) -> Ref.Ref<Catalog>:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, _, _, catalog, _, _}: catalog
+    case ModelRuntime{_, _, _, _, _, _, _, catalog, _, _, _}: catalog
 
 def storeOf(runtime: ModelRuntime) -> Store.ModelsStore:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, _, _, _, store, _}: store
+    case ModelRuntime{_, _, _, _, _, _, _, _, store, _, _}: store
 
 def readCatalog(runtime: ModelRuntime) -> IO(Catalog):
   Ref.read(Catalog, catalogRef(runtime))
@@ -245,7 +269,7 @@ def effectiveProviders(+base: List<&2, AiModels.Provider>, +builtins: List<&2, S
 
 def providersIn(runtime: ModelRuntime, catalog: Catalog) -> List<&2, AiModels.Provider>:
   match runtime:
-    case ModelRuntime{providers, builtins, _, _, config, _, _, _, _, _}: effectiveProviders(providers, builtins, config, catalog)
+    case ModelRuntime{providers, builtins, _, _, config, _, _, _, _, _, _}: effectiveProviders(providers, builtins, config, catalog)
 
 def getProviders(+runtime: ModelRuntime) -> IO(List<&2, AiModels.Provider>):
   do IO<List<&2, AiModels.Provider>>:
@@ -294,7 +318,7 @@ def configuredKey(entry: Maybe<&2, Config.ModelsJsonProvider>) -> Maybe<&2, Stri
 
 def getModelConfig(runtime: ModelRuntime) -> Config.ModelConfig:
   match runtime:
-    case ModelRuntime{_, _, _, _, config, _, _, _, _, _}: config
+    case ModelRuntime{_, _, _, _, config, _, _, _, _, _, _}: config
 
 def checkedStored(+runtime: ModelRuntime, +id: String, +providers: List<&2, AiModels.Provider>, stored: Auth.StoreResult(Maybe<&2, Auth.Credential>)) -> IO(Bool):
   match stored:
@@ -475,7 +499,8 @@ def fromProvidersWithStore(+providers: List<&2, AiModels.Provider>, credentials:
   do IO<ModelRuntime>:
     catalog : Ref.Ref<Catalog> <- Ref.new(Catalog, emptyCatalog())
     storeState : StoreState() <- Ref.new(Maybe<&1, Files.FileModelsReadState>, None{})
-    +runtime : ModelRuntime <- IO.pure(ModelRuntime, ModelRuntime{providers, builtinIds(providers), credentials, context, Config.empty(), Nil{}, Nil{}, catalog, store, storeState})
+    extensions : Ref.Ref<ExtensionState> <- Ref.new(ExtensionState, emptyExtensions())
+    +runtime : ModelRuntime <- IO.pure(ModelRuntime, ModelRuntime{providers, builtinIds(providers), credentials, context, Config.empty(), Nil{}, Nil{}, catalog, store, storeState, extensions})
     refreshAvailability(runtime)
     return runtime
 
@@ -508,11 +533,67 @@ def retireStoreState(state: Maybe<&1, Files.FileModelsReadState>) -> IO(Unit):
     case None{}: IO.pure(Unit, Unit{})
     case Some{owner}: Files.disposeReadState(owner)
 
-# Extension providers stay with the extensions that registered them.
+def disposeOwned(items: List<&2, OwnedAuth>) -> IO(Unit):
+  match items:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case OwnedApiKey{auth} <> rest:
+      do IO<Unit>:
+        Auth.disposeApiKeyAuth(auth)
+        disposeOwned(rest)
+    case OwnedToAuth{toAuth} <> rest:
+      do IO<Unit>:
+        C.dispose(Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>, toAuth)
+        disposeOwned(rest)
+
+def disposeEntries(entries: List<&2, ExtensionEntry>) -> IO(Unit):
+  match entries:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case ExtensionEntry{_, _, _, owned} <> rest:
+      do IO<Unit>:
+        disposeOwned(owned)
+        disposeEntries(rest)
+
+def entriesOf(state: ExtensionState) -> List<&2, ExtensionEntry>:
+  match state:
+    case ExtensionState{entries, _}: entries
+
+def apiStreamsOf(state: ExtensionState) -> Maybe<&2, Composer.ProviderStream()>:
+  match state:
+    case ExtensionState{_, streams}: streams
+
+def disposeApiStreamsOf(streams: Maybe<&2, Composer.ProviderStream()>) -> IO(Unit):
+  match streams:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{stream}: C.dispose(Composer.StreamRequest(), Composer.StreamOutput(), stream)
+
+def extensionsRef(runtime: ModelRuntime) -> Ref.Ref<ExtensionState>:
+  match runtime:
+    case ModelRuntime{_, _, _, _, _, _, _, _, _, _, extensions}: extensions
+
+def entryId(entry: ExtensionEntry) -> String:
+  match entry:
+    case ExtensionEntry{id, _, _, _}: id
+
+def findEntry(entries: List<&2, ExtensionEntry>, +id: String) -> Maybe<&2, ExtensionEntry>:
+  match entries:
+    case Nil{}: None{}
+    case +entry <> rest: Bool.pick(Maybe<&2, ExtensionEntry>, String.eq(entryId(entry), id), Some{entry}, findEntry(rest, id))
+
+def entryConfig(entry: Maybe<&2, ExtensionEntry>) -> Maybe<&2, Composer.ProviderConfigInput>:
+  match entry:
+    case Some{ExtensionEntry{_, config, _, _}}: config
+    case None{}: None{}
+
+# Extension providers stay with the extensions that registered them; the
+# auth callbacks a config registration's composition created go with the
+# runtime. The api stream belongs to whoever installed it.
 def dispose(runtime: ModelRuntime) -> IO(Unit):
   match runtime:
-    case ModelRuntime{providers, _, _, context, _, _, retained, catalog, store, storeState}:
+    case ModelRuntime{providers, _, _, context, _, _, retained, catalog, store, storeState, extensions}:
       do IO<Unit>:
+        +registered : ExtensionState <- Ref.dispose(ExtensionState, extensions)
+        disposeEntries(entriesOf(registered))
+        disposeApiStreamsOf(apiStreamsOf(registered))
         disposeProviders(providers)
         Composer.disposeRetained(retained)
         Auth.disposeContext(context)
@@ -531,7 +612,7 @@ def joinedErrors(configError: Maybe<&2, String>, errors: List<&2, String>) -> Ma
 
 def getError(runtime: ModelRuntime) -> Maybe<&2, String>:
   match runtime:
-    case ModelRuntime{_, _, _, _, config, errors, _, _, _, _}: joinedErrors(Config.getError(config), errors)
+    case ModelRuntime{_, _, _, _, config, errors, _, _, _, _, _}: joinedErrors(Config.getError(config), errors)
 
 # Catalog
 # -------
@@ -586,7 +667,7 @@ def getModel(+runtime: ModelRuntime, +provider: String, +id: String) -> IO(Maybe
 
 def baseModels(runtime: ModelRuntime) -> List<&2, Model()>:
   match runtime:
-    case ModelRuntime{providers, _, _, _, _, _, _, _, _, _}: allModels(providers)
+    case ModelRuntime{providers, _, _, _, _, _, _, _, _, _, _}: allModels(providers)
 
 # Auth
 # ----
@@ -642,12 +723,19 @@ def resolutionEnv(resolution: Resolve.Resolution(), overrides: Maybe<&2, Ai.Prov
     case Done{Some{Auth.AuthResult{_, Some{env}, _}}} None{}: Some{env}
     case _ extra: extra
 
-def withModelHeaders(+model: Model(), config: Maybe<&2, Config.ModelsJsonProvider>, +resolution: Resolve.Resolution(), overrides: Maybe<&2, Ai.ProviderEnv()>) -> IO(Resolve.Resolution()):
+def ownHeaders(model: Model()) -> Maybe<&2, R.Record<String>>:
+  match model:
+    case Ai.Model{_, _, _, _, _, _, _, _, _, _, _, _, _, _, headers, _}: headers
+
+# upstream Models.getAuth merges the model's own headers into the provider's
+# request auth; ModelRuntime.getAuth then adds the model's configured
+# headers (models.json and the extension registration).
+def withModelHeaders(+model: Model(), config: Maybe<&2, Config.ModelsJsonProvider>, extension: Maybe<&2, Composer.ProviderConfigInput>, +resolution: Resolve.Resolution(), overrides: Maybe<&2, Ai.ProviderEnv()>) -> IO(Resolve.Resolution()):
   match resolution:
     case Done{Some{_}}:
       do IO<Resolve.Resolution()>:
-        headers : Result<&2, &2, String, Maybe<&2, R.Record<String>>> <- Composer.resolveConfiguredModelHeaders(model, config, resolutionEnv(resolution, overrides))
-        return modelHeaders(resolution, headers)
+        headers : Result<&2, &2, String, Maybe<&2, R.Record<String>>> <- Composer.resolveConfiguredModelHeaders(model, config, extension, resolutionEnv(resolution, overrides))
+        return modelHeaders(modelHeaders(resolution, Done{ownHeaders(model)}), headers)
     case other: IO.pure(Resolve.Resolution(), other)
 
 def overrideEnv(overrides: Resolve.AuthResolutionOverrides) -> Maybe<&2, Ai.ProviderEnv()>:
@@ -659,7 +747,8 @@ def overrideEnv(overrides: Resolve.AuthResolutionOverrides) -> Maybe<&2, Ai.Prov
 def getModelAuth(+runtime: ModelRuntime, +model: Model(), +overrides: Resolve.AuthResolutionOverrides) -> IO(Resolve.Resolution()):
   do IO<Resolve.Resolution()>:
     resolution : Resolve.Resolution() <- getAuth(runtime, Ai.modelProvider(model), overrides)
-    withModelHeaders(model, Config.getProvider(getModelConfig(runtime), Ai.modelProvider(model)), resolution, overrideEnv(overrides))
+    state : ExtensionState <- Ref.read(ExtensionState, extensionsRef(runtime))
+    withModelHeaders(model, Config.getProvider(getModelConfig(runtime), Ai.modelProvider(model)), entryConfig(findEntry(entriesOf(state), Ai.modelProvider(model))), resolution, overrideEnv(overrides))
 
 def withoutId(ids: List<&2, String>, +id: String) -> List<&2, String>:
   match ids:
@@ -1574,28 +1663,303 @@ def refresh(+runtime: ModelRuntime, options: ModelsRefreshOptions) -> IO(ModelsR
         offline : Result<&1, &1, U32 & String, String> <- IO.get_env("PI_OFFLINE")
         refreshOwned(runtime, filter, Maybe.default(&2, Bool, allowNetwork, networkEnabled(offline)), force, signal)
 
+def withoutEntry(entries: List<&2, ExtensionEntry>, +id: String) -> List<&2, ExtensionEntry>:
+  match entries:
+    case Nil{}: Nil{}
+    case +entry <> +rest: Bool.pick(List<&2, ExtensionEntry>, String.eq(entryId(entry), id), withoutEntry(rest, id), entry <> withoutEntry(rest, id))
+
+def ownedOf(entry: Maybe<&2, ExtensionEntry>) -> List<&2, OwnedAuth>:
+  match entry:
+    case None{}: Nil{}
+    case Some{ExtensionEntry{_, _, _, owned}}: owned
+
+# The entry of `id` replaced by `entry` (removed when None); the replaced
+# entry's own auth parts are returned for disposal.
+def replacedEntry(+id: String, entry: Maybe<&2, ExtensionEntry>, state: ExtensionState) -> ExtensionState & List<&2, OwnedAuth>:
+  match state:
+    case ExtensionState{+entries, streams}:
+      (ExtensionState{List.append(&2, ExtensionEntry, withoutEntry(entries, id), Maybe.default(&2, List<&2, ExtensionEntry>, Maybe.map(&2, ExtensionEntry, List<&2, ExtensionEntry>, found => [found], entry), Nil{})), streams}, ownedOf(findEntry(entries, id)))
+
+def setEntry(+runtime: ModelRuntime, +id: String, entry: Maybe<&2, ExtensionEntry>) -> IO(Unit):
+  do IO<Unit>:
+    previous : List<&2, OwnedAuth> <- Ref.modify(ExtensionState, List<&2, OwnedAuth>, extensionsRef(runtime), state => replacedEntry(id, entry, state))
+    disposeOwned(previous)
+
+def noNetwork() -> ModelsRefreshOptions: ModelsRefreshOptions{Some{False{}}, None{}, None{}, None{}}
+
 # upstream registerNativeProvider: the extension provider replaces any
-# provider of its id until it is unregistered, and the cached catalogs are
-# restored without network access.
-def registerUnlessBlank(+runtime: ModelRuntime, +provider: AiModels.Provider, blank: Bool) -> IO(Result<&2, &2, String, Unit>):
+# provider of its id (and any config registration) until it is
+# unregistered, and the cached catalogs are restored without network access.
+# `stream` is the provider's own streamSimple (upstream Provider.streamSimple);
+# without one its models stream by api.
+def registerUnlessBlank(+runtime: ModelRuntime, +provider: AiModels.Provider, stream: Maybe<&2, Composer.ProviderStream()>, blank: Bool) -> IO(Result<&2, &2, String, Unit>):
   match blank:
     case True{}: IO.pure(Result<&2, &2, String, Unit>, Fail{"Provider id must not be empty."})
     case False{}:
       do IO<Result<&2, &2, String, Unit>>:
+        setEntry(runtime, providerId(provider), Some{ExtensionEntry{providerId(provider), None{}, stream, Nil{}}})
         Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (registeredNative(provider, catalog), Unit{}))
-        result : ModelsRefreshResult <- refresh(runtime, ModelsRefreshOptions{Some{False{}}, None{}, None{}, None{}})
+        result : ModelsRefreshResult <- refresh(runtime, noNetwork())
         return Done{Unit{}}
 
+def registerNativeProviderStream(+runtime: ModelRuntime, +provider: AiModels.Provider, stream: Maybe<&2, Composer.ProviderStream()>) -> IO(Result<&2, &2, String, Unit>):
+  registerUnlessBlank(runtime, provider, stream, isBlank(providerId(provider)))
+
 def registerNativeProvider(+runtime: ModelRuntime, +provider: AiModels.Provider) -> IO(Result<&2, &2, String, Unit>):
-  registerUnlessBlank(runtime, provider, isBlank(providerId(provider)))
+  registerNativeProviderStream(runtime, provider, None{})
 
 # upstream unregisterProvider: the built-in or models.json provider of the id,
 # if any, is restored.
 def unregisterProvider(+runtime: ModelRuntime, +id: String) -> IO(Unit):
   do IO<Unit>:
+    setEntry(runtime, id, None{})
     Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (unregisteredNative(id, catalog), Unit{}))
-    result : ModelsRefreshResult <- refresh(runtime, ModelsRefreshOptions{Some{False{}}, None{}, None{}, None{}})
+    result : ModelsRefreshResult <- refresh(runtime, noNetwork())
     return Unit{}
+
+# Config registrations (upstream registerProvider(providerId, config))
+# ------------------------------------------------------------------
+
+def configOf(entry: Maybe<&2, ExtensionEntry>) -> Composer.ProviderConfigInput:
+  match entry:
+    case Some{ExtensionEntry{_, Some{config}, _, _}}: config
+    case _: Composer.providerConfig()
+
+def baseProvider(runtime: ModelRuntime, +id: String) -> Maybe<&2, AiModels.Provider>:
+  match runtime:
+    case ModelRuntime{providers, _, _, _, _, _, _, _, _, _, _}: findProvider(providers, id)
+
+def maybeProviderAuth(provider: Maybe<&2, AiModels.Provider>) -> Auth.ProviderAuth:
+  match provider:
+    case Some{AiModels.Provider{_, _, _, auth, _, _, _}}: auth
+    case None{}: Auth.ProviderAuth{None{}, None{}}
+
+def sameResolve(left: Auth.ApiKeyAuth, right: Auth.ApiKeyAuth) -> Bool:
+  match left right:
+    case Auth.ApiKeyAuth{_, _, a} Auth.ApiKeyAuth{_, _, b}: C.same(Auth.ResolveInput, Auth.AuthOutcome(), a, b)
+
+def ownedKey(composed: Maybe<&2, Auth.ApiKeyAuth>, base: Maybe<&2, Auth.ApiKeyAuth>) -> List<&2, OwnedAuth>:
+  match composed base:
+    case None{} _: Nil{}
+    case Some{+auth} Some{inherited}: Bool.pick(List<&2, OwnedAuth>, sameResolve(auth, inherited), Nil{}, [OwnedApiKey{auth}])
+    case Some{auth} None{}: [OwnedApiKey{auth}]
+
+def ownedToAuth(composed: Maybe<&2, Auth.OAuthAuth>, base: Maybe<&2, Auth.OAuthAuth>) -> List<&2, OwnedAuth>:
+  match composed base:
+    case Some{Auth.OAuthAuth{_, _, _, _, _, +mine}} Some{Auth.OAuthAuth{_, _, _, _, _, theirs}}: Bool.pick(List<&2, OwnedAuth>, C.same(Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>, mine, theirs), Nil{}, [OwnedToAuth{mine}])
+    case _ _: Nil{}
+
+# The callbacks a composition created over its base's auth.
+def ownedAuth(composed: Auth.ProviderAuth, base: Auth.ProviderAuth) -> List<&2, OwnedAuth>:
+  match composed base:
+    case Auth.ProviderAuth{key, oauth} Auth.ProviderAuth{baseKey, baseOAuth}: List.append(&2, OwnedAuth, ownedKey(key, baseKey), ownedToAuth(oauth, baseOAuth))
+
+def modelsJsonOverrides(+config: Config.ModelConfig, +id: String) -> Maybe<&2, R.Record<Config.ModelsJsonModelOverride>>:
+  Maybe.bind(&2, Config.ModelsJsonProvider, R.Record<Config.ModelsJsonModelOverride>, Config.getProvider(config, id), Composer.overridesOf)
+
+def registeredConfig(+runtime: ModelRuntime, +id: String, +merged: Composer.ProviderConfigInput, +base: Maybe<&2, AiModels.Provider>, result: Result<&2, &2, String, Composer.Composed>) -> IO(Result<&2, &2, String, Unit>):
+  match result:
+    case Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{error})
+    case Done{Composer.Composed{name, url, +auth, models, _}}:
+      do IO<Result<&2, &2, String, Unit>>:
+        # modelOverrides are the topmost layer (upstream getModels).
+        +provider : AiModels.Provider = AiModels.Provider{id, name, url, auth, Composer.applyOverrides(models, modelsJsonOverrides(getModelConfig(runtime), id)), AiModels.inheritedStreams(base), baseRefresh(base)}
+        setEntry(runtime, id, Some{ExtensionEntry{id, Some{merged}, Composer.configStream(merged), ownedAuth(auth, maybeProviderAuth(base))}})
+        Ref.modify(Catalog, Unit, catalogRef(runtime), catalog => (registeredNative(provider, catalog), Unit{}))
+        refreshed : ModelsRefreshResult <- refresh(runtime, noNetwork())
+        return Done{Unit{}}
+
+def composedRegistration(+runtime: ModelRuntime, +id: String, +merged: Composer.ProviderConfigInput) -> IO(Result<&2, &2, String, Unit>):
+  do IO<Result<&2, &2, String, Unit>>:
+    +found : Maybe<&2, AiModels.Provider> = baseProvider(runtime, id)
+    result : Result<&2, &2, String, Composer.Composed> <- Composer.composeLayeredProvider(id, base(found), Composer.Layers{None{}, Some{merged}})
+    registeredConfig(runtime, id, merged, found, result)
+
+def validatedRegistration(+runtime: ModelRuntime, +id: String, +config: Composer.ProviderConfigInput, valid: Result<&2, &2, String, Unit>) -> IO(Result<&2, &2, String, Unit>):
+  match valid:
+    case Fail{error}: IO.pure(Result<&2, &2, String, Unit>, Fail{error})
+    case Done{_}:
+      do IO<Result<&2, &2, String, Unit>>:
+        state : ExtensionState <- Ref.read(ExtensionState, extensionsRef(runtime))
+        composedRegistration(runtime, id, Composer.mergeProviderConfig(configOf(findEntry(entriesOf(state), id)), config))
+
+# upstream ModelRuntime.registerProvider(providerId, config): the config
+# layers over the built-in or models.json provider of the id (a native
+# registration of the id is dropped). A re-registration merges its defined
+# values over the previous registration's. An invalid registration fails
+# without changing anything.
+def registerProvider(+runtime: ModelRuntime, +id: String, +config: Composer.ProviderConfigInput) -> IO(Result<&2, &2, String, Unit>):
+  Bool.pick(Unit -> IO(Result<&2, &2, String, Unit>), isBlank(id), _ => IO.pure(Result<&2, &2, String, Unit>, Fail{"Provider id must not be empty."}), _ => validatedRegistration(runtime, id, config, Composer.validateStream(id, config)))(Unit{})
+
+# Streaming (upstream ModelRuntime.streamSimple and complete)
+# ----------------------------------------------------------
+
+# upstream ModelsRequestTransforms: transformHeaders sees the assembled
+# request headers (auth, model and request headers) and returns the headers
+# sent; it is not forwarded to the provider.
+type RequestTransforms is Data:
+  RequestTransforms{transformHeaders: Maybe<&2, C.Callback<Ai.ProviderHeaders(), Ai.ProviderHeaders()>>}
+
+def noTransforms() -> RequestTransforms: RequestTransforms{None{}}
+
+def withApiStreams(streams: Maybe<&2, Composer.ProviderStream()>, state: ExtensionState) -> ExtensionState & Maybe<&2, Composer.ProviderStream()>:
+  match state:
+    case ExtensionState{entries, previous}: (ExtensionState{entries, streams}, previous)
+
+# Install the stream the built-in apis dispatch through (upstream's api
+# registry over the global fetch); the runtime owns it from here on and
+# disposes the one it replaces. None removes it.
+def setApiStreams(runtime: ModelRuntime, streams: Maybe<&2, Composer.ProviderStream()>) -> IO(Unit):
+  do IO<Unit>:
+    previous : Maybe<&2, Composer.ProviderStream()> <- Ref.modify(ExtensionState, Maybe<&2, Composer.ProviderStream()>, extensionsRef(runtime), state => withApiStreams(streams, state))
+    disposeApiStreamsOf(previous)
+
+def failed(+message: String) -> Composer.StreamOutput(): Fail{Tools.Failure{message}}
+
+def requestOverrides(options: Maybe<&2, Composer.StreamOptions()>) -> Resolve.AuthResolutionOverrides:
+  match options:
+    case None{}: Resolve.noOverrides()
+    case Some{Ai.SimpleStreamOptions{signal, _, apiKey, _, env, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}}: Resolve.AuthResolutionOverrides{apiKey, env, None{}, signal}
+
+def withAuthBaseUrl(model: Model(), url: Maybe<&2, String>) -> Model():
+  match model url:
+    case _ None{}: model
+    case Ai.Model{id, name, api, provider, _, reasoning, levels, input, limits, cost, cache, window, maxTokens, sampling, headers, compat} Some{replaced}:
+      Ai.Model{id, name, api, provider, replaced, reasoning, levels, input, limits, cost, cache, window, maxTokens, sampling, headers, compat}
+
+def mergedEnv(auth: Maybe<&2, Ai.ProviderEnv()>, request: Maybe<&2, Ai.ProviderEnv()>) -> Maybe<&2, Ai.ProviderEnv()>:
+  match auth request:
+    case None{} _: request
+    case _ None{}: auth
+    case Some{base} Some{extra}: Some{Composer.spread(String, base, R.entries(String, extra))}
+
+# upstream prepareRequest's options: the request's key wins over the
+# resolved one, auth headers come first, and the environments merge.
+def authorizedOptions(auth: Auth.AuthResult, options: Composer.StreamOptions()) -> Composer.StreamOptions():
+  match auth options:
+    case Auth.AuthResult{Auth.ModelAuth{key, authHeaders, _}, authEnv, _} Ai.SimpleStreamOptions{signal, telemetry, apiKey, shared, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}:
+      Ai.SimpleStreamOptions{signal, telemetry, Maybe.or(&2, String, apiKey, key), shared, mergedEnv(authEnv, env), onPayload, onResponse, mergeHeaders(authHeaders, headers), timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}
+
+def optionsHeaders(options: Composer.StreamOptions()) -> Maybe<&2, Ai.ProviderHeaders()>:
+  match options:
+    case Ai.SimpleStreamOptions{_, _, _, _, _, _, _, headers, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: headers
+
+def withOptionsHeaders(options: Composer.StreamOptions(), headers: Maybe<&2, Ai.ProviderHeaders()>) -> Composer.StreamOptions():
+  match options:
+    case Ai.SimpleStreamOptions{signal, telemetry, apiKey, shared, env, onPayload, onResponse, _, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}:
+      Ai.SimpleStreamOptions{signal, telemetry, apiKey, shared, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}
+
+# upstream: `if (transformHeaders) headers = await transformHeaders(headers ?? {})`.
+def transformedWith(transform: Maybe<&2, C.Callback<Ai.ProviderHeaders(), Ai.ProviderHeaders()>>, +options: Composer.StreamOptions()) -> IO(Composer.StreamOptions()):
+  match transform:
+    case None{}: IO.pure(Composer.StreamOptions(), options)
+    case Some{callback}:
+      do IO<Composer.StreamOptions()>:
+        +headers : Ai.ProviderHeaders() <- C.call(Ai.ProviderHeaders(), Ai.ProviderHeaders(), callback, Maybe.default(&2, Ai.ProviderHeaders(), optionsHeaders(options), R.new(Ai.Nullable<String>)))
+        return withOptionsHeaders(options, Some{headers})
+
+def transformed(transforms: RequestTransforms, options: Maybe<&2, Composer.StreamOptions()>) -> IO(Maybe<&2, Composer.StreamOptions()>):
+  match transforms options:
+    case _ None{}: IO.pure(Maybe<&2, Composer.StreamOptions()>, None{})
+    case RequestTransforms{transform} Some{value}:
+      do IO<Maybe<&2, Composer.StreamOptions()>>:
+        found : Composer.StreamOptions() <- transformedWith(transform, value)
+        return Some{found}
+
+def sameApi(configured: Maybe<&2, Ai.ModelApi>, +api: Ai.ModelApi) -> Bool:
+  match configured:
+    case None{}: False{}
+    case Some{found}: String.eq(ModelApi.name(found), ModelApi.name(api))
+
+# upstream composeModelProvider's stream: a config registration's
+# streamSimple serves its api; a native provider's own stream serves all its
+# models.
+def entryStream(entry: Maybe<&2, ExtensionEntry>, +model: Model()) -> Maybe<&2, Composer.ProviderStream()>:
+  match entry:
+    case Some{ExtensionEntry{_, None{}, stream, _}}: stream
+    case Some{ExtensionEntry{_, Some{config}, stream, _}}: Bool.pick(Maybe<&2, Composer.ProviderStream()>, sameApi(Composer.configApi(config), ModelApi.modelApi(Ai.JsonValue, model)), stream, None{})
+    case None{}: None{}
+
+def optionsEnv(options: Composer.StreamOptions()) -> Maybe<&2, Ai.ProviderEnv()>:
+  match options:
+    case Ai.SimpleStreamOptions{_, _, _, _, env, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: env
+
+def routedCall(stream: Composer.ProviderStream(), +routed: Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Tools.ToolDetails>, options: Maybe<&2, Composer.StreamOptions()>, +streams: AiModels.ProviderStreams) -> IO(Composer.StreamOutput()):
+  C.call(Composer.StreamRequest(), Composer.StreamOutput(), stream, AgentTypes.StreamInput{routed, context, Maybe.map(&2, Composer.StreamOptions(), Composer.StreamOptions(), value => AiModels.streamSimpleOptions(Ai.JsonValue, Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError, streams, routed, value), options)})
+
+# Built-in apis stream through the installed api stream, for the model the
+# provider's streams dispatch (Cloudflare's resolved account URL, OpenCode's
+# session header).
+def viaApiStreams(apiStreams: Maybe<&2, Composer.ProviderStream()>, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Tools.ToolDetails>, +options: Maybe<&2, Composer.StreamOptions()>, +streams: AiModels.ProviderStreams) -> IO(Composer.StreamOutput()):
+  match apiStreams:
+    case None{}: IO.pure(Composer.StreamOutput(), failed("No API provider registered for api: " ++ ModelApi.name(ModelApi.modelApi(Ai.JsonValue, model))))
+    case Some{stream}: routedCall(stream, AiModels.streamModel(Ai.JsonValue, streams, model, Maybe.bind(&2, Composer.StreamOptions(), Ai.ProviderEnv(), options, optionsEnv)), context, options, streams)
+
+def dispatchedWith(custom: Maybe<&2, Composer.ProviderStream()>, apiStreams: Maybe<&2, Composer.ProviderStream()>, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Tools.ToolDetails>, options: Maybe<&2, Composer.StreamOptions()>, streams: AiModels.ProviderStreams) -> IO(Composer.StreamOutput()):
+  match custom:
+    case Some{stream}: C.call(Composer.StreamRequest(), Composer.StreamOutput(), stream, AgentTypes.StreamInput{model, context, options})
+    case None{}: viaApiStreams(apiStreams, model, context, options, streams)
+
+def dispatched(state: ExtensionState, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Tools.ToolDetails>, options: Maybe<&2, Composer.StreamOptions()>, streams: AiModels.ProviderStreams) -> IO(Composer.StreamOutput()):
+  match state:
+    case ExtensionState{entries, apiStreams}: dispatchedWith(entryStream(findEntry(entries, Ai.modelProvider(model)), model), apiStreams, model, context, options, streams)
+
+def preparedModel(resolution: Resolve.Resolution(), +model: Model()) -> Model():
+  match resolution:
+    case Done{Some{Auth.AuthResult{Auth.ModelAuth{_, _, url}, _, _}}}: withAuthBaseUrl(model, url)
+    case _: model
+
+def preparedOptions(resolution: Resolve.Resolution(), options: Maybe<&2, Composer.StreamOptions()>) -> Maybe<&2, Composer.StreamOptions()>:
+  match resolution options:
+    case Done{Some{auth}} Some{value}: Some{authorizedOptions(auth, value)}
+    case Done{Some{auth}} None{}: Some{authorizedOptions(auth, Ai.emptySimpleStreamOptions(Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError))}
+    case _ other: other
+
+def preparedStream(+runtime: ModelRuntime, +model: Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Tools.ToolDetails>, transforms: RequestTransforms, +resolution: Resolve.Resolution(), options: Maybe<&2, Composer.StreamOptions()>) -> IO(Composer.StreamOutput()):
+  do IO<Composer.StreamOutput()>:
+    final : Maybe<&2, Composer.StreamOptions()> <- transformed(transforms, preparedOptions(resolution, options))
+    streams : AiModels.ProviderStreams <- getProviderStreams(runtime, Ai.modelProvider(model))
+    state : ExtensionState <- Ref.read(ExtensionState, extensionsRef(runtime))
+    dispatched(state, preparedModel(resolution, model), context, final, streams)
+
+# upstream ModelRuntime.streamSimple: the request's auth is resolved for its
+# model (the request's key, env and signal override), the auth base URL
+# replaces the model's, headers are assembled and transformed, and the
+# provider streams it: an extension stream, else the built-in api stream.
+# Without resolved auth the request goes out as prepared (the native
+# runtime has no "Provider is not configured" failure here).
+def streamSimple(+runtime: ModelRuntime, request: Composer.StreamRequest(), transforms: RequestTransforms) -> IO(Composer.StreamOutput()):
+  match request:
+    case AgentTypes.StreamInput{+model, context, +options}:
+      do IO<Composer.StreamOutput()>:
+        resolution : Resolve.Resolution() <- getModelAuth(runtime, model, requestOverrides(options))
+        preparedStream(runtime, model, context, transforms, resolution, options)
+
+def errorReply(model: Model(), message: String, now: F64) -> Ai.AssistantMessage<V.Value, Unit>:
+  match model:
+    case Ai.Model{id, _, api, provider, _, _, _, _, _, _, _, _, _, _, _, _}: Ai.AssistantMessage{Nil{}, ModelApi.name(api), provider, id, None{}, None{}, None{}, None{}, Ai.Usage{F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0), None{}, None{}, F.fromU32(0), Ai.UsageCost{F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0), F.fromU32(0)}}, Ai.Error{}, None{}, Some{message}, None{}, None{}, now}
+
+def completed(+model: Model(), response: Composer.StreamOutput()) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+  match response:
+    case Fail{error}:
+      do IO<Ai.AssistantMessage<V.Value, Unit>>:
+        now : F64 <- Date.now()
+        return errorReply(model, Tools.errorMessage(error), now)
+    case Done{AgentTypes.StreamLease{events, release}}:
+      do IO<Ai.AssistantMessage<V.Value, Unit>>:
+        message : Ai.AssistantMessage<V.Value, Unit> <- Events.resultValue(Ai.AssistantMessageEvent<V.Value, Unit>, Ai.AssistantMessage<V.Value, Unit>, events)
+        released : Result<&2, &2, Tools.ToolError, Unit> <- release
+        return message
+
+# upstream ModelRuntime.completeSimple (and complete, which the native
+# provider options do not distinguish): the stream's final message.
+def completeSimple(+runtime: ModelRuntime, +model: Model(), context: Ai.Context<V.Value, V.Value, Unit, Tools.ToolDetails>, options: Maybe<&2, Composer.StreamOptions()>) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+  do IO<Ai.AssistantMessage<V.Value, Unit>>:
+    response : Composer.StreamOutput() <- streamSimple(runtime, AgentTypes.StreamInput{model, Transcript.normalizeContext(V.Value, V.Value, Unit, Tools.ToolDetails, context), options}, noTransforms())
+    completed(model, response)
+
+def complete(+runtime: ModelRuntime, +model: Model(), context: Ai.Context<V.Value, V.Value, Unit, Tools.ToolDetails>, options: Maybe<&2, Composer.StreamOptions()>) -> IO(Ai.AssistantMessage<V.Value, Unit>):
+  completeSimple(runtime, model, context, options)
 
 def nativeIdsOf(catalog: Catalog) -> List<&2, String>:
   match catalog:
@@ -1694,7 +2058,8 @@ def assembledWith(composition: Composition, builtins: List<&2, String>, credenti
         context : Auth.AuthContext <- Context.defaultProviderAuthContext()
         catalog : Ref.Ref<Catalog> <- Ref.new(Catalog, emptyCatalog())
         storeState : StoreState() <- Ref.new(Maybe<&1, Files.FileModelsReadState>, state)
-        return assembled(composition, builtins, credentials, context, config, catalog, store, storeState)
+        extensions : Ref.Ref<ExtensionState> <- Ref.new(ExtensionState, emptyExtensions())
+        return assembled(composition, builtins, credentials, context, config, catalog, store, storeState, extensions)
 
 def optionsStore(options: CreateModelRuntimeOptions, modelsPath: Maybe<&2, String>) -> IO(StoreChoice()):
   match options:

@@ -65,3 +65,29 @@ def getSessionsDir() -> IO(Located()): inAgentDir("sessions")
 def getCustomThemesDir() -> IO(Located()): inAgentDir("themes")
 def getToolsDir() -> IO(Located()): inAgentDir("tools")
 def getBinDir() -> IO(Located()): inAgentDir("bin")
+
+# upstream getPackageDir: PI_BEND_PACKAGE_DIR, else the checkout two levels
+# above the running executable when it holds the runtime data, else the
+# working directory.
+def packageDirFrom(+cwd: String, executable: Located()) -> IO(String):
+  match executable:
+    case Fail{_}: IO.pure(String, cwd)
+    case Done{path}:
+      +candidate = Path.join(path, "../..")
+      do IO<String>:
+        found : Bool <- FS.accessible(Path.join(candidate, "packages/runtime/data/icu78-word-rules.bin"), 0)
+        return Bool.pick(String, found, candidate, cwd)
+
+def packageDirOr(configured: Result<&1, &1, U32 & String, String>, cwd: String) -> IO(String):
+  match configured:
+    case Done{SCon{c, cs}}: IO.pure(String, SCon{c, cs})
+    case _:
+      do IO<String>:
+        executable : Located() <- FS.realpath("/proc/self/exe")
+        packageDirFrom(cwd, executable)
+
+def getPackageDir() -> IO(String):
+  do IO<String>:
+    configured : Result<&1, &1, U32 & String, String> <- IO.get_env("PI_BEND_PACKAGE_DIR")
+    cwd : Located() <- FS.cwd()
+    packageDirOr(configured, Result.default(&2, &2, FS.Error, String, cwd, "."))

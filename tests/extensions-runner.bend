@@ -738,7 +738,7 @@ def autocompleteSkipsBuiltinNames() -> IO(Unit):
 def pendingNames(pending: List<&2, T.PendingProvider>) -> List<&2, String>:
   match pending:
     case Nil{}: Nil{}
-    case T.PendingProvider{provider, _} <> rest: Loader.providerIdOf(provider) <> pendingNames(rest)
+    case T.PendingProvider{registration, _} <> rest: Loader.registrationId(registration) <> pendingNames(rest)
 
 def pendingNamesOf(state: T.ExtensionRuntimeState) -> String:
   match state:

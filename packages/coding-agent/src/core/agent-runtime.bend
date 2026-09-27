@@ -224,11 +224,14 @@ def requestDefaults(+settings: Settings.SettingsManager) -> RequestDefaults:
 type KeySource is Data:
   KeySource{models: Models.ModelRuntime, apiKey: Maybe<&2, String>}
 
+# The agent's stream function (upstream sdk's streamFn): each request gets
+# the settings' defaults and goes through the model runtime, which resolves
+# its auth and dispatches it to its provider. `headers` runs
+# before_provider_headers on the assembled headers.
 type ProviderStreams is Data:
-  ProviderStreams{responses: Responses.Config, fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource, googleToolCalls: Ref.Ref<Nat>, codexSessions: CodexSessions.Pool<Unit>}
+  ProviderStreams{fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource, headers: Models.RequestTransforms}
 
-def selectedOptions(options: Maybe<&2, LoopConfig()>) -> Maybe<&2, Responses.SimpleStreamOptions(Unit, Unit, Error())>:
-  Maybe.map(&2, LoopConfig(), Responses.SimpleStreamOptions(Unit, Unit, Error()), project, options)
+def selectedOptions(options: Maybe<&2, Composer.StreamOptions()>) -> Maybe<&2, Composer.StreamOptions()>: options
 
 # Like upstream's global fetch, requests share the runtime's fetch, so
 # keep-alive connections carry over between turns.
@@ -237,11 +240,11 @@ def withRequest(fetch: Fetch.Fetch(Unit), preset: RequestDefaults, options: Ai.S
     case RequestDefaults{timeout, retries, delay, connect} Ai.SimpleStreamOptions{signal, telemetry, apiKey, shared, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}:
       Ai.SimpleStreamOptions{signal, telemetry, apiKey, Maybe.or(&2, Fetch.Fetch(Unit), shared, Some{fetch}), env, onPayload, onResponse, headers, Maybe.or(&2, F64, timeoutMs, Some{timeout}), Maybe.or(&2, F64, maxRetries, retries), Maybe.or(&2, F64, maxRetryDelayMs, Some{delay}), temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, Maybe.or(&2, F64, websocketConnectTimeoutMs, connect), metadata, toolChoice, reasoning, deferred, budgets}
 
-def requestConfig(fetch: Fetch.Fetch(Unit), preset: RequestDefaults, config: LoopConfig()) -> LoopConfig():
-  match config:
-    case T.AgentLoopConfig{options, model, convert, transform, key, a, b, c, d, e, f, g, h}: T.AgentLoopConfig{withRequest(fetch, preset, options), model, convert, transform, key, a, b, c, d, e, f, g, h}
+def identityOptions(options: Composer.StreamOptions()) -> Responses.SimpleStreamOptions(Unit, Unit, Error()): options
 
-def selectedProvider(codexSessions: CodexSessions.Pool<Unit>, responses: Responses.Config, fetch: Fetch.Fetch(Unit), googleToolCalls: Ref.Ref<Nat>, model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, +options: Maybe<&2, LoopConfig()>, api: Ai.ModelApi) -> IO(Providers.Output(Unit, Error())):
+# The built-in apis over the runtime's transport (upstream's api registry
+# with the global fetch).
+def selectedProvider(codexSessions: CodexSessions.Pool<Unit>, responses: Responses.Config, fetch: Fetch.Fetch(Unit), googleToolCalls: Ref.Ref<Nat>, model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, +options: Maybe<&2, Composer.StreamOptions()>, api: Ai.ModelApi) -> IO(Providers.Output(Unit, Error())):
   match api:
     case Ai.AnthropicMessagesApi{}: Anthropic.open(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.GoogleGenerativeAiApi{}: Google.open(fetch, urlContext(), googleToolCalls, model, context, selectedOptions(options))
@@ -250,68 +253,36 @@ def selectedProvider(codexSessions: CodexSessions.Pool<Unit>, responses: Respons
     case Ai.MistralConversationsApi{}: StreamProviders.mistral(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.BedrockConverseStreamApi{}: StreamProviders.bedrock(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.GoogleVertexApi{}: StreamProviders.vertex(fetch, urlContext(), model, context, selectedOptions(options))
-    case _: Providers.openResponsesWithSessions(~LoopConfig(), ~Unit, ~Unit, ~Details(), ~Error(), ~project, ~render, ~failure, Some{codexSessions}, responses, T.StreamInput{model, context, options})
+    case _: Providers.openResponsesWithSessions(~Composer.StreamOptions(), ~Unit, ~Unit, ~Details(), ~Error(), ~identityOptions, ~render, ~failure, Some{codexSessions}, responses, T.StreamInput{model, context, options})
 
-# upstream ModelRuntime.prepareRequest: each request resolves its model's
-# auth; the request's own key and headers win over it, auth headers come
-# first, the auth base URL replaces the model's and the environments merge.
-# Without resolved auth the request goes out as prepared by the agent.
-def withBaseUrl(model: Models.Model(), url: Maybe<&2, String>) -> Models.Model():
-  match model url:
-    case _ None{}: model
-    case Ai.Model{id, name, api, provider, _, reasoning, levels, input, limits, cost, cache, window, maxTokens, sampling, headers, compat} Some{replaced}:
-      Ai.Model{id, name, api, provider, replaced, reasoning, levels, input, limits, cost, cache, window, maxTokens, sampling, headers, compat}
+type ApiTransport is Data:
+  ApiTransport{responses: Responses.Config, fetch: Fetch.Fetch(Unit), googleToolCalls: Ref.Ref<Nat>, codexSessions: CodexSessions.Pool<Unit>}
 
-def mergedEnv(auth: Maybe<&2, Ai.ProviderEnv()>, request: Maybe<&2, Ai.ProviderEnv()>) -> Maybe<&2, Ai.ProviderEnv()>:
-  match auth request:
-    case None{} _: request
-    case _ None{}: auth
-    case Some{base} Some{extra}: Some{Composer.spread(String, base, R.entries(String, extra))}
+def openApi(transport: ApiTransport, request: Composer.StreamRequest()) -> IO(Providers.Output(Unit, Error())):
+  match transport request:
+    case ApiTransport{responses, fetch, calls, codexSessions} T.StreamInput{+model, context, options}: selectedProvider(codexSessions, responses, fetch, calls, model, context, options, modelApi(model))
 
-def preparedOptions(auth: Auth.AuthResult, options: Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()>) -> Ai.SimpleStreamOptions<Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()>:
-  match auth options:
-    case Auth.AuthResult{Auth.ModelAuth{key, authHeaders, _}, authEnv, _} Ai.SimpleStreamOptions{signal, telemetry, apiKey, shared, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}:
-      Ai.SimpleStreamOptions{signal, telemetry, Maybe.or(&2, String, apiKey, key), shared, mergedEnv(authEnv, env), onPayload, onResponse, Models.mergeHeaders(authHeaders, headers), timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}
+# The model runtime's api stream over this transport; the model runtime
+# owns it once installed.
+def createApiStream(codexSessions: CodexSessions.Pool<Unit>, authorizer: C.Callback<URL.Host, TLSClient.Authorization>, fetch: Fetch.Fetch(Unit)) -> IO(Composer.ProviderStream()):
+  do IO<Composer.ProviderStream()>:
+    agent : String <- IO.try(String, UserAgent.get())
+    calls : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
+    C.create(~ApiTransport, ~Composer.StreamRequest(), ~Providers.Output(Unit, Error()), ~openApi, ApiTransport{providerConfig(authorizer, agent), fetch, calls, codexSessions})
 
-def preparedConfig(auth: Auth.AuthResult, config: LoopConfig()) -> LoopConfig():
-  match config:
-    case T.AgentLoopConfig{options, model, convert, transform, key, a, b, c, d, e, f, g, h}: T.AgentLoopConfig{preparedOptions(auth, options), model, convert, transform, key, a, b, c, d, e, f, g, h}
-
-def requestEnv(options: Maybe<&2, LoopConfig()>) -> Maybe<&2, Ai.ProviderEnv()>:
+# --api-key: the request carries the runtime key unless it has its own.
+def withKey(apiKey: Maybe<&2, String>, options: Composer.StreamOptions()) -> Composer.StreamOptions():
   match options:
-    case Some{T.AgentLoopConfig{Ai.SimpleStreamOptions{_, _, _, _, env, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}, _, _, _, _, _, _, _, _, _, _, _, _}}: env
-    case None{}: None{}
-
-# The provider's streamSimple options (upstream provider.streamSimple's
-# wrappers, e.g. OpenCode's session header).
-def streamedConfig(streams: AiModels.ProviderStreams, model: Models.Model(), config: LoopConfig()) -> LoopConfig():
-  match config:
-    case T.AgentLoopConfig{options, m, convert, transform, key, a, b, c, d, e, f, g, h}: T.AgentLoopConfig{AiModels.streamSimpleOptions(Ai.JsonValue, Ai.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error(), streams, model, options), m, convert, transform, key, a, b, c, d, e, f, g, h}
-
-# The provider's stream then dispatches the model for the request's merged
-# provider env (upstream provider.stream after prepareRequest).
-def preparedRequest(codexSessions: CodexSessions.Pool<Unit>, responses: Responses.Config, fetch: Fetch.Fetch(Unit), +googleToolCalls: Ref.Ref<Nat>, +model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, +options: Maybe<&2, LoopConfig()>, +streams: AiModels.ProviderStreams, resolution: Resolve.Resolution()) -> IO(Providers.Output(Unit, Error())):
-  match resolution:
-    case Done{Some{Auth.AuthResult{Auth.ModelAuth{key, headers, +url}, +env, source}}}:
-      +model = AiModels.streamModel(Ai.JsonValue, streams, withBaseUrl(model, url), mergedEnv(env, requestEnv(options)))
-      selectedProvider(codexSessions, responses, fetch, googleToolCalls, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => streamedConfig(streams, model, preparedConfig(Auth.AuthResult{Auth.ModelAuth{key, headers, url}, env, source}, value)), options), modelApi(model))
-    case _:
-      +model = AiModels.streamModel(Ai.JsonValue, streams, model, requestEnv(options))
-      selectedProvider(codexSessions, responses, fetch, googleToolCalls, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => streamedConfig(streams, model, value), options), modelApi(model))
+    case Ai.SimpleStreamOptions{signal, telemetry, key, shared, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}:
+      Ai.SimpleStreamOptions{signal, telemetry, Maybe.or(&2, String, key, apiKey), shared, env, onPayload, onResponse, headers, timeoutMs, maxRetries, maxRetryDelayMs, temperature, samplingParams, maxTokens, transport, cacheRetention, sessionId, websocketConnectTimeoutMs, metadata, toolChoice, reasoning, deferred, budgets}
 
 def openProvider(config: ProviderStreams, input: Providers.Input(LoopConfig(), Unit, Details())) -> IO(Providers.Output(Unit, Error())):
   match config input:
-    case ProviderStreams{responses, +fetch, defaults, KeySource{+models, apiKey}, calls, codexSessions} T.StreamInput{+model, context, options}:
-      do IO<Providers.Output(Unit, Error())>:
-        resolution : Resolve.Resolution() <- Models.getModelAuth(models, model, Resolve.AuthResolutionOverrides{apiKey, None{}, None{}, None{}})
-        streams : AiModels.ProviderStreams <- Models.getProviderStreams(models, Models.modelProvider(model))
-        preparedRequest(codexSessions, responses, fetch, calls, model, context, Maybe.map(&2, LoopConfig(), LoopConfig(), value => requestConfig(fetch, defaults, value), options), streams, resolution)
+    case ProviderStreams{+fetch, defaults, KeySource{+models, apiKey}, headers} T.StreamInput{model, context, options}:
+      Models.streamSimple(models, T.StreamInput{model, context, Maybe.map(&2, LoopConfig(), Composer.StreamOptions(), value => withKey(apiKey, withRequest(fetch, defaults, project(value))), options)}, headers)
 
-def createStream(codexSessions: CodexSessions.Pool<Unit>, authorizer: C.Callback<URL.Host, TLSClient.Authorization>, fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource) -> IO(Stream()):
-  do IO<Stream()>:
-    agent : String <- IO.try(String, UserAgent.get())
-    calls : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
-    C.create(~ProviderStreams, ~Providers.Input(LoopConfig(), Unit, Details()), ~Providers.Output(Unit, Error()), ~openProvider, ProviderStreams{providerConfig(authorizer, agent), fetch, defaults, keys, calls, codexSessions})
+def createStream(fetch: Fetch.Fetch(Unit), defaults: RequestDefaults, keys: KeySource, headers: Models.RequestTransforms) -> IO(Stream()):
+  C.create(~ProviderStreams, ~Providers.Input(LoopConfig(), Unit, Details()), ~Providers.Output(Unit, Error()), ~openProvider, ProviderStreams{fetch, defaults, keys, headers})
 
 # Request auth
 # ------------
@@ -491,7 +462,10 @@ type Selection is Data:
 # the executable tools (upstream _preparePromptAndToolLoadout's inputs), with
 # the loaded skills and prompt templates that expand /skill: and /name input.
 # What the prompt resources were prepared from.
-type LoadoutSource is Data: LoadoutSource{environment: Paths.Environment, options: CreateOptions, packageDir: String}
+# `resourceLoader` is the injected ResourceLoader of an SDK session (upstream
+# AgentSession.resourceLoader); without one the resources come from the
+# options (the CLI path).
+type LoadoutSource is Data: LoadoutSource{environment: Paths.Environment, options: CreateOptions, packageDir: String, resourceLoader: Maybe<&2, Resources.ResourceLoader>}
 
 # `source` rebuilds the prompt resources on reload (upstream AgentSession.reload).
 # `registry` holds every tool that can be activated (upstream _toolRegistry);
@@ -592,103 +566,6 @@ def contextFilesReported(result: Resources.ContextFiles) -> IO(List<&2,Prompt.Co
 # Skills
 # ------
 
-def canonicalPath(+path: String) -> IO(String):
-  do IO<String>:
-    real : Result<&2, &2, FS.Error, String> <- FS.realpath(path)
-    return Result.default(&2, &2, FS.Error, String, real, path)
-
-def seenPath(seen: List<&2, String>, +path: String) -> Bool:
-  match seen:
-    case Nil{}: False{}
-    case first <> rest: String.eq(first, path) || seenPath(rest, path)
-
-def mergedFrom(+environment: Paths.Environment, +cwd: String, paths: List<&2, String>, +seen: List<&2, String>) -> IO(List<&2, String>):
-  match paths:
-    case Nil{}: IO.pure(List<&2, String>, Nil{})
-    case +path <> +rest:
-      +resolved = Result.default(&2, &2, Paths.Error, String, Paths.resolvePath(environment, path, cwd, Paths.PathInputOptions{True{}, True{}, None{}, False{}, False{}}), path)
-      do IO<List<&2, String>>:
-        +real : String <- canonicalPath(resolved)
-        Bool.pick(Unit -> IO(List<&2, String>), seenPath(seen, real),
-          _ => mergedFrom(environment, cwd, rest, seen),
-          _ => do IO<List<&2, String>>:
-            later : List<&2, String> <- mergedFrom(environment, cwd, rest, real <> seen)
-            return resolved <> later)(Unit{})
-
-def loadedSkills(result: Skills.LoadSkillsResult) -> List<&2, Skills.Skill>:
-  match result:
-    case Skills.LoadSkillsResult{skills, _}: skills
-
-def skillsFrom(+environment: Paths.Environment, +cwd: String, agentDir: String, noSkills: Bool, paths: List<&2, String>) -> IO(List<&2, Skills.Skill>):
-  match noSkills paths:
-    case True{} Nil{}: IO.pure(List<&2, Skills.Skill>, Nil{})
-    case _ _:
-      do IO<List<&2, Skills.Skill>>:
-        result : Skills.LoadSkillsResult <- Skills.loadSkills(environment, Skills.LoadSkillsOptions{cwd, agentDir, paths, False{}})
-        return loadedSkills(result)
-
-def resolvedSkills(resolved: PackageManager.ResolvedPaths) -> List<&2, String>:
-  match resolved:
-    case PackageManager.ResolvedPaths{skills, _, _}: PackageManager.enabledPaths(skills)
-
-def skillSourceName(source: PackageManager.Source) -> String:
-  match source:
-    case PackageManager.Local{}: "local"
-    case PackageManager.Auto{}: "auto"
-
-def skillScope(scope: PackageManager.Scope) -> Skills.SourceScope:
-  match scope:
-    case PackageManager.ProjectScope{}: Skills.Project{}
-    case PackageManager.UserScope{}: Skills.User{}
-
-# upstream metadataByPath: every resolved resource's metadata, first path wins.
-def resolvedResources(resolved: PackageManager.ResolvedPaths) -> List<&2, PackageManager.ResolvedResource>:
-  match resolved:
-    case PackageManager.ResolvedPaths{skills, prompts, themes}: List.append(&2, PackageManager.ResolvedResource, skills, List.append(&2, PackageManager.ResolvedResource, prompts, themes))
-
-def resourceSource(metadata: PackageManager.PathMetadata, path: String) -> Skills.SourceInfo:
-  match metadata:
-    case PackageManager.PathMetadata{source, scope, baseDir}:
-      Skills.SourceInfo{path, skillSourceName(source), skillScope(scope), Skills.TopLevel{}, baseDir}
-
-# upstream findSourceInfoForPath: the resource at or above the path.
-def findSourceInfoForPath(+path: String, resources: List<&2, PackageManager.ResolvedResource>) -> Maybe<&2, Skills.SourceInfo>:
-  match resources:
-    case Nil{}: None{}
-    case PackageManager.ResolvedResource{root, _, metadata} <> rest:
-      Bool.pick(Maybe<&2, Skills.SourceInfo>, Skills.under(path, root), Some{resourceSource(metadata, path)}, findSourceInfoForPath(path, rest))
-
-def sourcedSkills(skills: List<&2, Skills.Skill>, +resources: List<&2, PackageManager.ResolvedResource>) -> List<&2, Skills.Skill>:
-  match skills:
-    case Nil{}: Nil{}
-    case Skills.Skill{name, description, +path, baseDir, source, disabled} <> rest:
-      +resolved = Maybe.default(&2, Skills.SourceInfo, findSourceInfoForPath(path, resources), source)
-      Skills.Skill{name, description, path, baseDir, resolved, disabled} <> sourcedSkills(rest, resources)
-
-def sourcedTemplates(templates: List<&2, Templates.PromptTemplate>, +resources: List<&2, PackageManager.ResolvedResource>) -> List<&2, Templates.PromptTemplate>:
-  match templates:
-    case Nil{}: Nil{}
-    case Templates.PromptTemplate{name, description, hint, content, source, +file} <> rest:
-      +resolved = Maybe.default(&2, Skills.SourceInfo, findSourceInfoForPath(file, resources), source)
-      Templates.PromptTemplate{name, description, hint, content, resolved, file} <> sourcedTemplates(rest, resources)
-
-def nonLocalPrefix(+value: String) -> Bool:
-  String.starts_with(value, "npm:") || String.starts_with(value, "git:") || String.starts_with(value, "github:") || String.starts_with(value, "http:") || String.starts_with(value, "https:") || String.starts_with(value, "ssh:")
-
-# upstream isLocalPath.
-def isLocalPath(value: String) -> Bool: Bool.not(nonLocalPrefix(Text.trim(value)))
-
-def processCwd(environment: Paths.Environment) -> String:
-  match environment:
-    case Paths.Environment{cwd, _, _}: cwd
-
-# upstream resolveCliPaths: local command-line paths against the process cwd.
-def cliPaths(+environment: Paths.Environment, paths: List<&2, String>) -> List<&2, String>:
-  match paths:
-    case Nil{}: Nil{}
-    case +path <> rest:
-      Bool.pick(String, isLocalPath(path), Result.default(&2, &2, Paths.Error, String, Paths.resolvePath(environment, path, processCwd(environment), Paths.defaults()), path), path) <> cliPaths(environment, rest)
-
 def resolvedFor(+environment: Paths.Environment, options: CreateOptions) -> IO(PackageManager.ResolvedPaths):
   match options:
     case CreateOptions{cwd, agentDir, _, _, _, _, _, _, _, _, _, _, _, _, settings, _}: PackageManager.resolve(environment, settings, cwd, agentDir)
@@ -700,49 +577,16 @@ def skillsFor(+environment: Paths.Environment, options: CreateOptions, +resolved
   match options:
     case CreateOptions{+cwd, +agentDir, _, _, _, _, _, _, _, _, _, _, _, _, _, ResourceOptions{skillPaths, +noSkills, _, _}}:
       do IO<List<&2, Skills.Skill>>:
-        merged : List<&2, String> <- mergedFrom(environment, cwd, List.append(&2, String, Bool.pick(List<&2, String>, noSkills, Nil{}, resolvedSkills(resolved)), cliPaths(environment, skillPaths)), Nil{})
-        loaded : List<&2, Skills.Skill> <- skillsFrom(environment, cwd, agentDir, noSkills, merged)
-        return sourcedSkills(loaded, resolvedResources(resolved))
-
-def resolvedPrompts(resolved: PackageManager.ResolvedPaths) -> List<&2, String>:
-  match resolved:
-    case PackageManager.ResolvedPaths{_, prompts, _}: PackageManager.enabledPaths(prompts)
-
-def templateNamed(templates: List<&2, Templates.PromptTemplate>, +name: String) -> Bool:
-  match templates:
-    case Nil{}: False{}
-    case Templates.PromptTemplate{known, _, _, _, _, _} <> rest: String.eq(known, name) || templateNamed(rest, name)
-
-# upstream dedupePrompts: the first template of each name wins.
-def dedupedTemplates(templates: List<&2, Templates.PromptTemplate>, +kept: List<&2, Templates.PromptTemplate>) -> List<&2, Templates.PromptTemplate>:
-  match templates:
-    case Nil{}: List.reverse(&2, Templates.PromptTemplate, kept)
-    case Templates.PromptTemplate{+name, description, hint, content, source, file} <> +rest:
-      Bool.pick(Unit -> List<&2, Templates.PromptTemplate>, templateNamed(kept, name),
-        _ => dedupedTemplates(rest, kept),
-        _ => dedupedTemplates(rest, Templates.PromptTemplate{name, description, hint, content, source, file} <> kept))(Unit{})
-
-def loadedTemplates(result: Result<&2, &2, Paths.Error, Templates.LoadResult>) -> List<&2, Templates.PromptTemplate>:
-  match result:
-    case Fail{_}: Nil{}
-    case Done{Templates.LoadResult{templates, _}}: dedupedTemplates(templates, Nil{})
-
-def templatesFrom(+environment: Paths.Environment, +cwd: String, agentDir: String, noTemplates: Bool, paths: List<&2, String>) -> IO(List<&2, Templates.PromptTemplate>):
-  match noTemplates paths:
-    case True{} Nil{}: IO.pure(List<&2, Templates.PromptTemplate>, Nil{})
-    case _ _:
-      do IO<List<&2, Templates.PromptTemplate>>:
-        result : Result<&2, &2, Paths.Error, Templates.LoadResult> <- Templates.loadPromptTemplates(environment, ".pi", Templates.LoadPromptTemplatesOptions{cwd, agentDir, paths, False{}})
-        return loadedTemplates(result)
+        loaded : Resources.SkillsResult <- Resources.loadSkillResources(environment, cwd, agentDir, noSkills, skillPaths, resolved)
+        return Resources.skillsOf(loaded)
 
 # upstream DefaultResourceLoader prompts, as for skills.
 def templatesFor(+environment: Paths.Environment, options: CreateOptions, +resolved: PackageManager.ResolvedPaths) -> IO(List<&2, Templates.PromptTemplate>):
   match options:
     case CreateOptions{+cwd, +agentDir, _, _, _, _, _, _, _, _, _, _, _, _, _, ResourceOptions{_, _, promptPaths, +noTemplates}}:
       do IO<List<&2, Templates.PromptTemplate>>:
-        merged : List<&2, String> <- mergedFrom(environment, cwd, List.append(&2, String, Bool.pick(List<&2, String>, noTemplates, Nil{}, resolvedPrompts(resolved)), cliPaths(environment, promptPaths)), Nil{})
-        loaded : List<&2, Templates.PromptTemplate> <- templatesFrom(environment, cwd, agentDir, noTemplates, merged)
-        return sourcedTemplates(loaded, resolvedResources(resolved))
+        loaded : Resources.PromptsResult <- Resources.loadPromptResources(environment, cwd, agentDir, noTemplates, promptPaths, resolved)
+        return Resources.promptsOf(loaded)
 
 def promptResult(value: Prompt.ResultOf(Prompt.SystemPromptSections())) -> Result<&2, &2, String, Prompt.SystemPromptSections()>:
   match value:
@@ -758,12 +602,12 @@ def preparedWith(skills: List<&2, Skills.Skill>, templates: List<&2, Templates.P
 # already loaded.
 def sectionsForTools(source: LoadoutSource, active: List<&2, String>, contextList: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>) -> Result<&2, &2, String, Prompt.SystemPromptSections()>:
   match source:
-    case LoadoutSource{_, options, packageDir}: promptResult(Prompt.buildSystemPromptSections(documentationPaths(packageDir), promptOptions(options, active, contextList, skills)))
+    case LoadoutSource{_, options, packageDir, _}: promptResult(Prompt.buildSystemPromptSections(documentationPaths(packageDir), promptOptions(options, active, contextList, skills)))
 
 # The sections for the active tools with registered tools' prompts.
 def sectionsForToolsWith(source: LoadoutSource, active: List<&2, String>, contextList: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>, prompts: ToolPrompts) -> Result<&2, &2, String, Prompt.SystemPromptSections()>:
   match source:
-    case LoadoutSource{_, options, packageDir}: promptResult(Prompt.buildSystemPromptSections(documentationPaths(packageDir), promptOptionsWith(options, active, contextList, skills, prompts)))
+    case LoadoutSource{_, options, packageDir, _}: promptResult(Prompt.buildSystemPromptSections(documentationPaths(packageDir), promptOptionsWith(options, active, contextList, skills, prompts)))
 
 def preparedWithTools(+environment: Paths.Environment, +options: CreateOptions, +packageDir: String, active: List<&2, String>) -> IO(Result<&2, &2, String, Prepared>):
   do IO<Result<&2, &2, String, Prepared>>:
@@ -777,6 +621,24 @@ def preparedWithTools(+environment: Paths.Environment, +options: CreateOptions, 
 def preparedFor(+environment: Paths.Environment, +options: CreateOptions, +packageDir: String) -> IO(Result<&2, &2, String, Prepared>):
   preparedWithTools(environment, options, packageDir, activeNamesOf(toolSetupOf(options)))
 
+# The system prompt and its appended text from a resource loader.
+def withLoadedPrompt(options: CreateOptions, systemPrompt: Maybe<&2, String>, append: List<&2, String>) -> CreateOptions:
+  match options:
+    case CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, _, _, names, contextFiles, seed, settings, resources}: CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, append, names, contextFiles, seed, settings, resources}
+
+# upstream _buildRuntime's resources from an injected ResourceLoader: its
+# skills, prompt templates, context files, system prompt and appended text.
+def preparedFromLoader(+loader: Resources.ResourceLoader, options: CreateOptions, +packageDir: String, active: List<&2, String>) -> IO(Result<&2, &2, String, Prepared>):
+  do IO<Result<&2, &2, String, Prepared>>:
+    +skills : Resources.SkillsResult <- Resources.getSkills(loader)
+    prompts : Resources.PromptsResult <- Resources.getPrompts(loader)
+    +files : Resources.AgentsFilesResult <- Resources.getAgentsFiles(loader)
+    system : Maybe<&2, String> <- Resources.getSystemPrompt(loader)
+    append : List<&2, String> <- Resources.getAppendSystemPrompt(loader)
+    +contextList : List<&2, Prompt.ContextFile> = Resources.agentsFilesOf(files)
+    +loaded : List<&2, Skills.Skill> = Resources.skillsOf(skills)
+    return preparedWith(loaded, Resources.promptsOf(prompts), contextList, promptResult(Prompt.buildSystemPromptSections(documentationPaths(packageDir), promptOptions(withLoadedPrompt(options, system, append), active, contextList, loaded))))
+
 def withSettings(options: CreateOptions, settings: Settings.SettingsManager) -> CreateOptions:
   match options:
     case CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, _, resources}: CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings, resources}
@@ -784,7 +646,11 @@ def withSettings(options: CreateOptions, settings: Settings.SettingsManager) -> 
 # reloaded settings.
 def reprepare(source: LoadoutSource, settings: Settings.SettingsManager, active: List<&2, String>) -> IO(Result<&2, &2, String, Prepared>):
   match source:
-    case LoadoutSource{environment, options, packageDir}: preparedWithTools(environment, withSettings(options, settings), packageDir, active)
+    case LoadoutSource{environment, options, packageDir, None{}}: preparedWithTools(environment, withSettings(options, settings), packageDir, active)
+    case LoadoutSource{_, options, packageDir, Some{+loader}}:
+      do IO<Result<&2, &2, String, Prepared>>:
+        Resources.reload(loader, Resources.ResourceLoaderReloadOptions{Some{settings}})
+        preparedFromLoader(loader, options, packageDir, active)
 def sectionsOf(result: Result<&2, &2, String, Prepared>) -> Result<&2, &2, String, Prompt.SystemPromptSections()>:
   match result:
     case Fail{error}: Fail{error}
@@ -1096,7 +962,7 @@ def activeTools(+registry: List<&2, Tools.Tool()>, names: List<&2, String>) -> L
 
 def loadoutFrom(prepared: Prepared, +registry: List<&2, Tools.Tool()>, extensions: ExtensionRunner.ExtensionRunner, source: LoadoutSource) -> Loadout:
   match prepared source:
-    case Prepared{sections, skills, templates, agentsFiles} LoadoutSource{paths, +options, packageDir}: Loadout{sections, activeTools(registry, activeNamesOf(toolSetupOf(options))), skills, templates, Some{extensions}, agentsFiles, Some{LoadoutSource{paths, options, packageDir}}, registry}
+    case Prepared{sections, skills, templates, agentsFiles} LoadoutSource{paths, +options, packageDir, loader}: Loadout{sections, activeTools(registry, activeNamesOf(toolSetupOf(options))), skills, templates, Some{extensions}, agentsFiles, Some{LoadoutSource{paths, options, packageDir, loader}}, registry}
 
 def assembled(transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, created: Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>), +stream: Stream(), +registry: StreamFn.Registry(Unit, Details(), LoopConfig(), Error()), +validator: Loop.Validator(Error()), +keys: C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>>, +converter: Converter(), prepared: Prepared, +model: Maybe<&2, Models.Model()>, +thinking: Ai.ModelThinkingLevel, seed: SessionSeed, settings: Settings.SettingsManager, extensions: ExtensionRunner.ExtensionRunner, source: LoadoutSource) -> IO(Outcome(AgentRuntime)):
   match created:
@@ -1112,7 +978,9 @@ def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey
         queue : Queue.Owner <- Queue.create()
         +context : ToolContext.ContextSource() <- IO.pure(ToolContext.ContextSource(), ExtensionRunner.toolContext(extensions))
         created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- createToolList(names, toolsOptionsFor(builtins, settings, paths), paths, cwd, agentDir, packageDir, fetch, context, Queue.borrow(queue))
-        +stream : Stream() <- createStream(codexSessions, authorizer, fetch, requestDefaults(settings), KeySource{models, apiKey})
+        apiStream : Composer.ProviderStream() <- createApiStream(codexSessions, authorizer, fetch)
+        Models.setApiStreams(models, Some{apiStream})
+        +stream : Stream() <- createStream(fetch, requestDefaults(settings), KeySource{models, apiKey}, Models.noTransforms())
         +registry : StreamFn.Registry(Unit, Details(), LoopConfig(), Error()) <- StreamFn.create(Unit, Details(), LoopConfig(), Error())
         +validator : Loop.Validator(Error()) <- Loop.createPlain(~Error(), ~validationError)
         +keys : C.Callback<String, Result<&2, &2, Error(), Maybe<&2, String>>> <- C.create(~KeySource, ~String, ~Result<&2, &2, Error(), Maybe<&2, String>>, ~resolveKey, KeySource{models, apiKey})
@@ -1133,7 +1001,7 @@ def registryOf(setup: ToolSetup) -> List<&2, Tools.ToolName>:
 
 def withModel(+options: CreateOptions, transport: Transport, storage: Storage.AuthStorageOwner, storageStore: Auth.CredentialStore, credentials: Runtime.RuntimeCredentials, credentialStore: Auth.CredentialStore, models: Models.ModelRuntime, +paths: Paths.Environment, prompt: Result<&2, &2, String, Prepared>, selected: Result<&2, &2, String, Maybe<&2, Models.Model()>>, extensions: ExtensionRunner.ExtensionRunner) -> IO(Outcome(AgentRuntime)):
   match options:
-    case CreateOptions{cwd, agentDir, _, _, +packageDir, _, _, apiKey, thinking, _, _, +selection, _, seed, settings, _}: withModelFields(cwd, agentDir, packageDir, apiKey, thinking, seed, settings, registryOf(toolSetupOf(options)), builtinsOf(selection), transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected, LoadoutSource{paths, options, packageDir}, extensions)
+    case CreateOptions{cwd, agentDir, _, _, +packageDir, _, _, apiKey, thinking, _, _, +selection, _, seed, settings, _}: withModelFields(cwd, agentDir, packageDir, apiKey, thinking, seed, settings, registryOf(toolSetupOf(options)), builtinsOf(selection), transport, storage, storageStore, credentials, credentialStore, models, paths, prompt, selected, LoadoutSource{paths, options, packageDir, None{}}, extensions)
 
 # A runtime API key changes the provider's availability (upstream
 # setRuntimeApiKey refreshes it).

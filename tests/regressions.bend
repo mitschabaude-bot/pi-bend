@@ -1086,7 +1086,7 @@ def toolsWith(+dir: String, +agentDir: String, selection: Runtime.ToolSelection,
     +execute : Tools.Execute() <- C.create(~Unit, ~Tools.Input(), ~Tools.Output(), ~stubExecute, Unit{})
     +options : Runtime.CreateOptions = toolOptions(dir, agentDir, selection, settings)
     +runner : Maybe<&2, Runner.ExtensionRunner> <- toolRunner(extensions, dir)
-    +loadout : Runtime.Loadout = toolLoadout(Runtime.LoadoutSource{Paths.Environment{dir, agentDir, Runtime.urlContext()}, options, "/pi"}, Runtime.toolSetupOf(options), execute, runner)
+    +loadout : Runtime.Loadout = toolLoadout(Runtime.LoadoutSource{Paths.Environment{dir, agentDir, Runtime.urlContext()}, options, "/pi", None{}}, Runtime.toolSetupOf(options), execute, runner)
     uuids : Uuid.Generator <- Uuid.generator()
     created : Sessions.Outcome(Session.Session()) <- Session.memorySession(uuids, dir, Sessions.noOptions())
     stored : Session.Session() <- H.requireSession(created)

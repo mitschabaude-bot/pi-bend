@@ -10,12 +10,17 @@ import ../../../runtime/src/record.bend as R
 import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/abort.bend as Abort
+import ../../../runtime/src/fetch.bend as Fetch
+import ../../../agent/src/types.bend as Agent
+import ./tools/index.bend as Tools
 
-# Composition of a built-in provider with its models.json layer
-# (upstream provider-composer.ts). Extension providers (registerProvider,
-# streamSimple, extension OAuth, refreshModels/modifyModels) and radius OAuth
-# providers are not ported; stream dispatch stays with the api-keyed native
-# providers, as upstream's composed stream falls back to the api registry.
+# Composition of a built-in provider with its models.json layer and an
+# extension's registerProvider(name, config) layer (upstream
+# provider-composer.ts). Extension OAuth, refreshModels/modifyModels and
+# radius OAuth providers are not ported. Stream dispatch: an extension's
+# streamSimple serves its api; other requests stream through the api-keyed
+# native providers, as upstream's composed stream falls back to the api
+# registry (model-runtime.bend).
 
 def Model() -> Data: T.Model<T.JsonValue>
 
@@ -773,8 +778,7 @@ def composedKey(+providerId: String, inheritedAuth: Maybe<&2, Auth.ApiKeyAuth>, 
     case Some{auth} None{} None{} False{}: IO.pure(Composition<Auth.ApiKeyAuth>, Composition{Some{auth}, Nil{}})
     case inheritedAuth keyValue headerConfig bearerHeader: wrappedKey(KeyConfig{providerId, inheritedAuth, keyValue, headerConfig, bearerHeader})
 
-def composeApiKeyAuth(+providerId: String, inherited: Maybe<&2, Auth.ApiKeyAuth>, oauth: Bool, +config: Config.ModelsJsonProvider) -> IO(Composition<Auth.ApiKeyAuth>):
-  composedKey(providerId, inherited, oauth, configuredApiKey(config), configuredHeaders(config), configuredAuthHeader(config))
+
 
 # Composed OAuth auth
 # -------------------
@@ -815,8 +819,196 @@ def composedOAuth(providerId: String, base: Maybe<&2, Auth.OAuthAuth>, headerCon
     case Some{oauth} None{} False{}: IO.pure(Composition<Auth.OAuthAuth>, Composition{Some{oauth}, Nil{}})
     case Some{oauth} headers bearerHeader: wrappedOAuth(providerId, oauth, headers, bearerHeader)
 
-def composeOAuthAuth(providerId: String, base: Maybe<&2, Auth.OAuthAuth>, +config: Config.ModelsJsonProvider) -> IO(Composition<Auth.OAuthAuth>):
-  composedOAuth(providerId, base, configuredHeaders(config), configuredAuthHeader(config))
+
+
+# Extension providers (upstream ProviderConfigInput)
+# --------------------------------------------------
+
+# A provider's streamSimple (upstream Provider.streamSimple and
+# ProviderConfigInput.streamSimple): the model, transcript and provider
+# options of one request, answered with the event stream the agent loop
+# consumes. Built-in providers stream by api through the runtime's
+# transport instead.
+def StreamOptions() -> Data: T.SimpleStreamOptions<T.JsonValue, Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Tools.ToolError>
+def StreamRequest() -> Data: Agent.StreamInput<Unit, Tools.ToolDetails, StreamOptions()>
+def StreamOutput() -> Type: Result<&2, &1, Tools.ToolError, Agent.StreamLease<Unit, Tools.ToolError>>
+def ProviderStream() -> Data: C.Callback<StreamRequest(), StreamOutput()>
+
+# One of ProviderConfigInput.models; `api` and `baseUrl` fall back to the
+# provider config, then to the defaults model.
+type ProviderModelConfig is Data:
+  ProviderModelConfig{id: String, name: String, api: Maybe<&2, T.ModelApi>, baseUrl: Maybe<&2, String>, reasoning: Bool, thinkingLevelMap: Maybe<&2, T.ThinkingLevelMap>, input: List<&2, T.ModelInput>, inputLimits: Maybe<&2, T.ModelInputLimits>, cost: T.ModelCost, promptCache: Maybe<&2, T.ModelPromptCache>, contextWindow: F64, maxTokens: F64, samplingParams: Maybe<&2, R.Record<T.JsonValue>>, headers: Maybe<&2, R.Record<String>>, compat: Maybe<&2, V.Value>}
+
+# upstream ProviderConfigInput without oauth and refreshModels (not ported).
+type ProviderConfigInput is Data:
+  ProviderConfigInput{name: Maybe<&2, String>, baseUrl: Maybe<&2, String>, apiKey: Maybe<&2, String>, api: Maybe<&2, T.ModelApi>, streamSimple: Maybe<&2, ProviderStream()>, headers: Maybe<&2, R.Record<String>>, authHeader: Maybe<&2, Bool>, models: Maybe<&2, List<&2, ProviderModelConfig>>}
+
+def providerConfig() -> ProviderConfigInput: ProviderConfigInput{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+
+def configApi(config: ProviderConfigInput) -> Maybe<&2, T.ModelApi>:
+  match config:
+    case ProviderConfigInput{_, _, _, api, _, _, _, _}: api
+
+def configStream(config: ProviderConfigInput) -> Maybe<&2, ProviderStream()>:
+  match config:
+    case ProviderConfigInput{_, _, _, _, stream, _, _, _}: stream
+
+# upstream registerProvider's merge: the new registration's defined values
+# over the previous registration's.
+def mergeProviderConfig(previous: ProviderConfigInput, config: ProviderConfigInput) -> ProviderConfigInput:
+  match previous config:
+    case ProviderConfigInput{n0, b0, k0, a0, s0, h0, x0, m0} ProviderConfigInput{n1, b1, k1, a1, s1, h1, x1, m1}:
+      ProviderConfigInput{Maybe.or(&2, String, n1, n0), Maybe.or(&2, String, b1, b0), Maybe.or(&2, String, k1, k0), Maybe.or(&2, T.ModelApi, a1, a0), Maybe.or(&2, ProviderStream(), s1, s0), Maybe.or(&2, R.Record<String>, h1, h0), Maybe.or(&2, Bool, x1, x0), Maybe.or(&2, List<&2, ProviderModelConfig>, m1, m0)}
+
+def withModelBaseUrl(model: Model(), +url: String) -> Model():
+  match model:
+    case T.Model{id, name, api, provider, _, reasoning, levels, inputs, limits, cost, cache, window, maximum, sampling, headers, compat}:
+      T.Model{id, name, api, provider, url, reasoning, levels, inputs, limits, cost, cache, window, maximum, sampling, headers, compat}
+
+def withBaseUrls(models: List<&2, Model()>, +url: String) -> List<&2, Model()>:
+  match models:
+    case Nil{}: Nil{}
+    case model <> rest: withModelBaseUrl(model, url) <> withBaseUrls(rest, url)
+
+def extensionModel(+providerId: String, definition: ProviderModelConfig, +api: T.ModelApi, baseUrl: String) -> Model():
+  match definition:
+    case ProviderModelConfig{id, name, _, _, reasoning, levels, inputs, limits, cost, cache, window, maximum, sampling, _, compat}:
+      T.Model{id, name, api, providerId, baseUrl, reasoning, levels, inputs, limits, cost, cache, window, maximum, sampling, None{}, compatFor(api, compat)}
+
+def locatedExtensionModel(+providerId: String, definition: ProviderModelConfig, +api: T.ModelApi, baseUrl: Maybe<&2, String>) -> Result<&2, &2, String, Model()>:
+  match baseUrl:
+    case None{}: Fail{"Provider " ++ providerId ++ ": \"baseUrl\" is required when defining custom models."}
+    case Some{url}: Done{extensionModel(providerId, definition, api, url)}
+
+def definitionModelApi(definition: ProviderModelConfig) -> Maybe<&2, T.ModelApi>:
+  match definition:
+    case ProviderModelConfig{_, _, api, _, _, _, _, _, _, _, _, _, _, _, _}: api
+
+def definitionModelBaseUrl(definition: ProviderModelConfig) -> Maybe<&2, String>:
+  match definition:
+    case ProviderModelConfig{_, _, _, baseUrl, _, _, _, _, _, _, _, _, _, _, _}: baseUrl
+
+def definitionModelId(definition: ProviderModelConfig) -> String:
+  match definition:
+    case ProviderModelConfig{id, _, _, _, _, _, _, _, _, _, _, _, _, _, _}: id
+
+def configBaseUrl(config: ProviderConfigInput) -> Maybe<&2, String>:
+  match config:
+    case ProviderConfigInput{_, baseUrl, _, _, _, _, _, _}: baseUrl
+
+def configModels(config: ProviderConfigInput) -> Maybe<&2, List<&2, ProviderModelConfig>>:
+  match config:
+    case ProviderConfigInput{_, _, _, _, _, _, _, models}: models
+
+def apiOfModel(model: Model()) -> T.ModelApi: Api.modelApi(T.JsonValue, model)
+
+def extensionModelFor(+providerId: String, definition: ProviderModelConfig, +baseUrl: Maybe<&2, String>, api: Maybe<&2, T.ModelApi>) -> Result<&2, &2, String, Model()>:
+  match api:
+    case None{}: Fail{"Provider " ++ providerId ++ ", model " ++ definitionModelId(definition) ++ ": no \"api\" specified. Set at provider or model level."}
+    case Some{found}: locatedExtensionModel(providerId, definition, found, baseUrl)
+
+# upstream applyExtension's model: api and baseUrl from the definition, the
+# provider config, then the defaults model; request headers are not model
+# fields.
+def extensionModelWith(+providerId: String, +definition: ProviderModelConfig, +config: ProviderConfigInput, +defaults: Maybe<&2, Model()>) -> Result<&2, &2, String, Model()>:
+  extensionModelFor(providerId, definition, Maybe.or(&2, String, definitionModelBaseUrl(definition), Maybe.or(&2, String, configBaseUrl(config), Maybe.map(&2, Model(), String, modelBaseUrl, defaults))), Maybe.or(&2, T.ModelApi, definitionModelApi(definition), Maybe.or(&2, T.ModelApi, configApi(config), Maybe.map(&2, Model(), T.ModelApi, apiOfModel, defaults))))
+
+def requestedApiName(+definition: ProviderModelConfig, +config: ProviderConfigInput) -> Maybe<&2, String>:
+  Maybe.map(&2, T.ModelApi, String, Api.name, Maybe.or(&2, T.ModelApi, definitionModelApi(definition), configApi(config)))
+
+def extensionModels(+providerId: String, definitions: List<&2, ProviderModelConfig>, +config: ProviderConfigInput, +base: List<&2, Model()>) -> Result<&2, &2, String, List<&2, Model()>>:
+  match definitions:
+    case Nil{}: Done{Nil{}}
+    case +definition <> rest:
+      Result.bind(&2, &2, String, Model(), List<&2, Model()>, extensionModelWith(providerId, definition, config, findModelDefaults(base, definitionModelId(definition), requestedApiName(definition, config))), model => Result.map(&2, &2, String, List<&2, Model()>, List<&2, Model()>, others => model <> others, extensionModels(providerId, rest, config, base)))
+
+def baseUrlOverride(+models: List<&2, Model()>, baseUrl: Maybe<&2, String>) -> List<&2, Model()>:
+  match baseUrl:
+    case None{}: models
+    case Some{url}: withBaseUrls(models, url)
+
+def extendedModels(+providerId: String, +models: List<&2, Model()>, +config: ProviderConfigInput, definitions: Maybe<&2, List<&2, ProviderModelConfig>>) -> Result<&2, &2, String, List<&2, Model()>>:
+  match definitions:
+    case None{}: Done{baseUrlOverride(models, configBaseUrl(config))}
+    case Some{list}: extensionModels(providerId, list, config, models)
+
+# upstream applyExtension: without models, a baseUrl moves every model;
+# with models, they replace the provider's.
+def applyExtension(+providerId: String, +models: List<&2, Model()>, extension: Maybe<&2, ProviderConfigInput>) -> Result<&2, &2, String, List<&2, Model()>>:
+  match extension:
+    case None{}: Done{models}
+    case Some{+config}: extendedModels(providerId, models, config, configModels(config))
+
+# upstream validateExtensionProvider: a streamSimple needs its api, and the
+# layers must compose.
+def validateStream(+providerId: String, config: ProviderConfigInput) -> Result<&2, &2, String, Unit>:
+  match config:
+    case ProviderConfigInput{_, _, _, None{}, Some{_}, _, _, _}: Fail{"Provider " ++ providerId ++ ": \"api\" is required when registering streamSimple."}
+    case _: Done{Unit{}}
+
+def providerName(config: Config.ModelsJsonProvider) -> Maybe<&2, String>:
+  match config:
+    case Config.ModelsJsonProvider{name, _, _, _, _, _, _, _, _, _}: name
+
+# The configured values of the models.json entry and the extension config
+# (upstream configuredApiKey, configuredHeaders and authHeader).
+type Layers is Data:
+  Layers{config: Maybe<&2, Config.ModelsJsonProvider>, extension: Maybe<&2, ProviderConfigInput>}
+
+def extensionField(-A: Data, extension: Maybe<&2, ProviderConfigInput>, get: ProviderConfigInput -> Maybe<&2, A>) -> Maybe<&2, A>:
+  match extension:
+    case None{}: None{}
+    case Some{config}: get(config)
+
+def configField(-A: Data, config: Maybe<&2, Config.ModelsJsonProvider>, get: Config.ModelsJsonProvider -> Maybe<&2, A>) -> Maybe<&2, A>:
+  match config:
+    case None{}: None{}
+    case Some{entry}: get(entry)
+
+def extensionKey(config: ProviderConfigInput) -> Maybe<&2, String>:
+  match config:
+    case ProviderConfigInput{_, _, key, _, _, _, _, _}: key
+
+def extensionHeaders(config: ProviderConfigInput) -> Maybe<&2, R.Record<String>>:
+  match config:
+    case ProviderConfigInput{_, _, _, _, _, headers, _, _}: headers
+
+def extensionAuthHeader(config: ProviderConfigInput) -> Maybe<&2, Bool>:
+  match config:
+    case ProviderConfigInput{_, _, _, _, _, _, authHeader, _}: authHeader
+
+def extensionName(config: ProviderConfigInput) -> Maybe<&2, String>:
+  match config:
+    case ProviderConfigInput{name, _, _, _, _, _, _, _}: name
+
+def entryAuthHeader(config: Config.ModelsJsonProvider) -> Maybe<&2, Bool>:
+  match config:
+    case Config.ModelsJsonProvider{_, _, _, _, _, _, _, authHeader, _, _}: authHeader
+
+def layeredApiKey(layers: Layers) -> Maybe<&2, String>:
+  match layers:
+    case Layers{config, extension}: Maybe.or(&2, String, extensionField(String, extension, extensionKey), configField(String, config, configuredApiKey))
+
+def mergedRecords(base: Maybe<&2, R.Record<String>>, over: Maybe<&2, R.Record<String>>) -> Maybe<&2, R.Record<String>>:
+  match base over:
+    case None{} None{}: None{}
+    case base over: Some{spread(String, recordOr(String, base), R.entries(String, recordOr(String, over)))}
+
+def layeredHeaders(layers: Layers) -> Maybe<&2, R.Record<String>>:
+  match layers:
+    case Layers{config, extension}: mergedRecords(configField(R.Record<String>, config, configuredHeaders), extensionField(R.Record<String>, extension, extensionHeaders))
+
+def layeredAuthHeader(layers: Layers) -> Bool:
+  match layers:
+    case Layers{config, extension}: Maybe.default(&2, Bool, Maybe.or(&2, Bool, extensionField(Bool, extension, extensionAuthHeader), configField(Bool, config, entryAuthHeader)), False{})
+
+def layeredName(layers: Layers) -> Maybe<&2, String>:
+  match layers:
+    case Layers{config, extension}: Maybe.or(&2, String, extensionField(String, extension, extensionName), configField(String, config, providerName))
+
+def layeredBaseUrl(layers: Layers) -> Maybe<&2, String>:
+  match layers:
+    case Layers{config, extension}: Maybe.or(&2, String, extensionField(String, extension, configBaseUrl), configField(String, config, providerBaseUrl))
 
 # Provider composition
 # --------------------
@@ -837,44 +1029,74 @@ def baseAuth(base: Maybe<&2, Base>) -> Auth.ProviderAuth:
     case Some{Base{_, _, auth, _}}: auth
     case None{}: Auth.ProviderAuth{None{}, None{}}
 
-def providerName(config: Config.ModelsJsonProvider) -> Maybe<&2, String>:
-  match config:
-    case Config.ModelsJsonProvider{name, _, _, _, _, _, _, _, _, _}: name
+def composeApiKeyAuth(+providerId: String, inherited: Maybe<&2, Auth.ApiKeyAuth>, oauth: Bool, +layers: Layers) -> IO(Composition<Auth.ApiKeyAuth>):
+  composedKey(providerId, inherited, oauth, layeredApiKey(layers), layeredHeaders(layers), layeredAuthHeader(layers))
 
-def composedName(+providerId: String, config: Config.ModelsJsonProvider, base: Maybe<&2, Base>) -> String:
+def composeOAuthAuth(providerId: String, base: Maybe<&2, Auth.OAuthAuth>, +layers: Layers) -> IO(Composition<Auth.OAuthAuth>):
+  composedOAuth(providerId, base, layeredHeaders(layers), layeredAuthHeader(layers))
+
+# upstream: extension name, models.json name, base name, then the id.
+def composedName(+providerId: String, +layers: Layers, base: Maybe<&2, Base>) -> String:
   match base:
-    case Some{Base{name, _, _, _}}: Maybe.default(&2, String, providerName(config), name)
-    case None{}: Maybe.default(&2, String, providerName(config), providerId)
+    case Some{Base{name, _, _, _}}: Maybe.default(&2, String, layeredName(layers), name)
+    case None{}: Maybe.default(&2, String, layeredName(layers), providerId)
 
 # Provider.baseUrl is a string; a custom provider without one has "".
-def composedBaseUrl(config: Config.ModelsJsonProvider, base: Maybe<&2, Base>) -> String:
+def composedBaseUrl(+layers: Layers, base: Maybe<&2, Base>) -> String:
   match base:
-    case Some{Base{_, url, _, _}}: Maybe.default(&2, String, providerBaseUrl(config), url)
-    case None{}: Maybe.default(&2, String, providerBaseUrl(config), "")
+    case Some{Base{_, url, _, _}}: Maybe.default(&2, String, layeredBaseUrl(layers), url)
+    case None{}: Maybe.default(&2, String, layeredBaseUrl(layers), "")
 
 def composedAuth(+providerId: String, name: String, baseUrl: String, models: List<&2, Model()>, apiKey: Composition<Auth.ApiKeyAuth>, oauth: Composition<Auth.OAuthAuth>) -> Result<&2, &2, String, Composed>:
   match apiKey oauth:
     case Composition{None{}, _} Composition{None{}, _}: Fail{"Provider " ++ providerId ++ ": no authentication method configured."}
     case Composition{key, keyRetained} Composition{method, methodRetained}: Done{Composed{name, baseUrl, Auth.ProviderAuth{key, method}, models, List.append(&2, Retained, keyRetained, methodRetained)}}
 
-def composeAuth(+providerId: String, +base: Maybe<&2, Base>, +config: Config.ModelsJsonProvider, models: List<&2, Model()>, providerAuth: Auth.ProviderAuth) -> IO(Result<&2, &2, String, Composed>):
+def composeAuth(+providerId: String, +base: Maybe<&2, Base>, +layers: Layers, models: List<&2, Model()>, providerAuth: Auth.ProviderAuth) -> IO(Result<&2, &2, String, Composed>):
   match providerAuth:
     case Auth.ProviderAuth{inherited, +oauth}:
       do IO<Result<&2, &2, String, Composed>>:
-        apiKey : Composition<Auth.ApiKeyAuth> <- composeApiKeyAuth(providerId, inherited, Maybe.is_some(&2, Auth.OAuthAuth, oauth), config)
-        method : Composition<Auth.OAuthAuth> <- composeOAuthAuth(providerId, oauth, config)
-        return composedAuth(providerId, composedName(providerId, config, base), composedBaseUrl(config, base), models, apiKey, method)
+        apiKey : Composition<Auth.ApiKeyAuth> <- composeApiKeyAuth(providerId, inherited, Maybe.is_some(&2, Auth.OAuthAuth, oauth), layers)
+        method : Composition<Auth.OAuthAuth> <- composeOAuthAuth(providerId, oauth, layers)
+        return composedAuth(providerId, composedName(providerId, layers, base), composedBaseUrl(layers, base), models, apiKey, method)
 
-def composedModels(+providerId: String, +base: Maybe<&2, Base>, +config: Config.ModelsJsonProvider, result: Result<&2, &2, String, List<&2, Model()>>) -> IO(Result<&2, &2, String, Composed>):
+def layerOverrides(layers: Layers) -> Maybe<&2, R.Record<Config.ModelsJsonModelOverride>>:
+  match layers:
+    case Layers{Some{config}, _}: overridesOf(config)
+    case Layers{None{}, _}: None{}
+
+def composedModels(+providerId: String, +base: Maybe<&2, Base>, +layers: Layers, result: Result<&2, &2, String, List<&2, Model()>>) -> IO(Result<&2, &2, String, Composed>):
   match result:
     case Fail{error}: IO.pure(Result<&2, &2, String, Composed>, Fail{error})
-    case Done{valid}: composeAuth(providerId, base, config, applyOverrides(valid, overridesOf(config)), baseAuth(base))
+    case Done{valid}: composeAuth(providerId, base, layers, applyOverrides(valid, layerOverrides(layers)), baseAuth(base))
 
-# Compose a built-in provider (if any) with its models.json entry. Models are
+def modelsJsonModels(+providerId: String, +models: List<&2, Model()>, config: Maybe<&2, Config.ModelsJsonProvider>) -> Result<&2, &2, String, List<&2, Model()>>:
+  match config:
+    case None{}: Done{models}
+    case Some{entry}: applyModelsJson(providerId, models, entry)
+
+def extensionOf(layers: Layers) -> Maybe<&2, ProviderConfigInput>:
+  match layers:
+    case Layers{_, extension}: extension
+
+def entryOf(layers: Layers) -> Maybe<&2, Config.ModelsJsonProvider>:
+  match layers:
+    case Layers{config, _}: config
+
+# The provider's models: the base catalog with the models.json entry, then
+# the extension layer; modelOverrides apply last.
+def layeredModels(+providerId: String, +base: Maybe<&2, Base>, +layers: Layers) -> Result<&2, &2, String, List<&2, Model()>>:
+  Result.bind(&2, &2, String, List<&2, Model()>, List<&2, Model()>, modelsJsonModels(providerId, baseModels(base), entryOf(layers)), models => applyExtension(providerId, models, extensionOf(layers)))
+
+# Compose a provider (the base, if any) with its models.json entry and an
+# extension's registration (upstream composeModelProvider). Models are
 # validated before any auth callback exists, so a failed composition owns
-# nothing. modelOverrides apply last, after custom-model upserts.
-def composeModelProvider(+providerId: String, +base: Maybe<&2, Base>, +config: Config.ModelsJsonProvider) -> IO(Result<&2, &2, String, Composed>):
-  composedModels(providerId, base, config, applyModelsJson(providerId, baseModels(base), config))
+# nothing.
+def composeLayeredProvider(+providerId: String, +base: Maybe<&2, Base>, +layers: Layers) -> IO(Result<&2, &2, String, Composed>):
+  composedModels(providerId, base, layers, layeredModels(providerId, base, layers))
+
+def composeModelProvider(+providerId: String, +base: Maybe<&2, Base>, config: Config.ModelsJsonProvider) -> IO(Result<&2, &2, String, Composed>):
+  composeLayeredProvider(providerId, base, Layers{Some{config}, None{}})
 
 # Availability without resolution: a command-backed key counts as configured
 # without running it; a template needs each referenced variable.
@@ -908,13 +1130,26 @@ def overrideHeaders(overrides: Maybe<&2, R.Record<Config.ModelsJsonModelOverride
     case None{}: None{}
     case Some{entries}: entryHeaders(R.get(Config.ModelsJsonModelOverride, entries, id))
 
-def rawModelHeaders(+id: String, config: Maybe<&2, Config.ModelsJsonProvider>) -> Maybe<&2, R.Record<String>>:
+def entryModelHeaders(+id: String, config: Maybe<&2, Config.ModelsJsonProvider>) -> R.Record<String>:
   match config:
-    case None{}: None{}
-    case Some{+config}:
-      nonemptyRecord(String, spread(String, recordOr(String, overrideHeaders(overridesOf(config), id)), R.entries(String, recordOr(String, definitionHeaders(definitionsOf(config), id)))))
+    case None{}: R.new(String)
+    case Some{+config}: spread(String, recordOr(String, overrideHeaders(overridesOf(config), id)), R.entries(String, recordOr(String, definitionHeaders(definitionsOf(config), id))))
 
-# The model's own configured headers (modelOverrides, then its models.json
-# definition), resolved with the given environment.
-def resolveConfiguredModelHeaders(+model: Model(), config: Maybe<&2, Config.ModelsJsonProvider>, env: Maybe<&2, T.ProviderEnv()>) -> IO(Result<&2, &2, String, Maybe<&2, R.Record<String>>>):
-  resolveHeadersOrThrow(rawModelHeaders(modelId(model), config), "model \"" ++ T.modelProvider(model) ++ "/" ++ modelId(model) ++ "\"", env)
+def extensionDefinitionHeaders(definitions: List<&2, ProviderModelConfig>, +id: String) -> Maybe<&2, R.Record<String>>:
+  match definitions:
+    case Nil{}: None{}
+    case ProviderModelConfig{+entryId, _, _, _, _, _, _, _, _, _, _, _, _, headers, _} <> rest: Bool.pick(Maybe<&2, R.Record<String>>, String.eq(entryId, id), headers, extensionDefinitionHeaders(rest, id))
+
+def extensionModelHeaders(+id: String, extension: Maybe<&2, ProviderConfigInput>) -> Maybe<&2, R.Record<String>>:
+  match extension:
+    case None{}: None{}
+    case Some{config}: extensionDefinitionHeaders(Maybe.default(&2, List<&2, ProviderModelConfig>, configModels(config), Nil{}), id)
+
+# upstream rawModelHeaders: modelOverrides, the models.json definition, then
+# the extension's model definition.
+def rawModelHeaders(+id: String, config: Maybe<&2, Config.ModelsJsonProvider>, extension: Maybe<&2, ProviderConfigInput>) -> Maybe<&2, R.Record<String>>:
+  nonemptyRecord(String, spread(String, entryModelHeaders(id, config), R.entries(String, recordOr(String, extensionModelHeaders(id, extension)))))
+
+# The model's own configured headers, resolved with the given environment.
+def resolveConfiguredModelHeaders(+model: Model(), config: Maybe<&2, Config.ModelsJsonProvider>, extension: Maybe<&2, ProviderConfigInput>, env: Maybe<&2, T.ProviderEnv()>) -> IO(Result<&2, &2, String, Maybe<&2, R.Record<String>>>):
+  resolveHeadersOrThrow(rawModelHeaders(modelId(model), config, extension), "model \"" ++ T.modelProvider(model) ++ "/" ++ modelId(model) ++ "\"", env)

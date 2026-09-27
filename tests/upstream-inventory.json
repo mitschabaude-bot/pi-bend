@@ -2645,10 +2645,12 @@
     },
     {
       "source": "packages/coding-agent/test/compaction-extensions-example.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/compaction-extensions-example.bend"
+      ],
       "sha256": "73c0c9cac5cc35c4113d3ff5819aa8b5fcbfc8c53816699123294a6798f35481",
-      "notes": "Pending: the custom-compaction example needs ctx.modelRegistry.find and ModelRuntime.complete, and convertToLlm/serializeConversation as extension-facing exports; the two type-check cases have no native runtime content."
+      "notes": "All named meaningful assertions are ported; python3 tests/sdk_suites_check.py --lanes native-1,native-4 compaction-extensions-example checks exact verdicts. JS identity/type reflection is adapted to typed native values. Broader SDK/provider source coverage remains partial."
     },
     {
       "source": "packages/coding-agent/test/compaction-extensions.test.ts",
@@ -3644,17 +3646,21 @@
     },
     {
       "source": "packages/coding-agent/test/sdk-session-manager.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/sdk-session-manager.bend"
+      ],
       "sha256": "bd7eecb00b533e04d0b9fd9836f7b9bc227323595779a75745529d80a79cee4e",
-      "notes": "Pending: createAgentSession defaults (agentDir session path, explicit sessionManager, cwd derived from it, PI_* bash environment) have no single native SDK entry; the native equivalents are agent-runtime.bend create options and bash.bend environment variables, not yet checked against this suite."
+      "notes": "All named meaningful assertions are ported; python3 tests/sdk_suites_check.py --lanes native-1,native-4 sdk-session-manager checks exact verdicts. JS identity/type reflection is adapted to typed native values. Broader SDK/provider source coverage remains partial."
     },
     {
       "source": "packages/coding-agent/test/sdk-skills.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/sdk-skills.bend"
+      ],
       "sha256": "fdba99833bf6dd8346c3acdc7c77e156fab5ff451c3cc2b7a93295de60ac2307",
-      "notes": "Pending: the ResourceLoader interface (getSkills and the other getters, injectable into createAgentSession) is not ported; native sessions receive skills through Runtime.Loadout."
+      "notes": "All named meaningful assertions are ported; python3 tests/sdk_suites_check.py --lanes native-1,native-4 sdk-skills checks exact verdicts. JS identity/type reflection is adapted to typed native values. Broader SDK/provider source coverage remains partial."
     },
     {
       "source": "packages/coding-agent/test/sdk-stream-options.test.ts",
