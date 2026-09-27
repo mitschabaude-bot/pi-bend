@@ -210,12 +210,35 @@ def styledGlyph(view: Scroll.ScrollView,+glyph: String) -> String:
   +track = Bool.pick(String,interactive,"\u{1b}[38;5;239m","\u{1b}[90m")
   +thumb = Bool.pick(String,interactive,"\u{1b}[38;5;188m","\u{1b}[37m")
   Bool.pick(String,String.eq(glyph,"│"),track ++ glyph ++ "\u{1b}[39m",thumb ++ glyph ++ "\u{1b}[39m")
+def targetBackground(tokens: List<&2,U.Token>,state: U.AnsiCodeTracker) -> String:
+  match tokens:
+    case U.Token{code,True{}} <> rest: targetBackground(rest,U.process(state,code))
+    case _: U.getActiveBackgroundCode(state)
+def replacedScrollbar(+line: String,+column: Nat,+totalWidth: Nat,replacement: String,preserveBackground: Bool,range: U.GraphemeCellRange) -> String:
+  match range:
+    case U.GraphemeCellRange{+start,+end}:
+      +before = U.sliceByColumn(line,0n,start,True{})
+      +target = U.sliceByColumn(line,start,end - start,True{})
+      +after = U.sliceByColumn(line,end,totalWidth - end,True{})
+      +background = Bool.pick(String,preserveBackground,targetBackground(U.tokens(target),U.emptyTracker()),"")
+      before ++ U.spaces(start - U.visibleWidth(before),"") ++ T.segmentReset() ++ background ++
+        U.spaces(column - start,"") ++ replacement ++ U.spaces(end - column - 1n,"") ++ after
+# Overlay scrollbar cells inherit only background, never text styling or links.
+# Reserved scrollbar columns start with default styling. Image rows stay intact.
+def replaceScrollbarCell(+line: String,+column: Nat,+totalWidth: Nat,+replacement: String,+preserveBackground: Bool) -> String:
+  Bool.pick(Unit -> String,Image.isImageLine(line),_ => line,
+    _ => replacedScrollbar(line,column,totalWidth,replacement,preserveBackground,
+      Maybe.default(&2,U.GraphemeCellRange,U.getGraphemeCellRange(line,column),U.GraphemeCellRange{column,column + 1n})))(Unit{})
+def preservesScrollbarBackground(view: Scroll.ScrollView) -> Bool:
+  match view:
+    case Scroll.ScrollView{_,_,_,_,Scroll.Always{},_,_,_,_,_,_,_,_,_}: False{}
+    case _: True{}
 def overScrollbar(row: String,index: Nat,+view: Scroll.ScrollView,width: Nat,geometry: Maybe<&2,ScrollbarGeometry>) -> String:
   match geometry:
     case None{}: row
     case Some{ScrollbarGeometry{+column,top,height,thumbTop,thumbHeight,maxTop}}:
       +glyph = scrollbarGlyph(view,index,ScrollbarGeometry{column,top,height,thumbTop,thumbHeight,maxTop})
-      T.compositeTuiLine(row,styledGlyph(view,glyph),column,1n,width)
+      replaceScrollbarCell(row,column,width,styledGlyph(view,glyph),preservesScrollbarBackground(view))
 def dropLines(lines: List<&2,String>,offset: Nat) -> List<&2,String>:
   match lines offset:
     case Nil{} _: Nil{}

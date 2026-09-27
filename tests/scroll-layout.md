@@ -1,7 +1,16 @@
-# Recursive layout and ScrollView milestone
+# Checking scroll layout
 
-`packages/tui/src/components/scroll-view.bend` models upstream `ScrollView` as immutable state: follow-end, bounded scroll deltas, runtime scrollbar modes, activity, and hide deadlines. `packages/tui/src/layout.bend` renders direct scroll viewport frames with clipped rows, reserved width, scrollbar track and proportional thumb geometry. `packages/tui/src/layout-node.bend` and `layout-tree.bend` provide a recursive tree for nested VStack/HStack layout, leaf width caching within a frame, and ScrollView children in stacks.
+The scroll layout fixtures compare native Bend behavior against the pinned upstream `ScrollView` and layout modules. `tests/scroll_view_reference.ts` supplies the state-transition oracle; `tests/scroll_layout_reference.ts` supplies viewport geometry, visible rows and complete ANSI strings. The colored cases check overlay backgrounds, reserved columns, intersected wide characters and isolation of foreground styles, bold text and hyperlinks.
 
-`tests/scroll_layout_check.py` compares state transitions and direct viewport frames against hash-pinned upstream modules. `tests/layout_tree_check.py` compares three source-backed layout cases: nested intrinsic minimum heights, allocated HStack widths, and a ScrollView in a growing VStack. Both run Bun and native one/four threads after compiling their Bend fixtures with `BEND=build/bend-process-files/bend2/main.ts sh scripts/build-pure.sh`.
+Build the fixture and run all three comparison backends:
 
-This is a partial port of `packages/tui/test/layout.test.ts`. Remaining cases include custom style callbacks and exact ANSI/background preservation under overlay scrollbars, Kitty image cropping, nested ScrollView content whose child is a stack, large sparse content, full geometry reflow after dynamic component changes, and cursor-aware leaf offsets. TuiBase accepts an optional layout root and carries the returned immutable tree through prepared/committed frames; `tests/tui_layout_check.py` pins a follow-end, scroll-up, resize and scroll-to-end sequence through that owner. The direct Container path remains the default. JavaScript's cyclic `LayoutBox.parent` is represented by the nested child tree only. Tests compare visible rows, dimensions and scroll state; they do not yet claim byte-exact ANSI parity.
+```sh
+sh scripts/build-incremental.sh tests/scroll-layout.bend build/scroll-layout
+python3 tests/scroll_layout_check.py
+```
+
+The checker runs the interpreted Bend backend and the native binary with one and four threads. It compares the complete output with the source-pinned reference rather than stripping styles from the colored cases.
+
+For nested layouts, use `tests/layout_tree_check.py`; for prepared/committed TUI frames and scroll/resize transitions, use `tests/tui_layout_check.py`. Compile their corresponding Bend fixtures before running those checkers. Scroll state is an immutable return value: retain the returned tree or view for the next render instead of rendering the previous state again.
+
+The [test inventory](upstream-inventory.json) records upstream suite coverage. [Source review records](../docs/source-coverage-reviews.json) record reviewed implementation coverage and outstanding API gaps.

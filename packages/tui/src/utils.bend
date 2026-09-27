@@ -434,6 +434,19 @@ def nextCell(cursor: CellCursor) -> CellStep:
     case CellCursor{SNil{},SCon{Chr{27},rest}}: scannedCell(scan(SCon{Chr{27},rest}))
     case CellCursor{SNil{},text}: rawCluster(Grapheme.next(text))
     case CellCursor{run,rest}: clusterCell(Grapheme.next(run),rest)
+type GraphemeCellRange is Data: GraphemeCellRange{start: Nat,end: Nat}
+# A scrollbar can replace either cell of a wide character. Report its whole
+# range so the caller can blank the other cell instead of leaving half a glyph.
+@unsafe def findCellRange(step: CellStep,+column: Nat,+start: Nat) -> Maybe<&2,GraphemeCellRange>:
+  match step:
+    case CellEnd{}: None{}
+    case CellNext{Token{_,True{}},rest}: findCellRange(nextCell(rest),column,start)
+    case CellNext{Token{text,False{}},rest}:
+      +width = graphemeWidth(text)
+      Bool.pick(Unit -> Maybe<&2,GraphemeCellRange>,Nat.is_gt(width,0n) && Nat.is_ge(column,start) && Nat.is_lt(column,start + width),
+        _ => Some{GraphemeCellRange{start,start + width}},_ => findCellRange(nextCell(rest),column,start + width))(Unit{})
+def getGraphemeCellRange(line: String,column: Nat) -> Maybe<&2,GraphemeCellRange>:
+  findCellRange(nextCell(CellCursor{"",line}),column,0n)
 def spaces(count: Nat,result: String) -> String:
   match count:
     case Zero{}: result

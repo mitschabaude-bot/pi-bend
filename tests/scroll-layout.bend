@@ -27,6 +27,21 @@ def info(label: String,value: L.ScrollLayoutFrame) -> IO(Unit):
         case _: IO.print(label ++ ":empty")
 def takeTransition(value: S.Transition) -> S.ScrollView: match value: case S.Transition{view,_}: view
 def takeView(value: S.ScrollByResult) -> S.ScrollView: match value: case S.ScrollByResult{view,_,_}: view
+def styledRows(rows: List<&2,String>,_: Nat) -> IO(List<&2,String>): IO.pure(List<&2,String>,rows)
+def styledFrame(label: String,frame: L.ScrollLayoutFrame) -> IO(Unit):
+  match frame:
+    case L.ScrollLayoutFrame{_,L.LayoutFrame{_,_,_,rows}}: IO.print(label ++ ":" ++ String.join(rows,"|"))
+def coloredCases(+invalidate: Callback.Callback<Unit,Unit>) -> IO(Unit):
+  do IO<Unit>:
+    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~List<&2,String>,~Nat,~List<&2,String>,~styledRows,
+      ["start", "\u{1b}[42mxxxxx\u{1b}[31m│\u{1b}[39m\u{1b}[49m", "\u{1b}[44m\u{1b}[1mxxxx界\u{1b}[0m", "\u{1b}[48;2;12;34;56mxxxxx \u{1b}[49m", "\u{1b}]8;;https://example.com\u{7}xxxxx界\u{1b}]8;;\u{7}", "last"])
+    +child : C.Component <- IO.pure(C.Component,C.Component{C.ComponentId{2n},render,None{},None{},invalidate,None{},False{}})
+    +automatic : S.ScrollView <- IO.pure(S.ScrollView,takeView(S.scrollBy(S.updateLayout(S.new(child,S.ScrollViewOptions{S.FollowNone{},False{},S.Chain{},S.Auto{},10n}),6n,4n),T.Forward{1n},0n)))
+    autoFrame : L.ScrollLayoutFrame <- L.renderScrollViewFrame(automatic,6n,4n)
+    styledFrame("styled-auto",autoFrame)
+    reserved : L.ScrollLayoutFrame <- L.renderScrollViewFrame(S.new(child,S.ScrollViewOptions{S.FollowNone{},False{},S.Chain{},S.Always{},10n}),6n,4n)
+    styledFrame("styled-always",reserved)
+    Callback.dispose(Nat,List<&2,String>,render)
 def main() -> IO(Unit):
   do IO<Unit>:
     StateTest.main()
@@ -50,5 +65,6 @@ def main() -> IO(Unit):
     info("auto-moved",u1)
     +u2 : L.ScrollLayoutFrame <- L.renderScrollViewFrame(takeTransition(S.scrollToEnd(viewOf(u1),0n)),6n,3n)
     info("auto-end",u2)
+    coloredCases(invalidator)
     Callback.dispose(Nat,List<&2,String>,renderer)
     Callback.dispose(Unit,Unit,invalidator)

@@ -30,3 +30,12 @@ auto.scrollBy(1);
 info("auto-moved", auto, 6, 3);
 auto.scrollToEnd();
 info("auto-end", auto, 6, 3);
+
+const styledRows = ["start", "\x1b[42mxxxxx\x1b[31m│\x1b[39m\x1b[49m", "\x1b[44m\x1b[1mxxxx界\x1b[0m", "\x1b[48;2;12;34;56mxxxxx \x1b[49m", "\x1b]8;;https://example.com\x07xxxxx界\x1b]8;;\x07", "last"];
+const styledChild = { render: () => styledRows, invalidate: () => {} };
+const styledAuto = new ScrollView(styledChild, { scrollbar: "auto", scrollbarHideDelayMs: 10 });
+renderLayoutFrame(styledAuto, 6, 4, () => {});
+styledAuto.scrollBy(1);
+console.log("styled-auto:" + renderLayoutFrame(styledAuto, 6, 4, () => {}).lines.join("|"));
+const styledAlways = new ScrollView(styledChild, { scrollbar: "always", scrollbarHideDelayMs: 10 });
+console.log("styled-always:" + renderLayoutFrame(styledAlways, 6, 4, () => {}).lines.join("|"));

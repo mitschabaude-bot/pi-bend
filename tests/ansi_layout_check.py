@@ -27,6 +27,8 @@ def corpus():
  for text in samples:
   for style in styles:
    text=style+text+(E+'[0m' if style else '')
+   for column in range(12):
+    cases.append(dict(method="getGraphemeCellRange",text=text,column=column))
    for width in [0,1,2,3,5,8,20]:
     cases.append(dict(method='wrapTextWithAnsi',text=text,width=width))
     for ellipsis in ['', '...', '…','界',E+'[32m..'+E+'[0m']:
@@ -51,7 +53,7 @@ if __name__=='__main__':
  print('All 1,114,112 CJK Script_Extensions values match the pinned source regex digest',flush=True)
  cases=corpus();expected=batch(oracle,cases);actual=batch(command,cases);assert len(actual)==len(expected)
  for c,w,g in zip(cases,expected,actual):assert w==g,(c,w,g)
- print(f'{len(cases)} ANSI/Unicode wrapping, truncation and slicing comparisons passed',flush=True)
+ print(f'{len(cases)} ANSI/Unicode wrapping, truncation, slicing and cell-range comparisons passed',flush=True)
 
  long=[dict(method='wrapTextWithAnsi',text='x',repeat=20000,width=10000),dict(method='wrapTextWithAnsi',text='x ',repeat=10000,width=10000),dict(method='wrapTextWithAnsi',text='a'+'\u0301'*20000+' word'*40,width=20),dict(method='wrapTextWithAnsi',text='x',repeat=100000,width=80),dict(method='wrapTextWithAnsi',text='word ',repeat=10000,width=80),dict(method='sliceWithWidth',text='界x',repeat=100000,start=299990,length=10,strict=True),dict(method='extractSegments',text='x',repeat=200000,before=10,after=199990,length=10,strict=True)]
  assert batch(command,long)==batch(oracle,long)

@@ -15,10 +15,11 @@ const hashes:Record<string,string>={
 function pinned(file:string){const text=readFileSync(join(root,file),'utf8');assert.equal(createHash('sha256').update(text).digest('hex'),hashes[file],file);return text;}
 const sourceText=pinned('packages/tui/src/utils.ts');
 const compiled=transpiler.transformSync(sourceText.replace(/^import.*\n/, '')).replace(/\bexport /g,'');
-const names=['visibleWidth','graphemeWidth','normalizeTerminalOutput','truncateToWidth','wrapTextWithAnsi','extractSegments','sliceWithWidth','sliceByColumn','cjkBreakRegex'];
+const names=['visibleWidth','graphemeWidth','normalizeTerminalOutput','truncateToWidth','wrapTextWithAnsi','extractSegments','sliceWithWidth','sliceByColumn','getGraphemeCellRange','cjkBreakRegex'];
 const source=new Function('eastAsianWidth',compiled+';return {'+names.join(',')+'};')(eastAsianWidth);
 function query(v:any){if(v.repeat)v={...v,text:v.text.repeat(v.repeat)};switch(v.method){
  case 'cjkProperties':{let h=2166136261;for(let cp=0;cp<0x110000;cp++)h=Math.imul(h^(source.cjkBreakRegex.test(String.fromCodePoint(cp))?1:0),16777619)>>>0;return h;}
+ case 'getGraphemeCellRange':return source.getGraphemeCellRange(v.text,v.column)??null;
  case 'wrapTextWithAnsi':return source.wrapTextWithAnsi(v.text,v.width);
  case 'truncateToWidth':return source.truncateToWidth(v.text,v.width,v.ellipsis,v.pad);
  case 'sliceWithWidth':case 'sliceByColumn':return source[v.method](v.text,v.start,v.length,v.strict);

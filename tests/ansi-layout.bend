@@ -42,6 +42,10 @@ def widthResult(value: U.WidthResult) -> V.Value:
 def segmentsResult(value: U.Segments) -> V.Value:
   match value:
     case U.Segments{before,beforeWidth,after,afterWidth}: V.ObjectValue{R.set(V.Value,R.set(V.Value,R.set(V.Value,R.set(V.Value,R.new(V.Value),"before",V.Text{before}),"beforeWidth",count(beforeWidth)),"after",V.Text{after}),"afterWidth",count(afterWidth))}
+def cellRange(value: Maybe<&2,U.GraphemeCellRange>) -> V.Value:
+  match value:
+    case None{}: V.Null{}
+    case Some{U.GraphemeCellRange{start,end}}: V.ObjectValue{R.set(V.Value,R.set(V.Value,R.new(V.Value),"start",count(start)),"end",count(end))}
 def preparedText(+value: V.Value) -> String:
   +repeat = repetitions(get(value,"repeat"))
   Bool.pick(Unit -> String,Nat.is_eq(repeat,0n),_ => text(get(value,"text")),_ => repeated(repeat,text(get(value,"text")),""))(Unit{})
@@ -51,6 +55,7 @@ def query(method: String,+value: V.Value) -> V.Value:
     case "wrapTextWithAnsi": strings(U.wrapTextWithAnsi(preparedText(value),repetitions(get(value,"width"))),Nil{})
     case "truncateToWidth": V.Text{U.truncateToWidth(preparedText(value),repetitions(get(value,"width")),text(get(value,"ellipsis")),boolean(get(value,"pad")))}
     case "sliceWithWidth": widthResult(U.sliceWithWidth(preparedText(value),repetitions(get(value,"start")),repetitions(get(value,"length")),boolean(get(value,"strict"))))
+    case "getGraphemeCellRange": cellRange(U.getGraphemeCellRange(preparedText(value),repetitions(get(value,"column"))))
     case "sliceByColumn": V.Text{U.sliceByColumn(preparedText(value),repetitions(get(value,"start")),repetitions(get(value,"length")),boolean(get(value,"strict")))}
     case "extractSegments": segmentsResult(U.extractSegments(preparedText(value),repetitions(get(value,"before")),repetitions(get(value,"after")),repetitions(get(value,"length")),boolean(get(value,"strict"))))
     case _: V.Null{}
