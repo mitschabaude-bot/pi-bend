@@ -4,18 +4,27 @@ responses for pi-mono's live suites.
 Requests arrive under `/<run>/...`, where the run names the scenario, the API
 and the executor (`<scenario>~<api>~<executor>`). The server keeps each run's
 requests and answers request k of a run with the scenario's k-th reply, encoded
-in the API's wire format: Anthropic Messages SSE, Gemini streamGenerateContent
-SSE, Chat Completions chunks, or Responses events (OpenAI, Azure and Codex).
+in the API's wire format: Anthropic Messages SSE, Gemini and Vertex
+streamGenerateContent SSE, Chat Completions chunks, Mistral chat completion
+chunks, Bedrock ConverseStream frames (application/vnd.amazon.eventstream), or
+Responses events (OpenAI, Azure and Codex). Requests for Google's OAuth2 token
+endpoint, which Vertex Application Default Credentials refresh first, arrive as
+`/<run>/token` and are answered with an access token.
 
 The replies follow each provider's documented stream shapes: Anthropic and
 Gemini report input usage early (message_start / every chunk's
-usageMetadata); Chat Completions and Responses report usage only in the final
-chunk / response.completed. A reply may `hang`: after its chunks the server
+usageMetadata); Chat Completions, Mistral and Responses report usage only in
+the final chunk / response.completed; Bedrock reports it in the trailing
+metadata event, after messageStop. A reply may `hang`: after its chunks the server
 keeps the connection open until the client closes it, so an abort interrupts
 a blocked read and the partial content is deterministic.
 
 Codex request bodies may arrive zstd-compressed (Content-Encoding: zstd, as
 upstream sends them); the server decodes them with the zstd tool.
+
+Bedrock requests must carry a valid AWS Signature Version 4 for a key in
+AWS_SECRETS (AWS answers anything else with 403 InvalidSignatureException), so
+the signing itself is checked, not only its presence.
 
 The server also rejects requests the way the providers do for the defects the
 suites guard against: a body that is not strict JSON (an unpaired UTF-16
@@ -23,13 +32,18 @@ surrogate escape: "no low surrogate in string") and a tool call without a
 matching tool result. Those checks model the provider-side validation; they
 are not a general provider emulation.
 """
+import hashlib
+import hmac
 import http.server
 import json
 import re
 import select
+import struct
 import subprocess
 import threading
 import time
+import urllib.parse
+import zlib
 
 LONE_SURROGATE = re.compile(r'\\u[dD][89abAB][0-9a-fA-F]{2}(?!\\u[dD][c-fC-F][0-9a-fA-F]{2})|(?<!\\u[dD][89abAB][0-9a-fA-F]{2})\\u[dD][c-fC-F][0-9a-fA-F]{2}')
 
@@ -94,7 +108,7 @@ def anthropic(reply, model):
 
 # Gemini
 # ------
-def gemini(reply, model):
+def gemini(reply, model, vertex=False):
     u = reply.usage
     produced = 0
 
@@ -105,7 +119,11 @@ def gemini(reply, model):
         candidate = {'content': {'role': 'model', 'parts': parts}, 'index': 0}
         if finish:
             candidate['finishReason'] = finish
-        return ('data: ' + json.dumps({'candidates': [candidate], 'usageMetadata': metadata, 'modelVersion': model, 'responseId': 'replay-response'}) + '\r\n\r\n').encode()
+        data = {'candidates': [candidate], 'usageMetadata': metadata, 'modelVersion': model, 'responseId': 'replay-response'}
+        if vertex:
+            # Vertex responses also carry the response's creation time.
+            data['createTime'] = '2026-09-27T12:00:00.000000Z'
+        return ('data: ' + json.dumps(data) + '\r\n\r\n').encode()
 
     outputs = sum(1 for block in reply.blocks for _ in (pieces(block[1], reply.chunk) if block[0] != 'tool' else [0]))
     for block in reply.blocks:
@@ -156,6 +174,103 @@ def completions(reply, model):
     total = u['input'] + u['cache_read'] + u['output']
     yield ('data: ' + json.dumps({'id': 'chatcmpl-replay', 'object': 'chat.completion.chunk', 'created': 1, 'model': model, 'choices': [], 'usage': {'prompt_tokens': u['input'] + u['cache_read'], 'completion_tokens': u['output'], 'total_tokens': total, 'prompt_tokens_details': {'cached_tokens': u['cache_read']}}}) + '\n\n').encode()
     yield b'data: [DONE]\n\n'
+
+
+# Vertex (streamGenerateContent?alt=sse, the Gemini response shape)
+# ------
+def vertex(reply, model):
+    return gemini(reply, model, vertex=True)
+
+
+# Mistral chat completions
+# ------------------------
+def mistral(reply, model):
+    """Mistral's stream: an opening chunk with the role and empty content,
+    content chunks (thinking as typed content parts), tool calls whole in one
+    chunk each (id, name and complete arguments), and usage together with the
+    finish reason on the last chunk."""
+    u = reply.usage
+
+    def chunk(delta, finish=None, usage=None):
+        data = {'id': 'cmpl-replay-mistral', 'object': 'chat.completion.chunk', 'created': 1, 'model': model, 'choices': [{'index': 0, 'delta': delta, 'finish_reason': finish}]}
+        if usage:
+            data['usage'] = usage
+        return ('data: ' + json.dumps(data) + '\n\n').encode()
+
+    deltas = [{'role': 'assistant', 'content': ''}]
+    calls = 0
+    for block in reply.blocks:
+        if block[0] == 'text':
+            deltas += [{'content': part} for part in pieces(block[1], reply.chunk)]
+            if reply.hang:
+                for delta in deltas:
+                    yield chunk(delta)
+                return
+        elif block[0] == 'thinking':
+            deltas += [{'content': [{'type': 'thinking', 'thinking': [{'type': 'text', 'text': part}]}]} for part in pieces(block[1], reply.chunk)]
+        else:
+            deltas.append({'tool_calls': [{'id': block[1], 'function': {'name': block[2], 'arguments': block[3]}, 'index': calls}]})
+            calls += 1
+    if 'tool_calls' not in deltas[-1]:
+        deltas.append({'content': ''})
+    finish = {'stop': 'stop', 'tool': 'tool_calls', 'length': 'length'}[reply.stop]
+    total = u['input'] + u['cache_read'] + u['output']
+    usage = {'prompt_tokens': u['input'] + u['cache_read'], 'total_tokens': total, 'completion_tokens': u['output']}
+    if u['cache_read']:
+        usage['prompt_tokens_details'] = {'cached_tokens': u['cache_read']}
+    for delta in deltas[:-1]:
+        yield chunk(delta)
+    yield chunk(deltas[-1], finish, usage)
+    yield b'data: [DONE]\n\n'
+
+
+# Bedrock ConverseStream (application/vnd.amazon.eventstream)
+# ----------------------
+def eventstream_frame(headers, payload):
+    """One AWS event-stream message: prelude (total and header lengths, CRC32),
+    string-typed headers, the JSON payload and the message CRC32."""
+    encoded = b''.join(bytes([len(name)]) + name.encode() + bytes([7]) + struct.pack('>H', len(value.encode())) + value.encode() for name, value in headers)
+    body = json.dumps(payload).encode()
+    prelude = struct.pack('>II', 12 + len(encoded) + len(body) + 4, len(encoded))
+    prelude += struct.pack('>I', zlib.crc32(prelude))
+    message = prelude + encoded + body
+    return message + struct.pack('>I', zlib.crc32(message))
+
+
+def bedrock_event(kind, payload):
+    # Bedrock pads every event payload with a "p" field of varying length.
+    padded = {**payload, 'p': 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJ'[:len(kind) + 3]}
+    return eventstream_frame([(':event-type', kind), (':content-type', 'application/json'), (':message-type', 'event')], padded)
+
+
+def bedrock(reply, model):
+    """Converse stream events: messageStart, per block contentBlockStart (tool
+    use only, as Bedrock sends it), contentBlockDelta (text, reasoningContent
+    text then signature, toolUse input) and contentBlockStop, then
+    messageStop and the metadata event with usage and metrics."""
+    u = reply.usage
+    yield bedrock_event('messageStart', {'role': 'assistant'})
+    for index, block in enumerate(reply.blocks):
+        kind = block[0]
+        if kind == 'thinking':
+            for part in pieces(block[1], reply.chunk):
+                yield bedrock_event('contentBlockDelta', {'contentBlockIndex': index, 'delta': {'reasoningContent': {'text': part}}})
+            yield bedrock_event('contentBlockDelta', {'contentBlockIndex': index, 'delta': {'reasoningContent': {'signature': block[2]}}})
+        elif kind == 'text':
+            for part in pieces(block[1], reply.chunk):
+                yield bedrock_event('contentBlockDelta', {'contentBlockIndex': index, 'delta': {'text': part}})
+            if reply.hang:
+                return
+        else:
+            yield bedrock_event('contentBlockStart', {'contentBlockIndex': index, 'start': {'toolUse': {'toolUseId': block[1], 'name': block[2]}}})
+            for part in pieces(block[3], None):
+                yield bedrock_event('contentBlockDelta', {'contentBlockIndex': index, 'delta': {'toolUse': {'input': part}}})
+        yield bedrock_event('contentBlockStop', {'contentBlockIndex': index})
+    yield bedrock_event('messageStop', {'stopReason': {'stop': 'end_turn', 'tool': 'tool_use', 'length': 'max_tokens'}[reply.stop]})
+    usage = {'inputTokens': u['input'], 'outputTokens': u['output'], 'totalTokens': u['input'] + u['output'] + u['cache_read'] + u['cache_write']}
+    if u['cache_read'] or u['cache_write']:
+        usage.update(cacheReadInputTokens=u['cache_read'], cacheWriteInputTokens=u['cache_write'])
+    yield bedrock_event('metadata', {'usage': usage, 'metrics': {'latencyMs': 120}})
 
 
 # Responses (OpenAI, Azure, Codex)
@@ -210,7 +325,10 @@ def responses(reply, model):
     yield event('response.completed', {'response': {'id': 'resp_replay', 'object': 'response', 'status': status, 'model': model, 'output': output, 'usage': {'input_tokens': u['input'] + u['cache_read'], 'input_tokens_details': {'cached_tokens': u['cache_read']}, 'output_tokens': u['output'], 'output_tokens_details': {'reasoning_tokens': 0}, 'total_tokens': total}}})
 
 
-ENCODERS = {'anthropic': anthropic, 'google': gemini, 'completions': completions, 'responses': responses, 'azure': responses, 'codex': responses}
+ENCODERS = {'anthropic': anthropic, 'google': gemini, 'vertex': vertex, 'completions': completions, 'mistral': mistral, 'bedrock': bedrock, 'responses': responses, 'azure': responses, 'codex': responses}
+
+# Response content types (the replies stream until the connection closes).
+CONTENT_TYPES = {'bedrock': 'application/vnd.amazon.eventstream'}
 
 
 # Provider-side validation
@@ -220,8 +338,12 @@ def error_body(api, message, code=None, status=400):
         return status, None
     if api == 'anthropic':
         return status, {'type': 'error', 'error': {'type': 'invalid_request_error', 'message': message}}
-    if api == 'google':
+    if api in ('google', 'vertex'):
         return status, {'error': {'code': status, 'message': message, 'status': 'INVALID_ARGUMENT'}}
+    if api == 'bedrock':
+        return status, {'message': message}
+    if api == 'mistral':
+        return status, {'object': 'error', 'message': message, 'type': 'invalid_request_message_error', 'param': None, 'code': code}
     return status, {'error': {'message': message, 'type': 'invalid_request_error', 'param': None, 'code': code}}
 
 
@@ -259,6 +381,45 @@ def orphan_calls(api, body):
         outputs = {item.get('call_id') for item in items if isinstance(item, dict) and item.get('type') == 'function_call_output'}
         missing += [item['call_id'] for item in items if isinstance(item, dict) and item.get('type') == 'function_call' and item.get('call_id') not in outputs]
     return missing
+
+
+# AWS Signature Version 4
+# -----------------------
+# Access key id -> secret access key the Bedrock executors sign with.
+AWS_SECRETS = {}
+AUTHORIZATION = re.compile(r'^AWS4-HMAC-SHA256 Credential=([^/]+)/(\d{8})/([^/]+)/([^/]+)/aws4_request, ?SignedHeaders=([^,]+), ?Signature=([0-9a-f]{64})$')
+SIGNATURE_MISMATCH = 'The request signature we calculated does not match the signature you provided. Check your AWS Secret Access Key and signing method. Consult the service documentation for details.'
+
+
+def sigv4_problem(method, path, headers, raw):
+    """None when the request is signed as SigV4 prescribes (canonical request
+    with the path segments URI-encoded again, sorted signed headers and the
+    payload hash), else AWS's error message."""
+    found = AUTHORIZATION.match(headers.get('authorization', ''))
+    if not found:
+        return 'Authorization header requires \'Credential\' parameter. Authorization header requires \'Signature\' parameter.'
+    key, day, region, service, signed, signature = found.groups()
+    if key not in AWS_SECRETS:
+        return 'The security token included in the request is invalid.'
+    payload = hashlib.sha256(raw).hexdigest()
+    if headers.get('x-amz-content-sha256', payload) != payload:
+        return 'The provided \'x-amz-content-sha256\' header does not match what was computed.'
+    date = headers.get('x-amz-date', '')
+    if not date.startswith(day):
+        return SIGNATURE_MISMATCH
+    target, _, query = path.partition('?')
+    uri = '/'.join(urllib.parse.quote(segment, safe='-_.~') for segment in target.split('/'))
+    canonical_query = '&'.join(sorted(query.split('&'))) if query else ''
+    names = signed.split(';')
+    canonical_headers = ''.join(f"{name}:{' '.join(headers.get(name, '').split())}\n" for name in names)
+    request = '\n'.join([method, uri, canonical_query, canonical_headers, signed, headers.get('x-amz-content-sha256', payload)])
+    scope = f'{day}/{region}/{service}/aws4_request'
+    to_sign = '\n'.join(['AWS4-HMAC-SHA256', date, scope, hashlib.sha256(request.encode()).hexdigest()])
+    signing = ('AWS4' + AWS_SECRETS[key]).encode()
+    for part in (day, region, service, 'aws4_request'):
+        signing = hmac.new(signing, part.encode(), hashlib.sha256).digest()
+    expected = hmac.new(signing, to_sign.encode(), hashlib.sha256).hexdigest()
+    return None if hmac.compare_digest(expected, signature) else SIGNATURE_MISMATCH
 
 
 ID_CHARS = re.compile(r'^[A-Za-z0-9_-]*$')
@@ -331,9 +492,21 @@ class Server:
                 scenario, api, _ = run.split('~')
                 with owner.lock:
                     seen = owner.requests.setdefault(run, [])
-                    index = len(seen)
+                    index = len([request for request in seen if request['path'] != '/token'])
                     seen.append(dict(path=self.path[len(run) + 1:], headers={k.lower(): v for k, v in self.headers.items()}, raw=raw, encoding=encoding))
+                if self.path == f'/{run}/token':
+                    # Google's OAuth2 token endpoint (ADC refresh).
+                    data = json.dumps({'access_token': 'ya29.replay-token', 'expires_in': 3599, 'scope': 'https://www.googleapis.com/auth/cloud-platform', 'token_type': 'Bearer'}).encode()
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json; charset=utf-8')
+                    self.send_header('Content-Length', str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
                 rejected = rejection(api, raw)
+                if not rejected and api == 'bedrock':
+                    problem = sigv4_problem('POST', self.path, {k.lower(): v for k, v in self.headers.items()}, raw)
+                    rejected = error_body(api, problem, status=403) if problem else None
                 reply = None if rejected else owner.script(scenario, api, index, json.loads(raw))
                 if rejected or reply.error:
                     status, body = rejected or error_body(api, *reply.error, status=reply.status)
@@ -345,7 +518,9 @@ class Server:
                     self.wfile.write(data)
                     return
                 self.send_response(200)
-                self.send_header('Content-Type', 'text/event-stream')
+                self.send_header('Content-Type', CONTENT_TYPES.get(api, 'text/event-stream'))
+                if api == 'bedrock':
+                    self.send_header('x-amzn-RequestId', f'replay-request-{index}')
                 self.send_header('Cache-Control', 'no-cache')
                 self.send_header('Connection', 'close')
                 self.end_headers()

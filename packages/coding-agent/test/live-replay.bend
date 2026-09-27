@@ -6,12 +6,16 @@ import ../../ai/src/api/openai-codex-responses.bend as Codex
 import ../../ai/src/api/anthropic-messages.bend as Messages
 import ../../ai/src/api/google-generative-ai.bend as Gemini
 import ../../ai/src/api/openai-completions.bend as Chat
+import ../../ai/src/api/mistral-conversations.bend as Mistral
+import ../../ai/src/api/bedrock-converse-stream.bend as Bedrock
+import ../../ai/src/api/google-vertex.bend as Vertex
 import ../../ai/src/utils/event-stream.bend as Events
 import ../../ai/src/utils/message-json.bend as MessageJson
 import ../../ai/src/utils/schema-json.bend as Convert
 import ../../ai/src/utils/json.bend as Wire
 import ../../ai/src/utils/transcript.bend as Transcript
 import ../../ai/src/utils/overflow.bend as Overflow
+import ../../ai/src/providers/amazon-bedrock.models.bend as CatalogAmazonBedrock
 import ../../ai/src/providers/ant-ling.models.bend as CatalogAntLing
 import ../../ai/src/providers/anthropic.models.bend as CatalogAnthropic
 import ../../ai/src/providers/azure-openai-responses.models.bend as CatalogAzureOpenaiResponses
@@ -23,12 +27,14 @@ import ../../ai/src/providers/deepseek.models.bend as CatalogDeepseek
 import ../../ai/src/providers/fireworks.models.bend as CatalogFireworks
 import ../../ai/src/providers/github-copilot.models.bend as CatalogGithubCopilot
 import ../../ai/src/providers/google.models.bend as CatalogGoogle
+import ../../ai/src/providers/google-vertex.models.bend as CatalogGoogleVertex
 import ../../ai/src/providers/groq.models.bend as CatalogGroq
 import ../../ai/src/providers/huggingface.models.bend as CatalogHuggingface
 import ../../ai/src/providers/kimi-coding.models.bend as CatalogKimiCoding
 import ../../ai/src/providers/meta.models.bend as CatalogMeta
 import ../../ai/src/providers/minimax.models.bend as CatalogMinimax
 import ../../ai/src/providers/minimax-cn.models.bend as CatalogMinimaxCn
+import ../../ai/src/providers/mistral.models.bend as CatalogMistral
 import ../../ai/src/providers/nvidia.models.bend as CatalogNvidia
 import ../../ai/src/providers/openai.models.bend as CatalogOpenai
 import ../../ai/src/providers/openai-codex.models.bend as CatalogOpenaiCodex
@@ -57,10 +63,13 @@ import ../../agent/src/types.bend as Agent
 import ../src/core/anthropic-provider.bend as Anthropic
 import ../src/core/google-provider.bend as Google
 import ../src/core/openai-completions-provider.bend as Completions
+import ../src/core/stream-providers.bend as StreamProviders
 import ../../ai/test/responses-payload.bend as RP
 import ../../ai/test/anthropic-messages-client.bend as TestClient
 import ../src/core/tools/index.bend as Tools
 import ../../runtime/src/abort.bend as Abort
+import ../../runtime/src/callback.bend as C
+import ../../runtime/src/url.bend as URL
 import ../../runtime/src/f64.bend as F
 import ../../runtime/src/fetch.bend as Fetch
 import ../../runtime/src/json.bend as Decode
@@ -83,6 +92,9 @@ import ../../runtime/src/utf8.bend as Utf8
 #    options: {apiKey?, transport?, reasoning?, thinkingEnabled?, thinkingBudgetTokens?, effort?,
 #    thinking?: {enabled, budgetTokens?}, reasoningEffort?},
 #    abortAfterChars?, abortBefore?, overflow?}
+# `options` may also carry Vertex's `project` and `location`; `googleBase`
+# routes requests for Google's OAuth2 host (Vertex ADC token refresh) to the
+# loopback server.
 # The model is the built-in catalog model with its base URL replaced by
 # `<base>/<run>` (and, with `api`, its API replaced and compat dropped, as
 # the suites do for OpenAI Completions). `overflow` replaces the context with
@@ -179,6 +191,9 @@ def contextOf(+value: V.Value) -> Result<&2, &2, String, Context()>:
 # The built-in catalog models the replayed suites use (upstream getModel).
 def catalogModel(+key: String) -> Maybe<&2, Model()>:
   match key:
+    case "amazon-bedrock/global.anthropic.claude-opus-4-5-20251101-v1:0": Some{CatalogAmazonBedrock.model_global_anthropic_claude_opus_4_5_20251101_v1_0()}
+    case "amazon-bedrock/global.anthropic.claude-opus-4-6-v1": Some{CatalogAmazonBedrock.model_global_anthropic_claude_opus_4_6_v1()}
+    case "amazon-bedrock/global.anthropic.claude-sonnet-4-5-20250929-v1:0": Some{CatalogAmazonBedrock.model_global_anthropic_claude_sonnet_4_5_20250929_v1_0()}
     case "ant-ling/Ling-2.6-flash": Some{CatalogAntLing.model_Ling_2_6_flash()}
     case "ant-ling/Ring-2.6-1T": Some{CatalogAntLing.model_Ring_2_6_1T()}
     case "anthropic/claude-haiku-4-5": Some{CatalogAnthropic.model_claude_haiku_4_5()}
@@ -257,6 +272,8 @@ def catalogModel(+key: String) -> Maybe<&2, Model()>:
     case "google/gemini-2.5-flash": Some{CatalogGoogle.model_gemini_2_5_flash()}
     case "google/gemini-3-flash-preview": Some{CatalogGoogle.model_gemini_3_flash_preview()}
     case "google/gemini-3.1-pro-preview": Some{CatalogGoogle.model_gemini_3_1_pro_preview()}
+    case "google-vertex/gemini-2.5-flash": Some{CatalogGoogleVertex.model_gemini_2_5_flash()}
+    case "google-vertex/gemini-3-flash-preview": Some{CatalogGoogleVertex.model_gemini_3_flash_preview()}
     case "groq/llama-3.3-70b-versatile": Some{CatalogGroq.model_llama_3_3_70b_versatile()}
     case "groq/openai/gpt-oss-120b": Some{CatalogGroq.model_openai_gpt_oss_120b()}
     case "groq/openai/gpt-oss-20b": Some{CatalogGroq.model_openai_gpt_oss_20b()}
@@ -265,6 +282,8 @@ def catalogModel(+key: String) -> Maybe<&2, Model()>:
     case "meta/muse-spark-1.3": Some{CatalogMeta.model_muse_spark_1_3()}
     case "minimax/MiniMax-M2.7": Some{CatalogMinimax.model_MiniMax_M2_7()}
     case "minimax-cn/MiniMax-M2.7": Some{CatalogMinimaxCn.model_MiniMax_M2_7()}
+    case "mistral/devstral-medium-latest": Some{CatalogMistral.model_devstral_medium_latest()}
+    case "mistral/pixtral-12b": Some{CatalogMistral.model_pixtral_12b()}
     case "nvidia/nvidia/nemotron-3-super-120b-a12b": Some{CatalogNvidia.model_nvidia_nemotron_3_super_120b_a12b()}
     case "openai/gpt-4o": Some{CatalogOpenai.model_gpt_4o()}
     case "openai/gpt-4o-mini": Some{CatalogOpenai.model_gpt_4o_mini()}
@@ -562,11 +581,13 @@ def tierOf(value: Maybe<&2, String>) -> Maybe<&2, Ai.Nullable<Responses.ServiceT
     case Some{"priority"}: Some{Ai.PresentValue{Responses.TierPriority{}}}
     case _: None{}
 
-def baseOptions(+options: V.Value, signal: Abort.AbortSignal<Unit>, fetch: Fetch.Fetch(Unit)) -> Base():
-  Ai.StreamOptions{Some{signal}, None{}, text(field(options, "apiKey")), Some{fetch}, None{}, None{}, None{}, headersOf(field(options, "headers")), None{}, None{}, None{}, number(field(options, "temperature")), None{}, number(field(options, "maxTokens")), transportOf(text(field(options, "transport"))), retentionOf(text(field(options, "cacheRetention"))), text(field(options, "sessionId")), None{}, None{}}
+# `fetch` is the options' fetch: the process fetch, or none where the API
+# takes only its default (Vertex rejects a custom fetch).
+def baseOptions(+options: V.Value, signal: Abort.AbortSignal<Unit>, fetch: Maybe<&2, Fetch.Fetch(Unit)>) -> Base():
+  Ai.StreamOptions{Some{signal}, None{}, text(field(options, "apiKey")), fetch, None{}, None{}, None{}, headersOf(field(options, "headers")), None{}, None{}, None{}, number(field(options, "temperature")), None{}, number(field(options, "maxTokens")), transportOf(text(field(options, "transport"))), retentionOf(text(field(options, "cacheRetention"))), text(field(options, "sessionId")), None{}, None{}}
 
-def simpleOptions(+options: V.Value, signal: Abort.AbortSignal<Unit>, fetch: Fetch.Fetch(Unit)) -> Simple():
-  Ai.SimpleStreamOptions{Some{signal}, None{}, text(field(options, "apiKey")), Some{fetch}, None{}, None{}, None{}, headersOf(field(options, "headers")), None{}, None{}, None{}, number(field(options, "temperature")), None{}, number(field(options, "maxTokens")), transportOf(text(field(options, "transport"))), retentionOf(text(field(options, "cacheRetention"))), text(field(options, "sessionId")), None{}, None{}, None{}, levelOf(text(field(options, "reasoning"))), None{}, None{}}
+def simpleOptions(+options: V.Value, signal: Abort.AbortSignal<Unit>, fetch: Maybe<&2, Fetch.Fetch(Unit)>) -> Simple():
+  Ai.SimpleStreamOptions{Some{signal}, None{}, text(field(options, "apiKey")), fetch, None{}, None{}, None{}, headersOf(field(options, "headers")), None{}, None{}, None{}, number(field(options, "temperature")), None{}, number(field(options, "maxTokens")), transportOf(text(field(options, "transport"))), retentionOf(text(field(options, "cacheRetention"))), text(field(options, "sessionId")), None{}, None{}, None{}, levelOf(text(field(options, "reasoning"))), None{}, None{}}
 
 def googleThinking(value: Maybe<&2, V.Value>) -> Maybe<&2, Gemini.GoogleThinking>:
   match value:
@@ -592,15 +613,26 @@ def withAgent(agent: String, config: Responses.Config) -> Responses.Config:
 
 def configFor(agent: String) -> Responses.Config: withAgent(agent, RP.config())
 
+# Vertex's own options: `project` and `location` besides Google's.
+def vertexOptions(+options: V.Value, signal: Abort.AbortSignal<Unit>) -> StreamProviders.VertexOptions():
+  Vertex.GoogleVertexOptions{Gemini.GoogleOptions{baseOptions(options, signal, None{}), None{}, googleThinking(field(options, "thinking"))}, text(field(options, "project")), text(field(options, "location"))}
+
+# upstream bedrock-converse-stream stream() with the base options.
+def bedrockStream(+fetch: Fetch.Fetch(Unit), +model: Model(), +context: Context(), +options: V.Value, +signal: Abort.AbortSignal<Unit>) -> IO(Output()):
+  StreamProviders.lease(events => inner => Bedrock.stream(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~render, ~StreamProviders.noDetails, events, fetch, TestClient.urlContext(), inner, model, context, Bedrock.withBase(Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error(), baseOptions(options, signal, Some{fetch}))), Some{signal})
+
 # upstream stream(): the provider's own options.
-def opened(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api: Ai.ModelApi, +model: Model(), +context: Context(), +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
+def opened(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api: Ai.ModelApi, +model: Model(), +context: Context(), +options: V.Value, +signal: Abort.AbortSignal<Unit>) -> IO(Output()):
   match api:
-    case Ai.AnthropicMessagesApi{}: Anthropic.openStream(fetch, TestClient.urlContext(), model, context, Messages.AnthropicOptions{baseOptions(options, signal, fetch), flag(field(options, "thinkingEnabled")), number(field(options, "thinkingBudgetTokens")), text(field(options, "effort")), None{}, None{}, None{}, None{}})
-    case Ai.GoogleGenerativeAiApi{}: Google.openStream(fetch, TestClient.urlContext(), counter, model, context, Gemini.GoogleOptions{baseOptions(options, signal, fetch), None{}, googleThinking(field(options, "thinking"))})
-    case Ai.OpenAICompletionsApi{}: Completions.openStream(fetch, TestClient.urlContext(), model, context, Chat.OpenAICompletionsOptions{baseOptions(options, signal, fetch), None{}, levelOf(text(field(options, "reasoningEffort"))), None{}})
+    case Ai.MistralConversationsApi{}: StreamProviders.mistralSelected(fetch, TestClient.urlContext(), model, context, Some{signal}, Done{Mistral.MistralOptions{baseOptions(options, signal, Some{fetch}), None{}, None{}, None{}}})
+    case Ai.BedrockConverseStreamApi{}: bedrockStream(fetch, model, context, options, signal)
+    case Ai.GoogleVertexApi{}: StreamProviders.vertexSelected(fetch, TestClient.urlContext(), model, context, Some{signal}, Done{vertexOptions(options, signal)})
+    case Ai.AnthropicMessagesApi{}: Anthropic.openStream(fetch, TestClient.urlContext(), model, context, Messages.AnthropicOptions{baseOptions(options, signal, Some{fetch}), flag(field(options, "thinkingEnabled")), number(field(options, "thinkingBudgetTokens")), text(field(options, "effort")), None{}, None{}, None{}, None{}})
+    case Ai.GoogleGenerativeAiApi{}: Google.openStream(fetch, TestClient.urlContext(), counter, model, context, Gemini.GoogleOptions{baseOptions(options, signal, Some{fetch}), None{}, googleThinking(field(options, "thinking"))})
+    case Ai.OpenAICompletionsApi{}: Completions.openStream(fetch, TestClient.urlContext(), model, context, Chat.OpenAICompletionsOptions{baseOptions(options, signal, Some{fetch}), None{}, levelOf(text(field(options, "reasoningEffort"))), None{}})
     case Ai.AzureOpenAIResponsesApi{}:
       do IO<Output()>:
-        owner : Responses.Run<Unit, Unit, Error()> <- Azure.stream(~Unit, ~Unit, ~Unit, ~Details(), ~Error(), ~render, configFor(agent), model, context, Azure.AzureOpenAIResponsesOptions{baseOptions(options, signal, fetch), levelOf(text(field(options, "reasoningEffort"))), None{}, None{}, None{}, None{}, None{}, None{}})
+        owner : Responses.Run<Unit, Unit, Error()> <- Azure.stream(~Unit, ~Unit, ~Unit, ~Details(), ~Error(), ~render, configFor(agent), model, context, Azure.AzureOpenAIResponsesOptions{baseOptions(options, signal, Some{fetch}), levelOf(text(field(options, "reasoningEffort"))), None{}, None{}, None{}, None{}, None{}, None{}})
         return Providers.lease(~Unit, ~Error(), ~failure, Responses.borrow(Unit, Unit, Error(), owner))
     case Ai.OpenAICodexResponsesApi{}:
       do IO<Output()>:
@@ -614,10 +646,13 @@ def opened(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api
 # upstream streamSimple(), as the agent runtime dispatches it.
 def openedSimple(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api: Ai.ModelApi, +model: Model(), +context: Context(), +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
   match api:
-    case Ai.AnthropicMessagesApi{}: Anthropic.open(fetch, TestClient.urlContext(), model, context, Some{simpleOptions(options, signal, fetch)})
-    case Ai.GoogleGenerativeAiApi{}: Google.open(fetch, TestClient.urlContext(), counter, model, context, Some{simpleOptions(options, signal, fetch)})
-    case Ai.OpenAICompletionsApi{}: Completions.open(fetch, TestClient.urlContext(), model, context, Some{simpleOptions(options, signal, fetch)})
-    case _: Providers.openResponses(~Simple(), ~Unit, ~Unit, ~Details(), ~Error(), ~selected(Simple()), ~render, ~failure, configFor(agent), Agent.StreamInput{model, context, Some{simpleOptions(options, signal, fetch)}})
+    case Ai.MistralConversationsApi{}: StreamProviders.mistral(fetch, TestClient.urlContext(), model, context, Some{simpleOptions(options, signal, Some{fetch})})
+    case Ai.BedrockConverseStreamApi{}: StreamProviders.bedrock(fetch, TestClient.urlContext(), model, context, Some{simpleOptions(options, signal, Some{fetch})})
+    case Ai.GoogleVertexApi{}: StreamProviders.vertex(fetch, TestClient.urlContext(), model, context, Some{simpleOptions(options, signal, None{})})
+    case Ai.AnthropicMessagesApi{}: Anthropic.open(fetch, TestClient.urlContext(), model, context, Some{simpleOptions(options, signal, Some{fetch})})
+    case Ai.GoogleGenerativeAiApi{}: Google.open(fetch, TestClient.urlContext(), counter, model, context, Some{simpleOptions(options, signal, Some{fetch})})
+    case Ai.OpenAICompletionsApi{}: Completions.open(fetch, TestClient.urlContext(), model, context, Some{simpleOptions(options, signal, Some{fetch})})
+    case _: Providers.openResponses(~Simple(), ~Unit, ~Unit, ~Details(), ~Error(), ~selected(Simple()), ~render, ~failure, configFor(agent), Agent.StreamInput{model, context, Some{simpleOptions(options, signal, Some{fetch})}})
 
 def entered(+agent: String, +entry: String, fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, +model: Model(), +context: Context(), +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
   match entry:
@@ -884,6 +919,41 @@ def restoredCase(parsed: Result<&2, &2, Decode.ParseError, V.Value>) -> Result<&
     case Done{value}: Done{restored(value)}
     case Fail{error}: Fail{error}
 
+# Requests for Google's OAuth2 host go to the case's `googleBase` on the
+# loopback server, as the reference routes gaxios's fetch.
+type Reroute is Data:
+  Reroute{inner: Fetch.Fetch(Unit), base: Maybe<&2, String>}
+
+def GOOGLE_OAUTH2() -> String: "https://oauth2.googleapis.com/"
+
+def reroutedText(+base: String, +address: String) -> Maybe<&2, String>:
+  Bool.pick(Maybe<&2, String>, String.starts_with(address, GOOGLE_OAUTH2()), Some{base ++ "/" ++ String.drop(address, String.length(GOOGLE_OAUTH2()))}, None{})
+
+def parsedOr(url: URL.URL, parsed: Maybe<&2, Result<&2, &2, URL.Error, URL.URL>>) -> URL.URL:
+  match parsed:
+    case Some{Done{address}}: address
+    case _: url
+
+def reroutedUrl(base: Maybe<&2, String>, +url: URL.URL) -> URL.URL:
+  match base:
+    case None{}: url
+    case Some{+root}: parsedOr(url, Maybe.map(&2, String, Result<&2, &2, URL.Error, URL.URL>, address => URL.parse(TestClient.urlContext(), address), reroutedText(root, URL.serialize(url, False{}))))
+
+def rerouted(route: Reroute, input: Fetch.Input<Unit>) -> IO(Fetch.Result_(Unit)):
+  match route input:
+    case Reroute{inner, base} Fetch.Input{url, method, headers, body, signal}: C.call(Fetch.Input<Unit>, Fetch.Result_(Unit), inner, Fetch.Input{reroutedUrl(base, url), method, headers, body, signal})
+
+def googleBaseOf(parsed: Result<&2, &2, Decode.ParseError, V.Value>) -> Maybe<&2, String>:
+  match parsed:
+    case Done{+value}: text(field(value, "googleBase"))
+    case Fail{_}: None{}
+
+def routedCase(+base: String, +fetch: Fetch.Fetch(Unit), +parsed: Result<&2, &2, Decode.ParseError, V.Value>) -> IO(Unit):
+  do IO<Unit>:
+    +routed : Fetch.Fetch(Unit) <- C.create(~Reroute, ~Fetch.Input<Unit>, ~Fetch.Result_(Unit), ~rerouted, Reroute{fetch, googleBaseOf(parsed)})
+    runCase(routed, base, parsed)
+    C.dispose(Fetch.Input<Unit>, Fetch.Result_(Unit), routed)
+
 def caseText(result: Result<&2, &2, FS.Error, List<&2, U32>>) -> String:
   match result:
     case Done{bytes}: Utf8.decodeBytes(bytes)
@@ -894,7 +964,7 @@ def borrowed(+base: String, +path: String, pair: Fetch.Runtime & Fetch.Fetch(Uni
     case (runtime, +fetch):
       do IO<Unit>:
         read : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile(path)
-        runCase(fetch, base, restoredCase(Decode.parse(caseText(read))))
+        routedCase(base, fetch, restoredCase(Decode.parse(caseText(read))))
         Fetch.retire(Unit, fetch)
         Fetch.dispose(runtime)
 

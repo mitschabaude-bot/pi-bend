@@ -14,9 +14,14 @@ upstream assertions hold for both executors, both sent the same requests
 (path and JSON body), and both produced the same events and final messages.
 
 The rows are read from the pinned test files: every `it` whose model uses
-one of those APIs is run with the options its test passes. Rows on other APIs
-(Bedrock, Mistral, Vertex), the Codex WebSocket transport, local servers and
-upstream `it.skip` stay pending; `--pending` lists them with the reason.
+one of those APIs is run with the options its test passes. The rows of
+image-tool-result, responseid, interleaved-thinking and google-thinking-disable
+also run on Mistral (mistral-conversations), Amazon Bedrock
+(bedrock-converse-stream, SigV4 with IAM keys from the environment) and Google
+Vertex (google-vertex, with an API key or with Application Default Credentials
+from an authorized_user file whose token refresh the server answers); those
+APIs' rows of the other suites, the Codex WebSocket transport, local servers
+and upstream `it.skip` stay pending; `--pending` lists them with the reason.
 
 Adaptations, documented per suite in tests/upstream-inventory.json:
 - A replayed model answers from a script, so assertions about what a real
@@ -27,6 +32,15 @@ Adaptations, documented per suite in tests/upstream-inventory.json:
   usage, overflow error texts from upstream's utils/overflow.ts examples).
 - compat.ts's environment-key fallback is applied by the harness: each case
   carries the key the suite's environment (or token) would supply.
+- Environment credentials are loopback fixtures: AWS IAM keys and region
+  (AWS_BEDROCK_FORCE_HTTP1 keeps the AWS SDK on HTTP/1.1, which the loopback
+  server speaks), and for Vertex GOOGLE_APPLICATION_CREDENTIALS, project and
+  location. The models' base URLs point at the server (upstream's custom
+  endpoint paths for Bedrock and Vertex); requests for Google's OAuth2 host go
+  to the server as well (the reference routes gaxios's fetch, the port wraps
+  its fetch), so both executors' token refreshes are compared too.
+- google-thinking-disable's Vertex rows run with both of the options the
+  suite may pick from its environment: the API key and ADC.
 - Codex cases select the SSE transport (upstream's default "auto" tries
   WebSocket first; the port has only SSE). Upstream zstd-compresses Codex
   bodies and the port does not; the server decodes before comparing.
@@ -51,11 +65,12 @@ import re
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from upstream_pin import UPSTREAM
-from live_replay_server import Reply, Server, usage
+from live_replay_server import AWS_SECRETS, Reply, Server, usage
 
 ROOT = Path(__file__).resolve().parents[1]
 ENTRY = 'packages/coding-agent/test/live-replay.bend'
@@ -76,11 +91,41 @@ KEYS = {
 }
 KEYS['openai-codex'] = KEYS['openaiCodexToken']
 KEYS['github-copilot'] = KEYS['githubCopilotToken']
+# A Vertex API key (GOOGLE_CLOUD_API_KEY); Vertex otherwise authenticates with
+# ADC and Bedrock with the environment's IAM keys, so no key is passed.
+KEYS['vertexApiKey'] = 'AIzaSyReplayVertexApiKey0123456789abcde'
+KEYS['google-vertex'] = None
+KEYS['amazon-bedrock'] = None
+VERTEX_PROJECT, VERTEX_LOCATION = 'replay-project', 'us-central1'
 
-API_TAG = {'anthropic-messages': 'anthropic', 'google-generative-ai': 'google', 'openai-completions': 'completions', 'openai-responses': 'responses', 'azure-openai-responses': 'azure', 'openai-codex-responses': 'codex'}
+API_TAG = {'anthropic-messages': 'anthropic', 'google-generative-ai': 'google', 'openai-completions': 'completions', 'openai-responses': 'responses', 'azure-openai-responses': 'azure', 'openai-codex-responses': 'codex',
+           'mistral-conversations': 'mistral', 'bedrock-converse-stream': 'bedrock', 'google-vertex': 'vertex'}
+# The APIs every suite replays; the others only for the suites listed.
+BASE_APIS = {'anthropic-messages', 'google-generative-ai', 'openai-completions', 'openai-responses', 'azure-openai-responses', 'openai-codex-responses'}
+EXTRA_API_SUITES = {'image-tool-result.test.ts', 'responseid.test.ts', 'interleaved-thinking.test.ts', 'google-thinking-disable.test.ts'}
 
 # Upstream catalog metadata, filled by catalog_metadata().
 META = {}
+
+# The executors' environment (replay_environment()).
+ENVIRONMENT = {}
+
+# ADC from an authorized_user credentials file; the server answers its token
+# refresh.
+ADC_FILE = {'type': 'authorized_user', 'client_id': 'replay-client.apps.googleusercontent.com', 'client_secret': 'replay-secret', 'refresh_token': 'replay-refresh-token', 'quota_project_id': VERTEX_PROJECT}
+
+
+def replay_environment(directory):
+    """The process environment without provider credentials, plus the
+    loopback fixtures for Bedrock and Vertex."""
+    adc = Path(directory) / 'adc.json'
+    adc.write_text(json.dumps(ADC_FILE))
+    env = {k: v for k, v in os.environ.items() if not k.startswith(('AWS_', 'GOOGLE_', 'GCLOUD'))}
+    AWS_SECRETS['AKIDREPLAYEXAMPLE'] = 'replay/secret/access/key'
+    env.update(AWS_ACCESS_KEY_ID='AKIDREPLAYEXAMPLE', AWS_SECRET_ACCESS_KEY='replay/secret/access/key', AWS_REGION='us-east-1', AWS_BEDROCK_FORCE_HTTP1='1', AWS_EC2_METADATA_DISABLED='true',
+               AWS_CONFIG_FILE=str(Path(directory) / 'aws-config'), AWS_SHARED_CREDENTIALS_FILE=str(Path(directory) / 'aws-credentials'),
+               GOOGLE_APPLICATION_CREDENTIALS=str(adc), GOOGLE_CLOUD_PROJECT=VERTEX_PROJECT, GOOGLE_CLOUD_LOCATION=VERTEX_LOCATION)
+    return env
 
 
 class Model:
@@ -98,8 +143,10 @@ class Model:
 
 # Scripted replies
 # ----------------
-SIGNATURES = {'anthropic': 'sig-anthropic-replay', 'responses': 'enc-replay', 'azure': 'enc-replay', 'codex': 'enc-replay'}
-TOOL_IDS = {'anthropic': 'toolu_replay_{}', 'completions': 'call_replay_{}', 'responses': 'call_replay_{}', 'azure': 'call_replay_{}', 'codex': 'call_replay_{}', 'google': ''}
+SIGNATURES = {'anthropic': 'sig-anthropic-replay', 'bedrock': 'sig-bedrock-replay', 'responses': 'enc-replay', 'azure': 'enc-replay', 'codex': 'enc-replay'}
+# Mistral ids are nine alphanumerics; Bedrock's are tooluse_ ids.
+TOOL_IDS = {'anthropic': 'toolu_replay_{}', 'completions': 'call_replay_{}', 'mistral': 'replay{:03d}', 'bedrock': 'tooluse_replay_{}', 'responses': 'call_replay_{}', 'azure': 'call_replay_{}', 'codex': 'call_replay_{}', 'google': '', 'vertex': ''}
+GEMINI_TAGS = ('google', 'vertex')
 
 # Verbatim response bodies for `raw.<index>` scenarios (the suites' mocked
 # fetch responses).
@@ -110,14 +157,14 @@ SCENARIO_MODELS = {}
 
 
 def thinking(api, text):
-    if api == 'google':
+    if api in GEMINI_TAGS:
         return [('thinking', text, '')]
     return [('thinking', text, SIGNATURES.get(api, ''))]
 
 
 def tool(api, n, name, arguments):
     block = ('tool', TOOL_IDS[api].format(n), name, json.dumps(arguments))
-    return block + ('c2lnLWdvb2dsZQ==',) if api == 'google' else block
+    return block + ('c2lnLWdvb2dsZQ==',) if api in GEMINI_TAGS else block
 
 
 def text(value):
@@ -176,13 +223,16 @@ LONG_ITEM_ID = "t5nnb2qYMFWGSsr13fhCd1CaCu3t3qONEPuOudu4HSVEtA8YJSL6FAZUxvoOoD79
 
 def first_tool_name(api, body):
     """The first declared tool, as a model names it back in its call."""
+    if api == 'bedrock':
+        tools = (body.get('toolConfig') or {}).get('tools') or []
+        return tools[0]['toolSpec']['name'] if tools else 'tool'
     tools = body.get('tools') or []
     if not tools:
         return 'tool'
     first = tools[0]
-    if api == 'completions':
+    if api in ('completions', 'mistral'):
         return first['function']['name']
-    if api == 'google':
+    if api in GEMINI_TAGS:
         declarations = first.get('functionDeclarations') or first.get('function_declarations') or [{}]
         return declarations[0].get('name', 'tool')
     return first.get('name', 'tool')
@@ -280,6 +330,9 @@ class Executor:
         self.outputs = []
 
     def __call__(self, case):
+        if case.pop('googleHosts', False):
+            # Google's OAuth2 host (Vertex ADC token refresh) goes to the run.
+            case = {**case, 'googleBase': f"{self.base}/{case['run']}"}
         text = json.dumps(case)
         if self.name != 'upstream':
             # See restoredText in the executor: U+E000 stands for U+D83D.
@@ -287,7 +340,7 @@ class Executor:
         with tempfile.NamedTemporaryFile('w', suffix='.json', prefix='live-replay-') as file:
             file.write(text)
             file.flush()
-            run = subprocess.run(self.command + [self.base, file.name], cwd=ROOT, capture_output=True, text=True, timeout=600)
+            run = subprocess.run(self.command + [self.base, file.name], cwd=ROOT, capture_output=True, text=True, timeout=600, env=ENVIRONMENT or None)
         if run.returncode != 0:
             raise Failed(f'{self.name} exited {run.returncode}: {run.stderr[-1500:]}')
         events, message, thrown, overflowed = [], None, None, None
@@ -338,7 +391,10 @@ def case(model, run, context, options=None, entry='stream', **extra):
     # Codex defaults to transport "auto" (WebSocket first, then SSE); the port
     # has only the SSE transport, so Codex cases select it explicitly.
     transport = {'transport': 'sse'} if model.api == 'openai-codex-responses' else {}
-    return dict(run=run, provider=model.provider, model=model.id, api=model.override, entry=entry, context=context, options={'apiKey': model.key, **transport, **(options or {})}, **extra)
+    if model.api == 'google-vertex':
+        extra = {'googleHosts': True, **extra}
+    key = {'apiKey': model.key} if model.key is not None else {}
+    return dict(run=run, provider=model.provider, model=model.id, api=model.override, entry=entry, context=context, options={**key, **transport, **(options or {})}, **extra)
 
 
 def texts(message):
@@ -791,9 +847,22 @@ def thinkingDisabled(expression):
             request[key] = None if found.group(1) == 'undefined' else int(found.group(1))
     min_pongs = int((re.search(r'minPongs: (\d+)', expression) or [None, 35])[1])
     max_output = re.search(r'maxOutputTokens: (\d+)', expression)
+    if 'requestOptions: vertexOptions' in expression:
+        # The suite's vertexOptions: the API key when GOOGLE_CLOUD_API_KEY is
+        # set, else project and location for ADC; both are run.
+        variants = [('k', {'apiKey': KEYS['vertexApiKey']}), ('a', {'project': VERTEX_PROJECT, 'location': VERTEX_LOCATION})]
 
+        def both(ex, model, run, options=None):
+            for suffix, chosen in variants:
+                one(ex, model, run.replace('~', suffix + '~', 1), chosen)
+        one = thinkingDisabledRun(request, min_pongs, max_output)
+        return both
+    return thinkingDisabledRun(request, min_pongs, max_output)
+
+
+def thinkingDisabledRun(request, min_pongs, max_output):
     def test(ex, model, run, options=None):
-        merged = {'maxTokens': 160, 'temperature': 0, **request}
+        merged = {'maxTokens': 160, 'temperature': 0, **request, **(options or {})}
         merged = {key: value for key, value in merged.items() if value is not None}
         context = {'systemPrompt': 'You are a precise assistant. Follow the requested output format exactly.', 'messages': [user('Before replying, carefully solve 36863 * 5279 internally. Then reply with the word pong repeated exactly 40 times, separated by single spaces. Do not add any other text.')]}
         result = ex(case(model, run, context, merged, entry='simple'))
@@ -1348,7 +1417,8 @@ def plan(row):
     ids = row_model(row)
     if ids is None:
         return None, 'local server (Ollama/LM Studio/llama.cpp)'
-    if tuple(ids) not in META or (row['api'] or META[tuple(ids)]['api']) not in API_TAG:
+    replayed = API_TAG.keys() if row['file'] in EXTRA_API_SUITES else BASE_APIS
+    if tuple(ids) not in META or (row['api'] or META[tuple(ids)]['api']) not in replayed:
         return None, f'{ids[0]}/{ids[1]} uses an API this check does not replay'
     if len(row['calls']) != 1:
         return None, 'no single suite function call'
@@ -1361,6 +1431,9 @@ def plan(row):
             expression = declared.group(1)
     if function in ('assertSecondToolCallWithInterleavedThinking', 'expectThinkingDisabledE2E'):
         options, reason = ({}, None)
+    elif expression.strip() == 'vertexOptions' and row['file'] in EXTRA_API_SUITES:
+        # responseid's `{ project: vertexProject, location: vertexLocation }`.
+        options, reason = ({'project': VERTEX_PROJECT, 'location': VERTEX_LOCATION}, None)
     else:
         options, reason = parse_options(expression, ids[0])
     if reason:
@@ -1386,7 +1459,7 @@ def handoff_pairs():
     block = block[:block.index('];')]
     pairs = []
     for provider, id, label, api, env in re.findall(r'\{\s*provider: "([^"]+)",\s*model: "([^"]+)",\s*label: "([^"]+)"(?:,\s*apiOverride: "([^"]+)")?(?:,\s*upstreamApiKeyEnv: "([^"]+)")?,?\s*\}', block):
-        if (provider, id) in META and (api or META[(provider, id)]['api']) in API_TAG:
+        if (provider, id) in META and (api or META[(provider, id)]['api']) in BASE_APIS:
             headers = {'Authorization': f'Bearer replay-{env.lower()}'} if env else None
             pairs.append((label, (Model(provider, id, api or None), headers)))
     return pairs
@@ -1453,6 +1526,9 @@ def request_view(request):
         body = json.loads(request['raw'])
     except ValueError:
         body = request['raw'].decode('utf-8', 'replace')
+        if request['path'].endswith('/token'):
+            # An OAuth2 form body: its fields, in any order.
+            body = sorted(urllib.parse.parse_qsl(body))
     return dict(path=TIMESTAMP.sub('<ms>', request['path']), body=normalized(body))
 
 
@@ -1590,6 +1666,8 @@ def main():
     ENV_KEYS.update({'bun': ['bun', env + '.js'], 'native-1': [env, '--threads', '1'], 'native-4': [env, '--threads', '4']})
     selected = [(index, test) for index, test in enumerate(tests) if not arguments.only or arguments.only in test[0]]
     counts = {}
+    fixtures = tempfile.TemporaryDirectory(prefix='live-replay-env-')
+    ENVIRONMENT.update(replay_environment(fixtures.name))
     with Server(script) as server:
         # Handoff fixtures and targets share state, so they run in order after
         # the independent tests.
