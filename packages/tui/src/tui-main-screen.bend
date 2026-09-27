@@ -145,10 +145,11 @@ def rowWidth(+text: String,image: Bool) -> Nat: Bool.pick(Unit -> Nat,image,_ =>
 def rowHeader(text: String,image: Bool,header: Header) -> Row:
   match header:
     case Header{ids,rows}: Row{text,image,ids,rows}
-def prepareRow(+text: String) -> Row:
-  +image = Image.isImageLine(text)
-  +header = Bool.pick(Unit -> Header,image,_ => parsedHeader(Image.findKitty(text,"")),_ => Header{Nil{},1n})(Unit{})
-  rowHeader(text,image,header)
+def prepareImageRow(+text: String,image: Bool) -> Row:
+  match image:
+    case True{}: rowHeader(text,True{},parsedHeader(Image.findKitty(text,"")))
+    case False{}: Row{text,False{},Nil{},1n}
+def prepareRow(+text: String) -> Row: prepareImageRow(text,Image.isImageLine(text))
 def prepareRows(lines: List<&2,String>,reversed: List<&2,Row>) -> List<&2,Row>:
   match lines:
     case Nil{}: List.reverse(&2,Row,reversed)
@@ -235,12 +236,16 @@ def changedRange(+previous: List<&2,Row>,+current: List<&2,Row>) -> Changed:
 # Equal lines have equal image metadata. Compare and prepare the old rows in
 # one pass, rather than scanning their text once for images and again for diffs.
 type Comparison is Data: Comparison{previous: List<&2,Row>,changes: Changed}
+def previousRow(text: String,current: Row,same: Bool) -> Row:
+  match same:
+    case True{}: current
+    case False{}: prepareRow(text)
 def comparePrevious(previous: List<&2,String>,current: List<&2,Row>,+index: Nat,reversed: List<&2,Row>,changes: Changed) -> Comparison:
   match previous current:
     case Nil{} Nil{}: Comparison{List.reverse(&2,Row,reversed),changes}
     case +text <> rest Row{+next,+image,+ids,+requested} <> more:
       +same = Strings.equal(text,next)
-      +old = Bool.pick(Unit -> Row,same,_ => Row{next,image,ids,requested},_ => prepareRow(text))(Unit{})
+      +old = previousRow(text,Row{next,image,ids,requested},same)
       comparePrevious(rest,more,Succ{index},old <> reversed,changedValue(changes,index,Bool.not(same)))
     case +text <> rest Nil{}:
       comparePrevious(rest,Nil{},Succ{index},prepareRow(text) <> reversed,changedValue(changes,index,Bool.not(Strings.equal(text,""))))

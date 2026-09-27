@@ -192,9 +192,13 @@ def cursorScan(fuel: Nat,search: CursorSearch) -> CursorFrame:
 def extractCursorPosition(+lines: List<&2,String>,height: Nat) -> CursorFrame:
   +length = List.length(&2,String,lines)
   cursorScan(Succ{length},Searching{List.reverse(&2,String,lines),Nil{},height,length})
+def resetLine(text: String,image: Bool) -> String:
+  match image:
+    case True{}: text
+    case False{}: Layout.normalizeTerminalOutput(text) ++ segmentReset()
 def resetLines(lines: List<&2,String>,reversed: List<&2,String>) -> List<&2,String>:
   match lines:
     case Nil{}: List.reverse(&2,String,reversed)
     case +line <> rest:
-      resetLines(rest,Bool.pick(Unit -> String,Image.isImageLine(line),_ => line,_ => Layout.normalizeTerminalOutput(line) ++ segmentReset())(Unit{}) <> reversed)
+      resetLines(rest,resetLine(line,Image.isImageLine(line)) <> reversed)
 def applyLineResets(lines: List<&2,String>) -> List<&2,String>: resetLines(lines,Nil{})

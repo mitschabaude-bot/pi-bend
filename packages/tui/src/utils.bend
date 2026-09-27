@@ -96,9 +96,12 @@ def needsNormalization(text: String) -> Bool:
     case SCon{Chr{3635},_}: True{}
     case SCon{Chr{3763},_}: True{}
     case SCon{_,rest}: needsNormalization(rest)
+def normalizeWhen(text: String,needed: Bool) -> String:
+  match needed:
+    case True{}: renderTokens(tokens(text),False{},"")
+    case False{}: text
 def normalizeTerminalOutput(+text: String) -> String:
-  Bool.pick(Unit -> String,needsNormalization(text),
-    _ => renderTokens(tokens(text),False{},""),_ => text)(Unit{})
+  normalizeWhen(text,needsNormalization(text))
 
 # Style state is immutable; SGR reset leaves an OSC-8 link open.
 type Osc8Terminator is Data: Bell{} StringTerminator{}
