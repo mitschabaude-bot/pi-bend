@@ -225,6 +225,8 @@ def run_side(label, argv, scenario, keep):
            **package_links(),
            **({"SSL_CERT_FILE": tls["ca"], "NODE_EXTRA_CA_CERTS": tls["ca"]} if tls else {}),
            **scenario.get("env", {})}
+    if label == "bend" and "BEND_THREADS" in os.environ:
+        env.setdefault("BEND_THREADS", os.environ["BEND_THREADS"])
     snaps, timings = {}, {}
     if scenario.get("process"):
         # Non-interactive modes: exact stdout/stderr of a plain process.

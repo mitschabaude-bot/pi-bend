@@ -107,6 +107,17 @@ def pending_bash(excluded, fullscreen=False):
     }
 
 
+def pending_bash_scroll():
+    scenario = pending_bash(False, fullscreen=True)
+    scenario["name"] = "bash-pending-fullscreen-scroll"
+    scenario["turns"].insert(0, {"text": "\n\n".join(f"History paragraph {i}." for i in range(40)) + "\n\nHISTORY_READY"})
+    scenario["steps"][2:2] = [("keys", "history"), ("key", "Enter"), ("wait", "HISTORY_READY", "history"), ("settle", 0.3)]
+    index = scenario["steps"].index(("snap", "answered")) + 1
+    scenario["steps"][index:index] = [("key", "PageUp"), ("settle", 0.2), ("snap", "pending-page-up"),
+                                      ("key", "End"), ("settle", 0.2), ("snap", "pending-end")]
+    return scenario
+
+
 SCENARIOS = [
     {
         "name": "fullscreen-startup",
@@ -277,6 +288,7 @@ SCENARIOS = [
     pending_bash(False),
     pending_bash(True),
     pending_bash(False, fullscreen=True),
+    pending_bash_scroll(),
     {
         "name": "bash-env",
         "args": MODEL,

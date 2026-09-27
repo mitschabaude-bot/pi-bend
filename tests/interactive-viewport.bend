@@ -7,6 +7,7 @@ import ../packages/coding-agent/src/modes/interactive/viewport.bend as View
 import ../packages/runtime/src/callback.bend as Callback
 import ../packages/tui/src/component.bend as Component
 import ../packages/tui/src/tui-base.bend as Tui
+import ../packages/tui/src/layout-node.bend as Node
 import ../packages/tui/src/utils.bend as Utils
 
 def lines(value: List<&2,String>,_: Nat) -> IO(List<&2,String>): IO.pure(List<&2,String>,value)
@@ -54,6 +55,45 @@ def runMounted(view: View.View,+handle: View.Handle,+base: Tui.TuiBase,message: 
 def runPair(pair: View.View & View.Handle & Tui.TuiBase,message: Component.Component) -> IO(Unit):
   match pair:
     case (view,handle,base): runMounted(view,handle,base,message)
+# The pending dock is independent of chat's scroll position, then joins chat
+# exactly once on the next prompt. Use an overflowing transcript and a small
+# viewport so this exercises allocation rather than only list ordering.
+def contains(+actual: String,expected: String) -> IO(Unit):
+  Bool.pick(Unit -> IO(Unit),String.contains(actual,expected),_ => IO.pure(Unit,Unit{}),_ => IO.die(Unit,1,"missing pending dock: " ++ actual))(Unit{})
+def fullscreenFrame(result: Tui.ResultOf(Tui.PreparedFrame)) -> IO(Tui.TuiBase & String):
+  match result:
+    case Done{Tui.PreparedFrame{base,_,rows,_,_}}: IO.pure(Tui.TuiBase & String,(base,String.join(clean(rows),"|")))
+    case Fail{_}: IO.die(Tui.TuiBase & String,1,"fullscreen viewport render failed")
+def scrolled(change: Tui.ScrollChange) -> Tui.TuiBase:
+  match change: case Tui.ScrollChange{base,_,_}: base
+def verifyPinned(view: View.View,+handle: View.Handle,pair: Tui.TuiBase & String) -> IO(Unit):
+  match pair:
+    case (+base,visible):
+      do IO<Unit>:
+        contains(visible,"|one|two|three|four||editor")
+        previous : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(scrolled(Tui.scrollPrimaryBy(base,Node.ScrollTop{},0n)),12n,10n)
+        top : String <- frame(previous)
+        contains(top,"|one|two|three|four||editor")
+        View.flushPending(handle)
+        following : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,10n)
+        flushed : String <- frame(following)
+        contains(flushed,"four")
+        View.clear(handle)
+        cleared : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,10n)
+        empty : String <- frame(cleared)
+        Bool.pick(Unit -> IO(Unit),String.contains(empty,"one"),_ => IO.die(Unit,1,"pending dock survived reset"),_ => IO.pure(Unit,Unit{}))(Unit{})
+        View.dispose(view)
+def runFullscreen(pair: View.View & View.Handle & Tui.TuiBase,+message: Component.Component) -> IO(Unit):
+  match pair:
+    case (view,+handle,base):
+      do IO<Unit>:
+        View.append(handle,message)
+        View.append(handle,message)
+        View.append(handle,message)
+        View.appendPending(handle,message)
+        rendered : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,12n,10n)
+        painted : Tui.TuiBase & String <- fullscreenFrame(rendered)
+        verifyPinned(view,handle,painted)
 # upstream showLoadedResources inserts an extra spacer before Context only.
 def resourceSections(result: Result<&2,&2,Theme.LoadError,Theme.Theme>) -> IO(Unit):
   match result:
@@ -83,6 +123,10 @@ def main() -> IO(Unit):
     setup : View.View & View.Handle & Tui.ResultOf(Tui.TuiBase) <- View.mount(view,editor,footer)
     pair : View.View & View.Handle & Tui.TuiBase <- mounted(setup)
     runPair(pair,message)
+    fullscreen : View.View <- View.create(Component.ComponentId{1n})
+    fullscreenSetup : View.View & View.Handle & Tui.ResultOf(Tui.TuiBase) <- View.mountFor(fullscreen,editor,footer,True{})
+    fullscreenPair : View.View & View.Handle & Tui.TuiBase <- mounted(fullscreenSetup)
+    runFullscreen(fullscreenPair,message)
     Callback.dispose(Nat,List<&2,String>,messageRender)
     Callback.dispose(Nat,List<&2,String>,editorRender)
     Callback.dispose(Nat,List<&2,String>,footerRender)
