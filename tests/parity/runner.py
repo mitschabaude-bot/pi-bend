@@ -275,6 +275,16 @@ def run_side(label, argv, scenario, keep):
                 target = root / step[1]
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(step[2])
+            elif kind == "title":
+                deadline = time.monotonic() + scenario.get("timeout", 30)
+                while True:
+                    title = tmux("display-message", "-p", "-t", terminal.name, "#{pane_title}")
+                    if len(step) < 3 or title.rstrip("\n") == step[2]:
+                        break
+                    if time.monotonic() >= deadline:
+                        raise AssertionError(f"Expected title {step[2]!r}, got {title!r}")
+                    time.sleep(.05)
+                snaps[step[1]] = title
             elif kind == "snap":
                 if step[1] == "working":
                     snaps[step[1]] = working_screen(terminal.screen(), root)
