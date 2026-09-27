@@ -2,6 +2,8 @@ import Base
 import ../../../modes/interactive/components/messages.bend as Messages
 import ../../../modes/interactive/theme/theme.bend as Theme
 import ../../../../../runtime/src/schema-value.bend as Value
+import ../../../../../runtime/src/json.bend as Decode
+import ../../../../../runtime/src/record.bend as Record
 import ../render-utils.bend as Render
 import ../index.bend as Tools
 import ../edit.bend as Edit
@@ -13,10 +15,24 @@ import ../../../../../tui/src/components/text.bend as TuiText
 
 def renderCall(args: Value.Value,theme: Theme.Theme) -> IO(String):
   Render.pathCall(theme,"edit",args)
-def diffValue(details: Maybe<&2,Tools.ToolDetails>) -> Maybe<&2,String>:
+# Stored presentation data may predate the executable edit result's patch.
+def decodeStoredDiff(value: Value.Value) -> Result<&2,&2,Decode.Error,Diff.DiffResult>:
+  do Result<&2,&2,Decode.Error,Diff.DiffResult>:
+    +fields : Record.Record<Value.Value> <- Decode.object(value)
+    diff : String <- Decode.required(String,fields,"diff",Decode.string)
+    first : Maybe<&2,Nat> <- Decode.optional(Nat,fields,"firstChangedLine",Tools.natural)
+    return Diff.DiffResult{diff,first}
+def decodedDiff(result: Result<&2,&2,Decode.Error,Diff.DiffResult>) -> Maybe<&2,Diff.DiffResult>:
+  match result: case Done{diff}: Some{diff} case Fail{_}: None{}
+def diffDetails(details: Maybe<&2,Tools.ToolDetails>) -> Maybe<&2,Diff.DiffResult>:
   match details:
-    case Some{Tools.EditDetails{Edit.EditToolDetails{diff,_,_}}}: Some{diff}
+    case Some{Tools.EditDetails{Edit.EditToolDetails{diff,_,line}}}: Some{Diff.DiffResult{diff,line}}
+    case Some{Tools.RawDetails{value}}: decodedDiff(decodeStoredDiff(value))
     case _: None{}
+def diffText(value: Diff.DiffResult) -> String:
+  match value: case Diff.DiffResult{diff,_}: diff
+def diffValue(details: Maybe<&2,Tools.ToolDetails>) -> Maybe<&2,String>:
+  Maybe.map(&2,Diff.DiffResult,String,diffText,diffDetails(details))
 def colorDiffLine(theme: Theme.Theme,line: String) -> IO(String):
   match line:
     case SCon{'-',_}: Messages.foregroundText(theme,"toolDiffRemoved",line)
@@ -133,9 +149,9 @@ def display(call: String,+result: String,hasResult: Bool,error: Bool,theme: Them
 # Once available, the preview stays in the call region. Settling an identical
 # result changes its status without moving the diff into a second region.
 def settledPreview(details: Maybe<&2,Tools.ToolDetails>,error: Bool,previous: Maybe<&2,Edits.Preview()>) -> Maybe<&2,Edits.Preview()>:
-  match details error:
-    case Some{Tools.EditDetails{Edit.EditToolDetails{diff,_,line}}} False{}: Some{Done{Diff.DiffResult{diff,line}}}
-    case _ _: previous
+  match error:
+    case True{}: previous
+    case False{}: Maybe.default(&2,Maybe<&2,Edits.Preview()>,Maybe.map(&2,Diff.DiffResult,Maybe<&2,Edits.Preview()>,diff => Some{Done{diff}},diffDetails(details)),previous)
 def previewText(preview: Maybe<&2,Edits.Preview()>,theme: Theme.Theme) -> IO(String):
   match preview:
     case None{}: IO.pure(String,"")

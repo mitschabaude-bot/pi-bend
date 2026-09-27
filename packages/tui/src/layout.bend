@@ -67,23 +67,25 @@ def compositeWhen(direct: Bool,row: String,line: String,x: Nat,width: Nat,totalW
     case False{}: T.compositeTuiLine(row,line,x,width,totalWidth)
 # upstream OSC133_ZONE_PREFIX: leading semantic-prompt zone marks
 # (ESC ] 133 ; A|B|C, ended by BEL or ESC \) are removed before painting.
-def zoneKind(kind: Char,rest: String) -> Maybe<&2,String>:
+def zoneKind(kind: Char) -> Bool:
   match kind:
-    case 'A': Some{rest}
-    case 'B': Some{rest}
-    case 'C': Some{rest}
-    case _: None{}
-def zonePrefix(line: String) -> Maybe<&2,String>:
+    case 'A': True{}
+    case 'B': True{}
+    case 'C': True{}
+    case _: False{}
+def zonePrefixLength(line: String) -> Nat:
   match line:
-    case SCon{Chr{27},SCon{']',SCon{'1',SCon{'3',SCon{'3',SCon{';',SCon{kind,SCon{Chr{7},rest}}}}}}}}: zoneKind(kind,rest)
-    case SCon{Chr{27},SCon{']',SCon{'1',SCon{'3',SCon{'3',SCon{';',SCon{kind,SCon{Chr{27},SCon{'\\',rest}}}}}}}}}: zoneKind(kind,rest)
-    case _: None{}
+    case SCon{Chr{27},SCon{']',SCon{'1',SCon{'3',SCon{'3',SCon{';',SCon{kind,SCon{Chr{7},_}}}}}}}}: Bool.pick(Nat,zoneKind(kind),8n,0n)
+    case SCon{Chr{27},SCon{']',SCon{'1',SCon{'3',SCon{'3',SCon{';',SCon{kind,SCon{Chr{27},SCon{'\\',_}}}}}}}}}: Bool.pick(Nat,zoneKind(kind),9n,0n)
+    case _: 0n
 @unsafe
-def withoutZonesFrom(line: String,next: Maybe<&2,String>) -> String:
-  match next:
-    case None{}: line
-    case Some{+rest}: withoutZonesFrom(rest,zonePrefix(rest))
-def withoutZones(+line: String) -> String: withoutZonesFrom(line,zonePrefix(line))
+def withoutZonesFrom(line: String,length: Nat) -> String:
+  match length:
+    case Zero{}: line
+    case Succ{count}:
+      +rest = String.drop(line,Succ{count})
+      withoutZonesFrom(rest,zonePrefixLength(rest))
+def withoutZones(+line: String) -> String: withoutZonesFrom(line,zonePrefixLength(line))
 def composite(+row: String,line: Maybe<&2,String>,+x: Nat,+width: Nat,+totalWidth: Nat) -> String:
   match line:
     case None{}: row

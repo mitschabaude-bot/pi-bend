@@ -997,7 +997,7 @@
       "source_sha256": "76dfd9f8a88cabc064f0652b83f16a945fbc988c9fe7c0423a4cd796907ef77d",
       "port_sha256": {
         "packages/tui/src/components/scroll-view.bend": "0b6d7081ad10aabbe5f6e25ed4c7871b85ed38d10f45774be294c4a9ae6db95b",
-        "packages/tui/src/layout.bend": "abbae131973c280bf29fd8381c8f1f711f5e20fefb9408c60f6caa5494dca013"
+        "packages/tui/src/layout.bend": "66c63276c55bd1a67653a770632b1205c9f9ead060311c60d4ede2bb87c2b7ff"
       },
       "ports": [
         "packages/tui/src/components/scroll-view.bend",
@@ -1266,10 +1266,10 @@
         "packages/coding-agent/src/core/tools/renderers/edit.bend",
         "packages/coding-agent/src/modes/interactive/components/tool-execution.bend"
       ],
-      "note": "Native owned asynchronous read-only preflight begins after complete canonical edit arguments; successful diffs and failures stay in the call box, settled details reconstruct saved previews without reading files, and identical settlement does not move the diff or request a full redraw. Input revisions discard stale completions, including A\u2192B\u2192A, and disposal joins owned reads. Bun/native1/native4 integration covers the three named edit-tool-no-full-redraw contracts. Alternate raw legacy preview argument shapes and the full renderer contract remain unreviewed.",
+      "note": "Native owned asynchronous read-only preflight begins after complete canonical edit arguments; successful diffs and failures stay in the call box, settled details reconstruct saved previews without reading files, and identical settlement does not move the diff or request a full redraw. Input revisions discard stale completions, including A\u2192B\u2192A, and disposal joins owned reads. Bun/native1/native4 integration covers the three named edit-tool-no-full-redraw contracts. Diff-only stored results and historical path/oldText/newText call records reconstruct saved previews after the source file is deleted, with identical text/colors to modern results; the presentation decoder reads diff and optional firstChangedLine without inventing a missing executable patch. Bun integration checks a fresh historical component with no prior preview. Broader raw preflight argument shapes and the full renderer contract remain unreviewed.",
       "source_sha256": "0c1bafcf74ad2b703bf5ab193e72084a1da80231a77abddefc23c5bb20558731",
       "port_sha256": {
-        "packages/coding-agent/src/core/tools/renderers/edit.bend": "36f676b340befebbf56ee972051f8eada6bcf1dda6b6a9fc7fe18c63794048a4",
+        "packages/coding-agent/src/core/tools/renderers/edit.bend": "e6ad64cb2392f986153a3f5c421ab5cae2337e8531c1f159ca234ebbd4650e09",
         "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "4b9f9d23207fa65c19f80f56caac121763c2b138f97b07f50fb20ecbc64797ad"
       }
     },
@@ -1498,10 +1498,10 @@
     },
     "packages/tui/src/layout.ts": {
       "state": "partial",
-      "note": "Immutable boxes and recursive tree rendering represent source layout without cyclic parent references. Scrollbar cells now match source ANSI/background and wide-character behavior; overflowing pending-Bash terminal frames match text/colors on native one/four. Custom scrollbar style callbacks, image cropping and the full source suite remain incomplete. getLayoutBoxesAt now orders all clipped descendants by layer/depth, with pinned nested/overlapping hit-map comparisons on native one/four. getScrollViewBox/getScrollViewsAt and includeHiddenAuto geometry lookup are missing. Leaf and placed-scroll natural widths use the existing deferred line-width representation, so vertical layout reads height without scanning text for an unused width. Horizontal callers still compute the same width; pinned recursive layout comparisons cover nested horizontal and unbounded document frames on native one/four.",
+      "note": "Immutable boxes and recursive tree rendering represent source layout without cyclic parent references. Scrollbar cells now match source ANSI/background and wide-character behavior; overflowing pending-Bash terminal frames match text/colors on native one/four. Custom scrollbar style callbacks, image cropping and the full source suite remain incomplete. getLayoutBoxesAt now orders all clipped descendants by layer/depth, with pinned nested/overlapping hit-map comparisons on native one/four. getScrollViewBox/getScrollViewsAt and includeHiddenAuto geometry lookup are missing. Leaf and placed-scroll natural widths use the existing deferred line-width representation, so vertical layout reads height without scanning text for an unused width. Horizontal callers still compute the same width; pinned recursive layout comparisons cover nested horizontal and unbounded document frames on native one/four. Leading OSC133 zone parsing returns a scalar prefix length rather than an escaping string tail; exact terminal-row comparisons cover both terminators, repeated prefixes, ANSI, Unicode, and malformed/embedded controls on Bun and native one/four.",
       "source_sha256": "7530a8eaa30f44fef82e8b7020b5068ba89d34884463c6cb526073b20fcdeef0",
       "port_sha256": {
-        "packages/tui/src/layout.bend": "abbae131973c280bf29fd8381c8f1f711f5e20fefb9408c60f6caa5494dca013",
+        "packages/tui/src/layout.bend": "66c63276c55bd1a67653a770632b1205c9f9ead060311c60d4ede2bb87c2b7ff",
         "packages/tui/src/layout-tree.bend": "c4190b3020b94fbc41345d5c7e2db820b11e5d1ad5f94846ed6f865b1b0e6069",
         "packages/tui/src/layout-node.bend": "11945ca2e5945343ef3952a50835df06b0d65e6be8a9e1e6f663809057c94a91"
       },
@@ -1572,10 +1572,10 @@
     },
     "packages/tui/src/tui-main-screen.ts": {
       "state": "partial",
-      "note": "Focused review of render-state snapshots and line-diff decisions: checkedPlan is an immutable planner whose caller commits only after terminal effects succeed. Comparison preserves missing-line-as-empty behavior, append boundaries and Kitty image-range expansion; equal lines reuse committed metadata; cache selection and diff detection share one comparison, and restored snapshots rebuild previous metadata. The pinned main-screen differential compares effects and state; IO process ownership and the wider TUI facade need a complete API review. Large-session latency and full-scrollback content parity remain open in the mounted scenario. Internal State retains derived metadata for its committed lines; captureRenderState remains unchanged and restore/reset clear metadata. Structural line equality selects reusable metadata, with fresh classification for every mismatch. Thirty native one/four effect/state traces match pinned upstream and an uncached execution; broader virtual-terminal and edit-preview contracts pass through Bun.",
+      "note": "Focused review of render-state snapshots and line-diff decisions: checkedPlan is an immutable planner whose caller commits only after terminal effects succeed. Comparison preserves missing-line-as-empty behavior, append boundaries and Kitty image-range expansion; equal lines reuse committed metadata; cache selection and diff detection share one comparison, and restored snapshots rebuild previous metadata. The pinned main-screen differential compares effects and state; IO process ownership and the wider TUI facade need a complete API review. Module traces do not establish mounted latency or complete scrollback parity; use the large-session scenario for those checks. Internal State retains derived metadata for its committed lines; captureRenderState remains unchanged and restore/reset clear metadata. Structural line equality selects reusable metadata, with fresh classification for every mismatch. Thirty native one/four effect/state traces match pinned upstream and an uncached execution; broader virtual-terminal and edit-preview contracts pass through Bun. Image reservations are evaluated only for image rows requiring them, avoiding a remaining-row count for every ordinary output row; pinned effect/state traces cover both branches. Comparison retains the immutable committed previous-row list instead of reconstructing it; the differential fixture also checks every frame against fresh metadata classification.",
       "source_sha256": "d2271afc2ce0d2302014ae0c20ab1b6af6a9765de90254b21cef0ce2c6ca062d",
       "port_sha256": {
-        "packages/tui/src/tui-main-screen.bend": "832791decf6b042d9001c1bf8c0e7f224730827bafd3d0c31601906946108427"
+        "packages/tui/src/tui-main-screen.bend": "debb1e6ff8a29db576feaddc20e4ce28ad4c4030b85c93ddf4811ff274094cf6"
       },
       "ports": [
         "packages/tui/src/tui-main-screen.bend"

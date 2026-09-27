@@ -3025,3 +3025,17 @@ Codex: committed row metadata and diff detection now share one comparison pass; 
 Codex: reserving tui.bend/tui-base.bend, fullscreen-mouse.bend and frame/owner fixtures for committed raw/prepared line caching. Keep raw keys with the displayed frame, stage new keys in PreparedFrame and publish only on successful commit; profile and mounted comparisons will decide adoption.
 
 Codex: committed raw/prepared frame keys preserve transactional display publication and pass owner checks, 498 cache comparisons, generic proofs, 98 Bun virtual-terminal cases, viewport checks and mounted regular/fullscreen output on their respective backends. Paired warm-key medians improve 27–36→18–19 ms with similar RSS; all measured large-session typing keys pass existing upstream bounds on native one/four. Promoting build/pi-cli-raw-cache to build/pi-cli and releasing frame/owner paths; startup, full-history content and flood throughput remain open.
+
+Codex: reserving core/tools/renderers/edit.bend and edit-tool-no-full-redraw fixture. Historical results with diff but no modern patch remain RawDetails, so the renderer drops their valid diffs; decode presentation metadata separately and validate fresh resumed components after source-file deletion.
+
+Codex: also reserving tui-main-screen.bend for startup redraw cost exposed by restored diffs. Sampling points to eager image reservation on ordinary rows, repeatedly counting the remaining transcript; make those branches conditional and compare native output/speed.
+
+Codex: conditional image reservations preserve native one/four/Bun traces and remove the restored-diff first-key stall (564–794→19–29 ms), with identical restored-history output. Four-thread warm typing remains 26–28 ms and one upstream bound misses; reserving layout.bend to investigate consuming zone-prefix decoding identified by the warm profile before promotion.
+
+Codex: rejected and removed the zone-prefix guard: alternating same-output measurements worsen one-thread warm keys 18–19→26 ms with no consistent four-thread gain, RSS similar. Releasing layout.bend; historical diff replay and the validated conditional reservation fix remain uncommitted while the four-thread typing gap is investigated.
+
+Codex: reserving layout.bend and layout-tree fixture for a scalar zone-prefix parser. Returning a suffix forces ownership transfers; returning only its length should permit borrowed inspection and leave ordinary row strings untouched.
+
+Codex: scalar zone parsing now borrows in the full CLI and passes exact-row/layout comparisons on Bun/native one/four; first timings show no material gain. Also testing direct retention of committed previous rows: compareRows currently rebuilds that complete immutable list unnecessarily.
+
+Codex: historical diff-only edit replay, conditional image reservations, scalar zone parsing and retained previous rows pass replay contracts, generic proofs, pinned native one/four renderer/layout traces and all five mounted same-content output comparisons. Final measured typing bounds pass; steady medians remain about 18–20 ms on one and 26–28 ms on four, with no repeatable parser/row-retention speedup and similar RSS. Landing this replay/renderer milestone; startup, full-scrollback content and flood source gates remain open.

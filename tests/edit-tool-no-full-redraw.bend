@@ -117,24 +117,39 @@ def largeCase(+context: Tool.ToolContext,channel: Chan(Unit),+paths: Paths.Envir
     +edits : List<&2,Edits.Edit> = largeEdits(50n <> 150n <> 250n <> 350n <> 450n <> 550n <> 650n <> 750n <> 850n <> 950n <> Nil{})
     owner : Tool.Owner <- Tool.createWithContext(Component.ComponentId{1n},Tool.new("edit","large",args("large.txt",edits),theme,Tool.Generic{}),Some{context})
     largeMounted(Tool.borrow(owner),context,channel,paths,cwd,edits)
-def replayMounted(pair: Tool.Owner & Component.Component & Tool.Handle,result: Tools.ToolDetails) -> IO(Unit):
+def historicalDetails(details: Tools.ToolDetails) -> Tools.ToolDetails:
+  match details:
+    case Tools.EditDetails{Edit.EditToolDetails{diff,_,_}}: Tools.RawDetails{Value.ObjectValue{Record.Record{Record.Property{"diff",Value.Text{diff}} <> Nil{}}}}
+    case details: details
+def historicalMounted(pair: Tool.Owner & Component.Component & Tool.Handle,details: Tools.ToolDetails,expected: String) -> IO(Unit):
+  match pair:
+    case (owner,component,handle):
+      do IO<Unit>:
+        settled(handle,Tools.restoreDetails("edit",historicalDetails(details)))
+        rows : List<&2,String> <- Component.render(component,80n)
+        checked(String.eq(String.join(rows,"\n"),expected),"historical edit metadata lost its saved diff or colors")
+        Tool.dispose(owner)
+def replayMounted(pair: Tool.Owner & Component.Component & Tool.Handle,+result: Tools.ToolDetails,theme: Theme.Theme) -> IO(Unit):
   match pair:
     case (owner,component,handle):
       do IO<Unit>:
         settled(handle,result)
-        lines : List<&2,String> <- Component.render(component,80n)
+        +lines : List<&2,String> <- Component.render(component,80n)
         +display : String = clean(lines)
         checked(String.contains(display,"line 50 changed") && String.contains(display,"line 150 changed"),"saved result needs its deleted source file")
+        +legacyArgs : Value.Value = Value.ObjectValue{Record.Record{Record.Property{"path",Value.Text{"replay.txt"}} <> Record.Property{"oldText",Value.Text{"before"}} <> Record.Property{"newText",Value.Text{"after"}} <> Nil{}}}
+        legacy : Tool.Owner <- Tool.create(Component.ComponentId{12n},Tool.new("edit","historical",legacyArgs,theme,Tool.Generic{}))
+        historicalMounted(Tool.borrow(legacy),result,String.join(lines,"\n"))
         Tool.dispose(owner)
         IO.print("reconstructs the boxed preview from a settled result without argsComplete")
-def replayCase(+context: Tool.ToolContext,+paths: Paths.Environment,+cwd: String,theme: Theme.Theme) -> IO(Unit):
+def replayCase(+context: Tool.ToolContext,+paths: Paths.Environment,+cwd: String,+theme: Theme.Theme) -> IO(Unit):
   do IO<Unit>:
     +edits : List<&2,Edits.Edit> = largeEdits(50n <> 150n <> Nil{})
     preview : Edits.Preview() <- Edits.computeEditsDiff(paths,"replay.txt",edits,cwd)
     result : Tools.ToolDetails <- details(preview)
     removed : Result<&2,&2,FS.Error,Unit> <- FS.remove(cwd ++ "/replay.txt",False{},False{})
     owner : Tool.Owner <- Tool.createWithContext(Component.ComponentId{2n},Tool.new("edit","replay",args("replay.txt",edits),theme,Tool.Generic{}),Some{context})
-    replayMounted(Tool.borrow(owner),result)
+    replayMounted(Tool.borrow(owner),result,theme)
 def errorMounted(pair: Tool.Owner & Component.Component & Tool.Handle,channel: Chan(Unit)) -> IO(Unit):
   match pair:
     case (owner,component,handle):

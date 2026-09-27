@@ -53,3 +53,17 @@ report("horizontal", new HStack([
   new VStack([staticText("below"), staticText("footer")]),
   staticText("right"),
 ], {align: "start"}), 16, 2);
+
+// Compare complete terminal rows: stripping controls would hide prefix mistakes.
+for (const text of [
+  "hello", "\x1b[31mred\x1b[0m",
+  "\x1b]133;A\x07text", "\x1b]133;B\x1b\\text",
+  "\x1b]133;C\x07\x1b]133;A\x1b\\text",
+  "\x1b]133;D\x07text", "\x1b]133;Afoo",
+  "\x1b]133;A\x1bXtext", "\x1b]133;A",
+  "before\x1b]133;A\x07text", "\x1b]133;A\x07",
+  "\x1b]133;A\x07😀 日本 é",
+]) {
+  const frame = renderLayoutFrame(staticText(text), 80, 1, () => {});
+  console.log(`zones:[${frame.lines.map(line => Array.from(line, char => char.codePointAt(0)).join(",")).join("|")}]`);
+}

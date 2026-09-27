@@ -193,7 +193,7 @@ def changed(previous: List<&2,Row>,current: List<&2,Row>,+index: Nat,value: Chan
 def reservedFound(found: Maybe<&2,Row>,+rows: List<&2,Row>,+index: Nat,maxIndex: Nat) -> Nat:
   match found:
     case Some{Row{_,_,_,+requested}}:
-      Bool.pick(Nat,Nat.is_le(requested,1n),1n,1n + reserved(min(requested - 1n,min(maxIndex - index,rowCount(rows) - index - 1n)),List.drop(&2,Row,rows,Succ{index}),0n))
+      Bool.pick(Unit -> Nat,Nat.is_le(requested,1n),_ => 1n,_ => 1n + reserved(min(requested - 1n,min(maxIndex - index,rowCount(rows) - index - 1n)),List.drop(&2,Row,rows,Succ{index}),0n))(Unit{})
     case None{}: 1n
 def reservedRows(+rows: List<&2,Row>,+index: Nat,maxIndex: Nat) -> Nat: reservedFound(at(rows,index),rows,index,maxIndex)
 def rowHasIds(found: Maybe<&2,Row>) -> Bool:
@@ -235,23 +235,23 @@ def changedRange(+previous: List<&2,Row>,+current: List<&2,Row>) -> Changed:
   changedRangeFrom(changed(previous,current,0n,Changed{None{},0n}),previous,current)
 
 # Compare committed metadata with new lines once; classify only changed rows.
-type Comparison is Data: Comparison{previous: List<&2,Row>,current: List<&2,Row>,changes: Changed}
+type Comparison is Data: Comparison{current: List<&2,Row>,changes: Changed}
 def previousRow(text: String,current: Row,same: Bool) -> Row:
   match same:
     case True{}: current
     case False{}: prepareRow(text)
-def compareRows(previous: List<&2,Row>,current: List<&2,String>,+index: Nat,oldReversed: List<&2,Row>,nextReversed: List<&2,Row>,changes: Changed) -> Comparison:
+def compareRows(previous: List<&2,Row>,current: List<&2,String>,+index: Nat,nextReversed: List<&2,Row>,changes: Changed) -> Comparison:
   match previous current:
-    case Nil{} Nil{}: Comparison{List.reverse(&2,Row,oldReversed),List.reverse(&2,Row,nextReversed),changes}
+    case Nil{} Nil{}: Comparison{List.reverse(&2,Row,nextReversed),changes}
     case Row{+old,+image,+ids,+requested} <> rest +text <> more:
       +same = Strings.equal(old,text)
       +row = {Row{old,image,ids,requested}: Row}
       +next = previousRow(text,row,same)
-      compareRows(rest,more,Succ{index},row <> oldReversed,next <> nextReversed,changedValue(changes,index,Bool.not(same)))
-    case Row{+text,image,ids,requested} <> rest Nil{}:
-      compareRows(rest,Nil{},Succ{index},Row{text,image,ids,requested} <> oldReversed,nextReversed,changedValue(changes,index,Bool.not(Strings.equal(text,""))))
+      compareRows(rest,more,Succ{index},next <> nextReversed,changedValue(changes,index,Bool.not(same)))
+    case Row{+text,_,_,_} <> rest Nil{}:
+      compareRows(rest,Nil{},Succ{index},nextReversed,changedValue(changes,index,Bool.not(Strings.equal(text,""))))
     case Nil{} +text <> more:
-      compareRows(Nil{},more,Succ{index},oldReversed,prepareRow(text) <> nextReversed,changedValue(changes,index,Bool.not(Strings.equal(text,""))))
+      compareRows(Nil{},more,Succ{index},prepareRow(text) <> nextReversed,changedValue(changes,index,Bool.not(Strings.equal(text,""))))
 
 def deleteIds(ids: List<&2,U32>,reversed: List<&2,Operation>) -> List<&2,Operation>:
   match ids:
@@ -285,7 +285,7 @@ type LinesOutput is Data: LinesOutput{reversed: List<&2,Operation>,finalRow: Nat
   match rows:
     case Nil{}: LinesOutput{reversed,Bool.pick(Nat,Nat.is_eq(index,0n),0n,index - 1n),False{},None{}}
     case Row{+text,+image,+ids,+requested} <> +rest:
-      +count = Bool.pick(Nat,image,reservedRows(Row{text,image,ids,requested} <> rest,0n,end - index),1n)
+      +count = Bool.pick(Unit -> Nat,image,_ => reservedRows(Row{text,image,ids,requested} <> rest,0n,end - index),_ => 1n)(Unit{})
       +scroll = Bool.not(full) && image && Nat.is_gt(count,1n) && (Nat.is_lt(index,viewportTop) || Nat.is_gt(index - viewportTop + count,height))
       +separator = Bool.pick(List<&2,Operation>,Nat.is_gt(index,first),appendText("\r\n",reversed),reversed)
       +written = writeLine(Row{text,image,ids,requested},Row{text,image,ids,requested} <> rest,0n,end - index,height,full,separator)
@@ -476,9 +476,9 @@ def checkedResult(changes: Changed,rows: List<&2,Row>,width: Nat,result: Plan) -
   match result:
     case Plan{_,_,Some{_}}: Done{result}
     case Plan{_,_,None{}}: checkedChanged(changes,rows,width,result)
-def checkedComparison(comparison: Comparison,state: State,cursor: Maybe<&2,Tui.CursorPosition>,+width: Nat,height: Nat,options: Options) -> Result<&2,&2,RenderError,Plan>:
+def checkedComparison(comparison: Comparison,+old: List<&2,Row>,state: State,cursor: Maybe<&2,Tui.CursorPosition>,+width: Nat,height: Nat,options: Options) -> Result<&2,&2,RenderError,Plan>:
   match comparison:
-    case Comparison{+old,+rows,base}:
+    case Comparison{+rows,base}:
       +changes = changedRangeFrom(base,old,rows)
       checkedResult(changes,rows,width,plan(state,old,rows,changes,cursor,width,height,options))
 def cachedRows(state: State) -> List<&2,Row>:
@@ -492,4 +492,6 @@ def checkedPlan(+state: State,+frame: Frame,+options: Options) -> Result<&2,&2,R
         _ => Done{Plan{state,stream(Nil{}),None{}}},
         _ => Bool.pick(Unit -> Result<&2,&2,RenderError,Plan>,Nat.is_eq(width,0n) || Nat.is_eq(height,0n),
           _ => Fail{InvalidDimensions{}},
-          _ => checkedComparison(compareRows(cachedRows(state),lines,0n,Nil{},Nil{},Changed{None{},0n}),state,cursor,width,height,Options{termux,shrink,overlays,show,stopped}))(Unit{}))(Unit{})
+          _ =>
+            +old = cachedRows(state)
+            checkedComparison(compareRows(old,lines,0n,Nil{},Changed{None{},0n}),old,state,cursor,width,height,Options{termux,shrink,overlays,show,stopped}))(Unit{}))(Unit{})

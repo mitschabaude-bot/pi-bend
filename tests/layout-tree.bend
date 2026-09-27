@@ -33,6 +33,29 @@ def horizontal(value: T.TreeFrame) -> IO(Unit):
   match value:
     case T.TreeFrame{_,L.LayoutFrame{L.LayoutBox{_,_,_,children,_,_,_},_,_,lines}}:
       IO.print("horizontal:" ++ heights(children) ++ ":[" ++ clean(lines) ++ "]")
+def codepoints(text: String) -> String:
+  match text:
+    case SNil{}: ""
+    case SCon{Chr{code},SNil{}}: U32.show(code)
+    case SCon{Chr{code},rest}: U32.show(code) ++ "," ++ codepoints(rest)
+def zoneLines(lines: List<&2,String>) -> String:
+  match lines:
+    case Nil{}: ""
+    case line <> Nil{}: codepoints(line)
+    case line <> rest: codepoints(line) ++ "|" ++ zoneLines(rest)
+def zoneReport(frame: T.TreeFrame) -> IO(Unit):
+  match frame:
+    case T.TreeFrame{_,L.LayoutFrame{_,_,_,lines}}: IO.print("zones:[" ++ zoneLines(lines) ++ "]")
+def zoneCases(values: List<&2,String>,+invalidator: Callback.Callback<Unit,Unit>) -> IO(Unit):
+  match values:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case text <> rest:
+      do IO<Unit>:
+        +renderer : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~List<&2,String>,~Nat,~List<&2,String>,~draw,text <> Nil{})
+        frame : T.TreeFrame <- T.renderTreeFrame(N.Leaf{component(200n,renderer,invalidator)},80n,1n)
+        zoneReport(frame)
+        Callback.dispose(Nat,List<&2,String>,renderer)
+        zoneCases(rest,invalidator)
 def main() -> IO(Unit):
   do IO<Unit>:
     +invalidator : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~ignore,Unit{})
@@ -76,6 +99,15 @@ def main() -> IO(Unit):
     horizontal(leafFrame)
     nestedRow : T.TreeFrame <- T.renderTreeFrame(N.HStack{two(N.child(N.VStack{two(child(below,S.defaultSize()),child(footer,S.defaultSize())),0n},S.defaultSize(),None{}),child(right,S.defaultSize())),0n,S.Start{}},16n,2n)
     horizontal(nestedRow)
+    # Compare exact terminal rows, retaining ANSI, malformed and embedded marks.
+    zoneCases([
+      "hello", "\u{1b}[31mred\u{1b}[0m",
+      "\u{1b}]133;A\u{7}text", "\u{1b}]133;B\u{1b}\\text",
+      "\u{1b}]133;C\u{7}\u{1b}]133;A\u{1b}\\text",
+      "\u{1b}]133;D\u{7}text", "\u{1b}]133;Afoo",
+      "\u{1b}]133;A\u{1b}Xtext", "\u{1b}]133;A",
+      "before\u{1b}]133;A\u{7}text", "\u{1b}]133;A\u{7}",
+      "\u{1b}]133;A\u{7}😀 日本 é"],invalidator)
     Callback.dispose(Nat,List<&2,String>,bodyDraw)
     Callback.dispose(Nat,List<&2,String>,topDraw)
     Callback.dispose(Nat,List<&2,String>,selectorDraw)
