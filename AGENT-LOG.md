@@ -2937,3 +2937,11 @@ Codex: reserving tui-process.bend, tui-alt-screen.bend and fullscreen-mouse.bend
 Codex: also reserving layout.bend hit testing: getLayoutBoxesAt currently visits only direct children, whereas upstream orders all clipped descendants by layer/depth. Mouse dispatch needs that corrected shared primitive.
 
 Codex: fullscreen component SGR dispatch and recursive layer/depth hit testing now pass pinned native1/native4 traces and mounted picker click/wheel/drag frames/settings. Basic turn and fullscreen scrolling match; search matches after startup settles, while its fd-warning submission race reproduces in both old/new binaries. Committing mouse/layout paths and checked coverage; binary build/pi-cli-fullscreen-mouse.
+
+Codex: 8cdb75ca is published via merge bad8ebe0; merged-tree freshness passes. Releasing mouse/layout paths; tested CLI build/pi-cli-fullscreen-mouse. SDK edits remain untouched and local main still needs the publication merges after SDK reconciliation; next UX review is model-picker mouse interaction.
+
+Codex: reserving model-selector.bend and its differential checks, plus the run.bend createHost call to pass the existing word source. Upstream model rows have no mouse handlers; porting search Input editing/mouse/cursor, default ordering/filtering and wrapped Text rendering instead. SDK/provider files stay free.
+
+Codex: model picker component traces pass 49 sequences on native1/native4. Reserving model-thinking-selector.bend and the settings-selector.bend factory call as well: the shared picker now owns native Input state, so its settings caller must pass the existing word-source ref and await input edits.
+
+Codex: model picker shared Input/Text and locale/default ordering pass 49 pinned component sequences and mounted editing/mouse/default saves on native1/native4. All-filter ANSI, custom save, per-model thinking and cache-miss scenarios match; build/pi-cli-model-picker is tested. Refresh lifecycle/scoped metadata and focus/resize remain partial; first cache-miss picker appeared in 137ms versus pi 26ms in this sample.
