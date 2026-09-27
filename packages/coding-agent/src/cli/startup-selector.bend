@@ -9,6 +9,7 @@ import ../../../runtime/src/callback.bend as Callback
 import ../../../runtime/src/deferred.bend as Deferred
 import ../../../runtime/src/posix-path.bend as Path
 import ../../../runtime/src/ref.bend as Ref
+import ../../../runtime/src/serial-resource.bend as Serial
 import ../../../tui/src/component.bend as Component
 import ../../../tui/src/keybindings.bend as Bindings
 import ../../../tui/src/keys.bend as Keys
@@ -129,17 +130,27 @@ def finish(owner: Owner,outcome: Result<&2,&2,Terminal.Error,Process.Active>) ->
         Callback.dispose(Bool,Unit,focus)
         Deferred.dispose(Unit,stop)
         return settled(outcome,final)
-def clearPrompt(outcome: Result<&2,&2,Terminal.Error,Process.Active>) -> IO(Unit):
-  match outcome:
-    case Done{_}: IO.write("\u{1b}[2J\u{1b}[H")
-    case Fail{_}: IO.pure(Unit,Unit{})
+# Render the empty startup UI while the terminal is still owned. Clearing after
+# terminal stop lets its final newline push the question into scrollback.
+def clearedPlan(plan: Result<&2,&2,Screen.RenderError,Screen.Plan>,tui: Tui.TuiBase,screen: Screen.State,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,error: Maybe<&2,Process.Error>,ticks: Nat) -> Process.Active & Screen.Stream:
+  match plan:
+    case Done{Screen.Plan{next,output,_}}:
+      (Process.Active{Process.Session{Tui.cleared(tui),Process.Main{next}},components,mounted,error,False{},ticks},output)
+    case Fail{cause}:
+      (Process.Active{Process.Session{tui,Process.Main{screen}},components,mounted,Some{Process.InvalidFrame{cause}},False{},ticks},Screen.stream(Nil{}))
+def clearBeforeStop(current: Process.Active,width: Nat) -> IO(Process.Active & Screen.Stream):
+  match current:
+    case Process.Active{Process.Session{tui,Process.Main{Screen.State{Screen.TuiMainScreenRenderState{lines,previousWidth,+height,cursor,hardware,maximum,top},ids,count,rows}}},components,mounted,error,_,ticks}:
+      +old = {Screen.State{Screen.TuiMainScreenRenderState{lines,previousWidth,height,cursor,hardware,maximum,top},ids,count,rows}: Screen.State}
+      IO.pure(Process.Active & Screen.Stream,clearedPlan(Screen.checkedPlan(old,Screen.Frame{Nil{},None{},width,Maybe.default(&2,Nat,height,1n)},Screen.defaultOptions()),tui,old,components,mounted,error,ticks))
+    case _: Process.beforeStop(current,width)
 def mounted(owner: Owner,base: Tui.ResultOf(Tui.TuiBase)) -> IO(Result<&2,&2,String,Maybe<&2,String>>):
   match owner base:
     case owner Fail{_}: finish(owner,Fail{Terminal.Closed{}})
     case Owner{state,+stop,+component,render,input,invalidate,focus} Done{tui}:
       do IO<Result<&2,&2,String,Maybe<&2,String>>>:
-        +outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runProcess(Process.active(Process.Session{tui,Process.Main{Screen.initial()}},[component],[Component.ComponentId{1n}]),stop,False{})
-        clearPrompt(outcome)
+        process : Serial.Owner<Process.Active> <- Serial.create(Process.Active,Process.active(Process.Session{tui,Process.Main{Screen.initial()}},[component],[Component.ComponentId{1n}]))
+        +outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runOwner(Serial.borrow(Process.Active,process),stop,False{},None{},None{},clearBeforeStop)
         finish(Owner{state,stop,component,render,input,invalidate,focus},outcome)
 def run(owner: Owner) -> IO(Result<&2,&2,String,Maybe<&2,String>>):
   match owner:

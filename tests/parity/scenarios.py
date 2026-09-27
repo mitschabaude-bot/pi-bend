@@ -497,7 +497,7 @@ SCENARIOS = [
         "name": "session-missing-cwd",
         "args": MODEL + ["--session", "large.jsonl"],
         "files": {"project/large.jsonl": open(str(UPSTREAM / 'packages/coding-agent/test/fixtures/large-session.jsonl')).read()},
-        "steps": [("wait", "Continue", "prompt"), ("settle", 0.3), ("snap", "prompt"), ("key", "Down"), ("key", "Enter"), ("settle", 1.0), ("snap", "cancelled")],
+        "steps": [("wait", "Continue", "prompt"), ("settle", 0.3), ("snap", "prompt"), ("key", "Down"), ("key", "Enter"), ("settle", 1.0), ("snap", "cancelled"), ("snap-history", "history")],
     },
     {
         "name": "compaction-status", "args": MODEL,
