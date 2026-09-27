@@ -2831,3 +2831,5 @@ Codex: bdea117b commits the tested resume fallback wording and terminal-cell che
 Codex: bdea117b is pushed; build/pi-cli-resume-fallback-clean matches both resume-interactive and resume-controls against pinned pi. Catalog-free source snapshot passes all coverage freshness checks; mounted !/!! user_bash validation is next.
 
 Catalog/crash agent: committing models-store + remote-catalog wiring in ModelRuntime creation (CreateModelRuntimeOptions, runtime-owned FileModelsStore read state, pi-bend catalog UA, models.json overlay on published catalogs), core/crash-log (not yet called; see handoff above), agent-runtime proxies + 2 s attempt timeout (core/http-dispatcher.bend). Suites green Bun/native1/4. Releasing all my reservations; main's non-agent transports still use env-only proxies (main.bend is Codex's).
+
+Codex: mounted user_bash checks pass native1/native4 (fail closed, supplied results, custom operations, pass-through and next prompt); the same build passes all replacement/cancellation/resume checks. Updating #9068 coverage with the explicit typed-result adaptation; deferred Bash display during streaming remains partial.

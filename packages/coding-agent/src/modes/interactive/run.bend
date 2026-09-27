@@ -51,6 +51,9 @@ import ../../core/agent-session.bend as Session
 import ../../core/trust-manager.bend as Trust
 import ../../core/agent-session-runtime.bend as SessionHost
 import ../../core/bash-executor.bend as BashExec
+import ../../core/tools/bash.bend as BashTool
+import ../../core/extensions/runner.bend as ExtensionRunner
+import ../../core/extensions/types.bend as ExtensionTypes
 import ../../core/session-cwd.bend as SessionCwd
 import ../../core/session-persistence.bend as Persistence
 import ../../core/export-html/index.bend as Export
@@ -727,17 +730,39 @@ def bashCompleted(input: BashInput,message: MessageUI.Handle,result: Result<&2,&
 def idleBash(state: BashActivity) -> BashActivity & Unit:
   match state:
     case BashActivity{_,closing,completion}: (BashActivity{False{},closing,completion},Unit{})
-def runBashTask(+input: BashInput,+command: String,+excluded: Bool,completion: Deferred.Deferred<Unit>) -> IO(Unit):
+def executeBash(+input: BashInput,+live: Session.AgentSession,+command: String,+excluded: Bool,operations: Maybe<&2,BashTool.BashOperations>) -> IO(Unit):
   match input:
-    case BashInput{session,transcript,_,_,redraw,activity}:
+    case BashInput{_,transcript,_,_,redraw,_}:
       do IO<Unit>:
-        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         +message : MessageUI.Handle <- Transcript.startBash(transcript,command,excluded)
         Interactive.requestRender(redraw)
         +chunk : Callback.Callback<String,Unit> <- Callback.create(~BashChunk,~String,~Unit,~bashChunk,BashChunk{message,redraw})
-        result : Result<&2,&2,String,BashExec.BashResult> <- Session.executeBash(live,command,Some{chunk},Session.BashOptions{Some{excluded},None{},None{}})
+        result : Result<&2,&2,String,BashExec.BashResult> <- Session.executeBash(live,command,Some{chunk},Session.BashOptions{Some{excluded},None{},operations})
         Callback.dispose(String,Unit,chunk)
         bashCompleted(input,message,result)
+def bashDecided(+input: BashInput,+live: Session.AgentSession,+command: String,+excluded: Bool,outcome: Result<&2,&2,String,Maybe<&2,ExtensionTypes.UserBashEventResult>>) -> IO(Unit):
+  match outcome input:
+    case Fail{error} BashInput{_,_,_,failure,_,_}: Interactive.report(failure,Interactive.CommandFailure{error})
+    case Done{Some{ExtensionTypes.UserBashResult{+result}}} BashInput{_,transcript,_,_,_,_}:
+      do IO<Unit>:
+        message : MessageUI.Handle <- Transcript.startBash(transcript,command,excluded)
+        Session.recordBashResult(live,command,result,Some{excluded})
+        bashDone(input,message,result)
+    case Done{Some{ExtensionTypes.UserBashOperations{operations}}} _: executeBash(input,live,command,excluded,Some{operations})
+    case Done{None{}} _: executeBash(input,live,command,excluded,None{})
+def userBashOf(runner: Maybe<&2,ExtensionRunner.ExtensionRunner>,event: ExtensionTypes.UserBashEvent) -> IO(Result<&2,&2,String,Maybe<&2,ExtensionTypes.UserBashEventResult>>):
+  match runner:
+    case None{}: IO.pure(Result<&2,&2,String,Maybe<&2,ExtensionTypes.UserBashEventResult>>,Done{None{}})
+    case Some{found}: ExtensionRunner.emitUserBash(found,event)
+def runBashTask(+input: BashInput,+command: String,+excluded: Bool,completion: Deferred.Deferred<Unit>) -> IO(Unit):
+  match input:
+    case BashInput{session,_,_,_,_,activity}:
+      do IO<Unit>:
+        +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        stored : Session.Session() <- Session.sessionOf(live)
+        runner : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(live)
+        outcome : Result<&2,&2,String,Maybe<&2,ExtensionTypes.UserBashEventResult>> <- userBashOf(runner,ExtensionTypes.UserBashEvent{command,excluded,Tree.getCwd(Unit,Tools.ToolDetails,Schema.Value,Session.stateOf(stored))})
+        bashDecided(input,live,command,excluded,outcome)
         Ref.modify(BashActivity,Unit,activity,idleBash)
         settled : Bool <- Deferred.resolve(Unit,completion,Unit{})
         return Unit{}

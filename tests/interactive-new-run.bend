@@ -1,5 +1,15 @@
 import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
 import Base
+import ../packages/coding-agent/src/core/agent-runtime.bend as AgentRuntime
+import ../packages/coding-agent/src/core/extensions/types.bend as Ext
+import ../packages/coding-agent/src/core/extensions/loader.bend as ExtensionLoader
+import ../packages/coding-agent/src/core/tools/bash.bend as Bash
+import ../packages/coding-agent/src/core/bash-executor.bend as BashExec
+import ../packages/runtime/src/filesystem.bend as Files
+import ../packages/runtime/src/json.bend as Json
+import ../packages/runtime/src/record.bend as Record
+import ../packages/runtime/src/utf8.bend as Utf8
+import ./model-runtime-fixture.bend as ModelFixture
 import ../packages/coding-agent/src/core/extensions/runner.bend as Runner
 import ./agent-session-runtime.bend as Fixture
 import ./agent-session.bend as Faux
@@ -82,7 +92,49 @@ def quietFactory(agentDir: String,request: Host.Request) -> IO(Result<&1,&1,Stri
       do IO<Result<&1,&1,String,Host.Created<Services()>>>:
         fixture : Faux.Fixture <- Faux.fixture(stored,storedCwd,agentDir,"answer" <> "again" <> Nil{},Nil{})
         quietCreated(fixture)
-def runWith(+cancel: Bool,quiet: Bool,args: List<String>) -> IO(Unit):
+type BashSetup is Data:
+  BashSetup{agentDir: String,runners: Ref.Ref<List<&2,Runner.ExtensionRunner>>,operations: Bash.BashOperations}
+def bashOutcome(operations: Bash.BashOperations,command: String) -> Result<&2,&2,String,Maybe<&2,Ext.UserBashEventResult>>:
+  match command:
+    case "touch rejected": Fail{"Routing failed"}
+    case "touch overridden": Done{Some{Ext.UserBashResult{BashExec.BashResult{"EXTENSION_RESULT",Some{0},False{},False{},None{}}}}}
+    case "touch operations": Done{Some{Ext.UserBashOperations{operations}}}
+    case _: Done{None{}}
+def interceptedBash(operations: Bash.BashOperations,call: Ext.HandlerCall<Ext.UserBashEvent>) -> IO(Result<&2,&2,String,Maybe<&2,Ext.UserBashEventResult>>):
+  match call:
+    case Ext.HandlerCall{Ext.UserBashEvent{+command,+excluded,+cwd},_}:
+      do IO<Result<&2,&2,String,Maybe<&2,Ext.UserBashEventResult>>>:
+        saved : Result<&2,&2,Files.Error,Unit> <- Files.appendFile(Files.child(cwd,"bash-events.jsonl"),"{\"command\":" ++ Json.quote(command) ++ ",\"excludeFromContext\":" ++ Bool.pick(String,excluded,"true","false") ++ ",\"cwd\":" ++ Json.quote(cwd) ++ "}\n")
+        return bashOutcome(operations,command)
+def bashExtension(operations: Bash.BashOperations,api: Ext.ExtensionAPI) -> IO(Result<&2,&2,String,Unit>):
+  do IO<Result<&2,&2,String,Unit>>:
+    handler : Ext.ExtensionHandler(Ext.UserBashEvent,Ext.UserBashEventResult) <- Callback.create(~Bash.BashOperations,~Ext.HandlerCall<Ext.UserBashEvent>,~Result<&2,&2,String,Maybe<&2,Ext.UserBashEventResult>>,~interceptedBash,operations)
+    registered : Result<&2,&2,String,ExtensionLoader.Unsubscribe> <- ExtensionLoader.on(api,Ext.OnUserBash{handler})
+    return Result.map(&2,&2,String,ExtensionLoader.Unsubscribe,Unit,_ => Unit{},registered)
+def bashFactory(setup: BashSetup,request: Host.Request) -> IO(Result<&1,&1,String,Host.Created<Services()>>):
+  match setup request:
+    case BashSetup{agentDir,runners,operations} Host.Request{+cwd,stored,_}:
+      do IO<Result<&1,&1,String,Host.Created<Services()>>>:
+        +runtime : Ext.ExtensionRuntime() <- ExtensionLoader.createExtensionRuntime()
+        errors : List<&2,Ext.LoadError> <- ExtensionLoader.loadExtensionFactories(runtime,[Ext.InlineExtension{"user-bash",api => bashExtension(operations,api),False{}}])
+        models : Models.ModelRuntime <- ModelFixture.create(Faux.fauxSources())
+        +runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
+        Ref.modify(List<&2,Runner.ExtensionRunner>,Unit,runners,loaded => (runner <> loaded,Unit{}))
+        fixture : Faux.Fixture <- Faux.fixtureWith(stored,cwd,agentDir,"answer" <> "again" <> Nil{},Nil{},AgentRuntime.Loadout{Record.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}})
+        quietCreated(fixture)
+def customBash(_: Unit,input: Bash.BashExecutionInput) -> IO(Result<&2,&2,Bash.OperationError,Maybe<&2,U32>>):
+  match input:
+    case Bash.BashExecutionInput{_,_,chunk,_,_,_}:
+      do IO<Result<&2,&2,Bash.OperationError,Maybe<&2,U32>>>:
+        emitted : Result<&2,&2,String,Unit> <- Callback.call(List<&2,U32>,Result<&2,&2,String,Unit>,chunk,Utf8.encode("CUSTOM_OPERATIONS"))
+        return Done{Some{0}}
+def factoryFor(cancel: Bool,mode: String,setup: BashSetup,cancelFork: Ref.Ref<Bool>) -> IO(Host.Factory(Services())):
+  match cancel mode setup:
+    case True{} _ BashSetup{agentDir,runners,_}: Callback.create(~Fixture.EventsEnv,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~Fixture.eventsFactoryCall,Fixture.EventsEnv{agentDir,True{},cancelFork,runners})
+    case False{} "bash" setup: Callback.create(~BashSetup,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~bashFactory,setup)
+    case False{} "quiet" BashSetup{agentDir,_,_}: Callback.create(~String,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~quietFactory,agentDir)
+    case False{} _ BashSetup{agentDir,_,_}: Callback.create(~String,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~Fixture.factory,agentDir)
+def runWith(+cancel: Bool,+mode: String,args: List<String>) -> IO(Unit):
   match args:
     case assetsRoot <> +cwd <> +agentDir <> Nil{}:
       do IO<Unit>:
@@ -91,11 +143,8 @@ def runWith(+cancel: Bool,quiet: Bool,args: List<String>) -> IO(Unit):
         stored : Session.Session() <- requireSession(created)
         +cancelFork : Ref.Ref<Bool> <- Ref.new(Bool,cancel)
         +runners : Ref.Ref<List<&2,Runner.ExtensionRunner>> <- Ref.new(List<&2,Runner.ExtensionRunner>,Nil{})
-        +factory : Host.Factory(Services()) <- Bool.pick(Unit -> IO(Host.Factory(Services())),cancel,
-          _ => Callback.create(~Fixture.EventsEnv,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~Fixture.eventsFactoryCall,Fixture.EventsEnv{agentDir,True{},cancelFork,runners}),
-          _ => Bool.pick(Unit -> IO(Host.Factory(Services())),quiet,
-            _ => Callback.create(~String,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~quietFactory,agentDir),
-            _ => Callback.create(~String,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~Fixture.factory,agentDir))(Unit{}))(Unit{})
+        +operations : Callback.Callback<Bash.BashExecutionInput,Result<&2,&2,Bash.OperationError,Maybe<&2,U32>>> <- Callback.create(~Unit,~Bash.BashExecutionInput,~Result<&2,&2,Bash.OperationError,Maybe<&2,U32>>,~customBash,Unit{})
+        +factory : Host.Factory(Services()) <- factoryFor(cancel,mode,BashSetup{agentDir,runners,Bash.BashOperations{operations}},cancelFork)
         +release : Callback.Callback<Services(),Unit> <- Callback.create(~Unit,~Services(),~Unit,~Fixture.release,Unit{})
         hosted : Result<&2,&2,String,Runtime()> <- Host.create(Services(),factory,release,agentDir,cwd,stored)
         +runtime : Runtime() <- requireHost(hosted)
@@ -129,14 +178,16 @@ def runWith(+cancel: Bool,quiet: Bool,args: List<String>) -> IO(Unit):
         Callback.dispose(Services(),Unit,release)
         loaded : List<&2,Runner.ExtensionRunner> <- Ref.dispose(List<&2,Runner.ExtensionRunner>,runners)
         Fixture.disposeRunners(loaded)
+        Callback.dispose(Bash.BashExecutionInput,Result<&2,&2,Bash.OperationError,Maybe<&2,U32>>,operations)
         retiredCancel : Bool <- Ref.dispose(Bool,cancelFork)
         checked(result)
     case _: IO.die(Unit,1,"expected assetsRoot cwd agentDir")
 def run(args: List<String>) -> IO(Unit):
   match args:
-    case "cancel" <> rest: runWith(True{},False{},rest)
-    case "quiet" <> rest: runWith(False{},True{},rest)
-    case rest: runWith(False{},False{},rest)
+    case "cancel" <> rest: runWith(True{},"",rest)
+    case "quiet" <> rest: runWith(False{},"quiet",rest)
+    case "bash" <> rest: runWith(False{},"bash",rest)
+    case rest: runWith(False{},"",rest)
 def main() -> IO(Unit):
   do IO<Unit>:
     args : List<String> <- IO.args()

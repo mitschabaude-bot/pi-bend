@@ -4738,13 +4738,15 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9068-user-bash-fail-closed.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/rpc-mode.bend",
-        "tests/rpc_mode_check.py"
+        "tests/rpc_mode_check.py",
+        "tests/interactive-new-run.bend",
+        "tests/interactive_user_bash_check.py"
       ],
       "sha256": "ac50f627231a28486fb34ce8880dd994a56f6f8fcfef59ffef24fc0d07f9b07d",
-      "notes": "RPC cases in tests/rpc-mode.bend: a throwing user_bash handler fails the bash request with its message and an extension_error record, and nothing runs (a marker file stays absent; upstream spies on executeBash); a handler returning undefined lets the command run (native lanes; the Bun lane has no process primitive and reports SKIP). The \"empty result\" case has no native counterpart: handler results are operations or a result by construction. Pending: the interactive ! and !! cases (interactive mode submits bash without user_bash yet).",
+      "notes": "RPC cases verify a throwing user_bash handler fails the request with its message and an extension_error record without execution, while returning nothing permits local execution (native lanes; Bun has no process primitive and reports SKIP). Mounted native1/native4 interactive !/!! cases verify command, exclusion flag and cwd, visible handler errors, no executed command and no recorded Bash result after failure. Native adaptation: malformed empty handler results cannot be constructed; the typed operations/result sum rejects them statically, and runtime fail-closed routing is exercised through a typed handler failure. Additional mounted cases cover supplied results recorded once, custom operations, pass-through and the following model prompt.",
       "implementation": "packages/coding-agent/src/modes/rpc.bend"
     },
     {
