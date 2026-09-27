@@ -586,7 +586,7 @@
         "tests/live_replay_reference.ts"
       ],
       "sha256": "603afe6d43a63196ead002d6508707ecf7e10e5e2cb6d6c86df1c30bc257bdf5",
-      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 31 of 41 pass; 5 KNOWN (abort during a pending body read: upstream reports the fetch AbortError, the port 'Request was aborted' on Anthropic-Messages and Codex paths; awaiting decision); pending: Bedrock, Mistral (5). Upstream's testAbortSignal returns before its post-loop assertions; the aborted streams are still compared."
+      "notes": "Replayed over loopback by tests/live_replay_check.py (native1/native4; Bun except native-only rows): each upstream it on the Anthropic/Gemini/Chat Completions/Responses/Azure/Codex APIs runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. Adaptations are listed in the check's docstring. 31 of 41 pass; 5 KNOWN (abort during a pending body read: upstream reports the fetch AbortError, the port 'Request was aborted' on Anthropic-Messages and Codex paths; kept by decision of 2026-09-27: the message is a JS runtime detail); pending: Bedrock, Mistral (5). Upstream's testAbortSignal returns before its post-loop assertions; the aborted streams are still compared."
     },
     {
       "source": "packages/ai/test/anthropic-adaptive-thinking-models.test.ts",
@@ -685,9 +685,14 @@
     },
     {
       "source": "packages/ai/test/anthropic-oauth.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "8671f7f284a6927770dc5bc71f4783b8e753102932c8d91b8747b633ff6aaad5"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/oauth-flows.bend",
+        "tests/oauth_flows_check.py",
+        "tests/oauth_flows_reference.ts"
+      ],
+      "sha256": "8671f7f284a6927770dc5bc71f4783b8e753102932c8d91b8747b633ff6aaad5",
+      "notes": "tests/oauth_flows_check.py runs each upstream it through packages/ai/test/oauth-flows.bend and pinned pi-mono (tests/oauth_flows_reference.ts) with a fetch that rewrites provider URLs to a loopback server answering as the test's stub; the upstream assertions must hold for both and requests, events, prompts and results must agree (Bun, native1, native4). All 3 tests; the manual prompt answers with the auth URL's redirect_uri and state, and the driver observes the manual prompt's signal being aborted after login."
     },
     {
       "source": "packages/ai/test/anthropic-opus-4-8-smoke.test.ts",
@@ -740,16 +745,23 @@
     },
     {
       "source": "packages/ai/test/anthropic-tool-name-normalization.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts",
+        "tests/anthropic_messages_check.py"
+      ],
       "sha256": "f603925db12079ff9849317214de2d51ec947df9de54e504ab910f8ac209b7df",
-      "notes": "E2E: needs Anthropic OAuth credentials. The Claude Code name mapping it exercises (toClaudeCodeName outbound, fromClaudeCodeName inbound) is compared with upstream in tests/anthropic_messages_check.py (oauth-tools payload and response cases)."
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. All 4 tests with an Anthropic OAuth token (Claude Code tool-name mapping); tests/anthropic_messages_check.py also compares the mapping's payload and response cases."
     },
     {
       "source": "packages/ai/test/assistant-message-frame.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "e3e456ac790012b47fada4f63de70f82de7ea1c89e3b85338701d327c8e381e5"
+      "sha256": "e3e456ac790012b47fada4f63de70f82de7ea1c89e3b85338701d327c8e381e5",
+      "notes": "utils/assistant-message-frame.ts (AssistantMessageFrameEncoder, reduceAssistantMessageFrames) is exported by pi-ai's index but used in pi-mono only by the out-of-scope experimental harness; not ported yet. It is public API, so the port is next rather than an exclusion."
     },
     {
       "source": "packages/ai/test/azure-openai-base-url.test.ts",
@@ -783,9 +795,15 @@
     },
     {
       "source": "packages/ai/test/baseten-models.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "dc84a41dc48124b273295df5ee08cabd39827ad111ea67129f91b5b7b3cf83aa"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "dc84a41dc48124b273295df5ee08cabd39827ad111ea67129f91b5b7b3cf83aa",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. All 5 tests (catalog facts and requests)."
     },
     {
       "source": "packages/ai/test/bedrock-cache-write-1h-cost.test.ts",
@@ -942,7 +960,8 @@
       "source": "packages/ai/test/compat-env.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "d21e59ead5d900fabab11e8625633e7f827df6be7ef5f3ef6d720cb4af5ab1bf"
+      "sha256": "d21e59ead5d900fabab11e8625633e7f827df6be7ef5f3ef6d720cb4af5ab1bf",
+      "notes": "Tests the legacy compat entry (src/compat.ts registerApiProvider/complete dispatching unknown providers through the legacy API registry), which the port has not implemented; pending with the compat module."
     },
     {
       "source": "packages/ai/test/constrained-sampling.test.ts",
@@ -1059,19 +1078,27 @@
       "source": "packages/ai/test/fireworks-model-generation.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "6df658ba6d2a30d9d6f1b9638613ebd1b8be591241d15023ed1bf2b7beafdfda"
+      "sha256": "6df658ba6d2a30d9d6f1b9638613ebd1b8be591241d15023ed1bf2b7beafdfda",
+      "notes": "Test 1 checks upstream's generator script (models-dev reasoning options); test 2 checks that a generated Fireworks Messages model sends native effort, which the Fireworks rows of tests/live_replay_check.py cover for the cataloged models. The generator half is maintainer tooling with no counterpart; proposed for exclusion (needs the user's decision)."
     },
     {
       "source": "packages/ai/test/fireworks-models.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a53f779f80d2a2f7c4bb77ed9b2e309d1cdb71d27da459dc3c34317a68a0a60d"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "a53f779f80d2a2f7c4bb77ed9b2e309d1cdb71d27da459dc3c34317a68a0a60d",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. All 17 tests (27 rows, including Anthropic-compatible session affinity with custom models)."
     },
     {
       "source": "packages/ai/test/generate-models-strict.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "45925a49cffec90f03fbcbd4b650a959eb61881a358d8aeb61f53209e27e463c"
+      "sha256": "45925a49cffec90f03fbcbd4b650a959eb61881a358d8aeb61f53209e27e463c",
+      "notes": "Spawns upstream's scripts/generate-models.ts to check it fails before mutating generated data; maintainer tooling with no counterpart in the port (catalogs come from pinned upstream data). Proposed for exclusion (needs the user's decision)."
     },
     {
       "source": "packages/ai/test/github-copilot-anthropic.test.ts",
@@ -1087,9 +1114,14 @@
     },
     {
       "source": "packages/ai/test/github-copilot-oauth.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "b71fbfb21a4b382c058865cf86598a28b11fd30d1a95b0b6c8ff11c0ccd60046"
+      "status": "partial",
+      "ports": [
+        "packages/ai/test/oauth-flows.bend",
+        "tests/oauth_flows_check.py",
+        "tests/oauth_flows_reference.ts"
+      ],
+      "sha256": "b71fbfb21a4b382c058865cf86598a28b11fd30d1a95b0b6c8ff11c0ccd60046",
+      "notes": "tests/oauth_flows_check.py runs each upstream it through packages/ai/test/oauth-flows.bend and pinned pi-mono (tests/oauth_flows_reference.ts) with a fetch that rewrites provider URLs to a loopback server answering as the test's stub; the upstream assertions must hold for both and requests, events, prompts and results must agree (Bun, native1, native4). 10 of 13 tests fully. For 'filters models to the authenticated account picker catalog', 'falls back to explicitly enabled policy models when the picker catalog is empty' and 'stops policy updates and persists authentication when the retry delay exceeds the login budget' only the credential half runs (availableModelIds; the policy updates and the returned credential): Models.Provider does not carry filterModels yet, and packages/ai has no Models collection with getAvailable/login/credential persistence."
     },
     {
       "source": "packages/ai/test/google-raw-stop-reason.test.ts",
@@ -1174,10 +1206,15 @@
     },
     {
       "source": "packages/ai/test/google-thinking-disable.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
       "sha256": "dc899136ae7d5c367b846aa68fc693cbe20fe12a85dfd8b41ff97fb8e6f22b10",
-      "notes": "Every case is a live E2E request against Gemini (skipped without GEMINI_API_KEY); the request shapes it covers are compared in the Google differential (tests/google_generative_ai_check.py)."
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. The 7 Gemini API cases pass; the 2 Google Vertex cases are pending (Vertex is not served by the replay). tests/google_generative_ai_check.py also compares the request shapes."
     },
     {
       "source": "packages/ai/test/google-thinking-level-map.test.ts",
@@ -1228,9 +1265,15 @@
     },
     {
       "source": "packages/ai/test/image-tool-result.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "ebfcb7386688d70a0a051c73b5aa3001f75d8560306f733917aeab9245d2658d"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "ebfcb7386688d70a0a051c73b5aa3001f75d8560306f733917aeab9245d2658d",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. 38 of 46 rows pass. Pending: Mistral pixtral-12b (2) and Amazon Bedrock (2), whose APIs the replay does not serve, and 4 Xiaomi MiMo rows skipped upstream (it.skip)."
     },
     {
       "source": "packages/ai/test/images-models.test.ts",
@@ -1244,23 +1287,37 @@
     },
     {
       "source": "packages/ai/test/images.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/openrouter-images.bend",
+        "packages/ai/test/openrouter-images-oracle.ts",
+        "tests/openrouter_images_check.py"
+      ],
       "sha256": "d44702aa4d1b5186a833e7f4c844ee996c08d303a8d8dc79ed0d513960f27ff8",
-      "notes": "Live E2E image generation against OpenRouter (needs OPENROUTER_API_KEY); no external service is contacted."
+      "notes": "The 3 OpenRouter E2E cases (basic, text plus image, image input) run in tests/openrouter_images_check.py against a loopback server that answers as OpenRouter does; upstream assertions (including a positive timestamp) hold for the port and pinned images.ts with the OpenAI SDK, and payloads, results and requests agree (Bun, native1, native4)."
     },
     {
       "source": "packages/ai/test/interleaved-thinking.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
       "sha256": "4144ecf2389eaa13fd967c84112fdb4d61580cc8b2101ce6999baed231e84292",
-      "notes": "All four cases are live E2E requests (Bedrock and Anthropic credentials); no offline counterpart."
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. The 2 Anthropic cases pass; the 2 Amazon Bedrock cases are pending (Bedrock is not served by the replay)."
     },
     {
       "source": "packages/ai/test/kimi-coding-oauth.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a0cce566b219ce880c0559f1cede8aec295c694166d595595d2075c4300872f0"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/oauth-flows.bend",
+        "tests/oauth_flows_check.py",
+        "tests/oauth_flows_reference.ts"
+      ],
+      "sha256": "a0cce566b219ce880c0559f1cede8aec295c694166d595595d2075c4300872f0",
+      "notes": "tests/oauth_flows_check.py runs each upstream it through packages/ai/test/oauth-flows.bend and pinned pi-mono (tests/oauth_flows_reference.ts) with a fetch that rewrites provider URLs to a loopback server answering as the test's stub; the upstream assertions must hold for both and requests, events, prompts and results must agree (Bun, native1, native4). All 6 tests, including the KIMI_CODE_OAUTH_HOST override and the 429 retry backoff on the real clock."
     },
     {
       "source": "packages/ai/test/lax-message-content.test.ts",
@@ -1272,9 +1329,10 @@
     },
     {
       "source": "packages/ai/test/lazy-module-load.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "8b68a837881194e4a942ac3c72aa90366d0df98daebc925af6cbe11e46585ee9"
+      "sha256": "8b68a837881194e4a942ac3c72aa90366d0df98daebc925af6cbe11e46585ee9",
+      "notes": "Not applicable to a native binary: the suite spawns Node and checks which provider SDK modules a dynamic import graph loads (root barrel, builtin providers, compat entry, lazy API wrappers). The port links every provider statically and has no SDK modules or dynamic imports; provider construction performs no IO (OAuth handlers are created without fetching). Decided by the AI-suites agent on the coordinator's delegation, 2026-09-27."
     },
     {
       "source": "packages/ai/test/max-thinking.test.ts",
@@ -1296,9 +1354,14 @@
     },
     {
       "source": "packages/ai/test/meta-oauth.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "d78eea9109de93748c6bede3c4a9fec1f0e494013328ee7d54244f5269ea520e"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/oauth-flows.bend",
+        "tests/oauth_flows_check.py",
+        "tests/oauth_flows_reference.ts"
+      ],
+      "sha256": "d78eea9109de93748c6bede3c4a9fec1f0e494013328ee7d54244f5269ea520e",
+      "notes": "tests/oauth_flows_check.py runs each upstream it through packages/ai/test/oauth-flows.bend and pinned pi-mono (tests/oauth_flows_reference.ts) with a fetch that rewrites provider URLs to a loopback server answering as the test's stub; the upstream assertions must hold for both and requests, events, prompts and results must agree (Bun, native1, native4). All 4 tests."
     },
     {
       "source": "packages/ai/test/mistral-http-transport.test.ts",
@@ -1357,7 +1420,8 @@
       "source": "packages/ai/test/model-data-validation.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "d2cfd099bf176b62804f4424d122c616117340afa3baf8bd556cba5288b17bcd"
+      "sha256": "d2cfd099bf176b62804f4424d122c616117340afa3baf8bd556cba5288b17bcd",
+      "notes": "Tests upstream's model-data maintenance scripts (scripts/model-data-validation.ts: generated allowlists, API-grouped data directories, file hashes, schema stamps). The port generates its catalogs from pinned upstream data (scripts/generate-model-catalog.py) and has no counterpart; proposed for exclusion as maintainer tooling (needs the user's decision)."
     },
     {
       "source": "packages/ai/test/models-runtime.test.ts",
@@ -1371,21 +1435,37 @@
     },
     {
       "source": "packages/ai/test/node-http-proxy.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "cb03e1e1d843492d5efb0417ed281ad2fa10c44560024b61cdd4c96572617742"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/node-http-proxy.bend",
+        "tests/node_http_proxy_check.py",
+        "tests/node_http_proxy_reference.ts"
+      ],
+      "sha256": "cb03e1e1d843492d5efb0417ed281ad2fa10c44560024b61cdd4c96572617742",
+      "notes": "All 5 tests: tests/node_http_proxy_check.py runs each resolution in a process with the test's proxy environment, asserts the upstream expectation and compares with pinned resolveHttpProxyUrlForTarget, plus 18 differential resolutions (ALL_PROXY, scheme-less proxies, NO_PROXY entry edges, invalid and non-HTTP proxy URLs); Bun, native1, native4. Routing requests through the resolved proxy (Bedrock, Codex WebSocket, the coding agent's global dispatcher) is not wired in the native runtime yet."
     },
     {
       "source": "packages/ai/test/oauth-auth.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "8e9cc6baa15e44dcebca1318ad0cec161364a3e04ad3e10bc3c96cd8c8504e84"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/oauth-flows.bend",
+        "tests/oauth_flows_check.py",
+        "tests/oauth_flows_reference.ts",
+        "packages/ai/test/oauth-auth.bend",
+        "tests/ai-misc-suites.bend"
+      ],
+      "sha256": "8e9cc6baa15e44dcebca1318ad0cec161364a3e04ad3e10bc3c96cd8c8504e84",
+      "notes": "tests/oauth_flows_check.py runs each upstream it through packages/ai/test/oauth-flows.bend and pinned pi-mono (tests/oauth_flows_reference.ts) with a fetch that rewrites provider URLs to a loopback server answering as the test's stub; the upstream assertions must hold for both and requests, events, prompts and results must agree (Bun, native1, native4). The 10 'OAuthAuth adapters' tests that exercise flows (subscription flags, toAuth derivations, the OpenRouter permanent credential, Anthropic and Copilot refresh). The two 'Models.getAuth' tests run in packages/ai/test/oauth-auth.bend over Resolve.resolveProviderAuth with a store holding the credential (handlers created directly; there is no lazy import in a native binary). 'keeps the extension OAuth barrel free of built-in flow implementations' checks src/oauth.ts, a type-only entry point for JavaScript extensions; JS/TS extension compatibility is out of scope (AGENTS.md) and the port has no such module, so it has no counterpart."
     },
     {
       "source": "packages/ai/test/oauth-device-code.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "0402a6238bf9ab3be4ce8879f9068e2383475cb2a6a9fad9da33f3acbd8e0f1e"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/oauth-device-code.bend",
+        "tests/ai-misc-suites.bend"
+      ],
+      "sha256": "0402a6238bf9ab3be4ce8879f9068e2383475cb2a6a9fad9da33f3acbd8e0f1e",
+      "notes": "All 5 tests in tests/ai-misc-suites.bend (Bun, native1, native4). Adaptation: upstream drives the poll loop with fake timers; here the clock is real and each poll must fall in [expected, expected + 750 ms) from the start."
     },
     {
       "source": "packages/ai/test/openai-codex-cache-affinity-e2e.test.ts",
@@ -1568,15 +1648,19 @@
     },
     {
       "source": "packages/ai/test/openai-responses-compat.test.ts",
-      "status": "pending",
+      "status": "ported",
       "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts",
         "tests/responses_policy_check.py",
         "tests/provider_env_check.py",
         "tests/responses_params_check.py",
         "tests/responses_request_check.py"
       ],
       "sha256": "aeeb537956357d192f62848ce7a7fe71584b249ab34716d282b654fdbfd829f0",
-      "notes": "Component evidence: 9,219 compatibility/cache comparisons, 168 environment comparisons, 914 field-assembly comparisons against buildParams with substituted converted inputs, and 192 full request-builder comparisons with actual transcript/message/tool converters pass on one/four native threads. The original suite remains pending because it invokes the complete provider with captured HTTP requests; explicit-header merging, public options/wrapper, hooks and transport integration remain unfinished."
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. All 16 tests (37 rows: model overrides, compat merges, headers, cache retention, session ids, service tiers, tool choice, reasoning options) through the complete provider; component differentials (compatibility/cache, environment, params, request builder) remain in the listed checks."
     },
     {
       "source": "packages/ai/test/openai-responses-empty-tool-result.test.ts",
@@ -1642,9 +1726,15 @@
     },
     {
       "source": "packages/ai/test/openai-responses-tool-result-images.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "62894b12f0fdaf060f93528b196ce01bccd25cb8313a02730a40ddd5912544b4"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "62894b12f0fdaf060f93528b196ce01bccd25cb8313a02730a40ddd5912544b4",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. All 4 tests."
     },
     {
       "source": "packages/ai/test/opencode-provider-headers.test.ts",
@@ -1684,9 +1774,16 @@
     },
     {
       "source": "packages/ai/test/openrouter-oauth.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "b68283ffe9b5f5bd2b328145b58ca0c02b89e1c8c6beb1b5e66465a2657724ee"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/oauth-flows.bend",
+        "tests/oauth_flows_check.py",
+        "tests/oauth_flows_reference.ts",
+        "packages/ai/test/openrouter-oauth.bend",
+        "tests/ai-misc-suites.bend"
+      ],
+      "sha256": "b68283ffe9b5f5bd2b328145b58ca0c02b89e1c8c6beb1b5e66465a2657724ee",
+      "notes": "tests/oauth_flows_check.py runs each upstream it through packages/ai/test/oauth-flows.bend and pinned pi-mono (tests/oauth_flows_reference.ts) with a fetch that rewrites provider URLs to a loopback server answering as the test's stub; the upstream assertions must hold for both and requests, events, prompts and results must agree (Bun, native1, native4). 11 login/callback tests: the driver's browser GETs the loopback callback on the auth_url event (a second GET after 0.5 s while the server holds the exchange 1.5 s for the single-exchange test), probes the closed callback after cancellation, and upstream's never-settling prompt settles only through its signal. The two provider tests (OAuth exposed by both OpenRouter providers; one stored key for text and image providers) run in packages/ai/test/openrouter-oauth.bend, with a store holding the credential in place of InMemoryCredentialStore and Resolve.resolveProviderAuth for getAuth. Callback ports: BEND-062."
     },
     {
       "source": "packages/ai/test/openrouter-reasoning-options.test.ts",
@@ -1734,9 +1831,14 @@
     },
     {
       "source": "packages/ai/test/provider-error-body-passthrough.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "477e3a30169999bff87bd1f82e66befaca10ab693f6132e9ba5527612aa42688"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/openrouter-images.bend",
+        "packages/ai/test/openrouter-images-oracle.ts",
+        "tests/openrouter_images_check.py"
+      ],
+      "sha256": "477e3a30169999bff87bd1f82e66befaca10ab693f6132e9ba5527612aa42688",
+      "notes": "The one test runs in tests/openrouter_images_check.py: a 403 with a text body through generateImages keeps the body in errorMessage; compared with upstream images.ts driving the pinned OpenAI SDK against the same loopback server (Bun, native1, native4)."
     },
     {
       "source": "packages/ai/test/provider-error-body-regression.test.ts",
@@ -1787,9 +1889,15 @@
     },
     {
       "source": "packages/ai/test/qwen-token-plan-models.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "4289b2f4c3f6c0705fbf650dd0c0687ae157c85e56c05749029ee1574c9b83c0"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "4289b2f4c3f6c0705fbf650dd0c0687ae157c85e56c05749029ee1574c9b83c0",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. All 10 tests (88 rows over the three Qwen Token Plan catalogs)."
     },
     {
       "source": "packages/ai/test/radius-oauth.test.ts",
@@ -1820,9 +1928,15 @@
     },
     {
       "source": "packages/ai/test/responseid.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "86ee611befd27221de3183c568b0534603efdfd378d4783e940e93ff6b55f8e4"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "86ee611befd27221de3183c568b0534603efdfd378d4783e940e93ff6b55f8e4",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. 8 of 11 pass. Pending: Google Vertex (ADC and API key) and Mistral, whose APIs the replay does not serve."
     },
     {
       "source": "packages/ai/test/retry.test.ts",
@@ -1919,9 +2033,15 @@
     },
     {
       "source": "packages/ai/test/tool-call-id-normalization.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "6bf904b0f19726fd782c066255e483b3ceb5e7606b4d83f89ad01971bcde6672"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "6bf904b0f19726fd782c066255e483b3ceb5e7606b4d83f89ad01971bcde6672",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. All 4 tests; the server rejects tool call ids Completions (over 40 characters) and Responses (over 64 or invalid characters) would reject."
     },
     {
       "source": "packages/ai/test/tool-call-without-result.test.ts",
@@ -2003,21 +2123,38 @@
     },
     {
       "source": "packages/ai/test/xai-oauth.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "a586d75d51ed09c41bdf0f84a91147c0adcd13f922bb603f49d042995cc310d7"
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/oauth-flows.bend",
+        "tests/oauth_flows_check.py",
+        "tests/oauth_flows_reference.ts"
+      ],
+      "sha256": "a586d75d51ed09c41bdf0f84a91147c0adcd13f922bb603f49d042995cc310d7",
+      "notes": "tests/oauth_flows_check.py runs each upstream it through packages/ai/test/oauth-flows.bend and pinned pi-mono (tests/oauth_flows_reference.ts) with a fetch that rewrites provider URLs to a loopback server answering as the test's stub; the upstream assertions must hold for both and requests, events, prompts and results must agree (Bun, native1, native4). All 9 tests. Adaptation: fake timers become real-clock windows [expected, expected + 0.9 s); runtime default headers (Bun's User-Agent, Accept */*) are not compared."
     },
     {
       "source": "packages/ai/test/xai-responses.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "72532da3c743d81dd1d8b1aaaa37a794f599a4ecd30e2c1eb1e5e3885c942851"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "72532da3c743d81dd1d8b1aaaa37a794f599a4ecd30e2c1eb1e5e3885c942851",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. All 11 tests (catalog, request and response shapes on the xAI Responses API)."
     },
     {
       "source": "packages/ai/test/xhigh.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "bff409de7c2374a433fb6e701f258cf9e98e001943201196c37f27fb9e1d0df3"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "bff409de7c2374a433fb6e701f258cf9e98e001943201196c37f27fb9e1d0df3",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. All 3 tests."
     },
     {
       "source": "packages/ai/test/xiaomi-models.test.ts",
@@ -2045,9 +2182,15 @@
     },
     {
       "source": "packages/ai/test/zen.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "0e2d865917f5644ed326e5763eded26fb63700a41f8eeb1007dc4bb4fbb25f9a"
+      "status": "ported",
+      "ports": [
+        "packages/coding-agent/test/live-replay.bend",
+        "tests/live_replay_check.py",
+        "tests/live_replay_server.py",
+        "tests/live_replay_reference.ts"
+      ],
+      "sha256": "0e2d865917f5644ed326e5763eded26fb63700a41f8eeb1007dc4bb4fbb25f9a",
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. The smoke test over every OpenCode and OpenCode Go model (103 rows)."
     },
     {
       "source": "packages/chord/test/boundary.test.ts",

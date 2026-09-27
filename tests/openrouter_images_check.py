@@ -4,8 +4,8 @@
 Each case runs packages/ai/test/openrouter-images.bend against a loopback
 server that answers as the upstream test's OpenAI mock does (or with the
 responses a further case needs), asserts the upstream expectations, and
-compares the payload onPayload saw, the onResponse value, the result (without
-its timestamp) and the requests the server received with upstream images.ts
+compares the payload onPayload saw, the onResponse value, the result (its
+timestamp only as positive or not) and the requests the server received with upstream images.ts
 driving the pinned OpenAI SDK against the same server
 (packages/ai/test/openrouter-images-oracle.ts). Request headers are compared
 for the members pi sets; the SDK's own identity headers (User-Agent,
@@ -78,10 +78,10 @@ class Server:
 
 
 def parse(output):
-    lines = {"payload": [], "response": [], "result": [], "thrown": [], "model": [], "providers": []}
+    lines = {"payload": [], "response": [], "result": [], "timestamp": [], "thrown": [], "model": [], "providers": []}
     for line in output.splitlines():
         kind, _, rest = line.partition(" ")
-        lines[kind].append(rest if kind == "thrown" else json.loads(rest))
+        lines[kind].append(rest if kind in ("thrown", "timestamp") else json.loads(rest))
     return lines
 
 
@@ -176,6 +176,28 @@ def variants(lines, requests):
 
 
 OK = [(200, {}, IMAGE_RESPONSE)]
+
+
+def body_reason(lines, requests):
+    output = only(lines, "result")
+    assert output["stopReason"] == "error" and "403" in output["errorMessage"] and "blocked by gateway WAF" in output["errorMessage"] and output["errorMessage"] != "403 status code (no body)", output
+
+
+def e2e_basic(lines, requests):
+    output = only(lines, "result")
+    assert output["stopReason"] == "stop" and not output.get("errorMessage") and any(item["type"] == "image" for item in output["output"]), output
+    assert lines["timestamp"] == ["positive"], lines["timestamp"]
+
+
+def e2e_text(lines, requests):
+    output = only(lines, "result")
+    assert output["stopReason"] == "stop" and any(item["type"] == "image" for item in output["output"]) and any(item["type"] == "text" and item["text"].strip() for item in output["output"]), output
+
+
+def e2e_input(lines, requests):
+    output = only(lines, "result")
+    assert output["stopReason"] == "stop" and any(item["type"] == "image" for item in output["output"]), output
+    assert requests[0]["body"]["messages"][0]["content"][1]["type"] == "image_url", requests[0]["body"]
 VARIANTS = {
     "id": "img-2",
     "choices": [{"message": {"content": "", "images": [
@@ -203,6 +225,14 @@ CASES = [
     ("request headers overlay the model headers", "headers", OK, headers),
     ("onPayload replaces the params", "replace", OK, replaced),
     ("a retryable status is retried", "retry", [(429, {"retry-after": "0"}, {"error": {"message": "rate limited"}}), (200, {}, IMAGE_RESPONSE)], retried),
+    # provider-error-body-passthrough.test.ts (the upstream mock's 403 APIError,
+    # here a 403 response carrying the gateway's body)
+    ("provider error body passthrough > surfaces the HTTP body reason instead of the opaque SDK message (openrouter images)", "flux", [(403, {}, {"error": "blocked by gateway WAF"})], body_reason),
+    # images.test.ts (Images E2E Tests > OpenRouter Images Provider (google/gemini-2.5-flash-image)),
+    # replayed: the server answers as the provider does.
+    ("Images E2E Tests > should generate a basic image", "e2e-basic", OK, e2e_basic),
+    ("Images E2E Tests > should handle text plus image output", "e2e-text", OK, e2e_text),
+    ("Images E2E Tests > should handle image input", "e2e-input", OK, e2e_input),
     ("an api without a registered provider rejects", "unregistered", OK, thrown("No API provider registered for api: other-images")),
 ]
 

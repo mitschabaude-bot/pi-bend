@@ -20,6 +20,7 @@ import ../../ai/src/providers/cerebras.models.bend as CatalogCerebras
 import ../../ai/src/providers/cloudflare-ai-gateway.models.bend as CatalogCloudflareAiGateway
 import ../../ai/src/providers/cloudflare-workers-ai.models.bend as CatalogCloudflareWorkersAi
 import ../../ai/src/providers/deepseek.models.bend as CatalogDeepseek
+import ../../ai/src/providers/fireworks.models.bend as CatalogFireworks
 import ../../ai/src/providers/github-copilot.models.bend as CatalogGithubCopilot
 import ../../ai/src/providers/google.models.bend as CatalogGoogle
 import ../../ai/src/providers/groq.models.bend as CatalogGroq
@@ -32,6 +33,7 @@ import ../../ai/src/providers/nvidia.models.bend as CatalogNvidia
 import ../../ai/src/providers/openai.models.bend as CatalogOpenai
 import ../../ai/src/providers/openai-codex.models.bend as CatalogOpenaiCodex
 import ../../ai/src/providers/opencode.models.bend as CatalogOpencode
+import ../../ai/src/providers/opencode-go.models.bend as CatalogOpencodeGo
 import ../../ai/src/providers/openrouter.models.bend as CatalogOpenrouter
 import ../../ai/src/providers/qwen-token-plan.models.bend as CatalogQwenTokenPlan
 import ../../ai/src/providers/qwen-token-plan-cn.models.bend as CatalogQwenTokenPlanCn
@@ -45,6 +47,12 @@ import ../../ai/src/providers/xiaomi-token-plan-cn.models.bend as CatalogXiaomiT
 import ../../ai/src/providers/xiaomi-token-plan-sgp.models.bend as CatalogXiaomiTokenPlanSgp
 import ../../ai/src/providers/zai.models.bend as CatalogZai
 import ../../agent/src/providers.bend as Providers
+import ../../ai/src/utils/model-json.bend as ModelJson
+import ../../ai/src/models.bend as AiModels
+import ../../ai/src/api/openai-client.bend as OpenAIClient
+import ../../runtime/src/pi-user-agent.bend as UserAgent
+import ../src/core/provider-composer.bend as Composer
+import ../src/core/model-config.bend as ModelConfig
 import ../../agent/src/types.bend as Agent
 import ../src/core/anthropic-provider.bend as Anthropic
 import ../src/core/google-provider.bend as Google
@@ -174,24 +182,81 @@ def catalogModel(+key: String) -> Maybe<&2, Model()>:
     case "ant-ling/Ling-2.6-flash": Some{CatalogAntLing.model_Ling_2_6_flash()}
     case "ant-ling/Ring-2.6-1T": Some{CatalogAntLing.model_Ring_2_6_1T()}
     case "anthropic/claude-haiku-4-5": Some{CatalogAnthropic.model_claude_haiku_4_5()}
+    case "anthropic/claude-opus-4-5": Some{CatalogAnthropic.model_claude_opus_4_5()}
     case "anthropic/claude-opus-4-6": Some{CatalogAnthropic.model_claude_opus_4_6()}
     case "anthropic/claude-sonnet-4-5": Some{CatalogAnthropic.model_claude_sonnet_4_5()}
     case "anthropic/claude-sonnet-4-6": Some{CatalogAnthropic.model_claude_sonnet_4_6()}
     case "azure-openai-responses/gpt-4o-mini": Some{CatalogAzureOpenaiResponses.model_gpt_4o_mini()}
+    case "baseten/deepseek-ai/DeepSeek-V4-Flash-0731": Some{CatalogBaseten.model_deepseek_ai_DeepSeek_V4_Flash_0731()}
+    case "baseten/deepseek-ai/DeepSeek-V4-Pro": Some{CatalogBaseten.model_deepseek_ai_DeepSeek_V4_Pro()}
+    case "baseten/deepseek-ai/DeepSeek-V4-Pro-0813": Some{CatalogBaseten.model_deepseek_ai_DeepSeek_V4_Pro_0813()}
+    case "baseten/deepseek-ai/DeepSeek-V4.1-Flash": Some{CatalogBaseten.model_deepseek_ai_DeepSeek_V4_1_Flash()}
+    case "baseten/moonshotai/Kimi-K2.5": Some{CatalogBaseten.model_moonshotai_Kimi_K2_5()}
+    case "baseten/moonshotai/Kimi-K2.6": Some{CatalogBaseten.model_moonshotai_Kimi_K2_6()}
+    case "baseten/moonshotai/Kimi-K2.7-Code": Some{CatalogBaseten.model_moonshotai_Kimi_K2_7_Code()}
+    case "baseten/moonshotai/Kimi-K3": Some{CatalogBaseten.model_moonshotai_Kimi_K3()}
+    case "baseten/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B": Some{CatalogBaseten.model_nvidia_NVIDIA_Nemotron_3_Ultra_550B_A55B()}
+    case "baseten/nvidia/Nemotron-120B-A12B": Some{CatalogBaseten.model_nvidia_Nemotron_120B_A12B()}
+    case "baseten/openai/gpt-oss-120b": Some{CatalogBaseten.model_openai_gpt_oss_120b()}
+    case "baseten/thinkingmachines/inkling": Some{CatalogBaseten.model_thinkingmachines_inkling()}
+    case "baseten/thinkingmachines/inkling-small": Some{CatalogBaseten.model_thinkingmachines_inkling_small()}
+    case "baseten/zai-org/GLM-4.7": Some{CatalogBaseten.model_zai_org_GLM_4_7()}
+    case "baseten/zai-org/GLM-5": Some{CatalogBaseten.model_zai_org_GLM_5()}
+    case "baseten/zai-org/GLM-5.1": Some{CatalogBaseten.model_zai_org_GLM_5_1()}
     case "baseten/zai-org/GLM-5.2": Some{CatalogBaseten.model_zai_org_GLM_5_2()}
+    case "baseten/zai-org/GLM-5.2-Fast": Some{CatalogBaseten.model_zai_org_GLM_5_2_Fast()}
+    case "baseten/zai-org/GLM-5.3": Some{CatalogBaseten.model_zai_org_GLM_5_3()}
+    case "baseten/zai-org/GLM-5.3-Fast": Some{CatalogBaseten.model_zai_org_GLM_5_3_Fast()}
+    case "baseten/zai-org/GLM-5.3-Flash": Some{CatalogBaseten.model_zai_org_GLM_5_3_Flash()}
     case "cerebras/gpt-oss-120b": Some{CatalogCerebras.model_gpt_oss_120b()}
     case "cloudflare-ai-gateway/claude-sonnet-4.5": Some{CatalogCloudflareAiGateway.model_claude_sonnet_4_5()}
     case "cloudflare-ai-gateway/gpt-5.1": Some{CatalogCloudflareAiGateway.model_gpt_5_1()}
+    case "cloudflare-ai-gateway/gpt-5.6-sol": Some{CatalogCloudflareAiGateway.model_gpt_5_6_sol()}
     case "cloudflare-ai-gateway/workers-ai/@cf/moonshotai/kimi-k2.6": Some{CatalogCloudflareAiGateway.model_workers_ai__cf_moonshotai_kimi_k2_6()}
     case "cloudflare-workers-ai/@cf/moonshotai/kimi-k2.6": Some{CatalogCloudflareWorkersAi.model__cf_moonshotai_kimi_k2_6()}
     case "deepseek/deepseek-flash": Some{CatalogDeepseek.model_deepseek_flash()}
+    case "fireworks/accounts/fireworks/models/deepseek-v4-flash-0731": Some{CatalogFireworks.model_accounts_fireworks_models_deepseek_v4_flash_0731()}
+    case "fireworks/accounts/fireworks/models/deepseek-v4-flash-vision-exp": Some{CatalogFireworks.model_accounts_fireworks_models_deepseek_v4_flash_vision_exp()}
+    case "fireworks/accounts/fireworks/models/deepseek-v4-pro": Some{CatalogFireworks.model_accounts_fireworks_models_deepseek_v4_pro()}
+    case "fireworks/accounts/fireworks/models/deepseek-v4-pro-0813": Some{CatalogFireworks.model_accounts_fireworks_models_deepseek_v4_pro_0813()}
+    case "fireworks/accounts/fireworks/models/deepseek-v4p1-flash": Some{CatalogFireworks.model_accounts_fireworks_models_deepseek_v4p1_flash()}
+    case "fireworks/accounts/fireworks/models/glm-5p2": Some{CatalogFireworks.model_accounts_fireworks_models_glm_5p2()}
+    case "fireworks/accounts/fireworks/models/glm-5p3": Some{CatalogFireworks.model_accounts_fireworks_models_glm_5p3()}
+    case "fireworks/accounts/fireworks/models/glm-5p3-flash": Some{CatalogFireworks.model_accounts_fireworks_models_glm_5p3_flash()}
+    case "fireworks/accounts/fireworks/models/gpt-oss-120b": Some{CatalogFireworks.model_accounts_fireworks_models_gpt_oss_120b()}
+    case "fireworks/accounts/fireworks/models/inkling": Some{CatalogFireworks.model_accounts_fireworks_models_inkling()}
+    case "fireworks/accounts/fireworks/models/kimi-k2p6": Some{CatalogFireworks.model_accounts_fireworks_models_kimi_k2p6()}
+    case "fireworks/accounts/fireworks/models/kimi-k2p7-code": Some{CatalogFireworks.model_accounts_fireworks_models_kimi_k2p7_code()}
+    case "fireworks/accounts/fireworks/models/kimi-k3": Some{CatalogFireworks.model_accounts_fireworks_models_kimi_k3()}
+    case "fireworks/accounts/fireworks/models/minimax-m2p7": Some{CatalogFireworks.model_accounts_fireworks_models_minimax_m2p7()}
+    case "fireworks/accounts/fireworks/models/minimax-m3": Some{CatalogFireworks.model_accounts_fireworks_models_minimax_m3()}
+    case "fireworks/accounts/fireworks/models/muse-glimmer-30b": Some{CatalogFireworks.model_accounts_fireworks_models_muse_glimmer_30b()}
+    case "fireworks/accounts/fireworks/models/nemotron-3-ultra-nvfp4": Some{CatalogFireworks.model_accounts_fireworks_models_nemotron_3_ultra_nvfp4()}
+    case "fireworks/accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b": Some{CatalogFireworks.model_accounts_fireworks_models_nemotron_lightning_3p5_30b_a3b()}
+    case "fireworks/accounts/fireworks/models/qwen3p7-plus": Some{CatalogFireworks.model_accounts_fireworks_models_qwen3p7_plus()}
+    case "fireworks/accounts/fireworks/models/qwen3p8-2p4t-a95b": Some{CatalogFireworks.model_accounts_fireworks_models_qwen3p8_2p4t_a95b()}
+    case "fireworks/accounts/fireworks/models/qwen3p8-max": Some{CatalogFireworks.model_accounts_fireworks_models_qwen3p8_max()}
+    case "fireworks/accounts/fireworks/routers/deepseek-flash-latest": Some{CatalogFireworks.model_accounts_fireworks_routers_deepseek_flash_latest()}
+    case "fireworks/accounts/fireworks/routers/deepseek-pro-latest": Some{CatalogFireworks.model_accounts_fireworks_routers_deepseek_pro_latest()}
+    case "fireworks/accounts/fireworks/routers/glm-5p2-fast": Some{CatalogFireworks.model_accounts_fireworks_routers_glm_5p2_fast()}
+    case "fireworks/accounts/fireworks/routers/glm-5p3-fast": Some{CatalogFireworks.model_accounts_fireworks_routers_glm_5p3_fast()}
+    case "fireworks/accounts/fireworks/routers/glm-fast-latest": Some{CatalogFireworks.model_accounts_fireworks_routers_glm_fast_latest()}
+    case "fireworks/accounts/fireworks/routers/glm-flash-latest": Some{CatalogFireworks.model_accounts_fireworks_routers_glm_flash_latest()}
+    case "fireworks/accounts/fireworks/routers/glm-latest": Some{CatalogFireworks.model_accounts_fireworks_routers_glm_latest()}
+    case "fireworks/accounts/fireworks/routers/kimi-fast-latest": Some{CatalogFireworks.model_accounts_fireworks_routers_kimi_fast_latest()}
+    case "fireworks/accounts/fireworks/routers/kimi-k3-fast": Some{CatalogFireworks.model_accounts_fireworks_routers_kimi_k3_fast()}
+    case "fireworks/accounts/fireworks/routers/kimi-latest": Some{CatalogFireworks.model_accounts_fireworks_routers_kimi_latest()}
+    case "fireworks/accounts/fireworks/routers/minimax-latest": Some{CatalogFireworks.model_accounts_fireworks_routers_minimax_latest()}
+    case "fireworks/accounts/fireworks/routers/qwen-max-latest": Some{CatalogFireworks.model_accounts_fireworks_routers_qwen_max_latest()}
     case "github-copilot/claude-haiku-4.5": Some{CatalogGithubCopilot.model_claude_haiku_4_5()}
     case "github-copilot/claude-sonnet-4.6": Some{CatalogGithubCopilot.model_claude_sonnet_4_6()}
     case "github-copilot/gemini-3.5-flash": Some{CatalogGithubCopilot.model_gemini_3_5_flash()}
     case "github-copilot/gpt-5-mini": Some{CatalogGithubCopilot.model_gpt_5_mini()}
     case "github-copilot/gpt-5.3-codex": Some{CatalogGithubCopilot.model_gpt_5_3_codex()}
+    case "github-copilot/gpt-5.5": Some{CatalogGithubCopilot.model_gpt_5_5()}
     case "google/gemini-2.5-flash": Some{CatalogGoogle.model_gemini_2_5_flash()}
     case "google/gemini-3-flash-preview": Some{CatalogGoogle.model_gemini_3_flash_preview()}
+    case "google/gemini-3.1-pro-preview": Some{CatalogGoogle.model_gemini_3_1_pro_preview()}
     case "groq/llama-3.3-70b-versatile": Some{CatalogGroq.model_llama_3_3_70b_versatile()}
     case "groq/openai/gpt-oss-120b": Some{CatalogGroq.model_openai_gpt_oss_120b()}
     case "groq/openai/gpt-oss-20b": Some{CatalogGroq.model_openai_gpt_oss_20b()}
@@ -203,14 +268,129 @@ def catalogModel(+key: String) -> Maybe<&2, Model()>:
     case "nvidia/nvidia/nemotron-3-super-120b-a12b": Some{CatalogNvidia.model_nvidia_nemotron_3_super_120b_a12b()}
     case "openai/gpt-4o": Some{CatalogOpenai.model_gpt_4o()}
     case "openai/gpt-4o-mini": Some{CatalogOpenai.model_gpt_4o_mini()}
+    case "openai/gpt-5": Some{CatalogOpenai.model_gpt_5()}
     case "openai/gpt-5-mini": Some{CatalogOpenai.model_gpt_5_mini()}
+    case "openai/gpt-5-nano": Some{CatalogOpenai.model_gpt_5_nano()}
+    case "openai/gpt-5-pro": Some{CatalogOpenai.model_gpt_5_pro()}
+    case "openai/gpt-5.1": Some{CatalogOpenai.model_gpt_5_1()}
+    case "openai/gpt-5.2": Some{CatalogOpenai.model_gpt_5_2()}
+    case "openai/gpt-5.2-pro": Some{CatalogOpenai.model_gpt_5_2_pro()}
+    case "openai/gpt-5.3-codex": Some{CatalogOpenai.model_gpt_5_3_codex()}
     case "openai/gpt-5.4": Some{CatalogOpenai.model_gpt_5_4()}
     case "openai/gpt-5.4-mini": Some{CatalogOpenai.model_gpt_5_4_mini()}
+    case "openai/gpt-5.4-nano": Some{CatalogOpenai.model_gpt_5_4_nano()}
+    case "openai/gpt-5.4-pro": Some{CatalogOpenai.model_gpt_5_4_pro()}
+    case "openai/gpt-5.5": Some{CatalogOpenai.model_gpt_5_5()}
+    case "openai/gpt-5.5-pro": Some{CatalogOpenai.model_gpt_5_5_pro()}
+    case "openai/gpt-5.6-luna": Some{CatalogOpenai.model_gpt_5_6_luna()}
+    case "openai/gpt-5.6-sol": Some{CatalogOpenai.model_gpt_5_6_sol()}
+    case "openai/gpt-5.6-terra": Some{CatalogOpenai.model_gpt_5_6_terra()}
+    case "openai/gpt-6-luna": Some{CatalogOpenai.model_gpt_6_luna()}
+    case "openai/gpt-6-sol": Some{CatalogOpenai.model_gpt_6_sol()}
     case "openai-codex/gpt-5.5": Some{CatalogOpenaiCodex.model_gpt_5_5()}
     case "opencode/big-pickle": Some{CatalogOpencode.model_big_pickle()}
+    case "opencode/claude-fable-5": Some{CatalogOpencode.model_claude_fable_5()}
+    case "opencode/claude-fable-5-1": Some{CatalogOpencode.model_claude_fable_5_1()}
+    case "opencode/claude-haiku-4-5": Some{CatalogOpencode.model_claude_haiku_4_5()}
+    case "opencode/claude-opus-4-5": Some{CatalogOpencode.model_claude_opus_4_5()}
+    case "opencode/claude-opus-4-6": Some{CatalogOpencode.model_claude_opus_4_6()}
+    case "opencode/claude-opus-4-7": Some{CatalogOpencode.model_claude_opus_4_7()}
+    case "opencode/claude-opus-4-8": Some{CatalogOpencode.model_claude_opus_4_8()}
+    case "opencode/claude-opus-5": Some{CatalogOpencode.model_claude_opus_5()}
+    case "opencode/claude-opus-5-5": Some{CatalogOpencode.model_claude_opus_5_5()}
+    case "opencode/claude-sonnet-4": Some{CatalogOpencode.model_claude_sonnet_4()}
     case "opencode/claude-sonnet-4-5": Some{CatalogOpencode.model_claude_sonnet_4_5()}
+    case "opencode/claude-sonnet-4-6": Some{CatalogOpencode.model_claude_sonnet_4_6()}
+    case "opencode/claude-sonnet-5": Some{CatalogOpencode.model_claude_sonnet_5()}
+    case "opencode/deepseek-v4-flash": Some{CatalogOpencode.model_deepseek_v4_flash()}
+    case "opencode/deepseek-v4-flash-vision-exp": Some{CatalogOpencode.model_deepseek_v4_flash_vision_exp()}
+    case "opencode/deepseek-v4-pro": Some{CatalogOpencode.model_deepseek_v4_pro()}
+    case "opencode/deepseek-v4.1-flash": Some{CatalogOpencode.model_deepseek_v4_1_flash()}
     case "opencode/gemini-3-flash": Some{CatalogOpencode.model_gemini_3_flash()}
+    case "opencode/gemini-3.1-pro": Some{CatalogOpencode.model_gemini_3_1_pro()}
+    case "opencode/gemini-3.5-flash": Some{CatalogOpencode.model_gemini_3_5_flash()}
+    case "opencode/gemini-3.5-flash-lite": Some{CatalogOpencode.model_gemini_3_5_flash_lite()}
+    case "opencode/gemini-3.6-flash": Some{CatalogOpencode.model_gemini_3_6_flash()}
+    case "opencode/gemini-3.7-flash": Some{CatalogOpencode.model_gemini_3_7_flash()}
+    case "opencode/gemini-3.8-flash": Some{CatalogOpencode.model_gemini_3_8_flash()}
+    case "opencode/glm-5": Some{CatalogOpencode.model_glm_5()}
+    case "opencode/glm-5.1": Some{CatalogOpencode.model_glm_5_1()}
+    case "opencode/glm-5.2": Some{CatalogOpencode.model_glm_5_2()}
+    case "opencode/glm-5.3": Some{CatalogOpencode.model_glm_5_3()}
+    case "opencode/glm-5.3-flash": Some{CatalogOpencode.model_glm_5_3_flash()}
+    case "opencode/gpt-5": Some{CatalogOpencode.model_gpt_5()}
+    case "opencode/gpt-5-codex": Some{CatalogOpencode.model_gpt_5_codex()}
+    case "opencode/gpt-5-nano": Some{CatalogOpencode.model_gpt_5_nano()}
+    case "opencode/gpt-5.1": Some{CatalogOpencode.model_gpt_5_1()}
+    case "opencode/gpt-5.1-codex": Some{CatalogOpencode.model_gpt_5_1_codex()}
+    case "opencode/gpt-5.1-codex-max": Some{CatalogOpencode.model_gpt_5_1_codex_max()}
+    case "opencode/gpt-5.1-codex-mini": Some{CatalogOpencode.model_gpt_5_1_codex_mini()}
+    case "opencode/gpt-5.2": Some{CatalogOpencode.model_gpt_5_2()}
     case "opencode/gpt-5.2-codex": Some{CatalogOpencode.model_gpt_5_2_codex()}
+    case "opencode/gpt-5.3-codex": Some{CatalogOpencode.model_gpt_5_3_codex()}
+    case "opencode/gpt-5.4": Some{CatalogOpencode.model_gpt_5_4()}
+    case "opencode/gpt-5.4-mini": Some{CatalogOpencode.model_gpt_5_4_mini()}
+    case "opencode/gpt-5.4-nano": Some{CatalogOpencode.model_gpt_5_4_nano()}
+    case "opencode/gpt-5.4-pro": Some{CatalogOpencode.model_gpt_5_4_pro()}
+    case "opencode/gpt-5.5": Some{CatalogOpencode.model_gpt_5_5()}
+    case "opencode/gpt-5.5-pro": Some{CatalogOpencode.model_gpt_5_5_pro()}
+    case "opencode/gpt-5.6-luna": Some{CatalogOpencode.model_gpt_5_6_luna()}
+    case "opencode/gpt-5.6-sol": Some{CatalogOpencode.model_gpt_5_6_sol()}
+    case "opencode/gpt-5.6-terra": Some{CatalogOpencode.model_gpt_5_6_terra()}
+    case "opencode/gpt-6-astra": Some{CatalogOpencode.model_gpt_6_astra()}
+    case "opencode/gpt-6-luna": Some{CatalogOpencode.model_gpt_6_luna()}
+    case "opencode/gpt-6-sol": Some{CatalogOpencode.model_gpt_6_sol()}
+    case "opencode/grok-4.5": Some{CatalogOpencode.model_grok_4_5()}
+    case "opencode/grok-4.6": Some{CatalogOpencode.model_grok_4_6()}
+    case "opencode/grok-build-0.1": Some{CatalogOpencode.model_grok_build_0_1()}
+    case "opencode/kimi-k2.5": Some{CatalogOpencode.model_kimi_k2_5()}
+    case "opencode/kimi-k2.6": Some{CatalogOpencode.model_kimi_k2_6()}
+    case "opencode/kimi-k2.7-code": Some{CatalogOpencode.model_kimi_k2_7_code()}
+    case "opencode/kimi-k3": Some{CatalogOpencode.model_kimi_k3()}
+    case "opencode/ling-3.0-flash-fin-free": Some{CatalogOpencode.model_ling_3_0_flash_fin_free()}
+    case "opencode/mimo-v2.6-flash-free": Some{CatalogOpencode.model_mimo_v2_6_flash_free()}
+    case "opencode/minimax-m2.5": Some{CatalogOpencode.model_minimax_m2_5()}
+    case "opencode/minimax-m2.7": Some{CatalogOpencode.model_minimax_m2_7()}
+    case "opencode/minimax-m3": Some{CatalogOpencode.model_minimax_m3()}
+    case "opencode/muse-spark-1.2": Some{CatalogOpencode.model_muse_spark_1_2()}
+    case "opencode/muse-spark-1.2-contributor-free": Some{CatalogOpencode.model_muse_spark_1_2_contributor_free()}
+    case "opencode/muse-spark-1.3": Some{CatalogOpencode.model_muse_spark_1_3()}
+    case "opencode/muse-spark-1.3-contributor-free": Some{CatalogOpencode.model_muse_spark_1_3_contributor_free()}
+    case "opencode/nemotron-3-ultra-free": Some{CatalogOpencode.model_nemotron_3_ultra_free()}
+    case "opencode/nemotron-3.5-lightning-free": Some{CatalogOpencode.model_nemotron_3_5_lightning_free()}
+    case "opencode/qwen3.5-plus": Some{CatalogOpencode.model_qwen3_5_plus()}
+    case "opencode/qwen3.6-plus": Some{CatalogOpencode.model_qwen3_6_plus()}
+    case "opencode/qwen3.8-flash": Some{CatalogOpencode.model_qwen3_8_flash()}
+    case "opencode-go/deepseek-v4-flash": Some{CatalogOpencodeGo.model_deepseek_v4_flash()}
+    case "opencode-go/deepseek-v4-flash-vision-exp": Some{CatalogOpencodeGo.model_deepseek_v4_flash_vision_exp()}
+    case "opencode-go/deepseek-v4-pro": Some{CatalogOpencodeGo.model_deepseek_v4_pro()}
+    case "opencode-go/deepseek-v4.1-flash": Some{CatalogOpencodeGo.model_deepseek_v4_1_flash()}
+    case "opencode-go/glm-5.1": Some{CatalogOpencodeGo.model_glm_5_1()}
+    case "opencode-go/glm-5.2": Some{CatalogOpencodeGo.model_glm_5_2()}
+    case "opencode-go/glm-5.3": Some{CatalogOpencodeGo.model_glm_5_3()}
+    case "opencode-go/glm-5.3-flash": Some{CatalogOpencodeGo.model_glm_5_3_flash()}
+    case "opencode-go/gpt-5.6-luna": Some{CatalogOpencodeGo.model_gpt_5_6_luna()}
+    case "opencode-go/grok-4.6": Some{CatalogOpencodeGo.model_grok_4_6()}
+    case "opencode-go/grok-4.7": Some{CatalogOpencodeGo.model_grok_4_7()}
+    case "opencode-go/hy3": Some{CatalogOpencodeGo.model_hy3()}
+    case "opencode-go/hy4-preview": Some{CatalogOpencodeGo.model_hy4_preview()}
+    case "opencode-go/kimi-k2.6": Some{CatalogOpencodeGo.model_kimi_k2_6()}
+    case "opencode-go/kimi-k2.7-code": Some{CatalogOpencodeGo.model_kimi_k2_7_code()}
+    case "opencode-go/kimi-k3": Some{CatalogOpencodeGo.model_kimi_k3()}
+    case "opencode-go/longcat-2.0": Some{CatalogOpencodeGo.model_longcat_2_0()}
+    case "opencode-go/mimo-v2.5": Some{CatalogOpencodeGo.model_mimo_v2_5()}
+    case "opencode-go/mimo-v2.5-pro": Some{CatalogOpencodeGo.model_mimo_v2_5_pro()}
+    case "opencode-go/mimo-v2.6-flash": Some{CatalogOpencodeGo.model_mimo_v2_6_flash()}
+    case "opencode-go/mimo-v2.6-pro": Some{CatalogOpencodeGo.model_mimo_v2_6_pro()}
+    case "opencode-go/minimax-m2.7": Some{CatalogOpencodeGo.model_minimax_m2_7()}
+    case "opencode-go/minimax-m3": Some{CatalogOpencodeGo.model_minimax_m3()}
+    case "opencode-go/muse-spark-1.2-contributor": Some{CatalogOpencodeGo.model_muse_spark_1_2_contributor()}
+    case "opencode-go/muse-spark-1.3-contributor": Some{CatalogOpencodeGo.model_muse_spark_1_3_contributor()}
+    case "opencode-go/qwen3.6-plus": Some{CatalogOpencodeGo.model_qwen3_6_plus()}
+    case "opencode-go/qwen3.7-max": Some{CatalogOpencodeGo.model_qwen3_7_max()}
+    case "opencode-go/qwen3.7-plus": Some{CatalogOpencodeGo.model_qwen3_7_plus()}
+    case "opencode-go/qwen3.8-flash": Some{CatalogOpencodeGo.model_qwen3_8_flash()}
+    case "opencode-go/qwen3.8-max": Some{CatalogOpencodeGo.model_qwen3_8_max()}
     case "openrouter/anthropic/claude-sonnet-4": Some{CatalogOpenrouter.model_anthropic_claude_sonnet_4()}
     case "openrouter/deepseek/deepseek-chat": Some{CatalogOpenrouter.model_deepseek_deepseek_chat()}
     case "openrouter/deepseek/deepseek-v3.2": Some{CatalogOpenrouter.model_deepseek_deepseek_v3_2()}
@@ -218,17 +398,65 @@ def catalogModel(+key: String) -> Maybe<&2, Model()>:
     case "openrouter/meta-llama/llama-4-scout": Some{CatalogOpenrouter.model_meta_llama_llama_4_scout()}
     case "openrouter/mistralai/mistral-large": Some{CatalogOpenrouter.model_mistralai_mistral_large()}
     case "openrouter/mistralai/mistral-small-3.2-24b-instruct": Some{CatalogOpenrouter.model_mistralai_mistral_small_3_2_24b_instruct()}
+    case "openrouter/openai/gpt-5.5": Some{CatalogOpenrouter.model_openai_gpt_5_5()}
+    case "openrouter/qwen/qwen3.5-plus-02-15": Some{CatalogOpenrouter.model_qwen_qwen3_5_plus_02_15()}
     case "openrouter/z-ai/glm-4.5v": Some{CatalogOpenrouter.model_z_ai_glm_4_5v()}
+    case "qwen-token-plan/MiniMax-M2.5": Some{CatalogQwenTokenPlan.model_MiniMax_M2_5()}
+    case "qwen-token-plan/deepseek-v3.2": Some{CatalogQwenTokenPlan.model_deepseek_v3_2()}
+    case "qwen-token-plan/deepseek-v4-flash": Some{CatalogQwenTokenPlan.model_deepseek_v4_flash()}
+    case "qwen-token-plan/deepseek-v4-flash-0731": Some{CatalogQwenTokenPlan.model_deepseek_v4_flash_0731()}
+    case "qwen-token-plan/deepseek-v4-pro": Some{CatalogQwenTokenPlan.model_deepseek_v4_pro()}
+    case "qwen-token-plan/deepseek-v4-pro-0813": Some{CatalogQwenTokenPlan.model_deepseek_v4_pro_0813()}
+    case "qwen-token-plan/deepseek-v4.1-flash": Some{CatalogQwenTokenPlan.model_deepseek_v4_1_flash()}
+    case "qwen-token-plan/glm-5": Some{CatalogQwenTokenPlan.model_glm_5()}
+    case "qwen-token-plan/glm-5.1": Some{CatalogQwenTokenPlan.model_glm_5_1()}
+    case "qwen-token-plan/glm-5.2": Some{CatalogQwenTokenPlan.model_glm_5_2()}
+    case "qwen-token-plan/glm-5.3": Some{CatalogQwenTokenPlan.model_glm_5_3()}
+    case "qwen-token-plan/kimi-k2.5": Some{CatalogQwenTokenPlan.model_kimi_k2_5()}
+    case "qwen-token-plan/kimi-k2.6": Some{CatalogQwenTokenPlan.model_kimi_k2_6()}
+    case "qwen-token-plan/kimi-k2.7-code": Some{CatalogQwenTokenPlan.model_kimi_k2_7_code()}
+    case "qwen-token-plan/qwen3.6-flash": Some{CatalogQwenTokenPlan.model_qwen3_6_flash()}
+    case "qwen-token-plan/qwen3.6-plus": Some{CatalogQwenTokenPlan.model_qwen3_6_plus()}
     case "qwen-token-plan/qwen3.7-max": Some{CatalogQwenTokenPlan.model_qwen3_7_max()}
+    case "qwen-token-plan/qwen3.7-plus": Some{CatalogQwenTokenPlan.model_qwen3_7_plus()}
+    case "qwen-token-plan/qwen3.8-flash": Some{CatalogQwenTokenPlan.model_qwen3_8_flash()}
+    case "qwen-token-plan/qwen3.8-max": Some{CatalogQwenTokenPlan.model_qwen3_8_max()}
+    case "qwen-token-plan-cn/MiniMax-M2.5": Some{CatalogQwenTokenPlanCn.model_MiniMax_M2_5()}
+    case "qwen-token-plan-cn/deepseek-v3.2": Some{CatalogQwenTokenPlanCn.model_deepseek_v3_2()}
+    case "qwen-token-plan-cn/deepseek-v4-flash": Some{CatalogQwenTokenPlanCn.model_deepseek_v4_flash()}
+    case "qwen-token-plan-cn/deepseek-v4-flash-0731": Some{CatalogQwenTokenPlanCn.model_deepseek_v4_flash_0731()}
+    case "qwen-token-plan-cn/deepseek-v4-pro": Some{CatalogQwenTokenPlanCn.model_deepseek_v4_pro()}
+    case "qwen-token-plan-cn/deepseek-v4-pro-0813": Some{CatalogQwenTokenPlanCn.model_deepseek_v4_pro_0813()}
+    case "qwen-token-plan-cn/deepseek-v4.1-flash": Some{CatalogQwenTokenPlanCn.model_deepseek_v4_1_flash()}
+    case "qwen-token-plan-cn/glm-5": Some{CatalogQwenTokenPlanCn.model_glm_5()}
+    case "qwen-token-plan-cn/glm-5.1": Some{CatalogQwenTokenPlanCn.model_glm_5_1()}
+    case "qwen-token-plan-cn/glm-5.2": Some{CatalogQwenTokenPlanCn.model_glm_5_2()}
+    case "qwen-token-plan-cn/glm-5.3": Some{CatalogQwenTokenPlanCn.model_glm_5_3()}
+    case "qwen-token-plan-cn/kimi-k2.5": Some{CatalogQwenTokenPlanCn.model_kimi_k2_5()}
+    case "qwen-token-plan-cn/kimi-k2.6": Some{CatalogQwenTokenPlanCn.model_kimi_k2_6()}
+    case "qwen-token-plan-cn/kimi-k2.7-code": Some{CatalogQwenTokenPlanCn.model_kimi_k2_7_code()}
+    case "qwen-token-plan-cn/qwen3.6-flash": Some{CatalogQwenTokenPlanCn.model_qwen3_6_flash()}
+    case "qwen-token-plan-cn/qwen3.6-plus": Some{CatalogQwenTokenPlanCn.model_qwen3_6_plus()}
     case "qwen-token-plan-cn/qwen3.7-max": Some{CatalogQwenTokenPlanCn.model_qwen3_7_max()}
+    case "qwen-token-plan-cn/qwen3.7-plus": Some{CatalogQwenTokenPlanCn.model_qwen3_7_plus()}
+    case "qwen-token-plan-cn/qwen3.8-flash": Some{CatalogQwenTokenPlanCn.model_qwen3_8_flash()}
+    case "qwen-token-plan-cn/qwen3.8-max": Some{CatalogQwenTokenPlanCn.model_qwen3_8_max()}
     case "qwen-token-plan-individual/deepseek-v4-flash-0731": Some{CatalogQwenTokenPlanIndividual.model_deepseek_v4_flash_0731()}
+    case "qwen-token-plan-individual/deepseek-v4-pro": Some{CatalogQwenTokenPlanIndividual.model_deepseek_v4_pro()}
+    case "qwen-token-plan-individual/deepseek-v4-pro-0813": Some{CatalogQwenTokenPlanIndividual.model_deepseek_v4_pro_0813()}
     case "qwen-token-plan-individual/glm-5.2": Some{CatalogQwenTokenPlanIndividual.model_glm_5_2()}
+    case "qwen-token-plan-individual/qwen3.6-flash": Some{CatalogQwenTokenPlanIndividual.model_qwen3_6_flash()}
+    case "qwen-token-plan-individual/qwen3.7-max": Some{CatalogQwenTokenPlanIndividual.model_qwen3_7_max()}
+    case "qwen-token-plan-individual/qwen3.7-plus": Some{CatalogQwenTokenPlanIndividual.model_qwen3_7_plus()}
+    case "qwen-token-plan-individual/qwen3.8-flash": Some{CatalogQwenTokenPlanIndividual.model_qwen3_8_flash()}
     case "qwen-token-plan-individual/qwen3.8-max": Some{CatalogQwenTokenPlanIndividual.model_qwen3_8_max()}
     case "together/moonshotai/Kimi-K2.6": Some{CatalogTogether.model_moonshotai_Kimi_K2_6()}
     case "vercel-ai-gateway/anthropic/claude-opus-4.5": Some{CatalogVercelAiGateway.model_anthropic_claude_opus_4_5()}
     case "vercel-ai-gateway/google/gemini-2.5-flash": Some{CatalogVercelAiGateway.model_google_gemini_2_5_flash()}
     case "vercel-ai-gateway/openai/gpt-5.1-codex-max": Some{CatalogVercelAiGateway.model_openai_gpt_5_1_codex_max()}
     case "xai/grok-4.3": Some{CatalogXai.model_grok_4_3()}
+    case "xai/grok-4.5": Some{CatalogXai.model_grok_4_5()}
+    case "xai/grok-4.6": Some{CatalogXai.model_grok_4_6()}
     case "xai/grok-4.7": Some{CatalogXai.model_grok_4_7()}
     case "xiaomi/mimo-v2.5-pro": Some{CatalogXiaomi.model_mimo_v2_5_pro()}
     case "xiaomi-token-plan-ams/mimo-v2.5-pro": Some{CatalogXiaomiTokenPlanAms.model_mimo_v2_5_pro()}
@@ -303,11 +531,42 @@ def transportOf(value: Maybe<&2, String>) -> Maybe<&2, Ai.Transport>:
     case Some{"auto"}: Some{Ai.AutoTransport{}}
     case _: None{}
 
+def nullableText(value: V.Value) -> Ai.Nullable<String>:
+  match value:
+    case V.Text{item}: Ai.PresentValue{item}
+    case _: Ai.NullValue{}
+
+def headerProperties(values: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<Ai.Nullable<String>>>:
+  match values:
+    case Nil{}: Nil{}
+    case R.Property{name, value} <> rest: R.Property{name, nullableText(value)} <> headerProperties(rest)
+
+def headersOf(value: Maybe<&2, V.Value>) -> Maybe<&2, Ai.ProviderHeaders()>:
+  match value:
+    case Some{V.ObjectValue{R.Record{values}}}: Some{R.Record{headerProperties(values)}}
+    case _: None{}
+
+def retentionOf(value: Maybe<&2, String>) -> Maybe<&2, Ai.CacheRetention>:
+  match value:
+    case Some{"none"}: Some{Ai.CacheNone{}}
+    case Some{"short"}: Some{Ai.CacheShort{}}
+    case Some{"long"}: Some{Ai.CacheLong{}}
+    case _: None{}
+
+def tierOf(value: Maybe<&2, String>) -> Maybe<&2, Ai.Nullable<Responses.ServiceTier>>:
+  match value:
+    case Some{"auto"}: Some{Ai.PresentValue{Responses.TierAuto{}}}
+    case Some{"default"}: Some{Ai.PresentValue{Responses.TierDefault{}}}
+    case Some{"flex"}: Some{Ai.PresentValue{Responses.TierFlex{}}}
+    case Some{"scale"}: Some{Ai.PresentValue{Responses.TierScale{}}}
+    case Some{"priority"}: Some{Ai.PresentValue{Responses.TierPriority{}}}
+    case _: None{}
+
 def baseOptions(+options: V.Value, signal: Abort.AbortSignal<Unit>, fetch: Fetch.Fetch(Unit)) -> Base():
-  Ai.StreamOptions{Some{signal}, None{}, text(field(options, "apiKey")), Some{fetch}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, transportOf(text(field(options, "transport"))), None{}, None{}, None{}, None{}}
+  Ai.StreamOptions{Some{signal}, None{}, text(field(options, "apiKey")), Some{fetch}, None{}, None{}, None{}, headersOf(field(options, "headers")), None{}, None{}, None{}, number(field(options, "temperature")), None{}, number(field(options, "maxTokens")), transportOf(text(field(options, "transport"))), retentionOf(text(field(options, "cacheRetention"))), text(field(options, "sessionId")), None{}, None{}}
 
 def simpleOptions(+options: V.Value, signal: Abort.AbortSignal<Unit>, fetch: Fetch.Fetch(Unit)) -> Simple():
-  Ai.SimpleStreamOptions{Some{signal}, None{}, text(field(options, "apiKey")), Some{fetch}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, transportOf(text(field(options, "transport"))), None{}, None{}, None{}, None{}, None{}, levelOf(text(field(options, "reasoning"))), None{}, None{}}
+  Ai.SimpleStreamOptions{Some{signal}, None{}, text(field(options, "apiKey")), Some{fetch}, None{}, None{}, None{}, headersOf(field(options, "headers")), None{}, None{}, None{}, number(field(options, "temperature")), None{}, number(field(options, "maxTokens")), transportOf(text(field(options, "transport"))), retentionOf(text(field(options, "cacheRetention"))), text(field(options, "sessionId")), None{}, None{}, None{}, levelOf(text(field(options, "reasoning"))), None{}, None{}}
 
 def googleThinking(value: Maybe<&2, V.Value>) -> Maybe<&2, Gemini.GoogleThinking>:
   match value:
@@ -315,7 +574,7 @@ def googleThinking(value: Maybe<&2, V.Value>) -> Maybe<&2, Gemini.GoogleThinking
     case None{}: None{}
 
 def responsesOptions(+options: V.Value, signal: Abort.AbortSignal<Unit>, fetch: Fetch.Fetch(Unit)) -> Responses.OpenAIResponsesOptions<Unit, Unit, Error()>:
-  Responses.OpenAIResponsesOptions{Some{signal}, None{}, text(field(options, "apiKey")), Some{fetch}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, transportOf(text(field(options, "transport"))), None{}, None{}, None{}, None{}, levelOf(text(field(options, "reasoningEffort"))), None{}, None{}, None{}}
+  Responses.OpenAIResponsesOptions{Some{signal}, None{}, text(field(options, "apiKey")), Some{fetch}, None{}, None{}, None{}, headersOf(field(options, "headers")), None{}, None{}, None{}, number(field(options, "temperature")), None{}, number(field(options, "maxTokens")), transportOf(text(field(options, "transport"))), retentionOf(text(field(options, "cacheRetention"))), text(field(options, "sessionId")), None{}, None{}, levelOf(text(field(options, "reasoningEffort"))), None{}, tierOf(text(field(options, "serviceTier"))), Maybe.map(&2, V.Value, J(), Convert.toJson, field(options, "toolChoice"))}
 
 # Opening the stream
 # ------------------
@@ -326,37 +585,44 @@ def failure(cause: Responses.Error<Unit, Error()>) -> Error():
 
 def selected(-Options: Data, value: Options) -> Options: value
 
+# The Responses configuration with the process user agent, as the agent runtime builds it.
+def withAgent(agent: String, config: Responses.Config) -> Responses.Config:
+  match config:
+    case Responses.Config{url, OpenAIClient.Defaults{_, a, b, c}, files, transport, security, limit, synthesize}: Responses.Config{url, OpenAIClient.Defaults{agent, a, b, c}, files, transport, security, limit, synthesize}
+
+def configFor(agent: String) -> Responses.Config: withAgent(agent, RP.config())
+
 # upstream stream(): the provider's own options.
-def opened(+fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api: Ai.ModelApi, +model: Model(), +context: Context(), +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
+def opened(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api: Ai.ModelApi, +model: Model(), +context: Context(), +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
   match api:
     case Ai.AnthropicMessagesApi{}: Anthropic.openStream(fetch, TestClient.urlContext(), model, context, Messages.AnthropicOptions{baseOptions(options, signal, fetch), flag(field(options, "thinkingEnabled")), number(field(options, "thinkingBudgetTokens")), text(field(options, "effort")), None{}, None{}, None{}, None{}})
     case Ai.GoogleGenerativeAiApi{}: Google.openStream(fetch, TestClient.urlContext(), counter, model, context, Gemini.GoogleOptions{baseOptions(options, signal, fetch), None{}, googleThinking(field(options, "thinking"))})
     case Ai.OpenAICompletionsApi{}: Completions.openStream(fetch, TestClient.urlContext(), model, context, Chat.OpenAICompletionsOptions{baseOptions(options, signal, fetch), None{}, levelOf(text(field(options, "reasoningEffort"))), None{}})
     case Ai.AzureOpenAIResponsesApi{}:
       do IO<Output()>:
-        owner : Responses.Run<Unit, Unit, Error()> <- Azure.stream(~Unit, ~Unit, ~Unit, ~Details(), ~Error(), ~render, RP.config(), model, context, Azure.AzureOpenAIResponsesOptions{baseOptions(options, signal, fetch), levelOf(text(field(options, "reasoningEffort"))), None{}, None{}, None{}, None{}, None{}, None{}})
+        owner : Responses.Run<Unit, Unit, Error()> <- Azure.stream(~Unit, ~Unit, ~Unit, ~Details(), ~Error(), ~render, configFor(agent), model, context, Azure.AzureOpenAIResponsesOptions{baseOptions(options, signal, fetch), levelOf(text(field(options, "reasoningEffort"))), None{}, None{}, None{}, None{}, None{}, None{}})
         return Providers.lease(~Unit, ~Error(), ~failure, Responses.borrow(Unit, Unit, Error(), owner))
     case Ai.OpenAICodexResponsesApi{}:
       do IO<Output()>:
-        owner : Responses.Run<Unit, Unit, Error()> <- Codex.stream(~Unit, ~Unit, ~Unit, ~Details(), ~Error(), ~render, RP.config(), model, context, responsesOptions(options, signal, fetch))
+        owner : Responses.Run<Unit, Unit, Error()> <- Codex.stream(~Unit, ~Unit, ~Unit, ~Details(), ~Error(), ~render, configFor(agent), model, context, responsesOptions(options, signal, fetch))
         return Providers.lease(~Unit, ~Error(), ~failure, Responses.borrow(Unit, Unit, Error(), owner))
     case _:
       do IO<Output()>:
-        owner : Responses.Run<Unit, Unit, Error()> <- Responses.stream(~Unit, ~Unit, ~Unit, ~Details(), ~Error(), ~render, RP.config(), model, context, responsesOptions(options, signal, fetch))
+        owner : Responses.Run<Unit, Unit, Error()> <- Responses.stream(~Unit, ~Unit, ~Unit, ~Details(), ~Error(), ~render, configFor(agent), model, context, responsesOptions(options, signal, fetch))
         return Providers.lease(~Unit, ~Error(), ~failure, Responses.borrow(Unit, Unit, Error(), owner))
 
 # upstream streamSimple(), as the agent runtime dispatches it.
-def openedSimple(+fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api: Ai.ModelApi, +model: Model(), +context: Context(), +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
+def openedSimple(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api: Ai.ModelApi, +model: Model(), +context: Context(), +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
   match api:
     case Ai.AnthropicMessagesApi{}: Anthropic.open(fetch, TestClient.urlContext(), model, context, Some{simpleOptions(options, signal, fetch)})
     case Ai.GoogleGenerativeAiApi{}: Google.open(fetch, TestClient.urlContext(), counter, model, context, Some{simpleOptions(options, signal, fetch)})
     case Ai.OpenAICompletionsApi{}: Completions.open(fetch, TestClient.urlContext(), model, context, Some{simpleOptions(options, signal, fetch)})
-    case _: Providers.openResponses(~Simple(), ~Unit, ~Unit, ~Details(), ~Error(), ~selected(Simple()), ~render, ~failure, RP.config(), Agent.StreamInput{model, context, Some{simpleOptions(options, signal, fetch)}})
+    case _: Providers.openResponses(~Simple(), ~Unit, ~Unit, ~Details(), ~Error(), ~selected(Simple()), ~render, ~failure, configFor(agent), Agent.StreamInput{model, context, Some{simpleOptions(options, signal, fetch)}})
 
-def entered(+entry: String, fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, +model: Model(), +context: Context(), +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
+def entered(+agent: String, +entry: String, fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, +model: Model(), +context: Context(), +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
   match entry:
-    case "simple": openedSimple(fetch, counter, apiOf(model), model, context, options, signal)
-    case _: opened(fetch, counter, apiOf(model), model, context, options, signal)
+    case "simple": openedSimple(agent, fetch, counter, apiOf(model), model, context, options, signal)
+    case _: opened(agent, fetch, counter, apiOf(model), model, context, options, signal)
 
 # Draining
 # --------
@@ -435,34 +701,139 @@ def caseContext(+model: Model(), value: V.Value, overflow: Bool) -> Result<&2, &
     case True{}: Done{overflowContext(model)}
     case False{}: contextOf(Maybe.default(&2, V.Value, field(value, "context"), V.ObjectValue{R.new(V.Value)}))
 
-def runWith(fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, +value: V.Value, +model: Model(), context: Result<&2, &2, String, Context()>) -> IO(Unit):
+def runWith(+agent: String, fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, +value: V.Value, +model: Model(), context: Result<&2, &2, String, Context()>) -> IO(Unit):
   match context:
     case Fail{error}: IO.die(Unit, 1, error)
     case Done{+items}:
       do IO<Unit>:
         +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
         abortFirst(Maybe.default(&2, Bool, flag(field(value, "abortBefore")), False{}), controller)
-        result : Output() <- entered(Maybe.default(&2, String, text(field(value, "entry")), "stream"), fetch, counter, model, items, Maybe.default(&2, V.Value, field(value, "options"), V.ObjectValue{R.new(V.Value)}), Abort.signal(Unit, controller))
+        result : Output() <- entered(agent, Maybe.default(&2, String, text(field(value, "entry")), "stream"), fetch, counter, model, items, Maybe.default(&2, V.Value, field(value, "options"), V.ObjectValue{R.new(V.Value)}), Abort.signal(Unit, controller))
         observed(result, controller, Maybe.map(&2, F64, Nat, natOf, number(field(value, "abortAfterChars"))), Maybe.default(&2, Bool, flag(field(value, "overflow")), False{}), windowOf(model))
         Abort.dispose(Unit, controller)
 
-def withModel(fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, +base: String, +value: V.Value, model: Maybe<&2, Model()>) -> IO(Unit):
+# Case `modelOverride`: {provider?, compat? (replaces the catalog compat, as
+# the suites' `{ ...model, compat: {...} }`), compatMerge? (spread over it),
+# hostPath? (keeps the catalog base URL's host and path after the run, so
+# base-URL substring checks such as "openrouter.ai" still see it)}.
+def withProvider(model: Model(), provider: Maybe<&2, String>) -> Model():
+  match model provider:
+    case _ None{}: model
+    case Ai.Model{id, name, api, _, url, reasoning, levels, input, limits, cost, cache, window, maxTokens, sampling, headers, compat} Some{replaced}:
+      Ai.Model{id, name, api, replaced, url, reasoning, levels, input, limits, cost, cache, window, maxTokens, sampling, headers, compat}
+
+def withCompat(model: Model(), replaced: Maybe<&2, V.Value>, merged: Maybe<&2, V.Value>) -> Model():
+  match model replaced merged:
+    case _ None{} None{}: model
+    case Ai.Model{id, name, +api, provider, url, reasoning, levels, input, limits, cost, cache, window, maxTokens, sampling, headers, _} Some{value} _:
+      Ai.Model{id, name, api, provider, url, reasoning, levels, input, limits, cost, cache, window, maxTokens, sampling, headers, Composer.mergedCompat(api, None{}, Some{value})}
+    case Ai.Model{id, name, +api, provider, url, reasoning, levels, input, limits, cost, cache, window, maxTokens, sampling, headers, compat} None{} Some{value}:
+      Ai.Model{id, name, api, provider, url, reasoning, levels, input, limits, cost, cache, window, maxTokens, sampling, headers, Composer.mergedCompat(api, compat, Some{value})}
+
+def baseUrlOf(model: Model()) -> String:
+  match model:
+    case Ai.Model{_, _, _, _, url, _, _, _, _, _, _, _, _, _, _, _}: url
+
+def withoutScheme(url: String) -> String:
+  match url:
+    case SCon{'h', SCon{'t', SCon{'t', SCon{'p', SCon{'s', SCon{':', SCon{'/', SCon{'/', rest}}}}}}}}: rest
+    case SCon{'h', SCon{'t', SCon{'t', SCon{'p', SCon{':', SCon{'/', SCon{'/', rest}}}}}}}: rest
+    case other: other
+
+def runUrl(+base: String, +run: String, hostPath: Bool, logical: Maybe<&2, String>, model: Model()) -> String:
+  base ++ "/" ++ run ++ Bool.pick(String, hostPath, "/" ++ withoutScheme(Maybe.default(&2, String, logical, baseUrlOf(model))), "")
+
+def logicalBaseUrl(override: Maybe<&2, V.Value>) -> Maybe<&2, String>:
+  match override:
+    case Some{+value}: text(field(value, "baseUrl"))
+    case None{}: None{}
+
+def overriddenModel(+model: Model(), override: Maybe<&2, V.Value>) -> Model():
+  match override:
+    case None{}: model
+    case Some{+value}: withCompat(withProvider(model, text(field(value, "provider"))), field(value, "compat"), field(value, "compatMerge"))
+
+def hostPathOf(override: Maybe<&2, V.Value>) -> Bool:
+  match override:
+    case Some{+value}: Maybe.default(&2, Bool, flag(field(value, "hostPath")), False{})
+    case None{}: False{}
+
+def withModel(+agent: String, fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, +base: String, +value: V.Value, model: Maybe<&2, Model()>) -> IO(Unit):
   match model:
     case None{}: IO.die(Unit, 1, "unknown model")
     case Some{found}:
-      +configured = withBaseUrl(withApi(found, apiNamed(text(field(value, "api")))), base ++ "/" ++ Maybe.default(&2, String, text(field(value, "run")), "run"))
-      runWith(fetch, counter, value, configured, caseContext(configured, value, Maybe.default(&2, Bool, flag(field(value, "overflow")), False{})))
+      +shaped = overriddenModel(withApi(found, apiNamed(text(field(value, "api")))), field(value, "modelOverride"))
+      +configured = withBaseUrl(shaped, runUrl(base, Maybe.default(&2, String, text(field(value, "run")), "run"), hostPathOf(field(value, "modelOverride")), logicalBaseUrl(field(value, "modelOverride")), shaped))
+      runWith(agent, fetch, counter, value, configured, caseContext(configured, value, Maybe.default(&2, Bool, flag(field(value, "overflow")), False{})))
 
 def keyOf(+value: V.Value) -> String:
   Maybe.default(&2, String, text(field(value, "provider")), "") ++ "/" ++ Maybe.default(&2, String, text(field(value, "model")), "")
 
+# Case `catalog: <provider>`: prints each built-in model ("M <json>", code
+# points) with its supported thinking levels, for the catalog suites.
+def catalogList(+provider: String) -> List<&2, Model()>:
+  match provider:
+    case "xai": CatalogXai.XAI_MODELS()
+    case "baseten": CatalogBaseten.BASETEN_MODELS()
+    case "fireworks": CatalogFireworks.FIREWORKS_MODELS()
+    case "qwen-token-plan": CatalogQwenTokenPlan.QWEN_TOKEN_PLAN_MODELS()
+    case "qwen-token-plan-cn": CatalogQwenTokenPlanCn.QWEN_TOKEN_PLAN_CN_MODELS()
+    case "qwen-token-plan-individual": CatalogQwenTokenPlanIndividual.QWEN_TOKEN_PLAN_INDIVIDUAL_MODELS()
+    case "opencode": CatalogOpencode.OPENCODE_MODELS()
+    case "opencode-go": CatalogOpencodeGo.OPENCODE_GO_MODELS()
+    case _: Nil{}
+
+def levelNames(levels: List<&2, Ai.ModelThinkingLevel>) -> List<&2, V.Value>:
+  match levels:
+    case Nil{}: Nil{}
+    case level <> rest: V.Text{ModelJson.thinkingLevel(level)} <> levelNames(rest)
+
+def withLevels(json: V.Value, levels: V.Value) -> V.Value:
+  match json:
+    case V.ObjectValue{fields}: V.ObjectValue{R.set(V.Value, fields, "supportedThinkingLevels", levels)}
+    case other: other
+
+def described(+model: Model()) -> V.Value:
+  withLevels(ModelJson.model(model), V.ArrayValue{levelNames(AiModels.getSupportedThinkingLevels(J(), model))})
+
+def printCatalog(models: List<&2, Model()>) -> IO(Unit):
+  match models:
+    case Nil{}: IO.pure(Unit, Unit{})
+    case model <> rest:
+      do IO<Unit>:
+        IO.print("M " ++ Text.showText(jsonText(Convert.toJson(described(model)))))
+        printCatalog(rest)
+
+def builtCustom(result: Result<&2, &2, String, Model()>) -> Maybe<&2, Model()>:
+  match result:
+    case Done{model}: Some{model}
+    case Fail{_}: None{}
+
+# Case `customModel`: a model literal as the suites write it, built the way
+# the CLI builds a models.json model definition.
+def customModel(value: Maybe<&2, V.Value>) -> Maybe<&2, Model()>:
+  match value:
+    case None{}: None{}
+    case Some{+definition}: builtCustom(Composer.modelFromJson(Maybe.default(&2, String, text(field(definition, "provider")), "custom"), ModelConfig.modelOf(definition), ModelConfig.providerOf(V.ObjectValue{R.new(V.Value)}), None{}))
+
+def chosenModel(custom: Maybe<&2, Model()>, +key: String) -> Maybe<&2, Model()>:
+  match custom:
+    case Some{model}: Some{model}
+    case None{}: catalogModel(key)
+
+def catalogOrCase(fetch: Fetch.Fetch(Unit), +base: String, +value: V.Value, catalog: Maybe<&2, String>) -> IO(Unit):
+  match catalog:
+    case Some{provider}: printCatalog(catalogList(provider))
+    case None{}:
+      do IO<Unit>:
+        counter : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
+        +agent : String <- IO.try(String, UserAgent.get())
+        withModel(agent, fetch, counter, base, value, chosenModel(customModel(field(value, "customModel")), keyOf(value)))
+
 def runCase(fetch: Fetch.Fetch(Unit), +base: String, parsed: Result<&2, &2, Decode.ParseError, V.Value>) -> IO(Unit):
   match parsed:
     case Fail{_}: IO.die(Unit, 1, "invalid case")
-    case Done{+value}:
-      do IO<Unit>:
-        counter : Ref.Ref<Nat> <- Ref.new(Nat, 0n)
-        withModel(fetch, counter, base, value, catalogModel(keyOf(value)))
+    case Done{+value}: catalogOrCase(fetch, base, value, text(field(value, "catalog")))
 
 # The strict JSON decoder rejects unpaired surrogate escapes (an approved
 # native adaptation of JSON.parse), so the check writes U+E000 where a case

@@ -328,7 +328,7 @@ def builtins() -> IO(Unit):
     store : Auth.CredentialStore <- emptyStore()
     context : Auth.AuthContext <- fakeAuthContext(vars([R.Property{"OPENROUTER_API_KEY", "or-key"}]))
     api : Images.ProviderImages(Error()) <- okApi()
-    +models : Collection() <- All.builtinImagesModels(Error(), store, context, api)
+    +models : Collection() <- All.builtinImagesModels(Error(), store, context, None{}, api)
     +list : List<&2, Model()> <- Images.getModels(Error(), models, Some{"openrouter"})
     auth : Resolve.Resolution() <- Images.getAuth(Error(), models, "openrouter", Resolve.noOverrides())
     expect("builtinImagesModels registers the openrouter provider with its catalog", String.join(providerIds(Images.getProviders(Error(), models)), ",") ++ "|" ++ Bool.pick(String, List.is_empty(&2, Model(), list), "empty", "listed") ++ "|" ++ Bool.pick(String, allOpenRouter(list), "openrouter-images", "other") ++ "|" ++ authKey(auth), "openrouter|listed|openrouter-images|or-key")
