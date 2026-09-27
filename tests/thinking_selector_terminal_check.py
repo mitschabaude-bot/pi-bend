@@ -1,0 +1,54 @@
+"""Exercise picker mouse selection through both interactive terminals."""
+import argparse
+import os
+from pathlib import Path
+import re
+import shutil
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tests/parity'))
+import runner
+import scenarios
+
+
+class PickerTerminal(runner.Terminal):
+    def keys(self, text):
+        if text == '<click-high>':
+            rows = self.screen().splitlines()
+            row = next(i for i, line in enumerate(rows) if re.search(r'^\s*(?:→ )?\s*high\s+Deep reasoning', line))
+            # SGR mouse coordinates are one-based. A release after the left
+            # press produces the terminal's click, invoking the chosen hook.
+            text = f'\x1b[<0;4;{row + 1}M\x1b[<0;4;{row + 1}m'
+        super().keys(text)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--bend', type=Path, default=ROOT / 'build/pi-cli-thinking-mouse')
+    args = parser.parse_args()
+    runner.Terminal = PickerTerminal
+    runner.package_links()
+    original = next(s for s in scenarios.SCENARIOS if s['name'] == 'thinking-selector')
+    scenario = {**original, 'args': original['args'] + ['--tui-mode', 'fullscreen'],
+                'name': 'thinking-selector-mouse', 'steps': [
+        ('wait', scenarios.READY, 'startup'), ('settle', 1),
+        ('keys', '/thinking'), ('key', 'Enter'), ('wait', 'Thinking Level', 'open'),
+        ('settle', .2), ('keys', '<click-high>'),
+        ('wait', 'Thinking level: high', 'selected'), ('settle', .2), ('snap', 'selected'),
+        ('keys', '/thinking'), ('key', 'Enter'), ('wait', 'Thinking Level', 'reopen'),
+        ('key', 'C-s'), ('wait', 'Default thinking level:', 'saved'), ('settle', .2), ('snap', 'saved')
+    ]}
+    expected = runner.run_side('pi', [shutil.which('pi')], scenario, False)
+    assert all(value is not None for value in expected['timings'].values()), expected['timings']
+    for threads in (1, 4):
+        os.environ['BEND_THREADS'] = str(threads)
+        actual = runner.run_side('bend', [str(args.bend.resolve())], scenario, False)
+        assert all(value is not None for value in actual['timings'].values()), actual['timings']
+        assert actual['snaps'] == expected['snaps'], (threads, actual['snaps'], expected['snaps'])
+        assert not actual['requests'], 'picker unexpectedly sent a model request'
+        print(f'native{threads}: picker mouse selection, modal closure and save-as-default match pi')
+
+
+if __name__ == '__main__':
+    main()

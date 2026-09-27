@@ -6,18 +6,20 @@ import ../../../../../runtime/src/ref.bend as Ref
 import ../../../../../runtime/src/word-segmenter.bend as Segmenter
 import ../../../../../tui/src/component.bend as Component
 import ../../../../../tui/src/components/input.bend as Input
+import ../../../../../tui/src/components/select-list.bend as Select
 import ../../../../../tui/src/fuzzy.bend as Fuzzy
 import ../../../../../tui/src/keybindings.bend as Bindings
 import ../../../../../tui/src/keys.bend as Keys
 import ../../../../../tui/src/tui.bend as Tui
-import ../../../../../tui/src/utils.bend as Utils
+import ../../../../../tui/src/components/text.bend as Text
 import ../../../../../tui/src/word-navigation.bend as Word
 import ../theme/theme.bend as Theme
 import ./keybinding-hints.bend as Hints
 
 type Entry is Data: Entry{level: Ai.ModelThinkingLevel,description: String}
+type Layout is Data: Layout{width: Nat,searchRow: Nat,listRow: Nat,pressed: Maybe<&2,Nat>}
 type State is Data:
-  State{all: List<&2,Entry>,visible: List<&2,Entry>,selected: Nat,search: Input.Input,current: Ai.ModelThinkingLevel,defaultLevel: Ai.ModelThinkingLevel}
+  State{all: List<&2,Entry>,visible: List<&2,Entry>,selected: Nat,search: Input.Input,current: Ai.ModelThinkingLevel,defaultLevel: Maybe<&2,Ai.ModelThinkingLevel>,layout: Maybe<&2,Layout>}
 type Action is Data: Continue{} Cancel{} Chosen{level: Ai.ModelThinkingLevel,persist: Bool}
 
 def description(level: Ai.ModelThinkingLevel) -> String:
@@ -29,10 +31,12 @@ def description(level: Ai.ModelThinkingLevel) -> String:
     case Ai.Thinking{Ai.High{}}: "Deep reasoning (~16k tokens)"
     case Ai.Thinking{Ai.XHigh{}}: "Extra-high reasoning (~32k tokens)"
     case Ai.Thinking{Ai.Max{}}: "Maximum reasoning"
-def entries(levels: List<&2,Ai.ModelThinkingLevel>) -> List<&2,Entry>:
+def isDefault(defaultLevel: Maybe<&2,Ai.ModelThinkingLevel>,level: Ai.ModelThinkingLevel) -> Bool:
+  match defaultLevel: case None{}: False{} case Some{value}: U32.is_eq(Levels.rank(value),Levels.rank(level))
+def entries(levels: List<&2,Ai.ModelThinkingLevel>,+defaultLevel: Maybe<&2,Ai.ModelThinkingLevel>) -> List<&2,Entry>:
   match levels:
     case Nil{}: Nil{}
-    case +level <> rest: Entry{level,description(level)} <> entries(rest)
+    case +level <> rest: Entry{level,description(level) ++ Bool.pick(String,isDefault(defaultLevel,level)," · default","")} <> entries(rest,defaultLevel)
 def same(left: Ai.ModelThinkingLevel,right: Ai.ModelThinkingLevel) -> Bool:
   U32.is_eq(Levels.rank(left),Levels.rank(right))
 def indexOf(items: List<&2,Entry>,+level: Ai.ModelThinkingLevel,+index: Nat) -> Nat:
@@ -44,12 +48,14 @@ def searchable(item: Entry) -> String:
     case Entry{level,details}: Levels.name(level) ++ " " ++ details
 def filtered(+items: List<&2,Entry>,+query: String) -> List<&2,Entry>:
   Bool.pick(List<&2,Entry>,String.is_empty(query),items,Fuzzy.fuzzyFilter(~Entry,~searchable,items,query))
-def create(levels: List<&2,Ai.ModelThinkingLevel>,+current: Ai.ModelThinkingLevel,defaultLevel: Ai.ModelThinkingLevel) -> State:
-  +all = entries(levels)
-  State{all,all,indexOf(all,current,0n),Input.setFocused(Input.new(None{}),True{}),current,defaultLevel}
+def createWithDefault(levels: List<&2,Ai.ModelThinkingLevel>,+current: Ai.ModelThinkingLevel,+defaultLevel: Maybe<&2,Ai.ModelThinkingLevel>) -> State:
+  +all = entries(levels,defaultLevel)
+  State{all,all,indexOf(all,current,0n),Input.setFocused(Input.new(None{}),True{}),current,defaultLevel,None{}}
+def create(levels: List<&2,Ai.ModelThinkingLevel>,current: Ai.ModelThinkingLevel,defaultLevel: Ai.ModelThinkingLevel) -> State:
+  createWithDefault(levels,current,Some{defaultLevel})
 def selected(state: State) -> Maybe<&2,Entry>:
   match state:
-    case State{_,visible,index,_,_,_}: List.get(&2,Entry,visible,index)
+    case State{_,visible,index,_,_,_,_}: List.get(&2,Entry,visible,index)
 def choice(value: Maybe<&2,Entry>,persist: Bool) -> Action:
   match value:
     case None{}: Continue{}
@@ -66,16 +72,16 @@ def preserve(items: List<&2,Entry>,selection: Maybe<&2,Ai.ModelThinkingLevel>) -
     case Some{level}: indexOf(items,level,0n)
 def withSearch(state: State,+search: Input.Input) -> State:
   match state:
-    case State{+all,+visible,+index,_,+current,+defaultLevel}:
-      +old = currentSelection(State{all,visible,index,search,current,defaultLevel})
+    case State{+all,+visible,+index,_,+current,+defaultLevel,_}:
+      +old = currentSelection(State{all,visible,index,search,current,defaultLevel,None{}})
       +next = filtered(all,Input.getValue(search))
-      State{all,next,preserve(next,old),search,current,defaultLevel}
+      State{all,next,preserve(next,old),search,current,defaultLevel,None{}}
 def move(state: State,up: Bool) -> State:
   match state:
-    case State{all,+visible,+index,search,current,defaultLevel}:
+    case State{all,+visible,+index,search,current,defaultLevel,layout}:
       +count = List.length(&2,Entry,visible)
       +next = Bool.pick(Nat,up,Bool.pick(Nat,Nat.is_eq(index,0n),count - 1n,index - 1n),Bool.pick(Nat,Nat.is_eq(index,count - 1n),0n,index + 1n))
-      State{all,visible,Bool.pick(Nat,Nat.is_eq(count,0n),0n,next),search,current,defaultLevel}
+      State{all,visible,Bool.pick(Nat,Nat.is_eq(count,0n),0n,next),search,current,defaultLevel,layout}
 def nonAtomic(_: Segmenter.Source,_: String) -> Bool: False{}
 def edited(state: State,result: Word.ResultOf(Input.Input)) -> State & Action:
   match result:
@@ -83,7 +89,7 @@ def edited(state: State,result: Word.ResultOf(Input.Input)) -> State & Action:
     case Fail{_}: (state,Continue{})
 def otherInput(+state: State,source: Segmenter.Source,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,data: String) -> IO(State & Action):
   match state:
-    case State{_,_,_,+search,_,_}:
+    case State{_,_,_,+search,_,_,_}:
       do IO<State & Action>:
         result : Word.ResultOf(Input.Input) <- Input.handleInput(~Segmenter.Source,~Word.sourceSegments,~nonAtomic,source,search,bindings,keyboard,data)
         return edited(state,result)
@@ -96,50 +102,92 @@ def input(+state: State,source: Segmenter.Source,+bindings: Bindings.Keybindings
 def paint(theme: Theme.Theme,key: String,+text: String) -> String:
   Result.default(&2,&2,Theme.Error,String,Theme.foreground(theme,key,text),text)
 def border(width: Nat) -> String: String.repeat("─",width)
-def rowText(active: Bool,prefix: String,spacing: String,annotated: String,theme: Theme.Theme) -> String:
-  match active:
-    case True{}: paint(theme,"accent",prefix ++ spacing ++ annotated)
-    case False{}: prefix ++ paint(theme,"muted",spacing ++ annotated)
-def row(item: Entry,+index: Nat,+selected: Nat,current: Ai.ModelThinkingLevel,defaultLevel: Ai.ModelThinkingLevel,theme: Theme.Theme,width: Nat) -> String:
-  match item:
-    case Entry{+level,details}:
-      +mark = Bool.pick(String,same(level,current),"✓ ","  ")
-      +label = mark ++ Levels.name(level)
-      +annotated = details ++ Bool.pick(String,same(level,defaultLevel)," · default","")
-      +spacing = String.repeat(" ",Nat.max(1n,12n - Utils.visibleWidth(label)))
-      +active = Nat.is_eq(index,selected)
-      +prefix = Bool.pick(String,active,"→ ","  ") ++ label
-      +line = rowText(active,prefix,spacing,annotated,theme)
-      Utils.truncateToWidth(line,width,"",False{})
-def rows(items: List<&2,Entry>,+index: Nat,+selected: Nat,+current: Ai.ModelThinkingLevel,+defaultLevel: Ai.ModelThinkingLevel,+theme: Theme.Theme,+width: Nat) -> List<&2,String>:
+def selectItems(items: List<&2,Entry>,+current: Ai.ModelThinkingLevel,+defaultLevel: Maybe<&2,Ai.ModelThinkingLevel>) -> List<&2,Select.SelectItem>:
   match items:
     case Nil{}: Nil{}
-    case item <> rest: row(item,index,selected,current,defaultLevel,theme,width) <> rows(rest,index + 1n,selected,current,defaultLevel,theme,width)
-def renderedState(state: State,+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,+width: Nat,nextSearch: Input.Input,searchLines: List<&2,String>) -> State & List<&2,String>:
+    case Entry{+level,details} <> rest:
+      Select.SelectItem{Levels.name(level),Bool.pick(String,same(level,current),"✓ ","  ") ++ Levels.name(level),Some{details}} <> selectItems(rest,current,defaultLevel)
+type SelectPaint is Data: SelectPaint{theme: Theme.Theme,key: String}
+def selectPaint(context: SelectPaint,text: String) -> IO(String):
+  match context: case SelectPaint{theme,key}: IO.pure(String,paint(theme,key,text))
+def selectRows(items: List<&2,Entry>,index: Nat,current: Ai.ModelThinkingLevel,defaultLevel: Maybe<&2,Ai.ModelThinkingLevel>,+theme: Theme.Theme,width: Nat) -> IO(List<&2,String>):
+  do IO<List<&2,String>>:
+    +accent : Callback.Callback<String,String> <- Callback.create(~SelectPaint,~String,~String,~selectPaint,SelectPaint{theme,"accent"})
+    +muted : Callback.Callback<String,String> <- Callback.create(~SelectPaint,~String,~String,~selectPaint,SelectPaint{theme,"muted"})
+    +rows : List<&2,Select.SelectItem> = selectItems(items,current,defaultLevel)
+    lines : List<&2,String> <- Select.render(Select.setSelectedIndex(Select.new(rows,Nat.max(1n,List.length(&2,Select.SelectItem,rows)),Select.SelectListTheme{accent,accent,muted,muted,muted},Some{Select.SelectListLayoutOptions{Some{12n},Some{32n},None{}}}),index),width)
+    Callback.dispose(String,String,accent)
+    Callback.dispose(String,String,muted)
+    return lines
+def pressed(layout: Maybe<&2,Layout>) -> Maybe<&2,Nat>:
+  match layout: case None{}: None{} case Some{Layout{_,_,_,value}}: value
+def textOutput(pair: Text.Text & List<&2,String>) -> List<&2,String>:
+  match pair: case (_,lines): lines
+def textLines(text: String,width: Nat) -> IO(List<&2,String>):
+  do IO<List<&2,String>>:
+    pair : Text.Text & List<&2,String> <- Text.render(Text.new(text,Some{0n},Some{0n},None{}),width)
+    return textOutput(pair)
+def renderedState(state: State,+width: Nat,nextSearch: Input.Input,+searchLines: List<&2,String>,+heading: List<&2,String>,footer: List<&2,String>,body: List<&2,String>) -> State & List<&2,String>:
   match state:
-    case State{all,+visible,+index,_,+current,+defaultLevel}:
-      +cycle = Hints.keyDisplayText(bindings,"app.thinking.cycle")
-      +confirm = Hints.keyDisplayText(bindings,"tui.select.confirm")
-      +save = Hints.keyDisplayText(bindings,"app.thinking.save")
-      +cancel = Hints.keyDisplayText(bindings,"tui.select.cancel")
-      +body = Bool.pick(List<&2,String>,List.is_empty(&2,Entry,visible),paint(theme,"muted","  No matching levels") <> Nil{},rows(visible,0n,index,current,defaultLevel,theme,width))
-      +lines = List.concat(&2,String,[
-        [paint(theme,"border",border(width)),"","Thinking Level","",cycle ++ " cycles thinking levels in-session",""],
-        searchLines,
-        [""],
-        body,
-        ["",paint(theme,"dim","  " ++ confirm ++ " to select · " ++ save ++ " to set as default · " ++ cancel ++ " to cancel"),paint(theme,"border",border(width))]
-      ])
-      (State{all,visible,index,nextSearch,current,defaultLevel},lines)
-def renderedPair(state: State,theme: Theme.Theme,bindings: Bindings.KeybindingsManager,width: Nat,pair: Input.Input & List<&2,String>) -> State & List<&2,String>:
-  match pair:
-    case (nextSearch,searchLines): renderedState(state,theme,bindings,width,nextSearch,searchLines)
-def rendered(+state: State,theme: Theme.Theme,bindings: Bindings.KeybindingsManager,+width: Nat) -> IO(State & List<&2,String>):
+    case State{all,visible,index,_,current,defaultLevel,layout}:
+      +searchRow = List.length(&2,String,heading)
+      +listRow = searchRow + List.length(&2,String,searchLines) + 1n
+      +lines = List.concat(&2,String,[heading,searchLines,[""],body,[""],footer])
+      (State{all,visible,index,nextSearch,current,defaultLevel,Some{Layout{width,searchRow,listRow,pressed(layout)}}},lines)
+def renderedPair(state: State,width: Nat,pair: Input.Input & List<&2,String>,heading: List<&2,String>,footer: List<&2,String>,body: List<&2,String>) -> State & List<&2,String>:
+  match pair: case (nextSearch,searchLines): renderedState(state,width,nextSearch,searchLines,heading,footer,body)
+def rendered(+state: State,+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,+width: Nat) -> IO(State & List<&2,String>):
   match state:
-    case State{_,_,_,+search,_,_}:
+    case State{_,visible,index,+search,current,defaultLevel,_}:
       do IO<State & List<&2,String>>:
+        body : List<&2,String> <- selectRows(visible,index,current,defaultLevel,theme,width)
+        title : List<&2,String> <- textLines("Thinking Level",width)
+        hint : List<&2,String> <- textLines(Hints.keyDisplayText(bindings,"app.thinking.cycle") ++ " cycles thinking levels in-session",width)
+        help : List<&2,String> <- textLines(paint(theme,"dim","  " ++ Hints.keyDisplayText(bindings,"tui.select.confirm") ++ " to select · " ++ Hints.keyDisplayText(bindings,"app.thinking.save") ++ " to set as default · " ++ Hints.keyDisplayText(bindings,"tui.select.cancel") ++ " to cancel"),width)
         pair : Input.Input & List<&2,String> <- Input.render(search,width)
-        return renderedPair(state,theme,bindings,width,pair)
+        return renderedPair(state,width,pair,List.concat(&2,String,[[paint(theme,"border",border(width)),""],title,[""],hint,[""]]),List.concat(&2,String,[help,[paint(theme,"border",border(width))]]),body)
+
+def containsRow(value: Tui.Offset,+start: Nat,count: Nat) -> Bool:
+  match value:
+    case Tui.Forward{+row}: Nat.is_le(start,row) && Nat.is_lt(row,start + count)
+    case Tui.Backward{amount}: Nat.is_eq(amount,0n) && Nat.is_eq(start,0n) && Nat.is_lt(0n,count)
+def mouseSelection(state: State,index: Nat,pressedIndex: Maybe<&2,Nat>) -> State:
+  match state:
+    case State{all,visible,_,search,current,defaultLevel,Some{Layout{width,searchRow,listRow,_}}}:
+      State{all,visible,index,search,current,defaultLevel,Some{Layout{width,searchRow,listRow,pressedIndex}}}
+    case state: state
+def wheel(+state: State,delta: Maybe<&2,Tui.Offset>) -> State & Action & Maybe<&2,Tui.TuiMouseEventResult>:
+  match state delta:
+    case State{_,visible,+index,_,_,_,layout} Some{+direction}:
+      +next = Select.wheelIndex(direction,index,List.length(&2,Entry,visible))
+      Bool.pick(State & Action & Maybe<&2,Tui.TuiMouseEventResult>,Select.nonzero(Some{direction}),
+        (mouseSelection(state,next,pressed(layout)),Continue{},Some{Tui.TuiMouseEventResult{True{},False{},False{},Some{Bool.not(Nat.is_eq(index,next))}}}),
+        (state,Continue{},None{}))
+    case state _: (state,Continue{},None{})
+def listMouse(+state: State,event: Tui.TuiMouseEvent) -> State & Action & Maybe<&2,Tui.TuiMouseEventResult>:
+  match state event:
+    case State{_,_,index,_,_,_,Some{Layout{_,_,listRow,oldPressed}}} Tui.TuiMouseEvent{Tui.MousePress{},Tui.MouseLeft{},_,+y,_,_,_,_,_,_,_,_,_}:
+      (mouseSelection(state,Select.nonnegative(y) - listRow,Some{Select.nonnegative(y) - listRow}),Continue{},Some{Tui.TuiMouseEventResult{True{},False{},True{},None{}}})
+    case State{_,_,_,_,_,_,Some{Layout{_,_,listRow,oldPressed}}} Tui.TuiMouseEvent{Tui.MouseClick{},Tui.MouseLeft{},_,y,_,_,_,_,_,_,_,_,_}:
+      +next = mouseSelection(state,Maybe.default(&2,Nat,oldPressed,Select.nonnegative(y) - listRow),None{})
+      (next,chosen(next,False{}),Some{Tui.TuiMouseEventResult{True{},False{},False{},None{}}})
+    case state Tui.TuiMouseEvent{Tui.MouseWheel{},_,_,_,_,_,_,_,_,_,_,delta,_}: wheel(state,delta)
+    case state _: (state,Continue{},None{})
+def searchedMouse(state: State,pair: Input.Input & Maybe<&2,Tui.TuiMouseEventResult>) -> State & Action & Maybe<&2,Tui.TuiMouseEventResult>:
+  match pair state:
+    case (search,response) State{all,visible,index,_,current,defaultLevel,layout}:
+      (State{all,visible,index,search,current,defaultLevel,layout},Continue{},response)
+def searchMouse(+state: State,event: Tui.TuiMouseEvent) -> State & Action & Maybe<&2,Tui.TuiMouseEventResult>:
+  match state event:
+    case State{_,_,_,+search,_,_,_} Tui.TuiMouseEvent{kind,button,x,_,sx,sy,width,_,shift,alt,ctrl,delta,count}:
+      searchedMouse(state,Input.handleMouse(search,Tui.TuiMouseEvent{kind,button,x,Tui.Forward{0n},sx,sy,width,1n,shift,alt,ctrl,delta,count}))
+def handleMouse(+state: State,+event: Tui.TuiMouseEvent) -> State & Action & Maybe<&2,Tui.TuiMouseEventResult>:
+  match state event:
+    case State{_,visible,_,_,_,_,Some{Layout{width,searchRow,listRow,_}}} Tui.TuiMouseEvent{_,_,_,+y,_,_,_,+height,_,_,_,_,_}:
+      Bool.pick(Unit -> State & Action & Maybe<&2,Tui.TuiMouseEventResult>,containsRow(y,0n,height) && containsRow(y,searchRow,1n),
+        _ => searchMouse(state,event),
+        _ => Bool.pick(Unit -> State & Action & Maybe<&2,Tui.TuiMouseEventResult>,containsRow(y,0n,height) && containsRow(y,listRow,List.length(&2,Entry,visible)),_ => listMouse(state,event),_ => (state,Continue{},None{}))(Unit{}))(Unit{})
+    case state _: (state,Continue{},None{})
 
 type Modal is Data: Closed{} Open{state: State}
 type Choice is Data: Choice{level: Ai.ModelThinkingLevel,persist: Bool}
@@ -193,16 +241,22 @@ def editorMouse(editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Mayb
   match editor:
     case Component.Component{_,_,_,Some{callback},_,_,_}: Callback.call(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,callback,event)
     case _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
-def mouseCurrent(editor: Component.Component,event: Tui.TuiMouseEvent,current: Modal) -> IO(Maybe<&2,Component.MouseResponse>):
+def mouseAccepted(modal: Ref.Ref<Modal>,onSelect: Callback.Callback<Choice,Unit>,pair: State & Action & Maybe<&2,Tui.TuiMouseEventResult>) -> IO(Maybe<&2,Component.MouseResponse>):
+  match pair:
+    case (state,action,response):
+      do IO<Maybe<&2,Component.MouseResponse>>:
+        accepted(modal,onSelect,(state,action))
+        return Maybe.map(&2,Tui.TuiMouseEventResult,Component.MouseResponse,result => Component.LocalResult{result},response)
+def mouseCurrent(modal: Ref.Ref<Modal>,onSelect: Callback.Callback<Choice,Unit>,editor: Component.Component,event: Tui.TuiMouseEvent,current: Modal) -> IO(Maybe<&2,Component.MouseResponse>):
   match current:
     case Closed{}: editorMouse(editor,event)
-    case Open{_}: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
+    case Open{state}: mouseAccepted(modal,onSelect,handleMouse(state,event))
 def mouse(host: Host,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match host:
-    case Host{+modal,editor,_,_,_,_,_}:
+    case Host{+modal,editor,_,_,_,_,onSelect}:
       do IO<Maybe<&2,Component.MouseResponse>>:
         current : Modal <- Ref.read(Modal,modal)
-        mouseCurrent(editor,event,current)
+        mouseCurrent(modal,onSelect,editor,event,current)
 def invalidate(host: Host,_: Unit) -> IO(Unit):
   match host: case Host{_,editor,_,_,_,_,_}: Component.invalidate(editor)
 def focus(host: Host,value: Bool) -> IO(Unit):

@@ -4920,10 +4920,12 @@
       "source": "packages/coding-agent/test/thinking-selector.test.ts",
       "status": "ported",
       "ports": [
-        "tests/thinking-level.bend"
+        "tests/thinking-level.bend",
+        "tests/thinking-selector.bend",
+        "tests/thinking_selector_check.py"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads). Additional pinned component comparisons cover 51 sequences across six widths (keyboard, search cursor, default filtering and mouse) on native one/four threads; the optional default now has an explicit None representation. The original two source cases still pass. Fullscreen mouse integration is separately pending because the terminal process consumes button input without component dispatch."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",
