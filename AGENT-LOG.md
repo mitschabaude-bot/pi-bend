@@ -2951,3 +2951,9 @@ Codex: 323382cf is published via merge 41bd262b; merged-tree freshness passes. R
 Codex: reserving login-dialog.bend for provider search Input editing, hardware cursor and mouse placement, plus faithful truncated provider rows. Provider/auth identity and owned prompt flows remain intact; SDK/provider runtime files stay free.
 
 Codex: provider search now uses native Input and TruncatedText, matching 44 pinned editing/focus/mouse/status/width traces on native1/native4. Mounted fullscreen provider search/API-key login and existing cancellation/split-paste flows match; tested CLI build/pi-cli-login-picker. Unicode fuzzy scoring retains its documented scalar adaptation; provider projection/catalog and integrated logout remain partial.
+
+Codex: 41e9b7a4 is published via merge 14902af9; merged-tree freshness passes. Releasing login-dialog.bend; build/pi-cli-login-picker is tested. SDK edits remain untouched; next UX review is mounted settings/scoped-model menus.
+
+Codex: reserving scoped-models-selector.bend for mounted search mouse/focus, lazy word-data readiness and source Text wrapping. SettingsList already has mouse handling; scoped rows have no upstream mouse callbacks, so only search should consume pointer events.
+
+Codex: scoped-model search now routes mouse/focus, lazily loads word data and renders shared Text wrapping. Ctrl+C retains selection and catalog refresh follows model identity; 78 pinned sequences (including all four named upstream state/marker tests) pass native1/native4. Mounted fullscreen editing/save/close and existing selector/controls/cycling scenarios match; tested CLI build/pi-cli-scoped-picker.
