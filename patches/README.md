@@ -88,7 +88,9 @@ Evidence, measurements and history live in [docs/bend-issues.md](../docs/bend-is
 | `bend-borrowed-scalars` | Borrow lookup only for boxed fields (BEND-054) |
 | `bend-import-binders`, `bend-named-column-binders`, `bend-import-copy-binders` | Binders named like an imported def, including `+` binders; named column binders (BEND-032, BEND-059) |
 | `bend-conversion-identity` | Conversion checks syntactic identity within a budget before normalizing; port of bendlang/bend PR #1075, replacing BEND-052's congruence step (BEND-061) |
-| `bend-deep-indent` (last in `series`) | JS lines keep exact indentation past 32 columns, which the explicit stack reads; C stays clamped (BEND-063) |
+| `bend-deep-indent` | JS lines keep exact indentation past 32 columns, which the explicit stack reads; C stays clamped (BEND-063) |
+
+| `bend-native-string-equality` | Read immutable String.eq inputs in place and release each root once (BEND-064) |
 
 ### Effect primitives
 

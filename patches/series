@@ -72,3 +72,4 @@ bend-system-identity.patch
 bend-external-editor-primitives.patch
 bend-conversion-identity.patch
 bend-deep-indent.patch
+bend-native-string-equality.patch

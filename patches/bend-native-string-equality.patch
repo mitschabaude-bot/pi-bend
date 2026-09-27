@@ -1,0 +1,35 @@
+--- a/comp.ts
++++ b/comp.ts
+@@ -384,6 +384,7 @@
+     JS:   "nat_divmod($0, $1)",
+   },
+   ...tpl_ops("bool_", "or:|:|| xor:^:!==", "(($0) $o ($1))", "($0 $o $1)"),
++  string_eq: { C: "str_equal(e, $0, $1)", JS: "($0 === $1)" },
+   string_append: {
+     JS: "($0 + $1)",
+   },
+@@ -4901,6 +4902,24 @@
+   return term_aux(s) == CID_SNIL;
+ }
+ 
++// Read immutable chains while their owned roots remain alive. Release each
++// root once, rather than transferring and retaining its fields at every node.
++INLINE u64 str_equal(Env e, Term a, Term b) {
++  Term l = a, r = b;
++  u64 same = 1;
++  while (l != r) {
++    if (term_aux(l) != term_aux(r)) { same = 0; break; }
++    if (term_aux(l) == CID_SNIL) break;
++    Loc ll = term_peek(e, l), rr = term_peek(e, r);
++    if ((u32)e.mem[ll] != (u32)e.mem[rr]) { same = 0; break; }
++    l = e.mem[ll + 1];
++    r = e.mem[rr + 1];
++  }
++  term_sink(e, a);
++  term_sink(e, b);
++  return same;
++}
++
+ // Blk
+ // ===
+ 
