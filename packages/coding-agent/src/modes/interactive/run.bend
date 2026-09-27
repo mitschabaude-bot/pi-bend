@@ -182,13 +182,43 @@ def footerEvent(state: Footer.State,event: Session.AgentSessionEvent) -> Footer.
 type WorkingOwned is Type:
   WorkingOwned{indicator: Maybe<&1,Status.Owner>,appearance: Status.Appearance,redraw: Callback.Callback<Unit,Unit>,cancelKey: String}
 type Working is Data:
-  Working{active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>}
+  Working{active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>}
 type StatusChange is Data:
   ShowStatus{indicator: Status.Indicator}
   ClearStatus{kind: Status.StatusIndicatorKind}
   KeepStatus{}
 def workingActive(working: Working) -> Ref.Ref<Maybe<&2,Loader.Handle>>:
-  match working: case Working{active,_}: active
+  match working: case Working{active,_,_}: active
+def workingTerminal(working: Working) -> Ref.Ref<Maybe<&2,Terminal.Handle>>:
+  match working: case Working{_,_,terminal}: terminal
+def progressEvent(event: Session.AgentSessionEvent) -> Maybe<&2,Bool>:
+  match event:
+    case Session.AgentEvent{Agent.TurnStart{}}: Some{True{}}
+    case Session.AgentEnd{_,_}: Some{False{}}
+    case Session.CompactionStart{_}: Some{True{}}
+    case Session.CompactionEnd{_,_,_,_,_}: Some{False{}}
+    case _: None{}
+def updateTerminalProgress(terminal: Maybe<&2,Terminal.Handle>,enabled: Bool,active: Bool) -> IO(Unit):
+  match enabled terminal:
+    case True{} Some{handle}: Terminal.setProgress(handle,active)
+    case _ _: IO.pure(Unit,Unit{})
+def changedProgress(working: Working,session: Ref.Ref<Session.AgentSession>,active: Maybe<&2,Bool>) -> IO(Unit):
+  match active:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{busy}:
+      do IO<Unit>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        settings : Settings.SettingsManager <- Session.getSettings(live)
+        terminal : Maybe<&2,Terminal.Handle> <- Ref.read(Maybe<&2,Terminal.Handle>,workingTerminal(working))
+        updateTerminalProgress(terminal,Settings.getShowTerminalProgress(settings),busy)
+def readyProgress(working: Working,+session: Ref.Ref<Session.AgentSession>,+terminal: Terminal.Handle) -> IO(Unit):
+  do IO<Unit>:
+    Ref.write(Maybe<&2,Terminal.Handle>,workingTerminal(working),Some{terminal})
+    +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+    settings : Settings.SettingsManager <- Session.getSettings(live)
+    streaming : Bool <- Session.isStreaming(live)
+    compacting : Bool <- Session.isCompacting(live)
+    updateTerminalProgress(Some{terminal},Bool.and(Settings.getShowTerminalProgress(settings),Bool.or(streaming,compacting)),True{})
 def workingRedraw(redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,_: Unit) -> IO(Unit):
   Interactive.requestRender(redraw)
 def compactionReason(reason: Session.CompactionReason) -> Status.CompactionStatusReason:
@@ -260,13 +290,13 @@ def workingChanged(previous: Maybe<&1,WorkingOwned>,active: Ref.Ref<Maybe<&2,Loa
         Bool.pick(Unit -> IO(Unit),statusChanged(change),_ => Callback.call(Unit,Unit,request,Unit{}),_ => IO.pure(Unit,Unit{}))(Unit{})
 def workingEvent(working: Working,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,event: Session.AgentSessionEvent) -> IO(Unit):
   match working:
-    case Working{active,+owned}:
+    case Working{active,+owned,_}:
       do IO<Unit>:
         previous : Maybe<&1,WorkingOwned> <- Ref.swap(Maybe<&1,WorkingOwned>,owned,None{})
         workingChanged(previous,active,owned,event)
 def setupWorking(working: Working,paint: Callback.Callback<String,String>,theme: Ref.Ref<Theme.Theme>,bindings: Keybindings.KeybindingsManager,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
   match working:
-    case Working{_,owned}:
+    case Working{_,owned,_}:
       do IO<Unit>:
         +request : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,~Unit,~Unit,~workingRedraw,redraw)
         Ref.write(Maybe<&1,WorkingOwned>,owned,Some{WorkingOwned{None{},Status.Appearance{theme,Some{paint},request},request,Hints.keyText(bindings,"app.interrupt")}})
@@ -279,8 +309,9 @@ def disposeWorkingOwned(oldOwner: Maybe<&1,WorkingOwned>) -> IO(Unit):
         Callback.dispose(Unit,Unit,request)
 def disposeWorking(working: Working) -> IO(Unit):
   match working:
-    case Working{active,owned}:
+    case Working{active,owned,terminal}:
       do IO<Unit>:
+        oldTerminal : Maybe<&2,Terminal.Handle> <- Ref.dispose(Maybe<&2,Terminal.Handle>,terminal)
         oldActive : Maybe<&2,Loader.Handle> <- Ref.dispose(Maybe<&2,Loader.Handle>,active)
         oldOwner : Maybe<&1,WorkingOwned> <- Ref.dispose(Maybe<&1,WorkingOwned>,owned)
         disposeWorkingOwned(oldOwner)
@@ -352,9 +383,10 @@ def structuralNotice(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Call
     case _: IO.pure(Unit,Unit{})
 def observeCopied(input: Observation,+event: Session.AgentSessionEvent) -> IO(Unit):
   match input:
-    case Observation{+transcript,+redraw,footer,working,+session}:
+    case Observation{+transcript,+redraw,footer,+working,+session}:
       do IO<Unit>:
         changed : Bool <- Ref.modify(Footer.State,Bool,footer,state => footerEvent(state,event))
+        changedProgress(working,session,progressEvent(event))
         workingEvent(working,redraw,event)
         statusNotice(transcript,event)
         compactionNotice(transcript,redraw,session,event)
@@ -1228,7 +1260,7 @@ type ThemeOwned is Type:
   ThemeOwned{controller: ThemeController.Owner,render: Callback.Callback<Unit,Unit>}
   ThemePaused{selection: ThemeController.Selection}
 type ThemeStopping is Data:
-  ThemeStopping{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,view: View.Handle,screen: Process.ScreenState,session: Ref.Ref<Session.AgentSession>,suspension: Process.SuspensionHandle}
+  ThemeStopping{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,view: View.Handle,screen: Process.ScreenState,session: Ref.Ref<Session.AgentSession>,suspension: Process.SuspensionHandle,working: Working}
 type Interaction is Data:
   Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,modelSelector: Ref.Ref<Maybe<&2,ModelPicker.Host>>,thinkingSelector: Ref.Ref<Maybe<&2,ThinkingPicker.Host>>,scopedSelector: Ref.Ref<Maybe<&2,ScopePicker.Host>>,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,trust: Ref.Ref<Maybe<&2,TrustPicker.Host>>,header: Maybe<&2,Header.Handle>,bashActivity: Ref.Ref<BashActivity>,working: Working,autocomplete: AutocompleteSlot,suspension: Process.SuspensionHandle}
 type ThemeStartup is Data:
@@ -2594,8 +2626,9 @@ def startTheme(previous: Maybe<&1,ThemeOwned>,ready: Process.QueryReady,setting:
         ThemeController.start(ready,setting,env,builtinDir,customDir,mode)
 def themeReady(startup: ThemeStartup,ready: Process.QueryReady) -> IO(Unit):
   match startup ready:
-    case ThemeStartup{redraw,queue,initial,failure,stopped,+selected,+owned,error,+theme,+transcript,+session,+setting,+builtinDir,+customDir,+managed,+interaction,highlighter,first} Process.QueryReady{queries,terminal,write,requestRender,preference}:
+    case ThemeStartup{redraw,queue,initial,failure,stopped,+selected,+owned,error,+theme,+transcript,+session,+setting,+builtinDir,+customDir,+managed,+interaction,highlighter,first} Process.QueryReady{queries,+terminal,write,requestRender,preference}:
       do IO<Unit>:
+        readyProgress(workingOf(interaction),session,terminal)
         +render : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeLive,~Unit,~Unit,~syncRender,ThemeLive{selected,theme,transcript,requestRender})
         detected : Result<&1,&1,U32 & String,String> <- IO.get_env("COLORFGBG")
         initialTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
@@ -2622,8 +2655,9 @@ def prepareFullscreenExit(screen: Process.ScreenState,view: View.Handle,session:
         View.prepareExit(view,hasSessionMessages(messages))
 def themeStopping(stopping: ThemeStopping,_: Unit) -> IO(Unit):
   match stopping:
-    case ThemeStopping{redraw,selected,+owned,view,screen,session,suspension}:
+    case ThemeStopping{redraw,selected,+owned,view,screen,session,suspension,working}:
       do IO<Unit>:
+        Ref.write(Maybe<&2,Terminal.Handle>,workingTerminal(working),None{})
         +suspending : Bool <- Process.isSuspending(suspension)
         Bool.pick(Unit -> IO(Unit),suspending,_ => IO.pure(Unit,Unit{}),_ => prepareFullscreenExit(screen,view,session))(Unit{})
         Ref.write(Maybe<&2,Callback.Callback<Unit,Unit>>,redraw,None{})
@@ -2696,7 +2730,7 @@ def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),
         +startupState : ThemeStartup = startup(context,redraw,queue,initial,contextStatus(context),stopped,selected,owned,error)
         +ready : Callback.Callback<Process.QueryReady,Unit> <- Callback.create(~ThemeStartup,~Process.QueryReady,~Unit,~themeReady,startupState)
         +resumed : Callback.Callback<Process.QueryReady,Unit> <- Callback.create(~ThemeStartup,~Process.QueryReady,~Unit,~themeResumed,startupState)
-        +stopping : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeStopping,~Unit,~Unit,~themeStopping,ThemeStopping{redraw,selected,owned,viewHandle,screen,contextSession(context),terminalControl(contextInteraction(context))})
+        +stopping : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeStopping,~Unit,~Unit,~themeStopping,ThemeStopping{redraw,selected,owned,viewHandle,screen,contextSession(context),terminalControl(contextInteraction(context)),workingOf(contextInteraction(context))})
         +ids : List<&2,Component.ComponentId> <- IO.pure(List<&2,Component.ComponentId>,Component.ComponentId{1n} <> Component.ComponentId{2n} <> Component.ComponentId{3n} <> Nil{})
         +components : List<&2,Component.Component> <- IO.pure(List<&2,Component.Component>,document <> editorComponent <> footerComponent(foot) <> Nil{})
         configured : Tui.TuiBase <- configuredTui(base,contextSession(context),screen)
@@ -3003,7 +3037,8 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +status : Interactive.StatusSink <- IO.pure(Interactive.StatusSink,Interactive.StatusSink{transcriptHandle,redraw})
         +workingActiveRef : Ref.Ref<Maybe<&2,Loader.Handle>> <- Ref.new(Maybe<&2,Loader.Handle>,None{})
         +workingOwnerRef : Ref.Ref<Maybe<&1,WorkingOwned>> <- Ref.new(Maybe<&1,WorkingOwned>,None{})
-        +working : Working <- IO.pure(Working,Working{workingActiveRef,workingOwnerRef})
+        +workingTerminalRef : Ref.Ref<Maybe<&2,Terminal.Handle>> <- Ref.new(Maybe<&2,Terminal.Handle>,None{})
+        +working : Working <- IO.pure(Working,Working{workingActiveRef,workingOwnerRef,workingTerminalRef})
         +stopped : Deferred.Deferred<Unit> <- Deferred.new(Unit)
         +listener : Callback.Callback<Session.AgentSessionEvent,Unit> <- Callback.create(~Observation,~Session.AgentSessionEvent,~Unit,~observed,Observation{transcriptHandle,redraw,footerState(foot),working,current})
         failureObserver : Callback.Callback<Controller.PromptFailure,Unit> <- Callback.create(~WorkerFailure,~Controller.PromptFailure,~Unit,~promptFailed,WorkerFailure{status,redraw})

@@ -2900,3 +2900,11 @@ Codex: reserving settings-selector.bend, run.bend configuredTui only, tui-proces
 AI-replay agent: pushed bfca2e49 (Mistral/Bedrock/Vertex rows of stream, abort, empty, tokens, total-tokens, unicode, tool-call-without-result, context-overflow, handoff). Full replay 934 pass / 0 fail on Bun+native1+native4; new KNOWN: 2 Bedrock abort texts, 1 Bedrock diagnostics details dropped by the CLI (Unit details); 1 UPSTREAM (xhigh adaptive test fails on pinned pi-mono). Releasing my reservations.
 
 Codex: fullscreen scrollbar startup/live control now matches pi on one/four threads: all modes, persistence, immediate PageUp after hidden -> auto, regular-mode isolation, and existing cursor/clear controls. The async preference queue now drains before the next input as well as scheduled frames; native PTY coalescing/restoration checks pass. Committing only my reserved paths; AI/SDK-owned core edits remain untouched.
+
+Codex: 7b106932 is pushed and merged with AI-replay as cb2f5455; merged committed-source freshness gate passes 150 reviews. Releasing settings-selector/run and TUI preference/layout paths. Tested binary: build/pi-cli-scrollbar-settings-final; startup/live/persistence/immediate-scroll/regular-mode checks match pi on native1/native4. AI-suites may proceed with its isolated caller pattern changes.
+
+Codex: reserving run.bend working/event/terminal-ready lifecycle sections and a terminal-progress PTY acceptance test. Reusing Terminal.setProgress; AI-suites caller wildcard edits remain free, and SDK/core paths remain untouched.
+
+Subagent-example agent: pushed 1d383aa7 + 0e640db6 (native subagent example extension; 8261-subagent-project-trust ported on Bun/native1/native4, plus native single/chain/parallel subprocess checks). Releasing examples/extensions/subagent/** and tests/subagent*.
+
+Codex: terminal progress now follows turn/compaction events and terminal resume using the existing primitive. Raw PTY comparison passes pi/native1/native4 for keepalives, completion, cancellation, manual compaction, disabled settings and exit during streaming; basic-turn matches text/colors on native4. Committed-source freshness gate passes 150 reviews; committing only run.bend, the acceptance check and reviewed metadata.
