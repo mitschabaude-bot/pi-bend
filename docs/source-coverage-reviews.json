@@ -1576,6 +1576,17 @@
       "ports": [
         "packages/tui/src/tui-main-screen.bend"
       ]
+    },
+    "packages/tui/src/terminal-image.ts": {
+      "state": "partial",
+      "note": "Focused review of isImageLine: recognizes Kitty and iTerm2 prefixes anywhere in arbitrary text, independently of image capability state, using literal prefix patterns and a tail-recursive scan. Original named image/protocol comparisons and strict-input cases pass native one/four; mounted rendering remains byte-identical to the preceding build. The remaining public capability, sizing, registry/cache and effectful probe APIs need a complete coverage review. Large-session latency/full-history content parity and flood throughput remain open.",
+      "source_sha256": "f29572354977fd4ef4cc76878d31cce3cb5c45cebdfc9b5c49b50ad9cfb3171f",
+      "port_sha256": {
+        "packages/tui/src/terminal-image.bend": "9eacf3fc10c965837aed1edb166a1aef3a364e2d3c918168ed5500d4a2e04478"
+      },
+      "ports": [
+        "packages/tui/src/terminal-image.bend"
+      ]
     }
   }
 }

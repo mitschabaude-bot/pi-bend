@@ -14,7 +14,11 @@ import ../../runtime/src/f64.bend as Number
 import ../../runtime/src/record.bend as Record
 
 # Image payloads must remain intact when overlays cover their terminal rows.
-def imagePrefix(+rest: String) -> Bool: String.starts_with(rest,"_G") || String.starts_with(rest,"]1337;File=")
+def imagePrefix(rest: String) -> Bool:
+  match rest:
+    case SCon{'_',SCon{'G',_}}: True{}
+    case SCon{']',SCon{'1',SCon{'3',SCon{'3',SCon{'7',SCon{';',SCon{'F',SCon{'i',SCon{'l',SCon{'e',SCon{'=',_}}}}}}}}}}}: True{}
+    case _: False{}
 def imageScan(line: String,found: Bool) -> Bool:
   match line found:
     case _ True{}: True{}
