@@ -51,13 +51,32 @@ def finished(state: State, fragments: List<&2, String>) -> Maybe<&2, String>:
     case Ready{}: Some{String.join(List.reverse(&2, String, fragments), "")}
     case Pending{_, _, _}: None{}
 
-def scan(text: String, step: Maybe<&2, Step>, fragments: List<&2, String>) -> Maybe<&2, String>:
+# ECMAScript Decode's reservedSet: an escape that decodes to one of these
+# ASCII characters stays as written (decodeURI keeps ";/?:@&=+$,#").
+def reservedByte(+reserved: String, value: Maybe<&2, U32>) -> Bool:
+  match value:
+    case Some{+byte}: U32.is_lt(byte, 128) && String.contains(reserved, SCon{Chr{byte}, ""})
+    case None{}: False{}
+
+def escaped(+reserved: String, state: State, a: U32, b: U32, +value: Maybe<&2, U32>) -> Maybe<&2, Step>:
+  match state:
+    case Ready{}: Bool.pick(Maybe<&2, Step>, reservedByte(reserved, value), Some{Step{Ready{}, SCon{Chr{37}, SCon{Chr{a}, SCon{Chr{b}, ""}}}}}, consume(Ready{}, value))
+    case Pending{remaining, scalar, minimum}: consume(Pending{remaining, scalar, minimum}, value)
+
+def escape(+reserved: String, state: State, +a: U32, +b: U32) -> Maybe<&2, Step>: escaped(reserved, state, a, b, octet(hex(a), hex(b)))
+
+def scan(+reserved: String, text: String, step: Maybe<&2, Step>, fragments: List<&2, String>) -> Maybe<&2, String>:
   match text step:
     case _ None{}: None{}
     case SNil{} Some{Step{state, emitted}}: finished(state, emitted <> fragments)
-    case SCon{Chr{37}, SCon{Chr{a}, SCon{Chr{b}, rest}}} Some{Step{state, emitted}}: scan(rest, consume(state, octet(hex(a), hex(b))), emitted <> fragments)
+    case SCon{Chr{37}, SCon{Chr{a}, SCon{Chr{b}, rest}}} Some{Step{state, emitted}}: scan(reserved, rest, escape(reserved, state, a, b), emitted <> fragments)
     case SCon{Chr{37}, _} _: None{}
-    case SCon{char, rest} Some{Step{state, emitted}}: scan(rest, literal(state, char), emitted <> fragments)
+    case SCon{char, rest} Some{Step{state, emitted}}: scan(reserved, rest, literal(state, char), emitted <> fragments)
 
+# decodeURIComponent; None where JavaScript throws URIError.
 def decode(text: String) -> Maybe<&2, String>:
-  scan(text, Some{Step{Ready{}, ""}}, Nil{})
+  scan("", text, Some{Step{Ready{}, ""}}, Nil{})
+
+# decodeURI: escapes of URI-reserved characters and "#" are kept.
+def decodeURI(text: String) -> Maybe<&2, String>:
+  scan(";/?:@&=+$,#", text, Some{Step{Ready{}, ""}}, Nil{})

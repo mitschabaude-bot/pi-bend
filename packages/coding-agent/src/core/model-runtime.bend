@@ -16,6 +16,10 @@ import ../config.bend as AppConfig
 import ./model-config.bend as Config
 import ./provider-composer.bend as Composer
 import ../../../ai/src/models-store.bend as Store
+import ./models-store.bend as Files
+import ./remote-catalog-provider.bend as Remote
+import ../../../runtime/src/posix-path.bend as Path
+import ../../../runtime/src/serial-resource.bend as Serial
 import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/callback.bend as C
 import ../../../runtime/src/f64.bend as F
@@ -25,8 +29,10 @@ import ../../../runtime/src/date.bend as Date
 # coding agent's ModelRuntime. Built-in providers are composed with their
 # models.json entries and models.json custom providers are added. Extensions
 # register native providers (registerNativeProvider) and dynamic providers
-# publish catalogs through refresh(). Not ported: models-store.json (catalogs
-# persist in an in-memory ModelsStore), reloading models.json on refresh,
+# publish catalogs through refresh(). Catalogs persist in the models store
+# (models-store.json beside models.json unless one is injected) and built-in
+# providers other than Radius carry pi.dev's remote catalog overlay. Not
+# ported: reloading models.json on refresh,
 # models.json overlays on extension providers and config-form extension
 # providers (registerProvider(name, config)).
 
@@ -42,12 +48,20 @@ type Catalog is Data:
 
 def emptyCatalog() -> Catalog: Catalog{Nil{}, R.new(List<&2, Model()>), R.new(Nat), Nil{}}
 
+# The read state of a FileModelsStore the runtime created. Upstream shares a
+# module-level read state per path among FileModelsStore instances; Bend has
+# no module state, and the state's Serial owner is affine (Type-kinded), so
+# the runtime that creates the file store owns its read state here and
+# retires it in dispose(), after the store's callbacks. Injected and
+# in-memory stores have none.
+def StoreState() -> Data: Ref.Ref<Maybe<&1, Files.FileModelsReadState>>
+
 # `providers` is the composition of built-in and models.json providers;
 # `builtins` are the built-in ids among them. `retained` owns the built-in
 # auth parts that composed providers wrap. Extension providers are owned by
 # the extensions that registered them.
 type ModelRuntime is Data:
-  ModelRuntime{providers: List<&2, AiModels.Provider>, builtins: List<&2, String>, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, compositionErrors: List<&2, String>, retained: List<&2, Composer.Retained>, catalog: Ref.Ref<Catalog>, store: Store.ModelsStore}
+  ModelRuntime{providers: List<&2, AiModels.Provider>, builtins: List<&2, String>, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, compositionErrors: List<&2, String>, retained: List<&2, Composer.Retained>, catalog: Ref.Ref<Catalog>, store: Store.ModelsStore, storeState: StoreState()}
 
 # Composition (recomposeProvider/rebuildProviders)
 # -----------------------------------------------
@@ -78,9 +92,9 @@ def added(provider: Maybe<&2, AiModels.Provider>, composition: Composition) -> C
     case None{} composition: composition
     case Some{provider} Composition{providers, errors, retained}: Composition{provider <> providers, errors, retained}
 
-# upstream composeProvider forwards refreshModels to the base provider. Here
-# the base's publications replace the composed provider's catalog, so a
-# models.json overlay is not re-applied to a refreshed catalog.
+# upstream composeProvider forwards refreshModels to the base provider; the
+# base's publications are shown through the models.json overlay
+# (publishedModels).
 def baseRefresh(builtin: Maybe<&2, AiModels.Provider>) -> Maybe<&2, AiModels.RefreshModels()>:
   match builtin:
     case Some{AiModels.Provider{_, _, _, _, _, _, refresher}}: refresher
@@ -131,9 +145,9 @@ def rebuildProviders(ids: List<&2, String>, +builtins: List<&2, AiModels.Provide
         next : Composition <- recomposeProvider(id, findProvider(builtins, id), Config.getProvider(config, id), composition)
         rebuildProviders(rest, builtins, config, next)
 
-def assembled(composition: Composition, builtins: List<&2, String>, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, catalog: Ref.Ref<Catalog>, store: Store.ModelsStore) -> ModelRuntime:
+def assembled(composition: Composition, builtins: List<&2, String>, credentials: Auth.CredentialStore, context: Auth.AuthContext, config: Config.ModelConfig, catalog: Ref.Ref<Catalog>, store: Store.ModelsStore, storeState: StoreState()) -> ModelRuntime:
   match composition:
-    case Composition{providers, errors, retained}: ModelRuntime{List.reverse(&2, AiModels.Provider, providers), builtins, credentials, context, config, List.reverse(&2, String, errors), retained, catalog, store}
+    case Composition{providers, errors, retained}: ModelRuntime{List.reverse(&2, AiModels.Provider, providers), builtins, credentials, context, config, List.reverse(&2, String, errors), retained, catalog, store, storeState}
 
 def supportsOAuth(provider: Maybe<&2, AiModels.Provider>) -> Bool:
   match provider:
@@ -152,19 +166,19 @@ def providerRef(provider: AiModels.Provider) -> Resolve.ProviderRef:
 
 def credentialsOf(runtime: ModelRuntime) -> Auth.CredentialStore:
   match runtime:
-    case ModelRuntime{_, _, credentials, _, _, _, _, _, _}: credentials
+    case ModelRuntime{_, _, credentials, _, _, _, _, _, _, _}: credentials
 
 def contextOf(runtime: ModelRuntime) -> Auth.AuthContext:
   match runtime:
-    case ModelRuntime{_, _, _, context, _, _, _, _, _}: context
+    case ModelRuntime{_, _, _, context, _, _, _, _, _, _}: context
 
 def catalogRef(runtime: ModelRuntime) -> Ref.Ref<Catalog>:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, _, _, catalog, _}: catalog
+    case ModelRuntime{_, _, _, _, _, _, _, catalog, _, _}: catalog
 
 def storeOf(runtime: ModelRuntime) -> Store.ModelsStore:
   match runtime:
-    case ModelRuntime{_, _, _, _, _, _, _, _, store}: store
+    case ModelRuntime{_, _, _, _, _, _, _, _, store, _}: store
 
 def readCatalog(runtime: ModelRuntime) -> IO(Catalog):
   Ref.read(Catalog, catalogRef(runtime))
@@ -188,27 +202,50 @@ def addedNatives(natives: List<&2, AiModels.Provider>, +known: List<&2, String>)
       +tail = addedNatives(rest, known)
       Bool.pick(List<&2, AiModels.Provider>, containsId(known, providerId(provider)), tail, provider <> tail)
 
-def publishedModels(+published: R.Record<List<&2, Model()>>, provider: AiModels.Provider) -> AiModels.Provider:
-  match provider:
-    case AiModels.Provider{+id, name, url, auth, models, streams, refresher}: AiModels.Provider{id, name, url, auth, Maybe.default(&2, List<&2, Model()>, R.get(List<&2, Model()>, published, id), models), streams, refresher}
+# upstream composeModelProvider's getModels: a built-in provider composed with
+# its models.json entry shows the entry applied over the base's current
+# catalog, so a published catalog gets the same overlay (and modelOverrides)
+# as the static one. The composition was validated on the static catalog; an
+# overlay that fails on a published one keeps the provider's composed models.
+# Extension providers are used untouched (see the module header).
+def overlaid(+id: String, +entry: Maybe<&2, Config.ModelsJsonProvider>, +fallback: List<&2, Model()>, published: List<&2, Model()>) -> List<&2, Model()>:
+  match entry:
+    case None{}: published
+    case Some{+config}: Result.default(&2, &2, String, List<&2, Model()>, Result.map(&2, &2, String, List<&2, Model()>, List<&2, Model()>, models => Composer.applyOverrides(models, Composer.overridesOf(config)), Composer.applyModelsJson(id, published, config)), fallback)
 
-def withPublished(providers: List<&2, AiModels.Provider>, +published: R.Record<List<&2, Model()>>) -> List<&2, AiModels.Provider>:
+def composedEntry(+config: Config.ModelConfig, +composed: List<&2, String>, +id: String) -> Maybe<&2, Config.ModelsJsonProvider>:
+  Bool.pick(Unit -> Maybe<&2, Config.ModelsJsonProvider>, containsId(composed, id), _ => Config.getProvider(config, id), _ => None{})(Unit{})
+
+def publishedModels(+published: R.Record<List<&2, Model()>>, +config: Config.ModelConfig, +composed: List<&2, String>, provider: AiModels.Provider) -> AiModels.Provider:
+  match provider:
+    case AiModels.Provider{+id, name, url, auth, +models, streams, refresher}: AiModels.Provider{id, name, url, auth, Maybe.default(&2, List<&2, Model()>, Maybe.map(&2, List<&2, Model()>, List<&2, Model()>, list => overlaid(id, composedEntry(config, composed, id), models, list), R.get(List<&2, Model()>, published, id)), models), streams, refresher}
+
+def withPublished(providers: List<&2, AiModels.Provider>, +published: R.Record<List<&2, Model()>>, +config: Config.ModelConfig, +composed: List<&2, String>) -> List<&2, AiModels.Provider>:
   match providers:
     case Nil{}: Nil{}
-    case provider <> rest: publishedModels(published, provider) <> withPublished(rest, published)
+    case provider <> rest: publishedModels(published, config, composed, provider) <> withPublished(rest, published, config, composed)
+
+# Built-in ids not replaced by an extension provider: those composed with
+# their models.json entry.
+def composedBuiltins(builtins: List<&2, String>, +natives: List<&2, String>) -> List<&2, String>:
+  match builtins:
+    case Nil{}: Nil{}
+    case +id <> rest:
+      +tail = composedBuiltins(rest, natives)
+      Bool.pick(List<&2, String>, containsId(natives, id), tail, id <> tail)
 
 # upstream providerIds() order: built-in providers, extension providers with
 # new ids, then models.json providers. An extension provider replaces the
 # provider of its id, and a dynamic provider's models are its published
 # catalog.
-def effectiveProviders(+base: List<&2, AiModels.Provider>, +builtins: List<&2, String>, catalog: Catalog) -> List<&2, AiModels.Provider>:
+def effectiveProviders(+base: List<&2, AiModels.Provider>, +builtins: List<&2, String>, +config: Config.ModelConfig, catalog: Catalog) -> List<&2, AiModels.Provider>:
   match catalog:
     case Catalog{+natives, +published, _, _}:
-      withPublished(List.concat(&2, AiModels.Provider, [overridden(base, natives, True{}, builtins), addedNatives(natives, builtinIds(base)), overridden(base, natives, False{}, builtins)]), published)
+      withPublished(List.concat(&2, AiModels.Provider, [overridden(base, natives, True{}, builtins), addedNatives(natives, builtinIds(base)), overridden(base, natives, False{}, builtins)]), published, config, composedBuiltins(builtins, builtinIds(natives)))
 
 def providersIn(runtime: ModelRuntime, catalog: Catalog) -> List<&2, AiModels.Provider>:
   match runtime:
-    case ModelRuntime{providers, builtins, _, _, _, _, _, _, _}: effectiveProviders(providers, builtins, catalog)
+    case ModelRuntime{providers, builtins, _, _, config, _, _, _, _, _}: effectiveProviders(providers, builtins, config, catalog)
 
 def getProviders(+runtime: ModelRuntime) -> IO(List<&2, AiModels.Provider>):
   do IO<List<&2, AiModels.Provider>>:
@@ -257,7 +294,7 @@ def configuredKey(entry: Maybe<&2, Config.ModelsJsonProvider>) -> Maybe<&2, Stri
 
 def getModelConfig(runtime: ModelRuntime) -> Config.ModelConfig:
   match runtime:
-    case ModelRuntime{_, _, _, _, config, _, _, _, _}: config
+    case ModelRuntime{_, _, _, _, config, _, _, _, _, _}: config
 
 def checkedStored(+runtime: ModelRuntime, +id: String, +providers: List<&2, AiModels.Provider>, stored: Auth.StoreResult(Maybe<&2, Auth.Credential>)) -> IO(Bool):
   match stored:
@@ -377,25 +414,68 @@ def configureRadiusProviders(ids: List<&2, String>, +builtins: List<&2, AiModels
         next : List<&2, AiModels.Provider> <- configuredRadius(builtins, radius, radiusEntry(id, Config.getProvider(config, id)))
         configureRadiusProviders(rest, next, config, radius)
 
-# The credential store is borrowed; the built-in providers are owned from here on.
-def createWithProviders(credentials: Auth.CredentialStore, +defaults: List<&2, AiModels.Provider>, modelsPath: Maybe<&2, String>, radius: Radius.RadiusTransport) -> IO(ModelRuntime):
-  do IO<ModelRuntime>:
-    +config : Config.ModelConfig <- Config.load(modelsPath)
-    +builtins : List<&2, AiModels.Provider> <- configureRadiusProviders(Config.getProviderIds(config), defaults, config, radius)
-    composition : Composition <- rebuildProviders(composedIds(builtins, config), builtins, config, Composition{Nil{}, Nil{}, Nil{}})
-    context : Auth.AuthContext <- Context.defaultProviderAuthContext()
-    catalog : Ref.Ref<Catalog> <- Ref.new(Catalog, emptyCatalog())
-    store : Store.ModelsStore <- Store.inMemoryModelsStore()
-    +runtime : ModelRuntime <- IO.pure(ModelRuntime, assembled(composition, builtinIds(builtins), credentials, context, config, catalog, store))
-    refreshAvailability(runtime)
-    return runtime
+# upstream CreateModelRuntimeOptions, the fields that choose the models store
+# and the create-time refresh (credentials, OAuth handlers, transport and the
+# models path are the create functions' arguments). An injected modelsStore
+# is owned by the runtime from here on. Not ported: modelRefreshTimeoutMs,
+# which no non-experimental caller sets.
+type CreateModelRuntimeOptions is Data:
+  CreateModelRuntimeOptions{modelsStore: Maybe<&2, Store.ModelsStore>, modelsStorePath: Maybe<&2, String>, allowModelNetwork: Bool, catalogBaseUrl: Maybe<&2, String>, signal: Maybe<&2, Abort.AbortSignal<Unit>>, refreshOnCreate: Bool}
+
+# upstream's defaults: the store beside models.json, a create-time refresh
+# without network access, pi.dev's catalog.
+def createOptions() -> CreateModelRuntimeOptions: CreateModelRuntimeOptions{None{}, None{}, False{}, None{}, None{}, True{}}
+
+def StoreChoice() -> Type: Store.ModelsStore & Maybe<&1, Files.FileModelsReadState>
+
+def fileStore(+path: String, pair: Files.FileModelsReadState & Serial.Handle<Files.ReadState>) -> IO(StoreChoice()):
+  match pair:
+    case (state, handle):
+      do IO<StoreChoice()>:
+        store : Store.ModelsStore <- Files.fileModelsStore(path, handle)
+        return (store, Some{state})
+
+def storePathBeside(modelsPath: String) -> String: Path.join(Path.join(modelsPath, ".."), "models-store.json")
+
+# upstream: the injected store, else a FileModelsStore (modelsStorePath, or
+# models-store.json beside models.json), else an in-memory store when
+# models.json is disabled.
+def modelsStoreFor(injected: Maybe<&2, Store.ModelsStore>, storePath: Maybe<&2, String>, modelsPath: Maybe<&2, String>) -> IO(StoreChoice()):
+  match injected modelsPath:
+    case Some{store} _: IO.pure(StoreChoice(), (store, None{}))
+    case None{} Some{path}:
+      do IO<StoreChoice()>:
+        state : Files.FileModelsReadState <- Files.newReadState()
+        fileStore(Maybe.default(&2, String, storePath, storePathBeside(path)), Files.borrowReadState(state))
+    case None{} None{}:
+      do IO<StoreChoice()>:
+        store : Store.ModelsStore <- Store.inMemoryModelsStore()
+        return (store, None{})
+
+def remoteCatalogOf(+provider: AiModels.Provider, +transport: Remote.RemoteCatalogTransport, +baseUrl: String) -> IO(AiModels.Provider):
+  Bool.pick(Unit -> IO(AiModels.Provider), String.eq(providerId(provider), "radius"), _ => IO.pure(AiModels.Provider, provider), _ => Remote.withRemoteCatalog(provider, transport, baseUrl, Builtin.getBuiltinModelDataGeneratedAt()))(Unit{})
+
+# upstream builtinProviders().map(withRemoteCatalog), Radius excepted.
+def withRemoteCatalogs(providers: List<&2, AiModels.Provider>, +transport: Remote.RemoteCatalogTransport, +baseUrl: String) -> IO(List<&2, AiModels.Provider>):
+  match providers:
+    case Nil{}: IO.pure(List<&2, AiModels.Provider>, Nil{})
+    case provider <> rest:
+      do IO<List<&2, AiModels.Provider>>:
+        wrapped : AiModels.Provider <- remoteCatalogOf(provider, transport, baseUrl)
+        tail : List<&2, AiModels.Provider> <- withRemoteCatalogs(rest, transport, baseUrl)
+        return wrapped <> tail
+
+def remoteTransport(radius: Radius.RadiusTransport) -> Remote.RemoteCatalogTransport:
+  match radius:
+    case Radius.RadiusTransport{fetch, url}: Remote.RemoteCatalogTransport{fetch, url}
 
 # Providers without models.json, as test fixtures build them. The runtime
 # owns the store.
 def fromProvidersWithStore(+providers: List<&2, AiModels.Provider>, credentials: Auth.CredentialStore, context: Auth.AuthContext, store: Store.ModelsStore) -> IO(ModelRuntime):
   do IO<ModelRuntime>:
     catalog : Ref.Ref<Catalog> <- Ref.new(Catalog, emptyCatalog())
-    +runtime : ModelRuntime <- IO.pure(ModelRuntime, ModelRuntime{providers, builtinIds(providers), credentials, context, Config.empty(), Nil{}, Nil{}, catalog, store})
+    storeState : StoreState() <- Ref.new(Maybe<&1, Files.FileModelsReadState>, None{})
+    +runtime : ModelRuntime <- IO.pure(ModelRuntime, ModelRuntime{providers, builtinIds(providers), credentials, context, Config.empty(), Nil{}, Nil{}, catalog, store, storeState})
     refreshAvailability(runtime)
     return runtime
 
@@ -415,18 +495,6 @@ def defaultModelsPath() -> IO(Maybe<&2, String>):
     path : Result<&2, &2, FS.Error, String> <- AppConfig.getModelsPath()
     return locatedPath(path)
 
-# The credential store is borrowed; the OAuth handlers are owned from here on.
-def createWithModelsPath(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuthAuth>, +radius: Radius.RadiusTransport, modelsPath: Maybe<&2, String>) -> IO(ModelRuntime):
-  do IO<ModelRuntime>:
-    builtins : List<&2, AiModels.Provider> <- Builtin.builtinProviders(codex, anthropicOAuth, radius)
-    createWithProviders(credentials, builtins, modelsPath, radius)
-
-# Upstream's default models path: <agentDir>/models.json.
-def createWithAnthropic(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuthAuth>, radius: Radius.RadiusTransport) -> IO(ModelRuntime):
-  do IO<ModelRuntime>:
-    modelsPath : Maybe<&2, String> <- defaultModelsPath()
-    createWithModelsPath(credentials, codex, anthropicOAuth, radius, modelsPath)
-
 def disposeProviders(providers: List<&2, AiModels.Provider>) -> IO(Unit):
   match providers:
     case Nil{}: IO.pure(Unit, Unit{})
@@ -435,15 +503,22 @@ def disposeProviders(providers: List<&2, AiModels.Provider>) -> IO(Unit):
         Auth.disposeProviderAuth(auth)
         disposeProviders(rest)
 
+def retireStoreState(state: Maybe<&1, Files.FileModelsReadState>) -> IO(Unit):
+  match state:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{owner}: Files.disposeReadState(owner)
+
 # Extension providers stay with the extensions that registered them.
 def dispose(runtime: ModelRuntime) -> IO(Unit):
   match runtime:
-    case ModelRuntime{providers, _, _, context, _, _, retained, catalog, store}:
+    case ModelRuntime{providers, _, _, context, _, _, retained, catalog, store, storeState}:
       do IO<Unit>:
         disposeProviders(providers)
         Composer.disposeRetained(retained)
         Auth.disposeContext(context)
         Store.dispose(store)
+        state : Maybe<&1, Files.FileModelsReadState> <- Ref.dispose(Maybe<&1, Files.FileModelsReadState>, storeState)
+        retireStoreState(state)
         old : Catalog <- Ref.dispose(Catalog, catalog)
         return Unit{}
 
@@ -456,7 +531,7 @@ def joinedErrors(configError: Maybe<&2, String>, errors: List<&2, String>) -> Ma
 
 def getError(runtime: ModelRuntime) -> Maybe<&2, String>:
   match runtime:
-    case ModelRuntime{_, _, _, _, config, errors, _, _, _}: joinedErrors(Config.getError(config), errors)
+    case ModelRuntime{_, _, _, _, config, errors, _, _, _, _}: joinedErrors(Config.getError(config), errors)
 
 # Catalog
 # -------
@@ -511,7 +586,7 @@ def getModel(+runtime: ModelRuntime, +provider: String, +id: String) -> IO(Maybe
 
 def baseModels(runtime: ModelRuntime) -> List<&2, Model()>:
   match runtime:
-    case ModelRuntime{providers, _, _, _, _, _, _, _, _}: allModels(providers)
+    case ModelRuntime{providers, _, _, _, _, _, _, _, _, _}: allModels(providers)
 
 # Auth
 # ----
@@ -1591,3 +1666,71 @@ def login(runtime: ModelRuntime,id: String,kind: Auth.CredentialType,interaction
         result : Auth.LoginOutcome() <- loginSignalled(runtime,id,kind,Auth.ProviderAuthInteraction{Abort.signal(Unit,controller),prompt,notify})
         Abort.dispose(Unit,controller)
         return result
+
+# Creation
+# --------
+
+def modelNetworkEnabled() -> IO(Bool):
+  do IO<Bool>:
+    offline : Result<&1, &1, U32 & String, String> <- IO.get_env("PI_OFFLINE")
+    return networkEnabled(offline)
+
+# upstream create's initial refresh: cached catalogs are restored, and
+# refreshed over the network only when allowModelNetwork is set and PI_OFFLINE
+# is not; refreshOnCreate false skips it (static models remain available).
+def initialRefresh(+runtime: ModelRuntime, options: CreateModelRuntimeOptions) -> IO(Unit):
+  match options:
+    case CreateModelRuntimeOptions{_, _, _, _, _, False{}}: IO.pure(Unit, Unit{})
+    case CreateModelRuntimeOptions{_, _, allow, _, signal, True{}}:
+      do IO<Unit>:
+        enabled : Bool <- modelNetworkEnabled()
+        result : ModelsRefreshResult <- refresh(runtime, ModelsRefreshOptions{Some{enabled && allow}, None{}, None{}, signal})
+        return Unit{}
+
+def assembledWith(composition: Composition, builtins: List<&2, String>, credentials: Auth.CredentialStore, config: Config.ModelConfig, choice: StoreChoice()) -> IO(ModelRuntime):
+  match choice:
+    case (store, state):
+      do IO<ModelRuntime>:
+        context : Auth.AuthContext <- Context.defaultProviderAuthContext()
+        catalog : Ref.Ref<Catalog> <- Ref.new(Catalog, emptyCatalog())
+        storeState : StoreState() <- Ref.new(Maybe<&1, Files.FileModelsReadState>, state)
+        return assembled(composition, builtins, credentials, context, config, catalog, store, storeState)
+
+def optionsStore(options: CreateModelRuntimeOptions, modelsPath: Maybe<&2, String>) -> IO(StoreChoice()):
+  match options:
+    case CreateModelRuntimeOptions{injected, storePath, _, _, _, _}: modelsStoreFor(injected, storePath, modelsPath)
+
+def catalogBaseUrlOf(options: CreateModelRuntimeOptions) -> String:
+  match options:
+    case CreateModelRuntimeOptions{_, _, _, baseUrl, _, _}: Maybe.default(&2, String, baseUrl, Remote.DEFAULT_CATALOG_BASE_URL())
+
+# upstream ModelRuntime.create. The credential store is borrowed; the
+# built-in providers are owned from here on.
+def createWithProviders(credentials: Auth.CredentialStore, defaults: List<&2, AiModels.Provider>, +modelsPath: Maybe<&2, String>, +radius: Radius.RadiusTransport, +options: CreateModelRuntimeOptions) -> IO(ModelRuntime):
+  do IO<ModelRuntime>:
+    +config : Config.ModelConfig <- Config.load(modelsPath)
+    choice : StoreChoice() <- optionsStore(options, modelsPath)
+    remote : List<&2, AiModels.Provider> <- withRemoteCatalogs(defaults, remoteTransport(radius), catalogBaseUrlOf(options))
+    +builtins : List<&2, AiModels.Provider> <- configureRadiusProviders(Config.getProviderIds(config), remote, config, radius)
+    composition : Composition <- rebuildProviders(composedIds(builtins, config), builtins, config, Composition{Nil{}, Nil{}, Nil{}})
+    +runtime : ModelRuntime <- assembledWith(composition, builtinIds(builtins), credentials, config, choice)
+    initialRefresh(runtime, options)
+    return runtime
+
+# The credential store is borrowed; the OAuth handlers are owned from here on.
+def createWithOptions(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuthAuth>, +radius: Radius.RadiusTransport, modelsPath: Maybe<&2, String>, options: CreateModelRuntimeOptions) -> IO(ModelRuntime):
+  do IO<ModelRuntime>:
+    builtins : List<&2, AiModels.Provider> <- Builtin.builtinProviders(codex, anthropicOAuth, radius)
+    createWithProviders(credentials, builtins, modelsPath, radius, options)
+
+def createWithModelsPath(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuthAuth>, radius: Radius.RadiusTransport, modelsPath: Maybe<&2, String>) -> IO(ModelRuntime):
+  createWithOptions(credentials, codex, anthropicOAuth, radius, modelsPath, createOptions())
+
+# Upstream's default models path: <agentDir>/models.json.
+def createWithAnthropicOptions(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuthAuth>, radius: Radius.RadiusTransport, options: CreateModelRuntimeOptions) -> IO(ModelRuntime):
+  do IO<ModelRuntime>:
+    modelsPath : Maybe<&2, String> <- defaultModelsPath()
+    createWithOptions(credentials, codex, anthropicOAuth, radius, modelsPath, options)
+
+def createWithAnthropic(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuthAuth>, radius: Radius.RadiusTransport) -> IO(ModelRuntime):
+  createWithAnthropicOptions(credentials, codex, anthropicOAuth, radius, createOptions())

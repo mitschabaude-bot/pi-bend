@@ -24,7 +24,8 @@ import ../../../runtime/src/url.bend as URL
 # upstream core/remote-catalog-provider.ts: a built-in provider's catalog
 # overlaid with pi.dev's persisted per-provider catalog. The overlay is the
 # refreshModels publication (the provider's models once it is accepted).
-# Transport is the caller's fetch.
+# Transport is the caller's fetch. Requests identify as pi-bend rather than
+# pi (getPiBendUserAgent; docs/scope-decisions.md).
 
 def DEFAULT_CATALOG_BASE_URL() -> String: "https://pi.dev"
 def REMOTE_CATALOG_ATTEMPT_TIMEOUT_MS() -> U32: 4000
@@ -271,7 +272,7 @@ def requested(+catalog: RemoteCatalog, +context: AiModels.RefreshModelsContext, 
     case _ Fail{message}: IO.pure(Result<&2, &2, String, Unit>, Fail{message})
     case RemoteCatalog{_, _, RemoteCatalogTransport{fetch, urlContext}, _, _} Done{address}:
       do IO<Result<&2, &2, String, Unit>>:
-        userAgent : String <- UserAgent.getPiUserAgent(Config.version())
+        userAgent : String <- UserAgent.getPiBendUserAgent(Config.version())
         result : Http.ScopedOutcome() <- Http.fetchWithRetry(fetch, urlContext, Http.Request{address, requestHeaders(userAgent, validatorOf(stored)), Http.Follow{}}, AiModels.signalOf(context), Http.FetchRetryOptions{None{}, None{}, UNBOUNDED_MS(), Some{REMOTE_CATALOG_ATTEMPT_TIMEOUT_MS()}})
         responded(catalog, context, stored, result)
 

@@ -3,9 +3,13 @@
 The provider's https://pi.dev catalog requests reach this server through a
 logging redirect fetch; the first path segment names the case, whose
 responses are served in order (upstream's mocked fetch sequences).
+The supplemental "wired" case sends every https request of a ModelRuntime
+created with the built-in providers here: pi.dev's catalog for openai (newer
+than the built-in data), 404 for the other providers; afterwards the scratch
+directory's models-store.json must hold the openai overlay.
 Usage: python3 tests/remote_catalog_check.py [build/remote-catalog.js] [build/remote-catalog]
 """
-import calendar, email.utils, http.server, json, os, pathlib, socketserver, subprocess, sys, threading
+import calendar, email.utils, http.server, json, os, pathlib, socketserver, subprocess, sys, tempfile, threading, time
 
 root = pathlib.Path(__file__).resolve().parents[1]
 js = sys.argv[1] if len(sys.argv) > 1 else 'build/remote-catalog.js'
@@ -51,12 +55,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         case = self.path.split('/')[1]
+        if case == 'wired':
+            self.wired()
+            return
         assert self.path == f'/{case}/api/models/providers/test-provider', self.path
         if case == 'stall':
             self.stall()
             return
         code, body, headers = queues[case].pop(0)
         self.answer(code, body, headers)
+
+    def wired(self):
+        prefix = '/wired/pi.dev/api/models/providers/'
+        assert self.path.startswith(prefix), self.path
+        if self.path[len(prefix):] == 'openai':
+            remote = dict(model('remote-only'), provider='openai', api='openai-responses', baseUrl='https://api.openai.com/v1')
+            self.answer(*ok({'remote-only': remote}, **{'last-modified': http_date(time.time())}))
+        else:
+            self.answer(404, b'not found', {})
 
     # The first request waits until the second has been answered.
     def stall(self):
@@ -98,10 +114,14 @@ for name, command in lanes:
     stall_state['seen'] = False
     server = Server(('127.0.0.1', 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
+    scratch = tempfile.TemporaryDirectory(prefix='pi-remote-catalog-')
     try:
-        result = subprocess.run(command + [f'http://127.0.0.1:{server.server_address[1]}', str(LOCAL)], cwd=root, capture_output=True, text=True, timeout=300, env=dict({k: v for k, v in os.environ.items() if k != 'PI_OFFLINE'}, TEST_PROVIDER_KEY='test-key'))
+        result = subprocess.run(command + [f'http://127.0.0.1:{server.server_address[1]}', str(LOCAL), scratch.name], cwd=root, capture_output=True, text=True, timeout=300, env=dict({k: v for k, v in os.environ.items() if k != 'PI_OFFLINE'}, TEST_PROVIDER_KEY='test-key', PI_CODING_AGENT_DIR=scratch.name))
+        lines = result.stdout.splitlines()
+        assert result.returncode == 0 and len(lines) == 8 and all(line.startswith('ok ') for line in lines), (name, result.stdout, result.stderr[-3000:])
+        stored = json.loads((pathlib.Path(scratch.name) / 'models-store.json').read_text())
+        assert [m['id'] for m in stored['openai']['models']] == ['remote-only'], stored.get('openai')
     finally:
         server.shutdown()
-    lines = result.stdout.splitlines()
-    assert result.returncode == 0 and len(lines) == 7 and all(line.startswith('ok ') for line in lines), (name, result.stdout, result.stderr[-3000:])
+        scratch.cleanup()
     print(f'{name}: {len(lines)} remote catalog cases pass')

@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 from tls13_handshake_check import server_context, encode
@@ -159,8 +160,10 @@ def main():
         certificate = x509.load_pem_x509_certificate((directory / 'certificate.pem').read_bytes()).public_bytes(serialization.Encoding.DER)
         resolver, hosts = directory / 'resolv.conf', directory / 'hosts'
         resolver.write_text('nameserver 127.0.0.1\n')
-        hosts.write_text('127.0.0.1 localhost\n')
         plain, secure = Origin(), Origin(context)
+        # slow.test's first address has a full accept queue, so a connection
+        # attempt to it hangs; its second address is the TLS origin.
+        hosts.write_text('127.0.0.1 localhost\n127.0.0.1 fast.test\n127.0.0.2 slow.test\n127.0.0.1 slow.test\n')
         origins = {'plain.test': plain.server.port, 'secure.test': secure.server.port}
         base = {k: v for k, v in os.environ.items() if k not in PROXY_KEYS}
         P, S = plain.server.port, secure.server.port
@@ -240,6 +243,44 @@ def main():
         case('https:// proxy URLs are rejected natively (TLS to the proxy is not supported)', {'HTTPS_PROXY': 'https://127.0.0.1:1'},
              [f'https://secure.test:{S}/x'], native_only=True,
              expect=lambda lines, connects: lines == ['config HTTPS proxies are not supported; use an http:// proxy URL'])
+        # http-dispatcher.test.ts > http dispatcher > "allows two seconds for
+        # HTTPS connection attempts without changing the Node default".
+        # Upstream spies on undici's connect options; here the coding agent's
+        # options are observed through timing: the hanging first address of
+        # slow.test is abandoned after two seconds (measured from the reply
+        # to fast.test, a single-address host fetched just before). There is
+        # no process-wide default to leave unchanged natively.
+        queue = socket.socket()
+        queue.bind(('127.0.0.2', S))
+        queue.listen(0)
+        filler = []
+        for _ in range(4):
+            client = socket.socket()
+            client.setblocking(False)
+            client.connect_ex(('127.0.0.2', S))
+            filler.append(client)
+        name = D + 'http dispatcher > allows two seconds for HTTPS connection attempts without changing the Node default'
+        problems = []
+        for backend in arguments.backends:
+            env = {k: v for k, v in base.items() if k not in PROXY_KEYS}
+            process = subprocess.Popen(commands[backend] + [encode(certificate), str(resolver), str(hosts), '-', f'https://fast.test:{S}/fast', f'https://slow.test:{S}/attempt'], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+            first = process.stdout.readline().strip()
+            fast = time.monotonic()
+            second = process.stdout.readline().strip()
+            elapsed = time.monotonic() - fast
+            process.communicate(timeout=60)
+            if first != 'status 200 hello /fast' or second != 'status 200 hello /attempt' or not 1.9 <= elapsed <= 3.5:
+                problems.append(f'{backend}: {first!r} then {second!r} after {elapsed:.2f} s')
+        for client in filler:
+            client.close()
+        queue.close()
+        if problems:
+            failures += 1
+            print(f'FAIL {name}')
+            for problem in problems:
+                print(f'  {problem}')
+        else:
+            print(f'PASS {name}')
         plain.server.close()
         secure.server.close()
     sys.exit(1 if failures else 0)

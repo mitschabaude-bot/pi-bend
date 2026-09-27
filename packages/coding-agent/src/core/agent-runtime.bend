@@ -20,6 +20,8 @@ import ../../../agent/src/providers.bend as Providers
 import ../../../agent/src/stream-fn.bend as StreamFn
 import ../../../agent/src/types.bend as T
 import ../../../runtime/src/fetch.bend as Fetch
+import ../../../runtime/src/http-proxy.bend as Proxy
+import ./http-dispatcher.bend as Dispatcher
 import ../../../runtime/src/ref.bend as Ref
 import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/pi-user-agent.bend as UserAgent
@@ -108,8 +110,7 @@ def urlContext() -> URL.Context:
 
 def files() -> Fetch.Files: Fetch.Files{"/etc/resolv.conf", "/etc/hosts", 4096, 1048576n, 5000, 65535}
 
-def httpOptions() -> HTTP.Options:
-  HTTP.Options{DNS.IPv4First{}, Connect.IPv4First{}, 10000, 16384, Response.Limits{8192n, 65536n, 100n, 8n, Message.Limits{8192n, 8192n, 65536n, 100n}}}
+def httpOptions() -> HTTP.Options: Dispatcher.httpOptions()
 
 def security(authorizer: C.Callback<URL.Host, TLSClient.Authorization>) -> HTTP.Security:
   HTTP.WithTLS{authorizer, TLS.defaults()}
@@ -144,20 +145,40 @@ def withRuntime(+authorizer: C.Callback<URL.Host, TLSClient.Authorization>, resu
         codexSessions : CodexSessions.Pool<Unit> <- CodexSessions.create(Unit, CodexSessions.defaults())
         return transportOf(codexSessions, authorizer, pair)
 
-def withBundle(bundle: Result<&2, &2, Trust.Error, List<&2, X509.Certificate>>) -> IO(Outcome(Transport)):
+def withProxies(anchors: List<&2, X509.Certificate>, proxies: Result<&2, &2, String, Proxy.Config>) -> IO(Outcome(Transport)):
+  match proxies:
+    case Fail{error}: IO.pure(Outcome(Transport), Fail{error})
+    case Done{config}:
+      do IO<Outcome(Transport)>:
+        +authorizer : C.Callback<URL.Host, TLSClient.Authorization> <- Trust.newSAN(Trust.SANPolicy{anchors, 256n})
+        runtime : Result<&2, &1, Fetch.InitError, Fetch.Runtime> <- Fetch.createWithProxy(files(), httpOptions(), config)
+        withRuntime(authorizer, runtime)
+
+# upstream applyHttpProxySettings + configureHttpDispatcher: every request
+# goes through the proxies of the environment, where the httpProxy setting
+# stands in for unset HTTP_PROXY/HTTPS_PROXY (undici's EnvHttpProxyAgent with
+# CONNECT tunnels). An invalid proxy URL fails the transport, as undici's
+# constructor throws.
+def withBundle(httpProxy: Maybe<&2, String>, bundle: Result<&2, &2, Trust.Error, List<&2, X509.Certificate>>) -> IO(Outcome(Transport)):
   match bundle:
     case Fail{error}: IO.pure(Outcome(Transport), Fail{trustError(error)})
     case Done{anchors}:
       do IO<Outcome(Transport)>:
-        +authorizer : C.Callback<URL.Host, TLSClient.Authorization> <- Trust.newSAN(Trust.SANPolicy{anchors, 256n})
-        runtime : Result<&2, &1, Fetch.InitError, Fetch.Runtime> <- Fetch.create(files(), httpOptions())
-        withRuntime(authorizer, runtime)
+        proxies : Result<&2, &2, String, Proxy.Config> <- Proxy.fromEnvironmentWith(urlContext(), httpProxy)
+        withProxies(anchors, proxies)
 
 # The CA bundle path: SSL_CERT_FILE or the Debian/Ubuntu system bundle.
-def createTransport(bundlePath: String) -> IO(Outcome(Transport)):
+# `httpProxy` is the global settings' value (upstream main applies
+# getGlobalSettings().httpProxy).
+def createTransportWith(bundlePath: String, httpProxy: Maybe<&2, String>) -> IO(Outcome(Transport)):
   do IO<Outcome(Transport)>:
     bundle : Result<&2, &2, Trust.Error, List<&2, X509.Certificate>> <- Trust.load(bundlePath, 4194304n)
-    withBundle(bundle)
+    withBundle(httpProxy, bundle)
+
+# Without settings: the proxies of the environment alone.
+def createTransport(bundlePath: String) -> IO(Outcome(Transport)): createTransportWith(bundlePath, None{})
+
+def globalHttpProxy(settings: Settings.SettingsManager) -> Maybe<&2, String>: Settings.selectedHttpProxy(Settings.get(Settings.getGlobalSettings(settings), "httpProxy"))
 
 def disposeTransport(transport: Transport) -> IO(Unit):
   match transport:
@@ -1217,9 +1238,9 @@ def withTransport(+options: CreateOptions, transport: Outcome(Transport)) -> IO(
 
 def create(options: CreateOptions) -> IO(Outcome(AgentRuntime)):
   match options:
-    case CreateOptions{cwd, agentDir, authPath, +bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings, resources}:
+    case CreateOptions{cwd, agentDir, authPath, +bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, +settings, resources}:
       do IO<Outcome(AgentRuntime)>:
-        transport : Outcome(Transport) <- createTransport(bundlePath)
+        transport : Outcome(Transport) <- createTransportWith(bundlePath, globalHttpProxy(settings))
         withTransport(CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings, resources}, transport)
 
 def agentOf(runtime: AgentRuntime) -> AgentRuntime & Owner():

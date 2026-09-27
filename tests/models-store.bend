@@ -115,13 +115,47 @@ def cancelsWrite(+path: String) -> IO(Unit):
     done : Unit <- IO.join(Unit, canceller)
     check(isAbort(pending), "FileModelsStore cancels a catalog write waiting for a held file lock without writing later")
 
+def readAborted(result: Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>)) -> Bool:
+  match result:
+    case Fail{message}: String.contains(message, "aborted")
+    case Done{_}: False{}
+
+def readOne(store: Store.ModelsStore, signal: Abort.AbortSignal<Unit>) -> IO(Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>)):
+  Store.read(store, "one", Some{signal})
+
+# "keeps a coalesced reload alive while another reader is still waiting": the
+# lock is held by tests/models_store_check.py until this prints that the first
+# reader was cancelled. Readers of one read state are serialized here, so the
+# cancelled reader withdraws its lock wait and the waiting reader takes the
+# lock itself; upstream's lock/release call counts (a mocked proper-lockfile)
+# are not observed.
+def cancelledWith(+store: Store.ModelsStore) -> IO(Unit):
+  do IO<Unit>:
+    +firstController : Abort.AbortController<Unit> <- Abort.new(Unit)
+    +secondController : Abort.AbortController<Unit> <- Abort.new(Unit)
+    first : Chan(Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>)) <- IO.fork(Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>), readOne(store, Abort.signal(Unit, firstController)))
+    second : Chan(Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>)) <- IO.fork(Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>), readOne(store, Abort.signal(Unit, secondController)))
+    IO.sleep(10)
+    aborted : Bool <- Abort.abort(Unit, firstController, None{})
+    firstResult : Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>) <- IO.join(Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>), first)
+    +firstAborted : Bool <- IO.pure(Bool, readAborted(firstResult))
+    IO.print(Bool.pick(String, firstAborted, "first reader aborted", "first reader not aborted"))
+    secondResult : Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>) <- IO.join(Store.StoreResult(Maybe<&2, Store.ModelsStoreEntry>), second)
+    check(firstAborted && String.eq(modelIds(secondResult), "stored"), "FileModelsStore keeps a coalesced reload alive while another reader is still waiting")
+
+def cancelledReader(+path: String) -> IO(Unit):
+  do IO<Unit>:
+    store : Store.ModelsStore <- fresh(path)
+    cancelledWith(store)
+
 def started(args: List<String>) -> IO(Unit):
   match args:
     case "persist" <> path <> Nil{}: persists(path)
     case "mode" <> path <> Nil{}: preservesMode(path)
     case "coalesce" <> path <> other <> Nil{}: coalesces(path, other)
     case "cancel" <> path <> Nil{}: cancelsWrite(path)
-    case _: IO.die(Unit, 2, "usage: models-store <persist|mode|coalesce|cancel> <path> [other path]")
+    case "reader" <> path <> Nil{}: cancelledReader(path)
+    case _: IO.die(Unit, 2, "usage: models-store <persist|mode|coalesce|cancel|reader> <path> [other path]")
 
 def main() -> IO(Unit):
   do IO<Unit>:

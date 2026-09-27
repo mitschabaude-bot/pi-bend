@@ -2712,9 +2712,13 @@
     },
     {
       "source": "packages/coding-agent/test/crash-log.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "27de661cb40634b0e441e52537aaf52380a08ff0dbd823e3b7b96ae20bc5f641"
+      "status": "ported",
+      "ports": [
+        "tests/crash-log.bend",
+        "tests/crash_log_check.py"
+      ],
+      "sha256": "27de661cb40634b0e441e52537aaf52380a08ff0dbd823e3b7b96ae20bc5f641",
+      "notes": "All five 'extension crash attribution' cases (findExtensionStackMatches) pass as named on Bun and native one/four threads, with upstream's inputs and expected labels. Three native cases cover the log file that upstream exercises only through the excluded /bug flow: recordCrash keeps the last five records and creates the directory (upstream's pretty JSON and field order), takeUnnotifiedCrash announces the newest unannounced crash of the last week once and marks every record, clearCrashLog tolerates a missing file."
     },
     {
       "source": "packages/coding-agent/test/credential-print.test.ts",
@@ -2779,7 +2783,7 @@
       ],
       "sha256": "7ba2d75282846b177e31e9e1d1dafd34c62b92cf93426883bebd3f9291e73bd6",
       "implementation": "packages/coding-agent/src/core/tools/renderers/edit.bend",
-      "notes": "All three named contracts pass on Bun/native1/native4: large preflight diffs stay in the call box and identical settlement emits no full redraw; saved details reconstruct previews after source deletion without complete args or preflight; invalid edits display a preflight error without a diff. Native Screen plans expose redraw count/reason/writes rather than JS component internals. Supplementary controlled A→B→A reads prove stale completions cannot publish and disposal joins owned work; preflight does not mutate files."
+      "notes": "All three named contracts pass on Bun/native1/native4: large preflight diffs stay in the call box and identical settlement emits no full redraw; saved details reconstruct previews after source deletion without complete args or preflight; invalid edits display a preflight error without a diff. Native Screen plans expose redraw count/reason/writes rather than JS component internals. Supplementary controlled A\u2192B\u2192A reads prove stale completions cannot publish and disposal joins owned work; preflight does not mutate files."
     },
     {
       "source": "packages/coding-agent/test/experimental-agent-controller.test.ts",
@@ -3069,14 +3073,14 @@
     },
     {
       "source": "packages/coding-agent/test/http-dispatcher.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/http-proxy.bend",
         "tests/http_proxy_check.py",
         "tests/http_proxy_reference.mts"
       ],
       "sha256": "f378869e565c336d556ce75ceebf6eab10baccf3f58ef21260f07ca6abb5606a",
-      "notes": "tests/http_proxy_check.py runs the native fetch through a loopback CONNECT proxy against pinned configureHttpDispatcher/applyHttpProxySettings (Node, undici) with the same environment and httpProxy setting; results and CONNECT requests must agree (Bun, native1, native4). The three 'http proxy settings' tests are observed through the effective proxies (the port computes the configuration from the environment and the setting instead of writing HTTP_PROXY/HTTPS_PROXY), and 'tunnels proxied HTTP origins' runs as named; nine further cases cover HTTPS inside the tunnel, fallback to HTTP_PROXY, lowercase precedence, NO_PROXY hosts and ports, proxy credentials and a refused tunnel. Pending: the coding agent's runtime is not yet created with these proxies (agent-runtime.bend), and 'allows two seconds for HTTPS connection attempts' (the agent's attempt timeout is 10000 ms, upstream's autoSelectFamilyAttemptTimeout 2000). The native pool reuses an idle tunnel where undici opens a second one for back-to-back requests. https:// proxy URLs (TLS to the proxy) are rejected natively."
+      "notes": "tests/http_proxy_check.py runs the native fetch, with the coding agent's connection options (core/http-dispatcher.bend), through a loopback CONNECT proxy against pinned configureHttpDispatcher/applyHttpProxySettings (Node, undici) with the same environment and httpProxy setting; results and CONNECT requests must agree (Bun, native1, native4). The three 'http proxy settings' tests are observed through the effective proxies (the port computes the configuration from the environment and the setting instead of writing HTTP_PROXY/HTTPS_PROXY), and 'tunnels proxied HTTP origins' runs as named; nine further cases cover HTTPS inside the tunnel, fallback to HTTP_PROXY, lowercase precedence, NO_PROXY hosts and ports, proxy credentials and a refused tunnel. 'allows two seconds for HTTPS connection attempts without changing the Node default' is observed through timing instead of upstream's connect-option spy: a hosts file gives slow.test a first address with a full accept queue and the TLS origin second, and the reply must arrive 1.9-3.5 s after a single-address request (native only; there is no process-wide default to leave unchanged). The coding agent's transport (agent-runtime createTransportWith) uses these proxies with the global httpProxy setting. The native pool reuses an idle tunnel where undici opens a second one for back-to-back requests. https:// proxy URLs (TLS to the proxy) are rejected natively."
     },
     {
       "source": "packages/coding-agent/test/image-process.test.ts",
@@ -3349,7 +3353,7 @@
         "tests/models_store_check.py"
       ],
       "sha256": "ad84fe3cf045af1ce4db057844bca181db0db59eaa8326664c607f6d9c3bf82f",
-      "notes": "Four of five cases pass on Bun and native one/four threads over packages/coding-agent/src/core/models-store.bend: catalogs persisted per provider without replacing others (write, fresh-store read, delete), an existing file's 0660 mode preserved, coalesced reloads (a shared read state serves unchanged-revision reads from its cache and reloads after the file changes; results asserted, not upstream's lock-call counts), and a write waiting for a held proper-lockfile lock cancelled after 10 ms without writing later. Pending: \"keeps a coalesced reload alive while another reader is still waiting\" (upstream mocks proper-lockfile.lock to hold the reload; native reads under one read state are serialized and a cancelled reader's reload is not kept for the next one), and the lock-count assertions of the coalescing case."
+      "notes": "All five cases run on Bun and native one/four threads over packages/coding-agent/src/core/models-store.bend: catalogs persisted per provider without replacing others (write, fresh-store read, delete), an existing file's 0660 mode preserved, coalesced reloads (a shared read state serves unchanged-revision reads from its cache and reloads after the file changes), a coalesced reload kept alive for a waiting reader while the first reader is cancelled (the checker holds the proper-lockfile lock until the program reports the cancelled reader, then the waiting reader gets the stored catalog), and a write waiting for a held lock cancelled after 10 ms without writing later. Partial because upstream's lock/release call-count assertions (a mocked proper-lockfile) are not observed: native readers of one read state are serialized, so the cancelled reader withdraws its own lock wait and the waiting reader then takes the lock itself (two lock attempts, one acquisition, where upstream shares one reload)."
     },
     {
       "source": "packages/coding-agent/test/oauth-selector.test.ts",
@@ -3477,7 +3481,7 @@
         "tests/radius_check.py"
       ],
       "sha256": "f4cfc14df90a8f3555d6e514e28fdf46cc1cdc967cf030c171a65996dd3c7f06",
-      "notes": "All 6 cases through Models.createWithModelsPath and refresh (upstream ModelRuntime.create's refresh with allowModelNetwork) with in-memory credentials and models store; requests for https://radius.pi.dev and http://localhost:8788 are redirected to a loopback gateway, whose request log replaces the fetch spy. Bun/native1/native4."
+      "notes": "All 6 cases through Models.createWithOptions (upstream ModelRuntime.create with modelsStore, modelsPath and allowModelNetwork) with in-memory credentials and models store; requests for https://radius.pi.dev and http://localhost:8788 are redirected to a loopback gateway, whose request log replaces the fetch spy, and the built-in providers' pi.dev catalog requests (answered 404) stay local too. Bun/native1/native4."
     },
     {
       "source": "packages/coding-agent/test/remote-catalog-provider.test.ts",
@@ -3487,7 +3491,7 @@
         "tests/remote_catalog_check.py"
       ],
       "sha256": "865f1fc88157ce16c5e409971ed2e386f74d7c56d0e96f8108e3c58dbf7fc93f",
-      "notes": "All seven cases pass on Bun and native one/four threads. The provider's https://pi.dev requests go through a logging redirect fetch to a local server that plays each case's response sequence (upstream mocks global fetch): keyed catalogs with the pi/<version> user agent, the 4-hour TTL and forced refresh (two requests for three refreshes); newer-of-generated-and-remote by Last-Modified; If-None-Match revalidation keeping the overlay on 304; a stale etag dropped on 501; etag and overlay kept after 429s (retried by fetchWithRetry, then the error); two concurrent forced refreshes through the model runtime where the stalled older answer is not published; and 501 as an unavailable (empty) overlay. refreshProvider publishes like upstream's helper (persist to an in-memory store; the published models are the provider's catalog)."
+      "notes": "All seven cases pass on Bun and native one/four threads. The provider's https://pi.dev requests go through a logging redirect fetch to a local server that plays each case's response sequence (upstream mocks global fetch): keyed catalogs with the version user agent, the 4-hour TTL and forced refresh (two requests for three refreshes); newer-of-generated-and-remote by Last-Modified; If-None-Match revalidation keeping the overlay on 304; a stale etag dropped on 501; etag and overlay kept after 429s (retried by fetchWithRetry, then the error); two concurrent forced refreshes through the model runtime where the stalled older answer is not published; and 501 as an unavailable (empty) overlay. refreshProvider publishes like upstream's helper (persist to an in-memory store; the published models are the provider's catalog). Adaptation: requests identify as pi-bend (docs/scope-decisions.md), so the user-agent assertion expects pi-bend/<version> where upstream expects pi/<version>. A supplemental native case creates the model runtime with the production built-in providers and a stored openai key: every https request goes to the local server, the openai overlay (newer than the built-in data) is published and persisted in models-store.json beside models.json, Radius is not requested, and a default offline creation restores the overlay without requests."
     },
     {
       "source": "packages/coding-agent/test/resolve-config-value.test.ts",
@@ -4905,7 +4909,7 @@
         "tests/thinking-level.bend"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '→ ✓ medium', then '  ✓ medium' and '→   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads)."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",
@@ -4952,7 +4956,7 @@
         "tests/tools-manager.md"
       ],
       "sha256": "09e7bdfba469506725a8df17f87bc461ce7dd4eeba7ad04ec3140c0b39e1e2d5",
-      "notes": "7 of 8 cases pass on Bun and native one/four threads (tests/tools-manager-latest.bend): all six getLatestVersion cases through a logging redirect fetch and a local server (release redirects with and without the v prefix, a relative Location, a redirect whose body is discarded, 404 without redirect, a redirect to /login; one manual-redirect request each with the pi-coding-agent user agent) and ensureTool's offline status callback. Adaptation: upstream checks response.bodyUsed; here the redirect body is released unread. Pending: \"surfaces the error cause chain when a download fails\" — the native fetch error has no cause chain, so the status reads \"Failed to download fd: fetch failed\" without the connect detail. Download, extraction and install scenarios are covered by tests/tools_manager_check.py (tests/tools-manager.md)."
+      "notes": "7 of 8 cases pass on Bun and native one/four threads (tests/tools-manager-latest.bend): all six getLatestVersion cases through a logging redirect fetch and a local server (release redirects with and without the v prefix, a relative Location, a redirect whose body is discarded, 404 without redirect, a redirect to /login; one manual-redirect request each with the pi-coding-agent user agent) and ensureTool's offline status callback. Adaptation: upstream checks response.bodyUsed; here the redirect body is released unread. Pending: \"surfaces the error cause chain when a download fails\" \u2014 the native fetch error has no cause chain, so the status reads \"Failed to download fd: fetch failed\" without the connect detail. Download, extraction and install scenarios are covered by tests/tools_manager_check.py (tests/tools-manager.md)."
     },
     {
       "source": "packages/coding-agent/test/tools.test.ts",
@@ -5057,7 +5061,7 @@
         "tests/loopback-fetch.bend"
       ],
       "sha256": "cba6b39e9767019aebe0277ab580cb603927258652afcb2b9967387f1e8d6aa7",
-      "notes": "9 of 10 cases pass on Bun and native one/four threads. Instead of stubbing the global fetch, the library's https://pi.dev request goes through a logging fetch (tests/loopback-fetch.bend) to a local server that answers, drops connections or fails per case; the request URL, User-Agent and accept headers and the request counts (3 with retry, 1 for automatic checks, 0 when PI_SKIP_VERSION_CHECK is set) are asserted. semver valid/compare come from packages/runtime/src/semver.bend (tests/semver_check.py: 1,363 pairs match node-semver 7.8.5, including JavaScript double rounding of huge numeric pre-release identifiers). Not ported: \"formats nested network error details\" — the native fetch error carries no errno codes, so formatVersionCheckError returns the management request's message."
+      "notes": "9 of 10 cases pass on Bun and native one/four threads. Instead of stubbing the global fetch, the library's https://pi.dev request goes through a logging fetch (tests/loopback-fetch.bend) to a local server that answers, drops connections or fails per case; the request URL, User-Agent and accept headers and the request counts (3 with retry, 1 for automatic checks, 0 when PI_SKIP_VERSION_CHECK is set) are asserted. semver valid/compare come from packages/runtime/src/semver.bend (tests/semver_check.py: 1,363 pairs match node-semver 7.8.5, including JavaScript double rounding of huge numeric pre-release identifiers). Not ported: \"formats nested network error details\" \u2014 the native fetch error carries no errno codes, so formatVersionCheckError returns the management request's message."
     },
     {
       "source": "packages/durable/test/memory-storage.test.ts",
@@ -5653,7 +5657,7 @@
         "tests/tui_virtual_terminal.ts"
       ],
       "sha256": "ace909b9dfca424f4c0e08e348163ecb98e86513d55c3f4fef5028a715fb9896",
-      "notes": "tests/tui_virtual_terminal.ts replays 25 of the 28 tests with their upstream names and assertions on Bun/native one/four (resize, shrink, differential rendering, Kitty image cleanup and reservation, bounded writes). Pending: 'renders keyboard input without waiting for a throttled frame' (tests/tui_process_check.py only shows that input draws immediately, not the preempted throttled frame or render count), 'writes redraw logs to the provided directory' and 'writes the crash dump to the OS temp directory…': the native TUI has no logDirectory, PI_TUI_DEBUG_REDRAW log or crash dump; a too-wide line is recorded as InvalidFrame instead of stopping the terminal."
+      "notes": "tests/tui_virtual_terminal.ts replays 25 of the 28 tests with their upstream names and assertions on Bun/native one/four (resize, shrink, differential rendering, Kitty image cleanup and reservation, bounded writes). Pending: 'renders keyboard input without waiting for a throttled frame' (tests/tui_process_check.py only shows that input draws immediately, not the preempted throttled frame or render count), 'writes redraw logs to the provided directory' and 'writes the crash dump to the OS temp directory\u2026': the native TUI has no logDirectory, PI_TUI_DEBUG_REDRAW log or crash dump; a too-wide line is recorded as InvalidFrame instead of stopping the terminal."
     },
     {
       "source": "packages/tui/test/tui-shrink.test.ts",

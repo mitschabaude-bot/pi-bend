@@ -367,11 +367,11 @@
     },
     "packages/ai/src/models.ts": {
       "state": "partial",
-      "note": "Reviewed provider/publication types and collection/auth ownership. Provider, RefreshModelsContext and ModelsPublication have native representations and fetched-catalog helpers. The standalone Models/MutableModels collection is not exposed in pi-ai: much of its catalog, auth, refresh and request behavior currently lives in coding-agent ModelRuntime/agent-runtime. This layer must be separated into the AI library while keeping app configuration and credential-operation synchronization in ModelRuntime; public collection operations and API boundary parity remain incomplete. ProviderStreams also has OpenCodeStreams{apis} for upstream's withOpenCodeSessionHeader wrapper (opencode.ts/opencode-go.ts); streamSimpleOptions applies it, and inheritedStreams keeps it for models.json overlays.",
+      "note": "Reviewed provider/publication types and collection/auth ownership. Provider, RefreshModelsContext and ModelsPublication have native representations and fetched-catalog helpers. The standalone Models/MutableModels collection is not exposed in pi-ai: much of its catalog, auth, refresh and request behavior currently lives in coding-agent ModelRuntime/agent-runtime. This layer must be separated into the AI library while keeping app configuration and credential-operation synchronization in ModelRuntime; public collection operations and API boundary parity remain incomplete. ProviderStreams also has OpenCodeStreams{apis} for upstream's withOpenCodeSessionHeader wrapper (opencode.ts/opencode-go.ts); streamSimpleOptions applies it, and inheritedStreams keeps it for models.json overlays. Rechecked after the models-store/remote-catalog wiring: publications of built-in providers composed with models.json are now shown through that overlay, as upstream's composed getModels over the base's refreshed catalog.",
       "source_sha256": "84f2799b0bf45fb01237c5c2c19641b0da5d1245670b208c05bacb5cff36b96f",
       "port_sha256": {
         "packages/ai/src/models.bend": "f4c90abd0a9b3c4908c9bcceab18e69a19e38ed78b9339dd0ef4f3ae488b73d4",
-        "packages/coding-agent/src/core/model-runtime.bend": "1c16b38982b62ad245bc976cb1a8eb7922acf0e9d1d9d36b4920037b7629b45b"
+        "packages/coding-agent/src/core/model-runtime.bend": "a55aff58c009dbf3b73e0b09ef5249949ad2faa41b34675d771ae9b295ca3b02"
       },
       "ports": [
         "packages/ai/src/models.bend",
@@ -572,14 +572,14 @@
     },
     "packages/coding-agent/src/core/model-runtime.ts": {
       "state": "partial",
-      "note": "Reviewed login path: native login dispatches by provider and auth type, normalizes an absent signal with an owned controller, rejects pre-aborted requests, saves through the credential store and refreshes availability. Interactive API-key login uses this path; OAuth providers implement native login callbacks. Upstream per-provider credential-operation serialization, complete synchronizeCredentialState behavior and source-wide ModelRuntime coverage remain incomplete. checkAuth (AuthCheck with source and credential type, credential-store read failures as errors) is ported for the auth commands (tests/auth-commands.bend).",
-      "source_sha256": "20c1dbfa1dd757a594cf0b4ab6e401fc6c6155484a3f490096bc5328e3c33c2c",
-      "port_sha256": {
-        "packages/coding-agent/src/core/model-runtime.bend": "1c16b38982b62ad245bc976cb1a8eb7922acf0e9d1d9d36b4920037b7629b45b"
-      },
+      "note": "Reviewed login path: native login dispatches by provider and auth type, normalizes an absent signal with an owned controller, rejects pre-aborted requests, saves through the credential store and refreshes availability. Interactive API-key login uses this path; OAuth providers implement native login callbacks. checkAuth (AuthCheck with source and credential type, credential-store read failures as errors) is ported for the auth commands (tests/auth-commands.bend). Reviewed create(): CreateModelRuntimeOptions' modelsStore, modelsStorePath, allowModelNetwork (with PI_OFFLINE), catalogBaseUrl, signal and refreshOnCreate; the store is the injected one, else a FileModelsStore (models-store.json beside models.json), else in-memory without models.json; built-in providers other than Radius are wrapped with withRemoteCatalog (the built-in data's generation time from the pinned manifest); the create-time refresh restores cached catalogs (tests/remote-catalog.bend, tests/radius.bend). The runtime owns the file store's read state (a Serial owner in a Ref, retired in dispose after the store's callbacks), where upstream shares one module-level read state per path. Published catalogs of built-in providers are shown through their models.json entry and modelOverrides, as upstream's composed getModels (tests/models_json_check.py). Not ported: modelRefreshTimeoutMs, reloading models.json on refresh, models.json overlays on extension providers, per-provider credential-operation serialization and complete synchronizeCredentialState behavior.",
       "ports": [
         "packages/coding-agent/src/core/model-runtime.bend"
-      ]
+      ],
+      "source_sha256": "20c1dbfa1dd757a594cf0b4ab6e401fc6c6155484a3f490096bc5328e3c33c2c",
+      "port_sha256": {
+        "packages/coding-agent/src/core/model-runtime.bend": "a55aff58c009dbf3b73e0b09ef5249949ad2faa41b34675d771ae9b295ca3b02"
+      }
     },
     "packages/coding-agent/src/core/session-manager.ts": {
       "state": "partial",
@@ -656,7 +656,7 @@
     },
     "packages/coding-agent/src/modes/interactive/chat-viewport.ts": {
       "state": "partial",
-      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Fullscreen transcript allocation uses upstream’s zero basis and one-row minimum; natural dock rendering during external-editor handoffs matches pi. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
+      "note": "The fullscreen transcript scrolls independently of the dock and matches page/wheel parity. Fullscreen transcript allocation uses upstream\u2019s zero basis and one-row minimum; natural dock rendering during external-editor handoffs matches pi. Pending/status/widget dock sections and configurable scrollbar settings remain open.",
       "source_sha256": "24bbdd06a5e17d6c0631f7de51329eb7bb4ecd4a460dec7b3d593ff9e6219960",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/viewport.bend": "91281c83b948bdb35106382375cfc14628d313a48d7676cd9a023b1bcadea32e"
@@ -1087,13 +1087,13 @@
     },
     "packages/coding-agent/src/utils/pi-user-agent.ts": {
       "state": "ported",
-      "note": "getPiUserAgent formats pi/<version> (<platform>; <runtime>; <arch>) from the system identity; the runtime token is bend/2.0.7 rather than Bun's or Node's version.",
+      "note": "getPiUserAgent formats pi/<version> (<platform>; <runtime>; <arch>) from the system identity; the runtime token is bend/2.0.7 rather than Bun's or Node's version. getPiBendUserAgent is the same shape naming pi-bend, used by the remote model catalog (docs/scope-decisions.md).",
       "ports": [
         "packages/coding-agent/src/utils/pi-user-agent.bend"
       ],
       "source_sha256": "cd2329beb4b18fd99f5180d603fd1371c8f50441d4688f7d75918a051e565c26",
       "port_sha256": {
-        "packages/coding-agent/src/utils/pi-user-agent.bend": "c81a896b94046d712c4c82072c1513ed64e1e1e178bc92358c2949d761ef5158"
+        "packages/coding-agent/src/utils/pi-user-agent.bend": "577267459bdaf65b991a6e3076260deb6829206dba0b0d1941654917e5ea0254"
       }
     },
     "packages/coding-agent/src/utils/version-check.ts": {
@@ -1174,13 +1174,13 @@
     },
     "packages/coding-agent/src/cli/auth-check.ts": {
       "state": "ported",
-      "note": "checkProviderAuth, getProviderCredential and createAuthCheckModelRuntime over ModelRuntime.checkAuth; the package directory is an extra argument for ordering ambiguous model matches.",
+      "note": "checkProviderAuth, getProviderCredential and createAuthCheckModelRuntime over ModelRuntime.checkAuth; createAuthCheckModelRuntime creates the runtime as upstream does (in-memory models store, no model network, no create-time refresh). The package directory is an extra argument for ordering ambiguous model matches.",
       "ports": [
         "packages/coding-agent/src/cli/auth-check.bend"
       ],
       "source_sha256": "bed735dae4b5b6a68f78e282f0bd1e48f1f9c90aad1be6d2c43510b816947144",
       "port_sha256": {
-        "packages/coding-agent/src/cli/auth-check.bend": "7ade568abd1f4177dae9018d90665c59ed87973beb7b3c00a5d799308e71279a"
+        "packages/coding-agent/src/cli/auth-check.bend": "0424dd7d0484c1c4de8cca6a41c0c9f8b734867d38b78251ead8746816ee4aee"
       }
     },
     "packages/coding-agent/src/cli/credential-print.ts": {
@@ -1211,19 +1211,19 @@
       }
     },
     "packages/coding-agent/src/core/remote-catalog-provider.ts": {
-      "state": "partial",
-      "note": "withRemoteCatalog, parseCatalog (array, {models}, keyed object; entries decoded as models.json model definitions with the provider id), remoteModels, the refresh TTL, If-None-Match revalidation, 304/404/501/error handling and publication are ported and tested (tests/remote-catalog.bend). Last-Modified is parsed as an HTTP date (strict native date parsing). Not yet wired into ModelRuntime creation: with only the in-memory models store (FileModelsStore is not ported) every start would re-request all built-in catalogs, so the wrapping waits for persisted catalogs.",
+      "state": "ported",
+      "note": "withRemoteCatalog, parseCatalog (array, {models}, keyed object; entries decoded as models.json model definitions with the provider id), remoteModels, the refresh TTL, If-None-Match revalidation, 304/404/501/error handling and publication are ported and tested (tests/remote-catalog.bend), and ModelRuntime creation wraps the built-in providers except Radius. Last-Modified is parsed as an HTTP date (strict native date parsing). Requests identify as pi-bend rather than pi (scope decision).",
       "ports": [
         "packages/coding-agent/src/core/remote-catalog-provider.bend"
       ],
       "source_sha256": "72c74d4d41954deabc9b1b52c9274e76a95f8148b732400f9225ff529aacb915",
       "port_sha256": {
-        "packages/coding-agent/src/core/remote-catalog-provider.bend": "f5528a24980e1617a4e52cbaff87ae11f6dbea5d1ea014c96466bfdade9023a4"
+        "packages/coding-agent/src/core/remote-catalog-provider.bend": "cdbd25432b6b86232ffd382257dd86eaa36dad7c546ff664e0d1b2cdd286833e"
       }
     },
     "packages/coding-agent/src/core/models-store.ts": {
       "state": "partial",
-      "note": "FileModelsStore is ported (core/models-store.bend): read/write/delete under auth.json's lock protocol (parent directory, empty-object file, 30 s cancellable lock, lease check before writing, 0600 for new files), raw JSON kept for other providers and entries decoded to typed models, revision-based reuse of the last load with the read state shared explicitly. Gaps: the file revision is read after the lock is released rather than inside it; a cancelled reader's in-flight reload is not kept alive for other waiting readers; InMemoryCodingAgentModelsStore is the ai package's in-memory store; ModelRuntime creation still uses the in-memory store (its read-state lifetime is not wired yet), so catalogs are not yet persisted across runs.",
+      "note": "FileModelsStore is ported (core/models-store.bend): read/write/delete under auth.json's lock protocol (parent directory, empty-object file, 30 s cancellable lock, lease check before writing, 0600 for new files), raw JSON kept for other providers and entries decoded to typed models, revision-based reuse of the last load with the read state shared explicitly. ModelRuntime creation uses it for models-store.json beside models.json and owns its read state (model-runtime.bend). InMemoryCodingAgentModelsStore is the ai package's in-memory store. Gaps: the file revision is read after the lock is released rather than inside it; readers of one read state are serialized, so a cancelled reader's reload is not shared with a waiting reader (which reloads itself); upstream shares the read state across instances of one path per process, here per runtime.",
       "ports": [
         "packages/coding-agent/src/core/models-store.bend"
       ],
@@ -1251,7 +1251,7 @@
         "packages/coding-agent/src/core/tools/renderers/edit.bend",
         "packages/coding-agent/src/modes/interactive/components/tool-execution.bend"
       ],
-      "note": "Native owned asynchronous read-only preflight begins after complete canonical edit arguments; successful diffs and failures stay in the call box, settled details reconstruct saved previews without reading files, and identical settlement does not move the diff or request a full redraw. Input revisions discard stale completions, including A→B→A, and disposal joins owned reads. Bun/native1/native4 integration covers the three named edit-tool-no-full-redraw contracts. Alternate raw legacy preview argument shapes and the full renderer contract remain unreviewed.",
+      "note": "Native owned asynchronous read-only preflight begins after complete canonical edit arguments; successful diffs and failures stay in the call box, settled details reconstruct saved previews without reading files, and identical settlement does not move the diff or request a full redraw. Input revisions discard stale completions, including A\u2192B\u2192A, and disposal joins owned reads. Bun/native1/native4 integration covers the three named edit-tool-no-full-redraw contracts. Alternate raw legacy preview argument shapes and the full renderer contract remain unreviewed.",
       "source_sha256": "0c1bafcf74ad2b703bf5ab193e72084a1da80231a77abddefc23c5bb20558731",
       "port_sha256": {
         "packages/coding-agent/src/core/tools/renderers/edit.bend": "36f676b340befebbf56ee972051f8eada6bcf1dda6b6a9fc7fe18c63794048a4",
@@ -1442,16 +1442,31 @@
     },
     "packages/coding-agent/src/core/http-dispatcher.ts": {
       "state": "partial",
-      "note": "applyHttpProxySettings and the proxy half of configureHttpDispatcher (undici EnvHttpProxyAgent with proxyTunnel) are packages/runtime/src/http-proxy.bend: Proxy.fromEnvironmentWith computes the configuration from http_proxy/HTTP_PROXY, https_proxy/HTTPS_PROXY, no_proxy/NO_PROXY and the trimmed httpProxy setting, and Fetch.createWithProxy tunnels every proxied origin with CONNECT (proxy credentials, the undici request head, TLS inside the tunnel). Missing: the coding agent's runtime is not created with it yet; the idle/headers timeouts and the 2 s connection-attempt timeout are not taken from here (the agent uses 10000 ms); parseHttpIdleTimeoutMs/formatHttpIdleTimeoutMs/HTTP_IDLE_TIMEOUT_CHOICES are not reviewed here; https:// and SOCKS proxies are rejected.",
+      "note": "applyHttpProxySettings and the proxy half of configureHttpDispatcher (undici EnvHttpProxyAgent with proxyTunnel) are packages/runtime/src/http-proxy.bend: Proxy.fromEnvironmentWith computes the configuration from http_proxy/HTTP_PROXY, https_proxy/HTTPS_PROXY, no_proxy/NO_PROXY and the trimmed httpProxy setting, and Fetch.createWithProxy tunnels every proxied origin with CONNECT (proxy credentials, the undici request head, TLS inside the tunnel). core/http-dispatcher.bend holds the connection options with DEFAULT_AUTO_SELECT_FAMILY_ATTEMPT_TIMEOUT_MS (2 s per non-final address attempt); agent-runtime's transport is created with them and with the global httpProxy setting (createTransportWith); main's other transports (auth login, model listing) use the environment's proxies only. The idle timeout is a per-request option (agent-runtime requestDefaults), not a dispatcher option. Missing: parseHttpIdleTimeoutMs/formatHttpIdleTimeoutMs/HTTP_IDLE_TIMEOUT_CHOICES are not reviewed here; https:// and SOCKS proxies are rejected.",
+      "ports": [
+        "packages/coding-agent/src/core/http-dispatcher.bend",
+        "packages/runtime/src/http-proxy.bend",
+        "packages/runtime/src/fetch.bend",
+        "packages/coding-agent/src/core/agent-runtime.bend"
+      ],
       "source_sha256": "d64922c476d11b90555b8f23cab92ce1f4f83174cb750c125a96d8d4374744e2",
       "port_sha256": {
+        "packages/coding-agent/src/core/http-dispatcher.bend": "ebdef30af7fff2fd0f4529bced421f752bc290f3b92698f5a173e29b90b9e6f8",
         "packages/runtime/src/http-proxy.bend": "419b0ead8c7f0b14547c03dc1c66b0d90189456b8676a345983f095a7da4f083",
-        "packages/runtime/src/fetch.bend": "f189fd01e044448ed351dba66d522fe6570839dfd7aec83672df622515af09f6"
-      },
+        "packages/runtime/src/fetch.bend": "f189fd01e044448ed351dba66d522fe6570839dfd7aec83672df622515af09f6",
+        "packages/coding-agent/src/core/agent-runtime.bend": "af9020ceab46e8aeaccbfb3894ba3621d1478fe5a8436395057be7039e4a8cb3"
+      }
+    },
+    "packages/coding-agent/src/core/crash-log.ts": {
+      "state": "partial",
+      "note": "The module is ported (core/crash-log.bend, tests/crash-log.bend): typed CrashRecord in crashes.json (last five, pretty JSON, upstream's field order), readCrashLog's filter, recordCrash, takeUnnotifiedCrash (one week, newest unannounced, all marked), clearCrashLog, and findExtensionStackMatches with decodeURI'd frame lines, package roots, directory entries, Windows drive paths and deduplicated labels. Records with malformed optional fields are normalized when rewritten; timestamps are read as ISO strings. Native errors carry no stack, so the agent's own failures match no extension. Gap: nothing calls recordCrash yet: upstream records from interactive handleFatalRuntimeError/uncaughtCrash, and the port's interactive mode has no fatal runtime error path (session replacement failures are statuses; handed to the run.bend owner). The startup takeUnnotifiedCrash notice and the crash report instructions point to /bug and are excluded (docs/scope-decisions.md).",
       "ports": [
-        "packages/runtime/src/http-proxy.bend",
-        "packages/runtime/src/fetch.bend"
-      ]
+        "packages/coding-agent/src/core/crash-log.bend"
+      ],
+      "source_sha256": "7f88a79e4c672844baf01828e02ed79d6cce03e14bce04b0f193dd46471bae07",
+      "port_sha256": {
+        "packages/coding-agent/src/core/crash-log.bend": "c1afae31fcb2c0564e4947d378c89975e9bd58e86fee2ff8889bb9141e13b865"
+      }
     }
   }
 }

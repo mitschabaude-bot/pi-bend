@@ -6,6 +6,7 @@ import ../../../ai/src/auth/types.bend as Auth
 import ../../../ai/src/auth/resolve.bend as Resolve
 import ../../../ai/src/models.bend as AiModels
 import ../../../ai/src/providers/radius.bend as Radius
+import ../../../ai/src/models-store.bend as Store
 import ../../../runtime/src/collation.bend as Collation
 import ../../../runtime/src/posix-path.bend as Path
 
@@ -166,4 +167,6 @@ def getProviderCredential(+providerId: String, +runtime: Models.ModelRuntime, cr
 # upstream createAuthCheckModelRuntime: the production providers over the
 # given credentials, with in-memory catalogs and no model network access.
 def createAuthCheckModelRuntime(credentials: Auth.CredentialStore, codex: Auth.OAuthAuth, anthropic: Auth.OAuthAuth, radius: Radius.RadiusTransport) -> IO(Models.ModelRuntime):
-  Models.createWithAnthropic(credentials, codex, Some{anthropic}, radius)
+  do IO<Models.ModelRuntime>:
+    store : Store.ModelsStore <- Store.inMemoryModelsStore()
+    Models.createWithAnthropicOptions(credentials, codex, Some{anthropic}, radius, Models.CreateModelRuntimeOptions{Some{store}, None{}, False{}, None{}, None{}, False{}})

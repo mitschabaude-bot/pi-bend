@@ -3,7 +3,8 @@
 Each case runs in a fresh directory. The mode case pre-creates the file with
 mode 0660; the cancellation case holds the proper-lockfile lock
 (<path>.lock) while the store's write waits, then releases it and checks that
-nothing is written later.
+nothing is written later. The reader case holds the lock until the program
+reports its first (cancelled) reader, then releases it for the waiting one.
 Usage: python3 tests/models_store_check.py [build/models-store.js] [build/models-store]
 """
 import json, os, pathlib, stat, subprocess, sys, tempfile, time
@@ -48,6 +49,19 @@ for name, command in lanes:
         other = base / 'other-models-store.json'
         other.write_text('{}')
         passed.append(run(command, 'coalesce', str(shared), str(other)))
+
+        waiting = base / 'waiting.json'
+        waiting.write_text(json.dumps({'one': {'models': [model('one', 'stored')]}}))
+        held = pathlib.Path(str(waiting) + '.lock')
+        held.mkdir()
+        process = subprocess.Popen(command + ['reader', str(waiting)], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            first = process.stdout.readline().strip()
+        finally:
+            held.rmdir()
+        rest, err = process.communicate(timeout=120)
+        assert first == 'first reader aborted' and process.returncode == 0 and rest.startswith('ok '), (first, rest, err[-2000:])
+        passed.append(rest.strip())
 
         locked = base / 'locked.json'
         locked.write_text(json.dumps({'one': {'models': [model('one', 'existing')]}}))

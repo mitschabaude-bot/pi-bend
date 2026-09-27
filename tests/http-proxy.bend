@@ -3,6 +3,7 @@ import ../packages/runtime/src/fetch.bend as Fetch
 import ../packages/runtime/src/http-exchange.bend as HTTP
 import ../packages/runtime/src/http-message.bend as Message
 import ../packages/runtime/src/http-proxy.bend as Proxy
+import ../packages/coding-agent/src/core/http-dispatcher.bend as Dispatcher
 import ../packages/runtime/src/http-response.bend as Response
 import ../packages/runtime/src/tls-socket.bend as TLS
 import ../packages/runtime/src/tls13-client.bend as Client
@@ -23,7 +24,8 @@ import ./aes128-gcm.bend as Bytes
 # `httpProxy` setting, and prints one line per URL: "status <code> <body>",
 # "error <proxy message>" for a refused or broken tunnel, "failed" for
 # another failure; or "config <message>" when the proxy configuration is
-# rejected. TLS origins must present the given certificate.
+# rejected. TLS origins must present the given certificate. The connection
+# options are the coding agent's (core/http-dispatcher.bend).
 
 def pinned(certificate: List<&2, U32>, host: URL.Host) -> IO(Client.Authorization): IO.pure(Client.Authorization, Client.Authorization{chain => Session.pin(certificate, chain)})
 
@@ -90,15 +92,13 @@ def started(result: Result<&2, &1, Fetch.InitError, Fetch.Runtime>, certificate:
         runWith(pair, urls)
         C.dispose(URL.Host, Client.Authorization, factory)
 
-def options() -> HTTP.Options:
-  HTTP.Options{DNS.IPv4First{}, Connect.IPv4First{}, 5000, 16384, Response.Limits{8192n, 65536n, 100n, 8n, Message.Limits{8192n, 8192n, 65536n, 100n}}}
 
 def configured(certificate: List<&2, U32>, resolverPath: String, hostsPath: String, urls: List<String>, config: Result<&2, &2, String, Proxy.Config>) -> IO(Unit):
   match config:
     case Fail{message}: IO.print("config " ++ message)
     case Done{proxies}:
       do IO<Unit>:
-        result : Result<&2, &1, Fetch.InitError, Fetch.Runtime> <- Fetch.createWithProxy(Fetch.Files{resolverPath, hostsPath, 4096, 65536n, 2000, 65535}, options(), proxies)
+        result : Result<&2, &1, Fetch.InitError, Fetch.Runtime> <- Fetch.createWithProxy(Fetch.Files{resolverPath, hostsPath, 4096, 65536n, 2000, 65535}, Dispatcher.httpOptions(), proxies)
         started(result, certificate, urls)
 
 def arguments(values: List<String>) -> IO(Unit):

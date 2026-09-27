@@ -15,6 +15,7 @@ import ../packages/runtime/src/f64.bend as F
 import ../packages/runtime/src/fetch.bend as Fetch
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/ref.bend as Ref
+import ../packages/ai/src/providers/radius.bend as Radius
 import ./loopback-fetch.bend as Loop
 
 # upstream packages/coding-agent/test/remote-catalog-provider.test.ts. The
@@ -22,8 +23,11 @@ import ./loopback-fetch.bend as Loop
 # tests/remote_catalog_check.py's server, whose first path segment names the
 # case and serves that case's responses in order. refreshProvider publishes
 # like upstream's helper: persist writes (or deletes) the store entry, and the
-# published models become the provider's catalog. Args: <server base>
-# <localGeneratedAt ms for the "newer" case>.
+# published models become the provider's catalog. Requests identify as
+# pi-bend (docs/scope-decisions.md), so the user-agent assertion expects
+# pi-bend/<version> where upstream expects pi/<version>. A supplemental case
+# checks ModelRuntime creation's wiring. Args: <server base> <localGeneratedAt
+# seconds for the "newer" case> <scratch directory>.
 
 def check(value: Bool, +name: String) -> IO(Unit):
   Bool.pick(Unit -> IO(Unit), value, _ => IO.print("ok " ++ name), _ => IO.die(Unit, 1, "FAIL " ++ name))(Unit{})
@@ -197,7 +201,7 @@ def keyed(+inner: Fetch.Fetch(Unit), +base: String) -> IO(Unit):
     models : String <- catalogIds(catalogOf(h))
     +entry : Maybe<&2, Store.ModelsStoreEntry> <- entryOf(storeOf(h))
     +lines : List<&2, String> <- Loop.requests(logOf(h))
-    check(succeeded(first) && succeeded(second) && succeeded(third) && String.eq(models, "static,dynamic") && String.eq(storedIds(entry), "dynamic") && Nat.is_eq(List.length(&2, String, lines), 2n) && Maybe.default(&2, Bool, Maybe.map(&2, String, Bool, agent => String.contains(agent, "pi/" ++ Config.version()), field(nth(lines, 0n), "user-agent")), False{}), "remote catalog provider parses keyed catalogs, sends version headers, observes the refresh TTL, and supports forced refreshes")
+    check(succeeded(first) && succeeded(second) && succeeded(third) && String.eq(models, "static,dynamic") && String.eq(storedIds(entry), "dynamic") && Nat.is_eq(List.length(&2, String, lines), 2n) && Maybe.default(&2, Bool, Maybe.map(&2, String, Bool, agent => String.starts_with(agent, "pi-bend/" ++ Config.version() ++ " ("), field(nth(lines, 0n), "user-agent")), False{}), "remote catalog provider parses keyed catalogs, sends version headers, observes the refresh TTL, and supports forced refreshes")
 
 def newer(+inner: Fetch.Fetch(Unit), +base: String, +local: F64) -> IO(Unit):
   do IO<Unit>:
@@ -304,7 +308,73 @@ def stalled(+inner: Fetch.Fetch(Unit), +base: String) -> IO(Unit):
     pair : Fetch.Fetch(Unit) & Loop.Log() <- Loop.redirecting(inner, "https://pi.dev", base ++ "/stall")
     stalledPair(pair)
 
-def cases(+base: String, +local: F64, +inner: Fetch.Fetch(Unit)) -> IO(Unit):
+# Supplemental (not upstream): ModelRuntime creation with the production
+# built-in providers and a stored openai API key (upstream refreshes a
+# catalog over the network only for providers with credentials). Every https
+# request goes to the local server, which answers pi.dev's catalog for openai
+# (Last-Modified now, newer than the built-in data) and 404 for others. A network-enabled creation
+# publishes the overlay and persists it in models-store.json beside
+# models.json; a default (offline) creation restores it from that file.
+def unusedLogin(unused: Unit, interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()): IO.pure(Auth.LoginOutcome(), Fail{"unused"})
+
+def unusedRefresh(unused: Unit, input: Auth.RefreshInput) -> IO(Result<&2, &2, String, Auth.Credential>): IO.pure(Result<&2, &2, String, Auth.Credential>, Fail{"unused"})
+
+def unusedToAuth(unused: Unit, credential: Auth.Credential) -> IO(Result<&2, &2, String, Auth.ModelAuth>): IO.pure(Result<&2, &2, String, Auth.ModelAuth>, Fail{"unused"})
+
+def fixtureOAuth(name: String) -> IO(Auth.OAuthAuth):
+  do IO<Auth.OAuthAuth>:
+    authenticate : C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()> <- C.create(~Unit, ~Auth.ProviderAuthInteraction, ~Auth.LoginOutcome(), ~unusedLogin, Unit{})
+    refresher : C.Callback<Auth.RefreshInput, Result<&2, &2, String, Auth.Credential>> <- C.create(~Unit, ~Auth.RefreshInput, ~Result<&2, &2, String, Auth.Credential>, ~unusedRefresh, Unit{})
+    deriver : C.Callback<Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>> <- C.create(~Unit, ~Auth.Credential, ~Result<&2, &2, String, Auth.ModelAuth>, ~unusedToAuth, Unit{})
+    return Auth.OAuthAuth{name, True{}, None{}, authenticate, refresher, deriver}
+
+def wiredRuntime(+fetch: Fetch.Fetch(Unit), +modelsPath: String, options: Models.CreateModelRuntimeOptions) -> IO(Models.ModelRuntime):
+  do IO<Models.ModelRuntime>:
+    owner : AuthStorage.AuthStorageOwner <- AuthStorage.inMemory(R.Record{[R.Property{"openai", Auth.ApiKeyCredential{Some{"test-key"}, None{}}}]})
+    credentials : Auth.CredentialStore <- credentialStore(AuthStorage.borrow(owner))
+    codex : Auth.OAuthAuth <- fixtureOAuth("ChatGPT Plus/Pro (Codex Subscription)")
+    anthropic : Auth.OAuthAuth <- fixtureOAuth("Anthropic (Claude Pro/Max)")
+    Models.createWithOptions(credentials, codex, Some{anthropic}, Radius.RadiusTransport{fetch, Loop.urlContext()}, Some{modelsPath}, options)
+
+def openaiIds(+runtime: Models.ModelRuntime) -> IO(String):
+  do IO<String>:
+    models : List<&2, T.Model<T.JsonValue>> <- Models.getModels(runtime)
+    return ids(AiModels.ownedBy(models, "openai"))
+
+def catalogRequest(+line: String) -> Bool:
+  String.starts_with(line, "GET https://pi.dev/api/models/providers/") && Maybe.default(&2, Bool, Maybe.map(&2, String, Bool, agent => String.starts_with(agent, "pi-bend/" ++ Config.version() ++ " ("), field(line, "user-agent")), False{})
+
+def allCatalogRequests(lines: List<&2, String>) -> Bool:
+  match lines:
+    case Nil{}: True{}
+    case line <> rest: catalogRequest(line) && allCatalogRequests(rest)
+
+def requested(lines: List<&2, String>, +provider: String) -> Bool:
+  match lines:
+    case Nil{}: False{}
+    case +line <> rest: String.starts_with(line, "GET https://pi.dev/api/models/providers/" ++ provider ++ "\t") || requested(rest, provider)
+
+def wiredWith(+directory: String, pair: Fetch.Fetch(Unit) & Loop.Log()) -> IO(Unit):
+  match pair:
+    case (+fetch, +log):
+      +modelsPath = directory ++ "/models.json"
+      do IO<Unit>:
+        +online : Models.ModelRuntime <- wiredRuntime(fetch, modelsPath, Models.CreateModelRuntimeOptions{None{}, None{}, True{}, None{}, None{}, True{}})
+        +published : String <- openaiIds(online)
+        Models.dispose(online)
+        +first : List<&2, String> <- Loop.requests(log)
+        +offline : Models.ModelRuntime <- wiredRuntime(fetch, modelsPath, Models.createOptions())
+        +restored : String <- openaiIds(offline)
+        Models.dispose(offline)
+        +after : List<&2, String> <- Loop.requests(log)
+        check(String.contains(published, "remote-only") && String.contains(restored, "remote-only") && allCatalogRequests(first) && requested(first, "openai") && Bool.not(requested(first, "radius")) && Nat.is_eq(List.length(&2, String, after), List.length(&2, String, first)), "native: model runtime creation overlays pi.dev catalogs and persists them in models-store.json beside models.json")
+
+def wired(+inner: Fetch.Fetch(Unit), +base: String, +directory: String) -> IO(Unit):
+  do IO<Unit>:
+    pair : Fetch.Fetch(Unit) & Loop.Log() <- Loop.redirecting(inner, "https://", base ++ "/wired/")
+    wiredWith(directory, pair)
+
+def cases(+base: String, +local: F64, +directory: String, +inner: Fetch.Fetch(Unit)) -> IO(Unit):
   do IO<Unit>:
     keyed(inner, base)
     newer(inner, base, local)
@@ -313,11 +383,12 @@ def cases(+base: String, +local: F64, +inner: Fetch.Fetch(Unit)) -> IO(Unit):
     transient(inner, base)
     unavailable(inner, base)
     stalled(inner, base)
+    wired(inner, base, directory)
 
 def started(args: List<String>) -> IO(Unit):
   match args:
-    case base <> localText <> Nil{}: Loop.withNetwork(inner => cases(base, F.multiply(F.fromU32(Maybe.default(&2, U32, U32.read(localText), 0)), F.fromU32(1000)), inner))
-    case _: IO.die(Unit, 2, "usage: remote-catalog <server base> <local generated seconds>")
+    case base <> localText <> directory <> Nil{}: Loop.withNetwork(inner => cases(base, F.multiply(F.fromU32(Maybe.default(&2, U32, U32.read(localText), 0)), F.fromU32(1000)), directory, inner))
+    case _: IO.die(Unit, 2, "usage: remote-catalog <server base> <local generated seconds> <scratch directory>")
 
 def main() -> IO(Unit):
   do IO<Unit>:

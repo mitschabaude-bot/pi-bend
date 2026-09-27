@@ -111,8 +111,10 @@ type Redirect is Data:
 def swapped(+url: String, +prefix: String, +loopback: String) -> String:
   Bool.pick(String, String.starts_with(url, prefix), loopback ++ String.drop(url, String.length(prefix)), url)
 
+# pi.dev's remote catalog requests of the built-in providers (answered 404,
+# an unavailable overlay) stay local as well.
 def target(+url: String, +loopback: String) -> String:
-  swapped(swapped(url, "https://radius.pi.dev", loopback), "http://localhost:8788", loopback)
+  swapped(swapped(swapped(url, "https://radius.pi.dev", loopback), "http://localhost:8788", loopback), "https://pi.dev", loopback)
 
 def headerText(value: Result<&2, &2, Headers.HeaderSyntaxError, Maybe<&2, String>>) -> String:
   match value:
@@ -325,17 +327,16 @@ def storeOf(pair: AuthStorage.AuthStorageOwner & AuthStorage.AuthStorage) -> IO(
   match pair:
     case (_, storage): AuthStorage.store(storage)
 
-# upstream ModelRuntime.create with in-memory credentials and models store,
-# then its refresh with `allowModelNetwork`.
+# upstream ModelRuntime.create with in-memory credentials and models store
+# and `allowModelNetwork`.
 def runtimeWith(transport: Radius.RadiusTransport, credentials: List<&2, R.Property<Auth.Credential>>, modelsPath: Maybe<&2, String>, allowNetwork: Bool) -> IO(Models.ModelRuntime):
   do IO<Models.ModelRuntime>:
     owner : AuthStorage.AuthStorageOwner <- AuthStorage.inMemory(R.Record{credentials})
     store : Auth.CredentialStore <- storeOf(AuthStorage.borrow(owner))
     codex : Auth.OAuthAuth <- fixtureOAuth("ChatGPT Plus/Pro (Codex Subscription)")
     anthropic : Auth.OAuthAuth <- fixtureOAuth("Anthropic (Claude Pro/Max)")
-    +runtime : Models.ModelRuntime <- Models.createWithModelsPath(store, codex, Some{anthropic}, transport, modelsPath)
-    result : Models.ModelsRefreshResult <- Models.refresh(runtime, Models.ModelsRefreshOptions{Some{allowNetwork}, None{}, None{}, None{}})
-    return runtime
+    modelsStore : Store.ModelsStore <- Store.inMemoryModelsStore()
+    Models.createWithOptions(store, codex, Some{anthropic}, transport, modelsPath, Models.CreateModelRuntimeOptions{Some{modelsStore}, None{}, allowNetwork, None{}, None{}, True{}})
 
 def legacyCatalog(transport: Radius.RadiusTransport, log: Log()) -> IO(Unit):
   do IO<Unit>:

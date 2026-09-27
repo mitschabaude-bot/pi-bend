@@ -36,6 +36,7 @@ import ../auth/oauth/meta.bend as MetaOAuth
 import ../auth/oauth/kimi-coding.bend as KimiOAuth
 import ../auth/oauth/github-copilot.bend as CopilotOAuth
 import ../auth/oauth/openrouter.bend as OpenRouterOAuth
+import ./model-data.generated.bend as ModelData
 import ../../../runtime/src/fetch.bend as Fetch
 import ../../../runtime/src/url.bend as URL
 import ./qwen-token-plan.bend as QwenTokenPlan
@@ -120,6 +121,10 @@ def builtinProviders(codex: Auth.OAuthAuth, anthropicOAuth: Maybe<&2, Auth.OAuth
 
 # upstream builtinImagesProviders: every built-in image-generation provider,
 # freshly constructed, over the given api and OpenRouter OAuth handler.
+# upstream getBuiltinModelDataGeneratedAt: when the built-in catalogs were
+# generated (the pinned pi-ai data manifest), epoch milliseconds.
+def getBuiltinModelDataGeneratedAt() -> Maybe<&2, F64>: ModelData.GENERATED_AT()
+
 def builtinImagesProviders(-E: Data, oauth: Maybe<&2, Auth.OAuthAuth>, openrouter: Images.ProviderImages(E)) -> IO(List<&2, Images.ImagesProvider<E>>):
   do IO<List<&2, Images.ImagesProvider<E>>>:
     provider : Images.ImagesProvider<E> <- OpenrouterImages.openrouterImagesProvider(E, oauth, openrouter)
