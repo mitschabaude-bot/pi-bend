@@ -227,3 +227,13 @@ def resetLinesFrom(lines: List<&2,String>,previous: List<&2,String>,reversed: Li
     case lines Nil{}: List.append(&2,String,List.reverse(&2,String,reversed),applyLineResets(lines))
 def applyLineResetsFrom(lines: List<&2,String>,previous: List<&2,String>) -> List<&2,String>:
   resetLinesFrom(lines,previous,Nil{})
+
+# Raw keys and prepared values come from the same committed frame.
+def cachedLineResets(lines: List<&2,String>,source: List<&2,String>,prepared: List<&2,String>,reversed: List<&2,String>) -> List<&2,String>:
+  match lines source prepared:
+    case Nil{} _ _: List.reverse(&2,String,reversed)
+    case +line <> rest old <> more saved <> remaining:
+      cachedLineResets(rest,more,remaining,reuseLine(line,saved,String.eq(line,old)) <> reversed)
+    case lines _ prepared: List.append(&2,String,List.reverse(&2,String,reversed),applyLineResetsFrom(lines,prepared))
+def applyCachedLineResets(lines: List<&2,String>,source: List<&2,String>,prepared: List<&2,String>) -> List<&2,String>:
+  cachedLineResets(lines,source,prepared,Nil{})

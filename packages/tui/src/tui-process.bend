@@ -40,10 +40,10 @@ def options(tui: Tui.TuiBase,termux: Bool) -> Screen.Options:
       Screen.Options{termux,clear,Bool.not(List.is_empty(&2,O.Entry,entries)),show,stopped}
 def frame(prepared: Tui.PreparedFrame,width: Nat,height: Nat) -> Screen.Frame:
   match prepared:
-    case Tui.PreparedFrame{_,_,lines,cursor,_}: Screen.Frame{lines,cursor,width,height}
+    case Tui.PreparedFrame{_,_,lines,cursor,_,_}: Screen.Frame{lines,cursor,width,height}
 def planned(+prepared: Tui.PreparedFrame,screen: Screen.State,termux: Bool,width: Nat,height: Nat) -> Result<&2,&2,Screen.RenderError,Screen.Plan>:
   match prepared:
-    case Tui.PreparedFrame{+tui,_,_,_,_}:
+    case Tui.PreparedFrame{+tui,_,_,_,_,_}:
       Screen.checkedPlan(screen,frame(prepared,width,height),options(tui,termux))
 
 def effect(handle: Terminal.Handle,value: Screen.Effect) -> IO(Result<&2,&2,Terminal.Error,Unit>):
@@ -68,7 +68,7 @@ def finished(result: Result<&2,&2,Terminal.Error,Unit>,old: Session,prepared: Tu
     case Fail{error} Session{tui,Main{screen}}: Rejected{Session{tui,Main{Screen.resetRenderState(screen)}},Output{error}}
     case Fail{error} Session{tui,Fullscreen{screen}}: Rejected{Session{tui,Fullscreen{Alt.reset(screen)}},Output{error}}
 def retainedLayout(screen: Alt.State,prepared: Tui.PreparedFrame) -> Alt.State:
-  match prepared: case Tui.PreparedFrame{_,_,_,_,layout}: Alt.withLayout(screen,layout)
+  match prepared: case Tui.PreparedFrame{_,_,_,_,layout,_}: Alt.withLayout(screen,layout)
 def finishedAlt(result: Result<&2,&2,Terminal.Error,Unit>,old: Session,+prepared: Tui.PreparedFrame,next: Alt.State) -> Draw:
   match result old:
     case Done{_} _: Drawn{Session{Tui.commitFrame(prepared),Fullscreen{retainedLayout(next,prepared)}}}
@@ -103,7 +103,7 @@ def refreshedSearch(+screen: Alt.State,content: Maybe<&2,Tui.PrimaryContent>) ->
     case Some{Tui.PrimaryContent{lines,top,rows,_,_}}: refreshedActive(screen,Alt.search(screen),lines,top,rows)
 def executeAltReady(+prepared: Tui.PreparedFrame,old: Session,+screen: Alt.State,handle: Terminal.Handle,width: Nat,height: Nat) -> IO(Draw):
   match prepared:
-    case Tui.PreparedFrame{+tui,_,+lines,+cursor,_}:
+    case Tui.PreparedFrame{+tui,_,+lines,+cursor,_,_}:
       do IO<Draw>:
         +row : Maybe<&2,Nat> <- IO.pure(Maybe<&2,Nat>,Tui.indicatorRow(tui))
         label : String <- indicatorText(screen,row)
@@ -121,7 +121,7 @@ def executeAltScroll(change: Tui.ScrollChange,screen: Alt.State,old: Session,han
         executeAltMoved(rerendered,screen,old,handle,width,height)
 def executeAltTarget(prepared: Tui.PreparedFrame,screen: Alt.State,old: Session,handle: Terminal.Handle,width: Nat,height: Nat,target: Nat) -> IO(Draw):
   match prepared:
-    case Tui.PreparedFrame{tui,_,_,_,_}:
+    case Tui.PreparedFrame{tui,_,_,_,_,_}:
       do IO<Draw>:
         now : Nat <- IO.now()
         executeAltScroll(Tui.scrollPrimaryBy(tui,Layout.ScrollRow{target},now),screen,old,handle,width,height)

@@ -76,3 +76,26 @@ for backend in a.backends:
   got=run(command,reuse[start:start+30]);want=reuse_expected[start:start+30]
   assert got==want,(backend,start,[(v,w,g) for v,w,g in zip(reuse[start:start+30],want,got) if w!=g])
  print(f'{backend}: {len(reuse)} cached/fresh normalization comparisons pass')
+
+# Valid cache keys and values are published together by commitFrame.
+# Equal independently decoded keys, edits and different lengths all match a
+# fresh preparation, including normalization-sensitive text and image lines.
+cached=[]
+for line in cache_texts:
+ for previous in [[],[line],['wrong'],*[[old] for old in cache_texts]]:
+  cached.append(dict(op='cached',lines=[line],previous=previous))
+for _ in range(80):
+ old=[rng.choice(cache_texts) for _ in range(rng.randrange(12))]
+ new=list(old)
+ if new:new[rng.randrange(len(new))]=rng.choice(cache_texts)
+ if rng.randrange(2):new.append(rng.choice(cache_texts))
+ elif new:new.pop()
+ cached.append(dict(op='cached',lines=new,previous=old))
+cached_expected=[]
+for start in range(0,len(cached),30):cached_expected.extend(run(oracle,[dict(op='reset',lines=v['lines']) for v in cached[start:start+30]]))
+for backend in a.backends:
+ command=['bun',str(a.prefix)+'.js'] if backend=='bun' else [str(a.prefix),'--threads',backend[-1]]
+ for start in range(0,len(cached),30):
+  got=run(command,cached[start:start+30]);want=cached_expected[start:start+30]
+  assert got==want,(backend,start,[(v,w,g) for v,w,g in zip(cached[start:start+30],want,got) if w!=g])
+ print(f'{backend}: {len(cached)} committed raw/prepared cache comparisons pass')

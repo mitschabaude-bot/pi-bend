@@ -51,13 +51,13 @@ def frame(value: B.Frame) -> String:
     case B.Frame{lines,bounds}: joined(lines) ++ "#" ++ ids(bounds)
 def displayed(value: B.TuiBase) -> String:
   match value:
-    case B.TuiBase{_,_,_,shown,_,_,_,_}: frame(shown)
+    case B.TuiBase{_,_,_,B.DisplayedFrame{_,shown},_,_,_,_}: frame(shown)
 def prepared(value: B.PreparedFrame) -> String:
   match value:
-    case B.PreparedFrame{_,shown,_,_,_}: frame(shown)
+    case B.PreparedFrame{_,shown,_,_,_,_}: frame(shown)
 def stagedDisplayed(value: B.PreparedFrame) -> String:
   match value:
-    case B.PreparedFrame{tui,_,_,_,_}: displayed(tui)
+    case B.PreparedFrame{tui,_,_,_,_,_}: displayed(tui)
 def committed(value: B.PreparedFrame) -> B.TuiBase: B.commitFrame(value)
 def success(value: B.ResultOf(B.PreparedFrame)) -> IO(B.PreparedFrame):
   match value:
@@ -84,7 +84,7 @@ def run() -> IO(Unit):
     +b : C.Component <- component(2n,"C" <> Nil{},journal,False{})
     +overlay : C.Component <- component(3n,"OV" <> Nil{},journal,False{})
     +old : C.Component <- component(9n,"old" <> Nil{},journal,False{})
-    +base : B.TuiBase = B.TuiBase{C.Container{a <> b <> Nil{},None{}},O.State{O.Entry{O.OverlayHandle{3n},C.ComponentId{3n},Some{C.ComponentId{1n}},False{},True{},False{},1n} <> Nil{},Some{C.ComponentId{3n}},O.Eligible{O.OverlayHandle{3n}},1n,4n},B.Overlay{O.OverlayHandle{3n},overlay,T.OverlayGeometry{Some{T.Cells{2n}},0n,None{},T.TopLeft{},T.Forward{0n},T.Forward{0n},Some{T.Cells{0n}},Some{T.Cells{1n}},T.OverlayMargin{0n,0n,0n,0n}}} <> Nil{},B.Frame{"old" <> Nil{},B.OverlayBounds{O.OverlayHandle{9n},old,C.TuiMouseDispatchTarget{C.ComponentId{9n},T.Forward{0n},T.Forward{0n},3n,1n}} <> Nil{}},B.newRenderSchedule(),False{},False{},None{}}
+    +base : B.TuiBase = B.TuiBase{C.Container{a <> b <> Nil{},None{}},O.State{O.Entry{O.OverlayHandle{3n},C.ComponentId{3n},Some{C.ComponentId{1n}},False{},True{},False{},1n} <> Nil{},Some{C.ComponentId{3n}},O.Eligible{O.OverlayHandle{3n}},1n,4n},B.Overlay{O.OverlayHandle{3n},overlay,T.OverlayGeometry{Some{T.Cells{2n}},0n,None{},T.TopLeft{},T.Forward{0n},T.Forward{0n},Some{T.Cells{0n}},Some{T.Cells{1n}},T.OverlayMargin{0n,0n,0n,0n}}} <> Nil{},B.DisplayedFrame{Nil{},B.Frame{"old" <> Nil{},B.OverlayBounds{O.OverlayHandle{9n},old,C.TuiMouseDispatchTarget{C.ComponentId{9n},T.Forward{0n},T.Forward{0n},3n,1n}} <> Nil{}}},B.newRenderSchedule(),False{},False{},None{}}
     +before : String = displayed(base)
     visibleBase : B.TuiBase <- snapshot(base,journal,True{})
     made : B.ResultOf(B.PreparedFrame) <- B.renderRoot(visibleBase,8n,3n)

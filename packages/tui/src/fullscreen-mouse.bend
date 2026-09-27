@@ -92,7 +92,7 @@ def afterOverlay(hit: BaseTui.MouseHit,frame: Maybe<&2,L.LayoutFrame>,raw: Raw,r
     case BaseTui.MouseHit{False{},_}: dispatchBoxes(layoutHits(frame,raw),registry,event,Nil{})
 def hit(tui: BaseTui.TuiBase,frame: Maybe<&2,L.LayoutFrame>,+raw: Raw,registry: List<&2,C.Component>,+event: T.TuiMouseEvent) -> IO(Maybe<&2,C.TuiMouseDispatchResult>):
   match tui:
-    case BaseTui.TuiBase{_,_,_,displayed,_,_,_,_}:
+    case BaseTui.TuiBase{_,_,_,BaseTui.DisplayedFrame{_,displayed},_,_,_,_}:
       do IO<Maybe<&2,C.TuiMouseDispatchResult>>:
         overlay : BaseTui.MouseHit <- BaseTui.dispatchMouseToOverlay(displayed,event)
         afterOverlay(overlay,frame,raw,registry,event)

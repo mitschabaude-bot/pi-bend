@@ -14,6 +14,8 @@ import ../../runtime/src/stable-sort.bend as Sort
 type Overlay is Data: Overlay{handle: O.OverlayHandle,component: C.Component,geometry: T.OverlayGeometry}
 type OverlayBounds is Data: OverlayBounds{handle: O.OverlayHandle,component: C.Component,target: C.TuiMouseDispatchTarget}
 type Frame is Data: Frame{lines: List<&2,String>,overlays: List<&2,OverlayBounds>}
+# Raw keys and displayed output are published together after a successful draw.
+type DisplayedFrame is Data: DisplayedFrame{source: List<&2,String>,frame: Frame}
 type Error is Data:
   MissingOverlay{handle: O.OverlayHandle}
   ComponentMismatch{handle: O.OverlayHandle}
@@ -224,7 +226,7 @@ def schedule(event: RenderEvent,state: RenderSchedule,now: Nat) -> Scheduled:
 # last displayed hit map. Preparing a frame does not mutate that displayed map;
 # the owner installs it only after its terminal renderer accepts the frame.
 type TuiBase is Data:
-  TuiBase{root: C.Container,focus: O.State,bindings: List<&2,Overlay>,displayed: Frame,renderSchedule: RenderSchedule,showHardwareCursor: Bool,clearOnShrink: Bool,layoutRoot: Maybe<&2,N.LayoutNode>}
+  TuiBase{root: C.Container,focus: O.State,bindings: List<&2,Overlay>,displayed: DisplayedFrame,renderSchedule: RenderSchedule,showHardwareCursor: Bool,clearOnShrink: Bool,layoutRoot: Maybe<&2,N.LayoutNode>}
 def scheduledTui(tui: TuiBase,scheduled: Scheduled) -> TuiBase & List<&2,RenderEffect>:
   match tui scheduled:
     case TuiBase{root,focus,bindings,displayed,_,show,clear,layout} Scheduled{next,effects}: (TuiBase{root,focus,bindings,displayed,next,show,clear,layout},effects)
@@ -236,7 +238,7 @@ def scheduleOf(tui: TuiBase) -> RenderSchedule:
 def scheduleRender(+tui: TuiBase,event: RenderEvent,now: Nat) -> TuiBase & List<&2,RenderEffect>:
   scheduledTui(tui,schedule(event,scheduleOf(tui),now))
 type PreparedFrame is Data:
-  PreparedFrame{tui: TuiBase,frame: Frame,lines: List<&2,String>,cursor: Maybe<&2,T.CursorPosition>,layout: Maybe<&2,Layout.LayoutFrame>}
+  PreparedFrame{tui: TuiBase,frame: Frame,lines: List<&2,String>,cursor: Maybe<&2,T.CursorPosition>,layout: Maybe<&2,Layout.LayoutFrame>,source: List<&2,String>}
 type PrimaryContent is Data: PrimaryContent{lines: List<&2,String>,top: Nat,rows: Nat,rect: Layout.LayoutRect,clip: Layout.LayoutRect}
 @unsafe def primaryAt(boxes: List<&2,Layout.LayoutBox>,+wanted: C.ComponentId,+top: Nat,+rows: Nat) -> Maybe<&2,PrimaryContent>:
   match boxes:
@@ -254,7 +256,7 @@ def primaryFrom(layout: Maybe<&2,Layout.LayoutFrame>,view: Maybe<&2,N.Primary>) 
     case _ _: None{}
 def primaryContent(frame: PreparedFrame) -> Maybe<&2,PrimaryContent>:
   match frame:
-    case PreparedFrame{TuiBase{_,_,_,_,_,_,_,Some{node}},_,_,_,layout}: primaryFrom(layout,N.primaryInfo(node))
+    case PreparedFrame{TuiBase{_,_,_,_,_,_,_,Some{node}},_,_,_,layout,_}: primaryFrom(layout,N.primaryInfo(node))
     case _: None{}
 type OverlayChange is Data:
   OverlayChange{tui: TuiBase,handle: O.OverlayHandle,focusChanges: List<&2,O.FocusChange>,hideCursor: Bool,render: Bool}
@@ -271,7 +273,7 @@ def withVisibility(base: TuiBase,values: List<&2,Visibility>) -> TuiBase:
     case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout}:
       TuiBase{root,visibleState(values,focus),bindings,displayed,scheduler,show,clear,layout}
 def newTui() -> TuiBase:
-  TuiBase{C.new(),O.new(),Nil{},Frame{Nil{},Nil{}},newRenderSchedule(),False{},False{},None{}}
+  TuiBase{C.new(),O.new(),Nil{},DisplayedFrame{Nil{},Frame{Nil{},Nil{}}},newRenderSchedule(),False{},False{},None{}}
 def setLayoutRoot(base: TuiBase,node: Maybe<&2,N.LayoutNode>) -> TuiBase:
   match base:
     case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,_}:
@@ -325,7 +327,7 @@ def cleared(base: TuiBase) -> TuiBase:
   match base:
     case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout}:
       TuiBase{C.clear(root),focus,bindings,displayed,scheduler,show,clear,layout}
-def addedOverlay(root: C.Container,bindings: List<&2,Overlay>,displayed: Frame,scheduler: RenderSchedule,show: Bool,clear: Bool,layout: Maybe<&2,N.LayoutNode>,component: C.Component,geometry: T.OverlayGeometry,pair: O.Change & O.OverlayHandle) -> OverlayChange:
+def addedOverlay(root: C.Container,bindings: List<&2,Overlay>,displayed: DisplayedFrame,scheduler: RenderSchedule,show: Bool,clear: Bool,layout: Maybe<&2,N.LayoutNode>,component: C.Component,geometry: T.OverlayGeometry,pair: O.Change & O.OverlayHandle) -> OverlayChange:
   match pair:
     case (O.Change{focus,assignments,hide,render},+handle):
       OverlayChange{TuiBase{root,focus,List.append(&2,Overlay,bindings,Overlay{handle,component,geometry} <> Nil{}),displayed,scheduler,show,clear,layout},handle,assignments,hide,render}
@@ -341,7 +343,7 @@ def without(bindings: List<&2,Overlay>,+handle: O.OverlayHandle,+reversed: List<
     case Nil{}: List.reverse(&2,Overlay,reversed)
     case +binding <> +rest:
       Bool.pick(Unit -> List<&2,Overlay>,O.sameHandle(bindingHandle(binding),handle),_ => without(rest,handle,reversed),_ => without(rest,handle,binding <> reversed))(Unit{})
-def removedOverlay(root: C.Container,bindings: List<&2,Overlay>,displayed: Frame,scheduler: RenderSchedule,show: Bool,clear: Bool,layout: Maybe<&2,N.LayoutNode>,+handle: O.OverlayHandle,change: O.Change) -> OverlayChange:
+def removedOverlay(root: C.Container,bindings: List<&2,Overlay>,displayed: DisplayedFrame,scheduler: RenderSchedule,show: Bool,clear: Bool,layout: Maybe<&2,N.LayoutNode>,+handle: O.OverlayHandle,change: O.Change) -> OverlayChange:
   match change:
     case O.Change{focus,assignments,hide,render}:
       OverlayChange{TuiBase{root,focus,without(bindings,handle,Nil{}),displayed,scheduler,show,clear,layout},handle,assignments,hide,render}
@@ -385,13 +387,15 @@ def focusedEntry(focus: Maybe<&2,C.ComponentId>,entry: Maybe<&2,O.Entry>) -> Boo
 def isOverlayFocused(base: TuiBase,handle: O.OverlayHandle) -> Bool:
   match base:
     case TuiBase{_,O.State{entries,focus,_,_,_},_,_,_,_,_,_}: focusedEntry(focus,O.find(entries,handle))
-def displayedLines(frame: Frame) -> List<&2,String>:
-  match frame: case Frame{lines,_}: lines
+def displayedLines(frame: DisplayedFrame) -> List<&2,String>:
+  match frame: case DisplayedFrame{_,Frame{lines,_}}: lines
+def displayedSource(frame: DisplayedFrame) -> List<&2,String>:
+  match frame: case DisplayedFrame{source,_}: source
 def cursorPrepared(base: TuiBase,container: C.Container,bounds: List<&2,OverlayBounds>,result: T.CursorFrame,layoutFrame: Maybe<&2,Layout.LayoutFrame>) -> PreparedFrame:
   match base result:
-    case TuiBase{_,focus,bindings,+displayed,scheduler,show,clear,layout} T.CursorFrame{lines,cursor}:
-      +lines = T.applyLineResetsFrom(lines,displayedLines(displayed))
-      PreparedFrame{TuiBase{container,focus,bindings,displayed,scheduler,show,clear,layout},Frame{lines,bounds},lines,cursor,layoutFrame}
+    case TuiBase{_,focus,bindings,+displayed,scheduler,show,clear,layout} T.CursorFrame{+source,cursor}:
+      +lines = T.applyCachedLineResets(source,displayedSource(displayed),displayedLines(displayed))
+      PreparedFrame{TuiBase{container,focus,bindings,displayed,scheduler,show,clear,layout},Frame{lines,bounds},lines,cursor,layoutFrame,source}
 def prepared(base: TuiBase,container: C.Container,frame: Frame,height: Nat,layoutFrame: Maybe<&2,Layout.LayoutFrame>) -> PreparedFrame:
   match frame:
     case Frame{lines,bounds}: cursorPrepared(base,container,bounds,T.extractCursorPosition(lines,height),layoutFrame)
@@ -428,7 +432,7 @@ def renderRoot(+base: TuiBase,+width: Nat,+height: Nat) -> IO(ResultOf(PreparedF
 # The alternate screen restores its complete document to the regular terminal
 # on exit. Rendering the child container here includes offscreen transcript
 # rows, unlike the viewport-sized layout frame.
-def renderedDocument(result: C.Container & List<&2,String>,focus: O.State,bindings: List<&2,Overlay>,displayed: Frame,scheduler: RenderSchedule,show: Bool,clear: Bool,layout: Maybe<&2,N.LayoutNode>) -> TuiBase & List<&2,String>:
+def renderedDocument(result: C.Container & List<&2,String>,focus: O.State,bindings: List<&2,Overlay>,displayed: DisplayedFrame,scheduler: RenderSchedule,show: Bool,clear: Bool,layout: Maybe<&2,N.LayoutNode>) -> TuiBase & List<&2,String>:
   match result:
     case (next,lines): (TuiBase{next,focus,bindings,displayed,scheduler,show,clear,layout},lines)
 def renderDocument(base: TuiBase,width: Nat) -> IO(TuiBase & List<&2,String>):
@@ -464,8 +468,8 @@ def renderLayoutDocument(+base: TuiBase,width: Nat) -> IO(TuiBase & List<&2,Stri
 # Publish displayed hit bounds only after the terminal accepted the prepared frame.
 def commitFrame(value: PreparedFrame) -> TuiBase:
   match value:
-    case PreparedFrame{TuiBase{root,focus,bindings,_,scheduler,show,clear,layout},frame,_,_,_}:
-      TuiBase{root,focus,bindings,frame,scheduler,show,clear,layout}
+    case PreparedFrame{TuiBase{root,focus,bindings,_,scheduler,show,clear,layout},frame,_,_,_,source}:
+      TuiBase{root,focus,bindings,DisplayedFrame{source,frame},scheduler,show,clear,layout}
 
 # Component registries include nested controls supplied by the application.
 # Focus assignments run in source order before the focused component sees input.
