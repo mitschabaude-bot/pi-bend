@@ -68,28 +68,30 @@ def nextEffect(value: Stream) -> Maybe<&2,Batch>:
 # None dimensions represent an invalidated render, replacing the JS -1 sentinel.
 type TuiMainScreenRenderState is Data:
   TuiMainScreenRenderState{previousLines: List<&2,String>,previousWidth: Maybe<&2,Nat>,previousHeight: Maybe<&2,Nat>,cursorRow: Nat,hardwareCursorRow: Nat,maxLinesRendered: Nat,previousViewportTop: Nat}
-type State is Data: State{render: TuiMainScreenRenderState,previousKittyImageIds: List<&2,U32>,fullRedrawCount: Nat}
+type Row is Data: Row{text: String,image: Bool,ids: List<&2,U32>,requestedRows: Nat}
+# Derived row metadata belongs to the committed frame, outside captured snapshots.
+type State is Data: State{render: TuiMainScreenRenderState,previousKittyImageIds: List<&2,U32>,fullRedrawCount: Nat,previousRows: List<&2,Row>}
 type Frame is Data: Frame{lines: List<&2,String>,cursor: Maybe<&2,Tui.CursorPosition>,width: Nat,height: Nat}
 type Options is Data: Options{termux: Bool,clearOnShrink: Bool,hasOverlayEntries: Bool,showHardwareCursor: Bool,stopped: Bool}
 type RedrawReason is Data: FirstRender{} WidthChanged{} HeightChanged{} ClearOnShrink{} DeletedAboveViewport{} ExcessDeletion{} ChangedAboveViewport{} KittyWouldScroll{}
 type RenderError is Data: InvalidDimensions{} LineTooWide{index: Nat,actual: Nat,limit: Nat}
 type Plan is Data: Plan{state: State,output: Stream,redrawReason: Maybe<&2,RedrawReason>}
-def initial() -> State: State{TuiMainScreenRenderState{Nil{},Some{0n},Some{0n},0n,0n,0n,0n},Nil{},0n}
+def initial() -> State: State{TuiMainScreenRenderState{Nil{},Some{0n},Some{0n},0n,0n,0n,0n},Nil{},0n,Nil{}}
 def defaultOptions() -> Options: Options{False{},False{},False{},False{},False{}}
 def captureRenderState(state: State) -> TuiMainScreenRenderState:
   match state:
-    case State{snapshot,_,_}: snapshot
+    case State{snapshot,_,_,_}: snapshot
 def blankImages(lines: List<&2,String>,reversed: List<&2,String>) -> List<&2,String>:
   match lines:
     case Nil{}: List.reverse(&2,String,reversed)
     case +line <> rest: blankImages(rest,Bool.pick(String,Image.isImageLine(line),"",line) <> reversed)
 def restoreRenderState(state: State,snapshot: TuiMainScreenRenderState) -> State:
   match state snapshot:
-    case State{_,_,count} TuiMainScreenRenderState{lines,width,height,cursor,hardware,maximum,top}:
-      State{TuiMainScreenRenderState{blankImages(lines,Nil{}),width,height,cursor,hardware,maximum,top},Nil{},count}
+    case State{_,_,count,_} TuiMainScreenRenderState{lines,width,height,cursor,hardware,maximum,top}:
+      State{TuiMainScreenRenderState{blankImages(lines,Nil{}),width,height,cursor,hardware,maximum,top},Nil{},count,Nil{}}
 def resetRenderState(state: State) -> State:
   match state:
-    case State{_,ids,count}: State{TuiMainScreenRenderState{Nil{},None{},None{},0n,0n,0n,0n},ids,count}
+    case State{_,ids,count,_}: State{TuiMainScreenRenderState{Nil{},None{},None{},0n,0n,0n,0n},ids,count,Nil{}}
 def movement(+target: Nat,+current: Nat) -> String:
   Bool.pick(String,Nat.is_gt(target,current),"\u{1b}[" ++ Nat.show(target - current) ++ "B",Bool.pick(String,Nat.is_lt(target,current),"\u{1b}[" ++ Nat.show(current - target) ++ "A",""))
 def emptyStrings(values: List<&2,String>) -> Bool:
@@ -102,7 +104,7 @@ def emptyIds(values: List<&2,U32>) -> Bool:
     case _: False{}
 def beforeTerminalStop(state: State,+preserveScreen: Bool) -> Stream:
   match state:
-    case State{TuiMainScreenRenderState{+lines,_,_,_,hardware,_,_},_,_}:
+    case State{TuiMainScreenRenderState{+lines,_,_,_,hardware,_,_},_,_,_}:
       stream(Bool.pick(List<&2,Operation>,preserveScreen || emptyStrings(lines),Nil{},Text{" "} <> Flush{} <> Text{movement(List.length(&2,String,lines),hardware)} <> Flush{} <> Text{"\r\n"} <> Flush{} <> Nil{}))
 
 # IDs retain first-occurrence order, matching Kitty deletion order in a frame.
@@ -140,7 +142,6 @@ def parsedHeader(value: Maybe<&2,Image.KittyHeader>) -> Header:
     case Some{Image.KittyHeader{_,controls,_}}: headerControls(Strings.split(controls,','),Header{Nil{},1n})
 # A row's visible width is measured only where upstream measures it: rows being
 # written (the overflow check) and blank-row checks under an image.
-type Row is Data: Row{text: String,image: Bool,ids: List<&2,U32>,requestedRows: Nat}
 def rowWidth(+text: String,image: Bool) -> Nat: Bool.pick(Unit -> Nat,image,_ => 0n,_ => Layout.visibleWidth(text))(Unit{})
 def rowHeader(text: String,image: Bool,header: Header) -> Row:
   match header:
@@ -233,24 +234,24 @@ def changedRangeFrom(base: Changed,+previous: List<&2,Row>,+current: List<&2,Row
 def changedRange(+previous: List<&2,Row>,+current: List<&2,Row>) -> Changed:
   changedRangeFrom(changed(previous,current,0n,Changed{None{},0n}),previous,current)
 
-# Equal lines have equal image metadata. Compare and prepare the old rows in
-# one pass, rather than scanning their text once for images and again for diffs.
-type Comparison is Data: Comparison{previous: List<&2,Row>,changes: Changed}
+# Compare committed metadata with new lines once; classify only changed rows.
+type Comparison is Data: Comparison{previous: List<&2,Row>,current: List<&2,Row>,changes: Changed}
 def previousRow(text: String,current: Row,same: Bool) -> Row:
   match same:
     case True{}: current
     case False{}: prepareRow(text)
-def comparePrevious(previous: List<&2,String>,current: List<&2,Row>,+index: Nat,reversed: List<&2,Row>,changes: Changed) -> Comparison:
+def compareRows(previous: List<&2,Row>,current: List<&2,String>,+index: Nat,oldReversed: List<&2,Row>,nextReversed: List<&2,Row>,changes: Changed) -> Comparison:
   match previous current:
-    case Nil{} Nil{}: Comparison{List.reverse(&2,Row,reversed),changes}
-    case +text <> rest Row{+next,+image,+ids,+requested} <> more:
-      +same = Strings.equal(text,next)
-      +old = previousRow(text,Row{next,image,ids,requested},same)
-      comparePrevious(rest,more,Succ{index},old <> reversed,changedValue(changes,index,Bool.not(same)))
-    case +text <> rest Nil{}:
-      comparePrevious(rest,Nil{},Succ{index},prepareRow(text) <> reversed,changedValue(changes,index,Bool.not(Strings.equal(text,""))))
-    case Nil{} Row{text,_,_,_} <> more:
-      comparePrevious(Nil{},more,Succ{index},reversed,changedValue(changes,index,Bool.not(Strings.equal(text,""))))
+    case Nil{} Nil{}: Comparison{List.reverse(&2,Row,oldReversed),List.reverse(&2,Row,nextReversed),changes}
+    case Row{+old,+image,+ids,+requested} <> rest +text <> more:
+      +same = Strings.equal(old,text)
+      +row = {Row{old,image,ids,requested}: Row}
+      +next = previousRow(text,row,same)
+      compareRows(rest,more,Succ{index},row <> oldReversed,next <> nextReversed,changedValue(changes,index,Bool.not(same)))
+    case Row{+text,image,ids,requested} <> rest Nil{}:
+      compareRows(rest,Nil{},Succ{index},Row{text,image,ids,requested} <> oldReversed,nextReversed,changedValue(changes,index,Bool.not(Strings.equal(text,""))))
+    case Nil{} +text <> more:
+      compareRows(Nil{},more,Succ{index},oldReversed,prepareRow(text) <> nextReversed,changedValue(changes,index,Bool.not(Strings.equal(text,""))))
 
 def deleteIds(ids: List<&2,U32>,reversed: List<&2,Operation>) -> List<&2,Operation>:
   match ids:
@@ -319,12 +320,12 @@ def rowTexts(rows: List<&2,Row>,reversed: List<&2,String>) -> List<&2,String>:
 
 def committed(state: State,+rows: List<&2,Row>,width: Nat,height: Nat,cursorRow: Nat,hardware: Nat,maximum: Nat,top: Nat,redraw: Bool) -> State:
   match state:
-    case State{_,_,count}: State{TuiMainScreenRenderState{rowTexts(rows,Nil{}),Some{width},Some{height},cursorRow,hardware,maximum,top},allIds(rows,Nil{}),count + Bool.pick(Nat,redraw,1n,0n)}
+    case State{_,_,count,_}: State{TuiMainScreenRenderState{rowTexts(rows,Nil{}),Some{width},Some{height},cursorRow,hardware,maximum,top},allIds(rows,Nil{}),count + Bool.pick(Nat,redraw,1n,0n),rows}
 
 def finish(reversed: List<&2,Operation>) -> Stream: stream(List.reverse(&2,Operation,reversed))
 def fullPlan(+state: State,+rows: List<&2,Row>,+cursor: Maybe<&2,Tui.CursorPosition>,+width: Nat,+height: Nat,+options: Options,+clear: Bool,+reason: RedrawReason) -> Plan:
   match state options:
-    case State{TuiMainScreenRenderState{_,_,_,_,_,maximum,_},oldIds,_} Options{_,_,_,show,_}:
+    case State{TuiMainScreenRenderState{_,_,_,_,_,maximum,_},oldIds,_,_} Options{_,_,_,show,_}:
       +length = rowCount(rows)
       +last = Bool.pick(Nat,Nat.is_eq(length,0n),0n,length - 1n)
       +top = max(height,length) - height
@@ -361,11 +362,11 @@ def changedPreflight(+rows: List<&2,Row>,+first: Nat,+last: Nat,+width: Nat) -> 
   wideInRange(List.drop(&2,Row,rows,first),first,last,width)
 def noChange(+state: State,+rows: List<&2,Row>,+cursor: Maybe<&2,Tui.CursorPosition>,+height: Nat,+top: Nat,+show: Bool) -> Plan:
   match state:
-    case State{TuiMainScreenRenderState{lines,width,_,cursorRow,+hardware,maximum,_},ids,count}:
+    case State{TuiMainScreenRenderState{lines,width,_,cursorRow,+hardware,maximum,_},ids,count,cached}:
       +length = rowCount(rows)
       +nextHardware = cursorHardware(cursor,length,hardware)
       +output = finish(cursorOutput(cursor,length,hardware,show,Nil{}))
-      Plan{State{TuiMainScreenRenderState{lines,width,Some{height},cursorRow,nextHardware,maximum,top},ids,count},output,None{}}
+      Plan{State{TuiMainScreenRenderState{lines,width,Some{height},cursorRow,nextHardware,maximum,top},ids,count,cached},output,None{}}
 def deletedOutput(+state: State,+old: List<&2,Row>,+rows: List<&2,Row>,+cursor: Maybe<&2,Tui.CursorPosition>,+width: Nat,+height: Nat,+top: Nat,+first: Nat,+last: Nat,+target: Nat,+extra: Nat,+hardware: Nat,+maximum: Nat,+show: Bool) -> Plan:
   +begin = {Text{"\u{1b}[?2026h"} <> Nil{}: List<&2,Operation>}
   +deleted = deleteIds(oldRangeIds(old,first,last),begin)
@@ -382,7 +383,7 @@ def deletedOutput(+state: State,+old: List<&2,Row>,+rows: List<&2,Row>,+cursor: 
 
 def deleted(+state: State,+old: List<&2,Row>,+rows: List<&2,Row>,+cursor: Maybe<&2,Tui.CursorPosition>,+width: Nat,+height: Nat,+options: Options,+top: Nat,+first: Nat,+last: Nat) -> Plan:
   match state options:
-    case State{TuiMainScreenRenderState{_,_,_,_,hardware,maximum,_},_,_} Options{_,_,_,show,_}:
+    case State{TuiMainScreenRenderState{_,_,_,_,hardware,maximum,_},_,_,_} Options{_,_,_,show,_}:
       +length = rowCount(rows)
       +extra = rowCount(old) - length
       +target = Bool.pick(Nat,Nat.is_eq(length,0n),0n,length - 1n)
@@ -419,7 +420,7 @@ def changedResult(+body: LinesOutput,+state: State,+old: List<&2,Row>,+rows: Lis
       differentialOutput(state,old,rows,cursor,width,height,top,first,last,moveTarget,scroll,appendStart,hardware,maximum,show,written,renderEnd)
 def changedPlan(+state: State,+old: List<&2,Row>,+rows: List<&2,Row>,+cursor: Maybe<&2,Tui.CursorPosition>,+width: Nat,+height: Nat,+options: Options,+top: Nat,+first: Nat,+last: Nat) -> Plan:
   match state options:
-    case State{TuiMainScreenRenderState{_,_,_,_,hardware,maximum,_},_,_} Options{_,_,_,show,_}:
+    case State{TuiMainScreenRenderState{_,_,_,_,hardware,maximum,_},_,_,_} Options{_,_,_,show,_}:
       +oldCount = rowCount(old)
       +length = rowCount(rows)
       +appendStart = Nat.is_gt(length,oldCount) && Nat.is_eq(first,oldCount) && Nat.is_gt(first,0n)
@@ -432,7 +433,7 @@ def changedPlan(+state: State,+old: List<&2,Row>,+rows: List<&2,Row>,+cursor: Ma
       changedResult(body,state,old,rows,cursor,width,height,options,top,first,last,moveTarget,scroll,appendStart,hardware,maximum,show)
 def changedRoute(+state: State,+old: List<&2,Row>,+rows: List<&2,Row>,+cursor: Maybe<&2,Tui.CursorPosition>,+width: Nat,+height: Nat,+options: Options,+heightChanged: Bool,+first: Nat,+last: Nat) -> Plan:
   match state:
-    case State{snapshot,_,_}:
+    case State{snapshot,_,_,_}:
       +top = previousTop(snapshot,height,heightChanged)
       Bool.pick(Unit -> Plan,Nat.is_ge(first,rowCount(rows)),
         _ => deleted(state,old,rows,cursor,width,height,options,top,first,last),
@@ -441,14 +442,14 @@ def changedRoute(+state: State,+old: List<&2,Row>,+rows: List<&2,Row>,+cursor: M
           _ => changedPlan(state,old,rows,cursor,width,height,options,top,first,last))(Unit{}))(Unit{})
 def noChangeFrom(+state: State,+rows: List<&2,Row>,+cursor: Maybe<&2,Tui.CursorPosition>,+height: Nat,+options: Options,+heightChanged: Bool) -> Plan:
   match state options:
-    case State{snapshot,_,_} Options{_,_,_,show,_}: noChange(state,rows,cursor,height,previousTop(snapshot,height,heightChanged),show)
+    case State{snapshot,_,_,_} Options{_,_,_,show,_}: noChange(state,rows,cursor,height,previousTop(snapshot,height,heightChanged),show)
 def differentialChanged(+changes: Changed,+state: State,+old: List<&2,Row>,+rows: List<&2,Row>,+cursor: Maybe<&2,Tui.CursorPosition>,+width: Nat,+height: Nat,+options: Options,+heightChanged: Bool) -> Plan:
   match changes:
     case Changed{None{},_}: noChangeFrom(state,rows,cursor,height,options,heightChanged)
     case Changed{Some{first},last}: changedRoute(state,old,rows,cursor,width,height,options,heightChanged,first,last)
 def plan(+state: State,+old: List<&2,Row>,+rows: List<&2,Row>,changes: Changed,+cursor: Maybe<&2,Tui.CursorPosition>,+width: Nat,+height: Nat,+options: Options) -> Plan:
   match state options:
-    case State{TuiMainScreenRenderState{oldLines,oldWidth,oldHeight,_,_,maximum,_},_,_} Options{termux,shrink,overlays,_,_}:
+    case State{TuiMainScreenRenderState{oldLines,oldWidth,oldHeight,_,_,maximum,_},_,_,_} Options{termux,shrink,overlays,_,_}:
       +widthChanged = oldDimension(oldWidth,width)
       +heightChanged = oldDimension(oldHeight,height)
       Bool.pick(Unit -> Plan,emptyStrings(oldLines) && Bool.not(widthChanged) && Bool.not(heightChanged),
@@ -462,7 +463,7 @@ def plan(+state: State,+old: List<&2,Row>,+rows: List<&2,Row>,changes: Changed,+
               _ => differentialChanged(changes,state,old,rows,cursor,width,height,options,heightChanged))(Unit{}))(Unit{}))(Unit{}))(Unit{})
 def previousLines(state: State) -> List<&2,String>:
   match state:
-    case State{TuiMainScreenRenderState{lines,_,_,_,_,_,_},_,_}: lines
+    case State{TuiMainScreenRenderState{lines,_,_,_,_,_,_},_,_,_}: lines
 def checkedWidth(problem: Maybe<&2,RenderError>,result: Plan) -> Result<&2,&2,RenderError,Plan>:
   match problem:
     case None{}: Done{result}
@@ -475,13 +476,15 @@ def checkedResult(changes: Changed,rows: List<&2,Row>,width: Nat,result: Plan) -
   match result:
     case Plan{_,_,Some{_}}: Done{result}
     case Plan{_,_,None{}}: checkedChanged(changes,rows,width,result)
-def checkedComparison(comparison: Comparison,state: State,+rows: List<&2,Row>,cursor: Maybe<&2,Tui.CursorPosition>,+width: Nat,height: Nat,options: Options) -> Result<&2,&2,RenderError,Plan>:
+def checkedComparison(comparison: Comparison,state: State,cursor: Maybe<&2,Tui.CursorPosition>,+width: Nat,height: Nat,options: Options) -> Result<&2,&2,RenderError,Plan>:
   match comparison:
-    case Comparison{+old,base}:
+    case Comparison{+old,+rows,base}:
       +changes = changedRangeFrom(base,old,rows)
       checkedResult(changes,rows,width,plan(state,old,rows,changes,cursor,width,height,options))
-def checkedPrepared(+state: State,+rows: List<&2,Row>,cursor: Maybe<&2,Tui.CursorPosition>,width: Nat,height: Nat,options: Options) -> Result<&2,&2,RenderError,Plan>:
-  checkedComparison(comparePrevious(previousLines(state),rows,0n,Nil{},Changed{None{},0n}),state,rows,cursor,width,height,options)
+def cachedRows(state: State) -> List<&2,Row>:
+  match state:
+    case State{TuiMainScreenRenderState{lines,_,_,_,_,_,_},_,_,Nil{}}: prepareRows(lines,Nil{})
+    case State{_,_,_,rows}: rows
 def checkedPlan(+state: State,+frame: Frame,+options: Options) -> Result<&2,&2,RenderError,Plan>:
   match frame options:
     case Frame{lines,cursor,width,height} Options{termux,shrink,overlays,show,stopped}:
@@ -489,4 +492,4 @@ def checkedPlan(+state: State,+frame: Frame,+options: Options) -> Result<&2,&2,R
         _ => Done{Plan{state,stream(Nil{}),None{}}},
         _ => Bool.pick(Unit -> Result<&2,&2,RenderError,Plan>,Nat.is_eq(width,0n) || Nat.is_eq(height,0n),
           _ => Fail{InvalidDimensions{}},
-          _ => checkedPrepared(state,prepareRows(lines,Nil{}),cursor,width,height,Options{termux,shrink,overlays,show,stopped}))(Unit{}))(Unit{})
+          _ => checkedComparison(compareRows(cachedRows(state),lines,0n,Nil{},Nil{},Changed{None{},0n}),state,cursor,width,height,Options{termux,shrink,overlays,show,stopped}))(Unit{}))(Unit{})

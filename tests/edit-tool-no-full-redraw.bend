@@ -67,7 +67,7 @@ def frame(previous: Screen.State,lines: List<&2,String>) -> IO(Screen.Plan):
 def screenState(plan: Screen.Plan) -> Screen.State:
   match plan: case Screen.Plan{state,_,_}: state
 def fullRedraws(plan: Screen.Plan) -> Nat:
-  match plan: case Screen.Plan{Screen.State{_,_,count},_,_}: count
+  match plan: case Screen.Plan{Screen.State{_,_,count,_},_,_}: count
 # Screen.nextEffect consumes a finite plan; its computed decrease is opaque to the checker.
 @unsafe def writes(batch: Maybe<&2,Screen.Batch>) -> String:
   match batch:

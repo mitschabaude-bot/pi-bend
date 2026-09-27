@@ -1572,10 +1572,10 @@
     },
     "packages/tui/src/tui-main-screen.ts": {
       "state": "partial",
-      "note": "Focused review of render-state snapshots and line-diff decisions: checkedPlan is an immutable planner whose caller commits only after terminal effects succeed. Comparison preserves missing-line-as-empty behavior, append boundaries and Kitty image-range expansion; equal lines reuse parsed metadata while changed/deleted old lines are parsed. The pinned main-screen differential compares effects and state; IO process ownership and the wider TUI facade need a complete API review. Large-session latency and full-scrollback content parity remain open in the mounted scenario.",
+      "note": "Focused review of render-state snapshots and line-diff decisions: checkedPlan is an immutable planner whose caller commits only after terminal effects succeed. Comparison preserves missing-line-as-empty behavior, append boundaries and Kitty image-range expansion; equal lines reuse committed metadata; cache selection and diff detection share one comparison, and restored snapshots rebuild previous metadata. The pinned main-screen differential compares effects and state; IO process ownership and the wider TUI facade need a complete API review. Large-session latency and full-scrollback content parity remain open in the mounted scenario. Internal State retains derived metadata for its committed lines; captureRenderState remains unchanged and restore/reset clear metadata. Structural line equality selects reusable metadata, with fresh classification for every mismatch. Thirty native one/four effect/state traces match pinned upstream and an uncached execution; broader virtual-terminal and edit-preview contracts pass through Bun.",
       "source_sha256": "d2271afc2ce0d2302014ae0c20ab1b6af6a9765de90254b21cef0ce2c6ca062d",
       "port_sha256": {
-        "packages/tui/src/tui-main-screen.bend": "a499217357650dcdedf5b8164a5c9e1d0f9f677fdaf4b009fd9d443c9a999947"
+        "packages/tui/src/tui-main-screen.bend": "832791decf6b042d9001c1bf8c0e7f224730827bafd3d0c31601906946108427"
       },
       "ports": [
         "packages/tui/src/tui-main-screen.bend"

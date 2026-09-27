@@ -289,7 +289,7 @@ def check(harness: Harness) -> IO(Harness):
 
 def redraws(state: Screen.State) -> V.Value:
   match state:
-    case Screen.State{_, _, count}: V.Number{T.dimension(count)}
+    case Screen.State{_, _, count,_}: V.Number{T.dimension(count)}
 def planned(plan: Result<&2, &2, Screen.RenderError, Screen.Plan>, +prepared: Tui.PreparedFrame, +scene: Scene) -> IO(Harness):
   match plan:
     case Fail{_}: IO.die(Harness, 1, "render failed")

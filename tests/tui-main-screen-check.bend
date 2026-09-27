@@ -25,7 +25,7 @@ def imageIds(ids: List<&2,U32>,first: Bool,acc: String) -> String:
     case id <> rest: imageIds(rest,False{},acc ++ Bool.pick(String,first,"",",") ++ U32.show(id))
 def stateLine(state: Screen.State) -> String:
   match state:
-    case Screen.State{Screen.TuiMainScreenRenderState{lines,width,height,cursor,hardware,maximum,top},ids,count}:
+    case Screen.State{Screen.TuiMainScreenRenderState{lines,width,height,cursor,hardware,maximum,top},ids,count,_}:
       "[" ++ Nat.show(List.length(&2,String,lines)) ++ "," ++ dimension(width) ++ "," ++ dimension(height) ++ "," ++ Nat.show(cursor) ++ "," ++ Nat.show(hardware) ++ "," ++ Nat.show(maximum) ++ "," ++ Nat.show(top) ++ "," ++ Nat.show(count) ++ ",[" ++ imageIds(ids,True{},"") ++ "]]"
 def stepResult(result: Result<&2,&2,Screen.RenderError,Screen.Plan>) -> IO(Screen.State):
   match result:
@@ -35,10 +35,25 @@ def stepResult(result: Result<&2,&2,Screen.RenderError,Screen.Plan>) -> IO(Scree
         IO.print("[" ++ events(Pending{output},True{},"") ++ "]")
         IO.print(stateLine(next))
         IO.pure(Screen.State,next)
+# Each trace checks the committed metadata path against fresh classification.
+def withoutMetadata(state: Screen.State) -> Screen.State:
+  match state: case Screen.State{render,ids,count,_}: Screen.State{render,ids,count,Nil{}}
+def planSignature(result: Result<&2,&2,Screen.RenderError,Screen.Plan>) -> String:
+  match result:
+    case Fail{Screen.InvalidDimensions{}}: "dimensions"
+    case Fail{Screen.LineTooWide{index,actual,limit}}: "width:" ++ Nat.show(index) ++ ":" ++ Nat.show(actual) ++ ":" ++ Nat.show(limit)
+    case Done{Screen.Plan{next,output,_}}: events(Pending{output},True{},"") ++ stateLine(next)
+def verifiedResult(result: Result<&2,&2,Screen.RenderError,Screen.Plan>,same: Bool) -> IO(Screen.State):
+  match same:
+    case True{}: stepResult(result)
+    case False{}: IO.die(Screen.State,1,"cached and fresh row classification differ")
+def checkedStep(+state: Screen.State,+frame: Screen.Frame,+options: Screen.Options) -> IO(Screen.State):
+  +result = Screen.checkedPlan(state,frame,options)
+  verifiedResult(result,String.eq(planSignature(result),planSignature(Screen.checkedPlan(withoutMetadata(state),frame,options))))
 def step(state: Screen.State,lines: List<&2,String>,width: Nat,height: Nat,options: Screen.Options) -> IO(Screen.State):
-  stepResult(Screen.checkedPlan(state,Screen.Frame{Tui.applyLineResets(lines),None{},width,height},options))
+  checkedStep(state,Screen.Frame{Tui.applyLineResets(lines),None{},width,height},options)
 def stepCursor(state: Screen.State,lines: List<&2,String>,width: Nat,height: Nat,row: Nat,col: Nat,show: Bool) -> IO(Screen.State):
-  stepResult(Screen.checkedPlan(state,Screen.Frame{Tui.applyLineResets(lines),Some{Tui.CursorPosition{row,col}},width,height},Screen.Options{False{},False{},False{},show,False{}}))
+  checkedStep(state,Screen.Frame{Tui.applyLineResets(lines),Some{Tui.CursorPosition{row,col}},width,height},Screen.Options{False{},False{},False{},show,False{}})
 def numbered(count: Nat,+index: Nat) -> List<&2,String>:
   match count:
     case Zero{}: Nil{}
