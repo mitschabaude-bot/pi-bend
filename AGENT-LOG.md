@@ -3083,3 +3083,23 @@ Codex: initial frame now precedes the owned startup callback; withheld-query PTY
 Codex: reserving core/session-json.bend and session-persistence.bend for a fused JSONL line scan. Parse each completed line before advancing, and return final-newline state from that pass, removing the full split-line list and shared second traversal; existing persistence and mounted speed comparisons will decide adoption.
 
 Codex: fused line parsing passes 398 pinned persistence operations on Bun/native one/four, generic proofs and all five mounted same-output comparisons. Alternating resumed first-frame timing improves 330–335→300–302 ms on one and 403–407→368–376 ms on four; peak RSS falls about 23 MB with similar typing. Landing and releasing session-json/persistence paths, promoting build/pi-cli-fused-lines; source startup/flood/history gaps remain open.
+
+Codex: reserving tui/src/component.bend and coding-agent interactive/components/custom-message.bend for owned native renderer results and the custom-message lifecycle. Registration/replay integration will follow in extensions/types/loader/runner and transcript; completion requires that wiring, not just the standalone component.
+
+Codex: extending the custom-message reservation to extensions/types.bend, loader.bend and runner.bend for native renderer registration and first-loaded-extension lookup. Component lifecycle passes Bun; native validation is still running.
+
+Codex: custom-message lifecycle passes Bun/native one/four; renderer types now live in extensions/types, with native registration and first-active-extension lookup passing Bun. Combined native fixture build is live (exec 30309); transcript live/replay, interaction routing and upstream frame comparisons remain pending, with no CLI promotion or coverage claim.
+
+Codex: reserving interactive/transcript.bend and run.bend for full-metadata custom-message mounting and renderer binding before startup/rebound replay. The existing custom-message reservation remains; foreign tests/zz-mdr-bench.bend is untouched.
+
+Codex: seven custom/default/failure/padding frames match pinned pi on Bun/native one/four, including the original outputPad test; registration and live/hidden/options/clear/replay/disposal assertions pass all three backends. Current CLI build is live (exec 74532); required mounted parity/speed gates, inherited mouse/focus handling and review updates remain before a completion claim.
+
+Codex: also reserving interactive/components/messages.bend: default customType="skill" incorrectly inherits the skill-card no-separator branch. Restricting that branch to actual cards with a brief, and adding a pinned custom-message frame; current performance run (exec 11614) must finish before rebuilding.
+
+Codex: fixed customType="skill" inheriting skill-card spacing; eight frames plus registry/live/replay/cleanup checks pass Bun/native one/four. Earlier five-scenario candidate preserves baseline output but retains startup/flood/history and an existing four-thread key-bound miss; final-source CLI rebuild is live (exec 47144), with clean parity and alternating flood comparisons still required.
+
+Codex: moved renderer bindings into the existing serialized RenderRegistry, removing the separate mutable Ref and restoring the original two-field transcript Handle/Owner. Eight-frame/registry/live/replay/lifetime fixture passes Bun; native fixture build is live (exec 7825 if assigned by the tool, otherwise use its returned handle), and final CLI/performance checks need this smaller revision.
+
+Codex: the native fixture handle is exec 96093; ignore the placeholder in the previous entry.
+
+Codex: the smaller serialized RenderRegistry version passes eight reference frames and all registry/live/replay/cleanup assertions on Bun/native one/four. Final CLI build is live (exec 55130); rerun the five scenarios and alternating large-session/flood comparisons before landing. Existing transcript fixture/proofs and scoped review freshness remain to check.

@@ -465,7 +465,7 @@ def collapsedNote(+label: String,summary: String,+theme: Theme.Theme,hint: Strin
         heading : List<&2,String> <- textLines(title,0n,width)
         body : List<&2,String> <- textLines(detail ++ key ++ suffix,0n,width)
         return List.append(&2,String,heading,"" <> body))(Unit{})
-def noteRows(+label: String,brief: Maybe<&2,String>,content: String,expanded: Bool,+theme: Theme.Theme,styles: Markdown.MarkdownTheme,hint: String,+width: Nat) -> IO(List<&2,String>):
+def noteRows(+label: String,+brief: Maybe<&2,String>,content: String,expanded: Bool,+theme: Theme.Theme,styles: Markdown.MarkdownTheme,hint: String,+width: Nat) -> IO(List<&2,String>):
   match brief expanded:
     case Some{summary} False{}: collapsedNote(label,summary,theme,hint,width)
     case _ _:
@@ -475,7 +475,7 @@ def noteRows(+label: String,brief: Maybe<&2,String>,content: String,expanded: Bo
         +paint : Callback.Callback<String,String> <- color(theme,"customMessageText",False{})
         +body : List<&2,String> <- markdownLines(content,0n,width,styles,Some{Markdown.DefaultTextStyle{Some{paint},None{},False{},False{},False{},False{}}},None{})
         Callback.dispose(String,String,paint)
-        return List.append(&2,String,heading,Bool.pick(List<&2,String>,String.eq(label,"skill"),body,"" <> body))
+        return List.append(&2,String,heading,Bool.pick(List<&2,String>,String.eq(label,"skill") && Bool.not(Maybe.is_none(&2,String,brief)),body,"" <> body))
 def renderNote(value: Note,+width: Nat) -> IO(List<&2,String>):
   match value:
     case Note{label,brief,content,expanded,+theme,styles,hint}:

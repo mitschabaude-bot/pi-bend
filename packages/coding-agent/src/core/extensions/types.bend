@@ -18,10 +18,22 @@ import ../../../../runtime/src/abort.bend as Abort
 import ../system-prompt.bend as Prompt
 import ../tools/bash.bend as Bash
 import ../bash-executor.bend as BashExec
+import ../../../../runtime/src/record.bend as Record
+import ../../../../tui/src/component.bend as Component
+import ../../modes/interactive/theme/theme.bend as Theme
 
 # upstream core/extensions/types.ts: registrations, events and the loaded
 # extension state. Extensions are Bend code linked into the binary; their
 # handlers are callbacks over typed events and results.
+
+# Native renderer callbacks borrow their registration and return an owned
+# component, so rebuilding a message retires its previous resources.
+type MessageRenderOptions is Data:
+  MessageRenderOptions{expanded: Bool, outputPad: Nat}
+type MessageRenderInput is Data:
+  MessageRenderInput{message: Messages.CustomMessage<V.Value>, options: MessageRenderOptions, theme: Theme.Theme}
+def MessageRenderResult() -> Type: Result<&2, &1, String, Maybe<&1, Component.Owner>>
+def MessageRenderer() -> Data: C.Callback<MessageRenderInput, MessageRenderResult()>
 
 # Commands
 # --------
@@ -477,9 +489,9 @@ type ExtensionShortcut is Data:
 # loading wait in pendingFlagValues until it commits (upstream's loader
 # closure).
 type ExtensionExtras is Data:
-  ExtensionExtras{flags: List<&2, ExtensionFlag>, shortcuts: List<&2, ExtensionShortcut>, pendingFlagValues: List<&2, FlagSetting>}
+  ExtensionExtras{flags: List<&2, ExtensionFlag>, shortcuts: List<&2, ExtensionShortcut>, pendingFlagValues: List<&2, FlagSetting>, messageRenderers: Record.Record<MessageRenderer()>}
 
-def noExtras() -> ExtensionExtras: ExtensionExtras{Nil{}, Nil{}, Nil{}}
+def noExtras() -> ExtensionExtras: ExtensionExtras{Nil{}, Nil{}, Nil{}, Record.new(MessageRenderer())}
 
 type Extension is Data:
   Extension{id: Nat, path: String, resolvedPath: String, hidden: Bool, sourceInfo: Skills.SourceInfo, handlers: List<&2, Subscription>, commands: List<&2, RegisteredCommand>, state: LoadState, changes: List<&2, ProviderChange>, tools: List<&2, ToolDefinition>, extras: ExtensionExtras}

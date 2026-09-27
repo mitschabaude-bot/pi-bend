@@ -103,7 +103,7 @@ def getAllRegisteredTools(runner: ExtensionRunner) -> IO(List<&2, T.RegisteredTo
 def flagsOf(extensions: List<&2, T.Extension>) -> List<&2, T.ExtensionFlag>:
   match extensions:
     case Nil{}: Nil{}
-    case T.Extension{_, _, _, _, _, _, _, _, _, _, T.ExtensionExtras{flags, _, _}} <> rest: List.append(&2, T.ExtensionFlag, flags, flagsOf(rest))
+    case T.Extension{_, _, _, _, _, _, _, _, _, _, T.ExtensionExtras{flags, _, _, _}} <> rest: List.append(&2, T.ExtensionFlag, flags, flagsOf(rest))
 
 def firstFlags(flags: List<&2, T.ExtensionFlag>, +seen: List<&2, T.ExtensionFlag>) -> List<&2, T.ExtensionFlag>:
   match flags:
@@ -1002,3 +1002,17 @@ def emitContext(+runner: ExtensionRunner, messages: List<&2, T.AgentMessage()>) 
     withSystem : List<&2, Dispatch> <- snapshot(runner, "context_with_system")
     withSystemHandlers(runner, withSystem, restored)
 
+
+def messageRendererFound(found: Maybe<&2, T.MessageRenderer()>, next: Unit -> Maybe<&2, T.MessageRenderer()>) -> Maybe<&2, T.MessageRenderer()>:
+  match found:
+    case Some{renderer}: Some{renderer}
+    case None{}: next(Unit{})
+def messageRendererIn(extensions: List<&2, T.Extension>, +customType: String) -> Maybe<&2, T.MessageRenderer()>:
+  match extensions:
+    case Nil{}: None{}
+    case T.Extension{_, _, _, _, _, _, _, _, _, _, T.ExtensionExtras{_, _, _, renderers}} <> rest:
+      messageRendererFound(Rec.get(T.MessageRenderer(), renderers, customType), _ => messageRendererIn(rest, customType))
+def getMessageRenderer(runner: ExtensionRunner, customType: String) -> IO(Maybe<&2, T.MessageRenderer()>):
+  do IO<Maybe<&2, T.MessageRenderer()>>:
+    loaded : List<&2, T.Extension> <- extensions(runner)
+    return messageRendererIn(loaded, customType)

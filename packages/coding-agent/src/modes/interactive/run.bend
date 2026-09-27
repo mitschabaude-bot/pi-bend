@@ -2397,6 +2397,8 @@ def reboundCopied(sink: RebindSink,+session: Session.AgentSession) -> IO(Unit):
         updateSessionTitle(working,session)
         +messages : List<&2,Session.Message()> <- Session.messages(session)
         Transcript.clear(transcript)
+        renderers : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(session)
+        Transcript.setExtensions(transcript,renderers)
         stored : Session.Session() <- Session.sessionOf(session)
         Transcript.setToolCwd(transcript,Tree.getCwd(Unit,Tools.ToolDetails,Schema.Value,Session.stateOf(stored)))
         +settings : Settings.SettingsManager <- Session.getSettings(session)
@@ -2624,7 +2626,9 @@ def initializeApplication(first: Bool,managed: Maybe<&2,Manager.ToolsManager>,+t
     case True{}:
       do IO<Unit>:
         files : Bool <- setupManaged(managed,transcript,render)
-        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        renderers : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(live)
+        Transcript.setExtensions(transcript,renderers)
         existing : List<&2,Session.Message()> <- Session.messages(live)
         Transcript.seedSession(transcript,existing)
         startAutocomplete(interaction,session,files)
@@ -3152,6 +3156,8 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +lastEscape : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         selectionObserver : Callback.Callback<Controller.SelectionResult,Unit> <- Callback.create(~SelectionSink,~Controller.SelectionResult,~Unit,~selectionResult,SelectionSink{current,transcriptHandle,editorHandle,footerState(foot),status,redraw,cwd,home})
         controlObserver : Callback.Callback<Controller.ControlResult,Unit> <- Callback.create(~ControlSink,~Controller.ControlResult,~Unit,~controlResult,ControlSink{editorHandle,status,redraw})
+        renderers : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(session)
+        Transcript.setExtensions(transcriptHandle,renderers)
         bindOptional(mode,listener,transcriptHandle,editorHandle,footerState(foot),status,redraw,cwd,home,working)
         controllerPair : Controller.Controller & Controller.Handle <- controllerFor(mode,current,session,listener,32n,Some{failureObserver},Some{commandObserver},Some{controlObserver},Some{selectionObserver},modelsRef,loginCallback)
         startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,current,setting,builtinDir,customDir,Interaction{editorHandle,lastClear,lastEscape,selectorRef,modelSelectorRef,thinkingSelectorRef,scopedSelectorRef,settingsSelectorRef,trustSelectorRef,View.headerHandle(viewHandle),bashActivity,working,autocomplete,suspension},modelsRef,mode,loginState,resumeState,bindings,highlighter,status})

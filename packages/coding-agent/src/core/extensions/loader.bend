@@ -1,4 +1,5 @@
 import Base
+import ../../../../runtime/src/record.bend as Record
 import ../../../../ai/src/models.bend as AiModels
 import ../../../../ai/src/types.bend as Ai
 import ../../../../runtime/src/callback.bend as C
@@ -437,7 +438,7 @@ def withFlagValues(state: T.ExtensionRuntimeState, +values: List<&2, T.FlagSetti
 
 def extrasWithPending(extras: T.ExtensionExtras, +setting: T.FlagSetting) -> T.ExtensionExtras:
   match extras:
-    case T.ExtensionExtras{flags, shortcuts, pending}: T.ExtensionExtras{flags, shortcuts, settingIfAbsent(pending, setting)}
+    case T.ExtensionExtras{flags, shortcuts, pending, renderers}: T.ExtensionExtras{flags, shortcuts, settingIfAbsent(pending, setting), renderers}
 
 def pendingDefault(+extension: T.Extension, +setting: T.FlagSetting) -> T.Extension: withExtras(extension, extrasWithPending(extrasOf(extension), setting))
 
@@ -452,7 +453,7 @@ def withDefault(+state: T.ExtensionRuntimeState, +extension: T.Extension, +name:
 
 def extrasWithFlag(extras: T.ExtensionExtras, +flag: T.ExtensionFlag) -> T.ExtensionExtras:
   match extras:
-    case T.ExtensionExtras{flags, shortcuts, pending}: T.ExtensionExtras{setFlag(flags, flag), shortcuts, pending}
+    case T.ExtensionExtras{flags, shortcuts, pending, renderers}: T.ExtensionExtras{setFlag(flags, flag), shortcuts, pending, renderers}
 
 def flaggedExtension(+extension: T.Extension, +flag: T.ExtensionFlag) -> T.Extension: withExtras(extension, extrasWithFlag(extrasOf(extension), flag))
 
@@ -481,7 +482,7 @@ def registerFlag(api: T.ExtensionAPI, +name: String, options: T.FlagOptions) -> 
 
 def flagIn(state: T.ExtensionRuntimeState, +name: String, extras: T.ExtensionExtras) -> Maybe<&2, T.FlagValue>:
   match extras:
-    case T.ExtensionExtras{flags, _, pending}:
+    case T.ExtensionExtras{flags, _, pending, _}:
       Bool.pick(Maybe<&2, T.FlagValue>, hasFlag(flags, name), Maybe.or(&2, T.FlagValue, settingValue(flagValuesOf(state), name), settingValue(pending, name)), None{})
 
 def flagFrom(state: T.ExtensionRuntimeState, +name: String, found: Result<&2, &2, String, T.Extension>) -> Result<&2, &2, String, Maybe<&2, T.FlagValue>>:
@@ -510,7 +511,7 @@ def committedFlags(+state: T.ExtensionRuntimeState, pending: List<&2, T.FlagSett
 
 def committedExtras(+state: T.ExtensionRuntimeState, +extension: T.Extension, extras: T.ExtensionExtras) -> T.ExtensionRuntimeState & Unit:
   match extras:
-    case T.ExtensionExtras{flags, shortcuts, pending}: (committedFlags(withExtension(state, withExtras(extension, T.ExtensionExtras{flags, shortcuts, Nil{}})), pending), Unit{})
+    case T.ExtensionExtras{flags, shortcuts, pending, renderers}: (committedFlags(withExtension(state, withExtras(extension, T.ExtensionExtras{flags, shortcuts, Nil{}, renderers})), pending), Unit{})
 
 def committedWith(+state: T.ExtensionRuntimeState, found: Maybe<&2, T.Extension>) -> T.ExtensionRuntimeState & Unit:
   match found:
@@ -829,7 +830,7 @@ def setShortcut(+shortcuts: List<&2, T.ExtensionShortcut>, +shortcut: T.Extensio
 
 def extrasWithShortcut(extras: T.ExtensionExtras, +shortcut: T.ExtensionShortcut) -> T.ExtensionExtras:
   match extras:
-    case T.ExtensionExtras{flags, shortcuts, pending}: T.ExtensionExtras{flags, setShortcut(shortcuts, shortcut), pending}
+    case T.ExtensionExtras{flags, shortcuts, pending, renderers}: T.ExtensionExtras{flags, setShortcut(shortcuts, shortcut), pending, renderers}
 
 def withShortcut(+key: String, options: T.ShortcutOptions, +extension: T.Extension) -> T.Extension:
   match options:
@@ -846,3 +847,11 @@ def appendWith(actions: T.ExtensionActions, request: T.AppendEntry) -> IO(Unit):
 # upstream appendEntry(customType, data): a custom entry in the session.
 def appendEntry(api: T.ExtensionAPI, customType: String, data: Maybe<&2, V.Value>) -> IO(Result<&2, &2, String, Unit>):
   withActionsOf(api, actions => appendWith(actions, T.AppendEntry{customType, data}))
+
+# Registration replaces this extension's renderer for the same custom type.
+def withMessageRenderer(extension: T.Extension, customType: String, renderer: T.MessageRenderer()) -> T.Extension:
+  match extension:
+    case T.Extension{id, path, resolved, hidden, source, handlers, commands, state, changes, tools, T.ExtensionExtras{flags, shortcuts, pending, renderers}}:
+      T.Extension{id, path, resolved, hidden, source, handlers, commands, state, changes, tools, T.ExtensionExtras{flags, shortcuts, pending, Record.set(T.MessageRenderer(), renderers, customType, renderer)}}
+def registerMessageRenderer(api: T.ExtensionAPI, customType: String, renderer: T.MessageRenderer()) -> IO(Result<&2, &2, String, Unit>):
+  modifyExtension(api, extension => withMessageRenderer(extension, customType, renderer))

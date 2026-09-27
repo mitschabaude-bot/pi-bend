@@ -17,6 +17,19 @@ type MouseResponse is Data:
 type Component is Data:
   Component{id: ComponentId,render: C.Callback<Nat,List<&2,String>>,handleInput: Maybe<&2,C.Callback<String,Unit>>,handleMouse: Maybe<&2,C.Callback<T.TuiMouseEvent,Maybe<&2,MouseResponse>>>,invalidate: C.Callback<Unit,Unit>,setFocused: Maybe<&2,C.Callback<Bool,Unit>>,wantsKeyRelease: Bool}
 
+# A component's callbacks are borrowed. Its affine owner retires whatever
+# resources the component factory created, once the component is unmounted.
+type Owner is Type:
+  Owner{component: Component, retire: Unit -> IO(Unit)}
+
+def borrow(owner: Owner) -> Owner & Component:
+  match owner:
+    case Owner{+component, retire}: (Owner{component, retire}, component)
+
+def dispose(owner: Owner) -> IO(Unit):
+  match owner:
+    case Owner{_, retire}: retire(Unit{})
+
 def same(left: ComponentId,right: ComponentId) -> Bool:
   match left right:
     case ComponentId{a} ComponentId{b}: Nat.is_eq(a,b)

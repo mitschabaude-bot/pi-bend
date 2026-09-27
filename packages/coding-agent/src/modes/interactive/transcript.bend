@@ -13,6 +13,9 @@ import ../../../../tui/src/components/markdown.bend as Markdown
 import ../../../../runtime/src/callback.bend as Callback
 import ./theme/theme.bend as Theme
 import ./components/messages.bend as Messages
+import ./components/custom-message.bend as Custom
+import ../../core/extensions/runner.bend as ExtensionRunner
+import ../../core/extensions/types.bend as ExtensionTypes
 import ./components/keybinding-hints.bend as Hints
 import ./components/session-info.bend as SessionInfo
 import ./components/tool-execution.bend as Tool
@@ -25,17 +28,17 @@ import ../../core/tools/edit-diff.bend as Edits
 
 # The transcript owns mounted messages, tools, and transient status lines.
 # Agent events replace the active assistant and matching tool snapshots.
-type Entry is Type: MessageEntry{owner: Messages.Owner} ToolEntry{owner: Tool.Owner} StatusEntry{owner: Messages.Owner,handle: Messages.Handle}
+type Entry is Type: MessageEntry{owner: Messages.Owner} ToolEntry{owner: Tool.Owner} StatusEntry{owner: Messages.Owner,handle: Messages.Handle} CustomEntry{owner: Custom.Owner}
 type ToolLink is Data: ToolLink{id: String,handle: Tool.Handle}
-type ToolRegistry is Data: ToolRegistry{links: List<&2,ToolLink>,context: Maybe<&2,Tool.ToolContext>}
+type RenderRegistry is Data: RenderRegistry{links: List<&2,ToolLink>,context: Maybe<&2,Tool.ToolContext>,extensions: Maybe<&2,ExtensionRunner.ExtensionRunner>}
 type State is Type:
-  State{entries: List<&1,Entry>,tools: ToolRegistry,active: Maybe<&2,Messages.Handle>,nextId: Nat,view: View.Handle,theme: Theme.Theme,styles: Markdown.MarkdownTheme,expanded: Bool,hidden: Bool,outputPad: Nat}
+  State{entries: List<&1,Entry>,tools: RenderRegistry,active: Maybe<&2,Messages.Handle>,nextId: Nat,view: View.Handle,theme: Theme.Theme,styles: Markdown.MarkdownTheme,expanded: Bool,hidden: Bool,outputPad: Nat}
 type Owner is Type: Owner{resource: Serial.Owner<State>,bindings: Ref.Ref<Bindings.KeybindingsManager>}
 type Handle is Data: Handle{resource: Serial.Handle<State>,bindings: Ref.Ref<Bindings.KeybindingsManager>}
 
 def create(view: View.Handle,theme: Theme.Theme,styles: Markdown.MarkdownTheme) -> IO(Owner):
   do IO<Owner>:
-    resource : Serial.Owner<State> <- Serial.create(State,State{Nil{},ToolRegistry{Nil{},None{}},None{},100n,view,theme,styles,False{},False{},1n})
+    resource : Serial.Owner<State> <- Serial.create(State,State{Nil{},RenderRegistry{Nil{},None{},None{}},None{},100n,view,theme,styles,False{},False{},1n})
     bindings : Ref.Ref<Bindings.KeybindingsManager> <- Ref.new(Bindings.KeybindingsManager,Bindings.create(AppKeys.KEYBINDINGS(AppKeys.Environment{"linux",None{},None{}}),Record.new(List<&2,Keys.KeyId>)))
     return Owner{resource,bindings}
 def borrowed(pair: Serial.Owner<State> & Serial.Handle<State>,+bindings: Ref.Ref<Bindings.KeybindingsManager>) -> Owner & Handle:
@@ -61,7 +64,7 @@ def append(state: State,body: Messages.Body,assistant: Bool) -> IO(State & Bool)
       do IO<State & Bool>:
         owner : Messages.Owner <- Messages.create(Component.ComponentId{id},body)
         inserted(State{entries,tools,active,id,view,theme,styles,expanded,hidden,pad},Messages.borrow(owner),assistant)
-def statusAppended(pair: Messages.Owner & Component.Component & Messages.Handle,entries: List<&1,Entry>,tools: ToolRegistry,active: Maybe<&2,Messages.Handle>,id: Nat,+view: View.Handle,theme: Theme.Theme,styles: Markdown.MarkdownTheme,expanded: Bool,hidden: Bool,pad: Nat) -> IO(State & Unit):
+def statusAppended(pair: Messages.Owner & Component.Component & Messages.Handle,entries: List<&1,Entry>,tools: RenderRegistry,active: Maybe<&2,Messages.Handle>,id: Nat,+view: View.Handle,theme: Theme.Theme,styles: Markdown.MarkdownTheme,expanded: Bool,hidden: Bool,pad: Nat) -> IO(State & Unit):
   match pair:
     case (owner,component,handle):
       do IO<State & Unit>:
@@ -264,12 +267,12 @@ def findToolLink(tools: List<&2,ToolLink>,+id: String) -> Maybe<&2,Tool.Handle>:
     case Nil{}: None{}
     case ToolLink{current,handle} <> rest:
       Bool.pick(Unit -> Maybe<&2,Tool.Handle>,String.eq(current,id),_ => Some{handle},_ => findToolLink(rest,id))(Unit{})
-def findTool(registry: ToolRegistry,id: String) -> Maybe<&2,Tool.Handle>:
-  match registry: case ToolRegistry{links,_}: findToolLink(links,id)
-def linkedTool(registry: ToolRegistry,id: String,handle: Tool.Handle) -> ToolRegistry:
-  match registry: case ToolRegistry{links,context}: ToolRegistry{ToolLink{id,handle} <> links,context}
-def toolContext(registry: ToolRegistry) -> Maybe<&2,Tool.ToolContext>:
-  match registry: case ToolRegistry{_,context}: context
+def findTool(registry: RenderRegistry,id: String) -> Maybe<&2,Tool.Handle>:
+  match registry: case RenderRegistry{links,_,_}: findToolLink(links,id)
+def linkedTool(registry: RenderRegistry,id: String,handle: Tool.Handle) -> RenderRegistry:
+  match registry: case RenderRegistry{links,context,extensions}: RenderRegistry{ToolLink{id,handle} <> links,context,extensions}
+def toolContext(registry: RenderRegistry) -> Maybe<&2,Tool.ToolContext>:
+  match registry: case RenderRegistry{_,context,_}: context
 def mountedOwned(state: State,toolId: String,owned: Tool.Owner,component: Component.Component,handle: Tool.Handle) -> IO(State & Bool):
   match state:
     case State{entries,tools,active,+id,+view,theme,styles,expanded,hidden,pad}:
@@ -334,7 +337,7 @@ def finalizeTool(handle: Maybe<&2,Tool.Handle>,failure: Maybe<&2,String>) -> IO(
       do IO<Unit>:
         current : Tool.ToolExecution <- Tool.current(ready)
         finalizeToolValue(ready,current,failure)
-def finalizeCalls(content: List<&2,Ai.AssistantContent<Schema.Value>>,+tools: ToolRegistry,+failure: Maybe<&2,String>) -> IO(Unit):
+def finalizeCalls(content: List<&2,Ai.AssistantContent<Schema.Value>>,+tools: RenderRegistry,+failure: Maybe<&2,String>) -> IO(Unit):
   match content:
     case Nil{}: IO.pure(Unit,Unit{})
     case Ai.AssistantToolCall{Ai.ToolCall{id,_,_,_,_}} <> rest:
@@ -501,19 +504,39 @@ def groupedDigits(input: String,+count: Nat,acc: String) -> String:
       +separator = Bool.pick(String,Nat.is_eq(count,3n),",","")
       groupedDigits(rest,Bool.pick(Nat,Nat.is_eq(count,3n),1n,count + 1n),SCon{digit,separator ++ acc})
 def grouped(value: Nat) -> String: groupedDigits(String.reverse(Nat.show(value)),0n,"")
-def customPieces(blocks: List<&2,Ai.TextImageContent>) -> List<&2,String>:
-  match blocks:
-    case Nil{}: Nil{}
-    case Ai.TextImageText{Ai.TextContent{text,_}} <> rest: text <> customPieces(rest)
-    case _ <> rest: customPieces(rest)
-def customText(content: Ai.UserContent) -> String:
-  match content:
-    case Ai.UserText{text}: text
-    case Ai.UserBlocks{blocks}: String.join(customPieces(blocks),"\n")
-def seedCustom(handle: Handle,value: CoreMessages.CustomMessage<Schema.Value>) -> IO(Unit):
-  match value:
-    case CoreMessages.CustomMessage{customType,content,True{},_,_}: note(handle,customType,None{},customText(content))
-    case _: IO.pure(Unit,Unit{})
+def extensionsConfigured(state: State, extensions: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> IO(State & Unit):
+  match state:
+    case State{entries,RenderRegistry{links,context,_},active,id,view,theme,styles,expanded,hidden,pad}:
+      IO.pure(State & Unit,(State{entries,RenderRegistry{links,context,extensions},active,id,view,theme,styles,expanded,hidden,pad},Unit{}))
+def setExtensions(handle: Handle, extensions: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> IO(Unit):
+  match handle:
+    case Handle{resource,_}: Serial.run(State,Unit,resource,state => extensionsConfigured(state,extensions))
+def extensionsOf(registry: RenderRegistry) -> Maybe<&2,ExtensionRunner.ExtensionRunner>:
+  match registry:
+    case RenderRegistry{_,_,extensions}: extensions
+def rendererFor(runner: Maybe<&2,ExtensionRunner.ExtensionRunner>, customType: String) -> IO(Maybe<&2,ExtensionTypes.MessageRenderer()>):
+  match runner:
+    case None{}: IO.pure(Maybe<&2,ExtensionTypes.MessageRenderer()>,None{})
+    case Some{value}: ExtensionRunner.getMessageRenderer(value,customType)
+def customMounted(state: State, pair: Custom.Owner & Component.Component & Custom.Handle) -> IO(State & Unit):
+  match state pair:
+    case State{entries,tools,active,id,+view,theme,styles,expanded,hidden,pad} Tuple{owner,Tuple{component,_}}:
+      do IO<State & Unit>:
+        View.append(view,component)
+        return (State{CustomEntry{owner} <> entries,tools,active,id + 1n,view,theme,styles,expanded,hidden,pad},Unit{})
+def customAppended(state: State, message: CoreMessages.CustomMessage<Schema.Value>, customType: String) -> IO(State & Unit):
+  match state:
+    case State{entries,+tools,active,+id,view,+theme,+styles,+expanded,hidden,+pad}:
+      do IO<State & Unit>:
+        renderer : Maybe<&2,ExtensionTypes.MessageRenderer()> <- rendererFor(extensionsOf(tools),customType)
+        owner : Custom.Owner <- Custom.create(Component.ComponentId{id},message,renderer,theme,styles,pad)
+        ready : Custom.Owner <- Custom.updateOwner(owner, handle => Custom.setExpanded(handle,expanded))
+        customMounted(State{entries,tools,active,id,view,theme,styles,expanded,hidden,pad},Custom.borrow(ready))
+def seedCustom(handle: Handle, value: CoreMessages.CustomMessage<Schema.Value>) -> IO(Unit):
+  match handle value:
+    case Handle{resource,_} CoreMessages.CustomMessage{+customType,content,True{},details,timestamp}:
+      Serial.run(State,Unit,resource,state => customAppended(state,CoreMessages.CustomMessage{customType,content,True{},details,timestamp},customType))
+    case _ _: IO.pure(Unit,Unit{})
 def seedCompaction(handle: Handle,value: CoreMessages.CompactionSummaryMessage) -> IO(Unit):
   match value:
     case CoreMessages.CompactionSummaryMessage{summary,tokens,_}:
@@ -541,29 +564,34 @@ def seedSession(+handle: Handle,messages: List<&2,Agent.AgentMessage<Unit,Tools.
       do IO<Unit>:
         seedSessionEntry(handle,message)
         seedSession(handle,rest)
-def rethemeEntries(entries: List<&1,Entry>,+theme: Theme.Theme) -> IO(List<&1,Entry>):
+def rethemeEntries(entries: List<&1,Entry>,+theme: Theme.Theme,+styles: Markdown.MarkdownTheme) -> IO(List<&1,Entry>):
   match entries:
     case Nil{}: IO.pure(List<&1,Entry>,Nil{})
     case MessageEntry{owner} <> rest:
       do IO<List<&1,Entry>>:
         kept : Messages.Owner <- Messages.rethemeOwner(owner,theme)
-        next : List<&1,Entry> <- rethemeEntries(rest,theme)
+        next : List<&1,Entry> <- rethemeEntries(rest,theme,styles)
         return MessageEntry{kept} <> next
     case ToolEntry{owner} <> rest:
       do IO<List<&1,Entry>>:
         kept : Tool.Owner <- Tool.rethemeOwner(owner,theme)
-        next : List<&1,Entry> <- rethemeEntries(rest,theme)
+        next : List<&1,Entry> <- rethemeEntries(rest,theme,styles)
         return ToolEntry{kept} <> next
     case StatusEntry{owner,handle} <> rest:
       do IO<List<&1,Entry>>:
         kept : Messages.Owner <- Messages.rethemeOwner(owner,theme)
-        next : List<&1,Entry> <- rethemeEntries(rest,theme)
+        next : List<&1,Entry> <- rethemeEntries(rest,theme,styles)
         return StatusEntry{kept,handle} <> next
+    case CustomEntry{owner} <> rest:
+      do IO<List<&1,Entry>>:
+        kept : Custom.Owner <- Custom.updateOwner(owner,handle => Custom.setTheme(handle,theme,styles))
+        next : List<&1,Entry> <- rethemeEntries(rest,theme,styles)
+        return CustomEntry{kept} <> next
 def applyTheme(state: State,+theme: Theme.Theme) -> IO(State & Unit):
   match state:
-    case State{entries,tools,active,nextId,view,_,styles,expanded,hidden,pad}:
+    case State{entries,tools,active,nextId,view,_,+styles,expanded,hidden,pad}:
       do IO<State & Unit>:
-        next : List<&1,Entry> <- rethemeEntries(entries,theme)
+        next : List<&1,Entry> <- rethemeEntries(entries,theme,styles)
         return (State{next,tools,active,nextId,view,theme,styles,expanded,hidden,pad},Unit{})
 def rethemeWhen(changed: Bool,state: State,theme: Theme.Theme) -> IO(State & Unit):
   match changed:
@@ -595,6 +623,11 @@ def expandEntries(entries: List<&1,Entry>,+expanded: Bool) -> IO(List<&1,Entry>)
       do IO<List<&1,Entry>>:
         next : List<&1,Entry> <- expandEntries(rest,expanded)
         return StatusEntry{owner,handle} <> next
+    case CustomEntry{owner} <> rest:
+      do IO<List<&1,Entry>>:
+        kept : Custom.Owner <- Custom.updateOwner(owner,handle => Custom.setExpanded(handle,expanded))
+        next : List<&1,Entry> <- expandEntries(rest,expanded)
+        return CustomEntry{kept} <> next
 def toggled(state: State) -> IO(State & Bool):
   match state:
     case State{entries,+tools,active,nextId,view,theme,styles,+expanded,hidden,pad}:
@@ -621,6 +654,10 @@ def hideThinkingEntries(entries: List<&1,Entry>,+hidden: Bool) -> IO(List<&1,Ent
       do IO<List<&1,Entry>>:
         next : List<&1,Entry> <- hideThinkingEntries(rest,hidden)
         return StatusEntry{owner,handle} <> next
+    case CustomEntry{owner} <> rest:
+      do IO<List<&1,Entry>>:
+        next : List<&1,Entry> <- hideThinkingEntries(rest,hidden)
+        return CustomEntry{owner} <> next
 def changedThinking(state: State,+hidden: Bool) -> IO(State & Unit):
   match state:
     case State{entries,tools,active,id,view,theme,styles,expanded,_,pad}:
@@ -647,6 +684,11 @@ def padEntries(entries: List<&1,Entry>,+pad: Nat) -> IO(List<&1,Entry>):
         next : List<&1,Entry> <- padEntries(rest,pad)
         return StatusEntry{owner,handle} <> next
 # upstream ui.invalidate(): components drop their rendered lines.
+    case CustomEntry{owner} <> rest:
+      do IO<List<&1,Entry>>:
+        kept : Custom.Owner <- Custom.updateOwner(owner,handle => Custom.setOutputPad(handle,pad))
+        next : List<&1,Entry> <- padEntries(rest,pad)
+        return CustomEntry{kept} <> next
 def invalidateEntries(entries: List<&1,Entry>) -> IO(List<&1,Entry>):
   match entries:
     case Nil{}: IO.pure(List<&1,Entry>,Nil{})
@@ -665,6 +707,11 @@ def invalidateEntries(entries: List<&1,Entry>) -> IO(List<&1,Entry>):
         kept : Messages.Owner <- Messages.invalidateOwner(owner)
         next : List<&1,Entry> <- invalidateEntries(rest)
         return StatusEntry{kept,handle} <> next
+    case CustomEntry{owner} <> rest:
+      do IO<List<&1,Entry>>:
+        kept : Custom.Owner <- Custom.updateOwner(owner,handle => Custom.invalidate(handle,Unit{}))
+        next : List<&1,Entry> <- invalidateEntries(rest)
+        return CustomEntry{kept} <> next
 def invalidated(state: State) -> IO(State & Unit):
   match state:
     case State{entries,tools,active,nextId,view,theme,styles,expanded,hidden,pad}:
@@ -698,13 +745,17 @@ def disposeEntries(entries: List<&1,Entry>) -> IO(Unit):
       do IO<Unit>:
         Messages.dispose(entry)
         disposeEntries(rest)
+    case CustomEntry{owner} <> rest:
+      do IO<Unit>:
+        Custom.dispose(owner)
+        disposeEntries(rest)
 def cleared(state: State) -> IO(State & Unit):
   match state:
-    case State{entries,ToolRegistry{_,context},_,nextId,+view,theme,styles,expanded,hidden,pad}:
+    case State{entries,RenderRegistry{_,context,extensions},_,nextId,+view,theme,styles,expanded,hidden,pad}:
       do IO<State & Unit>:
         View.clear(view)
         disposeEntries(entries)
-        return (State{Nil{},ToolRegistry{Nil{},context},None{},nextId,view,theme,styles,expanded,hidden,pad},Unit{})
+        return (State{Nil{},RenderRegistry{Nil{},context,extensions},None{},nextId,view,theme,styles,expanded,hidden,pad},Unit{})
 def clear(handle: Handle) -> IO(Unit):
   match handle:
     case Handle{resource,_}: Serial.run(State,Unit,resource,cleared)
@@ -714,7 +765,7 @@ def disposeToolContext(context: Maybe<&2,Tool.ToolContext>) -> IO(Unit):
     case Some{Tool.ToolContext{_,compute,_,_}}: Callback.dispose(Tool.PreviewRequest,Edits.Preview(),compute)
 def disposeState(state: State) -> IO(Unit):
   match state:
-    case State{entries,ToolRegistry{_,context},_,_,_,_,_,_,_,_}:
+    case State{entries,RenderRegistry{_,context,_},_,_,_,_,_,_,_,_}:
       do IO<Unit>:
         disposeEntries(entries)
         disposeToolContext(context)
@@ -729,8 +780,8 @@ def dispose(owner: Owner) -> IO(Unit):
 
 def contextConfigured(state: State,context: Tool.ToolContext) -> IO(State & Unit):
   match state:
-    case State{entries,ToolRegistry{links,None{}},active,id,view,theme,styles,expanded,hidden,pad}:
-      IO.pure(State & Unit,(State{entries,ToolRegistry{links,Some{context}},active,id,view,theme,styles,expanded,hidden,pad},Unit{}))
+    case State{entries,RenderRegistry{links,None{},extensions},active,id,view,theme,styles,expanded,hidden,pad}:
+      IO.pure(State & Unit,(State{entries,RenderRegistry{links,Some{context},extensions},active,id,view,theme,styles,expanded,hidden,pad},Unit{}))
     case _: IO.die(State & Unit,1,"Tool preview context is already configured")
 def setToolContext(handle: Handle,context: Tool.ToolContext) -> IO(Unit):
   match handle: case Handle{resource,_}: Serial.run(State,Unit,resource,state => contextConfigured(state,context))
@@ -741,7 +792,7 @@ def contextCwd(context: Maybe<&2,Tool.ToolContext>,cwd: String) -> Maybe<&2,Tool
     case Some{Tool.ToolContext{_,compute,redraw,read}}: Some{Tool.ToolContext{cwd,compute,redraw,read}}
 def contextCwdChanged(state: State,cwd: String) -> IO(State & Unit):
   match state:
-    case State{entries,ToolRegistry{links,context},active,id,view,theme,styles,expanded,hidden,pad}:
-      IO.pure(State & Unit,(State{entries,ToolRegistry{links,contextCwd(context,cwd)},active,id,view,theme,styles,expanded,hidden,pad},Unit{}))
+    case State{entries,RenderRegistry{links,context,extensions},active,id,view,theme,styles,expanded,hidden,pad}:
+      IO.pure(State & Unit,(State{entries,RenderRegistry{links,contextCwd(context,cwd),extensions},active,id,view,theme,styles,expanded,hidden,pad},Unit{}))
 def setToolCwd(handle: Handle,cwd: String) -> IO(Unit):
   match handle: case Handle{resource,_}: Serial.run(State,Unit,resource,state => contextCwdChanged(state,cwd))

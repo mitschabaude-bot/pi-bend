@@ -2743,10 +2743,14 @@
     },
     {
       "source": "packages/coding-agent/test/custom-message.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/custom-message.bend",
+        "tests/custom_message_check.py",
+        "tests/custom_message_reference.ts"
+      ],
       "sha256": "345716cc20a80dbe8072a3ed92bbff232f36ec83cfd02241b2ea4cb54945cc20",
-      "notes": "Pending: extension message renderers (pi.registerMessageRenderer, MessageRenderOptions with outputPad) and the interactive CustomMessageComponent that applies them are not ported."
+      "notes": "The original provides output padding to custom renderers and updates it case: initial expanded=false/outputPad=1, a Text component with one-space padding, and outputPad=0 with no leading padding. The native fixture also checks unchanged-option reuse, expansion, invalidation, renderer failure/absence fallback, duplicate registration replacement, first-active-extension precedence, hidden/live/replayed messages and affine child cleanup; the host oracle compares custom/default/padding frames to pinned pi on Bun and native one/four."
     },
     {
       "source": "packages/coding-agent/test/default-tools-setting.test.ts",
