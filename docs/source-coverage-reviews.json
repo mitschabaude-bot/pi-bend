@@ -1266,11 +1266,11 @@
         "packages/coding-agent/src/core/tools/edit-diff.bend",
         "packages/coding-agent/src/core/tools/diff.bend"
       ],
-      "note": "Pure immutable matching/replacement and diff generation are split between edit-diff.bend and diff.bend. Read-only computeEditsDiff and computeEditDiff use explicit native path context and typed Result errors; focused Bun/native1/native4 differential checks match pinned pi for a 1000-line ten-edit preview, CRLF/BOM, original-snapshot batch matching, missing/duplicate/overlapping/unchanged/empty replacements and missing files, without modifying the file. Invalid UTF-8 is rejected consistently with native edit execution under the approved strict-input policy. Interactive preflight is wired and validated separately by edit-tool-no-full-redraw; full source contract review remains incomplete.",
+      "note": "Pure immutable matching/replacement and diff generation are split between edit-diff.bend and diff.bend. Read-only computeEditsDiff and computeEditDiff use explicit native path context and typed Result errors; focused Bun/native1/native4 differential checks match pinned pi for a 1000-line ten-edit preview, CRLF/BOM, original-snapshot batch matching, missing/duplicate/overlapping/unchanged/empty replacements and missing files, without modifying the file. Invalid UTF-8 is rejected consistently with native edit execution under the approved strict-input policy. Interactive preflight is wired and validated separately by edit-tool-no-full-redraw; full source contract review remains incomplete. The shared token matcher retains line behavior in 264 native one/four jsdiff comparisons; 725 existing edit/application checks also pass. Default word-key matching has 863 source-pinned comparisons but is not yet wired into rendering.",
       "source_sha256": "f85a9809eb44b9828236050cf38a8e45933e5cfd583a186e9a0e55a664dd3e8d",
       "port_sha256": {
         "packages/coding-agent/src/core/tools/edit-diff.bend": "20c97e7ba832547e1f44e87a2de510512791522af1f41db1075fe811592d6f23",
-        "packages/coding-agent/src/core/tools/diff.bend": "51f1246c01d1b557319f5bd5b208caf2ca5489b82c186b020374202ef2ef1e25"
+        "packages/coding-agent/src/core/tools/diff.bend": "3cf45d8e28002617fbb89e1764609e94af8f4f49c35b791acee57f08587dfc01"
       }
     },
     "packages/coding-agent/src/core/tools/renderers/edit.ts": {
@@ -1614,6 +1614,19 @@
       "source_sha256": "109f7896fbc8ec8923ae609a803ef3ab5353413e1b036375e8067247106183b2",
       "port_sha256": {
         "packages/coding-agent/src/cli/startup-selector.bend": "37418d3f7d27995058194667ba97352551155be29ef50ecde9c482c6f5ab001e"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/diff.ts": {
+      "state": "partial",
+      "ports": [
+        "packages/coding-agent/src/core/tools/renderers/edit.bend",
+        "packages/coding-agent/src/core/tools/diff.bend"
+      ],
+      "note": "Diff colors, tab expansion and a prefix/suffix intra-line approximation exist in the edit renderer. Default jsdiff word-key tokenization and Myers matching are native and match 863 source-pinned edit scripts on one/four threads, including Latin and whitespace boundaries, Unicode and repeated words; the matcher is not yet integrated. Numbered-line parsing, consecutive removed/added grouping, multiple changed word spans and full renderDiff behavior remain incomplete. Upstream word display can alter original whitespace inside string literals; that rendering-policy choice remains unresolved. Matching checks do not establish terminal color or scrollback parity.",
+      "source_sha256": "b43f8d91ba9f19088dc9dc86126091c3fdfca25eac6461f5510f5e1e9ddd6491",
+      "port_sha256": {
+        "packages/coding-agent/src/core/tools/renderers/edit.bend": "e6ad64cb2392f986153a3f5c421ab5cae2337e8531c1f159ca234ebbd4650e09",
+        "packages/coding-agent/src/core/tools/diff.bend": "3cf45d8e28002617fbb89e1764609e94af8f4f49c35b791acee57f08587dfc01"
       }
     }
   }

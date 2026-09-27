@@ -101,11 +101,47 @@ def ordered(changes: List<&2,Change>, result: List<&2,Change>) -> List<&2,Change
 
 # Myers shortest-edit search: O((N+M)D) time, persistent shared path histories.
 # Remaining input tails provide constant-time movement without indexed arrays.
-def diffLines(old: String, newer: String) -> List<&2,Change>:
-  +left = tokenize(old,"",Nil{})
-  +right = tokenize(newer,"",Nil{})
+def diffTokens(+left: List<&2,String>,+right: List<&2,String>) -> List<&2,Change>:
   +paths = {Some{common(left,right,0n,Nil{})} <> Nil{} : List<&2,Maybe<&2,Path>>}
   ordered(search(List.length(&2,String,left) + List.length(&2,String,right),paths,finished(paths)),Nil{})
+def diffLines(old: String,newer: String) -> List<&2,Change>:
+  diffTokens(tokenize(old,"",Nil{}),tokenize(newer,"",Nil{}))
+
+# Default jsdiff word matching ignores surrounding whitespace. Keep token
+# matching separate from rendering: both original lines remain authoritative.
+def wordChar(+code: U32) -> Bool:
+  (U32.is_ge(code,48) && U32.is_le(code,57)) || (U32.is_ge(code,65) && U32.is_le(code,90)) ||
+  (U32.is_ge(code,97) && U32.is_le(code,122)) || U32.is_eq(code,95) || U32.is_eq(code,173) ||
+  (U32.is_ge(code,192) && U32.is_le(code,214)) || (U32.is_ge(code,216) && U32.is_le(code,246)) ||
+  (U32.is_ge(code,248) && U32.is_le(code,710)) || (U32.is_ge(code,712) && U32.is_le(code,727)) ||
+  (U32.is_ge(code,734) && U32.is_le(code,767)) || (U32.is_ge(code,7680) && U32.is_le(code,7935))
+def wordSpace(+code: U32) -> Bool:
+  (U32.is_ge(code,9) && U32.is_le(code,13)) || U32.is_eq(code,32) || U32.is_eq(code,160) || U32.is_eq(code,5760) ||
+  (U32.is_ge(code,8192) && U32.is_le(code,8202)) || U32.is_eq(code,8232) || U32.is_eq(code,8233) ||
+  U32.is_eq(code,8239) || U32.is_eq(code,8287) || U32.is_eq(code,12288) || U32.is_eq(code,65279)
+def finishWord(word: String,keys: List<&2,String>) -> List<&2,String>:
+  match word:
+    case SNil{}: keys
+    case word: String.reverse(word) <> keys
+def scanWords(text: String,+word: String,+keys: List<&2,String>) -> List<&2,String>:
+  match text:
+    case SNil{}: List.reverse(&2,String,finishWord(word,keys))
+    case SCon{Chr{+code},+rest}:
+      Bool.pick(Unit -> List<&2,String>,wordChar(code),
+        _ => scanWords(rest,SCon{Chr{code},word},keys),
+        _ => Bool.pick(Unit -> List<&2,String>,wordSpace(code),
+          _ => scanWords(rest,"",finishWord(word,keys)),
+          _ => scanWords(rest,"",SCon{Chr{code},SNil{}} <> finishWord(word,keys)))(Unit{}))(Unit{})
+def whitespaceWord(keys: List<&2,String>) -> List<&2,String>:
+  match keys:
+    case Nil{}: "" <> Nil{}
+    case keys: keys
+def wordKeys(text: String) -> List<&2,String>:
+  match text:
+    case SNil{}: Nil{}
+    case text: whitespaceWord(scanWords(text,"",Nil{}))
+def diffWordKeys(old: String,newer: String) -> List<&2,Change>:
+  diffTokens(wordKeys(old),wordKeys(newer))
 
 def size(lines: List<&2,String>) -> Nat: List.length(&2,String,lines)
 
