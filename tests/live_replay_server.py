@@ -359,7 +359,7 @@ def orphan_calls(api, body):
             following = messages[i + 1] if i + 1 < len(messages) else {}
             results = {block.get('tool_use_id') for block in following.get('content', []) if isinstance(following.get('content'), list) and block.get('type') == 'tool_result'}
             missing += [id for id in ids if id not in results]
-    elif api == 'completions':
+    elif api in ('completions', 'mistral'):
         messages = body.get('messages', [])
         for i, message in enumerate(messages):
             ids = [call['id'] for call in message.get('tool_calls') or []] if message.get('role') == 'assistant' else []
@@ -369,7 +369,14 @@ def orphan_calls(api, body):
                     break
                 results.add(later.get('tool_call_id'))
             missing += [id for id in ids if id not in results]
-    elif api == 'google':
+    elif api == 'bedrock':
+        messages = body.get('messages', [])
+        for i, message in enumerate(messages):
+            ids = [block['toolUse']['toolUseId'] for block in message.get('content', []) if 'toolUse' in block] if message.get('role') == 'assistant' else []
+            following = messages[i + 1] if i + 1 < len(messages) else {}
+            results = {block['toolResult']['toolUseId'] for block in following.get('content', []) if 'toolResult' in block}
+            missing += [id for id in ids if id not in results]
+    elif api in ('google', 'vertex'):
         contents = body.get('contents', [])
         for i, content in enumerate(contents):
             names = [part['functionCall']['name'] for part in content.get('parts', []) if 'functionCall' in part]
@@ -465,7 +472,11 @@ def rejection(api, raw):
             return error_body(api, f'messages: `tool_use` ids were found without `tool_result` blocks immediately after: {", ".join(missing)}. Each `tool_use` block must have a corresponding `tool_result` block in the next message.')
         if api == 'completions':
             return error_body(api, f"An assistant message with 'tool_calls' must be followed by tool messages responding to each 'tool_call_id'. The following tool_call_ids did not have response messages: {', '.join(missing)}")
-        if api == 'google':
+        if api == 'mistral':
+            return error_body(api, 'Not the same number of function calls and responses', '3230')
+        if api == 'bedrock':
+            return error_body(api, f'Expected toolResult blocks at messages.{len(body["messages"]) - 1}.content for the following Ids: {", ".join(missing)}')
+        if api in ('google', 'vertex'):
             return error_body(api, 'Please ensure that the number of function response parts is equal to the number of function call parts of the function call turn.')
         return error_body(api, f'No tool output found for function call {missing[0]}.')
     return None
@@ -513,6 +524,10 @@ class Server:
                     data = b'' if body is None else json.dumps(body).encode()
                     self.send_response(status)
                     self.send_header('Content-Type', 'application/json')
+                    if api == 'bedrock':
+                        # restJson errors name their type in this header.
+                        self.send_header('x-amzn-ErrorType', 'InvalidSignatureException' if status == 403 else 'ValidationException')
+                        self.send_header('x-amzn-RequestId', f'replay-request-{index}')
                     self.send_header('Content-Length', str(len(data)))
                     self.end_headers()
                     self.wfile.write(data)
