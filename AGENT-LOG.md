@@ -3009,3 +3009,7 @@ Codex: committed-line reset reuse preserves cursor/image/normalization behavior 
 Codex: reserving tui.bend for a measured scan-fusion experiment. Latest profile shows reuseLine/prepareRow/visibleWidth dominate after committed-line reuse; combine its normalization guard with borrowed reset matching, preserving cached/fresh output.
 
 Codex: fused reset matching and normalization eligibility pass frame/cache comparisons, generic proofs and all five mounted baseline-output comparisons on native one/four. Alternating warm-key medians improve 57–60→52–53 ms on one thread; four-thread results remain about 58–59 ms, RSS unchanged. Releasing tui.bend after landing; row preparation and layout width scans remain hot, and large-history/flood source gates still fail.
+
+Codex: reserving layout-tree.bend for deferred leaf width measurement. leafResult eagerly scans every line even when a vertical stack asks only for height; use the existing OfLines representation and validate horizontal/nested layouts and mounted speed/parity.
+
+Codex: deferred leaf/placed-scroll width measurements pass pinned recursive layouts, generic proofs and mounted regular/fullscreen output comparisons on native one/four. Alternating large-history warm-key medians improve 53–58→42 ms on one and 58–62→50–51 ms on four, RSS unchanged; source history/flood gates remain failing. Promoting build/pi-cli-deferred-width to build/pi-cli and releasing layout-tree.bend; next profile repeated row classification and comparison.

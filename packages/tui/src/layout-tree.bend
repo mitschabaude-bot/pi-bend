@@ -113,7 +113,7 @@ def leafBox(component: C.Component,lines: List<&2,String>,+bounds: L.LayoutRect,
 def leafResult(+component: C.Component,+lines: List<&2,String>,cache: List<&2,CachedLine>,x: Nat,y: Nat,width: Nat,height: Nat,clip: L.LayoutRect) -> Result:
   +bounds = L.rect(x,y,width,height)
   +box = leafBox(component,lines,bounds,clip)
-  one(N.Leaf{component},box,lines,L.lineWidth(lines),List.length(&2,String,lines),cache)
+  Single{Item{N.Leaf{component},box,lines,OfLines{},List.length(&2,String,lines),None{}},cache}
 def wrapEntry(result: Result,+size: S.StackEntryOptions,visible: Maybe<&2,Callback.Callback<S.LayoutViewport,Bool>>) -> Result:
   match result:
     case Single{Item{node,box,lines,width,height,_},cache}:
@@ -184,7 +184,7 @@ def measuredScroll(view: Scroll.ScrollView,rendered: Rendered,width: Nat) -> Res
 def placedScrollFrame(value: L.ScrollLayoutFrame,cache: List<&2,CachedLine>,x: Nat,y: Nat,clip: L.LayoutRect,naturalHeight: Nat) -> Result:
   match value:
     case L.ScrollLayoutFrame{+next,L.LayoutFrame{box,width,height,+screen}}:
-      one(N.ScrollNode{next},shiftedScroll(next,L.LayoutFrame{box,width,height,screen},x,y,clip),screen,L.lineWidth(screen),naturalHeight,cache)
+      Single{Item{N.ScrollNode{next},shiftedScroll(next,L.LayoutFrame{box,width,height,screen},x,y,clip),screen,OfLines{},naturalHeight,None{}},cache}
 def placedScroll(view: Scroll.ScrollView,rendered: Rendered,x: Nat,y: Nat,width: Nat,height: Nat,contentWidth: Nat,clip: L.LayoutRect) -> Result:
   match rendered:
     case Rendered{+lines,cache}:

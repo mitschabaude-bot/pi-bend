@@ -1498,11 +1498,11 @@
     },
     "packages/tui/src/layout.ts": {
       "state": "partial",
-      "note": "Immutable boxes and recursive tree rendering represent source layout without cyclic parent references. Scrollbar cells now match source ANSI/background and wide-character behavior; overflowing pending-Bash terminal frames match text/colors on native one/four. Custom scrollbar style callbacks, image cropping and the full source suite remain incomplete. getLayoutBoxesAt now orders all clipped descendants by layer/depth, with pinned nested/overlapping hit-map comparisons on native one/four. getScrollViewBox/getScrollViewsAt and includeHiddenAuto geometry lookup are missing.",
+      "note": "Immutable boxes and recursive tree rendering represent source layout without cyclic parent references. Scrollbar cells now match source ANSI/background and wide-character behavior; overflowing pending-Bash terminal frames match text/colors on native one/four. Custom scrollbar style callbacks, image cropping and the full source suite remain incomplete. getLayoutBoxesAt now orders all clipped descendants by layer/depth, with pinned nested/overlapping hit-map comparisons on native one/four. getScrollViewBox/getScrollViewsAt and includeHiddenAuto geometry lookup are missing. Leaf and placed-scroll natural widths use the existing deferred line-width representation, so vertical layout reads height without scanning text for an unused width. Horizontal callers still compute the same width; pinned recursive layout comparisons cover nested horizontal and unbounded document frames on native one/four.",
       "source_sha256": "7530a8eaa30f44fef82e8b7020b5068ba89d34884463c6cb526073b20fcdeef0",
       "port_sha256": {
         "packages/tui/src/layout.bend": "abbae131973c280bf29fd8381c8f1f711f5e20fefb9408c60f6caa5494dca013",
-        "packages/tui/src/layout-tree.bend": "96e8eb98061c9f9c44069ad2cded5558c219fcb1d715ded93b3c8654561da762",
+        "packages/tui/src/layout-tree.bend": "c4190b3020b94fbc41345d5c7e2db820b11e5d1ad5f94846ed6f865b1b0e6069",
         "packages/tui/src/layout-node.bend": "11945ca2e5945343ef3952a50835df06b0d65e6be8a9e1e6f663809057c94a91"
       },
       "ports": [
