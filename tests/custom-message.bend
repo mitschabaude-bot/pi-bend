@@ -1,4 +1,8 @@
 import Base
+import ../packages/tui/src/fullscreen-mouse.bend as Gestures
+import ../packages/tui/src/tui-base.bend as Tui
+import ../packages/tui/src/layout.bend as Layout
+import ../packages/tui/src/tui.bend as Mouse
 import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/f64.bend as F
@@ -105,7 +109,7 @@ def lifecycleOwner(owner: Custom.Owner, +component: Component.Component, +handle
     check(String.eq(String.join(changed, "\n"), "\nnotice:True:3"), "updated renderer options differ")
     Component.invalidate(component)
     current : Counts <- Ref.read(Counts, counter)
-    verifyCounts(current, 4n, 3n, 1n)
+    verifyCounts(current, 4n, 2n, 1n)
     Custom.dispose(owner)
     final : Counts <- Ref.read(Counts, counter)
     verifyCounts(final, 4n, 4n, 1n)
@@ -226,6 +230,204 @@ def paddingCase(theme: Theme.Theme, markdown: Markdown.MarkdownTheme) -> IO(Unit
     owner : Custom.Owner <- Custom.create(Component.ComponentId{14n},message(),Some{callback},theme,markdown,1n)
     paddingOwner(Custom.borrow(owner))
     C.dispose(Extensions.MessageRenderInput,Extensions.MessageRenderResult(),callback)
+type Control is Data: Control{id: Nat,journal: Ref.Ref<String>,reentry: Maybe<&2,Ref.Ref<Maybe<&2,Custom.Handle>>>}
+type Controls is Data: Controls{counter: Ref.Ref<Counts>,journal: Ref.Ref<String>,reentry: Maybe<&2,Ref.Ref<Maybe<&2,Custom.Handle>>>}
+def expandOnce(handle: Maybe<&2,Custom.Handle>) -> IO(Unit):
+  match handle:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{handle}: Custom.setExpanded(handle,True{})
+def reenter(value: Maybe<&2,Ref.Ref<Maybe<&2,Custom.Handle>>>) -> IO(Unit):
+  match value:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{reference}:
+      do IO<Unit>:
+        handle : Maybe<&2,Custom.Handle> <- Ref.swap(Maybe<&2,Custom.Handle>,reference,None{})
+        expandOnce(handle)
+def controlInput(journal: Ref.Ref<String>,data: String) -> IO(Unit): Ref.modify(String,Unit,journal,old => (old ++ data,Unit{}))
+def controlFocus(journal: Ref.Ref<String>,value: Bool) -> IO(Unit): IO.pure(Unit,Unit{})
+def controlMouse(control: Control,event: Mouse.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
+  match control event:
+    case Control{id,journal,reentry} Mouse.TuiMouseEvent{_,_,_,Mouse.Forward{y},_,_,_,_,_,_,_,_,_}:
+      do IO<Maybe<&2,Component.MouseResponse()>>:
+        Ref.modify(String,Unit,journal,old => (old ++ Nat.show(id) ++ ":" ++ Nat.show(y) ++ ";",Unit{}))
+        reenter(reentry)
+        return Some{Component.LocalResult{Mouse.TuiMouseEventResult{True{},True{},True{},None{}}}}
+    case _ _: IO.pure(Maybe<&2,Component.MouseResponse()>,None{})
+def controlId(counts: Counts) -> Nat:
+  match counts: case Counts{calls,_,_}: 10000n + calls
+def retireControl(counter: Ref.Ref<Counts>,render: C.Callback<Nat,List<&2,String>>,input: C.Callback<String,Unit>,mouse: C.Callback<Mouse.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidate: C.Callback<Unit,Unit>,focus: C.Callback<Bool,Unit>) -> IO(Unit):
+  do IO<Unit>:
+    C.dispose(String,Unit,input)
+    C.dispose(Mouse.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>,mouse)
+    C.dispose(Bool,Unit,focus)
+    retire(counter,render,invalidate)
+def controlRenderer(environment: Controls,input: Extensions.MessageRenderInput) -> IO(Extensions.MessageRenderResult()):
+  match environment:
+    case Controls{+counter,+journal,reentry}:
+      do IO<Extensions.MessageRenderResult()>:
+        Ref.modify(Counts,Unit,counter,called)
+        count : Counts <- Ref.read(Counts,counter)
+        +id : Nat = controlId(count)
+        +render : C.Callback<Nat,List<&2,String>> <- C.create(~String,~Nat,~List<&2,String>,~text,"control")
+        +input : C.Callback<String,Unit> <- C.create(~Ref.Ref<String>,~String,~Unit,~controlInput,journal)
+        +mouse : C.Callback<Mouse.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>> <- C.create(~Control,~Mouse.TuiMouseEvent,~Maybe<&2,Component.MouseResponse()>,~controlMouse,Control{id,journal,reentry})
+        +invalidate : C.Callback<Unit,Unit> <- C.create(~Ref.Ref<Counts>,~Unit,~Unit,~invalidate,counter)
+        +focus : C.Callback<Bool,Unit> <- C.create(~Ref.Ref<String>,~Bool,~Unit,~controlFocus,journal)
+        return Done{Some{Component.Owner{Component.Component{Component.ComponentId{id},render,Some{input},Some{mouse},invalidate,Some{focus},False{}},_ => retireControl(counter,render,input,mouse,invalidate,focus)}}}
+def press(+row: Nat) -> Mouse.TuiMouseEvent:
+  Mouse.TuiMouseEvent{Mouse.MousePress{},Mouse.MouseLeft{},Mouse.Forward{2n},Mouse.Forward{row},Mouse.Forward{2n},Mouse.Forward{row},80n,2n,False{},False{},False{},None{},None{}}
+def verifyHitBounds(result: Maybe<&2,Component.TuiMouseDispatchResult()>,+wanted: Nat) -> IO(Unit):
+  match result:
+    case Some{Component.TuiMouseDispatchResult{Component.IdTarget{Component.ComponentId{id},_,Mouse.Forward{y},width,height},Some{Component.ComponentId{focus}},capture,focused,_}}:
+      check(Nat.is_eq(id,wanted) && Nat.is_eq(focus,wanted) && Nat.is_eq(y,1n) && Nat.is_eq(width,80n) && Nat.is_eq(height,1n) && capture && focused,"custom child target/focus/capture coordinates differ")
+    case _: IO.die(Unit,1,"custom child did not receive mouse input")
+def verifyHit(result: Maybe<&2,Component.TuiMouseDispatchResult()>,wanted: Nat) -> IO(Unit):
+  match result:
+    case Some{Component.TuiMouseDispatchResult{target,focusTarget,capture,focus,render}}:
+      verifyHitBounds(Some{Component.TuiMouseDispatchResult{Component.targetBounds(target),focusTarget,capture,focus,render}},wanted)
+    case None{}: verifyHitBounds(None{},wanted)
+def verifyFound(result: Maybe<&2,Component.Component>,wanted: Nat) -> IO(Unit):
+  match result:
+    case Some{component}: check(Component.same(Component.id(component),Component.ComponentId{wanted}),"custom child discovery differs")
+    case None{}: IO.die(Unit,1,"custom child missing from transcript hierarchy")
+def pendingDisplay(handle: View.Handle) -> View.Display:
+  match handle:
+    case View.Handle{document,_,exit}: View.Display{View.Pending{},document,None{},exit}
+def verifyMouseResponse(response: Maybe<&2,Component.MouseResponse()>,wanted: Nat) -> IO(Unit):
+  match response:
+    case Some{Component.DispatchedResult{result}}: verifyHit(Some{result},wanted)
+    case _: IO.die(Unit,1,"cached pending child did not receive mouse input")
+def mouseContents(owner: Custom.Owner,+component: Component.Component,+handle: Custom.Handle,view: View.View,+document: Component.Component,+viewHandle: View.Handle,+counter: Ref.Ref<Counts>,+journal: Ref.Ref<String>) -> IO(Unit):
+  do IO<Unit>:
+    View.appendPending(viewHandle,component)
+    rows : List<&2,String> <- Component.render(document,80n)
+    pendingRows : List<&2,String> <- View.draw(pendingDisplay(viewHandle),80n)
+    View.flushPending(viewHandle)
+    pendingHit : Maybe<&2,Component.MouseResponse()> <- View.mouse(pendingDisplay(viewHandle),press(1n))
+    verifyMouseResponse(pendingHit,10001n)
+    emptyRows : List<&2,String> <- View.draw(pendingDisplay(viewHandle),80n)
+    emptyHit : Maybe<&2,Component.MouseResponse()> <- View.mouse(pendingDisplay(viewHandle),press(1n))
+    check(Maybe.is_none(&2,Component.MouseResponse(),emptyHit),"redrawn empty pending section receives mouse input")
+    found : Maybe<&2,Component.Component> <- Component.lookup(document <> Nil{},Component.ComponentId{10001n})
+    verifyFound(found,10001n)
+    spacer : Maybe<&2,Component.TuiMouseDispatchResult()> <- Component.dispatchMouseEvent(document,press(0n))
+    check(Maybe.is_none(&2,Component.TuiMouseDispatchResult(),spacer),"custom spacer consumes mouse input")
+    initial : Maybe<&2,Component.TuiMouseDispatchResult()> <- Component.dispatchMouseEvent(document,press(1n))
+    verifyHit(initial,10001n)
+    Custom.setExpanded(handle,True{})
+    removed : Maybe<&2,Component.Component> <- Component.lookup(document <> Nil{},Component.ComponentId{10001n})
+    check(Maybe.is_none(&2,Component.Component,removed),"replaced child remains in current hierarchy")
+    cached : Maybe<&2,Component.TuiMouseDispatchResult()> <- Component.dispatchMouseEvent(document,press(1n))
+    verifyHit(cached,10001n)
+    retained : Counts <- Ref.read(Counts,counter)
+    verifyCounts(retained,2n,0n,0n)
+    changed : List<&2,String> <- Component.render(document,80n)
+    next : Maybe<&2,Component.TuiMouseDispatchResult()> <- Component.dispatchMouseEvent(document,press(1n))
+    verifyHit(next,10002n)
+    current : Counts <- Ref.read(Counts,counter)
+    verifyCounts(current,2n,1n,0n)
+    +events : String <- Ref.read(String,journal)
+    check(String.eq(events,"10001:0;10001:0;10001:0;10002:0;"),"custom mouse routing or retained-child lifetime differs")
+    snapshot("mouse",events <> Nil{})
+    View.clear(viewHandle)
+    Custom.dispose(owner)
+    cleared : Maybe<&2,Component.TuiMouseDispatchResult()> <- Component.dispatchMouseEvent(document,press(1n))
+    check(Maybe.is_none(&2,Component.TuiMouseDispatchResult(),cleared),"cleared transcript routes to retired callbacks")
+    View.dispose(view)
+    closed : Counts <- Ref.read(Counts,counter)
+    verifyCounts(closed,2n,2n,0n)
+def mouseCustom(custom: Custom.Owner & Component.Component & Custom.Handle,view: View.View,document: Component.Component,viewHandle: View.Handle,counter: Ref.Ref<Counts>,journal: Ref.Ref<String>) -> IO(Unit):
+  match custom:
+    case (owner,component,handle): mouseContents(owner,component,handle,view,document,viewHandle,counter,journal)
+def mouseOwner(pair: View.View & Component.Component & View.Handle,custom: Custom.Owner & Component.Component & Custom.Handle,counter: Ref.Ref<Counts>,journal: Ref.Ref<String>) -> IO(Unit):
+  match pair:
+    case (view,document,handle): mouseCustom(custom,view,document,handle,counter,journal)
+def gestureFrame(document: Component.Component) -> Layout.LayoutFrame:
+  +rect = {Layout.LayoutRect{0n,0n,80n,2n}: Layout.LayoutRect}
+  Layout.LayoutFrame{Layout.LayoutBox{Some{Component.id(document)},rect,rect,Nil{},None{},0n,0n},80n,24n,Nil{}}
+def gestureMouse(result: Gestures.Outcome) -> Gestures.State:
+  match result: case Gestures.Outcome{mouse,_,_,_,_}: mouse
+def gestureTui(result: Gestures.Outcome) -> Tui.TuiBase:
+  match result: case Gestures.Outcome{_,tui,_,_,_}: tui
+def gestureResult(result: Gestures.Outcome) -> IO(Gestures.Outcome):
+  match result:
+    case Gestures.Outcome{mouse,tui,handled,render,None{}}: IO.pure(Gestures.Outcome,Gestures.Outcome{mouse,tui,handled,render,None{}})
+    case _: IO.die(Gestures.Outcome,1,"captured gesture lost its replaced control")
+def gestureStep(state: Gestures.State,tui: Tui.TuiBase,+document: Component.Component,raw: Gestures.Raw) -> IO(Gestures.Outcome):
+  do IO<Gestures.Outcome>:
+    result : Gestures.Outcome <- Gestures.dispatch(state,tui,Some{gestureFrame(document)},document <> Nil{},Component.id(document) <> Nil{},raw,80n,24n)
+    gestureResult(result)
+def gestureInput(result: Tui.ResultOf(Tui.InputResult)) -> IO(Tui.TuiBase):
+  match result:
+    case Done{Tui.InputResult{tui,True{},_}}: IO.pure(Tui.TuiBase,tui)
+    case _: IO.die(Tui.TuiBase,1,"replaced focused control lost keyboard input")
+def gestureFocusCleared(result: Tui.ResultOf(Tui.TuiBase)) -> IO(Unit):
+  match result:
+    case Done{tui}: Tui.disposeFocus(tui)
+    case _: IO.die(Unit,1,"failed to clear replaced focus")
+def gestureContents(owner: Custom.Owner,+component: Component.Component,+handle: Custom.Handle,view: View.View,+document: Component.Component,+viewHandle: View.Handle,+counter: Ref.Ref<Counts>,+journal: Ref.Ref<String>) -> IO(Unit):
+  do IO<Unit>:
+    View.append(viewHandle,component)
+    rows : List<&2,String> <- Component.render(document,80n)
+    +initial : Gestures.Outcome <- gestureStep(Gestures.initial(),Tui.newTui(),document,Gestures.Raw{0n,2n,1n,False{}})
+    changed : List<&2,String> <- Component.render(document,80n)
+    retained : Counts <- Ref.read(Counts,counter)
+    verifyCounts(retained,2n,0n,0n)
+    +dragged : Gestures.Outcome <- gestureStep(gestureMouse(initial),gestureTui(initial),document,Gestures.Raw{32n,2n,3n,False{}})
+    +released : Gestures.Outcome <- gestureStep(gestureMouse(dragged),gestureTui(dragged),document,Gestures.Raw{0n,2n,3n,True{}})
+    heldFocus : Counts <- Ref.read(Counts,counter)
+    verifyCounts(heldFocus,2n,0n,0n)
+    typed : Tui.ResultOf(Tui.InputResult) <- Tui.dispatchInput(gestureTui(released),document <> Nil{},Component.id(document) <> Nil{},"typed")
+    +afterInput : Tui.TuiBase <- gestureInput(typed)
+    +events : String <- Ref.read(String,journal)
+    check(String.eq(events,"10001:0;10001:2;10001:2;typed"),"gesture or focused-input trace differs")
+    snapshot("gesture",events <> Nil{})
+    cleared : Tui.ResultOf(Tui.TuiBase) <- Tui.setFocus(afterInput,document <> Nil{},Component.id(document) <> Nil{},None{})
+    gestureFocusCleared(cleared)
+    disposedOld : Counts <- Ref.read(Counts,counter)
+    verifyCounts(disposedOld,2n,1n,0n)
+    Gestures.dispose(gestureMouse(released))
+    View.clear(viewHandle)
+    Custom.dispose(owner)
+    View.dispose(view)
+    final : Counts <- Ref.read(Counts,counter)
+    verifyCounts(final,2n,2n,0n)
+def gestureReady(owner: Custom.Owner,component: Component.Component,+handle: Custom.Handle,view: View.View,document: Component.Component,viewHandle: View.Handle,counter: Ref.Ref<Counts>,journal: Ref.Ref<String>,reentry: Ref.Ref<Maybe<&2,Custom.Handle>>) -> IO(Unit):
+  do IO<Unit>:
+    Ref.write(Maybe<&2,Custom.Handle>,reentry,Some{handle})
+    gestureContents(owner,component,handle,view,document,viewHandle,counter,journal)
+def gestureCustom(pair: Custom.Owner & Component.Component & Custom.Handle,view: View.View,document: Component.Component,viewHandle: View.Handle,counter: Ref.Ref<Counts>,journal: Ref.Ref<String>,reentry: Ref.Ref<Maybe<&2,Custom.Handle>>) -> IO(Unit):
+  match pair:
+    case (owner,component,handle): gestureReady(owner,component,handle,view,document,viewHandle,counter,journal,reentry)
+def gestureView(pair: View.View & Component.Component & View.Handle,custom: Custom.Owner & Component.Component & Custom.Handle,counter: Ref.Ref<Counts>,journal: Ref.Ref<String>,reentry: Ref.Ref<Maybe<&2,Custom.Handle>>) -> IO(Unit):
+  match pair:
+    case (view,document,handle): gestureCustom(custom,view,document,handle,counter,journal,reentry)
+def gestureCase(+theme: Theme.Theme,+markdown: Markdown.MarkdownTheme) -> IO(Unit):
+  do IO<Unit>:
+    +counter : Ref.Ref<Counts> <- Ref.new(Counts,Counts{0n,0n,0n})
+    +journal : Ref.Ref<String> <- Ref.new(String,"")
+    +reentry : Ref.Ref<Maybe<&2,Custom.Handle>> <- Ref.new(Maybe<&2,Custom.Handle>,None{})
+    +callback : Extensions.MessageRenderer() <- C.create(~Controls,~Extensions.MessageRenderInput,~Extensions.MessageRenderResult(),~controlRenderer,Controls{counter,journal,Some{reentry}})
+    view : View.View <- View.create(Component.ComponentId{20n})
+    custom : Custom.Owner <- Custom.create(Component.ComponentId{21n},message(),Some{callback},theme,markdown,1n)
+    gestureView(View.borrow(view),Custom.borrow(custom),counter,journal,reentry)
+    oldReentry : Maybe<&2,Custom.Handle> <- Ref.dispose(Maybe<&2,Custom.Handle>,reentry)
+    C.dispose(Extensions.MessageRenderInput,Extensions.MessageRenderResult(),callback)
+    oldCount : Counts <- Ref.dispose(Counts,counter)
+    oldJournal : String <- Ref.dispose(String,journal)
+    return Unit{}
+def mouseCase(+theme: Theme.Theme,+markdown: Markdown.MarkdownTheme) -> IO(Unit):
+  do IO<Unit>:
+    +counter : Ref.Ref<Counts> <- Ref.new(Counts,Counts{0n,0n,0n})
+    +journal : Ref.Ref<String> <- Ref.new(String,"")
+    +callback : Extensions.MessageRenderer() <- C.create(~Controls,~Extensions.MessageRenderInput,~Extensions.MessageRenderResult(),~controlRenderer,Controls{counter,journal,None{}})
+    view : View.View <- View.create(Component.ComponentId{20n})
+    custom : Custom.Owner <- Custom.create(Component.ComponentId{21n},message(),Some{callback},theme,markdown,1n)
+    mouseOwner(View.borrow(view),Custom.borrow(custom),counter,journal)
+    C.dispose(Extensions.MessageRenderInput,Extensions.MessageRenderResult(),callback)
+    unusedCounts : Counts <- Ref.dispose(Counts,counter)
+    unusedEvents : String <- Ref.dispose(String,journal)
+    return Unit{}
 def runStyle(pair: Styles.Styles & Markdown.MarkdownTheme, +theme: Theme.Theme) -> IO(Unit):
   match pair:
     case (styles, +markdown):
@@ -251,6 +453,8 @@ def runStyle(pair: Styles.Styles & Markdown.MarkdownTheme, +theme: Theme.Theme) 
         fallbackCase(Custom.borrow(skill))
         paddingCase(theme,markdown)
         transcriptCase(theme,markdown)
+        mouseCase(theme,markdown)
+        gestureCase(theme,markdown)
         Styles.dispose(styles)
         IO.print("custom renderer lifecycle and default fallbacks pass")
 def main() -> IO(Unit):

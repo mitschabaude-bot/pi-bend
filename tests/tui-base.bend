@@ -83,20 +83,29 @@ def signed(value: T.Offset) -> V.Value:
 def id(value: C.ComponentId) -> V.Value:
   match value:
     case C.ComponentId{value}: count(value)
-def target(value: C.TuiMouseDispatchTarget) -> V.Value:
+def targetBounds(value: C.TuiMouseDispatchTarget()) -> V.Value:
   match value:
-    case C.TuiMouseDispatchTarget{component,x,y,width,height}: object(field("id",id(component)) <> field("originX",signed(x)) <> field("originY",signed(y)) <> field("width",count(width)) <> field("height",count(height)) <> Nil{})
-def response(value: Maybe<&2,C.TuiMouseDispatchResult>) -> V.Value:
+    case C.IdTarget{component,x,y,width,height}: object(field("id",id(component)) <> field("originX",signed(x)) <> field("originY",signed(y)) <> field("width",count(width)) <> field("height",count(height)) <> Nil{})
+    case _: V.Null{}
+def target(value: C.TuiMouseDispatchTarget()) -> V.Value: targetBounds(C.targetBounds(value))
+
+def response(value: Maybe<&2,C.TuiMouseDispatchResult()>) -> V.Value:
   match value:
     case None{}: V.Null{}
     case Some{C.TuiMouseDispatchResult{mouseTarget,focusTarget,capture,focus,render}}: object(field("target",target(mouseTarget)) <> field("focusTarget",Maybe.default(&2,V.Value,Maybe.map(&2,C.ComponentId,V.Value,id,focusTarget),V.Null{})) <> field("capture",V.Boolean{capture}) <> field("focus",V.Boolean{focus}) <> field("render",Maybe.default(&2,V.Value,Maybe.map(&2,Bool,V.Value,value => V.Boolean{value},render),V.Null{})) <> Nil{})
 def hit(value: B.MouseHit) -> V.Value:
   match value:
     case B.MouseHit{found,result}: object(field("hit",V.Boolean{found}) <> field("result",response(result)) <> Nil{})
+def boundsFields(component: C.ComponentId,x: T.Offset,y: T.Offset,width: Nat,height: Nat) -> V.Value:
+  object(field("id",id(component)) <> field("col",signed(x)) <> field("row",signed(y)) <> field("width",count(width)) <> field("height",count(height)) <> Nil{})
+def boundsTarget(value: C.TuiMouseDispatchTarget()) -> V.Value:
+  match value:
+    case C.IdTarget{component,x,y,width,height}: boundsFields(component,x,y,width,height)
+    case C.ComponentTarget{component,x,y,width,height,_}: boundsFields(C.id(component),x,y,width,height)
 def bounds(values: List<&2,B.OverlayBounds>,reversed: List<&2,V.Value>) -> V.Value:
   match values:
     case Nil{}: V.ArrayValue{List.reverse(&2,V.Value,reversed)}
-    case B.OverlayBounds{_,_,C.TuiMouseDispatchTarget{component,x,y,width,height}} <> rest: bounds(rest,object(field("id",id(component)) <> field("col",signed(x)) <> field("row",signed(y)) <> field("width",count(width)) <> field("height",count(height)) <> Nil{}) <> reversed)
+    case B.OverlayBounds{_,_,value} <> rest: bounds(rest,boundsTarget(value) <> reversed)
 type Child is Data: Child{spec: V.Value,renders: Ref.Ref<List<&2,V.Value>>,calls: Ref.Ref<List<&2,V.Value>>}
 def log(values: Ref.Ref<List<&2,V.Value>>,value: V.Value) -> IO(Unit):
   Ref.modify(List<&2,V.Value>,Unit,values,previous => (value <> previous,Unit{}))
@@ -107,26 +116,26 @@ def render(child: Child,width: Nat) -> IO(List<&2,String>):
         log(renders,object(field("id",get(spec,"id")) <> field("width",count(width)) <> Nil{}))
         return strings(array(get(spec,"lines")),Nil{})
 def invalidate(unused: Unit,value: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
-def mouseResult(mode: String,event: T.TuiMouseEvent,+spec: V.Value) -> Maybe<&2,C.MouseResponse>:
+def mouseResult(mode: String,event: T.TuiMouseEvent,+spec: V.Value) -> Maybe<&2,C.MouseResponse()>:
   match mode event:
     case "none" _: None{}
     case "unhandled" _: Some{C.LocalResult{T.TuiMouseEventResult{False{},False{},False{},None{}}}}
-    case "nested" T.TuiMouseEvent{_,_,x,y,screenX,screenY,_,_,_,_,_,_,_}: Some{C.DispatchedResult{C.TuiMouseDispatchResult{C.TuiMouseDispatchTarget{C.ComponentId{natural(get(spec,"id")) + 1000n},C.subtract(C.subtract(screenX,x),T.Backward{1n}),C.subtract(C.subtract(screenY,y),T.Backward{1n}),2n,1n},Some{C.ComponentId{natural(get(spec,"id")) + 1000n}},True{},True{},Some{False{}}}}}
-    case "nested-no-focus" T.TuiMouseEvent{_,_,x,y,screenX,screenY,_,_,_,_,_,_,_}: Some{C.DispatchedResult{C.TuiMouseDispatchResult{C.TuiMouseDispatchTarget{C.ComponentId{natural(get(spec,"id")) + 1000n},C.subtract(C.subtract(screenX,x),T.Backward{1n}),C.subtract(C.subtract(screenY,y),T.Backward{1n}),2n,1n},Some{C.ComponentId{natural(get(spec,"id")) + 1000n}},True{},False{},Some{False{}}}}}
+    case "nested" T.TuiMouseEvent{_,_,x,y,screenX,screenY,_,_,_,_,_,_,_}: Some{C.DispatchedResult{C.TuiMouseDispatchResult{C.IdTarget{C.ComponentId{natural(get(spec,"id")) + 1000n},C.subtract(C.subtract(screenX,x),T.Backward{1n}),C.subtract(C.subtract(screenY,y),T.Backward{1n}),2n,1n},Some{C.ComponentId{natural(get(spec,"id")) + 1000n}},True{},True{},Some{False{}}}}}
+    case "nested-no-focus" T.TuiMouseEvent{_,_,x,y,screenX,screenY,_,_,_,_,_,_,_}: Some{C.DispatchedResult{C.TuiMouseDispatchResult{C.IdTarget{C.ComponentId{natural(get(spec,"id")) + 1000n},C.subtract(C.subtract(screenX,x),T.Backward{1n}),C.subtract(C.subtract(screenY,y),T.Backward{1n}),2n,1n},Some{C.ComponentId{natural(get(spec,"id")) + 1000n}},True{},False{},Some{False{}}}}}
     case mode _:
       +mode = {mode: String}
       Some{C.LocalResult{T.TuiMouseEventResult{Bool.not(String.eq(mode,"focus") || String.eq(mode,"capture")),String.eq(mode,"capture"),String.eq(mode,"focus"),Some{False{}}}}}
-def mouseCore(child: Child,+event: T.TuiMouseEvent) -> IO(Maybe<&2,C.MouseResponse>):
+def mouseCore(child: Child,+event: T.TuiMouseEvent) -> IO(Maybe<&2,C.MouseResponse()>):
   match child event:
     case Child{+spec,_,calls} T.TuiMouseEvent{_,_,x,y,screenX,screenY,width,height,_,_,_,_,_}:
-      do IO<Maybe<&2,C.MouseResponse>>:
+      do IO<Maybe<&2,C.MouseResponse()>>:
         log(calls,object(field("id",get(spec,"id")) <> field("x",signed(x)) <> field("y",signed(y)) <> field("screenX",signed(screenX)) <> field("screenY",signed(screenY)) <> field("width",count(width)) <> field("height",count(height)) <> Nil{}))
         return mouseResult(text(get(spec,"mouse")),event,spec)
-def mouse(child: Child,event: T.TuiMouseEvent) -> IO(Maybe<&2,C.MouseResponse>): mouseCore(child,event)
+def mouse(child: Child,event: T.TuiMouseEvent) -> IO(Maybe<&2,C.MouseResponse()>): mouseCore(child,event)
 def child(+spec: V.Value,+renders: Ref.Ref<List<&2,V.Value>>,+calls: Ref.Ref<List<&2,V.Value>>) -> IO(C.Component):
   do IO<C.Component>:
     renderCallback : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Child,~Nat,~List<&2,String>,~render,Child{spec,renders,calls})
-    mouseCallback : Callback.Callback<T.TuiMouseEvent,Maybe<&2,C.MouseResponse>> <- Callback.create(~Child,~T.TuiMouseEvent,~Maybe<&2,C.MouseResponse>,~mouse,Child{spec,renders,calls})
+    mouseCallback : Callback.Callback<T.TuiMouseEvent,Maybe<&2,C.MouseResponse()>> <- Callback.create(~Child,~T.TuiMouseEvent,~Maybe<&2,C.MouseResponse()>,~mouse,Child{spec,renders,calls})
     invalidateCallback : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~invalidate,Unit{})
     return C.Component{C.ComponentId{natural(get(spec,"id"))},renderCallback,None{},Some{mouseCallback},invalidateCallback,None{},False{}}
 def isVisible(value: V.Value) -> Bool:
@@ -166,7 +175,7 @@ def dispose(values: List<&2,B.Overlay>) -> IO(Unit):
     case B.Overlay{_,C.Component{_,render,_,Some{mouse},invalidate,_,_},_} <> rest:
       do IO<Unit>:
         Callback.dispose(Nat,List<&2,String>,render)
-        Callback.dispose(T.TuiMouseEvent,Maybe<&2,C.MouseResponse>,mouse)
+        Callback.dispose(T.TuiMouseEvent,Maybe<&2,C.MouseResponse()>,mouse)
         Callback.dispose(Unit,Unit,invalidate)
         dispose(rest)
     case _ <> rest: dispose(rest)

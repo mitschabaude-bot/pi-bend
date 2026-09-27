@@ -59,9 +59,9 @@ def row(state: P.State,zone: String) -> Nat:
     case P.State{_,_,_,_,_,_,_,_,_,Some{row}} "search": row
     case P.State{_,_,_,_,_,_,_,_,_,Some{row}} _: row + 2n
     case _ _: 0n
-def mouseResponse(value: Maybe<&2,C.MouseResponse>) -> Maybe<&2,T.TuiMouseEventResult>:
+def mouseResponse(value: Maybe<&2,C.MouseResponse()>) -> Maybe<&2,T.TuiMouseEventResult>:
   match value: case Some{C.LocalResult{result}}: Some{result} case _: None{}
-def mousePair(pair: P.State & Maybe<&2,C.MouseResponse>) -> P.State & P.Action & Maybe<&2,T.TuiMouseEventResult>:
+def mousePair(pair: P.State & Maybe<&2,C.MouseResponse()>) -> P.State & P.Action & Maybe<&2,T.TuiMouseEventResult>:
   match pair: case (state,response): (state,P.Continue{},mouseResponse(response))
 def mouse(+state: P.State,width: Nat,parts: List<&2,String>) -> P.State & P.Action & Maybe<&2,T.TuiMouseEventResult>:
   match parts:

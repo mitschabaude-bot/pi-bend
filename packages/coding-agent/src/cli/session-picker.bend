@@ -1073,7 +1073,7 @@ def syncHostLoading(current: Modal,loader: HostLoader) -> IO(Unit):
 type Host is Data:
   Host{modal: Ref.Ref<Modal>,editor: Component.Component,bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,words: Ref.Ref<Words.Source>,chosen: Callback.Callback<String,Unit>,ids: Uuid.Generator,session: Ref.Ref<AgentSession.AgentSession>,loader: HostLoader}
 type HostOwner is Type:
-  HostOwner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
+  HostOwner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>}
 def drawModalCurrent(current: Modal,editor: Component.Component,+bindings: Bindings.KeybindingsManager,theme: Ref.Ref<Theme.Theme>,loads: Loads,+width: Nat) -> IO(List<&2,String>):
   match current:
     case Closed{}: Component.render(editor,width)
@@ -1319,10 +1319,10 @@ def receivedModal(+host: Host,data: String) -> IO(Unit):
         loading : Loads <- Ref.read(Loads,loads)
         receiveReady(host,data,current,loading)
 
-def mouseCurrent(current: Modal,mouse: Maybe<&2,Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>>,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+def mouseCurrent(current: Modal,mouse: Maybe<&2,Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>>,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
   match current mouse:
-    case Closed{} Some{callback}: Callback.call(Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,callback,event)
-    case _ _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
+    case Closed{} Some{callback}: Callback.call(Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>,callback,event)
+    case _ _: IO.pure(Maybe<&2,Component.MouseResponse()>,None{})
 def drawModal(+host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
     case Host{+modal,editor,bindings,theme,_,_,_,_,HostLoader{+loads,_,_,_,_}}:
@@ -1331,12 +1331,12 @@ def drawModal(+host: Host,width: Nat) -> IO(List<&2,String>):
         current : Modal <- Ref.read(Modal,modal)
         loading : Loads <- Ref.read(Loads,loads)
         drawModalCurrent(current,editor,bindings,theme,loading,width)
-def modalMouse(host: Host,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+def modalMouse(host: Host,event: Ui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
   match host:
-    case Host{+modal,Component.Component{_,_,_,mouse,_,_,_},_,_,_,_,_,_,_}:
-      do IO<Maybe<&2,Component.MouseResponse>>:
+    case Host{+modal,editor,_,_,_,_,_,_,_}:
+      do IO<Maybe<&2,Component.MouseResponse()>>:
         current : Modal <- Ref.read(Modal,modal)
-        mouseCurrent(current,mouse,event)
+        mouseCurrent(current,Component.mouseHandler(editor),event)
 def modalInvalidate(host: Host,_: Unit) -> IO(Unit):
   match host: case Host{_,editor,_,_,_,_,_,_,_}: Component.invalidate(editor)
 def modalFocus(host: Host,value: Bool) -> IO(Unit):
@@ -1352,7 +1352,7 @@ def createHost(ids: Uuid.Generator,+editor: Component.Component,bindings: Bindin
     +host : Host <- IO.pure(Host,Host{modal,editor,bindings,theme,wordRef,chosen,ids,session,HostLoader{loads,worker,redraw,touched,pendingInput}})
     +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~(host => width => drawModal(host,width)),host)
     +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~(host => data => receivedModal(host,data)),host)
-    +mouse : Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Host,~Ui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~modalMouse,host)
+    +mouse : Callback.Callback<Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>> <- Callback.create(~Host,~Ui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse()>,~modalMouse,host)
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Host,~Unit,~Unit,~modalInvalidate,host)
     +focus : Callback.Callback<Bool,Unit> <- Callback.create(~Host,~Bool,~Unit,~modalFocus,host)
     +component : Component.Component <- IO.pure(Component.Component,Component.Component{Component.id(editor),render,Some{input},Some{mouse},invalidate,Some{focus},False{}})
@@ -1406,6 +1406,6 @@ def disposeHost(owner: HostOwner) -> IO(Unit):
         oldWords : Words.Source <- Ref.dispose(Words.Source,words)
         Callback.dispose(Nat,List<&2,String>,render)
         Callback.dispose(String,Unit,input)
-        Callback.dispose(Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,mouse)
+        Callback.dispose(Ui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>,mouse)
         Callback.dispose(Unit,Unit,invalidate)
         Callback.dispose(Bool,Unit,focus)

@@ -64,9 +64,9 @@ def keyboard(current: P.State,state: Ref.Ref<P.State>,reply: Ref.Ref<Maybe<&2,P.
   match current:
     case P.Choosing{menu,title,all,visible,index,query}: P.menuInput(state,reply,bindings,Keys.defaults(),menu,title,all,visible,index,query,data,words)
     case _: IO.die(Unit,1,"selector unexpectedly closed")
-def mouseResponse(value: Maybe<&2,C.MouseResponse>) -> Maybe<&2,T.TuiMouseEventResult>:
+def mouseResponse(value: Maybe<&2,C.MouseResponse()>) -> Maybe<&2,T.TuiMouseEventResult>:
   match value: case Some{C.LocalResult{result}}: Some{result} case _: None{}
-def mouseResult(pair: P.State & Maybe<&2,C.MouseResponse>,state: Ref.Ref<P.State>) -> IO(Maybe<&2,T.TuiMouseEventResult>):
+def mouseResult(pair: P.State & Maybe<&2,C.MouseResponse()>,state: Ref.Ref<P.State>) -> IO(Maybe<&2,T.TuiMouseEventResult>):
   match pair:
     case (current,response):
       do IO<Maybe<&2,T.TuiMouseEventResult>>:

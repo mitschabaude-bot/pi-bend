@@ -369,7 +369,7 @@ type Modal is Data: Closed{} Open{state: State}
 type Host is Data:
   Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Ref.Ref<Segmenter.Source>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,notify: Callback.Callback<Action,Unit>}
 type Owner is Type:
-  Owner{host: Host,component: Component.Component,renderCallback: Callback.Callback<Nat,List<&2,String>>,inputCallback: Callback.Callback<String,Unit>,mouseCallback: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>,invalidateCallback: Callback.Callback<Unit,Unit>,focusCallback: Callback.Callback<Bool,Unit>}
+  Owner{host: Host,component: Component.Component,renderCallback: Callback.Callback<Nat,List<&2,String>>,inputCallback: Callback.Callback<String,Unit>,mouseCallback: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidateCallback: Callback.Callback<Unit,Unit>,focusCallback: Callback.Callback<Bool,Unit>}
 def displayedPair(modal: Ref.Ref<Modal>,pair: State & List<&2,String>) -> IO(List<&2,String>):
   match pair:
     case (next,lines):
@@ -425,39 +425,39 @@ def receive(host: Host,data: String) -> IO(Unit):
       do IO<Unit>:
         current : Modal <- Ref.read(Modal,modal)
         receiveCurrent(modal,editor,words,bindings,keyboard,notify,data,current)
-def editorMouse(editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+def editorMouse(editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
   match editor:
-    case Component.Component{_,_,_,Some{callback},_,_,_}: Callback.call(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,callback,event)
-    case _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
-def mouseEdited(state: State,pair: Input.Input & Maybe<&2,Tui.TuiMouseEventResult>) -> State & Maybe<&2,Component.MouseResponse>:
+    case Component.Component{_,_,_,Some{callback},_,_,_}: Callback.call(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>,callback,event)
+    case _: IO.pure(Maybe<&2,Component.MouseResponse()>,None{})
+def mouseEdited(state: State,pair: Input.Input & Maybe<&2,Tui.TuiMouseEventResult>) -> State & Maybe<&2,Component.MouseResponse()>:
   match state pair:
     case State{models,scope,visible,index,_,dirty,status} Tuple{search,result}:
-      (State{models,scope,visible,index,search,dirty,status},Maybe.map(&2,Tui.TuiMouseEventResult,Component.MouseResponse,value => Component.LocalResult{value},result))
-def mouseSearch(+state: State,row: Nat,event: Tui.TuiMouseEvent) -> State & Maybe<&2,Component.MouseResponse>:
+      (State{models,scope,visible,index,search,dirty,status},Maybe.map(&2,Tui.TuiMouseEventResult,Component.MouseResponse(),value => Component.LocalResult{value},result))
+def mouseSearch(+state: State,row: Nat,event: Tui.TuiMouseEvent) -> State & Maybe<&2,Component.MouseResponse()>:
   match state event:
     case State{_,_,_,_,search,_,_} Tui.TuiMouseEvent{kind,button,x,Tui.Forward{+y},sx,sy,width,height,shift,alt,ctrl,wheel,count}:
-      Bool.pick(State & Maybe<&2,Component.MouseResponse>,Nat.is_eq(y,row) && Nat.is_lt(y,height),mouseEdited(state,Input.handleMouse(search,Tui.TuiMouseEvent{kind,button,x,Tui.Forward{0n},sx,sy,width,1n,shift,alt,ctrl,wheel,count})),(state,None{}))
+      Bool.pick(State & Maybe<&2,Component.MouseResponse()>,Nat.is_eq(y,row) && Nat.is_lt(y,height),mouseEdited(state,Input.handleMouse(search,Tui.TuiMouseEvent{kind,button,x,Tui.Forward{0n},sx,sy,width,1n,shift,alt,ctrl,wheel,count})),(state,None{}))
     case state _: (state,None{})
-def mouseStored(modal: Ref.Ref<Modal>,pair: State & Maybe<&2,Component.MouseResponse>) -> IO(Maybe<&2,Component.MouseResponse>):
+def mouseStored(modal: Ref.Ref<Modal>,pair: State & Maybe<&2,Component.MouseResponse()>) -> IO(Maybe<&2,Component.MouseResponse()>):
   match pair:
     case (state,result):
-      do IO<Maybe<&2,Component.MouseResponse>>:
+      do IO<Maybe<&2,Component.MouseResponse()>>:
         Ref.write(Modal,modal,Open{state})
         return result
 def eventWidth(event: Tui.TuiMouseEvent) -> Nat:
   match event: case Tui.TuiMouseEvent{_,_,_,_,_,_,width,_,_,_,_,_,_}: width
-def mouseCurrent(editor: Component.Component,+event: Tui.TuiMouseEvent,current: Modal,modal: Ref.Ref<Modal>,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager) -> IO(Maybe<&2,Component.MouseResponse>):
+def mouseCurrent(editor: Component.Component,+event: Tui.TuiMouseEvent,current: Modal,modal: Ref.Ref<Modal>,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager) -> IO(Maybe<&2,Component.MouseResponse()>):
   match current:
     case Closed{}: editorMouse(editor,event)
     case Open{state}:
-      do IO<Maybe<&2,Component.MouseResponse>>:
+      do IO<Maybe<&2,Component.MouseResponse()>>:
         colors : Theme.Theme <- Ref.read(Theme.Theme,theme)
         header : List<&2,String> <- heading(colors,bindings,eventWidth(event))
         mouseStored(modal,mouseSearch(state,List.length(&2,String,header),event))
-def mouse(host: Host,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+def mouse(host: Host,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
   match host:
     case Host{+modal,editor,theme,_,bindings,_,_}:
-      do IO<Maybe<&2,Component.MouseResponse>>:
+      do IO<Maybe<&2,Component.MouseResponse()>>:
         current : Modal <- Ref.read(Modal,modal)
         mouseCurrent(editor,event,current,modal,theme,bindings)
 def invalidate(host: Host,_: Unit) -> IO(Unit):
@@ -480,7 +480,7 @@ def createHost(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: S
     +host : Host <- IO.pure(Host,Host{modal,editor,theme,source,bindings,keyboard,notify})
     +renderCallback : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~draw,host)
     +inputCallback : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receive,host)
-    +mouseCallback : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Host,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~mouse,host)
+    +mouseCallback : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>> <- Callback.create(~Host,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse()>,~mouse,host)
     +invalidateCallback : Callback.Callback<Unit,Unit> <- Callback.create(~Host,~Unit,~Unit,~invalidate,host)
     +focusCallback : Callback.Callback<Bool,Unit> <- Callback.create(~Host,~Bool,~Unit,~focus,host)
     +component : Component.Component <- IO.pure(Component.Component,Component.Component{Component.id(editor),renderCallback,Some{inputCallback},Some{mouseCallback},invalidateCallback,Some{focusCallback},False{}})
@@ -510,6 +510,6 @@ def disposeHost(owner: Owner) -> IO(Unit):
         source : Segmenter.Source <- Ref.dispose(Segmenter.Source,words)
         Callback.dispose(Nat,List<&2,String>,renderCallback)
         Callback.dispose(String,Unit,inputCallback)
-        Callback.dispose(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,mouseCallback)
+        Callback.dispose(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>,mouseCallback)
         Callback.dispose(Unit,Unit,invalidateCallback)
         Callback.dispose(Bool,Unit,focusCallback)

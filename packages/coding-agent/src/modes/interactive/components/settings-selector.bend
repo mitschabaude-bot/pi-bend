@@ -195,7 +195,7 @@ type CompletionContext is Data:
 type Host is Data:
   Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,words: Ref.Ref<Segmenter.Source>,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,style: ListUI.SettingsListTheme,changed: Callback.Callback<ListUI.Change,Unit>,cancelled: Callback.Callback<Unit,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>,controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,themeSubmenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>,pending: Ref.Ref<Maybe<&2,ListUI.Completion>>,modelSubmenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>}
 type Owner is Type:
-  Owner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>,label: Callback.Callback<ListUI.ThemeText,String>,value: Callback.Callback<ListUI.ThemeText,String>,description: Callback.Callback<String,String>,hint: Callback.Callback<String,String>,changed: Callback.Callback<ListUI.Change,Unit>,cancelled: Callback.Callback<Unit,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>,themeOwner: ThemePicker.Owner,modelOwner: ModelThinkingPicker.Owner}
+  Owner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>,label: Callback.Callback<ListUI.ThemeText,String>,value: Callback.Callback<ListUI.ThemeText,String>,description: Callback.Callback<String,String>,hint: Callback.Callback<String,String>,changed: Callback.Callback<ListUI.Change,Unit>,cancelled: Callback.Callback<Unit,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>,themeOwner: ThemePicker.Owner,modelOwner: ModelThinkingPicker.Owner}
 
 def requested(callback: Maybe<&2,Callback.Callback<Unit,Unit>>) -> IO(Unit):
   match callback:
@@ -397,33 +397,33 @@ def receive(host: Host,data: String) -> IO(Unit):
       do IO<Unit>:
         current : Modal <- Ref.read(Modal,modal)
         receiveCurrent(current,Host{modal,editor,theme,session,words,bindings,keyboard,redraw,style,changed,cancelled,completed,controller,themeSubmenu,pending,modelSubmenu},editor,data)
-def editorMouse(editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+def editorMouse(editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
   match editor:
-    case Component.Component{_,_,_,Some{callback},_,_,_}: Callback.call(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,callback,event)
-    case _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
-def mousePair(modal: Ref.Ref<Modal>,pair: ListUI.SettingsList & Maybe<&2,Component.MouseResponse>) -> IO(Maybe<&2,Component.MouseResponse>):
+    case Component.Component{_,_,_,Some{callback},_,_,_}: Callback.call(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>,callback,event)
+    case _: IO.pure(Maybe<&2,Component.MouseResponse()>,None{})
+def mousePair(modal: Ref.Ref<Modal>,pair: ListUI.SettingsList & Maybe<&2,Component.MouseResponse()>) -> IO(Maybe<&2,Component.MouseResponse()>):
   match pair:
     case (next,result):
-      do IO<Maybe<&2,Component.MouseResponse>>:
+      do IO<Maybe<&2,Component.MouseResponse()>>:
         Ref.write(Modal,modal,Open{next})
         return result
 def listMouseEvent(event: Tui.TuiMouseEvent) -> Tui.TuiMouseEvent:
   match event:
     case Tui.TuiMouseEvent{kind,button,x,y,screenX,screenY,width,height,shift,alt,ctrl,wheel,clicks}:
       Tui.TuiMouseEvent{kind,button,x,Component.subtract(y,Tui.Forward{1n}),screenX,screenY,width,height,shift,alt,ctrl,wheel,clicks}
-def mouseCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+def mouseCurrent(current: Modal,modal: Ref.Ref<Modal>,editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
   match current:
     case Closed{}: editorMouse(editor,event)
     case Open{list}:
-      do IO<Maybe<&2,Component.MouseResponse>>:
-        pair : ListUI.SettingsList & Maybe<&2,Component.MouseResponse> <- ListUI.handleMouse(list,listMouseEvent(event))
+      do IO<Maybe<&2,Component.MouseResponse()>>:
+        pair : ListUI.SettingsList & Maybe<&2,Component.MouseResponse()> <- ListUI.handleMouse(list,listMouseEvent(event))
         mousePair(modal,pair)
-def mouseEvent(host: Host,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+def mouseEvent(host: Host,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
   match host:
     case Host{+modal,editor,_,_,_,_,_,_,_,_,_,_,_,_,_,_}:
-      do IO<Maybe<&2,Component.MouseResponse>>:
+      do IO<Maybe<&2,Component.MouseResponse()>>:
         current : Modal <- Ref.read(Modal,modal)
-        result : Maybe<&2,Component.MouseResponse> <- mouseCurrent(current,modal,editor,event)
+        result : Maybe<&2,Component.MouseResponse()> <- mouseCurrent(current,modal,editor,event)
         return result
 def invalidated(host: Host,_: Unit) -> IO(Unit):
   match host: case Host{_,editor,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: Component.invalidate(editor)
@@ -452,7 +452,7 @@ def createHost(+editor: Component.Component,+theme: Ref.Ref<Theme.Theme>,+sessio
     +host : Host <- IO.pure(Host,Host{modal,editor,theme,session,source,bindings,keyboard,redraw,style,changedCallback,cancelledCallback,completed,themeController,themeSubmenu,pending,modelSubmenu})
     +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~draw,host)
     +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receive,host)
-    +mouseCallback : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Host,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~mouseEvent,host)
+    +mouseCallback : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>> <- Callback.create(~Host,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse()>,~mouseEvent,host)
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Host,~Unit,~Unit,~invalidated,host)
     +focus : Callback.Callback<Bool,Unit> <- Callback.create(~Host,~Bool,~Unit,~focused,host)
     +component : Component.Component <- IO.pure(Component.Component,Component.Component{Component.id(editor),render,Some{input},Some{mouseCallback},invalidate,Some{focus},False{}})
@@ -484,7 +484,7 @@ def disposeHost(owner: Owner) -> IO(Unit):
         ModelThinkingPicker.disposeHost(modelOwner)
         Callback.dispose(Nat,List<&2,String>,render)
         Callback.dispose(String,Unit,input)
-        Callback.dispose(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,mouse)
+        Callback.dispose(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>,mouse)
         Callback.dispose(Unit,Unit,invalidate)
         Callback.dispose(Bool,Unit,focus)
         Callback.dispose(ListUI.ThemeText,String,label)

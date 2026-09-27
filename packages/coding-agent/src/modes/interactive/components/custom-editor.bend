@@ -78,6 +78,8 @@ def receive(host: Host,data: String) -> IO(Unit): handleInput(host,data)
 def wrapped(inner: Component.Component,input: Callback.Callback<String,Unit>) -> Component.Component:
   match inner:
     case Component.Component{id,render,_,mouse,invalidate,focus,release}: Component.Component{id,render,Some{input},mouse,invalidate,focus,release}
+    case Component.Group{component,children}: Component.Group{wrapped(component,input),children}
+    case Component.Managed{component,lifetime}: Component.Managed{wrapped(component,input),lifetime}
 def create(host: Host) -> IO(Owner):
   match host:
     case Host{editor,+inner,bindings,keyboard,actions,onAction}:

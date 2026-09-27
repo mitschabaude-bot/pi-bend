@@ -317,7 +317,7 @@ def mouseResult(value: Maybe<&2,Tui.TuiMouseEventResult>) -> V.Value:
     case None{}: V.Null{}
     case Some{Tui.TuiMouseEventResult{handled,capture,focus,render}}: obj(R.Property{"handled",V.Boolean{handled}} <> R.Property{"capture",V.Boolean{capture}} <> R.Property{"focus",V.Boolean{focus}} <> renderFlag(render))
 # A dispatched result was handled by its target.
-def mouseResponse(value: Maybe<&2,Component.MouseResponse>) -> V.Value:
+def mouseResponse(value: Maybe<&2,Component.MouseResponse()>) -> V.Value:
   match value:
     case None{}: V.Null{}
     case Some{Component.LocalResult{result}}: mouseResult(Some{result})
@@ -420,7 +420,7 @@ def selectOp(+pending: Ref.Ref<List<&2,U32>>,+index: Nat,+list: Select.SelectLis
 def settingsRendered(words: Segmenter.Source,pair: Settings.SettingsList & List<&2,String>) -> IO(Reply):
   match pair:
     case (list,lines): done(SettingsEntry{list,words},V.ArrayValue{strings(lines)})
-def settingsMoused(words: Segmenter.Source,pair: Settings.SettingsList & Maybe<&2,Component.MouseResponse>) -> IO(Reply):
+def settingsMoused(words: Segmenter.Source,pair: Settings.SettingsList & Maybe<&2,Component.MouseResponse()>) -> IO(Reply):
   match pair:
     case (list,result): done(SettingsEntry{list,words},mouseResponse(result))
 def settingsEdited(words: Segmenter.Source,result: Word.ResultOf(Settings.SettingsList)) -> IO(Reply):
@@ -436,7 +436,7 @@ def settingsOp(+list: Settings.SettingsList,words: Segmenter.Source,+manager: KB
         settingsRendered(words,pair)
     case "handleMouse":
       do IO<Reply>:
-        pair : Settings.SettingsList & Maybe<&2,Component.MouseResponse> <- Settings.handleMouse(list,mouseEvent(get(request,"event")))
+        pair : Settings.SettingsList & Maybe<&2,Component.MouseResponse()> <- Settings.handleMouse(list,mouseEvent(get(request,"event")))
         settingsMoused(words,pair)
     case "input":
       do IO<Reply>:

@@ -2721,6 +2721,10 @@ def themeStopping(stopping: ThemeStopping,_: Unit) -> IO(Unit):
         closeTheme(current)
         Ref.write(Maybe<&1,ThemeOwned>,owned,saved)
 
+def disposeProcess(result: Result<&2,&2,Terminal.Error,Process.Active>) -> IO(Unit):
+  match result:
+    case Done{active}: Process.disposeFocus(active)
+    case Fail{_}: IO.pure(Unit,Unit{})
 def processResult(result: Result<&2,&2,Terminal.Error,Process.Active>) -> Result<&2,&2,Error,Unit>:
   match result:
     case Done{_}: Done{Unit{}}
@@ -2788,7 +2792,8 @@ def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),
         +ids : List<&2,Component.ComponentId> <- IO.pure(List<&2,Component.ComponentId>,Component.ComponentId{1n} <> Component.ComponentId{2n} <> Component.ComponentId{3n} <> Nil{})
         +components : List<&2,Component.Component> <- IO.pure(List<&2,Component.Component>,document <> editorComponent <> footerComponent(foot) <> Nil{})
         configured : Tui.TuiBase <- configuredTui(base,contextSession(context),screen)
-        outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runSuspendable(Process.active(Process.Session{configured,screen},components,ids),stopped,terminalControl(contextInteraction(context)),False{},ready,resumed,stopping)
+        +outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runSuspendable(Process.active(Process.Session{configured,screen},components,ids),stopped,terminalControl(contextInteraction(context)),False{},ready,resumed,stopping)
+        disposeProcess(outcome)
         Callback.dispose(Process.QueryReady,Unit,ready)
         Callback.dispose(Process.QueryReady,Unit,resumed)
         Callback.dispose(Unit,Unit,stopping)

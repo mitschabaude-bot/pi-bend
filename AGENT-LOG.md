@@ -3103,3 +3103,53 @@ Codex: moved renderer bindings into the existing serialized RenderRegistry, remo
 Codex: the native fixture handle is exec 96093; ignore the placeholder in the previous entry.
 
 Codex: the smaller serialized RenderRegistry version passes eight reference frames and all registry/live/replay/cleanup assertions on Bun/native one/four. Final CLI build is live (exec 55130); rerun the five scenarios and alternating large-session/flood comparisons before landing. Existing transcript fixture/proofs and scoped review freshness remain to check.
+
+Codex: 61eb0779 pushed and installed: native custom-message rendering/registration, eight pinned frames and lifecycle checks on Bun/native one/four, existing transcript fixture, proofs and freshness pass. Required five scenarios preserve baseline output; paired timing repeats show no consistent penalty, while source startup/flood/history gaps remain. Releasing feature paths; next is shared nested-component mouse/focus discovery, still marked partial.
+
+Codex: reserving tui/src/component.bend and tui-base.bend for explicit nested component groups and direct-root-first discovery. Existing leaf constructors stay unchanged; transcript/custom-message mouse wiring follows once focus and mounted-tree contracts are validated.
+
+Codex: also touching fullscreen-mouse.bend and adding component-groups.bend; registry lookup now resolves live descendants for focus, keyboard input and captured mouse delivery. New fixture passes Bun; native build exec 28070 is live, before any CLI build or performance run.
+
+Codex: live descendant discovery/focus/input fixture and outer-root-only captured mouse differential pass native one/four; existing frame/input oracle passes Bun/native one/four. Changes remain uncommitted until transcript/custom-message hierarchy and child lifetimes are wired, followed by full CLI/performance gates; no build is running.
+
+Codex: reserving viewport.bend, custom-message.bend and their fixtures for live hierarchy/mouse layout wiring. Custom renderer replacements must retain the displayed child until the next render, so cached hit testing cannot call disposed callbacks.
+
+Codex: viewport/custom-message hierarchy and cached mouse layout now pass nine pinned pi frames/traces and lifetime assertions on Bun; native fixture build is live in session 31686. Still uncommitted: capture must retain its original child across redraw (ID-only lookup currently loses it), then existing transcript/owner tests and full CLI/performance gates; installed binary unchanged.
+
+Codex: native nine-frame custom-message/lifetime fixture passed one/four. Adding direct component targets and counted owner retention for captures; concrete public aliases require callback type annotations in dependent Bend modules to use `()`, with ID-only layout targets renamed `IdTarget`. Core/fullscreen checker passes; shared-lifetime fixture checker is live in session 52037, mouse adoption/release wiring still pending.
+
+Codex: direct component targets and counted owner retention compile; shared-lifetime fixture passes Bun/native one/four, including primary retirement before two captures finish and exactly-once final callback cleanup. No build live. Next: adopt/release targets in mouse loop (including stop/reset), preserve focused child lifetime across replacement, rerun all dependent fixtures and full CLI/performance gates; changes uncommitted.
+
+Codex: reserving tui-alt-screen.bend, tui-process.bend and interactive/run.bend for retained mouse/focus cleanup. Mouse loop and focused component retention now check; reset preserves capture as upstream does, while terminal stop clears gestures and final interactive shutdown releases focused ownership. Integration fixtures and performance gates remain pending.
+
+Codex: ten custom-message frames/traces match pinned pi on Bun/native one/four, including capture and focus surviving redraw; existing fullscreen mouse differential passes. Removed parent locks around child mouse dispatch and changed the gesture fixture to rebuild its parent from the handler; JS checker session 1662 is live, then native rebuild and remaining CLI/performance gates.
+
+Codex: reentrant parent rebuild from a mouse handler now matches all ten pinned custom-message frames/traces on Bun/native one/four, with exactly-once retained-child cleanup; fullscreen gesture differential also passes. Full CLI candidate build session 64957 is live; installed binary unchanged. Remaining: refreshed core/owner fixtures, proof/freshness checks, and all five one/four-thread performance scenarios before commit/install.
+
+Codex: full CLI check exposed leaf-only component matches in session-picker and custom-editor; updated mouse field access and editor wrapping to preserve Group/Managed metadata. Also owns custom-editor.bend for this compatibility fix. Retry CLI build session 90319 is live; prior 64957 is terminal, installed binary unchanged.
+
+Codex: full CLI candidate build passed; performance comparison session 66372 is live. Initial native-one typing/code-answer/large-session output matches unchanged 61eb binary, large-history keys remain 18–20 ms; existing startup/history display gaps remain. Core/owner fixture rebuilds and proof/review freshness checks still precede commit/install.
+
+Codex: all five native-one/four scenarios preserve baseline captures/requests; existing startup/history/flood gaps persist. Six alternating large-history pairs show native-four median/p90 26.1/27.2 ms baseline versus 27.0/28.0 ms candidate, with fewer fast samples in candidate; treat as unresolved overhead before landing. No build/perf process live; next inspect newly retained viewport layouts/render work, then core fixtures/proofs/review freshness; installed binary remains 61eb.
+
+Codex: viewport now counts hit-test heights while appending rows in one traversal, and exit decoration uses an explicit branch instead of duplicating the full row stream. Serial validation/build pipeline session 80398 is live (native custom-message, Bun/oracle, then pi-cli-nested-fast). Preserve pi-cli-nested-components as the pre-optimization candidate for causal timing comparison; no other build/perf work live.
+
+Codex: fused viewport and explicit exit branch pass ten pinned custom-message frames/traces and retained ownership on Bun/native one/four; optimized full CLI build passed. Five-scenario baseline comparison is now live; integration fixture/proof/coverage refresh still pending.
+
+Codex: optimized viewport preserves all five baseline captures/requests on native one/four, but no demonstrated typing improvement yet. Key delivery now reads the retained focused receiver directly, matching pi, with registry fallback for ID-only states. Serial custom native/Bun/oracle and pi-cli-nested-focus pipeline session 13277 is live; no performance process live.
+
+Codex: also owns scripts/check-proofs.py: removed its unconsumed proof-check.json write (no reader exists), preserving checks and console result, per the earlier instruction to stop storing unused diagnostic output. Full focus CLI pipeline 13277 remains live; proof validation runs after builds/performance.
+
+Codex: current groups/shared-lifetime fixture, 255 container traces and 130 TuiBase composition/mouse cases pass Bun/native one/four. Fixed remaining ID-only target serializers in tui-base/tui-owner fixtures; remaining owner/transcript/proof pipeline now live (session recorded by harness), prior 5434/12902 terminal. All five latest CLI captures/requests match 61eb, existing startup/history/flood gaps persist; native-four small typing overhead still needs resolution before landing.
+
+Codex: remaining owner/transcript/proof pipeline is session 98451 (live); preceding 12902 stopped at the owner fixture serializer and that ID projection is now fixed. Native full CLI candidate is pi-cli-nested-focus; installed binary unchanged.
+
+Codex correction: 98451 was terminal when polled, not live: owner frame/input checks passed Bun/native one/four, then transcript checking found its old two-field Document pattern. Fixed that fixture to preserve layouts; transcript/proof retry follows.
+
+Codex: transcript/proof retry is live in session 54628; core groups, 255 container traces, 130 composition/mouse cases and owner frame/input sequences all pass Bun/native one/four. Candidate pi-cli-nested-focus preserves required scenario captures/requests; native-four timing overhead remains unresolved, then review hashes/inventory and commit/install. Installed main remains 61eb; preserve foreign zz-mdr-bench.bend.
+
+Codex: prior transcript/proofs passed; resumed compact viewport geometry cache validation after restart (old session handle is gone). Owns existing component/viewport changes and adds pending-section cached-hit regression across flush; installed binary remains 61eb, no CLI build started.
+
+Codex: compact viewport cache passes ten pinned custom-message frames/traces and lifecycle checks on Bun/native one/four, including cached pending hit after flush and empty redraw. Full CLI candidate build session 90909 is confirmed live; custom-message review revised, remaining review freshness/performance gates still pending. Installed 61eb unchanged.
+
+Codex: compact full CLI passed all five one/four-thread baseline captures/requests; source large-history/startup and flood bounds remain open. Eight alternating 26-key native-four pairs: 208 keys each, baseline/candidate median 26.48/26.37 ms, p90 27.78/28.06 ms; bimodal per-run noise persists. Core 255/130/owner/custom/group checks, current transcript Bun/native one/four, proofs and coverage freshness pass; landing nested receiver/lifetime milestone now, foreign zz-mdr preserved.

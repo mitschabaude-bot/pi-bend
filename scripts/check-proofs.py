@@ -4,7 +4,6 @@ Python only orchestrates the checker. No Python implementation or finite value
 corpus supplies evidence for the universally quantified Bend laws.
 """
 import hashlib
-import json
 import os
 import re
 from pathlib import Path
@@ -103,7 +102,4 @@ source_hashes = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() fo
 results = {'proof': check(ROOT, 'PROOF.bend')}
 accepted(results['proof'])
 assert source_hashes == {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in source_hashes}, 'proof sources changed during validation'
-results['sha256'] = source_hashes
-(ROOT / 'build').mkdir(exist_ok=True)
-(ROOT / 'build/proof-check.json').write_text(json.dumps(results, indent=2) + '\n')
 print("PASS generic laws")

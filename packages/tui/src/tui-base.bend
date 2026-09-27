@@ -12,7 +12,7 @@ import ../../runtime/src/stable-sort.bend as Sort
 # Renderer-owned bindings borrow the component callbacks. Focus policy keeps
 # only identities; displayed bounds belong to the frame that produced them.
 type Overlay is Data: Overlay{handle: O.OverlayHandle,component: C.Component,geometry: T.OverlayGeometry}
-type OverlayBounds is Data: OverlayBounds{handle: O.OverlayHandle,component: C.Component,target: C.TuiMouseDispatchTarget}
+type OverlayBounds is Data: OverlayBounds{handle: O.OverlayHandle,component: C.Component,target: C.TuiMouseDispatchTarget()}
 type Frame is Data: Frame{lines: List<&2,String>,overlays: List<&2,OverlayBounds>}
 # Raw keys and displayed output are published together after a successful draw.
 type DisplayedFrame is Data: DisplayedFrame{source: List<&2,String>,frame: Frame}
@@ -51,7 +51,7 @@ def positioned(handle: O.OverlayHandle,+component: C.Component,+lines: List<&2,S
   match layout:
     case Fail{error}: Fail{InvalidLayout{error}}
     case Done{T.OverlayLayout{+width,+row,+col,_}}:
-      Done{PaintedOverlay{OverlayBounds{handle,component,C.TuiMouseDispatchTarget{C.id(component),T.Forward{col},T.Forward{row},width,List.length(&2,String,lines)}},lines,row,col,width}}
+      Done{PaintedOverlay{OverlayBounds{handle,component,C.IdTarget{C.id(component),T.Forward{col},T.Forward{row},width,List.length(&2,String,lines)}},lines,row,col,width}}
 def layoutLines(handle: O.OverlayHandle,component: C.Component,geometry: T.OverlayGeometry,termWidth: Nat,termHeight: Nat,+lines: List<&2,String>) -> ResultOf(PaintedOverlay):
   positioned(handle,component,lines,T.resolveOverlayLayout(geometry,List.length(&2,String,lines),termWidth,termHeight))
 def measured(handle: O.OverlayHandle,+component: C.Component,+geometry: T.OverlayGeometry,+termWidth: Nat,+termHeight: Nat,layout: Result<&2,&2,T.LayoutError,T.OverlayLayout>) -> IO(ResultOf(PaintedOverlay)):
@@ -116,16 +116,19 @@ def compositeOverlays(+state: O.State,bindings: List<&2,Overlay>,lines: List<&2,
 
 # Hit testing uses the last displayed bounds and borrowed component, including
 # when the live overlay list has changed but no replacement frame was drawn.
-type MouseHit is Data: MouseHit{hit: Bool,result: Maybe<&2,C.TuiMouseDispatchResult>}
+type MouseHit is Data: MouseHit{hit: Bool,result: Maybe<&2,C.TuiMouseDispatchResult()>}
 def inside(position: T.Offset,origin: T.Offset,extent: Nat) -> Bool:
   match position origin:
     case T.Forward{+position} T.Forward{+origin}: Nat.is_ge(position,origin) && Nat.is_lt(position - origin,extent)
     case _ _: False{}
-def contains(bounds: C.TuiMouseDispatchTarget,event: T.TuiMouseEvent) -> Bool:
+def containsBounds(bounds: C.TuiMouseDispatchTarget(),event: T.TuiMouseEvent) -> Bool:
   match bounds event:
-    case C.TuiMouseDispatchTarget{_,x,y,width,height} T.TuiMouseEvent{_,_,_,_,screenX,screenY,_,_,_,_,_,_,_}:
+    case C.IdTarget{_,x,y,width,height} T.TuiMouseEvent{_,_,_,_,screenX,screenY,_,_,_,_,_,_,_}:
       inside(screenX,x,width) && inside(screenY,y,height)
-def mouseOwner(owner: C.ComponentId,result: Maybe<&2,C.TuiMouseDispatchResult>) -> MouseHit:
+    case _ _: False{}
+def contains(bounds: C.TuiMouseDispatchTarget(),event: T.TuiMouseEvent) -> Bool:
+  containsBounds(C.targetBounds(bounds),event)
+def mouseOwner(owner: C.ComponentId,result: Maybe<&2,C.TuiMouseDispatchResult()>) -> MouseHit:
   match result:
     case None{}: MouseHit{True{},None{}}
     case Some{C.TuiMouseDispatchResult{target,focusTarget,capture,+focus,wantsRender}}:
@@ -136,7 +139,7 @@ def dispatchTopmost(reversed: List<&2,OverlayBounds>,+event: T.TuiMouseEvent) ->
     case OverlayBounds{_,+component,+target} <> rest:
       Bool.pick(Unit -> IO(MouseHit),contains(target,event),
         _ => do IO<MouseHit>:
-          result : Maybe<&2,C.TuiMouseDispatchResult> <- C.dispatchMouseEvent(component,C.retargetMouseEvent(event,target))
+          result : Maybe<&2,C.TuiMouseDispatchResult()> <- C.dispatchMouseEvent(component,C.retargetMouseEvent(event,target))
           return mouseOwner(C.id(component),result),
         _ => dispatchTopmost(rest,event))(Unit{})
 def dispatchMouseToOverlay(frame: Frame,event: T.TuiMouseEvent) -> IO(MouseHit):
@@ -225,16 +228,17 @@ def schedule(event: RenderEvent,state: RenderSchedule,now: Nat) -> Scheduled:
 # One owner carries the root layout, focus policy, overlay bindings and the
 # last displayed hit map. Preparing a frame does not mutate that displayed map;
 # the owner installs it only after its terminal renderer accepts the frame.
+type FocusBinding is Data: FocusBinding{component: C.Component,retentions: List<&2,C.Retention()>}
 type TuiBase is Data:
-  TuiBase{root: C.Container,focus: O.State,bindings: List<&2,Overlay>,displayed: DisplayedFrame,renderSchedule: RenderSchedule,showHardwareCursor: Bool,clearOnShrink: Bool,layoutRoot: Maybe<&2,N.LayoutNode>}
+  TuiBase{root: C.Container,focus: O.State,bindings: List<&2,Overlay>,displayed: DisplayedFrame,renderSchedule: RenderSchedule,showHardwareCursor: Bool,clearOnShrink: Bool,layoutRoot: Maybe<&2,N.LayoutNode>,focusedComponent: Maybe<&2,FocusBinding>}
 def scheduledTui(tui: TuiBase,scheduled: Scheduled) -> TuiBase & List<&2,RenderEffect>:
   match tui scheduled:
-    case TuiBase{root,focus,bindings,displayed,_,show,clear,layout} Scheduled{next,effects}: (TuiBase{root,focus,bindings,displayed,next,show,clear,layout},effects)
+    case TuiBase{root,focus,bindings,displayed,_,show,clear,layout,+heldFocus} Scheduled{next,effects}: (TuiBase{root,focus,bindings,displayed,next,show,clear,layout,heldFocus},effects)
 # Applies a render event to the owner's schedule; the caller carries out the
 # returned effects (upstream TUI.requestRender/scheduleRender/doRender).
 def scheduleOf(tui: TuiBase) -> RenderSchedule:
   match tui:
-    case TuiBase{_,_,_,_,current,_,_,_}: current
+    case TuiBase{_,_,_,_,current,_,_,_,+heldFocus}: current
 def scheduleRender(+tui: TuiBase,event: RenderEvent,now: Nat) -> TuiBase & List<&2,RenderEffect>:
   scheduledTui(tui,schedule(event,scheduleOf(tui),now))
 type PreparedFrame is Data:
@@ -256,7 +260,7 @@ def primaryFrom(layout: Maybe<&2,Layout.LayoutFrame>,view: Maybe<&2,N.Primary>) 
     case _ _: None{}
 def primaryContent(frame: PreparedFrame) -> Maybe<&2,PrimaryContent>:
   match frame:
-    case PreparedFrame{TuiBase{_,_,_,_,_,_,_,Some{node}},_,_,_,layout,_}: primaryFrom(layout,N.primaryInfo(node))
+    case PreparedFrame{TuiBase{_,_,_,_,_,_,_,Some{node},+heldFocus},_,_,_,layout,_}: primaryFrom(layout,N.primaryInfo(node))
     case _: None{}
 type OverlayChange is Data:
   OverlayChange{tui: TuiBase,handle: O.OverlayHandle,focusChanges: List<&2,O.FocusChange>,hideCursor: Bool,render: Bool}
@@ -270,31 +274,31 @@ def visibleState(values: List<&2,Visibility>,state: O.State) -> O.State:
     case Visibility{handle,shown} <> rest: visibleState(rest,O.setVisibility(state,handle,shown))
 def withVisibility(base: TuiBase,values: List<&2,Visibility>) -> TuiBase:
   match base:
-    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout}:
-      TuiBase{root,visibleState(values,focus),bindings,displayed,scheduler,show,clear,layout}
+    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout,+heldFocus}:
+      TuiBase{root,visibleState(values,focus),bindings,displayed,scheduler,show,clear,layout,heldFocus}
 def newTui() -> TuiBase:
-  TuiBase{C.new(),O.new(),Nil{},DisplayedFrame{Nil{},Frame{Nil{},Nil{}}},newRenderSchedule(),False{},False{},None{}}
+  TuiBase{C.new(),O.new(),Nil{},DisplayedFrame{Nil{},Frame{Nil{},Nil{}}},newRenderSchedule(),False{},False{},None{},None{}}
 def setLayoutRoot(base: TuiBase,node: Maybe<&2,N.LayoutNode>) -> TuiBase:
   match base:
-    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,_}:
-      TuiBase{root,focus,bindings,displayed,scheduler,show,clear,node}
+    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,_,+heldFocus}:
+      TuiBase{root,focus,bindings,displayed,scheduler,show,clear,node,heldFocus}
 def setTerminalPreferences(base: TuiBase,showHardwareCursor: Bool,clearOnShrink: Bool) -> TuiBase:
   match base:
-    case TuiBase{root,focus,bindings,displayed,scheduler,_,_,layout}:
-      TuiBase{root,focus,bindings,displayed,scheduler,showHardwareCursor,clearOnShrink,layout}
+    case TuiBase{root,focus,bindings,displayed,scheduler,_,_,layout,+heldFocus}:
+      TuiBase{root,focus,bindings,displayed,scheduler,showHardwareCursor,clearOnShrink,layout,heldFocus}
 def layoutRoot(base: TuiBase) -> Maybe<&2,N.LayoutNode>:
-  match base: case TuiBase{_,_,_,_,_,_,_,node}: node
+  match base: case TuiBase{_,_,_,_,_,_,_,node,_}: node
 def primaryScrollbarRoot(root: Maybe<&2,N.LayoutNode>,+mode: Scroll.ScrollViewScrollbar,+now: Nat) -> Maybe<&2,N.LayoutNode>:
   match root:
     case Some{node}: Some{N.setPrimaryScrollbar(node,mode,now)}
     case None{}: None{}
 def setPrimaryScrollbar(base: TuiBase,mode: Scroll.ScrollViewScrollbar,now: Nat) -> TuiBase:
   match base:
-    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout}:
-      TuiBase{root,focus,bindings,displayed,scheduler,show,clear,primaryScrollbarRoot(layout,mode,now)}
+    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout,+heldFocus}:
+      TuiBase{root,focus,bindings,displayed,scheduler,show,clear,primaryScrollbarRoot(layout,mode,now),heldFocus}
 def indicatorRow(base: TuiBase) -> Maybe<&2,Nat>:
   match base:
-    case TuiBase{_,_,_,_,_,_,_,Some{layout}}: N.indicatorRow(layout)
+    case TuiBase{_,_,_,_,_,_,_,Some{layout},+heldFocus}: N.indicatorRow(layout)
     case _: None{}
 def scrolledRoot(base: TuiBase,result: Scroll.ScrollByResult) -> ScrollChange:
   match result:
@@ -312,29 +316,29 @@ def scrolledPrimary(base: TuiBase,result: N.ScrollResult) -> ScrollChange:
     case N.ScrollResult{node,_,unused,render}: ScrollChange{setLayoutRoot(base,Some{node}),unused,render}
 def scrollPrimaryBy(base: TuiBase,motion: N.ScrollMotion,now: Nat) -> ScrollChange:
   match base:
-    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,Some{layout}}:
-      scrolledPrimary(TuiBase{root,focus,bindings,displayed,scheduler,show,clear,None{}},N.scrollPrimary(layout,motion,now))
+    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,Some{layout},+heldFocus}:
+      scrolledPrimary(TuiBase{root,focus,bindings,displayed,scheduler,show,clear,None{},heldFocus},N.scrollPrimary(layout,motion,now))
     case _: ScrollChange{base,T.Forward{0n},False{}}
 def added(base: TuiBase,component: C.Component) -> TuiBase:
   match base:
-    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout}:
-      TuiBase{C.addChild(root,component),focus,bindings,displayed,scheduler,show,clear,layout}
+    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout,+heldFocus}:
+      TuiBase{C.addChild(root,component),focus,bindings,displayed,scheduler,show,clear,layout,heldFocus}
 def removed(base: TuiBase,component: C.ComponentId) -> TuiBase:
   match base:
-    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout}:
-      TuiBase{C.removeChild(root,component),focus,bindings,displayed,scheduler,show,clear,layout}
+    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout,+heldFocus}:
+      TuiBase{C.removeChild(root,component),focus,bindings,displayed,scheduler,show,clear,layout,heldFocus}
 def cleared(base: TuiBase) -> TuiBase:
   match base:
-    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout}:
-      TuiBase{C.clear(root),focus,bindings,displayed,scheduler,show,clear,layout}
-def addedOverlay(root: C.Container,bindings: List<&2,Overlay>,displayed: DisplayedFrame,scheduler: RenderSchedule,show: Bool,clear: Bool,layout: Maybe<&2,N.LayoutNode>,component: C.Component,geometry: T.OverlayGeometry,pair: O.Change & O.OverlayHandle) -> OverlayChange:
+    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout,+heldFocus}:
+      TuiBase{C.clear(root),focus,bindings,displayed,scheduler,show,clear,layout,heldFocus}
+def addedOverlay(root: C.Container,bindings: List<&2,Overlay>,displayed: DisplayedFrame,scheduler: RenderSchedule,show: Bool,clear: Bool,layout: Maybe<&2,N.LayoutNode>,component: C.Component,geometry: T.OverlayGeometry,pair: O.Change & O.OverlayHandle,heldFocus: Maybe<&2,FocusBinding>) -> OverlayChange:
   match pair:
     case (O.Change{focus,assignments,hide,render},+handle):
-      OverlayChange{TuiBase{root,focus,List.append(&2,Overlay,bindings,Overlay{handle,component,geometry} <> Nil{}),displayed,scheduler,show,clear,layout},handle,assignments,hide,render}
+      OverlayChange{TuiBase{root,focus,List.append(&2,Overlay,bindings,Overlay{handle,component,geometry} <> Nil{}),displayed,scheduler,show,clear,layout,heldFocus},handle,assignments,hide,render}
 def addOverlay(base: TuiBase,+component: C.Component,geometry: T.OverlayGeometry,nonCapturing: Bool,visible: Bool,mounted: List<&2,C.ComponentId>) -> OverlayChange:
   match base:
-    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout}:
-      addedOverlay(root,bindings,displayed,scheduler,show,clear,layout,component,geometry,O.showOverlay(focus,mounted,C.id(component),nonCapturing,visible))
+    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout,+heldFocus}:
+      addedOverlay(root,bindings,displayed,scheduler,show,clear,layout,component,geometry,O.showOverlay(focus,mounted,C.id(component),nonCapturing,visible),heldFocus)
 def bindingHandle(binding: Overlay) -> O.OverlayHandle:
   match binding:
     case Overlay{handle,_,_}: handle
@@ -343,14 +347,14 @@ def without(bindings: List<&2,Overlay>,+handle: O.OverlayHandle,+reversed: List<
     case Nil{}: List.reverse(&2,Overlay,reversed)
     case +binding <> +rest:
       Bool.pick(Unit -> List<&2,Overlay>,O.sameHandle(bindingHandle(binding),handle),_ => without(rest,handle,reversed),_ => without(rest,handle,binding <> reversed))(Unit{})
-def removedOverlay(root: C.Container,bindings: List<&2,Overlay>,displayed: DisplayedFrame,scheduler: RenderSchedule,show: Bool,clear: Bool,layout: Maybe<&2,N.LayoutNode>,+handle: O.OverlayHandle,change: O.Change) -> OverlayChange:
+def removedOverlay(root: C.Container,bindings: List<&2,Overlay>,displayed: DisplayedFrame,scheduler: RenderSchedule,show: Bool,clear: Bool,layout: Maybe<&2,N.LayoutNode>,+handle: O.OverlayHandle,change: O.Change,heldFocus: Maybe<&2,FocusBinding>) -> OverlayChange:
   match change:
     case O.Change{focus,assignments,hide,render}:
-      OverlayChange{TuiBase{root,focus,without(bindings,handle,Nil{}),displayed,scheduler,show,clear,layout},handle,assignments,hide,render}
+      OverlayChange{TuiBase{root,focus,without(bindings,handle,Nil{}),displayed,scheduler,show,clear,layout,heldFocus},handle,assignments,hide,render}
 def overlayRemoved(base: TuiBase,+handle: O.OverlayHandle,components: List<&2,C.ComponentId>) -> OverlayChange:
   match base:
-    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout}:
-      removedOverlay(root,bindings,displayed,scheduler,show,clear,layout,handle,O.hide(focus,components,handle))
+    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout,+heldFocus}:
+      removedOverlay(root,bindings,displayed,scheduler,show,clear,layout,handle,O.hide(focus,components,handle),heldFocus)
 def hiddenTop(+base: TuiBase,last: Maybe<&2,O.Entry>,components: List<&2,C.ComponentId>) -> Maybe<&2,OverlayChange>:
   match last:
     case None{}: None{}
@@ -359,18 +363,18 @@ def hiddenTop(+base: TuiBase,last: Maybe<&2,O.Entry>,components: List<&2,C.Compo
 # (None when there is none).
 def hideOverlay(+base: TuiBase,components: List<&2,C.ComponentId>) -> Maybe<&2,OverlayChange>:
   match base:
-    case TuiBase{_,O.State{entries,_,_,_,_},_,_,_,_,_,_}: hiddenTop(base,O.lastEntry(entries,None{}),components)
+    case TuiBase{_,O.State{entries,_,_,_,_},_,_,_,_,_,_,+heldFocus}: hiddenTop(base,O.lastEntry(entries,None{}),components)
 # Upstream OverlayHandle.focus/unfocus/setHidden. Like addOverlay and
 # overlayRemoved (OverlayHandle.hide), each is a pure transition whose focus
 # assignments the owner runs with applyOverlayChange. A handle whose overlay
 # was removed is inert (see tests/overlays.md).
 def focusTransition(base: TuiBase,+handle: O.OverlayHandle,change: O.Change) -> OverlayChange:
   match base change:
-    case TuiBase{root,_,bindings,displayed,scheduler,show,clear,layout} O.Change{focus,assignments,hide,render}:
-      OverlayChange{TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout},handle,assignments,hide,render}
+    case TuiBase{root,_,bindings,displayed,scheduler,show,clear,layout,+heldFocus} O.Change{focus,assignments,hide,render}:
+      OverlayChange{TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout,heldFocus},handle,assignments,hide,render}
 def focusState(base: TuiBase) -> O.State:
   match base:
-    case TuiBase{_,focus,_,_,_,_,_,_}: focus
+    case TuiBase{_,focus,_,_,_,_,_,_,+heldFocus}: focus
 def focusOverlay(+base: TuiBase,+handle: O.OverlayHandle,components: List<&2,C.ComponentId>) -> OverlayChange:
   focusTransition(base,handle,O.focusOverlay(focusState(base),components,handle))
 # `target` is upstream's OverlayUnfocusOptions: None when omitted, Some{None}
@@ -386,16 +390,16 @@ def focusedEntry(focus: Maybe<&2,C.ComponentId>,entry: Maybe<&2,O.Entry>) -> Boo
 # upstream OverlayHandle.isFocused
 def isOverlayFocused(base: TuiBase,handle: O.OverlayHandle) -> Bool:
   match base:
-    case TuiBase{_,O.State{entries,focus,_,_,_},_,_,_,_,_,_}: focusedEntry(focus,O.find(entries,handle))
+    case TuiBase{_,O.State{entries,focus,_,_,_},_,_,_,_,_,_,+heldFocus}: focusedEntry(focus,O.find(entries,handle))
 def displayedLines(frame: DisplayedFrame) -> List<&2,String>:
   match frame: case DisplayedFrame{_,Frame{lines,_}}: lines
 def displayedSource(frame: DisplayedFrame) -> List<&2,String>:
   match frame: case DisplayedFrame{source,_}: source
 def cursorPrepared(base: TuiBase,container: C.Container,bounds: List<&2,OverlayBounds>,result: T.CursorFrame,layoutFrame: Maybe<&2,Layout.LayoutFrame>) -> PreparedFrame:
   match base result:
-    case TuiBase{_,focus,bindings,+displayed,scheduler,show,clear,layout} T.CursorFrame{+source,cursor}:
+    case TuiBase{_,focus,bindings,+displayed,scheduler,show,clear,layout,+heldFocus} T.CursorFrame{+source,cursor}:
       +lines = T.applyCachedLineResets(source,displayedSource(displayed),displayedLines(displayed))
-      PreparedFrame{TuiBase{container,focus,bindings,displayed,scheduler,show,clear,layout},Frame{lines,bounds},lines,cursor,layoutFrame,source}
+      PreparedFrame{TuiBase{container,focus,bindings,displayed,scheduler,show,clear,layout,heldFocus},Frame{lines,bounds},lines,cursor,layoutFrame,source}
 def prepared(base: TuiBase,container: C.Container,frame: Frame,height: Nat,layoutFrame: Maybe<&2,Layout.LayoutFrame>) -> PreparedFrame:
   match frame:
     case Frame{lines,bounds}: cursorPrepared(base,container,bounds,T.extractCursorPosition(lines,height),layoutFrame)
@@ -405,7 +409,7 @@ def preparedResult(base: TuiBase,container: C.Container,result: ResultOf(Frame),
     case Done{frame}: Done{prepared(base,container,frame,height,layoutFrame)}
 def composeRoot(+base: TuiBase,container: C.Container,lines: List<&2,String>,width: Nat,+height: Nat,layoutFrame: Maybe<&2,Layout.LayoutFrame>) -> IO(ResultOf(PreparedFrame)):
   match base:
-    case TuiBase{_,focus,+bindings,_,_,_,_,_}:
+    case TuiBase{_,focus,+bindings,_,_,_,_,_,+heldFocus}:
       do IO<ResultOf(PreparedFrame)>:
         result : ResultOf(Frame) <- compositeOverlays(focus,bindings,lines,width,height)
         return preparedResult(base,container,result,height,layoutFrame)
@@ -418,7 +422,7 @@ def composedLayout(base: TuiBase,root: C.Container,tree: Tree.TreeFrame,width: N
       composeRoot(setLayoutRoot(base,Some{node}),root,lines,width,height,Some{Layout.LayoutFrame{box,frameWidth,frameHeight,lines}})
 def renderRoot(+base: TuiBase,+width: Nat,+height: Nat) -> IO(ResultOf(PreparedFrame)):
   match base:
-    case TuiBase{root,_,_,_,_,_,_,layout}:
+    case TuiBase{root,_,_,_,_,_,_,layout,+heldFocus}:
       match layout:
         case None{}:
           do IO<ResultOf(PreparedFrame)>:
@@ -432,15 +436,15 @@ def renderRoot(+base: TuiBase,+width: Nat,+height: Nat) -> IO(ResultOf(PreparedF
 # The alternate screen restores its complete document to the regular terminal
 # on exit. Rendering the child container here includes offscreen transcript
 # rows, unlike the viewport-sized layout frame.
-def renderedDocument(result: C.Container & List<&2,String>,focus: O.State,bindings: List<&2,Overlay>,displayed: DisplayedFrame,scheduler: RenderSchedule,show: Bool,clear: Bool,layout: Maybe<&2,N.LayoutNode>) -> TuiBase & List<&2,String>:
+def renderedDocument(result: C.Container & List<&2,String>,focus: O.State,bindings: List<&2,Overlay>,displayed: DisplayedFrame,scheduler: RenderSchedule,show: Bool,clear: Bool,layout: Maybe<&2,N.LayoutNode>,heldFocus: Maybe<&2,FocusBinding>) -> TuiBase & List<&2,String>:
   match result:
-    case (next,lines): (TuiBase{next,focus,bindings,displayed,scheduler,show,clear,layout},lines)
+    case (next,lines): (TuiBase{next,focus,bindings,displayed,scheduler,show,clear,layout,heldFocus},lines)
 def renderDocument(base: TuiBase,width: Nat) -> IO(TuiBase & List<&2,String>):
   match base:
-    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout}:
+    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout,+heldFocus}:
       do IO<TuiBase & List<&2,String>>:
         result : C.Container & List<&2,String> <- C.renderContainer(root,width)
-        return renderedDocument(result,focus,bindings,displayed,scheduler,show,clear,layout)
+        return renderedDocument(result,focus,bindings,displayed,scheduler,show,clear,layout,heldFocus)
 
 # A stopped fullscreen layout uses each stack's natural allocation. Scroll
 # children render from their beginning, rather than their current viewport.
@@ -459,8 +463,8 @@ def layoutDocument(frame: Tree.TreeFrame) -> List<&2,String>:
     case Tree.TreeFrame{_,Layout.LayoutFrame{_,_,_,lines}}: lines
 def renderLayoutDocument(+base: TuiBase,width: Nat) -> IO(TuiBase & List<&2,String>):
   match base:
-    case TuiBase{_,_,_,_,_,_,_,None{}}: renderDocument(base,width)
-    case TuiBase{_,_,_,_,_,_,_,Some{node}}:
+    case TuiBase{_,_,_,_,_,_,_,None{},+heldFocus}: renderDocument(base,width)
+    case TuiBase{_,_,_,_,_,_,_,Some{node},+heldFocus}:
       do IO<TuiBase & List<&2,String>>:
         frame : Tree.TreeFrame <- Tree.renderInline(documentNode(node),width,4294967295n)
         return (base,layoutDocument(frame))
@@ -468,45 +472,86 @@ def renderLayoutDocument(+base: TuiBase,width: Nat) -> IO(TuiBase & List<&2,Stri
 # Publish displayed hit bounds only after the terminal accepted the prepared frame.
 def commitFrame(value: PreparedFrame) -> TuiBase:
   match value:
-    case PreparedFrame{TuiBase{root,focus,bindings,_,scheduler,show,clear,layout},frame,_,_,_,source}:
-      TuiBase{root,focus,bindings,DisplayedFrame{source,frame},scheduler,show,clear,layout}
+    case PreparedFrame{TuiBase{root,focus,bindings,_,scheduler,show,clear,layout,+heldFocus},frame,_,_,_,source}:
+      TuiBase{root,focus,bindings,DisplayedFrame{source,frame},scheduler,show,clear,layout,heldFocus}
 
-# Component registries include nested controls supplied by the application.
+def focusedBinding(base: TuiBase) -> Maybe<&2,FocusBinding>:
+  match base:
+    case TuiBase{_,_,_,_,_,_,_,_,held}: held
+def focusedValue(binding: FocusBinding) -> C.Component:
+  match binding: case FocusBinding{component,_}: component
+def getFocusedComponent(base: TuiBase) -> Maybe<&2,C.Component>:
+  Maybe.map(&2,FocusBinding,C.Component,focusedValue,focusedBinding(base))
+def withFocusedBinding(base: TuiBase,held: Maybe<&2,FocusBinding>) -> TuiBase:
+  match base:
+    case TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout,_}: TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout,held}
+def focusRegistry(base: TuiBase,registry: List<&2,C.Component>) -> List<&2,C.Component>:
+  match base:
+    case TuiBase{_,_,_,_,_,_,_,_,Some{FocusBinding{component,_}}}: List.append(&2,C.Component,registry,component <> Nil{})
+    case _: registry
+def releaseFocusBinding(binding: Maybe<&2,FocusBinding>) -> IO(Unit):
+  match binding:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{FocusBinding{_,retentions}}: C.releaseRetentions(retentions,Nil{})
+def disposeFocus(base: TuiBase) -> IO(Unit): releaseFocusBinding(focusedBinding(base))
+def retainFocused(component: Maybe<&2,C.Component>) -> IO(Maybe<&2,FocusBinding>):
+  match component:
+    case None{}: IO.pure(Maybe<&2,FocusBinding>,None{})
+    case Some{+component}:
+      do IO<Maybe<&2,FocusBinding>>:
+        retentions : List<&2,C.Retention()> <- C.retainIndependent(C.componentRetentions(component))
+        return Some{FocusBinding{component,retentions}}
+
+# Registries hold mounted roots; groups expose their current descendants.
 # Focus assignments run in source order before the focused component sees input.
 type InputResult is Data: InputResult{tui: TuiBase,handled: Bool,requestImmediateRender: Bool}
-def registered(components: List<&2,C.Component>,+wanted: C.ComponentId) -> Maybe<&2,C.Component>:
-  match components:
-    case Nil{}: None{}
-    case +component <> rest:
-      Bool.pick(Unit -> Maybe<&2,C.Component>,C.same(C.id(component),wanted),_ => Some{component},_ => registered(rest,wanted))(Unit{})
-def registeredMaybe(registry: List<&2,C.Component>,target: Maybe<&2,C.ComponentId>) -> Maybe<&2,C.Component>:
+def registered(components: List<&2,C.Component>,wanted: C.ComponentId) -> IO(Maybe<&2,C.Component>):
+  C.lookup(components,wanted)
+def registeredMaybe(registry: List<&2,C.Component>,target: Maybe<&2,C.ComponentId>) -> IO(Maybe<&2,C.Component>):
   match target:
-    case None{}: None{}
+    case None{}: IO.pure(Maybe<&2,C.Component>,None{})
     case Some{wanted}: registered(registry,wanted)
-def present(registry: List<&2,C.Component>,target: Maybe<&2,C.ComponentId>) -> Bool:
+def present(registry: List<&2,C.Component>,target: Maybe<&2,C.ComponentId>) -> IO(Bool):
   match target:
-    case None{}: True{}
-    case Some{wanted}: Bool.not(Maybe.is_none(&2,C.Component,registered(registry,wanted)))
-def validateChanges(changes: List<&2,O.FocusChange>,+registry: List<&2,C.Component>) -> ResultOf(Unit):
+    case None{}: IO.pure(Bool,True{})
+    case Some{wanted}:
+      do IO<Bool>:
+        found : Maybe<&2,C.Component> <- registered(registry,wanted)
+        return Bool.not(Maybe.is_none(&2,C.Component,found))
+def validateChanges(changes: List<&2,O.FocusChange>,+registry: List<&2,C.Component>) -> IO(ResultOf(Unit)):
   match changes:
-    case Nil{}: Done{Unit{}}
+    case Nil{}: IO.pure(ResultOf(Unit),Done{Unit{}})
     case O.FocusChange{previous,next} <> rest:
-      Bool.pick(Unit -> ResultOf(Unit),present(registry,previous) && present(registry,next),
-        _ => validateChanges(rest,registry),_ => Fail{MissingFocusedComponent{}})(Unit{})
+      do IO<ResultOf(Unit)>:
+        previousPresent : Bool <- present(registry,previous)
+        nextPresent : Bool <- present(registry,next)
+        Bool.pick(Unit -> IO(ResultOf(Unit)),previousPresent && nextPresent,
+          _ => validateChanges(rest,registry),_ => IO.pure(ResultOf(Unit),Fail{MissingFocusedComponent{}}))(Unit{})
 def setIfPresent(value: Maybe<&2,C.Component>,focused: Bool) -> IO(Unit):
   match value:
     case None{}: IO.pure(Unit,Unit{})
     case Some{component}: C.setFocused(component,focused)
-def applyChanges(changes: List<&2,O.FocusChange>,+registry: List<&2,C.Component>) -> IO(Unit):
+def focusAssignment(+base: TuiBase,+registry: List<&2,C.Component>,previous: Maybe<&2,C.ComponentId>,next: Maybe<&2,C.ComponentId>) -> IO(TuiBase):
+  do IO<TuiBase>:
+    +all : List<&2,C.Component> = focusRegistry(base,registry)
+    old : Maybe<&2,C.Component> <- registeredMaybe(all,previous)
+    +new : Maybe<&2,C.Component> <- registeredMaybe(all,next)
+    held : Maybe<&2,FocusBinding> <- retainFocused(new)
+    setIfPresent(old,False{})
+    setIfPresent(new,True{})
+    releaseFocusBinding(focusedBinding(base))
+    return withFocusedBinding(base,held)
+def applyChanges(changes: List<&2,O.FocusChange>,+registry: List<&2,C.Component>,base: TuiBase) -> IO(TuiBase):
   match changes:
-    case Nil{}: IO.pure(Unit,Unit{})
+    case Nil{}: IO.pure(TuiBase,base)
     case O.FocusChange{previous,next} <> rest:
-      do IO<Unit>:
-        setIfPresent(registeredMaybe(registry,previous),False{})
-        setIfPresent(registeredMaybe(registry,next),True{})
-        applyChanges(rest,registry)
+      do IO<TuiBase>:
+        current : TuiBase <- focusAssignment(base,registry,previous,next)
+        applyChanges(rest,registry,current)
 def acceptsKey(component: C.Component,data: String) -> Bool:
   match component:
+    case C.Group{component,_}: acceptsKey(component,data)
+    case C.Managed{component,_}: acceptsKey(component,data)
     case C.Component{_,_,Some{_},_,_,_,+wantsRelease}: Bool.not(Keys.isKeyRelease(data)) || wantsRelease
     case _: False{}
 def deliverKey(+state: TuiBase,component: Maybe<&2,C.Component>,+data: String) -> IO(ResultOf(InputResult)):
@@ -518,37 +563,83 @@ def deliverKey(+state: TuiBase,component: Maybe<&2,C.Component>,+data: String) -
           C.handleInput(component,data)
           return Done{InputResult{state,True{},True{}}},
         _ => IO.pure(ResultOf(InputResult),Done{InputResult{state,False{},False{}}}))(Unit{})
-def inputFocused(result: ResultOf(Unit),state: TuiBase,+registry: List<&2,C.Component>,changes: List<&2,O.FocusChange>,focused: Maybe<&2,C.ComponentId>,data: String) -> IO(ResultOf(InputResult)):
+def focusedReceiver(binding: Maybe<&2,FocusBinding>,+registry: List<&2,C.Component>,+wanted: Maybe<&2,C.ComponentId>) -> IO(Maybe<&2,C.Component>):
+  match binding wanted:
+    case Some{FocusBinding{+component,_}} Some{id}:
+      Bool.pick(Unit -> IO(Maybe<&2,C.Component>),C.same(C.id(component),id),
+        _ => IO.pure(Maybe<&2,C.Component>,Some{component}),
+        _ => registeredMaybe(registry,wanted))(Unit{})
+    case _ _: registeredMaybe(registry,wanted)
+def inputFocused(result: ResultOf(Unit),+state: TuiBase,+registry: List<&2,C.Component>,changes: List<&2,O.FocusChange>,focused: Maybe<&2,C.ComponentId>,data: String) -> IO(ResultOf(InputResult)):
   match result:
     case Fail{error}: IO.pure(ResultOf(InputResult),Fail{error})
     case Done{_}:
       do IO<ResultOf(InputResult)>:
-        applyChanges(changes,registry)
-        deliverKey(state,registeredMaybe(registry,focused),data)
-def preparedInput(base: TuiBase,+registry: List<&2,C.Component>,change: O.Change,data: String) -> IO(ResultOf(InputResult)):
+        +state : TuiBase <- applyChanges(changes,registry,state)
+        component : Maybe<&2,C.Component> <- focusedReceiver(focusedBinding(state),registry,focused)
+        deliverKey(state,component,data)
+def preparedInput(+base: TuiBase,+registry: List<&2,C.Component>,change: O.Change,data: String) -> IO(ResultOf(InputResult)):
   match base change:
-    case TuiBase{root,_,bindings,displayed,scheduler,show,clear,layout} O.Change{O.State{entries,+focused,restore,order,nextId},+changes,_,_}:
-      inputFocused(validateChanges(changes,registry),TuiBase{root,O.State{entries,focused,restore,order,nextId},bindings,displayed,scheduler,show,clear,layout},registry,changes,focused,data)
+    case TuiBase{root,_,bindings,displayed,scheduler,show,clear,layout,+heldFocus} O.Change{O.State{entries,+focused,restore,order,nextId},+changes,_,_}:
+      do IO<ResultOf(InputResult)>:
+        validation : ResultOf(Unit) <- validateChanges(changes,focusRegistry(base,registry))
+        inputFocused(validation,TuiBase{root,O.State{entries,focused,restore,order,nextId},bindings,displayed,scheduler,show,clear,layout,heldFocus},registry,changes,focused,data)
+def mountedRoots(registry: List<&2,C.Component>,+mounted: List<&2,C.ComponentId>) -> List<&2,C.Component>:
+  match registry:
+    case Nil{}: Nil{}
+    case +component <> +rest:
+      Bool.pick(Unit -> List<&2,C.Component>,O.mounted(mounted,C.id(component)),_ => component <> mountedRoots(rest,mounted),_ => mountedRoots(rest,mounted))(Unit{})
+def mountedFocus(registry: List<&2,C.Component>,+mounted: List<&2,C.ComponentId>,target: Maybe<&2,C.ComponentId>) -> IO(List<&2,C.ComponentId>):
+  match target:
+    case None{}: IO.pure(List<&2,C.ComponentId>,mounted)
+    case Some{+wanted}:
+      Bool.pick(Unit -> IO(List<&2,C.ComponentId>),O.mounted(mounted,wanted),
+        _ => IO.pure(List<&2,C.ComponentId>,mounted),
+        _ => do IO<List<&2,C.ComponentId>>:
+          found : Maybe<&2,C.Component> <- C.lookup(mountedRoots(registry,mounted),wanted)
+          return Bool.pick(List<&2,C.ComponentId>,Maybe.is_none(&2,C.Component,found),mounted,wanted <> mounted))(Unit{})
+def mountedState(registry: List<&2,C.Component>,mounted: List<&2,C.ComponentId>,state: O.State) -> IO(List<&2,C.ComponentId>):
+  match state:
+    case O.State{_,current,_,_,_}: mountedFocus(registry,mounted,current)
 def dispatchInput(+base: TuiBase,+registry: List<&2,C.Component>,mounted: List<&2,C.ComponentId>,data: String) -> IO(ResultOf(InputResult)):
   match base:
-    case TuiBase{_,+focus,_,_,_,_,_,_}: preparedInput(base,registry,O.prepareInput(focus,mounted),data)
+    case TuiBase{_,+focus,_,_,_,_,_,_,+heldFocus}:
+      do IO<ResultOf(InputResult)>:
+        mounted : List<&2,C.ComponentId> <- mountedState(registry,mounted,focus)
+        preparedInput(base,registry,O.prepareInput(focus,mounted),data)
 
 def focusResult(result: ResultOf(Unit),base: TuiBase,registry: List<&2,C.Component>,changes: List<&2,O.FocusChange>) -> IO(ResultOf(TuiBase)):
   match result:
     case Fail{error}: IO.pure(ResultOf(TuiBase),Fail{error})
     case Done{_}:
       do IO<ResultOf(TuiBase)>:
-        applyChanges(changes,registry)
-        return Done{base}
-def focusChange(base: TuiBase,change: O.Change,+registry: List<&2,C.Component>) -> IO(ResultOf(TuiBase)):
+        current : TuiBase <- applyChanges(changes,registry,base)
+        return Done{current}
+def focusChange(+base: TuiBase,change: O.Change,+registry: List<&2,C.Component>) -> IO(ResultOf(TuiBase)):
   match base change:
-    case TuiBase{root,_,bindings,displayed,scheduler,show,clear,layout} O.Change{focus,+changes,_,_}:
-      focusResult(validateChanges(changes,registry),TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout},registry,changes)
+    case TuiBase{root,_,bindings,displayed,scheduler,show,clear,layout,+heldFocus} O.Change{focus,+changes,_,_}:
+      do IO<ResultOf(TuiBase)>:
+        validation : ResultOf(Unit) <- validateChanges(changes,focusRegistry(base,registry))
+        focusResult(validation,TuiBase{root,focus,bindings,displayed,scheduler,show,clear,layout,heldFocus},registry,changes)
 # Runs an overlay transition's focus assignments in source order, as upstream
 # showOverlay and the handle methods set `focused` synchronously.
 def applyOverlayChange(change: OverlayChange,+registry: List<&2,C.Component>) -> IO(ResultOf(TuiBase)):
   match change:
-    case OverlayChange{tui,_,+changes,_,_}: focusResult(validateChanges(changes,registry),tui,registry,changes)
-def setFocus(+base: TuiBase,registry: List<&2,C.Component>,mounted: List<&2,C.ComponentId>,target: Maybe<&2,C.ComponentId>) -> IO(ResultOf(TuiBase)):
+    case OverlayChange{+tui,_,+changes,_,_}:
+      do IO<ResultOf(TuiBase)>:
+        validation : ResultOf(Unit) <- validateChanges(changes,focusRegistry(tui,registry))
+        focusResult(validation,tui,registry,changes)
+def setFocus(+base: TuiBase,+registry: List<&2,C.Component>,mounted: List<&2,C.ComponentId>,target: Maybe<&2,C.ComponentId>) -> IO(ResultOf(TuiBase)):
   match base:
-    case TuiBase{_,+focus,_,_,_,_,_,_}: focusChange(base,O.setFocus(focus,mounted,target),registry)
+    case TuiBase{_,+focus,_,_,_,_,_,_,+heldFocus}:
+      do IO<ResultOf(TuiBase)>:
+        mounted : List<&2,C.ComponentId> <- mountedState(registry,mounted,focus)
+        focusChange(base,O.setFocus(focus,mounted,target),registry)
+
+def focusedTarget(component: Maybe<&2,C.Component>,+base: TuiBase,+registry: List<&2,C.Component>,mounted: List<&2,C.ComponentId>,+target: C.TuiMouseDispatchTarget(),+wanted: C.ComponentId) -> IO(ResultOf(TuiBase)):
+  match component:
+    case Some{component}:
+      setFocus(base,Bool.pick(List<&2,C.Component>,C.same(C.targetId(target),wanted),component <> registry,registry),mounted,Some{wanted})
+    case None{}: setFocus(base,registry,mounted,Some{wanted})
+def setFocusFromTarget(base: TuiBase,registry: List<&2,C.Component>,mounted: List<&2,C.ComponentId>,+target: C.TuiMouseDispatchTarget(),wanted: C.ComponentId) -> IO(ResultOf(TuiBase)):
+  focusedTarget(C.targetComponent(target),base,registry,mounted,target,wanted)

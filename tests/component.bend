@@ -105,20 +105,23 @@ def optionalId(value: Maybe<&2,C.ComponentId>) -> V.Value:
   match value:
     case Some{value}: id(value)
     case None{}: V.Null{}
-def target(value: C.TuiMouseDispatchTarget) -> V.Value:
+def targetBounds(value: C.TuiMouseDispatchTarget()) -> V.Value:
   match value:
-    case C.TuiMouseDispatchTarget{component,x,y,width,height}: object(field("component",id(component)) <> field("originX",signed(x)) <> field("originY",signed(y)) <> field("width",n(width)) <> field("height",n(height)) <> Nil{})
-def result(value: Maybe<&2,C.TuiMouseDispatchResult>) -> V.Value:
+    case C.IdTarget{component,x,y,width,height}: object(field("component",id(component)) <> field("originX",signed(x)) <> field("originY",signed(y)) <> field("width",n(width)) <> field("height",n(height)) <> Nil{})
+    case _: V.Null{}
+def target(value: C.TuiMouseDispatchTarget()) -> V.Value: targetBounds(C.targetBounds(value))
+
+def result(value: Maybe<&2,C.TuiMouseDispatchResult()>) -> V.Value:
   match value:
     case None{}: V.Null{}
     case Some{C.TuiMouseDispatchResult{value,focusTarget,capture,focus,wantsRender}}: object(field("target",target(value)) <> field("focusTarget",optionalId(focusTarget)) <> field("capture",V.Boolean{capture}) <> field("focus",V.Boolean{focus}) <> field("render",boolValue(wantsRender)) <> Nil{})
-def parsedTarget(+value: V.Value) -> C.TuiMouseDispatchTarget:
-  C.TuiMouseDispatchTarget{C.ComponentId{number(get(value,"component"))},offset(get(value,"originX")),offset(get(value,"originY")),number(get(value,"width")),number(get(value,"height"))}
-def response(+value: V.Value) -> Maybe<&2,C.MouseResponse>:
+def parsedTarget(+value: V.Value) -> C.TuiMouseDispatchTarget():
+  C.IdTarget{C.ComponentId{number(get(value,"component"))},offset(get(value,"originX")),offset(get(value,"originY")),number(get(value,"width")),number(get(value,"height"))}
+def response(+value: V.Value) -> Maybe<&2,C.MouseResponse()>:
   match value:
     case V.Null{}: None{}
     case _:
-      Bool.pick(Maybe<&2,C.MouseResponse>,boolean(get(value,"forward")),
+      Bool.pick(Maybe<&2,C.MouseResponse()>,boolean(get(value,"forward")),
         Some{C.DispatchedResult{C.TuiMouseDispatchResult{parsedTarget(get(value,"target")),Some{C.ComponentId{number(get(value,"focusTarget"))}},boolean(get(value,"capture")),boolean(get(value,"focus")),optionalBool(get(value,"render"))}}},
         Some{C.LocalResult{T.TuiMouseEventResult{boolean(get(value,"handled")),boolean(get(value,"capture")),boolean(get(value,"focus")),optionalBool(get(value,"render"))}}})
 type Fixture is Data:
@@ -142,10 +145,10 @@ def draw(fixture: Fixture,width: Nat) -> IO(List<&2,String>):
 def invalidate(fixture: Fixture,unused: Unit) -> IO(Unit): logCall(fixture,"invalidate",V.Null{})
 def input(fixture: Fixture,value: String) -> IO(Unit): logCall(fixture,"input",V.Text{value})
 def focused(fixture: Fixture,value: Bool) -> IO(Unit): logCall(fixture,"focus",V.Boolean{value})
-def handleMouse(fixture: Fixture,value: T.TuiMouseEvent) -> IO(Maybe<&2,C.MouseResponse>):
+def handleMouse(fixture: Fixture,value: T.TuiMouseEvent) -> IO(Maybe<&2,C.MouseResponse()>):
   match fixture:
     case Fixture{+spec,calls}:
-      do IO<Maybe<&2,C.MouseResponse>>:
+      do IO<Maybe<&2,C.MouseResponse()>>:
         logCall(Fixture{spec,calls},"mouse",event(value))
         return response(get(spec,"response"))
 def create(+spec: V.Value,calls: Ref.Ref<List<&2,V.Value>>) -> IO(C.Component):
@@ -154,7 +157,7 @@ def create(+spec: V.Value,calls: Ref.Ref<List<&2,V.Value>>) -> IO(C.Component):
     renderCallback : Call.Callback<Nat,List<&2,String>> <- Call.create(~Fixture,~Nat,~List<&2,String>,~draw,fixture)
     invalidate : Call.Callback<Unit,Unit> <- Call.create(~Fixture,~Unit,~Unit,~invalidate,fixture)
     input : Call.Callback<String,Unit> <- Call.create(~Fixture,~String,~Unit,~input,fixture)
-    mouse : Call.Callback<T.TuiMouseEvent,Maybe<&2,C.MouseResponse>> <- Call.create(~Fixture,~T.TuiMouseEvent,~Maybe<&2,C.MouseResponse>,~handleMouse,fixture)
+    mouse : Call.Callback<T.TuiMouseEvent,Maybe<&2,C.MouseResponse()>> <- Call.create(~Fixture,~T.TuiMouseEvent,~Maybe<&2,C.MouseResponse()>,~handleMouse,fixture)
     focus : Call.Callback<Bool,Unit> <- Call.create(~Fixture,~Bool,~Unit,~focused,fixture)
     return C.Component{C.ComponentId{number(get(spec,"id"))},renderCallback,Some{input},Some{mouse},invalidate,Some{focus},False{}}
 def createAll(specs: List<&2,V.Value>,+calls: Ref.Ref<List<&2,V.Value>>,reversed: List<&2,C.Component>) -> IO(List<&2,C.Component>):
@@ -171,7 +174,7 @@ def dispose(components: List<&2,C.Component>) -> IO(Unit):
       do IO<Unit>:
         Call.dispose(Nat,List<&2,String>,renderCallback)
         Call.dispose(String,Unit,input)
-        Call.dispose(T.TuiMouseEvent,Maybe<&2,C.MouseResponse>,mouse)
+        Call.dispose(T.TuiMouseEvent,Maybe<&2,C.MouseResponse()>,mouse)
         Call.dispose(Unit,Unit,invalidate)
         Call.dispose(Bool,Unit,focus)
         dispose(rest)
@@ -207,7 +210,7 @@ def step(+command: V.Value,operation: String,+components: List<&2,C.Component>,+
     case "retarget": IO.pure(C.Container & V.Value,(state,event(C.retargetMouseEvent(mouse(get(command,"event")),parsedTarget(get(command,"target"))))))
     case _:
       do IO<C.Container & V.Value>:
-        dispatched : Maybe<&2,C.TuiMouseDispatchResult> <- C.handleMouse(state,C.ComponentId{999n},boolean(get(command,"delegates")),mouse(get(command,"event")))
+        dispatched : Maybe<&2,C.TuiMouseDispatchResult()> <- C.handleMouse(state,C.ComponentId{999n},boolean(get(command,"delegates")),mouse(get(command,"event")))
         return (state,result(dispatched))
 def steps(commands: List<&2,V.Value>,+components: List<&2,C.Component>,pair: C.Container & V.Value,reversed: List<&2,V.Value>) -> IO(List<&2,V.Value>):
   match commands pair:

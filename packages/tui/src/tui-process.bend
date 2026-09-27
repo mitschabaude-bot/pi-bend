@@ -36,7 +36,7 @@ type Input is Data: Input{outcome: Draw,handled: Bool,owed: Bool}
 def initial() -> Session: Session{Tui.newTui(),Main{Screen.initial()}}
 def options(tui: Tui.TuiBase,termux: Bool) -> Screen.Options:
   match tui:
-    case Tui.TuiBase{_,O.State{entries,_,_,_,_},_,_,Tui.RenderSchedule{_,_,_,_,_,stopped},show,clear,_}:
+    case Tui.TuiBase{_,O.State{entries,_,_,_,_},_,_,Tui.RenderSchedule{_,_,_,_,_,stopped},show,clear,_,+heldFocus}:
       Screen.Options{termux,clear,Bool.not(List.is_empty(&2,O.Entry,entries)),show,stopped}
 def frame(prepared: Tui.PreparedFrame,width: Nat,height: Nat) -> Screen.Frame:
   match prepared:
@@ -311,8 +311,8 @@ def preferredScrollbar(base: Tui.TuiBase,mode: Maybe<&2,Scroll.ScrollViewScrollb
     case Some{mode}: Tui.setPrimaryScrollbar(base,mode,0n)
 def preferredTui(base: Tui.TuiBase,preferences: Preferences) -> Tui.TuiBase:
   match base preferences:
-    case Tui.TuiBase{root,focus,bindings,displayed,scheduler,cursor,clear,node} Preferences{newCursor,newClear,scrollbar}:
-      preferredScrollbar(Tui.TuiBase{root,focus,bindings,displayed,scheduler,Maybe.default(&2,Bool,newCursor,cursor),Maybe.default(&2,Bool,newClear,clear),node},scrollbar)
+    case Tui.TuiBase{root,focus,bindings,displayed,scheduler,cursor,clear,node,+heldFocus} Preferences{newCursor,newClear,scrollbar}:
+      preferredScrollbar(Tui.TuiBase{root,focus,bindings,displayed,scheduler,Maybe.default(&2,Bool,newCursor,cursor),Maybe.default(&2,Bool,newClear,clear),node,heldFocus},scrollbar)
 def preferredActive(current: Active,preferences: Preferences) -> Active:
   match current:
     case Active{Session{tui,+screen},components,mounted,error,owed,ticks}:
@@ -540,6 +540,16 @@ def onInput(listener: EventSink,data: String) -> IO(Unit): dispatchInput(listene
 
 # The caller's stop signal is settled by its input/application callbacks. The
 # terminal and serialized TUI state remain owned here until all listeners stop.
+def clearMouse(current: Active) -> IO(Active & Unit):
+  match current:
+    case Active{Session{tui,Fullscreen{+screen}},components,mounted,error,owed,ticks}:
+      do IO<Active & Unit>:
+        Mouse.dispose(Alt.mouse(screen))
+        return (Active{Session{tui,Fullscreen{Alt.withMouse(screen,Mouse.initial())}},components,mounted,error,owed,ticks},Unit{})
+    case current: IO.pure(Active & Unit,(current,Unit{}))
+def disposeFocus(current: Active) -> IO(Unit):
+  match current:
+    case Active{Session{tui,_},_,_,_,_,_}: Tui.disposeFocus(tui)
 def unchanged(current: Active) -> IO(Active & Unit): IO.pure(Active & Unit,(current,Unit{}))
 def pendingTicks(current: Active) -> IO(Active & Nat):
   match current:
@@ -653,6 +663,7 @@ def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Ow
         stopRendering : List<&2,Tui.RenderEffect> <- Serial.run(Active,List<&2,Tui.RenderEffect>,handle,current => scheduledOperation(Tui.StopRendering{},current,terminalHandle,termux))
         waitTicks(handle,1000n)
         Query.setRunning(queries,writer,False{})
+        cleared : Unit <- Serial.run(Active,Unit,handle,clearMouse)
         columns : U32 <- Terminal.getColumns(terminalHandle)
         cleanup : Screen.Stream <- Serial.run(Active,Screen.Stream,handle,current => finish(current,U32.to_nat(columns)))
         written : Result<&2,&2,Terminal.Error,Unit> <- writeEffects(terminalHandle,cleanup)
@@ -670,6 +681,7 @@ def awaitProcess(started: Result<&2,&1,Terminal.Error,Terminal.ProcessTerminal>,
     case Fail{error}:
       do IO<Result<&2,&2,Terminal.Error,Active>>:
         old : Active <- Serial.retire(Active,owner)
+        disposeFocus(old)
         return Fail{error}
     case Done{terminal}: runStarted(Terminal.borrow(terminal),owner,handle,ready,queries,onReady,onStopping,requestRender,preferences,stopped,termux,finish)
 

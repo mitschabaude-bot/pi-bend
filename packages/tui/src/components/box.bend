@@ -140,17 +140,17 @@ def innerEvent(event: T.TuiMouseEvent,paddingX: Nat,paddingY: Nat,width: Nat) ->
   match event:
     case T.TuiMouseEvent{kind,button,x,y,sx,sy,_,height,shift,alt,ctrl,wheel,clicks}:
       T.TuiMouseEvent{kind,button,Component.subtract(x,T.Forward{paddingX}),Component.subtract(y,T.Forward{paddingY}),sx,sy,width,height,shift,alt,ctrl,wheel,clicks}
-def routeInner(container: Component.Container,+inner: T.TuiMouseEvent,+contentWidth: Nat) -> IO(Maybe<&2,Component.TuiMouseDispatchResult>):
+def routeInner(container: Component.Container,+inner: T.TuiMouseEvent,+contentWidth: Nat) -> IO(Maybe<&2,Component.TuiMouseDispatchResult()>):
   match inner:
     case T.TuiMouseEvent{_,_,x,y,_,_,_,_,_,_,_,_,_}:
-      Bool.pick(Unit -> IO(Maybe<&2,Component.TuiMouseDispatchResult>),nonnegative(y) && insideX(x,contentWidth),
-        _ => do IO<Maybe<&2,Component.TuiMouseDispatchResult>>:
+      Bool.pick(Unit -> IO(Maybe<&2,Component.TuiMouseDispatchResult()>),nonnegative(y) && insideX(x,contentWidth),
+        _ => do IO<Maybe<&2,Component.TuiMouseDispatchResult()>>:
           children : List<&2,Component.ChildLayout> <- Component.mouseChildren(container,contentWidth)
           Component.routeMouse(children,inner,y,0n),
-        _ => IO.pure(Maybe<&2,Component.TuiMouseDispatchResult>,None{}))(Unit{})
+        _ => IO.pure(Maybe<&2,Component.TuiMouseDispatchResult()>,None{}))(Unit{})
 def eventWidth(event: T.TuiMouseEvent) -> Nat:
   match event: case T.TuiMouseEvent{_,_,_,_,_,_,width,_,_,_,_,_,_}: width
-def handleMouse(state: Box,+event: T.TuiMouseEvent) -> IO(Maybe<&2,Component.TuiMouseDispatchResult>):
+def handleMouse(state: Box,+event: T.TuiMouseEvent) -> IO(Maybe<&2,Component.TuiMouseDispatchResult()>):
   match state:
     case Box{container,+x,+y,_,_}:
       +contentWidth = Nat.max(1n,eventWidth(event) - x * 2n)

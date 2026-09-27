@@ -268,21 +268,21 @@ def handleInput(~Context: Data,~segment: Context -> String -> Word.ResultOf(List
         return Done{state}
     case _: mainInput(~Context,~segment,~isAtomic,context,state,manager,keyboard,data)
 
-def focusMouse(response: Maybe<&2,Component.MouseResponse>) -> Maybe<&2,Component.MouseResponse>:
+def focusMouse(response: Maybe<&2,Component.MouseResponse()>) -> Maybe<&2,Component.MouseResponse()>:
   match response:
     case Some{Component.LocalResult{Tui.TuiMouseEventResult{handled,capture,_,wantsRender}}}: Some{Component.LocalResult{Tui.TuiMouseEventResult{handled,capture,True{},wantsRender}}}
     case Some{Component.DispatchedResult{Component.TuiMouseDispatchResult{target,focusTarget,capture,_,wantsRender}}}: Some{Component.DispatchedResult{Component.TuiMouseDispatchResult{target,focusTarget,capture,True{},wantsRender}}}
     case None{}: None{}
-def childMouse(child: Component.Component,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+def childMouse(child: Component.Component,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
   match child:
     case Component.Component{_,_,_,Some{callback},_,_,_}:
-      do IO<Maybe<&2,Component.MouseResponse>>:
-        response : Maybe<&2,Component.MouseResponse> <- C.call(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,callback,event)
+      do IO<Maybe<&2,Component.MouseResponse()>>:
+        response : Maybe<&2,Component.MouseResponse()> <- C.call(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>,callback,event)
         return focusMouse(response)
-    case _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
-def searchMouse(state: SettingsList,pair: Input.Input & Maybe<&2,Tui.TuiMouseEventResult>) -> SettingsList & Maybe<&2,Component.MouseResponse>:
+    case _: IO.pure(Maybe<&2,Component.MouseResponse()>,None{})
+def searchMouse(state: SettingsList,pair: Input.Input & Maybe<&2,Tui.TuiMouseEventResult>) -> SettingsList & Maybe<&2,Component.MouseResponse()>:
   match pair:
-    case (input,result): (withSearch(state,input),focusMouse(Maybe.map(&2,Tui.TuiMouseEventResult,Component.MouseResponse,value => Component.LocalResult{value},result)))
+    case (input,result): (withSearch(state,input),focusMouse(Maybe.map(&2,Tui.TuiMouseEventResult,Component.MouseResponse(),value => Component.LocalResult{value},result)))
 def wheelIndex(delta: Tui.Offset,+index: Nat,count: Nat) -> Nat:
   match delta:
     case Tui.Backward{Succ{_}}: Nat.min(count - 1n,index - 1n)
@@ -293,7 +293,7 @@ def nonzero(delta: Maybe<&2,Tui.Offset>) -> Bool:
     case Some{Tui.Forward{Succ{_}}}: True{}
     case Some{Tui.Backward{Succ{_}}}: True{}
     case _: False{}
-def wheel(+state: SettingsList,delta: Tui.Offset) -> SettingsList & Maybe<&2,Component.MouseResponse>:
+def wheel(+state: SettingsList,delta: Tui.Offset) -> SettingsList & Maybe<&2,Component.MouseResponse()>:
   match state:
     case SettingsList{_,_,_,+index,pressed,_,_,_,_,_,_,_}:
       +next = wheelIndex(delta,index,List.length(&2,SettingItem,getDisplayItems(state)))
@@ -307,7 +307,7 @@ def validRow(row: Tui.Offset,count: Nat) -> Bool:
     case Tui.Forward{value}: Nat.is_lt(value,count)
     case Tui.Backward{Zero{}}: Nat.is_gt(count,0n)
     case _: False{}
-def clicked(+state: SettingsList,+press: Bool,row: Tui.Offset) -> IO(SettingsList & Maybe<&2,Component.MouseResponse>):
+def clicked(+state: SettingsList,+press: Bool,row: Tui.Offset) -> IO(SettingsList & Maybe<&2,Component.MouseResponse()>):
   match state:
     case SettingsList{_,_,_,index,pressed,+maximum,_,_,search,_,_,_}:
       +count = List.length(&2,SettingItem,getDisplayItems(state))
@@ -316,29 +316,29 @@ def clicked(+state: SettingsList,+press: Bool,row: Tui.Offset) -> IO(SettingsLis
       +target = start + rowNumber(relative)
       +selected = Bool.pick(Nat,press,target,Maybe.default(&2,Nat,pressed,target))
       +updated = selection(state,selected,Bool.pick(Maybe<&2,Nat>,press,Some{target},None{}))
-      Bool.pick(Unit -> IO(SettingsList & Maybe<&2,Component.MouseResponse>),validRow(relative,Nat.min(maximum,count - start)),
+      Bool.pick(Unit -> IO(SettingsList & Maybe<&2,Component.MouseResponse()>),validRow(relative,Nat.min(maximum,count - start)),
         _ =>
-          do IO<SettingsList & Maybe<&2,Component.MouseResponse>>:
+          do IO<SettingsList & Maybe<&2,Component.MouseResponse()>>:
             next : SettingsList <- Bool.pick(Unit -> IO(SettingsList),press,_ => IO.pure(SettingsList,updated),_ => activateItem(updated))(Unit{})
             return (next,Some{Component.LocalResult{Tui.TuiMouseEventResult{True{},False{},press,None{}}}}),
-        _ => IO.pure(SettingsList & Maybe<&2,Component.MouseResponse>,(state,None{})))(Unit{})
-def listMouse(+state: SettingsList,event: Tui.TuiMouseEvent) -> IO(SettingsList & Maybe<&2,Component.MouseResponse>):
+        _ => IO.pure(SettingsList & Maybe<&2,Component.MouseResponse()>,(state,None{})))(Unit{})
+def listMouse(+state: SettingsList,event: Tui.TuiMouseEvent) -> IO(SettingsList & Maybe<&2,Component.MouseResponse()>):
   match event:
     case Tui.TuiMouseEvent{Tui.MouseWheel{},_,_,_,_,_,_,_,_,_,_,+delta,_}:
-      IO.pure(SettingsList & Maybe<&2,Component.MouseResponse>,Bool.pick(Unit -> SettingsList & Maybe<&2,Component.MouseResponse>,nonzero(delta),_ => wheel(state,Maybe.default(&2,Tui.Offset,delta,Tui.Forward{0n})),_ => (state,None{}))(Unit{}))
+      IO.pure(SettingsList & Maybe<&2,Component.MouseResponse()>,Bool.pick(Unit -> SettingsList & Maybe<&2,Component.MouseResponse()>,nonzero(delta),_ => wheel(state,Maybe.default(&2,Tui.Offset,delta,Tui.Forward{0n})),_ => (state,None{}))(Unit{}))
     case Tui.TuiMouseEvent{Tui.MousePress{},Tui.MouseLeft{},_,row,_,_,_,_,_,_,_,_,_}: clicked(state,True{},row)
     case Tui.TuiMouseEvent{Tui.MouseClick{},Tui.MouseLeft{},_,row,_,_,_,_,_,_,_,_,_}: clicked(state,False{},row)
-    case _: IO.pure(SettingsList & Maybe<&2,Component.MouseResponse>,(state,None{}))
-def mainMouse(+state: SettingsList,+event: Tui.TuiMouseEvent) -> IO(SettingsList & Maybe<&2,Component.MouseResponse>):
+    case _: IO.pure(SettingsList & Maybe<&2,Component.MouseResponse()>,(state,None{}))
+def mainMouse(+state: SettingsList,+event: Tui.TuiMouseEvent) -> IO(SettingsList & Maybe<&2,Component.MouseResponse()>):
   match state event:
-    case SettingsList{_,_,_,_,_,_,_,_,Some{input},_,_,_} Tui.TuiMouseEvent{_,_,_,Tui.Forward{Zero{}},_,_,_,_,_,_,_,_,_}: IO.pure(SettingsList & Maybe<&2,Component.MouseResponse>,searchMouse(state,Input.handleMouse(input,event)))
-    case SettingsList{_,_,_,_,_,_,_,_,Some{input},_,_,_} Tui.TuiMouseEvent{_,_,_,Tui.Backward{Zero{}},_,_,_,_,_,_,_,_,_}: IO.pure(SettingsList & Maybe<&2,Component.MouseResponse>,searchMouse(state,Input.handleMouse(input,event)))
-    case SettingsList{_,_,_,_,_,_,_,_,Some{_},_,_,_} Tui.TuiMouseEvent{_,_,_,Tui.Forward{Succ{Zero{}}},_,_,_,_,_,_,_,_,_}: IO.pure(SettingsList & Maybe<&2,Component.MouseResponse>,(state,None{}))
-    case _ _: Bool.pick(Unit -> IO(SettingsList & Maybe<&2,Component.MouseResponse>),List.is_empty(&2,SettingItem,getDisplayItems(state)),_ => IO.pure(SettingsList & Maybe<&2,Component.MouseResponse>,(state,None{})),_ => listMouse(state,event))(Unit{})
-def handleMouse(+state: SettingsList,+event: Tui.TuiMouseEvent) -> IO(SettingsList & Maybe<&2,Component.MouseResponse>):
+    case SettingsList{_,_,_,_,_,_,_,_,Some{input},_,_,_} Tui.TuiMouseEvent{_,_,_,Tui.Forward{Zero{}},_,_,_,_,_,_,_,_,_}: IO.pure(SettingsList & Maybe<&2,Component.MouseResponse()>,searchMouse(state,Input.handleMouse(input,event)))
+    case SettingsList{_,_,_,_,_,_,_,_,Some{input},_,_,_} Tui.TuiMouseEvent{_,_,_,Tui.Backward{Zero{}},_,_,_,_,_,_,_,_,_}: IO.pure(SettingsList & Maybe<&2,Component.MouseResponse()>,searchMouse(state,Input.handleMouse(input,event)))
+    case SettingsList{_,_,_,_,_,_,_,_,Some{_},_,_,_} Tui.TuiMouseEvent{_,_,_,Tui.Forward{Succ{Zero{}}},_,_,_,_,_,_,_,_,_}: IO.pure(SettingsList & Maybe<&2,Component.MouseResponse()>,(state,None{}))
+    case _ _: Bool.pick(Unit -> IO(SettingsList & Maybe<&2,Component.MouseResponse()>),List.is_empty(&2,SettingItem,getDisplayItems(state)),_ => IO.pure(SettingsList & Maybe<&2,Component.MouseResponse()>,(state,None{})),_ => listMouse(state,event))(Unit{})
+def handleMouse(+state: SettingsList,+event: Tui.TuiMouseEvent) -> IO(SettingsList & Maybe<&2,Component.MouseResponse()>):
   match state:
     case SettingsList{_,_,_,_,_,_,_,_,_,Some{child},_,_}:
-      do IO<SettingsList & Maybe<&2,Component.MouseResponse>>:
-        response : Maybe<&2,Component.MouseResponse> <- childMouse(child,event)
+      do IO<SettingsList & Maybe<&2,Component.MouseResponse()>>:
+        response : Maybe<&2,Component.MouseResponse()> <- childMouse(child,event)
         return (state,response)
     case _: mainMouse(state,event)

@@ -19,10 +19,10 @@ def signed(value: T.Offset) -> String:
   match value:
     case T.Forward{n}: Nat.show(n)
     case T.Backward{n}: "-" ++ Nat.show(n)
-def onMouse(child: Child,event: T.TuiMouseEvent) -> IO(Maybe<&2,C.MouseResponse>):
+def onMouse(child: Child,event: T.TuiMouseEvent) -> IO(Maybe<&2,C.MouseResponse()>):
   match child event:
     case Child{_,mouse,_} T.TuiMouseEvent{_,_,x,y,_,_,width,height,_,_,_,_,_}:
-      do IO<Maybe<&2,C.MouseResponse>>:
+      do IO<Maybe<&2,C.MouseResponse()>>:
         Ref.write(String,mouse,signed(x) ++ "," ++ signed(y) ++ "," ++ Nat.show(width) ++ "," ++ Nat.show(height))
         return Some{C.LocalResult{T.TuiMouseEventResult{True{},False{},True{},None{}}}}
 def painted(text: Unit,value: String) -> IO(String): IO.pure(String,"<" ++ value ++ ">")
@@ -45,7 +45,7 @@ def main() -> IO(Unit):
     +mouse : Ref.Ref<String> <- Ref.new(String,"")
     +invalidations : Ref.Ref<Nat> <- Ref.new(Nat,0n)
     +drawCallback : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Child,~Nat,~List<&2,String>,~draw,Child{text,mouse,invalidations})
-    +mouseCallback : Callback.Callback<T.TuiMouseEvent,Maybe<&2,C.MouseResponse>> <- Callback.create(~Child,~T.TuiMouseEvent,~Maybe<&2,C.MouseResponse>,~onMouse,Child{text,mouse,invalidations})
+    +mouseCallback : Callback.Callback<T.TuiMouseEvent,Maybe<&2,C.MouseResponse()>> <- Callback.create(~Child,~T.TuiMouseEvent,~Maybe<&2,C.MouseResponse()>,~onMouse,Child{text,mouse,invalidations})
     +invalidator : Callback.Callback<Unit,Unit> <- Callback.create(~Child,~Unit,~Unit,~ignore,Child{text,mouse,invalidations})
     +background : Callback.Callback<String,String> <- Callback.create(~Unit,~String,~String,~painted,Unit{})
     component : C.Component <- IO.pure(C.Component,C.Component{C.ComponentId{1n},drawCallback,None{},Some{mouseCallback},invalidator,None{},False{}})
@@ -56,10 +56,10 @@ def main() -> IO(Unit):
     Ref.write(String,text,"xyz")
     changedPair : Box.Box & List<&2,String> <- Box.render(first,6n)
     +changed : Box.Box <- report(changedPair)
-    hit : Maybe<&2,C.TuiMouseDispatchResult> <- Box.handleMouse(changed,mouseEvent(2n,1n))
+    hit : Maybe<&2,C.TuiMouseDispatchResult()> <- Box.handleMouse(changed,mouseEvent(2n,1n))
     seen : String <- Ref.read(String,mouse)
     IO.print(seen)
-    missed : Maybe<&2,C.TuiMouseDispatchResult> <- Box.handleMouse(changed,mouseEvent(0n,1n))
+    missed : Maybe<&2,C.TuiMouseDispatchResult()> <- Box.handleMouse(changed,mouseEvent(0n,1n))
     afterMiss : String <- Ref.read(String,mouse)
     IO.print(afterMiss)
     invalidated : Box.Box <- Box.invalidate(changed)
@@ -68,7 +68,7 @@ def main() -> IO(Unit):
     colored : Box.Box & List<&2,String> <- Box.render(Box.setBgFn(invalidated,Some{background}),6n)
     IO.print(show(linesOf(colored)))
     Callback.dispose(Nat,List<&2,String>,drawCallback)
-    Callback.dispose(T.TuiMouseEvent,Maybe<&2,C.MouseResponse>,mouseCallback)
+    Callback.dispose(T.TuiMouseEvent,Maybe<&2,C.MouseResponse()>,mouseCallback)
     Callback.dispose(Unit,Unit,invalidator)
     Callback.dispose(String,String,background)
     oldText : String <- Ref.dispose(String,text)

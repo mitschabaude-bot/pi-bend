@@ -2750,7 +2750,7 @@
         "tests/custom_message_reference.ts"
       ],
       "sha256": "345716cc20a80dbe8072a3ed92bbff232f36ec83cfd02241b2ea4cb54945cc20",
-      "notes": "The original provides output padding to custom renderers and updates it case: initial expanded=false/outputPad=1, a Text component with one-space padding, and outputPad=0 with no leading padding. The native fixture also checks unchanged-option reuse, expansion, invalidation, renderer failure/absence fallback, duplicate registration replacement, first-active-extension precedence, hidden/live/replayed messages and affine child cleanup; the host oracle compares custom/default/padding frames to pinned pi on Bun and native one/four."
+      "notes": "The original provides output padding to custom renderers and updates it case: initial expanded=false/outputPad=1, a Text component with one-space padding, and outputPad=0 with no leading padding. The native fixture also checks unchanged-option reuse, expansion, invalidation, renderer failure/absence fallback, duplicate registration replacement, first-active-extension precedence, hidden/live/replayed messages and affine child cleanup; the host oracle compares custom/default/padding frames to pinned pi on Bun and native one/four. Pinned mouse traces additionally cover nested discovery, displayed-child routing after replacement, pending-section reparenting, reentrant renderer replacement, retained capture/focused input and exactly-once retirement."
     },
     {
       "source": "packages/coding-agent/test/default-tools-setting.test.ts",
@@ -5675,10 +5675,14 @@
         "tests/fullscreen-mouse.bend",
         "tests/fullscreen_mouse_check.py",
         "tests/fullscreen_mouse_reference.mts",
-        "tests/thinking_selector_terminal_check.py"
+        "tests/thinking_selector_terminal_check.py",
+        "tests/component-groups.bend",
+        "tests/custom-message.bend",
+        "tests/custom_message_check.py",
+        "tests/custom_message_reference.ts"
       ],
       "sha256": "1c3e5210d61e0bbf322a218fc77efe90469ce741aeb718589ddb4c497089edd7",
-      "notes": "The search corpus, Unicode column mapping, cache, box rendering and visible highlights have native checks; fullscreen-search exercises keyboard navigation and closing against the upstream terminal. Native one/four pinned component traces exercise the contracts of \"focuses and captures drag gestures for mouse-aware components\", \"reports consecutive click counts to component-owned controls\" and component-first wheel dispatch; fullscreen picker click/wheel/drag terminal frames and settings match pi. This is partial coverage: document selection/copy, focus loss, scrollbar pointer controls, viewport bubbling and broader overlay/focus resolution remain open."
+      "notes": "The search corpus, Unicode column mapping, cache, box rendering and visible highlights have native checks; fullscreen-search exercises keyboard navigation and closing against the upstream terminal. Native one/four pinned component traces exercise the contracts of \"focuses and captures drag gestures for mouse-aware components\", \"reports consecutive click counts to component-owned controls\" and component-first wheel dispatch; fullscreen picker click/wheel/drag terminal frames and settings match pi. This is partial coverage: document selection/copy, focus loss, scrollbar pointer controls, viewport bubbling and broader overlay/focus resolution remain open. Added nested group discovery and independent lifetime-holder checks, plus pinned custom renderer traces where an active gesture replaces its child and the old capture/focus continues receiving input after redraw. Broader gaps above remain."
     },
     {
       "source": "packages/tui/test/tui-cell-size-input.test.ts",

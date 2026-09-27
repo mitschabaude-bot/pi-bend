@@ -15,4 +15,4 @@ for backend, command in [
     output = subprocess.check_output(command, cwd=ROOT, env=env)
     frames = b"".join(row + b"\n" for row in output.split(b"\n") if b"\x1e" in row)
     assert frames == expected, (backend, frames.decode(), expected.decode())
-    print(f"{backend}: custom/default/failure frames match pi; registration and transcript lifecycle pass")
+    print(f"{backend}: custom/default/failure frames and reentrant capture/focus traces match pi; lifecycle checks pass")

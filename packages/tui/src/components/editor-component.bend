@@ -112,21 +112,21 @@ def invalidateLive(handle: Handle,value: Unit) -> IO(Unit):
   match handle:
     case Handle{resource}: Serial.run(State,Unit,resource,invalidated)
 
-def mouseAccepted(previous: State,result: Editor.ResultOf(Editor.MouseResult)) -> State & Maybe<&2,Component.MouseResponse>:
+def mouseAccepted(previous: State,result: Editor.ResultOf(Editor.MouseResult)) -> State & Maybe<&2,Component.MouseResponse()>:
   match previous result:
     case State{_,words,bindings,keyboard,rows,_} Done{Editor.MouseResult{editor,response}}:
-      (State{editor,words,bindings,keyboard,rows,None{}},Maybe.map(&2,Tui.TuiMouseEventResult,Component.MouseResponse,answer => Component.LocalResult{answer},response))
+      (State{editor,words,bindings,keyboard,rows,None{}},Maybe.map(&2,Tui.TuiMouseEventResult,Component.MouseResponse(),answer => Component.LocalResult{answer},response))
     case State{editor,words,bindings,keyboard,rows,_} Fail{error}:
       (State{editor,words,bindings,keyboard,rows,Some{error}},None{})
-def mouseState(state: State,event: Tui.TuiMouseEvent) -> IO(State & Maybe<&2,Component.MouseResponse>):
+def mouseState(state: State,event: Tui.TuiMouseEvent) -> IO(State & Maybe<&2,Component.MouseResponse()>):
   match state:
     case State{+editor,words,bindings,keyboard,rows,error}:
-      do IO<State & Maybe<&2,Component.MouseResponse>>:
+      do IO<State & Maybe<&2,Component.MouseResponse()>>:
         result : Editor.ResultOf(Editor.MouseResult) <- Editor.handleMouse(editor,event)
         return mouseAccepted(State{editor,words,bindings,keyboard,rows,error},result)
-def mouseLive(handle: Handle,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+def mouseLive(handle: Handle,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
   match handle:
-    case Handle{resource}: Serial.run(State,Maybe<&2,Component.MouseResponse>,resource,state => mouseState(state,event))
+    case Handle{resource}: Serial.run(State,Maybe<&2,Component.MouseResponse()>,resource,state => mouseState(state,event))
 
 def errorState(state: State) -> IO(State & Maybe<&2,Editor.Error>):
   match state:
@@ -203,7 +203,7 @@ def created(id: Component.ComponentId,pair: Serial.Owner<State> & Serial.Handle<
       do IO<Owner>:
         render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~RenderInput,~Nat,~List<&2,String>,~renderLive,RenderInput{Handle{handle},working})
         input : Callback.Callback<String,Unit> <- Callback.create(~Handle,~String,~Unit,~inputLive,Handle{handle})
-        mouse : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Handle,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~mouseLive,Handle{handle})
+        mouse : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>> <- Callback.create(~Handle,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse()>,~mouseLive,Handle{handle})
         invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Handle,~Unit,~Unit,~invalidateLive,Handle{handle})
         focus : Callback.Callback<Bool,Unit> <- Callback.create(~Handle,~Bool,~Unit,~focusLive,Handle{handle})
         return Owner{resource,Component.Component{id,render,Some{input},Some{mouse},invalidate,Some{focus},False{}},Handle{handle}}
@@ -229,7 +229,7 @@ def dispose(owner: Owner) -> IO(Unit):
         disposeState(state)
         Callback.dispose(Nat,List<&2,String>,render)
         Callback.dispose(String,Unit,input)
-        Callback.dispose(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,mouse)
+        Callback.dispose(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>,mouse)
         Callback.dispose(Unit,Unit,invalidate)
         Callback.dispose(Bool,Unit,focus)
     case _: IO.die(Unit,1,"invalid editor component")

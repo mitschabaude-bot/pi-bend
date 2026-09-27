@@ -52,9 +52,9 @@ def show(+state: P.State,action: P.Action,result: Maybe<&2,T.TuiMouseEventResult
   do IO<P.State>:
     pair : P.State & List<&2,String> <- P.render(state,theme,bindings,width)
     emitted(pair,action,result)
-def mouseResponse(value: Maybe<&2,C.MouseResponse>) -> Maybe<&2,T.TuiMouseEventResult>:
+def mouseResponse(value: Maybe<&2,C.MouseResponse()>) -> Maybe<&2,T.TuiMouseEventResult>:
   match value: case Some{C.LocalResult{result}}: Some{result} case _: None{}
-def mousePair(pair: P.State & Maybe<&2,C.MouseResponse>) -> P.State & P.Action & Maybe<&2,T.TuiMouseEventResult>:
+def mousePair(pair: P.State & Maybe<&2,C.MouseResponse()>) -> P.State & P.Action & Maybe<&2,T.TuiMouseEventResult>:
   match pair: case (state,response): (state,P.Continue{},mouseResponse(response))
 def mouse(+state: P.State,+width: Nat,theme: Theme.Theme,bindings: Bindings.KeybindingsManager,parts: List<&2,String>) -> IO(P.State & P.Action & Maybe<&2,T.TuiMouseEventResult>):
   match parts:

@@ -560,18 +560,18 @@ def noteClicked(current: Stamped) -> Stamped:
     case Stamped{NoteBody{Note{label,Some{brief},content,expanded,theme,styles,hint}},version}:
       Stamped{NoteBody{Note{label,Some{brief},content,Bool.not(expanded),theme,styles,hint}},version + 1n}
     case other: other
-def toggleNote(handle: Handle) -> IO(Maybe<&2,Component.MouseResponse>):
+def toggleNote(handle: Handle) -> IO(Maybe<&2,Component.MouseResponse()>):
   match handle:
     case Handle{+state,rendered}:
-      do IO<Maybe<&2,Component.MouseResponse>>:
+      do IO<Maybe<&2,Component.MouseResponse()>>:
         current : Stamped <- Ref.read(Stamped,state)
         Ref.write(Stamped,state,noteClicked(current))
         Ref.write(Maybe<&2,Rendered>,rendered,None{})
         return Some{Component.LocalResult{Tui.TuiMouseEventResult{True{},False{},False{},Some{True{}}}}}
-def clickNote(handle: Handle,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+def clickNote(handle: Handle,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
   match event:
     case Tui.TuiMouseEvent{Tui.MouseClick{},Tui.MouseLeft{},_,_,_,_,_,_,_,_,_,_,_}: toggleNote(handle)
-    case _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
+    case _: IO.pure(Maybe<&2,Component.MouseResponse()>,None{})
 def runAt(runs: List<&2,ThinkingRun>,+row: Nat) -> Maybe<&2,Nat>:
   match runs:
     case Nil{}: None{}
@@ -581,44 +581,44 @@ def toggleThinkingStamp(current: Stamped,index: Nat) -> Stamped:
   match current:
     case Stamped{AssistantBody{message},version}: Stamped{AssistantBody{toggleThinkingRun(message,index)},version + 1n}
     case other: other
-def clickThinkingIndex(+state: Ref.Ref<Stamped>,+rendered: Ref.Ref<Maybe<&2,Rendered>>,found: Maybe<&2,Nat>) -> IO(Maybe<&2,Component.MouseResponse>):
+def clickThinkingIndex(+state: Ref.Ref<Stamped>,+rendered: Ref.Ref<Maybe<&2,Rendered>>,found: Maybe<&2,Nat>) -> IO(Maybe<&2,Component.MouseResponse()>):
   match found:
-    case None{}: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
+    case None{}: IO.pure(Maybe<&2,Component.MouseResponse()>,None{})
     case Some{index}:
-      do IO<Maybe<&2,Component.MouseResponse>>:
+      do IO<Maybe<&2,Component.MouseResponse()>>:
         current : Stamped <- Ref.read(Stamped,state)
         Ref.write(Stamped,state,toggleThinkingStamp(current,index))
         Ref.write(Maybe<&2,Rendered>,rendered,None{})
         return Some{Component.LocalResult{Tui.TuiMouseEventResult{True{},False{},False{},Some{True{}}}}}
-def clickThinkingCache(state: Ref.Ref<Stamped>,rendered: Ref.Ref<Maybe<&2,Rendered>>,row: Nat,cache: Maybe<&2,Rendered>) -> IO(Maybe<&2,Component.MouseResponse>):
+def clickThinkingCache(state: Ref.Ref<Stamped>,rendered: Ref.Ref<Maybe<&2,Rendered>>,row: Nat,cache: Maybe<&2,Rendered>) -> IO(Maybe<&2,Component.MouseResponse()>):
   match cache:
     case Some{Rendered{_,_,_,runs}}: clickThinkingIndex(state,rendered,runAt(runs,row))
-    case None{}: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
-def clickThinkingRow(handle: Handle,row: Nat,width: Nat) -> IO(Maybe<&2,Component.MouseResponse>):
+    case None{}: IO.pure(Maybe<&2,Component.MouseResponse()>,None{})
+def clickThinkingRow(handle: Handle,row: Nat,width: Nat) -> IO(Maybe<&2,Component.MouseResponse()>):
   match handle:
     case Handle{+state,+rendered}:
-      do IO<Maybe<&2,Component.MouseResponse>>:
+      do IO<Maybe<&2,Component.MouseResponse()>>:
         rows : List<&2,String> <- renderLive(Handle{state,rendered},width)
         cache : Maybe<&2,Rendered> <- Ref.read(Maybe<&2,Rendered>,rendered)
         clickThinkingCache(state,rendered,row,cache)
-def clickThinking(handle: Handle,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+def clickThinking(handle: Handle,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
   match event:
     case Tui.TuiMouseEvent{Tui.MouseClick{},Tui.MouseLeft{},_,Tui.Forward{row},_,_,width,_,_,_,_,_,_}: clickThinkingRow(handle,row,width)
-    case _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
-def messageMouse(body: Body,handle: Handle) -> IO(Maybe<&2,Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>>):
+    case _: IO.pure(Maybe<&2,Component.MouseResponse()>,None{})
+def messageMouse(body: Body,handle: Handle) -> IO(Maybe<&2,Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>>):
   match body:
     case AssistantBody{_}:
-      do IO<Maybe<&2,Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>>>:
-        callback : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Handle,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~clickThinking,handle)
+      do IO<Maybe<&2,Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>>>:
+        callback : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>> <- Callback.create(~Handle,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse()>,~clickThinking,handle)
         return Some{callback}
     case NoteBody{Note{_,Some{_},_,_,_,_,_}}:
-      do IO<Maybe<&2,Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>>>:
-        callback : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- Callback.create(~Handle,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~clickNote,handle)
+      do IO<Maybe<&2,Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>>>:
+        callback : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>> <- Callback.create(~Handle,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse()>,~clickNote,handle)
         return Some{callback}
-    case _: IO.pure(Maybe<&2,Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>>,None{})
+    case _: IO.pure(Maybe<&2,Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>>,None{})
 def disposeMouse(component: Component.Component) -> IO(Unit):
   match component:
-    case Component.Component{_,_,_,Some{callback},_,_,_}: Callback.dispose(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,callback)
+    case Component.Component{_,_,_,Some{callback},_,_,_}: Callback.dispose(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>,callback)
     case _: IO.pure(Unit,Unit{})
 def create(id: Component.ComponentId,+body: Body) -> IO(Owner):
   do IO<Owner>:
@@ -626,7 +626,7 @@ def create(id: Component.ComponentId,+body: Body) -> IO(Owner):
     +rendered : Ref.Ref<Maybe<&2,Rendered>> <- Ref.new(Maybe<&2,Rendered>,None{})
     +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Handle,~Nat,~List<&2,String>,~renderLive,Handle{state,rendered})
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Handle,~Unit,~Unit,~invalidateLive,Handle{state,rendered})
-    mouse : Maybe<&2,Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>>> <- messageMouse(body,Handle{state,rendered})
+    mouse : Maybe<&2,Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>> <- messageMouse(body,Handle{state,rendered})
     return Owner{state,rendered,Component.Component{id,render,None{},mouse,invalidate,None{},False{}},render,invalidate}
 def borrow(owner: Owner) -> Owner & Component.Component & Handle:
   match owner:

@@ -58,7 +58,7 @@ def stopping(context: Context,_: Unit) -> IO(Unit):
         Ref.write(Maybe<&2,Callback.Callback<String,Unit>>,write,None{})
 def result(value: Result<&2,&2,Terminal.Error,Process.Active>) -> IO(Unit):
   match value:
-    case Done{Process.Active{Process.Session{Tui.TuiBase{_,_,_,_,_,True{},False{},_},_},_,_,None{},_,_}}:
+    case Done{Process.Active{Process.Session{Tui.TuiBase{_,_,_,_,_,True{},False{},_,+heldFocus},_},_,_,None{},_,_}}:
       IO.print_err("preferences:cursor=true,clear=false")
     case _: IO.die(Unit,1,"live preference update failed")
 def focused(value: Tui.ResultOf(Tui.TuiBase)) -> IO(Tui.TuiBase):

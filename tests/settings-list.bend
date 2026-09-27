@@ -172,13 +172,13 @@ def eventName(event: Tui.TuiMouseEventType) -> String:
     case Tui.MouseRelease{}: "release"
     case Tui.MouseDrag{}: "drag"
     case _: "move"
-def childMouseCore(+child: Child,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
+def childMouseCore(+child: Child,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
   match child event:
     case Child{_,_,_,+mode} Tui.TuiMouseEvent{kind,_,_,y,_,_,_,_,_,_,_,_,_}:
-      do IO<Maybe<&2,Component.MouseResponse>>:
+      do IO<Maybe<&2,Component.MouseResponse()>>:
         childRecord(child,"child-mouse",field("type",V.Text{eventName(kind)}) <> field("y",signedValue(y)) <> Nil{})
-        return Bool.pick(Maybe<&2,Component.MouseResponse>,String.eq(mode,"none"),None{},Some{Component.LocalResult{Tui.TuiMouseEventResult{Bool.not(String.eq(mode,"unhandled")),String.eq(mode,"capture"),False{},Bool.pick(Maybe<&2,Bool>,String.eq(mode,"unhandled"),None{},Some{False{}})}}})
-def childMouse(child: Child,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>): childMouseCore(child,event)
+        return Bool.pick(Maybe<&2,Component.MouseResponse()>,String.eq(mode,"none"),None{},Some{Component.LocalResult{Tui.TuiMouseEventResult{Bool.not(String.eq(mode,"unhandled")),String.eq(mode,"capture"),False{},Bool.pick(Maybe<&2,Bool>,String.eq(mode,"unhandled"),None{},Some{False{}})}}})
+def childMouse(child: Child,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>): childMouseCore(child,event)
 def rememberDone(context: Context,done: S.SubmenuDone) -> IO(Unit):
   match context:
     case Context{_,_,values,_,_}: Ref.modify(List<&2,S.SubmenuDone>,Unit,values,previous => (List.append(&2,S.SubmenuDone,previous,done <> Nil{}),Unit{}))
@@ -198,7 +198,7 @@ def factory(pair: FactoryContext,request: S.SubmenuRequest) -> IO(Component.Comp
         rememberDone(context,done)
         render : C.Callback<Nat,List<&2,String>> <- C.create(~Child,~Nat,~List<&2,String>,~childRender,child)
         input : C.Callback<String,Unit> <- C.create(~Child,~String,~Unit,~childInput,child)
-        mouse : C.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>> <- C.create(~Child,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse>,~childMouse,child)
+        mouse : C.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>> <- C.create(~Child,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse()>,~childMouse,child)
         invalidate : C.Callback<Unit,Unit> <- C.create(~Child,~Unit,~Unit,~childInvalidate,child)
         rememberChild(context,Component.Component{Component.ComponentId{0n},render,Some{input},Some{mouse},invalidate,None{},False{}})
 def texts(values: List<&2,V.Value>) -> List<&2,String>:
@@ -241,11 +241,11 @@ def snapshot(+state: S.SettingsList,extra: List<&2,R.Property<V.Value>>) -> V.Va
 def rendered(pair: S.SettingsList & List<&2,String>) -> S.SettingsList & List<&2,R.Property<V.Value>>:
   match pair:
     case (state,lines): (state,field("lines",strings(lines,Nil{})) <> Nil{})
-def mouseResult(response: Maybe<&2,Component.MouseResponse>) -> V.Value:
+def mouseResult(response: Maybe<&2,Component.MouseResponse()>) -> V.Value:
   match response:
     case Some{Component.LocalResult{response}}: result(Some{response})
     case _: V.Null{}
-def clicked(pair: S.SettingsList & Maybe<&2,Component.MouseResponse>) -> S.SettingsList & List<&2,R.Property<V.Value>>:
+def clicked(pair: S.SettingsList & Maybe<&2,Component.MouseResponse()>) -> S.SettingsList & List<&2,R.Property<V.Value>>:
   match pair:
     case (state,value): (state,field("mouse",mouseResult(value)) <> Nil{})
 def received(value: Word.ResultOf(S.SettingsList)) -> IO(S.SettingsList & List<&2,R.Property<V.Value>>):
@@ -275,7 +275,7 @@ def stepOp(context: Context,+command: V.Value,+state: S.SettingsList,manager: KB
         return rendered(next)
     case "mouse":
       do IO<S.SettingsList & List<&2,R.Property<V.Value>>>:
-        next : S.SettingsList & Maybe<&2,Component.MouseResponse> <- S.handleMouse(state,mouse(get(command,"event")))
+        next : S.SettingsList & Maybe<&2,Component.MouseResponse()> <- S.handleMouse(state,mouse(get(command,"event")))
         return clicked(next)
     case "update": IO.pure(S.SettingsList & List<&2,R.Property<V.Value>>,(S.updateValue(state,text(get(command,"id")),text(get(command,"value"))),Nil{}))
     case "select": IO.pure(S.SettingsList & List<&2,R.Property<V.Value>>,(S.selectItem(state,text(get(command,"id"))),Nil{}))
@@ -329,7 +329,7 @@ def disposeChildren(values: List<&2,Component.Component>) -> IO(Unit):
       do IO<Unit>:
         C.dispose(Nat,List<&2,String>,render)
         C.dispose(String,Unit,input)
-        C.dispose(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,mouse)
+        C.dispose(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>,mouse)
         C.dispose(Unit,Unit,invalidate)
         disposeChildren(rest)
     case _ <> rest: disposeChildren(rest)

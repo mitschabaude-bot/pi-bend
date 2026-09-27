@@ -57,7 +57,7 @@ def rowContaining(rows: List<&2,String>,+needle: String) -> String:
     case +row <> rest: Bool.pick(String,contains(Utils.stripTerminalSequences(row),needle),Utils.stripTerminalSequences(row),rowContaining(rest,needle))
 def countDocument(document: View.Document) -> IO(View.Document & Nat):
   match document:
-    case View.Document{+children,+pending}: IO.pure(View.Document & Nat,(View.Document{children,pending},List.length(&2,Component.Component,children) + List.length(&2,Component.Component,pending)))
+    case View.Document{+children,+pending,layouts}: IO.pure(View.Document & Nat,(View.Document{children,pending,layouts},List.length(&2,Component.Component,children) + List.length(&2,Component.Component,pending)))
 def mountedCount(handle: View.Handle) -> IO(Nat):
   match handle:
     case View.Handle{document,_,_}: Serial.run(View.Document,Nat,document,countDocument)
@@ -270,12 +270,12 @@ def runEvents(pair: Transcript.Owner & Transcript.Handle,view: View.View,+docume
         IO.print("interactive transcript replaces stream snapshots")
 def clickNote(component: Component.Component) -> IO(Unit):
   do IO<Unit>:
-    clicked : Maybe<&2,Component.TuiMouseDispatchResult> <- Component.dispatchMouseEvent(component,Tui.TuiMouseEvent{Tui.MouseClick{},Tui.MouseLeft{},Tui.Forward{2n},Tui.Forward{1n},Tui.Forward{2n},Tui.Forward{1n},80n,5n,False{},False{},False{},None{},Some{1n}})
-    check(Maybe.is_some(&2,Component.TuiMouseDispatchResult,clicked),"summary click was not handled")
+    clicked : Maybe<&2,Component.TuiMouseDispatchResult()> <- Component.dispatchMouseEvent(component,Tui.TuiMouseEvent{Tui.MouseClick{},Tui.MouseLeft{},Tui.Forward{2n},Tui.Forward{1n},Tui.Forward{2n},Tui.Forward{1n},80n,5n,False{},False{},False{},None{},Some{1n}})
+    check(Maybe.is_some(&2,Component.TuiMouseDispatchResult(),clicked),"summary click was not handled")
 def clickThinkingAt(component: Component.Component,+row: Nat) -> IO(Unit):
   do IO<Unit>:
-    clicked : Maybe<&2,Component.TuiMouseDispatchResult> <- Component.dispatchMouseEvent(component,Tui.TuiMouseEvent{Tui.MouseClick{},Tui.MouseLeft{},Tui.Forward{2n},Tui.Forward{row},Tui.Forward{2n},Tui.Forward{row},80n,20n,False{},False{},False{},None{},Some{1n}})
-    check(Maybe.is_some(&2,Component.TuiMouseDispatchResult,clicked),"thinking run click was not handled")
+    clicked : Maybe<&2,Component.TuiMouseDispatchResult()> <- Component.dispatchMouseEvent(component,Tui.TuiMouseEvent{Tui.MouseClick{},Tui.MouseLeft{},Tui.Forward{2n},Tui.Forward{row},Tui.Forward{2n},Tui.Forward{row},80n,20n,False{},False{},False{},None{},Some{1n}})
+    check(Maybe.is_some(&2,Component.TuiMouseDispatchResult(),clicked),"thinking run click was not handled")
 def updatedThinking(body: Messages.Body) -> Messages.Body:
   match body:
     case Messages.AssistantBody{value}:

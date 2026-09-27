@@ -53,7 +53,7 @@ def leaveWithLayoutDocument(lines: List<&2,String>,width: Nat) -> Screen.Stream:
   leaveDocument(lines,width,False{})
 def reset(state: State) -> State:
   match state:
-    case State{_,_,_,label,keys,_,palette,_,_}: initial(label,keys,palette)
+    case State{_,_,_,label,keys,active,palette,mouse,_}: State{Nil{},None{},None{},label,keys,active,palette,mouse,None{}}
 def rowText(row: Nat,line: String) -> String:
   "\u{1b}[" ++ Nat.show(row + 1n) ++ ";1H\u{1b}[2K\u{1b}[0m" ++ line
 def addRow(operation: Maybe<&2,Screen.Operation>,reversed: List<&2,Screen.Operation>) -> List<&2,Screen.Operation>:
