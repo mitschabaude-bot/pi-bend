@@ -314,6 +314,7 @@ def loadByName(+themeName: String,builtinDir: String,+customDir: String,+mode: C
 def bold(text: String) -> String: "\u{1b}[1m" ++ text ++ "\u{1b}[22m"
 def italic(text: String) -> String: "\u{1b}[3m" ++ text ++ "\u{1b}[23m"
 def underline(text: String) -> String: "\u{1b}[4m" ++ text ++ "\u{1b}[24m"
+def strikethrough(text: String) -> String: "\u{1b}[9m" ++ text ++ "\u{1b}[29m"
 def fg(theme: Theme,+key: String,+text: String) -> String: Result.default(&2,&2,Error,String,foreground(theme,key,text),text)
 
 # The formatters of the CLI highlight theme: a theme foreground or an effect.

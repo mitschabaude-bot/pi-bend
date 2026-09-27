@@ -3429,10 +3429,13 @@
     },
     {
       "source": "packages/coding-agent/test/plan-mode-extension.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/plan-mode-extension.bend"
+      ],
       "sha256": "c04b3602f3b11f30578f9ab3d440095ad92433e463d34b03b24b9cec4e24c13a",
-      "notes": "Pending: the plan-mode example needs pi.registerFlag/getFlag, pi.registerShortcut, pi.appendEntry, ctx.sessionManager (read-only entries) and ctx.ui.theme, none of which the native extension API has yet. Its utils are ported (plan-mode-utils)."
+      "notes": "All four tests with upstream names, Bun/native1/native4 (build tests/plan-mode-extension.bend and run it; each passing test prints `ok <name>`). Upstream calls the factory with a mocked ExtensionAPI and context; here the example registers through the real loader into a runner bound to recording actions (setActiveTools/getActiveTools, sendMessage, sendUserMessage, appendEntry: upstream's vi.fn mocks), a TUI context whose select and editor answer the test's choice and text and which binds no theme (upstream's identity fg/strikethrough), and context actions with an idle-false state and an empty session. Commands run through their registered handlers and agent_end through Runner.emit. toHaveBeenLastCalledWith/toHaveBeenCalledWith are checked against the recorded calls.",
+      "implementation": "packages/coding-agent/examples/extensions/plan-mode/index.bend"
     },
     {
       "source": "packages/coding-agent/test/plan-mode-utils.test.ts",

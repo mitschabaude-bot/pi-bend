@@ -21,6 +21,9 @@ import ../packages/coding-agent/src/modes/interactive/interactive-mode.bend as I
 import ../packages/coding-agent/src/modes/rpc.bend as Rpc
 import ./model-runtime-fixture.bend as Fixture
 import ../packages/coding-agent/src/core/tools/bash.bend as Bash
+import ../packages/coding-agent/src/core/agent-session.bend as Session
+import ../packages/coding-agent/src/core/session-persistence.bend as Sessions
+import ../packages/ai/src/utils/uuid.bend as Uuid
 import ../packages/coding-agent/src/core/bash-executor.bend as BashExec
 
 # upstream test/extensions-runner.test.ts, the cases phase 1 of the native
@@ -167,6 +170,17 @@ def noUsage(unit: Unit, input: Unit) -> IO(Maybe<&2, Ctx.ContextUsage>): IO.pure
 def ignoreCompact(unit: Unit, options: Ctx.CompactOptions) -> IO(Unit): Ctx.disposeCompactOptions(options)
 def noPrompt(unit: Unit, input: Unit) -> IO(String): IO.pure(String, "")
 
+def requiredSession(result: Sessions.Outcome(Session.Session())) -> IO(Session.Session()):
+  match result:
+    case Done{session}: IO.pure(Session.Session(), session)
+    case Fail{error}: IO.die(Session.Session(), 1, Sessions.message(error))
+
+def emptySession(unit: Unit, input: Unit) -> IO(Ctx.ReadonlySessionManager()):
+  do IO<Ctx.ReadonlySessionManager()>:
+    ids : Uuid.Generator <- Uuid.generator()
+    created : Sessions.Outcome(Session.Session()) <- Session.memorySession(ids, "/tmp/pi-runner-test", Sessions.noOptions())
+    requiredSession(created)
+
 def contextActions(env: StateEnv) -> IO(Ctx.ExtensionContextActions):
   do IO<Ctx.ExtensionContextActions>:
     state : C.Callback<Unit, Ctx.SessionState> <- C.create(~StateEnv, ~Unit, ~Ctx.SessionState, ~stateOf, env)
@@ -175,7 +189,8 @@ def contextActions(env: StateEnv) -> IO(Ctx.ExtensionContextActions):
     usage : C.Callback<Unit, Maybe<&2, Ctx.ContextUsage>> <- C.create(~Unit, ~Unit, ~Maybe<&2, Ctx.ContextUsage>, ~noUsage, Unit{})
     compact : C.Callback<Ctx.CompactOptions, Unit> <- C.create(~Unit, ~Ctx.CompactOptions, ~Unit, ~ignoreCompact, Unit{})
     prompt : C.Callback<Unit, String> <- C.create(~Unit, ~Unit, ~String, ~noPrompt, Unit{})
-    return Ctx.ExtensionContextActions{state, abort, shutdown, usage, compact, prompt}
+    manager : C.Callback<Unit, Ctx.ReadonlySessionManager()> <- C.create(~Unit, ~Unit, ~Ctx.ReadonlySessionManager(), ~emptySession, Unit{})
+    return Ctx.ExtensionContextActions{state, abort, shutdown, usage, compact, prompt, manager}
 
 def scopedIds(items: List<&2, Models.ScopedModel>) -> String:
   match items:
@@ -261,7 +276,7 @@ def someUI() -> IO(Ctx.ExtensionUIContext):
     text : C.Callback<String, Unit> <- C.create(~Unit, ~String, ~Unit, ~ignoredText, Unit{})
     paste : C.Callback<String, Unit> <- C.create(~Unit, ~String, ~Unit, ~ignoredText, Unit{})
     current : C.Callback<Unit, String> <- C.create(~Unit, ~Unit, ~String, ~emptyEditor, Unit{})
-    return Ctx.ExtensionUIContext{select, confirm, input, notify, status, custom, editor, widget, title, text, paste, current}
+    return Ctx.ExtensionUIContext{select, confirm, input, notify, status, custom, editor, widget, title, text, paste, current, None{}}
 
 def exposesModeWithUI(mode: Ctx.ExtensionMode, +expected: String, +name: String) -> IO(Unit):
   do IO<Unit>:

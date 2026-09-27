@@ -16,7 +16,7 @@ import ../packages/runtime/src/tls-trust.bend as Trust
 import ../packages/runtime/src/x509.bend as X509
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/test/utf8-runner.bend as Wire
-import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
+import ../packages/coding-agent/src/core/extensions/tool-context.bend as Ctx
 
 type EditExecution is Data:
   EditExecution{callback: C.Callback<Agent.ToolExecutionInput<Edit.EditToolDetails>, Edit.ToolResult()>, counter: Ref.Ref<U32>}

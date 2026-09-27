@@ -10,7 +10,7 @@ import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/filesystem.bend as FS
 import ../packages/runtime/src/tls-trust.bend as Trust
 import ../packages/runtime/src/x509.bend as X509
-import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
+import ../packages/coding-agent/src/core/extensions/tool-context.bend as Ctx
 
 type Execution is Data:
   Execution{callback: C.Callback<Runner.ToolInput(), Write.ToolResult()>, counter: Ref.Ref<U32>}

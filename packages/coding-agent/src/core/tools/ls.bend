@@ -7,7 +7,7 @@ import ../../../../runtime/src/record.bend as Record
 import ../../../../runtime/src/filesystem.bend as FS
 import ../../../../runtime/src/posix-path.bend as Posix
 import ../../../../runtime/src/callback.bend as Callback
-import ../extensions/context.bend as Ctx
+import ../extensions/tool-context.bend as Ctx
 import ../../../../runtime/src/abort.bend as Abort
 import ../../../../runtime/src/f64.bend as Number
 import ../../../../runtime/src/stable-sort.bend as Sort

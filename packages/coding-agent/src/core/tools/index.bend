@@ -20,7 +20,7 @@ import ./grep.bend as Grep
 import ../../utils/tools-manager.bend as Manager
 import ./truncate.bend as Truncate
 import ./file-mutation-queue.bend as Queue
-import ../extensions/context.bend as Ctx
+import ../extensions/tool-context.bend as Ctx
 
 # The public coding tools behind one agent-tool type. Upstream erases each
 # tool's details to `any`; here the details and errors are explicit sums, and

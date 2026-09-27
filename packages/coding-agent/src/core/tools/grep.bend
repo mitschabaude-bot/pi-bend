@@ -15,7 +15,7 @@ import ../../../../runtime/src/ref.bend as Ref
 import ../../../../runtime/src/string.bend as Strings
 import ../../../../runtime/src/f64.bend as Number
 import ../../../../runtime/src/callback.bend as Callback
-import ../extensions/context.bend as Ctx
+import ../extensions/tool-context.bend as Ctx
 import ../../../../runtime/src/abort.bend as Abort
 import ./truncate.bend as Truncate
 

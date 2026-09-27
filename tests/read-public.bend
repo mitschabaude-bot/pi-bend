@@ -11,7 +11,7 @@ import ../packages/runtime/src/idna.bend as IDNA
 import ../packages/runtime/src/unicode-17-idna-mapping.bend as Mapping
 import ../packages/runtime/src/unicode-17-normalization.bend as Normalization
 import ../packages/runtime/src/unicode-17-idna-properties.bend as Properties
-import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
+import ../packages/coding-agent/src/core/extensions/tool-context.bend as Ctx
 import ../packages/coding-agent/src/utils/image-resize.bend as Resize
 import ../packages/runtime/src/f64.bend as F
 

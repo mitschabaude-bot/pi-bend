@@ -1279,7 +1279,7 @@ def disposeExecutors(executors: List<&2, Tools.Execute()>) -> IO(Unit):
 
 def disposeExtensionBinding(binding: ExtensionBinding) -> IO(Unit):
   match binding:
-    case ExtensionBinding{Ctx.ExtensionContextActions{reader, aborter, stopper, usage, compactor, prompt}, changed, sessionActions, handler, extensionTools}:
+    case ExtensionBinding{Ctx.ExtensionContextActions{reader, aborter, stopper, usage, compactor, prompt, manager}, changed, sessionActions, handler, extensionTools}:
       do IO<Unit>:
         tools : ExtensionTools <- R.dispose(ExtensionTools, extensionTools)
         disposeExecutors(executorsOf(tools))
@@ -1290,6 +1290,7 @@ def disposeExtensionBinding(binding: ExtensionBinding) -> IO(Unit):
         C.dispose(Unit, Maybe<&2, Ctx.ContextUsage>, usage)
         C.dispose(Ctx.CompactOptions, Unit, compactor)
         C.dispose(Unit, String, prompt)
+        C.dispose(Unit, Ctx.ReadonlySessionManager(), manager)
         C.dispose(Unit, Unit, changed)
         bound : Maybe<&2, ExtensionTypes.ExtensionActions> <- R.dispose(Maybe<&2, ExtensionTypes.ExtensionActions>, sessionActions)
         disposeSessionActions(bound)
@@ -5041,6 +5042,14 @@ def contextSystemPrompt(env: ContextEnv, unit: Unit) -> IO(String):
         loadout : Runtime.Loadout <- R.read(Runtime.Loadout, extensionsOf(stored))
         return Result.default(&2, &2, Prompt.Error, String, Prompt.promptText(Done{Prompt.SystemPromptState{"", Some{sectionsIn(loadout)}}}), "")
 
+# upstream ctx.sessionManager: the session record as it is now.
+def contextSessionManager(env: ContextEnv, unit: Unit) -> IO(Ctx.ReadonlySessionManager()):
+  match env:
+    case ContextEnv{_, shared, _, _, _}:
+      do IO<Ctx.ReadonlySessionManager()>:
+        stored : Shared <- R.read(Shared, shared)
+        return sharedSession(stored)
+
 def createContextActions(+env: ContextEnv) -> IO(Ctx.ExtensionContextActions):
   do IO<Ctx.ExtensionContextActions>:
     reader : C.Callback<Unit, Ctx.SessionState> <- C.create(~ContextEnv, ~Unit, ~Ctx.SessionState, ~sessionState, env)
@@ -5049,7 +5058,8 @@ def createContextActions(+env: ContextEnv) -> IO(Ctx.ExtensionContextActions):
     usage : C.Callback<Unit, Maybe<&2, Ctx.ContextUsage>> <- C.create(~ContextEnv, ~Unit, ~Maybe<&2, Ctx.ContextUsage>, ~contextUsage, env)
     compactor : C.Callback<Ctx.CompactOptions, Unit> <- C.create(~ContextEnv, ~Ctx.CompactOptions, ~Unit, ~contextCompact, env)
     prompt : C.Callback<Unit, String> <- C.create(~ContextEnv, ~Unit, ~String, ~contextSystemPrompt, env)
-    return Ctx.ExtensionContextActions{reader, aborter, stopper, usage, compactor, prompt}
+    manager : C.Callback<Unit, Ctx.ReadonlySessionManager()> <- C.create(~ContextEnv, ~Unit, ~Ctx.ReadonlySessionManager(), ~contextSessionManager, env)
+    return Ctx.ExtensionContextActions{reader, aborter, stopper, usage, compactor, prompt, manager}
 
 def createExtensionBinding(+env: ContextEnv, +models: Models.ModelRuntime) -> IO(ExtensionBinding):
   match env:

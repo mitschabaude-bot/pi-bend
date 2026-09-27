@@ -17,7 +17,7 @@ import ../packages/runtime/src/unicode-17-idna-properties.bend as Properties
 import ../packages/runtime/src/string.bend as S
 import ../packages/runtime/src/utf8.bend as U
 import ../packages/runtime/src/base64.bend as B
-import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
+import ../packages/coding-agent/src/core/extensions/tool-context.bend as Ctx
 
 def urlContext() -> URL.Context:
   URL.Context{IDNA.Context{Mapping.table(),Normalization.tables(),Properties.table()},IDNA.Options{IDNA.LabelOptions{False{},False{},True{},IDNA.Nontransitional{}},True{},False{}}}

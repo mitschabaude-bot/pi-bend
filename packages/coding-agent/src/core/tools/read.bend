@@ -9,7 +9,7 @@ import ../../../../runtime/src/schema-value.bend as Value
 import ../../../../runtime/src/record.bend as Record
 import ../../../../runtime/src/filesystem.bend as FS
 import ../../../../runtime/src/callback.bend as Callback
-import ../extensions/context.bend as Ctx
+import ../extensions/tool-context.bend as Ctx
 import ../../../../runtime/src/abort.bend as Abort
 import ../../../../runtime/src/utf8.bend as Utf8
 import ../../../../runtime/src/f64.bend as Number

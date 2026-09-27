@@ -11,7 +11,7 @@ import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/record.bend as R
 import ../packages/runtime/src/utf8.bend as Utf8
 import ../packages/runtime/src/base64.bend as B64
-import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
+import ../packages/coding-agent/src/core/extensions/tool-context.bend as Ctx
 
 # One public call drives real callbacks; the host runner checks the wire frames.
 # UTF-8 encoding already guarantees valid octets; use the direct encoder.

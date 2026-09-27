@@ -13,7 +13,7 @@ import ../../../../runtime/src/f64.bend as F
 import ../../../../runtime/src/serial-resource.bend as Serial
 import ../../../../runtime/src/ref.bend as Ref
 import ../../../../ai/src/utils/thinking-levels.bend as Levels
-import ../extensions/context.bend as Ctx
+import ../extensions/tool-context.bend as Ctx
 
 # Typed operations are shared by local and injected (for example remote) shells.
 type BashToolInput is Data:

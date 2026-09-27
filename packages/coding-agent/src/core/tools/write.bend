@@ -7,7 +7,7 @@ import ../../../../runtime/src/record.bend as Record
 import ./file-mutation-queue.bend as Queue
 import ../../../../runtime/src/filesystem.bend as FS
 import ../../../../runtime/src/callback.bend as Callback
-import ../extensions/context.bend as Ctx
+import ../extensions/tool-context.bend as Ctx
 import ../../../../runtime/src/abort.bend as Abort
 import ../../../../runtime/src/string.bend as Strings
 

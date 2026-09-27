@@ -15,7 +15,7 @@ import ../packages/runtime/src/unicode-17-idna-properties.bend as Properties
 import ./file-mutation-queue.bend as Test
 import ../packages/runtime/src/json.bend as Json
 import ../packages/runtime/test/utf8-runner.bend as Wire
-import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
+import ../packages/coding-agent/src/core/extensions/tool-context.bend as Ctx
 
 def environment(cwd: String, home: String) -> Paths.Environment:
   Paths.Environment{cwd, home, URL.Context{IDNA.Context{Mapping.table(), Normalization.tables(), Properties.table()}, IDNA.Options{IDNA.LabelOptions{False{}, False{}, True{}, IDNA.Nontransitional{}}, True{}, False{}}}}

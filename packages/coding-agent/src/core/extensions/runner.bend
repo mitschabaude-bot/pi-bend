@@ -5,6 +5,7 @@ import ../../../../runtime/src/ref.bend as R
 import ../diagnostics.bend as D
 import ../model-runtime.bend as Models
 import ./context.bend as Ctx
+import ./tool-context.bend as ToolContext
 import ./loader.bend as Loader
 import ./types.bend as T
 import ../../../../agent/src/types.bend as Agent
@@ -28,22 +29,24 @@ type Listeners is Data:
   Listeners{next: Nat, listeners: List<&2, ErrorListener>}
 
 type ExtensionRunner is Data:
-  ExtensionRunner{runtime: T.ExtensionRuntime(), cwd: String, models: Models.ModelRuntime, bindings: R.Ref<Ctx.Bindings>, listeners: R.Ref<Listeners>}
+  ExtensionRunner{runtime: T.ExtensionRuntime(), cwd: String, models: Models.ModelRuntime, bindings: R.Ref<Ctx.Bindings>, listeners: R.Ref<Listeners>, toolContext: C.Callback<Unit, Maybe<&2, ToolContext.ContextView>>}
 
 # The runner owns the extension runtime from here on.
-def create(+runtime: T.ExtensionRuntime(), +cwd: String, models: Models.ModelRuntime) -> IO(ExtensionRunner):
+def create(+runtime: T.ExtensionRuntime(), +cwd: String, +models: Models.ModelRuntime) -> IO(ExtensionRunner):
   do IO<ExtensionRunner>:
-    bindings : R.Ref<Ctx.Bindings> <- R.new(Ctx.Bindings, Ctx.unbound())
+    +bindings : R.Ref<Ctx.Bindings> <- R.new(Ctx.Bindings, Ctx.unbound())
     listeners : R.Ref<Listeners> <- R.new(Listeners, Listeners{0n, Nil{}})
     Loader.setCwd(runtime, cwd)
-    return ExtensionRunner{runtime, cwd, models, bindings, listeners}
+    toolContext : C.Callback<Unit, Maybe<&2, ToolContext.ContextView>> <- Ctx.createToolContext(Ctx.ExtensionContext{cwd, models, bindings})
+    return ExtensionRunner{runtime, cwd, models, bindings, listeners, toolContext}
 
 # Whoever bound callbacks or listeners unbinds and disposes them; the
 # extensions' own registrations live as long as the program.
 def dispose(runner: ExtensionRunner) -> IO(Unit):
   match runner:
-    case ExtensionRunner{runtime, _, _, bindings, listeners}:
+    case ExtensionRunner{runtime, _, _, bindings, listeners, toolContext}:
       do IO<Unit>:
+        C.dispose(Unit, Maybe<&2, ToolContext.ContextView>, toolContext)
         state : T.ExtensionRuntimeState <- R.dispose(T.ExtensionRuntimeState, runtime)
         bound : Ctx.Bindings <- R.dispose(Ctx.Bindings, bindings)
         registered : Listeners <- R.dispose(Listeners, listeners)
@@ -51,20 +54,25 @@ def dispose(runner: ExtensionRunner) -> IO(Unit):
 
 def runtimeOf(runner: ExtensionRunner) -> T.ExtensionRuntime():
   match runner:
-    case ExtensionRunner{runtime, _, _, _, _}: runtime
+    case ExtensionRunner{runtime, _, _, _, _, _}: runtime
 
 def modelsOf(runner: ExtensionRunner) -> Models.ModelRuntime:
   match runner:
-    case ExtensionRunner{_, _, models, _, _}: models
+    case ExtensionRunner{_, _, models, _, _, _}: models
 
 def bindingsRef(runner: ExtensionRunner) -> R.Ref<Ctx.Bindings>:
   match runner:
-    case ExtensionRunner{_, _, _, bindings, _}: bindings
+    case ExtensionRunner{_, _, _, bindings, _, _}: bindings
 
 # upstream createContext and createCommandContext.
 def createContext(runner: ExtensionRunner) -> Ctx.ExtensionContext:
   match runner:
-    case ExtensionRunner{_, cwd, models, bindings, _}: Ctx.ExtensionContext{cwd, models, bindings}
+    case ExtensionRunner{_, cwd, models, bindings, _, _}: Ctx.ExtensionContext{cwd, models, bindings}
+
+# The context reader of the runner's built-in tools (upstream's ctxFactory).
+def toolContext(runner: ExtensionRunner) -> ToolContext.ContextSource():
+  match runner:
+    case ExtensionRunner{_, _, _, _, _, reader}: Some{reader}
 
 def createCommandContext(runner: ExtensionRunner) -> Ctx.ExtensionCommandContext:
   Ctx.ExtensionCommandContext{createContext(runner)}
@@ -143,7 +151,7 @@ def withListener(listeners: Listeners, listener: C.Callback<T.ExtensionError, Un
 # the returned subscription before disposing it.
 def onError(runner: ExtensionRunner, listener: C.Callback<T.ExtensionError, Unit>) -> IO(ErrorSubscription):
   match runner:
-    case ExtensionRunner{_, _, _, _, listeners}:
+    case ExtensionRunner{_, _, _, _, listeners, _}:
       do IO<ErrorSubscription>:
         id : Nat <- R.modify(Listeners, Nat, listeners, current => withListener(current, listener))
         return ErrorSubscription{id}
@@ -165,7 +173,7 @@ def removedListener(listeners: Listeners, +id: Nat) -> Listeners:
 
 def offError(runner: ExtensionRunner, subscription: ErrorSubscription) -> IO(Unit):
   match runner subscription:
-    case ExtensionRunner{_, _, _, _, listeners} ErrorSubscription{+id}: R.modify(Listeners, Unit, listeners, current => (removedListener(current, id), Unit{}))
+    case ExtensionRunner{_, _, _, _, listeners, _} ErrorSubscription{+id}: R.modify(Listeners, Unit, listeners, current => (removedListener(current, id), Unit{}))
 
 def notifyListeners(listeners: List<&2, ErrorListener>, +error: T.ExtensionError) -> IO(Unit):
   match listeners:
@@ -181,7 +189,7 @@ def registeredListeners(listeners: Listeners) -> List<&2, ErrorListener>:
 
 def emitError(runner: ExtensionRunner, error: T.ExtensionError) -> IO(Unit):
   match runner:
-    case ExtensionRunner{_, _, _, _, listeners}:
+    case ExtensionRunner{_, _, _, _, listeners, _}:
       do IO<Unit>:
         current : Listeners <- R.read(Listeners, listeners)
         notifyListeners(registeredListeners(current), error)

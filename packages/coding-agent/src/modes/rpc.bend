@@ -568,7 +568,7 @@ def createExtensions(+sink: Sink(),current: Ref.Ref<Session.AgentSession>,+host:
     errors : Callback.Callback<ExtensionTypes.ExtensionError,Unit> <- Callback.create(~Sink(),~ExtensionTypes.ExtensionError,~Unit,~extensionError,sink)
     bound : Ref.Ref<Maybe<&2,Bound>> <- Ref.new(Maybe<&2,Bound>,None{})
     raise : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Bool>,~Unit,~Unit,~raiseShutdown,requestedOf(host))
-    return Extensions{dialogs,Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom,editor,widget,title,editorText,paste,current},errors,bound,starting,detached,actions,raise}
+    return Extensions{dialogs,Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom,editor,widget,title,editorText,paste,current,None{}},errors,bound,starting,detached,actions,raise}
 def bindRunner(extensions: Extensions,runner: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> IO(Unit):
   match extensions runner:
     case _ None{}: IO.pure(Unit,Unit{})
@@ -621,7 +621,7 @@ def closeDialogs(extensions: Extensions) -> IO(Unit):
         cancelDialogs(waiting)
 def disposeExtensions(extensions: Extensions) -> IO(Unit):
   match extensions:
-    case Extensions{dialogs,Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom,editor,widget,title,editorText,paste,current},errors,bound,starting,detached,Ctx.ExtensionCommandContextActions{wait,opening,forking,navigating,switching,reloading},raise}:
+    case Extensions{dialogs,Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom,editor,widget,title,editorText,paste,current,_},errors,bound,starting,detached,Ctx.ExtensionCommandContextActions{wait,opening,forking,navigating,switching,reloading},raise}:
       do IO<Unit>:
         Callback.dispose(Unit,Unit,raise)
         Callback.dispose(Ctx.SelectRequest,Maybe<&2,String>,select)

@@ -9,7 +9,7 @@ import ../packages/runtime/src/json.bend as Json
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/record.bend as Record
 import ./read-public.bend as Public
-import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
+import ../packages/coding-agent/src/core/extensions/tool-context.bend as Ctx
 
 type Scenario is Data:
   Scenario{trace: Ref.Ref<String>, mode: String, controller: Abort.AbortController<Unit>}

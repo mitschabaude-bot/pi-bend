@@ -70,6 +70,7 @@ import ./tools/bash.bend as Bash
 import ../utils/tools-manager.bend as Manager
 import ./tools/file-mutation-queue.bend as Queue
 import ./extensions/context.bend as Ctx
+import ./extensions/tool-context.bend as ToolContext
 import ./extensions/loader.bend as ExtensionLoader
 import ./extensions/runner.bend as ExtensionRunner
 import ./extensions/types.bend as ExtensionTypes
@@ -1022,7 +1023,7 @@ def agentOptions(model: Maybe<&2, Models.Model()>, thinking: Ai.ModelThinkingLev
   Agent.AgentOptions{Some{Agent.AgentInitialState{Some{""}, model, Some{thinking}, Some{Nil{}}, seededMessages(seed)}}, Some{converter}, None{}, Some{stream}, Some{keys}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Some{Settings.getSteeringMode(settings)}, Some{Settings.getFollowUpMode(settings)}, Some{seedSessionId(seed)}, thinkingBudgets(Settings.getThinkingBudgets(settings)), Some{Settings.getTransport(settings)}, Some{maxRetryDelay(Settings.getProviderRetrySettings(settings))}, None{}}
 
 # The tools download fd and rg through the agent's own fetch.
-def environment(paths: Paths.Environment, cwd: String, agentDir: String, packageDir: String, fetch: Fetch.Fetch(Unit), queue: Queue.Queue, context: Ctx.ContextSource()) -> Tools.Environment:
+def environment(paths: Paths.Environment, cwd: String, agentDir: String, packageDir: String, fetch: Fetch.Fetch(Unit), queue: Queue.Queue, context: ToolContext.ContextSource()) -> Tools.Environment:
   Tools.Environment{paths, cwd, Manager.ToolsManager{Path.join(agentDir, "bin"), urlContext(), Some{fetch}}, queue, Path.join(packageDir, "packages/runtime/data"), context}
 
 def pathsError(error: FS.Error) -> String: "Could not resolve the working directory"
@@ -1068,7 +1069,7 @@ def disposeBase(transport: Transport, storage: Storage.AuthStorageOwner, storage
     Storage.dispose(storage)
     disposeTransport(transport)
 
-def createToolList(names: List<&2, Tools.ToolName>, builtins: Tools.ToolsOptions, paths: Paths.Environment, cwd: String, agentDir: String, packageDir: String, fetch: Fetch.Fetch(Unit), context: Ctx.ContextSource(), borrowed: Queue.Owner & Queue.Queue) -> IO(Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>)):
+def createToolList(names: List<&2, Tools.ToolName>, builtins: Tools.ToolsOptions, paths: Paths.Environment, cwd: String, agentDir: String, packageDir: String, fetch: Fetch.Fetch(Unit), context: ToolContext.ContextSource(), borrowed: Queue.Owner & Queue.Queue) -> IO(Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>)):
   match borrowed:
     case Tuple{queue, handle}:
       do IO<Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>)>:
@@ -1109,7 +1110,7 @@ def withModelFields(+cwd: String, +agentDir: String, packageDir: String, +apiKey
     case Transport{+authorizer, runtime, +fetch, +codexSessions} Done{prompt} Done{+model}:
       do IO<Outcome(AgentRuntime)>:
         queue : Queue.Owner <- Queue.create()
-        +context : Ctx.ContextSource() <- IO.pure(Ctx.ContextSource(), Some{ExtensionRunner.createContext(extensions)})
+        +context : ToolContext.ContextSource() <- IO.pure(ToolContext.ContextSource(), ExtensionRunner.toolContext(extensions))
         created : Queue.Owner & (List<&1, Tools.ToolOwner> & List<&2, Tools.Tool()>) <- createToolList(names, toolsOptionsFor(builtins, settings, paths), paths, cwd, agentDir, packageDir, fetch, context, Queue.borrow(queue))
         +stream : Stream() <- createStream(codexSessions, authorizer, fetch, requestDefaults(settings), KeySource{models, apiKey})
         +registry : StreamFn.Registry(Unit, Details(), LoopConfig(), Error()) <- StreamFn.create(Unit, Details(), LoopConfig(), Error())

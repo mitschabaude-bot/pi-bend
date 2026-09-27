@@ -6,6 +6,11 @@ import ../../../../runtime/src/ref.bend as R
 import ../../../../tui/src/component.bend as Component
 import ../model-runtime.bend as Models
 import ../compaction/compaction.bend as Compaction
+import ../session-persistence.bend as Sessions
+import ../tools/index.bend as Tools
+import ../../../../runtime/src/schema-value.bend as V
+import ../../modes/interactive/theme/theme.bend as Theme
+import ./tool-context.bend as ToolContext
 
 # upstream ExtensionContext and ExtensionCommandContext (core/extensions/
 # types.ts). The context is a handle on its runner: like upstream's getters,
@@ -92,10 +97,12 @@ type WidgetUpdate is Data:
 def CustomDone() -> Data: C.Callback<Unit, Unit>
 def CustomFactory() -> Data: C.Callback<CustomDone(), Component.Component>
 
-# The dialog-capable UI a mode binds. Print and JSON modes bind none
+# The dialog-capable UI a mode binds. `theme` is the mode's current theme
+# (upstream ui.theme, the global theme): the live theme of a mode that has
+# one. Print and JSON modes bind none
 # (upstream noOpUIContext); the accessors below then answer as it does.
 type ExtensionUIContext is Data:
-  ExtensionUIContext{select: C.Callback<SelectRequest, Maybe<&2, String>>, confirm: C.Callback<ConfirmRequest, Bool>, input: C.Callback<InputRequest, Maybe<&2, String>>, notify: C.Callback<Notification, Unit>, setStatus: C.Callback<StatusUpdate, Unit>, custom: C.Callback<CustomFactory(), Unit>, editor: C.Callback<EditorRequest, Maybe<&2, String>>, setWidget: C.Callback<WidgetUpdate, Unit>, setTitle: C.Callback<String, Unit>, setEditorText: C.Callback<String, Unit>, pasteToEditor: C.Callback<String, Unit>, getEditorText: C.Callback<Unit, String>}
+  ExtensionUIContext{select: C.Callback<SelectRequest, Maybe<&2, String>>, confirm: C.Callback<ConfirmRequest, Bool>, input: C.Callback<InputRequest, Maybe<&2, String>>, notify: C.Callback<Notification, Unit>, setStatus: C.Callback<StatusUpdate, Unit>, custom: C.Callback<CustomFactory(), Unit>, editor: C.Callback<EditorRequest, Maybe<&2, String>>, setWidget: C.Callback<WidgetUpdate, Unit>, setTitle: C.Callback<String, Unit>, setEditorText: C.Callback<String, Unit>, pasteToEditor: C.Callback<String, Unit>, getEditorText: C.Callback<Unit, String>, theme: Maybe<&2, R.Ref<Theme.Theme>>}
 
 # Session actions (upstream ExtensionContextActions)
 # ---------------------------------------------------
@@ -117,8 +124,13 @@ type CompactOptions is Data:
 
 def compactOptions() -> CompactOptions: CompactOptions{None{}, None{}, None{}}
 
+# upstream ReadonlySessionManager: a snapshot of the session record. Its
+# queries are session-manager.bend's and session-persistence.bend's pure
+# functions (getEntries, getBranch, getLeafId, getSessionFile, ...).
+def ReadonlySessionManager() -> Data: Sessions.Session<Unit, Tools.ToolDetails, V.Value>
+
 type ExtensionContextActions is Data:
-  ExtensionContextActions{state: C.Callback<Unit, SessionState>, abort: C.Callback<Unit, Unit>, shutdown: C.Callback<Unit, Unit>, getContextUsage: C.Callback<Unit, Maybe<&2, ContextUsage>>, compact: C.Callback<CompactOptions, Unit>, getSystemPrompt: C.Callback<Unit, String>}
+  ExtensionContextActions{state: C.Callback<Unit, SessionState>, abort: C.Callback<Unit, Unit>, shutdown: C.Callback<Unit, Unit>, getContextUsage: C.Callback<Unit, Maybe<&2, ContextUsage>>, compact: C.Callback<CompactOptions, Unit>, getSystemPrompt: C.Callback<Unit, String>, sessionManager: C.Callback<Unit, ReadonlySessionManager()>}
 
 # Session control for commands (upstream ExtensionCommandContextActions).
 # The `withSession` and `setup` continuations are not ported.
@@ -207,7 +219,7 @@ def unboundState() -> SessionState:
 def stateFrom(session: Maybe<&2, ExtensionContextActions>) -> IO(SessionState):
   match session:
     case None{}: IO.pure(SessionState, unboundState())
-    case Some{ExtensionContextActions{state, _, _, _, _, _}}: C.call(Unit, SessionState, state, Unit{})
+    case Some{ExtensionContextActions{state, _, _, _, _, _, _}}: C.call(Unit, SessionState, state, Unit{})
 
 def stateModel(state: SessionState) -> Maybe<&2, Ai.Model<Ai.JsonValue>>:
   match state:
@@ -281,7 +293,7 @@ def signal(context: ExtensionContext) -> IO(Maybe<&2, Abort.AbortSignal<Unit>>):
 def abortWith(session: Maybe<&2, ExtensionContextActions>) -> IO(Unit):
   match session:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{ExtensionContextActions{_, callback, _, _, _, _}}: C.call(Unit, Unit, callback, Unit{})
+    case Some{ExtensionContextActions{_, callback, _, _, _, _, _}}: C.call(Unit, Unit, callback, Unit{})
 
 def abort(context: ExtensionContext) -> IO(Unit):
   do IO<Unit>:
@@ -291,7 +303,7 @@ def abort(context: ExtensionContext) -> IO(Unit):
 def shutdownWith(session: Maybe<&2, ExtensionContextActions>) -> IO(Unit):
   match session:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{ExtensionContextActions{_, _, callback, _, _, _}}: C.call(Unit, Unit, callback, Unit{})
+    case Some{ExtensionContextActions{_, _, callback, _, _, _, _}}: C.call(Unit, Unit, callback, Unit{})
 
 def shutdown(context: ExtensionContext) -> IO(Unit):
   do IO<Unit>:
@@ -301,7 +313,7 @@ def shutdown(context: ExtensionContext) -> IO(Unit):
 def contextUsageWith(session: Maybe<&2, ExtensionContextActions>) -> IO(Maybe<&2, ContextUsage>):
   match session:
     case None{}: IO.pure(Maybe<&2, ContextUsage>, None{})
-    case Some{ExtensionContextActions{_, _, _, callback, _, _}}: C.call(Unit, Maybe<&2, ContextUsage>, callback, Unit{})
+    case Some{ExtensionContextActions{_, _, _, callback, _, _, _}}: C.call(Unit, Maybe<&2, ContextUsage>, callback, Unit{})
 
 # upstream ctx.getContextUsage(): None before a session binds the runner.
 def getContextUsage(context: ExtensionContext) -> IO(Maybe<&2, ContextUsage>):
@@ -329,7 +341,7 @@ def disposeCompactOptions(options: CompactOptions) -> IO(Unit):
 def compactWith(session: Maybe<&2, ExtensionContextActions>, options: CompactOptions) -> IO(Unit):
   match session:
     case None{}: disposeCompactOptions(options)
-    case Some{ExtensionContextActions{_, _, _, _, callback, _}}: C.call(CompactOptions, Unit, callback, options)
+    case Some{ExtensionContextActions{_, _, _, _, callback, _, _}}: C.call(CompactOptions, Unit, callback, options)
 
 # upstream ctx.compact(options): starts a manual compaction without waiting
 # for it; before a session binds the runner nothing happens.
@@ -341,7 +353,7 @@ def compact(context: ExtensionContext, options: CompactOptions) -> IO(Unit):
 def systemPromptWith(session: Maybe<&2, ExtensionContextActions>) -> IO(String):
   match session:
     case None{}: IO.pure(String, "")
-    case Some{ExtensionContextActions{_, _, _, _, _, callback}}: C.call(Unit, String, callback, Unit{})
+    case Some{ExtensionContextActions{_, _, _, _, _, callback, _}}: C.call(Unit, String, callback, Unit{})
 
 # upstream ctx.getSystemPrompt(): the effective system prompt, "" unbound.
 def getSystemPrompt(context: ExtensionContext) -> IO(String):
@@ -349,12 +361,28 @@ def getSystemPrompt(context: ExtensionContext) -> IO(String):
     bindings : Bindings <- bindingsOf(context)
     systemPromptWith(sessionOf(bindings))
 
+def sessionManagerWith(session: Maybe<&2, ExtensionContextActions>) -> IO(Maybe<&2, ReadonlySessionManager()>):
+  match session:
+    case None{}: IO.pure(Maybe<&2, ReadonlySessionManager()>, None{})
+    case Some{ExtensionContextActions{_, _, _, _, _, _, callback}}:
+      do IO<Maybe<&2, ReadonlySessionManager()>>:
+        snapshot : ReadonlySessionManager() <- C.call(Unit, ReadonlySessionManager(), callback, Unit{})
+        return Some{snapshot}
+
+# upstream ctx.sessionManager: the session as it is when read. The runner is
+# created before its session (upstream passes the session manager to the
+# runner's constructor), so it is None until a session binds the runner.
+def sessionManager(context: ExtensionContext) -> IO(Maybe<&2, ReadonlySessionManager()>):
+  do IO<Maybe<&2, ReadonlySessionManager()>>:
+    bindings : Bindings <- bindingsOf(context)
+    sessionManagerWith(sessionOf(bindings))
+
 # UI accessors; without a UI they answer as upstream's noOpUIContext.
 
 def notifyWith(ui: Maybe<&2, ExtensionUIContext>, notification: Notification) -> IO(Unit):
   match ui:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{ExtensionUIContext{_, _, _, callback, _, _, _, _, _, _, _, _}}: C.call(Notification, Unit, callback, notification)
+    case Some{ExtensionUIContext{_, _, _, callback, _, _, _, _, _, _, _, _, _}}: C.call(Notification, Unit, callback, notification)
 
 def notify(context: ExtensionContext, message: String, kind: NotifyType) -> IO(Unit):
   do IO<Unit>:
@@ -364,7 +392,7 @@ def notify(context: ExtensionContext, message: String, kind: NotifyType) -> IO(U
 def statusWith(ui: Maybe<&2, ExtensionUIContext>, update: StatusUpdate) -> IO(Unit):
   match ui:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{ExtensionUIContext{_, _, _, _, callback, _, _, _, _, _, _, _}}: C.call(StatusUpdate, Unit, callback, update)
+    case Some{ExtensionUIContext{_, _, _, _, callback, _, _, _, _, _, _, _, _}}: C.call(StatusUpdate, Unit, callback, update)
 
 def setStatus(context: ExtensionContext, key: String, text: Maybe<&2, String>) -> IO(Unit):
   do IO<Unit>:
@@ -374,7 +402,7 @@ def setStatus(context: ExtensionContext, key: String, text: Maybe<&2, String>) -
 def selectWith(ui: Maybe<&2, ExtensionUIContext>, request: SelectRequest) -> IO(Maybe<&2, String>):
   match ui:
     case None{}: IO.pure(Maybe<&2, String>, None{})
-    case Some{ExtensionUIContext{callback, _, _, _, _, _, _, _, _, _, _, _}}: C.call(SelectRequest, Maybe<&2, String>, callback, request)
+    case Some{ExtensionUIContext{callback, _, _, _, _, _, _, _, _, _, _, _, _}}: C.call(SelectRequest, Maybe<&2, String>, callback, request)
 
 def select(context: ExtensionContext, title: String, options: List<&2, String>, dialog: DialogOptions) -> IO(Maybe<&2, String>):
   do IO<Maybe<&2, String>>:
@@ -384,7 +412,7 @@ def select(context: ExtensionContext, title: String, options: List<&2, String>, 
 def confirmWith(ui: Maybe<&2, ExtensionUIContext>, request: ConfirmRequest) -> IO(Bool):
   match ui:
     case None{}: IO.pure(Bool, False{})
-    case Some{ExtensionUIContext{_, callback, _, _, _, _, _, _, _, _, _, _}}: C.call(ConfirmRequest, Bool, callback, request)
+    case Some{ExtensionUIContext{_, callback, _, _, _, _, _, _, _, _, _, _, _}}: C.call(ConfirmRequest, Bool, callback, request)
 
 def confirm(context: ExtensionContext, title: String, message: String, dialog: DialogOptions) -> IO(Bool):
   do IO<Bool>:
@@ -394,7 +422,7 @@ def confirm(context: ExtensionContext, title: String, message: String, dialog: D
 def inputWith(ui: Maybe<&2, ExtensionUIContext>, request: InputRequest) -> IO(Maybe<&2, String>):
   match ui:
     case None{}: IO.pure(Maybe<&2, String>, None{})
-    case Some{ExtensionUIContext{_, _, callback, _, _, _, _, _, _, _, _, _}}: C.call(InputRequest, Maybe<&2, String>, callback, request)
+    case Some{ExtensionUIContext{_, _, callback, _, _, _, _, _, _, _, _, _, _}}: C.call(InputRequest, Maybe<&2, String>, callback, request)
 
 def input(context: ExtensionContext, title: String, placeholder: Maybe<&2, String>, dialog: DialogOptions) -> IO(Maybe<&2, String>):
   do IO<Maybe<&2, String>>:
@@ -404,7 +432,7 @@ def input(context: ExtensionContext, title: String, placeholder: Maybe<&2, Strin
 def customWith(ui: Maybe<&2, ExtensionUIContext>, factory: CustomFactory()) -> IO(Unit):
   match ui:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{ExtensionUIContext{_, _, _, _, _, callback, _, _, _, _, _, _}}: C.call(CustomFactory(), Unit, callback, factory)
+    case Some{ExtensionUIContext{_, _, _, _, _, callback, _, _, _, _, _, _, _}}: C.call(CustomFactory(), Unit, callback, factory)
 
 def custom(context: ExtensionContext, factory: CustomFactory()) -> IO(Unit):
   do IO<Unit>:
@@ -414,7 +442,7 @@ def custom(context: ExtensionContext, factory: CustomFactory()) -> IO(Unit):
 def editorWith(ui: Maybe<&2, ExtensionUIContext>, request: EditorRequest) -> IO(Maybe<&2, String>):
   match ui:
     case None{}: IO.pure(Maybe<&2, String>, None{})
-    case Some{ExtensionUIContext{_, _, _, _, _, _, callback, _, _, _, _, _}}: C.call(EditorRequest, Maybe<&2, String>, callback, request)
+    case Some{ExtensionUIContext{_, _, _, _, _, _, callback, _, _, _, _, _, _}}: C.call(EditorRequest, Maybe<&2, String>, callback, request)
 
 def editor(context: ExtensionContext, title: String, prefill: Maybe<&2, String>) -> IO(Maybe<&2, String>):
   do IO<Maybe<&2, String>>:
@@ -424,7 +452,7 @@ def editor(context: ExtensionContext, title: String, prefill: Maybe<&2, String>)
 def widgetWith(ui: Maybe<&2, ExtensionUIContext>, update: WidgetUpdate) -> IO(Unit):
   match ui:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{ExtensionUIContext{_, _, _, _, _, _, _, callback, _, _, _, _}}: C.call(WidgetUpdate, Unit, callback, update)
+    case Some{ExtensionUIContext{_, _, _, _, _, _, _, callback, _, _, _, _, _}}: C.call(WidgetUpdate, Unit, callback, update)
 
 def setWidget(context: ExtensionContext, key: String, content: Maybe<&2, WidgetContent>, placement: Maybe<&2, WidgetPlacement>) -> IO(Unit):
   do IO<Unit>:
@@ -440,9 +468,9 @@ type TextTarget is Data:
 def textWith(ui: Maybe<&2, ExtensionUIContext>, target: TextTarget, text: String) -> IO(Unit):
   match ui target:
     case None{} _: IO.pure(Unit, Unit{})
-    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, callback, _, _, _}} TitleText{}: C.call(String, Unit, callback, text)
-    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, _, callback, _, _}} EditorText{}: C.call(String, Unit, callback, text)
-    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, _, _, callback, _}} PastedText{}: C.call(String, Unit, callback, text)
+    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, callback, _, _, _, _}} TitleText{}: C.call(String, Unit, callback, text)
+    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, _, callback, _, _, _}} EditorText{}: C.call(String, Unit, callback, text)
+    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, _, _, callback, _, _}} PastedText{}: C.call(String, Unit, callback, text)
 
 def setText(context: ExtensionContext, target: TextTarget, text: String) -> IO(Unit):
   do IO<Unit>:
@@ -456,12 +484,30 @@ def pasteToEditor(context: ExtensionContext, text: String) -> IO(Unit): setText(
 def editorTextWith(ui: Maybe<&2, ExtensionUIContext>) -> IO(String):
   match ui:
     case None{}: IO.pure(String, "")
-    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, _, _, _, callback}}: C.call(Unit, String, callback, Unit{})
+    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, _, _, _, callback, _}}: C.call(Unit, String, callback, Unit{})
 
 def getEditorText(context: ExtensionContext) -> IO(String):
   do IO<String>:
     bindings : Bindings <- bindingsOf(context)
     editorTextWith(uiOf(bindings))
+
+def themeWith(ui: Maybe<&2, ExtensionUIContext>) -> IO(Maybe<&2, Theme.Theme>):
+  match ui:
+    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, _, _, _, _, Some{live}}}:
+      do IO<Maybe<&2, Theme.Theme>>:
+        current : Theme.Theme <- R.read(Theme.Theme, live)
+        return Some{current}
+    case _: IO.pure(Maybe<&2, Theme.Theme>, None{})
+
+# upstream ctx.ui.theme: the bound UI's current theme. Upstream's no-UI
+# context answers the process-global theme; the native modes keep their
+# theme in their own state, so without a UI (or a UI without a theme) there
+# is none, and extensions style nothing (their status and widget updates go
+# nowhere without a UI anyway).
+def theme(context: ExtensionContext) -> IO(Maybe<&2, Theme.Theme>):
+  do IO<Maybe<&2, Theme.Theme>>:
+    bindings : Bindings <- bindingsOf(context)
+    themeWith(uiOf(bindings))
 
 # Command context (upstream createCommandContext)
 # -----------------------------------------------
@@ -540,45 +586,29 @@ def reload(context: ExtensionCommandContext) -> IO(Unit):
 # The built-in tools' view
 # ------------------------
 
-# What a built-in tool reads from its context when it runs (upstream
-# wrapToolDefinition's ctx: cwd, model, session identity, thinking level).
-type ContextView is Data:
-  ContextView{cwd: String, model: Maybe<&2, Ai.Model<Ai.JsonValue>>, sessionId: String, sessionFile: Maybe<&2, String>, thinkingLevel: Ai.ModelThinkingLevel}
-
-# Tools are created with the runner's context, or without one (upstream's
-# missing ctxFactory); `create` is the latter.
-def ContextSource() -> Data: Maybe<&2, ExtensionContext>
-
-def create() -> IO(ContextSource()): IO.pure(ContextSource(), None{})
-
-def viewOf(+directory: String, state: SessionState) -> ContextView:
+# What a built-in tool reads from its context when it runs
+# (tool-context.bend): the context's cwd and the bound session's model,
+# identity and thinking level.
+def viewOf(+directory: String, state: SessionState) -> ToolContext.ContextView:
   match state:
-    case SessionState{found, _, level, id, file, _, _, _, _}: ContextView{directory, found, id, file, level}
+    case SessionState{found, _, level, id, file, _, _, _, _}: ToolContext.ContextView{directory, found, id, file, level}
 
-def viewFrom(+directory: String, session: Maybe<&2, ExtensionContextActions>) -> IO(Maybe<&2, ContextView>):
+def viewFrom(+directory: String, session: Maybe<&2, ExtensionContextActions>) -> IO(Maybe<&2, ToolContext.ContextView>):
   match session:
-    case None{}: IO.pure(Maybe<&2, ContextView>, None{})
-    case Some{ExtensionContextActions{state, _, _, _, _, _}}:
-      do IO<Maybe<&2, ContextView>>:
+    case None{}: IO.pure(Maybe<&2, ToolContext.ContextView>, None{})
+    case Some{ExtensionContextActions{state, _, _, _, _, _, _}}:
+      do IO<Maybe<&2, ToolContext.ContextView>>:
         snapshot : SessionState <- C.call(Unit, SessionState, state, Unit{})
         return Some{viewOf(directory, snapshot)}
 
 # Before a session binds the runner, tools keep their own cwd.
-def current(source: ContextSource()) -> IO(Maybe<&2, ContextView>):
-  match source:
-    case None{}: IO.pure(Maybe<&2, ContextView>, None{})
-    case Some{+context}:
-      do IO<Maybe<&2, ContextView>>:
-        bindings : Bindings <- bindingsOf(context)
-        viewFrom(cwd(context), sessionOf(bindings))
-
-def cwdOf(context: Maybe<&2, ContextView>) -> Maybe<&2, String>:
+def toolView(context: ExtensionContext, unit: Unit) -> IO(Maybe<&2, ToolContext.ContextView>):
   match context:
-    case None{}: None{}
-    case Some{ContextView{directory, _, _, _, _}}: Some{directory}
+    case ExtensionContext{directory, _, bindings}:
+      do IO<Maybe<&2, ToolContext.ContextView>>:
+        bound : Bindings <- R.read(Bindings, bindings)
+        viewFrom(directory, sessionOf(bound))
 
-# upstream `ctx?.cwd || cwd`
-def cwdOr(context: Maybe<&2, ContextView>, +fallback: String) -> String:
-  match context:
-    case Some{ContextView{SCon{first, rest}, _, _, _, _}}: SCon{first, rest}
-    case _: fallback
+# The reader the tools of a runner are created with; its owner disposes it.
+def createToolContext(context: ExtensionContext) -> IO(C.Callback<Unit, Maybe<&2, ToolContext.ContextView>>):
+  C.create(~ExtensionContext, ~Unit, ~Maybe<&2, ToolContext.ContextView>, ~toolView, context)
