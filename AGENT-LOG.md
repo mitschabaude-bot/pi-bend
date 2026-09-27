@@ -3005,3 +3005,7 @@ Codex: scalar ANSI width phases make visibleScan borrowed and structurally recur
 Codex: reserving tui.bend/tui-base.bend and frame tests to reuse committed normalized/reset strings when a borrowed raw-prefix/reset-suffix comparison proves the value unchanged. No persistent cache field or renderer API change; preserve image bypass and fresh normalization for every mismatch.
 
 Codex: committed-line reset reuse preserves cursor/image/normalization behavior (including 288 arbitrary prior-frame comparisons) on native one/four/Bun, 30 renderer frames, generic proofs and mounted regular/fullscreen output. Paired large-history warm-key medians improve 65–71→58–59 ms with similar RSS; existing history/flood gates still fail. Promoting build/pi-cli-reset-reuse to build/pi-cli and releasing TUI/frame-test paths; next investigate duplicate scans and layout/preflight costs.
+
+Codex: reserving tui.bend for a measured scan-fusion experiment. Latest profile shows reuseLine/prepareRow/visibleWidth dominate after committed-line reuse; combine its normalization guard with borrowed reset matching, preserving cached/fresh output.
+
+Codex: fused reset matching and normalization eligibility pass frame/cache comparisons, generic proofs and all five mounted baseline-output comparisons on native one/four. Alternating warm-key medians improve 57–60→52–53 ms on one thread; four-thread results remain about 58–59 ms, RSS unchanged. Releasing tui.bend after landing; row preparation and layout width scans remain hot, and large-history/flood source gates still fail.
