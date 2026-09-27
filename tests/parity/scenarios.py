@@ -5,6 +5,7 @@ Paths in `files` are relative to the scenario root (home/, project/). Steps:
   ("wait", regex[, label])  record input→screen latency under `label`
   ("settle"[, seconds])     wait for a quiet screen   ("snap", name)
   ("write", path, text)     change a file under the scenario root
+  ("title", name[, expected])  capture or await the terminal tab title
 """
 import sys; sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[2] / "tests"))
 from upstream_pin import UPSTREAM
@@ -1306,3 +1307,30 @@ SCENARIOS = [
 # Exercise the same editor handoffs through the fullscreen terminal lifecycle.
 external_editor = next(case for case in SCENARIOS if case["name"] == "external-editor")
 SCENARIOS.append({**external_editor, "name": "external-editor-fullscreen", "args": MODEL + ["--tui-mode", "fullscreen"]})
+
+SCENARIOS.append({
+    "name": "terminal-session-title", "args": MODEL,
+    "turns": [{"text": "TITLE-ANSWER"}],
+    "steps": [("wait", READY, "startup"), ("title", "startup-title", "π - project"), ("settle", 0.5),
+              ("keys", "hello"), ("key", "Enter"), ("wait", "TITLE-ANSWER", "answer"), ("settle", 0.3),
+              ("keys", "/name Research π"), ("key", "Enter"), ("settle", 0.3), ("title", "named-title", "π - Research π - project"),
+              ("keys", "/name Revised session"), ("key", "Enter"), ("settle", 0.3), ("title", "renamed-title", "π - Revised session - project"),
+              ("keys", "/new"), ("key", "Enter"), ("settle", 0.5), ("title", "new-session-title", "π - project"),
+              ("keys", "/resume"), ("key", "Enter"), ("wait", "Resume Session", "picker"),
+              ("keys", "Revised session"), ("settle", 0.3), ("key", "Enter"),
+              ("title", "resumed-title", "π - Revised session - project"),
+              ("key", "C-d"), ("wait", r"shell\$", "exit")],
+})
+
+SCENARIOS.append({
+    "name": "terminal-editor-title", "args": MODEL,
+    "env": {"VISUAL": "python3 title-editor.py"},
+    "files": {"project/title-editor.py": 'print("\\033]0;Editor title\\007", end="", flush=True)\n' + EXTERNAL_EDITOR},
+    "steps": [("wait", READY, "startup"), ("title", "startup-title", "π - project"), ("settle", 0.5),
+              ("keys", "draft"), ("key", "C-g"), ("wait", "External editor ready", "editor"),
+              ("title", "editor-title", "Editor title"), ("keys", "saved"), ("key", "Enter"),
+              ("wait", "draft saved", "resumed"), ("settle", 0.3), ("title", "preserved-title", "Editor title"),
+              ("key", "C-c"), ("keys", "/name After editing"), ("key", "Enter"),
+              ("title", "named-title", "π - After editing - project"),
+              ("key", "C-d"), ("wait", r"shell\$", "exit")],
+})

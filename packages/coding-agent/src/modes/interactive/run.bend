@@ -191,6 +191,30 @@ def workingActive(working: Working) -> Ref.Ref<Maybe<&2,Loader.Handle>>:
   match working: case Working{active,_,_}: active
 def workingTerminal(working: Working) -> Ref.Ref<Maybe<&2,Terminal.Handle>>:
   match working: case Working{_,_,terminal}: terminal
+def sessionTitle(name: Maybe<&2,String>,cwd: String) -> String:
+  match name:
+    case None{}: Config.appTitle() ++ " - " ++ Path.basename(cwd)
+    case Some{+value}: Config.appTitle() ++ Bool.pick(String,String.is_empty(value),""," - " ++ value) ++ " - " ++ Path.basename(cwd)
+def writeSessionTitle(terminal: Maybe<&2,Terminal.Handle>,session: Session.AgentSession) -> IO(Unit):
+  match terminal:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{handle}:
+      do IO<Unit>:
+        stored : Session.Session() <- Session.sessionOf(session)
+        +state : Session.State() = Session.stateOf(stored)
+        result : Result<&2,&2,Terminal.Error,Unit> <- Terminal.setTitle(handle,sessionTitle(Tree.getSessionName(Unit,Tools.ToolDetails,Schema.Value,state),Tree.getCwd(Unit,Tools.ToolDetails,Schema.Value,state)))
+        return Unit{}
+def updateSessionTitle(working: Working,session: Session.AgentSession) -> IO(Unit):
+  do IO<Unit>:
+    terminal : Maybe<&2,Terminal.Handle> <- Ref.read(Maybe<&2,Terminal.Handle>,workingTerminal(working))
+    writeSessionTitle(terminal,session)
+def titleEvent(working: Working,session: Ref.Ref<Session.AgentSession>,event: Session.AgentSessionEvent) -> IO(Unit):
+  match event:
+    case Session.SessionInfoChanged{_}:
+      do IO<Unit>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        updateSessionTitle(working,live)
+    case _: IO.pure(Unit,Unit{})
 def progressEvent(event: Session.AgentSessionEvent) -> Maybe<&2,Bool>:
   match event:
     case Session.AgentEvent{Agent.TurnStart{}}: Some{True{}}
@@ -211,10 +235,11 @@ def changedProgress(working: Working,session: Ref.Ref<Session.AgentSession>,acti
         settings : Settings.SettingsManager <- Session.getSettings(live)
         terminal : Maybe<&2,Terminal.Handle> <- Ref.read(Maybe<&2,Terminal.Handle>,workingTerminal(working))
         updateTerminalProgress(terminal,Settings.getShowTerminalProgress(settings),busy)
-def readyProgress(working: Working,+session: Ref.Ref<Session.AgentSession>,+terminal: Terminal.Handle) -> IO(Unit):
+def readyTerminal(working: Working,+session: Ref.Ref<Session.AgentSession>,+terminal: Terminal.Handle,initial: Bool) -> IO(Unit):
   do IO<Unit>:
     Ref.write(Maybe<&2,Terminal.Handle>,workingTerminal(working),Some{terminal})
     +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+    Bool.pick(Unit -> IO(Unit),initial,_ => writeSessionTitle(Some{terminal},live),_ => IO.pure(Unit,Unit{}))(Unit{})
     settings : Settings.SettingsManager <- Session.getSettings(live)
     streaming : Bool <- Session.isStreaming(live)
     compacting : Bool <- Session.isCompacting(live)
@@ -386,6 +411,7 @@ def observeCopied(input: Observation,+event: Session.AgentSessionEvent) -> IO(Un
     case Observation{+transcript,+redraw,footer,+working,+session}:
       do IO<Unit>:
         changed : Bool <- Ref.modify(Footer.State,Bool,footer,state => footerEvent(state,event))
+        titleEvent(working,session,event)
         changedProgress(working,session,progressEvent(event))
         workingEvent(working,redraw,event)
         statusNotice(transcript,event)
@@ -2350,12 +2376,13 @@ def controlResult(sink: ControlSink,result: Controller.ControlResult) -> IO(Unit
         message : String <- IO.pure(String,Bool.pick(String,Nat.is_eq(total,0n),"No queued messages to restore","Restored " ++ Nat.show(total) ++ Bool.pick(String,Nat.is_eq(total,1n)," queued message"," queued messages") ++ " to editor"))
         Interactive.report(failure,Interactive.CommandNotice{message})
 type RebindSink is Data:
-  RebindSink{listener: Session.Listener(),transcript: Transcript.Handle,footerRef: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>}
+  RebindSink{listener: Session.Listener(),transcript: Transcript.Handle,footerRef: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>,working: Working}
 def reboundCopied(sink: RebindSink,+session: Session.AgentSession) -> IO(Unit):
   match sink:
-    case RebindSink{listener,+transcript,footerRef,failure,redraw,cwd,home}:
+    case RebindSink{listener,+transcript,footerRef,failure,redraw,cwd,home,working}:
       do IO<Unit>:
         Session.subscribe(session,listener)
+        updateSessionTitle(working,session)
         +messages : List<&2,Session.Message()> <- Session.messages(session)
         Transcript.clear(transcript)
         stored : Session.Session() <- Session.sessionOf(session)
@@ -2368,16 +2395,16 @@ def reboundCopied(sink: RebindSink,+session: Session.AgentSession) -> IO(Unit):
         Interactive.requestRender(redraw)
 def rebound(sink: RebindSink,session: Session.AgentSession) -> IO(Unit):
   reboundCopied(sink,session)
-def bindRebound(binding: Binding,listener: Session.Listener(),transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>) -> IO(Unit):
+def bindRebound(binding: Binding,listener: Session.Listener(),transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>,working: Working) -> IO(Unit):
   match binding:
     case Binding{_,_,hook,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
-        callback : Callback.Callback<Session.AgentSession,Unit> <- Callback.create(~RebindSink,~Session.AgentSession,~Unit,~rebound,RebindSink{listener,transcript,footer,failure,redraw,cwd,home})
+        callback : Callback.Callback<Session.AgentSession,Unit> <- Callback.create(~RebindSink,~Session.AgentSession,~Unit,~rebound,RebindSink{listener,transcript,footer,failure,redraw,cwd,home,working})
         Ref.write(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,hook,Some{callback})
-def bindOptional(mode: Maybe<&2,Binding>,listener: Session.Listener(),transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>) -> IO(Unit):
+def bindOptional(mode: Maybe<&2,Binding>,listener: Session.Listener(),transcript: Transcript.Handle,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>,working: Working) -> IO(Unit):
   match mode:
     case None{}: IO.pure(Unit,Unit{})
-    case Some{binding}: bindRebound(binding,listener,transcript,editor,footer,failure,redraw,cwd,home)
+    case Some{binding}: bindRebound(binding,listener,transcript,editor,footer,failure,redraw,cwd,home,working)
 def disposeRebindCallback(value: Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>) -> IO(Unit):
   match value:
     case None{}: IO.pure(Unit,Unit{})
@@ -2626,9 +2653,9 @@ def startTheme(previous: Maybe<&1,ThemeOwned>,ready: Process.QueryReady,setting:
         ThemeController.start(ready,setting,env,builtinDir,customDir,mode)
 def themeReady(startup: ThemeStartup,ready: Process.QueryReady) -> IO(Unit):
   match startup ready:
-    case ThemeStartup{redraw,queue,initial,failure,stopped,+selected,+owned,error,+theme,+transcript,+session,+setting,+builtinDir,+customDir,+managed,+interaction,highlighter,first} Process.QueryReady{queries,+terminal,write,requestRender,preference}:
+    case ThemeStartup{redraw,queue,initial,failure,stopped,+selected,+owned,error,+theme,+transcript,+session,+setting,+builtinDir,+customDir,+managed,+interaction,highlighter,+first} Process.QueryReady{queries,+terminal,write,requestRender,preference}:
       do IO<Unit>:
-        readyProgress(workingOf(interaction),session,terminal)
+        readyTerminal(workingOf(interaction),session,terminal,first)
         +render : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeLive,~Unit,~Unit,~syncRender,ThemeLive{selected,theme,transcript,requestRender})
         detected : Result<&1,&1,U32 & String,String> <- IO.get_env("COLORFGBG")
         initialTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
@@ -3066,7 +3093,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +lastEscape : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         selectionObserver : Callback.Callback<Controller.SelectionResult,Unit> <- Callback.create(~SelectionSink,~Controller.SelectionResult,~Unit,~selectionResult,SelectionSink{current,transcriptHandle,editorHandle,footerState(foot),status,redraw,cwd,home})
         controlObserver : Callback.Callback<Controller.ControlResult,Unit> <- Callback.create(~ControlSink,~Controller.ControlResult,~Unit,~controlResult,ControlSink{editorHandle,status,redraw})
-        bindOptional(mode,listener,transcriptHandle,editorHandle,footerState(foot),status,redraw,cwd,home)
+        bindOptional(mode,listener,transcriptHandle,editorHandle,footerState(foot),status,redraw,cwd,home,working)
         controllerPair : Controller.Controller & Controller.Handle <- controllerFor(mode,current,session,listener,32n,Some{failureObserver},Some{commandObserver},Some{controlObserver},Some{selectionObserver},modelsRef,loginCallback)
         startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,current,setting,builtinDir,customDir,Interaction{editorHandle,lastClear,lastEscape,selectorRef,modelSelectorRef,thinkingSelectorRef,scopedSelectorRef,settingsSelectorRef,trustSelectorRef,View.headerHandle(viewHandle),bashActivity,working,autocomplete,suspension},modelsRef,mode,loginState,resumeState,bindings,highlighter,status})
 def startStyles(styles: MarkdownTheme.Styles,view: View.View,+viewHandle: View.Handle,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Source,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
