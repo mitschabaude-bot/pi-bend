@@ -1209,7 +1209,7 @@
     },
     {
       "source": "packages/ai/test/google-thinking-disable.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/coding-agent/test/live-replay.bend",
         "tests/live_replay_check.py",
@@ -1217,7 +1217,7 @@
         "tests/live_replay_reference.ts"
       ],
       "sha256": "dc899136ae7d5c367b846aa68fc693cbe20fe12a85dfd8b41ff97fb8e6f22b10",
-      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. The 7 Gemini API cases pass; the 2 Google Vertex cases are pending (Vertex is not served by the replay). tests/google_generative_ai_check.py also compares the request shapes."
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. All 9 rows pass. The 2 Google Vertex rows run with both options the suite picks from its environment (the API key, and project/location with ADC from an authorized_user file). tests/google_generative_ai_check.py also compares the request shapes."
     },
     {
       "source": "packages/ai/test/google-thinking-level-map.test.ts",
@@ -1268,7 +1268,7 @@
     },
     {
       "source": "packages/ai/test/image-tool-result.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/coding-agent/test/live-replay.bend",
         "tests/live_replay_check.py",
@@ -1276,7 +1276,7 @@
         "tests/live_replay_reference.ts"
       ],
       "sha256": "ebfcb7386688d70a0a051c73b5aa3001f75d8560306f733917aeab9245d2658d",
-      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. 38 of 46 rows pass. Pending: Mistral pixtral-12b (2) and Amazon Bedrock (2), whose APIs the replay does not serve, and 4 Xiaomi MiMo rows skipped upstream (it.skip)."
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. All 42 non-skipped rows pass, including Mistral pixtral-12b (Mistral chat completion chunks) and Amazon Bedrock (ConverseStream event-stream frames, SigV4 with environment IAM keys that the server verifies). The 4 Xiaomi MiMo rows are it.skip upstream and are recorded as skipped, not ported (tests/live_replay_check.py --pending lists them)."
     },
     {
       "source": "packages/ai/test/images-models.test.ts",
@@ -1301,7 +1301,7 @@
     },
     {
       "source": "packages/ai/test/interleaved-thinking.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/coding-agent/test/live-replay.bend",
         "tests/live_replay_check.py",
@@ -1309,7 +1309,7 @@
         "tests/live_replay_reference.ts"
       ],
       "sha256": "4144ecf2389eaa13fd967c84112fdb4d61580cc8b2101ce6999baed231e84292",
-      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. The 2 Anthropic cases pass; the 2 Amazon Bedrock cases are pending (Bedrock is not served by the replay)."
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. All 4 rows pass: Anthropic and Amazon Bedrock (ConverseStream event-stream frames with reasoning text and signature deltas, SigV4 with environment IAM keys that the server verifies)."
     },
     {
       "source": "packages/ai/test/kimi-coding-oauth.test.ts",
@@ -1931,7 +1931,7 @@
     },
     {
       "source": "packages/ai/test/responseid.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "packages/coding-agent/test/live-replay.bend",
         "tests/live_replay_check.py",
@@ -1939,7 +1939,7 @@
         "tests/live_replay_reference.ts"
       ],
       "sha256": "86ee611befd27221de3183c568b0534603efdfd378d4783e940e93ff6b55f8e4",
-      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. 8 of 11 pass. Pending: Google Vertex (ADC and API key) and Mistral, whose APIs the replay does not serve."
+      "notes": "Replayed over loopback by tests/live_replay_check.py (Bun, native1, native4): each upstream it runs through pinned pi-mono and the port's provider streams against a server replaying provider wire responses; upstream assertions, request bodies, events and final messages must agree. All 11 rows pass, including Google Vertex with ADC (an authorized_user credentials file whose token refresh the server answers; both executors' refresh requests are compared) and with an API key, and Mistral."
     },
     {
       "source": "packages/ai/test/retry.test.ts",

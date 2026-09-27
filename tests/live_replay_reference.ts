@@ -6,6 +6,23 @@
 // "T <message>" when streaming throws before a stream exists.
 import { UPSTREAM } from "./upstream_pin.mjs";
 
+const [base, path] = process.argv.slice(2);
+const spec = JSON.parse(await Bun.file(path).text());
+// Vertex ADC: google-auth-library sends its token refresh through gaxios,
+// which uses a browser's `window.fetch` when one exists; requests for
+// Google's OAuth2 host go to the run on the loopback server (`googleBase`).
+// Only Vertex cases set it (other SDKs change behaviour when `window` exists).
+if (spec.googleBase) {
+	const realFetch = globalThis.fetch;
+	const host = "https://oauth2.googleapis.com/";
+	(globalThis as any).window = {
+		fetch: (url: any, init: any) => {
+			const text = String(url);
+			return realFetch(text.startsWith(host) ? `${spec.googleBase}/${text.slice(host.length)}` : url, init);
+		},
+	};
+}
+
 const { getModel, stream, streamSimple } = await import(UPSTREAM + "/packages/ai/src/compat.ts");
 // entry "api": the API module's own stream, as the suites that import it call it.
 const apiStreams: Record<string, string> = {
@@ -28,8 +45,6 @@ function generateOverflowContent(contextWindow: number): string {
 // Text as comma-separated code points (lone surrogates as their units).
 const points = (text: string) => Array.from(text, (c) => c.codePointAt(0)).join(",");
 
-const [base, path] = process.argv.slice(2);
-const spec = JSON.parse(await Bun.file(path).text());
 if (spec.catalog) {
 	const { getModels } = await import(UPSTREAM + "/packages/ai/src/compat.ts");
 	const { getSupportedThinkingLevels } = await import(UPSTREAM + "/packages/ai/src/models.ts");
