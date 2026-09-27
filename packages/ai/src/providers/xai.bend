@@ -9,4 +9,4 @@ import ./xai.models.bend as Catalog
 def xaiProvider(oauth: Maybe<&2, Auth.OAuthAuth>) -> IO(Models.Provider):
   do IO<Models.Provider>:
     apiKey : Auth.ApiKeyAuth <- Helpers.envApiKeyAuth("xAI API key", ["XAI_API_KEY"])
-    return Models.Provider{"xai", "xAI", "https://api.x.ai/v1", Auth.ProviderAuth{Some{apiKey}, oauth}, Catalog.XAI_MODELS(), Models.ApiStreams{}, None{}}
+    return Models.Provider{"xai", "xAI", "https://api.x.ai/v1", Auth.ProviderAuth{Some{apiKey}, oauth}, Catalog.XAI_MODELS(), Models.ApiStreams{}, None{}, None{}}

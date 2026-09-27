@@ -68,7 +68,7 @@ def rendered(outcome: Auth.AuthOutcome()) -> String:
 
 def resolveWith(auth: Auth.ApiKeyAuth, context: Auth.AuthContext, credential: Maybe<&2, Auth.Credential>, signal: Abort.AbortSignal<Unit>) -> IO(Auth.AuthOutcome()):
   match auth:
-    case Auth.ApiKeyAuth{_, _, resolve}: C.call(Auth.ResolveInput, Auth.AuthOutcome(), resolve, Auth.ResolveInput{context, credential, signal})
+    case Auth.ApiKeyAuth{_, _, resolve, _}: C.call(Auth.ResolveInput, Auth.AuthOutcome(), resolve, Auth.ResolveInput{context, credential, signal})
 
 def resolvedText(auth: IO(Auth.ApiKeyAuth), env: Env(), credential: Maybe<&2, Auth.Credential>, cancel: Bool) -> IO(String):
   do IO<String>:
@@ -108,7 +108,7 @@ def credentialText(result: Auth.LoginOutcome()) -> String:
     case Done{_}: "wrong credential type"
 def callLogin(auth: Auth.ApiKeyAuth,interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
   match auth:
-    case Auth.ApiKeyAuth{_,Some{callback},_}: C.call(Auth.ProviderAuthInteraction,Auth.LoginOutcome(),callback,interaction)
+    case Auth.ApiKeyAuth{_,Some{callback},_,_}: C.call(Auth.ProviderAuthInteraction,Auth.LoginOutcome(),callback,interaction)
     case _: IO.pure(Auth.LoginOutcome(),Fail{"login unavailable"})
 def ignoreNotification(_: Unit,_: Auth.AuthEvent) -> IO(Unit): IO.pure(Unit,Unit{})
 def loginText(auth: IO(Auth.ApiKeyAuth)) -> IO(String):

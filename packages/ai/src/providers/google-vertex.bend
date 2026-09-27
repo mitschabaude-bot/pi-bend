@@ -223,4 +223,4 @@ def googleVertexProvider() -> IO(Models.Provider):
   do IO<Models.Provider>:
     resolve : C.Callback<Auth.ResolveInput, AuthOutcome()> <- C.create(~Unit, ~Auth.ResolveInput, ~AuthOutcome(), ~resolveVertex, Unit{})
     login : C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()> <- C.create(~Unit, ~Auth.ProviderAuthInteraction, ~(Auth.LoginOutcome()), ~loginVertex, Unit{})
-    return Models.Provider{"google-vertex", "Google Vertex AI", "", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Google Cloud credentials", Some{login}, resolve}}, None{}}, Catalog.GOOGLE_VERTEX_MODELS(), Models.ApiStreams{}, None{}}
+    return Models.Provider{"google-vertex", "Google Vertex AI", "", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Google Cloud credentials", Some{login}, resolve, None{}}}, None{}}, Catalog.GOOGLE_VERTEX_MODELS(), Models.ApiStreams{}, None{}, None{}}

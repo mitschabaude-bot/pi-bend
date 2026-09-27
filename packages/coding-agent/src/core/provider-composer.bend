@@ -3,6 +3,7 @@ import ./model-config.bend as Config
 import ./resolve-config-value.bend as ConfigValue
 import ../../../ai/src/types.bend as T
 import ../../../ai/src/auth/types.bend as Auth
+import ../../../ai/src/models.bend as AiModels
 import ../../../ai/src/utils/model-api.bend as Api
 import ../../../ai/src/utils/model-json.bend as ModelJson
 import ../../../runtime/src/schema-value.bend as V
@@ -646,7 +647,7 @@ type KeyConfig is Data:
 def inheritedResolve(inheritedAuth: Maybe<&2, Auth.ApiKeyAuth>, input: Auth.ResolveInput) -> IO(Auth.AuthOutcome()):
   match inheritedAuth:
     case None{}: IO.pure(Auth.AuthOutcome(), Done{None{}})
-    case Some{Auth.ApiKeyAuth{_, _, resolve}}: C.call(Auth.ResolveInput, Auth.AuthOutcome(), resolve, input)
+    case Some{Auth.ApiKeyAuth{_, _, resolve, _}}: C.call(Auth.ResolveInput, Auth.AuthOutcome(), resolve, input)
 def loginDefaultResult(value: Result<&2,&2,String,String>) -> Auth.LoginOutcome():
   match value:
     case Fail{reason}: Fail{reason}
@@ -660,7 +661,7 @@ def loginDefault(interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutc
         return loginDefaultResult(value)
 def loginInherited(inherited: Maybe<&2,Auth.ApiKeyAuth>,interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
   match inherited:
-    case Some{Auth.ApiKeyAuth{_,Some{callback},_}}: C.call(Auth.ProviderAuthInteraction,Auth.LoginOutcome(),callback,interaction)
+    case Some{Auth.ApiKeyAuth{_,Some{callback},_,_}}: C.call(Auth.ProviderAuthInteraction,Auth.LoginOutcome(),callback,interaction)
     case _: loginDefault(interaction)
 def loginConfigured(config: KeyConfig,interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
   match config:
@@ -718,10 +719,64 @@ def resolveConfigured(config: KeyConfig, input: Auth.ResolveInput) -> IO(Auth.Au
         outcome : Auth.AuthOutcome() <- baseOutcome(providerId, inherited, rawKey, context, credential, signal)
         withHeaders(outcome, providerId, rawHeaders, authHeader, context, credentialEnv(credential))
 
+# Availability without resolution: a command-backed key counts as configured
+# without running it; a template needs each referenced variable.
+def allSet(names: List<&2, String>, +context: Auth.AuthContext) -> IO(Bool):
+  match names:
+    case Nil{}: IO.pure(Bool, True{})
+    case name <> rest:
+      do IO<Bool>:
+        value : Maybe<&2, String> <- Auth.envValue(context, name)
+        others : Bool <- allSet(rest, context)
+        return Maybe.is_some(&2, String, value) && others
+
+def checkConfiguredApiKey(+rawKey: String, context: Auth.AuthContext) -> IO(Bool):
+  Bool.pick(Unit -> IO(Bool), ConfigValue.isCommandConfigValue(rawKey), _ => IO.pure(Bool, True{}), _ => allSet(ConfigValue.getConfigValueEnvVarNames(rawKey), context))(Unit{})
+
+# upstream's composed check: a stored key counts without resolving it, a
+# configured key without running its command (a template needs each
+# variable it references), and otherwise the inherited check or resolution
+# decides.
+def resolvedCheck(outcome: Auth.AuthOutcome()) -> Auth.CheckOutcome():
+  match outcome:
+    case Fail{error}: Fail{error}
+    case Done{None{}}: Done{None{}}
+    case Done{Some{Auth.AuthResult{_, _, source}}}: Done{Some{Auth.AuthCheck{source, Auth.ApiKeyType{}}}}
+
+def inheritedCheck(inheritedAuth: Maybe<&2, Auth.ApiKeyAuth>, input: Auth.ResolveInput) -> IO(Auth.CheckOutcome()):
+  match inheritedAuth:
+    case Some{Auth.ApiKeyAuth{_, _, _, Some{check}}}: C.call(Auth.ResolveInput, Auth.CheckOutcome(), check, input)
+    case other:
+      do IO<Auth.CheckOutcome()>:
+        outcome : Auth.AuthOutcome() <- inheritedResolve(other, input)
+        return resolvedCheck(outcome)
+
+def storedCheck(inheritedAuth: Maybe<&2, Auth.ApiKeyAuth>, input: Auth.ResolveInput, credential: Auth.Credential) -> IO(Auth.CheckOutcome()):
+  match inheritedAuth credential:
+    case Some{Auth.ApiKeyAuth{name, login, resolve, Some{check}}} _: inheritedCheck(Some{Auth.ApiKeyAuth{name, login, resolve, Some{check}}}, input)
+    case _ Auth.ApiKeyCredential{Some{SCon{_, _}}, _}: IO.pure(Auth.CheckOutcome(), Done{Some{Auth.AuthCheck{Some{"stored credential"}, Auth.ApiKeyType{}}}})
+    case inheritedAuth _: inheritedCheck(inheritedAuth, input)
+
+def configuredCheck(+rawKey: String, context: Auth.AuthContext) -> IO(Auth.CheckOutcome()):
+  do IO<Auth.CheckOutcome()>:
+    ready : Bool <- checkConfiguredApiKey(rawKey, context)
+    return Done{Bool.pick(Maybe<&2, Auth.AuthCheck>, ready, Some{Auth.AuthCheck{Some{"configured API key"}, Auth.ApiKeyType{}}}, None{})}
+
+def checkWith(inheritedAuth: Maybe<&2, Auth.ApiKeyAuth>, rawKey: Maybe<&2, String>, +context: Auth.AuthContext, credential: Maybe<&2, Auth.Credential>, +signal: Abort.AbortSignal<Unit>) -> IO(Auth.CheckOutcome()):
+  match credential rawKey:
+    case Some{+stored} _: storedCheck(inheritedAuth, Auth.ResolveInput{context, Some{stored}, signal}, stored)
+    case None{} Some{raw}: configuredCheck(raw, context)
+    case None{} None{}: inheritedCheck(inheritedAuth, Auth.ResolveInput{context, None{}, signal})
+
+def checkConfigured(config: KeyConfig, input: Auth.ResolveInput) -> IO(Auth.CheckOutcome()):
+  match config input:
+    case KeyConfig{_, inherited, rawKey, _, _} Auth.ResolveInput{context, credential, signal}: checkWith(inherited, rawKey, context, credential, signal)
+
 # Parts of the base provider's auth that a composed wrapper owns.
 type Retained is Data:
   RetainedApiKey{auth: Auth.ApiKeyAuth}
   RetainedToAuth{toAuth: C.Callback<Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>>}
+  RetainedRefresh{refresh: AiModels.RefreshModels()}
 
 def disposeRetained(items: List<&2, Retained>) -> IO(Unit):
   match items:
@@ -734,6 +789,10 @@ def disposeRetained(items: List<&2, Retained>) -> IO(Unit):
       do IO<Unit>:
         C.dispose(Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>, toAuth)
         disposeRetained(rest)
+    case RetainedRefresh{refresh} <> rest:
+      do IO<Unit>:
+        C.dispose(AiModels.RefreshModelsContext, Result<&2, &2, String, Unit>, refresh)
+        disposeRetained(rest)
 
 type Composition<-A: Data> is Data:
   Composition{auth: Maybe<&2, A>, retained: List<&2, Retained>}
@@ -745,7 +804,7 @@ def retainedKey(inheritedAuth: Maybe<&2, Auth.ApiKeyAuth>) -> List<&2, Retained>
 
 def inheritedName(inheritedAuth: Maybe<&2, Auth.ApiKeyAuth>) -> String:
   match inheritedAuth:
-    case Some{Auth.ApiKeyAuth{name, _, _}}: name
+    case Some{Auth.ApiKeyAuth{name, _, _, _}}: name
     case None{}: "API key"
 
 def wrappedKey(+config: KeyConfig) -> IO(Composition<Auth.ApiKeyAuth>):
@@ -754,7 +813,8 @@ def wrappedKey(+config: KeyConfig) -> IO(Composition<Auth.ApiKeyAuth>):
       do IO<Composition<Auth.ApiKeyAuth>>:
         resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~KeyConfig, ~Auth.ResolveInput, ~(Auth.AuthOutcome()), ~resolveConfigured, config)
         login : C.Callback<Auth.ProviderAuthInteraction,Auth.LoginOutcome()> <- C.create(~KeyConfig,~Auth.ProviderAuthInteraction,~(Auth.LoginOutcome()),~loginConfigured,config)
-        return Composition{Some{Auth.ApiKeyAuth{inheritedName(inherited), Some{login}, resolve}}, retainedKey(inherited)}
+        check : C.Callback<Auth.ResolveInput, Auth.CheckOutcome()> <- C.create(~KeyConfig, ~Auth.ResolveInput, ~(Auth.CheckOutcome()), ~checkConfigured, config)
+        return Composition{Some{Auth.ApiKeyAuth{inheritedName(inherited), Some{login}, resolve, Some{check}}}, retainedKey(inherited)}
 
 def configuredHeaders(config: Config.ModelsJsonProvider) -> Maybe<&2, R.Record<String>>:
   match config:
@@ -768,15 +828,12 @@ def configuredAuthHeader(config: Config.ModelsJsonProvider) -> Bool:
   match config:
     case Config.ModelsJsonProvider{_, _, _, _, _, _, _, authHeader, _, _}: Maybe.default(&2, Bool, authHeader, False{})
 
-# OAuth-only providers get no fabricated API-key method. Without configured
-# key, headers or authHeader the inherited method is used unchanged, which
-# resolves identically to upstream's wrapper.
+# OAuth-only providers get no fabricated API-key method.
 def composedKey(+providerId: String, inheritedAuth: Maybe<&2, Auth.ApiKeyAuth>, oauth: Bool, keyValue: Maybe<&2, String>, +headerConfig: Maybe<&2, R.Record<String>>, +bearerHeader: Bool) -> IO(Composition<Auth.ApiKeyAuth>):
-  match inheritedAuth keyValue headerConfig bearerHeader:
-    case None{} None{} _ _:
+  match inheritedAuth keyValue:
+    case None{} None{}:
       Bool.pick(Unit -> IO(Composition<Auth.ApiKeyAuth>), oauth, _ => IO.pure(Composition<Auth.ApiKeyAuth>, Composition{None{}, Nil{}}), _ => wrappedKey(KeyConfig{providerId, None{}, None{}, headerConfig, bearerHeader}))(Unit{})
-    case Some{auth} None{} None{} False{}: IO.pure(Composition<Auth.ApiKeyAuth>, Composition{Some{auth}, Nil{}})
-    case inheritedAuth keyValue headerConfig bearerHeader: wrappedKey(KeyConfig{providerId, inheritedAuth, keyValue, headerConfig, bearerHeader})
+    case inheritedAuth keyValue: wrappedKey(KeyConfig{providerId, inheritedAuth, keyValue, headerConfig, bearerHeader})
 
 
 
@@ -1098,20 +1155,6 @@ def composeLayeredProvider(+providerId: String, +base: Maybe<&2, Base>, +layers:
 def composeModelProvider(+providerId: String, +base: Maybe<&2, Base>, config: Config.ModelsJsonProvider) -> IO(Result<&2, &2, String, Composed>):
   composeLayeredProvider(providerId, base, Layers{Some{config}, None{}})
 
-# Availability without resolution: a command-backed key counts as configured
-# without running it; a template needs each referenced variable.
-def allSet(names: List<&2, String>, +context: Auth.AuthContext) -> IO(Bool):
-  match names:
-    case Nil{}: IO.pure(Bool, True{})
-    case name <> rest:
-      do IO<Bool>:
-        value : Maybe<&2, String> <- Auth.envValue(context, name)
-        others : Bool <- allSet(rest, context)
-        return Maybe.is_some(&2, String, value) && others
-
-def checkConfiguredApiKey(+rawKey: String, context: Auth.AuthContext) -> IO(Bool):
-  Bool.pick(Unit -> IO(Bool), ConfigValue.isCommandConfigValue(rawKey), _ => IO.pure(Bool, True{}), _ => allSet(ConfigValue.getConfigValueEnvVarNames(rawKey), context))(Unit{})
-
 # Per-model request headers
 # -------------------------
 
@@ -1153,3 +1196,40 @@ def rawModelHeaders(+id: String, config: Maybe<&2, Config.ModelsJsonProvider>, e
 # The model's own configured headers, resolved with the given environment.
 def resolveConfiguredModelHeaders(+model: Model(), config: Maybe<&2, Config.ModelsJsonProvider>, extension: Maybe<&2, ProviderConfigInput>, env: Maybe<&2, T.ProviderEnv()>) -> IO(Result<&2, &2, String, Maybe<&2, R.Record<String>>>):
   resolveHeadersOrThrow(rawModelHeaders(modelId(model), config, extension), "model \"" ++ T.modelProvider(model) ++ "/" ++ modelId(model) ++ "\"", env)
+# Published catalogs of a composed provider
+# -----------------------------------------
+
+# upstream composeModelProvider's getModels: a built-in provider composed with
+# its models.json entry shows the entry applied over the base's current
+# catalog, so a catalog the base publishes gets the same overlay (and
+# modelOverrides) as the static one. The composition was validated on the
+# static catalog; an overlay that fails on a published one keeps the
+# provider's composed models (`fallback`).
+def overlaidModels(+providerId: String, +config: Config.ModelsJsonProvider, +fallback: List<&2, Model()>, published: List<&2, Model()>) -> List<&2, Model()>:
+  Result.default(&2, &2, String, List<&2, Model()>, Result.map(&2, &2, String, List<&2, Model()>, List<&2, Model()>, models => applyOverrides(models, overridesOf(config)), applyModelsJson(providerId, published, config)), fallback)
+
+type OverlaidPublish is Data:
+  OverlaidPublish{providerId: String, config: Config.ModelsJsonProvider, fallback: List<&2, Model()>, publish: C.Callback<AiModels.ModelsPublication, Bool>}
+
+type OverlaidRefresh is Data:
+  OverlaidRefresh{providerId: String, config: Config.ModelsJsonProvider, fallback: List<&2, Model()>, base: AiModels.RefreshModels()}
+
+def publishOverlaid(target: OverlaidPublish, publication: AiModels.ModelsPublication) -> IO(Bool):
+  match target publication:
+    case OverlaidPublish{+providerId, +config, +fallback, publish} AiModels.ModelsPublication{persist, models}:
+      C.call(AiModels.ModelsPublication, Bool, publish, AiModels.ModelsPublication{persist, Maybe.map(&2, List<&2, Model()>, List<&2, Model()>, list => overlaidModels(providerId, config, fallback, list), models)})
+
+def refreshOverlaid(source: OverlaidRefresh, context: AiModels.RefreshModelsContext) -> IO(Result<&2, &2, String, Unit>):
+  match source context:
+    case OverlaidRefresh{providerId, config, fallback, base} AiModels.RefreshModelsContext{credential, stored, publish, allowNetwork, force, signal}:
+      do IO<Result<&2, &2, String, Unit>>:
+        +wrapped : C.Callback<AiModels.ModelsPublication, Bool> <- C.create(~OverlaidPublish, ~AiModels.ModelsPublication, ~Bool, ~publishOverlaid, OverlaidPublish{providerId, config, fallback, publish})
+        result : Result<&2, &2, String, Unit> <- C.call(AiModels.RefreshModelsContext, Result<&2, &2, String, Unit>, base, AiModels.RefreshModelsContext{credential, stored, wrapped, allowNetwork, force, signal})
+        C.dispose(AiModels.ModelsPublication, Bool, wrapped)
+        return result
+
+# upstream composeProvider forwards refreshModels to the base provider; its
+# publications reach the collection through the models.json overlay. The
+# wrapper is retained by the composition (RetainedRefresh).
+def overlaidRefresh(providerId: String, config: Config.ModelsJsonProvider, fallback: List<&2, Model()>, base: AiModels.RefreshModels()) -> IO(AiModels.RefreshModels()):
+  C.create(~OverlaidRefresh, ~AiModels.RefreshModelsContext, ~Result<&2, &2, String, Unit>, ~refreshOverlaid, OverlaidRefresh{providerId, config, fallback, base})

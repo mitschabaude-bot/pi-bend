@@ -226,7 +226,7 @@ def withChange(change: T.ProviderChange, extension: T.Extension) -> T.Extension:
 
 def providerIdOf(provider: AiModels.Provider) -> String:
   match provider:
-    case AiModels.Provider{id, _, _, _, _, _, _}: id
+    case AiModels.Provider{id, _, _, _, _, _, _, _}: id
 
 # The provider id a registration is for.
 def registrationId(registration: T.ProviderRegistration) -> String:

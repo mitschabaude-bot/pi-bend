@@ -1414,7 +1414,7 @@ def apiNotify(state: ApiPromptState,event: Auth.AuthEvent) -> IO(Unit):
 def providerKeyAuth(provider: Maybe<&2,AiModels.Provider>) -> Maybe<&2,Auth.ApiKeyAuth>:
   match provider:
     case None{}: None{}
-    case Some{AiModels.Provider{_,_,_,Auth.ProviderAuth{key,_},_,_,_}}: key
+    case Some{AiModels.Provider{_,_,_,Auth.ProviderAuth{key,_},_,_,_,_}}: key
 def apiKeyAuth(state: LoginState,provider: String) -> IO(Maybe<&2,Auth.ApiKeyAuth>):
   match state:
     case LoginState{_,_,_,_,_,_,_,session,_}:
@@ -1425,7 +1425,7 @@ def apiKeyAuth(state: LoginState,provider: String) -> IO(Maybe<&2,Auth.ApiKeyAut
 def loginProviderName(found: Maybe<&2,AiModels.Provider>,fallback: String) -> String:
   match found:
     case None{}: fallback
-    case Some{AiModels.Provider{_,name,_,_,_,_,_}}: name
+    case Some{AiModels.Provider{_,name,_,_,_,_,_,_}}: name
 def apiKeyProviderName(state: LoginState,+provider: String) -> IO(String):
   match state:
     case LoginState{_,_,_,_,_,_,_,session,_}:
@@ -1514,7 +1514,7 @@ def oauthOption(id: String,name: String,auth: Maybe<&2,Auth.OAuthAuth>,filter: M
 def keyOption(id: String,name: String,auth: Maybe<&2,Auth.ApiKeyAuth>,filter: Maybe<&2,Auth.CredentialType>) -> List<&2,LoginDialog.ProviderOption>:
   match auth:
     case None{}: Nil{}
-    case Some{Auth.ApiKeyAuth{method,_,_}}:
+    case Some{Auth.ApiKeyAuth{method,_,_,_}}:
       Bool.pick(List<&2,LoginDialog.ProviderOption>,optionMatches(Auth.ApiKeyType{},filter),[LoginDialog.ProviderOption{id,name,Auth.ApiKeyType{},method,None{},""}],Nil{})
 def providerOptions(+id: String,+name: String,auth: Auth.ProviderAuth,+filter: Maybe<&2,Auth.CredentialType>) -> List<&2,LoginDialog.ProviderOption>:
   match auth:
@@ -1523,7 +1523,7 @@ def providerOptions(+id: String,+name: String,auth: Auth.ProviderAuth,+filter: M
 def loginOptions(providers: List<&2,AiModels.Provider>,+filter: Maybe<&2,Auth.CredentialType>) -> List<&2,LoginDialog.ProviderOption>:
   match providers:
     case Nil{}: Nil{}
-    case AiModels.Provider{id,name,_,auth,_,_,_} <> rest:
+    case AiModels.Provider{id,name,_,auth,_,_,_,_} <> rest:
       List.append(&2,LoginDialog.ProviderOption,providerOptions(id,name,auth,filter),loginOptions(rest,filter))
 def availableLoginOptions(state: LoginState,filter: Maybe<&2,Auth.CredentialType>) -> IO(List<&2,LoginDialog.ProviderOption>):
   match state:
@@ -1595,8 +1595,8 @@ def selectedAmbient(+state: LoginState,provider: String,method: String,controlle
         ambientDialog(state,provider,method,controller,redraw,target)
 def selectedKeyMethod(state: LoginState,provider: String,controller: Abort.AbortController<Unit>,method: Maybe<&2,Auth.ApiKeyAuth>) -> IO(Unit):
   match method:
-    case Some{Auth.ApiKeyAuth{_,Some{_},_}}: selectedProvider(state,provider,Auth.ApiKeyType{},controller)
-    case Some{Auth.ApiKeyAuth{name,None{},_}}: selectedAmbient(state,provider,name,controller)
+    case Some{Auth.ApiKeyAuth{_,Some{_},_,_}}: selectedProvider(state,provider,Auth.ApiKeyType{},controller)
+    case Some{Auth.ApiKeyAuth{name,None{},_,_}}: selectedAmbient(state,provider,name,controller)
     case None{}: cancelChosen(state,controller)
 def apiSelected(+state: LoginState,+provider: String,controller: Abort.AbortController<Unit>) -> IO(Unit):
   do IO<Unit>:

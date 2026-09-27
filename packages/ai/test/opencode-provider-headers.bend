@@ -77,7 +77,7 @@ def wrappedApis(streams: Models.ProviderStreams) -> String:
 
 def wrapped(provider: Models.Provider) -> String:
   match provider:
-    case Models.Provider{_, _, _, _, _, streams, _}: wrappedApis(streams)
+    case Models.Provider{_, _, _, _, _, streams, _, _}: wrappedApis(streams)
 
 def inherited(provider: Models.Provider) -> String: wrappedApis(Models.inheritedStreams(Some{provider}))
 

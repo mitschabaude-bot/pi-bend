@@ -69,7 +69,7 @@ def exposure(auth: Auth.ProviderAuth) -> String:
 
 def textAuth(provider: Models.Provider) -> Auth.ProviderAuth:
   match provider:
-    case Models.Provider{_, _, _, auth, _, _, _}: auth
+    case Models.Provider{_, _, _, auth, _, _, _, _}: auth
 
 def keyOf(resolution: Resolve.Resolution()) -> String:
   match resolution:

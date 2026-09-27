@@ -79,4 +79,4 @@ def envApiKeyAuth(+name: String, envVars: List<&2, String>) -> IO(Auth.ApiKeyAut
     +config : EnvApiKey = EnvApiKey{name,envVars}
     resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~EnvApiKey, ~Auth.ResolveInput, ~(Auth.AuthOutcome()), ~resolveEnv, config)
     login : C.Callback<Auth.ProviderAuthInteraction,Auth.LoginOutcome()> <- C.create(~EnvApiKey,~Auth.ProviderAuthInteraction,~(Auth.LoginOutcome()),~loginEnv,config)
-    return Auth.ApiKeyAuth{name,Some{login},resolve}
+    return Auth.ApiKeyAuth{name,Some{login},resolve,None{}}

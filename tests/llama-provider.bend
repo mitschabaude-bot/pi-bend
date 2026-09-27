@@ -63,17 +63,17 @@ def printCredential(value: Auth.Credential) -> IO(Unit):
 
 def loginCallback(controller: Llama.LlamaProviderController) -> IO(C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()>):
   match controller:
-    case Llama.LlamaProviderController{Models.Provider{_, _, _, Auth.ProviderAuth{Some{Auth.ApiKeyAuth{_, Some{callback}, _}}, _}, _, _, _}}: IO.pure(C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()>, callback)
+    case Llama.LlamaProviderController{Models.Provider{_, _, _, Auth.ProviderAuth{Some{Auth.ApiKeyAuth{_, Some{callback}, _, _}}, _}, _, _, _, _}}: IO.pure(C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()>, callback)
     case _: IO.die(C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()>, 1, "missing login")
 
 def resolveCallback(controller: Llama.LlamaProviderController) -> IO(C.Callback<Auth.ResolveInput, Auth.AuthOutcome()>):
   match controller:
-    case Llama.LlamaProviderController{Models.Provider{_, _, _, Auth.ProviderAuth{Some{Auth.ApiKeyAuth{_, _, callback}}, _}, _, _, _}}: IO.pure(C.Callback<Auth.ResolveInput, Auth.AuthOutcome()>, callback)
+    case Llama.LlamaProviderController{Models.Provider{_, _, _, Auth.ProviderAuth{Some{Auth.ApiKeyAuth{_, _, callback, _}}, _}, _, _, _, _}}: IO.pure(C.Callback<Auth.ResolveInput, Auth.AuthOutcome()>, callback)
     case _: IO.die(C.Callback<Auth.ResolveInput, Auth.AuthOutcome()>, 1, "missing auth resolver")
 
 def refresher(controller: Llama.LlamaProviderController) -> IO(Models.RefreshModels()):
   match controller:
-    case Llama.LlamaProviderController{Models.Provider{_, _, _, _, _, _, Some{callback}}}: IO.pure(Models.RefreshModels(), callback)
+    case Llama.LlamaProviderController{Models.Provider{_, _, _, _, _, _, Some{callback}, _}}: IO.pure(Models.RefreshModels(), callback)
     case _: IO.die(Models.RefreshModels(), 1, "missing refresh")
 
 def loginCase(transport: Llama.Transport, +base: String, +signal: Abort.AbortSignal<Unit>) -> IO(Unit):

@@ -38,12 +38,12 @@ def resolved(resolution: Resolve.Resolution()) -> String:
 
 def authOf(provider: Models.Provider) -> Auth.ProviderAuth:
   match provider:
-    case Models.Provider{_, _, _, auth, _, _, _}: auth
+    case Models.Provider{_, _, _, auth, _, _, _, _}: auth
 
 def firstModelProvider(provider: Models.Provider) -> String:
   match provider:
-    case Models.Provider{id, _, _, _, Nil{}, _, _}: id
-    case Models.Provider{_, _, _, _, model <> _, _, _}: T.modelProvider(model)
+    case Models.Provider{id, _, _, _, Nil{}, _, _, _}: id
+    case Models.Provider{_, _, _, _, model <> _, _, _, _}: T.modelProvider(model)
 
 def resolvedFor(provider: Models.Provider, +providerId: String, credential: Auth.Credential) -> IO(Resolve.Resolution()):
   do IO<Resolve.Resolution()>:

@@ -157,7 +157,7 @@ def cloudflareAuth(+kind: CloudflareAuthKind) -> IO(Auth.ApiKeyAuth):
   do IO<Auth.ApiKeyAuth>:
     resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~CloudflareAuthKind, ~Auth.ResolveInput, ~(Auth.AuthOutcome()), ~resolveCloudflareEnv, kind)
     login : C.Callback<Auth.ProviderAuthInteraction,Auth.LoginOutcome()> <- C.create(~CloudflareAuthKind,~Auth.ProviderAuthInteraction,~(Auth.LoginOutcome()),~loginCloudflare,kind)
-    return Auth.ApiKeyAuth{"Cloudflare API key", Some{login}, resolve}
+    return Auth.ApiKeyAuth{"Cloudflare API key", Some{login}, resolve, None{}}
 
 def cloudflareWorkersAIAuth() -> IO(Auth.ApiKeyAuth): cloudflareAuth(WorkersAI{})
 

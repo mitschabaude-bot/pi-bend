@@ -19,7 +19,7 @@ def noFiles(unused: Unit, path: String) -> IO(Bool): IO.pure(Bool, False{})
 
 def resolveWith(provider: Models.Provider, input: Auth.ResolveInput) -> IO(Auth.AuthOutcome()):
   match provider:
-    case Models.Provider{_, _, _, Auth.ProviderAuth{Some{Auth.ApiKeyAuth{_, _, resolve}}, _}, _, _, _}: C.call(Auth.ResolveInput, Auth.AuthOutcome(), resolve, input)
+    case Models.Provider{_, _, _, Auth.ProviderAuth{Some{Auth.ApiKeyAuth{_, _, resolve, _}}, _}, _, _, _, _}: C.call(Auth.ResolveInput, Auth.AuthOutcome(), resolve, input)
     case _: IO.pure(Auth.AuthOutcome(), Fail{"no api key auth"})
 
 def env(entries: List<&2, R.Property<String>>) -> R.Record<String>: R.Record{entries}

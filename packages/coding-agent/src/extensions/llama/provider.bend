@@ -76,7 +76,7 @@ def catalogModels(values: List<&2, Client.LlamaModelInfo>, +serverUrl: String, +
 
 def replacedModels(provider: Models.Provider, models: List<&2, Model()>) -> Models.Provider:
   match provider:
-    case Models.Provider{id, name, url, auth, _, streams, refresh}: Models.Provider{id, name, url, auth, models, streams, refresh}
+    case Models.Provider{id, name, url, auth, _, streams, refresh, filter}: Models.Provider{id, name, url, auth, models, streams, refresh, filter}
 
 # setCatalog returns the next immutable controller. Accepted refresh
 # publications update the model runtime's live catalog separately.
@@ -339,12 +339,12 @@ def createLlamaProvider(+transport: Transport) -> IO(LlamaProviderController):
     login : C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()> <- C.create(~Transport, ~Auth.ProviderAuthInteraction, ~Auth.LoginOutcome(), ~loginCallback, transport)
     resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~Transport, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~resolveCallback, transport)
     refresh : Models.RefreshModels() <- C.create(~Transport, ~Models.RefreshModelsContext, ~Result<&2, &2, String, Unit>, ~refreshCallback, transport)
-    return LlamaProviderController{Models.Provider{LLAMA_PROVIDER_ID(), "llama.cpp", DEFAULT_LLAMA_SERVER_URL() ++ "/v1", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"llama.cpp server", Some{login}, resolve}}, None{}}, Nil{}, Models.ApiStreams{}, Some{refresh}}}
+    return LlamaProviderController{Models.Provider{LLAMA_PROVIDER_ID(), "llama.cpp", DEFAULT_LLAMA_SERVER_URL() ++ "/v1", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"llama.cpp server", Some{login}, resolve, None{}}}, None{}}, Nil{}, Models.ApiStreams{}, Some{refresh}, None{}}}
 
 # Retire the callbacks owned by this controller; its transport is borrowed.
 def disposeLlamaProvider(controller: LlamaProviderController) -> IO(Unit):
   match controller:
-    case LlamaProviderController{Models.Provider{_, _, _, auth, _, _, refresh}}:
+    case LlamaProviderController{Models.Provider{_, _, _, auth, _, _, refresh, _}}:
       do IO<Unit>:
         Auth.disposeProviderAuth(auth)
         Auth.disposeMaybe(Models.RefreshModels(), refresh, callback => C.dispose(Models.RefreshModelsContext, Result<&2, &2, String, Unit>, callback))

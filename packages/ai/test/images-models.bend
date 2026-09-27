@@ -160,7 +160,7 @@ def envResolve(envVar: Maybe<&2, String>, input: Auth.ResolveInput) -> IO(Auth.A
 def keyAuth(envVar: Maybe<&2, String>) -> IO(Auth.ProviderAuth):
   do IO<Auth.ProviderAuth>:
     resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~Maybe<&2, String>, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~envResolve, envVar)
-    return Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Test key", None{}, resolve}}, None{}}
+    return Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Test key", None{}, resolve, None{}}}, None{}}
 
 def testProvider(+id: String, models: List<&2, Model()>, envVar: Maybe<&2, String>, api: Images.ProviderImages(Error())) -> IO(Provider()):
   do IO<Provider()>:
@@ -248,7 +248,7 @@ def mergesEnv() -> IO(Unit):
     +calls : Calls() <- Ref.new(List<&2, String>, Nil{})
     api : Images.ProviderImages(Error()) <- recordingApi(calls)
     resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~Unit, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~providerEnvResolve, Unit{})
-    provider : Provider() <- Images.createImagesProvider(Error(), Images.CreateImagesProviderOptions{"p1", None{}, Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Test key", None{}, resolve}}, None{}}, [testImageModel("p1", "model-a")], None{}, api})
+    provider : Provider() <- Images.createImagesProvider(Error(), Images.CreateImagesProviderOptions{"p1", None{}, Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Test key", None{}, resolve, None{}}}, None{}}, [testImageModel("p1", "model-a")], None{}, api})
     +models : Collection() <- IO.pure(Collection(), Images.setProvider(Error(), empty, provider))
     result : T.AssistantImages <- Images.generateImages(Error(), models, testImageModel("p1", "model-a"), context(), requestOptions(Some{"request-key"}, Some{vars([R.Property{"REQUEST_ONLY", "request"}, R.Property{"SHARED", "request"}])}))
     recorded : String <- callLines(calls)
@@ -283,7 +283,7 @@ def noAuthResolve(unused: Unit, input: Auth.ResolveInput) -> IO(Auth.AuthOutcome
 def noAuth() -> IO(Auth.ProviderAuth):
   do IO<Auth.ProviderAuth>:
     resolve : C.Callback<Auth.ResolveInput, Auth.AuthOutcome()> <- C.create(~Unit, ~Auth.ResolveInput, ~Auth.AuthOutcome(), ~noAuthResolve, Unit{})
-    return Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Test", None{}, resolve}}, None{}}
+    return Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"Test", None{}, resolve, None{}}}, None{}}
 
 def dynamicProvider(+id: String, fetch: Images.RefreshImagesModels()) -> IO(Provider()):
   do IO<Provider()>:

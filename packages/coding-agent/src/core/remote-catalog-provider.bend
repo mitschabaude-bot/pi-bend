@@ -318,7 +318,7 @@ def refreshCatalog(catalog: RemoteCatalog, context: AiModels.RefreshModelsContex
 # upstream withRemoteCatalog: the provider with a pi.dev catalog overlay.
 def withRemoteCatalog(provider: AiModels.Provider, transport: RemoteCatalogTransport, catalogBaseUrl: String, localGeneratedAt: Maybe<&2, F64>) -> IO(AiModels.Provider):
   match provider:
-    case AiModels.Provider{+id, name, baseUrl, auth, +models, streams, _}:
+    case AiModels.Provider{+id, name, baseUrl, auth, +models, streams, _, filter}:
       do IO<AiModels.Provider>:
         refresh : AiModels.RefreshModels() <- C.create(~RemoteCatalog, ~AiModels.RefreshModelsContext, ~Result<&2, &2, String, Unit>, ~refreshCatalog, RemoteCatalog{id, models, transport, catalogBaseUrl, localGeneratedAt})
-        return AiModels.Provider{id, name, baseUrl, auth, models, streams, Some{refresh}}
+        return AiModels.Provider{id, name, baseUrl, auth, models, streams, Some{refresh}, filter}

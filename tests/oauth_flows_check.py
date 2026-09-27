@@ -126,7 +126,7 @@ def run(command, server, spec):
         result = subprocess.run(command + [server.base, file.name], cwd=ROOT, capture_output=True, text=True, timeout=300, env=env)
     if result.returncode != 0:
         raise Failed(f'exit {result.returncode}: {result.stderr[-1500:]}')
-    out = dict(events=[], prompts=[], credential=None, auth=None, facts=None, error=None, start=None, browser={})
+    out = dict(events=[], prompts=[], credential=None, auth=None, facts=None, error=None, start=None, browser={}, available=None, stored='<unread>')
     for line in result.stdout.splitlines():
         tag, _, rest = line.partition(' ')
         if tag == 'S':
@@ -144,6 +144,10 @@ def run(command, server, spec):
             out['facts'] = json.loads(decoded(rest))
         elif tag == 'E':
             out['error'] = decoded(rest)
+        elif tag == 'V':
+            out['available'] = json.loads(decoded(rest))
+        elif tag == 'T':
+            out['stored'] = json.loads(decoded(rest))
         elif tag in ('B', 'B2', 'M', 'R'):
             out['browser'][tag] = rest
     return out
@@ -206,10 +210,12 @@ def request_views(requests):
 
 def normalized(out):
     """Outputs without clock values."""
-    credential = dict(out['credential']) if out['credential'] else None
-    if credential and 'expires' in credential:
-        credential['expires'] = '<clock>' if credential['expires'] < 1e15 else credential['expires']
-    return unrandom(dict(events=out['events'], prompts=out['prompts'], credential=credential, auth=out['auth'], facts=out['facts'], error=out['error'], browser=out.get('browser', {})))
+    def clockless(value):
+        credential = dict(value) if isinstance(value, dict) else value
+        if credential and 'expires' in credential:
+            credential['expires'] = '<clock>' if credential['expires'] < 1e15 else credential['expires']
+        return credential
+    return unrandom(dict(events=out['events'], prompts=out['prompts'], credential=clockless(out['credential']), auth=out['auth'], facts=out['facts'], error=out['error'], browser=out.get('browser', {}), available=out.get('available'), stored=clockless(out.get('stored'))))
 
 
 def main():
@@ -596,22 +602,33 @@ def entry(id, picker, state=None, tools=True):
     return item
 
 
-# The InMemoryCredentialStore / Models.getAvailable halves of the next two
-# tests need the provider's filterModels, which the port does not carry yet.
-@test(f'{G} > filters models to the authenticated account picker catalog (credential half)')
+# The refreshed credential goes into an InMemoryCredentialStore of a Models
+# collection holding githubCopilotProvider(); getAvailable applies the
+# provider's filterModels.
+def copilot_available(execute, credential):
+    out = execute({'flow': 'copilot', 'action': 'available', 'credential': credential})
+    expect(out['error'] is None, out)
+    return out['available']
+
+
+@test(f'{G} > filters models to the authenticated account picker catalog')
 def copilot_picker(execute, server):
     ids = [copilot_model_id(i) for i in range(3)]
     out = copilot_refresh(execute, server, [entry(ids[0], True), entry(ids[1], True, 'disabled'), entry(ids[2], False, 'enabled')])
     expect(out['credential'] and out['credential'].get('availableModelIds') == [ids[0]], out)
-    return out
+    available = copilot_available(execute, out['credential'])
+    expect(available == [ids[0]], available)
+    return dict(out, available=available)
 
 
-@test(f'{G} > falls back to explicitly enabled policy models when the picker catalog is empty (credential half)')
+@test(f'{G} > falls back to explicitly enabled policy models when the picker catalog is empty')
 def copilot_fallback(execute, server):
     enabled = copilot_model_id(0)
     out = copilot_refresh(execute, server, [entry(enabled, False, 'enabled'), entry('policy-disabled-model', False, 'disabled'), entry('unconfigured-model', False), entry('tool-incapable-model', False, 'enabled', False)])
     expect(out['credential'] and out['credential'].get('availableModelIds') == [enabled], out)
-    return out
+    available = copilot_available(execute, out['credential'])
+    expect(available == [enabled], available)
+    return dict(out, available=available)
 
 
 @test(f'{G} > does not fall back to policy models for non-Individual accounts')
@@ -692,7 +709,9 @@ def copilot_transport(execute, server):
     return out
 
 
-@test(f'{G} > stops policy updates and persists authentication when the retry delay exceeds the login budget (credential half)')
+# Upstream logs in through Models.login over an InMemoryCredentialStore and
+# reads the store afterwards.
+@test(f'{G} > stops policy updates and persists authentication when the retry delay exceeds the login budget')
 def copilot_budget(execute, server):
     ids = [copilot_model_id(0), copilot_model_id(1)]
     seen = []
@@ -701,8 +720,9 @@ def copilot_budget(execute, server):
         seen.append(model)
         return 429, {'error': 'too many requests'}, {'Retry-After': '5'}
     server.routes = login_routes(lambda r: (200, {'data': [{'id': i, 'model_picker_enabled': True, 'policy': {'state': 'unconfigured'}} for i in ids]}, None), policy)
-    out = execute({'flow': 'copilot', 'action': 'login', 'prompts': ['']})
+    out = execute({'flow': 'copilot', 'action': 'modelsLogin', 'prompts': ['']})
     expect(out['credential'] and out['credential']['type'] == 'oauth' and out['credential']['access'] == COPILOT_TOKEN and seen == [ids[0]], (out, seen))
+    expect(out['stored'] == out['credential'], (out['stored'], out['credential']))
     return out
 
 

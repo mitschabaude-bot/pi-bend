@@ -232,7 +232,7 @@ def printsApiKey(+packageDir: String, +counter: Counter()) -> IO(Unit):
 def kimiProvider(counter: Counter()) -> IO(AiModels.Provider):
   do IO<AiModels.Provider>:
     kimi : Auth.OAuthAuth <- fixtureOAuth("Kimi Code (subscription)", counter, True{})
-    return AiModels.Provider{"kimi-coding", "Kimi For Coding", "https://api.kimi.com/coding", Auth.ProviderAuth{None{}, Some{kimi}}, Nil{}, AiModels.ApiStreams{}, None{}}
+    return AiModels.Provider{"kimi-coding", "Kimi For Coding", "https://api.kimi.com/coding", Auth.ProviderAuth{None{}, Some{kimi}}, Nil{}, AiModels.ApiStreams{}, None{}, None{}}
 
 def bearerHeader(+packageDir: String, +counter: Counter()) -> IO(Unit):
   do IO<Unit>:

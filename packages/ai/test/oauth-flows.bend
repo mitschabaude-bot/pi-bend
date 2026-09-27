@@ -10,6 +10,10 @@ import ../src/auth/oauth/anthropic.bend as AnthropicOAuth
 import ../src/auth/oauth/openai-codex.bend as CodexOAuth
 import ../src/auth/oauth/radius.bend as RadiusOAuth
 import ../src/auth/oauth/oauth-http.bend as H
+import ../src/models.bend as Models
+import ../src/auth/resolve.bend as Resolve
+import ../src/auth/credential-store.bend as CredentialStore
+import ../src/providers/github-copilot.bend as CopilotProvider
 import ../src/api/credential-http.bend as Http
 import ../../runtime/src/deferred.bend as Deferred
 import ../../runtime/src/http-message.bend as Headers
@@ -37,14 +41,20 @@ import ../../runtime/test/utf8-runner.bend as Text
 # request goes through a fetch that rewrites `https://<host><path>` to
 # `<base>/<host><path>`, so the server sees each provider URL. Arguments: the
 # base URL and a JSON case file
-#   {flow, action: "login" | "refresh" | "toAuth" | "describe", credential?,
+#   {flow, action: "login" | "refresh" | "toAuth" | "describe" | "available"
+#    | "modelsLogin", credential?,
 #    prompts?: [answer], abortOnDeviceCode?, abortOnAuthUrl?, pendingPrompt?
 #    (prompts after the listed answers stay pending),
 #    watchPromptSignal?, promptError?, callbackCode?, secondCallbackMs?,
 #    preAborted?}
 # Output (code-point encoded JSON): "S <start ms>", "N <event>" per notify,
 # "P <prompt>" per prompt, then "C <credential>", "A <auth>", "D <facts>" or
-# "E <error message>". Loopback-callback flows (OpenRouter) add the browser:
+# "E <error message>". The Copilot provider cases run through a Models
+# collection over an InMemoryCredentialStore (github-copilot-oauth.test.ts):
+# "available" stores `credential` and prints the ids getAvailable returns
+# ("V <ids>"); "modelsLogin" logs in through Models.login and prints the
+# credential, then the stored one ("T <credential or null>").
+# Loopback-callback flows (OpenRouter) add the browser:
 # on the auth_url event it GETs `callback_url` with `code=<callbackCode>`
 # ("B <status>"), optionally again after secondCallbackMs ("B2 <status>");
 # `{callback}`, `{redirect_uri}` and `{state}` in a prompt answer stand for
@@ -463,6 +473,59 @@ def reported(interaction: Interaction) -> IO(Unit):
         pendingReport(pending || watch, promptAborted)
         probe(abortOnAuthUrl, raw, authUrl)
 
+# The Copilot provider over a Models collection
+# ---------------------------------------------
+
+def storedAs(credential: Auth.Credential, old: Maybe<&2, Auth.Credential>) -> IO(Auth.StoreResult(Maybe<&2, Auth.Credential>)):
+  IO.pure(Auth.StoreResult(Maybe<&2, Auth.Credential>), Done{Some{credential}})
+
+def copilotModels(oauth: Auth.OAuthAuth, store: Auth.CredentialStore) -> IO(Models.Models):
+  do IO<Models.Models>:
+    +models : Models.Models <- Models.createModels(Models.CreateModelsOptions{Some{store}, None{}, None{}})
+    provider : Models.Provider <- CopilotProvider.githubCopilotProvider(Some{oauth})
+    Models.setProvider(models, provider)
+    return models
+
+def modelIds(models: List<&2, Models.Model()>) -> List<&2, V.Value>:
+  match models:
+    case Nil{}: Nil{}
+    case model <> rest: V.Text{T.modelId(model)} <> modelIds(rest)
+
+def availableResult(result: Models.AvailableResult()) -> IO(Unit):
+  match result:
+    case Done{models}: emit("V", V.ArrayValue{modelIds(models)})
+    case Fail{error}: IO.print("E " ++ Text.showText(Resolve.errorMessage(error)))
+
+# upstream: store.modify(...) the credential, createModels({credentials}),
+# setProvider(githubCopilotProvider()), getAvailable("github-copilot").
+def available(oauth: Auth.OAuthAuth, credential: Auth.Credential) -> IO(Unit):
+  do IO<Unit>:
+    +store : Auth.CredentialStore <- CredentialStore.inMemoryCredentialStore()
+    +update : Auth.Modification() <- C.create(~Auth.Credential, ~Maybe<&2, Auth.Credential>, ~Auth.StoreResult(Maybe<&2, Auth.Credential>), ~storedAs, credential)
+    written : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.modify(store, "github-copilot", update, None{})
+    C.dispose(Maybe<&2, Auth.Credential>, Auth.StoreResult(Maybe<&2, Auth.Credential>), update)
+    +models : Models.Models <- copilotModels(oauth, store)
+    result : Models.AvailableResult() <- Models.getAvailable(models, Some{"github-copilot"}, None{})
+    availableResult(result)
+
+def storedResult(stored: Auth.StoreResult(Maybe<&2, Auth.Credential>)) -> IO(Unit):
+  match stored:
+    case Done{Some{credential}}: emit("T", credentialJson(credential))
+    case Done{None{}}: emit("T", V.Null{})
+    case Fail{message}: IO.print("E " ++ Text.showText(message))
+
+# upstream: createModels({credentials: store}), setProvider(
+# githubCopilotProvider()), models.login("github-copilot", "oauth", ...),
+# then store.read("github-copilot").
+def modelsLogin(oauth: Auth.OAuthAuth, interaction: Auth.AuthInteraction) -> IO(Unit):
+  do IO<Unit>:
+    +store : Auth.CredentialStore <- CredentialStore.inMemoryCredentialStore()
+    +models : Models.Models <- copilotModels(oauth, store)
+    result : Auth.LoginOutcome() <- Models.login(models, "github-copilot", Auth.OAuthType{}, interaction)
+    loginResult(result)
+    stored : Auth.StoreResult(Maybe<&2, Auth.Credential>) <- Auth.read(store, "github-copilot", None{})
+    storedResult(stored)
+
 def acted(+action: String, oauth: Auth.OAuthAuth, +value: V.Value, +interaction: Interaction, signal: Abort.AbortSignal<Unit>) -> IO(Unit):
   match action oauth:
     case "describe" _: describe(oauth)
@@ -470,6 +533,13 @@ def acted(+action: String, oauth: Auth.OAuthAuth, +value: V.Value, +interaction:
       do IO<Unit>:
         result : Result<&2, &2, String, Auth.Credential> <- C.call(Auth.RefreshInput, Result<&2, &2, String, Auth.Credential>, refresh, Auth.RefreshInput{credentialOf(field(value, "credential")), signal})
         loginResult(result)
+    case "available" _: available(oauth, credentialOf(field(value, "credential")))
+    case "modelsLogin" _:
+      do IO<Unit>:
+        prompt : C.Callback<Auth.AuthPrompt, Result<&2, &2, String, String>> <- C.create(~Interaction, ~Auth.AuthPrompt, ~Result<&2, &2, String, String>, ~prompted, interaction)
+        notify : C.Callback<Auth.AuthEvent, Unit> <- C.create(~Interaction, ~Auth.AuthEvent, ~Unit, ~notified, interaction)
+        modelsLogin(oauth, Auth.AuthInteraction{Some{signal}, prompt, notify})
+        reported(interaction)
     case "toAuth" Auth.OAuthAuth{_, _, _, _, _, toAuth}:
       do IO<Unit>:
         result : Result<&2, &2, String, Auth.ModelAuth> <- C.call(Auth.Credential, Result<&2, &2, String, Auth.ModelAuth>, toAuth, credentialOf(field(value, "credential")))

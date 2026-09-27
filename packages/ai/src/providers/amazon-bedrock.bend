@@ -197,4 +197,4 @@ def amazonBedrockProvider() -> IO(Models.Provider):
   do IO<Models.Provider>:
     resolve : C.Callback<Auth.ResolveInput, AuthOutcome()> <- C.create(~Unit, ~Auth.ResolveInput, ~AuthOutcome(), ~resolveBedrock, Unit{})
     login : C.Callback<Auth.ProviderAuthInteraction, Auth.LoginOutcome()> <- C.create(~Unit, ~Auth.ProviderAuthInteraction, ~(Auth.LoginOutcome()), ~loginBedrock, Unit{})
-    return Models.Provider{"amazon-bedrock", "Amazon Bedrock", "", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"AWS credentials or bearer token", Some{login}, resolve}}, None{}}, Catalog.AMAZON_BEDROCK_MODELS(), Models.ApiStreams{}, None{}}
+    return Models.Provider{"amazon-bedrock", "Amazon Bedrock", "", Auth.ProviderAuth{Some{Auth.ApiKeyAuth{"AWS credentials or bearer token", Some{login}, resolve, None{}}}, None{}}, Catalog.AMAZON_BEDROCK_MODELS(), Models.ApiStreams{}, None{}, None{}}

@@ -144,9 +144,20 @@ type ProviderAuthInteraction is Data:
   ProviderAuthInteraction{signal: Abort.AbortSignal<Unit>, prompt: C.Callback<AuthPrompt, Result<&2, &2, String, String>>, notify: C.Callback<AuthEvent, Unit>}
 def LoginOutcome() -> Data: Result<&2, &2, String, Credential>
 
+# upstream AuthCheck: how a provider's auth is configured, and where from.
+type AuthCheck is Data:
+  AuthCheck{source: Maybe<&2, String>, kind: CredentialType}
+
+# A failed check is the message of upstream's rejection.
+def CheckOutcome() -> Data: Result<&2, &2, String, Maybe<&2, AuthCheck>>
+
 # Resolution is provider-scoped; endpoint preparation follows auth resolution.
+# `check` is upstream's optional side-effect-free availability check, for
+# providers whose resolve may run commands or do request-time work; without
+# it Models checks availability by resolving auth. It comes last so that the
+# positional fields keep their order.
 type ApiKeyAuth is Data:
-  ApiKeyAuth{name: String, login: Maybe<&2, C.Callback<ProviderAuthInteraction, LoginOutcome()>>, resolve: C.Callback<ResolveInput, AuthOutcome()>}
+  ApiKeyAuth{name: String, login: Maybe<&2, C.Callback<ProviderAuthInteraction, LoginOutcome()>>, resolve: C.Callback<ResolveInput, AuthOutcome()>, check: Maybe<&2, C.Callback<ResolveInput, CheckOutcome()>>}
 
 type RefreshInput is Data:
   RefreshInput{credential: Credential, signal: Abort.AbortSignal<Unit>}
@@ -162,12 +173,17 @@ def disposeLogin(value: Maybe<&2,C.Callback<ProviderAuthInteraction, LoginOutcom
   match value:
     case None{}: IO.pure(Unit,Unit{})
     case Some{callback}: C.dispose(ProviderAuthInteraction, LoginOutcome(), callback)
+def disposeCheck(value: Maybe<&2, C.Callback<ResolveInput, CheckOutcome()>>) -> IO(Unit):
+  match value:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{callback}: C.dispose(ResolveInput, CheckOutcome(), callback)
 def disposeApiKeyAuth(auth: ApiKeyAuth) -> IO(Unit):
   match auth:
-    case ApiKeyAuth{_, login, resolve}:
+    case ApiKeyAuth{_, login, resolve, check}:
       do IO<Unit>:
         disposeLogin(login)
         C.dispose(ResolveInput, AuthOutcome(), resolve)
+        disposeCheck(check)
 
 def disposeOAuthAuth(auth: OAuthAuth) -> IO(Unit):
   match auth:
