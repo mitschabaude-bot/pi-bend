@@ -37,15 +37,28 @@ for backend, command in [
                     raise
         assert needle in output, (backend, needle, bytes(output), process.poll(), process.stderr.read().decode(errors='replace') if process.poll() is not None else '')
     try:
+        # The first frame must appear while startup's query has no reply.
+        until(b'hello')
         until(ESC + b']11;?\x07')
+        assert output.index(b'hello') < output.index(ESC + b']11;?\x07'), (backend, bytes(output))
         os.write(master, ESC + b']11;#ff8040\x07')
         until((ESC + b']11;?\x07') * 2)
         os.write(master, ESC + b']11;not-a-color\x07')
         until(ESC + b'[?996n')
         os.write(master, ESC + b'[?997;2n')
-        until(b'hello')
+        # 'hello' is already visible; wait for the query callback itself
+        # before checking the subsequent ordinary-input lifecycle.
+        startup_stderr = bytearray()
+        deadline = time.monotonic() + 8
+        while b'redrawn\n' not in startup_stderr and time.monotonic() < deadline:
+            if select.select([process.stderr], [], [], .2)[0]:
+                chunk = os.read(process.stderr.fileno(), 65536)
+                if not chunk:
+                    break
+                startup_stderr.extend(chunk)
+        assert b'redrawn\n' in startup_stderr, (backend, bytes(startup_stderr))
         os.write(master, b'x')
-        stderr = process.communicate(timeout=8)[1].decode(errors='replace')
+        stderr = (bytes(startup_stderr) + process.communicate(timeout=8)[1]).decode(errors='replace')
         assert process.returncode == 0, (backend, stderr)
         while select.select([master], [], [], 0)[0]:
             try:
