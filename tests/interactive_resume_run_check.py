@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import pty
+import re
 import select
 import struct
 import subprocess
@@ -14,7 +15,7 @@ import termios
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-BINARY = Path(os.environ.get("PI_BEND_RESUME_RUN", ROOT / "build/interactive-resume-run"))
+BINARY = Path(os.environ.get("PI_BEND_RESUME_RUN", ROOT / "build/interactive-resume-run")).resolve()
 SOURCE = ROOT / "tests/fixtures/export-input.jsonl"
 
 
@@ -53,7 +54,8 @@ for threads in (1, 4):
                         if error.errno != errno.EIO:
                             raise
                         break
-            assert needle in output[start:], (threads, needle, process.poll(), bytes(output[start:][-1200:]))
+            clean = re.sub(rb"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*\x07)", b"", output[start:])
+            assert needle in output[start:], (threads, needle, process.poll(), clean.decode(errors="replace")[-1800:])
 
         def command(data, expected):
             start = len(output)
@@ -84,7 +86,7 @@ for threads in (1, 4):
             os.write(master, b"\r")
             until(b"Session cwd not found")
             before = len(output)
-            os.write(master, b"1")
+            os.write(master, b"\r")
             until(b"Resumed session", before)
             command(b"after fallback", b"answer")
             command(b"/export fallback.jsonl", b"Session exported to:")

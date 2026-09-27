@@ -90,6 +90,34 @@ def scenario(threads, shortcuts=False, cancelled=False):
                 before = len(output)
                 os.write(master, b"after clone\r" if cancelled == "clone" else b" after fork\r")
                 until(b'"type":"turn_end"', before)
+                # Resume uses the same cancellable hook, including a target
+                # with an unavailable cwd: cancellation precedes cwd handling.
+                target = cwd / "cancel-target.jsonl"
+                target_entries = [json.loads(line) for line in first[0].read_text().splitlines()]
+                target_entries[0]["cwd"] = str(cwd / "gone")
+                target_entries[0]["id"] = "cancel-target"
+                next(e for e in target_entries if e.get("type") == "message" and e["message"].get("role") == "user")["message"]["content"] = "cancel-target RESUME SESSION"
+                target.write_text("\n".join(json.dumps(e) for e in target_entries) + "\n")
+                target_before = target.read_bytes()
+                before = len(output)
+                os.write(master, b"resume draft\x12")
+                until(b"Resume Session", before)
+                os.write(master, b"\t")
+                until(b"Resume Session (All)", before)
+                os.write(master, b"cancel-target")
+                time.sleep(.2)
+                os.write(master, b"\r")
+                until(b'"reason":"resume"', before)
+                time.sleep(.2)
+                assert b"Resumed session" not in output[before:]
+                assert b"Failed to resume" not in output[before:]
+                assert b"Session cwd not found" not in output[before:]
+                assert target.read_bytes() == target_before
+                assert b'"targetSessionFile":"' + os.fsencode(target) + b'"' in output[before:]
+                assert b'"event":"session_shutdown"' not in output
+                before = len(output)
+                os.write(master, b" after resume\r")
+                until(b'"type":"turn_end"', before)
                 os.write(master, b"/quit\r")
                 stderr = process.communicate(timeout=20)[1]
                 assert process.returncode == 0 and not stderr, stderr
@@ -98,10 +126,11 @@ def scenario(threads, shortcuts=False, cancelled=False):
                 assert any("preserved draft after new" in json.dumps(e) for e in entries), entries
                 expected = "after clone" if cancelled == "clone" else "fork draft after fork"
                 assert any(expected in json.dumps(e) for e in entries), entries
-                assert output.count(b'"event":"session_before_switch"') == 1
+                assert any("resume draft after resume" in json.dumps(e) for e in entries), entries
+                assert output.count(b'"event":"session_before_switch"') == 2
                 assert output.count(b'"event":"session_before_fork"') == 1
                 assert output.count(b'"event":"session_start"') == initial_starts
-                print(f"native{threads}: extension-cancelled new/{cancelled} preserve session, draft and terminal")
+                print(f"native{threads}: extension-cancelled new/{cancelled}/resume preserve session, draft and terminal")
                 return
             if shortcuts:
                 before = len(output)

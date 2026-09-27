@@ -40,9 +40,9 @@ def forkSession(runtime: Runtime(),request: Host.ForkRequest) -> IO(Result<&2,&2
 def importSession(runtime: Runtime(),request: Run.ImportRequest) -> IO(Host.ImportOutcome):
   match request:
     case Run.ImportRequest{path,cwdOverride}: Host.importFromJsonl(Services(),runtime,path,cwdOverride)
-def resumeSession(runtime: Runtime(),request: Run.ResumeRequest) -> IO(Host.ResumeOutcome):
+def resumeSession(runtime: Runtime(),request: Run.ResumeRequest) -> IO(Host.CancellableResume):
   match request:
-    case Run.ResumeRequest{path,cwdOverride}: Host.resumeSession(Services(),runtime,path,cwdOverride)
+    case Run.ResumeRequest{path,cwdOverride}: Host.resumeSessionCancellable(Services(),runtime,path,cwdOverride)
 type Listings is Data: Listings{cwd: String,agentDir: String}
 def listSessions(source: Listings,_: Unit) -> IO(Run.SessionChoices):
   match source:
@@ -95,7 +95,7 @@ def runWith(+cancel: Bool,args: List<String>) -> IO(Unit):
         +refresh : Callback.Callback<Unit,List<&2,Models.Model()>> <- Callback.create(~Unit,~Unit,~List<&2,Models.Model()>,~models,Unit{})
         +importer : Callback.Callback<Run.ImportRequest,Host.ImportOutcome> <- Callback.create(~Runtime(),~Run.ImportRequest,~Host.ImportOutcome,~importSession,runtime)
         +sessions : Callback.Callback<Unit,Run.SessionChoices> <- Callback.create(~Listings,~Unit,~Run.SessionChoices,~listSessions,Listings{cwd,agentDir})
-        +resume : Callback.Callback<Run.ResumeRequest,Host.ResumeOutcome> <- Callback.create(~Runtime(),~Run.ResumeRequest,~Host.ResumeOutcome,~resumeSession,runtime)
+        +resume : Callback.Callback<Run.ResumeRequest,Host.CancellableResume> <- Callback.create(~Runtime(),~Run.ResumeRequest,~Host.CancellableResume,~resumeSession,runtime)
         Host.setRebindSession(Services(),runtime,Some{rebinder})
         result : Result<&2,&2,Run.Error,Unit> <- Run.runBound(live,Run.Binding{current,Controller.Replacement{new,forking},hook,login,refresh,importer,sessions,resume,None{},False{},None{}},Nil{},cwd,None{},agentDir,assetsRoot,None{},Faux.fauxModel() <> Nil{})
         Host.setRebindSession(Services(),runtime,None{})
@@ -103,7 +103,7 @@ def runWith(+cancel: Bool,args: List<String>) -> IO(Unit):
         Callback.dispose(Unit,List<&2,Models.Model()>,refresh)
         Callback.dispose(Run.ImportRequest,Host.ImportOutcome,importer)
         Callback.dispose(Unit,Run.SessionChoices,sessions)
-        Callback.dispose(Run.ResumeRequest,Host.ResumeOutcome,resume)
+        Callback.dispose(Run.ResumeRequest,Host.CancellableResume,resume)
         Callback.dispose(Unit,Result<&2,&2,String,Ctx.SessionChange>,new)
         Callback.dispose(Host.ForkRequest,Result<&2,&2,String,Host.ForkOutcome>,forking)
         Callback.dispose(Session.AgentSession,Unit,rebinder)

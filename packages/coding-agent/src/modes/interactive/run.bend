@@ -366,7 +366,7 @@ type SessionChoices is Data: SessionChoices{current: List<&2,Tree.SessionInfo>,a
 type ImportState is Data:
   ImportState{host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,backend: Maybe<&2,Callback.Callback<ImportRequest,SessionHost.ImportOutcome>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type ResumeState is Data:
-  ResumeState{picker: Ref.Ref<Maybe<&2,SessionPicker.Host>>,dialog: Ref.Ref<Maybe<&2,LoginDialog.Host>>,sessions: Maybe<&2,Callback.Callback<Unit,SessionChoices>>,backend: Maybe<&2,Callback.Callback<ResumeRequest,SessionHost.ResumeOutcome>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+  ResumeState{picker: Ref.Ref<Maybe<&2,SessionPicker.Host>>,dialog: Ref.Ref<Maybe<&2,LoginDialog.Host>>,sessions: Maybe<&2,Callback.Callback<Unit,SessionChoices>>,backend: Maybe<&2,Callback.Callback<ResumeRequest,SessionHost.CancellableResume>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type BashActivity is Data:
   BashActivity{active: Bool,closing: Bool,completion: Maybe<&2,Deferred.Deferred<Unit>>}
 type BashInput is Data:
@@ -583,20 +583,21 @@ def resumeStatus(state: ResumeState,status: Interactive.SubmissionFailure) -> IO
     case ResumeState{_,_,_,_,failure,redraw}:
       do IO<Unit>:
         Interactive.report(failure,status)
-def resumeInvoked(state: ResumeState,path: String,cwdOverride: Maybe<&2,String>) -> IO(SessionHost.ResumeOutcome):
+def resumeInvoked(state: ResumeState,path: String,cwdOverride: Maybe<&2,String>) -> IO(SessionHost.CancellableResume):
   match state:
-    case ResumeState{_,_,_,None{},_,_}: IO.pure(SessionHost.ResumeOutcome,SessionHost.ResumeFailed{"Resume is unavailable"})
-    case ResumeState{_,_,_,Some{backend},_,_}: Callback.call(ResumeRequest,SessionHost.ResumeOutcome,backend,ResumeRequest{path,cwdOverride})
-def resumeFinal(state: ResumeState,result: SessionHost.ResumeOutcome) -> IO(Unit):
+    case ResumeState{_,_,_,None{},_,_}: IO.pure(SessionHost.CancellableResume,SessionHost.ResumeAttempted{SessionHost.ResumeFailed{"Resume is unavailable"}})
+    case ResumeState{_,_,_,Some{backend},_,_}: Callback.call(ResumeRequest,SessionHost.CancellableResume,backend,ResumeRequest{path,cwdOverride})
+def resumeFinal(state: ResumeState,result: SessionHost.CancellableResume) -> IO(Unit):
   match result:
-    case SessionHost.Resumed{}: resumeStatus(state,Interactive.CommandNotice{"Resumed session"})
-    case SessionHost.ResumeFailed{message}: resumeStatus(state,Interactive.CommandFailure{"Failed to resume session: " ++ message})
-    case SessionHost.ResumeNeedsCwd{issue}: resumeStatus(state,Interactive.CommandFailure{"Failed to resume session: " ++ SessionCwd.formatMissingSessionCwdError(issue)})
+    case SessionHost.ResumeCancelled{}: IO.pure(Unit,Unit{})
+    case SessionHost.ResumeAttempted{SessionHost.Resumed{}}: resumeStatus(state,Interactive.CommandNotice{"Resumed session"})
+    case SessionHost.ResumeAttempted{SessionHost.ResumeFailed{message}}: resumeStatus(state,Interactive.CommandFailure{"Failed to resume session: " ++ message})
+    case SessionHost.ResumeAttempted{SessionHost.ResumeNeedsCwd{issue}}: resumeStatus(state,Interactive.CommandFailure{"Failed to resume session: " ++ SessionCwd.formatMissingSessionCwdError(issue)})
 def resumeFallbackResult(+state: ResumeState,path: String,fallback: String,answer: String) -> IO(Unit):
   match answer:
     case "yes":
       do IO<Unit>:
-        result : SessionHost.ResumeOutcome <- resumeInvoked(state,path,Some{fallback})
+        result : SessionHost.CancellableResume <- resumeInvoked(state,path,Some{fallback})
         resumeFinal(state,result)
     case _: resumeStatus(state,Interactive.CommandNotice{"Resume cancelled"})
 def resumeMissing(+state: ResumeState,+path: String,issue: SessionCwd.SessionCwdIssue) -> IO(Unit):
@@ -606,13 +607,13 @@ def resumeMissing(+state: ResumeState,+path: String,issue: SessionCwd.SessionCwd
         target : Maybe<&2,LoginDialog.Host> <- Ref.read(Maybe<&2,LoginDialog.Host>,dialog)
         answer : String <- importAnswer(target,redraw," Session cwd not found · " ++ missing,LoginDialog.Choice{LoginDialog.TextChoice{"yes"},"Continue in current cwd",fallback,"Continue in current cwd"} <> LoginDialog.Choice{LoginDialog.TextChoice{"no"},"Cancel resume","","Cancel resume"} <> Nil{})
         resumeFallbackResult(state,path,fallback,answer)
-def resumeResult(state: ResumeState,path: String,result: SessionHost.ResumeOutcome) -> IO(Unit):
+def resumeResult(state: ResumeState,path: String,result: SessionHost.CancellableResume) -> IO(Unit):
   match result:
-    case SessionHost.ResumeNeedsCwd{issue}: resumeMissing(state,path,issue)
+    case SessionHost.ResumeAttempted{SessionHost.ResumeNeedsCwd{issue}}: resumeMissing(state,path,issue)
     case other: resumeFinal(state,other)
 def resumePath(+state: ResumeState,+path: String,cwdOverride: Maybe<&2,String>) -> IO(Unit):
   do IO<Unit>:
-    result : SessionHost.ResumeOutcome <- resumeInvoked(state,path,cwdOverride)
+    result : SessionHost.CancellableResume <- resumeInvoked(state,path,cwdOverride)
     resumeResult(state,path,result)
 def resumePicked(state: ResumeState,path: String) -> IO(Unit): IO.spawn(Unit,resumePath(state,path,None{}))
 def matchResumePicker(target: Maybe<&2,SessionPicker.Host>,current: List<&2,Tree.SessionInfo>,all: List<&2,Tree.SessionInfo>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
@@ -1206,7 +1207,7 @@ type ThemeStartup is Data:
   ThemeStartup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Interactive.StatusSink,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>,theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,session: Ref.Ref<Session.AgentSession>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,managed: Maybe<&2,Manager.ToolsManager>,interaction: Interaction,highlighter: SyntaxHighlight.Highlighter,first: Bool}
 type LoginRequest is Data: LoginRequest{runtime: Models.ModelRuntime,provider: String,kind: Auth.CredentialType,interaction: Auth.AuthInteraction}
 type Binding is Data:
-  Binding{current: Ref.Ref<Session.AgentSession>,replacement: Controller.Replacement,onRebind: Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>,login: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,refreshModels: Callback.Callback<Unit,List<&2,Models.Model()>>,importer: Callback.Callback<ImportRequest,SessionHost.ImportOutcome>,sessions: Callback.Callback<Unit,SessionChoices>,resume: Callback.Callback<ResumeRequest,SessionHost.ResumeOutcome>,managed: Maybe<&2,Manager.ToolsManager>,autoTrustOnReload: Bool,tuiMode: Maybe<&2,Settings.TuiMode>}
+  Binding{current: Ref.Ref<Session.AgentSession>,replacement: Controller.Replacement,onRebind: Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>,login: Callback.Callback<LoginRequest,AuthLogin.Outcome()>,refreshModels: Callback.Callback<Unit,List<&2,Models.Model()>>,importer: Callback.Callback<ImportRequest,SessionHost.ImportOutcome>,sessions: Callback.Callback<Unit,SessionChoices>,resume: Callback.Callback<ResumeRequest,SessionHost.CancellableResume>,managed: Maybe<&2,Manager.ToolsManager>,autoTrustOnReload: Bool,tuiMode: Maybe<&2,Settings.TuiMode>}
 type ProviderSort is Data: PendingSort{directory: String} ReadySort{collator: Collation.Collator}
 type LoginState is Data:
   LoginState{host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,abort: Ref.Ref<Maybe<&2,Abort.AbortController<Unit>>>,backend: Maybe<&2,Callback.Callback<LoginRequest,AuthLogin.Outcome()>>,refresh: Maybe<&2,Callback.Callback<Unit,List<&2,Models.Model()>>>,models: Ref.Ref<List<&2,Models.Model()>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Ref.Ref<Session.AgentSession>,sort: Ref.Ref<ProviderSort>}

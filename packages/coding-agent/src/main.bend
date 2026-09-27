@@ -946,9 +946,9 @@ def listInteractive(source: InteractiveSessionSource,_: Unit) -> IO(InteractiveR
         +override : Maybe<&2,String> <- IO.pure(Maybe<&2,String>,sessionOverride(Sessions.usesDefaultSessionDir(Unit,Tools.ToolDetails,V.Value,stored,agentDir),directory))
         return InteractiveRun.SessionLoading{Picker.LoadContext{cwd,override,agentDir,Path.join(agentDir,"sessions"),packageDir}}
 
-def resumeInteractive(host: Host(),request: InteractiveRun.ResumeRequest) -> IO(SessionRuntime.ResumeOutcome):
+def resumeInteractive(host: Host(),request: InteractiveRun.ResumeRequest) -> IO(SessionRuntime.CancellableResume):
   match request:
-    case InteractiveRun.ResumeRequest{path,cwdOverride}: SessionRuntime.resumeSession(Services,host,path,cwdOverride)
+    case InteractiveRun.ResumeRequest{path,cwdOverride}: SessionRuntime.resumeSessionCancellable(Services,host,path,cwdOverride)
 
 def forkHosted(host: Host(), request: SessionRuntime.ForkRequest) -> IO(Result<&2,&2,String,SessionRuntime.ForkOutcome>):
   match request:
@@ -1005,7 +1005,7 @@ def interactiveHosted(initial: Initial.InitialMessage, themeOverride: Maybe<&2,S
     +refresh : Callback.Callback<Unit,List<&2,Models.Model()>> <- Callback.create(~Host(),~Unit,~List<&2,Models.Model()>,~refreshInteractive,host)
     +importer : Callback.Callback<InteractiveRun.ImportRequest,SessionRuntime.ImportOutcome> <- Callback.create(~Host(),~InteractiveRun.ImportRequest,~SessionRuntime.ImportOutcome,~importInteractive,host)
     +sessions : Callback.Callback<Unit,InteractiveRun.SessionChoices> <- Callback.create(~InteractiveSessionSource,~Unit,~InteractiveRun.SessionChoices,~listInteractive,InteractiveSessionSource{host,agentDir,packageDir})
-    +resume : Callback.Callback<InteractiveRun.ResumeRequest,SessionRuntime.ResumeOutcome> <- Callback.create(~Host(),~InteractiveRun.ResumeRequest,~SessionRuntime.ResumeOutcome,~resumeInteractive,host)
+    +resume : Callback.Callback<InteractiveRun.ResumeRequest,SessionRuntime.CancellableResume> <- Callback.create(~Host(),~InteractiveRun.ResumeRequest,~SessionRuntime.CancellableResume,~resumeInteractive,host)
     tools : Maybe<&2,Manager.ToolsManager> <- SessionRuntime.withServices(Services,Maybe<&2,Manager.ToolsManager>,host,services => managedInServices(agentDir,services),None{})
     SessionRuntime.setRebindSession(Services,host,Some{rebinder})
     +result : Result<&2,&2,InteractiveRun.Error,Unit> <- InteractiveRun.runBound(live,InteractiveRun.Binding{current,Controller.Replacement{startNew,forking},onRebind,login,refresh,importer,sessions,resume,tools,autoTrustOnReload,tuiMode},initialSubmissions(initial),cwd,optionalHome(home),agentDir,packageDir,selectedTheme(themeOverride,settings),catalogModels(catalog))
@@ -1014,7 +1014,7 @@ def interactiveHosted(initial: Initial.InitialMessage, themeOverride: Maybe<&2,S
     Callback.dispose(Unit,List<&2,Models.Model()>,refresh)
     Callback.dispose(InteractiveRun.ImportRequest,SessionRuntime.ImportOutcome,importer)
     Callback.dispose(Unit,InteractiveRun.SessionChoices,sessions)
-    Callback.dispose(InteractiveRun.ResumeRequest,SessionRuntime.ResumeOutcome,resume)
+    Callback.dispose(InteractiveRun.ResumeRequest,SessionRuntime.CancellableResume,resume)
     Callback.dispose(Unit,Result<&2,&2,String,Ctx.SessionChange>,startNew)
     Callback.dispose(SessionRuntime.ForkRequest,Result<&2,&2,String,SessionRuntime.ForkOutcome>,forking)
     Callback.dispose(AgentSession.AgentSession,Unit,rebinder)
