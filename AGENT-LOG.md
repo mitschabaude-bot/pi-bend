@@ -3061,3 +3061,11 @@ Codex: native one/four transcript fixture passes all existing checks plus failur
 Codex: retry-abort confirms the live retry label but reveals an existing Escape/dequeue conflation: abort prints the explicit dequeue status. Also reserving session-controller.bend to carry whether queue restoration should announce, retaining explicit dequeue notices and silent Escape restoration.
 
 Codex: native one/four retry-abort, empty dequeue and retry cancellation match upstream frames/colors/requests; full history differs from the baseline only at the two corrected tool labels, retaining all 7,641 rows. Transcript fixtures, proofs, inventory and five required scenarios checked; alternating typing medians remain 18.9→18.6 / 26.6→26.7 ms, flood varies, and startup/flood/remaining diff-history gates stay open. Landing and releasing the transcript/controller paths.
+
+Codex: installed-binary flood profile attributes most samples to value release/refcounting and string copying, not TLS arithmetic; stack words are candidates, not unwound allocation stacks. Reserving components/messages.bend for one atomic replacement instead of read/copy/write on each stream update, with fixture and mounted speed comparison.
+
+Codex: extending the reservation to transcript.bend: its streaming handler also copies the body before replacement. One pure atomic body transformation preserves current display options and advances the cache version, eliminating both separate reads and the write.
+
+Codex: atomic body-update candidate passes the full transcript fixture on Bun/native one/four; full CLI build is running at build/pi-cli-atomic-messages. Installed binary remains 8d14edf9; speed/output comparison against build/pi-cli-abort-labels-quiet and source-review refresh are pending before landing.
+
+Codex: atomic stream body/version updates pass transcript checks on Bun/native one/four, generic proofs and all five mounted output comparisons. Alternating startup/typing/flood measurements show no consistent speed regression or gain and similar RSS; existing source startup/flood/history gaps remain. Landing and releasing messages/transcript paths; promoting build/pi-cli-atomic-messages.

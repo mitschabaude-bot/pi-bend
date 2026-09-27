@@ -683,14 +683,14 @@ def hideThinkingOwner(owner: Owner,hidden: Bool) -> IO(Owner):
         current : Stamped <- Ref.read(Stamped,state)
         Ref.write(Stamped,state,hiddenStamp(current,hidden))
         return Owner{state,rendered,component,render,invalidate}
-def replaced(current: Stamped,body: Body) -> Stamped:
-  match current: case Stamped{_,version}: Stamped{body,version + 1n}
-def set(handle: Handle,body: Body) -> IO(Unit):
+def transformed(current: Stamped,transform: Body -> Body) -> Stamped:
+  match current: case Stamped{body,version}: Stamped{transform(body),version + 1n}
+def update(handle: Handle,transform: Body -> Body) -> IO(Unit):
   match handle:
-    case Handle{+state,_}:
-      do IO<Unit>:
-        current : Stamped <- Ref.read(Stamped,state)
-        Ref.write(Stamped,state,replaced(current,body))
+    case Handle{state,_}:
+      Ref.modify(Stamped,Unit,state,current => (transformed(current,transform),Unit{}))
+def set(handle: Handle,body: Body) -> IO(Unit):
+  update(handle,_ => body)
 def bodyOf(current: Stamped) -> Body:
   match current: case Stamped{body,_}: body
 def current(handle: Handle) -> IO(Body):

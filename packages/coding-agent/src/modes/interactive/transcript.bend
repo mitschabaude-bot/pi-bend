@@ -380,8 +380,7 @@ def assistantUpdate(-D: Data,state: State,+message: Ai.AssistantMessage<Schema.V
         case None{}: IO.pure(State & Bool,(State{entries,tools,None{},id,view,theme,styles,expanded,hidden,pad},False{}))
         case Some{+handle}:
           do IO<State & Bool>:
-            body : Messages.Body <- Messages.current(handle)
-            Messages.set(handle,updated(Schema.Value,D,body,completedAssistant(D,message,liveRetry,streaming),streaming))
+            Messages.update(handle,body => updated(Schema.Value,D,body,completedAssistant(D,message,liveRetry,streaming),streaming))
             mountedMessageCalls(D,State{entries,tools,Bool.pick(Maybe<&2,Messages.Handle>,streaming,Some{handle},None{}),id,view,theme,styles,expanded,hidden,pad},message,streaming,liveRetry)
 def blocksText(blocks: List<&2,Ai.TextImageContent>) -> String:
   match blocks:

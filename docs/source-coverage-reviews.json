@@ -687,7 +687,7 @@
         "packages/coding-agent/src/modes/interactive/components/messages.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "fc91778bfd9b6dc26c1a42ad69aaa1a25bee82db2740f93806aa6c914a9b5e7c"
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "3f525a80ade54121f23c494f31401e40043848444010af0984b84d83a125d332"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/branch-summary-message.ts": {
@@ -699,8 +699,8 @@
         "packages/coding-agent/src/modes/interactive/transcript.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "fc91778bfd9b6dc26c1a42ad69aaa1a25bee82db2740f93806aa6c914a9b5e7c",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "e12475cb46a1696d10586417682e8df10697195538e682d7beab309d1b19cc9d"
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "3f525a80ade54121f23c494f31401e40043848444010af0984b84d83a125d332",
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "535fd7c2561f8eed1e04c9d4730772b786b99fb05ccb8d07d348a666b2b488ac"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/compaction-summary-message.ts": {
@@ -712,8 +712,8 @@
         "packages/coding-agent/src/modes/interactive/transcript.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "fc91778bfd9b6dc26c1a42ad69aaa1a25bee82db2740f93806aa6c914a9b5e7c",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "e12475cb46a1696d10586417682e8df10697195538e682d7beab309d1b19cc9d"
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "3f525a80ade54121f23c494f31401e40043848444010af0984b84d83a125d332",
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "535fd7c2561f8eed1e04c9d4730772b786b99fb05ccb8d07d348a666b2b488ac"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/countdown-timer.ts": {
@@ -736,8 +736,8 @@
         "packages/coding-agent/src/modes/interactive/transcript.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "fc91778bfd9b6dc26c1a42ad69aaa1a25bee82db2740f93806aa6c914a9b5e7c",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "e12475cb46a1696d10586417682e8df10697195538e682d7beab309d1b19cc9d"
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "3f525a80ade54121f23c494f31401e40043848444010af0984b84d83a125d332",
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "535fd7c2561f8eed1e04c9d4730772b786b99fb05ccb8d07d348a666b2b488ac"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/footer.ts": {
@@ -832,8 +832,8 @@
         "packages/coding-agent/src/modes/interactive/transcript.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/messages.bend": "fc91778bfd9b6dc26c1a42ad69aaa1a25bee82db2740f93806aa6c914a9b5e7c",
-        "packages/coding-agent/src/modes/interactive/transcript.bend": "e12475cb46a1696d10586417682e8df10697195538e682d7beab309d1b19cc9d"
+        "packages/coding-agent/src/modes/interactive/components/messages.bend": "3f525a80ade54121f23c494f31401e40043848444010af0984b84d83a125d332",
+        "packages/coding-agent/src/modes/interactive/transcript.bend": "535fd7c2561f8eed1e04c9d4730772b786b99fb05ccb8d07d348a666b2b488ac"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/status-indicator.ts": {
