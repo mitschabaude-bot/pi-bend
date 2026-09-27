@@ -68,7 +68,7 @@ def confirmUI(calls: R.Ref<Nat>) -> IO(Ctx.ExtensionUIContext):
     text : C.Callback<String, Unit> <- C.create(~Unit, ~String, ~Unit, ~ignoredText, Unit{})
     paste : C.Callback<String, Unit> <- C.create(~Unit, ~String, ~Unit, ~ignoredText, Unit{})
     current : C.Callback<Unit, String> <- C.create(~Unit, ~Unit, ~String, ~emptyEditor, Unit{})
-    return Ctx.ExtensionUIContext{select, confirm, input, notify, status, custom, editor, widget, title, text, paste, current}
+    return Ctx.ExtensionUIContext{select, confirm, input, notify, status, custom, editor, widget, title, text, paste, current, None{}}
 
 # harness.settingsManager.setProjectTrusted(trusted)
 def setProjectTrusted(+session: Session.AgentSession, +dir: String, +agentDir: String, +trusted: Bool) -> IO(Unit):
