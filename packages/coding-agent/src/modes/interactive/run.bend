@@ -1298,7 +1298,7 @@ type ThemeOwned is Type:
   ThemeOwned{controller: ThemeController.Owner,render: Callback.Callback<Unit,Unit>}
   ThemePaused{selection: ThemeController.Selection}
 type ThemeStopping is Data:
-  ThemeStopping{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,view: View.Handle,screen: Process.ScreenState,session: Ref.Ref<Session.AgentSession>,suspension: Process.SuspensionHandle,working: Working}
+  ThemeStopping{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,view: View.Handle,modes: Ref.Ref<Process.RendererModes>,session: Ref.Ref<Session.AgentSession>,suspension: Process.SuspensionHandle,working: Working}
 type Interaction is Data:
   Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,modelSelector: Ref.Ref<Maybe<&2,ModelPicker.Host>>,thinkingSelector: Ref.Ref<Maybe<&2,ThinkingPicker.Host>>,scopedSelector: Ref.Ref<Maybe<&2,ScopePicker.Host>>,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,trust: Ref.Ref<Maybe<&2,TrustPicker.Host>>,header: Maybe<&2,Header.Handle>,bashActivity: Ref.Ref<BashActivity>,working: Working,autocomplete: AutocompleteSlot,suspension: Process.SuspensionHandle}
 type ThemeStartup is Data:
@@ -2695,6 +2695,13 @@ def resumedStartup(startup: ThemeStartup) -> ThemeStartup:
       ThemeStartup{redraw,queue,Nil{},failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managed,interaction,highlighter,False{}}
 def themeResumed(startup: ThemeStartup,ready: Process.QueryReady) -> IO(Unit):
   themeReady(resumedStartup(startup),ready)
+type RendererReady is Data: RendererReady{startup: ThemeStartup,modes: Ref.Ref<Process.RendererModes>,resumed: Bool}
+def rendererReady(context: RendererReady,ready: Process.QueryReady) -> IO(Unit):
+  match context ready:
+    case RendererReady{+startup,modes,resumed} Process.QueryReady{queries,terminal,write,request,+setter}:
+      do IO<Unit>:
+        Callback.call(Process.TerminalPreference,Unit,setter,Process.RendererViews{modes})
+        themeReady(Bool.pick(ThemeStartup,resumed,resumedStartup(startup),startup),Process.QueryReady{queries,terminal,write,request,setter})
 def hasSessionMessages(messages: List<&2,Session.Message()>) -> Bool:
   match messages:
     case Nil{}: False{}
@@ -2708,21 +2715,23 @@ def fullscreenExitOutput(session: Ref.Ref<Session.AgentSession>,_: Unit) -> IO(B
     live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
     settings : Settings.SettingsManager <- Ref.read(Settings.SettingsManager,Session.settingsOf(live))
     return printFullscreenDocument(Settings.getFullscreenExitOutput(settings))
-def prepareFullscreenExit(screen: Process.ScreenState,view: View.Handle,session: Ref.Ref<Session.AgentSession>) -> IO(Unit):
-  match screen:
-    case Process.Main{_}: IO.pure(Unit,Unit{})
-    case Process.Fullscreen{_}:
+def prepareFullscreenExit(modes: Process.RendererModes,view: View.Handle,session: Ref.Ref<Session.AgentSession>) -> IO(Unit):
+  match modes:
+    case Process.RendererModes{_,_,_,_,False{}}: IO.pure(Unit,Unit{})
+    case Process.RendererModes{_,_,_,Some{_},True{}}: IO.pure(Unit,Unit{})
+    case Process.RendererModes{_,_,_,None{},True{}}:
       do IO<Unit>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         messages : List<&2,Session.Message()> <- Session.messages(live)
         View.prepareExit(view,hasSessionMessages(messages))
 def themeStopping(stopping: ThemeStopping,_: Unit) -> IO(Unit):
   match stopping:
-    case ThemeStopping{redraw,selected,+owned,view,screen,session,suspension,working}:
+    case ThemeStopping{redraw,selected,+owned,view,modes,session,suspension,working}:
       do IO<Unit>:
         Ref.write(Maybe<&2,Terminal.Handle>,workingTerminal(working),None{})
         +suspending : Bool <- Process.isSuspending(suspension)
-        Bool.pick(Unit -> IO(Unit),suspending,_ => IO.pure(Unit,Unit{}),_ => prepareFullscreenExit(screen,view,session))(Unit{})
+        currentModes : Process.RendererModes <- Ref.read(Process.RendererModes,modes)
+        Bool.pick(Unit -> IO(Unit),suspending,_ => IO.pure(Unit,Unit{}),_ => prepareFullscreenExit(currentModes,view,session))(Unit{})
         Ref.write(Maybe<&2,Callback.Callback<Unit,Unit>>,redraw,None{})
         previous : Maybe<&2,ThemeController.Handle> <- Ref.swap(Maybe<&2,ThemeController.Handle>,selected,None{})
         saved : Maybe<&1,ThemeOwned> <- Bool.pick(Unit -> IO(Maybe<&1,ThemeOwned>),suspending,_ => saveTheme(previous),_ => IO.pure(Maybe<&1,ThemeOwned>,None{}))(Unit{})
@@ -2747,16 +2756,17 @@ def configuredScrollbar(value: Settings.ScrollViewScrollbar) -> Scroll.ScrollVie
     case Settings.ScrollAuto{}: Scroll.Auto{}
     case Settings.ScrollAlways{}: Scroll.Always{}
     case Settings.ScrollHidden{}: Scroll.Hidden{}
-def configuredTui(base: Tui.TuiBase,session: Ref.Ref<Session.AgentSession>,screen: Process.ScreenState) -> IO(Tui.TuiBase):
+def configuredTui(base: Tui.TuiBase,session: Ref.Ref<Session.AgentSession>,screen: Process.ScreenState,modes: Ref.Ref<Process.RendererModes>) -> IO(Tui.TuiBase):
   do IO<Tui.TuiBase>:
     live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
     +settings : Settings.SettingsManager <- Session.getSettings(live)
+    Ref.modify(Process.RendererModes,Unit,modes,current => Process.rendererScrollbar(current,configuredScrollbar(Settings.getFullscreenScrollbar(settings))))
     hardwareEnv : Result<&1,&1,U32 & String,String> <- IO.get_env("PI_HARDWARE_CURSOR")
     clearEnv : Result<&1,&1,U32 & String,String> <- IO.get_env("PI_CLEAR_ON_SHRINK")
     hardwareFallback : Bool <- IO.pure(Bool,String.eq(Maybe.default(&2,String,environmentValue(hardwareEnv),""),"1"))
     clearFallback : Bool <- IO.pure(Bool,String.eq(Maybe.default(&2,String,environmentValue(clearEnv),""),"1"))
     show : Bool <- IO.pure(Bool,Maybe.default(&2,Bool,Settings.selectedShowHardwareCursor(Settings.get(Settings.effective(settings),"showHardwareCursor")),hardwareFallback))
-    return Process.preferredTui(base,Process.screenPreferences(screen,Process.Preferences{Some{show},Some{Settings.resolvedClearOnShrink(Settings.terminalOptions(settings),clearFallback)},Some{configuredScrollbar(Settings.getFullscreenScrollbar(settings))}}))
+    return Process.preferredTui(base,Process.screenPreferences(screen,Process.Preferences{Some{show},Some{Settings.resolvedClearOnShrink(Settings.terminalOptions(settings),clearFallback)},Some{configuredScrollbar(Settings.getFullscreenScrollbar(settings))},None{},Nil{}}))
 type IndicatorStyle is Data: IndicatorStyle{theme: Ref.Ref<Theme.Theme>,bindings: Keybindings.KeybindingsManager}
 def styledIndicator(+current: Theme.Theme,bindings: Keybindings.KeybindingsManager) -> String:
   +shortcut = Hints.keyDisplayText(bindings,"tui.altScreen.bottom")
@@ -2786,37 +2796,40 @@ def configuredScreen(session: Ref.Ref<Session.AgentSession>,override: Maybe<&2,S
     live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
     +settings : Settings.SettingsManager <- Session.getSettings(live)
     return screenForMode(Maybe.default(&2,Settings.TuiMode,override,Settings.getTuiMode(settings)),indicator,bindings,styles)
-def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),document: Component.Component,editorComponent: Component.Component,+foot: FooterOwner,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,+screen: Process.ScreenState,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
+def fullscreenScreen(screen: Process.ScreenState) -> Bool:
+  match screen:
+    case Process.Main{_}: False{}
+    case Process.Fullscreen{_}: True{}
+def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),+document: Component.Component,+editorComponent: Component.Component,+foot: FooterOwner,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,+screen: Process.ScreenState,alternate: AltScreen.State,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
   match mounted:
     case (view,_,Fail{cause}): IO.pure(View.View & Result<&2,&2,Error,Unit>,(view,Fail{Layout{cause}}))
-    case (view,viewHandle,Done{base}):
+    case (View.View{viewOwner,header,headerHandle,exit,value,render,+chat,+pending,invalidate},viewHandle,Done{base}):
       do IO<View.View & Result<&2,&2,Error,Unit>>:
+        view : View.View = View.View{viewOwner,header,headerHandle,exit,value,render,chat,pending,invalidate}
+        +modes : Ref.Ref<Process.RendererModes> <- Ref.new(Process.RendererModes,Process.RendererModes{View.rendererView(document,editorComponent,footerComponent(foot),pending,False{}),View.rendererView(chat,editorComponent,footerComponent(foot),pending,True{}),alternate,None{},fullscreenScreen(screen)})
         +selected : Ref.Ref<Maybe<&2,ThemeController.Handle>> <- Ref.new(Maybe<&2,ThemeController.Handle>,None{})
         +owned : Ref.Ref<Maybe<&1,ThemeOwned>> <- Ref.new(Maybe<&1,ThemeOwned>,None{})
         +error : Ref.Ref<Maybe<&2,Theme.LoadError>> <- Ref.new(Maybe<&2,Theme.LoadError>,None{})
         +startupState : ThemeStartup = startup(context,redraw,queue,initial,contextStatus(context),stopped,selected,owned,error)
-        +ready : Callback.Callback<Process.QueryReady,Unit> <- Callback.create(~ThemeStartup,~Process.QueryReady,~Unit,~themeReady,startupState)
-        +resumed : Callback.Callback<Process.QueryReady,Unit> <- Callback.create(~ThemeStartup,~Process.QueryReady,~Unit,~themeResumed,startupState)
-        +stopping : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeStopping,~Unit,~Unit,~themeStopping,ThemeStopping{redraw,selected,owned,viewHandle,screen,contextSession(context),terminalControl(contextInteraction(context)),workingOf(contextInteraction(context))})
+        +ready : Callback.Callback<Process.QueryReady,Unit> <- Callback.create(~RendererReady,~Process.QueryReady,~Unit,~rendererReady,RendererReady{startupState,modes,False{}})
+        +resumed : Callback.Callback<Process.QueryReady,Unit> <- Callback.create(~RendererReady,~Process.QueryReady,~Unit,~rendererReady,RendererReady{startupState,modes,True{}})
+        +stopping : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeStopping,~Unit,~Unit,~themeStopping,ThemeStopping{redraw,selected,owned,viewHandle,modes,contextSession(context),terminalControl(contextInteraction(context)),workingOf(contextInteraction(context))})
         +ids : List<&2,Component.ComponentId> <- IO.pure(List<&2,Component.ComponentId>,Component.ComponentId{1n} <> Component.ComponentId{2n} <> Component.ComponentId{3n} <> Nil{})
         +components : List<&2,Component.Component> <- IO.pure(List<&2,Component.Component>,document <> editorComponent <> footerComponent(foot) <> Nil{})
-        configured : Tui.TuiBase <- configuredTui(base,contextSession(context),screen)
+        configured : Tui.TuiBase <- configuredTui(base,contextSession(context),screen,modes)
         +exitOutput : Callback.Callback<Unit,Bool> <- Callback.create(~Ref.Ref<Session.AgentSession>,~Unit,~Bool,~fullscreenExitOutput,contextSession(context))
-        +outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runSuspendable(Process.active(Process.Session{configured,screen},components,ids),stopped,terminalControl(contextInteraction(context)),False{},ready,resumed,stopping,exitOutput)
+        +outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runSuspendableWithRenderer(Process.active(Process.Session{configured,screen},components,ids),stopped,terminalControl(contextInteraction(context)),False{},ready,resumed,stopping,exitOutput,Some{modes})
         Callback.dispose(Unit,Bool,exitOutput)
         disposeProcess(outcome)
         Callback.dispose(Process.QueryReady,Unit,ready)
         Callback.dispose(Process.QueryReady,Unit,resumed)
         Callback.dispose(Unit,Unit,stopping)
+        oldModes : Process.RendererModes <- Ref.dispose(Process.RendererModes,modes)
         oldSelected : Maybe<&2,ThemeController.Handle> <- Ref.dispose(Maybe<&2,ThemeController.Handle>,selected)
         oldOwned : Maybe<&1,ThemeOwned> <- Ref.dispose(Maybe<&1,ThemeOwned>,owned)
         failure : Maybe<&2,Theme.LoadError> <- Ref.dispose(Maybe<&2,Theme.LoadError>,error)
         return (view,processThemeResult(outcome,failure))
 
-def fullscreenScreen(screen: Process.ScreenState) -> Bool:
-  match screen:
-    case Process.Main{_}: False{}
-    case Process.Fullscreen{_}: True{}
 def processEditorBorrowed(borrowed: View.View & Component.Component & View.Handle,+editorComponent: Component.Component,+foot: FooterOwner,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
   match borrowed:
     case (view,document,_):
@@ -2826,7 +2839,7 @@ def processEditorBorrowed(borrowed: View.View & Component.Component & View.Handl
         +viewportBindings : Ref.Ref<Keybindings.KeybindingsManager> <- Ref.new(Keybindings.KeybindingsManager,contextBindings(context))
         +screen : Process.ScreenState <- configuredScreen(contextSession(context),tuiModeOverride(contextBinding(context)),indicator,viewportBindings,searchStyles)
         mounted : View.View & View.Handle & Tui.ResultOf(Tui.TuiBase) <- View.mountFor(view,editorComponent,footerComponent(foot),fullscreenScreen(screen))
-        outcome : View.View & Result<&2,&2,Error,Unit> <- processMounted(mounted,document,editorComponent,foot,stopped,redraw,queue,initial,screen,context)
+        outcome : View.View & Result<&2,&2,Error,Unit> <- processMounted(mounted,document,editorComponent,foot,stopped,redraw,queue,initial,screen,AltScreen.initial(indicator,viewportBindings,searchStyles),context)
         oldBindings : Keybindings.KeybindingsManager <- Ref.dispose(Keybindings.KeybindingsManager,viewportBindings)
         Callback.dispose(Unit,AltSearch.Styles,searchStyles)
         Callback.dispose(Unit,String,indicator)

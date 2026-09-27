@@ -8,6 +8,7 @@ import ../../../../tui/src/components/scroll-view.bend as Scroll
 import ../../../../tui/src/components/stack.bend as Stack
 import ../../../../tui/src/layout-node.bend as Node
 import ../../../../tui/src/tui-base.bend as Tui
+import ../../../../tui/src/tui-process.bend as Process
 import ./components/header.bend as Header
 import ./theme/theme.bend as Theme
 import ../../core/system-prompt.bend as Prompt
@@ -291,6 +292,8 @@ def mountComponents(+document: Component.Component,+editor: Component.Component,
 def nextId(document: Component.ComponentId,editor: Component.ComponentId,footer: Component.ComponentId) -> Component.ComponentId:
   match document editor footer:
     case Component.ComponentId{a} Component.ComponentId{b} Component.ComponentId{c}: Component.ComponentId{Nat.max(a,Nat.max(b,c)) + 1n}
+def rendererView(+document: Component.Component,+editor: Component.Component,+footer: Component.Component,+pending: Component.Component,fullscreen: Bool) -> Process.RendererView:
+  Process.RendererView{Component.Container{[document,pending,editor,footer],None{}},Some{layoutFor(document,editor,footer,fullscreen,Some{pending})}}
 def mountedSections(view: View,+document: Component.Component,handle: Handle,+editor: Component.Component,+footer: Component.Component,+fullscreen: Bool) -> IO(View & Handle & Tui.ResultOf(Tui.TuiBase)):
   match view:
     case View{owner,header,headerHandle,exit,value,render,+chat,+pending,invalidate}:

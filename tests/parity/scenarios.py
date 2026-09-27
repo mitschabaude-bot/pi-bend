@@ -147,7 +147,49 @@ def fullscreen_exit_output(output, change_to=None, answer=True):
 regular_exit_output = fullscreen_exit_output("resume-hint")
 regular_exit_output.update(name="regular-exit-output-resume-hint", args=MODEL)
 
+def tui_mode_switch(initial, answer=False, switches=2):
+    steps = [("wait", READY, "startup"), ("wait", "Warning: fd not found", "ready"), ("settle", 0.3)]
+    if answer:
+        steps += [("keys", "hello"), ("key", "Enter"), ("wait", "A short reply.", "answer"), ("settle", 0.3)]
+    for index in range(switches):
+        steps += [("keys", "/settings"), ("key", "Enter"), ("settle", 0.3),
+                  ("keys", "tui mode"), ("settle", 0.2), ("snap", f"choice-{index}"),
+                  ("key", "Enter"), ("settle", 0.3), ("snap", f"changed-{index}"),
+                  ("key", "Escape"), ("settle", 0.2), ("keys", "draft"),
+                  ("wait", "draft", f"draft-{index}"), ("snap", f"editor-{index}"),
+                  ("key", "C-u"), ("settle", 0.2)]
+    steps += [("key", "C-d"), ("wait", "shell\\$", "exit"), ("snap", "exit"), ("snap-history", "history")]
+    return {"name": "tui-mode-switch-" + initial + ("-answer" if answer else "-empty") + ("-single" if switches == 1 else ""), "args": MODEL,
+            "files": {**RESOURCES, "home/.pi/agent/settings.json": json.dumps({"tuiMode": initial})},
+            "turns": [{"text": "A short reply."}] if answer else [], "steps": steps}
+
+override_mode_switch = tui_mode_switch("fullscreen")
+override_mode_switch.update(name="tui-mode-switch-cli-override", args=MODEL + ["--tui-mode", "fullscreen"])
+override_mode_switch["files"]["home/.pi/agent/settings.json"] = json.dumps({"tuiMode": "regular"})
+resume_hint_mode_switch = tui_mode_switch("regular", True, switches=1)
+resume_hint_mode_switch.update(name="tui-mode-switch-resume-hint")
+resume_hint_mode_switch["files"]["home/.pi/agent/settings.json"] = json.dumps({"tuiMode": "regular", "fullscreenExitOutput": "resume-hint"})
+always_bar_mode_switch = tui_mode_switch("regular", True, switches=1)
+always_bar_mode_switch.update(name="tui-mode-switch-scrollbar-always")
+always_bar_mode_switch["files"]["home/.pi/agent/settings.json"] = json.dumps({"tuiMode": "regular", "fullscreenScrollbar": "always"})
+hidden_bar_mode_switch = tui_mode_switch("regular", True, switches=1)
+hidden_bar_mode_switch.update(name="tui-mode-switch-scrollbar-hidden")
+hidden_bar_mode_switch["files"]["home/.pi/agent/settings.json"] = json.dumps({"tuiMode": "regular", "fullscreenScrollbar": "hidden"})
+hidden_bar_mode_switch["turns"] = [{"text": STREAM_ANSWER}]
+hidden_bar_mode_switch["steps"] = [(step[0], "END-OF-STREAM", *step[2:]) if step[0] == "wait" and step[1] == "A short reply." else step for step in hidden_bar_mode_switch["steps"]]
+hidden_bar_mode_switch["steps"][-4:-4] = [("key", "PageUp"), ("settle", 0.2), ("snap", "scrolled")]
+
 SCENARIOS = [
+    always_bar_mode_switch,
+    hidden_bar_mode_switch,
+    resume_hint_mode_switch,
+    tui_mode_switch("regular", switches=1),
+    tui_mode_switch("regular", True, switches=1),
+    override_mode_switch,
+    tui_mode_switch("regular"),
+    tui_mode_switch("fullscreen"),
+    tui_mode_switch("regular", True),
+    tui_mode_switch("fullscreen", True),
     regular_exit_output,
     fullscreen_exit_output("resume-hint", answer=False),
     fullscreen_exit_output("resume-hint"),

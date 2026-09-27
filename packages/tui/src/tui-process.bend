@@ -293,30 +293,171 @@ def input(+session: Session,registry: List<&2,Component.Component>,mounted: List
 # between a component callback and the frame it produces.
 type Active is Data:
   Active{session: Session,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,lastError: Maybe<&2,Error>,owed: Bool,ticks: Nat}
-type TerminalPreference is Data: HardwareCursor{enabled: Bool} ClearOnShrink{enabled: Bool} FullscreenScrollbar{mode: Scroll.ScrollViewScrollbar}
-type Preferences is Data: Preferences{cursor: Maybe<&2,Bool>,clear: Maybe<&2,Bool>,scrollbar: Maybe<&2,Scroll.ScrollViewScrollbar>}
-def emptyPreferences() -> Preferences: Preferences{None{},None{},None{}}
+# Layouts and callbacks are borrowed from the application. Only the regular
+# renderer snapshot is retained across mode changes, as in InteractiveMode.
+type RendererView is Data: RendererView{root: Component.Container,layout: Maybe<&2,Layout.LayoutNode>}
+type RendererModes is Data:
+  RendererModes{regular: RendererView,fullscreen: RendererView,alternate: Alt.State,main: Maybe<&2,Screen.TuiMainScreenRenderState>,isFullscreen: Bool}
+type RendererSwitch is Data: RendererSwitch{active: Active,modes: RendererModes,output: Screen.Stream,changed: Bool}
+def fullscreenMode(current: Active) -> Bool:
+  match current:
+    case Active{Session{_,Fullscreen{_}},_,_,_,_,_}: True{}
+    case _: False{}
+def hasOverlayEntries(base: Tui.TuiBase) -> Bool:
+  match base:
+    case Tui.TuiBase{_,O.State{entries,_,_,_,_},_,_,_,_,_,_,_}: Bool.not(List.is_empty(&2,O.Entry,entries))
+def rendererBase(base: Tui.TuiBase,view: RendererView) -> Tui.TuiBase:
+  match base view:
+    case Tui.TuiBase{_,focus,bindings,_,Tui.RenderSchedule{_,_,_,next,last,_},show,clear,_,held} RendererView{root,layout}:
+      Tui.TuiBase{root,focus,bindings,Tui.DisplayedFrame{Nil{},Tui.Frame{Nil{},Nil{}}},Tui.RenderSchedule{False{},False{},None{},next,last,False{}},show,clear,layout,held}
+def regularScreen(snapshot: Maybe<&2,Screen.TuiMainScreenRenderState>) -> ScreenState:
+  match snapshot:
+    case None{}: Main{Screen.initial()}
+    case Some{saved}: Main{Screen.restoreRenderState(Screen.initial(),saved)}
+def nextRenderer(current: ScreenState,modes: RendererModes,fullscreen: Bool,base: Tui.TuiBase) -> ScreenState & (RendererModes & Screen.Stream):
+  match current modes fullscreen:
+    case Main{state} RendererModes{RendererView{root,_},full,+alternate,_,_} True{}:
+      (Fullscreen{alternate},(RendererModes{RendererView{root,Tui.layoutRoot(base)},full,alternate,Some{Screen.captureRenderState(state)},True{}},Screen.stream(Screen.Text{Alt.enter()} <> Nil{})))
+    case Fullscreen{_} RendererModes{regular,RendererView{root,_},alternate,+saved,_} False{}:
+      (regularScreen(saved),(RendererModes{regular,RendererView{root,Tui.layoutRoot(base)},alternate,saved,False{}},Screen.stream(Screen.Text{Alt.leave()} <> Nil{})))
+    case current modes _: (current,(modes,Screen.stream(Nil{})))
+def rendererFocus(component: Maybe<&2,Component.Component>,focused: Bool) -> IO(Unit):
+  match component:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{component}: Component.setFocused(component,focused)
+def invalidateRenderer(view: RendererView) -> IO(Unit):
+  match view:
+    case RendererView{root,_}: Component.invalidateContainer(root)
+def disposeRendererMouse(screen: ScreenState) -> IO(Unit):
+  match screen:
+    case Fullscreen{screen}: Mouse.dispose(Alt.mouse(screen))
+    case _: IO.pure(Unit,Unit{})
+def rendererChildren(view: RendererView) -> List<&2,Component.Component>:
+  match view:
+    case RendererView{Component.Container{children,_},_}: children
+def rendererIds(children: List<&2,Component.Component>) -> List<&2,Component.ComponentId>:
+  match children:
+    case Nil{}: Nil{}
+    case child <> rest: Component.id(child) <> rendererIds(rest)
+def switchedRenderer(current: Active,modes: RendererModes,fullscreen: Bool,transition: ScreenState & (RendererModes & Screen.Stream)) -> IO(RendererSwitch):
+  match current modes transition:
+    case Active{Session{+tui,oldScreen},_,_,error,_,ticks} RendererModes{+regular,+full,_,_,_} Tuple{screen,Tuple{modes,output}}:
+      do IO<RendererSwitch>:
+        +view : RendererView = Bool.pick(RendererView,fullscreen,full,regular)
+        +next : Tui.TuiBase = rendererBase(tui,view)
+        +focused : Maybe<&2,Component.Component> = Tui.getFocusedComponent(tui)
+        disposeRendererMouse(oldScreen)
+        rendererFocus(focused,False{})
+        invalidateRenderer(view)
+        rendererFocus(focused,True{})
+        +components : List<&2,Component.Component> = rendererChildren(view)
+        return RendererSwitch{Active{Session{next,screen},components,rendererIds(components),error,True{},ticks},modes,output,True{}}
+def switchRenderer(+current: Active,+modes: RendererModes,+fullscreen: Bool) -> IO(Maybe<&2,RendererSwitch>):
+  match current:
+    case Active{Session{+tui,+screen},_,_,_,_,_}:
+      Bool.pick(Unit -> IO(Maybe<&2,RendererSwitch>),Bool.xor(fullscreenMode(current),fullscreen),
+        _ => Bool.pick(Unit -> IO(Maybe<&2,RendererSwitch>),hasOverlayEntries(tui),
+          _ => IO.pure(Maybe<&2,RendererSwitch>,None{}),
+          _ => do IO<Maybe<&2,RendererSwitch>>:
+            result : RendererSwitch <- switchedRenderer(current,modes,fullscreen,nextRenderer(screen,modes,fullscreen,tui))
+            return Some{result})(Unit{}),
+        _ => IO.pure(Maybe<&2,RendererSwitch>,Some{RendererSwitch{current,modes,Screen.stream(Nil{}),False{}}}))(Unit{})
+
+type RendererResult is Data: RendererResult{fullscreen: Bool,accepted: Bool} RendererCurrent{fullscreen: Bool}
+type RendererRequest is Data:
+  RendererRequest{fullscreen: Bool,completed: Callback.Callback<RendererResult,Unit>}
+  RendererInspection{completed: Callback.Callback<RendererResult,Unit>}
+type TerminalPreference is Data:
+  HardwareCursor{enabled: Bool} ClearOnShrink{enabled: Bool} FullscreenScrollbar{mode: Scroll.ScrollViewScrollbar}
+  RendererViews{modes: Ref.Ref<RendererModes>} RendererMode{request: RendererRequest}
+type Preferences is Data:
+  Preferences{cursor: Maybe<&2,Bool>,clear: Maybe<&2,Bool>,scrollbar: Maybe<&2,Scroll.ScrollViewScrollbar>,renderer: Maybe<&2,Ref.Ref<RendererModes>>,requests: List<&2,RendererRequest>}
+def emptyPreferences() -> Preferences: Preferences{None{},None{},None{},None{},Nil{}}
 def changedPreference(current: Preferences,change: TerminalPreference) -> Preferences & Unit:
   match current change:
-    case Preferences{_,clear,bar} HardwareCursor{value}: (Preferences{Some{value},clear,bar},Unit{})
-    case Preferences{cursor,_,bar} ClearOnShrink{value}: (Preferences{cursor,Some{value},bar},Unit{})
-    case Preferences{cursor,clear,_} FullscreenScrollbar{value}: (Preferences{cursor,clear,Some{value}},Unit{})
+    case Preferences{_,clear,bar,renderer,requests} HardwareCursor{value}: (Preferences{Some{value},clear,bar,renderer,requests},Unit{})
+    case Preferences{cursor,_,bar,renderer,requests} ClearOnShrink{value}: (Preferences{cursor,Some{value},bar,renderer,requests},Unit{})
+    case Preferences{cursor,clear,_,renderer,requests} FullscreenScrollbar{value}: (Preferences{cursor,clear,Some{value},renderer,requests},Unit{})
+    case Preferences{cursor,clear,bar,_,requests} RendererViews{modes}: (Preferences{cursor,clear,bar,Some{modes},requests},Unit{})
+    case Preferences{cursor,clear,bar,renderer,requests} RendererMode{request}: (Preferences{cursor,clear,bar,renderer,List.append(&2,RendererRequest,requests,request <> Nil{})},Unit{})
+def takenPreferences(+current: Preferences) -> Preferences & Preferences:
+  match current:
+    case Preferences{_,_,_,renderer,_}: (Preferences{None{},None{},None{},renderer,Nil{}},current)
 def screenPreferences(screen: ScreenState,preferences: Preferences) -> Preferences:
   match screen preferences:
-    case Main{_} Preferences{cursor,clear,_}: Preferences{cursor,clear,None{}}
+    case Main{_} Preferences{cursor,clear,_,renderer,requests}: Preferences{cursor,clear,None{},renderer,requests}
     case Fullscreen{_} preferences: preferences
 def preferredScrollbar(base: Tui.TuiBase,mode: Maybe<&2,Scroll.ScrollViewScrollbar>) -> Tui.TuiBase:
   match mode:
     case None{}: base
     case Some{mode}: Tui.setPrimaryScrollbar(base,mode,0n)
+def rendererScrollbar(current: RendererModes,mode: Scroll.ScrollViewScrollbar) -> RendererModes & Unit:
+  match current:
+    case RendererModes{regular,RendererView{root,Some{layout}},alternate,snapshot,fullscreen}:
+      (RendererModes{regular,RendererView{root,Some{Layout.setPrimaryScrollbar(layout,mode,0n)}},alternate,snapshot,fullscreen},Unit{})
+    case current: (current,Unit{})
+def storeRendererScrollbar(renderer: Maybe<&2,Ref.Ref<RendererModes>>,scrollbar: Maybe<&2,Scroll.ScrollViewScrollbar>) -> IO(Unit):
+  match renderer scrollbar:
+    case Some{modes} Some{mode}: Ref.modify(RendererModes,Unit,modes,current => rendererScrollbar(current,mode))
+    case _ _: IO.pure(Unit,Unit{})
 def preferredTui(base: Tui.TuiBase,preferences: Preferences) -> Tui.TuiBase:
   match base preferences:
-    case Tui.TuiBase{root,focus,bindings,displayed,scheduler,cursor,clear,node,+heldFocus} Preferences{newCursor,newClear,scrollbar}:
+    case Tui.TuiBase{root,focus,bindings,displayed,scheduler,cursor,clear,node,+heldFocus} Preferences{newCursor,newClear,scrollbar,_,_}:
       preferredScrollbar(Tui.TuiBase{root,focus,bindings,displayed,scheduler,Maybe.default(&2,Bool,newCursor,cursor),Maybe.default(&2,Bool,newClear,clear),node,heldFocus},scrollbar)
 def preferredActive(current: Active,preferences: Preferences) -> Active:
   match current:
     case Active{Session{tui,+screen},components,mounted,error,owed,ticks}:
       Active{Session{preferredTui(tui,screenPreferences(screen,preferences)),screen},components,mounted,error,owed,ticks}
+def rendererOutput(current: Active,written: Result<&2,&2,Terminal.Error,Unit>) -> Active:
+  match current written:
+    case Active{session,components,mounted,_,owed,ticks} Fail{cause}: Active{session,components,mounted,Some{Output{cause}},owed,ticks}
+    case current Done{_}: current
+def rendererChanged(result: Maybe<&2,RendererSwitch>,+old: Active,modes: Ref.Ref<RendererModes>,completed: Callback.Callback<RendererResult,Unit>,handle: Terminal.Handle) -> IO(Active):
+  match result:
+    case None{}:
+      do IO<Active>:
+        Callback.call(RendererResult,Unit,completed,RendererResult{fullscreenMode(old),False{}})
+        return old
+    case Some{RendererSwitch{+active,next,output,_}}:
+      do IO<Active>:
+        +written : Result<&2,&2,Terminal.Error,Unit> <- writeEffects(handle,output)
+        Ref.write(RendererModes,modes,next)
+        Callback.call(RendererResult,Unit,completed,RendererResult{fullscreenMode(active),Result.is_done(&2,&2,Terminal.Error,Unit,written)})
+        return rendererOutput(active,written)
+def requestedRenderer(+current: Active,renderer: Maybe<&2,Ref.Ref<RendererModes>>,request: RendererRequest,handle: Terminal.Handle) -> IO(Active):
+  match renderer request:
+    case _ RendererInspection{completed}:
+      do IO<Active>:
+        Callback.call(RendererResult,Unit,completed,RendererCurrent{fullscreenMode(current)})
+        return current
+    case None{} RendererRequest{_,completed}:
+      do IO<Active>:
+        Callback.call(RendererResult,Unit,completed,RendererResult{fullscreenMode(current),False{}})
+        return current
+    case Some{+modes} RendererRequest{fullscreen,completed}:
+      do IO<Active>:
+        views : RendererModes <- Ref.read(RendererModes,modes)
+        changed : Maybe<&2,RendererSwitch> <- switchRenderer(current,views,fullscreen)
+        rendererChanged(changed,current,modes,completed,handle)
+@unsafe def requestedRenderers(current: Active,+renderer: Maybe<&2,Ref.Ref<RendererModes>>,requests: List<&2,RendererRequest>,+handle: Terminal.Handle) -> IO(Active):
+  match requests:
+    case Nil{}: IO.pure(Active,current)
+    case request <> rest:
+      do IO<Active>:
+        next : Active <- requestedRenderer(current,renderer,request,handle)
+        requestedRenderers(next,renderer,rest,handle)
+def applyPreferences(current: Active,+preferences: Preferences,handle: Terminal.Handle) -> IO(Active):
+  match preferences:
+    case Preferences{None{},None{},None{},_,Nil{}}: IO.pure(Active,current)
+    case Preferences{_,_,scrollbar,+renderer,requests}:
+      do IO<Active>:
+        storeRendererScrollbar(renderer,scrollbar)
+        next : Active <- requestedRenderers(current,renderer,requests,handle)
+        return preferredActive(next,preferences)
+def applyPendingPreferences(pending: Ref.Ref<Preferences>,current: Active,handle: Terminal.Handle) -> IO(Active):
+  do IO<Active>:
+    changes : Preferences <- Ref.modify(Preferences,Preferences,pending,value => takenPreferences(value))
+    applyPreferences(current,changes,handle)
 type PreferenceSink is Data:
   PreferenceSink{pending: Ref.Ref<Preferences>,request: Callback.Callback<Unit,Unit>,write: Callback.Callback<String,Unit>}
 def cursorPreference(write: Callback.Callback<String,Unit>,preference: TerminalPreference) -> IO(Unit):
@@ -406,16 +547,20 @@ def settledOperation(current: Active,handle: Terminal.Handle,termux: Bool) -> IO
     case current: drawNow(current,handle,termux)
 def onResize(listener: EventSink,value: Unit) -> IO(Unit):
   match listener:
-    case EventSink{state,ready,_,termux,_}:
+    case EventSink{state,ready,_,termux,+preferences}:
       do IO<Unit>:
-        handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
-        Serial.run(Active,Unit,state,current => resizeOperation(current,handle,termux))
+        +handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
+        Serial.run(Active,Unit,state,current => do IO<Active & Unit>:
+          next : Active <- applyPendingPreferences(preferences,current,handle)
+          resizeOperation(next,handle,termux))
 def onSettled(listener: EventSink,value: Unit) -> IO(Unit):
   match listener:
-    case EventSink{state,ready,_,termux,_}:
+    case EventSink{state,ready,_,termux,+preferences}:
       do IO<Unit>:
-        handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
-        Serial.run(Active,Unit,state,current => settledOperation(current,handle,termux))
+        +handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
+        Serial.run(Active,Unit,state,current => do IO<Active & Unit>:
+          next : Active <- applyPendingPreferences(preferences,current,handle)
+          settledOperation(next,handle,termux))
 def closedTimer(pair: Timer & Bool) -> IO(Unit):
   match pair:
     case (owner,_): Timer.close(owner)
@@ -425,10 +570,10 @@ def slept(pair: Timer & TimerCancel) -> IO(Unit):
       do IO<Unit>:
         waited : Timer & Bool <- Timer.wait(owner)
         closedTimer(waited)
-def scheduledPreferences(+pending: Ref.Ref<Preferences>,event: Tui.RenderEvent,current: Active,handle: Terminal.Handle,termux: Bool) -> IO(Active & List<&2,Tui.RenderEffect>):
+def scheduledPreferences(+pending: Ref.Ref<Preferences>,event: Tui.RenderEvent,current: Active,+handle: Terminal.Handle,termux: Bool) -> IO(Active & List<&2,Tui.RenderEffect>):
   do IO<Active & List<&2,Tui.RenderEffect>>:
-    changes : Preferences <- Ref.swap(Preferences,pending,emptyPreferences())
-    scheduledOperation(event,preferredActive(current,changes),handle,termux)
+    next : Active <- applyPendingPreferences(pending,current,handle)
+    scheduledOperation(event,next,handle,termux)
 def scheduled(listener: EventSink,event: Tui.RenderEvent) -> IO(List<&2,Tui.RenderEffect>):
   match listener:
     case EventSink{state,ready,_,termux,+preferences}:
@@ -513,12 +658,12 @@ def dispatchCells(+listener: EventSink,+data: String,cells: Maybe<&2,Bool>) -> I
     case Some{updated} _: cellsConsumed(listener,updated)
     case None{} EventSink{state,ready,_,termux,+preferences}:
       do IO<Unit>:
-        handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
+        +handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
         # A setting changed by the previous key must affect this key, even if
         # its coalesced frame has not run yet (for example hidden -> auto).
         Serial.run(Active,Unit,state,current => do IO<Active & Unit>:
-          changes : Preferences <- Ref.swap(Preferences,preferences,emptyPreferences())
-          inputOperation(preferredActive(current,changes),data,handle,termux))
+          next : Active <- applyPendingPreferences(preferences,current,handle)
+          inputOperation(next,data,handle,termux))
 def dispatchRemaining(+listener: EventSink,queries: Query.Handle,remaining: Maybe<&2,String>) -> IO(Unit):
   match remaining:
     case None{}: IO.pure(Unit,Unit{})
@@ -544,7 +689,7 @@ def clearMouse(current: Active) -> IO(Active & Unit):
   match current:
     case Active{Session{tui,Fullscreen{+screen}},components,mounted,error,owed,ticks}:
       do IO<Active & Unit>:
-        Mouse.dispose(Alt.mouse(screen))
+        disposeRendererMouse(Fullscreen{screen})
         return (Active{Session{tui,Fullscreen{Alt.withMouse(screen,Mouse.initial())}},components,mounted,error,owed,ticks},Unit{})
     case current: IO.pure(Active & Unit,(current,Unit{}))
 def disposeFocus(current: Active) -> IO(Unit):
@@ -792,14 +937,52 @@ def finalStop(printDocument: Bool,current: Active,width: Nat) -> IO(Active & Scr
   match printDocument:
     case True{}: beforeStop(current,width)
     case False{}: preserveScreen(current,width)
-def beforeSuspensionStop(handle: SuspensionHandle,output: Callback.Callback<Unit,Bool>,+current: Active,+width: Nat) -> IO(Active & Screen.Stream):
+def finalRendererStream(output: Screen.Stream,ending: Screen.Stream) -> Screen.Stream:
+  match output ending:
+    case Screen.Stream{operations,_} Screen.Stream{end,_}:
+      Screen.stream(Screen.Text{Alt.leave()} <> List.append(&2,Screen.Operation,operations,end))
+def finalRendererPlan(result: Result<&2,&2,Screen.RenderError,Screen.Plan>,current: Active,prepared: Tui.PreparedFrame) -> Active & Screen.Stream:
+  match result current:
+    case Done{Screen.Plan{+next,output,_}} Active{_,components,mounted,error,owed,ticks}:
+      (Active{Session{Tui.commitFrame(prepared),Main{next}},components,mounted,error,owed,ticks},finalRendererStream(output,Screen.beforeTerminalStop(next,False{})))
+    case Fail{cause} Active{session,components,mounted,_,owed,ticks}:
+      (Active{session,components,mounted,Some{InvalidFrame{cause}},owed,ticks},Screen.stream(Screen.Text{Alt.leave()} <> Nil{}))
+def finalRendererFrame(result: Tui.ResultOf(Tui.PreparedFrame),+current: Active,width: Nat,height: Nat) -> Active & Screen.Stream:
+  match result current:
+    case Done{+prepared} Active{Session{_,Main{state}},_,_,_,_,_}:
+      finalRendererPlan(planned(prepared,state,False{},width,height),current,prepared)
+    case Fail{cause} Active{session,components,mounted,_,owed,ticks}:
+      (Active{session,components,mounted,Some{Owner{cause}},owed,ticks},Screen.stream(Screen.Text{Alt.leave()} <> Nil{}))
+    case _ _: (current,Screen.stream(Nil{}))
+def finalRendererRestored(value: Maybe<&2,RendererSwitch>,old: Active,+width: Nat,+height: Nat) -> IO(Active & Screen.Stream):
+  match value:
+    case None{}: beforeStop(old,width)
+    case Some{RendererSwitch{Active{Session{+base,screen},components,mounted,error,owed,ticks},_,_,_}}:
+      do IO<Active & Screen.Stream>:
+        prepared : Tui.ResultOf(Tui.PreparedFrame) <- Tui.renderRoot(base,width,height)
+        return finalRendererFrame(prepared,Active{Session{base,screen},components,mounted,error,owed,ticks},width,height)
+def finalRendererViews(+views: RendererModes,+current: Active,+width: Nat,height: Nat) -> IO(Active & Screen.Stream):
+  match views:
+    case RendererModes{_,_,_,Some{_},_}:
+      do IO<Active & Screen.Stream>:
+        switched : Maybe<&2,RendererSwitch> <- switchRenderer(current,views,False{})
+        finalRendererRestored(switched,current,width,height)
+    case _: beforeStop(current,width)
+def finalRendererStop(+current: Active,renderer: Maybe<&2,Ref.Ref<RendererModes>>,+width: Nat) -> IO(Active & Screen.Stream):
+  match renderer current:
+    case Some{modes} Active{Session{_,Fullscreen{Alt.State{_,_,height,_,_,_,_,_,_}}},_,_,_,_,_}:
+      do IO<Active & Screen.Stream>:
+        views : RendererModes <- Ref.read(RendererModes,modes)
+        finalRendererViews(views,current,width,Maybe.default(&2,Nat,height,24n))
+    case _ _: beforeStop(current,width)
+def beforeSuspensionStop(handle: SuspensionHandle,output: Callback.Callback<Unit,Bool>,renderer: Maybe<&2,Ref.Ref<RendererModes>>,+current: Active,+width: Nat) -> IO(Active & Screen.Stream):
   do IO<Active & Screen.Stream>:
     suspending : Bool <- isSuspending(handle)
     Bool.pick(Unit -> IO(Active & Screen.Stream),suspending,
       _ => beforeStopWith(True{},current,width),
       _ => do IO<Active & Screen.Stream>:
         printDocument : Bool <- Callback.call(Unit,Bool,output,Unit{})
-        finalStop(printDocument,current,width))(Unit{})
+        Bool.pick(Unit -> IO(Active & Screen.Stream),printDocument,_ => finalRendererStop(current,renderer,width),_ => preserveScreen(current,width))(Unit{}))(Unit{})
 def beginSuspensionRun(handle: SuspensionHandle,stop: Deferred.Deferred<Unit>) -> IO(Unit):
   match handle:
     case SuspensionHandle{state}: Ref.write(SuspensionState,state,Running{stop,None{}})
@@ -857,21 +1040,24 @@ def afterSuspension(next: Active -> IO(Result<&2,&2,Terminal.Error,Active>),resu
       do IO<Result<&2,&2,Terminal.Error,Active>>:
         ended : Maybe<&2,Unit> <- Deferred.peek(Unit,stopped)
         resumeProcess(next,current,operation,ended)
-def observedSuspendable(next: Active -> IO(Result<&2,&2,Terminal.Error,Active>),observation: Deferred.Observation<Unit>,initial: Active,+stopped: Deferred.Deferred<Unit>,+suspension: SuspensionHandle,termux: Bool,ready: Callback.Callback<QueryReady,Unit>,stopping: Callback.Callback<Unit,Unit>,+output: Callback.Callback<Unit,Bool>,+local: Deferred.Deferred<Unit>) -> IO(Result<&2,&2,Terminal.Error,Active>):
+def observedSuspendable(next: Active -> IO(Result<&2,&2,Terminal.Error,Active>),observation: Deferred.Observation<Unit>,initial: Active,+stopped: Deferred.Deferred<Unit>,+suspension: SuspensionHandle,termux: Bool,ready: Callback.Callback<QueryReady,Unit>,stopping: Callback.Callback<Unit,Unit>,+output: Callback.Callback<Unit,Bool>,renderer: Maybe<&2,Ref.Ref<RendererModes>>,+local: Deferred.Deferred<Unit>) -> IO(Result<&2,&2,Terminal.Error,Active>):
   match observation:
     case Deferred.Observation{ticket,cancellation}:
       do IO<Result<&2,&2,Terminal.Error,Active>>:
         task : Chan(Unit) <- IO.fork(Unit,forwardStop(local,ticket))
         owner : Serial.Owner<Active> <- Serial.create(Active,initial)
-        result : Result<&2,&2,Terminal.Error,Active> <- runOwner(Serial.borrow(Active,owner),local,termux,Some{ready},Some{stopping},current => width => beforeSuspensionStop(suspension,output,current,width))
+        result : Result<&2,&2,Terminal.Error,Active> <- runOwner(Serial.borrow(Active,owner),local,termux,Some{ready},Some{stopping},current => width => beforeSuspensionStop(suspension,output,renderer,current,width))
         operation : Maybe<&2,Callback.Callback<Unit,Unit>> <- finishSuspensionRun(suspension)
         cancelled : Bool <- Deferred.cancel(Unit,cancellation)
         joined : Unit <- IO.join(Unit,task)
         Deferred.dispose(Unit,local)
         afterSuspension(next,result,stopped,operation)
-@unsafe def runSuspendable(initial: Active,+stopped: Deferred.Deferred<Unit>,+suspension: SuspensionHandle,+termux: Bool,ready: Callback.Callback<QueryReady,Unit>,+resumed: Callback.Callback<QueryReady,Unit>,+stopping: Callback.Callback<Unit,Unit>,+output: Callback.Callback<Unit,Bool>) -> IO(Result<&2,&2,Terminal.Error,Active>):
+@unsafe def runSuspendableWithRenderer(initial: Active,+stopped: Deferred.Deferred<Unit>,+suspension: SuspensionHandle,+termux: Bool,ready: Callback.Callback<QueryReady,Unit>,+resumed: Callback.Callback<QueryReady,Unit>,+stopping: Callback.Callback<Unit,Unit>,+output: Callback.Callback<Unit,Bool>,+renderer: Maybe<&2,Ref.Ref<RendererModes>>) -> IO(Result<&2,&2,Terminal.Error,Active>):
   do IO<Result<&2,&2,Terminal.Error,Active>>:
     +local : Deferred.Deferred<Unit> <- Deferred.new(Unit)
     beginSuspensionRun(suspension,local)
     observation : Deferred.Observation<Unit> <- Deferred.observe(Unit,stopped)
-    observedSuspendable(next => runSuspendable(next,stopped,suspension,termux,resumed,resumed,stopping,output),observation,initial,stopped,suspension,termux,ready,stopping,output,local)
+    observedSuspendable(next => runSuspendableWithRenderer(next,stopped,suspension,termux,resumed,resumed,stopping,output,renderer),observation,initial,stopped,suspension,termux,ready,stopping,output,renderer,local)
+
+def runSuspendable(initial: Active,stopped: Deferred.Deferred<Unit>,suspension: SuspensionHandle,termux: Bool,ready: Callback.Callback<QueryReady,Unit>,resumed: Callback.Callback<QueryReady,Unit>,stopping: Callback.Callback<Unit,Unit>,output: Callback.Callback<Unit,Bool>) -> IO(Result<&2,&2,Terminal.Error,Active>):
+  runSuspendableWithRenderer(initial,stopped,suspension,termux,ready,resumed,stopping,output,None{})

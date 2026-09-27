@@ -3165,3 +3165,23 @@ Codex: a4847f05 pushed/installed. Owns tui-alt-screen.bend for remaining transcr
 Codex: final document cursor cleanup implemented in tui-alt-screen; candidate CLI build session 28144 is confirmed live. Next compare transcript-exit text/colors/history and resume-hint/editor handoffs, then required one/four performance gates. Installed a4847f05 unchanged.
 
 Codex: exit cursor candidate matches completed-turn/configured/live exit-output text/colors/history/requests and editor handoffs on native one/four; untouched initial border remains the sole focused exit gap. Required five scenarios preserve installed captures/requests; existing large-history/startup, four-thread key bounds and flood speed gaps remain. Updating coverage and landing after proofs/freshness; installed a4847f05 unchanged until then.
+
+Codex: e1fc9f10 pushed/installed. Owns tui-process/settings-selector/run/viewport for live renderer mode switching: first implementing owned transition with regular snapshot restoration, focus ordering, mouse retirement and overlay rejection; settings wiring follows. No candidate installed or full build started.
+
+Codex: renderer transition fixture passes Bun/native one/four: regular snapshot, live layout retention, screen escape sequences, mounted registry, focus/invalidation order, no-op and hidden-overlay rejection. Runtime/settings wiring remains pending; installed e1fc9f10 unchanged, no build process live.
+
+Codex: settings TUI-mode row and ordered owner-side requests are wired, with acceptance-gated persistence/status and current-mode shutdown. Full candidate build 49694 is live after fixing callback signature; four round-trip parity scenarios added, validation/coverage update still pending. Installed e1fc9f10 unchanged.
+
+Codex: first mode candidate matches regular-start empty/answered round trips; fullscreen-start exit duplicates saved main-screen history, and CLI override leaves the row stale. Both paths revised (saved renderer diff on final exit, owner-side mode inspection); restored candidate build 48315 is live, latest core Bun fixture passes. Five-scenario one/four baseline gates and coverage refresh remain pending; installed e1fc9f10 unchanged.
+
+Codex: restored build 48315 stopped on a settings Host reconstruction binder; corrected it and replacement build 4170 is confirmed live. No candidate installed; current restored exit/active-mode inspection revisions await full terminal validation.
+
+Codex: all seven mode round-trip/one-way/CLI-override scenarios match source text/colors/history/settings/requests on native one/four. Combined resume-hint exit exposed an old-screen redraw before switching; queued preferences now apply before settled/resize draws as well. Latest core Bun fixture passes; ordered candidate build started, installed e1fc9f10 unchanged and performance/freshness gates pending.
+
+Codex: ordered candidate build 52600 is confirmed live. Next rerun resume-hint mode exit and the seven one/four mode scenarios, then compare all five required input/stream scenarios against unchanged e1fc9f10 before any install/commit.
+
+Codex: ordered mode candidate passes all eight source scenarios on native one/four and preserves all five baseline captures/requests; existing startup/history/flood gaps persist. Alternating 104-key samples each: native1 median 18.58/19.85 ms, native4 26.91/26.98; native1 tail needs care. Stored always-scrollbar switch failed; initialized/updated retained fullscreen scrollbar and added no-change preference fast path. New candidate build started; no install/commit.
+
+Codex: scrollbar/no-op candidate build 53898 is confirmed live. Next validate stored scrollbar mode scenarios (hidden after scroll), repeat eight mode/source cases and five baseline gates, then native owner/suspension checks, proofs and coverage freshness. Installed e1fc9f10 remains unchanged.
+
+Codex: live renderer switching passes ten source scenarios on native one/four, current renderer/preference fixtures, repeated editor handoffs, proofs and coverage freshness. Five required scenarios preserve baseline captures/requests; large-session and flood gaps remain, paired flood medians baseline/candidate 422.61/424.48 ms (one), 488.80/499.56 ms (four). Landing and installing the tested candidate; foreign zz-mdr untouched.
