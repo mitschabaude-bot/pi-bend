@@ -3616,9 +3616,15 @@
     },
     {
       "source": "packages/coding-agent/test/scoped-models-selector.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "9f5890511f8a0362d0a771517cb5f999768c2d71e3cc92a870a350fcd512b74b"
+      "status": "ported",
+      "ports": [
+        "tests/scoped-selector-input.bend",
+        "tests/scoped_selector_input_check.py",
+        "tests/scoped_selector_reference.mts",
+        "tests/scoped_selector_terminal_check.py"
+      ],
+      "sha256": "9f5890511f8a0362d0a771517cb5f999768c2d71e3cc92a870a350fcd512b74b",
+      "notes": "All four named tests run with three catalog models: enable all, disable only the selected model, enable only the selected model after clearing, and restore All after re-enabling the last disabled model. Native enabled-state membership, visible checkmarks and all-enabled footer assertions are explicit; complete callback-action, scope, selection and ANSI snapshots also match the pinned component on native one/four threads. Typed immutable Scope/Action values replace mutation of the test harness model objects. Additional traces cover editing, focus, search mouse placement, unavailable models, reordered catalogs and narrow/wide rendering; this suite status does not claim the separate refresh regression suites or full CLI API coverage."
     },
     {
       "source": "packages/coding-agent/test/scrollbar-theme.test.ts",

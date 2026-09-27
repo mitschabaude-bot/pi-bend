@@ -778,10 +778,10 @@
     },
     "packages/coding-agent/src/modes/interactive/components/scoped-models-selector.ts": {
       "state": "partial",
-      "note": "The native /scoped-models picker matches upstream selection, clear/enable/provider controls, save, close, and model cycling in terminal parity. Refresh cancellation, unavailable-pattern resolution, reorder/mouse interactions, and remaining ANSI/viewport details are not yet verified or matched.",
+      "note": "Native scoped configuration preserves All versus ordered Selected models, enable/clear/provider controls, unavailable entries, toggles, reorder/save/cancel and shared Input editing. Text rendering wraps and pads header, rows, details, status and footer as upstream. Search mouse placement follows the wrapped header; focus propagates to Input and the mounted host loads/caches word data when needed. Ctrl+C clears a nonempty query while retaining clamped selection; catalog reordering preserves the selected model identity. Pinned component comparisons cover four named upstream enabled-state/marker contracts plus editing, focus, pointer placement, refresh ordering and narrow/wide ANSI frames. Mounted fullscreen search editing, pointer placement, word deletion/yank, clear-search selection, persistence and close match pi on native one/four threads; existing selector and controls/cycling terminal scenarios match too. Background refresh cancellation, enabled-scope overrides on updateModels, unavailable-pattern resolution, resize-before-mouse Input viewport and remaining public callback coverage are incomplete.",
       "source_sha256": "a8524d7ccfaf6fd6044a268a06d43f6eee7325b047057c73bb43fa0b1286c612",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/scoped-models-selector.bend": "d344fc42dc581fb2f742a75485436f4c410213fe42279ac175e7967712d08902"
+        "packages/coding-agent/src/modes/interactive/components/scoped-models-selector.bend": "5bbb25cc339ce3606ab5634f35b33ed022830d6d40f1ad54a19aa708f8a919a4"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/session-selector.ts": {

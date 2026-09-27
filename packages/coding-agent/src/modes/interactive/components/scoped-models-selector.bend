@@ -4,6 +4,7 @@ import ../../../../../runtime/src/ref.bend as Ref
 import ../../../../../runtime/src/word-segmenter.bend as Segmenter
 import ../../../../../tui/src/component.bend as Component
 import ../../../../../tui/src/components/input.bend as Input
+import ../../../../../tui/src/components/text.bend as Text
 import ../../../../../tui/src/fuzzy.bend as Fuzzy
 import ../../../../../tui/src/keybindings.bend as Bindings
 import ../../../../../tui/src/keys.bend as Keys
@@ -123,19 +124,24 @@ def rebuild(+models: List<&2,Models.Model()>,+scope: Scope,+search: Input.Input,
   State{models,scope,visible,index,search,dirty,status}
 def create(models: List<&2,Models.Model()>,scope: Scope,status: String) -> State:
   rebuild(models,scope,Input.setFocused(Input.new(None{}),True{}),0n,False{},status)
-def updateModels(state: State,models: List<&2,Models.Model()>,status: String) -> State:
-  match state:
-    case State{_,scope,_,selected,search,dirty,_}: rebuild(models,scope,search,selected,dirty,status)
 def selectedItem(state: State) -> Maybe<&2,Item>:
   match state: case State{_,_,items,index,_,_,_}: List.get(&2,Item,items,index)
-def modelsOf(state: State) -> List<&2,Models.Model()>:
-  match state: case State{models,_,_,_,_,_,_}: models
-def scopeOf(state: State) -> Scope:
-  match state: case State{_,scope,_,_,_,_,_}: scope
 def itemIds(items: List<&2,Item>) -> List<&2,String>:
   match items:
     case Nil{}: Nil{}
     case Item{id,_,_} <> rest: id <> itemIds(rest)
+def itemId(item: Item) -> String: match item: case Item{id,_,_}: id
+def preserveSelection(state: State,id: Maybe<&2,String>) -> State:
+  match state id:
+    case State{models,scope,+items,+index,search,dirty,status} Some{id}: State{models,scope,items,Maybe.default(&2,Nat,position(itemIds(items),id,0n),index),search,dirty,status}
+    case state None{}: state
+def updateModels(state: State,models: List<&2,Models.Model()>,status: String) -> State:
+  match state:
+    case State{_,scope,+items,+selected,search,dirty,_}: preserveSelection(rebuild(models,scope,search,selected,dirty,status),Maybe.map(&2,Item,String,item => itemId(item),List.get(&2,Item,items,selected)))
+def modelsOf(state: State) -> List<&2,Models.Model()>:
+  match state: case State{models,_,_,_,_,_,_}: models
+def scopeOf(state: State) -> Scope:
+  match state: case State{_,scope,_,_,_,_,_}: scope
 def targetIds(state: State) -> List<&2,String>:
   match state:
     case State{models,_,items,_,search,_,_}:
@@ -217,7 +223,7 @@ def searchOf(state: State) -> Input.Input:
   match state: case State{_,_,_,_,search,_,_}: search
 def clearSearch(state: State) -> State:
   match state:
-    case State{models,scope,_,_,search,dirty,status}: rebuild(models,scope,Input.setValue(search,""),0n,dirty,status)
+    case State{models,scope,_,selected,search,dirty,status}: rebuild(models,scope,Input.setValue(search,""),selected,dirty,status)
 def cancelInput(+state: State,keyboard: Keys.Context,data: String) -> State & Action:
   +ctrlC = Keys.matchesKey(keyboard,data,Keys.ctrl(Keys.Printable{'c'}))
   +hasSearch = Bool.not(String.is_empty(Input.getValue(searchOf(state))))
@@ -279,7 +285,7 @@ def row(+item: Item,+selected: Bool,+theme: Theme.Theme,width: Nat) -> String:
   +mark = Bool.pick(String,enabledMark(item),paint(theme,"accent","✓ "),"  ")
   +name = label(item)
   +main = Bool.pick(String,selected,paint(theme,"accent",name),name)
-  Utils.truncateToWidth(prefix ++ mark ++ main ++ paint(theme,"muted",providerBadge(item)),width,"",False{})
+  prefix ++ mark ++ main ++ paint(theme,"muted",providerBadge(item))
 def rows(items: List<&2,Item>,skip: Nat,remaining: Nat,+index: Nat,+selected: Nat,+theme: Theme.Theme,+width: Nat) -> List<&2,String>:
   match items skip remaining:
     case _ _ Zero{}: Nil{}
@@ -317,32 +323,47 @@ def footer(scope: Scope,models: List<&2,Models.Model()>,+dirty: Bool,+bindings: 
     countText(scope,models)
   ]," · ")
   +hint = paint(theme,"dim","  " ++ parts ++ Bool.pick(String,dirty," ","")) ++ Bool.pick(String,dirty,paint(theme,"warning","(unsaved)"),"")
-  Utils.wrapTextWithAnsi(hint,width)
+  [hint]
 def body(+items: List<&2,Item>,+index: Nat,+theme: Theme.Theme,+width: Nat) -> List<&2,String>:
   +count = List.length(&2,Item,items)
   +start = Nat.min(index - 4n,count - Nat.min(count,8n))
   +visible = Bool.pick(List<&2,String>,Nat.is_eq(count,0n),paint(theme,"muted","  No matching models") <> Nil{},rows(items,start,8n,0n,index,theme,width))
   +scroll = Bool.pick(List<&2,String>,Nat.is_gt(start,0n) || Nat.is_gt(count,start + 8n),paint(theme,"muted","  (" ++ Nat.show(index + 1n) ++ "/" ++ Nat.show(count) ++ ")") <> Nil{},Nil{})
   List.append(&2,String,visible,List.append(&2,String,scroll,detail(List.get(&2,Item,items,index),theme)))
-def renderedState(state: State,+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,+width: Nat,search: Input.Input,searchLines: List<&2,String>) -> State & List<&2,String>:
+def textLines(pair: Text.Text & List<&2,String>) -> List<&2,String>:
+  match pair: case (_,lines): lines
+def wrapLines(lines: List<&2,String>,+width: Nat) -> IO(List<&2,String>):
+  match lines:
+    case Nil{}: IO.pure(List<&2,String>,Nil{})
+    case SNil{} <> rest:
+      do IO<List<&2,String>>:
+        following : List<&2,String> <- wrapLines(rest,width)
+        return "" <> following
+    case line <> rest:
+      do IO<List<&2,String>>:
+        first : Text.Text & List<&2,String> <- Text.render(Text.new(line,Some{0n},Some{0n},None{}),width)
+        following : List<&2,String> <- wrapLines(rest,width)
+        return List.append(&2,String,textLines(first),following)
+def heading(+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,+width: Nat) -> IO(List<&2,String>):
+  do IO<List<&2,String>>:
+    lines : List<&2,String> <- wrapLines([paint(theme,"accent",Theme.bold("Model Configuration")),paint(theme,"muted","Session-only. " ++ Hints.keyDisplayText(bindings,"app.models.save") ++ " to save to settings.")],width)
+    return List.concat(&2,String,[[paint(theme,"border",border(width)),""],lines,[""]])
+def renderedState(state: State,+theme: Theme.Theme,+bindings: Bindings.KeybindingsManager,+width: Nat,search: Input.Input,searchLines: List<&2,String>) -> IO(State & List<&2,String>):
   match state:
     case State{+models,+scope,+visible,+index,_,+dirty,+status}:
-      +lines = List.concat(&2,String,[
-        [paint(theme,"border",border(width)),"",paint(theme,"accent",Theme.bold("Model Configuration")),paint(theme,"muted","Session-only. " ++ Hints.keyDisplayText(bindings,"app.models.save") ++ " to save to settings."),""],
-        searchLines,[""],body(visible,index,theme,width),[""],
-        Bool.pick(List<&2,String>,String.is_empty(status),Nil{},paint(theme,statusColor(status),"  " ++ status) <> Nil{}),
-        footer(scope,models,dirty,bindings,theme,width),[paint(theme,"border",border(width))]
-      ])
-      (State{models,scope,visible,index,search,dirty,status},lines)
-def renderedPair(state: State,theme: Theme.Theme,bindings: Bindings.KeybindingsManager,width: Nat,pair: Input.Input & List<&2,String>) -> State & List<&2,String>:
-  match pair:
-    case (search,lines): renderedState(state,theme,bindings,width,search,lines)
+      do IO<State & List<&2,String>>:
+        header : List<&2,String> <- heading(theme,bindings,width)
+        bodyLines : List<&2,String> <- wrapLines(body(visible,index,theme,width),width)
+        tail : List<&2,String> <- wrapLines(List.append(&2,String,Bool.pick(List<&2,String>,String.is_empty(status),Nil{},paint(theme,statusColor(status),"  " ++ status) <> Nil{}),footer(scope,models,dirty,bindings,theme,width)),width)
+        return (State{models,scope,visible,index,search,dirty,status},List.concat(&2,String,[header,searchLines,[""],bodyLines,[""],tail,[paint(theme,"border",border(width))]]))
+def renderedPair(state: State,theme: Theme.Theme,bindings: Bindings.KeybindingsManager,width: Nat,pair: Input.Input & List<&2,String>) -> IO(State & List<&2,String>):
+  match pair: case (search,lines): renderedState(state,theme,bindings,width,search,lines)
 def render(+state: State,theme: Theme.Theme,bindings: Bindings.KeybindingsManager,+width: Nat) -> IO(State & List<&2,String>):
   match state:
     case State{_,_,_,_,+search,_,_}:
       do IO<State & List<&2,String>>:
         pair : Input.Input & List<&2,String> <- Input.render(search,width)
-        return renderedPair(state,theme,bindings,width,pair)
+        renderedPair(state,theme,bindings,width,pair)
 
 type Modal is Data: Closed{} Open{state: State}
 type Host is Data:
@@ -381,12 +402,21 @@ def accepted(modal: Ref.Ref<Modal>,notify: Callback.Callback<Action,Unit>,pair: 
       do IO<Unit>:
         Ref.write(Modal,modal,Open{state})
         Callback.call(Action,Unit,notify,Save{scope})
-def receiveCurrent(modal: Ref.Ref<Modal>,editor: Component.Component,words: Ref.Ref<Segmenter.Source>,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,notify: Callback.Callback<Action,Unit>,data: String,current: Modal) -> IO(Unit):
+def readyWords(command: Input.Command,source: Segmenter.Source,text: String) -> IO(Segmenter.Source):
+  match command:
+    case Input.WordLeft{}: Segmenter.readyFor(source,text)
+    case Input.WordRight{}: Segmenter.readyFor(source,text)
+    case Input.KillWordBackward{}: Segmenter.readyFor(source,text)
+    case Input.KillWordForward{}: Segmenter.readyFor(source,text)
+    case _: IO.pure(Segmenter.Source,source)
+def receiveCurrent(modal: Ref.Ref<Modal>,editor: Component.Component,+words: Ref.Ref<Segmenter.Source>,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,notify: Callback.Callback<Action,Unit>,+data: String,current: Modal) -> IO(Unit):
   match current:
     case Closed{}: Component.handleInput(editor,data)
-    case Open{state}:
+    case Open{+state}:
       do IO<Unit>:
-        source : Segmenter.Source <- Ref.read(Segmenter.Source,words)
+        previous : Segmenter.Source <- Ref.read(Segmenter.Source,words)
+        +source : Segmenter.Source <- readyWords(Input.command(Input.bindings(),bindings,keyboard,data),previous,Input.getValue(searchOf(state)))
+        Ref.write(Segmenter.Source,words,source)
         pair : State & Action <- input(state,source,bindings,keyboard,data)
         accepted(modal,notify,pair)
 def receive(host: Host,data: String) -> IO(Unit):
@@ -399,20 +429,50 @@ def editorMouse(editor: Component.Component,event: Tui.TuiMouseEvent) -> IO(Mayb
   match editor:
     case Component.Component{_,_,_,Some{callback},_,_,_}: Callback.call(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse>,callback,event)
     case _: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
-def mouseCurrent(editor: Component.Component,event: Tui.TuiMouseEvent,current: Modal) -> IO(Maybe<&2,Component.MouseResponse>):
+def mouseEdited(state: State,pair: Input.Input & Maybe<&2,Tui.TuiMouseEventResult>) -> State & Maybe<&2,Component.MouseResponse>:
+  match state pair:
+    case State{models,scope,visible,index,_,dirty,status} Tuple{search,result}:
+      (State{models,scope,visible,index,search,dirty,status},Maybe.map(&2,Tui.TuiMouseEventResult,Component.MouseResponse,value => Component.LocalResult{value},result))
+def mouseSearch(+state: State,row: Nat,event: Tui.TuiMouseEvent) -> State & Maybe<&2,Component.MouseResponse>:
+  match state event:
+    case State{_,_,_,_,search,_,_} Tui.TuiMouseEvent{kind,button,x,Tui.Forward{+y},sx,sy,width,height,shift,alt,ctrl,wheel,count}:
+      Bool.pick(State & Maybe<&2,Component.MouseResponse>,Nat.is_eq(y,row) && Nat.is_lt(y,height),mouseEdited(state,Input.handleMouse(search,Tui.TuiMouseEvent{kind,button,x,Tui.Forward{0n},sx,sy,width,1n,shift,alt,ctrl,wheel,count})),(state,None{}))
+    case state _: (state,None{})
+def mouseStored(modal: Ref.Ref<Modal>,pair: State & Maybe<&2,Component.MouseResponse>) -> IO(Maybe<&2,Component.MouseResponse>):
+  match pair:
+    case (state,result):
+      do IO<Maybe<&2,Component.MouseResponse>>:
+        Ref.write(Modal,modal,Open{state})
+        return result
+def eventWidth(event: Tui.TuiMouseEvent) -> Nat:
+  match event: case Tui.TuiMouseEvent{_,_,_,_,_,_,width,_,_,_,_,_,_}: width
+def mouseCurrent(editor: Component.Component,+event: Tui.TuiMouseEvent,current: Modal,modal: Ref.Ref<Modal>,theme: Ref.Ref<Theme.Theme>,bindings: Bindings.KeybindingsManager) -> IO(Maybe<&2,Component.MouseResponse>):
   match current:
     case Closed{}: editorMouse(editor,event)
-    case Open{_}: IO.pure(Maybe<&2,Component.MouseResponse>,None{})
+    case Open{state}:
+      do IO<Maybe<&2,Component.MouseResponse>>:
+        colors : Theme.Theme <- Ref.read(Theme.Theme,theme)
+        header : List<&2,String> <- heading(colors,bindings,eventWidth(event))
+        mouseStored(modal,mouseSearch(state,List.length(&2,String,header),event))
 def mouse(host: Host,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse>):
   match host:
-    case Host{+modal,editor,_,_,_,_,_}:
+    case Host{+modal,editor,theme,_,bindings,_,_}:
       do IO<Maybe<&2,Component.MouseResponse>>:
         current : Modal <- Ref.read(Modal,modal)
-        mouseCurrent(editor,event,current)
+        mouseCurrent(editor,event,current,modal,theme,bindings)
 def invalidate(host: Host,_: Unit) -> IO(Unit):
   match host: case Host{_,editor,_,_,_,_,_}: Component.invalidate(editor)
+def focusedModal(current: Modal,value: Bool) -> Modal & Unit:
+  match current:
+    case Open{State{models,scope,visible,index,search,dirty,status}}: (Open{State{models,scope,visible,index,Input.setFocused(search,value),dirty,status}},Unit{})
+    case Closed{}: (Closed{},Unit{})
 def focus(host: Host,value: Bool) -> IO(Unit):
-  match host: case Host{_,editor,_,_,_,_,_}: Component.setFocused(editor,value)
+  match host:
+    case Host{modal,editor,_,_,_,_,_}:
+      do IO<Unit>:
+        +focused : Bool = value
+        Component.setFocused(editor,focused)
+        Ref.modify(Modal,Unit,modal,current => focusedModal(current,focused))
 def createHost(+editor: Component.Component,theme: Ref.Ref<Theme.Theme>,words: Segmenter.Source,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,notify: Callback.Callback<Action,Unit>) -> IO(Owner):
   do IO<Owner>:
     modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
