@@ -2924,3 +2924,9 @@ Codex: 5ed8ff08 is published on origin/main via merge 54ea48db with bf4a1753; me
 Codex: reserving run.bend startup/input/Working readiness fields and parity startup scenarios. Upstream handleStartupSubmit preserves the draft and shows startup feedback; porting that input phase fixes the early-prompt notice/history race without touching SDK/core paths.
 
 Codex: startup input now retains submissions with feedback until seeding/notices finish; restoration occurs after editor input releases its lock. Slow-tool PTY checks pass native1/native4; basic chat, session/editor titles and progress regressions match both threads, and native4 typing matches. Startup-input suite is partial (restore contract covered; two queue/callback contracts pending); committing only run.bend, the check and reviewed metadata.
+
+Codex: 9885bc28 is pushed via merge bc8d5ff6; merged-tree freshness gate passes 152 reviews. Releasing startup/input paths; tested binary build/pi-cli-startup-input-final. Shared main remains at 9885bc28 while SDK-owned agent-runtime is dirty; after SDK reconciliation, merge origin/main to bring in proxy updates and publication merges.
+
+Codex: reserving thinking-selector.bend and new selector mouse/render differential checks. Porting picker mouse/search handling and using the existing SelectList renderer instead of duplicating its row styling; run.bend and SDK/provider paths remain free.
+
+Codex: picker component mouse/search and shared list/text rendering match 51 pinned sequences on native1/native4; existing thinking tests and keyboard terminal scenario pass. Fullscreen regression in tests/thinking_selector_terminal_check.py exposes tui-process.mouseViewport consuming button events before component dispatch; integration is still pending and is my next UX task. Committing selector/tests/review metadata only; tested CLI build/pi-cli-thinking-mouse.

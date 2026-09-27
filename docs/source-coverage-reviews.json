@@ -850,10 +850,10 @@
     },
     "packages/coding-agent/src/modes/interactive/components/thinking-selector.ts": {
       "state": "partial",
-      "note": "The interactive picker matches upstream terminal frames for search, selection and save-as-default; mouse input and the full navigation/cancellation contract remain unverified.",
+      "note": "Native picker uses the shared SelectList and Text components for upstream layout, wrapping and styles. Source-pinned differential checks cover keyboard navigation, confirmation/cancellation, default-description filtering, empty/no-match lists, mouse press/click selection, wheel movement and search-cursor handling across six widths on native one/four threads. Optional default levels are explicit. Focus propagation, resize-before-mouse dispatch and standalone public list access remain unverified. The keyboard terminal flow matches pi, but the fullscreen mouse integration regression remains failing: tui-process.mouseViewport consumes button events without dispatching to components.",
       "source_sha256": "a8e562022d04ef4266191ba35a0417fced547666be6e6e97329aa3918b512e18",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/components/thinking-selector.bend": "b2874a95ffd83ab8e7568c3a4613ac4c0e9b336a71229a6931dcc9e07cc55460"
+        "packages/coding-agent/src/modes/interactive/components/thinking-selector.bend": "edc010d69002f406b00083493be5dd69abe9ce0ded9f5b69c47edacc35b3cfff"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/tree-selector.ts": {
