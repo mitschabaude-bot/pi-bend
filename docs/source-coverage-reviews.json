@@ -1513,6 +1513,22 @@
       "ports": [
         "packages/tui/src/utils.bend"
       ]
+    },
+    "packages/coding-agent/examples/extensions/subagent/agents.ts": {
+      "state": "ported",
+      "note": "Native Bend module (JS/TS loading is excluded): user (<agentDir>/agents) and nearest project .pi/agents discovery, string/list tools frontmatter, model, markdown body, Map-by-name merge per scope, and formatAgentList. The agent directory is a parameter resolved once by the extension (upstream calls getAgentDir() here); invalid YAML fails discovery as upstream parseFrontmatter throws.",
+      "source_sha256": "cc85ecd33b89aa575bea3d2a9a9da7654a6305da4de02e5041aa5342a1de29b4",
+      "port_sha256": {
+        "packages/coding-agent/examples/extensions/subagent/agents.bend": "7c34a8aedbd32ef5b1d1e47d141a2a1a1a76a44d135db24d80dcf4102529ec27"
+      }
+    },
+    "packages/coding-agent/examples/extensions/subagent/index.ts": {
+      "state": "partial",
+      "note": "The subagent tool execute is ported: parameters and TypeBox schema, project-agent confirmation (scope, confirmProjectAgents, hasUI, isProjectTrusted), single/parallel (8 tasks, 4 workers)/chain modes, per-agent pi --mode json -p --no-session runs with model/thinking/tools/system-prompt file, message_end/tool_result_end parsing, usage, streaming updates and typed details (RawDetails JSON). The executable is /proc/self/exe (bun/node fall back to pi on PATH, as upstream without a script). Remaining: renderCall/renderResult and their formatting helpers (the native ToolDefinition has no renderers); abort sends SIGKILL at once (Child.spawn) where upstream sends SIGTERM then SIGKILL after 5 s; the prompt file skips the process-wide file mutation queue, which extensions cannot reach; {previous} is replaced literally.",
+      "source_sha256": "4facaa61c9c781748dd000eb5d2ec0a75289986d1a6e11ce13971ca5653dc252",
+      "port_sha256": {
+        "packages/coding-agent/examples/extensions/subagent/index.bend": "36a5d55be9813c8d9cc248be056c2b10b17d8ad6b31d8b78c9899be3d00b67dd"
+      }
     }
   }
 }

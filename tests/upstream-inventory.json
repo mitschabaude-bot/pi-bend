@@ -4644,10 +4644,15 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8261-subagent-project-trust.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "tests/subagent-project-trust.bend",
+        "tests/subagent_project_trust_check.py",
+        "packages/coding-agent/examples/extensions/subagent/index.bend",
+        "packages/coding-agent/examples/extensions/subagent/agents.bend"
+      ],
       "sha256": "21f699dfc91e240657599559db6203cd36360e5435fe1310cddbe5d3446ae3f6",
-      "notes": "Pending: needs the subagent example extension (examples/extensions/subagent, which spawns pi subprocesses for project agents) as a native extension."
+      "notes": "Both cases pass on Bun and native one/four threads with the exact test names: the native subagent example extension runs through a harness session (createHarness over the faux provider, inline extension, Builtins tools) with .pi/agents/project-agent.md, settings setProjectTrusted, a TUI UI context whose confirm counts calls and declines, and the scripted subagent call (agentScope project, missing cwd) then \"done\". Upstream mocks getAgentDir to /missing-user-agent-dir and parseFrontmatter; here the extension is created over that explicit agent directory (subagentExtensionWith) and the real frontmatter parser reads the same fields. In the trusted case the Bun lane stops at mkdtemp (JS process/temp-directory effects are ENOSYS by design) while native lanes spawn and fail on the missing cwd; both satisfy \"not Canceled:\". Native lanes additionally run single, inherited-model, failing, chain and parallel calls against the test binary acting as a fake `pi --mode json` (tests/subagent_project_trust_check.py native_checks)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8328-zero-usage-auto-compaction.test.ts",
