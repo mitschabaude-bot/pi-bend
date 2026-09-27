@@ -1254,7 +1254,7 @@ def refreshCurrentModel(env: ModelEnv, unit: Unit) -> IO(Unit):
 def disposeSessionActions(actions: Maybe<&2, ExtensionTypes.ExtensionActions>) -> IO(Unit):
   match actions:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{ExtensionTypes.ExtensionActions{send, sendUser, switcher, ExtensionTypes.ToolActions{active, all, set, refresh}}}:
+    case Some{ExtensionTypes.ExtensionActions{send, sendUser, switcher, ExtensionTypes.ToolActions{active, all, set, refresh}, appender}}:
       do IO<Unit>:
         C.dispose(ExtensionTypes.SendMessage, Unit, send)
         C.dispose(ExtensionTypes.SendUserMessage, Unit, sendUser)
@@ -1263,6 +1263,7 @@ def disposeSessionActions(actions: Maybe<&2, ExtensionTypes.ExtensionActions>) -
         C.dispose(Unit, List<&2, ExtensionTypes.ToolInfo>, all)
         C.dispose(List<&2, String>, Unit, set)
         C.dispose(Unit, Unit, refresh)
+        C.dispose(ExtensionTypes.AppendEntry, Unit, appender)
 
 def executorsOf(tools: ExtensionTools) -> List<&2, Tools.Execute()>:
   match tools:
@@ -4963,6 +4964,16 @@ def setModelAction(+session: AgentSession, +model: Ai.Model<Ai.JsonValue>) -> IO
 
 def setModelCallback(session: AgentSession, model: Ai.Model<Ai.JsonValue>) -> IO(Bool): setModelAction(session, model)
 
+# upstream bindCore's appendEntry: sessionManager.appendCustomEntry.
+def appendEntryAction(+session: AgentSession, request: ExtensionTypes.AppendEntry) -> IO(Unit):
+  match request:
+    case ExtensionTypes.AppendEntry{customType, data}:
+      do IO<Unit>:
+        outcome : Sessions.Outcome(Appended()) <- appendEntry(sharedOf(session), target => Sessions.appendCustomEntry(~Unit, ~Tools.ToolDetails, ~V.Value, ~unitValue, ~Tools.detailsValue, ~rawValue, target, customType, data))
+        return Unit{}
+
+def appendEntryCallback(session: AgentSession, request: ExtensionTypes.AppendEntry) -> IO(Unit): appendEntryAction(session, request)
+
 # The session's actions for its extension runtime (upstream bindCore).
 def bindSessionActions(+session: AgentSession) -> IO(Unit):
   do IO<Unit>:
@@ -4970,9 +4981,10 @@ def bindSessionActions(+session: AgentSession) -> IO(Unit):
     +sendUser : C.Callback<ExtensionTypes.SendUserMessage, Unit> <- C.create(~AgentSession, ~ExtensionTypes.SendUserMessage, ~Unit, ~sendUserMessageCallback, session)
     +switcher : C.Callback<Ai.Model<Ai.JsonValue>, Bool> <- C.create(~AgentSession, ~Ai.Model<Ai.JsonValue>, ~Bool, ~setModelCallback, session)
     +tools : ExtensionTypes.ToolActions <- createToolActions(session)
-    R.write(Maybe<&2, ExtensionTypes.ExtensionActions>, sessionActionsOf(session), Some{ExtensionTypes.ExtensionActions{send, sendUser, switcher, tools}})
+    +appender : C.Callback<ExtensionTypes.AppendEntry, Unit> <- C.create(~AgentSession, ~ExtensionTypes.AppendEntry, ~Unit, ~appendEntryCallback, session)
+    R.write(Maybe<&2, ExtensionTypes.ExtensionActions>, sessionActionsOf(session), Some{ExtensionTypes.ExtensionActions{send, sendUser, switcher, tools, appender}})
     loadout : Runtime.Loadout <- loadoutOf(session)
-    bindActionsTo(runnerIn(loadout), ExtensionTypes.ExtensionActions{send, sendUser, switcher, tools})
+    bindActionsTo(runnerIn(loadout), ExtensionTypes.ExtensionActions{send, sendUser, switcher, tools, appender})
 
 # upstream bindCore's getContextUsage, compact and getSystemPrompt.
 def contextUsageOf(result: Result<&2, &2, S.Error, Maybe<&2, Stats.ContextUsage>>) -> Maybe<&2, Ctx.ContextUsage>:

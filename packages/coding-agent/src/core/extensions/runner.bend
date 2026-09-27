@@ -82,13 +82,42 @@ def registeredIn(+path: String, definitions: List<&2, T.ToolDefinition>) -> List
 def registeredTools(extensions: List<&2, T.Extension>) -> List<&2, T.RegisteredTool>:
   match extensions:
     case Nil{}: Nil{}
-    case T.Extension{_, path, _, _, _, _, _, _, _, tools} <> rest: List.append(&2, T.RegisteredTool, registeredIn(path, tools), registeredTools(rest))
+    case T.Extension{_, path, _, _, _, _, _, _, _, tools, extras} <> rest: List.append(&2, T.RegisteredTool, registeredIn(path, tools), registeredTools(rest))
 
 # upstream getAllRegisteredTools: every loaded extension's tools, in load order.
 def getAllRegisteredTools(runner: ExtensionRunner) -> IO(List<&2, T.RegisteredTool>):
   do IO<List<&2, T.RegisteredTool>>:
     loaded : List<&2, T.Extension> <- extensions(runner)
     return registeredTools(loaded)
+
+# upstream getFlags: every loaded extension's flags; the first registration
+# of a name wins.
+def flagsOf(extensions: List<&2, T.Extension>) -> List<&2, T.ExtensionFlag>:
+  match extensions:
+    case Nil{}: Nil{}
+    case T.Extension{_, _, _, _, _, _, _, _, _, _, T.ExtensionExtras{flags, _, _}} <> rest: List.append(&2, T.ExtensionFlag, flags, flagsOf(rest))
+
+def firstFlags(flags: List<&2, T.ExtensionFlag>, +seen: List<&2, T.ExtensionFlag>) -> List<&2, T.ExtensionFlag>:
+  match flags:
+    case Nil{}: seen
+    case +flag <> rest: firstFlags(rest, Bool.pick(List<&2, T.ExtensionFlag>, Loader.hasFlag(seen, Loader.flagName(flag)), seen, List.append(&2, T.ExtensionFlag, seen, [flag])))
+
+def getFlags(runner: ExtensionRunner) -> IO(List<&2, T.ExtensionFlag>):
+  do IO<List<&2, T.ExtensionFlag>>:
+    loaded : List<&2, T.Extension> <- extensions(runner)
+    return firstFlags(flagsOf(loaded), Nil{})
+
+def settingSet(+name: String, value: T.FlagValue, +state: T.ExtensionRuntimeState) -> T.ExtensionRuntimeState & Unit:
+  (Loader.withFlagValues(state, Loader.setSetting(Loader.flagValuesOf(state), T.FlagSetting{name, value})), Unit{})
+
+# upstream setFlagValue and getFlagValues: the runtime's flag values.
+def setFlagValue(runner: ExtensionRunner, +name: String, value: T.FlagValue) -> IO(Unit):
+  R.modify(T.ExtensionRuntimeState, Unit, runtimeOf(runner), state => settingSet(name, value, state))
+
+def getFlagValues(runner: ExtensionRunner) -> IO(List<&2, T.FlagSetting>):
+  do IO<List<&2, T.FlagSetting>>:
+    state : T.ExtensionRuntimeState <- R.read(T.ExtensionRuntimeState, runtimeOf(runner))
+    return Loader.flagValuesOf(state)
 
 def pathsOf(extensions: List<&2, T.Extension>) -> List<&2, String>:
   match extensions:
@@ -208,7 +237,7 @@ def hasUI(runner: ExtensionRunner) -> IO(Bool): Ctx.hasUI(createContext(runner))
 def commandsOf(extensions: List<&2, T.Extension>) -> List<&2, T.RegisteredCommand>:
   match extensions:
     case Nil{}: Nil{}
-    case T.Extension{_, _, _, _, _, _, commands, _, _, _} <> rest: List.append(&2, T.RegisteredCommand, commands, commandsOf(rest))
+    case T.Extension{_, _, _, _, _, _, commands, _, _, _, _} <> rest: List.append(&2, T.RegisteredCommand, commands, commandsOf(rest))
 
 def counted(commands: List<&2, T.RegisteredCommand>, +counts: Rec.Record<Nat>) -> Rec.Record<Nat>:
   match commands:
@@ -302,7 +331,7 @@ def dispatchesOf(+path: String, handlers: List<&2, T.EventHandler>) -> List<&2, 
 def snapshotEventHandlers(extensions: List<&2, T.Extension>, +eventType: String) -> List<&2, Dispatch>:
   match extensions:
     case Nil{}: Nil{}
-    case T.Extension{_, path, _, _, _, handlers, _, _, _, _} <> rest: List.append(&2, Dispatch, dispatchesOf(path, subscribedTo(handlers, eventType)), snapshotEventHandlers(rest, eventType))
+    case T.Extension{_, path, _, _, _, handlers, _, _, _, _, _} <> rest: List.append(&2, Dispatch, dispatchesOf(path, subscribedTo(handlers, eventType)), snapshotEventHandlers(rest, eventType))
 
 def hasHandlers(runner: ExtensionRunner, eventType: String) -> IO(Bool):
   do IO<Bool>:
@@ -925,6 +954,36 @@ def emitInput(+runner: ExtensionRunner, +text: String, images: List<&2, Ai.Image
   do IO<T.InputEventResult>:
     dispatches : List<&2, Dispatch> <- snapshot(runner, "input")
     inputHandlers(runner, dispatches, source, behavior, Some{InputState{text, images, False{}}})
+
+def UserBashOutcome() -> Data: Result<&2, &2, String, Maybe<&2, T.UserBashEventResult>>
+
+# After one handler: None to ask the next, or the outcome.
+def userBashStep(+runner: ExtensionRunner, path: String, result: UserBashOutcome()) -> IO(Maybe<&2, UserBashOutcome()>):
+  match result:
+    case Done{None{}}: IO.pure(Maybe<&2, UserBashOutcome()>, None{})
+    case Done{Some{found}}: IO.pure(Maybe<&2, UserBashOutcome()>, Some{Done{Some{found}}})
+    case Fail{+error}:
+      do IO<Maybe<&2, UserBashOutcome()>>:
+        emitError(runner, T.ExtensionError{path, "user_bash", error, None{}})
+        return Some{Fail{error}}
+
+def userBashHandlers(+runner: ExtensionRunner, dispatches: List<&2, Dispatch>, +event: T.UserBashEvent, decided: Maybe<&2, UserBashOutcome()>) -> IO(UserBashOutcome()):
+  match decided dispatches:
+    case Some{outcome} _: IO.pure(UserBashOutcome(), outcome)
+    case None{} Nil{}: IO.pure(UserBashOutcome(), Done{None{}})
+    case None{} Dispatch{path, T.OnUserBash{callback}} <> rest:
+      do IO<UserBashOutcome()>:
+        result : UserBashOutcome() <- C.call(T.HandlerCall<T.UserBashEvent>, UserBashOutcome(), callback, T.HandlerCall{event, createContext(runner)})
+        next : Maybe<&2, UserBashOutcome()> <- userBashStep(runner, path, result)
+        userBashHandlers(runner, rest, event, next)
+    case None{} _ <> rest: userBashHandlers(runner, rest, event, None{})
+
+# upstream emitUserBash: the first handler that returns a result decides; a
+# failing handler is reported and fails the command (fail closed).
+def emitUserBash(+runner: ExtensionRunner, event: T.UserBashEvent) -> IO(UserBashOutcome()):
+  do IO<UserBashOutcome()>:
+    dispatches : List<&2, Dispatch> <- snapshot(runner, "user_bash")
+    userBashHandlers(runner, dispatches, event, None{})
 
 # upstream emitContext: context handlers first, then context_with_system
 # handlers on the restored transcript.

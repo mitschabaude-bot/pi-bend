@@ -18,6 +18,7 @@ import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/deferred.bend as Deferred
 import ../core/agent-session.bend as Session
 import ../core/bash-executor.bend as Bash
+import ../core/tools/bash.bend as BashTool
 import ../core/agent-runtime.bend as Runtime
 import ../core/model-runtime.bend as Models
 import ../core/settings-manager.bend as Settings
@@ -191,12 +192,34 @@ def bashReply(sink: Sink(),id: Maybe<&2,String>,result: Result<&2,&2,String,Bash
   match result:
     case Fail{reason}: output(sink,failure(id,"bash",reason))
     case Done{value}: output(sink,data(id,"bash",Types.bashResultValue(value)))
+# upstream "bash": user_bash handlers first; a handler's result is recorded
+# instead of running the command, its operations run it, and a failing
+# handler fails the request without running anything.
+def userBashOf(runner: Maybe<&2,ExtensionRunner.ExtensionRunner>,event: ExtensionTypes.UserBashEvent) -> IO(Result<&2,&2,String,Maybe<&2,ExtensionTypes.UserBashEventResult>>):
+  match runner:
+    case None{}: IO.pure(Result<&2,&2,String,Maybe<&2,ExtensionTypes.UserBashEventResult>>,Done{None{}})
+    case Some{found}: ExtensionRunner.emitUserBash(found,event)
+def bashExecuted(+session: Session.AgentSession,+sink: Sink(),+id: Maybe<&2,String>,+command: String,exclude: Maybe<&2,Bool>,operations: Maybe<&2,BashTool.BashOperations>) -> IO(Unit):
+  do IO<Unit>:
+    result : Result<&2,&2,String,Bash.BashResult> <- Session.executeBash(session,command,None{},Session.BashOptions{exclude,id,operations})
+    bashReply(sink,id,result)
+def bashDecided(+session: Session.AgentSession,+sink: Sink(),+id: Maybe<&2,String>,+command: String,+exclude: Maybe<&2,Bool>,outcome: Result<&2,&2,String,Maybe<&2,ExtensionTypes.UserBashEventResult>>) -> IO(Unit):
+  match outcome:
+    case Fail{reason}: output(sink,failure(id,"bash",reason))
+    case Done{Some{ExtensionTypes.UserBashResult{+result}}}:
+      do IO<Unit>:
+        Session.recordBashResult(session,command,result,exclude)
+        output(sink,data(id,"bash",Types.bashResultValue(result)))
+    case Done{Some{ExtensionTypes.UserBashOperations{operations}}}: bashExecuted(session,sink,id,command,exclude,Some{operations})
+    case Done{None{}}: bashExecuted(session,sink,id,command,exclude,None{})
 def runBash(handle: Command,request: BashRequest) -> IO(Unit):
   match handle request:
-    case Command{session,sink,_,_,_,_} BashRequest{+id,command,exclude}:
+    case Command{+session,sink,_,_,_,_} BashRequest{+id,+command,+exclude}:
       do IO<Unit>:
-        result : Result<&2,&2,String,Bash.BashResult> <- Session.executeBash(session,command,None{},Session.BashOptions{exclude,id,None{}})
-        bashReply(sink,id,result)
+        stored : Session.Session() <- Session.sessionOf(session)
+        runner : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(session)
+        outcome : Result<&2,&2,String,Maybe<&2,ExtensionTypes.UserBashEventResult>> <- userBashOf(runner,ExtensionTypes.UserBashEvent{command,Maybe.default(&2,Bool,exclude,False{}),Sessions.getCwd(Unit,Tools.ToolDetails,V.Value,stored)})
+        bashDecided(session,sink,id,command,exclude,outcome)
 def newStarted() -> IO(Started):
   do IO<Started>:
     signal : Chan(Bool) <- Chan.new(Bool,64)

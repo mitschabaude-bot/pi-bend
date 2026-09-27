@@ -15,6 +15,8 @@ import ../session-manager.bend as S
 import ../compaction/compaction.bend as Compaction
 import ../../../../runtime/src/abort.bend as Abort
 import ../system-prompt.bend as Prompt
+import ../tools/bash.bend as Bash
+import ../bash-executor.bend as BashExec
 
 # upstream core/extensions/types.ts: registrations, events and the loaded
 # extension state. Extensions are Bend code linked into the binary; their
@@ -232,6 +234,17 @@ type UserDelivery is Data:
   UserSteer{}
   UserFollowUp{}
 
+# upstream UserBashEvent (! and !! commands, RPC bash) and its result:
+# custom operations to run the command with, or the result that replaces
+# running it. A result is one or the other by construction, so upstream's
+# validation of handler results has no native counterpart.
+type UserBashEvent is Data:
+  UserBashEvent{command: String, excludeFromContext: Bool, cwd: String}
+
+type UserBashEventResult is Data:
+  UserBashOperations{operations: Bash.BashOperations}
+  UserBashResult{result: BashExec.BashResult}
+
 # upstream InputSource: where user input came from.
 type InputSource is Data:
   InteractiveSource{}
@@ -315,6 +328,7 @@ type EventHandler is Data:
   OnSessionBeforeSwitch{handler: ExtensionHandler(SessionBeforeSwitchEvent, SessionBeforeSwitchResult)}
   OnSessionBeforeFork{handler: ExtensionHandler(SessionBeforeForkEvent, SessionBeforeForkResult)}
   OnSessionShutdown{handler: ExtensionHandler(SessionShutdownEvent, Unit)}
+  OnUserBash{handler: ExtensionHandler(UserBashEvent, UserBashEventResult)}
 
 # Events dispatched without a result (upstream emit). Events with results
 # have their own emitters in the runner.
@@ -363,6 +377,7 @@ def handlerEventType(handler: EventHandler) -> String:
     case OnSessionBeforeSwitch{_}: "session_before_switch"
     case OnSessionBeforeFork{_}: "session_before_fork"
     case OnSessionShutdown{_}: "session_shutdown"
+    case OnUserBash{_}: "user_bash"
 
 def eventType(event: ExtensionEvent) -> String:
   match event:
@@ -420,8 +435,45 @@ type RegisteredTool is Data:
 type ToolInfo is Data:
   ToolInfo{name: String, description: String, parameters: V.Value}
 
+# upstream registerFlag's options and ExtensionFlag (`type` is a keyword in
+# Bend, so the field is flagType): a boolean or string
+# flag with an optional default of its type.
+type FlagType is Data:
+  BooleanFlag{}
+  StringFlag{}
+
+type FlagValue is Data:
+  FlagBoolean{value: Bool}
+  FlagString{value: String}
+
+type FlagSetting is Data:
+  FlagSetting{name: String, value: FlagValue}
+
+type FlagOptions is Data:
+  FlagOptions{description: Maybe<&2, String>, flagType: FlagType, default: Maybe<&2, FlagValue>}
+
+type ExtensionFlag is Data:
+  ExtensionFlag{name: String, extensionPath: String, description: Maybe<&2, String>, flagType: FlagType, default: Maybe<&2, FlagValue>}
+
+# upstream registerShortcut's options and ExtensionShortcut.
+def ShortcutHandler() -> Data: C.Callback<Ctx.ExtensionContext, Result<&2, &2, String, Unit>>
+
+type ShortcutOptions is Data:
+  ShortcutOptions{description: Maybe<&2, String>, handler: ShortcutHandler()}
+
+type ExtensionShortcut is Data:
+  ExtensionShortcut{shortcut: String, extensionPath: String, description: Maybe<&2, String>, handler: ShortcutHandler()}
+
+# An extension's flags and shortcuts; the flag defaults it registers while
+# loading wait in pendingFlagValues until it commits (upstream's loader
+# closure).
+type ExtensionExtras is Data:
+  ExtensionExtras{flags: List<&2, ExtensionFlag>, shortcuts: List<&2, ExtensionShortcut>, pendingFlagValues: List<&2, FlagSetting>}
+
+def noExtras() -> ExtensionExtras: ExtensionExtras{Nil{}, Nil{}, Nil{}}
+
 type Extension is Data:
-  Extension{id: Nat, path: String, resolvedPath: String, hidden: Bool, sourceInfo: Skills.SourceInfo, handlers: List<&2, Subscription>, commands: List<&2, RegisteredCommand>, state: LoadState, changes: List<&2, ProviderChange>, tools: List<&2, ToolDefinition>}
+  Extension{id: Nat, path: String, resolvedPath: String, hidden: Bool, sourceInfo: Skills.SourceInfo, handlers: List<&2, Subscription>, commands: List<&2, RegisteredCommand>, state: LoadState, changes: List<&2, ProviderChange>, tools: List<&2, ToolDefinition>, extras: ExtensionExtras}
 
 type PendingProvider is Data:
   PendingProvider{provider: AiModels.Provider, extensionPath: String}
@@ -463,14 +515,18 @@ type SendUserMessage is Data:
 type ToolActions is Data:
   ToolActions{getActiveTools: C.Callback<Unit, List<&2, String>>, getAllTools: C.Callback<Unit, List<&2, ToolInfo>>, setActiveTools: C.Callback<List<&2, String>, Unit>, refreshTools: C.Callback<Unit, Unit>}
 
+# upstream appendEntry(customType, data): a custom entry in the session.
+type AppendEntry is Data:
+  AppendEntry{customType: String, data: Maybe<&2, V.Value>}
+
 type ExtensionActions is Data:
-  ExtensionActions{sendMessage: C.Callback<SendMessage, Unit>, sendUserMessage: C.Callback<SendUserMessage, Unit>, setModel: C.Callback<Ai.Model<Ai.JsonValue>, Bool>, tools: ToolActions}
+  ExtensionActions{sendMessage: C.Callback<SendMessage, Unit>, sendUserMessage: C.Callback<SendUserMessage, Unit>, setModel: C.Callback<Ai.Model<Ai.JsonValue>, Bool>, tools: ToolActions, appendEntry: C.Callback<AppendEntry, Unit>}
 
 
 # `actions` are the session's, once bound; before that the action methods
 # fail (upstream's "not initialized" runtime).
 type ExtensionRuntimeState is Data:
-  ExtensionRuntimeState{extensions: List<&2, Extension>, pendingProviders: List<&2, PendingProvider>, providers: Maybe<&2, ProviderBinding>, nextId: Nat, actions: Maybe<&2, ExtensionActions>, cwd: Maybe<&2, String>}
+  ExtensionRuntimeState{extensions: List<&2, Extension>, pendingProviders: List<&2, PendingProvider>, providers: Maybe<&2, ProviderBinding>, nextId: Nat, actions: Maybe<&2, ExtensionActions>, cwd: Maybe<&2, String>, flagValues: List<&2, FlagSetting>}
 
 def ExtensionRuntime() -> Data: R.Ref<ExtensionRuntimeState>
 

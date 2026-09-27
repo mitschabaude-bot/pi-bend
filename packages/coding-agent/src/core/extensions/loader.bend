@@ -8,6 +8,7 @@ import ../skills.bend as Skills
 import ./types.bend as T
 import ../../../../runtime/src/child-process.bend as Child
 import ../../../../runtime/src/utf8.bend as Utf8
+import ../../../../runtime/src/schema-value.bend as V
 
 # The part of upstream core/extensions/loader.ts that remains without a
 # module loader: the shared extension runtime (createExtensionRuntime), the
@@ -17,7 +18,7 @@ import ../../../../runtime/src/utf8.bend as Utf8
 # transition of the runtime's immutable ExtensionRuntimeState.
 
 def createExtensionRuntime() -> IO(T.ExtensionRuntime()):
-  R.new(T.ExtensionRuntimeState, T.ExtensionRuntimeState{Nil{}, Nil{}, None{}, 0n, None{}, None{}})
+  R.new(T.ExtensionRuntimeState, T.ExtensionRuntimeState{Nil{}, Nil{}, None{}, 0n, None{}, None{}, Nil{}})
 
 def firstSegment(parts: List<&2, String>) -> String:
   match parts:
@@ -41,25 +42,25 @@ def inactiveMessage(path: String) -> String:
 
 def extensionId(extension: T.Extension) -> Nat:
   match extension:
-    case T.Extension{id, _, _, _, _, _, _, _, _, _}: id
+    case T.Extension{id, _, _, _, _, _, _, _, _, _, _}: id
 
 def extensionPath(extension: T.Extension) -> String:
   match extension:
-    case T.Extension{_, path, _, _, _, _, _, _, _, _}: path
+    case T.Extension{_, path, _, _, _, _, _, _, _, _, _}: path
 
 def isFailed(extension: T.Extension) -> Bool:
   match extension:
-    case T.Extension{_, _, _, _, _, _, _, T.Failed{}, _, _}: True{}
+    case T.Extension{_, _, _, _, _, _, _, T.Failed{}, _, _, _}: True{}
     case _: False{}
 
 def isLoading(extension: T.Extension) -> Bool:
   match extension:
-    case T.Extension{_, _, _, _, _, _, _, T.Loading{}, _, _}: True{}
+    case T.Extension{_, _, _, _, _, _, _, T.Loading{}, _, _, _}: True{}
     case _: False{}
 
 def isActive(extension: T.Extension) -> Bool:
   match extension:
-    case T.Extension{_, _, _, _, _, _, _, T.Active{}, _, _}: True{}
+    case T.Extension{_, _, _, _, _, _, _, T.Active{}, _, _, _}: True{}
     case _: False{}
 
 # upstream's extension list: extensions that loaded.
@@ -82,11 +83,11 @@ def replaceExtension(extensions: List<&2, T.Extension>, +extension: T.Extension)
 
 def extensionsOf(state: T.ExtensionRuntimeState) -> List<&2, T.Extension>:
   match state:
-    case T.ExtensionRuntimeState{extensions, _, _, _, actions, runtimeCwd}: extensions
+    case T.ExtensionRuntimeState{extensions, _, _, _, actions, runtimeCwd, flagValues}: extensions
 
 def withExtension(state: T.ExtensionRuntimeState, +extension: T.Extension) -> T.ExtensionRuntimeState:
   match state:
-    case T.ExtensionRuntimeState{extensions, pending, models, next, actions, runtimeCwd}: T.ExtensionRuntimeState{replaceExtension(extensions, extension), pending, models, next, actions, runtimeCwd}
+    case T.ExtensionRuntimeState{extensions, pending, models, next, actions, runtimeCwd, flagValues}: T.ExtensionRuntimeState{replaceExtension(extensions, extension), pending, models, next, actions, runtimeCwd, flagValues}
 
 def missingMessage(id: Nat) -> String: "Extension runtime has no extension " ++ Nat.show(id)
 
@@ -135,8 +136,8 @@ def setCommand(+commands: List<&2, T.RegisteredCommand>, +command: T.RegisteredC
 
 def withCommand(+name: String, options: T.CommandOptions, extension: T.Extension) -> T.Extension:
   match options extension:
-    case T.CommandOptions{description, completions, handler} T.Extension{id, path, resolved, hidden, +info, handlers, commands, state, changes, tools}:
-      T.Extension{id, path, resolved, hidden, info, handlers, setCommand(commands, T.RegisteredCommand{name, info, description, completions, handler}), state, changes, tools}
+    case T.CommandOptions{description, completions, handler} T.Extension{id, path, resolved, hidden, +info, handlers, commands, state, changes, tools, extras}:
+      T.Extension{id, path, resolved, hidden, info, handlers, setCommand(commands, T.RegisteredCommand{name, info, description, completions, handler}), state, changes, tools, extras}
 
 # upstream registerCommand(name, options): the command carries the
 # extension's source info.
@@ -154,13 +155,13 @@ def definedTool(tools: List<&2, T.ToolDefinition>, +definition: T.ToolDefinition
 
 def withTool(definition: T.ToolDefinition, extension: T.Extension) -> T.Extension:
   match extension:
-    case T.Extension{id, path, resolved, hidden, info, handlers, commands, state, changes, tools}:
-      T.Extension{id, path, resolved, hidden, info, handlers, commands, state, changes, definedTool(tools, definition)}
+    case T.Extension{id, path, resolved, hidden, info, handlers, commands, state, changes, tools, extras}:
+      T.Extension{id, path, resolved, hidden, info, handlers, commands, state, changes, definedTool(tools, definition), extras}
 
 def withSubscription(subscription: T.Subscription, extension: T.Extension) -> T.Extension:
   match extension:
-    case T.Extension{id, path, resolved, hidden, info, handlers, commands, state, changes, tools}:
-      T.Extension{id, path, resolved, hidden, info, List.append(&2, T.Subscription, handlers, [subscription]), commands, state, changes, tools}
+    case T.Extension{id, path, resolved, hidden, info, handlers, commands, state, changes, tools, extras}:
+      T.Extension{id, path, resolved, hidden, info, List.append(&2, T.Subscription, handlers, [subscription]), commands, state, changes, tools, extras}
 
 def subscriptionId(subscription: T.Subscription) -> Nat:
   match subscription:
@@ -175,8 +176,8 @@ def withoutSubscription(handlers: List<&2, T.Subscription>, +id: Nat) -> List<&2
 
 def unsubscribed(+id: Nat, extension: T.Extension) -> T.Extension:
   match extension:
-    case T.Extension{owner, path, resolved, hidden, info, handlers, commands, state, changes, tools}:
-      T.Extension{owner, path, resolved, hidden, info, withoutSubscription(handlers, id), commands, state, changes, tools}
+    case T.Extension{owner, path, resolved, hidden, info, handlers, commands, state, changes, tools, extras}:
+      T.Extension{owner, path, resolved, hidden, info, withoutSubscription(handlers, id), commands, state, changes, tools, extras}
 
 # What `on` returns: removing the handler it registered.
 type Unsubscribe is Data:
@@ -189,8 +190,8 @@ def subscribedResult(+next: Nat, pair: T.ExtensionRuntimeState & Result<&2, &2, 
 
 def subscribed(+id: Nat, handler: T.EventHandler, state: T.ExtensionRuntimeState) -> T.ExtensionRuntimeState & Result<&2, &2, String, Nat>:
   match state:
-    case T.ExtensionRuntimeState{extensions, pending, models, +next, actions, runtimeCwd}:
-      subscribedResult(next, updateExtension(id, extension => withSubscription(T.Subscription{next, handler}, extension), T.ExtensionRuntimeState{extensions, pending, models, Nat.add(next, 1n), actions, runtimeCwd}))
+    case T.ExtensionRuntimeState{extensions, pending, models, +next, actions, runtimeCwd, flagValues}:
+      subscribedResult(next, updateExtension(id, extension => withSubscription(T.Subscription{next, handler}, extension), T.ExtensionRuntimeState{extensions, pending, models, Nat.add(next, 1n), actions, runtimeCwd, flagValues}))
 
 def unsubscribeOf(+api: T.ExtensionAPI, result: Result<&2, &2, String, Nat>) -> Result<&2, &2, String, Unsubscribe>:
   match result:
@@ -219,8 +220,8 @@ def unsubscribe(value: Unsubscribe) -> IO(Unit):
 
 def withChange(change: T.ProviderChange, extension: T.Extension) -> T.Extension:
   match extension:
-    case T.Extension{id, path, resolved, hidden, info, handlers, commands, state, changes, tools}:
-      T.Extension{id, path, resolved, hidden, info, handlers, commands, state, List.append(&2, T.ProviderChange, changes, [change]), tools}
+    case T.Extension{id, path, resolved, hidden, info, handlers, commands, state, changes, tools, extras}:
+      T.Extension{id, path, resolved, hidden, info, handlers, commands, state, List.append(&2, T.ProviderChange, changes, [change]), tools, extras}
 
 def providerIdOf(provider: AiModels.Provider) -> String:
   match provider:
@@ -245,10 +246,10 @@ type Effect is Data:
 # an unregistration drops the queued ones (upstream createExtensionRuntime).
 def appliedChange(change: T.ProviderChange, +path: String, state: T.ExtensionRuntimeState) -> T.ExtensionRuntimeState & Effect:
   match change state:
-    case T.RegisterProvider{provider} T.ExtensionRuntimeState{extensions, pending, None{}, next, actions, runtimeCwd}: (T.ExtensionRuntimeState{extensions, List.append(&2, T.PendingProvider, pending, [T.PendingProvider{provider, path}]), None{}, next, actions, runtimeCwd}, NoEffect{})
-    case T.UnregisterProvider{name} T.ExtensionRuntimeState{extensions, pending, None{}, next, actions, runtimeCwd}: (T.ExtensionRuntimeState{extensions, withoutPending(pending, name), None{}, next, actions, runtimeCwd}, NoEffect{})
-    case T.RegisterProvider{provider} T.ExtensionRuntimeState{extensions, pending, Some{+binding}, next, actions, runtimeCwd}: (T.ExtensionRuntimeState{extensions, pending, Some{binding}, next, actions, runtimeCwd}, RegisterNow{binding, provider})
-    case T.UnregisterProvider{name} T.ExtensionRuntimeState{extensions, pending, Some{+binding}, next, actions, runtimeCwd}: (T.ExtensionRuntimeState{extensions, pending, Some{binding}, next, actions, runtimeCwd}, UnregisterNow{binding, name})
+    case T.RegisterProvider{provider} T.ExtensionRuntimeState{extensions, pending, None{}, next, actions, runtimeCwd, flagValues}: (T.ExtensionRuntimeState{extensions, List.append(&2, T.PendingProvider, pending, [T.PendingProvider{provider, path}]), None{}, next, actions, runtimeCwd, flagValues}, NoEffect{})
+    case T.UnregisterProvider{name} T.ExtensionRuntimeState{extensions, pending, None{}, next, actions, runtimeCwd, flagValues}: (T.ExtensionRuntimeState{extensions, withoutPending(pending, name), None{}, next, actions, runtimeCwd, flagValues}, NoEffect{})
+    case T.RegisterProvider{provider} T.ExtensionRuntimeState{extensions, pending, Some{+binding}, next, actions, runtimeCwd, flagValues}: (T.ExtensionRuntimeState{extensions, pending, Some{binding}, next, actions, runtimeCwd, flagValues}, RegisterNow{binding, provider})
+    case T.UnregisterProvider{name} T.ExtensionRuntimeState{extensions, pending, Some{+binding}, next, actions, runtimeCwd, flagValues}: (T.ExtensionRuntimeState{extensions, pending, Some{binding}, next, actions, runtimeCwd, flagValues}, UnregisterNow{binding, name})
 
 def notifyChanged(changed: Maybe<&2, C.Callback<Unit, Unit>>) -> IO(Unit):
   match changed:
@@ -313,12 +314,12 @@ def unregisterProvider(api: T.ExtensionAPI, name: String) -> IO(Result<&2, &2, S
 
 def added(+path: String, hidden: Bool, state: T.ExtensionRuntimeState) -> T.ExtensionRuntimeState & Nat:
   match state:
-    case T.ExtensionRuntimeState{extensions, pending, models, +next, actions, runtimeCwd}:
-      (T.ExtensionRuntimeState{List.append(&2, T.Extension, extensions, [T.Extension{next, path, path, hidden, createSourceInfo(path), Nil{}, Nil{}, T.Loading{}, Nil{}, Nil{}}]), pending, models, Nat.add(next, 1n), actions, runtimeCwd}, next)
+    case T.ExtensionRuntimeState{extensions, pending, models, +next, actions, runtimeCwd, flagValues}:
+      (T.ExtensionRuntimeState{List.append(&2, T.Extension, extensions, [T.Extension{next, path, path, hidden, createSourceInfo(path), Nil{}, Nil{}, T.Loading{}, Nil{}, Nil{}, T.noExtras()}]), pending, models, Nat.add(next, 1n), actions, runtimeCwd, flagValues}, next)
 
 def withState(extension: T.Extension, state: T.LoadState) -> T.Extension & List<&2, T.ProviderChange>:
   match extension:
-    case T.Extension{id, path, resolved, hidden, info, handlers, commands, _, changes, tools}: (T.Extension{id, path, resolved, hidden, info, handlers, commands, state, Nil{}, tools}, changes)
+    case T.Extension{id, path, resolved, hidden, info, handlers, commands, _, changes, tools, extras}: (T.Extension{id, path, resolved, hidden, info, handlers, commands, state, Nil{}, tools, extras}, changes)
 
 def storedSettled(state: T.ExtensionRuntimeState, pair: T.Extension & List<&2, T.ProviderChange>) -> T.ExtensionRuntimeState & List<&2, T.ProviderChange>:
   match pair:
@@ -331,6 +332,173 @@ def settledWith(+state: T.ExtensionRuntimeState, outcome: T.LoadState, found: Ma
 
 def settled(+id: Nat, outcome: T.LoadState, +state: T.ExtensionRuntimeState) -> T.ExtensionRuntimeState & List<&2, T.ProviderChange>:
   settledWith(state, outcome, findExtension(extensionsOf(state), id))
+
+# Flags (upstream registerFlag, getFlag and the commit of pending defaults)
+# ------------------------------------------------------------------------
+
+def flagName(flag: T.ExtensionFlag) -> String:
+  match flag:
+    case T.ExtensionFlag{name, _, _, _, _}: name
+
+def settingName(setting: T.FlagSetting) -> String:
+  match setting:
+    case T.FlagSetting{name, _}: name
+
+def hasFlag(flags: List<&2, T.ExtensionFlag>, +name: String) -> Bool:
+  match flags:
+    case Nil{}: False{}
+    case flag <> rest: String.eq(flagName(flag), name) || hasFlag(rest, name)
+
+# Map.set: a name registered again keeps its position.
+def replacedFlag(flags: List<&2, T.ExtensionFlag>, +flag: T.ExtensionFlag) -> List<&2, T.ExtensionFlag>:
+  match flags:
+    case Nil{}: Nil{}
+    case +current <> rest: Bool.pick(T.ExtensionFlag, String.eq(flagName(current), flagName(flag)), flag, current) <> replacedFlag(rest, flag)
+
+def setFlag(+flags: List<&2, T.ExtensionFlag>, +flag: T.ExtensionFlag) -> List<&2, T.ExtensionFlag>:
+  Bool.pick(List<&2, T.ExtensionFlag>, hasFlag(flags, flagName(flag)), replacedFlag(flags, flag), List.append(&2, T.ExtensionFlag, flags, [flag]))
+
+def settingValue(settings: List<&2, T.FlagSetting>, +name: String) -> Maybe<&2, T.FlagValue>:
+  match settings:
+    case Nil{}: None{}
+    case T.FlagSetting{key, value} <> rest: Bool.pick(Maybe<&2, T.FlagValue>, String.eq(key, name), Some{value}, settingValue(rest, name))
+
+def hasSetting(settings: List<&2, T.FlagSetting>, +name: String) -> Bool: Maybe.is_some(&2, T.FlagValue, settingValue(settings, name))
+
+def replacedSetting(settings: List<&2, T.FlagSetting>, +setting: T.FlagSetting) -> List<&2, T.FlagSetting>:
+  match settings:
+    case Nil{}: Nil{}
+    case +current <> rest: Bool.pick(T.FlagSetting, String.eq(settingName(current), settingName(setting)), setting, current) <> replacedSetting(rest, setting)
+
+# Map.set for flag values.
+def setSetting(+settings: List<&2, T.FlagSetting>, +setting: T.FlagSetting) -> List<&2, T.FlagSetting>:
+  Bool.pick(List<&2, T.FlagSetting>, hasSetting(settings, settingName(setting)), replacedSetting(settings, setting), List.append(&2, T.FlagSetting, settings, [setting]))
+
+# Only when the name has no value yet.
+def settingIfAbsent(+settings: List<&2, T.FlagSetting>, +setting: T.FlagSetting) -> List<&2, T.FlagSetting>:
+  Bool.pick(List<&2, T.FlagSetting>, hasSetting(settings, settingName(setting)), settings, List.append(&2, T.FlagSetting, settings, [setting]))
+
+def flagTypeName(kind: T.FlagType) -> String:
+  match kind:
+    case T.BooleanFlag{}: "boolean"
+    case T.StringFlag{}: "string"
+
+def valueTypeName(value: T.FlagValue) -> String:
+  match value:
+    case T.FlagBoolean{_}: "boolean"
+    case T.FlagString{_}: "string"
+
+# upstream's typeof check of a flag's default.
+def defaultMismatch(+name: String, options: T.FlagOptions) -> Maybe<&2, String>:
+  match options:
+    case T.FlagOptions{_, +kind, Some{+value}}:
+      Bool.pick(Maybe<&2, String>, String.eq(flagTypeName(kind), valueTypeName(value)), None{}, Some{"Invalid default for flag \"" ++ name ++ "\": expected " ++ flagTypeName(kind) ++ ", got " ++ valueTypeName(value)})
+    case _: None{}
+
+def extrasOf(extension: T.Extension) -> T.ExtensionExtras:
+  match extension:
+    case T.Extension{_, _, _, _, _, _, _, _, _, _, extras}: extras
+
+def withExtras(extension: T.Extension, +extras: T.ExtensionExtras) -> T.Extension:
+  match extension:
+    case T.Extension{id, path, resolved, hidden, info, handlers, commands, state, changes, tools, _}: T.Extension{id, path, resolved, hidden, info, handlers, commands, state, changes, tools, extras}
+
+def flagValuesOf(state: T.ExtensionRuntimeState) -> List<&2, T.FlagSetting>:
+  match state:
+    case T.ExtensionRuntimeState{_, _, _, _, _, _, flagValues}: flagValues
+
+def withFlagValues(state: T.ExtensionRuntimeState, +values: List<&2, T.FlagSetting>) -> T.ExtensionRuntimeState:
+  match state:
+    case T.ExtensionRuntimeState{extensions, pending, models, next, actions, runtimeCwd, _}: T.ExtensionRuntimeState{extensions, pending, models, next, actions, runtimeCwd, values}
+
+def extrasWithPending(extras: T.ExtensionExtras, +setting: T.FlagSetting) -> T.ExtensionExtras:
+  match extras:
+    case T.ExtensionExtras{flags, shortcuts, pending}: T.ExtensionExtras{flags, shortcuts, settingIfAbsent(pending, setting)}
+
+def pendingDefault(+extension: T.Extension, +setting: T.FlagSetting) -> T.Extension: withExtras(extension, extrasWithPending(extrasOf(extension), setting))
+
+# A default applies unless the name has a value: while the extension loads it
+# waits for the commit, otherwise it applies at once.
+def withDefault(+state: T.ExtensionRuntimeState, +extension: T.Extension, +name: String, value: Maybe<&2, T.FlagValue>) -> T.ExtensionRuntimeState:
+  match value:
+    case None{}: withExtension(state, extension)
+    case Some{+found}:
+      Bool.pick(T.ExtensionRuntimeState, hasSetting(flagValuesOf(state), name), withExtension(state, extension),
+        Bool.pick(T.ExtensionRuntimeState, isLoading(extension), withExtension(state, pendingDefault(extension, T.FlagSetting{name, found})), withFlagValues(withExtension(state, extension), setSetting(flagValuesOf(state), T.FlagSetting{name, found}))))
+
+def extrasWithFlag(extras: T.ExtensionExtras, +flag: T.ExtensionFlag) -> T.ExtensionExtras:
+  match extras:
+    case T.ExtensionExtras{flags, shortcuts, pending}: T.ExtensionExtras{setFlag(flags, flag), shortcuts, pending}
+
+def flaggedExtension(+extension: T.Extension, +flag: T.ExtensionFlag) -> T.Extension: withExtras(extension, extrasWithFlag(extrasOf(extension), flag))
+
+def flagAdded(+state: T.ExtensionRuntimeState, +name: String, options: T.FlagOptions, +extension: T.Extension) -> T.ExtensionRuntimeState & Result<&2, &2, String, Unit>:
+  match options:
+    case T.FlagOptions{description, kind, +value}:
+      (withDefault(state, flaggedExtension(extension, T.ExtensionFlag{name, extensionPath(extension), description, kind, value}), name, value), Done{Unit{}})
+
+def flagValidated(+state: T.ExtensionRuntimeState, +name: String, options: T.FlagOptions, +extension: T.Extension, mismatch: Maybe<&2, String>) -> T.ExtensionRuntimeState & Result<&2, &2, String, Unit>:
+  match mismatch:
+    case Some{error}: (state, Fail{error})
+    case None{}: flagAdded(state, name, options, extension)
+
+def flagChecked(+state: T.ExtensionRuntimeState, +name: String, +options: T.FlagOptions, found: Result<&2, &2, String, T.Extension>) -> T.ExtensionRuntimeState & Result<&2, &2, String, Unit>:
+  match found:
+    case Fail{error}: (state, Fail{error})
+    case Done{extension}: flagValidated(state, name, options, extension, defaultMismatch(name, options))
+
+def flagRegistered(+id: Nat, +name: String, options: T.FlagOptions, +state: T.ExtensionRuntimeState) -> T.ExtensionRuntimeState & Result<&2, &2, String, Unit>:
+  flagChecked(state, name, options, extensionIn(state, id))
+
+# upstream registerFlag(name, options): a default of the wrong type fails.
+def registerFlag(api: T.ExtensionAPI, +name: String, options: T.FlagOptions) -> IO(Result<&2, &2, String, Unit>):
+  match api:
+    case T.ExtensionAPI{runtime, +id}: R.modify(T.ExtensionRuntimeState, Result<&2, &2, String, Unit>, runtime, state => flagRegistered(id, name, options, state))
+
+def flagIn(state: T.ExtensionRuntimeState, +name: String, extras: T.ExtensionExtras) -> Maybe<&2, T.FlagValue>:
+  match extras:
+    case T.ExtensionExtras{flags, _, pending}:
+      Bool.pick(Maybe<&2, T.FlagValue>, hasFlag(flags, name), Maybe.or(&2, T.FlagValue, settingValue(flagValuesOf(state), name), settingValue(pending, name)), None{})
+
+def flagFrom(state: T.ExtensionRuntimeState, +name: String, found: Result<&2, &2, String, T.Extension>) -> Result<&2, &2, String, Maybe<&2, T.FlagValue>>:
+  match found:
+    case Fail{error}: Fail{error}
+    case Done{extension}: Done{flagIn(state, name, extrasOf(extension))}
+
+def flagOf(+id: Nat, +name: String, +state: T.ExtensionRuntimeState) -> Result<&2, &2, String, Maybe<&2, T.FlagValue>>: flagFrom(state, name, extensionIn(state, id))
+
+# upstream getFlag(name): None unless this extension registered the flag;
+# the runtime's value, else the default waiting for the commit.
+def getFlag(api: T.ExtensionAPI, +name: String) -> IO(Result<&2, &2, String, Maybe<&2, T.FlagValue>>):
+  match api:
+    case T.ExtensionAPI{runtime, +id}:
+      do IO<Result<&2, &2, String, Maybe<&2, T.FlagValue>>>:
+        state : T.ExtensionRuntimeState <- R.read(T.ExtensionRuntimeState, runtime)
+        return flagOf(id, name, state)
+
+def settingsCommitted(pending: List<&2, T.FlagSetting>, +values: List<&2, T.FlagSetting>) -> List<&2, T.FlagSetting>:
+  match pending:
+    case Nil{}: values
+    case setting <> rest: settingsCommitted(rest, settingIfAbsent(values, setting))
+
+def committedFlags(+state: T.ExtensionRuntimeState, pending: List<&2, T.FlagSetting>) -> T.ExtensionRuntimeState:
+  withFlagValues(state, settingsCommitted(pending, flagValuesOf(state)))
+
+def committedExtras(+state: T.ExtensionRuntimeState, +extension: T.Extension, extras: T.ExtensionExtras) -> T.ExtensionRuntimeState & Unit:
+  match extras:
+    case T.ExtensionExtras{flags, shortcuts, pending}: (committedFlags(withExtension(state, withExtras(extension, T.ExtensionExtras{flags, shortcuts, Nil{}})), pending), Unit{})
+
+def committedWith(+state: T.ExtensionRuntimeState, found: Maybe<&2, T.Extension>) -> T.ExtensionRuntimeState & Unit:
+  match found:
+    case None{}: (state, Unit{})
+    case Some{+extension}: committedExtras(state, extension, extrasOf(extension))
+
+# upstream commit: pending flag defaults apply where no value exists.
+def committedFor(+id: Nat, +state: T.ExtensionRuntimeState) -> T.ExtensionRuntimeState & Unit:
+  committedWith(state, findExtension(extensionsOf(state), id))
+
+def commitFlags(runtime: T.ExtensionRuntime(), +id: Nat) -> IO(Unit):
+  R.modify(T.ExtensionRuntimeState, Unit, runtime, state => committedFor(id, state))
 
 def applyChanges(+api: T.ExtensionAPI, changes: List<&2, T.ProviderChange>) -> IO(Result<&2, &2, String, Unit>):
   match changes:
@@ -351,6 +519,7 @@ def finishLoad(+api: T.ExtensionAPI, outcome: Result<&2, &2, String, Unit>) -> I
     case T.ExtensionAPI{runtime, +id} Done{_}:
       do IO<Result<&2, &2, String, Unit>>:
         changes : List<&2, T.ProviderChange> <- R.modify(T.ExtensionRuntimeState, List<&2, T.ProviderChange>, runtime, state => settled(id, T.Active{}, state))
+        commitFlags(runtime, id)
         applied : Result<&2, &2, String, Unit> <- applyChanges(T.ExtensionAPI{runtime, id}, changes)
         return Done{Unit{}}
 
@@ -394,7 +563,7 @@ def loadExtensionFactories(+runtime: T.ExtensionRuntime(), extensions: List<&1, 
 
 def taken(state: T.ExtensionRuntimeState, binding: T.ProviderBinding) -> T.ExtensionRuntimeState & List<&2, T.PendingProvider>:
   match state:
-    case T.ExtensionRuntimeState{extensions, pending, _, next, actions, runtimeCwd}: (T.ExtensionRuntimeState{extensions, Nil{}, Some{binding}, next, actions, runtimeCwd}, pending)
+    case T.ExtensionRuntimeState{extensions, pending, _, next, actions, runtimeCwd, flagValues}: (T.ExtensionRuntimeState{extensions, Nil{}, Some{binding}, next, actions, runtimeCwd, flagValues}, pending)
 
 def providerError(path: String, result: Result<&2, &2, String, Unit>, others: List<&2, T.ExtensionError>) -> List<&2, T.ExtensionError>:
   match result:
@@ -412,7 +581,7 @@ def registeredPending(+models: Models.ModelRuntime, pending: List<&2, T.PendingP
 
 def bindingOf(state: T.ExtensionRuntimeState) -> Maybe<&2, T.ProviderBinding>:
   match state:
-    case T.ExtensionRuntimeState{_, _, binding, _, actions, runtimeCwd}: binding
+    case T.ExtensionRuntimeState{_, _, binding, _, actions, runtimeCwd, flagValues}: binding
 
 def changedOf(binding: Maybe<&2, T.ProviderBinding>) -> Maybe<&2, C.Callback<Unit, Unit>>:
   match binding:
@@ -441,7 +610,7 @@ def notInitialized() -> String: "Extension runtime not initialized. Action metho
 
 def withActions(state: T.ExtensionRuntimeState, actions: Maybe<&2, T.ExtensionActions>) -> T.ExtensionRuntimeState & Unit:
   match state:
-    case T.ExtensionRuntimeState{extensions, pending, models, next, _, runtimeCwd}: (T.ExtensionRuntimeState{extensions, pending, models, next, actions, runtimeCwd}, Unit{})
+    case T.ExtensionRuntimeState{extensions, pending, models, next, _, runtimeCwd, flagValues}: (T.ExtensionRuntimeState{extensions, pending, models, next, actions, runtimeCwd, flagValues}, Unit{})
 
 # upstream bindCore's actions; None unbinds them before the session disposes
 # its callbacks.
@@ -450,7 +619,7 @@ def bindActions(runtime: T.ExtensionRuntime(), actions: Maybe<&2, T.ExtensionAct
 
 def actionsIn(state: T.ExtensionRuntimeState) -> Maybe<&2, T.ExtensionActions>:
   match state:
-    case T.ExtensionRuntimeState{_, _, _, _, actions, runtimeCwd}: actions
+    case T.ExtensionRuntimeState{_, _, _, _, actions, runtimeCwd, flagValues}: actions
 
 # The extension must be active and the actions bound.
 def checkedActions(found: Result<&2, &2, String, T.Extension>, actions: Maybe<&2, T.ExtensionActions>) -> Result<&2, &2, String, T.ExtensionActions>:
@@ -479,7 +648,7 @@ def withActionsOf(api: T.ExtensionAPI, act: T.ExtensionActions -> IO(Unit)) -> I
 
 def sendWith(actions: T.ExtensionActions, request: T.SendMessage) -> IO(Unit):
   match actions:
-    case T.ExtensionActions{send, _, _, _}: C.call(T.SendMessage, Unit, send, request)
+    case T.ExtensionActions{send, _, _, _, _}: C.call(T.SendMessage, Unit, send, request)
 
 # upstream pi.sendMessage(message, options).
 def sendMessage(api: T.ExtensionAPI, message: T.CustomMessageInput, options: T.SendMessageOptions) -> IO(Result<&2, &2, String, Unit>):
@@ -487,7 +656,7 @@ def sendMessage(api: T.ExtensionAPI, message: T.CustomMessageInput, options: T.S
 
 def sendUserWith(actions: T.ExtensionActions, request: T.SendUserMessage) -> IO(Unit):
   match actions:
-    case T.ExtensionActions{_, send, _, _}: C.call(T.SendUserMessage, Unit, send, request)
+    case T.ExtensionActions{_, send, _, _, _}: C.call(T.SendUserMessage, Unit, send, request)
 
 # upstream pi.sendUserMessage(content, options).
 def sendUserMessage(api: T.ExtensionAPI, content: Ai.UserContent, options: T.SendUserMessageOptions) -> IO(Result<&2, &2, String, Unit>):
@@ -496,7 +665,7 @@ def sendUserMessage(api: T.ExtensionAPI, content: Ai.UserContent, options: T.Sen
 def modelSetWith(found: Result<&2, &2, String, T.ExtensionActions>, model: Ai.Model<Ai.JsonValue>) -> IO(Result<&2, &2, String, Bool>):
   match found:
     case Fail{error}: IO.pure(Result<&2, &2, String, Bool>, Fail{error})
-    case Done{T.ExtensionActions{_, _, setter, _}}:
+    case Done{T.ExtensionActions{_, _, setter, _, _}}:
       do IO<Result<&2, &2, String, Bool>>:
         changed : Bool <- C.call(Ai.Model<Ai.JsonValue>, Bool, setter, model)
         return Done{changed}
@@ -513,7 +682,7 @@ def setModel(api: T.ExtensionAPI, model: Ai.Model<Ai.JsonValue>) -> IO(Result<&2
 def toolActionsWith(-A: Data, found: Result<&2, &2, String, T.ExtensionActions>, act: T.ToolActions -> IO(A)) -> IO(Result<&2, &2, String, A>):
   match found:
     case Fail{error}: IO.pure(Result<&2, &2, String, A>, Fail{error})
-    case Done{T.ExtensionActions{_, _, _, tools}}:
+    case Done{T.ExtensionActions{_, _, _, tools, _}}:
       do IO<Result<&2, &2, String, A>>:
         value : A <- act(tools)
         return Done{value}
@@ -550,7 +719,7 @@ def setActiveTools(api: T.ExtensionAPI, names: List<&2, String>) -> IO(Result<&2
 def refreshWith(actions: Maybe<&2, T.ExtensionActions>) -> IO(Unit):
   match actions:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{T.ExtensionActions{_, _, _, T.ToolActions{_, _, _, refresh}}}: C.call(Unit, Unit, refresh, Unit{})
+    case Some{T.ExtensionActions{_, _, _, T.ToolActions{_, _, _, refresh}, _}}: C.call(Unit, Unit, refresh, Unit{})
 
 def refreshBound(runtime: T.ExtensionRuntime()) -> IO(Unit):
   do IO<Unit>:
@@ -572,14 +741,14 @@ def registerTool(api: T.ExtensionAPI, definition: T.ToolDefinition) -> IO(Result
 # runner is created for a session.
 def withCwd(+cwd: String, state: T.ExtensionRuntimeState) -> T.ExtensionRuntimeState & Unit:
   match state:
-    case T.ExtensionRuntimeState{extensions, pending, models, next, actions, _}: (T.ExtensionRuntimeState{extensions, pending, models, next, actions, Some{cwd}}, Unit{})
+    case T.ExtensionRuntimeState{extensions, pending, models, next, actions, _, flagValues}: (T.ExtensionRuntimeState{extensions, pending, models, next, actions, Some{cwd}, flagValues}, Unit{})
 
 def setCwd(runtime: T.ExtensionRuntime(), +cwd: String) -> IO(Unit):
   R.modify(T.ExtensionRuntimeState, Unit, runtime, state => withCwd(cwd, state))
 
 def cwdOf(state: T.ExtensionRuntimeState) -> String:
   match state:
-    case T.ExtensionRuntimeState{_, _, _, _, _, runtimeCwd}: Maybe.default(&2, String, runtimeCwd, ".")
+    case T.ExtensionRuntimeState{_, _, _, _, _, runtimeCwd, flagValues}: Maybe.default(&2, String, runtimeCwd, ".")
 
 # upstream ExecOptions: the directory (its timeout and abort signal are not
 # ported yet).
@@ -613,3 +782,43 @@ def exec(api: T.ExtensionAPI, +command: String, args: List<String>, options: Exe
       do IO<ExecResult>:
         state : T.ExtensionRuntimeState <- R.read(T.ExtensionRuntimeState, runtime)
         execIn(command, args, Maybe.default(&2, String, cwd, cwdOf(state)))
+
+# Shortcuts and custom entries (upstream registerShortcut, appendEntry)
+# ---------------------------------------------------------------------
+
+def shortcutKey(shortcut: T.ExtensionShortcut) -> String:
+  match shortcut:
+    case T.ExtensionShortcut{key, _, _, _}: key
+
+def hasShortcut(shortcuts: List<&2, T.ExtensionShortcut>, +key: String) -> Bool:
+  match shortcuts:
+    case Nil{}: False{}
+    case shortcut <> rest: String.eq(shortcutKey(shortcut), key) || hasShortcut(rest, key)
+
+def replacedShortcut(shortcuts: List<&2, T.ExtensionShortcut>, +shortcut: T.ExtensionShortcut) -> List<&2, T.ExtensionShortcut>:
+  match shortcuts:
+    case Nil{}: Nil{}
+    case +current <> rest: Bool.pick(T.ExtensionShortcut, String.eq(shortcutKey(current), shortcutKey(shortcut)), shortcut, current) <> replacedShortcut(rest, shortcut)
+
+def setShortcut(+shortcuts: List<&2, T.ExtensionShortcut>, +shortcut: T.ExtensionShortcut) -> List<&2, T.ExtensionShortcut>:
+  Bool.pick(List<&2, T.ExtensionShortcut>, hasShortcut(shortcuts, shortcutKey(shortcut)), replacedShortcut(shortcuts, shortcut), List.append(&2, T.ExtensionShortcut, shortcuts, [shortcut]))
+
+def extrasWithShortcut(extras: T.ExtensionExtras, +shortcut: T.ExtensionShortcut) -> T.ExtensionExtras:
+  match extras:
+    case T.ExtensionExtras{flags, shortcuts, pending}: T.ExtensionExtras{flags, setShortcut(shortcuts, shortcut), pending}
+
+def withShortcut(+key: String, options: T.ShortcutOptions, +extension: T.Extension) -> T.Extension:
+  match options:
+    case T.ShortcutOptions{description, handler}: withExtras(extension, extrasWithShortcut(extrasOf(extension), T.ExtensionShortcut{key, extensionPath(extension), description, handler}))
+
+# upstream registerShortcut(shortcut, options).
+def registerShortcut(api: T.ExtensionAPI, key: String, options: T.ShortcutOptions) -> IO(Result<&2, &2, String, Unit>):
+  modifyExtension(api, extension => withShortcut(key, options, extension))
+
+def appendWith(actions: T.ExtensionActions, request: T.AppendEntry) -> IO(Unit):
+  match actions:
+    case T.ExtensionActions{_, _, _, _, append}: C.call(T.AppendEntry, Unit, append, request)
+
+# upstream appendEntry(customType, data): a custom entry in the session.
+def appendEntry(api: T.ExtensionAPI, customType: String, data: Maybe<&2, V.Value>) -> IO(Result<&2, &2, String, Unit>):
+  withActionsOf(api, actions => appendWith(actions, T.AppendEntry{customType, data}))

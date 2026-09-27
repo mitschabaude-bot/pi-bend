@@ -758,10 +758,13 @@
     },
     {
       "source": "packages/ai/test/assistant-message-frame.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/assistant-message-frame.bend",
+        "tests/ai-misc-suites.bend"
+      ],
       "sha256": "e3e456ac790012b47fada4f63de70f82de7ea1c89e3b85338701d327c8e381e5",
-      "notes": "utils/assistant-message-frame.ts (AssistantMessageFrameEncoder, reduceAssistantMessageFrames) is exported by pi-ai's index but used in pi-mono only by the out-of-scope experimental harness; not ported yet. It is public API, so the port is next rather than an exclusion."
+      "notes": "All 20 tests in tests/ai-misc-suites.bend (Bun, native1, native4). Adaptations: upstream mutates one live partial between events; here each event carries the partial as it is when encoded (events built first and encoded later all carry the final partial). Values are compared through their JSON; thrown errors are the Fail messages of encode/reduce, matched by substring as toThrow does. Typed blocks cannot carry provider scratch fields and values are immutable, so the whitelist and snapshot tests check the values the frames and reduction carry. The OpenAI Responses round trip runs the native processResponsesStream."
     },
     {
       "source": "packages/ai/test/azure-openai-base-url.test.ts",
@@ -2939,9 +2942,10 @@
     },
     {
       "source": "packages/coding-agent/test/extensions-discovery.test.ts",
-      "status": "pending",
+      "status": "excluded",
       "ports": [],
-      "sha256": "4a29f3acb8737d70515afede622cf3505df206dec4ab58c1e863b77975aee4ed"
+      "sha256": "4a29f3acb8737d70515afede622cf3505df206dec4ab58c1e863b77975aee4ed",
+      "notes": "Excluded: discovers and loads .ts/.js extension files (jiti, package.json pi fields, node_modules resolution); JS/TS extension loading is out of scope (docs/scope-decisions.md). The API contracts its cases exercise (commands, tools, handlers, shortcuts, flags, load errors) are covered on inline native extensions in tests/extensions-runner.bend."
     },
     {
       "source": "packages/coding-agent/test/extensions-input-event.test.ts",
@@ -2962,7 +2966,7 @@
       ],
       "sha256": "f6ce2f169d04c748e3587ca42c797ed3acf71152903b45b6340c1208845c7dbb",
       "implementation": "packages/coding-agent/src/core/extensions/runner.bend",
-      "notes": "Ported with upstream names on the Bun lane (25 checks): command collection (all three cases), context creation (all five), scopedModels, provider registration 'pre-bind unregister removes all queued registrations for a provider' and 'post-bind register and unregister take effect immediately', command context, event subscriptions (all five), hasHandlers and 'calls error listeners when handler throws'. Adaptations: extensions are inline factories instead of discovered files; provider cases register native Provider values because config-form registerProvider(name, config) is not ported; the event cases use agent_end, the one event dispatched so far (hasHandlers swaps the roles of tool_call and agent_end; the error-listener case throws from agent_end instead of context); duplicate registrations of one function are one callback registered twice. Native cases add invocation-name skipping, discarding a failed factory, queued providers joining the model runtime, a rejected queued provider as an extension error, RPC get_commands entries and autocomplete built-in conflicts. Pending: project_trust, shortcut conflicts, tool collection, user_bash, renderers, flags, before_agent_start, boundary chaining, tool_result chaining, before_provider_headers and 'bindCore ignores invalid queued registrations' (config validation). Native lane not run."
+      "notes": "Ported with upstream names (31 checks): command collection (all three cases), context creation (all five), scopedModels, provider registration 'pre-bind unregister removes all queued registrations for a provider' and 'post-bind register and unregister take effect immediately', command context, event subscriptions (all five), hasHandlers, 'calls error listeners when handler throws', flags (all four; the first and last upstream cases register options without a type, which the native FlagOptions requires) and user_bash 'fails closed when a user_bash handler throws' and 'accepts valid user_bash operations and result overrides' (the six malformed-result cases have no native counterpart: results are typed). Adaptations: extensions are inline factories instead of discovered files; provider cases register native Provider values because config-form registerProvider(name, config) is not ported; the event cases use agent_end, the one event dispatched so far (hasHandlers swaps the roles of tool_call and agent_end; the error-listener case throws from agent_end instead of context); duplicate registrations of one function are one callback registered twice. Native cases add invocation-name skipping, discarding a failed factory, queued providers joining the model runtime, a rejected queued provider as an extension error, RPC get_commands entries and autocomplete built-in conflicts. Pending: project_trust, shortcut conflicts, tool collection, renderers, before_agent_start, boundary chaining, tool_result chaining, before_provider_headers and 'bindCore ignores invalid queued registrations' (config validation). Bun and native lanes."
     },
     {
       "source": "packages/coding-agent/test/external-editor.test.ts",
@@ -3602,19 +3606,22 @@
       "source": "packages/coding-agent/test/sdk-openrouter-attribution.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "65dc25f0e70bf89f5b7d4e4d0ae9bcc6312644e1a38d30443ffc708d827ddeb5"
+      "sha256": "65dc25f0e70bf89f5b7d4e4d0ae9bcc6312644e1a38d30443ffc708d827ddeb5",
+      "notes": "Pending: provider-attribution.ts (OpenRouter/NVIDIA/Cloudflare defaults, OpenCode session headers, precedence of provider and request headers) is not ported. Per docs/scope-decisions.md native attribution names pi-bend and is off by default, so the default-on cases need adapted expectations."
     },
     {
       "source": "packages/coding-agent/test/sdk-session-manager.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "bd7eecb00b533e04d0b9fd9836f7b9bc227323595779a75745529d80a79cee4e"
+      "sha256": "bd7eecb00b533e04d0b9fd9836f7b9bc227323595779a75745529d80a79cee4e",
+      "notes": "Pending: createAgentSession defaults (agentDir session path, explicit sessionManager, cwd derived from it, PI_* bash environment) have no single native SDK entry; the native equivalents are agent-runtime.bend create options and bash.bend environment variables, not yet checked against this suite."
     },
     {
       "source": "packages/coding-agent/test/sdk-skills.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "fdba99833bf6dd8346c3acdc7c77e156fab5ff451c3cc2b7a93295de60ac2307"
+      "sha256": "fdba99833bf6dd8346c3acdc7c77e156fab5ff451c3cc2b7a93295de60ac2307",
+      "notes": "Pending: the ResourceLoader interface (getSkills and the other getters, injectable into createAgentSession) is not ported; native sessions receive skills through Runtime.Loadout."
     },
     {
       "source": "packages/coding-agent/test/sdk-stream-options.test.ts",
@@ -4105,7 +4112,8 @@
       "source": "packages/coding-agent/test/suite/regressions/2860-replaced-session-context.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "7c5bd69d6bb018d7d8c064d78554e437fb42fe3fd81465a5867a9c6345ff6d97"
+      "sha256": "7c5bd69d6bb018d7d8c064d78554e437fb42fe3fd81465a5867a9c6345ff6d97",
+      "notes": "Pending: withSession continuations and ReplacedSessionContext. Carrying a Callback<ReplacedSessionContext> in NewSessionRequest/ForkRequest/SwitchSessionRequest would make ExtensionContext, Bindings, the command actions and the requests mutually recursive, which Bend datatypes cannot be (docs/bend-issues.md, restrictions); stale pi/ctx invalidation is not ported either. Awaiting a design decision (one recursive type, or a host-level continuation)."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/3217-scoped-model-order.test.ts",
@@ -4418,7 +4426,8 @@
       "source": "packages/coding-agent/test/suite/regressions/6768-copilot-compaction-base-url.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "8a8c424bb9bea4328dd7dcb6e65cfd5da229ecaef8957122a4bb29fe891bbc5b"
+      "sha256": "8a8c424bb9bea4328dd7dcb6e65cfd5da229ecaef8957122a4bb29fe891bbc5b",
+      "notes": "Pending: needs a test provider registered at runtime with OAuth toAuth returning a baseUrl, and the session stream routed through ModelRuntime.streamSimple so compaction requests use the auth-resolved base URL."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/6904-dns-transport-retry.test.ts",
@@ -4543,7 +4552,8 @@
       "source": "packages/coding-agent/test/suite/regressions/7301-stalled-availability-refresh.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "5f505f4177e4da8e14a5796cce26f53fc7db727a3461a963674384bc82aa2b70"
+      "sha256": "5f505f4177e4da8e14a5796cce26f53fc7db727a3461a963674384bc82aa2b70",
+      "notes": "Pending: needs a credential list that can be stalled mid-refresh (upstream replaces authStorage.list) and ModelRuntime availability refresh generations for stale results and errors; the model-runtime owner has not exposed an injectable credential source for this."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/7443-model-command-cached-match.test.ts",
@@ -4621,7 +4631,8 @@
       "source": "packages/coding-agent/test/suite/regressions/8261-subagent-project-trust.test.ts",
       "status": "pending",
       "ports": [],
-      "sha256": "21f699dfc91e240657599559db6203cd36360e5435fe1310cddbe5d3446ae3f6"
+      "sha256": "21f699dfc91e240657599559db6203cd36360e5435fe1310cddbe5d3446ae3f6",
+      "notes": "Pending: needs the subagent example extension (examples/extensions/subagent, which spawns pi subprocesses for project agents) as a native extension."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8328-zero-usage-auto-compaction.test.ts",
@@ -4652,7 +4663,7 @@
         "tests/extensions-runner.bend"
       ],
       "sha256": "ab6b2c52acd5282b8a40efa51a1fa291b0d5c0bce9128a9f9867ea5255ca18b8",
-      "notes": "Both cases' provider contracts pass in tests/extensions-runner.bend: a failing factory's unregisterProvider/registerProvider changes are discarded (pending registrations stay ['working-provider']) and its captured API then rejects registration with upstream's inactive-API message; a factory failing after another factory loaded concurrently (a fiber held on a channel) does not discard that factory's provider. Pending: flags (registerFlag/getFlag, runtime.flagValues) and the event bus, which the native extension API does not have; the late call is registerProvider instead of registerFlag. Bun lane."
+      "notes": "Both cases pass in tests/extensions-runner.bend: a failing factory's registerFlag default is visible to its getFlag while loading but never reaches runtime flag values, its unregisterProvider/registerProvider changes are discarded (pending registrations stay ['working-provider']) and its captured API then rejects registerFlag with upstream's inactive-API message; a factory failing after another factory loaded concurrently (a fiber held on a channel) does not discard that factory's provider. Pending: the event bus (pi.events), which the native extension API does not have. Bun lane."
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/8537-custom-message-tool-result-ordering.test.ts",
@@ -4716,10 +4727,14 @@
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9068-user-bash-fail-closed.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "partial",
+      "ports": [
+        "tests/rpc-mode.bend",
+        "tests/rpc_mode_check.py"
+      ],
       "sha256": "ac50f627231a28486fb34ce8880dd994a56f6f8fcfef59ffef24fc0d07f9b07d",
-      "notes": "Pending: the user_bash extension event (emitUserBash and its fail-closed result validation) is not ported, neither in RPC bash nor in interactive ! commands."
+      "notes": "RPC cases in tests/rpc-mode.bend: a throwing user_bash handler fails the bash request with its message and an extension_error record, and nothing runs (a marker file stays absent; upstream spies on executeBash); a handler returning undefined lets the command run (native lanes; the Bun lane has no process primitive and reports SKIP). The \"empty result\" case has no native counterpart: handler results are operations or a result by construction. Pending: the interactive ! and !! cases (interactive mode submits bash without user_bash yet).",
+      "implementation": "packages/coding-agent/src/modes/rpc.bend"
     },
     {
       "source": "packages/coding-agent/test/suite/regressions/9178-tree-during-compaction.test.ts",
