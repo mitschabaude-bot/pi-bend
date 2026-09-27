@@ -30,8 +30,9 @@ for threads in (1, 4):
     process = subprocess.Popen(command + ["browser"], cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
         assert process.stdout.readline().startswith(b"ready ")
-        for target in ("/wrong?code=bad&state=test_state", "/auth/callback?code=bad", "/auth/callback?code=bad&state=wrong"):
-            assert request(target).startswith(b"HTTP/1.1 400")
+        # The Codex handler's statuses (upstream openai-codex.ts).
+        for target, status in (("/wrong?code=bad&state=test_state", b"404"), ("/auth/callback?code=bad", b"400"), ("/auth/callback?code=bad&state=wrong", b"400"), ("/auth/callback?state=test_state", b"400")):
+            assert request(target).startswith(b"HTTP/1.1 " + status)
             assert process.poll() is None
         assert request("/auth/callback?code=browser_code&state=test_state").startswith(b"HTTP/1.1 200")
         out, err = process.communicate(timeout=5)

@@ -1,5 +1,6 @@
 import Base
 import ./browser.bend as Browser
+import ./oauth-page.bend as Page
 import ./device-code.bend as Device
 import ../types.bend as Auth
 import ../../api/provider-fetch.bend as Http
@@ -24,8 +25,7 @@ import ../../../../runtime/src/utf8.bend as Utf8
 # client APIs live on the configured gateway; only the browser authorization
 # endpoint is discovered (GET /v1/oauth). Browser login is PKCE with a local
 # callback on 127.0.0.1:1456; device login polls the gateway's token endpoint
-# (device-code.bend). The success/error pages are plain HTML with upstream's
-# messages; upstream's styled oauth-page template is not ported.
+# (device-code.bend). The callback pages are oauth-page.bend's.
 
 def CALLBACK_HOST() -> String: "127.0.0.1"
 
@@ -342,25 +342,14 @@ type Callback is Data:
   CallbackRejected{status: U32, message: String}
   CallbackError{message: String}
 
-def page(title: String, message: String) -> String: "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><title>" ++ title ++ "</title></head><body><p>" ++ message ++ "</p></body></html>"
-
-def escapedChar(+c: Char) -> String:
-  +code = Char.to_u32(c)
-  Bool.pick(String, U32.is_eq(code, 38), "&amp;", Bool.pick(String, U32.is_eq(code, 60), "&lt;", Bool.pick(String, U32.is_eq(code, 62), "&gt;", Bool.pick(String, U32.is_eq(code, 34), "&quot;", Bool.pick(String, U32.is_eq(code, 39), "&#39;", SCon{c, SNil{}})))))
-
-def escaped(text: String) -> String:
-  match text:
-    case SNil{}: SNil{}
-    case SCon{c, rest}: escapedChar(c) ++ escaped(rest)
-
 def reason(+status: U32) -> String: Bool.pick(String, U32.is_eq(status, 200), "OK", Bool.pick(String, U32.is_eq(status, 404), "Not Found", "Bad Request"))
 
 def httpPage(+status: U32, +html: String) -> String:
   "HTTP/1.1 " ++ U32.show(status) ++ " " ++ reason(status) ++ "\r\ncontent-type: text/html; charset=utf-8\r\nContent-Length: " ++ Nat.show(List.length(&2, U32, Utf8.encode(html))) ++ "\r\nConnection: close\r\n\r\n" ++ html
 
-def errorPage(message: String) -> String: page("Authentication failed", escaped(message))
+def errorPage(message: String) -> String: Page.oauthErrorHtml(message, None{})
 
-def successPage() -> String: page("Authentication successful", "Signed in to Radius. You may now close this page.")
+def successPage() -> String: Page.oauthSuccessHtml("Signed in to Radius. You may now close this page.")
 
 def codeOf(code: Maybe<&2, String>) -> Callback:
   match code:
@@ -381,19 +370,13 @@ def stateChecked(+params: URL.URLSearchParams, received: Maybe<&2, String>, stat
 
 def paramsCallback(+params: URL.URLSearchParams, state: String) -> Callback: stateChecked(params, URL.get(params, "state"), state)
 
-def splitTarget(target: String, reversed: String) -> String & String:
-  match target:
-    case SNil{}: (String.reverse(reversed), "")
-    case SCon{'?', rest}: (String.reverse(reversed), rest)
-    case SCon{c, rest}: splitTarget(rest, SCon{c, reversed})
-
 def targetCallback(pair: String & String, state: String) -> Callback:
   match pair:
     case (+path, query): Bool.pick(Unit -> Callback, String.eq(path, CALLBACK_PATH()), _ => paramsCallback(URL.parseSearchParams(query), state), _ => CallbackRejected{404, "Callback route not found."})(Unit{})
 
 def lineCallback(parts: List<&2, String>, state: String) -> Callback:
   match parts:
-    case _ <> target <> _: targetCallback(splitTarget(target, ""), state)
+    case _ <> target <> _: targetCallback(Browser.splitTarget(target, ""), state)
     case _: CallbackRejected{400, "Callback route not found."}
 
 type Step is Type:

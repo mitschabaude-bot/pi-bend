@@ -150,6 +150,17 @@ def nullableProperties(values: List<&2, R.Property<V.Value>>) -> List<&2, R.Prop
     case Nil{}: Nil{}
     case R.Property{name, value} <> rest: R.Property{name, nullable(value)} <> nullableProperties(rest)
 
+def textProperties(values: List<&2, R.Property<V.Value>>) -> List<&2, R.Property<String>>:
+  match values:
+    case Nil{}: Nil{}
+    case R.Property{name, V.Text{value}} <> rest: R.Property{name, value} <> textProperties(rest)
+    case _ <> rest: textProperties(rest)
+
+def providerEnv(value: Maybe<&2, V.Value>) -> Maybe<&2, T.ProviderEnv()>:
+  match value:
+    case Some{V.ObjectValue{R.Record{values}}}: Some{R.Record{textProperties(values)}}
+    case _: None{}
+
 def headers(value: Maybe<&2, V.Value>) -> Maybe<&2, T.ProviderHeaders()>:
   match value:
     case Some{V.ObjectValue{R.Record{values}}}: Some{R.Record{nullableProperties(values)}}
@@ -214,10 +225,10 @@ def tier(value: Maybe<&2, String>) -> Maybe<&2, T.Nullable<Responses.ServiceTier
 def jsonChoice(value: Maybe<&2, V.Value>) -> Maybe<&2, J()>: Maybe.map(&2, V.Value, J(), Convert.toJson, value)
 
 def streamOptions(+value: V.Value, signal: Abort.AbortSignal<Unit>) -> Responses.OpenAIResponsesOptions<Unit, Unit, String>:
-  Responses.OpenAIResponsesOptions{Some{signal}, None{}, text(field(value, "apiKey")), None{}, None{}, None{}, None{}, headers(field(value, "headers")), number(field(value, "timeoutMs")), number(field(value, "maxRetries")), number(field(value, "maxRetryDelayMs")), number(field(value, "temperature")), None{}, None{}, transport(text(field(value, "transport"))), retention(text(field(value, "cacheRetention"))), text(field(value, "sessionId")), number(field(value, "websocketConnectTimeoutMs")), None{}, thinking(text(field(value, "reasoningEffort"))), None{}, tier(text(field(value, "serviceTier"))), jsonChoice(field(value, "toolChoice"))}
+  Responses.OpenAIResponsesOptions{Some{signal}, None{}, text(field(value, "apiKey")), None{}, providerEnv(field(value, "env")), None{}, None{}, headers(field(value, "headers")), number(field(value, "timeoutMs")), number(field(value, "maxRetries")), number(field(value, "maxRetryDelayMs")), number(field(value, "temperature")), None{}, None{}, transport(text(field(value, "transport"))), retention(text(field(value, "cacheRetention"))), text(field(value, "sessionId")), number(field(value, "websocketConnectTimeoutMs")), None{}, thinking(text(field(value, "reasoningEffort"))), None{}, tier(text(field(value, "serviceTier"))), jsonChoice(field(value, "toolChoice"))}
 
 def simpleOptions(+value: V.Value, signal: Abort.AbortSignal<Unit>) -> Responses.SimpleStreamOptions(Unit, Unit, String):
-  T.SimpleStreamOptions{Some{signal}, None{}, text(field(value, "apiKey")), None{}, None{}, None{}, None{}, headers(field(value, "headers")), number(field(value, "timeoutMs")), number(field(value, "maxRetries")), number(field(value, "maxRetryDelayMs")), number(field(value, "temperature")), None{}, None{}, transport(text(field(value, "transport"))), retention(text(field(value, "cacheRetention"))), text(field(value, "sessionId")), number(field(value, "websocketConnectTimeoutMs")), None{}, simpleChoice(text(field(value, "toolChoice"))), thinking(text(field(value, "reasoning"))), None{}, None{}}
+  T.SimpleStreamOptions{Some{signal}, None{}, text(field(value, "apiKey")), None{}, providerEnv(field(value, "env")), None{}, None{}, headers(field(value, "headers")), number(field(value, "timeoutMs")), number(field(value, "maxRetries")), number(field(value, "maxRetryDelayMs")), number(field(value, "temperature")), None{}, None{}, transport(text(field(value, "transport"))), retention(text(field(value, "cacheRetention"))), text(field(value, "sessionId")), number(field(value, "websocketConnectTimeoutMs")), None{}, simpleChoice(text(field(value, "toolChoice"))), thinking(text(field(value, "reasoning"))), None{}, None{}}
 
 def rendered(error: String) -> String: error
 

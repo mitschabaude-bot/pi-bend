@@ -162,9 +162,12 @@ def trace(lines):
 
 
 class Case:
-    def __init__(self, suite, name, spec, check, server=None, env=None, differential=True, message=True):
+    def __init__(self, suite, name, spec, check, server=None, env=None, differential=True, message=True, proxy=None):
         self.suite, self.name, self.spec, self.check = suite, name, spec, check
         self.server, self.env, self.differential, self.message = server, env, differential, message
+        # Proxy variables for the provider env ("scoped") or the process
+        # environment ("process"); {proxy} is the loopback proxy's address.
+        self.proxy = proxy
 
 
 def hello():
@@ -485,6 +488,93 @@ stream_case("bedrock-custom-headers", "VC3: registers no middleware when headers
 stream_case("bedrock-custom-headers", "VC4: streamSimpleBedrock forwards headers end-to-end (regression guard)", sent_header("x-custom", "v"), OK_FRAMES, spec={"mode": "simple", "options": {"headers": {"x-custom": "v"}}})
 
 
+# --- HTTP proxies ------------------------------------------------------------
+# No upstream suite covers them: upstream builds the client's request handler
+# from resolveHttpProxyUrlForTarget(model.baseUrl, options.env), whose
+# HttpProxyAgent sends an http endpoint's requests to the proxy in absolute
+# form. A loopback forwarding proxy records what it receives, for the port and
+# for upstream driving the pinned AWS SDK.
+
+class ForwardingProxy:
+    def __init__(self):
+        self.received = []
+        self.listener = __import__("socket").socket()
+        self.listener.bind(("127.0.0.1", 0))
+        self.listener.listen(16)
+        self.port = self.listener.getsockname()[1]
+        threading.Thread(target=self.accept, daemon=True).start()
+
+    def accept(self):
+        while True:
+            try:
+                peer, _ = self.listener.accept()
+            except OSError:
+                return
+            threading.Thread(target=self.handle, args=(peer,), daemon=True).start()
+
+    def handle(self, peer):
+        import socket
+        data = b""
+        while b"\r\n\r\n" not in data:
+            part = peer.recv(65536)
+            if not part:
+                peer.close()
+                return
+            data += part
+        head, _, rest = data.partition(b"\r\n\r\n")
+        lines = head.decode("latin-1").split("\r\n")
+        headers = {name.strip().lower(): value.strip() for name, _, value in (line.partition(":") for line in lines[1:])}
+        self.received.append({"line": lines[0], "proxy-authorization": headers.get("proxy-authorization"), "proxy-connection": headers.get("proxy-connection")})
+        method, target, version = lines[0].split(" ")
+        parsed = urllib.parse.urlsplit(target)
+        upstream = socket.create_connection((parsed.hostname, parsed.port))
+        kept = [line for line in lines[1:] if not line.lower().startswith(("proxy-authorization:", "proxy-connection:"))]
+        upstream.sendall(("\r\n".join([f"{method} {parsed.path}{'?' + parsed.query if parsed.query else ''} {version}", *kept, "connection: close"]) + "\r\n\r\n").encode("latin-1") + rest)
+        length = int(headers.get("content-length", "0")) - len(rest)
+        while length > 0:
+            part = peer.recv(65536)
+            if not part:
+                break
+            upstream.sendall(part)
+            length -= len(part)
+        while True:
+            part = upstream.recv(65536)
+            if not part:
+                break
+            peer.sendall(part)
+        upstream.close()
+        peer.close()
+
+    def close(self):
+        self.listener.close()
+
+
+def proxy_case(name, variables, where="scoped", expect_proxied=True, differential=True, check=None):
+    def default(lines, requests):
+        expect(message(lines)["stopReason"] == "stop" and requests and requests[0]["path"] == "/model/us.anthropic.claude-opus-4-8/converse-stream", (message(lines), requests))
+    case("node-http-proxy", name, {"model": {"catalog": "us.anthropic.claude-opus-4-8"}, "context": hello(), "options": {"cacheRetention": "none"}}, check or default,
+         server=lambda: Server(frames=OK_FRAMES), differential=differential, proxy=(where, variables, expect_proxied))
+
+
+proxy_case("routes an http endpoint through HTTP_PROXY from the provider env", {"HTTP_PROXY": "http://{proxy}"})
+proxy_case("routes an http endpoint through HTTP_PROXY from the process environment", {"HTTP_PROXY": "http://{proxy}"}, where="process")
+proxy_case("prefers scoped proxy variables over the process environment", {"http_proxy": "http://{proxy}"}, where="scoped+process")
+proxy_case("falls back to ALL_PROXY without a scheme", {"ALL_PROXY": "{proxy}"})
+proxy_case("sends the proxy URL's credentials as Proxy-Authorization", {"HTTP_PROXY": "http://user:p%40ss@{proxy}"})
+proxy_case("reaches the endpoint directly when NO_PROXY excludes it", {"HTTP_PROXY": "http://{proxy}", "NO_PROXY": "example.com, 127.0.0.1"}, expect_proxied=False)
+proxy_case("reaches the endpoint directly when NO_PROXY is *", {"HTTP_PROXY": "http://{proxy}", "NO_PROXY": "*"}, expect_proxied=False)
+proxy_case("proxies when a NO_PROXY entry names another port", {"HTTP_PROXY": "http://{proxy}", "NO_PROXY": "127.0.0.1:1"})
+
+
+def unsupported(lines, requests):
+    expect(requests == [] and message(lines)["stopReason"] == "error" and message(lines)["errorMessage"] == "Unsupported proxy protocol. SOCKS and PAC proxy URLs are not supported; use an HTTP or HTTPS proxy URL. Got socks5:", message(lines))
+
+
+# Upstream throws this while configuring the client, before its try block,
+# so its stream task rejects without an error event (no differential).
+proxy_case("fails on SOCKS proxy URLs", {"HTTP_PROXY": "socks5://{proxy}"}, expect_proxied=False, differential=False, check=unsupported)
+
+
 # --- The default credential chain -----------------------------------------
 # No upstream suite covers it (upstream leaves it to the AWS SDK), so each case
 # resolves credentials from shared files and environment variables against a
@@ -725,12 +815,34 @@ def run_case(command, backend, item, compare):
         item.check(lines["config"][0], None)
         return
     env = dict(BASE_ENV, **KEYS, **(item.env or {}))
+    env = {k: v for k, v in env.items() if k.lower() not in ("http_proxy", "https_proxy", "all_proxy", "no_proxy")}
     server = item.server()
+    proxy = ForwardingProxy() if item.proxy else None
     with server as base:
         spec["model"] = dict(spec["model"], baseUrl=base)
+        seen = {}
+        if proxy:
+            where, variables, proxied = item.proxy
+            values = {k: v.replace("{proxy}", f"127.0.0.1:{proxy.port}") for k, v in variables.items()}
+            if "scoped" in where:
+                spec["options"] = dict(spec["options"], env=values)
+            if where == "process":
+                env = dict(env, **values)
+            if where == "scoped+process":
+                env = dict(env, HTTP_PROXY="http://127.0.0.1:9")
         lines = run(command, spec, env)
+        if proxy:
+            seen["port"] = [dict(r, line=r["line"].replace(base, "{origin}")) for r in proxy.received]
+            proxy.received.clear()
         reference = oracle(spec, env) if (compare and item.differential) else None
+        if proxy:
+            seen["upstream"] = [dict(r, line=r["line"].replace(base, "{origin}")) for r in proxy.received]
+            proxy.close()
     item.check(lines, server.requests)
+    if proxy:
+        expect(len(seen["port"]) == (1 if item.proxy[2] else 0), seen)
+        if reference is not None:
+            assert seen["port"] == seen["upstream"], (item.name, seen)
     if reference is not None:
         native, upstream = trace(lines), trace(reference)
         assert native == upstream, (item.name, json.dumps(native, indent=1)[:5000], json.dumps(upstream, indent=1)[:5000])
@@ -754,7 +866,7 @@ def main():
             commands.extend([("native1", [str(output), "--threads", "1"]), ("native4", [str(output), "--threads", "4"])])
         for backend, command in commands:
             for item in CASES:
-                if args.only and args.only not in item.name:
+                if args.only and args.only not in item.name and args.only != item.suite:
                     continue
                 run_case(command, backend, item, compare=True)
                 print(f"PASS {backend}: {item.suite}: {item.name}")

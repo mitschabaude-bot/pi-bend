@@ -1,5 +1,6 @@
 import Base
 import ../packages/ai/src/auth/oauth/browser.bend as OAuth
+import ../packages/ai/src/auth/oauth/anthropic.bend as Anthropic
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/deferred.bend as Deferred
 
@@ -27,7 +28,7 @@ def run(listener: Listener,mode: String) -> IO(Unit):
   do IO<Unit>:
     +answer : Deferred.Deferred<OAuth.CodeResult()> <- Deferred.new(OAuth.CodeResult())
     +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
-    worker : Chan(Unit) <- IO.fork(Unit,OAuth.callbackRun(OAuth.Listening{listener},answer,OAuth.CallbackConfig{"http://localhost:53692/callback","/callback","state_test"},Abort.signal(Unit,controller)))
+    worker : Chan(Unit) <- IO.fork(Unit,OAuth.callbackRun(~Anthropic.callbackReply,OAuth.Listening{listener},answer,OAuth.CallbackConfig{"http://localhost:53692/callback","state_test"},Abort.signal(Unit,controller)))
     cancel : Maybe<&1,Chan(Unit)> <- cancelMode(mode,answer)
     result : OAuth.CodeResult() <- Deferred.result(OAuth.CodeResult(),answer)
     IO.join(Unit,worker)

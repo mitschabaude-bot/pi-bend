@@ -7,6 +7,7 @@ import ../utils/headers.bend as HeaderUtils
 import ../utils/json.bend as JsonWire
 import ../utils/json-parse.bend as JsonRepair
 import ../utils/model-api.bend as ModelApi
+import ../utils/node-http-proxy.bend as NodeProxy
 import ../utils/provider-env.bend as Env
 import ../utils/sanitize-unicode.bend as Unicode
 import ../utils/schema-json.bend as SchemaJson
@@ -28,7 +29,9 @@ import ../../../runtime/src/date.bend as Date
 import ../../../runtime/src/deadline.bend as Deadline
 import ../../../runtime/src/f64.bend as F
 import ../../../runtime/src/fetch.bend as Fetch
+import ../../../runtime/src/http-exchange.bend as HTTP
 import ../../../runtime/src/http-message.bend as Headers
+import ../../../runtime/src/http-proxy.bend as Proxy
 import ../../../runtime/src/http-response.bend as Response
 import ../../../runtime/src/json.bend as Decode
 import ../../../runtime/src/record.bend as R
@@ -278,8 +281,8 @@ def modelBaseUrl(model: T.Model<J()>) -> String:
   match model:
     case T.Model{_, _, _, _, base, _, _, _, _, _, _, _, _, _, _, _}: base
 
-# upstream stream's client configuration for a Node runtime (without the
-# proxy and HTTP handler, which the native transport has no counterpart for).
+# upstream stream's client configuration for a Node runtime; its proxy and
+# request handler are `Handler` and `Setup.proxies`.
 def clientConfigWith(+model: T.Model<J()>, urlContext: URL.Context, +optionsProfile: Maybe<&2, String>, optionsRegion: Maybe<&2, String>, optionsBearer: Maybe<&2, String>, apiKey: Maybe<&2, String>, values: ConfigEnv) -> ClientConfig:
   match values:
     case ConfigEnv{profile, region, defaultRegion, +ambientProfile, skipAuth, bearer, accessKey, secretKey, sessionToken}:
@@ -1306,9 +1309,17 @@ def jsonPayload(bytes: List<&2, U32>) -> Maybe<&2, V.Value>: parsedPayload(Decod
 
 def stateStep(-G: Data, state: State<G>) -> Step<G>: Step{state, Nil{}}
 
-# What sending needs besides the payload.
+# The network the SDK's request handler is built on when a proxy applies:
+# upstream replaces the default handler with a NodeHttpHandler whose agents
+# go through the proxy (HttpProxyAgent, HttpsProxyAgent), per client.
+type Handler is Data:
+  Handler{files: Fetch.Files, options: HTTP.Options, security: HTTP.Security}
+
+# What sending needs besides the payload. `fetch` carries the request unless
+# `proxies` holds the proxy resolveHttpProxyUrlForTarget chose for the
+# model's base URL; credential providers always use `fetch`.
 type Setup<-Reason: Data, -E: Data> is Data:
-  Setup{config: ClientConfig, headers: Maybe<&2, T.ProviderHeaders()>, onResponse: Maybe<&2, T.ResponseCallback(T.Model<J()>, E)>, fetch: Fetch.Fetch(Reason), urlContext: URL.Context}
+  Setup{config: ClientConfig, headers: Maybe<&2, T.ProviderHeaders()>, onResponse: Maybe<&2, T.ResponseCallback(T.Model<J()>, E)>, fetch: Fetch.Fetch(Reason), urlContext: URL.Context, handler: Handler, proxies: Maybe<&2, Proxy.Config>}
 
 # The request settings that do not depend on the transcript.
 type Request<-E: Data> is Data:
@@ -1339,7 +1350,7 @@ def failed(~Reason: Data, ~G: Data, ~details: J() -> G, +events: EventStreamOut(
 
 def setupConfig(-Reason: Data, -E: Data, setup: Setup<Reason, E>) -> ClientConfig:
   match setup:
-    case Setup{config, _, _, _, _}: config
+    case Setup{config, _, _, _, _, _, _}: config
 
 # How a request authenticates: the bearer token, or SigV4 credentials.
 type Auth is Data:
@@ -1664,27 +1675,62 @@ def exchanged(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, ~details:
 
 # The SDK passes only the caller's signal; the native fetch takes a deadline
 # scope, which here never expires (the maximum U32 milliseconds).
-def exchange(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, +state: State<G>, hook: Maybe<&2, T.ResponseCallback(T.Model<J()>, E)>, fetch: Fetch.Fetch(Reason), request: Http.Request) -> IO(Unit):
+def exchangeVia(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, +state: State<G>, hook: Maybe<&2, T.ResponseCallback(T.Model<J()>, E)>, fetch: Fetch.Fetch(Reason), request: Http.Request) -> IO(Unit):
   do IO<Unit>:
     scope : Deadline.Scope<Reason> <- Deadline.create(Reason, 4294967295, parent)
     exchanged(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, hook, fetch, request, Deadline.borrow(Reason, scope))
 
-def dispatched(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, +state: State<G>, hook: Maybe<&2, T.ResponseCallback(T.Model<J()>, E)>, fetch: Fetch.Fetch(Reason), url: URL.URL, headers: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>, body: String) -> IO(Unit):
+def proxiedFetch(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, +state: State<G>, hook: Maybe<&2, T.ResponseCallback(T.Model<J()>, E)>, request: Http.Request, pair: Fetch.Runtime & Fetch.Fetch(Reason)) -> IO(Unit):
+  match pair:
+    case (runtime, +fetch):
+      do IO<Unit>:
+        exchangeVia(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, hook, fetch, request)
+        Fetch.retire(Reason, fetch)
+        Fetch.dispose(runtime)
+
+def proxiedRuntime(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, +state: State<G>, hook: Maybe<&2, T.ResponseCallback(T.Model<J()>, E)>, security: HTTP.Security, request: Http.Request, runtime: Result<&2, &1, Fetch.InitError, Fetch.Runtime>) -> IO(Unit):
+  match runtime:
+    case Fail{error}: failed(~Reason, ~G, ~details, events, parent, state, PlainFailure{Fetch.format(error)}, None{})
+    case Done{owned}:
+      do IO<Unit>:
+        pair : Fetch.Runtime & Fetch.Fetch(Reason) <- Fetch.callbackWithSecurity(~Reason, owned, security)
+        proxiedFetch(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, hook, request, pair)
+
+# How the request is sent: through the caller's fetch, or through a runtime
+# of its own that reaches the endpoint through the proxy.
+type Sender<-Reason: Data> is Data:
+  Direct{fetch: Fetch.Fetch(Reason)}
+  Proxied{handler: Handler, proxies: Proxy.Config}
+
+def exchange(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, +state: State<G>, hook: Maybe<&2, T.ResponseCallback(T.Model<J()>, E)>, sender: Sender<Reason>, request: Http.Request) -> IO(Unit):
+  match sender:
+    case Direct{fetch}: exchangeVia(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, hook, fetch, request)
+    case Proxied{Handler{files, options, security}, proxies}:
+      do IO<Unit>:
+        runtime : Result<&2, &1, Fetch.InitError, Fetch.Runtime> <- Fetch.createWithProxy(files, options, proxies)
+        proxiedRuntime(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, hook, security, request, runtime)
+
+def senderOf(-Reason: Data, fetch: Fetch.Fetch(Reason), handler: Handler, proxies: Maybe<&2, Proxy.Config>) -> Sender<Reason>:
+  match proxies:
+    case None{}: Direct{fetch}
+    case Some{config}: Proxied{handler, config}
+
+def dispatched(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, +state: State<G>, hook: Maybe<&2, T.ResponseCallback(T.Model<J()>, E)>, sender: Sender<Reason>, url: URL.URL, headers: Result<&2, &2, Headers.HeaderSyntaxError, Headers.Headers>, body: String) -> IO(Unit):
   match headers:
     case Fail{_}: failed(~Reason, ~G, ~details, events, parent, state, PlainFailure{"Invalid header"}, None{})
-    case Done{fields}: exchange(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, hook, fetch, Http.Request{url, fields, body})
+    case Done{fields}: exchange(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, hook, sender, Http.Request{url, fields, body})
 
 def addressed(~Reason: Data, ~E: Data, ~G: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, +state: State<G>, setup: Setup<Reason, E>, auth: Auth, +region: String, +body: String, url: Result<&2, &2, URL.Error, URL.URL>) -> IO(Unit):
   match setup url:
     case _ Fail{_}: failed(~Reason, ~G, ~details, events, parent, state, PlainFailure{"Invalid URL"}, None{})
-    case Setup{_, headers, hook, fetch, _} Done{+address}:
+    case Setup{_, headers, hook, fetch, _, handler, proxies} Done{+address}:
       do IO<Unit>:
         now : F64 <- Date.now()
-        dispatched(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, hook, fetch, address, requestHeaders(authorized(auth, region, isoDate(Date.formatIso(now)), address, Utf8.encode(body), custom(headers))), body)
+        dispatched(~Reason, ~E, ~G, ~render, ~details, events, parent, model, state, hook, senderOf(Reason, fetch, handler, proxies), address, requestHeaders(authorized(auth, region, isoDate(Date.formatIso(now)), address, Utf8.encode(body), custom(headers))), body)
 
 def setupContext(-Reason: Data, -E: Data, setup: Setup<Reason, E>) -> URL.Context:
   match setup:
-    case Setup{_, _, _, _, context}: context
+    case Setup{_, _, _, _, context, _, _}: context
 
 def endpointOf(config: ClientConfig) -> Maybe<&2, String>:
   match config:
@@ -1716,7 +1762,7 @@ def clientRegion(configured: Maybe<&2, String>, profile: Maybe<&2, String>) -> I
 
 def setupFetch(-Reason: Data, -E: Data, setup: Setup<Reason, E>) -> Fetch.Fetch(Reason):
   match setup:
-    case Setup{_, _, _, fetch, _}: fetch
+    case Setup{_, _, _, fetch, _, _, _}: fetch
 
 def signedWith(result: Result<&2, &2, String, SigV4.Credentials>) -> Result<&2, &2, String, Auth>:
   match result:
@@ -1830,7 +1876,27 @@ type Settings<-Reason: Data, -E: Data> is Data:
 
 def createState(-G: Data, model: T.Model<J()>, timestamp: F64) -> State<G>: State{createOutput(G, model, timestamp), Nil{}}
 
-def started(~Reason: Data, ~E: Data, ~G: Data, ~D: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, context: T.TranscriptContext<V.Value, V.Value, G, D>, +urlContext: URL.Context, settings: Settings<Reason, E>) -> IO(Unit):
+# resolveHttpProxyUrlForTarget(model.baseUrl, options.env) as the request
+# handler's proxy (Handler).
+def handlerProxies(resolved: Result<&2, &2, String, Maybe<&2, URL.URL>>) -> Result<&2, &2, String, Maybe<&2, Proxy.Config>>:
+  match resolved:
+    case Fail{message}: Fail{message}
+    case Done{None{}}: Done{None{}}
+    case Done{Some{url}}: Result.map(&2, &2, String, Proxy.Config, Maybe<&2, Proxy.Config>, config => Some{config}, Proxy.forwardingUrl(url))
+
+def withProxies(-Reason: Data, -E: Data, setup: Setup<Reason, E>, proxies: Maybe<&2, Proxy.Config>) -> Setup<Reason, E>:
+  match setup:
+    case Setup{config, headers, onResponse, fetch, urlContext, handler, _}: Setup{config, headers, onResponse, fetch, urlContext, handler, proxies}
+
+# Upstream resolves the proxy while configuring the client, before its try
+# block, so an unusable proxy URL rejects the stream's task instead of ending
+# the stream; here the stream ends with that error.
+def proxiedStart(~Reason: Data, ~E: Data, ~G: Data, ~D: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, +state: State<G>, setup: Setup<Reason, E>, request: Request<E>, context: T.TranscriptContext<V.Value, V.Value, G, D>, proxies: Result<&2, &2, String, Maybe<&2, Proxy.Config>>) -> IO(Unit):
+  match proxies:
+    case Fail{message}: failed(~Reason, ~G, ~details, events, parent, state, PlainFailure{message}, None{})
+    case Done{found}: prepared(~Reason, ~E, ~G, ~D, ~render, ~details, events, parent, model, state, withProxies(Reason, E, setup, found), request, context)
+
+def started(~Reason: Data, ~E: Data, ~G: Data, ~D: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, context: T.TranscriptContext<V.Value, V.Value, G, D>, +urlContext: URL.Context, handler: Handler, settings: Settings<Reason, E>) -> IO(Unit):
   match settings:
     case Settings{profile, +region, bearer, apiKey, +env, retention, maxTokens, temperature, choice, reasoning, budgets, interleaved, display, metadata, headers, onPayload, onResponse, fetch}:
       +collapsed = Transcript.collapseSystemMessages(V.Value, V.Value, G, D, context)
@@ -1841,7 +1907,8 @@ def started(~Reason: Data, ~E: Data, ~G: Data, ~D: Data, ~render: E -> String, ~
         forced : Maybe<&2, String> <- envValue("AWS_BEDROCK_FORCE_CACHE", env)
         regionEnv : Maybe<&2, String> <- envValue("AWS_REGION", env)
         defaultRegion : Maybe<&2, String> <- envValue("AWS_DEFAULT_REGION", env)
-        prepared(~Reason, ~E, ~G, ~D, ~render, ~details, events, parent, model, createState(G, model, timestamp), Setup{config, headers, onResponse, fetch, urlContext}, Request{systemText(G, D, contextMessages(G, D, collapsed)), retentionOf(retention, legacy), forcedCache(forced), inferenceMaxTokens(model, maxTokens), temperature, choice, buildAdditionalModelRequestFields(model, reasoning, budgets, interleaved, display, firstOf([region, regionEnv, defaultRegion])), metadata, onPayload}, collapsed)
+        proxy : Result<&2, &2, String, Maybe<&2, URL.URL>> <- NodeProxy.resolveHttpProxyUrlForTarget(urlContext, modelBaseUrl(model), env)
+        proxiedStart(~Reason, ~E, ~G, ~D, ~render, ~details, events, parent, model, createState(G, model, timestamp), Setup{config, headers, onResponse, fetch, urlContext, handler, None{}}, Request{systemText(G, D, contextMessages(G, D, collapsed)), retentionOf(retention, legacy), forcedCache(forced), inferenceMaxTokens(model, maxTokens), temperature, choice, buildAdditionalModelRequestFields(model, reasoning, budgets, interleaved, display, firstOf([region, regionEnv, defaultRegion])), metadata, onPayload}, collapsed, handlerProxies(proxy))
 
 # Streaming
 # ---------
@@ -1855,12 +1922,13 @@ def started(~Reason: Data, ~E: Data, ~G: Data, ~D: Data, ~render: E -> String, ~
 # Preparing
 # ---------
 
-# upstream stream. The caller supplies the default fetch and the request's
-# abort signal; events go to `events`, which the terminal event completes.
-def stream(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), fetch: Fetch.Fetch(Reason), urlContext: URL.Context, +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options(Abort.AbortSignal<Reason>, Telemetry, Fetch.Fetch(Reason), E)) -> IO(Unit):
+# upstream stream. The caller supplies the default fetch, the network a
+# proxied request handler is built on and the request's abort signal; events
+# go to `events`, which the terminal event completes.
+def stream(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), fetch: Fetch.Fetch(Reason), urlContext: URL.Context, handler: Handler, +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Options(Abort.AbortSignal<Reason>, Telemetry, Fetch.Fetch(Reason), E)) -> IO(Unit):
   match options:
     case BedrockOptions{T.StreamOptions{_, _, apiKey, customFetch, env, onPayload, onResponse, headers, _, _, _, temperature, _, maxTokens, _, retention, _, _, _}, region, profile, choice, reasoning, budgets, interleaved, display, metadata, bearer}:
-      started(~Reason, ~E, ~G, ~D, ~render, ~details, events, parent, model, context, urlContext, Settings{profile, region, bearer, apiKey, env, retention, maxTokens, temperature, choice, reasoning, budgets, interleaved, display, metadata, headers, onPayload, onResponse, Maybe.default(&2, Fetch.Fetch(Reason), customFetch, fetch)})
+      started(~Reason, ~E, ~G, ~D, ~render, ~details, events, parent, model, context, urlContext, handler, Settings{profile, region, bearer, apiKey, env, retention, maxTokens, temperature, choice, reasoning, budgets, interleaved, display, metadata, headers, onPayload, onResponse, Maybe.default(&2, Fetch.Fetch(Reason), customFetch, fetch)})
 
 def simpleChoice(value: T.ToolChoice) -> BedrockToolChoice:
   match value:
@@ -1919,5 +1987,5 @@ def streamSimpleOptions(~G: Data, ~D: Data, ~Signal: Data, ~Telemetry: Data, ~Fe
   simpleWith(~G, ~D, ~Signal, ~Telemetry, ~Fetch, ~Error, model, context, Simple.buildBaseOptions(~G, ~D, ~J(), ~Signal, ~Telemetry, ~Fetch, ~Error, model, context, options, None{}), simpleSettings(Signal, Telemetry, Fetch, Error, options))
 
 # upstream streamSimple.
-def streamSimple(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), fetch: Fetch.Fetch(Reason), urlContext: URL.Context, +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Maybe<&2, T.SimpleStreamOptions<J(), Abort.AbortSignal<Reason>, Telemetry, Fetch.Fetch(Reason), E>>) -> IO(Unit):
-  stream(~Reason, ~Telemetry, ~E, ~G, ~D, ~render, ~details, events, fetch, urlContext, parent, model, context, streamSimpleOptions(~G, ~D, ~Abort.AbortSignal<Reason>, ~Telemetry, ~Fetch.Fetch(Reason), ~E, model, context, options))
+def streamSimple(~Reason: Data, ~Telemetry: Data, ~E: Data, ~G: Data, ~D: Data, ~render: E -> String, ~details: J() -> G, +events: EventStreamOut(G), fetch: Fetch.Fetch(Reason), urlContext: URL.Context, handler: Handler, +parent: Abort.AbortSignal<Reason>, +model: T.Model<J()>, +context: T.TranscriptContext<V.Value, V.Value, G, D>, options: Maybe<&2, T.SimpleStreamOptions<J(), Abort.AbortSignal<Reason>, Telemetry, Fetch.Fetch(Reason), E>>) -> IO(Unit):
+  stream(~Reason, ~Telemetry, ~E, ~G, ~D, ~render, ~details, events, fetch, urlContext, handler, parent, model, context, streamSimpleOptions(~G, ~D, ~Abort.AbortSignal<Reason>, ~Telemetry, ~Fetch.Fetch(Reason), ~E, model, context, options))

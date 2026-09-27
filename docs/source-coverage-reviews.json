@@ -48,7 +48,7 @@
     },
     "packages/ai/src/api/bedrock-converse-stream.ts": {
       "state": "partial",
-      "note": "stream/streamSimple: the client configuration pi builds (profile, region from ARN/AWS_REGION/profile/built-in endpoint, custom endpoints, static credentials, bearer token), message/tool/system conversion with cache points and document sanitization, adaptive and budget thinking fields, onPayload/onResponse, the restJson ConverseStream request with SigV4 (runtime/aws-sigv4.bend) or bearer auth and caller headers minus reserved ones, the event-stream response (runtime/aws-eventstream.bend with CRC-32), the stream fold (text, reasoning incl. redacted, tool calls, usage with 1h cache writes, stop reasons) and error formatting with bedrock_response_failure diagnostics; traces equal the pinned AWS SDK on a loopback server (tests/bedrock_check.py). Without configured credentials the SDK default chain resolves them as the pinned credential-provider-node does (bedrock-credentials.bend over bedrock-credential-services.bend): environment keys unless a profile is selected, shared-file profiles (static keys, STS AssumeRole through source_profile chains and credential_source Environment/EcsContainer/Ec2InstanceMetadata with cycle and MFA errors, AssumeRoleWithWebIdentity, credential_process, SSO with sso-session token refresh through SSO-OIDC and legacy start-URL caches), fromProcess, web identity from the environment, then container (fromHttp with token file and retries, fromContainerMetadata) or IMDS (v2 token, v1 fallback and its blocks); tests/bedrock_check.py compares 33 chain cases (including the SDK standard retry strategy on STS and SSO) with the SDK against a loopback STS/SSO/OIDC/ECS/IMDS server. Missing: console login sessions (login_session), the Bedrock ConverseStream request's own SDK retries, and HTTP(S) proxy agents. Unknown content-block types and lone surrogates are not representable in the typed Bend transcript. The live suites' Bedrock rows (stream, abort, tokens, empty, total-tokens, unicode-surrogate, tool-call-without-result, context-overflow, cross-provider-handoff, image-tool-result, interleaved-thinking) also pass through the agent's stream providers against ConverseStream event-stream frames on the loopback replay, with SigV4 from environment IAM keys verified by the server (tests/live_replay_check.py, Bun and native 1/4 threads), compared with the pinned AWS SDK. Two replay rows stay KNOWN: an abort during a pending event-stream read reports 'Request aborted' (pinned pi-mono's text depends on its runtime), and the CLI's messages drop diagnostics details (Unit details in the agent session codecs).",
+      "note": "stream/streamSimple: the client configuration pi builds (profile, region from ARN/AWS_REGION/profile/built-in endpoint, custom endpoints, static credentials, bearer token), message/tool/system conversion with cache points and document sanitization, adaptive and budget thinking fields, onPayload/onResponse, the restJson ConverseStream request with SigV4 (runtime/aws-sigv4.bend) or bearer auth and caller headers minus reserved ones, the event-stream response (runtime/aws-eventstream.bend with CRC-32), the stream fold (text, reasoning incl. redacted, tool calls, usage with 1h cache writes, stop reasons) and error formatting with bedrock_response_failure diagnostics; traces equal the pinned AWS SDK on a loopback server (tests/bedrock_check.py). Without configured credentials the SDK default chain resolves them as the pinned credential-provider-node does (bedrock-credentials.bend over bedrock-credential-services.bend): environment keys unless a profile is selected, shared-file profiles (static keys, STS AssumeRole through source_profile chains and credential_source Environment/EcsContainer/Ec2InstanceMetadata with cycle and MFA errors, AssumeRoleWithWebIdentity, credential_process, SSO with sso-session token refresh through SSO-OIDC and legacy start-URL caches), fromProcess, web identity from the environment, then container (fromHttp with token file and retries, fromContainerMetadata) or IMDS (v2 token, v1 fallback and its blocks); tests/bedrock_check.py compares 33 chain cases (including the SDK standard retry strategy on STS and SSO) with the SDK against a loopback STS/SSO/OIDC/ECS/IMDS server. Proxies as upstream's request handler: resolveHttpProxyUrlForTarget(model.baseUrl, options.env) chooses the proxy, and the request then runs on a runtime of its own built from the caller's Handler (files, HTTP options, TLS policy); an http endpoint's request goes to the proxy in absolute form with Proxy-Authorization and Proxy-Connection (HttpProxyAgent), an https endpoint through a CONNECT tunnel; tests/bedrock_check.py node-http-proxy cases compare what a loopback forwarding proxy receives, and the traces, with the pinned SDK (scoped/process/ALL_PROXY/credentials/NO_PROXY). An unusable proxy URL ends the stream with its error, where upstream's task rejects before its try block. Missing: console login sessions (login_session), the Bedrock ConverseStream request's own SDK retries, and https:// proxy URLs (TLS to the proxy is rejected natively). Unknown content-block types and lone surrogates are not representable in the typed Bend transcript. The live suites' Bedrock rows (stream, abort, tokens, empty, total-tokens, unicode-surrogate, tool-call-without-result, context-overflow, cross-provider-handoff, image-tool-result, interleaved-thinking) also pass through the agent's stream providers against ConverseStream event-stream frames on the loopback replay, with SigV4 from environment IAM keys verified by the server (tests/live_replay_check.py, Bun and native 1/4 threads), compared with the pinned AWS SDK. Two replay rows stay KNOWN: an abort during a pending event-stream read reports 'Request aborted' (pinned pi-mono's text depends on its runtime), and the CLI's messages drop diagnostics details (Unit details in the agent session codecs).",
       "ports": [
         "packages/ai/src/api/bedrock-converse-stream.bend",
         "packages/ai/src/api/bedrock-credentials.bend",
@@ -61,7 +61,7 @@
       ],
       "source_sha256": "cd4b63f95787c9f775a96a19edf760bbf266987b51f9cc9f6ac0ecd34cffe047",
       "port_sha256": {
-        "packages/ai/src/api/bedrock-converse-stream.bend": "9a4951f4913de4724474884bcda9dfd119766ff7e63a0eff53f738515571c978",
+        "packages/ai/src/api/bedrock-converse-stream.bend": "e801ea6fe7eba03504873dd1bb48d0db00f7d62e0ce0298b9b88a1ee1a5ae8e2",
         "packages/ai/src/api/bedrock-credentials.bend": "e812424f78f1622475bd0ed2904d17e26e9ffa30db0e7ae45b5c5f1c5585d68d",
         "packages/ai/src/api/bedrock-credential-services.bend": "bd006da1c25e1d9f06f60ca4c358a0b84e6666435c897ab16613333858e86a42",
         "packages/ai/src/api/credential-http.bend": "9c037e48ffab2c42a8448d6ff2fdf615ed3d789fff1f9e6efb1da10faa33794a",
@@ -147,15 +147,15 @@
       "port_sha256": {
         "packages/ai/src/api/mistral-conversations.bend": "87f9860ab53ae3c884656d205c8f771c48b7ad54dc01ce2438b0c8e07659a7b1",
         "packages/ai/src/api/provider-fetch.bend": "4f11d6da5363ffae0c3d2214e163bd9eee6a4348039d4f37d4d652a62a248275",
-        "packages/coding-agent/src/core/stream-providers.bend": "28555108d117c8cdf1d802989ccf2b3ba371312ef9c48a0679feac09af5d112d"
+        "packages/coding-agent/src/core/stream-providers.bend": "fd5616a8455258480aca95c7b7fc1acc0fab54451b0cb3f315814bab12e41070"
       }
     },
     "packages/ai/src/api/openai-codex-responses.ts": {
       "state": "partial",
-      "note": "Native Codex stream/streamSimple use shared Responses request preparation and conversion, SSE retry/timeouts/service-tier pricing, and real WebSocket streaming. The CLI-owned session pool supports exclusive reusable connections, independent request cancellation, concurrent one-shot requests, immutable cached-context deltas, invalidation and checkout-time expiry. Connection-limit errors retry once before output starts; missing previous responses retry once with a fresh full request, including after partial output. One run emits start once across retries/fallback. Transport failures remember SSE for later requests in that session, without disabling other sessions. Differential checks cover 27 SSE cases, 22 WebSocket scenarios and 15 consecutive-turn scenarios on Bun/native1/native4; cache helpers and pool ownership also have dedicated checks. Remaining: active idle-expiry timers, stale-peer checks, debug/cleanup APIs, transport diagnostics, generated WebSocket request IDs without a session, proxy environment routing and optional zstd compression. Approved differences: structural JSON equality, immutable event snapshots, strict malformed-input rejection; parser/fetch error wording is native.",
+      "note": "Native Codex stream/streamSimple use shared Responses request preparation and conversion, SSE retry/timeouts/service-tier pricing, and real WebSocket streaming. The CLI-owned session pool supports exclusive reusable connections, independent request cancellation, concurrent one-shot requests, immutable cached-context deltas, invalidation and checkout-time expiry. Connection-limit errors retry once before output starts; missing previous responses retry once with a fresh full request, including after partial output. One run emits start once across retries/fallback. Transport failures remember SSE for later requests in that session, without disabling other sessions. Differential checks cover 27 SSE cases, 22 WebSocket scenarios and 15 consecutive-turn scenarios on Bun/native1/native4; cache helpers and pool ownership also have dedicated checks. Remaining: active idle-expiry timers, stale-peer checks, debug/cleanup APIs, transport diagnostics, generated WebSocket request IDs without a session, https:// proxy URLs (TLS to the proxy; the attempt falls back to SSE) and optional zstd compression. WebSocket connections take the proxy as upstream's Bun WebSocketWithProxy does: resolveHttpProxyUrlForTarget for the http(s) form of the URL with the request's provider env, then a CONNECT tunnel; an unsupported proxy URL fails the attempt (SSE fallback); tests/openai_codex_websocket_check.py proxy modes compare tunnel requests, credentials, NO_PROXY and failures with pinned pi. Approved differences: structural JSON equality, immutable event snapshots, strict malformed-input rejection; parser/fetch error wording is native.",
       "source_sha256": "ea1860ea6f78d1ed4e935e86b5dcb149ccb1f03a12669ff8550cc7243ec6ddc8",
       "port_sha256": {
-        "packages/ai/src/api/openai-codex-responses.bend": "6b3a5d6e5f9191b29a8e06ca9d11740f5821b05c98e416d2d7595c5aab3faec1",
+        "packages/ai/src/api/openai-codex-responses.bend": "4515aade351c90df5f6698fe232c33bb439700519d4383e4347c0a885b926200",
         "packages/ai/src/api/openai-codex-sessions.bend": "91d9b2a2ca0ed88b1a359af5be2ed167817d53c7607aed46908597faf198cd2c"
       },
       "ports": [
@@ -233,7 +233,7 @@
       "port_sha256": {
         "packages/ai/src/api/pi-messages.bend": "b014bfe831a016688261bc1d18470838ca61366b4baa7647c28cc44a0452d6e7",
         "packages/ai/src/api/provider-fetch.bend": "4f11d6da5363ffae0c3d2214e163bd9eee6a4348039d4f37d4d652a62a248275",
-        "packages/coding-agent/src/core/stream-providers.bend": "28555108d117c8cdf1d802989ccf2b3ba371312ef9c48a0679feac09af5d112d"
+        "packages/coding-agent/src/core/stream-providers.bend": "fd5616a8455258480aca95c7b7fc1acc0fab54451b0cb3f315814bab12e41070"
       }
     },
     "packages/ai/src/auth/credential-store.ts": {
@@ -252,11 +252,11 @@
     },
     "packages/ai/src/auth/oauth/anthropic.ts": {
       "state": "partial",
-      "note": "Native OAuthAuth.login uses PKCE, the upstream authorization URL, callback host override (names resolved through /etc/hosts), browser/manual arbitration, progress notification and authorization-code exchange; token requests send upstream's JSON Content-Type/Accept headers and report upstream's request-failed and invalid-JSON messages (the error details omit the JS stack). Refresh retains the five-minute expiry margin and toAuth derives bearer auth. anthropic-oauth.test.ts and oauth-auth.test.ts cases pass against pinned pi-mono in tests/oauth_flows_check.py; native callback/manual fixtures check state rejection, cancellation, typed prompt failures and occupied-port fallback. Remaining: the callback pages are plain (oauth-page.bend is not used yet), and a token response missing fields is an error instead of a credential with undefined fields.",
+      "note": "Native OAuthAuth.login uses PKCE, the upstream authorization URL, callback host override (names resolved through /etc/hosts), browser/manual arbitration, progress notification and authorization-code exchange; token requests send upstream's JSON Content-Type/Accept headers and report upstream's request-failed and invalid-JSON messages (the error details omit the JS stack). Refresh retains the five-minute expiry margin and toAuth derives bearer auth. anthropic-oauth.test.ts and oauth-auth.test.ts cases pass against pinned pi-mono in tests/oauth_flows_check.py; native callback/manual fixtures check state rejection, cancellation, typed prompt failures and occupied-port fallback. The callback server answers with upstream's handler (callbackReply: route, OAuth error with details, missing code or state, state mismatch, success) and oauth-page.bend's pages; tests/oauth_callback_pages_check.py compares every status, content type and body with pinned pi. Remaining: a token response missing fields is an error instead of a credential with undefined fields.",
       "source_sha256": "8bf457ab5f0e7756898bff324d54d7ad9e4d4977c1053cb744791ac024945810",
       "port_sha256": {
-        "packages/ai/src/auth/oauth/anthropic.bend": "4329a26b4a883de5f6ab103cfd7b185ee23ef7d491c7bd306d5a8acc793ac72f",
-        "packages/ai/src/auth/oauth/browser.bend": "1f9b99149c01193b13fb81c1600e09d91f61478f312e2e60a711f9b1c1ca21c9"
+        "packages/ai/src/auth/oauth/anthropic.bend": "798ff0cf9f74f4a71f74083502b4cfb9b4d69dd31491699da3c79e532ebeeef0",
+        "packages/ai/src/auth/oauth/browser.bend": "fdb9e73450eb2a5630d820fcade347aaad6c05c39fc7a8f04c2631a6514f99f5"
       },
       "ports": [
         "packages/ai/src/auth/oauth/anthropic.bend",
@@ -273,11 +273,11 @@
     },
     "packages/ai/src/auth/oauth/openai-codex.ts": {
       "state": "partial",
-      "note": "Native OAuthAuth.login selects browser/device login. Browser authorization uses PKCE, independent 16-byte hex state, upstream URL fields, callback host override, state validation, manual-input fallback and token exchange with the browser redirect URI. Device login notifies the user code then polls/exchanges with the device redirect URI. Refresh and toAuth remain native. Browser/manual workers share typed first-settlement arbitration and are cancelled/joined before disposal. Callback completion HTML is simplified; exact token-error classification/rendering and source-wide edge-case parity remain incomplete.",
+      "note": "Native OAuthAuth.login selects browser/device login. Browser authorization uses PKCE, independent 16-byte hex state, upstream URL fields, callback host override, state validation, manual-input fallback and token exchange with the browser redirect URI. Device login notifies the user code then polls/exchanges with the device redirect URI. Refresh and toAuth remain native. Browser/manual workers share typed first-settlement arbitration and are cancelled/joined before disposal. The callback server answers with upstream's handler (callbackReply) and oauth-page.bend's pages, compared byte for byte with pinned pi in tests/oauth_callback_pages_check.py; exact token-error classification/rendering and source-wide edge-case parity remain incomplete.",
       "source_sha256": "757c6cff2bc67d89df30ad175eead549519e1d3756397b5b4189460ac9dbcaba",
       "port_sha256": {
-        "packages/ai/src/auth/oauth/openai-codex.bend": "bd8c582fb0c5e8fbf734ba47d9ee358633d1d1b5243f8bcd0ecfd6f36b4ea41a",
-        "packages/ai/src/auth/oauth/browser.bend": "1f9b99149c01193b13fb81c1600e09d91f61478f312e2e60a711f9b1c1ca21c9"
+        "packages/ai/src/auth/oauth/openai-codex.bend": "b259f40999841da31598540cd0656007d2550298e2ff228aad40473fde2a50b9",
+        "packages/ai/src/auth/oauth/browser.bend": "fdb9e73450eb2a5630d820fcade347aaad6c05c39fc7a8f04c2631a6514f99f5"
       },
       "ports": [
         "packages/ai/src/auth/oauth/openai-codex.bend",
@@ -289,7 +289,7 @@
       "note": "Native generatePKCE reads 32 secure random bytes, base64url-encodes the verifier and SHA-256 challenge, and returns immutable PKCE fields. Failures are typed errors. tests/anthropic_oauth_start_check.py compares native one/four-thread authorization challenges with the Python SHA-256/base64 oracle; browser interaction tests exercise worker cleanup.",
       "source_sha256": "33835111577490103dbb7509b7687db1643691d7b425845428f3cbeb873fe9cf",
       "port_sha256": {
-        "packages/ai/src/auth/oauth/browser.bend": "1f9b99149c01193b13fb81c1600e09d91f61478f312e2e60a711f9b1c1ca21c9"
+        "packages/ai/src/auth/oauth/browser.bend": "fdb9e73450eb2a5630d820fcade347aaad6c05c39fc7a8f04c2631a6514f99f5"
       },
       "ports": [
         "packages/ai/src/auth/oauth/browser.bend"
@@ -297,10 +297,10 @@
     },
     "packages/ai/src/auth/oauth/radius.ts": {
       "state": "ported",
-      "note": "createRadiusOAuth: the sign-in method select, device login (POST /v1/oauth/device, device_code event, polling the token endpoint with authorization_pending/slow_down/expired_token/access_denied), browser login (GET /v1/oauth discovery, PKCE with a random-UUID state, the callback server on 127.0.0.1:1456 with upstream's 404/state-mismatch/missing-code responses and error completion, progress and auth_url events, the code exchange), refresh through the gateway, OAuthResponseError messages and toAuth; tests/radius_check.py (the three upstream cases plus the full browser callback flow). Native differences: the success/error pages are plain HTML with upstream's messages (the styled oauth-page template is not ported); a token response missing access_token/refresh_token/expires_in is an error instead of a credential with undefined fields.",
+      "note": "createRadiusOAuth: the sign-in method select, device login (POST /v1/oauth/device, device_code event, polling the token endpoint with authorization_pending/slow_down/expired_token/access_denied), browser login (GET /v1/oauth discovery, PKCE with a random-UUID state, the callback server on 127.0.0.1:1456 with upstream's 404/state-mismatch/missing-code responses and error completion, progress and auth_url events, the code exchange), refresh through the gateway, OAuthResponseError messages and toAuth; tests/radius_check.py (the three upstream cases plus the full browser callback flow). The callback pages are oauth-page.bend's, compared byte for byte with pinned pi in tests/oauth_callback_pages_check.py. Native difference: a token response missing access_token/refresh_token/expires_in is an error instead of a credential with undefined fields.",
       "source_sha256": "a4c520d7ea0f605da1cb4499e8532c5e058cb9fda4d162bd347526bd66351801",
       "port_sha256": {
-        "packages/ai/src/auth/oauth/radius.bend": "5f6accfc6256abbbd0399a14317707c5e9a6b42827db51f92426a2677dfc9cab"
+        "packages/ai/src/auth/oauth/radius.bend": "a8f069861d79ba038fcd73d9212ef951c7a3a26a98cd2c241a739014cc89d565"
       }
     },
     "packages/ai/src/auth/types.ts": {
@@ -1387,7 +1387,7 @@
     },
     "packages/ai/src/auth/oauth/oauth-page.ts": {
       "state": "ported",
-      "note": "oauthSuccessHtml/oauthErrorHtml with upstream's template and escaping (output compared byte for byte). Used by the OpenRouter callback; the Anthropic, Codex and Radius callbacks still serve their plain pages.",
+      "note": "oauthSuccessHtml/oauthErrorHtml with upstream's template and escaping (output compared byte for byte). Used by the OpenRouter, Anthropic, Codex and Radius callbacks.",
       "source_sha256": "f58b133d271be4ff47352947fd4e55ab66230dc2647b7cbc7c79a574a93de632",
       "port_sha256": {
         "packages/ai/src/auth/oauth/oauth-page.bend": "536ff05b5511efe1ad8ab2c517a71d05d0080e01af0ea8bf5e481dd8bc9510c8"
@@ -1395,7 +1395,7 @@
     },
     "packages/ai/src/utils/node-http-proxy.ts": {
       "state": "ported",
-      "note": "resolveHttpProxyUrlForTarget: scoped provider env before the process env, lowercase before uppercase, <protocol>_proxy then all_proxy, scheme-less proxies, NO_PROXY with '*', wildcards, IPv6 brackets, ports (parseInt semantics) and default ports per protocol, and the invalid/unsupported proxy errors (error values instead of throws). node-http-proxy.test.ts and differential resolutions in tests/node_http_proxy_check.py. Callers that route through the proxy (Bedrock, Codex WebSocket) are not wired yet.",
+      "note": "resolveHttpProxyUrlForTarget: scoped provider env before the process env, lowercase before uppercase, <protocol>_proxy then all_proxy, scheme-less proxies, NO_PROXY with '*', wildcards, IPv6 brackets, ports (parseInt semantics) and default ports per protocol, and the invalid/unsupported proxy errors (error values instead of throws). node-http-proxy.test.ts and differential resolutions in tests/node_http_proxy_check.py. Bedrock and the Codex WebSocket route their requests through the resolved proxy (see their reviews). Upstream's coding agent also feeds its httpProxy setting to them by writing HTTP_PROXY/HTTPS_PROXY into the process environment (applyHttpProxySettings); natively the setting configures only the agent's fetch, so they see the environment and provider env alone.",
       "source_sha256": "a13ab6556d127e6fb097147b209c68e47aed8e724e2774e7dd7df21ff91d9d5b",
       "port_sha256": {
         "packages/ai/src/utils/node-http-proxy.bend": "e5cc40b3b19642be405992b12736c3bbcd538890eb4fbd8006261f93ebc48e90"
@@ -1462,9 +1462,9 @@
       "source_sha256": "d64922c476d11b90555b8f23cab92ce1f4f83174cb750c125a96d8d4374744e2",
       "port_sha256": {
         "packages/coding-agent/src/core/http-dispatcher.bend": "ebdef30af7fff2fd0f4529bced421f752bc290f3b92698f5a173e29b90b9e6f8",
-        "packages/runtime/src/http-proxy.bend": "419b0ead8c7f0b14547c03dc1c66b0d90189456b8676a345983f095a7da4f083",
+        "packages/runtime/src/http-proxy.bend": "53cefc4acd8c47f4aed1011884124072a63e7b72612898e996c7a6e35e0d9ba9",
         "packages/runtime/src/fetch.bend": "f189fd01e044448ed351dba66d522fe6570839dfd7aec83672df622515af09f6",
-        "packages/coding-agent/src/core/agent-runtime.bend": "eb4230698b0a97f577cc3aae98436bcefe2f540d1737f00b5b8a5b2aca0181b3",
+        "packages/coding-agent/src/core/agent-runtime.bend": "b7da3d22788a913d1c67ccb1b14ff65ccbac4890792623afbe2eb0a7c5b98975",
         "packages/coding-agent/src/main.bend": "c1115b09092f2785d2c2acf7b33ef1043850e6768f0817686799b470d650d23b"
       }
     },

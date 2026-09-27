@@ -78,9 +78,10 @@ def mistralSelected(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai
 def mistral(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, +model: Ai.Model<Ai.JsonValue>, +context: Context(), +options: Maybe<&2, Options()>) -> IO(Output()):
   mistralSelected(fetch, urlContext, model, context, parentSignal(options), Mistral.streamSimpleOptions(~Unit, ~Details(), ~Abort.AbortSignal<Unit>, ~Unit, ~Fetch.Fetch(Unit), ~Error(), model, context, options))
 
-# upstream bedrock-converse-stream streamSimple.
-def bedrock(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, model: Ai.Model<Ai.JsonValue>, context: Context(), +options: Maybe<&2, Options()>) -> IO(Output()):
-  lease(events => signal => Bedrock.streamSimple(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~Tools.errorMessage, ~noDetails, events, fetch, urlContext, signal, model, context, options), parentSignal(options))
+# upstream bedrock-converse-stream streamSimple; a proxied request runs on
+# `handler`'s network.
+def bedrock(fetch: Fetch.Fetch(Unit), urlContext: URL.Context, handler: Bedrock.Handler, model: Ai.Model<Ai.JsonValue>, context: Context(), +options: Maybe<&2, Options()>) -> IO(Output()):
+  lease(events => signal => Bedrock.streamSimple(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~Tools.errorMessage, ~noDetails, events, fetch, urlContext, handler, signal, model, context, options), parentSignal(options))
 
 def VertexOptions() -> Data: Vertex.Options(Unit, Unit, Error())
 

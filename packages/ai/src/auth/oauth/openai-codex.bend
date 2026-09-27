@@ -387,6 +387,20 @@ def exchangeBrowser(flow: Flow,endpoint: String,code: AuthorizationCode,signal: 
         response : Result<&2,&2,String,HttpText> <- post(fetch,context,endpoint,"application/x-www-form-urlencoded",exchangeBodyAt(code,REDIRECT_URI()),signal)
         now : F64 <- Date.now()
         return exchanged(now,response)
+# upstream startLocalOAuthServer's request handler: its pages, in its order
+# of checks; rejected requests leave the server waiting.
+def codeChecked(code: Maybe<&2,String>) -> Browser.CallbackReply:
+  match code:
+    case Some{value}: Browser.completed("OpenAI authentication completed. You can close this window.",value)
+    case None{}: Browser.rejected(400,"Missing authorization code.",None{})
+def stateChecked(+params: URL.URLSearchParams, received: Maybe<&2,String>, state: String) -> Browser.CallbackReply:
+  match received:
+    case Some{value}: Bool.pick(Unit -> Browser.CallbackReply,String.eq(value,state),_ => codeChecked(Browser.truthy(URL.get(params,"code"))),_ => Browser.rejected(400,"State mismatch.",None{}))(Unit{})
+    case None{}: Browser.rejected(400,"State mismatch.",None{})
+def callbackReply(request: Browser.CallbackRequest) -> Browser.CallbackReply:
+  match request:
+    case Browser.CallbackRequest{+path,+params,state}: Bool.pick(Unit -> Browser.CallbackReply,String.eq(path,"/auth/callback"),_ => stateChecked(params,URL.get(params,"state"),state),_ => Browser.rejected(404,"Callback route not found.",None{}))(Unit{})
+
 def browserCode(flow: Flow,endpoint: String,code: Browser.CodeResult(),verifier: String,signal: Abort.AbortSignal<Unit>) -> IO(Auth.LoginOutcome()):
   match code:
     case Fail{message}: IO.pure(Auth.LoginOutcome(),Fail{message})
@@ -397,7 +411,7 @@ def browserStarted(flow: Flow,endpoint: String,started: Result<&2,&2,String,Auth
     case Done{Authorization{url,verifier,state}} Auth.ProviderAuthInteraction{signal,_,_}:
       do IO<Auth.LoginOutcome()>:
         listener : Result<&1,&1,U32 & String,Listener> <- Browser.listenCallback(1455)
-        code : Browser.CodeResult() <- Browser.promptCode(Browser.CallbackConfig{REDIRECT_URI(),"/auth/callback",state},listener,interaction,url,"Complete login in your browser, or paste the authorization code / redirect URL here:","A browser window should open. Complete login to finish.")
+        code : Browser.CodeResult() <- Browser.promptCode(~callbackReply,Browser.CallbackConfig{REDIRECT_URI(),state},listener,interaction,url,"Complete login in your browser, or paste the authorization code / redirect URL here:","A browser window should open. Complete login to finish.")
         browserCode(flow,endpoint,code,verifier,signal)
 def deviceAuthorized(flow: Flow,endpoints: DeviceEndpoints,result: Result<&2,&2,String,AuthorizationCode>,signal: Abort.AbortSignal<Unit>) -> IO(Auth.LoginOutcome()):
   match result:

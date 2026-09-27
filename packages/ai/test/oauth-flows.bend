@@ -8,6 +8,7 @@ import ../src/auth/oauth/github-copilot.bend as Copilot
 import ../src/auth/oauth/openrouter.bend as OpenRouter
 import ../src/auth/oauth/anthropic.bend as AnthropicOAuth
 import ../src/auth/oauth/openai-codex.bend as CodexOAuth
+import ../src/auth/oauth/radius.bend as RadiusOAuth
 import ../src/auth/oauth/oauth-http.bend as H
 import ../src/api/credential-http.bend as Http
 import ../../runtime/src/deferred.bend as Deferred
@@ -37,7 +38,8 @@ import ../../runtime/test/utf8-runner.bend as Text
 # `<base>/<host><path>`, so the server sees each provider URL. Arguments: the
 # base URL and a JSON case file
 #   {flow, action: "login" | "refresh" | "toAuth" | "describe", credential?,
-#    prompts?: [answer], abortOnDeviceCode?, abortOnAuthUrl?, pendingPrompt?,
+#    prompts?: [answer], abortOnDeviceCode?, abortOnAuthUrl?, pendingPrompt?
+#    (prompts after the listed answers stay pending),
 #    watchPromptSignal?, promptError?, callbackCode?, secondCallbackMs?,
 #    preAborted?}
 # Output (code-point encoded JSON): "S <start ms>", "N <event>" per notify,
@@ -196,9 +198,20 @@ def watched(watch: Bool, record: Ref.Ref<Bool>, signal: Maybe<&2, Abort.AbortSig
         return Unit{}
     case _ _: IO.pure(Unit, Unit{})
 
+# A pending prompt case answers its listed prompts first (the Codex method
+# select), then leaves the rest pending.
+def answeredOrPending(context: URL.Context, answer: Maybe<&2, String>, authUrl: String, record: Ref.Ref<Bool>, signal: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Result<&2, &2, String, String>):
+  match answer:
+    case Some{text}: IO.pure(Result<&2, &2, String, String>, Done{substituted(context, text, authUrl)})
+    case None{}: pendingUntilAborted(record, signal)
+
 def promptedWith(answers: Ref.Ref<List<&2, String>>, browser: Browser, +prompt: Auth.AuthPrompt) -> IO(Result<&2, &2, String, String>):
   match browser:
-    case Browser{_, _, _, _, _, True{}, _, _, promptAborted, _, _}: pendingUntilAborted(promptAborted, promptSignalOf(prompt))
+    case Browser{raw, authUrl, _, _, _, True{}, _, _, promptAborted, _, _}:
+      do IO<Result<&2, &2, String, String>>:
+        answer : Maybe<&2, String> <- Ref.modify(List<&2, String>, Maybe<&2, String>, answers, popped)
+        url : String <- Ref.read(String, authUrl)
+        answeredOrPending(H.flowContext(raw), answer, url, promptAborted, promptSignalOf(prompt))
     case Browser{_, _, _, _, _, False{}, watch, Some{message}, promptAborted, _, _}:
       do IO<Result<&2, &2, String, String>>:
         watched(watch, promptAborted, promptSignalOf(prompt))
@@ -364,6 +377,10 @@ def flowOf(+name: String, fetch: Fetch.Fetch(Unit), url: URL.Context) -> IO(Mayb
     case "anthropic":
       do IO<Maybe<&2, Auth.OAuthAuth>>:
         oauth : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch, url)
+        return Some{oauth}
+    case "radius":
+      do IO<Maybe<&2, Auth.OAuthAuth>>:
+        oauth : Auth.OAuthAuth <- RadiusOAuth.createRadiusOAuth("Radius", "https://radius.pi.dev", fetch, url)
         return Some{oauth}
     case "openrouter":
       do IO<Maybe<&2, Auth.OAuthAuth>>:

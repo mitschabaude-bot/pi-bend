@@ -17,18 +17,19 @@ import ./utf8.bend as UTF8
 
 # A native duplex connection, independent of HTTP response-body framing and
 # fetch keep-alive pools. The caller owns the signal, resolver and TLS policy;
-# they remain alive until the connection is disposed.
+# they remain alive until the connection is disposed. Connections go through
+# the runtime's proxies with a CONNECT tunnel, as its fetch requests do.
 type Config is Data:
-  Config{resolver: DNS.Resolver, hosts: Fetch.HostsResult(), options: HTTP.Options, security: HTTP.Security, url: URL.Context}
+  Config{resolver: DNS.Resolver, hosts: Fetch.HostsResult(), options: HTTP.Options, proxies: Proxy.Config, security: HTTP.Security, url: URL.Context}
 type Wire<-Reason: Data> is Type:
   Plain{socket: Net.Owner<Reason>}
   Secure{connection: TLS.Connection<Reason>, writer: TLS.Writer<Reason>}
 type Connection<-Reason: Data> is Type:
   Connection{wire: Wire<Reason>, decoder: WS.Decoder, pending: List<&2, U32>, readSize: U32}
 
-def withResolver(+hosts: Fetch.HostsResult(), +options: HTTP.Options, proxies: Proxy.Config, pools: List<&2, C.Callback<Unit, Unit>>, security: HTTP.Security, url: URL.Context, pair: DNS.Owner & DNS.Resolver) -> Fetch.Runtime & Config:
+def withResolver(+hosts: Fetch.HostsResult(), +options: HTTP.Options, +proxies: Proxy.Config, pools: List<&2, C.Callback<Unit, Unit>>, security: HTTP.Security, url: URL.Context, pair: DNS.Owner & DNS.Resolver) -> Fetch.Runtime & Config:
   match pair:
-    case (owner, resolver): (Fetch.Runtime{owner, hosts, options, proxies, pools}, Config{resolver, hosts, options, security, url})
+    case (owner, resolver): (Fetch.Runtime{owner, hosts, options, proxies, pools}, Config{resolver, hosts, options, proxies, security, url})
 
 def borrow(runtime: Fetch.Runtime, security: HTTP.Security, url: URL.Context) -> Fetch.Runtime & Config:
   match runtime:
@@ -148,20 +149,37 @@ def handshaking(-Reason: Data, key: String, size: U32, request: H.BufferedReques
         authenticated : Result<&2, &1, TLS.Error<Reason>, TLS.Connection<Reason>> <- TLS.awaitHandshake(Reason, connection)
         secured(Reason, key, size, request, authenticated)
 
-def adopted(-Reason: Data, protocol: HTTP.Protocol, key: String, size: U32, request: H.BufferedRequestPrepared, result: Result<&2, &1, Net.Error<Reason>, Net.Owner<Reason>>) -> IO(Result<&2, &1, String, Connection<Reason>>):
-  match result protocol:
-    case Fail{_} _: IO.pure(Result<&2, &1, String, Connection<Reason>>, Fail{"WebSocket connection failed"})
-    case Done{owner} HTTP.Cleartext{}: upgrade(Reason, Plain{owner}, key, size, request)
-    case Done{owner} HTTP.Encrypted{+host, authorize, options}:
+# The upgrade over a connection to the origin, or through an established
+# tunnel to it (HTTP.routeOf never nests tunnels).
+def upgradeOver(-Reason: Data, protocol: HTTP.Protocol, key: String, size: U32, request: H.BufferedRequestPrepared, owner: Net.Owner<Reason>) -> IO(Result<&2, &1, String, Connection<Reason>>):
+  match protocol:
+    case HTTP.Cleartext{}: upgrade(Reason, Plain{owner}, key, size, request)
+    case HTTP.Encrypted{+host, authorize, options}:
       do IO<Result<&2, &1, String, Connection<Reason>>>:
         authorization : TLSClient.Authorization <- C.call(URL.Host, TLSClient.Authorization, authorize, host)
         initial : Result<&2, &1, TLS.Error<Reason>, TLS.Connection<Reason>> <- TLS.start(Reason, owner, HTTP.serverName(host), authorization, options)
         handshaking(Reason, key, size, request, initial)
-    # HTTP.protocol never selects a proxy tunnel for WebSockets.
-    case Done{owner} HTTP.Tunneled{_, _}:
+    case HTTP.Tunneled{_, _}:
       do IO<Result<&2, &1, String, Connection<Reason>>>:
         closed : Result<&2, &2, Net.InterruptError, Unit> <- Net.close(Reason, owner)
-        return Fail{"WebSocket proxy tunnels are not supported"}
+        return Fail{"WebSocket proxy tunnels cannot nest"}
+
+def tunnelled(-Reason: Data, target: HTTP.Protocol, key: String, size: U32, request: H.BufferedRequestPrepared, result: Proxy.TunnelResult(Reason)) -> IO(Result<&2, &1, String, Connection<Reason>>):
+  match result:
+    case (owner, Done{_}): upgradeOver(Reason, target, key, size, request, owner)
+    case (owner, Fail{error}):
+      do IO<Result<&2, &1, String, Connection<Reason>>>:
+        closed : Result<&2, &2, Net.InterruptError, Unit> <- Net.close(Reason, owner)
+        return Fail{Proxy.tunnelMessage(Reason, error)}
+
+def adopted(-Reason: Data, protocol: HTTP.Protocol, key: String, size: U32, request: H.BufferedRequestPrepared, result: Result<&2, &1, Net.Error<Reason>, Net.Owner<Reason>>) -> IO(Result<&2, &1, String, Connection<Reason>>):
+  match result protocol:
+    case Fail{_} _: IO.pure(Result<&2, &1, String, Connection<Reason>>, Fail{"WebSocket connection failed"})
+    case Done{owner} HTTP.Tunneled{connect, target}:
+      do IO<Result<&2, &1, String, Connection<Reason>>>:
+        tunnel : Proxy.TunnelResult(Reason) <- Proxy.tunnel(Reason, owner, connect)
+        tunnelled(Reason, target, key, size, request, tunnel)
+    case Done{owner} direct: upgradeOver(Reason, direct, key, size, request, owner)
 
 def opened(~Reason: Data, signal: Abort.AbortSignal<Reason>, protocol: HTTP.Protocol, key: String, size: U32, request: H.BufferedRequestPrepared, report: Driver.PlanReport<HTTP.Resolution(Reason, Fetch.SourceError()), Reason, Socket>) -> IO(Result<&2, &1, String, Connection<Reason>>):
   match report:
@@ -175,15 +193,20 @@ def opened(~Reason: Data, signal: Abort.AbortSignal<Reason>, protocol: HTTP.Prot
 def connectProtocol(~Reason: Data, +signal: Abort.AbortSignal<Reason>, config: Config, key: String, host: URL.Host, port: U32, request: H.BufferedRequestPrepared, protocol: Result<&2, &2, H.ExchangePlanError, HTTP.Protocol>) -> IO(Result<&2, &1, String, Connection<Reason>>):
   match config protocol:
     case _ Fail{_}: IO.pure(Result<&2, &1, String, Connection<Reason>>, Fail{"WebSocket TLS policy required"})
-    case Config{resolver, hosts, HTTP.Options{priority, preference, duration, size, _}, _, _} Done{protocol}:
+    case Config{resolver, hosts, HTTP.Options{priority, preference, duration, size, _}, _, _, _} Done{protocol}:
       do IO<Result<&2, &1, String, Connection<Reason>>>:
         report : Driver.PlanReport<HTTP.Resolution(Reason, Fetch.SourceError()), Reason, Socket> <- HTTP.open(~Reason, ~(Fetch.SourceError()), resolver, signal, priority, preference, Driver.Options{port, duration}, host, hosts)
         opened(~Reason, signal, protocol, key, size, request, report)
 
+# To the origin, or to its proxy (HTTP.routeOf).
+def viaRoute(~Reason: Data, +signal: Abort.AbortSignal<Reason>, config: Config, key: String, request: H.BufferedRequestPrepared, route: HTTP.Route) -> IO(Result<&2, &1, String, Connection<Reason>>):
+  match route:
+    case HTTP.Route{host, port, protocol}: connectProtocol(~Reason, signal, config, key, host, port, request, protocol)
+
 def prepared(~Reason: Data, signal: Abort.AbortSignal<Reason>, +config: Config, key: String, result: Result<&2, &2, H.URLRequestError, H.URLPrepared>) -> IO(Result<&2, &1, String, Connection<Reason>>):
   match config result:
     case _ Fail{_}: IO.pure(Result<&2, &1, String, Connection<Reason>>, Fail{"Invalid WebSocket URL or headers"})
-    case Config{_, _, _, security, _} Done{H.URLPrepared{H.Endpoint{transport, +host, port, _, _}, request}}: connectProtocol(~Reason, signal, config, key, host, port, request, HTTP.protocol(security, transport, host))
+    case Config{_, _, _, proxies, security, _} Done{H.URLPrepared{H.Endpoint{transport, +host, port, _, _}, request}}: viaRoute(~Reason, signal, config, key, request, HTTP.routeOf(proxies, security, transport, host, port))
 
 def headerFields(+key: String, headers: H.Headers) -> Result<&2, &2, H.HeaderSyntaxError, H.Headers>:
   Result.bind(&2, &2, H.HeaderSyntaxError, H.Headers, H.Headers, H.set(headers, "Upgrade", "websocket"),
@@ -206,8 +229,8 @@ def requestReady(~Reason: Data, signal: Abort.AbortSignal<Reason>, +config: Conf
   match config headers url:
     case _ Fail{_} _: IO.pure(Result<&2, &1, String, Connection<Reason>>, Fail{"Invalid WebSocket request headers"})
     case _ _ Fail{error}: IO.pure(Result<&2, &1, String, Connection<Reason>>, Fail{error})
-    case Config{_, _, HTTP.Options{_, _, _, 0, _}, _, _} _ _: IO.pure(Result<&2, &1, String, Connection<Reason>>, Fail{"Invalid WebSocket read size"})
-    case Config{_, _, _, _, context} Done{fields} Done{address}:
+    case Config{_, _, HTTP.Options{_, _, _, 0, _}, _, _, _} _ _: IO.pure(Result<&2, &1, String, Connection<Reason>>, Fail{"Invalid WebSocket read size"})
+    case Config{_, _, _, _, _, context} Done{fields} Done{address}:
       parsedURL(~Reason, signal, config, key, fields, URL.parse(context, address))
 
 def connectEntropy(~Reason: Data, config: Config, url: String, headers: H.Headers, signal: Abort.AbortSignal<Reason>, bytes: Result<&1, &1, U32 & String, List<&2, U32>>) -> IO(Result<&2, &1, String, Connection<Reason>>):

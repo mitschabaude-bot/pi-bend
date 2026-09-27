@@ -17,8 +17,10 @@ const modules: Record<string, [string, string]> = {
 	anthropic: ["anthropic.ts", "anthropicOAuth"],
 	codex: ["openai-codex.ts", "openaiCodexOAuth"],
 };
-const [file, name] = modules[spec.flow];
-const oauth = (await import(`${UPSTREAM}/packages/ai/src/auth/oauth/${file}`))[name];
+const oauth =
+	spec.flow === "radius"
+		? (await import(`${UPSTREAM}/packages/ai/src/auth/oauth/radius.ts`)).createRadiusOAuth({ name: "Radius", gateway: "https://radius.pi.dev" })
+		: (await import(`${UPSTREAM}/packages/ai/src/auth/oauth/${modules[spec.flow][0]}`))[modules[spec.flow][1]];
 
 const realFetch = globalThis.fetch;
 globalThis.fetch = ((input: any, init?: any) => {
@@ -53,7 +55,7 @@ try {
 			prompt: async (prompt: any) => {
 				const { signal: _signal, ...shown } = prompt;
 				emit("P", shown);
-				if (spec.pendingPrompt) {
+				if (spec.pendingPrompt && answers.length === 0) {
 					promptSignal = prompt.signal;
 					return new Promise<string>(() => {});
 				}
