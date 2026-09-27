@@ -32,6 +32,11 @@ type ToolResult is Data: ToolResult{content: List<&2,Ai.TextImageContent>,isErro
 type RenderContext is Data:
   RenderContext{toolName: String,toolCallId: String,args: Value.Value,result: Maybe<&2,ToolResult>,expanded: Bool,isPartial: Bool,executionStarted: Bool,argsComplete: Bool,width: Nat}
 def Renderer() -> Data: Callback.Callback<RenderContext,List<&2,String>>
+# Context computation is injectable, like a tool's operations. The transcript
+# owns the callback; each mounted tool joins its reads before being disposed.
+type PreviewRequest is Data: PreviewRequest{cwd: String,input: Edit.EditToolInput}
+type ToolContext is Data:
+  ToolContext{cwd: String,compute: Callback.Callback<PreviewRequest,Edits.Preview()>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,read: Maybe<&2,ReadRenderer.Context>}
 type Shell is Data:
   Generic{}
   Boxed{call: Maybe<&2,Renderer()>,result: Maybe<&2,Renderer()>}
@@ -167,33 +172,38 @@ def bashElapsed(result: Maybe<&2,ToolResult>,elapsed: Maybe<&2,F64>) -> Maybe<&2
     case None{}: None{}
     case Some{_}: elapsed
 def builtResult(+name: String,+args: Value.Value,+highlight: Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>,+result: Maybe<&2,ToolResult>,+expanded: Bool,partial: Bool,elapsed: Maybe<&2,F64>,+theme: Theme.Theme,width: Nat) -> IO(String):
-  match name:
-    case "read": ReadRenderer.renderResult(args,highlight,textOutput(result),resultDetails(result),expanded,errorOutput(result),theme)
-    case "write":
+  match result name:
+    case None{} _: IO.pure(String,"")
+    case _ "read": ReadRenderer.renderResult(args,highlight,textOutput(result),resultDetails(result),expanded,errorOutput(result),theme)
+    case _ "write":
       do IO<String>:
         +text : String <- WriteRenderer.renderResult(textOutput(result),errorOutput(result),theme)
         # Separate call/result Text components contribute a line boundary;
         # the write renderer itself contributes the blank line before errors.
         return Bool.pick(String,String.eq(text,""),"","\n" ++ text)
-    case "bash": BashRenderer.renderResult(textOutput(result),resultDetails(result),expanded,partial,bashElapsed(result,elapsed),theme,width)
-    case "find": FindRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
-    case "grep": GrepRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
-    case "ls": LsRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
-    case _: IO.pure(String,"")
-def builtCall(name: String,args: Value.Value,highlight: Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>,expanded: Bool,theme: Theme.Theme) -> IO(String):
+    case _ "bash": BashRenderer.renderResult(textOutput(result),resultDetails(result),expanded,partial,bashElapsed(result,elapsed),theme,width)
+    case _ "find": FindRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
+    case _ "grep": GrepRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
+    case _ "ls": LsRenderer.renderResult(textOutput(result),resultDetails(result),expanded,theme)
+    case _ _: IO.pure(String,"")
+def readCall(args: Value.Value,theme: Theme.Theme,expanded: Bool,context: Maybe<&2,ToolContext>) -> IO(String):
+  match context:
+    case None{}: ReadRenderer.renderCall(args,theme)
+    case Some{ToolContext{cwd,_,_,read}}: ReadRenderer.renderCallWithContext(args,theme,expanded,read,cwd)
+def builtCall(name: String,args: Value.Value,context: Maybe<&2,ToolContext>,highlight: Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>,expanded: Bool,theme: Theme.Theme) -> IO(String):
   match name:
-    case "read": ReadRenderer.renderCall(args,theme)
+    case "read": readCall(args,theme,expanded,context)
     case "bash": BashRenderer.renderCall(args,theme)
     case "write": WriteRenderer.renderCall(args,highlight,write,theme,expanded)
     case "find": FindRenderer.renderCall(args,theme)
     case "grep": GrepRenderer.renderCall(args,theme)
     case "ls": LsRenderer.renderCall(args,theme)
     case _: Render.pathCall(theme,name,args)
-def boxedBuiltin(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>) -> IO(List<&2,String>):
+def boxedBuiltin(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>,context: Maybe<&2,ToolContext>) -> IO(List<&2,String>):
   match state:
     case ToolExecution{name,_,+args,result,expanded,_,partial,_,_,+theme,_,+highlight}:
       do IO<List<&2,String>>:
-        call : String <- builtCall(name,args,highlight,write,expanded,theme)
+        call : String <- builtCall(name,args,context,highlight,write,expanded,theme)
         extra : String <- builtResult(name,args,highlight,result,expanded,partial,elapsed,theme,Nat.max(1n,width - 2n))
         +bg : Callback.Callback<String,String> <- Messages.color(theme,backgroundKey(state),True{})
         lines : List<&2,String> <- textLines(call ++ extra,0n,0n,Nat.max(1n,width - 2n),None{})
@@ -202,13 +212,13 @@ def boxedBuiltin(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>,write:
         +bottom : List<&2,String> <- Box.paintPadding(1n,width,Some{bg},Nil{})
         Callback.dispose(String,String,bg)
         return "" <> List.append(&2,String,top,List.append(&2,String,body,bottom))
-def builtinWithPreview(+state: ToolExecution,width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>,preview: Maybe<&2,Edits.Preview()>) -> IO(List<&2,String>):
+def builtinWithPreview(+state: ToolExecution,width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>,preview: Maybe<&2,Edits.Preview()>,context: Maybe<&2,ToolContext>) -> IO(List<&2,String>):
   match state:
     case ToolExecution{"edit",_,args,+result,_,_,partial,_,_,theme,_,_}:
       EditRenderer.renderWithPreview(args,textOutput(result),resultDetails(result),preview,errorOutput(result),theme,width)
-    case _: boxedBuiltin(state,width,elapsed,write)
+    case _: boxedBuiltin(state,width,elapsed,write,context)
 def builtinWithDuration(state: ToolExecution,width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>) -> IO(List<&2,String>):
-  builtinWithPreview(state,width,elapsed,write,None{})
+  builtinWithPreview(state,width,elapsed,write,None{},None{})
 def builtin(state: ToolExecution,width: Nat) -> IO(List<&2,String>):
   builtinWithDuration(state,width,None{},None{})
 
@@ -273,14 +283,14 @@ def selfRendered(+state: ToolExecution,call: Maybe<&2,Renderer()>,result: Maybe<
     second : List<&2,String> <- resultSlot(result,state,width)
     +content : List<&2,String> <- IO.pure(List<&2,String>,List.append(&2,String,first,second))
     return Bool.pick(List<&2,String>,List.is_empty(&2,String,content),Nil{},"" <> content)
-def renderWithPreview(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>,preview: Maybe<&2,Edits.Preview()>) -> IO(List<&2,String>):
+def renderWithPreview(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>,preview: Maybe<&2,Edits.Preview()>,context: Maybe<&2,ToolContext>) -> IO(List<&2,String>):
   match state:
     case ToolExecution{+name,_,_,_,_,_,_,_,_,_,Generic{},_}:
-      Bool.pick(Unit -> IO(List<&2,String>),String.eq(name,"read") || String.eq(name,"bash") || String.eq(name,"edit") || String.eq(name,"write") || String.eq(name,"find") || String.eq(name,"grep") || String.eq(name,"ls"),_ => builtinWithPreview(state,width,elapsed,write,preview),_ => generic(state,width))(Unit{})
+      Bool.pick(Unit -> IO(List<&2,String>),String.eq(name,"read") || String.eq(name,"bash") || String.eq(name,"edit") || String.eq(name,"write") || String.eq(name,"find") || String.eq(name,"grep") || String.eq(name,"ls"),_ => builtinWithPreview(state,width,elapsed,write,preview,context),_ => generic(state,width))(Unit{})
     case ToolExecution{_,_,_,_,_,_,_,_,_,_,Boxed{+call,+result},_}: boxed(state,call,result,width)
     case ToolExecution{_,_,_,_,_,_,_,_,_,_,SelfRendered{+call,+result},_}: selfRendered(state,call,result,width)
 def renderWithDuration(state: ToolExecution,width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>) -> IO(List<&2,String>):
-  renderWithPreview(state,width,elapsed,write,None{})
+  renderWithPreview(state,width,elapsed,write,None{},None{})
 def render(state: ToolExecution,width: Nat) -> IO(List<&2,String>):
   renderWithDuration(state,width,None{},None{})
 
@@ -288,13 +298,8 @@ def render(state: ToolExecution,width: Nat) -> IO(List<&2,String>):
 # immutable state as tool events arrive. As upstream's components keep their
 # rendered text between frames, rendered lines are reused until the state
 # (version), the width or the shown elapsed time changes.
-# Context computation is injectable, like a tool's operations. The transcript
-# owns the callback; each mounted tool joins its reads before being disposed.
-type PreviewRequest is Data: PreviewRequest{cwd: String,input: Edit.EditToolInput}
-type PreviewContext is Data:
-  PreviewContext{cwd: String,compute: Callback.Callback<PreviewRequest,Edits.Preview()>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type Preflight is Data:
-  Preflight{context: Maybe<&2,PreviewContext>,tasks: Ref.Ref<List<&2,Chan(Unit)>>}
+  Preflight{context: Maybe<&2,ToolContext>,tasks: Ref.Ref<List<&2,Chan(Unit)>>}
 type Stamped is Data: Stamped{value: ToolExecution,version: Nat,preview: Maybe<&2,Edits.Preview()>,revision: Nat}
 type Rendered is Data: Rendered{version: Nat,width: Nat,elapsed: Maybe<&2,F64>,lines: List<&2,String>}
 # The write preview's highlight cache (upstream WriteCallRenderComponent.cache).
@@ -312,23 +317,25 @@ def refreshedWrite(value: ToolExecution,previous: Maybe<&2,WriteRenderer.WriteHi
   match value:
     case ToolExecution{"write",_,args,_,_,_,_,_,complete,_,_,highlight}: WriteRenderer.refreshCache(highlight,args,complete,previous)
     case _: IO.pure(Maybe<&2,WriteRenderer.WriteHighlightCache>,None{})
-def renderStamped(current: Stamped,+width: Nat,+elapsed: Maybe<&2,F64>,rendered: Ref.Ref<Maybe<&2,Rendered>>,+write: Ref.Ref<Maybe<&2,WriteRenderer.WriteHighlightCache>>) -> IO(List<&2,String>):
+def renderStamped(context: Maybe<&2,ToolContext>,current: Stamped,+width: Nat,+elapsed: Maybe<&2,F64>,rendered: Ref.Ref<Maybe<&2,Rendered>>,+write: Ref.Ref<Maybe<&2,WriteRenderer.WriteHighlightCache>>) -> IO(List<&2,String>):
   match current:
     case Stamped{+value,version,+preview,+revision}:
       do IO<List<&2,String>>:
         previous : Maybe<&2,WriteRenderer.WriteHighlightCache> <- Ref.read(Maybe<&2,WriteRenderer.WriteHighlightCache>,write)
         +cache : Maybe<&2,WriteRenderer.WriteHighlightCache> <- refreshedWrite(value,previous)
         Ref.write(Maybe<&2,WriteRenderer.WriteHighlightCache>,write,cache)
-        +lines : List<&2,String> <- renderWithPreview(value,width,elapsed,cache,preview)
+        +lines : List<&2,String> <- renderWithPreview(value,width,elapsed,cache,preview,context)
         Ref.write(Maybe<&2,Rendered>,rendered,Some{Rendered{version,width,elapsed,lines}})
         return lines
-def cachedLines(cached: Maybe<&2,Rendered>,current: Stamped,+width: Nat,+elapsed: Maybe<&2,F64>,rendered: Ref.Ref<Maybe<&2,Rendered>>,write: Ref.Ref<Maybe<&2,WriteRenderer.WriteHighlightCache>>) -> IO(List<&2,String>):
+def cachedLines(+context: Maybe<&2,ToolContext>,cached: Maybe<&2,Rendered>,current: Stamped,+width: Nat,+elapsed: Maybe<&2,F64>,rendered: Ref.Ref<Maybe<&2,Rendered>>,write: Ref.Ref<Maybe<&2,WriteRenderer.WriteHighlightCache>>) -> IO(List<&2,String>):
   match cached current:
     case Some{Rendered{version,oldWidth,oldElapsed,lines}} Stamped{value,+now,+preview,+revision}:
       Bool.pick(Unit -> IO(List<&2,String>),Nat.is_eq(version,now) && Nat.is_eq(oldWidth,width) && sameElapsed(oldElapsed,elapsed),
         _ => IO.pure(List<&2,String>,lines),
-        _ => renderStamped(Stamped{value,now,preview,revision},width,elapsed,rendered,write))(Unit{})
-    case None{} current: renderStamped(current,width,elapsed,rendered,write)
+        _ => renderStamped(context,Stamped{value,now,preview,revision},width,elapsed,rendered,write))(Unit{})
+    case None{} current: renderStamped(context,current,width,elapsed,rendered,write)
+def renderContext(preflight: Preflight) -> Maybe<&2,ToolContext>:
+  match preflight: case Preflight{context,_}: context
 def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
   match handle:
     case Handle{state,+rendered,write,timing,+preflight}:
@@ -336,7 +343,7 @@ def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
         current : Stamped <- Ref.read(Stamped,state)
         elapsed : Maybe<&2,F64> <- Serial.run(Timing,Maybe<&2,F64>,timing,measured)
         cached : Maybe<&2,Rendered> <- Ref.read(Maybe<&2,Rendered>,rendered)
-        cachedLines(cached,current,width,elapsed,rendered,write)
+        cachedLines(renderContext(preflight),cached,current,width,elapsed,rendered,write)
 # upstream invalidate(): the next render starts afresh.
 def invalidateLive(rendered: Ref.Ref<Maybe<&2,Rendered>>,unit: Unit) -> IO(Unit): Ref.write(Maybe<&2,Rendered>,rendered,None{})
 def arguments(value: ToolExecution) -> Value.Value:
@@ -363,9 +370,9 @@ def previewInput(value: ToolExecution) -> Maybe<&2,Edit.EditToolInput>:
   match value:
     case ToolExecution{"edit",_,args,None{},_,_,_,_,True{},_,Generic{},_}: parsedPreview(Edit.parseInput(args))
     case _: None{}
-def requestedPreview(context: PreviewContext) -> IO(Unit):
+def requestedPreview(context: ToolContext) -> IO(Unit):
   match context:
-    case PreviewContext{_,_,redraw}:
+    case ToolContext{_,_,redraw,_}:
       do IO<Unit>:
         callback : Maybe<&2,Callback.Callback<Unit,Unit>> <- Ref.read(Maybe<&2,Callback.Callback<Unit,Unit>>,redraw)
         notifyPreview(callback)
@@ -374,13 +381,13 @@ def previewArrived(current: Stamped,expected: Value.Value,requestRevision: Nat,+
     case Stamped{+value,+version,+preview,+revision}:
       +accept = Nat.is_eq(revision,requestRevision) && Value.equal(arguments(value),expected) && Maybe.is_some(&2,Edit.EditToolInput,previewInput(value))
       (Stamped{value,Bool.pick(Nat,accept,version + 1n,version),Bool.pick(Maybe<&2,Edits.Preview()>,accept,Some{result},preview),revision},accept)
-def computePreview(+state: Ref.Ref<Stamped>,+context: PreviewContext,expected: Value.Value,revision: Nat,input: Edit.EditToolInput) -> IO(Unit):
+def computePreview(+state: Ref.Ref<Stamped>,+context: ToolContext,expected: Value.Value,revision: Nat,input: Edit.EditToolInput) -> IO(Unit):
   match context:
-    case PreviewContext{+cwd,+compute,+redraw}:
+    case ToolContext{+cwd,+compute,+redraw,+read}:
       do IO<Unit>:
         result : Edits.Preview() <- Callback.call(PreviewRequest,Edits.Preview(),compute,PreviewRequest{cwd,input})
         accepted : Bool <- Ref.modify(Stamped,Bool,state,current => previewArrived(current,expected,revision,result))
-        Bool.pick(Unit -> IO(Unit),accepted,_ => requestedPreview(PreviewContext{cwd,compute,redraw}),_ => IO.pure(Unit,Unit{}))(Unit{})
+        Bool.pick(Unit -> IO(Unit),accepted,_ => requestedPreview(ToolContext{cwd,compute,redraw,read}),_ => IO.pure(Unit,Unit{}))(Unit{})
 def previewStarted(state: Ref.Ref<Stamped>,preflight: Preflight,expected: Value.Value,revision: Nat,input: Maybe<&2,Edit.EditToolInput>) -> IO(Unit):
   match preflight input:
     case Preflight{Some{context},tasks} Some{ready}:
@@ -416,7 +423,7 @@ def created(id: Component.ComponentId,+state: Ref.Ref<Stamped>,+preflight: Prefl
         +draw : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Handle,~Nat,~List<&2,String>,~renderLive,Handle{state,rendered,write,handle,preflight})
         +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Rendered>>,~Unit,~Unit,~invalidateLive,rendered)
         return Owner{state,rendered,write,timing,Component.Component{id,draw,None{},None{},invalidate,None{},False{}},draw,invalidate,preflight}
-def createWithContext(id: Component.ComponentId,+value: ToolExecution,context: Maybe<&2,PreviewContext>) -> IO(Owner):
+def createWithContext(id: Component.ComponentId,+value: ToolExecution,context: Maybe<&2,ToolContext>) -> IO(Owner):
   do IO<Owner>:
     +state : Ref.Ref<Stamped> <- Ref.new(Stamped,Stamped{value,0n,None{},0n})
     timing : Serial.Owner<Timing> <- Serial.create(Timing,Waiting{})

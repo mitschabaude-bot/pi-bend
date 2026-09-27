@@ -8,6 +8,11 @@ import ../packages/runtime/src/callback.bend as Callback
 import ../packages/ai/src/types.bend as Ai
 import ../packages/agent/src/types.bend as Agent
 import ../packages/tui/src/utils.bend as U
+import ../packages/tui/src/component.bend as Component
+import ../packages/runtime/src/ref.bend as Ref
+import ../packages/coding-agent/src/core/tools/renderers/read.bend as ReadRenderer
+import ../packages/coding-agent/src/core/tools/edit-diff.bend as Edits
+import ./edit-preview.bend as Fixture
 
 def loaded(value: Result<&2,&2,Theme.LoadError,Theme.Theme>) -> IO(Theme.Theme):
   match value: case Done{theme}: IO.pure(Theme.Theme,theme) case Fail{_}: IO.die(Theme.Theme,1,"theme load failed")
@@ -48,6 +53,40 @@ def draw(label: String,context: Tool.RenderContext) -> IO(List<&2,String>):
       +label = {label: String}
       IO.pure(List<&2,String>,U.padResult(label,U.visibleWidth(label),width,True{}) <> Nil{})
 def drawEmpty(label: String,context: Tool.RenderContext) -> IO(List<&2,String>): IO.pure(List<&2,String>,Nil{})
+def unusedPreview(_: Unit,request: Tool.PreviewRequest) -> IO(Edits.Preview()):
+  IO.die(Edits.Preview(),1,"read rendering invoked edit preflight")
+def compactMounted(pair: Tool.Owner & Component.Component & Tool.Handle,+label: String) -> IO(Unit):
+  match pair:
+    case (owner,component,handle):
+      do IO<Unit>:
+        +draw : Component.Component = component
+        +mounted : Tool.Handle = handle
+        compact : List<&2,String> <- Component.render(draw,80n)
+        output("read-compact-" ++ label,compact)
+        current : Tool.ToolExecution <- Tool.current(mounted)
+        Tool.set(mounted,Tool.setExpanded(current,True{}))
+        expanded : List<&2,String> <- Component.render(draw,80n)
+        output("read-ordinary-" ++ label,expanded)
+        Tool.dispose(owner)
+type CompactCase is Data: CompactCase{label: String,path: String}
+def compactCases(cases: List<&2,CompactCase>,+context: Tool.ToolContext,+theme: Theme.Theme) -> IO(Unit):
+  match cases:
+    case Nil{}: IO.pure(Unit,Unit{})
+    case CompactCase{+label,path} <> rest:
+      do IO<Unit>:
+        args : Value.Value = Value.ObjectValue{R.Record{R.Property{"path",Value.Text{path}} <> Nil{}}}
+        owner : Tool.Owner <- Tool.createWithContext(Component.ComponentId{1n},Tool.new("read",label,args,theme,Tool.Generic{}),Some{context})
+        compactMounted(Tool.borrow(owner),label)
+        compactCases(rest,context,theme)
+def compactReads(theme: Theme.Theme) -> IO(Unit):
+  do IO<Unit>:
+    +compute : Callback.Callback<Tool.PreviewRequest,Edits.Preview()> <- Callback.create(~Unit,~Tool.PreviewRequest,~Edits.Preview(),~unusedPreview,Unit{})
+    +redraw : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,None{})
+    context : Tool.ToolContext = Tool.ToolContext{"/work/project",compute,redraw,Some{ReadRenderer.Context{Fixture.environment("/work/project","/home/tester"),"/package","ctrl+o"}}}
+    compactCases(CompactCase{"skill","skills/check/SKILL.md"} <> CompactCase{"resource","AGENTS.md"} <> CompactCase{"override","../AGENTS.override.md"} <> CompactCase{"docs","/package/docs/how.md"} <> CompactCase{"examples","/package/examples/demo/main.bend"} <> CompactCase{"readme","/package/README.md"} <> CompactCase{"docs-skill","/package/docs/guide/SKILL.md"} <> CompactCase{"docs-resource","/package/docs/AGENTS.md"} <> CompactCase{"outside","/package-other/docs/README.md"} <> CompactCase{"outside-resource","/outside/CLAUDE.MD"} <> CompactCase{"ordinary","src/main.bend"} <> CompactCase{"resource-suffix","xAGENTS.md"} <> CompactCase{"tilde","~/AGENTS.md"} <> Nil{},context,theme)
+    Callback.dispose(Tool.PreviewRequest,Edits.Preview(),compute)
+    retired : Maybe<&2,Callback.Callback<Unit,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<Unit,Unit>>,redraw)
+    return Unit{}
 def mainRun(+theme: Theme.Theme) -> IO(Unit):
   do IO<Unit>:
     +generic : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("custom_tool","g1",args1(),theme,Tool.Generic{}))
@@ -104,6 +143,7 @@ def mainRun(+theme: Theme.Theme) -> IO(Unit):
     +longWrite : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("write","long",Value.ObjectValue{R.Record{R.Property{"path",Value.Text{"notes.txt"}} <> R.Property{"content",Value.Text{String.join(lines(1n,12n,Nil{}),"\n")}} <> Nil{}}},theme,Tool.Generic{}))
     showWide("write-preview",longWrite)
     showWide("write-expanded",Tool.setExpanded(longWrite,True{}))
+    compactReads(theme)
     Callback.dispose(Tool.RenderContext,List<&2,String>,call)
     Callback.dispose(Tool.RenderContext,List<&2,String>,resultCall)
     Callback.dispose(Tool.RenderContext,List<&2,String>,ownCall)

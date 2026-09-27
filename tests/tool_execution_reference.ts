@@ -74,3 +74,9 @@ const longBash=new ToolExecutionComponent('bash','long',{command:'seq 7'},{},bui
 longBash.updateResult({content:[{type:'text',text:Array.from({length:7},(_,i)=>`line-${i+1}`).join('\n')}],isError:false},false);out('bash-preview',longBash,80);
 const longWrite=new ToolExecutionComponent('write','long',{path:'notes.txt',content:Array.from({length:12},(_,i)=>`line-${i+1}`).join('\n')},{},writeRenderers,ui,process.cwd());
 out('write-preview',longWrite,80);longWrite.setExpanded(true);out('write-expanded',longWrite,80);
+
+process.env.PI_PACKAGE_DIR='/package';process.env.HOME='/home/tester';
+for (const [label,path] of [['skill','skills/check/SKILL.md'],['resource','AGENTS.md'],['override','../AGENTS.override.md'],['docs','/package/docs/how.md'],['examples','/package/examples/demo/main.bend'],['readme','/package/README.md'],['docs-skill','/package/docs/guide/SKILL.md'],['docs-resource','/package/docs/AGENTS.md'],['outside','/package-other/docs/README.md'],['outside-resource','/outside/CLAUDE.MD'],['ordinary','src/main.bend'],['resource-suffix','xAGENTS.md'],['tilde','~/AGENTS.md']]) {
+ const component=new ToolExecutionComponent('read',label,{path},{},readRenderers,ui,'/work/project');
+ out('read-compact-'+label,component,80);component.setExpanded(true);out('read-ordinary-'+label,component,80);
+}

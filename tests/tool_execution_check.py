@@ -8,7 +8,7 @@ import subprocess
 root = Path(__file__).resolve().parents[1]
 env = dict(os.environ)
 env.pop('NO_COLOR', None)
-env.update(FORCE_COLOR='1', TERM='xterm-256color')
+env.update(FORCE_COLOR='1', TERM='xterm-256color', HOME='/home/tester')
 parser = argparse.ArgumentParser()
 parser.add_argument('--bun-runner', help='Previously compiled JavaScript fixture')
 parser.add_argument('--native-runner', default='build/tool-execution')

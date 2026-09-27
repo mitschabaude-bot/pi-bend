@@ -1,5 +1,6 @@
 import Base
 import ./components/tool-execution.bend as Tool
+import ../../core/tools/renderers/read.bend as ReadRenderer
 import ../../core/tools/edit.bend as Edit
 import ../../core/tools/edit-diff.bend as Edits
 import ../../utils/paths.bend as Paths
@@ -2297,7 +2298,7 @@ def reboundCopied(sink: RebindSink,+session: Session.AgentSession) -> IO(Unit):
         +messages : List<&2,Session.Message()> <- Session.messages(session)
         Transcript.clear(transcript)
         stored : Session.Session() <- Session.sessionOf(session)
-        Transcript.setPreviewCwd(transcript,Tree.getCwd(Unit,Tools.ToolDetails,Schema.Value,Session.stateOf(stored)))
+        Transcript.setToolCwd(transcript,Tree.getCwd(Unit,Tools.ToolDetails,Schema.Value,Session.stateOf(stored)))
         +settings : Settings.SettingsManager <- Session.getSettings(session)
         Transcript.setHideThinking(transcript,Settings.getHideThinkingBlock(settings))
         Transcript.seedSession(transcript,messages)
@@ -2914,23 +2915,23 @@ def printModelScope(+theme: Theme.Theme,scope: List<&2,Models.ScopedModel>,quiet
 def computeToolPreview(paths: Paths.Environment,request: Tool.PreviewRequest) -> IO(Edits.Preview()):
   match request:
     case Tool.PreviewRequest{cwd,Edit.EditToolInput{path,edits}}: Edits.computeEditsDiff(paths,path,edits,cwd)
-def previewHomeResult(result: Result<&2,&2,Filesystem.Error,String>) -> IO(String):
+def toolHomeResult(result: Result<&2,&2,Filesystem.Error,String>) -> IO(String):
   match result:
     case Done{home}: IO.pure(String,home)
     case Fail{error}: IO.die(String,1,Filesystem.errorMessage(error))
-def previewHome(home: Maybe<&2,String>) -> IO(String):
+def toolHome(home: Maybe<&2,String>) -> IO(String):
   match home:
     case Some{path}: IO.pure(String,path)
     case None{}:
       do IO<String>:
         result : Result<&2,&2,Filesystem.Error,String> <- Filesystem.homedir()
-        previewHomeResult(result)
-def configureToolPreview(transcript: Transcript.Handle,+cwd: String,home: Maybe<&2,String>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
+        toolHomeResult(result)
+def configureTools(transcript: Transcript.Handle,builtinDir: String,key: String,+cwd: String,home: Maybe<&2,String>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
   do IO<Unit>:
-    directory : String <- previewHome(home)
-    paths : Paths.Environment = Paths.Environment{cwd,directory,URL.Context{IDNA.Context{Mapping.table(),Normalization.tables(),Properties.table()},IDNA.Options{IDNA.LabelOptions{False{},False{},True{},IDNA.Nontransitional{}},True{},False{}}}}
+    directory : String <- toolHome(home)
+    +paths : Paths.Environment = Paths.Environment{cwd,directory,URL.Context{IDNA.Context{Mapping.table(),Normalization.tables(),Properties.table()},IDNA.Options{IDNA.LabelOptions{False{},False{},True{},IDNA.Nontransitional{}},True{},False{}}}}
     compute : Callback.Callback<Tool.PreviewRequest,Edits.Preview()> <- Callback.create(~Paths.Environment,~Tool.PreviewRequest,~Edits.Preview(),~computeToolPreview,paths)
-    Transcript.setPreviewContext(transcript,Tool.PreviewContext{cwd,compute,redraw})
+    Transcript.setToolContext(transcript,Tool.ToolContext{cwd,compute,redraw,Some{ReadRenderer.Context{paths,Path.normalize(builtinDir ++ "/../../../../../.."),key}}})
 def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.View,+viewHandle: View.Handle,styles: MarkdownTheme.Styles,highlighter: SyntaxHighlight.Highlighter,+liveTheme: Ref.Ref<Theme.Theme>,+session: Session.AgentSession,initial: List<&2,Controller.Submission>,+cwd: String,+home: Maybe<&2,String>,words: Words.Source,setting: Maybe<&2,String>,+builtinDir: String,+customDir: String,+models: List<&2,Models.Model()>,+mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
     case (transcript,+transcriptHandle):
@@ -2950,7 +2951,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +current : Ref.Ref<Session.AgentSession> <- modeCurrent(mode,session)
         +foot : FooterOwner <- footer(initialFooter(agentState,existing,cwd,home,Settings.getCompactionEnabled(settings)),liveTheme,current)
         +redraw : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,None{})
-        configureToolPreview(transcriptHandle,cwd,home,redraw)
+        configureTools(transcriptHandle,builtinDir,Hints.keyText(bindings,"app.tools.expand"),cwd,home,redraw)
         +status : Interactive.StatusSink <- IO.pure(Interactive.StatusSink,Interactive.StatusSink{transcriptHandle,redraw})
         +workingActiveRef : Ref.Ref<Maybe<&2,Loader.Handle>> <- Ref.new(Maybe<&2,Loader.Handle>,None{})
         +workingOwnerRef : Ref.Ref<Maybe<&1,WorkingOwned>> <- Ref.new(Maybe<&1,WorkingOwned>,None{})

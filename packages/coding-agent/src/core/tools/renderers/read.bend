@@ -6,6 +6,8 @@ import ../render-utils.bend as Render
 import ../index.bend as Tools
 import ../read.bend as Read
 import ../truncate.bend as Truncate
+import ../../../utils/paths.bend as Paths
+import ../../../../../runtime/src/posix-path.bend as Path
 import ../../../../../tui/src/components/markdown.bend as Markdown
 import ../../../../../runtime/src/callback.bend as C
 
@@ -26,6 +28,63 @@ def renderCall(+args: Value.Value,+theme: Theme.Theme) -> IO(String):
     title : String <- Render.pathCall(theme,"read",args)
     lines : String <- range(theme,natural(Render.field(args,"offset")),natural(Render.field(args,"limit")))
     return title ++ lines
+
+# Ambient renderer inputs are explicit and reused by mounted components.
+type Context is Data: Context{paths: Paths.Environment,packageRoot: String,expandKey: String}
+type CompactKind is Data: Skill{} Docs{} Resource{}
+type Classification is Data: Classification{kind: CompactKind,label: String}
+def resourceName(+name: String) -> Bool:
+  String.eq(name,"AGENTS.override.md") || String.eq(name,"AGENTS.md") || String.eq(name,"AGENTS.MD") || String.eq(name,"CLAUDE.md") || String.eq(name,"CLAUDE.MD")
+def docsLabel(+relative: String) -> Maybe<&2,Classification>:
+  Bool.pick(Maybe<&2,Classification>,String.eq(relative,"README.md") || String.starts_with(relative,"docs/") || String.starts_with(relative,"examples/"),Some{Classification{Docs{},relative}},None{})
+def resourceLabel(context: Context,+cwd: String,+absolute: String,docs: Maybe<&2,Classification>) -> Maybe<&2,Classification>:
+  match docs context:
+    case Some{value} _: Some{value}
+    case None{} Context{paths,_,_}:
+      Bool.pick(Maybe<&2,Classification>,resourceName(Path.basename(absolute)),Some{Classification{Resource{},Result.default(&2,&2,Paths.Error,String,Paths.formatPathRelativeToCwdOrAbsolute(paths,absolute,cwd),absolute)}},None{})
+def classifiedPath(+context: Context,+cwd: String,+absolute: String) -> Maybe<&2,Classification>:
+  match context:
+    case Context{_,root,_}:
+      +name = Path.basename(absolute)
+      +parent = Path.basename(Path.normalize(absolute ++ "/.."))
+      Bool.pick(Unit -> Maybe<&2,Classification>,String.eq(name,"SKILL.md"),
+        _ => Some{Classification{Skill{},Bool.pick(String,String.eq(parent,""),name,parent)}},
+        _ => resourceLabel(context,cwd,absolute,docsLabel(Path.relative(Maybe.default(&2,String,Path.resolve(cwd,root),root),absolute))))(Unit{})
+def resolvedClassification(context: Context,cwd: String,resolved: Result<&2,&2,Paths.Error,String>) -> Maybe<&2,Classification>:
+  match resolved:
+    case Done{path}: classifiedPath(context,cwd,path)
+    case Fail{_}: None{}
+def classify(context: Context,+cwd: String,path: Maybe<&2,String>) -> Maybe<&2,Classification>:
+  match context path:
+    case Context{+paths,+root,+key} Some{SCon{first,rest}}:
+      resolvedClassification(Context{paths,root,key},cwd,Paths.resolveToCwd(paths,SCon{first,rest},cwd))
+    case _ _: None{}
+def isSkill(kind: CompactKind) -> Bool:
+  match kind: case Skill{}: True{} case _: False{}
+def isDocs(kind: CompactKind) -> Bool:
+  match kind: case Docs{}: True{} case _: False{}
+def compactCall(classification: Classification,+args: Value.Value,+theme: Theme.Theme,key: String) -> IO(String):
+  match classification:
+    case Classification{+kind,label}:
+      do IO<String>:
+        title : String <- Bool.pick(Unit -> IO(String),isSkill(kind),
+          _ => Messages.foregroundText(theme,"customMessageLabel","\u{1b}[1m[skill]\u{1b}[22m "),
+          _ => do IO<String>:
+            title : String <- Render.title(theme,Bool.pick(String,isDocs(kind),"read docs","read resource"))
+            return title ++ " ")(Unit{})
+        name : String <- Messages.foregroundText(theme,Bool.pick(String,isSkill(kind),"customMessageText","accent"),label)
+        lines : String <- range(theme,natural(Render.field(args,"offset")),natural(Render.field(args,"limit")))
+        hint : String <- Messages.foregroundText(theme,"dim"," (" ++ key ++ " to expand)")
+        return title ++ name ++ lines ++ hint
+
+def classifiedCall(classification: Maybe<&2,Classification>,args: Value.Value,theme: Theme.Theme,key: String) -> IO(String):
+  match classification:
+    case None{}: renderCall(args,theme)
+    case Some{value}: compactCall(value,args,theme,key)
+def renderCallWithContext(+args: Value.Value,theme: Theme.Theme,expanded: Bool,context: Maybe<&2,Context>,cwd: String) -> IO(String):
+  match context expanded:
+    case Some{Context{+paths,+root,+key}} False{}: classifiedCall(classify(Context{paths,root,key},cwd,Render.path(args)),args,theme,key)
+    case _ _: renderCall(args,theme)
 
 def trimmedReverse(lines: List<&2,String>) -> List<&2,String>:
   match lines:

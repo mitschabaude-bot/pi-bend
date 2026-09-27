@@ -27,6 +27,12 @@ for (let i = 0; i < left.length; i++) {
   assert.equal(left[i].name, right[i].name);
   assert.equal(left[i].lines.length, right[i].lines.length, left[i].name);
   const width = Math.max(28, ...left[i].lines.map(visibleWidth), ...right[i].lines.map(visibleWidth));
-  assert.deepEqual(await cells(right[i].lines, width), await cells(left[i].lines, width), left[i].name);
+  const actualCells = await cells(right[i].lines, width);
+  const expectedCells = await cells(left[i].lines, width);
+  for (let y = 0; y < expectedCells.length; y++) {
+    for (let x = 0; x < width; x++) {
+      assert.deepEqual(actualCells[y][x], expectedCells[y][x], `${left[i].name} row ${y} column ${x}`);
+    }
+  }
 }
 console.log(`${left.length} tool frames match xterm cells and styles`);

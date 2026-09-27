@@ -86,7 +86,7 @@ def settled(+handle: Tool.Handle,preview: Tools.ToolDetails) -> IO(Unit):
   do IO<Unit>:
     current : Tool.ToolExecution <- Tool.current(handle)
     Tool.set(handle,Tool.updateResult(current,Tool.ToolResult{Ai.TextImageText{Ai.TextContent{"Successfully replaced blocks.",None{}}} <> Nil{},False{},Some{preview}},False{}))
-def largeMounted(pair: Tool.Owner & Component.Component & Tool.Handle,+context: Tool.PreviewContext,channel: Chan(Unit),+paths: Paths.Environment,+cwd: String,+edits: List<&2,Edits.Edit>) -> IO(Unit):
+def largeMounted(pair: Tool.Owner & Component.Component & Tool.Handle,+context: Tool.ToolContext,channel: Chan(Unit),+paths: Paths.Environment,+cwd: String,+edits: List<&2,Edits.Edit>) -> IO(Unit):
   match pair:
     case (owner,component,handle):
       do IO<Unit>:
@@ -112,7 +112,7 @@ def largeMounted(pair: Tool.Owner & Component.Component & Tool.Handle,+context: 
         checked(Bool.not(String.contains(clean(finalLines),"Successfully replaced")),"success text duplicated diff")
         Tool.dispose(owner)
         IO.print("renders the large diff in the call preview and does not full-redraw when the result settles")
-def largeCase(+context: Tool.PreviewContext,channel: Chan(Unit),+paths: Paths.Environment,+cwd: String,theme: Theme.Theme) -> IO(Unit):
+def largeCase(+context: Tool.ToolContext,channel: Chan(Unit),+paths: Paths.Environment,+cwd: String,theme: Theme.Theme) -> IO(Unit):
   do IO<Unit>:
     +edits : List<&2,Edits.Edit> = largeEdits(50n <> 150n <> 250n <> 350n <> 450n <> 550n <> 650n <> 750n <> 850n <> 950n <> Nil{})
     owner : Tool.Owner <- Tool.createWithContext(Component.ComponentId{1n},Tool.new("edit","large",args("large.txt",edits),theme,Tool.Generic{}),Some{context})
@@ -127,7 +127,7 @@ def replayMounted(pair: Tool.Owner & Component.Component & Tool.Handle,result: T
         checked(String.contains(display,"line 50 changed") && String.contains(display,"line 150 changed"),"saved result needs its deleted source file")
         Tool.dispose(owner)
         IO.print("reconstructs the boxed preview from a settled result without argsComplete")
-def replayCase(+context: Tool.PreviewContext,+paths: Paths.Environment,+cwd: String,theme: Theme.Theme) -> IO(Unit):
+def replayCase(+context: Tool.ToolContext,+paths: Paths.Environment,+cwd: String,theme: Theme.Theme) -> IO(Unit):
   do IO<Unit>:
     +edits : List<&2,Edits.Edit> = largeEdits(50n <> 150n <> Nil{})
     preview : Edits.Preview() <- Edits.computeEditsDiff(paths,"replay.txt",edits,cwd)
@@ -150,7 +150,7 @@ def errorMounted(pair: Tool.Owner & Component.Component & Tool.Handle,channel: C
         checked(Bool.not(String.contains(display,"+1 ")) && Bool.not(String.contains(display,"-1 ")),"failed preflight displayed a diff")
         Tool.dispose(owner)
         IO.print("shows a preflight error without rendering a diff when the edits do not apply")
-def errorCase(context: Tool.PreviewContext,channel: Chan(Unit),theme: Theme.Theme) -> IO(Unit):
+def errorCase(context: Tool.ToolContext,channel: Chan(Unit),theme: Theme.Theme) -> IO(Unit):
   do IO<Unit>:
     edits : List<&2,Edits.Edit> = Edits.Edit{"does not exist","replacement"} <> Nil{}
     owner : Tool.Owner <- Tool.createWithContext(Component.ComponentId{3n},Tool.new("edit","error",args("error.txt",edits),theme,Tool.Generic{}),Some{context})
@@ -216,7 +216,7 @@ def raceCase(cwd: String,theme: Theme.Theme) -> IO(Unit):
     +notify : Callback.Callback<Unit,Unit> <- Callback.create(~Notices,~Unit,~Unit,~raceNotified,Notices{notices,ready})
     +redraw : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,Some{notify})
     +original : Value.Value = args("same.txt",Edits.Edit{"x","y"} <> Nil{})
-    owner : Tool.Owner <- Tool.createWithContext(Component.ComponentId{4n},Tool.new("edit","race",original,theme,Tool.Generic{}),Some{Tool.PreviewContext{cwd,compute,redraw}})
+    owner : Tool.Owner <- Tool.createWithContext(Component.ComponentId{4n},Tool.new("edit","race",original,theme,Tool.Generic{}),Some{Tool.ToolContext{cwd,compute,redraw,None{}}})
     raceMounted(Tool.borrow(owner),original,entered,release,ready,calls,notices)
     Callback.dispose(Tool.PreviewRequest,Edits.Preview(),compute)
     retired : Maybe<&2,Callback.Callback<Unit,Unit>> <- Ref.dispose(Maybe<&2,Callback.Callback<Unit,Unit>>,redraw)
@@ -240,7 +240,7 @@ def run(arguments: List<String>) -> IO(Unit):
         +channel : Chan(Unit) <- Chan.new(Unit,8)
         +notify : Callback.Callback<Unit,Unit> <- Callback.create(~Chan(Unit),~Unit,~Unit,~notified,channel)
         +redraw : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,Some{notify})
-        +context : Tool.PreviewContext = Tool.PreviewContext{cwd,compute,redraw}
+        +context : Tool.ToolContext = Tool.ToolContext{cwd,compute,redraw,None{}}
         ready : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadFromPath("packages/coding-agent/src/modes/interactive/theme/dark.json",Color.Palette256{})
         +theme : Theme.Theme <- loaded(ready)
         largeCase(context,channel,paths,cwd,theme)
