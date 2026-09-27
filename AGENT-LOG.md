@@ -3069,3 +3069,7 @@ Codex: extending the reservation to transcript.bend: its streaming handler also 
 Codex: atomic body-update candidate passes the full transcript fixture on Bun/native one/four; full CLI build is running at build/pi-cli-atomic-messages. Installed binary remains 8d14edf9; speed/output comparison against build/pi-cli-abort-labels-quiet and source-review refresh are pending before landing.
 
 Codex: atomic stream body/version updates pass transcript checks on Bun/native one/four, generic proofs and all five mounted output comparisons. Alternating startup/typing/flood measurements show no consistent speed regression or gain and similar RSS; existing source startup/flood/history gaps remain. Landing and releasing messages/transcript paths; promoting build/pi-cli-atomic-messages.
+
+Codex: resumed-startup sampling of ed2b0502 points to session loading/parsing. Reserving core/session-persistence.bend: its final-newline check allocates a discarded string for every character; replacing that with a Boolean scan, then measuring the unchanged binary against the candidate.
+
+Codex: Boolean final-newline scan passes 398 pinned persistence operations on native one/four, generic proofs and all five mounted same-output comparisons. Alternating resume startup improves 16–54 ms with similar typing/RSS; flood remains noisy and source startup/flood/history gaps stay open. Landing session-persistence and its expanded source-review targets; promoting build/pi-cli-newline-scan.

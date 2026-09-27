@@ -253,9 +253,15 @@ def afterLastNewline(text: String, +pending: String) -> String:
     case SCon{'\n', rest}: afterLastNewline(rest, "")
     case SCon{char, rest}: afterLastNewline(rest, SCon{char, pending})
 
-# The text after the final newline (reversed, only emptiness matters).
+# Track whether any character follows the final newline without storing it.
+def unterminatedTail(text: String, pending: Bool) -> Bool:
+  match text:
+    case SNil{}: pending
+    case SCon{'\n', rest}: unterminatedTail(rest, False{})
+    case SCon{_, rest}: unterminatedTail(rest, True{})
+
 def unterminated(content: String) -> Bool:
-  Bool.not(String.is_empty(afterLastNewline(content, "")))
+  unterminatedTail(content, False{})
 
 def validHeader(-D: Data, -T: Data, -C: Data, entries: List<&2, S.FileEntry<D, T, C>>) -> Bool:
   match entries:
