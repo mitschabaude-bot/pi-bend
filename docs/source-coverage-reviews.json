@@ -592,11 +592,16 @@
     },
     "packages/coding-agent/src/core/session-manager.ts": {
       "state": "partial",
-      "note": "Session persistence, resume, tree and fork work; complete upstream session/recovery parity is not claimed.",
+      "note": "Session persistence, resume, tree and fork work; complete upstream session/recovery parity is not claimed. Focused line-reader review: native parsedLine uses JSON parse failure to skip empty/blank/malformed rows without trimming and reversing each nonblank line; parsed entry order is preserved. The session-file differential covers loading, discovery, newline repair, migration and resumed-entry operations. This review does not establish complete streaming-reader or recovery parity.",
       "source_sha256": "ded5d65112f8666f0e3ae71dab39a302607c29a000745a3d06e00c2103c8f257",
       "port_sha256": {
-        "packages/coding-agent/src/core/session-manager.bend": "66905475905747fb9c53670f213967704ee46c3ed9020e2144a0ebbd9da56158"
-      }
+        "packages/coding-agent/src/core/session-manager.bend": "66905475905747fb9c53670f213967704ee46c3ed9020e2144a0ebbd9da56158",
+        "packages/coding-agent/src/core/session-json.bend": "0decf3425d05423edf1e90cf4006d3a1e3804c87d79863e417596e34321216dd"
+      },
+      "ports": [
+        "packages/coding-agent/src/core/session-manager.bend",
+        "packages/coding-agent/src/core/session-json.bend"
+      ]
     },
     "packages/coding-agent/src/core/settings-diagnostics.ts": {
       "state": "ported",

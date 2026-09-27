@@ -366,14 +366,10 @@ def maybeOf(-E: Data, -A: Data, result: Result<&2, &2, E, A>) -> Maybe<&2, A>:
     case Done{value}: Some{value}
     case Fail{_}: None{}
 
-def blank(line: String) -> Bool: String.is_empty(String.trim(line))
-
-def parsedUnlessBlank(isBlank: Bool, line: String) -> Maybe<&2, V.Value>:
-  match isBlank:
-    case True{}: None{}
-    case False{}: maybeOf(Decode.ParseError, V.Value, Decode.parse(line))
-
-def parsedLine(+line: String) -> Maybe<&2, V.Value>: parsedUnlessBlank(blank(line), line)
+# Parsing already rejects empty and whitespace-only rows; do not copy an
+# entire nonblank JSON line just to decide whether it should be parsed.
+def parsedLine(line: String) -> Maybe<&2, V.Value>:
+  maybeOf(Decode.ParseError, V.Value, Decode.parse(line))
 
 def parseSessionEntryLine(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D), ~tool: V.Value -> Decoded(T), ~custom: V.Value -> Decoded(C), line: String) -> Maybe<&2, S.FileEntry<D, T, C>>:
   Maybe.bind(&2, V.Value, S.FileEntry<D, T, C>, parsedLine(line), value => maybeOf(Decode.Error, S.FileEntry<D, T, C>, decodeFileEntry(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, value)))
