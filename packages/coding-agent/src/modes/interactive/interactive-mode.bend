@@ -10,6 +10,7 @@ import ../../../../tui/src/tui-process.bend as Process
 import ../../core/agent-runtime.bend as Runtime
 import ../../core/agent-session.bend as Session
 import ../../core/model-runtime.bend as Models
+import ../../../../ai/src/auth/resolve.bend as AuthResolve
 import ../../../../ai/src/auth/types.bend as Auth
 import ../../../../ai/src/types.bend as Ai
 import ../../../../ai/src/models.bend as AiModels
@@ -45,6 +46,7 @@ type SubmissionFailure is Data:
   CommandNotice{message: String}
 type StatusSink is Data:
   StatusSink{transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+  SessionStatusSink{transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,subscriptionShown: Ref.Ref<Bool>}
 type SubmissionInput is Data:
   SubmissionInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: StatusSink}
 type CommandSink is Data:
@@ -79,24 +81,74 @@ def onSessionEvent(events: Events,event: Session.AgentSessionEvent) -> IO(Unit):
   match event:
     case Session.AgentEvent{value}: observed(events,value)
     case _: IO.pure(Unit,Unit{})
-def report(sink: StatusSink,status: SubmissionFailure) -> IO(Unit):
-  match sink status:
-    case StatusSink{transcript,redraw} CommandNotice{message}:
+def reportToTranscript(transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,status: SubmissionFailure) -> IO(Unit):
+  match status:
+    case CommandNotice{message}:
       do IO<Unit>:
         Transcript.status(transcript,message)
         requestRender(redraw)
-    case StatusSink{transcript,redraw} CommandWarning{message}:
+    case CommandWarning{message}:
       do IO<Unit>:
         Transcript.showWarning(transcript,message)
         requestRender(redraw)
-    case StatusSink{transcript,redraw} other:
+    case other:
       do IO<Unit>:
         Transcript.showError(transcript,failureText(other))
         requestRender(redraw)
+def report(sink: StatusSink,status: SubmissionFailure) -> IO(Unit):
+  match sink:
+    case StatusSink{transcript,redraw}: reportToTranscript(transcript,redraw,status)
+    case SessionStatusSink{transcript,redraw,_}: reportToTranscript(transcript,redraw,status)
 def submittedResult(failure: StatusSink,result: Result<&2,&2,Controller.SubmitError,Unit>) -> IO(Unit):
   match result:
     case Done{_}: IO.pure(Unit,Unit{})
     case Fail{cause}: report(failure,QueueFailure{cause})
+
+def subscriptionWarning() -> String:
+  "Anthropic subscription auth is active. Third-party harness usage draws from extra usage and is billed per token, not your Claude plan limits. Manage extra usage at https://claude.ai/settings/usage. Disable this warning in /settings."
+def warningsEnabled(value: Settings.WarningSettings) -> Bool:
+  match value:
+    case Settings.WarningSettings{Some{False{}}}: False{}
+    case _: True{}
+def subscriptionKey(value: AuthResolve.Resolution()) -> Bool:
+  match value:
+    case Done{Some{Auth.AuthResult{Auth.ModelAuth{Some{key},_,_},_,_}}}: String.starts_with(key,"sk-ant-oat")
+    case _: False{}
+def subscriptionAuth(+runtime: Models.ModelRuntime,value: Result<&2,&2,String,Maybe<&2,Auth.AuthCheck>>) -> IO(Bool):
+  match value:
+    case Fail{_}: IO.pure(Bool,False{})
+    case Done{Some{Auth.AuthCheck{_,Auth.OAuthType{}}}}: IO.pure(Bool,True{})
+    case _:
+      do IO<Bool>:
+        resolved : AuthResolve.Resolution() <- Models.getAuth(runtime,"anthropic",AuthResolve.noOverrides())
+        return subscriptionKey(resolved)
+def firstSubscription(shown: Bool) -> Bool & Bool: (True{},Bool.not(shown))
+def subscriptionNotice(+failure: StatusSink,shown: Ref.Ref<Bool>,active: Bool) -> IO(Unit):
+  match active:
+    case False{}: IO.pure(Unit,Unit{})
+    case True{}:
+      do IO<Unit>:
+        first : Bool <- Ref.modify(Bool,Bool,shown,value => firstSubscription(value))
+        Bool.pick(Unit -> IO(Unit),first,_ => report(failure,CommandWarning{subscriptionWarning()}),_ => IO.pure(Unit,Unit{}))(Unit{})
+def subscriptionModel(+failure: StatusSink,+shown: Ref.Ref<Bool>,+session: Session.AgentSession,model: Maybe<&2,Models.Model()>,enabled: Bool,alreadyShown: Bool) -> IO(Unit):
+  match model enabled alreadyShown:
+    case Some{Ai.Model{_,_,_,"anthropic",_,_,_,_,_,_,_,_,_,_,_,_}} True{} False{}:
+      do IO<Unit>:
+        +runtime : Models.ModelRuntime = Session.modelRuntime(session)
+        checked : Result<&2,&2,String,Maybe<&2,Auth.AuthCheck>> <- Models.checkAuth(runtime,"anthropic")
+        active : Bool <- subscriptionAuth(runtime,checked)
+        subscriptionNotice(failure,shown,active)
+    case _ _ _: IO.pure(Unit,Unit{})
+def maybeWarnAboutAnthropicSubscriptionAuth(+failure: StatusSink,+session: Session.AgentSession) -> IO(Unit):
+  match failure:
+    case StatusSink{_,_}: IO.pure(Unit,Unit{})
+    case SessionStatusSink{_,_,+shown}:
+      do IO<Unit>:
+        alreadyShown : Bool <- Ref.read(Bool,shown)
+        settings : Settings.SettingsManager <- Session.getSettings(session)
+        current : Session.AgentState() <- Session.state(session)
+        subscriptionModel(failure,shown,session,Session.stateModel(current),warningsEnabled(Settings.getWarnings(settings)),alreadyShown)
+
 def commandStatus(failure: StatusSink,status: SubmissionFailure) -> IO(Unit): report(failure,status)
 def pickerCurrent(session: Session.AgentSession) -> IO(Maybe<&2,Models.Model()>):
   do IO<Maybe<&2,Models.Model()>>:
@@ -212,10 +264,12 @@ def selectionResult(+failure: StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callb
       do IO<Bool>:
         commandStatus(failure,CommandFailure{reason})
         return False{}
-def refreshedSelection(failure: StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,session: Session.AgentSession,+model: Models.Model()) -> IO(Bool):
+def refreshedSelection(+failure: StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+session: Session.AgentSession,+model: Models.Model()) -> IO(Bool):
   do IO<Bool>:
     selected : Result<&2,&2,String,Unit> <- Session.setModel(session,model,Session.ModelMutationOptions{False{}})
-    selectionResult(failure,redraw,model,selected)
+    +accepted : Bool <- selectionResult(failure,redraw,model,selected)
+    Bool.pick(Unit -> IO(Unit),accepted,_ => maybeWarnAboutAnthropicSubscriptionAuth(failure,session),_ => IO.pure(Unit,Unit{}))(Unit{})
+    return accepted
 def refreshedModelMatch(+failure: StatusSink,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,catalog: Ref.Ref<List<&2,Models.Model()>>,session: Session.AgentSession,+query: String,models: List<&2,Models.Model()>,found: Maybe<&2,Models.Model()>) -> IO(Bool):
   match found:
     case Some{model}: refreshedSelection(failure,redraw,session,model)
@@ -333,9 +387,11 @@ def commandResult(+sink: CommandSink,result: Commands.Action) -> IO(Bool):
         commandStatus(failure,CommandFailure{message})
         requestRender(redraw)
         return False{}
-    case CommandSink{failure,redraw,_,_,_,_,_} Commands.ModelSelected{+model,persist}:
+    case CommandSink{+failure,redraw,_,_,_,session,_} Commands.ModelSelected{+model,persist}:
       do IO<Bool>:
         commandStatus(failure,CommandNotice{Bool.pick(String,persist,"Default model: " ++ Models.reference(model),"Model: " ++ Models.modelId(model))})
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        maybeWarnAboutAnthropicSubscriptionAuth(failure,live)
         requestRender(redraw)
         return True{}
     case CommandSink{failure,redraw,picker,_,_,session,models} Commands.OpenModelPicker{search}:

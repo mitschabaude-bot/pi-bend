@@ -179,7 +179,52 @@ hidden_bar_mode_switch["turns"] = [{"text": STREAM_ANSWER}]
 hidden_bar_mode_switch["steps"] = [(step[0], "END-OF-STREAM", *step[2:]) if step[0] == "wait" and step[1] == "A short reply." else step for step in hidden_bar_mode_switch["steps"]]
 hidden_bar_mode_switch["steps"][-4:-4] = [("key", "PageUp"), ("settle", 0.2), ("snap", "scrolled")]
 
+def warning_settings(fullscreen=False, disabled=False):
+    return {"name": "settings-warnings" + ("-fullscreen" if fullscreen else "") + ("-saved-disabled" if disabled else ""),
+            "args": MODEL + (["--tui-mode", "fullscreen"] if fullscreen else []),
+            "files": {**RESOURCES, "home/.pi/agent/settings.json": json.dumps({"warnings": {"anthropicExtraUsage": False}} if disabled else {})},
+            "steps": [("wait", READY, "ready"), ("settle", .3),
+                      ("keys", "/settings"), ("key", "Enter"), ("wait", "Auto-compact", "settings-open"), ("keys", "warnings"), ("settle", .2), ("snap", "parent"),
+                      ("key", "Enter"), ("settle", .2), ("snap", "submenu"),
+                      ("key", "Enter"), ("settle", .2), ("snap", "changed"),
+                      ("key", "Escape"), ("settle", .2), ("snap", "back"),
+                      ("key", "Enter"), ("settle", .2), ("snap", "reopened"),
+                      ("key", "Escape"), ("settle", .2), ("key", "Escape"), ("settle", .2), ("keys", "draft"), ("wait", "draft", "editor"), ("snap", "editor")]}
+
+SUBSCRIPTION_MODEL = "parity-anthropic"
+WARNING_MODELS = {"cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0}, "input": ["text"], "reasoning": True, "contextWindow": 200000, "maxTokens": 8192}
+def subscription_warning(disabled=False, oauth=False):
+    files = {**RESOURCES, "home/.pi/agent/settings.json": json.dumps({"warnings": {"anthropicExtraUsage": False}} if disabled else {})}
+    if oauth:
+        files["home/.pi/agent/auth.json"] = json.dumps({"anthropic": {"type": "oauth", "access": "parity-oauth-fixture", "refresh": "parity-refresh-fixture", "expires": 4102444800000}})
+    steps = [("wait", SUBSCRIPTION_MODEL + " • ", "ready"), ("settle", .3), ("snap", "startup"),
+             ("keys", "/model openai/gpt-5"), ("key", "Enter"), ("settle", .2), ("key", "Enter"), ("wait", "gpt-5 • ", "other"), ("settle", .2), ("snap", "other"),
+             ("keys", "/model anthropic/" + SUBSCRIPTION_MODEL), ("key", "Enter"), ("settle", .2), ("key", "Enter"), ("wait", SUBSCRIPTION_MODEL + " • ", "returned"),
+             ("settle", .3), ("snap", "returned"), ("snap-history", "history")]
+    return {"name": "anthropic-subscription-warning" + ("-disabled" if disabled else "") + ("-oauth" if oauth else ""),
+            "args": ["--provider", "anthropic", "--model", SUBSCRIPTION_MODEL, "--thinking", "medium", "--no-extensions", "--no-skills", "--no-prompt-templates"],
+            "env": {} if oauth else {"ANTHROPIC_API_KEY": "sk-ant-oat01-parity-fixture"}, "files": files, "steps": steps,
+            "provider": {"api": "openai-responses", "models": [{**WARNING_MODELS, "id": "gpt-5", "name": "gpt-5"}]},
+            "providers": {"anthropic": {"api": "anthropic-messages", "models": [{**WARNING_MODELS, "id": SUBSCRIPTION_MODEL, "name": SUBSCRIPTION_MODEL}]}}}
+
+enabled_later_warning = subscription_warning(disabled=True)
+enabled_later_warning["name"] = "anthropic-subscription-warning-enabled-later"
+enabled_later_warning["steps"][3:3] = [("keys", "/settings"), ("key", "Enter"), ("wait", "Auto-compact", "settings-open"), ("keys", "warnings"), ("settle", .2),
+                                    ("key", "Enter"), ("key", "Enter"), ("settle", .2), ("snap", "enabled"),
+                                    ("key", "Escape"), ("settle", .2), ("key", "Escape"), ("settle", .2)]
+ordinary_key_warning = subscription_warning()
+ordinary_key_warning["name"] = "anthropic-ordinary-key-no-warning"
+ordinary_key_warning["env"] = {"ANTHROPIC_API_KEY": "sk-ant-api03-parity-fixture"}
+
 SCENARIOS = [
+    enabled_later_warning,
+    ordinary_key_warning,
+    warning_settings(),
+    warning_settings(disabled=True),
+    warning_settings(fullscreen=True),
+    subscription_warning(),
+    subscription_warning(disabled=True),
+    subscription_warning(oauth=True),
     always_bar_mode_switch,
     hidden_bar_mode_switch,
     resume_hint_mode_switch,

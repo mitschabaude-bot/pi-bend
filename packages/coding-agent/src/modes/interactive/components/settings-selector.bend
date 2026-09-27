@@ -24,6 +24,13 @@ import ./theme-selector.bend as ThemePicker
 import ./model-thinking-selector.bend as ModelThinkingPicker
 import ../../../core/model-runtime.bend as Models
 
+type Submenus is Data:
+  Submenus{model: Callback.Callback<ListUI.SubmenuRequest,Component.Component>,warnings: Callback.Callback<ListUI.SubmenuRequest,Component.Component>}
+def modelFactory(menus: Submenus) -> Callback.Callback<ListUI.SubmenuRequest,Component.Component>:
+  match menus: case Submenus{model,_}: model
+def warningFactory(menus: Submenus) -> Callback.Callback<ListUI.SubmenuRequest,Component.Component>:
+  match menus: case Submenus{_,warnings}: warnings
+
 # Choices are decoded before they touch the persisted settings manager.
 def item(id: String,label: String,description: String,current: String,values: List<&2,String>) -> ListUI.SettingItem:
   ListUI.SettingItem{id,label,Some{description},current,Some{values},None{}}
@@ -94,7 +101,7 @@ def tuiMode(value: Settings.TuiMode) -> String:
   match value:
     case Settings.Regular{}: "regular"
     case Settings.Fullscreen{}: "fullscreen"
-def rows(+settings: Settings.SettingsManager,currentTheme: String,submenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>,modelSubmenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>) -> List<&2,ListUI.SettingItem>:
+def rows(+settings: Settings.SettingsManager,currentTheme: String,submenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>,+modelSubmenu: Submenus) -> List<&2,ListUI.SettingItem>:
   boolean("autocompact","Auto-compact","Automatically compact context when it gets too large",Settings.getCompactionEnabled(settings)) <>
   boolean("auto-resize-images","Auto-resize images","Resize large images to 2000x2000 max for better model compatibility",Settings.getImageAutoResize(settings)) <>
   boolean("block-images","Block images","Prevent images from being sent to LLM providers",Settings.getBlockImages(settings)) <>
@@ -118,7 +125,8 @@ def rows(+settings: Settings.SettingsManager,currentTheme: String,submenu: Callb
   item("default-project-trust","Default project trust","Fallback behavior when no extension or saved trust decision decides project trust",trust(Settings.getDefaultProjectTrust(settings)),"Ask" <> "Always trust" <> "Never trust" <> Nil{}) <>
   item("double-escape-action","Double-escape action","Action when pressing Escape twice with empty editor",escape(Settings.getDoubleEscapeAction(settings)),"tree" <> "fork" <> "none" <> Nil{}) <>
   item("tree-filter-mode","Tree filter mode","Default filter when opening /tree",treeFilter(Settings.getTreeFilterMode(settings)),"default" <> "no-tools" <> "user-only" <> "labeled-only" <> "all" <> Nil{}) <>
-  modelThinkingRow(ModelThinkingPicker.summary(settings),modelSubmenu) <>
+  ListUI.SettingItem{"warnings","Warnings",Some{"Enable or disable individual warnings"},"configure",None{},Some{warningFactory(modelSubmenu)}} <>
+  modelThinkingRow(ModelThinkingPicker.summary(settings),modelFactory(modelSubmenu)) <>
   item("tui-mode","TUI mode","Interface layout; fullscreen mode is experimental",tuiMode(Settings.getTuiMode(settings)),choices("regular","fullscreen")) <>
   item("fullscreen-exit-output","Fullscreen exit output","Print the transcript or only a session resume hint when exiting fullscreen mode",exitOutput(Settings.getFullscreenExitOutput(settings)),choices("transcript","resume-hint")) <>
   item("fullscreen-scrollbar","Fullscreen scrollbar","Scrollbar behavior in fullscreen mode; has no effect in regular mode",scrollbar(Settings.getFullscreenScrollbar(settings)),"auto" <> "always" <> "hidden" <> Nil{}) <>
@@ -185,6 +193,8 @@ def change(id: String,value: String,settings: Settings.SettingsManager) -> Setti
     case "tree-filter-mode" "all": Settings.setTreeFilterMode(Settings.AllEntries{},settings)
     case "show-images" "true": Settings.setShowImages(True{},settings)
     case "show-images" "false": Settings.setShowImages(False{},settings)
+    case "anthropic-extra-usage" "true": Settings.setWarnings(Settings.WarningSettings{Some{True{}}},settings)
+    case "anthropic-extra-usage" "false": Settings.setWarnings(Settings.WarningSettings{Some{False{}}},settings)
     case "theme" _: Settings.setTheme(value,settings)
     case "auto-resize-images" "true": Settings.setImageAutoResize(True{},settings)
     case "auto-resize-images" "false": Settings.setImageAutoResize(False{},settings)
@@ -196,6 +206,119 @@ def change(id: String,value: String,settings: Settings.SettingsManager) -> Setti
     case "terminal-progress" "false": Settings.setShowTerminalProgress(False{},settings)
     case _ _: Fail{Settings.InvalidSetting{Json.InvalidValue{Nil{},"known setting choice"}}}
 
+
+def nonAtomic(_: Segmenter.Source,_: String) -> Bool: False{}
+
+# A warnings submenu is an ordinary SettingsList with its own list state.
+# Callbacks and theme are borrowed from the surrounding settings panel.
+type WarningPanel is Data: WarningClosed{} WarningOpen{list: ListUI.SettingsList,done: ListUI.SubmenuDone}
+type WarningContext is Data:
+  WarningContext{panel: Ref.Ref<WarningPanel>,session: Ref.Ref<Session.AgentSession>,words: Ref.Ref<Segmenter.Source>,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,style: ListUI.SettingsListTheme,changed: Callback.Callback<ListUI.Change,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>}
+type WarningFactory is Data:
+  WarningFactory{context: WarningContext,component: Component.Component,cancel: Callback.Callback<Unit,Unit>}
+type WarningOwner is Data:
+  WarningOwner{panel: Ref.Ref<WarningPanel>,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidate: Callback.Callback<Unit,Unit>,cancel: Callback.Callback<Unit,Unit>,factory: Callback.Callback<ListUI.SubmenuRequest,Component.Component>}
+def warningsFactory(owner: WarningOwner) -> Callback.Callback<ListUI.SubmenuRequest,Component.Component>:
+  match owner: case WarningOwner{_,_,_,_,_,_,factory}: factory
+def warningOption(value: Settings.WarningSettings) -> Bool:
+  match value:
+    case Settings.WarningSettings{value}: Maybe.default(&2,Bool,value,True{})
+def warningRendered(panel: Ref.Ref<WarningPanel>,pair: ListUI.SettingsList & List<&2,String>,done: ListUI.SubmenuDone) -> IO(List<&2,String>):
+  match pair:
+    case (list,lines):
+      do IO<List<&2,String>>:
+        Ref.write(WarningPanel,panel,WarningOpen{list,done})
+        return lines
+def warningDrawCurrent(+panel: Ref.Ref<WarningPanel>,width: Nat,current: WarningPanel) -> IO(List<&2,String>):
+  match current:
+    case WarningClosed{}: IO.pure(List<&2,String>,Nil{})
+    case WarningOpen{list,done}:
+      do IO<List<&2,String>>:
+        pair : ListUI.SettingsList & List<&2,String> <- ListUI.render(list,width)
+        warningRendered(panel,pair,done)
+def warningDraw(panel: Ref.Ref<WarningPanel>,width: Nat) -> IO(List<&2,String>):
+  do IO<List<&2,String>>:
+    +panel : Ref.Ref<WarningPanel> = panel
+    current : WarningPanel <- Ref.read(WarningPanel,panel)
+    warningDrawCurrent(panel,width,current)
+def warningAccepted(panel: Ref.Ref<WarningPanel>,result: Word.ResultOf(ListUI.SettingsList),done: ListUI.SubmenuDone) -> IO(Unit):
+  match result:
+    case Done{list}: Ref.write(WarningPanel,panel,WarningOpen{list,done})
+    case Fail{_}: IO.pure(Unit,Unit{})
+def warningInputCurrent(context: WarningContext,data: String,current: WarningPanel) -> IO(Unit):
+  match context current:
+    case _ WarningClosed{}: IO.pure(Unit,Unit{})
+    case WarningContext{panel,_,words,bindings,keyboard,_,_,_} WarningOpen{list,done}:
+      do IO<Unit>:
+        source : Segmenter.Source <- Ref.read(Segmenter.Source,words)
+        result : Word.ResultOf(ListUI.SettingsList) <- ListUI.handleInput(~Segmenter.Source,~Word.sourceSegments,~nonAtomic,source,list,bindings,keyboard,data)
+        warningAccepted(panel,result,done)
+def warningInput(context: WarningContext,data: String) -> IO(Unit):
+  match context:
+    case WarningContext{+panel,session,words,bindings,keyboard,style,changed,completed}:
+      do IO<Unit>:
+        current : WarningPanel <- Ref.read(WarningPanel,panel)
+        warningInputCurrent(WarningContext{panel,session,words,bindings,keyboard,style,changed,completed},data,current)
+def warningCancelled(current: WarningPanel) -> IO(Unit):
+  match current:
+    case WarningClosed{}: IO.pure(Unit,Unit{})
+    case WarningOpen{_,done}: ListUI.complete(done,None{},None{})
+def warningCancel(panel: Ref.Ref<WarningPanel>,_: Unit) -> IO(Unit):
+  do IO<Unit>:
+    current : WarningPanel <- Ref.read(WarningPanel,panel)
+    warningCancelled(current)
+def warningMousePair(panel: Ref.Ref<WarningPanel>,pair: ListUI.SettingsList & Maybe<&2,Component.MouseResponse()>,done: ListUI.SubmenuDone) -> IO(Maybe<&2,Component.MouseResponse()>):
+  match pair:
+    case (list,result):
+      do IO<Maybe<&2,Component.MouseResponse()>>:
+        Ref.write(WarningPanel,panel,WarningOpen{list,done})
+        return result
+def warningMouseCurrent(panel: Ref.Ref<WarningPanel>,event: Tui.TuiMouseEvent,current: WarningPanel) -> IO(Maybe<&2,Component.MouseResponse()>):
+  match current:
+    case WarningClosed{}: IO.pure(Maybe<&2,Component.MouseResponse()>,None{})
+    case WarningOpen{list,done}:
+      do IO<Maybe<&2,Component.MouseResponse()>>:
+        pair : ListUI.SettingsList & Maybe<&2,Component.MouseResponse()> <- ListUI.handleMouse(list,event)
+        warningMousePair(panel,pair,done)
+def warningMouse(panel: Ref.Ref<WarningPanel>,event: Tui.TuiMouseEvent) -> IO(Maybe<&2,Component.MouseResponse()>):
+  do IO<Maybe<&2,Component.MouseResponse()>>:
+    +panel : Ref.Ref<WarningPanel> = panel
+    current : WarningPanel <- Ref.read(WarningPanel,panel)
+    warningMouseCurrent(panel,event,current)
+def warningInvalidate(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
+def warningCreate(factory: WarningFactory,request: ListUI.SubmenuRequest) -> IO(Component.Component):
+  match factory request:
+    case WarningFactory{WarningContext{panel,session,_,_,_,style,changed,completed},component,cancel} ListUI.SubmenuRequest{_,done}:
+      do IO<Component.Component>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        settings : Settings.SettingsManager <- Session.getSettings(live)
+        items : List<&2,ListUI.SettingItem> = [boolean("anthropic-extra-usage","Anthropic extra usage","Warn when Anthropic subscription auth may use paid extra usage",warningOption(Settings.getWarnings(settings)))]
+        Ref.write(WarningPanel,panel,WarningOpen{ListUI.new(items,1n,style,changed,cancel,None{},completed),done})
+        return component
+def createWarnings(editor: Component.Component,+session: Ref.Ref<Session.AgentSession>,+words: Ref.Ref<Segmenter.Source>,+bindings: Keybindings.KeybindingsManager,+keyboard: Keys.Context,+style: ListUI.SettingsListTheme,+changed: Callback.Callback<ListUI.Change,Unit>,+completed: Callback.Callback<ListUI.Completion,Unit>) -> IO(WarningOwner):
+  do IO<WarningOwner>:
+    +panel : Ref.Ref<WarningPanel> <- Ref.new(WarningPanel,WarningClosed{})
+    +context : WarningContext = WarningContext{panel,session,words,bindings,keyboard,style,changed,completed}
+    +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Ref.Ref<WarningPanel>,~Nat,~List<&2,String>,~warningDraw,panel)
+    +input : Callback.Callback<String,Unit> <- Callback.create(~WarningContext,~String,~Unit,~warningInput,context)
+    +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~warningInvalidate,Unit{})
+    +cancel : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<WarningPanel>,~Unit,~Unit,~warningCancel,panel)
+    +mouse : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>> <- Callback.create(~Ref.Ref<WarningPanel>,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse()>,~warningMouse,panel)
+    +component : Component.Component = Component.Component{Component.id(editor),render,Some{input},Some{mouse},invalidate,None{},False{}}
+    +factory : Callback.Callback<ListUI.SubmenuRequest,Component.Component> <- Callback.create(~WarningFactory,~ListUI.SubmenuRequest,~Component.Component,~warningCreate,WarningFactory{context,component,cancel})
+    return WarningOwner{panel,render,input,mouse,invalidate,cancel,factory}
+def disposeWarnings(owner: WarningOwner) -> IO(Unit):
+  match owner:
+    case WarningOwner{panel,render,input,mouse,invalidate,cancel,factory}:
+      do IO<Unit>:
+        old : WarningPanel <- Ref.dispose(WarningPanel,panel)
+        Callback.dispose(Nat,List<&2,String>,render)
+        Callback.dispose(String,Unit,input)
+        Callback.dispose(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>,mouse)
+        Callback.dispose(Unit,Unit,invalidate)
+        Callback.dispose(Unit,Unit,cancel)
+        Callback.dispose(ListUI.SubmenuRequest,Component.Component,factory)
+
 type Modal is Data: Closed{} Open{list: ListUI.SettingsList}
 type Paint is Data: Paint{theme: Ref.Ref<Theme.Theme>,ordinary: String,selected: String}
 type ChangeContext is Data:
@@ -206,9 +329,9 @@ type CancelContext is Data:
 type CompletionContext is Data:
   CompletionContext{pending: Ref.Ref<Maybe<&2,ListUI.Completion>>}
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,words: Ref.Ref<Segmenter.Source>,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,style: ListUI.SettingsListTheme,changed: Callback.Callback<ListUI.Change,Unit>,cancelled: Callback.Callback<Unit,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>,controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,themeSubmenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>,pending: Ref.Ref<Maybe<&2,ListUI.Completion>>,modelSubmenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>,modeChanged: Callback.Callback<Process.RendererResult,Unit>}
+  Host{modal: Ref.Ref<Modal>,editor: Component.Component,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,words: Ref.Ref<Segmenter.Source>,bindings: Keybindings.KeybindingsManager,keyboard: Keys.Context,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,style: ListUI.SettingsListTheme,changed: Callback.Callback<ListUI.Change,Unit>,cancelled: Callback.Callback<Unit,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>,controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,themeSubmenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>,pending: Ref.Ref<Maybe<&2,ListUI.Completion>>,modelSubmenu: Submenus,modeChanged: Callback.Callback<Process.RendererResult,Unit>}
 type Owner is Type:
-  Owner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>,label: Callback.Callback<ListUI.ThemeText,String>,value: Callback.Callback<ListUI.ThemeText,String>,description: Callback.Callback<String,String>,hint: Callback.Callback<String,String>,changed: Callback.Callback<ListUI.Change,Unit>,cancelled: Callback.Callback<Unit,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>,themeOwner: ThemePicker.Owner,modelOwner: ModelThinkingPicker.Owner,modeChanged: Callback.Callback<Process.RendererResult,Unit>}
+  Owner{host: Host,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,input: Callback.Callback<String,Unit>,mouse: Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>>,invalidate: Callback.Callback<Unit,Unit>,focus: Callback.Callback<Bool,Unit>,label: Callback.Callback<ListUI.ThemeText,String>,value: Callback.Callback<ListUI.ThemeText,String>,description: Callback.Callback<String,String>,hint: Callback.Callback<String,String>,changed: Callback.Callback<ListUI.Change,Unit>,cancelled: Callback.Callback<Unit,Unit>,completed: Callback.Callback<ListUI.Completion,Unit>,themeOwner: ThemePicker.Owner,modelOwner: ModelThinkingPicker.Owner,warningOwner: WarningOwner,modeChanged: Callback.Callback<Process.RendererResult,Unit>}
 
 def requested(callback: Maybe<&2,Callback.Callback<Unit,Unit>>) -> IO(Unit):
   match callback:
@@ -406,7 +529,6 @@ def draw(host: Host,width: Nat) -> IO(List<&2,String>):
       do IO<List<&2,String>>:
         current : Modal <- Ref.read(Modal,modal)
         displayed(Host{modal,editor,theme,session,words,bindings,keyboard,redraw,style,changed,cancelled,completed,controller,themeSubmenu,pending,modelSubmenu,modeChanged},width,current)
-def nonAtomic(_: Segmenter.Source,_: String) -> Bool: False{}
 def keepOpen(current: Modal,modal: Ref.Ref<Modal>,next: ListUI.SettingsList) -> IO(Unit):
   match current:
     case Closed{}: IO.pure(Unit,Unit{})
@@ -501,18 +623,20 @@ def createHost(+editor: Component.Component,+theme: Ref.Ref<Theme.Theme>,+sessio
     currentTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
     cursor : String <- IO.pure(String,Result.default(&2,&2,Theme.Error,String,Theme.foreground(currentTheme,"accent","→ "),"→ "))
     +style : ListUI.SettingsListTheme <- IO.pure(ListUI.SettingsListTheme,ListUI.SettingsListTheme{label,value,description,cursor,hint})
-    +host : Host <- IO.pure(Host,Host{modal,editor,theme,session,source,bindings,keyboard,redraw,style,changedCallback,cancelledCallback,completed,themeController,themeSubmenu,pending,modelSubmenu,modeChanged})
+    +warningOwner : WarningOwner <- createWarnings(editor,session,source,bindings,keyboard,style,changedCallback,completed)
+    +submenus : Submenus = Submenus{modelSubmenu,warningsFactory(warningOwner)}
+    +host : Host <- IO.pure(Host,Host{modal,editor,theme,session,source,bindings,keyboard,redraw,style,changedCallback,cancelledCallback,completed,themeController,themeSubmenu,pending,submenus,modeChanged})
     +render : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~draw,host)
     +input : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receive,host)
     +mouseCallback : Callback.Callback<Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>> <- Callback.create(~Host,~Tui.TuiMouseEvent,~Maybe<&2,Component.MouseResponse()>,~mouseEvent,host)
     +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Host,~Unit,~Unit,~invalidated,host)
     +focus : Callback.Callback<Bool,Unit> <- Callback.create(~Host,~Bool,~Unit,~focused,host)
     +component : Component.Component <- IO.pure(Component.Component,Component.Component{Component.id(editor),render,Some{input},Some{mouseCallback},invalidate,Some{focus},False{}})
-    return Owner{host,component,render,input,mouseCallback,invalidate,focus,label,value,description,hint,changedCallback,cancelledCallback,completed,themeOwner,modelOwner,modeChanged}
+    return Owner{host,component,render,input,mouseCallback,invalidate,focus,label,value,description,hint,changedCallback,cancelledCallback,completed,themeOwner,modelOwner,warningOwner,modeChanged}
 def borrowHost(owner: Owner) -> Owner & Host & Component.Component:
   match owner:
-    case Owner{+host,+component,render,input,mouse,invalidate,focus,label,value,description,hint,changed,cancelled,completed,themeOwner,modelOwner,modeChanged}:
-      (Owner{host,component,render,input,mouse,invalidate,focus,label,value,description,hint,changed,cancelled,completed,themeOwner,modelOwner,modeChanged},host,component)
+    case Owner{+host,+component,render,input,mouse,invalidate,focus,label,value,description,hint,changed,cancelled,completed,themeOwner,modelOwner,warningOwner,modeChanged}:
+      (Owner{host,component,render,input,mouse,invalidate,focus,label,value,description,hint,changed,cancelled,completed,themeOwner,modelOwner,warningOwner,modeChanged},host,component)
 def open(host: Host) -> IO(Unit):
   match host:
     case Host{modal,_,_,session,_,_,_,redraw,style,changed,cancelled,completed,controller,themeSubmenu,_,modelSubmenu,modeChanged}:
@@ -528,7 +652,7 @@ def installController(host: Host,handle: ThemeController.Handle) -> IO(Unit):
     case Host{_,_,_,_,_,_,_,_,_,_,_,_,controller,_,_,_,_}: Ref.write(Maybe<&2,ThemeController.Handle>,controller,Some{handle})
 def disposeHost(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{Host{modal,_,_,_,words,_,_,_,_,_,_,_,controller,_,pending,_,_},_,render,input,mouse,invalidate,focus,label,value,description,hint,changed,cancelled,completed,themeOwner,modelOwner,modeChanged}:
+    case Owner{Host{modal,_,_,_,words,_,_,_,_,_,_,_,controller,_,pending,_,_},_,render,input,mouse,invalidate,focus,label,value,description,hint,changed,cancelled,completed,themeOwner,modelOwner,warningOwner,modeChanged}:
       do IO<Unit>:
         oldModal : Modal <- Ref.dispose(Modal,modal)
         oldSource : Segmenter.Source <- Ref.dispose(Segmenter.Source,words)
@@ -536,6 +660,7 @@ def disposeHost(owner: Owner) -> IO(Unit):
         oldPending : Maybe<&2,ListUI.Completion> <- Ref.dispose(Maybe<&2,ListUI.Completion>,pending)
         ThemePicker.disposeHost(themeOwner)
         ModelThinkingPicker.disposeHost(modelOwner)
+        disposeWarnings(warningOwner)
         Callback.dispose(Nat,List<&2,String>,render)
         Callback.dispose(String,Unit,input)
         Callback.dispose(Tui.TuiMouseEvent,Maybe<&2,Component.MouseResponse()>,mouse)

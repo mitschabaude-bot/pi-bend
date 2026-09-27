@@ -157,6 +157,30 @@ def seedFooter(messages: List<&2,Session.Message()>,state: Footer.State) -> Foot
 def initialFooter(+agentState: Session.AgentState(),messages: List<&2,Session.Message()>,cwd: String,home: Maybe<&2,String>,autoCompact: Bool) -> Footer.State:
   +chosen = Maybe.map(&2,Ai.Model<Ai.JsonValue>,Footer.Model,model,Session.stateModel(agentState))
   seedFooter(messages,Footer.State{cwd,home,None{},None{},chosen,Levels.name(Session.stateThinking(agentState)),Footer.emptyUsage(),None{},None{},None{},1n,False{},autoCompact,False{},Nil{}})
+def countProviders(models: List<&2,Models.Model()>,+seen: List<&2,String>) -> Nat:
+  match models:
+    case Nil{}: List.length(&2,String,seen)
+    case model <> rest:
+      +provider = Models.modelProvider(model)
+      countProviders(rest,Bool.pick(List<&2,String>,Models.containsId(seen,provider),seen,provider <> seen))
+def footerMetadata(state: Footer.State,newCount: Maybe<&2,Nat>,newSubscription: Bool) -> Footer.State:
+  match state:
+    case Footer.State{cwd,home,branch,name,chosen,thinkingLevel,totals,latest,context,window,count,_,auto,experimental,statuses}:
+      Footer.State{cwd,home,branch,name,chosen,thinkingLevel,totals,latest,context,window,Maybe.default(&2,Nat,newCount,count),newSubscription,auto,experimental,statuses}
+def modelSubscription(session: Session.AgentSession,model: Maybe<&2,Models.Model()>) -> IO(Bool):
+  match model:
+    case None{}: IO.pure(Bool,False{})
+    case Some{model}:
+      +provider = Models.modelProvider(model)
+      Bool.pick(Unit -> IO(Bool),String.eq(provider,"kimi-coding"),_ => IO.pure(Bool,True{}),_ => Models.isUsingSubscription(Session.modelRuntime(session),provider))(Unit{})
+def initialSessionFooter(+session: Session.AgentSession,+agentState: Session.AgentState(),messages: List<&2,Session.Message()>,cwd: String,home: Maybe<&2,String>,autoCompact: Bool) -> IO(Footer.State):
+  do IO<Footer.State>:
+    +scoped : List<&2,Models.ScopedModel> <- Session.getScopedModels(session)
+    models : List<&2,Models.Model()> <- Bool.pick(Unit -> IO(List<&2,Models.Model()>),List.is_empty(&2,Models.ScopedModel,scoped),
+      _ => Models.getAvailable(Session.modelRuntime(session)),
+      _ => IO.pure(List<&2,Models.Model()>,Session.scopedModels(scoped)))(Unit{})
+    subscription : Bool <- modelSubscription(session,Session.stateModel(agentState))
+    return footerMetadata(initialFooter(agentState,messages,cwd,home,autoCompact),Some{countProviders(models,Nil{})},subscription)
 def withStatus(state: Footer.State,statuses: List<&2,Footer.Status>) -> Footer.State:
   match state:
     case Footer.State{cwd,home,branch,name,chosen,thinkingLevel,totals,latest,context,window,providers,subscription,auto,experimental,_}:
@@ -169,6 +193,20 @@ def withChosen(state: Footer.State,+agentState: Session.AgentState()) -> Footer.
   match state:
     case Footer.State{cwd,home,branch,name,_,_,totals,latest,context,window,providers,subscription,auto,experimental,statuses}:
       Footer.State{cwd,home,branch,name,Maybe.map(&2,Ai.Model<Ai.JsonValue>,Footer.Model,model,Session.stateModel(agentState)),Levels.name(Session.stateThinking(agentState)),totals,latest,context,window,providers,subscription,auto,experimental,statuses}
+def sameFooterModel(state: Footer.State,model: Maybe<&2,Models.Model()>) -> Bool:
+  match state model:
+    case Footer.State{_,_,_,_,None{},_,_,_,_,_,_,_,_,_,_} None{}: True{}
+    case Footer.State{_,_,_,_,Some{Footer.Model{_,left,_,_}},_,_,_,_,_,_,_,_,_,_} Some{Ai.Model{_,_,_,right,_,_,_,_,_,_,_,_,_,_,_,_}}: String.eq(left,right)
+    case _ _: False{}
+def chosenFooter(current: Footer.State,agentState: Session.AgentState(),subscription: Bool) -> Footer.State & Footer.State:
+  +updated = footerMetadata(withChosen(current,agentState),None{},subscription)
+  (updated,updated)
+def syncFooterMetadata(state: Ref.Ref<Footer.State>,+session: Session.AgentSession,+current: Footer.State,+agentState: Session.AgentState()) -> IO(Footer.State):
+  Bool.pick(Unit -> IO(Footer.State),sameFooterModel(current,Session.stateModel(agentState)),
+    _ => IO.pure(Footer.State,withChosen(current,agentState)),
+    _ => do IO<Footer.State>:
+      subscription : Bool <- modelSubscription(session,Session.stateModel(agentState))
+      Ref.modify(Footer.State,Footer.State,state,stored => chosenFooter(stored,agentState,subscription)))(Unit{})
 def withName(state: Footer.State,name: Maybe<&2,String>) -> Footer.State:
   match state:
     case Footer.State{cwd,home,branch,_,chosen,thinkingLevel,totals,latest,context,window,providers,subscription,auto,experimental,statuses}:
@@ -183,17 +221,17 @@ type WorkingOwned is Type:
   WorkingOwned{indicator: Maybe<&1,Status.Owner>,appearance: Status.Appearance,redraw: Callback.Callback<Unit,Unit>,cancelKey: String}
 type StartupState is Data: StartupState{initialized: Bool,draft: Maybe<&2,String>}
 type Working is Data:
-  Working{active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>,ready: Ref.Ref<StartupState>}
+  Working{active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>,ready: Ref.Ref<StartupState>,subscriptionShown: Ref.Ref<Bool>}
 type StatusChange is Data:
   ShowStatus{indicator: Status.Indicator}
   ClearStatus{kind: Status.StatusIndicatorKind}
   KeepStatus{}
 def workingActive(working: Working) -> Ref.Ref<Maybe<&2,Loader.Handle>>:
-  match working: case Working{active,_,_,_}: active
+  match working: case Working{active,_,_,_,_}: active
 def workingTerminal(working: Working) -> Ref.Ref<Maybe<&2,Terminal.Handle>>:
-  match working: case Working{_,_,terminal,_}: terminal
+  match working: case Working{_,_,terminal,_,_}: terminal
 def workingReady(working: Working) -> Ref.Ref<StartupState>:
-  match working: case Working{_,_,_,ready}: ready
+  match working: case Working{_,_,_,ready,_}: ready
 def sessionTitle(name: Maybe<&2,String>,cwd: String) -> String:
   match name:
     case None{}: Config.appTitle() ++ " - " ++ Path.basename(cwd)
@@ -318,13 +356,13 @@ def workingChanged(previous: Maybe<&1,WorkingOwned>,active: Ref.Ref<Maybe<&2,Loa
         Bool.pick(Unit -> IO(Unit),statusChanged(change),_ => Callback.call(Unit,Unit,request,Unit{}),_ => IO.pure(Unit,Unit{}))(Unit{})
 def workingEvent(working: Working,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,event: Session.AgentSessionEvent) -> IO(Unit):
   match working:
-    case Working{active,+owned,_,_}:
+    case Working{active,+owned,_,_,_}:
       do IO<Unit>:
         previous : Maybe<&1,WorkingOwned> <- Ref.swap(Maybe<&1,WorkingOwned>,owned,None{})
         workingChanged(previous,active,owned,event)
 def setupWorking(working: Working,paint: Callback.Callback<String,String>,theme: Ref.Ref<Theme.Theme>,bindings: Keybindings.KeybindingsManager,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
   match working:
-    case Working{_,owned,_,_}:
+    case Working{_,owned,_,_,_}:
       do IO<Unit>:
         +request : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,~Unit,~Unit,~workingRedraw,redraw)
         Ref.write(Maybe<&1,WorkingOwned>,owned,Some{WorkingOwned{None{},Status.Appearance{theme,Some{paint},request},request,Hints.keyText(bindings,"app.interrupt")}})
@@ -337,8 +375,9 @@ def disposeWorkingOwned(oldOwner: Maybe<&1,WorkingOwned>) -> IO(Unit):
         Callback.dispose(Unit,Unit,request)
 def disposeWorking(working: Working) -> IO(Unit):
   match working:
-    case Working{active,owned,terminal,ready}:
+    case Working{active,owned,terminal,ready,subscriptionShown}:
       do IO<Unit>:
+        oldSubscription : Bool <- Ref.dispose(Bool,subscriptionShown)
         oldStartup : StartupState <- Ref.dispose(StartupState,ready)
         oldTerminal : Maybe<&2,Terminal.Handle> <- Ref.dispose(Maybe<&2,Terminal.Handle>,terminal)
         oldActive : Maybe<&2,Loader.Handle> <- Ref.dispose(Maybe<&2,Loader.Handle>,active)
@@ -891,13 +930,15 @@ def bashObserved(input: CommandObservation,command: String,excluded: Bool) -> IO
   match input: case CommandObservation{_,_,_,_,_,_,_,_,_,_,bash,_,_,_,_,_,_}: bashRequested(bash,command,excluded)
 def ordinaryCommandObserved(input: CommandObservation,action: Commands.Action) -> IO(Unit):
   match input:
-    case CommandObservation{sink,session,footer,_,_,_,_,_,_,_,_,_,_,_,_,_,_}:
+    case CommandObservation{sink,session,+footer,_,_,_,_,_,_,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
         changed : Bool <- Interactive.commandResult(sink,action)
         Bool.pick(Unit -> IO(Unit),changed,_ => do IO<Unit>:
-          live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+          +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
           state : Session.AgentState() <- Session.state(live)
-          Ref.modify(Footer.State,Unit,footer,current => (withChosen(current,state),Unit{})),_ => IO.pure(Unit,Unit{}))(Unit{})
+          current : Footer.State <- Ref.read(Footer.State,footer)
+          updated : Footer.State <- syncFooterMetadata(footer,live,current,state)
+          return Unit{},_ => IO.pure(Unit,Unit{}))(Unit{})
 def copyResult(transcript: Transcript.Handle,result: Result<&2,&2,String,Unit>) -> IO(Unit):
   match result:
     case Done{_}: Transcript.status(transcript,"Copied last agent message to clipboard")
@@ -1229,15 +1270,16 @@ def statsState(state: Footer.State,result: Result<&2,&2,Tree.Error,Stats.Stats>)
 # agent state.
 def footerLinesCopied(paint: FooterPaint,+width: Nat) -> IO(List<&2,String>):
   match paint:
-    case FooterPaint{state,+theme,session}:
+    case FooterPaint{+state,+theme,session}:
       do IO<List<&2,String>>:
         +selected : Theme.Theme <- Ref.read(Theme.Theme,theme)
         current : Footer.State <- Ref.read(Footer.State,state)
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         stats : Result<&2,&2,Tree.Error,Stats.Stats> <- Session.getSessionStats(live)
         agentState : Session.AgentState() <- Session.state(live)
+        metadata : Footer.State <- syncFooterMetadata(state,live,current,agentState)
         autoCompact : Bool <- Session.getAutoCompactionEnabled(live)
-        Footer.render(Footer.setAutoCompactEnabled(statsState(withChosen(current,agentState),stats),autoCompact),selected,width)
+        Footer.render(Footer.setAutoCompactEnabled(statsState(metadata,stats),autoCompact),selected,width)
 def footerLines(paint: FooterPaint,width: Nat) -> IO(List<&2,String>):
   footerLinesCopied(paint,width)
 def ignore(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
@@ -1359,7 +1401,7 @@ def credentialsNotice(message: String,path: Result<&2,&2,Filesystem.Error,String
   match path:
     case Fail{_}: message
     case Done{value}: message ++ ". Credentials saved to " ++ value
-def loginOutcomeResult(provider: String,apiKey: Bool,result: AuthLogin.Outcome(),refresh: Maybe<&2,Callback.Callback<Unit,List<&2,Models.Model()>>>,models: Ref.Ref<List<&2,Models.Model()>>,failure: Interactive.StatusSink,session: Ref.Ref<Session.AgentSession>) -> IO(Unit):
+def loginOutcomeResult(provider: String,apiKey: Bool,result: AuthLogin.Outcome(),refresh: Maybe<&2,Callback.Callback<Unit,List<&2,Models.Model()>>>,models: Ref.Ref<List<&2,Models.Model()>>,+failure: Interactive.StatusSink,+session: Ref.Ref<Session.AgentSession>) -> IO(Unit):
   match result:
     case Done{_}:
       do IO<Unit>:
@@ -1367,6 +1409,8 @@ def loginOutcomeResult(provider: String,apiKey: Bool,result: AuthLogin.Outcome()
         message : String <- loginStatus(provider,apiKey,session,available)
         path : Result<&2,&2,Filesystem.Error,String> <- Config.getAuthPath()
         Interactive.report(failure,Interactive.CommandNotice{credentialsNotice(message,path)})
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        Interactive.maybeWarnAboutAnthropicSubscriptionAuth(failure,live)
     case Fail{message}: Interactive.report(failure,Interactive.CommandFailure{message})
 def loginOutcome(provider: String,apiKey: Bool,result: AuthLogin.Outcome(),cancelled: Bool,refresh: Maybe<&2,Callback.Callback<Unit,List<&2,Models.Model()>>>,models: Ref.Ref<List<&2,Models.Model()>>,failure: Interactive.StatusSink,session: Ref.Ref<Session.AgentSession>) -> IO(Unit):
   match cancelled:
@@ -1957,7 +2001,8 @@ def refreshSelection(sink: SelectionSink,result: Controller.SelectionResult) -> 
         Transcript.seedSession(transcript,messages)
         agentState : Session.AgentState() <- Session.state(live)
         settings : Settings.SettingsManager <- Session.getSettings(live)
-        Ref.write(Footer.State,footerRef,initialFooter(agentState,messages,cwd,home,Settings.getCompactionEnabled(settings)))
+        initialFooterState : Footer.State <- initialSessionFooter(live,agentState,messages,cwd,home,Settings.getCompactionEnabled(settings))
+        Ref.write(Footer.State,footerRef,initialFooterState)
         updateSelectionEditor(editor,selectionText(result))
         Interactive.requestRender(redraw)
 def failedSelection(sink: SelectionSink,message: String) -> IO(Unit):
@@ -2249,12 +2294,13 @@ def modelCycled(transcript: Transcript.Handle,scoped: Bool,result: Result<&2,&2,
     case Done{Some{cycled}}: Transcript.status(transcript,switchedTo(cycled))
 def cycleModel(input: KeyInput,direction: Session.CycleDirection) -> IO(Unit):
   match input:
-    case KeyInput{_,_,_,_,_,_,session,_,_,transcript,_,_}:
+    case KeyInput{_,_,failure,_,_,_,session,_,_,transcript,_,_}:
       do IO<Unit>:
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         result : Result<&2,&2,String,Maybe<&2,Session.ModelCycleResult>> <- Session.cycleModel(live,direction,Session.ModelMutationOptions{False{}})
         scope : List<&2,Models.ScopedModel> <- Session.getScopedModels(live)
         modelCycled(transcript,Bool.not(List.is_empty(&2,Models.ScopedModel,scope)),result)
+        Interactive.maybeWarnAboutAnthropicSubscriptionAuth(failure,live)
 # upstream showModelSelector, as /model without arguments.
 def selectModel(input: KeyInput) -> IO(Unit):
   match input:
@@ -2405,7 +2451,8 @@ def reboundCopied(sink: RebindSink,+session: Session.AgentSession) -> IO(Unit):
         Transcript.setHideThinking(transcript,Settings.getHideThinkingBlock(settings))
         Transcript.seedSession(transcript,messages)
         state : Session.AgentState() <- Session.state(session)
-        Ref.write(Footer.State,footerRef,initialFooter(state,messages,cwd,home,Settings.getCompactionEnabled(settings)))
+        initialFooterState : Footer.State <- initialSessionFooter(session,state,messages,cwd,home,Settings.getCompactionEnabled(settings))
+        Ref.write(Footer.State,footerRef,initialFooterState)
         Interactive.requestRender(redraw)
 def rebound(sink: RebindSink,session: Session.AgentSession) -> IO(Unit):
   reboundCopied(sink,session)
@@ -2620,7 +2667,7 @@ def takeStartupDraft(state: StartupState) -> StartupState & Maybe<&2,String>:
   match state: case StartupState{initialized,draft}: (StartupState{initialized,None{}},draft)
 def startupInitialized(state: StartupState) -> Bool:
   match state: case StartupState{initialized,_}: initialized
-def initializeApplication(first: Bool,managed: Maybe<&2,Manager.ToolsManager>,+transcript: Transcript.Handle,+session: Ref.Ref<Session.AgentSession>,+interaction: Interaction,builtinDir: String,highlighter: SyntaxHighlight.Highlighter,+render: Callback.Callback<Unit,Unit>) -> IO(Unit):
+def initializeApplication(failure: Interactive.StatusSink,first: Bool,managed: Maybe<&2,Manager.ToolsManager>,+transcript: Transcript.Handle,+session: Ref.Ref<Session.AgentSession>,+interaction: Interaction,builtinDir: String,highlighter: SyntaxHighlight.Highlighter,+render: Callback.Callback<Unit,Unit>) -> IO(Unit):
   match first:
     case False{}: IO.pure(Unit,Unit{})
     case True{}:
@@ -2632,6 +2679,7 @@ def initializeApplication(first: Bool,managed: Maybe<&2,Manager.ToolsManager>,+t
         existing : List<&2,Session.Message()> <- Session.messages(live)
         Transcript.seedSession(transcript,existing)
         startAutocomplete(interaction,session,files)
+        Interactive.maybeWarnAboutAnthropicSubscriptionAuth(failure,live)
         startupProjectTrustWarning(transcript,session)
         startupChangelog(transcript,session,builtinDir)
         Ref.modify(StartupState,Unit,workingReady(workingOf(interaction)),enableStartup)
@@ -2640,13 +2688,13 @@ def initializeApplication(first: Bool,managed: Maybe<&2,Manager.ToolsManager>,+t
         SyntaxHighlight.loadAllHighlightLanguages(highlighter)
 def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle>,startup: ThemeStartup,+render: Callback.Callback<Unit,Unit>) -> IO(Unit):
   match result startup:
-    case Done{(controller,+handle)} ThemeStartup{redraw,queue,initial,failure,_,+selected,owned,_,theme,+transcript,+session,_,builtinDir,_,managed,+interaction,highlighter,first}:
+    case Done{(controller,+handle)} ThemeStartup{redraw,queue,initial,+failure,_,+selected,owned,_,theme,+transcript,+session,_,builtinDir,_,managed,+interaction,highlighter,first}:
       do IO<Unit>:
         Ref.write(Maybe<&2,ThemeController.Handle>,selected,Some{handle})
         connectSettingsTheme(interaction,handle)
         Ref.write(Maybe<&1,ThemeOwned>,owned,Some{ThemeOwned{controller,render}})
         syncSelected(ThemeLive{selected,theme,transcript,render},handle)
-        initializeApplication(first,managed,transcript,session,interaction,builtinDir,highlighter,render)
+        initializeApplication(failure,first,managed,transcript,session,interaction,builtinDir,highlighter,render)
         Transcript.invalidate(transcript)
         Callback.call(Unit,Unit,render,Unit{})
         startInput(handle,redraw,queue,initial,failure,render)
@@ -3149,15 +3197,17 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         Transcript.setOutputPad(transcriptHandle,outputPad(Settings.getOutputPad(settings)))
         agentState : Session.AgentState() <- Session.state(session)
         +current : Ref.Ref<Session.AgentSession> <- modeCurrent(mode,session)
-        +foot : FooterOwner <- footer(initialFooter(agentState,existing,cwd,home,Settings.getCompactionEnabled(settings)),liveTheme,current)
+        initialFooterState : Footer.State <- initialSessionFooter(session,agentState,existing,cwd,home,Settings.getCompactionEnabled(settings))
+        +foot : FooterOwner <- footer(initialFooterState,liveTheme,current)
         +redraw : Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>> <- Ref.new(Maybe<&2,Callback.Callback<Unit,Unit>>,None{})
         configureTools(transcriptHandle,builtinDir,Hints.keyText(bindings,"app.tools.expand"),cwd,home,redraw)
-        +status : Interactive.StatusSink <- IO.pure(Interactive.StatusSink,Interactive.StatusSink{transcriptHandle,redraw})
+        +subscriptionShown : Ref.Ref<Bool> <- Ref.new(Bool,False{})
+        +status : Interactive.StatusSink <- IO.pure(Interactive.StatusSink,Interactive.SessionStatusSink{transcriptHandle,redraw,subscriptionShown})
         +workingActiveRef : Ref.Ref<Maybe<&2,Loader.Handle>> <- Ref.new(Maybe<&2,Loader.Handle>,None{})
         +workingOwnerRef : Ref.Ref<Maybe<&1,WorkingOwned>> <- Ref.new(Maybe<&1,WorkingOwned>,None{})
         +workingTerminalRef : Ref.Ref<Maybe<&2,Terminal.Handle>> <- Ref.new(Maybe<&2,Terminal.Handle>,None{})
         +workingReadyRef : Ref.Ref<StartupState> <- Ref.new(StartupState,StartupState{False{},None{}})
-        +working : Working <- IO.pure(Working,Working{workingActiveRef,workingOwnerRef,workingTerminalRef,workingReadyRef})
+        +working : Working <- IO.pure(Working,Working{workingActiveRef,workingOwnerRef,workingTerminalRef,workingReadyRef,subscriptionShown})
         +stopped : Deferred.Deferred<Unit> <- Deferred.new(Unit)
         +listener : Callback.Callback<Session.AgentSessionEvent,Unit> <- Callback.create(~Observation,~Session.AgentSessionEvent,~Unit,~observed,Observation{transcriptHandle,redraw,footerState(foot),working,current})
         failureObserver : Callback.Callback<Controller.PromptFailure,Unit> <- Callback.create(~WorkerFailure,~Controller.PromptFailure,~Unit,~promptFailed,WorkerFailure{status,redraw})

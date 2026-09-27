@@ -276,6 +276,27 @@ def checkAuth(+runtime: ModelRuntime, +id: String) -> IO(Result<&2, &2, String, 
     result : AiModels.CheckResult() <- AiModels.checkAuth(modelsOf(runtime), id, None{})
     return checkFailure(result)
 
+def oauthConfigured(result: Result<&2,&2,String,Maybe<&2,Auth.AuthCheck>>) -> Bool:
+  match result:
+    case Done{Some{Auth.AuthCheck{_,Auth.OAuthType{}}}}: True{}
+    case _: False{}
+def isUsingOAuth(runtime: ModelRuntime,id: String) -> IO(Bool):
+  do IO<Bool>:
+    checked : Result<&2,&2,String,Maybe<&2,Auth.AuthCheck>> <- checkAuth(runtime,id)
+    return oauthConfigured(checked)
+def subscriptionProvider(provider: Maybe<&2,AiModels.Provider>) -> Bool:
+  match provider:
+    case Some{AiModels.Provider{_,_,_,Auth.ProviderAuth{_,Some{Auth.OAuthAuth{_,subscription,_,_,_,_}}},_,_,_,_}}: subscription
+    case _: False{}
+def isUsingSubscription(+runtime: ModelRuntime,+id: String) -> IO(Bool):
+  do IO<Bool>:
+    oauth : Bool <- isUsingOAuth(runtime,id)
+    Bool.pick(Unit -> IO(Bool),oauth,
+      _ => do IO<Bool>:
+        provider : Maybe<&2,AiModels.Provider> <- getProvider(runtime,id)
+        return subscriptionProvider(provider),
+      _ => IO.pure(Bool,False{}))(Unit{})
+
 def configuredCheck(result: AiModels.CheckResult()) -> Bool:
   match result:
     case Done{Some{_}}: True{}

@@ -225,7 +225,7 @@ def run_side(label, argv, scenario, keep):
     server = fake_openai.serve(scenario.get("turns", []), str(log), tls=tls and tls["tls"])
     port = server.server_address[1]
     provider = {"baseUrl": f"{'https' if tls else 'http'}://127.0.0.1:{port}/v1", **scenario.get("provider", {})}
-    (agent / "models.json").write_text(json.dumps({"providers": {"openai": provider}}))
+    (agent / "models.json").write_text(json.dumps({"providers": {**scenario.get("providers", {}), "openai": provider}}))
     env = {"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "PATH": os.environ["PATH"],
            "TERM": "xterm-256color", "LANG": "C.UTF-8", "OPENAI_API_KEY": "sk-parity", "PI_OFFLINE": "1",
            **package_links(),
