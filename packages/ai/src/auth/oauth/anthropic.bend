@@ -134,6 +134,23 @@ def toAuth(unused: Unit, credential: Auth.Credential) -> IO(Result<&2, &2, Strin
     case Auth.OAuthCredential{_, access, _, _}: IO.pure(Result<&2, &2, String, Auth.ModelAuth>, Done{Auth.ModelAuth{Some{access}, None{}, None{}}})
     case _: IO.pure(Result<&2, &2, String, Auth.ModelAuth>, Fail{"Anthropic auth requires an OAuth credential"})
 
+# upstream startCallbackServer's request handler: its pages, in its order of
+# checks. An OAuth error, a missing code or state and a state mismatch leave
+# the server waiting.
+def stateChecked(+code: String, +received: String, state: String) -> Browser.CallbackReply:
+  Bool.pick(Browser.CallbackReply,String.eq(received,state),Browser.completed("Anthropic authentication completed. You can close this window.",code),Browser.rejected(400,"State mismatch.",None{}))
+def codeAndState(code: Maybe<&2,String>, received: Maybe<&2,String>, state: String) -> Browser.CallbackReply:
+  match code received:
+    case Some{value} Some{found}: stateChecked(value,found,state)
+    case _ _: Browser.rejected(400,"Missing code or state parameter.",None{})
+def errorChecked(error: Maybe<&2,String>, +params: URL.URLSearchParams, state: String) -> Browser.CallbackReply:
+  match error:
+    case Some{message}: Browser.rejected(400,"Anthropic authentication did not complete.",Some{"Error: " ++ message})
+    case None{}: codeAndState(Browser.truthy(URL.get(params,"code")),Browser.truthy(URL.get(params,"state")),state)
+def callbackReply(request: Browser.CallbackRequest) -> Browser.CallbackReply:
+  match request:
+    case Browser.CallbackRequest{+path,+params,state}: Bool.pick(Unit -> Browser.CallbackReply,String.eq(path,"/callback"),_ => errorChecked(Browser.truthy(URL.get(params,"error")),params,state),_ => Browser.rejected(404,"Callback route not found.",None{}))(Unit{})
+
 def loginCode(flow: Flow,code: Browser.CodeResult(),verifier: String,notify: C.Callback<Auth.AuthEvent,Unit>,signal: Abort.AbortSignal<Unit>) -> IO(Auth.LoginOutcome()):
   match code:
     case Fail{message}: IO.pure(Auth.LoginOutcome(),Fail{message})
@@ -147,7 +164,7 @@ def loginStarted(flow: Flow,started: Result<&2,&2,String,Authorization>,+interac
     case Done{Authorization{url,+verifier}} Auth.ProviderAuthInteraction{signal,_,notify}:
       do IO<Auth.LoginOutcome()>:
         listener : Result<&1,&1,U32 & String,Listener> <- Browser.listenCallback(53692)
-        code : Browser.CodeResult() <- Browser.promptCode(Browser.CallbackConfig{REDIRECT_URI(),"/callback",verifier},listener,interaction,url,"Complete login in your browser, or paste the authorization code / redirect URL here:","Complete login in your browser. If the browser is on another machine, paste the final redirect URL here.")
+        code : Browser.CodeResult() <- Browser.promptCode(~callbackReply,Browser.CallbackConfig{REDIRECT_URI(),verifier},listener,interaction,url,"Complete login in your browser, or paste the authorization code / redirect URL here:","Complete login in your browser. If the browser is on another machine, paste the final redirect URL here.")
         loginCode(flow,code,verifier,notify,signal)
 def login(flow: Flow,interaction: Auth.ProviderAuthInteraction) -> IO(Auth.LoginOutcome()):
   do IO<Auth.LoginOutcome()>:

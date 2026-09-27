@@ -1445,7 +1445,7 @@
         "tests/node_http_proxy_reference.ts"
       ],
       "sha256": "cb03e1e1d843492d5efb0417ed281ad2fa10c44560024b61cdd4c96572617742",
-      "notes": "All 5 tests: tests/node_http_proxy_check.py runs each resolution in a process with the test's proxy environment, asserts the upstream expectation and compares with pinned resolveHttpProxyUrlForTarget, plus 18 differential resolutions (ALL_PROXY, scheme-less proxies, NO_PROXY entry edges, invalid and non-HTTP proxy URLs); Bun, native1, native4. Routing requests through the resolved proxy (Bedrock, Codex WebSocket, the coding agent's global dispatcher) is not wired in the native runtime yet."
+      "notes": "All 5 tests: tests/node_http_proxy_check.py runs each resolution in a process with the test's proxy environment, asserts the upstream expectation and compares with pinned resolveHttpProxyUrlForTarget, plus 18 differential resolutions (ALL_PROXY, scheme-less proxies, NO_PROXY entry edges, invalid and non-HTTP proxy URLs); Bun, native1, native4. Requests routed through the resolved proxy are checked by their callers' suites: Bedrock in tests/bedrock_check.py (node-http-proxy cases, a loopback forwarding proxy against the pinned AWS SDK) and the Codex WebSocket in tests/openai_codex_websocket_check.py (proxy modes, a loopback CONNECT proxy against pinned pi on Bun); the coding agent's global dispatcher in http-dispatcher.test.ts."
     },
     {
       "source": "packages/ai/test/oauth-auth.test.ts",
@@ -1910,7 +1910,7 @@
         "tests/radius_check.py"
       ],
       "sha256": "7e744c72d5b94e6a7d270665401824dd6f30cd871dc9a2e8df34895d9727c286",
-      "notes": "All 3 cases against a loopback gateway instead of a stubbed fetch (form fields, request order and the device_code event asserted; the expiry is checked against a time window instead of fake timers), plus native cases for the full browser callback flow (state mismatch and missing code rejected, the code exchanged) and a callback error. Bun/native1/native4."
+      "notes": "All 3 cases against a loopback gateway instead of a stubbed fetch (form fields, request order and the device_code event asserted; the expiry is checked against a time window instead of fake timers), plus native cases for the full browser callback flow (state mismatch and missing code rejected, the code exchanged) and a callback error; tests/oauth_callback_pages_check.py compares the callback server's pages with pinned pi byte for byte (also for the Anthropic and Codex callbacks). Bun/native1/native4."
     },
     {
       "source": "packages/ai/test/radius-provider.test.ts",

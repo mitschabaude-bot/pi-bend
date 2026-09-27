@@ -3,6 +3,9 @@
 
 Build packages/ai/test/openai-codex-stream.bend to the selected prefix first.
 The server records both transports so fallback/replay can be checked directly.
+The proxy modes put a loopback CONNECT proxy into the request's provider env
+(upstream's Bun WebSocketWithProxy: resolveHttpProxyUrlForTarget); the
+tunnel requests the proxy saw are compared too.
 """
 import argparse
 import base64
@@ -15,6 +18,7 @@ import subprocess
 import threading
 import time
 from websocket_client_check import frame, receive, GUID
+from http_proxy_check import Proxy
 
 ROOT = Path(__file__).resolve().parents[1]
 USAGE = {'input_tokens': 5, 'output_tokens': 3, 'total_tokens': 8,
@@ -141,6 +145,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass
 
 
+# Provider env per proxy mode; {proxy} is the loopback proxy's address.
+PROXY_MODES = {
+    'proxy-http': {'HTTP_PROXY': 'http://{proxy}'},
+    'proxy-all': {'ALL_PROXY': '{proxy}'},
+    'proxy-credentials': {'http_proxy': 'http://user:p%40ss@{proxy}', 'HTTP_PROXY': 'http://127.0.0.1:9'},
+    'proxy-no-proxy': {'HTTP_PROXY': 'http://{proxy}', 'NO_PROXY': 'example.com, 127.0.0.1'},
+    'proxy-no-proxy-port': {'HTTP_PROXY': 'http://{proxy}', 'NO_PROXY': '127.0.0.1:1'},
+    'proxy-refused': {'HTTP_PROXY': 'http://{proxy}'},
+    'proxy-unsupported': {'HTTP_PROXY': 'socks5://{proxy}'},
+}
+PROXY_KEYS = ['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'no_proxy', 'all_proxy']
+
+
 def fixture(mode):
     token = 'aaa.' + base64.b64encode(json.dumps({'https://api.openai.com/auth': {'chatgpt_account_id': 'acc_test'}}).encode()).decode() + '.bbb'
     value = {'options': {'apiKey': token, 'transport': 'websocket', 'sessionId': 'ws-fixture'},
@@ -167,6 +184,7 @@ def fixture(mode):
 
 
 def run(command, mode, reference=False):
+    proxy = Proxy({}, refuse=mode == 'proxy-refused') if mode in PROXY_MODES else None
     with Server(('127.0.0.1', 0), Handler) as server:
         server.mode = mode
         server.text = 'snow ☃ and emoji 😀' if mode == 'fragmented' else 'Hello'
@@ -175,12 +193,16 @@ def run(command, mode, reference=False):
         worker.start()
         url = f'http://127.0.0.1:{server.server_port}'
         value = fixture(mode)
+        if proxy:
+            address = f'127.0.0.1:{proxy.server.port}'
+            value['options']['env'] = {k: v.replace('{proxy}', address) for k, v in PROXY_MODES[mode].items()}
+        env = {k: v for k, v in os.environ.items() if k not in PROXY_KEYS}
         try:
             if reference:
-                result = subprocess.run(command, cwd=ROOT, input=json.dumps({**value, 'url': url}), text=True, capture_output=True, timeout=15)
+                result = subprocess.run(command, cwd=ROOT, input=json.dumps({**value, 'url': url}), text=True, capture_output=True, timeout=15, env=env)
             else:
                 encoded = ','.join(str(ord(c)) for c in json.dumps(value, ensure_ascii=False, separators=(',', ':')))
-                result = subprocess.run(command + [url, encoded], cwd=ROOT, text=True, capture_output=True, timeout=15)
+                result = subprocess.run(command + [url, encoded], cwd=ROOT, text=True, capture_output=True, timeout=15, env=env)
             assert result.returncode == 0, (mode, result.stdout[-1000:], result.stderr[-1000:])
             if reference:
                 output = json.loads(result.stdout)
@@ -191,12 +213,19 @@ def run(command, mode, reference=False):
         finally:
             server.shutdown()
             worker.join()
-        server.server_close()
+        if proxy:
+            proxy.server.close()
         assert not server.errors, (mode, server.errors)
-        expected = 3 if mode == 'mixed-retries' else 2 if mode in ('limit-once', 'limit-always', 'context-once', 'context-after') else 1
+        expected = 3 if mode == 'mixed-retries' else 2 if mode in ('limit-once', 'limit-always', 'context-once', 'context-after') else 0 if mode in ('proxy-refused', 'proxy-unsupported') else 1
         assert len(server.upgrades) == expected, (mode, server.upgrades)
         output['requests'] = server.requests
         output['http_requests'] = server.http_requests
+        if proxy:
+            # The tunnel target and credentials; header spelling and order
+            # belong to Bun's and the native proxy clients.
+            origin = f':{server.server_port} '
+            output['connects'] = [(line.replace(origin, ':ORIGIN '), dict(headers).get('proxy-authorization')) for line, headers in proxy.connects]
+        server.server_close()
         return output
 
 
@@ -210,13 +239,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--prefix', default='build/openai-codex-stream-ws')
     parser.add_argument('--backends', nargs='+', choices=['bun', 'native-1', 'native-4'], default=['bun'])
+    parser.add_argument('--modes', nargs='+')
     args = parser.parse_args()
-    for mode in ('limit-once', 'limit-always', 'context-once', 'context-after', 'mixed-retries', 'limit-after', 'complete', 'simple', 'auto', 'cached-first', 'connect-disabled', 'idle-disabled', 'fragmented', 'binary', 'tool', 'api-error', 'invalid', 'close-before', 'close-after', 'abort', 'idle', 'connect-timeout'):
+    for mode in args.modes or ('limit-once', 'limit-always', 'context-once', 'context-after', 'mixed-retries', 'limit-after', 'complete', 'simple', 'auto', 'cached-first', 'connect-disabled', 'idle-disabled', 'fragmented', 'binary', 'tool', 'api-error', 'invalid', 'close-before', 'close-after', 'abort', 'idle', 'connect-timeout', *PROXY_MODES):
         want = run(['bun', 'tests/openai_codex_websocket_reference.ts'], mode, True)
         for backend in args.backends:
             command = ['bun', args.prefix + '.js'] if backend == 'bun' else [args.prefix, '--threads', backend[-1]]
             got = run(command, mode)
-            if mode in ('complete', 'simple', 'auto', 'cached-first', 'connect-disabled', 'idle-disabled', 'fragmented', 'binary', 'tool', 'api-error', 'abort', 'limit-once', 'context-once', 'context-after', 'mixed-retries', 'limit-after'):
+            if mode in ('complete', 'simple', 'auto', 'cached-first', 'connect-disabled', 'idle-disabled', 'fragmented', 'binary', 'tool', 'api-error', 'abort', 'limit-once', 'context-once', 'context-after', 'mixed-retries', 'limit-after', 'proxy-http', 'proxy-all', 'proxy-credentials', 'proxy-no-proxy', 'proxy-no-proxy-port'):
                 assert comparable(got) == comparable(want), (backend, mode, comparable(got), comparable(want))
                 print(f'{backend}: {mode} request/events/final message MATCH')
             else:
@@ -228,6 +258,7 @@ def main():
                     assert comparable(got) == expected, (backend, mode, got, expected)
                 assert got['events'] == want['events'], (backend, mode, got, want)
                 assert got['requests'] == want['requests'], (backend, mode, got, want)
+                assert got.get('connects') == want.get('connects'), (backend, mode, got, want)
                 assert got['http_requests'] == want['http_requests'], (backend, mode, got, want)
                 assert got['message']['stopReason'] == want['message']['stopReason'], (backend, mode, got, want)
                 print(f'{backend}: {mode} fallback/no-replay/events/stop reason PASS (diagnostics pending)')

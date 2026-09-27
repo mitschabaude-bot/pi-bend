@@ -18,6 +18,7 @@ import ./clock.bend as Clock
 import ./f64.bend as F
 import ./text.bend as Text
 import ./http-proxy.bend as Proxy
+import ./utf8.bend as UTF8
 
 type Plan is Data:
   Numeric{address: Connect.Address}
@@ -1084,13 +1085,47 @@ def routed(~Reason: Data, ~SourceError: Data, resolver: Pair.Resolver, signal: A
   match options route:
     case Options{priority, preference, duration, +maximum, limits} Route{host, port, selected}: configuredRoute(~Reason, ~SourceError, resolver, signal, hosts, Options{priority, preference, duration, maximum, limits}, Some{keep}, routedPlan(host, port, prepared, maximum), selected)
 
-def fresh(~Reason: Data, ~SourceError: Data, pool: Pool<Reason>, origin: Origin, proxies: Proxy.Config, security: Security, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, request: Request.URLPrepared) -> IO(Report<Reason, SourceError>):
+# A forwarded request: its request line in absolute form, then the proxy's
+# fields after the request's own.
+def withoutLine(bytes: List<&2, U32>) -> List<&2, U32>:
+  match bytes:
+    case Nil{}: Nil{}
+    case 13 <> 10 <> rest: rest
+    case _ <> rest: withoutLine(rest)
+
+def forwardedHead(+head: Request.Head, absolute: String, fields: String) -> Request.Head:
+  match head:
+    case Request.Head{+method, bytes}:
+      +rest = withoutLine(bytes)
+      Request.Head{method, List.concat(&2, U32, [UTF8.encode(method ++ " " ++ absolute ++ " HTTP/1.1\r\n"), List.take(&2, U32, rest, Nat.sub(List.length(&2, U32, rest), 2n)), UTF8.encode(fields ++ "\r\n")])}
+
+def forwardedRequest(prepared: Request.BufferedRequestPrepared, absolute: String, fields: String) -> Request.BufferedRequestPrepared:
+  match prepared:
+    case Request.BufferedRequestPrepared{head, body}: Request.BufferedRequestPrepared{forwardedHead(head, absolute, fields), body}
+
+def forwardedRoute(proxy: Proxy.Proxy) -> Route:
+  match proxy:
+    case Proxy.Proxy{proxyHost, proxyPort, _}: Route{proxyHost, proxyPort, Done{Cleartext{}}}
+
+def forwarderOf(proxies: Proxy.Config, endpoint: Request.Endpoint) -> Maybe<&2, Proxy.Proxy>:
+  match endpoint:
+    case Request.Endpoint{Request.Plaintext{}, host, port, _, _}: Proxy.forwarderFor(proxies, host, port)
+    case _: None{}
+
+# A request and where it goes: to its origin, through a tunnel, or to a
+# forwarding proxy (HttpProxyAgent) in absolute form.
+def routedWith(~Reason: Data, ~SourceError: Data, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, keep: Keep<Reason>, proxies: Proxy.Config, security: Security, +endpoint: Request.Endpoint, prepared: Request.BufferedRequestPrepared, forwarder: Maybe<&2, Proxy.Proxy>) -> IO(Report<Reason, SourceError>):
+  match endpoint forwarder:
+    case Request.Endpoint{transport, +host, port, _, _} None{}: routed(~Reason, ~SourceError, resolver, signal, hosts, options, keep, prepared, routeOf(proxies, security, transport, host, port))
+    case Request.Endpoint{_, _, _, authority, target} Some{+proxy}: routed(~Reason, ~SourceError, resolver, signal, hosts, options, keep, forwardedRequest(prepared, "http://" ++ authority ++ target, Proxy.forwardedFields(proxy)), forwardedRoute(proxy))
+
+def fresh(~Reason: Data, ~SourceError: Data, pool: Pool<Reason>, origin: Origin, +proxies: Proxy.Config, security: Security, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, request: Request.URLPrepared) -> IO(Report<Reason, SourceError>):
   match options request:
-    case Options{priority, preference, duration, +maximum, limits} Request.URLPrepared{Request.Endpoint{transport, +host, port, _, _}, +prepared}:
+    case Options{priority, preference, duration, +maximum, limits} Request.URLPrepared{+endpoint, +prepared}:
       do IO<Report<Reason, SourceError>>:
         +controller : Abort.AbortController<Reason> <- Abort.new(Reason)
         +keep : Keep<Reason> <- keepFor(Reason, pool, origin, controller, signal, preparedMethod(prepared))
-        report : Report<Reason, SourceError> <- routed(~Reason, ~SourceError, resolver, Abort.signal(Reason, controller), hosts, Options{priority, preference, duration, maximum, limits}, keep, prepared, routeOf(proxies, security, transport, host, port))
+        report : Report<Reason, SourceError> <- routedWith(~Reason, ~SourceError, resolver, Abort.signal(Reason, controller), hosts, Options{priority, preference, duration, maximum, limits}, keep, proxies, security, endpoint, prepared, forwarderOf(proxies, endpoint))
         settledReport(Reason, SourceError, keep, report)
 
 def startFrom(~Reason: Data, ~SourceError: Data, pool: Pool<Reason>, origin: Origin, proxies: Proxy.Config, security: Security, resolver: Pair.Resolver, signal: Abort.AbortSignal<Reason>, hosts: Result<&2, &2, SourceError, List<&2, Hosts.Entry<Hosts.Address>>>, options: Options, request: Request.URLPrepared, idle: Maybe<&1, Idle<Reason>>) -> IO(Report<Reason, SourceError>):

@@ -10,6 +10,8 @@ import ./utf8.bend as Utf8
 # EnvHttpProxyAgent (http_proxy/HTTP_PROXY, https_proxy/HTTPS_PROXY,
 # no_proxy/NO_PROXY) over ProxyAgent with `proxyTunnel: true`, so every
 # proxied origin, http or https, is reached through a CONNECT tunnel.
+# A configuration from `forwardingUrl` instead sends http origins' requests to
+# the proxy in absolute form, as http-proxy-agent's HttpProxyAgent does.
 #
 # The configuration is an explicit value given to Fetch.createWithProxy;
 # plain Fetch.create stays proxy-free, as pi-ai's global fetch is. Proxies are
@@ -24,9 +26,9 @@ type NoProxyEntry is Data:
   NoProxyEntry{hostname: String, port: Nat}
 
 type Config is Data:
-  Config{http: Maybe<&2, Proxy>, https: Maybe<&2, Proxy>, noProxyValue: String, noProxy: List<&2, NoProxyEntry>}
+  Config{http: Maybe<&2, Proxy>, https: Maybe<&2, Proxy>, noProxyValue: String, noProxy: List<&2, NoProxyEntry>, forwardHttp: Bool}
 
-def none() -> Config: Config{None{}, None{}, "", Nil{}}
+def none() -> Config: Config{None{}, None{}, "", Nil{}, False{}}
 
 # Proxy URLs
 # ----------
@@ -104,6 +106,19 @@ def configured(context: URL.Context, value: Maybe<&2, String>) -> Result<&2, &2,
   match value:
     case Some{SCon{c, cs}}: Result.map(&2, &2, String, Proxy, Maybe<&2, Proxy>, proxy => Some{proxy}, proxyOf(URL.parse(context, SCon{c, cs})))
     case _: Done{None{}}
+
+# One proxy for every origin: a proxy URL already chosen for a target, as
+# Bun's WebSocket `proxy` option and HttpsProxyAgent take it.
+def everywhere(forward: Bool, parsed: Result<&2, &2, String, Proxy>) -> Result<&2, &2, String, Config>:
+  match parsed:
+    case Fail{message}: Fail{message}
+    case Done{+proxy}: Done{Config{Some{proxy}, Some{proxy}, "", Nil{}, forward}}
+
+def forUrl(+url: URL.URL) -> Result<&2, &2, String, Config>: everywhere(False{}, parsedProxy(url))
+
+# The same proxy as the AWS SDK's request handler uses it with
+# HttpProxyAgent (http origins) and HttpsProxyAgent (https origins, tunnelled).
+def forwardingUrl(+url: URL.URL) -> Result<&2, &2, String, Config>: everywhere(True{}, parsedProxy(url))
 
 # NO_PROXY
 # --------
@@ -197,8 +212,8 @@ def assembled(http: Result<&2, &2, String, Maybe<&2, Proxy>>, https: Result<&2, 
   match http https:
     case Fail{message} _: Fail{message}
     case _ Fail{message}: Fail{message}
-    case Done{plain} Done{Some{secure}}: Done{Config{plain, Some{secure}, noProxy, entries(noProxy, "")}}
-    case Done{+plain} Done{None{}}: Done{Config{plain, plain, noProxy, entries(noProxy, "")}}
+    case Done{plain} Done{Some{secure}}: Done{Config{plain, Some{secure}, noProxy, entries(noProxy, ""), False{}}}
+    case Done{+plain} Done{None{}}: Done{Config{plain, plain, noProxy, entries(noProxy, ""), False{}}}
 
 # EnvHttpProxyAgent's configuration from the values of http_proxy ??
 # HTTP_PROXY, https_proxy ?? HTTPS_PROXY and no_proxy ?? NO_PROXY; https
@@ -273,7 +288,21 @@ def comparedHost(host: URL.Host) -> String:
 # The proxy for an origin, None when it is reached directly.
 def proxyFor(config: Config, secure: Bool, host: URL.Host, +port: U32) -> Maybe<&2, Proxy>:
   match config:
-    case Config{http, https, value, list}: Bool.pick(Maybe<&2, Proxy>, shouldProxy(comparedHost(host), port, value, list), Bool.pick(Maybe<&2, Proxy>, secure, https, http), None{})
+    case Config{http, https, value, list, _}: Bool.pick(Maybe<&2, Proxy>, shouldProxy(comparedHost(host), port, value, list), Bool.pick(Maybe<&2, Proxy>, secure, https, http), None{})
+
+# The proxy that receives an http origin's request in absolute form, if the
+# configuration forwards and proxies it.
+def forwarderFor(config: Config, host: URL.Host, +port: U32) -> Maybe<&2, Proxy>:
+  match config:
+    case Config{_, _, _, _, True{}}: proxyFor(config, False{}, host, port)
+    case Config{_, _, _, _, False{}}: None{}
+
+# HttpProxyAgent's header additions (setRequestProps): the proxy's
+# credentials and Proxy-Connection; its agent does not keep connections alive.
+def forwardedFields(proxy: Proxy) -> String:
+  match proxy:
+    case Proxy{_, _, Some{credentials}}: "Proxy-Authorization: " ++ credentials ++ "\r\nProxy-Connection: close\r\n"
+    case Proxy{_, _, None{}}: "Proxy-Connection: close\r\n"
 
 # The tunnel
 # ----------

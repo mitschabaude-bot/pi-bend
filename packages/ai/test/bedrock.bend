@@ -321,12 +321,16 @@ def report(+events: Stream()) -> IO(Unit):
 # Running
 # -------
 
+# Proxied requests use a runtime of their own, like the requests of the
+# loopback cases: plain HTTP.
+def handler() -> Bedrock.Handler: Bedrock.Handler{Fetch.linuxFiles(), networkOptions(), HTTP.NoTLS{}}
+
 def mode(+spec: R.Record<V.Value>) -> String: Maybe.default(&2, String, text(get(spec, "mode")), "stream")
 
 def streamedIn(fetch: Fetch.Fetch(Unit), +signal: Abort.AbortSignal<Unit>, +events: Stream(), +spec: R.Record<V.Value>, onPayload: Maybe<&2, T.PayloadCallback(J(), T.Model<J()>, Error())>, onResponse: Maybe<&2, T.ResponseCallback(T.Model<J()>, Error())>, kind: String, +options: R.Record<V.Value>, requestSignal: Maybe<&2, Abort.AbortSignal<Unit>>) -> IO(Unit):
   match kind:
-    case "simple": Bedrock.streamSimple(~Unit, ~Unit, ~Error(), ~J(), ~J(), ~render, ~identity, events, fetch, urlContext(), signal, modelOf(spec), contextOf(spec), Some{simpleOptions(options, requestSignal, onPayload, onResponse)})
-    case _: Bedrock.stream(~Unit, ~Unit, ~Error(), ~J(), ~J(), ~render, ~identity, events, fetch, urlContext(), signal, modelOf(spec), contextOf(spec), streamOptions(options, requestSignal, onPayload, onResponse))
+    case "simple": Bedrock.streamSimple(~Unit, ~Unit, ~Error(), ~J(), ~J(), ~render, ~identity, events, fetch, urlContext(), handler(), signal, modelOf(spec), contextOf(spec), Some{simpleOptions(options, requestSignal, onPayload, onResponse)})
+    case _: Bedrock.stream(~Unit, ~Unit, ~Error(), ~J(), ~J(), ~render, ~identity, events, fetch, urlContext(), handler(), signal, modelOf(spec), contextOf(spec), streamOptions(options, requestSignal, onPayload, onResponse))
 
 def streamed(fetch: Fetch.Fetch(Unit), +signal: Abort.AbortSignal<Unit>, +events: Stream(), +spec: R.Record<V.Value>, onPayload: Maybe<&2, T.PayloadCallback(J(), T.Model<J()>, Error())>, onResponse: Maybe<&2, T.ResponseCallback(T.Model<J()>, Error())>) -> IO(Unit):
   streamedIn(fetch, signal, events, spec, onPayload, onResponse, mode(spec), fieldsOf(get(spec, "options")), Bool.pick(Maybe<&2, Abort.AbortSignal<Unit>>, Maybe.default(&2, Bool, flag(get(spec, "abort")), False{}), Some{signal}, None{}))

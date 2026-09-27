@@ -11,6 +11,7 @@ import ./anthropic-provider.bend as Anthropic
 import ./google-provider.bend as Google
 import ./openai-completions-provider.bend as Completions
 import ./stream-providers.bend as StreamProviders
+import ../../../ai/src/api/bedrock-converse-stream.bend as Bedrock
 import ../../../ai/src/api/openai-client.bend as Client
 import ../../../ai/src/utils/tool-declaration.bend as Declaration
 import ../../../ai/src/utils/validation.bend as Validation
@@ -241,6 +242,11 @@ def requestConfig(fetch: Fetch.Fetch(Unit), preset: RequestDefaults, config: Loo
   match config:
     case T.AgentLoopConfig{options, model, convert, transform, key, a, b, c, d, e, f, g, h}: T.AgentLoopConfig{withRequest(fetch, preset, options), model, convert, transform, key, a, b, c, d, e, f, g, h}
 
+# The network a proxied Bedrock request runs on: the transport's.
+def bedrockHandler(config: Responses.Config) -> Bedrock.Handler:
+  match config:
+    case Responses.Config{_, _, files, options, security, _, _}: Bedrock.Handler{files, options, security}
+
 def selectedProvider(codexSessions: CodexSessions.Pool<Unit>, responses: Responses.Config, fetch: Fetch.Fetch(Unit), googleToolCalls: Ref.Ref<Nat>, model: Models.Model(), context: Ai.TranscriptContext<V.Value, V.Value, Unit, Details()>, +options: Maybe<&2, LoopConfig()>, api: Ai.ModelApi) -> IO(Providers.Output(Unit, Error())):
   match api:
     case Ai.AnthropicMessagesApi{}: Anthropic.open(fetch, urlContext(), model, context, selectedOptions(options))
@@ -248,7 +254,7 @@ def selectedProvider(codexSessions: CodexSessions.Pool<Unit>, responses: Respons
     case Ai.OpenAICompletionsApi{}: Completions.open(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.PiMessagesApi{}: StreamProviders.piMessages(fetch, urlContext(), model, context, selectedOptions(options))
     case Ai.MistralConversationsApi{}: StreamProviders.mistral(fetch, urlContext(), model, context, selectedOptions(options))
-    case Ai.BedrockConverseStreamApi{}: StreamProviders.bedrock(fetch, urlContext(), model, context, selectedOptions(options))
+    case Ai.BedrockConverseStreamApi{}: StreamProviders.bedrock(fetch, urlContext(), bedrockHandler(responses), model, context, selectedOptions(options))
     case Ai.GoogleVertexApi{}: StreamProviders.vertex(fetch, urlContext(), model, context, selectedOptions(options))
     case _: Providers.openResponsesWithSessions(~LoopConfig(), ~Unit, ~Unit, ~Details(), ~Error(), ~project, ~render, ~failure, Some{codexSessions}, responses, T.StreamInput{model, context, options})
 

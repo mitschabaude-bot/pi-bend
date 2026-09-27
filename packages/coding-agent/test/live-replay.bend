@@ -646,15 +646,20 @@ def textRecord(value: Maybe<&2, V.Value>) -> Maybe<&2, R.Record<String>>:
 def bedrockOptions(+options: V.Value, signal: Abort.AbortSignal<Unit>, fetch: Fetch.Fetch(Unit)) -> Bedrock.Options(Abort.AbortSignal<Unit>, Unit, Fetch.Fetch(Unit), Error()):
   Bedrock.BedrockOptions{baseOptions(options, signal, Some{fetch}), None{}, None{}, None{}, levelOf(text(field(options, "reasoning"))), None{}, flag(field(options, "interleavedThinking")), None{}, textRecord(field(options, "requestMetadata")), None{}}
 
+# The network a proxied Bedrock request runs on: the case transport's.
+def bedrockHandler(config: Responses.Config) -> Bedrock.Handler:
+  match config:
+    case Responses.Config{_, _, files, options, security, _, _}: Bedrock.Handler{files, options, security}
+
 # upstream bedrock-converse-stream stream() with the case's options.
-def bedrockStream(+fetch: Fetch.Fetch(Unit), +model: Model(), +context: Context(), +options: V.Value, +signal: Abort.AbortSignal<Unit>) -> IO(Output()):
-  StreamProviders.lease(events => inner => Bedrock.stream(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~render, ~StreamProviders.noDetails, events, fetch, TestClient.urlContext(), inner, model, context, bedrockOptions(options, signal, fetch)), Some{signal})
+def bedrockStream(+fetch: Fetch.Fetch(Unit), handler: Bedrock.Handler, +model: Model(), +context: Context(), +options: V.Value, +signal: Abort.AbortSignal<Unit>) -> IO(Output()):
+  StreamProviders.lease(events => inner => Bedrock.stream(~Unit, ~Unit, ~Error(), ~Unit, ~Details(), ~render, ~StreamProviders.noDetails, events, fetch, TestClient.urlContext(), handler, inner, model, context, bedrockOptions(options, signal, fetch)), Some{signal})
 
 # upstream stream(): the provider's own options.
 def opened(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api: Ai.ModelApi, +model: Model(), +context: Context(), +options: V.Value, +signal: Abort.AbortSignal<Unit>) -> IO(Output()):
   match api:
     case Ai.MistralConversationsApi{}: StreamProviders.mistralSelected(fetch, TestClient.urlContext(), model, context, Some{signal}, Done{Mistral.MistralOptions{baseOptions(options, signal, Some{fetch}), None{}, None{}, text(field(options, "reasoningEffort"))}})
-    case Ai.BedrockConverseStreamApi{}: bedrockStream(fetch, model, context, options, signal)
+    case Ai.BedrockConverseStreamApi{}: bedrockStream(fetch, bedrockHandler(configFor(agent)), model, context, options, signal)
     case Ai.GoogleVertexApi{}: StreamProviders.vertexSelected(fetch, TestClient.urlContext(), model, context, Some{signal}, Done{vertexOptions(options, signal)})
     case Ai.AnthropicMessagesApi{}: Anthropic.openStream(fetch, TestClient.urlContext(), model, context, Messages.AnthropicOptions{baseOptions(options, signal, Some{fetch}), flag(field(options, "thinkingEnabled")), number(field(options, "thinkingBudgetTokens")), text(field(options, "effort")), None{}, None{}, None{}, None{}})
     case Ai.GoogleGenerativeAiApi{}: Google.openStream(fetch, TestClient.urlContext(), counter, model, context, Gemini.GoogleOptions{baseOptions(options, signal, Some{fetch}), None{}, googleThinking(field(options, "thinking"))})
@@ -676,7 +681,7 @@ def opened(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api
 def openedSimple(+agent: String, +fetch: Fetch.Fetch(Unit), counter: Ref.Ref<Nat>, api: Ai.ModelApi, +model: Model(), +context: Context(), +options: V.Value, signal: Abort.AbortSignal<Unit>) -> IO(Output()):
   match api:
     case Ai.MistralConversationsApi{}: StreamProviders.mistral(fetch, TestClient.urlContext(), model, context, Some{simpleOptions(options, signal, Some{fetch})})
-    case Ai.BedrockConverseStreamApi{}: StreamProviders.bedrock(fetch, TestClient.urlContext(), model, context, Some{simpleOptions(options, signal, Some{fetch})})
+    case Ai.BedrockConverseStreamApi{}: StreamProviders.bedrock(fetch, TestClient.urlContext(), bedrockHandler(configFor(agent)), model, context, Some{simpleOptions(options, signal, Some{fetch})})
     case Ai.GoogleVertexApi{}: StreamProviders.vertex(fetch, TestClient.urlContext(), model, context, Some{simpleOptions(options, signal, None{})})
     case Ai.AnthropicMessagesApi{}: Anthropic.open(fetch, TestClient.urlContext(), model, context, Some{simpleOptions(options, signal, Some{fetch})})
     case Ai.GoogleGenerativeAiApi{}: Google.open(fetch, TestClient.urlContext(), counter, model, context, Some{simpleOptions(options, signal, Some{fetch})})

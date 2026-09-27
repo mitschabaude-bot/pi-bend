@@ -1,5 +1,6 @@
 import Base
 import ../types.bend as Auth
+import ./oauth-page.bend as Page
 import ../../../../runtime/src/abort.bend as Abort
 import ../../../../runtime/src/base64.bend as Base64
 import ../../../../runtime/src/callback.bend as C
@@ -13,11 +14,13 @@ import ../../../../runtime/src/hosts.bend as Hosts
 
 # Shared native browser authorization: secure PKCE, state validation and a
 # callback/manual-input race. Workers own their sockets and are joined before
-# the cancellation controllers or answer are disposed.
+# the cancellation controllers or answer are disposed. Each provider's
+# callback server answers requests with its own pages (`~respond`, upstream's
+# request handlers in anthropic.ts and openai-codex.ts).
 def CodeResult() -> Data: Result<&2,&2,String,String>
 type PKCE is Data: PKCE{verifier: String, challenge: String}
 type CallbackConfig is Data:
-  CallbackConfig{redirectUri: String, path: String, state: String}
+  CallbackConfig{redirectUri: String, state: String}
 def removePadding(reversed: String) -> String:
   match reversed:
     case SCon{'=',rest}: removePadding(rest)
@@ -83,12 +86,6 @@ def codeWithState(+code: String, state: Maybe<&2,String>, verifier: String) -> R
       Bool.pick(Result<&2,&2,String,String>,String.eq(received,verifier) && Bool.not(String.is_empty(code)),Done{code},Fail{"OAuth state mismatch or missing authorization code"})
     case None{}:
       Bool.pick(Result<&2,&2,String,String>,String.is_empty(code),Fail{"Missing authorization code"},Done{code})
-def queryValue(code: Maybe<&2,String>, state: Maybe<&2,String>, verifier: String) -> Result<&2,&2,String,String>:
-  match code state:
-    case Some{value} Some{received}: codeWithState(value,Some{received},verifier)
-    case _ _: Fail{"OAuth callback needs a code and state"}
-def queryCode(+params: URL.URLSearchParams, verifier: String) -> Result<&2,&2,String,String>:
-  queryValue(URL.get(params,"code"),URL.get(params,"state"),verifier)
 def manualQueryValue(code: Maybe<&2,String>, received: Maybe<&2,String>, state: String) -> CodeResult():
   match code:
     case None{}: Fail{"Missing authorization code"}
@@ -97,9 +94,9 @@ def manualQuery(+params: URL.URLSearchParams, state: String) -> CodeResult():
   manualQueryValue(URL.get(params,"code"),URL.get(params,"state"),state)
 def manualParts(parts: List<&2,String>, +value: String, config: CallbackConfig) -> CodeResult():
   match parts config:
-    case code <> state <> Nil{} CallbackConfig{_,_,expected}: codeWithState(code,Some{state},expected)
+    case code <> state <> Nil{} CallbackConfig{_,expected}: codeWithState(code,Some{state},expected)
     case _ <> _ <> _ <> _ _: Fail{"Malformed authorization code"}
-    case _ CallbackConfig{+redirect,_,+expected}:
+    case _ CallbackConfig{+redirect,+expected}:
       +prefix = redirect ++ "?"
       Bool.pick(Unit -> CodeResult(),String.starts_with(value,prefix),_ => manualQuery(URL.parseSearchParams(String.drop(value,String.length(prefix))),expected),_ => Bool.pick(Unit -> CodeResult(),String.starts_with(value,"http://") || String.starts_with(value,"https://"),_ => Fail{"Unexpected OAuth redirect URL"},_ => Bool.pick(Unit -> CodeResult(),String.starts_with(value,"code="),_ => manualQuery(URL.parseSearchParams(value),expected),_ => codeWithState(value,None{},expected))(Unit{}))(Unit{}))(Unit{})
 def authorizationInput(input: String, config: CallbackConfig) -> CodeResult():
@@ -115,25 +112,64 @@ def callbackLineText(value: Result<&2,&2,Utf8.Error,String>) -> Maybe<&2,String>
     case Done{text}: callbackLineParts(Strings.split(text,'\n'))
 def callbackLine(bytes: List<&2,U32>) -> Maybe<&2,String>:
   callbackLineText(Utf8.decodeStrict(bytes))
-def callbackTarget(parts: List<&2,String>,config: CallbackConfig) -> CodeResult():
+# A callback request as the provider's handler sees it: the URL path, the
+# query and the state the login expects.
+type CallbackRequest is Data:
+  CallbackRequest{path: String, params: URL.URLSearchParams, state: String}
+
+# The handler's answer: the status and page, and the code when the request
+# completes the login (the server then stops); otherwise it keeps listening.
+type CallbackReply is Data:
+  CallbackReply{status: U32, html: String, code: Maybe<&2,String>}
+
+def rejected(+status: U32, message: String, details: Maybe<&2,String>) -> CallbackReply: CallbackReply{status,Page.oauthErrorHtml(message,details),None{}}
+def completed(message: String, +code: String) -> CallbackReply: CallbackReply{200,Page.oauthSuccessHtml(message),Some{code}}
+
+# A query parameter JavaScript treats as truthy.
+def truthy(value: Maybe<&2,String>) -> Maybe<&2,String>:
+  match value:
+    case Some{SCon{c,cs}}: Some{SCon{c,cs}}
+    case _: None{}
+
+def splitTarget(target: String, +reversed: String) -> String & String:
+  match target:
+    case SNil{}: (String.reverse(reversed),"")
+    case SCon{'?',rest}: (String.reverse(reversed),rest)
+    case SCon{c,rest}: splitTarget(rest,SCon{c,reversed})
+
+def targetRequest(pair: String & String, state: String) -> CallbackRequest:
+  match pair:
+    case (path,query): CallbackRequest{path,URL.parseSearchParams(query),state}
+
+# The request line `<method> <target> HTTP/<version>`; anything else gets
+# Node's bare 400 response.
+def callbackRequest(parts: List<&2,String>, config: CallbackConfig) -> Maybe<&2,CallbackRequest>:
   match parts config:
-    case "GET" <> +target <> "HTTP/1.1" <> Nil{} CallbackConfig{_,+path,+state}:
-      +prefix = path ++ "?"
-      Bool.pick(Unit -> CodeResult(),String.starts_with(target,prefix),_ => queryCode(URL.parseSearchParams(String.drop(target,String.length(prefix))),state),_ => Fail{"Unexpected OAuth callback route"})(Unit{})
-    case _ _: Fail{"Invalid OAuth callback request"}
-def callbackCode(line: String,config: CallbackConfig) -> CodeResult():
-  callbackTarget(Strings.split(line,' '),config)
-def callbackHtml(success: Bool) -> String:
-  Bool.pick(String,success,"<!doctype html><title>OAuth login complete</title><p>Authentication completed. You can close this window.</p>","<!doctype html><title>OAuth login failed</title><p>Authentication did not complete. Return to the terminal.</p>")
-def callbackResponse(+success: Bool) -> String:
-  +body = callbackHtml(success)
-  Bool.pick(String,success,"HTTP/1.1 200 OK\r\n","HTTP/1.1 400 Bad Request\r\n") ++ "Content-Type: text/html; charset=utf-8\r\nContent-Length: " ++ Nat.show(List.length(&2,U32,Utf8.encode(body))) ++ "\r\nConnection: close\r\n\r\n" ++ body
+    case _ <> target <> +version <> Nil{} CallbackConfig{_,state}: Bool.pick(Maybe<&2,CallbackRequest>,String.starts_with(version,"HTTP/"),Some{targetRequest(splitTarget(target,""),state)},None{})
+    case _ _: None{}
+def callbackReply(~respond: CallbackRequest -> CallbackReply, line: String, config: CallbackConfig) -> Maybe<&2,CallbackReply>:
+  Maybe.map(&2,CallbackRequest,CallbackReply,respond,callbackRequest(Strings.split(line,' '),config))
+def reasonPhrase(+status: U32) -> String:
+  match status:
+    case 200: "OK"
+    case 400: "Bad Request"
+    case 404: "Not Found"
+    case _: "Internal Server Error"
+def replyResponse(reply: Maybe<&2,CallbackReply>) -> String:
+  match reply:
+    case None{}: "HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n"
+    case Some{CallbackReply{+status,+html,_}}:
+      "HTTP/1.1 " ++ U32.show(status) ++ " " ++ reasonPhrase(status) ++ "\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " ++ Nat.show(List.length(&2,U32,Utf8.encode(html))) ++ "\r\nConnection: close\r\n\r\n" ++ html
+def replyCode(reply: Maybe<&2,CallbackReply>) -> Maybe<&2,String>:
+  match reply:
+    case Some{CallbackReply{_,_,code}}: code
+    case None{}: None{}
 def closeCallbackWrite(pair: Socket & Result<&1,&1,U32 & String,Unit>) -> IO(Unit):
   match pair:
     case (socket,_): Socket.close(socket)
-def respondCallback(socket: Socket,success: Bool) -> IO(Unit):
+def respondCallback(socket: Socket,response: String) -> IO(Unit):
   do IO<Unit>:
-    pair : Socket & Result<&1,&1,U32 & String,Unit> <- TCP.send(socket,callbackResponse(success))
+    pair : Socket & Result<&1,&1,U32 & String,Unit> <- TCP.send(socket,response)
     closeCallbackWrite(pair)
 
 type CallbackStep is Type:
@@ -146,15 +182,15 @@ type CallbackStep is Type:
   Received{listener: Listener,pair: Socket & Result<&1,&1,U32 & String,List<&2,U32>>,bytes: List<&2,U32>}
   Line{listener: Listener,socket: Socket,bytes: List<&2,U32>,line: Maybe<&2,String>}
   LineSize{listener: Listener,socket: Socket,bytes: List<&2,U32>,tooLong: Bool}
-  Parsed{listener: Listener,socket: Socket,result: Result<&2,&2,String,String>}
+  Parsed{listener: Listener,socket: Socket,response: String,code: Maybe<&2,String>}
 
-@unsafe def callbackRun(step: CallbackStep,+answer: Deferred.Deferred<CodeResult()>,+config: CallbackConfig,+signal: Abort.AbortSignal<Unit>) -> IO(Unit):
+@unsafe def callbackRun(~respond: CallbackRequest -> CallbackReply,step: CallbackStep,+answer: Deferred.Deferred<CodeResult()>,+config: CallbackConfig,+signal: Abort.AbortSignal<Unit>) -> IO(Unit):
   match step:
     case Listening{listener}:
       do IO<Unit>:
         current : Maybe<&2,CodeResult()> <- Deferred.peek(CodeResult(),answer)
         stopped : Bool <- Abort.aborted(Unit,signal)
-        callbackRun(CheckedListener{listener,current,stopped},answer,config,signal)
+        callbackRun(~respond,CheckedListener{listener,current,stopped},answer,config,signal)
     case CheckedListener{listener,Some{_},_}:
       do IO<Unit>:
         Listener.close(listener)
@@ -167,22 +203,22 @@ type CallbackStep is Type:
     case CheckedListener{listener,None{},False{}}:
       do IO<Unit>:
         pair : Listener & Result<&1,&1,U32 & String,Socket> <- TCP.accept_try(listener)
-        callbackRun(Accepted{pair},answer,config,signal)
+        callbackRun(~respond,Accepted{pair},answer,config,signal)
     case Accepted{(listener,Fail{(11,_)})}:
       do IO<Unit>:
         IO.sleep(30)
-        callbackRun(Listening{listener},answer,config,signal)
+        callbackRun(~respond,Listening{listener},answer,config,signal)
     case Accepted{(listener,Fail{_})}:
       do IO<Unit>:
         Listener.close(listener)
         settled : Bool <- Deferred.resolve(CodeResult(),answer,Fail{"Login cancelled"})
         return Unit{}
-    case Accepted{(listener,Done{socket})}: callbackRun(Reading{listener,socket,Nil{}},answer,config,signal)
+    case Accepted{(listener,Done{socket})}: callbackRun(~respond,Reading{listener,socket,Nil{}},answer,config,signal)
     case Reading{listener,socket,bytes}:
       do IO<Unit>:
         current : Maybe<&2,CodeResult()> <- Deferred.peek(CodeResult(),answer)
         stopped : Bool <- Abort.aborted(Unit,signal)
-        callbackRun(CheckedSocket{listener,socket,bytes,current,stopped},answer,config,signal)
+        callbackRun(~respond,CheckedSocket{listener,socket,bytes,current,stopped},answer,config,signal)
     case CheckedSocket{listener,socket,_,Some{_},_}:
       do IO<Unit>:
         Socket.close(socket)
@@ -197,45 +233,47 @@ type CallbackStep is Type:
     case CheckedSocket{listener,socket,bytes,None{},False{}}:
       do IO<Unit>:
         pair : Socket & Result<&1,&1,U32 & String,Bool> <- TCP.readable(socket)
-        callbackRun(Readable{listener,pair,bytes},answer,config,signal)
+        callbackRun(~respond,Readable{listener,pair,bytes},answer,config,signal)
     case Readable{listener,(socket,Done{False{}}),bytes}:
       do IO<Unit>:
         IO.sleep(30)
-        callbackRun(Reading{listener,socket,bytes},answer,config,signal)
+        callbackRun(~respond,Reading{listener,socket,bytes},answer,config,signal)
     case Readable{listener,(socket,Fail{_}),_}:
       do IO<Unit>:
         Socket.close(socket)
-        callbackRun(Listening{listener},answer,config,signal)
+        callbackRun(~respond,Listening{listener},answer,config,signal)
     case Readable{listener,(socket,Done{True{}}),bytes}:
       do IO<Unit>:
         pair : Socket & Result<&1,&1,U32 & String,List<&2,U32>> <- TCP.recv_bytes(socket,4096)
-        callbackRun(Received{listener,pair,bytes},answer,config,signal)
+        callbackRun(~respond,Received{listener,pair,bytes},answer,config,signal)
     case Received{listener,(socket,Fail{_}),_}:
       do IO<Unit>:
         Socket.close(socket)
-        callbackRun(Listening{listener},answer,config,signal)
+        callbackRun(~respond,Listening{listener},answer,config,signal)
     case Received{listener,(socket,Done{Nil{}}),_}:
       do IO<Unit>:
         Socket.close(socket)
-        callbackRun(Listening{listener},answer,config,signal)
+        callbackRun(~respond,Listening{listener},answer,config,signal)
     case Received{listener,(socket,Done{chunk}),bytes}:
       +joined = List.append(&2,U32,bytes,chunk)
-      callbackRun(Line{listener,socket,joined,callbackLine(joined)},answer,config,signal)
+      callbackRun(~respond,Line{listener,socket,joined,callbackLine(joined)},answer,config,signal)
     case Line{listener,socket,+bytes,None{}}:
-      callbackRun(LineSize{listener,socket,bytes,Nat.is_gt(List.length(&2,U32,bytes),8192n)},answer,config,signal)
+      callbackRun(~respond,LineSize{listener,socket,bytes,Nat.is_gt(List.length(&2,U32,bytes),8192n)},answer,config,signal)
     case LineSize{listener,socket,_,True{}}:
       do IO<Unit>:
-        respondCallback(socket,False{})
-        callbackRun(Listening{listener},answer,config,signal)
-    case LineSize{listener,socket,bytes,False{}}: callbackRun(Reading{listener,socket,bytes},answer,config,signal)
-    case Line{listener,socket,_,Some{line}}: callbackRun(Parsed{listener,socket,callbackCode(line,config)},answer,config,signal)
-    case Parsed{listener,socket,Fail{_}}:
+        respondCallback(socket,replyResponse(None{}))
+        callbackRun(~respond,Listening{listener},answer,config,signal)
+    case LineSize{listener,socket,bytes,False{}}: callbackRun(~respond,Reading{listener,socket,bytes},answer,config,signal)
+    case Line{listener,socket,_,Some{line}}:
+      +reply = callbackReply(~respond,line,config)
+      callbackRun(~respond,Parsed{listener,socket,replyResponse(reply),replyCode(reply)},answer,config,signal)
+    case Parsed{listener,socket,response,None{}}:
       do IO<Unit>:
-        respondCallback(socket,False{})
-        callbackRun(Listening{listener},answer,config,signal)
-    case Parsed{listener,socket,Done{code}}:
+        respondCallback(socket,response)
+        callbackRun(~respond,Listening{listener},answer,config,signal)
+    case Parsed{listener,socket,response,Some{code}}:
       do IO<Unit>:
-        respondCallback(socket,True{})
+        respondCallback(socket,response)
         settled : Bool <- Deferred.resolve(CodeResult(),answer,Done{code})
         Listener.close(listener)
         return Unit{}
@@ -259,23 +297,23 @@ def joinServer(worker: Maybe<&1,Chan(Unit)>) -> IO(Unit):
   match worker:
     case None{}: IO.pure(Unit,Unit{})
     case Some{task}: IO.join(Unit,task)
-def serverRun(listener: Result<&1,&1,U32 & String,Listener>, answer: Deferred.Deferred<CodeResult()>,config: CallbackConfig,signal: Abort.AbortSignal<Unit>) -> IO(Maybe<&1,Chan(Unit)>):
+def serverRun(~respond: CallbackRequest -> CallbackReply,listener: Result<&1,&1,U32 & String,Listener>, answer: Deferred.Deferred<CodeResult()>,config: CallbackConfig,signal: Abort.AbortSignal<Unit>) -> IO(Maybe<&1,Chan(Unit)>):
   match listener:
     case Fail{_}: IO.pure(Maybe<&1,Chan(Unit)>,None{})
     case Done{socket}:
       do IO<Maybe<&1,Chan(Unit)>>:
-        worker : Chan(Unit) <- IO.fork(Unit,callbackRun(Listening{socket},answer,config,signal))
+        worker : Chan(Unit) <- IO.fork(Unit,callbackRun(~respond,Listening{socket},answer,config,signal))
         return Some{worker}
-def promptCode(+config: CallbackConfig, listener: Result<&1,&1,U32 & String,Listener>, interaction: Auth.ProviderAuthInteraction, url: String, message: String, instructions: String) -> IO(CodeResult()):
+def promptCode(~respond: CallbackRequest -> CallbackReply,+config: CallbackConfig, listener: Result<&1,&1,U32 & String,Listener>, interaction: Auth.ProviderAuthInteraction, url: String, message: String, instructions: String) -> IO(CodeResult()):
   match interaction config:
-    case Auth.ProviderAuthInteraction{+parent,prompt,notify} CallbackConfig{+redirect,path,state}:
+    case Auth.ProviderAuthInteraction{+parent,prompt,notify} CallbackConfig{+redirect,state}:
       do IO<CodeResult()>:
         +answer : Deferred.Deferred<CodeResult()> <- Deferred.new(CodeResult())
         +manualAbort : Abort.AbortController<Unit> <- Abort.new(Unit)
         +serverAbort : Abort.AbortController<Unit> <- Abort.new(Unit)
         manualLink : Abort.Link<Unit> <- Abort.link(Unit,parent,manualAbort)
         serverLink : Abort.Link<Unit> <- Abort.link(Unit,parent,serverAbort)
-        worker : Maybe<&1,Chan(Unit)> <- serverRun(listener,answer,CallbackConfig{redirect,path,state},Abort.signal(Unit,serverAbort))
+        worker : Maybe<&1,Chan(Unit)> <- serverRun(~respond,listener,answer,CallbackConfig{redirect,state},Abort.signal(Unit,serverAbort))
         C.call(Auth.AuthEvent,Unit,notify,Auth.AuthUrlEvent{url,Some{instructions}})
         manual : Chan(Unit) <- IO.fork(Unit,manualRun(answer,config,prompt,Abort.signal(Unit,manualAbort),message,redirect))
         result : CodeResult() <- Deferred.result(CodeResult(),answer)
