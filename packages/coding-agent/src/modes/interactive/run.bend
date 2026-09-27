@@ -947,7 +947,7 @@ def sessionInfoOf(stats: Stats.Stats,+state: Tree.SessionManager<Unit,Tools.Tool
 # from the session, formatted at the time of the command.
 def cacheWarmingInfo(+live: Session.AgentSession) -> IO(SessionInfo.CacheWarmingInfo):
   do IO<SessionInfo.CacheWarmingInfo>:
-    settings : Settings.SettingsManager <- Ref.read(Settings.SettingsManager,Session.settingsOf(live))
+    settings : Settings.SettingsManager <- Session.getSettings(live)
     status : Warmer.CacheWarmingStatus <- Session.cacheWarmingStatus(live)
     now : F64 <- Date.now()
     return SessionInfo.CacheWarmingInfo{Settings.getCacheWarmingMode(settings),status,now}
@@ -2699,6 +2699,15 @@ def hasSessionMessages(messages: List<&2,Session.Message()>) -> Bool:
   match messages:
     case Nil{}: False{}
     case _ <> _: True{}
+def printFullscreenDocument(output: Settings.FullscreenExitOutput) -> Bool:
+  match output:
+    case Settings.Transcript{}: True{}
+    case Settings.ResumeHint{}: False{}
+def fullscreenExitOutput(session: Ref.Ref<Session.AgentSession>,_: Unit) -> IO(Bool):
+  do IO<Bool>:
+    live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+    settings : Settings.SettingsManager <- Ref.read(Settings.SettingsManager,Session.settingsOf(live))
+    return printFullscreenDocument(Settings.getFullscreenExitOutput(settings))
 def prepareFullscreenExit(screen: Process.ScreenState,view: View.Handle,session: Ref.Ref<Session.AgentSession>) -> IO(Unit):
   match screen:
     case Process.Main{_}: IO.pure(Unit,Unit{})
@@ -2792,7 +2801,9 @@ def processMounted(mounted: View.View & View.Handle & Tui.ResultOf(Tui.TuiBase),
         +ids : List<&2,Component.ComponentId> <- IO.pure(List<&2,Component.ComponentId>,Component.ComponentId{1n} <> Component.ComponentId{2n} <> Component.ComponentId{3n} <> Nil{})
         +components : List<&2,Component.Component> <- IO.pure(List<&2,Component.Component>,document <> editorComponent <> footerComponent(foot) <> Nil{})
         configured : Tui.TuiBase <- configuredTui(base,contextSession(context),screen)
-        +outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runSuspendable(Process.active(Process.Session{configured,screen},components,ids),stopped,terminalControl(contextInteraction(context)),False{},ready,resumed,stopping)
+        +exitOutput : Callback.Callback<Unit,Bool> <- Callback.create(~Ref.Ref<Session.AgentSession>,~Unit,~Bool,~fullscreenExitOutput,contextSession(context))
+        +outcome : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runSuspendable(Process.active(Process.Session{configured,screen},components,ids),stopped,terminalControl(contextInteraction(context)),False{},ready,resumed,stopping,exitOutput)
+        Callback.dispose(Unit,Bool,exitOutput)
         disposeProcess(outcome)
         Callback.dispose(Process.QueryReady,Unit,ready)
         Callback.dispose(Process.QueryReady,Unit,resumed)

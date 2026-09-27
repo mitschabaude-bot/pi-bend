@@ -13,6 +13,7 @@ type Edit is Data:
   Edit{text: Ref.Ref<String>,stopped: Deferred.Deferred<Unit>,suspension: Process.SuspensionHandle,command: String}
 type Invocation is Data:
   Invocation{text: Ref.Ref<String>,command: String}
+def printDocument(_: Unit,_: Unit) -> IO(Bool): IO.pure(Bool,True{})
 def noInvalidate(_: Unit,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
 def render(text: Ref.Ref<String>,_: Nat) -> IO(List<&2,String>):
   do IO<List<&2,String>>:
@@ -78,9 +79,11 @@ def run(command: String) -> IO(Unit):
     +first : Callback.Callback<Process.QueryReady,Unit> <- Callback.create(~String,~Process.QueryReady,~Unit,~ready,"ready")
     +resumed : Callback.Callback<Process.QueryReady,Unit> <- Callback.create(~String,~Process.QueryReady,~Unit,~ready,"resumed")
     +stop : Callback.Callback<Unit,Unit> <- Callback.create(~Process.SuspensionHandle,~Unit,~Unit,~stopping,suspension)
+    +exitOutput : Callback.Callback<Unit,Bool> <- Callback.create(~Unit,~Unit,~Bool,~printDocument,Unit{})
     initial : Process.Active <- prepare(Component.Component{Component.ComponentId{1n},renderCallback,Some{editCallback},None{},invalidate,None{},False{}})
-    result : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runSuspendable(initial,stopped,suspension,False{},first,resumed,stop)
+    result : Result<&2,&2,Terminal.Error,Process.Active> <- Process.runSuspendable(initial,stopped,suspension,False{},first,resumed,stop,exitOutput)
     requireRun(result)
+    Callback.dispose(Unit,Bool,exitOutput)
     Callback.dispose(Process.QueryReady,Unit,first)
     Callback.dispose(Process.QueryReady,Unit,resumed)
     Callback.dispose(Unit,Unit,stop)

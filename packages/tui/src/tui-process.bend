@@ -781,10 +781,25 @@ def isSuspending(handle: SuspensionHandle) -> IO(Bool):
       do IO<Bool>:
         current : SuspensionState <- Ref.read(SuspensionState,state)
         return pendingSuspension(current)
-def beforeSuspensionStop(handle: SuspensionHandle,current: Active,width: Nat) -> IO(Active & Screen.Stream):
+# External actions need the natural document. Final fullscreen exit may instead
+# restore the main screen without printing it; the caller prints its resume hint.
+def preserveScreen(current: Active,width: Nat) -> IO(Active & Screen.Stream):
+  match current:
+    case Active{Session{_,Fullscreen{_}},_,_,_,_,_}:
+      IO.pure(Active & Screen.Stream,(current,Screen.stream(Screen.Text{Alt.leave()} <> Nil{})))
+    case _: beforeStop(current,width)
+def finalStop(printDocument: Bool,current: Active,width: Nat) -> IO(Active & Screen.Stream):
+  match printDocument:
+    case True{}: beforeStop(current,width)
+    case False{}: preserveScreen(current,width)
+def beforeSuspensionStop(handle: SuspensionHandle,output: Callback.Callback<Unit,Bool>,+current: Active,+width: Nat) -> IO(Active & Screen.Stream):
   do IO<Active & Screen.Stream>:
-    layout : Bool <- isSuspending(handle)
-    beforeStopWith(layout,current,width)
+    suspending : Bool <- isSuspending(handle)
+    Bool.pick(Unit -> IO(Active & Screen.Stream),suspending,
+      _ => beforeStopWith(True{},current,width),
+      _ => do IO<Active & Screen.Stream>:
+        printDocument : Bool <- Callback.call(Unit,Bool,output,Unit{})
+        finalStop(printDocument,current,width))(Unit{})
 def beginSuspensionRun(handle: SuspensionHandle,stop: Deferred.Deferred<Unit>) -> IO(Unit):
   match handle:
     case SuspensionHandle{state}: Ref.write(SuspensionState,state,Running{stop,None{}})
@@ -842,21 +857,21 @@ def afterSuspension(next: Active -> IO(Result<&2,&2,Terminal.Error,Active>),resu
       do IO<Result<&2,&2,Terminal.Error,Active>>:
         ended : Maybe<&2,Unit> <- Deferred.peek(Unit,stopped)
         resumeProcess(next,current,operation,ended)
-def observedSuspendable(next: Active -> IO(Result<&2,&2,Terminal.Error,Active>),observation: Deferred.Observation<Unit>,initial: Active,+stopped: Deferred.Deferred<Unit>,+suspension: SuspensionHandle,termux: Bool,ready: Callback.Callback<QueryReady,Unit>,stopping: Callback.Callback<Unit,Unit>,+local: Deferred.Deferred<Unit>) -> IO(Result<&2,&2,Terminal.Error,Active>):
+def observedSuspendable(next: Active -> IO(Result<&2,&2,Terminal.Error,Active>),observation: Deferred.Observation<Unit>,initial: Active,+stopped: Deferred.Deferred<Unit>,+suspension: SuspensionHandle,termux: Bool,ready: Callback.Callback<QueryReady,Unit>,stopping: Callback.Callback<Unit,Unit>,+output: Callback.Callback<Unit,Bool>,+local: Deferred.Deferred<Unit>) -> IO(Result<&2,&2,Terminal.Error,Active>):
   match observation:
     case Deferred.Observation{ticket,cancellation}:
       do IO<Result<&2,&2,Terminal.Error,Active>>:
         task : Chan(Unit) <- IO.fork(Unit,forwardStop(local,ticket))
         owner : Serial.Owner<Active> <- Serial.create(Active,initial)
-        result : Result<&2,&2,Terminal.Error,Active> <- runOwner(Serial.borrow(Active,owner),local,termux,Some{ready},Some{stopping},current => width => beforeSuspensionStop(suspension,current,width))
+        result : Result<&2,&2,Terminal.Error,Active> <- runOwner(Serial.borrow(Active,owner),local,termux,Some{ready},Some{stopping},current => width => beforeSuspensionStop(suspension,output,current,width))
         operation : Maybe<&2,Callback.Callback<Unit,Unit>> <- finishSuspensionRun(suspension)
         cancelled : Bool <- Deferred.cancel(Unit,cancellation)
         joined : Unit <- IO.join(Unit,task)
         Deferred.dispose(Unit,local)
         afterSuspension(next,result,stopped,operation)
-@unsafe def runSuspendable(initial: Active,+stopped: Deferred.Deferred<Unit>,+suspension: SuspensionHandle,+termux: Bool,ready: Callback.Callback<QueryReady,Unit>,+resumed: Callback.Callback<QueryReady,Unit>,+stopping: Callback.Callback<Unit,Unit>) -> IO(Result<&2,&2,Terminal.Error,Active>):
+@unsafe def runSuspendable(initial: Active,+stopped: Deferred.Deferred<Unit>,+suspension: SuspensionHandle,+termux: Bool,ready: Callback.Callback<QueryReady,Unit>,+resumed: Callback.Callback<QueryReady,Unit>,+stopping: Callback.Callback<Unit,Unit>,+output: Callback.Callback<Unit,Bool>) -> IO(Result<&2,&2,Terminal.Error,Active>):
   do IO<Result<&2,&2,Terminal.Error,Active>>:
     +local : Deferred.Deferred<Unit> <- Deferred.new(Unit)
     beginSuspensionRun(suspension,local)
     observation : Deferred.Observation<Unit> <- Deferred.observe(Unit,stopped)
-    observedSuspendable(next => runSuspendable(next,stopped,suspension,termux,resumed,resumed,stopping),observation,initial,stopped,suspension,termux,ready,stopping,local)
+    observedSuspendable(next => runSuspendable(next,stopped,suspension,termux,resumed,resumed,stopping,output),observation,initial,stopped,suspension,termux,ready,stopping,output,local)

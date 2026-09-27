@@ -129,7 +129,30 @@ def configured_scrollbar(mode):
                       ("key", "PageUp"), ("settle", 0.2), ("snap", "scrolled"),
                       ("key", "End"), ("settle", 0.2), ("snap", "end")]}
 
+def fullscreen_exit_output(output, change_to=None, answer=True):
+    steps = [("wait", READY, "startup"), ("wait", "Warning: fd not found", "ready"), ("settle", 0.3)]
+    if answer:
+        steps += [("keys", "hello"), ("key", "Enter"), ("wait", "A short reply.", "answer"), ("settle", 0.3)]
+    if change_to:
+        steps += [("keys", "/settings"), ("key", "Enter"), ("settle", 0.3),
+                  ("keys", "fullscreen exit output"), ("settle", 0.2), ("snap", "choice"),
+                  ("key", "Enter"), ("settle", 0.2), ("snap", "changed"),
+                  ("key", "Escape"), ("settle", 0.2)]
+    steps += [("key", "C-d"), ("wait", "shell\\$", "exit"), ("snap", "exit"), ("snap-history", "history")]
+    return {"name": "fullscreen-exit-output-" + output + ("-to-" + change_to if change_to else "-turn" if answer else "-empty"),
+            "args": MODEL + ["--tui-mode", "fullscreen"],
+            "files": {**RESOURCES, "home/.pi/agent/settings.json": json.dumps({"fullscreenExitOutput": output})},
+            "turns": [{"text": "A short reply."}] if answer else [], "steps": steps}
+
+regular_exit_output = fullscreen_exit_output("resume-hint")
+regular_exit_output.update(name="regular-exit-output-resume-hint", args=MODEL)
+
 SCENARIOS = [
+    regular_exit_output,
+    fullscreen_exit_output("resume-hint", answer=False),
+    fullscreen_exit_output("resume-hint"),
+    fullscreen_exit_output("transcript", "resume-hint"),
+    fullscreen_exit_output("resume-hint", "transcript"),
     configured_scrollbar("always"),
     configured_scrollbar("hidden"),
     {
@@ -1324,6 +1347,11 @@ SCENARIOS = [
 # Exercise the same editor handoffs through the fullscreen terminal lifecycle.
 external_editor = next(case for case in SCENARIOS if case["name"] == "external-editor")
 SCENARIOS.append({**external_editor, "name": "external-editor-fullscreen", "args": MODEL + ["--tui-mode", "fullscreen"]})
+resume_hint_editor_files = dict(external_editor["files"])
+resume_hint_editor_settings = json.loads(resume_hint_editor_files["home/.pi/agent/settings.json"])
+resume_hint_editor_settings["fullscreenExitOutput"] = "resume-hint"
+resume_hint_editor_files["home/.pi/agent/settings.json"] = json.dumps(resume_hint_editor_settings)
+SCENARIOS.append({**external_editor, "name": "external-editor-fullscreen-resume-hint", "args": MODEL + ["--tui-mode", "fullscreen"], "files": resume_hint_editor_files})
 
 SCENARIOS.append({
     "name": "terminal-session-title", "args": MODEL,

@@ -86,6 +86,10 @@ def scrollbar(value: Settings.ScrollViewScrollbar) -> String:
     case Settings.ScrollAuto{}: "auto"
     case Settings.ScrollAlways{}: "always"
     case Settings.ScrollHidden{}: "hidden"
+def exitOutput(value: Settings.FullscreenExitOutput) -> String:
+  match value:
+    case Settings.Transcript{}: "transcript"
+    case Settings.ResumeHint{}: "resume-hint"
 def rows(+settings: Settings.SettingsManager,currentTheme: String,submenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>,modelSubmenu: Callback.Callback<ListUI.SubmenuRequest,Component.Component>) -> List<&2,ListUI.SettingItem>:
   boolean("autocompact","Auto-compact","Automatically compact context when it gets too large",Settings.getCompactionEnabled(settings)) <>
   boolean("auto-resize-images","Auto-resize images","Resize large images to 2000x2000 max for better model compatibility",Settings.getImageAutoResize(settings)) <>
@@ -111,6 +115,7 @@ def rows(+settings: Settings.SettingsManager,currentTheme: String,submenu: Callb
   item("double-escape-action","Double-escape action","Action when pressing Escape twice with empty editor",escape(Settings.getDoubleEscapeAction(settings)),"tree" <> "fork" <> "none" <> Nil{}) <>
   item("tree-filter-mode","Tree filter mode","Default filter when opening /tree",treeFilter(Settings.getTreeFilterMode(settings)),"default" <> "no-tools" <> "user-only" <> "labeled-only" <> "all" <> Nil{}) <>
   modelThinkingRow(ModelThinkingPicker.summary(settings),modelSubmenu) <>
+  item("fullscreen-exit-output","Fullscreen exit output","Print the transcript or only a session resume hint when exiting fullscreen mode",exitOutput(Settings.getFullscreenExitOutput(settings)),choices("transcript","resume-hint")) <>
   item("fullscreen-scrollbar","Fullscreen scrollbar","Scrollbar behavior in fullscreen mode; has no effect in regular mode",scrollbar(Settings.getFullscreenScrollbar(settings)),"auto" <> "always" <> "hidden" <> Nil{}) <>
   themeRow(currentTheme,submenu) <>
   Nil{}
@@ -134,6 +139,8 @@ def change(id: String,value: String,settings: Settings.SettingsManager) -> Setti
     case "autocomplete-max-visible" "10": Settings.setAutocompleteMaxVisible(W.U64{0,10},settings)
     case "autocomplete-max-visible" "15": Settings.setAutocompleteMaxVisible(W.U64{0,15},settings)
     case "autocomplete-max-visible" "20": Settings.setAutocompleteMaxVisible(W.U64{0,20},settings)
+    case "fullscreen-exit-output" "transcript": Settings.setFullscreenExitOutput(Settings.Transcript{},settings)
+    case "fullscreen-exit-output" "resume-hint": Settings.setFullscreenExitOutput(Settings.ResumeHint{},settings)
     case "fullscreen-scrollbar" "auto": Settings.setFullscreenScrollbar(Settings.ScrollAuto{},settings)
     case "fullscreen-scrollbar" "always": Settings.setFullscreenScrollbar(Settings.ScrollAlways{},settings)
     case "fullscreen-scrollbar" "hidden": Settings.setFullscreenScrollbar(Settings.ScrollHidden{},settings)
