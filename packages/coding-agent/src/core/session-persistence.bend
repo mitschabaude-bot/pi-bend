@@ -247,22 +247,6 @@ def sessionCwdMatches(+cwd: String, resolvedCwd: String) -> Bool:
 type Loaded<-D: Data, -T: Data, -C: Data> is Data:
   Loaded{entries: List<&2, S.FileEntry<D, T, C>>, migrated: Bool}
 
-def afterLastNewline(text: String, +pending: String) -> String:
-  match text:
-    case SNil{}: pending
-    case SCon{'\n', rest}: afterLastNewline(rest, "")
-    case SCon{char, rest}: afterLastNewline(rest, SCon{char, pending})
-
-# Track whether any character follows the final newline without storing it.
-def unterminatedTail(text: String, pending: Bool) -> Bool:
-  match text:
-    case SNil{}: pending
-    case SCon{'\n', rest}: unterminatedTail(rest, False{})
-    case SCon{_, rest}: unterminatedTail(rest, True{})
-
-def unterminated(content: String) -> Bool:
-  unterminatedTail(content, False{})
-
 def validHeader(-D: Data, -T: Data, -C: Data, entries: List<&2, S.FileEntry<D, T, C>>) -> Bool:
   match entries:
     case S.Header{_} <> _: True{}
@@ -288,15 +272,17 @@ def migratedIf(migrate: Bool, values: List<&2, V.Value>) -> IO(SJ.Migration):
     case True{}: SJ.migrated(values)
     case False{}: IO.pure(SJ.Migration, SJ.Migration{False{}, values})
 
-def loadedValues(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D), ~tool: V.Value -> Decoded(T), ~custom: V.Value -> Decoded(C), path: String, +content: String, migrate: Bool) -> IO(Outcome(Loaded<D, T, C>)):
-  do IO<Outcome(Loaded<D, T, C>)>:
-    migration : SJ.Migration <- migratedIf(migrate, SJ.parsedLines(String.split(content, '\n'), Nil{}))
-    loadedMigration(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, path, unterminated(content), migration)
+def loadedContent(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D), ~tool: V.Value -> Decoded(T), ~custom: V.Value -> Decoded(C), path: String, migrate: Bool, parsed: List<&2, V.Value> & Bool) -> IO(Outcome(Loaded<D, T, C>)):
+  match parsed:
+    case (values, pending):
+      do IO<Outcome(Loaded<D, T, C>)>:
+        migration : SJ.Migration <- migratedIf(migrate, values)
+        loadedMigration(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, path, pending, migration)
 
 def loadedText(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D), ~tool: V.Value -> Decoded(T), ~custom: V.Value -> Decoded(C), path: String, text: Maybe<&2, String>, migrate: Bool) -> IO(Outcome(Loaded<D, T, C>)):
   match text:
     case None{}: IO.pure(Outcome(Loaded<D, T, C>), Done{Loaded{Nil{}, False{}}})
-    case Some{content}: loadedValues(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, path, content, migrate)
+    case Some{content}: loadedContent(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, path, migrate, SJ.parsedContent(content))
 
 def loadedBytes(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D), ~tool: V.Value -> Decoded(T), ~custom: V.Value -> Decoded(C), +path: String, bytes: Result<&2, &2, FS.Error, List<&2, U32>>, migrate: Bool) -> IO(Outcome(Loaded<D, T, C>)):
   match bytes:

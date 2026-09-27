@@ -592,12 +592,12 @@
     },
     "packages/coding-agent/src/core/session-manager.ts": {
       "state": "partial",
-      "note": "Session persistence, resume, tree and fork work; complete upstream session/recovery parity is not claimed. Focused line-reader review: native parsedLine uses JSON parse failure to skip empty/blank/malformed rows without trimming and reversing each nonblank line; parsed entry order is preserved. The session-file differential covers loading, discovery, newline repair, migration and resumed-entry operations. This review does not establish complete streaming-reader or recovery parity. Focused final-newline review: repair depends only on whether text follows the final newline, and only a valid session header permits repair; the native check tracks that Boolean without retaining a discarded line. Full loading still reads and decodes the entire file rather than upstream\u2019s incremental UTF-8 reader.",
+      "note": "Session persistence, resume, tree and fork work; complete upstream session/recovery parity is not claimed. Focused file-reader review: lines are parsed in order, empty/blank/malformed rows are skipped without trimming each nonblank line, migration precedes typed decoding, and final-newline repair requires a valid session header. The loader parses completed lines during the character scan and derives final-newline state in that pass. Full loading still reads and decodes the entire file rather than upstream\u2019s incremental UTF-8 reader. The session-file differential covers loading, discovery, newline repair, migration and resumed-entry operations; complete streaming-reader and recovery parity remain unverified.",
       "source_sha256": "ded5d65112f8666f0e3ae71dab39a302607c29a000745a3d06e00c2103c8f257",
       "port_sha256": {
         "packages/coding-agent/src/core/session-manager.bend": "66905475905747fb9c53670f213967704ee46c3ed9020e2144a0ebbd9da56158",
-        "packages/coding-agent/src/core/session-json.bend": "0decf3425d05423edf1e90cf4006d3a1e3804c87d79863e417596e34321216dd",
-        "packages/coding-agent/src/core/session-persistence.bend": "8ee53c3b768da512836921cf81b07c87f1b02d823caf8f253dd2bc111e722396"
+        "packages/coding-agent/src/core/session-json.bend": "c8fda396275c2508b582e12595455f473f61775dfd9c8369ed14de89730ca3de",
+        "packages/coding-agent/src/core/session-persistence.bend": "a7ebf387024846d52af9aa291dabc835596dcd826b4f7c1947a63cc1885205a6"
       },
       "ports": [
         "packages/coding-agent/src/core/session-manager.bend",

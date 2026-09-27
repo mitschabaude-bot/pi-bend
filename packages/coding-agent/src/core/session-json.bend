@@ -385,6 +385,22 @@ def parsedLines(lines: List<&2, String>, +reversed: List<&2, V.Value>) -> List<&
     case Nil{}: List.reverse(&2, V.Value, reversed)
     case row <> rest: parsedLines(rest, consValue(parsedLine(row), reversed))
 
+# Parse completed lines immediately instead of retaining a list of every line.
+# The Boolean records text after the last newline, including malformed text.
+def parsedTail(row: String, reversed: List<&2, V.Value>) -> List<&2, V.Value> & Bool:
+  match row:
+    case SNil{}: (List.reverse(&2, V.Value, reversed), False{})
+    case SCon{char, rest}: (List.reverse(&2, V.Value, consValue(parsedLine(String.reverse(SCon{char, rest})), reversed)), True{})
+
+def contentLines(text: String, row: String, reversed: List<&2, V.Value>) -> List<&2, V.Value> & Bool:
+  match text:
+    case SNil{}: parsedTail(row, reversed)
+    case SCon{'\n', rest}: contentLines(rest, "", consValue(parsedLine(String.reverse(row)), reversed))
+    case SCon{char, rest}: contentLines(rest, SCon{char, row}, reversed)
+
+def parsedContent(content: String) -> List<&2, V.Value> & Bool:
+  contentLines(content, "", Nil{})
+
 def consEntry(-D: Data, -T: Data, -C: Data, decoded: Decoded(S.FileEntry<D, T, C>), +reversed: List<&2, S.FileEntry<D, T, C>>) -> List<&2, S.FileEntry<D, T, C>>:
   match decoded:
     case Fail{_}: reversed
