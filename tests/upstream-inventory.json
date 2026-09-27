@@ -3852,9 +3852,14 @@
     },
     {
       "source": "packages/coding-agent/test/session-selector-search.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "f2ca2bb06f27e62416b66680b50310fa0ada051fdb97d67fbf4ac36b09fdd55a"
+      "status": "partial",
+      "ports": [
+        "tests/resume-selector.bend",
+        "tests/resume_selector_check.py",
+        "tests/resume_selector_reference.mts"
+      ],
+      "sha256": "f2ca2bb06f27e62416b66680b50310fa0ada051fdb97d67fbf4ac36b09fdd55a",
+      "notes": "Mounted source-pinned cases cover quoted whitespace normalization, case-insensitive word-boundary regex, relevance order and modified-time ties, and named filtering on native one/four threads. Invalid-regex display deliberately differs; regex match-position relevance and the complete exported search API remain pending."
     },
     {
       "source": "packages/coding-agent/test/session-share.test.ts",

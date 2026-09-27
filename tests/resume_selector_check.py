@@ -26,6 +26,14 @@ for forest in forests:
 for active in (None, "/tmp/a.jsonl"):
     cases.append(dict(width=100, current=[session("a", modified=20000, name="Active"), session("b", modified=10000, name="Other")], active=active, actions=(["delete", "down", "path"] if active else ["delete", "escape", "down", "delete", "down", "path", "escape", "a", "delete-alias", "delete", "escape"])))
 cases.append(dict(width=100, current=[session("a", name="First"), session("b", name="Second")], actions=["delete-alias", "escape"]))
+cases.extend([
+    dict(width=100, current=[session("a", modified=10000, allMessagesText="node\n\n   cve was discussed"), session("b", modified=20000, allMessagesText="node something else")], actions=list('"node cve"')),
+    dict(width=100, current=[session("a", allMessagesText="NoDe\n\tCVE"), session("b", allMessagesText="node elsewhere")], actions=['"node cve"']),
+    dict(width=100, current=[session("a", modified=10000, allMessagesText="Brave is great"), session("b", modified=20000, allMessagesText="bravery is not the same")], actions=["sort", r"re:\bbrave\b"]),
+    dict(width=100, current=[session("late", modified=30000, allMessagesText="xxxx brave"), session("early", modified=10000, allMessagesText="brave xxxx")], actions=["sort", "sort"] + list('"brave"')),
+    dict(width=100, current=[session("newer", modified=30000, allMessagesText="brave"), session("older", modified=10000, allMessagesText="brave")], actions=["sort", "sort"] + list('"brave"')),
+    dict(width=100, current=[session("named", name="Real Name", allMessagesText="blueberry"), session("unnamed", allMessagesText="blueberry")], actions=["named"] + list("blueberry")),
+])
 # Active-session protection must recognize different filesystem aliases.
 with tempfile.TemporaryDirectory(prefix="pi-resume-paths-") as directory:
     root = Path(directory)

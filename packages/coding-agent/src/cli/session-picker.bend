@@ -13,7 +13,6 @@ import ../modes/interactive/theme/color.bend as Color
 import ../../../runtime/src/filesystem.bend as FS
 import ../../../runtime/src/posix-path.bend as Path
 import ../../../runtime/src/child-process.bend as Child
-import ../../../runtime/src/regex.bend as Regex
 import ../../../runtime/src/callback.bend as Callback
 import ../../../runtime/src/abort.bend as Abort
 import ../../../runtime/src/deferred.bend as Deferred
@@ -26,7 +25,7 @@ import ../../../tui/src/components/input.bend as SearchInput
 import ../../../tui/src/keys.bend as Keys
 import ../../../tui/src/keybindings.bend as Bindings
 import ../../../tui/src/word-navigation.bend as Word
-import ../../../tui/src/fuzzy.bend as Fuzzy
+import ../modes/interactive/components/session-selector-search.bend as Search
 import ../../../tui/src/tui-base.bend as Tui
 import ../../../tui/src/tui.bend as Ui
 import ../../../tui/src/tui-main-screen.bend as Screen
@@ -60,10 +59,6 @@ def Outcome() -> Data: Result<&2,&2,String,Maybe<&2,String>>
 def queryText(query: SearchInput.Input) -> String: SearchInput.getValue(query)
 def newQuery() -> SearchInput.Input: SearchInput.setFocused(SearchInput.new(None{}),True{})
 
-def searchText(info: Session.SessionInfo) -> String:
-  match info:
-    case Session.SessionInfo{_,id,cwd,name,_,_,_,_,_,messages}:
-      id ++ " " ++ Maybe.default(&2,String,name,"") ++ " " ++ messages ++ " " ++ cwd
 def infoPath(info: Session.SessionInfo) -> String:
   match info: case Session.SessionInfo{path,_,_,_,_,_,_,_,_,_}: path
 
@@ -75,12 +70,10 @@ def scopeSessions(current: List<&2,Session.SessionInfo>,all: List<&2,Session.Ses
 def isAll(scope: Scope) -> Bool:
   match scope: case All{}: True{} case Current{}: False{}
 
-def named(info: Session.SessionInfo) -> Bool:
-  match info: case Session.SessionInfo{_,_,_,name,_,_,_,_,_,_}: Bool.not(String.is_empty(String.trim(Maybe.default(&2,String,name,""))))
 def namedOnly(items: List<&2,Session.SessionInfo>,+namedFilter: Bool) -> List<&2,Session.SessionInfo>:
   match items:
     case Nil{}: Nil{}
-    case +info <> +rest: Bool.pick(Unit -> List<&2,Session.SessionInfo>,Bool.not(namedFilter) || named(info),_ => info <> namedOnly(rest,namedFilter),_ => namedOnly(rest,namedFilter))(Unit{})
+    case +info <> +rest: Bool.pick(Unit -> List<&2,Session.SessionInfo>,Bool.not(namedFilter) || Search.hasSessionName(info),_ => info <> namedOnly(rest,namedFilter),_ => namedOnly(rest,namedFilter))(Unit{})
 
 def parentPath(info: Session.SessionInfo) -> Maybe<&2,String>:
   match info: case Session.SessionInfo{_,_,_,_,parent,_,_,_,_,_}: parent
@@ -165,76 +158,14 @@ def dismissed(controls: Controls) -> Controls:
   match controls: case Controls{sort,namedFilter,showPath,_,_,active}: Controls{sort,namedFilter,showPath,None{},None{},active}
 def withStatus(controls: Controls,message: StatusMessage) -> Controls:
   match controls: case Controls{sort,namedFilter,showPath,_,status,active}: Controls{sort,namedFilter,showPath,None{},Some{message},active}
-type SearchToken is Data: Word{text: String} Phrase{text: String}
-type Search is Data: Tokens{tokens: List<&2,SearchToken>,fuzzy: String} Pattern{regex: Regex.Regex} Invalid{message: String}
-def pushed(buffer: String,quoted: Bool,+tokens: List<&2,SearchToken>) -> List<&2,SearchToken>:
-  +word = String.trim(buffer)
-  Bool.pick(List<&2,SearchToken>,String.is_empty(word),tokens,Bool.pick(SearchToken,quoted,Phrase{word},Word{word}) <> tokens)
-def scan(text: String,+quoted: Bool,+buffer: String,+tokens: List<&2,SearchToken>) -> List<&2,SearchToken> & Bool:
-  match text:
-    case SNil{}: (List.reverse(&2,SearchToken,pushed(buffer,quoted,tokens)),quoted)
-    case SCon{'"',rest}: scan(rest,Bool.not(quoted),"",pushed(buffer,quoted,tokens))
-    case SCon{' ',+rest}: Bool.pick(Unit -> List<&2,SearchToken> & Bool,quoted,_ => scan(rest,quoted,buffer ++ " ",tokens),_ => scan(rest,quoted,"",pushed(buffer,False{},tokens)))(Unit{})
-    case SCon{'\t',+rest}: Bool.pick(Unit -> List<&2,SearchToken> & Bool,quoted,_ => scan(rest,quoted,buffer ++ " ",tokens),_ => scan(rest,quoted,"",pushed(buffer,False{},tokens)))(Unit{})
-    case SCon{char,rest}: scan(rest,quoted,buffer ++ SCon{char,SNil{}},tokens)
-def plainTokens(words: List<&2,String>) -> List<&2,SearchToken>:
-  match words: case Nil{}: Nil{} case word <> rest: Word{word} <> plainTokens(rest)
-def fuzzyWords(tokens: List<&2,SearchToken>) -> List<&2,String>:
-  match tokens:
-    case Nil{}: Nil{}
-    case Word{text} <> rest: text <> fuzzyWords(rest)
-    case Phrase{_} <> rest: fuzzyWords(rest)
-# Reject malformed regex visibly; upstream silently reduces it to no matches.
-def regexSearch(compiled: Result<&2,&2,Regex.Error,Regex.Regex>) -> Search:
-  match compiled:
-    case Done{regex}: Pattern{regex}
-    case Fail{Regex.Syntax{message}}: Invalid{"Invalid regex: " ++ message}
-    case Fail{_}: Invalid{"Invalid regex"}
-def regexQuery(+pattern: String) -> Search:
-  Bool.pick(Unit -> Search,String.is_empty(pattern),_ => Invalid{"Empty regex"},_ => regexSearch(Regex.compile(pattern,True{})))(Unit{})
-def tokensSearch(scanned: List<&2,SearchToken> & Bool,+trimmed: String) -> Search:
-  match scanned:
-    case (unused,True{}):
-      +fallback = plainTokens(Fuzzy.tokens(trimmed,"",Nil{}))
-      Tokens{fallback,String.join(fuzzyWords(fallback)," ")}
-    case (+tokens,False{}): Tokens{tokens,String.join(fuzzyWords(tokens)," ")}
-def parsedSearch(query: String) -> Search:
-  +trimmed = String.trim(query)
-  Bool.pick(Unit -> Search,String.starts_with(trimmed,"re:"),
-    _ => regexQuery(String.trim(String.drop(trimmed,3n))),
-    _ => tokensSearch(scan(trimmed,False{},"",Nil{}),trimmed))(Unit{})
-def tokenMatches(tokens: List<&2,SearchToken>,+text: String) -> Bool:
-  match tokens:
-    case Nil{}: True{}
-    case Word{word} <> rest: Maybe.is_some(&2,F64,Fuzzy.tokenScore([word],text,Some{U32.to_f64(0)})) && tokenMatches(rest,text)
-    case Phrase{phrase} <> rest: String.contains(String.to_lower(text),String.to_lower(phrase)) && tokenMatches(rest,text)
-def searchMatches(info: Session.SessionInfo,search: Search) -> Bool:
-  match search:
-    case Tokens{tokens,_}: tokenMatches(tokens,searchText(info))
-    case Pattern{regex}: Regex.isMatch(regex,searchText(info))
-    case Invalid{_}: False{}
-def recentFiltered(items: List<&2,Session.SessionInfo>,+search: Search) -> List<&2,Session.SessionInfo>:
-  match items:
-    case Nil{}: Nil{}
-    case +info <> +rest: Bool.pick(Unit -> List<&2,Session.SessionInfo>,searchMatches(info,search),_ => info <> recentFiltered(rest,search),_ => recentFiltered(rest,search))(Unit{})
-def searched(+items: List<&2,Session.SessionInfo>,search: Search,sort: Sort) -> List<&2,Session.SessionInfo>:
-  match search sort:
-    case Invalid{_} _: Nil{}
-    case Pattern{regex} _: recentFiltered(items,Pattern{regex})
-    case Tokens{tokens,fuzzy} Recent{}: recentFiltered(items,Tokens{tokens,fuzzy})
-    case Tokens{+tokens,+fuzzy} _:
-      +ranked = Bool.pick(List<&2,Session.SessionInfo>,String.is_empty(fuzzy),items,Fuzzy.fuzzyFilter(~Session.SessionInfo,~searchText,items,fuzzy))
-      recentFiltered(ranked,Tokens{tokens,fuzzy})
-def searchProblem(search: Search) -> Maybe<&2,String>:
-  match search:
-    case Invalid{message}: Some{message}
-    case _: None{}
 def unsought(items: List<&2,Session.SessionInfo>,sort: Sort) -> List<&2,Session.SessionInfo>:
   match sort: case Threaded{}: threaded(items) case _: items
+def notRecent(sort: Sort) -> Bool:
+  match sort: case Recent{}: False{} case _: True{}
 def arranged(+items: List<&2,Session.SessionInfo>,+query: String,+sort: Sort) -> List<&2,Session.SessionInfo>:
   Bool.pick(Unit -> List<&2,Session.SessionInfo>,String.is_empty(String.trim(query)),_ =>
     unsought(items,sort),
-    _ => searched(items,parsedSearch(query),sort))(Unit{})
+    _ => Search.filterAndSortSessions(items,query,notRecent(sort)))(Unit{})
 
 def visible(state: State) -> List<&2,Session.SessionInfo>:
   match state:
@@ -407,7 +338,7 @@ def renderState(+state: State,+width: Nat,+bindings: Bindings.KeybindingsManager
       do IO<List<&2,String>>:
         input : SearchInput.Input & List<&2,String> <- SearchInput.render(query,width)
         return List.concat(&2,String,[["",Theme.fg(theme,"accent",rule(width)),"",heading(scope,sort,namedFilter,loading,width,theme)],
-          hintRows(hintLines(deleting,status,searchProblem(parsedSearch(text)),theme,bindings,showPath,canRename),width),
+          hintRows(hintLines(deleting,status,Search.problem(Search.parseSearchQuery(text)),theme,bindings,showPath,canRename),width),
           [""],renderedQuery(input),[""],body,["",Theme.fg(theme,"accent",rule(width))]])
 
 def paint(environment: Paint,width: Nat) -> IO(List<&2,String>):

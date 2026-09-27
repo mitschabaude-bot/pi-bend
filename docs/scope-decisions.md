@@ -57,6 +57,7 @@ note pointing here. Everything not listed here is in scope.
 
 ## Changed
 
+- **Malformed resume-search regex** (2026-09-28): pi silently returns no matches for an empty or invalid `re:` pattern. pi-bend also returns no matches but displays a parsing error, following Gregor's preference to reject invalid input explicitly.
 - **Provider SDK headers**: no `x-stainless-*` headers are sent (2026-09-25).
 - **Attribution headers** name pi-bend and are off by default (2026-09-25).
 - **Documentation** is ported in spirit: the model is never pointed at
