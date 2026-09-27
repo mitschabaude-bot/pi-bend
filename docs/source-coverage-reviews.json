@@ -1277,13 +1277,15 @@
       "state": "partial",
       "ports": [
         "packages/coding-agent/src/core/tools/renderers/edit.bend",
-        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend"
+        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend",
+        "packages/coding-agent/src/modes/interactive/components/diff.bend"
       ],
-      "note": "Native owned asynchronous read-only preflight begins after complete canonical edit arguments; successful diffs and failures stay in the call box, settled details reconstruct saved previews without reading files, and identical settlement does not move the diff or request a full redraw. Input revisions discard stale completions, including A→B→A, and disposal joins owned reads. Bun/native1/native4 integration covers the three named edit-tool-no-full-redraw contracts. Diff-only stored results and historical path/oldText/newText call records reconstruct saved previews after the source file is deleted, with identical text/colors to modern results; the presentation decoder reads diff and optional firstChangedLine without inventing a missing executable patch. Bun integration checks a fresh historical component with no prior preview. Broader raw preflight argument shapes and the full renderer contract remain unreviewed.",
+      "note": "Native owned asynchronous read-only preflight begins after complete canonical edit arguments; successful diffs and failures stay in the call box, settled details reconstruct saved previews without reading files, and identical settlement does not move the diff or request a full redraw. Input revisions discard stale completions, including A→B→A, and disposal joins owned reads. Bun/native1/native4 integration covers the three named edit-tool-no-full-redraw contracts. Diff-only stored results and historical path/oldText/newText call records reconstruct saved previews after the source file is deleted, with identical text/colors to modern results; the presentation decoder reads diff and optional firstChangedLine without inventing a missing executable patch. Bun integration checks a fresh historical component with no prior preview. Broader raw preflight argument shapes and the full renderer contract remain unreviewed. Numbered diff lines and removed/added block grouping now use the native interactive diff component, matching 286 source-pinned exact ANSI renders; single-pair word spans remain approximate.",
       "source_sha256": "0c1bafcf74ad2b703bf5ab193e72084a1da80231a77abddefc23c5bb20558731",
       "port_sha256": {
-        "packages/coding-agent/src/core/tools/renderers/edit.bend": "e6ad64cb2392f986153a3f5c421ab5cae2337e8531c1f159ca234ebbd4650e09",
-        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "4b9f9d23207fa65c19f80f56caac121763c2b138f97b07f50fb20ecbc64797ad"
+        "packages/coding-agent/src/core/tools/renderers/edit.bend": "cc10fcba4952f185f1c2bf47e1550d9036d26866196f58fba0640c826730bdfa",
+        "packages/coding-agent/src/modes/interactive/components/tool-execution.bend": "4b9f9d23207fa65c19f80f56caac121763c2b138f97b07f50fb20ecbc64797ad",
+        "packages/coding-agent/src/modes/interactive/components/diff.bend": "bc9f72db8cbf477436b60675048bb75830680fab8ae06ad15ee561fe9d946c87"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/tool-execution.ts": {
@@ -1620,13 +1622,15 @@
       "state": "partial",
       "ports": [
         "packages/coding-agent/src/core/tools/renderers/edit.bend",
-        "packages/coding-agent/src/core/tools/diff.bend"
+        "packages/coding-agent/src/core/tools/diff.bend",
+        "packages/coding-agent/src/modes/interactive/components/diff.bend"
       ],
-      "note": "Diff colors, tab expansion and a prefix/suffix intra-line approximation exist in the edit renderer. Default jsdiff word-key tokenization and Myers matching are native and match 863 source-pinned edit scripts on one/four threads, including Latin and whitespace boundaries, Unicode and repeated words; the matcher is not yet integrated. Numbered-line parsing, consecutive removed/added grouping, multiple changed word spans and full renderDiff behavior remain incomplete. Upstream word display can alter original whitespace inside string literals; that rendering-policy choice remains unresolved. Matching checks do not establish terminal color or scrollback parity.",
+      "note": "Native diff-line parsing, tab expansion and consecutive removed/added grouping match 286 source-pinned exact ANSI renders on one/four threads, including numbered lines and multi-line blocks; mounted edit-tool checks pass. Default jsdiff word-key tokenization and Myers matching are native and match 863 source-pinned edit scripts, but are not yet integrated into rendering. Single-pair rendering still uses a prefix/suffix approximation rather than all changed word spans, so full color and scrollback parity remain incomplete. The upstream renderer can alter original whitespace inside string literals; that rendering-policy choice remains unresolved.",
       "source_sha256": "b43f8d91ba9f19088dc9dc86126091c3fdfca25eac6461f5510f5e1e9ddd6491",
       "port_sha256": {
-        "packages/coding-agent/src/core/tools/renderers/edit.bend": "e6ad64cb2392f986153a3f5c421ab5cae2337e8531c1f159ca234ebbd4650e09",
-        "packages/coding-agent/src/core/tools/diff.bend": "3cf45d8e28002617fbb89e1764609e94af8f4f49c35b791acee57f08587dfc01"
+        "packages/coding-agent/src/core/tools/renderers/edit.bend": "cc10fcba4952f185f1c2bf47e1550d9036d26866196f58fba0640c826730bdfa",
+        "packages/coding-agent/src/core/tools/diff.bend": "3cf45d8e28002617fbb89e1764609e94af8f4f49c35b791acee57f08587dfc01",
+        "packages/coding-agent/src/modes/interactive/components/diff.bend": "bc9f72db8cbf477436b60675048bb75830680fab8ae06ad15ee561fe9d946c87"
       }
     }
   }
