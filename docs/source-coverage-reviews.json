@@ -1509,10 +1509,10 @@
     },
     "packages/tui/src/utils.ts": {
       "state": "partial",
-      "note": "Reviewed the cell-range/background-tracker/slicing path. getGraphemeCellRange is a functional Unicode/ANSI scan and matches 1,224 column lookups on native one/four; scrollbar integration also covers wide-cell replacement, bold, RGB background and hyperlink isolation. The native public getOsc8LinkAtColumn, isWhitespaceChar and isPunctuationChar helpers remain missing; the rest of this module needs a complete API review. Terminal normalization retains ordinary immutable strings when no tab or Thai/Lao AM vowel needs rewriting; the ANSI/style differential covers normalization, controls and long inputs.",
+      "note": "Reviewed the cell-range/background-tracker/slicing path. getGraphemeCellRange is a functional Unicode/ANSI scan and matches 1,224 column lookups on native one/four; scrollbar integration also covers wide-cell replacement, bold, RGB background and hyperlink isolation. The native public getOsc8LinkAtColumn, isWhitespaceChar and isPunctuationChar helpers remain missing; the rest of this module needs a complete API review. Terminal normalization retains ordinary immutable strings when no tab or Thai/Lao AM vowel needs rewriting; the ANSI/style differential covers normalization, controls and long inputs. Styled width measurement uses scalar ANSI phases and cell counts with the general tokenizer/grapheme fallback for unsupported text and incomplete/malformed controls; source width assertions, Unicode/emoji comparisons and control-prefix/continuation differential checks cover it.",
       "source_sha256": "8cda2d53e2361ac5aaf6d7345b2fee058c8df5743eae4e4e90c89a7072c026c3",
       "port_sha256": {
-        "packages/tui/src/utils.bend": "15f95463a8378c6118c1f3081d3b59020c7b55f2851f46849018d8f527f24002"
+        "packages/tui/src/utils.bend": "e79f5a53ad54585b944d1d4b4652118ce9c7c4560ba7acc9c99966dd5eb45a2a"
       },
       "ports": [
         "packages/tui/src/utils.bend"

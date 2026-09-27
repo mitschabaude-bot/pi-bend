@@ -377,29 +377,45 @@ def widthText(items: List<&2,Token>,reversed: String) -> String:
     case Nil{}: reverseInto(reversed,"")
     case Token{text,False{}} <> rest: widthText(rest,expandedTabs(text,reversed))
     case _ <> rest: widthText(rest,reversed)
-# Styled text of plain characters: controls are skipped in place and cells
-# summed, without building the stripped string. `cells` is one more than the
-# previous step's width; 0 means a character or sequence needing the general
-# path (a non-control escape, a tab, a non-plain character).
-type Visible is Data: Visible{rest: String,cells: Nat}
-def controlStep(value: Scan) -> Visible:
-  match value:
-    case Scan{Token{_,True{}},rest,_}: Visible{rest,1n}
-    case Scan{_,rest,_}: Visible{rest,0n}
-def visibleStep(text: String) -> Visible:
-  match text:
-    case SNil{}: Visible{"",1n}
-    case SCon{Chr{27},rest}: controlStep(scan(SCon{Chr{27},rest}))
-    case SCon{char,rest}:
-      +point = Char.to_u32(char)
-      +cells = cellsOf(range(point,32,126),point)
-      Visible{rest,Bool.pick(Nat,Nat.is_eq(cells,0n),0n,cells + 1n)}
-@unsafe
-def visibleScan(step: Visible,width: Nat) -> Maybe<&2,Nat>:
-  match step:
-    case Visible{_,Zero{}}: None{}
-    case Visible{SNil{},Succ{cells}}: Some{width + cells}
-    case Visible{rest,Succ{cells}}: visibleScan(visibleStep(rest),width + cells)
+# Measure ordinary styled text without returning or storing string tails.
+# Unsupported graphemes and incomplete/malformed controls use the general path.
+type WidthPhase is Data:
+  PlainText{} EscapePrefix{} CsiParameters{} CsiIntermediates{}
+  ControlString{} ControlEscape{} GeneralWidth{}
+type WidthStep is Data: WidthStep{phase: WidthPhase,cells: Nat}
+def plainWidthStep(cells: Nat) -> WidthStep:
+  match cells:
+    case Zero{}: WidthStep{GeneralWidth{},0n}
+    case cells: WidthStep{PlainText{},cells}
+def csiWidthStep(+point: U32,intermediate: Bool) -> WidthStep:
+  WidthStep{Bool.pick(WidthPhase,range(point,64,126),PlainText{},
+    Bool.pick(WidthPhase,range(point,32,47),CsiIntermediates{},
+      Bool.pick(WidthPhase,Bool.not(intermediate) && range(point,48,63),CsiParameters{},GeneralWidth{}))),0n}
+def widthStep(phase: WidthPhase,point: U32) -> WidthStep:
+  match phase point:
+    case PlainText{} 27: WidthStep{EscapePrefix{},0n}
+    case PlainText{} +point: plainWidthStep(cellsOf(range(point,32,126),point))
+    case EscapePrefix{} 91: WidthStep{CsiParameters{},0n}
+    case EscapePrefix{} 93: WidthStep{ControlString{},0n}
+    case EscapePrefix{} 95: WidthStep{ControlString{},0n}
+    case EscapePrefix{} _: WidthStep{GeneralWidth{},0n}
+    case CsiParameters{} point: csiWidthStep(point,False{})
+    case CsiIntermediates{} point: csiWidthStep(point,True{})
+    case ControlString{} 7: WidthStep{PlainText{},0n}
+    case ControlString{} 27: WidthStep{ControlEscape{},0n}
+    case ControlString{} _: WidthStep{ControlString{},0n}
+    case ControlEscape{} 92: WidthStep{PlainText{},0n}
+    case ControlEscape{} 7: WidthStep{PlainText{},0n}
+    case ControlEscape{} 27: WidthStep{ControlEscape{},0n}
+    case ControlEscape{} _: WidthStep{ControlString{},0n}
+    case GeneralWidth{} _: WidthStep{GeneralWidth{},0n}
+def visibleScan(text: String,step: WidthStep,width: Nat) -> Maybe<&2,Nat>:
+  match text step:
+    case _ WidthStep{GeneralWidth{},_}: None{}
+    case SNil{} WidthStep{PlainText{},cells}: Some{width + cells}
+    case SNil{} _: None{}
+    case SCon{char,rest} WidthStep{phase,cells}:
+      visibleScan(rest,widthStep(phase,Char.to_u32(char)),width + cells)
 def visibleGeneral(value: Maybe<&2,Nat>,text: String) -> Nat:
   match value:
     case Some{width}: width
@@ -407,7 +423,7 @@ def visibleGeneral(value: Maybe<&2,Nat>,text: String) -> Nat:
 def visibleMeasured(value: Maybe<&2,Nat>,+text: String) -> Nat:
   match value:
     case Some{width}: width
-    case None{}: visibleGeneral(visibleScan(visibleStep(text),0n),text)
+    case None{}: visibleGeneral(visibleScan(text,WidthStep{PlainText{},0n},0n),text)
 def visibleWidth(+text: String) -> Nat: visibleMeasured(asciiWidth(text,0n),text)
 
 # Layout retains controls as zero-cell tokens and segments each visible run.

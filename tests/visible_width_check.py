@@ -35,6 +35,15 @@ def corpus():
   for pos in range(len(text)+1):
    decorated=text[:pos]+E+'[31m'+text[pos:]+E+'[0m';cases.append({'method':'width','text':decorated})
  return cases
+def control_boundaries():
+ # Every prefix of each supported control family, followed by each lexical
+ # class, reaches complete, incomplete and malformed transitions.
+ controls=[E+'[31m',E+'[?25l',E+'[12;3m',E+'[0 q',E+']0;x\x07',E+']8;;x'+E+'\\',E+'_x'+E+'\\']
+ continuations=['a',E,'[',']','\\',' ','?','0','m','\x07','\t','界','\u0301','😀']
+ return sorted({before+control[:index]+char+after
+  for control in controls for index in range(len(control)+1)
+  for char in continuations for before,after in [('', ''),('界a', 'z'+E+'[0m')]})
+
 if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('--reference',default=str(UPSTREAM));p.add_argument('--width-reference',default='build/ansi-reference/node_modules/get-east-asian-width/index.js');p.add_argument('command',nargs=argparse.REMAINDER);a=p.parse_args();command=a.command
  if command[:1]==['--']:command=command[1:]
@@ -53,3 +62,7 @@ if __name__=='__main__':
  long=[({'method':'repeat','text':'x','repeat':200000},200000),({'method':'repeat','prefix':'a','text':'\u0301','repeat':100000},1),({'method':'repeat','text':'👩\u200d💻','repeat':10000},20000),({'method':'repeat','text':E+'[31mX'+E+'[0m','repeat':10000},10000)]
  for case,want in long:assert run(command,[case])==[want],(case,want)
  print('3 corrected-control widths and 4 long ASCII/combining/emoji/styled scans passed',flush=True)
+ texts=control_boundaries();checks=[{'method':m,'text':text} for text in texts for m in ['width','general']]
+ measured=batch(command,checks);assert len(measured)==len(checks)
+ for index,text in enumerate(texts):assert measured[2*index]==measured[2*index+1],(text,measured[2*index:2*index+2])
+ print(f'{len(texts)} control-prefix/continuation widths match the general tokenizer/grapheme path',flush=True)

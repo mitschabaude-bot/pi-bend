@@ -31,6 +31,7 @@ def repeated(remaining: Nat,+text: String,reversed: String) -> String:
 def query(method: String,+value: V.Value) -> V.Value:
   match method:
     case "width": count(U.visibleWidth(text(get(value,"text"))))
+    case "general": count(U.visibleClean(U.widthText(U.tokens(text(get(value,"text"))),"")))
     case "grapheme": count(U.graphemeWidth(text(get(value,"text"))))
     case "emoji": V.Boolean{Display.isRgiEmoji(text(get(value,"text")))}
     case "repeat": count(U.visibleWidth(text(get(value,"prefix")) ++ repeated(repetitions(get(value,"repeat")),text(get(value,"text")),"")))
