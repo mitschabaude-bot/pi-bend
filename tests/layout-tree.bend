@@ -74,6 +74,8 @@ def main() -> IO(Unit):
     horizontal(shortFrame)
     leafFrame : T.TreeFrame <- T.renderTreeFrame(N.Inline{N.Leaf{scrollChild}},10n,2n)
     horizontal(leafFrame)
+    nestedRow : T.TreeFrame <- T.renderTreeFrame(N.HStack{two(N.child(N.VStack{two(child(below,S.defaultSize()),child(footer,S.defaultSize())),0n},S.defaultSize(),None{}),child(right,S.defaultSize())),0n,S.Start{}},16n,2n)
+    horizontal(nestedRow)
     Callback.dispose(Nat,List<&2,String>,bodyDraw)
     Callback.dispose(Nat,List<&2,String>,topDraw)
     Callback.dispose(Nat,List<&2,String>,selectorDraw)

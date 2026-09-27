@@ -49,3 +49,7 @@ const inline = (root: Component) => {
 inline(new VStack([new ScrollView(staticText("one\ntwo\nthree")), staticText("dock")]));
 inline(new VStack([staticText("body"), staticText("dock")]));
 inline(staticText("one\ntwo\nthree"));
+report("horizontal", new HStack([
+  new VStack([staticText("below"), staticText("footer")]),
+  staticText("right"),
+], {align: "start"}), 16, 2);

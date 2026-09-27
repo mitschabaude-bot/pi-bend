@@ -1565,6 +1565,17 @@
       "port_sha256": {
         "packages/coding-agent/src/core/provider-composer.bend": "bd4750554c530b6ae5e505b8854e72efcc79ea700f3552e08a31e95601a758b2"
       }
+    },
+    "packages/tui/src/tui-main-screen.ts": {
+      "state": "partial",
+      "note": "Focused review of render-state snapshots and line-diff decisions: checkedPlan is an immutable planner whose caller commits only after terminal effects succeed. Comparison preserves missing-line-as-empty behavior, append boundaries and Kitty image-range expansion; equal lines reuse parsed metadata while changed/deleted old lines are parsed. The pinned main-screen differential compares effects and state; IO process ownership and the wider TUI facade need a complete API review. Large-session latency and full-scrollback content parity remain open in the mounted scenario.",
+      "source_sha256": "d2271afc2ce0d2302014ae0c20ab1b6af6a9765de90254b21cef0ce2c6ca062d",
+      "port_sha256": {
+        "packages/tui/src/tui-main-screen.bend": "dceba1a2d21e6bc299387746c669a5374ad742cd8f3119a86d36ac85f7c5b2fa"
+      },
+      "ports": [
+        "packages/tui/src/tui-main-screen.bend"
+      ]
     }
   }
 }

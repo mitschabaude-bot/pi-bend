@@ -145,13 +145,14 @@ def rowWidth(+text: String,image: Bool) -> Nat: Bool.pick(Unit -> Nat,image,_ =>
 def rowHeader(text: String,image: Bool,header: Header) -> Row:
   match header:
     case Header{ids,rows}: Row{text,image,ids,rows}
+def prepareRow(+text: String) -> Row:
+  +image = Image.isImageLine(text)
+  +header = Bool.pick(Unit -> Header,image,_ => parsedHeader(Image.findKitty(text,"")),_ => Header{Nil{},1n})(Unit{})
+  rowHeader(text,image,header)
 def prepareRows(lines: List<&2,String>,reversed: List<&2,Row>) -> List<&2,Row>:
   match lines:
     case Nil{}: List.reverse(&2,Row,reversed)
-    case +text <> rest:
-      +image = Image.isImageLine(text)
-      +header = Bool.pick(Unit -> Header,image,_ => parsedHeader(Image.findKitty(text,"")),_ => Header{Nil{},1n})(Unit{})
-      prepareRows(rest,rowHeader(text,image,header) <> reversed)
+    case text <> rest: prepareRows(rest,prepareRow(text) <> reversed)
 def allIds(rows: List<&2,Row>,reversed: List<&2,U32>) -> List<&2,U32>:
   match rows:
     case Nil{}: List.reverse(&2,U32,reversed)
@@ -223,12 +224,28 @@ def expandedRange(+value: Changed,+previous: List<&2,Row>,+current: List<&2,Row>
   Bool.pick(Unit -> Changed,hasImageIds(previous) || hasImageIds(current),
     _ => expandRange(value,previous,current,oldCount,newCount),
     _ => value)(Unit{})
-def changedRange(+previous: List<&2,Row>,+current: List<&2,Row>) -> Changed:
+def changedRangeFrom(base: Changed,+previous: List<&2,Row>,+current: List<&2,Row>) -> Changed:
   +oldCount = rowCount(previous)
   +newCount = rowCount(current)
-  +base = changed(previous,current,0n,Changed{None{},0n})
   +appended = Nat.is_gt(newCount,oldCount)
   expandedRange(appendedRange(base,appended,oldCount,newCount),previous,current,oldCount,newCount)
+def changedRange(+previous: List<&2,Row>,+current: List<&2,Row>) -> Changed:
+  changedRangeFrom(changed(previous,current,0n,Changed{None{},0n}),previous,current)
+
+# Equal lines have equal image metadata. Compare and prepare the old rows in
+# one pass, rather than scanning their text once for images and again for diffs.
+type Comparison is Data: Comparison{previous: List<&2,Row>,changes: Changed}
+def comparePrevious(previous: List<&2,String>,current: List<&2,Row>,+index: Nat,reversed: List<&2,Row>,changes: Changed) -> Comparison:
+  match previous current:
+    case Nil{} Nil{}: Comparison{List.reverse(&2,Row,reversed),changes}
+    case +text <> rest Row{+next,+image,+ids,+requested} <> more:
+      +same = Strings.equal(text,next)
+      +old = Bool.pick(Unit -> Row,same,_ => Row{next,image,ids,requested},_ => prepareRow(text))(Unit{})
+      comparePrevious(rest,more,Succ{index},old <> reversed,changedValue(changes,index,Bool.not(same)))
+    case +text <> rest Nil{}:
+      comparePrevious(rest,Nil{},Succ{index},prepareRow(text) <> reversed,changedValue(changes,index,Bool.not(Strings.equal(text,""))))
+    case Nil{} Row{text,_,_,_} <> more:
+      comparePrevious(Nil{},more,Succ{index},reversed,changedValue(changes,index,Bool.not(Strings.equal(text,""))))
 
 def deleteIds(ids: List<&2,U32>,reversed: List<&2,Operation>) -> List<&2,Operation>:
   match ids:
@@ -438,9 +455,9 @@ def plan(+state: State,+old: List<&2,Row>,+rows: List<&2,Row>,changes: Changed,+
             _ => Bool.pick(Unit -> Plan,shrink && Nat.is_lt(rowCount(rows),maximum) && Bool.not(overlays),
               _ => fullReason(state,rows,cursor,width,height,options,ClearOnShrink{}),
               _ => differentialChanged(changes,state,old,rows,cursor,width,height,options,heightChanged))(Unit{}))(Unit{}))(Unit{}))(Unit{})
-def previousRows(state: State) -> List<&2,Row>:
+def previousLines(state: State) -> List<&2,String>:
   match state:
-    case State{TuiMainScreenRenderState{lines,_,_,_,_,_,_},_,_}: prepareRows(lines,Nil{})
+    case State{TuiMainScreenRenderState{lines,_,_,_,_,_,_},_,_}: lines
 def checkedWidth(problem: Maybe<&2,RenderError>,result: Plan) -> Result<&2,&2,RenderError,Plan>:
   match problem:
     case None{}: Done{result}
@@ -453,10 +470,13 @@ def checkedResult(changes: Changed,rows: List<&2,Row>,width: Nat,result: Plan) -
   match result:
     case Plan{_,_,Some{_}}: Done{result}
     case Plan{_,_,None{}}: checkedChanged(changes,rows,width,result)
-def checkedPrepared(+state: State,+rows: List<&2,Row>,cursor: Maybe<&2,Tui.CursorPosition>,+width: Nat,height: Nat,options: Options) -> Result<&2,&2,RenderError,Plan>:
-  +old = previousRows(state)
-  +changes = changedRange(old,rows)
-  checkedResult(changes,rows,width,plan(state,old,rows,changes,cursor,width,height,options))
+def checkedComparison(comparison: Comparison,state: State,+rows: List<&2,Row>,cursor: Maybe<&2,Tui.CursorPosition>,+width: Nat,height: Nat,options: Options) -> Result<&2,&2,RenderError,Plan>:
+  match comparison:
+    case Comparison{+old,base}:
+      +changes = changedRangeFrom(base,old,rows)
+      checkedResult(changes,rows,width,plan(state,old,rows,changes,cursor,width,height,options))
+def checkedPrepared(+state: State,+rows: List<&2,Row>,cursor: Maybe<&2,Tui.CursorPosition>,width: Nat,height: Nat,options: Options) -> Result<&2,&2,RenderError,Plan>:
+  checkedComparison(comparePrevious(previousLines(state),rows,0n,Nil{},Changed{None{},0n}),state,rows,cursor,width,height,options)
 def checkedPlan(+state: State,+frame: Frame,+options: Options) -> Result<&2,&2,RenderError,Plan>:
   match frame options:
     case Frame{lines,cursor,width,height} Options{termux,shrink,overlays,show,stopped}:
