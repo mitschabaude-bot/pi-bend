@@ -69,7 +69,20 @@ def checked(result: Result<&2,&2,Run.Error,Unit>) -> IO(Unit):
   match result:
     case Done{_}: IO.pure(Unit,Unit{})
     case Fail{error}: IO.die(Unit,1,Run.errorMessage(error))
-def runWith(+cancel: Bool,args: List<String>) -> IO(Unit):
+# Visual checks keep fixture diagnostics out of the terminal renderer's stream.
+def quietCreated(+fixture: Faux.Fixture) -> IO(Result<&1,&1,String,Host.Created<Services()>>):
+  match fixture:
+    case Faux.Fixture{live,listener,_,_,_,_,_}:
+      do IO<Result<&1,&1,String,Host.Created<Services()>>>:
+        Session.unsubscribe(live,listener)
+        return Fixture.created(fixture)
+def quietFactory(agentDir: String,request: Host.Request) -> IO(Result<&1,&1,String,Host.Created<Services()>>):
+  match request:
+    case Host.Request{storedCwd,stored,_}:
+      do IO<Result<&1,&1,String,Host.Created<Services()>>>:
+        fixture : Faux.Fixture <- Faux.fixture(stored,storedCwd,agentDir,"answer" <> "again" <> Nil{},Nil{})
+        quietCreated(fixture)
+def runWith(+cancel: Bool,quiet: Bool,args: List<String>) -> IO(Unit):
   match args:
     case assetsRoot <> +cwd <> +agentDir <> Nil{}:
       do IO<Unit>:
@@ -80,7 +93,9 @@ def runWith(+cancel: Bool,args: List<String>) -> IO(Unit):
         +runners : Ref.Ref<List<&2,Runner.ExtensionRunner>> <- Ref.new(List<&2,Runner.ExtensionRunner>,Nil{})
         +factory : Host.Factory(Services()) <- Bool.pick(Unit -> IO(Host.Factory(Services())),cancel,
           _ => Callback.create(~Fixture.EventsEnv,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~Fixture.eventsFactoryCall,Fixture.EventsEnv{agentDir,True{},cancelFork,runners}),
-          _ => Callback.create(~String,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~Fixture.factory,agentDir))(Unit{})
+          _ => Bool.pick(Unit -> IO(Host.Factory(Services())),quiet,
+            _ => Callback.create(~String,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~quietFactory,agentDir),
+            _ => Callback.create(~String,~Host.Request,~Result<&1,&1,String,Host.Created<Services()>>,~Fixture.factory,agentDir))(Unit{}))(Unit{})
         +release : Callback.Callback<Services(),Unit> <- Callback.create(~Unit,~Services(),~Unit,~Fixture.release,Unit{})
         hosted : Result<&2,&2,String,Runtime()> <- Host.create(Services(),factory,release,agentDir,cwd,stored)
         +runtime : Runtime() <- requireHost(hosted)
@@ -119,8 +134,9 @@ def runWith(+cancel: Bool,args: List<String>) -> IO(Unit):
     case _: IO.die(Unit,1,"expected assetsRoot cwd agentDir")
 def run(args: List<String>) -> IO(Unit):
   match args:
-    case "cancel" <> rest: runWith(True{},rest)
-    case rest: runWith(False{},rest)
+    case "cancel" <> rest: runWith(True{},False{},rest)
+    case "quiet" <> rest: runWith(False{},True{},rest)
+    case rest: runWith(False{},False{},rest)
 def main() -> IO(Unit):
   do IO<Unit>:
     args : List<String> <- IO.args()

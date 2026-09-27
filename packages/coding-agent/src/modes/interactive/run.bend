@@ -587,10 +587,10 @@ def resumeInvoked(state: ResumeState,path: String,cwdOverride: Maybe<&2,String>)
   match state:
     case ResumeState{_,_,_,None{},_,_}: IO.pure(SessionHost.CancellableResume,SessionHost.ResumeAttempted{SessionHost.ResumeFailed{"Resume is unavailable"}})
     case ResumeState{_,_,_,Some{backend},_,_}: Callback.call(ResumeRequest,SessionHost.CancellableResume,backend,ResumeRequest{path,cwdOverride})
-def resumeFinal(state: ResumeState,result: SessionHost.CancellableResume) -> IO(Unit):
+def resumeFinal(state: ResumeState,result: SessionHost.CancellableResume,fallback: Bool) -> IO(Unit):
   match result:
     case SessionHost.ResumeCancelled{}: IO.pure(Unit,Unit{})
-    case SessionHost.ResumeAttempted{SessionHost.Resumed{}}: resumeStatus(state,Interactive.CommandNotice{"Resumed session"})
+    case SessionHost.ResumeAttempted{SessionHost.Resumed{}}: resumeStatus(state,Interactive.CommandNotice{Bool.pick(String,fallback,"Resumed session in current cwd","Resumed session")})
     case SessionHost.ResumeAttempted{SessionHost.ResumeFailed{message}}: resumeStatus(state,Interactive.CommandFailure{"Failed to resume session: " ++ message})
     case SessionHost.ResumeAttempted{SessionHost.ResumeNeedsCwd{issue}}: resumeStatus(state,Interactive.CommandFailure{"Failed to resume session: " ++ SessionCwd.formatMissingSessionCwdError(issue)})
 def resumeFallbackResult(+state: ResumeState,path: String,fallback: String,answer: String) -> IO(Unit):
@@ -598,7 +598,7 @@ def resumeFallbackResult(+state: ResumeState,path: String,fallback: String,answe
     case "yes":
       do IO<Unit>:
         result : SessionHost.CancellableResume <- resumeInvoked(state,path,Some{fallback})
-        resumeFinal(state,result)
+        resumeFinal(state,result,True{})
     case _: resumeStatus(state,Interactive.CommandNotice{"Resume cancelled"})
 def resumeMissing(+state: ResumeState,+path: String,issue: SessionCwd.SessionCwdIssue) -> IO(Unit):
   match state issue:
@@ -610,7 +610,7 @@ def resumeMissing(+state: ResumeState,+path: String,issue: SessionCwd.SessionCwd
 def resumeResult(state: ResumeState,path: String,result: SessionHost.CancellableResume) -> IO(Unit):
   match result:
     case SessionHost.ResumeAttempted{SessionHost.ResumeNeedsCwd{issue}}: resumeMissing(state,path,issue)
-    case other: resumeFinal(state,other)
+    case other: resumeFinal(state,other,False{})
 def resumePath(+state: ResumeState,+path: String,cwdOverride: Maybe<&2,String>) -> IO(Unit):
   do IO<Unit>:
     result : SessionHost.CancellableResume <- resumeInvoked(state,path,cwdOverride)

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Interactive /resume reuses the native picker and switches the live session."""
+"""Interactive /resume reuses the native picker and switches the live session.
+
+Run with: uv run --with pyte tests/interactive_resume_run_check.py
+"""
+import codecs
 import errno
 import fcntl
 import json
@@ -14,8 +18,10 @@ import tempfile
 import termios
 import time
 
+import pyte
+
 ROOT = Path(__file__).resolve().parents[1]
-BINARY = Path(os.environ.get("PI_BEND_RESUME_RUN", ROOT / "build/interactive-resume-run")).resolve()
+BINARY = Path(os.environ.get("PI_BEND_RESUME_RUN", ROOT / "build/interactive-new-run")).resolve()
 SOURCE = ROOT / "tests/fixtures/export-input.jsonl"
 
 
@@ -38,24 +44,31 @@ for threads in (1, 4):
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 150, 0, 0))
         original = termios.tcgetattr(slave)
         process = subprocess.Popen(
-            [str(BINARY), "--threads", str(threads), "--", str(ROOT), place, str(cwd / "agent")],
+            [str(BINARY), "--threads", str(threads), "--", "quiet", str(ROOT), place, str(cwd / "agent")],
             cwd=cwd, stdin=slave, stdout=slave, stderr=subprocess.PIPE,
             env={**os.environ, "TERM": "xterm-256color"},
         )
         output = bytearray()
+        screen = pyte.Screen(150, 24)
+        terminal = pyte.Stream(screen)
+        decoder = codecs.getincrementaldecoder("utf-8")("replace")
 
-        def until(needle, start=0, timeout=20):
+        def until(needle, start=0, timeout=20, visible=False):
+            def present():
+                return needle.decode() in "\n".join(screen.display) if visible else needle in output[start:]
             deadline = time.monotonic() + timeout
-            while needle not in output[start:] and time.monotonic() < deadline:
+            while not present() and time.monotonic() < deadline:
                 if select.select([master], [], [], .2)[0]:
                     try:
-                        output.extend(os.read(master, 65536))
+                        chunk = os.read(master, 65536)
+                        output.extend(chunk)
+                        terminal.feed(decoder.decode(chunk))
                     except OSError as error:
                         if error.errno != errno.EIO:
                             raise
                         break
             clean = re.sub(rb"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*\x07)", b"", output[start:])
-            assert needle in output[start:], (threads, needle, process.poll(), clean.decode(errors="replace")[-1800:])
+            assert present(), (threads, needle, process.poll(), "\n".join(screen.display) if visible else clean.decode(errors="replace")[-1800:])
 
         def command(data, expected):
             start = len(output)
@@ -72,7 +85,7 @@ for threads in (1, 4):
             os.write(master, b"TARGET")
             until(b"TARGET RESUME SESSION")
             os.write(master, b"\r")
-            until(b"Resumed session")
+            until(b"Resumed session", visible=True)
             command(b"after resume", b"answer")
             command(b"/export active.jsonl", b"Session exported to:")
             exported = (cwd / "active.jsonl").read_text()
@@ -87,7 +100,8 @@ for threads in (1, 4):
             until(b"Session cwd not found")
             before = len(output)
             os.write(master, b"\r")
-            until(b"Resumed session", before)
+            # Confirm the rendered terminal cells after rebinding.
+            until(b"Resumed session in current cwd", before, visible=True)
             command(b"after fallback", b"answer")
             command(b"/export fallback.jsonl", b"Session exported to:")
             fallback = (cwd / "fallback.jsonl").read_text()
