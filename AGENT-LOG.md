@@ -3159,3 +3159,9 @@ Codex: 0a082f59 pushed and installed; owns settings-selector/run/tui-process plu
 Codex: exit-output source oracle confirms empty/answered resume-hint and live changes both directions; native one/four suspension checks pass edited/failed/empty repeated handoffs. Serial build pipeline 68914 now building pi-cli-exit-output; installed 0a082f59 unchanged. New parity scenarios and current settings coverage require final candidate validation before landing.
 
 Codex: exit-output candidate passes configured/live fullscreen policy, regular isolation and resume-hint editor handoffs against pi on native one/four; transcript-exit colors retain the known gap. All five required scenario baseline captures/requests match, typing/paced bounds pass, existing large-history/startup/flood gaps persist; proofs and coverage freshness pass. Landing this milestone; no test/build process live, foreign zz-mdr preserved.
+
+Codex: a4847f05 pushed/installed. Owns tui-alt-screen.bend for remaining transcript-exit cursor color gap: source main-screen shutdown writes a plain space over its software cursor; native final document retained inverse video. Implementing cursor-position cleanup on final document output only; suspension path remains unchanged.
+
+Codex: final document cursor cleanup implemented in tui-alt-screen; candidate CLI build session 28144 is confirmed live. Next compare transcript-exit text/colors/history and resume-hint/editor handoffs, then required one/four performance gates. Installed a4847f05 unchanged.
+
+Codex: exit cursor candidate matches completed-turn/configured/live exit-output text/colors/history/requests and editor handoffs on native one/four; untouched initial border remains the sole focused exit gap. Required five scenarios preserve installed captures/requests; existing large-history/startup, four-thread key bounds and flood speed gaps remain. Updating coverage and landing after proofs/freshness; installed a4847f05 unchanged until then.

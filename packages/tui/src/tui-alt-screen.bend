@@ -44,9 +44,22 @@ def documentRows(lines: List<&2,String>,+width: Nat,first: Bool,reversed: List<&
     case +line <> rest:
       +prefix = Bool.pick(String,first,"","\r\n")
       documentRows(rest,width,False{},Screen.Text{prefix ++ "\r\u{1b}[2K" ++ documentLine(line,width)} <> reversed)
-def leaveDocument(lines: List<&2,String>,width: Nat,blankAfter: Bool) -> Screen.Stream:
+# The regular renderer clears its software cursor before terminal shutdown.
+# Reproduce that write after restoring the natural document, then return to its
+# last row so newline placement stays the same. Suspension keeps its cursor.
+def eraseDocumentCursor(frame: Tui.CursorFrame,height: Nat) -> String:
+  match frame:
+    case Tui.CursorFrame{_,Some{Tui.CursorPosition{+row,col}}}:
+      +last = height - 1n
+      Screen.movement(row,last) ++ "\r\u{1b}[" ++ Nat.show(col + 1n) ++ "G\u{1b}[0m " ++ Screen.movement(last,row)
+    case _: ""
+def finalCursor(+lines: List<&2,String>,printDocument: Bool) -> String:
+  match printDocument:
+    case True{}: eraseDocumentCursor(Tui.extractCursorPosition(lines,List.length(&2,String,lines)),List.length(&2,String,lines))
+    case False{}: ""
+def leaveDocument(+lines: List<&2,String>,width: Nat,+blankAfter: Bool) -> Screen.Stream:
   Screen.stream(Screen.Text{"\u{1b}[?2026h\u{1b}[?1006l\u{1b}[?1004l\u{1b}[?1003l\u{1b}[?1002l\u{1b}[?1000l\u{1b}[?7h\u{1b}[?1049l\u{1b}[?7l"} <>
-    List.append(&2,Screen.Operation,documentRows(lines,width,True{},Nil{}),Screen.Text{"\u{1b}[0m\u{1b}[?7h\r\n" ++ Bool.pick(String,blankAfter,"\r\n","") ++ "\u{1b}[?25h\u{1b}[?2026l"} <> Nil{}))
+    List.append(&2,Screen.Operation,documentRows(lines,width,True{},Nil{}),Screen.Text{finalCursor(lines,blankAfter) ++ "\u{1b}[0m\u{1b}[?7h\r\n" ++ Bool.pick(String,blankAfter,"\r\n","") ++ "\u{1b}[?25h\u{1b}[?2026l"} <> Nil{}))
 def leaveWithDocument(lines: List<&2,String>,width: Nat) -> Screen.Stream:
   leaveDocument(lines,width,True{})
 def leaveWithLayoutDocument(lines: List<&2,String>,width: Nat) -> Screen.Stream:
