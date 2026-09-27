@@ -758,10 +758,13 @@
     },
     {
       "source": "packages/ai/test/assistant-message-frame.test.ts",
-      "status": "pending",
-      "ports": [],
+      "status": "ported",
+      "ports": [
+        "packages/ai/test/assistant-message-frame.bend",
+        "tests/ai-misc-suites.bend"
+      ],
       "sha256": "e3e456ac790012b47fada4f63de70f82de7ea1c89e3b85338701d327c8e381e5",
-      "notes": "utils/assistant-message-frame.ts (AssistantMessageFrameEncoder, reduceAssistantMessageFrames) is exported by pi-ai's index but used in pi-mono only by the out-of-scope experimental harness; not ported yet. It is public API, so the port is next rather than an exclusion."
+      "notes": "All 20 tests in tests/ai-misc-suites.bend (Bun, native1, native4). Adaptations: upstream mutates one live partial between events; here each event carries the partial as it is when encoded (events built first and encoded later all carry the final partial). Values are compared through their JSON; thrown errors are the Fail messages of encode/reduce, matched by substring as toThrow does. Typed blocks cannot carry provider scratch fields and values are immutable, so the whitelist and snapshot tests check the values the frames and reduction carry. The OpenAI Responses round trip runs the native processResponsesStream."
     },
     {
       "source": "packages/ai/test/azure-openai-base-url.test.ts",

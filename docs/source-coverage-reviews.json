@@ -1431,6 +1431,14 @@
       "port_sha256": {
         "packages/ai/src/providers/github-copilot.bend": "cf8f1df66f710e33bb38088f09e9ae055c862dbf9e62551f47cb1f8cd301d8dd"
       }
+    },
+    "packages/ai/src/utils/assistant-message-frame.ts": {
+      "state": "ported",
+      "note": "AssistantMessageFrame (one constructor per frame type), AssistantMessageFrameEncoder as an explicit state value (encode returns the next encoder and the frame, or upstream's error message) with per-block covered/delta offsets in UTF-16 code units, tool-call catch-up with checkpoints and the legacy-grammar prefix rule (isJsonPrefix), and reduceAssistantMessageFrames with upstream's validation messages and the final parse of unfinished tool JSON. Upstream's clones and structuredClone snapshots hold by construction for typed, immutable values. assistant-message-frame.test.ts runs in tests/ai-misc-suites.bend. No JSON codec for frames is ported (upstream has none; persistence is the caller's).",
+      "source_sha256": "e3db9eb5fb4a56f6c45b43ff6a5ef87347c8c19f28b0cbdf389b1ddf1928a6e9",
+      "port_sha256": {
+        "packages/ai/src/utils/assistant-message-frame.bend": "db1633224080bf924c312f0cbb55757e7cb872cdd8041b1bad80fe687b2422ad"
+      }
     }
   }
 }
