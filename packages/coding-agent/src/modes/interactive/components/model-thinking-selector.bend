@@ -1,4 +1,6 @@
 import Base
+import ../../../../../runtime/src/word-segmenter.bend as Words
+import ../../../../../tui/src/components/input.bend as Input
 import ../../../../../ai/src/types.bend as Ai
 import ../../../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../../../../runtime/src/callback.bend as Callback
@@ -24,7 +26,7 @@ type Stage is Data:
   Levels{list: ModelPicker.State,model: Models.Model(),options: List<&2,Ai.ModelThinkingLevel>,selected: Nat,override: Maybe<&2,Ai.ModelThinkingLevel>}
 type Modal is Data: Closed{} Open{stage: Stage,done: SettingsList.SubmenuDone}
 type Host is Data:
-  Host{modal: Ref.Ref<Modal>,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,transcript: Transcript.Handle,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context}
+  Host{modal: Ref.Ref<Modal>,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,transcript: Transcript.Handle,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,words: Ref.Ref<Words.Source>}
 type Factory is Data: Factory{host: Host,component: Component.Component}
 type Owner is Data:
   Owner{host: Host,component: Component.Component,renderCallback: Callback.Callback<Nat,List<&2,String>>,inputCallback: Callback.Callback<String,Unit>,invalidateCallback: Callback.Callback<Unit,Unit>,factoryCallback: Callback.Callback<SettingsList.SubmenuRequest,Component.Component>}
@@ -54,13 +56,13 @@ def modelRows(items: List<&2,Models.Model()>,skip: Nat,remaining: Nat,+index: Na
     case model <> rest Zero{} Succ{remaining}: modelRow(model,Nat.is_eq(index,selected),theme,width,overrides) <> modelRows(rest,0n,remaining,index + 1n,selected,theme,width,overrides)
 def renderModels(list: ModelPicker.State,+theme: Theme.Theme,width: Nat,settings: Settings.SettingsManager) -> List<&2,String>:
   match list:
-    case ModelPicker.State{_,_,+visible,+index,query,_,_,_,_}:
+    case ModelPicker.State{_,_,+visible,+index,query,_,_,_,_,_}:
       +count = List.length(&2,Models.Model(),visible)
       +start = Nat.min(index - 5n,count - Nat.min(count,10n))
       +body = Bool.pick(List<&2,String>,Nat.is_eq(count,0n),"  No matching models" <> Nil{},modelRows(visible,start,10n,0n,index,theme,width,Settings.getAllModelThinkingLevels(settings)))
       paint(theme,"accent",Theme.bold("Per-Model Thinking Level")) <> "" <>
       paint(theme,"muted","Step 1/2 · Select a model to configure") <> "" <>
-      ("> " ++ query ++ "\u{1b}[7m \u{1b}[0m") <> "" <>
+      ("> " ++ Input.getValue(query) ++ "\u{1b}[7m \u{1b}[0m") <> "" <>
       List.append(&2,String,body,paint(theme,"muted","  (" ++ Nat.show(Bool.pick(Nat,Nat.is_eq(count,0n),0n,index + 1n)) ++ "/" ++ Nat.show(count) ++ ")") <> "" <>
         paint(theme,"dim","  Type to filter · Enter to select · Esc to go back") <> Nil{})
 def sameLevel(left: Ai.ModelThinkingLevel,right: Ai.ModelThinkingLevel) -> Bool:
@@ -115,7 +117,7 @@ def renderCurrent(current: Modal,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Se
         return renderStage(stage,selected,width,settings)
 def draw(host: Host,width: Nat) -> IO(List<&2,String>):
   match host:
-    case Host{modal,theme,session,_,_,_,_}:
+    case Host{modal,theme,session,_,_,_,_,_}:
       do IO<List<&2,String>>:
         current : Modal <- Ref.read(Modal,modal)
         renderCurrent(current,theme,session,width)
@@ -161,14 +163,14 @@ def saved(result: Result<&2,&2,String,Unit>,modal: Ref.Ref<Modal>,list: ModelPic
     case Fail{message}: Transcript.showError(transcript,message)
 def chooseLevel(host: Host,list: ModelPicker.State,model: Models.Model(),options: List<&2,Ai.ModelThinkingLevel>,index: Nat,done: SettingsList.SubmenuDone) -> IO(Unit):
   match host:
-    case Host{modal,_,session,_,transcript,_,_}:
+    case Host{modal,_,session,_,transcript,_,_,_}:
       do IO<Unit>:
         current : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         result : Result<&2,&2,String,Unit> <- changeLevel(model,selectedLevel(options,index),current)
         saved(result,modal,list,done,transcript)
 def showLevel(host: Host,list: ModelPicker.State,+model: Models.Model(),done: SettingsList.SubmenuDone) -> IO(Unit):
   match host:
-    case Host{modal,_,session,_,_,_,_}:
+    case Host{modal,_,session,_,_,_,_,_}:
       do IO<Unit>:
         current : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         settings : Settings.SettingsManager <- Session.getSettings(current)
@@ -177,14 +179,14 @@ def showLevel(host: Host,list: ModelPicker.State,+model: Models.Model(),done: Se
         Ref.write(Modal,modal,Open{Levels{list,model,options,levelIndex(options,override,0n),override},done})
 def finish(host: Host,done: SettingsList.SubmenuDone) -> IO(Unit):
   match host:
-    case Host{modal,_,session,_,_,_,_}:
+    case Host{modal,_,session,_,_,_,_,_}:
       do IO<Unit>:
         current : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         settings : Settings.SettingsManager <- Session.getSettings(current)
         Ref.write(Modal,modal,Closed{})
         SettingsList.complete(done,Some{summary(settings)},None{})
 def writeStage(host: Host,stage: Stage,done: SettingsList.SubmenuDone) -> IO(Unit):
-  match host: case Host{modal,_,_,_,_,_,_}: Ref.write(Modal,modal,Open{stage,done})
+  match host: case Host{modal,_,_,_,_,_,_,_}: Ref.write(Modal,modal,Open{stage,done})
 def modelAction(host: Host,done: SettingsList.SubmenuDone,pair: ModelPicker.State & ModelPicker.Action) -> IO(Unit):
   match pair:
     case (list,ModelPicker.Continue{}): writeStage(host,Models{list},done)
@@ -196,9 +198,18 @@ def levelInput(+host: Host,+list: ModelPicker.State,+model: Models.Model(),+opti
     _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.down"),_ => writeStage(host,Levels{list,model,options,moveIndex(index,count,False{}),override},done),
       _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.confirm"),_ => chooseLevel(host,list,model,options,index,done),
         _ => Bool.pick(Unit -> IO(Unit),Bindings.matches(bindings,keyboard,data,"tui.select.cancel"),_ => writeStage(host,Models{list},done),_ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
+def modelInput(+host: Host,+list: ModelPicker.State,done: SettingsList.SubmenuDone,+bindings: Bindings.KeybindingsManager,+keyboard: Keys.Context,+data: String) -> IO(Unit):
+  match host:
+    case Host{_,_,_,_,_,_,_,+words}:
+      do IO<Unit>:
+        stored : Words.Source <- Ref.read(Words.Source,words)
+        +source : Words.Source <- ModelPicker.wordsFor(ModelPicker.needsWords(Input.command(Input.bindings(),bindings,keyboard,data)),stored,ModelPicker.queryOf(list))
+        Ref.write(Words.Source,words,source)
+        pair : ModelPicker.State & ModelPicker.Action <- ModelPicker.input(list,source,bindings,keyboard,data)
+        modelAction(host,done,pair)
 def inputStage(host: Host,stage: Stage,done: SettingsList.SubmenuDone,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,data: String) -> IO(Unit):
   match stage:
-    case Models{list}: modelAction(host,done,ModelPicker.input(list,bindings,keyboard,data))
+    case Models{list}: modelInput(host,list,done,bindings,keyboard,data)
     case Levels{list,model,options,index,override}: levelInput(host,list,model,options,index,override,done,bindings,keyboard,data)
 def inputCurrent(current: Modal,host: Host,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,data: String) -> IO(Unit):
   match current:
@@ -206,14 +217,14 @@ def inputCurrent(current: Modal,host: Host,bindings: Bindings.KeybindingsManager
     case Open{stage,done}: inputStage(host,stage,done,bindings,keyboard,data)
 def receive(host: Host,data: String) -> IO(Unit):
   match host:
-    case Host{+modal,theme,session,models,transcript,+bindings,+keyboard}:
+    case Host{+modal,theme,session,models,transcript,+bindings,+keyboard,words}:
       do IO<Unit>:
         current : Modal <- Ref.read(Modal,modal)
-        inputCurrent(current,Host{modal,theme,session,models,transcript,bindings,keyboard},bindings,keyboard,data)
+        inputCurrent(current,Host{modal,theme,session,models,transcript,bindings,keyboard,words},bindings,keyboard,data)
 def invalidated(_: Host,_: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
 def opened(host: Host,request: SettingsList.SubmenuRequest) -> IO(Unit):
   match host request:
-    case Host{modal,_,session,models,_,_,_} SettingsList.SubmenuRequest{_,done}:
+    case Host{modal,_,session,models,_,_,_,_} SettingsList.SubmenuRequest{_,done}:
       do IO<Unit>:
         current : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         agent : Session.AgentState() <- Session.state(current)
@@ -225,10 +236,10 @@ def factory(context: Factory,request: SettingsList.SubmenuRequest) -> IO(Compone
       do IO<Component.Component>:
         opened(host,request)
         return component
-def createHost(parent: Component.Component,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,transcript: Transcript.Handle,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context) -> IO(Owner):
+def createHost(parent: Component.Component,theme: Ref.Ref<Theme.Theme>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,transcript: Transcript.Handle,bindings: Bindings.KeybindingsManager,keyboard: Keys.Context,words: Ref.Ref<Words.Source>) -> IO(Owner):
   do IO<Owner>:
     modal : Ref.Ref<Modal> <- Ref.new(Modal,Closed{})
-    +host : Host <- IO.pure(Host,Host{modal,theme,session,models,transcript,bindings,keyboard})
+    +host : Host <- IO.pure(Host,Host{modal,theme,session,models,transcript,bindings,keyboard,words})
     +renderCallback : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~Host,~Nat,~List<&2,String>,~draw,host)
     +inputCallback : Callback.Callback<String,Unit> <- Callback.create(~Host,~String,~Unit,~receive,host)
     +invalidateCallback : Callback.Callback<Unit,Unit> <- Callback.create(~Host,~Unit,~Unit,~invalidated,host)
@@ -239,7 +250,7 @@ def factoryOf(owner: Owner) -> Callback.Callback<SettingsList.SubmenuRequest,Com
   match owner: case Owner{_,_,_,_,_,factoryCallback}: factoryCallback
 def disposeHost(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{Host{modal,_,_,_,_,_,_},_,renderCallback,inputCallback,invalidateCallback,factoryCallback}:
+    case Owner{Host{modal,_,_,_,_,_,_,_},_,renderCallback,inputCallback,invalidateCallback,factoryCallback}:
       do IO<Unit>:
         old : Modal <- Ref.dispose(Modal,modal)
         Callback.dispose(Nat,List<&2,String>,renderCallback)

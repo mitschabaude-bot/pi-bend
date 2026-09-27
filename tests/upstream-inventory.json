@@ -3344,10 +3344,14 @@
       "source": "packages/coding-agent/test/model-selector.test.ts",
       "status": "partial",
       "ports": [
-        "tests/parity/scenarios.py"
+        "tests/parity/scenarios.py",
+        "tests/model-selector-input.bend",
+        "tests/model_selector_input_check.py",
+        "tests/model_selector_reference.mts",
+        "tests/model_selector_terminal_check.py"
       ],
       "sha256": "82a440482fa15aff46765396dba3cf8877f914235bee2cdd36778d08615814a5",
-      "notes": "Current-model marker while browsing and configured Ctrl+R save binding match upstream in the terminal. Real refresh success is shown. The named multi-catalog refresh-error case and the full component harness assertions remain pending."
+      "notes": "Current-model markers, search editing and selection are covered by pinned component comparisons; configurable save binding is covered by terminal parity. Component snapshots include native scalar cursor positions instead of UTF-16 offsets, while displayed graphemes and ANSI frames must match. The named multi-catalog refresh-error assertion remains pending; catalog refresh lifecycle coverage is incomplete."
     },
     {
       "source": "packages/coding-agent/test/models-store.test.ts",
