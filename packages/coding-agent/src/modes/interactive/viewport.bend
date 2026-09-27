@@ -18,7 +18,7 @@ import ../../core/skills.bend as Skills
 # are serialized: once `clear` returns, no frame still renders the removed
 # children, so their owners may be disposed. Children are kept newest first:
 # appending is constant time, and a frame prepends each child's lines.
-type Document is Data: Document{newest: List<&2,Component.Component>}
+type Document is Data: Document{newest: List<&2,Component.Component>,pending: List<&2,Component.Component>}
 type View is Type:
   View{document: Serial.Owner<Document>,header: Maybe<&1,Header.Owner>,headerHandle: Maybe<&2,Header.Handle>,exit: Ref.Ref<Maybe<&2,Bool>>,component: Component.Component,render: Callback.Callback<Nat,List<&2,String>>,invalidate: Callback.Callback<Unit,Unit>}
 type Handle is Data: Handle{document: Serial.Handle<Document>,header: Maybe<&2,Header.Handle>,exit: Ref.Ref<Maybe<&2,Bool>>}
@@ -37,10 +37,11 @@ def prepended(children: List<&2,Component.Component>,+width: Nat,below: List<&2,
         prepended(older,width,List.append(&2,String,lines,below))
 def renderedDocument(document: Document,+width: Nat) -> IO(Document & List<&2,String>):
   match document:
-    case Document{+newest}:
+    case Document{+newest,+pending}:
       do IO<Document & List<&2,String>>:
-        lines : List<&2,String> <- prepended(newest,width,Nil{})
-        return (Document{newest},lines)
+        below : List<&2,String> <- prepended(pending,width,Nil{})
+        lines : List<&2,String> <- prepended(newest,width,below)
+        return (Document{newest,pending},lines)
 def exitLines(header: Maybe<&2,Component.Component>,width: Nat,lines: List<&2,String>,leaving: Maybe<&2,Bool>) -> IO(List<&2,String>):
   match leaving:
     case Some{False{}}: IO.pure(List<&2,String>,"" <> Nil{})
@@ -71,7 +72,7 @@ def withDocument(id: Component.ComponentId,pair: Serial.Owner<Document> & Serial
         return View{document,header,handle,exit,Component.Component{id,render,None{},None{},invalidate,None{},False{}},render,invalidate}
 def created(id: Component.ComponentId,header: Maybe<&1,Header.Owner>,component: Maybe<&2,Component.Component>,handle: Maybe<&2,Header.Handle>) -> IO(View):
   do IO<View>:
-    document : Serial.Owner<Document> <- Serial.create(Document,Document{Nil{}})
+    document : Serial.Owner<Document> <- Serial.create(Document,Document{Nil{},Nil{}})
     withDocument(id,Serial.borrow(Document,document),header,component,handle)
 def create(id: Component.ComponentId) -> IO(View): created(id,None{},None{},None{})
 def withHeader(id: Component.ComponentId,pair: Header.Owner & Component.Component & Header.Handle) -> IO(View):
@@ -92,11 +93,24 @@ def headerHandle(handle: Handle) -> Maybe<&2,Header.Handle>:
 def prepareExit(handle: Handle,hasMessages: Bool) -> IO(Unit):
   match handle: case Handle{_,_,exit}: Ref.write(Maybe<&2,Bool>,exit,Some{hasMessages})
 def added(current: Document,entry: Component.Component) -> IO(Document & Unit):
-  match current: case Document{newest}: IO.pure(Document & Unit,(Document{entry <> newest},Unit{}))
+  match current: case Document{newest,pending}: IO.pure(Document & Unit,(Document{entry <> newest,pending},Unit{}))
 def append(handle: Handle,entry: Component.Component) -> IO(Unit):
   match handle:
     case Handle{document,_,_}: Serial.run(Document,Unit,document,current => added(current,entry))
-def emptied(current: Document) -> IO(Document & Unit): IO.pure(Document & Unit,(Document{Nil{}},Unit{}))
+# Bash commands submitted during a model run stay below later chat entries.
+# The next ordinary prompt moves them into chat before its own message.
+def pendingAdded(current: Document,entry: Component.Component) -> IO(Document & Unit):
+  match current: case Document{newest,pending}: IO.pure(Document & Unit,(Document{newest,entry <> pending},Unit{}))
+def appendPending(handle: Handle,entry: Component.Component) -> IO(Unit):
+  match handle:
+    case Handle{document,_,_}: Serial.run(Document,Unit,document,current => pendingAdded(current,entry))
+def pendingFlushed(current: Document) -> IO(Document & Unit):
+  match current:
+    case Document{newest,pending}: IO.pure(Document & Unit,(Document{List.append(&2,Component.Component,pending,newest),Nil{}},Unit{}))
+def flushPending(handle: Handle) -> IO(Unit):
+  match handle:
+    case Handle{document,_,_}: Serial.run(Document,Unit,document,pendingFlushed)
+def emptied(current: Document) -> IO(Document & Unit): IO.pure(Document & Unit,(Document{Nil{},Nil{}},Unit{}))
 def clear(handle: Handle) -> IO(Unit):
   match handle:
     case Handle{document,_,_}: Serial.run(Document,Unit,document,emptied)

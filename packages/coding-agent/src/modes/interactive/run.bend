@@ -734,7 +734,8 @@ def executeBash(+input: BashInput,+live: Session.AgentSession,+command: String,+
   match input:
     case BashInput{_,transcript,_,_,redraw,_}:
       do IO<Unit>:
-        +message : MessageUI.Handle <- Transcript.startBash(transcript,command,excluded)
+        streaming : Bool <- Session.isStreaming(live)
+        +message : MessageUI.Handle <- Transcript.startBashWhile(transcript,command,excluded,streaming)
         Interactive.requestRender(redraw)
         +chunk : Callback.Callback<String,Unit> <- Callback.create(~BashChunk,~String,~Unit,~bashChunk,BashChunk{message,redraw})
         result : Result<&2,&2,String,BashExec.BashResult> <- Session.executeBash(live,command,Some{chunk},Session.BashOptions{Some{excluded},None{},operations})
@@ -745,7 +746,8 @@ def bashDecided(+input: BashInput,+live: Session.AgentSession,+command: String,+
     case Fail{error} BashInput{_,_,_,failure,_,_}: Interactive.report(failure,Interactive.CommandFailure{error})
     case Done{Some{ExtensionTypes.UserBashResult{+result}}} BashInput{_,transcript,_,_,_,_}:
       do IO<Unit>:
-        message : MessageUI.Handle <- Transcript.startBash(transcript,command,excluded)
+        streaming : Bool <- Session.isStreaming(live)
+        message : MessageUI.Handle <- Transcript.startBashWhile(transcript,command,excluded,streaming)
         Session.recordBashResult(live,command,result,Some{excluded})
         bashDone(input,message,result)
     case Done{Some{ExtensionTypes.UserBashOperations{operations}}} _: executeBash(input,live,command,excluded,Some{operations})
@@ -2908,11 +2910,25 @@ def startPaint(pair: Callback.Callback<String,String> & Editor.EditorTheme,chang
         setupWorking(working,paint,contextTheme(context),contextBindings(context),redraw)
         live : Live.Owner <- Live.createWithWorking(Component.ComponentId{2n},configured,words,contextBindings(context),Keys.defaults(),rows,workingActive(working))
         runLive(Live.borrow(live),words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context)
+type SubmissionInput is Data:
+  SubmissionInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: Interactive.StatusSink,session: Ref.Ref<Session.AgentSession>,transcript: Transcript.Handle}
+def submitCommandWithPending(input: SubmissionInput,command: Commands.Command) -> IO(Unit):
+  match input command:
+    case SubmissionInput{queue,stop,failure,session,transcript} Commands.Send{message}:
+      do IO<Unit>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        streaming : Bool <- Session.isStreaming(live)
+        Bool.pick(Unit -> IO(Unit),streaming,_ => IO.pure(Unit,Unit{}),_ => Transcript.flushPending(transcript))(Unit{})
+        Interactive.act(queue,stop,failure,Commands.Send{message})
+    case SubmissionInput{queue,stop,failure,_,_} command: Interactive.act(queue,stop,failure,command)
+def submitWithPending(input: SubmissionInput,text: String) -> IO(Unit):
+  +shared = text
+  Bool.pick(Unit -> IO(Unit),String.is_empty(Text.trim(shared)),_ => IO.pure(Unit,Unit{}),_ => submitCommandWithPending(input,Commands.parse(shared)))(Unit{})
 def startController(pair: Controller.Controller & Controller.Handle,view: View.View,transcript: Transcript.Owner,styles: MarkdownTheme.Styles,initial: List<&2,Controller.Submission>,+foot: FooterOwner,words: Words.Source,+stopped: Deferred.Deferred<Unit>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+context: ThemeContext) -> IO(Result<&2,&2,Error,Unit>):
   match pair:
     case (controller,+queue):
       do IO<Result<&2,&2,Error,Unit>>:
-        submitted : Callback.Callback<String,Unit> <- Callback.create(~Interactive.SubmissionInput,~String,~Unit,~Interactive.submitted,Interactive.SubmissionInput{queue,stopped,contextStatus(context)})
+        submitted : Callback.Callback<String,Unit> <- Callback.create(~SubmissionInput,~String,~Unit,~submitWithPending,SubmissionInput{queue,stopped,contextStatus(context),contextSession(context),contextTranscript(context)})
         +paint : Callback.Callback<String,String> <- editorTheme(contextTheme(context))
         +muted : Callback.Callback<String,String> <- MarkdownTheme.color(contextTheme(context),"muted")
         +bash : Ref.Ref<Bool> <- Ref.new(Bool,False{})

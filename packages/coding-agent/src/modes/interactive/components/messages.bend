@@ -263,6 +263,10 @@ def bashBorder(count: Nat) -> String:
     case Succ{rest}: SCon{'─',bashBorder(rest)}
 def bashColor(excluded: Bool) -> String:
   match excluded: case True{}: "dim" case False{}: "bashMode"
+def bashHeaderColor(status: BashStatus,output: String,initial: String) -> String:
+  match status output:
+    case BashRunning{} SNil{}: initial
+    case _ _: "bashMode"
 # upstream BashExecutionComponent. Key texts are keyText's defaults for
 # tui.select.cancel and app.tools.expand.
 def PREVIEW_LINES() -> Nat: 20n
@@ -347,14 +351,14 @@ def bashStatus(status: BashStatus,+theme: Theme.Theme,key: String,+hidden: Nat,e
         statusLines(List.append(&2,String,more,List.append(&2,String,ending,cut)),width)
 def renderBash(state: BashMessage,+width: Nat) -> IO(List<&2,String>):
   match state:
-    case BashMessage{command,output,status,excluded,+theme,+expanded,bindings}:
+    case BashMessage{command,+output,+status,excluded,+theme,+expanded,bindings}:
       +key = bashColor(excluded)
       +truncation = Truncate.truncateTail(output,Truncate.TruncationOptions{None{},None{}})
       +available = bashAvailable(truncation)
       +hidden = List.length(&2,String,available) - PREVIEW_LINES()
       do IO<List<&2,String>>:
         +top : String <- foregroundText(theme,key,bashBorder(width))
-        header : String <- foregroundText(theme,key,"\u{1b}[1m$ " ++ command ++ "\u{1b}[22m")
+        header : String <- foregroundText(theme,bashHeaderColor(status,output,key),"\u{1b}[1m$ " ++ command ++ "\u{1b}[22m")
         headerLines : List<&2,String> <- textLines(header,1n,width)
         body : List<&2,String> <- bashOutput(available,theme,expanded,width)
         after : List<&2,String> <- bashStatus(status,theme,key,hidden,expanded,contextTruncated(truncation),width,bindings)

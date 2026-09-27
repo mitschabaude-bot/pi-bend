@@ -57,7 +57,7 @@ def rowContaining(rows: List<&2,String>,+needle: String) -> String:
     case +row <> rest: Bool.pick(String,contains(Utils.stripTerminalSequences(row),needle),Utils.stripTerminalSequences(row),rowContaining(rest,needle))
 def countDocument(document: View.Document) -> IO(View.Document & Nat):
   match document:
-    case View.Document{+children}: IO.pure(View.Document & Nat,(View.Document{children},List.length(&2,Component.Component,children)))
+    case View.Document{+children,+pending}: IO.pure(View.Document & Nat,(View.Document{children,pending},List.length(&2,Component.Component,children) + List.length(&2,Component.Component,pending)))
 def mountedCount(handle: View.Handle) -> IO(Nat):
   match handle:
     case View.Handle{document,_,_}: Serial.run(View.Document,Nat,document,countDocument)
@@ -83,10 +83,34 @@ def repeatedLines(count: Nat) -> String:
   match count:
     case Zero{}: ""
     case Succ{rest}: "later\n" ++ repeatedLines(rest)
+def pendingBash(+handle: Transcript.Handle,+document: Component.Component,+view: View.Handle) -> IO(Unit):
+  do IO<Unit>:
+    first : Messages.Handle <- Transcript.startBashWhile(handle,"pending-one",False{},True{})
+    Transcript.finishBash(first,"first output",Some{0},False{},False{},None{})
+    chat : Bool <- Transcript.accept(Value.Value,Unit,handle,user("later-chat"))
+    second : Messages.Handle <- Transcript.startBashWhile(handle,"pending-two",True{},True{})
+    Transcript.finishBash(second,"second output",Some{0},False{},False{},None{})
+    last : Bool <- Transcript.accept(Value.Value,Unit,handle,user("newest-chat"))
+    +pending : List<&2,String> <- Component.render(document,80n)
+    check(orderedRows(pending,"later-chat","newest-chat") && orderedRows(pending,"newest-chat","pending-one") && orderedRows(pending,"pending-one","pending-two"),"pending Bash did not stay below chat in submission order")
+    before : Nat <- mountedCount(view)
+    Transcript.flushPending(handle)
+    Transcript.flushPending(handle)
+    after : Nat <- mountedCount(view)
+    check(Nat.is_eq(before,after),"flushing pending Bash duplicated a mounted component")
+    sent : Bool <- Transcript.accept(Value.Value,Unit,handle,user("next-prompt"))
+    +flushed : List<&2,String> <- Component.render(document,80n)
+    check(orderedRows(flushed,"newest-chat","pending-one") && orderedRows(flushed,"pending-one","pending-two") && orderedRows(flushed,"pending-two","next-prompt"),"flushed Bash did not precede the next user prompt")
+    third : Messages.Handle <- Transcript.startBashWhile(handle,"pending-clear",False{},True{})
+    Transcript.clear(handle)
+    count : Nat <- mountedCount(view)
+    cleared : List<&2,String> <- Component.render(document,80n)
+    check(Nat.is_eq(count,0n) && String.is_empty(clean(cleared)),"clearing transcript retained pending Bash")
 def runEvents(pair: Transcript.Owner & Transcript.Handle,view: View.View,+document: Component.Component,+viewHandle: View.Handle,styles: Styles.Styles) -> IO(Unit):
   match pair:
     case (transcript,+handle):
       do IO<Unit>:
+        pendingBash(handle,document,viewHandle)
         added : Bool <- Transcript.accept(Value.Value,Unit,handle,user("hello"))
         check(added,"user event did not append")
         +partial : Ai.AssistantMessage<Value.Value,Value.Value> <- IO.pure(Ai.AssistantMessage<Value.Value,Value.Value>,assistant("partial"))

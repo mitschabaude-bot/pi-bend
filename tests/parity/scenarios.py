@@ -90,6 +90,23 @@ SEARCH_STEPS = [("wait", READY, "startup"), ("wait", "Warning: fd not found", "r
                 ("snap", "next"), ("key", "Escape"), ("settle", 0.2),
                 ("snap", "closed")]
 
+def pending_bash(excluded, fullscreen=False):
+    return {
+        "name": ("bash-pending-excluded" if excluded else "bash-pending-stream") + ("-fullscreen" if fullscreen else ""),
+        "args": MODEL + (["--tui-mode", "fullscreen"] if fullscreen else []),
+        "turns": [{"tool": {"name": "bash", "arguments": {"command": "sleep 3; printf TOOL_OUTPUT"}}},
+                  {"text": "MODEL_CONTINUED"}, {"text": "NEXT_ANSWER"}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.3),
+                  ("keys", "start a tool"), ("key", "Enter"),
+                  ("wait", "sleep 3; printf TOOL_OUTPUT", "tool"),
+                  ("keys", ("!!" if excluded else "!") + "printf USER_BASH"), ("key", "Enter"),
+                  ("wait", r"^ USER_BASH$", "bash"), ("snap", "working"),
+                  ("wait", "MODEL_CONTINUED", "answer"), ("settle", 0.3), ("snap", "answered"),
+                  ("keys", "next prompt"), ("key", "Enter"),
+                  ("wait", "NEXT_ANSWER", "next"), ("settle", 0.3), ("snap", "flushed")],
+    }
+
+
 SCENARIOS = [
     {
         "name": "fullscreen-startup",
@@ -257,6 +274,9 @@ SCENARIOS = [
                   ("keys", "/reload"), ("key", "Enter"),
                   ("wait", "saved project trust", "reloaded"), ("settle", 0.2), ("snap", "reloaded")],
     },
+    pending_bash(False),
+    pending_bash(True),
+    pending_bash(False, fullscreen=True),
     {
         "name": "bash-env",
         "args": MODEL,

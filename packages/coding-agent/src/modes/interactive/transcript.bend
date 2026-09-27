@@ -170,27 +170,37 @@ def hotkeysAppended(state: State,markdown: String) -> IO(State & Unit):
 def hotkeys(handle: Handle,markdown: String) -> IO(Unit):
   match handle:
     case Handle{resource,_}: Serial.run(State,Unit,resource,state => hotkeysAppended(state,markdown))
-def mountedBashState(state: State,owner: Messages.Owner,component: Component.Component,handle: Messages.Handle) -> IO(State & Messages.Handle):
+def mountedBashState(state: State,owner: Messages.Owner,+component: Component.Component,handle: Messages.Handle,deferred: Bool) -> IO(State & Messages.Handle):
   match state:
     case State{entries,tools,active,+id,+view,theme,styles,expanded,hidden,pad}:
       do IO<State & Messages.Handle>:
-        View.append(view,component)
+        Bool.pick(Unit -> IO(Unit),deferred,_ => View.appendPending(view,component),_ => View.append(view,component))(Unit{})
         return (State{MessageEntry{owner} <> entries,tools,active,id + 1n,view,theme,styles,expanded,hidden,pad},handle)
-def mountedBash(state: State,pair: Messages.Owner & Component.Component & Messages.Handle) -> IO(State & Messages.Handle):
+def mountedBash(state: State,pair: Messages.Owner & Component.Component & Messages.Handle,deferred: Bool) -> IO(State & Messages.Handle):
   match pair:
-    case (owner,component,handle): mountedBashState(state,owner,component,handle)
-def bashCreated(state: State,command: String,excluded: Bool,bindings: Bindings.KeybindingsManager) -> IO(State & Messages.Handle):
+    case (owner,component,handle): mountedBashState(state,owner,component,handle,deferred)
+def bashCreated(state: State,command: String,excluded: Bool,bindings: Bindings.KeybindingsManager,deferred: Bool) -> IO(State & Messages.Handle):
   match state:
     case State{entries,tools,active,+id,view,+theme,styles,+expanded,hidden,pad}:
       do IO<State & Messages.Handle>:
         owner : Messages.Owner <- Messages.create(Component.ComponentId{id},Messages.BashBody{Messages.bash(command,excluded,theme,expanded,bindings)})
-        mountedBash(State{entries,tools,active,id,view,theme,styles,expanded,hidden,pad},Messages.borrow(owner))
-def startBash(handle: Handle,command: String,excluded: Bool) -> IO(Messages.Handle):
+        mountedBash(State{entries,tools,active,id,view,theme,styles,expanded,hidden,pad},Messages.borrow(owner),deferred)
+def startBashWhile(handle: Handle,command: String,excluded: Bool,deferred: Bool) -> IO(Messages.Handle):
   match handle:
     case Handle{resource,bindings}:
       do IO<Messages.Handle>:
         current : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,bindings)
-        Serial.run(State,Messages.Handle,resource,state => bashCreated(state,command,excluded,current))
+        Serial.run(State,Messages.Handle,resource,state => bashCreated(state,command,excluded,current,deferred))
+def startBash(handle: Handle,command: String,excluded: Bool) -> IO(Messages.Handle): startBashWhile(handle,command,excluded,False{})
+def pendingFlushed(state: State) -> IO(State & Unit):
+  match state:
+    case State{entries,tools,active,id,+view,theme,styles,expanded,hidden,pad}:
+      do IO<State & Unit>:
+        View.flushPending(view)
+        return (State{entries,tools,active,id,view,theme,styles,expanded,hidden,pad},Unit{})
+def flushPending(handle: Handle) -> IO(Unit):
+  match handle:
+    case Handle{resource,_}: Serial.run(State,Unit,resource,pendingFlushed)
 def bashAppended(body: Messages.Body,delta: String) -> Messages.Body:
   match body:
     case Messages.BashBody{state}: Messages.BashBody{Messages.appendBash(state,delta)}
