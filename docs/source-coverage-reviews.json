@@ -987,13 +987,13 @@
     },
     "packages/coding-agent/src/modes/rpc/rpc-mode.ts": {
       "state": "partial",
-      "note": "All commands, JSONL framing, correlated errors, prompt/queue semantics, session replacement through the host, event streaming, per-line tasks (the reader waits for a line to finish or open a dialog, so extension handlers can ask the client), the whole RPC extension UI context (select/confirm/input/editor dialogs with timeouts and abort signals, notify/setStatus/setWidget/setTitle/set_editor_text requests, extension_error records), and command-context actions through the host. The prompt response follows AgentSession's preflightResult (success when accepted, the error when rejected first; later failures unanswered) and prompts, steers and follow-ups reach input handlers with source rpc. The bash command runs user_bash handlers first: a returned result is recorded instead of running the command, returned operations run it, and a failing handler fails the request without running anything. Gaps: stdout backpressure and signal handling belong to main.bend. See tests/rpc.md. The RPC UI context binds no theme yet (upstream answers ui.theme with the global theme main initializes from settings); ctx.ui.theme is None in RPC mode. Working controls are no-ops in RPC mode, as upstream defines them.",
+      "note": "All commands, JSONL framing, correlated errors, prompt/queue semantics, session replacement through the host, event streaming, per-line tasks (the reader waits for a line to finish or open a dialog, so extension handlers can ask the client), the whole RPC extension UI context (select/confirm/input/editor dialogs with timeouts and abort signals, notify/setStatus/setWidget/setTitle/set_editor_text requests, extension_error records), and command-context actions through the host. The reader resumes after accepted prompt preflight; the steer-and-queue RPC flow matches upstream on one and four threads. The prompt response follows AgentSession's preflightResult (success when accepted, the error when rejected first; later failures unanswered) and prompts, steers and follow-ups reach input handlers with source rpc. The bash command runs user_bash handlers first: a returned result is recorded instead of running the command, returned operations run it, and a failing handler fails the request without running anything. Gaps: stdout backpressure and signal handling belong to main.bend. See tests/rpc.md. The RPC UI context binds no theme yet (upstream answers ui.theme with the global theme main initializes from settings); ctx.ui.theme is None in RPC mode. Working controls are no-ops in RPC mode, as upstream defines them.",
       "ports": [
         "packages/coding-agent/src/modes/rpc.bend"
       ],
       "source_sha256": "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc",
       "port_sha256": {
-        "packages/coding-agent/src/modes/rpc.bend": "6398d61dd2db156d80c2365d938f3e2e5a99e4df8a0536efd6d86dfe2a47c444"
+        "packages/coding-agent/src/modes/rpc.bend": "35ff606340daa5721048f7d6a109bc85da550e2eb7c38f66e1440fb75cd6abd4"
       }
     },
     "packages/coding-agent/src/modes/rpc/rpc-types.ts": {

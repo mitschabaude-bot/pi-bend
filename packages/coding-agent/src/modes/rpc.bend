@@ -41,12 +41,10 @@ import ../core/prompt-templates.bend as Templates
 def Sink() -> Data: Callback.Callback<String,Unit>
 type Submission is Data: Submission{id: Maybe<&2,String>,text: String,images: List<&2,Ai.ImageContent>,behavior: Maybe<&2,Session.StreamingBehavior>}
 type BashRequest is Data: BashRequest{id: Maybe<&2,String>,command: String,exclude: Maybe<&2,Bool>}
-# Upstream handles the next command only when the prompt reaches its first
-# awaited I/O: its user message is out and the loop has polled the steering
-# queue. `Started` lets the reader wait for that point (or the prompt's end).
-# A signal carries False at that point and True when the work has finished;
-# the waiter takes the first and closes the channel, so later signals are
-# dropped.
+# A prompt releases the RPC reader when preflight accepts it, before the
+# agent emits its user message. The event signal is a fallback. False means
+# the reader may continue; True means the work ended. The waiter takes the
+# first signal and closes the channel.
 type Started is Data: Started{signal: Chan(Bool)}
 type Work is Data: PromptWork{request: Submission,started: Started} BashWork{request: BashRequest}
 # One command's view of the endpoint, over the session current when it runs.
@@ -247,13 +245,14 @@ def startedBy(started: Started,value: Session.AgentSessionEvent) -> IO(Unit):
 # upstream handleCommand "prompt": the response is written once the prompt
 # passes its preflight; a prompt that fails before that is answered with its
 # error instead, and later failures are not answered.
-type PreflightEnv is Data: PreflightEnv{sink: Sink(),id: Maybe<&2,String>,accepted: Ref.Ref<Bool>}
+type PreflightEnv is Data: PreflightEnv{sink: Sink(),id: Maybe<&2,String>,accepted: Ref.Ref<Bool>,started: Started}
 def preflightAnswer(env: PreflightEnv,success: Bool) -> IO(Unit):
   match env success:
-    case PreflightEnv{sink,id,accepted} True{}:
+    case PreflightEnv{sink,id,accepted,started} True{}:
       do IO<Unit>:
         Ref.write(Bool,accepted,True{})
         output(sink,ok(id,"prompt"))
+        signalOnce(started)
     case _ False{}: IO.pure(Unit,Unit{})
 def unacceptedFailure(sink: Sink(),id: Maybe<&2,String>,accepted: Bool,result: Result<&2,&2,String,Unit>) -> IO(Unit):
   match accepted result:
@@ -266,7 +265,7 @@ def runJob(handle: Command,request: Submission,+started: Started) -> IO(Unit):
         +watch : Session.Listener() <- Callback.create(~Started,~Session.AgentSessionEvent,~Unit,~startedBy,started)
         Session.subscribe(session,watch)
         +accepted : Ref.Ref<Bool> <- Ref.new(Bool,False{})
-        +observer : Callback.Callback<Bool,Unit> <- Callback.create(~PreflightEnv,~Bool,~Unit,~preflightAnswer,PreflightEnv{sink,id,accepted})
+        +observer : Callback.Callback<Bool,Unit> <- Callback.create(~PreflightEnv,~Bool,~Unit,~preflightAnswer,PreflightEnv{sink,id,accepted,started})
         result : Result<&2,&2,String,Unit> <- Session.promptWith(session,text,Session.PromptOptions{True{},images,behavior,ExtensionTypes.RpcSource{},Some{observer}})
         Callback.dispose(Bool,Unit,observer)
         answered : Bool <- Ref.dispose(Bool,accepted)
