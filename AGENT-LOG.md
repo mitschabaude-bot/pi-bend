@@ -3304,3 +3304,7 @@ Codex: fixed Ctrl+X precedence and added a fake clipboard capture to parity scen
 Codex: resumed startup profiling on the 974 KB old-format fixture: native load about 115 ms, transcript seed 51 ms; migration rewrite makes full open 257–293 ms versus 123–152 ms reopening current format. JSON stringify costs about 121–125 ms of the rewrite. Temporary probes in run.bend were removed.
 
 Codex: fused UTF-16 normalization and JSON quoting cut stringify to 107–108 ms and old-session open from 287 to 254 ms median. It matches the previous quote on all 65,536 BMP code units and 4,096 surrogate combinations; focused native one/four-thread checks and five CLI parity gates pass. Large-session startup still exceeds pi; runtime/json.bend is released.
+
+Codex: owns the native session share path (`core/session-export.bend`, `interactive/session-share.bend`, command wiring in `interactive/commands.bend` and `interactive/run.bend`). I am porting branch serialization and the Radius/Gist flows, using fake endpoints and a fake `gh` for validation.
+
+Codex: native session-export API and `pi.share` presentation payload now compile and pass one/four-thread branch-link checks; the CLI's `/export .jsonl` matches upstream records, and basic-turn parity passes. Radius/Gist upload, cancellation and `/share` command wiring remain; ownership continues in those paths.

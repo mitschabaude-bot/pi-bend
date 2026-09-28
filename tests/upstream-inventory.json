@@ -2946,9 +2946,13 @@
     },
     {
       "source": "packages/coding-agent/test/export-jsonl-share.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "012e811f542543bcc5ea935258e25c41b0d6f6cea6e9ff6c98ed3cec493ea3a9"
+      "status": "partial",
+      "ports": [
+        "tests/session-share-export.bend",
+        "tests/session_share_export_check.py"
+      ],
+      "sha256": "012e811f542543bcc5ea935258e25c41b0d6f6cea6e9ff6c98ed3cec493ea3a9",
+      "notes": "Native one/four-thread export checks preserve selected conversation IDs and parent links and append pi.share with prompt and tool metadata. The upstream case also round-trips the exported file through SessionManager with user, assistant and tool-result messages; that remains open."
     },
     {
       "source": "packages/coding-agent/test/extensions-discovery.test.ts",

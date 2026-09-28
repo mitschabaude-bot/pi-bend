@@ -58,6 +58,7 @@ import ../../core/extensions/context.bend as Ctx
 import ../../core/extensions/types.bend as ExtensionTypes
 import ../../core/session-cwd.bend as SessionCwd
 import ../../core/session-persistence.bend as Persistence
+import ../../core/session-export.bend as SessionExport
 import ../../core/export-html/index.bend as Export
 import ../../core/prompt-templates.bend as Templates
 import ../../core/session-manager.bend as Tree
@@ -640,42 +641,17 @@ def exportPath(requested: Maybe<&2,String>) -> Maybe<&2,String>:
   match requested:
     case None{}: None{}
     case Some{text}: firstPath(Templates.parseCommandArgs(text))
-def jsonlWritten(path: String,result: Result<&2,&2,Filesystem.Error,Unit>) -> Result<&2,&2,String,String>:
-  match result:
-    case Done{_}: Done{path}
-    case Fail{error}: Fail{Filesystem.errorMessage(error)}
-def branchText(result: Persistence.Outcome(String)) -> Result<&2,&2,String,String>:
-  match result:
-    case Done{text}: Done{text}
-    case Fail{error}: Fail{Persistence.message(error)}
-def branchAt(stored: Session.Session(),time: Persistence.Outcome(String)) -> Result<&2,&2,String,String>:
+def exportJsonlAt(session: Session.AgentSession,cwd: String,path: String,time: Persistence.Outcome(String)) -> IO(Result<&2,&2,String,String>):
   match time:
-    case Fail{error}: Fail{Persistence.message(error)}
-    case Done{timestamp}: branchText(Persistence.branchContent(~Unit,~Tools.ToolDetails,~Schema.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,Session.stateOf(stored),timestamp))
-def writeBranchCreated(+target: String,+content: String,created: Result<&2,&2,Filesystem.Error,Unit>) -> IO(Result<&2,&2,String,String>):
-  match created:
-    case Fail{error}: IO.pure(Result<&2,&2,String,String>,Fail{Filesystem.errorMessage(error)})
-    case Done{_}:
-      do IO<Result<&2,&2,String,String>>:
-        result : Result<&2,&2,Filesystem.Error,Unit> <- Filesystem.writeFile(target,content)
-        return jsonlWritten(target,result)
-def writeBranch(+target: String,content: Result<&2,&2,String,String>) -> IO(Result<&2,&2,String,String>):
-  match content:
-    case Fail{message}: IO.pure(Result<&2,&2,String,String>,Fail{message})
-    case Done{text}:
-      do IO<Result<&2,&2,String,String>>:
-        created : Result<&2,&2,Filesystem.Error,Unit> <- Filesystem.mkdir(Path.join(target,".."))
-        writeBranchCreated(target,text,created)
-def exportJsonlResolved(session: Session.AgentSession,resolved: Maybe<&2,String>) -> IO(Result<&2,&2,String,String>):
-  match resolved:
-    case None{}: IO.pure(Result<&2,&2,String,String>,Fail{"Could not resolve export path"})
-    case Some{+target}:
+    case Fail{error}: IO.pure(Result<&2,&2,String,String>,Fail{Persistence.message(error)})
+    case Done{timestamp}:
       do IO<Result<&2,&2,String,String>>:
         stored : Session.Session() <- Session.sessionOf(session)
-        timestamp : Persistence.Outcome(String) <- Persistence.isoNow()
-        writeBranch(target,branchAt(stored,timestamp))
+        SessionExport.exportSessionToJsonl(~Unit,~Tools.ToolDetails,~Schema.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,Session.stateOf(stored),cwd,path,timestamp,_ => _ => Nil{})
 def exportJsonl(session: Session.AgentSession,cwd: String,path: String) -> IO(Result<&2,&2,String,String>):
-  exportJsonlResolved(session,Path.resolve(cwd,path))
+  do IO<Result<&2,&2,String,String>>:
+    timestamp : Persistence.Outcome(String) <- Persistence.isoNow()
+    exportJsonlAt(session,cwd,path,timestamp)
 def exportWithAssets(+session: Session.AgentSession,path: Maybe<&2,String>,theme: Theme.Theme,themePath: String,assets: Result<&2,&2,String,Export.Assets>) -> IO(Result<&2,&2,String,String>):
   match assets:
     case Fail{message}: IO.pure(Result<&2,&2,String,String>,Fail{message})
