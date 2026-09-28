@@ -25,10 +25,12 @@ def scenario(threads: int) -> None:
         root = Path(place)
         agent_dir = root / "agent"
         agent_dir.mkdir()
+        editor = root / "extension-editor.py"
+        editor.write_text('import pathlib, sys\npathlib.Path(sys.argv[-1]).write_text("seed-external\\n")\n')
         process = subprocess.Popen(
             [str(BINARY), "--threads", str(threads), "--", "ui", str(ROOT), place, str(agent_dir)],
             cwd=root, stdin=slave, stdout=slave, stderr=subprocess.PIPE,
-            env={**os.environ, "PI_FAUX_API_KEY": "faux-key", "TERM": "xterm-256color", "DISPLAY": "", "WAYLAND_DISPLAY": "", "TERMUX_VERSION": "", "PI_TUI_ESC_TIMEOUT": "10"},
+            env={**os.environ, "PI_FAUX_API_KEY": "faux-key", "TERM": "xterm-256color", "DISPLAY": "", "WAYLAND_DISPLAY": "", "TERMUX_VERSION": "", "PI_TUI_ESC_TIMEOUT": "10", "VISUAL": f"python3 {editor}"},
         )
         output = bytearray()
 
@@ -69,11 +71,18 @@ def scenario(threads: int) -> None:
             until(b"Write a note", start)
             os.write(master, b"\r")
             until(b"Extension chose: seed", start)
+            start = len(output)
+            os.write(master, b"/ask-editor\r")
+            until(b"Write a note", start)
+            os.write(master, b"\x07")
+            until(b"seed-external", start)
+            os.write(master, b"\r")
+            until(b"Extension chose: seed-external", start)
             os.write(master, b"/quit\r")
             stderr = process.communicate(timeout=20)[1]
             assert process.returncode == 0 and not stderr, (process.returncode, stderr)
             assert termios.tcgetattr(slave) == original, threads
-            print(f"native{threads}: extension select/input/editor, cancellation and terminal restoration")
+            print(f"native{threads}: extension prompts, external editor, cancellation and terminal restoration")
         finally:
             if process.poll() is None:
                 process.kill()

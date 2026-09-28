@@ -2348,17 +2348,42 @@ def invokeExternalEditor(invocation: ExternalEditorInvocation,_: Unit) -> IO(Uni
       do IO<Unit>:
         result : ExternalEditor.ExternalEditorResult <- ExternalEditor.editInExternalEditor(ExternalEditor.ExternalEditorOptions{command,content})
         externalEditorResult(editor,result)
+def configuredExternalEditor(session: Ref.Ref<Session.AgentSession>) -> IO(String):
+  do IO<String>:
+    live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+    settings : Settings.SettingsManager <- Session.getSettings(live)
+    visual : Result<&1,&1,U32 & String,String> <- IO.get_env("VISUAL")
+    fallback : Result<&1,&1,U32 & String,String> <- IO.get_env("EDITOR")
+    return Settings.configuredEditor(Settings.getExternalEditorSetting(settings),Maybe.default(&2,String,Maybe.or(&2,String,Settings.nonemptyText(environmentValue(visual)),Settings.nonemptyText(environmentValue(fallback))),"nano"))
 def openExternalEditor(input: KeyInput,+editor: Live.Handle) -> IO(Unit):
   match input:
     case KeyInput{_,_,_,_,_,_,session,_,_,_,_,suspension}:
       do IO<Unit>:
-        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
-        settings : Settings.SettingsManager <- Session.getSettings(live)
-        visual : Result<&1,&1,U32 & String,String> <- IO.get_env("VISUAL")
-        fallback : Result<&1,&1,U32 & String,String> <- IO.get_env("EDITOR")
-        command : String = Settings.configuredEditor(Settings.getExternalEditorSetting(settings),Maybe.default(&2,String,Maybe.or(&2,String,Settings.nonemptyText(environmentValue(visual)),Settings.nonemptyText(environmentValue(fallback))),"nano"))
+        command : String <- configuredExternalEditor(session)
         content : String <- Live.expandedText(editor)
         operation : Callback.Callback<Unit,Unit> <- Callback.create(~ExternalEditorInvocation,~Unit,~Unit,~invokeExternalEditor,ExternalEditorInvocation{editor,command,content})
+        accepted : Bool <- Process.suspendWith(suspension,operation)
+        return Unit{}
+type ExtensionEditorInvocation is Data:
+  ExtensionEditorInvocation{dialog: ExtensionDialog.Host,ticket: Nat,command: String,content: String}
+def extensionEditorResult(dialog: ExtensionDialog.Host,ticket: Nat,result: ExternalEditor.ExternalEditorResult) -> IO(Unit):
+  match result:
+    case ExternalEditor.Failed{}: IO.pure(Unit,Unit{})
+    case ExternalEditor.Complete{content}: ExtensionDialog.applyExternal(dialog,ticket,content)
+def invokeExtensionEditor(invocation: ExtensionEditorInvocation,_: Unit) -> IO(Unit):
+  match invocation:
+    case ExtensionEditorInvocation{dialog,ticket,command,content}:
+      do IO<Unit>:
+        result : ExternalEditor.ExternalEditorResult <- ExternalEditor.editInExternalEditor(ExternalEditor.ExternalEditorOptions{command,content})
+        extensionEditorResult(dialog,ticket,result)
+type ExtensionEditorInput is Data:
+  ExtensionEditorInput{dialog: ExtensionDialog.Host,session: Ref.Ref<Session.AgentSession>,suspension: Process.SuspensionHandle}
+def openExtensionEditor(input: ExtensionEditorInput,request: ExtensionDialog.ExternalRequest) -> IO(Unit):
+  match input request:
+    case ExtensionEditorInput{dialog,session,suspension} ExtensionDialog.ExternalRequest{ticket,content}:
+      do IO<Unit>:
+        command : String <- configuredExternalEditor(session)
+        operation : Callback.Callback<Unit,Unit> <- Callback.create(~ExtensionEditorInvocation,~Unit,~Unit,~invokeExtensionEditor,ExtensionEditorInvocation{dialog,ticket,command,content})
         accepted : Bool <- Process.suspendWith(suspension,operation)
         return Unit{}
 def sessionCwd(session: Session.AgentSession) -> String:
@@ -3032,14 +3057,18 @@ def runHosted(borrowed: Selector.Owner & Selector.Host & Component.Component,liv
         runScopeHosted(ScopePicker.borrowHost(host),tree,treeHandle,live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen,scopeChosen)
 def runExtensionDialog(borrowed: ExtensionDialog.Owner & ExtensionDialog.Host & Component.Component,live: Live.Owner,+words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,+chosen: Callback.Callback<Selector.Choice,Unit>,treeEvents: Callback.Callback<TreePicker.Action,Unit>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
-    case (dialog,dialogHost,component):
+    case (dialog,+dialogHost,component):
       do IO<Result<&2,&2,Error,Unit>>:
         ui : ExtensionUI.Owner <- ExtensionUI.create(ExtensionUI.BaseEnv{dialogHost,editorRefOf(contextInteraction(context)),footerState(foot),contextTranscript(context),redraw,workingTerminal(workingOf(contextInteraction(context))),contextTheme(context)})
         current : Session.AgentSession <- Ref.read(Session.AgentSession,contextSession(context))
         runner : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(current)
         bound : ExtensionUI.Owner <- ExtensionUI.bind(ui,runner)
+        +external : Callback.Callback<ExtensionDialog.ExternalRequest,Unit> <- Callback.create(~ExtensionEditorInput,~ExtensionDialog.ExternalRequest,~Unit,~openExtensionEditor,ExtensionEditorInput{dialogHost,contextSession(context),terminalControl(contextInteraction(context))})
+        ExtensionDialog.bindExternal(dialogHost,Some{external})
         host : Selector.Owner <- Selector.createHost(component,contextTheme(context),contextBindings(context),Keys.defaults(),words,chosen,Some{treeEvents})
         result : Result<&2,&2,Error,Unit> <- runHosted(Selector.borrowHost(host),live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen)
+        ExtensionDialog.bindExternal(dialogHost,None{})
+        Callback.dispose(ExtensionDialog.ExternalRequest,Unit,external)
         ExtensionUI.dispose(bound)
         ExtensionDialog.dispose(dialog)
         return result

@@ -3255,3 +3255,7 @@ Codex: extension-dialog.bend owns a serial editor-slot modal and resolves select
 Codex: owns new interactive/extension-ui.bend plus run.bend and viewport.bend for live TUI extension binding. Dialog mounting is in the worktree; next I am connecting prompt/status/editor callbacks and will use the five PTY gates before landing any interactive change.
 
 Codex: live extension UI binding now mounts select/input/editor prompts and status/editor callbacks; inline Bend extension PTY checks pass native one/four, including cancellation and terminal restoration. Five CLI parity gates retain baseline behavior and latency; default CLI extension discovery, timeout/abort, external-editor actions, widgets and custom components remain open.
+
+Codex: owns interactive/components/extension-dialog.bend, run.bend and the inline extension PTY fixture for the editor's currently ignored external-editor action. I am reusing the existing TUI suspension path and preserving the prompt when editing fails.
+
+Codex: extension editor Ctrl+G now uses the existing suspended native external-editor handoff; successful edits update only the originating prompt. Mounted select/input/editor/external-editor PTYs pass native one/four, five parity gates retain unchanged CLI captures and latencies (including the existing large-session/flood gaps), and inventory is clean.
