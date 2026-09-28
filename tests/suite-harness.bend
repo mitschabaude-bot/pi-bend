@@ -2044,7 +2044,7 @@ def switchExecute(env: SwitchEnv, call: Ext.ToolCallInput) -> IO(Tools.Output())
 def switchTool(+api: Ext.ExtensionAPI, +name: String, +kind: String, +label: String, +description: String, +snippet: String) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
     execute : Ext.ToolExecute() <- C.create(~SwitchEnv, ~Ext.ToolCallInput, ~Tools.Output(), ~switchExecute, SwitchEnv{api, kind})
-    Loader.registerTool(api, Ext.ToolDefinition{name, label, description, Some{snippet}, Nil{}, emptySchema(), None{}, execute})
+    Loader.registerTool(api, Ext.ToolDefinition{name, label, description, Some{snippet}, Nil{}, emptySchema(), None{}, execute, Ext.DefaultShell{}, None{}, None{}})
 
 def registerSwitchTools(+api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
@@ -2112,8 +2112,8 @@ def dynamicExecute(env: Unit, call: Ext.ToolCallInput) -> IO(Tools.Output()): IO
 
 def dynamicDefinition(hidden: Bool, execute: Ext.ToolExecute()) -> Ext.ToolDefinition:
   match hidden:
-    case True{}: Ext.ToolDefinition{"hidden_tool", "Hidden Tool", "Description should not appear in available tools", None{}, Nil{}, emptySchema(), None{}, execute}
-    case False{}: Ext.ToolDefinition{"dynamic_tool", "Dynamic Tool", "Tool registered from session_start", Some{"Run dynamic test behavior"}, ["Use dynamic_tool when the user asks for dynamic behavior tests."], emptySchema(), None{}, execute}
+    case True{}: Ext.ToolDefinition{"hidden_tool", "Hidden Tool", "Description should not appear in available tools", None{}, Nil{}, emptySchema(), None{}, execute, Ext.DefaultShell{}, None{}, None{}}
+    case False{}: Ext.ToolDefinition{"dynamic_tool", "Dynamic Tool", "Tool registered from session_start", Some{"Run dynamic test behavior"}, ["Use dynamic_tool when the user asks for dynamic behavior tests."], emptySchema(), None{}, execute, Ext.DefaultShell{}, None{}, None{}}
 
 def registerOnStart(env: DynamicEnv, call: Ext.HandlerCall<Ext.SessionStartEvent>) -> IO(Handled(Unit)):
   match env:

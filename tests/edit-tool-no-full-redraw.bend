@@ -1,5 +1,6 @@
 import Base
 import ../packages/coding-agent/src/modes/interactive/components/tool-execution.bend as Tool
+import ../packages/coding-agent/src/core/extensions/tool-render.bend as ToolRender
 import ../packages/coding-agent/src/modes/interactive/theme/theme.bend as Theme
 import ../packages/coding-agent/src/modes/interactive/theme/color.bend as Color
 import ../packages/coding-agent/src/core/tools/edit.bend as Edit
@@ -85,7 +86,7 @@ def details(preview: Edits.Preview()) -> IO(Tools.ToolDetails):
 def settled(+handle: Tool.Handle,preview: Tools.ToolDetails) -> IO(Unit):
   do IO<Unit>:
     current : Tool.ToolExecution <- Tool.current(handle)
-    Tool.set(handle,Tool.updateResult(current,Tool.ToolResult{Ai.TextImageText{Ai.TextContent{"Successfully replaced blocks.",None{}}} <> Nil{},False{},Some{preview}},False{}))
+    Tool.set(handle,Tool.updateResult(current,ToolRender.ToolResult{Ai.TextImageText{Ai.TextContent{"Successfully replaced blocks.",None{}}} <> Nil{},False{},Some{preview}},False{}))
 def largeMounted(pair: Tool.Owner & Component.Component & Tool.Handle,+context: Tool.ToolContext,channel: Chan(Unit),+paths: Paths.Environment,+cwd: String,+edits: List<&2,Edits.Edit>) -> IO(Unit):
   match pair:
     case (owner,component,handle):

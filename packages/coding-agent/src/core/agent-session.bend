@@ -2136,7 +2136,7 @@ def withGuidelines(+record: Rec.Record<List<&2, String>>, +name: String, +guidel
 def toolPromptsFrom(registered: List<&2, ExtensionTypes.RegisteredTool>, +snippets: Rec.Record<String>, +guidelines: Rec.Record<List<&2, String>>) -> Runtime.ToolPrompts:
   match registered:
     case Nil{}: Runtime.ToolPrompts{snippets, guidelines}
-    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{+name, _, _, snippet, rules, _, _, _}, _} <> rest:
+    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{+name, _, _, snippet, rules, _, _, _, _, _, _}, _} <> rest:
       toolPromptsFrom(rest, withSnippet(snippets, name, snippet), withGuidelines(guidelines, name, trimmedGuidelines(rules, Nil{})))
 
 def registeredOf(runner: Maybe<&2, ExtensionRunner.ExtensionRunner>) -> IO(List<&2, ExtensionTypes.RegisteredTool>):
@@ -4691,7 +4691,7 @@ def executeExtensionTool(env: ExtensionToolEnv, input: Tools.Input()) -> IO(Tool
 def wrappedTools(+runner: ExtensionRunner.ExtensionRunner, registered: List<&2, ExtensionTypes.RegisteredTool>) -> IO(List<&2, Tools.Tool()>):
   match registered:
     case Nil{}: IO.pure(List<&2, Tools.Tool()>, Nil{})
-    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{name, label, description, _, _, parameters, mode, execute}, _} <> rest:
+    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{name, label, description, _, _, parameters, mode, execute, _, _, _}, _} <> rest:
       do IO<List<&2, Tools.Tool()>>:
         executor : Tools.Execute() <- C.create(~ExtensionToolEnv, ~Tools.Input(), ~Tools.Output(), ~executeExtensionTool, ExtensionToolEnv{runner, execute})
         others : List<&2, Tools.Tool()> <- wrappedTools(runner, rest)
@@ -4704,7 +4704,7 @@ def executorsIn(tools: List<&2, Tools.Tool()>) -> List<&2, Tools.Execute()>:
 
 def registeredName(tool: ExtensionTypes.RegisteredTool) -> String:
   match tool:
-    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{name, _, _, _, _, _, _, _}, _}: name
+    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{name, _, _, _, _, _, _, _, _, _, _}, _}: name
 
 def allowedRegistered(registered: List<&2, ExtensionTypes.RegisteredTool>, +allowed: Maybe<&2, List<&2, String>>, +excluded: List<&2, String>) -> List<&2, ExtensionTypes.RegisteredTool>:
   match registered:

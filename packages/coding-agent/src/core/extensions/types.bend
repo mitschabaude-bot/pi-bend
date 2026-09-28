@@ -21,6 +21,7 @@ import ../bash-executor.bend as BashExec
 import ../../../../runtime/src/record.bend as Record
 import ../../../../tui/src/component.bend as Component
 import ../../modes/interactive/theme/theme.bend as Theme
+import ./tool-render.bend as ToolRender
 
 # upstream core/extensions/types.ts: registrations, events and the loaded
 # extension state. Extensions are Bend code linked into the binary; their
@@ -436,7 +437,7 @@ type ProviderChange is Data:
   RegisterProvider{registration: ProviderRegistration}
   UnregisterProvider{name: String}
 
-# upstream ToolDefinition (without the TUI renderers): the tool's model-facing
+# upstream ToolDefinition: the tool's model-facing
 # description and JSON-schema parameters, an optional snippet for the system
 # prompt's tool list and guideline bullets, and execute, which also receives
 # the extension context.
@@ -445,8 +446,10 @@ type ToolCallInput is Data:
 
 def ToolExecute() -> Data: C.Callback<ToolCallInput, Tools.Output()>
 
+type ToolRenderShell is Data: DefaultShell{} SelfShell{}
+
 type ToolDefinition is Data:
-  ToolDefinition{name: String, label: String, description: String, promptSnippet: Maybe<&2, String>, promptGuidelines: List<&2, String>, parameters: V.Value, executionMode: Maybe<&2, Agent.ToolExecutionMode>, execute: ToolExecute()}
+  ToolDefinition{name: String, label: String, description: String, promptSnippet: Maybe<&2, String>, promptGuidelines: List<&2, String>, parameters: V.Value, executionMode: Maybe<&2, Agent.ToolExecutionMode>, execute: ToolExecute(), renderShell: ToolRenderShell, renderCall: Maybe<&2,ToolRender.Renderer()>, renderResult: Maybe<&2,ToolRender.Renderer()>}
 
 # upstream RegisteredTool: a definition with the extension that registered it.
 type RegisteredTool is Data:

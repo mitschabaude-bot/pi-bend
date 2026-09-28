@@ -19,6 +19,7 @@ import ../../core/extensions/types.bend as ExtensionTypes
 import ./components/keybinding-hints.bend as Hints
 import ./components/session-info.bend as SessionInfo
 import ./components/tool-execution.bend as Tool
+import ../../core/extensions/tool-render.bend as ToolRender
 import ./viewport.bend as View
 import ../../core/messages.bend as CoreMessages
 import ../../core/skills.bend as Skills
@@ -291,18 +292,47 @@ def mountedTool(state: State,toolId: String,componentId: Nat,value: Tool.ToolExe
 # Tool previews highlight code with the Markdown theme's highlightCode.
 def codeHighlighter(styles: Markdown.MarkdownTheme) -> Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>:
   match styles: case Markdown.MarkdownTheme{_,_,_,_,_,_,_,_,_,_,_,_,_,_,highlight,_,_}: highlight
-def ensureFound(state: State,+id: String,name: String,args: Schema.Value,componentId: Nat,theme: Theme.Theme,highlight: Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>,found: Maybe<&2,Tool.Handle>) -> IO(State & Bool):
+def styledShell(style: ExtensionTypes.ToolRenderShell,call: Maybe<&2,ToolRender.Renderer()>,result: Maybe<&2,ToolRender.Renderer()>) -> Tool.Shell:
+  match style:
+    case ExtensionTypes.DefaultShell{}: Tool.Boxed{call,result}
+    case ExtensionTypes.SelfShell{}: Tool.SelfRendered{call,result}
+def registeredShellIn(registered: List<&2,ExtensionTypes.RegisteredTool>,+name: String,selected: Tool.Shell) -> Tool.Shell:
+  match registered:
+    case Nil{}: selected
+    case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{toolName,_,_,_,_,_,_,_,style,call,result},_} <> +rest:
+      Bool.pick(Unit -> Tool.Shell,String.eq(toolName,name),
+        _ => registeredShellIn(rest,name,styledShell(style,call,result)),
+        _ => registeredShellIn(rest,name,selected))(Unit{})
+def registeredShell(registered: List<&2,ExtensionTypes.RegisteredTool>,name: String) -> Tool.Shell:
+  registeredShellIn(registered,name,Tool.Generic{})
+def shellOfExtensions(extensions: Maybe<&2,ExtensionRunner.ExtensionRunner>,+name: String) -> IO(Tool.Shell):
+  match extensions:
+    case None{}: IO.pure(Tool.Shell,Tool.Generic{})
+    case Some{runner}:
+      do IO<Tool.Shell>:
+        registered : List<&2,ExtensionTypes.RegisteredTool> <- ExtensionRunner.getAllRegisteredTools(runner)
+        return registeredShell(registered,name)
+def shellFor(registry: RenderRegistry,+name: String) -> IO(Tool.Shell):
+  match registry:
+    case RenderRegistry{_,_,extensions}: shellOfExtensions(extensions,name)
+def mountRegistered(state: State,+id: String,+name: String,args: Schema.Value,componentId: Nat,highlight: Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>) -> IO(State & Bool):
+  match state:
+    case State{entries,+tools,active,nextId,view,+theme,styles,expanded,hidden,pad}:
+      do IO<State & Bool>:
+        shell : Tool.Shell <- shellFor(tools,name)
+        mountedTool(State{entries,tools,active,nextId,view,theme,styles,expanded,hidden,pad},id,componentId,Tool.withHighlightCode(Tool.new(name,id,args,theme,shell),highlight))
+def ensureFound(state: State,+id: String,+name: String,args: Schema.Value,componentId: Nat,highlight: Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>,found: Maybe<&2,Tool.Handle>) -> IO(State & Bool):
   match found:
     case Some{+handle}:
       do IO<State & Bool>:
         current : Tool.ToolExecution <- Tool.current(handle)
         Tool.set(handle,Tool.updateArgs(current,args))
         return (state,True{})
-    case None{}: mountedTool(state,id,componentId,Tool.withHighlightCode(Tool.new(name,id,args,theme,Tool.Generic{}),highlight))
+    case None{}: mountRegistered(state,id,name,args,componentId,highlight)
 def ensureTool(state: State,+id: String,name: String,args: Schema.Value) -> IO(State & Bool):
   match state:
     case State{entries,+tools,active,+componentId,view,+theme,+styles,expanded,hidden,pad}:
-      ensureFound(State{entries,tools,active,componentId,view,theme,styles,expanded,hidden,pad},id,name,args,componentId,theme,codeHighlighter(styles),findTool(tools,id))
+      ensureFound(State{entries,tools,active,componentId,view,theme,styles,expanded,hidden,pad},id,name,args,componentId,codeHighlighter(styles),findTool(tools,id))
 def stateOf(pair: State & Bool) -> State:
   match pair: case (next,_): next
 def mountCalls(content: List<&2,Ai.AssistantContent<Schema.Value>>,state: State) -> IO(State & Bool):
@@ -329,7 +359,7 @@ def updated(-A: Data,-D: Data,body: Messages.Body,message: Ai.AssistantMessage<A
 def finalizeToolValue(handle: Tool.Handle,current: Tool.ToolExecution,failure: Maybe<&2,String>) -> IO(Unit):
   match failure:
     case None{}: Tool.set(handle,Tool.setArgsComplete(current))
-    case Some{message}: Tool.set(handle,Tool.updateResult(current,Tool.ToolResult{Ai.TextImageText{Ai.TextContent{message,None{}}} <> Nil{},True{},None{}},False{}))
+    case Some{message}: Tool.set(handle,Tool.updateResult(current,ToolRender.ToolResult{Ai.TextImageText{Ai.TextContent{message,None{}}} <> Nil{},True{},None{}},False{}))
 def finalizeTool(handle: Maybe<&2,Tool.Handle>,failure: Maybe<&2,String>) -> IO(Unit):
   match handle:
     case None{}: IO.pure(Unit,Unit{})

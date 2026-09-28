@@ -10,11 +10,14 @@ import ../../../src/modes/json-event.bend as JsonEvent
 import ../../../../agent/src/types.bend as Agent
 import ../../../../ai/src/types.bend as Ai
 import ../../../../ai/src/utils/message-json.bend as Json
+import ../../../../ai/src/utils/json.bend as JsonText
+import ../../../../ai/src/utils/schema-json.bend as SchemaJson
 import ../../../../ai/src/utils/thinking-levels.bend as Levels
 import ../../../../runtime/src/abort.bend as Abort
 import ../../../../runtime/src/callback.bend as C
 import ../../../../runtime/src/child-process.bend as Child
 import ../../../../runtime/src/filesystem.bend as FS
+import ../../../../runtime/src/f64.bend as F
 import ../../../../runtime/src/json.bend as Decode
 import ../../../../runtime/src/posix-path.bend as Path
 import ../../../../runtime/src/record.bend as R
@@ -23,6 +26,10 @@ import ../../../../runtime/src/schema-value.bend as V
 import ../../../../runtime/src/string.bend as Strings
 import ../../../../runtime/src/text.bend as Text
 import ../../../../runtime/src/utf8.bend as Utf8
+import ../../../../runtime/src/number-string.bend as NumberString
+import ../../../src/core/extensions/tool-render.bend as ToolRender
+import ../../../src/modes/interactive/theme/theme.bend as Theme
+import ../../../../tui/src/components/text.bend as TuiText
 
 # pi v0.87.1 examples/extensions/subagent/index.ts: the `subagent` tool
 # delegates tasks to specialized agents, each in its own `pi --mode json -p
@@ -33,8 +40,6 @@ import ../../../../runtime/src/utf8.bend as Utf8
 #   chain:    { chain: [{ agent, task }, ...] }  ({previous} is the prior output)
 #
 # Native adaptations:
-# - The TUI renderers (renderCall/renderResult and their formatting helpers)
-#   are not ported: the native ToolDefinition has no renderers.
 # - The subagent runs the running pi binary (/proc/self/exe; upstream
 #   process.execPath). A generic JavaScript runtime (bun/node) falls back to
 #   `pi` on PATH, as upstream does without a script path.
@@ -1114,6 +1119,296 @@ def executeCall(+env: ExtensionEnv, call: Ext.ToolCallInput) -> IO(Tools.Output(
 
 def executeSubagent(env: ExtensionEnv, call: Ext.ToolCallInput) -> IO(Tools.Output()): executeCall(env, call)
 
+# Tool presentation
+# -----------------
+
+def renderField(value: V.Value,key: String) -> Maybe<&2,V.Value>:
+  match value:
+    case V.ObjectValue{fields}: R.get(V.Value,fields,key)
+    case _: None{}
+def renderText(value: Maybe<&2,V.Value>,fallback: String) -> String:
+  match value:
+    case Some{V.Text{text}}: text
+    case _: fallback
+def renderItems(value: Maybe<&2,V.Value>) -> List<&2,V.Value>:
+  match value:
+    case Some{V.ArrayValue{items}}: items
+    case _: Nil{}
+def renderColor(theme: Theme.Theme,key: String,+value: String) -> String:
+  Result.default(&2,&2,Theme.Error,String,Theme.foreground(theme,key,value),value)
+def renderPreview(+text: String,+limit: Nat) -> String:
+  Bool.pick(String,Nat.is_gt(String.length(text),limit),String.take(text,limit) ++ "...",text)
+def renderRows(items: List<&2,V.Value>,+chain: Bool,+theme: Theme.Theme,+index: Nat,+remaining: Nat) -> String:
+  match items remaining:
+    case Nil{} _: ""
+    case _ 0n: "\n  " ++ renderColor(theme,"muted","... +" ++ Nat.show(List.length(&2,V.Value,items)) ++ " more")
+    case +item <> rest 1n+more:
+      +agent = renderText(renderField(item,"agent"),"...")
+      +task = renderText(renderField(item,"task"),"...")
+      +clean = Bool.pick(String,chain,String.trim(Strings.replaceAll(task,"{previous}","")),task)
+      +number = Bool.pick(String,chain,renderColor(theme,"muted",Nat.show(index) ++ ".") ++ " ","")
+      "\n  " ++ number ++ renderColor(theme,"accent",agent) ++ renderColor(theme,"dim"," " ++ renderPreview(clean,40n)) ++ renderRows(rest,chain,theme,index + 1n,more)
+def callText(+args: V.Value,+theme: Theme.Theme) -> String:
+  +scope = renderText(renderField(args,"agentScope"),"user")
+  +title = renderColor(theme,"toolTitle",Theme.bold("subagent "))
+  +suffix = renderColor(theme,"muted"," [" ++ scope ++ "]")
+  +chain = renderItems(renderField(args,"chain"))
+  +tasks = renderItems(renderField(args,"tasks"))
+  Bool.pick(Unit -> String,Bool.not(List.is_empty(&2,V.Value,chain)),
+    _ => title ++ renderColor(theme,"accent","chain (" ++ Nat.show(List.length(&2,V.Value,chain)) ++ " steps)") ++ suffix ++ renderRows(chain,True{},theme,1n,3n),
+    _ => Bool.pick(Unit -> String,Bool.not(List.is_empty(&2,V.Value,tasks)),
+      _ => title ++ renderColor(theme,"accent","parallel (" ++ Nat.show(List.length(&2,V.Value,tasks)) ++ " tasks)") ++ suffix ++ renderRows(tasks,False{},theme,1n,3n),
+      _ => title ++ renderColor(theme,"accent",renderText(renderField(args,"agent"),"...")) ++ suffix ++ "\n  " ++ renderColor(theme,"dim",renderPreview(renderText(renderField(args,"task"),"..."),60n)))(Unit{}))(Unit{})
+def renderedLines(pair: TuiText.Text & List<&2,String>) -> List<&2,String>:
+  match pair: case (_,lines): lines
+def renderLines(text: String,width: Nat) -> IO(List<&2,String>):
+  do IO<List<&2,String>>:
+    pair : TuiText.Text & List<&2,String> <- TuiText.render(TuiText.new(text,Some{0n},Some{0n},None{}),width)
+    return renderedLines(pair)
+def renderCall(_: Unit,context: ToolRender.RenderContext) -> IO(List<&2,String>):
+  match context:
+    case ToolRender.RenderContext{_,_,args,_,_,_,_,_,width,theme}: renderLines(callText(args,theme),width)
+
+def convertedNatural(converted: Result<&2,&2,F.Error,Nat>) -> Result<&2,&2,Decode.Error,Nat>:
+  match converted:
+    case Done{count}: Done{count}
+    case Fail{_}: Fail{Decode.InvalidValue{Nil{},"nonnegative integer"}}
+def decodeNatural(value: V.Value) -> Result<&2,&2,Decode.Error,Nat>:
+  do Result<&2,&2,Decode.Error,Nat>:
+    number : F64 <- Decode.number(value)
+    convertedNatural(F.convert(number))
+def convertedExit(converted: Result<&2,&2,F.Error,Nat>) -> Result<&2,&2,Decode.Error,Maybe<&2,U32>>:
+  match converted:
+    case Done{+count}: Bool.pick(Result<&2,&2,Decode.Error,Maybe<&2,U32>>,Nat.is_le(count,4294967295n),Done{Some{U32.from_nat(count)}},Fail{Decode.InvalidValue{Nil{},"exit code"}})
+    case Fail{_}: Fail{Decode.InvalidValue{Nil{},"exit code"}}
+def exitNumber(+number: F64) -> Result<&2,&2,Decode.Error,Maybe<&2,U32>>:
+  Bool.pick(Unit -> Result<&2,&2,Decode.Error,Maybe<&2,U32>>,F64.is_eq(number,F64.neg(U32.to_f64(1))),
+    _ => Done{None{}},_ => convertedExit(F.convert(number)))(Unit{})
+def decodeExit(value: V.Value) -> Result<&2,&2,Decode.Error,Maybe<&2,U32>>:
+  do Result<&2,&2,Decode.Error,Maybe<&2,U32>>:
+    number : F64 <- Decode.number(value)
+    exitNumber(number)
+def decodeSource(value: V.Value) -> Result<&2,&2,Decode.Error,ResultSource>:
+  match value:
+    case V.Text{"user"}: Done{KnownSource{Agents.UserSource{}}}
+    case V.Text{"project"}: Done{KnownSource{Agents.ProjectSource{}}}
+    case V.Text{"unknown"}: Done{UnknownSource{}}
+    case _: Fail{Decode.InvalidValue{Nil{},"user, project or unknown"}}
+def decodeUsage(value: V.Value) -> Result<&2,&2,Decode.Error,UsageStats>:
+  do Result<&2,&2,Decode.Error,UsageStats>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    input : F64 <- Decode.required(F64,fields,"input",Decode.number)
+    output : F64 <- Decode.required(F64,fields,"output",Decode.number)
+    cacheRead : F64 <- Decode.required(F64,fields,"cacheRead",Decode.number)
+    cacheWrite : F64 <- Decode.required(F64,fields,"cacheWrite",Decode.number)
+    cost : F64 <- Decode.required(F64,fields,"cost",Decode.number)
+    contextTokens : F64 <- Decode.required(F64,fields,"contextTokens",Decode.number)
+    turns : Nat <- Decode.required(Nat,fields,"turns",decodeNatural)
+    return UsageStats{input,output,cacheRead,cacheWrite,cost,contextTokens,turns}
+def decodeSingle(value: V.Value) -> Result<&2,&2,Decode.Error,SingleResult>:
+  do Result<&2,&2,Decode.Error,SingleResult>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    agent : String <- Decode.required(String,fields,"agent",Decode.string)
+    source : ResultSource <- Decode.required(ResultSource,fields,"agentSource",decodeSource)
+    task : String <- Decode.required(String,fields,"task",Decode.string)
+    exitCode : Maybe<&2,U32> <- Decode.required(Maybe<&2,U32>,fields,"exitCode",decodeExit)
+    messages : List<&2,Message()> <- Decode.required(List<&2,Message()>,fields,"messages",Decode.list(~Message(),~JsonEvent.decodeMessage))
+    stderr : String <- Decode.required(String,fields,"stderr",Decode.string)
+    usage : UsageStats <- Decode.required(UsageStats,fields,"usage",decodeUsage)
+    model : Maybe<&2,String> <- Decode.optional(String,fields,"model",Decode.string)
+    stopReason : Maybe<&2,String> <- Decode.optional(String,fields,"stopReason",Decode.string)
+    errorMessage : Maybe<&2,String> <- Decode.optional(String,fields,"errorMessage",Decode.string)
+    step : Maybe<&2,Nat> <- Decode.optional(Nat,fields,"step",decodeNatural)
+    return SingleResult{agent,source,task,exitCode,messages,stderr,usage,model,stopReason,errorMessage,step}
+def decodeMode(value: V.Value) -> Result<&2,&2,Decode.Error,SubagentMode>:
+  match value:
+    case V.Text{"single"}: Done{SingleMode{}}
+    case V.Text{"parallel"}: Done{ParallelMode{}}
+    case V.Text{"chain"}: Done{ChainMode{}}
+    case _: Fail{Decode.InvalidValue{Nil{},"single, parallel or chain"}}
+def decodeDetails(value: V.Value) -> Result<&2,&2,Decode.Error,SubagentDetails>:
+  do Result<&2,&2,Decode.Error,SubagentDetails>:
+    +fields : R.Record<V.Value> <- Decode.object(value)
+    mode : SubagentMode <- Decode.required(SubagentMode,fields,"mode",decodeMode)
+    scope : Agents.AgentScope <- Decode.required(Agents.AgentScope,fields,"agentScope",decodeScope)
+    projectDir : Maybe<&2,String> <- Decode.optional(String,fields,"projectAgentsDir",Decode.string)
+    results : List<&2,SingleResult> <- Decode.required(List<&2,SingleResult>,fields,"results",Decode.list(~SingleResult,~decodeSingle))
+    return SubagentDetails{mode,scope,projectDir,results}
+
+type DisplayItem is Data: DisplayText{text: String} DisplayTool{name: String,args: V.Value}
+def displayContent(content: List<&2,Ai.AssistantContent<V.Value>>) -> List<&2,DisplayItem>:
+  match content:
+    case Nil{}: Nil{}
+    case Ai.AssistantText{Ai.TextContent{text,_}} <> rest: DisplayText{text} <> displayContent(rest)
+    case Ai.AssistantToolCall{Ai.ToolCall{_,name,args,_,_}} <> rest: DisplayTool{name,args} <> displayContent(rest)
+    case _ <> rest: displayContent(rest)
+def displayMessage(message: Message()) -> List<&2,DisplayItem>:
+  match message:
+    case Agent.LlmMessage{Ai.Assistant{Ai.AssistantMessage{content,_,_,_,_,_,_,_,_,_,_,_,_,_,_}}}: displayContent(content)
+    case _: Nil{}
+def displayItems(messages: List<&2,Message()>) -> List<&2,DisplayItem>:
+  match messages:
+    case Nil{}: Nil{}
+    case message <> rest: List.append(&2,DisplayItem,displayMessage(message),displayItems(rest))
+def toolCallText(+name: String,+args: V.Value,+theme: Theme.Theme) -> String:
+  match name:
+    case "bash": renderColor(theme,"muted","$ ") ++ renderColor(theme,"toolOutput",renderPreview(renderText(renderField(args,"command"),"..."),60n))
+    case "read": renderColor(theme,"muted","read ") ++ renderColor(theme,"accent",renderText(renderField(args,"file_path"),renderText(renderField(args,"path"),"...")))
+    case "write": renderColor(theme,"muted","write ") ++ renderColor(theme,"accent",renderText(renderField(args,"file_path"),renderText(renderField(args,"path"),"...")))
+    case "edit": renderColor(theme,"muted","edit ") ++ renderColor(theme,"accent",renderText(renderField(args,"file_path"),renderText(renderField(args,"path"),"...")))
+    case "ls": renderColor(theme,"muted","ls ") ++ renderColor(theme,"accent",renderText(renderField(args,"path"),"."))
+    case "find": renderColor(theme,"muted","find ") ++ renderColor(theme,"accent",renderText(renderField(args,"pattern"),"*")) ++ renderColor(theme,"dim"," in " ++ renderText(renderField(args,"path"),"."))
+    case "grep": renderColor(theme,"muted","grep ") ++ renderColor(theme,"accent","/" ++ renderText(renderField(args,"pattern"),"") ++ "/") ++ renderColor(theme,"dim"," in " ++ renderText(renderField(args,"path"),"."))
+    case _:
+      +shown = Maybe.default(&2,String,JsonText.stringify(SchemaJson.toJson(args)),"{}")
+      renderColor(theme,"accent",name) ++ renderColor(theme,"dim"," " ++ renderPreview(shown,50n))
+def displayed(item: DisplayItem,+expanded: Bool,+theme: Theme.Theme) -> String:
+  match item:
+    case DisplayText{+text}:
+      +preview = Bool.pick(String,expanded,text,String.join(List.take(&2,String,String.split(text,'\n'),3n),"\n"))
+      renderColor(theme,"toolOutput",preview)
+    case DisplayTool{name,args}: renderColor(theme,"muted","→ ") ++ toolCallText(name,args,theme)
+def displayList(items: List<&2,DisplayItem>,+expanded: Bool,+theme: Theme.Theme) -> List<&2,String>:
+  match items:
+    case Nil{}: Nil{}
+    case item <> rest: displayed(item,expanded,theme) <> displayList(rest,expanded,theme)
+def displayOutput(+items: List<&2,DisplayItem>,expanded: Bool,limit: Nat,+theme: Theme.Theme) -> String:
+  +count = List.length(&2,DisplayItem,items)
+  +skipped = Nat.sub(count,limit)
+  +visible = List.drop(&2,DisplayItem,items,skipped)
+  +heading = Bool.pick(String,Nat.is_gt(skipped,0n),renderColor(theme,"muted","... " ++ Nat.show(skipped) ++ " earlier items\n"),"")
+  heading ++ String.join(displayList(visible,expanded,theme),"\n")
+def fixed(number: F64,digits: Nat) -> String:
+  Maybe.default(&2,String,NumberString.formatFixed(number,digits),"0")
+def formatTokens(+number: F64) -> String:
+  Bool.pick(Unit -> String,F64.is_lt(number,U32.to_f64(1000)),
+    _ => fixed(number,0n),
+    _ => Bool.pick(Unit -> String,F64.is_lt(number,U32.to_f64(10000)),
+      _ => fixed(F64.div(number,U32.to_f64(1000)),1n) ++ "k",
+      _ => Bool.pick(Unit -> String,F64.is_lt(number,U32.to_f64(1000000)),
+        _ => fixed(F64.div(number,U32.to_f64(1000)),0n) ++ "k",
+        _ => fixed(F64.div(number,U32.to_f64(1000000)),1n) ++ "M")(Unit{}))(Unit{}))(Unit{})
+def modelPart(model: Maybe<&2,String>) -> List<&2,String>:
+  match model:
+    case None{}: Nil{}
+    case Some{name}: [name]
+def usageParts(usage: UsageStats,+model: Maybe<&2,String>) -> List<&2,String>:
+  match usage:
+    case UsageStats{+input,+output,+cacheRead,+cacheWrite,+cost,+contextTokens,+turns}:
+      +turnPart = Bool.pick(List<&2,String>,Nat.is_eq(turns,0n),Nil{},[Nat.show(turns) ++ Bool.pick(String,Nat.is_eq(turns,1n)," turn"," turns")])
+      +inputPart = Bool.pick(List<&2,String>,F64.is_eq(input,zero()),Nil{},["↑" ++ formatTokens(input)])
+      +outputPart = Bool.pick(List<&2,String>,F64.is_eq(output,zero()),Nil{},["↓" ++ formatTokens(output)])
+      +readPart = Bool.pick(List<&2,String>,F64.is_eq(cacheRead,zero()),Nil{},["R" ++ formatTokens(cacheRead)])
+      +writePart = Bool.pick(List<&2,String>,F64.is_eq(cacheWrite,zero()),Nil{},["W" ++ formatTokens(cacheWrite)])
+      +costPart = Bool.pick(List<&2,String>,F64.is_eq(cost,zero()),Nil{},["$" ++ fixed(cost,4n)])
+      +contextPart = Bool.pick(List<&2,String>,F64.is_le(contextTokens,zero()),Nil{},["ctx:" ++ formatTokens(contextTokens)])
+      +last = modelPart(model)
+      List.concat(&2,String,[turnPart,inputPart,outputPart,readPart,writePart,costPart,contextPart,last])
+def usageText(usage: UsageStats,model: Maybe<&2,String>) -> String:
+  String.join(usageParts(usage,model)," ")
+def sumUsage(left: UsageStats,right: UsageStats) -> UsageStats:
+  match left right:
+    case UsageStats{input,output,read,write,cost,_,turns} UsageStats{otherInput,otherOutput,otherRead,otherWrite,otherCost,_,otherTurns}:
+      UsageStats{F64.add(input,otherInput),F64.add(output,otherOutput),F64.add(read,otherRead),F64.add(write,otherWrite),F64.add(cost,otherCost),zero(),turns + otherTurns}
+def allUsage(results: List<&2,SingleResult>) -> UsageStats:
+  match results:
+    case Nil{}: emptyUsage()
+    case SingleResult{_,_,_,_,_,_,usage,_,_,_,_} <> rest: sumUsage(usage,allUsage(rest))
+def resultIcon(failed: Bool,+theme: Theme.Theme) -> String:
+  Bool.pick(String,failed,renderColor(theme,"error","✗"),renderColor(theme,"success","✓"))
+def singleError(failed: Bool,errorMessage: Maybe<&2,String>,theme: Theme.Theme) -> String:
+  match errorMessage:
+    case Some{message}: Bool.pick(String,failed,"\n" ++ renderColor(theme,"error","Error: " ++ message),"")
+    case None{}: ""
+def hasErrorMessage(errorMessage: Maybe<&2,String>) -> Bool:
+  match errorMessage:
+    case Some{_}: True{}
+    case None{}: False{}
+def stopBadge(failed: Bool,reason: Maybe<&2,String>,theme: Theme.Theme) -> String:
+  match reason:
+    case Some{value}: Bool.pick(String,failed," " ++ renderColor(theme,"error","[" ++ value ++ "]"),"")
+    case None{}: ""
+def toolItems(items: List<&2,DisplayItem>) -> List<&2,DisplayItem>:
+  match items:
+    case Nil{}: Nil{}
+    case DisplayTool{name,args} <> rest: DisplayTool{name,args} <> toolItems(rest)
+    case _ <> rest: toolItems(rest)
+def singleExpanded(task: String,+items: List<&2,DisplayItem>,+finalOutput: String,+theme: Theme.Theme) -> String:
+  +tools = toolItems(items)
+  +toolText = displayOutput(tools,True{},List.length(&2,DisplayItem,tools),theme)
+  +output = Bool.pick(String,String.is_empty(finalOutput),Bool.pick(String,List.is_empty(&2,DisplayItem,items),renderColor(theme,"muted","(no output)"),toolText),toolText ++ Bool.pick(String,String.is_empty(toolText),"","\n\n") ++ finalOutput)
+  "\n\n" ++ renderColor(theme,"muted","─── Task ───") ++ "\n" ++ renderColor(theme,"dim",task) ++ "\n\n" ++ renderColor(theme,"muted","─── Output ───") ++ "\n" ++ output
+def singleCollapsed(+items: List<&2,DisplayItem>,failed: Bool,errorMessage: Maybe<&2,String>,+theme: Theme.Theme) -> String:
+  Bool.pick(Unit -> String,failed && hasErrorMessage(errorMessage),_ => "",
+    _ => Bool.pick(Unit -> String,List.is_empty(&2,DisplayItem,items),
+      _ => "\n" ++ renderColor(theme,"muted","(no output)"),
+      _ => "\n" ++ displayOutput(items,False{},10n,theme) ++ Bool.pick(String,Nat.is_gt(List.length(&2,DisplayItem,items),10n),"\n" ++ renderColor(theme,"muted","(Ctrl+O to expand)"),""))(Unit{}))(Unit{})
+def singleText(+result: SingleResult,expanded: Bool,+theme: Theme.Theme) -> String:
+  match result:
+    case SingleResult{agent,source,task,_,+messages,_,usage,model,stopReason,+errorMessage,_}:
+      +failed = isFailedResult(result)
+      +items = displayItems(messages)
+      +finalOutput = getFinalOutput(messages)
+      +header = resultIcon(failed,theme) ++ " " ++ renderColor(theme,"toolTitle",Theme.bold(agent)) ++ renderColor(theme,"muted"," (" ++ sourceName(source) ++ ")") ++ stopBadge(failed,stopReason,theme)
+      +error = singleError(failed,errorMessage,theme)
+      +usageLine = usageText(usage,model)
+      +footer = Bool.pick(String,String.is_empty(usageLine),"","\n" ++ renderColor(theme,"dim",usageLine))
+      +body = Bool.pick(Unit -> String,expanded,_ => singleExpanded(task,items,finalOutput,theme),_ => singleCollapsed(items,failed,errorMessage,theme))(Unit{})
+      header ++ error ++ body ++ footer
+def resultStep(result: SingleResult) -> Maybe<&2,Nat>:
+  match result: case SingleResult{_,_,_,_,_,_,_,_,_,_,step}: step
+def modeLabel(mode: SubagentMode,result: SingleResult) -> String:
+  match mode:
+    case ChainMode{}: "Step " ++ Nat.show(Maybe.default(&2,Nat,resultStep(result),0n)) ++ ": "
+    case _: ""
+def rowIcon(mode: SubagentMode,+result: SingleResult,+theme: Theme.Theme) -> String:
+  match mode:
+    case ParallelMode{}: Bool.pick(String,isRunning(result),renderColor(theme,"warning","⏳"),resultIcon(isFailedResult(result),theme))
+    case _: resultIcon(isFailedResult(result),theme)
+def modeRows(results: List<&2,SingleResult>,+mode: SubagentMode,+expanded: Bool,+theme: Theme.Theme) -> String:
+  match results:
+    case Nil{}: ""
+    case +result <> rest:
+      +label = modeLabel(mode,result)
+      +items = displayItems(messagesOf(result))
+      +body = Bool.pick(String,List.is_empty(&2,DisplayItem,items),renderColor(theme,"muted",Bool.pick(String,isRunning(result),"(running...)","(no output)")),displayOutput(items,expanded,Bool.pick(Nat,expanded,List.length(&2,DisplayItem,items),5n),theme))
+      "\n\n" ++ renderColor(theme,"muted","─── " ++ label) ++ renderColor(theme,"accent",resultAgent(result)) ++ " " ++ rowIcon(mode,result,theme) ++ "\n" ++ body ++ modeRows(rest,mode,expanded,theme)
+def runningCount(results: List<&2,SingleResult>) -> Nat:
+  match results:
+    case Nil{}: 0n
+    case result <> rest: Bool.pick(Nat,isRunning(result),1n,0n) + runningCount(rest)
+def modeText(+mode: SubagentMode,+results: List<&2,SingleResult>,+expanded: Bool,+theme: Theme.Theme) -> String:
+  +count = List.length(&2,SingleResult,results)
+  +success = successCount(results)
+  +running = runningCount(results)
+  +label = modeName(mode)
+  +status = Bool.pick(String,String.eq(label,"parallel") && Nat.is_gt(running,0n),Nat.show(Nat.sub(count,running)) ++ "/" ++ Nat.show(count) ++ " done, " ++ Nat.show(running) ++ " running",Nat.show(success) ++ "/" ++ Nat.show(count) ++ Bool.pick(String,String.eq(label,"chain")," steps"," tasks"))
+  +icon = Bool.pick(String,Nat.is_gt(running,0n),renderColor(theme,"warning","⏳"),Bool.pick(String,String.eq(label,"parallel") && Nat.is_lt(success,count),renderColor(theme,"warning","◐"),resultIcon(Nat.is_lt(success,count),theme)))
+  +usage = usageText(allUsage(results),None{})
+  icon ++ " " ++ renderColor(theme,"toolTitle",Theme.bold(label ++ " ")) ++ renderColor(theme,"accent",status) ++ modeRows(results,mode,expanded,theme) ++ Bool.pick(String,String.is_empty(usage),"","\n\n" ++ renderColor(theme,"dim","Total: " ++ usage)) ++ Bool.pick(String,expanded,"","\n" ++ renderColor(theme,"muted","(Ctrl+O to expand)"))
+def fallbackResult(content: List<&2,Ai.TextImageContent>) -> String:
+  match content:
+    case Ai.TextImageText{Ai.TextContent{text,_}} <> _: text
+    case _ <> rest: fallbackResult(rest)
+    case Nil{}: "(no output)"
+def detailsText(decoded: Result<&2,&2,Decode.Error,SubagentDetails>,+content: List<&2,Ai.TextImageContent>,+expanded: Bool,+theme: Theme.Theme) -> String:
+  match decoded:
+    case Fail{_}: fallbackResult(content)
+    case Done{SubagentDetails{_,_,_,Nil{}}}: fallbackResult(content)
+    case Done{SubagentDetails{SingleMode{},_,_,result <> _}}: singleText(result,expanded,theme)
+    case Done{SubagentDetails{mode,_,_,results}}: modeText(mode,results,expanded,theme)
+def resultText(details: Maybe<&2,Tools.ToolDetails>,+content: List<&2,Ai.TextImageContent>,+expanded: Bool,+theme: Theme.Theme) -> String:
+  match details:
+    case Some{Tools.RawDetails{value}}: detailsText(decodeDetails(value),content,expanded,theme)
+    case _: fallbackResult(content)
+def renderedResult(result: ToolRender.ToolResult,expanded: Bool,width: Nat,theme: Theme.Theme) -> IO(List<&2,String>):
+  match result:
+    case ToolRender.ToolResult{content,_,details}: renderLines(resultText(details,content,expanded,theme),width)
+def renderResult(_: Unit,context: ToolRender.RenderContext) -> IO(List<&2,String>):
+  match context:
+    case ToolRender.RenderContext{_,_,_,None{},_,_,_,_,_,_}: IO.pure(List<&2,String>,Nil{})
+    case ToolRender.RenderContext{_,_,_,Some{result},expanded,_,_,_,width,theme}: renderedResult(result,expanded,width,theme)
+
 # Registration
 # ------------
 
@@ -1125,7 +1420,9 @@ def toolDescription(+agentDir: String) -> String:
 def subagentExtensionWith(+agentDir: String, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
     execute : Ext.ToolExecute() <- C.create(~ExtensionEnv, ~Ext.ToolCallInput, ~Tools.Output(), ~executeSubagent, ExtensionEnv{agentDir})
-    Loader.registerTool(api, Ext.ToolDefinition{"subagent", "Subagent", toolDescription(agentDir), None{}, Nil{}, subagentParams(), None{}, execute})
+    call : ToolRender.Renderer() <- C.create(~Unit, ~ToolRender.RenderContext, ~List<&2,String>, ~renderCall, Unit{})
+    result : ToolRender.Renderer() <- C.create(~Unit, ~ToolRender.RenderContext, ~List<&2,String>, ~renderResult, Unit{})
+    Loader.registerTool(api, Ext.ToolDefinition{"subagent", "Subagent", toolDescription(agentDir), None{}, Nil{}, subagentParams(), None{}, execute, Ext.DefaultShell{}, Some{call}, Some{result}})
 
 def registered(located: Config.Located(), +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
   match located:

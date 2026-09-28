@@ -1,5 +1,6 @@
 import Base
 import ../packages/coding-agent/src/modes/interactive/components/tool-execution.bend as Tool
+import ../packages/coding-agent/src/core/extensions/tool-render.bend as ToolRender
 import ../packages/coding-agent/src/modes/interactive/theme/theme.bend as Theme
 import ../packages/coding-agent/src/modes/interactive/theme/color.bend as Color
 import ../packages/runtime/src/schema-value.bend as Value
@@ -26,7 +27,7 @@ def showWide(label: String,state: Tool.ToolExecution) -> IO(Unit):
     lines : List<&2,String> <- Tool.render(state,80n)
     output(label,lines)
 def text(value: String) -> Ai.TextImageContent: Ai.TextImageText{Ai.TextContent{value,None{}}}
-def result(value: String,error: Bool) -> Tool.ToolResult: Tool.ToolResult{text(value) <> Nil{},error,None{}}
+def result(value: String,error: Bool) -> ToolRender.ToolResult: ToolRender.ToolResult{text(value) <> Nil{},error,None{}}
 def builtinArgs(name: String) -> Value.Value:
   match name:
     case "bash": Value.ObjectValue{R.Record{R.Property{"command",Value.Text{"printf hello"}} <> Nil{}}}
@@ -47,12 +48,12 @@ def args2() -> Value.Value: Value.ObjectValue{R.Record{R.Property{"path",Value.T
   match count:
     case Zero{}: List.reverse(&2,String,reversed)
     case Succ{rest}: lines(from + 1n,rest,("line-" ++ Nat.show(from)) <> reversed)
-def draw(label: String,context: Tool.RenderContext) -> IO(List<&2,String>):
+def draw(label: String,context: ToolRender.RenderContext) -> IO(List<&2,String>):
   match context:
-    case Tool.RenderContext{_,_,_,_,_,_,_,_,width}:
+    case ToolRender.RenderContext{_,_,_,_,_,_,_,_,width,_}:
       +label = {label: String}
       IO.pure(List<&2,String>,U.padResult(label,U.visibleWidth(label),width,True{}) <> Nil{})
-def drawEmpty(label: String,context: Tool.RenderContext) -> IO(List<&2,String>): IO.pure(List<&2,String>,Nil{})
+def drawEmpty(label: String,context: ToolRender.RenderContext) -> IO(List<&2,String>): IO.pure(List<&2,String>,Nil{})
 def unusedPreview(_: Unit,request: Tool.PreviewRequest) -> IO(Edits.Preview()):
   IO.die(Edits.Preview(),1,"read rendering invoked edit preflight")
 def compactMounted(pair: Tool.Owner & Component.Component & Tool.Handle,+label: String) -> IO(Unit):
@@ -107,22 +108,22 @@ def mainRun(+theme: Theme.Theme) -> IO(Unit):
     +expanded : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.setExpanded(preview,True{}))
     show("fallback-expanded",expanded)
     show("fallback-error",Tool.updateResult(expanded,result("failed",True{}),False{}))
-    +call : Callback.Callback<Tool.RenderContext,List<&2,String>> <- Callback.create(~String,~Tool.RenderContext,~List<&2,String>,~draw,"custom call")
-    +resultCall : Callback.Callback<Tool.RenderContext,List<&2,String>> <- Callback.create(~String,~Tool.RenderContext,~List<&2,String>,~draw,"custom result")
+    +call : Callback.Callback<ToolRender.RenderContext,List<&2,String>> <- Callback.create(~String,~ToolRender.RenderContext,~List<&2,String>,~draw,"custom call")
+    +resultCall : Callback.Callback<ToolRender.RenderContext,List<&2,String>> <- Callback.create(~String,~ToolRender.RenderContext,~List<&2,String>,~draw,"custom result")
     +rendered : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("custom_tool","r1",Value.ObjectValue{R.Record{Nil{}}},theme,Tool.Boxed{Some{call},Some{resultCall}}))
     show("rendered-call",rendered)
     show("rendered-result",Tool.updateResult(rendered,result("done",False{}),False{}))
-    +ownCall : Callback.Callback<Tool.RenderContext,List<&2,String>> <- Callback.create(~String,~Tool.RenderContext,~List<&2,String>,~draw,"own call")
-    +ownResult : Callback.Callback<Tool.RenderContext,List<&2,String>> <- Callback.create(~String,~Tool.RenderContext,~List<&2,String>,~draw,"own result")
+    +ownCall : Callback.Callback<ToolRender.RenderContext,List<&2,String>> <- Callback.create(~String,~ToolRender.RenderContext,~List<&2,String>,~draw,"own call")
+    +ownResult : Callback.Callback<ToolRender.RenderContext,List<&2,String>> <- Callback.create(~String,~ToolRender.RenderContext,~List<&2,String>,~draw,"own result")
     +self : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("custom_tool","s1",Value.ObjectValue{R.Record{Nil{}}},theme,Tool.SelfRendered{Some{ownCall},Some{ownResult}}))
     show("self-call",self)
     show("self-result",Tool.updateResult(self,result("done",False{}),False{}))
-    +empty : Callback.Callback<Tool.RenderContext,List<&2,String>> <- Callback.create(~String,~Tool.RenderContext,~List<&2,String>,~drawEmpty,"")
+    +empty : Callback.Callback<ToolRender.RenderContext,List<&2,String>> <- Callback.create(~String,~ToolRender.RenderContext,~List<&2,String>,~drawEmpty,"")
     +emptyBox : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("custom_tool","e1",Value.ObjectValue{R.Record{Nil{}}},theme,Tool.Boxed{Some{empty},Some{empty}}))
     show("boxed-empty",emptyBox)
     +emptySelf : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("custom_tool","e2",Value.ObjectValue{R.Record{Nil{}}},theme,Tool.SelfRendered{Some{empty},Some{empty}}))
     show("self-empty",emptySelf)
-    show("self-empty-result",Tool.updateResult(emptySelf,Tool.ToolResult{Nil{},False{},None{}},False{}))
+    show("self-empty-result",Tool.updateResult(emptySelf,ToolRender.ToolResult{Nil{},False{},None{}},False{}))
     +callValue : Ai.ToolCall<Value.Value> <- IO.pure(Ai.ToolCall<Value.Value>,Ai.ToolCall{"a1","custom_tool",Value.ObjectValue{R.Record{Nil{}}},None{},None{}})
     +adapter : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.fromAiToolCall(callValue,theme,Tool.Generic{}))
     +agentResult : Agent.AgentToolResult<Value.Value> <- IO.pure(Agent.AgentToolResult<Value.Value>,Agent.AgentToolResult{text("from agent") <> Nil{},Some{Value.Null{}},None{},None{}})
@@ -144,11 +145,11 @@ def mainRun(+theme: Theme.Theme) -> IO(Unit):
     showWide("write-preview",longWrite)
     showWide("write-expanded",Tool.setExpanded(longWrite,True{}))
     compactReads(theme)
-    Callback.dispose(Tool.RenderContext,List<&2,String>,call)
-    Callback.dispose(Tool.RenderContext,List<&2,String>,resultCall)
-    Callback.dispose(Tool.RenderContext,List<&2,String>,ownCall)
-    Callback.dispose(Tool.RenderContext,List<&2,String>,ownResult)
-    Callback.dispose(Tool.RenderContext,List<&2,String>,empty)
+    Callback.dispose(ToolRender.RenderContext,List<&2,String>,call)
+    Callback.dispose(ToolRender.RenderContext,List<&2,String>,resultCall)
+    Callback.dispose(ToolRender.RenderContext,List<&2,String>,ownCall)
+    Callback.dispose(ToolRender.RenderContext,List<&2,String>,ownResult)
+    Callback.dispose(ToolRender.RenderContext,List<&2,String>,empty)
 def main() -> IO(Unit):
   do IO<Unit>:
     loadedTheme : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadFromPath("packages/coding-agent/src/modes/interactive/theme/dark.json",Color.Palette256{})

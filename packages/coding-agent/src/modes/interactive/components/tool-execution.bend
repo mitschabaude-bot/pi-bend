@@ -27,11 +27,8 @@ import ../../../core/tools/renderers/bash.bend as BashRenderer
 import ../../../core/tools/render-utils.bend as Render
 import ../../../core/tools/index.bend as Tools
 import ../../../../../agent/src/types.bend as Agent
+import ../../../core/extensions/tool-render.bend as ToolRender
 
-type ToolResult is Data: ToolResult{content: List<&2,Ai.TextImageContent>,isError: Bool,details: Maybe<&2,Tools.ToolDetails>}
-type RenderContext is Data:
-  RenderContext{toolName: String,toolCallId: String,args: Value.Value,result: Maybe<&2,ToolResult>,expanded: Bool,isPartial: Bool,executionStarted: Bool,argsComplete: Bool,width: Nat}
-def Renderer() -> Data: Callback.Callback<RenderContext,List<&2,String>>
 # Context computation is injectable, like a tool's operations. The transcript
 # owns the callback; each mounted tool joins its reads before being disposed.
 type PreviewRequest is Data: PreviewRequest{cwd: String,input: Edit.EditToolInput}
@@ -39,10 +36,10 @@ type ToolContext is Data:
   ToolContext{cwd: String,compute: Callback.Callback<PreviewRequest,Edits.Preview()>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,read: Maybe<&2,ReadRenderer.Context>}
 type Shell is Data:
   Generic{}
-  Boxed{call: Maybe<&2,Renderer()>,result: Maybe<&2,Renderer()>}
-  SelfRendered{call: Maybe<&2,Renderer()>,result: Maybe<&2,Renderer()>}
+  Boxed{call: Maybe<&2,ToolRender.Renderer()>,result: Maybe<&2,ToolRender.Renderer()>}
+  SelfRendered{call: Maybe<&2,ToolRender.Renderer()>,result: Maybe<&2,ToolRender.Renderer()>}
 type ToolExecution is Data:
-  ToolExecution{toolName: String,toolCallId: String,args: Value.Value,result: Maybe<&2,ToolResult>,expanded: Bool,showImages: Bool,isPartial: Bool,executionStarted: Bool,argsComplete: Bool,theme: Theme.Theme,shell: Shell,highlightCode: Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>}
+  ToolExecution{toolName: String,toolCallId: String,args: Value.Value,result: Maybe<&2,ToolRender.ToolResult>,expanded: Bool,showImages: Bool,isPartial: Bool,executionStarted: Bool,argsComplete: Bool,theme: Theme.Theme,shell: Shell,highlightCode: Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>}
 type Timing is Data:
   Waiting{}
   Running{clock: Clock.Clock}
@@ -93,22 +90,22 @@ def markExecutionStarted(state: ToolExecution) -> ToolExecution:
   match state: case ToolExecution{name,id,args,result,expanded,images,partial,_,complete,theme,shell,highlight}: ToolExecution{name,id,args,result,expanded,images,partial,True{},complete,theme,shell,highlight}
 def setArgsComplete(state: ToolExecution) -> ToolExecution:
   match state: case ToolExecution{name,id,args,result,expanded,images,partial,started,_,theme,shell,highlight}: ToolExecution{name,id,args,result,expanded,images,partial,started,True{},theme,shell,highlight}
-def updateResult(state: ToolExecution,result: ToolResult,isPartial: Bool) -> ToolExecution:
+def updateResult(state: ToolExecution,result: ToolRender.ToolResult,isPartial: Bool) -> ToolExecution:
   match state: case ToolExecution{name,id,args,_,expanded,images,_,started,complete,theme,shell,highlight}: ToolExecution{name,id,args,Some{result},expanded,images,isPartial,started,complete,theme,shell,highlight}
 def updateFromAgent(-D: Data,state: ToolExecution,result: Agent.AgentToolResult<D>,details: Maybe<&2,Tools.ToolDetails>,isError: Bool,isPartial: Bool) -> ToolExecution:
-  match result: case Agent.AgentToolResult{content,_,_,_}: updateResult(state,ToolResult{content,isError,details},isPartial)
+  match result: case Agent.AgentToolResult{content,_,_,_}: updateResult(state,ToolRender.ToolResult{content,isError,details},isPartial)
 def updateFromAiResult(-D: Data,state: ToolExecution,message: Ai.ToolResultMessage<D>,details: Maybe<&2,Tools.ToolDetails>) -> ToolExecution:
   match message:
     case Ai.ToolResultMessage{_,_,content,_,_,isError,_}:
-      updateResult(markExecutionStarted(setArgsComplete(state)),ToolResult{content,isError,details},False{})
+      updateResult(markExecutionStarted(setArgsComplete(state)),ToolRender.ToolResult{content,isError,details},False{})
 def setExpanded(state: ToolExecution,expanded: Bool) -> ToolExecution:
   match state: case ToolExecution{name,id,args,result,_,images,partial,started,complete,theme,shell,highlight}: ToolExecution{name,id,args,result,expanded,images,partial,started,complete,theme,shell,highlight}
 def setShowImages(state: ToolExecution,images: Bool) -> ToolExecution:
   match state: case ToolExecution{name,id,args,result,expanded,_,partial,started,complete,theme,shell,highlight}: ToolExecution{name,id,args,result,expanded,images,partial,started,complete,theme,shell,highlight}
 def retheme(state: ToolExecution,theme: Theme.Theme) -> ToolExecution:
   match state: case ToolExecution{name,id,args,result,expanded,images,partial,started,complete,_,shell,highlight}: ToolExecution{name,id,args,result,expanded,images,partial,started,complete,theme,shell,highlight}
-def context(state: ToolExecution,width: Nat) -> RenderContext:
-  match state: case ToolExecution{name,id,args,result,expanded,_,partial,started,complete,_,_,_}: RenderContext{name,id,args,result,expanded,partial,started,complete,width}
+def context(state: ToolExecution,width: Nat) -> ToolRender.RenderContext:
+  match state: case ToolExecution{name,id,args,result,expanded,_,partial,started,complete,theme,_,_}: ToolRender.RenderContext{name,id,args,result,expanded,partial,started,complete,width,theme}
 def title(state: ToolExecution) -> IO(String):
   match state:
     case ToolExecution{name,_,_,_,_,_,_,_,_,theme,_,_}:
@@ -116,7 +113,7 @@ def title(state: ToolExecution) -> IO(String):
 def backgroundKey(state: ToolExecution) -> String:
   match state:
     case ToolExecution{_,_,_,_,_,_,True{},_,_,_,_,_}: "toolPendingBg"
-    case ToolExecution{_,_,_,Some{ToolResult{_,True{},_}},_,_,False{},_,_,_,_,_}: "toolErrorBg"
+    case ToolExecution{_,_,_,Some{ToolRender.ToolResult{_,True{},_}},_,_,False{},_,_,_,_,_}: "toolErrorBg"
     case _: "toolSuccessBg"
 def resultTexts(content: List<&2,Ai.TextImageContent>,reversed: List<&2,String>) -> List<&2,String>:
   match content:
@@ -125,10 +122,10 @@ def resultTexts(content: List<&2,Ai.TextImageContent>,reversed: List<&2,String>)
       +clean = String.join(String.split(Shell.sanitizeBinaryOutput(U.stripTerminalSequences(text)),'\r'),"")
       resultTexts(rest,clean <> reversed)
     case _ <> rest: resultTexts(rest,reversed)
-def textOutput(result: Maybe<&2,ToolResult>) -> String:
+def textOutput(result: Maybe<&2,ToolRender.ToolResult>) -> String:
   match result:
     case None{}: ""
-    case Some{ToolResult{content,_,_}}: String.join(resultTexts(content,Nil{}),"\n")
+    case Some{ToolRender.ToolResult{content,_,_}}: String.join(resultTexts(content,Nil{}),"\n")
 def argsJson(args: Value.Value) -> String:
   Maybe.default(&2,String,Json.stringifyPretty(SchemaJson.toJson(args)),"")
 def textResult(value: TuiText.Text & List<&2,String>) -> List<&2,String>:
@@ -159,19 +156,19 @@ def generic(+state: ToolExecution,width: Nat) -> IO(List<&2,String>):
         Callback.dispose(String,String,bg)
         return "" <> lines
 
-def errorOutput(result: Maybe<&2,ToolResult>) -> Bool:
+def errorOutput(result: Maybe<&2,ToolRender.ToolResult>) -> Bool:
   match result:
-    case Some{ToolResult{_,True{},_}}: True{}
+    case Some{ToolRender.ToolResult{_,True{},_}}: True{}
     case _: False{}
-def resultDetails(result: Maybe<&2,ToolResult>) -> Maybe<&2,Tools.ToolDetails>:
+def resultDetails(result: Maybe<&2,ToolRender.ToolResult>) -> Maybe<&2,Tools.ToolDetails>:
   match result:
-    case Some{ToolResult{_,_,details}}: details
+    case Some{ToolRender.ToolResult{_,_,details}}: details
     case None{}: None{}
-def bashElapsed(result: Maybe<&2,ToolResult>,elapsed: Maybe<&2,F64>) -> Maybe<&2,F64>:
+def bashElapsed(result: Maybe<&2,ToolRender.ToolResult>,elapsed: Maybe<&2,F64>) -> Maybe<&2,F64>:
   match result:
     case None{}: None{}
     case Some{_}: elapsed
-def builtResult(+name: String,+args: Value.Value,+highlight: Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>,+result: Maybe<&2,ToolResult>,+expanded: Bool,partial: Bool,elapsed: Maybe<&2,F64>,+theme: Theme.Theme,width: Nat) -> IO(String):
+def builtResult(+name: String,+args: Value.Value,+highlight: Maybe<&2,Callback.Callback<Markdown.HighlightInput,List<&2,String>>>,+result: Maybe<&2,ToolRender.ToolResult>,+expanded: Bool,partial: Bool,elapsed: Maybe<&2,F64>,+theme: Theme.Theme,width: Nat) -> IO(String):
   match result name:
     case None{} _: IO.pure(String,"")
     case _ "read": ReadRenderer.renderResult(args,highlight,textOutput(result),resultDetails(result),expanded,errorOutput(result),theme)
@@ -250,20 +247,20 @@ def resultFallback(state: ToolExecution,width: Nat) -> IO(List<&2,String>):
               end : String <- Messages.foregroundText(theme,"muted",")")
               return joined ++ start ++ " " ++ key ++ hint ++ end)(Unit{})
           textLines(text,0n,0n,width,None{}))(Unit{})
-def renderSlot(renderer: Maybe<&2,Renderer()>,+state: ToolExecution,+width: Nat,call: Bool) -> IO(List<&2,String>):
+def renderSlot(renderer: Maybe<&2,ToolRender.Renderer()>,+state: ToolExecution,+width: Nat,call: Bool) -> IO(List<&2,String>):
   match renderer:
-    case Some{callback}: Callback.call(RenderContext,List<&2,String>,callback,context(state,width))
+    case Some{callback}: Callback.call(ToolRender.RenderContext,List<&2,String>,callback,context(state,width))
     case None{}: Bool.pick(Unit -> IO(List<&2,String>),call,_ => callFallback(state,width),_ => resultFallback(state,width))(Unit{})
-def resultSlot(renderer: Maybe<&2,Renderer()>,state: ToolExecution,width: Nat) -> IO(List<&2,String>):
+def resultSlot(renderer: Maybe<&2,ToolRender.Renderer()>,state: ToolExecution,width: Nat) -> IO(List<&2,String>):
   match state:
     case ToolExecution{_,_,_,None{},_,_,_,_,_,_,_,_}: IO.pure(List<&2,String>,Nil{})
     case _: renderSlot(renderer,state,width,False{})
-def boxContent(+state: ToolExecution,call: Maybe<&2,Renderer()>,result: Maybe<&2,Renderer()>,+width: Nat) -> IO(List<&2,String>):
+def boxContent(+state: ToolExecution,call: Maybe<&2,ToolRender.Renderer()>,result: Maybe<&2,ToolRender.Renderer()>,+width: Nat) -> IO(List<&2,String>):
   do IO<List<&2,String>>:
     first : List<&2,String> <- renderSlot(call,state,Nat.max(1n,width - 2n),True{})
     second : List<&2,String> <- resultSlot(result,state,Nat.max(1n,width - 2n))
     return List.append(&2,String,first,second)
-def boxed(+state: ToolExecution,call: Maybe<&2,Renderer()>,result: Maybe<&2,Renderer()>,+width: Nat) -> IO(List<&2,String>):
+def boxed(+state: ToolExecution,call: Maybe<&2,ToolRender.Renderer()>,result: Maybe<&2,ToolRender.Renderer()>,+width: Nat) -> IO(List<&2,String>):
   match state:
     case ToolExecution{_,_,_,_,_,_,_,_,_,theme,_,_}:
       do IO<List<&2,String>>:
@@ -277,7 +274,7 @@ def boxed(+state: ToolExecution,call: Maybe<&2,Renderer()>,result: Maybe<&2,Rend
             bottom : List<&2,String> <- Box.paintPadding(1n,width,Some{bg},Nil{})
             Callback.dispose(String,String,bg)
             return "" <> List.append(&2,String,top,List.append(&2,String,body,bottom)))(Unit{})
-def selfRendered(+state: ToolExecution,call: Maybe<&2,Renderer()>,result: Maybe<&2,Renderer()>,+width: Nat) -> IO(List<&2,String>):
+def selfRendered(+state: ToolExecution,call: Maybe<&2,ToolRender.Renderer()>,result: Maybe<&2,ToolRender.Renderer()>,+width: Nat) -> IO(List<&2,String>):
   do IO<List<&2,String>>:
     first : List<&2,String> <- renderSlot(call,state,width,True{})
     second : List<&2,String> <- resultSlot(result,state,width)

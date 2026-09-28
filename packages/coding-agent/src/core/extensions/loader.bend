@@ -148,7 +148,7 @@ def registerCommand(api: T.ExtensionAPI, name: String, options: T.CommandOptions
 
 def toolNameOf(definition: T.ToolDefinition) -> String:
   match definition:
-    case T.ToolDefinition{name, _, _, _, _, _, _, _}: name
+    case T.ToolDefinition{name, _, _, _, _, _, _, _, _, _, _}: name
 
 def definedTool(tools: List<&2, T.ToolDefinition>, +definition: T.ToolDefinition) -> List<&2, T.ToolDefinition>:
   match tools:
