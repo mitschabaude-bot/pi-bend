@@ -101,8 +101,12 @@ def CustomFactory() -> Data: C.Callback<CustomDone(), Component.Component>
 # (upstream ui.theme, the global theme): the live theme of a mode that has
 # one. Print and JSON modes bind none
 # (upstream noOpUIContext); the accessors below then answer as it does.
+type WorkingIndicatorOptions is Data:
+  WorkingIndicatorOptions{frames: Maybe<&2, List<&2, String>>, intervalMs: Maybe<&2, U32>}
+type WorkingControls is Data:
+  WorkingControls{message: C.Callback<Maybe<&2, String>, Unit>, visible: C.Callback<Bool, Unit>, indicator: C.Callback<Maybe<&2, WorkingIndicatorOptions>, Unit>}
 type ExtensionUIContext is Data:
-  ExtensionUIContext{select: C.Callback<SelectRequest, Maybe<&2, String>>, confirm: C.Callback<ConfirmRequest, Bool>, input: C.Callback<InputRequest, Maybe<&2, String>>, notify: C.Callback<Notification, Unit>, setStatus: C.Callback<StatusUpdate, Unit>, custom: C.Callback<CustomFactory(), Unit>, editor: C.Callback<EditorRequest, Maybe<&2, String>>, setWidget: C.Callback<WidgetUpdate, Unit>, setTitle: C.Callback<String, Unit>, setEditorText: C.Callback<String, Unit>, pasteToEditor: C.Callback<String, Unit>, getEditorText: C.Callback<Unit, String>, theme: Maybe<&2, R.Ref<Theme.Theme>>}
+  ExtensionUIContext{select: C.Callback<SelectRequest, Maybe<&2, String>>, confirm: C.Callback<ConfirmRequest, Bool>, input: C.Callback<InputRequest, Maybe<&2, String>>, notify: C.Callback<Notification, Unit>, setStatus: C.Callback<StatusUpdate, Unit>, custom: C.Callback<CustomFactory(), Unit>, editor: C.Callback<EditorRequest, Maybe<&2, String>>, setWidget: C.Callback<WidgetUpdate, Unit>, setTitle: C.Callback<String, Unit>, setEditorText: C.Callback<String, Unit>, pasteToEditor: C.Callback<String, Unit>, getEditorText: C.Callback<Unit, String>, working: Maybe<&2, WorkingControls>, theme: Maybe<&2, R.Ref<Theme.Theme>>}
 
 # Session actions (upstream ExtensionContextActions)
 # ---------------------------------------------------
@@ -382,7 +386,7 @@ def sessionManager(context: ExtensionContext) -> IO(Maybe<&2, ReadonlySessionMan
 def notifyWith(ui: Maybe<&2, ExtensionUIContext>, notification: Notification) -> IO(Unit):
   match ui:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{ExtensionUIContext{_, _, _, callback, _, _, _, _, _, _, _, _, _}}: C.call(Notification, Unit, callback, notification)
+    case Some{ExtensionUIContext{_, _, _, callback, _, _, _, _, _, _, _, _, _, _}}: C.call(Notification, Unit, callback, notification)
 
 def notify(context: ExtensionContext, message: String, kind: NotifyType) -> IO(Unit):
   do IO<Unit>:
@@ -392,17 +396,46 @@ def notify(context: ExtensionContext, message: String, kind: NotifyType) -> IO(U
 def statusWith(ui: Maybe<&2, ExtensionUIContext>, update: StatusUpdate) -> IO(Unit):
   match ui:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{ExtensionUIContext{_, _, _, _, callback, _, _, _, _, _, _, _, _}}: C.call(StatusUpdate, Unit, callback, update)
+    case Some{ExtensionUIContext{_, _, _, _, callback, _, _, _, _, _, _, _, _, _}}: C.call(StatusUpdate, Unit, callback, update)
 
 def setStatus(context: ExtensionContext, key: String, text: Maybe<&2, String>) -> IO(Unit):
   do IO<Unit>:
     bindings : Bindings <- bindingsOf(context)
     statusWith(uiOf(bindings), StatusUpdate{key, text})
 
+def workingControls(ui: Maybe<&2, ExtensionUIContext>) -> Maybe<&2, WorkingControls>:
+  match ui:
+    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, _, _, _, _, controls, _}}: controls
+    case None{}: None{}
+def workingMessageWith(controls: Maybe<&2, WorkingControls>, message: Maybe<&2, String>) -> IO(Unit):
+  match controls:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{WorkingControls{callback, _, _}}: C.call(Maybe<&2, String>, Unit, callback, message)
+def setWorkingMessage(context: ExtensionContext, message: Maybe<&2, String>) -> IO(Unit):
+  do IO<Unit>:
+    bindings : Bindings <- bindingsOf(context)
+    workingMessageWith(workingControls(uiOf(bindings)), message)
+def workingVisibleWith(controls: Maybe<&2, WorkingControls>, visible: Bool) -> IO(Unit):
+  match controls:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{WorkingControls{_, callback, _}}: C.call(Bool, Unit, callback, visible)
+def setWorkingVisible(context: ExtensionContext, visible: Bool) -> IO(Unit):
+  do IO<Unit>:
+    bindings : Bindings <- bindingsOf(context)
+    workingVisibleWith(workingControls(uiOf(bindings)), visible)
+def workingIndicatorWith(controls: Maybe<&2, WorkingControls>, options: Maybe<&2, WorkingIndicatorOptions>) -> IO(Unit):
+  match controls:
+    case None{}: IO.pure(Unit, Unit{})
+    case Some{WorkingControls{_, _, callback}}: C.call(Maybe<&2, WorkingIndicatorOptions>, Unit, callback, options)
+def setWorkingIndicator(context: ExtensionContext, options: Maybe<&2, WorkingIndicatorOptions>) -> IO(Unit):
+  do IO<Unit>:
+    bindings : Bindings <- bindingsOf(context)
+    workingIndicatorWith(workingControls(uiOf(bindings)), options)
+
 def selectWith(ui: Maybe<&2, ExtensionUIContext>, request: SelectRequest) -> IO(Maybe<&2, String>):
   match ui:
     case None{}: IO.pure(Maybe<&2, String>, None{})
-    case Some{ExtensionUIContext{callback, _, _, _, _, _, _, _, _, _, _, _, _}}: C.call(SelectRequest, Maybe<&2, String>, callback, request)
+    case Some{ExtensionUIContext{callback, _, _, _, _, _, _, _, _, _, _, _, _, _}}: C.call(SelectRequest, Maybe<&2, String>, callback, request)
 
 def select(context: ExtensionContext, title: String, options: List<&2, String>, dialog: DialogOptions) -> IO(Maybe<&2, String>):
   do IO<Maybe<&2, String>>:
@@ -412,7 +445,7 @@ def select(context: ExtensionContext, title: String, options: List<&2, String>, 
 def confirmWith(ui: Maybe<&2, ExtensionUIContext>, request: ConfirmRequest) -> IO(Bool):
   match ui:
     case None{}: IO.pure(Bool, False{})
-    case Some{ExtensionUIContext{_, callback, _, _, _, _, _, _, _, _, _, _, _}}: C.call(ConfirmRequest, Bool, callback, request)
+    case Some{ExtensionUIContext{_, callback, _, _, _, _, _, _, _, _, _, _, _, _}}: C.call(ConfirmRequest, Bool, callback, request)
 
 def confirm(context: ExtensionContext, title: String, message: String, dialog: DialogOptions) -> IO(Bool):
   do IO<Bool>:
@@ -422,7 +455,7 @@ def confirm(context: ExtensionContext, title: String, message: String, dialog: D
 def inputWith(ui: Maybe<&2, ExtensionUIContext>, request: InputRequest) -> IO(Maybe<&2, String>):
   match ui:
     case None{}: IO.pure(Maybe<&2, String>, None{})
-    case Some{ExtensionUIContext{_, _, callback, _, _, _, _, _, _, _, _, _, _}}: C.call(InputRequest, Maybe<&2, String>, callback, request)
+    case Some{ExtensionUIContext{_, _, callback, _, _, _, _, _, _, _, _, _, _, _}}: C.call(InputRequest, Maybe<&2, String>, callback, request)
 
 def input(context: ExtensionContext, title: String, placeholder: Maybe<&2, String>, dialog: DialogOptions) -> IO(Maybe<&2, String>):
   do IO<Maybe<&2, String>>:
@@ -432,7 +465,7 @@ def input(context: ExtensionContext, title: String, placeholder: Maybe<&2, Strin
 def customWith(ui: Maybe<&2, ExtensionUIContext>, factory: CustomFactory()) -> IO(Unit):
   match ui:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{ExtensionUIContext{_, _, _, _, _, callback, _, _, _, _, _, _, _}}: C.call(CustomFactory(), Unit, callback, factory)
+    case Some{ExtensionUIContext{_, _, _, _, _, callback, _, _, _, _, _, _, _, _}}: C.call(CustomFactory(), Unit, callback, factory)
 
 def custom(context: ExtensionContext, factory: CustomFactory()) -> IO(Unit):
   do IO<Unit>:
@@ -442,7 +475,7 @@ def custom(context: ExtensionContext, factory: CustomFactory()) -> IO(Unit):
 def editorWith(ui: Maybe<&2, ExtensionUIContext>, request: EditorRequest) -> IO(Maybe<&2, String>):
   match ui:
     case None{}: IO.pure(Maybe<&2, String>, None{})
-    case Some{ExtensionUIContext{_, _, _, _, _, _, callback, _, _, _, _, _, _}}: C.call(EditorRequest, Maybe<&2, String>, callback, request)
+    case Some{ExtensionUIContext{_, _, _, _, _, _, callback, _, _, _, _, _, _, _}}: C.call(EditorRequest, Maybe<&2, String>, callback, request)
 
 def editor(context: ExtensionContext, title: String, prefill: Maybe<&2, String>) -> IO(Maybe<&2, String>):
   do IO<Maybe<&2, String>>:
@@ -452,7 +485,7 @@ def editor(context: ExtensionContext, title: String, prefill: Maybe<&2, String>)
 def widgetWith(ui: Maybe<&2, ExtensionUIContext>, update: WidgetUpdate) -> IO(Unit):
   match ui:
     case None{}: IO.pure(Unit, Unit{})
-    case Some{ExtensionUIContext{_, _, _, _, _, _, _, callback, _, _, _, _, _}}: C.call(WidgetUpdate, Unit, callback, update)
+    case Some{ExtensionUIContext{_, _, _, _, _, _, _, callback, _, _, _, _, _, _}}: C.call(WidgetUpdate, Unit, callback, update)
 
 def setWidget(context: ExtensionContext, key: String, content: Maybe<&2, WidgetContent>, placement: Maybe<&2, WidgetPlacement>) -> IO(Unit):
   do IO<Unit>:
@@ -468,9 +501,9 @@ type TextTarget is Data:
 def textWith(ui: Maybe<&2, ExtensionUIContext>, target: TextTarget, text: String) -> IO(Unit):
   match ui target:
     case None{} _: IO.pure(Unit, Unit{})
-    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, callback, _, _, _, _}} TitleText{}: C.call(String, Unit, callback, text)
-    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, _, callback, _, _, _}} EditorText{}: C.call(String, Unit, callback, text)
-    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, _, _, callback, _, _}} PastedText{}: C.call(String, Unit, callback, text)
+    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, callback, _, _, _, _, _}} TitleText{}: C.call(String, Unit, callback, text)
+    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, _, callback, _, _, _, _}} EditorText{}: C.call(String, Unit, callback, text)
+    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, _, _, callback, _, _, _}} PastedText{}: C.call(String, Unit, callback, text)
 
 def setText(context: ExtensionContext, target: TextTarget, text: String) -> IO(Unit):
   do IO<Unit>:
@@ -484,7 +517,7 @@ def pasteToEditor(context: ExtensionContext, text: String) -> IO(Unit): setText(
 def editorTextWith(ui: Maybe<&2, ExtensionUIContext>) -> IO(String):
   match ui:
     case None{}: IO.pure(String, "")
-    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, _, _, _, callback, _}}: C.call(Unit, String, callback, Unit{})
+    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, _, _, _, callback, _, _}}: C.call(Unit, String, callback, Unit{})
 
 def getEditorText(context: ExtensionContext) -> IO(String):
   do IO<String>:
@@ -493,7 +526,7 @@ def getEditorText(context: ExtensionContext) -> IO(String):
 
 def themeWith(ui: Maybe<&2, ExtensionUIContext>) -> IO(Maybe<&2, Theme.Theme>):
   match ui:
-    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, _, _, _, _, Some{live}}}:
+    case Some{ExtensionUIContext{_, _, _, _, _, _, _, _, _, _, _, _, _, Some{live}}}:
       do IO<Maybe<&2, Theme.Theme>>:
         current : Theme.Theme <- R.read(Theme.Theme, live)
         return Some{current}

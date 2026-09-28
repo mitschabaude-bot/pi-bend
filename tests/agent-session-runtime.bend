@@ -67,7 +67,7 @@ def factoryNoModel(agentDir: String, request: Host.Request) -> IO(Result<&1, &1,
 # The session itself is disposed by the host before its services.
 def release(env: Unit, fixture: Services()) -> IO(Unit):
   match fixture:
-    case Fx.Fixture{+session, listener, stream, validator, converter, registry, Fx.Faux{responses, streams, gates}}:
+    case Fx.Fixture{+session, listener, stream, validator, converter, registry, Fx.Faux{responses, streams, gates, _}}:
       do IO<Unit>:
         C.dispose(Session.AgentSessionEvent, Unit, listener)
         Agent.dispose(Unit, Tools.ToolDetails, Runtime.Custom(), Tools.ToolError, Unit, Session.agentOf(session))

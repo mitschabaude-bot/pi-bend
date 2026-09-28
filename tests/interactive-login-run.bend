@@ -48,7 +48,7 @@ def factoryTransport(+agentDir: String,request: Host.Request,storage: Storage.Au
         +responses : Ref.Ref<List<&2,String>> <- Ref.new(List<&2,String>,"answer" <> "again" <> Nil{})
         +streams : Ref.Ref<List<&2,Faux.EventStream()>> <- Ref.new(List<&2,Faux.EventStream()>,Nil{})
         +gates : Ref.Ref<List<&2,Faux.Gate>> <- Ref.new(List<&2,Faux.Gate>,Nil{})
-        +stream : AgentRuntime.Stream() <- Callback.create(~Faux.Faux,~Faux.Input(),~Faux.Output(),~Faux.provider,Faux.Faux{responses,streams,gates})
+        +stream : AgentRuntime.Stream() <- Callback.create(~Faux.Faux,~Faux.Input(),~Faux.Output(),~Faux.provider,Faux.Faux{responses,streams,gates,1n})
         +registry : StreamFn.Registry(Unit,Tools.ToolDetails,AgentRuntime.LoopConfig(),Tools.ToolError) <- StreamFn.create(Unit,Tools.ToolDetails,AgentRuntime.LoopConfig(),Tools.ToolError)
         +validator : Loop.Validator(Tools.ToolError) <- Loop.createPlain(~Tools.ToolError,~AgentRuntime.validationError)
         +converter : AgentRuntime.Converter() <- AgentRuntime.createConverter(False{})
@@ -58,7 +58,7 @@ def factoryTransport(+agentDir: String,request: Host.Request,storage: Storage.Au
         +session : Session.AgentSession <- Session.create(agent,stored,Faux.settingsOf(loaded),cwd,AgentRuntime.Loadout{Record.new(String),Nil{},Nil{},Nil{},None{},Nil{},None{},Nil{}},models,Nil{})
         +listener : Session.Listener() <- Callback.create(~Unit,~Session.AgentSessionEvent,~Unit,~Faux.observe,Unit{})
         Session.subscribe(session,listener)
-        return Done{Host.Created{LoginServices{Faux.Fixture{session,listener,stream,validator,converter,registry,Faux.Faux{responses,streams,gates}},storage,store,AgentRuntime.Transport{authorizer,runtime,fetch,codexSessions}},session}}
+        return Done{Host.Created{LoginServices{Faux.Fixture{session,listener,stream,validator,converter,registry,Faux.Faux{responses,streams,gates,1n}},storage,store,AgentRuntime.Transport{authorizer,runtime,fetch,codexSessions}},session}}
 def factoryStored(+agentDir: String,request: Host.Request,pair: Storage.AuthStorageOwner & Storage.AuthStorage) -> IO(Result<&1,&1,String,Host.Created<Services()>>):
   match pair:
     case (storage,view):

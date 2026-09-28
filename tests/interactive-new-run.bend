@@ -147,6 +147,27 @@ def uiWidgetCommand(_: Unit,call: Ext.CommandCall) -> IO(Result<&2,&2,String,Uni
         Ctx.setWidget(ctx,"replay-above",Some{Ctx.WidgetLines{["fixture widget above"]}},None{})
         Ctx.setWidget(ctx,"replay-below",Some{Ctx.WidgetLines{["fixture widget below"]}},Some{Ctx.BelowEditor{}})
         return Done{Unit{}}
+def setWorkingMode(mode: String,+ctx: Ctx.ExtensionContext) -> IO(Unit):
+  match mode:
+    case "style":
+      do IO<Unit>:
+        Ctx.setWorkingMessage(ctx,Some{"Fixture working"})
+        Ctx.setWorkingIndicator(ctx,Some{Ctx.WorkingIndicatorOptions{Some{["◆"]},None{}}})
+        Ctx.setWorkingVisible(ctx,True{})
+    case "hide": Ctx.setWorkingVisible(ctx,False{})
+    case _:
+      do IO<Unit>:
+        Ctx.setWorkingMessage(ctx,None{})
+        Ctx.setWorkingIndicator(ctx,None{})
+        Ctx.setWorkingVisible(ctx,True{})
+def configureWorking(mode: String,call: Ext.CommandCall) -> IO(Result<&2,&2,String,Unit>):
+  match call:
+    case Ext.CommandCall{_,commandContext}:
+      do IO<Result<&2,&2,String,Unit>>:
+        +ctx : Ctx.ExtensionContext <- IO.pure(Ctx.ExtensionContext,Ctx.commandContext(commandContext))
+        setWorkingMode(mode,ctx)
+        Ctx.notify(ctx,"Working configured",Ctx.InfoNotice{})
+        return Done{Unit{}}
 def uiExtension(api: Ext.ExtensionAPI) -> IO(Result<&2,&2,String,Unit>):
   do IO<Result<&2,&2,String,Unit>>:
     +shared : Ext.ExtensionAPI <- IO.pure(Ext.ExtensionAPI,api)
@@ -157,7 +178,13 @@ def uiExtension(api: Ext.ExtensionAPI) -> IO(Result<&2,&2,String,Unit>):
     editor : Ext.CommandHandler() <- Callback.create(~Unit,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~uiEditorCommand,Unit{})
     third : Result<&2,&2,String,Unit> <- ExtensionLoader.registerCommand(shared,"ask-editor",Ext.CommandOptions{Some{"Show a native extension editor"},None{},editor})
     widget : Ext.CommandHandler() <- Callback.create(~Unit,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~uiWidgetCommand,Unit{})
-    ExtensionLoader.registerCommand(shared,"show-widget",Ext.CommandOptions{Some{"Show native editor widgets"},None{},widget})
+    shown : Result<&2,&2,String,Unit> <- ExtensionLoader.registerCommand(shared,"show-widget",Ext.CommandOptions{Some{"Show native editor widgets"},None{},widget})
+    style : Ext.CommandHandler() <- Callback.create(~String,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~configureWorking,"style")
+    styled : Result<&2,&2,String,Unit> <- ExtensionLoader.registerCommand(shared,"working-style",Ext.CommandOptions{None{},None{},style})
+    hide : Ext.CommandHandler() <- Callback.create(~String,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~configureWorking,"hide")
+    hidden : Result<&2,&2,String,Unit> <- ExtensionLoader.registerCommand(shared,"working-hide",Ext.CommandOptions{None{},None{},hide})
+    reset : Ext.CommandHandler() <- Callback.create(~String,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~configureWorking,"reset")
+    ExtensionLoader.registerCommand(shared,"working-reset",Ext.CommandOptions{None{},None{},reset})
 def bashFactory(setup: BashSetup,request: Host.Request) -> IO(Result<&1,&1,String,Host.Created<Services()>>):
   match setup request:
     case BashSetup{agentDir,runners,operations} Host.Request{+cwd,stored,_}:
@@ -178,7 +205,7 @@ def uiFactory(setup: BashSetup,request: Host.Request) -> IO(Result<&1,&1,String,
         models : Models.ModelRuntime <- ModelFixture.create(Faux.fauxSources())
         +runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
         Ref.modify(List<&2,Runner.ExtensionRunner>,Unit,runners,loaded => (runner <> loaded,Unit{}))
-        fixture : Faux.Fixture <- Faux.fixtureWith(stored,cwd,agentDir,"answer" <> "again" <> Nil{},Nil{},AgentRuntime.Loadout{Record.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}})
+        fixture : Faux.Fixture <- Faux.fixtureWithDelay(stored,cwd,agentDir,"answer" <> "again" <> "hidden reply" <> Nil{},Nil{},AgentRuntime.Loadout{Record.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}},350n)
         quietCreated(fixture)
 def customBash(_: Unit,input: Bash.BashExecutionInput) -> IO(Result<&2,&2,Bash.OperationError,Maybe<&2,U32>>):
   match input:

@@ -50,7 +50,7 @@ type Gate is Data:
   Gate{started: Chan(Unit), release: Chan(Unit)}
 
 type Faux is Data:
-  Faux{responses: R.Ref<List<&2, String>>, streams: R.Ref<List<&2, EventStream()>>, gates: R.Ref<List<&2, Gate>>}
+  Faux{responses: R.Ref<List<&2, String>>, streams: R.Ref<List<&2, EventStream()>>, gates: R.Ref<List<&2, Gate>>, responseDelayMs: Nat}
 
 def popGate(gates: List<&2, Gate>) -> List<&2, Gate> & Maybe<&2, Gate>:
   match gates:
@@ -152,12 +152,12 @@ def answer(+stream: EventStream(), script: Scripted, +now: F64) -> IO(Unit):
 # the compaction's own millisecond would count as pre-compaction.
 def provider(faux: Faux, input: Input()) -> IO(Output()):
   match faux:
-    case Faux{responses, streams, gates}:
+    case Faux{responses, streams, gates, delay}:
       do IO<Output()>:
         gate : Maybe<&2, Gate> <- R.modify(List<&2, Gate>, Maybe<&2, Gate>, gates, remaining => popGate(remaining))
         holdAt(gate)
         text : String <- R.modify(List<&2, String>, String, responses, remaining => popResponse(remaining))
-        IO.sleep(1)
+        IO.sleep(U32.from_nat(delay))
         +now : F64 <- Date.now()
         +stream : EventStream() <- Stream.createAssistantMessageEventStream(~V.Value, ~Unit)
         R.modify(List<&2, EventStream()>, Unit, streams, old => (stream <> old, Unit{}))
@@ -195,12 +195,12 @@ def settingsOf(pair: Settings.FileSettingsStorage & Settings.SettingsManager) ->
   match pair:
     case Tuple{_, manager}: manager
 
-def fixtureWithModel(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>, +loadout: Runtime.Loadout, selected: Maybe<&2,Ai.Model<Ai.JsonValue>>, sources: List<&2, ModelFixture.Source>) -> IO(Fixture):
+def fixtureWithModelDelay(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>, +loadout: Runtime.Loadout, selected: Maybe<&2,Ai.Model<Ai.JsonValue>>, sources: List<&2, ModelFixture.Source>, +delay: Nat) -> IO(Fixture):
   do IO<Fixture>:
     +responseRef : R.Ref<List<&2, String>> <- R.new(List<&2, String>, responses)
     +streams : R.Ref<List<&2, EventStream()>> <- R.new(List<&2, EventStream()>, Nil{})
     +gateRef : R.Ref<List<&2, Gate>> <- R.new(List<&2, Gate>, gates)
-    +stream : Runtime.Stream() <- C.create(~Faux, ~Input(), ~Output(), ~provider, Faux{responseRef, streams, gateRef})
+    +stream : Runtime.Stream() <- C.create(~Faux, ~Input(), ~Output(), ~provider, Faux{responseRef, streams, gateRef, delay})
     +registry : StreamFn.Registry(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError) <- StreamFn.create(Unit, Tools.ToolDetails, Runtime.LoopConfig(), Tools.ToolError)
     +validator : Loop.Validator(Tools.ToolError) <- Loop.createPlain(~Tools.ToolError, ~Runtime.validationError)
     +converter : Runtime.Converter() <- Runtime.createConverter(False{})
@@ -211,7 +211,13 @@ def fixtureWithModel(+stored: Session.Session(), +cwd: String, agentDir: String,
     +session : Session.AgentSession <- Session.create(agent, stored, settingsOf(loaded), cwd, loadout, models, Nil{})
     +listener : Session.Listener() <- C.create(~Unit, ~Session.AgentSessionEvent, ~Unit, ~observe, Unit{})
     Session.subscribe(session, listener)
-    return Fixture{session, listener, stream, validator, converter, registry, Faux{responseRef, streams, gateRef}}
+    return Fixture{session, listener, stream, validator, converter, registry, Faux{responseRef, streams, gateRef, delay}}
+
+def fixtureWithModel(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>, +loadout: Runtime.Loadout, selected: Maybe<&2,Ai.Model<Ai.JsonValue>>, sources: List<&2, ModelFixture.Source>) -> IO(Fixture):
+  fixtureWithModelDelay(stored,cwd,agentDir,responses,gates,loadout,selected,sources,1n)
+
+def fixtureWithDelay(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>, +loadout: Runtime.Loadout, delay: Nat) -> IO(Fixture):
+  fixtureWithModelDelay(stored,cwd,agentDir,responses,gates,loadout,Some{fauxModel()},fauxSources(),delay)
 
 def fixtureWith(+stored: Session.Session(), +cwd: String, agentDir: String, responses: List<&2, String>, gates: List<&2, Gate>, +loadout: Runtime.Loadout) -> IO(Fixture):
   fixtureWithModel(stored,cwd,agentDir,responses,gates,loadout,Some{fauxModel()},fauxSources())
@@ -236,7 +242,7 @@ def disposeStreams(streams: List<&2, EventStream()>) -> IO(Unit):
 
 def teardown(value: Fixture) -> IO(Unit):
   match value:
-    case Fixture{+session, +listener, stream, validator, converter, registry, Faux{responses, streams, gates}}:
+    case Fixture{+session, +listener, stream, validator, converter, registry, Faux{responses, streams, gates, _}}:
       do IO<Unit>:
         Session.unsubscribe(session, listener)
         C.dispose(Session.AgentSessionEvent, Unit, listener)
@@ -492,7 +498,7 @@ def cancelOnRetry(+session: Session.AgentSession, started: Chan(Unit),abortRun: 
 
 def responsesOf(value: Fixture) -> R.Ref<List<&2, String>>:
   match value:
-    case Fixture{_, _, _, _, _, _, Faux{responses, _, _}}: responses
+    case Fixture{_, _, _, _, _, _, Faux{responses, _, _, _}}: responses
 
 def reportRetrying(session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:

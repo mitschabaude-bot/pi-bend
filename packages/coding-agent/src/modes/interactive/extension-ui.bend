@@ -24,7 +24,7 @@ import ./interactive-mode.bend as Interactive
 type Env is Data:
   Env{dialog: Dialog.Host,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>,theme: Ref.Ref<Theme.Theme>,editorTheme: Editor.EditorTheme}
 type BaseEnv is Data:
-  BaseEnv{dialog: Dialog.Host,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>,theme: Ref.Ref<Theme.Theme>,widgets: Widgets.Host}
+  BaseEnv{dialog: Dialog.Host,editor: Ref.Ref<Maybe<&2,Live.Handle>>,footer: Ref.Ref<Footer.State>,transcript: Transcript.Handle,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>,theme: Ref.Ref<Theme.Theme>,widgets: Widgets.Host,working: Ctx.WorkingControls}
 type Rebinding is Data:
   Rebinding{previous: Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,ui: Ctx.ExtensionUIContext,runner: Ref.Ref<Maybe<&2,Runner.ExtensionRunner>>,widgets: Widgets.Host}
 type Owner is Type:
@@ -126,7 +126,7 @@ def editorText(env: Env,_: Unit) -> IO(String):
         readEditor(found)
 def create(+base: BaseEnv) -> IO(Owner):
   match base:
-    case BaseEnv{dialog,editor,footer,transcript,redraw,terminal,theme,+widgets}:
+    case BaseEnv{dialog,editor,footer,transcript,redraw,terminal,theme,+widgets,working}:
       do IO<Owner>:
         +border : Callback.Callback<String,String> <- MarkdownTheme.color(theme,"borderMuted")
         +accent : Callback.Callback<String,String> <- MarkdownTheme.color(theme,"accent")
@@ -145,7 +145,7 @@ def create(+base: BaseEnv) -> IO(Owner):
         +paste : Callback.Callback<String,Unit> <- Callback.create(~Env,~String,~Unit,~pasteToEditor,bound)
         +getText : Callback.Callback<Unit,String> <- Callback.create(~Env,~Unit,~String,~editorText,bound)
         current : Ref.Ref<Maybe<&2,Runner.ExtensionRunner>> <- Ref.new(Maybe<&2,Runner.ExtensionRunner>,None{})
-        return Owner{Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom,editor,widget,title,setText,paste,getText,Some{theme}},border,accent,muted,current,widgets,None{}}
+        return Owner{Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom,editor,widget,title,setText,paste,getText,Some{working},Some{theme}},border,accent,muted,current,widgets,None{}}
 def bindRunner(ui: Ctx.ExtensionUIContext,runner: Maybe<&2,Runner.ExtensionRunner>) -> IO(Unit):
   match runner:
     case None{}: IO.pure(Unit,Unit{})
@@ -195,7 +195,7 @@ def disposePrevious(previous: Maybe<&2,Callback.Callback<Session.AgentSession,Un
     case Some{callback}: Callback.dispose(Session.AgentSession,Unit,callback)
 def dispose(owner: Owner) -> IO(Unit):
   match owner:
-    case Owner{Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom,editor,widget,title,setText,paste,getText,_},border,accent,muted,runner,_,previous}:
+    case Owner{Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom,editor,widget,title,setText,paste,getText,_,_},border,accent,muted,runner,_,previous}:
       do IO<Unit>:
         current : Maybe<&2,Runner.ExtensionRunner> <- Ref.dispose(Maybe<&2,Runner.ExtensionRunner>,runner)
         unbind(current)

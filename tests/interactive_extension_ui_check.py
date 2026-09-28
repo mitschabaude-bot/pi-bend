@@ -96,6 +96,9 @@ def scenario(threads: int) -> None:
             until(b"fixture widget below", start)
             assert all(any(label in row for row in screen.display) for label in ("fixture widget above", "fixture widget below")), screen.display
             start = len(output)
+            os.write(master, b"/working-style\r")
+            until(b"Working configured", start)
+            start = len(output)
             os.write(master, b"/new\r")
             until(b"New session started", start)
             assert all(label not in row for row in screen.display for label in ("fixture widget above", "fixture widget below")), screen.display
@@ -108,11 +111,39 @@ def scenario(threads: int) -> None:
             until(b"Pick a value", start)
             os.write(master, b"\x1b")
             until(b"Extension prompt cancelled", start)
+            start = len(output)
+            os.write(master, b"before-style\r")
+            until(b"Working", start)
+            until(b"answer", start)
+            assert b"Fixture working" not in output[start:], output[start:][-1000:]
+            start = len(output)
+            os.write(master, b"/working-style\r")
+            until(b"Working configured", start)
+            start = len(output)
+            os.write(master, b"first\r")
+            until("◆".encode(), start)
+            until(b"Fixture working", start)
+            until(b"again", start)
+            start = len(output)
+            os.write(master, b"/working-hide\r")
+            until(b"Working configured", start)
+            start = len(output)
+            os.write(master, b"second\r")
+            until(b"hidden reply", start)
+            assert b"Fixture working" not in output[start:], output[start:][-1000:]
+            start = len(output)
+            os.write(master, b"/working-reset\r")
+            until(b"Working configured", start)
+            start = len(output)
+            os.write(master, b"third\r")
+            until(b"Working", start)
+            until(b"(no scripted response)", start)
+            assert b"Fixture working" not in output[start:], output[start:][-1000:]
             os.write(master, b"/quit\r")
             stderr = process.communicate(timeout=20)[1]
             assert process.returncode == 0 and not stderr, (process.returncode, stderr)
             assert termios.tcgetattr(slave) == original, threads
-            print(f"native{threads}: extension prompts, widget reset, external editor, cancellation and terminal restoration")
+            print(f"native{threads}: extension prompts, widgets, Working controls and session reset, external editor and terminal restoration")
         finally:
             if process.poll() is None:
                 process.kill()

@@ -85,6 +85,20 @@ def borrow(owner: Owner) -> Owner & Handle:
   match owner:
     case Owner{+indicator,appearance,Loader.Owner{resource,+handle,animation},colors,countdown,tick}:
       (Owner{indicator,appearance,Loader.Owner{resource,handle,animation},colors,countdown,tick},Handle{kind(indicator),handle})
+def setWorkingMessage(owner: Owner,+message: String) -> IO(Owner):
+  match owner:
+    case Owner{WorkingStatusIndicator{_,indicator},appearance,Loader.Owner{resource,+handle,animation},colors,countdown,tick}:
+      do IO<Owner>:
+        Loader.updateMessage(handle,message)
+        return Owner{WorkingStatusIndicator{message,indicator},appearance,Loader.Owner{resource,handle,animation},colors,countdown,tick}
+    case other: IO.pure(Owner,other)
+def setWorkingIndicator(owner: Owner,+indicator: Maybe<&2,Loader.Indicator>) -> IO(Owner):
+  match owner:
+    case Owner{WorkingStatusIndicator{message,_},appearance,loader,colors,countdown,tick}:
+      do IO<Owner>:
+        updated : Loader.Owner <- Loader.setIndicator(loader,indicator)
+        return Owner{WorkingStatusIndicator{message,indicator},appearance,updated,colors,countdown,tick}
+    case other: IO.pure(Owner,other)
 def render(handle: Handle,width: Nat) -> IO(List<&2,String>):
   match handle: case Handle{_,loader}: Loader.renderLive(loader,width)
 def renderInBorder(handle: Handle,+width: Nat) -> IO(String):

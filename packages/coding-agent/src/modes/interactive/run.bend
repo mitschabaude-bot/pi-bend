@@ -54,6 +54,7 @@ import ../../core/agent-session-runtime.bend as SessionHost
 import ../../core/bash-executor.bend as BashExec
 import ../../core/tools/bash.bend as BashTool
 import ../../core/extensions/runner.bend as ExtensionRunner
+import ../../core/extensions/context.bend as Ctx
 import ../../core/extensions/types.bend as ExtensionTypes
 import ../../core/session-cwd.bend as SessionCwd
 import ../../core/session-persistence.bend as Persistence
@@ -224,18 +225,26 @@ def footerEvent(state: Footer.State,event: Session.AgentSessionEvent) -> Footer.
 type WorkingOwned is Type:
   WorkingOwned{indicator: Maybe<&1,Status.Owner>,appearance: Status.Appearance,redraw: Callback.Callback<Unit,Unit>,cancelKey: String}
 type StartupState is Data: StartupState{initialized: Bool,draft: Maybe<&2,String>}
+type WorkingPreferences is Data:
+  WorkingPreferences{message: Maybe<&2,String>,visible: Bool,indicator: Maybe<&2,Loader.Indicator>}
 type Working is Data:
-  Working{active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>,ready: Ref.Ref<StartupState>,subscriptionShown: Ref.Ref<Bool>}
+  Working{active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,terminal: Ref.Ref<Maybe<&2,Terminal.Handle>>,ready: Ref.Ref<StartupState>,subscriptionShown: Ref.Ref<Bool>,preferences: Ref.Ref<WorkingPreferences>}
 type StatusChange is Data:
   ShowStatus{indicator: Status.Indicator}
   ClearStatus{kind: Status.StatusIndicatorKind}
   KeepStatus{}
+type WorkingMutation is Data:
+  ApplyStatus{change: StatusChange}
+  UpdateWorkingMessage{message: String}
+  UpdateWorkingIndicator{indicator: Maybe<&2,Loader.Indicator>}
 def workingActive(working: Working) -> Ref.Ref<Maybe<&2,Loader.Handle>>:
-  match working: case Working{active,_,_,_,_}: active
+  match working: case Working{active,_,_,_,_,_}: active
 def workingTerminal(working: Working) -> Ref.Ref<Maybe<&2,Terminal.Handle>>:
-  match working: case Working{_,_,terminal,_,_}: terminal
+  match working: case Working{_,_,terminal,_,_,_}: terminal
 def workingReady(working: Working) -> Ref.Ref<StartupState>:
-  match working: case Working{_,_,_,ready,_}: ready
+  match working: case Working{_,_,_,ready,_,_}: ready
+def workingPreferences(working: Working) -> Ref.Ref<WorkingPreferences>:
+  match working: case Working{_,_,_,_,_,preferences}: preferences
 def sessionTitle(name: Maybe<&2,String>,cwd: String) -> String:
   match name:
     case None{}: Config.appTitle() ++ " - " ++ Path.basename(cwd)
@@ -300,10 +309,15 @@ def retryStatus(attempt: Nat,maxAttempts: Nat,delay: Result<&2,&2,Timer.Error,U3
   match delay:
     case Done{milliseconds}: ShowStatus{Status.RetryStatusIndicator{attempt,maxAttempts,U32.to_nat(milliseconds),cancel}}
     case Fail{_}: ClearStatus{Status.Retry{}}
-def statusChange(event: Session.AgentSessionEvent,cancel: String) -> StatusChange:
+def workingStatus(preferences: WorkingPreferences) -> StatusChange:
+  match preferences:
+    case WorkingPreferences{message,True{},indicator}:
+      ShowStatus{Status.WorkingStatusIndicator{Maybe.default(&2,String,message,"Working"),indicator}}
+    case WorkingPreferences{_,False{},_}: ClearStatus{Status.Working{}}
+def statusChange(event: Session.AgentSessionEvent,cancel: String,preferences: WorkingPreferences) -> StatusChange:
   match event:
-    case Session.AgentEvent{Agent.AgentStart{}}: ShowStatus{Status.WorkingStatusIndicator{"Working",None{}}}
-    case Session.AgentEvent{Agent.TurnStart{}}: ShowStatus{Status.WorkingStatusIndicator{"Working",None{}}}
+    case Session.AgentEvent{Agent.AgentStart{}}: workingStatus(preferences)
+    case Session.AgentEvent{Agent.TurnStart{}}: workingStatus(preferences)
     case Session.AgentEvent{Agent.AgentEnd{_}}: ClearStatus{Status.Working{}}
     case Session.AgentEnd{_,_}: ClearStatus{Status.Working{}}
     case Session.AgentSettled{}: ClearStatus{Status.Working{}}
@@ -347,26 +361,97 @@ def workingRetained(pair: Maybe<&1,Status.Owner> & Maybe<&2,Loader.Handle>,appea
       do IO<Unit>:
         Ref.write(Maybe<&2,Loader.Handle>,active,handle)
         Ref.write(Maybe<&1,WorkingOwned>,owned,Some{WorkingOwned{indicator,appearance,request,cancel}})
-def statusChanged(change: StatusChange) -> Bool:
-  match change: case KeepStatus{}: False{} case _: True{}
-def workingChanged(previous: Maybe<&1,WorkingOwned>,active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,event: Session.AgentSessionEvent) -> IO(Unit):
+def mutateStatus(previous: Maybe<&1,Status.Owner>,appearance: Status.Appearance,mutation: WorkingMutation) -> IO(Maybe<&1,Status.Owner>):
+  match mutation previous:
+    case ApplyStatus{change} retained: changeStatus(retained,appearance,change)
+    case UpdateWorkingMessage{_} None{}: IO.pure(Maybe<&1,Status.Owner>,None{})
+    case UpdateWorkingMessage{message} Some{owner}:
+      do IO<Maybe<&1,Status.Owner>>:
+        updated : Status.Owner <- Status.setWorkingMessage(owner,message)
+        return Some{updated}
+    case UpdateWorkingIndicator{_} None{}: IO.pure(Maybe<&1,Status.Owner>,None{})
+    case UpdateWorkingIndicator{indicator} Some{owner}:
+      do IO<Maybe<&1,Status.Owner>>:
+        updated : Status.Owner <- Status.setWorkingIndicator(owner,indicator)
+        return Some{updated}
+def mutationChanged(mutation: WorkingMutation) -> Bool:
+  match mutation:
+    case ApplyStatus{KeepStatus{}}: False{}
+    case _: True{}
+def workingMutated(previous: Maybe<&1,WorkingOwned>,active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,+mutation: WorkingMutation) -> IO(Unit):
   match previous:
     case None{}: IO.pure(Unit,Unit{})
     case Some{WorkingOwned{indicator,+appearance,+request,+cancel}}:
       do IO<Unit>:
-        +change : StatusChange <- IO.pure(StatusChange,statusChange(event,cancel))
+        next : Maybe<&1,Status.Owner> <- mutateStatus(indicator,appearance,mutation)
+        workingRetained(retainedStatus(next),appearance,request,cancel,active,owned)
+        Bool.pick(Unit -> IO(Unit),mutationChanged(mutation),_ => Callback.call(Unit,Unit,request,Unit{}),_ => IO.pure(Unit,Unit{}))(Unit{})
+def workingEventApplied(previous: Maybe<&1,WorkingOwned>,active: Ref.Ref<Maybe<&2,Loader.Handle>>,owned: Ref.Ref<Maybe<&1,WorkingOwned>>,config: WorkingPreferences,event: Session.AgentSessionEvent) -> IO(Unit):
+  match previous:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{WorkingOwned{indicator,+appearance,+request,+cancel}}:
+      do IO<Unit>:
+        +change : StatusChange <- IO.pure(StatusChange,statusChange(event,cancel,config))
         next : Maybe<&1,Status.Owner> <- changeStatus(indicator,appearance,change)
         workingRetained(retainedStatus(next),appearance,request,cancel,active,owned)
-        Bool.pick(Unit -> IO(Unit),statusChanged(change),_ => Callback.call(Unit,Unit,request,Unit{}),_ => IO.pure(Unit,Unit{}))(Unit{})
+        Bool.pick(Unit -> IO(Unit),mutationChanged(ApplyStatus{change}),_ => Callback.call(Unit,Unit,request,Unit{}),_ => IO.pure(Unit,Unit{}))(Unit{})
 def workingEvent(working: Working,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,event: Session.AgentSessionEvent) -> IO(Unit):
   match working:
-    case Working{active,+owned,_,_,_}:
+    case Working{active,+owned,_,_,_,preferences}:
+      do IO<Unit>:
+        config : WorkingPreferences <- Ref.read(WorkingPreferences,preferences)
+        previous : Maybe<&1,WorkingOwned> <- Ref.swap(Maybe<&1,WorkingOwned>,owned,None{})
+        workingEventApplied(previous,active,owned,config,event)
+def applyWorkingMutation(working: Working,mutation: WorkingMutation) -> IO(Unit):
+  match working:
+    case Working{active,+owned,_,_,_,_}:
       do IO<Unit>:
         previous : Maybe<&1,WorkingOwned> <- Ref.swap(Maybe<&1,WorkingOwned>,owned,None{})
-        workingChanged(previous,active,owned,event)
+        workingMutated(previous,active,owned,mutation)
+def withWorkingMessage(previous: WorkingPreferences,message: Maybe<&2,String>) -> WorkingPreferences:
+  match previous: case WorkingPreferences{_,visible,indicator}: WorkingPreferences{message,visible,indicator}
+def withWorkingVisible(previous: WorkingPreferences,visible: Bool) -> WorkingPreferences:
+  match previous: case WorkingPreferences{message,_,indicator}: WorkingPreferences{message,visible,indicator}
+def withWorkingIndicator(previous: WorkingPreferences,indicator: Maybe<&2,Loader.Indicator>) -> WorkingPreferences:
+  match previous: case WorkingPreferences{message,visible,_}: WorkingPreferences{message,visible,indicator}
+def changeWorkingMessage(+working: Working,+message: Maybe<&2,String>) -> IO(Unit):
+  do IO<Unit>:
+    Ref.modify(WorkingPreferences,Unit,workingPreferences(working),previous => (withWorkingMessage(previous,message),Unit{}))
+    applyWorkingMutation(working,UpdateWorkingMessage{Maybe.default(&2,String,message,"Working")})
+def workingMessageCallback(working: Working,message: Maybe<&2,String>) -> IO(Unit):
+  changeWorkingMessage(working,message)
+type WorkingVisibility is Data:
+  WorkingVisibility{working: Working,session: Ref.Ref<Session.AgentSession>}
+def changeWorkingVisible(binding: WorkingVisibility,+visible: Bool) -> IO(Unit):
+  match binding:
+    case WorkingVisibility{+working,session}:
+      do IO<Unit>:
+        Ref.modify(WorkingPreferences,Unit,workingPreferences(working),previous => (withWorkingVisible(previous,visible),Unit{}))
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        streaming : Bool <- Session.isStreaming(live)
+        config : WorkingPreferences <- Ref.read(WorkingPreferences,workingPreferences(working))
+        Bool.pick(Unit -> IO(Unit),Bool.and(visible,streaming),_ => applyWorkingMutation(working,ApplyStatus{workingStatus(config)}),_ => applyWorkingMutation(working,ApplyStatus{ClearStatus{Status.Working{}}}))(Unit{})
+def workingVisibleCallback(binding: WorkingVisibility,visible: Bool) -> IO(Unit):
+  changeWorkingVisible(binding,visible)
+def indicatorDefaults(defaults: Loader.Indicator,frames: Maybe<&2,List<&2,String>>,interval: Maybe<&2,U32>) -> Loader.Indicator:
+  match defaults:
+    case Loader.Indicator{defaultFrames,defaultInterval}:
+      Loader.Indicator{Maybe.default(&2,List<&2,String>,frames,defaultFrames),Maybe.default(&2,U32,interval,defaultInterval)}
+def configuredIndicator(options: Maybe<&2,Ctx.WorkingIndicatorOptions>) -> Maybe<&2,Loader.Indicator>:
+  match options:
+    case None{}: None{}
+    case Some{Ctx.WorkingIndicatorOptions{frames,interval}}:
+      Some{indicatorDefaults(Loader.defaults(),frames,interval)}
+def changeWorkingIndicator(+working: Working,+options: Maybe<&2,Ctx.WorkingIndicatorOptions>) -> IO(Unit):
+  do IO<Unit>:
+    +indicator : Maybe<&2,Loader.Indicator> <- IO.pure(Maybe<&2,Loader.Indicator>,configuredIndicator(options))
+    Ref.modify(WorkingPreferences,Unit,workingPreferences(working),previous => (withWorkingIndicator(previous,indicator),Unit{}))
+    applyWorkingMutation(working,UpdateWorkingIndicator{indicator})
+def workingIndicatorCallback(working: Working,options: Maybe<&2,Ctx.WorkingIndicatorOptions>) -> IO(Unit):
+  changeWorkingIndicator(working,options)
 def setupWorking(working: Working,paint: Callback.Callback<String,String>,theme: Ref.Ref<Theme.Theme>,bindings: Keybindings.KeybindingsManager,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> IO(Unit):
   match working:
-    case Working{_,owned,_,_,_}:
+    case Working{_,owned,_,_,_,_}:
       do IO<Unit>:
         +request : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,~Unit,~Unit,~workingRedraw,redraw)
         Ref.write(Maybe<&1,WorkingOwned>,owned,Some{WorkingOwned{None{},Status.Appearance{theme,Some{paint},request},request,Hints.keyText(bindings,"app.interrupt")}})
@@ -379,8 +464,9 @@ def disposeWorkingOwned(oldOwner: Maybe<&1,WorkingOwned>) -> IO(Unit):
         Callback.dispose(Unit,Unit,request)
 def disposeWorking(working: Working) -> IO(Unit):
   match working:
-    case Working{active,owned,terminal,ready,subscriptionShown}:
+    case Working{active,owned,terminal,ready,subscriptionShown,preferences}:
       do IO<Unit>:
+        oldPreferences : WorkingPreferences <- Ref.dispose(WorkingPreferences,preferences)
         oldSubscription : Bool <- Ref.dispose(Bool,subscriptionShown)
         oldStartup : StartupState <- Ref.dispose(StartupState,ready)
         oldTerminal : Maybe<&2,Terminal.Handle> <- Ref.dispose(Maybe<&2,Terminal.Handle>,terminal)
@@ -2466,9 +2552,11 @@ type RebindSink is Data:
   RebindSink{listener: Session.Listener(),transcript: Transcript.Handle,footerRef: Ref.Ref<Footer.State>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,cwd: String,home: Maybe<&2,String>,working: Working}
 def reboundCopied(sink: RebindSink,+session: Session.AgentSession) -> IO(Unit):
   match sink:
-    case RebindSink{listener,+transcript,footerRef,failure,redraw,cwd,home,working}:
+    case RebindSink{listener,+transcript,footerRef,failure,redraw,cwd,home,+working}:
       do IO<Unit>:
         Session.subscribe(session,listener)
+        Ref.write(WorkingPreferences,workingPreferences(working),WorkingPreferences{None{},True{},None{}})
+        applyWorkingMutation(working,ApplyStatus{ClearStatus{Status.Working{}}})
         updateSessionTitle(working,session)
         +messages : List<&2,Session.Message()> <- Session.messages(session)
         Transcript.clear(transcript)
@@ -3064,7 +3152,11 @@ def runWidgetHosted(borrowed: ExtensionWidgets.Owner & ExtensionWidgets.Host & C
   match borrowed:
     case (widgetOwner,widgetHost,widgetComponent):
       do IO<Result<&2,&2,Error,Unit>>:
-        ui : ExtensionUI.Owner <- ExtensionUI.create(ExtensionUI.BaseEnv{dialogHost,editorRefOf(contextInteraction(context)),footerState(foot),contextTranscript(context),redraw,workingTerminal(workingOf(contextInteraction(context))),contextTheme(context),widgetHost})
+        +working : Working <- IO.pure(Working,workingOf(contextInteraction(context)))
+        +workingMessage : Callback.Callback<Maybe<&2,String>,Unit> <- Callback.create(~Working,~Maybe<&2,String>,~Unit,~workingMessageCallback,working)
+        +workingVisible : Callback.Callback<Bool,Unit> <- Callback.create(~WorkingVisibility,~Bool,~Unit,~workingVisibleCallback,WorkingVisibility{working,contextSession(context)})
+        +workingIndicator : Callback.Callback<Maybe<&2,Ctx.WorkingIndicatorOptions>,Unit> <- Callback.create(~Working,~Maybe<&2,Ctx.WorkingIndicatorOptions>,~Unit,~workingIndicatorCallback,working)
+        ui : ExtensionUI.Owner <- ExtensionUI.create(ExtensionUI.BaseEnv{dialogHost,editorRefOf(contextInteraction(context)),footerState(foot),contextTranscript(context),redraw,workingTerminal(working),contextTheme(context),widgetHost,Ctx.WorkingControls{workingMessage,workingVisible,workingIndicator}})
         current : Session.AgentSession <- Ref.read(Session.AgentSession,contextSession(context))
         runner : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(current)
         bound : ExtensionUI.Owner <- ExtensionUI.bind(ui,runner,extensionRebindHook(contextBinding(context)))
@@ -3075,6 +3167,9 @@ def runWidgetHosted(borrowed: ExtensionWidgets.Owner & ExtensionWidgets.Host & C
         ExtensionDialog.bindExternal(dialogHost,None{})
         Callback.dispose(ExtensionDialog.ExternalRequest,Unit,external)
         ExtensionUI.dispose(bound)
+        Callback.dispose(Maybe<&2,String>,Unit,workingMessage)
+        Callback.dispose(Bool,Unit,workingVisible)
+        Callback.dispose(Maybe<&2,Ctx.WorkingIndicatorOptions>,Unit,workingIndicator)
         ExtensionWidgets.dispose(widgetOwner)
         ExtensionDialog.dispose(dialog)
         return result
@@ -3268,7 +3363,8 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +workingOwnerRef : Ref.Ref<Maybe<&1,WorkingOwned>> <- Ref.new(Maybe<&1,WorkingOwned>,None{})
         +workingTerminalRef : Ref.Ref<Maybe<&2,Terminal.Handle>> <- Ref.new(Maybe<&2,Terminal.Handle>,None{})
         +workingReadyRef : Ref.Ref<StartupState> <- Ref.new(StartupState,StartupState{False{},None{}})
-        +working : Working <- IO.pure(Working,Working{workingActiveRef,workingOwnerRef,workingTerminalRef,workingReadyRef,subscriptionShown})
+        +workingPreferencesRef : Ref.Ref<WorkingPreferences> <- Ref.new(WorkingPreferences,WorkingPreferences{None{},True{},None{}})
+        +working : Working <- IO.pure(Working,Working{workingActiveRef,workingOwnerRef,workingTerminalRef,workingReadyRef,subscriptionShown,workingPreferencesRef})
         +stopped : Deferred.Deferred<Unit> <- Deferred.new(Unit)
         +listener : Callback.Callback<Session.AgentSessionEvent,Unit> <- Callback.create(~Observation,~Session.AgentSessionEvent,~Unit,~observed,Observation{transcriptHandle,redraw,footerState(foot),working,current})
         failureObserver : Callback.Callback<Controller.PromptFailure,Unit> <- Callback.create(~WorkerFailure,~Controller.PromptFailure,~Unit,~promptFailed,WorkerFailure{status,redraw})

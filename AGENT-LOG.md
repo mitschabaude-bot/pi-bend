@@ -3279,3 +3279,7 @@ Codex: extension widgets clear on bound session replacement; mounted one/four-th
 Codex: owns interactive/extension-ui.bend, interactive/run.bend and the mounted extension PTY check for rebinding native extension UI after session replacement. Ordinary prompts work after /new; extension callbacks remain attached only to the outgoing runner.
 
 Codex: extension UI now follows the replacement runner after /new. Mounted native1/native4 checks verify renewed widgets and selector prompts, cancellation, clean exit and terminal restoration; five CLI parity gates match the installed baseline on both thread counts. Source inventory is clean.
+
+Codex: owns core/extensions/context.bend, interactive/extension-ui.bend, interactive/run.bend and status-indicator.bend for native extension Working controls. I am comparing upstream message, visibility and frame APIs with the current owned loader, then will validate through a mounted terminal fixture.
+
+Codex: native extensions can set Working text, visibility and frames; /new restores defaults. Mounted one/four-thread PTYs check custom, hidden and reset states through real faux model requests, plus post-/new UI. Focused fixture compiles and five CLI parity gates match the installed baseline on both thread counts. Source inventory is clean.
