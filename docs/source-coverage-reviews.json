@@ -594,12 +594,12 @@
     },
     "packages/coding-agent/src/core/session-manager.ts": {
       "state": "partial",
-      "note": "Session persistence, resume, tree and fork work; complete upstream session/recovery parity is not claimed. Focused file-reader review: lines are parsed in order, empty/blank/malformed rows are skipped without trimming each nonblank line, migration precedes typed decoding, and final-newline repair requires a valid session header. The loader parses completed lines during the character scan and derives final-newline state in that pass. Full loading still reads and decodes the entire file rather than upstream\u2019s incremental UTF-8 reader. The session-file differential covers loading, discovery, newline repair, migration and resumed-entry operations; complete streaming-reader and recovery parity remain unverified.",
+      "note": "Session persistence, resume, tree and fork work; complete upstream session/recovery parity is not claimed. Focused file-reader review: lines are parsed in order, empty/blank/malformed rows are skipped without trimming each nonblank line, migration precedes typed decoding, and final-newline repair requires a valid session header. The loader parses completed lines during the character scan and derives final-newline state in that pass. Loading now decodes UTF-8 across 64 KiB file chunks; it still accumulates the whole text before JSONL parsing. The session-file differential covers loading, discovery, newline repair, migration and resumed-entry operations; complete streaming-reader and recovery parity remain unverified.",
       "source_sha256": "ded5d65112f8666f0e3ae71dab39a302607c29a000745a3d06e00c2103c8f257",
       "port_sha256": {
         "packages/coding-agent/src/core/session-manager.bend": "66905475905747fb9c53670f213967704ee46c3ed9020e2144a0ebbd9da56158",
         "packages/coding-agent/src/core/session-json.bend": "c8fda396275c2508b582e12595455f473f61775dfd9c8369ed14de89730ca3de",
-        "packages/coding-agent/src/core/session-persistence.bend": "a7ebf387024846d52af9aa291dabc835596dcd826b4f7c1947a63cc1885205a6"
+        "packages/coding-agent/src/core/session-persistence.bend": "3e9ef4acc8fece5151c10b2b86950b6224ca0bff344f8f5a9107b2846f71934d"
       },
       "ports": [
         "packages/coding-agent/src/core/session-manager.bend",

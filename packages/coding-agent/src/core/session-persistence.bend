@@ -284,17 +284,17 @@ def loadedText(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D),
     case None{}: IO.pure(Outcome(Loaded<D, T, C>), Done{Loaded{Nil{}, False{}}})
     case Some{content}: loadedContent(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, path, migrate, SJ.parsedContent(content))
 
-def loadedBytes(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D), ~tool: V.Value -> Decoded(T), ~custom: V.Value -> Decoded(C), +path: String, bytes: Result<&2, &2, FS.Error, List<&2, U32>>, migrate: Bool) -> IO(Outcome(Loaded<D, T, C>)):
+def loadedBytes(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D), ~tool: V.Value -> Decoded(T), ~custom: V.Value -> Decoded(C), +path: String, bytes: Result<&2, &2, FS.Error, Result<&2, &2, Utf8.Error, String>>, migrate: Bool) -> IO(Outcome(Loaded<D, T, C>)):
   match bytes:
     case Fail{cause}: IO.pure(Outcome(Loaded<D, T, C>), Fail{Filesystem{path, cause}})
-    case Done{content}: loadedText(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, path, decodedText(content), migrate)
+    case Done{content}: loadedText(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, path, textOf(content), migrate)
 
 def loadExisting(~D: Data, ~T: Data, ~C: Data, ~diagnostic: V.Value -> Decoded(D), ~tool: V.Value -> Decoded(T), ~custom: V.Value -> Decoded(C), +path: String, present: Bool, migrate: Bool) -> IO(Outcome(Loaded<D, T, C>)):
   match present:
     case False{}: IO.pure(Outcome(Loaded<D, T, C>), Done{Loaded{Nil{}, False{}}})
     case True{}:
       do IO<Outcome(Loaded<D, T, C>)>:
-        bytes : Result<&2, &2, FS.Error, List<&2, U32>> <- FS.readFile(path)
+        bytes : Result<&2, &2, FS.Error, Result<&2, &2, Utf8.Error, String>> <- FS.readUtf8(path)
         loadedBytes(~D, ~T, ~C, ~diagnostic, ~tool, ~custom, path, bytes, migrate)
 
 # Entries of a session file, migrated to the current version; a file whose

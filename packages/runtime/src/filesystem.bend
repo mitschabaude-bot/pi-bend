@@ -130,7 +130,7 @@ def collectBytes(bytes: List<&2, U32>, reversed: List<&2, U32>) -> List<&2, U32>
 def consumeBytes(reversed: List<&2, U32>, bytes: List<&2, U32>) -> Fold.Control<List<&2, U32>>:
   Fold.Continue{collectBytes(bytes, reversed)}
 
-def readResult(outcome: Fold.Outcome<List<&2, U32>>) -> Result<&2, &2, Error, List<&2, U32>>:
+def readResult(-A: Data, outcome: Fold.Outcome<A>) -> Result<&2, &2, Error, A>:
   match outcome:
     case Fold.Outcome{bytes, Done{_}}: Done{bytes}
     case Fold.Outcome{_, Fail{Fold.Open{code, message}}}: Fail{System{code, message}}
@@ -142,7 +142,16 @@ def readResult(outcome: Fold.Outcome<List<&2, U32>>) -> Result<&2, &2, Error, Li
 def readFile(path: String) -> IO(Result<&2, &2, Error, List<&2, U32>>):
   do IO<Result<&2, &2, Error, List<&2, U32>>>:
     outcome : Fold.Outcome<List<&2, U32>> <- Fold.read(~List<&2, U32>, ~consumeBytes, path, 65536, Nil{})
-    return Result.map(&2, &2, Error, List<&2, U32>, List<&2, U32>, bytes => List.reverse(&2, U32, bytes), readResult(outcome))
+    return Result.map(&2, &2, Error, List<&2, U32>, List<&2, U32>, bytes => List.reverse(&2, U32, bytes), readResult(List<&2, U32>, outcome))
+
+# Decode while reading, so a large text file need not first be assembled as
+# a second byte list. The nested result keeps I/O and UTF-8 errors distinct.
+def consumeUtf8(state: Result<&2, &2, Utf8.Error, Utf8.State>, bytes: List<&2, U32>) -> Fold.Control<Result<&2, &2, Utf8.Error, Utf8.State>>:
+  Fold.Continue{Utf8.feed(bytes, state)}
+def readUtf8(path: String) -> IO(Result<&2, &2, Error, Result<&2, &2, Utf8.Error, String>>):
+  do IO<Result<&2, &2, Error, Result<&2, &2, Utf8.Error, String>>>:
+    outcome : Fold.Outcome<Result<&2, &2, Utf8.Error, Utf8.State>> <- Fold.read(~Result<&2, &2, Utf8.Error, Utf8.State>, ~consumeUtf8, path, 65536, Done{Utf8.initial(Utf8.Preserve{})})
+    return Result.map(&2, &2, Error, Result<&2, &2, Utf8.Error, Utf8.State>, Result<&2, &2, Utf8.Error, String>, Utf8.finishStrict, readResult(Result<&2, &2, Utf8.Error, Utf8.State>, outcome))
 
 def prefixBytes(unused: List<&2, U32>, bytes: List<&2, U32>) -> Fold.Control<List<&2, U32>>:
   Fold.Stop{bytes}
@@ -152,7 +161,7 @@ def prefixBytes(unused: List<&2, U32>, bytes: List<&2, U32>) -> Fold.Control<Lis
 def readPrefix(path: String, maximum: U32) -> IO(Result<&2, &2, Error, List<&2, U32>>):
   do IO<Result<&2, &2, Error, List<&2, U32>>>:
     outcome : Fold.Outcome<List<&2, U32>> <- Fold.read(~List<&2, U32>, ~prefixBytes, path, maximum, Nil{})
-    return readResult(outcome)
+    return readResult(List<&2, U32>, outcome)
 
 # stat follows symbolic links and reads no content. Keep the full OS word size.
 # libuv's error names and descriptions, as Node's fs and child_process
