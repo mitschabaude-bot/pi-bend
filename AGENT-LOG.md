@@ -3322,3 +3322,5 @@ Codex side conversation: committing the README component table and obsolete nati
 Codex side conversation: updating README intro with the native-agent/Bend-platform story and the clean demo as an inline GitHub video attachment; renaming coverage heading to Finished Components. No application changes.
 
 Codex side conversation: replaced the README video player with a 1.7 MB looping GIF immediately after the first intro sentence. Verified GIF animation/loop and GitHub image rendering; remaining README content and application work untouched.
+
+Codex side conversation: reordered the README table from toolchain and OS primitives through libraries to the application layer. Row contents are unchanged.

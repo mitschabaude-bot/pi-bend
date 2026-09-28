@@ -18,39 +18,39 @@ The port includes the application, reusable Bend libraries and the compiler/runt
 
 | Layer | Component | Built here |
 | --- | --- | --- |
+| Toolchain | [Compiler and runtime patches](patches/README.md) | Shared imports, specialization and layout reuse, emission worklists, large-program limits, native scalar/string operations and compiler memory/performance fixes. |
+| Toolchain | [Incremental native builds](docs/incremental-build.md) | Stable generated identities and translation-unit object reuse between builds. |
+| OS primitives | [Sockets](patches/README.md) | TCP/UDP, cancellable connect, byte I/O, readiness, shutdown and network-interface lookup. |
+| OS primitives | [Files and processes](patches/README.md) | Filesystem metadata and byte I/O, temporary files, permissions, child processes, pipes, signals and exit status. |
+| OS primitives | [Terminal, time and environment](patches/README.md) | Terminal acquisition/restoration and dimensions, cancellable timers, clocks, entropy, environment and system identity. |
+| Foundations | [Collections and values](packages/runtime/src/) | Persistent records/maps, queues, stable sorting, strings, numeric conversion and date/time helpers. |
+| Foundations | [Async resources](packages/runtime/src/) | Callbacks, deferred values, cancellation, deadlines, concurrent operations and resource ownership. |
+| Text | [Regular expressions](packages/runtime/src/ecma-regex.bend) | ECMAScript regex parsing and execution, shared by parsers, highlighting and search. |
+| Text | [Unicode](packages/runtime/src/) | UTF-8/UTF-16, case mapping/folding, grapheme and word boundaries, CJK/SEA segmentation and collation. |
+| Files | [Paths and search](packages/runtime/src/) | POSIX paths, glob/minimatch, ignore rules, directory traversal and file search. |
+| Data | [JSON and schemas](packages/runtime/src/schema.bend) | JSON parsing/serialization, partial streaming JSON, schema validation and immutable records. |
+| Data | [Text formats](packages/runtime/src/) | YAML, URL/URI encoding, IDNA/Punycode, Base64, PEM, DER, semver and hosted Git URLs. |
+| Data | [Markdown lexer](packages/runtime/src/marked/) | A Bend port of marked's GFM lexer, tokenizers and extension hooks. |
+| Data | [Syntax highlighting](packages/runtime/src/highlight.bend) | A highlight.js lexer with generated language grammars over the native ECMAScript regex engine. |
+| Media | [Images](packages/runtime/src/image.bend) | PNG, JPEG, GIF, BMP and WebP decoding, resizing and image encoding. |
+| Media | [Compression and framing](packages/runtime/src/) | DEFLATE, CRC-32 and AWS event-stream encoding/decoding. |
+| Cryptography | [Hashes and key derivation](packages/runtime/src/) | SHA-256/512, HMAC, HKDF and SHA-1 for protocol/cache uses. |
+| Cryptography | [Ciphers and signatures](packages/runtime/src/) | AES-128-GCM, X25519, ECDSA, RSA signing/verification, big integers and modular/prime-field arithmetic. |
+| Networking | [DNS](packages/runtime/src/dns-resolver.bend) | Wire codec, resolver configuration, hosts files, UDP transport, IPv4/IPv6 addressing and interface scopes. |
+| Networking | [HTTP and fetch](packages/runtime/src/fetch.bend) | Request/response codecs, streaming bodies, connections, proxy handling and cancellation. |
+| Networking | [SSE](packages/runtime/src/sse.bend) and [WebSocket](packages/runtime/src/websocket.bend) | Incremental event decoding, WebSocket framing and client transport. |
+| Networking | [TLS 1.3](packages/runtime/src/tls13-client.bend) | Handshake, key derivation, encrypted records, X.509 certificate-chain validation and trust loading. |
+| Terminal library | [TUI](packages/tui/src/) | Terminal input and rendering, components, layouts, editor, fullscreen mode and mouse handling. |
+| Terminal library | [Markdown and LaTeX](packages/tui/src/components/markdown.bend) | GFM terminal rendering, tables, code blocks and [math rendering](packages/tui/src/latex.bend). |
+| AI library | [Provider APIs](packages/ai/src/api/) | OpenAI Responses/Codex and Completions, Azure, Anthropic, Google GenAI/Vertex, Mistral, Bedrock and pi-messages, with model catalogs and compatible provider routing. |
+| AI library | [Authentication](packages/ai/src/auth/) | Credential storage and refresh; browser/device OAuth flows for Codex, Anthropic, Copilot, Radius, Kimi, xAI, OpenRouter and Meta. |
+| AI library | [Cloud credentials](packages/ai/src/api/) | AWS credential resolution and SigV4; Google Application Default Credentials, token exchange and service-account signing. |
+| Agent library | [Agent loop](packages/agent/src/) | Typed messages and events, streamed model requests, tool execution, hooks, queues, cancellation and immutable event snapshots. |
 | Application | [Interactive terminal](packages/coding-agent/src/modes/interactive/) | Streaming answers and tool output, editor and history, model/thinking selection, themes, settings, cancellation, queued prompts and fullscreen mouse selection. |
 | Application | [Print and RPC modes](packages/coding-agent/src/modes/) | Text/JSON output and a JSONL RPC interface for driving agent sessions. |
 | Application | [Coding tools](packages/coding-agent/src/core/tools/) | Read, write, edit, Bash, grep, find and ls; diffs, output truncation and terminal previews. |
 | Application | [Sessions and context](packages/coding-agent/src/core/) | JSONL persistence, resume/search, tree navigation, forks, import/export, sharing, compaction, system prompts, project instructions, skills and prompt templates. |
 | Application | [Native extensions](packages/coding-agent/src/core/extensions/) | Bend commands, tools, hooks, renderers, prompts and widgets; a linked [subagent extension](packages/coding-agent/src/extensions/). |
-| Agent library | [Agent loop](packages/agent/src/) | Typed messages and events, streamed model requests, tool execution, hooks, queues, cancellation and immutable event snapshots. |
-| AI library | [Provider APIs](packages/ai/src/api/) | OpenAI Responses/Codex and Completions, Azure, Anthropic, Google GenAI/Vertex, Mistral, Bedrock and pi-messages, with model catalogs and compatible provider routing. |
-| AI library | [Authentication](packages/ai/src/auth/) | Credential storage and refresh; browser/device OAuth flows for Codex, Anthropic, Copilot, Radius, Kimi, xAI, OpenRouter and Meta. |
-| AI library | [Cloud credentials](packages/ai/src/api/) | AWS credential resolution and SigV4; Google Application Default Credentials, token exchange and service-account signing. |
-| Terminal library | [TUI](packages/tui/src/) | Terminal input and rendering, components, layouts, editor, fullscreen mode and mouse handling. |
-| Terminal library | [Markdown and LaTeX](packages/tui/src/components/markdown.bend) | GFM terminal rendering, tables, code blocks and [math rendering](packages/tui/src/latex.bend). |
-| Networking | [DNS](packages/runtime/src/dns-resolver.bend) | Wire codec, resolver configuration, hosts files, UDP transport, IPv4/IPv6 addressing and interface scopes. |
-| Networking | [HTTP and fetch](packages/runtime/src/fetch.bend) | Request/response codecs, streaming bodies, connections, proxy handling and cancellation. |
-| Networking | [SSE](packages/runtime/src/sse.bend) and [WebSocket](packages/runtime/src/websocket.bend) | Incremental event decoding, WebSocket framing and client transport. |
-| Networking | [TLS 1.3](packages/runtime/src/tls13-client.bend) | Handshake, key derivation, encrypted records, X.509 certificate-chain validation and trust loading. |
-| Cryptography | [Hashes and key derivation](packages/runtime/src/) | SHA-256/512, HMAC, HKDF and SHA-1 for protocol/cache uses. |
-| Cryptography | [Ciphers and signatures](packages/runtime/src/) | AES-128-GCM, X25519, ECDSA, RSA signing/verification, big integers and modular/prime-field arithmetic. |
-| Data | [JSON and schemas](packages/runtime/src/schema.bend) | JSON parsing/serialization, partial streaming JSON, schema validation and immutable records. |
-| Data | [Text formats](packages/runtime/src/) | YAML, URL/URI encoding, IDNA/Punycode, Base64, PEM, DER, semver and hosted Git URLs. |
-| Data | [Markdown lexer](packages/runtime/src/marked/) | A Bend port of marked's GFM lexer, tokenizers and extension hooks. |
-| Data | [Syntax highlighting](packages/runtime/src/highlight.bend) | A highlight.js lexer with generated language grammars over the native ECMAScript regex engine. |
-| Text | [Regular expressions](packages/runtime/src/ecma-regex.bend) | ECMAScript regex parsing and execution, shared by parsers, highlighting and search. |
-| Text | [Unicode](packages/runtime/src/) | UTF-8/UTF-16, case mapping/folding, grapheme and word boundaries, CJK/SEA segmentation and collation. |
-| Files | [Paths and search](packages/runtime/src/) | POSIX paths, glob/minimatch, ignore rules, directory traversal and file search. |
-| Media | [Images](packages/runtime/src/image.bend) | PNG, JPEG, GIF, BMP and WebP decoding, resizing and image encoding. |
-| Media | [Compression and framing](packages/runtime/src/) | DEFLATE, CRC-32 and AWS event-stream encoding/decoding. |
-| Foundations | [Collections and values](packages/runtime/src/) | Persistent records/maps, queues, stable sorting, strings, numeric conversion and date/time helpers. |
-| Foundations | [Async resources](packages/runtime/src/) | Callbacks, deferred values, cancellation, deadlines, concurrent operations and resource ownership. |
-| OS primitives | [Sockets](patches/README.md) | TCP/UDP, cancellable connect, byte I/O, readiness, shutdown and network-interface lookup. |
-| OS primitives | [Files and processes](patches/README.md) | Filesystem metadata and byte I/O, temporary files, permissions, child processes, pipes, signals and exit status. |
-| OS primitives | [Terminal, time and environment](patches/README.md) | Terminal acquisition/restoration and dimensions, cancellable timers, clocks, entropy, environment and system identity. |
-| Toolchain | [Compiler and runtime patches](patches/README.md) | Shared imports, specialization and layout reuse, emission worklists, large-program limits, native scalar/string operations and compiler memory/performance fixes. |
-| Toolchain | [Incremental native builds](docs/incremental-build.md) | Stable generated identities and translation-unit object reuse between builds. |
 
 The libraries above are implemented in Bend. The OS primitives are small effects at the system-call boundary; Bun runs the compiler, while the resulting native executable needs no JavaScript runtime.
 
