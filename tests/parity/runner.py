@@ -217,6 +217,8 @@ def run_side(label, argv, scenario, keep):
         path.parent.mkdir(parents=True, exist_ok=True)
         # `<root>` in a text file stands for this run's temporary root.
         path.write_bytes(content) if isinstance(content, bytes) else path.write_text(content.replace("<root>", str(root)))
+    for relative in scenario.get("executables", []):
+        (root / relative).chmod(0o755)
     log = root / "requests.jsonl"
     global LOCAL_CA
     if scenario.get("tls") and LOCAL_CA is None:
@@ -231,6 +233,8 @@ def run_side(label, argv, scenario, keep):
            **package_links(),
            **({"SSL_CERT_FILE": tls["ca"], "NODE_EXTRA_CA_CERTS": tls["ca"]} if tls else {}),
            **scenario.get("env", {})}
+    if scenario.get("tool_bin"):
+        env["PATH"] = str(root / scenario["tool_bin"]) + os.pathsep + env["PATH"]
     if label == "bend" and "BEND_THREADS" in os.environ:
         env.setdefault("BEND_THREADS", os.environ["BEND_THREADS"])
     snaps, timings = {}, {}
@@ -281,6 +285,8 @@ def run_side(label, argv, scenario, keep):
                 target = root / step[1]
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(step[2])
+            elif kind == "file":
+                snaps[step[2]] = (root / step[1]).read_text()
             elif kind == "title":
                 deadline = time.monotonic() + scenario.get("timeout", 30)
                 while True:

@@ -668,13 +668,16 @@ SCENARIOS = [
     },
     {
         "name": "fullscreen-text-selection", "args": MODEL + ["--tui-mode", "fullscreen"],
-        "files": {"home/.pi/agent/settings.json": json.dumps({"fullscreenCopyOnSelect": False})},
+        "files": {"home/.pi/agent/settings.json": json.dumps({"fullscreenCopyOnSelect": False}),
+                  "bin/xclip": "#!/bin/sh\ncat > \"$HOME/clipboard.txt\"\n"},
+        "executables": ["bin/xclip"], "tool_bin": "bin", "env": {"DISPLAY": ":99"},
         "turns": [{"text": "alpha beta gamma"}],
         "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "hello"), ("key", "Enter"),
                   ("wait", "alpha beta gamma", "answer"), ("settle", 0.3), ("snap", "answered"),
                   ("keys", "\x1b[<0;2;15M"), ("keys", "\x1b[<32;7;15M"), ("keys", "\x1b[<0;7;15m"),
                   ("settle", 0.3), ("snap", "selected"),
-                  ("key", "C-x"), ("settle", 0.2), ("snap", "manual-copy")],
+                  ("key", "C-x"), ("settle", 0.2), ("snap", "manual-copy"),
+                  ("file", "home/clipboard.txt", "selected-copy")],
     },
     {
         "name": "fullscreen-copy-on-select", "args": MODEL + ["--tui-mode", "fullscreen"],
@@ -697,6 +700,17 @@ SCENARIOS = [
                   ("keys", "\x1b[<0;2;15M"), ("keys", "\x1b[<32;7;15M"), ("keys", "\x1b[<0;7;15m"),
                   ("settle", 0.3), ("snap", "selected"),
                   ("key", "C-x"), ("settle", 0.2), ("snap", "manual-copy")],
+    },
+    {
+        "name": "fullscreen-copy-selection-precedence", "args": MODEL + ["--tui-mode", "fullscreen"],
+        "files": {"bin/xclip": "#!/bin/sh\ncat > \"$HOME/clipboard.txt\"\n"},
+        "executables": ["bin/xclip"], "tool_bin": "bin", "env": {"DISPLAY": ":99"},
+        "turns": [{"text": "alpha beta gamma"}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "hello"), ("key", "Enter"),
+                  ("wait", "alpha beta gamma", "answer"), ("settle", 0.3),
+                  ("keys", "\x1b[<0;2;15M"), ("keys", "\x1b[<32;7;15M"), ("keys", "\x1b[<0;7;15m"),
+                  ("settle", 0.3), ("file", "home/clipboard.txt", "automatic-copy"),
+                  ("key", "C-x"), ("settle", 0.2), ("file", "home/clipboard.txt", "shortcut-copy")],
     },
     # Streaming benchmark over each CLI's own TLS stack: a long Markdown answer
     # in 500 deltas, paced (about 250 per second) and as fast as the server

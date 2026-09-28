@@ -3220,9 +3220,12 @@
     },
     {
       "source": "packages/coding-agent/test/interactive-tui.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "e1d51377ee06cf9ae6c4be4fcfe247b0889a73b42779b7dc02e81d59a722ecfc"
+      "status": "partial",
+      "ports": [
+        "tests/parity/scenarios.py"
+      ],
+      "sha256": "e1d51377ee06cf9ae6c4be4fcfe247b0889a73b42779b7dc02e81d59a722ecfc",
+      "notes": "Mounted fullscreen scenarios compare clipboard bytes for automatic selection copy and the Ctrl+X precedence in enabled/disabled modes. The suite\u2019s renderer switching, jump indicator, paste and spacing cases are not claimed here."
     },
     {
       "source": "packages/coding-agent/test/keybindings-migration.test.ts",

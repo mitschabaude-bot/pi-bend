@@ -305,13 +305,17 @@ def keyboardSelection(text: Maybe<&2,String>,tui: Tui.TuiBase,screen: Alt.State,
         now : Nat <- IO.now()
         +deadline : Nat = now + 1000n
         return Input{Drawn{Session{tui,Fullscreen{copyFlash(screen,result,deadline)}}},True{},True{},flashDeadline(result,deadline)}
+def selectedForCopy(screen: Alt.State,copyOnSelect: Bool) -> Maybe<&2,String>:
+  match copyOnSelect:
+    case True{}: None{}
+    case False{}: Alt.selectedText(screen)
 def copyOrKeyboard(+tui: Tui.TuiBase,+screen: Alt.State,+registry: List<&2,Component.Component>,+mounted: List<&2,Component.ComponentId>,+data: String,+handle: Terminal.Handle,+termux: Bool,policy: Bool & Maybe<&2,Callback.Callback<String,CopyResult>>) -> IO(Input):
   match policy:
-    case (_,clipboard):
+    case (copyOnSelect,clipboard):
       do IO<Input>:
         bindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,Alt.bindings(screen))
         Bool.pick(Unit -> IO(Input),Bindings.matches(bindings,Keys.defaults(),data,"app.message.copy"),
-          _ => keyboardSelection(Alt.selectedText(screen),tui,screen,registry,mounted,data,handle,termux,clipboard),
+          _ => keyboardSelection(selectedForCopy(screen,copyOnSelect),tui,screen,registry,mounted,data,handle,termux,clipboard),
           _ => keyboardFullscreen(tui,screen,registry,mounted,data,handle,termux))(Unit{})
 def selectionStep(tui: Tui.TuiBase,screen: Alt.State,step: Selection.Step,policy: Bool & Maybe<&2,Callback.Callback<String,CopyResult>>,handle: Terminal.Handle) -> IO(Input):
   match step:

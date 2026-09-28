@@ -3295,3 +3295,7 @@ Codex: HTTP idle timeout choices, persistence and confirmation now match upstrea
 Codex: owns TUI fullscreen selection paths (tui-alt-screen.bend, tui-process.bend, fullscreen-mouse.bend) and related settings/CLI wiring. Upstream tests require drag selection, visible highlight, automatic or explicit copy, and disabled copy-on-select behavior. I am mapping the existing mouse fallback and renderer state before editing.
 
 Codex: fullscreen drag selection, native clipboard copy, Ctrl+X, copy-on-select setting and timed feedback are implemented. Three new terminal scenarios match pi's text and settings on one/four threads; the badge has one ANSI reset placement difference. Existing settings and typing scenarios match. Source/test inventories pass; richer selection gestures remain open.
+
+Codex: owns tui-process.bend and parity runner/scenarios for the copy shortcut's selection precedence. Upstream copies the selection with copy-on-select disabled, but copies the last assistant response with copy-on-select enabled. I am validating clipboard bytes through a fake xclip before changing the branch.
+
+Codex: fixed Ctrl+X precedence and added a fake clipboard capture to parity scenarios. Enabled-mode clipboard bytes now MATCH pi on native one/four threads; disabled-mode bytes also match, with only the previously recorded badge ANSI reset difference. Typing parity and source/test inventories pass.
