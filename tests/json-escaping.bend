@@ -19,12 +19,16 @@ def check(accepted: Bool) -> IO(Unit):
   match accepted:
     case True{}: IO.print("PASS large escaped JSON string")
     case False{}: IO.die(Unit,1,"incorrect JSON escaping")
+def surrogateTexts(+high: String,+low: String) -> Bool:
+  Strings.equal(J.quote(high),"\"\\ud83d\"") && Strings.equal(J.quote(low),"\"\\ude00\"") && Strings.equal(J.quote(high ++ low),"\"😀\"") && Strings.equal(J.quote(high ++ high ++ low),"\"\\ud83d😀\"")
+def surrogateQuotes() -> Bool:
+  surrogateTexts(SCon{Chr{55357},SNil{}},SCon{Chr{56832},SNil{}})
 def command(values: List<String>) -> IO(Unit):
   match values:
     case "small" <> _: IO.print(U32.show(run(20000n,repeated(4n,"normal text\n\"\\雪", ""),0)))
     case "large" <> _: IO.print(U32.show(run(8n,repeated(7500n,"Project instructions.\n", ""),0)))
     case _:
-      check(Strings.equal(J.quote(repeated(12000n,"line\n\"\\雪\t", "")),"\"" ++ repeated(12000n,"line\\n\\\"\\\\雪\\t", "") ++ "\""))
+      check(Strings.equal(J.quote(repeated(12000n,"line\n\"\\雪\t", "")),"\"" ++ repeated(12000n,"line\\n\\\"\\\\雪\\t", "") ++ "\"") && surrogateQuotes())
 def main() -> IO(Unit):
   do IO<Unit>:
     values : List<String> <- IO.args()

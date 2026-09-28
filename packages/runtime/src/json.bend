@@ -392,5 +392,33 @@ def escapeInto(chars: String, reversed: String) -> String:
 def escaped(chars: String) -> String:
   escapeInto(chars, "")
 
+type QuoteState is Data: QuoteState{pending: Maybe<&2,U32>,reversed: String}
+
+def quotedChar(plain: Bool,+code: U32,reversed: String) -> String:
+  match plain:
+    case True{}: SCon{Chr{code},reversed}
+    case False{}: String.reverse.go(escapeCode(code),reversed)
+def quoteCode(+code: U32,reversed: String) -> String:
+  quotedChar(U32.is_ge(code,32) && Bool.not(U32.is_eq(code,34) || U32.is_eq(code,92) || Utf16.highSurrogate(code) || Utf16.lowSurrogate(code)),code,reversed)
+def quoteCurrent(high: Bool,code: U32,reversed: String) -> QuoteState:
+  match high:
+    case True{}: QuoteState{Some{code},reversed}
+    case False{}: QuoteState{None{},quoteCode(code,reversed)}
+def quotePending(low: Bool,high: U32,+code: U32,reversed: String) -> QuoteState:
+  match low:
+    case True{}: QuoteState{None{},quoteCode((65536 + (high - 55296) * 1024 + code - 56320 : U32),reversed)}
+    case False{}: quoteCurrent(Utf16.highSurrogate(code),code,quoteCode(high,reversed))
+def quoteAdvance(state: QuoteState,+code: U32) -> QuoteState:
+  match state:
+    case QuoteState{None{},reversed}: quoteCurrent(Utf16.highSurrogate(code),code,reversed)
+    case QuoteState{Some{high},reversed}: quotePending(Utf16.lowSurrogate(code),high,code,reversed)
+def quoteFinished(state: QuoteState) -> String:
+  match state:
+    case QuoteState{None{},reversed}: "\"" ++ String.reverse(reversed) ++ "\""
+    case QuoteState{Some{high},reversed}: "\"" ++ String.reverse(quoteCode(high,reversed)) ++ "\""
+def quoteLoop(text: String,state: QuoteState) -> String:
+  match text:
+    case SNil{}: quoteFinished(state)
+    case SCon{Chr{code},rest}: quoteLoop(rest,quoteAdvance(state,code))
 def quote(text: String) -> String:
-  "\"" ++ escaped(Utf16.normalize(text)) ++ "\""
+  quoteLoop(text,QuoteState{None{},""})

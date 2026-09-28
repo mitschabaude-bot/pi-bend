@@ -3299,3 +3299,8 @@ Codex: fullscreen drag selection, native clipboard copy, Ctrl+X, copy-on-select 
 Codex: owns tui-process.bend and parity runner/scenarios for the copy shortcut's selection precedence. Upstream copies the selection with copy-on-select disabled, but copies the last assistant response with copy-on-select enabled. I am validating clipboard bytes through a fake xclip before changing the branch.
 
 Codex: fixed Ctrl+X precedence and added a fake clipboard capture to parity scenarios. Enabled-mode clipboard bytes now MATCH pi on native one/four threads; disabled-mode bytes also match, with only the previously recorded badge ANSI reset difference. Typing parity and source/test inventories pass.
+
+
+Codex: resumed startup profiling on the 974 KB old-format fixture: native load about 115 ms, transcript seed 51 ms; migration rewrite makes full open 257–293 ms versus 123–152 ms reopening current format. JSON stringify costs about 121–125 ms of the rewrite. Temporary probes in run.bend were removed.
+
+Codex: fused UTF-16 normalization and JSON quoting cut stringify to 107–108 ms and old-session open from 287 to 254 ms median. It matches the previous quote on all 65,536 BMP code units and 4,096 surrogate combinations; focused native one/four-thread checks and five CLI parity gates pass. Large-session startup still exceeds pi; runtime/json.bend is released.
