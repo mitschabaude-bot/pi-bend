@@ -30,6 +30,7 @@ import ./model-search.bend as Search
 import ./components/model-selector.bend as ModelPicker
 import ./components/thinking-selector.bend as ThinkingPicker
 import ./components/scoped-models-selector.bend as ScopePicker
+import ./components/bordered-loader.bend as BorderedLoader
 import ./session-controller.bend as Controller
 import ./commands.bend as Commands
 import ./transcript.bend as Transcript
@@ -50,7 +51,11 @@ type StatusSink is Data:
 type SubmissionInput is Data:
   SubmissionInput{queue: Controller.Handle,stop: Deferred.Deferred<Unit>,failure: StatusSink}
 type CommandSink is Data:
-  CommandSink{failure: StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,thinking: Ref.Ref<Maybe<&2,ThinkingPicker.Host>>,scoped: Ref.Ref<Maybe<&2,ScopePicker.Host>>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>}
+  CommandSink{failure: StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: Ref.Ref<Maybe<&2,ModelPicker.Host>>,thinking: Ref.Ref<Maybe<&2,ThinkingPicker.Host>>,scoped: Ref.Ref<Maybe<&2,ScopePicker.Host>>,session: Ref.Ref<Session.AgentSession>,models: Ref.Ref<List<&2,Models.Model()>>,sharing: Ref.Ref<Maybe<&2,BorderedLoader.Activity>>}
+
+def shareController(sink: CommandSink) -> Ref.Ref<Maybe<&2,BorderedLoader.Activity>>:
+  match sink:
+    case CommandSink{_,_,_,_,_,_,_,sharing}: sharing
 type Startup is Data:
   Startup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: StatusSink}
 
@@ -377,37 +382,37 @@ def openScoped(+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,picker: 
     return False{}
 def commandResult(+sink: CommandSink,result: Commands.Action) -> IO(Bool):
   match sink result:
-    case CommandSink{failure,redraw,_,_,_,_,_} Commands.Notice{message}:
+    case CommandSink{failure,redraw,_,_,_,_,_,_} Commands.Notice{message}:
       do IO<Bool>:
         commandStatus(failure,CommandNotice{message})
         requestRender(redraw)
         return False{}
-    case CommandSink{failure,redraw,_,_,_,_,_} Commands.CommandError{message}:
+    case CommandSink{failure,redraw,_,_,_,_,_,_} Commands.CommandError{message}:
       do IO<Bool>:
         commandStatus(failure,CommandFailure{message})
         requestRender(redraw)
         return False{}
-    case CommandSink{+failure,redraw,_,_,_,session,_} Commands.ModelSelected{+model,persist}:
+    case CommandSink{+failure,redraw,_,_,_,session,_,_} Commands.ModelSelected{+model,persist}:
       do IO<Bool>:
         commandStatus(failure,CommandNotice{Bool.pick(String,persist,"Default model: " ++ Models.reference(model),"Model: " ++ Models.modelId(model))})
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         maybeWarnAboutAnthropicSubscriptionAuth(failure,live)
         requestRender(redraw)
         return True{}
-    case CommandSink{failure,redraw,picker,_,_,session,models} Commands.OpenModelPicker{search}:
+    case CommandSink{failure,redraw,picker,_,_,session,models,_} Commands.OpenModelPicker{search}:
       do IO<Bool>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         available : List<&2,Models.Model()> <- Ref.read(List<&2,Models.Model()>,models)
         openModelCommand(failure,redraw,picker,models,live,available,search)
-    case CommandSink{_,redraw,_,thinking,_,session,_} Commands.OpenThinkingPicker{}:
+    case CommandSink{_,redraw,_,thinking,_,session,_,_} Commands.OpenThinkingPicker{}:
       do IO<Bool>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         openThinking(redraw,thinking,live)
-    case CommandSink{_,redraw,_,_,scoped,session,models} Commands.OpenScopedModels{}:
+    case CommandSink{_,redraw,_,_,scoped,session,models,_} Commands.OpenScopedModels{}:
       do IO<Bool>:
         live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         openScoped(redraw,scoped,live,models)
-    case CommandSink{failure,redraw,_,_,_,_,_} Commands.ThinkingSelected{level,persist}:
+    case CommandSink{failure,redraw,_,_,_,_,_,_} Commands.ThinkingSelected{level,persist}:
       do IO<Bool>:
         commandStatus(failure,CommandNotice{Bool.pick(String,persist,"Default thinking level: ","Thinking level: ") ++ Levels.name(level)})
         requestRender(redraw)

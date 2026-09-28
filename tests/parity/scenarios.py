@@ -1550,3 +1550,18 @@ SCENARIOS.append({
               ("wait", "Share URL:", "shared"), ("settle", 0.2), ("snap", "shared"),
               ("file", "home/gh-call", "gist-call")],
 })
+
+SCENARIOS.append({
+    "name": "share-gist-cancel", "args": MODEL,
+    "turns": [{"text": "Share fixture answer"}, {"text": "After cancellation"}],
+    "files": {"bin/gh": "#!/bin/sh\nif [ \"$1\" = auth ] && [ \"$2\" = status ]; then exit 0; fi\nif [ \"$1\" = gist ] && [ \"$2\" = create ] && [ \"$3\" = --public=false ] && [ -s \"$4\" ]; then printf 'gist invoked\\n' > \"$HOME/gh-call\"; exec sleep 30; fi\nexit 1\n"},
+    "executables": ["bin/gh"], "tool_bin": "bin",
+    "steps": [("wait", READY, "startup"), ("settle", 1), ("keys", "hello"), ("key", "Enter"),
+              ("wait", "Share fixture answer", "answered"), ("settle", 0.3),
+              ("keys", "/share"), ("key", "Enter"),
+              ("wait", "Creating gist...", "creating"), ("wait-file", "home/gh-call"), ("snap", "creating"),
+              ("key", "Escape"), ("wait", "Share cancelled", "cancelled"),
+              ("snap", "cancelled"), ("file", "home/gh-call", "gist-call"),
+              ("keys", "next"), ("key", "Enter"),
+              ("wait", "After cancellation", "recovered"), ("settle", 0.2), ("snap", "recovered")],
+})

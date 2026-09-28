@@ -1,5 +1,6 @@
 import Base
 import ./components/tool-execution.bend as Tool
+import ./components/bordered-loader.bend as BorderedLoader
 import ../../../../tui/src/components/markdown.bend as Markdown
 import ../../core/tools/renderers/read.bend as ReadRenderer
 import ../../core/tools/edit.bend as Edit
@@ -702,13 +703,16 @@ def shareNotice(result: SessionShare.ShareResult) -> Interactive.SubmissionFailu
     case SessionShare.Cancelled{}: Interactive.CommandNotice{"Share cancelled"}
 def shareObserved(input: CommandObservation) -> IO(Unit):
   match input:
-    case CommandObservation{_,session,_,+failure,redraw,cwd,builtinDir,_,_,_,_,_,_,_,_,_,ExportTheme{active,customDir}}:
+    case CommandObservation{sink,session,_,+failure,redraw,cwd,builtinDir,_,_,_,_,_,_,_,_,_,ExportTheme{active,customDir}}:
       do IO<Unit>:
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         theme : Theme.Theme <- Ref.read(Theme.Theme,active)
         +cancel : Abort.AbortController<Unit> <- Abort.new(Unit)
-        Interactive.report(failure,Interactive.CommandNotice{"Creating gist..."})
+        +sharing : Ref.Ref<Maybe<&2,BorderedLoader.Activity>> = Interactive.shareController(sink)
+        Ref.write(Maybe<&2,BorderedLoader.Activity>,sharing,Some{BorderedLoader.Activity{cancel,"Creating gist..."}})
+        Interactive.requestRender(redraw)
         result : SessionShare.ShareResult <- SessionShare.shareSession(live,cwd,Abort.signal(Unit,cancel),path => exportHtml(live,builtinDir,customDir,theme,Some{path}))
+        Ref.write(Maybe<&2,BorderedLoader.Activity>,sharing,None{})
         Abort.dispose(Unit,cancel)
         Interactive.report(failure,shareNotice(result))
 def importStatus(state: ImportState,status: Interactive.SubmissionFailure) -> IO(Unit):
@@ -1442,7 +1446,7 @@ type ThemeOwned is Type:
 type ThemeStopping is Data:
   ThemeStopping{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,view: View.Handle,modes: Ref.Ref<Process.RendererModes>,session: Ref.Ref<Session.AgentSession>,suspension: Process.SuspensionHandle,working: Working}
 type Interaction is Data:
-  Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,modelSelector: Ref.Ref<Maybe<&2,ModelPicker.Host>>,thinkingSelector: Ref.Ref<Maybe<&2,ThinkingPicker.Host>>,scopedSelector: Ref.Ref<Maybe<&2,ScopePicker.Host>>,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,trust: Ref.Ref<Maybe<&2,TrustPicker.Host>>,header: Maybe<&2,Header.Handle>,bashActivity: Ref.Ref<BashActivity>,working: Working,autocomplete: AutocompleteSlot,suspension: Process.SuspensionHandle}
+  Interaction{editor: Ref.Ref<Maybe<&2,Live.Handle>>,lastClear: Ref.Ref<Maybe<&2,F64>>,lastEscape: Ref.Ref<Maybe<&2,F64>>,selector: Ref.Ref<Maybe<&2,Selector.Host>>,modelSelector: Ref.Ref<Maybe<&2,ModelPicker.Host>>,thinkingSelector: Ref.Ref<Maybe<&2,ThinkingPicker.Host>>,scopedSelector: Ref.Ref<Maybe<&2,ScopePicker.Host>>,settings: Ref.Ref<Maybe<&2,SettingsPicker.Host>>,trust: Ref.Ref<Maybe<&2,TrustPicker.Host>>,header: Maybe<&2,Header.Handle>,bashActivity: Ref.Ref<BashActivity>,working: Working,autocomplete: AutocompleteSlot,suspension: Process.SuspensionHandle,sharing: Ref.Ref<Maybe<&2,BorderedLoader.Activity>>}
 type ThemeStartup is Data:
   ThemeStartup{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,failure: Interactive.StatusSink,stopped: Deferred.Deferred<Unit>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,error: Ref.Ref<Maybe<&2,Theme.LoadError>>,theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,session: Ref.Ref<Session.AgentSession>,setting: Maybe<&2,String>,builtinDir: String,customDir: String,managed: Maybe<&2,Manager.ToolsManager>,interaction: Interaction,highlighter: SyntaxHighlight.Highlighter,first: Bool}
 type LoginRequest is Data: LoginRequest{runtime: Models.ModelRuntime,provider: String,kind: Auth.CredentialType,interaction: Auth.AuthInteraction}
@@ -2189,19 +2193,19 @@ def scopeAction(input: ScopeInput,action: ScopePicker.Action) -> IO(Unit):
         scopeSaved(failure,redraw,result)
     case _ _: IO.pure(Unit,Unit{})
 def selectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,Selector.Host>>:
-  match interaction: case Interaction{_,_,_,selector,_,_,_,_,_,_,_,_,_,_}: selector
+  match interaction: case Interaction{_,_,_,selector,_,_,_,_,_,_,_,_,_,_,_}: selector
 def modelSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,ModelPicker.Host>>:
-  match interaction: case Interaction{_,_,_,_,selector,_,_,_,_,_,_,_,_,_}: selector
+  match interaction: case Interaction{_,_,_,_,selector,_,_,_,_,_,_,_,_,_,_}: selector
 def thinkingSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,ThinkingPicker.Host>>:
-  match interaction: case Interaction{_,_,_,_,_,selector,_,_,_,_,_,_,_,_}: selector
+  match interaction: case Interaction{_,_,_,_,_,selector,_,_,_,_,_,_,_,_,_}: selector
 def scopedSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,ScopePicker.Host>>:
-  match interaction: case Interaction{_,_,_,_,_,_,selector,_,_,_,_,_,_,_}: selector
+  match interaction: case Interaction{_,_,_,_,_,_,selector,_,_,_,_,_,_,_,_}: selector
 def settingsSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,SettingsPicker.Host>>:
-  match interaction: case Interaction{_,_,_,_,_,_,_,settings,_,_,_,_,_,_}: settings
+  match interaction: case Interaction{_,_,_,_,_,_,_,settings,_,_,_,_,_,_,_}: settings
 def editorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,Live.Handle>>:
-  match interaction: case Interaction{editor,_,_,_,_,_,_,_,_,_,_,_,_,_}: editor
+  match interaction: case Interaction{editor,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: editor
 def trustSelectorRefOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,TrustPicker.Host>>:
-  match interaction: case Interaction{_,_,_,_,_,_,_,_,trust,_,_,_,_,_}: trust
+  match interaction: case Interaction{_,_,_,_,_,_,_,_,trust,_,_,_,_,_,_}: trust
 def contextStatus(context: ThemeContext) -> Interactive.StatusSink:
   match context: case ThemeContext{_,_,_,_,_,_,_,_,_,_,_,_,_,status}: status
 def contextTheme(context: ThemeContext) -> Ref.Ref<Theme.Theme>:
@@ -2213,15 +2217,17 @@ def contextAgentDir(context: ThemeContext) -> String:
 def contextInteraction(context: ThemeContext) -> Interaction:
   match context: case ThemeContext{_,_,_,_,_,_,interaction,_,_,_,_,_,_,_}: interaction
 def lastClearOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,F64>>:
-  match interaction: case Interaction{_,lastClear,_,_,_,_,_,_,_,_,_,_,_,_}: lastClear
+  match interaction: case Interaction{_,lastClear,_,_,_,_,_,_,_,_,_,_,_,_,_}: lastClear
 def recordEditor(interaction: Interaction,handle: Live.Handle) -> IO(Unit):
-  match interaction: case Interaction{editor,_,_,_,_,_,_,_,_,_,_,_,_,_}: Ref.write(Maybe<&2,Live.Handle>,editor,Some{handle})
+  match interaction: case Interaction{editor,_,_,_,_,_,_,_,_,_,_,_,_,_,_}: Ref.write(Maybe<&2,Live.Handle>,editor,Some{handle})
 def bashActivityOf(interaction: Interaction) -> Ref.Ref<BashActivity>:
-  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,_,activity,_,_,_}: activity
+  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,_,activity,_,_,_,_}: activity
 def workingOf(interaction: Interaction) -> Working:
-  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,_,_,working,_,_}: working
+  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,_,_,working,_,_,_}: working
 def terminalControl(interaction: Interaction) -> Process.SuspensionHandle:
-  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,_,_,_,_,suspension}: suspension
+  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,_,_,_,_,suspension,_}: suspension
+def sharingOf(interaction: Interaction) -> Ref.Ref<Maybe<&2,BorderedLoader.Activity>>:
+  match interaction: case Interaction{_,_,_,_,_,_,_,_,_,_,_,_,_,_,sharing}: sharing
 def contextModels(context: ThemeContext) -> Ref.Ref<List<&2,Models.Model()>>:
   match context: case ThemeContext{_,_,_,_,_,_,_,models,_,_,_,_,_,_}: models
 def contextSession(context: ThemeContext) -> Ref.Ref<Session.AgentSession>:
@@ -2259,7 +2265,7 @@ def disposeLoginState(state: LoginState) -> IO(Unit):
         return Unit{}
 def keyInput(queue: Controller.Handle,stop: Deferred.Deferred<Unit>,+failure: Interactive.StatusSink,interaction: Interaction,+session: Ref.Ref<Session.AgentSession>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,transcript: Transcript.Handle,models: Ref.Ref<List<&2,Models.Model()>>) -> KeyInput:
   match interaction:
-    case Interaction{_,lastClear,lastEscape,selector,+modelSelector,+thinkingSelector,+scopedSelector,_,_,header,_,_,_,suspension}: KeyInput{queue,stop,failure,lastClear,lastEscape,selector,session,redraw,header,transcript,Interactive.CommandSink{failure,redraw,modelSelector,thinkingSelector,scopedSelector,session,models},suspension}
+    case Interaction{_,lastClear,lastEscape,selector,+modelSelector,+thinkingSelector,+scopedSelector,_,_,header,_,_,_,suspension,sharing}: KeyInput{queue,stop,failure,lastClear,lastEscape,selector,session,redraw,header,transcript,Interactive.CommandSink{failure,redraw,modelSelector,thinkingSelector,scopedSelector,session,models,sharing},suspension}
 def openedTree(input: KeyInput,mode: Selector.Mode) -> IO(Unit):
   match input:
     case KeyInput{_,_,failure,_,_,selector,session,redraw,_,_,_,_}: openSessionSelector(mode,session,selector,failure,redraw)
@@ -2297,9 +2303,13 @@ def abortCompaction(+session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
     Session.abortCompaction(session)
     Session.abortBranchSummary(session)
-def interrupted(+input: KeyInput,+text: String) -> IO(Unit):
-  match input:
-    case KeyInput{_,_,_,_,lastEscape,_,session,_,_,_,_,_}:
+def interruptOrShare(+input: KeyInput,+text: String,lastEscape: Ref.Ref<Maybe<&2,F64>>,session: Ref.Ref<Session.AgentSession>,sharing: Maybe<&2,BorderedLoader.Activity>) -> IO(Unit):
+  match sharing:
+    case Some{BorderedLoader.Activity{controller,_}}:
+      do IO<Unit>:
+        cancelled : Bool <- Abort.abort(Unit,controller,None{})
+        return Unit{}
+    case None{}:
       do IO<Unit>:
         +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
         bash : Bool <- Session.isBashRunning(live)
@@ -2311,6 +2321,12 @@ def interrupted(+input: KeyInput,+text: String) -> IO(Unit):
             _ => Bool.pick(Unit -> IO(Unit),compact,_ => abortCompaction(live),
               _ => Bool.pick(Unit -> IO(Unit),active,_ => keyControl(input,Controller.Interrupt{text}),
                 _ => Bool.pick(Unit -> IO(Unit),String.is_empty(Text.trim(text)),_ => idleEscape(input,lastEscape),_ => IO.pure(Unit,Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{}))(Unit{})
+def interrupted(+input: KeyInput,+text: String) -> IO(Unit):
+  match input:
+    case KeyInput{_,_,_,_,lastEscape,_,session,_,_,_,sink,_}:
+      do IO<Unit>:
+        sharing : Maybe<&2,BorderedLoader.Activity> <- Ref.read(Maybe<&2,BorderedLoader.Activity>,Interactive.shareController(sink))
+        interruptOrShare(input,text,lastEscape,session,sharing)
 def doubleClear(previous: Maybe<&2,F64>,now: F64,stop: Deferred.Deferred<Unit>) -> IO(Unit):
   match previous:
     case Some{earlier}: Bool.pick(Unit -> IO(Unit),F64.is_lt(F.subtract(now,earlier),U32.to_f64(500)),_ => do IO<Unit>:
@@ -2625,7 +2641,7 @@ def controllerFor(mode: Maybe<&2,Binding>,current: Ref.Ref<Session.AgentSession>
     case Some{Binding{_,replacement,_,_,_,_,_,_,_,_,_}}: Controller.startBound(current,listener,replacement,limit,failure,command,control,selection,models,Some{login})
 def disposeInteraction(interaction: Interaction) -> IO(Unit):
   match interaction:
-    case Interaction{editor,lastClear,lastEscape,selector,modelSelector,thinkingSelector,scopedSelector,settings,trust,_,bashActivity,working,autocomplete,suspension}:
+    case Interaction{editor,lastClear,lastEscape,selector,modelSelector,thinkingSelector,scopedSelector,settings,trust,_,bashActivity,working,autocomplete,suspension,sharing}:
       do IO<Unit>:
         disposeAutocompleteSlot(autocomplete)
         oldEditor : Maybe<&2,Live.Handle> <- Ref.dispose(Maybe<&2,Live.Handle>,editor)
@@ -2638,6 +2654,7 @@ def disposeInteraction(interaction: Interaction) -> IO(Unit):
         oldSettings : Maybe<&2,SettingsPicker.Host> <- Ref.dispose(Maybe<&2,SettingsPicker.Host>,settings)
         oldTrust : Maybe<&2,TrustPicker.Host> <- Ref.dispose(Maybe<&2,TrustPicker.Host>,trust)
         oldBash : BashActivity <- Ref.dispose(BashActivity,bashActivity)
+        oldShare : Maybe<&2,BorderedLoader.Activity> <- Ref.dispose(Maybe<&2,BorderedLoader.Activity>,sharing)
         disposeBashActivity(oldBash)
         disposeWorking(working)
         Process.disposeSuspension(suspension)
@@ -2770,7 +2787,7 @@ def startupProjectTrustWarning(transcript: Transcript.Handle,session: Ref.Ref<Se
 # autocomplete provider with the resolved fd path.
 def startAutocomplete(interaction: Interaction,session: Ref.Ref<Session.AgentSession>,found: Bool) -> IO(Unit):
   match interaction:
-    case Interaction{editor,_,_,_,_,_,_,_,_,_,_,_,+autocomplete,_}:
+    case Interaction{editor,_,_,_,_,_,_,_,_,_,_,_,+autocomplete,_,_}:
       do IO<Unit>:
         Ref.write(Bool,autocompleteFiles(autocomplete),found)
         setupAutocomplete(autocomplete,editor,session)
@@ -2780,7 +2797,7 @@ def installSettingsTheme(current: Maybe<&2,SettingsPicker.Host>,handle: ThemeCon
     case Some{host}: SettingsPicker.installController(host,handle)
 def connectSettingsTheme(interaction: Interaction,handle: ThemeController.Handle) -> IO(Unit):
   match interaction:
-    case Interaction{_,_,_,_,_,_,_,settings,_,_,_,_,_,_}:
+    case Interaction{_,_,_,_,_,_,_,settings,_,_,_,_,_,_,_}:
       do IO<Unit>:
         current : Maybe<&2,SettingsPicker.Host> <- Ref.read(Maybe<&2,SettingsPicker.Host>,settings)
         installSettingsTheme(current,handle)
@@ -3026,8 +3043,17 @@ def processEditorBorrowed(borrowed: View.View & Component.Component & View.Handl
         Callback.dispose(Unit,AltSearch.Styles,searchStyles)
         Callback.dispose(Unit,String,indicator)
         return outcome
+def processEditorWith(pair: BorderedLoader.Owner & Component.Component,view: View.View,foot: FooterOwner,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
+  match pair:
+    case (owner,component):
+      do IO<View.View & Result<&2,&2,Error,Unit>>:
+        result : View.View & Result<&2,&2,Error,Unit> <- processEditorBorrowed(View.borrow(view),component,foot,stopped,redraw,queue,initial,context)
+        BorderedLoader.dispose(owner)
+        return result
 def processEditor(view: View.View,editorComponent: Component.Component,foot: FooterOwner,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
-  processEditorBorrowed(View.borrow(view),editorComponent,foot,stopped,redraw,queue,initial,context)
+  do IO<View.View & Result<&2,&2,Error,Unit>>:
+    overlay : BorderedLoader.Owner <- BorderedLoader.create(editorComponent,sharingOf(contextInteraction(context)),contextTheme(context),contextBindings(context))
+    processEditorWith(BorderedLoader.borrow(overlay),view,foot,stopped,redraw,queue,initial,context)
 def process(view: View.View,editor: Component.Component,foot: FooterOwner,stopped: Deferred.Deferred<Unit>,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,queue: Controller.Handle,initial: List<&2,Controller.Submission>,+context: ThemeContext) -> IO(View.View & Result<&2,&2,Error,Unit>):
   processEditor(view,editor,foot,stopped,redraw,queue,initial,context)
 def markBashClosing(state: BashActivity) -> BashActivity & Maybe<&2,Deferred.Deferred<Unit>>:
@@ -3399,7 +3425,8 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +loginState : LoginState <- IO.pure(LoginState,loginStateOf(mode,loginHost,loginAbort,modelsRef,status,redraw,current,providerSort))
         +resumeState : ResumeState <- IO.pure(ResumeState,resumeStateOf(mode,resumePicker,loginHost,status,redraw))
         loginCallback : Callback.Callback<Commands.CredentialCommand,Unit> <- Callback.create(~LoginState,~Commands.CredentialCommand,~Unit,~credentialRun,loginState)
-        +commandSink : Interactive.CommandSink <- IO.pure(Interactive.CommandSink,Interactive.CommandSink{status,redraw,modelSelectorRef,thinkingSelectorRef,scopedSelectorRef,current,modelsRef})
+        +shareControlRef : Ref.Ref<Maybe<&2,BorderedLoader.Activity>> <- Ref.new(Maybe<&2,BorderedLoader.Activity>,None{})
+        +commandSink : Interactive.CommandSink <- IO.pure(Interactive.CommandSink,Interactive.CommandSink{status,redraw,modelSelectorRef,thinkingSelectorRef,scopedSelectorRef,current,modelsRef,shareControlRef})
         +suspension : Process.SuspensionHandle <- Process.createSuspension()
         +editorHandle : Ref.Ref<Maybe<&2,Live.Handle>> <- Ref.new(Maybe<&2,Live.Handle>,None{})
         +bashActivity : Ref.Ref<BashActivity> <- Ref.new(BashActivity,BashActivity{False{},False{},None{}})
@@ -3413,7 +3440,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         Transcript.setExtensions(transcriptHandle,renderers)
         bindOptional(mode,listener,transcriptHandle,editorHandle,footerState(foot),status,redraw,cwd,home,working)
         controllerPair : Controller.Controller & Controller.Handle <- controllerFor(mode,current,session,listener,32n,Some{failureObserver},Some{commandObserver},Some{controlObserver},Some{selectionObserver},modelsRef,loginCallback)
-        startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,current,setting,builtinDir,customDir,Interaction{editorHandle,lastClear,lastEscape,selectorRef,modelSelectorRef,thinkingSelectorRef,scopedSelectorRef,settingsSelectorRef,trustSelectorRef,View.headerHandle(viewHandle),bashActivity,working,autocomplete,suspension},modelsRef,mode,loginState,resumeState,bindings,highlighter,status})
+        startController(controllerPair,view,transcript,styles,initial,foot,words,stopped,redraw,ThemeContext{liveTheme,transcriptHandle,current,setting,builtinDir,customDir,Interaction{editorHandle,lastClear,lastEscape,selectorRef,modelSelectorRef,thinkingSelectorRef,scopedSelectorRef,settingsSelectorRef,trustSelectorRef,View.headerHandle(viewHandle),bashActivity,working,autocomplete,suspension,shareControlRef},modelsRef,mode,loginState,resumeState,bindings,highlighter,status})
 def startStyles(styles: MarkdownTheme.Styles,view: View.View,+viewHandle: View.Handle,session: Session.AgentSession,initial: List<&2,Controller.Submission>,cwd: String,home: Maybe<&2,String>,+theme: Theme.Theme,words: Words.Source,setting: Maybe<&2,String>,builtinDir: String,customDir: String,models: List<&2,Models.Model()>,mode: Maybe<&2,Binding>) -> IO(Result<&2,&2,Error,Unit>):
   match styles:
     case MarkdownTheme.Styles{+markdown,callbacks,+live,+highlighter}:

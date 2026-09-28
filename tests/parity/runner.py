@@ -287,6 +287,13 @@ def run_side(label, argv, scenario, keep):
                 target.write_text(step[2])
             elif kind == "file":
                 snaps[step[2]] = (root / step[1]).read_text()
+            elif kind == "wait-file":
+                target = root / step[1]
+                deadline = time.monotonic() + scenario.get("timeout", 30)
+                while not target.exists() and time.monotonic() < deadline:
+                    time.sleep(.01)
+                if not target.exists():
+                    raise AssertionError(f"Expected file {target}")
             elif kind == "title":
                 deadline = time.monotonic() + scenario.get("timeout", 30)
                 while True:
