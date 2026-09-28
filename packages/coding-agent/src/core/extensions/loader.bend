@@ -8,6 +8,11 @@ import ../model-runtime.bend as Models
 import ../provider-composer.bend as Composer
 import ../skills.bend as Skills
 import ./types.bend as T
+import ./context.bend as Ctx
+import ./tool-context.bend as ToolContext
+import ../tools/bash.bend as Bash
+import ../tools/index.bend as Tools
+import ../../../../agent/src/types.bend as Agent
 import ../../../../runtime/src/child-process.bend as Child
 import ../../../../runtime/src/utf8.bend as Utf8
 import ../../../../runtime/src/schema-value.bend as V
@@ -35,6 +40,37 @@ def syntheticSource(+path: String) -> String:
 # upstream createSyntheticSourceInfo(path, { source }).
 def createSourceInfo(+path: String) -> Skills.SourceInfo:
   Skills.SourceInfo{path, syntheticSource(path), Skills.Temporary{}, Skills.TopLevel{}, None{}}
+
+# Build a registerable Bash definition with the same live session context as
+# the built-in tool. Each execution owns its short-lived shell operations;
+# the definition keeps only its options and the extension-owned callback.
+type BashDefinition is Data:
+  BashDefinition{cwd: String, options: Bash.BashToolOptions}
+
+def runBashDefinitionOwned(pair: Tools.ToolOwner & Tools.Tool(), input: Tools.Input()) -> IO(Tools.Output()):
+  match pair:
+    case (owner,Agent.AgentTool{_,_,_,_,_,_,execute,_,_}):
+      do IO<Tools.Output()>:
+        result : Tools.Output() <- C.call(Tools.Input(),Tools.Output(),execute,input)
+        Tools.disposeTool(owner)
+        return result
+
+def runBashDefinition(env: BashDefinition, call: T.ToolCallInput) -> IO(Tools.Output()):
+  match env call:
+    case BashDefinition{cwd,options} T.ToolCallInput{input,context}:
+      do IO<Tools.Output()>:
+        +reader : C.Callback<Unit,Maybe<&2,ToolContext.ContextView>> <- Ctx.createToolContext(context)
+        owner : Bash.ToolOwner <- Bash.createBashTool("",cwd,options,Some{reader})
+        bridged : Tools.ToolOwner <- Tools.bridgedBash(Bash.borrowTool(owner))
+        result : Tools.Output() <- runBashDefinitionOwned(Tools.borrowTool(bridged),input)
+        C.dispose(Unit,Maybe<&2,ToolContext.ContextView>,reader)
+        return result
+
+def createBashToolDefinition(+cwd: String, +options: Bash.BashToolOptions) -> IO(T.ToolDefinition):
+  +guidelines = Bool.pick(List<&2,String>,Tools.exposesSessionEnvironment(Some{options}),Tools.promptGuidelines(Tools.BashTool{}),Nil{})
+  do IO<T.ToolDefinition>:
+    execute : T.ToolExecute() <- C.create(~BashDefinition,~T.ToolCallInput,~Tools.Output(),~runBashDefinition,BashDefinition{cwd,options})
+    return T.ToolDefinition{"bash","bash",Bash.description(),Some{Tools.promptSnippet(Tools.BashTool{})},guidelines,Bash.bashSchema(),None{},execute,T.DefaultShell{},None{},None{}}
 
 # Extension state
 # ---------------

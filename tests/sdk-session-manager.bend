@@ -8,14 +8,18 @@ import ../packages/runtime/src/callback.bend as C
 import ../packages/runtime/src/filesystem.bend as FS
 import ../packages/runtime/src/posix-path.bend as Path
 import ../packages/runtime/src/record.bend as Rec
+import ../packages/runtime/src/ref.bend as Ref
 import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/text.bend as Text
 import ../packages/coding-agent/src/core/agent-session.bend as Session
 import ../packages/coding-agent/src/core/extensions/types.bend as Ext
+import ../packages/coding-agent/src/core/extensions/loader.bend as Loader
 import ../packages/coding-agent/src/core/skills.bend as Skills
+import ../packages/coding-agent/src/core/tools/bash.bend as Bash
 import ../packages/coding-agent/src/core/session-persistence.bend as Sessions
 import ../packages/coding-agent/src/core/sdk.bend as Sdk
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
+import ../packages/coding-agent/src/utils/shell.bend as Shell
 
 # upstream test/sdk-session-manager.test.ts ("createAgentSession session
 # manager defaults"). Each test gets its own directory under the one the check
@@ -277,6 +281,77 @@ def acceptsSdkCustomTools(+base: String) -> IO(Unit):
     customChecked(name,Sdk.sessionOf(result))
     C.dispose(Ext.ToolCallInput,Tools.Output(),execute)
 
+type Capture is Data:
+  Capture{seen: Ref.Ref<Maybe<&2,Shell.Environment()>>}
+def captureSpawn(capture: Capture, context: Bash.BashSpawnContext) -> IO(Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>):
+  match capture context:
+    case Capture{seen} Bash.BashSpawnContext{command,cwd,+env}:
+      do IO<Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>>:
+        Ref.write(Maybe<&2,Shell.Environment()>,seen,Some{env})
+        return Done{Bash.BashSpawnContext{command,cwd,env}}
+def renamed(definition: Ext.ToolDefinition,name: String,label: String) -> Ext.ToolDefinition:
+  match definition:
+    case Ext.ToolDefinition{_,_,description,snippet,guidelines,parameters,mode,execute,shell,call,result}:
+      Ext.ToolDefinition{name,label,description,snippet,guidelines,parameters,mode,execute,shell,call,result}
+def definitionExecute(definition: Ext.ToolDefinition) -> Ext.ToolExecute():
+  match definition:
+    case Ext.ToolDefinition{_,_,_,_,_,_,_,execute,_,_,_}: execute
+def envValue(variables: Shell.Environment(),+name: String) -> Maybe<&2,String>:
+  match variables:
+    case Nil{}: None{}
+    case Shell.Variable{key,value} <> rest: Bool.pick(Maybe<&2,String>,String.eq(key,name),Some{value},envValue(rest,name))
+def hasValue(variables: Shell.Environment(),name: String,value: String) -> Bool:
+  Maybe.default(&2,Bool,Maybe.map(&2,String,Bool,found => String.eq(found,value),envValue(variables,name)),False{})
+def exposedEnv(found: Maybe<&2,Shell.Environment()>,id: String,file: String) -> Bool:
+  match found:
+    case None{}: False{}
+    case Some{+variables}:
+      hasValue(variables,"PI_SESSION_ID",id) && hasValue(variables,"PI_SESSION_FILE",file) && hasValue(variables,"PI_PROVIDER","anthropic") && hasValue(variables,"PI_MODEL","claude-sonnet-4-5") && hasValue(variables,"PI_REASONING_LEVEL","high")
+def hiddenEnv(found: Maybe<&2,Shell.Environment()>) -> Bool:
+  match found:
+    case None{}: False{}
+    case Some{+variables}: Bool.not(Shell.present("PI_SESSION_ID",variables) || Shell.present("PI_SESSION_FILE",variables) || Shell.present("PI_PROVIDER",variables) || Shell.present("PI_MODEL",variables) || Shell.present("PI_REASONING_LEVEL",variables))
+def customBashChecked(+name: String,+first: Capture,+second: Capture,pair: SessionPair()) -> IO(Unit):
+  match pair first second:
+    case Tuple{result,+session} Capture{firstSeen} Capture{secondSeen}:
+      do IO<Unit>:
+        +record : Session.Session() <- Session.sessionOf(session)
+        +id : String = Sessions.getSessionId(Unit,Tools.ToolDetails,V.Value,record)
+        +file : String = fileOr(Sessions.getSessionFile(Unit,Tools.ToolDetails,V.Value,record))
+        +prompt : String <- Session.systemPrompt(session)
+        +state : Session.AgentState() <- Session.state(session)
+        +bash : String <- ranBash(findTool(stateTools(state),"bash"),"printf ok")
+        +hidden : String <- ranBash(findTool(stateTools(state),"bash_without_session_env"),"printf ok")
+        +one : Maybe<&2,Shell.Environment()> <- Ref.read(Maybe<&2,Shell.Environment()>,firstSeen)
+        +two : Maybe<&2,Shell.Environment()> <- Ref.read(Maybe<&2,Shell.Environment()>,secondSeen)
+        Sdk.dispose(result)
+        checkRun(exposedEnv(one,id,file) && hiddenEnv(two) && String.contains(prompt,"You can inspect PI_* environment variables") && (noProcesses(bash) || String.eq(Text.trim(bash),"ok")) && (noProcesses(hidden) || String.eq(Text.trim(hidden),"ok")),bash ++ " | " ++ hidden,name,"custom Bash definitions lost session environment, opt-out, or execution")
+def customBashDefinitions(+base: String) -> IO(Unit):
+  +name = {"exposes session state before custom bash spawn hooks and supports opting out" : String}
+  +cwd = Path.join(base,"project")
+  +agentDir = Path.join(base,"agent")
+  do IO<Unit>:
+    mkdirs(cwd)
+    mkdirs(agentDir)
+    +firstSeen : Ref.Ref<Maybe<&2,Shell.Environment()>> <- Ref.new(Maybe<&2,Shell.Environment()>,None{})
+    +secondSeen : Ref.Ref<Maybe<&2,Shell.Environment()>> <- Ref.new(Maybe<&2,Shell.Environment()>,None{})
+    +firstHook : C.Callback<Bash.BashSpawnContext,Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>> <- C.create(~Capture,~Bash.BashSpawnContext,~Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>,~captureSpawn,Capture{firstSeen})
+    +secondHook : C.Callback<Bash.BashSpawnContext,Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>> <- C.create(~Capture,~Bash.BashSpawnContext,~Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>,~captureSpawn,Capture{secondSeen})
+    +first : Ext.ToolDefinition <- Loader.createBashToolDefinition(cwd,Bash.BashToolOptions{None{},None{},None{},None{},Some{firstHook}})
+    +second : Ext.ToolDefinition <- Loader.createBashToolDefinition(cwd,Bash.BashToolOptions{None{},None{},None{},Some{False{}},Some{secondHook}})
+    +firstExec : Ext.ToolExecute() = definitionExecute(first)
+    +secondExec : Ext.ToolExecute() = definitionExecute(second)
+    created : Created() <- Sdk.createAgentSession(Sdk.CreateAgentSessionOptions{Some{cwd},Some{agentDir},None{},Some{model()},Some{Ai.Thinking{Ai.High{}}},Nil{},None{},None{},None{},None{},None{},None{},[first,renamed(second,"bash_without_session_env","bash without session env")]})
+    result : Sdk.CreateAgentSessionResult <- required(created,name)
+    customBashChecked(name,Capture{firstSeen},Capture{secondSeen},Sdk.sessionOf(result))
+    C.dispose(Ext.ToolCallInput,Tools.Output(),firstExec)
+    C.dispose(Ext.ToolCallInput,Tools.Output(),secondExec)
+    C.dispose(Bash.BashSpawnContext,Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>,firstHook)
+    C.dispose(Bash.BashSpawnContext,Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>,secondHook)
+    capturedFirst : Maybe<&2,Shell.Environment()> <- Ref.dispose(Maybe<&2,Shell.Environment()>,firstSeen)
+    capturedSecond : Maybe<&2,Shell.Environment()> <- Ref.dispose(Maybe<&2,Shell.Environment()>,secondSeen)
+    return Unit{}
+
 def runIn(+base: String) -> IO(Unit):
   do IO<Unit>:
     usesAgentDirForTheDefaultPersistedSessionPath(Path.join(base, "1"))
@@ -284,6 +359,7 @@ def runIn(+base: String) -> IO(Unit):
     derivesCwdFromAnExplicitSessionManager(Path.join(base, "3"))
     exposesCurrentSessionStateToTheBuiltInBashTool(Path.join(base, "4"))
     acceptsSdkCustomTools(Path.join(base,"5"))
+    customBashDefinitions(Path.join(base,"6"))
 
 def run(args: List<String>) -> IO(Unit):
   match args:

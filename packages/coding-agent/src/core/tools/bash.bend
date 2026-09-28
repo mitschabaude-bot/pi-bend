@@ -58,6 +58,7 @@ type ToolOwner is Type:
 
 def ToolResult() -> Data: Result<&2,&2,Error,Agent.AgentToolResult<BashToolDetails>>
 def defaults() -> BashToolOptions: BashToolOptions{None{},None{},None{},None{},None{}}
+def description() -> String: "Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last 2000 lines or 50KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds."
 def noContext() -> BashContext: BashContext{None{},None{},None{},None{},None{},None{}}
 
 def nativeMessages(values: List<&2,Child.Error>) -> List<&2,String>:
@@ -436,7 +437,7 @@ def invoke(registered: Registered, request: Agent.ToolExecutionInput<BashToolDet
 def created(invocation: Registered, owned: Maybe<&2,BashOperations>, consumers: Ref.Ref<Consumers()>) -> IO(ToolOwner):
   do IO<ToolOwner>:
     callback : C.Callback<Agent.ToolExecutionInput<BashToolDetails>,ToolResult()> <- C.create(~Registered,~Agent.ToolExecutionInput<BashToolDetails>,~ToolResult(),~invoke,invocation)
-    return ToolOwner{Agent.AgentTool{"bash","Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last 2000 lines or 50KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.",bashSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"bash",None{},callback,None{},None{}},owned,consumers}
+    return ToolOwner{Agent.AgentTool{"bash",description(),bashSchema(),Some{Ai.SamplingConfigured{Ai.JsonSchemaSampling{Ai.Prefer{}}}},"bash",None{},callback,None{},None{}},owned,consumers}
 
 # The managed binary directory is an explicit runtime/configuration dependency.
 # Injected operations and hooks remain borrowed; default operations are owned.

@@ -33,6 +33,7 @@ SUITES = {
         'derives cwd from an explicit sessionManager when cwd is omitted',
         'exposes current session state to the built-in bash tool',
         'registers SDK custom tools through the session registry',
+        'exposes session state before custom bash spawn hooks and supports opting out',
     ], True, {'derives cwd from an explicit sessionManager when cwd is omitted', 'exposes current session state to the built-in bash tool'}),
     'sdk-skills': ([
         'should discover skills by default and expose them on session.skills',

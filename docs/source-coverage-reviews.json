@@ -550,10 +550,10 @@
     },
     "packages/coding-agent/src/core/extensions/loader.ts": {
       "state": "partial",
-      "note": "Inline factories (named, or bare as <inline:N>) load into a runtime (loadExtensionFromFactory/loadExtensionFactories) with registerCommand, registerProvider/unregisterProvider (deferred while loading), on/unsubscribe, sendMessage, sendUserMessage with its options and setModel (failing before the session binds them with upstream's not-initialized message). No file discovery or jiti loading (JS extensions are excluded; extensions are compiled Bend). registerTool (refreshing a bound session), getActiveTools, getAllTools and setActiveTools. exec runs a command without a shell (Child.spawnSync) in options.cwd or the runner cwd; options.signal and timeout are not ported. registerFlag (typed defaults, pending until the extension commits, discarded with a failed one), getFlag, registerShortcut and appendEntry (the session appends a custom entry). registerMessageRenderer stores or replaces the current extension's native callback. Missing: entry renderers, session name/label, model getters and thinking actions, events bus. registerStreamingProvider and registerProviderConfig now preserve explicit native/config registration forms through deferred loading and bound ModelRuntime dispatch. Config-form behavior still needs dedicated coverage.",
+      "note": "Inline factories (named, or bare as <inline:N>) load into a runtime (loadExtensionFromFactory/loadExtensionFactories) with registerCommand, registerProvider/unregisterProvider (deferred while loading), on/unsubscribe, sendMessage, sendUserMessage with its options and setModel (failing before the session binds them with upstream's not-initialized message). No file discovery or jiti loading (JS extensions are excluded; extensions are compiled Bend). registerTool (refreshing a bound session), getActiveTools, getAllTools and setActiveTools. exec runs a command without a shell (Child.spawnSync) in options.cwd or the runner cwd; options.signal and timeout are not ported. registerFlag (typed defaults, pending until the extension commits, discarded with a failed one), getFlag, registerShortcut and appendEntry (the session appends a custom entry). registerMessageRenderer stores or replaces the current extension's native callback. Missing: entry renderers, session name/label, model getters and thinking actions, events bus. registerStreamingProvider and registerProviderConfig now preserve explicit native/config registration forms through deferred loading and bound ModelRuntime dispatch. Config-form behavior still needs dedicated coverage. createBashToolDefinition makes the native Bash engine available through registerTool/customTools; executions own and retire their shell callback and context reader.",
       "source_sha256": "ba9af64db7ff81df6c94193613f3447bf110497698eb118b379f32af12cff075",
       "port_sha256": {
-        "packages/coding-agent/src/core/extensions/loader.bend": "e8cc846d682e2489063bab64a067ac796952836ab9e17b762f235f782b84e9be"
+        "packages/coding-agent/src/core/extensions/loader.bend": "89c1f99a3b0a8e1a741f5e28bad15974c1e2106cd84a9a259b0f66ef7952241a"
       }
     },
     "packages/coding-agent/src/core/extensions/runner.ts": {
@@ -617,10 +617,10 @@
     },
     "packages/coding-agent/src/core/tools/bash.ts": {
       "state": "partial",
-      "note": "Native Bash execution and interactive streaming work; the tool now reads live session context, while output preview and exact terminal parity retain known gaps.",
+      "note": "Native Bash execution and interactive streaming work; the tool now reads live session context, while output preview and exact terminal parity retain known gaps. A registerable native Bash ToolDefinition is built by extensions/loader.bend using the same Bash engine; its executions borrow live extension context, apply spawn hooks and can omit PI_* session variables. SDK and extension-factory checks cover both options on native one/four. The registerable definition still uses the generic extension renderer and omits upstream constrainedSampling; those presentation/request metadata fields remain to port.",
       "source_sha256": "3f43b6d80b460bd38334975bee2726b5438ee6e54bf52abdb6fc54400aad28d2",
       "port_sha256": {
-        "packages/coding-agent/src/core/tools/bash.bend": "a8259ec54da630f2a44e8a23f951517579cb216281a3bf71a4089476c9606b63"
+        "packages/coding-agent/src/core/tools/bash.bend": "2d89c99d72776f276b44822a8ad6fadff719b3097fad65d5839b8ae2d2e5a380"
       }
     },
     "packages/coding-agent/src/core/tools/edit.ts": {
@@ -1528,7 +1528,7 @@
         "packages/coding-agent/src/core/http-dispatcher.bend": "ebdef30af7fff2fd0f4529bced421f752bc290f3b92698f5a173e29b90b9e6f8",
         "packages/runtime/src/http-proxy.bend": "53cefc4acd8c47f4aed1011884124072a63e7b72612898e996c7a6e35e0d9ba9",
         "packages/runtime/src/fetch.bend": "f189fd01e044448ed351dba66d522fe6570839dfd7aec83672df622515af09f6",
-        "packages/coding-agent/src/core/agent-runtime.bend": "3f21fd2a1381cf3a8f3cbadcc682cf790993e467a298d1bf29731e8aee3c215c",
+        "packages/coding-agent/src/core/agent-runtime.bend": "f43f79d4755862b2e5fde2dfc86be6f12f2f13f6be58aa20500b681801ca9515",
         "packages/coding-agent/src/main.bend": "4c9fd11f0a7091930c3f0e1a0ddce9a4059378b48301a8b5f8ae456b6a01a7ff"
       }
     },
@@ -1606,7 +1606,7 @@
     },
     "packages/coding-agent/src/core/sdk.ts": {
       "state": "partial",
-      "note": "createAgentSession assembles injected or default settings, persisted/in-memory session, model runtime, resource loader, tools, extension runner and provider stream. Owned services have explicit disposal; injected session identity is represented by immutable session IDs. All five sdk-session-manager and three sdk-skills assertions pass on native one/four, including agentDir session paths, inherited cwd, Bash PI_* fields and injected skill results. SDK customTools are accepted as direct Bend definitions and registered without an extension factory, including same-name built-in override. getAllTools now reports SDK tool source metadata. Remaining: sessionStartEvent, upstream SDK re-export surface, stream-options/attribution suites and shared injected-ModelRuntime API-stream ownership and other injected-service lifetime coverage; the CLI still has its separate assembly path.",
+      "note": "createAgentSession assembles injected or default settings, persisted/in-memory session, model runtime, resource loader, tools, extension runner and provider stream. Owned services have explicit disposal; injected session identity is represented by immutable session IDs. All six sdk-session-manager and three sdk-skills assertions pass on native one/four, including agentDir session paths, inherited cwd, Bash PI_* fields and injected skill results. SDK customTools are accepted as direct Bend definitions and registered without an extension factory, including same-name built-in override. getAllTools now reports SDK tool source metadata. Remaining: sessionStartEvent, upstream SDK re-export surface, stream-options/attribution suites and shared injected-ModelRuntime API-stream ownership and other injected-service lifetime coverage; the CLI still has its separate assembly path.",
       "source_sha256": "b419cd7aa1515d5f85d68d210daa0d79360a1e8eabe456e96b97857bec0498de",
       "port_sha256": {
         "packages/coding-agent/src/core/sdk.bend": "06bf936336294ee4c641ebda87f1eeaf9d905855e253bc17b70c804d2cb32268"
@@ -1733,7 +1733,7 @@
       "port_sha256": {
         "packages/coding-agent/src/main.bend": "4c9fd11f0a7091930c3f0e1a0ddce9a4059378b48301a8b5f8ae456b6a01a7ff",
         "packages/coding-agent/src/extensions/index.bend": "cac66e23a500ff2bbd041ab89114ad74c7fc09a599fbb4d982dbc77bf502d3d8",
-        "packages/coding-agent/src/core/agent-runtime.bend": "3f21fd2a1381cf3a8f3cbadcc682cf790993e467a298d1bf29731e8aee3c215c"
+        "packages/coding-agent/src/core/agent-runtime.bend": "f43f79d4755862b2e5fde2dfc86be6f12f2f13f6be58aa20500b681801ca9515"
       }
     },
     "packages/coding-agent/src/cli/args.ts": {
@@ -1755,7 +1755,7 @@
         "packages/coding-agent/src/core/agent-runtime.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/core/agent-runtime.bend": "3f21fd2a1381cf3a8f3cbadcc682cf790993e467a298d1bf29731e8aee3c215c"
+        "packages/coding-agent/src/core/agent-runtime.bend": "f43f79d4755862b2e5fde2dfc86be6f12f2f13f6be58aa20500b681801ca9515"
       }
     },
     "packages/coding-agent/src/core/session-export.ts": {

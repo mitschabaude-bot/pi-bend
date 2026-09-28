@@ -2385,7 +2385,7 @@
     },
     {
       "source": "packages/coding-agent/test/agent-session-dynamic-tools.test.ts",
-      "status": "partial",
+      "status": "ported",
       "ports": [
         "tests/suite-harness.bend",
         "tests/suite_harness_check.py",
@@ -2393,7 +2393,7 @@
         "tests/sdk_suites_check.py"
       ],
       "sha256": "d0e3053b05635eb80891962db05c24ae3eaaf26e0ab8b9cfc7f4f90ac212fd79",
-      "notes": "'refreshes tool registry when tools are registered after initialization' now checks sourceInfo and promptGuidelines for dynamic and built-in tools in tests/suite_harness_check.py; 'returns source metadata for SDK custom tools' is checked in tests/sdk-session-manager.bend on native one/four; 'keeps custom tools active but omits them from available tools when promptSnippet is not provided' is also ported. Pending: 'exposes session state before custom bash spawn hooks' (built-in tool factories such as createBashTool are not exposed as extension tool definitions).",
+      "notes": "All four upstream cases: native Bash definitions registered by an inline extension expose live PI_* state to spawn hooks and support the opt-out (tests/suite_harness_check.py); dynamic registration and hidden prompt snippets use the same harness; SDK customTools source metadata and persisted session-file state are checked by tests/sdk-session-manager.bend. Native one/four threads.",
       "implementation": "packages/coding-agent/src/core/agent-session.bend"
     },
     {

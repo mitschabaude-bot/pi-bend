@@ -634,6 +634,15 @@ def extension_tool_checks(f):
     assert [sorted(r['tools']) for r in requests] == [['switch_tools'], ['after_switch']]
     assert len(requests) == 2 and all('keep this run override' in r['systemPrompt'] for r in requests)
     checks += 1
+    # dynamic tools: custom Bash definitions see the live session before their spawn hooks
+    events = run(f, 'prompt', 'bash_definition')
+    expected = last(events, 'bash_expected')
+    captured = {event['label']: event for event in of_type(events, 'bash_spawn')}
+    keys = ['PI_SESSION_ID', 'PI_SESSION_FILE', 'PI_PROVIDER', 'PI_MODEL', 'PI_REASONING_LEVEL']
+    assert all(captured['exposed'][key] == expected[key] for key in keys), captured
+    assert all(captured['hidden'][key] == '<missing>' for key in keys), captured
+    assert {event['name'] for event in of_type(events, 'bash_result') if event.get('ok')} == {'bash', 'bash_without_session_env'}, events
+    checks += 1
     # dynamic tools: refreshes the registry and reports the tool's source and guidelines
     events = run(f, 'prompt', 'dynamic_tool')
     tools = {e['label']: e for e in of_type(events, 'tools')}

@@ -331,9 +331,9 @@ def noResources() -> ResourceOptions: ResourceOptions{Nil{}, False{}, Nil{}, Fal
 # default built-ins only), `excludeTools` the denylist applied after both.
 # `builtins` configures the built-in tools. Upstream SDK callers get this
 # through `customTools` built with createBashToolDefinition(cwd, options) and
-# the like, which replace the built-ins of the same name; the port has no
-# custom tool definitions, so callers pass the same options for the built-ins
-# themselves. Settings still supply what upstream's _buildRuntime takes from
+# the like, which replace the built-ins of the same name. Native SDK callers
+# can pass those definitions through customTools or configure these built-in
+# options directly. Settings still supply what upstream's _buildRuntime takes from
 # them (read autoResizeImages, bash commandPrefix and shellPath) where the
 # caller leaves it unset.
 type NoTools is Data:

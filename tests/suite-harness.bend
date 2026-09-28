@@ -24,6 +24,7 @@ import ../packages/coding-agent/src/core/extensions/runner.bend as Runner
 import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
 import ../packages/coding-agent/src/core/model-runtime.bend as Models
 import ../packages/coding-agent/src/utils/paths.bend as Paths
+import ../packages/coding-agent/src/utils/shell.bend as Shell
 import ../packages/coding-agent/src/core/session-stats.bend as Stats
 import ../packages/coding-agent/src/core/tools/file-mutation-queue.bend as Queue
 import ../packages/coding-agent/src/utils/tools-manager.bend as Manager
@@ -2154,6 +2155,76 @@ def dynamicScenario(+dir: String, agentDir: String, hidden: Bool) -> IO(Unit):
     reportTools("after_bind", sessionOf(harness))
     cleanup(harness)
 
+def bashEnvValue(variables: Shell.Environment(),+name: String) -> String:
+  match variables:
+    case Nil{}: "<missing>"
+    case Shell.Variable{key,value} <> rest: Bool.pick(String,String.eq(key,name),value,bashEnvValue(rest,name))
+def bashEnvFields(+variables: Shell.Environment()) -> List<&2,Rec.Property<V.Value>>:
+  [Rec.Property{"PI_SESSION_ID",Json.text(bashEnvValue(variables,"PI_SESSION_ID"))},Rec.Property{"PI_SESSION_FILE",Json.text(bashEnvValue(variables,"PI_SESSION_FILE"))},Rec.Property{"PI_PROVIDER",Json.text(bashEnvValue(variables,"PI_PROVIDER"))},Rec.Property{"PI_MODEL",Json.text(bashEnvValue(variables,"PI_MODEL"))},Rec.Property{"PI_REASONING_LEVEL",Json.text(bashEnvValue(variables,"PI_REASONING_LEVEL"))}]
+def bashSpawnHook(label: String, context: Bash.BashSpawnContext) -> IO(Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>):
+  match context:
+    case Bash.BashSpawnContext{command,cwd,+env}:
+      do IO<Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>>:
+        print("bash_spawn",Rec.Property{"label",Json.text(label)} <> bashEnvFields(env))
+        return Done{Bash.BashSpawnContext{command,cwd,env}}
+def bashDefinitionName(definition: Ext.ToolDefinition,name: String,label: String) -> Ext.ToolDefinition:
+  match definition:
+    case Ext.ToolDefinition{_,_,description,snippet,guidelines,parameters,mode,execute,shell,call,result}: Ext.ToolDefinition{name,label,description,snippet,guidelines,parameters,mode,execute,shell,call,result}
+def bashDefinitionExecute(definition: Ext.ToolDefinition) -> Ext.ToolExecute():
+  match definition:
+    case Ext.ToolDefinition{_,_,_,_,_,_,_,execute,_,_,_}: execute
+def bashFactory(first: Ext.ToolDefinition,second: Ext.ToolDefinition,+api: Ext.ExtensionAPI) -> IO(Result<&2,&2,String,Unit>):
+  do IO<Result<&2,&2,String,Unit>>:
+    a : Result<&2,&2,String,Unit> <- Loader.registerTool(api,first)
+    b : Result<&2,&2,String,Unit> <- Loader.registerTool(api,second)
+    return both(a,b)
+def activeToolName(tool: Tools.Tool()) -> String:
+  match tool: case T.AgentTool{name,_,_,_,_,_,_,_,_}: name
+def namedTool(tools: List<&2,Tools.Tool()>,+name: String) -> Maybe<&2,Tools.Tool()>:
+  match tools:
+    case Nil{}: None{}
+    case +tool <> rest: Bool.pick(Maybe<&2,Tools.Tool()>,String.eq(activeToolName(tool),name),Some{tool},namedTool(rest,name))
+def activeToolIn(state: Session.AgentState(),name: String) -> Maybe<&2,Tools.Tool()>:
+  match state:
+    case T.AgentState{_,_,tools,_,_,_,_,_}: namedTool(tools,name)
+def activeBash(session: Session.AgentSession,name: String) -> IO(Maybe<&2,Tools.Tool()>):
+  do IO<Maybe<&2,Tools.Tool()>>:
+    state : Session.AgentState() <- Session.state(session)
+    return activeToolIn(state,name)
+def reportBashResult(name: String,result: Tools.Output()) -> IO(Unit):
+  match result:
+    case Done{_}: print("bash_result",Json.field("name",Json.text(name),Json.field("ok",V.Boolean{True{}},Nil{})))
+    case Fail{error}: print("bash_result",Json.field("name",Json.text(name),Json.field("error",Json.text(Tools.errorMessage(error)),Nil{})))
+def bashResult(name: String,tool: Maybe<&2,Tools.Tool()>) -> IO(Unit):
+  match tool:
+    case None{}: print("bash_result",Json.field("name",Json.text(name),Json.field("error",Json.text("missing tool"),Nil{})))
+    case Some{T.AgentTool{_,_,_,_,_,_,execute,_,_}}:
+      do IO<Unit>:
+        result : Tools.Output() <- C.call(Tools.Input(),Tools.Output(),execute,T.ToolExecutionInput{"bash-definition",Json.object(Json.field("command",Json.text("printf ok"),Nil{})),None{},None{}})
+        reportBashResult(name,result)
+def bashDefinitionScenario(+dir: String,agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    +firstHook : C.Callback<Bash.BashSpawnContext,Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>> <- C.create(~String,~Bash.BashSpawnContext,~Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>,~bashSpawnHook,"exposed")
+    +secondHook : C.Callback<Bash.BashSpawnContext,Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>> <- C.create(~String,~Bash.BashSpawnContext,~Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>,~bashSpawnHook,"hidden")
+    +first : Ext.ToolDefinition <- Loader.createBashToolDefinition(dir,Bash.BashToolOptions{None{},None{},None{},None{},Some{firstHook}})
+    +second : Ext.ToolDefinition <- Loader.createBashToolDefinition(dir,Bash.BashToolOptions{None{},None{},None{},Some{False{}},Some{secondHook}})
+    +firstExec : Ext.ToolExecute() = bashDefinitionExecute(first)
+    +secondExec : Ext.ToolExecute() = bashDefinitionExecute(second)
+    +ref : R.Ref<Maybe<&2,Session.AgentSession>> <- R.new(Maybe<&2,Session.AgentSession>,None{})
+    +harness : Harness <- resourceHarness(dir,agentDir,setup(Nil{}),ref,[inline("bash-hook",api => bashFactory(first,bashDefinitionName(second,"bash_without_session_env","bash without session env"),api))],noResources())
+    +session : Session.AgentSession = sessionOf(harness)
+    +record : Session.Session() <- Session.sessionOf(session)
+    print("bash_expected",Json.field("PI_SESSION_ID",Json.text(Sessions.getSessionId(Unit,Tools.ToolDetails,V.Value,record)),Json.field("PI_SESSION_FILE",Json.text("<missing>"),Json.field("PI_PROVIDER",Json.text("faux"),Json.field("PI_MODEL",Json.text("faux-model"),Json.field("PI_REASONING_LEVEL",Json.text("off"),Nil{}))))))
+    firstTool : Maybe<&2,Tools.Tool()> <- activeBash(session,"bash")
+    bashResult("bash",firstTool)
+    secondTool : Maybe<&2,Tools.Tool()> <- activeBash(session,"bash_without_session_env")
+    bashResult("bash_without_session_env",secondTool)
+    cleanup(harness)
+    C.dispose(Ext.ToolCallInput,Tools.Output(),firstExec)
+    C.dispose(Ext.ToolCallInput,Tools.Output(),secondExec)
+    C.dispose(Bash.BashSpawnContext,Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>,firstHook)
+    C.dispose(Bash.BashSpawnContext,Result<&2,&2,Bash.OperationError,Bash.BashSpawnContext>,secondHook)
+
 # #2753: reload applies prompt settings changed after startup. The harness
 # builds its loadout without discovery, so a first reload loads the
 # discovered templates as startup does.
@@ -2393,6 +2464,7 @@ def promptScenario(+dir: String, agentDir: String, +name: String) -> IO(Unit):
     case "switch_tools": switchScenario(dir, agentDir, "plain")
     case "dynamic_tool": dynamicScenario(dir, agentDir, False{})
     case "hidden_tool": dynamicScenario(dir, agentDir, True{})
+    case "bash_definition": bashDefinitionScenario(dir, agentDir)
     case "switch_tools_override": switchScenario(dir, agentDir, "override")
     case _: IO.die(Unit, 1, "unknown prompt scenario")
 
