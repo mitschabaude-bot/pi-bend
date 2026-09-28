@@ -3275,3 +3275,7 @@ Codex: the normal CLI now loads --extension subagent through an injected native 
 Codex: owns interactive/components/extension-widgets.bend, interactive/run.bend and the inline extension PTY check for clearing widgets on session replacement. A pi-bend native worker is implementing the bounded change; I will review and validate it before landing.
 
 Codex: extension widgets clear on bound session replacement; mounted one/four-thread PTYs verify /new, clean exit and terminal restoration. Five CLI terminal gates match the installed binary on both thread counts. The fixture's next extension command after /new still stalls on unchanged source and remains a separate gap in the source review.
+
+Codex: owns interactive/extension-ui.bend, interactive/run.bend and the mounted extension PTY check for rebinding native extension UI after session replacement. Ordinary prompts work after /new; extension callbacks remain attached only to the outgoing runner.
+
+Codex: extension UI now follows the replacement runner after /new. Mounted native1/native4 checks verify renewed widgets and selector prompts, cancellation, clean exit and terminal restoration; five CLI parity gates match the installed baseline on both thread counts. Source inventory is clean.

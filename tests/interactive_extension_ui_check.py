@@ -99,6 +99,15 @@ def scenario(threads: int) -> None:
             os.write(master, b"/new\r")
             until(b"New session started", start)
             assert all(label not in row for row in screen.display for label in ("fixture widget above", "fixture widget below")), screen.display
+            start = len(output)
+            os.write(master, b"/show-widget\r")
+            until(b"fixture widget above", start)
+            until(b"fixture widget below", start)
+            start = len(output)
+            os.write(master, b"/ask\r")
+            until(b"Pick a value", start)
+            os.write(master, b"\x1b")
+            until(b"Extension prompt cancelled", start)
             os.write(master, b"/quit\r")
             stderr = process.communicate(timeout=20)[1]
             assert process.returncode == 0 and not stderr, (process.returncode, stderr)

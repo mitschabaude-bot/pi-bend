@@ -3056,36 +3056,18 @@ def runHosted(borrowed: Selector.Owner & Selector.Host & Component.Component,liv
         +scopeChosen : Callback.Callback<ScopePicker.Action,Unit> <- Callback.create(~ScopeInput,~ScopePicker.Action,~Unit,~scopeAction,ScopeInput{contextSession(context),contextModels(context),contextStatus(context),redraw})
         host : ScopePicker.Owner <- ScopePicker.createHost(component,contextTheme(context),words,contextBindings(context),Keys.defaults(),scopeChosen)
         runScopeHosted(ScopePicker.borrowHost(host),tree,treeHandle,live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen,scopeChosen)
-type WidgetRebind is Data:
-  WidgetRebind{previous: Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,widgets: ExtensionWidgets.Host}
-def callPreviousRebound(previous: Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,session: Session.AgentSession) -> IO(Unit):
-  match previous:
-    case None{}: IO.pure(Unit,Unit{})
-    case Some{callback}: Callback.call(Session.AgentSession,Unit,callback,session)
-def clearOnRebind(binding: WidgetRebind,session: Session.AgentSession) -> IO(Unit):
-  match binding:
-    case WidgetRebind{previous,widgets}:
-      do IO<Unit>:
-        callPreviousRebound(previous,session)
-        ExtensionWidgets.clear(widgets)
-def bindWidgetReset(mode: Maybe<&2,Binding>,widgets: ExtensionWidgets.Host) -> IO(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>):
+def extensionRebindHook(mode: Maybe<&2,Binding>) -> Maybe<&2,Ref.Ref<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>>:
   match mode:
-    case None{}: IO.pure(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,None{})
-    case Some{Binding{_,_,+hook,_,_,_,_,_,_,_,_}}:
-      do IO<Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>>:
-        +previous : Maybe<&2,Callback.Callback<Session.AgentSession,Unit>> <- Ref.read(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,hook)
-        callback : Callback.Callback<Session.AgentSession,Unit> <- Callback.create(~WidgetRebind,~Session.AgentSession,~Unit,~clearOnRebind,WidgetRebind{previous,widgets})
-        Ref.write(Maybe<&2,Callback.Callback<Session.AgentSession,Unit>>,hook,Some{callback})
-        return previous
+    case None{}: None{}
+    case Some{Binding{_,_,hook,_,_,_,_,_,_,_,_}}: Some{hook}
 def runWidgetHosted(borrowed: ExtensionWidgets.Owner & ExtensionWidgets.Host & Component.Component,dialog: ExtensionDialog.Owner,+dialogHost: ExtensionDialog.Host,live: Live.Owner,+words: Words.Source,view: View.View,+foot: FooterOwner,controller: Controller.Controller,+queue: Controller.Handle,transcript: Transcript.Owner,submitted: Callback.Callback<String,Unit>,keys: Callback.Callback<CustomEditor.AppAction,Unit>,paint: Callback.Callback<String,String>,styles: MarkdownTheme.Styles,rows: Ref.Ref<Nat>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,+stopped: Deferred.Deferred<Unit>,initial: List<&2,Controller.Submission>,+context: ThemeContext,+chosen: Callback.Callback<Selector.Choice,Unit>,treeEvents: Callback.Callback<TreePicker.Action,Unit>) -> IO(Result<&2,&2,Error,Unit>):
   match borrowed:
-    case (widgetOwner,+widgetHost,widgetComponent):
+    case (widgetOwner,widgetHost,widgetComponent):
       do IO<Result<&2,&2,Error,Unit>>:
-        previous : Maybe<&2,Callback.Callback<Session.AgentSession,Unit>> <- bindWidgetReset(contextBinding(context),widgetHost)
         ui : ExtensionUI.Owner <- ExtensionUI.create(ExtensionUI.BaseEnv{dialogHost,editorRefOf(contextInteraction(context)),footerState(foot),contextTranscript(context),redraw,workingTerminal(workingOf(contextInteraction(context))),contextTheme(context),widgetHost})
         current : Session.AgentSession <- Ref.read(Session.AgentSession,contextSession(context))
         runner : Maybe<&2,ExtensionRunner.ExtensionRunner> <- Session.extensionRunner(current)
-        bound : ExtensionUI.Owner <- ExtensionUI.bind(ui,runner)
+        bound : ExtensionUI.Owner <- ExtensionUI.bind(ui,runner,extensionRebindHook(contextBinding(context)))
         +external : Callback.Callback<ExtensionDialog.ExternalRequest,Unit> <- Callback.create(~ExtensionEditorInput,~ExtensionDialog.ExternalRequest,~Unit,~openExtensionEditor,ExtensionEditorInput{dialogHost,contextSession(context),terminalControl(contextInteraction(context))})
         ExtensionDialog.bindExternal(dialogHost,Some{external})
         host : Selector.Owner <- Selector.createHost(widgetComponent,contextTheme(context),contextBindings(context),Keys.defaults(),words,chosen,Some{treeEvents})
@@ -3093,8 +3075,6 @@ def runWidgetHosted(borrowed: ExtensionWidgets.Owner & ExtensionWidgets.Host & C
         ExtensionDialog.bindExternal(dialogHost,None{})
         Callback.dispose(ExtensionDialog.ExternalRequest,Unit,external)
         ExtensionUI.dispose(bound)
-        # finish() has already retired the installed hook; only its predecessor remains.
-        disposeRebindCallback(previous)
         ExtensionWidgets.dispose(widgetOwner)
         ExtensionDialog.dispose(dialog)
         return result
