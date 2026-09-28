@@ -25,6 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fake_openai  # noqa: E402
+import fake_radius  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 WIDTH, HEIGHT = 100, 32
@@ -200,9 +201,26 @@ def local_ca():
     (directory / "server.ext").write_text("subjectAltName=IP:127.0.0.1\nextendedKeyUsage=serverAuth\n")
     openssl("x509", "-req", "-in", "server.csr", "-CA", "ca.pem", "-CAkey", "ca.key", "-CAcreateserial",
             "-out", "server.pem", "-days", "2", "-extfile", "server.ext")
-    return {"ca": str(directory / "ca.pem"), "tls": (str(directory / "server.pem"), str(directory / "server.key"))}
+    openssl("req", *curve, "-keyout", "radius.key", "-out", "radius.csr", "-subj", "/CN=radius.pi.dev")
+    (directory / "radius.ext").write_text("subjectAltName=DNS:radius.pi.dev\nextendedKeyUsage=serverAuth\n")
+    openssl("x509", "-req", "-in", "radius.csr", "-CA", "ca.pem", "-CAkey", "ca.key", "-CAcreateserial",
+            "-out", "radius.pem", "-days", "2", "-extfile", "radius.ext")
+    return {"ca": str(directory / "ca.pem"), "tls": (str(directory / "server.pem"), str(directory / "server.key")),
+            "radius": (str(directory / "radius.pem"), str(directory / "radius.key"))}
 
 LOCAL_CA = None
+
+def radius_request(server):
+    if len(server.calls) != 1:
+        return f"calls: {len(server.calls)}"
+    path, headers, body = server.calls[0]
+    headers = {name.lower(): value for name, value in headers.items()}
+    entries = [json.loads(line) for line in body.decode().splitlines()]
+    has_share = any(entry.get("type") == "custom" and entry.get("customType") == "pi.share" for entry in entries)
+    return "\n".join((path, f"authorization: {headers.get('authorization')}",
+                      f"content-type: {headers.get('content-type')}",
+                      f"length matches: {len(body) == int(headers.get('content-length', '-1'))}",
+                      f"pi.share: {has_share}"))
 
 def run_side(label, argv, scenario, keep):
     # Equal-length names: the cwd enters the system prompt and token estimates.
@@ -221,9 +239,10 @@ def run_side(label, argv, scenario, keep):
         (root / relative).chmod(0o755)
     log = root / "requests.jsonl"
     global LOCAL_CA
-    if scenario.get("tls") and LOCAL_CA is None:
+    if (scenario.get("tls") or scenario.get("radius_share")) and LOCAL_CA is None:
         LOCAL_CA = local_ca()
     tls = LOCAL_CA if scenario.get("tls") else None
+    radius = fake_radius.serve(LOCAL_CA["radius"], scenario.get("radius_delay", 0)) if scenario.get("radius_share") else None
     server = fake_openai.serve(scenario.get("turns", []), str(log), tls=tls and tls["tls"])
     port = server.server_address[1]
     provider = {"baseUrl": f"{'https' if tls else 'http'}://127.0.0.1:{port}/v1", **scenario.get("provider", {})}
@@ -231,7 +250,8 @@ def run_side(label, argv, scenario, keep):
     env = {"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "PATH": os.environ["PATH"],
            "TERM": "xterm-256color", "LANG": "C.UTF-8", "OPENAI_API_KEY": "sk-parity", "PI_OFFLINE": "1",
            **package_links(),
-           **({"SSL_CERT_FILE": tls["ca"], "NODE_EXTRA_CA_CERTS": tls["ca"]} if tls else {}),
+           **({"SSL_CERT_FILE": LOCAL_CA["ca"], "NODE_EXTRA_CA_CERTS": LOCAL_CA["ca"]} if tls or radius else {}),
+           **({"HTTPS_PROXY": f"http://127.0.0.1:{radius.server_port}", "NO_PROXY": "127.0.0.1,localhost"} if radius else {}),
            **scenario.get("env", {})}
     if scenario.get("tool_bin"):
         env["PATH"] = str(root / scenario["tool_bin"]) + os.pathsep + env["PATH"]
@@ -294,6 +314,12 @@ def run_side(label, argv, scenario, keep):
                     time.sleep(.01)
                 if not target.exists():
                     raise AssertionError(f"Expected file {target}")
+            elif kind == "wait-radius-call":
+                deadline = time.monotonic() + scenario.get("timeout", 30)
+                while not radius.calls and time.monotonic() < deadline:
+                    time.sleep(.01)
+                if not radius.calls:
+                    raise AssertionError("Expected Radius upload")
             elif kind == "title":
                 deadline = time.monotonic() + scenario.get("timeout", 30)
                 while True:
@@ -315,6 +341,10 @@ def run_side(label, argv, scenario, keep):
     finally:
         terminal.close()
         server.shutdown()
+        if radius:
+            radius.shutdown()
+            radius.server_close()
+            snaps["radius-request"] = radius_request(radius)
         logged = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
         for request in logged:
             request["headers"] = {k: v for k, v in request.get("headers", {}).items() if k not in KNOWN_HEADERS}

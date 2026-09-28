@@ -1755,7 +1755,7 @@
     },
     "packages/coding-agent/src/modes/interactive/session-share.ts": {
       "state": "partial",
-      "note": "The pi.share export payload, native Radius-first POST and private Gist fallback are implemented. The share loader starts when upload or Gist creation begins and shows the selected route. One/four-thread loopback tests check Radius JSONL bytes, headers, success and errors; mounted Gist sharing and Escape cancellation match pi, including the next prompt. A full Radius terminal scenario and concurrent-export isolation remain open.",
+      "note": "The pi.share export payload, native Radius-first POST and private Gist fallback are implemented. The share loader starts when upload or Gist creation begins and shows the selected route. One/four-thread loopback tests check Radius JSONL bytes, headers, success and errors; mounted Radius and Gist sharing, Escape cancellation and the next prompt match pi. Concurrent-export isolation remains open.",
       "source_sha256": "8204ea1382273641e943ca02877ca466f5642dab73f4bda29508c2337637c0cd",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/session-share.bend": "0d4dca8689b3c0ba5fd4714cdc8251224613c0320fec6365c82171cdbb18214a"
@@ -1771,7 +1771,7 @@
     },
     "packages/coding-agent/src/modes/interactive/components/bordered-loader.ts": {
       "state": "partial",
-      "note": "The native component replaces the mounted editor with a bordered progress screen, forwards idle input/focus/mouse/nested children, and restores the editor after completion. Its spinner uses the upstream ten frames at 80 ms and is active only during sharing. Mounted Gist creation and Escape cancellation screens match pi on one/four threads, including a subsequent prompt. Full Radius terminal parity and independent modal focus remain open.",
+      "note": "The native component replaces the mounted editor with a bordered progress screen, forwards idle input/focus/mouse/nested children, and restores the editor after completion. Its spinner uses the upstream ten frames at 80 ms and is active only during sharing. Mounted Radius and Gist creation and Escape cancellation screens match pi on one/four threads, including a subsequent prompt. Independent modal focus remains open.",
       "source_sha256": "f4a6487b80360bde89d8e96ebec16d84d4cd106dcc57c53757be571c7c4da1f6",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/bordered-loader.bend": "7ec941cee8c0a73deb2fb9c04fd20d37bd3d00f6f4715e695a5dfcf6fafd0295"

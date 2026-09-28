@@ -3325,3 +3325,6 @@ Codex side conversation: replaced the README video player with a 1.7 MB looping 
 
 Codex side conversation: reordered the README table from toolchain and OS primitives through libraries to the application layer. Row contents are unchanged.
 Codex: `/share` now shows route-specific progress and animates upstream spinner frames at 80 ms only during active sharing. One/four-thread Gist completion, cancellation, typing, code-answer and paced-stream parity match; Radius loopback and source inventory pass. Large-session startup/history and flood latency remain at the known baseline.
+
+Codex: owns a focused Radius `/share` terminal parity fixture in tests/parity/runner.py, scenarios.py and a fake loopback HTTPS proxy. No production changes planned unless the mounted comparison finds a defect.
+Codex: mounted Radius `/share` success/cancel/recovery and authenticated JSONL request match pi on native one/four via a loopback HTTPS proxy. Releasing tests/parity paths; concurrent share export remains the session-share gap.

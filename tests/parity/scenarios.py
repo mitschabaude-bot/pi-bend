@@ -1565,3 +1565,27 @@ SCENARIOS.append({
               ("keys", "next"), ("key", "Enter"),
               ("wait", "After cancellation", "recovered"), ("settle", 0.2), ("snap", "recovered")],
 })
+
+SCENARIOS.append({
+    "name": "share-radius", "args": MODEL, "radius_share": True, "radius_delay": 0.35,
+    "turns": [{"text": "Share fixture answer"}],
+    "files": {"home/.pi/agent/auth.json": '{"radius":{"type":"oauth","access":"radius-fixture","refresh":"","expires":4102444800000}}'},
+    "steps": [("wait", READY, "startup"), ("settle", 1), ("keys", "hello"), ("key", "Enter"),
+              ("wait", "Share fixture answer", "answered"), ("settle", 0.3),
+              ("keys", "/share"), ("key", "Enter"),
+              ("wait", "Uploading to Radius...", "uploading"),
+              ("wait", "Share URL:", "shared"), ("settle", 0.2), ("snap", "shared")],
+})
+
+SCENARIOS.append({
+    "name": "share-radius-cancel", "args": MODEL, "radius_share": True, "radius_delay": 5,
+    "turns": [{"text": "Share fixture answer"}, {"text": "After cancellation"}],
+    "files": {"home/.pi/agent/auth.json": '{"radius":{"type":"oauth","access":"radius-fixture","refresh":"","expires":4102444800000}}'},
+    "steps": [("wait", READY, "startup"), ("settle", 1), ("keys", "hello"), ("key", "Enter"),
+              ("wait", "Share fixture answer", "answered"), ("settle", 0.3),
+              ("keys", "/share"), ("key", "Enter"),
+              ("wait", "Uploading to Radius...", "uploading"), ("wait-radius-call",),
+              ("key", "Escape"), ("wait", "Share cancelled", "cancelled"), ("snap", "cancelled"),
+              ("keys", "next"), ("key", "Enter"),
+              ("wait", "After cancellation", "recovered"), ("settle", 0.2), ("snap", "recovered")],
+})
