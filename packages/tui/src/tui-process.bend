@@ -1,5 +1,8 @@
 import Base
 import ./fullscreen-mouse.bend as Mouse
+import ./fullscreen-selection.bend as Selection
+import ../../runtime/src/utf8.bend as Utf8
+import ../../runtime/src/base64.bend as Base64
 import ../../runtime/src/callback.bend as Callback
 import ../../runtime/src/deferred.bend as Deferred
 import ../../runtime/src/ref.bend as Ref
@@ -20,6 +23,8 @@ import ./tui-alt-screen.bend as Alt
 import ./alt-screen-search.bend as Search
 import ../../runtime/src/grapheme.bend as Grapheme
 
+type CopyResult is Data: Copied{} CopyError{message: String}
+
 # Rendering is a transaction: the owner publishes mouse bounds and the screen
 # retains its new diff state only after every ordered terminal effect succeeds.
 type ScreenState is Data: Main{state: Screen.State} Fullscreen{state: Alt.State}
@@ -31,7 +36,7 @@ type Error is Data:
 type Draw is Data:
   Drawn{session: Session}
   Rejected{session: Session,cause: Error}
-type Input is Data: Input{outcome: Draw,handled: Bool,owed: Bool}
+type Input is Data: Input{outcome: Draw,handled: Bool,owed: Bool,flashDeadline: Maybe<&2,Nat>}
 
 def initial() -> Session: Session{Tui.newTui(),Main{Screen.initial()}}
 def options(tui: Tui.TuiBase,termux: Bool) -> Screen.Options:
@@ -156,8 +161,8 @@ def draw(session: Session,+handle: Terminal.Handle,termux: Bool) -> IO(Draw):
 # transaction as a manually requested frame.
 def afterInput(result: Tui.ResultOf(Tui.InputResult),old: Session,handle: Terminal.Handle,termux: Bool) -> IO(Input):
   match result old:
-    case Fail{error} old: IO.pure(Input,Input{Rejected{old,Owner{error}},False{},False{}})
-    case Done{Tui.InputResult{tui,handled,immediate}} Session{_,screen}: IO.pure(Input,Input{Drawn{Session{tui,screen}},handled,immediate})
+    case Fail{error} old: IO.pure(Input,Input{Rejected{old,Owner{error}},False{},False{},None{}})
+    case Done{Tui.InputResult{tui,handled,immediate}} Session{_,screen}: IO.pure(Input,Input{Drawn{Session{tui,screen}},handled,immediate,None{}})
 type ViewportAction is Data: Scroll{motion: Layout.ScrollMotion} Consume{} Pass{}
 type ViewportKey is Data: ViewportKey{action: String,motion: Layout.ScrollMotion}
 def viewportKeys() -> List<&2,ViewportKey>:
@@ -184,7 +189,7 @@ def viewportAction(bindings: Bindings.KeybindingsManager,+data: String) -> Viewp
   viewportFound(boundViewport(bindings,data,viewportKeys()),data)
 def scrollInput(result: Tui.ScrollChange,screen: Alt.State) -> Input:
   match result:
-    case Tui.ScrollChange{next,_,render}: Input{Drawn{Session{next,Fullscreen{screen}}},True{},render}
+    case Tui.ScrollChange{next,_,render}: Input{Drawn{Session{next,Fullscreen{screen}}},True{},render,None{}}
 def viewportScrolled(tui: Tui.TuiBase,screen: Alt.State,motion: Layout.ScrollMotion) -> IO(Input):
   do IO<Input>:
     now : Nat <- IO.now()
@@ -198,7 +203,7 @@ def primaryTop(view: Maybe<&2,Layout.LayoutNode>) -> Nat:
     case None{}: 0n
     case Some{node}: topOf(Layout.primaryInfo(node))
 def searchInputResult(tui: Tui.TuiBase,screen: Alt.State) -> Input:
-  Input{Drawn{Session{tui,Fullscreen{screen}}},True{},True{}}
+  Input{Drawn{Session{tui,Fullscreen{screen}}},True{},True{},None{}}
 def toggleSearchActive(+tui: Tui.TuiBase,+screen: Alt.State,active: Maybe<&2,Search.Session>) -> Input:
   match active:
     case None{}: searchInputResult(tui,Alt.withSearch(screen,Some{Search.open(primaryTop(Tui.layoutRoot(tui)))}))
@@ -244,7 +249,7 @@ def searchAction(+tui: Tui.TuiBase,+screen: Alt.State,+bindings: Bindings.Keybin
 def fullscreenAction(action: ViewportAction,+tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
   match action:
     case Scroll{motion}: viewportScrolled(tui,screen,motion)
-    case Consume{}: IO.pure(Input,Input{Drawn{Session{tui,Fullscreen{screen}}},True{},False{}})
+    case Consume{}: IO.pure(Input,Input{Drawn{Session{tui,Fullscreen{screen}}},True{},False{},None{}})
     case Pass{}:
       do IO<Input>:
         result : Tui.ResultOf(Tui.InputResult) <- Tui.dispatchInput(tui,registry,mounted,data)
@@ -257,32 +262,100 @@ def keyboardFullscreen(+tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Co
   do IO<Input>:
     +bindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,Alt.bindings(screen))
     searchedOrViewport(searchAction(tui,screen,bindings,data),bindings,tui,screen,registry,mounted,data,handle,termux)
-def mouseFallback(delta: Maybe<&2,T.Offset>,tui: Tui.TuiBase,next: Alt.State) -> IO(Input):
+def copiedWrite(result: Result<&2,&2,Terminal.Error,Unit>) -> CopyResult:
+  match result:
+    case Done{_}: Copied{}
+    case Fail{_}: CopyError{"Copy failed"}
+def copiedFallback(handle: Terminal.Handle,encoded: Result<&2,&2,Base64.Error,String>) -> IO(CopyResult):
+  match encoded:
+    case Fail{_}: IO.pure(CopyResult,CopyError{"Copy failed"})
+    case Done{value}:
+      do IO<CopyResult>:
+        result : Result<&2,&2,Terminal.Error,Unit> <- Terminal.write(handle,"\u{1b}]52;c;" ++ value ++ "\u{7}")
+        return copiedWrite(result)
+def copySelected(value: Maybe<&2,String>,clipboard: Maybe<&2,Callback.Callback<String,CopyResult>>,handle: Terminal.Handle) -> IO(Maybe<&2,CopyResult>):
+  match value clipboard:
+    case None{} _: IO.pure(Maybe<&2,CopyResult>,None{})
+    case Some{text} Some{copy}:
+      do IO<Maybe<&2,CopyResult>>:
+        result : CopyResult <- Callback.call(String,CopyResult,copy,text)
+        return Some{result}
+    case Some{text} None{}:
+      do IO<Maybe<&2,CopyResult>>:
+        result : CopyResult <- copiedFallback(handle,Base64.encode(Utf8.encode(text)))
+        return Some{result}
+def copyMessage(result: CopyResult) -> String:
+  match result:
+    case Copied{}: "Copied!"
+    case CopyError{message}: message
+def copyFlash(screen: Alt.State,result: Maybe<&2,CopyResult>,deadline: Nat) -> Alt.State:
+  match result:
+    case None{}: screen
+    case Some{value}: Alt.withFlash(screen,copyMessage(value),deadline)
+def flashDeadline(result: Maybe<&2,CopyResult>,deadline: Nat) -> Maybe<&2,Nat>:
+  match result:
+    case None{}: None{}
+    case Some{_}: Some{deadline}
+def keyboardSelection(text: Maybe<&2,String>,tui: Tui.TuiBase,screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,data: String,handle: Terminal.Handle,termux: Bool,clipboard: Maybe<&2,Callback.Callback<String,CopyResult>>) -> IO(Input):
+  match text:
+    case None{}: keyboardFullscreen(tui,screen,registry,mounted,data,handle,termux)
+    case Some{text}:
+      do IO<Input>:
+        +result : Maybe<&2,CopyResult> <- copySelected(Some{text},clipboard,handle)
+        now : Nat <- IO.now()
+        +deadline : Nat = now + 1000n
+        return Input{Drawn{Session{tui,Fullscreen{copyFlash(screen,result,deadline)}}},True{},True{},flashDeadline(result,deadline)}
+def copyOrKeyboard(+tui: Tui.TuiBase,+screen: Alt.State,+registry: List<&2,Component.Component>,+mounted: List<&2,Component.ComponentId>,+data: String,+handle: Terminal.Handle,+termux: Bool,policy: Bool & Maybe<&2,Callback.Callback<String,CopyResult>>) -> IO(Input):
+  match policy:
+    case (_,clipboard):
+      do IO<Input>:
+        bindings : Bindings.KeybindingsManager <- Ref.read(Bindings.KeybindingsManager,Alt.bindings(screen))
+        Bool.pick(Unit -> IO(Input),Bindings.matches(bindings,Keys.defaults(),data,"app.message.copy"),
+          _ => keyboardSelection(Alt.selectedText(screen),tui,screen,registry,mounted,data,handle,termux,clipboard),
+          _ => keyboardFullscreen(tui,screen,registry,mounted,data,handle,termux))(Unit{})
+def selectionStep(tui: Tui.TuiBase,screen: Alt.State,step: Selection.Step,policy: Bool & Maybe<&2,Callback.Callback<String,CopyResult>>,handle: Terminal.Handle) -> IO(Input):
+  match step:
+    case Selection.Step{selection,changed,released}:
+      match policy:
+        case (copyOnSelect,clipboard):
+          do IO<Input>:
+            +next : Alt.State = Alt.withSelection(screen,selection)
+            +result : Maybe<&2,CopyResult> <- Bool.pick(Unit -> IO(Maybe<&2,CopyResult>),released && copyOnSelect,_ => copySelected(Alt.selectedText(next),clipboard,handle),_ => IO.pure(Maybe<&2,CopyResult>,None{}))(Unit{})
+            now : Nat <- IO.now()
+            +deadline : Nat = now + 1000n
+            return Input{Drawn{Session{tui,Fullscreen{copyFlash(next,result,deadline)}}},True{},changed,flashDeadline(result,deadline)}
+def selectionSized(tui: Tui.TuiBase,+screen: Alt.State,raw: Mouse.Raw,size: Nat & Nat,policy: Bool & Maybe<&2,Callback.Callback<String,CopyResult>>,handle: Terminal.Handle) -> IO(Input):
+  match size raw:
+    case (width,height) Mouse.Raw{+code,x,y,release}:
+      selectionStep(tui,screen,Selection.advance(Alt.selection(screen),x,y,width,height,code % 4n,Mouse.bit(code,32n),release),policy,handle)
+def selectionInput(tui: Tui.TuiBase,+screen: Alt.State,raw: Mouse.Raw,policy: Bool & Maybe<&2,Callback.Callback<String,CopyResult>>,handle: Terminal.Handle) -> IO(Input):
+  selectionSized(tui,screen,raw,Alt.dimensions(screen),policy,handle)
+def mouseFallback(delta: Maybe<&2,T.Offset>,tui: Tui.TuiBase,next: Alt.State,raw: Mouse.Raw,policy: Bool & Maybe<&2,Callback.Callback<String,CopyResult>>,handle: Terminal.Handle) -> IO(Input):
   match delta:
     case Some{delta}: viewportScrolled(tui,next,Layout.ScrollLines{delta})
-    case None{}: IO.pure(Input,Input{Drawn{Session{tui,Fullscreen{next}}},True{},False{}})
-def mouseOutcome(outcome: Mouse.Outcome,+screen: Alt.State,raw: Mouse.Raw) -> IO(Input):
+    case None{}: selectionInput(tui,next,raw,policy,handle)
+def mouseOutcome(outcome: Mouse.Outcome,+screen: Alt.State,+raw: Mouse.Raw,policy: Bool & Maybe<&2,Callback.Callback<String,CopyResult>>,handle: Terminal.Handle) -> IO(Input):
   match outcome:
-    case Mouse.Outcome{state,tui,_,_,Some{error}}: IO.pure(Input,Input{Rejected{Session{tui,Fullscreen{Alt.withMouse(screen,state)}},Owner{error}},True{},False{}})
-    case Mouse.Outcome{state,tui,True{},render,None{}}: IO.pure(Input,Input{Drawn{Session{tui,Fullscreen{Alt.withMouse(screen,state)}}},True{},render})
+    case Mouse.Outcome{state,tui,_,_,Some{error}}: IO.pure(Input,Input{Rejected{Session{tui,Fullscreen{Alt.withMouse(screen,state)}},Owner{error}},True{},False{},None{}})
+    case Mouse.Outcome{state,tui,True{},render,None{}}: IO.pure(Input,Input{Drawn{Session{tui,Fullscreen{Alt.withMouse(screen,state)}}},True{},render,None{}})
     case Mouse.Outcome{state,tui,False{},_,None{}}:
       +next = Alt.withMouse(screen,state)
-      mouseFallback(Mouse.wheel(raw),tui,next)
-def mouseSized(pair: Nat & Nat,+tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,+raw: Mouse.Raw) -> IO(Input):
+      mouseFallback(Mouse.wheel(raw),tui,next,raw,policy,handle)
+def mouseSized(pair: Nat & Nat,+tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,+raw: Mouse.Raw,policy: Bool & Maybe<&2,Callback.Callback<String,CopyResult>>,handle: Terminal.Handle) -> IO(Input):
   match pair:
     case (width,height):
       do IO<Input>:
         outcome : Mouse.Outcome <- Mouse.dispatch(Alt.mouse(screen),tui,Alt.layout(screen),registry,mounted,raw,width,height)
-        mouseOutcome(outcome,screen,raw)
-def mouseOrInput(raw: Maybe<&2,Mouse.Raw>,+tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
+        mouseOutcome(outcome,screen,raw,policy,handle)
+def mouseOrInput(raw: Maybe<&2,Mouse.Raw>,+tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,data: String,handle: Terminal.Handle,termux: Bool,policy: Bool & Maybe<&2,Callback.Callback<String,CopyResult>>) -> IO(Input):
   match raw:
-    case Some{raw}: mouseSized(Alt.dimensions(screen),tui,screen,registry,mounted,raw)
-    case None{}: keyboardFullscreen(tui,screen,registry,mounted,data,handle,termux)
-def fullscreenInput(+tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,+data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
-  mouseOrInput(Mouse.parse(data),tui,screen,registry,mounted,data,handle,termux)
-def input(+session: Session,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,data: String,handle: Terminal.Handle,termux: Bool) -> IO(Input):
+    case Some{raw}: mouseSized(Alt.dimensions(screen),tui,screen,registry,mounted,raw,policy,handle)
+    case None{}: copyOrKeyboard(tui,screen,registry,mounted,data,handle,termux,policy)
+def fullscreenInput(+tui: Tui.TuiBase,+screen: Alt.State,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,+data: String,handle: Terminal.Handle,termux: Bool,policy: Bool & Maybe<&2,Callback.Callback<String,CopyResult>>) -> IO(Input):
+  mouseOrInput(Mouse.parse(data),tui,screen,registry,mounted,data,handle,termux,policy)
+def input(+session: Session,registry: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,data: String,handle: Terminal.Handle,termux: Bool,policy: Bool & Maybe<&2,Callback.Callback<String,CopyResult>>) -> IO(Input):
   match session:
-    case Session{tui,Fullscreen{screen}}: fullscreenInput(tui,screen,registry,mounted,data,handle,termux)
+    case Session{tui,Fullscreen{screen}}: fullscreenInput(tui,screen,registry,mounted,data,handle,termux,policy)
     case Session{+tui,_}:
       do IO<Input>:
         result : Tui.ResultOf(Tui.InputResult) <- Tui.dispatchInput(tui,registry,mounted,data)
@@ -369,24 +442,29 @@ type RendererRequest is Data:
   RendererInspection{completed: Callback.Callback<RendererResult,Unit>}
 type TerminalPreference is Data:
   HardwareCursor{enabled: Bool} ClearOnShrink{enabled: Bool} FullscreenScrollbar{mode: Scroll.ScrollViewScrollbar}
+  FullscreenCopyOnSelect{enabled: Bool} SelectionClipboard{copy: Callback.Callback<String,CopyResult>}
   RendererViews{modes: Ref.Ref<RendererModes>} RendererMode{request: RendererRequest}
 type Preferences is Data:
-  Preferences{cursor: Maybe<&2,Bool>,clear: Maybe<&2,Bool>,scrollbar: Maybe<&2,Scroll.ScrollViewScrollbar>,renderer: Maybe<&2,Ref.Ref<RendererModes>>,requests: List<&2,RendererRequest>}
-def emptyPreferences() -> Preferences: Preferences{None{},None{},None{},None{},Nil{}}
+  Preferences{cursor: Maybe<&2,Bool>,clear: Maybe<&2,Bool>,scrollbar: Maybe<&2,Scroll.ScrollViewScrollbar>,renderer: Maybe<&2,Ref.Ref<RendererModes>>,requests: List<&2,RendererRequest>,copyOnSelect: Bool,clipboard: Maybe<&2,Callback.Callback<String,CopyResult>>}
+def emptyPreferences() -> Preferences: Preferences{None{},None{},None{},None{},Nil{},True{},None{}}
 def changedPreference(current: Preferences,change: TerminalPreference) -> Preferences & Unit:
   match current change:
-    case Preferences{_,clear,bar,renderer,requests} HardwareCursor{value}: (Preferences{Some{value},clear,bar,renderer,requests},Unit{})
-    case Preferences{cursor,_,bar,renderer,requests} ClearOnShrink{value}: (Preferences{cursor,Some{value},bar,renderer,requests},Unit{})
-    case Preferences{cursor,clear,_,renderer,requests} FullscreenScrollbar{value}: (Preferences{cursor,clear,Some{value},renderer,requests},Unit{})
-    case Preferences{cursor,clear,bar,_,requests} RendererViews{modes}: (Preferences{cursor,clear,bar,Some{modes},requests},Unit{})
-    case Preferences{cursor,clear,bar,renderer,requests} RendererMode{request}: (Preferences{cursor,clear,bar,renderer,List.append(&2,RendererRequest,requests,request <> Nil{})},Unit{})
+    case Preferences{_,clear,bar,renderer,requests,copy,clipboard} HardwareCursor{value}: (Preferences{Some{value},clear,bar,renderer,requests,copy,clipboard},Unit{})
+    case Preferences{cursor,_,bar,renderer,requests,copy,clipboard} ClearOnShrink{value}: (Preferences{cursor,Some{value},bar,renderer,requests,copy,clipboard},Unit{})
+    case Preferences{cursor,clear,_,renderer,requests,copy,clipboard} FullscreenScrollbar{value}: (Preferences{cursor,clear,Some{value},renderer,requests,copy,clipboard},Unit{})
+    case Preferences{cursor,clear,bar,renderer,requests,_,clipboard} FullscreenCopyOnSelect{value}: (Preferences{cursor,clear,bar,renderer,requests,value,clipboard},Unit{})
+    case Preferences{cursor,clear,bar,renderer,requests,copy,_} SelectionClipboard{value}: (Preferences{cursor,clear,bar,renderer,requests,copy,Some{value}},Unit{})
+    case Preferences{cursor,clear,bar,_,requests,copy,clipboard} RendererViews{modes}: (Preferences{cursor,clear,bar,Some{modes},requests,copy,clipboard},Unit{})
+    case Preferences{cursor,clear,bar,renderer,requests,copy,clipboard} RendererMode{request}: (Preferences{cursor,clear,bar,renderer,List.append(&2,RendererRequest,requests,request <> Nil{}),copy,clipboard},Unit{})
 def takenPreferences(+current: Preferences) -> Preferences & Preferences:
   match current:
-    case Preferences{_,_,_,renderer,_}: (Preferences{None{},None{},None{},renderer,Nil{}},current)
+    case Preferences{_,_,_,renderer,_,copy,clipboard}: (Preferences{None{},None{},None{},renderer,Nil{},copy,clipboard},current)
 def screenPreferences(screen: ScreenState,preferences: Preferences) -> Preferences:
   match screen preferences:
-    case Main{_} Preferences{cursor,clear,_,renderer,requests}: Preferences{cursor,clear,None{},renderer,requests}
+    case Main{_} Preferences{cursor,clear,_,renderer,requests,copy,clipboard}: Preferences{cursor,clear,None{},renderer,requests,copy,clipboard}
     case Fullscreen{_} preferences: preferences
+def selectionPreferences(preferences: Preferences) -> Bool & Maybe<&2,Callback.Callback<String,CopyResult>>:
+  match preferences: case Preferences{_,_,_,_,_,copy,clipboard}: (copy,clipboard)
 def preferredScrollbar(base: Tui.TuiBase,mode: Maybe<&2,Scroll.ScrollViewScrollbar>) -> Tui.TuiBase:
   match mode:
     case None{}: base
@@ -402,7 +480,7 @@ def storeRendererScrollbar(renderer: Maybe<&2,Ref.Ref<RendererModes>>,scrollbar:
     case _ _: IO.pure(Unit,Unit{})
 def preferredTui(base: Tui.TuiBase,preferences: Preferences) -> Tui.TuiBase:
   match base preferences:
-    case Tui.TuiBase{root,focus,bindings,displayed,scheduler,cursor,clear,node,+heldFocus} Preferences{newCursor,newClear,scrollbar,_,_}:
+    case Tui.TuiBase{root,focus,bindings,displayed,scheduler,cursor,clear,node,+heldFocus} Preferences{newCursor,newClear,scrollbar,_,_,_,_}:
       preferredScrollbar(Tui.TuiBase{root,focus,bindings,displayed,scheduler,Maybe.default(&2,Bool,newCursor,cursor),Maybe.default(&2,Bool,newClear,clear),node,heldFocus},scrollbar)
 def preferredActive(current: Active,preferences: Preferences) -> Active:
   match current:
@@ -448,8 +526,8 @@ def requestedRenderer(+current: Active,renderer: Maybe<&2,Ref.Ref<RendererModes>
         requestedRenderers(next,renderer,rest,handle)
 def applyPreferences(current: Active,+preferences: Preferences,handle: Terminal.Handle) -> IO(Active):
   match preferences:
-    case Preferences{None{},None{},None{},_,Nil{}}: IO.pure(Active,current)
-    case Preferences{_,_,scrollbar,+renderer,requests}:
+    case Preferences{None{},None{},None{},_,Nil{},_,_}: IO.pure(Active,current)
+    case Preferences{_,_,scrollbar,+renderer,requests,_,_}:
       do IO<Active>:
         storeRendererScrollbar(renderer,scrollbar)
         next : Active <- requestedRenderers(current,renderer,requests,handle)
@@ -480,16 +558,35 @@ type QueryWriter is Data:
   QueryWriter{terminal: Terminal.Handle,stopped: Deferred.Deferred<Unit>,failure: Deferred.Deferred<Terminal.Error>}
 def active(session: Session,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>) -> Active:
   Active{session,components,mounted,None{},False{},0n}
-def inputFinished(event: Input,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,previous: Maybe<&2,Error>,+owed: Bool,ticks: Nat) -> Active & Unit:
+def flashCount(deadline: Maybe<&2,Nat>) -> Nat:
+  match deadline:
+    case None{}: 0n
+    case Some{_}: 1n
+def inputFinished(event: Input,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,previous: Maybe<&2,Error>,+owed: Bool,ticks: Nat) -> Active & Maybe<&2,Nat>:
   match event:
-    case Input{Drawn{session},_,now}: (Active{session,components,mounted,previous,owed || now,ticks},Unit{})
-    case Input{Rejected{session,error},_,_}: (Active{session,components,mounted,Some{error},owed,ticks},Unit{})
-def inputOperation(current: Active,data: String,handle: Terminal.Handle,termux: Bool) -> IO(Active & Unit):
+    case Input{Drawn{session},_,now,+deadline}: (Active{session,components,mounted,previous,owed || now,ticks + flashCount(deadline)},deadline)
+    case Input{Rejected{session,error},_,_,_}: (Active{session,components,mounted,Some{error},owed,ticks},None{})
+def inputOperation(current: Active,data: String,handle: Terminal.Handle,termux: Bool,policy: Bool & Maybe<&2,Callback.Callback<String,CopyResult>>) -> IO(Active & Maybe<&2,Nat>):
   match current:
     case Active{session,+components,+mounted,previous,owed,ticks}:
-      do IO<Active & Unit>:
-        event : Input <- input(session,components,mounted,data,handle,termux)
+      do IO<Active & Maybe<&2,Nat>>:
+        event : Input <- input(session,components,mounted,data,handle,termux,policy)
         return inputFinished(event,components,mounted,previous,owed,ticks)
+def withoutFlashDeadline(pair: Active & Maybe<&2,Nat>) -> Active & Unit:
+  match pair: case (active,_): (active,Unit{})
+def clearedFlash(pair: Alt.State & Bool,tui: Tui.TuiBase,components: List<&2,Component.Component>,mounted: List<&2,Component.ComponentId>,previous: Maybe<&2,Error>,owed: Bool,ticks: Nat,handle: Terminal.Handle,termux: Bool) -> IO(Active & Unit):
+  match pair:
+    case (screen,False{}): IO.pure(Active & Unit,(Active{Session{tui,Fullscreen{screen}},components,mounted,previous,owed,ticks - 1n},Unit{}))
+    case (screen,True{}):
+      do IO<Active & Unit>:
+        rendered : Draw <- draw(Session{tui,Fullscreen{screen}},handle,termux)
+        return withoutFlashDeadline(inputFinished(Input{rendered,True{},False{},None{}},components,mounted,previous,owed,ticks - 1n))
+def expireFlashActive(current: Active,handle: Terminal.Handle,termux: Bool,now: Nat) -> IO(Active & Unit):
+  match current:
+    case Active{Session{tui,Fullscreen{screen}},components,mounted,previous,owed,ticks}:
+      clearedFlash(Alt.expiredFlash(screen,now),tui,components,mounted,previous,owed,ticks,handle,termux)
+    case Active{session,components,mounted,previous,owed,ticks}:
+      IO.pure(Active & Unit,(Active{session,components,mounted,previous,owed,ticks - 1n},Unit{}))
 # Render scheduling follows upstream TUI: requestRender queues a scheduling
 # step (process.nextTick), which starts a timer honouring the 16 ms minimum
 # frame interval; input and resize draw at once and cancel a pending timer.
@@ -570,6 +667,20 @@ def slept(pair: Timer & TimerCancel) -> IO(Unit):
       do IO<Unit>:
         waited : Timer & Bool <- Timer.wait(owner)
         closedTimer(waited)
+def flashTimer(listener: EventSink,deadline: Nat) -> IO(Unit):
+  match listener:
+    case EventSink{state,ready,_,termux,_}:
+      do IO<Unit>:
+        now : Nat <- IO.now()
+        timer : Timer & TimerCancel <- Timer.new(U32.from_nat(Nat.max(1n,deadline - now + 1n)))
+        slept(timer)
+        handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
+        now : Nat <- IO.now()
+        Serial.run(Active,Unit,state,current => expireFlashActive(current,handle,termux,now))
+def scheduleFlash(listener: EventSink,deadline: Maybe<&2,Nat>) -> IO(Unit):
+  match deadline:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{deadline}: IO.spawn(Unit,flashTimer(listener,deadline))
 def scheduledPreferences(+pending: Ref.Ref<Preferences>,event: Tui.RenderEvent,current: Active,+handle: Terminal.Handle,termux: Bool) -> IO(Active & List<&2,Tui.RenderEffect>):
   do IO<Active & List<&2,Tui.RenderEffect>>:
     next : Active <- applyPendingPreferences(pending,current,handle)
@@ -656,14 +767,16 @@ def cellsConsumed(+listener: EventSink,updated: Bool) -> IO(Unit):
 def dispatchCells(+listener: EventSink,+data: String,cells: Maybe<&2,Bool>) -> IO(Unit):
   match cells listener:
     case Some{updated} _: cellsConsumed(listener,updated)
-    case None{} EventSink{state,ready,_,termux,+preferences}:
+    case None{} EventSink{+state,+ready,queries,+termux,+preferences}:
       do IO<Unit>:
         +handle : Terminal.Handle <- Deferred.result(Terminal.Handle,ready)
         # A setting changed by the previous key must affect this key, even if
         # its coalesced frame has not run yet (for example hidden -> auto).
-        Serial.run(Active,Unit,state,current => do IO<Active & Unit>:
+        deadline : Maybe<&2,Nat> <- Serial.run(Active,Maybe<&2,Nat>,state,current => do IO<Active & Maybe<&2,Nat>>:
           next : Active <- applyPendingPreferences(preferences,current,handle)
-          inputOperation(next,data,handle,termux))
+          currentPreferences : Preferences <- Ref.read(Preferences,preferences)
+          inputOperation(next,data,handle,termux,selectionPreferences(currentPreferences)))
+        scheduleFlash(EventSink{state,ready,queries,termux,preferences},deadline)
 def dispatchRemaining(+listener: EventSink,queries: Query.Handle,remaining: Maybe<&2,String>) -> IO(Unit):
   match remaining:
     case None{}: IO.pure(Unit,Unit{})
@@ -806,7 +919,7 @@ def runStarted(pair: Terminal.ProcessTerminal & Terminal.Handle,owner: Serial.Ow
         notifyStopping(onStopping)
         drained : Unit <- Serial.run(Active,Unit,handle,unchanged)
         stopRendering : List<&2,Tui.RenderEffect> <- Serial.run(Active,List<&2,Tui.RenderEffect>,handle,current => scheduledOperation(Tui.StopRendering{},current,terminalHandle,termux))
-        waitTicks(handle,1000n)
+        waitTicks(handle,1500n)
         Query.setRunning(queries,writer,False{})
         cleared : Unit <- Serial.run(Active,Unit,handle,clearMouse)
         columns : U32 <- Terminal.getColumns(terminalHandle)
@@ -970,7 +1083,7 @@ def finalRendererViews(+views: RendererModes,+current: Active,+width: Nat,height
     case _: beforeStop(current,width)
 def finalRendererStop(+current: Active,renderer: Maybe<&2,Ref.Ref<RendererModes>>,+width: Nat) -> IO(Active & Screen.Stream):
   match renderer current:
-    case Some{modes} Active{Session{_,Fullscreen{Alt.State{_,_,height,_,_,_,_,_,_}}},_,_,_,_,_}:
+    case Some{modes} Active{Session{_,Fullscreen{Alt.State{_,_,height,_,_,_,_,_,_,_,_}}},_,_,_,_,_}:
       do IO<Active & Screen.Stream>:
         views : RendererModes <- Ref.read(RendererModes,modes)
         finalRendererViews(views,current,width,Maybe.default(&2,Nat,height,24n))

@@ -3291,3 +3291,7 @@ Codex: rejected chunked session JSONL loading. It passed 398 pinned operations o
 Codex: owns settings-selector.bend for the missing HTTP idle timeout menu choice; will validate persisted setting and menu behavior. Fullscreen copy-on-select also needs actual selection behavior and remains separate.
 
 Codex: HTTP idle timeout choices, persistence and confirmation now match upstream in the terminal parity scenario; source inventory passes. The general settings panel's remaining one-row count difference is the pre-existing missing fullscreen copy-on-select feature. Settings-selector paths released.
+
+Codex: owns TUI fullscreen selection paths (tui-alt-screen.bend, tui-process.bend, fullscreen-mouse.bend) and related settings/CLI wiring. Upstream tests require drag selection, visible highlight, automatic or explicit copy, and disabled copy-on-select behavior. I am mapping the existing mouse fallback and renderer state before editing.
+
+Codex: fullscreen drag selection, native clipboard copy, Ctrl+X, copy-on-select setting and timed feedback are implemented. Three new terminal scenarios match pi's text and settings on one/four threads; the badge has one ANSI reset placement difference. Existing settings and typing scenarios match. Source/test inventories pass; richer selection gestures remain open.

@@ -1,5 +1,6 @@
 import Base
 import ./fullscreen-mouse.bend as Mouse
+import ./fullscreen-selection.bend as Selection
 import ../../runtime/src/callback.bend as Callback
 import ../../runtime/src/ref.bend as Ref
 import ./keybindings.bend as Bindings
@@ -14,21 +15,22 @@ import ./layout.bend as Geometry
 
 # The alternate screen owns a fixed-size image of the terminal. Rendering is a
 # pure diff; the process commits the new image only after its write succeeds.
-type State is Data: State{lines: List<&2,String>,width: Maybe<&2,Nat>,height: Maybe<&2,Nat>,indicator: Callback.Callback<Unit,String>,bindings: Ref.Ref<Bindings.KeybindingsManager>,search: Maybe<&2,Search.Session>,styles: Callback.Callback<Unit,Search.Styles>,mouse: Mouse.State,layout: Maybe<&2,Geometry.LayoutFrame>}
+type Flash is Data: Flash{message: String,deadline: Nat}
+type State is Data: State{lines: List<&2,String>,width: Maybe<&2,Nat>,height: Maybe<&2,Nat>,indicator: Callback.Callback<Unit,String>,bindings: Ref.Ref<Bindings.KeybindingsManager>,search: Maybe<&2,Search.Session>,styles: Callback.Callback<Unit,Search.Styles>,mouse: Mouse.State,layout: Maybe<&2,Geometry.LayoutFrame>,selection: Selection.Selection,flash: Maybe<&2,Flash>}
 type Plan is Data: Plan{state: State,output: Screen.Stream}
 
-def initial(indicator: Callback.Callback<Unit,String>,bindings: Ref.Ref<Bindings.KeybindingsManager>,styles: Callback.Callback<Unit,Search.Styles>) -> State: State{Nil{},None{},None{},indicator,bindings,None{},styles,Mouse.initial(),None{}}
+def initial(indicator: Callback.Callback<Unit,String>,bindings: Ref.Ref<Bindings.KeybindingsManager>,styles: Callback.Callback<Unit,Search.Styles>) -> State: State{Nil{},None{},None{},indicator,bindings,None{},styles,Mouse.initial(),None{},Selection.initial(),None{}}
 def indicator(state: State) -> Callback.Callback<Unit,String>:
-  match state: case State{_,_,_,label,_,_,_,_,_}: label
+  match state: case State{_,_,_,label,_,_,_,_,_,_,_}: label
 def bindings(state: State) -> Ref.Ref<Bindings.KeybindingsManager>:
-  match state: case State{_,_,_,_,keys,_,_,_,_}: keys
+  match state: case State{_,_,_,_,keys,_,_,_,_,_,_}: keys
 def search(state: State) -> Maybe<&2,Search.Session>:
-  match state: case State{_,_,_,_,_,value,_,_,_}: value
+  match state: case State{_,_,_,_,_,value,_,_,_,_,_}: value
 def styles(state: State) -> Callback.Callback<Unit,Search.Styles>:
-  match state: case State{_,_,_,_,_,_,value,_,_}: value
+  match state: case State{_,_,_,_,_,_,value,_,_,_,_}: value
 def withSearch(state: State,value: Maybe<&2,Search.Session>) -> State:
   match state:
-    case State{lines,width,height,label,keys,_,palette,mouse,layout}: State{lines,width,height,label,keys,value,palette,mouse,layout}
+    case State{lines,width,height,label,keys,_,palette,mouse,layout,selection,flash}: State{lines,width,height,label,keys,value,palette,mouse,layout,selection,flash}
 def enter() -> String: "\u{1b}[?1049h\u{1b}[?7l\u{1b}[?1000h\u{1b}[?1002h\u{1b}[?1006h\u{1b}[2J\u{1b}[H\u{1b}[?25l"
 def leave() -> String: "\u{1b}[?2026h\u{1b}[?1000l\u{1b}[?1002l\u{1b}[?1003l\u{1b}[?1006l\u{1b}[?7h\u{1b}[?1049l\u{1b}[?25h\u{1b}[?2026l"
 def documentLinePrepared(reset: List<&2,String>,+width: Nat) -> String:
@@ -66,7 +68,7 @@ def leaveWithLayoutDocument(lines: List<&2,String>,width: Nat) -> Screen.Stream:
   leaveDocument(lines,width,False{})
 def reset(state: State) -> State:
   match state:
-    case State{_,_,_,label,keys,active,palette,mouse,_}: State{Nil{},None{},None{},label,keys,active,palette,mouse,None{}}
+    case State{_,_,_,label,keys,active,palette,mouse,_,selection,flash}: State{Nil{},None{},None{},label,keys,active,palette,mouse,None{},selection,flash}
 def rowText(row: Nat,line: String) -> String:
   "\u{1b}[" ++ Nat.show(row + 1n) ++ ";1H\u{1b}[2K\u{1b}[0m" ++ line
 def addRow(operation: Maybe<&2,Screen.Operation>,reversed: List<&2,Screen.Operation>) -> List<&2,Screen.Operation>:
@@ -95,15 +97,26 @@ def sameDimension(previous: Maybe<&2,Nat>,current: Nat) -> Bool:
   match previous:
     case None{}: False{}
     case Some{value}: Nat.is_eq(value,current)
+def flashDecorated(message: Maybe<&2,Flash>,lines: List<&2,String>,+width: Nat) -> List<&2,String>:
+  match message lines:
+    case None{} lines: lines
+    case Some{Flash{message,_}} +line <> rest:
+      +badge = "\u{1b}[7m " ++ message
+      +size = Layout.visibleWidth(badge)
+      +placed = Bool.pick(Unit -> String,String.is_empty(line),
+        _ => Layout.spaces(width - size - 1n,"") ++ badge,
+        _ => Tui.compositeTuiLine(line,badge,width - size - 1n,size,width))(Unit{})
+      placed <> rest
+    case Some{_} Nil{}: Nil{}
 def plan(state: State,+lines: List<&2,String>,cursor: Maybe<&2,Tui.CursorPosition>,+width: Nat,+height: Nat) -> Plan:
   match state:
-    case State{old,previousWidth,previousHeight,label,keys,active,palette,mouse,layout}:
+    case State{old,previousWidth,previousHeight,label,keys,active,palette,mouse,layout,+selection,+flash}:
       +full = Bool.not(sameDimension(previousWidth,width) && sameDimension(previousHeight,height))
-      +fitted = fit(lines,height,Nil{})
+      +fitted = flashDecorated(flash,Selection.paint(selection,fit(lines,height,Nil{})),width)
       +body = rows(old,fitted,0n,full,Nil{})
       +clear = Bool.pick(List<&2,Screen.Operation>,full,Screen.Text{"\u{1b}[2J"} <> body,body)
       +output = Screen.stream(Screen.Text{"\u{1b}[?2026h"} <> List.append(&2,Screen.Operation,clear,Screen.Text{cursorText(cursor,width) ++ "\u{1b}[?2026l"} <> Nil{}))
-      Plan{State{fitted,Some{width},Some{height},label,keys,active,palette,mouse,layout},output}
+      Plan{State{fitted,Some{width},Some{height},label,keys,active,palette,mouse,layout,selection,flash},output}
 
 def indicatorLine(line: String,+label: String,+width: Nat) -> String:
   +size = Layout.visibleWidth(label)
@@ -211,12 +224,32 @@ def planWithIndicator(+state: State,lines: List<&2,String>,cursor: Maybe<&2,Tui.
     case Some{position}: plan(state,searchDecorated(search(state),indicatorLines(lines,position,label,width),width),cursor,width,height)
 
 def withLayout(state: State,layout: Maybe<&2,Geometry.LayoutFrame>) -> State:
-  match state: case State{lines,width,height,label,keys,active,palette,mouse,_}: State{lines,width,height,label,keys,active,palette,mouse,layout}
+  match state: case State{lines,width,height,label,keys,active,palette,mouse,_,selection,flash}: State{lines,width,height,label,keys,active,palette,mouse,layout,selection,flash}
 def withMouse(state: State,mouse: Mouse.State) -> State:
-  match state: case State{lines,width,height,label,keys,active,palette,_,layout}: State{lines,width,height,label,keys,active,palette,mouse,layout}
+  match state: case State{lines,width,height,label,keys,active,palette,_,layout,selection,flash}: State{lines,width,height,label,keys,active,palette,mouse,layout,selection,flash}
 def mouse(state: State) -> Mouse.State:
-  match state: case State{_,_,_,_,_,_,_,value,_}: value
+  match state: case State{_,_,_,_,_,_,_,value,_,_,_}: value
 def layout(state: State) -> Maybe<&2,Geometry.LayoutFrame>:
-  match state: case State{_,_,_,_,_,_,_,_,value}: value
+  match state: case State{_,_,_,_,_,_,_,_,value,_,_}: value
 def dimensions(state: State) -> Nat & Nat:
-  match state: case State{_,width,height,_,_,_,_,_,_}: (Maybe.default(&2,Nat,width,1n),Maybe.default(&2,Nat,height,1n))
+  match state: case State{_,width,height,_,_,_,_,_,_,_,_}: (Maybe.default(&2,Nat,width,1n),Maybe.default(&2,Nat,height,1n))
+def withSelection(state: State,selection: Selection.Selection) -> State:
+  match state: case State{lines,width,height,label,keys,active,palette,mouse,layout,_,flash}: State{lines,width,height,label,keys,active,palette,mouse,layout,selection,flash}
+def selection(state: State) -> Selection.Selection:
+  match state: case State{_,_,_,_,_,_,_,_,_,value,_}: value
+def selectedText(state: State) -> Maybe<&2,String>:
+  match state: case State{lines,_,_,_,_,_,_,_,_,selection,_}: Selection.text(selection,lines)
+def withFlash(state: State,message: String,deadline: Nat) -> State:
+  match state: case State{lines,width,height,label,keys,active,palette,mouse,layout,selection,_}: State{lines,width,height,label,keys,active,palette,mouse,layout,selection,Some{Flash{message,deadline}}}
+def clearFlash(state: State) -> State:
+  match state: case State{lines,width,height,label,keys,active,palette,mouse,layout,selection,_}: State{lines,width,height,label,keys,active,palette,mouse,layout,selection,None{}}
+def expiryChoice(expired: Bool,state: State) -> State & Bool:
+  match expired:
+    case True{}: (clearFlash(state),True{})
+    case False{}: (state,False{})
+def expiredFlash(state: State,+now: Nat) -> State & Bool:
+  match state:
+    case State{lines,width,height,label,keys,active,palette,mouse,layout,selection,Some{Flash{message,+deadline}}}:
+      expiryChoice(Nat.is_le(deadline,now),State{lines,width,height,label,keys,active,palette,mouse,layout,selection,Some{Flash{message,deadline}}})
+    case State{lines,width,height,label,keys,active,palette,mouse,layout,selection,None{}}:
+      (State{lines,width,height,label,keys,active,palette,mouse,layout,selection,None{}},False{})

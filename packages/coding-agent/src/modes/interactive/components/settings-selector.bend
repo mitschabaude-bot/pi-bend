@@ -140,6 +140,7 @@ def rows(+settings: Settings.SettingsManager,currentTheme: String,submenu: Callb
   item("tui-mode","TUI mode","Interface layout; fullscreen mode is experimental",tuiMode(Settings.getTuiMode(settings)),choices("regular","fullscreen")) <>
   item("fullscreen-exit-output","Fullscreen exit output","Print the transcript or only a session resume hint when exiting fullscreen mode",exitOutput(Settings.getFullscreenExitOutput(settings)),choices("transcript","resume-hint")) <>
   item("fullscreen-scrollbar","Fullscreen scrollbar","Scrollbar behavior in fullscreen mode; has no effect in regular mode",scrollbar(Settings.getFullscreenScrollbar(settings)),"auto" <> "always" <> "hidden" <> Nil{}) <>
+  boolean("fullscreen-copy-on-select","Fullscreen copy on select","Automatically copy selected text in fullscreen mode; disable to copy selections with Ctrl+X",Settings.getFullscreenCopyOnSelect(settings)) <>
   themeRow(currentTheme,submenu) <>
   Nil{}
 
@@ -167,6 +168,8 @@ def change(id: String,value: String,settings: Settings.SettingsManager) -> Setti
     case "fullscreen-scrollbar" "auto": Settings.setFullscreenScrollbar(Settings.ScrollAuto{},settings)
     case "fullscreen-scrollbar" "always": Settings.setFullscreenScrollbar(Settings.ScrollAlways{},settings)
     case "fullscreen-scrollbar" "hidden": Settings.setFullscreenScrollbar(Settings.ScrollHidden{},settings)
+    case "fullscreen-copy-on-select" "true": Settings.setFullscreenCopyOnSelect(True{},settings)
+    case "fullscreen-copy-on-select" "false": Settings.setFullscreenCopyOnSelect(False{},settings)
     case "clear-on-shrink" "true": Settings.setClearOnShrink(True{},settings)
     case "clear-on-shrink" "false": Settings.setClearOnShrink(False{},settings)
     case "steering-mode" "all": Settings.setSteeringMode(Agent.All{},settings)
@@ -457,6 +460,7 @@ def controllerEffect(id: String,value: String,controller: Ref.Ref<Maybe<&2,Theme
     case "show-hardware-cursor": terminalEffect(controller,Process.HardwareCursor{boolValue(value)})
     case "http-idle-timeout": Transcript.status(transcript,"HTTP idle timeout: " ++ value)
     case "fullscreen-scrollbar": scrollbarEffect(controller,value)
+    case "fullscreen-copy-on-select": terminalEffect(controller,Process.FullscreenCopyOnSelect{boolValue(value)})
     case "clear-on-shrink": terminalEffect(controller,Process.ClearOnShrink{boolValue(value)})
     case _: IO.pure(Unit,Unit{})
 def controllerAfter(result: Result<&2,&2,String,Unit>,id: String,value: String,controller: Ref.Ref<Maybe<&2,ThemeController.Handle>>,transcript: Transcript.Handle) -> IO(Unit):

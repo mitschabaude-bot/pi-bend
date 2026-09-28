@@ -1047,6 +1047,19 @@ def treeCopyResult(transcript: Transcript.Handle,result: Result<&2,&2,String,Uni
     case Fail{message}: Transcript.showError(transcript,message)
 def treeCopyCwd(header: Tree.SessionHeader) -> String:
   match header: case Tree.SessionHeader{_,_,_,cwd,_}: cwd
+type SelectionCopySink is Data: SelectionCopySink{session: Ref.Ref<Session.AgentSession>}
+def selectedCopyResult(result: Result<&2,&2,String,Unit>) -> Process.CopyResult:
+  match result:
+    case Done{_}: Process.Copied{}
+    case Fail{message}: Process.CopyError{message}
+def selectedCopied(sink: SelectionCopySink,text: String) -> IO(Process.CopyResult):
+  match sink:
+    case SelectionCopySink{session}:
+      do IO<Process.CopyResult>:
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        stored : Session.Session() <- Session.sessionOf(live)
+        result : Result<&2,&2,String,Unit> <- Clipboard.copy(text,treeCopyCwd(Tree.getHeader(Unit,Tools.ToolDetails,Schema.Value,Session.stateOf(stored))))
+        return selectedCopyResult(result)
 def treeLabelResult(transcript: Transcript.Handle,result: Result<&2,&2,String,Unit>) -> IO(Unit):
   match result:
     case Done{_}: IO.pure(Unit,Unit{})
@@ -1427,7 +1440,7 @@ def clear(redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,_: Unit) -> IO
 type ThemeLive is Data:
   ThemeLive{selection: Ref.Ref<Maybe<&2,ThemeController.Handle>>,theme: Ref.Ref<Theme.Theme>,transcript: Transcript.Handle,requestRender: Callback.Callback<Unit,Unit>}
 type ThemeOwned is Type:
-  ThemeOwned{controller: ThemeController.Owner,render: Callback.Callback<Unit,Unit>}
+  ThemeOwned{controller: ThemeController.Owner,render: Callback.Callback<Unit,Unit>,copySelection: Callback.Callback<String,Process.CopyResult>}
   ThemePaused{selection: ThemeController.Selection}
 type ThemeStopping is Data:
   ThemeStopping{redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,selected: Ref.Ref<Maybe<&2,ThemeController.Handle>>,owned: Ref.Ref<Maybe<&1,ThemeOwned>>,view: View.Handle,modes: Ref.Ref<Process.RendererModes>,session: Ref.Ref<Session.AgentSession>,suspension: Process.SuspensionHandle,working: Working}
@@ -2803,13 +2816,13 @@ def initializeApplication(failure: Interactive.StatusSink,first: Bool,managed: M
         # upstream init: once startup is rendered, register the remaining
         # highlight.js languages, then invalidate and render again.
         SyntaxHighlight.loadAllHighlightLanguages(highlighter)
-def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle>,startup: ThemeStartup,+render: Callback.Callback<Unit,Unit>) -> IO(Unit):
+def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle>,startup: ThemeStartup,+render: Callback.Callback<Unit,Unit>,+copySelection: Callback.Callback<String,Process.CopyResult>) -> IO(Unit):
   match result startup:
     case Done{(controller,+handle)} ThemeStartup{redraw,queue,initial,+failure,_,+selected,owned,_,theme,+transcript,+session,_,builtinDir,_,managed,+interaction,highlighter,first}:
       do IO<Unit>:
         Ref.write(Maybe<&2,ThemeController.Handle>,selected,Some{handle})
         connectSettingsTheme(interaction,handle)
-        Ref.write(Maybe<&1,ThemeOwned>,owned,Some{ThemeOwned{controller,render}})
+        Ref.write(Maybe<&1,ThemeOwned>,owned,Some{ThemeOwned{controller,render,copySelection}})
         syncSelected(ThemeLive{selected,theme,transcript,render},handle)
         initializeApplication(failure,first,managed,transcript,session,interaction,builtinDir,highlighter,render)
         Transcript.invalidate(transcript)
@@ -2818,6 +2831,7 @@ def readySelected(result: Result<&2,&1,Theme.LoadError,ThemeController.Owner & T
     case Fail{cause} ThemeStartup{_,_,_,_,stopped,_,_,error,_,_,_,_,_,_,_,_,_,_}:
       do IO<Unit>:
         Callback.dispose(Unit,Unit,render)
+        Callback.dispose(String,Process.CopyResult,copySelection)
         Ref.write(Maybe<&2,Theme.LoadError>,error,Some{cause})
         settled : Bool <- Deferred.resolve(Unit,stopped,Unit{})
         return Unit{}
@@ -2825,10 +2839,11 @@ def closeTheme(current: Maybe<&1,ThemeOwned>) -> IO(Unit):
   match current:
     case None{}: IO.pure(Unit,Unit{})
     case Some{ThemePaused{_}}: IO.pure(Unit,Unit{})
-    case Some{ThemeOwned{controller,render}}:
+    case Some{ThemeOwned{controller,render,copySelection}}:
       do IO<Unit>:
         ThemeController.close(controller)
         Callback.dispose(Unit,Unit,render)
+        Callback.dispose(String,Process.CopyResult,copySelection)
 def saveTheme(selected: Maybe<&2,ThemeController.Handle>) -> IO(Maybe<&1,ThemeOwned>):
   match selected:
     case None{}: IO.pure(Maybe<&1,ThemeOwned>,None{})
@@ -2845,15 +2860,20 @@ def startTheme(previous: Maybe<&1,ThemeOwned>,ready: Process.QueryReady,setting:
         ThemeController.start(ready,setting,env,builtinDir,customDir,mode)
 def themeReady(startup: ThemeStartup,ready: Process.QueryReady) -> IO(Unit):
   match startup ready:
-    case ThemeStartup{redraw,queue,initial,failure,stopped,+selected,+owned,error,+theme,+transcript,+session,+setting,+builtinDir,+customDir,+managed,+interaction,highlighter,+first} Process.QueryReady{queries,+terminal,write,requestRender,preference}:
+    case ThemeStartup{redraw,queue,initial,failure,stopped,+selected,+owned,error,+theme,+transcript,+session,+setting,+builtinDir,+customDir,+managed,+interaction,highlighter,+first} Process.QueryReady{queries,+terminal,write,requestRender,+preference}:
       do IO<Unit>:
         readyTerminal(workingOf(interaction),session,terminal,first)
         +render : Callback.Callback<Unit,Unit> <- Callback.create(~ThemeLive,~Unit,~Unit,~syncRender,ThemeLive{selected,theme,transcript,requestRender})
+        +copySelection : Callback.Callback<String,Process.CopyResult> <- Callback.create(~SelectionCopySink,~String,~Process.CopyResult,~selectedCopied,SelectionCopySink{session})
+        Callback.call(Process.TerminalPreference,Unit,preference,Process.SelectionClipboard{copySelection})
+        live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        settings : Settings.SettingsManager <- Session.getSettings(live)
+        Callback.call(Process.TerminalPreference,Unit,preference,Process.FullscreenCopyOnSelect{Settings.getFullscreenCopyOnSelect(settings)})
         detected : Result<&1,&1,U32 & String,String> <- IO.get_env("COLORFGBG")
         initialTheme : Theme.Theme <- Ref.read(Theme.Theme,theme)
         previous : Maybe<&1,ThemeOwned> <- Ref.swap(Maybe<&1,ThemeOwned>,owned,None{})
         result : Result<&2,&1,Theme.LoadError,ThemeController.Owner & ThemeController.Handle> <- startTheme(previous,Process.QueryReady{queries,terminal,write,render,preference},setting,environmentValue(detected),builtinDir,customDir,Theme.colorMode(initialTheme))
-        readySelected(result,ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managed,interaction,highlighter,first},render)
+        readySelected(result,ThemeStartup{redraw,queue,initial,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managed,interaction,highlighter,first},render,copySelection)
 def resumedStartup(startup: ThemeStartup) -> ThemeStartup:
   match startup:
     case ThemeStartup{redraw,queue,_,failure,stopped,selected,owned,error,theme,transcript,session,setting,builtinDir,customDir,managed,interaction,highlighter,_}:
@@ -2931,7 +2951,7 @@ def configuredTui(base: Tui.TuiBase,session: Ref.Ref<Session.AgentSession>,scree
     hardwareFallback : Bool <- IO.pure(Bool,String.eq(Maybe.default(&2,String,environmentValue(hardwareEnv),""),"1"))
     clearFallback : Bool <- IO.pure(Bool,String.eq(Maybe.default(&2,String,environmentValue(clearEnv),""),"1"))
     show : Bool <- IO.pure(Bool,Maybe.default(&2,Bool,Settings.selectedShowHardwareCursor(Settings.get(Settings.effective(settings),"showHardwareCursor")),hardwareFallback))
-    return Process.preferredTui(base,Process.screenPreferences(screen,Process.Preferences{Some{show},Some{Settings.resolvedClearOnShrink(Settings.terminalOptions(settings),clearFallback)},Some{configuredScrollbar(Settings.getFullscreenScrollbar(settings))},None{},Nil{}}))
+    return Process.preferredTui(base,Process.screenPreferences(screen,Process.Preferences{Some{show},Some{Settings.resolvedClearOnShrink(Settings.terminalOptions(settings),clearFallback)},Some{configuredScrollbar(Settings.getFullscreenScrollbar(settings))},None{},Nil{},Settings.getFullscreenCopyOnSelect(settings),None{}}))
 type IndicatorStyle is Data: IndicatorStyle{theme: Ref.Ref<Theme.Theme>,bindings: Keybindings.KeybindingsManager}
 def styledIndicator(+current: Theme.Theme,bindings: Keybindings.KeybindingsManager) -> String:
   +shortcut = Hints.keyDisplayText(bindings,"tui.altScreen.bottom")

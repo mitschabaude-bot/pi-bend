@@ -666,6 +666,38 @@ SCENARIOS = [
                   ("wait", r"word1\b", "first-token"), ("snap", "working"), ("wait", "END-OF-ANSWER", "last-token"),
                   ("settle", 0.5), ("snap", "answered")],
     },
+    {
+        "name": "fullscreen-text-selection", "args": MODEL + ["--tui-mode", "fullscreen"],
+        "files": {"home/.pi/agent/settings.json": json.dumps({"fullscreenCopyOnSelect": False})},
+        "turns": [{"text": "alpha beta gamma"}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "hello"), ("key", "Enter"),
+                  ("wait", "alpha beta gamma", "answer"), ("settle", 0.3), ("snap", "answered"),
+                  ("keys", "\x1b[<0;2;15M"), ("keys", "\x1b[<32;7;15M"), ("keys", "\x1b[<0;7;15m"),
+                  ("settle", 0.3), ("snap", "selected"),
+                  ("key", "C-x"), ("settle", 0.2), ("snap", "manual-copy")],
+    },
+    {
+        "name": "fullscreen-copy-on-select", "args": MODEL + ["--tui-mode", "fullscreen"],
+        "turns": [{"text": "alpha beta gamma"}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "hello"), ("key", "Enter"),
+                  ("wait", "alpha beta gamma", "answer"), ("settle", 0.3),
+                  ("keys", "\x1b[<0;2;15M"), ("keys", "\x1b[<32;7;15M"), ("keys", "\x1b[<0;7;15m"),
+                  ("settle", 0.3), ("snap", "copied"),
+                  ("settle", 1.3), ("snap", "expired")],
+    },
+    {
+        "name": "fullscreen-copy-setting-live", "args": MODEL + ["--tui-mode", "fullscreen"],
+        "turns": [{"text": "alpha beta gamma"}],
+        "steps": [("wait", READY, "startup"), ("settle", 0.3), ("keys", "hello"), ("key", "Enter"),
+                  ("wait", "alpha beta gamma", "answer"), ("settle", 0.3),
+                  ("keys", "/settings"), ("key", "Enter"), ("settle", 0.3),
+                  ("keys", "fullscreen copy"), ("settle", 0.2), ("snap", "enabled"),
+                  ("key", "Enter"), ("settle", 0.2), ("snap", "disabled"),
+                  ("key", "Escape"), ("settle", 0.2),
+                  ("keys", "\x1b[<0;2;15M"), ("keys", "\x1b[<32;7;15M"), ("keys", "\x1b[<0;7;15m"),
+                  ("settle", 0.3), ("snap", "selected"),
+                  ("key", "C-x"), ("settle", 0.2), ("snap", "manual-copy")],
+    },
     # Streaming benchmark over each CLI's own TLS stack: a long Markdown answer
     # in 500 deltas, paced (about 250 per second) and as fast as the server
     # writes. Bend may take at most 1.25x pi's time to render the last token.
