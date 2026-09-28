@@ -2631,9 +2631,14 @@
     },
     {
       "source": "packages/coding-agent/test/clipboard.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "0c89cc3ad50766d0498863b96afed372c0aa0883d8f6b93fe7637cebe6ec2155"
+      "status": "partial",
+      "ports": [
+        "packages/coding-agent/src/utils/clipboard.bend",
+        "tests/clipboard-native-probe.bend",
+        "tests/clipboard_native_check.py"
+      ],
+      "sha256": "0c89cc3ad50766d0498863b96afed372c0aa0883d8f6b93fe7637cebe6ec2155",
+      "notes": "Linux command, OSC 52 and WSL PowerShell copy/read paths run natively on one/four threads. Native clipboard addon and macOS/Windows mocked cases remain unported."
     },
     {
       "source": "packages/coding-agent/test/collapsible-message-components.test.ts",

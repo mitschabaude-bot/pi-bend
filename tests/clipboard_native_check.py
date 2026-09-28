@@ -59,7 +59,45 @@ def main():
         env.pop("DISPLAY")
         assert run(env, "read") == b"EMPTY\n"  # Native timeout is five seconds.
 
-    print("native clipboard: Unicode, desktop/remote writes, OSC 52 limit, read fallback and timeout OK")
+        writer(directory / "wslpath", 'printf "%s\\n" "$2"\n')
+        powershell = directory / "powershell.exe"
+        powershell.write_text("#!/usr/bin/python3\n" + '''import os, pathlib, re, sys
+script = sys.argv[-1]
+match = re.search(r"ReadAllText\\('((?:''|[^'])*)'", script)
+assert match, script
+path = pathlib.Path(match.group(1).replace("''", "'"))
+pathlib.Path(os.environ["CLIPBOARD_CAPTURE"]).write_bytes(path.read_bytes())
+pathlib.Path(os.environ["CLIPBOARD_TEMP_PATH"]).write_text(str(path))
+pathlib.Path(os.environ["CLIPBOARD_TEMP_MODE"]).write_text(oct(path.stat().st_mode & 0o777))
+''')
+        powershell.chmod(0o755)
+        env.pop("WAYLAND_DISPLAY")
+        env["WSL_DISTRO_NAME"] = "Ubuntu"
+        private_tmp = directory / "pi's tmp"
+        private_tmp.mkdir()
+        env["TMPDIR"] = str(private_tmp)
+        env["CLIPBOARD_TEMP_PATH"] = str(directory / "temp-path")
+        env["CLIPBOARD_TEMP_MODE"] = str(directory / "temp-mode")
+        assert run(env, "copy", text) == b"OK\n"
+        assert (directory / "captured").read_text() == text
+        assert (directory / "temp-mode").read_text() == "0o600"
+        assert not Path((directory / "temp-path").read_text()).exists()
+
+        (directory / "captured").unlink()
+        env["WT_SESSION"] = "windows-terminal"
+        assert run(env, "copy", text) == osc + b"OK\n"
+        assert not (directory / "captured").exists()  # PowerShell was skipped.
+        assert run(env, "copy", "x" * 75001) == b"OK\n"  # Oversized OSC 52 uses interop.
+        assert (directory / "captured").read_text() == "x" * 75001
+        env.pop("WT_SESSION")
+
+        env["SSH_CONNECTION"] = "client server"
+        assert run(env, "copy", text) == osc + b"OK\n"
+        env.pop("SSH_CONNECTION")
+        writer(powershell, "exit 1\n")
+        assert run(env, "copy", text) == osc + b"OK\n"  # Interop failure falls back to the terminal.
+
+    print("native clipboard: Unicode, desktop/remote/WSL writes, OSC 52, read fallback and timeout OK")
 
 
 if __name__ == "__main__":

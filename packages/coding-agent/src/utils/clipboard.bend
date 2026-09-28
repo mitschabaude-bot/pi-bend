@@ -4,6 +4,12 @@ import ../../../runtime/src/child-process.bend as Child
 import ../../../runtime/src/callback.bend as Callback
 import ../../../runtime/src/ref.bend as Ref
 import ../../../runtime/src/utf8.bend as Utf8
+import ../../../runtime/src/filesystem.bend as FS
+import ../../../runtime/src/string.bend as Strings
+import ../../../runtime/src/text.bend as Text
+import ../../../ai/src/utils/uuid.bend as Uuid
+import ./clipboard-command.bend as ClipCmd
+import ../core/tools/output-accumulator.bend as Temp
 
 # Desktop writers retain selection ownership. Remote and headless terminals use
 # OSC 52, which has no acknowledgement channel back from the terminal.
@@ -156,6 +162,60 @@ def read(cwd: String) -> IO(Maybe<&2,String>):
     result : ReadAttempt <- readAttempt(readers(flags),cwd)
     return readValue(result)
 
+# WSL without a Linux display can still reach the Windows clipboard. A file
+# carries UTF-8 text across interop; PowerShell's stdin uses the console code
+# page and would corrupt non-ASCII input.
+def wslRelease(result: Result<&2,&2,FS.Error,List<&2,U32>>) -> Bool:
+  match result:
+    case Done{bytes}:
+      +version = String.to_lower(Utf8.decodeBuffer(bytes))
+      String.contains(version,"microsoft") || String.contains(version,"wsl")
+    case Fail{_}: False{}
+def isWsl() -> IO(Bool):
+  do IO<Bool>:
+    distro : Result<&1,&1,U32 & String,String> <- IO.get_env("WSL_DISTRO_NAME")
+    interop : Result<&1,&1,U32 & String,String> <- IO.get_env("WSLENV")
+    Bool.pick(Unit -> IO(Bool),present(distro) || present(interop),_ => IO.pure(Bool,True{}),
+      _ => do IO<Bool>:
+        release : Result<&2,&2,FS.Error,List<&2,U32>> <- FS.readFile("/proc/version")
+        return wslRelease(release))(Unit{})
+def windowsPath(output: Maybe<&2,List<&2,U32>>) -> Maybe<&2,String>:
+  match output:
+    case None{}: None{}
+    case Some{bytes}:
+      +path = Text.trim(Utf8.decodeBuffer(bytes))
+      Bool.pick(Maybe<&2,String>,String.is_empty(path),None{},Some{path})
+def powerShellAt(path: Maybe<&2,String>,cwd: String) -> IO(Bool):
+  match path:
+    case None{}: IO.pure(Bool,False{})
+    case Some{value}:
+      do IO<Bool>:
+        +script : String <- IO.pure(String,"Set-Clipboard -Value ([System.IO.File]::ReadAllText('" ++ Strings.replaceAll(value,"'","''") ++ "', [System.Text.Encoding]::UTF8))")
+        output : Maybe<&2,List<&2,U32>> <- ClipCmd.runClipboardCommand("powershell.exe",["-NoProfile","-Command",script],ClipCmd.withTimeout(5000),cwd)
+        return Maybe.is_some(&2,List<&2,U32>,output)
+def writtenWindows(path: String,+cwd: String,result: Result<&2,&2,FS.Error,Unit>) -> IO(Bool):
+  match result:
+    case Fail{_}: IO.pure(Bool,False{})
+    case Done{_}:
+      do IO<Bool>:
+        output : Maybe<&2,List<&2,U32>> <- ClipCmd.runClipboardCommand("wslpath",["-w",path],ClipCmd.withTimeout(1000),cwd)
+        powerShellAt(windowsPath(output),cwd)
+def windowsNamed(text: String,cwd: String,name: Result<&2,&2,Uuid.Error,String>) -> IO(Bool):
+  match name:
+    case Fail{_}: IO.pure(Bool,False{})
+    case Done{id}:
+      do IO<Bool>:
+        directory : String <- Temp.tempDirectory(["TMPDIR","TMP","TEMP"],None{})
+        +path : String <- IO.pure(String,FS.child(directory,"pi-wsl-clip-" ++ id ++ ".txt"))
+        written : Result<&2,&2,FS.Error,Unit> <- FS.writeFileMode(path,text,384)
+        copied : Bool <- writtenWindows(path,cwd,written)
+        removed : Result<&2,&2,FS.Error,Unit> <- FS.remove(path,False{},True{})
+        return copied
+def copyViaWindowsClipboard(text: String,cwd: String) -> IO(Bool):
+  do IO<Bool>:
+    name : Result<&2,&2,Uuid.Error,String> <- Uuid.randomUUID()
+    windowsNamed(text,cwd,name)
+
 def encoded(value: Result<&2,&2,Base64.Error,String>) -> Result<&2,&2,String,String>:
   match value:
     case Done{text}: Done{text}
@@ -187,18 +247,42 @@ def unavailable(flags: Environment) -> String:
     case Environment{_,True{},_,_}: "Clipboard unavailable: install `wl-clipboard` (`wl-copy`) or check Wayland access"
     case Environment{_,_,True{},_}: "Clipboard unavailable: install `xclip` or `xsel`, or check X11 access"
     case _: "Clipboard unavailable"
-def afterFailedCommands(text: String,flags: Environment) -> IO(Result<&2,&2,String,Unit>):
+def terminalFallback(text: String,flags: Environment) -> IO(Result<&2,&2,String,Unit>):
   match flags:
     case Environment{False{},False{},False{},_}: emit(osc52(text))
     case Environment{_,_,_,True{}}: emit(osc52(text))
     case _: IO.pure(Result<&2,&2,String,Unit>,Fail{unavailable(flags)})
-def afterCommands(copied: Bool,text: String,flags: Environment) -> IO(Result<&2,&2,String,Unit>):
+def emitted(value: Result<&2,&2,String,String>) -> IO(Bool):
+  match value:
+    case Fail{_}: IO.pure(Bool,False{})
+    case Done{sequence}:
+      do IO<Bool>:
+        IO.write(sequence)
+        return True{}
+def afterWindows(copied: Bool,text: String,flags: Environment) -> IO(Result<&2,&2,String,Unit>):
   match copied flags:
     case True{} Environment{_,_,_,True{}}: emitIfPossible(osc52(text))
     case True{} _: IO.pure(Result<&2,&2,String,Unit>,Done{Unit{}})
-    case False{} flags: afterFailedCommands(text,flags)
-def copy(+text: String,cwd: String) -> IO(Result<&2,&2,String,Unit>):
+    case False{} _: terminalFallback(text,flags)
+def wslFallback(+text: String,cwd: String,flags: Environment) -> IO(Result<&2,&2,String,Unit>):
+  do IO<Result<&2,&2,String,Unit>>:
+    terminal : Result<&1,&1,U32 & String,String> <- IO.get_env("WT_SESSION")
+    sent : Bool <- Bool.pick(Unit -> IO(Bool),present(terminal),_ => emitted(osc52(text)),_ => IO.pure(Bool,False{}))(Unit{})
+    Bool.pick(Unit -> IO(Result<&2,&2,String,Unit>),sent,_ => IO.pure(Result<&2,&2,String,Unit>,Done{Unit{}}),
+      _ => do IO<Result<&2,&2,String,Unit>>:
+        copied : Bool <- copyViaWindowsClipboard(text,cwd)
+        afterWindows(copied,text,flags))(Unit{})
+def afterFailedCommands(+text: String,cwd: String,+flags: Environment) -> IO(Result<&2,&2,String,Unit>):
+  do IO<Result<&2,&2,String,Unit>>:
+    wsl : Bool <- isWsl()
+    Bool.pick(Unit -> IO(Result<&2,&2,String,Unit>),wsl,_ => wslFallback(text,cwd,flags),_ => terminalFallback(text,flags))(Unit{})
+def afterCommands(copied: Bool,text: String,cwd: String,flags: Environment) -> IO(Result<&2,&2,String,Unit>):
+  match copied flags:
+    case True{} Environment{_,_,_,True{}}: emitIfPossible(osc52(text))
+    case True{} _: IO.pure(Result<&2,&2,String,Unit>,Done{Unit{}})
+    case False{} flags: afterFailedCommands(text,cwd,flags)
+def copy(+text: String,+cwd: String) -> IO(Result<&2,&2,String,Unit>):
   do IO<Result<&2,&2,String,Unit>>:
     +flags : Environment <- environment()
     copied : Bool <- attempt(candidates(flags),text,cwd)
-    afterCommands(copied,text,flags)
+    afterCommands(copied,text,cwd,flags)

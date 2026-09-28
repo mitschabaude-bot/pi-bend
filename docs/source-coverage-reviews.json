@@ -1776,6 +1776,27 @@
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/bordered-loader.bend": "7ec941cee8c0a73deb2fb9c04fd20d37bd3d00f6f4715e695a5dfcf6fafd0295"
       }
+    },
+    "packages/coding-agent/src/utils/clipboard.ts": {
+      "state": "partial",
+      "note": "Native Linux text clipboard reads/writes, command fallbacks, remote/headless OSC 52 and its size limit, plus WSL Windows Terminal and UTF-8 PowerShell interop run in tests/clipboard_native_check.py on one/four threads. The native clipboard addon fallback and macOS/Windows command routes are not ported; the pinned suite is partial.",
+      "source_sha256": "1331d3b9ade0eeb3c71500eabad44f2eab52fa4c1cc5154c66cf9aec9c0c811c",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/clipboard.bend": "e44595aa90f67824122ab27f1030208be9c5449ac75c941d67ce103880396f8a"
+      }
+    },
+    "packages/coding-agent/src/utils/wsl.ts": {
+      "state": "partial",
+      "note": "Both text and image clipboard paths detect WSL_DISTRO_NAME, WSLENV and Microsoft/WSL in /proc/version. WSL_DISTRO_NAME is exercised by the mounted text clipboard check; other detection branches are not independently validated.",
+      "ports": [
+        "packages/coding-agent/src/utils/clipboard.bend",
+        "packages/coding-agent/src/utils/clipboard-image.bend"
+      ],
+      "source_sha256": "689ab1d024e0d7e6d956ee9040c50ca8d741627c07718bf487dfdb560985d024",
+      "port_sha256": {
+        "packages/coding-agent/src/utils/clipboard.bend": "e44595aa90f67824122ab27f1030208be9c5449ac75c941d67ce103880396f8a",
+        "packages/coding-agent/src/utils/clipboard-image.bend": "b4fa2ffa5778774223d53f126888164d0fc871d91084f3165f0a8b19e4c35f6e"
+      }
     }
   }
 }
