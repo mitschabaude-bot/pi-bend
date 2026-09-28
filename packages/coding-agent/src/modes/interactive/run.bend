@@ -61,7 +61,6 @@ import ../../core/session-cwd.bend as SessionCwd
 import ../../core/session-persistence.bend as Persistence
 import ../../core/session-export.bend as SessionExport
 import ../../core/export-html/index.bend as Export
-import ../../core/prompt-templates.bend as Templates
 import ../../core/session-manager.bend as Tree
 import ../../core/session-stats.bend as Stats
 import ../../core/tools/index.bend as Tools
@@ -95,6 +94,7 @@ import ./components/trust-selector.bend as TrustPicker
 import ./components/messages.bend as MessageUI
 import ./components/custom-editor.bend as CustomEditor
 import ./components/extension-dialog.bend as ExtensionDialog
+import ./components/extension-selector.bend as ExtensionSelector
 import ./components/extension-widgets.bend as ExtensionWidgets
 import ./extension-ui.bend as ExtensionUI
 import ./components/session-info.bend as SessionInfo
@@ -570,9 +570,9 @@ type ImportRequest is Data: ImportRequest{path: String,cwdOverride: Maybe<&2,Str
 type ResumeRequest is Data: ResumeRequest{path: String,cwdOverride: Maybe<&2,String>}
 type SessionChoices is Data: SessionChoices{current: List<&2,Tree.SessionInfo>,all: List<&2,Tree.SessionInfo>} SessionLoading{context: SessionPicker.LoadContext}
 type ImportState is Data:
-  ImportState{host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,backend: Maybe<&2,Callback.Callback<ImportRequest,SessionHost.ImportOutcome>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+  ImportState{host: Ref.Ref<Maybe<&2,ExtensionDialog.Host>>,backend: Maybe<&2,Callback.Callback<ImportRequest,SessionHost.ImportOutcome>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type ResumeState is Data:
-  ResumeState{picker: Ref.Ref<Maybe<&2,SessionPicker.Host>>,dialog: Ref.Ref<Maybe<&2,LoginDialog.Host>>,sessions: Maybe<&2,Callback.Callback<Unit,SessionChoices>>,backend: Maybe<&2,Callback.Callback<ResumeRequest,SessionHost.CancellableResume>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
+  ResumeState{picker: Ref.Ref<Maybe<&2,SessionPicker.Host>>,dialog: Ref.Ref<Maybe<&2,ExtensionDialog.Host>>,sessions: Maybe<&2,Callback.Callback<Unit,SessionChoices>>,backend: Maybe<&2,Callback.Callback<ResumeRequest,SessionHost.CancellableResume>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>}
 type BashActivity is Data:
   BashActivity{active: Bool,closing: Bool,completion: Maybe<&2,Deferred.Deferred<Unit>>}
 type BashInput is Data:
@@ -635,14 +635,32 @@ def setupAutocomplete(+slot: AutocompleteSlot,editor: Ref.Ref<Maybe<&2,Live.Hand
         recursive : Bool <- Ref.read(Bool,files)
         created : Maybe<&2,Interactive.AutocompleteOwner> <- Interactive.createAutocompleteProvider(session,home,data,recursive)
         replaceProvider(slot,editor,created)
-def firstPath(args: List<&2,String>) -> Maybe<&2,String>:
-  match args:
-    case Nil{}: None{}
-    case path <> _: Some{path}
+def nonemptyPath(+path: String) -> Maybe<&2,String>:
+  Bool.pick(Maybe<&2,String>,String.is_empty(path),None{},Some{path})
+def quotedPath(text: String,+quote: Char,+reversed: String) -> Maybe<&2,String>:
+  match text:
+    case SNil{}: None{}
+    case SCon{+char,rest}:
+      Bool.pick(Unit -> Maybe<&2,String>,Char.is_eq(char,quote),
+        _ => nonemptyPath(String.reverse(reversed)),
+        _ => quotedPath(rest,quote,SCon{char,reversed}))(Unit{})
+def barePath(text: String,+reversed: String) -> String:
+  match text:
+    case SNil{}: String.reverse(reversed)
+    case SCon{Chr{+code},rest}:
+      Bool.pick(Unit -> String,Text.whitespace(code),
+        _ => String.reverse(reversed),
+        _ => barePath(rest,SCon{Chr{code},reversed}))(Unit{})
+def pathArgument(text: String) -> Maybe<&2,String>:
+  match text:
+    case SNil{}: None{}
+    case SCon{'"',rest}: quotedPath(rest,'"',"")
+    case SCon{'\'',rest}: quotedPath(rest,'\'',"")
+    case other: nonemptyPath(barePath(other,""))
 def exportPath(requested: Maybe<&2,String>) -> Maybe<&2,String>:
   match requested:
     case None{}: None{}
-    case Some{text}: firstPath(Templates.parseCommandArgs(text))
+    case Some{text}: pathArgument(Text.trimStart(text))
 def exportJsonlAt(session: Session.AgentSession,cwd: String,path: String,time: Persistence.Outcome(String)) -> IO(Result<&2,&2,String,String>):
   match time:
     case Fail{error}: IO.pure(Result<&2,&2,String,String>,Fail{Persistence.message(error)})
@@ -740,24 +758,19 @@ def importStatus(state: ImportState,status: Interactive.SubmissionFailure) -> IO
     case ImportState{_,_,failure,redraw}:
       do IO<Unit>:
         Interactive.report(failure,status)
-def importAnswer(target: Maybe<&2,LoginDialog.Host>,+redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>,title: String,choices: List<&2,LoginDialog.Choice>) -> IO(String):
+def importAnswer(target: Maybe<&2,ExtensionDialog.Host>,title: String) -> IO(String):
   match target:
     case None{}: IO.pure(String,"")
-    case Some{+dialog}:
+    case Some{dialog}:
       do IO<String>:
-        +pending : Deferred.Deferred<String> <- LoginDialog.openChoices(dialog,title,choices)
-        Interactive.requestRender(redraw)
-        answer : String <- Deferred.result(String,pending)
-        Deferred.dispose(String,pending)
-        LoginDialog.close(dialog)
-        Interactive.requestRender(redraw)
-        return answer
-def importConfirm(state: ImportState,title: String,yes: LoginDialog.Choice,no: LoginDialog.Choice) -> IO(String):
+        answer : Maybe<&2,String> <- ExtensionDialog.select(dialog,ExtensionSelector.create(title,["Yes","No"],None{}))
+        return Maybe.default(&2,String,answer,"")
+def importConfirm(state: ImportState,title: String) -> IO(String):
   match state:
-    case ImportState{host,_,_,redraw}:
+    case ImportState{host,_,_,_}:
       do IO<String>:
-        target : Maybe<&2,LoginDialog.Host> <- Ref.read(Maybe<&2,LoginDialog.Host>,host)
-        importAnswer(target,redraw,title,yes <> no <> Nil{})
+        target : Maybe<&2,ExtensionDialog.Host> <- Ref.read(Maybe<&2,ExtensionDialog.Host>,host)
+        importAnswer(target,title)
 def importInvoked(state: ImportState,path: String,cwdOverride: Maybe<&2,String>) -> IO(SessionHost.ImportOutcome):
   match state:
     case ImportState{_,None{},_,_}: IO.pure(SessionHost.ImportOutcome,SessionHost.ImportFailed{"Import is unavailable"})
@@ -769,16 +782,18 @@ def importReported(state: ImportState,path: String,result: SessionHost.ImportOut
     case SessionHost.ImportNeedsCwd{issue}: importStatus(state,Interactive.CommandFailure{"Failed to import session: " ++ SessionCwd.formatMissingSessionCwdError(issue)})
 def importFallbackChosen(+state: ImportState,+path: String,fallback: String,answer: String) -> IO(Unit):
   match answer:
-    case "yes":
+    case "Yes":
       do IO<Unit>:
         result : SessionHost.ImportOutcome <- importInvoked(state,path,Some{fallback})
         importReported(state,path,result)
     case _: importStatus(state,Interactive.CommandNotice{"Import cancelled"})
+def missingCwdTitle(missing: String,fallback: String) -> String:
+  "Session cwd not found\ncwd from session file does not exist\n" ++ missing ++ "\n\ncontinue in current cwd\n" ++ fallback
 def importFallback(+state: ImportState,path: String,issue: SessionCwd.SessionCwdIssue) -> IO(Unit):
   match issue:
     case SessionCwd.SessionCwdIssue{_,missing,+fallback}:
       do IO<Unit>:
-        answer : String <- importConfirm(state," Session cwd not found · " ++ missing,LoginDialog.Choice{LoginDialog.TextChoice{"yes"},"Continue in current cwd",fallback,"Continue in current cwd"},LoginDialog.Choice{LoginDialog.TextChoice{"no"},"Cancel import","","Cancel import"})
+        answer : String <- importConfirm(state,missingCwdTitle(missing,fallback))
         importFallbackChosen(state,path,fallback,answer)
 def importFirstResult(state: ImportState,path: String,result: SessionHost.ImportOutcome) -> IO(Unit):
   match result:
@@ -786,7 +801,7 @@ def importFirstResult(state: ImportState,path: String,result: SessionHost.Import
     case other: importReported(state,path,other)
 def importConfirmed(+state: ImportState,+path: String,answer: String) -> IO(Unit):
   match answer:
-    case "yes":
+    case "Yes":
       do IO<Unit>:
         result : SessionHost.ImportOutcome <- importInvoked(state,path,None{})
         importFirstResult(state,path,result)
@@ -796,7 +811,7 @@ def importRequested(+state: ImportState,path: Maybe<&2,String>) -> IO(Unit):
     case None{}: importStatus(state,Interactive.CommandFailure{"Usage: /import <path.jsonl>"})
     case Some{+input}:
       do IO<Unit>:
-        answer : String <- importConfirm(state," Import session · Replace current session with " ++ input ++ "?",LoginDialog.Choice{LoginDialog.TextChoice{"yes"},"Yes","Replace current session","Yes"},LoginDialog.Choice{LoginDialog.TextChoice{"no"},"No","Keep current session","No"})
+        answer : String <- importConfirm(state,"Import session\nReplace current session with " ++ input ++ "?")
         importConfirmed(state,input,answer)
 def importObserved(input: CommandObservation,requested: Maybe<&2,String>) -> IO(Unit):
   match input:
@@ -818,7 +833,7 @@ def resumeFinal(state: ResumeState,result: SessionHost.CancellableResume,fallbac
     case SessionHost.ResumeAttempted{SessionHost.ResumeNeedsCwd{issue}}: resumeStatus(state,Interactive.CommandFailure{"Failed to resume session: " ++ SessionCwd.formatMissingSessionCwdError(issue)})
 def resumeFallbackResult(+state: ResumeState,path: String,fallback: String,answer: String) -> IO(Unit):
   match answer:
-    case "yes":
+    case "Yes":
       do IO<Unit>:
         result : SessionHost.CancellableResume <- resumeInvoked(state,path,Some{fallback})
         resumeFinal(state,result,True{})
@@ -827,8 +842,8 @@ def resumeMissing(+state: ResumeState,+path: String,issue: SessionCwd.SessionCwd
   match state issue:
     case ResumeState{_,dialog,_,_,_,redraw} SessionCwd.SessionCwdIssue{_,missing,+fallback}:
       do IO<Unit>:
-        target : Maybe<&2,LoginDialog.Host> <- Ref.read(Maybe<&2,LoginDialog.Host>,dialog)
-        answer : String <- importAnswer(target,redraw," Session cwd not found · " ++ missing,LoginDialog.Choice{LoginDialog.TextChoice{"yes"},"Continue in current cwd",fallback,"Continue in current cwd"} <> LoginDialog.Choice{LoginDialog.TextChoice{"no"},"Cancel resume","","Cancel resume"} <> Nil{})
+        target : Maybe<&2,ExtensionDialog.Host> <- Ref.read(Maybe<&2,ExtensionDialog.Host>,dialog)
+        answer : String <- importAnswer(target,missingCwdTitle(missing,fallback))
         resumeFallbackResult(state,path,fallback,answer)
 def resumeResult(state: ResumeState,path: String,result: SessionHost.CancellableResume) -> IO(Unit):
   match result:
@@ -2258,6 +2273,8 @@ def contextResume(context: ThemeContext) -> ResumeState:
   match context: case ThemeContext{_,_,_,_,_,_,_,_,_,_,resume,_,_,_}: resume
 def resumePickerRef(state: ResumeState) -> Ref.Ref<Maybe<&2,SessionPicker.Host>>:
   match state: case ResumeState{picker,_,_,_,_,_}: picker
+def resumeDialogRef(state: ResumeState) -> Ref.Ref<Maybe<&2,ExtensionDialog.Host>>:
+  match state: case ResumeState{_,dialog,_,_,_,_}: dialog
 def contextBinding(context: ThemeContext) -> Maybe<&2,Binding>:
   match context: case ThemeContext{_,_,_,_,_,_,_,_,binding,_,_,_,_,_}: binding
 def contextBindings(context: ThemeContext) -> Keybindings.KeybindingsManager:
@@ -2266,11 +2283,11 @@ def loginStateOf(mode: Maybe<&2,Binding>,host: Ref.Ref<Maybe<&2,LoginDialog.Host
   match mode:
     case None{}: LoginState{host,abort,None{},None{},models,failure,redraw,session,sort}
     case Some{Binding{_,_,_,backend,refresh,_,_,_,_,_,_}}: LoginState{host,abort,Some{backend},Some{refresh},models,failure,redraw,session,sort}
-def importStateOf(mode: Maybe<&2,Binding>,host: Ref.Ref<Maybe<&2,LoginDialog.Host>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> ImportState:
+def importStateOf(mode: Maybe<&2,Binding>,host: Ref.Ref<Maybe<&2,ExtensionDialog.Host>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> ImportState:
   match mode:
     case None{}: ImportState{host,None{},failure,redraw}
     case Some{Binding{_,_,_,_,_,backend,_,_,_,_,_}}: ImportState{host,Some{backend},failure,redraw}
-def resumeStateOf(mode: Maybe<&2,Binding>,picker: Ref.Ref<Maybe<&2,SessionPicker.Host>>,dialog: Ref.Ref<Maybe<&2,LoginDialog.Host>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> ResumeState:
+def resumeStateOf(mode: Maybe<&2,Binding>,picker: Ref.Ref<Maybe<&2,SessionPicker.Host>>,dialog: Ref.Ref<Maybe<&2,ExtensionDialog.Host>>,failure: Interactive.StatusSink,redraw: Ref.Ref<Maybe<&2,Callback.Callback<Unit,Unit>>>) -> ResumeState:
   match mode:
     case None{}: ResumeState{picker,dialog,None{},None{},failure,redraw}
     case Some{Binding{_,_,_,_,_,_,sessions,resume,_,_,_}}: ResumeState{picker,dialog,Some{sessions},Some{resume},failure,redraw}
@@ -3215,6 +3232,7 @@ def runWidgetHosted(borrowed: ExtensionWidgets.Owner & ExtensionWidgets.Host & C
   match borrowed:
     case (widgetOwner,widgetHost,widgetComponent):
       do IO<Result<&2,&2,Error,Unit>>:
+        Ref.write(Maybe<&2,ExtensionDialog.Host>,resumeDialogRef(contextResume(context)),Some{dialogHost})
         +working : Working <- IO.pure(Working,workingOf(contextInteraction(context)))
         +workingMessage : Callback.Callback<Maybe<&2,String>,Unit> <- Callback.create(~Working,~Maybe<&2,String>,~Unit,~workingMessageCallback,working)
         +workingVisible : Callback.Callback<Bool,Unit> <- Callback.create(~WorkingVisibility,~Bool,~Unit,~workingVisibleCallback,WorkingVisibility{working,contextSession(context)})
@@ -3227,6 +3245,7 @@ def runWidgetHosted(borrowed: ExtensionWidgets.Owner & ExtensionWidgets.Host & C
         ExtensionDialog.bindExternal(dialogHost,Some{external})
         host : Selector.Owner <- Selector.createHost(widgetComponent,contextTheme(context),contextBindings(context),Keys.defaults(),words,chosen,Some{treeEvents})
         result : Result<&2,&2,Error,Unit> <- runHosted(Selector.borrowHost(host),live,words,view,foot,controller,queue,transcript,submitted,keys,paint,styles,rows,redraw,stopped,initial,context,chosen)
+        retiredDialog : Maybe<&2,ExtensionDialog.Host> <- Ref.dispose(Maybe<&2,ExtensionDialog.Host>,resumeDialogRef(contextResume(context)))
         ExtensionDialog.bindExternal(dialogHost,None{})
         Callback.dispose(ExtensionDialog.ExternalRequest,Unit,external)
         ExtensionUI.dispose(bound)
@@ -3439,11 +3458,12 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +selectorRef : Ref.Ref<Maybe<&2,Selector.Host>> <- Ref.new(Maybe<&2,Selector.Host>,None{})
         +modelsRef : Ref.Ref<List<&2,Models.Model()>> <- Ref.new(List<&2,Models.Model()>,models)
         +loginHost : Ref.Ref<Maybe<&2,LoginDialog.Host>> <- Ref.new(Maybe<&2,LoginDialog.Host>,None{})
+        +extensionDialogHost : Ref.Ref<Maybe<&2,ExtensionDialog.Host>> <- Ref.new(Maybe<&2,ExtensionDialog.Host>,None{})
         +resumePicker : Ref.Ref<Maybe<&2,SessionPicker.Host>> <- Ref.new(Maybe<&2,SessionPicker.Host>,None{})
         +loginAbort : Ref.Ref<Maybe<&2,Abort.AbortController<Unit>>> <- Ref.new(Maybe<&2,Abort.AbortController<Unit>>,None{})
         +providerSort : Ref.Ref<ProviderSort> <- Ref.new(ProviderSort,PendingSort{Path.normalize(builtinDir ++ "/../../../../../runtime/data")})
         +loginState : LoginState <- IO.pure(LoginState,loginStateOf(mode,loginHost,loginAbort,modelsRef,status,redraw,current,providerSort))
-        +resumeState : ResumeState <- IO.pure(ResumeState,resumeStateOf(mode,resumePicker,loginHost,status,redraw))
+        +resumeState : ResumeState <- IO.pure(ResumeState,resumeStateOf(mode,resumePicker,extensionDialogHost,status,redraw))
         loginCallback : Callback.Callback<Commands.CredentialCommand,Unit> <- Callback.create(~LoginState,~Commands.CredentialCommand,~Unit,~credentialRun,loginState)
         +shareControlRef : Ref.Ref<Maybe<&2,BorderedLoader.Activity>> <- Ref.new(Maybe<&2,BorderedLoader.Activity>,None{})
         +commandSink : Interactive.CommandSink <- IO.pure(Interactive.CommandSink,Interactive.CommandSink{status,redraw,modelSelectorRef,thinkingSelectorRef,scopedSelectorRef,current,modelsRef,shareControlRef})
@@ -3451,7 +3471,7 @@ def startTranscript(borrowed: Transcript.Owner & Transcript.Handle,view: View.Vi
         +editorHandle : Ref.Ref<Maybe<&2,Live.Handle>> <- Ref.new(Maybe<&2,Live.Handle>,None{})
         +bashActivity : Ref.Ref<BashActivity> <- Ref.new(BashActivity,BashActivity{False{},False{},None{}})
         +autocomplete : AutocompleteSlot <- autocompleteSlot(home,builtinDir)
-        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),status,redraw,cwd,builtinDir,importStateOf(mode,loginHost,status,redraw),resumeState,selectorRef,BashInput{current,transcriptHandle,editorHandle,status,redraw,bashActivity},settingsSelectorRef,TrustContext{trustSelectorRef,Trust.create(Path.normalize(customDir ++ "/..")),autoTrustOnReloadOf(mode)},View.headerHandle(viewHandle),bindings,autocomplete,ExportTheme{liveTheme,customDir}})
+        commandObserver : Callback.Callback<Commands.Action,Unit> <- Callback.create(~CommandObservation,~Commands.Action,~Unit,~commandObserved,CommandObservation{commandSink,current,footerState(foot),status,redraw,cwd,builtinDir,importStateOf(mode,extensionDialogHost,status,redraw),resumeState,selectorRef,BashInput{current,transcriptHandle,editorHandle,status,redraw,bashActivity},settingsSelectorRef,TrustContext{trustSelectorRef,Trust.create(Path.normalize(customDir ++ "/..")),autoTrustOnReloadOf(mode)},View.headerHandle(viewHandle),bindings,autocomplete,ExportTheme{liveTheme,customDir}})
         +lastClear : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         +lastEscape : Ref.Ref<Maybe<&2,F64>> <- Ref.new(Maybe<&2,F64>,None{})
         selectionObserver : Callback.Callback<Controller.SelectionResult,Unit> <- Callback.create(~SelectionSink,~Controller.SelectionResult,~Unit,~selectionResult,SelectionSink{current,transcriptHandle,editorHandle,footerState(foot),status,redraw,cwd,home})

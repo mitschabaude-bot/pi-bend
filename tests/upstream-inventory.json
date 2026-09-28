@@ -3188,9 +3188,12 @@
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-import-command.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "4d1efb74cdc71799ddf9374b411dccac233997e6a6e7f362dd35628a7925627e"
+      "status": "partial",
+      "ports": [
+        "tests/parity/scenarios.py"
+      ],
+      "sha256": "4d1efb74cdc71799ddf9374b411dccac233997e6a6e7f362dd35628a7925627e",
+      "notes": "Mounted quoted-space and apostrophe imports match on one/four threads. Missing-file handling is nonfatal but reports a relative path instead of the resolved absolute path; command token boundary is checked by the dispatcher, not by a mounted case."
     },
     {
       "source": "packages/coding-agent/test/interactive-mode-startup-input.test.ts",

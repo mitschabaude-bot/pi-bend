@@ -41,6 +41,10 @@ def handleInput(+state: State,+bindings: Bindings.KeybindingsManager,+keyboard: 
 
 def color(theme: Theme.Theme,key: String,+value: String) -> String:
   Result.default(&2,&2,Theme.Error,String,Theme.foreground(theme,key,value),value)
+def titleLines(lines: List<&2,String>,+theme: Theme.Theme,reversed: List<&2,String>) -> List<&2,String>:
+  match lines:
+    case Nil{}: List.reverse(&2,String,reversed)
+    case line <> rest: titleLines(rest,theme,color(theme,"accent",Theme.bold(line)) <> reversed)
 def border(width: Nat,theme: Theme.Theme) -> String:
   color(theme,"border",String.repeat("─",Nat.max(1n,width)))
 def textRows(pair: Text.Text & List<&2,String>) -> List<&2,String>:
@@ -70,7 +74,7 @@ def render(state: State,+theme: Theme.Theme,+bindings: Bindings.KeybindingsManag
   match state:
     case State{heading,options,index,description,remaining}:
       do IO<List<&2,String>>:
-        headingRows : List<&2,String> <- textLine(color(theme,"accent","\u{1b}[1m" ++ heading ++ remainingSuffix(remaining) ++ "\u{1b}[22m"),width)
+        headingRows : List<&2,String> <- textLine(String.join(titleLines(String.split(heading ++ remainingSuffix(remaining),'\n'),theme,Nil{}),"\n"),width)
         detail : List<&2,String> <- descriptionRows(description,width,theme)
         choices : List<&2,String> <- optionRows(options,0n,index,width,theme)
         hint : String <- IO.pure(String,Hints.rawKeyHint(theme,"↑↓","navigate") ++ "  " ++ Hints.keyHint(theme,bindings,"tui.select.confirm","select") ++ "  " ++ Hints.keyHint(theme,bindings,"tui.select.cancel","cancel"))

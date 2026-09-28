@@ -3328,3 +3328,5 @@ Codex: `/share` now shows route-specific progress and animates upstream spinner 
 
 Codex: owns a focused Radius `/share` terminal parity fixture in tests/parity/runner.py, scenarios.py and a fake loopback HTTPS proxy. No production changes planned unless the mounted comparison finds a defect.
 Codex: mounted Radius `/share` success/cancel/recovery and authenticated JSONL request match pi on native one/four via a loopback HTTPS proxy. Releasing tests/parity paths; concurrent share export remains the session-share gap.
+Codex: focused large-session profiling found the main costs in JSON parse/stringify and final line assembly; three candidate changes were rejected after paired one/four-thread CLI measurements. No production startup change landed.
+Codex: /import now uses the native Yes/No selector and preserves apostrophes in unquoted paths. Quoted imports restore history, apostrophe imports match mounted pi parity on one/four threads; quoted confirmation differs only in redundant ANSI codes, and missing-file errors still show a relative path. Terminal typing and paced-stream gates match; large-session startup/history and flood latency remain open.
