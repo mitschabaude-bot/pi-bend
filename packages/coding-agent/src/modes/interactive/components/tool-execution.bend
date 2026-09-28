@@ -43,6 +43,7 @@ type Shell is Data:
   Generic{}
   Boxed{call: Maybe<&2,ToolRender.Renderer()>,result: Maybe<&2,ToolRender.Renderer()>}
   SelfRendered{call: Maybe<&2,ToolRender.Renderer()>,result: Maybe<&2,ToolRender.Renderer()>}
+  NativeBash{}
 # A returned component belongs to this tool row until the next renderer
 # replacement or row retirement. Line renderers remain width-dependent.
 type Retained is Type: Retained{version: Nat,owner: Component.Owner}
@@ -243,12 +244,12 @@ def builtCall(name: String,args: Value.Value,context: Maybe<&2,ToolContext>,high
     case "grep": GrepRenderer.renderCall(args,theme)
     case "ls": LsRenderer.renderCall(args,theme)
     case _: Render.pathCall(theme,name,args)
-def boxedBuiltin(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>,+context: Maybe<&2,ToolContext>) -> IO(List<&2,String>):
+def boxedBuiltinAs(+renderName: String,+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>,+context: Maybe<&2,ToolContext>) -> IO(List<&2,String>):
   match state:
-    case ToolExecution{name,_,+args,result,expanded,images,partial,_,_,+theme,_,+highlight}:
+    case ToolExecution{_,_,+args,result,expanded,images,partial,_,_,+theme,_,+highlight}:
       do IO<List<&2,String>>:
-        call : String <- builtCall(name,args,context,highlight,write,expanded,theme)
-        extra : String <- builtResult(name,args,highlight,result,expanded,partial,elapsed,theme,Nat.max(1n,width - 2n),images,imageConfig(context))
+        call : String <- builtCall(renderName,args,context,highlight,write,expanded,theme)
+        extra : String <- builtResult(renderName,args,highlight,result,expanded,partial,elapsed,theme,Nat.max(1n,width - 2n),images,imageConfig(context))
         +bg : Callback.Callback<String,String> <- Messages.color(theme,backgroundKey(state),True{})
         lines : List<&2,String> <- textLines(call ++ extra,0n,0n,Nat.max(1n,width - 2n),None{})
         +body : List<&2,String> <- Box.paintContent(Box.prependMargin(lines," ",Nil{}),width,Some{bg},Nil{})
@@ -256,6 +257,8 @@ def boxedBuiltin(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>,write:
         +bottom : List<&2,String> <- Box.paintPadding(1n,width,Some{bg},Nil{})
         Callback.dispose(String,String,bg)
         return "" <> List.append(&2,String,top,List.append(&2,String,body,bottom))
+def boxedBuiltin(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>,+context: Maybe<&2,ToolContext>) -> IO(List<&2,String>):
+  match state: case ToolExecution{name,_,_,_,_,_,_,_,_,_,_,_}: boxedBuiltinAs(name,state,width,elapsed,write,context)
 def builtinWithPreview(+state: ToolExecution,width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>,preview: Maybe<&2,Edits.Preview()>,context: Maybe<&2,ToolContext>) -> IO(List<&2,String>):
   match state:
     case ToolExecution{"edit",_,args,+result,_,images,partial,_,_,theme,_,_}:
@@ -486,6 +489,7 @@ def renderContent(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>,write
   match state:
     case ToolExecution{+name,_,_,_,_,_,_,_,_,_,Generic{},_}:
       Bool.pick(Unit -> IO(List<&2,String>),hasBuiltin(name),_ => builtinWithPreview(state,width,elapsed,write,preview,context),_ => generic(state,width,imageConfig(context)))(Unit{})
+    case ToolExecution{_,_,_,_,_,_,_,_,_,_,NativeBash{},_}: boxedBuiltinAs("bash",state,width,elapsed,write,context)
     case ToolExecution{_,_,_,_,_,_,_,_,_,_,Boxed{+call,+result},_}: boxed(state,call,result,width,context,mount)
     case ToolExecution{_,_,_,_,_,_,_,_,_,_,SelfRendered{+call,+result},_}: selfRendered(state,call,result,width,context,mount)
 def renderWithPreview(+state: ToolExecution,+width: Nat,elapsed: Maybe<&2,F64>,write: Maybe<&2,WriteRenderer.WriteHighlightCache>,preview: Maybe<&2,Edits.Preview()>,+context: Maybe<&2,ToolContext>,mount: Maybe<&2,RenderMount>) -> IO(List<&2,String>):
@@ -586,6 +590,7 @@ def renderPrepared(preflight: Preflight,cached: Maybe<&2,Rendered>,current: Stam
 def displayedElapsed(current: Stamped,elapsed: Maybe<&2,F64>) -> Maybe<&2,F64>:
   match current:
     case Stamped{ToolExecution{"bash",_,_,_,_,_,_,_,_,_,_,_},_,_,_}: elapsed
+    case Stamped{ToolExecution{_,_,_,_,_,_,_,_,_,_,NativeBash{},_},_,_,_}: elapsed
     case _: None{}
 def renderLive(handle: Handle,width: Nat) -> IO(List<&2,String>):
   match handle:
@@ -765,6 +770,7 @@ def clickArea(state: ToolExecution,+rows: Nat,y: Tui.Offset) -> Bool:
     case ToolExecution{+name,_,_,_,_,_,_,_,_,_,Generic{},_} Tui.Forward{+row}:
       Bool.pick(Bool,hasBuiltin(name),Nat.is_le(2n,row) && Nat.is_lt(row + 1n,rows),Nat.is_le(1n,row) && Nat.is_lt(row,rows))
     case ToolExecution{_,_,_,_,_,_,_,_,_,_,Boxed{_,_},_} Tui.Forward{+row}: Nat.is_le(2n,row) && Nat.is_lt(row + 1n,rows)
+    case ToolExecution{_,_,_,_,_,_,_,_,_,_,NativeBash{},_} Tui.Forward{+row}: Nat.is_le(2n,row) && Nat.is_lt(row + 1n,rows)
     case _ _: False{}
 def displayedRows(cached: Maybe<&2,Rendered>) -> Nat:
   match cached:

@@ -40,8 +40,9 @@ def expandHint(+theme: Theme.Theme,skipped: Nat) -> IO(String):
   do IO<String>:
     start : String <- Messages.foregroundText(theme,"muted","... (" ++ Nat.show(skipped) ++ " earlier lines,")
     key : String <- Messages.foregroundText(theme,"dim",Messages.expandKeys())
-    ending : String <- Messages.foregroundText(theme,"muted"," to expand)")
-    return "\n\n" ++ start ++ " " ++ key ++ ending
+    ending : String <- Messages.foregroundText(theme,"muted"," to expand")
+    close : String <- Messages.foregroundText(theme,"muted",")")
+    return "\n\n" ++ start ++ " " ++ key ++ ending ++ close
 def previewLines(display: List<&2,String>,expanded: Bool,width: Nat) -> List<&2,String>:
   match expanded:
     case True{}: display

@@ -43,6 +43,8 @@ def builtinArgs(name: String) -> Value.Value:
     case "bash": Value.ObjectValue{R.Record{R.Property{"command",Value.Text{"printf hello"}} <> Nil{}}}
     case "write": Value.ObjectValue{R.Record{R.Property{"path",Value.Text{"notes.txt"}} <> R.Property{"content",Value.Text{"one\ntwo"}} <> Nil{}}}
     case _: Value.ObjectValue{R.Record{R.Property{"path",Value.Text{"notes.txt"}} <> Nil{}}}
+def ensure(yes: Bool,label: String) -> IO(Unit):
+  Bool.pick(Unit -> IO(Unit),yes,_ => IO.pure(Unit,Unit{}),_ => IO.die(Unit,1,label))(Unit{})
 def builtin(+name: String,+theme: Theme.Theme) -> IO(Unit):
   do IO<Unit>:
     +pending : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new(name,name,builtinArgs(name),theme,Tool.Generic{}))
@@ -52,6 +54,26 @@ def builtin(+name: String,+theme: Theme.Theme) -> IO(Unit):
     +final : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.updateResult(partial,result("one\ntwo\nthree",False{}),False{}))
     show(name ++ "-final",final)
     show(name ++ "-error",Tool.updateResult(final,result("bad input",True{}),False{}))
+def sameBashDisplay(builtin: Tool.ToolExecution,alias: Tool.ToolExecution,label: String) -> IO(Unit):
+  do IO<Unit>:
+    first : List<&2,String> <- Tool.renderWithDuration(builtin,80n,Some{F.fromU32(1500)},None{})
+    second : List<&2,String> <- Tool.renderWithDuration(alias,80n,Some{F.fromU32(1500)},None{})
+    ensure(String.eq(String.join(first,"\n"),String.join(second,"\n")),"renamed Bash display differs from built-in: " ++ label)
+def bashAlias(+theme: Theme.Theme) -> IO(Unit):
+  do IO<Unit>:
+    +args : Value.Value <- IO.pure(Value.Value,builtinArgs("bash"))
+    +builtin : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("bash","original",args,theme,Tool.Generic{}))
+    +alias : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("run_shell","alias",args,theme,Tool.NativeBash{}))
+    +partialText : ToolRender.ToolResult <- IO.pure(ToolRender.ToolResult,result("one\ntwo\nthree\nfour\nfive\nsix",False{}))
+    +running : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.updateResult(builtin,partialText,True{}))
+    +aliasRunning : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.updateResult(alias,partialText,True{}))
+    +done : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.updateResult(running,partialText,False{}))
+    +aliasDone : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.updateResult(aliasRunning,partialText,False{}))
+    pendingCheck : Unit <- sameBashDisplay(builtin,alias,"pending")
+    runningCheck : Unit <- sameBashDisplay(running,aliasRunning,"streaming")
+    completeCheck : Unit <- sameBashDisplay(done,aliasDone,"completed")
+    expandedCheck : Unit <- sameBashDisplay(Tool.setExpanded(done,True{}),Tool.setExpanded(aliasDone,True{}),"expanded")
+    sameBashDisplay(Tool.updateResult(done,result("failed",True{}),False{}),Tool.updateResult(aliasDone,result("failed",True{}),False{}),"error")
 def args1() -> Value.Value: Value.ObjectValue{R.Record{R.Property{"path",Value.Text{"notes.txt"}} <> Nil{}}}
 def args2() -> Value.Value: Value.ObjectValue{R.Record{R.Property{"path",Value.Text{"notes.txt"}} <> R.Property{"limit",Value.Number{F64{1073741824,0}}} <> Nil{}}}
 @unsafe def lines(+from: Nat,count: Nat,reversed: List<&2,String>) -> List<&2,String>:
@@ -64,8 +86,6 @@ def draw(label: String,context: ToolRender.RenderContext) -> IO(ToolRender.Rende
       +label = {label: String}
       IO.pure(ToolRender.RenderResult(),Done{ToolRender.RenderLines{U.padResult(label,U.visibleWidth(label),width,True{}) <> Nil{}}})
 def drawEmpty(label: String,context: ToolRender.RenderContext) -> IO(ToolRender.RenderResult()): IO.pure(ToolRender.RenderResult(),Done{ToolRender.RenderLines{Nil{}}})
-def ensure(yes: Bool,label: String) -> IO(Unit):
-  Bool.pick(Unit -> IO(Unit),yes,_ => IO.pure(Unit,Unit{}),_ => IO.die(Unit,1,label))(Unit{})
 def mountedImageCheck(pair: Tool.Owner & Component.Component & Tool.Handle) -> IO(Unit):
   match pair:
     case (owner,component,handle):
@@ -291,6 +311,7 @@ def mainRun(+theme: Theme.Theme) -> IO(Unit):
     show("agent-adapter",Tool.updateFromAgent(Value.Value,adapter,agentResult,None{},False{},False{}))
     builtin("read",theme)
     builtin("bash",theme)
+    bashAlias(theme)
     builtin("edit",theme)
     builtin("write",theme)
     +ranged : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("read","range",Value.ObjectValue{R.Record{R.Property{"path",Value.Text{"notes.txt"}} <> R.Property{"offset",Value.Number{F64{1074790400,0}}} <> R.Property{"limit",Value.Number{F64{1073741824,0}}} <> Nil{}}},theme,Tool.Generic{}))

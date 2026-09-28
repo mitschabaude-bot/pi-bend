@@ -145,8 +145,9 @@ def expandHint(+theme: Theme.Theme,remaining: Nat) -> IO(String):
       do IO<String>:
         start : String <- Messages.foregroundText(theme,"muted","\n... (" ++ Nat.show(count) ++ " more lines,")
         key : String <- Messages.foregroundText(theme,"dim",Messages.expandKeys())
-        end : String <- Messages.foregroundText(theme,"muted"," to expand)")
-        return start ++ " " ++ key ++ end
+        end : String <- Messages.foregroundText(theme,"muted"," to expand")
+        close : String <- Messages.foregroundText(theme,"muted",")")
+        return start ++ " " ++ key ++ end ++ close
 def renderResult(+args: Value.Value,highlight: Maybe<&2,C.Callback<Markdown.HighlightInput,List<&2,String>>>,+output: String,details: Maybe<&2,Tools.ToolDetails>,expanded: Bool,isError: Bool,+theme: Theme.Theme) -> IO(String):
   match expanded isError:
     case False{} False{}: IO.pure(String,"")

@@ -70,7 +70,7 @@ def createBashToolDefinition(+cwd: String, +options: Bash.BashToolOptions) -> IO
   +guidelines = Bool.pick(List<&2,String>,Tools.exposesSessionEnvironment(Some{options}),Tools.promptGuidelines(Tools.BashTool{}),Nil{})
   do IO<T.ToolDefinition>:
     execute : T.ToolExecute() <- C.create(~BashDefinition,~T.ToolCallInput,~Tools.Output(),~runBashDefinition,BashDefinition{cwd,options})
-    return T.ToolDefinition{"bash","bash",Bash.description(),Some{Tools.promptSnippet(Tools.BashTool{})},guidelines,Bash.bashSchema(),None{},execute,T.DefaultShell{},None{},None{}}
+    return T.ToolDefinition{"bash","bash",Bash.description(),Some{Tools.promptSnippet(Tools.BashTool{})},guidelines,Bash.bashSchema(),None{},execute,T.NativeBash{},None{},None{}}
 
 # Extension state
 # ---------------

@@ -25,8 +25,9 @@ def expandHint(+theme: Theme.Theme,remaining: Nat,total: Nat) -> IO(String):
   do IO<String>:
     start : String <- Messages.foregroundText(theme,"muted","\n... (" ++ Nat.show(remaining) ++ " more lines, " ++ Nat.show(total) ++ " total,")
     key : String <- Messages.foregroundText(theme,"dim",Messages.expandKeys())
-    rest : String <- Messages.foregroundText(theme,"muted"," to expand)")
-    return start ++ " " ++ key ++ rest
+    rest : String <- Messages.foregroundText(theme,"muted"," to expand")
+    close : String <- Messages.foregroundText(theme,"muted",")")
+    return start ++ " " ++ key ++ rest ++ close
 # Syntax highlighting (upstream formatWriteCall): content of a file whose path
 # names a language is highlighted instead of coloured as tool output.
 def writeLanguage(path: Maybe<&2,String>) -> Maybe<&2,String>:

@@ -296,6 +296,7 @@ def styledShell(style: ExtensionTypes.ToolRenderShell,call: Maybe<&2,ToolRender.
   match style:
     case ExtensionTypes.DefaultShell{}: Tool.Boxed{call,result}
     case ExtensionTypes.SelfShell{}: Tool.SelfRendered{call,result}
+    case ExtensionTypes.NativeBash{}: Tool.NativeBash{}
 def registeredShellIn(registered: List<&2,ExtensionTypes.RegisteredTool>,+name: String,selected: Tool.Shell) -> Tool.Shell:
   match registered:
     case Nil{}: selected
