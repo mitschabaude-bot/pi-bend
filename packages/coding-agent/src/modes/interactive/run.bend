@@ -692,9 +692,11 @@ def exportObserved(input: CommandObservation,requested: Maybe<&2,String>) -> IO(
         theme : Theme.Theme <- Ref.read(Theme.Theme,active)
         result : Result<&2,&2,String,String> <- exportCurrent(live,cwd,builtinDir,customDir,theme,requested)
         Interactive.report(failure,exportNotice(result))
-def shareNotice(result: SessionShare.GistResult) -> Interactive.SubmissionFailure:
+def shareNotice(result: SessionShare.ShareResult) -> Interactive.SubmissionFailure:
   match result:
-    case SessionShare.Shared{+viewerUrl,+gistUrl}:
+    case SessionShare.RadiusShared{+url}:
+      Interactive.CommandNotice{"Share URL: " ++ Markdown.hyperlink(url,url)}
+    case SessionShare.GistShared{+viewerUrl,+gistUrl}:
       Interactive.CommandNotice{"Share URL: " ++ Markdown.hyperlink(viewerUrl,viewerUrl) ++ "\nGist: " ++ Markdown.hyperlink(gistUrl,gistUrl)}
     case SessionShare.Failed{message}: Interactive.CommandFailure{message}
     case SessionShare.Cancelled{}: Interactive.CommandNotice{"Share cancelled"}
@@ -706,7 +708,7 @@ def shareObserved(input: CommandObservation) -> IO(Unit):
         theme : Theme.Theme <- Ref.read(Theme.Theme,active)
         +cancel : Abort.AbortController<Unit> <- Abort.new(Unit)
         Interactive.report(failure,Interactive.CommandNotice{"Creating gist..."})
-        result : SessionShare.GistResult <- SessionShare.shareSession(live,cwd,Abort.signal(Unit,cancel),path => exportHtml(live,builtinDir,customDir,theme,Some{path}))
+        result : SessionShare.ShareResult <- SessionShare.shareSession(live,cwd,Abort.signal(Unit,cancel),path => exportHtml(live,builtinDir,customDir,theme,Some{path}))
         Abort.dispose(Unit,cancel)
         Interactive.report(failure,shareNotice(result))
 def importStatus(state: ImportState,status: Interactive.SubmissionFailure) -> IO(Unit):

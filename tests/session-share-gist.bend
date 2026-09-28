@@ -3,9 +3,10 @@ import ../packages/coding-agent/src/modes/interactive/session-share.bend as Shar
 import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/filesystem.bend as FS
 
-def display(result: Share.GistResult) -> IO(Unit):
+def display(result: Share.ShareResult) -> IO(Unit):
   match result:
-    case Share.Shared{viewer,gist}: IO.print("SHARED " ++ viewer ++ " " ++ gist)
+    case Share.GistShared{viewer,gist}: IO.print("SHARED " ++ viewer ++ " " ++ gist)
+    case Share.RadiusShared{url}: IO.print("RADIUS " ++ url)
     case Share.Failed{message}: IO.print("FAILED " ++ message)
     case Share.Cancelled{}: IO.print("CANCELLED")
 
@@ -14,7 +15,7 @@ def afterCheck(found: Result<&2,&2,String,String>,file: String,cwd: String,env: 
     case Fail{message}: IO.print("CHECK " ++ message)
     case Done{program}:
       do IO<Unit>:
-        result : Share.GistResult <- Share.createGist(program,file,cwd,env,signal)
+        result : Share.ShareResult <- Share.createGist(program,file,cwd,env,signal)
         display(result)
 
 def run(file: String,+cwd: String) -> IO(Unit):

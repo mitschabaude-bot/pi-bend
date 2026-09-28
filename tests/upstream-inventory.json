@@ -3874,10 +3874,12 @@
       "ports": [
         "tests/parity/scenarios.py",
         "tests/session-share-gist.bend",
-        "tests/session_share_gist_check.py"
+        "tests/session_share_gist_check.py",
+        "tests/session-share-radius.bend",
+        "tests/session_share_radius_check.py"
       ],
       "sha256": "55bc68b6a7c5dccdec056598dcc3ae358f874bd1b3e42ae014dfbae1bbaca975",
-      "notes": "Mounted /share parity creates a private Gist with fake gh and matches the upstream terminal frame; native one/four-thread fake-gh checks cover auth, creation and errors. The upstream concurrent-export isolation case and Radius path remain open."
+      "notes": "Mounted /share parity creates a private Gist with fake gh and matches upstream. Native one/four-thread loopback tests cover Radius JSONL POST bytes, headers, success and error responses; fake-gh checks cover auth and creation errors. Interactive Radius loader/cancellation, end-to-end Radius terminal behavior and concurrent-export isolation remain open."
     },
     {
       "source": "packages/coding-agent/test/settings-diagnostics.test.ts",
