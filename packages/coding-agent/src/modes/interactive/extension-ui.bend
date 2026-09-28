@@ -32,18 +32,18 @@ type Owner is Type:
 
 def select(env: Env,request: Ctx.SelectRequest) -> IO(Maybe<&2,String>):
   match env request:
-    case Env{dialog,_,_,_,_,_,_,_} Ctx.SelectRequest{title,options,_}: Dialog.select(dialog,Selector.create(title,options,None{}))
+    case Env{dialog,_,_,_,_,_,_,_} Ctx.SelectRequest{title,options,Ctx.DialogOptions{signal,timeout}}: Dialog.selectWith(dialog,Selector.create(title,options,None{}),signal,timeout)
 def yes(value: Maybe<&2,String>) -> Bool:
   match value: case Some{"Yes"}: True{} case _: False{}
 def confirm(env: Env,request: Ctx.ConfirmRequest) -> IO(Bool):
   match env request:
-    case Env{dialog,_,_,_,_,_,_,_} Ctx.ConfirmRequest{title,message,_}:
+    case Env{dialog,_,_,_,_,_,_,_} Ctx.ConfirmRequest{title,message,Ctx.DialogOptions{signal,timeout}}:
       do IO<Bool>:
-        answer : Maybe<&2,String> <- Dialog.select(dialog,Selector.create(title ++ "\n" ++ message,["Yes","No"],None{}))
+        answer : Maybe<&2,String> <- Dialog.selectWith(dialog,Selector.create(title ++ "\n" ++ message,["Yes","No"],None{}),signal,timeout)
         return yes(answer)
 def input(env: Env,request: Ctx.InputRequest) -> IO(Maybe<&2,String>):
   match env request:
-    case Env{dialog,_,_,_,_,_,_,_} Ctx.InputRequest{title,_,_}: Dialog.input(dialog,Input.create(title,"",None{}))
+    case Env{dialog,_,_,_,_,_,_,_} Ctx.InputRequest{title,_,Ctx.DialogOptions{signal,timeout}}: Dialog.inputWith(dialog,Input.create(title,"",None{}),signal,timeout)
 def displayNotice(transcript: Transcript.Handle,message: String,kind: Ctx.NotifyType) -> IO(Unit):
   match kind:
     case Ctx.InfoNotice{}: Transcript.status(transcript,message)

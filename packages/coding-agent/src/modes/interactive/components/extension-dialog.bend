@@ -1,7 +1,10 @@
 import Base
 import ../../../../../runtime/src/callback.bend as Callback
+import ../../../../../runtime/src/abort.bend as Abort
+import ../../../../../runtime/src/deferred.bend as Deferred
 import ../../../../../runtime/src/ref.bend as Ref
 import ../../../../../runtime/src/serial-resource.bend as Serial
+import ../../../../../runtime/src/timer.bend as Timer
 import ../../../../../runtime/src/word-segmenter.bend as Words
 import ../../../../../tui/src/component.bend as Component
 import ../../../../../tui/src/components/editor.bend as Editor
@@ -12,6 +15,7 @@ import ../theme/theme.bend as Theme
 import ./extension-selector.bend as Selector
 import ./extension-input.bend as Input
 import ./extension-editor.bend as Multi
+import ./countdown-timer.bend as CountdownTimer
 
 # A prompt temporarily occupies the editor's component slot. Its result
 # channel belongs to the requester; closing the slot always resolves it.
@@ -210,6 +214,119 @@ def replace(host: Host,next: Modal) -> IO(Unit):
         Serial.run(Modal,Unit,modal,current => replaced(next,current))
         Callback.call(Unit,Unit,redraw,Unit{})
 def close(host: Host) -> IO(Unit): replace(host,Closed{})
+def dismissMatching(current: Modal,matched: Bool) -> IO(Modal & Bool):
+  match matched:
+    case True{}:
+      do IO<Modal & Bool>:
+        cancel(current)
+        return (Closed{},True{})
+    case False{}: IO.pure(Modal & Bool,(current,False{}))
+def dismissCurrent(current: Modal,reply: Reply()) -> IO(Modal & Bool):
+  match current:
+    case Closed{}: IO.pure(Modal & Bool,(Closed{},False{}))
+    case Selecting{state,+found}: dismissMatching(Selecting{state,found},Chan.same(Answer(),found,reply))
+    case Typing{state,+found}: dismissMatching(Typing{state,found},Chan.same(Answer(),found,reply))
+    case Editing{state,+found,ticket}: dismissMatching(Editing{state,found,ticket},Chan.same(Answer(),found,reply))
+# A late timeout or abort cannot close the next prompt occupying this slot.
+def dismiss(host: Host,reply: Reply()) -> IO(Unit):
+  match host:
+    case Host{modal,_,_,_,_,_,_,redraw,_,_}:
+      do IO<Unit>:
+        changed : Bool <- Serial.run(Modal,Bool,modal,current => dismissCurrent(current,reply))
+        Bool.pick(Unit -> IO(Unit),changed,_ => Callback.call(Unit,Unit,redraw,Unit{}),_ => IO.pure(Unit,Unit{}))(Unit{})
+def durationResult(result: Result<&2,&2,Timer.Error,U32>) -> Maybe<&2,U32>:
+  match result:
+    case Done{+milliseconds}: Bool.pick(Maybe<&2,U32>,U32.is_eq(milliseconds,0),None{},Some{milliseconds})
+    case Fail{_}: None{}
+def duration(timeout: Maybe<&2,F64>) -> Maybe<&2,U32>:
+  match timeout:
+    case None{}: None{}
+    case Some{value}: durationResult(Timer.milliseconds(value))
+type Countdown is Type:
+  NoCountdown{}
+  Counting{owner: CountdownTimer.Owner,tick: Callback.Callback<Nat,Unit>,expire: Callback.Callback<Unit,Unit>}
+type CountdownTarget is Data: CountdownTarget{host: Host,reply: Reply()}
+def selectedWithMatch(state: Selector.State,found: Reply(),seconds: Nat,matched: Bool) -> Modal & Bool:
+  match matched:
+    case True{}: (Selecting{Selector.setRemaining(state,seconds),found},True{})
+    case False{}: (Selecting{state,found},False{})
+def typedWithMatch(state: Input.State,found: Reply(),seconds: Nat,matched: Bool) -> Modal & Bool:
+  match matched:
+    case True{}: (Typing{Input.setRemaining(state,seconds),found},True{})
+    case False{}: (Typing{state,found},False{})
+def modalRemaining(current: Modal,reply: Reply(),seconds: Nat) -> Modal & Bool:
+  match current:
+    case Selecting{state,+found}: selectedWithMatch(state,found,seconds,Chan.same(Answer(),found,reply))
+    case Typing{state,+found}: typedWithMatch(state,found,seconds,Chan.same(Answer(),found,reply))
+    case other: (other,False{})
+def countdownTick(target: CountdownTarget,seconds: Nat) -> IO(Unit):
+  match target:
+    case CountdownTarget{Host{modal,_,_,_,_,_,_,redraw,_,_},reply}:
+      do IO<Unit>:
+        changed : Bool <- Serial.run(Modal,Bool,modal,current => IO.pure(Modal & Bool,modalRemaining(current,reply,seconds)))
+        Bool.pick(Unit -> IO(Unit),changed,_ => Callback.call(Unit,Unit,redraw,Unit{}),_ => IO.pure(Unit,Unit{}))(Unit{})
+def countdownEnd(target: CountdownTarget,_: Unit) -> IO(Unit):
+  match target: case CountdownTarget{host,reply}: dismiss(host,reply)
+def startCountdown(+host: Host,+reply: Reply(),milliseconds: Maybe<&2,U32>) -> IO(Countdown):
+  match milliseconds:
+    case None{}: IO.pure(Countdown,NoCountdown{})
+    case Some{value}:
+      do IO<Countdown>:
+        +tick : Callback.Callback<Nat,Unit> <- Callback.create(~CountdownTarget,~Nat,~Unit,~countdownTick,CountdownTarget{host,reply})
+        +expire : Callback.Callback<Unit,Unit> <- Callback.create(~CountdownTarget,~Unit,~Unit,~countdownEnd,CountdownTarget{host,reply})
+        owner : CountdownTimer.Owner <- CountdownTimer.create(U32.to_nat(value),None{},tick,expire)
+        return Counting{owner,tick,expire}
+def stopCountdown(countdown: Countdown) -> IO(Unit):
+  match countdown:
+    case NoCountdown{}: IO.pure(Unit,Unit{})
+    case Counting{owner,tick,expire}:
+      do IO<Unit>:
+        CountdownTimer.dispose(owner)
+        Callback.dispose(Nat,Unit,tick)
+        Callback.dispose(Unit,Unit,expire)
+type AbortWatch is Type:
+  NoAbortWatch{}
+  Watching{cancellation: Deferred.Cancellation<Abort.AbortReason<Unit>>,worker: Chan(Unit)}
+def afterAbort(host: Host,reply: Reply(),reason: Maybe<&2,Abort.AbortReason<Unit>>) -> IO(Unit):
+  match reason:
+    case None{}: IO.pure(Unit,Unit{})
+    case Some{_}: dismiss(host,reply)
+def abortedDialog(host: Host,reply: Reply(),ticket: Deferred.Ticket<Maybe<&2,Abort.AbortReason<Unit>>>) -> IO(Unit):
+  do IO<Unit>:
+    reason : Maybe<&2,Abort.AbortReason<Unit>> <- Deferred.wait(Maybe<&2,Abort.AbortReason<Unit>>,ticket)
+    afterAbort(host,reply,reason)
+def observedAbort(host: Host,reply: Reply(),observation: Deferred.Observation<Abort.AbortReason<Unit>>) -> IO(AbortWatch):
+  match observation:
+    case Deferred.Observation{ticket,cancellation}:
+      do IO<AbortWatch>:
+        worker : Chan(Unit) <- IO.fork(Unit,abortedDialog(host,reply,ticket))
+        return Watching{cancellation,worker}
+def watchAbort(host: Host,reply: Reply(),signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(AbortWatch):
+  match signal:
+    case None{}: IO.pure(AbortWatch,NoAbortWatch{})
+    case Some{value}:
+      do IO<AbortWatch>:
+        observation : Deferred.Observation<Abort.AbortReason<Unit>> <- Abort.observe(Unit,value)
+        observedAbort(host,reply,observation)
+def stopWatch(watch: AbortWatch) -> IO(Unit):
+  match watch:
+    case NoAbortWatch{}: IO.pure(Unit,Unit{})
+    case Watching{cancellation,worker}:
+      do IO<Unit>:
+        removed : Bool <- Deferred.cancel(Abort.AbortReason<Unit>,cancellation)
+        IO.join(Unit,worker)
+def waitReply(+host: Host,+reply: Reply(),signal: Maybe<&2,Abort.AbortSignal<Unit>>,timeout: Maybe<&2,F64>) -> IO(Answer()):
+  do IO<Answer()>:
+    countdown : Countdown <- startCountdown(host,reply,duration(timeout))
+    watch : AbortWatch <- watchAbort(host,reply,signal)
+    answer : Maybe<&1,Answer()> <- Chan.recv(Answer(),reply)
+    stopWatch(watch)
+    stopCountdown(countdown)
+    return Maybe.default(&1,Answer(),answer,None{})
+def preAborted(signal: Maybe<&2,Abort.AbortSignal<Unit>>) -> IO(Bool):
+  match signal:
+    case None{}: IO.pure(Bool,False{})
+    case Some{value}: Abort.aborted(Unit,value)
 def bindExternal(host: Host,callback: Maybe<&2,Callback.Callback<ExternalRequest,Unit>>) -> IO(Unit):
   match host: case Host{_,_,_,_,_,_,_,_,_,external}: Ref.write(Maybe<&2,Callback.Callback<ExternalRequest,Unit>>,external,callback)
 def nextTicket(current: Nat) -> Nat & Nat:
@@ -230,20 +347,30 @@ def applyExternal(host: Host,ticket: Nat,content: String) -> IO(Unit):
       do IO<Unit>:
         Serial.run(Modal,Unit,modal,current => changedExternal(current,ticket,content))
         Callback.call(Unit,Unit,redraw,Unit{})
-def select(host: Host,state: Selector.State) -> IO(Answer()):
+def openSelect(+host: Host,state: Selector.State,signal: Maybe<&2,Abort.AbortSignal<Unit>>,timeout: Maybe<&2,F64>) -> IO(Answer()):
   do IO<Answer()>:
     +reply : Reply() <- Chan.new(Answer(),1)
     replace(host,Selecting{state,reply})
-    received : Maybe<&1,Answer()> <- Chan.recv(Answer(),reply)
+    received : Answer() <- waitReply(host,reply,signal,timeout)
     Chan.close(Answer(),reply)
-    return Maybe.default(&1,Answer(),received,None{})
-def input(host: Host,state: Input.State) -> IO(Answer()):
+    return received
+def selectWith(host: Host,state: Selector.State,+signal: Maybe<&2,Abort.AbortSignal<Unit>>,timeout: Maybe<&2,F64>) -> IO(Answer()):
+  do IO<Answer()>:
+    aborted : Bool <- preAborted(signal)
+    Bool.pick(Unit -> IO(Answer()),aborted,_ => IO.pure(Answer(),None{}),_ => openSelect(host,state,signal,timeout))(Unit{})
+def select(host: Host,state: Selector.State) -> IO(Answer()): selectWith(host,state,None{},None{})
+def openInput(+host: Host,state: Input.State,signal: Maybe<&2,Abort.AbortSignal<Unit>>,timeout: Maybe<&2,F64>) -> IO(Answer()):
   do IO<Answer()>:
     +reply : Reply() <- Chan.new(Answer(),1)
     replace(host,Typing{state,reply})
-    received : Maybe<&1,Answer()> <- Chan.recv(Answer(),reply)
+    received : Answer() <- waitReply(host,reply,signal,timeout)
     Chan.close(Answer(),reply)
-    return Maybe.default(&1,Answer(),received,None{})
+    return received
+def inputWith(host: Host,state: Input.State,+signal: Maybe<&2,Abort.AbortSignal<Unit>>,timeout: Maybe<&2,F64>) -> IO(Answer()):
+  do IO<Answer()>:
+    aborted : Bool <- preAborted(signal)
+    Bool.pick(Unit -> IO(Answer()),aborted,_ => IO.pure(Answer(),None{}),_ => openInput(host,state,signal,timeout))(Unit{})
+def input(host: Host,state: Input.State) -> IO(Answer()): inputWith(host,state,None{},None{})
 def editor(+host: Host,state: Multi.State) -> IO(Answer()):
   match host:
     case Host{_,_,_,_,_,_,_,_,counter,_}:

@@ -6,6 +6,7 @@ import ../packages/coding-agent/src/core/extensions/loader.bend as ExtensionLoad
 import ../packages/coding-agent/src/core/tools/bash.bend as Bash
 import ../packages/coding-agent/src/core/bash-executor.bend as BashExec
 import ../packages/runtime/src/filesystem.bend as Files
+import ../packages/runtime/src/abort.bend as Abort
 import ../packages/runtime/src/json.bend as Json
 import ../packages/runtime/src/record.bend as Record
 import ../packages/runtime/src/utf8.bend as Utf8
@@ -115,6 +116,13 @@ def uiAnswer(ctx: Ctx.ExtensionContext,answer: Maybe<&2,String>) -> IO(Unit):
   match answer:
     case None{}: Ctx.notify(ctx,"Extension prompt cancelled",Ctx.InfoNotice{})
     case Some{value}: Ctx.notify(ctx,"Extension chose: " ++ value,Ctx.InfoNotice{})
+def expectedCancellation(ctx: Ctx.ExtensionContext,answer: Maybe<&2,String>,notice: String) -> IO(Result<&2,&2,String,Unit>):
+  match answer:
+    case Some{value}: IO.pure(Result<&2,&2,String,Unit>,Fail{"Unexpected dialog value: " ++ value})
+    case None{}:
+      do IO<Result<&2,&2,String,Unit>>:
+        Ctx.notify(ctx,notice,Ctx.InfoNotice{})
+        return Done{Unit{}}
 def uiCommand(_: Unit,call: Ext.CommandCall) -> IO(Result<&2,&2,String,Unit>):
   match call:
     case Ext.CommandCall{_,commandContext}:
@@ -131,6 +139,39 @@ def uiInputCommand(_: Unit,call: Ext.CommandCall) -> IO(Result<&2,&2,String,Unit
         answer : Maybe<&2,String> <- Ctx.input(ctx,"Name a value",None{},Ctx.dialogOptions())
         uiAnswer(ctx,answer)
         return Done{Unit{}}
+def uiTimedCommand(_: Unit,call: Ext.CommandCall) -> IO(Result<&2,&2,String,Unit>):
+  match call:
+    case Ext.CommandCall{_,commandContext}:
+      do IO<Result<&2,&2,String,Unit>>:
+        +ctx : Ctx.ExtensionContext <- IO.pure(Ctx.ExtensionContext,Ctx.commandContext(commandContext))
+        answer : Maybe<&2,String> <- Ctx.select(ctx,"Timed choice",["alpha","beta"],Ctx.DialogOptions{None{},Some{U32.to_f64(800)}})
+        expectedCancellation(ctx,answer,"Timed prompt cancelled")
+def uiAbortedCommand(_: Unit,call: Ext.CommandCall) -> IO(Result<&2,&2,String,Unit>):
+  match call:
+    case Ext.CommandCall{_,commandContext}:
+      do IO<Result<&2,&2,String,Unit>>:
+        +ctx : Ctx.ExtensionContext <- IO.pure(Ctx.ExtensionContext,Ctx.commandContext(commandContext))
+        +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+        cancelled : Bool <- Abort.abort(Unit,controller,None{})
+        answer : Maybe<&2,String> <- Ctx.input(ctx,"Should not open",None{},Ctx.DialogOptions{Some{Abort.signal(Unit,controller)},None{}})
+        Abort.dispose(Unit,controller)
+        expectedCancellation(ctx,answer,"Pre-aborted prompt cancelled")
+def abortSoon(controller: Abort.AbortController<Unit>) -> IO(Unit):
+  do IO<Unit>:
+    IO.sleep(400)
+    cancelled : Bool <- Abort.abort(Unit,controller,None{})
+    return Unit{}
+def uiAbortLaterCommand(_: Unit,call: Ext.CommandCall) -> IO(Result<&2,&2,String,Unit>):
+  match call:
+    case Ext.CommandCall{_,commandContext}:
+      do IO<Result<&2,&2,String,Unit>>:
+        +ctx : Ctx.ExtensionContext <- IO.pure(Ctx.ExtensionContext,Ctx.commandContext(commandContext))
+        +controller : Abort.AbortController<Unit> <- Abort.new(Unit)
+        worker : Chan(Unit) <- IO.fork(Unit,abortSoon(controller))
+        answer : Maybe<&2,String> <- Ctx.input(ctx,"Aborting input",None{},Ctx.DialogOptions{Some{Abort.signal(Unit,controller)},None{}})
+        IO.join(Unit,worker)
+        Abort.dispose(Unit,controller)
+        expectedCancellation(ctx,answer,"Active prompt aborted")
 def uiEditorCommand(_: Unit,call: Ext.CommandCall) -> IO(Result<&2,&2,String,Unit>):
   match call:
     case Ext.CommandCall{_,commandContext}:
@@ -175,6 +216,12 @@ def uiExtension(api: Ext.ExtensionAPI) -> IO(Result<&2,&2,String,Unit>):
     first : Result<&2,&2,String,Unit> <- ExtensionLoader.registerCommand(shared,"ask",Ext.CommandOptions{Some{"Show a native extension prompt"},None{},handler})
     input : Ext.CommandHandler() <- Callback.create(~Unit,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~uiInputCommand,Unit{})
     second : Result<&2,&2,String,Unit> <- ExtensionLoader.registerCommand(shared,"ask-input",Ext.CommandOptions{Some{"Show a native extension input"},None{},input})
+    timed : Ext.CommandHandler() <- Callback.create(~Unit,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~uiTimedCommand,Unit{})
+    timedRegistered : Result<&2,&2,String,Unit> <- ExtensionLoader.registerCommand(shared,"ask-timeout",Ext.CommandOptions{None{},None{},timed})
+    aborted : Ext.CommandHandler() <- Callback.create(~Unit,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~uiAbortedCommand,Unit{})
+    abortedRegistered : Result<&2,&2,String,Unit> <- ExtensionLoader.registerCommand(shared,"ask-aborted",Ext.CommandOptions{None{},None{},aborted})
+    abortLater : Ext.CommandHandler() <- Callback.create(~Unit,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~uiAbortLaterCommand,Unit{})
+    abortRegistered : Result<&2,&2,String,Unit> <- ExtensionLoader.registerCommand(shared,"ask-abort-later",Ext.CommandOptions{None{},None{},abortLater})
     editor : Ext.CommandHandler() <- Callback.create(~Unit,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~uiEditorCommand,Unit{})
     third : Result<&2,&2,String,Unit> <- ExtensionLoader.registerCommand(shared,"ask-editor",Ext.CommandOptions{Some{"Show a native extension editor"},None{},editor})
     widget : Ext.CommandHandler() <- Callback.create(~Unit,~Ext.CommandCall,~Result<&2,&2,String,Unit>,~uiWidgetCommand,Unit{})

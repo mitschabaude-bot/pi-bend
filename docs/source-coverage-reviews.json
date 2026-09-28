@@ -942,8 +942,8 @@
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6",
         "packages/coding-agent/src/modes/interactive/session-controller.bend": "9e2189ff0cdd0cbc81152d17589464b291b11c1b27fcb087d817849948f2dcbf",
         "packages/coding-agent/src/modes/interactive/transcript.bend": "7004cf45301739e438ad8c1b0468beb4f535acb388b5e6bc1593f52ad7c741ef",
-        "packages/coding-agent/src/modes/interactive/extension-ui.bend": "16ebe5c97ca7e150dee83453022814c080efa78b47546b925e1deb955f155adb",
-        "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "18b4a11288d1b899f37cb2d42f5cbe4d7670092bc00ae2368d8a7b4e19724a07",
+        "packages/coding-agent/src/modes/interactive/extension-ui.bend": "542118143307d58e78ec800a4b1ef7b38e3e56b3ded7da01466f9a0707fc8f70",
+        "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "f0904b3123149b1769e7ad14237791fee4d9926323b23e30834e182a4cbdfc30",
         "packages/coding-agent/src/modes/interactive/components/extension-widgets.bend": "38735263a2f993b4eee09b9a6ead4f0ae1df09bbde934d2f3a6d92c33f9bc2ad"
       }
     },
@@ -1678,7 +1678,7 @@
     },
     "packages/coding-agent/src/modes/interactive/components/extension-selector.ts": {
       "state": "partial",
-      "note": "Native selector state, keyboard actions and ANSI rows match focused upstream fixtures on one/four threads. The control is mounted through the serialized extension dialog host; live selector, input and editor commands pass a one/four-thread PTY check. Ctrl+O forwards the tool-expansion action without closing the prompt, checked in the focused host test and mounted PTY. Dialog timeout and abort remain unported. Multiline confirmation titles now render as separate styled lines; the import prompt has only redundant ANSI control-code differences from pi.",
+      "note": "Native selector state, keyboard actions and ANSI rows match focused upstream fixtures on one/four threads. The control is mounted through the serialized extension dialog host; live selector, input and editor commands pass a one/four-thread PTY check. Ctrl+O forwards the tool-expansion action without closing the prompt, checked in the focused host test and mounted PTY. Timed dialogs show a countdown and dismiss on expiry; pre-aborted and in-flight signals dismiss without retaining the modal. A late callback cannot close a newer prompt. Mounted native one/four-thread checks cover timeout, both abort timings and a following input. Multiline confirmation titles now render as separate styled lines; the import prompt has only redundant ANSI control-code differences from pi.",
       "source_sha256": "d83767b09d73264eb0cb9af54b6f13e0e9c15a429a6dd7b9c8e7498e013b7704",
       "ports": [
         "packages/coding-agent/src/modes/interactive/components/extension-selector.bend",
@@ -1687,13 +1687,13 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/extension-selector.bend": "be55ca6d91307cab4526cb689f0090c7098848705c0dd33ebb5ea5233fd851aa",
-        "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "18b4a11288d1b899f37cb2d42f5cbe4d7670092bc00ae2368d8a7b4e19724a07",
-        "packages/coding-agent/src/modes/interactive/extension-ui.bend": "16ebe5c97ca7e150dee83453022814c080efa78b47546b925e1deb955f155adb"
+        "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "f0904b3123149b1769e7ad14237791fee4d9926323b23e30834e182a4cbdfc30",
+        "packages/coding-agent/src/modes/interactive/extension-ui.bend": "542118143307d58e78ec800a4b1ef7b38e3e56b3ded7da01466f9a0707fc8f70"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/extension-input.ts": {
       "state": "partial",
-      "note": "Native single-line input state, keyboard actions and ANSI rows match focused upstream fixtures on one/four threads. The control is mounted through the serialized extension dialog host; live selector, input and editor commands pass a one/four-thread PTY check. Dialog timeout and abort behavior remains unported.",
+      "note": "Native single-line input state, keyboard actions and ANSI rows match focused upstream fixtures on one/four threads. The control is mounted through the serialized extension dialog host; live selector, input and editor commands pass a one/four-thread PTY check. Timed dialogs show a countdown and dismiss on expiry; pre-aborted and in-flight signals dismiss without retaining the modal. Mounted native one/four-thread checks cover timeout, both abort timings and a following input.",
       "source_sha256": "efd8f7c27b2a1f1a9215e0cca31a34b3d54db2783ade2914dfa1facf8e1945bd",
       "ports": [
         "packages/coding-agent/src/modes/interactive/components/extension-input.bend",
@@ -1702,8 +1702,8 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/extension-input.bend": "f751ee610df229596f8390824705ceb3a24bf71fc5ca765305701b7231a19110",
-        "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "18b4a11288d1b899f37cb2d42f5cbe4d7670092bc00ae2368d8a7b4e19724a07",
-        "packages/coding-agent/src/modes/interactive/extension-ui.bend": "16ebe5c97ca7e150dee83453022814c080efa78b47546b925e1deb955f155adb"
+        "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "f0904b3123149b1769e7ad14237791fee4d9926323b23e30834e182a4cbdfc30",
+        "packages/coding-agent/src/modes/interactive/extension-ui.bend": "542118143307d58e78ec800a4b1ef7b38e3e56b3ded7da01466f9a0707fc8f70"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/extension-editor.ts": {
@@ -1717,8 +1717,8 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/extension-editor.bend": "b5d3f204d2c33b7f58faa0f059a8d3a3ef65f7c425e4d5ab7001863b97c00664",
-        "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "18b4a11288d1b899f37cb2d42f5cbe4d7670092bc00ae2368d8a7b4e19724a07",
-        "packages/coding-agent/src/modes/interactive/extension-ui.bend": "16ebe5c97ca7e150dee83453022814c080efa78b47546b925e1deb955f155adb"
+        "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "f0904b3123149b1769e7ad14237791fee4d9926323b23e30834e182a4cbdfc30",
+        "packages/coding-agent/src/modes/interactive/extension-ui.bend": "542118143307d58e78ec800a4b1ef7b38e3e56b3ded7da01466f9a0707fc8f70"
       }
     },
     "packages/coding-agent/src/main.ts": {

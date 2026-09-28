@@ -79,6 +79,24 @@ def scenario(threads: int) -> None:
             os.write(master, b"hello\r")
             until(b"Extension chose: hello", start)
             start = len(output)
+            os.write(master, b"/ask-aborted\r")
+            until(b"Pre-aborted prompt cancelled", start)
+            assert b"Should not open" not in output[start:], output[start:][-1000:]
+            start = len(output)
+            os.write(master, b"/ask-timeout\r")
+            until(b"Timed choice (1s)", start)
+            until(b"Timed prompt cancelled", start, timeout=4)
+            time.sleep(.3)
+            start = len(output)
+            os.write(master, b"/ask-abort-later\r")
+            until(b"Aborting input", start)
+            until(b"Active prompt aborted", start, timeout=4)
+            start = len(output)
+            os.write(master, b"/ask-input\r")
+            until(b"Name a value", start)
+            os.write(master, b"after-timeout\r")
+            until(b"Extension chose: after-timeout", start)
+            start = len(output)
             os.write(master, b"/ask-editor\r")
             until(b"Write a note", start)
             os.write(master, b"\r")
@@ -143,7 +161,7 @@ def scenario(threads: int) -> None:
             stderr = process.communicate(timeout=20)[1]
             assert process.returncode == 0 and not stderr, (process.returncode, stderr)
             assert termios.tcgetattr(slave) == original, threads
-            print(f"native{threads}: extension prompts, widgets, Working controls and session reset, external editor and terminal restoration")
+            print(f"native{threads}: extension prompts, timeout/abort, widgets, Working controls, session reset and terminal restoration")
         finally:
             if process.poll() is None:
                 process.kill()
