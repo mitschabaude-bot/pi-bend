@@ -31,6 +31,8 @@ import ./core/tools/index.bend as Tools
 import ./modes/print-mode.bend as Print
 import ./core/extensions/context.bend as Ctx
 import ./modes/rpc.bend as Rpc
+import ./modes/interactive/theme/theme.bend as Theme
+import ./modes/interactive/theme/color.bend as ThemeColor
 import ./modes/interactive/session-controller.bend as Controller
 import ./modes/interactive/run.bend as InteractiveRun
 import ./utils/paths.bend as Paths
@@ -1072,7 +1074,7 @@ def rpcServed(+host: Host(), rpcHost: Rpc.Host, pair: Rpc.Owner & Rpc.Handle) ->
         disposeRpcHost(rpcHost)
         return result
 
-def rpcSelected(live: AgentSession.AgentSession, assetsRoot: String, +host: Host(), selected: Maybe<&2,Models.Model()>) -> IO(Unit):
+def rpcSelected(live: AgentSession.AgentSession, assetsRoot: String, theme: Ref.Ref<Theme.Theme>, +host: Host(), selected: Maybe<&2,Models.Model()>) -> IO(Unit):
   match selected:
     case None{}:
       do IO<Unit>:
@@ -1087,23 +1089,44 @@ def rpcSelected(live: AgentSession.AgentSession, assetsRoot: String, +host: Host
         shutdown : Callback.Callback<Unit,Unit> <- Callback.create(~Host(),~Unit,~Unit,~rpcShutdown,host)
         requested : Ref.Ref<Bool> <- Ref.new(Bool,False{})
         +rpcHost : Rpc.Host = Rpc.Host{opening, switching, forking, shutdown, requested}
-        endpoint : Rpc.Owner & Rpc.Handle <- Rpc.start(live,sink,Some{Path.join(assetsRoot,"packages/coding-agent/src/core/export-html")},rpcHost)
+        endpoint : Rpc.Owner & Rpc.Handle <- Rpc.startWithTheme(live,sink,Some{Path.join(assetsRoot,"packages/coding-agent/src/core/export-html")},Some{theme},rpcHost)
         result : Result<&2,&2,String,Unit> <- rpcServed(host, rpcHost, endpoint)
         Callback.dispose(String,Unit,sink)
         SessionRuntime.dispose(Services, host)
         rpcFinished(result)
 
-def rpcHosted(assetsRoot: String, +host: Host()) -> IO(Unit):
+def rpcThemeFallback(name: String,result: Result<&2,&2,Theme.LoadError,Theme.Theme>) -> IO(Ref.Ref<Theme.Theme>):
+  match result:
+    case Done{theme}: Ref.new(Theme.Theme,theme)
+    case Fail{_}: IO.die(Ref.Ref<Theme.Theme>,1,"Cannot load RPC theme: " ++ name)
+def rpcThemeLoaded(agentDir: String,assetsRoot: String,+name: String,mode: ThemeColor.Mode,result: Result<&2,&2,Theme.LoadError,Theme.Theme>) -> IO(Ref.Ref<Theme.Theme>):
+  match result:
+    case Done{theme}: Ref.new(Theme.Theme,theme)
+    case Fail{_}:
+      do IO<Ref.Ref<Theme.Theme>>:
+        fallback : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadByName("dark",Path.join(assetsRoot,"packages/coding-agent/src/modes/interactive/theme"),Path.join(agentDir,"themes"),mode)
+        rpcThemeFallback(name,fallback)
+def loadRpcTheme(+agentDir: String,+assetsRoot: String,+mode: ThemeColor.Mode,settings: Settings.SettingsManager) -> IO(Ref.Ref<Theme.Theme>):
+  do IO<Ref.Ref<Theme.Theme>>:
+    +name : String <- IO.pure(String,Maybe.default(&2,String,Settings.getThemeSetting(settings),"dark"))
+    result : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadByName(name,Path.join(assetsRoot,"packages/coding-agent/src/modes/interactive/theme"),Path.join(agentDir,"themes"),mode)
+    rpcThemeLoaded(agentDir,assetsRoot,name,mode,result)
+def rpcHosted(agentDir: String,+assetsRoot: String,+host: Host()) -> IO(Unit):
   do IO<Unit>:
     current : Maybe<&2, AgentSession.AgentSession> <- SessionRuntime.session(Services, host)
     +live : AgentSession.AgentSession <- activeSession(current)
     state : AgentSession.AgentState() <- AgentSession.state(live)
-    rpcSelected(live, assetsRoot, host, AgentSession.stateModel(state))
+    settings : Settings.SettingsManager <- Ref.read(Settings.SettingsManager,AgentSession.settingsOf(live))
+    colors : ThemeColor.Mode <- InteractiveRun.colorMode(live,None{})
+    +theme : Ref.Ref<Theme.Theme> <- loadRpcTheme(agentDir,assetsRoot,colors,settings)
+    rpcSelected(live,assetsRoot,theme,host,AgentSession.stateModel(state))
+    retired : Theme.Theme <- Ref.dispose(Theme.Theme,theme)
+    return Unit{}
 def runHosted(mode: AppMode, initial: Initial.InitialMessage, themeOverride: Maybe<&2,String>, autoTrustOnReload: Bool, tuiMode: Maybe<&2,Settings.TuiMode>, cwd: String, agentDir: String, packageDir: String, started: Result<&2, &2, String, Host()>) -> IO(Unit):
   match mode initial started:
     case _ _ Fail{message}: fail(message)
     case Interactive{} _ Done{host}: interactiveHosted(initial, themeOverride, autoTrustOnReload, tuiMode, cwd, agentDir, packageDir, host)
-    case Rpc{} _ Done{host}: rpcHosted(packageDir, host)
+    case Rpc{} _ Done{host}: rpcHosted(agentDir,packageDir,host)
     case _ Initial.InitialMessage{text, images, remaining} Done{host}: printHosted(Print.PrintModeOptions{outputMode(mode), remaining, text, images}, host)
 
 def noTrustOverride(value: Maybe<&2,Bool>) -> Bool:

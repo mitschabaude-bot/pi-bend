@@ -6,6 +6,8 @@ import ../packages/coding-agent/src/core/agent-runtime.bend as Runtime
 import ../packages/coding-agent/src/core/session-persistence.bend as Stored
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
 import ../packages/coding-agent/src/modes/rpc.bend as Rpc
+import ../packages/coding-agent/src/modes/interactive/theme/theme.bend as Theme
+import ../packages/coding-agent/src/modes/interactive/theme/color.bend as ThemeColor
 import ../packages/coding-agent/src/core/extensions/context.bend as Ctx
 import ../packages/coding-agent/src/core/extensions/loader.bend as Loader
 import ../packages/coding-agent/src/core/extensions/runner.bend as Runner
@@ -135,12 +137,13 @@ def endpointWith(+cwd: String,+agentDir: String,withAuth: Bool,gates: List<&2,Fa
 # model is upstream's fake-provider model, which has no credentials.
 def endpoint(+cwd: String,+agentDir: String,withAuth: Bool,gates: List<&2,Faux.Gate>) -> IO(Endpoint):
   endpointWith(cwd,agentDir,withAuth,gates,emptyLoadout())
-def started(+value: Endpoint) -> IO(Rpc.Owner & Rpc.Handle):
+def startedWithTheme(+value: Endpoint,theme: Maybe<&2,Ref.Ref<Theme.Theme>>) -> IO(Rpc.Owner & Rpc.Handle):
   match value:
     case Endpoint{fixture,_,sink}:
       do IO<Rpc.Owner & Rpc.Handle>:
         host : Rpc.Host <- RpcHost.createWith(sink)
-        Rpc.start(Faux.sessionOf(fixture),sink,None{},host)
+        Rpc.startWithTheme(Faux.sessionOf(fixture),sink,None{},theme,host)
+def started(value: Endpoint) -> IO(Rpc.Owner & Rpc.Handle): startedWithTheme(value,None{})
 def linesOf(value: Endpoint) -> Ref.Ref<List<&2,String>>:
   match value:
     case Endpoint{_,lines,_}: lines
@@ -324,6 +327,45 @@ def dialogAnswered(+value: Endpoint,pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
         +captured : List<&2,String> <- cleanup(value,owner)
         report("RPC extension UI > a select dialog is answered by its extension_ui_response",Bool.not(String.is_empty(id)) && anyContains(asked,"{\"type\":\"extension_ui_request\",\"id\":\"" ++ id ++ "\",\"method\":\"select\",\"title\":\"Pick one\",\"options\":[\"a\",\"b\"]}") && anyContains(notified,"\"method\":\"notify\",\"message\":\"picked b\",\"notifyType\":\"info\"}"))
         report("RPC extension UI > stopping answers an open dialog as cancelled",anyContains(captured,"\"message\":\"picked none\""))
+def activeThemeName(theme: Maybe<&2,Theme.Theme>) -> String:
+  match theme:
+    case Some{Theme.Theme{name,_,_,_,_,_}}: name
+    case None{}: "none"
+def themeCommand(unit: Unit,call: ExtT.CommandCall) -> IO(Outcome()):
+  match call:
+    case ExtT.CommandCall{_,Ctx.ExtensionCommandContext{+context}}:
+      do IO<Outcome()>:
+        current : Maybe<&2,Theme.Theme> <- Ctx.theme(context)
+        Ctx.notify(context,"active theme is " ++ activeThemeName(current),Ctx.InfoNotice{})
+        return Done{Unit{}}
+def themeExtension(api: ExtT.ExtensionAPI) -> IO(Outcome()):
+  do IO<Outcome()>:
+    handler : ExtT.CommandHandler() <- Callback.create(~Unit,~ExtT.CommandCall,~Outcome(),~themeCommand,Unit{})
+    Loader.registerCommand(api,"theme-name",ExtT.CommandOptions{Some{"Read the active theme"},None{},handler})
+def themeLoadout(+cwd: String) -> IO(Runtime.Loadout):
+  do IO<Runtime.Loadout>:
+    +runtime : ExtT.ExtensionRuntime() <- Loader.createExtensionRuntime()
+    errors : List<&2,ExtT.LoadError> <- Loader.loadExtensionFactories(runtime,[ExtT.InlineExtension{"theme-reader",api => themeExtension(api),False{}}])
+    models : Models.ModelRuntime <- ModelFixture.create(Nil{})
+    runner : Runner.ExtensionRunner <- Runner.create(runtime,cwd,models)
+    return Runtime.Loadout{R.new(String),Nil{},Nil{},Nil{},Some{runner},Nil{},None{},Nil{}}
+def activeThemePair(+value: Endpoint,pair: Rpc.Owner & Rpc.Handle) -> IO(Unit):
+  match pair:
+    case (owner,+handle):
+      do IO<Unit>:
+        send(handle,"{\"id\":\"theme\",\"type\":\"prompt\",\"message\":\"/theme-name\"}")
+        lines : List<&2,String> <- waitFor(linesOf(value),Contains{"active theme is configured-test"},300n)
+        captured : List<&2,String> <- cleanup(value,owner)
+        report("RPC extension UI > ui.theme reads the active configured theme",anyContains(lines,"active theme is configured-test") && anyContains(captured,"active theme is configured-test"))
+def extensionReadsActiveTheme(+cwd: String,+agentDir: String) -> IO(Unit):
+  do IO<Unit>:
+    loadout : Runtime.Loadout <- themeLoadout(cwd)
+    +value : Endpoint <- endpointWith(cwd,agentDir,True{},Nil{},loadout)
+    +theme : Ref.Ref<Theme.Theme> <- Ref.new(Theme.Theme,Theme.create("configured-test",ThemeColor.TrueColor{},R.new(ThemeColor.Color),R.new(ThemeColor.Color)))
+    pair : Rpc.Owner & Rpc.Handle <- startedWithTheme(value,Some{theme})
+    activeThemePair(value,pair)
+    retired : Theme.Theme <- Ref.dispose(Theme.Theme,theme)
+    return Unit{}
 def extensionDialog(+cwd: String,+agentDir: String) -> IO(Unit):
   do IO<Unit>:
     loadout : Runtime.Loadout <- pickerLoadout(cwd)
@@ -644,6 +686,7 @@ def run(args: List<String>) -> IO(Unit):
         clearsQueues(cwd,agentDir)
         unknownCommand(cwd,agentDir)
         extensionDialog(cwd,agentDir)
+        extensionReadsActiveTheme(cwd,agentDir)
         commandDialog(cwd,agentDir)
         commandActions(cwd,agentDir)
         uiExtras(cwd,agentDir)

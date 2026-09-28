@@ -30,6 +30,7 @@ NAMES = [
     # Native supplement: extension UI over the protocol (no upstream suite).
     "RPC extension UI > a select dialog is answered by its extension_ui_response",
     "RPC extension UI > stopping answers an open dialog as cancelled",
+    "RPC extension UI > ui.theme reads the active configured theme",
     "RPC extension UI > a command's handler can open a dialog while input is still read",
     "RPC extension UI > command-context actions go through the RPC host",
     "RPC extension UI > title, widget and editor-text requests are sent as upstream's",

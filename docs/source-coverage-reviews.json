@@ -938,7 +938,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "6bd75053098d85f55cc671bcc9207b897729e8ceb37c05b9e4eb8963d5d8d34c",
         "packages/coding-agent/src/modes/interactive/commands.bend": "9443632c43ce4906a850718f77a5ffe718954e6146b0e5c6896c821bdfa197ec",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "a82171affe232ea68175278c64bd69cbeca39efa3bc62f585cb520b61d3743e8",
-        "packages/coding-agent/src/main.bend": "f3164821e2990e8d14788451285fe03e9c1614177830572c2e9b5f8ab251c81f",
+        "packages/coding-agent/src/main.bend": "7551d62e06273010e849a9e9f3089775a8e2af817765cbb6a74f7508014b30a1",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6",
         "packages/coding-agent/src/modes/interactive/session-controller.bend": "9e2189ff0cdd0cbc81152d17589464b291b11c1b27fcb087d817849948f2dcbf",
         "packages/coding-agent/src/modes/interactive/transcript.bend": "7004cf45301739e438ad8c1b0468beb4f535acb388b5e6bc1593f52ad7c741ef",
@@ -987,13 +987,13 @@
     },
     "packages/coding-agent/src/modes/rpc/rpc-mode.ts": {
       "state": "partial",
-      "note": "All commands, JSONL framing, correlated errors, prompt/queue semantics, session replacement through the host, event streaming, per-line tasks (the reader waits for a line to finish or open a dialog, so extension handlers can ask the client), the whole RPC extension UI context (select/confirm/input/editor dialogs with timeouts and abort signals, notify/setStatus/setWidget/setTitle/set_editor_text requests, extension_error records), and command-context actions through the host. The reader resumes after accepted prompt preflight; the steer-and-queue RPC flow matches upstream on one and four threads. The prompt response follows AgentSession's preflightResult (success when accepted, the error when rejected first; later failures unanswered) and prompts, steers and follow-ups reach input handlers with source rpc. The bash command runs user_bash handlers first: a returned result is recorded instead of running the command, returned operations run it, and a failing handler fails the request without running anything. Gaps: stdout backpressure and signal handling belong to main.bend. See tests/rpc.md. The RPC UI context binds no theme yet (upstream answers ui.theme with the global theme main initializes from settings); ctx.ui.theme is None in RPC mode. Working controls are no-ops in RPC mode, as upstream defines them.",
+      "note": "All commands, JSONL framing, correlated errors, prompt/queue semantics, session replacement through the host, event streaming, per-line tasks (the reader waits for a line to finish or open a dialog, so extension handlers can ask the client), the whole RPC extension UI context (select/confirm/input/editor dialogs with timeouts and abort signals, notify/setStatus/setWidget/setTitle/set_editor_text requests, extension_error records), and command-context actions through the host. The reader resumes after accepted prompt preflight; the steer-and-queue RPC flow matches upstream on one and four threads. The prompt response follows AgentSession's preflightResult (success when accepted, the error when rejected first; later failures unanswered) and prompts, steers and follow-ups reach input handlers with source rpc. The bash command runs user_bash handlers first: a returned result is recorded instead of running the command, returned operations run it, and a failing handler fails the request without running anything. Gaps: stdout backpressure and signal handling belong to main.bend. See tests/rpc.md. The RPC UI context binds no theme yet (upstream answers ui.theme with the global theme main initializes from settings); ctx.ui.theme reads the supplied active theme in RPC mode; a mounted Bend extension verifies that on native one/four threads. Working controls are no-ops in RPC mode, as upstream defines them.",
       "ports": [
         "packages/coding-agent/src/modes/rpc.bend"
       ],
       "source_sha256": "7d4bf1e4291a5320a1ce27504c488622c9a7307ce9e7c2d973f9d95f18a8b2bc",
       "port_sha256": {
-        "packages/coding-agent/src/modes/rpc.bend": "35ff606340daa5721048f7d6a109bc85da550e2eb7c38f66e1440fb75cd6abd4"
+        "packages/coding-agent/src/modes/rpc.bend": "4ed4250added0d2ee180dab12bb16ab268f627e4ec6542e6697d3084b2b3e31b"
       }
     },
     "packages/coding-agent/src/modes/rpc/rpc-types.ts": {
@@ -1516,7 +1516,7 @@
         "packages/runtime/src/http-proxy.bend": "53cefc4acd8c47f4aed1011884124072a63e7b72612898e996c7a6e35e0d9ba9",
         "packages/runtime/src/fetch.bend": "f189fd01e044448ed351dba66d522fe6570839dfd7aec83672df622515af09f6",
         "packages/coding-agent/src/core/agent-runtime.bend": "3f21fd2a1381cf3a8f3cbadcc682cf790993e467a298d1bf29731e8aee3c215c",
-        "packages/coding-agent/src/main.bend": "f3164821e2990e8d14788451285fe03e9c1614177830572c2e9b5f8ab251c81f"
+        "packages/coding-agent/src/main.bend": "7551d62e06273010e849a9e9f3089775a8e2af817765cbb6a74f7508014b30a1"
       }
     },
     "packages/coding-agent/src/core/crash-log.ts": {
@@ -1710,7 +1710,7 @@
     },
     "packages/coding-agent/src/main.ts": {
       "state": "partial",
-      "note": "Reviewed the extension startup path: upstream combines built-in and injected inline factories, resolves explicit extension paths, passes factories to session services and reports load errors. Native main selects named linked Bend factories through --extension; dynamic extension-path discovery, package commands and broader main behavior remain incomplete or unreviewed.",
+      "note": "Reviewed the extension startup path: upstream combines built-in and injected inline factories, resolves explicit extension paths, passes factories to session services and reports load errors. Native RPC startup now loads the settings-selected global theme with the terminal color mode and dark fallback, and supplies it to extension UI; custom and missing-theme RPC startup smoke checks pass. Native main selects named linked Bend factories through --extension; dynamic extension-path discovery, package commands and broader main behavior remain incomplete or unreviewed.",
       "source_sha256": "d5f38460ed5ff89a8822a56bb40d279c08fe00b4d1d501e83cce0faf0b99addd",
       "ports": [
         "packages/coding-agent/src/main.bend",
@@ -1718,7 +1718,7 @@
         "packages/coding-agent/src/core/agent-runtime.bend"
       ],
       "port_sha256": {
-        "packages/coding-agent/src/main.bend": "f3164821e2990e8d14788451285fe03e9c1614177830572c2e9b5f8ab251c81f",
+        "packages/coding-agent/src/main.bend": "7551d62e06273010e849a9e9f3089775a8e2af817765cbb6a74f7508014b30a1",
         "packages/coding-agent/src/extensions/index.bend": "cac66e23a500ff2bbd041ab89114ad74c7fc09a599fbb4d982dbc77bf502d3d8",
         "packages/coding-agent/src/core/agent-runtime.bend": "3f21fd2a1381cf3a8f3cbadcc682cf790993e467a298d1bf29731e8aee3c215c"
       }

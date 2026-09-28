@@ -35,6 +35,7 @@ import ./rpc-types.bend as Types
 import ../core/agent-session-runtime.bend as SessionRuntime
 import ../core/skills.bend as Skills
 import ../core/prompt-templates.bend as Templates
+import ./interactive/theme/theme.bend as Theme
 
 # pi v0.87.1's headless protocol is LF-delimited JSON objects. The caller owns
 # byte transport; this endpoint owns framing, dispatch and event subscriptions.
@@ -545,7 +546,7 @@ def createActions(+env: ActionEnv) -> IO(Ctx.ExtensionCommandContextActions):
     switching : Callback.Callback<Ctx.SwitchSessionRequest,Ctx.SessionChange> <- Callback.create(~ActionEnv,~Ctx.SwitchSessionRequest,~Ctx.SessionChange,~actionSwitch,env)
     reloading : Callback.Callback<Unit,Unit> <- Callback.create(~ActionEnv,~Unit,~Unit,~actionReload,env)
     return Ctx.ExtensionCommandContextActions{wait,opening,forking,navigating,switching,reloading}
-def createExtensions(+sink: Sink(),current: Ref.Ref<Session.AgentSession>,+host: Host) -> IO(Extensions):
+def createExtensions(+sink: Sink(),current: Ref.Ref<Session.AgentSession>,theme: Maybe<&2,Ref.Ref<Theme.Theme>>,+host: Host) -> IO(Extensions):
   do IO<Extensions>:
     +dialogs : Ref.Ref<Dialogs> <- Ref.new(Dialogs,Dialogs{True{},Nil{}})
     +starting : Ref.Ref<Maybe<&2,Started>> <- Ref.new(Maybe<&2,Started>,None{})
@@ -567,7 +568,7 @@ def createExtensions(+sink: Sink(),current: Ref.Ref<Session.AgentSession>,+host:
     errors : Callback.Callback<ExtensionTypes.ExtensionError,Unit> <- Callback.create(~Sink(),~ExtensionTypes.ExtensionError,~Unit,~extensionError,sink)
     bound : Ref.Ref<Maybe<&2,Bound>> <- Ref.new(Maybe<&2,Bound>,None{})
     raise : Callback.Callback<Unit,Unit> <- Callback.create(~Ref.Ref<Bool>,~Unit,~Unit,~raiseShutdown,requestedOf(host))
-    return Extensions{dialogs,Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom,editor,widget,title,editorText,paste,current,None{},None{}},errors,bound,starting,detached,actions,raise}
+    return Extensions{dialogs,Ctx.ExtensionUIContext{select,confirm,input,notify,status,custom,editor,widget,title,editorText,paste,current,None{},theme},errors,bound,starting,detached,actions,raise}
 def bindRunner(extensions: Extensions,runner: Maybe<&2,ExtensionRunner.ExtensionRunner>) -> IO(Unit):
   match extensions runner:
     case _ None{}: IO.pure(Unit,Unit{})
@@ -655,19 +656,21 @@ def answered(dialogs: Ref.Ref<Dialogs>,decoded: Types.Decoded(Types.RpcExtension
         found : Maybe<&2,Dialog> <- Ref.modify(Dialogs,Maybe<&2,Dialog>,dialogs,value => takeDialog(value,Types.uiResponseId(response)))
         answerDialog(found,response)
 
-def start(+session: Session.AgentSession,+sink: Sink(),assetsDir: Maybe<&2,String>,+host: Host) -> IO(Owner & Handle):
+def startWithTheme(+session: Session.AgentSession,+sink: Sink(),assetsDir: Maybe<&2,String>,theme: Maybe<&2,Ref.Ref<Theme.Theme>>,+host: Host) -> IO(Owner & Handle):
   do IO<Owner & Handle>:
     +current : Ref.Ref<Session.AgentSession> <- Ref.new(Session.AgentSession,session)
     +buffer : Ref.Ref<String> <- Ref.new(String,"")
     +busy : Ref.Ref<Bool> <- Ref.new(Bool,False{})
     +jobs : Chan(Work) <- Chan.new(Work,64)
-    +extensions : Extensions <- createExtensions(sink,current,host)
+    +extensions : Extensions <- createExtensions(sink,current,theme,host)
     bindExtensions(extensions,session)
     +listener : Session.Listener() <- Callback.create(~Observer,~Session.AgentSessionEvent,~Unit,~observe,Observer{sink,host})
     Session.subscribe(session,listener)
     +handle : Handle <- IO.pure(Handle,Handle{current,sink,buffer,busy,jobs,assetsDir,host,listener,extensions})
     task : Chan(Unit) <- IO.fork(Unit,worker(handle,Check{}))
     return (Owner{handle,task},handle)
+def start(+session: Session.AgentSession,+sink: Sink(),assetsDir: Maybe<&2,String>,+host: Host) -> IO(Owner & Handle):
+  startWithTheme(session,sink,assetsDir,None{},host)
 
 # upstream rebindSession: later commands and events use the session the host
 # installed; the replaced session's listeners went with it.
