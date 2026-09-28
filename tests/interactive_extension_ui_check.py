@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
-"""Exercise an inline Bend extension command through the mounted terminal UI."""
+"""Exercise an inline Bend extension command through the mounted terminal UI.
+
+Run with: uv run --with pyte tests/interactive_extension_ui_check.py
+"""
 import errno
+import codecs
 import fcntl
 import os
 from pathlib import Path
@@ -12,6 +16,8 @@ import subprocess
 import tempfile
 import termios
 import time
+
+import pyte
 
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = Path(os.environ.get("PI_BEND_EXTENSION_UI_RUN", ROOT / "build/interactive-new-run")).resolve()
@@ -33,19 +39,24 @@ def scenario(threads: int) -> None:
             env={**os.environ, "PI_FAUX_API_KEY": "faux-key", "TERM": "xterm-256color", "DISPLAY": "", "WAYLAND_DISPLAY": "", "TERMUX_VERSION": "", "PI_TUI_ESC_TIMEOUT": "10", "VISUAL": f"python3 {editor}"},
         )
         output = bytearray()
+        screen = pyte.Screen(100, 24)
+        terminal = pyte.Stream(screen)
+        decoder = codecs.getincrementaldecoder("utf-8")("replace")
 
         def until(needle: bytes, start: int = 0, timeout: float = 15) -> None:
             deadline = time.monotonic() + timeout
             while needle not in output[start:] and time.monotonic() < deadline:
                 if select.select([master], [], [], .2)[0]:
                     try:
-                        output.extend(os.read(master, 65536))
+                        chunk = os.read(master, 65536)
+                        output.extend(chunk)
+                        terminal.feed(decoder.decode(chunk))
                     except OSError as error:
                         if error.errno != errno.EIO:
                             raise
                         break
             plain = re.sub(rb"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*\x07)", b"", output[start:])
-            assert needle in output[start:], (threads, needle, process.poll(), plain[-3000:])
+            assert needle in output[start:], (threads, needle, process.poll(), plain[-3000:], screen.display)
 
         try:
             until(b"faux-model")
@@ -83,11 +94,16 @@ def scenario(threads: int) -> None:
             os.write(master, b"/show-widget\r")
             until(b"fixture widget above", start)
             until(b"fixture widget below", start)
+            assert all(any(label in row for row in screen.display) for label in ("fixture widget above", "fixture widget below")), screen.display
+            start = len(output)
+            os.write(master, b"/new\r")
+            until(b"New session started", start)
+            assert all(label not in row for row in screen.display for label in ("fixture widget above", "fixture widget below")), screen.display
             os.write(master, b"/quit\r")
             stderr = process.communicate(timeout=20)[1]
             assert process.returncode == 0 and not stderr, (process.returncode, stderr)
             assert termios.tcgetattr(slave) == original, threads
-            print(f"native{threads}: extension prompts, widgets, external editor, cancellation and terminal restoration")
+            print(f"native{threads}: extension prompts, widget reset, external editor, cancellation and terminal restoration")
         finally:
             if process.poll() is None:
                 process.kill()

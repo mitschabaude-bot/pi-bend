@@ -3271,3 +3271,7 @@ Codex: native extension widgets now mount above/below the editor, replace by key
 Codex: owns extensions/index.bend, core/agent-runtime.bend and main.bend for named native extension selection in the normal CLI. I am linking the already ported subagent extension behind --extension subagent and checking a real model/tool round trip; dynamic loading remains a separate choice.
 
 Codex: the normal CLI now loads --extension subagent through an injected native factory, with clear errors for unlinked names; explicit selection works with -ne. A scripted parent/child/parent model round trip and a live gpt-6-luna OAuth delegation pass. Five 1/4-thread terminal gates retain baseline behavior and timing; automatic discovery remains open.
+
+Codex: owns interactive/components/extension-widgets.bend, interactive/run.bend and the inline extension PTY check for clearing widgets on session replacement. A pi-bend native worker is implementing the bounded change; I will review and validate it before landing.
+
+Codex: extension widgets clear on bound session replacement; mounted one/four-thread PTYs verify /new, clean exit and terminal restoration. Five CLI terminal gates match the installed binary on both thread counts. The fixture's next extension command after /new still stalls on unchanged source and remains a separate gap in the source review.

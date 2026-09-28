@@ -181,6 +181,22 @@ def disposeRemoved(pair: Maybe<&2,Widget> & Maybe<&2,Widget>) -> IO(Unit):
       do IO<Unit>:
         disposeOne(above)
         disposeOne(below)
+def emptied(state: State) -> State & (List<&2,Widget> & List<&2,Widget>):
+  match state:
+    case State{above,below,nextId,_}: (State{Nil{},Nil{},nextId,None{}},(above,below))
+def disposeAll(pair: List<&2,Widget> & List<&2,Widget>) -> IO(Unit):
+  match pair:
+    case (above,below):
+      do IO<Unit>:
+        disposeEntries(above)
+        disposeEntries(below)
+def clear(host: Host) -> IO(Unit):
+  match host:
+    case Host{state,_,_,redraw}:
+      do IO<Unit>:
+        old : List<&2,Widget> & List<&2,Widget> <- Serial.run(State,List<&2,Widget> & List<&2,Widget>,state,current => IO.pure(State & (List<&2,Widget> & List<&2,Widget>),emptied(current)))
+        disposeAll(old)
+        Callback.call(Unit,Unit,redraw,Unit{})
 def setWidget(host: Host,update: Ctx.WidgetUpdate) -> IO(Unit):
   match host update:
     case Host{+state,editor,theme,+redraw} Ctx.WidgetUpdate{+key,content,placement}:
