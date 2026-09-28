@@ -756,7 +756,7 @@
       ],
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/components/footer.bend": "d924bbd85b2a33b86ec77491b3f88014fe87ffac531779233f82cb77c4ce5828",
-        "packages/coding-agent/src/modes/interactive/run.bend": "4246cc07f4c1d3e0f63a38066fc2e4c29d9dcd139c980a5df39dcdc2b2f89505"
+        "packages/coding-agent/src/modes/interactive/run.bend": "84f9312ab15cdfb96da817cdbe6f6d0d88c8ba10920580e8fd7b37b16197993d"
       }
     },
     "packages/coding-agent/src/modes/interactive/components/login-dialog.ts": {
@@ -935,8 +935,8 @@
       "source_sha256": "0af3d03d1af8bbe7672c704aa9414d14bd7f15b511320acc038af7148d214388",
       "port_sha256": {
         "packages/coding-agent/src/modes/interactive/interactive-mode.bend": "1c219cfd23db65f1179e4accd8ba7ee43148585876bb7563281fe19154cd78f0",
-        "packages/coding-agent/src/modes/interactive/run.bend": "4246cc07f4c1d3e0f63a38066fc2e4c29d9dcd139c980a5df39dcdc2b2f89505",
-        "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
+        "packages/coding-agent/src/modes/interactive/run.bend": "84f9312ab15cdfb96da817cdbe6f6d0d88c8ba10920580e8fd7b37b16197993d",
+        "packages/coding-agent/src/modes/interactive/commands.bend": "9443632c43ce4906a850718f77a5ffe718954e6146b0e5c6896c821bdfa197ec",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "a82171affe232ea68175278c64bd69cbeca39efa3bc62f585cb520b61d3743e8",
         "packages/coding-agent/src/main.bend": "f3164821e2990e8d14788451285fe03e9c1614177830572c2e9b5f8ab251c81f",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6",
@@ -1755,10 +1755,18 @@
     },
     "packages/coding-agent/src/modes/interactive/session-share.ts": {
       "state": "partial",
-      "note": "The export-only pi.share record carries the system prompt and active tool schemas; native one/four-thread checks preserve conversation IDs and links. Radius upload, Gist fallback, cancellation and interactive command wiring remain missing.",
+      "note": "The pi.share export payload and private Gist fallback are native, including auth checks, temp cleanup and cancellable child process. Mounted terminal parity with fake gh matches upstream. Radius upload and the interactive cancellable loader remain missing.",
       "source_sha256": "8204ea1382273641e943ca02877ca466f5642dab73f4bda29508c2337637c0cd",
       "port_sha256": {
-        "packages/coding-agent/src/modes/interactive/session-share.bend": "32ccf072ac8cc0aa8b298e3bbadeb86fcb67687f81285cb9de4a08eec545654a"
+        "packages/coding-agent/src/modes/interactive/session-share.bend": "74a4dc196ddfc81fbc3c07ba10fefee458299023be102dc87582cf12ffe0ba32"
+      }
+    },
+    "packages/coding-agent/src/config.ts": {
+      "state": "partial",
+      "note": "Package identity, agent paths, package directory and the configurable Gist viewer URL are native. Install-method detection, self-update commands, several package asset paths and debug-log path are still missing.",
+      "source_sha256": "7874d7f63a62778f4281a324f99ba4faee8dc9a5c7ae80e2c531552d199257f9",
+      "port_sha256": {
+        "packages/coding-agent/src/config.bend": "2e5c0517551544b142b271f9dd3e5e1c7fc74a465f66827e90fd475018c5df1d"
       }
     }
   }

@@ -3308,3 +3308,5 @@ Codex: fused UTF-16 normalization and JSON quoting cut stringify to 107–108 ms
 Codex: owns the native session share path (`core/session-export.bend`, `interactive/session-share.bend`, command wiring in `interactive/commands.bend` and `interactive/run.bend`). I am porting branch serialization and the Radius/Gist flows, using fake endpoints and a fake `gh` for validation.
 
 Codex: native session-export API and `pi.share` presentation payload now compile and pass one/four-thread branch-link checks; the CLI's `/export .jsonl` matches upstream records, and basic-turn parity passes. Radius/Gist upload, cancellation and `/share` command wiring remain; ownership continues in those paths.
+
+Codex: native `/share` now exports HTML and creates a private Gist through cancellable `gh`; fake-GitHub terminal parity matches pi on the current binary, and one/four-thread core error paths pass. The required interactive gates match except the pre-existing stream-flood latency and large-session history/startup diffs, which reproduce on the installed baseline. Radius-first upload and Escape-driven loader cancellation remain next.

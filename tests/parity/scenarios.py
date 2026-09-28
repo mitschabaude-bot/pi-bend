@@ -1538,3 +1538,15 @@ for fullscreen in (False, True):
                   ("settle", 0.2), ("snap", "models-after-save"),
                   ("key", "Escape"), ("settle", 0.2), ("snap", "saved")],
     })
+
+SCENARIOS.append({
+    "name": "share-gist", "args": MODEL,
+    "turns": [{"text": "Share fixture answer"}],
+    "files": {"bin/gh": "#!/bin/sh\nif [ \"$1\" = auth ] && [ \"$2\" = status ]; then exit 0; fi\nif [ \"$1\" = gist ] && [ \"$2\" = create ] && [ \"$3\" = --public=false ] && [ -s \"$4\" ]; then printf 'gist invoked\\n' > \"$HOME/gh-call\"; printf 'https://gist.github.com/test/abc123\\n'; exit 0; fi\nexit 1\n"},
+    "executables": ["bin/gh"], "tool_bin": "bin",
+    "steps": [("wait", READY, "startup"), ("settle", 1), ("keys", "hello"), ("key", "Enter"),
+              ("wait", "Share fixture answer", "answered"), ("settle", 0.3),
+              ("keys", "/share"), ("key", "Enter"),
+              ("wait", "Share URL:", "shared"), ("settle", 0.2), ("snap", "shared"),
+              ("file", "home/gh-call", "gist-call")],
+})

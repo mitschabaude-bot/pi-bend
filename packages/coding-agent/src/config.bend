@@ -9,6 +9,13 @@ def appTitle() -> String: "π"
 def configDirName() -> String: ".pi"
 def version() -> String: "0.87.1"
 
+# Upstream's gist viewer link. The override is useful for self-hosted viewers.
+def getShareViewerUrl(gistId: String) -> IO(String):
+  do IO<String>:
+    value : Result<&1,&1,U32 & String,String> <- IO.get_env("PI_SHARE_VIEWER_URL")
+    +base : String = Result.default(&1,&1,U32 & String,String,value,"")
+    return Bool.pick(String,String.is_empty(base),"https://pi.dev/session/",base) ++ "#" ++ gistId
+
 # e.g. PI_CODING_AGENT_DIR
 def envAgentDir() -> String: "PI_CODING_AGENT_DIR"
 def envSessionDir() -> String: "PI_CODING_AGENT_SESSION_DIR"

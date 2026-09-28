@@ -3870,9 +3870,14 @@
     },
     {
       "source": "packages/coding-agent/test/session-share.test.ts",
-      "status": "pending",
-      "ports": [],
-      "sha256": "55bc68b6a7c5dccdec056598dcc3ae358f874bd1b3e42ae014dfbae1bbaca975"
+      "status": "partial",
+      "ports": [
+        "tests/parity/scenarios.py",
+        "tests/session-share-gist.bend",
+        "tests/session_share_gist_check.py"
+      ],
+      "sha256": "55bc68b6a7c5dccdec056598dcc3ae358f874bd1b3e42ae014dfbae1bbaca975",
+      "notes": "Mounted /share parity creates a private Gist with fake gh and matches the upstream terminal frame; native one/four-thread fake-gh checks cover auth, creation and errors. The upstream concurrent-export isolation case and Radius path remain open."
     },
     {
       "source": "packages/coding-agent/test/settings-diagnostics.test.ts",

@@ -23,6 +23,7 @@ type Action is Data:
   ThinkingSelected{level: Ai.ModelThinkingLevel,persist: Bool}
   ModelSelected{model: Ai.Model<Ai.JsonValue>,persist: Bool}
   ExportSession{path: Maybe<&2,String>}
+  ShareSession{}
   ImportSession{path: Maybe<&2,String>}
   ResumeSession{}
   OpenTree{}
@@ -56,6 +57,7 @@ type Command is Data:
   Login{provider: Maybe<&2,String>}
   Logout{}
   Export{path: Maybe<&2,String>}
+  Share{}
   Import{path: Maybe<&2,String>}
   Resume{}
   Tree{}
@@ -80,7 +82,6 @@ def bashCommand(+text: String,prefix: Nat,excluded: Bool) -> Command:
 # instead of reaching the model.
 def unported(parts: List<&2,String>) -> Bool:
   match parts:
-    case "/share" <> Nil{}: True{}
     case "/bug" <> _: True{}
     case "/debug" <> Nil{}: True{}
     case _: False{}
@@ -101,6 +102,7 @@ def classify(+text: String,+parts: List<&2,String>) -> Command:
     case "/login" <> _: Login{argument(text,6n)}
     case "/logout" <> Nil{}: Logout{}
     case "/export" <> _: Export{argument(text,7n)}
+    case "/share" <> Nil{}: Share{}
     case "/import" <> _: Import{argument(text,7n)}
     case "/resume" <> Nil{}: Resume{}
     case "/tree" <> Nil{}: Tree{}
@@ -239,6 +241,7 @@ def execute(session: Session.AgentSession,models: List<&2,Models.Model()>,comman
     case Login{_}: IO.pure(Action,CommandError{"Login is available in interactive mode only"})
     case Logout{}: IO.pure(Action,CommandError{"Logout is available in interactive mode only"})
     case Export{path}: IO.pure(Action,ExportSession{path})
+    case Share{}: IO.pure(Action,ShareSession{})
     case Import{path}: IO.pure(Action,ImportSession{path})
     case Resume{}: IO.pure(Action,ResumeSession{})
     case Tree{}: IO.pure(Action,OpenTree{})

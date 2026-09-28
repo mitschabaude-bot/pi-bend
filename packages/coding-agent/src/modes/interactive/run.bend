@@ -89,6 +89,7 @@ import ./components/thinking-selector.bend as ThinkingPicker
 import ./components/scoped-models-selector.bend as ScopePicker
 import ./components/settings-selector.bend as SettingsPicker
 import ./external-editor.bend as ExternalEditor
+import ./session-share.bend as SessionShare
 import ./components/trust-selector.bend as TrustPicker
 import ./components/messages.bend as MessageUI
 import ./components/custom-editor.bend as CustomEditor
@@ -691,6 +692,23 @@ def exportObserved(input: CommandObservation,requested: Maybe<&2,String>) -> IO(
         theme : Theme.Theme <- Ref.read(Theme.Theme,active)
         result : Result<&2,&2,String,String> <- exportCurrent(live,cwd,builtinDir,customDir,theme,requested)
         Interactive.report(failure,exportNotice(result))
+def shareNotice(result: SessionShare.GistResult) -> Interactive.SubmissionFailure:
+  match result:
+    case SessionShare.Shared{+viewerUrl,+gistUrl}:
+      Interactive.CommandNotice{"Share URL: " ++ Markdown.hyperlink(viewerUrl,viewerUrl) ++ "\nGist: " ++ Markdown.hyperlink(gistUrl,gistUrl)}
+    case SessionShare.Failed{message}: Interactive.CommandFailure{message}
+    case SessionShare.Cancelled{}: Interactive.CommandNotice{"Share cancelled"}
+def shareObserved(input: CommandObservation) -> IO(Unit):
+  match input:
+    case CommandObservation{_,session,_,+failure,redraw,cwd,builtinDir,_,_,_,_,_,_,_,_,_,ExportTheme{active,customDir}}:
+      do IO<Unit>:
+        +live : Session.AgentSession <- Ref.read(Session.AgentSession,session)
+        theme : Theme.Theme <- Ref.read(Theme.Theme,active)
+        +cancel : Abort.AbortController<Unit> <- Abort.new(Unit)
+        Interactive.report(failure,Interactive.CommandNotice{"Creating gist..."})
+        result : SessionShare.GistResult <- SessionShare.shareSession(live,cwd,Abort.signal(Unit,cancel),path => exportHtml(live,builtinDir,customDir,theme,Some{path}))
+        Abort.dispose(Unit,cancel)
+        Interactive.report(failure,shareNotice(result))
 def importStatus(state: ImportState,status: Interactive.SubmissionFailure) -> IO(Unit):
   match state:
     case ImportState{_,_,failure,redraw}:
@@ -1313,6 +1331,7 @@ def commandObserved(input: CommandObservation,action: Commands.Action) -> IO(Uni
     case Commands.ShowChangelog{}: changelogObserved(input)
     case Commands.ReloadResources{}: reloadObserved(input)
     case Commands.ExportSession{path}: exportObserved(input,path)
+    case Commands.ShareSession{}: shareObserved(input)
     case Commands.ImportSession{path}: importObserved(input,path)
     case Commands.ResumeSession{}: resumeObserved(input)
     case Commands.OpenTree{}: treeObserved(input,Selector.TreeMode{})
