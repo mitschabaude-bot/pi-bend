@@ -6,7 +6,7 @@ const { stream, streamSimple } = await import(`${root}/packages/ai/src/api/pi-me
 const { normalizeContext } = await import(`${root}/packages/ai/src/utils/transcript.ts`);
 const { AssistantMessageEventStream } = await import(`${root}/packages/ai/src/utils/event-stream.ts`);
 
-// Events are immutable snapshots in the port (docs/native-bend.md): record
+// Events are immutable snapshots in the port (docs/scope-decisions.md): record
 // each event as it is pushed, before later events mutate the shared partial.
 const pushed: string[] = [];
 const push = AssistantMessageEventStream.prototype.push;

@@ -69,3 +69,16 @@ note pointing here. Everything not listed here is in scope.
   `/bug` (excluded).
 - **Remote model catalog** (pi.dev, 2026-09-27): kept; requests identify as
   pi-bend rather than pi.
+
+## Native value and error semantics
+
+These are approved behavior and API choices, not implementation-completion claims.
+
+- **Immutable values and explicit updates** (2026-09-18): typed records, optional fields and returned updates replace JavaScript reflection, prototypes, symbols, sparse arrays and object identity. Dictionaries retain insertion order without numeric-key sorting; ordinary property names have no special behavior. Hooks return argument/context updates, and cost calculation returns a value rather than mutating an alias.
+- **Structural tool equality** (2026-09-18): dictionary field order does not affect declaration equality; list order and values do. Reordering schema fields alone does not cause a tool redefinition or provider fallback.
+- **Signed zero** (2026-09-18): `0` and `-0` compare equal, including in nested values. Schema `uniqueItems` rejects `[0, -0]`.
+- **Immutable event snapshots** (2026-09-18): a retained event keeps the content it had when emitted; subsequent events carry subsequent values.
+- **Failed asynchronous agent runs** (2026-09-18): close the event stream and return a typed error from the run result. Do not leave the stream unfinished or synthesize an `agent_end` event for a failed run.
+- **Bounded SSE diagnostics** (2026-09-19): clear diagnostic lines at each empty block rather than retaining comments and unknown fields indefinitely across heartbeat blocks. Preserve event names, data and emission behavior.
+- **Invalid input and dependency bugs** (2026-09-20): preserve meaningful contracts and valid-input behavior, with explicit errors for invalid cases. Do not reproduce permissive parsing accidents or known dependency bugs solely for reference equality. Approved cases include normal boolean JSON-schema semantics, literal schema property names, object/type checks for grammar schemas and Unicode hostname validation. Keep intentional differences explicit in differential checks.
+- **Strict resolver configuration** (2026-09-20): recognize whole option names and complete unsigned decimal values, apply numeric caps without wrapping, and reject malformed or unknown options when constructing configuration rather than silently accepting partial values.

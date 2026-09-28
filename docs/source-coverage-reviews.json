@@ -22,7 +22,7 @@
       "note": "streamProxy, processProxyEvent and the typed ProxyAssistantMessageEvent/ProxyStreamOptions over the native fetch: request body and headers, non-OK error messages, abort and transport failures, line splitting with a trailing unterminated event, partial reconstruction including toolcall_end metadata, unknown-type warnings and the unterminated-stream error. The caller supplies fetch and the URL context; options carry the whole SimpleStreamOptions and send upstream's eleven members; malformed events fail typed decoding; reading stops at the terminal event. streamLease adapts the stream to an Agent streamFn. Differential against upstream in tests/agent_proxy_check.py.",
       "source_sha256": "9c23fc8a625e79c6f8d180a65146288eaa8c10995d7c6fd91b75f57ff934fd40",
       "port_sha256": {
-        "packages/agent/src/proxy.bend": "f4d33dac0d9ddbbed9d47e6a07b3727f87c4525569d6a9edb04ea84522fd0d00"
+        "packages/agent/src/proxy.bend": "21ebbd6438d1337e63b4efdc134de33a2b55dff01f82368dc4a8251d076763d9"
       }
     },
     "packages/ai/src/api/anthropic-messages.ts": {

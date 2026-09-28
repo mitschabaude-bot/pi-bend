@@ -18,7 +18,7 @@ Preserve each package's meaningful public types, names and call contracts. Suppo
 
 Use Bend records and algebraic data types for messages, schemas, tools, contexts and events. Model optional fields explicitly, including the distinction between absence and `null` where it affects behavior. Keep JSON at serialization boundaries and at fields whose contract is arbitrary JSON. Ordinary state transitions return new values; effectful synchronization is reserved for concurrent work and resource ownership.
 
-Preserve meaningful behavior without recreating JavaScript reflection, prototypes, sparse arrays or incidental reference identity. Tool declarations compare structurally and emitted events are immutable snapshots. [Native semantics](native-bend.md) records the reviewed language-driven differences.
+Preserve meaningful behavior without recreating JavaScript reflection, prototypes, sparse arrays or incidental reference identity. Tool declarations compare structurally and emitted events are immutable snapshots. [Native semantics](scope-decisions.md) records the reviewed language-driven differences.
 
 ## Effects and dependencies
 

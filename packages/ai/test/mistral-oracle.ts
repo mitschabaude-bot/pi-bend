@@ -10,7 +10,7 @@ const { stream, streamSimple } = await import(`${root}/packages/ai/src/api/mistr
 const { getModel, normalizeContext } = await import(`${root}/packages/ai/src/compat.ts`);
 const { AssistantMessageEventStream } = await import(`${root}/packages/ai/src/utils/event-stream.ts`);
 
-// Events are immutable snapshots in the port (docs/native-bend.md): record
+// Events are immutable snapshots in the port (docs/scope-decisions.md): record
 // each event as it is pushed. `partialArgs` is upstream's scratch buffer on
 // streaming tool-call blocks, outside the ToolCall type; it is dropped.
 const pushed: string[] = [];

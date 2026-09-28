@@ -13,7 +13,7 @@ Bun.plugin({
 const { streamProxy } = await import(`${root}/packages/agent/src/proxy.ts`);
 const { normalizeContext, EventStream } = await import(`${root}/packages/ai/src/index.ts`);
 
-// Events are immutable snapshots in the port (docs/native-bend.md): record
+// Events are immutable snapshots in the port (docs/scope-decisions.md): record
 // each event as it is pushed, before later events mutate the shared partial.
 const pushed: string[] = [];
 const push = EventStream.prototype.push;

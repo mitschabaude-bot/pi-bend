@@ -35,7 +35,7 @@ import ../../runtime/src/utf8.bend as Utf8
 #   parsing context; ProxyStreamOptions carries the caller's
 #   SimpleStreamOptions whole (upstream picks eleven members of it and adds
 #   signal, authToken and proxyUrl), of which the same members are sent.
-# - Partials are immutable snapshots (docs/native-bend.md); the tool call's
+# - Partials are immutable snapshots (docs/scope-decisions.md); the tool call's
 #   accumulating `partialJson` is kept beside the message per content index,
 #   and `partial.content[index] = block` past the end appends.
 # - Decoding is typed: an event whose required members are missing or of the

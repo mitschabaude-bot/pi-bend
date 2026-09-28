@@ -24,7 +24,7 @@ Run `sh tests/native-agent.sh` for request sequencing, retained event snapshots,
 
 The package follows upstream's module boundaries: `src/types.bend` (the agent types), `src/agent-loop.bend` (`agentLoop`, `agentLoopContinue`, `runAgentLoop`, tool preparation, sequential and parallel execution, tool-change declarations and the main loop), `src/agent.bend` (the stateful `Agent` with its lifecycle, queues, listeners, hooks and failure recovery) and `src/stream-fn.bend`. Earlier layer modules were folded into sections of these files on 2026-09-22; the paragraphs below name those sections.
 
-See [native Bend decisions](../../docs/native-bend.md) for approved behavior changes and retired compatibility fixtures. Named loop coverage is recorded in `tests/upstream-inventory.json`. It does not establish complete `Agent` API, extension runtime, schema-validator or provider parity.
+See [native Bend decisions](../../docs/scope-decisions.md) for approved behavior changes. Named loop coverage is recorded in `tests/upstream-inventory.json`. It does not establish complete `Agent` API, extension runtime, schema-validator or provider parity.
 
 
 `finalizeExecutedToolCall` now awaits the configured after-tool hook, supplies the original call and validated arguments, applies optional overrides and turns hook errors into error tool results. Generic embeddings provide an empty details value and a pure error renderer; JSON-detail embeddings use an empty native dictionary. Nine native cases verify successful/error executions, absent hooks/returns, termination overrides, error conversion and exactly-once invocation. Channel gates verify that asynchronous hooks settle before finalization returns, without timing assumptions.
