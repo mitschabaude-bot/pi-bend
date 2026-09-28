@@ -2131,14 +2131,19 @@ def dynamicFactory(hidden: Bool, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, St
 def infoNamesOf(infos: List<&2, Session.ToolInfo()>) -> List<&2, V.Value>:
   match infos:
     case Nil{}: Nil{}
-    case Ext.ToolInfo{name, _, _} <> rest: Json.text(name) <> infoNamesOf(rest)
+    case Ext.ToolInfo{name, _, _, _, _} <> rest: Json.text(name) <> infoNamesOf(rest)
+def infoMetadata(infos: List<&2, Session.ToolInfo()>) -> List<&2, V.Value>:
+  match infos:
+    case Nil{}: Nil{}
+    case Ext.ToolInfo{name,_,_,guidelines,Skills.SourceInfo{path,source,_,_,_}} <> rest:
+      Json.object(Json.field("name",Json.text(name),Json.field("source",Json.text(source),Json.field("path",Json.text(path),Json.field("promptGuidelines",V.ArrayValue{textValues(guidelines)},Nil{}))))) <> infoMetadata(rest)
 
 def reportTools(+label: String, +session: Session.AgentSession) -> IO(Unit):
   do IO<Unit>:
-    all : List<&2, Session.ToolInfo()> <- Session.getAllTools(session)
+    +all : List<&2, Session.ToolInfo()> <- Session.getAllTools(session)
     active : List<&2, String> <- Session.getActiveToolNames(session)
     prompt : String <- Session.systemPrompt(session)
-    print("tools", Json.field("label", Json.text(label), Json.field("all", V.ArrayValue{infoNamesOf(all)}, Json.field("active", V.ArrayValue{textValues(active)}, Json.field("systemPrompt", Json.text(prompt), Nil{})))))
+    print("tools", Json.field("label", Json.text(label), Json.field("all", V.ArrayValue{infoNamesOf(all)}, Json.field("metadata",V.ArrayValue{infoMetadata(all)},Json.field("active", V.ArrayValue{textValues(active)}, Json.field("systemPrompt", Json.text(prompt), Nil{}))))))
 
 def dynamicScenario(+dir: String, agentDir: String, hidden: Bool) -> IO(Unit):
   do IO<Unit>:

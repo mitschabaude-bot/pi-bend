@@ -453,11 +453,11 @@ type ToolDefinition is Data:
 
 # upstream RegisteredTool: a definition with the extension that registered it.
 type RegisteredTool is Data:
-  RegisteredTool{definition: ToolDefinition, extensionPath: String}
+  RegisteredTool{definition: ToolDefinition, sourceInfo: Skills.SourceInfo}
 
-# upstream ToolInfo (getAllTools) without source metadata.
+# Tool metadata exposed to extensions and SDK callers.
 type ToolInfo is Data:
-  ToolInfo{name: String, description: String, parameters: V.Value}
+  ToolInfo{name: String, description: String, parameters: V.Value, promptGuidelines: List<&2, String>, sourceInfo: Skills.SourceInfo}
 
 # upstream registerFlag's options and ExtensionFlag (`type` is a keyword in
 # Bend, so the field is flagType): a boolean or string

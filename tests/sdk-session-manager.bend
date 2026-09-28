@@ -12,6 +12,7 @@ import ../packages/runtime/src/schema-value.bend as V
 import ../packages/runtime/src/text.bend as Text
 import ../packages/coding-agent/src/core/agent-session.bend as Session
 import ../packages/coding-agent/src/core/extensions/types.bend as Ext
+import ../packages/coding-agent/src/core/skills.bend as Skills
 import ../packages/coding-agent/src/core/session-persistence.bend as Sessions
 import ../packages/coding-agent/src/core/sdk.bend as Sdk
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
@@ -244,22 +245,25 @@ def namesContain(names: List<&2,String>,+name: String) -> Bool:
   match names:
     case Nil{}: False{}
     case found <> rest: String.eq(found,name) || namesContain(rest,name)
-def infoContains(infos: List<&2,Session.ToolInfo()>,+name: String) -> Bool:
+def infoSource(infos: List<&2,Session.ToolInfo()>,+name: String,+path: String,+source: String,+guideline: Maybe<&2,String>) -> Bool:
   match infos:
     case Nil{}: False{}
-    case Ext.ToolInfo{found,_,_} <> rest: String.eq(found,name) || infoContains(rest,name)
+    case Ext.ToolInfo{found,_,_,rules,Skills.SourceInfo{location,kind,Skills.Temporary{},Skills.TopLevel{},None{}}} <> rest:
+      +matches = String.eq(found,name) && String.eq(location,path) && String.eq(kind,source) && Maybe.default(&2,Bool,Maybe.map(&2,String,Bool,rule => namesContain(rules,rule),guideline),True{})
+      matches || infoSource(rest,name,path,source,guideline)
+    case _ <> rest: infoSource(rest,name,path,source,guideline)
 def customChecked(+name: String,pair: SessionPair()) -> IO(Unit):
   match pair:
     case Tuple{result,+session}:
       do IO<Unit>:
         +active : List<&2,String> <- Session.getActiveToolNames(session)
-        all : List<&2,Session.ToolInfo()> <- Session.getAllTools(session)
+        +all : List<&2,Session.ToolInfo()> <- Session.getAllTools(session)
         +state : Session.AgentState() <- Session.state(session)
         +prompt : String <- Session.systemPrompt(session)
         sdkOutput : String <- ranBash(findTool(stateTools(state),"sdk_tool"),"unused")
         readOutput : String <- ranBash(findTool(stateTools(state),"read"),"unused")
         Sdk.dispose(result)
-        check(namesContain(active,"sdk_tool") && namesContain(active,"read") && infoContains(all,"sdk_tool") && String.eq(sdkOutput,"sdk-ok") && String.eq(readOutput,"sdk-ok") && String.contains(prompt,"Prefer the SDK tool when asked"),name,"SDK tool not active, executable, overriding read, or contributing its prompt")
+        check(namesContain(active,"sdk_tool") && namesContain(active,"read") && infoSource(all,"sdk_tool","<sdk:sdk_tool>","sdk",Some{"Prefer the SDK tool when asked"}) && infoSource(all,"read","<sdk:read>","sdk",None{}) && infoSource(all,"bash","<builtin:bash>","builtin",None{}) && String.eq(sdkOutput,"sdk-ok") && String.eq(readOutput,"sdk-ok") && String.contains(prompt,"Prefer the SDK tool when asked"),name,"SDK tool not active, executable, overriding read, or reporting its source and prompt")
 def acceptsSdkCustomTools(+base: String) -> IO(Unit):
   +name = {"registers SDK custom tools through the session registry" : String}
   +cwd = Path.join(base,"project")

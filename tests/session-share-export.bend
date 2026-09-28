@@ -4,6 +4,7 @@ import ../packages/coding-agent/src/core/session-export.bend as Export
 import ../packages/coding-agent/src/core/session-persistence.bend as Persistence
 import ../packages/coding-agent/src/modes/interactive/session-share.bend as Share
 import ../packages/coding-agent/src/core/extensions/types.bend as Extensions
+import ../packages/coding-agent/src/core/extensions/loader.bend as ExtensionLoader
 import ../packages/runtime/src/schema-value.bend as V
 
 def State() -> Data: S.SessionManager<Unit,Unit,V.Value>
@@ -18,7 +19,7 @@ def printed(result: Persistence.Outcome(String)) -> IO(Unit):
     case Done{text}: IO.print(text)
     case Fail{error}: IO.die(Unit,1,Persistence.message(error))
 def share(parent: Maybe<&2,String>,timestamp: String) -> List<&2,V.Value>:
-  Share.createShareTrailingEntries(parent,timestamp,"abcdef12-0000-0000-0000-000000000000","You are helpful.",[Extensions.ToolInfo{"read","Read a file",V.Text{"schema"}}])
+  Share.createShareTrailingEntries(parent,timestamp,"abcdef12-0000-0000-0000-000000000000","You are helpful.",[Extensions.ToolInfo{"read","Read a file",V.Text{"schema"},Nil{},ExtensionLoader.createSourceInfo("<builtin:read>")}])
 def main() -> IO(Unit):
   do IO<Unit>:
     initial : State() <- checked(S.inMemory(Unit,Unit,V.Value,S.SessionHeader{Some{3n},"share-session","2026-01-01T00:00:00.000Z","/tmp/share",None{}}))

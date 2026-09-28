@@ -5,6 +5,7 @@ import ../packages/ai/src/utils/message-json.bend as Json
 import ../packages/coding-agent/examples/extensions/subagent/index.bend as Subagent
 import ../packages/coding-agent/examples/extensions/subagent/agents.bend as Agents
 import ../packages/coding-agent/src/core/extensions/types.bend as Ext
+import ../packages/coding-agent/src/core/extensions/loader.bend as ExtensionLoader
 import ../packages/coding-agent/src/core/extensions/tool-render.bend as ToolRender
 import ../packages/coding-agent/src/core/tools/index.bend as Tools
 import ../packages/coding-agent/src/modes/interactive/components/tool-execution.bend as Tool
@@ -41,7 +42,7 @@ def run(+theme: Theme.Theme) -> IO(Unit):
     +call : ToolRender.Renderer() <- C.create(~Unit,~ToolRender.RenderContext,~ToolRender.RenderResult(),~Subagent.renderCall,Unit{})
     +resultCallback : ToolRender.Renderer() <- C.create(~Unit,~ToolRender.RenderContext,~ToolRender.RenderResult(),~Subagent.renderResult,Unit{})
     +definition : Ext.ToolDefinition <- IO.pure(Ext.ToolDefinition,Ext.ToolDefinition{"subagent","Subagent","delegate",None{},Nil{},V.ObjectValue{R.Record{Nil{}}},None{},executeCallback,Ext.DefaultShell{},Some{call},Some{resultCallback}})
-    +shell : Tool.Shell <- IO.pure(Tool.Shell,Transcript.registeredShell([Ext.RegisteredTool{definition,"<test>"}],"subagent"))
+    +shell : Tool.Shell <- IO.pure(Tool.Shell,Transcript.registeredShell([Ext.RegisteredTool{definition,ExtensionLoader.createSourceInfo("<test:subagent>")}],"subagent"))
     +args : V.Value <- IO.pure(V.Value,Json.object(Json.field("agent",Json.text("worker"),Json.field("task",Json.text("Find the issue"),Nil{}))))
     +pending : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("subagent","call-1",args,theme,shell))
     +callRows : List<&2,String> <- Tool.render(pending,80n)

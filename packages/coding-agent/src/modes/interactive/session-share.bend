@@ -33,7 +33,7 @@ def radiusUrl() -> String: "https://radius.pi.dev/v1/artifacts?visibility=organi
 # conversation entries and the live session are not modified.
 def tool(value: Extensions.ToolInfo) -> V.Value:
   match value:
-    case Extensions.ToolInfo{name,description,parameters}:
+    case Extensions.ToolInfo{name,description,parameters,_,_}:
       Json.object([R.Property{"name",Json.text(name)},R.Property{"description",Json.text(description)},R.Property{"parameters",parameters}])
 
 def tools(values: List<&2,Extensions.ToolInfo>) -> List<&2,V.Value>:
@@ -50,7 +50,7 @@ def exported(+session: Session.AgentSession,cwd: String,path: String,timestamp: 
     state : Session.AgentState() <- Session.state(session)
     prompt : String <- Session.systemPrompt(session)
     stored : Session.Session() <- Session.sessionOf(session)
-    Export.exportSessionToJsonl(~Unit,~Tools.ToolDetails,~V.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,Session.stateOf(stored),cwd,path,timestamp,parent => time => createShareTrailingEntries(parent,time,id,prompt,Session.toolInfos(Session.stateTools(state))))
+    Export.exportSessionToJsonl(~Unit,~Tools.ToolDetails,~V.Value,~Session.unitValue,~Tools.detailsValue,~Session.rawValue,Session.stateOf(stored),cwd,path,timestamp,parent => time => createShareTrailingEntries(parent,time,id,prompt,Session.toolInfos(Session.stateTools(state),Nil{})))
 
 def withId(session: Session.AgentSession,cwd: String,path: String,time: Persistence.Outcome(String),id: Result<&2,&2,Uuid.Error,String>) -> IO(Result<&2,&2,String,String>):
   match time id:

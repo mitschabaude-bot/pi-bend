@@ -2147,7 +2147,7 @@ def sdkNames(definitions: List<&2, ExtensionTypes.ToolDefinition>) -> List<&2, S
 def sdkRegistered(definitions: List<&2, ExtensionTypes.ToolDefinition>) -> List<&2, ExtensionTypes.RegisteredTool>:
   match definitions:
     case Nil{}: Nil{}
-    case +definition <> rest: ExtensionTypes.RegisteredTool{definition,"<sdk:" ++ sdkToolName(definition) ++ ">"} <> sdkRegistered(rest)
+    case +definition <> rest: ExtensionTypes.RegisteredTool{definition,ExtensionLoader.createSourceInfo("<sdk:" ++ sdkToolName(definition) ++ ">")} <> sdkRegistered(rest)
 def registeredName(tool: ExtensionTypes.RegisteredTool) -> String:
   match tool:
     case ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{name, _, _, _, _, _, _, _, _, _, _}, _}: name
@@ -4643,21 +4643,31 @@ def getAgentsFiles(session: AgentSession) -> IO(List<&2, Prompt.ContextFile>):
 # Tools
 # -----
 
-# upstream ToolInfo without source metadata.
 def ToolInfo() -> Data: ExtensionTypes.ToolInfo
 
-def toolInfos(tools: List<&2, Tools.Tool()>) -> List<&2, ToolInfo()>:
+def registeredInfo(tools: List<&2, ExtensionTypes.RegisteredTool>, +name: String, +found: Maybe<&2, ExtensionTypes.RegisteredTool>) -> Maybe<&2, ExtensionTypes.RegisteredTool>:
+  match tools:
+    case Nil{}: found
+    case +tool <> +rest: Bool.pick(Unit -> Maybe<&2, ExtensionTypes.RegisteredTool>,String.eq(registeredName(tool),name),_ => registeredInfo(rest,name,Some{tool}),_ => registeredInfo(rest,name,found))(Unit{})
+def toolInfoWith(+name: String,description: String,parameters: V.Value,registered: Maybe<&2, ExtensionTypes.RegisteredTool>) -> ToolInfo():
+  match registered:
+    case Some{ExtensionTypes.RegisteredTool{ExtensionTypes.ToolDefinition{_,_,_,_,guidelines,_,_,_,_,_,_},source}}: ExtensionTypes.ToolInfo{name,description,parameters,guidelines,source}
+    case None{}: ExtensionTypes.ToolInfo{name,description,parameters,Nil{},ExtensionLoader.createSourceInfo("<builtin:" ++ name ++ ">")}
+def toolInfo(tool: Tools.Tool(),registered: List<&2, ExtensionTypes.RegisteredTool>) -> ToolInfo():
+  match tool:
+    case T.AgentTool{+name, description, parameters, _, _, _, _, _, _}: toolInfoWith(name,description,parameters,registeredInfo(registered,name,None{}))
+def toolInfos(tools: List<&2, Tools.Tool()>, +registered: List<&2, ExtensionTypes.RegisteredTool>) -> List<&2, ToolInfo()>:
   match tools:
     case Nil{}: Nil{}
-    case T.AgentTool{name, description, parameters, _, _, _, _, _, _} <> rest: ExtensionTypes.ToolInfo{name, description, parameters} <> toolInfos(rest)
+    case tool <> rest: toolInfo(tool,registered) <> toolInfos(rest,registered)
 
 def activeNamesIn(loadout: Runtime.Loadout) -> List<&2, String>:
   match loadout:
     case Runtime.Loadout{_, tools, _, _, _, _, _, _}: toolNamesOf(tools)
 
-def registryIn(loadout: Runtime.Loadout) -> List<&2, ToolInfo()>:
+def registryIn(loadout: Runtime.Loadout,registered: List<&2, ExtensionTypes.RegisteredTool>) -> List<&2, ToolInfo()>:
   match loadout:
-    case Runtime.Loadout{_, _, _, _, _, _, _, registry}: toolInfos(registry)
+    case Runtime.Loadout{_, _, _, _, _, _, _, registry}: toolInfos(registry,registered)
 
 # upstream getActiveToolNames: the active tools, in activation order.
 def getActiveToolNames(session: AgentSession) -> IO(List<&2, String>):
@@ -4667,9 +4677,13 @@ def getActiveToolNames(session: AgentSession) -> IO(List<&2, String>):
 
 # upstream getAllTools: every tool that can be activated.
 def getAllTools(session: AgentSession) -> IO(List<&2, ToolInfo()>):
-  do IO<List<&2, ToolInfo()>>:
-    loadout : Runtime.Loadout <- loadoutOf(session)
-    return registryIn(loadout)
+  match session:
+    case AgentSession{_,_,hooks,_,_,loadoutRef,_,_}:
+      do IO<List<&2, ToolInfo()>>:
+        +loadout : Runtime.Loadout <- R.read(Runtime.Loadout,loadoutRef)
+        sdk : List<&2, ExtensionTypes.ToolDefinition> <- sdkFromHooks(hooks)
+        registered : List<&2, ExtensionTypes.RegisteredTool> <- registeredOf(runnerIn(loadout))
+        return registryIn(loadout,withSdk(registered,sdk))
 
 def sectionsAfter(+sections: Prompt.SystemPromptSections(), source: Maybe<&2, Runtime.LoadoutSource>, +names: List<&2, String>, contextFiles: List<&2, Prompt.ContextFile>, skills: List<&2, Skills.Skill>, prompts: Runtime.ToolPrompts) -> Prompt.SystemPromptSections():
   match source:

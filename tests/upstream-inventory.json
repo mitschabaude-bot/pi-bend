@@ -2388,10 +2388,12 @@
       "status": "partial",
       "ports": [
         "tests/suite-harness.bend",
-        "tests/suite_harness_check.py"
+        "tests/suite_harness_check.py",
+        "tests/sdk-session-manager.bend",
+        "tests/sdk_suites_check.py"
       ],
       "sha256": "d0e3053b05635eb80891962db05c24ae3eaaf26e0ab8b9cfc7f4f90ac212fd79",
-      "notes": "'refreshes tool registry when tools are registered after initialization' (the guideline is checked in the system prompt; ToolInfo has no promptGuidelines or sourceInfo) and 'keeps custom tools active but omits them from available tools when promptSnippet is not provided' run in tests/suite_harness_check.py (session_start from Session.bindExtensions). Pending: 'exposes session state before custom bash spawn hooks' (built-in tool factories such as createBashTool are not exposed as extension tool definitions) and 'returns source metadata for SDK custom tools' (createAgentSession customTools and tool source metadata are not ported).",
+      "notes": "'refreshes tool registry when tools are registered after initialization' now checks sourceInfo and promptGuidelines for dynamic and built-in tools in tests/suite_harness_check.py; 'returns source metadata for SDK custom tools' is checked in tests/sdk-session-manager.bend on native one/four; 'keeps custom tools active but omits them from available tools when promptSnippet is not provided' is also ported. Pending: 'exposes session state before custom bash spawn hooks' (built-in tool factories such as createBashTool are not exposed as extension tool definitions).",
       "implementation": "packages/coding-agent/src/core/agent-session.bend"
     },
     {
@@ -2794,7 +2796,7 @@
       ],
       "sha256": "7ba2d75282846b177e31e9e1d1dafd34c62b92cf93426883bebd3f9291e73bd6",
       "implementation": "packages/coding-agent/src/core/tools/renderers/edit.bend",
-      "notes": "All three named contracts pass on Bun/native1/native4: large preflight diffs stay in the call box and identical settlement emits no full redraw; saved details reconstruct previews after source deletion without complete args or preflight; invalid edits display a preflight error without a diff. Native Screen plans expose redraw count/reason/writes rather than JS component internals. Supplementary controlled A\u2192B\u2192A reads prove stale completions cannot publish and disposal joins owned work; preflight does not mutate files."
+      "notes": "All three named contracts pass on Bun/native1/native4: large preflight diffs stay in the call box and identical settlement emits no full redraw; saved details reconstruct previews after source deletion without complete args or preflight; invalid edits display a preflight error without a diff. Native Screen plans expose redraw count/reason/writes rather than JS component internals. Supplementary controlled A→B→A reads prove stale completions cannot publish and disposal joins owned work; preflight does not mutate files."
     },
     {
       "source": "packages/coding-agent/test/experimental-agent-controller.test.ts",
@@ -3237,7 +3239,7 @@
         "tests/parity/scenarios.py"
       ],
       "sha256": "e1d51377ee06cf9ae6c4be4fcfe247b0889a73b42779b7dc02e81d59a722ecfc",
-      "notes": "Mounted fullscreen scenarios compare clipboard bytes for automatic selection copy and the Ctrl+X precedence in enabled/disabled modes. The suite\u2019s renderer switching, jump indicator, paste and spacing cases are not claimed here."
+      "notes": "Mounted fullscreen scenarios compare clipboard bytes for automatic selection copy and the Ctrl+X precedence in enabled/disabled modes. The suite’s renderer switching, jump indicator, paste and spacing cases are not claimed here."
     },
     {
       "source": "packages/coding-agent/test/keybindings-migration.test.ts",
@@ -4983,7 +4985,7 @@
         "tests/thinking_selector_terminal_check.py"
       ],
       "sha256": "9ecfd80858521289eed919657f36045f8289c1f8030b40ff07f04395b840548e",
-      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '\u2192 \u2713 medium', then '  \u2713 medium' and '\u2192   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads). Additional pinned component comparisons cover 51 sequences across six widths (keyboard, search cursor, default filtering and mouse) on native one/four threads; the optional default now has an explicit None representation. The original two source cases still pass. Fullscreen click, wheel and drag picker integration now matches source terminal frames and persisted settings on native one/four."
+      "notes": "Both cases on the selector's state (create, input, rendered with the dark theme, ANSI stripped): the current level keeps its check mark while browsing (rows '→ ✓ medium', then '  ✓ medium' and '→   high'), and a configured app.thinking.save of ctrl+r shows 'Ctrl+R to set as default', ignores ctrl+s and saves medium on ctrl+r. Adaptations in the test header: the save is Chosen{level, True} instead of onSelectAsDefault, and upstream's missing default level is off, which is not offered. Bun and native (1 and 4 threads). Additional pinned component comparisons cover 51 sequences across six widths (keyboard, search cursor, default filtering and mouse) on native one/four threads; the optional default now has an explicit None representation. The original two source cases still pass. Fullscreen click, wheel and drag picker integration now matches source terminal frames and persisted settings on native one/four."
     },
     {
       "source": "packages/coding-agent/test/tool-execution-component.test.ts",
@@ -5030,7 +5032,7 @@
         "tests/tools-manager.md"
       ],
       "sha256": "09e7bdfba469506725a8df17f87bc461ce7dd4eeba7ad04ec3140c0b39e1e2d5",
-      "notes": "7 of 8 cases pass on Bun and native one/four threads (tests/tools-manager-latest.bend): all six getLatestVersion cases through a logging redirect fetch and a local server (release redirects with and without the v prefix, a relative Location, a redirect whose body is discarded, 404 without redirect, a redirect to /login; one manual-redirect request each with the pi-coding-agent user agent) and ensureTool's offline status callback. Adaptation: upstream checks response.bodyUsed; here the redirect body is released unread. Pending: \"surfaces the error cause chain when a download fails\" \u2014 the native fetch error has no cause chain, so the status reads \"Failed to download fd: fetch failed\" without the connect detail. Download, extraction and install scenarios are covered by tests/tools_manager_check.py (tests/tools-manager.md)."
+      "notes": "7 of 8 cases pass on Bun and native one/four threads (tests/tools-manager-latest.bend): all six getLatestVersion cases through a logging redirect fetch and a local server (release redirects with and without the v prefix, a relative Location, a redirect whose body is discarded, 404 without redirect, a redirect to /login; one manual-redirect request each with the pi-coding-agent user agent) and ensureTool's offline status callback. Adaptation: upstream checks response.bodyUsed; here the redirect body is released unread. Pending: \"surfaces the error cause chain when a download fails\" — the native fetch error has no cause chain, so the status reads \"Failed to download fd: fetch failed\" without the connect detail. Download, extraction and install scenarios are covered by tests/tools_manager_check.py (tests/tools-manager.md)."
     },
     {
       "source": "packages/coding-agent/test/tools.test.ts",
@@ -5138,7 +5140,7 @@
         "tests/loopback-fetch.bend"
       ],
       "sha256": "cba6b39e9767019aebe0277ab580cb603927258652afcb2b9967387f1e8d6aa7",
-      "notes": "9 of 10 cases pass on Bun and native one/four threads. Instead of stubbing the global fetch, the library's https://pi.dev request goes through a logging fetch (tests/loopback-fetch.bend) to a local server that answers, drops connections or fails per case; the request URL, User-Agent and accept headers and the request counts (3 with retry, 1 for automatic checks, 0 when PI_SKIP_VERSION_CHECK is set) are asserted. semver valid/compare come from packages/runtime/src/semver.bend (tests/semver_check.py: 1,363 pairs match node-semver 7.8.5, including JavaScript double rounding of huge numeric pre-release identifiers). Not ported: \"formats nested network error details\" \u2014 the native fetch error carries no errno codes, so formatVersionCheckError returns the management request's message."
+      "notes": "9 of 10 cases pass on Bun and native one/four threads. Instead of stubbing the global fetch, the library's https://pi.dev request goes through a logging fetch (tests/loopback-fetch.bend) to a local server that answers, drops connections or fails per case; the request URL, User-Agent and accept headers and the request counts (3 with retry, 1 for automatic checks, 0 when PI_SKIP_VERSION_CHECK is set) are asserted. semver valid/compare come from packages/runtime/src/semver.bend (tests/semver_check.py: 1,363 pairs match node-semver 7.8.5, including JavaScript double rounding of huge numeric pre-release identifiers). Not ported: \"formats nested network error details\" — the native fetch error carries no errno codes, so formatVersionCheckError returns the management request's message."
     },
     {
       "source": "packages/durable/test/memory-storage.test.ts",
@@ -5745,7 +5747,7 @@
         "tests/tui_virtual_terminal.ts"
       ],
       "sha256": "ace909b9dfca424f4c0e08e348163ecb98e86513d55c3f4fef5028a715fb9896",
-      "notes": "tests/tui_virtual_terminal.ts replays 25 of the 28 tests with their upstream names and assertions on Bun/native one/four (resize, shrink, differential rendering, Kitty image cleanup and reservation, bounded writes). Pending: 'renders keyboard input without waiting for a throttled frame' (tests/tui_process_check.py only shows that input draws immediately, not the preempted throttled frame or render count), 'writes redraw logs to the provided directory' and 'writes the crash dump to the OS temp directory\u2026': the native TUI has no logDirectory, PI_TUI_DEBUG_REDRAW log or crash dump; a too-wide line is recorded as InvalidFrame instead of stopping the terminal."
+      "notes": "tests/tui_virtual_terminal.ts replays 25 of the 28 tests with their upstream names and assertions on Bun/native one/four (resize, shrink, differential rendering, Kitty image cleanup and reservation, bounded writes). Pending: 'renders keyboard input without waiting for a throttled frame' (tests/tui_process_check.py only shows that input draws immediately, not the preempted throttled frame or render count), 'writes redraw logs to the provided directory' and 'writes the crash dump to the OS temp directory…': the native TUI has no logDirectory, PI_TUI_DEBUG_REDRAW log or crash dump; a too-wide line is recorded as InvalidFrame instead of stopping the terminal."
     },
     {
       "source": "packages/tui/test/tui-shrink.test.ts",

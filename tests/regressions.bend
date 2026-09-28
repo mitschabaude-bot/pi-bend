@@ -1059,7 +1059,7 @@ def disposeToolRunner(runner: Maybe<&2, Runner.ExtensionRunner>) -> IO(Unit):
 def infoNames(infos: List<&2, Session.ToolInfo()>) -> List<&2, V.Value>:
   match infos:
     case Nil{}: Nil{}
-    case Ext.ToolInfo{name, _, _} <> rest: V.Text{name} <> infoNames(rest)
+    case Ext.ToolInfo{name, _, _, _, _} <> rest: V.Text{name} <> infoNames(rest)
 
 def texts(values: List<&2, String>) -> List<&2, V.Value>:
   match values:

@@ -15,6 +15,7 @@ import ../../../../ai/src/utils/transcript.bend as Transcript
 import ../session-json.bend as SessionJson
 import ../../../../runtime/src/schema-value.bend as V
 import ../messages.bend as Messages
+import ../skills.bend as Skills
 import ../tools/index.bend as Tools
 
 # upstream core/extensions/runner.ts: the loaded extensions of one runtime,
@@ -82,15 +83,15 @@ def extensions(runner: ExtensionRunner) -> IO(List<&2, T.Extension>):
     state : T.ExtensionRuntimeState <- R.read(T.ExtensionRuntimeState, runtimeOf(runner))
     return Loader.activeExtensions(Loader.extensionsOf(state))
 
-def registeredIn(+path: String, definitions: List<&2, T.ToolDefinition>) -> List<&2, T.RegisteredTool>:
+def registeredIn(+source: Skills.SourceInfo, definitions: List<&2, T.ToolDefinition>) -> List<&2, T.RegisteredTool>:
   match definitions:
     case Nil{}: Nil{}
-    case definition <> rest: T.RegisteredTool{definition, path} <> registeredIn(path, rest)
+    case definition <> rest: T.RegisteredTool{definition, source} <> registeredIn(source, rest)
 
 def registeredTools(extensions: List<&2, T.Extension>) -> List<&2, T.RegisteredTool>:
   match extensions:
     case Nil{}: Nil{}
-    case T.Extension{_, path, _, _, _, _, _, _, _, tools, extras} <> rest: List.append(&2, T.RegisteredTool, registeredIn(path, tools), registeredTools(rest))
+    case T.Extension{_, _, _, _, source, _, _, _, _, tools, _} <> rest: List.append(&2, T.RegisteredTool, registeredIn(source, tools), registeredTools(rest))
 
 # upstream getAllRegisteredTools: every loaded extension's tools, in load order.
 def getAllRegisteredTools(runner: ExtensionRunner) -> IO(List<&2, T.RegisteredTool>):

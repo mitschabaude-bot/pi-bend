@@ -634,13 +634,16 @@ def extension_tool_checks(f):
     assert [sorted(r['tools']) for r in requests] == [['switch_tools'], ['after_switch']]
     assert len(requests) == 2 and all('keep this run override' in r['systemPrompt'] for r in requests)
     checks += 1
-    # dynamic tools: refreshes tool registry when tools are registered after initialization (promptGuidelines are
-    # checked through the system prompt; tool source metadata is not ported)
+    # dynamic tools: refreshes the registry and reports the tool's source and guidelines
     events = run(f, 'prompt', 'dynamic_tool')
     tools = {e['label']: e for e in of_type(events, 'tools')}
     assert 'dynamic_tool' not in tools['before_bind']['all']
     after = tools['after_bind']
     assert 'dynamic_tool' in after['all'] and 'dynamic_tool' in after['active']
+    dynamic = next(info for info in after['metadata'] if info['name'] == 'dynamic_tool')
+    assert dynamic == {'name': 'dynamic_tool', 'source': 'inline', 'path': '<inline:dynamic>', 'promptGuidelines': ['Use dynamic_tool when the user asks for dynamic behavior tests.']}
+    read = next(info for info in after['metadata'] if info['name'] == 'read')
+    assert read['source'] == 'builtin' and read['path'] == '<builtin:read>' and read['promptGuidelines'] == []
     assert '- dynamic_tool: Run dynamic test behavior' in after['systemPrompt']
     assert '- Use dynamic_tool when the user asks for dynamic behavior tests.' in after['systemPrompt']
     checks += 1
