@@ -92,7 +92,7 @@ KEYS['openai-codex'] = KEYS['openaiCodexToken']
 KEYS['github-copilot'] = KEYS['githubCopilotToken']
 # A Vertex API key (GOOGLE_CLOUD_API_KEY); Vertex otherwise authenticates with
 # ADC and Bedrock with the environment's IAM keys, so no key is passed.
-KEYS['vertexApiKey'] = 'AIzaSyReplayVertexApiKey0123456789abcde'
+KEYS['vertexApiKey'] = 'replay-vertex-api-key'
 KEYS['google-vertex'] = None
 KEYS['amazon-bedrock'] = None
 VERTEX_PROJECT, VERTEX_LOCATION = 'replay-project', 'us-central1'
