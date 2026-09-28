@@ -938,7 +938,7 @@
         "packages/coding-agent/src/modes/interactive/run.bend": "a9d1dde0b4b3c5d0b77911b3c2b6ff9afc53c20d4f99135cca1f4506ab2f7a82",
         "packages/coding-agent/src/modes/interactive/commands.bend": "2c47f9162ce6a693b87141123c3b3e24803b9f15d5eaf02436af3ac7e5c05593",
         "packages/coding-agent/src/modes/interactive/viewport.bend": "a82171affe232ea68175278c64bd69cbeca39efa3bc62f585cb520b61d3743e8",
-        "packages/coding-agent/src/main.bend": "c1115b09092f2785d2c2acf7b33ef1043850e6768f0817686799b470d650d23b",
+        "packages/coding-agent/src/main.bend": "f3164821e2990e8d14788451285fe03e9c1614177830572c2e9b5f8ab251c81f",
         "packages/coding-agent/src/modes/interactive/components/header.bend": "5f80e3549d4968d849e602f5c25b648bc1651e855cce5725ed97b1c3bf40f0f6",
         "packages/coding-agent/src/modes/interactive/session-controller.bend": "9e2189ff0cdd0cbc81152d17589464b291b11c1b27fcb087d817849948f2dcbf",
         "packages/coding-agent/src/modes/interactive/transcript.bend": "7004cf45301739e438ad8c1b0468beb4f535acb388b5e6bc1593f52ad7c741ef",
@@ -1179,10 +1179,10 @@
     },
     "packages/coding-agent/src/extensions/index.ts": {
       "state": "excluded",
-      "note": "Excluded: its only built-in is llama.cpp, which Gregor removed from scope on 2026-09-26 (docs/scope-decisions.md). The native built-in list intentionally remains empty.",
+      "note": "Excluded: its only upstream built-in is llama.cpp, which Gregor removed from scope (docs/scope-decisions.md). The native built-in list remains empty; index.bend also holds the named compiled-extension registry mapped to main.ts.",
       "source_sha256": "29c9dc5de4ec9c895223e8991ff02871f8eb67702435abed64a2b412430b4d7c",
       "port_sha256": {
-        "packages/coding-agent/src/extensions/index.bend": "44a695593349473334cbda0bce1c15a58622682bffc83ce94ee1833c112d860d"
+        "packages/coding-agent/src/extensions/index.bend": "cac66e23a500ff2bbd041ab89114ad74c7fc09a599fbb4d982dbc77bf502d3d8"
       }
     },
     "packages/coding-agent/src/extensions/llama/client.ts": {
@@ -1513,8 +1513,8 @@
         "packages/coding-agent/src/core/http-dispatcher.bend": "ebdef30af7fff2fd0f4529bced421f752bc290f3b92698f5a173e29b90b9e6f8",
         "packages/runtime/src/http-proxy.bend": "53cefc4acd8c47f4aed1011884124072a63e7b72612898e996c7a6e35e0d9ba9",
         "packages/runtime/src/fetch.bend": "f189fd01e044448ed351dba66d522fe6570839dfd7aec83672df622515af09f6",
-        "packages/coding-agent/src/core/agent-runtime.bend": "b7da3d22788a913d1c67ccb1b14ff65ccbac4890792623afbe2eb0a7c5b98975",
-        "packages/coding-agent/src/main.bend": "c1115b09092f2785d2c2acf7b33ef1043850e6768f0817686799b470d650d23b"
+        "packages/coding-agent/src/core/agent-runtime.bend": "3f21fd2a1381cf3a8f3cbadcc682cf790993e467a298d1bf29731e8aee3c215c",
+        "packages/coding-agent/src/main.bend": "f3164821e2990e8d14788451285fe03e9c1614177830572c2e9b5f8ab251c81f"
       }
     },
     "packages/coding-agent/src/core/crash-log.ts": {
@@ -1704,6 +1704,43 @@
         "packages/coding-agent/src/modes/interactive/components/extension-editor.bend": "b5d3f204d2c33b7f58faa0f059a8d3a3ef65f7c425e4d5ab7001863b97c00664",
         "packages/coding-agent/src/modes/interactive/components/extension-dialog.bend": "18b4a11288d1b899f37cb2d42f5cbe4d7670092bc00ae2368d8a7b4e19724a07",
         "packages/coding-agent/src/modes/interactive/extension-ui.bend": "2040d705c6f58ba6cb2e63b4a4339e745f8324e22572844c0cd900a12528d61e"
+      }
+    },
+    "packages/coding-agent/src/main.ts": {
+      "state": "partial",
+      "note": "Reviewed the extension startup path: upstream combines built-in and injected inline factories, resolves explicit extension paths, passes factories to session services and reports load errors. Native main selects named linked Bend factories through --extension; dynamic extension-path discovery, package commands and broader main behavior remain incomplete or unreviewed.",
+      "source_sha256": "d5f38460ed5ff89a8822a56bb40d279c08fe00b4d1d501e83cce0faf0b99addd",
+      "ports": [
+        "packages/coding-agent/src/main.bend",
+        "packages/coding-agent/src/extensions/index.bend",
+        "packages/coding-agent/src/core/agent-runtime.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/main.bend": "f3164821e2990e8d14788451285fe03e9c1614177830572c2e9b5f8ab251c81f",
+        "packages/coding-agent/src/extensions/index.bend": "cac66e23a500ff2bbd041ab89114ad74c7fc09a599fbb4d982dbc77bf502d3d8",
+        "packages/coding-agent/src/core/agent-runtime.bend": "3f21fd2a1381cf3a8f3cbadcc682cf790993e467a298d1bf29731e8aee3c215c"
+      }
+    },
+    "packages/coding-agent/src/cli/args.ts": {
+      "state": "partial",
+      "note": "Reviewed extension flags and help text: --extension/-e accepts repeated arguments and --no-extensions/-ne leaves explicit selections active. Native help describes its linked-name requirement; the wider parser is not covered by this review.",
+      "source_sha256": "94d1490f9c0f66ae40482c8fec9a37ab541f92eb813ae859af66ed776da44315",
+      "ports": [
+        "packages/coding-agent/src/cli/args.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/cli/args.bend": "45b3824be0b2a269b5f3e7c594a8ae5e0e2ea57c3fee4374893f5469c6a03427"
+      }
+    },
+    "packages/coding-agent/src/core/agent-session-services.ts": {
+      "state": "partial",
+      "note": "Reviewed inline extension factory injection into session services: native AgentRuntime.createWithExtensions loads supplied Bend factories, binds providers and reports load errors. Automatic extension path discovery and reload remain open; the rest of this source module is not covered by this review.",
+      "source_sha256": "831c56842c394969567199a9e5ccdaebb9a3df7bdde825aa677935b825afedd6",
+      "ports": [
+        "packages/coding-agent/src/core/agent-runtime.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/core/agent-runtime.bend": "3f21fd2a1381cf3a8f3cbadcc682cf790993e467a298d1bf29731e8aee3c215c"
       }
     }
   }

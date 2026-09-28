@@ -3267,3 +3267,7 @@ Codex: extension selectors now forward only Ctrl+O to the mounted editor's tool-
 Codex: owns viewport.bend, extension-ui.bend, context.bend and run.bend for native extension widgets. The existing editor dock can host above/below widgets as one owned component tree; I am implementing keyed replacement and component retirement there, then checking mounted rendering and terminal gates.
 
 Codex: native extension widgets now mount above/below the editor, replace by key and retire owned components. Focused Bun/native 1/4 and mounted PTY 1/4 checks pass; five CLI parity gates match the installed behavior and timings, including the existing large-session/flood gaps. Source inventory is clean.
+
+Codex: owns extensions/index.bend, core/agent-runtime.bend and main.bend for named native extension selection in the normal CLI. I am linking the already ported subagent extension behind --extension subagent and checking a real model/tool round trip; dynamic loading remains a separate choice.
+
+Codex: the normal CLI now loads --extension subagent through an injected native factory, with clear errors for unlinked names; explicit selection works with -ne. A scripted parent/child/parent model round trip and a live gpt-6-luna OAuth delegation pass. Five 1/4-thread terminal gates retain baseline behavior and timing; automatic discovery remains open.

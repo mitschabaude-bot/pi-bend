@@ -75,15 +75,13 @@ import ./extensions/tool-context.bend as ToolContext
 import ./extensions/loader.bend as ExtensionLoader
 import ./extensions/runner.bend as ExtensionRunner
 import ./extensions/types.bend as ExtensionTypes
-import ../extensions/index.bend as BuiltinExtensions
 import ../config.bend as AppConfig
 import ./provider-composer.bend as Composer
 
 # The owned services behind one agent: transport, credentials, model runtime,
 # settings-driven selection, tools and the Agent itself. This is the print-mode
 # slice of upstream's AgentSessionServices/AgentSessionRuntime; the session
-# record and persistence live in agent-session.bend. Extensions, skills and
-# interactive mode are not ported yet.
+# record and persistence live in agent-session.bend.
 
 def Error() -> Data: Tools.ToolError
 def Details() -> Data: Tools.ToolDetails
@@ -1063,15 +1061,19 @@ def failedWith(failure: Maybe<&2, String>, prompt: Result<&2, &2, String, Prepar
 # cached catalogs: here each registration already refreshes, and built-in
 # providers have no dynamic catalog, so it would only repeat the
 # availability check.
-def loadExtensions(+cwd: String, +models: Models.ModelRuntime) -> IO(Extensions):
-  do IO<Extensions>:
-    +runtime : ExtensionTypes.ExtensionRuntime() <- ExtensionLoader.createExtensionRuntime()
-    loadErrors : List<&2, ExtensionTypes.LoadError> <- ExtensionLoader.loadExtensionFactories(runtime, BuiltinExtensions.builtInExtensions())
-    providerErrors : List<&2, ExtensionTypes.ExtensionError> <- ExtensionLoader.bindProviders(runtime, models, None{})
-    runner : ExtensionRunner.ExtensionRunner <- ExtensionRunner.create(runtime, cwd, models)
-    return Extensions{runner, loadErrors, providerErrors}
+type ExtensionLoadout is Type:
+  ExtensionLoadout{factories: List<&1, ExtensionTypes.InlineExtension>, errors: List<&2, ExtensionTypes.LoadError>}
+def loadExtensions(+cwd: String, +models: Models.ModelRuntime, loadout: ExtensionLoadout) -> IO(Extensions):
+  match loadout:
+    case ExtensionLoadout{factories, errors}:
+      do IO<Extensions>:
+        +runtime : ExtensionTypes.ExtensionRuntime() <- ExtensionLoader.createExtensionRuntime()
+        loadErrors : List<&2, ExtensionTypes.LoadError> <- ExtensionLoader.loadExtensionFactories(runtime, factories)
+        providerErrors : List<&2, ExtensionTypes.ExtensionError> <- ExtensionLoader.bindProviders(runtime, models, None{})
+        runner : ExtensionRunner.ExtensionRunner <- ExtensionRunner.create(runtime, cwd, models)
+        return Extensions{runner, List.append(&2, ExtensionTypes.LoadError, errors, loadErrors), providerErrors}
 
-def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, +paths: Paths.Environment, borrowed: Storage.AuthStorageOwner & Storage.AuthStorage) -> IO(Outcome(AgentRuntime)):
+def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, +paths: Paths.Environment, borrowed: Storage.AuthStorageOwner & Storage.AuthStorage, loadout: ExtensionLoadout) -> IO(Outcome(AgentRuntime)):
   match transport borrowed:
     case Transport{+authorizer, runtime, +fetch, +codexSessions} Tuple{storage, view}:
       do IO<Outcome(AgentRuntime)>:
@@ -1081,7 +1083,7 @@ def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, 
         oauth : Auth.OAuthAuth <- CodexOAuth.openaiCodexOAuth(fetch, urlContext())
         anthropicOAuth : Auth.OAuthAuth <- AnthropicOAuth.anthropicOAuth(fetch, urlContext())
         +models : Models.ModelRuntime <- Models.createWithAnthropic(credentialStore, oauth, Some{anthropicOAuth}, Radius.RadiusTransport{fetch, urlContext()})
-        +extensions : Extensions <- loadExtensions(cwdOf(options), models)
+        +extensions : Extensions <- loadExtensions(cwdOf(options), models, loadout)
         +resolution : Models.ResolveCliModelResult <- cliResolution(models, options, packageDir)
         reportResolution(resolution)
         +selected : Result<&2, &2, String, Maybe<&2, Models.Model()>> <- selectModel(models, options, resolution)
@@ -1089,34 +1091,37 @@ def storageStep(+options: CreateOptions, +packageDir: String, apiKey: Maybe<&2, 
         prompt : Result<&2, &2, String, Prepared> <- preparedFor(paths, options, packageDir)
         withModel(withSuffixThinking(options, resolution), Transport{authorizer, runtime, fetch, codexSessions}, storage, storageStore, credentials, credentialStore, models, paths, failedWith(extensionFailure(extensions), prompt), selected, runnerOf(extensions))
 
-def withPathsFields(options: CreateOptions, authPath: String, packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, paths: Paths.Environment) -> IO(Outcome(AgentRuntime)):
+def withPathsFields(options: CreateOptions, authPath: String, packageDir: String, apiKey: Maybe<&2, String>, transport: Transport, paths: Paths.Environment, loadout: ExtensionLoadout) -> IO(Outcome(AgentRuntime)):
   do IO<Outcome(AgentRuntime)>:
     storage : Storage.AuthStorageOwner <- Storage.create(authPath)
-    storageStep(options, packageDir, apiKey, transport, paths, Storage.borrow(storage))
+    storageStep(options, packageDir, apiKey, transport, paths, Storage.borrow(storage), loadout)
 
-def withPaths(options: CreateOptions, transport: Transport, +paths: Result<&2, &2, FS.Error, Paths.Environment>) -> IO(Outcome(AgentRuntime)):
+def withPaths(options: CreateOptions, transport: Transport, +paths: Result<&2, &2, FS.Error, Paths.Environment>, loadout: ExtensionLoadout) -> IO(Outcome(AgentRuntime)):
   match options paths:
     case _ Fail{error}:
       do IO<Outcome(AgentRuntime)>:
         disposeTransport(transport)
         return Fail{pathsError(error)}
-    case CreateOptions{cwd, agentDir, +authPath, bundlePath, +packageDir, provider, model, +apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings, resources} Done{paths}: withPathsFields(CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings, resources}, authPath, packageDir, apiKey, transport, paths)
+    case CreateOptions{cwd, agentDir, +authPath, bundlePath, +packageDir, provider, model, +apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings, resources} Done{paths}: withPathsFields(CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings, resources}, authPath, packageDir, apiKey, transport, paths, loadout)
 
 # --api-key applies to the selected model's provider for this process only.
-def withTransport(+options: CreateOptions, transport: Outcome(Transport)) -> IO(Outcome(AgentRuntime)):
+def withTransport(+options: CreateOptions, transport: Outcome(Transport), loadout: ExtensionLoadout) -> IO(Outcome(AgentRuntime)):
   match transport:
     case Fail{error}: IO.pure(Outcome(AgentRuntime), Fail{error})
     case Done{transport}:
       do IO<Outcome(AgentRuntime)>:
         paths : Result<&2, &2, FS.Error, Paths.Environment> <- Paths.loadEnvironment(urlContext())
-        withPaths(options, transport, paths)
+        withPaths(options, transport, paths, loadout)
 
-def create(options: CreateOptions) -> IO(Outcome(AgentRuntime)):
+def createWithExtensions(options: CreateOptions, loadout: ExtensionLoadout) -> IO(Outcome(AgentRuntime)):
   match options:
     case CreateOptions{cwd, agentDir, authPath, +bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, +settings, resources}:
       do IO<Outcome(AgentRuntime)>:
         transport : Outcome(Transport) <- createTransportWith(bundlePath, globalHttpProxy(settings))
-        withTransport(CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings, resources}, transport)
+        withTransport(CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, appendSystemPrompt, names, contextFiles, seed, settings, resources}, transport, loadout)
+
+def create(options: CreateOptions) -> IO(Outcome(AgentRuntime)):
+  createWithExtensions(options, ExtensionLoadout{Nil{}, Nil{}})
 
 def agentOf(runtime: AgentRuntime) -> AgentRuntime & Owner():
   match runtime:

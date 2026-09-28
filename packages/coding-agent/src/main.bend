@@ -11,6 +11,8 @@ import ./cli/list-models.bend as ModelList
 import ./cli/session-picker.bend as Picker
 import ./cli/startup-selector.bend as StartupSelector
 import ./config.bend as Config
+import ./extensions/index.bend as LinkedExtensions
+import ./core/extensions/types.bend as ExtensionTypes
 import ./migrations.bend as Migrations
 import ./core/keybindings.bend as AppKeys
 import ./core/agent-runtime.bend as Runtime
@@ -598,6 +600,12 @@ def createOptions(parsed: Args.Args, cwd: String, agentDir: String, authPath: St
     case Args.Args{provider, model, apiKey, systemPrompt, appendSystemPrompt, thinking, _, _, _, _, _, _, _, _, _, _, _, _, tools, excludeTools, noTools, noBuiltinTools, _, _, _, _, noSkills, skills, promptTemplates, noPromptTemplates, _, _, _, noContextFiles, _, _, _, _, _, _, _, _, _}:
       Runtime.CreateOptions{cwd, agentDir, authPath, bundlePath, packageDir, provider, model, apiKey, thinking, systemPrompt, Maybe.default(&2, List<&2, String>, appendSystemPrompt, Nil{}), Runtime.ToolSelection{tools, noToolsOf(noTools, noBuiltinTools), excludeTools, None{}}, Bool.not(Maybe.default(&2, Bool, noContextFiles, False{})), seed, settings, Runtime.ResourceOptions{Maybe.default(&2, List<&2, String>, skills, Nil{}), Maybe.default(&2, Bool, noSkills, False{}), Maybe.default(&2, List<&2, String>, promptTemplates, Nil{}), Maybe.default(&2, Bool, noPromptTemplates, False{})}}
 
+def extensionLoadout(parsed: Args.Args) -> Runtime.ExtensionLoadout:
+  match parsed:
+    case Args.Args{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, extensions, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+      +names = Maybe.default(&2, List<&2, String>, extensions, Nil{})
+      Runtime.ExtensionLoadout{List.append(&1, ExtensionTypes.InlineExtension, LinkedExtensions.builtInExtensions(), LinkedExtensions.selected(names)), LinkedExtensions.unlinked(names)}
+
 type ScopeFlags is Data: ScopeFlags{patterns: List<&2,String>,explicitModel: Bool,thinking: Maybe<&2,Ai.ModelThinkingLevel>}
 def scopeFlags(parsed: Args.Args,settings: Settings.SettingsManager) -> ScopeFlags:
   match parsed:
@@ -805,7 +813,7 @@ def runtimeWithSettings(env: FactoryEnv, +cwd: String, +session: Session(), +val
   match env:
     case FactoryEnv{+parsed, agentDir, authPath, bundlePath, packageDir,_,_,_}:
       do IO<Result<&1, &1, String, Created()>>:
-        created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.create(createOptions(parsed, cwd, agentDir, authPath, bundlePath, packageDir, value, settings))
+        created : Runtime.Outcome(Runtime.AgentRuntime) <- Runtime.createWithExtensions(createOptions(parsed, cwd, agentDir, authPath, bundlePath, packageDir, value, settings), extensionLoadout(parsed))
         runtimeCreated(cwd, session, seedMessages(value), seedThinking(value), settings, value, scopeFlags(parsed, settings), created)
 def trustedRuntime(env: FactoryEnv, +cwd: String, +session: Session(), +value: Runtime.SessionSeed, startup: Settings.SettingsManager, trust: Result<&2, &2, String, Bool>) -> IO(Result<&1, &1, String, Created()>):
   match env trust:
