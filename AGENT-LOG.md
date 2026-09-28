@@ -3229,3 +3229,7 @@ Codex: native ToolDefinition rendering is wired through transcript mounts; the s
 Codex: owns core/extensions/tool-render.bend, interactive/components/tool-execution.bend and subagent rendering while closing the remaining extension component/Markdown gap. I am checking upstream component lifecycle against the native TUI before editing; no heavy build live.
 
 Codex: expanded subagent results now render final answers with the shared Markdown theme in single/chain/parallel views. Native one/four renderer tests, 68 source tool frames, five terminal scenarios against installed CLI, inventory and gpt-6-luna smoke pass; source history and flood latency gaps remain, while retained extension components remain partial.
+
+Codex: owns core/extensions/tool-render.bend, types.bend, interactive/components/tool-execution.bend and focused tool-render tests for retained native extension components. The existing custom-message owner lifecycle is the reference; subagent rendering and terminal gates will be rechecked before landing.
+
+Codex: native tool renderers can return retained affine TUI components, see the previous component on state changes, and invalidate their mounted row; resize reuses the owner and replacement/disposal retire it once. Focused lifecycle tests and 68 source frames pass Bun/native one/four; five CLI gates preserve installed captures/requests, paired large-session typing and flood show no regression, and gpt-6-luna smoke passes. Mouse/input routing and shared renderer state remain partial.

@@ -38,8 +38,8 @@ def execute(_: Unit,call: Ext.ToolCallInput) -> IO(Tools.Output()): IO.pure(Tool
 def run(+theme: Theme.Theme) -> IO(Unit):
   do IO<Unit>:
     +executeCallback : Ext.ToolExecute() <- C.create(~Unit,~Ext.ToolCallInput,~Tools.Output(),~execute,Unit{})
-    +call : ToolRender.Renderer() <- C.create(~Unit,~ToolRender.RenderContext,~List<&2,String>,~Subagent.renderCall,Unit{})
-    +resultCallback : ToolRender.Renderer() <- C.create(~Unit,~ToolRender.RenderContext,~List<&2,String>,~Subagent.renderResult,Unit{})
+    +call : ToolRender.Renderer() <- C.create(~Unit,~ToolRender.RenderContext,~ToolRender.RenderResult(),~Subagent.renderCall,Unit{})
+    +resultCallback : ToolRender.Renderer() <- C.create(~Unit,~ToolRender.RenderContext,~ToolRender.RenderResult(),~Subagent.renderResult,Unit{})
     +definition : Ext.ToolDefinition <- IO.pure(Ext.ToolDefinition,Ext.ToolDefinition{"subagent","Subagent","delegate",None{},Nil{},V.ObjectValue{R.Record{Nil{}}},None{},executeCallback,Ext.DefaultShell{},Some{call},Some{resultCallback}})
     +shell : Tool.Shell <- IO.pure(Tool.Shell,Transcript.registeredShell([Ext.RegisteredTool{definition,"<test>"}],"subagent"))
     +args : V.Value <- IO.pure(V.Value,Json.object(Json.field("agent",Json.text("worker"),Json.field("task",Json.text("Find the issue"),Nil{}))))
@@ -54,16 +54,21 @@ def run(+theme: Theme.Theme) -> IO(Unit):
     check(String.contains(clean(expandedRows),"─── Task ───") && String.contains(clean(expandedRows),"─── Output ───") && String.contains(clean(expandedRows),"The fix is ready."),"expanded subagent result lost the task or output")
     +chain : V.Value <- IO.pure(V.Value,Json.object(Json.field("chain",V.ArrayValue{[Json.object(Json.field("agent",Json.text("a"),Json.field("task",Json.text("one"),Nil{}))),Json.object(Json.field("agent",Json.text("b"),Json.field("task",Json.text("{previous} two"),Nil{}))),Json.object(Json.field("agent",Json.text("c"),Json.field("task",Json.text("three"),Nil{}))),Json.object(Json.field("agent",Json.text("d"),Json.field("task",Json.text("four"),Nil{})))]},Nil{})))
     check(String.contains(U.stripTerminalSequences(Subagent.callText(chain,theme)),"chain (4 steps)") && String.contains(U.stripTerminalSequences(Subagent.callText(chain,theme)),"... +1 more"),"subagent chain call preview differs")
-    C.dispose(ToolRender.RenderContext,List<&2,String>,call)
-    C.dispose(ToolRender.RenderContext,List<&2,String>,resultCallback)
+    C.dispose(ToolRender.RenderContext,ToolRender.RenderResult(),call)
+    C.dispose(ToolRender.RenderContext,ToolRender.RenderResult(),resultCallback)
     C.dispose(Ext.ToolCallInput,Tools.Output(),executeCallback)
+def renderedLines(output: ToolRender.RenderResult()) -> IO(List<&2,String>):
+  match output:
+    case Done{ToolRender.RenderLines{lines}}: IO.pure(List<&2,String>,lines)
+    case _: IO.die(List<&2,String>,1,"subagent renderer did not return lines")
 def styledMode(mode: Subagent.SubagentMode,markdown: Markdown.MarkdownTheme,theme: Theme.Theme) -> IO(Unit):
   do IO<Unit>:
     +agent : Subagent.SingleResult = result("worker","**bold** and `code`")
     +details : Subagent.SubagentDetails = Subagent.SubagentDetails{mode,Agents.UserScope{},None{},[agent]}
     +toolResult : ToolRender.ToolResult = ToolRender.ToolResult{[Ai.TextImageText{Ai.TextContent{"**bold** and `code`",None{}}}],False{},Some{Tools.RawDetails{Subagent.detailsValue(details)}}}
-    +context : ToolRender.RenderContext = ToolRender.RenderContext{"subagent","call-1",V.ObjectValue{R.Record{Nil{}}},Some{toolResult},True{},False{},True{},True{},80n,theme,Some{markdown}}
-    +rows : List<&2,String> <- Subagent.renderResult(Unit{},context)
+    +context : ToolRender.RenderContext = ToolRender.RenderContext{"subagent","call-1",V.ObjectValue{R.Record{Nil{}}},Some{toolResult},True{},False{},True{},True{},80n,theme,Some{markdown},None{},None{}}
+    rendered : ToolRender.RenderResult() <- Subagent.renderResult(Unit{},context)
+    +rows : List<&2,String> <- renderedLines(rendered)
     check(String.contains(clean(rows),"bold and code") && Bool.not(String.contains(clean(rows),"**bold**")) && String.contains(String.join(rows,"\n"),"\u{1b}[1m"),"expanded subagent answer was not rendered as Markdown")
 def styledBorrowed(pair: MarkdownTheme.Styles & Markdown.MarkdownTheme,+theme: Theme.Theme) -> IO(Unit):
   match pair:

@@ -48,12 +48,95 @@ def args2() -> Value.Value: Value.ObjectValue{R.Record{R.Property{"path",Value.T
   match count:
     case Zero{}: List.reverse(&2,String,reversed)
     case Succ{rest}: lines(from + 1n,rest,("line-" ++ Nat.show(from)) <> reversed)
-def draw(label: String,context: ToolRender.RenderContext) -> IO(List<&2,String>):
+def draw(label: String,context: ToolRender.RenderContext) -> IO(ToolRender.RenderResult()):
   match context:
-    case ToolRender.RenderContext{_,_,_,_,_,_,_,_,width,_,_}:
+    case ToolRender.RenderContext{_,_,_,_,_,_,_,_,width,_,_,_,_}:
       +label = {label: String}
-      IO.pure(List<&2,String>,U.padResult(label,U.visibleWidth(label),width,True{}) <> Nil{})
-def drawEmpty(label: String,context: ToolRender.RenderContext) -> IO(List<&2,String>): IO.pure(List<&2,String>,Nil{})
+      IO.pure(ToolRender.RenderResult(),Done{ToolRender.RenderLines{U.padResult(label,U.visibleWidth(label),width,True{}) <> Nil{}}})
+def drawEmpty(label: String,context: ToolRender.RenderContext) -> IO(ToolRender.RenderResult()): IO.pure(ToolRender.RenderResult(),Done{ToolRender.RenderLines{Nil{}}})
+type ComponentProbe is Data: ComponentProbe{phase: Ref.Ref<Nat>,calls: Ref.Ref<Nat>,paints: Ref.Ref<Nat>,retired: Ref.Ref<Nat>,withLast: Ref.Ref<Nat>}
+def bumped(counter: Ref.Ref<Nat>) -> IO(Unit): Ref.modify(Nat,Unit,counter,n => (n + 1n,Unit{}))
+def paintedProbe(probe: ComponentProbe,width: Nat) -> IO(List<&2,String>):
+  match probe:
+    case ComponentProbe{_,_,paints,_,_}:
+      do IO<List<&2,String>>:
+        bumped(paints)
+        return ["component " ++ Nat.show(width)]
+def probeInvalidated(_: Unit,unit: Unit) -> IO(Unit): IO.pure(Unit,Unit{})
+def probeOwner(+probe: ComponentProbe) -> IO(Component.Owner):
+  match probe:
+    case ComponentProbe{_,_,_,+retired,_}:
+      do IO<Component.Owner>:
+        +draw : Callback.Callback<Nat,List<&2,String>> <- Callback.create(~ComponentProbe,~Nat,~List<&2,String>,~paintedProbe,probe)
+        +invalidate : Callback.Callback<Unit,Unit> <- Callback.create(~Unit,~Unit,~Unit,~probeInvalidated,Unit{})
+        return Component.Owner{Component.Component{Component.ComponentId{901n},draw,None{},None{},invalidate,None{},False{}},_ => do IO<Unit>:
+          bumped(retired)
+          Callback.dispose(Nat,List<&2,String>,draw)
+          Callback.dispose(Unit,Unit,invalidate)}
+def countLast(probe: ComponentProbe,last: Maybe<&2,Component.Component>) -> IO(Unit):
+  match probe last:
+    case ComponentProbe{_,_,_,_,withLast} Some{_}: bumped(withLast)
+    case _ _: IO.pure(Unit,Unit{})
+def probed(probe: ComponentProbe,context: ToolRender.RenderContext) -> IO(ToolRender.RenderResult()):
+  match context probe:
+    case ToolRender.RenderContext{_,_,_,_,_,_,_,_,_,_,_,last,_} ComponentProbe{+phase,+calls,+paints,+retired,+withLast}:
+      do IO<ToolRender.RenderResult()>:
+        bumped(calls)
+        countLast(ComponentProbe{phase,calls,paints,retired,withLast},last)
+        step : Nat <- Ref.read(Nat,phase)
+        Bool.pick(Unit -> IO(ToolRender.RenderResult()),Nat.is_eq(step,1n),
+          _ => IO.pure(ToolRender.RenderResult(),Done{ToolRender.ReuseComponent{}}),
+          _ => do IO<ToolRender.RenderResult()>:
+            owner : Component.Owner <- probeOwner(ComponentProbe{phase,calls,paints,retired,withLast})
+            return Done{ToolRender.RenderComponent{owner}})(Unit{})
+def readCount(counter: Ref.Ref<Nat>,expected: Nat,label: String) -> IO(Unit):
+  do IO<Unit>:
+    actual : Nat <- Ref.read(Nat,counter)
+    Bool.pick(Unit -> IO(Unit),Nat.is_eq(actual,expected),_ => IO.pure(Unit,Unit{}),_ => IO.die(Unit,1,label))(Unit{})
+def mountedProbe(pair: Tool.Owner & Component.Component & Tool.Handle,probe: ComponentProbe) -> IO(Unit):
+  match pair probe:
+    case (owner,component,handle) ComponentProbe{+phase,+calls,+paints,+retired,+withLast}:
+      do IO<Unit>:
+        +draw : Component.Component = component
+        +mounted : Tool.Handle = handle
+        first : List<&2,String> <- Component.render(draw,40n)
+        second : List<&2,String> <- Component.render(draw,60n)
+        readCount(calls,1n,"component renderer reran on resize")
+        readCount(paints,2n,"retained component did not repaint on resize")
+        readCount(retired,0n,"component retired before replacement")
+        Ref.write(Nat,phase,1n)
+        current : Tool.ToolExecution <- Tool.current(mounted)
+        Tool.set(mounted,Tool.updateArgs(current,args2()))
+        reused : List<&2,String> <- Component.render(draw,60n)
+        readCount(calls,2n,"component renderer missed state update")
+        readCount(withLast,1n,"component renderer missed previous component")
+        readCount(retired,0n,"reused component was retired")
+        Ref.write(Nat,phase,2n)
+        Component.invalidate(draw)
+        replacement : List<&2,String> <- Component.render(draw,60n)
+        readCount(calls,3n,"component renderer missed invalidation")
+        readCount(withLast,2n,"invalidated renderer missed previous component")
+        readCount(retired,1n,"replaced component was not retired")
+        Tool.dispose(owner)
+        readCount(retired,2n,"mounted component was not retired")
+def retainedComponents(theme: Theme.Theme) -> IO(Unit):
+  do IO<Unit>:
+    +phase : Ref.Ref<Nat> <- Ref.new(Nat,0n)
+    +calls : Ref.Ref<Nat> <- Ref.new(Nat,0n)
+    +paints : Ref.Ref<Nat> <- Ref.new(Nat,0n)
+    +retired : Ref.Ref<Nat> <- Ref.new(Nat,0n)
+    +withLast : Ref.Ref<Nat> <- Ref.new(Nat,0n)
+    +probe : ComponentProbe = ComponentProbe{phase,calls,paints,retired,withLast}
+    +renderer : ToolRender.Renderer() <- Callback.create(~ComponentProbe,~ToolRender.RenderContext,~ToolRender.RenderResult(),~probed,probe)
+    owner : Tool.Owner <- Tool.create(Component.ComponentId{900n},Tool.new("probe","probe-1",args1(),theme,Tool.SelfRendered{Some{renderer},None{}}))
+    mountedProbe(Tool.borrow(owner),probe)
+    Callback.dispose(ToolRender.RenderContext,ToolRender.RenderResult(),renderer)
+    p : Nat <- Ref.dispose(Nat,phase)
+    c : Nat <- Ref.dispose(Nat,calls)
+    a : Nat <- Ref.dispose(Nat,paints)
+    r : Nat <- Ref.dispose(Nat,retired)
+    l : Nat <- Ref.dispose(Nat,withLast)
+    return Unit{}
 def unusedPreview(_: Unit,request: Tool.PreviewRequest) -> IO(Edits.Preview()):
   IO.die(Edits.Preview(),1,"read rendering invoked edit preflight")
 def compactMounted(pair: Tool.Owner & Component.Component & Tool.Handle,+label: String) -> IO(Unit):
@@ -108,17 +191,17 @@ def mainRun(+theme: Theme.Theme) -> IO(Unit):
     +expanded : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.setExpanded(preview,True{}))
     show("fallback-expanded",expanded)
     show("fallback-error",Tool.updateResult(expanded,result("failed",True{}),False{}))
-    +call : Callback.Callback<ToolRender.RenderContext,List<&2,String>> <- Callback.create(~String,~ToolRender.RenderContext,~List<&2,String>,~draw,"custom call")
-    +resultCall : Callback.Callback<ToolRender.RenderContext,List<&2,String>> <- Callback.create(~String,~ToolRender.RenderContext,~List<&2,String>,~draw,"custom result")
+    +call : ToolRender.Renderer() <- Callback.create(~String,~ToolRender.RenderContext,~ToolRender.RenderResult(),~draw,"custom call")
+    +resultCall : ToolRender.Renderer() <- Callback.create(~String,~ToolRender.RenderContext,~ToolRender.RenderResult(),~draw,"custom result")
     +rendered : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("custom_tool","r1",Value.ObjectValue{R.Record{Nil{}}},theme,Tool.Boxed{Some{call},Some{resultCall}}))
     show("rendered-call",rendered)
     show("rendered-result",Tool.updateResult(rendered,result("done",False{}),False{}))
-    +ownCall : Callback.Callback<ToolRender.RenderContext,List<&2,String>> <- Callback.create(~String,~ToolRender.RenderContext,~List<&2,String>,~draw,"own call")
-    +ownResult : Callback.Callback<ToolRender.RenderContext,List<&2,String>> <- Callback.create(~String,~ToolRender.RenderContext,~List<&2,String>,~draw,"own result")
+    +ownCall : ToolRender.Renderer() <- Callback.create(~String,~ToolRender.RenderContext,~ToolRender.RenderResult(),~draw,"own call")
+    +ownResult : ToolRender.Renderer() <- Callback.create(~String,~ToolRender.RenderContext,~ToolRender.RenderResult(),~draw,"own result")
     +self : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("custom_tool","s1",Value.ObjectValue{R.Record{Nil{}}},theme,Tool.SelfRendered{Some{ownCall},Some{ownResult}}))
     show("self-call",self)
     show("self-result",Tool.updateResult(self,result("done",False{}),False{}))
-    +empty : Callback.Callback<ToolRender.RenderContext,List<&2,String>> <- Callback.create(~String,~ToolRender.RenderContext,~List<&2,String>,~drawEmpty,"")
+    +empty : ToolRender.Renderer() <- Callback.create(~String,~ToolRender.RenderContext,~ToolRender.RenderResult(),~drawEmpty,"")
     +emptyBox : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("custom_tool","e1",Value.ObjectValue{R.Record{Nil{}}},theme,Tool.Boxed{Some{empty},Some{empty}}))
     show("boxed-empty",emptyBox)
     +emptySelf : Tool.ToolExecution <- IO.pure(Tool.ToolExecution,Tool.new("custom_tool","e2",Value.ObjectValue{R.Record{Nil{}}},theme,Tool.SelfRendered{Some{empty},Some{empty}}))
@@ -145,11 +228,12 @@ def mainRun(+theme: Theme.Theme) -> IO(Unit):
     showWide("write-preview",longWrite)
     showWide("write-expanded",Tool.setExpanded(longWrite,True{}))
     compactReads(theme)
-    Callback.dispose(ToolRender.RenderContext,List<&2,String>,call)
-    Callback.dispose(ToolRender.RenderContext,List<&2,String>,resultCall)
-    Callback.dispose(ToolRender.RenderContext,List<&2,String>,ownCall)
-    Callback.dispose(ToolRender.RenderContext,List<&2,String>,ownResult)
-    Callback.dispose(ToolRender.RenderContext,List<&2,String>,empty)
+    retainedComponents(theme)
+    Callback.dispose(ToolRender.RenderContext,ToolRender.RenderResult(),call)
+    Callback.dispose(ToolRender.RenderContext,ToolRender.RenderResult(),resultCall)
+    Callback.dispose(ToolRender.RenderContext,ToolRender.RenderResult(),ownCall)
+    Callback.dispose(ToolRender.RenderContext,ToolRender.RenderResult(),ownResult)
+    Callback.dispose(ToolRender.RenderContext,ToolRender.RenderResult(),empty)
 def main() -> IO(Unit):
   do IO<Unit>:
     loadedTheme : Result<&2,&2,Theme.LoadError,Theme.Theme> <- Theme.loadFromPath("packages/coding-agent/src/modes/interactive/theme/dark.json",Color.Palette256{})

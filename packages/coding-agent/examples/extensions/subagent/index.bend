@@ -1173,9 +1173,12 @@ def renderLines(text: String,width: Nat) -> IO(List<&2,String>):
   do IO<List<&2,String>>:
     pair : TuiText.Text & List<&2,String> <- TuiText.render(TuiText.new(text,Some{0n},Some{0n},None{}),width)
     return renderedLines(pair)
-def renderCall(_: Unit,context: ToolRender.RenderContext) -> IO(List<&2,String>):
+def renderCall(_: Unit,context: ToolRender.RenderContext) -> IO(ToolRender.RenderResult()):
   match context:
-    case ToolRender.RenderContext{_,_,args,_,_,_,_,_,width,theme,_}: renderLines(callText(args,theme),width)
+    case ToolRender.RenderContext{_,_,args,_,_,_,_,_,width,theme,_,_,_}:
+      do IO<ToolRender.RenderResult()>:
+        lines : List<&2,String> <- renderLines(callText(args,theme),width)
+        return Done{ToolRender.RenderLines{lines}}
 
 def convertedNatural(converted: Result<&2,&2,F.Error,Nat>) -> Result<&2,&2,Decode.Error,Nat>:
   match converted:
@@ -1494,10 +1497,13 @@ def renderedResult(result: ToolRender.ToolResult,expanded: Bool,width: Nat,+them
   match result:
     case ToolRender.ToolResult{content,_,Some{Tools.RawDetails{value}}}: decodedResult(decodeDetails(value),content,expanded,width,theme,styles)
     case ToolRender.ToolResult{content,_,_}: renderLines(fallbackResult(content),width)
-def renderResult(_: Unit,context: ToolRender.RenderContext) -> IO(List<&2,String>):
+def renderResult(_: Unit,context: ToolRender.RenderContext) -> IO(ToolRender.RenderResult()):
   match context:
-    case ToolRender.RenderContext{_,_,_,None{},_,_,_,_,_,_,_}: IO.pure(List<&2,String>,Nil{})
-    case ToolRender.RenderContext{_,_,_,Some{result},expanded,_,_,_,width,theme,styles}: renderedResult(result,expanded,width,theme,styles)
+    case ToolRender.RenderContext{_,_,_,None{},_,_,_,_,_,_,_,_,_}: IO.pure(ToolRender.RenderResult(),Done{ToolRender.RenderLines{Nil{}}})
+    case ToolRender.RenderContext{_,_,_,Some{result},expanded,_,_,_,width,theme,styles,_,_}:
+      do IO<ToolRender.RenderResult()>:
+        lines : List<&2,String> <- renderedResult(result,expanded,width,theme,styles)
+        return Done{ToolRender.RenderLines{lines}}
 
 # Registration
 # ------------
@@ -1510,8 +1516,8 @@ def toolDescription(+agentDir: String) -> String:
 def subagentExtensionWith(+agentDir: String, +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
   do IO<Result<&2, &2, String, Unit>>:
     execute : Ext.ToolExecute() <- C.create(~ExtensionEnv, ~Ext.ToolCallInput, ~Tools.Output(), ~executeSubagent, ExtensionEnv{agentDir})
-    call : ToolRender.Renderer() <- C.create(~Unit, ~ToolRender.RenderContext, ~List<&2,String>, ~renderCall, Unit{})
-    result : ToolRender.Renderer() <- C.create(~Unit, ~ToolRender.RenderContext, ~List<&2,String>, ~renderResult, Unit{})
+    call : ToolRender.Renderer() <- C.create(~Unit, ~ToolRender.RenderContext, ~ToolRender.RenderResult(), ~renderCall, Unit{})
+    result : ToolRender.Renderer() <- C.create(~Unit, ~ToolRender.RenderContext, ~ToolRender.RenderResult(), ~renderResult, Unit{})
     Loader.registerTool(api, Ext.ToolDefinition{"subagent", "Subagent", toolDescription(agentDir), None{}, Nil{}, subagentParams(), None{}, execute, Ext.DefaultShell{}, Some{call}, Some{result}})
 
 def registered(located: Config.Located(), +api: Ext.ExtensionAPI) -> IO(Result<&2, &2, String, Unit>):
