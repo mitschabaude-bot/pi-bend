@@ -17,6 +17,7 @@ import ../../../../../tui/src/components/settings-list.bend as ListUI
 import ../../../core/agent-session.bend as Session
 import ../../../core/settings-manager.bend as Settings
 import ../../../../../runtime/src/u64.bend as W
+import ../../../../../runtime/src/f64.bend as F
 import ../theme/theme.bend as Theme
 import ../theme/theme-controller.bend as ThemeController
 import ../transcript.bend as Transcript
@@ -84,6 +85,14 @@ def outputPadding(value: Settings.OutputPadding) -> String:
 def smallNumber(value: W.U64) -> String:
   match value:
     case W.U64{_,low}: U32.show(low)
+def httpTimeout(value: W.U64) -> String:
+  match value:
+    case W.U64{0,30000}: "30 sec"
+    case W.U64{0,60000}: "1 min"
+    case W.U64{0,120000}: "2 min"
+    case W.U64{0,300000}: "5 min"
+    case W.U64{0,0}: "disabled"
+    case value: Maybe.default(&2,String,F.toDecimal(F.divide(F.fromU64(value),F.fromU32(1000))),"") ++ " sec"
 def modeNames(modes: List<&2,Settings.CacheWarmingMode>) -> List<&2,String>:
   match modes:
     case Nil{}: Nil{}
@@ -115,6 +124,7 @@ def rows(+settings: Settings.SettingsManager,currentTheme: String,submenu: Callb
   item("steering-mode","Steering mode","Enter while streaming queues steering messages. 'one-at-a-time': deliver one, wait for response. 'all': deliver all at once.",queue(Settings.getSteeringMode(settings)),choices("one-at-a-time","all")) <>
   item("follow-up-mode","Follow-up mode","Queues follow-up messages until agent stops. 'one-at-a-time': deliver one, wait for response. 'all': deliver all at once.",queue(Settings.getFollowUpMode(settings)),choices("one-at-a-time","all")) <>
   item("transport","Transport","Preferred transport for providers that support multiple transports",transport(Settings.getTransport(settings)),"sse" <> "websocket" <> "websocket-cached" <> "auto" <> Nil{}) <>
+  item("http-idle-timeout","HTTP idle timeout","Maximum idle gap while waiting for HTTP headers or body chunks. Disable for local models that pause longer than five minutes.",httpTimeout(Settings.getHttpIdleTimeoutMs(settings)),"30 sec" <> "1 min" <> "2 min" <> "5 min" <> "disabled" <> Nil{}) <>
   item("cache-warming-mode","Cache warming","off; streaming while the agent runs; idle also between runs while continuation stays profitable",Settings.cacheWarmingModeName(Settings.getCacheWarmingMode(settings)),modeNames(Settings.CACHE_WARMING_MODES())) <>
   boolean("hide-thinking","Hide thinking","Hide thinking blocks in assistant responses",Settings.getHideThinkingBlock(settings)) <>
   item("mermaid-rendering","Mermaid diagrams","Render Mermaid code blocks as Unicode diagrams",mermaid(Settings.getMermaidRenderingMode(settings)),"off" <> "final" <> "streaming" <> Nil{}) <>
@@ -167,6 +177,11 @@ def change(id: String,value: String,settings: Settings.SettingsManager) -> Setti
     case "transport" "websocket": Settings.setTransport(Ai.WebSocket{},settings)
     case "transport" "websocket-cached": Settings.setTransport(Ai.WebSocketCached{},settings)
     case "transport" "auto": Settings.setTransport(Ai.AutoTransport{},settings)
+    case "http-idle-timeout" "30 sec": Settings.setHttpIdleTimeoutMs(W.U64{0,30000},settings)
+    case "http-idle-timeout" "1 min": Settings.setHttpIdleTimeoutMs(W.U64{0,60000},settings)
+    case "http-idle-timeout" "2 min": Settings.setHttpIdleTimeoutMs(W.U64{0,120000},settings)
+    case "http-idle-timeout" "5 min": Settings.setHttpIdleTimeoutMs(W.U64{0,300000},settings)
+    case "http-idle-timeout" "disabled": Settings.setHttpIdleTimeoutMs(W.U64{0,0},settings)
     case "hide-thinking" "true": Settings.setHideThinkingBlock(True{},settings)
     case "hide-thinking" "false": Settings.setHideThinkingBlock(False{},settings)
     case "mermaid-rendering" "off": Settings.setMermaidRenderingMode(Settings.MermaidOff{},settings)
@@ -440,6 +455,7 @@ def controllerEffect(id: String,value: String,controller: Ref.Ref<Maybe<&2,Theme
         current : Maybe<&2,ThemeController.Handle> <- Ref.read(Maybe<&2,ThemeController.Handle>,controller)
         themeChanged(current,value,transcript)
     case "show-hardware-cursor": terminalEffect(controller,Process.HardwareCursor{boolValue(value)})
+    case "http-idle-timeout": Transcript.status(transcript,"HTTP idle timeout: " ++ value)
     case "fullscreen-scrollbar": scrollbarEffect(controller,value)
     case "clear-on-shrink": terminalEffect(controller,Process.ClearOnShrink{boolValue(value)})
     case _: IO.pure(Unit,Unit{})

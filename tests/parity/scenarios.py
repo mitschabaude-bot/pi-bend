@@ -1096,6 +1096,14 @@ SCENARIOS = [
                   ("key", "Escape"), ("settle", 0.2), ("snap", "closed")],
     },
     {
+        "name": "settings-http-idle-timeout", "args": MODEL,
+        "steps": [("wait", READY, "startup"), ("settle", 0.3),
+                  ("keys", "/settings"), ("key", "Enter"), ("settle", 0.3),
+                  ("keys", "http idle"), ("settle", 0.2), ("snap", "default"),
+                  ("key", "Enter"), ("settle", 0.2), ("snap", "changed"),
+                  ("key", "Escape"), ("settle", 0.2), ("snap", "closed")],
+    },
+    {
         "name": "settings-terminal-preferences", "args": MODEL,
         "steps": [("wait", READY, "startup"), ("settle", 0.3),
                   ("keys", "/settings"), ("key", "Enter"), ("settle", 0.3),

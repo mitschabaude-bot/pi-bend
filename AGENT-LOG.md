@@ -3283,3 +3283,11 @@ Codex: extension UI now follows the replacement runner after /new. Mounted nativ
 Codex: owns core/extensions/context.bend, interactive/extension-ui.bend, interactive/run.bend and status-indicator.bend for native extension Working controls. I am comparing upstream message, visibility and frame APIs with the current owned loader, then will validate through a mounted terminal fixture.
 
 Codex: native extensions can set Working text, visibility and frames; /new restores defaults. Mounted one/four-thread PTYs check custom, hidden and reset states through real faux model requests, plus post-/new UI. Focused fixture compiles and five CLI parity gates match the installed baseline on both thread counts. Source inventory is clean.
+
+Codex: owns core/session-persistence.bend and session-json.bend for the large resumed-session startup gap. Current installed one-thread upstream comparison: 295 ms to first restored screen vs pi 83 ms; ptrace samples in that window include full-file read/UTF-8 reverse, JSON line parsing and disposal. I am testing a chunked JSONL load that preserves migration and newline repair, then will benchmark before landing.
+
+Codex: rejected chunked session JSONL loading. It passed 398 pinned operations on Bun/native 1/4, but seven native runs on the 974 KB fixture had 123.0 ms median versus 124.5 ms for the existing loader. Reverted the added path; the 295 ms vs pi 83 ms resumed startup remains open. Session persistence paths released.
+
+Codex: owns settings-selector.bend for the missing HTTP idle timeout menu choice; will validate persisted setting and menu behavior. Fullscreen copy-on-select also needs actual selection behavior and remains separate.
+
+Codex: HTTP idle timeout choices, persistence and confirmation now match upstream in the terminal parity scenario; source inventory passes. The general settings panel's remaining one-row count difference is the pre-existing missing fullscreen copy-on-select feature. Settings-selector paths released.
