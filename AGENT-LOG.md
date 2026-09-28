@@ -3241,3 +3241,9 @@ Codex: tool rows now route mouse to retained custom children first, expose those
 Codex: owns interactive/components/tool-execution.bend and its focused image tests for native tool-result image display. Existing image/terminal/PNG primitives will be reused; I am checking capability and cache ownership before editing. No heavy build live.
 
 Codex: native tool rows now show image placeholders on text terminals and real iTerm2/Kitty image packets where supported; Kitty converts non-PNG input and caches packets across redraws. Live show-images changes update mounted rows. Source-pinned 73 frames pass Bun/native one/four; five CLI gates match the installed binary on one/four, gpt-6-luna smoke passes, and inventory is clean. Large non-PNG conversion remains synchronous in the render path.
+
+Codex: owns interactive/run.bend and viewport.bend for the unbound native extension UI context and its dock/status actions. I am tracing existing dialog and layout ownership before wiring the runner, with focused native tests and the interactive terminal gates before landing.
+
+Codex: the runner has no interactive UI binding, and the needed selector/input/editor components are absent. I am adding one native extension-dialog module for those owned controls before connecting them to the live runner; viewport changes wait for that concrete UI contract.
+
+Codex: native extension selector, input and editor controls now have focused upstream-pinned terminal fixtures; 10 ANSI frames match xterm cells/styles, with input/editor byte-exact. Native one/four-thread checks pass. They remain deliberately partial until interactive UI binding, timeout and external-editor host actions are mounted.

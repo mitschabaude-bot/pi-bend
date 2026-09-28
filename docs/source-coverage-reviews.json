@@ -1654,6 +1654,39 @@
         "packages/coding-agent/src/core/tools/diff.bend": "3cf45d8e28002617fbb89e1764609e94af8f4f49c35b791acee57f08587dfc01",
         "packages/coding-agent/src/modes/interactive/components/diff.bend": "bc9f72db8cbf477436b60675048bb75830680fab8ae06ad15ee561fe9d946c87"
       }
+    },
+    "packages/coding-agent/src/modes/interactive/components/extension-selector.ts": {
+      "state": "partial",
+      "note": "Native selection state, keyboard actions, countdown label and ANSI rows match focused upstream fixtures on one/four threads. The component is not yet mounted in interactive extension UI; host timeout, callbacks and lifecycle remain unported.",
+      "source_sha256": "d83767b09d73264eb0cb9af54b6f13e0e9c15a429a6dd7b9c8e7498e013b7704",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/extension-selector.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/extension-selector.bend": "fbc376a2bf4e5ccb4e3f0310100c3917ca4d8c0b25e4def3a391b0924c385904"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/extension-input.ts": {
+      "state": "partial",
+      "note": "Native single-line input state, editing actions and ANSI rows match focused upstream fixtures on one/four threads. The component is not yet mounted in interactive extension UI; host timeout, callbacks and lifecycle remain unported.",
+      "source_sha256": "efd8f7c27b2a1f1a9215e0cca31a34b3d54db2783ade2914dfa1facf8e1945bd",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/extension-input.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/extension-input.bend": "f751ee610df229596f8390824705ceb3a24bf71fc5ca765305701b7231a19110"
+      }
+    },
+    "packages/coding-agent/src/modes/interactive/components/extension-editor.ts": {
+      "state": "partial",
+      "note": "Native multiline editor state, editing actions and ANSI rows match focused upstream fixtures on one/four threads. The component is not yet mounted in interactive extension UI; external-editor host action, callbacks and lifecycle remain unported.",
+      "source_sha256": "d41f13dfaf73596643111fac10520b190998202627c6004eb6846d42ce9d37f1",
+      "ports": [
+        "packages/coding-agent/src/modes/interactive/components/extension-editor.bend"
+      ],
+      "port_sha256": {
+        "packages/coding-agent/src/modes/interactive/components/extension-editor.bend": "b5d3f204d2c33b7f58faa0f059a8d3a3ef65f7c425e4d5ab7001863b97c00664"
+      }
     }
   }
 }
