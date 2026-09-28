@@ -1,12 +1,14 @@
 # pi-bend
 
-**A coding agent written in [Bend](https://bend-lang.com).** A native port of [pi](https://github.com/earendil-works/pi), from its interactive terminal and modular agent libraries down to HTTP, TLS, cryptography and Unicode.
+**A coding agent written in [Bend](https://bend-lang.com).**
+
+![pi-bend editing a file, delegating tests to a native subagent, and running them](https://github.com/user-attachments/assets/c829b177-992b-46e2-8a5f-33faf0ee7f96)
+
+*Watch pi-bend edit a file, delegate tests to another native pi-bend agent, and run them. Shown at 2× speed.*
+
+A native port of [pi](https://github.com/earendil-works/pi), from its interactive terminal and modular agent libraries down to HTTP, TLS, cryptography and Unicode.
 
 Building pi-bend also meant building out Bend: adding missing libraries and OS primitives, and scaling the compiler to handle a full application. Networking, parsing, cryptography and rendering run in Bend, with small OS effects for system calls.
-
-Watch pi-bend edit a file, delegate tests to another native pi-bend agent, and run them. Shown at 2× speed.
-
-https://github.com/user-attachments/assets/6c637f1c-0065-4cae-b951-94f1e064306a
 
 The port targets pi v0.87.1 (`f07218c4d`); full parity is still in progress. Extensions are native Bend, with immutable values and explicit updates in place of JavaScript object semantics. See the [architecture](docs/architecture.md) and [scope decisions](docs/scope-decisions.md).
 
